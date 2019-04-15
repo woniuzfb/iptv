@@ -1,0 +1,1776 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link rel="shortcut icon" href="hbo.png">
+    <link href="https://cdn.bootcss.com/video.js/7.6.6/video-js.min.css" rel="stylesheet">
+    <style>
+html { 
+  font-size: 62.5%;
+}
+
+a {
+  color: #70B7FD;
+  text-decoration: none;
+}
+
+li {
+  margin-left: .8rem;
+  list-style: none;
+}
+
+ul:focus, li:focus {
+  outline: none;
+}
+
+button {
+  font-size: 1.44rem;
+}
+
+input {
+  display: inline-block;
+  text-align: center;
+  font-size: 1.6rem;
+  border-radius: .1rem;
+  box-sizing: border-box;
+  height: 3.2rem;
+  max-width: 12.8rem;
+}
+
+body {
+  width: 95%;
+  margin: 0 auto;
+  font: 1.6rem/1.2 'PingFangSC','helvetica neue','hiragino sans gb','arial','microsoft yahei ui','microsoft yahei','simsun','sans-serif';
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  grid-gap: 2rem;
+}
+
+header {
+  grid-column: 1 / 3;
+  grid-row: 1;
+}
+
+.videoContainer {
+  grid-column: 2;
+  grid-row: 2;
+  width: 80%;
+}
+
+.vjs-subs-caps-button {
+  display: none;
+}
+
+.sliderContainer {
+  grid-column: 2;
+  grid-row: 3;
+  width: 80%;
+}
+
+.slider {
+  position: relative;
+  margin: 0 auto;
+  width: 17rem;
+}
+
+.frame {
+  width: 16.4rem;
+  position: relative;
+  margin: 0 auto;
+  font-size: 0;
+  line-height: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.slides {
+  display: inline-block;
+}
+
+.frame li {
+  position: relative;
+  display: inline-block;
+  font-family: 'Source Sans Pro', sans-serif;
+  height: 3.2rem;
+  text-align: center;
+  font-size: 1.6rem;
+  line-height: 3.2rem;
+  background: #2E435A;
+  color: #fff;
+  margin-left: 0;
+  margin-right: .8rem;
+  padding: 0 .8rem;
+  cursor: pointer;
+}
+
+.prev, .next {
+  position: absolute;
+  top: 50%;
+  margin-top: -25px;
+  display: block;
+  cursor: pointer;
+}
+
+.next {
+  right: 0;
+}
+
+.prev {
+  left: 2.4rem;
+}
+
+.next.disabled, .prev.disabled {
+  opacity: .3;
+  pointer-events: none;
+}
+
+.next svg, .prev svg {
+  width: 2.5rem;
+}
+
+aside {
+  grid-column: 1;
+  grid-row: 2 / 4;
+  padding-left: .8rem;
+  padding-right: 1.6rem;
+  text-align: right;
+  border-right: .1rem solid #999;
+}
+
+fieldset {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.categories {
+  grid-column: 1 / 3;
+  grid-row: 6;
+  text-align: center;
+}
+
+section {
+  grid-column: 1 / 3;
+  grid-row: 7;
+  text-align: center;
+}
+
+.linkInput {
+  display: block;
+  width: 50%;
+  max-width: 50%;
+  margin: 0 auto 8rem;
+}
+
+.sources {
+  display: inline-block;
+  margin-top: 0;
+  padding: 0;
+}
+
+.sources li {
+  display: block;
+  text-decoration: none;
+  letter-spacing: .1rem;
+  border: .1rem solid rgba(0,0,200,0.6);
+  background: rgba(112,183,253,0.3);
+  color: rgba(0,0,200,0.6);
+  box-shadow: .1rem .1rem .2rem rgba(0,0,200,0.4);
+  border-radius: 1rem;
+  padding: .3rem 1rem;
+  margin-bottom: 1rem;
+  cursor: pointer;
+}
+
+.regImg {
+  display: inline-block;
+}
+
+.categories li, .channels li, .formToggle, button {
+  display: inline-block;
+  text-decoration: none;
+  letter-spacing: .1rem;
+  text-transform: uppercase;
+  border: .1rem solid rgba(0,0,200,0.6);
+  background: rgba(112,183,253,0.3);
+  color: rgba(0,0,200,0.6);
+  box-shadow: .1rem .1rem .2rem rgba(0,0,200,0.4);
+  border-radius: 1rem;
+  padding: .3rem 1rem;
+  margin-bottom: 1rem;
+  cursor: pointer;
+}
+
+aside h3 {
+  margin-top: 0;
+}
+
+form div + div {
+  margin-top: 1.6rem;
+}
+
+footer {
+  background: #F3F3F3;
+  padding: .8rem;
+  letter-spacing: .1rem;
+  position: fixed;
+  left: 0;
+  bottom: 0;
+}
+
+footer span {
+  margin-left: .8rem;
+  margin-right: .8rem;
+}
+
+.video-js .vjs-overlay {
+  color: #fff;
+  position: absolute;
+  text-align: center;
+}
+
+.video-js .vjs-overlay-background {
+  background-color: #646464;
+  border-radius: 3px;
+}
+
+.video-js .vjs-overlay-center {
+  left: 50%;
+  top: 50%;
+}
+
+.working {
+  border: .1rem solid rgba(0, 200, 0, 0.6) !important;
+  background:rgba(47, 201, 96, 0.5) !important;
+}
+
+.sources .sourceReg, .categories .selected, .channels .selected {
+  color: white;
+  background: red !important;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.white {
+  color: white !important;
+}
+
+.bgBlack {
+  background-color: black !important;
+}
+
+.borderRed {
+  border-color: red !important;
+}
+
+.alert {
+  grid-column: 1 / 3;
+  grid-row: 4;
+  text-align: center;
+  color: red !important;
+}
+
+.upComing {
+  grid-column: 1 / 3;
+  grid-row: 5;
+  text-align: center;
+  color: rgba(0, 200, 0);
+}
+
+.upComing li {
+  color: rgba(0, 200, 0) !important;
+}
+
+@media (max-width: 468px ) {
+
+  .slider {
+    width: 180px;
+  }
+
+  .frame {
+    width: 110px;
+  }
+}
+
+@media (min-width: 469px ) {
+
+  .slider {
+    width: 230px;
+  }
+
+  .frame {
+    width: 164px;
+  }
+}
+
+@media (min-width: 640px ) {
+
+  .slider {
+    width: 400px;
+  }
+
+  .frame {
+    width: 325px;
+  }
+}
+
+@media (min-width: 1176px ) {
+
+  .slider {
+    width: 615px;
+  }
+
+  .frame {
+    width: 536px;
+  }
+}
+
+@media (min-width: 1440px ) {
+
+  .slider {
+    width: 730px;
+  }
+
+  .frame {
+    width: 658px;
+  }
+}
+
+@media (max-width: 991.98px) {
+  header {
+    padding-left: 1.6rem;
+  }
+  .videoContainer, .sliderContainer {
+    width: 95%;
+  }
+  .categories .hbohd {
+    display: none;
+  }
+  footer span {
+    display: none;
+  }
+}
+
+@media (min-width: 992px) {
+  header {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+svg {
+  fill:#70B7FD; 
+  color:#fff; 
+  position: absolute; 
+  top: 0; 
+  border: 0; 
+  right: 0;
+}
+
+.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}
+    </style>
+    <title>HBO直播 - 高清电视直播</title>
+  </head>
+  <body>
+    <header>
+      <h1>
+        <a href="/">HBO中文直播</a>
+      </h1>
+      <p>部分广电直播源需手机号注册！</p>
+      <a href="https://github.com/woniuzfb/iptv" target="_blank" class="github-corner">
+        <svg width="80" height="80" viewBox="0 0 250 250" aria-hidden="true">
+          <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path>
+          <path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path>
+          <path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path>
+        </svg>
+      </a>
+    </header>
+    <div class="videoContainer"></div>
+    <div class="sliderContainer">
+      <div class="slider js_slider">
+        <div class="frame js_frame">
+            <ul class="slides js_slides">
+            </ul>
+        </div>
+        <span class="js_prev prev">
+            <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 501.5 501.5"><g><path fill="#2E435A" d="M302.67 90.877l55.77 55.508L254.575 250.75 358.44 355.116l-55.77 55.506L143.56 250.75z"/></g></svg>
+        </span>
+        <span class="js_next next">
+            <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 501.5 501.5"><g><path fill="#2E435A" d="M199.33 410.622l-55.77-55.508L247.425 250.75 143.56 146.384l55.77-55.507L358.44 250.75z"/></g></svg>
+        </span>
+      </div>
+    </div>
+    <div class="alert"></div>
+    <div class="upComing"></div>
+    <div class="categories">
+      <ul>
+        <li data-value="hbo" data-source="a8">HBO</li>
+        <li data-value="hbohd" data-source="hbo">HBO高清</li>
+        <li data-value="myList1" class="dianxin">高清&bull;电信</li>
+        <li data-value="myList1a" class="liantong">高清&bull;联通</li>
+        <li data-value="myList2">标清</li>
+        <li data-value="myList3">央视</li>
+        <li data-value="myList4">卫视</li>
+        <li data-value="myList5">地方</li>
+        <li data-value="myList8">专业</li>
+        <li data-value="myList9">自定义</li>
+        <li data-value="myList10">港澳台</li>
+        <li data-value="0" class="switch">关灯</li>
+      </ul>
+    </div>
+    <section>
+      <div class="channels">
+        <ul></ul>
+        <ul></ul>
+        <ul></ul>
+        <ul></ul>
+        <ul></ul>
+        <ul></ul>
+        <ul></ul>
+        <ul>
+          <input type="text" class="linkInput" placeholder="支持flv、hls">
+        </ul>
+        <ul></ul>
+      </div>
+    </section>
+    <aside>
+      <ul class="sources"></ul>
+      <form class="loginForm">
+        <fieldset>
+          <h3>登录账号</h3>
+          <div><input class="loginAcc" type="text" placeholder="用户名"></div>
+          <div><input class="loginPwd" type="password" placeholder="密码"></div>
+          <div><button class="loginBtn" type="button">登录</button></div>
+        </fieldset>
+      </form>
+      <form class="regForm hidden">
+        <fieldset>
+          <h3>注册账号</h3>
+          <div><input class="regAcc" type="text" placeholder="用户名"></div>
+          <div><input class="regPwd" type="password" placeholder="密码"></div>
+          <div class="regImg"></div><input type="hidden" class="regImgId">
+          <div><input class="regImgInput hidden" type="text" placeholder="图片验证码"></div>
+          <div><input class="regSms hidden" type="text" placeholder="短信验证码"></div>
+          <div><button class="regBtn" type="button">注册</button></div>
+        </fieldset>
+      </form>
+      <button class="formToggle" type="button">注册</button>
+    </aside>
+    <footer>
+      By MTimer<span>&bull;</span>
+      <a href="https://github.com/woniuzfb/iptv" target="_blank">@iptv</a>
+    </footer>
+    <script src="https://cdn.bootcss.com/video.js/7.6.6/video.min.js"></script>
+    <script src="https://cdn.bootcss.com/flv.js/1.5.0/flv.min.js"></script>
+    <script>
+/*videojs-overlay*/
+!function(t,e){"object"==typeof exports&&"undefined"!=typeof module?module.exports=e(require("video.js"),require("global/window")):"function"==typeof define&&define.amd?define(["video.js","global/window"],e):t.videojsOverlay=e(t.videojs,t.window)}(this,function(t,e){"use strict";function n(t){if(void 0===t)throw new ReferenceError("this hasn't been initialised - super() hasn't been called");return t}t=t&&t.hasOwnProperty("default")?t.default:t,e=e&&e.hasOwnProperty("default")?e.default:e;var r={align:"top-left",class:"",content:"This overlay will show up while the video is playing",debug:!1,showBackground:!0,attachToControlBar:!1,overlays:[{start:"playing",end:"paused"}]},i=t.getComponent("Component"),o=t.dom||t,s=t.registerPlugin||t.plugin,a=function(t){return"number"==typeof t&&t==t},h=function(t){return"string"==typeof t&&/^\S+$/.test(t)},d=function(r){var i,s;function d(t,e){var i;return i=r.call(this,t,e)||this,["start","end"].forEach(function(t){var e=i.options_[t];if(a(e))i[t+"Event_"]="timeupdate";else if(h(e))i[t+"Event_"]=e;else if("start"===t)throw new Error('invalid "start" option; expected number or string')}),["endListener_","rewindListener_","startListener_"].forEach(function(t){i[t]=function(e){return d.prototype[t].call(n(n(i)),e)}}),"timeupdate"===i.startEvent_&&i.on(t,"timeupdate",i.rewindListener_),i.debug('created, listening to "'+i.startEvent_+'" for "start" and "'+(i.endEvent_||"nothing")+'" for "end"'),i.hide(),i}s=r,(i=d).prototype=Object.create(s.prototype),i.prototype.constructor=i,i.__proto__=s;var l=d.prototype;return l.createEl=function(){var t=this.options_,n=t.content,r=t.showBackground?"vjs-overlay-background":"vjs-overlay-no-background",i=o.createEl("div",{className:"\n        vjs-overlay\n        vjs-overlay-"+t.align+"\n        "+t.class+"\n        "+r+"\n        vjs-hidden\n      "});return"string"==typeof n?i.innerHTML=n:n instanceof e.DocumentFragment?i.appendChild(n):o.appendContent(i,n),i},l.debug=function(){if(this.options_.debug){for(var e=t.log,n=e,r=arguments.length,i=new Array(r),o=0;o<r;o++)i[o]=arguments[o];e.hasOwnProperty(i[0])&&"function"==typeof e[i[0]]&&(n=e[i.shift()]),n.apply(void 0,["overlay#"+this.id()+": "].concat(i))}},l.hide=function(){return r.prototype.hide.call(this),this.debug("hidden"),this.debug('bound `startListener_` to "'+this.startEvent_+'"'),this.endEvent_&&(this.debug('unbound `endListener_` from "'+this.endEvent_+'"'),this.off(this.player(),this.endEvent_,this.endListener_)),this.on(this.player(),this.startEvent_,this.startListener_),this},l.shouldHide_=function(t,e){var n=this.options_.end;return a(n)?t>=n:n===e},l.show=function(){return r.prototype.show.call(this),this.off(this.player(),this.startEvent_,this.startListener_),this.debug("shown"),this.debug('unbound `startListener_` from "'+this.startEvent_+'"'),this.endEvent_&&(this.debug('bound `endListener_` to "'+this.endEvent_+'"'),this.on(this.player(),this.endEvent_,this.endListener_)),this},l.shouldShow_=function(t,e){var n=this.options_.start,r=this.options_.end;return a(n)?a(r)?t>=n&&t<r:this.hasShownSinceSeek_?Math.floor(t)===n:(this.hasShownSinceSeek_=!0,t>=n):n===e},l.startListener_=function(t){var e=this.player().currentTime();this.shouldShow_(e,t.type)&&this.show()},l.endListener_=function(t){var e=this.player().currentTime();this.shouldHide_(e,t.type)&&this.hide()},l.rewindListener_=function(t){var e=this.player().currentTime(),n=this.previousTime_,r=this.options_.start,i=this.options_.end;e<n&&(this.debug("rewind detected"),a(i)&&!this.shouldShow_(e)?(this.debug("hiding; "+i+" is an integer and overlay should not show at this time"),this.hasShownSinceSeek_=!1,this.hide()):h(i)&&e<r&&(this.debug("hiding; show point ("+r+") is before now ("+e+") and end point ("+i+") is an event"),this.hasShownSinceSeek_=!1,this.hide())),this.previousTime_=e},d}(i);t.registerComponent("Overlay",d);var l=function(e){var n=this,i=t.mergeOptions(r,e);Array.isArray(this.overlays_)&&this.overlays_.forEach(function(t){n.removeChild(t),n.controlBar&&n.controlBar.removeChild(t),t.dispose()});var o=i.overlays;delete i.overlays,this.overlays_=o.map(function(e){var r=t.mergeOptions(i,e),o="string"==typeof r.attachToControlBar||!0===r.attachToControlBar;if(!n.controls()||!n.controlBar)return n.addChild("overlay",r);if(o&&-1!==r.align.indexOf("bottom")){var s=n.controlBar.children()[0];if(void 0!==n.controlBar.getChild(r.attachToControlBar)&&(s=n.controlBar.getChild(r.attachToControlBar)),s){var a=n.controlBar.addChild("overlay",r);return n.controlBar.el().insertBefore(a.el(),s.el()),a}}var h=n.addChild("overlay",r);return n.el().insertBefore(h.el(),n.controlBar.el()),h})};return l.VERSION="2.1.4",s("overlay",l),l});
+/*videojs-flvjs*/
+!function e(t,r,o){function n(l,f){if(!r[l]){if(!t[l]){var u="function"==typeof require&&require;if(!f&&u)return u(l,!0);if(i)return i(l,!0);var a=new Error("Cannot find module '"+l+"'");throw a.code="MODULE_NOT_FOUND",a}var c=r[l]={exports:{}};t[l][0].call(c.exports,function(e){var r=t[l][1][e];return n(r||e)},c,c.exports,e,t,r,o)}return r[l].exports}for(var i="function"==typeof require&&require,l=0;l<o.length;l++)n(o[l]);return n}({1:[function(e,t,r){(function(e){"use strict";function t(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}function o(e,t){if(!e)throw new ReferenceError("this hasn't been initialised - super() hasn't been called");return!t||"object"!=typeof t&&"function"!=typeof t?e:t}function n(e,t){if("function"!=typeof t&&null!==t)throw new TypeError("Super expression must either be null or a function, not "+typeof t);e.prototype=Object.create(t&&t.prototype,{constructor:{value:e,enumerable:!1,writable:!0,configurable:!0}}),t&&(Object.setPrototypeOf?Object.setPrototypeOf(e,t):e.__proto__=t)}Object.defineProperty(r,"__esModule",{value:!0});var i=function(){function e(e,t){for(var r=0;r<t.length;r++){var o=t[r];o.enumerable=o.enumerable||!1,o.configurable=!0,"value"in o&&(o.writable=!0),Object.defineProperty(e,o.key,o)}}return function(t,r,o){return r&&e(t.prototype,r),o&&e(t,o),t}}(),l=function e(t,r,o){null===t&&(t=Function.prototype);var n=Object.getOwnPropertyDescriptor(t,r);if(void 0===n){var i=Object.getPrototypeOf(t);return null===i?void 0:e(i,r,o)}if("value"in n)return n.value;var l=n.get;if(void 0!==l)return l.call(o)},f="undefined"!=typeof window?window.videojs:void 0!==e?e.videojs:null,u=function(e){return e&&e.__esModule?e:{default:e}}(f),a=u.default.getTech("Html5"),c=u.default.mergeOptions||u.default.util.mergeOptions,s={mediaDataSource:{},config:{}},p=function(e){function r(e,n){return t(this,r),e=c(s,e),o(this,(r.__proto__||Object.getPrototypeOf(r)).call(this,e,n))}return n(r,e),i(r,[{key:"setSrc",value:function(e){this.flvPlayer&&(this.flvPlayer.detachMediaElement(),this.flvPlayer.destroy());var t=this.options_.mediaDataSource,r=this.options_.config;t.type=void 0===t.type?"flv":t.type,t.url=e,this.flvPlayer=window.flvjs.createPlayer(t,r),this.flvPlayer.attachMediaElement(this.el_),this.flvPlayer.load()}},{key:"dispose",value:function(){this.flvPlayer&&(this.flvPlayer.detachMediaElement(),this.flvPlayer.destroy()),l(r.prototype.__proto__||Object.getPrototypeOf(r.prototype),"dispose",this).call(this)}}]),r}(a);p.isSupported=function(){return window.flvjs&&window.flvjs.isSupported()},p.formats={"video/flv":"FLV","video/x-flv":"FLV"},p.canPlayType=function(e){return p.isSupported()&&e in p.formats?"maybe":""},p.canPlaySource=function(e,t){return p.canPlayType(e.type)},p.VERSION="0.2.0",u.default.registerTech("Flvjs",p),r.default=p}).call(this,"undefined"!=typeof global?global:"undefined"!=typeof self?self:"undefined"!=typeof window?window:{})},{}]},{},[1]);
+/*md5*/
+!function(n){"use strict";function t(n,t){var r=(65535&n)+(65535&t);return(n>>16)+(t>>16)+(r>>16)<<16|65535&r}function r(n,t){return n<<t|n>>>32-t}function e(n,e,o,u,c,f){return t(r(t(t(e,n),t(u,f)),c),o)}function o(n,t,r,o,u,c,f){return e(t&r|~t&o,n,t,u,c,f)}function u(n,t,r,o,u,c,f){return e(t&o|r&~o,n,t,u,c,f)}function c(n,t,r,o,u,c,f){return e(t^r^o,n,t,u,c,f)}function f(n,t,r,o,u,c,f){return e(r^(t|~o),n,t,u,c,f)}function i(n,r){n[r>>5]|=128<<r%32,n[14+(r+64>>>9<<4)]=r;var e,i,a,d,h,l=1732584193,g=-271733879,v=-1732584194,m=271733878;for(e=0;e<n.length;e+=16)i=l,a=g,d=v,h=m,g=f(g=f(g=f(g=f(g=c(g=c(g=c(g=c(g=u(g=u(g=u(g=u(g=o(g=o(g=o(g=o(g,v=o(v,m=o(m,l=o(l,g,v,m,n[e],7,-680876936),g,v,n[e+1],12,-389564586),l,g,n[e+2],17,606105819),m,l,n[e+3],22,-1044525330),v=o(v,m=o(m,l=o(l,g,v,m,n[e+4],7,-176418897),g,v,n[e+5],12,1200080426),l,g,n[e+6],17,-1473231341),m,l,n[e+7],22,-45705983),v=o(v,m=o(m,l=o(l,g,v,m,n[e+8],7,1770035416),g,v,n[e+9],12,-1958414417),l,g,n[e+10],17,-42063),m,l,n[e+11],22,-1990404162),v=o(v,m=o(m,l=o(l,g,v,m,n[e+12],7,1804603682),g,v,n[e+13],12,-40341101),l,g,n[e+14],17,-1502002290),m,l,n[e+15],22,1236535329),v=u(v,m=u(m,l=u(l,g,v,m,n[e+1],5,-165796510),g,v,n[e+6],9,-1069501632),l,g,n[e+11],14,643717713),m,l,n[e],20,-373897302),v=u(v,m=u(m,l=u(l,g,v,m,n[e+5],5,-701558691),g,v,n[e+10],9,38016083),l,g,n[e+15],14,-660478335),m,l,n[e+4],20,-405537848),v=u(v,m=u(m,l=u(l,g,v,m,n[e+9],5,568446438),g,v,n[e+14],9,-1019803690),l,g,n[e+3],14,-187363961),m,l,n[e+8],20,1163531501),v=u(v,m=u(m,l=u(l,g,v,m,n[e+13],5,-1444681467),g,v,n[e+2],9,-51403784),l,g,n[e+7],14,1735328473),m,l,n[e+12],20,-1926607734),v=c(v,m=c(m,l=c(l,g,v,m,n[e+5],4,-378558),g,v,n[e+8],11,-2022574463),l,g,n[e+11],16,1839030562),m,l,n[e+14],23,-35309556),v=c(v,m=c(m,l=c(l,g,v,m,n[e+1],4,-1530992060),g,v,n[e+4],11,1272893353),l,g,n[e+7],16,-155497632),m,l,n[e+10],23,-1094730640),v=c(v,m=c(m,l=c(l,g,v,m,n[e+13],4,681279174),g,v,n[e],11,-358537222),l,g,n[e+3],16,-722521979),m,l,n[e+6],23,76029189),v=c(v,m=c(m,l=c(l,g,v,m,n[e+9],4,-640364487),g,v,n[e+12],11,-421815835),l,g,n[e+15],16,530742520),m,l,n[e+2],23,-995338651),v=f(v,m=f(m,l=f(l,g,v,m,n[e],6,-198630844),g,v,n[e+7],10,1126891415),l,g,n[e+14],15,-1416354905),m,l,n[e+5],21,-57434055),v=f(v,m=f(m,l=f(l,g,v,m,n[e+12],6,1700485571),g,v,n[e+3],10,-1894986606),l,g,n[e+10],15,-1051523),m,l,n[e+1],21,-2054922799),v=f(v,m=f(m,l=f(l,g,v,m,n[e+8],6,1873313359),g,v,n[e+15],10,-30611744),l,g,n[e+6],15,-1560198380),m,l,n[e+13],21,1309151649),v=f(v,m=f(m,l=f(l,g,v,m,n[e+4],6,-145523070),g,v,n[e+11],10,-1120210379),l,g,n[e+2],15,718787259),m,l,n[e+9],21,-343485551),l=t(l,i),g=t(g,a),v=t(v,d),m=t(m,h);return[l,g,v,m]}function a(n){var t,r="",e=32*n.length;for(t=0;t<e;t+=8)r+=String.fromCharCode(n[t>>5]>>>t%32&255);return r}function d(n){var t,r=[];for(r[(n.length>>2)-1]=void 0,t=0;t<r.length;t+=1)r[t]=0;var e=8*n.length;for(t=0;t<e;t+=8)r[t>>5]|=(255&n.charCodeAt(t/8))<<t%32;return r}function h(n){return a(i(d(n),8*n.length))}function l(n,t){var r,e,o=d(n),u=[],c=[];for(u[15]=c[15]=void 0,o.length>16&&(o=i(o,8*n.length)),r=0;r<16;r+=1)u[r]=909522486^o[r],c[r]=1549556828^o[r];return e=i(u.concat(d(t)),512+8*t.length),a(i(c.concat(e),640))}function g(n){var t,r,e="";for(r=0;r<n.length;r+=1)t=n.charCodeAt(r),e+="0123456789abcdef".charAt(t>>>4&15)+"0123456789abcdef".charAt(15&t);return e}function v(n){return unescape(encodeURIComponent(n))}function m(n){return h(v(n))}function p(n){return g(m(n))}function s(n,t){return l(v(n),v(t))}function C(n,t){return g(s(n,t))}function A(n,t,r){return t?r?s(t,n):C(t,n):r?m(n):p(n)}"function"==typeof define&&define.amd?define(function(){return A}):"object"==typeof module&&module.exports?module.exports=A:n.md5=A}(this);
+/*promise*/
+!function(e,n){"object"==typeof exports&&"undefined"!=typeof module?n():"function"==typeof define&&define.amd?define(n):n()}(0,function(){"use strict";function e(e){var n=this.constructor;return this.then(function(t){return n.resolve(e()).then(function(){return t})},function(t){return n.resolve(e()).then(function(){return n.reject(t)})})}function n(){}function t(e){if(!(this instanceof t))throw new TypeError("Promises must be constructed via new");if("function"!=typeof e)throw new TypeError("not a function");this._state=0,this._handled=!1,this._value=undefined,this._deferreds=[],u(e,this)}function o(e,n){for(;3===e._state;)e=e._value;0!==e._state?(e._handled=!0,t._immediateFn(function(){var t=1===e._state?n.onFulfilled:n.onRejected;if(null!==t){var o;try{o=t(e._value)}catch(f){return void i(n.promise,f)}r(n.promise,o)}else(1===e._state?r:i)(n.promise,e._value)})):e._deferreds.push(n)}function r(e,n){try{if(n===e)throw new TypeError("A promise cannot be resolved with itself.");if(n&&("object"==typeof n||"function"==typeof n)){var o=n.then;if(n instanceof t)return e._state=3,e._value=n,void f(e);if("function"==typeof o)return void u(function(e,n){return function(){e.apply(n,arguments)}}(o,n),e)}e._state=1,e._value=n,f(e)}catch(r){i(e,r)}}function i(e,n){e._state=2,e._value=n,f(e)}function f(e){2===e._state&&0===e._deferreds.length&&t._immediateFn(function(){e._handled||t._unhandledRejectionFn(e._value)});for(var n=0,r=e._deferreds.length;r>n;n++)o(e,e._deferreds[n]);e._deferreds=null}function u(e,n){var t=!1;try{e(function(e){t||(t=!0,r(n,e))},function(e){t||(t=!0,i(n,e))})}catch(o){if(t)return;t=!0,i(n,o)}}var c=setTimeout;t.prototype["catch"]=function(e){return this.then(null,e)},t.prototype.then=function(e,t){var r=new this.constructor(n);return o(this,new function(e,n,t){this.onFulfilled="function"==typeof e?e:null,this.onRejected="function"==typeof n?n:null,this.promise=t}(e,t,r)),r},t.prototype["finally"]=e,t.all=function(e){return new t(function(n,t){function o(e,f){try{if(f&&("object"==typeof f||"function"==typeof f)){var u=f.then;if("function"==typeof u)return void u.call(f,function(n){o(e,n)},t)}r[e]=f,0==--i&&n(r)}catch(c){t(c)}}if(!e||"undefined"==typeof e.length)throw new TypeError("Promise.all accepts an array");var r=Array.prototype.slice.call(e);if(0===r.length)return n([]);for(var i=r.length,f=0;r.length>f;f++)o(f,r[f])})},t.resolve=function(e){return e&&"object"==typeof e&&e.constructor===t?e:new t(function(n){n(e)})},t.reject=function(e){return new t(function(n,t){t(e)})},t.race=function(e){return new t(function(n,t){for(var o=0,r=e.length;r>o;o++)e[o].then(n,t)})},t._immediateFn="function"==typeof setImmediate&&function(e){setImmediate(e)}||function(e){c(e,0)},t._unhandledRejectionFn=function(e){void 0!==console&&console&&console.warn("Possible Unhandled Promise Rejection:",e)};var l=function(){if("undefined"!=typeof self)return self;if("undefined"!=typeof window)return window;if("undefined"!=typeof global)return global;throw Error("unable to locate global object")}();"Promise"in l?l.Promise.prototype["finally"]||(l.Promise.prototype["finally"]=e):l.Promise=t});
+/*fetch*/
+!function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"function"==typeof define&&define.amd?define(["exports"],e):e(t.WHATWGFetch={})}(this,function(a){"use strict";var e="URLSearchParams"in self,r="Symbol"in self&&"iterator"in Symbol,h="FileReader"in self&&"Blob"in self&&function(){try{return new Blob,!0}catch(t){return!1}}(),o="FormData"in self,n="ArrayBuffer"in self;if(n)var i=["[object Int8Array]","[object Uint8Array]","[object Uint8ClampedArray]","[object Int16Array]","[object Uint16Array]","[object Int32Array]","[object Uint32Array]","[object Float32Array]","[object Float64Array]"],s=ArrayBuffer.isView||function(t){return t&&-1<i.indexOf(Object.prototype.toString.call(t))};function u(t){if("string"!=typeof t&&(t=String(t)),/[^a-z0-9\-#$%&'*+.^_`|~]/i.test(t))throw new TypeError("Invalid character in header field name");return t.toLowerCase()}function f(t){return"string"!=typeof t&&(t=String(t)),t}function t(e){var t={next:function(){var t=e.shift();return{done:void 0===t,value:t}}};return r&&(t[Symbol.iterator]=function(){return t}),t}function d(e){this.map={},e instanceof d?e.forEach(function(t,e){this.append(e,t)},this):Array.isArray(e)?e.forEach(function(t){this.append(t[0],t[1])},this):e&&Object.getOwnPropertyNames(e).forEach(function(t){this.append(t,e[t])},this)}function c(t){if(t.bodyUsed)return Promise.reject(new TypeError("Already read"));t.bodyUsed=!0}function p(r){return new Promise(function(t,e){r.onload=function(){t(r.result)},r.onerror=function(){e(r.error)}})}function y(t){var e=new FileReader,r=p(e);return e.readAsArrayBuffer(t),r}function l(t){if(t.slice)return t.slice(0);var e=new Uint8Array(t.byteLength);return e.set(new Uint8Array(t)),e.buffer}function b(){return this.bodyUsed=!1,this._initBody=function(t){(this._bodyInit=t)?"string"==typeof t?this._bodyText=t:h&&Blob.prototype.isPrototypeOf(t)?this._bodyBlob=t:o&&FormData.prototype.isPrototypeOf(t)?this._bodyFormData=t:e&&URLSearchParams.prototype.isPrototypeOf(t)?this._bodyText=t.toString():n&&h&&function(t){return t&&DataView.prototype.isPrototypeOf(t)}(t)?(this._bodyArrayBuffer=l(t.buffer),this._bodyInit=new Blob([this._bodyArrayBuffer])):n&&(ArrayBuffer.prototype.isPrototypeOf(t)||s(t))?this._bodyArrayBuffer=l(t):this._bodyText=t=Object.prototype.toString.call(t):this._bodyText="",this.headers.get("content-type")||("string"==typeof t?this.headers.set("content-type","text/plain;charset=UTF-8"):this._bodyBlob&&this._bodyBlob.type?this.headers.set("content-type",this._bodyBlob.type):e&&URLSearchParams.prototype.isPrototypeOf(t)&&this.headers.set("content-type","application/x-www-form-urlencoded;charset=UTF-8"))},h&&(this.blob=function(){var t=c(this);if(t)return t;if(this._bodyBlob)return Promise.resolve(this._bodyBlob);if(this._bodyArrayBuffer)return Promise.resolve(new Blob([this._bodyArrayBuffer]));if(this._bodyFormData)throw new Error("could not read FormData body as blob");return Promise.resolve(new Blob([this._bodyText]))},this.arrayBuffer=function(){return this._bodyArrayBuffer?c(this)||Promise.resolve(this._bodyArrayBuffer):this.blob().then(y)}),this.text=function(){var t=c(this);if(t)return t;if(this._bodyBlob)return function(t){var e=new FileReader,r=p(e);return e.readAsText(t),r}(this._bodyBlob);if(this._bodyArrayBuffer)return Promise.resolve(function(t){for(var e=new Uint8Array(t),r=new Array(e.length),o=0;o<e.length;o++)r[o]=String.fromCharCode(e[o]);return r.join("")}(this._bodyArrayBuffer));if(this._bodyFormData)throw new Error("could not read FormData body as text");return Promise.resolve(this._bodyText)},o&&(this.formData=function(){return this.text().then(v)}),this.json=function(){return this.text().then(JSON.parse)},this}d.prototype.append=function(t,e){t=u(t),e=f(e);var r=this.map[t];this.map[t]=r?r+", "+e:e},d.prototype.delete=function(t){delete this.map[u(t)]},d.prototype.get=function(t){return t=u(t),this.has(t)?this.map[t]:null},d.prototype.has=function(t){return this.map.hasOwnProperty(u(t))},d.prototype.set=function(t,e){this.map[u(t)]=f(e)},d.prototype.forEach=function(t,e){for(var r in this.map)this.map.hasOwnProperty(r)&&t.call(e,this.map[r],r,this)},d.prototype.keys=function(){var r=[];return this.forEach(function(t,e){r.push(e)}),t(r)},d.prototype.values=function(){var e=[];return this.forEach(function(t){e.push(t)}),t(e)},d.prototype.entries=function(){var r=[];return this.forEach(function(t,e){r.push([e,t])}),t(r)},r&&(d.prototype[Symbol.iterator]=d.prototype.entries);var m=["DELETE","GET","HEAD","OPTIONS","POST","PUT"];function w(t,e){var r=(e=e||{}).body;if(t instanceof w){if(t.bodyUsed)throw new TypeError("Already read");this.url=t.url,this.credentials=t.credentials,e.headers||(this.headers=new d(t.headers)),this.method=t.method,this.mode=t.mode,this.signal=t.signal,r||null==t._bodyInit||(r=t._bodyInit,t.bodyUsed=!0)}else this.url=String(t);if(this.credentials=e.credentials||this.credentials||"same-origin",!e.headers&&this.headers||(this.headers=new d(e.headers)),this.method=function(t){var e=t.toUpperCase();return-1<m.indexOf(e)?e:t}(e.method||this.method||"GET"),this.mode=e.mode||this.mode||null,this.signal=e.signal||this.signal,this.referrer=null,("GET"===this.method||"HEAD"===this.method)&&r)throw new TypeError("Body not allowed for GET or HEAD requests");this._initBody(r)}function v(t){var n=new FormData;return t.trim().split("&").forEach(function(t){if(t){var e=t.split("="),r=e.shift().replace(/\+/g," "),o=e.join("=").replace(/\+/g," ");n.append(decodeURIComponent(r),decodeURIComponent(o))}}),n}function E(t,e){e||(e={}),this.type="default",this.status=void 0===e.status?200:e.status,this.ok=200<=this.status&&this.status<300,this.statusText="statusText"in e?e.statusText:"OK",this.headers=new d(e.headers),this.url=e.url||"",this._initBody(t)}w.prototype.clone=function(){return new w(this,{body:this._bodyInit})},b.call(w.prototype),b.call(E.prototype),E.prototype.clone=function(){return new E(this._bodyInit,{status:this.status,statusText:this.statusText,headers:new d(this.headers),url:this.url})},E.error=function(){var t=new E(null,{status:0,statusText:""});return t.type="error",t};var A=[301,302,303,307,308];E.redirect=function(t,e){if(-1===A.indexOf(e))throw new RangeError("Invalid status code");return new E(null,{status:e,headers:{location:t}})},a.DOMException=self.DOMException;try{new a.DOMException}catch(t){a.DOMException=function(t,e){this.message=t,this.name=e;var r=Error(t);this.stack=r.stack},a.DOMException.prototype=Object.create(Error.prototype),a.DOMException.prototype.constructor=a.DOMException}function _(i,s){return new Promise(function(r,t){var e=new w(i,s);if(e.signal&&e.signal.aborted)return t(new a.DOMException("Aborted","AbortError"));var o=new XMLHttpRequest;function n(){o.abort()}o.onload=function(){var t={status:o.status,statusText:o.statusText,headers:function(t){var n=new d;return t.replace(/\r?\n[\t ]+/g," ").split(/\r?\n/).forEach(function(t){var e=t.split(":"),r=e.shift().trim();if(r){var o=e.join(":").trim();n.append(r,o)}}),n}(o.getAllResponseHeaders()||"")};t.url="responseURL"in o?o.responseURL:t.headers.get("X-Request-URL");var e="response"in o?o.response:o.responseText;r(new E(e,t))},o.onerror=function(){t(new TypeError("Network request failed"))},o.ontimeout=function(){t(new TypeError("Network request failed"))},o.onabort=function(){t(new a.DOMException("Aborted","AbortError"))},o.open(e.method,e.url,!0),"include"===e.credentials?o.withCredentials=!0:"omit"===e.credentials&&(o.withCredentials=!1),"responseType"in o&&h&&(o.responseType="blob"),e.headers.forEach(function(t,e){o.setRequestHeader(e,t)}),e.signal&&(e.signal.addEventListener("abort",n),o.onreadystatechange=function(){4===o.readyState&&e.signal.removeEventListener("abort",n)}),o.send(void 0===e._bodyInit?null:e._bodyInit)})}_.polyfill=!0,self.fetch||(self.fetch=_,self.Headers=d,self.Request=w,self.Response=E),a.Headers=d,a.Request=w,a.Response=E,a.fetch=_,Object.defineProperty(a,"__esModule",{value:!0})});
+/*lory*/
+!function(e,t){if("object"==typeof exports&&"object"==typeof module)module.exports=t();else if("function"==typeof define&&define.amd)define([],t);else{var n=t();for(var i in n)("object"==typeof exports?exports:e)[i]=n[i]}}("undefined"!=typeof self?self:this,function(){return function(e){function t(i){if(n[i])return n[i].exports;var o=n[i]={i:i,l:!1,exports:{}};return e[i].call(o.exports,o,o.exports,t),o.l=!0,o.exports}var n={};return t.m=e,t.c=n,t.d=function(e,n,i){t.o(e,n)||Object.defineProperty(e,n,{configurable:!1,enumerable:!0,get:i})},t.n=function(e){var n=e&&e.__esModule?function(){return e.default}:function(){return e};return t.d(n,"a",n),n},t.o=function(e,t){return Object.prototype.hasOwnProperty.call(e,t)},t.p="",t(t.s=7)}([function(e,t,n){"use strict";function i(e){return e&&e.__esModule?e:{default:e}}function o(e,t){function n(e,t){var n=W,i=n.classNameActiveSlide;e.forEach(function(e,t){e.classList.contains(i)&&e.classList.remove(i)}),e[t].classList.add(i)}function i(e){var t=W,n=t.infinite,i=e.slice(0,n),o=e.slice(e.length-n,e.length);return i.forEach(function(e){var t=e.cloneNode(!0);k.appendChild(t)}),o.reverse().forEach(function(e){var t=e.cloneNode(!0);k.insertBefore(t,k.firstChild)}),k.addEventListener(T.transitionEnd,x),m.call(k.children)}function o(t,n,i){(0,u.default)(e,t+".lory."+n,i)}function s(e,t,n){var i=k&&k.style;i&&(i[T.transition+"TimingFunction"]=n,i[T.transition+"Duration"]=t+"ms",i[T.transform]="translateX("+e+"px)")}function d(e){return e.getBoundingClientRect().width||e.offsetWidth}function c(e,t){var i=W,r=i.slideSpeed,a=i.slidesToScroll,d=i.infinite,l=i.rewind,c=i.rewindPrev,u=i.rewindSpeed,f=i.ease,v=i.classNameActiveSlide,b=i.classNameDisabledNextCtrl,h=void 0===b?"disabled":b,p=i.classNameDisabledPrevCtrl,L=void 0===p?"disabled":p,E=r,y=void 0,x=t?z+1:z-1,w=Math.round(S-(W.centerMode.enableCenterMode?P[0].clientWidth/2:_));o("before","slide",{index:z,nextSlide:x}),A&&A.classList.remove(L),B&&B.classList.remove(h),"number"!=typeof e&&(e=t?d&&z+2*d!==P.length?z+(d-z%d):z+a:d&&z%d!=0?z-z%d:z-a),e=Math.min(Math.max(e,0),P.length-1),d&&void 0===t&&(e+=d),c&&0===Math.abs(j.x)&&!1===t&&(e=P.length-1,E=u),W.centerMode.enableCenterMode?(y=Math.max(-1*P[e].offsetLeft+_/2-P[e].clientWidth/2,-1*w),y=y>=0&&W.centerMode.firstSlideLeftAlign?0:y):y=Math.min(Math.max(-1*P[e].offsetLeft,-1*w),0),l&&Math.abs(j.x)===w&&t&&(y=0,e=0,E=u),s(y,E,f),j.x=y,P[e].offsetLeft<=w&&(z=e),!d||e!==P.length-d&&e!==P.length-P.length%d&&0!==e||(t&&(z=d),t||(z=P.length-2*d),j.x=-1*P[z].offsetLeft,D=function(){s(-1*P[z].offsetLeft,0,void 0)}),v&&n(m.call(P),z),!A||d||c||0!==e||A.classList.add(L),!B||d||l||e+1!==P.length||B.classList.add(h),o("after","slide",{currentSlide:z})}function f(){o("before","init"),T=(0,a.default)(),W=r({},v.default,t);var s=W,d=s.classNameFrame,l=s.classNameSlideContainer,c=s.classNamePrevCtrl,u=s.classNameNextCtrl,f=s.classNameDisabledNextCtrl,h=void 0===f?"disabled":f,p=s.classNameDisabledPrevCtrl,y=void 0===p?"disabled":p,x=s.enableMouseEvents,M=s.classNameActiveSlide,g=s.initialIndex;z=g,O=e.getElementsByClassName(d)[0],k=O.getElementsByClassName(l)[0],A=e.getElementsByClassName(c)[0],B=e.getElementsByClassName(u)[0],j={x:k.offsetLeft,y:k.offsetTop},A.classList.remove(y),B.classList.remove(h),W.infinite?P=i(m.call(k.children)):(P=m.call(k.children),A&&!W.rewindPrev&&0===z&&A.classList.add(y),B&&1===P.length&&!W.rewind&&B.classList.add(h)),b(),M&&n(P,z),A&&B&&(A.addEventListener("click",L),B.addEventListener("click",E)),O.addEventListener("touchstart",w,F),x&&(O.addEventListener("mousedown",w),O.addEventListener("click",C)),W.window.addEventListener("resize",N),o("after","init")}function b(){var e=W,t=e.infinite,i=e.ease,o=e.rewindSpeed,r=e.rewindOnResize,a=e.classNameActiveSlide,l=e.initialIndex;S=d(k),_=d(O),_===S&&(S=P.reduce(function(e,t){return e+d(t)},0)),r?z=l:(i=null,o=0),t?(s(-1*P[z+t].offsetLeft,0,null),z+=t,j.x=-1*P[z].offsetLeft):W.centerMode.enableCenterMode&&!W.centerMode.firstSlideLeftAlign?(s(-1*P[z].offsetLeft+_/2-P[z].clientWidth/2,o,i),j.x=-1*P[z].offsetLeft+_/2-P[z].clientWidth/2):(s(-1*P[z].offsetLeft,o,i),j.x=-1*P[z].offsetLeft),a&&n(m.call(P),z)}function h(e){c(e)}function p(){return z-W.infinite||0}function L(){c(!1,!1)}function E(){c(!1,!0)}function y(){o("before","destroy"),k.removeEventListener(T.transitionEnd,x),O.removeEventListener("touchstart",w,F),O.removeEventListener("touchmove",M,F),O.removeEventListener("touchend",g),O.removeEventListener("mousemove",M),O.removeEventListener("mousedown",w),O.removeEventListener("mouseup",g),O.removeEventListener("mouseleave",g),O.removeEventListener("click",C),W.window.removeEventListener("resize",N),A&&A.removeEventListener("click",L),B&&B.removeEventListener("click",E),W.infinite&&Array.apply(null,Array(W.infinite)).forEach(function(){k.removeChild(k.firstChild),k.removeChild(k.lastChild)}),o("after","destroy")}function x(){D&&(D(),D=void 0)}function w(e){var t=W,n=t.enableMouseEvents,i=e.touches?e.touches[0]:e;n&&(O.addEventListener("mousemove",M),O.addEventListener("mouseup",g),O.addEventListener("mouseleave",g)),O.addEventListener("touchmove",M,F),O.addEventListener("touchend",g);var r=i.pageX,s=i.pageY;I={x:r,y:s,time:Date.now()},R=void 0,X={},o("on","touchstart",{event:e})}function M(e){var t=e.touches?e.touches[0]:e,n=t.pageX,i=t.pageY;X={x:n-I.x,y:i-I.y},void 0===R&&(R=!!(R||Math.abs(X.x)<Math.abs(X.y))),!R&&I&&s(j.x+X.x,0,null),o("on","touchmove",{event:e})}function g(e){var t=I?Date.now()-I.time:void 0,n=Number(t)<300&&Math.abs(X.x)>25||Math.abs(X.x)>_/3,i=!z&&X.x>0||z===P.length-1&&X.x<0,r=X.x<0;R||(n&&!i?c(!1,r):s(j.x,W.snapBackSpeed)),I=void 0,O.removeEventListener("touchmove",M),O.removeEventListener("touchend",g),O.removeEventListener("mousemove",M),O.removeEventListener("mouseup",g),O.removeEventListener("mouseleave",g),o("on","touchend",{event:e})}function C(e){X.x&&e.preventDefault()}function N(e){_!==d(O)&&(b(),o("on","resize",{event:e}))}var j=void 0,S=void 0,_=void 0,P=void 0,O=void 0,k=void 0,A=void 0,B=void 0,T=void 0,D=void 0,z=0,W={},F=!!(0,l.default)()&&{passive:!0};"undefined"!=typeof jQuery&&e instanceof jQuery&&(e=e[0]);var I=void 0,X=void 0,R=void 0;return f(),{setup:f,reset:b,slideTo:h,returnIndex:p,prev:L,next:E,destroy:y}}Object.defineProperty(t,"__esModule",{value:!0});var r=Object.assign||function(e){for(var t=1;t<arguments.length;t++){var n=arguments[t];for(var i in n)Object.prototype.hasOwnProperty.call(n,i)&&(e[i]=n[i])}return e};t.lory=o;var s=n(1),a=i(s),d=n(2),l=i(d),c=n(3),u=i(c),f=n(6),v=i(f),m=Array.prototype.slice},function(e,t,n){"use strict";function i(){var e=void 0,t=void 0,n=void 0;return function(){var i=document.createElement("_"),o=i.style,r=void 0;""===o[r="webkitTransition"]&&(n="webkitTransitionEnd",t=r),""===o[r="transition"]&&(n="transitionend",t=r),""===o[r="webkitTransform"]&&(e=r),""===o[r="msTransform"]&&(e=r),""===o[r="transform"]&&(e=r),document.body.insertBefore(i,null),o[e]="translateX(0)",document.body.removeChild(i)}(),{transform:e,transition:t,transitionEnd:n}}Object.defineProperty(t,"__esModule",{value:!0}),t.default=i},function(e,t,n){"use strict";function i(){var e=!1;try{var t=Object.defineProperty({},"passive",{get:function(){e=!0}});window.addEventListener("testPassive",null,t),window.removeEventListener("testPassive",null,t)}catch(e){}return e}Object.defineProperty(t,"__esModule",{value:!0}),t.default=i},function(e,t,n){"use strict";function i(e,t,n){var i=new r.default(t,{bubbles:!0,cancelable:!0,detail:n});e.dispatchEvent(i)}Object.defineProperty(t,"__esModule",{value:!0}),t.default=i;var o=n(4),r=function(e){return e&&e.__esModule?e:{default:e}}(o)},function(e,t,n){(function(t){var n=t.CustomEvent;e.exports=function(){try{var e=new n("cat",{detail:{foo:"bar"}});return"cat"===e.type&&"bar"===e.detail.foo}catch(e){}return!1}()?n:"undefined"!=typeof document&&"function"==typeof document.createEvent?function(e,t){var n=document.createEvent("CustomEvent");return t?n.initCustomEvent(e,t.bubbles,t.cancelable,t.detail):n.initCustomEvent(e,!1,!1,void 0),n}:function(e,t){var n=document.createEventObject();return n.type=e,t?(n.bubbles=Boolean(t.bubbles),n.cancelable=Boolean(t.cancelable),n.detail=t.detail):(n.bubbles=!1,n.cancelable=!1,n.detail=void 0),n}}).call(t,n(5))},function(e,t){var n;n=function(){return this}();try{n=n||Function("return this")()||(0,eval)("this")}catch(e){"object"==typeof window&&(n=window)}e.exports=n},function(e,t,n){"use strict";Object.defineProperty(t,"__esModule",{value:!0}),t.default={slidesToScroll:1,slideSpeed:300,rewindSpeed:600,snapBackSpeed:200,ease:"ease",rewind:!1,infinite:!1,initialIndex:0,classNameFrame:"js_frame",classNameSlideContainer:"js_slides",classNamePrevCtrl:"js_prev",classNameNextCtrl:"js_next",classNameActiveSlide:"active",enableMouseEvents:!1,window:"undefined"!=typeof window?window:null,rewindOnResize:!0,centerMode:{enableCenterMode:!1,firstSlideLeftAlign:!1}}},function(e,t,n){e.exports=n(0)}])});
+    </script>
+    <script>
+"use strict";
+function makeStr(num) {
+  let text = "";
+  let possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  for (let i = 0; i < num; i++) {
+    text += possible.charAt(Math.floor(Math.random() * possible.length));
+  }
+  return text;
+}
+
+function toggleClass(s,n) {
+  let elements = document.querySelectorAll(s);
+  elements.forEach(element => {
+    element.classList.toggle(n);
+  });
+}
+
+function switchSource(e) {
+  if(e.target && e.target.nodeName === "LI") {
+    sourceReg =  e.target.classList[0].substring(7);
+    updateAside();
+    programId = undefined;
+  }
+}
+
+function switchCategory(e) {
+  if(e.target && e.target.nodeName === "LI") {
+    let catValue =  e.target.dataset.value;
+    switch (catValue) {
+      case "0":
+      case "1":
+        if(catValue === "0") {
+          e.target.textContent = '开灯';
+          e.target.dataset.value = 1;
+          localStorage.setItem('dark', 1);
+        } else {
+          e.target.textContent = '关灯';
+          e.target.dataset.value = 0;
+          localStorage.setItem('dark', 0);
+        }
+        toggleClass('li','white');
+        toggleClass('button','white');
+        toggleClass('input','white');
+        toggleClass('a','white');
+        toggleClass('body','bgBlack');
+        toggleClass('input','bgBlack');
+        toggleClass('footer','hidden');
+        break;
+      default:
+        const selected = document.querySelector('.borderRed');
+        if(selected) selected.classList.remove('borderRed');
+        if (e.target.dataset.source) {
+          sourceReg = e.target.dataset.source;
+          programId = catValue;
+          playVideo();
+          const selected = document.querySelector('.selected');
+          if(selected) selected.classList.remove('selected');
+          e.target.classList.add('selected');
+        } else {
+          e.target.classList.add('borderRed');
+          const mylist = document.querySelector('.'+catValue);
+          let siblings = mylist.parentNode.childNodes;
+          siblings.forEach(sibling => {
+            if(sibling.nodeName === "UL") {
+              sibling.classList.add('hidden');
+            }
+          });
+          mylist.classList.remove('hidden');
+        }
+        break;
+    }
+  }
+}
+
+function switchChannel(e) {
+  if(e.target) {
+    if (e.target.nodeName === "LI") {
+      sourceReg =  e.target.dataset.source;
+      programId =  e.target.dataset.id;
+      rate = e.target.dataset.rate;
+      playVideo();
+      const selected = document.querySelector('.selected');
+      if(selected) selected.classList.remove('selected');
+      e.target.classList.add('selected');
+    } else if (e.target.nodeName === "SUB") {
+      sourceReg =  e.target.parentNode.dataset.source;
+      programId =  e.target.parentNode.dataset.id;
+      playVideo();
+      const selected = document.querySelector('.selected');
+      if(selected) selected.classList.remove('selected');
+      e.target.parentNode.classList.add('selected');
+    }
+  }
+}
+
+function videojsLoad() {
+  if (videoField.hasChildNodes()) {
+    videojs('video').dispose();
+  }
+  
+  let contentType = hlsVideoUrl.indexOf('.flv') === -1 ? 'application/vnd.apple.mpegurl' : 'video/x-flv';
+  const video = document.createElement('video');
+  video.id = 'video';
+  video.className = 'video-js';
+  const noVideojs = document.createElement('p');
+  noVideojs.className = 'vjs-no-js';
+  const noVideojsText = document.createTextNode('需启用 JavaScript，或使用更新的浏览器');
+  noVideojs.appendChild(noVideojsText);
+  video.appendChild(noVideojs);
+  videoField.appendChild(video);
+
+  const player = videojs('video',{
+    liveui: liveui,
+    autoplay: 'true',
+    preload: 'auto',
+    playsinline: true,
+    textTrackSettings: false,
+    controls: true,
+    fluid: true,
+    responsive: true
+  });
+
+  player.src({
+    src: hlsVideoUrl,
+    type: contentType,
+    overrideNative: true
+  });
+
+  player.ready(function() {
+    let promise = player.play();
+
+    if (promise !== undefined) {
+      promise.then(function() {
+        // Autoplay started!
+      }).catch(function() {
+        // Autoplay was prevented.
+      });
+    }
+  });
+
+  player.on('error', function(e) {
+    let time = this.currentTime();
+    if (this.error().code === 2) {
+      alertInfo('频道发生错误！',10);
+      this.error(null).pause().load().currentTime(time).play();
+    } else if (this.error().code === 4) {
+      if (hlsVideoUrl.indexOf('playtype=lookback') !== -1) {
+        if (rate === 'org') {
+          rate = 'hd';
+          playBack(sourceReg);
+        } else if (rate === 'hd') {
+          rate = 'ld';
+          playBack(sourceReg);
+        } else if (rate === 'ld') {
+          rate = 'sd';
+          playBack(sourceReg);
+        } else {
+          alertInfo('录像还未准备好！',10);
+        }
+      } else if (hlsVideoUrl.indexOf('playtype=live') !== -1) {
+        if (rate === 'org') {
+          rate = 'hd';
+          playVideo();
+        } else if (rate === 'hd') {
+          rate = 'ld';
+          playVideo();
+        } else if (rate === 'ld') {
+          rate = 'sd';
+          playVideo();
+        } else {
+          alertInfo('频道不可用！',10);
+        }
+      } else {
+        alertInfo('频道不可用！',10);
+      }
+      /*
+      if (programId) {
+        localStorage.removeItem(sourceReg+'_acc');
+        localStorage.removeItem(sourceReg+'_pwd');
+        localStorage.removeItem(sourceReg+'_token');
+        localStorage.removeItem(sourceReg+'_verify_code');
+      }
+      */
+    } else {
+      alertInfo('无法连接直播源！',10);
+    }
+  });
+}
+
+function playVideo() {
+  if(!programId) {
+    let keyArr = Object.keys(sourcesJsonParsed);
+    let index;
+    while ((index = keyArr.pop()) !== undefined) {
+      if (sourcesJsonParsed[index].hasOwnProperty('channels') && sourcesJsonParsed[index].channels[0] && sourcesJsonParsed[index].channels[0].hasOwnProperty('url')) {
+        hlsVideoUrl = sourcesJsonParsed[index].channels[0].url;
+        videojsLoad();
+        if (sourcesJsonParsed[index].hasOwnProperty('overlay')) {
+          videoOverlay(sourcesJsonParsed[index].overlay,sourcesJsonParsed[index].channels[0]);
+        }
+        showSchedule(sourcesJsonParsed[index].channels[0].schedule);
+        resetSourceReg();
+        break;
+      }
+    }
+  } else if (jsonChannels[sourceReg]) {
+    hlsVideoUrl = jsonChannels[sourceReg][programId]['url'];
+    videojsLoad();
+    if (jsonChannels[sourceReg].hasOwnProperty('overlay')) {
+      videoOverlay(jsonChannels[sourceReg].overlay,jsonChannels[sourceReg][programId]);
+    }
+    showSchedule(jsonChannels[sourceReg][programId].schedule);
+    resetSourceReg();
+  } else if (!sourcesJsonParsed.hasOwnProperty(sourceReg) || !sourcesJsonParsed[sourceReg].hasOwnProperty('channels')) {
+    deleteSchedule();
+    alertInfo('频道不可用！');
+    resetSourceReg();
+  } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('play_url')) {
+    sourcesJsonParsed[sourceReg].channels.forEach(channel => {
+      if (channel.chnl_id === programId) {
+        hlsVideoUrl = channel.url;
+        videojsLoad();
+        if (sourcesJsonParsed[sourceReg].hasOwnProperty('overlay')) {
+          videoOverlay(sourcesJsonParsed[sourceReg].overlay,channel);
+        }
+        showSchedule(channel.schedule);
+        resetSourceReg();
+      }
+    });
+  } else if (localStorage.getItem(sourceReg+'_token')) {
+    if (sourcesJsonParsed[sourceReg].hasOwnProperty('auth_info_url') && sourcesJsonParsed[sourceReg].hasOwnProperty('auth_verify_url')) {
+      reqAuth();
+    } else {
+      if (localStorage.getItem(sourceReg+'_verify_code')) {
+        hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken=ABCDEFGH&verifycode='+localStorage.getItem(sourceReg+'_verify_code')+'&rate='+rate+'&programid='+programId+'.m3u8';
+      } else {
+        hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken=ABCDEFGH&rate='+rate+'&programid='+programId+'.m3u8';
+      }
+      videojsLoad();
+      showSchedule();
+      updateAside();
+    }
+  } else {
+    deleteSchedule();
+    alertInfo(sourcesJsonParsed[sourceReg].desc+'直播源未注册或登录！',5);
+    updateAside();
+  }
+}
+
+function videoOverlay(sourceOverlay,channel) {
+  let overlays = [],channelOverlay,channelOverlayArr = [];
+  if (channel.hasOwnProperty('overlay') && channel.overlay.length > 0) {
+    channelOverlay = channel.overlay;
+    channelOverlayArr = channelOverlay.split(',');
+  }
+  sourceOverlay.forEach((sourceItem,sourceIndex) => {
+    let overlayInfo = [];
+    if (sourceItem.hasOwnProperty('force') && sourceItem.force === 1) {
+      if (sourceItem.hasOwnProperty('switch') && sourceItem.switch === 'on') {
+        overlays.push({class:'overlay'+sourceIndex.toString(),content:'',align:'center',start:'ready'});
+        overlayInfo.push(sourceItem.height,sourceItem.width,sourceItem.margin_left,sourceItem.margin_top,sourceItem.height_fullscreen,sourceItem.width_fullscreen,sourceItem.margin_left_fullscreen,sourceItem.margin_top_fullscreen);
+        overlaysInfo[sourceIndex] = overlayInfo;
+      }
+    } else if (channelOverlayArr.length > sourceIndex) {
+      let channelOverlayIndex = channelOverlayArr[sourceIndex];
+      if ((channelOverlayIndex === 'on' && sourceItem.reverse === 0) || (channelOverlayIndex === 'off' && sourceItem.reverse === 1)) {
+        overlays.push({class:'overlay'+sourceIndex.toString(),content:'',align:'center',start:'ready'});
+        overlayInfo.push(sourceItem.height,sourceItem.width,sourceItem.margin_left,sourceItem.margin_top,sourceItem.height_fullscreen,sourceItem.width_fullscreen,sourceItem.margin_left_fullscreen,sourceItem.margin_top_fullscreen);
+        overlaysInfo[sourceIndex] = overlayInfo;
+      } else if (channelOverlayIndex.indexOf(':') !== -1) {
+        let channelOverlayIndexArr = channelOverlayIndex.split(':');
+        if ((sourceItem.reverse === 0 && channelOverlayIndexArr[0] === 'on') || (sourceItem.reverse === 1 && channelOverlayIndexArr[0] === 'off')) {
+          overlays.push({class:'overlay'+sourceIndex.toString(),content:'',align:'center',start:'ready'});
+          channelOverlayIndexArr.shift();
+          overlaysInfo[sourceIndex] = channelOverlayIndexArr;
+        }
+      }
+    }
+  });
+
+  if (overlays.length > 0) {
+    videoField.firstChild.classList.add('vjs-16-9');
+    videojs('video').overlay({
+      debug: false,
+      overlays: overlays
+    });
+    for (let index = 0; index < overlays.length; index++) {
+      const info = overlaysInfo[index];
+      const overlayIndex = document.querySelector('.overlay'+index);
+      overlayIndex.setAttribute('style', 'height:' + info[0] +'%; width: ' + info[1] + '%; margin-left: ' + info[2] + '%; margin-top: ' + info[3] + '%;');
+    }
+  }
+}
+
+function setOverlayFullscreen() {
+  let width = window.screen.width * window.devicePixelRatio;
+  let height = window.screen.height * window.devicePixelRatio;
+  let videoWidth,videoHeight,newWidth,newHeight,marginLeft,marginTop;
+  let videoWidthRes = videojs('video').videoWidth();
+  let videoHeightRes = videojs('video').videoHeight();
+  if (width > height && width / height !== 1.6) {
+    videoHeight = height;
+    videoWidth = videoHeight * videoWidthRes / videoHeightRes;
+  } else {
+    videoWidth = width;
+    videoHeight = videoWidth * videoHeightRes / videoWidthRes;
+  }
+
+  for (let index = 0; index < Object.keys(overlaysInfo).length; index++) {
+    const info = overlaysInfo[index];
+    const overlayIndex = document.querySelector('.overlay'+index);
+    if (overlayIndex) {
+      if (document.fullscreenElement) {
+        newHeight = Math.floor(videoHeight * info[4] / 100 / window.devicePixelRatio);
+        newWidth = Math.floor(videoWidth * info[5] / 100 / window.devicePixelRatio);
+        marginLeft = Math.floor(videoWidth * info[6] / 100 / window.devicePixelRatio);
+        marginTop = Math.floor(videoHeight * info[7] / 100 / window.devicePixelRatio);
+  
+        overlayIndex.setAttribute('style', 'width:' + newWidth +'px; height: ' + newHeight + 'px; margin-left: ' + marginLeft + 'px; margin-top: ' + marginTop + 'px;');
+      } else {
+        overlayIndex.setAttribute('style', 'height:' + info[0] +'%; width: ' + info[1] + '%; margin-left: ' + info[2] + '%; margin-top: ' + info[3] + '%;');
+      }
+    }
+  }
+}
+
+function timeoutPromise(ms, promise) {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error('超时'));
+    }, ms);
+    promise.then(
+      (res) => {
+        clearTimeout(timeoutId);
+        resolve(res);
+      },
+      (err) => {
+        clearTimeout(timeoutId);
+        reject(err);
+      }
+    );
+  }).catch(console.log);
+}
+
+function reqData(url, data = '', method = 'GET') {
+  return new Promise((resolve, reject) => {
+    if (method === 'GET') {
+      fetch(url + data, {
+        method: method,
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "omit",
+        referrer: "",
+      }).then(response => {
+        resolve(response.json());
+      }).catch(err => {reject(err);});
+    } else {
+      fetch(url, {
+        method: method,
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "omit",
+        referrer: "",
+        body: JSON.stringify(data),
+      }).then(response => {
+        resolve(response.json());
+      }).catch(err => {reject(err);});
+    }
+  }).catch(err => {
+    console.log('连接 ' + url + ' 发生错误:', err.message);
+  });
+}
+
+function alertInfo(text,delay=3) {
+  alertField.textContent = text;
+  setTimeout(function() {
+    if (alertField.textContent === text) {
+      alertField.textContent = '';
+    }
+  }, delay*1000);
+}
+
+function uniqueName() {
+  if (sourcesJsonParsed[sourceReg].hasOwnProperty('unique_url')) {
+    reqData(sourcesJsonParsed[sourceReg].unique_url,'?accounttype='+sourcesJsonParsed[sourceReg].acc_type_reg+'&username='+regAccField.value)
+    .then(response => {
+      if (response.ret !== 0) {
+        alertInfo('用户名已存在,请重新输入！',3);
+      }
+    });
+  }
+}
+
+function regImg() {
+  if (sourcesJsonParsed[sourceReg].hasOwnProperty('img_url')) {
+    let tokenUrl,imgUrl;
+    tokenUrl = sourcesJsonParsed[sourceReg].token_url;
+    imgUrl = sourcesJsonParsed[sourceReg].img_url;
+
+    if (sourcesJsonParsed[sourceReg].hasOwnProperty('refresh_token_url')) {
+      let deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
+      deviceno = deviceno+md5(deviceno).substring(7, 8);
+      timeoutPromise(3000,reqData(tokenUrl,{"role":"guest","deviceno":deviceno,"deviceType":"yuj"},'POST'))
+      .then(response => {
+        if (response.ret !== 0) {
+          alertInfo('验证码请求错误！');
+        } else {
+          reqData(sourcesJsonParsed[sourceReg].refresh_token_url,{"accessToken":response.accessToken,"refreshToken":response.refreshToken},'POST')
+          .then(response => {
+            if (response.ret !== 0) {
+              alertInfo('验证码请求错误！');
+            } else {
+              reqData(imgUrl,'?accesstoken='+response.accessToken)
+              .then(response => {
+                const newImage = document.createElement('img');
+                newImage.src = response.image.replace('\\','/');
+                regImgField.innerHTML = newImage.outerHTML;
+                regImgIdField.value = response.picid;
+              });
+            }
+          });
+        }
+      }).catch(err => {
+        alertInfo('无法连接'+sourcesJsonParsed[sourceReg].desc+'直播源!', 10);
+        console.log('请求 '+tokenUrl+' 发生错误:', err.message);
+      });
+    } else {
+      timeoutPromise(3000,reqData(tokenUrl,{"usagescen":1},'POST'))
+      .then(response => {
+        if (response.ret !== 0) {
+          alertInfo('验证码请求错误！');
+        } else {
+          reqData(imgUrl,'?accesstoken='+response.access_token)
+          .then(response => {
+            const newImage = document.createElement('img');
+            newImage.src = response.image.replace('\\','/');
+            regImgField.innerHTML = newImage.outerHTML;
+            regImgIdField.value = response.picid;
+          });
+        }
+      }).catch(err => {
+        alertInfo('无法连接'+sourcesJsonParsed[sourceReg].desc+'直播源!', 10);
+        console.log('请求 '+tokenUrl+' 发生错误:', err.message);
+      });
+    }
+  }
+}
+
+function reqSms() {
+  if (sourcesJsonParsed[sourceReg].hasOwnProperty('sms_url')) {
+    let regAcc = regAccField.value;
+    let regImgInput = regImgInputField.value;
+    let regImgId = regImgIdField.value;
+
+    reqData(sourcesJsonParsed[sourceReg].sms_url,'?pincode='+regImgInput+'&picid='+regImgId+'&verifytype=3&account='+regAcc+'&accounttype=1')
+    .then(response => {
+      if (response.ret !== 0) {
+        alertInfo('验证码或其它错误！请重新输入！');
+      } else {
+        alertInfo('短信已发送！',5);
+      }
+    });
+  }
+}
+
+function reqReg() {
+  let acc = regAccField.value;
+  acc = acc.toString();
+  let pwd = regPwdField.value;
+  let smsCode = regSmsField.value;
+
+  if (!sourcesJsonParsed[sourceReg].hasOwnProperty('img_url')) {
+    reqData(sourcesJsonParsed[sourceReg].reg_url,'?username='+acc+'&iconid=1&pwd='+md5(pwd)+'&birthday=1970-1-1&type=1&accounttype='+sourcesJsonParsed[sourceReg].acc_type_reg)
+    .then(response => {
+      if (response.ret !== 0) {
+        alertInfo(sourcesJsonParsed[sourceReg].desc + '直播源注册失败，请重试！用户名不能是中文！');
+      } else {
+        formToggle.click();
+        loginAccField.value = acc;
+        loginPwdField.value = pwd;
+        regAccField.value = '';
+        regPwdField.value = '';
+        regImgInputField.value = '';
+        regSmsField.value = '';
+        alertInfo('注册成功!');
+        reqLogin();
+      }
+    });
+  } else {
+    reqData(sourcesJsonParsed[sourceReg].verify_url,'?verifycode='+smsCode+'&verifytype=3&username='+acc+'&account='+acc)
+    .then(response => {
+      if (response.ret === 0) {
+        let user = {};
+        user.account = acc;
+        let deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
+        user.deviceno = deviceno+md5(deviceno).substring(7, 8);
+        user.devicetype = 'yuj';
+        user.code = response.code;
+        let timestamp = Date.now();
+        user.signature = md5(acc+'|'+md5(pwd)+'|'+user.deviceno+'|'+user.devicetype+'|'+timestamp);
+        user.birthday = '1970-1-1';
+        user.username = acc;
+        user.type = 1;
+        user.timestamp = timestamp.toString();
+        user.pwd = md5(pwd);
+        user.accounttype = sourcesJsonParsed[sourceReg].acc_type_reg;
+
+        reqData(sourcesJsonParsed[sourceReg].reg_url,user,'POST')
+        .then(response => {
+          if (response.ret === 0) {
+            formToggle.click();
+            loginAccField.value = acc;
+            loginPwdField.value = pwd;
+            regAccField.value = '';
+            regPwdField.value = '';
+            regImgInputField.value = '';
+            regSmsField.value = '';
+            alertInfo('注册成功!');
+            reqLogin();
+          } else {
+            alertInfo('注册失败,手机号已存在！', 10);
+          }
+        });
+      } else {
+        alertInfo('短信验证失败,请重试！');
+      }
+    });
+  }
+}
+
+function reqLogin() {
+  let acc = loginAccField.value;
+  acc = acc.toString();
+  let pwd = loginPwdField.value;
+  let deviceno;
+  deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
+  deviceno = deviceno + md5(deviceno).substring(7, 8);
+  let devicetype = 3;
+  let isforce = 1;
+
+  if (!sourcesJsonParsed[sourceReg].hasOwnProperty('img_url')) {
+    reqData(sourcesJsonParsed[sourceReg].login_url,'?deviceno='+deviceno+'&devicetype='+devicetype+'&accounttype='+sourcesJsonParsed[sourceReg].acc_type_login+'&accesstoken=(null)&account='+acc+'&pwd='+md5(pwd)+'&isforce='+isforce)
+    .then(response => {
+      if (response.ret === 0) {
+        alertInfo(sourcesJsonParsed[sourceReg].desc+'直播源登录成功！',5);
+        localStorage.setItem(sourceReg+'_acc', acc);
+        localStorage.setItem(sourceReg+'_pwd', pwd);
+        localStorage.setItem(sourceReg+'_token', response.access_token);
+        localStorage.setItem(sourceReg+'_verify_code', response.device_id);
+        initialize();
+      } else {
+        alertInfo(sourcesJsonParsed[sourceReg].desc+'直播源登录失败！',10);
+      }
+    });
+  } else {
+    let user = {};
+    user.account = acc;
+    user.deviceno = deviceno;
+    user.pwd = md5(pwd);
+    user.devicetype = 'yuj';
+    user.businessplatform = 1;
+    let timestamp = Date.now();
+    user.signature = md5(deviceno+'|'+user.devicetype+'|'+sourcesJsonParsed[sourceReg].acc_type_login+'|'+acc+'|'+timestamp);
+    user.isforce = 1;
+    user.extendinfo = sourcesJsonParsed[sourceReg].extend_info;
+    if (sourcesJsonParsed[sourceReg].server_version) {
+      user.serverVersion = sourcesJsonParsed[sourceReg].server_version;
+    }
+    user.timestamp = timestamp.toString();
+    user.accounttype = sourcesJsonParsed[sourceReg].acc_type_login;
+
+    timeoutPromise(3000,reqData(sourcesJsonParsed[sourceReg].login_url,user,'POST'))
+    .then(response => {
+      if (response.ret !== 0) {
+        alertInfo(sourcesJsonParsed[sourceReg].desc+'直播源登录失败！',10);
+      } else {
+        alertInfo(sourcesJsonParsed[sourceReg].desc+'直播源登录成功！',5);
+        localStorage.setItem(sourceReg+'_acc', acc);
+        localStorage.setItem(sourceReg+'_pwd', pwd);
+        localStorage.setItem(sourceReg+'_token', response.access_token);
+        localStorage.setItem(sourceReg+'_verify_code', response.device_id);
+        initialize();
+      }
+    }).catch(err => {
+      alertInfo('无法连接'+sourcesJsonParsed[sourceReg].desc+'直播源!', 10);
+      console.log('登录 '+sourcesJsonParsed[sourceReg].login_url+' 发生错误:', err.message);
+    });
+  }
+}
+
+function appendList(channel,appendSourceName,sourceLane) {
+  const channelListItem = document.createElement('li');
+  const channelListText = document.createTextNode(channel.chnl_name);
+  if (localStorage.getItem('dark') === '1'){
+    channelListItem.classList.add('white');
+  }
+  if (localStorage.getItem(appendSourceName+'_token') || jsonChannels.hasOwnProperty(appendSourceName)){
+    channelListItem.classList.add('working');
+  }
+  channelListItem.setAttribute('data-id',channel.chnl_id);
+  channelListItem.setAttribute('data-source',appendSourceName);
+  if (channel.chnl_rate) {
+    channelListItem.setAttribute('data-rate',channel.chnl_rate);
+  }
+  channelListItem.appendChild(channelListText);
+  if (channel.chnl_cat.indexOf('高清') === -1) {
+    const channelSup = document.createElement('sub');
+    channelSup.textContent = sourceLane;
+    channelListItem.appendChild(channelSup);
+  }
+  switch (channel.chnl_cat) {
+    case '高清电信':
+      myList1.appendChild(channelListItem);
+      break;
+    case '高清联通':
+      myList1a.appendChild(channelListItem);
+      break;
+    case '标清':
+      myList2.appendChild(channelListItem);
+      break;
+    case '央视':
+      myList3.appendChild(channelListItem);
+      break;
+    case '卫视':
+      myList4.appendChild(channelListItem);
+      break;
+    case '地方':
+      myList5.appendChild(channelListItem);
+      break;
+    case '专业':
+      myList8.appendChild(channelListItem);
+      break;
+    case '港澳台':
+      myList10.appendChild(channelListItem);
+      break;
+    default:
+      break;
+  }
+}
+
+function reqJson(json) {
+  timeoutPromise(5000,reqData(json))
+  .then(response => {
+    if (response.ret === 0) {
+      response.data.forEach((source) => {
+        if (source.hasOwnProperty('channels')) {
+          let newChannel={};
+          jsonChannels[source.name] = {};
+          if (source.hasOwnProperty('overlay')) {
+            jsonChannels[source.name]['overlay'] = source.overlay;
+          }
+          source.channels.forEach(channel => {
+            if (channel.hasOwnProperty('url')) {
+              jsonChannels[source.name][channel.chnl_id] = {};
+              jsonChannels[source.name][channel.chnl_id]['url'] = channel.url;
+              if (channel.hasOwnProperty('overlay')) {
+                jsonChannels[source.name][channel.chnl_id]['overlay'] = channel.overlay;
+              }
+              if (channel.hasOwnProperty('schedule')) {
+                jsonChannels[source.name][channel.chnl_id]['schedule'] = channel.schedule;
+              }
+              newChannel.chnl_name = channel.chnl_name;
+              newChannel.chnl_id = channel.chnl_id;
+              newChannel.chnl_cat = channel.chnl_cat;
+              appendList(newChannel,source.name,source.lane);
+            }
+          });
+        }
+      });
+    }
+  }).catch(() => {console.log('无法连接 '+json)});
+}
+
+function getToken(source) {
+  return new Promise((resolve, reject) => {
+    if (source.hasOwnProperty('access_token')) {
+      let deviceno;
+      deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
+      deviceno = deviceno + md5(deviceno).substring(7, 8);
+
+      timeoutPromise(3000,reqData(source.login_url,'?deviceno='+deviceno+'&devicetype=3&accounttype='+source.acc_type_login+'&accesstoken=(null)&account='+source.access_token.substring(32)+'&pwd='+source.access_token.substring(0, 32)+'&isforce=1&businessplatform=1'))
+      .then(response => {
+        if (response.access_token) {
+          localStorage.setItem(source.name+'_token', response.access_token);
+          localStorage.setItem(source.name+'_verify_code', response.device_id);
+          resolve(response.access_token);
+        }
+      }).catch(err => {reject(err);});
+    } else if (localStorage.getItem(source.name+'_token')) {
+      resolve(localStorage.getItem(source.name+'_token'));
+    } else if (source.hasOwnProperty('refresh_token_url')) {
+      let deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
+      deviceno = deviceno+md5(deviceno).substring(7, 8);
+      timeoutPromise(3000,reqData(source.token_url,{"role":"guest","deviceno":deviceno,"deviceType":"yuj"},'POST'))
+      .then(response => {
+        if (response.ret === 0) {
+          reqData(source.refresh_token_url,{"accessToken":response.accessToken,"refreshToken":response.refreshToken},'POST')
+          .then(response => {
+            if (response.ret === 0) {
+              resolve(response.accessToken);
+            }
+          }).catch(err => {reject(err);});
+        }
+      }).catch(err => {reject(err);});
+    } else {
+      timeoutPromise(3000,reqData(source.token_url,{"usagescen":1},'POST'))
+      .then(response => {
+        if (response.ret === 0) {
+          resolve(response.access_token);
+        }
+      }).catch(err => {reject(err);});
+    }
+  }).catch(console.log);
+}
+
+function reqChannels(source,token) {
+  timeoutPromise(5000,reqData(source.list_url,'?pageidx=1&pagenum=500&accesstoken='+token))
+  .then(response => {
+    if (response.ret === 0) {
+      let channelCats;
+      let cats = {"001":"高清"+source.lane,"002":"标清","003":"央视","004":"卫视","005":"地方","008":"专业"};
+      let omitArr = [];
+      let reverse = 0;
+      if (source.omit) {
+        let omit = source.omit;
+        if (omit.substring(0,7) === 'reverse') {
+          reverse = 1;
+          omit = omit.substring(8);
+        }
+        let omitChannels = omit.split(',');
+        omitChannels.forEach(omitChannel => {
+          if (omitChannel.indexOf('-') !== -1) {
+            let omitSubArr = omitChannel.split('-');
+            for (let a = Number(omitSubArr[0]); a <= Number(omitSubArr[1]); a++) {
+              omitArr.push(Number(a));
+            }
+          } else {
+            omitArr.push(Number(omitChannel));
+          }
+        });
+      }
+      response.chnl_list.forEach(channel => {
+        if (source.omit) {
+          let chnl_id = Number(channel.chnl_id.toString().slice(-3));
+          if ((reverse === 0 && omitArr.indexOf(chnl_id) !== -1) || (reverse === 1 && omitArr.indexOf(chnl_id) === -1)) {
+            return;
+          }
+        }
+        if (channel.sub_type.length === 0) {
+          if (channel.chnl_name.indexOf('高清') !== -1 || channel.chnl_name.toUpperCase().indexOf('HD') !== -1) {
+            channel.sub_type = '001';
+          } else {
+            channel.sub_type = '002';
+          }
+          if (channel.chnl_name.toUpperCase().indexOf('CCTV') !== -1) {
+            channel.sub_type = channel.sub_type + '|003';
+          }
+          if (channel.chnl_name.indexOf('卫视') !== -1) {
+            channel.sub_type = channel.sub_type + '|004';
+          }
+        } else if (channel.chnl_name.indexOf('高清') !== -1 && channel.hasOwnProperty('subtype_name') && channel.subtype_name.indexOf('高清') === -1) {
+          channel.sub_type = channel.sub_type + '|001';
+        }
+        let newChannel={};
+        channelCats = channel.sub_type.split('|');
+        channelCats.forEach(channelCat => {
+          channelCat = channelCat.slice(-3);
+          if (sourcesJsonParsed[source.name].hasOwnProperty('fix_cats') && sourcesJsonParsed[source.name].fix_cats.hasOwnProperty(channelCat)) {
+            channelCat = sourcesJsonParsed[source.name].fix_cats[channelCat];
+          }
+          if (typeof cats[channelCat] === 'undefined') {
+            return;
+          }
+          newChannel.chnl_name = channel.chnl_name;
+          newChannel.chnl_id = channel.chnl_id;
+          newChannel.chnl_rate = channel.rate_list[0];
+          for (let index = 0; index < channel.rate_list.length; index++) {
+            const channel_rate = channel.rate_list[index];
+            if (channel_rate === 'org') {
+              newChannel.chnl_rate = channel_rate;
+              break;
+            } else if (channel_rate === 'hd') {
+              newChannel.chnl_rate = channel_rate;
+            }
+          }
+          newChannel.chnl_cat = cats[channelCat];
+          appendList(newChannel,source.name,source.lane);
+        });
+      });
+    } else {
+      alertInfo(sourcesJsonParsed[source.name].desc+'直播源错误！需重新注册或登录！',10);
+      localStorage.removeItem(source.name+'_acc');
+      localStorage.removeItem(source.name+'_pwd');
+      localStorage.removeItem(source.name+'_token');
+    }
+  }).catch(err => {
+    toggleClass('[data-source='+source.name+']','hidden');
+    alertInfo('无法连接'+sourcesJsonParsed[source.name].desc+'直播源！',10);
+    console.log('获取列表 '+source.list_url+' 发生错误:', err.message);
+  });
+}
+
+function reqAuth() {
+  timeoutPromise(3000,reqData(sourcesJsonParsed[sourceReg].auth_info_url,'?accesstoken='+localStorage.getItem(sourceReg+'_token')+'&programid='+programId+'&playtype=live&protocol=hls&verifycode='+localStorage.getItem(sourceReg+'_verify_code')))
+  .then(response => {
+    if (response.ret === 0) {
+      let authtoken = md5('ipanel123#%#&*(&(*#*&^*@#&*%()#*()$)#@&%(*@#()*%321ipanel'+response.auth_random_sn);
+      let playtoken = response.play_token;
+      timeoutPromise(3000,reqData(sourcesJsonParsed[sourceReg].auth_verify_url,'?programid='+programId+'&playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&verifycode='+localStorage.getItem(sourceReg+'_verify_code')+'&authtoken='+authtoken))
+      .then(response => {
+        if (response.ret !== 0) {
+          console.log(sourcesJsonParsed[sourceReg].auth_verify_url+' 返回错误');
+        }
+        if (localStorage.getItem(sourceReg+'_verify_code')) {
+          hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playtoken+'&verifycode='+localStorage.getItem(sourceReg+'_verify_code')+'&rate='+rate+'&programid='+programId+'.m3u8';
+        } else {
+          hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playtoken+'&rate='+rate+'&programid='+programId+'.m3u8';
+        }
+        videojsLoad();
+        showSchedule();
+        updateAside();
+      }).catch(err => {
+        alertInfo('无法连接'+sourcesJsonParsed[sourceReg].desc+'直播源！',10);
+        console.log('请求 '+sourcesJsonParsed[sourceReg].auth_verify_url+' 发生错误:', err.message);
+        updateAside();
+      });
+    } else {
+      alertInfo(sourcesJsonParsed[sourceReg].desc+'直播源错误！需重新注册或登录！',10);
+      localStorage.removeItem(sourceReg+'_acc');
+      localStorage.removeItem(sourceReg+'_pwd');
+      localStorage.removeItem(sourceReg+'_token');
+      localStorage.removeItem(sourceReg+'_verify_code');
+      updateAside();
+    }
+  }).catch(err => {
+    alertInfo('无法连接'+sourcesJsonParsed[sourceReg].desc+'直播源！',10);
+    console.log('请求 '+sourcesJsonParsed[sourceReg].auth_info_url+' 发生错误:', err.message);
+    updateAside();
+  });
+}
+
+function parseJson(json) {
+  let newJson = {};
+  json.data.forEach(element => {
+    if (element.play_url) {
+      const sourcesListItem = document.createElement('li');
+      sourcesListItem.textContent = element.desc;
+      sourcesListItem.className = 'source_' + element.name;
+      if (localStorage.getItem('dark') === '1'){
+        sourcesListItem.classList.add('white');
+      }
+      sourcesField.appendChild(sourcesListItem);
+    }
+
+    let newIndex = element.name;
+    newJson[newIndex] = element;
+  });
+
+  if (!sourcesField.firstChild) {
+    sourcesField.textContent = '无';
+  }
+  sourcesJsonParsed = newJson;
+}
+
+function updateAside() {
+  const selected = document.querySelector('.sourceReg');
+  if(selected) selected.classList.remove('sourceReg');
+  const foundSource = document.querySelector('.source_'+sourceReg);
+  if(foundSource) {
+    foundSource.classList.add('sourceReg');
+    if (sourcesJsonParsed[sourceReg].hasOwnProperty('access_token')) {
+      fieldsetLoginForm.setAttribute("disabled","disabled");
+      fieldsetRegForm.setAttribute("disabled","disabled");
+      formToggle.disabled = true;
+      return;
+    } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('play_url')) {
+      sourceReg = sourceRegDefault;
+      loginAccField.setAttribute('placeholder','用户名');
+      regAccField.setAttribute('placeholder','用户名');
+    } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('img_url')) {
+      loginAccField.setAttribute('placeholder','用户名');
+      regAccField.setAttribute('placeholder','用户名');
+      regImgField.classList.toggle('hidden',true);
+      regImgInputField.classList.toggle('hidden',true);
+      regSmsField.classList.toggle('hidden',true);
+    } else {
+      loginAccField.setAttribute('placeholder','手机号');
+      regAccField.setAttribute('placeholder','手机号');
+      regImgField.classList.toggle('hidden',false);
+      regImgInputField.classList.toggle('hidden',false);
+      regSmsField.classList.toggle('hidden',false);
+    }
+    fieldsetLoginForm.removeAttribute("disabled");
+    fieldsetRegForm.removeAttribute("disabled");
+    formToggle.disabled = false;
+    loginAccField.value = localStorage.getItem(sourceReg+'_acc');
+    loginPwdField.value = localStorage.getItem(sourceReg+'_pwd');
+  }
+}
+
+function resetSourceReg() {
+  sourceReg = sourceRegDefault;
+  programId = undefined;
+  updateAside();
+}
+
+function showSchedule(chnl) {
+  deleteSchedule();
+
+  if (!chnl) {
+    if (!sourcesJsonParsed[sourceReg].hasOwnProperty('schedule_url')) {
+      return;
+    } else if (schedules[sourceReg] && schedules[sourceReg][programId]) {
+      insertSchedule(sourceReg,programId);
+    } else {
+      let starttime = new Date();
+      starttime = starttime.setHours(0,0,0,0) / 1000;
+      let endtime = starttime + 86400;
+      let chnlSource = sourceReg;
+      let chnlId = programId;
+      reqData(sourcesJsonParsed[chnlSource].schedule_url,'?accesstoken='+localStorage.getItem(sourceReg+'_token')+'&repeat=1&starttime='+starttime+'&endtime='+endtime+'&chnlid='+chnlId+'&pagenum=500&pageidx=1')
+      .then(response => {
+        if (!schedules.hasOwnProperty(chnlSource)) {
+          schedules[chnlSource] = {};
+        }
+        schedules[chnlSource][chnlId] = [];
+        for (let index = 0; index < response.total; index++) {
+          let newEvent = {},newEventTime;
+          const event = response.event_list[index];
+          newEvent.event_id = event.event_id;
+          newEvent.title = event.event_name;
+          newEventTime = new Date(event.start_time * 1000);
+          newEventTime = newEventTime.toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true });
+          newEvent.time = newEventTime.replace(' ','');
+          newEvent.sys_time = event.start_time.toString();
+          schedules[chnlSource][chnlId].push(newEvent);
+        }
+        if (schedules[chnlSource][chnlId].length > 0) {
+          insertSchedule(chnlSource,chnlId);
+        }
+      });
+    }
+  } else if (Object.keys(schedules).length === 0 && schedules.constructor === Object) {
+    reqData(scheduleJson)
+    .then(response => {
+      schedules = response;
+      insertSchedule(chnl);
+    });
+  } else {
+    insertSchedule(chnl);
+  }
+}
+
+function insertSchedule(chnl,chnlId) {
+  if (!schedules.hasOwnProperty(chnl)) {
+    sliderField.classList.add('hidden');
+    return;
+  }
+
+  let chnlSchedules;
+
+  if (chnlId) {
+    if (!schedules[chnl].hasOwnProperty(chnlId) || schedules[chnl][chnlId].length === 0) {
+      sliderField.classList.add('hidden');
+      return;
+    }
+    chnlSchedules = schedules[chnl][chnlId];
+  }
+  else if (schedules[chnl].length === 0) {
+    sliderField.classList.add('hidden');
+    return;
+  } else {
+    chnlSchedules = schedules[chnl];
+  }
+
+  let scheduleTime = 1000000000,indexTime,slideIndex = 0;
+  let dateNow = Date.now();
+
+  for (let index = 0; index < chnlSchedules.length; index++) {
+    const schedule = chnlSchedules[index];
+    const scheduleListItem = document.createElement('li');
+    const scheduleListText = document.createTextNode(schedule.time + ' ' + schedule.title);
+    scheduleListItem.classList.add('js_slide');
+    if (schedule.hasOwnProperty('id')) {
+      scheduleListItem.setAttribute('data-id', schedule.id);
+      scheduleListItem.setAttribute('data-channel', chnl);
+    }
+    if (schedule.hasOwnProperty('event_id')) {
+      scheduleListItem.setAttribute('data-eventid', schedule.event_id);
+      scheduleListItem.setAttribute('data-id', chnl);
+    }
+    scheduleListItem.appendChild(scheduleListText);
+    scheduleField.appendChild(scheduleListItem);
+    indexTime = schedule.sys_time * 1000;
+    if (indexTime < dateNow && indexTime > scheduleTime) {
+      scheduleTime = indexTime;
+      slideIndex = index;
+    }
+  }
+
+  sliderField.classList.remove('hidden');
+
+  lory(sliderField, {
+    initialIndex: slideIndex,
+    centerMode: { enableCenterMode: true, firstSlideLeftAlign: true }
+  });
+}
+
+function deleteSchedule() {
+  sliderField.classList.add('hidden');
+  while (scheduleField.firstChild) {
+    scheduleField.removeChild(scheduleField.firstChild);
+  }
+}
+
+function playBack(sourceName) {
+  reqData(sourcesJsonParsed[sourceName].event_info_url,'?accesstoken='+localStorage.getItem(sourceName+'_token')+'&eventid='+eventId)
+  .then(response => {
+    if (response.ret === 0) {
+      let idx = response.event_idx;
+      let startTime = response.start_time;
+      let endTime = response.end_time;
+      let playToken = response.play_token;
+      let playbackUrl;
+
+      if (response.demand_url[0]) {
+        if (sourcesJsonParsed[sourceName].hasOwnProperty('playback_url')) {
+          playbackUrl = sourcesJsonParsed[sourceName].playback_url;
+        } else {
+          playbackUrl = response.demand_url[0];
+        }
+      }
+
+      if (playbackUrl) {
+        let eventStartTime = new Date(startTime * 1000);
+        let eventStartTimeHours = eventStartTime.getHours();
+        if (eventStartTimeHours < 10) {
+          eventStartTimeHours = '0' + eventStartTimeHours;
+        }
+        let eventStartTimeMinutes = eventStartTime.getMinutes();
+        if (eventStartTimeMinutes < 10) {
+          eventStartTimeMinutes = '0' + eventStartTimeMinutes;
+        }
+        let eventStartTimeMilliseconds = eventStartTime.getMilliseconds();
+        if (eventStartTimeMilliseconds < 10) {
+          eventStartTimeMilliseconds = '0' + eventStartTimeMilliseconds;
+        }
+        startTime = idx + eventStartTimeHours + eventStartTimeMinutes + eventStartTimeMilliseconds;
+
+        let eventEndTime = new Date(endTime * 1000);
+        let eventEndTimeHours = eventEndTime.getHours();
+        if (eventEndTimeHours < 10) {
+          eventEndTimeHours = '0' + eventEndTimeHours;
+        }
+        let eventEndTimeMinutes = eventEndTime.getMinutes();
+        if (eventEndTimeMinutes < 10) {
+          eventEndTimeMinutes = '0' + eventEndTimeMinutes;
+        }
+        let eventEndTimeMilliseconds = eventEndTime.getMilliseconds();
+        if (eventEndTimeMilliseconds < 10) {
+          eventEndTimeMilliseconds = '0' + eventEndTimeMilliseconds;
+        }
+        endTime = idx + eventEndTimeHours + eventEndTimeMinutes + eventEndTimeMilliseconds;
+        if (localStorage.getItem(sourceName+'_verify_code')) {
+          hlsVideoUrl = playbackUrl+'?playtype=lookback&protocol=hls&starttime='+startTime+'&endtime='+endTime+'&accesstoken='+localStorage.getItem(sourceName+'_token')+'&playtoken='+playToken+'&verifycode='+localStorage.getItem(sourceName+'_verify_code')+'&rate='+rate+'&programid='+eventId+'.m3u8';
+        } else {
+          hlsVideoUrl = playbackUrl+'?playtype=lookback&protocol=hls&starttime='+startTime+'&endtime='+endTime+'&accesstoken='+localStorage.getItem(sourceName+'_token')+'&playtoken='+playToken+'&rate='+rate+'&programid='+eventId+'.m3u8';
+        }
+        videojsLoad();
+      } else {
+        alertInfo('录像还未准备好！', 10);
+      }
+    }
+  });
+}
+
+function playbackOrUpcoming(e) {
+  if(e.target && e.target.nodeName === "LI") {
+    if (e.target.hasAttribute('data-eventid')) {
+      rate = 'org';
+      eventId = e.target.dataset.eventid;
+      let sourceName = e.target.dataset.id;
+      playBack(sourceName);
+    } else if (e.target.hasAttribute('data-id')) {
+      let showId =  e.target.dataset.id;
+      let channel = e.target.dataset.channel;
+      let hboLink;
+      if (channel === "hbo") {
+        hboLink = 'https://hboasia.com/HBO/zh-cn/ajax/home_schedule_upcoming_showtimes?channel=' + channel + '&feed=cn&id=' + showId;
+      } else {
+        hboLink = 'https://hboasia.com/HBO/zh-tw/ajax/home_schedule_upcoming_showtimes?channel=' + channel + '&feed=satellite&id=' + showId;
+      }
+      //alertInfo('正在查询官网请稍等...');
+      reqData(hboLink)
+      .then(response => {
+        let dateNow = Date.now();
+        const upComingList = document.createElement('ul');
+        upComingList.setAttribute('data-id', dateNow);
+        const upComingListTitle = document.createTextNode('即將播出:');
+        for (let index = 0; index < response.length; index++) {
+          const schedule = response[index];
+          if (schedule.id) {
+            const upComingListItem = document.createElement('li');
+            const upComingListText = document.createTextNode(schedule.time);
+            upComingListItem.appendChild(upComingListText);
+            upComingList.appendChild(upComingListItem);
+          }
+        }
+        if (!upComingList.firstChild) {
+          const upComingListItem = document.createElement('li');
+          const upComingListText = document.createTextNode('无');
+          upComingListItem.appendChild(upComingListText);
+          upComingList.appendChild(upComingListItem);
+        }
+        while (upComingField.firstChild) {
+          upComingField.removeChild(upComingField.firstChild);
+        }
+        upComingField.appendChild(upComingListTitle);
+        upComingField.appendChild(upComingList);
+        setTimeout(function() {
+          if (upComingField.firstChild && upComingField.firstChild.nextSibling.dataset.id === dateNow.toString()) {
+            while (upComingField.firstChild) {
+              upComingField.removeChild(upComingField.firstChild);
+            }
+          }
+        }, 10000);
+      });
+    }
+  }
+}
+
+function switchLink() {
+  hlsVideoUrl = linkInputField.value;
+  if (hlsVideoUrl.indexOf('.flv') !== -1 || hlsVideoUrl.indexOf('.m3u8') !== -1) {
+    videojsLoad();
+    deleteSchedule();
+  }
+}
+
+let programId,rate,eventId,hlsVideoUrl,sourcesJson,sourcesJsonParsed,jsonChannels = {},schedules = {},overlaysInfo = {};
+let sourceReg = 'hrtn',sourceRegDefault = 'hrtn';
+let localJson = 'channels.json';
+let remoteJson = 'http://hbo.epub.fun/channels.json';
+let scheduleJson = 'http://hbo.epub.fun/schedule.json';
+const videoField = document.querySelector('.videoContainer');
+const sourcesField = document.querySelector('.sources');
+const fieldsetLoginForm = document.querySelector('.loginForm fieldset');
+const loginForm = document.querySelector('.loginForm');
+const loginAccField = document.querySelector('.loginAcc');
+const loginPwdField = document.querySelector('.loginPwd');
+const loginBtn = document.querySelector('.loginBtn');
+const fieldsetRegForm = document.querySelector('.regForm fieldset');
+const regForm = document.querySelector('.regForm');
+const regAccField = document.querySelector('.regAcc');
+const regPwdField = document.querySelector('.regPwd');
+const regImgField = document.querySelector('.regImg');
+const regImgInputField = document.querySelector('.regImgInput');
+const regImgIdField = document.querySelector('.regImgId');
+const regSmsField = document.querySelector('.regSms');
+const regBtn = document.querySelector('.regBtn');
+const formToggle = document.querySelector('.formToggle');
+const channelsField = document.querySelector('.channels');
+const categoriesField = document.querySelector('.categories');
+const switchBtn = document.querySelector('.switch');
+const myList1 = document.querySelector('.channels ul:nth-child(1)');
+const myList1a = document.querySelector('.channels ul:nth-child(2)');
+const myList2 = document.querySelector('.channels ul:nth-child(3)');
+const myList3 = document.querySelector('.channels ul:nth-child(4)');
+const myList4 = document.querySelector('.channels ul:nth-child(5)');
+const myList5 = document.querySelector('.channels ul:nth-child(6)');
+const myList8 = document.querySelector('.channels ul:nth-child(7)');
+const myList9 = document.querySelector('.channels ul:nth-child(8)');
+const myList10 = document.querySelector('.channels ul:nth-child(9)');
+const linkInputField = document.querySelector('.linkInput');
+const alertField = document.querySelector('.alert');
+const upComingField = document.querySelector('.upComing');
+const sliderField = document.querySelector('.js_slider');
+const scheduleField = document.querySelector('.slides');
+
+let liveui = true;
+if (videojs.browser.IS_ANDROID || videojs.browser.IS_IOS) {
+  liveui = false;
+}
+
+reqData(localJson).then(response => {
+  if (response.ret === 0) {
+    sourcesJson = response;
+    parseJson(response);
+    initialize();
+  } else {
+    alertInfo('服务器维护中，请稍后再试！',10);
+  }
+}).catch(() => {
+  console.log('本地频道不存在，尝试连接远程频道...');
+  reqData(remoteJson).then(response => {
+    if (response.ret === 0) {
+      sourcesJson = response;
+      parseJson(response);
+      initialize();
+    } else {
+      alertInfo('官网服务器维护中，请稍后再试！',10);
+    }
+  }).catch(err => {
+    console.log('初始化错误:',err.message);
+  });
+});
+
+function initialize() {
+  myList1.textContent = '';
+  myList1.classList.add('myList1');
+  myList1a.textContent = '';
+  myList1a.classList.add('myList1a');
+  myList1a.classList.add('hidden');
+  myList2.textContent = '';
+  myList2.classList.add('myList2');
+  myList2.classList.add('hidden');
+  myList3.textContent = '';
+  myList3.classList.add('myList3');
+  myList3.classList.add('hidden');
+  myList4.textContent = '';
+  myList4.classList.add('myList4');
+  myList4.classList.add('hidden');
+  myList5.textContent = '';
+  myList5.classList.add('myList5');
+  myList5.classList.add('hidden');
+  myList8.textContent = '';
+  myList8.classList.add('myList8');
+  myList8.classList.add('hidden');
+  myList9.classList.add('myList9');
+  myList9.classList.add('hidden');
+  myList10.textContent = '';
+  myList10.classList.add('myList10');
+  myList10.classList.add('hidden');
+
+  sourcesJson.data.forEach(source => {
+    if (source.hasOwnProperty('json')) {
+      reqJson(source.json);
+    }
+    if (source.hasOwnProperty('list_url')) {
+      getToken(source).then(response => {reqChannels(source,response);});
+    }
+    if (source.hasOwnProperty('channels')) {
+      source.channels.forEach(channel => {
+        if (channel.hasOwnProperty('chnl_cat')) {
+          appendList(channel,source.name,source.lane);
+        }
+      });
+    }
+  });
+
+  if (localStorage.getItem(sourceReg+'_acc') && localStorage.getItem(sourceReg+'_pwd')){
+    loginAccField.value = localStorage.getItem(sourceReg+'_acc');
+    loginPwdField.value = localStorage.getItem(sourceReg+'_pwd');
+  }
+
+  updateAside();
+  playVideo();
+}
+
+formToggle.addEventListener("click", function(e) {
+  e.preventDefault();
+  loginForm.classList.toggle('hidden');
+  regForm.classList.toggle('hidden');
+  if (formToggle.textContent === '注册') {
+    formToggle.textContent = '登录';
+  } else {
+    formToggle.textContent = '注册';
+  }
+});
+
+regAccField.addEventListener("change", uniqueName);
+regAccField.addEventListener("change", regImg);
+regImgField.addEventListener("click", regImg);
+regImgInputField.addEventListener("change", reqSms);
+regBtn.addEventListener("click", reqReg);
+loginBtn.addEventListener("click", reqLogin);
+sourcesField.addEventListener("click", switchSource);
+categoriesField.addEventListener("click", switchCategory);
+scheduleField.addEventListener("click", playbackOrUpcoming);
+channelsField.addEventListener("click", switchChannel);
+linkInputField.addEventListener("change", switchLink);
+document.addEventListener("fullscreenchange", setOverlayFullscreen);
+document.addEventListener("webkitfullscreenchange", setOverlayFullscreen);
+document.addEventListener("mozfullscreenchange", setOverlayFullscreen);
+document.addEventListener("msfullscreenchange", setOverlayFullscreen);
+window.addEventListener("orientationchange", setOverlayFullscreen);
+
+if (localStorage.getItem('dark') === '1'){
+  switchBtn.click();
+}
+  </script>
+</body>
+</html>
