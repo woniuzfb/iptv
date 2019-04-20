@@ -283,7 +283,6 @@ function switchCategory(e) {
       for(let i=0; i < siblings.length; i++) {
         if(siblings[i].nodeName == "UL") {
           siblings[i].classList.add('hidden');
-          console.log(siblings[i]);
         }
       }
       mylist.classList.remove('hidden');
@@ -349,7 +348,6 @@ ReqJson.prototype.req = function(callback) {
   request.responseType = this.responseType;
   request.onload = function() {
     let response = request.response;
-    //console.log(response);
     callback(response);
   }
   request.send(this.data);
@@ -358,7 +356,6 @@ ReqJson.prototype.req = function(callback) {
 function regImg() {
   let regToken = new ReqJson(tokenUrl,'POST',JSON.stringify({"usagescen":1}, null, "  "));
   regToken.req(function(response){
-    console.log(response);
     let regImg = new ReqJson(imgUrl,'GET','?accesstoken='+response.access_token);
     regImg.req(function(response){
       const newImage = document.createElement('img');
@@ -519,7 +516,6 @@ if (Cookies.get('access_token')){
 
   let channelList = new ReqJson(listUrl,'GET','?pageidx=1&pagenum=500&accesstoken='+accessToken);
   channelList.req(function(response){
-    console.log(response.chnl_list);
     let categories = [1,2,3,4,5,7,8];
     let channels = response.chnl_list;
     const channelsDiv = document.createElement('div');
