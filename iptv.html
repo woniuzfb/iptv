@@ -195,6 +195,7 @@
           <li data-value="myList5">地方</li>
           <li data-value="myList7">本地</li>
           <li data-value="myList8">专业</li>
+          <li data-value="myList9">港澳台</li>
         </ul>
       </div>
       <section></section>
@@ -526,6 +527,7 @@ if (Cookies.get('access_token')){
     const myList5 = document.createElement('ul');
     const myList7 = document.createElement('ul');
     const myList8 = document.createElement('ul');
+    const myList9 = document.createElement('ul');
     channelsDiv.classList.add('channels');
     myList1.classList.add('myList1');
     myList2.classList.add('myList2','hidden');
@@ -534,6 +536,7 @@ if (Cookies.get('access_token')){
     myList5.classList.add('myList5','hidden');
     myList7.classList.add('myList7','hidden');
     myList8.classList.add('myList8','hidden');
+    myList9.classList.add('myList9','hidden');
     for(let i = 0; i < channels.length; i++) {
       let subs = (channels[i]['sub_type']).split('|');
       let channelId = channels[i].chnl_id;
@@ -570,6 +573,15 @@ if (Cookies.get('access_token')){
         }
       }
     }
+    let got = [4200900091,4200900106,4200900107,4200900108,4200900109,4200900110,4200900111,4200900112,4200900113,4200900114,4200900116];
+    let gotName = ["CCTV老故事","华娱卫视","凤凰卫视中文","星空卫视","TVB8","凤凰卫视资讯","星空卫视电影","凤凰卫视电影","Channel[V]音乐亚洲","国家地理","天映频道"];
+    for(let k = 0; k < got.length; k++) {
+      let gotListItem = document.createElement('li');
+      gotListItem.setAttribute('data-value',got[k]);
+      gotListItem.textContent = gotName[k];
+      myList9.appendChild(gotListItem);
+    }
+
     channelsDiv.appendChild(myList1);
     channelsDiv.appendChild(myList2);
     channelsDiv.appendChild(myList3);
@@ -577,6 +589,7 @@ if (Cookies.get('access_token')){
     channelsDiv.appendChild(myList5);
     channelsDiv.appendChild(myList7);
     channelsDiv.appendChild(myList8);
+    channelsDiv.appendChild(myList9);
     channelsField.appendChild(channelsDiv);
   });
 }
