@@ -584,7 +584,7 @@ if (Cookies.get('access_token')){
     channelsField.appendChild(channelsDiv);
   });
 }
-else {
+else if(Cookies.get('account') && Cookies.get('password')) {
   setTimeout(function(){
     loginBtn.click();
   }, 1000);
