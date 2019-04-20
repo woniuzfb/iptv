@@ -483,7 +483,7 @@ const formToggle = document.querySelector('.formToggle');
 const channelsField = document.querySelector('section');
 const categoriesField = document.querySelector('.categories');
 
-formToggle.addEventListener("click", (e) => {
+formToggle.addEventListener("click", function(e) {
   e.preventDefault();
   loginForm.classList.toggle('hidden');
   regForm.classList.toggle('hidden');
