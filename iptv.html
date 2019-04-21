@@ -231,7 +231,7 @@
       </aside>
 
       <footer>
-        <a href="#" target="_blank"></a>By MTimer</a> <span>&bull;</span>
+        By MTimer<span>&bull;</span>
         <a href="https://github.com/woniuzfb/iptv" target="_blank">@iptv</a>
       </footer>
     </div>
@@ -301,7 +301,7 @@ function playVideo(playUrl,accessToken,programid) {
       autoStartLoad: false,
     }
     let hls = new Hls(config);
-    hls.loadSource(playUrl+'?playtype=live&protocol=hls&accesstoken='+accessToken+'&playtoken=ABCDEFGHIGK&programid='+programid+'.m3u');
+    hls.loadSource(playUrl+'?playtype=live&protocol=hls&accesstoken='+accessToken+'&playtoken=ABCDEFGHIGK&programid='+programid);
     hls.attachMedia(video);
     hls.on(Hls.Events.MANIFEST_PARSED,function() {
       hls.startLoad(startPosition=1);
@@ -317,7 +317,7 @@ function playVideo(playUrl,accessToken,programid) {
     });
   }
   else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = playUrl+'?playtype=live&protocol=hls&accesstoken='+accessToken+'&playtoken=ABCDEFGHIGK&programid='+programid+'.m3u';
+    video.src = playUrl+'?playtype=live&protocol=hls&accesstoken='+accessToken+'&playtoken=ABCDEFGHIGK&programid='+programid;
     video.addEventListener('canplay',function() {
       let promise = video.play();
       if (promise !== undefined) {
@@ -446,7 +446,7 @@ function loginReq() {
   let login = new ReqJson(loginUrl,'POST',JSON.stringify(user, null, "  "));
   login.req(function(response) {
     if (response.ret === 0) {
-      if (Cookies.get('access_token') === false) {
+      if (Cookies.get('access_token') === undefined) {
         channelsReq(response.access_token);
       }
       Cookies.set('account', account, { expires: 7 });
