@@ -9,9 +9,9 @@
         color: #70B7FD;
         text-decoration: none;
       }
-
+      
       body {
-        width: 100%;
+        width: 95%;
         margin: 0 auto;
         font: 1em/1.2 'PingFangSC','helvetica neue','hiragino sans gb','arial','microsoft yahei ui','microsoft yahei','simsun','sans-serif';
       }
@@ -349,8 +349,14 @@ ReqJson.prototype.req = function(callback) {
   request.open(this.type, this.url);
   request.responseType = this.responseType;
   request.onload = function() {
-    let response = request.response;
-    callback(response);
+    if (typeof(request.response) === 'string') {
+      let response = JSON.parse(request.response);
+      callback(response);
+    }
+    else {
+      let response = request.response;
+      callback(response);
+    }
   }
   request.send(this.data);
 }
@@ -361,7 +367,7 @@ function regImg() {
     let regImg = new ReqJson(imgUrl,'GET','?accesstoken='+response.access_token);
     regImg.req(function(response){
       const newImage = document.createElement('img');
-      newImage.src = response.image;
+      newImage.src = response.image.replace('\\','/');
       regImgField.innerHTML = newImage.outerHTML;
       regImgIdField.value = response.picid;
     });
@@ -382,7 +388,7 @@ function reqSms() {
   });
 }
 
-function regReq() {
+function reqReg() {
   let smsCode = regSms.value;
   let regAcc = regAccField.value;
   let regVerify = new ReqJson(verifyUrl,'GET','?verifycode='+smsCode+'&verifytype=3&username='+regAcc+'&account='+regAcc);
@@ -424,7 +430,7 @@ function regReq() {
   });
 }
 
-function loginReq() {
+function reqLogin() {
   let regAcc = loginAccField.value;
   let regPwd = loginPwdField.value;
   let user = {};
@@ -447,7 +453,7 @@ function loginReq() {
   login.req(function(response) {
     if (response.ret === 0) {
       if (Cookies.get('access_token') === undefined) {
-        channelsReq(response.access_token);
+        reqChannels(response.access_token);
       }
       Cookies.set('account', account, { expires: 7 });
       Cookies.set('password', pwd, { expires: 7 });
@@ -460,7 +466,7 @@ function loginReq() {
   });
 }
 
-function channelsReq(accessToken) {
+function reqChannels(accessToken) {
   let channelList = new ReqJson(listUrl,'GET','?pageidx=1&pagenum=500&accesstoken='+accessToken);
   channelList.req(function(response){
     let categories = [1,2,3,4,5,7,8];
@@ -475,12 +481,18 @@ function channelsReq(accessToken) {
     const myList9 = document.createElement('ul');
     channelsDiv.classList.add('channels');
     myList1.classList.add('myList1');
-    myList2.classList.add('myList2','hidden');
-    myList3.classList.add('myList3','hidden');
-    myList4.classList.add('myList4','hidden');
-    myList5.classList.add('myList5','hidden');
-    myList8.classList.add('myList8','hidden');
-    myList9.classList.add('myList9','hidden');
+    myList2.classList.add('myList2');
+    myList2.classList.add('hidden');
+    myList3.classList.add('myList3');
+    myList3.classList.add('hidden');
+    myList4.classList.add('myList4');
+    myList4.classList.add('hidden');
+    myList5.classList.add('myList5');
+    myList5.classList.add('hidden');
+    myList8.classList.add('myList8');
+    myList8.classList.add('hidden');
+    myList9.classList.add('myList9');
+    myList9.classList.add('hidden');
     for(let i = 0; i < channels.length; i++) {
       let subs = (channels[i]['sub_type']).split('|');
       let channelName = channels[i].chnl_name;
@@ -573,8 +585,8 @@ formToggle.addEventListener("click", function(e) {
 regAccField.addEventListener("change", regImg);
 regImgField.addEventListener("click", regImg);
 regImgTxtField.addEventListener("change", reqSms);
-regBtn.addEventListener("click", regReq);
-loginBtn.addEventListener("click", loginReq);
+regBtn.addEventListener("click", reqReg);
+loginBtn.addEventListener("click", reqLogin);
 channelsField.addEventListener("click", switchChannel);
 categoriesField.addEventListener("click", switchCategory);
 
@@ -590,7 +602,7 @@ if (Cookies.get('access_token')){
       loginBtn.click();
     }, 1000);
   }
-  channelsReq(accessToken);
+  reqChannels(accessToken);
 }
 else if(Cookies.get('account') && Cookies.get('password')) {
   setTimeout(function(){
