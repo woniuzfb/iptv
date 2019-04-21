@@ -176,11 +176,10 @@
   <body>
     <div class="container">
       <header>
-        <!--[if lt IE 10]><p class="warn">浏览器 <strong>过时了</strong> 。 请 <a href="#">升级</a> 以获得最佳体验。</p><![endif]-->
         <h1>
           <a href="https://github.com/woniuzfb/iptv" target="_blank">HBO中文直播</a>
         </h1>
-        <p>使用方法：注册账号或登录。</p>
+        <p>使用方法：注册账号或登录。<!--[if lt IE 10]><p class="warn"><strong>不支持 IE浏览器</strong> 。</p><![endif]--></p>
       </header>
 
       <video id="video" controls></video>
@@ -297,10 +296,7 @@ function switchCategory(e) {
 function playVideo(playUrl,accessToken,programid) {
   if(Hls.isSupported()) {
     let video = document.querySelector('video');
-    config = {
-      autoStartLoad: false,
-    }
-    let hls = new Hls(config);
+    let hls = new Hls();
     hls.loadSource(playUrl+'?playtype=live&protocol=hls&accesstoken='+accessToken+'&playtoken=ABCDEFGHIGK&programid='+programid);
     hls.attachMedia(video);
     hls.on(Hls.Events.MANIFEST_PARSED,function() {
@@ -308,12 +304,9 @@ function playVideo(playUrl,accessToken,programid) {
       let promise = video.play();
       if (promise !== undefined) {
         promise.then(function() {
-          return 1;
         }).catch(function(error) {
-          return 0;
         });
       }
-      return 0;
     });
   }
   else if (video.canPlayType('application/vnd.apple.mpegurl')) {
