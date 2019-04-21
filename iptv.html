@@ -274,22 +274,23 @@ function switchChannel(e) {
 }
 
 function switchCategory(e) {
-  if(e.target && e.target.nodeName == "LI") {
-    let mylistName =  e.target.dataset.value;
-    if(mylistName !== "4200900115") {
-      const mylist = document.querySelector('.'+mylistName);
-      var siblings = mylist.parentNode.childNodes;
-      for(let i=0; i < siblings.length; i++) {
-        if(siblings[i].nodeName == "UL") {
-          siblings[i].classList.add('hidden');
+  if(Cookies.get('access_token')) {
+    if(e.target && e.target.nodeName == "LI") {
+      let channelId =  e.target.dataset.value;
+      if(channelId !== "4200900115") {
+        const mylist = document.querySelector('.'+channelId);
+        var siblings = mylist.parentNode.childNodes;
+        for(let i=0; i < siblings.length; i++) {
+          if(siblings[i].nodeName == "UL") {
+            siblings[i].classList.add('hidden');
+          }
         }
+        mylist.classList.remove('hidden');
       }
-      mylist.classList.remove('hidden');
-    } else if(Cookies.get('access_token')) {
-      playVideo(playUrl,Cookies.get('access_token'),mylistName);
-    } else {
-      alert("请先登录或者注册账号！");
+      playVideo(playUrl,Cookies.get('access_token'),channelId);
     }
+  } else {
+    alert("请先登录或者注册账号！");
   }
 }
 
@@ -452,7 +453,7 @@ function loginReq() {
       Cookies.set('password', pwd, { expires: 7 });
       Cookies.set('access_token', response.access_token, { expires: 7 });
       Cookies.set('deviceid', response.device_id, { expires: 7 });
-      playVideo(playUrl,response.access_token,channelId);
+      playVideo(playUrl,response.access_token,hbo);
     } else {
       alert("账号错误！");
     }
@@ -541,7 +542,7 @@ let verifyUrl = 'http://access.nx96200.cn:12690/account/user/validate_verify_cod
 let regUrl = 'http://access.nx96200.cn:12690/account/user/v2/register';
 let loginUrl = 'http://access.nx96200.cn:12690/account/user/v2/login';
 
-let channelId = '4200900115';
+let hbo = '4200900115';
 const loginForm = document.querySelector('.loginForm');
 const loginAccField = document.querySelector('.loginAcc');
 const loginPwdField = document.querySelector('.loginPwd');
@@ -584,7 +585,7 @@ if (Cookies.get('account') && Cookies.get('password')){
 
 if (Cookies.get('access_token')){
   let accessToken = Cookies.get('access_token');
-  if (playVideo(playUrl,accessToken,channelId) === 0) {
+  if (playVideo(playUrl,accessToken,hbo) === 0) {
     setTimeout(function(){
       loginBtn.click();
     }, 1000);
