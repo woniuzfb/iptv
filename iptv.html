@@ -101,6 +101,14 @@
         display: none;
       }
 
+      .white {
+        color: white !important;
+      }
+
+      .bgBlack {
+        background-color: black !important;
+      }
+
       input {
         display: inline-block;
         text-align: center;
@@ -200,6 +208,7 @@
         <li data-value="myList5">地方</li>
         <li data-value="myList8">专业</li>
         <li data-value="myList9">港澳台</li>
+        <li class="switch" data-value="0">关灯</li>
       </ul>
     </div>
     <section></section>
@@ -267,21 +276,52 @@ function switchChannel(e) {
   }
 }
 
+function toggleClass(s,n) {
+  let elements = document.querySelectorAll(s);
+  for (let i = 0; i < elements.length; i++) {
+    elements[i].classList.toggle(n);
+  }
+
+}
+
 function switchCategory(e) {
   if(Cookies.get('access_token')) {
     if(e.target && e.target.nodeName == "LI") {
       let channelId =  e.target.dataset.value;
-      if(channelId !== "4200900115") {
-        const mylist = document.querySelector('.'+channelId);
-        let siblings = mylist.parentNode.childNodes;
-        for(let i=0; i < siblings.length; i++) {
-          if(siblings[i].nodeName == "UL") {
-            siblings[i].classList.add('hidden');
+      switch (channelId) {
+        case "4200900115":
+          playVideo(playUrl,Cookies.get('access_token'),channelId);
+          break;
+        case "0":
+        case "1":
+          if(channelId === "0") {
+            e.target.textContent = '开灯';
+            e.target.dataset.value = 1;
+            Cookies.set('dark', 1, { expires: 7 });
+          } else {
+            e.target.textContent = '关灯';
+            e.target.dataset.value = 0;
+            Cookies.set('dark', 0, { expires: 7 });
           }
-        }
-        mylist.classList.remove('hidden');
-      } else {
-        playVideo(playUrl,Cookies.get('access_token'),channelId);
+          toggleClass('li','white');
+          toggleClass('button','white');
+          toggleClass('input','white');
+          toggleClass('footer','white');
+          toggleClass('a','white');
+          toggleClass('body','bgBlack');
+          toggleClass('input','bgBlack');
+          toggleClass('footer','bgBlack');
+          break;      
+        default:
+          const mylist = document.querySelector('.'+channelId);
+          let siblings = mylist.parentNode.childNodes;
+          for(let i=0; i < siblings.length; i++) {
+            if(siblings[i].nodeName == "UL") {
+              siblings[i].classList.add('hidden');
+            }
+          }
+          mylist.classList.remove('hidden');
+          break;
       }
     }
   } else {
@@ -378,7 +418,7 @@ function reqSms() {
 }
 
 function reqReg() {
-  let smsCode = regSms.value;
+  let smsCode = regSmsField.value;
   let regAcc = regAccField.value;
   let regVerify = new ReqJson(verifyUrl,'GET','?verifycode='+smsCode+'&verifytype=3&username='+regAcc+'&account='+regAcc);
   regVerify.req(function(response){
@@ -488,6 +528,9 @@ function reqChannels(accessToken) {
       for(let j = 0; j < subs.length; j++) {
         let sub = Number(subs[j]) - 10010000;
         let listItem = document.createElement('li');
+        if (Cookies.get('dark') === '1'){
+          listItem.classList.add('white');
+        }
         listItem.setAttribute('data-value',channels[i].chnl_id);
         listItem.textContent = channelName;
         switch (sub) {
@@ -554,11 +597,12 @@ const regPwdField = document.querySelector('.regPwd');
 const regImgField = document.querySelector('.regImg');
 const regImgTxtField = document.querySelector('.regImgTxt');
 const regImgIdField = document.querySelector('.regImgId');
-const regSms = document.querySelector('.regSms');
+const regSmsField = document.querySelector('.regSms');
 const regBtn = document.querySelector('.regBtn');
 const formToggle = document.querySelector('.formToggle');
 const channelsField = document.querySelector('section');
 const categoriesField = document.querySelector('.categories');
+const switchBtn = document.querySelector('.switch');
 
 formToggle.addEventListener("click", function(e) {
   e.preventDefault();
@@ -579,6 +623,10 @@ loginBtn.addEventListener("click", reqLogin);
 channelsField.addEventListener("click", switchChannel);
 categoriesField.addEventListener("click", switchCategory);
 
+if (Cookies.get('dark') === '1'){
+  switchBtn.click();
+}
+
 if (Cookies.get('account') && Cookies.get('password')){
   loginAccField.value = Cookies.get('account');
   loginPwdField.value = Cookies.get('password');
@@ -598,7 +646,6 @@ else if(Cookies.get('account') && Cookies.get('password')) {
     loginBtn.click();
   }, 1000);
 }
-
   </script>
 </body>
 </html>
