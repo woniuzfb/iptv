@@ -561,6 +561,9 @@ function reqChannels(accessToken) {
     let gotName = ["CCTV老故事","华娱卫视","凤凰卫视中文","星空卫视","TVB8","凤凰卫视资讯","星空卫视电影","凤凰卫视电影","Channel[V]音乐亚洲","国家地理","天映频道"];
     for(let k = 0; k < got.length; k++) {
       let gotListItem = document.createElement('li');
+      if (Cookies.get('dark') === '1'){
+        gotListItem.classList.add('white');
+      }
       gotListItem.setAttribute('data-value',got[k]);
       gotListItem.textContent = gotName[k];
       myList9.appendChild(gotListItem);
