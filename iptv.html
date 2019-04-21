@@ -193,7 +193,6 @@
           <li data-value="myList3">央视</li>
           <li data-value="myList4">卫视</li>
           <li data-value="myList5">地方</li>
-          <li data-value="myList7">本地</li>
           <li data-value="myList8">专业</li>
           <li data-value="myList9">港澳台</li>
         </ul>
@@ -267,8 +266,7 @@ return text;
 
 function switchChannel(e) {
   if(e.target && e.target.nodeName == "LI") {
-    let channelId = e.target.dataset.value;
-    playVideo(playUrl,accessToken,channelId);
+    playVideo(playUrl,accessToken,e.target.dataset.value);
     const selected = document.querySelector('.selected');
     if(selected) selected.classList.remove('selected');
     e.target.classList.add('selected');
@@ -293,14 +291,14 @@ function switchCategory(e) {
   }
 }
 
-function playVideo(playUrl,accessToken,channelId) {
+function playVideo(playUrl,accessToken,programid) {
   if(Hls.isSupported()) {
     let video = document.querySelector('video');
     config = {
       autoStartLoad: false,
     }
     let hls = new Hls(config);
-    hls.loadSource(playUrl+'?playtype=live&protocol=hls&accesstoken='+accessToken+'&playtoken=ABCDEFGHIGK&programid='+channelId+'.m3u');
+    hls.loadSource(playUrl+'?playtype=live&protocol=hls&accesstoken='+accessToken+'&playtoken=ABCDEFGHIGK&programid='+programid+'.m3u');
     hls.attachMedia(video);
     hls.on(Hls.Events.MANIFEST_PARSED,function() {
       hls.startLoad(startPosition=1);
@@ -316,7 +314,7 @@ function playVideo(playUrl,accessToken,channelId) {
     });
   }
   else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = playUrl+'?playtype=live&protocol=hls&accesstoken='+accessToken+'&playtoken=ABCDEFGHIGK&programid='+channelId+'.m3u';
+    video.src = playUrl+'?playtype=live&protocol=hls&accesstoken='+accessToken+'&playtoken=ABCDEFGHIGK&programid='+programid+'.m3u';
     video.addEventListener('canplay',function() {
       let promise = video.play();
       if (promise !== undefined) {
@@ -445,15 +443,91 @@ function loginReq() {
   let login = new ReqJson(loginUrl,'POST',JSON.stringify(user, null, "  "));
   login.req(function(response) {
     if (response.ret === 0) {
-      let access_token = response.access_token;
+      let accessToken = response.access_token;
+      if (Cookies.get('access_token') === false) {
+        channelsReq();
+      }
       Cookies.set('account', account, { expires: 7 });
       Cookies.set('password', pwd, { expires: 7 });
-      Cookies.set('access_token', access_token, { expires: 7 });
+      Cookies.set('access_token', accessToken, { expires: 7 });
       Cookies.set('deviceid', response.device_id, { expires: 7 });
-      playVideo(playUrl,access_token,channelId);
+      playVideo(playUrl,accessToken,channelId);
     } else {
       alert("账号错误！");
     }
+  });
+}
+
+function channelsReq() {
+  let channelList = new ReqJson(listUrl,'GET','?pageidx=1&pagenum=500&accesstoken='+accessToken);
+  channelList.req(function(response){
+    let categories = [1,2,3,4,5,7,8];
+    let channels = response.chnl_list;
+    const channelsDiv = document.createElement('div');
+    const myList1 = document.createElement('ul');
+    const myList2 = document.createElement('ul');
+    const myList3 = document.createElement('ul');
+    const myList4 = document.createElement('ul');
+    const myList5 = document.createElement('ul');
+    const myList8 = document.createElement('ul');
+    const myList9 = document.createElement('ul');
+    channelsDiv.classList.add('channels');
+    myList1.classList.add('myList1');
+    myList2.classList.add('myList2','hidden');
+    myList3.classList.add('myList3','hidden');
+    myList4.classList.add('myList4','hidden');
+    myList5.classList.add('myList5','hidden');
+    myList8.classList.add('myList8','hidden');
+    myList9.classList.add('myList9','hidden');
+    for(let i = 0; i < channels.length; i++) {
+      let subs = (channels[i]['sub_type']).split('|');
+      let channelName = channels[i].chnl_name;
+      for(let j = 0; j < subs.length; j++) {
+        let sub = Number(subs[j]) - 10010000;
+        let listItem = document.createElement('li');
+        listItem.setAttribute('data-value',channels[i].chnl_id);
+        listItem.textContent = channelName;
+        switch (sub) {
+          case 1:
+            myList1.appendChild(listItem);
+            break;
+          case 2:
+            myList2.appendChild(listItem);
+            break;
+          case 3:
+            myList3.appendChild(listItem);
+            break;
+          case 4:
+            myList4.appendChild(listItem);
+            break;
+          case 5:
+            myList5.appendChild(listItem);
+            break;
+          case 8:
+            myList8.appendChild(listItem);
+            break;
+          default:
+            break;
+        }
+      }
+    }
+    let got = [4200900091,4200900106,4200900107,4200900108,4200900109,4200900110,4200900111,4200900112,4200900113,4200900114,4200900116];
+    let gotName = ["CCTV老故事","华娱卫视","凤凰卫视中文","星空卫视","TVB8","凤凰卫视资讯","星空卫视电影","凤凰卫视电影","Channel[V]音乐亚洲","国家地理","天映频道"];
+    for(let k = 0; k < got.length; k++) {
+      let gotListItem = document.createElement('li');
+      gotListItem.setAttribute('data-value',got[k]);
+      gotListItem.textContent = gotName[k];
+      myList9.appendChild(gotListItem);
+    }
+
+    channelsDiv.appendChild(myList1);
+    channelsDiv.appendChild(myList2);
+    channelsDiv.appendChild(myList3);
+    channelsDiv.appendChild(myList4);
+    channelsDiv.appendChild(myList5);
+    channelsDiv.appendChild(myList8);
+    channelsDiv.appendChild(myList9);
+    channelsField.appendChild(channelsDiv);
   });
 }
 
@@ -514,84 +588,7 @@ if (Cookies.get('access_token')){
       loginBtn.click();
     }, 1000);
   }
-
-  let channelList = new ReqJson(listUrl,'GET','?pageidx=1&pagenum=500&accesstoken='+accessToken);
-  channelList.req(function(response){
-    let categories = [1,2,3,4,5,7,8];
-    let channels = response.chnl_list;
-    const channelsDiv = document.createElement('div');
-    const myList1 = document.createElement('ul');
-    const myList2 = document.createElement('ul');
-    const myList3 = document.createElement('ul');
-    const myList4 = document.createElement('ul');
-    const myList5 = document.createElement('ul');
-    const myList7 = document.createElement('ul');
-    const myList8 = document.createElement('ul');
-    const myList9 = document.createElement('ul');
-    channelsDiv.classList.add('channels');
-    myList1.classList.add('myList1');
-    myList2.classList.add('myList2','hidden');
-    myList3.classList.add('myList3','hidden');
-    myList4.classList.add('myList4','hidden');
-    myList5.classList.add('myList5','hidden');
-    myList7.classList.add('myList7','hidden');
-    myList8.classList.add('myList8','hidden');
-    myList9.classList.add('myList9','hidden');
-    for(let i = 0; i < channels.length; i++) {
-      let subs = (channels[i]['sub_type']).split('|');
-      let channelId = channels[i].chnl_id;
-      let channelName = channels[i].chnl_name;
-      for(let j = 0; j < subs.length; j++) {
-        let sub = Number(subs[j]) - 10010000;
-        let listItem = document.createElement('li');
-        listItem.setAttribute('data-value',channelId);
-        listItem.textContent = channelName;
-        switch (sub) {
-          case 1:
-            myList1.appendChild(listItem);
-            break;
-          case 2:
-            myList2.appendChild(listItem);
-            break;
-          case 3:
-            myList3.appendChild(listItem);
-            break;
-          case 4:
-            myList4.appendChild(listItem);
-            break;
-          case 5:
-            myList5.appendChild(listItem);
-            break;
-          case 7:
-            myList7.appendChild(listItem);
-            break;
-          case 8:
-            myList8.appendChild(listItem);
-            break;
-          default:
-            break;
-        }
-      }
-    }
-    let got = [4200900091,4200900106,4200900107,4200900108,4200900109,4200900110,4200900111,4200900112,4200900113,4200900114,4200900116];
-    let gotName = ["CCTV老故事","华娱卫视","凤凰卫视中文","星空卫视","TVB8","凤凰卫视资讯","星空卫视电影","凤凰卫视电影","Channel[V]音乐亚洲","国家地理","天映频道"];
-    for(let k = 0; k < got.length; k++) {
-      let gotListItem = document.createElement('li');
-      gotListItem.setAttribute('data-value',got[k]);
-      gotListItem.textContent = gotName[k];
-      myList9.appendChild(gotListItem);
-    }
-
-    channelsDiv.appendChild(myList1);
-    channelsDiv.appendChild(myList2);
-    channelsDiv.appendChild(myList3);
-    channelsDiv.appendChild(myList4);
-    channelsDiv.appendChild(myList5);
-    channelsDiv.appendChild(myList7);
-    channelsDiv.appendChild(myList8);
-    channelsDiv.appendChild(myList9);
-    channelsField.appendChild(channelsDiv);
-  });
+  channelsReq();
 }
 else if(Cookies.get('account') && Cookies.get('password')) {
   setTimeout(function(){
