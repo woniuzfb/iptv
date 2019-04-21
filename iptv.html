@@ -54,7 +54,7 @@
         letter-spacing: 1px;
         text-transform: uppercase;
         border: 2px solid rgba(0,0,200,0.6);
-        background: rgba(0,0,200,0.3);
+        background: rgba(112,183,253,0.3);
         color: rgba(0,0,200,0.6);
         box-shadow: 1px 1px 2px rgba(0,0,200,0.4);
         border-radius: 10px;
@@ -69,19 +69,23 @@
         text-align: center;
       }
 
-      .channels li {
+      .channels li, .formToggle, button {
         display: inline-block;
         text-decoration: none;
         letter-spacing: 1px;
         text-transform: uppercase;
         border: 2px solid rgba(0,0,200,0.6);
-        background: rgba(0,0,200,0.3);
+        background: rgba(112,183,253,0.3);
         color: rgba(0,0,200,0.6);
         box-shadow: 1px 1px 2px rgba(0,0,200,0.4);
         border-radius: 10px;
         padding: 3px 10px;
         margin-bottom: 10px;
         cursor: pointer;
+      }
+
+      button {
+        font-size: .9em;
       }
 
       .channels .selected {
@@ -105,7 +109,7 @@
         text-align: center;
         font-size: 1em;
         border-radius: 1px;
-        max-width: 11em;
+        max-width: 8em;
         box-sizing: border-box;
         height: 2em;
       }
@@ -207,7 +211,7 @@
           <div>
             <input class="loginPwd" type="password" placeholder="密码">
           </div>
-          <div><button class="loginBtn" type="button">确认</button></div>
+          <div><button class="loginBtn" type="button">登录</button></div>
         </form>
         <form class="regForm hidden">
           <h3>注册账号</h3>
@@ -226,7 +230,7 @@
           </div>
           <div><button class="regBtn" type="button">注册</button></div>
         </form>
-        <p><a class="formToggle" href="#">注册?</a></p>
+        <button class="formToggle" type="button">注册</button>
       </aside>
 
       <footer>
@@ -568,10 +572,10 @@ formToggle.addEventListener("click", function(e) {
   e.preventDefault();
   loginForm.classList.toggle('hidden');
   regForm.classList.toggle('hidden');
-  if (formToggle.innerText === '注册?') {
-    formToggle.innerText = '登录?';
+  if (formToggle.innerText === '注册') {
+    formToggle.innerText = '登录';
   }else {
-    formToggle.innerText = '注册?';
+    formToggle.innerText = '注册';
   }
 });
 
