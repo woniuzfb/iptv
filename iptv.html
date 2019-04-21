@@ -266,7 +266,7 @@ return text;
 
 function switchChannel(e) {
   if(e.target && e.target.nodeName == "LI") {
-    playVideo(playUrl,accessToken,e.target.dataset.value);
+    playVideo(playUrl,Cookies.get('access_token'),e.target.dataset.value);
     const selected = document.querySelector('.selected');
     if(selected) selected.classList.remove('selected');
     e.target.classList.add('selected');
@@ -285,8 +285,10 @@ function switchCategory(e) {
         }
       }
       mylist.classList.remove('hidden');
+    } else if(Cookies.get('access_token')) {
+      playVideo(playUrl,Cookies.get('access_token'),mylistName);
     } else {
-      playVideo(playUrl,accessToken,mylistName);
+      alert("请先登录或者注册账号！");
     }
   }
 }
@@ -443,22 +445,21 @@ function loginReq() {
   let login = new ReqJson(loginUrl,'POST',JSON.stringify(user, null, "  "));
   login.req(function(response) {
     if (response.ret === 0) {
-      let accessToken = response.access_token;
       if (Cookies.get('access_token') === false) {
-        channelsReq();
+        channelsReq(response.access_token);
       }
       Cookies.set('account', account, { expires: 7 });
       Cookies.set('password', pwd, { expires: 7 });
-      Cookies.set('access_token', accessToken, { expires: 7 });
+      Cookies.set('access_token', response.access_token, { expires: 7 });
       Cookies.set('deviceid', response.device_id, { expires: 7 });
-      playVideo(playUrl,accessToken,channelId);
+      playVideo(playUrl,response.access_token,channelId);
     } else {
       alert("账号错误！");
     }
   });
 }
 
-function channelsReq() {
+function channelsReq(accessToken) {
   let channelList = new ReqJson(listUrl,'GET','?pageidx=1&pagenum=500&accesstoken='+accessToken);
   channelList.req(function(response){
     let categories = [1,2,3,4,5,7,8];
@@ -582,13 +583,13 @@ if (Cookies.get('account') && Cookies.get('password')){
 }
 
 if (Cookies.get('access_token')){
-  accessToken = Cookies.get('access_token');
+  let accessToken = Cookies.get('access_token');
   if (playVideo(playUrl,accessToken,channelId) === 0) {
     setTimeout(function(){
       loginBtn.click();
     }, 1000);
   }
-  channelsReq();
+  channelsReq(accessToken);
 }
 else if(Cookies.get('account') && Cookies.get('password')) {
   setTimeout(function(){
