@@ -286,6 +286,8 @@ function switchCategory(e) {
           }
         }
         mylist.classList.remove('hidden');
+      } else {
+        playVideo(playUrl,Cookies.get('access_token'),channelId);
       }
     }
   } else {
