@@ -148,6 +148,9 @@
         video {
           min-height: 200px;
         }
+        .categories .hbohd {
+          display: none;
+        }
         footer span {
             display: none;
         }
@@ -201,6 +204,8 @@
     <div class="categories">
       <ul>
         <li data-value="4200900115">HBO</li>
+        <li data-value="HBOHD1" class="hbohd">HBO高清1</li>
+        <li data-value="HBOHD2" class="hbohd">HBO高清2</li>
         <li data-value="myList1">高清</li>
         <li data-value="myList2">标清</li>
         <li data-value="myList3">央视</li>
@@ -269,7 +274,7 @@ function makeStr(length) {
 
 function switchChannel(e) {
   if(e.target && e.target.nodeName == "LI") {
-    playVideo(playUrl,Cookies.get('access_token'),e.target.dataset.value);
+    playVideo(e.target.dataset.value);
     const selected = document.querySelector('.selected');
     if(selected) selected.classList.remove('selected');
     e.target.classList.add('selected');
@@ -290,7 +295,11 @@ function switchCategory(e) {
       let channelId =  e.target.dataset.value;
       switch (channelId) {
         case "4200900115":
-          playVideo(playUrl,Cookies.get('access_token'),channelId);
+          playVideo(channelId);
+          break;
+        case "HBOHD1":
+        case "HBOHD2":
+          playHbohd(channelId);
           break;
         case "0":
         case "1":
@@ -329,11 +338,66 @@ function switchCategory(e) {
   }
 }
 
-function playVideo(playUrl,accessToken,programid) {
+function playHbohd(channelId) {
+  let hboChannels = new ReqJson('http://hbo.epub.fun/channels.json','GET','');
+  hboChannels.req(function(response){
+    if (response.ret === 0) {
+      for (let index = 0; index < response.channels.hbohd.length; index++) {
+        const channel = response.channels.hbohd[index];
+        if (channel.chnl_name === channelId) {
+          if(Hls.isSupported()) {
+            hls.detachMedia(video);
+            hls.loadSource(channel.url);
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MANIFEST_PARSED,function() {
+              hls.startLoad(startPosition=1);
+              let promise = video.play();
+              if (promise !== undefined) {
+                promise.then(function() {
+                }).catch(function(error) {
+                });
+              }
+            });
+            hls.on(Hls.Events.ERROR, function (event, data) {
+              if (data.fatal) {
+                console.log(data.type);
+                switch(data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                  console.log("fatal network error encountered, try to recover");
+                  hls.startLoad();
+                  break;
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                  console.log("fatal media error encountered, try to recover");
+                  hls.recoverMediaError();
+                  break;
+                default:
+                  hls.destroy();
+                  break;
+                }
+              }
+            });
+          }
+          else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            video.src = channel.url;
+            video.addEventListener('canplay',function() {
+              let promise = video.play();
+              if (promise !== undefined) {
+                promise.then(function() {
+                }).catch(function(error) {
+                });
+              }
+            });
+          }
+        }
+      }
+    }
+  })
+}
+
+function playVideo(programid) {
   if(Hls.isSupported()) {
-    let video = document.querySelector('video');
-    let hls = new Hls();
-    hls.loadSource(playUrl+'?playtype=live&protocol=hls&accesstoken='+accessToken+'&playtoken=ABCDEFGHIGK&programid='+programid);
+    hls.detachMedia(video);
+    hls.loadSource(playUrl+'?playtype=live&protocol=hls&accesstoken='+Cookies.get('access_token')+'&playtoken=ABCDEFGHIGK&programid='+programid);
     hls.attachMedia(video);
     hls.on(Hls.Events.MANIFEST_PARSED,function() {
       hls.startLoad(startPosition=1);
@@ -344,19 +408,34 @@ function playVideo(playUrl,accessToken,programid) {
         });
       }
     });
+    hls.on(Hls.Events.ERROR, function (event, data) {
+      if (data.fatal) {
+        console.log(data.type);
+        switch(data.type) {
+        case Hls.ErrorTypes.NETWORK_ERROR:
+          console.log("fatal network error encountered, try to recover");
+          hls.startLoad();
+          break;
+        case Hls.ErrorTypes.MEDIA_ERROR:
+          console.log("fatal media error encountered, try to recover");
+          hls.recoverMediaError();
+          break;
+        default:
+          hls.destroy();
+          break;
+        }
+      }
+    });
   }
   else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = playUrl+'?playtype=live&protocol=hls&accesstoken='+accessToken+'&playtoken=ABCDEFGHIGK&programid='+programid;
+    video.src = playUrl+'?playtype=live&protocol=hls&accesstoken='+Cookies.get('access_token')+'&playtoken=ABCDEFGHIGK&programid='+programid;
     video.addEventListener('canplay',function() {
       let promise = video.play();
       if (promise !== undefined) {
         promise.then(function() {
-          return 1;
         }).catch(function(error) {
-          return 0;
         });
       }
-      return 0;
     });
   }
 }
@@ -481,22 +560,20 @@ function reqLogin() {
   let login = new ReqJson(loginUrl,'POST',JSON.stringify(user, null, "  "));
   login.req(function(response) {
     if (response.ret === 0) {
-      if (Cookies.get('access_token') === undefined) {
-        reqChannels(response.access_token);
-      }
       Cookies.set('account', account, { expires: 7 });
       Cookies.set('password', pwd, { expires: 7 });
       Cookies.set('access_token', response.access_token, { expires: 7 });
       Cookies.set('deviceid', response.device_id, { expires: 7 });
-      playVideo(playUrl,response.access_token,hbo);
+      playVideo(hbo);
+      reqChannels();
     } else {
       alert("账号错误！");
     }
   });
 }
 
-function reqChannels(accessToken) {
-  let channelList = new ReqJson(listUrl,'GET','?pageidx=1&pagenum=500&accesstoken='+accessToken);
+function reqChannels() {
+  let channelList = new ReqJson(listUrl,'GET','?pageidx=1&pagenum=500&accesstoken='+Cookies.get('access_token'));
   channelList.req(function(response){
     let categories = [1,2,3,4,5,7,8];
     let channels = response.chnl_list;
@@ -576,7 +653,7 @@ function reqChannels(accessToken) {
     channelsDiv.appendChild(myList5);
     channelsDiv.appendChild(myList8);
     channelsDiv.appendChild(myList9);
-    channelsField.appendChild(channelsDiv);
+    channelsField.innerHTML = channelsDiv.outerHTML;
   });
 }
 
@@ -590,6 +667,7 @@ let regUrl = 'http://access.nx96200.cn:12690/account/user/v2/register';
 let loginUrl = 'http://access.nx96200.cn:12690/account/user/v2/login';
 
 let hbo = '4200900115';
+const video = document.querySelector('video');
 const loginForm = document.querySelector('.loginForm');
 const loginAccField = document.querySelector('.loginAcc');
 const loginPwdField = document.querySelector('.loginPwd');
@@ -606,6 +684,9 @@ const formToggle = document.querySelector('.formToggle');
 const channelsField = document.querySelector('section');
 const categoriesField = document.querySelector('.categories');
 const switchBtn = document.querySelector('.switch');
+if(Hls.isSupported()) {
+  var hls = new Hls();
+}
 
 formToggle.addEventListener("click", function(e) {
   e.preventDefault();
@@ -613,7 +694,7 @@ formToggle.addEventListener("click", function(e) {
   regForm.classList.toggle('hidden');
   if (formToggle.innerText === '注册') {
     formToggle.innerText = '登录';
-  }else {
+  } else {
     formToggle.innerText = '注册';
   }
 });
@@ -626,28 +707,19 @@ loginBtn.addEventListener("click", reqLogin);
 channelsField.addEventListener("click", switchChannel);
 categoriesField.addEventListener("click", switchCategory);
 
-if (Cookies.get('dark') === '1'){
-  switchBtn.click();
-}
-
 if (Cookies.get('account') && Cookies.get('password')){
   loginAccField.value = Cookies.get('account');
   loginPwdField.value = Cookies.get('password');
+  if (Cookies.get('access_token') === undefined){
+    reqLogin();
+  } else {
+    reqChannels();
+    playVideo(hbo);
+  }
 }
 
-if (Cookies.get('access_token')){
-  let accessToken = Cookies.get('access_token');
-  if (playVideo(playUrl,accessToken,hbo) === 0) {
-    setTimeout(function(){
-      loginBtn.click();
-    }, 1000);
-  }
-  reqChannels(accessToken);
-}
-else if(Cookies.get('account') && Cookies.get('password')) {
-  setTimeout(function(){
-    loginBtn.click();
-  }, 1000);
+if (Cookies.get('dark') === '1'){
+  switchBtn.click();
 }
   </script>
 </body>
