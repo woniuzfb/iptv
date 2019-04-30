@@ -98,7 +98,7 @@
       }
 
       .hidden {
-        display: none;
+        display: none !important;
       }
 
       .white {
@@ -148,7 +148,7 @@
         video {
           min-height: 200px;
         }
-        .categories .hbohd {
+        .categories .extra {
           display: none;
         }
         footer span {
@@ -204,15 +204,15 @@
     <div class="categories">
       <ul>
         <li data-value="4200900115">HBO</li>
-        <li data-value="HBOHD1" class="hbohd">HBO高清1</li>
-        <li data-value="HBOHD2" class="hbohd">HBO高清2</li>
+        <li data-value="HBOHD1" class="extra">HBO高清1</li>
+        <li data-value="HBOHD2" class="extra">HBO高清2</li>
         <li data-value="myList1">高清</li>
         <li data-value="myList2">标清</li>
         <li data-value="myList3">央视</li>
         <li data-value="myList4">卫视</li>
         <li data-value="myList5">地方</li>
         <li data-value="myList8">专业</li>
-        <li data-value="myList9">港澳台+高清</li>
+        <li data-value="myList9" class="extra">港澳台+高清</li>
         <li class="switch" data-value="0">关灯</li>
       </ul>
     </div>
@@ -286,7 +286,6 @@ function toggleClass(s,n) {
   for (let i = 0; i < elements.length; i++) {
     elements[i].classList.toggle(n);
   }
-
 }
 
 function switchCategory(e) {
@@ -320,7 +319,7 @@ function switchCategory(e) {
           toggleClass('body','bgBlack');
           toggleClass('input','bgBlack');
           toggleClass('footer','bgBlack');
-          break;      
+          break;
         default:
           const mylist = document.querySelector('.'+channelId);
           let siblings = mylist.parentNode.childNodes;
@@ -391,7 +390,7 @@ function playHbohd(channelId) {
         }
       }
     }
-  })
+  });
 }
 
 function playVideo(source,programid) {
@@ -460,6 +459,7 @@ function ReqJson(url,type,data) {
 
 ReqJson.prototype.req = function(callback) {
   let request = new XMLHttpRequest();
+  request.onerror = function() {callback({"ret":1});}
   request.open(this.type, this.url);
   request.responseType = this.responseType;
   request.onload = function() {
@@ -495,10 +495,10 @@ function reqSms() {
   let regSms = new ReqJson(smsUrl,'GET','?pincode='+regImgTxt+'&picid='+regImgId+'&verifytype=3&account='+regAcc+'&accounttype=1');
   regSms.req(function(response){
     if (response.ret === 0) {
-    alert("短信已发送！");
+      alert("短信已发送！");
     } else {
-    alert("验证码或其它错误！");
-  }
+      alert("验证码或其它错误！");
+    }
   });
 }
 
@@ -676,6 +676,8 @@ function reqChannels() {
           myList9.appendChild(pygdzhcsListItem);
         }
         channelsDiv.appendChild(myList9);
+      } else {
+        toggleClass('.extra','hidden');
       }
       channelsField.innerHTML = channelsDiv.outerHTML;
     });
