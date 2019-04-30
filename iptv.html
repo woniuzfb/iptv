@@ -212,7 +212,7 @@
         <li data-value="myList4">卫视</li>
         <li data-value="myList5">地方</li>
         <li data-value="myList8">专业</li>
-        <li data-value="myList9">港澳台</li>
+        <li data-value="myList9">港澳台+高清</li>
         <li class="switch" data-value="0">关灯</li>
       </ul>
     </div>
@@ -274,7 +274,7 @@ function makeStr(length) {
 
 function switchChannel(e) {
   if(e.target && e.target.nodeName == "LI") {
-    playVideo(e.target.dataset.value);
+    playVideo(e.target.dataset.source,e.target.dataset.value);
     const selected = document.querySelector('.selected');
     if(selected) selected.classList.remove('selected');
     e.target.classList.add('selected');
@@ -295,7 +295,7 @@ function switchCategory(e) {
       let channelId =  e.target.dataset.value;
       switch (channelId) {
         case "4200900115":
-          playVideo(channelId);
+          playVideo('origin',channelId);
           break;
         case "HBOHD1":
         case "HBOHD2":
@@ -394,10 +394,16 @@ function playHbohd(channelId) {
   })
 }
 
-function playVideo(programid) {
+function playVideo(source,programid) {
+  let url = playUrl;
+  let token = Cookies.get('access_token');
+  if (source === 'pygdzhcs') {
+    url = 'http://httpdvb.slave.pygdzhcs.com:13164/playurl';
+    token = Cookies.get('pygdzhcs');
+  }
   if(Hls.isSupported()) {
     hls.detachMedia(video);
-    hls.loadSource(playUrl+'?playtype=live&protocol=hls&accesstoken='+Cookies.get('access_token')+'&playtoken=ABCDEFGHIGK&programid='+programid);
+    hls.loadSource(url+'?playtype=live&protocol=hls&accesstoken='+token+'&playtoken=ABCDEFGHIGK&programid='+programid);
     hls.attachMedia(video);
     hls.on(Hls.Events.MANIFEST_PARSED,function() {
       hls.startLoad(startPosition=1);
@@ -428,7 +434,7 @@ function playVideo(programid) {
     });
   }
   else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = playUrl+'?playtype=live&protocol=hls&accesstoken='+Cookies.get('access_token')+'&playtoken=ABCDEFGHIGK&programid='+programid;
+    video.src = url+'?playtype=live&protocol=hls&accesstoken='+token+'&playtoken=ABCDEFGHIGK&programid='+programid;
     video.addEventListener('canplay',function() {
       let promise = video.play();
       if (promise !== undefined) {
@@ -564,7 +570,7 @@ function reqLogin() {
       Cookies.set('password', pwd, { expires: 7 });
       Cookies.set('access_token', response.access_token, { expires: 7 });
       Cookies.set('deviceid', response.device_id, { expires: 7 });
-      playVideo(hbo);
+      playVideo('origin',hbo);
       reqChannels();
     } else {
       alert("账号错误！");
@@ -609,6 +615,7 @@ function reqChannels() {
           listItem.classList.add('white');
         }
         listItem.setAttribute('data-value',channels[i].chnl_id);
+        listItem.setAttribute('data-source','origin');
         listItem.textContent = channelName;
         switch (sub) {
           case 1:
@@ -634,17 +641,6 @@ function reqChannels() {
         }
       }
     }
-    let got = [4200900091,4200900106,4200900107,4200900108,4200900109,4200900110,4200900111,4200900112,4200900113,4200900114,4200900116];
-    let gotName = ["CCTV老故事","华娱卫视","凤凰卫视中文","星空卫视","TVB8","凤凰卫视资讯","星空卫视电影","凤凰卫视电影","Channel[V]音乐亚洲","国家地理","天映频道"];
-    for(let k = 0; k < got.length; k++) {
-      let gotListItem = document.createElement('li');
-      if (Cookies.get('dark') === '1'){
-        gotListItem.classList.add('white');
-      }
-      gotListItem.setAttribute('data-value',got[k]);
-      gotListItem.textContent = gotName[k];
-      myList9.appendChild(gotListItem);
-    }
 
     channelsDiv.appendChild(myList1);
     channelsDiv.appendChild(myList2);
@@ -652,8 +648,37 @@ function reqChannels() {
     channelsDiv.appendChild(myList4);
     channelsDiv.appendChild(myList5);
     channelsDiv.appendChild(myList8);
-    channelsDiv.appendChild(myList9);
-    channelsField.innerHTML = channelsDiv.outerHTML;
+
+    let channelsObj = new ReqJson('http://hbo.epub.fun/channels.json','GET','');
+    channelsObj.req(function(response){
+      if (response.ret === 0) {
+        for (let a = 0; a < response.channels.origin.length; a++) {
+          const originChannel = response.channels.origin[a];
+          let originListItem = document.createElement('li');
+          if (Cookies.get('dark') === '1'){
+            originListItem.classList.add('white');
+          }
+          originListItem.setAttribute('data-value',originChannel.chnl_id);
+          originListItem.setAttribute('data-source','origin');
+          originListItem.textContent = originChannel.chnl_name;
+          myList9.appendChild(originListItem);
+        }
+        Cookies.set('pygdzhcs', response.channels.pygdzhcs.token);
+        for (let b = 0; b < response.channels.pygdzhcs.channels.length; b++) {
+          const pygdzhcsChannel = response.channels.pygdzhcs.channels[b];
+          let pygdzhcsListItem = document.createElement('li');
+          if (Cookies.get('dark') === '1'){
+            pygdzhcsListItem.classList.add('white');
+          }
+          pygdzhcsListItem.setAttribute('data-value',pygdzhcsChannel.chnl_id);
+          pygdzhcsListItem.setAttribute('data-source','pygdzhcs');
+          pygdzhcsListItem.textContent = pygdzhcsChannel.chnl_name;
+          myList9.appendChild(pygdzhcsListItem);
+        }
+        channelsDiv.appendChild(myList9);
+      }
+      channelsField.innerHTML = channelsDiv.outerHTML;
+    });
   });
 }
 
@@ -714,7 +739,7 @@ if (Cookies.get('account') && Cookies.get('password')){
     reqLogin();
   } else {
     reqChannels();
-    playVideo(hbo);
+    playVideo('origin',hbo);
   }
 }
 
