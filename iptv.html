@@ -294,7 +294,7 @@ function switchCategory(e) {
       let channelId =  e.target.dataset.value;
       switch (channelId) {
         case "4200900115":
-          playVideo('origin',channelId);
+          playVideo('nx96200',channelId);
           break;
         case "HBOHD1":
         case "HBOHD2":
@@ -396,9 +396,17 @@ function playHbohd(channelId) {
 function playVideo(source,programid) {
   let url = playUrl;
   let token = Cookies.get('access_token');
-  if (source === 'pygdzhcs') {
-    url = 'http://httpdvb.slave.pygdzhcs.com:13164/playurl';
-    token = Cookies.get('pygdzhcs');
+  switch (source) {
+    case 'pygdzhcs':
+      url = 'http://httpdvb.slave.pygdzhcs.com:13164/playurl';
+      token = Cookies.get('pygdzhcs');
+      break;
+    case 'jscnwx':
+      url = 'http://httpdvb.slave.jscnwx.com:13164/playurl';
+      token = Cookies.get('jscnwx');
+      break;
+    default:
+      break;
   }
   if(Hls.isSupported()) {
     hls.detachMedia(video);
@@ -570,7 +578,7 @@ function reqLogin() {
       Cookies.set('password', pwd, { expires: 7 });
       Cookies.set('access_token', response.access_token, { expires: 7 });
       Cookies.set('deviceid', response.device_id, { expires: 7 });
-      playVideo('origin',hbo);
+      playVideo('nx96200',hbo);
       reqChannels();
     } else {
       alert("账号错误！");
@@ -615,7 +623,7 @@ function reqChannels() {
           listItem.classList.add('white');
         }
         listItem.setAttribute('data-value',channels[i].chnl_id);
-        listItem.setAttribute('data-source','origin');
+        listItem.setAttribute('data-source','nx96200');
         listItem.textContent = channelName;
         switch (sub) {
           case 1:
@@ -652,28 +660,24 @@ function reqChannels() {
     let channelsObj = new ReqJson('http://hbo.epub.fun/channels.json','GET','');
     channelsObj.req(function(response){
       if (response.ret === 0) {
-        for (let a = 0; a < response.channels.origin.length; a++) {
-          const originChannel = response.channels.origin[a];
-          let originListItem = document.createElement('li');
-          if (Cookies.get('dark') === '1'){
-            originListItem.classList.add('white');
+        for (let a = 0; a < response.data.length; a++) {
+          const sourceObj = response.data[a];
+          if (sourceObj.name !== 'hbohd') {
+            if (sourceObj.token !== undefined) {
+              Cookies.set(sourceObj.name, sourceObj.token);
+            }
+            for (let b = 0; b < sourceObj.channels.length; b++) {
+              const channelObj = sourceObj.channels[b];
+              let channelListItem = document.createElement('li');
+              if (Cookies.get('dark') === '1'){
+                channelListItem.classList.add('white');
+              }
+              channelListItem.setAttribute('data-value',channelObj.chnl_id);
+              channelListItem.setAttribute('data-source',sourceObj.name);
+              channelListItem.textContent = channelObj.chnl_name;
+              myList9.appendChild(channelListItem);
+            }
           }
-          originListItem.setAttribute('data-value',originChannel.chnl_id);
-          originListItem.setAttribute('data-source','origin');
-          originListItem.textContent = originChannel.chnl_name;
-          myList9.appendChild(originListItem);
-        }
-        Cookies.set('pygdzhcs', response.channels.pygdzhcs.token);
-        for (let b = 0; b < response.channels.pygdzhcs.channels.length; b++) {
-          const pygdzhcsChannel = response.channels.pygdzhcs.channels[b];
-          let pygdzhcsListItem = document.createElement('li');
-          if (Cookies.get('dark') === '1'){
-            pygdzhcsListItem.classList.add('white');
-          }
-          pygdzhcsListItem.setAttribute('data-value',pygdzhcsChannel.chnl_id);
-          pygdzhcsListItem.setAttribute('data-source','pygdzhcs');
-          pygdzhcsListItem.textContent = pygdzhcsChannel.chnl_name;
-          myList9.appendChild(pygdzhcsListItem);
         }
         channelsDiv.appendChild(myList9);
       } else {
@@ -741,7 +745,7 @@ if (Cookies.get('account') && Cookies.get('password')){
     reqLogin();
   } else {
     reqChannels();
-    playVideo('origin',hbo);
+    playVideo('nx96200',hbo);
   }
 }
 
