@@ -341,12 +341,12 @@ function playHbohd(channelId) {
   let hboChannels = new ReqJson('http://hbo.epub.fun/channels.json','GET','');
   hboChannels.req(function(response){
     if (response.ret === 0) {
-      for (let index = 0; index < response.channels.hbohd.length; index++) {
-        const channel = response.channels.hbohd[index];
-        if (channel.chnl_name === channelId) {
+      for (let index = 0; index < response.data[0]["channels"].length; index++) {
+        const channelObj = response.data[0]["channels"][index];
+        if (channelObj.chnl_name === channelId) {
           if(Hls.isSupported()) {
             hls.detachMedia(video);
-            hls.loadSource(channel.url);
+            hls.loadSource(channelObj.url);
             hls.attachMedia(video);
             hls.on(Hls.Events.MANIFEST_PARSED,function() {
               hls.startLoad(startPosition=1);
@@ -377,7 +377,7 @@ function playHbohd(channelId) {
             });
           }
           else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            video.src = channel.url;
+            video.src = channelObj.url;
             video.addEventListener('canplay',function() {
               let promise = video.play();
               if (promise !== undefined) {
