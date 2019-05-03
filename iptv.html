@@ -206,13 +206,14 @@
         <li data-value="4200900115">HBO</li>
         <li data-value="HBOHD1" class="hbohd extra">HBO高清1</li>
         <li data-value="HBOHD2" class="hbohd extra">HBO高清2</li>
-        <li data-value="myList1">高清</li>
+        <li data-value="myList1" class="liantong">高清</li>
+        <li data-value="myList1a" class="extra">高清[电信]</li>
         <li data-value="myList2">标清</li>
         <li data-value="myList3">央视</li>
         <li data-value="myList4">卫视</li>
         <li data-value="myList5">地方</li>
         <li data-value="myList8">专业</li>
-        <li data-value="myList9" class="extra">港澳台+高清</li>
+        <li data-value="myList9" class="extra">港澳台</li>
         <li class="switch" data-value="0">关灯</li>
       </ul>
     </div>
@@ -589,10 +590,10 @@ function reqLogin() {
 function reqChannels() {
   let channelList = new ReqJson(listUrl,'GET','?pageidx=1&pagenum=500&accesstoken='+Cookies.get('access_token'));
   channelList.req(function(response){
-    let categories = [1,2,3,4,5,7,8];
     let channels = response.chnl_list;
     const channelsDiv = document.createElement('div');
     const myList1 = document.createElement('ul');
+    const myList1a = document.createElement('ul');
     const myList2 = document.createElement('ul');
     const myList3 = document.createElement('ul');
     const myList4 = document.createElement('ul');
@@ -601,6 +602,8 @@ function reqChannels() {
     const myList9 = document.createElement('ul');
     channelsDiv.classList.add('channels');
     myList1.classList.add('myList1');
+    myList1a.classList.add('myList1a');
+    myList1a.classList.add('hidden');
     myList2.classList.add('myList2');
     myList2.classList.add('hidden');
     myList3.classList.add('myList3');
@@ -650,13 +653,6 @@ function reqChannels() {
       }
     }
 
-    channelsDiv.appendChild(myList1);
-    channelsDiv.appendChild(myList2);
-    channelsDiv.appendChild(myList3);
-    channelsDiv.appendChild(myList4);
-    channelsDiv.appendChild(myList5);
-    channelsDiv.appendChild(myList8);
-
     let channelsObj = new ReqJson('http://hbo.epub.fun/channels.json','GET','');
     channelsObj.req(function(response){
       if (response.ret === 0) {
@@ -675,15 +671,87 @@ function reqChannels() {
               channelListItem.setAttribute('data-value',channelObj.chnl_id);
               channelListItem.setAttribute('data-source',sourceObj.name);
               channelListItem.textContent = channelObj.chnl_name;
-              myList9.appendChild(channelListItem);
+              switch (channelObj.chnl_cat) {
+                case '高清联通':
+                  myList1.appendChild(channelListItem);
+                  break;
+                case '高清电信':
+                  myList1a.appendChild(channelListItem);
+                  break;
+                case '标清':
+                  myList2.appendChild(channelListItem);
+                  break;
+                case '央视':
+                  myList3.appendChild(channelListItem);
+                  break;
+                case '卫视':
+                  myList4.appendChild(channelListItem);
+                  break;
+                case '地方':
+                  myList5.appendChild(channelListItem);
+                  break;
+                case '专业':
+                  myList8.appendChild(channelListItem);
+                  break;
+                default:
+                  myList9.appendChild(channelListItem);
+                  break;
+              }
+            }
+            if (sourceObj.list_url !== undefined) {
+              let newChannelList = new ReqJson(sourceObj.list_url,'GET','?pageidx=1&pagenum=500&accesstoken='+sourceObj.token);
+              newChannelList.req(function(response){
+                if (response.ret === 0) {
+                  document.querySelector('.liantong').textContent = '高清[联通]';
+                  for(let c = 0; c < response.chnl_list.length; c++) {
+                    let newSubs = (response.chnl_list[c]['sub_type']).split('|');
+                    let newChannelName = response.chnl_list[c].chnl_name;
+                    for(let d = 0; d < newSubs.length; d++) {
+                      let newSub = Number(newSubs[d]) - 10010000;
+                      let newListItem = document.createElement('li');
+                      if (Cookies.get('dark') === '1'){
+                        newListItem.classList.add('white');
+                      }
+                      newListItem.setAttribute('data-value',response.chnl_list[c].chnl_id);
+                      newListItem.setAttribute('data-source',sourceObj.name);
+                      newListItem.textContent = newChannelName;
+                      switch (newSub) {
+                        case 1:
+                          myList1a.appendChild(newListItem);
+                          break;
+                        default:
+                          break;
+                      }
+                    }
+                  }
+                } else {
+                  toggleClass('.extra','hidden');
+                }
+                channelsDiv.appendChild(myList1);
+                channelsDiv.appendChild(myList1a);
+                channelsDiv.appendChild(myList2);
+                channelsDiv.appendChild(myList3);
+                channelsDiv.appendChild(myList4);
+                channelsDiv.appendChild(myList5);
+                channelsDiv.appendChild(myList8);
+                if (response.ret === 0) {
+                  channelsDiv.appendChild(myList9);
+                }
+                channelsField.innerHTML = channelsDiv.outerHTML;
+              });
             }
           }
         }
-        channelsDiv.appendChild(myList9);
       } else {
         toggleClass('.extra','hidden');
+        channelsDiv.appendChild(myList1);
+        channelsDiv.appendChild(myList2);
+        channelsDiv.appendChild(myList3);
+        channelsDiv.appendChild(myList4);
+        channelsDiv.appendChild(myList5);
+        channelsDiv.appendChild(myList8);
+        channelsField.innerHTML = channelsDiv.outerHTML;
       }
-      channelsField.innerHTML = channelsDiv.outerHTML;
     });
   });
 }
