@@ -207,7 +207,7 @@
         <li data-value="HBOHD1" class="hbohd extra">HBO高清1</li>
         <li data-value="HBOHD2" class="hbohd extra">HBO高清2</li>
         <li data-value="myList1" class="liantong">高清</li>
-        <li data-value="myList1a" class="extra">高清[电信]</li>
+        <li data-value="myList1a" class="dianxin">高清[电信]</li>
         <li data-value="myList2">标清</li>
         <li data-value="myList3">央视</li>
         <li data-value="myList4">卫视</li>
@@ -700,20 +700,21 @@ function reqChannels() {
               }
             }
             if (sourceObj.list_url !== undefined) {
+              extra = 1;
               let newChannelList = new ReqJson(sourceObj.list_url,'GET','?pageidx=1&pagenum=500&accesstoken='+sourceObj.token);
-              newChannelList.req(function(response){
-                if (response.ret === 0) {
-                  extra = 1;
-                  for(let c = 0; c < response.chnl_list.length; c++) {
-                    let newSubs = (response.chnl_list[c]['sub_type']).split('|');
-                    let newChannelName = response.chnl_list[c].chnl_name;
+              newChannelList.req(function(newResponse){
+                if (newResponse.ret === 0) {
+                  extra = 2;
+                  for(let c = 0; c < newResponse.chnl_list.length; c++) {
+                    let newSubs = (newResponse.chnl_list[c]['sub_type']).split('|');
+                    let newChannelName = newResponse.chnl_list[c].chnl_name;
                     for(let d = 0; d < newSubs.length; d++) {
                       let newSub = Number(newSubs[d]) - 10010000;
                       let newListItem = document.createElement('li');
                       if (Cookies.get('dark') === '1'){
                         newListItem.classList.add('white');
                       }
-                      newListItem.setAttribute('data-value',response.chnl_list[c].chnl_id);
+                      newListItem.setAttribute('data-value',newResponse.chnl_list[c].chnl_id);
                       newListItem.setAttribute('data-source',sourceObj.name);
                       newListItem.textContent = newChannelName;
                       switch (newSub) {
@@ -726,26 +727,40 @@ function reqChannels() {
                     }
                   }
                 }
+                if (a === response.data.length - 1) {
+                  channelsDiv.appendChild(myList1);
+                  if (extra === 2) {
+                    document.querySelector('.liantong').textContent = '高清[联通]';
+                    channelsDiv.appendChild(myList1a);
+                  } else {
+                    toggleClass('.dianxin','hidden');
+                  }
+                  channelsDiv.appendChild(myList2);
+                  channelsDiv.appendChild(myList3);
+                  channelsDiv.appendChild(myList4);
+                  channelsDiv.appendChild(myList5);
+                  channelsDiv.appendChild(myList8);
+                  channelsDiv.appendChild(myList9);
+                  channelsField.innerHTML = channelsDiv.outerHTML;
+                }
               });
             }
           }
         }
-        channelsDiv.appendChild(myList1);
-        if (extra === 1) {
-          document.querySelector('.liantong').textContent = '高清[联通]';
-          channelsDiv.appendChild(myList1a);
-        } else {
-          toggleClass('.extra','hidden');
-        }
-        channelsDiv.appendChild(myList2);
-        channelsDiv.appendChild(myList3);
-        channelsDiv.appendChild(myList4);
-        channelsDiv.appendChild(myList5);
-        channelsDiv.appendChild(myList8);
-        channelsDiv.appendChild(myList9);
+        if (extra === 0) {
+          toggleClass('.dianxin','hidden');
+          channelsDiv.appendChild(myList1);
+          channelsDiv.appendChild(myList2);
+          channelsDiv.appendChild(myList3);
+          channelsDiv.appendChild(myList4);
+          channelsDiv.appendChild(myList5);
+          channelsDiv.appendChild(myList8);
+          channelsDiv.appendChild(myList9);
         channelsField.innerHTML = channelsDiv.outerHTML;
+        }
       } else {
         toggleClass('.extra','hidden');
+        toggleClass('.dianxin','hidden');
         channelsDiv.appendChild(myList1);
         channelsDiv.appendChild(myList2);
         channelsDiv.appendChild(myList3);
