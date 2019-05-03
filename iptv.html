@@ -653,6 +653,7 @@ function reqChannels() {
       }
     }
 
+    let extra = 0;
     let channelsObj = new ReqJson('http://hbo.epub.fun/channels.json','GET','');
     channelsObj.req(function(response){
       if (response.ret === 0) {
@@ -702,7 +703,7 @@ function reqChannels() {
               let newChannelList = new ReqJson(sourceObj.list_url,'GET','?pageidx=1&pagenum=500&accesstoken='+sourceObj.token);
               newChannelList.req(function(response){
                 if (response.ret === 0) {
-                  document.querySelector('.liantong').textContent = '高清[联通]';
+                  extra = 1;
                   for(let c = 0; c < response.chnl_list.length; c++) {
                     let newSubs = (response.chnl_list[c]['sub_type']).split('|');
                     let newChannelName = response.chnl_list[c].chnl_name;
@@ -724,24 +725,25 @@ function reqChannels() {
                       }
                     }
                   }
-                } else {
-                  toggleClass('.extra','hidden');
                 }
-                channelsDiv.appendChild(myList1);
-                channelsDiv.appendChild(myList1a);
-                channelsDiv.appendChild(myList2);
-                channelsDiv.appendChild(myList3);
-                channelsDiv.appendChild(myList4);
-                channelsDiv.appendChild(myList5);
-                channelsDiv.appendChild(myList8);
-                if (response.ret === 0) {
-                  channelsDiv.appendChild(myList9);
-                }
-                channelsField.innerHTML = channelsDiv.outerHTML;
               });
             }
           }
         }
+        channelsDiv.appendChild(myList1);
+        if (extra === 1) {
+          document.querySelector('.liantong').textContent = '高清[联通]';
+          channelsDiv.appendChild(myList1a);
+        } else {
+          toggleClass('.extra','hidden');
+        }
+        channelsDiv.appendChild(myList2);
+        channelsDiv.appendChild(myList3);
+        channelsDiv.appendChild(myList4);
+        channelsDiv.appendChild(myList5);
+        channelsDiv.appendChild(myList8);
+        channelsDiv.appendChild(myList9);
+        channelsField.innerHTML = channelsDiv.outerHTML;
       } else {
         toggleClass('.extra','hidden');
         channelsDiv.appendChild(myList1);
