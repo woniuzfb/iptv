@@ -395,8 +395,8 @@ function playHbohd(channelId) {
 }
 
 function playVideo(source,programid) {
-  let url = playUrl;
-  let token = Cookies.get('access_token');
+  let url;
+  let token;
   switch (source) {
     case 'pygdzhcs':
       url = 'http://httpdvb.slave.pygdzhcs.com:13164/playurl';
@@ -407,6 +407,8 @@ function playVideo(source,programid) {
       token = Cookies.get('jscnwx');
       break;
     default:
+      url = playUrl;
+      token = Cookies.get('access_token');
       break;
   }
   if(Hls.isSupported()) {
@@ -616,12 +618,13 @@ function reqChannels() {
     myList8.classList.add('hidden');
     myList9.classList.add('myList9');
     myList9.classList.add('hidden');
+    let subs,channelName,sub,listItem;
     for(let i = 0; i < channels.length; i++) {
-      let subs = (channels[i]['sub_type']).split('|');
-      let channelName = channels[i].chnl_name;
+      subs = (channels[i]['sub_type']).split('|');
+      channelName = channels[i].chnl_name;
       for(let j = 0; j < subs.length; j++) {
-        let sub = Number(subs[j]) - 10010000;
-        let listItem = document.createElement('li');
+        sub = Number(subs[j]) - 10010000;
+        listItem = document.createElement('li');
         if (Cookies.get('dark') === '1'){
           listItem.classList.add('white');
         }
@@ -657,6 +660,7 @@ function reqChannels() {
     let channelsObj = new ReqJson('http://hbo.epub.fun/channels.json','GET','');
     channelsObj.req(function(response){
       if (response.ret === 0) {
+        let channelListItem,newChannelList,newSubs,newChannelName,newSub,newListItem;
         for (let a = 0; a < response.data.length; a++) {
           const sourceObj = response.data[a];
           if (sourceObj.name !== 'hbohd') {
@@ -665,7 +669,7 @@ function reqChannels() {
             }
             for (let b = 0; b < sourceObj.channels.length; b++) {
               const channelObj = sourceObj.channels[b];
-              let channelListItem = document.createElement('li');
+              channelListItem = document.createElement('li');
               if (Cookies.get('dark') === '1'){
                 channelListItem.classList.add('white');
               }
@@ -701,16 +705,16 @@ function reqChannels() {
             }
             if (sourceObj.list_url !== undefined) {
               extra = 1;
-              let newChannelList = new ReqJson(sourceObj.list_url,'GET','?pageidx=1&pagenum=500&accesstoken='+sourceObj.token);
+              newChannelList = new ReqJson(sourceObj.list_url,'GET','?pageidx=1&pagenum=500&accesstoken='+sourceObj.token);
               newChannelList.req(function(newResponse){
                 if (newResponse.ret === 0) {
                   extra = 2;
                   for(let c = 0; c < newResponse.chnl_list.length; c++) {
-                    let newSubs = (newResponse.chnl_list[c]['sub_type']).split('|');
-                    let newChannelName = newResponse.chnl_list[c].chnl_name;
+                    newSubs = (newResponse.chnl_list[c]['sub_type']).split('|');
+                    newChannelName = newResponse.chnl_list[c].chnl_name;
                     for(let d = 0; d < newSubs.length; d++) {
-                      let newSub = Number(newSubs[d]) - 10010000;
-                      let newListItem = document.createElement('li');
+                      newSub = Number(newSubs[d]) - 10010000;
+                      newListItem = document.createElement('li');
                       if (Cookies.get('dark') === '1'){
                         newListItem.classList.add('white');
                       }
