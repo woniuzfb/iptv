@@ -20,6 +20,8 @@
       "name":"nx96200",
       "lane":"联通",
       "token":"",
+      "acc_type":1,
+      "extend_info":"iOS;12;mobile;ipa2.0.3",
       "play_url":"http://httpdvb.slave.nx96200.cn:13164/playurl",
       "list_url":"http://slave.nx96200.cn:13160/media/channel/get_list",
       "token_url":"http://access.nx96200.cn:12690/account/get_third_token",
@@ -101,7 +103,22 @@
       "name":"pygdzhcs",
       "lane":"联通",
       "token":"",
+      "acc_type":1,
+      "extend_info":{
+        "operatingsystem":"iOS",
+        "systemversion":"12.1",
+        "model":"iPhone 6 Plus",
+        "appversion":"2.4"
+      },
+      "server_version":"V1.2.15",
       "play_url":"http://httpdvb.slave.pygdzhcs.com:13164/playurl",
+      "list_url":"http://slave.pygdzhcs.com:13160/media/channel/get_list",
+      "token_url":"http://access.pygdzhcs.com:12690/account/get_third_token",
+      "img_url":"http://access.pygdzhcs.com:12690/account/user/get_picture_code",
+      "sms_url":"http://access.pygdzhcs.com:12690/account/user/v2/get_verify_code",
+      "verify_url":"http://access.pygdzhcs.com:12690/account/user/validate_verify_code",
+      "reg_url":"http://access.pygdzhcs.com:12690/account/user/v2/register",
+      "login_url":"http://access.pygdzhcs.com:12690/account/user/v2/login",
       "channels":
       [
         {
