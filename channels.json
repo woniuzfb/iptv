@@ -19,7 +19,7 @@
     {
       "name":"nx96200",
       "lane":"联通",
-      "token":"R5CCD4433U3197F163K776352F7I7166E872PBM31A37C1V1042EZ9C465WE2912380831",
+      "token":"",
       "play_url":"http://httpdvb.slave.nx96200.cn:13164/playurl",
       "list_url":"http://slave.nx96200.cn:13160/media/channel/get_list",
       "token_url":"http://access.nx96200.cn:12690/account/get_third_token",
@@ -154,7 +154,7 @@
     {
       "name":"jscnwx",
       "lane":"电信",
-      "token":"R5CCC482AU309A40ABK773618C3I7166E872PBM31587DEV1045CZ4E2C9WE28EBC2E8A1",
+      "token":"",
       "unique_url":"http://122.194.12.25:12690/account/user/name_is_uniqueness",
       "reg_url":"http://122.194.12.25:12690/account/user/register",
       "login_url":"http://122.194.12.25:12690/account/login",
