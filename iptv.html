@@ -381,6 +381,7 @@ function hlsLoad(url) {
           hls.recoverMediaError();
           break;
         default:
+          console.log(data);
           hls.destroy();
           break;
         }
@@ -410,7 +411,7 @@ function playVideo(sourceName,programid) {
           url = source.play_url+'?playtype=live&protocol=hls&accesstoken='+Cookies.get(sourceName)+'&playtoken=ABCDEFGHIGK&programid='+programid;
           hlsLoad(url);
         } else {
-          alertInfo("此服务端尚未注册！\n请先注册！");
+          alertInfo("此服务端未注册或登录！\n请先注册或登录！");
           sourceNow = sourceName;
           formToggle.click();
         }
@@ -455,7 +456,7 @@ function alertInfo(info) {
   infoField.innerText = info;
   setTimeout(function run() {
     infoField.innerText = '';
-  }, 2000);
+  }, 3000);
 }
 
 function uniqueName() {
@@ -534,12 +535,15 @@ function reqReg() {
       sourceNowAccType = source.acc_type;
     }
   }
-  reqData(jscnwxUrl,'?username='+regAccField.value+'&iconid=1&pwd='+md5(pwd)+'&birthday=1970-1-1&type=1&accounttype=1')
-  .then(response => {
-    if (response.ret !== 0) {
-      alertInfo('jscnwx 注册失败，请重试！');
-    }
-  }).catch(err => console.log('发生错误:', err));
+
+  if (!Cookies.get('jscnwx')) {
+    reqData(jscnwxUrl,'?username='+regAccField.value+'&iconid=1&pwd='+md5(pwd)+'&birthday=1970-1-1&type=1&accounttype=1')
+    .then(response => {
+      if (response.ret !== 0) {
+        alertInfo('jscnwx 注册失败，请重试！');
+      }
+    }).catch(err => console.log('发生错误:', err));
+  }
 
   let smsCode = regSmsField.value;
   reqData(sourceNowVerifyUrl,'?verifycode='+smsCode+'&verifytype=3&username='+acc+'&account='+acc)
@@ -564,8 +568,12 @@ function reqReg() {
       .then(response => {
         if (response.ret === 0) {
           formToggle.click();
-          loginAccField.value = acc;
+          loginAccField.value = user["account"];
           loginPwdField.value = pwd;
+          regAccField.value = '';
+          regPwdField.value = '';
+          regImgTxtField.value = '';
+          regSmsField.value = '';
           Cookies.set('account', acc, { expires: 7 });
           Cookies.set('password', pwd, { expires: 7 });
           alertInfo("注册成功!");
