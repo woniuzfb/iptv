@@ -100,7 +100,7 @@
     {
       "name":"pygdzhcs",
       "lane":"联通",
-      "token":"R5CC5FBAAU319A7166K775A369CI7166E872PBM306EDB1V1020FZ225B8WE27F5B6A0A1",
+      "token":"",
       "play_url":"http://httpdvb.slave.pygdzhcs.com:13164/playurl",
       "channels":
       [
