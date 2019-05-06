@@ -195,7 +195,7 @@
       <h1>
         <a href="https://github.com/woniuzfb/iptv" target="_blank">HBO中文直播</a>
       </h1>
-      <p>仅作宽带测试用。<!--[if lt IE 10]><p class="warn"><strong>不支持 IE浏览器</strong> 。</p><![endif]--></p>
+      <p>用手机号注册后才能用！<!--[if lt IE 10]><p class="warn"><strong>不支持 IE浏览器</strong> 。</p><![endif]--></p>
       <a href="https://github.com/woniuzfb/iptv" target="_blank" class="github-corner">
         <svg width="80" height="80" viewBox="0 0 250 250" aria-hidden="true">
           <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path>
@@ -237,7 +237,7 @@
       <form class="loginForm">
         <h3>输入账号</h3>
         <div>
-          <input class="loginAcc" type="text" placeholder="用户名">
+          <input class="loginAcc" type="text" placeholder="手机号">
         </div>
         <div>
           <input class="loginPwd" type="password" placeholder="密码">
@@ -247,10 +247,17 @@
       <form class="regForm hidden">
         <h3>注册账号</h3>
         <div>
-          <input class="regAcc" type="text" placeholder="用户名">
+          <input class="regAcc" type="text" placeholder="手机号">
         </div>
         <div>
           <input class="regPwd" type="password" placeholder="密码">
+        </div>
+        <div class="regImg"></div><input type="hidden" class="regImgId">
+        <div>
+          <input class="regImgTxt" type="text" placeholder="图片验证码">
+        </div>
+        <div>
+          <input class="regSms" type="text" placeholder="短信验证码">
         </div>
         <div><button class="regBtn" type="button">注册</button></div>
       </form>
@@ -347,23 +354,7 @@ function switchCategory(e) {
   }
 }
 
-function playVideo(sourceName,programid) {
-  let url;
-  for (let index = 0; index < sourcesJson.data.length; index++) {
-    const source = sourcesJson.data[index];
-    if (source.name === sourceName) {
-      if (sourceName !== 'hbohd') {
-        url = source.play_url+'?playtype=live&protocol=hls&accesstoken='+Cookies.get(sourceName)+'&playtoken=ABCDEFGHIGK&programid='+programid;
-      } else {
-        for (let a = 0; a < source.channels.length; a++) {
-          const channel = source.channels[a];
-          if (channel.chnl_name === programid) {
-            url = channel.url;
-          }
-        }
-      }
-    }
-  }
+function hlsLoad(url) {
 
   if(Hls.isSupported()) {
     hls.detachMedia(video);
@@ -380,7 +371,6 @@ function playVideo(sourceName,programid) {
     });
     hls.on(Hls.Events.ERROR, function (event, data) {
       if (data.fatal) {
-        console.log(data.type);
         switch(data.type) {
         case Hls.ErrorTypes.NETWORK_ERROR:
           console.log("fatal network error encountered, try to recover");
@@ -410,30 +400,49 @@ function playVideo(sourceName,programid) {
   }
 }
 
+function playVideo(sourceName,programid) {
+  let url;
+  for (let index = 0; index < sourcesJson.data.length; index++) {
+    const source = sourcesJson.data[index];
+    if (source.name === sourceName) {
+      if (sourceName !== 'hbohd') {
+        if (Cookies.get(sourceName)) {
+          url = source.play_url+'?playtype=live&protocol=hls&accesstoken='+Cookies.get(sourceName)+'&playtoken=ABCDEFGHIGK&programid='+programid;
+          hlsLoad(url);
+        } else {
+          alertInfo('请先注册或者登录！');
+        }
+      } else {
+        for (let a = 0; a < source.channels.length; a++) {
+          const channel = source.channels[a];
+          if (channel.chnl_name === programid) {
+            url = channel.url;
+            hlsLoad(url);
+          }
+        }
+      }
+    }
+  }
+}
+
 function reqData(url = '', data, method = 'GET') {
-  let contentType;
   if (method === 'GET') {
-    contentType = 'application/x-www-form-urlencoded';
     return fetch(url + data, {
       method: method,
       mode: "cors",
       cache: "no-cache",
       credentials: "omit",
       headers: {
-        "Content-Type": contentType,
+        "Content-Type": 'application/x-www-form-urlencoded',
       },
       referrer: "no-referrer",
     }).then(response => response.json());
   } else {
-    contentType = 'application/json';
     return fetch(url, {
       method: method,
       mode: "cors",
       cache: "no-cache",
       credentials: "omit",
-      headers: {
-        "Content-Type": contentType,
-      },
       referrer: "no-referrer",
       body: JSON.stringify(data),
     }).then(response => response.json());
@@ -463,26 +472,105 @@ function uniqueName() {
   }).catch(err => console.log('发生错误:', err));
 }
 
-function reqReg() {
-  let acc = regAccField.value;
-  let pwd = regPwdField.value;
+function regImg() {
+  let tokenUrl,imgUrl;
+  for (let index = 0; index < sourcesJson.data.length; index++) {
+    const source = sourcesJson.data[index];
+    if (source.name == 'nx96200') {
+      tokenUrl = source.token_url;
+      imgUrl = source.img_url;
+    }
+  }
+  reqData(tokenUrl,{"usagescen":1},'POST')
+  .then(response => {
+    if (response.ret !== 0) {
+      alertInfo("验证码请求错误！");
+    } else {
+      reqData(imgUrl,'?accesstoken='+response.access_token)
+      .then(response => {
+        const newImage = document.createElement('img');
+        newImage.src = response.image.replace('\\','/');
+        regImgField.innerHTML = newImage.outerHTML;
+        regImgIdField.value = response.picid;
+      }).catch(err => console.log('发生错误:', err));
+    }
+  }).catch(err => console.log('发生错误:', err));
+}
+
+function reqSms() {
+  let regAcc = regAccField.value;
+  let regImgTxt = regImgTxtField.value;
+  let regImgId = regImgIdField.value;
   let url;
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
-    if (source.name == 'jscnwx') {
-      url = source.reg_url;
+    if (source.name == 'nx96200') {
+      url = source.sms_url;
     }
   }
-  reqData(url,'?username='+regAccField.value+'&iconid=1&pwd='+md5(pwd)+'&birthday=1970-1-1&type=1&accounttype=1')
+  reqData(url,'?pincode='+regImgTxt+'&picid='+regImgId+'&verifytype=3&account='+regAcc+'&accounttype=1')
   .then(response => {
     if (response.ret !== 0) {
-      alertInfo('注册失败，请重试！');
+      alertInfo("验证码或其它错误！\n请重新输入！");
     } else {
-      loginAccField.value = acc;
-      loginPwdField.value = pwd;
-      alertInfo('注册成功！');
-      formToggle.click();
-      reqLogin();
+      alertInfo("短信已发送！");
+    }
+  }).catch(err => console.log('发生错误:', err));
+}
+
+function reqReg() {
+  let acc = regAccField.value;
+  let pwd = regPwdField.value;
+  let jscnwxUrl,nx96200VerifyUrl,nx96200RegUrl;
+  for (let index = 0; index < sourcesJson.data.length; index++) {
+    const source = sourcesJson.data[index];
+    if (source.name == 'jscnwx') {
+      jscnwxUrl = source.reg_url;
+    } else if (source.name == 'nx96200') {
+      nx96200VerifyUrl = source.verify_url;
+      nx96200RegUrl = source.reg_url;
+    }
+  }
+  reqData(jscnwxUrl,'?username='+regAccField.value+'&iconid=1&pwd='+md5(pwd)+'&birthday=1970-1-1&type=1&accounttype=1')
+  .then(response => {
+    if (response.ret !== 0) {
+      alertInfo('jscnwx 注册失败，请重试！');
+    }
+  }).catch(err => console.log('发生错误:', err));
+
+  let smsCode = regSmsField.value;
+  reqData(nx96200Url,'?verifycode='+smsCode+'&verifytype=3&username='+acc+'&account='+acc)
+  .then(response => {
+    if (response.ret === 0) {
+      let user = {};
+      user["account"] = acc.toString();
+      let deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
+      user["deviceno"] = deviceno+md5(deviceno).substring(7, 8);
+      user["devicetype"] = "yuj";
+      user["code"] = response.code;
+      timestamp = Date.now();
+      user["signature"] = md5(user["account"]+'|'+md5(pwd)+'|'+user["deviceno"]+'|'+user["devicetype"]+'|'+timestamp);
+      user["birthday"] = "1970-1-1";
+      user["username"] = user["account"];
+      user["type"] = 1;
+      user["timestamp"] = timestamp.toString();
+      user["pwd"] = md5(pwd);
+      user["accounttype"] = 1;
+
+      reqData(nx96200RegUrl,user,'POST')
+      .then(response => {
+        if (response.ret === 0) {
+          formToggle.click();
+          loginAccField.value = acc;
+          loginPwdField.value = pwd;
+          Cookies.set('account', acc, { expires: 7 });
+          Cookies.set('password', pwd, { expires: 7 });
+          alertInfo("注册成功!");
+          reqLogin();
+        }
+      }).catch(err => console.log('发生错误:', err));
+    } else {
+      alertInfo("注册失败,请重试！");
     }
   }).catch(err => console.log('发生错误:', err));
 }
@@ -501,17 +589,53 @@ function reqLogin() {
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
     if (source.name == 'jscnwx') {
-      url = source.login_url;
+      jscnwxRegUrl = source.reg_url;
+      jscnwxLoginUrl = source.login_url;
+    } else if (source.name == 'nx96200') {
+      nx96200Url = source.login_url;
     }
   }
-  reqData(url,'?deviceno='+deviceno+'&devicetype='+devicetype+'&accounttype='+accounttype+'&accesstoken=(null)&account='+acc+'&pwd='+md5(pwd)+'&isforce='+isforce)
+  reqData(jscnwxLoginUrl,'?deviceno='+deviceno+'&devicetype='+devicetype+'&accounttype='+accounttype+'&accesstoken=(null)&account='+acc+'&pwd='+md5(pwd)+'&isforce='+isforce)
+  .then(response => {
+    if (response.ret === 0) {
+      Cookies.set('jscnwx', response.access_token, { expires: 7 });
+    } else {
+      reqData(jscnwxRegUrl,'?username='+acc+'&iconid=1&pwd='+md5(pwd)+'&birthday=1970-1-1&type=1&accounttype=1')
+      .then(response => {
+        if (response.ret !== 0) {
+          alertInfo('高清[电信]不可用！');
+        } else {
+          Cookies.set('jscnwx', response.access_token, { expires: 7 });
+        }
+      }).catch(err => console.log('发生错误:', err));
+    }
+  }).catch(err => console.log('发生错误:', err));
+
+  let user = {};
+  user["account"] = acc.toString();
+  user["deviceno"] = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
+  user["deviceno"] = user["deviceno"] + md5(user["deviceno"]).substring(7, 8);
+  user["businessplatform"] = 1;
+  user["devicetype"] = "yuj";
+  user["extendinfo"] = "iOS;12;mobile;ipa2.0.3";
+  let timestamp = Date.now();
+  user["signature"] = md5(user["deviceno"]+"|"+user["devicetype"]+"|3|"+user["account"]+"|"+timestamp);
+  user["isforce"] = 1;
+  user["timestamp"] = timestamp.toString();
+  user["pwd"] = md5(pwd);
+  user["accounttype"] = 3;
+  let account = user["account"];
+
+  reqData(nx96200Url,user,'POST')
   .then(response => {
     if (response.ret !== 0) {
-      alertInfo('登录失败，请重试！');
+      alertInfo('账号错误！');
     } else {
       Cookies.set('account', acc, { expires: 7 });
       Cookies.set('password', pwd, { expires: 7 });
-      Cookies.set('jscnwx', response.access_token, { expires: 7 });
+      Cookies.set('nx96200', response.access_token, { expires: 7 });
+      Cookies.set('deviceid', response.device_id, { expires: 7 });
+      initialize();
       playVideo('nx96200',hboId);
     }
   }).catch(err => console.log('发生错误:', err));
@@ -583,6 +707,10 @@ const loginBtn = document.querySelector('.loginBtn');
 const regForm = document.querySelector('.regForm');
 const regAccField = document.querySelector('.regAcc');
 const regPwdField = document.querySelector('.regPwd');
+const regImgField = document.querySelector('.regImg');
+const regImgTxtField = document.querySelector('.regImgTxt');
+const regImgIdField = document.querySelector('.regImgId');
+const regSmsField = document.querySelector('.regSms');
 const regBtn = document.querySelector('.regBtn');
 const infoField = document.querySelector('h4');
 const formToggle = document.querySelector('.formToggle');
@@ -632,19 +760,27 @@ fetch(localJson).then(response => {
 });
 
 function initialize() {
+  myList1.innerHTML = '';
   myList1.classList.add('myList1');
+  myList1a.innerHTML = '';
   myList1a.classList.add('myList1a');
   myList1a.classList.add('hidden');
+  myList2.innerHTML = '';
   myList2.classList.add('myList2');
   myList2.classList.add('hidden');
+  myList3.innerHTML = '';
   myList3.classList.add('myList3');
   myList3.classList.add('hidden');
+  myList4.innerHTML = '';
   myList4.classList.add('myList4');
   myList4.classList.add('hidden');
+  myList5.innerHTML = '';
   myList5.classList.add('myList5');
   myList5.classList.add('hidden');
+  myList8.innerHTML = '';
   myList8.classList.add('myList8');
   myList8.classList.add('hidden');
+  myList9.innerHTML = '';
   myList9.classList.add('myList9');
   myList9.classList.add('hidden');
   for (let index = 0; index < sourcesJson.data.length; index++) {
@@ -655,11 +791,14 @@ function initialize() {
         hbohd[hbohdChannel.chnl_name] = hbohdChannel.url;
       }
     } else {
-      if (source.list_url) {
-        reqChannels(source);
-      }
-      if (source.token) {
+      if (Cookies.get(source.name)) {
+        sourcesJson.data[index]['token'] = Cookies.get(source.name);
+        source['token'] = Cookies.get(source.name);
+      } else if (source.token) {
         Cookies.set(source.name, source.token);
+      }
+      if (source.list_url && Cookies.get(source.name)) {
+        reqChannels(source);
       }
       for (let b = 0; b < source.channels.length; b++) {
         const channel = source.channels[b];
@@ -677,7 +816,7 @@ function initialize() {
     loginPwdField.value = Cookies.get('password');
   }
 
-  if (hboId){
+  if (Cookies.get('nx96200')){
     playVideo('nx96200',hboId);
   }
 }
@@ -694,6 +833,9 @@ formToggle.addEventListener("click", function(e) {
 });
 
 regAccField.addEventListener("change", uniqueName);
+regAccField.addEventListener("change", regImg);
+regImgField.addEventListener("click", regImg);
+regImgTxtField.addEventListener("change", reqSms);
 regBtn.addEventListener("click", reqReg);
 loginBtn.addEventListener("click", reqLogin);
 channelsField.addEventListener("click", switchChannel);
