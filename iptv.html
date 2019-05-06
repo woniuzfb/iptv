@@ -410,7 +410,9 @@ function playVideo(sourceName,programid) {
           url = source.play_url+'?playtype=live&protocol=hls&accesstoken='+Cookies.get(sourceName)+'&playtoken=ABCDEFGHIGK&programid='+programid;
           hlsLoad(url);
         } else {
-          alertInfo('请先注册或者登录！');
+          alertInfo("此服务端尚未注册！\n请先注册！");
+          sourceNow = sourceName;
+          formToggle.click();
         }
       } else {
         for (let a = 0; a < source.channels.length; a++) {
@@ -476,7 +478,7 @@ function regImg() {
   let tokenUrl,imgUrl;
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
-    if (source.name === 'nx96200') {
+    if (source.name === sourceNow) {
       tokenUrl = source.token_url;
       imgUrl = source.img_url;
     }
@@ -504,7 +506,7 @@ function reqSms() {
   let url;
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
-    if (source.name === 'nx96200') {
+    if (source.name === sourceNow) {
       url = source.sms_url;
     }
   }
@@ -521,14 +523,15 @@ function reqSms() {
 function reqReg() {
   let acc = regAccField.value;
   let pwd = regPwdField.value;
-  let jscnwxUrl,nx96200VerifyUrl,nx96200RegUrl;
+  let jscnwxUrl,sourceNowVerifyUrl,sourceNowRegUrl,sourceNowAccType;
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
     if (source.name === 'jscnwx') {
       jscnwxUrl = source.reg_url;
-    } else if (source.name === 'nx96200') {
-      nx96200VerifyUrl = source.verify_url;
-      nx96200RegUrl = source.reg_url;
+    } else if (source.name === sourceNow) {
+      sourceNowVerifyUrl = source.verify_url;
+      sourceNowRegUrl = source.reg_url;
+      sourceNowAccType = source.acc_type;
     }
   }
   reqData(jscnwxUrl,'?username='+regAccField.value+'&iconid=1&pwd='+md5(pwd)+'&birthday=1970-1-1&type=1&accounttype=1')
@@ -539,7 +542,7 @@ function reqReg() {
   }).catch(err => console.log('发生错误:', err));
 
   let smsCode = regSmsField.value;
-  reqData(nx96200VerifyUrl,'?verifycode='+smsCode+'&verifytype=3&username='+acc+'&account='+acc)
+  reqData(sourceNowVerifyUrl,'?verifycode='+smsCode+'&verifytype=3&username='+acc+'&account='+acc)
   .then(response => {
     if (response.ret === 0) {
       let user = {};
@@ -555,9 +558,9 @@ function reqReg() {
       user["type"] = 1;
       user["timestamp"] = timestamp.toString();
       user["pwd"] = md5(pwd);
-      user["accounttype"] = 1;
+      user["accounttype"] = sourceNowAccType;
 
-      reqData(nx96200RegUrl,user,'POST')
+      reqData(sourceNowRegUrl,user,'POST')
       .then(response => {
         if (response.ret === 0) {
           formToggle.click();
@@ -578,7 +581,7 @@ function reqReg() {
 function reqLogin() {
   let acc = loginAccField.value;
   let pwd = loginPwdField.value;
-  let deviceno,devicetype,isforce,accounttype,jscnwxRegUrl,jscnwxLoginUrl,nx96200Url;
+  let deviceno,devicetype,isforce,accounttype,jscnwxRegUrl,jscnwxLoginUrl,sourceNowUrl,sourceNowExtendInfo,sourceNowServerVersion;
   acc = acc.toString();
   deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
   deviceno = deviceno + md5(deviceno).substring(7, 8);
@@ -591,8 +594,12 @@ function reqLogin() {
     if (source.name === 'jscnwx') {
       jscnwxRegUrl = source.reg_url;
       jscnwxLoginUrl = source.login_url;
-    } else if (source.name === 'nx96200') {
-      nx96200Url = source.login_url;
+    } else if (source.name === sourceNow) {
+      sourceNowUrl = source.login_url;
+      sourceNowExtendInfo = source.extend_info;
+      if (source.server_version) {
+        sourceNowServerVersion = source.server_version;
+      }
     }
   }
   reqData(jscnwxLoginUrl,'?deviceno='+deviceno+'&devicetype='+devicetype+'&accounttype='+accounttype+'&accesstoken=(null)&account='+acc+'&pwd='+md5(pwd)+'&isforce='+isforce)
@@ -617,23 +624,25 @@ function reqLogin() {
   user["deviceno"] = user["deviceno"] + md5(user["deviceno"]).substring(7, 8);
   user["businessplatform"] = 1;
   user["devicetype"] = "yuj";
-  user["extendinfo"] = "iOS;12;mobile;ipa2.0.3";
+  user["extendinfo"] = sourceNowExtendInfo;
   let timestamp = Date.now();
   user["signature"] = md5(user["deviceno"]+"|"+user["devicetype"]+"|3|"+user["account"]+"|"+timestamp);
   user["isforce"] = 1;
   user["timestamp"] = timestamp.toString();
   user["pwd"] = md5(pwd);
   user["accounttype"] = 3;
-  let account = user["account"];
+  if (sourceNowServerVersion) {
+    user["serverVersion"] = sourceNowServerVersion;
+  }
 
-  reqData(nx96200Url,user,'POST')
+  reqData(sourceNowUrl,user,'POST')
   .then(response => {
     if (response.ret !== 0) {
       alertInfo('账号错误！');
     } else {
-      Cookies.set('account', acc, { expires: 7 });
+      Cookies.set('account', user["account"], { expires: 7 });
       Cookies.set('password', pwd, { expires: 7 });
-      Cookies.set('nx96200', response.access_token, { expires: 7 });
+      Cookies.set(sourceNow, response.access_token, { expires: 7 });
       Cookies.set('deviceid', response.device_id, { expires: 7 });
       initialize();
       playVideo('nx96200',hboId);
@@ -700,6 +709,7 @@ function reqChannels(source) {
 }
 
 let sourcesJson,hboId,hbohd={};
+let sourceNow = 'nx96200';
 let localJson = 'channels.json';
 let remoteJson = 'http://hbo.epub.fun/channels.json';
 const video = document.querySelector('video');
@@ -801,7 +811,6 @@ function initialize() {
         Cookies.set(source.name, source.token);
       }
       if (source.list_url && Cookies.get(source.name) && Cookies.get(source.name) !== 'undefined') {
-        console.log(Cookies.get(source.name));
         reqChannels(source);
       }
       for (let b = 0; b < source.channels.length; b++) {
@@ -836,7 +845,7 @@ formToggle.addEventListener("click", function(e) {
   }
 });
 
-regAccField.addEventListener("change", uniqueName);
+//regAccField.addEventListener("change", uniqueName);
 regAccField.addEventListener("change", regImg);
 regImgField.addEventListener("click", regImg);
 regImgTxtField.addEventListener("change", reqSms);
