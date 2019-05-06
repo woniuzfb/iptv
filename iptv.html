@@ -294,7 +294,7 @@ function makeStr(length) {
 }
 
 function switchChannel(e) {
-  if(e.target && e.target.nodeName == "LI") {
+  if(e.target && e.target.nodeName === "LI") {
     playVideo(e.target.dataset.source,e.target.dataset.value);
     const selected = document.querySelector('.selected');
     if(selected) selected.classList.remove('selected');
@@ -310,7 +310,7 @@ function toggleClass(s,n) {
 }
 
 function switchCategory(e) {
-  if(e.target && e.target.nodeName == "LI") {
+  if(e.target && e.target.nodeName === "LI") {
     let channelId =  e.target.dataset.value;
     switch (channelId) {
       case "hbo":
@@ -344,7 +344,7 @@ function switchCategory(e) {
         const mylist = document.querySelector('.'+channelId);
         let siblings = mylist.parentNode.childNodes;
         for(let i=0; i < siblings.length; i++) {
-          if(siblings[i].nodeName == "UL") {
+          if(siblings[i].nodeName === "UL") {
             siblings[i].classList.add('hidden');
           }
         }
@@ -406,7 +406,7 @@ function playVideo(sourceName,programid) {
     const source = sourcesJson.data[index];
     if (source.name === sourceName) {
       if (sourceName !== 'hbohd') {
-        if (Cookies.get(sourceName)) {
+        if (Cookies.get(sourceName) && Cookies.get(sourceName) !== 'undefined') {
           url = source.play_url+'?playtype=live&protocol=hls&accesstoken='+Cookies.get(sourceName)+'&playtoken=ABCDEFGHIGK&programid='+programid;
           hlsLoad(url);
         } else {
@@ -460,7 +460,7 @@ function uniqueName() {
   let url;
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
-    if (source.name == 'jscnwx') {
+    if (source.name === 'jscnwx') {
       url = source.unique_url;
     }
   }
@@ -476,7 +476,7 @@ function regImg() {
   let tokenUrl,imgUrl;
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
-    if (source.name == 'nx96200') {
+    if (source.name === 'nx96200') {
       tokenUrl = source.token_url;
       imgUrl = source.img_url;
     }
@@ -504,7 +504,7 @@ function reqSms() {
   let url;
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
-    if (source.name == 'nx96200') {
+    if (source.name === 'nx96200') {
       url = source.sms_url;
     }
   }
@@ -524,9 +524,9 @@ function reqReg() {
   let jscnwxUrl,nx96200VerifyUrl,nx96200RegUrl;
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
-    if (source.name == 'jscnwx') {
+    if (source.name === 'jscnwx') {
       jscnwxUrl = source.reg_url;
-    } else if (source.name == 'nx96200') {
+    } else if (source.name === 'nx96200') {
       nx96200VerifyUrl = source.verify_url;
       nx96200RegUrl = source.reg_url;
     }
@@ -588,10 +588,10 @@ function reqLogin() {
 
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
-    if (source.name == 'jscnwx') {
+    if (source.name === 'jscnwx') {
       jscnwxRegUrl = source.reg_url;
       jscnwxLoginUrl = source.login_url;
-    } else if (source.name == 'nx96200') {
+    } else if (source.name === 'nx96200') {
       nx96200Url = source.login_url;
     }
   }
@@ -794,13 +794,14 @@ function initialize() {
         hbohd[hbohdChannel.chnl_name] = hbohdChannel.url;
       }
     } else {
-      if (Cookies.get(source.name)) {
+      if (Cookies.get(source.name) && Cookies.get(source.name) !== 'undefined') {
         sourcesJson.data[index]['token'] = Cookies.get(source.name);
         source['token'] = Cookies.get(source.name);
-      } else if (source.token) {
+      } else if (source.token && source.token !== '') {
         Cookies.set(source.name, source.token);
       }
-      if (source.list_url && Cookies.get(source.name)) {
+      if (source.list_url && Cookies.get(source.name) && Cookies.get(source.name) !== 'undefined') {
+        console.log(Cookies.get(source.name));
         reqChannels(source);
       }
       for (let b = 0; b < source.channels.length; b++) {
