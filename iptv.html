@@ -539,7 +539,7 @@ function reqReg() {
   }).catch(err => console.log('发生错误:', err));
 
   let smsCode = regSmsField.value;
-  reqData(nx96200Url,'?verifycode='+smsCode+'&verifytype=3&username='+acc+'&account='+acc)
+  reqData(nx96200RegUrl,'?verifycode='+smsCode+'&verifytype=3&username='+acc+'&account='+acc)
   .then(response => {
     if (response.ret === 0) {
       let user = {};
@@ -578,7 +578,7 @@ function reqReg() {
 function reqLogin() {
   let acc = loginAccField.value;
   let pwd = loginPwdField.value;
-  let deviceno,devicetype,isforce,accounttype,url;
+  let deviceno,devicetype,isforce,accounttype,jscnwxRegUrl,jscnwxLoginUrl,nx96200Url;
   acc = acc.toString();
   deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
   deviceno = deviceno + md5(deviceno).substring(7, 8);
