@@ -539,7 +539,7 @@ function reqReg() {
   }).catch(err => console.log('发生错误:', err));
 
   let smsCode = regSmsField.value;
-  reqData(nx96200RegUrl,'?verifycode='+smsCode+'&verifytype=3&username='+acc+'&account='+acc)
+  reqData(nx96200VerifyUrl,'?verifycode='+smsCode+'&verifytype=3&username='+acc+'&account='+acc)
   .then(response => {
     if (response.ret === 0) {
       let user = {};
