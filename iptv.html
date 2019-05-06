@@ -643,6 +643,9 @@ function reqLogin() {
 
 function appendList(channel,sourceName) {
   channelListItem = document.createElement('li');
+  if (Cookies.get('dark') === '1'){
+    channelListItem.classList.add('white');
+  }
   channelListItem.setAttribute('data-value',channel.chnl_id);
   channelListItem.setAttribute('data-source',sourceName);
   channelListItem.textContent = channel.chnl_name;
@@ -841,6 +844,9 @@ loginBtn.addEventListener("click", reqLogin);
 channelsField.addEventListener("click", switchChannel);
 categoriesField.addEventListener("click", switchCategory);
 
+if (Cookies.get('dark') === '1'){
+  switchBtn.click();
+}
   </script>
 </body>
 </html>
