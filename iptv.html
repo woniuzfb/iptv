@@ -710,7 +710,7 @@ function reqChannels(source) {
       for (let index = 0; index < omitSourceArr.length; index++) {
         if (omitSourceArr[index].indexOf('-')) {
           let omitSubArr = omitSourceArr[index].split('-');
-          for (let a = omitSubArr[0]; a < omitSubArr[1]; a++) {
+          for (let a = omitSubArr[0]; a <= omitSubArr[1]; a++) {
             omitArr.push(Number(a));
           }
         } else {
@@ -725,8 +725,8 @@ function reqChannels(source) {
       }
       let newChannel={};
       channelCats = channel.sub_type.split('|');
-      for (let a = 0; a < channelCats.length; a++) {
-        const channelCat = channelCats[a].slice(-3);
+      for (let c = 0; c < channelCats.length; c++) {
+        const channelCat = channelCats[c].slice(-3);
         newChannel.chnl_name = channel.chnl_name;
         newChannel.chnl_id = channel.chnl_id;
         newChannel.chnl_cat = cats[channelCat];
