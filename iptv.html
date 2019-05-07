@@ -708,9 +708,9 @@ function reqChannels(source) {
     if (source.omit) {
       let omitSourceArr = source.omit.split(',');
       for (let index = 0; index < omitSourceArr.length; index++) {
-        if (omitSourceArr[index].indexOf('-')) {
+        if (omitSourceArr[index].indexOf('-') !== -1) {
           let omitSubArr = omitSourceArr[index].split('-');
-          for (let a = omitSubArr[0]; a <= omitSubArr[1]; a++) {
+          for (let a = Number(omitSubArr[0]); a <= Number(omitSubArr[1]); a++) {
             omitArr.push(Number(a));
           }
         } else {
