@@ -456,9 +456,9 @@ function reqData(url, data, method = 'GET') {
 }
 
 function alertInfo(info) {
-  infoField.innerText = info;
+  infoField.textContent = info;
   setTimeout(function run() {
-    infoField.innerText = '';
+    infoField.textContent = '';
   }, 3000);
 }
 
@@ -661,14 +661,20 @@ function reqLogin() {
   }).catch(err => console.log('发生错误:', err));
 }
 
-function appendList(channel,sourceName) {
-  channelListItem = document.createElement('li');
+function appendList(channel,sourceName,sourceLane) {
+  const channelListItem = document.createElement('li');
+  const channelListText = document.createTextNode(channel.chnl_name);
   if (Cookies.get('dark') === '1'){
     channelListItem.classList.add('white');
   }
   channelListItem.setAttribute('data-value',channel.chnl_id);
   channelListItem.setAttribute('data-source',sourceName);
-  channelListItem.textContent = channel.chnl_name;
+  channelListItem.appendChild(channelListText);
+  if (channel.chnl_cat.indexOf('高清') === -1) {
+    const channelSup = document.createElement('sub');
+    channelSup.textContent = sourceLane;
+    channelListItem.appendChild(channelSup);
+  }
   switch (channel.chnl_cat) {
     case '高清联通':
       myList1.appendChild(channelListItem);
@@ -727,10 +733,13 @@ function reqChannels(source) {
       channelCats = channel.sub_type.split('|');
       for (let c = 0; c < channelCats.length; c++) {
         const channelCat = channelCats[c].slice(-3);
+        if (cats[channelCat] === undefined) {
+          continue;
+        }
         newChannel.chnl_name = channel.chnl_name;
         newChannel.chnl_id = channel.chnl_id;
         newChannel.chnl_cat = cats[channelCat];
-        appendList(newChannel,source.name);
+        appendList(newChannel,source.name,source.lane);
       }
     }
   }).catch(err => console.log('发生错误:', err));
@@ -801,27 +810,27 @@ fetch(localJson).then(response => {
 });
 
 function initialize() {
-  myList1.innerHTML = '';
+  myList1.textContent = '';
   myList1.classList.add('myList1');
-  myList1a.innerHTML = '';
+  myList1a.textContent = '';
   myList1a.classList.add('myList1a');
   myList1a.classList.add('hidden');
-  myList2.innerHTML = '';
+  myList2.textContent = '';
   myList2.classList.add('myList2');
   myList2.classList.add('hidden');
-  myList3.innerHTML = '';
+  myList3.textContent = '';
   myList3.classList.add('myList3');
   myList3.classList.add('hidden');
-  myList4.innerHTML = '';
+  myList4.textContent = '';
   myList4.classList.add('myList4');
   myList4.classList.add('hidden');
-  myList5.innerHTML = '';
+  myList5.textContent = '';
   myList5.classList.add('myList5');
   myList5.classList.add('hidden');
-  myList8.innerHTML = '';
+  myList8.textContent = '';
   myList8.classList.add('myList8');
   myList8.classList.add('hidden');
-  myList9.innerHTML = '';
+  myList9.textContent = '';
   myList9.classList.add('myList9');
   myList9.classList.add('hidden');
   for (let index = 0; index < sourcesJson.data.length; index++) {
@@ -846,7 +855,7 @@ function initialize() {
         if (channel.chnl_name === 'hbo') {
           hboId = channel.chnl_id;
         } else {
-          appendList(channel,source.name);
+          appendList(channel,source.name,source.lane);
         }
       }
     }
@@ -866,10 +875,10 @@ formToggle.addEventListener("click", function(e) {
   e.preventDefault();
   loginForm.classList.toggle('hidden');
   regForm.classList.toggle('hidden');
-  if (formToggle.innerText === '注册') {
-    formToggle.innerText = '登录';
+  if (formToggle.textContent === '注册') {
+    formToggle.textContent = '登录';
   } else {
-    formToggle.innerText = '注册';
+    formToggle.textContent = '注册';
   }
 });
 
