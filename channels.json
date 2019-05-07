@@ -172,6 +172,7 @@
       "name":"jscnwx",
       "lane":"电信",
       "token":"",
+      "omit":"99-106,113-124,126-128,131-155,186",
       "unique_url":"http://122.194.12.25:12690/account/user/name_is_uniqueness",
       "reg_url":"http://122.194.12.25:12690/account/user/register",
       "login_url":"http://122.194.12.25:12690/account/login",

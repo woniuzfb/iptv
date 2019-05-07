@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <!--<link rel="shortcut icon" href="favicon.ico" type="image/x-icon">-->
+    <link rel="shortcut icon" href="hbo.png">
     <style>
       a {
         color: #70B7FD;
@@ -379,10 +379,13 @@ function hlsLoad(url) {
         case Hls.ErrorTypes.MEDIA_ERROR:
           console.log("fatal media error encountered, try to recover");
           hls.recoverMediaError();
+          alertInfo('此频道不可用！');
           break;
         default:
           console.log(data);
-          hls.destroy();
+          if (data.details !== Hls.ErrorDetails.INTERNAL_EXCEPTION) {
+            hls.destroy();
+          }
           break;
         }
       }
@@ -428,7 +431,7 @@ function playVideo(sourceName,programid) {
   }
 }
 
-function reqData(url = '', data, method = 'GET') {
+function reqData(url, data, method = 'GET') {
   if (method === 'GET') {
     return fetch(url + data, {
       method: method,
@@ -701,8 +704,25 @@ function reqChannels(source) {
   .then(response => {
     let channelCats;
     let cats = {"001":"高清"+source.lane,"002":"标清","003":"央视","004":"卫视","005":"地方","008":"专业"};
-    for (let index = 0; index < response.chnl_list.length; index++) {
-      const channel = response.chnl_list[index];
+    let omitArr = [];
+    if (source.omit) {
+      let omitSourceArr = source.omit.split(',');
+      for (let index = 0; index < omitSourceArr.length; index++) {
+        if (omitSourceArr[index].indexOf('-')) {
+          let omitSubArr = omitSourceArr[index].split('-');
+          for (let a = omitSubArr[0]; a < omitSubArr[1]; a++) {
+            omitArr.push(Number(a));
+          }
+        } else {
+          omitArr.push(Number(omitSourceArr[index]));
+        }
+      }
+    }
+    for (let b = 0; b < response.chnl_list.length; b++) {
+      const channel = response.chnl_list[b];
+      if (source.omit && omitArr.indexOf(Number(channel.chnl_id.toString().slice(-3))) !== -1) {
+        continue;
+      }
       let newChannel={};
       channelCats = channel.sub_type.split('|');
       for (let a = 0; a < channelCats.length; a++) {
