@@ -3,6 +3,16 @@
   "data":
   [
     {
+      "name":"hbo",
+      "channels":
+      [
+        {
+          "chnl_name":"hbo1",
+          "url":"http://47.91.233.177:8282/live/hbo1.m3u8"
+        }
+      ]
+    },
+    {
       "name":"hbohd",
       "channels":
       [

@@ -207,11 +207,12 @@
     <video id="video" controls></video>
     <div class="categories">
       <ul>
-        <li data-value="hbo">HBO</li>
+        <li data-value="hbo1">HBO1</li>
+        <li data-value="hbo2">HBO2</li>
         <li data-value="HBOHD1" class="hbohd extra">HBO高清1</li>
         <li data-value="HBOHD2" class="hbohd extra">HBO高清2</li>
-        <li data-value="myList1" class="liantong">高清&bull;联通</li>
-        <li data-value="myList1a" class="dianxin">高清&bull;电信</li>
+        <li data-value="myList1" class="dianxin">高清&bull;电信</li>
+        <li data-value="myList1a" class="liantong">高清&bull;联通</li>
         <li data-value="myList2">标清</li>
         <li data-value="myList3">央视</li>
         <li data-value="myList4">卫视</li>
@@ -320,7 +321,10 @@ function switchCategory(e) {
   if(e.target && e.target.nodeName === "LI") {
     let channelId =  e.target.dataset.value;
     switch (channelId) {
-      case "hbo":
+      case "hbo1":
+        playVideo('hbo',channelId);
+        break;
+      case "hbo2":
         playVideo('nx96200',hboId);
         break;
       case "HBOHD1":
@@ -362,7 +366,6 @@ function switchCategory(e) {
 }
 
 function hlsLoad(url) {
-
   if(Hls.isSupported()) {
     hls.detachMedia(video);
     hls.loadSource(url);
@@ -382,6 +385,7 @@ function hlsLoad(url) {
         case Hls.ErrorTypes.NETWORK_ERROR:
           console.log("fatal network error encountered, try to recover");
           hls.startLoad();
+          alertInfo("此频道不可用！\n需注册！",10);
           break;
         case Hls.ErrorTypes.MEDIA_ERROR:
           console.log("fatal media error encountered, try to recover");
@@ -416,7 +420,15 @@ function playVideo(sourceName,programid) {
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
     if (source.name === sourceName) {
-      if (sourceName !== 'hbohd') {
+      if (sourceName === 'hbo' || sourceName === 'hbohd') {
+        for (let a = 0; a < source.channels.length; a++) {
+          const channel = source.channels[a];
+          if (channel.chnl_name === programid) {
+            url = channel.url;
+            hlsLoad(url);
+          }
+        }
+      } else {
         if (Cookies.get(sourceName) && Cookies.get(sourceName) !== 'undefined') {
           url = source.play_url+'?playtype=live&protocol=hls&accesstoken='+Cookies.get(sourceName)+'&playtoken=ABCDEFGHIGK&programid='+programid;
           hlsLoad(url);
@@ -424,14 +436,6 @@ function playVideo(sourceName,programid) {
           alertInfo("此服务端未注册或登录！\n请先注册或登录！");
           sourceNow = sourceName;
           formToggle.click();
-        }
-      } else {
-        for (let a = 0; a < source.channels.length; a++) {
-          const channel = source.channels[a];
-          if (channel.chnl_name === programid) {
-            url = channel.url;
-            hlsLoad(url);
-          }
         }
       }
     }
@@ -445,7 +449,7 @@ function reqData(url, data, method = 'GET') {
       mode: "cors",
       cache: "no-cache",
       credentials: "omit",
-      referrerPolicy: "no-referrer",
+      referrer: "",
     }).then(response => response.json());
   } else {
     return fetch(url, {
@@ -453,7 +457,7 @@ function reqData(url, data, method = 'GET') {
       mode: "cors",
       cache: "no-cache",
       credentials: "omit",
-      referrerPolicy: "no-referrer",
+      referrer: "",
       body: JSON.stringify(data),
     }).then(response => response.json());
   }
@@ -680,10 +684,10 @@ function appendList(channel,sourceName,sourceLane) {
     channelListItem.appendChild(channelSup);
   }
   switch (channel.chnl_cat) {
-    case '高清联通':
+    case '高清电信':
       myList1.appendChild(channelListItem);
       break;
-    case '高清电信':
+    case '高清联通':
       myList1a.appendChild(channelListItem);
       break;
     case '标清':
@@ -748,7 +752,7 @@ function reqChannels(source) {
         }
       }
     } else {
-      alertInfo("账号错误！\nIP地址已被服务端封禁? \n请重新注册！",10);
+      alertInfo("账号错误\n账号已被"+source.lane+"服务端删除\n需重新注册！",10);
     }
   }).catch(err => {
     alertInfo(source.lane+"服务端不可用\nIP地址被封?",10);
@@ -756,7 +760,7 @@ function reqChannels(source) {
   });
 }
 
-let sourcesJson,hboId,hbohd={};
+let sourcesJson,hboId,hbo={},hbohd={};
 let sourceNow = 'nx96200';
 let localJson = 'channels.json';
 let remoteJson = 'http://hbo.epub.fun/channels.json';
@@ -846,9 +850,14 @@ function initialize() {
   myList9.classList.add('hidden');
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
-    if (source.name === 'hbohd') {
+    if (source.name === 'hbo') {
       for (let a = 0; a < source.channels.length; a++) {
-        const hbohdChannel = source.channels[a];
+        const hboChannel = source.channels[a];
+        hbo[hboChannel.chnl_name] = hboChannel.url;
+      }
+    } else if (source.name === 'hbohd') {
+      for (let b = 0; b < source.channels.length; b++) {
+        const hbohdChannel = source.channels[b];
         hbohd[hbohdChannel.chnl_name] = hbohdChannel.url;
       }
     } else {
@@ -861,8 +870,8 @@ function initialize() {
       if (source.list_url && Cookies.get(source.name) && Cookies.get(source.name) !== 'undefined') {
         reqChannels(source);
       }
-      for (let b = 0; b < source.channels.length; b++) {
-        const channel = source.channels[b];
+      for (let c = 0; c < source.channels.length; c++) {
+        const channel = source.channels[c];
         if (channel.chnl_name === 'hbo') {
           hboId = channel.chnl_id;
         } else {
@@ -877,9 +886,7 @@ function initialize() {
     loginPwdField.value = Cookies.get('password');
   }
 
-  if (Cookies.get('nx96200')){
-    playVideo('nx96200',hboId);
-  }
+  playVideo('hbo','hbo1');
 }
 
 formToggle.addEventListener("click", function(e) {
