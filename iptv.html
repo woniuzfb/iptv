@@ -462,11 +462,11 @@ function reqData(url, data, method = 'GET') {
   }
 }
 
-function alertInfo(info) {
+function alertInfo(info,delay=3) {
   infoField.textContent = info;
   setTimeout(function run() {
     infoField.textContent = '';
-  }, 3000);
+  }, delay*1000);
 }
 
 function uniqueName() {
@@ -715,41 +715,48 @@ function appendList(channel,sourceName,sourceLane) {
 function reqChannels(source) {
   reqData(source.list_url,'?pageidx=1&pagenum=500&accesstoken='+source.token)
   .then(response => {
-    let channelCats;
-    let cats = {"001":"高清"+source.lane,"002":"标清","003":"央视","004":"卫视","005":"地方","008":"专业"};
-    let omitArr = [];
-    if (source.omit) {
-      let omitSourceArr = source.omit.split(',');
-      for (let index = 0; index < omitSourceArr.length; index++) {
-        if (omitSourceArr[index].indexOf('-') !== -1) {
-          let omitSubArr = omitSourceArr[index].split('-');
-          for (let a = Number(omitSubArr[0]); a <= Number(omitSubArr[1]); a++) {
-            omitArr.push(Number(a));
+    if (response.ret === 0) {
+      let channelCats;
+      let cats = {"001":"高清"+source.lane,"002":"标清","003":"央视","004":"卫视","005":"地方","008":"专业"};
+      let omitArr = [];
+      if (source.omit) {
+        let omitSourceArr = source.omit.split(',');
+        for (let index = 0; index < omitSourceArr.length; index++) {
+          if (omitSourceArr[index].indexOf('-') !== -1) {
+            let omitSubArr = omitSourceArr[index].split('-');
+            for (let a = Number(omitSubArr[0]); a <= Number(omitSubArr[1]); a++) {
+              omitArr.push(Number(a));
+            }
+          } else {
+            omitArr.push(Number(omitSourceArr[index]));
           }
-        } else {
-          omitArr.push(Number(omitSourceArr[index]));
         }
       }
-    }
-    for (let b = 0; b < response.chnl_list.length; b++) {
-      const channel = response.chnl_list[b];
-      if (source.omit && omitArr.indexOf(Number(channel.chnl_id.toString().slice(-3))) !== -1) {
-        continue;
-      }
-      let newChannel={};
-      channelCats = channel.sub_type.split('|');
-      for (let c = 0; c < channelCats.length; c++) {
-        const channelCat = channelCats[c].slice(-3);
-        if (cats[channelCat] === undefined) {
+      for (let b = 0; b < response.chnl_list.length; b++) {
+        const channel = response.chnl_list[b];
+        if (source.omit && omitArr.indexOf(Number(channel.chnl_id.toString().slice(-3))) !== -1) {
           continue;
         }
-        newChannel.chnl_name = channel.chnl_name;
-        newChannel.chnl_id = channel.chnl_id;
-        newChannel.chnl_cat = cats[channelCat];
-        appendList(newChannel,source.name,source.lane);
+        let newChannel={};
+        channelCats = channel.sub_type.split('|');
+        for (let c = 0; c < channelCats.length; c++) {
+          const channelCat = channelCats[c].slice(-3);
+          if (cats[channelCat] === undefined) {
+            continue;
+          }
+          newChannel.chnl_name = channel.chnl_name;
+          newChannel.chnl_id = channel.chnl_id;
+          newChannel.chnl_cat = cats[channelCat];
+          appendList(newChannel,source.name,source.lane);
+        }
       }
+    } else {
+      alertInfo("账号错误！\nIP地址已被服务端监控?",10);
     }
-  }).catch(err => console.log('发生错误:', err));
+  }).catch(err => {
+    alertInfo(source.lane+'服务端不可用(IP地址被封?)',10);
+    console.log('发生错误:', err);
+  });
 }
 
 let sourcesJson,hboId,hbohd={};
