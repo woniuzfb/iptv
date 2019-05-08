@@ -434,7 +434,9 @@ function playVideo(sourceName,programid) {
           hlsLoad(url);
         } else {
           alertInfo("此服务端未注册或登录！\n请先注册或登录！");
-          sourceNow = sourceName;
+          if (sourceName !== 'jscnwx') {
+            sourceNow = sourceName;
+          }
           formToggle.click();
         }
       }
