@@ -34,11 +34,6 @@
       [
         {
           "chnl_name":"CCTV老故事",
-          "chnl_id":"4200900115",
-          "chnl_cat":"港澳台"
-        },
-        {
-          "chnl_name":"CCTV老故事",
           "chnl_id":"4200900091",
           "chnl_cat":"央视"
         },
@@ -112,7 +107,6 @@
       },
       "server_version":"V1.2.15",
       "play_url":"http://httpdvb.slave.pygdzhcs.com:13164/playurl",
-      "list_url":"http://slave.pygdzhcs.com:13160/media/channel/get_list",
       "token_url":"http://access.pygdzhcs.com:12690/account/get_third_token",
       "img_url":"http://access.pygdzhcs.com:12690/account/user/get_picture_code",
       "sms_url":"http://access.pygdzhcs.com:12690/account/user/v2/get_verify_code",
@@ -172,7 +166,7 @@
       "name":"jscnwx",
       "lane":"电信",
       "token":"",
-      "omit":"99-106,113-124,126-128,131-155,186",
+      "omit":"95-96,99-106,113-128,131-156,186",
       "unique_url":"http://122.194.12.25:12690/account/user/name_is_uniqueness",
       "reg_url":"http://122.194.12.25:12690/account/user/register",
       "login_url":"http://122.194.12.25:12690/account/login",

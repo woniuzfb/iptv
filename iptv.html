@@ -195,7 +195,7 @@
       <h1>
         <a href="https://github.com/woniuzfb/iptv" target="_blank">HBO中文直播</a>
       </h1>
-      <p>用手机号注册后才能用！<!--[if lt IE 10]><p class="warn"><strong>不支持 IE浏览器</strong> 。</p><![endif]--></p>
+      <p>用手机号注册后使用！<!--[if lt IE 10]><p class="warn"><strong>不支持 IE浏览器</strong> 。</p><![endif]--></p>
       <a href="https://github.com/woniuzfb/iptv" target="_blank" class="github-corner">
         <svg width="80" height="80" viewBox="0 0 250 250" aria-hidden="true">
           <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path>
@@ -210,8 +210,8 @@
         <li data-value="hbo">HBO</li>
         <li data-value="HBOHD1" class="hbohd extra">HBO高清1</li>
         <li data-value="HBOHD2" class="hbohd extra">HBO高清2</li>
-        <li data-value="myList1" class="liantong">高清[联通]</li>
-        <li data-value="myList1a" class="dianxin">高清[电信]</li>
+        <li data-value="myList1" class="liantong">高清&bull;联通</li>
+        <li data-value="myList1a" class="dianxin">高清&bull;电信</li>
         <li data-value="myList2">标清</li>
         <li data-value="myList3">央视</li>
         <li data-value="myList4">卫视</li>
@@ -448,7 +448,7 @@ function reqData(url, data, method = 'GET') {
       headers: {
         "Content-Type": 'application/x-www-form-urlencoded',
       },
-      referrer: "no-referrer",
+      referrerPolicy: "no-referrer",
     }).then(response => response.json());
   } else {
     return fetch(url, {
@@ -456,7 +456,7 @@ function reqData(url, data, method = 'GET') {
       mode: "cors",
       cache: "no-cache",
       credentials: "omit",
-      referrer: "no-referrer",
+      referrerPolicy: "no-referrer",
       body: JSON.stringify(data),
     }).then(response => response.json());
   }
