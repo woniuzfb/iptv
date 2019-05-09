@@ -417,9 +417,8 @@ function playVideo(sourceName,programid) {
     if (source.name === sourceName) {
       if (sourceName === 'hbo' || sourceName === 'hbohd') {
         for (let a = 0; a < source.channels.length; a++) {
-          const channel = source.channels[a];
-          if (channel.chnl_name === programid) {
-            hlsLoad(channel.url);
+          if (source.channels[a].chnl_name === programid) {
+            hlsLoad(source.channels[a].url);
             break;
           }
         }
