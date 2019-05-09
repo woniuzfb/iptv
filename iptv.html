@@ -374,9 +374,7 @@ function hlsLoad(url) {
       hls.startLoad(startPosition=1);
       let promise = video.play();
       if (promise !== undefined) {
-        promise.then(function() {
-        }).catch(function(error) {
-        });
+        promise.then().catch(console.log);
       }
     });
     hls.on(Hls.Events.ERROR, function (event, data) {
@@ -407,16 +405,13 @@ function hlsLoad(url) {
     video.addEventListener('canplay',function() {
       let promise = video.play();
       if (promise !== undefined) {
-        promise.then(function() {
-        }).catch(function(error) {
-        });
+        promise.then().catch(console.log);
       }
     });
   }
 }
 
 function playVideo(sourceName,programid) {
-  let url;
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
     if (source.name === sourceName) {
@@ -424,14 +419,13 @@ function playVideo(sourceName,programid) {
         for (let a = 0; a < source.channels.length; a++) {
           const channel = source.channels[a];
           if (channel.chnl_name === programid) {
-            url = channel.url;
-            hlsLoad(url);
+            hlsLoad(channel.url);
+            break;
           }
         }
       } else {
         if (Cookies.get(sourceName) && Cookies.get(sourceName) !== 'undefined') {
-          url = source.play_url+'?playtype=live&protocol=hls&accesstoken='+Cookies.get(sourceName)+'&playtoken=ABCDEFGHIGK&programid='+programid;
-          hlsLoad(url);
+          hlsLoad(source.play_url+'?playtype=live&protocol=hls&accesstoken='+Cookies.get(sourceName)+'&playtoken=ABCDEFGHIGK&programid='+programid);
         } else {
           alertInfo("此服务端未注册或登录！\n请先注册或登录！");
           if (sourceName !== 'jscnwx') {
@@ -468,7 +462,9 @@ function reqData(url, data, method = 'GET') {
 function alertInfo(info,delay=3) {
   infoField.innerText = info;
   setTimeout(function run() {
-    infoField.textContent = '';
+    if (infoField.innerText === info) {
+      infoField.textContent = '';
+    }
   }, delay*1000);
 }
 
@@ -754,7 +750,7 @@ function reqChannels(source) {
         }
       }
     } else {
-      alertInfo("账号错误\n账号已被"+source.lane+"服务端删除\n需重新注册！",10);
+      alertInfo("账号登录错误！\n"+source.lane+"服务端不可用\n需重新注册！",10);
     }
   }).catch(err => {
     alertInfo(source.lane+"服务端不可用\nIP地址被封?",10);
