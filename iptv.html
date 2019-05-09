@@ -367,38 +367,40 @@ function switchCategory(e) {
 
 function hlsLoad(url) {
   if(Hls.isSupported()) {
-    hls.stopLoad();
     hls.detachMedia(video);
-    hls.loadSource(url);
     hls.attachMedia(video);
-    hls.on(Hls.Events.MANIFEST_PARSED,function() {
-      hls.startLoad(startPosition=1);
-      let promise = video.play();
-      if (promise !== undefined) {
-        promise.then().catch(console.log);
-      }
-    });
-    hls.on(Hls.Events.ERROR, function (event, data) {
-      if (data.fatal) {
-        switch(data.type) {
-        case Hls.ErrorTypes.NETWORK_ERROR:
-          console.log("fatal network error encountered, try to recover");
-          hls.startLoad();
-          alertInfo("此频道不可用！\n需注册！",10);
-          break;
-        case Hls.ErrorTypes.MEDIA_ERROR:
-          console.log("fatal media error encountered, try to recover");
-          hls.recoverMediaError();
-          alertInfo('此频道不可用！');
-          break;
-        default:
-          console.log(data);
-          if (data.details !== Hls.ErrorDetails.INTERNAL_EXCEPTION) {
-            hls.destroy();
-          }
-          break;
+    hls.on(Hls.Events.MEDIA_ATTACHED, function () {
+      console.log("video and hls.js are now bound together !");
+      hls.loadSource(url);
+      hls.on(Hls.Events.MANIFEST_PARSED, function () {
+        hls.startLoad(startPosition=1);
+        let promise = video.play();
+        if (promise !== undefined) {
+          promise.then().catch(console.log);
         }
-      }
+        hls.on(Hls.Events.ERROR, function (event, data) {
+          if (data.fatal) {
+            switch(data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              console.log("fatal network error encountered, try to recover");
+              hls.startLoad();
+              alertInfo("此频道不可用！\n需注册！",10);
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              console.log("fatal media error encountered, try to recover");
+              hls.recoverMediaError();
+              alertInfo('此频道不可用！');
+              break;
+            default:
+              console.log(data);
+              if (data.details !== Hls.ErrorDetails.INTERNAL_EXCEPTION) {
+                hls.destroy();
+              }
+              break;
+            }
+          }
+        });
+      });
     });
   }
   else if (video.canPlayType('application/vnd.apple.mpegurl')) {
