@@ -367,6 +367,7 @@ function switchCategory(e) {
 
 function hlsLoad(url) {
   if(Hls.isSupported()) {
+    hls.stopLoad();
     hls.detachMedia(video);
     hls.loadSource(url);
     hls.attachMedia(video);
