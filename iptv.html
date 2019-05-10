@@ -681,7 +681,7 @@ function reqLogin() {
     user["serverVersion"] = sourceNowServerVersion;
   }
 
-  reqData(sourceNowUrl,user,'POST')
+  timeoutPromise(3000,reqData(sourceNowUrl,user,'POST'))
   .then(response => {
     if (response.ret !== 0) {
       alertInfo('账号错误！');
@@ -693,7 +693,10 @@ function reqLogin() {
       initialize();
       playVideo('nx96200',hboId);
     }
-  }).catch(err => console.log('发生错误:', err));
+  }).catch(err => {
+    console.log('发生错误:', err);
+    alertInfo("IP地址被此频道服务端封禁！无法登录！", 10);
+  });
 }
 
 function appendList(channel,sourceName,sourceLane) {
@@ -741,7 +744,7 @@ function appendList(channel,sourceName,sourceLane) {
 }
 
 function reqChannels(source) {
-  reqData(source.list_url,'?pageidx=1&pagenum=500&accesstoken='+source.token)
+  timeoutPromise(5000,reqData(source.list_url,'?pageidx=1&pagenum=500&accesstoken='+source.token))
   .then(response => {
     if (response.ret === 0) {
       let channelCats;
