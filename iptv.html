@@ -365,12 +365,14 @@ function switchCategory(e) {
   }
 }
 
-function hlsLoad(url) {
+function hlsLoad() {
   if(Hls.isSupported()) {
-    hls.detachMedia(video);
+    hls.detachMedia();
+    hls.destroy();
+    hls = new Hls();
     hls.attachMedia(video);
     hls.on(Hls.Events.MEDIA_ATTACHED, function () {
-      hls.loadSource(url);
+      hls.loadSource(hlsVideoUrl);
       hls.on(Hls.Events.MANIFEST_PARSED, function () {
         hls.startLoad(startPosition=1);
         let promise = video.play();
@@ -391,10 +393,7 @@ function hlsLoad(url) {
               alertInfo('此频道不可用！');
               break;
             default:
-              console.log(data);
-              if (data.details !== Hls.ErrorDetails.INTERNAL_EXCEPTION) {
-                hls.destroy();
-              }
+              hlsLoad();
               break;
             }
           }
@@ -403,7 +402,8 @@ function hlsLoad(url) {
     });
   }
   else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-    video.src = url;
+    video.src = hlsVideoUrl;
+    video.load();
     video.addEventListener('canplay',function() {
       let promise = video.play();
       if (promise !== undefined) {
@@ -420,13 +420,15 @@ function playVideo(sourceName,programid) {
       if (sourceName === 'hbo' || sourceName === 'hbohd') {
         for (let a = 0; a < source.channels.length; a++) {
           if (source.channels[a].chnl_name === programid) {
-            hlsLoad(source.channels[a].url);
+            hlsVideoUrl = source.channels[a].url;
+            hlsLoad();
             break;
           }
         }
       } else {
         if (Cookies.get(sourceName) && Cookies.get(sourceName) !== 'undefined') {
-          hlsLoad(source.play_url+'?playtype=live&protocol=hls&accesstoken='+Cookies.get(sourceName)+'&playtoken=ABCDEFGHIGK&programid='+programid);
+          hlsVideoUrl = source.play_url+'?playtype=live&protocol=hls&accesstoken='+Cookies.get(sourceName)+'&playtoken=ABCDEFGHIGK&programid='+programid;
+          hlsLoad();
         } else {
           alertInfo("此服务端未注册或登录！\n请先注册或登录！");
           if (sourceName !== 'jscnwx') {
@@ -759,7 +761,7 @@ function reqChannels(source) {
   });
 }
 
-let sourcesJson,hboId,hbo={},hbohd={};
+let sourcesJson,hlsVideoUrl,hboId,hbo={},hbohd={};
 let sourceNow = 'nx96200';
 let localJson = 'channels.json';
 let remoteJson = 'http://hbo.epub.fun/channels.json';
