@@ -378,25 +378,30 @@ function hlsLoad() {
       if (promise !== undefined) {
         promise.then().catch(console.log);
       }
-      hls.on(Hls.Events.ERROR, function (event, data) {
-        if (data.fatal) {
-          switch(data.type) {
-          case Hls.ErrorTypes.NETWORK_ERROR:
-            console.log("fatal network error encountered, try to recover");
+    });
+    hls.on(Hls.Events.ERROR, function (event, data) {
+      if (data.fatal) {
+        switch(data.type) {
+        case Hls.ErrorTypes.NETWORK_ERROR:
+          if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR) {
+            console.log("network error");
             hls.startLoad();
             alertInfo("此频道不可用！\n需注册！",10);
-            break;
-          case Hls.ErrorTypes.MEDIA_ERROR:
-            console.log("fatal media error encountered, try to recover");
-            hls.recoverMediaError();
-            alertInfo('此频道不可用！');
-            break;
-          default:
-            hlsLoad();
-            break;
+          } else if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT) {
+            alertInfo("IP地址已被\n此频道服务端封禁！",10);
+            Cookies.remove(hlsVideoSource, { path: '' });
           }
+          break;
+        case Hls.ErrorTypes.MEDIA_ERROR:
+          console.log("media error");
+          hls.recoverMediaError();
+          alertInfo('此频道不可用！');
+          break;
+        default:
+          hlsLoad();
+          break;
         }
-      });
+      }
     });
   }
   else if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -412,6 +417,7 @@ function hlsLoad() {
 }
 
 function playVideo(sourceName,programid) {
+  hlsVideoSource = sourceName;
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
     if (source.name === sourceName) {
@@ -759,7 +765,7 @@ function reqChannels(source) {
   });
 }
 
-let sourcesJson,hlsVideoUrl,hboId,hbo={},hbohd={};
+let sourcesJson,hlsVideoSource,hlsVideoUrl,hboId,hbo={},hbohd={};
 let sourceNow = 'nx96200';
 let localJson = 'channels.json';
 let remoteJson = 'http://hbo.epub.fun/channels.json';
