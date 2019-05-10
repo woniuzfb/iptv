@@ -685,6 +685,9 @@ function reqLogin() {
   .then(response => {
     if (response.ret !== 0) {
       alertInfo('账号错误！');
+      if (Cookies.get('jscnwx') && Cookies.get('jscnwx') !== 'undefined') {
+        initialize();
+      }
     } else {
       Cookies.set('account', user["account"], { expires: 7 });
       Cookies.set('password', pwd, { expires: 7 });
