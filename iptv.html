@@ -395,7 +395,7 @@ function hlsLoad() {
         case Hls.ErrorTypes.MEDIA_ERROR:
           console.log("media error");
           hls.recoverMediaError();
-          alertInfo('此频道不可用！');
+          alertInfo('频道发生错误！');
           break;
         default:
           hlsLoad();
@@ -425,6 +425,7 @@ function playVideo(sourceName,programid) {
         for (let a = 0; a < source.channels.length; a++) {
           if (source.channels[a].chnl_name === programid) {
             hlsVideoUrl = source.channels[a].url;
+            sourceNow = 'nx96200';
             hlsLoad();
             break;
           }
@@ -443,6 +444,24 @@ function playVideo(sourceName,programid) {
       }
     }
   }
+}
+
+function timeoutPromise(ms, promise) {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error("promise timeout"))
+    }, ms);
+    promise.then(
+      (res) => {
+        clearTimeout(timeoutId);
+        resolve(res);
+      },
+      (err) => {
+        clearTimeout(timeoutId);
+        reject(err);
+      }
+    );
+  })
 }
 
 function reqData(url, data, method = 'GET') {
@@ -500,7 +519,7 @@ function regImg() {
       imgUrl = source.img_url;
     }
   }
-  reqData(tokenUrl,{"usagescen":1},'POST')
+  timeoutPromise(3000,reqData(tokenUrl,{"usagescen":1},'POST'))
   .then(response => {
     if (response.ret !== 0) {
       alertInfo("验证码请求错误！");
@@ -513,7 +532,10 @@ function regImg() {
         regImgIdField.value = response.picid;
       }).catch(err => console.log('发生错误:', err));
     }
-  }).catch(err => console.log('发生错误:', err));
+  }).catch(err => {
+    console.log('发生错误:', err);
+    alertInfo("IP地址被此频道服务端封禁！无法注册！", 10);
+  });
 }
 
 function reqSms() {
