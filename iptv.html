@@ -370,34 +370,32 @@ function hlsLoad() {
     hls.detachMedia();
     hls.destroy();
     hls = new Hls();
+    hls.loadSource(hlsVideoUrl);
     hls.attachMedia(video);
-    hls.on(Hls.Events.MEDIA_ATTACHED, function () {
-      hls.loadSource(hlsVideoUrl);
-      hls.on(Hls.Events.MANIFEST_PARSED, function () {
-        hls.startLoad(startPosition=1);
-        let promise = video.play();
-        if (promise !== undefined) {
-          promise.then().catch(console.log);
-        }
-        hls.on(Hls.Events.ERROR, function (event, data) {
-          if (data.fatal) {
-            switch(data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              console.log("fatal network error encountered, try to recover");
-              hls.startLoad();
-              alertInfo("此频道不可用！\n需注册！",10);
-              break;
-            case Hls.ErrorTypes.MEDIA_ERROR:
-              console.log("fatal media error encountered, try to recover");
-              hls.recoverMediaError();
-              alertInfo('此频道不可用！');
-              break;
-            default:
-              hlsLoad();
-              break;
-            }
+    hls.on(Hls.Events.MANIFEST_PARSED, function () {
+      hls.startLoad(startPosition=1);
+      let promise = video.play();
+      if (promise !== undefined) {
+        promise.then().catch(console.log);
+      }
+      hls.on(Hls.Events.ERROR, function (event, data) {
+        if (data.fatal) {
+          switch(data.type) {
+          case Hls.ErrorTypes.NETWORK_ERROR:
+            console.log("fatal network error encountered, try to recover");
+            hls.startLoad();
+            alertInfo("此频道不可用！\n需注册！",10);
+            break;
+          case Hls.ErrorTypes.MEDIA_ERROR:
+            console.log("fatal media error encountered, try to recover");
+            hls.recoverMediaError();
+            alertInfo('此频道不可用！');
+            break;
+          default:
+            hlsLoad();
+            break;
           }
-        });
+        }
       });
     });
   }
