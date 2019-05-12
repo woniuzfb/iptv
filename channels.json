@@ -18,11 +18,7 @@
       [
         {
           "chnl_name":"HBOHD1",
-          "url":"http://103.135.249.74/live/HBOHD1.m3u8"
-        },
-        {
-          "chnl_name":"HBOHD2",
-          "url":"http://149.129.72.61/live/HBOHD2.m3u8"
+          "url":"http://104.199.235.252/live/HBOHD1.m3u8"
         }
       ]
     },
@@ -176,7 +172,7 @@
       "name":"jscnwx",
       "lane":"电信",
       "token":"",
-      "omit":"95-96,99-106,113-128,131-156,186",
+      "omit":"95-96,99-106,113-128,131-156,167-168,186",
       "unique_url":"http://122.194.12.25:12690/account/user/name_is_uniqueness",
       "reg_url":"http://122.194.12.25:12690/account/user/register",
       "login_url":"http://122.194.12.25:12690/account/login",

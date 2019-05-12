@@ -209,8 +209,7 @@
       <ul>
         <li data-value="hbo1">HBO1</li>
         <li data-value="hbo2">HBO2</li>
-        <li data-value="HBOHD1" class="hbohd extra">HBO高清1</li>
-        <li data-value="HBOHD2" class="hbohd extra">HBO高清2</li>
+        <li data-value="HBOHD1" class="hbohd extra">HBO高清</li>
         <li data-value="myList1" class="dianxin">高清&bull;电信</li>
         <li data-value="myList1a" class="liantong">高清&bull;联通</li>
         <li data-value="myList2">标清</li>
@@ -297,12 +296,16 @@ function makeStr(length) {
 function switchChannel(e) {
   if(e.target) {
     if (e.target.nodeName === "LI") {
-      playVideo(e.target.dataset.source,e.target.dataset.value);
+      sourceName =  e.target.dataset.source;
+      programId =  e.target.dataset.value;
+      playVideo();
       const selected = document.querySelector('.selected');
       if(selected) selected.classList.remove('selected');
       e.target.classList.add('selected');
     } else if (e.target.nodeName === "SUB") {
-      playVideo(e.target.parentNode.dataset.source,e.target.parentNode.dataset.value);
+      sourceName =  e.target.parentNode.dataset.source;
+      programId =  e.target.parentNode.dataset.value;
+      playVideo();
       const selected = document.querySelector('.selected');
       if(selected) selected.classList.remove('selected');
       e.target.parentNode.classList.add('selected');
@@ -319,21 +322,23 @@ function toggleClass(s,n) {
 
 function switchCategory(e) {
   if(e.target && e.target.nodeName === "LI") {
-    let channelId =  e.target.dataset.value;
-    switch (channelId) {
+    programId =  e.target.dataset.value;
+    switch (programId) {
       case "hbo1":
-        playVideo('hbo',channelId);
-        break;
+        sourceName = 'hbo';
+        playVideo();
       case "hbo2":
-        playVideo('nx96200',hboId);
+        sourceName = 'nx96200';
+        playVideo();
         break;
       case "HBOHD1":
       case "HBOHD2":
-        playVideo('hbohd',channelId);
+        sourceName = 'hbohd';
+        playVideo();
         break;
       case "0":
       case "1":
-        if(channelId === "0") {
+        if(programId === "0") {
           e.target.textContent = '开灯';
           e.target.dataset.value = 1;
           Cookies.set('dark', 1, { expires: 7 });
@@ -352,7 +357,7 @@ function switchCategory(e) {
         toggleClass('footer','bgBlack');
         break;
       default:
-        const mylist = document.querySelector('.'+channelId);
+        const mylist = document.querySelector('.'+programId);
         let siblings = mylist.parentNode.childNodes;
         for(let i=0; i < siblings.length; i++) {
           if(siblings[i].nodeName === "UL") {
@@ -367,7 +372,6 @@ function switchCategory(e) {
 
 function hlsLoad() {
   if(Hls.isSupported()) {
-    hls.detachMedia();
     hls.destroy();
     hls = new Hls();
     hls.loadSource(hlsVideoUrl);
@@ -386,10 +390,10 @@ function hlsLoad() {
           if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR) {
             console.log("network error");
             hls.startLoad();
-            alertInfo("此频道不可用！\n需注册！",10);
+            alertInfo("此频道不可用！",10);
           } else if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT) {
             alertInfo("IP地址已被\n此频道服务端封禁！",10);
-            Cookies.remove(hlsVideoSource, { path: '' });
+            Cookies.remove(sourceName, { path: '' });
           }
           break;
         case Hls.ErrorTypes.MEDIA_ERROR:
@@ -398,9 +402,15 @@ function hlsLoad() {
           alertInfo('频道发生错误！');
           break;
         default:
-          hlsLoad();
+          console.log("fatal error");
+          console.log(data);
+          playVideo();
           break;
         }
+      } else {
+        console.log("other error");
+        console.log(data);
+        playVideo();
       }
     });
   }
@@ -416,28 +426,27 @@ function hlsLoad() {
   }
 }
 
-function playVideo(sourceName,programid) {
-  hlsVideoSource = sourceName;
+function playVideo() {
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
     if (source.name === sourceName) {
       if (sourceName === 'hbo' || sourceName === 'hbohd') {
         for (let a = 0; a < source.channels.length; a++) {
-          if (source.channels[a].chnl_name === programid) {
+          if (source.channels[a].chnl_name === programId) {
             hlsVideoUrl = source.channels[a].url;
-            sourceNow = 'nx96200';
+            sourceReg = 'nx96200';
             hlsLoad();
             break;
           }
         }
       } else {
         if (Cookies.get(sourceName) && Cookies.get(sourceName) !== 'undefined') {
-          hlsVideoUrl = source.play_url+'?playtype=live&protocol=hls&accesstoken='+Cookies.get(sourceName)+'&playtoken=ABCDEFGHIGK&programid='+programid;
+          hlsVideoUrl = source.play_url+'?playtype=live&protocol=hls&accesstoken='+Cookies.get(sourceName)+'&playtoken=ABCDEFGHIGK&programid='+programId;
           hlsLoad();
         } else {
-          alertInfo("此服务端未注册或登录！\n请先注册或登录！");
+          alertInfo("此服务端未注册或登录！");
           if (sourceName !== 'jscnwx') {
-            sourceNow = sourceName;
+            sourceReg = sourceName;
           }
           formToggle.click();
         }
@@ -514,7 +523,7 @@ function regImg() {
   let tokenUrl,imgUrl;
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
-    if (source.name === sourceNow) {
+    if (source.name === sourceReg) {
       tokenUrl = source.token_url;
       imgUrl = source.img_url;
     }
@@ -545,7 +554,7 @@ function reqSms() {
   let url;
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
-    if (source.name === sourceNow) {
+    if (source.name === sourceReg) {
       url = source.sms_url;
     }
   }
@@ -562,15 +571,15 @@ function reqSms() {
 function reqReg() {
   let acc = regAccField.value;
   let pwd = regPwdField.value;
-  let jscnwxUrl,sourceNowVerifyUrl,sourceNowRegUrl,sourceNowAccType;
+  let jscnwxUrl,sourceRegVerifyUrl,sourceRegRegUrl,sourceRegAccType;
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
     if (source.name === 'jscnwx') {
       jscnwxUrl = source.reg_url;
-    } else if (source.name === sourceNow) {
-      sourceNowVerifyUrl = source.verify_url;
-      sourceNowRegUrl = source.reg_url;
-      sourceNowAccType = source.acc_type;
+    } else if (source.name === sourceReg) {
+      sourceRegVerifyUrl = source.verify_url;
+      sourceRegRegUrl = source.reg_url;
+      sourceRegAccType = source.acc_type;
     }
   }
 
@@ -584,7 +593,7 @@ function reqReg() {
   }
 
   let smsCode = regSmsField.value;
-  reqData(sourceNowVerifyUrl,'?verifycode='+smsCode+'&verifytype=3&username='+acc+'&account='+acc)
+  reqData(sourceRegVerifyUrl,'?verifycode='+smsCode+'&verifytype=3&username='+acc+'&account='+acc)
   .then(response => {
     if (response.ret === 0) {
       let user = {};
@@ -600,9 +609,9 @@ function reqReg() {
       user["type"] = 1;
       user["timestamp"] = timestamp.toString();
       user["pwd"] = md5(pwd);
-      user["accounttype"] = sourceNowAccType;
+      user["accounttype"] = sourceRegAccType;
 
-      reqData(sourceNowRegUrl,user,'POST')
+      reqData(sourceRegRegUrl,user,'POST')
       .then(response => {
         if (response.ret === 0) {
           formToggle.click();
@@ -627,7 +636,7 @@ function reqReg() {
 function reqLogin() {
   let acc = loginAccField.value;
   let pwd = loginPwdField.value;
-  let deviceno,devicetype,isforce,accounttype,jscnwxRegUrl,jscnwxLoginUrl,sourceNowUrl,sourceNowExtendInfo,sourceNowServerVersion;
+  let deviceno,devicetype,isforce,accounttype,jscnwxRegUrl,jscnwxLoginUrl,sourceRegUrl,sourceRegExtendInfo,sourceRegServerVersion;
   acc = acc.toString();
   deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
   deviceno = deviceno + md5(deviceno).substring(7, 8);
@@ -640,11 +649,11 @@ function reqLogin() {
     if (source.name === 'jscnwx') {
       jscnwxRegUrl = source.reg_url;
       jscnwxLoginUrl = source.login_url;
-    } else if (source.name === sourceNow) {
-      sourceNowUrl = source.login_url;
-      sourceNowExtendInfo = source.extend_info;
+    } else if (source.name === sourceReg) {
+      sourceRegUrl = source.login_url;
+      sourceRegExtendInfo = source.extend_info;
       if (source.server_version) {
-        sourceNowServerVersion = source.server_version;
+        sourceRegServerVersion = source.server_version;
       }
     }
   }
@@ -670,18 +679,18 @@ function reqLogin() {
   user["deviceno"] = user["deviceno"] + md5(user["deviceno"]).substring(7, 8);
   user["businessplatform"] = 1;
   user["devicetype"] = "yuj";
-  user["extendinfo"] = sourceNowExtendInfo;
+  user["extendinfo"] = sourceRegExtendInfo;
   let timestamp = Date.now();
   user["signature"] = md5(user["deviceno"]+"|"+user["devicetype"]+"|3|"+user["account"]+"|"+timestamp);
   user["isforce"] = 1;
   user["timestamp"] = timestamp.toString();
   user["pwd"] = md5(pwd);
   user["accounttype"] = 3;
-  if (sourceNowServerVersion) {
-    user["serverVersion"] = sourceNowServerVersion;
+  if (sourceRegServerVersion) {
+    user["serverVersion"] = sourceRegServerVersion;
   }
 
-  timeoutPromise(3000,reqData(sourceNowUrl,user,'POST'))
+  timeoutPromise(3000,reqData(sourceRegUrl,user,'POST'))
   .then(response => {
     if (response.ret !== 0) {
       alertInfo('账号错误！');
@@ -691,10 +700,19 @@ function reqLogin() {
     } else {
       Cookies.set('account', user["account"], { expires: 7 });
       Cookies.set('password', pwd, { expires: 7 });
-      Cookies.set(sourceNow, response.access_token, { expires: 7 });
+      Cookies.set(sourceReg, response.access_token, { expires: 7 });
       Cookies.set('deviceid', response.device_id, { expires: 7 });
       initialize();
-      playVideo('nx96200',hboId);
+      alertInfo('登录成功！');
+      if (sourceReg === 'nx96200') {
+        sourceName = 'nx96200';
+        programId = hboId;
+        playVideo();
+      } else {
+        sourceName = 'hbo';
+        programId = 'hbo1';
+        playVideo();
+      }
     }
   }).catch(err => {
     console.log('发生错误:', err);
@@ -702,14 +720,14 @@ function reqLogin() {
   });
 }
 
-function appendList(channel,sourceName,sourceLane) {
+function appendList(channel,appendSourceName,sourceLane) {
   const channelListItem = document.createElement('li');
   const channelListText = document.createTextNode(channel.chnl_name);
   if (Cookies.get('dark') === '1'){
     channelListItem.classList.add('white');
   }
   channelListItem.setAttribute('data-value',channel.chnl_id);
-  channelListItem.setAttribute('data-source',sourceName);
+  channelListItem.setAttribute('data-source',appendSourceName);
   channelListItem.appendChild(channelListText);
   if (channel.chnl_cat.indexOf('高清') === -1) {
     const channelSup = document.createElement('sub');
@@ -785,7 +803,8 @@ function reqChannels(source) {
         }
       }
     } else {
-      alertInfo("账号登录错误！\n"+source.lane+"服务端不可用\n需重新注册！",10);
+      alertInfo(source.lane+"服务端不可用\n需重新注册或登录！",10);
+      Cookies.remove(source.name, { path: '' });
     }
   }).catch(err => {
     alertInfo(source.lane+"服务端不可用\nIP地址被封?",10);
@@ -793,8 +812,8 @@ function reqChannels(source) {
   });
 }
 
-let sourcesJson,hlsVideoSource,hlsVideoUrl,hboId,hbo={},hbohd={};
-let sourceNow = 'nx96200';
+let sourcesJson,sourceName,programId,hlsVideoUrl,hboId,hbo={},hbohd={};
+let sourceReg = 'nx96200';
 let localJson = 'channels.json';
 let remoteJson = 'http://hbo.epub.fun/channels.json';
 const video = document.querySelector('video');
@@ -918,8 +937,9 @@ function initialize() {
     loginAccField.value = Cookies.get('account');
     loginPwdField.value = Cookies.get('password');
   }
-
-  playVideo('hbo','hbo1');
+  sourceName = 'hbo';
+  programId = 'hbo1';
+  playVideo();
 }
 
 formToggle.addEventListener("click", function(e) {
