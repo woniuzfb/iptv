@@ -322,24 +322,27 @@ function toggleClass(s,n) {
 
 function switchCategory(e) {
   if(e.target && e.target.nodeName === "LI") {
-    programId =  e.target.dataset.value;
-    switch (programId) {
+    let catValue =  e.target.dataset.value;
+    switch (catValue) {
       case "hbo1":
         sourceName = 'hbo';
+        programId = catValue;
         playVideo();
         break;
       case "hbo2":
         sourceName = 'nx96200';
+        programId = catValue;
         playVideo();
         break;
       case "HBOHD1":
       case "HBOHD2":
         sourceName = 'hbohd';
+        programId = catValue;
         playVideo();
         break;
       case "0":
       case "1":
-        if(programId === "0") {
+        if(catValue === "0") {
           e.target.textContent = '开灯';
           e.target.dataset.value = 1;
           Cookies.set('dark', 1, { expires: 7 });
@@ -358,7 +361,7 @@ function switchCategory(e) {
         toggleClass('footer','bgBlack');
         break;
       default:
-        const mylist = document.querySelector('.'+programId);
+        const mylist = document.querySelector('.'+catValue);
         let siblings = mylist.parentNode.childNodes;
         for(let i=0; i < siblings.length; i++) {
           if(siblings[i].nodeName === "UL") {
@@ -411,7 +414,7 @@ function hlsLoad() {
       } else {
         console.log("other error");
         console.log(data);
-        playVideo();
+        //playVideo();
       }
     });
   }
