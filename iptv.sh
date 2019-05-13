@@ -164,21 +164,22 @@ Install()
         echo -e "$info 脚本就绪..."
         InstallFfmpeg
         InstallJq
-        printf '
-        {
-            "default":
-            {
-                "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536",
-                "seg_length":6,
-                "seg_count":5,
-                "bitrates":"256,384",
-                "audio_codec":"aac",
-                "video_codec":"libx264",
-                "quality":22,
-                "output_flags":"-preset superfast -pix_fmt yuv420p -profile:v main"
-            },
-            "channels":[]
-        }' > "$CHANNELS_FILE"
+cat > "$CHANNELS_FILE" << EOM
+{
+    "default":
+    {
+        "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536",
+        "seg_length":6,
+        "seg_count":5,
+        "bitrates":"256,384",
+        "audio_codec":"aac",
+        "video_codec":"libx264",
+        "quality":22,
+        "output_flags":"-preset superfast -pix_fmt yuv420p -profile:v main"
+    },
+    "channels":[]
+}
+EOM
         echo -e "$info 安装完成..."
     fi
 }
@@ -192,9 +193,9 @@ Uninstall()
     [ -z "$uninstall_yn" ] && uninstall_yn="n"
     if [[ "$uninstall_yn" == [Yy] ]]; then
         rm -rf "$IPTV_ROOT"
-        echo && echo "$info 卸载完成 !" && echo
+        echo && echo -e "$info 卸载完成 !" && echo
     else
-        echo && echo "$info 卸载已取消..." && echo
+        echo && echo -e "$info 卸载已取消..." && echo
     fi
 }
 
