@@ -21,3 +21,13 @@
 - 不支持IE浏览器
 - 支持画中画
 - 仅作为宽带测试用
+
+---
+
+## iptv.sh 勿用
+
+- 一键管理脚本 mpegts 转 hls
+
+``` bash
+bash -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh)"
+```
