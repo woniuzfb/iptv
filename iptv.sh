@@ -53,17 +53,9 @@ CheckRelease()
     if [ "$(uname -m | grep -c 64)" -gt 0 ]
     then
         release_bit="64"
-        FFMPEG_STATIC="ffmpeg-git-amd64-static"
     else
         release_bit="32"
-        FFMPEG_STATIC="ffmpeg-git-i686-static"
     fi
-
-    FFMPEG_PATH="$IPTV_PATH/$FFMPEG_STATIC"
-    FFMPEG="$FFMPEG_PATH/ffmpeg"
-    export FFMPEG_STATIC
-    export FFMPEG_PATH
-    export FFMPEG
 
     update_once=0
     depends=(unzip vim curl cron crond)
@@ -115,12 +107,22 @@ CheckRelease()
 
 InstallFfmpeg()
 {
+    FFMPEG=$(dirname "$IPTV_PATH/ffmpeg-git-*/ffmpeg")
     if [ ! -e "$FFMPEG" ]
     then
+        if [ "$release_bit" == "64" ]
+        then
+            FFMPEG_STATIC="ffmpeg-git-amd64-static"
+        else
+            FFMPEG_STATIC="ffmpeg-git-i686-static"
+        fi
+        FFMPEG_PATH="$IPTV_PATH/$FFMPEG_STATIC"
         wget --no-check-certificate "https://johnvansickle.com/ffmpeg/builds/$FFMPEG_STATIC.tar.xz" -qO "$FFMPEG_PATH.tar.xz"
         [ ! -e "$FFMPEG_PATH.tar.xz" ] && echo -e "$error ffmpeg压缩包 下载失败 !" && exit 1
         tar -xJf "$FFMPEG_PATH.tar.xz" -C "$IPTV_PATH" && rm -rf "$FFMPEG_PATH.tar.xz"
-        [ ! -e "$FFMPEG_PATH.tar.xz" ] && echo -e "$error ffmpeg压缩包 解压失败 !" && exit 1
+        FFMPEG=$(dirname "$IPTV_PATH/ffmpeg-git-*/ffmpeg")
+        [ ! -e "$FFMPEG" ] && echo -e "$error ffmpeg压缩包 解压失败 !" && exit 1
+        export FFMPEG
         echo -e "$info ffmpeg 安装完成..."
     else
         echo -e "$info ffmpeg 已安装..."
@@ -168,14 +170,14 @@ Uninstall()
 {
     [ ! -e "$IPTV_PATH" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
     CheckRelease
-    echo "确定要 卸载ShadowsocksR？[Y/n]" && echo
+    echo "确定要 卸载此脚本以及产生的全部文件？[Y/n]" && echo
     read -p "(默认: n):" uninstall_yn
     [ -z "$uninstall_yn" ] && uninstall_yn="n"
     if [[ "$uninstall_yn" == [Yy] ]]; then
         rm -rf "$IPTV_PATH"
-        echo && echo " 卸载完成 !" && echo
+        echo && echo "$info 卸载完成 !" && echo
     else
-        echo && echo " 卸载已取消..." && echo
+        echo && echo "$info 卸载已取消..." && echo
     fi
 }
 
@@ -285,6 +287,26 @@ exit
 
 }
 
+if [ -e "$FFMPEG" ]
+then
+    if [ "$release_bit" == "64" ]
+    then
+        FFMPEG_STATIC="ffmpeg-git-amd64-static"
+    else
+        FFMPEG_STATIC="ffmpeg-git-i686-static"
+    fi
+    FFMPEG_PATH="$IPTV_PATH/$FFMPEG_STATIC"
+    wget --no-check-certificate "https://johnvansickle.com/ffmpeg/builds/$FFMPEG_STATIC.tar.xz" -qO "$FFMPEG_PATH.tar.xz"
+    [ ! -e "$FFMPEG_PATH.tar.xz" ] && echo -e "$error ffmpeg压缩包 下载失败 !" && exit 1
+    tar -xJf "$FFMPEG_PATH.tar.xz" -C "$IPTV_PATH" && rm -rf "$FFMPEG_PATH.tar.xz"
+    FFMPEG=$(dirname "$IPTV_PATH"/ffmpeg-git-*/ffmpeg)
+    [ ! -e "$FFMPEG" ] && echo -e "$error ffmpeg压缩包 解压失败 !" && exit 1
+    export FFMPEG
+    echo -e "$info ffmpeg 安装完成..."
+else
+    echo -e "$info ffmpeg 已安装..."
+fi
+
 use_menu=1
 
 while getopts "i:s:o:c:a:v:b:p:S:t:q:K:h:H:m:n:Ce" flag
@@ -371,6 +393,8 @@ else
                 echo "已取消..." && exit 1
             fi
         else
+            FFMPEG=$(dirname "$IPTV_PATH/ffmpeg-git-*/ffmpeg")
+            export FFMPEG
             export FFMPEG_INPUT_FLAGS=${input_flags:-"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536"}
             seg_length=${seg_length:-"6")}
             output_dir_name=${output_dir_name:-"$(RandOutputDirName)"}
