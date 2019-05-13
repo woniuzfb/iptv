@@ -265,8 +265,8 @@ See LICENSE
     -c  m3u8里包含的段数目(默认：5)
     -a  音频编码(默认：aac)
     -v  视频编码(默认：libx264)
-    -b  输出视频的比特率 (多种比特率用逗号分隔)(默认：128,256)
-        同时可以指定输出的分辨率(比如：-b 128-600x400,256-1280x720)
+    -b  输出视频的比特率 (多种比特率用逗号分隔)(默认：256,384)
+        同时可以指定输出的分辨率(比如：-b 256-600x400,384-1280x720)
     -p  m3u8名称(前缀)(默认：随机)
     -S  段所在子目录名称(默认：不使用子目录)
     -t  段名称(前缀)(默认：跟m3u8名称相同)
@@ -276,16 +276,16 @@ See LICENSE
     -K  Key名称(默认：跟m3u8名称相同)
 
     -m  ffmpeg 额外的 INPUT FLAGS
-        (默认：-reconnect 1 -reconnect_at_eof 1 
+        (默认："-reconnect 1 -reconnect_at_eof 1 
         -reconnect_streamed 1 -reconnect_delay_max 2000 
         -timeout 2000000000 -y -thread_queue_size 55120 
         -nostats -nostdin -hide_banner -loglevel 
-        fatal -probesize 65536)
+        fatal -probesize 65536")
     -n  ffmpeg 额外的 OUTPUT FLAGS
-        (默认：-preset superfast -pix_fmt yuv420p -profile:v main)
+        (默认："-preset superfast -pix_fmt yuv420p -profile:v main")
 
 举例:
-    tv -i http://xxx.com/xxx.ts -s 5 -o hbo -c 10 -b 128,256 -p hbo1
+    tv -i http://xxx.com/xxx.ts -s 5 -o hbo -c 10 -b 256,384 -p hbo1
 
 EOM
 
@@ -387,7 +387,7 @@ else
             output_dir_name=${output_dir_name:-"$(RandOutputDirName)"}
             output_dir_root="$LIVE_ROOT/$output_dir_name"
             seg_count=${seg_count:-"5"}
-            bitrates=${bitrates:-"128,256"}
+            bitrates=${bitrates:-"256,384"}
             export AUDIO_CODEC=${audio_codec:-"aac"}
             export VIDEO_CODEC=${video_codec:-"libx264"}
             playlist_name=${playlist_name:-"$(RandPlaylistName)"}
@@ -403,8 +403,13 @@ else
                 -o "$output_dir_root" -c "$seg_count" -b "$bitrates" \
                 -p "$playlist_name" -t "$seg_name" -K "$key_name" -q "$quality" \
                 "$const" "$encrypt" &
-            PID=$!
-            echo $PID
+            pid=$!
+            #pids=$(pgrep -P $pid)
+            #kill -9 $pid
+            #for cpid in $pids ; do kill -9 $cpid ; done
+            #or pkill -TERM -P $pid
+
+            echo -e "$info 添加频道成功..." && echo
         fi
     fi
 fi
