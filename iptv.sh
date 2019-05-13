@@ -256,23 +256,23 @@ Copyright (C) 2013 B Tasker, D Atanasov
 Released under BSD 3 Clause License
 See LICENSE
 
-使用方法: tv -i [直播源] -s [段时长(秒)] -o [输出目录名称] [-c m3u8包含的段数目] -b [比特率]  [-p m3u8文件名称]
+使用方法: tv -i [直播源] -s [段时长(秒)] -o [输出目录名称] -c [m3u8包含的段数目] -b [比特率]  [-p m3u8文件名称]
 
-	-i	直播源(仅支持mpegts)
-	-s	段时长(秒)(默认：6)
-	-o	输出目录名称(默认：随机)
+    -i  直播源(仅支持mpegts)
+    -s  段时长(秒)(默认：6)
+    -o  输出目录名称(默认：随机)
 
-	-c	m3u8里包含的段数目(默认：5)
+    -c  m3u8里包含的段数目(默认：5)
     -a  音频编码(默认：aac)
     -v  视频编码(默认：libx264)
-	-b	输出视频的比特率 (多种比特率用逗号分隔)(默认：15,20)
-	-p	m3u8名称(前缀)(默认：随机)
-    -S	段所在子目录名称(默认：不使用子目录)
-	-t	段名称(前缀)(默认：跟m3u8名称相同)
-    -C	固定码率(CBR 而不是 AVB)(默认：是)
-	-q	质量(改变 CRF)(默认：22)
-    -e	加密段(默认：不加密)
-	-K	Key名称(默认：跟m3u8名称相同)
+    -b  输出视频的比特率 (多种比特率用逗号分隔)(默认：15,20)
+    -p  m3u8名称(前缀)(默认：随机)
+    -S  段所在子目录名称(默认：不使用子目录)
+    -t  段名称(前缀)(默认：跟m3u8名称相同)
+    -C  固定码率(CBR 而不是 AVB)(默认：是)
+    -q  质量(改变 CRF)(默认：22)
+    -e  加密段(默认：不加密)
+    -K  Key名称(默认：跟m3u8名称相同)
 
     -m  ffmpeg 额外的 INPUT FLAGS
         (默认：-reconnect 1 -reconnect_at_eof 1 
@@ -282,6 +282,9 @@ See LICENSE
         fatal -probesize 65536)
     -n  ffmpeg 额外的 OUTPUT FLAGS
         (默认：-preset superfast -pix_fmt yuv420p -profile:v main)
+
+举例:
+    tv -i http://xxx.com/xxx.ts -s 5 -o hbo -c 10 -b 28,30 -p hbo1
 
 EOM
 
@@ -293,22 +296,22 @@ use_menu=1
 
 while getopts "i:s:o:c:a:v:b:p:S:t:q:K:h:H:m:n:Ce" flag
 do
-	use_menu=0
+    use_menu=0
         case "$flag" in
                 i) stream_link="$OPTARG";;
                 s) seg_length="$OPTARG";;
                 o) output_dir_name="$OPTARG";;
-		c) seg_count="$OPTARG";;
+        c) seg_count="$OPTARG";;
         a) audio_codec="$OPTARG";;
         v) video_codec="$OPTARG";;
-		b) bitrates="$OPTARG";;
-		p) playlist_name="$OPTARG";;
+        b) bitrates="$OPTARG";;
+        p) playlist_name="$OPTARG";;
         S) seg_dir_name="$OPTARG";;
-		t) seg_name="$OPTARG";;
+        t) seg_name="$OPTARG";;
         C) const="-C";;
-		q) quality="$OPTARG";;
+        q) quality="$OPTARG";;
         e) encrypt="-e";;
-		K) key_name="$OPTARG";;
+        K) key_name="$OPTARG";;
         m) input_flags="$OPTARG";;
         n) output_flags="$OPTARG";;
         *) Usage;
