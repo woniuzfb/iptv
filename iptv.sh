@@ -164,6 +164,21 @@ Install()
         echo -e "$info 脚本就绪..."
         InstallFfmpeg
         InstallJq
+        printf '
+        {
+            "default":
+            {
+                "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536",
+                "seg_length":6,
+                "seg_count":5,
+                "bitrates":"256,384",
+                "audio_codec":"aac",
+                "video_codec":"libx264",
+                "quality":22,
+                "output_flags":"-preset superfast -pix_fmt yuv420p -profile:v main"
+            },
+            "channels":[]
+        }' > "$CHANNELS_FILE"
         echo -e "$info 安装完成..."
     fi
 }
@@ -408,6 +423,9 @@ else
             #kill -9 $pid
             #for cpid in $pids ; do kill -9 $cpid ; done
             #or pkill -TERM -P $pid
+
+            #$JQ_FILE '. += [{"test":1,"test2":2}]' "$CHANNELS_FILE" > channels.tmp
+            #$JQ_FILE '. -= [.[]|select(.test==1)]' "$CHANNELS_FILE" > channels.tmp
 
             echo -e "$info 添加频道成功..." && echo
         fi
