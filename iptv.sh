@@ -362,12 +362,14 @@ then
         ;;
     esac
 else
-    stream_link=${stream_link:-"")}
+    stream_link=${stream_link:-""}
     if [ "$stream_link" == "" ]
     then
         Usage
     else
         CheckRelease
+        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+        FFMPEG="$FFMPEG_ROOT/ffmpeg"
         if [ ! -e "$FFMPEG" ]
         then
             echo && read -p "尚未安装,是否现在安装？[y/N] (默认: N): " install_yn
@@ -378,15 +380,13 @@ else
                 echo "已取消..." && exit 1
             fi
         else
-            FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-            FFMPEG="$FFMPEG_ROOT/ffmpeg"
             export FFMPEG
             export FFMPEG_INPUT_FLAGS=${input_flags:-"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536"}
-            seg_length=${seg_length:-"6")}
+            seg_length=${seg_length:-"6"}
             output_dir_name=${output_dir_name:-"$(RandOutputDirName)"}
             output_dir_root="$LIVE_ROOT/$output_dir_name"
-            seg_count=${seg_count:-"5")}
-            bitrates=${bitrates:-"15,20")}
+            seg_count=${seg_count:-"5"}
+            bitrates=${bitrates:-"15,20"}
             export AUDIO_CODEC=${audio_codec:-"aac"}
             export VIDEO_CODEC=${video_codec:-"libx264"}
             playlist_name=${playlist_name:-"$(RandPlaylistName)"}
@@ -398,7 +398,7 @@ else
             key_name=${key_name:-"$playlist_name"}
             export FFMPEG_FLAGS=${output_flags:-"-preset superfast -pix_fmt yuv420p -profile:v main"}
 
-            exec CREATOR_FILE -l -i "$stream_link" -s "$seg_length" \
+            exec "$CREATOR_FILE" -l -i "$stream_link" -s "$seg_length" \
                 -o "$output_dir_root" -c "$seg_count" -b "$bitrates" \
                 -p "$playlist_name" -t "$seg_name" -K "$key_name" -q "$quality" \
                 "$const" "$encrypt"
