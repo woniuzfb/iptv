@@ -4,11 +4,11 @@ set -euxo pipefail
 
 sh_ver="0.1"
 SH_FILE="/usr/local/bin/tv"
-IPTV_PATH="$HOME/iptv"
-CREATOR_FILE="$IPTV_PATH/HLS-Stream-Creator.sh"
-JQ_FILE="$IPTV_PATH/jq"
-CHANNELS_File="$IPTV_PATH/channels.json"
-LIVE_PATH="$IPTV_PATH/live"
+IPTV_ROOT="$HOME/iptv"
+CREATOR_FILE="$IPTV_ROOT/HLS-Stream-Creator.sh"
+JQ_FILE="$IPTV_ROOT/jq"
+CHANNELS_FILE="$IPTV_ROOT/channels.json"
+LIVE_ROOT="$IPTV_ROOT/live"
 green="\033[32m"
 red="\033[31m"
 plain="\033[0m"
@@ -61,8 +61,8 @@ CheckRelease()
     depends=(unzip vim curl cron crond)
     
     for depend in "${depends[@]}"; do
-        DEPEND_PATH="$(command -v "$depend" || true)"
-        if [ -z "$DEPEND_PATH" ]
+        DEPEND_FILE="$(command -v "$depend" || true)"
+        if [ -z "$DEPEND_FILE" ]
         then
             case "$release" in
                 "rpm")
@@ -107,25 +107,27 @@ CheckRelease()
 
 InstallFfmpeg()
 {
-    FFMPEG=$(dirname "$IPTV_PATH/ffmpeg-git-*/ffmpeg")
+    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+    FFMPEG="$FFMPEG_ROOT/ffmpeg"
     if [ ! -e "$FFMPEG" ]
     then
+        echo -e "$info 开始下载/安装 FFmpeg..."
         if [ "$release_bit" == "64" ]
         then
-            FFMPEG_STATIC="ffmpeg-git-amd64-static"
+            ffmpeg_package="ffmpeg-git-amd64-static.tar.xz"
         else
-            FFMPEG_STATIC="ffmpeg-git-i686-static"
+            ffmpeg_package="ffmpeg-git-i686-static.tar.xz"
         fi
-        FFMPEG_PATH="$IPTV_PATH/$FFMPEG_STATIC"
-        wget --no-check-certificate "https://johnvansickle.com/ffmpeg/builds/$FFMPEG_STATIC.tar.xz" -qO "$FFMPEG_PATH.tar.xz"
-        [ ! -e "$FFMPEG_PATH.tar.xz" ] && echo -e "$error ffmpeg压缩包 下载失败 !" && exit 1
-        tar -xJf "$FFMPEG_PATH.tar.xz" -C "$IPTV_PATH" && rm -rf "$FFMPEG_PATH.tar.xz"
-        FFMPEG=$(dirname "$IPTV_PATH/ffmpeg-git-*/ffmpeg")
+        FFMPEG_PACKAGE_FILE="$IPTV_ROOT/$ffmpeg_package"
+        wget --no-check-certificate "https://johnvansickle.com/ffmpeg/builds/$ffmpeg_package" -qO "$FFMPEG_PACKAGE_FILE"
+        [ ! -e "$FFMPEG_PACKAGE_FILE" ] && echo -e "$error ffmpeg压缩包 下载失败 !" && exit 1
+        tar -xJf "$FFMPEG_PACKAGE_FILE" -C "$IPTV_ROOT" && rm -rf "$FFMPEG_PACKAGE_FILE"
+        FFMPEG=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
         [ ! -e "$FFMPEG" ] && echo -e "$error ffmpeg压缩包 解压失败 !" && exit 1
         export FFMPEG
-        echo -e "$info ffmpeg 安装完成..."
+        echo -e "$info FFmpeg 安装完成..."
     else
-        echo -e "$info ffmpeg 已安装..."
+        echo -e "$info FFmpeg 已安装..."
     fi
 }
 
@@ -152,11 +154,11 @@ Install()
 {
     echo -e "$info 检查依赖..."
     CheckRelease
-    if [ -e "$IPTV_PATH" ]
+    if [ -e "$IPTV_ROOT" ]
     then
         echo -e "$error 目录已存在，请先卸载..." && exit 1
     else
-        mkdir -p "$IPTV_PATH"
+        mkdir -p "$IPTV_ROOT"
         echo -e "$info 下载脚本..."
         wget --no-check-certificate "https://raw.githubusercontent.com/bentasker/HLS-Stream-Creator/master/HLS-Stream-Creator.sh" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
         echo -e "$info 脚本就绪..."
@@ -168,13 +170,13 @@ Install()
 
 Uninstall()
 {
-    [ ! -e "$IPTV_PATH" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+    [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
     CheckRelease
     echo "确定要 卸载此脚本以及产生的全部文件？[Y/n]" && echo
     read -p "(默认: n):" uninstall_yn
     [ -z "$uninstall_yn" ] && uninstall_yn="n"
     if [[ "$uninstall_yn" == [Yy] ]]; then
-        rm -rf "$IPTV_PATH"
+        rm -rf "$IPTV_ROOT"
         echo && echo "$info 卸载完成 !" && echo
     else
         echo && echo "$info 卸载已取消..." && echo
@@ -211,7 +213,7 @@ RandOutputDirName()
 {
     while :;do
         output_dir_name=$(RandStr)
-        str_info=$($JQ_FILE '.[]|select(.outputDirName=="'"$output_dir_name"'")' "$CHANNELS_File")
+        str_info=$($JQ_FILE '.[]|select(.outputDirName=="'"$output_dir_name"'")' "$CHANNELS_FILE")
         if [ -z "$str_info" ]; then
             echo "$output_dir_name"
             break
@@ -223,7 +225,7 @@ RandPlaylistName()
 {
     while :;do
         playlist_name=$(RandStr)
-        str_info=$($JQ_FILE '.[]|select(.playListName=="'"$playlist_name"'")' "$CHANNELS_File")
+        str_info=$($JQ_FILE '.[]|select(.playListName=="'"$playlist_name"'")' "$CHANNELS_FILE")
         if [ -z "$str_info" ]; then
             echo "$playlist_name"
             break
@@ -235,7 +237,7 @@ RandSegDirName()
 {
     while :;do
         seg_dir_name=$(RandStr)
-        str_info=$($JQ_FILE '.[]|select(.segDirName=="'"$seg_dir_name"'")' "$CHANNELS_File")
+        str_info=$($JQ_FILE '.[]|select(.segDirName=="'"$seg_dir_name"'")' "$CHANNELS_FILE")
         if [ -z "$str_info" ]; then
             echo "$seg_dir_name"
             break
@@ -373,12 +375,13 @@ else
                 echo "已取消..." && exit 1
             fi
         else
-            FFMPEG=$(dirname "$IPTV_PATH/ffmpeg-git-*/ffmpeg")
+            FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+            FFMPEG="$FFMPEG_ROOT/ffmpeg"
             export FFMPEG
             export FFMPEG_INPUT_FLAGS=${input_flags:-"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536"}
             seg_length=${seg_length:-"6")}
             output_dir_name=${output_dir_name:-"$(RandOutputDirName)"}
-            output_dir_path="$LIVE_PATH/$output_dir_name"
+            output_dir_root="$LIVE_ROOT/$output_dir_name"
             seg_count=${seg_count:-"5")}
             bitrates=${bitrates:-"15,20")}
             export AUDIO_CODEC=${audio_codec:-"aac"}
@@ -393,7 +396,7 @@ else
             export FFMPEG_FLAGS=${output_flags:-"-preset superfast -pix_fmt yuv420p -profile:v main"}
 
             exec CREATOR_FILE -l -i "$stream_link" -s "$seg_length" \
-                -o "$output_dir_path" -c "$seg_count" -b "$bitrates" \
+                -o "$output_dir_root" -c "$seg_count" -b "$bitrates" \
                 -p "$playlist_name" -t "$seg_name" -K "$key_name" -q "$quality" \
                 "$const" "$encrypt"
         fi
