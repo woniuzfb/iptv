@@ -287,26 +287,6 @@ exit
 
 }
 
-if [ -e "$FFMPEG" ]
-then
-    if [ "$release_bit" == "64" ]
-    then
-        FFMPEG_STATIC="ffmpeg-git-amd64-static"
-    else
-        FFMPEG_STATIC="ffmpeg-git-i686-static"
-    fi
-    FFMPEG_PATH="$IPTV_PATH/$FFMPEG_STATIC"
-    wget --no-check-certificate "https://johnvansickle.com/ffmpeg/builds/$FFMPEG_STATIC.tar.xz" -qO "$FFMPEG_PATH.tar.xz"
-    [ ! -e "$FFMPEG_PATH.tar.xz" ] && echo -e "$error ffmpeg压缩包 下载失败 !" && exit 1
-    tar -xJf "$FFMPEG_PATH.tar.xz" -C "$IPTV_PATH" && rm -rf "$FFMPEG_PATH.tar.xz"
-    FFMPEG=$(dirname "$IPTV_PATH"/ffmpeg-git-*/ffmpeg)
-    [ ! -e "$FFMPEG" ] && echo -e "$error ffmpeg压缩包 解压失败 !" && exit 1
-    export FFMPEG
-    echo -e "$info ffmpeg 安装完成..."
-else
-    echo -e "$info ffmpeg 已安装..."
-fi
-
 use_menu=1
 
 while getopts "i:s:o:c:a:v:b:p:S:t:q:K:h:H:m:n:Ce" flag
