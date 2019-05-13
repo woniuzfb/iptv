@@ -115,13 +115,12 @@ CheckRelease()
 
 InstallFfmpeg()
 {
-
     if [ ! -e "$FFMPEG" ]
     then
         wget --no-check-certificate "https://johnvansickle.com/ffmpeg/builds/$FFMPEG_STATIC.tar.xz" -qO "$FFMPEG_PATH.tar.xz"
         [ ! -e "$FFMPEG_PATH.tar.xz" ] && echo -e "$error ffmpeg压缩包 下载失败 !" && exit 1
-        tar -xJf "$FFMPEG_PATH.tar.xz" && rm -rf "$FFMPEG_PATH.tar.xz"
-        [ ! -e "$FFMPEG_PATH" ] && echo -e "$error ffmpeg压缩包 解压失败 !" && exit 1
+        tar -xJf "$FFMPEG_PATH.tar.xz" -C "$IPTV_PATH" && rm -rf "$FFMPEG_PATH.tar.xz"
+        [ ! -e "$FFMPEG_PATH.tar.xz" ] && echo -e "$error ffmpeg压缩包 解压失败 !" && exit 1
         echo -e "$info ffmpeg 安装完成..."
     else
         echo -e "$info ffmpeg 已安装..."
@@ -331,7 +330,7 @@ then
   ${green}9.$plain 查看日志
 
  $tip 输入: tv 打开此面板" && echo
-    echo && read -p "请输入数字 [1-15]：" menu_num
+    echo && read -p "请输入数字 [1-9]：" menu_num
     case "$menu_num" in
         1) Install
         ;;
