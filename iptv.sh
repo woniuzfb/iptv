@@ -265,7 +265,8 @@ See LICENSE
     -c  m3u8里包含的段数目(默认：5)
     -a  音频编码(默认：aac)
     -v  视频编码(默认：libx264)
-    -b  输出视频的比特率 (多种比特率用逗号分隔)(默认：15,20)
+    -b  输出视频的比特率 (多种比特率用逗号分隔)(默认：128,256)
+        同时可以指定输出的分辨率(比如：-b 128-600x400,256-1280x720)
     -p  m3u8名称(前缀)(默认：随机)
     -S  段所在子目录名称(默认：不使用子目录)
     -t  段名称(前缀)(默认：跟m3u8名称相同)
@@ -284,7 +285,7 @@ See LICENSE
         (默认：-preset superfast -pix_fmt yuv420p -profile:v main)
 
 举例:
-    tv -i http://xxx.com/xxx.ts -s 5 -o hbo -c 10 -b 28,30 -p hbo1
+    tv -i http://xxx.com/xxx.ts -s 5 -o hbo -c 10 -b 128,256 -p hbo1
 
 EOM
 
@@ -386,7 +387,7 @@ else
             output_dir_name=${output_dir_name:-"$(RandOutputDirName)"}
             output_dir_root="$LIVE_ROOT/$output_dir_name"
             seg_count=${seg_count:-"5"}
-            bitrates=${bitrates:-"15,20"}
+            bitrates=${bitrates:-"128,256"}
             export AUDIO_CODEC=${audio_codec:-"aac"}
             export VIDEO_CODEC=${video_codec:-"libx264"}
             playlist_name=${playlist_name:-"$(RandPlaylistName)"}
@@ -401,7 +402,9 @@ else
             exec "$CREATOR_FILE" -l -i "$stream_link" -s "$seg_length" \
                 -o "$output_dir_root" -c "$seg_count" -b "$bitrates" \
                 -p "$playlist_name" -t "$seg_name" -K "$key_name" -q "$quality" \
-                "$const" "$encrypt"
+                "$const" "$encrypt" &
+            PID=$!
+            echo $PID
         fi
     fi
 fi
