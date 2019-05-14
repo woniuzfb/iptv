@@ -793,7 +793,7 @@ DelChannel()
     ListChannels
     InputChannelPid
     StopChannel
-    $JQ_FILE '. -= [.channels[]|select(.pid=='"$chnl_pid"')]' "$CHANNELS_FILE" > channels.tmp
+    $JQ_FILE '.channels -= [.channels[]|select(.pid=='"$chnl_pid"')]' "$CHANNELS_FILE" > channels.tmp
     mv channels.tmp "$CHANNELS_FILE"
     echo -e "$info 频道删除成功 !" && echo
 }
