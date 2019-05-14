@@ -791,7 +791,7 @@ DelChannel()
 {
     ListChannels
     InputChannelPid
-    $JQ_FILE '.channels[]|select(.pid=='"$chnl_pid"')' "$CHANNELS_FILE"
+    output_dir_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').output_dir_name' "$CHANNELS_FILE")
     StopChannel
     $JQ_FILE '.channels -= [.channels[]|select(.pid=='"$chnl_pid"')]' "$CHANNELS_FILE" > channels.tmp
     mv channels.tmp "$CHANNELS_FILE"
@@ -801,7 +801,7 @@ DelChannel()
     [ -z "$delete_yn" ] && delete_yn="y"
     if [[ "$delete_yn" == [Yy] ]]
     then
-
+        rm -rf "$LIVE_ROOT/${output_dir_name:-notfound}"
         echo && echo -e "$info 频道目录删除成功 !" && echo
     else
         echo "退出..." && exit 0
