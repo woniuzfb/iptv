@@ -224,14 +224,116 @@ GetDefault()
     d_output_flags=${d_output_flags//\'/}
 }
 
-ListChannels()
+GetChannelsInfo()
 {
     [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+    channels_count=$($JQ_FILE -r '. | length' $CHANNELS_FILE)
+    [ "$channels_count" == 0 ] && echo -e "$error 没有发现 频道，请检查 !" && exit 1
+    IFS=" " read -a chnls_pid <<< "$($JQ_FILE -r '[.[].pid] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -a chnls_status <<< "$($JQ_FILE -r '[.[].status] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -a chnls_name <<< "$($JQ_FILE -r '[.[].channel_name] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -a chnls_bitrates <<< "$($JQ_FILE -r '[.[].bitrates] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -a chnls_output_dir_name <<< "$($JQ_FILE -r '[.[].output_dir_name] | @sh' $CHANNELS_FILE)"
 }
 
-ViewChannel()
+ListChannels()
 {
-    [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+    GetChannelsInfo
+    chnls_list=""
+    for((index = 0; index < "$channels_count"; index++)); do
+        if [ "${chnls_status[index]}" == "on" ]
+        then
+            chnls_status_text=$green"开启"$plain
+        else
+            chnls_status_text=$red"关闭"$plain
+        fi
+        chnls_output_dir="$LIVE_ROOT/${chnls_output_dir_name[index]}"
+        chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid[index]}$plain\t 状态: $chnls_status_text\t 频道名称: $green${chnls_name[index]}$plain\t 比特率: $green${chnls_bitrates[index]}$plain\t 目录: $green${chnls_output_dir}$plain  \n"
+    done
+    echo && echo -e "=== 频道总数 $green $channels_count $plain"
+    echo -e "$chnls_list\n"
+}
+
+GetChannelInfo(){
+    chnl_info_array=()
+    while IFS='' read -r chnl_line; do
+        chnl_info_array+=("$chnl_line");
+    done < <($JQ_FILE -r '.channels[] | select(.pid=='"$chnl_pid"') | .[] | @sh' $CHANNELS_FILE)
+    read chnl_pid chnl_status chnl_name chnl_stream_link chnl_seg_length chnl_output_dir_name chnl_seg_count chnl_bitrates chnl_playlist_name chnl_seg_name chnl_key_name chnl_quality chnl_const chnl_encrypt <<< "${chnl_info_array[@]}"
+    chnl_pid=${chnl_pid//\'/}
+    chnl_status=${chnl_status//\'/}
+    if [ "$chnl_status" == "on" ]; then
+        chnl_status_text=$green"开启"$plain
+    else
+        chnl_status_text=$red"关闭"$plain
+    fi
+    chnl_stream_link=${chnl_stream_link//\'/}
+    chnl_seg_length=${chnl_seg_length//\'/}
+    chnl_seg_length_text=$chnl_seg_length"s"
+    chnl_output_dir_name=${chnl_output_dir_name//\'/}
+    chnl_output_dir="$LIVE_ROOT/$chnl_output_dir_name"
+    chnl_seg_count=${chnl_seg_count//\'/}
+    chnl_bitrates=${chnl_bitrates//\'/}
+    chnl_playlist_name=${chnl_playlist_name//\'/}
+    chnl_seg_name=${chnl_seg_name//\'/}
+    chnl_key_name=${chnl_key_name//\'/}
+    chnl_quality=${chnl_quality//\'/}
+    chnl_const=${chnl_const//\'/}
+    if [ "$chnl_const" == "-C" ]; then
+        chnl_const_text=$green"是"$plain
+    else
+        chnl_const_text=$red"否"$plain
+    fi
+    chnl_encrypt=${chnl_encrypt//\'/}
+    if [ "$chnl_encrypt" == "-e" ]; then
+        chnl_encrypt_text=$green"是"$plain
+    else
+        chnl_encrypt_text=$red"否"$plain
+    fi
+}
+
+ViewChannelInfo()
+{
+    clear && echo "===================================================" && echo
+    echo -e " 频道 [$chnl_name] 的配置信息：" && echo
+    echo -e " 进程ID\t    : $green$chnl_pid$plain"
+    echo -e " 状态\t    : $chnl_status_text"
+    echo -e " 视频源\t    : $green$chnl_stream_link$plain"
+    echo -e " 段时长\t    : $green$chnl_seg_length_text$plain"
+    echo -e " 输出目录\t    : $green$chnl_output_dir$plain"
+    echo -e " m3u8包含段数目 : $green$chnl_seg_count$plain"
+    echo -e " 比特率\t    : $green$chnl_bitrates$plain"
+    echo -e " m3u8名称\t    : $red$chnl_playlist_name$plain"
+    echo -e " 段名称\t    : $red$chnl_seg_name$plain"
+    echo -e " key名称\t    : $green$chnl_key_name$plain"
+    echo -e " 视频质量\t    : $green$chnl_quality$plain"
+    echo -e " 固定码率\t    : $green$chnl_const_text$plain"
+    echo -e " 加密\t    : $green$chnl_encrypt_text$plain"
+    echo
+}
+
+ViewChannelMenu(){
+    ListChannels
+    echo -e "请输入要查看的频道进程ID "
+    while read -p "(默认: 取消):" chnl_pid; do
+        case "$chnl_pid" in
+            ("")
+                echo "已取消..." && exit 1
+            ;;
+            (*[!0-9]*)
+                echo -e "$error 请输入正确的数字！"
+            ;;
+            (*)
+                if [ -n "$($JQ_FILE '.[] | select(.pid=='"$chnl_pid"')' $CHANNELS_FILE)" ]; then
+                    break;
+                else
+                    echo -e "$error 请输入正确的进程ID！"
+                fi
+            ;;
+        esac
+    done
+    GetChannelInfo
+    ViewChannelInfo
 }
 
 AddChannel()
@@ -297,8 +399,7 @@ RandOutputDirName()
 {
     while :;do
         output_dir_name=$(RandStr)
-        str_info=$($JQ_FILE '.[]|select(.outputDirName=="'"$output_dir_name"'")' "$CHANNELS_FILE")
-        if [ -z "$str_info" ]; then
+        if [ -z "$($JQ_FILE '.[] | select(.outputDirName=='"$output_dir_name"')' $CHANNELS_FILE)" ]; then
             echo "$output_dir_name"
             break
         fi
@@ -309,8 +410,7 @@ RandPlaylistName()
 {
     while :;do
         playlist_name=$(RandStr)
-        str_info=$($JQ_FILE '.[]|select(.playListName=="'"$playlist_name"'")' "$CHANNELS_FILE")
-        if [ -z "$str_info" ]; then
+        if [ -z "$($JQ_FILE '.[] | select(.playListName=='"$playlist_name"')' $CHANNELS_FILE)" ]; then
             echo "$playlist_name"
             break
         fi
@@ -321,8 +421,7 @@ RandSegDirName()
 {
     while :;do
         seg_dir_name=$(RandStr)
-        str_info=$($JQ_FILE '.[]|select(.segDirName=="'"$seg_dir_name"'")' "$CHANNELS_FILE")
-        if [ -z "$str_info" ]; then
+        if [ -z "$($JQ_FILE '.[] | select(.segDirName=='"$seg_dir_name"')' $CHANNELS_FILE)" ]; then
             echo "$seg_dir_name"
             break
         fi
@@ -352,6 +451,7 @@ See LICENSE
     -b  输出视频的比特率 (多种比特率用逗号分隔)(默认：256,384)
         同时可以指定输出的分辨率(比如：-b 256-600x400,384-1280x720)
     -p  m3u8名称(前缀)(默认：随机)
+    -z  频道名称(默认：跟m3u8名称相同)
     -S  段所在子目录名称(默认：不使用子目录)
     -t  段名称(前缀)(默认：跟m3u8名称相同)
     -C  固定码率(CBR 而不是 AVB)(默认：是)
@@ -369,7 +469,7 @@ See LICENSE
         (默认："-preset superfast -pix_fmt yuv420p -profile:v main")
 
 举例:
-    tv -i http://xxx.com/xxx.ts -s 5 -o hbo -c 10 -b 256,384 -p hbo1
+    tv -i http://xxx.com/xxx.ts -s 5 -o hbo -c 10 -b 256,384 -p hbo1 -z 'hbo直播'
 
 EOM
 
@@ -379,7 +479,7 @@ exit
 
 use_menu=1
 
-while getopts "i:s:o:c:a:v:b:p:S:t:q:K:h:H:m:n:Ce" flag
+while getopts "i:s:o:c:a:v:b:p:z:S:t:q:K:h:H:m:n:Ce" flag
 do
     use_menu=0
         case "$flag" in
@@ -391,6 +491,7 @@ do
         v) video_codec="$OPTARG";;
         b) bitrates="$OPTARG";;
         p) playlist_name="$OPTARG";;
+        z) channel_name="$OPTARG";;
         S) seg_dir_name="$OPTARG";;
         t) seg_name="$OPTARG";;
         C) const="-C";;
@@ -475,6 +576,7 @@ else
             export AUDIO_CODEC=${audio_codec:-"$d_audio_codec"}
             export VIDEO_CODEC=${video_codec:-"$d_video_codec"}
             playlist_name=${playlist_name:-"$(RandPlaylistName)"}
+            channel_name=${channel_name:-"$playlist_name"}
             export SEGMENT_DIRECTORY=${seg_dir_name:-""}
             seg_name=${seg_name:-"$playlist_name"}
             const=${const:-""}
@@ -492,7 +594,8 @@ else
             $JQ_FILE '.channels += [
                 {
                     "pid":"'"$pid"'",
-                    "on":"1",
+                    "status":"on",
+                    "channel_name":"'"$channel_name"'",
                     "stream_link":"'"$stream_link"'",
                     "seg_length":"'"$seg_length"'",
                     "output_dir_name":"'"$output_dir_name"'",
