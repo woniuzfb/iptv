@@ -32,9 +32,10 @@
   - 也可以使用 shell 对话，输入 tv 打开面板
 - 管理频道
   - 输入 tv 打开面板
-- 主目录在 $HOME/iptv
+- 主目录在 /usr/local/iptv
   - channels.json [ 默认值和频道列表 ]
   - HLS-Stream-Creator 本尊
+  - FFmpeg
   - jq
   - live/ [ hls输出目录 ]
 

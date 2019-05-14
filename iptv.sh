@@ -4,7 +4,7 @@ set -euo pipefail
 
 sh_ver="0.1"
 SH_FILE="/usr/local/bin/tv"
-IPTV_ROOT="$HOME/iptv"
+IPTV_ROOT="/usr/local/iptv"
 CREATOR_FILE="$IPTV_ROOT/HLS-Stream-Creator.sh"
 JQ_FILE="$IPTV_ROOT/jq"
 CHANNELS_FILE="$IPTV_ROOT/channels.json"
@@ -230,11 +230,9 @@ GetDefault()
     then
         d_encrypt_yn="n"
         d_encrypt=""
-        d_encrypt_text="否"
     else
         d_encrypt_yn="y"
         d_encrypt="-e"
-        d_encrypt_text="是"
     fi
     d_output_flags=${default_array[10]//\'/}
 }
@@ -568,7 +566,7 @@ SetQuality()
 SetEncrypt()
 {
     echo "是否加密段[Y/n]"
-    read -p "(默认: $d_encrypt_text):" encrypt_yn
+    read -p "(默认: $d_encrypt_yn):" encrypt_yn
     [ -z "$encrypt_yn" ] && encrypt_yn=$d_encrypt_yn
     if [[ "$encrypt_yn" == [Yy] ]]
     then
@@ -717,8 +715,9 @@ EditChannel()
         StopChannel
         StartChannel
         echo && echo -e "$info 频道重启成功 !" && echo
+    else
+        echo "退出..." && exit 0
     fi
-    echo "退出..." && exit 0
 }
 
 ToggleChannel()
@@ -792,10 +791,21 @@ DelChannel()
 {
     ListChannels
     InputChannelPid
+    $JQ_FILE '.channels[]|select(.pid=='"$chnl_pid"')' "$CHANNELS_FILE"
     StopChannel
     $JQ_FILE '.channels -= [.channels[]|select(.pid=='"$chnl_pid"')]' "$CHANNELS_FILE" > channels.tmp
     mv channels.tmp "$CHANNELS_FILE"
     echo -e "$info 频道删除成功 !" && echo
+    echo "是否删除此频道目录(及所有内容)？[y/N]"
+    read -p "(默认: y):" delete_yn
+    [ -z "$delete_yn" ] && delete_yn="y"
+    if [[ "$delete_yn" == [Yy] ]]
+    then
+
+        echo && echo -e "$info 频道目录删除成功 !" && echo
+    else
+        echo "退出..." && exit 0
+    fi
 }
 
 RandStr()
