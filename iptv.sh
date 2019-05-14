@@ -272,7 +272,7 @@ GetChannelInfo(){
     chnl_seg_length=${chnl_info_array[4]//\'/}
     chnl_seg_length_text=$chnl_seg_length"s"
     chnl_output_dir_name=${chnl_info_array[5]//\'/}
-    chnl_output_dir="$LIVE_ROOT/$chnl_output_dir_name"
+    chnl_output_dir_root="$LIVE_ROOT/$chnl_output_dir_name"
     chnl_seg_count=${chnl_info_array[6]//\'/}
     chnl_bitrates=${chnl_info_array[7]//\'/}
     chnl_playlist_name=${chnl_info_array[8]//\'/}
@@ -303,7 +303,7 @@ ViewChannelInfo()
     echo -e " 状态\t    : $chnl_status_text"
     echo -e " 视频源\t    : $green$chnl_stream_link$plain"
     echo -e " 段时长\t    : $green$chnl_seg_length_text$plain"
-    echo -e " 目录\t    : $green$chnl_output_dir$plain"
+    echo -e " 目录\t    : $green$chnl_output_dir_root$plain"
     echo -e " m3u8包含段数目 : $green$chnl_seg_count$plain"
     echo -e " 比特率\t    : $green$chnl_bitrates$plain"
     echo -e " m3u8名称   : $green$chnl_playlist_name$plain"
@@ -315,9 +315,9 @@ ViewChannelInfo()
     echo
 }
 
-ViewChannelMenu(){
-    ListChannels
-    echo -e "请输入要查看的频道进程ID "
+InputChannelPid()
+{
+    echo -e "请输入频道的进程ID "
     while read -p "(默认: 取消):" chnl_pid; do
         case "$chnl_pid" in
             ("")
@@ -335,6 +335,11 @@ ViewChannelMenu(){
             ;;
         esac
     done
+}
+
+ViewChannelMenu(){
+    ListChannels
+    InputChannelPid
     GetChannelInfo
     ViewChannelInfo
 }
@@ -366,18 +371,64 @@ EditChannel()
 
 ToggleChannel()
 {
-    [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+    ListChannels
+    InputChannelPid
+    GetChannelInfo
+    if [ "$chnl_status" == "on" ] 
+    then
+        StopChannel
+    else
+        StartChannel
+    fi
+}
+
+StartChannel()
+{
+    rm -rf "${chnl_output_dir_root:-'notfound'}"/*
+    exec "$CREATOR_FILE" -l -i "$chnl_stream_link" -s "$chnl_seg_length" \
+        -o "$chnl_output_dir_root" -c "$chnl_seg_count" -b "$chnl_bitrates" \
+        -p "$chnl_playlist_name" -t "$chnl_seg_name" -K "$chnl_key_name" -q "$chnl_quality" \
+        "$chnl_const" "$chnl_encrypt" &
+    new_pid=$!
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.status)="on"' "$CHANNELS_FILE" > channels.tmp
+    mv channels.tmp "$CHANNELS_FILE"
+    echo && echo -e "$info 频道进程已开启 !" && echo
+}
+
+StopChannel()
+{
+    creator_pids=$(pgrep -P $chnl_pid)
+    for creator_pid in $creator_pids
+    do
+        ffmpeg_pids=$(pgrep -P $creator_pid)
+        for ffmpeg_pid in $ffmpeg_pids
+        do
+            kill $ffmpeg_pid || true
+        done
+        #or pkill -TERM -P $creator_pid
+    done
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"' "$CHANNELS_FILE" > channels.tmp
+    mv channels.tmp "$CHANNELS_FILE"
+    echo && echo -e "$info 频道进程已停止 !" && echo
+}
+
+RestartChannel()
+{
+    ListChannels
+    InputChannelPid
+    StopChannel
+    GetChannelInfo
+    StartChannel
 }
 
 DelChannel()
 {
-    [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
-    #pids=$(pgrep -P $pid)
-    #kill -9 $pid
-    #for cpid in $pids ; do kill -9 $cpid ; done
-    #or pkill -TERM -P $pid
-
-    #$JQ_FILE '. -= [.[]|select(.test==1)]' "$CHANNELS_FILE" > channels.tmp
+    ListChannels
+    InputChannelPid
+    StopChannel
+    $JQ_FILE '. -= [.[]|select(.pid=='"$chnl_pid"')]' "$CHANNELS_FILE" > channels.tmp
+    mv channels.tmp "$CHANNELS_FILE"
+    echo -e "$info 频道删除成功 !" && echo
 }
 
 RandStr()
