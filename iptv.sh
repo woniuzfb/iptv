@@ -8,6 +8,7 @@ IPTV_ROOT="/usr/local/iptv"
 CREATOR_FILE="$IPTV_ROOT/HLS-Stream-Creator.sh"
 JQ_FILE="$IPTV_ROOT/jq"
 CHANNELS_FILE="$IPTV_ROOT/channels.json"
+CHANNELS_TMP="$IPTV_ROOT/channels.tmp"
 LIVE_ROOT="$IPTV_ROOT/live"
 green="\033[32m"
 red="\033[31m"
@@ -167,7 +168,7 @@ cat > "$CHANNELS_FILE" << EOM
         "bitrates":"512,800",
         "audio_codec":"aac",
         "video_codec":"libx264",
-        "quality":22,
+        "quality":18,
         "const":"no",
         "encrypt":"no",
         "output_flags":"-preset superfast -pix_fmt yuv420p -profile:v main"
@@ -270,8 +271,8 @@ ListChannels()
             if [ "$creator_pids" == "" ] 
             then
                 chnls_status_text=$red"关闭"$plain
-                $JQ_FILE '(.channels[]|select(.pid=='"${chnls_pid[index]//\'/}"')|.status)="off"' "$CHANNELS_FILE" > channels.tmp
-                mv channels.tmp "$CHANNELS_FILE"
+                $JQ_FILE '(.channels[]|select(.pid=='"${chnls_pid[index]//\'/}"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+                mv "$CHANNELS_TMP" "$CHANNELS_FILE"
             else
                 chnls_status_text=$green"开启"$plain
             fi
@@ -531,7 +532,7 @@ SetSegName()
 SetConst()
 {
     echo "是否使用固定码率[Y/n]"
-    read -p "(默认: d_const_yn):" const_yn
+    read -p "(默认: $d_const_yn):" const_yn
     [ -z "$const_yn" ] && const_yn=$d_const_yn
     if [[ "$const_yn" == [Yy] ]]
     then
@@ -678,9 +679,9 @@ AddChannel()
             "seg_dir_name":"'"$SEGMENT_DIRECTORY"'",
             "output_flags":"'"$FFMPEG_FLAGS"'"
         }
-    ]' "$CHANNELS_FILE" > channels.tmp
+    ]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
 
-    mv channels.tmp "$CHANNELS_FILE"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
     echo && echo -e "$info 频道添加成功 !" && echo
 }
 
@@ -712,8 +713,8 @@ EditChannel()
     fi
     SetInputFlags
     SetOutputFlags
-    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.stream_link)='"$stream_link"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_length)='"$seg_length"'|(.channels[]|select(.pid=='"$chnl_pid"')|.out_put_dir_name)='"$out_put_dir_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_count)='"$seg_count"'|(.channels[]|select(.pid=='"$chnl_pid"')|.video_codec)='"$video_codec"'|(.channels[]|select(.pid=='"$chnl_pid"')|.audio_codec)='"$audio_codec"'|(.channels[]|select(.pid=='"$chnl_pid"')|.bitrates)='"$bitrates"'|(.channels[]|select(.pid=='"$chnl_pid"')|.playlist_name)='"$playlist_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.channel_name)='"$channel_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_dir_name)='"$seg_dir_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_name)='"$seg_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.const)='"$const"'|(.channels[]|select(.pid=='"$chnl_pid"')|.quality)='"$quality"'|(.channels[]|select(.pid=='"$chnl_pid"')|.encrypt)='"$encrypt"'|(.channels[]|select(.pid=='"$chnl_pid"')|.key_name)='"$key_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.input_flags)='"$input_flags"'|(.channels[]|select(.pid=='"$chnl_pid"')|.output_flags)='"$output_flags"'' "$MUDB_FILE" > mudb.tmp
-    mv mudb.tmp "$MUDB_FILE"
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.stream_link)='"$stream_link"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_length)='"$seg_length"'|(.channels[]|select(.pid=='"$chnl_pid"')|.out_put_dir_name)='"$out_put_dir_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_count)='"$seg_count"'|(.channels[]|select(.pid=='"$chnl_pid"')|.video_codec)='"$video_codec"'|(.channels[]|select(.pid=='"$chnl_pid"')|.audio_codec)='"$audio_codec"'|(.channels[]|select(.pid=='"$chnl_pid"')|.bitrates)='"$bitrates"'|(.channels[]|select(.pid=='"$chnl_pid"')|.playlist_name)='"$playlist_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.channel_name)='"$channel_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_dir_name)='"$seg_dir_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_name)='"$seg_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.const)='"$const"'|(.channels[]|select(.pid=='"$chnl_pid"')|.quality)='"$quality"'|(.channels[]|select(.pid=='"$chnl_pid"')|.encrypt)='"$encrypt"'|(.channels[]|select(.pid=='"$chnl_pid"')|.key_name)='"$key_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.input_flags)='"$input_flags"'|(.channels[]|select(.pid=='"$chnl_pid"')|.output_flags)='"$output_flags"'' "$MUDB_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$MUDB_FILE"
     echo && echo -e "$info 频道修改成功 !" && echo
     echo "是否重启此频道？[y/N]"
     read -p "(默认: y):" restart_yn
@@ -763,8 +764,8 @@ StartChannel()
         -p "$chnl_playlist_name" -t "$chnl_seg_name" -K "$chnl_key_name" -q "$chnl_quality" \
         "$chnl_const" "$chnl_encrypt" &
     new_pid=$!
-    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.status)="on"' "$CHANNELS_FILE" > channels.tmp
-    mv channels.tmp "$CHANNELS_FILE"
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.status)="on"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
     echo && echo -e "$info 频道进程已开启 !" && echo
 }
 
@@ -780,8 +781,8 @@ StopChannel()
         done
         #or pkill -TERM -P $creator_pid
     done
-    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"' "$CHANNELS_FILE" > channels.tmp
-    mv channels.tmp "$CHANNELS_FILE"
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
     echo && echo -e "$info 频道进程已停止 !" && echo
 }
 
@@ -801,8 +802,8 @@ DelChannel()
     InputChannelPid
     StopChannel
     output_dir_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').output_dir_name' "$CHANNELS_FILE")
-    $JQ_FILE '.channels -= [.channels[]|select(.pid=='"$chnl_pid"')]' "$CHANNELS_FILE" > channels.tmp
-    mv channels.tmp "$CHANNELS_FILE"
+    $JQ_FILE '.channels -= [.channels[]|select(.pid=='"$chnl_pid"')]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
     echo -e "$info 频道删除成功 !" && echo
     echo "是否删除此频道目录(及所有内容)？[y/N]"
     read -p "(默认: y):" delete_yn
@@ -898,7 +899,7 @@ See LICENSE
     -S  段所在子目录名称(默认：不使用子目录)
     -t  段名称(前缀)(默认：跟m3u8名称相同)
     -C  固定码率(CBR 而不是 AVB)(默认：否)
-    -q  视频质量(改变 CRF)(默认：22)
+    -q  视频质量(改变 CRF)(默认：18)
     -e  加密段(默认：不加密)
     -K  Key名称(默认：跟m3u8名称相同)
 
@@ -1057,9 +1058,9 @@ else
                     "seg_dir_name":"'"$SEGMENT_DIRECTORY"'",
                     "output_flags":"'"$FFMPEG_FLAGS"'"
                 }
-            ]' "$CHANNELS_FILE" > channels.tmp
+            ]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
 
-            mv channels.tmp "$CHANNELS_FILE"
+            mv "$CHANNELS_TMP" "$CHANNELS_FILE"
 
             echo -e "$info 添加频道成功..." && echo
         fi
