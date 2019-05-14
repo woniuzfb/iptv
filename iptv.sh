@@ -169,6 +169,7 @@ cat > "$CHANNELS_FILE" << EOM
     "default":
     {
         "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536",
+        "seg_dir_name":"",
         "seg_length":6,
         "seg_count":5,
         "bitrates":"256,384",
@@ -176,6 +177,7 @@ cat > "$CHANNELS_FILE" << EOM
         "video_codec":"libx264",
         "quality":22,
         "const":"-C",
+        "encrypt":"no",
         "output_flags":"-preset superfast -pix_fmt yuv420p -profile:v main"
     },
     "channels":[]
@@ -212,18 +214,37 @@ Update()
 GetDefault()
 {
     default_array=()
-    while IFS='' read -r default_line; do
+    while IFS='' read -r default_line
+    do
         default_array+=("$default_line");
     done < <($JQ_FILE -r '.default[] | @sh' "$CHANNELS_FILE")
     d_input_flags=${default_array[0]//\'/}
-    d_seg_length=${default_array[1]//\'/}
-    d_seg_count=${default_array[2]//\'/}
-    d_bitrates=${default_array[3]//\'/}
-    d_audio_codec=${default_array[4]//\'/}
-    d_video_codec=${default_array[5]//\'/}
-    d_quality=${default_array[6]//\'/}
-    d_const=${default_array[7]//\'/}
-    d_output_flags=${default_array[8]//\'/}
+    d_seg_dir_name=${default_array[1]//\'/}
+    if [ "$d_seg_dir_name" == "" ] 
+    then
+        d_seg_dir_name_text="不使用"
+    else
+        d_seg_dir_name_text=$d_seg_dir_name
+    fi
+    d_seg_length=${default_array[2]//\'/}
+    d_seg_count=${default_array[3]//\'/}
+    d_bitrates=${default_array[4]//\'/}
+    d_audio_codec=${default_array[5]//\'/}
+    d_video_codec=${default_array[6]//\'/}
+    d_quality=${default_array[7]//\'/}
+    d_const=${default_array[8]//\'/}
+    d_encrypt_yn=${default_array[9]//\'/}
+    if [ "$d_encrypt_yn" == "no" ] 
+    then
+        d_encrypt_yn="n"
+        d_encrypt=""
+        d_encrypt_text="否"
+    else
+        d_encrypt_yn="y"
+        d_encrypt="-e"
+        d_encrypt_text="是"
+    fi
+    d_output_flags=${default_array[10]//\'/}
 }
 
 GetChannelsInfo()
@@ -261,7 +282,8 @@ ListChannels()
 
 GetChannelInfo(){
     chnl_info_array=()
-    while IFS='' read -r chnl_line; do
+    while IFS='' read -r chnl_line
+    do
         chnl_info_array+=("$chnl_line");
     done < <($JQ_FILE -r '.channels[] | select(.pid=='"$chnl_pid"') | .[] | @sh' $CHANNELS_FILE)
     chnl_pid=${chnl_info_array[0]//\'/}
@@ -326,22 +348,23 @@ ViewChannelInfo()
     echo -e " 比特率\t    : $green$chnl_bitrates$plain"
     echo -e " m3u8名称   : $green$chnl_playlist_name$plain"
     echo -e " 段名称\t    : $green$chnl_seg_name$plain"
-    echo -e " 段子目录\t   : $green$chnl_seg_dir_name_text$plain"
+    echo -e " 段子目录   : $green$chnl_seg_dir_name_text$plain"
     echo -e " 视频质量   : $green$chnl_quality$plain"
     echo -e " 视频编码   : $chnl_video_codec"
     echo -e " 音频编码   : $chnl_audio_codec"
     echo -e " 固定码率   : $chnl_const_text"
     echo -e " key名称    : $chnl_key_name_text"
     echo -e " 加密\t    : $chnl_encrypt_text"
-    echo -e " input flags\t    : $chnl_input_flags"
-    echo -e " output flags\t    : $chnl_output_flags"
+    echo -e " input flags    : $chnl_input_flags"
+    echo -e " output flags   : $chnl_output_flags"
     echo
 }
 
 InputChannelPid()
 {
     echo -e "请输入频道的进程ID "
-    while read -p "(默认: 取消):" chnl_pid; do
+    while read -p "(默认: 取消):" chnl_pid
+    do
         case "$chnl_pid" in
             ("")
                 echo "已取消..." && exit 1
@@ -368,29 +391,334 @@ ViewChannelMenu(){
     ViewChannelInfo
 }
 
+SetStreamLink()
+{
+    echo "请输入直播源(只支持mpegts)"
+    read -p "(默认: 取消):" stream_link
+    [ -z "$stream_link" ] && echo "已取消..." && exit 1
+    echo && echo -e "	直播源: $green $stream_link $plain" && echo
+}
+
+SetSegLength()
+{
+    echo -e "请输入段的时长(单位：s)"
+    while read -p "(默认: $d_seg_length):" seg_length
+    do
+        case "$seg_length" in
+            ("")
+                break
+            ;;
+            (*[!0-9]*)
+                echo -e "$error 请输入正确的数字(大于0) "
+            ;;
+            (*)
+                if [ "$seg_length" -ge 1 ]; then
+                    break
+                else
+                    echo -e "$error 请输入正确的数字(大于0)"
+                fi
+            ;;
+        esac
+    done
+    [ -z "$seg_length" ] && seg_length=$d_seg_length
+    echo && echo -e "	段时长: $green ${seg_length}s $plain" && echo
+}
+
+SetOutputDirName()
+{
+    echo "请输入频道输出目录名称"
+    echo -e "$tip 根目录默认在$LIVE_ROOT"
+    read -p "(默认: 随机名称):" output_dir_name
+    [ -z "$output_dir_name" ] && output_dir_name=$(RandOutputDirName)
+    output_dir_root="$LIVE_ROOT/$output_dir_name"
+    echo && echo -e "	目录名称: $green $output_dir_name $plain" && echo
+}
+
+SetSegCount()
+{
+    echo -e "请输入分割段的数目"
+    echo -e "$tip 如果填0就是无限"
+    while read -p "(默认: $d_seg_count):" seg_count
+    do
+        case "$seg_count" in
+            ("")
+                break
+            ;;
+            (*[!0-9]*)
+                echo -e "$error 请输入正确的数字(大于0) "
+            ;;
+            (*)
+                if [ "$seg_count" -ge 0 ]; then
+                    break
+                else
+                    echo -e "$error 请输入正确的数字(大于0)"
+                fi
+            ;;
+        esac
+    done
+    [ -z "$seg_count" ] && seg_count=$d_seg_count
+    echo && echo -e "	段数目: $green $seg_count $plain" && echo
+}
+
+SetVideoCodec()
+{
+    echo "请输入视频编码"
+    read -p "(默认: libx264):" video_codec
+    [ -z "$video_codec" ] && video_codec=$d_video_codec
+    echo && echo -e "	视频编码: $green $video_codec $plain" && echo
+}
+
+SetAudioCodec()
+{
+    echo "请输入音频编码"
+    read -p "(默认: aac):" audio_codec
+    [ -z "$audio_codec" ] && audio_codec=$d_audio_codec
+    echo && echo -e "	音频编码: $green $audio_codec $plain" && echo
+}
+
+SetBitrates()
+{
+    echo "请输入比特率"
+    read -p "(默认: $d_bitrates):" bitrates
+    [ -z "$bitrates" ] && bitrates=$d_bitrates
+    echo && echo -e "	比特率: $green $bitrates $plain" && echo
+}
+
+SetPlaylistName()
+{
+    echo "请输入m3u8名称(前缀)"
+    read -p "(默认: 随机名称):" playlist_name
+    [ -z "$playlist_name" ] && playlist_name=$(RandPlaylistName)
+    echo && echo -e "	m3u8名称: $green $playlist_name $plain" && echo
+}
+
+SetChannelName()
+{
+    echo "请输入频道名称(可以是中文)"
+    read -p "(默认: 跟m3u8名称相同):" channel_name
+    [ -z "$channel_name" ] && channel_name=$playlist_name
+    echo && echo -e "	频道名称: $green $channel_name $plain" && echo
+}
+
+SetSegDirName()
+{
+    echo "请输入段所在子目录名称"
+    read -p "(默认: $d_seg_dir_name_text):" seg_dir_name
+    [ -z "$seg_dir_name" ] && seg_dir_name=$d_seg_dir_name
+    if [ "$seg_dir_name" == "" ] 
+    then
+        seg_dir_name_text="不使用"
+    else
+        seg_dir_name_text=$seg_dir_name
+    fi
+    echo && echo -e "	段子目录名: $green $seg_dir_name_text $plain" && echo
+}
+
+SetSegName()
+{
+    echo "请输入段名称"
+    read -p "(默认: 跟m3u8名称相同):" seg_name
+    [ -z "$seg_name" ] && seg_name=$playlist_name
+    echo && echo -e "	段名称: $green $seg_name $plain" && echo 
+}
+
+SetConst()
+{
+    echo "是否使用固定码率[y/N]"
+    read -p "(默认: 是):" const_yn
+    [ -z "$const_yn" ] && const_yn="y"
+    if [[ "$const_yn" == [Yy] ]]
+    then
+        const="-C"
+        const_text="是"
+    else
+        const=""
+        const_text="否"
+    fi
+    echo && echo -e "	固定码率: $green $const_text $plain" && echo 
+}
+
+SetQuality()
+{
+    echo -e "请输入输出视频质量"
+    echo -e "$tip 改变CRF，数字越大越质量越差"
+    while read -p "(默认: $d_quality):" quality
+    do
+        case "$quality" in
+            ("")
+                break
+            ;;
+            (*[!0-9]*)
+                echo -e "$error 请输入正确的数字(大于1,小于50) "
+            ;;
+            (*)
+                if [ "$quality" -ge 1 ] && [ "$quality" -le 50 ]
+                then
+                    break
+                else
+                    echo -e "$error 请输入正确的数字(大于1,小于50)"
+                fi
+            ;;
+        esac
+    done
+    [ -z "$quality" ] && quality=$d_quality
+    echo && echo -e "	视频质量(CRF): $green $quality $plain" && echo
+}
+
+SetEncrypt()
+{
+    echo "是否加密段[Y/n]"
+    read -p "(默认: $d_encrypt_text):" encrypt_yn
+    [ -z "$encrypt_yn" ] && encrypt_yn=$d_encrypt_yn
+    if [[ "$encrypt_yn" == [Yy] ]]
+    then
+        encrypt="-e"
+        encrypt_text="是"
+    else
+        encrypt=""
+        encrypt_text="否"
+    fi
+    echo && echo -e "	加密段: $green $encrypt_text $plain" && echo 
+}
+
+SetKeyName()
+{
+    echo "请输入key名称"
+    read -p "(默认: 跟m3u8名称相同):" key_name
+    [ -z "$key_name" ] && key_name=$playlist_name
+    echo && echo -e "	key名称: $green $key_name $plain" && echo 
+}
+
+SetInputFlags()
+{
+    echo "请输入input flags"
+    echo -e "$tip 需用引号括起来"
+    read -p "(默认: 跟配置文件相同):" input_flags
+    [ -z "$input_flags" ] && input_flags=$d_input_flags
+    echo && echo -e "	input flags: $green $input_flags $plain" && echo 
+}
+
+SetOutputFlags()
+{
+    echo "请输入output flags"
+    echo -e "$tip 需用引号括起来"
+    read -p "(默认: 跟配置文件相同):" output_flags
+    [ -z "$output_flags" ] && output_flags=$d_output_flags
+    echo && echo -e "	output flags: $green $output_flags $plain" && echo 
+}
+
 AddChannel()
 {
     [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+    GetDefault
     SetStreamLink
     SetSegLength
     SetOutputDirName
     SetSegCount
-    SetAudioCodec
     SetVideoCodec
+    SetAudioCodec
     SetBitrates
     SetPlaylistName
+    SetChannelName
+    SetSegDirName
     SetSegName
     SetConst
     SetQuality
     SetEncrypt
-    SetKeyName
+    if [ "$encrypt" == "-e" ] 
+    then
+        SetKeyName
+    fi
     SetInputFlags
     SetOutputFlags
+
+    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+    FFMPEG="$FFMPEG_ROOT/ffmpeg"
+    export FFMPEG
+    FFMPEG_INPUT_FLAGS=${input_flags//\'/}
+    AUDIO_CODEC=$audio_codec
+    VIDEO_CODEC=$video_codec
+    SEGMENT_DIRECTORY=$seg_dir_name
+    FFMPEG_FLAGS=${output_flags//\'/}
+    export FFMPEG_INPUT_FLAGS
+    export AUDIO_CODEC
+    export VIDEO_CODEC
+    export SEGMENT_DIRECTORY
+    export FFMPEG_FLAGS
+    exec "$CREATOR_FILE" -l -i "$stream_link" -s "$seg_length" \
+        -o "$output_dir_root" -c "$seg_count" -b "$bitrates" \
+        -p "$playlist_name" -t "$seg_name" -K "$key_name" -q "$quality" \
+        "$const" "$encrypt" &
+    pid=$!
+    $JQ_FILE '.channels += [
+        {
+            "pid":'"$pid"',
+            "status":"on",
+            "channel_name":"'"$channel_name"'",
+            "stream_link":"'"$stream_link"'",
+            "seg_length":'"$seg_length"',
+            "output_dir_name":"'"$output_dir_name"'",
+            "seg_count":'"$seg_count"',
+            "bitrates":"'"$bitrates"'",
+            "playlist_name":"'"$playlist_name"'",
+            "seg_name":"'"$seg_name"'",
+            "key_name":"'"$key_name"'",
+            "quality":'"$quality"',
+            "const":"'"$const"'",
+            "encrypt":"'"$encrypt"'",
+            "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
+            "audio_codec":"'"$AUDIO_CODEC"'",
+            "video_codec":"'"$VIDEO_CODEC"'",
+            "seg_dir_name":"'"$SEGMENT_DIRECTORY"'",
+            "output_flags":"'"$FFMPEG_FLAGS"'"
+        }
+    ]' "$CHANNELS_FILE" > channels.tmp
+
+    mv channels.tmp "$CHANNELS_FILE"
+    echo && echo -e "$info 频道添加成功 !" && echo
 }
 
 EditChannel()
 {
-    [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+    ListChannels
+    InputChannelPid
+    GetChannelInfo
+    GetDefault
+    SetStreamLink
+    SetSegLength
+    SetOutputDirName
+    SetSegCount
+    SetVideoCodec
+    SetAudioCodec
+    SetBitrates
+    SetPlaylistName
+    SetChannelName
+    SetSegDirName
+    SetSegName
+    SetConst
+    SetQuality
+    SetEncrypt
+    if [ "$encrypt" == "-e" ] 
+    then
+        SetKeyName
+    else
+        key_name=$chnl_key_name
+    fi
+    SetInputFlags
+    SetOutputFlags
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.stream_link)='"$stream_link"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_length)='"$seg_length"'|(.channels[]|select(.pid=='"$chnl_pid"')|.out_put_dir_name)='"$out_put_dir_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_count)='"$seg_count"'|(.channels[]|select(.pid=='"$chnl_pid"')|.video_codec)='"$video_codec"'|(.channels[]|select(.pid=='"$chnl_pid"')|.audio_codec)='"$audio_codec"'|(.channels[]|select(.pid=='"$chnl_pid"')|.bitrates)='"$bitrates"'|(.channels[]|select(.pid=='"$chnl_pid"')|.playlist_name)='"$playlist_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.channel_name)='"$channel_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_dir_name)='"$seg_dir_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_name)='"$seg_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.const)='"$const"'|(.channels[]|select(.pid=='"$chnl_pid"')|.quality)='"$quality"'|(.channels[]|select(.pid=='"$chnl_pid"')|.encrypt)='"$encrypt"'|(.channels[]|select(.pid=='"$chnl_pid"')|.key_name)='"$key_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.input_flags)='"$input_flags"'|(.channels[]|select(.pid=='"$chnl_pid"')|.output_flags)='"$output_flags"'' "$MUDB_FILE" > mudb.tmp
+    mv mudb.tmp "$MUDB_FILE"
+    echo && echo -e "$info 频道修改成功 !" && echo
+    echo "是否重启此频道？[y/N]"
+    read -p "(默认: 是):" restart_yn
+    [ -z "$restart_yn" ] && restart_yn="y"
+    if [[ "$restart_yn" == [Yy] ]] 
+    then
+        StopChannel
+        StartChannel
+        echo && echo -e "$info 频道重启成功 !" && echo
+    fi
+    echo "退出..." && exit 0
 }
 
 ToggleChannel()
@@ -412,11 +740,11 @@ StartChannel()
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
     FFMPEG="$FFMPEG_ROOT/ffmpeg"
     export FFMPEG
-    FFMPEG_INPUT_FLAGS=$chnl_input_flags
+    FFMPEG_INPUT_FLAGS=${chnl_input_flags//\'/}
     AUDIO_CODEC=$chnl_audio_codec
     VIDEO_CODEC=$chnl_video_codec
     SEGMENT_DIRECTORY=$chnl_seg_dir_name
-    FFMPEG_FLAGS=$chnl_output_flags
+    FFMPEG_FLAGS=${chnl_output_flags//\'/}
     export FFMPEG_INPUT_FLAGS
     export AUDIO_CODEC
     export VIDEO_CODEC
@@ -457,6 +785,7 @@ RestartChannel()
     StopChannel
     GetChannelInfo
     StartChannel
+    echo && echo -e "$info 频道重启成功 !" && echo
 }
 
 DelChannel()
@@ -464,7 +793,7 @@ DelChannel()
     ListChannels
     InputChannelPid
     StopChannel
-    $JQ_FILE '. -= [.[]|select(.pid=='"$chnl_pid"')]' "$CHANNELS_FILE" > channels.tmp
+    $JQ_FILE '. -= [.channels[]|select(.pid=='"$chnl_pid"')]' "$CHANNELS_FILE" > channels.tmp
     mv channels.tmp "$CHANNELS_FILE"
     echo -e "$info 频道删除成功 !" && echo
 }
@@ -479,7 +808,8 @@ F G H J K L Z X C V B N M
     str_array_size=${#str_array[*]}
     str_len=0
     rand_str=""
-    while [ $str_len -lt $str_size ]; do
+    while [ $str_len -lt $str_size ]
+    do
         str_index=$((RANDOM%str_array_size))
         rand_str="$rand_str${str_array[$str_index]}"
         str_len=$((str_len+1))
@@ -538,7 +868,7 @@ See LICENSE
 
     -i  直播源(仅支持mpegts)
     -s  段时长(秒)(默认：6)
-    -o  输出目录名称(默认：随机)
+    -o  输出目录名称(默认：随机名称)
 
     -c  m3u8里包含的段数目(默认：5)
     -a  音频编码(默认：aac)
@@ -550,7 +880,7 @@ See LICENSE
     -S  段所在子目录名称(默认：不使用子目录)
     -t  段名称(前缀)(默认：跟m3u8名称相同)
     -C  固定码率(CBR 而不是 AVB)(默认：是)
-    -q  质量(改变 CRF)(默认：22)
+    -q  视频质量(改变 CRF)(默认：22)
     -e  加密段(默认：不加密)
     -K  Key名称(默认：跟m3u8名称相同)
 
@@ -677,7 +1007,7 @@ else
             seg_name=${seg_name:-"$playlist_name"}
             const=${const:-"$d_const"}
             quality=${quality:-"$d_quality"}
-            encrypt=${encrypt:-""}
+            encrypt=${encrypt:-"$d_encrypt"}
             key_name=${key_name:-"$playlist_name"}
             export FFMPEG_FLAGS=${output_flags:-"$d_output_flags"}
 
