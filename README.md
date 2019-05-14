@@ -1,4 +1,4 @@
-# 看HBO直播
+# 看HBO直播 + 一键管理 IPTV 脚本 [mpegts => hls]
 
 - HBO中文直播 + 100多个电视台（N个高清台）
 
@@ -24,9 +24,14 @@
 
 ---
 
-## iptv.sh 勿用
+## iptv.sh 一键管理 IPTV 脚本 [mpegts => hls]
 
-- 一键管理脚本 mpegts 转 hls
+- 【自动化】HLS-Stream-Creator【手动麻烦】
+- 添加频道
+  - 可以用命令行，详见 tv -h
+  - 也可以使用 shell 对话，输入 tv 打开面板
+- 管理频道
+  - 输入 tv 打开面板
 
 ``` bash
 bash -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh)"

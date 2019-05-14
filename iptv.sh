@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -euxo pipefail
+set -euo pipefail
 
 sh_ver="0.1"
 SH_FILE="/usr/local/bin/tv"
