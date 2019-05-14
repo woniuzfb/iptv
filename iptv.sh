@@ -192,7 +192,8 @@ Uninstall()
     echo "确定要 卸载此脚本以及产生的全部文件？[Y/n]" && echo
     read -p "(默认: n):" uninstall_yn
     [ -z "$uninstall_yn" ] && uninstall_yn="n"
-    if [[ "$uninstall_yn" == [Yy] ]]; then
+    if [[ "$uninstall_yn" == [Yy] ]]
+    then
         rm -rf "$IPTV_ROOT"
         echo && echo -e "$info 卸载完成 !" && echo
     else
@@ -233,6 +234,8 @@ GetChannelsInfo()
     IFS=" " read -a chnls_pid <<< "$($JQ_FILE -r '[.channels[].pid] | @sh' $CHANNELS_FILE)"
     IFS=" " read -a chnls_status <<< "$($JQ_FILE -r '[.channels[].status] | @sh' $CHANNELS_FILE)"
     IFS=" " read -a chnls_name <<< "$($JQ_FILE -r '[.channels[].channel_name] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -a chnls_video_codec <<< "$($JQ_FILE -r '[.channels[].video_codec] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -a chnls_audio_codec <<< "$($JQ_FILE -r '[.channels[].audio_codec] | @sh' $CHANNELS_FILE)"
     IFS=" " read -a chnls_bitrates <<< "$($JQ_FILE -r '[.channels[].bitrates] | @sh' $CHANNELS_FILE)"
     IFS=" " read -a chnls_output_dir_name <<< "$($JQ_FILE -r '[.channels[].output_dir_name] | @sh' $CHANNELS_FILE)"
 }
@@ -248,8 +251,9 @@ ListChannels()
         else
             chnls_status_text=$red"关闭"$plain
         fi
+        chnls_codec="${chnls_video_codec[index]//\'/}:${chnls_audio_codec[index]//\'/}"
         chnls_output_dir="$LIVE_ROOT/${chnls_output_dir_name[index]//\'/}"
-        chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid[index]//\'/}$plain\t 状态: $chnls_status_text\t 频道名称: $green${chnls_name[index]//\'/}$plain\t 比特率: $green${chnls_bitrates[index]//\'/}$plain\t 目录: $green${chnls_output_dir}$plain  \n"
+        chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid[index]//\'/}$plain\t 状态: $chnls_status_text\t 频道名称: $green${chnls_name[index]//\'/}$plain\t 编码: $green$chnls_codec$plain\t 比特率: $green${chnls_bitrates[index]//\'/}$plain\t 目录: $green${chnls_output_dir}$plain  \n"
     done
     echo && echo -e "=== 频道总数 $green $channels_count $plain"
     echo -e "$chnls_list\n"
@@ -262,7 +266,8 @@ GetChannelInfo(){
     done < <($JQ_FILE -r '.channels[] | select(.pid=='"$chnl_pid"') | .[] | @sh' $CHANNELS_FILE)
     chnl_pid=${chnl_info_array[0]//\'/}
     chnl_status=${chnl_info_array[1]//\'/}
-    if [ "$chnl_status" == "on" ]; then
+    if [ "$chnl_status" == "on" ]
+    then
         chnl_status_text=$green"开启"$plain
     else
         chnl_status_text=$red"关闭"$plain
@@ -280,19 +285,32 @@ GetChannelInfo(){
     chnl_key_name=${chnl_info_array[10]//\'/}
     chnl_quality=${chnl_info_array[11]//\'/}
     chnl_const=${chnl_info_array[12]//\'/}
-    if [ "$chnl_const" == "-C" ]; then
+    if [ "$chnl_const" == "-C" ]
+    then
         chnl_const_text=$green"是"$plain
     else
         chnl_const_text=$red"否"$plain
     fi
     chnl_encrypt=${chnl_info_array[13]//\'/}
-    if [ "$chnl_encrypt" == "-e" ]; then
+    if [ "$chnl_encrypt" == "-e" ]
+    then
         chnl_encrypt_text=$green"是"$plain
         chnl_key_name_text=$green"$chnl_key_name"$plain
     else
         chnl_encrypt_text=$red"否"$plain
         chnl_key_name_text=$red"$chnl_key_name"$plain
     fi
+    chnl_input_flags=${chnl_info_array[14]}
+    chnl_audio_codec=${chnl_info_array[15]//\'/}
+    chnl_video_codec=${chnl_info_array[16]//\'/}
+    chnl_seg_dir_name=${chnl_info_array[17]//\'/}
+    if [ "$chnl_seg_dir_name" == "" ] 
+    then
+        chnl_seg_dir_name_text="不使用"
+    else
+        chnl_seg_dir_name_text=$chnl_seg_dir_name
+    fi
+    chnl_output_flags=${chnl_info_array[18]}
 }
 
 ViewChannelInfo()
@@ -308,10 +326,15 @@ ViewChannelInfo()
     echo -e " 比特率\t    : $green$chnl_bitrates$plain"
     echo -e " m3u8名称   : $green$chnl_playlist_name$plain"
     echo -e " 段名称\t    : $green$chnl_seg_name$plain"
+    echo -e " 段子目录\t   : $green$chnl_seg_dir_name_text$plain"
     echo -e " 视频质量   : $green$chnl_quality$plain"
+    echo -e " 视频编码   : $chnl_video_codec"
+    echo -e " 音频编码   : $chnl_audio_codec"
     echo -e " 固定码率   : $chnl_const_text"
     echo -e " key名称    : $chnl_key_name_text"
     echo -e " 加密\t    : $chnl_encrypt_text"
+    echo -e " input flags\t    : $chnl_input_flags"
+    echo -e " output flags\t    : $chnl_output_flags"
     echo
 }
 
@@ -327,7 +350,8 @@ InputChannelPid()
                 echo -e "$error 请输入正确的数字！"
             ;;
             (*)
-                if [ -n "$($JQ_FILE '.channels[] | select(.pid=='"$chnl_pid"')' $CHANNELS_FILE)" ]; then
+                if [ -n "$($JQ_FILE '.channels[] | select(.pid=='"$chnl_pid"')' $CHANNELS_FILE)" ]
+                then
                     break;
                 else
                     echo -e "$error 请输入正确的进程ID！"
@@ -384,6 +408,20 @@ ToggleChannel()
 
 StartChannel()
 {
+    GetDefault
+    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+    FFMPEG="$FFMPEG_ROOT/ffmpeg"
+    export FFMPEG
+    FFMPEG_INPUT_FLAGS=$chnl_input_flags
+    AUDIO_CODEC=$chnl_audio_codec
+    VIDEO_CODEC=$chnl_video_codec
+    SEGMENT_DIRECTORY=$chnl_seg_dir_name
+    FFMPEG_FLAGS=$chnl_output_flags
+    export FFMPEG_INPUT_FLAGS
+    export AUDIO_CODEC
+    export VIDEO_CODEC
+    export SEGMENT_DIRECTORY
+    export FFMPEG_FLAGS
     rm -rf "${chnl_output_dir_root:-'notfound'}"/*
     exec "$CREATOR_FILE" -l -i "$chnl_stream_link" -s "$chnl_seg_length" \
         -o "$chnl_output_dir_root" -c "$chnl_seg_count" -b "$chnl_bitrates" \
@@ -400,10 +438,10 @@ StopChannel()
     creator_pids=$(pgrep -P $chnl_pid)
     for creator_pid in $creator_pids
     do
-        ffmpeg_pids=$(pgrep -P $creator_pid)
+        ffmpeg_pids=$(pgrep -P $creator_pid || true)
         for ffmpeg_pid in $ffmpeg_pids
         do
-            kill $ffmpeg_pid || true
+            kill -9 $ffmpeg_pid || true
         done
         #or pkill -TERM -P $creator_pid
     done
@@ -453,7 +491,8 @@ RandOutputDirName()
 {
     while :;do
         output_dir_name=$(RandStr)
-        if [ -z "$($JQ_FILE '.channels[] | select(.outputDirName=='"$output_dir_name"')' $CHANNELS_FILE)" ]; then
+        if [ -z "$($JQ_FILE '.channels[] | select(.outputDirName=='"$output_dir_name"')' $CHANNELS_FILE)" ]
+        then
             echo "$output_dir_name"
             break
         fi
@@ -464,7 +503,8 @@ RandPlaylistName()
 {
     while :;do
         playlist_name=$(RandStr)
-        if [ -z "$($JQ_FILE '.channels[] | select(.playListName=='"$playlist_name"')' $CHANNELS_FILE)" ]; then
+        if [ -z "$($JQ_FILE '.channels[] | select(.playListName=='"$playlist_name"')' $CHANNELS_FILE)" ]
+        then
             echo "$playlist_name"
             break
         fi
@@ -475,7 +515,8 @@ RandSegDirName()
 {
     while :;do
         seg_dir_name=$(RandStr)
-        if [ -z "$($JQ_FILE '.channels[] | select(.segDirName=='"$seg_dir_name"')' $CHANNELS_FILE)" ]; then
+        if [ -z "$($JQ_FILE '.channels[] | select(.segDirName=='"$seg_dir_name"')' $CHANNELS_FILE)" ]
+        then
             echo "$seg_dir_name"
             break
         fi
@@ -613,7 +654,8 @@ else
         then
             echo && read -p "尚未安装,是否现在安装？[y/N] (默认: N): " install_yn
             [ -z "$install_yn" ] && install_yn="n"
-            if [[ "$install_yn" == [Yy] ]]; then
+            if [[ "$install_yn" == [Yy] ]]
+            then
                 Install
             else
                 echo "已取消..." && exit 1
@@ -660,7 +702,12 @@ else
                     "key_name":"'"$key_name"'",
                     "quality":'"$quality"',
                     "const":"'"$const"'",
-                    "encrypt":"'"$encrypt"'"
+                    "encrypt":"'"$encrypt"'",
+                    "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
+                    "audio_codec":"'"$AUDIO_CODEC"'",
+                    "video_codec":"'"$VIDEO_CODEC"'",
+                    "seg_dir_name":"'"$SEGMENT_DIRECTORY"'",
+                    "output_flags":"'"$FFMPEG_FLAGS"'"
                 }
             ]' "$CHANNELS_FILE" > channels.tmp
 
