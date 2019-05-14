@@ -169,12 +169,12 @@ cat > "$CHANNELS_FILE" << EOM
     "default":
     {
         "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536",
-        "seg_length":"6",
-        "seg_count":"5",
+        "seg_length":6,
+        "seg_count":5,
         "bitrates":"256,384",
         "audio_codec":"aac",
         "video_codec":"libx264",
-        "quality":"22",
+        "quality":22,
         "const":"-C",
         "output_flags":"-preset superfast -pix_fmt yuv420p -profile:v main"
     },
@@ -261,31 +261,32 @@ GetChannelInfo(){
         chnl_info_array+=("$chnl_line");
     done < <($JQ_FILE -r '.channels[] | select(.pid=='"$chnl_pid"') | .[] | @sh' $CHANNELS_FILE)
     read chnl_pid chnl_status chnl_name chnl_stream_link chnl_seg_length chnl_output_dir_name chnl_seg_count chnl_bitrates chnl_playlist_name chnl_seg_name chnl_key_name chnl_quality chnl_const chnl_encrypt <<< "${chnl_info_array[@]}"
-    chnl_pid=${chnl_pid//\'/}
-    chnl_status=${chnl_status//\'/}
+    chnl_pid=${chnl_info_array[0]//\'/}
+    chnl_status=${chnl_info_array[1]//\'/}
     if [ "$chnl_status" == "on" ]; then
         chnl_status_text=$green"开启"$plain
     else
         chnl_status_text=$red"关闭"$plain
     fi
-    chnl_stream_link=${chnl_stream_link//\'/}
-    chnl_seg_length=${chnl_seg_length//\'/}
+    chnl_name=${chnl_info_array[2]//\'/}
+    chnl_stream_link=${chnl_info_array[3]//\'/}
+    chnl_seg_length=${chnl_info_array[4]//\'/}
     chnl_seg_length_text=$chnl_seg_length"s"
-    chnl_output_dir_name=${chnl_output_dir_name//\'/}
+    chnl_output_dir_name=${chnl_info_array[5]//\'/}
     chnl_output_dir="$LIVE_ROOT/$chnl_output_dir_name"
-    chnl_seg_count=${chnl_seg_count//\'/}
-    chnl_bitrates=${chnl_bitrates//\'/}
-    chnl_playlist_name=${chnl_playlist_name//\'/}
-    chnl_seg_name=${chnl_seg_name//\'/}
-    chnl_key_name=${chnl_key_name//\'/}
-    chnl_quality=${chnl_quality//\'/}
-    chnl_const=${chnl_const//\'/}
+    chnl_seg_count=${chnl_info_array[6]//\'/}
+    chnl_bitrates=${chnl_info_array[7]//\'/}
+    chnl_playlist_name=${chnl_info_array[8]//\'/}
+    chnl_seg_name=${chnl_info_array[9]//\'/}
+    chnl_key_name=${chnl_info_array[10]//\'/}
+    chnl_quality=${chnl_info_array[11]//\'/}
+    chnl_const=${chnl_info_array[12]//\'/}
     if [ "$chnl_const" == "-C" ]; then
         chnl_const_text=$green"是"$plain
     else
         chnl_const_text=$red"否"$plain
     fi
-    chnl_encrypt=${chnl_encrypt//\'/}
+    chnl_encrypt=${chnl_info_array[13]//\'/}
     if [ "$chnl_encrypt" == "-e" ]; then
         chnl_encrypt_text=$green"是"$plain
     else
@@ -301,14 +302,14 @@ ViewChannelInfo()
     echo -e " 状态\t    : $chnl_status_text"
     echo -e " 视频源\t    : $green$chnl_stream_link$plain"
     echo -e " 段时长\t    : $green$chnl_seg_length_text$plain"
-    echo -e " 输出目录\t    : $green$chnl_output_dir$plain"
+    echo -e " 目录\t    : $green$chnl_output_dir$plain"
     echo -e " m3u8包含段数目 : $green$chnl_seg_count$plain"
     echo -e " 比特率\t    : $green$chnl_bitrates$plain"
-    echo -e " m3u8名称\t    : $red$chnl_playlist_name$plain"
+    echo -e " m3u8名称   : $red$chnl_playlist_name$plain"
     echo -e " 段名称\t    : $red$chnl_seg_name$plain"
-    echo -e " key名称\t    : $green$chnl_key_name$plain"
-    echo -e " 视频质量\t    : $green$chnl_quality$plain"
-    echo -e " 固定码率\t    : $green$chnl_const_text$plain"
+    echo -e " key名称    : $green$chnl_key_name$plain"
+    echo -e " 视频质量   : $green$chnl_quality$plain"
+    echo -e " 固定码率   : $green$chnl_const_text$plain"
     echo -e " 加密\t    : $green$chnl_encrypt_text$plain"
     echo
 }
@@ -594,18 +595,18 @@ else
 
             $JQ_FILE '.channels += [
                 {
-                    "pid":"'"$pid"'",
+                    "pid":'"$pid"',
                     "status":"on",
                     "channel_name":"'"$channel_name"'",
                     "stream_link":"'"$stream_link"'",
-                    "seg_length":"'"$seg_length"'",
+                    "seg_length":'"$seg_length"',
                     "output_dir_name":"'"$output_dir_name"'",
-                    "seg_count":"'"$seg_count"'",
+                    "seg_count":'"$seg_count"',
                     "bitrates":"'"$bitrates"'",
                     "playlist_name":"'"$playlist_name"'",
                     "seg_name":"'"$seg_name"'",
                     "key_name":"'"$key_name"'",
-                    "quality":"'"$quality"'",
+                    "quality":'"$quality"',
                     "const":"'"$const"'",
                     "encrypt":"'"$encrypt"'"
                 }
