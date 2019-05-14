@@ -169,12 +169,12 @@ cat > "$CHANNELS_FILE" << EOM
     "default":
     {
         "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536",
-        "seg_length":6,
-        "seg_count":5,
+        "seg_length":"6",
+        "seg_count":"5",
         "bitrates":"256,384",
         "audio_codec":"aac",
         "video_codec":"libx264",
-        "quality":22,
+        "quality":"22",
         "output_flags":"-preset superfast -pix_fmt yuv420p -profile:v main"
     },
     "channels":[]
@@ -205,6 +205,74 @@ Update()
     [ -z "$sh_new_ver" ] && echo -e "$error 无法链接到 Github !" && exit 1
     wget --no-check-certificate "https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh" -qO "$SH_FILE" && chmod +x "$SH_FILE"
     echo -e "脚本已更新为最新版本[ $sh_new_ver ] !(输入: tv 使用)" && exit 0
+}
+
+GetDefault()
+{
+    default_array=()
+    while IFS='' read -r default_line; do
+        default_array+=("$default_line");
+    done < <($JQ_FILE -r '.default[] | @sh' "$CHANNELS_FILE")
+    read d_input_flags d_seg_length d_seg_count d_bitrates d_audio_codec d_video_codec d_quality d_output_flags <<< "${default_array[@]}"
+    d_input_flags=${d_input_flags//\'/}
+    d_seg_length=${d_seg_length//\'/}
+    d_seg_count=${d_seg_count//\'/}
+    d_bitrates=${d_bitrates//\'/}
+    d_audio_codec=${d_audio_codec//\'/}
+    d_video_codec=${d_video_codec//\'/}
+    d_quality=${d_quality//\'/}
+    d_output_flags=${d_output_flags//\'/}
+}
+
+ListChannels()
+{
+    [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+}
+
+ViewChannel()
+{
+    [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+}
+
+AddChannel()
+{
+    [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+    SetStreamLink
+    SetSegLength
+    SetOutputDirName
+    SetSegCount
+    SetAudioCodec
+    SetVideoCodec
+    SetBitrates
+    SetPlaylistName
+    SetSegName
+    SetConst
+    SetQuality
+    SetEncrypt
+    SetKeyName
+    SetInputFlags
+    SetOutputFlags
+}
+
+EditChannel()
+{
+    [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+}
+
+ToggleChannel()
+{
+    [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+}
+
+DelChannel()
+{
+    [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+    #pids=$(pgrep -P $pid)
+    #kill -9 $pid
+    #for cpid in $pids ; do kill -9 $cpid ; done
+    #or pkill -TERM -P $pid
+
+    #$JQ_FILE '. -= [.[]|select(.test==1)]' "$CHANNELS_FILE" > channels.tmp
 }
 
 RandStr()
@@ -348,13 +416,12 @@ then
   ${green}4.$plain 查看频道
   ${green}5.$plain 添加频道
   ${green}6.$plain 修改频道
-  ${green}7.$plain 删除频道
-————————————
-  ${green}8.$plain 查看运行状态
-  ${green}9.$plain 查看日志
+  ${green}7.$plain 开关频道
+  ${green}8.$plain 重启频道
+  ${green}9.$plain 删除频道
 
  $tip 输入: tv 打开此面板" && echo
-    echo && read -p "请输入数字 [1-9]：" menu_num
+    echo && read -p "请输入数字 [1-7]：" menu_num
     case "$menu_num" in
         1) Install
         ;;
@@ -368,14 +435,14 @@ then
         ;;
         6) EditChannel
         ;;
-        7) DelChannel
+        8) ToggleChannel
         ;;
-        8) ViewStatus
+        8) RestartChannel
         ;;
-        9) ViewLog
+        9) DelChannel
         ;;
         *)
-        echo -e "$error 请输入正确的数字 [1-15]"
+        echo -e "$error 请输入正确的数字 [1-7]"
         ;;
     esac
 else
@@ -397,36 +464,50 @@ else
                 echo "已取消..." && exit 1
             fi
         else
+            GetDefault
             export FFMPEG
-            export FFMPEG_INPUT_FLAGS=${input_flags:-"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536"}
-            seg_length=${seg_length:-"6"}
+            export FFMPEG_INPUT_FLAGS=${input_flags:-"$d_input_flags"}
+            seg_length=${seg_length:-"$d_seg_length"}
             output_dir_name=${output_dir_name:-"$(RandOutputDirName)"}
             output_dir_root="$LIVE_ROOT/$output_dir_name"
-            seg_count=${seg_count:-"5"}
-            bitrates=${bitrates:-"256,384"}
-            export AUDIO_CODEC=${audio_codec:-"aac"}
-            export VIDEO_CODEC=${video_codec:-"libx264"}
+            seg_count=${seg_count:-"$d_seg_count"}
+            bitrates=${bitrates:-"$d_bitrates"}
+            export AUDIO_CODEC=${audio_codec:-"$d_audio_codec"}
+            export VIDEO_CODEC=${video_codec:-"$d_video_codec"}
             playlist_name=${playlist_name:-"$(RandPlaylistName)"}
             export SEGMENT_DIRECTORY=${seg_dir_name:-""}
             seg_name=${seg_name:-"$playlist_name"}
             const=${const:-""}
-            quality=${quality:-"22"}
+            quality=${quality:-"$d_quality"}
             encrypt=${encrypt:-""}
             key_name=${key_name:-"$playlist_name"}
-            export FFMPEG_FLAGS=${output_flags:-"-preset superfast -pix_fmt yuv420p -profile:v main"}
+            export FFMPEG_FLAGS=${output_flags:-"$d_output_flags"}
 
             exec "$CREATOR_FILE" -l -i "$stream_link" -s "$seg_length" \
                 -o "$output_dir_root" -c "$seg_count" -b "$bitrates" \
                 -p "$playlist_name" -t "$seg_name" -K "$key_name" -q "$quality" \
                 "$const" "$encrypt" &
             pid=$!
-            #pids=$(pgrep -P $pid)
-            #kill -9 $pid
-            #for cpid in $pids ; do kill -9 $cpid ; done
-            #or pkill -TERM -P $pid
 
-            #$JQ_FILE '. += [{"test":1,"test2":2}]' "$CHANNELS_FILE" > channels.tmp
-            #$JQ_FILE '. -= [.[]|select(.test==1)]' "$CHANNELS_FILE" > channels.tmp
+            $JQ_FILE '.channels += [
+                {
+                    "pid":"'"$pid"'",
+                    "on":"1",
+                    "stream_link":"'"$stream_link"'",
+                    "seg_length":"'"$seg_length"'",
+                    "output_dir_name":"'"$output_dir_name"'",
+                    "seg_count":"'"$seg_count"'",
+                    "bitrates":"'"$bitrates"'",
+                    "playlist_name":"'"$playlist_name"'",
+                    "seg_name":"'"$seg_name"'",
+                    "key_name":"'"$key_name"'",
+                    "quality":"'"$quality"'",
+                    "const":"'"$const"'",
+                    "encrypt":"'"$encrypt"'"
+                }
+            ]' "$CHANNELS_FILE" > channels.tmp
+
+            mv channels.tmp "$CHANNELS_FILE"
 
             echo -e "$info 添加频道成功..." && echo
         fi
