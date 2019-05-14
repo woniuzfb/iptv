@@ -525,7 +525,7 @@ SetSegName()
 SetConst()
 {
     echo "是否使用固定码率[y/N]"
-    read -p "(默认: 是):" const_yn
+    read -p "(默认: y):" const_yn
     [ -z "$const_yn" ] && const_yn="y"
     if [[ "$const_yn" == [Yy] ]]
     then
@@ -592,7 +592,6 @@ SetKeyName()
 SetInputFlags()
 {
     echo "请输入input flags"
-    echo -e "$tip 需用引号括起来"
     read -p "(默认: 跟配置文件相同):" input_flags
     [ -z "$input_flags" ] && input_flags=$d_input_flags
     echo && echo -e "	input flags: $green $input_flags $plain" && echo 
@@ -601,7 +600,6 @@ SetInputFlags()
 SetOutputFlags()
 {
     echo "请输入output flags"
-    echo -e "$tip 需用引号括起来"
     read -p "(默认: 跟配置文件相同):" output_flags
     [ -z "$output_flags" ] && output_flags=$d_output_flags
     echo && echo -e "	output flags: $green $output_flags $plain" && echo 
@@ -628,6 +626,8 @@ AddChannel()
     if [ "$encrypt" == "-e" ] 
     then
         SetKeyName
+    else
+        key_name=$playlist_name
     fi
     SetInputFlags
     SetOutputFlags
@@ -710,7 +710,7 @@ EditChannel()
     mv mudb.tmp "$MUDB_FILE"
     echo && echo -e "$info 频道修改成功 !" && echo
     echo "是否重启此频道？[y/N]"
-    read -p "(默认: 是):" restart_yn
+    read -p "(默认: y):" restart_yn
     [ -z "$restart_yn" ] && restart_yn="y"
     if [[ "$restart_yn" == [Yy] ]] 
     then
@@ -982,7 +982,7 @@ else
         FFMPEG="$FFMPEG_ROOT/ffmpeg"
         if [ ! -e "$FFMPEG" ]
         then
-            echo && read -p "尚未安装,是否现在安装？[y/N] (默认: N): " install_yn
+            echo && read -p "尚未安装,是否现在安装？[Y/n] (默认: n): " install_yn
             [ -z "$install_yn" ] && install_yn="n"
             if [[ "$install_yn" == [Yy] ]]
             then
