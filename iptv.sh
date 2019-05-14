@@ -42,14 +42,6 @@ CheckRelease()
         fi
     fi
 
-    if [ -s "/etc/redhat-release" ]
-    then
-        release_ver=$(grep -oE  "[0-9.]+" /etc/redhat-release)
-    else
-        release_ver=$(grep -oE  "[0-9.]+" /etc/issue)
-    fi
-    release_ver_main=${release_ver%%.*}
-
     if [ "$(uname -m | grep -c 64)" -gt 0 ]
     then
         release_bit="64"
@@ -268,7 +260,15 @@ ListChannels()
     for((index = 0; index < "$channels_count"; index++)); do
         if [ "${chnls_status[index]//\'/}" == "on" ]
         then
-            chnls_status_text=$green"开启"$plain
+            creator_pids=$(pgrep -P ${chnls_pid[index]//\'/} || true)
+            if [ "$creator_pids" == "" ] 
+            then
+                chnls_status_text=$red"关闭"$plain
+                $JQ_FILE '(.channels[]|select(.pid=='"${chnls_pid[index]//\'/}"')|.status)="off"' "$CHANNELS_FILE" > channels.tmp
+                mv channels.tmp "$CHANNELS_FILE"
+            else
+                chnls_status_text=$green"开启"$plain
+            fi
         else
             chnls_status_text=$red"关闭"$plain
         fi
@@ -763,7 +763,7 @@ StartChannel()
 
 StopChannel()
 {
-    creator_pids=$(pgrep -P $chnl_pid)
+    creator_pids=$(pgrep -P $chnl_pid || true)
     for creator_pid in $creator_pids
     do
         ffmpeg_pids=$(pgrep -P $creator_pid || true)
