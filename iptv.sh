@@ -175,6 +175,7 @@ cat > "$CHANNELS_FILE" << EOM
         "audio_codec":"aac",
         "video_codec":"libx264",
         "quality":"22",
+        "const":"-C",
         "output_flags":"-preset superfast -pix_fmt yuv420p -profile:v main"
     },
     "channels":[]
@@ -213,27 +214,27 @@ GetDefault()
     while IFS='' read -r default_line; do
         default_array+=("$default_line");
     done < <($JQ_FILE -r '.default[] | @sh' "$CHANNELS_FILE")
-    read d_input_flags d_seg_length d_seg_count d_bitrates d_audio_codec d_video_codec d_quality d_output_flags <<< "${default_array[@]}"
-    d_input_flags=${d_input_flags//\'/}
-    d_seg_length=${d_seg_length//\'/}
-    d_seg_count=${d_seg_count//\'/}
-    d_bitrates=${d_bitrates//\'/}
-    d_audio_codec=${d_audio_codec//\'/}
-    d_video_codec=${d_video_codec//\'/}
-    d_quality=${d_quality//\'/}
-    d_output_flags=${d_output_flags//\'/}
+    d_input_flags=${default_array[0]//\'/}
+    d_seg_length=${default_array[1]//\'/}
+    d_seg_count=${default_array[2]//\'/}
+    d_bitrates=${default_array[3]//\'/}
+    d_audio_codec=${default_array[4]//\'/}
+    d_video_codec=${default_array[5]//\'/}
+    d_quality=${default_array[6]//\'/}
+    d_const=${default_array[7]//\'/}
+    d_output_flags=${default_array[8]//\'/}
 }
 
 GetChannelsInfo()
 {
     [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
-    channels_count=$($JQ_FILE -r '. | length' $CHANNELS_FILE)
+    channels_count=$($JQ_FILE -r '.channels | length' $CHANNELS_FILE)
     [ "$channels_count" == 0 ] && echo -e "$error 没有发现 频道，请检查 !" && exit 1
-    IFS=" " read -a chnls_pid <<< "$($JQ_FILE -r '[.[].pid] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -a chnls_status <<< "$($JQ_FILE -r '[.[].status] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -a chnls_name <<< "$($JQ_FILE -r '[.[].channel_name] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -a chnls_bitrates <<< "$($JQ_FILE -r '[.[].bitrates] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -a chnls_output_dir_name <<< "$($JQ_FILE -r '[.[].output_dir_name] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -a chnls_pid <<< "$($JQ_FILE -r '[.channels[].pid] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -a chnls_status <<< "$($JQ_FILE -r '[.channels[].status] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -a chnls_name <<< "$($JQ_FILE -r '[.channels[].channel_name] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -a chnls_bitrates <<< "$($JQ_FILE -r '[.channels[].bitrates] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -a chnls_output_dir_name <<< "$($JQ_FILE -r '[.channels[].output_dir_name] | @sh' $CHANNELS_FILE)"
 }
 
 ListChannels()
@@ -241,14 +242,14 @@ ListChannels()
     GetChannelsInfo
     chnls_list=""
     for((index = 0; index < "$channels_count"; index++)); do
-        if [ "${chnls_status[index]}" == "on" ]
+        if [ "${chnls_status[index]//\'/}" == "on" ]
         then
             chnls_status_text=$green"开启"$plain
         else
             chnls_status_text=$red"关闭"$plain
         fi
-        chnls_output_dir="$LIVE_ROOT/${chnls_output_dir_name[index]}"
-        chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid[index]}$plain\t 状态: $chnls_status_text\t 频道名称: $green${chnls_name[index]}$plain\t 比特率: $green${chnls_bitrates[index]}$plain\t 目录: $green${chnls_output_dir}$plain  \n"
+        chnls_output_dir="$LIVE_ROOT/${chnls_output_dir_name[index]//\'/}"
+        chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid[index]//\'/}$plain\t 状态: $chnls_status_text\t 频道名称: $green${chnls_name[index]//\'/}$plain\t 比特率: $green${chnls_bitrates[index]//\'/}$plain\t 目录: $green${chnls_output_dir}$plain  \n"
     done
     echo && echo -e "=== 频道总数 $green $channels_count $plain"
     echo -e "$chnls_list\n"
@@ -324,7 +325,7 @@ ViewChannelMenu(){
                 echo -e "$error 请输入正确的数字！"
             ;;
             (*)
-                if [ -n "$($JQ_FILE '.[] | select(.pid=='"$chnl_pid"')' $CHANNELS_FILE)" ]; then
+                if [ -n "$($JQ_FILE '.channels[] | select(.pid=='"$chnl_pid"')' $CHANNELS_FILE)" ]; then
                     break;
                 else
                     echo -e "$error 请输入正确的进程ID！"
@@ -399,7 +400,7 @@ RandOutputDirName()
 {
     while :;do
         output_dir_name=$(RandStr)
-        if [ -z "$($JQ_FILE '.[] | select(.outputDirName=='"$output_dir_name"')' $CHANNELS_FILE)" ]; then
+        if [ -z "$($JQ_FILE '.channels[] | select(.outputDirName=='"$output_dir_name"')' $CHANNELS_FILE)" ]; then
             echo "$output_dir_name"
             break
         fi
@@ -410,7 +411,7 @@ RandPlaylistName()
 {
     while :;do
         playlist_name=$(RandStr)
-        if [ -z "$($JQ_FILE '.[] | select(.playListName=='"$playlist_name"')' $CHANNELS_FILE)" ]; then
+        if [ -z "$($JQ_FILE '.channels[] | select(.playListName=='"$playlist_name"')' $CHANNELS_FILE)" ]; then
             echo "$playlist_name"
             break
         fi
@@ -421,7 +422,7 @@ RandSegDirName()
 {
     while :;do
         seg_dir_name=$(RandStr)
-        if [ -z "$($JQ_FILE '.[] | select(.segDirName=='"$seg_dir_name"')' $CHANNELS_FILE)" ]; then
+        if [ -z "$($JQ_FILE '.channels[] | select(.segDirName=='"$seg_dir_name"')' $CHANNELS_FILE)" ]; then
             echo "$seg_dir_name"
             break
         fi
@@ -530,7 +531,7 @@ then
         ;;
         3) Update
         ;;
-        4) ViewChannel
+        4) ViewChannelMenu
         ;;
         5) AddChannel
         ;;
@@ -579,7 +580,7 @@ else
             channel_name=${channel_name:-"$playlist_name"}
             export SEGMENT_DIRECTORY=${seg_dir_name:-""}
             seg_name=${seg_name:-"$playlist_name"}
-            const=${const:-""}
+            const=${const:-"$d_const"}
             quality=${quality:-"$d_quality"}
             encrypt=${encrypt:-""}
             key_name=${key_name:-"$playlist_name"}
