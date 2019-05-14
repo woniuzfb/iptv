@@ -32,6 +32,11 @@
   - 也可以使用 shell 对话，输入 tv 打开面板
 - 管理频道
   - 输入 tv 打开面板
+- 主目录在 $HOME/iptv
+  - channels.json [ 默认值和频道列表 ]
+  - HLS-Stream-Creator 本尊
+  - jq
+  - live/ [ hls输出目录 ]
 
 ``` bash
 bash -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh)"

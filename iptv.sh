@@ -864,7 +864,7 @@ Copyright (C) 2013 B Tasker, D Atanasov
 Released under BSD 3 Clause License
 See LICENSE
 
-使用方法: tv -i [直播源] -s [段时长(秒)] -o [输出目录名称] -c [m3u8包含的段数目] -b [比特率]  [-p m3u8文件名称]
+使用方法: tv -i [直播源] -s [段时长(秒)] -o [输出目录名称] -c [m3u8包含的段数目] -b [比特率] -p [m3u8文件名称]
 
     -i  直播源(仅支持mpegts)
     -s  段时长(秒)(默认：6)
