@@ -164,7 +164,7 @@ cat > "$CHANNELS_FILE" << EOM
         "seg_dir_name":"",
         "seg_length":6,
         "seg_count":5,
-        "bitrates":"256,384",
+        "bitrates":"384,512",
         "audio_codec":"aac",
         "video_codec":"libx264",
         "quality":22,
@@ -873,8 +873,8 @@ See LICENSE
     -c  m3u8里包含的段数目(默认：5)
     -a  音频编码(默认：aac)
     -v  视频编码(默认：libx264)
-    -b  输出视频的比特率 (多种比特率用逗号分隔)(默认：256,384)
-        同时可以指定输出的分辨率(比如：-b 256-600x400,384-1280x720)
+    -b  输出视频的比特率 (多种比特率用逗号分隔)(默认：384,512)
+        同时可以指定输出的分辨率(比如：-b 256-600x400,512-1280x720)
     -p  m3u8名称(前缀)(默认：随机)
     -z  频道名称(默认：跟m3u8名称相同)
     -S  段所在子目录名称(默认：不使用子目录)
@@ -894,7 +894,7 @@ See LICENSE
         (默认："-preset superfast -pix_fmt yuv420p -profile:v main")
 
 举例:
-    tv -i http://xxx.com/xxx.ts -s 5 -o hbo -c 10 -b 256,384 -p hbo1 -z 'hbo直播'
+    tv -i http://xxx.com/xxx.ts -s 5 -o hbo -c 10 -b 384,512 -p hbo1 -z 'hbo直播'
 
 EOM
 
