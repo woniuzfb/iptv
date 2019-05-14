@@ -421,7 +421,7 @@ then
   ${green}9.$plain 删除频道
 
  $tip 输入: tv 打开此面板" && echo
-    echo && read -p "请输入数字 [1-7]：" menu_num
+    echo && read -p "请输入数字 [1-9]：" menu_num
     case "$menu_num" in
         1) Install
         ;;
