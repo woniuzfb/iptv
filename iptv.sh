@@ -435,14 +435,14 @@ then
         ;;
         6) EditChannel
         ;;
-        8) ToggleChannel
+        7) ToggleChannel
         ;;
         8) RestartChannel
         ;;
         9) DelChannel
         ;;
         *)
-        echo -e "$error 请输入正确的数字 [1-7]"
+        echo -e "$error 请输入正确的数字 [1-9]"
         ;;
     esac
 else
