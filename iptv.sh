@@ -164,11 +164,11 @@ cat > "$CHANNELS_FILE" << EOM
         "seg_dir_name":"",
         "seg_length":6,
         "seg_count":5,
-        "bitrates":"384,512",
+        "bitrates":"512,800",
         "audio_codec":"aac",
         "video_codec":"libx264",
         "quality":22,
-        "const":"-C",
+        "const":"no",
         "encrypt":"no",
         "output_flags":"-preset superfast -pix_fmt yuv420p -profile:v main"
     },
@@ -224,7 +224,15 @@ GetDefault()
     d_audio_codec=${default_array[5]//\'/}
     d_video_codec=${default_array[6]//\'/}
     d_quality=${default_array[7]//\'/}
-    d_const=${default_array[8]//\'/}
+    d_const_yn=${default_array[8]//\'/}
+    if [ "$d_const_yn" == "no" ] 
+    then
+        d_const_yn="n"
+        d_const=""
+    else
+        d_const_yn="y"
+        d_const="-C"
+    fi
     d_encrypt_yn=${default_array[9]//\'/}
     if [ "$d_encrypt_yn" == "no" ] 
     then
@@ -522,9 +530,9 @@ SetSegName()
 
 SetConst()
 {
-    echo "是否使用固定码率[y/N]"
-    read -p "(默认: y):" const_yn
-    [ -z "$const_yn" ] && const_yn="y"
+    echo "是否使用固定码率[Y/n]"
+    read -p "(默认: d_const_yn):" const_yn
+    [ -z "$const_yn" ] && const_yn=$d_const_yn
     if [[ "$const_yn" == [Yy] ]]
     then
         const="-C"
@@ -883,13 +891,13 @@ See LICENSE
     -c  m3u8里包含的段数目(默认：5)
     -a  音频编码(默认：aac)
     -v  视频编码(默认：libx264)
-    -b  输出视频的比特率 (多种比特率用逗号分隔)(默认：384,512)
-        同时可以指定输出的分辨率(比如：-b 256-600x400,512-1280x720)
+    -b  输出视频的比特率 (多种比特率用逗号分隔)(默认：512,800)
+        同时可以指定输出的分辨率(比如：-b 256-600x400,800-1280x720)
     -p  m3u8名称(前缀)(默认：随机)
     -z  频道名称(默认：跟m3u8名称相同)
     -S  段所在子目录名称(默认：不使用子目录)
     -t  段名称(前缀)(默认：跟m3u8名称相同)
-    -C  固定码率(CBR 而不是 AVB)(默认：是)
+    -C  固定码率(CBR 而不是 AVB)(默认：否)
     -q  视频质量(改变 CRF)(默认：22)
     -e  加密段(默认：不加密)
     -K  Key名称(默认：跟m3u8名称相同)
@@ -904,7 +912,7 @@ See LICENSE
         (默认："-preset superfast -pix_fmt yuv420p -profile:v main")
 
 举例:
-    tv -i http://xxx.com/xxx.ts -s 5 -o hbo -c 10 -b 384,512 -p hbo1 -z 'hbo直播'
+    tv -i http://xxx.com/xxx.ts -s 5 -o hbo -c 10 -b 512,800 -p hbo1 -z 'hbo直播'
 
 EOM
 
