@@ -260,7 +260,6 @@ GetChannelInfo(){
     while IFS='' read -r chnl_line; do
         chnl_info_array+=("$chnl_line");
     done < <($JQ_FILE -r '.channels[] | select(.pid=='"$chnl_pid"') | .[] | @sh' $CHANNELS_FILE)
-    read chnl_pid chnl_status chnl_name chnl_stream_link chnl_seg_length chnl_output_dir_name chnl_seg_count chnl_bitrates chnl_playlist_name chnl_seg_name chnl_key_name chnl_quality chnl_const chnl_encrypt <<< "${chnl_info_array[@]}"
     chnl_pid=${chnl_info_array[0]//\'/}
     chnl_status=${chnl_info_array[1]//\'/}
     if [ "$chnl_status" == "on" ]; then
@@ -289,8 +288,10 @@ GetChannelInfo(){
     chnl_encrypt=${chnl_info_array[13]//\'/}
     if [ "$chnl_encrypt" == "-e" ]; then
         chnl_encrypt_text=$green"是"$plain
+        chnl_key_name_text=$green"$chnl_key_name"$plain
     else
         chnl_encrypt_text=$red"否"$plain
+        chnl_key_name_text=$red"$chnl_key_name"$plain
     fi
 }
 
@@ -305,12 +306,12 @@ ViewChannelInfo()
     echo -e " 目录\t    : $green$chnl_output_dir$plain"
     echo -e " m3u8包含段数目 : $green$chnl_seg_count$plain"
     echo -e " 比特率\t    : $green$chnl_bitrates$plain"
-    echo -e " m3u8名称   : $red$chnl_playlist_name$plain"
-    echo -e " 段名称\t    : $red$chnl_seg_name$plain"
-    echo -e " key名称    : $green$chnl_key_name$plain"
+    echo -e " m3u8名称   : $green$chnl_playlist_name$plain"
+    echo -e " 段名称\t    : $green$chnl_seg_name$plain"
     echo -e " 视频质量   : $green$chnl_quality$plain"
-    echo -e " 固定码率   : $green$chnl_const_text$plain"
-    echo -e " 加密\t    : $green$chnl_encrypt_text$plain"
+    echo -e " 固定码率   : $chnl_const_text"
+    echo -e " key名称    : $chnl_key_name_text"
+    echo -e " 加密\t    : $chnl_encrypt_text"
     echo
 }
 
