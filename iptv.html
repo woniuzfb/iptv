@@ -648,6 +648,7 @@ function reqLogin() {
       jscnwxLoginUrl = source.login_url;
     } else if (source.name === sourceReg) {
       sourceRegUrl = source.login_url;
+      sourceLane = source.lane;
       sourceRegExtendInfo = source.extend_info;
       if (source.server_version) {
         sourceRegServerVersion = source.server_version;
@@ -690,7 +691,7 @@ function reqLogin() {
   timeoutPromise(3000,reqData(sourceRegUrl,user,'POST'))
   .then(response => {
     if (response.ret !== 0) {
-      alertInfo('账号错误！');
+      alertInfo(sourceReg+'服务端['+sourceLane+']账号错误！');
       if (localStorage.getItem('jscnwx')) {
         initialize();
       }
