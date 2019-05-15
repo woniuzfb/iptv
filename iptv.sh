@@ -258,6 +258,7 @@ GetChannelsInfo()
     IFS=" " read -a chnls_audio_codec <<< "$($JQ_FILE -r '[.channels[].audio_codec] | @sh' $CHANNELS_FILE)"
     IFS=" " read -a chnls_bitrates <<< "$($JQ_FILE -r '[.channels[].bitrates] | @sh' $CHANNELS_FILE)"
     IFS=" " read -a chnls_output_dir_name <<< "$($JQ_FILE -r '[.channels[].output_dir_name] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -a chnls_playlist_name <<< "$($JQ_FILE -r '[.channels[].playlist_name] | @sh' $CHANNELS_FILE)"
 }
 
 ListChannels()
@@ -280,8 +281,19 @@ ListChannels()
             chnls_status_text=$red"关闭"$plain
         fi
         chnls_codec="${chnls_video_codec[index]//\'/}:${chnls_audio_codec[index]//\'/}"
-        chnls_output_dir="$LIVE_ROOT/${chnls_output_dir_name[index]//\'/}"
-        chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid[index]//\'/}$plain\t 状态: $chnls_status_text\t 频道名称: $green${chnls_name[index]//\'/}$plain\t 编码: $green$chnls_codec$plain\t 比特率: $green${chnls_bitrates[index]//\'/}$plain\t 目录: $green${chnls_output_dir}$plain  \n"
+        chnls_output_dir_root="$LIVE_ROOT/${chnls_output_dir_name[index]//\'/}"
+        chnls_bitrates_a=${chnls_bitrates[index]//\'/}
+        chnls_bitrates_b=${chnls_bitrates_a//,/$'\n'}
+        chnls_playlist_file_text=""
+        for chnls_br in $chnls_bitrates_b
+        do
+            if [[ "$chnls_br" == *"-"* ]]
+            then
+                chnls_br=$(echo "$chnls_br" | cut -d- -f1) 
+            fi
+            chnls_playlist_file_text="$chnls_playlist_file_text$green$chnls_output_dir_root/${chnls_playlist_name[index]//\'/}_$chnls_br.m3u8$plain "
+        done
+        chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid[index]//\'/}$plain\t 状态: $chnls_status_text\t 频道名称: $green${chnls_name[index]//\'/}$plain\t 编码: $green$chnls_codec$plain\t 比特率: $green${chnls_bitrates[index]//\'/}$plain\t 目录: $green${chnls_output_dir_root}$plain\nm3u8位置: ${chnls_playlist_file_text}\n\n"
     done
     echo && echo -e "=== 频道总数 $green $channels_count $plain"
     echo -e "$chnls_list\n"
@@ -310,6 +322,16 @@ GetChannelInfo(){
     chnl_seg_count=${chnl_info_array[6]//\'/}
     chnl_bitrates=${chnl_info_array[7]//\'/}
     chnl_playlist_name=${chnl_info_array[8]//\'/}
+    chnl_bitrates_a=${chnl_bitrates//,/$'\n'}
+    chnl_playlist_file_text=""
+    for br in $chnl_bitrates_a
+    do
+        if [[ "$br" == *"-"* ]]
+        then
+            br=$(echo "$br" | cut -d- -f1)
+        fi
+        chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$br.m3u8$plain "
+    done
     chnl_seg_name=${chnl_info_array[9]//\'/}
     chnl_key_name=${chnl_info_array[10]//\'/}
     chnl_quality=${chnl_info_array[11]//\'/}
@@ -354,6 +376,7 @@ ViewChannelInfo()
     echo -e " m3u8包含段数目 : $green$chnl_seg_count$plain"
     echo -e " 比特率\t    : $green$chnl_bitrates$plain"
     echo -e " m3u8名称   : $green$chnl_playlist_name$plain"
+    echo -e " m3u8位置   : $chnl_playlist_file_text"
     echo -e " 段名称\t    : $green$chnl_seg_name$plain"
     echo -e " 段子目录   : $green$chnl_seg_dir_name_text$plain"
     echo -e " 视频质量   : $green$chnl_quality$plain"
