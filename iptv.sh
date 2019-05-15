@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-sh_ver="0.1"
+sh_ver="0.1.1"
 SH_FILE="/usr/local/bin/tv"
 IPTV_ROOT="/usr/local/iptv"
 CREATOR_FILE="$IPTV_ROOT/HLS-Stream-Creator.sh"
@@ -206,6 +206,70 @@ Update()
     sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1)
     [ -z "$sh_new_ver" ] && echo -e "$error 无法链接到 Github !" && exit 1
     wget --no-check-certificate "https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh" -qO "$SH_FILE" && chmod +x "$SH_FILE"
+    if [ "$sh_new_ver" != "$sh_ver" ] 
+    then
+        default='
+    {
+        "seg_dir_name":"",
+        "seg_length":6,
+        "seg_count":5,
+        "video_codec":"h264",
+        "audio_codec":"aac",
+        "quality":18,
+        "bitrates":"1500",
+        "const":"no",
+        "encrypt":"no",
+        "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536",
+        "output_flags":"-preset superfast -pix_fmt yuv420p -profile:v main"
+    }'
+        $JQ_FILE '(.default)='"$default"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+        mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+
+        pids=$($JQ_FILE '.channels[].pid' $CHANNELS_FILE)
+        for chnl_pid in $pids
+        do
+            GetChannelInfo
+            $JQ_FILE '.channels -= [.channels[]|select(.pid=='"$chnl_pid"')]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+            mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+
+            if [ "$chnl_const" == "yes" ]
+            then
+                chnl_const_yn="yes"
+            else
+                chnl_const_yn="no"
+            fi
+            if [ "$chnl_encrypt" == "yes" ]
+            then
+                chnl_encrypt_yn="yes"
+            else
+                chnl_encrypt_yn="no"
+            fi
+            $JQ_FILE '.channels += [
+                {
+                    "pid":'"$chnl_pid"',
+                    "status":"on",
+                    "stream_link":"'"$chnl_stream_link"'",
+                    "output_dir_name":"'"$chnl_output_dir_name"'",
+                    "playlist_name":"'"$chnl_playlist_name"'",
+                    "seg_dir_name":"'"$chnl_seg_dir_name"'",
+                    "seg_name":"'"$chnl_seg_name"'",
+                    "seg_length":'"$chnl_seg_length"',
+                    "seg_count":'"$chnl_seg_count"',
+                    "video_codec":"'"$chnl_video_codec"'",
+                    "audio_codec":"'"$chnl_audio_codec"'",
+                    "quality":'"$chnl_quality"',
+                    "bitrates":"'"$chnl_bitrates"'",
+                    "const":"'"$chnl_const_yn"'",
+                    "encrypt":"'"$chnl_encrypt_yn"'",
+                    "key_name":"'"$chnl_key_name"'",
+                    "input_flags":"'"$chnl_input_flags"'",
+                    "output_flags":"'"$chnl_output_flags"'",
+                    "channel_name":"'"$chnl_channel_name"'"
+                }
+            ]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+            mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+        done
+    fi
     echo -e "脚本已更新为最新版本[ $sh_new_ver ] !(输入: tv 使用)" && exit 0
 }
 
