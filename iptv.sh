@@ -206,7 +206,13 @@ Update()
     sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1)
     [ -z "$sh_new_ver" ] && echo -e "$error 无法链接到 Github !" && exit 1
     wget --no-check-certificate "https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh" -qO "$SH_FILE" && chmod +x "$SH_FILE"
-    if [ "$sh_new_ver" != "$sh_ver" ] 
+    echo -e "脚本已更新为最新版本[ $sh_new_ver ] !(输入: tv 使用)" && exit 0
+}
+
+UpdateSelf()
+{
+    sh_old_ver=$($JQ_FILE '.default.version' $CHANNELS_FILE)
+    if [ "$sh_old_ver" != "$sh_ver" ] 
     then
         default='
     {
@@ -220,7 +226,8 @@ Update()
         "const":"no",
         "encrypt":"no",
         "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536",
-        "output_flags":"-preset superfast -pix_fmt yuv420p -profile:v main"
+        "output_flags":"-preset superfast -pix_fmt yuv420p -profile:v main",
+        "version":"'"$sh_ver"'"
     }'
         $JQ_FILE '(.default)='"$default"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
@@ -287,8 +294,8 @@ Update()
             ]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
             mv "$CHANNELS_TMP" "$CHANNELS_FILE"
         done
+        
     fi
-    echo -e "脚本已更新为最新版本[ $sh_new_ver ] !(输入: tv 使用)" && exit 0
 }
 
 GetDefault()
@@ -1101,6 +1108,7 @@ exit
 
 }
 
+[ -e "$IPTV_ROOT" ] && UpdateSelf
 use_menu=1
 
 while getopts "i:o:p:S:t:s:c:v:a:q:b:K:m:n:z:h:H:Ce" flag
