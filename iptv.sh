@@ -264,7 +264,7 @@ Update()
                     "key_name":"'"$chnl_key_name"'",
                     "input_flags":"'"$chnl_input_flags"'",
                     "output_flags":"'"$chnl_output_flags"'",
-                    "channel_name":"'"$chnl_channel_name"'"
+                    "channel_name":"'"$chnl_name"'"
                 }
             ]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
             mv "$CHANNELS_TMP" "$CHANNELS_FILE"
