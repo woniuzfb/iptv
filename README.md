@@ -39,6 +39,15 @@
 bash -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh)"
 ```
 
+## 自动更新指定的json文件
+
+    "sync_file":"/var/www/html/channels.json", # 公开目录的json
+    "sync_index":"data:2:channels", # 必须指定到m3u8直播源所在的数组这一级，比如这里 ObjectJson.data[2].channels
+    "sync_pairs":"chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url:http://xxx.xxx.xxx.xxx/live", # 值配对用:号，如果直接赋值用=号
+
+- 操作频道，添加，删除，重启等都会自动更新指定的json文件
+
+
 ## 参数详解
 
 使用方法: tv -i [直播源] [-s 段时长(秒)] [-o 输出目录名称] [-c m3u8包含的段数目] [-b 比特率] [-p m3u8文件名称] [-C]
