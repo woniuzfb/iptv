@@ -190,9 +190,9 @@ Uninstall()
 {
     [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
     CheckRelease
-    echo "确定要 卸载此脚本以及产生的全部文件？[Y/n]" && echo
-    read -p "(默认: n):" uninstall_yn
-    uninstall_yn=${uninstall_yn:-"n"}
+    echo "确定要 卸载此脚本以及产生的全部文件？[y/N]" && echo
+    read -p "(默认: N):" uninstall_yn
+    uninstall_yn=${uninstall_yn:-"N"}
     if [[ "$uninstall_yn" == [Yy] ]]
     then
         pids=$($JQ_FILE '.channels[].pid' $CHANNELS_FILE)
@@ -313,19 +313,19 @@ GetDefault()
     d_const_yn=${default_array[7]//\'/}
     if [ "$d_const_yn" == "no" ] 
     then
-        d_const_yn="n"
+        d_const_yn="N"
         d_const=""
     else
-        d_const_yn="y"
+        d_const_yn="Y"
         d_const="-C"
     fi
     d_encrypt_yn=${default_array[8]//\'/}
     if [ "$d_encrypt_yn" == "no" ] 
     then
-        d_encrypt_yn="n"
+        d_encrypt_yn="N"
         d_encrypt=""
     else
-        d_encrypt_yn="y"
+        d_encrypt_yn="Y"
         d_encrypt="-e"
     fi
     d_input_flags=${default_array[9]//\'/}
@@ -733,7 +733,7 @@ SetBitrates()
 
 SetConst()
 {
-    echo "是否使用固定码率[Y/n]"
+    echo "是否使用固定码率[y/N]"
     read -p "(默认: $d_const_yn):" const_yn
     const_yn=${const_yn:-$d_const_yn}
     if [[ "$const_yn" == [Yy] ]]
@@ -751,7 +751,7 @@ SetConst()
 
 SetEncrypt()
 {
-    echo "是否加密段[Y/n]"
+    echo "是否加密段[y/N]"
     read -p "(默认: $d_encrypt_yn):" encrypt_yn
     encrypt_yn=${encrypt_yn:-$d_encrypt_yn}
     if [[ "$encrypt_yn" == [Yy] ]]
@@ -913,9 +913,9 @@ EditChannel()
     $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.stream_link)='"$stream_link"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_length)='"$seg_length"'|(.channels[]|select(.pid=='"$chnl_pid"')|.output_dir_name)='"$output_dir_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_count)='"$seg_count"'|(.channels[]|select(.pid=='"$chnl_pid"')|.video_codec)='"$video_codec"'|(.channels[]|select(.pid=='"$chnl_pid"')|.audio_codec)='"$audio_codec"'|(.channels[]|select(.pid=='"$chnl_pid"')|.bitrates)='"$bitrates"'|(.channels[]|select(.pid=='"$chnl_pid"')|.playlist_name)='"$playlist_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.channel_name)='"$channel_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_dir_name)='"$seg_dir_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_name)='"$seg_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.const)='"$const"'|(.channels[]|select(.pid=='"$chnl_pid"')|.quality)='"$quality"'|(.channels[]|select(.pid=='"$chnl_pid"')|.encrypt)='"$encrypt"'|(.channels[]|select(.pid=='"$chnl_pid"')|.key_name)='"$key_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.input_flags)='"$input_flags"'|(.channels[]|select(.pid=='"$chnl_pid"')|.output_flags)='"$output_flags"'' "$MUDB_FILE" > "$CHANNELS_TMP"
     mv "$CHANNELS_TMP" "$MUDB_FILE"
     echo && echo -e "$info 频道修改成功 !" && echo
-    echo "是否重启此频道？[y/N]"
-    read -p "(默认: y):" restart_yn
-    restart_yn=${restart_yn:-"y"}
+    echo "是否重启此频道？[Y/n]"
+    read -p "(默认: Y):" restart_yn
+    restart_yn=${restart_yn:-"Y"}
     if [[ "$restart_yn" == [Yy] ]] 
     then
         StopChannel
@@ -1002,9 +1002,9 @@ DelChannel()
     $JQ_FILE '.channels -= [.channels[]|select(.pid=='"$chnl_pid"')]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
     mv "$CHANNELS_TMP" "$CHANNELS_FILE"
     echo -e "$info 频道删除成功 !" && echo
-    echo "是否删除此频道目录(及所有内容)？[y/N]"
-    read -p "(默认: y):" delete_yn
-    delete_yn=${delete_yn:-"y"}
+    echo "是否删除此频道目录(及所有内容)？[Y/n]"
+    read -p "(默认: Y):" delete_yn
+    delete_yn=${delete_yn:-"Y"}
     if [[ "$delete_yn" == [Yy] ]]
     then
         rm -rf "$LIVE_ROOT/${output_dir_name:-'notfound'}"
@@ -1209,8 +1209,8 @@ else
         FFMPEG="$FFMPEG_ROOT/ffmpeg"
         if [ ! -e "$FFMPEG" ]
         then
-            echo && read -p "尚未安装,是否现在安装？[Y/n] (默认: n): " install_yn
-            install_yn=${install_yn:-"n"}
+            echo && read -p "尚未安装,是否现在安装？[y/N] (默认: N): " install_yn
+            install_yn=${install_yn:-"N"}
             if [[ "$install_yn" == [Yy] ]]
             then
                 Install
