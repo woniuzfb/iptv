@@ -2,15 +2,15 @@
 
 set -euo pipefail
 
-sh_ver="0.1.2"
+sh_ver="0.1.3"
 SH_FILE="/usr/local/bin/tv"
 IPTV_ROOT="/usr/local/iptv"
+LIVE_ROOT="$IPTV_ROOT/live"
 CREATOR_FILE="$IPTV_ROOT/HLS-Stream-Creator.sh"
 JQ_FILE="$IPTV_ROOT/jq"
 CHANNELS_FILE="$IPTV_ROOT/channels.json"
 CHANNELS_TMP="$IPTV_ROOT/channels.tmp"
 LOCK_FILE="$IPTV_ROOT/lock"
-LIVE_ROOT="$IPTV_ROOT/live"
 green="\033[32m"
 red="\033[31m"
 plain="\033[0m"
@@ -33,8 +33,129 @@ default='
     "encrypt":"no",
     "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536",
     "output_flags":"-g 30 -sc_threshold 0 -preset superfast -pix_fmt yuv420p -profile:v main",
+    "sync_file":"",
+    "sync_index":"data:2:channels",
+    "sync_pairs":"chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url:http://xxx.xxx.xxx.xxx/live",
     "version":"'"$sh_ver"'"
 }'
+
+SyncFile()
+{
+    case $action in
+        "skip")
+            return
+        ;;      
+        "start"|"stop"|"del")
+            GetDefault
+        ;;
+        "add")
+            chnl_pid=$pid
+            if [ -n "$($JQ_FILE '.channels[] | select(.pid=='"$chnl_pid"')' $CHANNELS_FILE)" ]
+            then
+                GetChannelInfo
+            fi
+        ;;
+        *)
+            echo -e "$error $action ???" && exit 1
+        ;;
+    esac
+
+    new_pid=${new_pid:-""}
+    d_sync_file=${d_sync_file:-""}
+    d_sync_index=${d_sync_index:-""}
+    d_sync_pairs=${d_sync_pairs:-""}
+    if [ -n "$d_sync_file" ] && [ -n "$d_sync_index" ] && [ -n "$d_sync_pairs" ]
+    then
+        jq_index=""
+        while IFS=':' read -ra index_arr
+        do
+            for index in "${index_arr[@]}"
+            do
+                case $index in
+                    '') 
+                        echo -e "$error sync设置错误..." && exit 1
+                    ;;
+                    *[!0-9]*)
+                        jq_index="$jq_index.$index"
+                    ;;
+                    *) 
+                        jq_index="${jq_index}[$index]"
+                    ;;
+                esac
+            done
+        done <<< "$d_sync_index"
+
+        if [ "$action" == "del" ] || [ "$action" == "stop" ]
+        then
+            if [ -n "$($JQ_FILE "$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")' "$d_sync_file")" ] 
+            then
+                $JQ_FILE "$jq_index"' -= ['"$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")]' "$d_sync_file" > "$CHANNELS_TMP"
+                mv "$CHANNELS_TMP" "$d_sync_file"
+            fi
+        else
+            jq_channel_add="[{"
+            jq_channel_edit=""
+            while IFS=',' read -ra index_arr
+            do
+                for index in "${index_arr[@]}"
+                do
+                    case $index in
+                        '') 
+                            echo -e "$error sync设置错误..." && exit 1
+                        ;;
+                        *) 
+                            if [[ $index == *"="* ]] 
+                            then
+                                key=$(echo "$index" | cut -d= -f1)
+                                value=$(echo "$index" | cut -d= -f2)
+                            else
+                                key=$(echo "$index" | cut -d: -f1)
+                                value=$(echo "$index" | cut -d: -f2)
+                                if [[ $value == *"http"* ]] 
+                                then
+                                    value_add=$(echo "$index" | cut -d: -f3)
+                                    value="$value:$value_add"
+                                    value="$value/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
+                                else
+                                    value="chnl_$value"
+                                    if [ "$value" == "chnl_pid" ] && [ -n "$new_pid" ]
+                                    then
+                                        value=$new_pid
+                                    else 
+                                        value=${!value}
+                                    fi
+                                fi
+                            fi
+
+                            if [ "$jq_channel_add" == "[{" ] 
+                            then
+                                jq_channel_add="$jq_channel_add\"$key\":\"${value}\""
+                            else
+                                jq_channel_add="$jq_channel_add,\"$key\":\"${value}\""
+                            fi
+                            if [ -z "$jq_channel_edit" ] 
+                            then
+                                jq_channel_edit="$jq_channel_edit(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key)=\"${value}\""
+                            else
+                                jq_channel_edit="$jq_channel_edit|(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key)=\"${value}\""
+                            fi
+                        ;;
+                    esac
+                done
+            done <<< "$d_sync_pairs"
+            if [ "$action" == "add" ] || [ -z "$($JQ_FILE "$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")' "$d_sync_file")" ]
+            then
+                jq_channel_add="${jq_channel_add}}]"
+                $JQ_FILE "$jq_index"' += '"$jq_channel_add"'' "$d_sync_file" > "$CHANNELS_TMP"
+                mv "$CHANNELS_TMP" "$d_sync_file"
+            else
+                $JQ_FILE "${jq_channel_edit}" "$d_sync_file" > "$CHANNELS_TMP"
+                mv "$CHANNELS_TMP" "$d_sync_file"
+            fi
+        fi
+        echo -e "$info sync 执行成功..." && exit 0
+    fi
+}
 
 CheckRelease()
 {
@@ -330,6 +451,9 @@ GetDefault()
     fi
     d_input_flags=${default_array[9]//\'/}
     d_output_flags=${default_array[10]//\'/}
+    d_sync_file=${default_array[11]//\'/}
+    d_sync_index=${default_array[12]//\'/}
+    d_sync_pairs=${default_array[13]//\'/}
 }
 
 GetChannelsInfo()
@@ -337,16 +461,16 @@ GetChannelsInfo()
     [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
     channels_count=$($JQ_FILE -r '.channels | length' $CHANNELS_FILE)
     [ "$channels_count" == 0 ] && echo -e "$error 没有发现 频道，请检查 !" && exit 1
-    IFS=" " read -a chnls_pid <<< "$($JQ_FILE -r '[.channels[].pid] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -a chnls_status <<< "$($JQ_FILE -r '[.channels[].status] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -a chnls_output_dir_name <<< "$($JQ_FILE -r '[.channels[].output_dir_name] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -a chnls_playlist_name <<< "$($JQ_FILE -r '[.channels[].playlist_name] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -a chnls_video_codec <<< "$($JQ_FILE -r '[.channels[].video_codec] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -a chnls_audio_codec <<< "$($JQ_FILE -r '[.channels[].audio_codec] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -a chnls_quality <<< "$($JQ_FILE -r '[.channels[].quality] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -a chnls_bitrates <<< "$($JQ_FILE -r '[.channels[].bitrates] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -a chnls_const <<< "$($JQ_FILE -r '[.channels[].const] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -a chnls_name <<< "$($JQ_FILE -r '[.channels[].channel_name] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -ra chnls_pid <<< "$($JQ_FILE -r '[.channels[].pid] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -ra chnls_status <<< "$($JQ_FILE -r '[.channels[].status] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -ra chnls_output_dir_name <<< "$($JQ_FILE -r '[.channels[].output_dir_name] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -ra chnls_playlist_name <<< "$($JQ_FILE -r '[.channels[].playlist_name] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -ra chnls_video_codec <<< "$($JQ_FILE -r '[.channels[].video_codec] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -ra chnls_audio_codec <<< "$($JQ_FILE -r '[.channels[].audio_codec] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -ra chnls_quality <<< "$($JQ_FILE -r '[.channels[].quality] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -ra chnls_bitrates <<< "$($JQ_FILE -r '[.channels[].bitrates] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -ra chnls_const <<< "$($JQ_FILE -r '[.channels[].const] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -ra chnls_name <<< "$($JQ_FILE -r '[.channels[].channel_name] | @sh' $CHANNELS_FILE)"
 }
 
 ListChannels()
@@ -509,7 +633,7 @@ GetChannelInfo(){
     fi
     chnl_input_flags=${chnl_info_array[16]}
     chnl_output_flags=${chnl_info_array[17]}
-    chnl_name=${chnl_info_array[18]//\'/}
+    chnl_channel_name=${chnl_info_array[18]//\'/}
 
     if [ -n "$chnl_quality" ] 
     then
@@ -522,7 +646,7 @@ GetChannelInfo(){
 ViewChannelInfo()
 {
     clear && echo "===================================================" && echo
-    echo -e " 频道 [$chnl_name] 的配置信息：" && echo
+    echo -e " 频道 [$chnl_channel_name] 的配置信息：" && echo
     echo -e " 进程ID\t    : $green$chnl_pid$plain"
     echo -e " 状态\t    : $chnl_status_text"
     echo -e " 视频源\t    : $green$chnl_stream_link$plain"
@@ -541,8 +665,8 @@ ViewChannelInfo()
     then
         echo -e " key名称    : $chnl_key_name_text"
     fi
-    echo -e " input flags    : $chnl_input_flags"
-    echo -e " output flags   : $chnl_output_flags"
+    echo -e " input flags    : $green$chnl_input_flags$plain"
+    echo -e " output flags   : $green$chnl_output_flags$plain"
     echo
 }
 
@@ -589,9 +713,17 @@ SetOutputDirName()
 {
     echo "请输入频道输出目录名称"
     echo -e "$tip 是名称不是路径"
-    read -p "(默认: 随机名称):" output_dir_name
-    output_dir_name=${output_dir_name:-$(RandOutputDirName)}
-    output_dir_root="$LIVE_ROOT/$output_dir_name"
+    while read -p "(默认: 随机名称):" output_dir_name
+    do
+        output_dir_name=${output_dir_name:-$(RandOutputDirName)}
+        output_dir_root="$LIVE_ROOT/$output_dir_name"
+        if [ -e "$output_dir_root" ] 
+        then
+            echo -e "$error 目录已存在！ "
+        else
+            break
+        fi
+    done
     echo && echo -e "	目录名称: $green $output_dir_name $plain" && echo
 }
 
@@ -875,6 +1007,8 @@ AddChannel()
 
     mv "$CHANNELS_TMP" "$CHANNELS_FILE"
     echo && echo -e "$info 频道添加成功 !" && echo
+    action="add"
+    SyncFile
 }
 
 EditChannel()
@@ -918,11 +1052,13 @@ EditChannel()
     restart_yn=${restart_yn:-"Y"}
     if [[ "$restart_yn" == [Yy] ]] 
     then
+        action="skip"
         StopChannel
+        action=""
         StartChannel
         echo && echo -e "$info 频道重启成功 !" && echo
     else
-        echo "退出..." && exit 0
+        echo "退出..." && exit 0 
     fi
 }
 
@@ -941,7 +1077,6 @@ ToggleChannel()
 
 StartChannel()
 {
-    GetDefault
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
     FFMPEG="$FFMPEG_ROOT/ffmpeg"
     export FFMPEG
@@ -955,7 +1090,6 @@ StartChannel()
     export VIDEO_CODEC
     export SEGMENT_DIRECTORY
     export FFMPEG_FLAGS
-    rm -rf "${chnl_output_dir_root:-'notfound'}"/*
     exec "$CREATOR_FILE" -l -i "$chnl_stream_link" -s "$chnl_seg_length" \
         -o "$chnl_output_dir_root" -c "$chnl_seg_count" -b "$chnl_bitrates" \
         -p "$chnl_playlist_name" -t "$chnl_seg_name" -K "$chnl_key_name" -q "$chnl_quality" \
@@ -964,6 +1098,8 @@ StartChannel()
     $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.status)="on"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
     mv "$CHANNELS_TMP" "$CHANNELS_FILE"
     echo && echo -e "$info 频道进程已开启 !" && echo
+    action=${action:-"start"}
+    SyncFile
 }
 
 StopChannel()
@@ -978,17 +1114,24 @@ StopChannel()
         done
         #or pkill -TERM -P $creator_pid
     done
+    remove_dir_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').output_dir_name' "$CHANNELS_FILE")
     $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
     mv "$CHANNELS_TMP" "$CHANNELS_FILE"
-    echo && echo -e "$info 频道进程$chnl_pid已停止 !" && echo
+    rm -rf "$LIVE_ROOT/${remove_dir_name:-'notfound'}"
+    echo && echo -e "$info 频道目录删除成功 !" && echo
+    echo -e "$info 频道进程$chnl_pid已停止 !" && echo
+    action=${action:-"stop"}
+    SyncFile
 }
 
 RestartChannel()
 {
     ListChannels
     InputChannelPid
+    action="skip"
     StopChannel
     GetChannelInfo
+    action=""
     StartChannel
     echo && echo -e "$info 频道重启成功 !" && echo
 }
@@ -997,21 +1140,13 @@ DelChannel()
 {
     ListChannels
     InputChannelPid
+    action="skip"
     StopChannel
-    output_dir_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').output_dir_name' "$CHANNELS_FILE")
     $JQ_FILE '.channels -= [.channels[]|select(.pid=='"$chnl_pid"')]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
     mv "$CHANNELS_TMP" "$CHANNELS_FILE"
     echo -e "$info 频道删除成功 !" && echo
-    echo "是否删除此频道目录(及所有内容)？[Y/n]"
-    read -p "(默认: Y):" delete_yn
-    delete_yn=${delete_yn:-"Y"}
-    if [[ "$delete_yn" == [Yy] ]]
-    then
-        rm -rf "$LIVE_ROOT/${output_dir_name:-'notfound'}"
-        echo && echo -e "$info 频道目录删除成功 !" && echo
-    else
-        echo "退出..." && exit 0
-    fi
+    action="del"
+    SyncFile
 }
 
 RandStr()
