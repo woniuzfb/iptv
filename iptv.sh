@@ -690,7 +690,7 @@ SetAudioCodec()
 SetQuality()
 {
     echo -e "请输入输出视频质量"
-    echo -e "$tip 改变CRF，数字越大越视频质量越差，如果设置则无法再设置比特率"
+    echo -e "$tip 改变CRF，数字越大越视频质量越差，如果设置CRF则无法用比特率控制视频质量"
     echo -e "$tip 可以输入 n 不设置CRF值，用比特率来控制输出的视频质量"
     while read -p "(默认: $d_quality_text):" quality
     do
@@ -730,7 +730,7 @@ SetBitrates()
         echo -e "$tip 用于 -maxrate 和 -bufsize"
     fi
     echo -e "$tip 多个比特率用逗号分隔(生成自适应码流)
-    同时可以指定输出的分辨率(比如：-b 128-600x400,256-1280x720)"
+    同时可以指定输出的分辨率(比如：128-600x400,256-1280x720)"
     read -p "(默认: $d_bitrates):" bitrates
     bitrates=${bitrates:-$d_bitrates}
     echo && echo -e "	比特率: $green $bitrates $plain" && echo
