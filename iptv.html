@@ -207,10 +207,10 @@
     <video id="video" controls></video>
     <div class="categories">
       <ul>
-        <li data-value="hbo1">HBO1</li>
-        <li data-value="hbo2">HBO2</li>
-        <li data-value="HBOHD1" class="hbohd extra">HBO高清1</li>
-        <li data-value="HBOHD2" class="hbohd extra">HBO高清2</li>
+        <li data-value="hbo1" data-source="hbo">HBO1</li>
+        <li data-value="hbo2" data-source="nx96200">HBO2</li>
+        <li data-value="HBOHD1" data-source="hbohd" class="hbohd extra">HBO高清1</li>
+        <li data-value="HBOHD2" data-source="hbohd" class="hbohd extra">HBO高清2</li>
         <li data-value="myList1" class="dianxin">高清&bull;电信</li>
         <li data-value="myList1a" class="liantong">高清&bull;联通</li>
         <li data-value="myList2">标清</li>
@@ -219,7 +219,7 @@
         <li data-value="myList5">地方</li>
         <li data-value="myList8">专业</li>
         <li data-value="myList9" class="extra">港澳台</li>
-        <li class="switch" data-value="0">关灯</li>
+        <li data-value="0" class="switch">关灯</li>
       </ul>
     </div>
     <section>
@@ -318,22 +318,6 @@ function switchCategory(e) {
   if(e.target && e.target.nodeName === "LI") {
     let catValue =  e.target.dataset.value;
     switch (catValue) {
-      case "hbo1":
-        sourceName = 'hbo';
-        programId = catValue;
-        playVideo();
-        break;
-      case "hbo2":
-        sourceName = 'nx96200';
-        programId = catValue;
-        playVideo();
-        break;
-      case "HBOHD1":
-      case "HBOHD2":
-        sourceName = 'hbohd';
-        programId = catValue;
-        playVideo();
-        break;
       case "0":
       case "1":
         if(catValue === "0") {
@@ -355,14 +339,20 @@ function switchCategory(e) {
         toggleClass('footer','bgBlack');
         break;
       default:
-        const mylist = document.querySelector('.'+catValue);
-        let siblings = mylist.parentNode.childNodes;
-        for(let i=0; i < siblings.length; i++) {
-          if(siblings[i].nodeName === "UL") {
-            siblings[i].classList.add('hidden');
+        if (e.target.dataset.source) {
+          sourceName = e.target.dataset.source;
+          programId = catValue;
+          playVideo();
+        } else {
+          const mylist = document.querySelector('.'+catValue);
+          let siblings = mylist.parentNode.childNodes;
+          for(let i=0; i < siblings.length; i++) {
+            if(siblings[i].nodeName === "UL") {
+              siblings[i].classList.add('hidden');
+            }
           }
+          mylist.classList.remove('hidden');
         }
-        mylist.classList.remove('hidden');
         break;
     }
   }
@@ -428,9 +418,9 @@ function playVideo() {
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
     if (source.name === sourceName) {
-      if (sourceName === 'hbo' || sourceName === 'hbohd') {
+      if (source.play_url === undefined) {
         for (let a = 0; a < source.channels.length; a++) {
-          if (source.channels[a].chnl_name === programId) {
+          if (source.channels[a].chnl_id === programId) {
             hlsVideoUrl = source.channels[a].url;
             sourceReg = 'nx96200';
             hlsLoad();
@@ -811,7 +801,7 @@ function reqChannels(source) {
   });
 }
 
-let sourcesJson,sourceName,programId,hlsVideoUrl,hboId,hbo={},hbohd={};
+let sourcesJson,sourceName,programId,hlsVideoUrl,hboId;
 let sourceReg = 'nx96200';
 let localJson = 'channels.json';
 let remoteJson = 'http://hbo.epub.fun/channels.json';
@@ -901,33 +891,21 @@ function initialize() {
   myList9.classList.add('hidden');
   for (let index = 0; index < sourcesJson.data.length; index++) {
     const source = sourcesJson.data[index];
-    if (source.name === 'hbo') {
-      for (let a = 0; a < source.channels.length; a++) {
-        const hboChannel = source.channels[a];
-        hbo[hboChannel.chnl_name] = hboChannel.url;
-      }
-    } else if (source.name === 'hbohd') {
-      for (let b = 0; b < source.channels.length; b++) {
-        const hbohdChannel = source.channels[b];
-        hbohd[hbohdChannel.chnl_name] = hbohdChannel.url;
-      }
-    } else {
-      if (localStorage.getItem(source.name)) {
-        sourcesJson.data[index]['token'] = localStorage.getItem(source.name);
-        source['token'] = localStorage.getItem(source.name);
-      } else if (source.token && source.token !== '') {
-        localStorage.setItem(source.name, source.token);
-      }
-      if (source.list_url && localStorage.getItem(source.name)) {
-        reqChannels(source);
-      }
-      for (let c = 0; c < source.channels.length; c++) {
-        const channel = source.channels[c];
-        if (channel.chnl_name === 'hbo') {
-          hboId = channel.chnl_id;
-        } else {
-          appendList(channel,source.name,source.lane);
-        }
+    if (localStorage.getItem(source.name)) {
+      sourcesJson.data[index]['token'] = localStorage.getItem(source.name);
+      source['token'] = localStorage.getItem(source.name);
+    } else if (source.token && source.token !== '') {
+      localStorage.setItem(source.name, source.token);
+    }
+    if (source.list_url && localStorage.getItem(source.name)) {
+      reqChannels(source);
+    }
+    for (let a = 0; a < source.channels.length; a++) {
+      const channel = source.channels[a];
+      if (channel.chnl_name === 'hbo') {
+        hboId = channel.chnl_id;
+      } else {
+        appendList(channel,source.name,source.lane);
       }
     }
   }
