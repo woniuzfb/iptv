@@ -32,7 +32,7 @@ default='
     "const":"no",
     "encrypt":"no",
     "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536",
-    "output_flags":"-preset superfast -pix_fmt yuv420p -profile:v main",
+    "output_flags":"-g 30 -sc_threshold 0 -preset superfast -pix_fmt yuv420p -profile:v main",
     "version":"'"$sh_ver"'"
 }'
 
