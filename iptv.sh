@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-sh_ver="0.1.1"
+sh_ver="0.1.2"
 SH_FILE="/usr/local/bin/tv"
 IPTV_ROOT="/usr/local/iptv"
 CREATOR_FILE="$IPTV_ROOT/HLS-Stream-Creator.sh"
@@ -27,8 +27,8 @@ default='
     "seg_count":5,
     "video_codec":"h264",
     "audio_codec":"aac",
-    "quality":18,
-    "bitrates":"256",
+    "quality":"",
+    "bitrates":"900-1280x720",
     "const":"no",
     "encrypt":"no",
     "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536",
@@ -374,7 +374,7 @@ ListChannels()
         then
             if [ -z "$d_bitrates" ] 
             then
-                d_bitrates=256
+                d_bitrates="900-1280x720"
             fi
             $JQ_FILE '(.channels[]|select(.pid=='"$chnls_pid_index"')|.bitrates)='"$d_bitrates"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
             mv "$CHANNELS_TMP" "$CHANNELS_FILE"
@@ -469,7 +469,7 @@ GetChannelInfo(){
     then
         if [ -z "$d_bitrates" ] 
         then
-            d_bitrates=256
+            d_bitrates="900-1280x720"
         fi
         $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.bitrates)='"$d_bitrates"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
@@ -691,7 +691,6 @@ SetQuality()
 {
     echo -e "请输入输出视频质量"
     echo -e "$tip 改变CRF，数字越大越视频质量越差，如果设置CRF则无法用比特率控制视频质量"
-    echo -e "$tip 可以输入 n 不设置CRF值，用比特率来控制输出的视频质量"
     while read -p "(默认: $d_quality_text):" quality
     do
         case "$quality" in
@@ -699,19 +698,15 @@ SetQuality()
                 quality=$d_quality
                 break
             ;;
-            "N"|"n")
-                quality=""
-                break
-            ;;
             (*[!0-9]*)
-                echo -e "$error 请输入正确的数字(大于等于0,小于等于63)或直接回车 "
+                echo -e "$error 请输入正确的数字(大于0,小于等于63)或直接回车 "
             ;;
             (*)
-                if [ "$quality" -ge 0 ] && [ "$quality" -le 63 ]
+                if [ "$quality" -gt 0 ] && [ "$quality" -lt 63 ]
                 then
                     break
                 else
-                    echo -e "$error 请输入正确的数字(大于等于0,小于等于63)或直接回车 "
+                    echo -e "$error 请输入正确的数字(大于0,小于等于63)或直接回车 "
                 fi
             ;;
         esac
@@ -730,7 +725,7 @@ SetBitrates()
         echo -e "$tip 用于 -maxrate 和 -bufsize"
     fi
     echo -e "$tip 多个比特率用逗号分隔(生成自适应码流)
-    同时可以指定输出的分辨率(比如：128-600x400,256-1280x720)"
+    同时可以指定输出的分辨率(比如：600-600x400,900-1280x720)"
     read -p "(默认: $d_bitrates):" bitrates
     bitrates=${bitrates:-$d_bitrates}
     echo && echo -e "	比特率: $green $bitrates $plain" && echo
@@ -1097,13 +1092,13 @@ See LICENSE
     -t  段名称(前缀)(默认：跟m3u8名称相同)
     -a  音频编码(默认：aac)
     -v  视频编码(默认：h264)
-    -q  crf视频质量(如果设置了输出视频比特率，则优先使用crf视频质量)(数值0~63 越大质量越差)(默认：18)
-        输入n不设置crf视频质量值
-    -b  输出视频的比特率(bits/s)(默认：256)
+    -q  crf视频质量(如果设置了输出视频比特率，则优先使用crf视频质量)(数值1~63 越大质量越差)
+        (默认: 不设置crf视频质量值)
+    -b  输出视频的比特率(bits/s)(默认：900-1280x720)
         如果已经设置crf视频质量值，则比特率用于 -maxrate -bufsize
         如果没有设置crf视频质量值，则可以继续设置是否固定码率
         多个比特率用逗号分隔(注意-如果设置多个比特率，就是生成自适应码流)
-        同时可以指定输出的分辨率(比如：-b 128-600x400,256-1280x720)
+        同时可以指定输出的分辨率(比如：-b 600-600x400,900-1280x720)
         这里不能不设置比特率(空)，因为大多数直播源没有设置比特率，无法让FFmpeg按输入源的比特率输出
     -C  固定码率(CBR 而不是 AVB)(只有在没有设置crf视频质量的情况下才有效)(默认：否)
     -e  加密段(默认：不加密)
@@ -1117,11 +1112,11 @@ See LICENSE
         -nostats -nostdin -hide_banner -loglevel 
         fatal -probesize 65536")
     -n  ffmpeg 额外的 OUTPUT FLAGS
-        (默认："-preset superfast -pix_fmt yuv420p -profile:v main")
+        (默认："-g 30 -sc_threshold 0 -preset superfast -pix_fmt yuv420p -profile:v main")
 
 举例:
-    默认[使用crf值控制视频质量]: tv -i http://xxx.com/xxx.ts -s 6 -o hbo1 -p hbo1 -q 18 -b 256 -z 'hbo直播1'
-    使用比特率控制视频质量: tv -i http://xxx.com/xxx.ts -s 6 -o hbo2 -p hbo2 -b 256 -q n -z 'hbo直播2'
+    使用crf值控制视频质量: tv -i http://xxx.com/xxx.ts -s 6 -o hbo1 -p hbo1 -q 15 -b 1500-1280x720 -z 'hbo直播1'
+    使用比特率控制视频质量[默认]: tv -i http://xxx.com/xxx.ts -s 6 -o hbo2 -p hbo2 -b 900-1280x720 -z 'hbo直播2'
 
 EOM
 
@@ -1234,12 +1229,7 @@ else
             seg_count=${seg_count:-"$d_seg_count"}
             export AUDIO_CODEC=${audio_codec:-"$d_audio_codec"}
             export VIDEO_CODEC=${video_codec:-"$d_video_codec"}
-            if [ "$quality" == "n" ] 
-            then
-                quality=""
-            else
-                quality=${quality:-"$d_quality"}
-            fi
+            quality=${quality:-"$d_quality"}
             bitrates=${bitrates:-"$d_bitrates"}
             const=${const:-"$d_const"}
             encrypt=${encrypt:-"$d_encrypt"}

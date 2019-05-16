@@ -53,13 +53,13 @@ bash -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/wo
     -t  段名称(前缀)(默认：跟m3u8名称相同)
     -a  音频编码(默认：aac)
     -v  视频编码(默认：h264)
-    -q  crf视频质量(如果设置了输出视频比特率，则优先使用crf视频质量)(数值0~63 越大质量越差)(默认：18)
-        输入n不设置crf视频质量值
-    -b  输出视频的比特率(bits/s)(默认：256)
+    -q  crf视频质量(如果设置了输出视频比特率，则优先使用crf视频质量)(数值1~63 越大质量越差)
+        (默认: 不设置crf视频质量值)
+    -b  输出视频的比特率(bits/s)(1500)
         如果已经设置crf视频质量值，则比特率用于 -maxrate -bufsize
         如果没有设置crf视频质量值，则可以继续设置是否固定码率
         多个比特率用逗号分隔(注意-如果设置多个比特率，就是生成自适应码流)
-        同时可以指定输出的分辨率(比如：-b 128-600x400,256-1280x720)
+        同时可以指定输出的分辨率(比如：-b 600-600x400,900-1280x720)
         这里不能不设置比特率(空)，因为大多数直播源没有设置比特率，无法让FFmpeg按输入源的比特率输出
     -C  固定码率(CBR 而不是 AVB)(只有在没有设置crf视频质量的情况下才有效)(默认：否)
     -e  加密段(默认：不加密)
@@ -73,16 +73,16 @@ bash -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/wo
         -nostats -nostdin -hide_banner -loglevel 
         fatal -probesize 65536")
     -n  ffmpeg 额外的 OUTPUT FLAGS
-        (默认："-preset superfast -pix_fmt yuv420p -profile:v main")
+        (默认："-g 30 -sc_threshold 0 -preset superfast -pix_fmt yuv420p -profile:v main")
 
 ## 举例
 
-- 使用crf值控制视频质量[ 默认 ]:
+- 使用crf值控制视频质量:
 
-    `tv -i http://xxx/xxx.ts -s 6 -o hbo1 -p hbo1 -q 18 -b 256 -z 'hbo直播1'`
+    `tv -i http://xxx/xxx.ts -s 6 -o hbo1 -p hbo1 -q 15 -b 1500-1280x720 -z 'hbo直播1'`
 
-- 使用比特率控制视频质量:
+- 使用比特率控制视频质量[ 默认 ]:
 
-    `tv -i http://xxx/xxx.ts -s 6 -o hbo2 -p hbo2 -q n -b 256 -z 'hbo直播2'`
+    `tv -i http://xxx/xxx.ts -s 6 -o hbo2 -p hbo2 -b 900-1280x720 -z 'hbo直播2'`
 
 - 或者输入 tv 打开面板，使用方法  **Enter**
