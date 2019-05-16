@@ -28,7 +28,7 @@ default='
     "video_codec":"h264",
     "audio_codec":"aac",
     "quality":18,
-    "bitrates":"1500",
+    "bitrates":"256",
     "const":"no",
     "encrypt":"no",
     "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536",
@@ -374,7 +374,7 @@ ListChannels()
         then
             if [ -z "$d_bitrates" ] 
             then
-                d_bitrates=1500
+                d_bitrates=256
             fi
             $JQ_FILE '(.channels[]|select(.pid=='"$chnls_pid_index"')|.bitrates)='"$d_bitrates"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
             mv "$CHANNELS_TMP" "$CHANNELS_FILE"
@@ -469,7 +469,7 @@ GetChannelInfo(){
     then
         if [ -z "$d_bitrates" ] 
         then
-            d_bitrates=1500
+            d_bitrates=256
         fi
         $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.bitrates)='"$d_bitrates"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
