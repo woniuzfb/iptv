@@ -115,7 +115,7 @@ InstallFfmpeg()
         FFMPEG_PACKAGE_FILE="$IPTV_ROOT/$ffmpeg_package"
         wget --no-check-certificate "https://johnvansickle.com/ffmpeg/builds/$ffmpeg_package" -qO "$FFMPEG_PACKAGE_FILE"
         [ ! -e "$FFMPEG_PACKAGE_FILE" ] && echo -e "$error ffmpeg压缩包 下载失败 !" && exit 1
-        tar -xJf "$FFMPEG_PACKAGE_FILE" -C "$IPTV_ROOT" && rm -rf "$FFMPEG_PACKAGE_FILE"
+        tar -xJf "$FFMPEG_PACKAGE_FILE" -C "$IPTV_ROOT" && rm -rf "${FFMPEG_PACKAGE_FILE:-'notfound'}"
         FFMPEG=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
         [ ! -e "$FFMPEG" ] && echo -e "$error ffmpeg压缩包 解压失败 !" && exit 1
         export FFMPEG
@@ -195,7 +195,7 @@ Uninstall()
         do
             StopChannel
         done
-        rm -rf "$IPTV_ROOT"
+        rm -rf "${IPTV_ROOT:-'notfound'}"
         echo && echo -e "$info 卸载完成 !" && echo
     else
         echo && echo -e "$info 卸载已取消..." && echo
@@ -209,8 +209,6 @@ Update()
     if [ "$sh_new_ver" != "$sh_ver" ] 
     then
         printf "" > ${LOCK_FILE}
-    else
-        rm -rf "${LOCK_FILE:-'notfound'}"
     fi
     wget --no-check-certificate "https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh" -qO "$SH_FILE" && chmod +x "$SH_FILE"
     echo -e "脚本已更新为最新版本[ $sh_new_ver ] !(输入: tv 使用)" && exit 0
@@ -303,6 +301,7 @@ UpdateSelf()
         done
         
     fi
+    rm -rf "${LOCK_FILE:-'notfound'}"
 }
 
 GetDefault()
