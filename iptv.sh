@@ -9,6 +9,7 @@ CREATOR_FILE="$IPTV_ROOT/HLS-Stream-Creator.sh"
 JQ_FILE="$IPTV_ROOT/jq"
 CHANNELS_FILE="$IPTV_ROOT/channels.json"
 CHANNELS_TMP="$IPTV_ROOT/channels.tmp"
+LOCK_FILE="$IPTV_ROOT/lock"
 LIVE_ROOT="$IPTV_ROOT/live"
 green="\033[32m"
 red="\033[31m"
@@ -205,6 +206,12 @@ Update()
 {
     sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1)
     [ -z "$sh_new_ver" ] && echo -e "$error 无法链接到 Github !" && exit 1
+    if [ "$sh_new_ver" != "$sh_ver" ] 
+    then
+        rm -rf "${LOCK_FILE:-'notfound'}"
+    else
+        print "" > ${LOCK_FILE}
+    fi
     wget --no-check-certificate "https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh" -qO "$SH_FILE" && chmod +x "$SH_FILE"
     echo -e "脚本已更新为最新版本[ $sh_new_ver ] !(输入: tv 使用)" && exit 0
 }
@@ -1108,7 +1115,7 @@ exit
 
 }
 
-[ -e "$IPTV_ROOT" ] && UpdateSelf
+[ ! -e "$LOCK_FILE" ] && UpdateSelf
 use_menu=1
 
 while getopts "i:o:p:S:t:s:c:v:a:q:b:K:m:n:z:h:H:Ce" flag
