@@ -208,9 +208,9 @@ Update()
     [ -z "$sh_new_ver" ] && echo -e "$error 无法链接到 Github !" && exit 1
     if [ "$sh_new_ver" != "$sh_ver" ] 
     then
-        rm -rf "${LOCK_FILE:-'notfound'}"
-    else
         print "" > ${LOCK_FILE}
+    else
+        rm -rf "${LOCK_FILE:-'notfound'}"
     fi
     wget --no-check-certificate "https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh" -qO "$SH_FILE" && chmod +x "$SH_FILE"
     echo -e "脚本已更新为最新版本[ $sh_new_ver ] !(输入: tv 使用)" && exit 0
@@ -1115,7 +1115,7 @@ exit
 
 }
 
-[ ! -e "$LOCK_FILE" ] && UpdateSelf
+[ -e "$LOCK_FILE" ] && UpdateSelf
 use_menu=1
 
 while getopts "i:o:p:S:t:s:c:v:a:q:b:K:m:n:z:h:H:Ce" flag
