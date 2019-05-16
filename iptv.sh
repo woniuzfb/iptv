@@ -35,7 +35,7 @@ default='
     "output_flags":"-g 30 -sc_threshold 0 -preset superfast -pix_fmt yuv420p -profile:v main",
     "sync_file":"",
     "sync_index":"data:2:channels",
-    "sync_pairs":"chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url:http://xxx.xxx.xxx.xxx/live",
+    "sync_pairs":"chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live",
     "version":"'"$sh_ver"'"
 }'
 
@@ -108,22 +108,19 @@ SyncFile()
                             then
                                 key=$(echo "$index" | cut -d= -f1)
                                 value=$(echo "$index" | cut -d= -f2)
+                                if [[ $value == *"http"* ]]  
+                                then
+                                    value="$value/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
+                                fi
                             else
                                 key=$(echo "$index" | cut -d: -f1)
                                 value=$(echo "$index" | cut -d: -f2)
-                                if [[ $value == *"http"* ]] 
+                                value="chnl_$value"
+                                if [ "$value" == "chnl_pid" ] && [ -n "$new_pid" ]
                                 then
-                                    value_add=$(echo "$index" | cut -d: -f3)
-                                    value="$value:$value_add"
-                                    value="$value/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
-                                else
-                                    value="chnl_$value"
-                                    if [ "$value" == "chnl_pid" ] && [ -n "$new_pid" ]
-                                    then
-                                        value=$new_pid
-                                    else 
-                                        value=${!value}
-                                    fi
+                                    value=$new_pid
+                                else 
+                                    value=${!value}
                                 fi
                             fi
 
