@@ -208,7 +208,7 @@ Update()
     [ -z "$sh_new_ver" ] && echo -e "$error 无法链接到 Github !" && exit 1
     if [ "$sh_new_ver" != "$sh_ver" ] 
     then
-        print "" > ${LOCK_FILE}
+        printf "" > ${LOCK_FILE}
     else
         rm -rf "${LOCK_FILE:-'notfound'}"
     fi
