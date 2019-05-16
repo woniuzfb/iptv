@@ -213,7 +213,7 @@ Update()
     [ -z "$sh_new_ver" ] && echo -e "$error 无法链接到 Github !" && exit 1
     if [ "$sh_new_ver" != "$sh_ver" ] 
     then
-        printf "" > ${LOCK_FILE}
+        rm -rf "${LOCK_FILE:-'notfound'}"
     fi
     wget --no-check-certificate "https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh" -qO "$SH_FILE" && chmod +x "$SH_FILE"
     echo -e "脚本已更新为最新版本[ $sh_new_ver ] !(输入: tv 使用)" && exit 0
@@ -291,7 +291,7 @@ UpdateSelf()
         done
         
     fi
-    rm -rf "${LOCK_FILE:-'notfound'}"
+    printf "" > ${LOCK_FILE}
 }
 
 GetDefault()
@@ -948,13 +948,13 @@ StartChannel()
 
 StopChannel()
 {
-    creator_pids=$(pgrep -P $chnl_pid || true)
+    creator_pids=$(pgrep -P "$chnl_pid" || true)
     for creator_pid in $creator_pids
     do
-        ffmpeg_pids=$(pgrep -P $creator_pid || true)
+        ffmpeg_pids=$(pgrep -P "$creator_pid" || true)
         for ffmpeg_pid in $ffmpeg_pids
         do
-            kill -9 $ffmpeg_pid || true
+            kill -9 "$ffmpeg_pid" || true
         done
         #or pkill -TERM -P $creator_pid
     done
@@ -1104,7 +1104,11 @@ exit
 
 }
 
-[ -e "$LOCK_FILE" ] && UpdateSelf
+if [ -e "$IPTV_ROOT" ] && [ ! -e "$LOCK_FILE" ] 
+then
+    UpdateSelf
+fi
+
 use_menu=1
 
 while getopts "i:o:p:S:t:s:c:v:a:q:b:K:m:n:z:h:H:Ce" flag
