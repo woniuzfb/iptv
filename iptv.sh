@@ -345,6 +345,7 @@ GetChannelsInfo()
     IFS=" " read -a chnls_audio_codec <<< "$($JQ_FILE -r '[.channels[].audio_codec] | @sh' $CHANNELS_FILE)"
     IFS=" " read -a chnls_quality <<< "$($JQ_FILE -r '[.channels[].quality] | @sh' $CHANNELS_FILE)"
     IFS=" " read -a chnls_bitrates <<< "$($JQ_FILE -r '[.channels[].bitrates] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -a chnls_const <<< "$($JQ_FILE -r '[.channels[].const] | @sh' $CHANNELS_FILE)"
     IFS=" " read -a chnls_name <<< "$($JQ_FILE -r '[.channels[].channel_name] | @sh' $CHANNELS_FILE)"
 }
 
@@ -356,11 +357,49 @@ ListChannels()
         chnls_status_index=${chnls_status[index]//\'/}
         chnls_pid_index=${chnls_pid[index]//\'/}
         chnls_output_dir_name_index=${chnls_output_dir_name[index]//\'/}
+        chnls_output_dir_root="$LIVE_ROOT/$chnls_output_dir_name_index"
         chnls_video_codec_index=${chnls_video_codec[index]//\'/}
         chnls_audio_codec_index=${chnls_audio_codec[index]//\'/}
         chnls_quality_index=${chnls_quality[index]//\'/}
         chnls_playlist_name_index=${chnls_playlist_name[index]//\'/}
+        chnls_const_index=${chnls_const[index]//\'/}
+        if [ "$chnls_const_index" == "no" ] 
+        then
+            chnls_const_index_text=" 固定频率:否"
+        else
+            chnls_const_index_text=" 固定频率:是"
+        fi
         chnls_bitrates_index=${chnls_bitrates[index]//\'/}
+        if [ -z "$chnls_bitrates_index" ] 
+        then
+            if [ -z "$d_bitrates" ] 
+            then
+                d_bitrates=1500
+            fi
+            $JQ_FILE '(.channels[]|select(.pid=='"$chnls_pid_index"')|.bitrates)='"$d_bitrates"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+            mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+            chnls_bitrates_index=$d_bitrates
+        fi
+        chnls_bitrates_index_arr=${chnls_bitrates_index//,/$'\n'}
+        chnls_quality_text=""
+        chnls_bitrates_text=""
+        chnls_playlist_file_text=""
+        for chnls_br in $chnls_bitrates_index_arr
+        do
+            if [[ "$chnls_br" == *"-"* ]]
+            then
+                chnls_br_a=$(echo "$chnls_br" | cut -d- -f1)
+                chnls_br_b=" 分辨率: "$(echo "$chnls_br" | cut -d- -f2)
+                chnls_quality_text="${chnls_quality_text}[ -maxrate ${chnls_br_a}k -bufsize ${chnls_br_a}k${chnls_br_b} ] "
+                chnls_bitrates_text="${chnls_bitrates_text}[ 比特率 ${chnls_br_a}k${chnls_const_index_text} ] "
+                chnls_playlist_file_text="$chnls_playlist_file_text$green$chnls_output_dir_root/${chnls_playlist_name_index}_$chnls_br_a.m3u8$plain "
+            else
+                chnls_quality_text="${chnls_quality_text}[ -maxrate ${chnls_br}k -bufsize ${chnls_br}k ] "
+                chnls_bitrates_text="${chnls_bitrates_text}[ 比特率 ${chnls_br}k${chnls_const_index_text} ] "
+                chnls_playlist_file_text="$chnls_playlist_file_text$green$chnls_output_dir_root/${chnls_playlist_name_index}_$chnls_br.m3u8$plain "
+            fi
+        done
+        
         chnls_name_index=${chnls_name[index]//\'/}
         if [ "$chnls_status_index" == "on" ]
         then
@@ -376,34 +415,12 @@ ListChannels()
         else
             chnls_status_text=$red"关闭"$plain
         fi
-        chnls_output_dir_root="$LIVE_ROOT/$chnls_output_dir_name_index"
 
         if [ -n "$chnls_quality_index" ] 
         then
-            chnls_video_quality_text="crf值${chnls_quality_index} [ -maxrate ${chnls_bitrates_index}k -bufsize ${chnls_bitrates_index}k ]"
-            chnls_playlist_file_text="$green$chnls_output_dir_root/${chnls_playlist_name_index}_${chnls_bitrates_index}.m3u8$plain"
+            chnls_video_quality_text="crf值$chnls_quality_index $chnls_quality_text"
         else
-            if [ -z "$chnls_bitrates_index" ] 
-            then
-                if [ -z "$d_bitrates" ] 
-                then
-                    d_bitrates=1500
-                fi
-                $JQ_FILE '(.channels[]|select(.pid=='"$chnls_pid_index"')|.bitrates)='"$d_bitrates"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
-                mv "$CHANNELS_TMP" "$CHANNELS_FILE"
-                chnls_bitrates_index=$d_bitrates
-            fi
-            chnls_video_quality_text="比特率值$chnls_bitrates_index"
-            chnls_bitrates_index_arr=${chnls_bitrates_index//,/$'\n'}
-            chnls_playlist_file_text=""
-            for chnls_br in $chnls_bitrates_index_arr
-            do
-                if [[ "$chnls_br" == *"-"* ]]
-                then
-                    chnls_br=$(echo "$chnls_br" | cut -d- -f1) 
-                fi
-                chnls_playlist_file_text="$chnls_playlist_file_text$green$chnls_output_dir_root/${chnls_playlist_name_index}_$chnls_br.m3u8$plain "
-            done
+            chnls_video_quality_text="比特率值 $chnls_bitrates_text"
         fi
         chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid_index}$plain\t 状态: $chnls_status_text\t 频道名称: $green${chnls_name_index}$plain\t 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain\t 视频质量: $green$chnls_video_quality_text$plain\t 目录: $green$chnls_output_dir_root$plain\nm3u8位置: $chnls_playlist_file_text\n\n"
     done
@@ -438,17 +455,46 @@ GetChannelInfo(){
     chnl_video_codec=${chnl_info_array[9]//\'/}
     chnl_audio_codec=${chnl_info_array[10]//\'/}
     chnl_quality=${chnl_info_array[11]//\'/}
-    chnl_quality_text=${chnl_quality:-"不设置"}
-    chnl_bitrates=${chnl_info_array[12]//\'/}
     chnl_const=${chnl_info_array[13]//\'/}
     if [ "$chnl_const" == "no" ]
     then
         chnl_const=""
-        chnl_const_text=$red"否"$plain
+        chnl_const_text=" 固定频率:否"
     else
         chnl_const="-C"
-        chnl_const_text=$green"是"$plain
+        chnl_const_text=" 固定频率:是"
     fi
+    chnl_bitrates=${chnl_info_array[12]//\'/}
+    if [ -z "$chnl_bitrates" ] 
+    then
+        if [ -z "$d_bitrates" ] 
+        then
+            d_bitrates=1500
+        fi
+        $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.bitrates)='"$d_bitrates"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+        mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+        chnl_bitrates=$d_bitrates
+    fi
+    chnl_bitrates_arr=${chnl_bitrates//,/$'\n'}
+    chnl_crf_text=""
+    chnl_nocrf_text=""
+    chnl_playlist_file_text=""
+    for chnl_br in $chnl_bitrates_arr
+    do
+        if [[ "$chnl_br" == *"-"* ]]
+        then
+            chnl_br_a=$(echo "$chnl_br" | cut -d- -f1)
+            chnl_br_b=" 分辨率: "$(echo "$chnl_br" | cut -d- -f2)
+            chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br_a}k -bufsize ${chnl_br_a}k${chnl_br_b} ] "
+            chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br_a}k${chnl_const_text} ] "
+            chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br_a.m3u8$plain "
+        else
+            chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br}k -bufsize ${chnl_br}k ] "
+            chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br}k${chnl_const_text} ] "
+            chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br.m3u8$plain "
+        fi
+    done
+
     chnl_encrypt=${chnl_info_array[14]//\'/}
     chnl_key_name=${chnl_info_array[15]//\'/}
     if [ "$chnl_encrypt" == "no" ]
@@ -467,30 +513,9 @@ GetChannelInfo(){
 
     if [ -n "$chnl_quality" ] 
     then
-        chnl_video_quality_text="crf值$chnl_quality_text [ -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k ]"
-        chnl_playlist_file_text="$green$chnl_output_dir_root/${chnl_playlist_name}_${chnl_bitrates}.m3u8$plain"
+        chnl_video_quality_text="crf值$chnl_quality $chnl_crf_text"
     else
-        if [ -z "$chnl_bitrates" ] 
-        then
-            if [ -z "$d_bitrates" ] 
-            then
-                d_bitrates=1500
-            fi
-            $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.bitrates)='"$d_bitrates"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
-            mv "$CHANNELS_TMP" "$CHANNELS_FILE"
-            chnl_bitrates=$d_bitrates
-        fi
-        chnl_video_quality_text="比特率值$chnl_bitrates [ 固定视频码率：$chnl_const_text]"
-        chnl_bitrates_arr=${chnl_bitrates//,/$'\n'}
-        chnl_playlist_file_text=""
-        for chnl_br in $chnl_bitrates_arr
-        do
-            if [[ "$chnl_br" == *"-"* ]]
-            then
-                chnl_br=$(echo "$chnl_br" | cut -d- -f1) 
-            fi
-            chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br.m3u8$plain "
-        done
+        chnl_video_quality_text="比特率值 $chnl_nocrf_text"
     fi
 }
 
