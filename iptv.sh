@@ -814,7 +814,7 @@ AddChannel()
     SetAudioCodec
     SetQuality
     SetBitrates
-    if [ -n "$quality" ] 
+    if [ -z "$quality" ] 
     then
         SetConst
     else
