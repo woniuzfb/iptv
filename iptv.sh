@@ -20,6 +20,22 @@ tip="${green}[注意]$plain"
 
 [ $EUID -ne 0 ] && echo -e "[$error] 当前账号非ROOT(或没有ROOT权限),无法继续操作,请使用$green sudo su $plain来获取临时ROOT权限（执行后会提示输入当前账号的密码）." && exit 1
 
+default='
+{
+    "seg_dir_name":"",
+    "seg_length":6,
+    "seg_count":5,
+    "video_codec":"h264",
+    "audio_codec":"aac",
+    "quality":18,
+    "bitrates":"1500",
+    "const":"no",
+    "encrypt":"no",
+    "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536",
+    "output_flags":"-preset superfast -pix_fmt yuv420p -profile:v main",
+    "version":"'"$sh_ver"'"
+}'
+
 CheckRelease()
 {
     if grep -Eqi "(Red Hat|CentOS|Fedora|Amazon)" < /etc/issue
@@ -161,21 +177,7 @@ Install()
         printf "[]" > "$CHANNELS_FILE"
         default='
 {
-    "default":
-    {
-        "seg_dir_name":"",
-        "seg_length":6,
-        "seg_count":5,
-        "video_codec":"h264",
-        "audio_codec":"aac",
-        "quality":18,
-        "bitrates":"1500",
-        "const":"no",
-        "encrypt":"no",
-        "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536",
-        "output_flags":"-preset superfast -pix_fmt yuv420p -profile:v main",
-        "version":"'"$sh_ver"'"
-    },
+    "default":'"$default"',
     "channels":[]
 }'
         $JQ_FILE '(.)='"$default"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
@@ -222,21 +224,6 @@ UpdateSelf()
     sh_old_ver=$($JQ_FILE '.default.version' $CHANNELS_FILE)
     if [ "$sh_old_ver" != "$sh_ver" ] 
     then
-        default='
-    {
-        "seg_dir_name":"",
-        "seg_length":6,
-        "seg_count":5,
-        "video_codec":"h264",
-        "audio_codec":"aac",
-        "quality":18,
-        "bitrates":"1500",
-        "const":"no",
-        "encrypt":"no",
-        "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536",
-        "output_flags":"-preset superfast -pix_fmt yuv420p -profile:v main",
-        "version":"'"$sh_ver"'"
-    }'
         $JQ_FILE '(.default)='"$default"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
 
