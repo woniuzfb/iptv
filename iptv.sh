@@ -158,7 +158,8 @@ Install()
         echo -e "$info 脚本就绪..."
         InstallFfmpeg
         InstallJq
-cat > "$CHANNELS_FILE" << EOM
+        printf "[]" > "$CHANNELS_FILE"
+        default='
 {
     "default":
     {
@@ -172,11 +173,13 @@ cat > "$CHANNELS_FILE" << EOM
         "const":"no",
         "encrypt":"no",
         "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536",
-        "output_flags":"-preset superfast -pix_fmt yuv420p -profile:v main"
+        "output_flags":"-preset superfast -pix_fmt yuv420p -profile:v main",
+        "version":"'"$sh_ver"'"
     },
     "channels":[]
-}
-EOM
+}'
+        $JQ_FILE '(.)='"$default"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+        mv "$CHANNELS_TMP" "$CHANNELS_FILE"
         echo -e "$info 安装完成..."
     fi
 }
