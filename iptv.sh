@@ -1041,7 +1041,7 @@ EditChannel()
     SetInputFlags
     SetOutputFlags
     SetChannelName
-    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.stream_link)='"$stream_link"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_length)='"$seg_length"'|(.channels[]|select(.pid=='"$chnl_pid"')|.output_dir_name)='"$output_dir_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_count)='"$seg_count"'|(.channels[]|select(.pid=='"$chnl_pid"')|.video_codec)='"$video_codec"'|(.channels[]|select(.pid=='"$chnl_pid"')|.audio_codec)='"$audio_codec"'|(.channels[]|select(.pid=='"$chnl_pid"')|.bitrates)='"$bitrates"'|(.channels[]|select(.pid=='"$chnl_pid"')|.playlist_name)='"$playlist_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.channel_name)='"$channel_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_dir_name)='"$seg_dir_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_name)='"$seg_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.const)='"$const"'|(.channels[]|select(.pid=='"$chnl_pid"')|.quality)='"$quality"'|(.channels[]|select(.pid=='"$chnl_pid"')|.encrypt)='"$encrypt"'|(.channels[]|select(.pid=='"$chnl_pid"')|.key_name)='"$key_name"'|(.channels[]|select(.pid=='"$chnl_pid"')|.input_flags)='"$input_flags"'|(.channels[]|select(.pid=='"$chnl_pid"')|.output_flags)='"$output_flags"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.stream_link)="'"$stream_link"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_length)='"$seg_length"'|(.channels[]|select(.pid=='"$chnl_pid"')|.output_dir_name)="'"$output_dir_name"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_count)='"$seg_count"'|(.channels[]|select(.pid=='"$chnl_pid"')|.video_codec)="'"$video_codec"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.audio_codec)="'"$audio_codec"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.bitrates)="'"$bitrates"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.playlist_name)="'"$playlist_name"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.channel_name)="'"$channel_name"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_dir_name)="'"$seg_dir_name"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_name)="'"$seg_name"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.const)="'"$const"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.quality)="'"$quality"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.encrypt)="'"$encrypt_yn"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.key_name)="'"$key_name"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.input_flags)="'"$input_flags"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.output_flags)="'"$output_flags"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
     mv "$CHANNELS_TMP" "$CHANNELS_FILE"
     echo && echo -e "$info 频道修改成功 !" && echo
     echo "是否重启此频道？[Y/n]"
@@ -1051,6 +1051,7 @@ EditChannel()
     then
         action="skip"
         StopChannel
+        GetChannelInfo
         action=""
         StartChannel
         echo && echo -e "$info 频道重启成功 !" && echo
