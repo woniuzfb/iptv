@@ -559,7 +559,7 @@ ListChannels()
         else
             chnls_video_quality_text="比特率值 $chnls_bitrates_text"
         fi
-        chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid_index}$plain\t 状态: $chnls_status_text\t 频道名称: $green${chnls_name_index}$plain\t 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain\t 视频质量: $green$chnls_video_quality_text$plain\t 目录: $green$chnls_output_dir_root$plain\nm3u8位置: $chnls_playlist_file_text\n\n"
+        chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid_index}$plain\t 状态: $chnls_status_text\t 频道名称: $green${chnls_name_index}$plain\t 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain\t 视频质量: $green$chnls_video_quality_text$plain\t m3u8位置: $chnls_playlist_file_text\n\n"
     done
     echo && echo -e "=== 频道总数 $green $channels_count $plain"
     echo -e "$chnls_list\n"
