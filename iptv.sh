@@ -566,6 +566,11 @@ ListChannels()
 }
 
 GetChannelInfo(){
+    d_sync_file=${d_sync_file:-""}
+    if [ -z "$d_sync_file" ] 
+    then
+        GetDefault
+    fi
     chnl_info_array=()
     while IFS='' read -r chnl_line
     do
@@ -1039,7 +1044,6 @@ EditChannel()
     ListChannels
     InputChannelPid
     GetChannelInfo
-    GetDefault
     SetStreamLink
     SetOutputDirName
     SetPlaylistName
