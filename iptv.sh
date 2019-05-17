@@ -640,7 +640,7 @@ GetChannelInfo(){
     if [ -n "$d_sync_file" ] && [ -n "$d_sync_index" ] && [ -n "$d_sync_pairs" ] && [[ $d_sync_pairs == *"=http"* ]] 
     then
         d_sync_pairs_arr=(${d_sync_pairs//=http/ })
-        chnl_playlist_link="http$(echo "${d_sync_pairs_arr[1]}" | cut -d, -f1)/$chnl_output_dir_root/${chnl_playlist_name}_master.m3u8"
+        chnl_playlist_link="http$(echo "${d_sync_pairs_arr[1]}" | cut -d, -f1)/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
         chnl_playlist_link_text="$green$chnl_playlist_link$plain"
     else
         chnl_playlist_link_text="$red请先设置 sync$plain"
