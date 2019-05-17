@@ -921,12 +921,14 @@ function initialize() {
     if (source.list_url && localStorage.getItem(source.name)) {
       reqChannels(source);
     }
-    for (let a = 0; a < source.channels.length; a++) {
-      const channel = source.channels[a];
-      if (channel.chnl_name === 'hbo') {
-        hboId = channel.chnl_id;
-      } else {
-        appendList(channel,source.name,source.lane);
+    if (source.channels) {
+      for (let a = 0; a < source.channels.length; a++) {
+        const channel = source.channels[a];
+        if (channel.chnl_name === 'hbo') {
+          hboId = channel.chnl_id;
+        } else {
+          appendList(channel,source.name,source.lane);
+        }
       }
     }
   }
