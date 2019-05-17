@@ -559,7 +559,7 @@ ListChannels()
         else
             chnls_video_quality_text="比特率值 $chnls_bitrates_text"
         fi
-        chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid_index}$plain\t 状态: $chnls_status_text\t 频道名称: $green${chnls_name_index}$plain\t 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain\t 视频质量: $green$chnls_video_quality_text$plain\t m3u8位置: $chnls_playlist_file_text\n\n"
+        chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_status_text 频道名称: $green${chnls_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 视频质量: $green$chnls_video_quality_text$plain m3u8位置: $chnls_playlist_file_text\n\n"
     done
     echo && echo -e "=== 频道总数 $green $channels_count $plain"
     echo -e "$chnls_list\n"
@@ -632,6 +632,15 @@ GetChannelInfo(){
         fi
     done
 
+    if [ -n "$d_sync_file" ] && [ -n "$d_sync_index" ] && [ -n "$d_sync_pairs" ] && [[ $d_sync_pairs == *"=http"* ]] 
+    then
+        d_sync_pairs_arr=(${d_sync_pairs//=http/ })
+        chnl_playlist_link="http"$(echo "${d_sync_pairs_arr[1]}" | cut -d, -f1)
+        chnl_playlist_link_text="$green$chnl_playlist_link$plain"
+    else
+        chnl_playlist_link_text="$red请先设置 sync$plain"
+    fi
+
     chnl_encrypt=${chnl_info_array[14]//\'/}
     chnl_key_name=${chnl_info_array[15]//\'/}
     if [ "$chnl_encrypt" == "no" ]
@@ -663,9 +672,10 @@ ViewChannelInfo()
     echo -e " 进程ID\t    : $green$chnl_pid$plain"
     echo -e " 状态\t    : $chnl_status_text"
     echo -e " 视频源\t    : $green$chnl_stream_link$plain"
-    echo -e " 目录\t    : $green$chnl_output_dir_root$plain"
-    echo -e " m3u8位置   : $chnl_playlist_file_text"
+    #echo -e " 目录\t    : $green$chnl_output_dir_root$plain"
     echo -e " m3u8名称   : $green$chnl_playlist_name$plain"
+    echo -e " m3u8位置   : $chnl_playlist_file_text"
+    echo -e " m3u8链接   : $chnl_playlist_link_text"
     echo -e " 段子目录   : $green$chnl_seg_dir_name_text$plain"
     echo -e " 段名称\t    : $green$chnl_seg_name$plain"
     echo -e " 段时长\t    : $green$chnl_seg_length_text$plain"
