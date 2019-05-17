@@ -207,7 +207,7 @@
     <video id="video" controls></video>
     <div class="categories">
       <ul>
-        <li data-value="hbo1" data-source="hbo">HBO1</li>
+        <li data-value="hbo" data-source="hbo">HBO1</li>
         <li data-value="hbo2" data-source="nx96200">HBO2</li>
         <li data-value="HBOHD1" data-source="hbohd" class="hbohd extra">HBO高清1</li>
         <li data-value="HBOHD2" data-source="hbohd" class="hbohd extra">HBO高清2</li>
@@ -461,7 +461,7 @@ function timeoutPromise(ms, promise) {
   })
 }
 
-function reqData(url, data, method = 'GET') {
+function reqData(url, data = '', method = 'GET') {
   if (method === 'GET') {
     return fetch(url + data, {
       method: method,
@@ -699,7 +699,7 @@ function reqLogin() {
         playVideo();
       } else {
         sourceName = 'hbo';
-        programId = 'hbo1';
+        programId = 'hbo';
         playVideo();
       }
     }
@@ -751,6 +751,24 @@ function appendList(channel,appendSourceName,sourceLane) {
     default:
       break;
   }
+}
+
+function reqJson(json) {
+  timeoutPromise(5000,reqData(json))
+  .then(response => {
+    if (response.ret === 0) {
+      let newChannel={};
+      for (let index = 0; index < response.data[0].channels.length; index++) {
+        const channel = response.data[0].channels[index];
+        newChannel.chnl_name = channel.chnl_name;
+        newChannel.chnl_id = channel.chnl_id;
+        newChannel.chnl_cat = channel.chnl_cat;
+        appendList(newChannel,response.data[0].name,response.data[0].lane);
+      }
+    }
+  }).catch(err => {
+    console.log('发生错误:', err);
+  });
 }
 
 function reqChannels(source) {
@@ -897,6 +915,9 @@ function initialize() {
     } else if (source.token && source.token !== '') {
       localStorage.setItem(source.name, source.token);
     }
+    if (source.json) {
+      reqJson(source.json);
+    }
     if (source.list_url && localStorage.getItem(source.name)) {
       reqChannels(source);
     }
@@ -915,7 +936,7 @@ function initialize() {
     loginPwdField.value = localStorage.getItem('password');
   }
   sourceName = 'hbo';
-  programId = 'hbo1';
+  programId = 'hbo';
   playVideo();
 }
 

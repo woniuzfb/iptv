@@ -10,7 +10,7 @@
           "chnl_name":"HBO1",
           "chnl_id":"hbo1",
           "chnl_cat":"港澳台",
-          "url":"http://47.91.233.177:8282/live/hbo/hbo1.m3u8"
+          "url":""
         }
       ]
     },
@@ -22,27 +22,19 @@
           "chnl_name":"HBO高清1",
           "chnl_id":"HBOHD1",
           "chnl_cat":"港澳台",
-          "url":"http://104.199.235.252/live/HBOHD/HBOHD1.m3u8"
+          "url":""
         },
         {
           "chnl_name":"HBO高清2",
           "chnl_id":"HBOHD2",
           "chnl_cat":"港澳台",
-          "url":"http://149.129.72.61/live/hbohd/hbohd1.m3u8"
+          "url":""
         }
       ]
     },
     {
       "name":"s116",
-      "channels":
-      [
-        {
-          "chnl_name":"中天娱乐高清",
-          "chnl_id":"4007",
-          "chnl_cat":"港澳台",
-          "url":""
-        }
-      ]
+      "json":""
     },
     {
       "name":"nx96200",
