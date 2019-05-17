@@ -208,9 +208,9 @@
     <div class="categories">
       <ul>
         <li data-value="hbo" data-source="hbo">HBO1</li>
-        <li data-value="hbo2" data-source="nx96200">HBO2</li>
-        <li data-value="HBOHD1" data-source="hbohd" class="hbohd extra">HBO高清1</li>
-        <li data-value="HBOHD2" data-source="hbohd" class="hbohd extra">HBO高清2</li>
+        <li data-value="4200900115" data-source="nx96200">HBO2</li>
+        <li data-value="HBOHD" data-source="g" class="hbohd extra">HBO高清1</li>
+        <li data-value="hbohd" data-source="a1" class="hbohd extra">HBO高清2</li>
         <li data-value="myList1" class="dianxin">高清&bull;电信</li>
         <li data-value="myList1a" class="liantong">高清&bull;联通</li>
         <li data-value="myList2">标清</li>
@@ -701,7 +701,7 @@ function reqLogin() {
       alertInfo('登录成功！');
       if (sourceReg === 'nx96200') {
         sourceName = 'nx96200';
-        programId = hboId;
+        programId = '4200900115';
         playVideo();
       } else {
         sourceName = 'hbo';
@@ -827,7 +827,7 @@ function reqChannels(source) {
   });
 }
 
-let sourcesJson,jsonChannels={},sourceName,programId,hlsVideoUrl,hboId;
+let sourcesJson,jsonChannels={},sourceName,programId,hlsVideoUrl;
 let sourceReg = 'nx96200';
 let localJson = 'channels.json';
 let remoteJson = 'http://hbo.epub.fun/channels.json';
@@ -931,12 +931,7 @@ function initialize() {
     }
     if (source.channels) {
       for (let a = 0; a < source.channels.length; a++) {
-        const channel = source.channels[a];
-        if (channel.chnl_name === 'hbo') {
-          hboId = channel.chnl_id;
-        } else {
-          appendList(channel,source.name,source.lane);
-        }
+        appendList(source.channels[a],source.name,source.lane);
       }
     }
   }
