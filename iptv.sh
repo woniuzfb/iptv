@@ -112,15 +112,35 @@ SyncFile()
                                 then
                                     value="$value/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
                                 fi
+                                if [ -z "$jq_channel_edit" ] 
+                                then
+                                    jq_channel_edit="$jq_channel_edit(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key)=\"${value}\""
+                                else
+                                    jq_channel_edit="$jq_channel_edit|(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key)=\"${value}\""
+                                fi
                             else
                                 key=$(echo "$index" | cut -d: -f1)
                                 value=$(echo "$index" | cut -d: -f2)
                                 value="chnl_$value"
-                                if [ "$value" == "chnl_pid" ] && [ -n "$new_pid" ]
+
+                                if [ "$value" == "chnl_pid" ] 
                                 then
-                                    value=$new_pid
+                                    if [ -n "$new_pid" ] 
+                                    then
+                                        value=$new_pid
+                                    else
+                                        value=${!value}
+                                    fi
+                                    key_last=$key
+                                    value_last=$value
                                 else 
                                     value=${!value}
+                                    if [ -z "$jq_channel_edit" ] 
+                                    then
+                                        jq_channel_edit="$jq_channel_edit(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key)=\"${value}\""
+                                    else
+                                        jq_channel_edit="$jq_channel_edit|(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key)=\"${value}\""
+                                    fi
                                 fi
                             fi
 
@@ -130,12 +150,7 @@ SyncFile()
                             else
                                 jq_channel_add="$jq_channel_add,\"$key\":\"${value}\""
                             fi
-                            if [ -z "$jq_channel_edit" ] 
-                            then
-                                jq_channel_edit="$jq_channel_edit(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key)=\"${value}\""
-                            else
-                                jq_channel_edit="$jq_channel_edit|(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key)=\"${value}\""
-                            fi
+
                         ;;
                     esac
                 done
@@ -146,6 +161,7 @@ SyncFile()
                 $JQ_FILE "$jq_index"' += '"$jq_channel_add"'' "$d_sync_file" > "$CHANNELS_TMP"
                 mv "$CHANNELS_TMP" "$d_sync_file"
             else
+                jq_channel_edit="$jq_channel_edit|(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key_last)=\"${value_last}\""
                 $JQ_FILE "${jq_channel_edit}" "$d_sync_file" > "$CHANNELS_TMP"
                 mv "$CHANNELS_TMP" "$d_sync_file"
             fi
