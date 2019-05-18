@@ -1294,7 +1294,7 @@ fi
 
 use_menu=1
 
-while getopts "i:o:p:S:t:s:c:v:a:q:b:K:m:n:z:h:H:Ce" flag
+while getopts "i:o:p:S:t:s:c:v:a:q:b:K:m:n:z:Ce" flag
 do
     use_menu=0
         case "$flag" in
@@ -1318,6 +1318,14 @@ do
             *) Usage;
         esac
 done
+
+cmd=$*
+case "$cmd" in
+    "e") vi "$CHANNELS_FILE" && exit 0
+    ;;
+    *)
+    ;;
+esac
 
 if [ "$use_menu" == "1" ]
 then
