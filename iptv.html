@@ -27,7 +27,7 @@
       video {
         grid-column: 2;
         grid-row: 2;
-        width: 90%;
+        width: 80%;
       }
 
       aside {
@@ -167,13 +167,6 @@
         }
       }
 
-      @media (min-width: 1300px) {
-        video {
-          width:800px;
-          height:600px;
-        }
-      }
-
       svg {
         fill:#70B7FD; 
         color:#fff; 
@@ -195,7 +188,7 @@
       <h1>
         <a href="https://github.com/woniuzfb/iptv" target="_blank">HBO中文直播</a>
       </h1>
-      <p>用手机号注册后使用！<!--[if lt IE 10]><p class="warn"><strong>不支持 IE浏览器</strong> 。</p><![endif]--></p>
+      <p>用手机号注册后可用广电直播源！<!--[if lt IE 10]><p class="warn"><strong>不支持 IE浏览器</strong> 。</p><![endif]--></p>
       <a href="https://github.com/woniuzfb/iptv" target="_blank" class="github-corner">
         <svg width="80" height="80" viewBox="0 0 250 250" aria-hidden="true">
           <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path>
@@ -208,7 +201,8 @@
     <div class="categories">
       <ul>
         <li data-value="hbo" data-source="hbo">HBO1</li>
-        <li data-value="4200900115" data-source="nx96200">HBO2</li>
+        <li data-value="hbo" data-source="a1">HBO2</li>
+        <li data-value="4200900115" data-source="nx96200">HBO3</li>
         <li data-value="HBOHD" data-source="g" class="hbohd extra">HBO高清1</li>
         <li data-value="hbohd" data-source="a1" class="hbohd extra">HBO高清2</li>
         <li data-value="myList1" class="dianxin">高清&bull;电信</li>
@@ -378,7 +372,7 @@ function hlsLoad() {
           if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR) {
             console.log("network error");
             hls.startLoad();
-            alertInfo("此频道不可用！",10);
+            alertInfo("此频道不可用！账号错误？",10);
           } else if (data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT) {
             alertInfo("IP地址已被\n此频道服务端封禁！",10);
             localStorage.removeItem(sourceName);

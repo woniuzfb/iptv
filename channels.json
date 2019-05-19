@@ -1,333 +1,323 @@
 {
-  "ret":0,
-  "data":
-  [
+  "ret": 0,
+  "data": [
     {
-      "name":"hbo",
-      "channels":
-      [
+      "name": "hbo",
+      "channels": [
         {
-          "chnl_name":"HBO1",
-          "chnl_id":"hbo1",
-          "chnl_cat":"港澳台",
-          "url":""
+          "chnl_name": "HBO1",
+          "chnl_id": "hbo",
+          "chnl_pid": "",
+          "chnl_cat": "港澳台",
+          "url": ""
         }
       ]
     },
     {
-      "name":"hbohd",
-      "channels":
-      [
+      "name": "g",
+      "json": ""
+    },
+    {
+      "name": "a1",
+      "json": ""
+    },
+    {
+      "name": "s116",
+      "json": ""
+    },
+    {
+      "name": "s37",
+      "json": ""
+    },
+    {
+      "name": "nx96200",
+      "lane": "联通",
+      "token": "",
+      "acc_type": 1,
+      "extend_info": "iOS;12;mobile;ipa2.0.3",
+      "play_url": "http://httpdvb.slave.nx96200.cn:13164/playurl",
+      "list_url": "http://slave.nx96200.cn:13160/media/channel/get_list",
+      "token_url": "http://access.nx96200.cn:12690/account/get_third_token",
+      "img_url": "http://access.nx96200.cn:12690/account/user/get_picture_code",
+      "sms_url": "http://access.nx96200.cn:12690/account/user/v2/get_verify_code",
+      "verify_url": "http://access.nx96200.cn:12690/account/user/validate_verify_code",
+      "reg_url": "http://access.nx96200.cn:12690/account/user/v2/register",
+      "login_url": "http://access.nx96200.cn:12690/account/user/v2/login",
+      "channels": [
         {
-          "chnl_name":"HBO高清1",
-          "chnl_id":"HBOHD1",
-          "chnl_cat":"港澳台",
-          "url":""
+          "chnl_name": "CCTV老故事",
+          "chnl_id": "4200900091",
+          "chnl_cat": "央视"
         },
         {
-          "chnl_name":"HBO高清2",
-          "chnl_id":"HBOHD2",
-          "chnl_cat":"港澳台",
-          "url":""
+          "chnl_name": "华娱卫视",
+          "chnl_id": "4200900106",
+          "chnl_cat": "港澳台"
+        },
+        {
+          "chnl_name": "凤凰卫视中文",
+          "chnl_id": "4200900107",
+          "chnl_cat": "港澳台"
+        },
+        {
+          "chnl_name": "星空卫视",
+          "chnl_id": "4200900108",
+          "chnl_cat": "港澳台"
+        },
+        {
+          "chnl_name": "TVB8",
+          "chnl_id": "4200900109",
+          "chnl_cat": "港澳台"
+        },
+        {
+          "chnl_name": "凤凰卫视资讯",
+          "chnl_id": "4200900110",
+          "chnl_cat": "港澳台"
+        },
+        {
+          "chnl_name": "星空卫视电影",
+          "chnl_id": "4200900111",
+          "chnl_cat": "港澳台"
+        },
+        {
+          "chnl_name": "凤凰卫视电影",
+          "chnl_id": "4200900112",
+          "chnl_cat": "港澳台"
+        },
+        {
+          "chnl_name": "Channel[V]音乐亚洲",
+          "chnl_id": "4200900113",
+          "chnl_cat": "港澳台"
+        },
+        {
+          "chnl_name": "国家地理",
+          "chnl_id": "4200900114",
+          "chnl_cat": "港澳台"
+        },
+        {
+          "chnl_name": "hbo",
+          "chnl_id": "4200900115",
+          "chnl_cat": "港澳台"
+        },
+        {
+          "chnl_name": "天映频道",
+          "chnl_id": "4200900116",
+          "chnl_cat": "港澳台"
         }
       ]
     },
     {
-      "name":"s116",
-      "json":""
-    },
-    {
-      "name":"nx96200",
-      "lane":"联通",
-      "token":"",
-      "acc_type":1,
-      "extend_info":"iOS;12;mobile;ipa2.0.3",
-      "play_url":"http://httpdvb.slave.nx96200.cn:13164/playurl",
-      "list_url":"http://slave.nx96200.cn:13160/media/channel/get_list",
-      "token_url":"http://access.nx96200.cn:12690/account/get_third_token",
-      "img_url":"http://access.nx96200.cn:12690/account/user/get_picture_code",
-      "sms_url":"http://access.nx96200.cn:12690/account/user/v2/get_verify_code",
-      "verify_url":"http://access.nx96200.cn:12690/account/user/validate_verify_code",
-      "reg_url":"http://access.nx96200.cn:12690/account/user/v2/register",
-      "login_url":"http://access.nx96200.cn:12690/account/user/v2/login",
-      "channels":
-      [
-        {
-          "chnl_name":"CCTV老故事",
-          "chnl_id":"4200900091",
-          "chnl_cat":"央视"
-        },
-        {
-          "chnl_name":"华娱卫视",
-          "chnl_id":"4200900106",
-          "chnl_cat":"港澳台"
-        },
-        {
-          "chnl_name":"凤凰卫视中文",
-          "chnl_id":"4200900107",
-          "chnl_cat":"港澳台"
-        },
-        {
-          "chnl_name":"星空卫视",
-          "chnl_id":"4200900108",
-          "chnl_cat":"港澳台"
-        },
-        {
-          "chnl_name":"TVB8",
-          "chnl_id":"4200900109",
-          "chnl_cat":"港澳台"
-        },
-        {
-          "chnl_name":"凤凰卫视资讯",
-          "chnl_id":"4200900110",
-          "chnl_cat":"港澳台"
-        },
-        {
-          "chnl_name":"星空卫视电影",
-          "chnl_id":"4200900111",
-          "chnl_cat":"港澳台"
-        },
-        {
-          "chnl_name":"凤凰卫视电影",
-          "chnl_id":"4200900112",
-          "chnl_cat":"港澳台"
-        },
-        {
-          "chnl_name":"Channel[V]音乐亚洲",
-          "chnl_id":"4200900113",
-          "chnl_cat":"港澳台"
-        },
-        {
-          "chnl_name":"国家地理",
-          "chnl_id":"4200900114",
-          "chnl_cat":"港澳台"
-        },
-        {
-          "chnl_name":"hbo",
-          "chnl_id":"4200900115",
-          "chnl_cat":"港澳台"
-        },
-        {
-          "chnl_name":"天映频道",
-          "chnl_id":"4200900116",
-          "chnl_cat":"港澳台"
-        }
-      ]
-    },
-    {
-      "name":"pygdzhcs",
-      "lane":"联通",
-      "token":"",
-      "acc_type":1,
-      "extend_info":{
-        "operatingsystem":"iOS",
-        "systemversion":"12.1",
-        "model":"iPhone 6 Plus",
-        "appversion":"2.4"
+      "name": "pygdzhcs",
+      "lane": "联通",
+      "token": "",
+      "acc_type": 1,
+      "extend_info": {
+        "operatingsystem": "iOS",
+        "systemversion": "12.1",
+        "model": "iPhone 6 Plus",
+        "appversion": "2.4"
       },
-      "server_version":"V1.2.15",
-      "play_url":"http://httpdvb.slave.pygdzhcs.com:13164/playurl",
-      "token_url":"http://access.pygdzhcs.com:12690/account/get_third_token",
-      "img_url":"http://access.pygdzhcs.com:12690/account/user/get_picture_code",
-      "sms_url":"http://access.pygdzhcs.com:12690/account/user/v2/get_verify_code",
-      "verify_url":"http://access.pygdzhcs.com:12690/account/user/validate_verify_code",
-      "reg_url":"http://access.pygdzhcs.com:12690/account/user/v2/register",
-      "login_url":"http://access.pygdzhcs.com:12690/account/user/v2/login",
-      "channels":
-      [
+      "server_version": "V1.2.15",
+      "play_url": "http://httpdvb.slave.pygdzhcs.com:13164/playurl",
+      "token_url": "http://access.pygdzhcs.com:12690/account/get_third_token",
+      "img_url": "http://access.pygdzhcs.com:12690/account/user/get_picture_code",
+      "sms_url": "http://access.pygdzhcs.com:12690/account/user/v2/get_verify_code",
+      "verify_url": "http://access.pygdzhcs.com:12690/account/user/validate_verify_code",
+      "reg_url": "http://access.pygdzhcs.com:12690/account/user/v2/register",
+      "login_url": "http://access.pygdzhcs.com:12690/account/user/v2/login",
+      "channels": [
         {
-          "chnl_name":"海南卫视高清",
-          "chnl_id":"4200000146",
-          "chnl_cat":"高清联通"
+          "chnl_name": "海南卫视高清",
+          "chnl_id": "4200000146",
+          "chnl_cat": "高清联通"
         },
         {
-          "chnl_name":"贵州卫视高清",
-          "chnl_id":"4200000147",
-          "chnl_cat":"高清联通"
+          "chnl_name": "贵州卫视高清",
+          "chnl_id": "4200000147",
+          "chnl_cat": "高清联通"
         },
         {
-          "chnl_name":"HD综艺高清",
-          "chnl_id":"4200000149",
-          "chnl_cat":"港澳台"
+          "chnl_name": "HD综艺高清",
+          "chnl_id": "4200000149",
+          "chnl_cat": "港澳台"
         },
         {
-          "chnl_name":"江西卫视高清",
-          "chnl_id":"4200000153",
-          "chnl_cat":"高清联通"
+          "chnl_name": "江西卫视高清",
+          "chnl_id": "4200000153",
+          "chnl_cat": "高清联通"
         },
         {
-          "chnl_name":"凤凰卫视资讯高清",
-          "chnl_id":"4200000154",
-          "chnl_cat":"港澳台"
+          "chnl_name": "凤凰卫视资讯高清",
+          "chnl_id": "4200000154",
+          "chnl_cat": "港澳台"
         },
         {
-          "chnl_name":"凤凰卫视中文高清",
-          "chnl_id":"4200000155",
-          "chnl_cat":"港澳台"
+          "chnl_name": "凤凰卫视中文高清",
+          "chnl_id": "4200000155",
+          "chnl_cat": "港澳台"
         },
         {
-          "chnl_name":"凤凰卫视香港台高清",
-          "chnl_id":"4200000156",
-          "chnl_cat":"港澳台"
+          "chnl_name": "凤凰卫视香港台高清",
+          "chnl_id": "4200000156",
+          "chnl_cat": "港澳台"
         },
         {
-          "chnl_name":"安徽卫视高清",
-          "chnl_id":"4200000165",
-          "chnl_cat":"高清联通"
+          "chnl_name": "安徽卫视高清",
+          "chnl_id": "4200000165",
+          "chnl_cat": "高清联通"
         },
         {
-          "chnl_name":"重庆卫视高清",
-          "chnl_id":"4200000170",
-          "chnl_cat":"高清联通"
+          "chnl_name": "重庆卫视高清",
+          "chnl_id": "4200000170",
+          "chnl_cat": "高清联通"
         }
       ]
     },
     {
-      "name":"jscnwx",
-      "lane":"电信",
-      "token":"",
-      "omit":"95-96,99-106,113-128,131-156,167-168,186",
-      "unique_url":"http://122.194.12.25:12690/account/user/name_is_uniqueness",
-      "reg_url":"http://122.194.12.25:12690/account/user/register",
-      "login_url":"http://122.194.12.25:12690/account/login",
-      "play_url":"http://httpdvb.slave.jscnwx.com:13164/playurl",
-      "list_url":"http://122.194.12.25:13160/media/channel/get_list",
-      "channels":
-      [
+      "name": "jscnwx",
+      "lane": "电信",
+      "token": "",
+      "omit": "95-96,99-106,113-128,131-156,167-168,186",
+      "unique_url": "http://122.194.12.25:12690/account/user/name_is_uniqueness",
+      "reg_url": "http://122.194.12.25:12690/account/user/register",
+      "login_url": "http://122.194.12.25:12690/account/login",
+      "play_url": "http://httpdvb.slave.jscnwx.com:13164/playurl",
+      "list_url": "http://122.194.12.25:13160/media/channel/get_list",
+      "channels": [
         {
-          "chnl_name":"江苏综艺",
-          "chnl_id":"4200000005",
-          "chnl_cat":"卫视"
+          "chnl_name": "江苏综艺",
+          "chnl_id": "4200000005",
+          "chnl_cat": "卫视"
         },
         {
-          "chnl_name":"无锡新闻综合高清",
-          "chnl_id":"4200000045",
-          "chnl_cat":"高清电信"
+          "chnl_name": "无锡新闻综合高清",
+          "chnl_id": "4200000045",
+          "chnl_cat": "高清电信"
         },
         {
-          "chnl_name":"无锡影视",
-          "chnl_id":"4200000047",
-          "chnl_cat":"地方"
+          "chnl_name": "无锡影视",
+          "chnl_id": "4200000047",
+          "chnl_cat": "地方"
         },
         {
-          "chnl_name":"无锡娱乐",
-          "chnl_id":"4200000048",
-          "chnl_cat":"地方"
+          "chnl_name": "无锡娱乐",
+          "chnl_id": "4200000048",
+          "chnl_cat": "地方"
         },
         {
-          "chnl_name":"无锡经济",
-          "chnl_id":"4200000049",
-          "chnl_cat":"地方"
+          "chnl_name": "无锡经济",
+          "chnl_id": "4200000049",
+          "chnl_cat": "地方"
         },
         {
-          "chnl_name":"无锡生活",
-          "chnl_id":"4200000050",
-          "chnl_cat":"地方"
+          "chnl_name": "无锡生活",
+          "chnl_id": "4200000050",
+          "chnl_cat": "地方"
         },
         {
-          "chnl_name":"东方CJ购物",
-          "chnl_id":"4200000051",
-          "chnl_cat":"专业"
+          "chnl_name": "东方CJ购物",
+          "chnl_id": "4200000051",
+          "chnl_cat": "专业"
         },
         {
-          "chnl_name":"无锡教育",
-          "chnl_id":"4200000052",
-          "chnl_cat":"地方"
+          "chnl_name": "无锡教育",
+          "chnl_id": "4200000052",
+          "chnl_cat": "地方"
         },
         {
-          "chnl_name":"好享购物",
-          "chnl_id":"4200000055",
-          "chnl_cat":"专业"
+          "chnl_name": "好享购物",
+          "chnl_id": "4200000055",
+          "chnl_cat": "专业"
         },
         {
-          "chnl_name":"江苏城市",
-          "chnl_id":"4200000059",
-          "chnl_cat":"地方"
+          "chnl_name": "江苏城市",
+          "chnl_id": "4200000059",
+          "chnl_cat": "地方"
         },
         {
-          "chnl_name":"江苏影视",
-          "chnl_id":"4200000060",
-          "chnl_cat":"地方"
+          "chnl_name": "江苏影视",
+          "chnl_id": "4200000060",
+          "chnl_cat": "地方"
         },
         {
-          "chnl_name":"江苏公共新闻",
-          "chnl_id":"4200000061",
-          "chnl_cat":"地方"
+          "chnl_name": "江苏公共新闻",
+          "chnl_id": "4200000061",
+          "chnl_cat": "地方"
         },
         {
-          "chnl_name":"江苏体育",
-          "chnl_id":"4200000062",
-          "chnl_cat":"地方"
+          "chnl_name": "江苏体育",
+          "chnl_id": "4200000062",
+          "chnl_cat": "地方"
         },
         {
-          "chnl_name":"江苏教育",
-          "chnl_id":"4200000066",
-          "chnl_cat":"地方"
+          "chnl_name": "江苏教育",
+          "chnl_id": "4200000066",
+          "chnl_cat": "地方"
         },
         {
-          "chnl_name":"未知高清1",
-          "chnl_id":"4200000078",
-          "chnl_cat":"港澳台"
+          "chnl_name": "高清测试1",
+          "chnl_id": "4200000078",
+          "chnl_cat": "港澳台"
         },
         {
-          "chnl_name":"未知高清2",
-          "chnl_id":"4200000079",
-          "chnl_cat":"港澳台"
+          "chnl_name": "高清测试2",
+          "chnl_id": "4200000079",
+          "chnl_cat": "港澳台"
         },
         {
-          "chnl_name":"未知高清3",
-          "chnl_id":"4200000080",
-          "chnl_cat":"港澳台"
+          "chnl_name": "高清测试3",
+          "chnl_id": "4200000080",
+          "chnl_cat": "港澳台"
         },
         {
-          "chnl_name":"未知高清4",
-          "chnl_id":"4200000081",
-          "chnl_cat":"港澳台"
+          "chnl_name": "高清测试4",
+          "chnl_id": "4200000081",
+          "chnl_cat": "港澳台"
         },
         {
-          "chnl_name":"未知高清5",
-          "chnl_id":"4200000082",
-          "chnl_cat":"港澳台"
+          "chnl_name": "高清测试5",
+          "chnl_id": "4200000082",
+          "chnl_cat": "港澳台"
         },
         {
-          "chnl_name":"未知高清6",
-          "chnl_id":"4200000083",
-          "chnl_cat":"港澳台"
+          "chnl_name": "高清测试6",
+          "chnl_id": "4200000083",
+          "chnl_cat": "港澳台"
         },
         {
-          "chnl_name":"未知高清7",
-          "chnl_id":"4200000084",
-          "chnl_cat":"港澳台"
+          "chnl_name": "高清测试7",
+          "chnl_id": "4200000084",
+          "chnl_cat": "港澳台"
         },
         {
-          "chnl_name":"未知高清8",
-          "chnl_id":"4200000085",
-          "chnl_cat":"港澳台"
+          "chnl_name": "高清测试8",
+          "chnl_id": "4200000085",
+          "chnl_cat": "港澳台"
         },
         {
-          "chnl_name":"新视觉高清",
-          "chnl_id":"4200000095",
-          "chnl_cat":"高清电信"
+          "chnl_name": "新视觉高清",
+          "chnl_id": "4200000095",
+          "chnl_cat": "高清电信"
         },
         {
-          "chnl_name":"无锡都市资讯高清",
-          "chnl_id":"4200000178",
-          "chnl_cat":"高清电信"
+          "chnl_name": "无锡都市资讯高清",
+          "chnl_id": "4200000178",
+          "chnl_cat": "高清电信"
         },
         {
-          "chnl_name":"东南卫视高清",
-          "chnl_id":"4200000180",
-          "chnl_cat":"高清电信"
+          "chnl_name": "东南卫视高清",
+          "chnl_id": "4200000180",
+          "chnl_cat": "高清电信"
         },
         {
-          "chnl_name":"河北卫视高清",
-          "chnl_id":"4200000183",
-          "chnl_cat":"高清电信"
+          "chnl_name": "河北卫视高清",
+          "chnl_id": "4200000183",
+          "chnl_cat": "高清电信"
         },
         {
-          "chnl_name":"吉林卫视高清",
-          "chnl_id":"4200000187",
-          "chnl_cat":"高清电信"
+          "chnl_name": "吉林卫视高清",
+          "chnl_id": "4200000187",
+          "chnl_cat": "高清电信"
         }
       ]
     }
