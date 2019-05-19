@@ -64,7 +64,7 @@ bash -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/wo
     -v  视频编码(默认：h264)
     -q  crf视频质量(如果设置了输出视频比特率，则优先使用crf视频质量)(数值1~63 越大质量越差)
         (默认: 不设置crf视频质量值)
-    -b  输出视频的比特率(bits/s)(1500)
+    -b  输出视频的比特率(bits/s)(默认：900-1280x720)
         如果已经设置crf视频质量值，则比特率用于 -maxrate -bufsize
         如果没有设置crf视频质量值，则可以继续设置是否固定码率
         多个比特率用逗号分隔(注意-如果设置多个比特率，就是生成自适应码流)

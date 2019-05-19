@@ -25,15 +25,10 @@
         grid-row: 1;
       }
 
-      .video-js {
+      .videoContainer {
         grid-column: 2;
         grid-row: 2;
         width: 80%;
-      }
-
-      .video-js.vjs-fluid {
-        width: 80%;
-        max-width: 80%;
       }
 
       aside {
@@ -200,11 +195,7 @@
         </svg>
       </a>
     </header>
-    <video id="video" class="video-js" controls>
-      <p class='vjs-no-js'>
-        需启用 JavaScript，或使用更新的浏览器
-      </p>
-    </video>
+    <div class="videoContainer"></div>
     <div class="categories">
       <ul>
         <li data-value="hbo" data-source="hbo">HBO1</li>
@@ -415,12 +406,57 @@ function hlsLoad() {
 }
 
 function videojsLoad() {
+  if (videoField.hasChildNodes()) {
+    videojs('video').dispose();
+  }
+  
+  const video = document.createElement('video');
+  video.id = 'video';
+  video.className = 'video-js';
+  const noVideojs = document.createElement('p');
+  noVideojs.className = 'vjs-no-js';
+  const noVideojsText = document.createTextNode('需启用 JavaScript，或使用更新的浏览器');
+  noVideojs.appendChild(noVideojsText);
+  video.appendChild(noVideojs);
+  videoField.appendChild(video);
+
+  var player = videojs('video',{
+    liveui: liveui,
+    autoplay: 'true',
+    preload: 'auto',
+    controls: true,
+    fluid: true
+  });
+
   player.src({
     src: hlsVideoUrl,
     type: 'application/x-mpegURL',
     overrideNative: true
   });
-  player.play();
+
+  player.ready(function() {
+    let promise = player.play();
+
+    if (promise !== undefined) {
+      promise.then(function() {
+        // Autoplay started!
+      }).catch(function(error) {
+        // Autoplay was prevented.
+      });
+    }
+  });
+
+  player.on('error', function(e) {
+    let time = this.currentTime();
+    if (this.error().code === 2) {
+      alertInfo("频道发生错误！",10);
+      this.error(null).pause().load().currentTime(time).play();
+    } else if (this.error().code === 4) {
+      alertInfo("此频道不可用！账号错误!",10);
+    } else {
+      alertInfo("无法访问服务端？IP被封？",10);
+    }
+  });
 }
 
 function playVideo() {
@@ -843,7 +879,7 @@ let sourcesJson,jsonChannels={},sourceName,programId,hlsVideoUrl;
 let sourceReg = 'nx96200';
 let localJson = 'channels.json';
 let remoteJson = 'http://hbo.epub.fun/channels.json';
-const video = document.querySelector('video');
+const videoField = document.querySelector('.videoContainer');
 const loginForm = document.querySelector('.loginForm');
 const loginAccField = document.querySelector('.loginAcc');
 const loginPwdField = document.querySelector('.loginPwd');
@@ -878,13 +914,6 @@ let liveui = true;
 if (videojs.browser.IS_ANDROID) {
   liveui = false;
 }
-
-var player = videojs('video',{
-  liveui: liveui,
-  autoplay: 'any',
-  preload: 'auto',
-  fluid: true
-});
 
 fetch(localJson).then(response => {
   let contentType;
@@ -966,9 +995,7 @@ function initialize() {
   }
   sourceName = 'hbo';
   programId = 'hbo';
-  player.ready(function() {
-    playVideo();
-  });
+  playVideo();
 }
 
 formToggle.addEventListener("click", function(e) {
