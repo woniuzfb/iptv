@@ -567,6 +567,9 @@ function parseJson(json) {
       const sourcesListItem = document.createElement('li');
       sourcesListItem.textContent = element.desc;
       sourcesListItem.className = 'source_' + element.name;
+      if (localStorage.getItem('dark') === '1'){
+        sourcesListItem.classList.add('white');
+      }
       sourcesField.appendChild(sourcesListItem);
     }
 
