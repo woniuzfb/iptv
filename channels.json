@@ -192,8 +192,7 @@
         "appversion": "1.2.6"
       },
       "server_version": "V1.4.0",
-      "auth_info_url": "http://slave.jxtvnet.tv:81/media/get_authority_info",
-      "auth_verify_url": "http://slave.jxtvnet.tv:81/media/authority_verify",
+      "unique_url": "http://access.jxtvnet.tv:81/account/user/name_is_uniqueness",
       "play_url": "http://stream.slave.jxtvnet.tv:14311/playurl",
       "list_url": "http://slave.jxtvnet.tv:81/media/channel/get_list",
       "token_url": "http://slave.jxtvnet.tv:81/account/get_access_token",
@@ -214,6 +213,7 @@
       "acc_type_reg": 1,
       "acc_type_login": 3,
       "extend_info": "iOS;12;mobile;ipa2.0.3",
+      "unique_url": "http://access.nx96200.cn:12690/account/user/name_is_uniqueness",
       "play_url": "http://httpdvb.slave.nx96200.cn:13164/playurl",
       "list_url": "http://slave.nx96200.cn:13160/media/channel/get_list",
       "token_url": "http://access.nx96200.cn:12690/account/get_third_token",

@@ -231,8 +231,8 @@ function alertInfo(info,delay=3) {
 }
 
 function uniqueName() {
-  if (!sourcesJsonParsed[sourceReg].hasOwnProperty('token_url')) {
-    reqData(sourcesJsonParsed[sourceReg].unique_url,'?accounttype=1&username='+regAccField.value)
+  if (sourcesJsonParsed[sourceReg].hasOwnProperty('unique_url')) {
+    reqData(sourcesJsonParsed[sourceReg].unique_url,'?accounttype='+sourcesJsonParsed[sourceReg].acc_type_reg+'&username='+regAccField.value)
     .then(response => {
       if (response.ret !== 0) {
         alertInfo('用户名已存在,请重新输入！',3);
