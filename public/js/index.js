@@ -242,46 +242,77 @@ function uniqueName() {
 }
 
 function regImg() {
-  if (sourcesJsonParsed[sourceReg].hasOwnProperty('token_url')) {
+  if (sourcesJsonParsed[sourceReg].hasOwnProperty('img_url')) {
     let tokenUrl,imgUrl;
     tokenUrl = sourcesJsonParsed[sourceReg].token_url;
     imgUrl = sourcesJsonParsed[sourceReg].img_url;
 
-    timeoutPromise(3000,reqData(tokenUrl,{"usagescen":1},'POST'))
-    .then(response => {
-      if (response.ret !== 0) {
-        alertInfo('验证码请求错误！');
-      } else {
-        reqData(imgUrl,'?accesstoken='+response.access_token)
-        .then(response => {
-          const newImage = document.createElement('img');
-          newImage.src = response.image.replace('\\','/');
-          regImgField.innerHTML = newImage.outerHTML;
-          regImgIdField.value = response.picid;
-        }).catch(err => console.log('发生错误:', err));
-      }
-    }).catch(err => {
-      console.log('发生错误:', err);
-      alertInfo('无法连接此直播源！', 10);
-    });
+    if (sourcesJsonParsed[sourceReg].hasOwnProperty('refresh_token_url')) {
+      let deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
+      deviceno = deviceno+md5(deviceno).substring(7, 8);
+      timeoutPromise(3000,reqData(tokenUrl,{"role":"guest","deviceno":deviceno,"deviceType":"yuj"},'POST'))
+      .then(response => {
+        if (response.ret !== 0) {
+          alertInfo('验证码请求错误！');
+        } else {
+          reqData(sourcesJsonParsed[sourceReg].refresh_token_url,{"accessToken":response.accessToken,"refreshToken":response.refreshToken},'POST')
+          .then(response => {
+            if (response.ret !== 0) {
+              alertInfo('验证码请求错误！');
+            } else {
+              reqData(imgUrl,'?accesstoken='+response.accessToken)
+              .then(response => {
+                const newImage = document.createElement('img');
+                newImage.src = response.image.replace('\\','/');
+                regImgField.innerHTML = newImage.outerHTML;
+                regImgIdField.value = response.picid;
+              }).catch(err => console.log('发生错误:', err));
+            }
+          }).catch(err => console.log('发生错误:', err));
+        }
+      }).catch(err => {
+        console.log('发生错误:', err);
+        alertInfo('无法连接此直播源！', 10);
+      });
+    } else {
+      timeoutPromise(3000,reqData(tokenUrl,{"usagescen":1},'POST'))
+      .then(response => {
+        if (response.ret !== 0) {
+          alertInfo('验证码请求错误！');
+        } else {
+          reqData(imgUrl,'?accesstoken='+response.access_token)
+          .then(response => {
+            const newImage = document.createElement('img');
+            newImage.src = response.image.replace('\\','/');
+            regImgField.innerHTML = newImage.outerHTML;
+            regImgIdField.value = response.picid;
+          }).catch(err => console.log('发生错误:', err));
+        }
+      }).catch(err => {
+        console.log('发生错误:', err);
+        alertInfo('无法连接此直播源！', 10);
+      });
+    }
   }
 }
 
 function reqSms() {
-  let regAcc = regAccField.value;
-  let regImgInput = regImgInputField.value;
-  let regImgId = regImgIdField.value;
-  let url;
-  url = sourcesJsonParsed[sourceReg].sms_url;
+  if (sourcesJsonParsed[sourceReg].hasOwnProperty('sms_url')) {
+    let regAcc = regAccField.value;
+    let regImgInput = regImgInputField.value;
+    let regImgId = regImgIdField.value;
+    let url;
+    url = sourcesJsonParsed[sourceReg].sms_url;
 
-  reqData(url,'?pincode='+regImgInput+'&picid='+regImgId+'&verifytype=3&account='+regAcc+'&accounttype=1')
-  .then(response => {
-    if (response.ret !== 0) {
-      alertInfo('验证码或其它错误！请重新输入！');
-    } else {
-      alertInfo('短信已发送！',5);
-    }
-  }).catch(err => console.log('发生错误:', err));
+    reqData(url,'?pincode='+regImgInput+'&picid='+regImgId+'&verifytype=3&account='+regAcc+'&accounttype=1')
+    .then(response => {
+      if (response.ret !== 0) {
+        alertInfo('验证码或其它错误！请重新输入！');
+      } else {
+        alertInfo('短信已发送！',5);
+      }
+    }).catch(err => console.log('发生错误:', err));
+  }
 }
 
 function reqReg() {
@@ -381,18 +412,18 @@ function reqLogin() {
     let user = {};
     user.account = acc;
     user.deviceno = deviceno;
-    user.businessplatform = 1;
-    user.devicetype = 'yuj';
-    user.extendinfo = sourcesJsonParsed[sourceReg].extend_info;
-    let timestamp = Date.now();
-    user.signature = md5(deviceno+"|"+user.devicetype+"|3|"+acc+"|"+timestamp);
-    user.isforce = 1;
-    user.timestamp = timestamp.toString();
     user.pwd = md5(pwd);
-    user.accounttype = sourcesJsonParsed[sourceReg].acc_type_login;
+    user.devicetype = 'yuj';
+    user.businessplatform = 1;
+    let timestamp = Date.now();
+    user.signature = md5(deviceno+'|'+user.devicetype+'|'+sourcesJsonParsed[sourceReg].acc_type_login+'|'+acc+"|"+timestamp);
+    user.isforce = 1;
+    user.extendinfo = sourcesJsonParsed[sourceReg].extend_info;
     if (sourcesJsonParsed[sourceReg].server_version) {
       user.serverVersion = sourcesJsonParsed[sourceReg].server_version;
     }
+    user.timestamp = timestamp.toString();
+    user.accounttype = sourcesJsonParsed[sourceReg].acc_type_login;
 
     timeoutPromise(3000,reqData(sourcesJsonParsed[sourceReg].login_url,user,'POST'))
     .then(response => {
