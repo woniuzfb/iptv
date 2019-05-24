@@ -416,10 +416,12 @@ function videojsLoad() {
       this.error(null).pause().load().currentTime(time).play();
     } else if (this.error().code === 4) {
       alertInfo('频道不可用！账号错误!',10);
-      localStorage.removeItem(sourceReg+'_acc');
-      localStorage.removeItem(sourceReg+'_pwd');
-      localStorage.removeItem(sourceReg+'_token');
-      localStorage.removeItem(sourceReg+'_deviceno');
+      if (programId) {
+        localStorage.removeItem(sourceReg+'_acc');
+        localStorage.removeItem(sourceReg+'_pwd');
+        localStorage.removeItem(sourceReg+'_token');
+        localStorage.removeItem(sourceReg+'_deviceno');
+      }
     } else {
       alertInfo('无法连接直播源！',10);
     }
