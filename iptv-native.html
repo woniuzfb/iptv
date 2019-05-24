@@ -690,15 +690,6 @@ function reqLogin() {
       //localStorage.setItem('deviceid', response.device_id);
       initialize();
       alertInfo('登录成功！');
-      if (sourceReg === 'nx96200') {
-        sourceName = 'nx96200';
-        programId = '4200900115';
-        playVideo();
-      } else {
-        sourceName = 'hbo';
-        programId = 'hbo';
-        playVideo();
-      }
     }
   }).catch(err => {
     console.log('发生错误:', err);
