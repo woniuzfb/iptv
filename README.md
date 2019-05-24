@@ -9,9 +9,9 @@
 
 ## 怎么看？
 
-- 用浏览器打开 iptv.html
-- 或者直接去 <http://hbo.epub.fun/>
-- 需用手机号注册后才能看各直播源[ 直播源来自各广电系 ]
+- 直接去 <http://hbo.epub.fun/>
+- 部分广电直播源需用手机号注册后才能看
+- 自定义频道，需把 iptv.html 放到**本地服务器**目录下，修改channels.json
 
 ## 账号登录错误？
 
@@ -82,7 +82,7 @@ bash -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/wo
         -nostats -nostdin -hide_banner -loglevel 
         fatal -probesize 65536")
     -n  ffmpeg 额外的 OUTPUT FLAGS
-        (默认："-g 30 -sc_threshold 0 -preset superfast -pix_fmt yuv420p -profile:v main")
+        (默认："-g 30 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main")
 
 ## 举例
 
