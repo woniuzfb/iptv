@@ -180,6 +180,34 @@
       ]
     },
     {
+      "name": "jxtvnet",
+      "desc": "江西广电",
+      "lane": "电信",
+      "acc_type_reg": 1,
+      "acc_type_login": 2,
+      "extend_info": {
+        "operatingsystem": "iOS",
+        "systemversion": "12.1",
+        "model": "iPhone 6 Plus",
+        "appversion": "1.2.6"
+      },
+      "server_version": "V1.4.0",
+      "auth_info_url": "http://slave.jxtvnet.tv:81/media/get_authority_info",
+      "auth_verify_url": "http://slave.jxtvnet.tv:81/media/authority_verify",
+      "play_url": "http://stream.slave.jxtvnet.tv:14311/playurl",
+      "list_url": "http://slave.jxtvnet.tv:81/media/channel/get_list",
+      "token_url": "http://slave.jxtvnet.tv:81/account/get_access_token",
+      "refresh_token_url": "http://slave.jxtvnet.tv:81/account/refresh_access_token",
+      "img_url": "http://access.jxtvnet.tv:81/account/user/get_picture_code",
+      "sms_url": "http://access.jxtvnet.tv:81/account/user/v2/get_verify_code",
+      "verify_url": "http://access.jxtvnet.tv:81/account/user/validate_verify_code",
+      "reg_url": "http://access.jxtvnet.tv:81/account/user/v2/register",
+      "login_url": "http://access.jxtvnet.tv:81/account/user/v2/login",
+      "channels": [
+
+      ]
+    },
+    {
       "name": "nx96200",
       "desc": "宁夏广电",
       "lane": "联通",
