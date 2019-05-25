@@ -50,7 +50,8 @@ section {
 
 .sources {
   display: inline-block;
-  padding: 0px;
+  margin-top: 0;
+  padding: 0;
 }
 
 .sources li {
@@ -100,7 +101,7 @@ li {
   margin-left: .5em;
 }
 
-form h3 {
+aside h3 {
   margin-top: 0;
 }
 

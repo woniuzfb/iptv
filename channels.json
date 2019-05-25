@@ -207,6 +207,34 @@
       ]
     },
     {
+      "name": "ttcatv",
+      "desc": "辽宁广电",
+      "lane": "电信",
+      "acc_type_reg": 2,
+      "acc_type_login": 3,
+      "extend_info": {
+        "operatingsystem": "iOS",
+        "systemversion": "12.1",
+        "model": "iPhone 6 Plus",
+        "appversion": "2.7.9"
+      },
+      "server_version": "V1.2.33",
+      "fix_cats": {"003":"007","007":"005"},
+      "omit": "173,175-177",
+      "unique_url": "http://access.ttcatv.tv:12690/account/user/name_is_uniqueness",
+      "play_url": "http://httpdvb.slave.ttcatv.tv:13164/playurl",
+      "list_url": "http://slave.ttcatv.tv:13160/media/channel/get_list",
+      "token_url": "http://access.ttcatv.tv:12690/account/get_third_token",
+      "img_url": "http://access.ttcatv.tv:12690/account/user/get_picture_code",
+      "sms_url": "http://access.ttcatv.tv:12690/account/user/v2/get_verify_code",
+      "verify_url": "http://access.ttcatv.tv:12690/account/user/validate_verify_code",
+      "reg_url": "http://access.ttcatv.tv:12690/account/user/v2/register",
+      "login_url": "http://access.ttcatv.tv:12690/account/user/v2/login",
+      "channels": [
+
+      ]
+    },
+    {
       "name": "nx96200",
       "desc": "宁夏广电",
       "lane": "联通",

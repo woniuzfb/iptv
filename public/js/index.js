@@ -535,7 +535,10 @@ function reqChannels(source) {
         let newChannel={};
         channelCats = channel.sub_type.split('|');
         for (let c = 0; c < channelCats.length; c++) {
-          const channelCat = channelCats[c].slice(-3);
+          let channelCat = channelCats[c].slice(-3);
+          if (sourcesJsonParsed[source.name].hasOwnProperty('fix_cats') && sourcesJsonParsed[source.name].fix_cats.hasOwnProperty(channelCat)) {
+            channelCat = sourcesJsonParsed[source.name].fix_cats[channelCat];
+          }
           if (cats[channelCat] === undefined) {
             continue;
           }
