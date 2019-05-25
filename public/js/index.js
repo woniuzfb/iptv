@@ -627,11 +627,13 @@ function updateAside() {
   } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('token_url')) {
     loginAccField.setAttribute('placeholder','用户名');
     regAccField.setAttribute('placeholder','用户名');
+    regImgField.classList.toggle('hidden',true);
     regImgInputField.classList.toggle('hidden',true);
     regSmsField.classList.toggle('hidden',true);
   } else {
     loginAccField.setAttribute('placeholder','手机号');
     regAccField.setAttribute('placeholder','手机号');
+    regImgField.classList.toggle('hidden',false);
     regImgInputField.classList.toggle('hidden',false);
     regSmsField.classList.toggle('hidden',false);
   }
