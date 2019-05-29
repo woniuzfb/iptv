@@ -1328,6 +1328,8 @@ case "$cmd" in
     ;;
     "d")
         wget "$DEFAULT_FILE" -qO "$CHANNELS_TMP"
+        channels=$(< $CHANNELS_TMP)
+        $JQ_FILE '.channels += '"$channels"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
         exit 0
     ;;

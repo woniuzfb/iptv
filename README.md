@@ -48,6 +48,12 @@ bash -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/wo
 
 - 操作频道，添加，删除，重启等都会自动更新指定的json文件
 
+## 快捷键
+
+- tv e 手动修改 channels.json
+- tv d 请求默认频道 ( 40多港澳台频道 )
+- ...
+
 ## 参数详解
 
 使用方法: tv -i [直播源] [-s 段时长(秒)] [-o 输出目录名称] [-c m3u8包含的段数目] [-b 比特率] [-p m3u8文件名称] [-C]
