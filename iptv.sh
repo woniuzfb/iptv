@@ -1238,6 +1238,15 @@ EditChannelAll()
     echo && echo -e "$info 频道修改成功 !" && echo
 }
 
+EditForSecurity()
+{
+    SetPlaylistName
+    SetSegName
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.playlist_name)="'"$playlist_name"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_name)='"$seg_name"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info 段名称、m3u8名称 修改成功 !" && echo
+}
+
 EditChannelMenu()
 {
     ListChannels
@@ -1264,7 +1273,7 @@ EditChannelMenu()
  ${green}17.$plain 修改 频道名称
  ${green}18.$plain 修改 全部配置
 ————— 组合[常用] —————
- ${green}19.$plain 自动修改 段名称、m3u8名称 (防盗链/DDoS)
+ ${green}19.$plain 修改 段名称、m3u8名称 (防盗链/DDoS)
  " && echo
     read -p "(默认: 取消):" edit_channel_num
     [ -z "$edit_channel_num" ] && echo "已取消..." && exit 1
@@ -1323,21 +1332,43 @@ EditChannelMenu()
         18)
             EditChannelAll
         ;;
+        19)
+            EditForSecurity
+        ;;
         *)
             echo "请输入正确序号..." && exit 1
         ;;
     esac
-    echo "是否启动此频道？[y/N]"
-    read -p "(默认: N):" start_yn
-    start_yn=${start_yn:-"Y"}
-    if [[ "$start_yn" == [Yy] ]] 
+
+    if [ "$chnl_status" == "on" ] 
     then
-        GetChannelInfo
-        action=""
-        StartChannel
-        echo && echo -e "$info 频道启动成功 !" && echo
+        echo "是否重启此频道？[y/N]"
+        read -p "(默认: N):" restart_yn
+        restart_yn=${restart_yn:-"Y"}
+        if [[ "$restart_yn" == [Yy] ]] 
+        then
+            action="skip"
+            StopChannel
+            GetChannelInfo
+            action=""
+            StartChannel
+            echo && echo -e "$info 频道重启成功 !" && echo
+        else
+            echo "退出..." && exit 0 
+        fi
     else
-        echo "退出..." && exit 0 
+        echo "是否启动此频道？[y/N]"
+        read -p "(默认: N):" start_yn
+        start_yn=${start_yn:-"Y"}
+        if [[ "$start_yn" == [Yy] ]] 
+        then
+            GetChannelInfo
+            action=""
+            StartChannel
+            echo && echo -e "$info 频道启动成功 !" && echo
+        else
+            echo "退出..." && exit 0 
+        fi
     fi
 }
 
