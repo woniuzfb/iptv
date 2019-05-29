@@ -10,6 +10,7 @@ CREATOR_FILE="$IPTV_ROOT/HLS-Stream-Creator.sh"
 JQ_FILE="$IPTV_ROOT/jq"
 CHANNELS_FILE="$IPTV_ROOT/channels.json"
 CHANNELS_TMP="$IPTV_ROOT/channels.tmp"
+DEFAULT_FILE="http://hbo.epub.fun/default.json"
 LOCK_FILE="$IPTV_ROOT/lock"
 green="\033[32m"
 red="\033[31m"
@@ -1322,6 +1323,10 @@ done
 cmd=$*
 case "$cmd" in
     "e") vi "$CHANNELS_FILE" && exit 0
+    ;;
+    "d")
+        wget "$DEFAULT_FILE" -qO "$CHANNELS_TMP"
+        mv "$CHANNELS_TMP" "$CHANNELS_FILE"
     ;;
     *)
     ;;
