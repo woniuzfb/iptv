@@ -1098,7 +1098,7 @@ EditSegName()
 EditSegLength()
 {
     SetSegLength
-    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.seg_length)="'"$seg_length"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.seg_length)='"$seg_length"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
     mv "$CHANNELS_TMP" "$CHANNELS_FILE"
     echo && echo -e "$info 段时长修改成功 !" && echo
 }
@@ -1106,7 +1106,7 @@ EditSegLength()
 EditSegCount()
 {
     SetSegCount
-    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.seg_count)="'"$seg_count"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.seg_count)='"$seg_count"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
     mv "$CHANNELS_TMP" "$CHANNELS_FILE"
     echo && echo -e "$info 段数目修改成功 !" && echo
 }
@@ -1242,7 +1242,7 @@ EditForSecurity()
 {
     SetPlaylistName
     SetSegName
-    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.playlist_name)="'"$playlist_name"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_name)='"$seg_name"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.playlist_name)="'"$playlist_name"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_name)="'"$seg_name"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
     mv "$CHANNELS_TMP" "$CHANNELS_FILE"
     echo && echo -e "$info 段名称、m3u8名称 修改成功 !" && echo
 }
@@ -1340,7 +1340,7 @@ EditChannelMenu()
         ;;
     esac
 
-    if [ "$chnl_status" == "on" ] 
+    if [ "$chnl_status" == "on" ] && [ "$edit_channel_num" != "2" ]
     then
         echo "是否重启此频道？[y/N]"
         read -p "(默认: N):" restart_yn
