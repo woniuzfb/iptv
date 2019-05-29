@@ -547,6 +547,8 @@ ListChannels()
                 chnls_status_text=$red"关闭"$plain
                 $JQ_FILE '(.channels[]|select(.pid=='"$chnls_pid_index"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
                 mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+                chnl_pid=$chnls_pid_index
+                StopChannel
             else
                 chnls_status_text=$green"开启"$plain
             fi
