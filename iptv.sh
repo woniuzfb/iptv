@@ -1042,11 +1042,170 @@ AddChannel()
     SyncFile
 }
 
-EditChannel()
+EditStreamLink()
 {
-    ListChannels
-    InputChannelPid
-    GetChannelInfo
+    SetStreamLink
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.stream_link)="'"$stream_link"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info 直播源修改成功 !" && echo
+}
+
+EditOutputDirName()
+{
+    if [ "$chnl_status" == "on" ]
+    then
+        echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]" && echo
+        read -p "(默认: N):" stop_channel_yn
+        stop_channel_yn=${stop_channel_yn:-'n'}
+        if [[ "$stop_channel_yn" == [Yy] ]]
+        then
+            StopChannel
+            echo && echo
+        else
+            echo "已取消..." && exit 1
+        fi
+    fi
+    SetOutputDirName
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.output_dir_name)="'"$output_dir_name"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info 输出目录名称修改成功 !" && echo
+}
+
+EditPlaylistName()
+{
+    SetPlaylistName
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.playlist_name)="'"$playlist_name"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info m3u8名称修改成功 !" && echo
+}
+
+EditSegDirName()
+{
+    SetSegDirName
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.seg_dir_name)="'"$seg_dir_name"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info 段所在子目录名称修改成功 !" && echo
+}
+
+EditSegName()
+{
+    SetSegName
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.seg_name)="'"$seg_name"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info 段名称修改成功 !" && echo
+}
+
+EditSegLength()
+{
+    SetSegLength
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.seg_length)="'"$seg_length"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info 段时长修改成功 !" && echo
+}
+
+EditSegCount()
+{
+    SetSegCount
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.seg_count)="'"$seg_count"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info 段数目修改成功 !" && echo
+}
+
+EditVideoCodec()
+{
+    SetVideoCodec
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.video_codec)="'"$video_codec"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info 视频编码修改成功 !" && echo
+}
+
+EditAudioCodec()
+{
+    SetAudioCodec
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.audio_codec)="'"$audio_codec"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info 音频编码修改成功 !" && echo
+}
+
+EditQuality()
+{
+    SetQuality
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.quality)="'"$quality"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info crf质量值修改成功 !" && echo
+}
+
+EditBitrates()
+{
+    SetBitrates
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.bitrates)="'"$bitrates"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info 比特率修改成功 !" && echo
+}
+
+EditConst()
+{
+    SetConst
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.const)="'"$const"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info 是否固定码率修改成功 !" && echo
+}
+
+EditEncrypt()
+{
+    SetEncrypt
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.encrypt)="'"$encrypt"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info 是否加密修改成功 !" && echo
+}
+
+EditKeyName()
+{
+    SetKeyName
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.key_name)="'"$key_name"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info key名称修改成功 !" && echo
+}
+
+EditInputFlags()
+{
+    SetInputFlags
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.input_flags)="'"$input_flags"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info input flags修改成功 !" && echo
+}
+
+EditOutputFlags()
+{
+    SetOutputFlags
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.output_flags)="'"$output_flags"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info output flags修改成功 !" && echo
+}
+
+EditChannelName()
+{
+    SetChannelName
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.channel_name)="'"$channel_name"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info 频道名称修改成功 !" && echo
+}
+
+EditChannelAll()
+{
+    if [ "$chnl_status" == "on" ]
+    then
+        echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]" && echo
+        read -p "(默认: N):" stop_channel_yn
+        stop_channel_yn=${stop_channel_yn:-'n'}
+        if [[ "$stop_channel_yn" == [Yy] ]]
+        then
+            StopChannel
+            echo && echo
+        else
+            echo "已取消..." && exit 1
+        fi
+    fi
     SetStreamLink
     SetOutputDirName
     SetPlaylistName
@@ -1077,17 +1236,106 @@ EditChannel()
     $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.stream_link)="'"$stream_link"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_length)='"$seg_length"'|(.channels[]|select(.pid=='"$chnl_pid"')|.output_dir_name)="'"$output_dir_name"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_count)='"$seg_count"'|(.channels[]|select(.pid=='"$chnl_pid"')|.video_codec)="'"$video_codec"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.audio_codec)="'"$audio_codec"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.bitrates)="'"$bitrates"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.playlist_name)="'"$playlist_name"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.channel_name)="'"$channel_name"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_dir_name)="'"$seg_dir_name"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_name)="'"$seg_name"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.const)="'"$const"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.quality)="'"$quality"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.encrypt)="'"$encrypt_yn"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.key_name)="'"$key_name"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.input_flags)="'"$input_flags"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.output_flags)="'"$output_flags"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
     mv "$CHANNELS_TMP" "$CHANNELS_FILE"
     echo && echo -e "$info 频道修改成功 !" && echo
-    echo "是否重启此频道？[Y/n]"
-    read -p "(默认: Y):" restart_yn
-    restart_yn=${restart_yn:-"Y"}
-    if [[ "$restart_yn" == [Yy] ]] 
+}
+
+EditChannelMenu()
+{
+    ListChannels
+    InputChannelPid
+    GetChannelInfo
+    ViewChannelInfo
+    echo && echo -e "你要修改什么？
+  ${green}1.$plain 修改 直播源
+  ${green}2.$plain 修改 输出目录名称
+  ${green}3.$plain 修改 m3u8名称
+  ${green}4.$plain 修改 段所在子目录名称
+  ${green}5.$plain 修改 段名称
+  ${green}6.$plain 修改 段时长
+  ${green}7.$plain 修改 段数目
+  ${green}8.$plain 修改 视频编码
+  ${green}9.$plain 修改 音频编码
+ ${green}10.$plain 修改 crf质量值
+ ${green}11.$plain 修改 比特率
+ ${green}12.$plain 修改 是否固定码率
+ ${green}13.$plain 修改 是否加密
+ ${green}14.$plain 修改 key名称
+ ${green}15.$plain 修改 input flags
+ ${green}16.$plain 修改 output flags
+ ${green}17.$plain 修改 频道名称
+ ${green}18.$plain 修改 全部配置
+————— 组合[常用] —————
+ ${green}19.$plain 自动修改 段名称、m3u8名称 (防盗链/DDoS)
+ " && echo
+    read -p "(默认: 取消):" edit_channel_num
+    [ -z "$edit_channel_num" ] && echo "已取消..." && exit 1
+    case $edit_channel_num in
+        1)
+            EditStreamLink
+        ;;
+        2)
+            EditOutputDirName
+        ;;
+        3)
+            EditPlaylistName
+        ;;
+        4)
+            EditSegDirName
+        ;;
+        5)
+            EditSegName
+        ;;
+        6)
+            EditSegLength
+        ;;
+        7)
+            EditSegCount
+        ;;
+        8)
+            EditVideoCodec
+        ;;
+        9)
+            EditAudioCodec
+        ;;
+        10)
+            EditQuality
+        ;;
+        11)
+            EditBitrates
+        ;;
+        12)
+            EditConst
+        ;;
+        13)
+            EditEncrypt
+        ;;
+        14)
+            EditKeyName
+        ;;
+        15)
+            EditInputFlags
+        ;;
+        16)
+            EditOutputFlags
+        ;;
+        17)
+            EditChannelName
+        ;;
+        18)
+            EditChannelAll
+        ;;
+        *)
+            echo "请输入正确序号..." && exit 1
+        ;;
+    esac
+    echo "是否启动此频道？[y/N]"
+    read -p "(默认: N):" start_yn
+    start_yn=${start_yn:-"Y"}
+    if [[ "$start_yn" == [Yy] ]] 
     then
-        action="skip"
-        StopChannel
         GetChannelInfo
         action=""
         StartChannel
-        echo && echo -e "$info 频道重启成功 !" && echo
+        echo && echo -e "$info 频道启动成功 !" && echo
     else
         echo "退出..." && exit 0 
     fi
@@ -1367,7 +1615,7 @@ then
         ;;
         5) AddChannel
         ;;
-        6) EditChannel
+        6) EditChannelMenu
         ;;
         7) ToggleChannel
         ;;
