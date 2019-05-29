@@ -1327,6 +1327,7 @@ case "$cmd" in
     "d")
         wget "$DEFAULT_FILE" -qO "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+        exit 0
     ;;
     *)
     ;;
