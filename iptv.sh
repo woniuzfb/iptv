@@ -46,7 +46,7 @@ SyncFile()
         "skip")
             return
         ;;      
-        "start"|"stop"|"del")
+        "start"|"stop")
             GetDefault
         ;;
         "add")
@@ -86,7 +86,7 @@ SyncFile()
             done
         done <<< "$d_sync_index"
 
-        if [ "$action" == "del" ] || [ "$action" == "stop" ]
+        if [ "$action" == "stop" ]
         then
             if [ -n "$($JQ_FILE "$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")' "$d_sync_file")" ] 
             then
@@ -167,7 +167,7 @@ SyncFile()
                 mv "$CHANNELS_TMP" "$d_sync_file"
             fi
         fi
-        echo -e "$info sync 执行成功..." && exit 0
+        echo -e "$info sync 执行成功..."
     fi
 }
 
@@ -1342,8 +1342,8 @@ EditChannelMenu()
 
     if [ "$chnl_status" == "on" ] && [ "$edit_channel_num" != "2" ]
     then
-        echo "是否重启此频道？[y/N]"
-        read -p "(默认: N):" restart_yn
+        echo "是否重启此频道？[Y/n]"
+        read -p "(默认: Y):" restart_yn
         restart_yn=${restart_yn:-"Y"}
         if [[ "$restart_yn" == [Yy] ]] 
         then
@@ -1359,7 +1359,7 @@ EditChannelMenu()
     else
         echo "是否启动此频道？[y/N]"
         read -p "(默认: N):" start_yn
-        start_yn=${start_yn:-"Y"}
+        start_yn=${start_yn:-"N"}
         if [[ "$start_yn" == [Yy] ]] 
         then
             GetChannelInfo
@@ -1450,13 +1450,10 @@ DelChannel()
 {
     ListChannels
     InputChannelPid
-    action="skip"
     StopChannel
     $JQ_FILE '.channels -= [.channels[]|select(.pid=='"$chnl_pid"')]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
     mv "$CHANNELS_TMP" "$CHANNELS_FILE"
     echo -e "$info 频道删除成功 !" && echo
-    action="del"
-    SyncFile
 }
 
 RandStr()
