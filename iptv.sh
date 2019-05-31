@@ -70,17 +70,17 @@ SyncFile()
         jq_index=""
         while IFS=':' read -ra index_arr
         do
-            for index in "${index_arr[@]}"
+            for a in "${index_arr[@]}"
             do
-                case $index in
+                case $a in
                     '') 
                         echo -e "$error sync设置错误..." && exit 1
                     ;;
                     *[!0-9]*)
-                        jq_index="$jq_index.$index"
+                        jq_index="$jq_index.$a"
                     ;;
                     *) 
-                        jq_index="${jq_index}[$index]"
+                        jq_index="${jq_index}[$a]"
                     ;;
                 esac
             done
@@ -98,17 +98,17 @@ SyncFile()
             jq_channel_edit=""
             while IFS=',' read -ra index_arr
             do
-                for index in "${index_arr[@]}"
+                for b in "${index_arr[@]}"
                 do
-                    case $index in
+                    case $b in
                         '') 
                             echo -e "$error sync设置错误..." && exit 1
                         ;;
                         *) 
-                            if [[ $index == *"="* ]] 
+                            if [[ $b == *"="* ]] 
                             then
-                                key=$(echo "$index" | cut -d= -f1)
-                                value=$(echo "$index" | cut -d= -f2)
+                                key=$(echo "$b" | cut -d= -f1)
+                                value=$(echo "$b" | cut -d= -f2)
                                 if [[ $value == *"http"* ]]  
                                 then
                                     value="$value/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
@@ -120,8 +120,8 @@ SyncFile()
                                     jq_channel_edit="$jq_channel_edit|(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key)=\"${value}\""
                                 fi
                             else
-                                key=$(echo "$index" | cut -d: -f1)
-                                value=$(echo "$index" | cut -d: -f2)
+                                key=$(echo "$b" | cut -d: -f1)
+                                value=$(echo "$b" | cut -d: -f2)
                                 value="chnl_$value"
 
                                 if [ "$value" == "chnl_pid" ] 
@@ -333,7 +333,11 @@ Uninstall()
         pids=$($JQ_FILE '.channels[].pid' $CHANNELS_FILE)
         for chnl_pid in $pids
         do
-            StopChannel
+            chnl_status=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').status' "$CHANNELS_FILE")
+            if [ "$chnl_status" == "on" ]
+            then
+                StopChannel
+            fi
         done
         rm -rf "${IPTV_ROOT:-'notfound'}"
         echo && echo -e "$info 卸载完成 !" && echo
@@ -701,25 +705,36 @@ ViewChannelInfo()
     echo
 }
 
-InputChannelPid()
+InputChannelsPids()
 {
     echo -e "请输入频道的进程ID "
-    while read -p "(默认: 取消):" chnl_pid
+    echo -e "$tip 多个进程ID用空格分隔 "
+    while read -p "(默认: 取消):" chnls_pids
     do
-        case "$chnl_pid" in
-            ("")
-                echo "已取消..." && exit 1
+        error=0
+        IFS=" " read -ra chnls_pids_arr <<< "$chnls_pids"
+        [ -z "$chnls_pids" ] && echo "已取消..." && exit 1
+        for chnl_pid in "${chnls_pids_arr[@]}"
+        do
+            case "$chnl_pid" in
+                (*[!0-9]*)
+                    error=1
+                ;;
+                (*)
+                    if [ -z "$($JQ_FILE '.channels[] | select(.pid=='"$chnl_pid"')' $CHANNELS_FILE)" ]
+                    then
+                        error=2
+                    fi
+                ;;
+            esac
+        done
+
+        case $error in
+            1) echo -e "$error 请输入正确的数字！"
             ;;
-            (*[!0-9]*)
-                echo -e "$error 请输入正确的数字！"
+            2) echo -e "$error 请输入正确的进程ID！"
             ;;
-            (*)
-                if [ -n "$($JQ_FILE '.channels[] | select(.pid=='"$chnl_pid"')' $CHANNELS_FILE)" ]
-                then
-                    break;
-                else
-                    echo -e "$error 请输入正确的进程ID！"
-                fi
+            *) break;
             ;;
         esac
     done
@@ -727,9 +742,12 @@ InputChannelPid()
 
 ViewChannelMenu(){
     ListChannels
-    InputChannelPid
-    GetChannelInfo
-    ViewChannelInfo
+    InputChannelsPids
+    for chnl_pid in "${chnls_pids_arr[@]}"
+    do
+        GetChannelInfo
+        ViewChannelInfo
+    done
 }
 
 SetStreamLink()
@@ -1250,139 +1268,145 @@ EditForSecurity()
 EditChannelMenu()
 {
     ListChannels
-    InputChannelPid
-    GetChannelInfo
-    ViewChannelInfo
-    echo && echo -e "你要修改什么？
-  ${green}1.$plain 修改 直播源
-  ${green}2.$plain 修改 输出目录名称
-  ${green}3.$plain 修改 m3u8名称
-  ${green}4.$plain 修改 段所在子目录名称
-  ${green}5.$plain 修改 段名称
-  ${green}6.$plain 修改 段时长
-  ${green}7.$plain 修改 段数目
-  ${green}8.$plain 修改 视频编码
-  ${green}9.$plain 修改 音频编码
- ${green}10.$plain 修改 crf质量值
- ${green}11.$plain 修改 比特率
- ${green}12.$plain 修改 是否固定码率
- ${green}13.$plain 修改 是否加密
- ${green}14.$plain 修改 key名称
- ${green}15.$plain 修改 input flags
- ${green}16.$plain 修改 output flags
- ${green}17.$plain 修改 频道名称
- ${green}18.$plain 修改 全部配置
-————— 组合[常用] —————
- ${green}19.$plain 修改 段名称、m3u8名称 (防盗链/DDoS)
- " && echo
-    read -p "(默认: 取消):" edit_channel_num
-    [ -z "$edit_channel_num" ] && echo "已取消..." && exit 1
-    case $edit_channel_num in
-        1)
-            EditStreamLink
-        ;;
-        2)
-            EditOutputDirName
-        ;;
-        3)
-            EditPlaylistName
-        ;;
-        4)
-            EditSegDirName
-        ;;
-        5)
-            EditSegName
-        ;;
-        6)
-            EditSegLength
-        ;;
-        7)
-            EditSegCount
-        ;;
-        8)
-            EditVideoCodec
-        ;;
-        9)
-            EditAudioCodec
-        ;;
-        10)
-            EditQuality
-        ;;
-        11)
-            EditBitrates
-        ;;
-        12)
-            EditConst
-        ;;
-        13)
-            EditEncrypt
-        ;;
-        14)
-            EditKeyName
-        ;;
-        15)
-            EditInputFlags
-        ;;
-        16)
-            EditOutputFlags
-        ;;
-        17)
-            EditChannelName
-        ;;
-        18)
-            EditChannelAll
-        ;;
-        19)
-            EditForSecurity
-        ;;
-        *)
-            echo "请输入正确序号..." && exit 1
-        ;;
-    esac
+    InputChannelsPids
+    for chnl_pid in "${chnls_pids_arr[@]}"
+    do
+        GetChannelInfo
+        ViewChannelInfo
+        echo && echo -e "你要修改什么？
+    ${green}1.$plain 修改 直播源
+    ${green}2.$plain 修改 输出目录名称
+    ${green}3.$plain 修改 m3u8名称
+    ${green}4.$plain 修改 段所在子目录名称
+    ${green}5.$plain 修改 段名称
+    ${green}6.$plain 修改 段时长
+    ${green}7.$plain 修改 段数目
+    ${green}8.$plain 修改 视频编码
+    ${green}9.$plain 修改 音频编码
+    ${green}10.$plain 修改 crf质量值
+    ${green}11.$plain 修改 比特率
+    ${green}12.$plain 修改 是否固定码率
+    ${green}13.$plain 修改 是否加密
+    ${green}14.$plain 修改 key名称
+    ${green}15.$plain 修改 input flags
+    ${green}16.$plain 修改 output flags
+    ${green}17.$plain 修改 频道名称
+    ${green}18.$plain 修改 全部配置
+    ————— 组合[常用] —————
+    ${green}19.$plain 修改 段名称、m3u8名称 (防盗链/DDoS)
+    " && echo
+        read -p "(默认: 取消):" edit_channel_num
+        [ -z "$edit_channel_num" ] && echo "已取消..." && exit 1
+        case $edit_channel_num in
+            1)
+                EditStreamLink
+            ;;
+            2)
+                EditOutputDirName
+            ;;
+            3)
+                EditPlaylistName
+            ;;
+            4)
+                EditSegDirName
+            ;;
+            5)
+                EditSegName
+            ;;
+            6)
+                EditSegLength
+            ;;
+            7)
+                EditSegCount
+            ;;
+            8)
+                EditVideoCodec
+            ;;
+            9)
+                EditAudioCodec
+            ;;
+            10)
+                EditQuality
+            ;;
+            11)
+                EditBitrates
+            ;;
+            12)
+                EditConst
+            ;;
+            13)
+                EditEncrypt
+            ;;
+            14)
+                EditKeyName
+            ;;
+            15)
+                EditInputFlags
+            ;;
+            16)
+                EditOutputFlags
+            ;;
+            17)
+                EditChannelName
+            ;;
+            18)
+                EditChannelAll
+            ;;
+            19)
+                EditForSecurity
+            ;;
+            *)
+                echo "请输入正确序号..." && exit 1
+            ;;
+        esac
 
-    if [ "$chnl_status" == "on" ] && [ "$edit_channel_num" != "2" ]
-    then
-        echo "是否重启此频道？[Y/n]"
-        read -p "(默认: Y):" restart_yn
-        restart_yn=${restart_yn:-"Y"}
-        if [[ "$restart_yn" == [Yy] ]] 
+        if [ "$chnl_status" == "on" ] && [ "$edit_channel_num" != "2" ]
         then
-            action="skip"
-            StopChannel
-            GetChannelInfo
-            action=""
-            StartChannel
-            echo && echo -e "$info 频道重启成功 !" && echo
+            echo "是否重启此频道？[Y/n]"
+            read -p "(默认: Y):" restart_yn
+            restart_yn=${restart_yn:-"Y"}
+            if [[ "$restart_yn" == [Yy] ]] 
+            then
+                action="skip"
+                StopChannel
+                GetChannelInfo
+                action=""
+                StartChannel
+                echo && echo -e "$info 频道重启成功 !" && echo
+            else
+                echo "不重启..."
+            fi
         else
-            echo "退出..." && exit 0 
+            echo "是否启动此频道？[y/N]"
+            read -p "(默认: N):" start_yn
+            start_yn=${start_yn:-"N"}
+            if [[ "$start_yn" == [Yy] ]] 
+            then
+                GetChannelInfo
+                action=""
+                StartChannel
+                echo && echo -e "$info 频道启动成功 !" && echo
+            else
+                echo "不启动..."
+            fi
         fi
-    else
-        echo "是否启动此频道？[y/N]"
-        read -p "(默认: N):" start_yn
-        start_yn=${start_yn:-"N"}
-        if [[ "$start_yn" == [Yy] ]] 
-        then
-            GetChannelInfo
-            action=""
-            StartChannel
-            echo && echo -e "$info 频道启动成功 !" && echo
-        else
-            echo "退出..." && exit 0 
-        fi
-    fi
+    done
 }
 
 ToggleChannel()
 {
     ListChannels
-    InputChannelPid
-    GetChannelInfo
-    if [ "$chnl_status" == "on" ] 
-    then
-        StopChannel
-    else
-        StartChannel
-    fi
+    InputChannelsPids
+    for chnl_pid in "${chnls_pids_arr[@]}"
+    do
+        GetChannelInfo
+        if [ "$chnl_status" == "on" ] 
+        then
+            StopChannel
+        else
+            StartChannel
+        fi
+    done
 }
 
 StartChannel()
@@ -1437,23 +1461,36 @@ StopChannel()
 RestartChannel()
 {
     ListChannels
-    InputChannelPid
-    action="skip"
-    StopChannel
-    GetChannelInfo
-    action=""
-    StartChannel
-    echo && echo -e "$info 频道重启成功 !" && echo
+    InputChannelsPids
+    for chnl_pid in "${chnls_pids_arr[@]}"
+    do
+        GetChannelInfo
+        if [ "$chnl_status" == "on" ] 
+        then
+            action="skip"
+            StopChannel
+        fi
+        action=""
+        StartChannel
+        echo && echo -e "$info 频道重启成功 !" && echo
+    done
 }
 
 DelChannel()
 {
     ListChannels
-    InputChannelPid
-    StopChannel
-    $JQ_FILE '.channels -= [.channels[]|select(.pid=='"$chnl_pid"')]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
-    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
-    echo -e "$info 频道删除成功 !" && echo
+    InputChannelsPids
+    for chnl_pid in "${chnls_pids_arr[@]}"
+    do
+        chnl_status=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').status' "$CHANNELS_FILE")
+        if [ "$chnl_status" == "on" ] 
+        then
+            StopChannel
+        fi
+        $JQ_FILE '.channels -= [.channels[]|select(.pid=='"$chnl_pid"')]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+        mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+        echo -e "$info 频道删除成功 !" && echo
+    done
 }
 
 RandStr()
@@ -1607,7 +1644,12 @@ case "$cmd" in
         channels=$(< $CHANNELS_TMP)
         $JQ_FILE '.channels += '"$channels"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+        echo && echo -e "$info 频道添加成功 !" && echo
         exit 0
+    ;;
+    "h") hbo && exit 0
+    ;;
+    "f") fenghuang && exit 0
     ;;
     *)
     ;;

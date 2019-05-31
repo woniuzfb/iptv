@@ -22,7 +22,7 @@
 
 ---
 
-## iptv.sh 一键管理 IPTV 脚本 [mpegts => hls]
+## iptv.sh 一键管理 IPTV 脚本 mpegts => hls
 
 - 【自动化】HLS-Stream-Creator【手动麻烦】
 - 添加频道
@@ -45,7 +45,7 @@ bash -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/wo
 
     "sync_file":"/var/www/html/channels.json", # 公开目录的json
     "sync_index":"data:2:channels", # 必须指定到m3u8直播源所在的数组这一级，比如这里 ObjectJson.data[2].channels
-    "sync_pairs":"chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live", # 值配对用:号，如果直接赋值用=号（公开的live根目录会自动补上完整的m3u8地址）
+    "sync_pairs":"chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live", # 值映射用:号，如果直接赋值用=号（公开的live根目录会自动补上完整的m3u8地址）
 
 - 操作频道，添加，删除，重启等都会自动更新指定的json文件
 
