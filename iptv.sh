@@ -959,7 +959,7 @@ SetKeyName()
 SetInputFlags()
 {
     echo "请输入input flags"
-    read -p "(默认: 跟配置文件相同):" input_flags
+    read -p "(默认: $d_input_flags):" input_flags
     input_flags=${input_flags:-$d_input_flags}
     echo && echo -e "	input flags: $green $input_flags $plain" && echo 
 }
@@ -967,7 +967,7 @@ SetInputFlags()
 SetOutputFlags()
 {
     echo "请输入output flags"
-    read -p "(默认: 跟配置文件相同):" output_flags
+    read -p "(默认: $d_output_flags):" output_flags
     output_flags=${output_flags:-$d_output_flags}
     echo && echo -e "	output flags: $green $output_flags $plain" && echo 
 }
@@ -1548,6 +1548,18 @@ RandSegDirName()
     done
 }
 
+hbo()
+{
+    CheckRelease
+
+}
+
+fenghuang()
+{
+    CheckRelease
+    
+}
+
 Usage()
 {
 
@@ -1647,9 +1659,9 @@ case "$cmd" in
         echo && echo -e "$info 频道添加成功 !" && echo
         exit 0
     ;;
-    "h") hbo && exit 0
+    "hbo") hbo && exit 0
     ;;
-    "f") fenghuang && exit 0
+    "fh") fenghuang && exit 0
     ;;
     *)
     ;;
