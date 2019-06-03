@@ -137,13 +137,15 @@ function videojsLoad() {
       alertInfo('频道发生错误！',10);
       this.error(null).pause().load().currentTime(time).play();
     } else if (this.error().code === 4) {
-      alertInfo('频道不可用！账号错误!',10);
+      alertInfo('频道不可用！请重新登录账号后尝试!',10);
+      /*
       if (programId) {
         localStorage.removeItem(sourceReg+'_acc');
         localStorage.removeItem(sourceReg+'_pwd');
         localStorage.removeItem(sourceReg+'_token');
         localStorage.removeItem(sourceReg+'_deviceno');
       }
+      */
     } else {
       alertInfo('无法连接直播源！',10);
     }
@@ -321,7 +323,7 @@ function reqReg() {
   let pwd = regPwdField.value;
   let smsCode = regSmsField.value;
 
-  if (!sourcesJsonParsed[sourceReg].hasOwnProperty('token_url')) {
+  if (!sourcesJsonParsed[sourceReg].hasOwnProperty('img_url')) {
     reqData(sourcesJsonParsed[sourceReg].reg_url,'?username='+acc+'&iconid=1&pwd='+md5(pwd)+'&birthday=1970-1-1&type=1&accounttype='+sourcesJsonParsed[sourceReg].acc_type_reg)
     .then(response => {
       if (response.ret !== 0) {
@@ -395,10 +397,11 @@ function reqLogin() {
   let devicetype = 3;
   let isforce = 1;
 
-  if (!sourcesJsonParsed[sourceReg].hasOwnProperty('token_url')) {
+  if (!sourcesJsonParsed[sourceReg].hasOwnProperty('img_url')) {
     reqData(sourcesJsonParsed[sourceReg].login_url,'?deviceno='+deviceno+'&devicetype='+devicetype+'&accounttype='+sourcesJsonParsed[sourceReg].acc_type_login+'&accesstoken=(null)&account='+acc+'&pwd='+md5(pwd)+'&isforce='+isforce)
     .then(response => {
       if (response.ret === 0) {
+        alertInfo(sourcesJsonParsed[sourceReg].desc+'直播源登录成功！',5);
         localStorage.setItem(sourceReg+'_acc', acc);
         localStorage.setItem(sourceReg+'_pwd', pwd);
         localStorage.setItem(sourceReg+'_token', response.access_token);
@@ -448,6 +451,9 @@ function appendList(channel,appendSourceName,sourceLane) {
   const channelListText = document.createTextNode(channel.chnl_name);
   if (localStorage.getItem('dark') === '1'){
     channelListItem.classList.add('white');
+  }
+  if (localStorage.getItem(appendSourceName+'_token') || jsonChannels.hasOwnProperty(appendSourceName)){
+    channelListItem.classList.add('working');
   }
   channelListItem.setAttribute('data-value',channel.chnl_id);
   channelListItem.setAttribute('data-source',appendSourceName);
@@ -507,8 +513,39 @@ function reqJson(json) {
   });
 }
 
-function reqChannels(source) {
-  timeoutPromise(5000,reqData(source.list_url,'?pageidx=1&pagenum=500&accesstoken='+localStorage.getItem(source.name+'_token')))
+function getToken(source) {
+  return new Promise((resolve, reject) => {
+    if (localStorage.getItem(source.name+'_token')) {
+        resolve(localStorage.getItem(source.name+'_token'));
+    } else {
+      if (source.hasOwnProperty('refresh_token_url')) {
+        let deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
+        deviceno = deviceno+md5(deviceno).substring(7, 8);
+        timeoutPromise(3000,reqData(source.token_url,{"role":"guest","deviceno":deviceno,"deviceType":"yuj"},'POST'))
+        .then(response => {
+          if (response.ret === 0) {
+            reqData(source.refresh_token_url,{"accessToken":response.accessToken,"refreshToken":response.refreshToken},'POST')
+            .then(response => {
+              if (response.ret === 0) {
+                resolve(response.accessToken);
+              }
+            }).catch(err => {reject(err);});
+          }
+        }).catch(err => {reject(err);});
+      } else {
+        timeoutPromise(3000,reqData(source.token_url,{"usagescen":1},'POST'))
+        .then(response => {
+          if (response.ret === 0) {
+            resolve(response.access_token);
+          }
+        }).catch(err => {reject(err);});
+      }
+    }
+  });
+}
+
+function reqChannels(source,token) {
+  timeoutPromise(5000,reqData(source.list_url,'?pageidx=1&pagenum=500&accesstoken='+token))
   .then(response => {
     if (response.ret === 0) {
       let channelCats;
@@ -624,7 +661,7 @@ function updateAside() {
     sourceReg = 'jscnwx';
     loginAccField.setAttribute('placeholder','用户名');
     regAccField.setAttribute('placeholder','用户名');
-  } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('token_url')) {
+  } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('img_url')) {
     loginAccField.setAttribute('placeholder','用户名');
     regAccField.setAttribute('placeholder','用户名');
     regImgField.classList.toggle('hidden',true);
@@ -745,10 +782,9 @@ function initialize() {
     if (source.hasOwnProperty('json')) {
       reqJson(source.json);
     }
-    if (source.hasOwnProperty('list_url') && localStorage.getItem(source.name+'_token')) {
-      reqChannels(source);
-      /* clean old */
-      localStorage.removeItem(source.name);
+    if (source.hasOwnProperty('list_url')) {
+      getToken(source).then(response => {reqChannels(source,response);})
+      .catch(err => {console.log('发生错误:', err);});
     }
     if (source.hasOwnProperty('channels')) {
       for (let a = 0; a < source.channels.length; a++) {
@@ -764,9 +800,6 @@ function initialize() {
 
   updateAside();
   playVideo();
-  /* clean old */
-  localStorage.removeItem('account');
-  localStorage.removeItem('password');
 }
 
 formToggle.addEventListener("click", function(e) {

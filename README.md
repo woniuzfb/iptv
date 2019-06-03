@@ -52,7 +52,7 @@ bash -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/wo
 ## 快捷键
 
 - tv e 手动修改 channels.json
-- tv d 请求默认频道 ( 40多港澳台频道 )，添加到 channels.json
+- tv d 请求默认频道 ( 40多港澳台频道 - **在墙外**)，添加到 channels.json
 - ...
 
 ## 参数详解

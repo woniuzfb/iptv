@@ -14,10 +14,6 @@
       ]
     },
     {
-      "name": "g",
-      "json": "http://104.199.235.252/channels.json"
-    },
-    {
       "name": "a1",
       "json": "http://149.129.72.61/channels.json"
     },
@@ -41,6 +37,7 @@
       "login_url": "http://122.194.12.25:12690/account/login",
       "play_url": "http://httpdvb.slave.jscnwx.com:13164/playurl",
       "list_url": "http://122.194.12.25:13160/media/channel/get_list",
+      "token_url": "http://122.194.12.25:12690/account/get_third_token",
       "channels": [
         {
           "chnl_name": "江苏综艺",
@@ -113,46 +110,6 @@
           "chnl_cat": "地方"
         },
         {
-          "chnl_name": "高清测试1",
-          "chnl_id": "4200000078",
-          "chnl_cat": "港澳台"
-        },
-        {
-          "chnl_name": "高清测试2",
-          "chnl_id": "4200000079",
-          "chnl_cat": "港澳台"
-        },
-        {
-          "chnl_name": "高清测试3",
-          "chnl_id": "4200000080",
-          "chnl_cat": "港澳台"
-        },
-        {
-          "chnl_name": "高清测试4",
-          "chnl_id": "4200000081",
-          "chnl_cat": "港澳台"
-        },
-        {
-          "chnl_name": "高清测试5",
-          "chnl_id": "4200000082",
-          "chnl_cat": "港澳台"
-        },
-        {
-          "chnl_name": "高清测试6",
-          "chnl_id": "4200000083",
-          "chnl_cat": "港澳台"
-        },
-        {
-          "chnl_name": "高清测试7",
-          "chnl_id": "4200000084",
-          "chnl_cat": "港澳台"
-        },
-        {
-          "chnl_name": "高清测试8",
-          "chnl_id": "4200000085",
-          "chnl_cat": "港澳台"
-        },
-        {
           "chnl_name": "新视觉高清",
           "chnl_id": "4200000095",
           "chnl_cat": "高清电信"
@@ -180,6 +137,30 @@
       ]
     },
     {
+      "name": "pyitv",
+      "desc": "广东广电",
+      "lane": "联通",
+      "acc_type_reg": 2,
+      "acc_type_login": 3,
+      "extend_info": {
+        "operatingsystem": "iOS",
+        "systemversion": "12.1",
+        "model": "iPhone 6 Plus",
+        "appversion": "1.2.0"
+      },
+      "server_version": "V1.4.0",
+      "fix_cats": {"008":"005","009":"005"},
+      "play_url": "http://httpdvb.slave.pyitv.com:13164/playurl",
+      "list_url": "http://slave.pyitv.com/media/channel/get_list",
+      "token_url": "http://access.pyitv.com/account/get_third_token",
+      "img_url": "http://access.pyitv.com/account/user/get_picture_code",
+      "sms_url": "http://access.pyitv.com/account/user/v2/get_verify_code",
+      "verify_url": "http://access.pyitv.com/account/user/validate_verify_code",
+      "reg_url": "http://access.pyitv.com/account/user/v2/register",
+      "login_url": "http://access.pyitv.com/account/user/v2/login",
+      "channels": []
+    },
+    {
       "name": "jxtvnet",
       "desc": "江西广电",
       "lane": "电信",
@@ -202,9 +183,7 @@
       "verify_url": "http://access.jxtvnet.tv:81/account/user/validate_verify_code",
       "reg_url": "http://access.jxtvnet.tv:81/account/user/v2/register",
       "login_url": "http://access.jxtvnet.tv:81/account/user/v2/login",
-      "channels": [
-
-      ]
+      "channels": []
     },
     {
       "name": "ttcatv",
@@ -219,7 +198,7 @@
         "appversion": "2.7.9"
       },
       "server_version": "V1.2.33",
-      "fix_cats": {"003":"007","007":"005"},
+      "fix_cats": {"003": "007","007": "005"},
       "omit": "173,175-177",
       "unique_url": "http://access.ttcatv.tv:12690/account/user/name_is_uniqueness",
       "play_url": "http://httpdvb.slave.ttcatv.tv:13164/playurl",
@@ -230,9 +209,7 @@
       "verify_url": "http://access.ttcatv.tv:12690/account/user/validate_verify_code",
       "reg_url": "http://access.ttcatv.tv:12690/account/user/v2/register",
       "login_url": "http://access.ttcatv.tv:12690/account/user/v2/login",
-      "channels": [
-
-      ]
+      "channels": []
     },
     {
       "name": "nx96200",
@@ -314,8 +291,49 @@
       ]
     },
     {
+      "name": "shuliyun",
+      "desc": "山西广电1",
+      "lane": "联通",
+      "acc_type_reg": 1,
+      "acc_type_login": 2,
+      "fix_cats": {"007":"005"},
+      "omit": "29,73,94,101",
+      "unique_url": "http://slave.shuliyun.com:12690/account/user/name_is_uniqueness",
+      "reg_url": "http://slave.shuliyun.com:12690/account/user/register",
+      "login_url": "http://slave.shuliyun.com:12690/account/login",
+      "play_url": "http://httpdvb.slave.shuliyun.com:13164/playurl",
+      "list_url": "http://slave.shuliyun.com:13160/media/channel/get_list",
+      "token_url": "http://slave.shuliyun.com:12690/account/get_third_token",
+      "channels": []
+    },
+    {
+      "name": "yqdtv",
+      "desc": "山西广电2",
+      "lane": "联通",
+      "acc_type_reg": 1,
+      "acc_type_login": 3,
+      "extend_info": {
+        "operatingsystem": "Android",
+        "systemversion": "7.0",
+        "model": "Xiaomi",
+        "appversion": "V1.2.1"
+      },
+      "server_version": "V1.2.13",
+      "omit": "278",
+      "unique_url": "http://access.yqdtv.com:12690/account/user/name_is_uniqueness",
+      "play_url": "http://httpdvb.slave.yqdtv.com:13164/playurl",
+      "list_url": "http://slave.yqdtv.com:13160/media/channel/get_list",
+      "token_url": "http://access.yqdtv.com:12690/account/get_third_token",
+      "img_url": "http://access.yqdtv.com:12690/account/user/get_picture_code",
+      "sms_url": "http://access.yqdtv.com:12690/account/user/v2/get_verify_code",
+      "verify_url": "http://access.yqdtv.com:12690/account/user/validate_verify_code",
+      "reg_url": "http://access.yqdtv.com:12690/account/user/v2/register",
+      "login_url": "http://access.yqdtv.com:12690/account/user/v2/login",
+      "channels": []
+    },
+    {
       "name": "pygdzhcs",
-      "desc": "山西广电",
+      "desc": "山西广电3",
       "lane": "联通",
       "acc_type_reg": 2,
       "acc_type_login": 3,
@@ -327,6 +345,7 @@
       },
       "server_version": "V1.2.15",
       "play_url": "http://httpdvb.slave.pygdzhcs.com:13164/playurl",
+      "list_url": "http://slave.pygdzhcs.com:13160/media/channel/get_list",
       "token_url": "http://access.pygdzhcs.com:12690/account/get_third_token",
       "img_url": "http://access.pygdzhcs.com:12690/account/user/get_picture_code",
       "sms_url": "http://access.pygdzhcs.com:12690/account/user/v2/get_verify_code",
@@ -357,11 +376,6 @@
         {
           "chnl_name": "凤凰卫视资讯高清",
           "chnl_id": "4200000154",
-          "chnl_cat": "港澳台"
-        },
-        {
-          "chnl_name": "凤凰卫视中文高清",
-          "chnl_id": "4200000155",
           "chnl_cat": "港澳台"
         },
         {

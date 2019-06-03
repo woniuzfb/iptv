@@ -92,9 +92,14 @@ button {
   font-size: .9em;
 }
 
+.working {
+  border: 2px solid rgba(0, 200, 0, 0.6) !important;
+  background:rgba(47, 201, 96, 0.3) !important;
+}
+
 .sources .sourceReg, .categories .selected, .channels .selected {
   color: white;
-  background: red;
+  background: red !important;
 }
 
 li {
