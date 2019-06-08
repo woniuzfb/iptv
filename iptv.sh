@@ -681,7 +681,7 @@ GetChannelInfo(){
 
 ViewChannelInfo()
 {
-    clear && echo "===================================================" && echo
+    echo "===================================================" && echo
     echo -e " 频道 [$chnl_channel_name] 的配置信息：" && echo
     echo -e " 进程ID\t    : $green$chnl_pid$plain"
     echo -e " 状态\t    : $chnl_status_text"
