@@ -44,6 +44,7 @@ SyncFile()
 {
     case $action in
         "skip")
+            action=""
             return
         ;;      
         "start"|"stop")
@@ -169,6 +170,7 @@ SyncFile()
         fi
         echo -e "$info sync 执行成功..."
     fi
+    action=""
 }
 
 CheckRelease()
@@ -1370,7 +1372,6 @@ EditChannelMenu()
                 action="skip"
                 StopChannel
                 GetChannelInfo
-                action=""
                 StartChannel
                 echo && echo -e "$info 频道重启成功 !" && echo
             else
@@ -1383,7 +1384,6 @@ EditChannelMenu()
             if [[ "$start_yn" == [Yy] ]] 
             then
                 GetChannelInfo
-                action=""
                 StartChannel
                 echo && echo -e "$info 频道启动成功 !" && echo
             else
@@ -1470,7 +1470,6 @@ RestartChannel()
             action="skip"
             StopChannel
         fi
-        action=""
         StartChannel
         echo && echo -e "$info 频道重启成功 !" && echo
     done
