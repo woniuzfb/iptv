@@ -266,7 +266,7 @@ InstallFfmpeg()
             ffmpeg_package="ffmpeg-git-i686-static.tar.xz"
         fi
         FFMPEG_PACKAGE_FILE="$IPTV_ROOT/$ffmpeg_package"
-        wget --no-check-certificate "https://johnvansickle.com/ffmpeg/builds/$ffmpeg_package" -qO "$FFMPEG_PACKAGE_FILE"
+        wget --no-check-certificate "https://johnvansickle.com/ffmpeg/builds/$ffmpeg_package" --show-progress -qO "$FFMPEG_PACKAGE_FILE"
         [ ! -e "$FFMPEG_PACKAGE_FILE" ] && echo -e "$error ffmpeg压缩包 下载失败 !" && exit 1
         tar -xJf "$FFMPEG_PACKAGE_FILE" -C "$IPTV_ROOT" && rm -rf "${FFMPEG_PACKAGE_FILE:-'notfound'}"
         FFMPEG=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
@@ -287,7 +287,7 @@ InstallJq()
         jq_ver=$(curl --silent -m 10 "https://api.github.com/repos/stedolan/jq/releases/latest" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
         if [ -n "$jq_ver" ]
         then
-            wget --no-check-certificate "https://github.com/stedolan/jq/releases/download/$jq_ver/jq-linux$release_bit" -qO "$JQ_FILE"
+            wget --no-check-certificate "https://github.com/stedolan/jq/releases/download/$jq_ver/jq-linux$release_bit" --show-progress -qO "$JQ_FILE"
         fi
         [ ! -e "$JQ_FILE" ] && echo -e "$error 下载JQ解析器失败，请检查 !" && exit 1
         chmod +x "$JQ_FILE"
