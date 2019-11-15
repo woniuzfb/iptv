@@ -13,8 +13,12 @@
       ]
     },
     {
-      "name": "a9",
+      "name": "a3",
       "json": "http://mtime.info/channels.json"
+    },
+    {
+      "name": "a8",
+      "json": "http://47.102.142.200/channels.json"
     },
     {
       "name": "jscnwx",
@@ -26,7 +30,7 @@
       "unique_url": "http://122.194.12.25:12690/account/user/name_is_uniqueness",
       "reg_url": "http://122.194.12.25:12690/account/user/register",
       "login_url": "http://122.194.12.25:12690/account/login",
-      "play_url": "http://httpdvb.slave.jscnwx.com:13164/playurl",
+      "play_url": "http://122.194.12.25:13164/playurl",
       "list_url": "http://122.194.12.25:13160/media/channel/get_list",
       "token_url": "http://122.194.12.25:12690/account/get_third_token",
       "channels": [
@@ -150,6 +154,151 @@
       "reg_url": "http://access.pyitv.com/account/user/v2/register",
       "login_url": "http://access.pyitv.com/account/user/v2/login",
       "channels": []
+    },
+    {
+      "name": "hrtn",
+      "desc": "湖北广电",
+      "lane": "联通",
+      "acc_type_reg": 1,
+      "acc_type_login": 2,
+      "unique_url": "http://slave.homed.hrtn.net:12690/account/user/name_is_uniqueness",
+      "reg_url": "http://slave.homed.hrtn.net:12690/account/user/register",
+      "login_url": "http://slave.homed.hrtn.net:12690/account/login",
+      "play_url": "http://httpdvb.slave.homed.hrtn.net:13164/playurl",
+      "list_url": "http://slave.homed.hrtn.net:13160/media/channel/get_list",
+      "token_url": "http://slave.homed.hrtn.net:12690/account/get_third_token",
+      "channels": [
+        {
+          "chnl_name": "CCTV9",
+          "chnl_id": "4200000143",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "湖北卫视高清",
+          "chnl_id": "4200000144",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "湖北经视高清",
+          "chnl_id": "4200000145",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "湖北综合高清",
+          "chnl_id": "4200000146",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "湖北公共新闻高清",
+          "chnl_id": "4200000148",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "北京卫视高清",
+          "chnl_id": "4200000149",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "东方卫视高清",
+          "chnl_id": "4200000150",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "浙江卫视高清",
+          "chnl_id": "4200000151",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "江苏卫视高清",
+          "chnl_id": "4200000152",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "湖南卫视高清",
+          "chnl_id": "4200000153",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "深圳卫视高清",
+          "chnl_id": "4200000155",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "辽宁卫视高清",
+          "chnl_id": "4200000159",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "贵州卫视高清",
+          "chnl_id": "4200000165",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "广东卫视高清",
+          "chnl_id": "4200000166",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "安徽卫视高清",
+          "chnl_id": "4200000167",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "CCTV-7高清",
+          "chnl_id": "4200000169",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "CCTV-10高清",
+          "chnl_id": "4200000170",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "CCTV-12高清",
+          "chnl_id": "4200000171",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "CCTV-14高清",
+          "chnl_id": "4200000172",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "江西卫视高清",
+          "chnl_id": "4200000173",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "福建东南卫视高清",
+          "chnl_id": "4200000185",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "重庆卫视高清",
+          "chnl_id": "4200000186",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "四川卫视高清",
+          "chnl_id": "4200000187",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "黑龙江卫视高清",
+          "chnl_id": "4200000188",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "极速汽车HD",
+          "chnl_id": "4200000190",
+          "chnl_cat": "高清联通"
+        },
+        {
+          "chnl_name": "CBN幸福娱乐",
+          "chnl_id": "4200000193",
+          "chnl_cat": "高清联通"
+        }
+      ]
     },
     {
       "name": "jxtvnet",

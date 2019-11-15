@@ -115,7 +115,7 @@ function videojsLoad() {
 
   player.src({
     src: hlsVideoUrl,
-    type: 'application/x-mpegURL',
+    type: 'application/vnd.apple.mpegurl',
     overrideNative: true
   });
 
@@ -175,7 +175,7 @@ function playVideo() {
   } else if (sourcesJsonParsed[sourceReg].auth_info_url && sourcesJsonParsed[sourceReg].auth_verify_url && localStorage.getItem(sourceReg+'_token')) {
     reqAuth();
   } else if (localStorage.getItem(sourceReg+'_token')) {
-    hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken=ABCDEFGHIGK&programid='+programId;
+    hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken=ABCDEFGHIGK&programid='+programId+'.m3u8';
     videojsLoad();
     updateAside();
   } else {
