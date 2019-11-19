@@ -94,6 +94,7 @@ function videojsLoad() {
     videojs('video').dispose();
   }
   
+  let contentType = hlsVideoUrl.indexOf('.flv') === -1 ? 'application/vnd.apple.mpegurl' : 'video/x-flv';
   const video = document.createElement('video');
   video.id = 'video';
   video.className = 'video-js';
@@ -115,7 +116,7 @@ function videojsLoad() {
 
   player.src({
     src: hlsVideoUrl,
-    type: 'application/vnd.apple.mpegurl',
+    type: contentType,
     overrideNative: true
   });
 
