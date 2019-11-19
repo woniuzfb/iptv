@@ -36,6 +36,13 @@ aside {
   border-right: 1px solid #999;
 }
 
+fieldset {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
 .categories {
   grid-column: 1 / 3;
   grid-row: 3;

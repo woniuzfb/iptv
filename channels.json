@@ -7,7 +7,6 @@
         {
           "chnl_name": "HBO高清",
           "chnl_id": "hbohd",
-          "chnl_cat": "港澳台",
           "url": "http://pili-live-hdl.qhmywl.com/dsdtv/13e83b20bc716e68221da438d761d352.m3u8"
         }
       ]
@@ -327,7 +326,7 @@
     },
     {
       "name": "ttcatv",
-      "desc": "辽宁广电",
+      "desc": "辽宁广电1",
       "lane": "电信",
       "acc_type_reg": 2,
       "acc_type_login": 3,
@@ -349,6 +348,17 @@
       "verify_url": "http://access.ttcatv.tv:12690/account/user/validate_verify_code",
       "reg_url": "http://access.ttcatv.tv:12690/account/user/v2/register",
       "login_url": "http://access.ttcatv.tv:12690/account/user/v2/login",
+      "channels": []
+    },
+    {
+      "name": "bfgd",
+      "desc": "辽宁广电2",
+      "lane": "电信",
+      "access_token": "R5DCD7015U3198F04BKB3239EF2I1C64E872P8M340BAB2V0Z334B7W15D7106E5E12A58E",
+      "play_url": "http://httpdvb.slave.bfgd.com.cn:13164/playurl",
+      "list_url": "http://slave.bfgd.com.cn:13160/media/channel/get_list",
+      "token_url": "http://slave.bfgd.com.cn:13160/account/get_access_token",
+      "refresh_token_url": "http://slave.bfgd.com.cn:13160/account/refresh_access_token",
       "channels": []
     },
     {

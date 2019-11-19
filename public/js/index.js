@@ -327,7 +327,7 @@ function reqReg() {
     reqData(sourcesJsonParsed[sourceReg].reg_url,'?username='+acc+'&iconid=1&pwd='+md5(pwd)+'&birthday=1970-1-1&type=1&accounttype='+sourcesJsonParsed[sourceReg].acc_type_reg)
     .then(response => {
       if (response.ret !== 0) {
-        alertInfo(sourcesJsonParsed[sourceReg].desc + '直播源注册失败，请重试！');
+        alertInfo(sourcesJsonParsed[sourceReg].desc + '直播源注册失败，请重试！用户名不能是中文！');
       } else {
         formToggle.click();
         loginAccField.value = acc;
@@ -516,30 +516,28 @@ function reqJson(json) {
 function getToken(source) {
   return new Promise((resolve, reject) => {
     if (localStorage.getItem(source.name+'_token')) {
-        resolve(localStorage.getItem(source.name+'_token'));
+      resolve(localStorage.getItem(source.name+'_token'));
+    } else if (source.hasOwnProperty('refresh_token_url')) {
+      let deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
+      deviceno = deviceno+md5(deviceno).substring(7, 8);
+      timeoutPromise(3000,reqData(source.token_url,{"role":"guest","deviceno":deviceno,"deviceType":"yuj"},'POST'))
+      .then(response => {
+        if (response.ret === 0) {
+          reqData(source.refresh_token_url,{"accessToken":response.accessToken,"refreshToken":response.refreshToken},'POST')
+          .then(response => {
+            if (response.ret === 0) {
+              resolve(response.accessToken);
+            }
+          }).catch(err => {reject(err);});
+        }
+      }).catch(err => {reject(err);});
     } else {
-      if (source.hasOwnProperty('refresh_token_url')) {
-        let deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
-        deviceno = deviceno+md5(deviceno).substring(7, 8);
-        timeoutPromise(3000,reqData(source.token_url,{"role":"guest","deviceno":deviceno,"deviceType":"yuj"},'POST'))
-        .then(response => {
-          if (response.ret === 0) {
-            reqData(source.refresh_token_url,{"accessToken":response.accessToken,"refreshToken":response.refreshToken},'POST')
-            .then(response => {
-              if (response.ret === 0) {
-                resolve(response.accessToken);
-              }
-            }).catch(err => {reject(err);});
-          }
-        }).catch(err => {reject(err);});
-      } else {
-        timeoutPromise(3000,reqData(source.token_url,{"usagescen":1},'POST'))
-        .then(response => {
-          if (response.ret === 0) {
-            resolve(response.access_token);
-          }
-        }).catch(err => {reject(err);});
-      }
+      timeoutPromise(3000,reqData(source.token_url,{"usagescen":1},'POST'))
+      .then(response => {
+        if (response.ret === 0) {
+          resolve(response.access_token);
+        }
+      }).catch(err => {reject(err);});
     }
   });
 }
@@ -657,7 +655,12 @@ function updateAside() {
   const selected = document.querySelector('.sourceReg');
   if(selected) selected.classList.remove('sourceReg');
   document.querySelector('.source_'+sourceReg).classList.add('sourceReg');
-  if (!sourcesJsonParsed[sourceReg].hasOwnProperty('play_url')) {
+  if (sourcesJsonParsed[sourceReg].hasOwnProperty('access_token')) {
+    fieldsetLoginForm.setAttribute("disabled","disabled");
+    fieldsetRegForm.setAttribute("disabled","disabled");
+    formToggle.disabled = true;
+    return;
+  } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('play_url')) {
     sourceReg = 'jscnwx';
     loginAccField.setAttribute('placeholder','用户名');
     regAccField.setAttribute('placeholder','用户名');
@@ -674,6 +677,9 @@ function updateAside() {
     regImgInputField.classList.toggle('hidden',false);
     regSmsField.classList.toggle('hidden',false);
   }
+  fieldsetLoginForm.removeAttribute("disabled");
+  fieldsetRegForm.removeAttribute("disabled");
+  formToggle.disabled = false;
   loginAccField.value = localStorage.getItem(sourceReg+'_acc');
   loginPwdField.value = localStorage.getItem(sourceReg+'_pwd');
 }
@@ -691,10 +697,12 @@ let localJson = 'channels.json';
 let remoteJson = 'http://hbo.epub.fun/channels.json';
 const videoField = document.querySelector('.videoContainer');
 const sourcesField = document.querySelector('.sources');
+const fieldsetLoginForm = document.querySelector('.loginForm fieldset');
 const loginForm = document.querySelector('.loginForm');
 const loginAccField = document.querySelector('.loginAcc');
 const loginPwdField = document.querySelector('.loginPwd');
 const loginBtn = document.querySelector('.loginBtn');
+const fieldsetRegForm = document.querySelector('.regForm fieldset');
 const regForm = document.querySelector('.regForm');
 const regAccField = document.querySelector('.regAcc');
 const regPwdField = document.querySelector('.regPwd');
@@ -786,9 +794,14 @@ function initialize() {
       getToken(source).then(response => {reqChannels(source,response);})
       .catch(err => {console.log('发生错误:', err);});
     }
+    if (source.hasOwnProperty('access_token')) {
+      localStorage.setItem(source.name+'_token', source.access_token);
+    }
     if (source.hasOwnProperty('channels')) {
       for (let a = 0; a < source.channels.length; a++) {
-        appendList(source.channels[a],source.name,source.lane);
+        if (source.channels[a].hasOwnProperty('chnl_cat')) {
+          appendList(source.channels[a],source.name,source.lane);
+        }
       }
     }
   }
