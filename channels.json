@@ -354,7 +354,7 @@
       "name": "bfgd",
       "desc": "辽宁广电2",
       "lane": "电信",
-      "access_token": "R5DCD7015U3198F04BKB3239EF2I1C64E872P8M340BAB2V0Z334B7W15D7106E5E12A58E",
+      "access_token": "R5DD781FFU319AA04BKB32C6DF4I3D65E872P8M330A239V0Z334B7W15D968A604F93DD5",
       "play_url": "http://httpdvb.slave.bfgd.com.cn:13164/playurl",
       "list_url": "http://slave.bfgd.com.cn:13160/media/channel/get_list",
       "token_url": "http://slave.bfgd.com.cn:13160/account/get_access_token",

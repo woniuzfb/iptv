@@ -114,6 +114,17 @@ function videojsLoad() {
     fluid: true
   });
 
+  if (hlsVideoUrl.indexOf('qhmywl.com') !== -1) {
+    player.overlay({
+      debug: false,
+      overlays: [{
+        content: '',
+        align: 'bottom-right',
+        start: 'play'
+      }]
+    });
+  }
+
   player.src({
     src: hlsVideoUrl,
     type: contentType,

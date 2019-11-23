@@ -161,6 +161,18 @@ footer span {
   margin-right: .5em;
 }
 
+.video-js .vjs-overlay-bottom-right {
+  bottom: 5%;
+  right: 3%;
+}
+
+.video-js .vjs-overlay-background {
+  background-color: #646464;
+  border-radius: 3px;
+  height: 20%;
+  width: 20%;
+}
+
 @media (max-width: 991.98px) {
   header {
     padding-left: 1em;

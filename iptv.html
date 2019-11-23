@@ -6,6 +6,8 @@
     <link rel="shortcut icon" href="hbo.png">
     <link href="https://cdn.bootcss.com/video.js/7.6.5/video-js.min.css" rel="stylesheet">
     <style>
+/*videojs-overlay.min*/
+ .video-js .vjs-overlay{color:#fff;position:absolute;text-align:center}.video-js .vjs-overlay-no-background{max-width:33%}.video-js .vjs-overlay-background{background-color:#646464;background-color:rgba(255,255,255,0.4);border-radius:3px;padding:10px;width:33%}.video-js .vjs-overlay-top-left{top:5px;left:5px}.video-js .vjs-overlay-top{left:50%;margin-left:-16.5%;top:5px}.video-js .vjs-overlay-top-right{right:5px;top:5px}.video-js .vjs-overlay-right{right:5px;top:50%;transform:translateY(-50%)}.video-js .vjs-overlay-bottom-right{bottom:3.5em;right:5px}.video-js .vjs-overlay-bottom{bottom:3.5em;left:50%;margin-left:-16.5%}.video-js .vjs-overlay-bottom-left{bottom:3.5em;left:5px}.video-js .vjs-overlay-left{left:5px;top:50%;transform:translateY(-50%)}.video-js .vjs-overlay-center{left:50%;margin-left:-16.5%;top:50%;transform:translateY(-50%)}.video-js .vjs-no-flex .vjs-overlay-left,.video-js .vjs-no-flex .vjs-overlay-center,.video-js .vjs-no-flex .vjs-overlay-right{margin-top:-15px}
       a {
         color: #70B7FD;
         text-decoration: none;
@@ -169,6 +171,18 @@
         margin-right: .5em;
       }
 
+      .video-js .vjs-overlay-bottom-right {
+        bottom: 5%;
+        right: 3%;
+      }
+
+      .video-js .vjs-overlay-background {
+        background-color: #646464;
+        border-radius: 3px;
+        height: 20%;
+        width: 20%;
+      }
+
       @media (max-width: 991.98px) {
         header {
           padding-left: 1em;
@@ -281,6 +295,8 @@
     <script src="https://cdn.bootcss.com/video.js/7.6.5/video.min.js"></script>
     <script src="https://cdn.bootcss.com/flv.js/1.5.0/flv.min.js"></script>
     <script>
+/*videojs-overlay*/
+!function(t,e){"object"==typeof exports&&"undefined"!=typeof module?module.exports=e(require("video.js"),require("global/window")):"function"==typeof define&&define.amd?define(["video.js","global/window"],e):t.videojsOverlay=e(t.videojs,t.window)}(this,function(t,e){"use strict";function n(t){if(void 0===t)throw new ReferenceError("this hasn't been initialised - super() hasn't been called");return t}t=t&&t.hasOwnProperty("default")?t.default:t,e=e&&e.hasOwnProperty("default")?e.default:e;var r={align:"top-left",class:"",content:"This overlay will show up while the video is playing",debug:!1,showBackground:!0,attachToControlBar:!1,overlays:[{start:"playing",end:"paused"}]},i=t.getComponent("Component"),o=t.dom||t,s=t.registerPlugin||t.plugin,a=function(t){return"number"==typeof t&&t==t},h=function(t){return"string"==typeof t&&/^\S+$/.test(t)},d=function(r){var i,s;function d(t,e){var i;return i=r.call(this,t,e)||this,["start","end"].forEach(function(t){var e=i.options_[t];if(a(e))i[t+"Event_"]="timeupdate";else if(h(e))i[t+"Event_"]=e;else if("start"===t)throw new Error('invalid "start" option; expected number or string')}),["endListener_","rewindListener_","startListener_"].forEach(function(t){i[t]=function(e){return d.prototype[t].call(n(n(i)),e)}}),"timeupdate"===i.startEvent_&&i.on(t,"timeupdate",i.rewindListener_),i.debug('created, listening to "'+i.startEvent_+'" for "start" and "'+(i.endEvent_||"nothing")+'" for "end"'),i.hide(),i}s=r,(i=d).prototype=Object.create(s.prototype),i.prototype.constructor=i,i.__proto__=s;var l=d.prototype;return l.createEl=function(){var t=this.options_,n=t.content,r=t.showBackground?"vjs-overlay-background":"vjs-overlay-no-background",i=o.createEl("div",{className:"\n        vjs-overlay\n        vjs-overlay-"+t.align+"\n        "+t.class+"\n        "+r+"\n        vjs-hidden\n      "});return"string"==typeof n?i.innerHTML=n:n instanceof e.DocumentFragment?i.appendChild(n):o.appendContent(i,n),i},l.debug=function(){if(this.options_.debug){for(var e=t.log,n=e,r=arguments.length,i=new Array(r),o=0;o<r;o++)i[o]=arguments[o];e.hasOwnProperty(i[0])&&"function"==typeof e[i[0]]&&(n=e[i.shift()]),n.apply(void 0,["overlay#"+this.id()+": "].concat(i))}},l.hide=function(){return r.prototype.hide.call(this),this.debug("hidden"),this.debug('bound `startListener_` to "'+this.startEvent_+'"'),this.endEvent_&&(this.debug('unbound `endListener_` from "'+this.endEvent_+'"'),this.off(this.player(),this.endEvent_,this.endListener_)),this.on(this.player(),this.startEvent_,this.startListener_),this},l.shouldHide_=function(t,e){var n=this.options_.end;return a(n)?t>=n:n===e},l.show=function(){return r.prototype.show.call(this),this.off(this.player(),this.startEvent_,this.startListener_),this.debug("shown"),this.debug('unbound `startListener_` from "'+this.startEvent_+'"'),this.endEvent_&&(this.debug('bound `endListener_` to "'+this.endEvent_+'"'),this.on(this.player(),this.endEvent_,this.endListener_)),this},l.shouldShow_=function(t,e){var n=this.options_.start,r=this.options_.end;return a(n)?a(r)?t>=n&&t<r:this.hasShownSinceSeek_?Math.floor(t)===n:(this.hasShownSinceSeek_=!0,t>=n):n===e},l.startListener_=function(t){var e=this.player().currentTime();this.shouldShow_(e,t.type)&&this.show()},l.endListener_=function(t){var e=this.player().currentTime();this.shouldHide_(e,t.type)&&this.hide()},l.rewindListener_=function(t){var e=this.player().currentTime(),n=this.previousTime_,r=this.options_.start,i=this.options_.end;e<n&&(this.debug("rewind detected"),a(i)&&!this.shouldShow_(e)?(this.debug("hiding; "+i+" is an integer and overlay should not show at this time"),this.hasShownSinceSeek_=!1,this.hide()):h(i)&&e<r&&(this.debug("hiding; show point ("+r+") is before now ("+e+") and end point ("+i+") is an event"),this.hasShownSinceSeek_=!1,this.hide())),this.previousTime_=e},d}(i);t.registerComponent("Overlay",d);var l=function(e){var n=this,i=t.mergeOptions(r,e);Array.isArray(this.overlays_)&&this.overlays_.forEach(function(t){n.removeChild(t),n.controlBar&&n.controlBar.removeChild(t),t.dispose()});var o=i.overlays;delete i.overlays,this.overlays_=o.map(function(e){var r=t.mergeOptions(i,e),o="string"==typeof r.attachToControlBar||!0===r.attachToControlBar;if(!n.controls()||!n.controlBar)return n.addChild("overlay",r);if(o&&-1!==r.align.indexOf("bottom")){var s=n.controlBar.children()[0];if(void 0!==n.controlBar.getChild(r.attachToControlBar)&&(s=n.controlBar.getChild(r.attachToControlBar)),s){var a=n.controlBar.addChild("overlay",r);return n.controlBar.el().insertBefore(a.el(),s.el()),a}}var h=n.addChild("overlay",r);return n.el().insertBefore(h.el(),n.controlBar.el()),h})};return l.VERSION="2.1.4",s("overlay",l),l});
 /*videojs-flvjs*/
 !function e(t,r,o){function n(l,f){if(!r[l]){if(!t[l]){var u="function"==typeof require&&require;if(!f&&u)return u(l,!0);if(i)return i(l,!0);var a=new Error("Cannot find module '"+l+"'");throw a.code="MODULE_NOT_FOUND",a}var c=r[l]={exports:{}};t[l][0].call(c.exports,function(e){var r=t[l][1][e];return n(r||e)},c,c.exports,e,t,r,o)}return r[l].exports}for(var i="function"==typeof require&&require,l=0;l<o.length;l++)n(o[l]);return n}({1:[function(e,t,r){(function(e){"use strict";function t(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}function o(e,t){if(!e)throw new ReferenceError("this hasn't been initialised - super() hasn't been called");return!t||"object"!=typeof t&&"function"!=typeof t?e:t}function n(e,t){if("function"!=typeof t&&null!==t)throw new TypeError("Super expression must either be null or a function, not "+typeof t);e.prototype=Object.create(t&&t.prototype,{constructor:{value:e,enumerable:!1,writable:!0,configurable:!0}}),t&&(Object.setPrototypeOf?Object.setPrototypeOf(e,t):e.__proto__=t)}Object.defineProperty(r,"__esModule",{value:!0});var i=function(){function e(e,t){for(var r=0;r<t.length;r++){var o=t[r];o.enumerable=o.enumerable||!1,o.configurable=!0,"value"in o&&(o.writable=!0),Object.defineProperty(e,o.key,o)}}return function(t,r,o){return r&&e(t.prototype,r),o&&e(t,o),t}}(),l=function e(t,r,o){null===t&&(t=Function.prototype);var n=Object.getOwnPropertyDescriptor(t,r);if(void 0===n){var i=Object.getPrototypeOf(t);return null===i?void 0:e(i,r,o)}if("value"in n)return n.value;var l=n.get;if(void 0!==l)return l.call(o)},f="undefined"!=typeof window?window.videojs:void 0!==e?e.videojs:null,u=function(e){return e&&e.__esModule?e:{default:e}}(f),a=u.default.getTech("Html5"),c=u.default.mergeOptions||u.default.util.mergeOptions,s={mediaDataSource:{},config:{}},p=function(e){function r(e,n){return t(this,r),e=c(s,e),o(this,(r.__proto__||Object.getPrototypeOf(r)).call(this,e,n))}return n(r,e),i(r,[{key:"setSrc",value:function(e){this.flvPlayer&&(this.flvPlayer.detachMediaElement(),this.flvPlayer.destroy());var t=this.options_.mediaDataSource,r=this.options_.config;t.type=void 0===t.type?"flv":t.type,t.url=e,this.flvPlayer=window.flvjs.createPlayer(t,r),this.flvPlayer.attachMediaElement(this.el_),this.flvPlayer.load()}},{key:"dispose",value:function(){this.flvPlayer&&(this.flvPlayer.detachMediaElement(),this.flvPlayer.destroy()),l(r.prototype.__proto__||Object.getPrototypeOf(r.prototype),"dispose",this).call(this)}}]),r}(a);p.isSupported=function(){return window.flvjs&&window.flvjs.isSupported()},p.formats={"video/flv":"FLV","video/x-flv":"FLV"},p.canPlayType=function(e){return p.isSupported()&&e in p.formats?"maybe":""},p.canPlaySource=function(e,t){return p.canPlayType(e.type)},p.VERSION="0.2.0",u.default.registerTech("Flvjs",p),r.default=p}).call(this,"undefined"!=typeof global?global:"undefined"!=typeof self?self:"undefined"!=typeof window?window:{})},{}]},{},[1]);
 /*md5*/
@@ -405,6 +421,17 @@ function videojsLoad() {
     controls: true,
     fluid: true
   });
+
+  if (hlsVideoUrl.indexOf('qhmywl.com') !== -1) {
+    player.overlay({
+      debug: false,
+      overlays: [{
+        content: '',
+        align: 'bottom-right',
+        start: 'play'
+      }]
+    });
+  }
 
   player.src({
     src: hlsVideoUrl,
