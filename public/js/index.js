@@ -849,14 +849,16 @@ sourcesField.addEventListener("click", switchSource);
 categoriesField.addEventListener("click", switchCategory);
 channelsField.addEventListener("click", switchChannel);
 
-document.addEventListener("fullscreenchange", function (e) {
+document.addEventListener("fullscreenchange", function(e) {
   const videoOverlay = document.querySelector('.vjs-overlay');
-  if (document.fullscreenElement) {
-    if (window.innerWidth/window.innerHeight === 1.6) {
-      videoOverlay.classList.add('fullscreen');
+  if (videoOverlay) {
+    if (document.fullscreenElement) {
+      if (window.innerWidth/window.innerHeight === 1.6) {
+        videoOverlay.classList.add('fullscreen');
+      }
+    } else {
+      videoOverlay.classList.remove('fullscreen');
     }
-  } else {
-    videoOverlay.classList.remove('fullscreen');
   }
 });
 
