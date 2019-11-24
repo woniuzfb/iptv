@@ -120,7 +120,7 @@ function videojsLoad() {
       debug: false,
       overlays: [{
         content: '',
-        align: 'bottom-right',
+        align: 'center',
         start: 'ready'
       }]
     });
@@ -703,6 +703,32 @@ function resetSourceReg() {
   updateAside();
 }
 
+function setOverlay() {
+  const videoOverlay = document.querySelector('.vjs-overlay');
+  if (videoOverlay) {
+    if (document.fullscreenElement) {
+      let width = window.screen.width * window.devicePixelRatio;
+      let height = window.screen.height * window.devicePixelRatio;
+      let videoWidth,videoHeight,overlayWidth,overlayHeight,marginLeft,marginTop;
+      if (width > height) {
+        videoHeight = height;
+        videoWidth = videoHeight * 16 / 9;
+      } else {
+        videoWidth = width;
+        videoHeight = videoWidth * 9 / 16;
+      }
+      overlayWidth = Math.floor(videoWidth * 19 / 100 / window.devicePixelRatio);
+      overlayHeight = Math.floor(videoHeight * 15 / 100 / window.devicePixelRatio);
+      marginLeft = Math.floor(videoWidth * 28 / 100 / window.devicePixelRatio);
+      marginTop = Math.floor(videoHeight * 30 / 100 / window.devicePixelRatio);
+
+      videoOverlay.setAttribute('style', 'width:' + overlayWidth +'px; height: ' + overlayHeight + 'px; margin-left: ' + marginLeft + 'px; margin-top: ' + marginTop + 'px;');
+    } else {
+      videoOverlay.removeAttribute('style');
+    }
+  }
+}
+
 let sourcesJson,sourcesJsonParsed,jsonChannels={},hlsVideoUrl;
 let sourceReg = 'jscnwx';
 let programId;
@@ -848,19 +874,12 @@ loginBtn.addEventListener("click", reqLogin);
 sourcesField.addEventListener("click", switchSource);
 categoriesField.addEventListener("click", switchCategory);
 channelsField.addEventListener("click", switchChannel);
+document.addEventListener("fullscreenchange", setOverlay);
+document.addEventListener("webkitfullscreenchange", setOverlay);
+document.addEventListener("mozfullscreenchange", setOverlay);
+document.addEventListener("msfullscreenchange", setOverlay);
+document.addEventListener("orientationchange", setOverlay);
 
-document.addEventListener("fullscreenchange", function(e) {
-  const videoOverlay = document.querySelector('.vjs-overlay');
-  if (videoOverlay) {
-    if (document.fullscreenElement) {
-      if (window.innerWidth/window.innerHeight === 1.6) {
-        videoOverlay.classList.add('fullscreen');
-      }
-    } else {
-      videoOverlay.classList.remove('fullscreen');
-    }
-  }
-});
 
 if (localStorage.getItem('dark') === '1'){
   switchBtn.click();

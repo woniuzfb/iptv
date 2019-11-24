@@ -6,8 +6,6 @@
     <link rel="shortcut icon" href="hbo.png">
     <link href="https://cdn.bootcss.com/video.js/7.6.5/video-js.min.css" rel="stylesheet">
     <style>
-/*videojs-overlay.min*/
-.video-js .vjs-overlay{color:#fff;position:absolute;text-align:center}.video-js .vjs-overlay-no-background{max-width:33%}.video-js .vjs-overlay-background{background-color:#646464;background-color:rgba(255,255,255,0.4);border-radius:3px;padding:10px;width:33%}.video-js .vjs-overlay-top-left{top:5px;left:5px}.video-js .vjs-overlay-top{left:50%;margin-left:-16.5%;top:5px}.video-js .vjs-overlay-top-right{right:5px;top:5px}.video-js .vjs-overlay-right{right:5px;top:50%;transform:translateY(-50%)}.video-js .vjs-overlay-bottom-right{bottom:3.5em;right:5px}.video-js .vjs-overlay-bottom{bottom:3.5em;left:50%;margin-left:-16.5%}.video-js .vjs-overlay-bottom-left{bottom:3.5em;left:5px}.video-js .vjs-overlay-left{left:5px;top:50%;transform:translateY(-50%)}.video-js .vjs-overlay-center{left:50%;margin-left:-16.5%;top:50%;transform:translateY(-50%)}.video-js .vjs-no-flex .vjs-overlay-left,.video-js .vjs-no-flex .vjs-overlay-center,.video-js .vjs-no-flex .vjs-overlay-right{margin-top:-15px}
       a {
         color: #70B7FD;
         text-decoration: none;
@@ -171,9 +169,10 @@
         margin-right: .5em;
       }
 
-      .video-js .vjs-overlay-bottom-right {
-        bottom: 5%;
-        right: 3%;
+      .video-js .vjs-overlay {
+        color: #fff;
+        position: absolute;
+        text-align: center;
       }
 
       .video-js .vjs-overlay-background {
@@ -183,8 +182,11 @@
         width: 19%;
       }
 
-      .video-js .fullscreen {
-        bottom: 8%;
+      .video-js .vjs-overlay-center {
+        left: 50%;
+        top: 50%;
+        margin-left: 28%;
+        margin-top: 17%;
       }
 
       @media (max-width: 991.98px) {
@@ -432,7 +434,7 @@ function videojsLoad() {
       debug: false,
       overlays: [{
         content: '',
-        align: 'bottom-right',
+        align: 'center',
         start: 'ready'
       }]
     });
@@ -1015,6 +1017,32 @@ function resetSourceReg() {
   updateAside();
 }
 
+function setOverlay() {
+  const videoOverlay = document.querySelector('.vjs-overlay');
+  if (videoOverlay) {
+    if (document.fullscreenElement) {
+      let width = window.screen.width * window.devicePixelRatio;
+      let height = window.screen.height * window.devicePixelRatio;
+      let videoWidth,videoHeight,overlayWidth,overlayHeight,marginLeft,marginTop;
+      if (width > height) {
+        videoHeight = height;
+        videoWidth = videoHeight * 16 / 9;
+      } else {
+        videoWidth = width;
+        videoHeight = videoWidth * 9 / 16;
+      }
+      overlayWidth = Math.floor(videoWidth * 19 / 100 / window.devicePixelRatio);
+      overlayHeight = Math.floor(videoHeight * 15 / 100 / window.devicePixelRatio);
+      marginLeft = Math.floor(videoWidth * 28 / 100 / window.devicePixelRatio);
+      marginTop = Math.floor(videoHeight * 30 / 100 / window.devicePixelRatio);
+
+      videoOverlay.setAttribute('style', 'width:' + overlayWidth +'px; height: ' + overlayHeight + 'px; margin-left: ' + marginLeft + 'px; margin-top: ' + marginTop + 'px;');
+    } else {
+      videoOverlay.removeAttribute('style');
+    }
+  }
+}
+
 let sourcesJson,sourcesJsonParsed,jsonChannels={},hlsVideoUrl;
 let sourceReg = 'jscnwx';
 let programId;
@@ -1160,19 +1188,11 @@ loginBtn.addEventListener("click", reqLogin);
 sourcesField.addEventListener("click", switchSource);
 categoriesField.addEventListener("click", switchCategory);
 channelsField.addEventListener("click", switchChannel);
-
-document.addEventListener("fullscreenchange", function(e) {
-  const videoOverlay = document.querySelector('.vjs-overlay');
-  if (videoOverlay) {
-    if (document.fullscreenElement) {
-      if (window.innerWidth/window.innerHeight === 1.6) {
-        videoOverlay.classList.add('fullscreen');
-      }
-    } else {
-      videoOverlay.classList.remove('fullscreen');
-    }
-  }
-});
+document.addEventListener("fullscreenchange", setOverlay);
+document.addEventListener("webkitfullscreenchange", setOverlay);
+document.addEventListener("mozfullscreenchange", setOverlay);
+document.addEventListener("msfullscreenchange", setOverlay);
+document.addEventListener("orientationchange", setOverlay);
 
 if (localStorage.getItem('dark') === '1'){
   switchBtn.click();
