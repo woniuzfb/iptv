@@ -166,6 +166,10 @@ footer span {
   right: 3%;
 }
 
+.video-js .fullscreen {
+  bottom: 8%;
+}
+
 .video-js .vjs-overlay-background {
   background-color: #646464;
   border-radius: 3px;

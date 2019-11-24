@@ -111,7 +111,8 @@ function videojsLoad() {
     preload: 'auto',
     textTrackSettings: false,
     controls: true,
-    fluid: true
+    fluid: true,
+    responsive: true
   });
 
   if (hlsVideoUrl.indexOf('qhmywl.com') !== -1) {
@@ -120,7 +121,7 @@ function videojsLoad() {
       overlays: [{
         content: '',
         align: 'bottom-right',
-        start: 'play'
+        start: 'ready'
       }]
     });
   }
@@ -847,6 +848,17 @@ loginBtn.addEventListener("click", reqLogin);
 sourcesField.addEventListener("click", switchSource);
 categoriesField.addEventListener("click", switchCategory);
 channelsField.addEventListener("click", switchChannel);
+
+document.addEventListener("fullscreenchange", function (e) {
+  const videoOverlay = document.querySelector('.vjs-overlay');
+  if (document.fullscreenElement) {
+    if (window.innerWidth/window.innerHeight === 1.6) {
+      videoOverlay.classList.add('fullscreen');
+    }
+  } else {
+    videoOverlay.classList.remove('fullscreen');
+  }
+});
 
 if (localStorage.getItem('dark') === '1'){
   switchBtn.click();
