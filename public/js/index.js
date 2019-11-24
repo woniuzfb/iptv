@@ -710,7 +710,7 @@ function setOverlay() {
       let width = window.screen.width * window.devicePixelRatio;
       let height = window.screen.height * window.devicePixelRatio;
       let videoWidth,videoHeight,overlayWidth,overlayHeight,marginLeft,marginTop;
-      if (width > height) {
+      if (width > height && width / height !== 1.6) {
         videoHeight = height;
         videoWidth = videoHeight * 16 / 9;
       } else {
@@ -878,7 +878,7 @@ document.addEventListener("fullscreenchange", setOverlay);
 document.addEventListener("webkitfullscreenchange", setOverlay);
 document.addEventListener("mozfullscreenchange", setOverlay);
 document.addEventListener("msfullscreenchange", setOverlay);
-document.addEventListener("orientationchange", setOverlay);
+window.addEventListener("orientationchange", setOverlay);
 
 
 if (localStorage.getItem('dark') === '1'){
