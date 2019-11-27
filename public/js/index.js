@@ -9,9 +9,9 @@ function makeStr(num) {
 
 function toggleClass(s,n) {
   let elements = document.querySelectorAll(s);
-  for (let i = 0; i < elements.length; i++) {
-    elements[i].classList.toggle(n);
-  }
+  elements.forEach(element => {
+    element.classList.toggle(n)
+  });
 }
 
 function switchSource(e) {
@@ -57,11 +57,11 @@ function switchCategory(e) {
         } else {
           const mylist = document.querySelector('.'+catValue);
           let siblings = mylist.parentNode.childNodes;
-          for(let i=0; i < siblings.length; i++) {
-            if(siblings[i].nodeName === "UL") {
-              siblings[i].classList.add('hidden');
+          siblings.forEach(sibling => {
+            if(sibling.nodeName === "UL") {
+              sibling.classList.add('hidden');
             }
-          }
+          });
           mylist.classList.remove('hidden');
         }
         break;
@@ -89,6 +89,17 @@ function switchChannel(e) {
   }
 }
 
+function videoOverlay() {
+  videojs('video').overlay({
+    debug: false,
+    overlays: [{
+      content: '',
+      align: 'center',
+      start: 'ready'
+    }]
+  });
+}
+
 function videojsLoad() {
   if (videoField.hasChildNodes()) {
     videojs('video').dispose();
@@ -105,26 +116,16 @@ function videojsLoad() {
   video.appendChild(noVideojs);
   videoField.appendChild(video);
 
-  var player = videojs('video',{
+  const player = videojs('video',{
     liveui: liveui,
     autoplay: 'true',
     preload: 'auto',
+    playsinline: true,
     textTrackSettings: false,
     controls: true,
     fluid: true,
     responsive: true
   });
-
-  if (hlsVideoUrl.indexOf('qhmywl.com') !== -1) {
-    player.overlay({
-      debug: false,
-      overlays: [{
-        content: '',
-        align: 'center',
-        start: 'ready'
-      }]
-    });
-  }
 
   player.src({
     src: hlsVideoUrl,
@@ -167,24 +168,40 @@ function videojsLoad() {
 
 function playVideo() {
   if(!programId) {
-    hlsVideoUrl = sourcesJsonParsed.hbo.channels[0].url;
-    resetSourceReg();
-    videojsLoad();
+    let keyArr = Object.keys(sourcesJsonParsed);
+    let index;
+    while ((index = keyArr.pop()) !== undefined) {
+      if (sourcesJsonParsed[index].hasOwnProperty('channels') && sourcesJsonParsed[index].channels[0] && sourcesJsonParsed[index].channels[0].hasOwnProperty('url')) {
+        hlsVideoUrl = sourcesJsonParsed[index].channels[0].url;
+        videojsLoad();
+        if (sourcesJsonParsed[index].channels[0].hasOwnProperty('overlay')) {
+          videoOverlay();
+        }
+        resetSourceReg();
+        break;
+      }
+    }
   } else if (jsonChannels[sourceReg]) {
-    hlsVideoUrl = jsonChannels[sourceReg][programId];
-    resetSourceReg();
+    hlsVideoUrl = jsonChannels[sourceReg][programId]['url'];
     videojsLoad();
+    if (jsonChannels[sourceReg][programId].hasOwnProperty('overlay')) {
+      videoOverlay();
+    }
+    resetSourceReg();
   } else if (!sourcesJsonParsed.hasOwnProperty(sourceReg) || !sourcesJsonParsed[sourceReg].hasOwnProperty('channels')) {
     alertInfo('抱歉频道不可用！');
     resetSourceReg();
   } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('play_url')) {
-    for (let a = 0; a < sourcesJsonParsed[sourceReg].channels.length; a++) {
-      if (sourcesJsonParsed[sourceReg].channels[a].chnl_id === programId) {
-        hlsVideoUrl = sourcesJsonParsed[sourceReg].channels[a].url;
-        resetSourceReg();
+    sourcesJsonParsed[sourceReg].channels.forEach(channel => {
+      if (channel.chnl_id === programId) {
+        hlsVideoUrl = channel.url;
         videojsLoad();
+        if (channel.hasOwnProperty('overlay')) {
+          videoOverlay();
+        }
+        resetSourceReg();
       }
-    }
+    });
   } else if (sourcesJsonParsed[sourceReg].auth_info_url && sourcesJsonParsed[sourceReg].auth_verify_url && localStorage.getItem(sourceReg+'_token')) {
     reqAuth();
   } else if (localStorage.getItem(sourceReg+'_token')) {
@@ -512,14 +529,17 @@ function reqJson(json) {
     if (response.ret === 0) {
       let newChannel={};
       jsonChannels[response.data[0].name] = {};
-      for (let index = 0; index < response.data[0].channels.length; index++) {
-        const channel = response.data[0].channels[index];
-        jsonChannels[response.data[0].name][channel.chnl_id] = channel.url;
+      response.data[0].channels.forEach(channel => {
+        jsonChannels[response.data[0].name][channel.chnl_id] = {};
+        jsonChannels[response.data[0].name][channel.chnl_id]['url'] = channel.url;
+        if (channel.hasOwnProperty('overlay')) {
+          jsonChannels[response.data[0].name][channel.chnl_id]['overlay'] = channel.overlay;
+        }
         newChannel.chnl_name = channel.chnl_name;
         newChannel.chnl_id = channel.chnl_id;
         newChannel.chnl_cat = channel.chnl_cat;
         appendList(newChannel,response.data[0].name,response.data[0].lane);
-      }
+      });
     }
   }).catch(err => {
     console.log('发生错误:', err);
@@ -564,38 +584,37 @@ function reqChannels(source,token) {
       let omitArr = [];
       if (source.omit) {
         let omitSourceArr = source.omit.split(',');
-        for (let index = 0; index < omitSourceArr.length; index++) {
-          if (omitSourceArr[index].indexOf('-') !== -1) {
-            let omitSubArr = omitSourceArr[index].split('-');
+        omitSourceArr.forEach(omitSource => {
+          if (omitSource.indexOf('-') !== -1) {
+            let omitSubArr = omitSource.split('-');
             for (let a = Number(omitSubArr[0]); a <= Number(omitSubArr[1]); a++) {
               omitArr.push(Number(a));
             }
           } else {
-            omitArr.push(Number(omitSourceArr[index]));
+            omitArr.push(Number(omitSource));
           }
-        }
+        });
       }
-      for (let b = 0; b < response.chnl_list.length; b++) {
-        const channel = response.chnl_list[b];
+      response.chnl_list.forEach(channel => {
         if (source.omit && omitArr.indexOf(Number(channel.chnl_id.toString().slice(-3))) !== -1) {
-          continue;
+          return;
         }
         let newChannel={};
         channelCats = channel.sub_type.split('|');
-        for (let c = 0; c < channelCats.length; c++) {
-          let channelCat = channelCats[c].slice(-3);
+        channelCats.forEach(channelCat => {
+          channelCat = channelCat.slice(-3);
           if (sourcesJsonParsed[source.name].hasOwnProperty('fix_cats') && sourcesJsonParsed[source.name].fix_cats.hasOwnProperty(channelCat)) {
             channelCat = sourcesJsonParsed[source.name].fix_cats[channelCat];
           }
           if (cats[channelCat] === undefined) {
-            continue;
+            return;
           }
           newChannel.chnl_name = channel.chnl_name;
           newChannel.chnl_id = channel.chnl_id;
           newChannel.chnl_cat = cats[channelCat];
           appendList(newChannel,source.name,source.lane);
-        }
-      }
+        });
+      });
     } else {
       alertInfo(sourcesJsonParsed[source.name].desc+'直播源错误！需重新注册或登录！',10);
       localStorage.removeItem(source.name+'_acc');
@@ -626,7 +645,7 @@ function reqAuth() {
       }).catch(err => {
         alertInfo('无法连接'+sourcesJsonParsed[sourceReg].desc+'直播源！',10);
         console.log('发生错误:', err);
-      });;
+      });
     } else {
       alertInfo(sourcesJsonParsed[sourceReg].desc+'直播源错误！需重新注册或登录！',10);
       localStorage.removeItem(sourceReg+'_acc');
@@ -643,8 +662,7 @@ function reqAuth() {
 
 function parseJson(json) {
   let newJson = {};
-  for (let index = 0; index < json.data.length; index++) {
-    const element = json.data[index];
+  json.data.forEach(element => {
     if (element.play_url) {
       const sourcesListItem = document.createElement('li');
       sourcesListItem.textContent = element.desc;
@@ -657,7 +675,8 @@ function parseJson(json) {
 
     let newIndex = element.name;
     newJson[newIndex] = element;
-  }
+  });
+
   if (!sourcesField.firstChild) {
     sourcesField.textContent = '无';
   }
@@ -824,8 +843,8 @@ function initialize() {
   myList9.textContent = '';
   myList9.classList.add('myList9');
   myList9.classList.add('hidden');
-  for (let index = 0; index < sourcesJson.data.length; index++) {
-    const source = sourcesJson.data[index];
+
+  sourcesJson.data.forEach(source => {
     if (source.hasOwnProperty('json')) {
       reqJson(source.json);
     }
@@ -837,13 +856,13 @@ function initialize() {
       localStorage.setItem(source.name+'_token', source.access_token);
     }
     if (source.hasOwnProperty('channels')) {
-      for (let a = 0; a < source.channels.length; a++) {
-        if (source.channels[a].hasOwnProperty('chnl_cat')) {
-          appendList(source.channels[a],source.name,source.lane);
+      source.channels.forEach(channel => {
+        if (channel.hasOwnProperty('chnl_cat')) {
+          appendList(channel,source.name,source.lane);
         }
-      }
+      });
     }
-  }
+  });
 
   if (localStorage.getItem(sourceReg+'_acc') && localStorage.getItem(sourceReg+'_pwd')){
     loginAccField.value = localStorage.getItem(sourceReg+'_acc');

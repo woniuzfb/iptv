@@ -5,6 +5,7 @@
       "name": "hbo",
       "channels": [
         {
+          "overlay": "",
           "chnl_name": "HBO高清",
           "chnl_id": "hbohd",
           "url": "http://pili-live-hdl.qhmywl.com/dsdtv/13e83b20bc716e68221da438d761d352.m3u8"
