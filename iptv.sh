@@ -37,6 +37,7 @@ default='
     "sync_file":"",
     "sync_index":"data:0:channels",
     "sync_pairs":"chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live",
+    "schedule_file":"",
     "version":"'"$sh_ver"'"
 }'
 
@@ -474,6 +475,7 @@ GetDefault()
     d_sync_file=${default_array[11]//\'/}
     d_sync_index=${default_array[12]//\'/}
     d_sync_pairs=${default_array[13]//\'/}
+    d_schedule_file=${default_array[14]//\'/}
 }
 
 GetChannelsInfo()
@@ -1553,10 +1555,58 @@ hbo()
 
 }
 
-fenghuang()
+schedule()
 {
     CheckRelease
-    
+
+    case $2 in
+        "hbo"|"hbohd")
+            [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请先安装 !" && exit 1
+            GetDefault
+
+            if [ -n "$d_schedule_file" ] 
+            then
+                SCHEDULE_JSON=$d_schedule_file
+            else
+                echo "请先设置 schedule_file 位置！" && exit 1
+            fi
+
+            date_now=$(date -d now "+%Y-%m-%d")
+            SCHEDULE_FILE="/usr/local/iptv/$2_schedule_$date_now"
+            SCHEDULE_TMP="${SCHEDULE_JSON}_tmp"
+            wget --no-check-certificate "https://hboasia.com/HBO/zh-tw/ajax/home_schedule?date=$date_now&channel=$2&feed=satellite" -qO "$SCHEDULE_FILE"
+            programs_count=$($JQ_FILE -r '. | length' $SCHEDULE_FILE)
+            IFS=" " read -ra programs_title <<< "$($JQ_FILE -r '[.[].title] | @sh' $SCHEDULE_FILE)"
+            IFS=" " read -ra programs_time <<< "$($JQ_FILE -r '[.[].time] | @sh' $SCHEDULE_FILE)"
+            IFS=" " read -ra programs_sys_time <<< "$($JQ_FILE -r '[.[].sys_time] | @sh' $SCHEDULE_FILE)"
+
+            if [ -z "$($JQ_FILE '.' $SCHEDULE_JSON)" ] 
+            then
+                printf '{"'"$2"'":[]}' > "$SCHEDULE_JSON"
+            fi
+
+            $JQ_FILE '.'"$2"' = []' "$SCHEDULE_JSON" > "$SCHEDULE_TMP"
+            mv "$SCHEDULE_TMP" "$SCHEDULE_JSON"
+
+            for((index = 0; index < "$programs_count"; index++)); do
+                programs_title_index=${programs_title[index]//\'/}
+                programs_time_index=${programs_time[index]//\'/}
+                programs_sys_time_index=${programs_sys_time[index]//\'/}
+
+                $JQ_FILE '.'"$2"' += [
+                    {
+                        "title":"'"$programs_title_index"'",
+                        "time":"'"$programs_time_index"'",
+                        "sys_time":"'"$programs_sys_time_index"'"
+                    }
+                ]' "$SCHEDULE_JSON" > "$SCHEDULE_TMP"
+
+                mv "$SCHEDULE_TMP" "$SCHEDULE_JSON"
+            done
+        ;;
+        *) echo "no support yet ~"
+        ;;
+    esac
 }
 
 Usage()
@@ -1619,6 +1669,11 @@ then
     UpdateSelf
 fi
 
+if [ "$1" == "s" ] 
+then
+    schedule "$@" && exit 0
+fi
+
 use_menu=1
 
 while getopts "i:o:p:S:t:s:c:v:a:q:b:K:m:n:z:Ce" flag
@@ -1659,8 +1714,6 @@ case "$cmd" in
         exit 0
     ;;
     "hbo") hbo && exit 0
-    ;;
-    "fh") fenghuang && exit 0
     ;;
     *)
     ;;

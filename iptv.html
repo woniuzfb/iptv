@@ -6,233 +6,358 @@
     <link rel="shortcut icon" href="hbo.png">
     <link href="https://cdn.bootcss.com/video.js/7.6.6/video-js.min.css" rel="stylesheet">
     <style>
-      a {
-        color: #70B7FD;
-        text-decoration: none;
-      }
-      
-      body {
-        width: 95%;
-        margin: 0 auto;
-        font: 1em/1.2 'PingFangSC','helvetica neue','hiragino sans gb','arial','microsoft yahei ui','microsoft yahei','simsun','sans-serif';
-        display: grid;
-        grid-template-columns: 1fr 2fr;
-        grid-gap: 20px;
-      }
+html { 
+  font-size: 62.5%;
+}
 
-      header {
-        grid-column: 1 / 3;
-        grid-row: 1;
-      }
+a {
+  color: #70B7FD;
+  text-decoration: none;
+}
 
-      .videoContainer {
-        grid-column: 2;
-        grid-row: 2;
-        width: 80%;
-      }
+ul:focus, li:focus {
+  outline: none;
+}
 
-      .vjs-subs-caps-button {
-        display: none;
-      }
+body {
+  width: 95%;
+  margin: 0 auto;
+  font: 1.6rem/1.2 'PingFangSC','helvetica neue','hiragino sans gb','arial','microsoft yahei ui','microsoft yahei','simsun','sans-serif';
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  grid-gap: 2rem;
+}
 
-      aside {
-        grid-column: 1;
-        grid-row: 2;
-        padding-left: .5em;
-        padding-right: 1em;
-        text-align: right;
-        border-right: 1px solid #999;
-      }
+header {
+  grid-column: 1 / 3;
+  grid-row: 1;
+}
 
-      fieldset {
-        min-width: 0;
-        padding: 0;
-        margin: 0;
-        border: 0;
-      }
+.videoContainer {
+  grid-column: 2;
+  grid-row: 2;
+  width: 80%;
+}
 
-      .categories {
-        grid-column: 1 / 3;
-        grid-row: 3;
-        text-align: center;
-      }
+.sliderContainer {
+  grid-column: 2;
+  grid-row: 3;
+  width: 80%;
+}
 
-      section {
-        grid-column: 1 / 3;
-        grid-row: 4;
-        text-align: center;
-      }
+.slider {
+  position: relative;
+  margin: 0 auto;
+  width: 17rem;
+}
 
-      .sources {
-        display: inline-block;
-        margin-top: 0;
-        padding: 0;
-      }
+.frame {
+  width: 16.4rem;
+  position: relative;
+  margin: 0 auto;
+  font-size: 0;
+  line-height: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
 
-      .sources li {
-        display: block;
-        text-decoration: none;
-        letter-spacing: 1px;
-        text-transform: uppercase;
-        border: 2px solid rgba(0,0,200,0.6);
-        background: rgba(112,183,253,0.3);
-        color: rgba(0,0,200,0.6);
-        box-shadow: 1px 1px 2px rgba(0,0,200,0.4);
-        border-radius: 10px;
-        padding: 3px 10px;
-        margin-bottom: 10px;
-        cursor: pointer;
-      }
+.slides {
+  display: inline-block;
+}
 
-      .regImg {
-        display: inline-block;
-      }
+.frame li {
+  position: relative;
+  display: inline-block;
+  font-family: 'Source Sans Pro', sans-serif;
+  height: 3.2rem;
+  text-align: center;
+  font-size: 1.6rem;
+  line-height: 3.2rem;
+  background: #2E435A;
+  color: #fff;
+  padding: 0 .8rem;
+  margin-left: none;
+}
 
-      .categories li, .channels li, .formToggle, button {
-        display: inline-block;
-        text-decoration: none;
-        letter-spacing: 1px;
-        text-transform: uppercase;
-        border: 2px solid rgba(0,0,200,0.6);
-        background: rgba(112,183,253,0.3);
-        color: rgba(0,0,200,0.6);
-        box-shadow: 1px 1px 2px rgba(0,0,200,0.4);
-        border-radius: 10px;
-        padding: 3px 10px;
-        margin-bottom: 10px;
-        cursor: pointer;
-      }
+.prev, .next {
+  position: absolute;
+  top: 50%;
+  margin-top: -2rem;
+  display: block;
+  cursor: pointer;
+}
 
-      button {
-        font-size: .9em;
-      }
+.next {
+  right: 0;
+}
 
-      .working {
-        border: 2px solid rgba(0, 200, 0, 0.6) !important;
-        background:rgba(47, 201, 96, 0.3) !important;
-      }
+.prev {
+  left: 2.4rem;
+}
 
-      .sources .sourceReg, .categories .selected, .channels .selected {
-        color: white;
-        background: red !important;
-      }
+.next.disabled, .prev.disabled {
+  opacity: .3;
+  pointer-events: none;
+}
 
-      li {
-        margin-left: .5em;
-      }
+.next svg, .prev svg {
+  width: 2.5rem;
+}
 
-      aside h3 {
-        margin-top: 0;
-      }
+.vjs-subs-caps-button {
+  display: none;
+}
 
-      .hidden {
-        display: none !important;
-      }
+aside {
+  grid-column: 1;
+  grid-row: 2 / 4;
+  padding-left: .8rem;
+  padding-right: 1.6rem;
+  text-align: right;
+  border-right: .1rem solid #999;
+}
 
-      .white {
-        color: white !important;
-      }
+fieldset {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
 
-      h4 {
-        color: red;
-      }
+.categories {
+  grid-column: 1 / 3;
+  grid-row: 4;
+  text-align: center;
+}
 
-      .bgBlack {
-        background-color: black !important;
-      }
+section {
+  grid-column: 1 / 3;
+  grid-row: 5;
+  text-align: center;
+}
 
-      input {
-        display: inline-block;
-        text-align: center;
-        font-size: 1em;
-        border-radius: 1px;
-        box-sizing: border-box;
-        height: 2em;
-        max-width: 8em;
-      }
+.sources {
+  display: inline-block;
+  margin-top: 0;
+  padding: 0;
+}
 
-      form div + div {
-        margin-top: 1em;
-      }
+.sources li {
+  display: block;
+  text-decoration: none;
+  letter-spacing: .1rem;
+  text-transform: uppercase;
+  border: .1rem solid rgba(0,0,200,0.6);
+  background: rgba(112,183,253,0.3);
+  color: rgba(0,0,200,0.6);
+  box-shadow: .1rem .1rem .2rem rgba(0,0,200,0.4);
+  border-radius: 1rem;
+  padding: .3rem 1rem;
+  margin-bottom: 1rem;
+  cursor: pointer;
+}
 
-      footer {
-        background: #F3F3F3;
-        padding: .5em;
-        letter-spacing: 1px;
-        position: fixed;
-        left: 0;
-        bottom: 0;
-      }
+.regImg {
+  display: inline-block;
+}
 
-      footer span {
-        margin-left: .5em;
-        margin-right: .5em;
-      }
+.categories li, .channels li, .formToggle, button {
+  display: inline-block;
+  text-decoration: none;
+  letter-spacing: .1rem;
+  text-transform: uppercase;
+  border: .1rem solid rgba(0,0,200,0.6);
+  background: rgba(112,183,253,0.3);
+  color: rgba(0,0,200,0.6);
+  box-shadow: .1rem .1rem .2rem rgba(0,0,200,0.4);
+  border-radius: 1rem;
+  padding: .3rem 1rem;
+  margin-bottom: 1rem;
+  cursor: pointer;
+}
 
-      .video-js .vjs-overlay {
-        color: #fff;
-        position: absolute;
-        text-align: center;
-      }
+button {
+  font-size: 1.44rem;
+}
 
-      .video-js .vjs-overlay-background {
-        background-color: #646464;
-        border-radius: 3px;
-        height: 15%;
-        width: 19%;
-      }
+.working {
+  border: .1rem solid rgba(0, 200, 0, 0.6) !important;
+  background:rgba(47, 201, 96, 0.3) !important;
+}
 
-      .video-js .vjs-overlay-center {
-        left: 50%;
-        top: 50%;
-        margin-left: 28%;
-        margin-top: 17%;
-      }
+.sources .sourceReg, .categories .selected, .channels .selected {
+  color: white;
+  background: red !important;
+}
 
-      @media (max-width: 991.98px) {
-        header {
-          padding-left: 1em;
-        }
-        .videoContainer {
-          width: 95%;
-        }
-        .categories .hbohd {
-          display: none;
-        }
-        footer span {
-            display: none;
-        }
-      }
+li {
+  margin-left: .8rem;
+}
 
-      @media (min-width: 992px) {
-        header {
-          grid-column: 2;
-          grid-row: 1;
-        }
-      }
+aside h3 {
+  margin-top: 0;
+}
 
-      svg {
-        fill:#70B7FD; 
-        color:#fff; 
-        position: absolute; 
-        top: 0; 
-        border: 0; 
-        right: 0;
-      }
+.hidden {
+  display: none !important;
+}
 
-      .github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}
+.white {
+  color: white !important;
+}
+
+h4 {
+  color: red;
+}
+
+.bgBlack {
+  background-color: black !important;
+}
+
+input {
+  display: inline-block;
+  text-align: center;
+  font-size: 1.6rem;
+  border-radius: .1rem;
+  box-sizing: border-box;
+  height: 3.2rem;
+  max-width: 12.8rem;
+}
+
+form div + div {
+  margin-top: 1.6rem;
+}
+
+footer {
+  background: #F3F3F3;
+  padding: .8rem;
+  letter-spacing: .1rem;
+  position: fixed;
+  left: 0;
+  bottom: 0;
+}
+
+footer span {
+  margin-left: .8rem;
+  margin-right: .8rem;
+}
+
+.video-js .vjs-overlay {
+  color: #fff;
+  position: absolute;
+  text-align: center;
+}
+
+.video-js .vjs-overlay-background {
+  background-color: #646464;
+  border-radius: .3rem;
+  height: 15%;
+  width: 19%;
+}
+
+.video-js .vjs-overlay-center {
+  left: 50%;
+  top: 50%;
+  margin-left: 28%;
+  margin-top: 17%;
+}
+
+@media (max-width: 468px ) {
+
+  .slider {
+    width: 180px;
+  }
+
+  .frame {
+    width: 110px;
+  }
+}
+
+@media (min-width: 469px ) {
+
+  .slider {
+    width: 230px;
+  }
+
+  .frame {
+    width: 164px;
+  }
+}
+
+@media (min-width: 640px ) {
+
+  .slider {
+    width: 400px;
+  }
+
+  .frame {
+    width: 325px;
+  }
+}
+
+@media (min-width: 1176px ) {
+
+  .slider {
+    width: 615px;
+  }
+
+  .frame {
+    width: 536px;
+  }
+}
+
+@media (min-width: 1440px ) {
+
+  .slider {
+    width: 730px;
+  }
+
+  .frame {
+    width: 658px;
+  }
+}
+
+@media (max-width: 991.98px) {
+  header {
+    padding-left: 1.6rem;
+  }
+  .videoContainer, .sliderContainer {
+    width: 95%;
+  }
+  .categories .hbohd {
+    display: none;
+  }
+  footer span {
+    display: none;
+  }
+}
+
+@media (min-width: 992px) {
+  header {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+svg {
+  fill:#70B7FD; 
+  color:#fff; 
+  position: absolute; 
+  top: 0; 
+  border: 0; 
+  right: 0;
+}
+
+.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}
     </style>
     <title>HBO直播 - 高清电视直播</title>
-    <!--[if lt IE 9]>
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.js"></script>
-    <![endif]-->
   </head>
   <body>
     <header>
       <h1>
         <a href="/">HBO中文直播</a>
       </h1>
-      <p>部分广电直播源需手机号注册！<!--[if lt IE 10]><p class="warn"><strong>不支持 IE浏览器</strong> 。</p><![endif]--></p>
+      <p>部分广电直播源需手机号注册！</p>
       <a href="https://github.com/woniuzfb/iptv" target="_blank" class="github-corner">
         <svg width="80" height="80" viewBox="0 0 250 250" aria-hidden="true">
           <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path>
@@ -242,6 +367,20 @@
       </a>
     </header>
     <div class="videoContainer"></div>
+    <div class="sliderContainer">
+      <div class="slider js_slider">
+        <div class="frame js_frame">
+            <ul class="slides js_slides">
+            </ul>
+        </div>
+        <span class="js_prev prev">
+            <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 501.5 501.5"><g><path fill="#2E435A" d="M302.67 90.877l55.77 55.508L254.575 250.75 358.44 355.116l-55.77 55.506L143.56 250.75z"/></g></svg>
+        </span>
+        <span class="js_next next">
+            <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 501.5 501.5"><g><path fill="#2E435A" d="M199.33 410.622l-55.77-55.508L247.425 250.75 143.56 146.384l55.77-55.507L358.44 250.75z"/></g></svg>
+        </span>
+      </div>
+    </div>
     <div class="categories">
       <ul>
         <li data-value="hbo" data-source="a8">HBO</li>
@@ -300,6 +439,7 @@
     </footer>
     <script src="https://cdn.bootcss.com/video.js/7.6.6/video.min.js"></script>
     <script src="https://cdn.bootcss.com/flv.js/1.5.0/flv.min.js"></script>
+    <script src="https://cdn.bootcss.com/lory.js/2.5.3/lory.min.js"></script>
     <script>
 /*videojs-overlay*/
 !function(t,e){"object"==typeof exports&&"undefined"!=typeof module?module.exports=e(require("video.js"),require("global/window")):"function"==typeof define&&define.amd?define(["video.js","global/window"],e):t.videojsOverlay=e(t.videojs,t.window)}(this,function(t,e){"use strict";function n(t){if(void 0===t)throw new ReferenceError("this hasn't been initialised - super() hasn't been called");return t}t=t&&t.hasOwnProperty("default")?t.default:t,e=e&&e.hasOwnProperty("default")?e.default:e;var r={align:"top-left",class:"",content:"This overlay will show up while the video is playing",debug:!1,showBackground:!0,attachToControlBar:!1,overlays:[{start:"playing",end:"paused"}]},i=t.getComponent("Component"),o=t.dom||t,s=t.registerPlugin||t.plugin,a=function(t){return"number"==typeof t&&t==t},h=function(t){return"string"==typeof t&&/^\S+$/.test(t)},d=function(r){var i,s;function d(t,e){var i;return i=r.call(this,t,e)||this,["start","end"].forEach(function(t){var e=i.options_[t];if(a(e))i[t+"Event_"]="timeupdate";else if(h(e))i[t+"Event_"]=e;else if("start"===t)throw new Error('invalid "start" option; expected number or string')}),["endListener_","rewindListener_","startListener_"].forEach(function(t){i[t]=function(e){return d.prototype[t].call(n(n(i)),e)}}),"timeupdate"===i.startEvent_&&i.on(t,"timeupdate",i.rewindListener_),i.debug('created, listening to "'+i.startEvent_+'" for "start" and "'+(i.endEvent_||"nothing")+'" for "end"'),i.hide(),i}s=r,(i=d).prototype=Object.create(s.prototype),i.prototype.constructor=i,i.__proto__=s;var l=d.prototype;return l.createEl=function(){var t=this.options_,n=t.content,r=t.showBackground?"vjs-overlay-background":"vjs-overlay-no-background",i=o.createEl("div",{className:"\n        vjs-overlay\n        vjs-overlay-"+t.align+"\n        "+t.class+"\n        "+r+"\n        vjs-hidden\n      "});return"string"==typeof n?i.innerHTML=n:n instanceof e.DocumentFragment?i.appendChild(n):o.appendContent(i,n),i},l.debug=function(){if(this.options_.debug){for(var e=t.log,n=e,r=arguments.length,i=new Array(r),o=0;o<r;o++)i[o]=arguments[o];e.hasOwnProperty(i[0])&&"function"==typeof e[i[0]]&&(n=e[i.shift()]),n.apply(void 0,["overlay#"+this.id()+": "].concat(i))}},l.hide=function(){return r.prototype.hide.call(this),this.debug("hidden"),this.debug('bound `startListener_` to "'+this.startEvent_+'"'),this.endEvent_&&(this.debug('unbound `endListener_` from "'+this.endEvent_+'"'),this.off(this.player(),this.endEvent_,this.endListener_)),this.on(this.player(),this.startEvent_,this.startListener_),this},l.shouldHide_=function(t,e){var n=this.options_.end;return a(n)?t>=n:n===e},l.show=function(){return r.prototype.show.call(this),this.off(this.player(),this.startEvent_,this.startListener_),this.debug("shown"),this.debug('unbound `startListener_` from "'+this.startEvent_+'"'),this.endEvent_&&(this.debug('bound `endListener_` to "'+this.endEvent_+'"'),this.on(this.player(),this.endEvent_,this.endListener_)),this},l.shouldShow_=function(t,e){var n=this.options_.start,r=this.options_.end;return a(n)?a(r)?t>=n&&t<r:this.hasShownSinceSeek_?Math.floor(t)===n:(this.hasShownSinceSeek_=!0,t>=n):n===e},l.startListener_=function(t){var e=this.player().currentTime();this.shouldShow_(e,t.type)&&this.show()},l.endListener_=function(t){var e=this.player().currentTime();this.shouldHide_(e,t.type)&&this.hide()},l.rewindListener_=function(t){var e=this.player().currentTime(),n=this.previousTime_,r=this.options_.start,i=this.options_.end;e<n&&(this.debug("rewind detected"),a(i)&&!this.shouldShow_(e)?(this.debug("hiding; "+i+" is an integer and overlay should not show at this time"),this.hasShownSinceSeek_=!1,this.hide()):h(i)&&e<r&&(this.debug("hiding; show point ("+r+") is before now ("+e+") and end point ("+i+") is an event"),this.hasShownSinceSeek_=!1,this.hide())),this.previousTime_=e},d}(i);t.registerComponent("Overlay",d);var l=function(e){var n=this,i=t.mergeOptions(r,e);Array.isArray(this.overlays_)&&this.overlays_.forEach(function(t){n.removeChild(t),n.controlBar&&n.controlBar.removeChild(t),t.dispose()});var o=i.overlays;delete i.overlays,this.overlays_=o.map(function(e){var r=t.mergeOptions(i,e),o="string"==typeof r.attachToControlBar||!0===r.attachToControlBar;if(!n.controls()||!n.controlBar)return n.addChild("overlay",r);if(o&&-1!==r.align.indexOf("bottom")){var s=n.controlBar.children()[0];if(void 0!==n.controlBar.getChild(r.attachToControlBar)&&(s=n.controlBar.getChild(r.attachToControlBar)),s){var a=n.controlBar.addChild("overlay",r);return n.controlBar.el().insertBefore(a.el(),s.el()),a}}var h=n.addChild("overlay",r);return n.el().insertBefore(h.el(),n.controlBar.el()),h})};return l.VERSION="2.1.4",s("overlay",l),l});
@@ -491,6 +631,7 @@ function playVideo() {
         if (sourcesJsonParsed[index].channels[0].hasOwnProperty('overlay')) {
           videoOverlay();
         }
+        showSchedule(sourcesJsonParsed[index].channels[0].schedule);
         resetSourceReg();
         break;
       }
@@ -501,8 +642,10 @@ function playVideo() {
     if (jsonChannels[sourceReg][programId].hasOwnProperty('overlay')) {
       videoOverlay();
     }
+    showSchedule(jsonChannels[sourceReg][programId].schedule);
     resetSourceReg();
   } else if (!sourcesJsonParsed.hasOwnProperty(sourceReg) || !sourcesJsonParsed[sourceReg].hasOwnProperty('channels')) {
+    showSchedule();
     alertInfo('抱歉频道不可用！');
     resetSourceReg();
   } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('play_url')) {
@@ -513,6 +656,7 @@ function playVideo() {
         if (channel.hasOwnProperty('overlay')) {
           videoOverlay();
         }
+        showSchedule(channel.schedule);
         resetSourceReg();
       }
     });
@@ -521,8 +665,10 @@ function playVideo() {
   } else if (localStorage.getItem(sourceReg+'_token')) {
     hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken=ABCDEFGHIGK&programid='+programId+'.m3u8';
     videojsLoad();
+    showSchedule(sourceReg + '_' + programId);
     updateAside();
   } else {
+    showSchedule();
     alertInfo(sourcesJsonParsed[sourceReg].desc+'直播源未注册或登录！',5);
     updateAside();
   }
@@ -1062,11 +1208,50 @@ function setOverlay() {
   }
 }
 
-let sourcesJson,sourcesJsonParsed,jsonChannels={},hlsVideoUrl;
+function showSchedule(program) {
+  
+  while (scheduleField.firstChild) {
+    scheduleField.removeChild(scheduleField.firstChild);
+  }
+
+  if (!schedules[program]) {
+    sliderField.classList.add('hidden');
+    return;
+  }
+
+  let scheduleTime = 1000000000,indexTime,slideIndex;
+  let dateNow = Date.now();
+
+  for (let index = 0; index < schedules[program].length; index++) {
+    const schedule = schedules[program][index];
+    const scheduleListItem = document.createElement('li');
+    const scheduleListLink = document.createElement('a');
+    const scheduleListText = document.createTextNode(schedule.time + ' ' + schedule.title);
+    scheduleListItem.classList.add('js_slide');
+    scheduleListLink.appendChild(scheduleListText);
+    scheduleListItem.appendChild(scheduleListLink);
+    scheduleField.appendChild(scheduleListItem);
+    indexTime = schedule.sys_time * 1000;
+    if (indexTime < dateNow && indexTime > scheduleTime) {
+      scheduleTime = indexTime;
+      slideIndex = index;
+    }
+  }
+
+  sliderField.classList.remove('hidden');
+
+  lory(sliderField, {
+    initialIndex: slideIndex,
+    rewind: true
+  });
+}
+
+let sourcesJson,sourcesJsonParsed,jsonChannels={},hlsVideoUrl,schedules;
 let sourceReg = 'jscnwx';
 let programId;
 let localJson = 'channels.json';
 let remoteJson = 'http://hbo.epub.fun/channels.json';
+let scheduleJson = 'http://hbo.epub.fun/schedule.json';
 const videoField = document.querySelector('.videoContainer');
 const sourcesField = document.querySelector('.sources');
 const fieldsetLoginForm = document.querySelector('.loginForm fieldset');
@@ -1096,41 +1281,55 @@ const myList4 = document.querySelector('.channels ul:nth-child(5)');
 const myList5 = document.querySelector('.channels ul:nth-child(6)');
 const myList8 = document.querySelector('.channels ul:nth-child(7)');
 const myList9 = document.querySelector('.channels ul:nth-child(8)');
+const sliderField = document.querySelector('.js_slider');
+const scheduleField = document.querySelector('.slides');
 
 let liveui = true;
 if (videojs.browser.IS_ANDROID || videojs.browser.IS_IOS) {
   liveui = false;
 }
 
-fetch(localJson).then(response => {
-  let contentType;
+let contentType;
+fetch(scheduleJson).then(response => {
   if(response.ok) {
     contentType = response.headers.get("content-type");
     if(contentType && contentType.includes("application/json")) {
       return response.json();
     }
   }
-  fetch(remoteJson).then(response => {
+}).then(json => {
+  schedules = json;
+  fetch(localJson).then(response => {
     if(response.ok) {
       contentType = response.headers.get("content-type");
       if(contentType && contentType.includes("application/json")) {
         return response.json();
       }
     }
+    fetch(remoteJson).then(response => {
+      if(response.ok) {
+        contentType = response.headers.get("content-type");
+        if(contentType && contentType.includes("application/json")) {
+          return response.json();
+        }
+      }
+    }).then(json => {
+      sourcesJson = json;
+      parseJson(json);
+      initialize();
+    }).catch(err => {
+      console.log('发生错误:', err.message);
+    });
+    throw new Error('本地频道不存在，尝试连接远程频道...');
   }).then(json => {
     sourcesJson = json;
     parseJson(json);
     initialize();
   }).catch(err => {
-    console.log('发生错误:', err.message);
+    console.log('发生错误:', err);
   });
-  throw new Error('本地频道不存在，尝试连接远程频道...');
-}).then(json => {
-  sourcesJson = json;
-  parseJson(json);
-  initialize();
 }).catch(err => {
-  console.log('发生错误:', err);
+  console.log('发生错误:', err.message);
 });
 
 function initialize() {
@@ -1212,7 +1411,6 @@ document.addEventListener("webkitfullscreenchange", setOverlay);
 document.addEventListener("mozfullscreenchange", setOverlay);
 document.addEventListener("msfullscreenchange", setOverlay);
 window.addEventListener("orientationchange", setOverlay);
-
 
 if (localStorage.getItem('dark') === '1'){
   switchBtn.click();

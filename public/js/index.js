@@ -177,6 +177,7 @@ function playVideo() {
         if (sourcesJsonParsed[index].channels[0].hasOwnProperty('overlay')) {
           videoOverlay();
         }
+        showSchedule(sourcesJsonParsed[index].channels[0].schedule);
         resetSourceReg();
         break;
       }
@@ -187,8 +188,10 @@ function playVideo() {
     if (jsonChannels[sourceReg][programId].hasOwnProperty('overlay')) {
       videoOverlay();
     }
+    showSchedule(jsonChannels[sourceReg][programId].schedule);
     resetSourceReg();
   } else if (!sourcesJsonParsed.hasOwnProperty(sourceReg) || !sourcesJsonParsed[sourceReg].hasOwnProperty('channels')) {
+    showSchedule();
     alertInfo('抱歉频道不可用！');
     resetSourceReg();
   } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('play_url')) {
@@ -199,6 +202,7 @@ function playVideo() {
         if (channel.hasOwnProperty('overlay')) {
           videoOverlay();
         }
+        showSchedule(channel.schedule);
         resetSourceReg();
       }
     });
@@ -207,8 +211,10 @@ function playVideo() {
   } else if (localStorage.getItem(sourceReg+'_token')) {
     hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken=ABCDEFGHIGK&programid='+programId+'.m3u8';
     videojsLoad();
+    showSchedule(sourceReg + '_' + programId);
     updateAside();
   } else {
+    showSchedule();
     alertInfo(sourcesJsonParsed[sourceReg].desc+'直播源未注册或登录！',5);
     updateAside();
   }
@@ -748,11 +754,50 @@ function setOverlay() {
   }
 }
 
-let sourcesJson,sourcesJsonParsed,jsonChannels={},hlsVideoUrl;
+function showSchedule(program) {
+  
+  while (scheduleField.firstChild) {
+    scheduleField.removeChild(scheduleField.firstChild);
+  }
+
+  if (!schedules[program]) {
+    sliderField.classList.add('hidden');
+    return;
+  }
+
+  let scheduleTime = 1000000000,indexTime,slideIndex;
+  let dateNow = Date.now();
+
+  for (let index = 0; index < schedules[program].length; index++) {
+    const schedule = schedules[program][index];
+    const scheduleListItem = document.createElement('li');
+    const scheduleListLink = document.createElement('a');
+    const scheduleListText = document.createTextNode(schedule.time + ' ' + schedule.title);
+    scheduleListItem.classList.add('js_slide');
+    scheduleListLink.appendChild(scheduleListText);
+    scheduleListItem.appendChild(scheduleListLink);
+    scheduleField.appendChild(scheduleListItem);
+    indexTime = schedule.sys_time * 1000;
+    if (indexTime < dateNow && indexTime > scheduleTime) {
+      scheduleTime = indexTime;
+      slideIndex = index;
+    }
+  }
+
+  sliderField.classList.remove('hidden');
+
+  lory(sliderField, {
+    initialIndex: slideIndex,
+    rewind: true
+  });
+}
+
+let sourcesJson,sourcesJsonParsed,jsonChannels={},hlsVideoUrl,schedules;
 let sourceReg = 'jscnwx';
 let programId;
 let localJson = 'channels.json';
 let remoteJson = 'http://hbo.epub.fun/channels.json';
+let scheduleJson = 'http://hbo.epub.fun/schedule.json';
 const videoField = document.querySelector('.videoContainer');
 const sourcesField = document.querySelector('.sources');
 const fieldsetLoginForm = document.querySelector('.loginForm fieldset');
@@ -782,41 +827,55 @@ const myList4 = document.querySelector('.channels ul:nth-child(5)');
 const myList5 = document.querySelector('.channels ul:nth-child(6)');
 const myList8 = document.querySelector('.channels ul:nth-child(7)');
 const myList9 = document.querySelector('.channels ul:nth-child(8)');
+const sliderField = document.querySelector('.js_slider');
+const scheduleField = document.querySelector('.slides');
 
 let liveui = true;
 if (videojs.browser.IS_ANDROID || videojs.browser.IS_IOS) {
   liveui = false;
 }
 
-fetch(localJson).then(response => {
-  let contentType;
+let contentType;
+fetch(scheduleJson).then(response => {
   if(response.ok) {
     contentType = response.headers.get("content-type");
     if(contentType && contentType.includes("application/json")) {
       return response.json();
     }
   }
-  fetch(remoteJson).then(response => {
+}).then(json => {
+  schedules = json;
+  fetch(localJson).then(response => {
     if(response.ok) {
       contentType = response.headers.get("content-type");
       if(contentType && contentType.includes("application/json")) {
         return response.json();
       }
     }
+    fetch(remoteJson).then(response => {
+      if(response.ok) {
+        contentType = response.headers.get("content-type");
+        if(contentType && contentType.includes("application/json")) {
+          return response.json();
+        }
+      }
+    }).then(json => {
+      sourcesJson = json;
+      parseJson(json);
+      initialize();
+    }).catch(err => {
+      console.log('发生错误:', err.message);
+    });
+    throw new Error('本地频道不存在，尝试连接远程频道...');
   }).then(json => {
     sourcesJson = json;
     parseJson(json);
     initialize();
   }).catch(err => {
-    console.log('发生错误:', err.message);
+    console.log('发生错误:', err);
   });
-  throw new Error('本地频道不存在，尝试连接远程频道...');
-}).then(json => {
-  sourcesJson = json;
-  parseJson(json);
-  initialize();
 }).catch(err => {
-  console.log('发生错误:', err);
+  console.log('发生错误:', err.message);
 });
 
 function initialize() {
@@ -898,7 +957,6 @@ document.addEventListener("webkitfullscreenchange", setOverlay);
 document.addEventListener("mozfullscreenchange", setOverlay);
 document.addEventListener("msfullscreenchange", setOverlay);
 window.addEventListener("orientationchange", setOverlay);
-
 
 if (localStorage.getItem('dark') === '1'){
   switchBtn.click();

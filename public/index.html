@@ -7,16 +7,13 @@
     <link rel="stylesheet" href="css/video-js.min.css">
     <link rel="stylesheet" href="css/index.css">
     <title>HBO直播 - 高清电视直播</title>
-    <!--[if lt IE 9]>
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.js"></script>
-    <![endif]-->
   </head>
   <body>
     <header>
       <h1>
         <a href="/">HBO中文直播</a>
       </h1>
-      <p>部分广电直播源需手机号注册！<!--[if lt IE 10]><p class="warn"><strong>不支持 IE浏览器</strong> 。</p><![endif]--></p>
+      <p>部分广电直播源需手机号注册！</p>
       <a href="https://github.com/woniuzfb/iptv" target="_blank" class="github-corner">
         <svg width="80" height="80" viewBox="0 0 250 250" aria-hidden="true">
           <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path>
@@ -26,6 +23,20 @@
       </a>
     </header>
     <div class="videoContainer"></div>
+    <div class="sliderContainer">
+      <div class="slider js_slider">
+        <div class="frame js_frame">
+            <ul class="slides js_slides">
+            </ul>
+        </div>
+        <span class="js_prev prev">
+            <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 501.5 501.5"><g><path fill="#2E435A" d="M302.67 90.877l55.77 55.508L254.575 250.75 358.44 355.116l-55.77 55.506L143.56 250.75z"/></g></svg>
+        </span>
+        <span class="js_next next">
+            <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 501.5 501.5"><g><path fill="#2E435A" d="M199.33 410.622l-55.77-55.508L247.425 250.75 143.56 146.384l55.77-55.507L358.44 250.75z"/></g></svg>
+        </span>
+      </div>
+    </div>
     <div class="categories">
       <ul>
         <li data-value="hbo" data-source="a8">HBO</li>
@@ -89,6 +100,7 @@
     <script src="js/md5.min.js"></script>
     <script src="js/polyfill.min.js"></script>
     <script src="js/fetch.min.js"></script>
+    <script src="js/lory.min.js"></script>
     <script src="js/index.js"></script>
   </body>
 </html>
