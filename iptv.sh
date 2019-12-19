@@ -1583,8 +1583,14 @@ schedule()
             SCHEDULE_FILE="/usr/local/iptv/$2_schedule_$date_now"
             SCHEDULE_TMP="${SCHEDULE_JSON}_tmp"
             wget --no-check-certificate "$SCHEDULE_LINK" -qO "$SCHEDULE_FILE"
-            programs_count=$($JQ_FILE -r '. | length' $SCHEDULE_FILE)
-            IFS=" " read -ra programs_title <<< "$($JQ_FILE -r '[.[].title] | @sh' $SCHEDULE_FILE)"
+            programs_count=$($JQ_FILE -r '. | length' "$SCHEDULE_FILE")
+
+            programs_title=()
+            while IFS='' read -r program_title
+            do
+                programs_title+=("$program_title");
+            done < <($JQ_FILE -r '.[].title | @sh' "$SCHEDULE_FILE")
+
             IFS=" " read -ra programs_time <<< "$($JQ_FILE -r '[.[].time] | @sh' $SCHEDULE_FILE)"
             IFS=" " read -ra programs_sys_time <<< "$($JQ_FILE -r '[.[].sys_time] | @sh' $SCHEDULE_FILE)"
 
