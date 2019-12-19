@@ -174,7 +174,7 @@ button {
 
 .working {
   border: .1rem solid rgba(0, 200, 0, 0.6) !important;
-  background:rgba(47, 201, 96, 0.3) !important;
+  background:rgba(47, 201, 96, 0.5) !important;
 }
 
 .sources .sourceReg, .categories .selected, .channels .selected {

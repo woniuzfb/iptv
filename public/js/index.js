@@ -541,6 +541,9 @@ function reqJson(json) {
         if (channel.hasOwnProperty('overlay')) {
           jsonChannels[response.data[0].name][channel.chnl_id]['overlay'] = channel.overlay;
         }
+        if (channel.hasOwnProperty('schedule')) {
+          jsonChannels[response.data[0].name][channel.chnl_id]['schedule'] = channel.schedule;
+        }
         newChannel.chnl_name = channel.chnl_name;
         newChannel.chnl_id = channel.chnl_id;
         newChannel.chnl_cat = channel.chnl_cat;

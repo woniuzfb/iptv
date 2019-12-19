@@ -1572,9 +1572,17 @@ schedule()
             fi
 
             date_now=$(date -d now "+%Y-%m-%d")
+
+            if [ "$2" == "hbo" ] 
+            then
+                SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$date_now&channel=$2&feed=cn"
+            else
+                SCHEDULE_LINK="https://hboasia.com/HBO/zh-tw/ajax/home_schedule?date=$date_now&channel=$2&feed=satellite"
+            fi
+            
             SCHEDULE_FILE="/usr/local/iptv/$2_schedule_$date_now"
             SCHEDULE_TMP="${SCHEDULE_JSON}_tmp"
-            wget --no-check-certificate "https://hboasia.com/HBO/zh-tw/ajax/home_schedule?date=$date_now&channel=$2&feed=satellite" -qO "$SCHEDULE_FILE"
+            wget --no-check-certificate "$SCHEDULE_LINK" -qO "$SCHEDULE_FILE"
             programs_count=$($JQ_FILE -r '. | length' $SCHEDULE_FILE)
             IFS=" " read -ra programs_title <<< "$($JQ_FILE -r '[.[].title] | @sh' $SCHEDULE_FILE)"
             IFS=" " read -ra programs_time <<< "$($JQ_FILE -r '[.[].time] | @sh' $SCHEDULE_FILE)"
