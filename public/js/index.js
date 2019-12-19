@@ -768,7 +768,7 @@ function showSchedule(program) {
     return;
   }
 
-  let scheduleTime = 1000000000,indexTime,slideIndex;
+  let scheduleTime = 1000000000,indexTime,slideIndex = 0;
   let dateNow = Date.now();
 
   for (let index = 0; index < schedules[program].length; index++) {
