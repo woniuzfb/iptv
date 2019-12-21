@@ -191,7 +191,7 @@ function playVideo() {
     showSchedule(jsonChannels[sourceReg][programId].schedule);
     resetSourceReg();
   } else if (!sourcesJsonParsed.hasOwnProperty(sourceReg) || !sourcesJsonParsed[sourceReg].hasOwnProperty('channels')) {
-    showSchedule();
+    deleteSchedule();
     alertInfo('抱歉频道不可用！');
     resetSourceReg();
   } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('play_url')) {
@@ -211,10 +211,10 @@ function playVideo() {
   } else if (localStorage.getItem(sourceReg+'_token')) {
     hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken=ABCDEFGHIGK&programid='+programId+'.m3u8';
     videojsLoad();
-    showSchedule(sourceReg + '_' + programId);
+    showSchedule();
     updateAside();
   } else {
-    showSchedule();
+    deleteSchedule();
     alertInfo(sourcesJsonParsed[sourceReg].desc+'直播源未注册或登录！',5);
     updateAside();
   }
@@ -246,7 +246,11 @@ function reqData(url, data = '', method = 'GET') {
       cache: "no-cache",
       credentials: "omit",
       referrer: "",
-    }).then(response => response.json());
+    }).then(response => {
+      return response.json();
+    }).catch(err => {
+      console.log('发生错误:', err.message);
+    });
   } else {
     return fetch(url, {
       method: method,
@@ -255,7 +259,11 @@ function reqData(url, data = '', method = 'GET') {
       credentials: "omit",
       referrer: "",
       body: JSON.stringify(data),
-    }).then(response => response.json());
+    }).then(response => {
+      return response.json();
+    }).catch(err => {
+      console.log('发生错误:', err.message);
+    });
   }
 }
 
@@ -275,7 +283,7 @@ function uniqueName() {
       if (response.ret !== 0) {
         alertInfo('用户名已存在,请重新输入！',3);
       }
-    }).catch(err => console.log('发生错误:', err));
+    });
   }
 }
 
@@ -304,9 +312,9 @@ function regImg() {
                 newImage.src = response.image.replace('\\','/');
                 regImgField.innerHTML = newImage.outerHTML;
                 regImgIdField.value = response.picid;
-              }).catch(err => console.log('发生错误:', err));
+              });
             }
-          }).catch(err => console.log('发生错误:', err));
+          });
         }
       }).catch(err => {
         console.log('发生错误:', err);
@@ -324,7 +332,7 @@ function regImg() {
             newImage.src = response.image.replace('\\','/');
             regImgField.innerHTML = newImage.outerHTML;
             regImgIdField.value = response.picid;
-          }).catch(err => console.log('发生错误:', err));
+          });
         }
       }).catch(err => {
         console.log('发生错误:', err);
@@ -349,7 +357,7 @@ function reqSms() {
       } else {
         alertInfo('短信已发送！',5);
       }
-    }).catch(err => console.log('发生错误:', err));
+    });
   }
 }
 
@@ -375,7 +383,7 @@ function reqReg() {
         alertInfo('注册成功!');
         reqLogin();
       }
-    }).catch(err => console.log('发生错误:', err));
+    });
   } else {
     reqData(sourcesJsonParsed[sourceReg].verify_url,'?verifycode='+smsCode+'&verifytype=3&username='+acc+'&account='+acc)
     .then(response => {
@@ -411,11 +419,11 @@ function reqReg() {
           } else {
             alertInfo('注册失败,手机号已存在！', 10);
           }
-        }).catch(err => console.log('发生错误:', err));
+        });
       } else {
         alertInfo('短信验证失败,请重试！');
       }
-    }).catch(err => console.log('发生错误:', err));
+    });
   }
 }
 
@@ -446,7 +454,7 @@ function reqLogin() {
       } else {
         alertInfo(sourcesJsonParsed[sourceReg].desc+'直播源登录失败！',10);
       }
-    }).catch(err => console.log('发生错误:', err));
+    });
   } else {
     let user = {};
     user.account = acc;
@@ -550,8 +558,6 @@ function reqJson(json) {
         appendList(newChannel,response.data[0].name,response.data[0].lane);
       });
     }
-  }).catch(err => {
-    console.log('发生错误:', err);
   });
 }
 
@@ -757,22 +763,75 @@ function setOverlay() {
   }
 }
 
-function showSchedule(program) {
-  
-  while (scheduleField.firstChild) {
-    scheduleField.removeChild(scheduleField.firstChild);
-  }
+function showSchedule(chnl) {
+  deleteSchedule();
 
-  if (!schedules[program]) {
+  if (!chnl) {
+    if (!sourcesJsonParsed[sourceReg].hasOwnProperty('schedule_url')) {
+      return;
+    } else if (schedules[sourceReg] && schedules[sourceReg][programId]) {
+      insertSchedule(sourceReg,programId);
+    } else {
+      let starttime = new Date();
+      starttime = starttime.setHours(0,0,0,0) / 1000;
+      let endtime = starttime + 86400;
+      let chnlSource = sourceReg;
+      let chnlId = programId;
+      reqData(sourcesJsonParsed[chnlSource].schedule_url,'?accesstoken='+localStorage.getItem(sourceReg+'_token')+'&repeat=1&starttime='+starttime+'&endtime='+endtime+'&chnlid='+chnlId+'&pagenum=500&pageidx=1')
+      .then(response => {
+        if (!schedules.hasOwnProperty(chnlSource)) {
+          schedules[chnlSource] = {};
+        }
+        schedules[chnlSource][chnlId] = [];
+        for (let index = 0; index < response.total; index++) {
+          let newEvent = {},newEventTime;
+          const event = response.event_list[index];
+          newEvent.title = event.event_name;
+          newEventTime = new Date(event.start_time * 1000);
+          newEventTime = newEventTime.toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true });
+          newEvent.time = newEventTime.replace(' ','');
+          newEvent.sys_time = event.start_time.toString();
+          schedules[chnlSource][chnlId].push(newEvent);
+        }
+        if (schedules[chnlSource][chnlId].length > 0) {
+          insertSchedule(chnlSource,chnlId);
+        }
+      });
+    }
+  } else if (!schedules || !schedules.hasOwnProperty(chnl) || !schedules[chnl]) {
+    reqData(scheduleJson)
+    .then(response => {
+      schedules[chnl] = response[chnl];
+      insertSchedule(chnl);
+    });
+  } else {
+    insertSchedule(chnl);
+  }
+}
+
+function insertSchedule(chnl,chnlId) {
+  if (!schedules[chnl]) {
     sliderField.classList.add('hidden');
     return;
   }
 
+  let chnlSchedules;
   let scheduleTime = 1000000000,indexTime,slideIndex = 0;
   let dateNow = Date.now();
 
-  for (let index = 0; index < schedules[program].length; index++) {
-    const schedule = schedules[program][index];
+  if (chnlId) {
+    if (!schedules[chnl].hasOwnProperty(chnlId) || !schedules[chnl][chnlId]) {
+      sliderField.classList.add('hidden');
+      return;
+    } else {
+      chnlSchedules = schedules[chnl][chnlId];
+    }
+  } else {
+    chnlSchedules = schedules[chnl];
+  }
+
+  for (let index = 0; index < chnlSchedules.length; index++) {
+    const schedule = chnlSchedules[index];
     const scheduleListItem = document.createElement('li');
     const scheduleListLink = document.createElement('a');
     const scheduleListText = document.createTextNode(schedule.time + ' ' + schedule.title);
@@ -795,7 +854,14 @@ function showSchedule(program) {
   });
 }
 
-let sourcesJson,sourcesJsonParsed,jsonChannels={},hlsVideoUrl,schedules;
+function deleteSchedule() {
+  sliderField.classList.add('hidden');
+  while (scheduleField.firstChild) {
+    scheduleField.removeChild(scheduleField.firstChild);
+  }
+}
+
+let sourcesJson,sourcesJsonParsed,jsonChannels={},hlsVideoUrl,schedules = {};
 let sourceReg = 'jscnwx';
 let programId;
 let localJson = 'channels.json';
@@ -838,47 +904,18 @@ if (videojs.browser.IS_ANDROID || videojs.browser.IS_IOS) {
   liveui = false;
 }
 
-let contentType;
-fetch(scheduleJson).then(response => {
-  if(response.ok) {
-    contentType = response.headers.get("content-type");
-    if(contentType && contentType.includes("application/json")) {
-      return response.json();
-    }
-  }
-}).then(json => {
-  schedules = json;
-  fetch(localJson).then(response => {
-    if(response.ok) {
-      contentType = response.headers.get("content-type");
-      if(contentType && contentType.includes("application/json")) {
-        return response.json();
-      }
-    }
-    fetch(remoteJson).then(response => {
-      if(response.ok) {
-        contentType = response.headers.get("content-type");
-        if(contentType && contentType.includes("application/json")) {
-          return response.json();
-        }
-      }
-    }).then(json => {
-      sourcesJson = json;
-      parseJson(json);
-      initialize();
-    }).catch(err => {
-      console.log('发生错误:', err.message);
-    });
-    throw new Error('本地频道不存在，尝试连接远程频道...');
-  }).then(json => {
-    sourcesJson = json;
-    parseJson(json);
-    initialize();
-  }).catch(err => {
-    console.log('发生错误:', err);
-  });
+reqData(localJson).then(response => {
+  sourcesJson = response;
+  parseJson(response);
+  initialize();
 }).catch(err => {
-  console.log('发生错误:', err.message);
+  console.log('发生错误:', err);
+  reqData(remoteJson).then(response => {
+    sourcesJson = response;
+    parseJson(response);
+    initialize();
+  });
+  throw new Error('本地频道不存在，尝试连接远程频道...');
 });
 
 function initialize() {

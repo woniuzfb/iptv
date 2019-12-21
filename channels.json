@@ -34,6 +34,7 @@
       "play_url": "http://122.194.12.25:13164/playurl",
       "list_url": "http://122.194.12.25:13160/media/channel/get_list",
       "token_url": "http://122.194.12.25:12690/account/get_third_token",
+      "schedule_url": "http://122.194.12.25:13160/media/event/get_list",
       "channels": [
         {
           "chnl_name": "江苏综艺",
@@ -154,6 +155,7 @@
       "verify_url": "http://access.pyitv.com/account/user/validate_verify_code",
       "reg_url": "http://access.pyitv.com/account/user/v2/register",
       "login_url": "http://access.pyitv.com/account/user/v2/login",
+      "schedule_url": "http://slave.pyitv.com/media/event/get_list",
       "channels": []
     },
     {
@@ -168,6 +170,7 @@
       "play_url": "http://httpdvb.slave.homed.hrtn.net:13164/playurl",
       "list_url": "http://slave.homed.hrtn.net:13160/media/channel/get_list",
       "token_url": "http://slave.homed.hrtn.net:12690/account/get_third_token",
+      "schedule_url": "http://slave.homed.hrtn.net:13160/media/event/get_list",
       "channels": [
         {
           "chnl_name": "CCTV9",
@@ -324,6 +327,7 @@
       "verify_url": "http://access.jxtvnet.tv:81/account/user/validate_verify_code",
       "reg_url": "http://access.jxtvnet.tv:81/account/user/v2/register",
       "login_url": "http://access.jxtvnet.tv:81/account/user/v2/login",
+      "schedule_url": "http://slave.jxtvnet.tv:81/media/event/get_list",
       "channels": []
     },
     {
@@ -350,6 +354,7 @@
       "verify_url": "http://access.ttcatv.tv:12690/account/user/validate_verify_code",
       "reg_url": "http://access.ttcatv.tv:12690/account/user/v2/register",
       "login_url": "http://access.ttcatv.tv:12690/account/user/v2/login",
+      "schedule_url": "http://slave.ttcatv.tv:13160/media/event/get_list",
       "channels": []
     },
     {
@@ -361,6 +366,7 @@
       "list_url": "http://slave.bfgd.com.cn:13160/media/channel/get_list",
       "token_url": "http://slave.bfgd.com.cn:13160/account/get_access_token",
       "refresh_token_url": "http://slave.bfgd.com.cn:13160/account/refresh_access_token",
+      "schedule_url": "http://slave.bfgd.com.cn:13160/media/event/get_list",
       "channels": []
     },
     {
@@ -379,6 +385,7 @@
       "verify_url": "http://access.nx96200.cn:12690/account/user/validate_verify_code",
       "reg_url": "http://access.nx96200.cn:12690/account/user/v2/register",
       "login_url": "http://access.nx96200.cn:12690/account/user/v2/login",
+      "schedule_url": "http://slave.nx96200.cn:13160/media/event/get_list",
       "channels": [
         {
           "chnl_name": "CCTV老故事",
@@ -456,6 +463,7 @@
       "play_url": "http://httpdvb.slave.shuliyun.com:13164/playurl",
       "list_url": "http://slave.shuliyun.com:13160/media/channel/get_list",
       "token_url": "http://slave.shuliyun.com:12690/account/get_third_token",
+      "schedule_url": "http://slave.shuliyun.com:13160/media/event/get_list",
       "channels": []
     },
     {
@@ -481,6 +489,7 @@
       "verify_url": "http://access.yqdtv.com:12690/account/user/validate_verify_code",
       "reg_url": "http://access.yqdtv.com:12690/account/user/v2/register",
       "login_url": "http://access.yqdtv.com:12690/account/user/v2/login",
+      "schedule_url": "http://slave.yqdtv.com:13160/media/event/get_list",
       "channels": []
     },
     {
@@ -504,6 +513,7 @@
       "verify_url": "http://access.pygdzhcs.com:12690/account/user/validate_verify_code",
       "reg_url": "http://access.pygdzhcs.com:12690/account/user/v2/register",
       "login_url": "http://access.pygdzhcs.com:12690/account/user/v2/login",
+      "schedule_url": "http://slave.pygdzhcs.com:13160/media/event/get_list",
       "channels": [
         {
           "chnl_name": "海南卫视高清",
