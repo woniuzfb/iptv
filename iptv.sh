@@ -1549,67 +1549,362 @@ RandSegDirName()
     done
 }
 
-hbo()
-{
-    CheckRelease
-
+# printf %s "$1" | jq -s -R -r @uri
+urlencode() {
+    local LANG=C i c e=''
+    for ((i=0;i<${#1};i++)); do
+        c=${1:$i:1}
+        [[ "$c" =~ [a-zA-Z0-9\.\~\_\-] ]] || printf -v c '%%%02X' "'$c"
+        e+="$c"
+    done
+    echo "$e"
 }
 
 schedule()
 {
     CheckRelease
 
-    case $2 in
-        "hbo"|"hbohd")
-            [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请先安装 !" && exit 1
-            GetDefault
+    [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请先安装 !" && exit 1
+    GetDefault
 
-            if [ -n "$d_schedule_file" ] 
-            then
-                SCHEDULE_JSON=$d_schedule_file
-            else
-                echo "请先设置 schedule_file 位置！" && exit 1
-            fi
+    if [ -n "$d_schedule_file" ] 
+    then
+        SCHEDULE_JSON=$d_schedule_file
+    else
+        echo "请先设置 schedule_file 位置！" && exit 1
+    fi
+
+    if [ -z ${2+x} ] 
+    then
+        count=0
+
+        chnls=( "hbogq:HBO HD"
+                "hbohits:HBO Hits"
+                "hbosignature:HBO Signature"
+                "hbofamily:HBO Family"
+                "hycj:寰宇財經台"
+                "hyzh:寰宇HD綜合台"
+                "hyxwthd:寰宇新聞台"
+                "hyxw2t:寰宇新聞二台"
+                "aedzh:愛爾達綜合台"
+                "aedyj:愛爾達影劇台"
+                "etzht:ETtoday綜合台"
+                "jtzx:靖天資訊台"
+                "jtzh:靖天綜合台"
+                "jtyl:靖天育樂台"
+                "jtxj:靖天戲劇台"
+                "jthl:Nice TV 靖天歡樂台"
+                "jtyh:靖天映畫"
+                "jtgj:KLT-靖天國際台"
+                "jtrb:靖天日本台"
+                "jtdy:靖天電影台"
+                "jtkt:靖天卡通台"
+                "jyxj:靖洋戲劇台"
+                "jykt:靖洋卡通台Nice Bingo"
+                "lhxj:龍華戲劇"
+                "lhox:龍華偶像"
+                "lhyj:龍華影劇"
+                "lhdy:龍華電影"
+                "lhjd:龍華經典"
+                "lhyp:龍華洋片"
+                "lhdh:龍華動畫"
+                "fgss:時尚頻道"
+                "gshd:公視"
+                "gs2:公視2台"
+                "gs3hd:公視3台"
+                "tshd:台視"
+                "tszh:台視綜合台"
+                "tscj:台視財經台"
+                "hshd:華視"
+                "hsjytywhhd:華視教育文化"
+                "zshd:中視"
+                "zsxwhd:中視新聞台"
+                "zsjd:中視經典台"
+                "yzlythd:亞洲旅遊台"
+                "yzms:亞洲美食頻道"
+                "yzzh:亞洲綜合台"
+                "bsgq1hd:博斯高球一台"
+                "bsgq2hd:博斯高球二台"
+                "bsmlhd:博斯魅力網"
+                "bswxhd:博斯無限台"
+                "bswqhd:博斯網球台"
+                "bsyd2hd:博斯運動二台"
+                "bsyd1hd:博斯運動一台"
+                "dwtv:DW(Deutsch)"
+                "lifetime:Lifetime"
+                "tracesports:TRACE Sport Stars"
+                "cinemax:Cinemax"
+                "oztyhd:EUROSPORT"
+                "animax:Animax HD"
+                "mtvhd:MTV綜合電視台"
+                "ozxw:Euronews"
+                "dwxqhd:動物星球頻道"
+                "warnertvhd:Warner TV"
+                "foxhd:FOX頻道"
+                "axnhd:AXN"
+                "luxetv:LUXE TV Channel"
+                "mgcdh:DREAMWORKS"
+                "elevensportsplus:ELEVEN SPORTS PLUS"
+                "elevensports2:ELEVEN SPORTS 2"
+                "foxsports3:FOX SPORTS 3"
+                "ymjst:影迷數位紀實台"
+                "ymdyt:影迷數位電影台"
+                "hyyjt:華藝影劇台"
+                "catchplaydyt:CatchPlay電影台"
+                "ccyjt:采昌影劇台"
+                "itvchoice:ITV Choice"
+                "ifundmt:i-Fun動漫台"
+                "mdrbt:曼迪日本台"
+                "msxq:c星球頻道"
+                "smartzst:Smart知識台"
+                "babytv:Baby TV"
+                "mykids:MY-KIDS TV"
+                "lspd:歷史頻道"
+                "lspd2:HISTORY 2"
+                "tv5monde:TV5MONDE"
+                "eltvshyy:ELTV生活英語台"
+                "outdoor:Outdoor"
+                "eentertainment:E! Entertainment"
+                "channelv:Channel V國際娛樂台HD"
+                "bbccbeebies:CBeebies"
+                "dwxpd:DaVinCi Learning達文西頻道"
+                "my101zht:MY101綜合台"
+                "nickkt:Nickelodeon Asia(尼克兒童頻道)"
+                "blueantextreme:BLUE ANT EXTREME"
+                "blueantentertainmet:BLUE ANT EXTREME"
+                "eyetvxjt:EYE TV戲劇台"
+                "eyetvlyt:EYE TV旅遊台"
+                "travelchannel:Travel Channel"
+                "cnnnews:CNN International"
+                "discoveryasia:Discovery Asia"
+                "discoveryhd:Discovery"
+                "discoverykxhd:Discovery科學頻道"
+                "dmaxhd:DMAX頻道"
+                "hitshd:HITS"
+                "ydyhd:壹電視電影台"
+                "yzh:壹電視資訊綜合台"
+                "wltyhd:緯來體育台"
+                "wlxjhd:緯來戲劇台"
+                "wlrbhd:緯來日本台"
+                "wldyhd:緯來電影台"
+                "wlzhhd:緯來綜合台"
+                "wlylhd:緯來育樂台"
+                "wljct:緯來精采台"
+                "dszhhd:東森綜合台"
+                "dsxjhd:東森戲劇台"
+                "dsyyhd:東森幼幼台"
+                "dsdyhd:東森電影台"
+                "dsyphd:東森洋片台"
+                "dsxwhd:東森新聞台"
+                "dscjxwhd:東森財經新聞台"
+                "dscshd:超級電視台"
+                "ztxwhd:中天新聞台"
+                "ztylhd:中天娛樂台"
+                "ztzhhd:中天綜合台"
+                "tvbsjct:TVBS精采台"
+                "fxhd:FX"
+                "foxcrime:FOXCRIME"
+                "foxnews:FOX News Channel"
+                "slzh:三立綜合台"
+                "slxj:三立戲劇台"
+                "tvn:tvN"
+                "hgylt:韓國娛樂台KMTV"
+                "xfkjjjt:幸福空間居家台"
+                "skynews:SKY NEWS HD"
+                "nhkworld:NHK新聞資訊台"
+                "zltyt:智林體育台"
+                "xwhddy:星衛HD電影台"
+                "xwyl:星衛娛樂台"
+                "mydy:美亞電影台"
+                "wdozdy:My Cinema Europe HD我的歐洲電影台"
+                "gjdlyr:國家地理高畫質悠人頻道"
+                "gjdlys:國家地理高畫質野生頻道"
+                "gjdlhd:國家地理高畫質頻道"
+                "bbcearth:BBC Earth"
+                "bbcworldnews:BBC World News"
+                "bbclifestyle:BBC Lifestyle Channel"
+                "amcrw:AMC"
+                "animaxhd:Animax HD"
+                "wakawakajapan:WAKUWAKU JAPAN"
+                "boomerangkt:Boomerang"
+                "tvbj2:TVB J2"
+                "tvbxh:TVB星河頻道"
+                "tvbfct:TVB 翡翠台"
+                "tvbmzt:TVB Pearl"
+                "cinemaworld:CinemaWorld"
+                "diva:Diva"
+                "bloombergtv:Bloomberg TV"  )
+
+        for chnl in "${chnls[@]}" ; do
+            chnl_id=${chnl%%:*}
+            chnl_name=${chnl#*:}
+            chnl_name=${chnl_name// /-}
+            chnl_name_encode=$(urlencode "$chnl_name")
 
             date_now=$(date -d now "+%Y-%m-%d")
 
-            if [ "$2" == "hbo" ] 
-            then
-                SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$date_now&channel=$2&feed=cn"
-            else
-                SCHEDULE_LINK="https://hboasia.com/HBO/zh-tw/ajax/home_schedule?date=$date_now&channel=$2&feed=satellite"
-            fi
-            
-            SCHEDULE_FILE="/usr/local/iptv/$2_schedule_$date_now"
+            SCHEDULE_LINK="https://xn--i0yt6h0rn.tw/channel/$chnl_name_encode/index.json"
+            SCHEDULE_FILE="/usr/local/iptv/${chnl_id}_schedule_$date_now"
             SCHEDULE_TMP="${SCHEDULE_JSON}_tmp"
+
             wget --no-check-certificate "$SCHEDULE_LINK" -qO "$SCHEDULE_FILE"
-            programs_count=$($JQ_FILE -r '. | length' "$SCHEDULE_FILE")
+            programs_count=$($JQ_FILE -r '.list[] | select(.key=="'"$date_now"'").values | length' "$SCHEDULE_FILE")
+            
+            if [[ $programs_count -eq 0 ]]
+            then
+                date_now=${date_now//-/\/}
+                programs_count=$($JQ_FILE -r '.list[] | select(.key=="'"$date_now"'").values | length' "$SCHEDULE_FILE")
+                if [[ $programs_count -eq 0 ]] 
+                then
+                    rm -rf "${SCHEDULE_FILE:-'notfound'}"
+                    continue
+                fi
+            fi
 
             programs_title=()
             while IFS='' read -r program_title
             do
                 programs_title+=("$program_title");
-            done < <($JQ_FILE -r '.[].title | @sh' "$SCHEDULE_FILE")
+            done < <($JQ_FILE -r '.list[] | select(.key=="'"$date_now"'").values | .[].name | @sh' "$SCHEDULE_FILE")
 
-            IFS=" " read -ra programs_time <<< "$($JQ_FILE -r '[.[].time] | @sh' $SCHEDULE_FILE)"
-            IFS=" " read -ra programs_sys_time <<< "$($JQ_FILE -r '[.[].sys_time] | @sh' $SCHEDULE_FILE)"
+            IFS=" " read -ra programs_time <<< "$($JQ_FILE -r '[.list[] | select(.key=="'"$date_now"'").values | .[].time] | @sh' $SCHEDULE_FILE)"
 
             if [ -z "$($JQ_FILE '.' $SCHEDULE_JSON)" ] 
             then
-                printf '{"'"$2"'":[]}' > "$SCHEDULE_JSON"
+                printf '{"%s":[]}' "$chnl_id" > "$SCHEDULE_JSON"
+            fi
+
+            $JQ_FILE '.'"$chnl_id"' = []' "$SCHEDULE_JSON" > "$SCHEDULE_TMP"
+            mv "$SCHEDULE_TMP" "$SCHEDULE_JSON"
+
+            rm -rf "${SCHEDULE_FILE:-'notfound'}"
+
+            for((index = 0; index < "$programs_count"; index++)); do
+                programs_title_index=${programs_title[index]//\'/}
+                programs_title_index=${programs_title_index//\\/\'}
+                programs_time_index=${programs_time[index]//\'/}
+                programs_sys_time_index=$(date -d "$date_now $programs_time_index" +%s)
+
+                $JQ_FILE '.'"$chnl_id"' += [
+                    {
+                        "title":"'"${programs_title_index}"'",
+                        "time":"'"$programs_time_index"'",
+                        "sys_time":"'"$programs_sys_time_index"'"
+                    }
+                ]' "$SCHEDULE_JSON" > "$SCHEDULE_TMP"
+
+                mv "$SCHEDULE_TMP" "$SCHEDULE_JSON"
+            done
+
+            count=$((count + 1))
+            echo -n $count
+        done
+
+
+        exit 0
+    fi
+
+    case $2 in
+        "hbo")
+            date_now=$(date -d now "+%Y-%m-%d")
+
+            chnls=(
+                "hbo"
+                "hbohd"
+                "hits"
+                "signature"
+                "family" )
+
+            for chnl in "${chnls[@]}" ; do
+
+                if [ "$chnl" == "hbo" ] 
+                then
+                    SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$date_now&channel=$chnl&feed=cn"
+                else
+                    SCHEDULE_LINK="https://hboasia.com/HBO/zh-tw/ajax/home_schedule?date=$date_now&channel=$chnl&feed=satellite"
+                fi
+                
+                SCHEDULE_FILE="/usr/local/iptv/${chnl}_schedule_$date_now"
+                SCHEDULE_TMP="${SCHEDULE_JSON}_tmp"
+                wget --no-check-certificate "$SCHEDULE_LINK" -qO "$SCHEDULE_FILE"
+                programs_count=$($JQ_FILE -r '. | length' "$SCHEDULE_FILE")
+
+                programs_title=()
+                while IFS='' read -r program_title
+                do
+                    programs_title+=("$program_title");
+                done < <($JQ_FILE -r '.[].title | @sh' "$SCHEDULE_FILE")
+
+                IFS=" " read -ra programs_time <<< "$($JQ_FILE -r '[.[].time] | @sh' $SCHEDULE_FILE)"
+                IFS=" " read -ra programs_sys_time <<< "$($JQ_FILE -r '[.[].sys_time] | @sh' $SCHEDULE_FILE)"
+
+                if [ -z "$($JQ_FILE '.' $SCHEDULE_JSON)" ] 
+                then
+                    printf '{"%s":[]}' "$chnl" > "$SCHEDULE_JSON"
+                fi
+
+                $JQ_FILE '.'"$chnl"' = []' "$SCHEDULE_JSON" > "$SCHEDULE_TMP"
+                mv "$SCHEDULE_TMP" "$SCHEDULE_JSON"
+
+                rm -rf "${SCHEDULE_FILE:-'notfound'}"
+
+                for((index = 0; index < "$programs_count"; index++)); do
+                    programs_title_index=${programs_title[index]//\'/}
+                    programs_title_index=${programs_title_index//\\/\'}
+                    programs_time_index=${programs_time[index]//\'/}
+                    programs_sys_time_index=${programs_sys_time[index]//\'/}
+
+                    $JQ_FILE '.'"$chnl"' += [
+                        {
+                            "title":"'"${programs_title_index}"'",
+                            "time":"'"$programs_time_index"'",
+                            "sys_time":"'"$programs_sys_time_index"'"
+                        }
+                    ]' "$SCHEDULE_JSON" > "$SCHEDULE_TMP"
+
+                    mv "$SCHEDULE_TMP" "$SCHEDULE_JSON"
+                done
+            done
+        ;;
+        "disney")
+            date_now=$(date -d now "+%Y%m%d")
+            SCHEDULE_LINK="https://disney.com.tw/_schedule/full/$date_now/8/%2Fepg"
+
+            SCHEDULE_FILE="/usr/local/iptv/$2_schedule_$date_now"
+            SCHEDULE_TMP="${SCHEDULE_JSON}_tmp"
+            wget --no-check-certificate "$SCHEDULE_LINK" -qO "$SCHEDULE_FILE"
+
+            programs_title=()
+            while IFS='' read -r program_title
+            do
+                programs_title+=("$program_title");
+            done < <($JQ_FILE -r '.schedule[].schedule_items[].show_title | @sh' "$SCHEDULE_FILE")
+
+            programs_count=${#programs_title[@]}
+
+            IFS=" " read -ra programs_time <<< "$($JQ_FILE -r '[.schedule[].schedule_items[].time] | @sh' $SCHEDULE_FILE)"
+            IFS=" " read -ra programs_sys_time <<< "$($JQ_FILE -r '[.schedule[].schedule_items[].iso8601_utc_time] | @sh' $SCHEDULE_FILE)"
+
+            if [ -z "$($JQ_FILE '.' $SCHEDULE_JSON)" ] 
+            then
+                printf '{"%s":[]}' "$2" > "$SCHEDULE_JSON"
             fi
 
             $JQ_FILE '.'"$2"' = []' "$SCHEDULE_JSON" > "$SCHEDULE_TMP"
             mv "$SCHEDULE_TMP" "$SCHEDULE_JSON"
 
+            rm -rf "${SCHEDULE_FILE:-'notfound'}"
+
             for((index = 0; index < "$programs_count"; index++)); do
                 programs_title_index=${programs_title[index]//\'/}
+                programs_title_index=${programs_title_index//\\/\'}
                 programs_time_index=${programs_time[index]//\'/}
                 programs_sys_time_index=${programs_sys_time[index]//\'/}
+                programs_sys_time_index=$(date -d "$programs_sys_time_index" +%s)
 
                 $JQ_FILE '.'"$2"' += [
                     {
-                        "title":"'"$programs_title_index"'",
+                        "title":"'"${programs_title_index}"'",
                         "time":"'"$programs_time_index"'",
                         "sys_time":"'"$programs_sys_time_index"'"
                     }
@@ -1726,8 +2021,6 @@ case "$cmd" in
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
         echo && echo -e "$info 频道添加成功 !" && echo
         exit 0
-    ;;
-    "hbo") hbo && exit 0
     ;;
     *)
     ;;
