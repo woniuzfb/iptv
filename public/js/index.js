@@ -798,10 +798,10 @@ function showSchedule(chnl) {
         }
       });
     }
-  } else if (!schedules || !schedules.hasOwnProperty(chnl) || !schedules[chnl]) {
+  } else if (Object.keys(schedules).length === 0 && schedules.constructor === Object) {
     reqData(scheduleJson)
     .then(response => {
-      schedules[chnl] = response[chnl];
+      schedules = response;
       insertSchedule(chnl);
     });
   } else {
@@ -810,25 +810,29 @@ function showSchedule(chnl) {
 }
 
 function insertSchedule(chnl,chnlId) {
-  if (!schedules[chnl]) {
+  if (!schedules.hasOwnProperty(chnl)) {
     sliderField.classList.add('hidden');
     return;
   }
 
   let chnlSchedules;
-  let scheduleTime = 1000000000,indexTime,slideIndex = 0;
-  let dateNow = Date.now();
 
   if (chnlId) {
-    if (!schedules[chnl].hasOwnProperty(chnlId) || !schedules[chnl][chnlId]) {
+    if (!schedules[chnl].hasOwnProperty(chnlId) || schedules[chnl][chnlId].length === 0) {
       sliderField.classList.add('hidden');
       return;
-    } else {
-      chnlSchedules = schedules[chnl][chnlId];
     }
+    chnlSchedules = schedules[chnl][chnlId];
+  }
+  else if (schedules[chnl].length === 0) {
+    sliderField.classList.add('hidden');
+    return;
   } else {
     chnlSchedules = schedules[chnl];
   }
+
+  let scheduleTime = 1000000000,indexTime,slideIndex = 0;
+  let dateNow = Date.now();
 
   for (let index = 0; index < chnlSchedules.length; index++) {
     const schedule = chnlSchedules[index];
