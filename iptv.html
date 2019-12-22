@@ -250,16 +250,16 @@ footer span {
 
 .video-js .vjs-overlay-background {
   background-color: #646464;
-  border-radius: .3rem;
-  height: 15%;
-  width: 19%;
+  border-radius: 3px;
+  height: 24%;
+  width: 9%;
 }
 
 .video-js .vjs-overlay-center {
   left: 50%;
   top: 50%;
-  margin-left: 28%;
-  margin-top: 17%;
+  margin-left: 38%;
+  margin-top: 12%;
 }
 
 @media (max-width: 468px ) {
@@ -1205,10 +1205,10 @@ function setOverlay() {
         videoWidth = width;
         videoHeight = videoWidth * 9 / 16;
       }
-      overlayWidth = Math.floor(videoWidth * 19 / 100 / window.devicePixelRatio);
-      overlayHeight = Math.floor(videoHeight * 15 / 100 / window.devicePixelRatio);
-      marginLeft = Math.floor(videoWidth * 28 / 100 / window.devicePixelRatio);
-      marginTop = Math.floor(videoHeight * 30 / 100 / window.devicePixelRatio);
+      overlayWidth = Math.floor(videoWidth * 10 / 100 / window.devicePixelRatio);
+      overlayHeight = Math.floor(videoHeight * 24 / 100 / window.devicePixelRatio);
+      marginLeft = Math.floor(videoWidth * 38 / 100 / window.devicePixelRatio);
+      marginTop = Math.floor(videoHeight * 22 / 100 / window.devicePixelRatio);
 
       videoOverlay.setAttribute('style', 'width:' + overlayWidth +'px; height: ' + overlayHeight + 'px; margin-left: ' + marginLeft + 'px; margin-top: ' + marginTop + 'px;');
     } else {

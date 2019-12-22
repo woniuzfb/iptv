@@ -242,16 +242,16 @@ footer span {
 
 .video-js .vjs-overlay-background {
   background-color: #646464;
-  border-radius: .3rem;
-  height: 15%;
-  width: 19%;
+  border-radius: 3px;
+  height: 24%;
+  width: 9%;
 }
 
 .video-js .vjs-overlay-center {
   left: 50%;
   top: 50%;
-  margin-left: 28%;
-  margin-top: 17%;
+  margin-left: 38%;
+  margin-top: 12%;
 }
 
 @media (max-width: 468px ) {

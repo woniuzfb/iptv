@@ -751,10 +751,10 @@ function setOverlay() {
         videoWidth = width;
         videoHeight = videoWidth * 9 / 16;
       }
-      overlayWidth = Math.floor(videoWidth * 19 / 100 / window.devicePixelRatio);
-      overlayHeight = Math.floor(videoHeight * 15 / 100 / window.devicePixelRatio);
-      marginLeft = Math.floor(videoWidth * 28 / 100 / window.devicePixelRatio);
-      marginTop = Math.floor(videoHeight * 30 / 100 / window.devicePixelRatio);
+      overlayWidth = Math.floor(videoWidth * 10 / 100 / window.devicePixelRatio);
+      overlayHeight = Math.floor(videoHeight * 24 / 100 / window.devicePixelRatio);
+      marginLeft = Math.floor(videoWidth * 38 / 100 / window.devicePixelRatio);
+      marginTop = Math.floor(videoHeight * 22 / 100 / window.devicePixelRatio);
 
       videoOverlay.setAttribute('style', 'width:' + overlayWidth +'px; height: ' + overlayHeight + 'px; margin-left: ' + marginLeft + 'px; margin-top: ' + marginTop + 'px;');
     } else {
