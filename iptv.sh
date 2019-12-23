@@ -1835,6 +1835,7 @@ schedule()
                     programs_title+=("$program_title");
                 done < <($JQ_FILE -r '.[].title | @sh' "$SCHEDULE_FILE")
 
+                IFS=" " read -ra programs_id <<< "$($JQ_FILE -r '[.[].id] | @sh' $SCHEDULE_FILE)"
                 IFS=" " read -ra programs_time <<< "$($JQ_FILE -r '[.[].time] | @sh' $SCHEDULE_FILE)"
                 IFS=" " read -ra programs_sys_time <<< "$($JQ_FILE -r '[.[].sys_time] | @sh' $SCHEDULE_FILE)"
 
@@ -1849,6 +1850,7 @@ schedule()
                 rm -rf "${SCHEDULE_FILE:-'notfound'}"
 
                 for((index = 0; index < "$programs_count"; index++)); do
+                    programs_id_index=${programs_id[index]//\'/}
                     programs_title_index=${programs_title[index]//\'/}
                     programs_title_index=${programs_title_index//\\/\'}
                     programs_time_index=${programs_time[index]//\'/}
@@ -1856,6 +1858,7 @@ schedule()
 
                     $JQ_FILE '.'"$chnl"' += [
                         {
+                            "id":"'"${programs_id_index}"'",
                             "title":"'"${programs_title_index}"'",
                             "time":"'"$programs_time_index"'",
                             "sys_time":"'"$programs_sys_time_index"'"

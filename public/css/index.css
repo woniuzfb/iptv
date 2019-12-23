@@ -7,8 +7,27 @@ a {
   text-decoration: none;
 }
 
+li {
+  margin-left: .8rem;
+  list-style: none;
+}
+
 ul:focus, li:focus {
   outline: none;
+}
+
+button {
+  font-size: 1.44rem;
+}
+
+input {
+  display: inline-block;
+  text-align: center;
+  font-size: 1.6rem;
+  border-radius: .1rem;
+  box-sizing: border-box;
+  height: 3.2rem;
+  max-width: 12.8rem;
 }
 
 body {
@@ -29,6 +48,10 @@ header {
   grid-column: 2;
   grid-row: 2;
   width: 80%;
+}
+
+.vjs-subs-caps-button {
+  display: none;
 }
 
 .sliderContainer {
@@ -69,6 +92,7 @@ header {
   color: #fff;
   padding: 0 .8rem;
   margin-left: none;
+  cursor: pointer;
 }
 
 .prev, .next {
@@ -96,10 +120,6 @@ header {
   width: 2.5rem;
 }
 
-.vjs-subs-caps-button {
-  display: none;
-}
-
 aside {
   grid-column: 1;
   grid-row: 2 / 4;
@@ -118,13 +138,13 @@ fieldset {
 
 .categories {
   grid-column: 1 / 3;
-  grid-row: 4;
+  grid-row: 6;
   text-align: center;
 }
 
 section {
   grid-column: 1 / 3;
-  grid-row: 5;
+  grid-row: 7;
   text-align: center;
 }
 
@@ -138,7 +158,6 @@ section {
   display: block;
   text-decoration: none;
   letter-spacing: .1rem;
-  text-transform: uppercase;
   border: .1rem solid rgba(0,0,200,0.6);
   background: rgba(112,183,253,0.3);
   color: rgba(0,0,200,0.6);
@@ -168,52 +187,8 @@ section {
   cursor: pointer;
 }
 
-button {
-  font-size: 1.44rem;
-}
-
-.working {
-  border: .1rem solid rgba(0, 200, 0, 0.6) !important;
-  background:rgba(47, 201, 96, 0.5) !important;
-}
-
-.sources .sourceReg, .categories .selected, .channels .selected {
-  color: white;
-  background: red !important;
-}
-
-li {
-  margin-left: .8rem;
-}
-
 aside h3 {
   margin-top: 0;
-}
-
-.hidden {
-  display: none !important;
-}
-
-.white {
-  color: white !important;
-}
-
-h4 {
-  color: red;
-}
-
-.bgBlack {
-  background-color: black !important;
-}
-
-input {
-  display: inline-block;
-  text-align: center;
-  font-size: 1.6rem;
-  border-radius: .1rem;
-  box-sizing: border-box;
-  height: 3.2rem;
-  max-width: 12.8rem;
 }
 
 form div + div {
@@ -252,6 +227,50 @@ footer span {
   top: 50%;
   margin-left: 38%;
   margin-top: 12%;
+}
+
+.working {
+  border: .1rem solid rgba(0, 200, 0, 0.6) !important;
+  background:rgba(47, 201, 96, 0.5) !important;
+}
+
+.sources .sourceReg, .categories .selected, .channels .selected {
+  color: white;
+  background: red !important;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.white {
+  color: white !important;
+}
+
+.bgBlack {
+  background-color: black !important;
+}
+
+.borderRed {
+  border-color: red !important;
+}
+
+.alert {
+  grid-column: 1 / 3;
+  grid-row: 4;
+  text-align: center;
+  color: red !important;
+}
+
+.upComing {
+  grid-column: 1 / 3;
+  grid-row: 5;
+  text-align: center;
+  color: rgba(0, 200, 0);
+}
+
+.upComing li {
+  color: rgba(0, 200, 0) !important;
 }
 
 @media (max-width: 468px ) {

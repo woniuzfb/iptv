@@ -40,13 +40,14 @@ function switchCategory(e) {
         toggleClass('li','white');
         toggleClass('button','white');
         toggleClass('input','white');
-        toggleClass('footer','white');
         toggleClass('a','white');
         toggleClass('body','bgBlack');
         toggleClass('input','bgBlack');
-        toggleClass('footer','bgBlack');
+        toggleClass('footer','hidden');
         break;
       default:
+        const selected = document.querySelector('.borderRed');
+        if(selected) selected.classList.remove('borderRed');
         if (e.target.dataset.source) {
           sourceReg = e.target.dataset.source;
           programId = catValue;
@@ -55,6 +56,7 @@ function switchCategory(e) {
           if(selected) selected.classList.remove('selected');
           e.target.classList.add('selected');
         } else {
+          e.target.classList.add('borderRed');
           const mylist = document.querySelector('.'+catValue);
           let siblings = mylist.parentNode.childNodes;
           siblings.forEach(sibling => {
@@ -267,11 +269,11 @@ function reqData(url, data = '', method = 'GET') {
   }
 }
 
-function alertInfo(info,delay=3) {
-  infoField.textContent = info;
-  setTimeout(function run() {
-    if (infoField.textContent === info) {
-      infoField.textContent = '';
+function alertInfo(text,delay=3) {
+  alertField.textContent = text;
+  setTimeout(function() {
+    if (alertField.textContent === text) {
+      alertField.textContent = '';
     }
   }, delay*1000);
 }
@@ -672,6 +674,7 @@ function reqAuth() {
     alertInfo('无法连接'+sourcesJsonParsed[sourceReg].desc+'直播源！',10);
     console.log('发生错误:', err);
   });
+  showSchedule();
   updateAside();
 }
 
@@ -837,11 +840,13 @@ function insertSchedule(chnl,chnlId) {
   for (let index = 0; index < chnlSchedules.length; index++) {
     const schedule = chnlSchedules[index];
     const scheduleListItem = document.createElement('li');
-    const scheduleListLink = document.createElement('a');
     const scheduleListText = document.createTextNode(schedule.time + ' ' + schedule.title);
     scheduleListItem.classList.add('js_slide');
-    scheduleListLink.appendChild(scheduleListText);
-    scheduleListItem.appendChild(scheduleListLink);
+    if (schedule.hasOwnProperty('id')) {
+      scheduleListItem.setAttribute('data-id', schedule.id);
+      scheduleListItem.setAttribute('data-channel', chnl);
+    }
+    scheduleListItem.appendChild(scheduleListText);
     scheduleField.appendChild(scheduleListItem);
     indexTime = schedule.sys_time * 1000;
     if (indexTime < dateNow && indexTime > scheduleTime) {
@@ -862,6 +867,49 @@ function deleteSchedule() {
   sliderField.classList.add('hidden');
   while (scheduleField.firstChild) {
     scheduleField.removeChild(scheduleField.firstChild);
+  }
+}
+
+function scheduleUpcoming(e) {
+  if(e.target) {
+    if (e.target.nodeName === "LI" && e.target.hasAttribute('data-id') && e.target.hasAttribute('data-channel')) {
+      let showId =  e.target.dataset.id;
+      let channel = e.target.dataset.channel;
+      reqData('https://hboasia.com/HBO/zh-tw/ajax/home_schedule_upcoming_showtimes?channel='+channel+'&feed=satellite&id='+showId)
+      .then(response => {
+        let dateNow = Date.now();
+        const upComingList = document.createElement('ul');
+        upComingList.setAttribute('data-id', dateNow);
+        const upComingListTitle = document.createTextNode('即將播出:');
+        for (let index = 0; index < response.length; index++) {
+          const schedule = response[index];
+          if (schedule.id) {
+            const upComingListItem = document.createElement('li');
+            const upComingListText = document.createTextNode(schedule.time);
+            upComingListItem.appendChild(upComingListText);
+            upComingList.appendChild(upComingListItem);
+          }
+        }
+        if (!upComingList.firstChild) {
+          const upComingListItem = document.createElement('li');
+          const upComingListText = document.createTextNode('无');
+          upComingListItem.appendChild(upComingListText);
+          upComingList.appendChild(upComingListItem);
+        }
+        while (upComingField.firstChild) {
+          upComingField.removeChild(upComingField.firstChild);
+        }
+        upComingField.appendChild(upComingListTitle);
+        upComingField.appendChild(upComingList);
+        setTimeout(function() {
+          if (upComingField.firstChild && upComingField.firstChild.nextSibling.dataset.id === dateNow.toString()) {
+            while (upComingField.firstChild) {
+              upComingField.removeChild(upComingField.firstChild);
+            }
+          }
+        }, 10000);
+      });
+    }
   }
 }
 
@@ -887,7 +935,6 @@ const regImgInputField = document.querySelector('.regImgInput');
 const regImgIdField = document.querySelector('.regImgId');
 const regSmsField = document.querySelector('.regSms');
 const regBtn = document.querySelector('.regBtn');
-const infoField = document.querySelector('h4');
 const formToggle = document.querySelector('.formToggle');
 const channelsField = document.querySelector('.channels');
 const categoriesField = document.querySelector('.categories');
@@ -900,6 +947,8 @@ const myList4 = document.querySelector('.channels ul:nth-child(5)');
 const myList5 = document.querySelector('.channels ul:nth-child(6)');
 const myList8 = document.querySelector('.channels ul:nth-child(7)');
 const myList9 = document.querySelector('.channels ul:nth-child(8)');
+const alertField = document.querySelector('.alert');
+const upComingField = document.querySelector('.upComing');
 const sliderField = document.querySelector('.js_slider');
 const scheduleField = document.querySelector('.slides');
 
@@ -995,6 +1044,7 @@ regBtn.addEventListener("click", reqReg);
 loginBtn.addEventListener("click", reqLogin);
 sourcesField.addEventListener("click", switchSource);
 categoriesField.addEventListener("click", switchCategory);
+scheduleField.addEventListener("click", scheduleUpcoming);
 channelsField.addEventListener("click", switchChannel);
 document.addEventListener("fullscreenchange", setOverlay);
 document.addEventListener("webkitfullscreenchange", setOverlay);
