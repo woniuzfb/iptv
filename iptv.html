@@ -684,7 +684,7 @@ function playVideo() {
   } else if (sourcesJsonParsed[sourceReg].auth_info_url && sourcesJsonParsed[sourceReg].auth_verify_url && localStorage.getItem(sourceReg+'_token')) {
     reqAuth();
   } else if (localStorage.getItem(sourceReg+'_token')) {
-    hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken=ABCDEFGHIGK&programid='+programId+'.m3u8';
+    hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken=ABCDEFGH&programid='+programId+'.m3u8';
     videojsLoad();
     showSchedule();
     updateAside();
@@ -1040,6 +1040,22 @@ function getToken(source) {
   return new Promise((resolve, reject) => {
     if (localStorage.getItem(source.name+'_token')) {
       resolve(localStorage.getItem(source.name+'_token'));
+    } else  if (source.hasOwnProperty('access_token')) {
+      let deviceno;
+      if (localStorage.getItem(source.name+'_deviceno')) {
+        deviceno = localStorage.getItem(source.name+'_deviceno');
+      } else {
+        deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
+        deviceno = deviceno + md5(deviceno).substring(7, 8);
+      }
+
+      timeoutPromise(3000,reqData(source.login_url,'?deviceno='+deviceno+'&devicetype=3&accounttype=2&accesstoken=(null)&account='+source.access_token.substring(32)+'&pwd='+source.access_token.substring(0, 32)+'&isforce=1&businessplatform=1'))
+      .then(response => {
+        if (response.access_token) {
+          localStorage.setItem(source.name+'_token', response.access_token);
+          resolve(response.access_token);
+        }
+      }).catch(err => {reject(err);});
     } else if (source.hasOwnProperty('refresh_token_url')) {
       let deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
       deviceno = deviceno+md5(deviceno).substring(7, 8);
@@ -1482,9 +1498,6 @@ function initialize() {
     if (source.hasOwnProperty('list_url')) {
       getToken(source).then(response => {reqChannels(source,response);})
       .catch(err => {console.log('发生错误:', err);});
-    }
-    if (source.hasOwnProperty('access_token')) {
-      localStorage.setItem(source.name+'_token', source.access_token);
     }
     if (source.hasOwnProperty('channels')) {
       source.channels.forEach(channel => {
