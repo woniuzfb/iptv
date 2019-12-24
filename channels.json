@@ -6,10 +6,10 @@
       "channels": [
         {
           "overlay": "",
-          "schedule": "hbohd",
           "chnl_name": "HBO高清",
           "chnl_id": "hbohd",
-          "url": "http://pili-live-hdl.qhmywl.com/dsdtv/13e83b20bc716e68221da438d761d352.m3u8"
+          "url": "http://pili-live-hdl.qhmywl.com/dsdtv/13e83b20bc716e68221da438d761d352.m3u8",
+          "schedule": "hbohd"
         }
       ]
     },
@@ -31,10 +31,11 @@
       "unique_url": "http://122.194.12.25:12690/account/user/name_is_uniqueness",
       "reg_url": "http://122.194.12.25:12690/account/user/register",
       "login_url": "http://122.194.12.25:12690/account/login",
-      "play_url": "http://122.194.12.25:13164/playurl",
+      "play_url": "http://stream.slave.jscnwx.com:13164/playurl",
       "list_url": "http://122.194.12.25:13160/media/channel/get_list",
       "token_url": "http://122.194.12.25:12690/account/get_third_token",
       "schedule_url": "http://122.194.12.25:13160/media/event/get_list",
+      "event_info_url": "http://122.194.12.25:13160/media/event/get_info",
       "channels": [
         {
           "chnl_name": "江苏综艺",
@@ -156,6 +157,7 @@
       "reg_url": "http://access.pyitv.com/account/user/v2/register",
       "login_url": "http://access.pyitv.com/account/user/v2/login",
       "schedule_url": "http://slave.pyitv.com/media/event/get_list",
+      "event_info_url": "http://slave.pyitv.com/media/event/get_info",
       "channels": []
     },
     {
@@ -171,6 +173,7 @@
       "list_url": "http://slave.homed.hrtn.net:13160/media/channel/get_list",
       "token_url": "http://slave.homed.hrtn.net:12690/account/get_third_token",
       "schedule_url": "http://slave.homed.hrtn.net:13160/media/event/get_list",
+      "event_info_url": "http://slave.homed.hrtn.net:13160/media/event/get_info",
       "channels": [
         {
           "chnl_name": "CCTV9",
@@ -328,6 +331,7 @@
       "reg_url": "http://access.jxtvnet.tv:81/account/user/v2/register",
       "login_url": "http://access.jxtvnet.tv:81/account/user/v2/login",
       "schedule_url": "http://slave.jxtvnet.tv:81/media/event/get_list",
+      "event_info_url": "http://slave.jxtvnet.tv:81/media/event/get_info",
       "channels": []
     },
     {
@@ -340,10 +344,10 @@
         "operatingsystem": "iOS",
         "systemversion": "12.1",
         "model": "iPhone 6 Plus",
-        "appversion": "2.7.9"
+        "appversion": "2.8.0"
       },
-      "server_version": "V1.2.33",
-      "fix_cats": {"003": "007","007": "005"},
+      "server_version": "V1.4.78",
+      "fix_cats": {"003": "007", "007": "005"},
       "omit": "173,175-177",
       "unique_url": "http://access.ttcatv.tv:12690/account/user/name_is_uniqueness",
       "play_url": "http://httpdvb.slave.ttcatv.tv:13164/playurl",
@@ -355,6 +359,7 @@
       "reg_url": "http://access.ttcatv.tv:12690/account/user/v2/register",
       "login_url": "http://access.ttcatv.tv:12690/account/user/v2/login",
       "schedule_url": "http://slave.ttcatv.tv:13160/media/event/get_list",
+      "event_info_url": "http://slave.ttcatv.tv:13160/media/event/get_info",
       "channels": []
     },
     {
@@ -365,6 +370,8 @@
       "play_url": "http://httpdvb.slave.bfgd.com.cn:13164/playurl",
       "list_url": "http://slave.bfgd.com.cn:13160/media/channel/get_list",
       "login_url": "http://access.bfgd.com.cn:12690/account/login",
+      "schedule_url": "http://slave.bfgd.com.cn:13160/media/event/get_list",
+      "event_info_url": "http://slave.bfgd.com.cn:13160/media/event/get_info",
       "channels": []
     },
     {
@@ -384,6 +391,7 @@
       "reg_url": "http://access.nx96200.cn:12690/account/user/v2/register",
       "login_url": "http://access.nx96200.cn:12690/account/user/v2/login",
       "schedule_url": "http://slave.nx96200.cn:13160/media/event/get_list",
+      "event_info_url": "http://slave.nx96200.cn:13160/media/event/get_info",
       "channels": [
         {
           "chnl_name": "CCTV老故事",
@@ -462,6 +470,7 @@
       "list_url": "http://slave.shuliyun.com:13160/media/channel/get_list",
       "token_url": "http://slave.shuliyun.com:12690/account/get_third_token",
       "schedule_url": "http://slave.shuliyun.com:13160/media/event/get_list",
+      "event_info_url": "http://slave.shuliyun.com:13160/media/event/get_info",
       "channels": []
     },
     {
@@ -488,6 +497,7 @@
       "reg_url": "http://access.yqdtv.com:12690/account/user/v2/register",
       "login_url": "http://access.yqdtv.com:12690/account/user/v2/login",
       "schedule_url": "http://slave.yqdtv.com:13160/media/event/get_list",
+      "event_info_url": "http://slave.yqdtv.com:13160/media/event/get_info",
       "channels": []
     },
     {
@@ -512,6 +522,7 @@
       "reg_url": "http://access.pygdzhcs.com:12690/account/user/v2/register",
       "login_url": "http://access.pygdzhcs.com:12690/account/user/v2/login",
       "schedule_url": "http://slave.pygdzhcs.com:13160/media/event/get_list",
+      "event_info_url": "http://slave.pygdzhcs.com:13160/media/event/get_info",
       "channels": [
         {
           "chnl_name": "海南卫视高清",

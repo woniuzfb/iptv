@@ -451,6 +451,7 @@ function reqLogin() {
         localStorage.setItem(sourceReg+'_acc', acc);
         localStorage.setItem(sourceReg+'_pwd', pwd);
         localStorage.setItem(sourceReg+'_token', response.access_token);
+        localStorage.setItem(sourceReg+'_verify_code', response.device_id);
         localStorage.setItem(sourceReg+'_deviceno', deviceno);
         initialize();
       } else {
@@ -565,9 +566,7 @@ function reqJson(json) {
 
 function getToken(source) {
   return new Promise((resolve, reject) => {
-    if (localStorage.getItem(source.name+'_token')) {
-      resolve(localStorage.getItem(source.name+'_token'));
-    } else  if (source.hasOwnProperty('access_token')) {
+    if (source.hasOwnProperty('access_token') && !localStorage.getItem(source.name+'_verify_code')) {
       let deviceno;
       if (localStorage.getItem(source.name+'_deviceno')) {
         deviceno = localStorage.getItem(source.name+'_deviceno');
@@ -580,9 +579,12 @@ function getToken(source) {
       .then(response => {
         if (response.access_token) {
           localStorage.setItem(source.name+'_token', response.access_token);
+          localStorage.setItem(source.name+'_verify_code', response.device_id);
           resolve(response.access_token);
         }
       }).catch(err => {reject(err);});
+    } else if (localStorage.getItem(source.name+'_token')) {
+      resolve(localStorage.getItem(source.name+'_token'));
     } else if (source.hasOwnProperty('refresh_token_url')) {
       let deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
       deviceno = deviceno+md5(deviceno).substring(7, 8);
@@ -805,6 +807,7 @@ function showSchedule(chnl) {
         for (let index = 0; index < response.total; index++) {
           let newEvent = {},newEventTime;
           const event = response.event_list[index];
+          newEvent.event_id = event.event_id;
           newEvent.title = event.event_name;
           newEventTime = new Date(event.start_time * 1000);
           newEventTime = newEventTime.toLocaleString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true });
@@ -862,6 +865,9 @@ function insertSchedule(chnl,chnlId) {
       scheduleListItem.setAttribute('data-id', schedule.id);
       scheduleListItem.setAttribute('data-channel', chnl);
     }
+    if (schedule.hasOwnProperty('event_id')) {
+      scheduleListItem.setAttribute('data-eventid', schedule.event_id);
+    }
     scheduleListItem.appendChild(scheduleListText);
     scheduleField.appendChild(scheduleListItem);
     indexTime = schedule.sys_time * 1000;
@@ -886,9 +892,61 @@ function deleteSchedule() {
   }
 }
 
-function scheduleUpcoming(e) {
-  if(e.target) {
-    if (e.target.nodeName === "LI" && e.target.hasAttribute('data-id') && e.target.hasAttribute('data-channel')) {
+function playbackOrUpcoming(e) {
+  if(e.target && e.target.nodeName === "LI") {
+    if (e.target.hasAttribute('data-eventid')) {
+      let eventId = e.target.dataset.eventid;
+      reqData(sourcesJsonParsed[sourceReg].event_info_url,'?accesstoken='+localStorage.getItem(sourceReg+'_token')+'&eventid='+eventId)
+      .then(response => {
+        if (response.ret === 0) {
+          let idx = response.event_idx;
+          let startTime = response.start_time;
+          let endTime = response.end_time;
+          let playToken = response.play_token;
+          let playbackUrl = response.demand_url[0];
+
+          if (playbackUrl) {
+            let eventStartTime = new Date(startTime * 1000);
+            let eventStartTimeHours = eventStartTime.getHours();
+            if (eventStartTimeHours < 10) {
+              eventStartTimeHours = '0' + eventStartTimeHours;
+            }
+            let eventStartTimeMinutes = eventStartTime.getMinutes();
+            if (eventStartTimeMinutes < 10) {
+              eventStartTimeMinutes = '0' + eventStartTimeMinutes;
+            }
+            let eventStartTimeMilliseconds = eventStartTime.getMilliseconds();
+            if (eventStartTimeMilliseconds < 10) {
+              eventStartTimeMilliseconds = '0' + eventStartTimeMilliseconds;
+            }
+            startTime = idx + eventStartTimeHours + eventStartTimeMinutes + eventStartTimeMilliseconds;
+  
+            let eventEndTime = new Date(endTime * 1000);
+            let eventEndTimeHours = eventEndTime.getHours();
+            if (eventEndTimeHours < 10) {
+              eventEndTimeHours = '0' + eventEndTimeHours;
+            }
+            let eventEndTimeMinutes = eventEndTime.getMinutes();
+            if (eventEndTimeMinutes < 10) {
+              eventEndTimeMinutes = '0' + eventEndTimeMinutes;
+            }
+            let eventEndTimeMilliseconds = eventEndTime.getMilliseconds();
+            if (eventEndTimeMilliseconds < 10) {
+              eventEndTimeMilliseconds = '0' + eventEndTimeMilliseconds;
+            }
+            endTime = idx + eventEndTimeHours + eventEndTimeMinutes + eventEndTimeMilliseconds;
+            if (localStorage.getItem(sourceReg+'_verify_code')) {
+              hlsVideoUrl = playbackUrl+'?playtype=lookback&protocol=hls&starttime='+startTime+'&endtime='+endTime+'&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playToken+'&verifycode='+localStorage.getItem(sourceReg+'_verify_code')+'&programid='+eventId+'.m3u8';
+            } else {
+              hlsVideoUrl = playbackUrl+'?playtype=lookback&protocol=hls&starttime='+startTime+'&endtime='+endTime+'&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playToken+'&programid='+eventId+'.m3u8';
+            }
+            videojsLoad();
+          } else {
+            alertInfo('录像还未准备好！', 10);
+          }
+        }
+      })
+    } else if (e.target.hasAttribute('data-id')) {
       let showId =  e.target.dataset.id;
       let channel = e.target.dataset.channel;
       let hboLink;
@@ -1063,7 +1121,7 @@ regBtn.addEventListener("click", reqReg);
 loginBtn.addEventListener("click", reqLogin);
 sourcesField.addEventListener("click", switchSource);
 categoriesField.addEventListener("click", switchCategory);
-scheduleField.addEventListener("click", scheduleUpcoming);
+scheduleField.addEventListener("click", playbackOrUpcoming);
 channelsField.addEventListener("click", switchChannel);
 document.addEventListener("fullscreenchange", setOverlay);
 document.addEventListener("webkitfullscreenchange", setOverlay);
