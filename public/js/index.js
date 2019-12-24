@@ -875,7 +875,13 @@ function scheduleUpcoming(e) {
     if (e.target.nodeName === "LI" && e.target.hasAttribute('data-id') && e.target.hasAttribute('data-channel')) {
       let showId =  e.target.dataset.id;
       let channel = e.target.dataset.channel;
-      reqData('https://hboasia.com/HBO/zh-tw/ajax/home_schedule_upcoming_showtimes?channel='+channel+'&feed=satellite&id='+showId)
+      let hboLink;
+      if (channel === "hbo") {
+        hboLink = 'https://hboasia.com/HBO/zh-cn/ajax/home_schedule_upcoming_showtimes?channel=' + channel + '&feed=cn&id=' + showId;
+      } else {
+        hboLink = 'https://hboasia.com/HBO/zh-tw/ajax/home_schedule_upcoming_showtimes?channel=' + channel + '&feed=satellite&id=' + showId;
+      }
+      reqData(hboLink)
       .then(response => {
         let dateNow = Date.now();
         const upComingList = document.createElement('ul');

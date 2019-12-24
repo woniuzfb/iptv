@@ -1921,6 +1921,16 @@ schedule()
     esac
 }
 
+token()
+{
+    CheckRelease
+    [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请先安装 !" && exit 1
+    GetDefault
+
+
+    
+}
+
 Usage()
 {
 
@@ -1981,9 +1991,16 @@ then
     UpdateSelf
 fi
 
-if [ "$1" == "s" ] 
+if [[ -n ${1+x} ]]
 then
-    schedule "$@" && exit 0
+    case $1 in
+        "s") schedule "$@" && exit 0
+        ;;
+        "t") token "$@" && exit 0
+        ;;
+        *)
+        ;;
+    esac
 fi
 
 use_menu=1
