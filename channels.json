@@ -390,6 +390,8 @@
       "verify_url": "http://access.nx96200.cn:12690/account/user/validate_verify_code",
       "reg_url": "http://access.nx96200.cn:12690/account/user/v2/register",
       "login_url": "http://access.nx96200.cn:12690/account/user/v2/login",
+      "auth_info_url": "http://slave.nx96200.cn:13160/media/get_authority_info",
+      "auth_verify_url": "http://slave.nx96200.cn:13160/media/authority_verify",
       "schedule_url": "http://slave.nx96200.cn:13160/media/event/get_list",
       "event_info_url": "http://slave.nx96200.cn:13160/media/event/get_info",
       "channels": [
@@ -521,6 +523,8 @@
       "verify_url": "http://access.pygdzhcs.com:12690/account/user/validate_verify_code",
       "reg_url": "http://access.pygdzhcs.com:12690/account/user/v2/register",
       "login_url": "http://access.pygdzhcs.com:12690/account/user/v2/login",
+      "auth_info_url": "http://slave.pygdzhcs.com:13160/media/get_authority_info",
+      "auth_verify_url": "http://slave.pygdzhcs.com:13160/media/authority_verify",
       "schedule_url": "http://slave.pygdzhcs.com:13160/media/event/get_list",
       "event_info_url": "http://slave.pygdzhcs.com:13160/media/event/get_info",
       "channels": [
