@@ -22,132 +22,20 @@
       "json": "http://47.102.142.200/channels.json"
     },
     {
-      "name": "jscnwx",
-      "desc": "江苏广电",
-      "lane": "电信",
-      "acc_type_reg": 1,
-      "acc_type_login": 2,
-      "omit": "95-96,99-106,113-128,131-156,167-168,186",
-      "unique_url": "http://122.194.12.25:12690/account/user/name_is_uniqueness",
-      "reg_url": "http://122.194.12.25:12690/account/user/register",
-      "login_url": "http://122.194.12.25:12690/account/login",
-      "play_url": "http://stream.slave.jscnwx.com:13164/playurl",
-      "list_url": "http://122.194.12.25:13160/media/channel/get_list",
-      "token_url": "http://122.194.12.25:12690/account/get_third_token",
-      "schedule_url": "http://122.194.12.25:13160/media/event/get_list",
-      "event_info_url": "http://122.194.12.25:13160/media/event/get_info",
-      "channels": [
-        {
-          "chnl_name": "江苏综艺",
-          "chnl_id": "4200000005",
-          "chnl_cat": "卫视"
-        },
-        {
-          "chnl_name": "无锡新闻综合高清",
-          "chnl_id": "4200000045",
-          "chnl_cat": "高清电信"
-        },
-        {
-          "chnl_name": "无锡影视",
-          "chnl_id": "4200000047",
-          "chnl_cat": "地方"
-        },
-        {
-          "chnl_name": "无锡娱乐",
-          "chnl_id": "4200000048",
-          "chnl_cat": "地方"
-        },
-        {
-          "chnl_name": "无锡经济",
-          "chnl_id": "4200000049",
-          "chnl_cat": "地方"
-        },
-        {
-          "chnl_name": "无锡生活",
-          "chnl_id": "4200000050",
-          "chnl_cat": "地方"
-        },
-        {
-          "chnl_name": "东方CJ购物",
-          "chnl_id": "4200000051",
-          "chnl_cat": "专业"
-        },
-        {
-          "chnl_name": "无锡教育",
-          "chnl_id": "4200000052",
-          "chnl_cat": "地方"
-        },
-        {
-          "chnl_name": "好享购物",
-          "chnl_id": "4200000055",
-          "chnl_cat": "专业"
-        },
-        {
-          "chnl_name": "江苏城市",
-          "chnl_id": "4200000059",
-          "chnl_cat": "地方"
-        },
-        {
-          "chnl_name": "江苏影视",
-          "chnl_id": "4200000060",
-          "chnl_cat": "地方"
-        },
-        {
-          "chnl_name": "江苏公共新闻",
-          "chnl_id": "4200000061",
-          "chnl_cat": "地方"
-        },
-        {
-          "chnl_name": "江苏体育",
-          "chnl_id": "4200000062",
-          "chnl_cat": "地方"
-        },
-        {
-          "chnl_name": "江苏教育",
-          "chnl_id": "4200000066",
-          "chnl_cat": "地方"
-        },
-        {
-          "chnl_name": "新视觉高清",
-          "chnl_id": "4200000095",
-          "chnl_cat": "高清电信"
-        },
-        {
-          "chnl_name": "无锡都市资讯高清",
-          "chnl_id": "4200000178",
-          "chnl_cat": "高清电信"
-        },
-        {
-          "chnl_name": "东南卫视高清",
-          "chnl_id": "4200000180",
-          "chnl_cat": "高清电信"
-        },
-        {
-          "chnl_name": "河北卫视高清",
-          "chnl_id": "4200000183",
-          "chnl_cat": "高清电信"
-        },
-        {
-          "chnl_name": "吉林卫视高清",
-          "chnl_id": "4200000187",
-          "chnl_cat": "高清电信"
-        }
-      ]
-    },
-    {
       "name": "pyitv",
       "desc": "广东广电",
       "lane": "联通",
-      "acc_type_reg": 2,
-      "acc_type_login": 3,
+      "acc_type_reg": 1,
+      "acc_type_login": 2,
       "extend_info": {
         "operatingsystem": "iOS",
-        "systemversion": "12.1",
-        "model": "iPhone 6 Plus",
-        "appversion": "1.2.0"
+        "systemversion": "13.3",
+        "model": "iPhone12_1",
+        "appversion": "1.3.1"
       },
       "server_version": "V1.4.0",
       "fix_cats": {"008":"005","009":"005"},
+      "unique_url": "http://access.pyitv.com/account/user/name_is_uniqueness",
       "play_url": "http://httpdvb.slave.pyitv.com:13164/playurl",
       "list_url": "http://slave.pyitv.com/media/channel/get_list",
       "token_url": "http://access.pyitv.com/account/get_third_token",
@@ -166,6 +54,7 @@
       "lane": "联通",
       "acc_type_reg": 1,
       "acc_type_login": 2,
+      "omit": "216",
       "unique_url": "http://slave.homed.hrtn.net:12690/account/user/name_is_uniqueness",
       "reg_url": "http://slave.homed.hrtn.net:12690/account/user/register",
       "login_url": "http://slave.homed.hrtn.net:12690/account/login",
@@ -175,126 +64,6 @@
       "schedule_url": "http://slave.homed.hrtn.net:13160/media/event/get_list",
       "event_info_url": "http://slave.homed.hrtn.net:13160/media/event/get_info",
       "channels": [
-        {
-          "chnl_name": "CCTV9",
-          "chnl_id": "4200000143",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "湖北卫视高清",
-          "chnl_id": "4200000144",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "湖北经视高清",
-          "chnl_id": "4200000145",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "湖北综合高清",
-          "chnl_id": "4200000146",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "湖北公共新闻高清",
-          "chnl_id": "4200000148",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "北京卫视高清",
-          "chnl_id": "4200000149",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "东方卫视高清",
-          "chnl_id": "4200000150",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "浙江卫视高清",
-          "chnl_id": "4200000151",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "江苏卫视高清",
-          "chnl_id": "4200000152",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "湖南卫视高清",
-          "chnl_id": "4200000153",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "深圳卫视高清",
-          "chnl_id": "4200000155",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "辽宁卫视高清",
-          "chnl_id": "4200000159",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "贵州卫视高清",
-          "chnl_id": "4200000165",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "广东卫视高清",
-          "chnl_id": "4200000166",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "安徽卫视高清",
-          "chnl_id": "4200000167",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "CCTV-7高清",
-          "chnl_id": "4200000169",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "CCTV-10高清",
-          "chnl_id": "4200000170",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "CCTV-12高清",
-          "chnl_id": "4200000171",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "CCTV-14高清",
-          "chnl_id": "4200000172",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "江西卫视高清",
-          "chnl_id": "4200000173",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "福建东南卫视高清",
-          "chnl_id": "4200000185",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "重庆卫视高清",
-          "chnl_id": "4200000186",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "四川卫视高清",
-          "chnl_id": "4200000187",
-          "chnl_cat": "高清联通"
-        },
-        {
-          "chnl_name": "黑龙江卫视高清",
-          "chnl_id": "4200000188",
-          "chnl_cat": "高清联通"
-        },
         {
           "chnl_name": "极速汽车HD",
           "chnl_id": "4200000190",
@@ -311,13 +80,13 @@
       "name": "jxtvnet",
       "desc": "江西广电",
       "lane": "电信",
-      "acc_type_reg": 1,
-      "acc_type_login": 2,
+      "acc_type_reg": 2,
+      "acc_type_login": 3,
       "extend_info": {
         "operatingsystem": "iOS",
         "systemversion": "12.1",
         "model": "iPhone 6 Plus",
-        "appversion": "1.2.6"
+        "appversion": "1.2.8"
       },
       "server_version": "V1.4.0",
       "unique_url": "http://access.jxtvnet.tv:81/account/user/name_is_uniqueness",
@@ -488,7 +257,7 @@
         "appversion": "V1.2.1"
       },
       "server_version": "V1.2.13",
-      "omit": "278",
+      "omit": "278,184-185",
       "unique_url": "http://access.yqdtv.com:12690/account/user/name_is_uniqueness",
       "play_url": "http://httpdvb.slave.yqdtv.com:13164/playurl",
       "list_url": "http://slave.yqdtv.com:13160/media/channel/get_list",

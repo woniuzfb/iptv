@@ -1039,7 +1039,7 @@ function reqJson(json) {
 
 function getToken(source) {
   return new Promise((resolve, reject) => {
-    if (source.hasOwnProperty('access_token') && !localStorage.getItem(source.name+'_verify_code')) {
+    if (source.hasOwnProperty('access_token')) {
       let deviceno;
       deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
       deviceno = deviceno + md5(deviceno).substring(7, 8);
@@ -1080,13 +1080,7 @@ function getToken(source) {
 }
 
 function reqChannels(source,token) {
-  let params;
-  if (localStorage.getItem(source.name+'_verify_code')) {
-    params = '?pageidx=1&pagenum=500&accesstoken='+token+'&verify_code='+localStorage.getItem(source.name+'_verify_code');
-  } else {
-    params = '?pageidx=1&pagenum=500&accesstoken='+token;
-  }
-  timeoutPromise(5000,reqData(source.list_url,params))
+  timeoutPromise(5000,reqData(source.list_url,'?pageidx=1&pagenum=500&accesstoken='+token))
   .then(response => {
     if (response.ret === 0) {
       let channelCats;
@@ -1108,6 +1102,19 @@ function reqChannels(source,token) {
       response.chnl_list.forEach(channel => {
         if (source.omit && omitArr.indexOf(Number(channel.chnl_id.toString().slice(-3))) !== -1) {
           return;
+        }
+        if (channel.sub_type.length === 0) {
+          if (channel.chnl_name.indexOf('高清') !== -1) {
+            channel.sub_type = '001';
+          } else {
+            channel.sub_type = '002';
+          }
+          if (channel.chnl_name.toUpperCase().indexOf('CCTV') !== -1) {
+            channel.sub_type = channel.sub_type + '|003';
+          }
+          if (channel.chnl_name.indexOf('卫视') !== -1) {
+            channel.sub_type = channel.sub_type + '|004';
+          }
         }
         let newChannel={};
         channelCats = channel.sub_type.split('|');
@@ -1197,7 +1204,7 @@ function updateAside() {
     formToggle.disabled = true;
     return;
   } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('play_url')) {
-    sourceReg = 'jscnwx';
+    sourceReg = sourceRegDefault;
     loginAccField.setAttribute('placeholder','用户名');
     regAccField.setAttribute('placeholder','用户名');
   } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('img_url')) {
@@ -1221,7 +1228,7 @@ function updateAside() {
 }
 
 function resetSourceReg() {
-  sourceReg = 'jscnwx';
+  sourceReg = sourceRegDefault;
   programId = undefined;
   updateAside();
 }
@@ -1461,9 +1468,8 @@ function playbackOrUpcoming(e) {
   }
 }
 
-let sourcesJson,sourcesJsonParsed,jsonChannels={},hlsVideoUrl,schedules = {};
-let sourceReg = 'jscnwx';
-let programId;
+let programId,sourcesJson,sourcesJsonParsed,jsonChannels={},hlsVideoUrl,schedules = {};
+let sourceReg = 'hrtn',sourceRegDefault = 'hrtn';
 let localJson = 'channels.json';
 let remoteJson = 'http://hbo.epub.fun/channels.json';
 let scheduleJson = 'http://hbo.epub.fun/schedule.json';
