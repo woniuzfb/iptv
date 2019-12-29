@@ -995,7 +995,7 @@ function playbackOrUpcoming(e) {
   }
 }
 
-let programId,sourcesJson,sourcesJsonParsed,jsonChannels={},hlsVideoUrl,schedules = {};
+let programId,sourcesJson,sourcesJsonParsed,jsonChannels = {},hlsVideoUrl,schedules = {};
 let sourceReg = 'hrtn',sourceRegDefault = 'hrtn';
 let localJson = 'channels.json';
 let remoteJson = 'http://hbo.epub.fun/channels.json';

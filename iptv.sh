@@ -1570,7 +1570,7 @@ generateSchedule()
     date_now=$(date -d now "+%Y-%m-%d")
 
     SCHEDULE_LINK="https://xn--i0yt6h0rn.tw/channel/$chnl_name_encode/index.json"
-    SCHEDULE_FILE="/usr/local/iptv/${chnl_id}_schedule_$date_now"
+    SCHEDULE_FILE="$IPTV_ROOT/${chnl_id}_schedule_$date_now"
     SCHEDULE_TMP="${SCHEDULE_JSON}_tmp"
 
     wget --no-check-certificate "$SCHEDULE_LINK" -qO "$SCHEDULE_FILE" || true
@@ -1794,7 +1794,8 @@ schedule()
             "tvbmzt:TVB Pearl"
             "cinemaworld:CinemaWorld"
             "diva:Diva"
-            "bloombergtv:Bloomberg TV"  )
+            "bloombergtv:Bloomberg TV"
+            "fksjtyy:福斯家庭電影台"  )
 
     if [ -z ${2+x} ] 
     then
@@ -1829,7 +1830,7 @@ schedule()
                     SCHEDULE_LINK="https://hboasia.com/HBO/zh-tw/ajax/home_schedule?date=$date_now&channel=$chnl&feed=satellite"
                 fi
                 
-                SCHEDULE_FILE="/usr/local/iptv/${chnl}_schedule_$date_now"
+                SCHEDULE_FILE="$IPTV_ROOT/${chnl}_schedule_$date_now"
                 SCHEDULE_TMP="${SCHEDULE_JSON}_tmp"
                 wget --no-check-certificate "$SCHEDULE_LINK" -qO "$SCHEDULE_FILE"
                 programs_count=$($JQ_FILE -r '. | length' "$SCHEDULE_FILE")
@@ -1879,7 +1880,7 @@ schedule()
             date_now=$(date -d now "+%Y%m%d")
             SCHEDULE_LINK="https://disney.com.tw/_schedule/full/$date_now/8/%2Fepg"
 
-            SCHEDULE_FILE="/usr/local/iptv/$2_schedule_$date_now"
+            SCHEDULE_FILE="$IPTV_ROOT/$2_schedule_$date_now"
             SCHEDULE_TMP="${SCHEDULE_JSON}_tmp"
             wget --no-check-certificate "$SCHEDULE_LINK" -qO "$SCHEDULE_FILE"
 
@@ -1922,6 +1923,53 @@ schedule()
 
                 mv "$SCHEDULE_TMP" "$SCHEDULE_JSON"
             done
+        ;;
+        "foxmovies")
+            date_now=$(date -d now "+%Y-%m-%d")
+            SCHEDULE_LINK="https://www.fng.tw/foxmovies/program.php?go=$date_now"
+
+            SCHEDULE_FILE="$IPTV_ROOT/$2_schedule_$date_now"
+            SCHEDULE_TMP="${SCHEDULE_JSON}_tmp"
+            wget --no-check-certificate "$SCHEDULE_LINK" -qO "$SCHEDULE_FILE"
+
+            if [ -z "$($JQ_FILE '.' $SCHEDULE_JSON)" ] 
+            then
+                printf '{"%s":[]}' "$2" > "$SCHEDULE_JSON"
+            fi
+
+            $JQ_FILE '.'"$2"' = []' "$SCHEDULE_JSON" > "$SCHEDULE_TMP"
+            mv "$SCHEDULE_TMP" "$SCHEDULE_JSON"
+
+            while IFS= read -r line
+            do
+                if [[ $line == *"<td>"* ]] 
+                then
+                    line=${line#*<td>}
+                    line=${line%%<\/td>*}
+
+                    if [[ $line == *"<br>"* ]]  
+                    then
+                        line=${line%% <br>*}
+                        line=${line//\"/}
+                        line=${line//\'/}
+                        line=${line//\\/\'}
+                        sys_time=$(date -d "$date_now $time" +%s)
+                        $JQ_FILE '.'"$2"' += [
+                            {
+                                "title":"'"${line}"'",
+                                "time":"'"$time"'",
+                                "sys_time":"'"$sys_time"'"
+                            }
+                        ]' "$SCHEDULE_JSON" > "$SCHEDULE_TMP"
+
+                        mv "$SCHEDULE_TMP" "$SCHEDULE_JSON"
+                    else
+                        time=${line#* }
+                    fi
+                fi
+            done < "$SCHEDULE_FILE"
+
+            rm -rf "${SCHEDULE_FILE:-'notfound'}"
         ;;
         *) 
             found=0
