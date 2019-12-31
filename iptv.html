@@ -1197,34 +1197,37 @@ function parseJson(json) {
 function updateAside() {
   const selected = document.querySelector('.sourceReg');
   if(selected) selected.classList.remove('sourceReg');
-  document.querySelector('.source_'+sourceReg).classList.add('sourceReg');
-  if (sourcesJsonParsed[sourceReg].hasOwnProperty('access_token')) {
-    fieldsetLoginForm.setAttribute("disabled","disabled");
-    fieldsetRegForm.setAttribute("disabled","disabled");
-    formToggle.disabled = true;
-    return;
-  } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('play_url')) {
-    sourceReg = sourceRegDefault;
-    loginAccField.setAttribute('placeholder','用户名');
-    regAccField.setAttribute('placeholder','用户名');
-  } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('img_url')) {
-    loginAccField.setAttribute('placeholder','用户名');
-    regAccField.setAttribute('placeholder','用户名');
-    regImgField.classList.toggle('hidden',true);
-    regImgInputField.classList.toggle('hidden',true);
-    regSmsField.classList.toggle('hidden',true);
-  } else {
-    loginAccField.setAttribute('placeholder','手机号');
-    regAccField.setAttribute('placeholder','手机号');
-    regImgField.classList.toggle('hidden',false);
-    regImgInputField.classList.toggle('hidden',false);
-    regSmsField.classList.toggle('hidden',false);
+  const foundSource = document.querySelector('.source_'+sourceReg);
+  if(foundSource) {
+    foundSource.classList.add('sourceReg');
+    if (sourcesJsonParsed[sourceReg].hasOwnProperty('access_token')) {
+      fieldsetLoginForm.setAttribute("disabled","disabled");
+      fieldsetRegForm.setAttribute("disabled","disabled");
+      formToggle.disabled = true;
+      return;
+    } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('play_url')) {
+      sourceReg = sourceRegDefault;
+      loginAccField.setAttribute('placeholder','用户名');
+      regAccField.setAttribute('placeholder','用户名');
+    } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('img_url')) {
+      loginAccField.setAttribute('placeholder','用户名');
+      regAccField.setAttribute('placeholder','用户名');
+      regImgField.classList.toggle('hidden',true);
+      regImgInputField.classList.toggle('hidden',true);
+      regSmsField.classList.toggle('hidden',true);
+    } else {
+      loginAccField.setAttribute('placeholder','手机号');
+      regAccField.setAttribute('placeholder','手机号');
+      regImgField.classList.toggle('hidden',false);
+      regImgInputField.classList.toggle('hidden',false);
+      regSmsField.classList.toggle('hidden',false);
+    }
+    fieldsetLoginForm.removeAttribute("disabled");
+    fieldsetRegForm.removeAttribute("disabled");
+    formToggle.disabled = false;
+    loginAccField.value = localStorage.getItem(sourceReg+'_acc');
+    loginPwdField.value = localStorage.getItem(sourceReg+'_pwd');
   }
-  fieldsetLoginForm.removeAttribute("disabled");
-  fieldsetRegForm.removeAttribute("disabled");
-  formToggle.disabled = false;
-  loginAccField.value = localStorage.getItem(sourceReg+'_acc');
-  loginPwdField.value = localStorage.getItem(sourceReg+'_pwd');
 }
 
 function resetSourceReg() {
