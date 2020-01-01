@@ -176,7 +176,7 @@ function playVideo() {
       if (sourcesJsonParsed[index].hasOwnProperty('channels') && sourcesJsonParsed[index].channels[0] && sourcesJsonParsed[index].channels[0].hasOwnProperty('url')) {
         hlsVideoUrl = sourcesJsonParsed[index].channels[0].url;
         videojsLoad();
-        if (sourcesJsonParsed[index].channels[0].hasOwnProperty('overlay')) {
+        if (sourcesJsonParsed[index].hasOwnProperty('overlay') && sourcesJsonParsed[index].channels[0].hasOwnProperty('overlay')) {
           videoOverlay();
         }
         showSchedule(sourcesJsonParsed[index].channels[0].schedule);
@@ -187,7 +187,7 @@ function playVideo() {
   } else if (jsonChannels[sourceReg]) {
     hlsVideoUrl = jsonChannels[sourceReg][programId]['url'];
     videojsLoad();
-    if (jsonChannels[sourceReg][programId].hasOwnProperty('overlay')) {
+    if (jsonChannels[sourceReg].hasOwnProperty('overlay') && jsonChannels[sourceReg][programId].hasOwnProperty('overlay')) {
       videoOverlay();
     }
     showSchedule(jsonChannels[sourceReg][programId].schedule);
@@ -201,7 +201,7 @@ function playVideo() {
       if (channel.chnl_id === programId) {
         hlsVideoUrl = channel.url;
         videojsLoad();
-        if (channel.hasOwnProperty('overlay')) {
+        if (sourcesJsonParsed[sourceReg].hasOwnProperty('overlay') && channel.hasOwnProperty('overlay')) {
           videoOverlay();
         }
         showSchedule(channel.schedule);
@@ -546,6 +546,9 @@ function reqJson(json) {
     if (response.ret === 0) {
       let newChannel={};
       jsonChannels[response.data[0].name] = {};
+      if (response.data[0].hasOwnProperty('overlay')) {
+        jsonChannels[response.data[0].name]['overlay'] = response.data[0].overlay;
+      }
       response.data[0].channels.forEach(channel => {
         jsonChannels[response.data[0].name][channel.chnl_id] = {};
         jsonChannels[response.data[0].name][channel.chnl_id]['url'] = channel.url;
