@@ -1925,7 +1925,7 @@ schedule()
             done
         ;;
         "foxmovies")
-            date_now=$(date -d now "+%Y-%m-%d")
+            date_now=$(date -d now "+%Y-%-m-%-d")
             SCHEDULE_LINK="https://www.fng.tw/foxmovies/program.php?go=$date_now"
 
             SCHEDULE_FILE="$IPTV_ROOT/$2_schedule_$date_now"

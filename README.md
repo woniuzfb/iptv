@@ -51,6 +51,7 @@ bash -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/wo
 - tv s 更新 150+ 节目表
 - tv s hbo 更新 hbo 节目表
 - tv s disney 更新迪士尼频道节目表
+- tv s foxmovies 更新 FOX MOVIES 节目表
 - ~~tv d 请求默认频道 ( 40多港澳台频道 - **在墙外**)，添加到 channels.json~~
 - ...
 
@@ -83,11 +84,7 @@ bash -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/wo
 -z  频道名称(默认：跟m3u8名称相同)
 
 -m  ffmpeg 额外的 INPUT FLAGS
-    (默认："-reconnect 1 -reconnect_at_eof 1 
-    -reconnect_streamed 1 -reconnect_delay_max 2000 
-    -timeout 2000000000 -y -thread_queue_size 55120 
-    -nostats -nostdin -hide_banner -loglevel 
-    fatal -probesize 65536")
+    (默认："-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536")
 -n  ffmpeg 额外的 OUTPUT FLAGS
     (默认："-g 30 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main")
 ```
