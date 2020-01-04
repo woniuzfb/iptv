@@ -1560,6 +1560,158 @@ urlencode() {
     echo "$e"
 }
 
+# HongKong
+generateScheduleNowtv()
+{
+    date_now_nowtv=$(date -d now "+%Y%m%d")
+    SCHEDULE_LINK_NOWTV="http://nowtv.now.com/gw-epg/epg/zh_tw/$date_now_nowtv/prf0/resp-genre/ch_G0$2.json"
+    SCHEDULE_FILE_NOWTV="$IPTV_ROOT/${2}_nowtv_schedule_$date_now_nowtv"
+    SCHEDULE_TMP_NOWTV="${SCHEDULE_JSON}_tmp"
+
+    if [ ! -e "$SCHEDULE_FILE_NOWTV" ] 
+    then
+        wget "$SCHEDULE_LINK_NOWTV" -qO "$SCHEDULE_FILE_NOWTV" || true
+    fi
+
+    programs_count_nowtv=$($JQ_FILE -r '.data.chProgram."'$1'" | length' "$SCHEDULE_FILE_NOWTV")
+
+    if [[ $programs_count_nowtv -eq 0 ]]
+    then
+        echo -e "\nNowTV empty: $chnl_nowtv_id\n"
+        rm -rf "${SCHEDULE_FILE_NOWTV:-'notfound'}"
+        return 0
+    fi
+
+    programs_title_nowtv=()
+    while IFS='' read -r program_title_nowtv
+    do
+        programs_title_nowtv+=("$program_title_nowtv");
+    done < <($JQ_FILE -r '.data.chProgram."'$1'"[].name | @sh' "$SCHEDULE_FILE_NOWTV")
+
+    programs_time_nowtv=()
+    while IFS='' read -r program_time_nowtv
+    do
+        programs_time_nowtv+=("$program_time_nowtv");
+    done < <($JQ_FILE -r '.data.chProgram."'$1'"[].startTime | @sh' "$SCHEDULE_FILE_NOWTV")
+
+    IFS=" " read -ra programs_sys_time_nowtv <<< "$($JQ_FILE -r '[.data.chProgram."'"$1"'" | .[].start] | @sh' $SCHEDULE_FILE_NOWTV)"
+
+    if [ -z "$($JQ_FILE '.' $SCHEDULE_JSON)" ] 
+    then
+        printf '{"%s":[]}' "$chnl_nowtv_id" > "$SCHEDULE_JSON"
+    fi
+
+    $JQ_FILE '.'"$chnl_nowtv_id"' = []' "$SCHEDULE_JSON" > "$SCHEDULE_TMP_NOWTV"
+    mv "$SCHEDULE_TMP_NOWTV" "$SCHEDULE_JSON"
+
+    rm -rf "${SCHEDULE_FILE_NOWTV:-'notfound'}"
+
+    for((index = 0; index < "$programs_count_nowtv"; index++)); do
+        programs_title_nowtv_index=${programs_title_nowtv[index]//\"/}
+        programs_title_nowtv_index=${programs_title_nowtv_index//\'/}
+        programs_title_nowtv_index=${programs_title_nowtv_index//\\/\'}
+        programs_time_nowtv_index=${programs_time_nowtv[index]//\'/}
+        programs_sys_time_nowtv_index=${programs_sys_time_nowtv[index]//\'/}
+        programs_sys_time_nowtv_index=${programs_sys_time_nowtv_index:0:10}
+
+        $JQ_FILE '.'"$chnl_nowtv_id"' += [
+            {
+                "title":"'"${programs_title_nowtv_index}"'",
+                "time":"'"$programs_time_nowtv_index"'",
+                "sys_time":"'"$programs_sys_time_nowtv_index"'"
+            }
+        ]' "$SCHEDULE_JSON" > "$SCHEDULE_TMP_NOWTV"
+
+        mv "$SCHEDULE_TMP_NOWTV" "$SCHEDULE_JSON"
+    done
+    #http://nowtv.now.com/nowtv-api/program-search/?q=p_series_name_zh_tw_s%3A%22America%27s+Newsroom%22&wt=json&start=0&p_key=epg_202001035771239&more=true&rows=100&nowtvapi_key=nowtv.now.com&group.limit=20&group=true&group.field=p_name_zh_tw_s&fq=p_end%3A[1578065134000+TO+*]+AND+p_date%3A[20200103+TO+20200109]&sort=score+desc%2C+p_start+asc
+}
+
+generateScheduleNiotv()
+{
+    date_now_niotv=$(date -d now "+%Y-%m-%d")
+    SCHEDULE_LINK_NIOTV="http://www.niotv.com/i_index.php?cont=day"
+    SCHEDULE_FILE_NIOTV="$IPTV_ROOT/${chnl_niotv_id}_niotv_schedule_$date_now_niotv"
+    SCHEDULE_TMP_NIOTV="${SCHEDULE_JSON}_tmp"
+
+    wget --post-data "act=select&day=$date_now_niotv&sch_id=$1" "$SCHEDULE_LINK_NIOTV" -qO "$SCHEDULE_FILE_NIOTV" || true
+    #curl -d "day=$date_now_niotv&sch_id=$1" -X POST "$SCHEDULE_LINK_NIOTV" -so "$SCHEDULE_FILE_NIOTV" || true
+    
+    if [ -z "$($JQ_FILE '.' $SCHEDULE_JSON)" ] 
+    then
+        printf '{"%s":[]}' "$chnl_niotv_id" > "$SCHEDULE_JSON"
+    fi
+
+    $JQ_FILE '.'"$chnl_niotv_id"' = []' "$SCHEDULE_JSON" > "$SCHEDULE_TMP_NIOTV"
+    mv "$SCHEDULE_TMP_NIOTV" "$SCHEDULE_JSON"
+
+    empty=1
+    check=1
+    while IFS= read -r line
+    do
+        if [[ $line == *"<td class=epg_tab_tm>"* ]] 
+        then
+            empty=0
+            line=${line#*<td class=epg_tab_tm>}
+            start_time=${line%%~*}
+            end_time=${line#*~}
+            end_time=${end_time%%</td>*}
+        fi
+
+        if [[ $line == *"</a></td>"* ]] 
+        then
+            line=${line%% </a></td>*}
+            line=${line%%</a></td>*}
+            title=${line#*target=_blank>}
+            title=${title//\"/}
+            title=${title//\'/}
+            title=${title//\\/\'}
+            sys_time=$(date -d "$date_now_niotv $start_time" +%s)
+
+            start_time_num=$(date -d "$date_now_niotv $start_time" +%s)
+            end_time_num=$(date -d "$date_now_niotv $end_time" +%s)
+
+            if [ "$check" == 1 ] && [ "$start_time_num" -gt "$end_time_num" ] 
+            then
+                continue
+            fi
+
+            check=0
+
+            $JQ_FILE '.'"$chnl_niotv_id"' += [
+                {
+                    "title":"'"${title}"'",
+                    "time":"'"$start_time"'",
+                    "sys_time":"'"$sys_time"'"
+                }
+            ]' "$SCHEDULE_JSON" > "$SCHEDULE_TMP_NIOTV"
+
+            mv "$SCHEDULE_TMP_NIOTV" "$SCHEDULE_JSON"
+        fi
+    done < "$SCHEDULE_FILE_NIOTV"
+
+    rm -rf "${SCHEDULE_FILE_NIOTV:-'notfound'}"
+
+    if [ "$empty" == 1 ] 
+    then
+        echo -e "\nNioTV empty: $chnl_niotv_id\ntrying NowTV...\n"
+        match_nowtv=0
+        for chnl_nowtv in "${chnls_nowtv[@]}" ; do
+            chnl_nowtv_id=${chnl_nowtv%%:*}
+            if [ "$chnl_nowtv_id" == "$chnl_niotv_id" ] 
+            then
+                match_nowtv=1
+                chnl_nowtv_num_group=${chnl_nowtv#*:}
+                chnl_nowtv_num=${chnl_nowtv_num_group%%:*}
+                chnl_nowtv_group=${chnl_nowtv_num_group#*:}
+                generateScheduleNowtv "$chnl_nowtv_num" "$chnl_nowtv_group"
+            fi
+        done
+        [ "$match_nowtv" == 0 ] && echo -e "\nNowTV not found\n"
+        return 0
+    fi
+}
+
 generateSchedule()
 {
     chnl_id=${1%%:*}
@@ -1582,9 +1734,37 @@ generateSchedule()
         programs_count=$($JQ_FILE -r '.list[] | select(.key=="'"$date_now"'").values | length' "$SCHEDULE_FILE")
         if [[ $programs_count -eq 0 ]] 
         then
-            echo -e "\n\nempty: $1\n"
+            echo -e "\n\nempty: $1\ntrying NioTV...\n"
             rm -rf "${SCHEDULE_FILE:-'notfound'}"
-            return
+            match=0
+            for chnl_niotv in "${chnls_niotv[@]}" ; do
+                chnl_niotv_id=${chnl_niotv%%:*}
+                if [ "$chnl_niotv_id" == "$chnl_id" ] 
+                then
+                    match=1
+                    chnl_niotv_num=${chnl_niotv#*:}
+                    generateScheduleNiotv "$chnl_niotv_num"
+                fi
+            done
+
+            if [ "$match" == 0 ] 
+            then
+                echo -e "\nNioTV not found\ntrying NowTV...\n"
+                for chnl_nowtv in "${chnls_nowtv[@]}" ; do
+                    chnl_nowtv_id=${chnl_nowtv%%:*}
+                    if [ "$chnl_nowtv_id" == "$chnl_id" ] 
+                    then
+                        match=1
+                        chnl_nowtv_num_group=${chnl_nowtv#*:}
+                        chnl_nowtv_num=${chnl_nowtv_num_group%%:*}
+                        chnl_nowtv_group=${chnl_nowtv_num_group#*:}
+                        generateScheduleNowtv "$chnl_nowtv_num" "$chnl_nowtv_group"
+                    fi
+                done
+            fi
+
+            [ "$match" == 0 ] && echo -e "\nNowTV not found\n"
+            return 0
         fi
     fi
 
@@ -1639,163 +1819,395 @@ schedule()
         echo "请先设置 schedule_file 位置！" && exit 1
     fi
 
-    chnls=( "hbogq:HBO HD"
-            "hbohits:HBO Hits"
-            "hbosignature:HBO Signature"
-            "hbofamily:HBO Family"
-            "hycj:寰宇財經台"
-            "hyzh:寰宇HD綜合台"
-            "hyxwthd:寰宇新聞台"
-            "hyxw2t:寰宇新聞二台"
-            "aedzh:愛爾達綜合台"
-            "aedyj:愛爾達影劇台"
-            "etzht:ETtoday綜合台"
-            "jtzx:靖天資訊台"
-            "jtzh:靖天綜合台"
-            "jtyl:靖天育樂台"
-            "jtxj:靖天戲劇台"
-            "jthl:Nice TV 靖天歡樂台"
-            "jtyh:靖天映畫"
-            "jtgj:KLT-靖天國際台"
-            "jtrb:靖天日本台"
-            "jtdy:靖天電影台"
-            "jtkt:靖天卡通台"
-            "jyxj:靖洋戲劇台"
-            "jykt:靖洋卡通台Nice Bingo"
-            "lhxj:龍華戲劇"
-            "lhox:龍華偶像"
-            "lhyj:龍華影劇"
-            "lhdy:龍華電影"
-            "lhjd:龍華經典"
-            "lhyp:龍華洋片"
-            "lhdh:龍華動畫"
-            "fgss:時尚頻道"
-            "gshd:公視"
-            "gs2:公視2台"
-            "gs3hd:公視3台"
-            "tshd:台視"
-            "tszh:台視綜合台"
-            "tscj:台視財經台"
-            "hshd:華視"
-            "hsjytywhhd:華視教育文化"
-            "zshd:中視"
-            "zsxwhd:中視新聞台"
-            "zsjd:中視經典台"
-            "yzlythd:亞洲旅遊台"
-            "yzms:亞洲美食頻道"
-            "yzzh:亞洲綜合台"
-            "bsgq1hd:博斯高球一台"
-            "bsgq2hd:博斯高球二台"
-            "bsmlhd:博斯魅力網"
-            "bswxhd:博斯無限台"
-            "bswqhd:博斯網球台"
-            "bsyd2hd:博斯運動二台"
-            "bsyd1hd:博斯運動一台"
-            "dwtv:DW(Deutsch)"
-            "lifetime:Lifetime"
-            "tracesports:TRACE Sport Stars"
-            "cinemax:Cinemax"
-            "oztyhd:EUROSPORT"
-            "animax:Animax HD"
-            "mtvhd:MTV綜合電視台"
-            "ozxw:Euronews"
-            "dwxqhd:動物星球頻道"
-            "warnertvhd:Warner TV"
-            "foxhd:FOX頻道"
-            "axnhd:AXN"
-            "luxetv:LUXE TV Channel"
-            "mgcdh:DREAMWORKS"
-            "elevensportsplus:ELEVEN SPORTS PLUS"
-            "elevensports2:ELEVEN SPORTS 2"
-            "foxsports3:FOX SPORTS 3"
-            "ymjst:影迷數位紀實台"
-            "ymdyt:影迷數位電影台"
-            "hyyjt:華藝影劇台"
-            "catchplaydyt:CatchPlay電影台"
-            "ccyjt:采昌影劇台"
-            "itvchoice:ITV Choice"
-            "ifundmt:i-Fun動漫台"
-            "mdrbt:曼迪日本台"
-            "msxq:美食星球頻道"
-            "smartzst:Smart知識台"
-            "babytv:Baby TV"
-            "mykids:MY-KIDS TV"
-            "lspd:歷史頻道"
-            "lspd2:HISTORY 2"
-            "tv5monde:TV5MONDE"
-            "eltvshyy:ELTV生活英語台"
-            "outdoor:Outdoor"
-            "eentertainment:E! Entertainment"
-            "channelv:Channel V國際娛樂台HD"
-            "bbccbeebies:CBeebies"
-            "dwxpd:DaVinCi Learning達文西頻道"
-            "my101zht:MY101綜合台"
-            "nickkt:Nickelodeon Asia(尼克兒童頻道)"
-            "blueantextreme:BLUE ANT EXTREME"
-            "blueantentertainmet:BLUE ANT EXTREME"
-            "eyetvxjt:EYE TV戲劇台"
-            "eyetvlyt:EYE TV旅遊台"
-            "travelchannel:Travel Channel"
-            "cnnnews:CNN International"
-            "discoveryasia:Discovery Asia"
-            "discoveryhd:Discovery"
-            "discoverykxhd:Discovery科學頻道"
-            "dmaxhd:DMAX頻道"
-            "hitshd:HITS"
-            "ydyhd:壹電視電影台"
-            "yzh:壹電視資訊綜合台"
-            "wltyhd:緯來體育台"
-            "wlxjhd:緯來戲劇台"
-            "wlrbhd:緯來日本台"
-            "wldyhd:緯來電影台"
-            "wlzhhd:緯來綜合台"
-            "wlylhd:緯來育樂台"
-            "wljct:緯來精采台"
-            "dszhhd:東森綜合台"
-            "dsxjhd:東森戲劇台"
-            "dsyyhd:東森幼幼台"
-            "dsdyhd:東森電影台"
-            "dsyphd:東森洋片台"
-            "dsxwhd:東森新聞台"
-            "dscjxwhd:東森財經新聞台"
-            "dscshd:超級電視台"
-            "ztxwhd:中天新聞台"
-            "ztylhd:中天娛樂台"
-            "ztzhhd:中天綜合台"
-            "tvbsjct:TVBS精采台"
-            "fxhd:FX"
-            "foxcrime:FOXCRIME"
-            "foxnews:FOX News Channel"
-            "slzh:三立綜合台"
-            "slxj:三立戲劇台"
-            "tvn:tvN"
-            "hgylt:韓國娛樂台KMTV"
-            "xfkjjjt:幸福空間居家台"
-            "skynews:SKY NEWS HD"
-            "nhkworld:NHK新聞資訊台"
-            "zltyt:智林體育台"
-            "xwhddy:星衛HD電影台"
-            "xwyl:星衛娛樂台"
-            "mydy:美亞電影台"
-            "wdozdy:My Cinema Europe HD我的歐洲電影台"
-            "gjdlyr:國家地理高畫質悠人頻道"
-            "gjdlys:國家地理高畫質野生頻道"
-            "gjdlhd:國家地理高畫質頻道"
-            "bbcearth:BBC Earth"
-            "bbcworldnews:BBC World News"
-            "bbclifestyle:BBC Lifestyle Channel"
-            "amcrw:AMC"
-            "animaxhd:Animax HD"
-            "wakawakajapan:WAKUWAKU JAPAN"
-            "boomerangkt:Boomerang"
-            "tvbj2:TVB J2"
-            "tvbxh:TVB星河頻道"
-            "tvbfct:TVB 翡翠台"
-            "tvbmzt:TVB Pearl"
-            "cinemaworld:CinemaWorld"
-            "diva:Diva"
-            "bloombergtv:Bloomberg TV"
-            "fksjtyy:福斯家庭電影台"  )
+    chnls=( 
+#        "hbogq:HBO HD"
+#        "hbohits:HBO Hits"
+#        "hbosignature:HBO Signature"
+#        "hbofamily:HBO Family"
+#        "foxmovies:FOX MOVIES"
+#        "disney:Disney"
+        "foxfamily:福斯家庭電影台"
+        "cinemax:Cinemax"
+        "dreamworks:DREAMWORKS"
+        "nickasia:Nickelodeon Asia(尼克兒童頻道)"
+        "cbeebies:CBeebies"
+        "babytv:Baby TV"
+        "boomerang:Boomerang"
+        "mykids:MY-KIDS TV"
+        "dwxq:動物星球頻道"
+        "eltvshyy:ELTV生活英語台"
+        "ifundm:i-Fun動漫台"
+        "momoqz:momo親子台"
+        "cnkt:CN卡通台"
+        "hycj:寰宇財經台"
+        "hyzh:寰宇HD綜合台"
+        "hyxw:寰宇新聞台"
+        "hyxw2:寰宇新聞二台"
+        "aedzh:愛爾達綜合台"
+        "aedyj:愛爾達影劇台"
+        "jtzx:靖天資訊台"
+        "jtzh:靖天綜合台"
+        "jtyl:靖天育樂台"
+        "jtxj:靖天戲劇台"
+        "jthl:Nice TV 靖天歡樂台"
+        "jtyh:靖天映畫"
+        "jtgj:KLT-靖天國際台"
+        "jtrb:靖天日本台"
+        "jtdy:靖天電影台"
+        "jtkt:靖天卡通台"
+        "jyxj:靖洋戲劇台"
+        "jykt:靖洋卡通台Nice Bingo"
+        "lhxj:龍華戲劇"
+        "lhox:龍華偶像"
+        "lhyj:龍華影劇"
+        "lhdy:龍華電影"
+        "lhjd:龍華經典"
+        "lhyp:龍華洋片"
+        "lhdh:龍華動畫"
+        "wszw:衛視中文台"
+        "wsdy:衛視電影台"
+        "gxws:國興衛視"
+        "gs:公視"
+        "gs2:公視2台"
+        "gs3:公視3台"
+        "ts:台視"
+        "tszh:台視綜合台"
+        "tscj:台視財經台"
+        "hs:華視"
+        "hsjywh:華視教育文化"
+        "zs:中視"
+        "zsxw:中視新聞台"
+        "zsjd:中視經典台"
+        "sltw:三立台灣台"
+        "sldh:三立都會台"
+        "slzh:三立綜合台"
+        "slxj:三立戲劇台"
+        "bdzh:八大綜合"
+        "bddy:八大第一"
+        "bdxj:八大戲劇"
+        "bdyl:八大娛樂"
+        "gdyl:高點育樂"
+        "gdzh:高點綜合"
+        "ydsdy:壹電視電影台"
+        "ydszxzh:壹電視資訊綜合台"
+        "wlty:緯來體育台"
+        "wlxj:緯來戲劇台"
+        "wlrb:緯來日本台"
+        "wldy:緯來電影台"
+        "wlzh:緯來綜合台"
+        "wlyl:緯來育樂台"
+        "wljc:緯來精采台"
+        "dszh:東森綜合台"
+        "dsxj:東森戲劇台"
+        "dsyy:東森幼幼台"
+        "dsdy:東森電影台"
+        "dsyp:東森洋片台"
+        "dsxw:東森新聞台"
+        "dscjxw:東森財經新聞台"
+        "dscs:超級電視台"
+        "ztxw:中天新聞台"
+        "ztyl:中天娛樂台"
+        "ztzh:中天綜合台"
+        "yzly:亞洲旅遊台"
+        "yzms:亞洲美食頻道"
+        "yzzh:亞洲綜合台"
+        "yzxw:亞洲新聞台"
+        "pltw:霹靂台灣"
+        "titvyjm:原住民"
+        "history:歷史頻道"
+        "history2:HISTORY 2"
+        "gjdlyr:國家地理高畫質悠人頻道"
+        "gjdlys:國家地理高畫質野生頻道"
+        "gjdlgq:國家地理高畫質頻道"
+        "discoveryasia:Discovery Asia"
+        "discovery:Discovery"
+        "discoverykx:Discovery科學頻道"
+        "bbcearth:BBC Earth"
+        "bbcworldnews:BBC World News"
+        "bbclifestyle:BBC Lifestyle Channel"
+        "bswx:博斯無限台"
+        "bsgq1:博斯高球一台"
+        "bsgq2:博斯高球二台"
+        "bsml:博斯魅力網"
+        "bswq:博斯網球台"
+        "bsyd1:博斯運動一台"
+        "bsyd2:博斯運動二台"
+        "zlty:智林體育台"
+        "eurosport:EUROSPORT"
+        "tracesportstars:TRACE Sport Stars"
+        "fox:FOX頻道"
+        "foxsports:FOX SPORTS"
+        "foxsports2:FOX SPORTS 2"
+        "foxsports3:FOX SPORTS 3"
+        "elevensportsplus:ELEVEN SPORTS PLUS"
+        "elevensports2:ELEVEN SPORTS 2"
+        "dw:DW(Deutsch)"
+        "lifetime:Lifetime"
+        "foxcrime:FOXCRIME"
+        "foxnews:FOX News Channel"
+        "hlwdy:好萊塢電影"
+        "animax:Animax"
+        "mtv:MTV綜合電視台"
+        "ndmuch:年代MUCH"
+        "nhk:NHK"
+        "euronews:Euronews"
+        "cnn:CNN International"
+        "skynews:SKY NEWS HD"
+        "nhkxwzx:NHK新聞資訊台"
+        "ffxw:非凡新聞"
+        "jetzh:JET綜合"
+        "tlclysh:旅遊生活"
+        "axn:AXN HD"
+        "z:Z頻道"
+        "luxe:LUXE TV Channel"
+        "ymjs:影迷數位紀實台"
+        "ymdy:影迷數位電影台"
+        "hyyj:華藝影劇台"
+        "catchplaydy:CatchPlay電影台"
+        "ccyj:采昌影劇台"
+        "itvchoice:ITV Choice"
+        "mdrb:曼迪日本台"
+        "msxq:美食星球頻道"
+        "smartzs:Smart知識台"
+        "tv5monde:TV5MONDE"
+        "outdoor:Outdoor"
+        "eentertainment:E! Entertainment"
+        "channelv:Channel V國際娛樂台HD"
+        "davinci:DaVinCi Learning達文西頻道"
+        "my101zh:MY101綜合台"
+        "blueantextreme:BLUE ANT EXTREME"
+        "blueantentertainmet:BLUE ANT EXTREME"
+        "eyetvxj:EYE TV戲劇台"
+        "eyetvly:EYE TV旅遊台"
+        "travel:Travel Channel"
+        "dmax:DMAX頻道"
+        "hitshd:HITS"
+        "lxdy:LS龍祥電影"
+        "fx:FX"
+        "tvbs:TVBS"
+        "tvbshl:TVBS歡樂"
+        "tvbsjc:TVBS精采台"
+        "tvbj2:TVB J2"
+        "tvbxh:TVB星河頻道"
+        "tvbfc:TVB 翡翠台"
+        "tvbpearl:TVB Pearl"
+        "tvn:tvN"
+        "hgyl:韓國娛樂台KMTV"
+        "xfkjjj:幸福空間居家台"
+        "xwdy:星衛HD電影台"
+        "xwyl:星衛娛樂台"
+        "mydy:美亞電影台"
+        "mycinemaeurope:My Cinema Europe HD我的歐洲電影台"
+        "amc:AMC"
+        "animaxhd:Animax HD"
+        "wakawakajapan:WAKUWAKU JAPAN"
+        "cinemaworld:CinemaWorld"
+        "diva:Diva"
+        "bloomberg:Bloomberg TV"
+        "fgss:時尚頻道"
+        "warner:Warner TV"
+        "ettodayzh:ETtoday綜合台" )
+
+    chnls_niotv=( 
+        "hbogq:629"
+        "hbohits:501"
+        "hbosignature:503"
+        "hbofamily:502"
+        "foxmovies:47"
+        "foxfamily:540"
+        "disney:63"
+        "dreamworks:758"
+        "nickasia:705"
+        "cbeebies:771"
+        "babytv:553"
+        "boomerang:766"
+        "dwxq:61"
+        "momoqz:148"
+        "cnkt:65"
+        "hyxw:695"
+        "jtzx:709"
+        "jtzh:710"
+        "jtyl:202"
+        "jtxj:721"
+        "jthl:708"
+        "jtyh:727"
+        "jtrb:711"
+        "jtkt:707"
+        "jyxj:203"
+        "jykt:706"
+        "wszw:19"
+        "wsdy:55"
+        "gxws:73"
+        "gs:17"
+        "gs2:759"
+        "gs3:177"
+        "ts:11"
+        "tszh:632"
+        "tscj:633"
+        "hs:15"
+        "hsjywh:138"
+        "zs:13"
+        "zsxw:668"
+        "zsjd:714"
+        "sltw:34"
+        "sldh:35"
+        "bdzh:21"
+        "bddy:33"
+        "bdxj:22"
+        "bdyl:60"
+        "gdyl:170"
+        "gdzh:143"
+        "ydsdy:187"
+        "ydszxzh:681"
+        "wlty:66"
+        "wlxj:29"
+        "wlrb:72"
+        "wldy:57"
+        "wlzh:24"
+        "wlyl:53"
+        "wljc:546"
+        "dszh:23"
+        "dsxj:36"
+        "dsyy:64"
+        "dsdy:56"
+        "dsyp:48"
+        "dsxw:42"
+        "dscjxw:43"
+        "dscs:18"
+        "ztxw:668"
+        "ztyl:14"
+        "ztzh:27"
+        "yzly:778"
+        "yzms:733"
+        "yzxw:554"
+        "pltw:26"
+        "titvyjm:133"
+        "history:549"
+        "history2:198"
+        "gjdlyr:670"
+        "gjdlys:161"
+        "gjdlgq:519"
+        "discoveryasia:563"
+        "discovery:58"
+        "discoverykx:520"
+        "bbcearth:698"
+        "bbcworldnews:144"
+        "bbclifestyle:646"
+        "bswx:587"
+        "bsgq1:529"
+        "bsgq2:526"
+        "bsml:588"
+        "bsyd2:635"
+        "bsyd1:527"
+        "eurosport:581"
+        "fox:70"
+        "foxsports:67"
+        "foxsports2:68"
+        "foxsports3:547"
+        "elevensportsplus:787"
+        "elevensports2:770"
+        "lifetime:199"
+        "foxcrime:543"
+        "cinemax:49"
+        "hlwdy:52"
+        "animax:84"
+        "mtv:69"
+        "ndmuch:25"
+        "nhk:74"
+        "euronews:591"
+        "ffxw:79"
+        "jetzh:71"
+        "tlclysh:62"
+        "axn:50"
+        "z:75"
+        "luxe:590"
+        "catchplaydy:582"
+        "tv5monde:574"
+        "channelv:584"
+        "davinci:669"
+        "blueantextreme:779"
+        "blueantentertainmet:785"
+        "travel:684"
+        "cnn:107"
+        "dmax:521"
+        "hitshd:692"
+        "lxdy:141"
+        "fx:544"
+        "tvn:757"
+        "hgyl:568"
+        "xfkjjj:672"
+        "nhkxwzx:773"
+        "zlty:676"
+        "xwdy:558"
+        "xwyl:539"
+        "mycinemaeurope:775"
+        "amc:682"
+        "animaxhd:772"
+        "wakawakajapan:765"
+        "tvbs:20"
+        "tvbshl:32"
+        "tvbsjc:774"
+        "cinemaworld:559"
+        "warner:688" )
+
+    chnls_nowtv=( 
+        "hbohits:111:1"
+        "hbofamily:112:1"
+        "cinemax:113:1"
+        "hbosignature:114:1"
+        "hbogq:115:1"
+        "foxmovies:117:1"
+        "foxfamily:120:1"
+        "wsdy:139:1"
+        "animaxhd:150:5"
+        "tvn:155:5"
+        "wszw:160:5"
+        "discoveryasia:208:2"
+        "discovery:209:2"
+        "dwxq:210:2"
+        "discoverykx:211:2"
+        "dmax:212:2"
+        "tlclysh:213:2"
+        "gjdl:215:2"
+        "gjdlys:216:2"
+        "gjdlyr:217:2"
+        "gjdlgq:218:2"
+        "bbcearth:220:2"
+        "history:223:2"
+        "cnn:316:3"
+        "foxnews:318:3"
+        "bbcworldnews:320:3"
+        "bloomberg:321:3"
+        "yzxw:322:3"
+        "skynews:323:3"
+        "dw:324:3"
+        "euronews:326:3"
+        "nhk:328:3"
+        "fhwszx:366:3"
+        "fhwsxg:367:3"
+        "fhwszh:368:3"
+        "disney:441:4"
+        "boomerang:445:4"
+        "cbeebies:447:4"
+        "babytv:448:4"
+        "bbclifestyle:502:5"
+        "eentertainment:506:5"
+        "diva:508:5"
+        "warner:510:5"
+        "AXN:512:5"
+        "blueantextreme:516:5"
+        "blueantentertainmet:517:5"
+        "fox:518:5"
+        "foxcrime:523:5"
+        "fx:524:5"
+        "lifetime:525:5"
+        "yzms:527:5"
+        "channelv:534:5"
+        "fhwszw:548:5"
+        "zgzwws:556:5"
+        "foxsports:670:6"
+        "foxsports2:671:6"
+        "foxsports3:672:6" )
 
     if [ -z ${2+x} ] 
     then
@@ -1981,6 +2393,36 @@ schedule()
                     generateSchedule "$2"
                 fi
             done
+
+            if [ "$found" == 0 ] 
+            then
+                echo -e "\nnot found: $2\ntrying NioTV...\n"
+                for chnl_niotv in "${chnls_niotv[@]}" ; do
+                    chnl_niotv_id=${chnl_niotv%%:*}
+                    if [ "$chnl_niotv_id" == "$2" ] 
+                    then
+                        found=1
+                        chnl_niotv_num=${chnl_niotv#*:}
+                        generateScheduleNiotv "$chnl_niotv_num"
+                    fi
+                done
+            fi
+
+            if [ "$found" == 0 ] 
+            then
+                echo -e "\nNioTV not found: $2\ntrying NowTV...\n"
+                for chnl_nowtv in "${chnls_nowtv[@]}" ; do
+                    chnl_nowtv_id=${chnl_nowtv%%:*}
+                    if [ "$chnl_nowtv_id" == "$2" ] 
+                    then
+                        found=1
+                        chnl_nowtv_num_group=${chnl_nowtv#*:}
+                        chnl_nowtv_num=${chnl_nowtv_num_group%%:*}
+                        chnl_nowtv_group=${chnl_nowtv_num_group#*:}
+                        generateScheduleNowtv "$chnl_nowtv_num" "$chnl_nowtv_group"
+                    fi
+                done
+            fi
 
             [ "$found" == 0 ] && echo "no support yet ~"
         ;;
