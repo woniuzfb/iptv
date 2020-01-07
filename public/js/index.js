@@ -176,8 +176,51 @@ function playVideo() {
       if (sourcesJsonParsed[index].hasOwnProperty('channels') && sourcesJsonParsed[index].channels[0] && sourcesJsonParsed[index].channels[0].hasOwnProperty('url')) {
         hlsVideoUrl = sourcesJsonParsed[index].channels[0].url;
         videojsLoad();
-        if (sourcesJsonParsed[index].hasOwnProperty('overlay') && sourcesJsonParsed[index].channels[0].hasOwnProperty('overlay')) {
-          videoOverlay();
+        if (sourcesJsonParsed[index].hasOwnProperty('overlay')) {
+          if (sourcesJsonParsed[index].overlay.hasOwnProperty('force') && sourcesJsonParsed[index].overlay.force === 1) {
+            if (sourcesJsonParsed[index].overlay.hasOwnProperty('switch') && sourcesJsonParsed[index].overlay.switch === 'on') {
+              overlayHeight = sourcesJsonParsed[index].overlay.height;
+              overlayWidth = sourcesJsonParsed[index].overlay.width;
+              overlayMarginLeft = sourcesJsonParsed[index].overlay.margin_left;
+              overlayMarginTop = sourcesJsonParsed[index].overlay.margin_top;
+              overlayHeightFullscreen = sourcesJsonParsed[index].overlay.height_fullscreen;
+              overlayWidthFullscreen = sourcesJsonParsed[index].overlay.width_fullscreen;
+              overlayMarginLeftFullscreen = sourcesJsonParsed[index].overlay.margin_left_fullscreen;
+              overlayMarginTopFullscreen = sourcesJsonParsed[index].overlay.margin_top_fullscreen;
+              videoOverlay();
+              customOverlay();
+            }
+          } else if (sourcesJsonParsed[index].channels[0].hasOwnProperty('overlay') && sourcesJsonParsed[index].channels[0].overlay.length > 0) {
+            let overlay = sourcesJsonParsed[index].channels[0].overlay;
+            if ((overlay === 'on' && sourcesJsonParsed[index].overlay.reverse === 0) || (overlay === 'off' && sourcesJsonParsed[index].overlay.reverse === 1)) {
+              overlayHeight = sourcesJsonParsed[index].overlay.height;
+              overlayWidth = sourcesJsonParsed[index].overlay.width;
+              overlayMarginLeft = sourcesJsonParsed[index].overlay.margin_left;
+              overlayMarginTop = sourcesJsonParsed[index].overlay.margin_top;
+              overlayHeightFullscreen = sourcesJsonParsed[index].overlay.height_fullscreen;
+              overlayWidthFullscreen = sourcesJsonParsed[index].overlay.width_fullscreen;
+              overlayMarginLeftFullscreen = sourcesJsonParsed[index].overlay.margin_left_fullscreen;
+              overlayMarginTopFullscreen = sourcesJsonParsed[index].overlay.margin_top_fullscreen;
+              videoOverlay();
+              customOverlay();
+            } else if (overlay.indexOf(':') !== -1) {
+              let overlayArr = overlay.split(':');
+              if (sourcesJsonParsed[index].overlay.hasOwnProperty('reverse')) {
+                if ((sourcesJsonParsed[index].overlay.reverse === 0 && overlayArr[0] === 'on') || (sourcesJsonParsed[index].overlay.reverse === 1 && overlayArr[0] === 'off')) {
+                  overlayHeight = overlayArr[1];
+                  overlayWidth = overlayArr[2];
+                  overlayMarginLeft = overlayArr[3];
+                  overlayMarginTop = overlayArr[4];
+                  overlayHeightFullscreen = overlayArr[5];
+                  overlayWidthFullscreen = overlayArr[6];
+                  overlayMarginLeftFullscreen = overlayArr[7];
+                  overlayMarginTopFullscreen = overlayArr[8];
+                  videoOverlay();
+                  customOverlay();
+                }
+              }
+            }
+          }
         }
         showSchedule(sourcesJsonParsed[index].channels[0].schedule);
         resetSourceReg();
@@ -187,8 +230,51 @@ function playVideo() {
   } else if (jsonChannels[sourceReg]) {
     hlsVideoUrl = jsonChannels[sourceReg][programId]['url'];
     videojsLoad();
-    if (jsonChannels[sourceReg].hasOwnProperty('overlay') && jsonChannels[sourceReg][programId].hasOwnProperty('overlay')) {
-      videoOverlay();
+    if (jsonChannels[sourceReg].hasOwnProperty('overlay')) {
+      if (jsonChannels[sourceReg].overlay.hasOwnProperty('force') && jsonChannels[sourceReg].overlay.force === 1) {
+        if (jsonChannels[sourceReg].overlay.hasOwnProperty('switch') && jsonChannels[sourceReg].overlay.switch === 'on') {
+          overlayHeight = jsonChannels[sourceReg].overlay.height;
+          overlayWidth = jsonChannels[sourceReg].overlay.width;
+          overlayMarginLeft = jsonChannels[sourceReg].overlay.margin_left;
+          overlayMarginTop = jsonChannels[sourceReg].overlay.margin_top;
+          overlayHeightFullscreen = jsonChannels[sourceReg].overlay.height_fullscreen;
+          overlayWidthFullscreen = jsonChannels[sourceReg].overlay.width_fullscreen;
+          overlayMarginLeftFullscreen = jsonChannels[sourceReg].overlay.margin_left_fullscreen;
+          overlayMarginTopFullscreen = jsonChannels[sourceReg].overlay.margin_top_fullscreen;
+          videoOverlay();
+          customOverlay();
+        }
+      } else if (jsonChannels[sourceReg][programId].hasOwnProperty('overlay') && jsonChannels[sourceReg][programId].overlay.length > 0) {
+        let overlay = jsonChannels[sourceReg][programId].overlay;
+        if ((overlay === 'on' && jsonChannels[sourceReg].overlay.reverse === 0) || (overlay === 'off' && jsonChannels[sourceReg].overlay.reverse === 1)) {
+          overlayHeight = jsonChannels[sourceReg].overlay.height;
+          overlayWidth = jsonChannels[sourceReg].overlay.width;
+          overlayMarginLeft = jsonChannels[sourceReg].overlay.margin_left;
+          overlayMarginTop = jsonChannels[sourceReg].overlay.margin_top;
+          overlayHeightFullscreen = jsonChannels[sourceReg].overlay.height_fullscreen;
+          overlayWidthFullscreen = jsonChannels[sourceReg].overlay.width_fullscreen;
+          overlayMarginLeftFullscreen = jsonChannels[sourceReg].overlay.margin_left_fullscreen;
+          overlayMarginTopFullscreen = jsonChannels[sourceReg].overlay.margin_top_fullscreen;
+          videoOverlay();
+          customOverlay();
+        } else if (overlay.indexOf(':') !== -1) {
+          let overlayArr = overlay.split(':');
+          if (jsonChannels[sourceReg].overlay.hasOwnProperty('reverse')) {
+            if ((jsonChannels[sourceReg].overlay.reverse === 0 && overlayArr[0] === 'on') || (jsonChannels[sourceReg].overlay.reverse === 1 && overlayArr[0] === 'off')) {
+              overlayHeight = overlayArr[1];
+              overlayWidth = overlayArr[2];
+              overlayMarginLeft = overlayArr[3];
+              overlayMarginTop = overlayArr[4];
+              overlayHeightFullscreen = overlayArr[5];
+              overlayWidthFullscreen = overlayArr[6];
+              overlayMarginLeftFullscreen = overlayArr[7];
+              overlayMarginTopFullscreen = overlayArr[8];
+              videoOverlay();
+              customOverlay();
+            }
+          }
+        }
+      }
     }
     showSchedule(jsonChannels[sourceReg][programId].schedule);
     resetSourceReg();
@@ -201,8 +287,51 @@ function playVideo() {
       if (channel.chnl_id === programId) {
         hlsVideoUrl = channel.url;
         videojsLoad();
-        if (sourcesJsonParsed[sourceReg].hasOwnProperty('overlay') && channel.hasOwnProperty('overlay')) {
-          videoOverlay();
+        if (sourcesJsonParsed[sourceReg].hasOwnProperty('overlay')) {
+          if (sourcesJsonParsed[sourceReg].overlay.hasOwnProperty('force') && sourcesJsonParsed[sourceReg].overlay.force === 1) {
+            if (sourcesJsonParsed[sourceReg].overlay.hasOwnProperty('switch') && sourcesJsonParsed[sourceReg].overlay.switch === 'on') {
+              overlayHeight = sourcesJsonParsed[sourceReg].overlay.height;
+              overlayWidth = sourcesJsonParsed[sourceReg].overlay.width;
+              overlayMarginLeft = sourcesJsonParsed[sourceReg].overlay.margin_left;
+              overlayMarginTop = sourcesJsonParsed[sourceReg].overlay.margin_top;
+              overlayHeightFullscreen = sourcesJsonParsed[sourceReg].overlay.height_fullscreen;
+              overlayWidthFullscreen = sourcesJsonParsed[sourceReg].overlay.width_fullscreen;
+              overlayMarginLeftFullscreen = sourcesJsonParsed[sourceReg].overlay.margin_left_fullscreen;
+              overlayMarginTopFullscreen = sourcesJsonParsed[sourceReg].overlay.margin_top_fullscreen;
+              videoOverlay();
+              customOverlay();
+            }
+          } else if (channel.hasOwnProperty('overlay') && channel.overlay.length > 0) {
+            let overlay = channel.overlay;
+            if ((overlay === 'on' && sourcesJsonParsed[sourceReg].overlay.reverse === 0) || (overlay === 'off' && sourcesJsonParsed[sourceReg].overlay.reverse === 1)) {
+              overlayHeight = sourcesJsonParsed[sourceReg].overlay.height;
+              overlayWidth = sourcesJsonParsed[sourceReg].overlay.width;
+              overlayMarginLeft = sourcesJsonParsed[sourceReg].overlay.margin_left;
+              overlayMarginTop = sourcesJsonParsed[sourceReg].overlay.margin_top;
+              overlayHeightFullscreen = sourcesJsonParsed[sourceReg].overlay.height_fullscreen;
+              overlayWidthFullscreen = sourcesJsonParsed[sourceReg].overlay.width_fullscreen;
+              overlayMarginLeftFullscreen = sourcesJsonParsed[sourceReg].overlay.margin_left_fullscreen;
+              overlayMarginTopFullscreen = sourcesJsonParsed[sourceReg].overlay.margin_top_fullscreen;
+              videoOverlay();
+              customOverlay();
+            } else if (overlay.indexOf(':') !== -1) {
+              let overlayArr = overlay.split(':');
+              if (sourcesJsonParsed[sourceReg].overlay.hasOwnProperty('reverse')) {
+                if ((sourcesJsonParsed[sourceReg].overlay.reverse === 0 && overlayArr[0] === 'on') || (sourcesJsonParsed[sourceReg].overlay.reverse === 1 && overlayArr[0] === 'off')) {
+                  overlayHeight = overlayArr[1];
+                  overlayWidth = overlayArr[2];
+                  overlayMarginLeft = overlayArr[3];
+                  overlayMarginTop = overlayArr[4];
+                  overlayHeightFullscreen = overlayArr[5];
+                  overlayWidthFullscreen = overlayArr[6];
+                  overlayMarginLeftFullscreen = overlayArr[7];
+                  overlayMarginTopFullscreen = overlayArr[8];
+                  videoOverlay();
+                  customOverlay();
+                }
+              }
+            }
+          }
         }
         showSchedule(channel.schedule);
         resetSourceReg();
@@ -766,13 +895,22 @@ function resetSourceReg() {
   updateAside();
 }
 
-function setOverlay() {
+function customOverlay() {
+  const videoOverlay = document.querySelector('.vjs-overlay');
+  videoOverlay.setAttribute('style', 'height:' + overlayHeight +'%; width: ' + overlayWidth + '%; margin-left: ' + overlayMarginLeft + '%; margin-top: ' + overlayMarginTop + '%;');
+}
+
+function setOverlayFullscreen() {
   const videoOverlay = document.querySelector('.vjs-overlay');
   if (videoOverlay) {
+    let isCustomOverlay = 0;
+    if (videoOverlay.hasAttribute('style')) {
+      isCustomOverlay = 1;
+    }
     if (document.fullscreenElement) {
       let width = window.screen.width * window.devicePixelRatio;
       let height = window.screen.height * window.devicePixelRatio;
-      let videoWidth,videoHeight,overlayWidth,overlayHeight,marginLeft,marginTop;
+      let videoWidth,videoHeight,newWidth,newHeight,marginLeft,marginTop;
       if (width > height && width / height !== 1.6) {
         videoHeight = height;
         videoWidth = videoHeight * 16 / 9;
@@ -780,14 +918,18 @@ function setOverlay() {
         videoWidth = width;
         videoHeight = videoWidth * 9 / 16;
       }
-      overlayWidth = Math.floor(videoWidth * 10 / 100 / window.devicePixelRatio);
-      overlayHeight = Math.floor(videoHeight * 24 / 100 / window.devicePixelRatio);
-      marginLeft = Math.floor(videoWidth * 38 / 100 / window.devicePixelRatio);
-      marginTop = Math.floor(videoHeight * 22 / 100 / window.devicePixelRatio);
+      newHeight = Math.floor(videoHeight * overlayHeightFullscreen / 100 / window.devicePixelRatio);
+      newWidth = Math.floor(videoWidth * overlayWidthFullscreen / 100 / window.devicePixelRatio);
+      marginLeft = Math.floor(videoWidth * overlayMarginLeftFullscreen / 100 / window.devicePixelRatio);
+      marginTop = Math.floor(videoHeight * overlayMarginTopFullscreen / 100 / window.devicePixelRatio);
 
-      videoOverlay.setAttribute('style', 'width:' + overlayWidth +'px; height: ' + overlayHeight + 'px; margin-left: ' + marginLeft + 'px; margin-top: ' + marginTop + 'px;');
+      videoOverlay.setAttribute('style', 'width:' + newWidth +'px; height: ' + newHeight + 'px; margin-left: ' + marginLeft + 'px; margin-top: ' + marginTop + 'px;');
     } else {
-      videoOverlay.removeAttribute('style');
+      if (isCustomOverlay === 1) {
+        videoOverlay.setAttribute('style', 'height:' + overlayHeight +'%; width: ' + overlayWidth + '%; margin-left: ' + overlayMarginLeft + '%; margin-top: ' + overlayMarginTop + '%;');
+      } else {
+        videoOverlay.removeAttribute('style');
+      }
     }
   }
 }
@@ -1003,6 +1145,7 @@ function playbackOrUpcoming(e) {
 
 let programId,sourcesJson,sourcesJsonParsed,jsonChannels = {},hlsVideoUrl,schedules = {};
 let sourceReg = 'hrtn',sourceRegDefault = 'hrtn';
+let overlayHeight,overlayWidth,overlayMarginLeft,overlayMarginTop,overlayHeightFullscreen,overlayWidthFullscreen,overlayMarginLeftFullscreen,overlayMarginTopFullscreen;
 let localJson = 'channels.json';
 let remoteJson = 'http://hbo.epub.fun/channels.json';
 let scheduleJson = 'http://hbo.epub.fun/schedule.json';
@@ -1130,11 +1273,11 @@ sourcesField.addEventListener("click", switchSource);
 categoriesField.addEventListener("click", switchCategory);
 scheduleField.addEventListener("click", playbackOrUpcoming);
 channelsField.addEventListener("click", switchChannel);
-document.addEventListener("fullscreenchange", setOverlay);
-document.addEventListener("webkitfullscreenchange", setOverlay);
-document.addEventListener("mozfullscreenchange", setOverlay);
-document.addEventListener("msfullscreenchange", setOverlay);
-window.addEventListener("orientationchange", setOverlay);
+document.addEventListener("fullscreenchange", setOverlayFullscreen);
+document.addEventListener("webkitfullscreenchange", setOverlayFullscreen);
+document.addEventListener("mozfullscreenchange", setOverlayFullscreen);
+document.addEventListener("msfullscreenchange", setOverlayFullscreen);
+window.addEventListener("orientationchange", setOverlayFullscreen);
 
 if (localStorage.getItem('dark') === '1'){
   switchBtn.click();

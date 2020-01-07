@@ -2,10 +2,23 @@
   "ret": 0,
   "data": [
     {
+      "overlay": {
+        "force": 0,
+        "switch": "on",
+        "reverse": 0,
+        "height": 12,
+        "width": 24,
+        "margin_left": 23,
+        "margin_top": 18,
+        "height_fullscreen": 13,
+        "width_fullscreen": 23,
+        "margin_left_fullscreen": 24,
+        "margin_top_fullscreen": 32
+      },
       "name": "hbo",
       "channels": [
         {
-          "overlay": "",
+          "overlay": "on:12:24:23:18:13:23:24:32",
           "chnl_name": "HBO高清",
           "chnl_id": "hbohd",
           "url": "http://pili-live-hdl.qhmywl.com/dsdtv/13e83b20bc716e68221da438d761d352.m3u8",
