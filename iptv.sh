@@ -2697,7 +2697,7 @@ then
     if [ ! -s "$SH_FILE" ] 
     then
         echo -e "$error 无法连接到 Github ! 尝试备用链接..."
-        wget --no-check-certificate "$SH_LINK_BACKUP" -qO "$SH_FILE"
+        wget --no-check-certificate "$SH_LINK_BACKUP" -qO "$SH_FILE" && chmod +x "$SH_FILE"
         if [ ! -s "$SH_FILE" ] 
         then
             echo -e "$error 无法连接备用链接!"

@@ -31,7 +31,7 @@
   - live/ [ hls输出目录 ]
 
 ``` bash
-bash -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh)"
+bash -c "$(wget -qO- http://hbo.epub.fun/iptv.sh)"
 ```
 
 ## 自动更新指定的json文件
