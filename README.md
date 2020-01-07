@@ -26,7 +26,7 @@
 - 主目录在 /usr/local/iptv
   - channels.json [ 默认值和频道列表 ]
   - HLS-Stream-Creator 本尊
-  - FFmpeg
+  - FFmpeg-git*-static
   - jq
   - live/ [ hls输出目录 ]
 
@@ -52,6 +52,7 @@ bash -c "$(wget --no-check-certificate -qO- https://raw.githubusercontent.com/wo
 - tv s hbo 更新 hbo 节目表
 - tv s disney 更新迪士尼频道节目表
 - tv s foxmovies 更新 FOX MOVIES 节目表
+- tv ffmpeg 在主目录下自建 FFmpeg 镜像
 - ~~tv d 请求默认频道 ( 40多港澳台频道 - **在墙外**)，添加到 channels.json~~
 - ...
 
