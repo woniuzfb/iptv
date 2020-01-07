@@ -2,10 +2,16 @@
 
 set -euo pipefail
 
-sh_ver="0.1.3"
+sh_ver="1.0.0"
+SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
+SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
 IPTV_ROOT="/usr/local/iptv"
+FFMPEG_MIRROR_LINK="http://hbo.epub.fun/ffmpeg"
+FFMPEG_MIRROR_ROOT="$IPTV_ROOT/ffmpeg"
 LIVE_ROOT="$IPTV_ROOT/live"
+CREATOR_LINK="https://raw.githubusercontent.com/bentasker/HLS-Stream-Creator/master/HLS-Stream-Creator.sh"
+CREATOR_LINK_BACKUP="http://hbo.epub.fun/HLS-Stream-Creator.sh"
 CREATOR_FILE="$IPTV_ROOT/HLS-Stream-Creator.sh"
 JQ_FILE="$IPTV_ROOT/jq"
 CHANNELS_FILE="$IPTV_ROOT/channels.json"
@@ -158,6 +164,7 @@ SyncFile()
                     esac
                 done
             done <<< "$d_sync_pairs"
+            [ -s "$d_sync_file" ] || printf '{"%s":0}' "ret" > "$d_sync_file"
             if [ "$action" == "add" ] || [ -z "$($JQ_FILE "$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")' "$d_sync_file")" ]
             then
                 jq_channel_add="${jq_channel_add}}]"
@@ -267,7 +274,7 @@ InstallFfmpeg()
             ffmpeg_package="ffmpeg-git-i686-static.tar.xz"
         fi
         FFMPEG_PACKAGE_FILE="$IPTV_ROOT/$ffmpeg_package"
-        wget --no-check-certificate "https://johnvansickle.com/ffmpeg/builds/$ffmpeg_package" --show-progress -qO "$FFMPEG_PACKAGE_FILE"
+        wget --no-check-certificate "$FFMPEG_MIRROR_LINK/builds/$ffmpeg_package" --show-progress -qO "$FFMPEG_PACKAGE_FILE"
         [ ! -e "$FFMPEG_PACKAGE_FILE" ] && echo -e "$error ffmpeg压缩包 下载失败 !" && exit 1
         tar -xJf "$FFMPEG_PACKAGE_FILE" -C "$IPTV_ROOT" && rm -rf "${FFMPEG_PACKAGE_FILE:-'notfound'}"
         FFMPEG=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
@@ -308,7 +315,17 @@ Install()
     else
         mkdir -p "$IPTV_ROOT"
         echo -e "$info 下载脚本..."
-        wget --no-check-certificate "https://raw.githubusercontent.com/bentasker/HLS-Stream-Creator/master/HLS-Stream-Creator.sh" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
+        wget --no-check-certificate "$CREATOR_LINK" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
+        if [ ! -s "$CREATOR_FILE" ] 
+        then
+            echo -e "$error 无法连接到 Github ! 尝试备用链接..."
+            wget --no-check-certificate "$CREATOR_LINK_BACKUP" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
+            if [ ! -s "$CREATOR_FILE" ] 
+            then
+                rm -rf "${IPTV_ROOT:-'notfound'}"
+                exit 1
+            fi
+        fi
         echo -e "$info 脚本就绪..."
         InstallFfmpeg
         InstallJq
@@ -351,13 +368,52 @@ Uninstall()
 
 Update()
 {
-    sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1 || true)
-    [ -z "$sh_new_ver" ] && echo -e "$error 无法链接到 Github !" && exit 1
+    CheckRelease
+    rm -rf "$IPTV_ROOT"/ffmpeg-git-*/
+    echo -e "$info 更新 FFmpeg..."
+    InstallFfmpeg
+    rm -rf "${JQ_FILE:-'notfound'}"
+    echo -e "$info 更新 Jq..."
+    InstallJq
+    echo -e "$info 更新 iptv 脚本..."
+    sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1 || true)
+    if [ -z "$sh_new_ver" ] 
+    then
+        echo -e "$error 无法连接到 Github ! 尝试备用链接..."
+        sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1 || true)
+        [ -z "$sh_new_ver" ] && echo -e "$error 无法连接备用链接!" && exit 1
+    fi
+
     if [ "$sh_new_ver" != "$sh_ver" ] 
     then
         rm -rf "${LOCK_FILE:-'notfound'}"
     fi
-    wget --no-check-certificate "https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh" -qO "$SH_FILE" && chmod +x "$SH_FILE"
+    wget --no-check-certificate "$SH_LINK" -qO "$SH_FILE" && chmod +x "$SH_FILE"
+    if [ ! -s "$SH_FILE" ] 
+    then
+        echo -e "$error 无法连接到 Github ! 尝试备用链接..."
+        wget --no-check-certificate "$SH_LINK_BACKUP" -qO "$SH_FILE"
+        if [ ! -s "$SH_FILE" ] 
+        then
+            echo -e "$error 无法连接备用链接!"
+            exit 1
+        fi
+    fi
+
+    rm -rf ${CREATOR_FILE:-'notfound'}
+    echo -e "$info 更新 Hls Stream Creator 脚本..."
+    wget --no-check-certificate "$CREATOR_LINK" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
+    if [ ! -s "$CREATOR_FILE" ] 
+    then
+        echo -e "$error 无法连接到 Github ! 尝试备用链接..."
+        wget --no-check-certificate "$CREATOR_LINK_BACKUP" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
+        if [ ! -s "$CREATOR_FILE" ] 
+        then
+            rm -rf "${IPTV_ROOT:-'notfound'}"
+            exit 1
+        fi
+    fi
+
     echo -e "脚本已更新为最新版本[ $sh_new_ver ] !(输入: tv 使用)" && exit 0
 }
 
@@ -366,7 +422,24 @@ UpdateSelf()
     sh_old_ver=$($JQ_FILE '.default.version' $CHANNELS_FILE)
     if [ "$sh_old_ver" != "$sh_ver" ] 
     then
-        $JQ_FILE '(.default)='"$default"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+        default_seg_dir_name=$($JQ_FILE -r '.default.seg_dir_name' "$CHANNELS_FILE")
+        default_seg_length=$($JQ_FILE -r '.default.seg_length' "$CHANNELS_FILE")
+        default_seg_count=$($JQ_FILE -r '.default.seg_count' "$CHANNELS_FILE")
+        default_video_codec=$($JQ_FILE -r '.default.video_codec' "$CHANNELS_FILE")
+        default_audio_codec=$($JQ_FILE -r '.default.audio_codec' "$CHANNELS_FILE")
+        default_quality=$($JQ_FILE -r '.default.quality' "$CHANNELS_FILE")
+        default_bitrates=$($JQ_FILE -r '.default.bitrates' "$CHANNELS_FILE")
+        default_const=$($JQ_FILE -r '.default.const' "$CHANNELS_FILE")
+        default_encrypt=$($JQ_FILE -r '.default.encrypt' "$CHANNELS_FILE")
+        default_input_flags=$($JQ_FILE -r '.default.input_flags' "$CHANNELS_FILE")
+        default_output_flags=$($JQ_FILE -r '.default.output_flags' "$CHANNELS_FILE")
+        default_sync_file=$($JQ_FILE -r '.default.sync_file' "$CHANNELS_FILE")
+        default_sync_index=$($JQ_FILE -r '.default.sync_index' "$CHANNELS_FILE")
+        default_sync_pairs=$($JQ_FILE -r '.default.sync_pairs' "$CHANNELS_FILE")
+        default_schedule_file=$($JQ_FILE -r '.default.schedule_file' "$CHANNELS_FILE")
+        default=$($JQ_FILE '(.seg_dir_name)="'"$default_seg_dir_name"'"|(.seg_length)='"$default_seg_length"'|(.seg_count)='"$default_seg_count"'|(.video_codec)="'"$default_video_codec"'"|(.audio_codec)="'"$default_audio_codec"'"|(.quality)="'"$default_quality"'"|(.bitrates)="'"$default_bitrates"'"|(.const)="'"$default_const"'"|(.encrypt)="'"$default_encrypt"'"|(.input_flags)="'"$default_input_flags"'"|(.output_flags)="'"$default_output_flags"'"|(.sync_file)="'"$default_sync_file"'"|(.sync_index)="'"$default_sync_index"'"|(.sync_pairs)="'"$default_sync_pairs"'"|(.schedule_file)="'"$default_schedule_file"'"' <<< "$default")
+
+        $JQ_FILE '. + {default: '"$default"'}' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
 
         pids=$($JQ_FILE '.channels[].pid' $CHANNELS_FILE)
@@ -537,7 +610,7 @@ ListChannels()
                 chnls_br_a=$(echo "$chnls_br" | cut -d- -f1)
                 chnls_br_b=" 分辨率: "$(echo "$chnls_br" | cut -d- -f2)
                 chnls_quality_text="${chnls_quality_text}[ -maxrate ${chnls_br_a}k -bufsize ${chnls_br_a}k${chnls_br_b} ] "
-                chnls_bitrates_text="${chnls_bitrates_text}[ 比特率 ${chnls_br_a}k${chnls_const_index_text} ] "
+                chnls_bitrates_text="${chnls_bitrates_text}[ 比特率 ${chnls_br_a}k${chnls_br_b}${chnls_const_index_text} ] "
                 chnls_playlist_file_text="$chnls_playlist_file_text$green$chnls_output_dir_root/${chnls_playlist_name_index}_$chnls_br_a.m3u8$plain "
             else
                 chnls_quality_text="${chnls_quality_text}[ -maxrate ${chnls_br}k -bufsize ${chnls_br}k ] "
@@ -639,7 +712,7 @@ GetChannelInfo(){
             chnl_br_a=$(echo "$chnl_br" | cut -d- -f1)
             chnl_br_b=" 分辨率: "$(echo "$chnl_br" | cut -d- -f2)
             chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br_a}k -bufsize ${chnl_br_a}k${chnl_br_b} ] "
-            chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br_a}k${chnl_const_text} ] "
+            chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br_a}k${chnl_br_b}${chnl_const_text} ] "
             chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br_a.m3u8$plain "
         else
             chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br}k -bufsize ${chnl_br}k ] "
@@ -1826,6 +1899,9 @@ schedule()
 #        "hbofamily:HBO Family"
 #        "foxmovies:FOX MOVIES"
 #        "disney:Disney"
+        "fhwszx:凤凰卫视资讯台"
+        "fhwsxg:凤凰卫视香港台"
+        "fhwszw:凤凰卫视中文台"
         "foxfamily:福斯家庭電影台"
         "hlwdy:好萊塢電影"
         "xwdy:星衛HD電影台"
@@ -2185,7 +2261,7 @@ schedule()
         "nhk:328:3"
         "fhwszx:366:3"
         "fhwsxg:367:3"
-        "fhwszh:368:3"
+        "fhwszw:368:3"
         "disney:441:4"
         "boomerang:445:4"
         "cbeebies:447:4"
@@ -2530,14 +2606,85 @@ done
 
 cmd=$*
 case "$cmd" in
-    "e") vi "$CHANNELS_FILE" && exit 0
+    "e") 
+        [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+        vi "$CHANNELS_FILE" && exit 0
     ;;
     "d")
+        [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
         wget "$DEFAULT_FILE" -qO "$CHANNELS_TMP"
         channels=$(< $CHANNELS_TMP)
         $JQ_FILE '.channels += '"$channels"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
         echo && echo -e "$info 频道添加成功 !" && echo
+        exit 0
+    ;;
+    "ffmpeg") 
+        [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+        mkdir -p "$FFMPEG_MIRROR_ROOT/builds"
+        mkdir -p "$FFMPEG_MIRROR_ROOT/releases"
+        git_download=0
+        release_download=0
+        git_version_old=""
+        release_version_old=""
+        if [ -e "$FFMPEG_MIRROR_ROOT/index.html" ] 
+        then
+            while IFS= read -r line
+            do
+                if [[ $line == *"<th>"* ]] 
+                then
+                    if [[ $line == *"git"* ]] 
+                    then
+                        git_version_old=$line
+                    else
+                        release_version_old=$line
+                    fi
+                fi
+            done < "$FFMPEG_MIRROR_ROOT/index.html"
+        fi
+
+        wget --no-check-certificate "https://www.johnvansickle.com/ffmpeg/index.html" -qO "$FFMPEG_MIRROR_ROOT/index.html"
+        wget --no-check-certificate "https://www.johnvansickle.com/ffmpeg/style.css" -qO "$FFMPEG_MIRROR_ROOT/style.css"
+
+        while IFS= read -r line
+        do
+            if [[ $line == *"<th>"* ]] 
+            then
+                if [[ $line == *"git"* ]] 
+                then
+                    git_version_new=$line
+                    [ "$git_version_new" != "$git_version_old" ] && git_download=1
+                else
+                    release_version_new=$line
+                    [ "$release_version_new" != "$release_version_old" ] && release_download=1
+                fi
+            fi
+
+            if [[ $line == *"tar.xz"* ]]  
+            then
+                if [[ $line == *"git"* ]] && [ "$git_download" == 1 ]
+                then
+                    line=${line#*<td><a href=\"}
+                    git_link=${line%%\" style*}
+                    wget --no-check-certificate "$git_link" --show-progress -qP "$FFMPEG_MIRROR_ROOT/builds/"
+                else 
+                    if [ "$release_download" == 1 ] 
+                    then
+                        line=${line#*<td><a href=\"}
+                        release_link=${line%%\" style*}
+                        wget --no-check-certificate "$release_link" --show-progress -qP "$FFMPEG_MIRROR_ROOT/releases/"
+                    fi
+                fi
+            fi
+
+        done < "$FFMPEG_MIRROR_ROOT/index.html"
+
+        echo && echo "输入镜像网站链接(比如：$FFMPEG_MIRROR_LINK)"
+        read -p "(默认: 取消): " FFMPEG_LINK
+
+        [ -z "$FFMPEG_LINK" ] && echo "已取消..." && exit 1
+
+        sed -i "s+https://johnvansickle.com/ffmpeg/\(builds\|releases\)/\(.*\).tar.xz\"+$FFMPEG_LINK/\1/\2.tar.xz\"+g" "$FFMPEG_MIRROR_ROOT/index.html"
         exit 0
     ;;
     *)
@@ -2546,7 +2693,17 @@ esac
 
 if [ "$use_menu" == "1" ]
 then
-    [ ! -e "$SH_FILE" ] && wget --no-check-certificate "https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh" -qO "$SH_FILE" && chmod +x "$SH_FILE"
+    [ ! -e "$SH_FILE" ] && wget --no-check-certificate "$SH_LINK" -qO "$SH_FILE" && chmod +x "$SH_FILE"
+    if [ ! -s "$SH_FILE" ] 
+    then
+        echo -e "$error 无法连接到 Github ! 尝试备用链接..."
+        wget --no-check-certificate "$SH_LINK_BACKUP" -qO "$SH_FILE"
+        if [ ! -s "$SH_FILE" ] 
+        then
+            echo -e "$error 无法连接备用链接!"
+            exit 1
+        fi
+    fi
     echo -e "  IPTV 一键管理脚本（mpegts => hls）${red}[v$sh_ver]$plain
   ---- MTimer | http://hbo.epub.fun ----
 
