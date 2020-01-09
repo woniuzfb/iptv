@@ -2,23 +2,49 @@
   "ret": 0,
   "data": [
     {
-      "overlay": {
+      "overlay": [{
         "force": 0,
         "switch": "on",
         "reverse": 0,
         "height": 12,
-        "width": 24,
-        "margin_left": 23,
-        "margin_top": 18,
+        "width": 25,
+        "margin_left": 22,
+        "margin_top": 19,
         "height_fullscreen": 13,
-        "width_fullscreen": 23,
-        "margin_left_fullscreen": 24,
-        "margin_top_fullscreen": 32
+        "width_fullscreen": 24,
+        "margin_left_fullscreen": 22,
+        "margin_top_fullscreen": 33
       },
+      {
+        "force": 0,
+        "switch": "on",
+        "reverse": 0,
+        "height": 25,
+        "width": 10,
+        "margin_left": -47,
+        "margin_top": 11,
+        "height_fullscreen": 25,
+        "width_fullscreen": 10,
+        "margin_left_fullscreen": -47,
+        "margin_top_fullscreen": 20
+      },
+      {
+        "force": 0,
+        "switch": "on",
+        "reverse": 0,
+        "height": 6,
+        "width": 55,
+        "margin_left": -28,
+        "margin_top": -17,
+        "height_fullscreen": 6,
+        "width_fullscreen": 55,
+        "margin_left_fullscreen": -28,
+        "margin_top_fullscreen": -30
+      }],
       "name": "hbo",
       "channels": [
         {
-          "overlay": "on:12:24:23:18:13:23:24:32",
+          "overlay": "on:12:25:22:19:13:24:22:33,on:25:10:-47:11:25:10:-47:20,on:6:55:-28:-17:6:55:-28:-30",
           "chnl_name": "HBO高清",
           "chnl_id": "hbohd",
           "url": "http://pili-live-hdl.qhmywl.com/dsdtv/13e83b20bc716e68221da438d761d352.m3u8",
