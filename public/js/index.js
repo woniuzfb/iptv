@@ -143,7 +143,11 @@ function videojsLoad() {
       alertInfo('频道发生错误！',10);
       this.error(null).pause().load().currentTime(time).play();
     } else if (this.error().code === 4) {
-      alertInfo('频道不可用！',10);
+      if (hlsVideoUrl.indexOf('playtype=lookback') !== -1) {
+        alertInfo('录像还未准备好！',10);
+      } else {
+        alertInfo('频道不可用！',10);
+      }
       /*
       if (programId) {
         localStorage.removeItem(sourceReg+'_acc');
@@ -218,6 +222,7 @@ function playVideo() {
 }
 
 function videoOverlay(sourceOverlay,channel) {
+  videoField.firstChild.classList.add('vjs-16-9');
   let overlays = [],channelOverlay,channelOverlayArr = [];
   if (channel.hasOwnProperty('overlay') && channel.overlay.length > 0) {
     channelOverlay = channel.overlay;
@@ -265,26 +270,30 @@ function setOverlayFullscreen() {
   let width = window.screen.width * window.devicePixelRatio;
   let height = window.screen.height * window.devicePixelRatio;
   let videoWidth,videoHeight,newWidth,newHeight,marginLeft,marginTop;
+  let videoWidthRes = videojs('video').videoWidth();
+  let videoHeightRes = videojs('video').videoHeight();
   if (width > height && width / height !== 1.6) {
     videoHeight = height;
-    videoWidth = videoHeight * 16 / 9;
+    videoWidth = videoHeight * videoWidthRes / videoHeightRes;
   } else {
     videoWidth = width;
-    videoHeight = videoWidth * 9 / 16;
+    videoHeight = videoWidth * videoHeightRes / videoWidthRes;
   }
 
   for (let index = 0; index < Object.keys(overlaysInfo).length; index++) {
     const info = overlaysInfo[index];
     const overlayIndex = document.querySelector('.overlay'+index);
-    if (document.fullscreenElement) {
-      newHeight = Math.floor(videoHeight * info[4] / 100 / window.devicePixelRatio);
-      newWidth = Math.floor(videoWidth * info[5] / 100 / window.devicePixelRatio);
-      marginLeft = Math.floor(videoWidth * info[6] / 100 / window.devicePixelRatio);
-      marginTop = Math.floor(videoHeight * info[7] / 100 / window.devicePixelRatio);
-
-      overlayIndex.setAttribute('style', 'width:' + newWidth +'px; height: ' + newHeight + 'px; margin-left: ' + marginLeft + 'px; margin-top: ' + marginTop + 'px;');
-    } else {
-      overlayIndex.setAttribute('style', 'height:' + info[0] +'%; width: ' + info[1] + '%; margin-left: ' + info[2] + '%; margin-top: ' + info[3] + '%;');
+    if (overlayIndex) {
+      if (document.fullscreenElement) {
+        newHeight = Math.floor(videoHeight * info[4] / 100 / window.devicePixelRatio);
+        newWidth = Math.floor(videoWidth * info[5] / 100 / window.devicePixelRatio);
+        marginLeft = Math.floor(videoWidth * info[6] / 100 / window.devicePixelRatio);
+        marginTop = Math.floor(videoHeight * info[7] / 100 / window.devicePixelRatio);
+  
+        overlayIndex.setAttribute('style', 'width:' + newWidth +'px; height: ' + newHeight + 'px; margin-left: ' + marginLeft + 'px; margin-top: ' + marginTop + 'px;');
+      } else {
+        overlayIndex.setAttribute('style', 'height:' + info[0] +'%; width: ' + info[1] + '%; margin-left: ' + info[2] + '%; margin-top: ' + info[3] + '%;');
+      }
     }
   }
 }
@@ -606,24 +615,30 @@ function reqJson(json) {
   timeoutPromise(5000,reqData(json))
   .then(response => {
     if (response.ret === 0) {
-      let newChannel={};
-      jsonChannels[response.data[0].name] = {};
-      if (response.data[0].hasOwnProperty('overlay')) {
-        jsonChannels[response.data[0].name]['overlay'] = response.data[0].overlay;
-      }
-      response.data[0].channels.forEach(channel => {
-        jsonChannels[response.data[0].name][channel.chnl_id] = {};
-        jsonChannels[response.data[0].name][channel.chnl_id]['url'] = channel.url;
-        if (channel.hasOwnProperty('overlay')) {
-          jsonChannels[response.data[0].name][channel.chnl_id]['overlay'] = channel.overlay;
+      response.data.forEach((source) => {
+        if (source.hasOwnProperty('channels')) {
+          let newChannel={};
+          jsonChannels[source.name] = {};
+          if (source.hasOwnProperty('overlay')) {
+            jsonChannels[source.name]['overlay'] = source.overlay;
+          }
+          source.channels.forEach(channel => {
+            if (channel.hasOwnProperty('url')) {
+              jsonChannels[source.name][channel.chnl_id] = {};
+              jsonChannels[source.name][channel.chnl_id]['url'] = channel.url;
+              if (channel.hasOwnProperty('overlay')) {
+                jsonChannels[source.name][channel.chnl_id]['overlay'] = channel.overlay;
+              }
+              if (channel.hasOwnProperty('schedule')) {
+                jsonChannels[source.name][channel.chnl_id]['schedule'] = channel.schedule;
+              }
+              newChannel.chnl_name = channel.chnl_name;
+              newChannel.chnl_id = channel.chnl_id;
+              newChannel.chnl_cat = channel.chnl_cat;
+              appendList(newChannel,source.name,source.lane);
+            }
+          });
         }
-        if (channel.hasOwnProperty('schedule')) {
-          jsonChannels[response.data[0].name][channel.chnl_id]['schedule'] = channel.schedule;
-        }
-        newChannel.chnl_name = channel.chnl_name;
-        newChannel.chnl_id = channel.chnl_id;
-        newChannel.chnl_cat = channel.chnl_cat;
-        appendList(newChannel,response.data[0].name,response.data[0].lane);
       });
     }
   });
@@ -999,6 +1014,7 @@ function playbackOrUpcoming(e) {
       } else {
         hboLink = 'https://hboasia.com/HBO/zh-tw/ajax/home_schedule_upcoming_showtimes?channel=' + channel + '&feed=satellite&id=' + showId;
       }
+      //alertInfo('正在查询官网请稍等...');
       reqData(hboLink)
       .then(response => {
         let dateNow = Date.now();
