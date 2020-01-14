@@ -16,7 +16,8 @@ CREATOR_FILE="$IPTV_ROOT/HLS-Stream-Creator.sh"
 JQ_FILE="$IPTV_ROOT/jq"
 CHANNELS_FILE="$IPTV_ROOT/channels.json"
 CHANNELS_TMP="$IPTV_ROOT/channels.tmp"
-DEFAULT_FILE="http://hbo.epub.fun/default.json"
+DEFAULT_DEMOS="http://hbo.epub.fun/default.json"
+DEFAULT_CHANNELS_LINK="http://hbo.epub.fun/channels.json"
 LOCK_FILE="$IPTV_ROOT/lock"
 green="\033[32m"
 red="\033[31m"
@@ -373,7 +374,7 @@ Update()
     echo -e "$info 更新 FFmpeg..."
     InstallFfmpeg
     rm -rf "${JQ_FILE:-'notfound'}"
-    echo -e "$info 更新 Jq..."
+    echo -e "$info 更新 JQ..."
     InstallJq
     echo -e "$info 更新 iptv 脚本..."
     sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1 || true)
@@ -1569,7 +1570,12 @@ DelChannel()
 
 RandStr()
 {
-    str_size=8
+    if [ -z ${1+x} ] 
+    then
+        str_size=8
+    else
+        str_size=$1
+    fi
     str_array=(
         q w e r t y u i o p a s d f g h j k l z x c v b n m Q W E R T Y U I O P A S D
 F G H J K L Z X C V B N M
@@ -1899,6 +1905,9 @@ schedule()
 #        "hbofamily:HBO Family"
 #        "foxmovies:FOX MOVIES"
 #        "disney:Disney"
+        "tvbfc:TVB 翡翠台"
+        "tvbpearl:TVB Pearl"
+        "tvbj2:TVB J2"
         "fhwszx:凤凰卫视资讯台"
         "fhwsxg:凤凰卫视香港台"
         "fhwszw:凤凰卫视中文台"
@@ -1928,6 +1937,7 @@ schedule()
         "ifundm:i-Fun動漫台"
         "momoqz:momo親子台"
         "cnkt:CN卡通台"
+        "ffxw:非凡新聞"
         "hycj:寰宇財經台"
         "hyzh:寰宇HD綜合台"
         "hyxw:寰宇新聞台"
@@ -1997,8 +2007,9 @@ schedule()
         "ztxw:中天新聞台"
         "ztyl:中天娛樂台"
         "ztzh:中天綜合台"
-        "yzly:亞洲旅遊台"
+        "msxq:美食星球頻道"
         "yzms:亞洲美食頻道"
+        "yzly:亞洲旅遊台"
         "yzzh:亞洲綜合台"
         "yzxw:亞洲新聞台"
         "pltw:霹靂台灣"
@@ -2008,12 +2019,11 @@ schedule()
         "gjdlyr:國家地理高畫質悠人頻道"
         "gjdlys:國家地理高畫質野生頻道"
         "gjdlgq:國家地理高畫質頻道"
-        "discoveryasia:Discovery Asia"
-        "discovery:Discovery"
-        "discoverykx:Discovery科學頻道"
         "bbcearth:BBC Earth"
         "bbcworldnews:BBC World News"
         "bbclifestyle:BBC Lifestyle Channel"
+        "wakawakajapan:WAKUWAKU JAPAN"
+        "luxe:LUXE TV Channel"
         "bswx:博斯無限台"
         "bsgq1:博斯高球一台"
         "bsgq2:博斯高球二台"
@@ -2023,13 +2033,16 @@ schedule()
         "bsyd2:博斯運動二台"
         "zlty:智林體育台"
         "eurosport:EUROSPORT"
-        "tracesportstars:TRACE Sport Stars"
         "fox:FOX頻道"
         "foxsports:FOX SPORTS"
         "foxsports2:FOX SPORTS 2"
         "foxsports3:FOX SPORTS 3"
         "elevensportsplus:ELEVEN SPORTS PLUS"
         "elevensports2:ELEVEN SPORTS 2"
+        "discoveryasia:Discovery Asia"
+        "discovery:Discovery"
+        "discoverykx:Discovery科學頻道"
+        "tracesportstars:TRACE Sport Stars"
         "dw:DW(Deutsch)"
         "lifetime:Lifetime"
         "foxcrime:FOXCRIME"
@@ -2042,14 +2055,11 @@ schedule()
         "cnn:CNN International"
         "skynews:SKY NEWS HD"
         "nhkxwzx:NHK新聞資訊台"
-        "ffxw:非凡新聞"
         "jetzh:JET綜合"
         "tlclysh:旅遊生活"
         "z:Z頻道"
-        "luxe:LUXE TV Channel"
         "itvchoice:ITV Choice"
         "mdrb:曼迪日本台"
-        "msxq:美食星球頻道"
         "smartzs:Smart知識台"
         "tv5monde:TV5MONDE"
         "outdoor:Outdoor"
@@ -2067,17 +2077,13 @@ schedule()
         "tvbs:TVBS"
         "tvbshl:TVBS歡樂"
         "tvbsjc:TVBS精采台"
-        "tvbj2:TVB J2"
         "tvbxh:TVB星河頻道"
-        "tvbfc:TVB 翡翠台"
-        "tvbpearl:TVB Pearl"
         "tvn:tvN"
         "hgyl:韓國娛樂台KMTV"
         "xfkjjj:幸福空間居家台"
         "xwyl:星衛娛樂台"
         "amc:AMC"
         "animaxhd:Animax HD"
-        "wakawakajapan:WAKUWAKU JAPAN"
         "diva:Diva"
         "bloomberg:Bloomberg TV"
         "fgss:時尚頻道"
@@ -2505,6 +2511,452 @@ schedule()
     esac
 }
 
+TsIsUnique()
+{
+    not_unique=$(wget --no-check-certificate "${ts_array[unique_url]}?accounttype=${ts_array[acc_type_reg]}&username=$account" -qO- | $JQ_FILE '.ret')
+    if [ "$not_unique" != 0 ] 
+    then
+        echo && echo -e "$error 用户名已存在,请重新输入！"
+    fi
+}
+
+TsImg()
+{
+    IMG_FILE="$IPTV_ROOT/ts_yzm.jpg"
+    if [ -n "${ts_array[refresh_token_url]:-}" ] 
+    then
+        str1=$(RandStr)
+        str2=$(RandStr 4)
+        str3=$(RandStr 4)
+        str4=$(RandStr 4)
+        str5=$(RandStr 12)
+        deviceno="$str1-$str2-$str3-$str4-$str5"
+        str6=$(printf '%s' "$deviceno" | md5sum)
+        str6=${str6%% *}
+        str6=${str6:7:1}
+        deviceno="$deviceno$str6"
+        declare -A token_array
+        while IFS="=" read -r key value
+        do
+            token_array[$key]="$value"
+        done < <($JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]' <<< $(curl -X POST -s --data '{"role":"guest","deviceno":"'"$deviceno"'","deviceType":"yuj"}' "${ts_array[token_url]}"))
+
+        if [ "${token_array[ret]}" == 0 ] 
+        then
+            declare -A refresh_token_array
+            while IFS="=" read -r key value
+            do
+                refresh_token_array[$key]="$value"
+            done < <($JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]' <<< $(curl -X POST -s --data '{"accessToken":"'"${token_array[accessToken]}"'","refreshToken":"'"${token_array[refreshToken]}"'"}' "${ts_array[refresh_token_url]}"))
+
+            if [ "${refresh_token_array[ret]}" == 0 ] 
+            then
+                declare -A img_array
+                while IFS="=" read -r key value
+                do
+                    img_array[$key]="$value"
+                done < <($JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]' <<< $(wget --no-check-certificate "${ts_array[img_url]}?accesstoken=${refresh_token_array[accessToken]}" -qO-))
+
+                if [ "${img_array[ret]}" == 0 ] 
+                then
+                    picid=${img_array[picid]}
+                    image=${img_array[image]}
+                    refresh_img=0
+                    base64 -d <<< "${image#*,}" > "$IMG_FILE"
+                    imgcat --half-height "$IMG_FILE"
+                    rm -rf "${IMG_FILE:-notfound}"
+                    echo && echo -e "$info 输入图片验证码："
+                    read -p "(默认: 刷新验证码):" pincode
+                    [ -z "$pincode" ] && refresh_img=1
+                    return 0
+                fi
+            fi
+        fi
+    else
+        declare -A token_array
+        while IFS="=" read -r key value
+        do
+            token_array[$key]="$value"
+        done < <($JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]' <<< $(curl -X POST -s --data '{"usagescen":1}' "${ts_array[token_url]}"))
+
+        if [ "${token_array[ret]}" == 0 ] 
+        then
+            declare -A img_array
+            while IFS="=" read -r key value
+            do
+                img_array[$key]="$value"
+            done < <($JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]' <<< $(wget --no-check-certificate "${ts_array[img_url]}?accesstoken=${token_array[access_token]}" -qO-))
+
+            if [ "${img_array[ret]}" == 0 ] 
+            then
+                picid=${img_array[picid]}
+                image=${img_array[image]}
+                refresh_img=0
+                base64 -d <<< "${image#*,}" > "$IMG_FILE"
+                imgcat --half-height "$IMG_FILE"
+                rm -rf "${IMG_FILE:-notfound}"
+                echo && echo -e "$info 输入图片验证码："
+                read -p "(默认: 刷新验证码):" pincode
+                [ -z "$pincode" ] && refresh_img=1
+                return 0
+            fi
+        fi
+    fi
+}
+
+TsRegister()
+{
+    if [ ! -e "/usr/local/bin/imgcat" ] &&  [ -n "${ts_array[img_url]:-}" ]
+    then
+        echo -e "$error 请先安装 imgcat (https://github.com/eddieantonio/imgcat#build)" && exit 1
+    fi
+    not_unique=1
+    while [ "$not_unique" != 0 ] 
+    do
+        echo && echo -e "$info 输入账号："
+        read -p "(默认: 取消):" account
+        [ -z "$account" ] && echo "已取消..." && exit 1
+        if [ -z "${ts_array[unique_url]:-}" ] 
+        then
+            not_unique=0
+        else
+            TsIsUnique
+        fi
+    done
+
+    echo && echo -e "$info 输入密码："
+    read -p "(默认: 取消):" password
+    [ -z "$password" ] && echo "已取消..." && exit 1
+
+    if [ -n "${ts_array[img_url]:-}" ] 
+    then
+        refresh_img=1
+        while [ "$refresh_img" != 0 ] 
+        do
+            TsImg
+            [ "$refresh_img" == 1 ] && continue
+
+            if [ -n "${ts_array[sms_url]:-}" ] 
+            then
+                declare -A sms_array
+                while IFS="=" read -r key value
+                do
+                    sms_array[$key]="$value"
+                done < <($JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]' <<< $(wget --no-check-certificate "${ts_array[sms_url]}?pincode=$pincode&picid=$picid&verifytype=3&account=$account&accounttype=1" -qO-))
+
+                if [ "${sms_array[ret]}" == 0 ] 
+                then
+                    echo && echo -e "$info 短信已发送！"
+                    echo && echo -e "$info 输入短信验证码："
+                    read -p "(默认: 取消):" smscode
+                    [ -z "$smscode" ] && echo "已取消..." && exit 1
+
+                    declare -A verify_array
+                    while IFS="=" read -r key value
+                    do
+                        verify_array[$key]="$value"
+                    done < <($JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]' <<< $(wget --no-check-certificate "${ts_array[verify_url]}?verifycode=$smscode&verifytype=3&username=$account&account=$account" -qO-))
+
+                    if [ "${verify_array[ret]}" == 0 ] 
+                    then
+                        str1=$(RandStr)
+                        str2=$(RandStr 4)
+                        str3=$(RandStr 4)
+                        str4=$(RandStr 4)
+                        str5=$(RandStr 12)
+                        deviceno="$str1-$str2-$str3-$str4-$str5"
+                        str6=$(printf '%s' "$deviceno" | md5sum)
+                        str6=${str6%% *}
+                        str6=${str6:7:1}
+                        deviceno="$deviceno$str6"
+                        devicetype="yuj"
+                        md5_password=$(printf '%s' "$password" | md5sum)
+                        md5_password=${md5_password%% *}
+                        timestamp=$(date +%s)
+                        timestamp=$((timestamp * 1000))
+                        signature="$account|$md5_password|$deviceno|$devicetype|$timestamp"
+                        signature=$(printf '%s' "$signature" | md5sum)
+                        signature=${signature%% *}
+                        declare -A reg_array
+                        while IFS="=" read -r key value
+                        do
+                            reg_array[$key]="$value"
+                        done < <($JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]' <<< $(curl -X POST -s --data '{"account":"'"$account"'","deviceno":"'"$deviceno"'","devicetype":"'"$devicetype"'","code":"'"${verify_array[code]}"'","signature":"'"$signature"'","birthday":"1970-1-1","username":"'"$account"'","type":1,"timestamp":"'"$timestamp"'","pwd":"'"$md5_password"'","accounttype":"'"${ts_array[acc_type_reg]}"'"}' "${ts_array[reg_url]}"))
+
+                        if [ "${reg_array[ret]}" == 0 ] 
+                        then
+                            echo && echo -e "$info 注册成功！"
+                            echo && echo -e "$info 是否登录账号? [y/N]" && echo
+                            read -p "(默认: N):" login_yn
+                            login_yn=${login_yn:-"N"}
+                            if [[ "$login_yn" == [Yy] ]]
+                            then
+                                TsLogin
+                            else
+                                echo "已取消..." && exit 1
+                            fi
+                        else
+                            echo && echo -e "$error 注册失败！"
+                            printf '%s\n' "${reg_array[@]}"
+                        fi
+                    fi
+
+                else
+                    if [ -z "${ts_array[unique_url]:-}" ] 
+                    then
+                        echo && echo -e "$error 验证码或其它错误！请重新尝试！"
+                    else
+                        echo && echo -e "$error 验证码错误！"
+                    fi
+                    #printf '%s\n' "${sms_array[@]}"
+                    refresh_img=1
+                fi
+            fi
+        done
+    else
+        md5_password=$(printf '%s' "$password" | md5sum)
+        md5_password=${md5_password%% *}
+        declare -A reg_array
+        while IFS="=" read -r key value
+        do
+            reg_array[$key]="$value"
+        done < <($JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]' <<< $(wget --no-check-certificate "${ts_array[reg_url]}?username=$account&iconid=1&pwd=$md5_password&birthday=1970-1-1&type=1&accounttype=${ts_array[acc_type_reg]}" -qO-))
+
+        if [ "${reg_array[ret]}" == 0 ] 
+        then
+            echo && echo -e "$info 注册成功！"
+            echo && echo -e "$info 是否登录账号? [y/N]" && echo
+            read -p "(默认: N):" login_yn
+            login_yn=${login_yn:-"N"}
+            if [[ "$login_yn" == [Yy] ]]
+            then
+                TsLogin
+            else
+                echo "已取消..." && exit 1
+            fi
+        else
+            echo && echo -e "$error 发生错误"
+            printf '%s\n' "${sms_array[@]}"
+        fi
+    fi
+    
+}
+
+TsLogin()
+{
+    if [ -z "${account:-}" ] 
+    then
+        echo && echo -e "$info 输入账号："
+        read -p "(默认: 取消):" account
+        [ -z "$account" ] && echo "已取消..." && exit 1
+    fi
+
+    if [ -z "${password:-}" ] 
+    then
+        echo && echo -e "$info 输入密码："
+        read -p "(默认: 取消):" password
+        [ -z "$password" ] && echo "已取消..." && exit 1
+    fi
+
+    str1=$(RandStr)
+    str2=$(RandStr 4)
+    str3=$(RandStr 4)
+    str4=$(RandStr 4)
+    str5=$(RandStr 12)
+    deviceno="$str1-$str2-$str3-$str4-$str5"
+    str6=$(printf '%s' "$deviceno" | md5sum)
+    str6=${str6%% *}
+    str6=${str6:7:1}
+    deviceno="$deviceno$str6"
+    md5_password=$(printf '%s' "$password" | md5sum)
+    md5_password=${md5_password%% *}
+
+    if [ -z "${ts_array[img_url]:-}" ] 
+    then
+        TOKEN_LINK="${ts_array[login_url]}?deviceno=$deviceno&devicetype=3&accounttype=${ts_array[acc_type_login]:-2}&accesstoken=(null)&account=$account&pwd=$md5_password&isforce=1&businessplatform=1"
+        token=$(wget --no-check-certificate "$TOKEN_LINK" -qO-)
+    else
+        timestamp=$(date +%s)
+        timestamp=$((timestamp * 1000))
+        signature="$deviceno|yuj|${ts_array[acc_type_login]}|$account|$timestamp"
+        signature=$(printf '%s' "$signature" | md5sum)
+        signature=${signature%% *}
+        token=$(curl -X POST -s --data '{"account":"'"$account"'","deviceno":"'"$deviceno"'","pwd":"'"$md5_password"'","devicetype":"yuj","businessplatform":1,"signature":"'"$signature"'","isforce":1,"extendinfo":'"${ts_array[extend_info]}"',"timestamp":"'"$timestamp"'","accounttype":'"${ts_array[acc_type_login]}"'}' "${ts_array[login_url]}")
+    fi
+
+    declare -A res_array
+    while IFS="=" read -r key value
+    do
+        res_array[$key]="$value"
+    done < <($JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]' <<< "$token")
+
+    if [ -z "${res_array[access_token]:-}" ] 
+    then
+        echo -e "$error 账号错误"
+        printf '%s\n' "${res_array[@]}"
+        echo && echo -e "$info 是否注册账号? [y/N]" && echo
+        read -p "(默认: N):" register_yn
+        register_yn=${register_yn:-"N"}
+        if [[ "$register_yn" == [Yy] ]]
+        then
+            TsRegister
+        else
+            echo "已取消..." && exit 1
+        fi
+    else
+        while :; do
+            echo && echo -e "$info 输入需要转换的频道号码："
+            read -p "(默认: 取消):" programid
+            [ -z "$programid" ] && echo "已取消..." && exit 1
+            [[ $programid =~ ^[0-9]{10}$ ]] || { echo -e "$error频道号码错误！"; continue; }
+            break
+        done
+
+        TS_LINK="${ts_array[play_url]}?playtype=live&protocol=ts&accesstoken=${res_array[access_token]}&playtoken=ABCDEFGH&verifycode=${res_array[device_id]}&programid=$programid"
+        echo && echo -e "$info ts链接：\n$TS_LINK"
+
+        stream_link=$($JQ_FILE -r --arg a "programid=$programid" '[.channels[].stream_link] | map(select(test($a)))[0]' "$CHANNELS_FILE")
+        if [ -n "$stream_link" ] 
+        then
+            echo && echo -e "$info 检测到此频道原有链接，是否替换成新的ts链接? [Y/n]"
+            read -p "(默认: Y):" change_yn
+            change_yn=${change_yn:-"Y"}
+            if [[ "$change_yn" == [Yy] ]]
+            then
+                $JQ_FILE '(.channels[]|select(.stream_link=="'"$stream_link"'")|.stream_link)="'"$TS_LINK"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+                mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+                echo && echo -e "$info 修改成功 !" && echo
+            else
+                echo "已取消..." && exit 1
+            fi
+        fi
+    fi
+}
+
+TsMenu()
+{
+    GetDefault
+
+    if [ -n "$d_sync_file" ] 
+    then
+        local_channels=$($JQ_FILE -r '.data[] | select(.reg_url != null)' "$d_sync_file")
+    fi
+
+    echo && echo -e "$info 是否使用默认频道文件? 默认链接: $DEFAULT_CHANNELS_LINK [Y/n]" && echo
+    read -p "(默认: Y):" use_default_channels_yn
+    use_default_channels_yn=${use_default_channels_yn:-"Y"}
+    if [[ "$use_default_channels_yn" == [Yy] ]]
+    then
+        TS_CHANNELS_LINK=$DEFAULT_CHANNELS_LINK
+    else
+        if [ -n "$local_channels" ] 
+        then
+            echo && echo -e "$info 是否使用本地频道文件? 本地路径: $d_sync_file [Y/n]" && echo
+            read -p "(默认: Y):" use_local_channels_yn
+            use_local_channels_yn=${use_local_channels_yn:-"Y"}
+            if [[ "$use_local_channels_yn" == [Yy] ]] 
+            then
+                TS_CHANNELS_FILE=$d_sync_file
+            fi
+        fi
+        if [ -z "${TS_CHANNELS_FILE:-}" ]
+        then
+            echo && echo -e "$info 请输入使用的频道文件链接或本地路径: " && echo
+            read -p "(默认: 取消):" TS_CHANNELS_LINK_OR_FILE
+            [ -z "$TS_CHANNELS_LINK_OR_FILE" ] && echo "已取消..." && exit 1
+            if [ "${TS_CHANNELS_LINK_OR_FILE:0:4}" == "http" ] 
+            then
+                TS_CHANNELS_LINK=$TS_CHANNELS_LINK_OR_FILE
+            else
+                [ ! -e "$TS_CHANNELS_LINK_OR_FILE" ] && echo "文件不存在，已取消..." && exit 1
+                TS_CHANNELS_FILE=$TS_CHANNELS_LINK_OR_FILE
+            fi
+        fi
+    fi
+
+    if [ -z "${TS_CHANNELS_LINK:-}" ] 
+    then
+        ts_channels=$(< "$TS_CHANNELS_FILE")
+    else
+        ts_channels=$(wget --no-check-certificate "$TS_CHANNELS_LINK" -qO-)
+
+        [ -z "$ts_channels" ] && echo && echo -e "$error无法连接文件地址，已取消..." && exit 1
+    fi
+
+    ts_channels_desc=()
+    while IFS='' read -r desc 
+    do
+        ts_channels_desc+=("$desc")
+    done < <($JQ_FILE -r '.data[] | select(.reg_url != null) | .desc | @sh' <<< "$ts_channels")
+    
+    count=${#ts_channels_desc[@]}
+
+    echo && echo -e "$info 选择需要操作的直播源"
+    for((i=0;i<count;i++));
+    do
+        desc=${ts_channels_desc[$i]//\"/}
+        desc=${desc//\'/}
+        desc=${desc//\\/\'}
+        echo -e "${green}$((i+1)).$plain ${desc}"
+    done
+    
+    while :; do
+        read -p "(默认: 取消):" channel_id
+        [ -z "$channel_id" ] && echo "已取消..." && exit 1
+        [[ $channel_id =~ ^[0-9]+$ ]] || { echo -e "$error请输入序号！"; continue; }
+        if ((channel_id >= 1 && channel_id <= count)); then
+            channel_id=$((channel_id-1))
+            declare -A ts_array
+            while IFS="=" read -r key value
+            do
+                ts_array[$key]="$value"
+            done < <($JQ_FILE -r '[.data[] | select(.reg_url != null)]['"$channel_id"'] | to_entries | map("\(.key)=\(.value)") | .[]' <<< "$ts_channels")
+
+            if [ "${ts_array[name]}" == "jxtvnet" ] && ! nc -z "access.jxtvnet.tv" 81 2>/dev/null
+            then
+                echo && echo -e "$info 部分服务器无法连接此直播源，但可以将ip写入 /etc/hosts 来连接，请选择线路
+  ${green}1.$plain 电信
+  ${green}2.$plain 联通"
+                read -p "(默认: 取消):" jxtvnet_lane
+                case $jxtvnet_lane in
+                    1) 
+                        printf '%s\n' "59.63.205.33 access.jxtvnet.tv" >> "/etc/hosts"
+                        printf '%s\n' "59.63.205.33 stream.slave.jxtvnet.tv" >> "/etc/hosts"
+                        printf '%s\n' "59.63.205.33 slave.jxtvnet.tv" >> "/etc/hosts"
+                    ;;
+                    2) 
+                        printf '%s\n' "110.52.240.146 access.jxtvnet.tv" >> "/etc/hosts"
+                        printf '%s\n' "110.52.240.146 stream.slave.jxtvnet.tv" >> "/etc/hosts"
+                        printf '%s\n' "110.52.240.146 slave.jxtvnet.tv" >> "/etc/hosts"
+                    ;;
+                    *) echo "已取消..." && exit 1
+                    ;;
+                esac
+            fi
+
+            echo && echo -e "$info 选择操作
+  ${green}1.$plain 登录以获取ts链接
+  ${green}2.$plain 注册账号"
+            read -p "(默认: 取消):" channel_act
+            [ -z "$channel_act" ] && echo "已取消..." && exit 1
+            
+            case $channel_act in
+                1) TsLogin
+                ;;
+                2) TsRegister
+                ;;
+                *) echo "已取消..." && exit 1
+                ;;
+            esac
+            
+            break
+        else
+            echo -e "$error序号错位，请重新输入！"
+        fi
+    done
+    
+}
+
 Usage()
 {
 
@@ -2612,8 +3064,8 @@ case "$cmd" in
     ;;
     "d")
         [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
-        wget "$DEFAULT_FILE" -qO "$CHANNELS_TMP"
-        channels=$(< $CHANNELS_TMP)
+        wget "$DEFAULT_DEMOS" -qO "$CHANNELS_TMP"
+        channels=$(< "$CHANNELS_TMP")
         $JQ_FILE '.channels += '"$channels"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
         echo && echo -e "$info 频道添加成功 !" && echo
@@ -2666,25 +3118,34 @@ case "$cmd" in
                 then
                     line=${line#*<td><a href=\"}
                     git_link=${line%%\" style*}
-                    wget --no-check-certificate "$git_link" --show-progress -qP "$FFMPEG_MIRROR_ROOT/builds/"
+                    build_file_name=${git_link##*/}
+                    wget --no-check-certificate "$git_link" --show-progress -qO "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}_tmp"
+                    mv "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}_tmp" "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}"
                 else 
                     if [ "$release_download" == 1 ] 
                     then
                         line=${line#*<td><a href=\"}
                         release_link=${line%%\" style*}
-                        wget --no-check-certificate "$release_link" --show-progress -qP "$FFMPEG_MIRROR_ROOT/releases/"
+                        release_file_name=${release_link##*/}
+                        wget --no-check-certificate "$release_link" --show-progress -qO "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}_tmp"
+                        mv "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}_tmp" "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}"
                     fi
                 fi
             fi
 
         done < "$FFMPEG_MIRROR_ROOT/index.html"
 
-        echo && echo "输入镜像网站链接(比如：$FFMPEG_MIRROR_LINK)"
-        read -p "(默认: 取消): " FFMPEG_LINK
+        #echo && echo "输入镜像网站链接(比如：$FFMPEG_MIRROR_LINK)"
+        #read -p "(默认: 取消): " FFMPEG_LINK
+        #[ -z "$FFMPEG_LINK" ] && echo "已取消..." && exit 1
+        #sed -i "s+https://johnvansickle.com/ffmpeg/\(builds\|releases\)/\(.*\).tar.xz\"+$FFMPEG_LINK/\1/\2.tar.xz\"+g" "$FFMPEG_MIRROR_ROOT/index.html"
 
-        [ -z "$FFMPEG_LINK" ] && echo "已取消..." && exit 1
-
-        sed -i "s+https://johnvansickle.com/ffmpeg/\(builds\|releases\)/\(.*\).tar.xz\"+$FFMPEG_LINK/\1/\2.tar.xz\"+g" "$FFMPEG_MIRROR_ROOT/index.html"
+        sed -i "s+https://johnvansickle.com/ffmpeg/\(builds\|releases\)/\(.*\).tar.xz\"+\1/\2.tar.xz\"+g" "$FFMPEG_MIRROR_ROOT/index.html"
+        exit 0
+    ;;
+    "ts") 
+        [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+        TsMenu
         exit 0
     ;;
     *)

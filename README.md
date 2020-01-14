@@ -53,6 +53,10 @@ bash -c "$(wget -qO- http://hbo.epub.fun/iptv.sh)"
 - tv s disney 更新迪士尼频道节目表
 - tv s foxmovies 更新 FOX MOVIES 节目表
 - tv ffmpeg 在主目录下自建 FFmpeg 镜像
+- tv ts 打开广电直播源 注册/登录 面板
+  - 在命令行注册账号
+  - 登录账号以获取 mpegts 链接
+  - 同步 mpegts 链接到 channels.json
 - ~~tv d 请求默认频道 ( 40多港澳台频道 - **在墙外**)，添加到 channels.json~~
 - ...
 
