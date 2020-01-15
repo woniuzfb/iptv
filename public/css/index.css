@@ -147,6 +147,13 @@ section {
   text-align: center;
 }
 
+.linkInput {
+  display: block;
+  width: 50%;
+  max-width: 50%;
+  margin: 0 auto 8rem;
+}
+
 .sources {
   display: inline-block;
   margin-top: 0;

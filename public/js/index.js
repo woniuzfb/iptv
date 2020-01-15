@@ -76,14 +76,15 @@ function switchChannel(e) {
   if(e.target) {
     if (e.target.nodeName === "LI") {
       sourceReg =  e.target.dataset.source;
-      programId =  e.target.dataset.value;
+      programId =  e.target.dataset.id;
+      rate = e.target.dataset.rate;
       playVideo();
       const selected = document.querySelector('.selected');
       if(selected) selected.classList.remove('selected');
       e.target.classList.add('selected');
     } else if (e.target.nodeName === "SUB") {
       sourceReg =  e.target.parentNode.dataset.source;
-      programId =  e.target.parentNode.dataset.value;
+      programId =  e.target.parentNode.dataset.id;
       playVideo();
       const selected = document.querySelector('.selected');
       if(selected) selected.classList.remove('selected');
@@ -144,7 +145,31 @@ function videojsLoad() {
       this.error(null).pause().load().currentTime(time).play();
     } else if (this.error().code === 4) {
       if (hlsVideoUrl.indexOf('playtype=lookback') !== -1) {
-        alertInfo('录像还未准备好！',10);
+        if (rate === 'org') {
+          rate = 'hd';
+          playBack();
+        } else if (rate === 'hd') {
+          rate = 'ld';
+          playBack();
+        } else if (rate === 'ld') {
+          rate = 'sd';
+          playBack();
+        } else {
+          alertInfo('录像还未准备好！',10);
+        }
+      } else if (hlsVideoUrl.indexOf('playtype=live') !== -1) {
+        if (rate === 'org') {
+          rate = 'hd';
+          playVideo();
+        } else if (rate === 'hd') {
+          rate = 'ld';
+          playVideo();
+        } else if (rate === 'ld') {
+          rate = 'sd';
+          playVideo();
+        } else {
+          alertInfo('频道不可用！',10);
+        }
       } else {
         alertInfo('频道不可用！',10);
       }
@@ -203,17 +228,19 @@ function playVideo() {
       }
     });
   } else if (localStorage.getItem(sourceReg+'_token')) {
-    if (localStorage.getItem(sourceReg+'_verify_code')) {
-      hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken=ABCDEFGH&verifycode='+localStorage.getItem(sourceReg+'_verify_code')+'&programid='+programId+'.m3u8';
-    } else {
-      hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken=ABCDEFGH&programid='+programId+'.m3u8';
-    }
-    videojsLoad();
-    showSchedule();
-    updateAside();
-    /*if (sourcesJsonParsed[sourceReg].hasOwnProperty('auth_info_url') && sourcesJsonParsed[sourceReg].hasOwnProperty('auth_verify_url')) {
+    if (sourcesJsonParsed[sourceReg].hasOwnProperty('auth_info_url') && sourcesJsonParsed[sourceReg].hasOwnProperty('auth_verify_url')) {
+      showSchedule();
       reqAuth();
-    }*/
+    } else {
+      if (localStorage.getItem(sourceReg+'_verify_code')) {
+        hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken=ABCDEFGH&verifycode='+localStorage.getItem(sourceReg+'_verify_code')+'&rate='+rate+'&programid='+programId+'.m3u8';
+      } else {
+        hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken=ABCDEFGH&rate='+rate+'&programid='+programId+'.m3u8';
+      }
+      videojsLoad();
+      showSchedule();
+      updateAside();
+    }
   } else {
     deleteSchedule();
     alertInfo(sourcesJsonParsed[sourceReg].desc+'直播源未注册或登录！',5);
@@ -222,7 +249,6 @@ function playVideo() {
 }
 
 function videoOverlay(sourceOverlay,channel) {
-  videoField.firstChild.classList.add('vjs-16-9');
   let overlays = [],channelOverlay,channelOverlayArr = [];
   if (channel.hasOwnProperty('overlay') && channel.overlay.length > 0) {
     channelOverlay = channel.overlay;
@@ -244,7 +270,7 @@ function videoOverlay(sourceOverlay,channel) {
         overlaysInfo[sourceIndex] = overlayInfo;
       } else if (channelOverlayIndex.indexOf(':') !== -1) {
         let channelOverlayIndexArr = channelOverlayIndex.split(':');
-        if ((sourceItem.reverse === 0 && channelOverlayIndexArr[0] === 'on') || (sourceItem.reverse === 1 && overlayArr[0] === 'off')) {
+        if ((sourceItem.reverse === 0 && channelOverlayIndexArr[0] === 'on') || (sourceItem.reverse === 1 && channelOverlayIndexArr[0] === 'off')) {
           overlays.push({class:'overlay'+sourceIndex.toString(),content:'',align:'center',start:'ready'});
           channelOverlayIndexArr.shift();
           overlaysInfo[sourceIndex] = channelOverlayIndexArr;
@@ -254,6 +280,7 @@ function videoOverlay(sourceOverlay,channel) {
   });
 
   if (overlays.length > 0) {
+    videoField.firstChild.classList.add('vjs-16-9');
     videojs('video').overlay({
       debug: false,
       overlays: overlays
@@ -425,10 +452,8 @@ function reqSms() {
     let regAcc = regAccField.value;
     let regImgInput = regImgInputField.value;
     let regImgId = regImgIdField.value;
-    let url;
-    url = sourcesJsonParsed[sourceReg].sms_url;
 
-    reqData(url,'?pincode='+regImgInput+'&picid='+regImgId+'&verifytype=3&account='+regAcc+'&accounttype=1')
+    reqData(sourcesJsonParsed[sourceReg].sms_url,'?pincode='+regImgInput+'&picid='+regImgId+'&verifytype=3&account='+regAcc+'&accounttype=1')
     .then(response => {
       if (response.ret !== 0) {
         alertInfo('验证码或其它错误！请重新输入！');
@@ -536,7 +561,7 @@ function reqLogin() {
     user.devicetype = 'yuj';
     user.businessplatform = 1;
     let timestamp = Date.now();
-    user.signature = md5(deviceno+'|'+user.devicetype+'|'+sourcesJsonParsed[sourceReg].acc_type_login+'|'+acc+"|"+timestamp);
+    user.signature = md5(deviceno+'|'+user.devicetype+'|'+sourcesJsonParsed[sourceReg].acc_type_login+'|'+acc+'|'+timestamp);
     user.isforce = 1;
     user.extendinfo = sourcesJsonParsed[sourceReg].extend_info;
     if (sourcesJsonParsed[sourceReg].server_version) {
@@ -573,8 +598,9 @@ function appendList(channel,appendSourceName,sourceLane) {
   if (localStorage.getItem(appendSourceName+'_token') || jsonChannels.hasOwnProperty(appendSourceName)){
     channelListItem.classList.add('working');
   }
-  channelListItem.setAttribute('data-value',channel.chnl_id);
+  channelListItem.setAttribute('data-id',channel.chnl_id);
   channelListItem.setAttribute('data-source',appendSourceName);
+  channelListItem.setAttribute('data-rate',channel.chnl_rate);
   channelListItem.appendChild(channelListText);
   if (channel.chnl_cat.indexOf('高清') === -1) {
     const channelSup = document.createElement('sub');
@@ -604,7 +630,7 @@ function appendList(channel,appendSourceName,sourceLane) {
       myList8.appendChild(channelListItem);
       break;
     case '港澳台':
-      myList9.appendChild(channelListItem);
+      myList10.appendChild(channelListItem);
       break;
     default:
       break;
@@ -651,7 +677,7 @@ function getToken(source) {
       deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
       deviceno = deviceno + md5(deviceno).substring(7, 8);
 
-      timeoutPromise(3000,reqData(source.login_url,'?deviceno='+deviceno+'&devicetype=3&accounttype=2&accesstoken=(null)&account='+source.access_token.substring(32)+'&pwd='+source.access_token.substring(0, 32)+'&isforce=1&businessplatform=1'))
+      timeoutPromise(3000,reqData(source.login_url,'?deviceno='+deviceno+'&devicetype=3&accounttype='+source.acc_type_login+'&accesstoken=(null)&account='+source.access_token.substring(32)+'&pwd='+source.access_token.substring(0, 32)+'&isforce=1&businessplatform=1'))
       .then(response => {
         if (response.access_token) {
           localStorage.setItem(source.name+'_token', response.access_token);
@@ -711,7 +737,7 @@ function reqChannels(source,token) {
           return;
         }
         if (channel.sub_type.length === 0) {
-          if (channel.chnl_name.indexOf('高清') !== -1) {
+          if (channel.chnl_name.indexOf('高清') !== -1 || channel.chnl_name.toUpperCase().indexOf('HD') !== -1) {
             channel.sub_type = '001';
           } else {
             channel.sub_type = '002';
@@ -722,6 +748,8 @@ function reqChannels(source,token) {
           if (channel.chnl_name.indexOf('卫视') !== -1) {
             channel.sub_type = channel.sub_type + '|004';
           }
+        } else if (channel.chnl_name.indexOf('高清') !== -1 && channel.hasOwnProperty('subtype_name') && channel.subtype_name.indexOf('高清') === -1) {
+          channel.sub_type = channel.sub_type + '|001';
         }
         let newChannel={};
         channelCats = channel.sub_type.split('|');
@@ -735,6 +763,16 @@ function reqChannels(source,token) {
           }
           newChannel.chnl_name = channel.chnl_name;
           newChannel.chnl_id = channel.chnl_id;
+          newChannel.chnl_rate = channel.rate_list[0];
+          for (let index = 0; index < channel.rate_list.length; index++) {
+            const channel_rate = channel.rate_list[index];
+            if (channel_rate === 'org') {
+              newChannel.chnl_rate = channel_rate;
+              break;
+            } else if (channel_rate === 'hd') {
+              newChannel.chnl_rate = channel_rate;
+            }
+          }
           newChannel.chnl_cat = cats[channelCat];
           appendList(newChannel,source.name,source.lane);
         });
@@ -756,9 +794,18 @@ function reqAuth() {
   .then(response => {
     if (response.ret === 0) {
       let authtoken = md5('ipanel123#%#&*(&(*#*&^*@#&*%()#*()$)#@&%(*@#()*%321ipanel'+response.auth_random_sn);
+      let playtoken = response.play_token;
       timeoutPromise(3000,reqData(sourcesJsonParsed[sourceReg].auth_verify_url,'?programid='+programId+'&playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&verifycode='+localStorage.getItem(sourceReg+'_verify_code')+'&authtoken='+authtoken))
       .then(response => {
-        if (response.ret !== 0) {
+        if (response.ret === 0) {
+          if (localStorage.getItem(sourceReg+'_verify_code')) {
+            hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playtoken+'&verifycode='+localStorage.getItem(sourceReg+'_verify_code')+'&rate='+rate+'&programid='+programId+'.m3u8';
+          } else {
+            hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playtoken+'&rate='+rate+'&programid='+programId+'.m3u8';
+          }
+          videojsLoad();
+          updateAside();
+        } else {
           alertInfo(sourcesJsonParsed[sourceReg].desc+'直播源发生错误！',10);
         }
       }).catch(err => {
@@ -951,60 +998,64 @@ function deleteSchedule() {
   }
 }
 
+function playBack() {
+  reqData(sourcesJsonParsed[sourceReg].event_info_url,'?accesstoken='+localStorage.getItem(sourceReg+'_token')+'&eventid='+eventId)
+  .then(response => {
+    if (response.ret === 0) {
+      let idx = response.event_idx;
+      let startTime = response.start_time;
+      let endTime = response.end_time;
+      let playToken = response.play_token;
+      let playbackUrl = sourcesJsonParsed[sourceReg].hasOwnProperty('playback_url') ? sourcesJsonParsed[sourceReg].playback_url : response.demand_url[0];
+
+      if (playbackUrl) {
+        let eventStartTime = new Date(startTime * 1000);
+        let eventStartTimeHours = eventStartTime.getHours();
+        if (eventStartTimeHours < 10) {
+          eventStartTimeHours = '0' + eventStartTimeHours;
+        }
+        let eventStartTimeMinutes = eventStartTime.getMinutes();
+        if (eventStartTimeMinutes < 10) {
+          eventStartTimeMinutes = '0' + eventStartTimeMinutes;
+        }
+        let eventStartTimeMilliseconds = eventStartTime.getMilliseconds();
+        if (eventStartTimeMilliseconds < 10) {
+          eventStartTimeMilliseconds = '0' + eventStartTimeMilliseconds;
+        }
+        startTime = idx + eventStartTimeHours + eventStartTimeMinutes + eventStartTimeMilliseconds;
+
+        let eventEndTime = new Date(endTime * 1000);
+        let eventEndTimeHours = eventEndTime.getHours();
+        if (eventEndTimeHours < 10) {
+          eventEndTimeHours = '0' + eventEndTimeHours;
+        }
+        let eventEndTimeMinutes = eventEndTime.getMinutes();
+        if (eventEndTimeMinutes < 10) {
+          eventEndTimeMinutes = '0' + eventEndTimeMinutes;
+        }
+        let eventEndTimeMilliseconds = eventEndTime.getMilliseconds();
+        if (eventEndTimeMilliseconds < 10) {
+          eventEndTimeMilliseconds = '0' + eventEndTimeMilliseconds;
+        }
+        endTime = idx + eventEndTimeHours + eventEndTimeMinutes + eventEndTimeMilliseconds;
+        if (localStorage.getItem(sourceReg+'_verify_code')) {
+          hlsVideoUrl = playbackUrl+'?playtype=lookback&protocol=hls&starttime='+startTime+'&endtime='+endTime+'&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playToken+'&verifycode='+localStorage.getItem(sourceReg+'_verify_code')+'&rate='+rate+'&programid='+eventId+'.m3u8';
+        } else {
+          hlsVideoUrl = playbackUrl+'?playtype=lookback&protocol=hls&starttime='+startTime+'&endtime='+endTime+'&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playToken+'&rate='+rate+'&programid='+eventId+'.m3u8';
+        }
+        videojsLoad();
+      } else {
+        alertInfo('录像还未准备好！', 10);
+      }
+    }
+  });
+}
+
 function playbackOrUpcoming(e) {
   if(e.target && e.target.nodeName === "LI") {
     if (e.target.hasAttribute('data-eventid')) {
-      let eventId = e.target.dataset.eventid;
-      reqData(sourcesJsonParsed[sourceReg].event_info_url,'?accesstoken='+localStorage.getItem(sourceReg+'_token')+'&eventid='+eventId)
-      .then(response => {
-        if (response.ret === 0) {
-          let idx = response.event_idx;
-          let startTime = response.start_time;
-          let endTime = response.end_time;
-          let playToken = response.play_token;
-          let playbackUrl = response.demand_url[0];
-
-          if (playbackUrl) {
-            let eventStartTime = new Date(startTime * 1000);
-            let eventStartTimeHours = eventStartTime.getHours();
-            if (eventStartTimeHours < 10) {
-              eventStartTimeHours = '0' + eventStartTimeHours;
-            }
-            let eventStartTimeMinutes = eventStartTime.getMinutes();
-            if (eventStartTimeMinutes < 10) {
-              eventStartTimeMinutes = '0' + eventStartTimeMinutes;
-            }
-            let eventStartTimeMilliseconds = eventStartTime.getMilliseconds();
-            if (eventStartTimeMilliseconds < 10) {
-              eventStartTimeMilliseconds = '0' + eventStartTimeMilliseconds;
-            }
-            startTime = idx + eventStartTimeHours + eventStartTimeMinutes + eventStartTimeMilliseconds;
-  
-            let eventEndTime = new Date(endTime * 1000);
-            let eventEndTimeHours = eventEndTime.getHours();
-            if (eventEndTimeHours < 10) {
-              eventEndTimeHours = '0' + eventEndTimeHours;
-            }
-            let eventEndTimeMinutes = eventEndTime.getMinutes();
-            if (eventEndTimeMinutes < 10) {
-              eventEndTimeMinutes = '0' + eventEndTimeMinutes;
-            }
-            let eventEndTimeMilliseconds = eventEndTime.getMilliseconds();
-            if (eventEndTimeMilliseconds < 10) {
-              eventEndTimeMilliseconds = '0' + eventEndTimeMilliseconds;
-            }
-            endTime = idx + eventEndTimeHours + eventEndTimeMinutes + eventEndTimeMilliseconds;
-            if (localStorage.getItem(sourceReg+'_verify_code')) {
-              hlsVideoUrl = playbackUrl+'?playtype=lookback&protocol=hls&starttime='+startTime+'&endtime='+endTime+'&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playToken+'&verifycode='+localStorage.getItem(sourceReg+'_verify_code')+'&programid='+eventId+'.m3u8';
-            } else {
-              hlsVideoUrl = playbackUrl+'?playtype=lookback&protocol=hls&starttime='+startTime+'&endtime='+endTime+'&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playToken+'&programid='+eventId+'.m3u8';
-            }
-            videojsLoad();
-          } else {
-            alertInfo('录像还未准备好！', 10);
-          }
-        }
-      })
+      eventId = e.target.dataset.eventid;
+      playBack();
     } else if (e.target.hasAttribute('data-id')) {
       let showId =  e.target.dataset.id;
       let channel = e.target.dataset.channel;
@@ -1053,7 +1104,15 @@ function playbackOrUpcoming(e) {
   }
 }
 
-let programId,sourcesJson,sourcesJsonParsed,jsonChannels = {},hlsVideoUrl,schedules = {},overlaysInfo = {};
+function switchLink() {
+  hlsVideoUrl = linkInputField.value;
+  if (hlsVideoUrl.indexOf('.flv') !== -1 || hlsVideoUrl.indexOf('.m3u8') !== -1) {
+    videojsLoad();
+    deleteSchedule();
+  }
+}
+
+let programId,rate,eventId,sourcesJson,sourcesJsonParsed,jsonChannels = {},hlsVideoUrl,schedules = {},overlaysInfo = {};
 let sourceReg = 'hrtn',sourceRegDefault = 'hrtn';
 let localJson = 'channels.json';
 let remoteJson = 'http://hbo.epub.fun/channels.json';
@@ -1086,6 +1145,8 @@ const myList4 = document.querySelector('.channels ul:nth-child(5)');
 const myList5 = document.querySelector('.channels ul:nth-child(6)');
 const myList8 = document.querySelector('.channels ul:nth-child(7)');
 const myList9 = document.querySelector('.channels ul:nth-child(8)');
+const myList10 = document.querySelector('.channels ul:nth-child(9)');
+const linkInputField = document.querySelector('.linkInput');
 const alertField = document.querySelector('.alert');
 const upComingField = document.querySelector('.upComing');
 const sliderField = document.querySelector('.js_slider');
@@ -1131,9 +1192,11 @@ function initialize() {
   myList8.textContent = '';
   myList8.classList.add('myList8');
   myList8.classList.add('hidden');
-  myList9.textContent = '';
   myList9.classList.add('myList9');
   myList9.classList.add('hidden');
+  myList10.textContent = '';
+  myList10.classList.add('myList10');
+  myList10.classList.add('hidden');
 
   sourcesJson.data.forEach(source => {
     if (source.hasOwnProperty('json')) {
@@ -1182,6 +1245,7 @@ sourcesField.addEventListener("click", switchSource);
 categoriesField.addEventListener("click", switchCategory);
 scheduleField.addEventListener("click", playbackOrUpcoming);
 channelsField.addEventListener("click", switchChannel);
+linkInputField.addEventListener("change", switchLink);
 document.addEventListener("fullscreenchange", setOverlayFullscreen);
 document.addEventListener("webkitfullscreenchange", setOverlayFullscreen);
 document.addEventListener("mozfullscreenchange", setOverlayFullscreen);
