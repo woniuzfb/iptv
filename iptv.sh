@@ -48,6 +48,8 @@ default='
     "version":"'"$sh_ver"'"
 }'
 
+#-movflags faststart
+
 SyncFile()
 {
     case $action in
@@ -392,7 +394,6 @@ Update()
     wget --no-check-certificate "$SH_LINK" -qO "$SH_FILE" && chmod +x "$SH_FILE"
     if [ ! -s "$SH_FILE" ] 
     then
-        echo -e "$error 无法连接到 Github ! 尝试备用链接..."
         wget --no-check-certificate "$SH_LINK_BACKUP" -qO "$SH_FILE"
         if [ ! -s "$SH_FILE" ] 
         then
@@ -2784,16 +2785,16 @@ TsLogin()
         token=$(curl -X POST -s --data '{"account":"'"$account"'","deviceno":"'"$deviceno"'","pwd":"'"$md5_password"'","devicetype":"yuj","businessplatform":1,"signature":"'"$signature"'","isforce":1,"extendinfo":'"${ts_array[extend_info]}"',"timestamp":"'"$timestamp"'","accounttype":'"${ts_array[acc_type_login]}"'}' "${ts_array[login_url]}")
     fi
 
-    declare -A res_array
+    declare -A login_array
     while IFS="=" read -r key value
     do
-        res_array[$key]="$value"
+        login_array[$key]="$value"
     done < <($JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]' <<< "$token")
 
-    if [ -z "${res_array[access_token]:-}" ] 
+    if [ -z "${login_array[access_token]:-}" ] 
     then
         echo -e "$error 账号错误"
-        printf '%s\n' "${res_array[@]}"
+        printf '%s\n' "${login_array[@]}"
         echo && echo -e "$info 是否注册账号? [y/N]" && echo
         read -p "(默认: N):" register_yn
         register_yn=${register_yn:-"N"}
@@ -2812,7 +2813,44 @@ TsLogin()
             break
         done
 
-        TS_LINK="${ts_array[play_url]}?playtype=live&protocol=ts&accesstoken=${res_array[access_token]}&playtoken=ABCDEFGH&verifycode=${res_array[device_id]}&programid=$programid"
+        if [ -n ${ts_array[auth_info_url]:-} ] 
+        then
+            declare -A auth_info_array
+            while IFS="=" read -r key value
+            do
+                auth_info_array[$key]="$value"
+            done < <($JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]' <<< $(wget --no-check-certificate "${ts_array[auth_info_url]}?accesstoken=${login_array[access_token]}&programid=$programid&playtype=live&protocol=hls&verifycode=${login_array[device_id]}" -qO-))
+
+            if [ "${auth_info_array[ret]}" == 0 ] 
+            then
+                authtoken="ipanel123#%#&*(&(*#*&^*@#&*%()#*()$)#@&%(*@#()*%321ipanel${auth_info_array[auth_random_sn]}"
+                authtoken=$(printf '%s' "$authtoken" | md5sum)
+                authtoken=${authtoken%% *}
+                playtoken=${auth_info_array[play_token]}
+
+                declare -A auth_verify_array
+                while IFS="=" read -r key value
+                do
+                    auth_verify_array[$key]="$value"
+                done < <($JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]' <<< $(wget --no-check-certificate "${ts_array[auth_verify_url]}?programid=$programid&playtype=live&protocol=hls&accesstoken=${login_array[access_token]}&verifycode=${login_array[device_id]}&authtoken=$authtoken" -qO-))
+
+                if [ "${auth_verify_array[ret]}" == 0 ] 
+                then
+                    TS_LINK="${ts_array[play_url]}?playtype=live&protocol=ts&accesstoken=${login_array[access_token]}&playtoken=$playtoken&verifycode=${login_array[device_id]}&programid=$programid"
+                else
+                    echo && echo -e "$error 发生错误"
+                    printf '%s\n' "${auth_verify_array[@]}"
+                    exit 1
+                fi
+            else
+                echo && echo -e "$error 发生错误"
+                printf '%s\n' "${auth_info_array[@]}"
+                exit 1
+            fi
+        else
+            TS_LINK="${ts_array[play_url]}?playtype=live&protocol=ts&accesstoken=${login_array[access_token]}&playtoken=ABCDEFGH&verifycode=${login_array[device_id]}&programid=$programid"
+        fi
+
         echo && echo -e "$info ts链接：\n$TS_LINK"
 
         stream_link=$($JQ_FILE -r --arg a "programid=$programid" '[.channels[].stream_link] | map(select(test($a)))[0]' "$CHANNELS_FILE")
