@@ -327,55 +327,55 @@
         {
           "chnl_name": "海南卫视高清",
           "chnl_id": "4200000146",
-          "chnl_rate": "hd",
+          "chnl_rate": "org",
           "chnl_cat": "高清联通"
         },
         {
           "chnl_name": "贵州卫视高清",
           "chnl_id": "4200000147",
-          "chnl_rate": "hd",
+          "chnl_rate": "org",
           "chnl_cat": "高清联通"
         },
         {
           "chnl_name": "HD综艺高清",
           "chnl_id": "4200000149",
-          "chnl_rate": "hd",
+          "chnl_rate": "org",
           "chnl_cat": "港澳台"
         },
         {
           "chnl_name": "江西卫视高清",
           "chnl_id": "4200000153",
-          "chnl_rate": "hd",
+          "chnl_rate": "org",
           "chnl_cat": "高清联通"
         },
         {
           "chnl_name": "凤凰卫视资讯高清",
           "chnl_id": "4200000154",
-          "chnl_rate": "hd",
+          "chnl_rate": "org",
           "chnl_cat": "港澳台"
         },
         {
           "chnl_name": "凤凰卫视中文高清",
           "chnl_id": "4200000155",
-          "chnl_rate": "hd",
+          "chnl_rate": "org",
           "chnl_cat": "港澳台"
         },
         {
           "chnl_name": "凤凰卫视香港台高清",
           "chnl_id": "4200000156",
-          "chnl_rate": "hd",
+          "chnl_rate": "org",
           "chnl_cat": "港澳台"
         },
         {
           "chnl_name": "安徽卫视高清",
           "chnl_id": "4200000165",
-          "chnl_rate": "hd",
+          "chnl_rate": "org",
           "chnl_cat": "高清联通"
         },
         {
           "chnl_name": "重庆卫视高清",
           "chnl_id": "4200000170",
-          "chnl_rate": "hd",
+          "chnl_rate": "org",
           "chnl_cat": "高清联通"
         }
       ]
@@ -384,6 +384,7 @@
       "name": "hfcatv",
       "desc": "安徽广电",
       "lane": "联通",
+      "acc_type_reg": 1,
       "acc_type_login": 2,
       "unique_url": "http://kid.hfcatv.com.cn:12690/account/user/name_is_uniqueness",
       "play_url": "http://kid.hfcatv.com.cn:13164/playurl",

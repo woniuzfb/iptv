@@ -613,7 +613,7 @@ function videojsLoad() {
     if (promise !== undefined) {
       promise.then(function() {
         // Autoplay started!
-      }).catch(function(error) {
+      }).catch(function() {
         // Autoplay was prevented.
       });
     }
@@ -628,13 +628,13 @@ function videojsLoad() {
       if (hlsVideoUrl.indexOf('playtype=lookback') !== -1) {
         if (rate === 'org') {
           rate = 'hd';
-          playBack();
+          playBack(sourceReg);
         } else if (rate === 'hd') {
           rate = 'ld';
-          playBack();
+          playBack(sourceReg);
         } else if (rate === 'ld') {
           rate = 'sd';
-          playBack();
+          playBack(sourceReg);
         } else {
           alertInfo('录像还未准备好！',10);
         }
@@ -710,7 +710,6 @@ function playVideo() {
     });
   } else if (localStorage.getItem(sourceReg+'_token')) {
     if (sourcesJsonParsed[sourceReg].hasOwnProperty('auth_info_url') && sourcesJsonParsed[sourceReg].hasOwnProperty('auth_verify_url')) {
-      showSchedule();
       reqAuth();
     } else {
       if (localStorage.getItem(sourceReg+'_verify_code')) {
@@ -809,7 +808,7 @@ function setOverlayFullscreen() {
 function timeoutPromise(ms, promise) {
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
-      reject(new Error("promise timeout"))
+      reject(new Error('超时'));
     }, ms);
     promise.then(
       (res) => {
@@ -821,36 +820,36 @@ function timeoutPromise(ms, promise) {
         reject(err);
       }
     );
-  })
+  }).catch(console.log);
 }
 
 function reqData(url, data = '', method = 'GET') {
-  if (method === 'GET') {
-    return fetch(url + data, {
-      method: method,
-      mode: "cors",
-      cache: "no-cache",
-      credentials: "omit",
-      referrer: "",
-    }).then(response => {
-      return response.json();
-    }).catch(err => {
-      console.log('发生错误:', err.message);
-    });
-  } else {
-    return fetch(url, {
-      method: method,
-      mode: "cors",
-      cache: "no-cache",
-      credentials: "omit",
-      referrer: "",
-      body: JSON.stringify(data),
-    }).then(response => {
-      return response.json();
-    }).catch(err => {
-      console.log('发生错误:', err.message);
-    });
-  }
+  return new Promise((resolve, reject) => {
+    if (method === 'GET') {
+      fetch(url + data, {
+        method: method,
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "omit",
+        referrer: "",
+      }).then(response => {
+        resolve(response.json());
+      }).catch(err => {reject(err);});
+    } else {
+      fetch(url, {
+        method: method,
+        mode: "cors",
+        cache: "no-cache",
+        credentials: "omit",
+        referrer: "",
+        body: JSON.stringify(data),
+      }).then(response => {
+        resolve(response.json());
+      }).catch(err => {reject(err);});
+    }
+  }).catch(err => {
+    console.log('连接 ' + url + ' 发生错误:', err.message);
+  });
 }
 
 function alertInfo(text,delay=3) {
@@ -903,8 +902,8 @@ function regImg() {
           });
         }
       }).catch(err => {
-        console.log('发生错误:', err);
-        alertInfo('无法连接此直播源！', 10);
+        alertInfo('无法连接'+sourcesJsonParsed[sourceReg].desc+'直播源!', 10);
+        console.log('请求 '+tokenUrl+' 发生错误:', err.message);
       });
     } else {
       timeoutPromise(3000,reqData(tokenUrl,{"usagescen":1},'POST'))
@@ -921,8 +920,8 @@ function regImg() {
           });
         }
       }).catch(err => {
-        console.log('发生错误:', err);
-        alertInfo('无法连接此直播源！', 10);
+        alertInfo('无法连接'+sourcesJsonParsed[sourceReg].desc+'直播源!', 10);
+        console.log('请求 '+tokenUrl+' 发生错误:', err.message);
       });
     }
   }
@@ -1064,8 +1063,8 @@ function reqLogin() {
         initialize();
       }
     }).catch(err => {
-      console.log('登录发生错误:', err);
       alertInfo('无法连接'+sourcesJsonParsed[sourceReg].desc+'直播源!', 10);
+      console.log('登录 '+sourcesJsonParsed[sourceReg].login_url+' 发生错误:', err.message);
     });
   }
 }
@@ -1081,7 +1080,9 @@ function appendList(channel,appendSourceName,sourceLane) {
   }
   channelListItem.setAttribute('data-id',channel.chnl_id);
   channelListItem.setAttribute('data-source',appendSourceName);
-  channelListItem.setAttribute('data-rate',channel.chnl_rate);
+  if (channel.chnl_rate) {
+    channelListItem.setAttribute('data-rate',channel.chnl_rate);
+  }
   channelListItem.appendChild(channelListText);
   if (channel.chnl_cat.indexOf('高清') === -1) {
     const channelSup = document.createElement('sub');
@@ -1148,7 +1149,7 @@ function reqJson(json) {
         }
       });
     }
-  });
+  }).catch(() => {console.log('无法连接 '+json)});
 }
 
 function getToken(source) {
@@ -1190,7 +1191,7 @@ function getToken(source) {
         }
       }).catch(err => {reject(err);});
     }
-  });
+  }).catch(console.log);
 }
 
 function reqChannels(source,token) {
@@ -1239,7 +1240,7 @@ function reqChannels(source,token) {
           if (sourcesJsonParsed[source.name].hasOwnProperty('fix_cats') && sourcesJsonParsed[source.name].fix_cats.hasOwnProperty(channelCat)) {
             channelCat = sourcesJsonParsed[source.name].fix_cats[channelCat];
           }
-          if (cats[channelCat] === undefined) {
+          if (typeof cats[channelCat] === 'undefined') {
             return;
           }
           newChannel.chnl_name = channel.chnl_name;
@@ -1266,7 +1267,7 @@ function reqChannels(source,token) {
     }
   }).catch(err => {
     alertInfo('无法连接'+sourcesJsonParsed[source.name].desc+'直播源！',10);
-    console.log('发生错误:', err);
+    console.log('获取列表 '+source.list_url+' 发生错误:', err.message);
   });
 }
 
@@ -1278,20 +1279,21 @@ function reqAuth() {
       let playtoken = response.play_token;
       timeoutPromise(3000,reqData(sourcesJsonParsed[sourceReg].auth_verify_url,'?programid='+programId+'&playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&verifycode='+localStorage.getItem(sourceReg+'_verify_code')+'&authtoken='+authtoken))
       .then(response => {
-        if (response.ret === 0) {
-          if (localStorage.getItem(sourceReg+'_verify_code')) {
-            hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playtoken+'&verifycode='+localStorage.getItem(sourceReg+'_verify_code')+'&rate='+rate+'&programid='+programId+'.m3u8';
-          } else {
-            hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playtoken+'&rate='+rate+'&programid='+programId+'.m3u8';
-          }
-          videojsLoad();
-          updateAside();
-        } else {
-          alertInfo(sourcesJsonParsed[sourceReg].desc+'直播源发生错误！',10);
+        if (response.ret !== 0) {
+          console.log(sourcesJsonParsed[sourceReg].auth_verify_url+' 返回错误');
         }
+        if (localStorage.getItem(sourceReg+'_verify_code')) {
+          hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playtoken+'&verifycode='+localStorage.getItem(sourceReg+'_verify_code')+'&rate='+rate+'&programid='+programId+'.m3u8';
+        } else {
+          hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playtoken+'&rate='+rate+'&programid='+programId+'.m3u8';
+        }
+        videojsLoad();
+        showSchedule();
+        updateAside();
       }).catch(err => {
         alertInfo('无法连接'+sourcesJsonParsed[sourceReg].desc+'直播源！',10);
-        console.log('发生错误:', err);
+        console.log('请求 '+sourcesJsonParsed[sourceReg].auth_verify_url+' 发生错误:', err.message);
+        updateAside();
       });
     } else {
       alertInfo(sourcesJsonParsed[sourceReg].desc+'直播源错误！需重新注册或登录！',10);
@@ -1299,10 +1301,12 @@ function reqAuth() {
       localStorage.removeItem(sourceReg+'_pwd');
       localStorage.removeItem(sourceReg+'_token');
       localStorage.removeItem(sourceReg+'_verify_code');
+      updateAside();
     }
   }).catch(err => {
     alertInfo('无法连接'+sourcesJsonParsed[sourceReg].desc+'直播源！',10);
-    console.log('发生错误:', err);
+    console.log('请求 '+sourcesJsonParsed[sourceReg].auth_info_url+' 发生错误:', err.message);
+    updateAside();
   });
 }
 
@@ -1454,6 +1458,7 @@ function insertSchedule(chnl,chnlId) {
     }
     if (schedule.hasOwnProperty('event_id')) {
       scheduleListItem.setAttribute('data-eventid', schedule.event_id);
+      scheduleListItem.setAttribute('data-id', chnl);
     }
     scheduleListItem.appendChild(scheduleListText);
     scheduleField.appendChild(scheduleListItem);
@@ -1479,15 +1484,23 @@ function deleteSchedule() {
   }
 }
 
-function playBack() {
-  reqData(sourcesJsonParsed[sourceReg].event_info_url,'?accesstoken='+localStorage.getItem(sourceReg+'_token')+'&eventid='+eventId)
+function playBack(sourceName) {
+  reqData(sourcesJsonParsed[sourceName].event_info_url,'?accesstoken='+localStorage.getItem(sourceName+'_token')+'&eventid='+eventId)
   .then(response => {
     if (response.ret === 0) {
       let idx = response.event_idx;
       let startTime = response.start_time;
       let endTime = response.end_time;
       let playToken = response.play_token;
-      let playbackUrl = sourcesJsonParsed[sourceReg].hasOwnProperty('playback_url') ? sourcesJsonParsed[sourceReg].playback_url : response.demand_url[0];
+      let playbackUrl;
+
+      if (response.demand_url[0]) {
+        if (sourcesJsonParsed[sourceName].hasOwnProperty('playback_url')) {
+          playbackUrl = sourcesJsonParsed[sourceName].playback_url;
+        } else {
+          playbackUrl = response.demand_url[0];
+        }
+      }
 
       if (playbackUrl) {
         let eventStartTime = new Date(startTime * 1000);
@@ -1519,10 +1532,10 @@ function playBack() {
           eventEndTimeMilliseconds = '0' + eventEndTimeMilliseconds;
         }
         endTime = idx + eventEndTimeHours + eventEndTimeMinutes + eventEndTimeMilliseconds;
-        if (localStorage.getItem(sourceReg+'_verify_code')) {
-          hlsVideoUrl = playbackUrl+'?playtype=lookback&protocol=hls&starttime='+startTime+'&endtime='+endTime+'&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playToken+'&verifycode='+localStorage.getItem(sourceReg+'_verify_code')+'&rate='+rate+'&programid='+eventId+'.m3u8';
+        if (localStorage.getItem(sourceName+'_verify_code')) {
+          hlsVideoUrl = playbackUrl+'?playtype=lookback&protocol=hls&starttime='+startTime+'&endtime='+endTime+'&accesstoken='+localStorage.getItem(sourceName+'_token')+'&playtoken='+playToken+'&verifycode='+localStorage.getItem(sourceName+'_verify_code')+'&rate='+rate+'&programid='+eventId+'.m3u8';
         } else {
-          hlsVideoUrl = playbackUrl+'?playtype=lookback&protocol=hls&starttime='+startTime+'&endtime='+endTime+'&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playToken+'&rate='+rate+'&programid='+eventId+'.m3u8';
+          hlsVideoUrl = playbackUrl+'?playtype=lookback&protocol=hls&starttime='+startTime+'&endtime='+endTime+'&accesstoken='+localStorage.getItem(sourceName+'_token')+'&playtoken='+playToken+'&rate='+rate+'&programid='+eventId+'.m3u8';
         }
         videojsLoad();
       } else {
@@ -1535,8 +1548,10 @@ function playBack() {
 function playbackOrUpcoming(e) {
   if(e.target && e.target.nodeName === "LI") {
     if (e.target.hasAttribute('data-eventid')) {
+      rate = 'org';
       eventId = e.target.dataset.eventid;
-      playBack();
+      let sourceName = e.target.dataset.id;
+      playBack(sourceName);
     } else if (e.target.hasAttribute('data-id')) {
       let showId =  e.target.dataset.id;
       let channel = e.target.dataset.channel;
@@ -1593,7 +1608,7 @@ function switchLink() {
   }
 }
 
-let programId,rate,eventId,sourcesJson,sourcesJsonParsed,jsonChannels = {},hlsVideoUrl,schedules = {},overlaysInfo = {};
+let programId,rate,eventId,hlsVideoUrl,sourcesJson,sourcesJsonParsed,jsonChannels = {},schedules = {},overlaysInfo = {};
 let sourceReg = 'hrtn',sourceRegDefault = 'hrtn';
 let localJson = 'channels.json';
 let remoteJson = 'http://hbo.epub.fun/channels.json';
@@ -1639,17 +1654,26 @@ if (videojs.browser.IS_ANDROID || videojs.browser.IS_IOS) {
 }
 
 reqData(localJson).then(response => {
-  sourcesJson = response;
-  parseJson(response);
-  initialize();
-}).catch(err => {
-  console.log('发生错误:', err);
-  reqData(remoteJson).then(response => {
+  if (response.ret === 0) {
     sourcesJson = response;
     parseJson(response);
     initialize();
+  } else {
+    alertInfo('服务器维护中，请稍后再试！',10);
+  }
+}).catch(() => {
+  console.log('本地频道不存在，尝试连接远程频道...');
+  reqData(remoteJson).then(response => {
+    if (response.ret === 0) {
+      sourcesJson = response;
+      parseJson(response);
+      initialize();
+    } else {
+      alertInfo('官网服务器维护中，请稍后再试！',10);
+    }
+  }).catch(err => {
+    console.log('初始化错误:',err.message);
   });
-  throw new Error('本地频道不存在，尝试连接远程频道...');
 });
 
 function initialize() {
@@ -1684,8 +1708,7 @@ function initialize() {
       reqJson(source.json);
     }
     if (source.hasOwnProperty('list_url')) {
-      getToken(source).then(response => {reqChannels(source,response);})
-      .catch(err => {console.log('发生错误:', err);});
+      getToken(source).then(response => {reqChannels(source,response);});
     }
     if (source.hasOwnProperty('channels')) {
       source.channels.forEach(channel => {
