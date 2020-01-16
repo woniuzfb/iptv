@@ -831,7 +831,7 @@ ViewChannelMenu(){
 
 SetStreamLink()
 {
-    echo "请输入直播源(只支持mpegts)"
+    echo "请输入直播源(只支持 mpegts / flv)"
     read -p "(默认: 取消):" stream_link
     [ -z "$stream_link" ] && echo "已取消..." && exit 1
     echo && echo -e "	直播源: $green $stream_link $plain" && echo
@@ -2813,7 +2813,7 @@ TsLogin()
             break
         done
 
-        if [ -n ${ts_array[auth_info_url]:-} ] 
+        if [ -n "${ts_array[auth_info_url]:-}" ] 
         then
             declare -A auth_info_array
             while IFS="=" read -r key value
@@ -3008,7 +3008,7 @@ See LICENSE
 
 使用方法: tv -i [直播源] [-s 段时长(秒)] [-o 输出目录名称] [-c m3u8包含的段数目] [-b 比特率] [-p m3u8文件名称] [-C]
 
-    -i  直播源(仅支持mpegts)
+    -i  直播源(仅支持 mpegts / flv)
     -s  段时长(秒)(默认：6)
     -o  输出目录名称(默认：随机名称)
 
@@ -3203,7 +3203,7 @@ then
             exit 1
         fi
     fi
-    echo -e "  IPTV 一键管理脚本（mpegts => hls）${red}[v$sh_ver]$plain
+    echo -e "  IPTV 一键管理脚本（mpegts / flv => hls）${red}[v$sh_ver]$plain
   ---- MTimer | http://hbo.epub.fun ----
 
   ${green}1.$plain 安装

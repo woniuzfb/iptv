@@ -1,4 +1,4 @@
-# 看HBO直播 + 一键管理 IPTV 脚本 mpegts => hls
+# 看HBO直播 + 一键管理 IPTV 脚本 mpegts / flv => hls
 
 - HBO 中文直播 + 集各广电直播源
 - 默认如果没有本地频道（channels.json）,会请求远程服务器频道
@@ -14,7 +14,7 @@
 
 ---
 
-## iptv.sh 一键管理 IPTV 脚本 mpegts => hls
+## iptv.sh 一键管理 IPTV 脚本 mpegts / flv => hls
 
 - 【自动化】HLS-Stream-Creator
 - 自建节目表
@@ -57,7 +57,19 @@ bash -c "$(wget -qO- http://hbo.epub.fun/iptv.sh)"
   - 在命令行注册账号
   - 登录账号以获取 mpegts 链接
   - 同步 mpegts 链接到 channels.json
-- ~~tv d 请求默认频道 ( 40多港澳台频道 - **在墙外**)，添加到 channels.json~~
+
+   ```bash
+    广电直播源mpegts转hls推荐的设置(1核以上, 根据核心和带宽调整)
+    "video_codec": "h264",
+    "audio_codec": "copy",
+    "quality": "40",
+    "bitrates": "800",
+    "const": "",
+    片段大小700~800K
+   ```
+
+- tv d 请求演示频道 ( 3个凤凰台,1个hbo中文频道 )，添加到 channels.json
+  - 都需要先替换 mpegts 链接才能开启
 - ...
 
 ## 参数详解
@@ -65,7 +77,7 @@ bash -c "$(wget -qO- http://hbo.epub.fun/iptv.sh)"
 使用方法: tv -i [直播源] [-s 段时长(秒)] [-o 输出目录名称] [-c m3u8包含的段数目] [-b 比特率] [-p m3u8文件名称] [-C]
 
 ```bash
--i  直播源(仅支持mpegts)
+-i  直播源(仅支持 mpegts / flv)
 -s  段时长(秒)(默认：6)
 -o  输出目录名称(默认：随机名称)
 
