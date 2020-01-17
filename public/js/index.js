@@ -11,7 +11,7 @@ function makeStr(num) {
 function toggleClass(s,n) {
   let elements = document.querySelectorAll(s);
   elements.forEach(element => {
-    element.classList.toggle(n)
+    element.classList.toggle(n);
   });
 }
 
@@ -213,7 +213,7 @@ function playVideo() {
     resetSourceReg();
   } else if (!sourcesJsonParsed.hasOwnProperty(sourceReg) || !sourcesJsonParsed[sourceReg].hasOwnProperty('channels')) {
     deleteSchedule();
-    alertInfo('抱歉频道不可用！');
+    alertInfo('频道不可用！');
     resetSourceReg();
   } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('play_url')) {
     sourcesJsonParsed[sourceReg].channels.forEach(channel => {
@@ -785,6 +785,10 @@ function reqChannels(source,token) {
       localStorage.removeItem(source.name+'_token');
     }
   }).catch(err => {
+    let elements = document.querySelectorAll('[data-source='+source.name+']');
+    elements.forEach(element => {
+      element.classList.add('hidden');
+    });
     alertInfo('无法连接'+sourcesJsonParsed[source.name].desc+'直播源！',10);
     console.log('获取列表 '+source.list_url+' 发生错误:', err.message);
   });
