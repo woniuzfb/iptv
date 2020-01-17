@@ -59,13 +59,19 @@ bash -c "$(wget -qO- http://hbo.epub.fun/iptv.sh)"
   - 同步 mpegts 链接到 channels.json
 
    ```bash
-    广电直播源mpegts转hls推荐的设置(1核以上, 根据核心和带宽调整)
+    广电直播源mpegts转hls的设置(1核以上, 根据核数和带宽调整)
     "video_codec": "h264",
     "audio_codec": "copy",
     "quality": "40",
     "bitrates": "800",
     "const": "",
-    片段大小700~800K
+    片段大小700~800K，但是非常吃CPU
+
+    也可以直接 copy ，相当于复制
+    "video_codec": "copy",
+    "audio_codec": "copy",
+    "output_flags": ""
+    原画输出，不吃CPU，但是片段大，吃带宽
    ```
 
 - tv d 请求演示频道 ( 3个凤凰台,1个hbo中文频道 )，添加到 channels.json
@@ -102,7 +108,7 @@ bash -c "$(wget -qO- http://hbo.epub.fun/iptv.sh)"
 
 -m  ffmpeg 额外的 INPUT FLAGS
     (默认："-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536")
--n  ffmpeg 额外的 OUTPUT FLAGS
+-n  ffmpeg 额外的 OUTPUT FLAGS, 如果不需要转码输入 copy
     (默认："-g 30 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main")
 ```
 
@@ -115,5 +121,7 @@ bash -c "$(wget -qO- http://hbo.epub.fun/iptv.sh)"
 - 使用比特率控制视频质量[ 默认 ]:
 
     `tv -i http://xxx/xxx.ts -s 6 -o hbo2 -p hbo2 -b 900-1280x720 -z 'hbo直播2'`
+
+- 不需要转码的设置: -a copy -v copy -n copy
 
 - 或者输入 tv 打开面板，使用方法  **Enter**

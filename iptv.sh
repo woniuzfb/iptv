@@ -779,8 +779,8 @@ ViewChannelInfo()
     then
         echo -e " key名称    : $chnl_key_name_text"
     fi
-    echo -e " input flags    : $green$chnl_input_flags$plain"
-    echo -e " output flags   : $green$chnl_output_flags$plain"
+    echo -e " input flags    : $green${chnl_input_flags:-"无"}$plain"
+    echo -e " output flags   : $green${chnl_output_flags:-"无"}$plain"
     echo
 }
 
@@ -1045,10 +1045,16 @@ SetInputFlags()
 
 SetOutputFlags()
 {
-    echo "请输入output flags"
+    echo "请输入output flags, 如果不需要转码请输入copy"
     read -p "(默认: $d_output_flags):" output_flags
     output_flags=${output_flags:-$d_output_flags}
-    echo && echo -e "	output flags: $green $output_flags $plain" && echo 
+    if [ "$output_flags" == "copy" ] 
+    then
+        output_flags=""
+        video_codec="copy"
+        audio_codec="copy"
+    fi
+    echo && echo -e "	output flags: $green ${output_flags:-"无"} $plain" && echo 
 }
 
 SetChannelName()
@@ -3018,7 +3024,7 @@ See LICENSE
     -t  段名称(前缀)(默认：跟m3u8名称相同)
     -a  音频编码(默认：aac)
     -v  视频编码(默认：h264)
-    -q  crf视频质量(如果设置了输出视频比特率，则优先使用crf视频质量)(数值1~63 越大质量越差)
+    -q  crf视频质量(如果同时设置了输出视频比特率，则优先使用crf视频质量)(数值1~63 越大质量越差)
         (默认: 不设置crf视频质量值)
     -b  输出视频的比特率(bits/s)(默认：900-1280x720)
         如果已经设置crf视频质量值，则比特率用于 -maxrate -bufsize
@@ -3037,12 +3043,14 @@ See LICENSE
         -timeout 2000000000 -y -thread_queue_size 55120 
         -nostats -nostdin -hide_banner -loglevel 
         fatal -probesize 65536")
-    -n  ffmpeg 额外的 OUTPUT FLAGS
+    -n  ffmpeg 额外的 OUTPUT FLAGS, 如果不需要转码输入 copy
         (默认："-g 30 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main")
 
 举例:
     使用crf值控制视频质量: tv -i http://xxx.com/xxx.ts -s 6 -o hbo1 -p hbo1 -q 15 -b 1500-1280x720 -z 'hbo直播1'
     使用比特率控制视频质量[默认]: tv -i http://xxx.com/xxx.ts -s 6 -o hbo2 -p hbo2 -b 900-1280x720 -z 'hbo直播2'
+
+    不需要转码的设置: -a copy -v copy -n copy
 
 EOM
 
@@ -3279,7 +3287,13 @@ else
             encrypt=${encrypt:-"$d_encrypt"}
             key_name=${key_name:-"$playlist_name"}
             export FFMPEG_INPUT_FLAGS=${input_flags:-"$d_input_flags"}
-            export FFMPEG_FLAGS=${output_flags:-"$d_output_flags"}
+            if [ "$output_flags" == "copy" ] 
+            then
+                output_flags=""
+            else
+                output_flags=${d_input_flags}
+            fi
+            export FFMPEG_FLAGS=${output_flags//\'/}
             channel_name=${channel_name:-"$playlist_name"}
 
             exec "$CREATOR_FILE" -l -i "$stream_link" -s "$seg_length" \
