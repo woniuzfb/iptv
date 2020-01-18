@@ -48,8 +48,6 @@ default='
     "version":"'"$sh_ver"'"
 }'
 
-#-movflags faststart
-
 SyncFile()
 {
     case $action in
@@ -122,7 +120,12 @@ SyncFile()
                                 value=$(echo "$b" | cut -d= -f2)
                                 if [[ $value == *"http"* ]]  
                                 then
-                                    value="$value/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
+                                    if [ -z "${master:-}" ] || [ "$master" == 1 ]
+                                    then
+                                        value="$value/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
+                                    else
+                                        value="$value/$chnl_output_dir_name/${chnl_playlist_name}.m3u8"
+                                    fi
                                 fi
                                 if [ -z "$jq_channel_edit" ] 
                                 then
@@ -591,35 +594,41 @@ ListChannels()
             chnls_const_index_text=" 固定频率:是"
         fi
         chnls_bitrates_index=${chnls_bitrates[index]//\'/}
-        if [ -z "$chnls_bitrates_index" ] 
-        then
-            if [ -z "$d_bitrates" ] 
-            then
-                d_bitrates="900-1280x720"
-            fi
-            $JQ_FILE '(.channels[]|select(.pid=='"$chnls_pid_index"')|.bitrates)='"$d_bitrates"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
-            mv "$CHANNELS_TMP" "$CHANNELS_FILE"
-            chnls_bitrates_index=$d_bitrates
-        fi
-        chnls_bitrates_index_arr=${chnls_bitrates_index//,/$'\n'}
+        #if [ -z "$chnls_bitrates_index" ] 
+        #then
+        #    if [ -z "$d_bitrates" ] 
+        #    then
+        #        d_bitrates="900-1280x720"
+        #    fi
+        #    $JQ_FILE '(.channels[]|select(.pid=='"$chnls_pid_index"')|.bitrates)='"$d_bitrates"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+        #    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+        #    chnls_bitrates_index=$d_bitrates
+        #fi
         chnls_quality_text=""
         chnls_bitrates_text=""
         chnls_playlist_file_text=""
-        for chnls_br in $chnls_bitrates_index_arr
-        do
-            if [[ "$chnls_br" == *"-"* ]]
-            then
-                chnls_br_a=$(echo "$chnls_br" | cut -d- -f1)
-                chnls_br_b=" 分辨率: "$(echo "$chnls_br" | cut -d- -f2)
-                chnls_quality_text="${chnls_quality_text}[ -maxrate ${chnls_br_a}k -bufsize ${chnls_br_a}k${chnls_br_b} ] "
-                chnls_bitrates_text="${chnls_bitrates_text}[ 比特率 ${chnls_br_a}k${chnls_br_b}${chnls_const_index_text} ] "
-                chnls_playlist_file_text="$chnls_playlist_file_text$green$chnls_output_dir_root/${chnls_playlist_name_index}_$chnls_br_a.m3u8$plain "
-            else
-                chnls_quality_text="${chnls_quality_text}[ -maxrate ${chnls_br}k -bufsize ${chnls_br}k ] "
-                chnls_bitrates_text="${chnls_bitrates_text}[ 比特率 ${chnls_br}k${chnls_const_index_text} ] "
-                chnls_playlist_file_text="$chnls_playlist_file_text$green$chnls_output_dir_root/${chnls_playlist_name_index}_$chnls_br.m3u8$plain "
-            fi
-        done
+
+        if [ -n "$chnls_bitrates_index" ] 
+        then
+            chnls_bitrates_index_arr=${chnls_bitrates_index//,/$'\n'}
+            for chnls_br in $chnls_bitrates_index_arr
+            do
+                if [[ "$chnls_br" == *"-"* ]]
+                then
+                    chnls_br_a=$(echo "$chnls_br" | cut -d- -f1)
+                    chnls_br_b=" 分辨率: "$(echo "$chnls_br" | cut -d- -f2)
+                    chnls_quality_text="${chnls_quality_text}[ -maxrate ${chnls_br_a}k -bufsize ${chnls_br_a}k${chnls_br_b} ] "
+                    chnls_bitrates_text="${chnls_bitrates_text}[ 比特率 ${chnls_br_a}k${chnls_br_b}${chnls_const_index_text} ] "
+                    chnls_playlist_file_text="$chnls_playlist_file_text$green$chnls_output_dir_root/${chnls_playlist_name_index}_$chnls_br_a.m3u8$plain "
+                else
+                    chnls_quality_text="${chnls_quality_text}[ -maxrate ${chnls_br}k -bufsize ${chnls_br}k ] "
+                    chnls_bitrates_text="${chnls_bitrates_text}[ 比特率 ${chnls_br}k${chnls_const_index_text} ] "
+                    chnls_playlist_file_text="$chnls_playlist_file_text$green$chnls_output_dir_root/${chnls_playlist_name_index}_$chnls_br.m3u8$plain "
+                fi
+            done
+        else
+            chnls_playlist_file_text="$chnls_playlist_file_text$green$chnls_output_dir_root/${chnls_playlist_name_index}.m3u8$plain "
+        fi
         
         chnls_name_index=${chnls_name[index]//\'/}
         if [ "$chnls_status_index" == "on" ]
@@ -644,6 +653,11 @@ ListChannels()
             chnls_video_quality_text="crf值$chnls_quality_index $chnls_quality_text"
         else
             chnls_video_quality_text="比特率值 $chnls_bitrates_text"
+        fi
+
+        if [ "$chnls_video_codec_index" == "copy" ] && [ "$chnls_audio_codec_index" == "copy" ]  
+        then
+            chnls_video_quality_text="原画"
         fi
         chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_status_text 频道名称: $green${chnls_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 视频质量: $green$chnls_video_quality_text$plain m3u8位置: $chnls_playlist_file_text\n\n"
     done
@@ -693,35 +707,41 @@ GetChannelInfo(){
         chnl_const_text=" 固定频率:是"
     fi
     chnl_bitrates=${chnl_info_array[12]//\'/}
-    if [ -z "$chnl_bitrates" ] 
-    then
-        if [ -z "$d_bitrates" ] 
-        then
-            d_bitrates="900-1280x720"
-        fi
-        $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.bitrates)='"$d_bitrates"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
-        mv "$CHANNELS_TMP" "$CHANNELS_FILE"
-        chnl_bitrates=$d_bitrates
-    fi
-    chnl_bitrates_arr=${chnl_bitrates//,/$'\n'}
+    #if [ -z "$chnl_bitrates" ] 
+    #then
+    #    if [ -z "$d_bitrates" ] 
+    #    then
+    #        d_bitrates="900-1280x720"
+    #    fi
+    #    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.bitrates)='"$d_bitrates"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    #    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    #    chnl_bitrates=$d_bitrates
+    #fi
     chnl_crf_text=""
     chnl_nocrf_text=""
     chnl_playlist_file_text=""
-    for chnl_br in $chnl_bitrates_arr
-    do
-        if [[ "$chnl_br" == *"-"* ]]
-        then
-            chnl_br_a=$(echo "$chnl_br" | cut -d- -f1)
-            chnl_br_b=" 分辨率: "$(echo "$chnl_br" | cut -d- -f2)
-            chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br_a}k -bufsize ${chnl_br_a}k${chnl_br_b} ] "
-            chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br_a}k${chnl_br_b}${chnl_const_text} ] "
-            chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br_a.m3u8$plain "
-        else
-            chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br}k -bufsize ${chnl_br}k ] "
-            chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br}k${chnl_const_text} ] "
-            chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br.m3u8$plain "
-        fi
-    done
+
+    if [ -n "$chnl_bitrates" ] 
+    then
+        chnl_bitrates_arr=${chnl_bitrates//,/$'\n'}
+        for chnl_br in $chnl_bitrates_arr
+        do
+            if [[ "$chnl_br" == *"-"* ]]
+            then
+                chnl_br_a=$(echo "$chnl_br" | cut -d- -f1)
+                chnl_br_b=" 分辨率: "$(echo "$chnl_br" | cut -d- -f2)
+                chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br_a}k -bufsize ${chnl_br_a}k${chnl_br_b} ] "
+                chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br_a}k${chnl_br_b}${chnl_const_text} ] "
+                chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br_a.m3u8$plain "
+            else
+                chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br}k -bufsize ${chnl_br}k ] "
+                chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br}k${chnl_const_text} ] "
+                chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br.m3u8$plain "
+            fi
+        done
+    else
+        chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}.m3u8$plain "
+    fi
 
     if [ -n "$d_sync_file" ] && [ -n "$d_sync_index" ] && [ -n "$d_sync_pairs" ] && [[ $d_sync_pairs == *"=http"* ]] 
     then
@@ -745,7 +765,9 @@ GetChannelInfo(){
         chnl_key_name_text=$green$chnl_key_name$plain
     fi
     chnl_input_flags=${chnl_info_array[16]}
+    chnl_input_flags_text=${chnl_input_flags//\'/}
     chnl_output_flags=${chnl_info_array[17]}
+    chnl_output_flags_text=${chnl_output_flags//\'/}
     chnl_channel_name=${chnl_info_array[18]//\'/}
 
     if [ -n "$chnl_quality" ] 
@@ -753,6 +775,13 @@ GetChannelInfo(){
         chnl_video_quality_text="crf值$chnl_quality $chnl_crf_text"
     else
         chnl_video_quality_text="比特率值 $chnl_nocrf_text"
+    fi
+
+    if [ "$chnl_video_codec" == "copy" ] && [ "$chnl_audio_codec" == "copy" ]  
+    then
+        chnl_video_quality_text="原画"
+        chnl_playlist_link=${chnl_playlist_link//_master.m3u8/.m3u8}
+        chnl_playlist_link_text=${chnl_playlist_link_text//_master.m3u8/.m3u8}
     fi
 }
 
@@ -779,8 +808,8 @@ ViewChannelInfo()
     then
         echo -e " key名称    : $chnl_key_name_text"
     fi
-    echo -e " input flags    : $green${chnl_input_flags:-"无"}$plain"
-    echo -e " output flags   : $green${chnl_output_flags:-"无"}$plain"
+    echo -e " input flags    : $green${chnl_input_flags_text:-"不设置"}$plain"
+    echo -e " output flags   : $green${chnl_output_flags_text:-"不设置"}$plain"
     echo
 }
 
@@ -971,13 +1000,19 @@ SetQuality()
             ;;
         esac
     done
-    quality_text=${quality:-"不设置"}
-    echo && echo -e "	crf视频质量: $green $quality_text $plain" && echo
+    echo && echo -e "	crf视频质量: $green ${quality:-"不设置"} $plain" && echo
 }
 
 SetBitrates()
 {
-    echo "请输入比特率"
+    if [ -z "$d_bitrates" ] 
+    then
+        d_bitrates_text="不设置"
+        echo "请输入比特率";
+    else
+        d_bitrates_text=${d_bitrates}
+        echo "请输入比特率, 可以输入 copy 省略此选项(不需要转码时)"
+    fi
     if [ -z "$quality" ] 
     then
         echo -e "$tip 用于指定输出视频比特率"
@@ -986,9 +1021,16 @@ SetBitrates()
     fi
     echo -e "$tip 多个比特率用逗号分隔(生成自适应码流)
     同时可以指定输出的分辨率(比如：600-600x400,900-1280x720)"
-    read -p "(默认: $d_bitrates):" bitrates
+    read -p "(默认: $d_bitrates_text):" bitrates
     bitrates=${bitrates:-$d_bitrates}
-    echo && echo -e "	比特率: $green $bitrates $plain" && echo
+    if [ "$bitrates" == "copy" ] 
+    then
+        video_codec="copy"
+        audio_codec="copy"
+        quality=""
+        bitrates=""
+    fi
+    echo && echo -e "	比特率: $green ${bitrates:-"不设置"} $plain" && echo
 }
 
 SetConst()
@@ -1045,16 +1087,25 @@ SetInputFlags()
 
 SetOutputFlags()
 {
-    echo "请输入output flags, 如果不需要转码请输入copy"
-    read -p "(默认: $d_output_flags):" output_flags
+    if [ -z "$d_output_flags" ] 
+    then
+        d_output_flags_text="不设置"
+        echo "请输入output flags";
+    else
+        d_output_flags_text=${d_output_flags}
+        echo "请输入output flags, 可以输入 copy 省略此选项(不需要转码时)"
+    fi
+    read -p "(默认: $d_output_flags_text):" output_flags
     output_flags=${output_flags:-$d_output_flags}
     if [ "$output_flags" == "copy" ] 
     then
         output_flags=""
         video_codec="copy"
         audio_codec="copy"
+        quality=""
+        bitrates=""
     fi
-    echo && echo -e "	output flags: $green ${output_flags:-"无"} $plain" && echo 
+    echo && echo -e "	output flags: $green ${output_flags:-"不设置"} $plain" && echo 
 }
 
 SetChannelName()
@@ -1078,8 +1129,26 @@ AddChannel()
     SetSegCount
     SetVideoCodec
     SetAudioCodec
-    SetQuality
-    SetBitrates
+    quality_command=""
+    bitrates_command=""
+    if [ "$video_codec" == "copy" ] && [ "$audio_codec" == "copy" ]
+    then
+        quality=""
+        bitrates=""
+        master=0
+    else
+        SetQuality
+        if [ -n "$quality" ] 
+        then
+            quality_command="-q $quality"
+        fi
+        SetBitrates
+        if [ -n "$bitrates" ] 
+        then
+            bitrates_command="-q $bitrates"
+        fi
+        master=1
+    fi
     if [ -z "$quality" ] 
     then
         SetConst
@@ -1111,8 +1180,8 @@ AddChannel()
     export SEGMENT_DIRECTORY
     export FFMPEG_FLAGS
     exec "$CREATOR_FILE" -l -i "$stream_link" -s "$seg_length" \
-        -o "$output_dir_root" -c "$seg_count" -b "$bitrates" \
-        -p "$playlist_name" -t "$seg_name" -K "$key_name" -q "$quality" \
+        -o "$output_dir_root" -c "$seg_count" $bitrates_command \
+        -p "$playlist_name" -t "$seg_name" -K "$key_name" $quality_command \
         "$const" "$encrypt" &
     pid=$!
     $JQ_FILE '.channels += [
@@ -1318,8 +1387,14 @@ EditChannelAll()
     SetSegCount
     SetVideoCodec
     SetAudioCodec
-    SetQuality
-    SetBitrates
+    if [ "$video_codec" == "copy" ] && [ "$audio_codec" == "copy" ]
+    then
+        quality=""
+        bitrates=""
+    else
+        SetQuality
+        SetBitrates
+    fi
     if [ -z "$quality" ] 
     then
         SetConst
@@ -1494,6 +1569,24 @@ ToggleChannel()
 
 StartChannel()
 {
+    chnl_quality_command=""
+    chnl_bitrates_command=""
+    if [ "$chnl_video_codec" == "copy" ] && [ "$chnl_audio_codec" == "copy" ]
+    then
+        chnl_quality=""
+        chnl_bitrates=""
+        master=0
+    else
+        if [ -n "$chnl_quality" ] 
+        then
+            chnl_quality_command="-q $chnl_quality"
+        fi
+        if [ -n "$chnl_bitrates" ] 
+        then
+            chnl_bitrates_command="-b $chnl_bitrates"
+        fi
+        master=1
+    fi
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
     FFMPEG="$FFMPEG_ROOT/ffmpeg"
     export FFMPEG
@@ -1508,8 +1601,8 @@ StartChannel()
     export SEGMENT_DIRECTORY
     export FFMPEG_FLAGS
     exec "$CREATOR_FILE" -l -i "$chnl_stream_link" -s "$chnl_seg_length" \
-        -o "$chnl_output_dir_root" -c "$chnl_seg_count" -b "$chnl_bitrates" \
-        -p "$chnl_playlist_name" -t "$chnl_seg_name" -K "$chnl_key_name" -q "$chnl_quality" \
+        -o "$chnl_output_dir_root" -c "$chnl_seg_count" $chnl_bitrates_command \
+        -p "$chnl_playlist_name" -t "$chnl_seg_name" -K "$chnl_key_name" $chnl_quality_command \
         "$chnl_const" "$chnl_encrypt" &
     new_pid=$!
     $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.status)="on"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
@@ -3022,8 +3115,8 @@ See LICENSE
     -c  m3u8里包含的段数目(默认：5)
     -S  段所在子目录名称(默认：不使用子目录)
     -t  段名称(前缀)(默认：跟m3u8名称相同)
-    -a  音频编码(默认：aac)
-    -v  视频编码(默认：h264)
+    -a  音频编码(默认：aac) (不需要转码时输入 copy)
+    -v  视频编码(默认：h264) (不需要转码时输入 copy)
     -q  crf视频质量(如果同时设置了输出视频比特率，则优先使用crf视频质量)(数值1~63 越大质量越差)
         (默认: 不设置crf视频质量值)
     -b  输出视频的比特率(bits/s)(默认：900-1280x720)
@@ -3031,7 +3124,7 @@ See LICENSE
         如果没有设置crf视频质量值，则可以继续设置是否固定码率
         多个比特率用逗号分隔(注意-如果设置多个比特率，就是生成自适应码流)
         同时可以指定输出的分辨率(比如：-b 600-600x400,900-1280x720)
-        这里不能不设置比特率(空)，因为大多数直播源没有设置比特率，无法让FFmpeg按输入源的比特率输出
+        可以输入 copy 省略此选项(不需要转码时)
     -C  固定码率(CBR 而不是 AVB)(只有在没有设置crf视频质量的情况下才有效)(默认：否)
     -e  加密段(默认：不加密)
     -K  Key名称(默认：跟m3u8名称相同)
@@ -3043,7 +3136,7 @@ See LICENSE
         -timeout 2000000000 -y -thread_queue_size 55120 
         -nostats -nostdin -hide_banner -loglevel 
         fatal -probesize 65536")
-    -n  ffmpeg 额外的 OUTPUT FLAGS, 如果不需要转码输入 copy
+    -n  ffmpeg 额外的 OUTPUT FLAGS, 可以输入 copy 省略此选项(不需要转码时)
         (默认："-g 30 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main")
 
 举例:
@@ -3283,6 +3376,22 @@ else
             export VIDEO_CODEC=${video_codec:-"$d_video_codec"}
             quality=${quality:-"$d_quality"}
             bitrates=${bitrates:-"$d_bitrates"}
+            quality_command=""
+            bitrates_command=""
+            if [ "$video_codec" == "copy" ] && [ "$audio_codec" == "copy" ]
+            then
+                quality=""
+                bitrates=""
+            else
+                if [ -n "$quality" ] 
+                then
+                    quality_command="-q $quality"
+                fi
+                if [ -n "$bitrates" ] 
+                then
+                    bitrates_command="-b $bitrates"
+                fi
+            fi
             const=${const:-"$d_const"}
             encrypt=${encrypt:-"$d_encrypt"}
             key_name=${key_name:-"$playlist_name"}
@@ -3297,8 +3406,8 @@ else
             channel_name=${channel_name:-"$playlist_name"}
 
             exec "$CREATOR_FILE" -l -i "$stream_link" -s "$seg_length" \
-                -o "$output_dir_root" -c "$seg_count" -b "$bitrates" \
-                -p "$playlist_name" -t "$seg_name" -K "$key_name" -q "$quality" \
+                -o "$output_dir_root" -c "$seg_count" $bitrates_command \
+                -p "$playlist_name" -t "$seg_name" -K "$key_name" $quality_command \
                 "$const" "$encrypt" &
             pid=$!
 

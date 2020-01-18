@@ -91,8 +91,8 @@ bash -c "$(wget -qO- http://hbo.epub.fun/iptv.sh)"
 -c  m3u8里包含的段数目(默认：5)
 -S  段所在子目录名称(默认：不使用子目录)
 -t  段名称(前缀)(默认：跟m3u8名称相同)
--a  音频编码(默认：aac)
--v  视频编码(默认：h264)
+-a  音频编码(默认：aac) (不需要转码时输入 copy)
+-v  视频编码(默认：h264) (不需要转码时输入 copy)
 -q  crf视频质量(如果设置了输出视频比特率，则优先使用crf视频质量)(数值1~63 越大质量越差)
     (默认: 不设置crf视频质量值)
 -b  输出视频的比特率(bits/s)(默认：900-1280x720)
@@ -100,7 +100,7 @@ bash -c "$(wget -qO- http://hbo.epub.fun/iptv.sh)"
     如果没有设置crf视频质量值，则可以继续设置是否固定码率
     多个比特率用逗号分隔(注意-如果设置多个比特率，就是生成自适应码流)
     同时可以指定输出的分辨率(比如：-b 600-600x400,900-1280x720)
-    这里不能不设置比特率(空)，因为大多数直播源没有设置比特率，无法让FFmpeg按输入源的比特率输出
+    可以输入 copy 省略此选项(不需要转码时)
 -C  固定码率(CBR 而不是 AVB)(只有在没有设置crf视频质量的情况下才有效)(默认：否)
 -e  加密段(默认：不加密)
 -K  Key名称(默认：跟m3u8名称相同)
@@ -108,7 +108,7 @@ bash -c "$(wget -qO- http://hbo.epub.fun/iptv.sh)"
 
 -m  ffmpeg 额外的 INPUT FLAGS
     (默认："-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536")
--n  ffmpeg 额外的 OUTPUT FLAGS, 如果不需要转码输入 copy
+-n  ffmpeg 额外的 OUTPUT FLAGS, 可以输入 copy 省略此选项(不需要转码时)
     (默认："-g 30 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main")
 ```
 
