@@ -720,22 +720,31 @@ function reqChannels(source,token) {
       let channelCats;
       let cats = {"001":"高清"+source.lane,"002":"标清","003":"央视","004":"卫视","005":"地方","008":"专业"};
       let omitArr = [];
+      let reverse = 0;
       if (source.omit) {
-        let omitSourceArr = source.omit.split(',');
-        omitSourceArr.forEach(omitSource => {
-          if (omitSource.indexOf('-') !== -1) {
-            let omitSubArr = omitSource.split('-');
+        let omit = source.omit;
+        if (omit.substring(0,7) === 'reverse') {
+          reverse = 1;
+          omit = omit.substring(8);
+        }
+        let omitChannels = omit.split(',');
+        omitChannels.forEach(omitChannel => {
+          if (omitChannel.indexOf('-') !== -1) {
+            let omitSubArr = omitChannel.split('-');
             for (let a = Number(omitSubArr[0]); a <= Number(omitSubArr[1]); a++) {
               omitArr.push(Number(a));
             }
           } else {
-            omitArr.push(Number(omitSource));
+            omitArr.push(Number(omitChannel));
           }
         });
       }
       response.chnl_list.forEach(channel => {
-        if (source.omit && omitArr.indexOf(Number(channel.chnl_id.toString().slice(-3))) !== -1) {
-          return;
+        if (source.omit) {
+          let chnl_id = Number(channel.chnl_id.toString().slice(-3));
+          if ((reverse === 0 && omitArr.indexOf(chnl_id) !== -1) || (reverse === 1 && omitArr.indexOf(chnl_id) === -1)) {
+            return;
+          }
         }
         if (channel.sub_type.length === 0) {
           if (channel.chnl_name.indexOf('高清') !== -1 || channel.chnl_name.toUpperCase().indexOf('HD') !== -1) {
@@ -785,10 +794,7 @@ function reqChannels(source,token) {
       localStorage.removeItem(source.name+'_token');
     }
   }).catch(err => {
-    let elements = document.querySelectorAll('[data-source='+source.name+']');
-    elements.forEach(element => {
-      element.classList.add('hidden');
-    });
+    toggleClass('[data-source='+source.name+']','hidden');
     alertInfo('无法连接'+sourcesJsonParsed[source.name].desc+'直播源！',10);
     console.log('获取列表 '+source.list_url+' 发生错误:', err.message);
   });
@@ -996,7 +1002,7 @@ function insertSchedule(chnl,chnlId) {
 
   lory(sliderField, {
     initialIndex: slideIndex,
-    rewind: true
+    centerMode: { enableCenterMode: true, firstSlideLeftAlign: true }
   });
 }
 

@@ -445,6 +445,7 @@
       "lane": "电信",
       "acc_type_reg": 1,
       "acc_type_login": 3,
+      "omit": "reverse:591,658,693,696,719,720,724,755,757,789,790",
       "unique_url": "http://access.reheyun.cn:12690/account/user/name_is_uniqueness",
       "play_url": "http://httpdvb.slave.reheyun.cn:13164/playurl",
       "list_url": "http://slave.reheyun.cn:13160/media/channel/get_list",
