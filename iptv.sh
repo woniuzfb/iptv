@@ -2882,7 +2882,7 @@ TsLogin()
         signature="$deviceno|yuj|${ts_array[acc_type_login]}|$account|$timestamp"
         signature=$(printf '%s' "$signature" | md5sum)
         signature=${signature%% *}
-        token=$(curl -X POST -s --data '{"account":"'"$account"'","deviceno":"'"$deviceno"'","pwd":"'"$md5_password"'","devicetype":"yuj","businessplatform":1,"signature":"'"$signature"'","isforce":1,"extendinfo":'"${ts_array[extend_info]}"',"timestamp":"'"$timestamp"'","accounttype":'"${ts_array[acc_type_login]}"'}' "${ts_array[login_url]}")
+        token=$(curl -X POST -s --data '{"account":"'"$account"'","deviceno":"'"$deviceno"'","pwd":"'"$md5_password"'","devicetype":"yuj","businessplatform":1,"signature":"'"$signature"'","isforce":1,"extendinfo":"'"${ts_array[extend_info]}"'","timestamp":"'"$timestamp"'","accounttype":'"${ts_array[acc_type_login]}"'}' "${ts_array[login_url]}")
     fi
 
     declare -A login_array
@@ -2936,7 +2936,7 @@ TsLogin()
 
                 if [ "${auth_verify_array[ret]}" == 0 ] 
                 then
-                    TS_LINK="${ts_array[play_url]}?playtype=live&protocol=ts&accesstoken=${login_array[access_token]}&playtoken=$playtoken&verifycode=${login_array[device_id]}&programid=$programid"
+                    TS_LINK="${ts_array[play_url]}?playtype=live&protocol=ts&accesstoken=${login_array[access_token]}&playtoken=$playtoken&verifycode=${login_array[device_id]}&rate=org&programid=$programid"
                 else
                     echo && echo -e "$error 发生错误"
                     printf '%s\n' "${auth_verify_array[@]}"
@@ -2948,7 +2948,7 @@ TsLogin()
                 exit 1
             fi
         else
-            TS_LINK="${ts_array[play_url]}?playtype=live&protocol=ts&accesstoken=${login_array[access_token]}&playtoken=ABCDEFGH&verifycode=${login_array[device_id]}&programid=$programid"
+            TS_LINK="${ts_array[play_url]}?playtype=live&protocol=ts&accesstoken=${login_array[access_token]}&playtoken=ABCDEFGH&verifycode=${login_array[device_id]}&rate=org&programid=$programid"
         fi
 
         echo && echo -e "$info ts链接：\n$TS_LINK"
