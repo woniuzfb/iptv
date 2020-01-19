@@ -1104,6 +1104,9 @@ SetOutputFlags()
         audio_codec="copy"
         quality=""
         bitrates=""
+        const=""
+        const_yn="no"
+        const_text="否"
     fi
     echo && echo -e "	output flags: $green ${output_flags:-"不设置"} $plain" && echo 
 }
@@ -1136,6 +1139,9 @@ AddChannel()
         quality=""
         bitrates=""
         master=0
+        const=""
+        const_yn="no"
+        const_text="否"
     else
         SetQuality
         if [ -n "$quality" ] 
@@ -1148,12 +1154,12 @@ AddChannel()
             bitrates_command="-q $bitrates"
         fi
         master=1
-    fi
-    if [ -z "$quality" ] 
-    then
-        SetConst
-    else
-        const=$d_const
+        if [ -z "$quality" ] 
+        then
+            SetConst
+        else
+            const=$d_const
+        fi
     fi
     SetEncrypt
     if [ -n "$encrypt" ] 
@@ -1391,15 +1397,18 @@ EditChannelAll()
     then
         quality=""
         bitrates=""
+        const=""
+        const_yn="no"
+        const_text="否"
     else
         SetQuality
         SetBitrates
-    fi
-    if [ -z "$quality" ] 
-    then
-        SetConst
-    else
-        const=$d_const
+        if [ -z "$quality" ] 
+        then
+            SetConst
+        else
+            const=$d_const
+        fi
     fi
     SetEncrypt
     if [ -n "$encrypt" ] 
@@ -1576,6 +1585,7 @@ StartChannel()
         chnl_quality=""
         chnl_bitrates=""
         master=0
+        chnl_const=""
     else
         if [ -n "$chnl_quality" ] 
         then
@@ -3288,6 +3298,12 @@ case "$cmd" in
         TsMenu
         exit 0
     ;;
+    "ll") 
+        for d in "$IPTV_ROOT"/live/*/ ; do
+            ls "$d" -lght
+        done
+        exit 0
+    ;;
     *)
     ;;
 esac
@@ -3383,6 +3399,8 @@ else
             then
                 quality=""
                 bitrates=""
+                const=""
+                const_yn="no"
             else
                 if [ -n "$quality" ] 
                 then
@@ -3391,6 +3409,10 @@ else
                 if [ -n "$bitrates" ] 
                 then
                     bitrates_command="-b $bitrates"
+                fi
+                if [ -n "${const:-}" ] 
+                then
+                    const_yn=$const
                 fi
             fi
             const=${const:-"$d_const"}
@@ -3427,7 +3449,7 @@ else
                     "audio_codec":"'"$AUDIO_CODEC"'",
                     "quality":"'"$quality"'",
                     "bitrates":"'"$bitrates"'",
-                    "const":"'"$const"'",
+                    "const":"'"$const_yn"'",
                     "encrypt":"'"$encrypt"'",
                     "key_name":"'"$key_name"'",
                     "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
