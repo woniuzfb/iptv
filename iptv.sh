@@ -1624,6 +1624,7 @@ StopChannel()
         done
         #or pkill -TERM -P $creator_pid
     done
+    kill -9 "$chnl_pid" || true
     remove_dir_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').output_dir_name' "$CHANNELS_FILE")
     $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
     mv "$CHANNELS_TMP" "$CHANNELS_FILE"
