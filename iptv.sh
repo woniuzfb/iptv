@@ -356,15 +356,14 @@ Uninstall()
     uninstall_yn=${uninstall_yn:-"N"}
     if [[ "$uninstall_yn" == [Yy] ]]
     then
-        pids=$($JQ_FILE '.channels[].pid' $CHANNELS_FILE)
-        for chnl_pid in $pids
+        while IFS= read -r chnl_pid
         do
             chnl_status=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').status' "$CHANNELS_FILE")
             if [ "$chnl_status" == "on" ]
             then
                 StopChannel
             fi
-        done
+        done <<< $($JQ_FILE '.channels[].pid' $CHANNELS_FILE)
         rm -rf "${IPTV_ROOT:-'notfound'}"
         echo && echo -e "$info 卸载完成 !" && echo
     else
@@ -447,8 +446,7 @@ UpdateSelf()
         $JQ_FILE '. + {default: '"$default"'}' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
 
-        pids=$($JQ_FILE '.channels[].pid' $CHANNELS_FILE)
-        for chnl_pid in $pids
+        while IFS= read -r chnl_pid
         do
             chnl_status=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').status' "$CHANNELS_FILE")
             chnl_stream_link=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').stream_link' "$CHANNELS_FILE")
@@ -508,7 +506,7 @@ UpdateSelf()
                 }
             ]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
             mv "$CHANNELS_TMP" "$CHANNELS_FILE"
-        done
+        done <<< $($JQ_FILE '.channels[].pid' $CHANNELS_FILE)
         
     fi
     printf "" > ${LOCK_FILE}
@@ -610,8 +608,7 @@ ListChannels()
 
         if [ -n "$chnls_bitrates_index" ] 
         then
-            chnls_bitrates_index_arr=${chnls_bitrates_index//,/$'\n'}
-            for chnls_br in $chnls_bitrates_index_arr
+            while IFS= read -r chnls_br
             do
                 if [[ "$chnls_br" == *"-"* ]]
                 then
@@ -625,7 +622,7 @@ ListChannels()
                     chnls_bitrates_text="${chnls_bitrates_text}[ 比特率 ${chnls_br}k${chnls_const_index_text} ] "
                     chnls_playlist_file_text="$chnls_playlist_file_text$green$chnls_output_dir_root/${chnls_playlist_name_index}_$chnls_br.m3u8$plain "
                 fi
-            done
+            done <<< ${chnls_bitrates_index//,/$'\n'}
         else
             chnls_playlist_file_text="$chnls_playlist_file_text$green$chnls_output_dir_root/${chnls_playlist_name_index}.m3u8$plain "
         fi
@@ -723,8 +720,7 @@ GetChannelInfo(){
 
     if [ -n "$chnl_bitrates" ] 
     then
-        chnl_bitrates_arr=${chnl_bitrates//,/$'\n'}
-        for chnl_br in $chnl_bitrates_arr
+        while IFS= read -r chnl_br
         do
             if [[ "$chnl_br" == *"-"* ]]
             then
@@ -738,7 +734,7 @@ GetChannelInfo(){
                 chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br}k${chnl_const_text} ] "
                 chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br.m3u8$plain "
             fi
-        done
+        done <<< ${chnl_bitrates//,/$'\n'}
     else
         chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}.m3u8$plain "
     fi
@@ -1624,17 +1620,22 @@ StartChannel()
 
 StopChannel()
 {
-    creator_pids=$(pgrep -P "$chnl_pid" || true)
-    for creator_pid in $creator_pids
+    while IFS= read -r creator_pid 
     do
-        ffmpeg_pids=$(pgrep -P "$creator_pid" || true)
-        for ffmpeg_pid in $ffmpeg_pids
-        do
-            kill -9 "$ffmpeg_pid" || true
-        done
-        #or pkill -TERM -P $creator_pid
-    done
-    kill -9 "$chnl_pid" || true
+        if [ -n "$creator_pid" ] 
+        then
+            while IFS= read -r ffmpeg_pid 
+            do
+                if [ -n "$ffmpeg_pid" ] 
+                then
+                    kill -9 "$ffmpeg_pid" || true
+                fi
+            done <<< $(pgrep -P "$creator_pid" || true)
+            kill -9 "$creator_pid" || true
+            #or pkill -TERM -P $creator_pid
+        fi
+    done <<< $(pgrep -P "$chnl_pid" || true)
+    
     remove_dir_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').output_dir_name' "$CHANNELS_FILE")
     $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
     mv "$CHANNELS_TMP" "$CHANNELS_FILE"
@@ -3211,6 +3212,12 @@ case "$cmd" in
     "e") 
         [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
         vi "$CHANNELS_FILE" && exit 0
+    ;;
+    "ee") 
+        [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+        GetDefault
+        [ -z "$d_sync_file" ] && echo -e "$error sync_file 未设置，请检查 !" && exit 1
+        vi "$d_sync_file" && exit 0
     ;;
     "d")
         [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
