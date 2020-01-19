@@ -3395,6 +3395,35 @@ else
             bitrates=${bitrates:-"$d_bitrates"}
             quality_command=""
             bitrates_command=""
+
+            if [ -z "${const:-}" ]  
+            then
+                if [ "$d_const" == "yes" ] 
+                then
+                    const="-C"
+                    const_yn="yes"
+                else
+                    const=""
+                    const_yn="no"
+                fi
+            else
+                const_yn="yes"
+            fi
+
+            if [ -z "${encrypt:-}" ]  
+            then
+                if [ "$d_encrypt" == "yes" ] 
+                then
+                    encrypt="-e"
+                    encrypt_yn="yes"
+                else
+                    encrypt=""
+                    encrypt_yn="no"
+                fi
+            else
+                encrypt_yn="yes"
+            fi
+
             if [ "$video_codec" == "copy" ] && [ "$audio_codec" == "copy" ]
             then
                 quality=""
@@ -3402,29 +3431,27 @@ else
                 const=""
                 const_yn="no"
             else
-                if [ -n "$quality" ] 
+                if [ -n "${quality:-}" ] 
                 then
                     quality_command="-q $quality"
                 fi
-                if [ -n "$bitrates" ] 
+                if [ -n "${bitrates:-}" ] 
                 then
                     bitrates_command="-b $bitrates"
                 fi
-                if [ -n "${const:-}" ] 
-                then
-                    const_yn=$const
-                fi
             fi
-            const=${const:-"$d_const"}
-            encrypt=${encrypt:-"$d_encrypt"}
+
             key_name=${key_name:-"$playlist_name"}
-            export FFMPEG_INPUT_FLAGS=${input_flags:-"$d_input_flags"}
-            if [ "$output_flags" == "copy" ] 
+            input_flags=${input_flags:-"$d_input_flags"}
+            export FFMPEG_INPUT_FLAGS=${input_flags//\'/}
+
+            if [ "${output_flags:-}" == "copy" ] 
             then
                 output_flags=""
             else
                 output_flags=${d_input_flags}
             fi
+
             export FFMPEG_FLAGS=${output_flags//\'/}
             channel_name=${channel_name:-"$playlist_name"}
 
@@ -3450,7 +3477,7 @@ else
                     "quality":"'"$quality"'",
                     "bitrates":"'"$bitrates"'",
                     "const":"'"$const_yn"'",
-                    "encrypt":"'"$encrypt"'",
+                    "encrypt":"'"$encrypt_yn"'",
                     "key_name":"'"$key_name"'",
                     "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
                     "output_flags":"'"$FFMPEG_FLAGS"'",
