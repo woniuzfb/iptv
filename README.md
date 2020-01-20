@@ -74,6 +74,10 @@ bash -c "$(wget -qO- http://hbo.epub.fun/iptv.sh)"
     原画输出，不吃CPU，但是片段大，吃带宽
    ```
 
+- tv m 开启监控 hls 输出目录，用来应对直播源出现变化导致 ffmpeg 无法继续分割的情况
+  - 如果片段大小大于5MB(默认)会自动重启频道(可以 tv m 数字 指定大小)。
+  - tv m stop 停止监控
+  - 建议在 copy 直播源的时候开启监控
 - tv d 请求演示频道 ( 3个凤凰台,1个hbo中文频道 )，添加到 channels.json
   - 都需要先替换 mpegts 链接才能开启
 - ...

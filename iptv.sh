@@ -19,6 +19,8 @@ CHANNELS_TMP="$IPTV_ROOT/channels.tmp"
 DEFAULT_DEMOS="http://hbo.epub.fun/default.json"
 DEFAULT_CHANNELS_LINK="http://hbo.epub.fun/channels.json"
 LOCK_FILE="$IPTV_ROOT/lock"
+MONITOR_PID="$IPTV_ROOT/monitor.pid"
+MONITOR_LOG="$IPTV_ROOT/monitor.log"
 green="\033[32m"
 red="\033[31m"
 plain="\033[0m"
@@ -356,6 +358,7 @@ Uninstall()
     uninstall_yn=${uninstall_yn:-"N"}
     if [[ "$uninstall_yn" == [Yy] ]]
     then
+        MonitorStop
         while IFS= read -r chnl_pid
         do
             chnl_status=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').status' "$CHANNELS_FILE")
@@ -821,10 +824,10 @@ InputChannelsPids()
         for chnl_pid in "${chnls_pids_arr[@]}"
         do
             case "$chnl_pid" in
-                (*[!0-9]*)
+                *[!0-9]*)
                     error=1
                 ;;
-                (*)
+                *)
                     if [ -z "$($JQ_FILE '.channels[] | select(.pid=='"$chnl_pid"')' $CHANNELS_FILE)" ]
                     then
                         error=2
@@ -911,14 +914,14 @@ SetSegLength()
     while read -p "(默认: $d_seg_length):" seg_length
     do
         case "$seg_length" in
-            ("")
+            "")
                 seg_length=$d_seg_length
                 break
             ;;
-            (*[!0-9]*)
+            *[!0-9]*)
                 echo -e "$error 请输入正确的数字(大于0) "
             ;;
-            (*)
+            *)
                 if [ "$seg_length" -ge 1 ]; then
                     break
                 else
@@ -937,14 +940,14 @@ SetSegCount()
     while read -p "(默认: $d_seg_count):" seg_count
     do
         case "$seg_count" in
-            ("")
+            "")
                 seg_count=$d_seg_count
                 break
             ;;
-            (*[!0-9]*)
+            *[!0-9]*)
                 echo -e "$error 请输入正确的数字(大于等于0) "
             ;;
-            (*)
+            *)
                 if [ "$seg_count" -ge 0 ]; then
                     break
                 else
@@ -979,14 +982,14 @@ SetQuality()
     while read -p "(默认: $d_quality_text):" quality
     do
         case "$quality" in
-            ("")
+            "")
                 quality=$d_quality
                 break
             ;;
-            (*[!0-9]*)
+            *[!0-9]*)
                 echo -e "$error 请输入正确的数字(大于0,小于等于63)或直接回车 "
             ;;
-            (*)
+            *)
                 if [ "$quality" -gt 0 ] && [ "$quality" -lt 63 ]
                 then
                     break
@@ -1996,11 +1999,9 @@ generateSchedule()
     done
 }
 
-schedule()
+Schedule()
 {
     CheckRelease
-
-    [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请先安装 !" && exit 1
     GetDefault
 
     if [ -n "$d_schedule_file" ] 
@@ -2893,7 +2894,12 @@ TsLogin()
         signature="$deviceno|yuj|${ts_array[acc_type_login]}|$account|$timestamp"
         signature=$(printf '%s' "$signature" | md5sum)
         signature=${signature%% *}
-        token=$(curl -X POST -s --data '{"account":"'"$account"'","deviceno":"'"$deviceno"'","pwd":"'"$md5_password"'","devicetype":"yuj","businessplatform":1,"signature":"'"$signature"'","isforce":1,"extendinfo":"'"${ts_array[extend_info]}"'","timestamp":"'"$timestamp"'","accounttype":'"${ts_array[acc_type_login]}"'}' "${ts_array[login_url]}")
+        if [[ ${ts_array[extend_info]} == "{"*"}" ]] 
+        then
+            token=$(curl -X POST -s --data '{"account":"'"$account"'","deviceno":"'"$deviceno"'","pwd":"'"$md5_password"'","devicetype":"yuj","businessplatform":1,"signature":"'"$signature"'","isforce":1,"extendinfo":'"${ts_array[extend_info]}"',"timestamp":"'"$timestamp"'","accounttype":'"${ts_array[acc_type_login]}"'}' "${ts_array[login_url]}")
+        else
+            token=$(curl -X POST -s --data '{"account":"'"$account"'","deviceno":"'"$deviceno"'","pwd":"'"$md5_password"'","devicetype":"yuj","businessplatform":1,"signature":"'"$signature"'","isforce":1,"extendinfo":"'"${ts_array[extend_info]}"'","timestamp":"'"$timestamp"'","accounttype":'"${ts_array[acc_type_login]}"'}' "${ts_array[login_url]}")
+        fi
     fi
 
     declare -A login_array
@@ -3106,6 +3112,59 @@ TsMenu()
     
 }
 
+Monitor()
+{
+    while true; do
+        for f in "$IPTV_ROOT"/live/*/* ; do
+            if [ -e "$f" ] 
+            then
+                size=$(find "$f" -printf '%s')
+                if [ "$size" -gt $(($1 * 1000000)) ] 
+                then
+                    file_root=${f%/*}
+                    output_dir_name=${file_root##*/}
+                    chnl_pid=$($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'").pid' $CHANNELS_FILE)
+                    GetChannelInfo
+                    if [ "$chnl_status" == "on" ] 
+                    then
+                        date_now=$(date -d now "+%m-%d %H:%M:%S")
+                        action="skip"
+                        StopChannel
+                        StartChannel
+                        printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
+                    else
+                        printf '%s\n' "$date_now pid: $chnl_pid $chnl_channel_name 不在运行?" >> "$MONITOR_LOG"
+                    fi
+                fi
+            fi
+        done
+        sleep 1
+    done
+}
+
+MonitorStop()
+{
+    if [ ! -s "$MONITOR_PID" ] 
+    then
+        echo -e "$error 监控未启动 !"
+    else
+        PID=$(< "$MONITOR_PID")
+        if kill -0 "$PID" 2> /dev/null
+        then
+            if pkill -9 -P "$PID" 2> /dev/null 
+            then
+                printf '%s\n' "$date_now 监控关闭成功 !" >> "$MONITOR_LOG"
+                echo -e "$info 监控关闭成功 !"
+            else
+                printf '%s\n' "$date_now 监控关闭失败 !" >> "$MONITOR_LOG"
+                echo -e "$error 监控关闭失败 !"
+            fi
+        else
+            echo -e "$error 监控未启动 !"
+        fi
+    fi
+}
+
 Usage()
 {
 
@@ -3172,7 +3231,53 @@ if [[ -n ${1+x} ]]
 then
     case $1 in
         "s") 
-            schedule "$@"
+            [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请先安装 !" && exit 1
+            Schedule "$@"
+            exit 0
+        ;;
+        "m") 
+            [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请先安装 !" && exit 1
+            date_now=$(date -d now "+%m-%d %H:%M:%S")
+
+            cmd=${2:-5}
+
+            case $cmd in
+                "stop") 
+                    MonitorStop
+                ;;
+                "log")
+                    tail -f "$MONITOR_LOG"
+                ;;
+                *[!0-9]*)
+                    echo -e "$error 请输入正确的数字(大于0) "
+                ;;
+                0)
+                    echo -e "$error 请输入正确的数字(大于0) "
+                ;;
+                *) 
+                    if [ ! -s "$MONITOR_PID" ] 
+                    then
+                        Monitor $cmd &
+                        PID=$!
+                        printf '%s' "$PID" > "$MONITOR_PID"
+                        printf '%s\n' "$date_now 监控启动成功 PID $PID !" >> "$MONITOR_LOG"
+                        echo -e "$info 监控启动成功 !"
+                    else
+                        PID=$(< "$MONITOR_PID")
+                        if kill -0 "$PID" 2> /dev/null 
+                        then
+                            echo -e "$error 监控已经在运行 !"
+                        else
+                            Monitor $cmd &
+                            PID=$!
+                            printf '%s' "$PID" > "$MONITOR_PID"
+                            printf '%s\n' "$date_now 监控启动成功 PID $PID !" >> "$MONITOR_LOG"
+                            echo -e "$info 监控启动成功 !"
+                        fi
+                    fi
+                ;;
+            esac
+
             exit 0
         ;;
         *)
