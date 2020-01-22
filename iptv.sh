@@ -633,16 +633,36 @@ ListChannels()
         chnls_name_index=${chnls_name[index]//\'/}
         if [ "$chnls_status_index" == "on" ]
         then
-            creator_pids=$(pgrep -P "$chnls_pid_index" || true)
-            if [ -z "$creator_pids" ] 
+            if kill -0 "$chnls_pid_index" 2> /dev/null 
             then
+                working=0
+                while IFS= read -r creator_pid 
+                do
+                    if [ -z "$creator_pid" ] 
+                    then
+                        working=1
+                    elif kill -0 "$creator_pid" 2> /dev/null 
+                    then
+                        working=1
+                    fi
+                done <<< $(pgrep -P "$chnls_pid_index")
+
+                if [ "$working" == 1 ] 
+                then
+                    chnls_status_text=$green"开启"$plain
+                else
+                    chnls_status_text=$red"关闭"$plain
+                    $JQ_FILE '(.channels[]|select(.pid=='"$chnls_pid_index"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+                    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+                    chnl_pid=$chnls_pid_index
+                    StopChannel
+                fi
+            else
                 chnls_status_text=$red"关闭"$plain
                 $JQ_FILE '(.channels[]|select(.pid=='"$chnls_pid_index"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
                 mv "$CHANNELS_TMP" "$CHANNELS_FILE"
                 chnl_pid=$chnls_pid_index
                 StopChannel
-            else
-                chnls_status_text=$green"开启"$plain
             fi
         else
             chnls_status_text=$red"关闭"$plain
@@ -1623,28 +1643,39 @@ StartChannel()
 
 StopChannel()
 {
+    stopped=0
     while IFS= read -r creator_pid 
     do
-        if [ -n "$creator_pid" ] 
+        if [ -z "$creator_pid" ] 
         then
-            while IFS= read -r ffmpeg_pid 
-            do
-                if [ -n "$ffmpeg_pid" ] 
-                then
-                    kill -9 "$ffmpeg_pid" || true
-                fi
-            done <<< $(pgrep -P "$creator_pid" || true)
-            kill -9 "$creator_pid" || true
-            #or pkill -TERM -P $creator_pid
+            if kill -9 "$chnl_pid" 2> /dev/null 
+            then
+                echo -e "$info 频道进程 $chnl_pid 已停止 !" && echo
+                stopped=1
+            fi
+        else
+            if kill -9 "$creator_pid" 2> /dev/null 
+            then
+                echo -e "$info 频道进程 $chnl_pid 已停止 !" && echo
+                stopped=1
+            fi
         fi
-    done <<< $(pgrep -P "$chnl_pid" || true)
-    
+    done <<< $(pgrep -P "$chnl_pid")
+
+    if [ "$stopped" == 0 ] 
+    then
+        if [ -n "${size:-}" ] # monitor
+        then
+            return 0
+        fi
+        echo -e "$error 关闭频道进程 $chnl_pid 遇到错误，请重试 !" && echo && exit 1
+    fi
+
     remove_dir_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').output_dir_name' "$CHANNELS_FILE")
     $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
     mv "$CHANNELS_TMP" "$CHANNELS_FILE"
     rm -rf "$LIVE_ROOT/${remove_dir_name:-'notfound'}"
     echo && echo -e "$info 频道目录删除成功 !" && echo
-    echo -e "$info 频道进程$chnl_pid已停止 !" && echo
     action=${action:-"stop"}
     SyncFile
 }
@@ -2021,9 +2052,11 @@ Schedule()
         "tvbfc:TVB 翡翠台"
         "tvbpearl:TVB Pearl"
         "tvbj2:TVB J2"
+        "tvbwxxw:TVB 互動新聞台"
         "fhwszx:凤凰卫视资讯台"
         "fhwsxg:凤凰卫视香港台"
         "fhwszw:凤凰卫视中文台"
+        "xgws:香港衛視綜合台"
         "foxfamily:福斯家庭電影台"
         "hlwdy:好萊塢電影"
         "xwdy:星衛HD電影台"
@@ -2163,6 +2196,7 @@ Schedule()
         "animax:Animax"
         "mtv:MTV綜合電視台"
         "ndmuch:年代MUCH"
+        "ndxw:年代新聞"
         "nhk:NHK"
         "euronews:Euronews"
         "cnn:CNN International"
@@ -2308,6 +2342,7 @@ Schedule()
         "animax:84"
         "mtv:69"
         "ndmuch:25"
+        "ndxw:40"
         "nhk:74"
         "euronews:591"
         "ffxw:79"
@@ -2380,7 +2415,7 @@ Schedule()
         "nhk:328:3"
         "fhwszx:366:3"
         "fhwsxg:367:3"
-        "fhwszw:368:3"
+        "xgws:368:3"
         "disney:441:4"
         "boomerang:445:4"
         "cbeebies:447:4"
@@ -3130,11 +3165,15 @@ Monitor()
                         date_now=$(date -d now "+%m-%d %H:%M:%S")
                         action="skip"
                         StopChannel
-                        StartChannel
-                        printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
+                        if [ "$stopped" == 1 ] 
+                        then
+                            StartChannel
+                            printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
+                        fi
                     else
                         printf '%s\n' "$date_now pid: $chnl_pid $chnl_channel_name 不在运行?" >> "$MONITOR_LOG"
                     fi
+                    break 1
                 fi
             fi
         done
@@ -3153,10 +3192,10 @@ MonitorStop()
         then
             if pkill -9 -P "$PID" 2> /dev/null 
             then
-                printf '%s\n' "$date_now 监控关闭成功 !" >> "$MONITOR_LOG"
+                printf '%s\n' "$date_now 监控关闭成功 PID $PID !" >> "$MONITOR_LOG"
                 echo -e "$info 监控关闭成功 !"
             else
-                printf '%s\n' "$date_now 监控关闭失败 !" >> "$MONITOR_LOG"
+                printf '%s\n' "$date_now 监控关闭失败 PID $PID !" >> "$MONITOR_LOG"
                 echo -e "$error 监控关闭失败 !"
             fi
         else
@@ -3257,6 +3296,7 @@ then
                 *) 
                     if [ ! -s "$MONITOR_PID" ] 
                     then
+                        #trap "true" HUP
                         Monitor $cmd &
                         PID=$!
                         printf '%s' "$PID" > "$MONITOR_PID"
@@ -3268,6 +3308,7 @@ then
                         then
                             echo -e "$error 监控已经在运行 !"
                         else
+                            #trap "true" HUP
                             Monitor $cmd &
                             PID=$!
                             printf '%s' "$PID" > "$MONITOR_PID"
