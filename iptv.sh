@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-sh_ver="1.0.0"
+sh_ver="1.1.0"
 SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
@@ -37,6 +37,7 @@ default='
     "seg_count":5,
     "video_codec":"h264",
     "audio_codec":"aac",
+    "video_audio_shift":"",
     "quality":"",
     "bitrates":"900-1280x720",
     "const":"no",
@@ -101,8 +102,8 @@ SyncFile()
         then
             if [ -n "$($JQ_FILE "$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")' "$d_sync_file")" ] 
             then
-                $JQ_FILE "$jq_index"' -= ['"$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")]' "$d_sync_file" > "$CHANNELS_TMP"
-                mv "$CHANNELS_TMP" "$d_sync_file"
+                $JQ_FILE "$jq_index"' -= ['"$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")]' "$d_sync_file" > "${d_sync_file}_tmp"
+                mv "${d_sync_file}_tmp" "$d_sync_file"
             fi
         else
             jq_channel_add="[{"
@@ -176,12 +177,12 @@ SyncFile()
             if [ "$action" == "add" ] || [ -z "$($JQ_FILE "$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")' "$d_sync_file")" ]
             then
                 jq_channel_add="${jq_channel_add}}]"
-                $JQ_FILE "$jq_index"' += '"$jq_channel_add"'' "$d_sync_file" > "$CHANNELS_TMP"
-                mv "$CHANNELS_TMP" "$d_sync_file"
+                $JQ_FILE "$jq_index"' += '"$jq_channel_add"'' "$d_sync_file" > "${d_sync_file}_tmp"
+                mv "${d_sync_file}_tmp" "$d_sync_file"
             else
                 jq_channel_edit="$jq_channel_edit|(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key_last)=\"${value_last}\""
-                $JQ_FILE "${jq_channel_edit}" "$d_sync_file" > "$CHANNELS_TMP"
-                mv "$CHANNELS_TMP" "$d_sync_file"
+                $JQ_FILE "${jq_channel_edit}" "$d_sync_file" > "${d_sync_file}_tmp"
+                mv "${d_sync_file}_tmp" "$d_sync_file"
             fi
         fi
         echo -e "$info sync 执行成功..."
@@ -434,6 +435,8 @@ UpdateSelf()
         default_seg_count=$($JQ_FILE -r '.default.seg_count' "$CHANNELS_FILE")
         default_video_codec=$($JQ_FILE -r '.default.video_codec' "$CHANNELS_FILE")
         default_audio_codec=$($JQ_FILE -r '.default.audio_codec' "$CHANNELS_FILE")
+        default_video_audio_shift=$($JQ_FILE -r '.default.video_audio_shift' "$CHANNELS_FILE")
+        [ "$default_video_audio_shift" == null ] && default_video_audio_shift=""
         default_quality=$($JQ_FILE -r '.default.quality' "$CHANNELS_FILE")
         default_bitrates=$($JQ_FILE -r '.default.bitrates' "$CHANNELS_FILE")
         default_const=$($JQ_FILE -r '.default.const' "$CHANNELS_FILE")
@@ -444,7 +447,7 @@ UpdateSelf()
         default_sync_index=$($JQ_FILE -r '.default.sync_index' "$CHANNELS_FILE")
         default_sync_pairs=$($JQ_FILE -r '.default.sync_pairs' "$CHANNELS_FILE")
         default_schedule_file=$($JQ_FILE -r '.default.schedule_file' "$CHANNELS_FILE")
-        default=$($JQ_FILE '(.seg_dir_name)="'"$default_seg_dir_name"'"|(.seg_length)='"$default_seg_length"'|(.seg_count)='"$default_seg_count"'|(.video_codec)="'"$default_video_codec"'"|(.audio_codec)="'"$default_audio_codec"'"|(.quality)="'"$default_quality"'"|(.bitrates)="'"$default_bitrates"'"|(.const)="'"$default_const"'"|(.encrypt)="'"$default_encrypt"'"|(.input_flags)="'"$default_input_flags"'"|(.output_flags)="'"$default_output_flags"'"|(.sync_file)="'"$default_sync_file"'"|(.sync_index)="'"$default_sync_index"'"|(.sync_pairs)="'"$default_sync_pairs"'"|(.schedule_file)="'"$default_schedule_file"'"' <<< "$default")
+        default=$($JQ_FILE '(.seg_dir_name)="'"$default_seg_dir_name"'"|(.seg_length)='"$default_seg_length"'|(.seg_count)='"$default_seg_count"'|(.video_codec)="'"$default_video_codec"'"|(.audio_codec)="'"$default_audio_codec"'"|(.video_audio_shift)="'"$default_video_audio_shift"'"|(.quality)="'"$default_quality"'"|(.bitrates)="'"$default_bitrates"'"|(.const)="'"$default_const"'"|(.encrypt)="'"$default_encrypt"'"|(.input_flags)="'"$default_input_flags"'"|(.output_flags)="'"$default_output_flags"'"|(.sync_file)="'"$default_sync_file"'"|(.sync_index)="'"$default_sync_index"'"|(.sync_pairs)="'"$default_sync_pairs"'"|(.schedule_file)="'"$default_schedule_file"'"' <<< "$default")
 
         $JQ_FILE '. + {default: '"$default"'}' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
@@ -461,6 +464,7 @@ UpdateSelf()
             chnl_seg_count=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').seg_count' "$CHANNELS_FILE")
             chnl_video_codec=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').video_codec' "$CHANNELS_FILE")
             chnl_audio_codec=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').audio_codec' "$CHANNELS_FILE")
+            chnl_video_audio_shift=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').video_audio_shift' "$CHANNELS_FILE")
             chnl_quality=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').quality' "$CHANNELS_FILE")
             chnl_bitrates=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').bitrates' "$CHANNELS_FILE")
             chnl_const=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').const' "$CHANNELS_FILE")
@@ -473,6 +477,7 @@ UpdateSelf()
             $JQ_FILE '.channels -= [.channels[]|select(.pid=='"$chnl_pid"')]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
             mv "$CHANNELS_TMP" "$CHANNELS_FILE"
 
+            [ "$chnl_video_audio_shift" == null ] && chnl_video_audio_shift=$default_video_audio_shift
             if [ "$chnl_const" == "yes" ]
             then
                 chnl_const_yn="yes"
@@ -498,6 +503,7 @@ UpdateSelf()
                     "seg_count":'"$chnl_seg_count"',
                     "video_codec":"'"$chnl_video_codec"'",
                     "audio_codec":"'"$chnl_audio_codec"'",
+                    "video_audio_shift":"'"$chnl_video_audio_shift"'",
                     "quality":"'"$chnl_quality"'",
                     "bitrates":"'"$chnl_bitrates"'",
                     "const":"'"$chnl_const_yn"'",
@@ -528,10 +534,25 @@ GetDefault()
     d_seg_count=${default_array[2]//\'/}
     d_video_codec=${default_array[3]//\'/}
     d_audio_codec=${default_array[4]//\'/}
-    d_quality=${default_array[5]//\'/}
+    d_video_audio_shift=${default_array[5]//\'/}
+
+    v_or_a=${d_video_audio_shift%_*}
+    if [ "$v_or_a" == "v" ] 
+    then
+        d_video_shift=${d_video_audio_shift#*_}
+        d_video_audio_shift_text="画面延迟 $d_video_shift 秒"
+    elif [ "$v_or_a" == "a" ] 
+    then
+        d_audio_shift=${d_video_audio_shift#*_}
+        d_video_audio_shift_text="声音延迟 $d_audio_shift 秒"
+    else
+        d_video_audio_shift_text="不设置"
+    fi
+
+    d_quality=${default_array[6]//\'/}
     d_quality_text=${d_quality:-"不设置"}
-    d_bitrates=${default_array[6]//\'/}
-    d_const_yn=${default_array[7]//\'/}
+    d_bitrates=${default_array[7]//\'/}
+    d_const_yn=${default_array[8]//\'/}
     if [ "$d_const_yn" == "no" ] 
     then
         d_const_yn="N"
@@ -540,7 +561,7 @@ GetDefault()
         d_const_yn="Y"
         d_const="-C"
     fi
-    d_encrypt_yn=${default_array[8]//\'/}
+    d_encrypt_yn=${default_array[9]//\'/}
     if [ "$d_encrypt_yn" == "no" ] 
     then
         d_encrypt_yn="N"
@@ -549,12 +570,12 @@ GetDefault()
         d_encrypt_yn="Y"
         d_encrypt="-e"
     fi
-    d_input_flags=${default_array[9]//\'/}
-    d_output_flags=${default_array[10]//\'/}
-    d_sync_file=${default_array[11]//\'/}
-    d_sync_index=${default_array[12]//\'/}
-    d_sync_pairs=${default_array[13]//\'/}
-    d_schedule_file=${default_array[14]//\'/}
+    d_input_flags=${default_array[10]//\'/}
+    d_output_flags=${default_array[11]//\'/}
+    d_sync_file=${default_array[12]//\'/}
+    d_sync_index=${default_array[13]//\'/}
+    d_sync_pairs=${default_array[14]//\'/}
+    d_schedule_file=${default_array[15]//\'/}
 }
 
 GetChannelsInfo()
@@ -568,10 +589,15 @@ GetChannelsInfo()
     IFS=" " read -ra chnls_playlist_name <<< "$($JQ_FILE -r '[.channels[].playlist_name] | @sh' $CHANNELS_FILE)"
     IFS=" " read -ra chnls_video_codec <<< "$($JQ_FILE -r '[.channels[].video_codec] | @sh' $CHANNELS_FILE)"
     IFS=" " read -ra chnls_audio_codec <<< "$($JQ_FILE -r '[.channels[].audio_codec] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -ra chnls_video_audio_shift <<< "$($JQ_FILE -r '[.channels[].video_audio_shift] | @sh' $CHANNELS_FILE)"
     IFS=" " read -ra chnls_quality <<< "$($JQ_FILE -r '[.channels[].quality] | @sh' $CHANNELS_FILE)"
     IFS=" " read -ra chnls_bitrates <<< "$($JQ_FILE -r '[.channels[].bitrates] | @sh' $CHANNELS_FILE)"
     IFS=" " read -ra chnls_const <<< "$($JQ_FILE -r '[.channels[].const] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -ra chnls_name <<< "$($JQ_FILE -r '[.channels[].channel_name] | @sh' $CHANNELS_FILE)"
+    chnls_name=()
+    while IFS='' read -r name
+    do
+        chnls_name+=("$name");
+    done < <($JQ_FILE -r '.channels[].channel_name | @sh' "$CHANNELS_FILE")
 }
 
 ListChannels()
@@ -585,6 +611,21 @@ ListChannels()
         chnls_output_dir_root="$LIVE_ROOT/$chnls_output_dir_name_index"
         chnls_video_codec_index=${chnls_video_codec[index]//\'/}
         chnls_audio_codec_index=${chnls_audio_codec[index]//\'/}
+        chnls_video_audio_shift_index=${chnls_video_audio_shift[index]//\'/}
+
+        v_or_a=${chnls_video_audio_shift_index%_*}
+        if [ "$v_or_a" == "v" ] 
+        then
+            chnls_video_shift=${chnls_video_audio_shift_index#*_}
+            chnls_video_audio_shift_text="画面延迟 $chnls_video_shift 秒"
+        elif [ "$v_or_a" == "a" ] 
+        then
+            chnls_audio_shift=${chnls_video_audio_shift_index#*_}
+            chnls_video_audio_shift_text="声音延迟 $chnls_audio_shift 秒"
+        else
+            chnls_video_audio_shift_text="不设置"
+        fi
+
         chnls_quality_index=${chnls_quality[index]//\'/}
         chnls_playlist_name_index=${chnls_playlist_name[index]//\'/}
         chnls_const_index=${chnls_const[index]//\'/}
@@ -644,6 +685,9 @@ ListChannels()
                     elif kill -0 "$creator_pid" 2> /dev/null 
                     then
                         working=1
+                    elif [[ $(< "$MONITOR_LOG") == *"PID $creator_pid"* ]] 
+                    then
+                        working=1
                     fi
                 done <<< $(pgrep -P "$chnls_pid_index")
 
@@ -679,7 +723,7 @@ ListChannels()
         then
             chnls_video_quality_text="原画"
         fi
-        chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_status_text 频道名称: $green${chnls_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 视频质量: $green$chnls_video_quality_text$plain m3u8位置: $chnls_playlist_file_text\n\n"
+        chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_status_text 频道名称: $green${chnls_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain m3u8位置: $chnls_playlist_file_text\n\n"
     done
     echo && echo -e "=== 频道总数 $green $channels_count $plain"
     echo -e "$chnls_list\n"
@@ -716,8 +760,23 @@ GetChannelInfo(){
     chnl_seg_count=${chnl_info_array[8]//\'/}
     chnl_video_codec=${chnl_info_array[9]//\'/}
     chnl_audio_codec=${chnl_info_array[10]//\'/}
-    chnl_quality=${chnl_info_array[11]//\'/}
-    chnl_const=${chnl_info_array[13]//\'/}
+    chnl_video_audio_shift=${chnl_info_array[11]//\'/}
+
+    v_or_a=${chnl_video_audio_shift%_*}
+    if [ "$v_or_a" == "v" ] 
+    then
+        chnl_video_shift=${chnl_video_audio_shift#*_}
+        chnl_video_audio_shift_text="画面延迟 $chnl_video_shift 秒"
+    elif [ "$v_or_a" == "a" ] 
+    then
+        chnl_audio_shift=${chnl_video_audio_shift#*_}
+        chnl_video_audio_shift_text="声音延迟 $chnl_audio_shift 秒"
+    else
+        chnl_video_audio_shift_text="不设置"
+    fi
+
+    chnl_quality=${chnl_info_array[12]//\'/}
+    chnl_const=${chnl_info_array[14]//\'/}
     if [ "$chnl_const" == "no" ]
     then
         chnl_const=""
@@ -726,7 +785,7 @@ GetChannelInfo(){
         chnl_const="-C"
         chnl_const_text=" 固定频率:是"
     fi
-    chnl_bitrates=${chnl_info_array[12]//\'/}
+    chnl_bitrates=${chnl_info_array[13]//\'/}
     #if [ -z "$chnl_bitrates" ] 
     #then
     #    if [ -z "$d_bitrates" ] 
@@ -771,8 +830,8 @@ GetChannelInfo(){
         chnl_playlist_link_text="$red请先设置 sync$plain"
     fi
 
-    chnl_encrypt=${chnl_info_array[14]//\'/}
-    chnl_key_name=${chnl_info_array[15]//\'/}
+    chnl_encrypt=${chnl_info_array[15]//\'/}
+    chnl_key_name=${chnl_info_array[16]//\'/}
     if [ "$chnl_encrypt" == "no" ]
     then
         chnl_encrypt=""
@@ -783,11 +842,11 @@ GetChannelInfo(){
         chnl_encrypt_text=$green"是"$plain
         chnl_key_name_text=$green$chnl_key_name$plain
     fi
-    chnl_input_flags=${chnl_info_array[16]}
+    chnl_input_flags=${chnl_info_array[17]}
     chnl_input_flags_text=${chnl_input_flags//\'/}
-    chnl_output_flags=${chnl_info_array[17]}
+    chnl_output_flags=${chnl_info_array[18]}
     chnl_output_flags_text=${chnl_output_flags//\'/}
-    chnl_channel_name=${chnl_info_array[18]//\'/}
+    chnl_channel_name=${chnl_info_array[19]//\'/}
 
     if [ -n "$chnl_quality" ] 
     then
@@ -822,6 +881,7 @@ ViewChannelInfo()
     echo -e " 视频编码   : $green$chnl_video_codec$plain"
     echo -e " 音频编码   : $green$chnl_audio_codec$plain"
     echo -e " 视频质量   : $green$chnl_video_quality_text$plain"
+    echo -e " 延迟\t    : $green$chnl_video_audio_shift_text$plain"
     echo -e " 加密\t    : $chnl_encrypt_text"
     if [ -n "$chnl_encrypt" ] 
     then
@@ -955,7 +1015,7 @@ SetSegLength()
 
 SetSegCount()
 {
-    echo "请输入分割段的数目"
+    echo "请输入m3u8文件包含的段数目，ffmpeg分割的数目是其2倍"
     echo -e "$tip 如果填0就是无限"
     while read -p "(默认: $d_seg_count):" seg_count
     do
@@ -981,7 +1041,7 @@ SetSegCount()
 
 SetVideoCodec()
 {
-    echo "请输入视频编码"
+    echo "请输入视频编码(不需要转码时输入 copy)"
     read -p "(默认: $d_video_codec):" video_codec
     video_codec=${video_codec:-$d_video_codec}
     echo && echo -e "	视频编码: $green $video_codec $plain" && echo
@@ -989,7 +1049,7 @@ SetVideoCodec()
 
 SetAudioCodec()
 {
-    echo "请输入音频编码"
+    echo "请输入音频编码(不需要转码时输入 copy)"
     read -p "(默认: $d_audio_codec):" audio_codec
     audio_codec=${audio_codec:-$d_audio_codec}
     echo && echo -e "	音频编码: $green $audio_codec $plain" && echo
@@ -1130,12 +1190,226 @@ SetOutputFlags()
     echo && echo -e "	output flags: $green ${output_flags:-"不设置"} $plain" && echo 
 }
 
+SetVideoAudioShift()
+{
+    echo && echo -e "画面或声音延迟？
+    ${green}1.$plain 设置 画面延迟
+    ${green}2.$plain 设置 声音延迟
+    ${green}3.$plain 不设置
+    " && echo
+    while read -p "(默认: $d_video_audio_shift_text):" video_audio_shift_num
+    do
+        case $video_audio_shift_num in
+            "") 
+                if [ -n "${d_video_shift:-}" ] 
+                then
+                    video_shift=$d_video_shift
+                elif [ -n "${d_audio_shift:-}" ] 
+                then
+                    audio_shift=$d_audio_shift
+                fi
+
+                video_audio_shift_text=$d_video_audio_shift_text
+                break
+            ;;
+            1) 
+                echo && echo "请输入延迟时间（比如 0.5）"
+                read -p "(默认: 返回上级选项): " video_shift
+                if [ -n "$video_shift" ] 
+                then
+                    video_audio_shift="v_$video_shift"
+                    video_audio_shift_text="画面延迟 $video_shift 秒"
+                    break
+                else
+                    echo
+                fi
+            ;;
+            2) 
+                echo && echo "请输入延迟时间（比如 0.5）"
+                read -p "(默认: 返回上级选项): " audio_shift
+                if [ -n "$audio_shift" ] 
+                then
+                    video_audio_shift="a_$audio_shift"
+                    video_audio_shift_text="声音延迟 $audio_shift 秒"
+                    break
+                else
+                    echo
+                fi
+            ;;
+            3) 
+                video_audio_shift_text="不设置"
+                break
+            ;;
+            *) echo && echo -e "$error 请输入正确序号(1、2、3)或直接回车 " && echo
+            ;;
+        esac
+    done
+
+    echo && echo -e "	延迟: $green $video_audio_shift_text $plain" && echo 
+}
+
 SetChannelName()
 {
     echo "请输入频道名称(可以是中文)"
     read -p "(默认: 跟m3u8名称相同):" channel_name
     channel_name=${channel_name:-$playlist_name}
     echo && echo -e "	频道名称: $green $channel_name $plain" && echo
+}
+
+HlsStreamCreatorWithShift()
+{
+    trap '' HUP INT QUIT TERM;
+    trap 'MonitorError $LINENO' ERR
+    pid="$BASHPID"
+    case $from in
+        "AddChannel") 
+            mkdir -p "$output_dir_root"
+            $JQ_FILE '.channels += [
+                {
+                    "pid":'"$pid"',
+                    "status":"on",
+                    "stream_link":"'"$stream_link"'",
+                    "output_dir_name":"'"$output_dir_name"'",
+                    "playlist_name":"'"$playlist_name"'",
+                    "seg_dir_name":"'"$SEGMENT_DIRECTORY"'",
+                    "seg_name":"'"$seg_name"'",
+                    "seg_length":'"$seg_length"',
+                    "seg_count":'"$seg_count"',
+                    "video_codec":"'"$VIDEO_CODEC"'",
+                    "audio_codec":"'"$AUDIO_CODEC"'",
+                    "video_audio_shift":"'"$video_audio_shift"'",
+                    "quality":"'"$quality"'",
+                    "bitrates":"'"$bitrates"'",
+                    "const":"'"$const_yn"'",
+                    "encrypt":"'"$encrypt_yn"'",
+                    "key_name":"'"$key_name"'",
+                    "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
+                    "output_flags":"'"$FFMPEG_FLAGS"'",
+                    "channel_name":"'"$channel_name"'"
+                }
+            ]' "$CHANNELS_FILE" > "${CHANNELS_TMP}_shift"
+            mv "${CHANNELS_TMP}_shift" "$CHANNELS_FILE"
+            action="add"
+            SyncFile
+
+            if [ -n "$bitrates" ] 
+            then
+                output_name="${playlist_name}_${bitrates}_%05d.ts"
+            else
+                output_name="${playlist_name}_%05d.ts"
+            fi
+            if [ -n "${video_shift:-}" ] 
+            then
+                map_command="-map 0:v -map 1:a"
+            elif [ -n "${audio_shift:-}" ] 
+            then
+                map_command="-map 0:a -map 1:v"
+            fi
+            $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" -itsoffset "$video_shift" \
+            -i "$stream_link" $map_command -y -vcodec "$video_codec" -acodec "$audio_codec" \
+            -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
+            -segment_time "$seg_length" -segment_format mpeg_ts -segment_list_flags +live \
+            -segment_list_size "$seg_count" -segment_wrap $((seg_count * 2)) $FFMPEG_FLAGS "$output_dir_root/$output_name" || true
+
+            $JQ_FILE '(.channels[]|select(.pid=='"$pid"')|.status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_shift"
+            mv "${CHANNELS_TMP}_shift" "$CHANNELS_FILE"
+            rm -rf "$LIVE_ROOT/${output_dir_name:-'notfound'}"
+            action="stop"
+            SyncFile
+            kill -9 "$pid"
+        ;;
+        "StartChannel") 
+            mkdir -p "$chnl_output_dir_root"
+            new_pid=$pid
+            $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.status)="on"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_shift"
+            mv "${CHANNELS_TMP}_shift" "$CHANNELS_FILE"
+            action=${action:-"start"}
+            SyncFile
+            if [ -n "$chnl_bitrates" ] 
+            then
+                output_name="${chnl_playlist_name}_${chnl_bitrates}_%05d.ts"
+            else
+                output_name="${chnl_playlist_name}_%05d.ts"
+            fi
+            if [ -n "${chnl_video_shift:-}" ] 
+            then
+                map_command="-map 0:v -map 1:a"
+            elif [ -n "${chnl_audio_shift:-}" ] 
+            then
+                map_command="-map 0:a -map 1:v"
+            fi
+            $FFMPEG $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" -itsoffset "$chnl_video_shift" \
+            -i "$chnl_stream_link" $map_command -y -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" \
+            -threads 0 -flags -global_header -f segment -segment_list "$chnl_output_dir_root/$chnl_playlist_name.m3u8" \
+            -segment_time "$chnl_seg_length" -segment_format mpeg_ts -segment_list_flags +live \
+            -segment_list_size "$chnl_seg_count" -segment_wrap $((chnl_seg_count * 2)) $FFMPEG_FLAGS "$chnl_output_dir_root/$output_name" || true
+
+            $JQ_FILE '(.channels[]|select(.pid=='"$new_pid"')|.status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_shift"
+            mv "${CHANNELS_TMP}_shift" "$CHANNELS_FILE"
+            rm -rf "$LIVE_ROOT/${chnl_output_dir_name:-'notfound'}"
+            action="stop"
+            chnl_pid=$new_pid
+            SyncFile
+            kill -9 "$new_pid"
+        ;;
+        "command") 
+            mkdir -p "$output_dir_root"
+            $JQ_FILE '.channels += [
+                {
+                    "pid":'"$pid"',
+                    "status":"on",
+                    "stream_link":"'"$stream_link"'",
+                    "output_dir_name":"'"$output_dir_name"'",
+                    "playlist_name":"'"$playlist_name"'",
+                    "seg_dir_name":"'"$SEGMENT_DIRECTORY"'",
+                    "seg_name":"'"$seg_name"'",
+                    "seg_length":'"$seg_length"',
+                    "seg_count":'"$seg_count"',
+                    "video_codec":"'"$VIDEO_CODEC"'",
+                    "audio_codec":"'"$AUDIO_CODEC"'",
+                    "video_audio_shift":"'"$video_audio_shift"'",
+                    "quality":"'"$quality"'",
+                    "bitrates":"'"$bitrates"'",
+                    "const":"'"$const_yn"'",
+                    "encrypt":"'"$encrypt_yn"'",
+                    "key_name":"'"$key_name"'",
+                    "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
+                    "output_flags":"'"$FFMPEG_FLAGS"'",
+                    "channel_name":"'"$channel_name"'"
+                }
+            ]' "$CHANNELS_FILE" > "${CHANNELS_TMP}_shift"
+            mv "${CHANNELS_TMP}_shift" "$CHANNELS_FILE"
+            action="add"
+            SyncFile
+
+            if [ -n "$bitrates" ] 
+            then
+                output_name="${playlist_name}_${bitrates}_%05d.ts"
+            else
+                output_name="${playlist_name}_%05d.ts"
+            fi
+            if [ -n "${video_shift:-}" ] 
+            then
+                map_command="-map 0:v -map 1:a"
+            elif [ -n "${audio_shift:-}" ] 
+            then
+                map_command="-map 0:a -map 1:v"
+            fi
+
+            $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" -itsoffset "$video_shift" \
+            -i "$stream_link" $map_command -y -vcodec "$video_codec" -acodec "$audio_codec" \
+            -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
+            -segment_time "$seg_length" -segment_format mpeg_ts -segment_list_flags +live \
+            -segment_list_size "$seg_count" -segment_wrap $((seg_count * 2)) $FFMPEG_FLAGS "$output_dir_root/$output_name" || true
+
+            $JQ_FILE '(.channels[]|select(.pid=='"$pid"')|.status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_shift"
+            mv "${CHANNELS_TMP}_shift" "$CHANNELS_FILE"
+            rm -rf "$LIVE_ROOT/${output_dir_name:-'notfound'}"
+            action="stop"
+            SyncFile
+            kill -9 "$pid"
+        ;;
+    esac
 }
 
 AddChannel()
@@ -1151,6 +1425,7 @@ AddChannel()
     SetSegCount
     SetVideoCodec
     SetAudioCodec
+    SetVideoAudioShift
     quality_command=""
     bitrates_command=""
     if [ "$video_codec" == "copy" ] && [ "$audio_codec" == "copy" ]
@@ -1204,39 +1479,47 @@ AddChannel()
     export VIDEO_CODEC
     export SEGMENT_DIRECTORY
     export FFMPEG_FLAGS
-    exec "$CREATOR_FILE" -l -i "$stream_link" -s "$seg_length" \
-        -o "$output_dir_root" -c "$seg_count" $bitrates_command \
-        -p "$playlist_name" -t "$seg_name" -K "$key_name" $quality_command \
-        "$const" "$encrypt" &
-    pid=$!
-    $JQ_FILE '.channels += [
-        {
-            "pid":'"$pid"',
-            "status":"on",
-            "stream_link":"'"$stream_link"'",
-            "output_dir_name":"'"$output_dir_name"'",
-            "playlist_name":"'"$playlist_name"'",
-            "seg_dir_name":"'"$SEGMENT_DIRECTORY"'",
-            "seg_name":"'"$seg_name"'",
-            "seg_length":'"$seg_length"',
-            "seg_count":'"$seg_count"',
-            "video_codec":"'"$VIDEO_CODEC"'",
-            "audio_codec":"'"$AUDIO_CODEC"'",
-            "quality":"'"$quality"'",
-            "bitrates":"'"$bitrates"'",
-            "const":"'"$const_yn"'",
-            "encrypt":"'"$encrypt_yn"'",
-            "key_name":"'"$key_name"'",
-            "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
-            "output_flags":"'"$FFMPEG_FLAGS"'",
-            "channel_name":"'"$channel_name"'"
-        }
-    ]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
 
-    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    if [ -n "${video_audio_shift:-}" ] 
+    then
+        from="AddChannel"
+        ( HlsStreamCreatorWithShift ) > /dev/null 2>/dev/null </dev/null &
+    else
+        exec "$CREATOR_FILE" -l -i "$stream_link" -s "$seg_length" \
+            -o "$output_dir_root" -c "$seg_count" $bitrates_command \
+            -p "$playlist_name" -t "$seg_name" -K "$key_name" $quality_command \
+            "$const" "$encrypt" &
+        pid=$!
+        $JQ_FILE '.channels += [
+            {
+                "pid":'"$pid"',
+                "status":"on",
+                "stream_link":"'"$stream_link"'",
+                "output_dir_name":"'"$output_dir_name"'",
+                "playlist_name":"'"$playlist_name"'",
+                "seg_dir_name":"'"$SEGMENT_DIRECTORY"'",
+                "seg_name":"'"$seg_name"'",
+                "seg_length":'"$seg_length"',
+                "seg_count":'"$seg_count"',
+                "video_codec":"'"$VIDEO_CODEC"'",
+                "audio_codec":"'"$AUDIO_CODEC"'",
+                "video_audio_shift":"",
+                "quality":"'"$quality"'",
+                "bitrates":"'"$bitrates"'",
+                "const":"'"$const_yn"'",
+                "encrypt":"'"$encrypt_yn"'",
+                "key_name":"'"$key_name"'",
+                "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
+                "output_flags":"'"$FFMPEG_FLAGS"'",
+                "channel_name":"'"$channel_name"'"
+            }
+        ]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+        mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+        action="add"
+        SyncFile
+    fi
+
     echo && echo -e "$info 频道添加成功 !" && echo
-    action="add"
-    SyncFile
 }
 
 EditStreamLink()
@@ -1412,6 +1695,7 @@ EditChannelAll()
     SetSegCount
     SetVideoCodec
     SetAudioCodec
+    SetVideoAudioShift
     if [ "$video_codec" == "copy" ] && [ "$audio_codec" == "copy" ]
     then
         quality=""
@@ -1629,16 +1913,24 @@ StartChannel()
     export VIDEO_CODEC
     export SEGMENT_DIRECTORY
     export FFMPEG_FLAGS
-    exec "$CREATOR_FILE" -l -i "$chnl_stream_link" -s "$chnl_seg_length" \
-        -o "$chnl_output_dir_root" -c "$chnl_seg_count" $chnl_bitrates_command \
-        -p "$chnl_playlist_name" -t "$chnl_seg_name" -K "$chnl_key_name" $chnl_quality_command \
-        "$chnl_const" "$chnl_encrypt" &
-    new_pid=$!
-    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.status)="on"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
-    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+
+    if [ -n "${chnl_video_audio_shift:-}" ] 
+    then
+        from="StartChannel"
+        ( HlsStreamCreatorWithShift ) > /dev/null 2>/dev/null </dev/null &
+    else
+        exec "$CREATOR_FILE" -l -i "$chnl_stream_link" -s "$chnl_seg_length" \
+            -o "$chnl_output_dir_root" -c "$chnl_seg_count" $chnl_bitrates_command \
+            -p "$chnl_playlist_name" -t "$chnl_seg_name" -K "$chnl_key_name" $chnl_quality_command \
+            "$chnl_const" "$chnl_encrypt" &
+        new_pid=$!
+        $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.status)="on"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+        mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+        action=${action:-"start"}
+        SyncFile
+    fi
+
     echo && echo -e "$info 频道进程已开启 !" && echo
-    action=${action:-"start"}
-    SyncFile
 }
 
 StopChannel()
@@ -1652,11 +1944,17 @@ StopChannel()
             then
                 echo -e "$info 频道进程 $chnl_pid 已停止 !" && echo
                 stopped=1
+            elif ! kill -0 "$chnl_pid" 2> /dev/null  
+            then
+                stopped=1
             fi
         else
             if kill -9 "$creator_pid" 2> /dev/null 
             then
                 echo -e "$info 频道进程 $chnl_pid 已停止 !" && echo
+                stopped=1
+            elif ! kill -0 "$creator_pid" 2> /dev/null   
+            then
                 stopped=1
             fi
         fi
@@ -3147,14 +3445,25 @@ TsMenu()
     
 }
 
+MonitorError()
+{
+    printf '%s\n' "${date_now:-"creator"} [LINE:$1] ERROR: $?" >> "$MONITOR_LOG"
+}
+
 Monitor()
 {
+    trap '' HUP INT TERM QUIT EXIT;
+    trap 'MonitorError $LINENO' ERR
+    printf '%s' "$BASHPID" > "$MONITOR_PID"
+    printf '%s\n' "$date_now 监控启动成功 PID $BASHPID !" >> "$MONITOR_LOG"
+    echo -e "$info 监控启动成功 !"
     while true; do
+        date_now=$(date -d now "+%m-%d %H:%M:%S")
         for f in "$IPTV_ROOT"/live/*/* ; do
             if [ -e "$f" ] 
             then
                 size=$(find "$f" -printf '%s')
-                if [ "$size" -gt $(($1 * 1000000)) ] 
+                if [ "$size" -gt $(($cmd * 1000000)) ] 
                 then
                     file_root=${f%/*}
                     output_dir_name=${file_root##*/}
@@ -3162,12 +3471,11 @@ Monitor()
                     GetChannelInfo
                     if [ "$chnl_status" == "on" ] 
                     then
-                        date_now=$(date -d now "+%m-%d %H:%M:%S")
                         action="skip"
                         StopChannel
                         if [ "$stopped" == 1 ] 
                         then
-                            StartChannel
+                            StartChannel || true
                             printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
                         fi
                     else
@@ -3227,6 +3535,8 @@ See LICENSE
     -t  段名称(前缀)(默认：跟m3u8名称相同)
     -a  音频编码(默认：aac) (不需要转码时输入 copy)
     -v  视频编码(默认：h264) (不需要转码时输入 copy)
+    -f  画面或声音延迟(格式如： v_3 画面延迟3秒，a_2 声音延迟2秒
+        如果转码时使用此功能*暂时*会忽略部分参数，建议 copy 直播源(画面声音不同步)时使用)
     -q  crf视频质量(如果同时设置了输出视频比特率，则优先使用crf视频质量)(数值1~63 越大质量越差)
         (默认: 不设置crf视频质量值)
     -b  输出视频的比特率(bits/s)(默认：900-1280x720)
@@ -3296,24 +3606,14 @@ then
                 *) 
                     if [ ! -s "$MONITOR_PID" ] 
                     then
-                        #trap "true" HUP
-                        Monitor $cmd &
-                        PID=$!
-                        printf '%s' "$PID" > "$MONITOR_PID"
-                        printf '%s\n' "$date_now 监控启动成功 PID $PID !" >> "$MONITOR_LOG"
-                        echo -e "$info 监控启动成功 !"
+                        Monitor &
                     else
                         PID=$(< "$MONITOR_PID")
                         if kill -0 "$PID" 2> /dev/null 
                         then
                             echo -e "$error 监控已经在运行 !"
                         else
-                            #trap "true" HUP
-                            Monitor $cmd &
-                            PID=$!
-                            printf '%s' "$PID" > "$MONITOR_PID"
-                            printf '%s\n' "$date_now 监控启动成功 PID $PID !" >> "$MONITOR_LOG"
-                            echo -e "$info 监控启动成功 !"
+                            Monitor &
                         fi
                     fi
                 ;;
@@ -3328,7 +3628,7 @@ fi
 
 use_menu=1
 
-while getopts "i:o:p:S:t:s:c:v:a:q:b:K:m:n:z:Ce" flag
+while getopts "i:o:p:S:t:s:c:v:a:f:q:b:K:m:n:z:Ce" flag
 do
     use_menu=0
         case "$flag" in
@@ -3341,6 +3641,7 @@ do
             c) seg_count="$OPTARG";;
             v) video_codec="$OPTARG";;
             a) audio_codec="$OPTARG";;
+            f) video_audio_shift="$OPTARG";;
             q) quality="$OPTARG";;
             b) bitrates="$OPTARG";;
             C) const="-C";;
@@ -3544,6 +3845,17 @@ else
             seg_count=${seg_count:-"$d_seg_count"}
             export AUDIO_CODEC=${audio_codec:-"$d_audio_codec"}
             export VIDEO_CODEC=${video_codec:-"$d_video_codec"}
+            
+            video_audio_shift=${video_audio_shift:-""}
+            v_or_a=${video_audio_shift%_*}
+            if [ "$v_or_a" == "v" ] 
+            then
+                video_shift=${video_audio_shift#*_}
+            elif [ "$v_or_a" == "a" ] 
+            then
+                audio_shift=${video_audio_shift#*_}
+            fi
+
             quality=${quality:-"$d_quality"}
             bitrates=${bitrates:-"$d_bitrates"}
             quality_command=""
@@ -3608,37 +3920,45 @@ else
             export FFMPEG_FLAGS=${output_flags//\'/}
             channel_name=${channel_name:-"$playlist_name"}
 
-            exec "$CREATOR_FILE" -l -i "$stream_link" -s "$seg_length" \
-                -o "$output_dir_root" -c "$seg_count" $bitrates_command \
-                -p "$playlist_name" -t "$seg_name" -K "$key_name" $quality_command \
-                "$const" "$encrypt" &
-            pid=$!
+            if [ -n "${video_audio_shift:-}" ] 
+            then
+                from="command"
+                ( HlsStreamCreatorWithShift ) > /dev/null 2>/dev/null </dev/null &
+            else
+                exec "$CREATOR_FILE" -l -i "$stream_link" -s "$seg_length" \
+                    -o "$output_dir_root" -c "$seg_count" $bitrates_command \
+                    -p "$playlist_name" -t "$seg_name" -K "$key_name" $quality_command \
+                    "$const" "$encrypt" &
+                pid=$!
 
-            $JQ_FILE '.channels += [
-                {
-                    "pid":'"$pid"',
-                    "status":"on",
-                    "stream_link":"'"$stream_link"'",
-                    "output_dir_name":"'"$output_dir_name"'",
-                    "playlist_name":"'"$playlist_name"'",
-                    "seg_dir_name":"'"$SEGMENT_DIRECTORY"'",
-                    "seg_name":"'"$seg_name"'",
-                    "seg_length":'"$seg_length"',
-                    "seg_count":'"$seg_count"',
-                    "video_codec":"'"$VIDEO_CODEC"'",
-                    "audio_codec":"'"$AUDIO_CODEC"'",
-                    "quality":"'"$quality"'",
-                    "bitrates":"'"$bitrates"'",
-                    "const":"'"$const_yn"'",
-                    "encrypt":"'"$encrypt_yn"'",
-                    "key_name":"'"$key_name"'",
-                    "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
-                    "output_flags":"'"$FFMPEG_FLAGS"'",
-                    "channel_name":"'"$channel_name"'"
-                }
-            ]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
-
-            mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+                $JQ_FILE '.channels += [
+                    {
+                        "pid":'"$pid"',
+                        "status":"on",
+                        "stream_link":"'"$stream_link"'",
+                        "output_dir_name":"'"$output_dir_name"'",
+                        "playlist_name":"'"$playlist_name"'",
+                        "seg_dir_name":"'"$SEGMENT_DIRECTORY"'",
+                        "seg_name":"'"$seg_name"'",
+                        "seg_length":'"$seg_length"',
+                        "seg_count":'"$seg_count"',
+                        "video_codec":"'"$VIDEO_CODEC"'",
+                        "audio_codec":"'"$AUDIO_CODEC"'",
+                        "video_audio_shift":"",
+                        "quality":"'"$quality"'",
+                        "bitrates":"'"$bitrates"'",
+                        "const":"'"$const_yn"'",
+                        "encrypt":"'"$encrypt_yn"'",
+                        "key_name":"'"$key_name"'",
+                        "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
+                        "output_flags":"'"$FFMPEG_FLAGS"'",
+                        "channel_name":"'"$channel_name"'"
+                    }
+                ]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+                mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+                action="add"
+                SyncFile
+            fi
 
             echo -e "$info 添加频道成功..." && echo
         fi

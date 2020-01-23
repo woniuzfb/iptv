@@ -39,7 +39,7 @@ bash -c "$(wget -qO- http://hbo.epub.fun/iptv.sh)"
 ```bash
 "sync_file":"/var/www/html/channels.json", # 公开目录的json
 "sync_index":"data:2:channels", # 必须指定到m3u8直播源所在的数组这一级，比如这里 ObjectJson.data[2].channels
-"sync_pairs":"chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live,schedule:output_dir_name", # 值映射用:号，如果直接赋值用=号（公开的live根目录会自动补上完整的m3u8地址）
+"sync_pairs":"chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live,schedule:playlist_name", # 值映射用:号，如果直接赋值用=号（公开的live根目录会自动补上完整的m3u8地址）
 "schedule_file":"/var/www/html/schedule.json" # 使用命令 tv s 自建节目表
 ```
 
@@ -97,6 +97,8 @@ bash -c "$(wget -qO- http://hbo.epub.fun/iptv.sh)"
 -t  段名称(前缀)(默认：跟m3u8名称相同)
 -a  音频编码(默认：aac) (不需要转码时输入 copy)
 -v  视频编码(默认：h264) (不需要转码时输入 copy)
+-f  画面或声音延迟(格式如： v_3 画面延迟3秒，a_2 声音延迟2秒
+    如果转码时使用此功能*暂时*会忽略部分参数，建议 copy 直播源(画面声音不同步)时使用)
 -q  crf视频质量(如果设置了输出视频比特率，则优先使用crf视频质量)(数值1~63 越大质量越差)
     (默认: 不设置crf视频质量值)
 -b  输出视频的比特率(bits/s)(默认：900-1280x720)
