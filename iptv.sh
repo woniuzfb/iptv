@@ -677,17 +677,27 @@ ListChannels()
             if kill -0 "$chnls_pid_index" 2> /dev/null 
             then
                 working=0
-                while IFS= read -r creator_pid 
+                while IFS= read -r ffmpeg_pid 
                 do
-                    if [ -z "$creator_pid" ] 
+                    if [ -z "$ffmpeg_pid" ] 
                     then
                         working=1
-                    elif kill -0 "$creator_pid" 2> /dev/null 
-                    then
-                        working=1
-                    elif [[ $(< "$MONITOR_LOG") == *"PID $creator_pid"* ]] 
-                    then
-                        working=1
+                    else
+                        while IFS= read -r real_ffmpeg_pid 
+                        do
+                            if [ -z "$real_ffmpeg_pid" ] 
+                            then
+                                if kill -0 "$ffmpeg_pid" 2> /dev/null 
+                                then
+                                    working=1
+                                fi
+                            else
+                                if kill -0 "$real_ffmpeg_pid" 2> /dev/null 
+                                then
+                                    working=1
+                                fi
+                            fi
+                        done <<< $(pgrep -P "$ffmpeg_pid")
                     fi
                 done <<< $(pgrep -P "$chnls_pid_index")
 
@@ -860,6 +870,10 @@ GetChannelInfo(){
         chnl_video_quality_text="原画"
         chnl_playlist_link=${chnl_playlist_link//_master.m3u8/.m3u8}
         chnl_playlist_link_text=${chnl_playlist_link_text//_master.m3u8/.m3u8}
+    elif [ -z "$chnl_bitrates" ] 
+    then
+        chnl_playlist_link=${chnl_playlist_link//"_master.m3u8"/".m3u8"}
+        chnl_playlist_link_text=${chnl_playlist_link_text//_master.m3u8/.m3u8}
     fi
 }
 
@@ -939,7 +953,7 @@ ViewChannelMenu(){
 
 SetStreamLink()
 {
-    echo "请输入直播源(只支持 mpegts / flv)"
+    echo && echo "请输入直播源(只支持 mpegts / flv)"
     read -p "(默认: 取消):" stream_link
     [ -z "$stream_link" ] && echo "已取消..." && exit 1
     echo && echo -e "	直播源: $green $stream_link $plain" && echo
@@ -1446,8 +1460,10 @@ AddChannel()
         if [ -n "$bitrates" ] 
         then
             bitrates_command="-q $bitrates"
+            master=1
+        else
+            master=0
         fi
-        master=1
         if [ -z "$quality" ] 
         then
             SetConst
@@ -1897,8 +1913,10 @@ StartChannel()
         if [ -n "$chnl_bitrates" ] 
         then
             chnl_bitrates_command="-b $chnl_bitrates"
+            master=1
+        else
+            master=0
         fi
-        master=1
     fi
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
     FFMPEG="$FFMPEG_ROOT/ffmpeg"
@@ -1918,6 +1936,20 @@ StartChannel()
     then
         from="StartChannel"
         ( HlsStreamCreatorWithShift ) > /dev/null 2>/dev/null </dev/null &
+    elif [ -n "${size:-}" ] # monitor
+    then
+        ( 
+            trap '' HUP INT QUIT TERM
+            exec "$CREATOR_FILE" -l -i "$chnl_stream_link" -s "$chnl_seg_length" \
+            -o "$chnl_output_dir_root" -c "$chnl_seg_count" $chnl_bitrates_command \
+            -p "$chnl_playlist_name" -t "$chnl_seg_name" -K "$chnl_key_name" $chnl_quality_command \
+            "$chnl_const" "$chnl_encrypt" &
+            new_pid=$!
+            $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.status)="on"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+            mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+            action=${action:-"start"}
+            SyncFile
+        ) > /dev/null 2>/dev/null </dev/null
     else
         exec "$CREATOR_FILE" -l -i "$chnl_stream_link" -s "$chnl_seg_length" \
             -o "$chnl_output_dir_root" -c "$chnl_seg_count" $chnl_bitrates_command \
@@ -1936,9 +1968,9 @@ StartChannel()
 StopChannel()
 {
     stopped=0
-    while IFS= read -r creator_pid 
+    while IFS= read -r ffmpeg_pid 
     do
-        if [ -z "$creator_pid" ] 
+        if [ -z "$ffmpeg_pid" ] 
         then
             if kill -9 "$chnl_pid" 2> /dev/null 
             then
@@ -1949,11 +1981,11 @@ StopChannel()
                 stopped=1
             fi
         else
-            if kill -9 "$creator_pid" 2> /dev/null 
+            if kill -9 "$ffmpeg_pid" 2> /dev/null 
             then
                 echo -e "$info 频道进程 $chnl_pid 已停止 !" && echo
                 stopped=1
-            elif ! kill -0 "$creator_pid" 2> /dev/null   
+            elif ! kill -0 "$ffmpeg_pid" 2> /dev/null 
             then
                 stopped=1
             fi
@@ -3480,6 +3512,7 @@ Monitor()
                         fi
                     else
                         printf '%s\n' "$date_now pid: $chnl_pid $chnl_channel_name 不在运行?" >> "$MONITOR_LOG"
+                        MonitorStop
                     fi
                     break 1
                 fi
