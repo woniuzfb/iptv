@@ -31,7 +31,7 @@
   - live/ [ hls输出目录 ]
 
 ``` bash
-bash -c "$(wget -qO- http://hbo.epub.fun/iptv.sh)"
+wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 ```
 
 ## 自动更新指定的json文件
