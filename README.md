@@ -76,6 +76,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 
 - tv m 开启监控 hls 输出目录，用来应对直播源出现变化导致 ffmpeg 无法继续分割的情况
   - 如果片段大小大于5MB(默认)会自动重启频道(可以 tv m 数字 指定大小)。
+  - 打开监控后会有选择是否对某些频道监控超时(在超时时只有重启频道才能继续连接直播源的情况)
   - tv m stop 停止监控
   - 建议在 copy 直播源的时候开启监控
 - tv d 请求演示频道 ( 3个凤凰台,1个hbo中文频道 )，添加到 channels.json

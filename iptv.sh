@@ -3492,14 +3492,41 @@ Monitor()
     echo -e "$info 监控启动成功 !"
     while true; do
         date_now=$(date -d now "+%m-%d %H:%M:%S")
-        for f in "$IPTV_ROOT"/live/*/* ; do
+        for f in "$LIVE_ROOT"/*/* ; do
             if [ -e "$f" ] 
             then
                 size=$(find "$f" -printf '%s')
-                if [ "$size" -gt $(($cmd * 1000000)) ] 
+                file_root=${f%/*}
+                output_dir_name=${file_root##*/}
+
+                if [ -z "${monitor_dir_names_chosen:-}" ] 
                 then
-                    file_root=${f%/*}
-                    output_dir_name=${file_root##*/}
+                    restart=0
+                else
+                    match=0
+                    for dir_name in "${monitor_dir_names_chosen[@]}"
+                    do
+                        if [ "$dir_name" == "$output_dir_name" ] 
+                        then
+                            match=1
+                        fi
+                    done
+
+                    if [ $(( $(date +%s) - $(date +%s -r "$f") )) -gt "$delay_seconds" ] 
+                    then
+                        if [ "${monitor_all}" == 1 ] || [ "$match" == 1 ] 
+                        then
+                            restart=1
+                        else
+                            restart=0
+                        fi
+                    else
+                        restart=0
+                    fi
+                fi
+
+                if [ "$size" -gt $(( cmd * 1000000)) ] || [ "$restart" == 1 ]
+                then
                     chnl_pid=$($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'").pid' $CHANNELS_FILE)
                     GetChannelInfo
                     if [ "$chnl_status" == "on" ] 
@@ -3520,6 +3547,106 @@ Monitor()
             fi
         done
         sleep 1
+    done
+}
+
+MonitorSet()
+{
+    chk_files=("${LIVE_ROOT}"/*)
+    (( ${#chk_files[*]} )) || return 0
+    echo && echo "请选择需要监控超时重启的频道(多个频道用空格分隔)"
+    echo "一般不需要设置，只有在需要重启频道才能继续连接直播源的情况下启用" && echo
+    monitor_count=0
+    monitor_dir_names=()
+    for dir in "$LIVE_ROOT"/*/
+    do
+        monitor_count=$((monitor_count + 1))
+        file_root=${dir%/*}
+        output_dir_name=${file_root##*/}
+        channel_name=$($JQ_FILE -r '.channels[]|select(.output_dir_name=="'"$output_dir_name"'").channel_name' "$CHANNELS_FILE")
+        monitor_dir_names+=("$output_dir_name")
+        echo -e "  ${green}$monitor_count.$plain $channel_name"
+    done
+    echo -e "  ${green}$((monitor_count+1)).$plain 全部" && echo
+    echo -e "  ${green}$((monitor_count+2)).$plain 不设置" && echo
+    
+    while read -p "(默认: 不设置):" monitor_nums
+    do
+        IFS=" " read -ra monitor_nums_arr <<< "$monitor_nums"
+        [ -z "$monitor_nums" ] && break
+
+        monitor_dir_names_chosen=()
+        if [ "$monitor_nums" == $((monitor_count+1)) ] 
+        then
+            monitor_all=1
+            monitor_dir_names_chosen=("${monitor_dir_names[@]}")
+
+            echo && echo "设置超时多少秒自动重启频道"
+            echo "必须大于 段时长 * 段数目"
+            while read -p "(默认: 120秒):" delay_seconds
+            do
+                case $delay_seconds in
+                    "") delay_seconds=120
+                    ;;
+                    *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
+                    ;;
+                    *) 
+                        if [ "$delay_seconds" -gt 60 ]
+                        then
+                            break
+                        else
+                            echo && echo -e "$error 请输入正确的数字(大于60)" && echo
+                        fi
+                    ;;
+                esac
+            done
+            break
+        else
+            monitor_all=0
+        fi
+
+        error=0
+        for monitor_key in "${monitor_nums_arr[@]}"
+        do
+            case "$monitor_key" in
+                *[!0-9]*)
+                    error=1
+                ;;
+                *)
+                    if [ "$monitor_key" -lt 1 ] || [ "$monitor_key" -gt "$monitor_count" ]
+                    then
+                        error=2
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error" in
+            1|2)
+                echo -e "$error 请输入正确的数字或直接回车 " && echo
+            ;;
+            *)
+                for monitor_key in "${monitor_nums_arr[@]}"
+                do
+                    monitor_dir_names_chosen+=("${monitor_dir_names[((monitor_key - 1))]}")
+                done
+
+                echo && echo "设置超时多少秒自动重启频道"
+                while read -p "(默认: 120秒):" delay_seconds
+                do
+                    case $delay_seconds in
+                        "") delay_seconds=120 && break
+                        ;;
+                        *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
+                        ;;
+                        *) break
+                        ;;
+                    esac
+                done
+
+                break
+            ;;
+        esac
     done
 }
 
@@ -3640,6 +3767,7 @@ then
                 *) 
                     if [ ! -s "$MONITOR_PID" ] 
                     then
+                        MonitorSet
                         Monitor &
                     else
                         PID=$(< "$MONITOR_PID")
@@ -3647,6 +3775,7 @@ then
                         then
                             echo -e "$error 监控已经在运行 !"
                         else
+                            MonitorSet
                             Monitor &
                         fi
                     fi
@@ -3787,7 +3916,7 @@ case "$cmd" in
         exit 0
     ;;
     "ll") 
-        for d in "$IPTV_ROOT"/live/*/ ; do
+        for d in "$LIVE_ROOT"/*/ ; do
             ls "$d" -lght
         done
         exit 0
