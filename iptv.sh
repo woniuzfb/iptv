@@ -42,8 +42,8 @@ default='
     "bitrates":"900-1280x720",
     "const":"no",
     "encrypt":"no",
-    "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -thread_queue_size 55120 -nostats -nostdin -hide_banner -loglevel fatal -probesize 65536",
-    "output_flags":"-g 30 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main",
+    "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -nostats -nostdin -hide_banner -loglevel fatal",
+    "output_flags":"-g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main",
     "sync_file":"",
     "sync_index":"data:0:channels",
     "sync_pairs":"chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live",
@@ -1969,29 +1969,42 @@ StartChannel()
 StopChannel()
 {
     stopped=0
-    while IFS= read -r ffmpeg_pid 
-    do
-        if [ -z "$ffmpeg_pid" ] 
-        then
-            if kill -9 "$chnl_pid" 2> /dev/null 
+
+    if kill -0 "$chnl_pid" 2> /dev/null 
+    then
+        while IFS= read -r ffmpeg_pid 
+        do
+            if [ -z "$ffmpeg_pid" ] 
             then
-                echo -e "$info 频道进程 $chnl_pid 已停止 !" && echo
-                stopped=1
-            elif ! kill -0 "$chnl_pid" 2> /dev/null  
-            then
-                stopped=1
+                if kill -9 "$chnl_pid" 2> /dev/null 
+                then
+                    echo && echo -e "$info 频道进程 $chnl_pid 已停止 !" && echo
+                    stopped=1
+                    break
+                fi
+            else
+                while IFS= read -r real_ffmpeg_pid 
+                do
+                    if [ -z "$real_ffmpeg_pid" ] 
+                    then
+                        if kill -9 "$ffmpeg_pid" 2> /dev/null 
+                        then
+                            echo && echo -e "$info 频道进程 $chnl_pid 已停止 !" && echo
+                            stopped=1
+                            break 2
+                        fi
+                    elif kill -9 "$real_ffmpeg_pid" 2> /dev/null 
+                    then
+                        echo && echo -e "$info 频道进程 $chnl_pid 已停止 !" && echo
+                        stopped=1
+                        break 2
+                    fi
+                done <<< $(pgrep -P "$ffmpeg_pid")
             fi
-        else
-            if kill -9 "$ffmpeg_pid" 2> /dev/null 
-            then
-                echo -e "$info 频道进程 $chnl_pid 已停止 !" && echo
-                stopped=1
-            elif ! kill -0 "$ffmpeg_pid" 2> /dev/null 
-            then
-                stopped=1
-            fi
-        fi
-    done <<< $(pgrep -P "$chnl_pid")
+        done <<< $(pgrep -P "$chnl_pid")
+    else
+        stopped=1
+    fi
 
     if [ "$stopped" == 0 ] 
     then
@@ -3495,6 +3508,7 @@ Monitor()
         for f in "$LIVE_ROOT"/*/* ; do
             if [ -e "$f" ] 
             then
+                file_date=$(date +%s -r "$f")
                 size=$(find "$f" -printf '%s')
                 file_root=${f%/*}
                 output_dir_name=${file_root##*/}
@@ -3512,7 +3526,7 @@ Monitor()
                         fi
                     done
 
-                    if [ $(( $(date +%s) - $(date +%s -r "$f") )) -gt "$delay_seconds" ] 
+                    if [ $(( $(date +%s) - file_date )) -gt "$delay_seconds" ] 
                     then
                         if [ "${monitor_all}" == 1 ] || [ "$match" == 1 ] 
                         then
@@ -3567,7 +3581,7 @@ MonitorSet()
         monitor_dir_names+=("$output_dir_name")
         echo -e "  ${green}$monitor_count.$plain $channel_name"
     done
-    echo -e "  ${green}$((monitor_count+1)).$plain 全部" && echo
+    echo && echo -e "  ${green}$((monitor_count+1)).$plain 全部"
     echo -e "  ${green}$((monitor_count+2)).$plain 不设置" && echo
     
     while read -p "(默认: 不设置):" monitor_nums
@@ -3586,7 +3600,7 @@ MonitorSet()
             while read -p "(默认: 120秒):" delay_seconds
             do
                 case $delay_seconds in
-                    "") delay_seconds=120
+                    "") delay_seconds=120 && break
                     ;;
                     *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
                     ;;
@@ -3718,7 +3732,7 @@ See LICENSE
         -nostats -nostdin -hide_banner -loglevel 
         fatal -probesize 65536")
     -n  ffmpeg 额外的 OUTPUT FLAGS, 可以输入 copy 省略此选项(不需要转码时)
-        (默认："-g 30 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main")
+        (默认："-g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main")
 
 举例:
     使用crf值控制视频质量: tv -i http://xxx.com/xxx.ts -s 6 -o hbo1 -p hbo1 -q 15 -b 1500-1280x720 -z 'hbo直播1'
@@ -4052,7 +4066,7 @@ else
                 encrypt_yn="yes"
             fi
 
-            if [ "$video_codec" == "copy" ] && [ "$audio_codec" == "copy" ]
+            if [ "${video_codec:-}" == "copy" ] && [ "${audio_codec:-}" == "copy" ]
             then
                 quality=""
                 bitrates=""
