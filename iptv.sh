@@ -1460,7 +1460,7 @@ AddChannel()
         SetBitrates
         if [ -n "$bitrates" ] 
         then
-            bitrates_command="-q $bitrates"
+            bitrates_command="-b $bitrates"
             master=1
         else
             master=0
@@ -1941,6 +1941,7 @@ StartChannel()
     then
         ( 
             trap '' HUP INT QUIT TERM
+            #trap 'chnl_pid=$new_pid; StopChannel; MonitorError $LINENO' ERROR
             exec "$CREATOR_FILE" -l -i "$chnl_stream_link" -s "$chnl_seg_length" \
             -o "$chnl_output_dir_root" -c "$chnl_seg_count" $chnl_bitrates_command \
             -p "$chnl_playlist_name" -t "$chnl_seg_name" -K "$chnl_key_name" $chnl_quality_command \
