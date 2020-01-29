@@ -7,7 +7,7 @@ SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
 IPTV_ROOT="/usr/local/iptv"
-FFMPEG_MIRROR_LINK="http://hbo.epub.fun/ffmpeg"
+FFMPEG_MIRROR_LINK="http://47.241.6.233/ffmpeg"
 FFMPEG_MIRROR_ROOT="$IPTV_ROOT/ffmpeg"
 LIVE_ROOT="$IPTV_ROOT/live"
 CREATOR_LINK="https://raw.githubusercontent.com/bentasker/HLS-Stream-Creator/master/HLS-Stream-Creator.sh"
@@ -2803,6 +2803,8 @@ Schedule()
 
             chnls=(
                 "hbo"
+                "hbotw"
+                "hbored"
                 "hbohd"
                 "hits"
                 "signature"
@@ -2813,6 +2815,12 @@ Schedule()
                 if [ "$chnl" == "hbo" ] 
                 then
                     SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$date_now&channel=$chnl&feed=cn"
+                elif [ "$chnl" == "hbotw" ] 
+                then
+                    SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$date_now&channel=hbo&feed=satellite"
+                elif [ "$chnl" == "hbored" ] 
+                then
+                    SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$date_now&channel=red&feed=satellite"
                 else
                     SCHEDULE_LINK="https://hboasia.com/HBO/zh-tw/ajax/home_schedule?date=$date_now&channel=$chnl&feed=satellite"
                 fi
@@ -2827,6 +2835,12 @@ Schedule()
                 do
                     programs_title+=("$program_title");
                 done < <($JQ_FILE -r '.[].title | @sh' "$SCHEDULE_FILE")
+
+                programs_title_local=()
+                while IFS='' read -r program_title_local
+                do
+                    programs_title_local+=("$program_title_local");
+                done < <($JQ_FILE -r '.[].title_local | @sh' "$SCHEDULE_FILE")
 
                 IFS=" " read -ra programs_id <<< "$($JQ_FILE -r '[.[].id] | @sh' $SCHEDULE_FILE)"
                 IFS=" " read -ra programs_time <<< "$($JQ_FILE -r '[.[].time] | @sh' $SCHEDULE_FILE)"
@@ -2847,6 +2861,13 @@ Schedule()
                     programs_title_index=${programs_title[index]//\"/}
                     programs_title_index=${programs_title_index//\'/}
                     programs_title_index=${programs_title_index//\\/\'}
+                    programs_title_local_index=${programs_title_local[index]//\"/}
+                    programs_title_local_index=${programs_title_local_index//\'/}
+                    programs_title_local_index=${programs_title_local_index//\\/\'}
+                    if [ -n "$programs_title_local_index" ] 
+                    then
+                        programs_title_index="$programs_title_local_index $programs_title_index"
+                    fi
                     programs_time_index=${programs_time[index]//\'/}
                     programs_sys_time_index=${programs_sys_time[index]//\'/}
 
@@ -3497,6 +3518,47 @@ MonitorError()
     printf '%s\n' "${date_now:-"creator"} [LINE:$1] ERROR: $?" >> "$MONITOR_LOG"
 }
 
+MonitorRestartChannel()
+{
+    chnl_pid=$($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'").pid' $CHANNELS_FILE)
+    GetChannelInfo
+    if [ "$chnl_status" == "on" ] 
+    then
+        for((i=0;i<restart_nums;i++))
+        do
+            action="skip"
+            StopChannel
+            if [ "$stopped" == 1 ] 
+            then
+                StartChannel || true
+                sleep 15
+                chnl_pid=$($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'").pid' $CHANNELS_FILE)
+                if ls -A "$LIVE_ROOT/$output_dir_name/"* > /dev/null 2>&1 
+                then
+                    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+                    FFPROBE="$FFMPEG_ROOT/ffprobe"
+                    bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts || true)
+                    bit_rate=${bit_rate//N\/A/0}
+                    audio_stream=$($FFPROBE -i "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -select_streams a -loglevel quiet || true)
+                    if [ "${bit_rate:-0}" -gt 500000 ] && [ -n "$audio_stream" ]
+                    then
+                        printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
+                        break
+                    fi
+                elif [[ $i -eq $((restart_nums - 1)) ]] 
+                then
+                    StopChannel
+                    printf '%s\n' "$date_now $chnl_channel_name 重启失败" >> "$MONITOR_LOG"
+                    break
+                fi
+            fi
+        done
+    else
+        printf '%s\n' "$date_now pid: $chnl_pid $chnl_channel_name 不在运行?" >> "$MONITOR_LOG"
+        MonitorStop
+    fi
+}
+
 Monitor()
 {
     trap '' HUP INT TERM QUIT EXIT;
@@ -3506,58 +3568,94 @@ Monitor()
     echo -e "$info 监控启动成功 !"
     while true; do
         date_now=$(date -d now "+%m-%d %H:%M:%S")
-        for f in "$LIVE_ROOT"/*/* ; do
-            if [ -e "$f" ] 
+        for dir_name in "${monitor_dir_names_chosen[@]}"
+        do
+            chnl_pid=$($JQ_FILE '.channels[] | select(.output_dir_name=="'"$dir_name"'").pid' $CHANNELS_FILE)
+            GetChannelInfo
+            FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+            FFPROBE="$FFMPEG_ROOT/ffprobe"
+            bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*_00000.ts || true)
+            bit_rate=${bit_rate:-500000}
+            bit_rate=${bit_rate//N\/A/500000}
+            #audio_stream=$($FFPROBE -i "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -select_streams a -loglevel quiet || true)
+            if [[ $bit_rate -lt 500000 ]] # || [ -z "$audio_stream" ]
             then
-                file_date=$(date +%s -r "$f")
-                size=$(find "$f" -printf '%s')
-                file_root=${f%/*}
-                output_dir_name=${file_root##*/}
-
-                if [ -z "${monitor_dir_names_chosen:-}" ] 
+                output_dir_name=$dir_name
+                fail_count=1
+                for f in "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*.ts
+                do
+                    bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$f" || true)
+                    bit_rate=${bit_rate:-500000}
+                    bit_rate=${bit_rate//N\/A/500000}
+                    if [[ $bit_rate -lt 500000 ]] 
+                    then
+                        fail_count=$((fail_count+1))
+                    fi
+                done
+                
+                if [ "$fail_count" -gt 2 ] 
                 then
-                    restart=0
-                else
-                    match=0
-                    for dir_name in "${monitor_dir_names_chosen[@]}"
-                    do
-                        if [ "$dir_name" == "$output_dir_name" ] 
-                        then
-                            match=1
-                        fi
-                    done
+                    MonitorRestartChannel
+                fi
+            fi
+        done
 
-                    if [ $(( $(date +%s) - file_date )) -gt "$delay_seconds" ] 
+        for f in "$LIVE_ROOT"/*/* ; do
+            file_root=${f%/*}
+            output_dir_name=${file_root##*/}
+
+            match=0
+            if [ -n "${monitor_dir_names_chosen:-}" ] 
+            then
+                for dir_name in "${monitor_dir_names_chosen[@]}"
+                do
+                    if [ "$dir_name" == "$output_dir_name" ] 
+                    then
+                        match=1
+                    fi
+                done
+            fi
+
+            if [ -d "$f" ] 
+            then
+                for ts in "$f"/*.ts
+                do
+                    file_date=$(date +%s -r "$ts")
+                    size=$(find "$ts" -printf '%s')
+
+                    if [ "$size" -gt $(( cmd * 1000000)) ]
+                    then
+                        MonitorRestartChannel
+                        break 2
+                    fi
+
+                    if [ -n "${delay_seconds:-}" ] && [ $(( $(date +%s) - file_date )) -gt "$delay_seconds" ] 
                     then
                         if [ "${monitor_all}" == 1 ] || [ "$match" == 1 ] 
                         then
-                            restart=1
-                        else
-                            restart=0
+                            MonitorRestartChannel
+                            break 2
                         fi
-                    else
-                        restart=0
                     fi
+                done
+            elif [ -f "$f" ] 
+            then
+                file_date=$(date +%s -r "$f")
+                size=$(find "$f" -printf '%s')
+
+                if [ "$size" -gt $(( cmd * 1000000)) ]
+                then
+                    MonitorRestartChannel
+                    break 1
                 fi
 
-                if [ "$size" -gt $(( cmd * 1000000)) ] || [ "$restart" == 1 ]
+                if [ -n "${delay_seconds:-}" ] && [ $(( $(date +%s) - file_date )) -gt "$delay_seconds" ] 
                 then
-                    chnl_pid=$($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'").pid' $CHANNELS_FILE)
-                    GetChannelInfo
-                    if [ "$chnl_status" == "on" ] 
+                    if [ "${monitor_all}" == 1 ] || [ "$match" == 1 ] 
                     then
-                        action="skip"
-                        StopChannel
-                        if [ "$stopped" == 1 ] 
-                        then
-                            StartChannel || true
-                            printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
-                        fi
-                    else
-                        printf '%s\n' "$date_now pid: $chnl_pid $chnl_channel_name 不在运行?" >> "$MONITOR_LOG"
-                        MonitorStop
+                        MonitorRestartChannel
+                        break 1
                     fi
-                    break 1
                 fi
             fi
         done
@@ -3567,8 +3665,9 @@ Monitor()
 
 MonitorSet()
 {
-    chk_files=("${LIVE_ROOT}"/*)
-    (( ${#chk_files[*]} )) || return 0
+    if ! ls -A $LIVE_ROOT/* > /dev/null 2>&1; then
+        return 0
+    fi
     echo && echo "请选择需要监控超时重启的频道(多个频道用空格分隔)"
     echo "一般不需要设置，只有在需要重启频道才能继续连接直播源的情况下启用" && echo
     monitor_count=0
@@ -3597,7 +3696,7 @@ MonitorSet()
             monitor_dir_names_chosen=("${monitor_dir_names[@]}")
 
             echo && echo "设置超时多少秒自动重启频道"
-            echo "必须大于 段时长 * 段数目"
+            echo "必须大于 段时长*段数目"
             while read -p "(默认: 120秒):" delay_seconds
             do
                 case $delay_seconds in
@@ -3660,6 +3759,25 @@ MonitorSet()
                 done
 
                 break
+            ;;
+        esac
+    done
+
+    echo && echo "请输入尝试重启的次数"
+    while read -p "(默认: 20次):" restart_nums
+    do
+        case $restart_nums in
+            "") restart_nums=20 && break
+            ;;
+            *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
+            ;;
+            *) 
+                if [ "$restart_nums" -gt 0 ]
+                then
+                    break
+                else
+                    echo && echo -e "$error 请输入正确的数字(大于0)" && echo
+                fi
             ;;
         esac
     done
@@ -3796,6 +3914,59 @@ then
                     fi
                 ;;
             esac
+
+            exit 0
+        ;;
+        "t") 
+            [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+
+            if [ -z ${2+x} ] 
+            then
+                echo -e "$error 请指定文件 !" && exit 1
+            elif [ ! -e "$2" ] 
+            then
+                echo -e "$error 文件不存在 !" && exit 1
+            fi
+
+            echo && echo "请输入测试的频道ID"
+            while read -p "(默认: 取消):" channel_id
+            do
+                case $channel_id in
+                    "") echo && echo -e "$error 已取消..." && exit 1
+                    ;;
+                    *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
+                    ;;
+                    *) 
+                        if [ "$channel_id" -gt 0 ]
+                        then
+                            break
+                        else
+                            echo && echo -e "$error 请输入正确的ID(大于0)" && echo
+                        fi
+                    ;;
+                esac
+            done
+            
+
+            set +euo pipefail
+            
+            while IFS= read -r line
+            do
+                if [[ $line == *"username="* ]] 
+                then
+                    domain_line=${line#*http://}
+                    domain=${domain_line%%/*}
+                    u_line=${line#*username=}
+                    p_line=${line#*password=}
+                    username=${u_line%%&*}
+                    password=${p_line%%&*}
+                    link="http://$domain/$username/$password/$channel_id"
+                    if curl --output /dev/null --silent --fail -r 0-0 "$link"
+                    then
+                        echo "$link"
+                    fi
+                fi
+            done < "$2"
 
             exit 0
         ;;
