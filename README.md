@@ -12,6 +12,10 @@
 - 广电+港澳台 <http://hbo.epub.fun/>, 港澳台 <http://mtime.info/>
 - 自定义频道，需把 iptv.html 放到**本地服务器**目录下，修改channels.json
 
+## 宽带运营商的阻断
+
+- 出于某种目的的龌龊行为，没办法DDOS服务器，只能阻断部分链接，打开浏览器 console 看到 connection reset 就是链接被阻断，所以需要不定时更改直播源地址
+
 ---
 
 ## iptv.sh 一键管理 IPTV 脚本 mpegts / flv => hls
@@ -83,7 +87,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
   - 建议在 copy 直播源的时候开启监控
   - 在 leech 直播源的时候必须打开监控选项，以应对输出低比特率/直播源服务器频繁重启/音轨丢失/等问题
 - tv t 文件
-  - 检测文件内的 xtream codes 账号链接（形如 ?get.php?username=xxx&password=xxx）
+  - 检测文件内的 xtream codes 账号链接（形如 /get.php?username=xxx&password=xxx）
 - tv d 请求演示频道 ( 3个凤凰台,1个hbo中文频道 )，添加到 channels.json
   - 都需要先替换 mpegts 链接才能开启
 - ...
