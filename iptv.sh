@@ -3571,90 +3571,71 @@ Monitor()
     while true; do
         if [ -n "${delay_seconds:-}" ] && ls -A $LIVE_ROOT/* > /dev/null 2>&1
         then
-            oldest_file=$(find "$LIVE_ROOT" -type f -printf '%T+ %p\n' | sort | head -n 1 | cut -d' ' -f2 || true)
-            if [ -n "${oldest_file:-}" ] 
-            then
-                output_dir_name=${oldest_file#*$LIVE_ROOT/}
+            while IFS= read -r old_file_path
+            do
+                output_dir_name=${old_file_path#*$LIVE_ROOT/}
                 output_dir_name=${output_dir_name%%/*}
-                match=0
-                if [ -n "${monitor_dir_names_chosen:-}" ] 
+                if [ "${monitor_all}" == 1 ] 
                 then
+                    MonitorRestartChannel
+                    break 1
+                else
                     for dir_name in "${monitor_dir_names_chosen[@]}"
                     do
                         if [ "$dir_name" == "$output_dir_name" ] 
                         then
-                            match=1
+                            MonitorRestartChannel
+                            break 2
                         fi
-                    done
+                    done  
                 fi
-
-                if [ "${monitor_all}" == 1 ] || [ "$match" == 1 ] 
+            done < <(find "$LIVE_ROOT/"* \! -newermt "-$delay_seconds seconds" || true)
+            
+            for dir_name in "${monitor_dir_names_chosen[@]}"
+            do
+                chnl_pid=$($JQ_FILE '.channels[] | select(.output_dir_name=="'"$dir_name"'").pid' $CHANNELS_FILE)
+                GetChannelInfo
+                FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+                FFPROBE="$FFMPEG_ROOT/ffprobe"
+                bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*_00000.ts || true)
+                bit_rate=${bit_rate:-500000}
+                bit_rate=${bit_rate//N\/A/500000}
+                #audio_stream=$($FFPROBE -i "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -select_streams a -loglevel quiet || true)
+                if [[ $bit_rate -lt 500000 ]] # || [ -z "$audio_stream" ]
                 then
-                    file_date=$(date +%s -r "$oldest_file")
-                    if [ $(( $(date +%s) - file_date )) -gt "$delay_seconds" ] 
-                    then
-                        MonitorRestartChannel
-                    fi
-                fi
-
-                for dir_name in "${monitor_dir_names_chosen[@]}"
-                do
-                    chnl_pid=$($JQ_FILE '.channels[] | select(.output_dir_name=="'"$dir_name"'").pid' $CHANNELS_FILE)
-                    GetChannelInfo
-                    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-                    FFPROBE="$FFMPEG_ROOT/ffprobe"
-                    bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*_00000.ts || true)
-                    bit_rate=${bit_rate:-500000}
-                    bit_rate=${bit_rate//N\/A/500000}
-                    #audio_stream=$($FFPROBE -i "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -select_streams a -loglevel quiet || true)
-                    if [[ $bit_rate -lt 500000 ]] # || [ -z "$audio_stream" ]
-                    then
-                        output_dir_name=$dir_name
-                        fail_count=1
-                        for f in "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*.ts
-                        do
-                            bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$f" || true)
-                            bit_rate=${bit_rate:-500000}
-                            bit_rate=${bit_rate//N\/A/500000}
-                            if [[ $bit_rate -lt 500000 ]] 
-                            then
-                                fail_count=$((fail_count+1))
-                            fi
-                        done
-                        
+                    output_dir_name=$dir_name
+                    fail_count=1
+                    for f in "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*.ts
+                    do
+                        bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$f" || true)
+                        bit_rate=${bit_rate:-500000}
+                        bit_rate=${bit_rate//N\/A/500000}
+                        if [[ $bit_rate -lt 500000 ]] 
+                        then
+                            fail_count=$((fail_count+1))
+                        fi
                         if [ "$fail_count" -gt 2 ] 
                         then
                             MonitorRestartChannel
+                            break 1
                         fi
-                    fi
-                done
-            fi
+                    done
+                fi
+            done
         fi
 
-        for f in "$LIVE_ROOT"/*/* ; do
-            file_root=${f%/*}
-            output_dir_name=${file_root##*/}
-
-            if [ -d "$f" ] 
+        largest_file=$(find "$LIVE_ROOT" -type f -printf "%s %p\n" | sort -n | tail -1 || true)
+        if [ -n "${largest_file:-}" ] 
+        then
+            largest_file_size=${largest_file%% *}
+            largest_file_path=${largest_file#* }
+            output_dir_name=${largest_file_path#*$LIVE_ROOT/}
+            output_dir_name=${output_dir_name%%/*}
+            if [ "$largest_file_size" -gt $(( cmd * 1000000)) ]
             then
-                for ts in "$f"/*.ts
-                do
-                    size=$(find "$ts" -printf '%s' || true)
-                    if [ "${size:-0}" -gt $(( cmd * 1000000)) ]
-                    then
-                        MonitorRestartChannel
-                        break 2
-                    fi
-                done
-            else
-                size=$(find "$f" -printf '%s' || true)
-                if [ "${size:-0}" -gt $(( cmd * 1000000)) ]
-                then
-                    MonitorRestartChannel
-                    break 1
-                fi
+                MonitorRestartChannel
             fi
-        done
+        fi
         sleep 1
     done
 }

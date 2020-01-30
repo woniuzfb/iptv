@@ -12,10 +12,6 @@
 - 广电+港澳台 <http://hbo.epub.fun/>, 港澳台 <http://mtime.info/>
 - 自定义频道，需把 iptv.html 放到**本地服务器**目录下，修改channels.json
 
-## 宽带运营商的阻断
-
-- 出于某种目的的龌龊行为，没办法DDOS服务器，只能阻断部分链接，打开浏览器 console 看到 connection reset 就是链接被阻断，所以需要不定时更改直播源地址
-
 ---
 
 ## iptv.sh 一键管理 IPTV 脚本 mpegts / flv => hls
