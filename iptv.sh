@@ -3515,7 +3515,8 @@ TsMenu()
 
 MonitorError()
 {
-    printf '%s\n' "${date_now:-"creator"} [LINE:$1] ERROR: $?" >> "$MONITOR_LOG"
+    date_now=$(date -d now "+%m-%d %H:%M:%S")
+    printf '%s\n' "$date_now [LINE:$1] ERROR: $?" >> "$MONITOR_LOG"
 }
 
 MonitorRestartChannel()
@@ -3524,6 +3525,7 @@ MonitorRestartChannel()
     GetChannelInfo
     if [ "$chnl_status" == "on" ] 
     then
+        date_now=$(date -d now "+%m-%d %H:%M:%S")
         for((i=0;i<restart_nums;i++))
         do
             action="skip"
@@ -3554,7 +3556,6 @@ MonitorRestartChannel()
             fi
         done
     else
-        printf '%s\n' "$date_now pid: $chnl_pid $chnl_channel_name 不在运行?" >> "$MONITOR_LOG"
         MonitorStop
     fi
 }
@@ -3564,98 +3565,93 @@ Monitor()
     trap '' HUP INT TERM QUIT EXIT;
     trap 'MonitorError $LINENO' ERR
     printf '%s' "$BASHPID" > "$MONITOR_PID"
+    date_now=$(date -d now "+%m-%d %H:%M:%S")
     printf '%s\n' "$date_now 监控启动成功 PID $BASHPID !" >> "$MONITOR_LOG"
     echo -e "$info 监控启动成功 !"
     while true; do
-        date_now=$(date -d now "+%m-%d %H:%M:%S")
-        for dir_name in "${monitor_dir_names_chosen[@]}"
-        do
-            chnl_pid=$($JQ_FILE '.channels[] | select(.output_dir_name=="'"$dir_name"'").pid' $CHANNELS_FILE)
-            GetChannelInfo
-            FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-            FFPROBE="$FFMPEG_ROOT/ffprobe"
-            bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*_00000.ts || true)
-            bit_rate=${bit_rate:-500000}
-            bit_rate=${bit_rate//N\/A/500000}
-            #audio_stream=$($FFPROBE -i "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -select_streams a -loglevel quiet || true)
-            if [[ $bit_rate -lt 500000 ]] # || [ -z "$audio_stream" ]
+        if [ -n "${delay_seconds:-}" ] && ls -A $LIVE_ROOT/* > /dev/null 2>&1
+        then
+            oldest_file=$(find "$LIVE_ROOT" -type f -printf '%T+ %p\n' | sort | head -n 1 | cut -d' ' -f2 || true)
+            if [ -n "${oldest_file:-}" ] 
             then
-                output_dir_name=$dir_name
-                fail_count=1
-                for f in "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*.ts
+                output_dir_name=${oldest_file#*$LIVE_ROOT/}
+                output_dir_name=${output_dir_name%%/*}
+                match=0
+                if [ -n "${monitor_dir_names_chosen:-}" ] 
+                then
+                    for dir_name in "${monitor_dir_names_chosen[@]}"
+                    do
+                        if [ "$dir_name" == "$output_dir_name" ] 
+                        then
+                            match=1
+                        fi
+                    done
+                fi
+
+                if [ "${monitor_all}" == 1 ] || [ "$match" == 1 ] 
+                then
+                    file_date=$(date +%s -r "$oldest_file")
+                    if [ $(( $(date +%s) - file_date )) -gt "$delay_seconds" ] 
+                    then
+                        MonitorRestartChannel
+                    fi
+                fi
+
+                for dir_name in "${monitor_dir_names_chosen[@]}"
                 do
-                    bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$f" || true)
+                    chnl_pid=$($JQ_FILE '.channels[] | select(.output_dir_name=="'"$dir_name"'").pid' $CHANNELS_FILE)
+                    GetChannelInfo
+                    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+                    FFPROBE="$FFMPEG_ROOT/ffprobe"
+                    bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*_00000.ts || true)
                     bit_rate=${bit_rate:-500000}
                     bit_rate=${bit_rate//N\/A/500000}
-                    if [[ $bit_rate -lt 500000 ]] 
+                    #audio_stream=$($FFPROBE -i "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -select_streams a -loglevel quiet || true)
+                    if [[ $bit_rate -lt 500000 ]] # || [ -z "$audio_stream" ]
                     then
-                        fail_count=$((fail_count+1))
+                        output_dir_name=$dir_name
+                        fail_count=1
+                        for f in "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*.ts
+                        do
+                            bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$f" || true)
+                            bit_rate=${bit_rate:-500000}
+                            bit_rate=${bit_rate//N\/A/500000}
+                            if [[ $bit_rate -lt 500000 ]] 
+                            then
+                                fail_count=$((fail_count+1))
+                            fi
+                        done
+                        
+                        if [ "$fail_count" -gt 2 ] 
+                        then
+                            MonitorRestartChannel
+                        fi
                     fi
                 done
-                
-                if [ "$fail_count" -gt 2 ] 
-                then
-                    MonitorRestartChannel
-                fi
             fi
-        done
+        fi
 
         for f in "$LIVE_ROOT"/*/* ; do
             file_root=${f%/*}
             output_dir_name=${file_root##*/}
 
-            match=0
-            if [ -n "${monitor_dir_names_chosen:-}" ] 
-            then
-                for dir_name in "${monitor_dir_names_chosen[@]}"
-                do
-                    if [ "$dir_name" == "$output_dir_name" ] 
-                    then
-                        match=1
-                    fi
-                done
-            fi
-
             if [ -d "$f" ] 
             then
                 for ts in "$f"/*.ts
                 do
-                    file_date=$(date +%s -r "$ts")
-                    size=$(find "$ts" -printf '%s')
-
-                    if [ "$size" -gt $(( cmd * 1000000)) ]
+                    size=$(find "$ts" -printf '%s' || true)
+                    if [ "${size:-0}" -gt $(( cmd * 1000000)) ]
                     then
                         MonitorRestartChannel
                         break 2
                     fi
-
-                    if [ -n "${delay_seconds:-}" ] && [ $(( $(date +%s) - file_date )) -gt "$delay_seconds" ] 
-                    then
-                        if [ "${monitor_all}" == 1 ] || [ "$match" == 1 ] 
-                        then
-                            MonitorRestartChannel
-                            break 2
-                        fi
-                    fi
                 done
-            elif [ -f "$f" ] 
-            then
-                file_date=$(date +%s -r "$f")
-                size=$(find "$f" -printf '%s')
-
-                if [ "$size" -gt $(( cmd * 1000000)) ]
+            else
+                size=$(find "$f" -printf '%s' || true)
+                if [ "${size:-0}" -gt $(( cmd * 1000000)) ]
                 then
                     MonitorRestartChannel
                     break 1
-                fi
-
-                if [ -n "${delay_seconds:-}" ] && [ $(( $(date +%s) - file_date )) -gt "$delay_seconds" ] 
-                then
-                    if [ "${monitor_all}" == 1 ] || [ "$match" == 1 ] 
-                    then
-                        MonitorRestartChannel
-                        break 1
-                    fi
                 fi
             fi
         done
@@ -3665,7 +3661,8 @@ Monitor()
 
 MonitorSet()
 {
-    if ! ls -A $LIVE_ROOT/* > /dev/null 2>&1; then
+    if ! ls -A $LIVE_ROOT/* > /dev/null 2>&1
+    then
         return 0
     fi
     echo && echo "请选择需要监控超时重启的频道(多个频道用空格分隔)"
@@ -3785,6 +3782,7 @@ MonitorSet()
 
 MonitorStop()
 {
+    date_now=$(date -d now "+%m-%d %H:%M:%S")
     if [ ! -s "$MONITOR_PID" ] 
     then
         echo -e "$error 监控未启动 !"
@@ -3880,7 +3878,6 @@ then
         ;;
         "m") 
             [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请先安装 !" && exit 1
-            date_now=$(date -d now "+%m-%d %H:%M:%S")
 
             cmd=${2:-5}
 
