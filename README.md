@@ -34,6 +34,10 @@
 
 ``` bash
 wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
+
+始终用最新的脚本，升级方式
+  - 通过 tv 面板（推荐）
+  - 用这里的 iptv.sh 覆盖 /usr/local/bin/tv ，删除主目录 /usr/local/iptv 下的 lock 文件
 ```
 
 ## 自动更新指定的json文件
