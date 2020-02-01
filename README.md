@@ -1,4 +1,4 @@
-# 看HBO直播 + 一键管理 IPTV 脚本 mpegts / flv => hls
+# 看HBO直播 + 一键管理 IPTV 脚本 mpegts / flv => hls / flv 推流
 
 - HBO 中文直播 + 集各广电直播源
 - 默认如果没有本地频道（channels.json）,会请求远程服务器频道
@@ -14,15 +14,17 @@
 
 ---
 
-## iptv.sh 一键管理 IPTV 脚本 mpegts / flv => hls
+## iptv.sh 一键管理 IPTV 脚本 mpegts / flv => hls / flv 推流
 
 - 【自动化】HLS-Stream-Creator
+- 【扩展】可以设置画面音轨延迟修复不同步的问题，可以不输出 HLS，管理推流 flv 等
 - 自建节目表
 - 添加频道
   - 可以用命令行，详见 tv -h
   - 也可以使用 shell 对话，输入 tv 打开面板
 - 管理频道
-  - 输入 tv 打开面板
+  - 输入 tv 打开 HLS 面板
+  - 输入 tv f 打开 FLV 推流管理面板
 - 主目录在 /usr/local/iptv
   - channels.json [ 默认值和频道列表 ]
   - HLS-Stream-Creator 本尊
@@ -112,11 +114,16 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
     如果没有设置crf视频质量值，则可以继续设置是否固定码率
     多个比特率用逗号分隔(注意-如果设置多个比特率，就是生成自适应码流)
     同时可以指定输出的分辨率(比如：-b 600-600x400,900-1280x720)
-    可以输入 copy 省略此选项(不需要转码时)
+    可以输入 omit 省略此选项(ffmpeg自行判断输出比特率)
 -C  固定码率(CBR 而不是 AVB)(只有在没有设置crf视频质量的情况下才有效)(默认：否)
 -e  加密段(默认：不加密)
 -K  Key名称(默认：跟m3u8名称相同)
 -z  频道名称(默认：跟m3u8名称相同)
+
+也可以不输出 HLS，比如 flv 推流
+-k  设置推流类型，比如 -k flv
+-T  设置推流地址，比如 rtmp://127.0.0.1/live/xxx
+-L  输入拉流(播放)地址(可省略)，比如 http://domain.com/live?app=live&stream=xxx
 
 -m  ffmpeg 额外的 INPUT FLAGS
     (默认："-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -nostats -nostdin -hide_banner -loglevel fatal")
@@ -136,4 +143,8 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 
 - 不需要转码的设置: -a copy -v copy -n copy
 
-- 或者输入 tv 打开面板，使用方法  **Enter**
+- 不输出 HLS, 推流 flv :
+
+    `tv -i http://xxx/xxx.ts -a copy -v h264 -b 3000 -k flv -T rtmp://127.0.0.1/live/xxx`
+
+- 或者输入 tv 打开 HLS 面板， tv f 打开 FLV 面板，使用方法  **Enter**

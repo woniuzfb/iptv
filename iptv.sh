@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-sh_ver="1.1.0"
+sh_ver="1.2.0"
 SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
@@ -331,6 +331,7 @@ Install()
             wget --no-check-certificate "$CREATOR_LINK_BACKUP" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
             if [ ! -s "$CREATOR_FILE" ] 
             then
+                echo -e "$error 无法连接备用链接!"
                 rm -rf "${IPTV_ROOT:-'notfound'}"
                 exit 1
             fi
@@ -417,7 +418,7 @@ Update()
         wget --no-check-certificate "$CREATOR_LINK_BACKUP" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
         if [ ! -s "$CREATOR_FILE" ] 
         then
-            rm -rf "${IPTV_ROOT:-'notfound'}"
+            echo -e "$error 无法连接备用链接!"
             exit 1
         fi
     fi
@@ -474,11 +475,18 @@ UpdateSelf()
             chnl_input_flags=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').input_flags' "$CHANNELS_FILE")
             chnl_output_flags=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').output_flags' "$CHANNELS_FILE")
             chnl_channel_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').channel_name' "$CHANNELS_FILE")
+            chnl_flv_status=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').flv_status' "$CHANNELS_FILE")
+            chnl_flv_push_link=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').flv_push_link' "$CHANNELS_FILE")
+            chnl_flv_pull_link=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').flv_pull_link' "$CHANNELS_FILE")
 
             $JQ_FILE '.channels -= [.channels[]|select(.pid=='"$chnl_pid"')]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
             mv "$CHANNELS_TMP" "$CHANNELS_FILE"
 
             [ "$chnl_video_audio_shift" == null ] && chnl_video_audio_shift=$default_video_audio_shift
+            [ "$chnl_flv_status" == null ] && chnl_flv_status="off"
+            [ "$chnl_flv_push_link" == null ] && chnl_flv_push_link=""
+            [ "$chnl_flv_pull_link" == null ] && chnl_flv_pull_link=""
+
             if [ "$chnl_const" == "yes" ]
             then
                 chnl_const_yn="yes"
@@ -512,7 +520,10 @@ UpdateSelf()
                     "key_name":"'"$chnl_key_name"'",
                     "input_flags":"'"$chnl_input_flags"'",
                     "output_flags":"'"$chnl_output_flags"'",
-                    "channel_name":"'"$chnl_channel_name"'"
+                    "channel_name":"'"$chnl_channel_name"'",
+                    "flv_status":"off",
+                    "flv_push_link":"'"$chnl_flv_push_link"'",
+                    "flv_pull_link":"'"$chnl_flv_pull_link"'"
                 }
             ]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
             mv "$CHANNELS_TMP" "$CHANNELS_FILE"
@@ -599,6 +610,9 @@ GetChannelsInfo()
     do
         chnls_name+=("$name");
     done < <($JQ_FILE -r '.channels[].channel_name | @sh' "$CHANNELS_FILE")
+    IFS=" " read -ra chnls_flv_status <<< "$($JQ_FILE -r '[.channels[].flv_status] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -ra chnls_flv_push_link <<< "$($JQ_FILE -r '[.channels[].flv_push_link] | @sh' $CHANNELS_FILE)"
+    IFS=" " read -ra chnls_flv_pull_link <<< "$($JQ_FILE -r '[.channels[].flv_pull_link] | @sh' $CHANNELS_FILE)"
 }
 
 ListChannels()
@@ -673,38 +687,51 @@ ListChannels()
         fi
         
         chnls_name_index=${chnls_name[index]//\'/}
-        if [ "$chnls_status_index" == "on" ]
-        then
-            if kill -0 "$chnls_pid_index" 2> /dev/null 
-            then
-                working=0
-                while IFS= read -r ffmpeg_pid 
-                do
-                    if [ -z "$ffmpeg_pid" ] 
-                    then
-                        working=1
-                    else
-                        while IFS= read -r real_ffmpeg_pid 
-                        do
-                            if [ -z "$real_ffmpeg_pid" ] 
-                            then
-                                if kill -0 "$ffmpeg_pid" 2> /dev/null 
-                                then
-                                    working=1
-                                fi
-                            else
-                                if kill -0 "$real_ffmpeg_pid" 2> /dev/null 
-                                then
-                                    working=1
-                                fi
-                            fi
-                        done <<< $(pgrep -P "$ffmpeg_pid")
-                    fi
-                done <<< $(pgrep -P "$chnls_pid_index")
+        chnls_flv_status_index=${chnls_flv_status[index]//\'/}
+        chnls_flv_push_link_index=${chnls_flv_push_link[index]//\'/}
+        chnls_flv_pull_link_index=${chnls_flv_pull_link[index]//\'/}
 
-                if [ "$working" == 1 ] 
+        if [ -z "${kind:-}" ] 
+        then
+            if [ "$chnls_status_index" == "on" ]
+            then
+                if kill -0 "$chnls_pid_index" 2> /dev/null 
                 then
-                    chnls_status_text=$green"开启"$plain
+                    working=0
+                    while IFS= read -r ffmpeg_pid 
+                    do
+                        if [ -z "$ffmpeg_pid" ] 
+                        then
+                            working=1
+                        else
+                            while IFS= read -r real_ffmpeg_pid 
+                            do
+                                if [ -z "$real_ffmpeg_pid" ] 
+                                then
+                                    if kill -0 "$ffmpeg_pid" 2> /dev/null 
+                                    then
+                                        working=1
+                                    fi
+                                else
+                                    if kill -0 "$real_ffmpeg_pid" 2> /dev/null 
+                                    then
+                                        working=1
+                                    fi
+                                fi
+                            done <<< $(pgrep -P "$ffmpeg_pid")
+                        fi
+                    done <<< $(pgrep -P "$chnls_pid_index")
+
+                    if [ "$working" == 1 ] 
+                    then
+                        chnls_status_text=$green"开启"$plain
+                    else
+                        chnls_status_text=$red"关闭"$plain
+                        $JQ_FILE '(.channels[]|select(.pid=='"$chnls_pid_index"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+                        mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+                        chnl_pid=$chnls_pid_index
+                        StopChannel
+                    fi
                 else
                     chnls_status_text=$red"关闭"$plain
                     $JQ_FILE '(.channels[]|select(.pid=='"$chnls_pid_index"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
@@ -714,27 +741,35 @@ ListChannels()
                 fi
             else
                 chnls_status_text=$red"关闭"$plain
-                $JQ_FILE '(.channels[]|select(.pid=='"$chnls_pid_index"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
-                mv "$CHANNELS_TMP" "$CHANNELS_FILE"
-                chnl_pid=$chnls_pid_index
-                StopChannel
             fi
-        else
-            chnls_status_text=$red"关闭"$plain
         fi
 
         if [ -n "$chnls_quality_index" ] 
         then
-            chnls_video_quality_text="crf值$chnls_quality_index $chnls_quality_text"
+            chnls_video_quality_text="crf值$chnls_quality_index ${chnls_quality_text:-"不设置"}"
         else
-            chnls_video_quality_text="比特率值 $chnls_bitrates_text"
+            chnls_video_quality_text="比特率值 ${chnls_bitrates_text:-"不设置"}"
         fi
 
         if [ "$chnls_video_codec_index" == "copy" ] && [ "$chnls_audio_codec_index" == "copy" ]  
         then
             chnls_video_quality_text="原画"
         fi
-        chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_status_text 频道名称: $green${chnls_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain m3u8位置: $chnls_playlist_file_text\n\n"
+
+        if [ -z "${kind:-}" ] 
+        then
+            chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_status_text 频道名称: $green${chnls_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain m3u8位置: $chnls_playlist_file_text\n\n"
+        elif [ "$kind" == "flv" ] 
+        then
+            if [ "$chnls_flv_status_index" == "on" ] 
+            then
+                chnls_flv_status_text=$green"开启"$plain
+            else
+                chnls_flv_status_text=$red"关闭"$plain
+            fi
+            chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_flv_status_text 频道名称: $green${chnls_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain flv推流地址: $green$chnls_flv_push_link_index$plain flv拉流地址: $green$chnls_flv_pull_link_index$plain\n\n"
+        fi
+        
     done
     echo && echo -e "=== 频道总数 $green $channels_count $plain"
     echo -e "$chnls_list\n"
@@ -858,12 +893,22 @@ GetChannelInfo(){
     chnl_output_flags=${chnl_info_array[18]}
     chnl_output_flags_text=${chnl_output_flags//\'/}
     chnl_channel_name=${chnl_info_array[19]//\'/}
+    chnl_flv_status=${chnl_info_array[20]//\'/}
+    if [ "$chnl_flv_status" == "on" ]
+    then
+        chnl_flv_status_text=$green"开启"$plain
+    else
+        chnl_flv_status_text=$red"关闭"$plain
+    fi
+
+    chnl_flv_push_link=${chnl_info_array[21]//\'/}
+    chnl_flv_pull_link=${chnl_info_array[22]//\'/}
 
     if [ -n "$chnl_quality" ] 
     then
-        chnl_video_quality_text="crf值$chnl_quality $chnl_crf_text"
+        chnl_video_quality_text="crf值$chnl_quality ${chnl_crf_text:-"不设置"}"
     else
-        chnl_video_quality_text="比特率值 $chnl_nocrf_text"
+        chnl_video_quality_text="比特率值 ${chnl_nocrf_text:-"不设置"}"
     fi
 
     if [ "$chnl_video_codec" == "copy" ] && [ "$chnl_audio_codec" == "copy" ]  
@@ -883,25 +928,36 @@ ViewChannelInfo()
     echo "===================================================" && echo
     echo -e " 频道 [$chnl_channel_name] 的配置信息：" && echo
     echo -e " 进程ID\t    : $green$chnl_pid$plain"
-    echo -e " 状态\t    : $chnl_status_text"
+
+    if [ -z "${kind:-}" ] 
+    then
+        echo -e " 状态\t    : $chnl_status_text"
+        echo -e " m3u8名称   : $green$chnl_playlist_name$plain"
+        echo -e " m3u8位置   : $chnl_playlist_file_text"
+        echo -e " m3u8链接   : $chnl_playlist_link_text"
+        echo -e " 段子目录   : $green$chnl_seg_dir_name_text$plain"
+        echo -e " 段名称\t    : $green$chnl_seg_name$plain"
+        echo -e " 段时长\t    : $green$chnl_seg_length_text$plain"
+        echo -e " m3u8包含段数目 : $green$chnl_seg_count$plain"
+        echo -e " 加密\t    : $chnl_encrypt_text"
+        if [ -n "$chnl_encrypt" ] 
+        then
+            echo -e " key名称    : $chnl_key_name_text"
+        fi
+    elif [ "$kind" == "flv" ] 
+    then
+        echo -e " 状态\t    : $chnl_flv_status_text"
+        echo -e " 推流地址   : $green$chnl_flv_push_link$plain"
+        echo -e " 拉流地址   : $green$chnl_flv_pull_link$plain"
+    fi
+    
     echo -e " 视频源\t    : $green$chnl_stream_link$plain"
     #echo -e " 目录\t    : $green$chnl_output_dir_root$plain"
-    echo -e " m3u8名称   : $green$chnl_playlist_name$plain"
-    echo -e " m3u8位置   : $chnl_playlist_file_text"
-    echo -e " m3u8链接   : $chnl_playlist_link_text"
-    echo -e " 段子目录   : $green$chnl_seg_dir_name_text$plain"
-    echo -e " 段名称\t    : $green$chnl_seg_name$plain"
-    echo -e " 段时长\t    : $green$chnl_seg_length_text$plain"
-    echo -e " m3u8包含段数目 : $green$chnl_seg_count$plain"
     echo -e " 视频编码   : $green$chnl_video_codec$plain"
     echo -e " 音频编码   : $green$chnl_audio_codec$plain"
     echo -e " 视频质量   : $green$chnl_video_quality_text$plain"
     echo -e " 延迟\t    : $green$chnl_video_audio_shift_text$plain"
-    echo -e " 加密\t    : $chnl_encrypt_text"
-    if [ -n "$chnl_encrypt" ] 
-    then
-        echo -e " key名称    : $chnl_key_name_text"
-    fi
+
     echo -e " input flags    : $green${chnl_input_flags_text:-"不设置"}$plain"
     echo -e " output flags   : $green${chnl_output_flags_text:-"不设置"}$plain"
     echo
@@ -963,7 +1019,7 @@ SetStreamLink()
 SetOutputDirName()
 {
     echo "请输入频道输出目录名称"
-    echo -e "$tip 是名称不是路径"
+    echo -e "$tip 是名称不是路径" && echo
     while read -p "(默认: 随机名称):" output_dir_name
     do
         output_dir_name=${output_dir_name:-$(RandOutputDirName)}
@@ -1102,26 +1158,28 @@ SetBitrates()
     if [ -z "$d_bitrates" ] 
     then
         d_bitrates_text="不设置"
-        echo "请输入比特率";
     else
         d_bitrates_text=${d_bitrates}
-        echo "请输入比特率, 可以输入 copy 省略此选项(不需要转码时)"
     fi
+
+    echo "请输入比特率, 可以输入 omit 省略此选项(ffmpeg自行判断输出比特率)"
+
     if [ -z "$quality" ] 
     then
         echo -e "$tip 用于指定输出视频比特率"
     else
         echo -e "$tip 用于 -maxrate 和 -bufsize"
     fi
-    echo -e "$tip 多个比特率用逗号分隔(生成自适应码流)
+    
+    if [ -z "${kind:-}" ] 
+    then
+        echo -e "$tip 多个比特率用逗号分隔(生成自适应码流)
     同时可以指定输出的分辨率(比如：600-600x400,900-1280x720)"
+    fi
     read -p "(默认: $d_bitrates_text):" bitrates
     bitrates=${bitrates:-$d_bitrates}
-    if [ "$bitrates" == "copy" ] 
+    if [ "$bitrates" == "omit" ] 
     then
-        video_codec="copy"
-        audio_codec="copy"
-        quality=""
         bitrates=""
     fi
     echo && echo -e "	比特率: $green ${bitrates:-"不设置"} $plain" && echo
@@ -1224,6 +1282,7 @@ SetVideoAudioShift()
                     audio_shift=$d_audio_shift
                 fi
 
+                video_audio_shift=""
                 video_audio_shift_text=$d_video_audio_shift_text
                 break
             ;;
@@ -1271,6 +1330,189 @@ SetChannelName()
     echo && echo -e "	频道名称: $green $channel_name $plain" && echo
 }
 
+SetFlvPush()
+{
+    echo && echo "请输入推流地址(比如 rtmp://127.0.0.1/live/xxx )"
+    read -p "(默认: 取消):" flv_push_link
+    [ -z "$flv_push_link" ] && echo "已取消..." && exit 1
+    echo && echo -e "	推流地址: $green $flv_push_link $plain" && echo
+}
+
+SetFlvPull()
+{
+    echo && echo "请输入拉流(播放)地址"
+    read -p "(默认: 不设置):" flv_pull_link
+    echo && echo -e "	拉流地址: $green ${flv_pull_link:-"不设置"} $plain" && echo
+}
+
+FlvStreamCreatorWithShift()
+{
+    trap '' HUP INT QUIT TERM;
+    trap 'MonitorError $LINENO' ERR
+    pid="$BASHPID"
+    case $from in
+        "AddChannel") 
+            $JQ_FILE '.channels += [
+                {
+                    "pid":'"$pid"',
+                    "status":"off",
+                    "stream_link":"'"$stream_link"'",
+                    "output_dir_name":"'"$output_dir_name"'",
+                    "playlist_name":"'"$playlist_name"'",
+                    "seg_dir_name":"'"$SEGMENT_DIRECTORY"'",
+                    "seg_name":"'"$seg_name"'",
+                    "seg_length":'"$seg_length"',
+                    "seg_count":'"$seg_count"',
+                    "video_codec":"'"$VIDEO_CODEC"'",
+                    "audio_codec":"'"$AUDIO_CODEC"'",
+                    "video_audio_shift":"'"$video_audio_shift"'",
+                    "quality":"'"$quality"'",
+                    "bitrates":"'"$bitrates"'",
+                    "const":"'"$const_yn"'",
+                    "encrypt":"'"$encrypt_yn"'",
+                    "key_name":"'"$key_name"'",
+                    "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
+                    "output_flags":"'"$FFMPEG_FLAGS"'",
+                    "channel_name":"'"$channel_name"'",
+                    "flv_status":"on",
+                    "flv_push_link":"'"$flv_push_link"'",
+                    "flv_pull_link":"'"$flv_pull_link"'"
+                }
+            ]' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
+            mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
+            action="add"
+            SyncFile
+
+            if [ -n "$bitrates" ] 
+            then
+                bitrates=${bitrates%%,*}
+                bitrates=${bitrates%%-*}
+                bitrates_command="-b:v ${bitrates}k"
+            else
+                bitrates_command=""
+            fi
+
+            if [ -n "${video_shift:-}" ] 
+            then
+                map_command="-itsoffset $video_shift -i $stream_link -map 0:v -map 1:a"
+            elif [ -n "${audio_shift:-}" ] 
+            then
+                map_command="-itsoffset $audio_shift -i $stream_link -map 0:a -map 1:v"
+            else
+                map_command=""
+            fi
+            
+            $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command \
+            -y -vcodec "$video_codec" -acodec "$audio_codec" $bitrates_command \
+            $FFMPEG_FLAGS -f flv "$flv_push_link" || true
+
+            $JQ_FILE '(.channels[]|select(.pid=='"$pid"')|.flv_status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
+            mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
+            action="stop"
+            SyncFile
+            kill -9 "$pid"
+        ;;
+        "StartChannel") 
+            new_pid=$pid
+            $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.flv_status)="on"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
+            mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
+            action=${action:-"start"}
+            SyncFile
+
+            if [ -n "$chnl_bitrates" ] 
+            then
+                bitrates=${chnl_bitrates%%,*}
+                bitrates=${chnl_bitrates%%-*}
+                bitrates_command="-b:v ${chnl_bitrates}k"
+            else
+                bitrates_command=""
+            fi
+
+            if [ -n "${chnl_video_shift:-}" ] 
+            then
+                map_command="-itsoffset $chnl_video_shift -i $chnl_stream_link -map 0:v -map 1:a"
+            elif [ -n "${chnl_audio_shift:-}" ] 
+            then
+                map_command="-itsoffset $chnl_audio_shift -i $chnl_stream_link -map 0:a -map 1:v"
+            else
+                map_command=""
+            fi
+
+            $FFMPEG $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command \
+            -y -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $bitrates_command \
+            $FFMPEG_FLAGS -f flv "$chnl_flv_push_link" || true
+
+            $JQ_FILE '(.channels[]|select(.pid=='"$new_pid"')|.flv_status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
+            mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
+            action="stop"
+            chnl_pid=$new_pid
+            SyncFile
+            kill -9 "$new_pid"
+        ;;
+        "command") 
+            $JQ_FILE '.channels += [
+                {
+                    "pid":'"$pid"',
+                    "status":"off",
+                    "stream_link":"'"$stream_link"'",
+                    "output_dir_name":"'"$output_dir_name"'",
+                    "playlist_name":"'"$playlist_name"'",
+                    "seg_dir_name":"'"$SEGMENT_DIRECTORY"'",
+                    "seg_name":"'"$seg_name"'",
+                    "seg_length":'"$seg_length"',
+                    "seg_count":'"$seg_count"',
+                    "video_codec":"'"$VIDEO_CODEC"'",
+                    "audio_codec":"'"$AUDIO_CODEC"'",
+                    "video_audio_shift":"'"$video_audio_shift"'",
+                    "quality":"'"$quality"'",
+                    "bitrates":"'"$bitrates"'",
+                    "const":"'"$const_yn"'",
+                    "encrypt":"'"$encrypt_yn"'",
+                    "key_name":"'"$key_name"'",
+                    "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
+                    "output_flags":"'"$FFMPEG_FLAGS"'",
+                    "channel_name":"'"$channel_name"'",
+                    "flv_status":"on",
+                    "flv_push_link":"'"$flv_push_link"'",
+                    "flv_pull_link":"'"$flv_pull_link"'"
+                }
+            ]' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
+            mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
+            action="add"
+            SyncFile
+
+            if [ -n "${bitrates:-}" ] 
+            then
+                bitrates=${bitrates%%,*}
+                bitrates=${bitrates%%-*}
+                bitrates_command="-b:v ${bitrates}k"
+            else
+                bitrates_command=""
+            fi
+
+            if [ -n "${video_shift:-}" ] 
+            then
+                map_command="-itsoffset $video_shift -i $stream_link -map 0:v -map 1:a"
+            elif [ -n "${audio_shift:-}" ] 
+            then
+                map_command="-itsoffset $audio_shift -i $stream_link -map 0:a -map 1:v"
+            else
+                map_command=""
+            fi
+
+            $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+            -vcodec "$video_codec" -acodec "$audio_codec" $bitrates_command \
+            $FFMPEG_FLAGS -f flv "$chnl_flv_push_link" || true
+
+            $JQ_FILE '(.channels[]|select(.pid=='"$pid"')|.flv_status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
+            mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
+            action="stop"
+            SyncFile
+            kill -9 "$pid"
+        ;;
+    esac
+}
+
 HlsStreamCreatorWithShift()
 {
     trap '' HUP INT QUIT TERM;
@@ -1300,7 +1542,10 @@ HlsStreamCreatorWithShift()
                     "key_name":"'"$key_name"'",
                     "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
                     "output_flags":"'"$FFMPEG_FLAGS"'",
-                    "channel_name":"'"$channel_name"'"
+                    "channel_name":"'"$channel_name"'",
+                    "flv_status":"off",
+                    "flv_push_link":"",
+                    "flv_pull_link":""
                 }
             ]' "$CHANNELS_FILE" > "${CHANNELS_TMP}_shift"
             mv "${CHANNELS_TMP}_shift" "$CHANNELS_FILE"
@@ -1313,15 +1558,19 @@ HlsStreamCreatorWithShift()
             else
                 output_name="${playlist_name}_%05d.ts"
             fi
+
             if [ -n "${video_shift:-}" ] 
             then
-                map_command="-map 0:v -map 1:a"
+                map_command="-itsoffset $video_shift -i $stream_link -map 0:v -map 1:a"
             elif [ -n "${audio_shift:-}" ] 
             then
-                map_command="-map 0:a -map 1:v"
+                map_command="-itsoffset $audio_shift -i $stream_link -map 0:a -map 1:v"
+            else
+                map_command=""
             fi
-            $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" -itsoffset "$video_shift" \
-            -i "$stream_link" $map_command -y -vcodec "$video_codec" -acodec "$audio_codec" \
+
+            $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+            -vcodec "$video_codec" -acodec "$audio_codec" \
             -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
             -segment_time "$seg_length" -segment_format mpeg_ts -segment_list_flags +live \
             -segment_list_size "$seg_count" -segment_wrap $((seg_count * 2)) $FFMPEG_FLAGS "$output_dir_root/$output_name" || true
@@ -1340,21 +1589,26 @@ HlsStreamCreatorWithShift()
             mv "${CHANNELS_TMP}_shift" "$CHANNELS_FILE"
             action=${action:-"start"}
             SyncFile
+
             if [ -n "$chnl_bitrates" ] 
             then
                 output_name="${chnl_playlist_name}_${chnl_bitrates}_%05d.ts"
             else
                 output_name="${chnl_playlist_name}_%05d.ts"
             fi
+
             if [ -n "${chnl_video_shift:-}" ] 
             then
-                map_command="-map 0:v -map 1:a"
+                map_command="-itsoffset $chnl_video_shift -i $chnl_stream_link -map 0:v -map 1:a"
             elif [ -n "${chnl_audio_shift:-}" ] 
             then
-                map_command="-map 0:a -map 1:v"
+                map_command="-itsoffset $chnl_audio_shift -i $chnl_stream_link -map 0:a -map 1:v"
+            else
+                map_command=""
             fi
-            $FFMPEG $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" -itsoffset "$chnl_video_shift" \
-            -i "$chnl_stream_link" $map_command -y -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" \
+
+            $FFMPEG $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
+            -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" \
             -threads 0 -flags -global_header -f segment -segment_list "$chnl_output_dir_root/$chnl_playlist_name.m3u8" \
             -segment_time "$chnl_seg_length" -segment_format mpeg_ts -segment_list_flags +live \
             -segment_list_size "$chnl_seg_count" -segment_wrap $((chnl_seg_count * 2)) $FFMPEG_FLAGS "$chnl_output_dir_root/$output_name" || true
@@ -1390,29 +1644,35 @@ HlsStreamCreatorWithShift()
                     "key_name":"'"$key_name"'",
                     "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
                     "output_flags":"'"$FFMPEG_FLAGS"'",
-                    "channel_name":"'"$channel_name"'"
+                    "channel_name":"'"$channel_name"'",
+                    "flv_status":"off",
+                    "flv_push_link":"",
+                    "flv_pull_link":""
                 }
             ]' "$CHANNELS_FILE" > "${CHANNELS_TMP}_shift"
             mv "${CHANNELS_TMP}_shift" "$CHANNELS_FILE"
             action="add"
             SyncFile
 
-            if [ -n "$bitrates" ] 
+            if [ -n "${bitrates:-}" ] 
             then
                 output_name="${playlist_name}_${bitrates}_%05d.ts"
             else
                 output_name="${playlist_name}_%05d.ts"
             fi
+            
             if [ -n "${video_shift:-}" ] 
             then
-                map_command="-map 0:v -map 1:a"
+                map_command="-itsoffset $video_shift -i $stream_link -map 0:v -map 1:a"
             elif [ -n "${audio_shift:-}" ] 
             then
-                map_command="-map 0:a -map 1:v"
+                map_command="-itsoffset $audio_shift -i $stream_link -map 0:a -map 1:v"
+            else
+                map_command=""
             fi
 
-            $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" -itsoffset "$video_shift" \
-            -i "$stream_link" $map_command -y -vcodec "$video_codec" -acodec "$audio_codec" \
+            $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+            -vcodec "$video_codec" -acodec "$audio_codec" \
             -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
             -segment_time "$seg_length" -segment_format mpeg_ts -segment_list_flags +live \
             -segment_list_size "$seg_count" -segment_wrap $((seg_count * 2)) $FFMPEG_FLAGS "$output_dir_root/$output_name" || true
@@ -1432,15 +1692,10 @@ AddChannel()
     [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
     GetDefault
     SetStreamLink
-    SetOutputDirName
-    SetPlaylistName
-    SetSegDirName
-    SetSegName
-    SetSegLength
-    SetSegCount
     SetVideoCodec
     SetAudioCodec
     SetVideoAudioShift
+
     quality_command=""
     bitrates_command=""
     if [ "$video_codec" == "copy" ] && [ "$audio_codec" == "copy" ]
@@ -1472,13 +1727,36 @@ AddChannel()
             const=$d_const
         fi
     fi
-    SetEncrypt
-    if [ -n "$encrypt" ] 
+
+    if [ "${kind:-}" == "flv" ] 
     then
-        SetKeyName
-    else
+        SetFlvPush
+        SetFlvPull
+        output_dir_name=$(RandOutputDirName)
+        playlist_name=$(RandPlaylistName)
+        seg_dir_name=$d_seg_dir_name
+        seg_name=$playlist_name
+        seg_length=$d_seg_length
+        seg_count=$d_seg_count
+        encrypt=""
+        encrypt_yn="no"
         key_name=$playlist_name
+    else
+        SetOutputDirName
+        SetPlaylistName
+        SetSegDirName
+        SetSegName
+        SetSegLength
+        SetSegCount
+        SetEncrypt
+        if [ -n "$encrypt" ] 
+        then
+            SetKeyName
+        else
+            key_name=$playlist_name
+        fi
     fi
+
     SetInputFlags
     SetOutputFlags
     SetChannelName
@@ -1497,7 +1775,16 @@ AddChannel()
     export SEGMENT_DIRECTORY
     export FFMPEG_FLAGS
 
-    if [ -n "${video_audio_shift:-}" ] 
+    if [ -n "${kind:-}" ] 
+    then
+        if [ "$kind" == "flv" ] 
+        then
+            from="AddChannel"
+            ( FlvStreamCreatorWithShift ) > /dev/null 2>/dev/null </dev/null & 
+        else
+            echo && echo -e "$error 暂不支持输出 $kind ..." && echo && exit 1
+        fi
+    elif [ -n "${video_audio_shift:-}" ] 
     then
         from="AddChannel"
         ( HlsStreamCreatorWithShift ) > /dev/null 2>/dev/null </dev/null &
@@ -1528,7 +1815,10 @@ AddChannel()
                 "key_name":"'"$key_name"'",
                 "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
                 "output_flags":"'"$FFMPEG_FLAGS"'",
-                "channel_name":"'"$channel_name"'"
+                "channel_name":"'"$channel_name"'",
+                "flv_status":"off",
+                "flv_push_link":"",
+                "flv_pull_link":""
             }
         ]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
@@ -1933,11 +2223,20 @@ StartChannel()
     export SEGMENT_DIRECTORY
     export FFMPEG_FLAGS
 
-    if [ -n "${chnl_video_audio_shift:-}" ] 
+    if [ -n "${kind:-}" ] 
+    then
+        if [ "$kind" == "flv" ] 
+        then
+            from="StartChannel"
+            ( FlvStreamCreatorWithShift ) > /dev/null 2>/dev/null </dev/null &
+        else
+            echo && echo -e "$error 暂不支持输出 $kind ..." && echo && exit 1
+        fi
+    elif [ -n "${chnl_video_audio_shift:-}" ] 
     then
         from="StartChannel"
         ( HlsStreamCreatorWithShift ) > /dev/null 2>/dev/null </dev/null &
-    elif [ -n "${size:-}" ] # monitor
+    elif [ -n "${monitor:-}" ] 
     then
         ( 
             trap '' HUP INT QUIT TERM
@@ -1969,6 +2268,11 @@ StartChannel()
 
 StopChannel()
 {
+    if [ -n "${kind:-}" ] && [ "$kind" != "flv" ]
+    then
+        echo -e "$error 暂不支持 $kind ..." && echo && exit 1
+    fi
+
     stopped=0
 
     if kill -0 "$chnl_pid" 2> /dev/null 
@@ -2009,20 +2313,29 @@ StopChannel()
 
     if [ "$stopped" == 0 ] 
     then
-        if [ -n "${size:-}" ] # monitor
+        if [ -n "${monitor:-}" ]
         then
             return 0
         fi
         echo -e "$error 关闭频道进程 $chnl_pid 遇到错误，请重试 !" && echo && exit 1
     fi
 
-    remove_dir_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').output_dir_name' "$CHANNELS_FILE")
-    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
-    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
-    rm -rf "$LIVE_ROOT/${remove_dir_name:-'notfound'}"
-    echo && echo -e "$info 频道目录删除成功 !" && echo
-    action=${action:-"stop"}
-    SyncFile
+
+    if [ "${kind:-}" == "flv" ] 
+    then
+        $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.flv_status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+        mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+        action=${action:-"stop"}
+        SyncFile
+    else
+        remove_dir_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').output_dir_name' "$CHANNELS_FILE")
+        $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+        mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+        rm -rf "$LIVE_ROOT/${remove_dir_name:-'notfound'}"
+        echo && echo -e "$info 频道目录删除成功 !" && echo
+        action=${action:-"stop"}
+        SyncFile
+    fi
 }
 
 RestartChannel()
@@ -3549,7 +3862,7 @@ MonitorRestartChannel()
                     fi
                 elif [[ $i -eq $((restart_nums - 1)) ]] 
                 then
-                    StopChannel
+                    StopChannel || true
                     printf '%s\n' "$date_now $chnl_channel_name 重启失败" >> "$MONITOR_LOG"
                     break
                 fi
@@ -3566,6 +3879,7 @@ Monitor()
     trap 'MonitorError $LINENO' ERR
     printf '%s' "$BASHPID" > "$MONITOR_PID"
     date_now=$(date -d now "+%m-%d %H:%M:%S")
+    monitor=1
     printf '%s\n' "$date_now 监控启动成功 PID $BASHPID !" >> "$MONITOR_LOG"
     echo -e "$info 监控启动成功 !"
     while true; do
@@ -3577,6 +3891,8 @@ Monitor()
                 output_dir_name=${output_dir_name%%/*}
                 if [ "${monitor_all}" == 1 ] 
                 then
+                    channel_name=$($JQ_FILE -r '.channels[]|select(.output_dir_name=="'"$output_dir_name"'").channel_name' "$CHANNELS_FILE")
+                    printf '%s\n' "$channel_name 超时重启" >> "$MONITOR_LOG"
                     MonitorRestartChannel
                     break 1
                 else
@@ -3584,6 +3900,8 @@ Monitor()
                     do
                         if [ "$dir_name" == "$output_dir_name" ] 
                         then
+                            channel_name=$($JQ_FILE -r '.channels[]|select(.output_dir_name=="'"$dir_name"'").channel_name' "$CHANNELS_FILE")
+                            printf '%s\n' "$channel_name 超时重启" >> "$MONITOR_LOG"
                             MonitorRestartChannel
                             break 2
                         fi
@@ -3616,6 +3934,8 @@ Monitor()
                         fi
                         if [ "$fail_count" -gt 2 ] 
                         then
+                            channel_name=$($JQ_FILE -r '.channels[]|select(.output_dir_name=="'"$output_dir_name"'").channel_name' "$CHANNELS_FILE")
+                            printf '%s\n' "$channel_name 比特率过低重启" >> "$MONITOR_LOG"
                             MonitorRestartChannel
                             break 1
                         fi
@@ -3633,6 +3953,8 @@ Monitor()
             output_dir_name=${output_dir_name%%/*}
             if [ "$largest_file_size" -gt $(( cmd * 1000000)) ]
             then
+                channel_name=$($JQ_FILE -r '.channels[]|select(.output_dir_name=="'"$output_dir_name"'").channel_name' "$CHANNELS_FILE")
+                printf '%s\n' "$channel_name 文件过大重启" >> "$MONITOR_LOG"
                 MonitorRestartChannel
             fi
         fi
@@ -3823,6 +4145,11 @@ See LICENSE
     -K  Key名称(默认：跟m3u8名称相同)
     -z  频道名称(默认：跟m3u8名称相同)
 
+    也可以不输出 HLS，比如 flv 推流
+    -k  设置推流类型，比如 -k flv
+    -T  设置推流地址，比如 rtmp://127.0.0.1/live/xxx
+    -L  输入拉流(播放)地址(可省略)，比如 http://domain.com/live?app=live&stream=xxx
+
     -m  ffmpeg 额外的 INPUT FLAGS
         (默认："-reconnect 1 -reconnect_at_eof 1 
         -reconnect_streamed 1 -reconnect_delay_max 2000 
@@ -3955,7 +4282,7 @@ fi
 
 use_menu=1
 
-while getopts "i:o:p:S:t:s:c:v:a:f:q:b:K:m:n:z:Ce" flag
+while getopts "i:o:p:S:t:s:c:v:a:f:q:b:k:K:m:n:z:T:L:Ce" flag
 do
     use_menu=0
         case "$flag" in
@@ -3973,10 +4300,13 @@ do
             b) bitrates="$OPTARG";;
             C) const="-C";;
             e) encrypt="-e";;
+            k) kind="$OPTARG";;
             K) key_name="$OPTARG";;
             m) input_flags="$OPTARG";;
             n) output_flags="$OPTARG";;
             z) channel_name="$OPTARG";;
+            T) flv_push_link="$OPTARG";;
+            L) flv_pull_link="$OPTARG";;
             *) Usage;
         esac
 done
@@ -4079,6 +4409,10 @@ case "$cmd" in
         TsMenu
         exit 0
     ;;
+    "f") 
+        [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+        kind="flv"
+    ;;
     "ll") 
         for d in "$LIVE_ROOT"/*/ ; do
             ls "$d" -lght
@@ -4102,7 +4436,7 @@ then
             exit 1
         fi
     fi
-    echo -e "  IPTV 一键管理脚本（mpegts / flv => hls）${red}[v$sh_ver]$plain
+    echo -e "  IPTV 一键管理脚本（mpegts / flv => hls / flv 推流）${red}[v$sh_ver]$plain
   ---- MTimer | http://hbo.epub.fun ----
 
   ${green}1.$plain 安装
@@ -4116,7 +4450,7 @@ then
   ${green}8.$plain 重启频道
   ${green}9.$plain 删除频道
 
- $tip 输入: tv 打开此面板" && echo
+ $tip 输入: tv 打开 HLS 面板, tv f 打开 FLV 面板" && echo
     echo && read -p "请输入数字 [1-9]：" menu_num
     case "$menu_num" in
         1) Install
@@ -4247,7 +4581,22 @@ else
             export FFMPEG_FLAGS=${output_flags//\'/}
             channel_name=${channel_name:-"$playlist_name"}
 
-            if [ -n "${video_audio_shift:-}" ] 
+            if [ -n "${kind:-}" ] 
+            then
+                if [ "$kind" == "flv" ] 
+                then
+                    if [ -z "${flv_push_link:-}" ] 
+                    then
+                        echo && echo -e "$error 未设置推流地址..." && echo && exit 1
+                    else
+                        flv_pull_link=${flv_pull_link:-""}
+                        from="command"
+                        ( FlvStreamCreatorWithShift ) > /dev/null 2>/dev/null </dev/null &
+                    fi
+                else
+                    echo && echo -e "$error 暂不支持输出 $kind ..." && echo && exit 1
+                fi
+            elif [ -n "${video_audio_shift:-}" ] 
             then
                 from="command"
                 ( HlsStreamCreatorWithShift ) > /dev/null 2>/dev/null </dev/null &
