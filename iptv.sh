@@ -123,7 +123,15 @@ SyncFile()
                                 value=$(echo "$b" | cut -d= -f2)
                                 if [[ $value == *"http"* ]]  
                                 then
-                                    if [ -z "${master:-}" ] || [ "$master" == 1 ]
+                                    if [ -n "${kind:-}" ] 
+                                    then
+                                        if [ "$kind" == "flv" ] 
+                                        then
+                                            value=$chnl_flv_pull_link
+                                        else
+                                            value=""
+                                        fi
+                                    elif [ -z "${master:-}" ] || [ "$master" == 1 ]
                                     then
                                         value="$value/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
                                     else
@@ -364,7 +372,13 @@ Uninstall()
         while IFS= read -r chnl_pid
         do
             chnl_status=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').status' "$CHANNELS_FILE")
-            if [ "$chnl_status" == "on" ]
+            if [ "${kind:-}" == "flv" ] 
+            then
+                if [ "$chnl_flv_status" == "on" ] 
+                then
+                    StopChannel
+                fi
+            elif [ "$chnl_status" == "on" ]
             then
                 StopChannel
             fi
@@ -1055,6 +1069,10 @@ SetSegName()
 {
     echo "请输入段名称"
     read -p "(默认: 跟m3u8名称相同):" seg_name
+    if [ -z "${playlist_name:-}" ] 
+    then
+        playlist_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').playlist_name' "$CHANNELS_FILE")
+    fi
     seg_name=${seg_name:-$playlist_name}
     echo && echo -e "	段名称: $green $seg_name $plain" && echo 
 }
@@ -1225,6 +1243,10 @@ SetKeyName()
 {
     echo "请输入key名称"
     read -p "(默认: 跟m3u8名称相同):" key_name
+    if [ -z "${playlist_name:-}" ] 
+    then
+        playlist_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').playlist_name' "$CHANNELS_FILE")
+    fi
     key_name=${key_name:-$playlist_name}
     echo && echo -e "	key名称: $green $key_name $plain" && echo 
 }
@@ -1326,6 +1348,10 @@ SetChannelName()
 {
     echo "请输入频道名称(可以是中文)"
     read -p "(默认: 跟m3u8名称相同):" channel_name
+    if [ -z "${playlist_name:-}" ] 
+    then
+        playlist_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').playlist_name' "$CHANNELS_FILE")
+    fi
     channel_name=${channel_name:-$playlist_name}
     echo && echo -e "	频道名称: $green $channel_name $plain" && echo
 }
@@ -1980,8 +2006,22 @@ EditChannelName()
 
 EditChannelAll()
 {
-    if [ "$chnl_status" == "on" ]
+    if [ "$chnl_flv_status" == "on" ] 
     then
+        kind="flv"
+        echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]" && echo
+        read -p "(默认: N):" stop_channel_yn
+        stop_channel_yn=${stop_channel_yn:-'n'}
+        if [[ "$stop_channel_yn" == [Yy] ]]
+        then
+            StopChannel
+            echo && echo
+        else
+            echo "已取消..." && exit 1
+        fi
+    elif [ "$chnl_status" == "on" ]
+    then
+        kind=""
         echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]" && echo
         read -p "(默认: N):" stop_channel_yn
         stop_channel_yn=${stop_channel_yn:-'n'}
@@ -2139,14 +2179,13 @@ EditChannelMenu()
             ;;
         esac
 
-        if [ "$chnl_status" == "on" ] && [ "$edit_channel_num" != "2" ]
+        if [ "$chnl_status" == "on" ] || [ "$chnl_flv_status" == "on" ]
         then
             echo "是否重启此频道？[Y/n]"
             read -p "(默认: Y):" restart_yn
             restart_yn=${restart_yn:-"Y"}
             if [[ "$restart_yn" == [Yy] ]] 
             then
-                action="skip"
                 StopChannel
                 GetChannelInfo
                 StartChannel
@@ -2177,7 +2216,16 @@ ToggleChannel()
     for chnl_pid in "${chnls_pids_arr[@]}"
     do
         GetChannelInfo
-        if [ "$chnl_status" == "on" ] 
+
+        if [ "${kind:-}" == "flv" ] 
+        then
+            if [ "$chnl_flv_status" == "on" ] 
+            then
+                StopChannel
+            else
+                StartChannel
+            fi
+        elif [ "$chnl_status" == "on" ] 
         then
             StopChannel
         else
@@ -2331,10 +2379,15 @@ StopChannel()
         remove_dir_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').output_dir_name' "$CHANNELS_FILE")
         $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
-        rm -rf "$LIVE_ROOT/${remove_dir_name:-'notfound'}"
-        echo && echo -e "$info 频道目录删除成功 !" && echo
         action=${action:-"stop"}
         SyncFile
+        if [ ! -e "$LIVE_ROOT/${remove_dir_name:-'notfound'}" ] 
+        then
+            echo && echo -e "$error 找不到应该删除的目录，请手动删除 !" && echo
+        else
+            rm -rf "$LIVE_ROOT/${remove_dir_name:-'notfound'}"
+            echo && echo -e "$info 频道目录删除成功 !" && echo
+        fi
     fi
 }
 
@@ -2345,7 +2398,14 @@ RestartChannel()
     for chnl_pid in "${chnls_pids_arr[@]}"
     do
         GetChannelInfo
-        if [ "$chnl_status" == "on" ] 
+        if [ "${kind:-}" == "flv" ] 
+        then
+            if [ "$chnl_flv_status" == "on" ] 
+            then
+                action="skip"
+                StopChannel
+            fi
+        elif [ "$chnl_status" == "on" ] 
         then
             action="skip"
             StopChannel
@@ -2362,7 +2422,13 @@ DelChannel()
     for chnl_pid in "${chnls_pids_arr[@]}"
     do
         chnl_status=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').status' "$CHANNELS_FILE")
-        if [ "$chnl_status" == "on" ] 
+        if [ "${kind:-}" == "flv" ] 
+        then
+            if [ "$chnl_flv_status" == "on" ] 
+            then
+                StopChannel
+            fi
+        elif [ "$chnl_status" == "on" ] 
         then
             StopChannel
         fi
