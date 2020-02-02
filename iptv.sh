@@ -3967,30 +3967,35 @@ Monitor()
             kind="flv"
             if [ -n "${flv_all:-}" ] 
             then
-                for chnl_flv_pull_link in "${chnls_flv_pull_link[@]}"
+                for chnl_flv_push_link in "${chnls_flv_push_link[@]}"
                 do
-                    chnl_flv_pull_link=${chnl_flv_pull_link//\'/}
+                    chnl_flv_push_link=${chnl_flv_push_link//\'/}
                     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
                     FFPROBE="$FFMPEG_ROOT/ffprobe"
-                    audio_stream=$($FFPROBE -i "$chnl_flv_pull_link" -show_streams -select_streams a -loglevel quiet || true)
+                    audio_stream=$($FFPROBE -i "$chnl_flv_push_link" -show_streams -select_streams a -loglevel quiet || true)
                     if [ -z "${audio_stream:-}" ] 
                     then
-                        chnl_flv_status=$($JQ_FILE '.channels[] | select(.flv_pull_link=="'"$chnl_flv_pull_link"'").flv_status' $CHANNELS_FILE)
-                        chnl_pid=$($JQ_FILE '.channels[] | select(.flv_pull_link=="'"$chnl_flv_pull_link"'").pid' $CHANNELS_FILE)
+                        chnl_pid=$($JQ_FILE '.channels[] | select(.flv_push_link=="'"$chnl_flv_push_link"'").pid' $CHANNELS_FILE)
                         GetChannelInfo
                         flv_fail_date=$(date +%s)
                         if [ "$chnl_flv_status" == "off" ] 
                         then
-                            StartChannel
+                            StartChannel || true
                             printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 恢复启动" >> "$MONITOR_LOG"
+                            sleep 10
                         elif [ -n "${flv_first_fail:-}" ] 
                         then
                             if [ $((flv_fail_date - flv_first_fail)) -gt "$flv_seconds" ] 
                             then
+                                chnl_pid=$($JQ_FILE '.channels[] | select(.flv_push_link=="'"$chnl_flv_push_link"'").pid' $CHANNELS_FILE)
                                 action="skip"
                                 StopChannel
-                                StartChannel
-                                printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
+                                if [ "$stopped" == 1 ] 
+                                then
+                                    StartChannel || true
+                                    printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
+                                    sleep 10
+                                fi
                             fi
                         else
                             flv_first_fail=$flv_fail_date
@@ -4003,29 +4008,33 @@ Monitor()
             else
                 for flv_num in "${flv_nums_arr[@]}"
                 do
-                    chnl_flv_pull_link=${chnls_flv_pull_link[$((flv_num-1))]}
-                    chnl_flv_pull_link=${chnl_flv_pull_link//\'/}
+                    chnl_flv_push_link=${chnls_flv_push_link[$((flv_num-1))]}
+                    chnl_flv_push_link=${chnl_flv_push_link//\'/}
                     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
                     FFPROBE="$FFMPEG_ROOT/ffprobe"
-                    audio_stream=$($FFPROBE -i "$chnl_flv_pull_link" -show_streams -select_streams a -loglevel quiet || true)
+                    audio_stream=$($FFPROBE -i "$chnl_flv_push_link" -show_streams -select_streams a -loglevel quiet || true)
                     if [ -z "${audio_stream:-}" ] 
                     then
-                        chnl_flv_status=$($JQ_FILE '.channels[] | select(.flv_pull_link=="'"$chnl_flv_pull_link"'").flv_status' $CHANNELS_FILE)
-                        chnl_pid=$($JQ_FILE '.channels[] | select(.flv_pull_link=="'"$chnl_flv_pull_link"'").pid' $CHANNELS_FILE)
+                        chnl_pid=$($JQ_FILE '.channels[] | select(.flv_push_link=="'"$chnl_flv_push_link"'").pid' $CHANNELS_FILE)
                         GetChannelInfo
                         flv_fail_date=$(date +%s)
                         if [ "$chnl_flv_status" == "off" ] 
                         then
-                            StartChannel
+                            StartChannel || true
                             printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 恢复启动" >> "$MONITOR_LOG"
+                            sleep 10
                         elif [ -n "${flv_first_fail:-}" ] 
                         then
                             if [ $((flv_fail_date - flv_first_fail)) -gt "$flv_seconds" ] 
                             then
                                 action="skip"
                                 StopChannel
-                                StartChannel
-                                printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
+                                if [ "$stopped" == 1 ] 
+                                then
+                                    StartChannel || true
+                                    printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
+                                    sleep 10
+                                fi
                             fi
                         else
                             flv_first_fail=$flv_fail_date
