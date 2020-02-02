@@ -790,8 +790,7 @@ ListChannels()
 }
 
 GetChannelInfo(){
-    d_sync_file=${d_sync_file:-""}
-    if [ -z "$d_sync_file" ] 
+    if [ -z "${d_sync_file:-}" ] 
     then
         GetDefault
     fi
@@ -928,11 +927,13 @@ GetChannelInfo(){
     if [ "$chnl_video_codec" == "copy" ] && [ "$chnl_audio_codec" == "copy" ]  
     then
         chnl_video_quality_text="原画"
+        chnl_playlist_link=${chnl_playlist_link:-""}
         chnl_playlist_link=${chnl_playlist_link//_master.m3u8/.m3u8}
         chnl_playlist_link_text=${chnl_playlist_link_text//_master.m3u8/.m3u8}
     elif [ -z "$chnl_bitrates" ] 
     then
-        chnl_playlist_link=${chnl_playlist_link//"_master.m3u8"/".m3u8"}
+        chnl_playlist_link=${chnl_playlist_link:-""}
+        chnl_playlist_link=${chnl_playlist_link//_master.m3u8/.m3u8}
         chnl_playlist_link_text=${chnl_playlist_link_text//_master.m3u8/.m3u8}
     fi
 }
@@ -1427,16 +1428,20 @@ FlvStreamCreatorWithShift()
             else
                 map_command=""
             fi
-            
+
             $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command \
             -y -vcodec "$video_codec" -acodec "$audio_codec" $bitrates_command \
             $FFMPEG_FLAGS -f flv "$flv_push_link" || true
 
             $JQ_FILE '(.channels[]|select(.pid=='"$pid"')|.flv_status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
             mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
+
+            date_now=$(date -d now "+%m-%d %H:%M:%S")
+            printf '%s\n' "$date_now $channel_name flv 关闭" >> "$MONITOR_LOG"
+            chnl_pid=$pid
             action="stop"
             SyncFile
-            kill -9 "$pid"
+            kill -9 "$chnl_pid"
         ;;
         "StartChannel") 
             new_pid=$pid
@@ -1470,10 +1475,13 @@ FlvStreamCreatorWithShift()
 
             $JQ_FILE '(.channels[]|select(.pid=='"$new_pid"')|.flv_status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
             mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
-            action="stop"
+
+            date_now=$(date -d now "+%m-%d %H:%M:%S")
+            printf '%s\n' "$date_now $chnl_channel_name flv 关闭" >> "$MONITOR_LOG"
             chnl_pid=$new_pid
+            action="stop"
             SyncFile
-            kill -9 "$new_pid"
+            kill -9 "$chnl_pid"
         ;;
         "command") 
             $JQ_FILE '.channels += [
@@ -1528,13 +1536,17 @@ FlvStreamCreatorWithShift()
 
             $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
             -vcodec "$video_codec" -acodec "$audio_codec" $bitrates_command \
-            $FFMPEG_FLAGS -f flv "$chnl_flv_push_link" || true
+            $FFMPEG_FLAGS -f flv "$flv_push_link" || true
 
             $JQ_FILE '(.channels[]|select(.pid=='"$pid"')|.flv_status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
             mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
+
+            date_now=$(date -d now "+%m-%d %H:%M:%S")
+            printf '%s\n' "$date_now $channel_name flv 关闭" >> "$MONITOR_LOG"
+            chnl_pid=$pid
             action="stop"
             SyncFile
-            kill -9 "$pid"
+            kill -9 "$chnl_pid"
         ;;
     esac
 }
@@ -3894,8 +3906,7 @@ TsMenu()
 
 MonitorError()
 {
-    date_now=$(date -d now "+%m-%d %H:%M:%S")
-    printf '%s\n' "$date_now [LINE:$1] ERROR: $?" >> "$MONITOR_LOG"
+    printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") [LINE:$1] ERROR: $?" >> "$MONITOR_LOG"
 }
 
 MonitorRestartChannel()
@@ -3946,9 +3957,87 @@ Monitor()
     printf '%s' "$BASHPID" > "$MONITOR_PID"
     date_now=$(date -d now "+%m-%d %H:%M:%S")
     monitor=1
+    mkdir -p "$LIVE_ROOT"
     printf '%s\n' "$date_now 监控启动成功 PID $BASHPID !" >> "$MONITOR_LOG"
     echo -e "$info 监控启动成功 !"
     while true; do
+
+        if [ -n "${flv_nums:-}" ] 
+        then
+            kind="flv"
+            if [ -n "${flv_all:-}" ] 
+            then
+                for chnl_flv_pull_link in "${chnls_flv_pull_link[@]}"
+                do
+                    chnl_flv_pull_link=${chnl_flv_pull_link//\'/}
+                    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+                    FFPROBE="$FFMPEG_ROOT/ffprobe"
+                    audio_stream=$($FFPROBE -i "$chnl_flv_pull_link" -show_streams -select_streams a -loglevel quiet || true)
+                    if [ -z "${audio_stream:-}" ] 
+                    then
+                        chnl_flv_status=$($JQ_FILE '.channels[] | select(.flv_pull_link=="'"$chnl_flv_pull_link"'").flv_status' $CHANNELS_FILE)
+                        chnl_pid=$($JQ_FILE '.channels[] | select(.flv_pull_link=="'"$chnl_flv_pull_link"'").pid' $CHANNELS_FILE)
+                        GetChannelInfo
+                        flv_fail_date=$(date +%s)
+                        if [ "$chnl_flv_status" == "off" ] 
+                        then
+                            StartChannel
+                            printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 恢复启动" >> "$MONITOR_LOG"
+                        elif [ -n "${flv_first_fail:-}" ] 
+                        then
+                            if [ $((flv_fail_date - flv_first_fail)) -gt "$flv_seconds" ] 
+                            then
+                                action="skip"
+                                StopChannel
+                                StartChannel
+                                printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
+                            fi
+                        else
+                            flv_first_fail=$flv_fail_date
+                        fi
+                        break 1
+                    else
+                        flv_first_fail=""
+                    fi
+                done
+            else
+                for flv_num in "${flv_nums_arr[@]}"
+                do
+                    chnl_flv_pull_link=${chnls_flv_pull_link[$((flv_num-1))]}
+                    chnl_flv_pull_link=${chnl_flv_pull_link//\'/}
+                    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+                    FFPROBE="$FFMPEG_ROOT/ffprobe"
+                    audio_stream=$($FFPROBE -i "$chnl_flv_pull_link" -show_streams -select_streams a -loglevel quiet || true)
+                    if [ -z "${audio_stream:-}" ] 
+                    then
+                        chnl_flv_status=$($JQ_FILE '.channels[] | select(.flv_pull_link=="'"$chnl_flv_pull_link"'").flv_status' $CHANNELS_FILE)
+                        chnl_pid=$($JQ_FILE '.channels[] | select(.flv_pull_link=="'"$chnl_flv_pull_link"'").pid' $CHANNELS_FILE)
+                        GetChannelInfo
+                        flv_fail_date=$(date +%s)
+                        if [ "$chnl_flv_status" == "off" ] 
+                        then
+                            StartChannel
+                            printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 恢复启动" >> "$MONITOR_LOG"
+                        elif [ -n "${flv_first_fail:-}" ] 
+                        then
+                            if [ $((flv_fail_date - flv_first_fail)) -gt "$flv_seconds" ] 
+                            then
+                                action="skip"
+                                StopChannel
+                                StartChannel
+                                printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
+                            fi
+                        else
+                            flv_first_fail=$flv_fail_date
+                        fi
+                        break 1
+                    fi
+                done
+            fi
+        fi
+
+        kind=""
+
         if [ -n "${delay_seconds:-}" ] && ls -A $LIVE_ROOT/* > /dev/null 2>&1
         then
             while IFS= read -r old_file_path
@@ -4030,6 +4119,102 @@ Monitor()
 
 MonitorSet()
 {
+
+    IFS=" " read -ra chnls_flv_push_link <<< "$($JQ_FILE -r '[.channels[]|select(.flv_status=="on").flv_push_link] | @sh' $CHANNELS_FILE)"
+
+    if [ -n "${chnls_flv_push_link:-}" ] 
+    then
+        chnls_name=()
+        while IFS='' read -r name
+        do
+            chnls_name+=("$name");
+        done < <($JQ_FILE -r '.channels[]|select(.flv_status=="on").channel_name | @sh' "$CHANNELS_FILE")
+        IFS=" " read -ra chnls_flv_pull_link <<< "$($JQ_FILE -r '[.channels[]|select(.flv_status=="on").flv_pull_link] | @sh' $CHANNELS_FILE)"
+        flv_count=${#chnls_name[@]}
+
+        echo && echo "请选择需要监控的推流频道(多个频道用空格分隔)" && echo
+
+        for((i=0;i<flv_count;i++));
+        do
+            echo -e "  ${green}$((i+1)).$plain ${chnls_name[$i]//\'/} ${chnls_flv_pull_link[$i]//\'/}"
+        done
+
+        echo && echo -e "  ${green}$((i+1)).$plain 全部"
+        echo -e "  ${green}$((i+2)).$plain 不设置" && echo
+        while read -p "(默认: 不设置):" flv_nums
+        do
+            [ -z "$flv_nums" ] && break
+            IFS=" " read -ra flv_nums_arr <<< "$flv_nums"
+
+            if [ "$flv_nums" == $((i+1)) ] 
+            then
+                flv_all=1
+                echo && echo "设置超时多少秒自动重启频道"
+                while read -p "(默认: 20秒):" flv_seconds
+                do
+                    case $flv_seconds in
+                        "") flv_seconds=20 && break
+                        ;;
+                        *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
+                        ;;
+                        *) 
+                            if [ "$flv_seconds" -gt 20 ]
+                            then
+                                break
+                            else
+                                echo && echo -e "$error 请输入正确的数字(大于20)" && echo
+                            fi
+                        ;;
+                    esac
+                done
+                break
+            fi
+
+            error=0
+            for flv_num in "${flv_nums_arr[@]}"
+            do
+                case "$flv_num" in
+                    *[!0-9]*)
+                        error=1
+                    ;;
+                    *)
+                        if [ "$flv_num" -lt 1 ] || [ "$flv_num" -gt "$flv_count" ]
+                        then
+                            error=2
+                        fi
+                    ;;
+                esac
+            done
+
+            case "$error" in
+                1|2)
+                    echo -e "$error 请输入正确的数字或直接回车 " && echo
+                ;;
+                *)
+                    echo && echo "设置超时多少秒自动重启频道"
+                    while read -p "(默认: 20秒):" flv_seconds
+                    do
+                        case $flv_seconds in
+                            "") flv_seconds=20 && break
+                            ;;
+                            *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
+                            ;;
+                            *) 
+                                if [ "$flv_seconds" -gt 20 ]
+                                then
+                                    break
+                                else
+                                    echo && echo -e "$error 请输入正确的数字(大于20)" && echo
+                                fi
+                            ;;
+                        esac
+                    done
+                    break
+                ;;
+            esac
+        done
+    fi
+
     if ! ls -A $LIVE_ROOT/* > /dev/null 2>&1
     then
         return 0
@@ -4052,8 +4237,8 @@ MonitorSet()
     
     while read -p "(默认: 不设置):" monitor_nums
     do
-        IFS=" " read -ra monitor_nums_arr <<< "$monitor_nums"
         [ -z "$monitor_nums" ] && break
+        IFS=" " read -ra monitor_nums_arr <<< "$monitor_nums"
 
         monitor_dir_names_chosen=()
         if [ "$monitor_nums" == $((monitor_count+1)) ] 
@@ -4159,7 +4344,7 @@ MonitorStop()
         PID=$(< "$MONITOR_PID")
         if kill -0 "$PID" 2> /dev/null
         then
-            if pkill -9 -P "$PID" 2> /dev/null 
+            if kill -9 "$PID" 2> /dev/null 
             then
                 printf '%s\n' "$date_now 监控关闭成功 PID $PID !" >> "$MONITOR_LOG"
                 echo -e "$info 监控关闭成功 !"
