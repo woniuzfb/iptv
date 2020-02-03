@@ -1,4 +1,4 @@
-# 看HBO直播 + 一键管理 IPTV 脚本 mpegts / flv => hls / flv 推流
+# 一键管理 IPTV 脚本 mpegts / hls / flv => hls / flv 推流
 
 - HBO 中文直播 + 集各广电直播源
 - 默认如果没有本地频道（channels.json）,会请求远程服务器频道
@@ -14,7 +14,7 @@
 
 ---
 
-## iptv.sh 一键管理 IPTV 脚本 mpegts / flv => hls / flv 推流
+## iptv.sh 一键管理 IPTV 脚本 mpegts / hls / flv => hls / flv 推流
 
 - 【自动化】HLS-Stream-Creator
 - 【扩展】可以设置画面音轨延迟修复不同步的问题，可以不输出 HLS，管理推流 flv 等
@@ -54,7 +54,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 ## 快捷键
 
 - tv e 手动修改 channels.json
-- tv s 更新 150+ 节目表
+- tv s 更新 180+ 节目表 (tv s 频道ID 可以个别更新节目表)
 - tv s hbo 更新 hbo 节目表
 - tv s disney 更新迪士尼频道节目表
 - tv s foxmovies 更新 FOX MOVIES 节目表
@@ -80,13 +80,15 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
     原画输出，不吃CPU，但是片段大，吃带宽
    ```
 
-- tv m 开启监控 hls 输出目录，用来应对直播源出现变化导致 ffmpeg 无法继续分割的情况
-  - 如果片段大小大于5MB(默认)会自动重启频道(可以 tv m 数字 指定大小)。
-  - 监控选项：
+- tv m 开启监控 flv推流 和 hls 输出目录，用来应对直播源出现变化导致 ffmpeg 无法继续分割的情况
+  - 监控 FLV 选项：
+    - 是否监控超时（默认20秒）
+    - 重启次数（默认20次）
+  - 如果 HLS 片段大小大于5MB(默认)会自动重启频道(可以 tv m 数字 指定大小)。
+  - 监控 HLS 选项：
     - 是否监控超时（默认120秒,必须大于段时长*段数目）
     - 重启次数（默认20次）
   - tv m stop 停止监控
-  - 建议在 copy 直播源的时候开启监控
   - 在 leech 直播源的时候必须打开监控选项，以应对输出低比特率/直播源服务器频繁重启/音轨丢失/等问题
 - tv t 文件
   - 检测文件内的 xtream codes 账号链接（形如 /get.php?username=xxx&password=xxx）
@@ -99,7 +101,8 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 使用方法: tv -i [直播源] [-s 段时长(秒)] [-o 输出目录名称] [-c m3u8包含的段数目] [-b 比特率] [-p m3u8文件名称] [-C]
 
 ```bash
--i  直播源(仅支持 mpegts / flv)
+-i  直播源(支持 mpegts / hls / flv ...)
+    hls 链接需包含 .m3u8 标识，没有的可以在结尾加上
 -s  段时长(秒)(默认：6)
 -o  输出目录名称(默认：随机名称)
 

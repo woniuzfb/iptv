@@ -1025,7 +1025,8 @@ ViewChannelMenu(){
 
 SetStreamLink()
 {
-    echo && echo "请输入直播源(只支持 mpegts / flv)"
+    echo && echo "请输入直播源( mpegts / hls / flv ...)"
+    echo -e "$tip hls 链接需包含 .m3u8 标识" && echo
     read -p "(默认: 取消):" stream_link
     [ -z "$stream_link" ] && echo "已取消..." && exit 1
     echo && echo -e "	直播源: $green $stream_link $plain" && echo
@@ -1254,6 +1255,10 @@ SetKeyName()
 
 SetInputFlags()
 {
+    if [[ ${stream_link:-} == *".m3u8"* ]] 
+    then
+        d_input_flags=${d_input_flags//-reconnect_at_eof 1/}
+    fi
     echo "请输入input flags"
     read -p "(默认: $d_input_flags):" input_flags
     input_flags=${input_flags:-$d_input_flags}
@@ -2259,6 +2264,10 @@ ToggleChannel()
 
 StartChannel()
 {
+    if [[ ${chnl_stream_link:-} == *".m3u8"* ]] 
+    then
+        chnl_input_flags=${chnl_input_flags//-reconnect_at_eof 1/}
+    fi
     chnl_quality_command=""
     chnl_bitrates_command=""
     if [ "$chnl_video_codec" == "copy" ] && [ "$chnl_audio_codec" == "copy" ]
@@ -2532,71 +2541,54 @@ urlencode() {
     echo "$e"
 }
 
-# HongKong
 generateScheduleNowtv()
 {
-    date_now_nowtv=$(date -d now "+%Y%m%d")
-    SCHEDULE_LINK_NOWTV="http://nowtv.now.com/gw-epg/epg/zh_tw/$date_now_nowtv/prf0/resp-genre/ch_G0$2.json"
-    SCHEDULE_FILE_NOWTV="$IPTV_ROOT/${2}_nowtv_schedule_$date_now_nowtv"
     SCHEDULE_TMP_NOWTV="${SCHEDULE_JSON}_tmp"
 
-    if [ ! -e "$SCHEDULE_FILE_NOWTV" ] 
-    then
-        wget "$SCHEDULE_LINK_NOWTV" -qO "$SCHEDULE_FILE_NOWTV" || true
-    fi
+    SCHEDULE_LINK_NOWTV="https://nowplayer.now.com/tvguide/epglist?channelIdList%5B%5D=$1&day=1"
 
-    programs_count_nowtv=$($JQ_FILE -r '.data.chProgram."'$1'" | length' "$SCHEDULE_FILE_NOWTV")
+    nowtv_schedule=$(curl --cookie "LANG=zh" -s "$SCHEDULE_LINK_NOWTV" || true)
 
-    if [[ $programs_count_nowtv -eq 0 ]]
+    if [ -z "${nowtv_schedule:-}" ]
     then
         echo -e "\nNowTV empty: $chnl_nowtv_id\n"
-        rm -rf "${SCHEDULE_FILE_NOWTV:-'notfound'}"
         return 0
-    fi
+    else
+        if [ -z "$($JQ_FILE '.' $SCHEDULE_JSON)" ] 
+        then
+            printf '{"%s":[]}' "$chnl_nowtv_id" > "$SCHEDULE_JSON"
+        fi
 
-    programs_title_nowtv=()
-    while IFS='' read -r program_title_nowtv
-    do
-        programs_title_nowtv+=("$program_title_nowtv");
-    done < <($JQ_FILE -r '.data.chProgram."'$1'"[].name | @sh' "$SCHEDULE_FILE_NOWTV")
-
-    programs_time_nowtv=()
-    while IFS='' read -r program_time_nowtv
-    do
-        programs_time_nowtv+=("$program_time_nowtv");
-    done < <($JQ_FILE -r '.data.chProgram."'$1'"[].startTime | @sh' "$SCHEDULE_FILE_NOWTV")
-
-    IFS=" " read -ra programs_sys_time_nowtv <<< "$($JQ_FILE -r '[.data.chProgram."'"$1"'" | .[].start] | @sh' $SCHEDULE_FILE_NOWTV)"
-
-    if [ -z "$($JQ_FILE '.' $SCHEDULE_JSON)" ] 
-    then
-        printf '{"%s":[]}' "$chnl_nowtv_id" > "$SCHEDULE_JSON"
-    fi
-
-    $JQ_FILE '.'"$chnl_nowtv_id"' = []' "$SCHEDULE_JSON" > "$SCHEDULE_TMP_NOWTV"
-    mv "$SCHEDULE_TMP_NOWTV" "$SCHEDULE_JSON"
-
-    rm -rf "${SCHEDULE_FILE_NOWTV:-'notfound'}"
-
-    for((index = 0; index < "$programs_count_nowtv"; index++)); do
-        programs_title_nowtv_index=${programs_title_nowtv[index]//\"/}
-        programs_title_nowtv_index=${programs_title_nowtv_index//\'/}
-        programs_title_nowtv_index=${programs_title_nowtv_index//\\/\'}
-        programs_time_nowtv_index=${programs_time_nowtv[index]//\'/}
-        programs_sys_time_nowtv_index=${programs_sys_time_nowtv[index]//\'/}
-        programs_sys_time_nowtv_index=${programs_sys_time_nowtv_index:0:10}
-
-        $JQ_FILE '.'"$chnl_nowtv_id"' += [
-            {
-                "title":"'"${programs_title_nowtv_index}"'",
-                "time":"'"$programs_time_nowtv_index"'",
-                "sys_time":"'"$programs_sys_time_nowtv_index"'"
-            }
-        ]' "$SCHEDULE_JSON" > "$SCHEDULE_TMP_NOWTV"
-
+        $JQ_FILE '.'"$chnl_nowtv_id"' = []' "$SCHEDULE_JSON" > "$SCHEDULE_TMP_NOWTV"
         mv "$SCHEDULE_TMP_NOWTV" "$SCHEDULE_JSON"
-    done
-    #http://nowtv.now.com/nowtv-api/program-search/?q=p_series_name_zh_tw_s%3A%22America%27s+Newsroom%22&wt=json&start=0&p_key=epg_202001035771239&more=true&rows=100&nowtvapi_key=nowtv.now.com&group.limit=20&group=true&group.field=p_name_zh_tw_s&fq=p_end%3A[1578065134000+TO+*]+AND+p_date%3A[20200103+TO+20200109]&sort=score+desc%2C+p_start+asc
+
+        schedule=""
+        while IFS= read -r program
+        do
+            title=${program#*title: }
+            title=${title%, time:*}
+            time=${program#*time: }
+            time=${time%, sys_time:*}
+            sys_time=${program#*sys_time: }
+            sys_time=${sys_time:0:10}
+            [ -n "$schedule" ] && schedule="$schedule,"
+            schedule=$schedule'{
+                "title":"'"${title}"'",
+                "time":"'"${time}"'",
+                "sys_time":"'"${sys_time}"'"
+            }'
+        done < <($JQ_FILE -r '.[0] | to_entries | map("title: \(.value.name), time: \(.value.startTime), sys_time: \(.value.start)") | .[]' <<< "$nowtv_schedule")
+
+        schedule="[$schedule]"
+
+        if [ -z "$schedule" ] 
+        then
+            echo -e "$error\nNowTV not found\n"
+        else
+            $JQ_FILE --arg index "$chnl_nowtv_id" --argjson program "$schedule" '.[$index] += $program' "$SCHEDULE_JSON" > "$SCHEDULE_TMP_NOWTV"
+            mv "$SCHEDULE_TMP_NOWTV" "$SCHEDULE_JSON"
+        fi
+    fi
 }
 
 generateScheduleNiotv()
@@ -2673,10 +2665,9 @@ generateScheduleNiotv()
             if [ "$chnl_nowtv_id" == "$chnl_niotv_id" ] 
             then
                 match_nowtv=1
-                chnl_nowtv_num_group=${chnl_nowtv#*:}
-                chnl_nowtv_num=${chnl_nowtv_num_group%%:*}
-                chnl_nowtv_group=${chnl_nowtv_num_group#*:}
-                generateScheduleNowtv "$chnl_nowtv_num" "$chnl_nowtv_group"
+                chnl_nowtv_num=${chnl_nowtv#*:}
+                generateScheduleNowtv "$chnl_nowtv_num"
+                break
             fi
         done
         [ "$match_nowtv" == 0 ] && echo -e "\nNowTV not found\n"
@@ -2727,10 +2718,9 @@ generateSchedule()
                     if [ "$chnl_nowtv_id" == "$chnl_id" ] 
                     then
                         match=1
-                        chnl_nowtv_num_group=${chnl_nowtv#*:}
-                        chnl_nowtv_num=${chnl_nowtv_num_group%%:*}
-                        chnl_nowtv_group=${chnl_nowtv_num_group#*:}
-                        generateScheduleNowtv "$chnl_nowtv_num" "$chnl_nowtv_group"
+                        chnl_nowtv_num=${chnl_nowtv#*:}
+                        generateScheduleNowtv "$chnl_nowtv_num"
+                        break
                     fi
                 done
             fi
@@ -3128,63 +3118,64 @@ Schedule()
         "warner:688" )
 
     chnls_nowtv=( 
-        "hbohits:111:1"
-        "hbofamily:112:1"
-        "cinemax:113:1"
-        "hbosignature:114:1"
-        "hbogq:115:1"
-        "foxmovies:117:1"
-        "foxfamily:120:1"
-        "wsdy:139:1"
-        "animaxhd:150:5"
-        "tvn:155:5"
-        "wszw:160:5"
-        "discoveryasia:208:2"
-        "discovery:209:2"
-        "dwxq:210:2"
-        "discoverykx:211:2"
-        "dmax:212:2"
-        "tlclysh:213:2"
-        "gjdl:215:2"
-        "gjdlys:216:2"
-        "gjdlyr:217:2"
-        "gjdlgq:218:2"
-        "bbcearth:220:2"
-        "history:223:2"
-        "cnn:316:3"
-        "foxnews:318:3"
-        "bbcworldnews:320:3"
-        "bloomberg:321:3"
-        "yzxw:322:3"
-        "skynews:323:3"
-        "dw:324:3"
-        "euronews:326:3"
-        "nhk:328:3"
-        "fhwszx:366:3"
-        "fhwsxg:367:3"
-        "xgws:368:3"
-        "disney:441:4"
-        "boomerang:445:4"
-        "cbeebies:447:4"
-        "babytv:448:4"
-        "bbclifestyle:502:5"
-        "eentertainment:506:5"
-        "diva:508:5"
-        "warner:510:5"
-        "AXN:512:5"
-        "blueantextreme:516:5"
-        "blueantentertainmet:517:5"
-        "fox:518:5"
-        "foxcrime:523:5"
-        "fx:524:5"
-        "lifetime:525:5"
-        "yzms:527:5"
-        "channelv:534:5"
-        "fhwszw:548:5"
-        "zgzwws:556:5"
-        "foxsports:670:6"
-        "foxsports2:671:6"
-        "foxsports3:672:6" )
+        "hbohits:111"
+        "hbofamily:112"
+        "cinemax:113"
+        "hbosignature:114"
+        "hbogq:115"
+        "foxmovies:117"
+        "foxfamily:120"
+        "foxaction:118"
+        "wsdy:139"
+        "animaxhd:150"
+        "tvn:155"
+        "wszw:160"
+        "discoveryasia:208"
+        "discovery:209"
+        "dwxq:210"
+        "discoverykx:211"
+        "dmax:212"
+        "tlclysh:213"
+        "gjdl:215"
+        "gjdlys:216"
+        "gjdlyr:217"
+        "gjdlgq:218"
+        "bbcearth:220"
+        "history:223"
+        "cnn:316"
+        "foxnews:318"
+        "bbcworldnews:320"
+        "bloomberg:321"
+        "yzxw:322"
+        "skynews:323"
+        "dw:324"
+        "euronews:326"
+        "nhk:328"
+        "fhwszx:366"
+        "fhwsxg:367"
+        "xgws:368"
+        "disney:441"
+        "boomerang:445"
+        "cbeebies:447"
+        "babytv:448"
+        "bbclifestyle:502"
+        "eentertainment:506"
+        "diva:508"
+        "warner:510"
+        "AXN:512"
+        "blueantextreme:516"
+        "blueantentertainmet:517"
+        "fox:518"
+        "foxcrime:523"
+        "fx:524"
+        "lifetime:525"
+        "yzms:527"
+        "channelv:534"
+        "fhwszw:548"
+        "zgzwws:556"
+        "foxsports:670"
+        "foxsports2:671"
+        "foxsports3:672" )
 
     if [ -z ${2+x} ] 
     then
@@ -3414,10 +3405,9 @@ Schedule()
                     if [ "$chnl_nowtv_id" == "$2" ] 
                     then
                         found=1
-                        chnl_nowtv_num_group=${chnl_nowtv#*:}
-                        chnl_nowtv_num=${chnl_nowtv_num_group%%:*}
-                        chnl_nowtv_group=${chnl_nowtv_num_group#*:}
-                        generateScheduleNowtv "$chnl_nowtv_num" "$chnl_nowtv_group"
+                        chnl_nowtv_num=${chnl_nowtv#*:}
+                        generateScheduleNowtv "$chnl_nowtv_num"
+                        break
                     fi
                 done
             fi
@@ -4041,6 +4031,7 @@ Monitor()
                                 StopChannel
                                 if [ "$stopped" == 1 ] 
                                 then
+                                    sleep 3
                                     StartChannel || true
                                     flv_restart_count=${flv_restart_count:-1}
                                     flv_restart_count=$((flv_restart_count+1))
@@ -4083,6 +4074,7 @@ Monitor()
                                 StopChannel
                                 if [ "$stopped" == 1 ] 
                                 then
+                                    sleep 3
                                     StartChannel || true
                                     printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
                                     sleep 15
@@ -4454,7 +4446,8 @@ See LICENSE
 
 使用方法: tv -i [直播源] [-s 段时长(秒)] [-o 输出目录名称] [-c m3u8包含的段数目] [-b 比特率] [-p m3u8文件名称] [-C]
 
-    -i  直播源(仅支持 mpegts / flv)
+    -i  直播源(支持 mpegts / hls / flv ...)
+        hls 链接需包含 .m3u8 标识
     -s  段时长(秒)(默认：6)
     -o  输出目录名称(默认：随机名称)
 
@@ -4494,10 +4487,15 @@ See LICENSE
         (默认："-g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main")
 
 举例:
-    使用crf值控制视频质量: tv -i http://xxx.com/xxx.ts -s 6 -o hbo1 -p hbo1 -q 15 -b 1500-1280x720 -z 'hbo直播1'
-    使用比特率控制视频质量[默认]: tv -i http://xxx.com/xxx.ts -s 6 -o hbo2 -p hbo2 -b 900-1280x720 -z 'hbo直播2'
+    使用crf值控制视频质量: 
+        tv -i http://xxx.com/xxx.ts -s 6 -o hbo1 -p hbo1 -q 15 -b 1500-1280x720 -z 'hbo直播1'
+    使用比特率控制视频质量[默认]: 
+        tv -i http://xxx.com/xxx.ts -s 6 -o hbo2 -p hbo2 -b 900-1280x720 -z 'hbo直播2'
 
     不需要转码的设置: -a copy -v copy -n copy
+
+    不输出 HLS, 推流 flv :
+        tv -i http://xxx/xxx.ts -a copy -v h264 -b 3000 -k flv -T rtmp://127.0.0.1/live/xxx
 
 EOM
 
@@ -4770,7 +4768,7 @@ then
             exit 1
         fi
     fi
-    echo -e "  IPTV 一键管理脚本（mpegts / flv => hls / flv 推流）${red}[v$sh_ver]$plain
+    echo -e "  IPTV 一键管理脚本（mpegts / hls / flv => hls / flv 推流）${red}[v$sh_ver]$plain
   ---- MTimer | http://hbo.epub.fun ----
 
   ${green}1.$plain 安装
@@ -4902,6 +4900,12 @@ else
             fi
 
             key_name=${key_name:-"$playlist_name"}
+
+            if [[ ${stream_link:-} == *".m3u8"* ]] 
+            then
+                d_input_flags=${d_input_flags//-reconnect_at_eof 1/}
+            fi
+
             input_flags=${input_flags:-"$d_input_flags"}
             export FFMPEG_INPUT_FLAGS=${input_flags//\'/}
 
