@@ -4026,7 +4026,6 @@ Monitor()
                         then
                             if [ $((flv_fail_date - flv_first_fail)) -gt "$flv_seconds" ] 
                             then
-                                chnl_pid=$($JQ_FILE '.channels[] | select(.flv_push_link=="'"$chnl_flv_push_link"'").pid' $CHANNELS_FILE)
                                 action="skip"
                                 StopChannel
                                 if [ "$stopped" == 1 ] 
@@ -4041,6 +4040,14 @@ Monitor()
                             fi
                         else
                             flv_first_fail=$flv_fail_date
+                            new_array=("$chnl_flv_push_link")
+                            for value in "${chnls_flv_push_link[@]}"
+                            do
+                                [ "$value" != "$chnl_flv_push_link" ] && new_array+=("$value")
+                            done
+                            chnls_flv_push_link=("${new_array[@]}")
+                            unset new_array
+                            flv_restart_count=1
                         fi
                         break 1
                     else
@@ -4058,12 +4065,26 @@ Monitor()
                     audio_stream=$($FFPROBE -i "$chnl_flv_push_link" -show_streams -select_streams a -loglevel quiet || true)
                     if [ -z "${audio_stream:-}" ] 
                     then
+                        if [ "${flv_restart_count:-1}" -gt "${flv_restart_nums:-20}" ] 
+                        then
+                            new_array=()
+                            for value in "${chnls_flv_push_link[@]}"
+                            do
+                                [ "$value" != "$chnl_flv_push_link" ] && new_array+=("$value")
+                            done
+                            chnls_flv_push_link=("${new_array[@]}")
+                            unset new_array
+                            flv_restart_count=1
+                            break 1
+                        fi
                         chnl_pid=$($JQ_FILE '.channels[] | select(.flv_push_link=="'"$chnl_flv_push_link"'").pid' $CHANNELS_FILE)
                         GetChannelInfo
                         flv_fail_date=$(date +%s)
                         if [ "$chnl_flv_status" == "off" ] 
                         then
                             StartChannel || true
+                            flv_restart_count=${flv_restart_count:-1}
+                            flv_restart_count=$((flv_restart_count+1))
                             printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 恢复启动" >> "$MONITOR_LOG"
                             sleep 15
                         elif [ -n "${flv_first_fail:-}" ] 
@@ -4076,14 +4097,27 @@ Monitor()
                                 then
                                     sleep 3
                                     StartChannel || true
+                                    flv_restart_count=${flv_restart_count:-1}
+                                    flv_restart_count=$((flv_restart_count+1))
                                     printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
                                     sleep 15
                                 fi
                             fi
                         else
                             flv_first_fail=$flv_fail_date
+                            new_array=("$chnl_flv_push_link")
+                            for value in "${chnls_flv_push_link[@]}"
+                            do
+                                [ "$value" != "$chnl_flv_push_link" ] && new_array+=("$value")
+                            done
+                            chnls_flv_push_link=("${new_array[@]}")
+                            unset new_array
+                            flv_restart_count=1
                         fi
                         break 1
+                    else
+                        flv_first_fail=""
+                        flv_restart_count=1
                     fi
                 done
             fi
