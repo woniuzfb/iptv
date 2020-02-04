@@ -4004,7 +4004,6 @@ Monitor()
     printf '%s\n' "$date_now 监控启动成功 PID $BASHPID !" >> "$MONITOR_LOG"
     echo -e "$info 监控启动成功 !"
     while true; do
-
         if [ -n "${flv_nums:-}" ] 
         then
             kind="flv"
@@ -4028,14 +4027,29 @@ Monitor()
                     then
                         if [ "${flv_restart_count:-1}" -gt "${flv_restart_nums:-20}" ] 
                         then
-                            new_array=()
-                            for value in "${chnls_flv_push_link[@]}"
+                            unset "${chnls_flv_push_link[$i]}"
+                            declare -a new_array
+                            i=0
+                            for element in "${chnls_flv_push_link[@]}"
                             do
-                                [ "$value" != "$chnl_flv_push_link" ] && new_array+=("$value")
+                                new_array[$i]=$element
+                                ((++i))
                             done
                             chnls_flv_push_link=("${new_array[@]}")
                             unset new_array
+
+                            unset "${chnls_flv_pull_link[$i]}"
+                            declare -a new_array
+                            for element in "${chnls_flv_pull_link[@]}"
+                            do
+                                new_array[$i]=$element
+                                ((++i))
+                            done
+                            chnls_flv_pull_link=("${new_array[@]}")
+                            unset new_array
+
                             flv_restart_count=1
+                            flv_count=$((flv_count-1))
                             break 1
                         fi
                         chnl_pid=$($JQ_FILE '.channels[] | select(.flv_push_link=="'"$chnl_flv_push_link"'").pid' $CHANNELS_FILE)
@@ -4066,14 +4080,25 @@ Monitor()
                             fi
                         else
                             flv_first_fail=$flv_fail_date
+                            flv_restart_count=1
+
                             new_array=("$chnl_flv_push_link")
-                            for value in "${chnls_flv_push_link[@]}"
+                            for element in "${chnls_flv_push_link[@]}"
                             do
-                                [ "$value" != "$chnl_flv_push_link" ] && new_array+=("$value")
+                                element=${element//\'/}
+                                [ "$element" != "$chnl_flv_push_link" ] && new_array+=("$element")
                             done
                             chnls_flv_push_link=("${new_array[@]}")
                             unset new_array
-                            flv_restart_count=1
+
+                            new_array=("$chnl_flv_pull_link")
+                            for element in "${chnls_flv_pull_link[@]}"
+                            do
+                                element=${element//\'/}
+                                [ "$element" != "$chnl_flv_pull_link" ] && new_array+=("$element")
+                            done
+                            chnls_flv_pull_link=("${new_array[@]}")
+                            unset new_array
                         fi
                         break 1
                     else
@@ -4100,13 +4125,14 @@ Monitor()
                     then
                         if [ "${flv_restart_count:-1}" -gt "${flv_restart_nums:-20}" ] 
                         then
-                            new_array=()
-                            for value in "${chnls_flv_push_link[@]}"
+                            declare -a new_array
+                            for element in "${flv_nums_arr[@]}"
                             do
-                                [ "$value" != "$chnl_flv_push_link" ] && new_array+=("$value")
+                                [ "$element" != "$flv_num" ] && new_array+=("$element")
                             done
-                            chnls_flv_push_link=("${new_array[@]}")
+                            flv_nums_arr=("${new_array[@]}")
                             unset new_array
+
                             flv_restart_count=1
                             break 1
                         fi
@@ -4138,14 +4164,15 @@ Monitor()
                             fi
                         else
                             flv_first_fail=$flv_fail_date
-                            new_array=("$chnl_flv_push_link")
-                            for value in "${chnls_flv_push_link[@]}"
-                            do
-                                [ "$value" != "$chnl_flv_push_link" ] && new_array+=("$value")
-                            done
-                            chnls_flv_push_link=("${new_array[@]}")
-                            unset new_array
                             flv_restart_count=1
+
+                            new_array=("$flv_num")
+                            for element in "${flv_nums_arr[@]}"
+                            do
+                                [ "$element" != "$flv_num" ] && new_array+=("$element")
+                            done
+                            flv_nums_arr=("${new_array[@]}")
+                            unset new_array
                         fi
                         break 1
                     else
@@ -4240,7 +4267,7 @@ Monitor()
                 fi
             fi
         fi
-        sleep 1
+        sleep 5
     done
 }
 
@@ -4270,7 +4297,11 @@ MonitorSet()
         echo -e "  ${green}$((i+2)).$plain 不设置" && echo
         while read -p "(默认: 不设置):" flv_nums
         do
-            [ -z "$flv_nums" ] && break
+            if [ -z "$flv_nums" ] || [ "$flv_nums" == $((i+2)) ] 
+            then
+                flv_nums=""
+                break
+            fi
             IFS=" " read -ra flv_nums_arr <<< "$flv_nums"
 
             if [ "$flv_nums" == $((i+1)) ] 
@@ -4383,7 +4414,11 @@ MonitorSet()
     
     while read -p "(默认: 不设置):" monitor_nums
     do
-        [ -z "$monitor_nums" ] && break
+        if [ -z "$monitor_nums" ] || [ "$monitor_nums" == $((monitor_count+2)) ] 
+        then
+            monitor_nums=""
+            break
+        fi
         IFS=" " read -ra monitor_nums_arr <<< "$monitor_nums"
 
         monitor_dir_names_chosen=()
