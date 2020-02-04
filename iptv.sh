@@ -1380,6 +1380,7 @@ SetFlvPush()
 SetFlvPull()
 {
     echo && echo "请输入拉流(播放)地址"
+    echo -e "$tip 监控会验证此链接来确定是否重启频道，如果不确定可以先留空"
     read -p "(默认: 不设置):" flv_pull_link
     echo && echo -e "	拉流地址: $green ${flv_pull_link:-"不设置"} $plain" && echo
 }
@@ -4009,12 +4010,20 @@ Monitor()
             kind="flv"
             if [ -n "${flv_all:-}" ] 
             then
-                for chnl_flv_push_link in "${chnls_flv_push_link[@]}"
+                for((i=0;i<flv_count;i++));
                 do
+                    chnl_flv_pull_link=${chnls_flv_pull_link[$i]}
+                    chnl_flv_pull_link=${chnl_flv_pull_link//\'/}
+                    chnl_flv_push_link=${chnls_flv_push_link[$i]}
                     chnl_flv_push_link=${chnl_flv_push_link//\'/}
                     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
                     FFPROBE="$FFMPEG_ROOT/ffprobe"
-                    audio_stream=$($FFPROBE -i "$chnl_flv_push_link" -show_streams -select_streams a -loglevel quiet || true)
+                    if [ -n "$chnl_flv_pull_link" ] 
+                    then
+                        audio_stream=$($FFPROBE -i "$chnl_flv_pull_link" -show_streams -select_streams a -loglevel quiet || true)
+                    else
+                        audio_stream=$($FFPROBE -i "$chnl_flv_push_link" -show_streams -select_streams a -loglevel quiet || true)
+                    fi
                     if [ -z "${audio_stream:-}" ] 
                     then
                         if [ "${flv_restart_count:-1}" -gt "${flv_restart_nums:-20}" ] 
@@ -4075,11 +4084,18 @@ Monitor()
             else
                 for flv_num in "${flv_nums_arr[@]}"
                 do
+                    chnl_flv_pull_link=${chnls_flv_pull_link[$((flv_num-1))]}
+                    chnl_flv_pull_link=${chnl_flv_pull_link//\'/}
                     chnl_flv_push_link=${chnls_flv_push_link[$((flv_num-1))]}
                     chnl_flv_push_link=${chnl_flv_push_link//\'/}
                     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
                     FFPROBE="$FFMPEG_ROOT/ffprobe"
-                    audio_stream=$($FFPROBE -i "$chnl_flv_push_link" -show_streams -select_streams a -loglevel quiet || true)
+                    if [ -n "$chnl_flv_pull_link" ] 
+                    then
+                        audio_stream=$($FFPROBE -i "$chnl_flv_pull_link" -show_streams -select_streams a -loglevel quiet || true)
+                    else
+                        audio_stream=$($FFPROBE -i "$chnl_flv_push_link" -show_streams -select_streams a -loglevel quiet || true)
+                    fi
                     if [ -z "${audio_stream:-}" ] 
                     then
                         if [ "${flv_restart_count:-1}" -gt "${flv_restart_nums:-20}" ] 
