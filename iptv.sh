@@ -1258,6 +1258,13 @@ SetInputFlags()
     if [[ ${stream_link:-} == *".m3u8"* ]] 
     then
         d_input_flags=${d_input_flags//-reconnect_at_eof 1/}
+    elif [ "${stream_link:0:4}" == "rtmp" ] 
+    then
+        d_input_flags=${d_input_flags//-timeout 2000000000/}
+        d_input_flags=${d_input_flags//-reconnect 1/}
+        d_input_flags=${d_input_flags//-reconnect_at_eof 1/}
+        d_input_flags=${d_input_flags//-reconnect_streamed 1/}
+        d_input_flags=${d_input_flags//-reconnect_delay_max 2000/}
     fi
     echo "请输入input flags"
     read -p "(默认: $d_input_flags):" input_flags
@@ -1379,7 +1386,7 @@ SetFlvPull()
 
 FlvStreamCreatorWithShift()
 {
-    trap '' HUP INT QUIT TERM;
+    trap '' HUP INT QUIT TERM
     trap 'MonitorError $LINENO' ERR
     pid="$BASHPID"
     case $from in
@@ -1558,7 +1565,7 @@ FlvStreamCreatorWithShift()
 
 HlsStreamCreatorWithShift()
 {
-    trap '' HUP INT QUIT TERM;
+    trap '' HUP INT QUIT TERM
     trap 'MonitorError $LINENO' ERR
     pid="$BASHPID"
     case $from in
@@ -2267,6 +2274,13 @@ StartChannel()
     if [[ ${chnl_stream_link:-} == *".m3u8"* ]] 
     then
         chnl_input_flags=${chnl_input_flags//-reconnect_at_eof 1/}
+    elif [ "${chnl_stream_link:0:4}" == "rtmp" ] 
+    then
+        chnl_input_flags=${chnl_input_flags//-timeout 2000000000/}
+        chnl_input_flags=${chnl_input_flags//-reconnect 1/}
+        chnl_input_flags=${chnl_input_flags//-reconnect_at_eof 1/}
+        chnl_input_flags=${chnl_input_flags//-reconnect_streamed 1/}
+        chnl_input_flags=${chnl_input_flags//-reconnect_delay_max 2000/}
     fi
     chnl_quality_command=""
     chnl_bitrates_command=""
@@ -3912,6 +3926,8 @@ MonitorError()
 
 MonitorRestartChannel()
 {
+    trap '' HUP INT TERM
+    trap 'MonitorError $LINENO' ERR
     restart_nums=${restart_nums:-20}
     for((i=0;i<restart_nums;i++))
     do
@@ -3920,9 +3936,10 @@ MonitorRestartChannel()
         if [ "$chnl_status" == "on" ]
         then
             action="skip"
-            StopChannel
-            if [ "$stopped" == 1 ] 
+            StopChannel || true
+            if [ "${stopped:-}" == 1 ] 
             then
+                sleep 3
                 StartChannel || true
                 sleep 15
                 chnl_pid=$($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'").pid' $CHANNELS_FILE)
@@ -3977,7 +3994,7 @@ MonitorRestartChannel()
 
 Monitor()
 {
-    trap '' HUP INT TERM QUIT EXIT;
+    trap '' HUP INT TERM QUIT EXIT
     trap 'MonitorError $LINENO' ERR
     printf '%s' "$BASHPID" > "$MONITOR_PID"
     date_now=$(date -d now "+%m-%d %H:%M:%S")
@@ -4021,21 +4038,21 @@ Monitor()
                             flv_restart_count=${flv_restart_count:-1}
                             flv_restart_count=$((flv_restart_count+1))
                             printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 恢复启动" >> "$MONITOR_LOG"
-                            sleep 15
+                            sleep 10
                         elif [ -n "${flv_first_fail:-}" ] 
                         then
                             if [ $((flv_fail_date - flv_first_fail)) -gt "$flv_seconds" ] 
                             then
                                 action="skip"
-                                StopChannel
-                                if [ "$stopped" == 1 ] 
+                                StopChannel || true
+                                if [ "${stopped:-}" == 1 ] 
                                 then
                                     sleep 3
                                     StartChannel || true
                                     flv_restart_count=${flv_restart_count:-1}
                                     flv_restart_count=$((flv_restart_count+1))
                                     printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
-                                    sleep 15
+                                    sleep 10
                                 fi
                             fi
                         else
@@ -4086,21 +4103,21 @@ Monitor()
                             flv_restart_count=${flv_restart_count:-1}
                             flv_restart_count=$((flv_restart_count+1))
                             printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 恢复启动" >> "$MONITOR_LOG"
-                            sleep 15
+                            sleep 10
                         elif [ -n "${flv_first_fail:-}" ] 
                         then
                             if [ $((flv_fail_date - flv_first_fail)) -gt "$flv_seconds" ] 
                             then
                                 action="skip"
-                                StopChannel
-                                if [ "$stopped" == 1 ] 
+                                StopChannel || true
+                                if [ "${stopped:-}" == 1 ] 
                                 then
                                     sleep 3
                                     StartChannel || true
                                     flv_restart_count=${flv_restart_count:-1}
                                     flv_restart_count=$((flv_restart_count+1))
                                     printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
-                                    sleep 15
+                                    sleep 10
                                 fi
                             fi
                         else
@@ -4129,6 +4146,10 @@ Monitor()
         then
             while IFS= read -r old_file_path
             do
+                if [[ "$old_file_path" == *"_master.m3u8" ]] 
+                then
+                    continue
+                fi
                 output_dir_name=${old_file_path#*$LIVE_ROOT/}
                 output_dir_name=${output_dir_name%%/*}
                 if [ "${monitor_all}" == 1 ] 
@@ -4938,6 +4959,13 @@ else
             if [[ ${stream_link:-} == *".m3u8"* ]] 
             then
                 d_input_flags=${d_input_flags//-reconnect_at_eof 1/}
+            elif [ "${stream_link:0:4}" == "rtmp" ] 
+            then
+                d_input_flags=${d_input_flags//-timeout 2000000000/}
+                d_input_flags=${d_input_flags//-reconnect 1/}
+                d_input_flags=${d_input_flags//-reconnect_at_eof 1/}
+                d_input_flags=${d_input_flags//-reconnect_streamed 1/}
+                d_input_flags=${d_input_flags//-reconnect_delay_max 2000/}
             fi
 
             input_flags=${input_flags:-"$d_input_flags"}
