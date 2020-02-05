@@ -1038,13 +1038,20 @@ SetOutputDirName()
     echo -e "$tip 是名称不是路径" && echo
     while read -p "(默认: 随机名称):" output_dir_name
     do
-        output_dir_name=${output_dir_name:-$(RandOutputDirName)}
-        output_dir_root="$LIVE_ROOT/$output_dir_name"
-        if [ -e "$output_dir_root" ] 
+        if [ -z "$output_dir_name" ] 
         then
-            echo -e "$error 目录已存在！ "
-        else
+            while :;do
+                output_dir_name=$(RandOutputDirName)
+                if [ -z "$($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'")' $CHANNELS_FILE)" ] 
+                then
+                    break 2
+                fi
+            done
+        elif [ -z "$($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'")' $CHANNELS_FILE)" ]  
+        then
             break
+        else
+            echo && echo -e "$error 目录已存在！" && echo
         fi
     done
     echo && echo -e "	目录名称: $green $output_dir_name $plain" && echo
@@ -1371,9 +1378,17 @@ SetChannelName()
 
 SetFlvPush()
 {
-    echo && echo "请输入推流地址(比如 rtmp://127.0.0.1/live/xxx )"
-    read -p "(默认: 取消):" flv_push_link
-    [ -z "$flv_push_link" ] && echo "已取消..." && exit 1
+    echo && echo "请输入推流地址(比如 rtmp://127.0.0.1/live/xxx )" && echo
+    while read -p "(默认: 取消):" flv_push_link
+    do
+        [ -z "$flv_push_link" ] && echo "已取消..." && exit 1
+        if [ -z "$($JQ_FILE '.channels[] | select(.flv_push_link=="'"$flv_push_link"'")' $CHANNELS_FILE)" ]
+        then
+            break
+        else
+            echo -e "$error 推流地址已存在！请重新输入" && echo
+        fi
+    done
     echo && echo -e "	推流地址: $green $flv_push_link $plain" && echo
 }
 
@@ -4028,7 +4043,7 @@ Monitor()
                             if [ "$chnl_flv_status" == "on" ] 
                             then
                                 StopChannel || true
-                                printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 超过重启次数关闭" >> "$MONITOR_LOG"
+                                printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 重启超过${flv_restart_nums:-20}次关闭" >> "$MONITOR_LOG"
                             fi
 
                             unset 'chnls_flv_push_link[0]'
@@ -4092,17 +4107,15 @@ Monitor()
                             new_array=("$chnl_flv_push_link")
                             for element in "${chnls_flv_push_link[@]}"
                             do
-                                element=${element//\'/}
-                                [ "$element" != "$chnl_flv_push_link" ] && new_array+=("$element")
+                                [ "${element//\'/}" != "$chnl_flv_push_link" ] && new_array+=("$element")
                             done
                             chnls_flv_push_link=("${new_array[@]}")
                             unset new_array
 
                             new_array=("${chnls_flv_pull_link[$i]}")
-                            for element in "${chnls_flv_pull_link[@]}"
+                            for((j=0;j<flv_count;j++));
                             do
-                                element=${element//\'/}
-                                [ "$element" != "$chnl_flv_pull_link" ] && new_array+=("$element")
+                                [ "$j" != "$i" ] && new_array+=("${chnls_flv_pull_link[$j]}")
                             done
                             chnls_flv_pull_link=("${new_array[@]}")
                             unset new_array
