@@ -4098,7 +4098,7 @@ Monitor()
                             chnls_flv_push_link=("${new_array[@]}")
                             unset new_array
 
-                            new_array=("$chnl_flv_pull_link")
+                            new_array=("${chnls_flv_pull_link[$i]}")
                             for element in "${chnls_flv_pull_link[@]}"
                             do
                                 element=${element//\'/}
