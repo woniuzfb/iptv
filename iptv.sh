@@ -445,6 +445,7 @@ UpdateSelf()
     sh_old_ver=$($JQ_FILE '.default.version' $CHANNELS_FILE)
     if [ "$sh_old_ver" != "$sh_ver" ] 
     then
+        echo -e "$info 更新中，请稍等..."
         default_seg_dir_name=$($JQ_FILE -r '.default.seg_dir_name' "$CHANNELS_FILE")
         default_seg_length=$($JQ_FILE -r '.default.seg_length' "$CHANNELS_FILE")
         default_seg_count=$($JQ_FILE -r '.default.seg_count' "$CHANNELS_FILE")
@@ -607,26 +608,74 @@ GetDefault()
 GetChannelsInfo()
 {
     [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
-    channels_count=$($JQ_FILE -r '.channels | length' $CHANNELS_FILE)
-    [ "$channels_count" == 0 ] && echo -e "$error 没有发现 频道，请检查 !" && exit 1
-    IFS=" " read -ra chnls_pid <<< "$($JQ_FILE -r '[.channels[].pid] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -ra chnls_status <<< "$($JQ_FILE -r '[.channels[].status] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -ra chnls_output_dir_name <<< "$($JQ_FILE -r '[.channels[].output_dir_name] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -ra chnls_playlist_name <<< "$($JQ_FILE -r '[.channels[].playlist_name] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -ra chnls_video_codec <<< "$($JQ_FILE -r '[.channels[].video_codec] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -ra chnls_audio_codec <<< "$($JQ_FILE -r '[.channels[].audio_codec] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -ra chnls_video_audio_shift <<< "$($JQ_FILE -r '[.channels[].video_audio_shift] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -ra chnls_quality <<< "$($JQ_FILE -r '[.channels[].quality] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -ra chnls_bitrates <<< "$($JQ_FILE -r '[.channels[].bitrates] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -ra chnls_const <<< "$($JQ_FILE -r '[.channels[].const] | @sh' $CHANNELS_FILE)"
-    chnls_name=()
-    while IFS='' read -r name
+
+    channels_count=0
+    chnls_pid=()
+    chnls_status=()
+    chnls_output_dir_name=()
+    chnls_playlist_name=()
+    chnls_video_codec=()
+    chnls_audio_codec=()
+    chnls_video_audio_shift=()
+    chnls_quality=()
+    chnls_bitrates=()
+    chnls_const=()
+    chnls_channel_name=()
+    chnls_flv_status=()
+    chnls_flv_push_link=()
+    chnls_flv_pull_link=()
+    
+    while IFS= read -r channel
     do
-        chnls_name+=("$name");
-    done < <($JQ_FILE -r '.channels[].channel_name | @sh' "$CHANNELS_FILE")
-    IFS=" " read -ra chnls_flv_status <<< "$($JQ_FILE -r '[.channels[].flv_status] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -ra chnls_flv_push_link <<< "$($JQ_FILE -r '[.channels[].flv_push_link] | @sh' $CHANNELS_FILE)"
-    IFS=" " read -ra chnls_flv_pull_link <<< "$($JQ_FILE -r '[.channels[].flv_pull_link] | @sh' $CHANNELS_FILE)"
+        channels_count=$((channels_count+1))
+        map_pid=${channel#*pid: }
+        map_pid=${map_pid%, status:*}
+        map_status=${channel#*status: }
+        map_status=${map_status%, output_dir_name:*}
+        map_output_dir_name=${channel#*output_dir_name: }
+        map_output_dir_name=${map_output_dir_name%, playlist_name:*}
+        map_playlist_name=${channel#*playlist_name: }
+        map_playlist_name=${map_playlist_name%, video_codec:*}
+        map_video_codec=${channel#*video_codec: }
+        map_video_codec=${map_video_codec%, audio_codec:*}
+        map_audio_codec=${channel#*audio_codec: }
+        map_audio_codec=${map_audio_codec%, video_audio_shift:*}
+        map_video_audio_shift=${channel#*video_audio_shift: }
+        map_video_audio_shift=${map_video_audio_shift%, quality:*}
+        map_quality=${channel#*quality: }
+        map_quality=${map_quality%, bitrates:*}
+        map_bitrates=${channel#*bitrates: }
+        map_bitrates=${map_bitrates%, const:*}
+        map_const=${channel#*const: }
+        map_const=${map_const%, channel_name:*}
+        map_channel_name=${channel#*channel_name: }
+        map_channel_name=${map_channel_name%, flv_status:*}
+        map_flv_status=${channel#*flv_status: }
+        map_flv_status=${map_flv_status%, flv_push_link:*}
+        map_flv_push_link=${channel#*flv_push_link: }
+        map_flv_push_link=${map_flv_push_link%, flv_pull_link:*}
+        map_flv_pull_link=${channel#*flv_pull_link: }
+
+        chnls_pid+=("$map_pid")
+        chnls_status+=("$map_status")
+        chnls_output_dir_name+=("$map_output_dir_name")
+        chnls_playlist_name+=("$map_playlist_name")
+        chnls_video_codec+=("$map_video_codec")
+        chnls_audio_codec+=("$map_audio_codec")
+        chnls_video_audio_shift+=("${map_video_audio_shift:-''}")
+        chnls_quality+=("${map_quality:-''}")
+        chnls_bitrates+=("${map_bitrates:-''}")
+        chnls_const+=("${map_const:-''}")
+        chnls_channel_name+=("$map_channel_name")
+        chnls_flv_status+=("$map_flv_status")
+        chnls_flv_push_link+=("${map_flv_push_link:-''}")
+        chnls_flv_pull_link+=("${map_flv_pull_link:-''}")
+        
+    done < <($JQ_FILE -r '.channels | to_entries | map("pid: \(.value.pid), status: \(.value.status), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), channel_name: \(.value.channel_name), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
+
+    [ "$channels_count" == 0 ] && echo -e "$error 没有发现 频道，请检查 !" && exit 1
+
+    return 0
 }
 
 ListChannels()
@@ -700,7 +749,7 @@ ListChannels()
             chnls_playlist_file_text="$chnls_playlist_file_text$green$chnls_output_dir_root/${chnls_playlist_name_index}.m3u8$plain "
         fi
         
-        chnls_name_index=${chnls_name[index]//\'/}
+        chnls_channel_name_index=${chnls_channel_name[index]//\'/}
         chnls_flv_status_index=${chnls_flv_status[index]//\'/}
         chnls_flv_push_link_index=${chnls_flv_push_link[index]//\'/}
         chnls_flv_pull_link_index=${chnls_flv_pull_link[index]//\'/}
@@ -772,7 +821,7 @@ ListChannels()
 
         if [ -z "${kind:-}" ] 
         then
-            chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_status_text 频道名称: $green${chnls_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain m3u8位置: $chnls_playlist_file_text\n\n"
+            chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_status_text 频道名称: $green${chnls_channel_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain m3u8位置: $chnls_playlist_file_text\n\n"
         elif [ "$kind" == "flv" ] 
         then
             if [ "$chnls_flv_status_index" == "on" ] 
@@ -781,7 +830,7 @@ ListChannels()
             else
                 chnls_flv_status_text=$red"关闭"$plain
             fi
-            chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_flv_status_text 频道名称: $green${chnls_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain flv推流地址: $green${chnls_flv_push_link_index:-"无"}$plain flv拉流地址: $green${chnls_flv_pull_link_index:-"无"}$plain\n\n"
+            chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_flv_status_text 频道名称: $green${chnls_channel_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain flv推流地址: $green${chnls_flv_push_link_index:-"无"}$plain flv拉流地址: $green${chnls_flv_pull_link_index:-"无"}$plain\n\n"
         fi
         
     done
@@ -4147,7 +4196,7 @@ Monitor()
                             if [ "$chnl_flv_status" == "on" ] 
                             then
                                 StopChannel || true
-                                printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 超过重启次数关闭" >> "$MONITOR_LOG"
+                                printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 重启超过${flv_restart_nums:-20}次关闭" >> "$MONITOR_LOG"
                             fi
 
                             declare -a new_array
@@ -4307,19 +4356,19 @@ MonitorSet()
 
     if [ -n "${chnls_flv_push_link:-}" ] 
     then
-        chnls_name=()
+        chnls_channel_name=()
         while IFS='' read -r name
         do
-            chnls_name+=("$name");
+            chnls_channel_name+=("$name");
         done < <($JQ_FILE -r '.channels[]|select(.flv_status=="on").channel_name | @sh' "$CHANNELS_FILE")
         IFS=" " read -ra chnls_flv_pull_link <<< "$($JQ_FILE -r '[.channels[]|select(.flv_status=="on").flv_pull_link] | @sh' $CHANNELS_FILE)"
-        flv_count=${#chnls_name[@]}
+        flv_count=${#chnls_channel_name[@]}
 
         echo && echo "请选择需要监控的 FLV 推流频道(多个频道用空格分隔)" && echo
 
         for((i=0;i<flv_count;i++));
         do
-            echo -e "  ${green}$((i+1)).$plain ${chnls_name[$i]//\'/} ${chnls_flv_pull_link[$i]//\'/}"
+            echo -e "  ${green}$((i+1)).$plain ${chnls_channel_name[$i]//\'/} ${chnls_flv_pull_link[$i]//\'/}"
         done
 
         echo && echo -e "  ${green}$((i+1)).$plain 全部"
