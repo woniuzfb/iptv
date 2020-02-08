@@ -1103,6 +1103,7 @@ SetOutputDirName()
             echo && echo -e "$error 目录已存在！" && echo
         fi
     done
+    output_dir_root="$LIVE_ROOT/$output_dir_name"
     echo && echo -e "	目录名称: $green $output_dir_name $plain" && echo
 }
 
@@ -3277,6 +3278,7 @@ Schedule()
                 "hbo"
                 "hbotw"
                 "hbored"
+                "cinemax"
                 "hbohd"
                 "hits"
                 "signature"
@@ -3293,6 +3295,9 @@ Schedule()
                 elif [ "$chnl" == "hbored" ] 
                 then
                     SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$date_now&channel=red&feed=satellite"
+                elif [ "$chnl" == "cinemax" ] 
+                then
+                    SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$date_now&channel=$chnl&feed=satellite"
                 else
                     SCHEDULE_LINK="https://hboasia.com/HBO/zh-tw/ajax/home_schedule?date=$date_now&channel=$chnl&feed=satellite"
                 fi
@@ -3328,7 +3333,7 @@ Schedule()
 
                 rm -rf "${SCHEDULE_FILE:-'notfound'}"
 
-                for((index = 0; index < "$programs_count"; index++)); do
+                for((index = 0; index < programs_count; index++)); do
                     programs_id_index=${programs_id[index]//\'/}
                     programs_title_index=${programs_title[index]//\"/}
                     programs_title_index=${programs_title_index//\'/}
@@ -3978,7 +3983,7 @@ TsMenu()
             
             break
         else
-            echo -e "$error序号错位，请重新输入！"
+            echo -e "$error序号错误，请重新输入！"
         fi
     done
     
@@ -4351,18 +4356,26 @@ Monitor()
 
 MonitorSet()
 {
+    flv_count=0
+    chnls_channel_name=()
+    chnls_flv_push_link=()
+    chnls_flv_pull_link=()
+    while IFS= read -r flv_channel
+    do
+        flv_count=$((flv_count+1))
+        map_channel_name=${flv_channel#*channel_name: }
+        map_channel_name=${map_channel_name%, flv_push_link:*}
+        map_flv_push_link=${flv_channel#*flv_push_link: }
+        map_flv_push_link=${map_flv_push_link%, flv_pull_link:*}
+        map_flv_pull_link=${flv_channel#*flv_pull_link: }
 
-    IFS=" " read -ra chnls_flv_push_link <<< "$($JQ_FILE -r '[.channels[]|select(.flv_status=="on").flv_push_link] | @sh' $CHANNELS_FILE)"
+        chnls_channel_name+=("$map_channel_name");
+        chnls_flv_push_link+=("$map_flv_push_link");
+        chnls_flv_pull_link+=("${map_flv_pull_link:-''}");
+    done < <($JQ_FILE -r '.channels | to_entries | map(select(.value.flv_status=="on")) | map("channel_name: \(.value.channel_name), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
 
-    if [ -n "${chnls_flv_push_link:-}" ] 
+    if [ "$flv_count" -gt 0 ] 
     then
-        chnls_channel_name=()
-        while IFS='' read -r name
-        do
-            chnls_channel_name+=("$name");
-        done < <($JQ_FILE -r '.channels[]|select(.flv_status=="on").channel_name | @sh' "$CHANNELS_FILE")
-        IFS=" " read -ra chnls_flv_pull_link <<< "$($JQ_FILE -r '[.channels[]|select(.flv_status=="on").flv_pull_link] | @sh' $CHANNELS_FILE)"
-        flv_count=${#chnls_channel_name[@]}
 
         echo && echo "请选择需要监控的 FLV 推流频道(多个频道用空格分隔)" && echo
 
