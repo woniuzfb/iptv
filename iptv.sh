@@ -445,7 +445,7 @@ UpdateSelf()
     sh_old_ver=$($JQ_FILE '.default.version' $CHANNELS_FILE)
     if [ "$sh_old_ver" != "$sh_ver" ] 
     then
-        echo -e "$info 更新中，请稍等..."
+        echo -e "$info 更新中，请稍等..." && echo
         default_seg_dir_name=$($JQ_FILE -r '.default.seg_dir_name' "$CHANNELS_FILE")
         default_seg_length=$($JQ_FILE -r '.default.seg_length' "$CHANNELS_FILE")
         default_seg_count=$($JQ_FILE -r '.default.seg_count' "$CHANNELS_FILE")
@@ -682,7 +682,7 @@ ListChannels()
 {
     GetChannelsInfo
     chnls_list=""
-    for((index = 0; index < "$channels_count"; index++)); do
+    for((index = 0; index < channels_count; index++)); do
         chnls_status_index=${chnls_status[index]//\'/}
         chnls_pid_index=${chnls_pid[index]//\'/}
         chnls_output_dir_name_index=${chnls_output_dir_name[index]//\'/}
@@ -2828,7 +2828,7 @@ generateSchedule()
 
     rm -rf "${SCHEDULE_FILE:-'notfound'}"
 
-    for((index = 0; index < "$programs_count"; index++)); do
+    for((index = 0; index < programs_count; index++)); do
         programs_title_index=${programs_title[index]//\"/}
         programs_title_index=${programs_title_index//\'/}
         programs_title_index=${programs_title_index//\\/\'}
@@ -3390,7 +3390,7 @@ Schedule()
 
             rm -rf "${SCHEDULE_FILE:-'notfound'}"
 
-            for((index = 0; index < "$programs_count"; index++)); do
+            for((index = 0; index < programs_count; index++)); do
                 programs_title_index=${programs_title[index]//\"/}
                 programs_title_index=${programs_title_index//\'/}
                 programs_title_index=${programs_title_index//\\/\'}
@@ -4942,10 +4942,66 @@ case "$cmd" in
         [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
         kind="flv"
     ;;
-    "ll") 
-        for d in "$LIVE_ROOT"/*/ ; do
-            ls "$d" -lght
-        done
+    "l"|"ll") 
+        flv_count=0
+        chnls_channel_name=()
+        chnls_stream_link=()
+        while IFS= read -r flv_channel
+        do
+            flv_count=$((flv_count+1))
+            map_channel_name=${flv_channel#*channel_name: }
+            map_channel_name=${map_channel_name%, stream_link:*}
+            map_stream_link=${flv_channel#*stream_link: }
+
+            chnls_channel_name+=("$map_channel_name");
+            chnls_stream_link+=("${map_stream_link:-''}");
+        done < <($JQ_FILE -r '.channels | to_entries | map(select(.value.flv_status=="on")) | map("channel_name: \(.value.channel_name), stream_link: \(.value.stream_link)") | .[]' "$CHANNELS_FILE")
+
+        if [ "$flv_count" -gt 0 ] 
+        then
+
+            echo && echo "FLV 频道" && echo
+
+            for((i=0;i<flv_count;i++));
+            do
+                echo -e "  ${green}$((i+1)).$plain ${chnls_channel_name[$i]//\'/} ${chnls_stream_link[$i]//\'/}"
+            done
+        fi
+
+
+        hls_count=0
+        chnls_channel_name=()
+        chnls_stream_link=()
+        while IFS= read -r hls_channel
+        do
+            hls_count=$((hls_count+1))
+            map_channel_name=${hls_channel#*channel_name: }
+            map_channel_name=${map_channel_name%, stream_link:*}
+            map_stream_link=${hls_channel#*stream_link: }
+
+            chnls_channel_name+=("$map_channel_name");
+            chnls_stream_link+=("${map_stream_link:-''}");
+        done < <($JQ_FILE -r '.channels | to_entries | map(select(.value.status=="on")) | map("channel_name: \(.value.channel_name), stream_link: \(.value.stream_link)") | .[]' "$CHANNELS_FILE")
+
+        if [ "$hls_count" -gt 0 ] 
+        then
+            echo && echo "HLS 频道" && echo
+
+            for((i=0;i<hls_count;i++));
+            do
+                echo -e "  ${green}$((i+1)).$plain ${chnls_channel_name[$i]//\'/} ${chnls_stream_link[$i]//\'/}"
+            done
+        fi
+
+        echo 
+
+        if ls -A $LIVE_ROOT/* > /dev/null 2>&1 
+        then
+            for d in "$LIVE_ROOT"/*/ ; do
+                ls "$d" -lght
+            done
+        fi
+
         exit 0
     ;;
     *)

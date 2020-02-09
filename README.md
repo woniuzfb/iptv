@@ -89,7 +89,9 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
     - 是否监控超时（默认120秒,必须大于段时长*段数目）
     - 重启次数（默认20次）
   - tv m stop 停止监控
+  - tv m log 查看监控日志
   - 在 leech 直播源的时候必须打开监控选项，以应对输出低比特率/直播源服务器频繁重启/音轨丢失/等问题
+- tv l 列出所有开启的 flv 和 hls 频道
 - tv t 文件
   - 检测文件内的 xtream codes 账号链接（形如 /get.php?username=xxx&password=xxx）
 - tv d 请求演示频道 ( 3个凤凰台,1个hbo中文频道 )，添加到 channels.json
