@@ -375,7 +375,7 @@ Uninstall()
         MonitorStop
         while IFS= read -r chnl_pid
         do
-            chnl_status=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').status' "$CHANNELS_FILE")
+            GetChannelInfo
             if [ "${kind:-}" == "flv" ] 
             then
                 if [ "$chnl_flv_status" == "on" ] 
@@ -852,6 +852,7 @@ ListChannels()
                         $JQ_FILE '(.channels[]|select(.pid=='"$chnls_pid_index"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
                         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
                         chnl_pid=$chnls_pid_index
+                        GetChannelInfo
                         StopChannel
                     fi
                 else
@@ -859,6 +860,7 @@ ListChannels()
                     $JQ_FILE '(.channels[]|select(.pid=='"$chnls_pid_index"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
                     mv "$CHANNELS_TMP" "$CHANNELS_FILE"
                     chnl_pid=$chnls_pid_index
+                    GetChannelInfo
                     StopChannel
                 fi
             else
@@ -2109,6 +2111,7 @@ EditOutputDirName()
         stop_channel_yn=${stop_channel_yn:-'n'}
         if [[ "$stop_channel_yn" == [Yy] ]]
         then
+            GetChannelInfo
             StopChannel
             echo && echo
         else
@@ -2272,6 +2275,7 @@ EditChannelAll()
         stop_channel_yn=${stop_channel_yn:-'n'}
         if [[ "$stop_channel_yn" == [Yy] ]]
         then
+            GetChannelInfo
             StopChannel
             echo && echo
         else
@@ -2667,7 +2671,12 @@ StopChannel()
         action=${action:-"stop"}
         SyncFile
     else
-        remove_dir_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').output_dir_name' "$CHANNELS_FILE")
+        if [ -n "${chnl_output_dir_name:-}" ] 
+        then
+            remove_dir_name=$chnl_output_dir_name
+        else
+            remove_dir_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').output_dir_name' "$CHANNELS_FILE")
+        fi
         $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
         action=${action:-"stop"}
@@ -2712,7 +2721,7 @@ DelChannel()
     InputChannelsPids
     for chnl_pid in "${chnls_pids_arr[@]}"
     do
-        chnl_status=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').status' "$CHANNELS_FILE")
+        GetChannelInfo
         if [ "${kind:-}" == "flv" ] 
         then
             if [ "$chnl_flv_status" == "on" ] 
@@ -4190,7 +4199,7 @@ MonitorRestartChannel()
                 sleep 3
                 StartChannel || true
                 sleep 15
-                chnl_pid=$($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'").pid' $CHANNELS_FILE)
+                GetChannelInfo
                 if ls -A "$LIVE_ROOT/$output_dir_name/"* > /dev/null 2>&1 
                 then
                     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
@@ -4209,13 +4218,20 @@ MonitorRestartChannel()
                     StopChannel || true
                     date_now=$(date -d now "+%m-%d %H:%M:%S")
                     printf '%s\n' "$date_now $chnl_channel_name 重启失败" >> "$MONITOR_LOG"
+                    declare -a new_array
+                    for element in "${monitor_dir_names_chosen[@]}"
+                    do
+                        [ "$element" != "$output_dir_name" ] && new_array+=("$element")
+                    done
+                    monitor_dir_names_chosen=("${new_array[@]}")
+                    unset new_array
                     break
                 fi
             fi
         else
             StartChannel || true
             sleep 15
-            chnl_pid=$($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'").pid' $CHANNELS_FILE)
+            GetChannelInfo
             if ls -A "$LIVE_ROOT/$output_dir_name/"* > /dev/null 2>&1 
             then
                 FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
