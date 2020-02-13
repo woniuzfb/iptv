@@ -316,7 +316,7 @@ InstallJq()
         jq_ver=$(curl --silent -m 10 "https://api.github.com/repos/stedolan/jq/releases/latest" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
         if [ -n "$jq_ver" ]
         then
-            wget --no-check-certificate "https://github.com/stedolan/jq/releases/download/$jq_ver/jq-linux$release_bit" --show-progress -qO "$JQ_FILE"
+            wget --no-check-certificate "$FFMPEG_MIRROR_LINK/$jq_ver/jq-linux$release_bit" --show-progress -qO "$JQ_FILE"
         fi
         [ ! -e "$JQ_FILE" ] && echo -e "$error 下载JQ解析器失败，请检查 !" && exit 1
         chmod +x "$JQ_FILE"
@@ -441,6 +441,7 @@ Update()
         fi
     fi
 
+    ln -sf "$IPTV_ROOT"/ffmpeg-git-*/ff* /usr/local/bin/
     echo -e "脚本已更新为最新版本[ $sh_new_ver ] !(输入: tv 使用)" && exit 0
 }
 
@@ -5122,7 +5123,11 @@ case "$cmd" in
                     line=${line#*<td><a href=\"}
                     git_link=${line%%\" style*}
                     build_file_name=${git_link##*/}
-                    wget --no-check-certificate "$git_link" --show-progress -qO "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}_tmp"
+                    wget --timeout=10 --tries=3 --no-check-certificate "$git_link" --show-progress -qO "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}_tmp"
+                    if [ ! -s "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}_tmp" ] 
+                    then
+                        echo && echo -e "$error 无法连接 github !" && exit 1
+                    fi
                     mv "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}_tmp" "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}"
                 else 
                     if [ "$release_download" == 1 ] 
@@ -5130,7 +5135,11 @@ case "$cmd" in
                         line=${line#*<td><a href=\"}
                         release_link=${line%%\" style*}
                         release_file_name=${release_link##*/}
-                        wget --no-check-certificate "$release_link" --show-progress -qO "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}_tmp"
+                        wget --timeout=10 --tries=3 --no-check-certificate "$release_link" --show-progress -qO "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}_tmp"
+                        if [ ! -s "$FFMPEG_MIRROR_ROOT/builds/${release_file_name}_tmp" ] 
+                        then
+                            echo && echo -e "$error 无法连接 github !" && exit 1
+                        fi
                         mv "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}_tmp" "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}"
                     fi
                 fi
@@ -5144,6 +5153,20 @@ case "$cmd" in
         #sed -i "s+https://johnvansickle.com/ffmpeg/\(builds\|releases\)/\(.*\).tar.xz\"+$FFMPEG_LINK/\1/\2.tar.xz\"+g" "$FFMPEG_MIRROR_ROOT/index.html"
 
         sed -i "s+https://johnvansickle.com/ffmpeg/\(builds\|releases\)/\(.*\).tar.xz\"+\1/\2.tar.xz\"+g" "$FFMPEG_MIRROR_ROOT/index.html"
+
+        jq_ver=$(curl --silent -m 10 "https://api.github.com/repos/stedolan/jq/releases/latest" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+        if [ -n "$jq_ver" ]
+        then
+            mkdir -p "$FFMPEG_MIRROR_ROOT/$jq_ver/"
+            wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/stedolan/jq/releases/download/$jq_ver/jq-linux64" --show-progress -qO "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64_tmp"
+            wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/stedolan/jq/releases/download/$jq_ver/jq-linux32" --show-progress -qO "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp"
+            if [ ! -s "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64_tmp" ] || [ ! -s "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp" ]
+            then
+                echo && echo -e "$error 无法连接 github !" && exit 1
+            fi
+            mv "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64_tmp" "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64"
+            mv "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp" "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32"
+        fi
         exit 0
     ;;
     "ts") 
