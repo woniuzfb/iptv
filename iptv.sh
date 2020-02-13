@@ -1600,6 +1600,7 @@ FlvStreamCreatorWithShift()
                     "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
                     "output_flags":"'"$FFMPEG_FLAGS"'",
                     "channel_name":"'"$channel_name"'",
+                    "sync_pairs":"'"$sync_pairs"'",
                     "flv_status":"on",
                     "flv_push_link":"'"$flv_push_link"'",
                     "flv_pull_link":"'"$flv_pull_link"'"
@@ -1705,6 +1706,7 @@ FlvStreamCreatorWithShift()
                     "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
                     "output_flags":"'"$FFMPEG_FLAGS"'",
                     "channel_name":"'"$channel_name"'",
+                    "sync_pairs":"",
                     "flv_status":"on",
                     "flv_push_link":"'"$flv_push_link"'",
                     "flv_pull_link":"'"$flv_pull_link"'"
@@ -1780,6 +1782,7 @@ HlsStreamCreatorWithShift()
                     "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
                     "output_flags":"'"$FFMPEG_FLAGS"'",
                     "channel_name":"'"$channel_name"'",
+                    "sync_pairs":"'"$sync_pairs"'",
                     "flv_status":"off",
                     "flv_push_link":"",
                     "flv_pull_link":""
@@ -1889,6 +1892,7 @@ HlsStreamCreatorWithShift()
                     "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
                     "output_flags":"'"$FFMPEG_FLAGS"'",
                     "channel_name":"'"$channel_name"'",
+                    "sync_pairs":"",
                     "flv_status":"off",
                     "flv_push_link":"",
                     "flv_pull_link":""
@@ -2073,6 +2077,7 @@ AddChannel()
                 "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
                 "output_flags":"'"$FFMPEG_FLAGS"'",
                 "channel_name":"'"$channel_name"'",
+                "sync_pairs":"'"$sync_pairs"'",
                 "flv_status":"off",
                 "flv_push_link":"",
                 "flv_pull_link":""
@@ -4228,6 +4233,13 @@ MonitorRestartChannel()
                 StopChannel || true
                 date_now=$(date -d now "+%m-%d %H:%M:%S")
                 printf '%s\n' "$date_now $chnl_channel_name 重启失败" >> "$MONITOR_LOG"
+                declare -a new_array
+                for element in "${monitor_dir_names_chosen[@]}"
+                do
+                    [ "$element" != "$output_dir_name" ] && new_array+=("$element")
+                done
+                monitor_dir_names_chosen=("${new_array[@]}")
+                unset new_array
                 break
             fi
         fi
@@ -4490,6 +4502,12 @@ Monitor()
                 do
                     output_dir_name=$dir_name
                     GetChannelInfo
+                    if [ "$chnl_status" == "off" ] 
+                    then
+                        printf '%s\n' "$chnl_channel_name 开启" >> "$MONITOR_LOG"
+                        MonitorRestartChannel
+                        break 1
+                    fi
                     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
                     FFPROBE="$FFMPEG_ROOT/ffprobe"
                     bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*_00000.ts || true)
@@ -5432,7 +5450,11 @@ else
                         "key_name":"'"$key_name"'",
                         "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
                         "output_flags":"'"$FFMPEG_FLAGS"'",
-                        "channel_name":"'"$channel_name"'"
+                        "channel_name":"'"$channel_name"'",
+                        "sync_pairs":"",
+                        "flv_status":"off",
+                        "flv_push_link":"",
+                        "flv_pull_link":""
                     }
                 ]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
                 mv "$CHANNELS_TMP" "$CHANNELS_FILE"
