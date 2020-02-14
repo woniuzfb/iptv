@@ -7,6 +7,7 @@ SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
 IPTV_ROOT="/usr/local/iptv"
+IP_DENY="$IPTV_ROOT/ip.deny"
 FFMPEG_MIRROR_LINK="http://47.241.6.233/ffmpeg"
 FFMPEG_MIRROR_ROOT="$IPTV_ROOT/ffmpeg"
 LIVE_ROOT="$IPTV_ROOT/live"
@@ -237,8 +238,7 @@ CheckRelease()
     depends=(unzip vim curl cron crond)
     
     for depend in "${depends[@]}"; do
-        DEPEND_FILE="$(command -v "$depend" || true)"
-        if [ -z "$DEPEND_FILE" ]
+        if [ ! -x "$(command -v $depend)" ]
         then
             case "$release" in
                 "rpm")
@@ -276,7 +276,6 @@ CheckRelease()
                 *) echo -e "\n系统不支持!" && exit 1
                 ;;
             esac
-            
         fi
     done
 }
@@ -1036,7 +1035,7 @@ GetChannelInfo(){
             if [ -n "$d_sync_file" ] && [ -n "$d_sync_index" ] && [ -n "$d_sync_pairs" ] && [[ $d_sync_pairs == *"=http"* ]] 
             then
                 chnl_playlist_link=${d_sync_pairs#*=http}
-                chnl_playlist_link=${chnl_playlist_link%,*}
+                chnl_playlist_link=${chnl_playlist_link%%,*}
                 chnl_playlist_link="http$chnl_playlist_link/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
                 chnl_playlist_link_text="$green$chnl_playlist_link$plain"
             else
@@ -1639,7 +1638,7 @@ FlvStreamCreatorWithShift()
             $JQ_FILE '(.channels[]|select(.pid=='"$pid"')|.flv_status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
             mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
 
-            date_now=$(date -d now "+%m-%d %H:%M:%S")
+            printf -v date_now "%(%m-%d %H:%M:%S)T"
             printf '%s\n' "$date_now $channel_name flv 关闭" >> "$MONITOR_LOG"
             chnl_pid=$pid
             action="stop"
@@ -1679,7 +1678,7 @@ FlvStreamCreatorWithShift()
             $JQ_FILE '(.channels[]|select(.pid=='"$new_pid"')|.flv_status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
             mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
 
-            date_now=$(date -d now "+%m-%d %H:%M:%S")
+            printf -v date_now "%(%m-%d %H:%M:%S)T"
             printf '%s\n' "$date_now $chnl_channel_name flv 关闭" >> "$MONITOR_LOG"
             chnl_pid=$new_pid
             action="stop"
@@ -1745,7 +1744,7 @@ FlvStreamCreatorWithShift()
             $JQ_FILE '(.channels[]|select(.pid=='"$pid"')|.flv_status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
             mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
 
-            date_now=$(date -d now "+%m-%d %H:%M:%S")
+            printf -v date_now "%(%m-%d %H:%M:%S)T"
             printf '%s\n' "$date_now $channel_name flv 关闭" >> "$MONITOR_LOG"
             chnl_pid=$pid
             action="stop"
@@ -1822,7 +1821,7 @@ HlsStreamCreatorWithShift()
             mv "${CHANNELS_TMP}_shift" "$CHANNELS_FILE"
             rm -rf "$LIVE_ROOT/${output_dir_name:-'notfound'}"
 
-            date_now=$(date -d now "+%m-%d %H:%M:%S")
+            printf -v date_now "%(%m-%d %H:%M:%S)T"
             printf '%s\n' "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
             chnl_pid=$pid
             action="stop"
@@ -1864,7 +1863,7 @@ HlsStreamCreatorWithShift()
             mv "${CHANNELS_TMP}_shift" "$CHANNELS_FILE"
             rm -rf "$LIVE_ROOT/${chnl_output_dir_name:-'notfound'}"
 
-            date_now=$(date -d now "+%m-%d %H:%M:%S")
+            printf -v date_now "%(%m-%d %H:%M:%S)T"
             printf '%s\n' "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
             chnl_pid=$new_pid
             action="stop"
@@ -1932,7 +1931,7 @@ HlsStreamCreatorWithShift()
             mv "${CHANNELS_TMP}_shift" "$CHANNELS_FILE"
             rm -rf "$LIVE_ROOT/${output_dir_name:-'notfound'}"
 
-            date_now=$(date -d now "+%m-%d %H:%M:%S")
+            printf -v date_now "%(%m-%d %H:%M:%S)T"
             printf '%s\n' "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
             chnl_pid=$pid
             action="stop"
@@ -2496,6 +2495,7 @@ ToggleChannel()
 
 StartChannel()
 {
+    trap 'MonitorError $LINENO' ERR
     if [[ ${chnl_stream_link:-} == *".m3u8"* ]] 
     then
         chnl_input_flags=${chnl_input_flags//-reconnect_at_eof 1/}
@@ -2681,7 +2681,7 @@ StopChannel()
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
         action=${action:-"stop"}
         SyncFile
-        if [ ! -e "$LIVE_ROOT/${remove_dir_name:-'notfound'}" ] 
+        if [ ! -e "$LIVE_ROOT/${remove_dir_name:-'notfound'}" ] && [ -z "${monitor:-}" ] 
         then
             echo && echo -e "$error 找不到应该删除的目录，请手动删除 !" && echo
         else
@@ -2861,7 +2861,7 @@ generateScheduleNowtv()
 
 generateScheduleNiotv()
 {
-    date_now_niotv=$(date -d now "+%Y-%m-%d")
+    printf -v date_now_niotv "%(%Y-%m-%d)T"
     SCHEDULE_LINK_NIOTV="http://www.niotv.com/i_index.php?cont=day"
     SCHEDULE_FILE_NIOTV="$IPTV_ROOT/${chnl_niotv_id}_niotv_schedule_$date_now_niotv"
     SCHEDULE_TMP_NIOTV="${SCHEDULE_JSON}_tmp"
@@ -2950,7 +2950,7 @@ generateSchedule()
     chnl_name=${chnl_name// /-}
     chnl_name_encode=$(urlencode "$chnl_name")
 
-    date_now=$(date -d now "+%Y-%m-%d")
+    printf -v date_now "%(%Y-%m-%d)T"
 
     SCHEDULE_LINK="https://xn--i0yt6h0rn.tw/channel/$chnl_name_encode/index.json"
     SCHEDULE_FILE="$IPTV_ROOT/${chnl_id}_schedule_$date_now"
@@ -3460,7 +3460,7 @@ Schedule()
 
     case $2 in
         "hbo")
-            date_now=$(date -d now "+%Y-%m-%d")
+            printf -v date_now "%(%Y-%m-%d)T"
 
             chnls=(
                 "hbo"
@@ -3550,7 +3550,7 @@ Schedule()
             done
         ;;
         "disney")
-            date_now=$(date -d now "+%Y%m%d")
+            printf -v date_now "%(%Y%m%d)T"
             SCHEDULE_LINK="https://disney.com.tw/_schedule/full/$date_now/8/%2Fepg"
 
             SCHEDULE_FILE="$IPTV_ROOT/$2_schedule_$date_now"
@@ -3598,7 +3598,7 @@ Schedule()
             done
         ;;
         "foxmovies")
-            date_now=$(date -d now "+%Y-%-m-%-d")
+            printf -v date_now "%(%Y-%-m-%-d)T"
             SCHEDULE_LINK="https://www.fng.tw/foxmovies/program.php?go=$date_now"
 
             SCHEDULE_FILE="$IPTV_ROOT/$2_schedule_$date_now"
@@ -3850,7 +3850,7 @@ TsRegister()
                         devicetype="yuj"
                         md5_password=$(printf '%s' "$password" | md5sum)
                         md5_password=${md5_password%% *}
-                        timestamp=$(date +%s)
+                        printf -v timestamp "%(%s)T"
                         timestamp=$((timestamp * 1000))
                         signature="$account|$md5_password|$deviceno|$devicetype|$timestamp"
                         signature=$(printf '%s' "$signature" | md5sum)
@@ -3954,7 +3954,7 @@ TsLogin()
         TOKEN_LINK="${ts_array[login_url]}?deviceno=$deviceno&devicetype=3&accounttype=${ts_array[acc_type_login]:-2}&accesstoken=(null)&account=$account&pwd=$md5_password&isforce=1&businessplatform=1"
         token=$(wget --no-check-certificate "$TOKEN_LINK" -qO-)
     else
-        timestamp=$(date +%s)
+        printf -v timestamp "%(%s)T"
         timestamp=$((timestamp * 1000))
         signature="$deviceno|yuj|${ts_array[acc_type_login]}|$account|$timestamp"
         signature=$(printf '%s' "$signature" | md5sum)
@@ -4179,7 +4179,8 @@ TsMenu()
 
 MonitorError()
 {
-    printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") [LINE:$1] ERROR: $?" >> "$MONITOR_LOG"
+    printf -v date_now "%(%m-%d %H:%M:%S)T"
+    printf '%s\n' "$date_now [LINE:$1] ERROR" >> "$MONITOR_LOG"
 }
 
 MonitorRestartChannel()
@@ -4189,46 +4190,11 @@ MonitorRestartChannel()
     restart_nums=${restart_nums:-20}
     for((i=0;i<restart_nums;i++))
     do
-        [ "$i" -gt 0 ] && GetChannelInfo
-        if [ "$chnl_status" == "on" ]
+        action="skip"
+        StopChannel || true
+        if [ "${stopped:-}" == 1 ] 
         then
-            action="skip"
-            StopChannel || true
-            if [ "${stopped:-}" == 1 ] 
-            then
-                sleep 3
-                StartChannel || true
-                sleep 15
-                GetChannelInfo
-                if ls -A "$LIVE_ROOT/$output_dir_name/"* > /dev/null 2>&1 
-                then
-                    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-                    FFPROBE="$FFMPEG_ROOT/ffprobe"
-                    bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts || true)
-                    bit_rate=${bit_rate//N\/A/0}
-                    audio_stream=$($FFPROBE -i "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -select_streams a -loglevel quiet || true)
-                    if [[ ${bit_rate:-0} -gt $min_bitrates ]] && [ -n "$audio_stream" ]
-                    then
-                        date_now=$(date -d now "+%m-%d %H:%M:%S")
-                        printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
-                        break
-                    fi
-                elif [[ $i -eq $((restart_nums - 1)) ]] 
-                then
-                    StopChannel || true
-                    date_now=$(date -d now "+%m-%d %H:%M:%S")
-                    printf '%s\n' "$date_now $chnl_channel_name 重启失败" >> "$MONITOR_LOG"
-                    declare -a new_array
-                    for element in "${monitor_dir_names_chosen[@]}"
-                    do
-                        [ "$element" != "$output_dir_name" ] && new_array+=("$element")
-                    done
-                    monitor_dir_names_chosen=("${new_array[@]}")
-                    unset new_array
-                    break
-                fi
-            fi
-        else
+            sleep 3
             StartChannel || true
             sleep 15
             GetChannelInfo
@@ -4241,14 +4207,14 @@ MonitorRestartChannel()
                 audio_stream=$($FFPROBE -i "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -select_streams a -loglevel quiet || true)
                 if [[ ${bit_rate:-0} -gt $min_bitrates ]] && [ -n "$audio_stream" ]
                 then
-                    date_now=$(date -d now "+%m-%d %H:%M:%S")
+                    printf -v date_now "%(%m-%d %H:%M:%S)T"
                     printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
                     break
                 fi
             elif [[ $i -eq $((restart_nums - 1)) ]] 
             then
                 StopChannel || true
-                date_now=$(date -d now "+%m-%d %H:%M:%S")
+                printf -v date_now "%(%m-%d %H:%M:%S)T"
                 printf '%s\n' "$date_now $chnl_channel_name 重启失败" >> "$MONITOR_LOG"
                 declare -a new_array
                 for element in "${monitor_dir_names_chosen[@]}"
@@ -4263,13 +4229,60 @@ MonitorRestartChannel()
     done
 }
 
+AntiDDoS()
+{
+    if [ -n "${anti_ddos:-}" ]
+    then
+        for output_dir_root in "$LIVE_ROOT"/*
+        do
+            output_dir_name=${output_dir_root#*$LIVE_ROOT/}
+            GetChannelInfo
+            trigger=$(( 60 * 5 / (chnl_seg_length * chnl_seg_count) ))
+            printf -v now "%(%s)T"
+            for file in "$chnl_output_dir_root/$chnl_seg_dir_name"/*.ts
+            do
+                link=${file#*$LIVE_ROOT}
+                while IFS=' ' read -r counts ip
+                do
+                    if [ "$counts" -lt $trigger ] 
+                    then
+                        break 1
+                    fi
+
+                    case "${ips[@]}" in
+                        *"$ip"*) 
+                        ;;
+                        *) 
+                            printf '%s\n' "$ip" >> "$IP_DENY"
+                            ufw deny from "$ip" to any port 80
+                            printf '%s\n' "$now $ip 已被禁" >> "$MONITOR_LOG"
+                            ips=$(< "$IP_DENY")
+                        ;;
+                    esac
+                done< <(awk -v d1="$(printf '%(%d/%b/%Y:%H:%M:%S)T' $((now-60)))" '{gsub(/^[\[\t]+/, "", $4); if ($7 ~ "'"$link"'" && $4 > d1 ) print $1;}' /usr/local/nginx/logs/access.log | sort | uniq -c | sort -fr)
+                # date --date '-1 min' '+%d/%b/%Y:%T'
+            done
+        done
+    fi
+}
+
 Monitor()
 {
     trap '' HUP INT TERM QUIT EXIT
     trap 'MonitorError $LINENO' ERR
     printf '%s' "$BASHPID" > "$MONITOR_PID"
-    date_now=$(date -d now "+%m-%d %H:%M:%S")
+    printf -v date_now "%(%m-%d %H:%M:%S)T"
     mkdir -p "$LIVE_ROOT"
+    if [ -s "$IP_DENY" ] 
+    then
+        ips=$(< "$IP_DENY")
+    else
+        ips=""
+    fi
+    if [ -x "$(command -v ufw)" ] && [ -s "/usr/local/nginx/logs/access.log" ]
+    then
+        anti_ddos=1
+    fi
     printf '%s\n' "$date_now 监控启动成功 PID $BASHPID !" >> "$MONITOR_LOG"
     echo -e "$info 监控启动成功 !"
     while true; do
@@ -4296,7 +4309,8 @@ Monitor()
                             if [ "$chnl_flv_status" == "on" ] 
                             then
                                 StopChannel || true
-                                printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 重启超过${flv_restart_nums:-20}次关闭" >> "$MONITOR_LOG"
+                                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                                printf '%s\n' "$date_now $chnl_channel_name flv 重启超过${flv_restart_nums:-20}次关闭" >> "$MONITOR_LOG"
                             fi
 
                             unset 'chnls_flv_push_link[0]'
@@ -4328,7 +4342,7 @@ Monitor()
 
                         if [ -n "${flv_first_fail:-}" ]
                         then
-                            flv_fail_date=$(date +%s)
+                            printf -v flv_fail_date "%(%s)T"
                             if [ $((flv_fail_date - flv_first_fail)) -gt "$flv_seconds" ] 
                             then
                                 action="skip"
@@ -4340,7 +4354,8 @@ Monitor()
                                     flv_restart_count=${flv_restart_count:-1}
                                     ((flv_restart_count++))
                                     flv_first_fail=""
-                                    printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
+                                    printf -v date_now "%(%m-%d %H:%M:%S)T"
+                                    printf '%s\n' "$date_now $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
                                     sleep 10
                                 fi
                             fi
@@ -4351,10 +4366,11 @@ Monitor()
                                 flv_restart_count=${flv_restart_count:-1}
                                 ((flv_restart_count++))
                                 flv_first_fail=""
-                                printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 恢复启动" >> "$MONITOR_LOG"
+                                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                                printf '%s\n' "$date_now $chnl_channel_name flv 恢复启动" >> "$MONITOR_LOG"
                                 sleep 10
                             else
-                                flv_first_fail=$(date +%s)
+                                printf -v flv_first_fail "%(%s)T"
                             fi
 
                             new_array=("$chnl_flv_push_link")
@@ -4401,7 +4417,8 @@ Monitor()
                             if [ "$chnl_flv_status" == "on" ] 
                             then
                                 StopChannel || true
-                                printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 重启超过${flv_restart_nums:-20}次关闭" >> "$MONITOR_LOG"
+                                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                                printf '%s\n' "$date_now $chnl_channel_name flv 重启超过${flv_restart_nums:-20}次关闭" >> "$MONITOR_LOG"
                             fi
 
                             declare -a new_array
@@ -4419,7 +4436,7 @@ Monitor()
 
                         if [ -n "${flv_first_fail:-}" ] 
                         then
-                            flv_fail_date=$(date +%s)
+                            printf -v flv_fail_date "%(%s)T"
                             if [ $((flv_fail_date - flv_first_fail)) -gt "$flv_seconds" ] 
                             then
                                 action="skip"
@@ -4431,7 +4448,8 @@ Monitor()
                                     flv_restart_count=${flv_restart_count:-1}
                                     ((flv_restart_count++))
                                     flv_first_fail=""
-                                    printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
+                                    printf -v date_now "%(%m-%d %H:%M:%S)T"
+                                    printf '%s\n' "$date_now $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
                                     sleep 10
                                 fi
                             fi
@@ -4442,10 +4460,11 @@ Monitor()
                                 flv_restart_count=${flv_restart_count:-1}
                                 ((flv_restart_count++))
                                 flv_first_fail=""
-                                printf '%s\n' "$(date -d now "+%m-%d %H:%M:%S") $chnl_channel_name flv 恢复启动" >> "$MONITOR_LOG"
+                                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                                printf '%s\n' "$date_now $chnl_channel_name flv 恢复启动" >> "$MONITOR_LOG"
                                 sleep 10
                             else
-                                flv_first_fail=$(date +%s)
+                                printf -v flv_first_fail "%(%s)T"
                             fi
 
                             new_array=("$flv_num")
@@ -4554,6 +4573,8 @@ Monitor()
                     fi
                 done
             fi
+
+            AntiDDoS
         fi
 
         sleep 5
@@ -4838,7 +4859,7 @@ MonitorSet()
 
 MonitorStop()
 {
-    date_now=$(date -d now "+%m-%d %H:%M:%S")
+    printf -v date_now "%(%m-%d %H:%M:%S)T"
     if [ ! -s "$MONITOR_PID" ] 
     then
         echo -e "$error 监控未启动 !"
