@@ -4233,36 +4233,88 @@ AntiDDoS()
 {
     if [ -n "${anti_ddos:-}" ]
     then
+        output_dir_names=()
+        triggers=()
+        GetChannelsInfo
         for output_dir_root in "$LIVE_ROOT"/*
         do
             output_dir_name=${output_dir_root#*$LIVE_ROOT/}
-            GetChannelInfo
-            trigger=$(( 60 * 5 / (chnl_seg_length * chnl_seg_count) ))
-            printf -v now "%(%s)T"
-            for file in "$chnl_output_dir_root/$chnl_seg_dir_name"/*.ts
-            do
-                link=${file#*$LIVE_ROOT}
-                while IFS=' ' read -r counts ip
-                do
-                    if [ "$counts" -lt $trigger ] 
-                    then
-                        break 1
-                    fi
 
-                    case "${ips[@]}" in
-                        *"$ip"*) 
-                        ;;
-                        *) 
-                            printf '%s\n' "$ip" >> "$IP_DENY"
-                            ufw deny from "$ip" to any port 80
-                            printf '%s\n' "$now $ip 已被禁" >> "$MONITOR_LOG"
-                            ips=$(< "$IP_DENY")
-                        ;;
-                    esac
-                done< <(awk -v d1="$(printf '%(%d/%b/%Y:%H:%M:%S)T' $((now-60)))" '{gsub(/^[\[\t]+/, "", $4); if ($7 ~ "'"$link"'" && $4 > d1 ) print $1;}' /usr/local/nginx/logs/access.log | sort | uniq -c | sort -fr)
-                # date --date '-1 min' '+%d/%b/%Y:%T'
+            for((i=0;i<channels_count;i++));
+            do
+                if [ "$output_dir_name" == "${chnls_output_dir_name[i]}" ] 
+                then
+                    output_dir_names+=("$output_dir_name")
+                    chnl_seg_length=${chnls_seg_length[i]}
+                    chnl_seg_count=${chnls_seg_count[i]}
+                    trigger=$(( 60 * 5 / (chnl_seg_length * chnl_seg_count) ))
+                    triggers+=("$trigger")
+                fi
             done
         done
+
+        dir_counts=${#output_dir_names[@]}
+        
+        printf -v now "%(%s)T"
+
+        if [ -z "${start:-}" ] 
+        then
+            start=$now
+        elif [ $((now - start)) -gt 300 ] 
+        then
+            while IFS= read -r ip
+            do
+                ufw delete deny from "$ip" to any port 80
+            done < "$IP_DENY"
+            printf "" > "$IP_DENY"
+            start=""
+            ips=""
+        fi
+        
+        while IFS=' ' read -r counts ip file
+        do
+            if [[ "$file" == *".ts" ]] 
+            then
+                seg_name=${file##*/}
+                file=${file%/*}
+                dir_name=${file##*/}
+                file=${file%/*}
+                match=0
+                if [ -e "$LIVE_ROOT/$dir_name/$seg_name" ] 
+                then
+                    output_dir_name=$dir_name
+                    match=1
+                elif [ -e "$LIVE_ROOT/${file##*/}/$dir_name/$seg_name" ] 
+                then
+                    output_dir_name=${file##*/}
+                    match=1
+                fi
+
+                if [ "$match" == 1 ] 
+                then
+                    for((i=0;i<dir_counts;i++));
+                    do
+                        if [ "${output_dir_names[i]}" == "$output_dir_name" ] && [ "$counts" -gt "${triggers[i]}" ]
+                        then
+                            case "${ips[@]}" in
+                                *"$ip"*) 
+                                ;;
+                                *) 
+                                    printf '%s\n' "$ip" >> "$IP_DENY"
+                                    ufw insert 1 deny from "$ip" to any port 80
+                                    printf -v date_now "%(%m-%d %H:%M:%S)T"
+                                    printf '%s\n' "$date_now $ip 已被禁" >> "$MONITOR_LOG"
+                                    ips=$(< "$IP_DENY")
+                                ;;
+                            esac
+                            break 1
+                        fi
+                    done
+                fi
+            fi
+        done< <(awk -v d1="$(printf '%(%d/%b/%Y:%H:%M:%S)T' $((now-60)))" '{gsub(/^[\[\t]+/, "", $4); if ( $4 > d1 ) print $1,$7;}' /usr/local/nginx/logs/access.log | sort | uniq -c | sort -k1 -nr)
+        # date --date '-1 min' '+%d/%b/%Y:%T'
+        # awk -v d1="$(printf '%(%d/%b/%Y:%H:%M:%S)T' $((now-60)))" '{gsub(/^[\[\t]+/, "", $4); if ($7 ~ "'"$link"'" && $4 > d1 ) print $1;}' /usr/local/nginx/logs/access.log | sort | uniq -c | sort -fr
     fi
 }
 
@@ -4293,9 +4345,9 @@ Monitor()
             then
                 for((i=0;i<flv_count;i++));
                 do
-                    chnl_flv_pull_link=${chnls_flv_pull_link[i]%\'}
+                    chnl_flv_pull_link=${monitor_flv_pull_links[i]%\'}
                     chnl_flv_pull_link=${chnl_flv_pull_link#\'}
-                    chnl_flv_push_link=${chnls_flv_push_link[i]%\'}
+                    chnl_flv_push_link=${monitor_flv_push_links[i]%\'}
                     chnl_flv_push_link=${chnl_flv_push_link#\'}
                     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
                     FFPROBE="$FFMPEG_ROOT/ffprobe"
@@ -4313,25 +4365,25 @@ Monitor()
                                 printf '%s\n' "$date_now $chnl_channel_name flv 重启超过${flv_restart_nums:-20}次关闭" >> "$MONITOR_LOG"
                             fi
 
-                            unset 'chnls_flv_push_link[0]'
+                            unset 'monitor_flv_push_links[0]'
                             declare -a new_array
-                            for element in "${chnls_flv_push_link[@]}"
+                            for element in "${monitor_flv_push_links[@]}"
                             do
                                 new_array[i]=$element
                                 ((++i))
                             done
-                            chnls_flv_push_link=("${new_array[@]}")
+                            monitor_flv_push_links=("${new_array[@]}")
                             unset new_array
 
-                            unset 'chnls_flv_pull_link[0]'
+                            unset 'monitor_flv_pull_links[0]'
                             declare -a new_array
                             i=0
-                            for element in "${chnls_flv_pull_link[@]}"
+                            for element in "${monitor_flv_pull_links[@]}"
                             do
                                 new_array[i]=$element
                                 ((++i))
                             done
-                            chnls_flv_pull_link=("${new_array[@]}")
+                            monitor_flv_pull_links=("${new_array[@]}")
                             unset new_array
 
                             flv_first_fail=""
@@ -4374,21 +4426,21 @@ Monitor()
                             fi
 
                             new_array=("$chnl_flv_push_link")
-                            for element in "${chnls_flv_push_link[@]}"
+                            for element in "${monitor_flv_push_links[@]}"
                             do
                                 element=${element%\'}
                                 element=${element#\'}
                                 [ "$element" != "$chnl_flv_push_link" ] && new_array+=("$element")
                             done
-                            chnls_flv_push_link=("${new_array[@]}")
+                            monitor_flv_push_links=("${new_array[@]}")
                             unset new_array
 
-                            new_array=("${chnls_flv_pull_link[i]}")
+                            new_array=("${monitor_flv_pull_links[i]}")
                             for((j=0;j<flv_count;j++));
                             do
-                                [ "$j" != "$i" ] && new_array+=("${chnls_flv_pull_link[$j]}")
+                                [ "$j" != "$i" ] && new_array+=("${monitor_flv_pull_links[$j]}")
                             done
-                            chnls_flv_pull_link=("${new_array[@]}")
+                            monitor_flv_pull_links=("${new_array[@]}")
                             unset new_array
                         fi
 
@@ -4401,9 +4453,9 @@ Monitor()
             else
                 for flv_num in "${flv_nums_arr[@]}"
                 do
-                    chnl_flv_pull_link=${chnls_flv_pull_link[$((flv_num-1))]%\'}
+                    chnl_flv_pull_link=${monitor_flv_pull_links[$((flv_num-1))]%\'}
                     chnl_flv_pull_link=${chnl_flv_pull_link#\'}
-                    chnl_flv_push_link=${chnls_flv_push_link[$((flv_num-1))]%\'}
+                    chnl_flv_push_link=${monitor_flv_push_links[$((flv_num-1))]%\'}
                     chnl_flv_push_link=${chnl_flv_push_link#\'}
                     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
                     FFPROBE="$FFMPEG_ROOT/ffprobe"
@@ -4585,9 +4637,9 @@ MonitorSet()
 {
     monitor=1
     flv_count=0
-    chnls_channel_name=()
-    chnls_flv_push_link=()
-    chnls_flv_pull_link=()
+    monitor_channel_names=()
+    monitor_flv_push_links=()
+    monitor_flv_pull_links=()
     while IFS= read -r flv_channel
     do
         flv_count=$((flv_count+1))
@@ -4597,9 +4649,9 @@ MonitorSet()
         map_flv_push_link=${map_flv_push_link%, flv_pull_link:*}
         map_flv_pull_link=${flv_channel#*flv_pull_link: }
 
-        chnls_channel_name+=("$map_channel_name");
-        chnls_flv_push_link+=("$map_flv_push_link");
-        chnls_flv_pull_link+=("${map_flv_pull_link:-''}");
+        monitor_channel_names+=("$map_channel_name");
+        monitor_flv_push_links+=("$map_flv_push_link");
+        monitor_flv_pull_links+=("${map_flv_pull_link:-''}");
     done < <($JQ_FILE -r '.channels | to_entries | map(select(.value.flv_status=="on")) | map("channel_name: \(.value.channel_name), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
 
     if [ "$flv_count" -gt 0 ] 
@@ -4609,9 +4661,9 @@ MonitorSet()
 
         for((i=0;i<flv_count;i++));
         do
-            flv_pull_link=${chnls_flv_pull_link[i]%\'}
+            flv_pull_link=${monitor_flv_pull_links[i]%\'}
             flv_pull_link=${flv_pull_link#\'}
-            echo -e "  ${green}$((i+1)).$plain ${chnls_channel_name[i]} ${flv_pull_link}"
+            echo -e "  ${green}$((i+1)).$plain ${monitor_channel_names[i]} ${flv_pull_link}"
         done
 
         echo && echo -e "  ${green}$((i+1)).$plain 全部"
