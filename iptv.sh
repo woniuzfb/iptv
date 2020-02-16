@@ -8,6 +8,7 @@ SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
 IPTV_ROOT="/usr/local/iptv"
 IP_DENY="$IPTV_ROOT/ip.deny"
+IP_LOG="$IPTV_ROOT/ip.log"
 FFMPEG_MIRROR_LINK="http://47.241.6.233/ffmpeg"
 FFMPEG_MIRROR_ROOT="$IPTV_ROOT/ffmpeg"
 LIVE_ROOT="$IPTV_ROOT/live"
@@ -4177,6 +4178,38 @@ TsMenu()
     
 }
 
+MonitorStop()
+{
+    printf -v date_now "%(%m-%d %H:%M:%S)T"
+    if [ ! -s "$MONITOR_PID" ] 
+    then
+        echo -e "$error 监控未启动 !"
+    else
+        PID=$(< "$MONITOR_PID")
+        if kill -0 "$PID" 2> /dev/null
+        then
+            if kill -9 "$PID" 2> /dev/null 
+            then
+                if [ -s "$IP_DENY" ] 
+                then
+                    while IFS= read -r ip
+                    do
+                        ufw delete deny from "$ip" to any port 80 || true
+                    done < "$IP_DENY"
+                    printf "" > "$IP_DENY"
+                fi
+                printf '%s\n' "$date_now 监控关闭成功 PID $PID !" >> "$MONITOR_LOG"
+                echo -e "$info 监控关闭成功 !"
+            else
+                printf '%s\n' "$date_now 监控关闭失败 PID $PID !" >> "$MONITOR_LOG"
+                echo -e "$error 监控关闭失败 !"
+            fi
+        else
+            echo -e "$error 监控未启动 !"
+        fi
+    fi
+}
+
 MonitorError()
 {
     printf -v date_now "%(%m-%d %H:%M:%S)T"
@@ -4231,6 +4264,8 @@ MonitorRestartChannel()
 
 AntiDDoS()
 {
+    trap '' HUP INT TERM QUIT EXIT
+    trap 'MonitorError $LINENO' ERR
     if [ -n "${anti_ddos:-}" ]
     then
         output_dir_names=()
@@ -4260,15 +4295,15 @@ AntiDDoS()
         if [ -z "${start:-}" ] 
         then
             start=$now
-        elif [ $((now - start)) -gt 300 ] 
+        elif [ -s "$IP_DENY" ] && [ $((now - start)) -gt 120 ]
         then
             while IFS= read -r ip
             do
-                ufw delete deny from "$ip" to any port 80
+                ufw delete deny from "$ip" to any port 80 || true
             done < "$IP_DENY"
             printf "" > "$IP_DENY"
             start=""
-            ips=""
+            ips=()
         fi
         
         while IFS=' ' read -r counts ip file
@@ -4279,34 +4314,37 @@ AntiDDoS()
                 file=${file%/*}
                 dir_name=${file##*/}
                 file=${file%/*}
-                match=0
+                to_ban=0
+
                 if [ -e "$LIVE_ROOT/$dir_name/$seg_name" ] 
                 then
                     output_dir_name=$dir_name
-                    match=1
+                    to_ban=1
                 elif [ -e "$LIVE_ROOT/${file##*/}/$dir_name/$seg_name" ] 
                 then
                     output_dir_name=${file##*/}
-                    match=1
+                    to_ban=1
                 fi
 
-                if [ "$match" == 1 ] 
+                for banned_ip in "${ips[@]}"
+                do
+                    if [ "$banned_ip" == "$ip" ] 
+                    then
+                        to_ban=0
+                    fi
+                done
+
+                if [ "$to_ban" == 1 ] 
                 then
                     for((i=0;i<dir_counts;i++));
                     do
                         if [ "${output_dir_names[i]}" == "$output_dir_name" ] && [ "$counts" -gt "${triggers[i]}" ]
                         then
-                            case "${ips[@]}" in
-                                *"$ip"*) 
-                                ;;
-                                *) 
-                                    printf '%s\n' "$ip" >> "$IP_DENY"
-                                    ufw insert 1 deny from "$ip" to any port 80
-                                    printf -v date_now "%(%m-%d %H:%M:%S)T"
-                                    printf '%s\n' "$date_now $ip 已被禁" >> "$MONITOR_LOG"
-                                    ips=$(< "$IP_DENY")
-                                ;;
-                            esac
+                            printf '%s\n' "$ip" >> "$IP_DENY"
+                            ufw insert 1 deny from "$ip" to any port 80
+                            printf -v date_now "%(%m-%d %H:%M:%S)T"
+                            printf '%s\n' "$date_now $ip 已被禁" >> "$IP_LOG"
+                            ips+=("$ip")
                             break 1
                         fi
                     done
@@ -4325,11 +4363,16 @@ Monitor()
     printf '%s' "$BASHPID" > "$MONITOR_PID"
     printf -v date_now "%(%m-%d %H:%M:%S)T"
     mkdir -p "$LIVE_ROOT"
+    ips=()
     if [ -s "$IP_DENY" ] 
     then
-        ips=$(< "$IP_DENY")
-    else
-        ips=""
+        while IFS= read -r ip
+        do
+            if [ -n "$ip" ] 
+            then
+                ips+=("$ip")
+            fi
+        done < "$IP_DENY"
     fi
     if [ -x "$(command -v ufw)" ] && [ -s "/usr/local/nginx/logs/access.log" ]
     then
@@ -4361,8 +4404,6 @@ Monitor()
                             if [ "$chnl_flv_status" == "on" ] 
                             then
                                 StopChannel || true
-                                printf -v date_now "%(%m-%d %H:%M:%S)T"
-                                printf '%s\n' "$date_now $chnl_channel_name flv 重启超过${flv_restart_nums:-20}次关闭" >> "$MONITOR_LOG"
                             fi
 
                             unset 'monitor_flv_push_links[0]'
@@ -4389,6 +4430,9 @@ Monitor()
                             flv_first_fail=""
                             flv_restart_count=1
                             ((flv_count--))
+
+                            printf -v date_now "%(%m-%d %H:%M:%S)T"
+                            printf '%s\n' "$date_now $chnl_channel_name flv 重启超过${flv_restart_nums:-20}次关闭" >> "$MONITOR_LOG"
                             break 1
                         fi
 
@@ -4907,30 +4951,6 @@ MonitorSet()
             ;;
         esac
     done
-}
-
-MonitorStop()
-{
-    printf -v date_now "%(%m-%d %H:%M:%S)T"
-    if [ ! -s "$MONITOR_PID" ] 
-    then
-        echo -e "$error 监控未启动 !"
-    else
-        PID=$(< "$MONITOR_PID")
-        if kill -0 "$PID" 2> /dev/null
-        then
-            if kill -9 "$PID" 2> /dev/null 
-            then
-                printf '%s\n' "$date_now 监控关闭成功 PID $PID !" >> "$MONITOR_LOG"
-                echo -e "$info 监控关闭成功 !"
-            else
-                printf '%s\n' "$date_now 监控关闭失败 PID $PID !" >> "$MONITOR_LOG"
-                echo -e "$error 监控关闭失败 !"
-            fi
-        else
-            echo -e "$error 监控未启动 !"
-        fi
-    fi
 }
 
 Usage()
