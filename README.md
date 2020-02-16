@@ -1,4 +1,4 @@
-# 一键管理 IPTV 脚本 mpegts / hls / flv => hls / flv 推流
+# 一键管理 IPTV 脚本 mpegts / flv => hls / flv 推流
 
 - HBO 中文直播 + 集各广电直播源
 - 默认如果没有本地频道（channels.json）,会请求远程服务器频道
@@ -14,10 +14,11 @@
 
 ---
 
-## iptv.sh 一键管理 IPTV 脚本 mpegts / hls / flv => hls / flv 推流
+## iptv.sh 一键管理 IPTV 脚本 mpegts / flv => hls / flv 推流
 
 - 【自动化】HLS-Stream-Creator
 - 【扩展】可以设置画面音轨延迟修复不同步的问题，可以不输出 HLS，管理推流 flv 等
+- 自带防护
 - 自建节目表
 - 添加频道
   - 可以用命令行，详见 tv -h
@@ -81,7 +82,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
    ```
 
 - tv m 开启监控 flv推流 和 hls 输出目录，用来应对直播源出现变化导致 ffmpeg 无法继续分割的情况
-  - AntiDDoS  默认每5分钟清除被禁 ip，很多时候因为直播源重启/网络等问题浏览器会不停的发送请求同一个文件，所以会有误伤
+  - AntiDDoS  默认每2分钟清除被禁 ip，很多时候因为直播源重启/网络等问题浏览器会不停的发送请求同一个文件，所以会有误伤
   - 监控 FLV 选项：
     - 是否监控超时（默认20秒）
     - 重启次数（默认20次）

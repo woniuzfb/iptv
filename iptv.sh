@@ -8,6 +8,7 @@ SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
 IPTV_ROOT="/usr/local/iptv"
 IP_DENY="$IPTV_ROOT/ip.deny"
+IP_PID="$IPTV_ROOT/ip.pid"
 IP_LOG="$IPTV_ROOT/ip.log"
 FFMPEG_MIRROR_LINK="http://47.241.6.233/ffmpeg"
 FFMPEG_MIRROR_ROOT="$IPTV_ROOT/ffmpeg"
@@ -4178,6 +4179,213 @@ TsMenu()
     
 }
 
+AntiDDoS()
+{
+    trap '' HUP INT TERM QUIT EXIT
+    trap 'MonitorError $LINENO' ERR
+    printf '%s' "$BASHPID" > "$IP_PID"
+
+    ips=()
+    jail_time=()
+
+    if [ -s "$IP_DENY" ]  
+    then
+        while IFS= read -r line
+        do
+            if [[ "$line" == *:* ]] 
+            then
+                ip=${line%:*}
+                jail=${line#*:}
+                ips+=("$ip")
+                jail_time+=("$jail")
+            else
+                ip=$line
+                ufw delete deny from "$ip" to any port 80
+            fi
+        done < "$IP_DENY"
+
+        if [ -n "${ips:-}" ] 
+        then
+            new_ips=()
+            new_jail_time=()
+            printf -v now "%(%s)T"
+
+            update=0
+            for((i=0;i<${#ips[@]};i++));
+            do
+                if [ "$now" -gt "${jail_time[i]}" ] 
+                then
+                    ufw delete deny from "${ips[i]}" to any port 80
+                    update=1
+                else
+                    new_ips+=("${ips[i]}")
+                    new_jail_time+=("${jail_time[i]}")
+                fi
+            done
+
+            if [ "$update" == 1 ] 
+            then
+                ips=("${new_ips[@]}")
+                jail_time=("${new_jail_time[@]}")
+
+                printf "" > "$IP_DENY"
+
+                for((i=0;i<${#ips[@]};i++));
+                do
+                    printf '%s\n' "${ips[i]}:${jail_time[i]}" >> "$IP_DENY"
+                done
+            fi
+        else
+            printf "" > "$IP_DENY"
+        fi
+    fi
+
+    echo && echo -e "$info AntiDDoS 启动成功 !"
+    printf '%s\n' "$date_now AntiDDoS 启动成功 PID $BASHPID !" >> "$MONITOR_LOG"
+    
+    while true; do
+        channels_count=0
+        chnls_output_dir_name=()
+        chnls_seg_length=()
+        chnls_seg_count=()
+        while IFS= read -r channel
+        do
+            channels_count=$((channels_count+1))
+            map_output_dir_name=${channel#*output_dir_name: }
+            map_output_dir_name=${map_output_dir_name%, seg_length:*}
+            map_seg_length=${channel#*seg_length: }
+            map_seg_length=${map_seg_length%, seg_count:*}
+            map_seg_count=${channel#*seg_count: }
+
+            chnls_output_dir_name+=("$map_output_dir_name");
+            chnls_seg_length+=("$map_seg_length");
+            chnls_seg_count+=("$map_seg_count");
+        done < <($JQ_FILE -r '.channels | to_entries | map("output_dir_name: \(.value.output_dir_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count)") | .[]' "$CHANNELS_FILE")
+
+        output_dir_names=()
+        triggers=()
+        for output_dir_root in "$LIVE_ROOT"/*
+        do
+            output_dir_name=${output_dir_root#*$LIVE_ROOT/}
+
+            for((i=0;i<channels_count;i++));
+            do
+                if [ "$output_dir_name" == "${chnls_output_dir_name[i]}" ] 
+                then
+                    output_dir_names+=("$output_dir_name")
+                    chnl_seg_length=${chnls_seg_length[i]}
+                    chnl_seg_count=${chnls_seg_count[i]}
+                    trigger=$(( 60 * 7 / (chnl_seg_length * chnl_seg_count) ))
+                    triggers+=("$trigger")
+                fi
+            done
+        done
+        
+        printf -v now "%(%s)T"
+        jail=$((now + 120))
+
+        while IFS=' ' read -r counts ip file
+        do
+            if [[ "$file" == *".ts" ]] 
+            then
+                seg_name=${file##*/}
+                file=${file%/*}
+                dir_name=${file##*/}
+                file=${file%/*}
+                to_ban=0
+
+                if [ -e "$LIVE_ROOT/$dir_name/$seg_name" ] 
+                then
+                    output_dir_name=$dir_name
+                    to_ban=1
+                elif [ -e "$LIVE_ROOT/${file##*/}/$dir_name/$seg_name" ] 
+                then
+                    output_dir_name=${file##*/}
+                    to_ban=1
+                fi
+
+                for banned_ip in "${ips[@]}"
+                do
+                    if [ "$banned_ip" == "$ip" ] 
+                    then
+                        to_ban=0
+                    fi
+                done
+
+                if [ "$to_ban" == 1 ] 
+                then
+                    for((i=0;i<${#output_dir_names[@]};i++));
+                    do
+                        if [ "${output_dir_names[i]}" == "$output_dir_name" ] && [ "$counts" -gt "${triggers[i]}" ]
+                        then
+                            jail_time+=("$jail")
+                            printf '%s\n' "$ip:$jail" >> "$IP_DENY"
+                            ufw insert 1 deny from "$ip" to any port 80
+                            printf -v date_now "%(%m-%d %H:%M:%S)T"
+                            printf '%s\n' "$date_now $ip 已被禁" >> "$IP_LOG"
+                            ips+=("$ip")
+                            break 1
+                        fi
+                    done
+                fi
+            fi
+        done< <(awk -v d1="$(printf '%(%d/%b/%Y:%H:%M:%S)T' $((now-60)))" '{gsub(/^[\[\t]+/, "", $4); if ( $4 > d1 ) print $1,$7;}' /usr/local/nginx/logs/access.log | sort | uniq -c | sort -k1 -nr)
+        # date --date '-1 min' '+%d/%b/%Y:%T'
+        # awk -v d1="$(printf '%(%d/%b/%Y:%H:%M:%S)T' $((now-60)))" '{gsub(/^[\[\t]+/, "", $4); if ($7 ~ "'"$link"'" && $4 > d1 ) print $1;}' /usr/local/nginx/logs/access.log | sort | uniq -c | sort -fr
+        sleep 10
+
+        if [ -n "${ips:-}" ] 
+        then
+            new_ips=()
+            new_jail_time=()
+            printf -v now "%(%s)T"
+
+            update=0
+            for((i=0;i<${#ips[@]};i++));
+            do
+                if [ "$now" -gt "${jail_time[i]}" ] 
+                then
+                    ufw delete deny from "${ips[i]}" to any port 80
+                    update=1
+                else
+                    new_ips+=("${ips[i]}")
+                    new_jail_time+=("${jail_time[i]}")
+                fi
+            done
+
+            if [ "$update" == 1 ] 
+            then
+                ips=("${new_ips[@]}")
+                jail_time=("${new_jail_time[@]}")
+
+                printf "" > "$IP_DENY"
+
+                for((i=0;i<${#ips[@]};i++));
+                do
+                    printf '%s\n' "${ips[i]}:${jail_time[i]}" >> "$IP_DENY"
+                done
+            fi
+        fi
+    done
+}
+
+AntiDDoSSet()
+{
+    sleep 2
+    if [ -x "$(command -v ufw)" ] && [ -s "/usr/local/nginx/logs/access.log" ] && ls -A $LIVE_ROOT/* > /dev/null 2>&1
+    then
+        echo && echo "是否启动 AntiDDoS [Y/n]"
+        read -p "(默认: Y):" anti_ddos
+        anti_ddos=${anti_ddos:-"Y"}
+        if [[ "$anti_ddos" != [Yy] ]] 
+        then
+            echo && echo "不启动 AntiDDoS ..." && echo && exit 0
+        fi
+    else
+        exit 0
+    fi
+}
+
 MonitorStop()
 {
     printf -v date_now "%(%m-%d %H:%M:%S)T"
@@ -4190,14 +4398,6 @@ MonitorStop()
         then
             if kill -9 "$PID" 2> /dev/null 
             then
-                if [ -s "$IP_DENY" ] 
-                then
-                    while IFS= read -r ip
-                    do
-                        ufw delete deny from "$ip" to any port 80 || true
-                    done < "$IP_DENY"
-                    printf "" > "$IP_DENY"
-                fi
                 printf '%s\n' "$date_now 监控关闭成功 PID $PID !" >> "$MONITOR_LOG"
                 echo -e "$info 监控关闭成功 !"
             else
@@ -4206,6 +4406,75 @@ MonitorStop()
             fi
         else
             echo -e "$error 监控未启动 !"
+        fi
+    fi
+
+    if [ -s "$IP_PID" ] 
+    then
+        PID=$(< "$IP_PID")
+        if kill -0 "$PID" 2> /dev/null
+        then
+            if kill -9 "$PID" 2> /dev/null 
+            then
+                if [ -s "$IP_DENY" ] 
+                then
+                    ips=()
+                    jail_time=()
+                    while IFS= read -r line
+                    do
+                        if [[ "$line" == *:* ]] 
+                        then
+                            ip=${line%:*}
+                            jail=${line#*:}
+                            ips+=("$ip")
+                            jail_time+=("$jail")
+                        else
+                            ip=$line
+                            ufw delete deny from "$ip" to any port 80
+                        fi
+                    done < "$IP_DENY"
+
+                    if [ -n "${ips:-}" ] 
+                    then
+                        new_ips=()
+                        new_jail_time=()
+                        printf -v now "%(%s)T"
+
+                        update=0
+                        for((i=0;i<${#ips[@]};i++));
+                        do
+                            if [ "$now" -gt "${jail_time[i]}" ] 
+                            then
+                                ufw delete deny from "${ips[i]}" to any port 80
+                                update=1
+                            else
+                                new_ips+=("${ips[i]}")
+                                new_jail_time+=("${jail_time[i]}")
+                            fi
+                        done
+
+                        if [ "$update" == 1 ] 
+                        then
+                            ips=("${new_ips[@]}")
+                            jail_time=("${new_jail_time[@]}")
+
+                            printf "" > "$IP_DENY"
+
+                            for((i=0;i<${#ips[@]};i++));
+                            do
+                                printf '%s\n' "${ips[i]}:${jail_time[i]}" >> "$IP_DENY"
+                            done
+                        fi
+                    else
+                        printf "" > "$IP_DENY"
+                    fi
+                fi
+                printf '%s\n' "$date_now AntiDDoS 关闭成功 PID $PID !" >> "$MONITOR_LOG"
+                echo -e "$info AntiDDoS 关闭成功 !"
+            else
+                printf '%s\n' "$date_now AntiDDoS 关闭失败 PID $PID !" >> "$MONITOR_LOG"
+                echo -e "$error AntiDDoS 关闭失败 !"
+            fi
         fi
     fi
 }
@@ -4262,122 +4531,12 @@ MonitorRestartChannel()
     done
 }
 
-AntiDDoS()
-{
-    trap '' HUP INT TERM QUIT EXIT
-    trap 'MonitorError $LINENO' ERR
-    if [ -n "${anti_ddos:-}" ]
-    then
-        output_dir_names=()
-        triggers=()
-        GetChannelsInfo
-        for output_dir_root in "$LIVE_ROOT"/*
-        do
-            output_dir_name=${output_dir_root#*$LIVE_ROOT/}
-
-            for((i=0;i<channels_count;i++));
-            do
-                if [ "$output_dir_name" == "${chnls_output_dir_name[i]}" ] 
-                then
-                    output_dir_names+=("$output_dir_name")
-                    chnl_seg_length=${chnls_seg_length[i]}
-                    chnl_seg_count=${chnls_seg_count[i]}
-                    trigger=$(( 60 * 5 / (chnl_seg_length * chnl_seg_count) ))
-                    triggers+=("$trigger")
-                fi
-            done
-        done
-
-        dir_counts=${#output_dir_names[@]}
-        
-        printf -v now "%(%s)T"
-
-        if [ -z "${start:-}" ] 
-        then
-            start=$now
-        elif [ -s "$IP_DENY" ] && [ $((now - start)) -gt 120 ]
-        then
-            while IFS= read -r ip
-            do
-                ufw delete deny from "$ip" to any port 80 || true
-            done < "$IP_DENY"
-            printf "" > "$IP_DENY"
-            start=""
-            ips=()
-        fi
-        
-        while IFS=' ' read -r counts ip file
-        do
-            if [[ "$file" == *".ts" ]] 
-            then
-                seg_name=${file##*/}
-                file=${file%/*}
-                dir_name=${file##*/}
-                file=${file%/*}
-                to_ban=0
-
-                if [ -e "$LIVE_ROOT/$dir_name/$seg_name" ] 
-                then
-                    output_dir_name=$dir_name
-                    to_ban=1
-                elif [ -e "$LIVE_ROOT/${file##*/}/$dir_name/$seg_name" ] 
-                then
-                    output_dir_name=${file##*/}
-                    to_ban=1
-                fi
-
-                for banned_ip in "${ips[@]}"
-                do
-                    if [ "$banned_ip" == "$ip" ] 
-                    then
-                        to_ban=0
-                    fi
-                done
-
-                if [ "$to_ban" == 1 ] 
-                then
-                    for((i=0;i<dir_counts;i++));
-                    do
-                        if [ "${output_dir_names[i]}" == "$output_dir_name" ] && [ "$counts" -gt "${triggers[i]}" ]
-                        then
-                            printf '%s\n' "$ip" >> "$IP_DENY"
-                            ufw insert 1 deny from "$ip" to any port 80
-                            printf -v date_now "%(%m-%d %H:%M:%S)T"
-                            printf '%s\n' "$date_now $ip 已被禁" >> "$IP_LOG"
-                            ips+=("$ip")
-                            break 1
-                        fi
-                    done
-                fi
-            fi
-        done< <(awk -v d1="$(printf '%(%d/%b/%Y:%H:%M:%S)T' $((now-60)))" '{gsub(/^[\[\t]+/, "", $4); if ( $4 > d1 ) print $1,$7;}' /usr/local/nginx/logs/access.log | sort | uniq -c | sort -k1 -nr)
-        # date --date '-1 min' '+%d/%b/%Y:%T'
-        # awk -v d1="$(printf '%(%d/%b/%Y:%H:%M:%S)T' $((now-60)))" '{gsub(/^[\[\t]+/, "", $4); if ($7 ~ "'"$link"'" && $4 > d1 ) print $1;}' /usr/local/nginx/logs/access.log | sort | uniq -c | sort -fr
-    fi
-}
-
 Monitor()
 {
     trap '' HUP INT TERM QUIT EXIT
     trap 'MonitorError $LINENO' ERR
     printf '%s' "$BASHPID" > "$MONITOR_PID"
-    printf -v date_now "%(%m-%d %H:%M:%S)T"
     mkdir -p "$LIVE_ROOT"
-    ips=()
-    if [ -s "$IP_DENY" ] 
-    then
-        while IFS= read -r ip
-        do
-            if [ -n "$ip" ] 
-            then
-                ips+=("$ip")
-            fi
-        done < "$IP_DENY"
-    fi
-    if [ -x "$(command -v ufw)" ] && [ -s "/usr/local/nginx/logs/access.log" ]
-    then
-        anti_ddos=1
-    fi
     printf '%s\n' "$date_now 监控启动成功 PID $BASHPID !" >> "$MONITOR_LOG"
     echo -e "$info 监控启动成功 !"
     while true; do
@@ -4669,8 +4828,6 @@ Monitor()
                     fi
                 done
             fi
-
-            AntiDDoS
         fi
 
         sleep 5
@@ -4733,11 +4890,11 @@ MonitorSet()
                         *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
                         ;;
                         *) 
-                            if [ "$flv_seconds" -gt 20 ]
+                            if [ "$flv_seconds" -gt 0 ]
                             then
                                 break
                             else
-                                echo && echo -e "$error 请输入正确的数字(大于20)" && echo
+                                echo && echo -e "$error 请输入正确的数字(大于0)" && echo
                             fi
                         ;;
                     esac
@@ -4775,11 +4932,11 @@ MonitorSet()
                             *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
                             ;;
                             *) 
-                                if [ "$flv_seconds" -gt 20 ]
+                                if [ "$flv_seconds" -gt 0 ]
                                 then
                                     break
                                 else
-                                    echo && echo -e "$error 请输入正确的数字(大于20)" && echo
+                                    echo && echo -e "$error 请输入正确的数字(大于0)" && echo
                                 fi
                             ;;
                         esac
@@ -4811,6 +4968,10 @@ MonitorSet()
 
     if ! ls -A $LIVE_ROOT/* > /dev/null 2>&1
     then
+        if [ "$flv_count" == 0 ] 
+        then
+            echo && echo -e "$error 没有开启的频道！" && echo && exit 1
+        fi
         return 0
     fi
     echo && echo "请选择需要监控超时重启的 HLS 频道(多个频道用空格分隔)"
@@ -5057,16 +5218,22 @@ then
                 *) 
                     if [ ! -s "$MONITOR_PID" ] 
                     then
+                        printf -v date_now "%(%m-%d %H:%M:%S)T"
                         MonitorSet
                         Monitor &
+                        AntiDDoSSet
+                        AntiDDoS &
                     else
                         PID=$(< "$MONITOR_PID")
                         if kill -0 "$PID" 2> /dev/null 
                         then
                             echo -e "$error 监控已经在运行 !"
                         else
+                            printf -v date_now "%(%m-%d %H:%M:%S)T"
                             MonitorSet
                             Monitor &
+                            AntiDDoSSet
+                            AntiDDoS &
                         fi
                     fi
                 ;;
