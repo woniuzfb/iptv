@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-sh_ver="1.3.0"
+sh_ver="1.4.0"
 SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
@@ -54,6 +54,9 @@ default='
     "sync_index":"data:0:channels",
     "sync_pairs":"chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live",
     "schedule_file":"",
+    "anti_ddos_port":80,
+    "anti_ddos_seconds":120,
+    "anti_ddos_level":6,
     "version":"'"$sh_ver"'"
 }'
 
@@ -452,7 +455,10 @@ UpdateSelf()
     if [ "$d_version" != "$sh_ver" ] 
     then
         echo -e "$info 更新中，请稍等..." && echo
-        default=$($JQ_FILE '(.playlist_name)="'"$d_playlist_name"'"|(.seg_dir_name)="'"$d_seg_dir_name"'"|(.seg_name)="'"$d_seg_name"'"|(.seg_length)='"$d_seg_length"'|(.seg_count)='"$d_seg_count"'|(.video_codec)="'"$d_video_codec"'"|(.audio_codec)="'"$d_audio_codec"'"|(.video_audio_shift)="'"$d_video_audio_shift"'"|(.quality)="'"$d_quality"'"|(.bitrates)="'"$d_bitrates"'"|(.const)="'"$d_const_yn"'"|(.encrypt)="'"$d_encrypt_yn"'"|(.key_name)="'"$d_key_name"'"|(.input_flags)="'"$d_input_flags"'"|(.output_flags)="'"$d_output_flags"'"|(.sync_file)="'"$d_sync_file"'"|(.sync_index)="'"$d_sync_index"'"|(.sync_pairs)="'"$d_sync_pairs"'"|(.schedule_file)="'"$d_schedule_file"'"' <<< "$default")
+        printf -v update_date "%(%m-%d)T"
+        cp -f "$CHANNELS_FILE" "${CHANNELS_FILE}_$update_date"
+        
+        default=$($JQ_FILE '(.playlist_name)="'"$d_playlist_name"'"|(.seg_dir_name)="'"$d_seg_dir_name"'"|(.seg_name)="'"$d_seg_name"'"|(.seg_length)='"$d_seg_length"'|(.seg_count)='"$d_seg_count"'|(.video_codec)="'"$d_video_codec"'"|(.audio_codec)="'"$d_audio_codec"'"|(.video_audio_shift)="'"$d_video_audio_shift"'"|(.quality)="'"$d_quality"'"|(.bitrates)="'"$d_bitrates"'"|(.const)="'"$d_const_yn"'"|(.encrypt)="'"$d_encrypt_yn"'"|(.key_name)="'"$d_key_name"'"|(.input_flags)="'"$d_input_flags"'"|(.output_flags)="'"$d_output_flags"'"|(.sync_file)="'"$d_sync_file"'"|(.sync_index)="'"$d_sync_index"'"|(.sync_pairs)="'"$d_sync_pairs"'"|(.schedule_file)="'"$d_schedule_file"'"|(.anti_ddos_port)='"$d_anti_ddos_port"'|(.anti_ddos_seconds)='"$d_anti_ddos_seconds"'|(.anti_ddos_level)='"$d_anti_ddos_level"'' <<< "$default")
 
         $JQ_FILE '. + {default: '"$default"'}' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
@@ -616,7 +622,21 @@ GetDefault()
         d_sync_pairs=${d_sync_pairs%, schedule_file:*}
         d_sync_pairs_text=${d_sync_pairs:-"不设置"}
         d_schedule_file=${d#*schedule_file: }
-        d_schedule_file=${d_schedule_file%, version:*}
+        if [[ "$d" == *"anti_ddos_port: "* ]] 
+        then
+            d_schedule_file=${d_schedule_file%, anti_ddos_port:*}
+            d_anti_ddos_port=${d#*anti_ddos_port: }
+            d_anti_ddos_port=${d_anti_ddos_port%, anti_ddos_seconds:*}
+            d_anti_ddos_seconds=${d#*anti_ddos_seconds: }
+            d_anti_ddos_seconds=${d_anti_ddos_seconds%, anti_ddos_level:*}
+            d_anti_ddos_level=${d#*anti_ddos_level: }
+            d_anti_ddos_level=${d_anti_ddos_level%, version:*}
+        else
+            d_schedule_file=${d_schedule_file%, version:*}
+            d_anti_ddos_port=80
+            d_anti_ddos_seconds=120
+            d_anti_ddos_level=6
+        fi
         d_version=${d#*version: }
     done < <($JQ_FILE -r '.default | to_entries | map([.key,.value]|join(": ")) | join(", ")' "$CHANNELS_FILE")
 }
@@ -4200,7 +4220,7 @@ AntiDDoS()
                 jail_time+=("$jail")
             else
                 ip=$line
-                ufw delete deny from "$ip" to any port 80
+                ufw delete deny from "$ip" to any port "$anti_ddos_port"
             fi
         done < "$IP_DENY"
 
@@ -4215,7 +4235,7 @@ AntiDDoS()
             do
                 if [ "$now" -gt "${jail_time[i]}" ] 
                 then
-                    ufw delete deny from "${ips[i]}" to any port 80
+                    ufw delete deny from "${ips[i]}" to any port "$anti_ddos_port"
                     update=1
                 else
                     new_ips+=("${ips[i]}")
@@ -4272,17 +4292,24 @@ AntiDDoS()
             do
                 if [ "$output_dir_name" == "${chnls_output_dir_name[i]}" ] 
                 then
-                    output_dir_names+=("$output_dir_name")
-                    chnl_seg_length=${chnls_seg_length[i]}
                     chnl_seg_count=${chnls_seg_count[i]}
-                    trigger=$(( 60 * 7 / (chnl_seg_length * chnl_seg_count) ))
-                    triggers+=("$trigger")
+                    if [ "$chnl_seg_count" != 0 ] 
+                    then
+                        chnl_seg_length=${chnls_seg_length[i]}
+                        trigger=$(( 60 * anti_ddos_level / (chnl_seg_length * chnl_seg_count) ))
+                        if [ "$trigger" == 0 ] 
+                        then
+                            trigger=1
+                        fi
+                        output_dir_names+=("$output_dir_name")
+                        triggers+=("$trigger")
+                    fi
                 fi
             done
         done
         
         printf -v now "%(%s)T"
-        jail=$((now + 120))
+        jail=$((now + anti_ddos_seconds))
 
         while IFS=' ' read -r counts ip file
         do
@@ -4320,7 +4347,7 @@ AntiDDoS()
                         then
                             jail_time+=("$jail")
                             printf '%s\n' "$ip:$jail" >> "$IP_DENY"
-                            ufw insert 1 deny from "$ip" to any port 80
+                            ufw insert 1 deny from "$ip" to any port "$anti_ddos_port" > /dev/null 2>> "$IP_LOG"
                             printf -v date_now "%(%m-%d %H:%M:%S)T"
                             printf '%s\n' "$date_now $ip 已被禁" >> "$IP_LOG"
                             ips+=("$ip")
@@ -4345,7 +4372,7 @@ AntiDDoS()
             do
                 if [ "$now" -gt "${jail_time[i]}" ] 
                 then
-                    ufw delete deny from "${ips[i]}" to any port 80
+                    ufw delete deny from "${ips[i]}" to any port "$anti_ddos_port" > /dev/null 2>> "$IP_LOG"
                     update=1
                 else
                     new_ips+=("${ips[i]}")
@@ -4371,14 +4398,81 @@ AntiDDoS()
 
 AntiDDoSSet()
 {
-    sleep 2
     if [ -x "$(command -v ufw)" ] && [ -s "/usr/local/nginx/logs/access.log" ] && ls -A $LIVE_ROOT/* > /dev/null 2>&1
     then
+        sleep 1
         echo && echo "是否启动 AntiDDoS [Y/n]"
         read -p "(默认: Y):" anti_ddos
         anti_ddos=${anti_ddos:-"Y"}
-        if [[ "$anti_ddos" != [Yy] ]] 
+        if [[ "$anti_ddos" == [Yy] ]] 
         then
+            GetDefault
+            echo && echo "设置封禁端口"
+            while read -p "(默认: ${d_anti_ddos_port:-80}):" anti_ddos_port
+            do
+                case $anti_ddos_port in
+                    "") anti_ddos_port=${d_anti_ddos_port:-80} && break
+                    ;;
+                    *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
+                    ;;
+                    *) 
+                        if [ "$anti_ddos_port" -gt 0 ]
+                        then
+                            break
+                        else
+                            echo && echo -e "$error 请输入正确的数字(大于0)" && echo
+                        fi
+                    ;;
+                esac
+            done
+
+            echo && echo "设置封禁ip多少秒"
+            while read -p "(默认: ${d_anti_ddos_seconds:-120}秒):" anti_ddos_seconds
+            do
+                case $anti_ddos_seconds in
+                    "") anti_ddos_seconds=${d_anti_ddos_seconds:-120} && break
+                    ;;
+                    *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
+                    ;;
+                    *) 
+                        if [ "$anti_ddos_seconds" -gt 0 ]
+                        then
+                            break
+                        else
+                            echo && echo -e "$error 请输入正确的数字(大于0)" && echo
+                        fi
+                    ;;
+                esac
+            done
+
+            echo && echo "设置封禁等级(1-9)"
+            echo -e "$tip 数值越低越严格，也越容易误伤，很多情况是网络问题导致重复请求并非 DDoS" && echo
+            while read -p "(默认: ${d_anti_ddos_level:-6}):" anti_ddos_level
+            do
+                case $anti_ddos_level in
+                    "") 
+                        anti_ddos_level=${d_anti_ddos_level:-6}
+                        break
+                    ;;
+                    *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
+                    ;;
+                    *) 
+                        if [ "$anti_ddos_level" -gt 0 ] && [ "$anti_ddos_level" -lt 10 ]
+                        then
+                            break
+                        else
+                            echo && echo -e "$error 请输入正确的数字(1-9)" && echo
+                        fi
+                    ;;
+                esac
+            done
+
+            $JQ_FILE '(.default|.anti_ddos_port)='"$anti_ddos_port"'|(.default|.anti_ddos_seconds)='"$anti_ddos_seconds"'|(.default|.anti_ddos_level)='"$anti_ddos_level"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+            mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+
+            ((anti_ddos_level++))
+
+        else
             echo && echo "不启动 AntiDDoS ..." && echo && exit 0
         fi
     else
@@ -4420,6 +4514,7 @@ MonitorStop()
                 then
                     ips=()
                     jail_time=()
+                    GetDefault
                     while IFS= read -r line
                     do
                         if [[ "$line" == *:* ]] 
@@ -4430,7 +4525,7 @@ MonitorStop()
                             jail_time+=("$jail")
                         else
                             ip=$line
-                            ufw delete deny from "$ip" to any port 80
+                            ufw delete deny from "$ip" to any port "$d_anti_ddos_port"
                         fi
                     done < "$IP_DENY"
 
@@ -4445,7 +4540,7 @@ MonitorStop()
                         do
                             if [ "$now" -gt "${jail_time[i]}" ] 
                             then
-                                ufw delete deny from "${ips[i]}" to any port 80
+                                ufw delete deny from "${ips[i]}" to any port "$d_anti_ddos_port"
                                 update=1
                             else
                                 new_ips+=("${ips[i]}")
@@ -5114,6 +5209,152 @@ MonitorSet()
     done
 }
 
+Progress(){
+    echo && echo -ne "$info 安装中，请等待..."
+    while true
+    do
+        echo -n "."
+        sleep 5
+    done
+}
+
+InstallNginx()
+{
+    Progress &
+    progress_pid=$!
+    apt -y update >/dev/null 2>&1
+    locale-gen zh_CN.UTF-8 >/dev/null 2>&1
+    timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
+    systemctl restart cron >/dev/null 2>&1
+    apt -y install software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext build-essential >/dev/null 2>&1
+    cd ~
+
+    if [ ! -e "./pcre-8.43" ] 
+    then
+        wget --no-check-certificate "https://ftp.pcre.org/pub/pcre/pcre-8.43.tar.gz" -qO "pcre-8.43.tar.gz"
+        tar xzvf "pcre-8.43.tar.gz" >/dev/null 2>&1
+    fi
+
+    if [ ! -e "./zlib-1.2.11" ] 
+    then
+        wget --no-check-certificate "https://www.zlib.net/zlib-1.2.11.tar.gz" -qO "zlib-1.2.11.tar.gz"
+        tar xzvf "zlib-1.2.11.tar.gz" >/dev/null 2>&1
+    fi
+
+    if [ ! -e "./openssl-1.1.1d" ] 
+    then
+        wget --no-check-certificate "https://www.openssl.org/source/openssl-1.1.1d.tar.gz" -qO "openssl-1.1.1d.tar.gz"
+        tar xzvf "openssl-1.1.1d.tar.gz" >/dev/null 2>&1
+    fi
+
+    if [ ! -e "./nginx-http-flv-module-master" ] 
+    then
+        wget --no-check-certificate "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -qO "nginx-http-flv-module.zip"
+        unzip "nginx-http-flv-module.zip" >/dev/null 2>&1
+    fi
+
+    while IFS= read -r line
+    do
+        if [[ "$line" == *"/download/"* ]] 
+        then
+            nginx_name=${line#*/download/}
+            nginx_name=${nginx_name%%.tar.gz*}
+        fi
+    done < <( wget "http://nginx.org/en/download.html" -qO- )
+    
+
+    if [ ! -e "./$nginx_name" ] 
+    then
+        wget --no-check-certificate "https://nginx.org/download/$nginx_name.tar.gz" -qO "$nginx_name.tar.gz"
+        tar xzvf "$nginx_name.tar.gz" >/dev/null 2>&1
+    fi
+
+    cd "$nginx_name/"
+    ./configure --add-module=../nginx-http-flv-module-master --with-pcre=../pcre-8.43 --with-pcre-jit --with-zlib=../zlib-1.2.11 --with-openssl=../openssl-1.1.1d --with-openssl-opt=no-nextprotoneg --with-http_stub_status_module --with-http_ssl_module --with-http_realip_module --with-debug >/dev/null 2>&1
+    make >/dev/null 2>&1
+    make install >/dev/null 2>&1
+    kill -9 $progress_pid >/dev/null 2>&1
+    ln -sf /usr/local/nginx/sbin/nginx /usr/local/bin/
+    echo -n "...完成" && echo
+}
+
+UninstallNginx()
+{
+    if [ ! -e "/usr/local/nginx" ] 
+    then
+        echo && echo -e "$error Nginx 未安装 !" && echo && exit 1
+    fi
+
+    echo && echo "确定删除 nginx 包括所有配置文件，操作不可恢复？[y/N]"
+    read -p "(默认: N):" nginx_uninstall_yn
+    nginx_uninstall_yn=${nginx_uninstall_yn:-"N"}
+
+    if [[ $nginx_uninstall_yn == [Yy] ]] 
+    then
+        nginx -s stop
+        rm -rf /usr/local/nginx/
+        echo && echo -e "$info Nginx 卸载完成" && echo
+    else
+        echo && echo "已取消..." && echo && exit 1
+    fi
+}
+
+ToggleNginx()
+{
+    if [ ! -s "/usr/local/nginx/logs/nginx.pid" ] 
+    then
+        echo && echo "nginx 未运行，是否开启？[Y/n]"
+        read -p "(默认: Y):" nginx_start_yn
+        nginx_start_yn=${nginx_start_yn:-"Y"}
+        if [[ $nginx_start_yn == [Yy] ]] 
+        then
+            nginx
+            echo && echo -e "$info Nginx 已开启" && echo
+        else
+            echo && echo "已取消..." && echo && exit 1
+        fi
+    else
+        PID=$(< "/usr/local/nginx/logs/nginx.pid")
+        if kill -0  "$PID" 2> /dev/null
+        then
+            echo && echo "nginx 正在运行，是否关闭？[Y/n]"
+            read -p "(默认: Y):" nginx_stop_yn
+            nginx_stop_yn=${nginx_stop_yn:-"Y"}
+            if [[ $nginx_stop_yn == [Yy] ]] 
+            then
+                nginx -s stop
+                echo && echo -e "$info Nginx 已关闭" && echo
+            else
+                echo && echo "已取消..." && echo && exit 1
+            fi
+        else
+            echo && echo "nginx 未运行，是否开启？[Y/n]"
+            read -p "(默认: Y):" nginx_start_yn
+            nginx_start_yn=${nginx_start_yn:-"Y"}
+            if [[ $nginx_start_yn == [Yy] ]] 
+            then
+                nginx
+                echo && echo -e "$info Nginx 已开启" && echo
+            else
+                echo && echo "已取消..." && echo && exit 1
+            fi
+        fi
+    fi
+}
+
+RestartNginx()
+{
+    PID=$(< "/usr/local/nginx/logs/nginx.pid")
+    if kill -0  "$PID" 2> /dev/null 
+    then
+        nginx -s stop
+        sleep 1
+        nginx
+    else
+        nginx
+    fi
+}
+
 Usage()
 {
 
@@ -5206,8 +5447,20 @@ then
                 "stop") 
                     MonitorStop
                 ;;
-                "log")
-                    tail -f "$MONITOR_LOG"
+                "l"|"log")
+                    if [ -s "$IP_LOG" ] 
+                    then
+                        echo -e "$info 监控日志: "
+                        tail -n 10 "$MONITOR_LOG"
+                        echo && echo -e "$info AntiDDoS 日志: "
+                        tail -n 10 "$IP_LOG"
+                    elif [ -s "$MONITOR_LOG" ] 
+                    then
+                        echo -e "$info 监控日志: "
+                        tail -n 10 "$MONITOR_LOG"
+                    else
+                        echo -e "$error 无日志"
+                    fi
                 ;;
                 *[!0-9]*)
                     echo -e "$error 请输入正确的数字(大于0) "
@@ -5443,6 +5696,8 @@ case "$cmd" in
             mv "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64_tmp" "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64"
             mv "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp" "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32"
         fi
+
+        wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/winshining/nginx-http-flv-module/archive/master.zip" -qO "$FFMPEG_MIRROR_ROOT/nginx-http-flv-module.zip"
         exit 0
     ;;
     "ts") 
@@ -5519,6 +5774,62 @@ case "$cmd" in
             echo -e "$error 没有开启的频道 !" && echo && exit 1
         fi
 
+        exit 0
+    ;;
+    "n"|"nginx")
+        CheckRelease
+        if [ "$release" == "rpm" ] 
+        then
+            echo -e "$error 系统不支持 !" && echo && exit 1
+        fi
+        echo && echo -e "  Nginx 管理面板 $plain
+
+  ${green}1.$plain 安装
+  ${green}2.$plain 卸载
+  ${green}3.$plain 升级
+————————————
+  ${green}4.$plain 开关
+  ${green}5.$plain 重启
+ " && echo
+        read -p "请输入数字 [1-5]：" nginx_num
+        case "$nginx_num" in
+            1) 
+                if [ -e "/usr/local/nginx" ] 
+                then
+                    echo && echo -e "$error Nginx 已经存在 !" && echo && exit 1
+                fi
+
+                echo && echo "因为是编译 nginx，耗时会很长，是否继续？[y/N]"
+                read -p "(默认: N):" nginx_install_yn
+                nginx_install_yn=${nginx_install_yn:-"N"}
+                if [[ $nginx_install_yn == [Yy] ]] 
+                then
+                    InstallNginx
+                    echo && echo -e "$info Nginx 安装完成" && echo
+                else
+                    echo && echo "已取消..." && echo && exit 1
+                fi
+            ;;
+            2) UninstallNginx
+            ;;
+            3) 
+                if [ ! -e "/usr/local/nginx" ] 
+                then
+                    echo && echo -e "$error Nginx 未安装 !" && echo && exit 1
+                fi
+                InstallNginx
+                echo && echo -e "$info Nginx 升级完成" && echo
+            ;;
+            4) ToggleNginx
+            ;;
+            5) 
+                RestartNginx
+                echo && echo -e "$info Nginx 已重启" && echo
+            ;;
+            *)
+            echo -e "$error 请输入正确的数字 [1-5]"
+            ;;
+        esac
         exit 0
     ;;
     *)
