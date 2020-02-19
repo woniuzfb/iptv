@@ -467,7 +467,7 @@ UpdateSelf()
 
         new_channels=""
 
-        for((i=0;i<channels_count;i++));
+        for((i=0;i<chnls_count;i++));
         do
             seg_dir_name=${chnls_seg_dir_name[i]%\'}
             seg_dir_name=${seg_dir_name#\'}
@@ -645,7 +645,7 @@ GetChannelsInfo()
 {
     [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
 
-    channels_count=0
+    chnls_count=0
     chnls_pid=()
     chnls_status=()
     chnls_stream_link=()
@@ -673,7 +673,7 @@ GetChannelsInfo()
     
     while IFS= read -r channel
     do
-        channels_count=$((channels_count+1))
+        chnls_count=$((chnls_count+1))
         map_pid=${channel#*pid: }
         map_pid=${map_pid%, status:*}
         map_status=${channel#*status: }
@@ -754,7 +754,7 @@ GetChannelsInfo()
         
     done < <($JQ_FILE -r '.channels | to_entries | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
 
-    [ "$channels_count" == 0 ] && echo -e "$error 没有发现 频道，请检查 !" && exit 1
+    [ "$chnls_count" == 0 ] && echo -e "$error 没有发现 频道，请检查 !" && exit 1
 
     return 0
 }
@@ -763,7 +763,7 @@ ListChannels()
 {
     GetChannelsInfo
     chnls_list=""
-    for((index = 0; index < channels_count; index++)); do
+    for((index = 0; index < chnls_count; index++)); do
         chnls_status_index=${chnls_status[index]}
         chnls_pid_index=${chnls_pid[index]}
         chnls_output_dir_name_index=${chnls_output_dir_name[index]}
@@ -903,7 +903,7 @@ ListChannels()
 
         if [ -z "${kind:-}" ] 
         then
-            chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_status_text 频道名称: $green${chnls_channel_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain m3u8位置: $chnls_playlist_file_text\n\n"
+            chnls_list=$chnls_list"$green#$((index+1))$plain 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_status_text 频道名称: $green${chnls_channel_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain m3u8位置: $chnls_playlist_file_text\n\n"
         elif [ "$kind" == "flv" ] 
         then
             if [ "$chnls_flv_status_index" == "on" ] 
@@ -912,12 +912,12 @@ ListChannels()
             else
                 chnls_flv_status_text=$red"关闭"$plain
             fi
-            chnls_list=$chnls_list"#$((index+1)) 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_flv_status_text 频道名称: $green${chnls_channel_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain flv推流地址: $green${chnls_flv_push_link_index:-"无"}$plain flv拉流地址: $green${chnls_flv_pull_link_index:-"无"}$plain\n\n"
+            chnls_list=$chnls_list"$green#$((index+1))$plain 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_flv_status_text 频道名称: $green${chnls_channel_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain flv推流地址: $green${chnls_flv_push_link_index:-"无"}$plain flv拉流地址: $green${chnls_flv_pull_link_index:-"无"}$plain\n\n"
         fi
         
     done
-    echo && echo -e "=== 频道总数 $green $channels_count $plain"
-    echo -e "$chnls_list\n"
+    echo && echo -e "=== 频道总数 $green $chnls_count $plain"
+    echo -e "$chnls_list"
 }
 
 GetChannelInfo(){
@@ -1138,45 +1138,55 @@ ViewChannelInfo()
     echo
 }
 
-InputChannelsPids()
+InputChannelsIndex()
 {
-    echo -e "请输入频道的进程ID "
-    echo -e "$tip 多个进程ID用空格分隔 "
-    while read -p "(默认: 取消):" chnls_pids
+    echo -e "请输入频道的序号 "
+    echo -e "$tip 多个序号用空格分隔 比如: 5 7 9-11 " && echo
+    while read -p "(默认: 取消):" chnls_index_input
     do
-        error_no=0
-        IFS=" " read -ra chnls_pids_arr <<< "$chnls_pids"
-        [ -z "$chnls_pids" ] && echo "已取消..." && exit 1
-        for chnl_pid in "${chnls_pids_arr[@]}"
-        do
-            case "$chnl_pid" in
-                *[!0-9]*)
-                    error_no=1
-                ;;
-                *)
-                    if [ -z "$($JQ_FILE '.channels[] | select(.pid=='"$chnl_pid"')' $CHANNELS_FILE)" ]
-                    then
-                        error_no=2
-                    fi
-                ;;
-            esac
-        done
+        chnls_pid_chosen=()
+        IFS=" " read -ra chnls_index <<< "$chnls_index_input"
+        [ -z "$chnls_index_input" ] && echo "已取消..." && exit 1
 
-        case $error_no in
-            1) echo -e "$error 请输入正确的数字！"
-            ;;
-            2) echo -e "$error 请输入正确的进程ID！"
-            ;;
-            *) break;
-            ;;
-        esac
+        for chnl_index in "${chnls_index[@]}"
+        do
+            if [[ $chnl_index == *"-"* ]] 
+            then
+                chnl_index_start=${chnl_index%-*}
+                chnl_index_end=${chnl_index#*-}
+
+                if [[ $chnl_index_start == *[!0-9]* ]] || [[ $chnl_index_end == *[!0-9]* ]] 
+                then
+                    echo -e "$error 多选输入错误！" && echo
+                    continue 2
+                elif [[ $chnl_index_start -gt 0 ]] && [[ ! $chnl_index_end -gt $chnls_count ]] && [[ $chnl_index_end -gt $chnl_index_start ]] 
+                then
+                    ((chnl_index_start--))
+                    for((i=chnl_index_start;i<chnl_index_end;i++));
+                    do
+                        chnls_pid_chosen+=("${chnls_pid[i]}")
+                    done
+                else
+                    echo -e "$error 多选输入错误！" && echo
+                    continue 2
+                fi
+            elif [[ $chnl_index == *[!0-9]* ]] || [[ $chnl_index -eq 0 ]] || [[ $chnl_index -gt $chnls_count ]] 
+            then
+                echo -e "$error 请输入正确的序号！" && echo
+                continue 2
+            else
+                ((chnl_index--))
+                chnls_pid_chosen+=("${chnls_pid[chnl_index]}")
+            fi
+        done
+        break
     done
 }
 
 ViewChannelMenu(){
     ListChannels
-    InputChannelsPids
-    for chnl_pid in "${chnls_pids_arr[@]}"
+    InputChannelsIndex
+    for chnl_pid in "${chnls_pid_chosen[@]}"
     do
         GetChannelInfo
         ViewChannelInfo
@@ -2079,6 +2089,17 @@ AddChannel()
             -p "$playlist_name" -t "$seg_name" -K "$key_name" $quality_command \
             "$const" "$encrypt" &
         pid=$!
+
+        while [ -n "$($JQ_FILE '.channels[]|select(.pid=='"$pid"')' "$CHANNELS_FILE")" ] 
+        do
+            kill -9 "$pid" >/dev/null 2>&1
+            exec "$CREATOR_FILE" -l -i "$stream_link" -s "$seg_length" \
+            -o "$output_dir_root" -c "$seg_count" $bitrates_command \
+            -p "$playlist_name" -t "$seg_name" -K "$key_name" $quality_command \
+            "$const" "$encrypt" &
+            pid=$!
+        done
+
         $JQ_FILE '.channels += [
             {
                 "pid":'"$pid"',
@@ -2364,8 +2385,8 @@ EditForSecurity()
 EditChannelMenu()
 {
     ListChannels
-    InputChannelsPids
-    for chnl_pid in "${chnls_pids_arr[@]}"
+    InputChannelsIndex
+    for chnl_pid in "${chnls_pid_chosen[@]}"
     do
         GetChannelInfo
         ViewChannelInfo
@@ -2493,8 +2514,8 @@ EditChannelMenu()
 ToggleChannel()
 {
     ListChannels
-    InputChannelsPids
-    for chnl_pid in "${chnls_pids_arr[@]}"
+    InputChannelsIndex
+    for chnl_pid in "${chnls_pid_chosen[@]}"
     do
         GetChannelInfo
 
@@ -2601,6 +2622,17 @@ StartChannel()
                 -p "$chnl_playlist_name" -t "$chnl_seg_name" -K "$chnl_key_name" $chnl_quality_command \
                 "$chnl_const" "$chnl_encrypt" &
                 new_pid=$!
+
+                while [ -n "$($JQ_FILE '.channels[]|select(.pid=='"$new_pid"')' "$CHANNELS_FILE")" ] 
+                do
+                    kill -9 "$new_pid" >/dev/null 2>&1
+                    exec "$CREATOR_FILE" -l -i "$chnl_stream_link" -s "$chnl_seg_length" \
+                    -o "$chnl_output_dir_root" -c "$chnl_seg_count" $chnl_bitrates_command \
+                    -p "$chnl_playlist_name" -t "$chnl_seg_name" -K "$chnl_key_name" $chnl_quality_command \
+                    "$chnl_const" "$chnl_encrypt" &
+                    new_pid=$!
+                done
+
                 $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.status)="on"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
                 mv "$CHANNELS_TMP" "$CHANNELS_FILE"
                 action=${action:-"start"}
@@ -2612,6 +2644,17 @@ StartChannel()
             -p "$chnl_playlist_name" -t "$chnl_seg_name" -K "$chnl_key_name" $chnl_quality_command \
             "$chnl_const" "$chnl_encrypt" &
             new_pid=$!
+
+            while [ -n "$($JQ_FILE '.channels[]|select(.pid=='"$new_pid"')' "$CHANNELS_FILE")" ] 
+            do
+                kill -9 "$new_pid" >/dev/null 2>&1
+                exec "$CREATOR_FILE" -l -i "$chnl_stream_link" -s "$chnl_seg_length" \
+                -o "$chnl_output_dir_root" -c "$chnl_seg_count" $chnl_bitrates_command \
+                -p "$chnl_playlist_name" -t "$chnl_seg_name" -K "$chnl_key_name" $chnl_quality_command \
+                "$chnl_const" "$chnl_encrypt" &
+                new_pid=$!
+            done
+
             $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.status)="on"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
             mv "$CHANNELS_TMP" "$CHANNELS_FILE"
             action=${action:-"start"}
@@ -2716,8 +2759,8 @@ StopChannel()
 RestartChannel()
 {
     ListChannels
-    InputChannelsPids
-    for chnl_pid in "${chnls_pids_arr[@]}"
+    InputChannelsIndex
+    for chnl_pid in "${chnls_pid_chosen[@]}"
     do
         GetChannelInfo
         if [ "${kind:-}" == "flv" ] 
@@ -2740,8 +2783,8 @@ RestartChannel()
 DelChannel()
 {
     ListChannels
-    InputChannelsPids
-    for chnl_pid in "${chnls_pids_arr[@]}"
+    InputChannelsIndex
+    for chnl_pid in "${chnls_pid_chosen[@]}"
     do
         GetChannelInfo
         if [ "${kind:-}" == "flv" ] 
@@ -2778,7 +2821,7 @@ F G H J K L Z X C V B N M
     while [ $str_len -lt $str_size ]
     do
         str_index=$((RANDOM%str_array_size))
-        rand_str="$rand_str${str_array[$str_index]}"
+        rand_str="$rand_str${str_array[str_index]}"
         str_len=$((str_len+1))
     done
     echo "$rand_str"
@@ -4264,13 +4307,13 @@ AntiDDoS()
     printf '%s\n' "$date_now AntiDDoS 启动成功 PID $BASHPID !" >> "$MONITOR_LOG"
     
     while true; do
-        channels_count=0
+        chnls_count=0
         chnls_output_dir_name=()
         chnls_seg_length=()
         chnls_seg_count=()
         while IFS= read -r channel
         do
-            channels_count=$((channels_count+1))
+            chnls_count=$((chnls_count+1))
             map_output_dir_name=${channel#*output_dir_name: }
             map_output_dir_name=${map_output_dir_name%, seg_length:*}
             map_seg_length=${channel#*seg_length: }
@@ -4288,7 +4331,7 @@ AntiDDoS()
         do
             output_dir_name=${output_dir_root#*$LIVE_ROOT/}
 
-            for((i=0;i<channels_count;i++));
+            for((i=0;i<chnls_count;i++));
             do
                 if [ "$output_dir_name" == "${chnls_output_dir_name[i]}" ] 
                 then
@@ -4736,7 +4779,7 @@ Monitor()
                             new_array=("${monitor_flv_pull_links[i]}")
                             for((j=0;j<flv_count;j++));
                             do
-                                [ "$j" != "$i" ] && new_array+=("${monitor_flv_pull_links[$j]}")
+                                [ "$j" != "$i" ] && new_array+=("${monitor_flv_pull_links[j]}")
                             done
                             monitor_flv_pull_links=("${new_array[@]}")
                             unset new_array
@@ -6038,6 +6081,16 @@ else
                     -p "$playlist_name" -t "$seg_name" -K "$key_name" $quality_command \
                     "$const" "$encrypt" &
                 pid=$!
+
+                while [ -n "$($JQ_FILE '.channels[]|select(.pid=='"$pid"')' "$CHANNELS_FILE")" ] 
+                do
+                    kill -9 "$pid" >/dev/null 2>&1
+                    exec "$CREATOR_FILE" -l -i "$stream_link" -s "$seg_length" \
+                    -o "$output_dir_root" -c "$seg_count" $bitrates_command \
+                    -p "$playlist_name" -t "$seg_name" -K "$key_name" $quality_command \
+                    "$const" "$encrypt" &
+                    pid=$!
+                done
 
                 $JQ_FILE '.channels += [
                     {
