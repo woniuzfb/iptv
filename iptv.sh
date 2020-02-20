@@ -364,6 +364,7 @@ Install()
         $JQ_FILE '(.)='"$default"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
         echo -e "$info 安装完成..."
+        ln -sf "$IPTV_ROOT"/ffmpeg-git-*/ff* /usr/local/bin/
     fi
 }
 
@@ -903,7 +904,7 @@ ListChannels()
 
         if [ -z "${kind:-}" ] 
         then
-            chnls_list=$chnls_list"$green#$((index+1))$plain 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_status_text 频道名称: $green${chnls_channel_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain m3u8位置: $chnls_playlist_file_text\n\n"
+            chnls_list=$chnls_list"# $green$((index+1))$plain 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_status_text 频道名称: $green${chnls_channel_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain m3u8位置: $chnls_playlist_file_text\n\n"
         elif [ "$kind" == "flv" ] 
         then
             if [ "$chnls_flv_status_index" == "on" ] 
@@ -912,11 +913,11 @@ ListChannels()
             else
                 chnls_flv_status_text=$red"关闭"$plain
             fi
-            chnls_list=$chnls_list"$green#$((index+1))$plain 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_flv_status_text 频道名称: $green${chnls_channel_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain flv推流地址: $green${chnls_flv_push_link_index:-"无"}$plain flv拉流地址: $green${chnls_flv_pull_link_index:-"无"}$plain\n\n"
+            chnls_list=$chnls_list"# $green$((index+1))$plain 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_flv_status_text 频道名称: $green${chnls_channel_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain flv推流地址: $green${chnls_flv_push_link_index:-"无"}$plain flv拉流地址: $green${chnls_flv_pull_link_index:-"无"}$plain\n\n"
         fi
         
     done
-    echo && echo -e "=== 频道总数 $green $chnls_count $plain"
+    echo && echo -e "=== 频道总数 $green $chnls_count $plain" && echo
     echo -e "$chnls_list"
 }
 
@@ -2616,7 +2617,6 @@ StartChannel()
         then
             ( 
                 trap '' HUP INT QUIT TERM
-                #trap 'chnl_pid=$new_pid; StopChannel; MonitorError $LINENO' ERROR
                 exec "$CREATOR_FILE" -l -i "$chnl_stream_link" -s "$chnl_seg_length" \
                 -o "$chnl_output_dir_root" -c "$chnl_seg_count" $chnl_bitrates_command \
                 -p "$chnl_playlist_name" -t "$chnl_seg_name" -K "$chnl_key_name" $chnl_quality_command \
@@ -2662,11 +2662,12 @@ StartChannel()
         fi
     fi
 
-    echo && echo -e "$info 频道进程已开启 !" && echo
+    echo && echo -e "$info 频道[ $chnl_channel_name ]已开启 !" && echo
 }
 
 StopChannel()
 {
+    trap 'MonitorError $LINENO' ERR
     if [ -n "${kind:-}" ]
     then
         if [ "$kind" != "flv" ] 
@@ -2732,26 +2733,24 @@ StopChannel()
     if [ "${kind:-}" == "flv" ] 
     then
         $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.flv_status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
-        mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+        mv "$CHANNELS_TMP" "$CHANNELS_FILE" 2>/dev/null || true
         action=${action:-"stop"}
         SyncFile
     else
-        if [ -n "${chnl_output_dir_name:-}" ] 
+        if [ -z "${chnl_output_dir_name:-}" ] 
         then
-            remove_dir_name=$chnl_output_dir_name
-        else
-            remove_dir_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').output_dir_name' "$CHANNELS_FILE")
+            IFS="=" read -r chnl_output_dir_name chnl_channel_name < <($JQ_FILE -r '.channels | to_entries | map(select(.value.pid=='"$chnl_pid"')) | map("\(.value.output_dir_name)=\(.value.channel_name)")|.[]' "$CHANNELS_FILE")
         fi
         $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
-        mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+        mv "$CHANNELS_TMP" "$CHANNELS_FILE" 2>/dev/null || true
         action=${action:-"stop"}
         SyncFile
-        if [ ! -e "$LIVE_ROOT/${remove_dir_name:-'notfound'}" ] && [ -z "${monitor:-}" ] 
+        if [ ! -e "$LIVE_ROOT/${chnl_output_dir_name:-'notfound'}" ]
         then
-            echo && echo -e "$error 找不到应该删除的目录，请手动删除 !" && echo
+            echo && echo -e "$error 频道[ $chnl_channel_name ]找不到应该删除的目录，请手动删除 !" && echo
         else
-            rm -rf "$LIVE_ROOT/${remove_dir_name:-'notfound'}"
-            echo && echo -e "$info 频道目录删除成功 !" && echo
+            rm -rf "$LIVE_ROOT/${chnl_output_dir_name:-'notfound'}"
+            echo && echo -e "$info 频道[ $chnl_channel_name ]目录删除成功 !" && echo
         fi
     fi
 }
@@ -4263,7 +4262,7 @@ AntiDDoS()
                 jail_time+=("$jail")
             else
                 ip=$line
-                ufw delete deny from "$ip" to any port "$anti_ddos_port"
+                ufw delete deny from "$ip" to any port "$anti_ddos_port" > /dev/null 2>> "$IP_LOG"
             fi
         done < "$IP_DENY"
 
@@ -4278,7 +4277,7 @@ AntiDDoS()
             do
                 if [ "$now" -gt "${jail_time[i]}" ] 
                 then
-                    ufw delete deny from "${ips[i]}" to any port "$anti_ddos_port"
+                    ufw delete deny from "${ips[i]}" to any port "$anti_ddos_port" > /dev/null 2>> "$IP_LOG"
                     update=1
                 else
                     new_ips+=("${ips[i]}")
@@ -4631,11 +4630,11 @@ MonitorRestartChannel()
     for((i=0;i<restart_nums;i++))
     do
         action="skip"
-        StopChannel || true
+        StopChannel > /dev/null 2>&1
         if [ "${stopped:-}" == 1 ] 
         then
             sleep 3
-            StartChannel || true
+            StartChannel > /dev/null 2>&1
             sleep 15
             GetChannelInfo
             if ls -A "$LIVE_ROOT/$output_dir_name/"* > /dev/null 2>&1 
@@ -4653,7 +4652,7 @@ MonitorRestartChannel()
                 fi
             elif [[ $i -eq $((restart_nums - 1)) ]] 
             then
-                StopChannel || true
+                StopChannel > /dev/null 2>&1
                 printf -v date_now "%(%m-%d %H:%M:%S)T"
                 printf '%s\n' "$date_now $chnl_channel_name 重启失败" >> "$MONITOR_LOG"
                 declare -a new_array
@@ -4700,7 +4699,7 @@ Monitor()
                         then
                             if [ "$chnl_flv_status" == "on" ] 
                             then
-                                StopChannel || true
+                                StopChannel > /dev/null 2>&1
                             fi
 
                             unset 'monitor_flv_push_links[0]'
@@ -4739,11 +4738,11 @@ Monitor()
                             if [ $((flv_fail_date - flv_first_fail)) -gt "$flv_seconds" ] 
                             then
                                 action="skip"
-                                StopChannel || true
+                                StopChannel > /dev/null 2>&1
                                 if [ "${stopped:-}" == 1 ] 
                                 then
                                     sleep 3
-                                    StartChannel || true
+                                    StartChannel > /dev/null 2>&1
                                     flv_restart_count=${flv_restart_count:-1}
                                     ((flv_restart_count++))
                                     flv_first_fail=""
@@ -4755,7 +4754,7 @@ Monitor()
                         else
                             if [ "$chnl_flv_status" == "off" ] 
                             then
-                                StartChannel || true
+                                StartChannel > /dev/null 2>&1
                                 flv_restart_count=${flv_restart_count:-1}
                                 ((flv_restart_count++))
                                 flv_first_fail=""
@@ -4809,7 +4808,7 @@ Monitor()
                         then
                             if [ "$chnl_flv_status" == "on" ] 
                             then
-                                StopChannel || true
+                                StopChannel > /dev/null 2>&1
                                 printf -v date_now "%(%m-%d %H:%M:%S)T"
                                 printf '%s\n' "$date_now $chnl_channel_name flv 重启超过${flv_restart_nums:-20}次关闭" >> "$MONITOR_LOG"
                             fi
@@ -4833,11 +4832,11 @@ Monitor()
                             if [ $((flv_fail_date - flv_first_fail)) -gt "$flv_seconds" ] 
                             then
                                 action="skip"
-                                StopChannel || true
+                                StopChannel > /dev/null 2>&1
                                 if [ "${stopped:-}" == 1 ] 
                                 then
                                     sleep 3
-                                    StartChannel || true
+                                    StartChannel > /dev/null 2>&1
                                     flv_restart_count=${flv_restart_count:-1}
                                     ((flv_restart_count++))
                                     flv_first_fail=""
@@ -4849,7 +4848,7 @@ Monitor()
                         else
                             if [ "$chnl_flv_status" == "off" ] 
                             then
-                                StartChannel || true
+                                StartChannel > /dev/null 2>&1
                                 flv_restart_count=${flv_restart_count:-1}
                                 ((flv_restart_count++))
                                 flv_first_fail=""
@@ -4930,12 +4929,41 @@ Monitor()
                 for dir_name in "${monitor_dir_names_chosen[@]}"
                 do
                     output_dir_name=$dir_name
+                    chnl_status=""
                     GetChannelInfo
+                    if [ -z "$chnl_status" ] 
+                    then
+                        declare -a new_array
+                        for element in "${monitor_dir_names_chosen[@]}"
+                        do
+                            [ "$element" != "$output_dir_name" ] && new_array+=("$element")
+                        done
+                        monitor_dir_names_chosen=("${new_array[@]}")
+                        unset new_array
+                        break 1
+                    fi
                     if [ "$chnl_status" == "off" ] 
                     then
-                        printf '%s\n' "$chnl_channel_name 开启" >> "$MONITOR_LOG"
-                        MonitorRestartChannel
-                        break 1
+                        sleep 5
+                        chnl_status=""
+                        GetChannelInfo
+                        if [ -z "$chnl_status" ] 
+                        then
+                            declare -a new_array
+                            for element in "${monitor_dir_names_chosen[@]}"
+                            do
+                                [ "$element" != "$output_dir_name" ] && new_array+=("$element")
+                            done
+                            monitor_dir_names_chosen=("${new_array[@]}")
+                            unset new_array
+                            break 1
+                        fi
+                        if [ "$chnl_status" == "off" ] 
+                        then
+                            printf '%s\n' "$chnl_channel_name 开启" >> "$MONITOR_LOG"
+                            MonitorRestartChannel
+                            break 1
+                        fi
                     fi
                     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
                     FFPROBE="$FFMPEG_ROOT/ffprobe"
@@ -5265,34 +5293,34 @@ InstallNginx()
 {
     Progress &
     progress_pid=$!
-    apt -y update >/dev/null 2>&1
+    apt-get -y update >/dev/null 2>&1
     locale-gen zh_CN.UTF-8 >/dev/null 2>&1
     timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
     systemctl restart cron >/dev/null 2>&1
-    apt -y install software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext build-essential >/dev/null 2>&1
+    apt-get -y install software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext build-essential >/dev/null 2>&1
     cd ~
 
     if [ ! -e "./pcre-8.43" ] 
     then
-        wget --no-check-certificate "https://ftp.pcre.org/pub/pcre/pcre-8.43.tar.gz" -qO "pcre-8.43.tar.gz"
+        wget --timeout=10 --tries=3 --no-check-certificate "https://ftp.pcre.org/pub/pcre/pcre-8.43.tar.gz" -qO "pcre-8.43.tar.gz"
         tar xzvf "pcre-8.43.tar.gz" >/dev/null 2>&1
     fi
 
     if [ ! -e "./zlib-1.2.11" ] 
     then
-        wget --no-check-certificate "https://www.zlib.net/zlib-1.2.11.tar.gz" -qO "zlib-1.2.11.tar.gz"
+        wget --timeout=10 --tries=3 --no-check-certificate "https://www.zlib.net/zlib-1.2.11.tar.gz" -qO "zlib-1.2.11.tar.gz"
         tar xzvf "zlib-1.2.11.tar.gz" >/dev/null 2>&1
     fi
 
     if [ ! -e "./openssl-1.1.1d" ] 
     then
-        wget --no-check-certificate "https://www.openssl.org/source/openssl-1.1.1d.tar.gz" -qO "openssl-1.1.1d.tar.gz"
+        wget --timeout=10 --tries=3 --no-check-certificate "https://www.openssl.org/source/openssl-1.1.1d.tar.gz" -qO "openssl-1.1.1d.tar.gz"
         tar xzvf "openssl-1.1.1d.tar.gz" >/dev/null 2>&1
     fi
 
     if [ ! -e "./nginx-http-flv-module-master" ] 
     then
-        wget --no-check-certificate "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -qO "nginx-http-flv-module.zip"
+        wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -qO "nginx-http-flv-module.zip"
         unzip "nginx-http-flv-module.zip" >/dev/null 2>&1
     fi
 
@@ -5308,7 +5336,7 @@ InstallNginx()
 
     if [ ! -e "./$nginx_name" ] 
     then
-        wget --no-check-certificate "https://nginx.org/download/$nginx_name.tar.gz" -qO "$nginx_name.tar.gz"
+        wget --timeout=10 --tries=3 --no-check-certificate "https://nginx.org/download/$nginx_name.tar.gz" -qO "$nginx_name.tar.gz"
         tar xzvf "$nginx_name.tar.gz" >/dev/null 2>&1
     fi
 
@@ -5316,7 +5344,7 @@ InstallNginx()
     ./configure --add-module=../nginx-http-flv-module-master --with-pcre=../pcre-8.43 --with-pcre-jit --with-zlib=../zlib-1.2.11 --with-openssl=../openssl-1.1.1d --with-openssl-opt=no-nextprotoneg --with-http_stub_status_module --with-http_ssl_module --with-http_realip_module --with-debug >/dev/null 2>&1
     make >/dev/null 2>&1
     make install >/dev/null 2>&1
-    kill -9 $progress_pid >/dev/null 2>&1
+    kill $progress_pid
     ln -sf /usr/local/nginx/sbin/nginx /usr/local/bin/
     echo -n "...完成" && echo
 }
@@ -5640,8 +5668,23 @@ case "$cmd" in
     ;;
     "d")
         [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
-        wget "$DEFAULT_DEMOS" -qO "$CHANNELS_TMP"
-        channels=$(< "$CHANNELS_TMP")
+        channels=""
+        while IFS= read -r line 
+        do
+            if [[ $line == *\"pid\":* ]] 
+            then
+                pid=${line#*:}
+                pid=${pid%,*}
+                rand_pid=$pid
+                while [ -n "$($JQ_FILE '.channels[]|select(.pid=='"$rand_pid"')' "$CHANNELS_FILE")" ] 
+                do
+                    true &
+                    rand_pid=$!
+                done
+                line=${line//$pid/$rand_pid}
+            fi
+            channels="$channels$line"
+        done < <(wget --no-check-certificate "$DEFAULT_DEMOS" -qO-)
         $JQ_FILE '.channels += '"$channels"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
         echo && echo -e "$info 频道添加成功 !" && echo
