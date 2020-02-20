@@ -192,7 +192,7 @@ SyncFile()
                 done
             done <<< "$chnl_sync_pairs"
             [ -s "$d_sync_file" ] || printf '{"%s":0}' "ret" > "$d_sync_file"
-            if [ "$action" == "add" ] || [ -z "$($JQ_FILE "$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")' "$d_sync_file")" ]
+            if [ "$action" == "add" ] || [[ -z $($JQ_FILE "$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")' "$d_sync_file") ]]
             then
                 jq_channel_add="${jq_channel_add}}]"
                 $JQ_FILE "$jq_index"' += '"$jq_channel_add"'' "$d_sync_file" > "${d_sync_file}_tmp"
@@ -897,11 +897,6 @@ ListChannels()
             chnls_video_quality_text="比特率值 ${chnls_bitrates_text:-"不设置"}"
         fi
 
-        if [ "$chnls_video_codec_index" == "copy" ] && [ "$chnls_audio_codec_index" == "copy" ]  
-        then
-            chnls_video_quality_text="原画"
-        fi
-
         if [ -z "${kind:-}" ] 
         then
             chnls_list=$chnls_list"# $green$((index+1))$plain 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_status_text 频道名称: $green${chnls_channel_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain m3u8位置: $chnls_playlist_file_text\n\n"
@@ -937,8 +932,10 @@ GetChannelInfo(){
         select=".value.output_dir_name==\"$output_dir_name\""
     fi
 
+    found=0
     while IFS= read -r channel
     do
+        found=1
         chnl_pid=${channel#*pid: }
         chnl_pid=${chnl_pid%, status:*}
         chnl_status=${channel#*status: }
@@ -1079,13 +1076,7 @@ GetChannelInfo(){
                 chnl_flv_status_text=$red"关闭"$plain
             fi
 
-            if [ "$chnl_video_codec" == "copy" ] && [ "$chnl_audio_codec" == "copy" ]  
-            then
-                chnl_video_quality_text="原画"
-                chnl_playlist_link=${chnl_playlist_link:-}
-                chnl_playlist_link=${chnl_playlist_link//_master.m3u8/.m3u8}
-                chnl_playlist_link_text=${chnl_playlist_link_text//_master.m3u8/.m3u8}
-            elif [ -z "$chnl_bitrates" ] 
+            if [ -z "$chnl_bitrates" ] 
             then
                 chnl_playlist_link=${chnl_playlist_link:-}
                 chnl_playlist_link=${chnl_playlist_link//_master.m3u8/.m3u8}
@@ -1093,6 +1084,11 @@ GetChannelInfo(){
             fi
         fi
     done < <($JQ_FILE -r '.channels | to_entries | map(select('"$select"')) | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
+
+    if [ "$found" == 0 ] && [ -z "${monitor:-}" ]
+    then
+        echo && echo -e "$error 频道发生变化，请重试 !" && echo && exit 1
+    fi
 }
 
 ViewChannelInfo()
@@ -1130,8 +1126,8 @@ ViewChannelInfo()
     echo -e " 视频质量   : $green$chnl_video_quality_text$plain"
     echo -e " 延迟\t    : $green$chnl_video_audio_shift_text$plain"
 
-    echo -e " input flags    : $green${chnl_input_flags_text:-"不设置"}$plain"
-    echo -e " output flags   : $green${chnl_output_flags_text:-"不设置"}$plain"
+    echo -e " input flags    : $green${chnl_input_flags:-"不设置"}$plain"
+    echo -e " output flags   : $green${chnl_output_flags:-"不设置"}$plain"
     if [ -n "$chnl_sync_pairs" ] 
     then
         echo -e " sync_pairs     : $green${chnl_sync_pairs}$plain"
@@ -1367,14 +1363,7 @@ SetQuality()
 
 SetBitrates()
 {
-    if [ -z "$d_bitrates" ] 
-    then
-        d_bitrates_text="不设置"
-    else
-        d_bitrates_text=${d_bitrates}
-    fi
-
-    echo "请输入比特率, 可以输入 omit 省略此选项(ffmpeg自行判断输出比特率)"
+    echo "请输入比特率(kb/s), 可以输入 omit 省略此选项"
 
     if [ -z "$quality" ] 
     then
@@ -1388,7 +1377,8 @@ SetBitrates()
         echo -e "$tip 多个比特率用逗号分隔(生成自适应码流)
     同时可以指定输出的分辨率(比如：600-600x400,900-1280x720)"
     fi
-    read -p "(默认: $d_bitrates_text):" bitrates
+
+    read -p "(默认: ${d_bitrates:-"不设置"}):" bitrates
     bitrates=${bitrates:-$d_bitrates}
     if [ "$bitrates" == "omit" ] 
     then
@@ -1480,26 +1470,12 @@ SetOutputFlags()
     then
         d_output_flags=${d_output_flags//-sc_threshold 0/}
     fi
-    if [ -z "$d_output_flags" ] 
-    then
-        d_output_flags_text="不设置"
-        echo "请输入output flags";
-    else
-        d_output_flags_text=${d_output_flags}
-        echo "请输入output flags, 可以输入 copy 省略此选项(不需要转码时)"
-    fi
-    read -p "(默认: $d_output_flags_text):" output_flags
+    echo "请输入output flags, 可以输入 omit 省略此选项"
+    read -p "(默认: ${d_output_flags:-"不设置"}):" output_flags
     output_flags=${output_flags:-$d_output_flags}
-    if [ "$output_flags" == "copy" ] 
+    if [ "$output_flags" == "omit" ] 
     then
         output_flags=""
-        video_codec="copy"
-        audio_codec="copy"
-        quality=""
-        bitrates=""
-        const=""
-        const_yn="no"
-        const_text="否"
     fi
     echo && echo -e "	output flags: $green ${output_flags:-"不设置"} $plain" && echo 
 }
@@ -1611,6 +1587,14 @@ FlvStreamCreatorWithShift()
     trap '' HUP INT QUIT TERM
     trap 'MonitorError $LINENO' ERR
     pid="$BASHPID"
+    rand_pid=$pid
+    while [ -n "$($JQ_FILE '.channels[]|select(.pid=='"$rand_pid"')' "$CHANNELS_FILE")" ] 
+    do
+        true &
+        rand_pid=$!
+        $JQ_FILE '(.channels[]|select(.pid=='"$pid"')|.pid)='"$rand_pid"'' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
+        mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
+    done
     case $from in
         "AddChannel") 
             $JQ_FILE '.channels += [
@@ -1682,7 +1666,7 @@ FlvStreamCreatorWithShift()
             new_pid=$pid
             $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.flv_status)="on"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
             mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
-            action=${action:-"start"}
+            action="start"
             SyncFile
 
             if [ -n "$chnl_bitrates" ] 
@@ -1792,6 +1776,14 @@ HlsStreamCreatorWithShift()
     trap '' HUP INT QUIT TERM
     trap 'MonitorError $LINENO' ERR
     pid="$BASHPID"
+    rand_pid=$pid
+    while [ -n "$($JQ_FILE '.channels[]|select(.pid=='"$rand_pid"')' "$CHANNELS_FILE")" ] 
+    do
+        true &
+        rand_pid=$!
+        $JQ_FILE '(.channels[]|select(.pid=='"$pid"')|.pid)='"$rand_pid"'' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
+        mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
+    done
     case $from in
         "AddChannel") 
             mkdir -p "$output_dir_root"
@@ -1829,8 +1821,12 @@ HlsStreamCreatorWithShift()
 
             if [ -n "$bitrates" ] 
             then
+                bitrates=${bitrates%%,*}
+                bitrates=${bitrates%%-*}
+                bitrates_command="-b:v ${bitrates}k"
                 output_name="${playlist_name}_${bitrates}_%05d.ts"
             else
+                bitrates_command=""
                 output_name="${playlist_name}_%05d.ts"
             fi
 
@@ -1845,7 +1841,7 @@ HlsStreamCreatorWithShift()
             fi
 
             $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
-            -vcodec "$video_codec" -acodec "$audio_codec" \
+            -vcodec "$video_codec" -acodec "$audio_codec" $bitrates_command \
             -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
             -segment_time "$seg_length" -segment_format mpeg_ts -segment_list_flags +live \
             -segment_list_size "$seg_count" -segment_wrap $((seg_count * 2)) $FFMPEG_FLAGS "$output_dir_root/$output_name" || true
@@ -1866,13 +1862,17 @@ HlsStreamCreatorWithShift()
             new_pid=$pid
             $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.status)="on"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_shift"
             mv "${CHANNELS_TMP}_shift" "$CHANNELS_FILE"
-            action=${action:-"start"}
+            action="start"
             SyncFile
 
             if [ -n "$chnl_bitrates" ] 
             then
+                chnl_bitrates=${chnl_bitrates%%,*}
+                chnl_bitrates=${chnl_bitrates%%-*}
+                bitrates_command="-b:v ${chnl_bitrates}k"
                 output_name="${chnl_playlist_name}_${chnl_bitrates}_%05d.ts"
             else
+                bitrates_command=""
                 output_name="${chnl_playlist_name}_%05d.ts"
             fi
 
@@ -1887,7 +1887,7 @@ HlsStreamCreatorWithShift()
             fi
 
             $FFMPEG $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
-            -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" \
+            -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $bitrates_command \
             -threads 0 -flags -global_header -f segment -segment_list "$chnl_output_dir_root/$chnl_playlist_name.m3u8" \
             -segment_time "$chnl_seg_length" -segment_format mpeg_ts -segment_list_flags +live \
             -segment_list_size "$chnl_seg_count" -segment_wrap $((chnl_seg_count * 2)) $FFMPEG_FLAGS "$chnl_output_dir_root/$output_name" || true
@@ -1939,8 +1939,12 @@ HlsStreamCreatorWithShift()
 
             if [ -n "${bitrates:-}" ] 
             then
+                bitrates=${bitrates%%,*}
+                bitrates=${bitrates%%-*}
+                bitrates_command="-b:v ${bitrates}k"
                 output_name="${playlist_name}_${bitrates}_%05d.ts"
             else
+                bitrates_command=""
                 output_name="${playlist_name}_%05d.ts"
             fi
             
@@ -1955,7 +1959,7 @@ HlsStreamCreatorWithShift()
             fi
 
             $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
-            -vcodec "$video_codec" -acodec "$audio_codec" \
+            -vcodec "$video_codec" -acodec "$audio_codec" $bitrates_command \
             -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
             -segment_time "$seg_length" -segment_format mpeg_ts -segment_list_flags +live \
             -segment_list_size "$seg_count" -segment_wrap $((seg_count * 2)) $FFMPEG_FLAGS "$output_dir_root/$output_name" || true
@@ -1985,35 +1989,30 @@ AddChannel()
 
     quality_command=""
     bitrates_command=""
-    if [ "$video_codec" == "copy" ] && [ "$audio_codec" == "copy" ]
+
+    SetQuality
+    
+    if [ -n "$quality" ] 
     then
-        quality=""
-        bitrates=""
+        quality_command="-q $quality"
+    fi
+
+    SetBitrates
+
+    if [ -n "$bitrates" ] 
+    then
+        bitrates_command="-b $bitrates"
+        master=1
+    else
         master=0
+    fi
+
+    if [ -z "$quality" ] && [ -n "$bitrates" ] 
+    then
+        SetConst
+    else
         const=""
         const_yn="no"
-        const_text="否"
-    else
-        SetQuality
-        if [ -n "$quality" ] 
-        then
-            quality_command="-q $quality"
-        fi
-        SetBitrates
-        if [ -n "$bitrates" ] 
-        then
-            bitrates_command="-b $bitrates"
-            master=1
-        else
-            master=0
-        fi
-        if [ -z "$quality" ] 
-        then
-            SetConst
-        else
-            const=""
-            const_yn="no"
-        fi
     fi
 
     if [ "${kind:-}" == "flv" ] 
@@ -2154,7 +2153,6 @@ EditOutputDirName()
         stop_channel_yn=${stop_channel_yn:-'n'}
         if [[ "$stop_channel_yn" == [Yy] ]]
         then
-            GetChannelInfo
             StopChannel
             echo && echo
         else
@@ -2318,7 +2316,6 @@ EditChannelAll()
         stop_channel_yn=${stop_channel_yn:-'n'}
         if [[ "$stop_channel_yn" == [Yy] ]]
         then
-            GetChannelInfo
             StopChannel
             echo && echo
         else
@@ -2335,24 +2332,17 @@ EditChannelAll()
     SetVideoCodec
     SetAudioCodec
     SetVideoAudioShift
-    if [ "$video_codec" == "copy" ] && [ "$audio_codec" == "copy" ]
+    SetQuality
+    SetBitrates
+
+    if [ -z "$quality" ] && [ -n "$bitrates" ]
     then
-        quality=""
-        bitrates=""
+        SetConst
+    else
         const=""
         const_yn="no"
-        const_text="否"
-    else
-        SetQuality
-        SetBitrates
-        if [ -z "$quality" ] 
-        then
-            SetConst
-        else
-            const=""
-            const_yn="no"
-        fi
     fi
+
     SetEncrypt
     if [ -n "$encrypt" ] 
     then
@@ -2490,6 +2480,7 @@ EditChannelMenu()
             if [[ "$restart_yn" == [Yy] ]] 
             then
                 StopChannel
+                sleep 3
                 GetChannelInfo
                 StartChannel
                 echo && echo -e "$info 频道重启成功 !" && echo
@@ -2555,25 +2546,21 @@ StartChannel()
     fi
     chnl_quality_command=""
     chnl_bitrates_command=""
-    if [ "$chnl_video_codec" == "copy" ] && [ "$chnl_audio_codec" == "copy" ]
+
+    if [ -n "$chnl_quality" ] 
     then
-        chnl_quality=""
-        chnl_bitrates=""
-        master=0
         chnl_const=""
-    else
-        if [ -n "$chnl_quality" ] 
-        then
-            chnl_quality_command="-q $chnl_quality"
-        fi
-        if [ -n "$chnl_bitrates" ] 
-        then
-            chnl_bitrates_command="-b $chnl_bitrates"
-            master=1
-        else
-            master=0
-        fi
+        chnl_quality_command="-q $chnl_quality"
     fi
+
+    if [ -n "$chnl_bitrates" ] 
+    then
+        chnl_bitrates_command="-b $chnl_bitrates"
+        master=1
+    else
+        master=0
+    fi
+
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
     FFMPEG="$FFMPEG_ROOT/ffmpeg"
     export FFMPEG
@@ -2635,7 +2622,7 @@ StartChannel()
 
                 $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.status)="on"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
                 mv "$CHANNELS_TMP" "$CHANNELS_FILE"
-                action=${action:-"start"}
+                action="start"
                 SyncFile
             ) > /dev/null 2>/dev/null </dev/null
         else
@@ -2657,7 +2644,7 @@ StartChannel()
 
             $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.status)="on"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
             mv "$CHANNELS_TMP" "$CHANNELS_FILE"
-            action=${action:-"start"}
+            action="start"
             SyncFile
         fi
     fi
@@ -2673,11 +2660,11 @@ StopChannel()
         if [ "$kind" != "flv" ] 
         then
             echo -e "$error 暂不支持 $kind ..." && echo && exit 1
-        elif [ -z "${monitor:-}" ] && [ "$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').status' "$CHANNELS_FILE")" == "on" ]
+        elif [ "$chnl_status" == "on" ]
         then
             echo -e "$error HLS 频道正开启，走错片场了？" && echo && exit 1
         fi
-    elif [ -z "${monitor:-}" ] && [ "$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').flv_status' "$CHANNELS_FILE")" == "on" ]
+    elif [ "$chnl_flv_status" == "on" ]
     then
         echo -e "$error FLV 频道正开启，走错片场了？" && echo && exit 1
     fi
@@ -2732,15 +2719,13 @@ StopChannel()
 
     if [ "${kind:-}" == "flv" ] 
     then
-        $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.flv_status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
-        mv "$CHANNELS_TMP" "$CHANNELS_FILE" 2>/dev/null || true
-        action=${action:-"stop"}
-        SyncFile
-    else
-        if [ -z "${chnl_output_dir_name:-}" ] 
-        then
-            IFS="=" read -r chnl_output_dir_name chnl_channel_name < <($JQ_FILE -r '.channels | to_entries | map(select(.value.pid=='"$chnl_pid"')) | map("\(.value.output_dir_name)=\(.value.channel_name)")|.[]' "$CHANNELS_FILE")
-        fi
+        #$JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.flv_status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+        #mv "$CHANNELS_TMP" "$CHANNELS_FILE" 2>/dev/null || true
+        chnl_flv_status="off"
+        echo && echo -e "$info 频道[ $chnl_channel_name ]已关闭 !" && echo
+    elif [ -z "$chnl_video_audio_shift" ] 
+    then
+        chnl_status="off"
         $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE" 2>/dev/null || true
         action=${action:-"stop"}
@@ -2752,6 +2737,9 @@ StopChannel()
             rm -rf "$LIVE_ROOT/${chnl_output_dir_name:-'notfound'}"
             echo && echo -e "$info 频道[ $chnl_channel_name ]目录删除成功 !" && echo
         fi
+    else
+        chnl_status="off"
+        echo && echo -e "$info 频道[ $chnl_channel_name ]已关闭 !" && echo
     fi
 }
 
@@ -2768,11 +2756,13 @@ RestartChannel()
             then
                 action="skip"
                 StopChannel
+                sleep 3
             fi
         elif [ "$chnl_status" == "on" ] 
         then
             action="skip"
             StopChannel
+            sleep 3
         fi
         StartChannel
         echo && echo -e "$info 频道重启成功 !" && echo
@@ -5451,16 +5441,16 @@ See LICENSE
     -a  音频编码(默认：aac) (不需要转码时输入 copy)
     -v  视频编码(默认：h264) (不需要转码时输入 copy)
     -f  画面或声音延迟(格式如： v_3 画面延迟3秒，a_2 声音延迟2秒
-        如果转码时使用此功能*暂时*会忽略部分参数，建议 copy 直播源(画面声音不同步)时使用)
+        使用此功能*暂时*会忽略部分参数，画面声音不同步时使用)
     -q  crf视频质量(如果同时设置了输出视频比特率，则优先使用crf视频质量)(数值1~63 越大质量越差)
         (默认: 不设置crf视频质量值)
-    -b  输出视频的比特率(bits/s)(默认：900-1280x720)
+    -b  输出视频的比特率(kb/s)(默认：900-1280x720)
         如果已经设置crf视频质量值，则比特率用于 -maxrate -bufsize
         如果没有设置crf视频质量值，则可以继续设置是否固定码率
         多个比特率用逗号分隔(注意-如果设置多个比特率，就是生成自适应码流)
         同时可以指定输出的分辨率(比如：-b 600-600x400,900-1280x720)
-        可以输入 copy 省略此选项(不需要转码时)
-    -C  固定码率(CBR 而不是 AVB)(只有在没有设置crf视频质量的情况下才有效)(默认：否)
+        可以输入 omit 省略此选项
+    -C  固定码率(只有在没有设置crf视频质量的情况下才有效)(默认：否)
     -e  加密段(默认：不加密)
     -K  Key名称(默认：跟m3u8名称相同)
     -z  频道名称(默认：跟m3u8名称相同)
@@ -5473,10 +5463,8 @@ See LICENSE
     -m  ffmpeg 额外的 INPUT FLAGS
         (默认："-reconnect 1 -reconnect_at_eof 1 
         -reconnect_streamed 1 -reconnect_delay_max 2000 
-        -timeout 2000000000 -y -thread_queue_size 55120 
-        -nostats -nostdin -hide_banner -loglevel 
-        fatal -probesize 65536")
-    -n  ffmpeg 额外的 OUTPUT FLAGS, 可以输入 copy 省略此选项(不需要转码时)
+        -timeout 2000000000 -y -nostats -nostdin -hide_banner -loglevel fatal")
+    -n  ffmpeg 额外的 OUTPUT FLAGS, 可以输入 omit 省略此选项
         (默认："-g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main")
 
 举例:
@@ -5485,10 +5473,10 @@ See LICENSE
     使用比特率控制视频质量[默认]: 
         tv -i http://xxx.com/xxx.ts -s 6 -o hbo2 -p hbo2 -b 900-1280x720 -z 'hbo直播2'
 
-    不需要转码的设置: -a copy -v copy -n copy
+    不需要转码的设置: -a copy -v copy -n omit
 
     不输出 HLS, 推流 flv :
-        tv -i http://xxx/xxx.ts -a copy -v h264 -b 3000 -k flv -T rtmp://127.0.0.1/live/xxx
+        tv -i http://xxx/xxx.ts -a aac -v h264 -b 3000 -k flv -T rtmp://127.0.0.1/live/xxx
 
 EOM
 
@@ -5515,7 +5503,7 @@ then
             cmd=${2:-5}
 
             case $cmd in
-                "stop") 
+                "s"|"stop") 
                     MonitorStop
                 ;;
                 "l"|"log")
@@ -5935,7 +5923,7 @@ then
             exit 1
         fi
     fi
-    echo -e "  IPTV 一键管理脚本（mpegts / hls / flv => hls / flv 推流）${red}[v$sh_ver]$plain
+    echo -e "  IPTV 一键管理脚本（mpegts / flv => hls / flv 推流）${red}[v$sh_ver]$plain
   ---- MTimer | http://hbo.epub.fun ----
 
   ${green}1.$plain 安装
@@ -6049,21 +6037,15 @@ else
                 encrypt_yn="yes"
             fi
 
-            if [ "${video_codec:-}" == "copy" ] && [ "${audio_codec:-}" == "copy" ]
+            if [ -n "${quality:-}" ] 
             then
-                quality=""
-                bitrates=""
                 const=""
                 const_yn="no"
-            else
-                if [ -n "${quality:-}" ] 
-                then
-                    quality_command="-q $quality"
-                fi
-                if [ -n "${bitrates:-}" ] 
-                then
-                    bitrates_command="-b $bitrates"
-                fi
+                quality_command="-q $quality"
+            fi
+            if [ -n "${bitrates:-}" ] 
+            then
+                bitrates_command="-b $bitrates"
             fi
 
             key_name=${key_name:-"$playlist_name"}
@@ -6087,7 +6069,7 @@ else
             input_flags=${input_flags#\'}
             export FFMPEG_INPUT_FLAGS=$input_flags
 
-            if [ "${output_flags:-}" == "copy" ] 
+            if [ "${output_flags:-}" == "omit" ] 
             then
                 output_flags=""
             else

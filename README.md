@@ -94,8 +94,8 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
   - 监控 HLS 选项：
     - 是否监控超时（默认120秒,必须大于段时长*段数目）
     - 重启次数（默认20次）
-  - tv m stop 停止监控
-  - tv m log 查看监控日志
+  - tv m s 停止监控
+  - tv m l 查看监控日志
   - 在 leech 直播源的时候必须打开监控选项，以应对输出低比特率/直播源服务器频繁重启/音轨丢失/等问题
 - tv l 列出所有开启的 flv 和 hls 频道
 - tv t 文件
@@ -121,16 +121,16 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 -a  音频编码(默认：aac) (不需要转码时输入 copy)
 -v  视频编码(默认：h264) (不需要转码时输入 copy)
 -f  画面或声音延迟(格式如： v_3 画面延迟3秒，a_2 声音延迟2秒
-    如果转码时使用此功能*暂时*会忽略部分参数，建议 copy 直播源(画面声音不同步)时使用)
+    使用此功能*暂时*会忽略部分参数，画面声音不同步时使用)
 -q  crf视频质量(如果设置了输出视频比特率，则优先使用crf视频质量)(数值1~63 越大质量越差)
     (默认: 不设置crf视频质量值)
--b  输出视频的比特率(bits/s)(默认：900-1280x720)
+-b  输出视频的比特率(kb/s)(默认：900-1280x720)
     如果已经设置crf视频质量值，则比特率用于 -maxrate -bufsize
     如果没有设置crf视频质量值，则可以继续设置是否固定码率
     多个比特率用逗号分隔(注意-如果设置多个比特率，就是生成自适应码流)
     同时可以指定输出的分辨率(比如：-b 600-600x400,900-1280x720)
-    可以输入 omit 省略此选项(ffmpeg自行判断输出比特率)
--C  固定码率(CBR 而不是 AVB)(只有在没有设置crf视频质量的情况下才有效)(默认：否)
+    可以输入 omit 省略此选项
+-C  固定码率(只有在没有设置crf视频质量的情况下才有效)(默认：否)
 -e  加密段(默认：不加密)
 -K  Key名称(默认：跟m3u8名称相同)
 -z  频道名称(默认：跟m3u8名称相同)
@@ -142,7 +142,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 
 -m  ffmpeg 额外的 INPUT FLAGS
     (默认："-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -nostats -nostdin -hide_banner -loglevel fatal")
--n  ffmpeg 额外的 OUTPUT FLAGS, 可以输入 copy 省略此选项(不需要转码时)
+-n  ffmpeg 额外的 OUTPUT FLAGS, 可以输入 omit 省略此选项
     (默认："-g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main")
 ```
 
@@ -156,10 +156,10 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 
     `tv -i http://xxx/xxx.ts -s 6 -o hbo2 -p hbo2 -b 900-1280x720 -z 'hbo直播2'`
 
-- 不需要转码的设置: -a copy -v copy -n copy
+- 不需要转码的设置: -a copy -v copy -n omit
 
 - 不输出 HLS, 推流 flv :
 
-    `tv -i http://xxx/xxx.ts -a copy -v h264 -b 3000 -k flv -T rtmp://127.0.0.1/live/xxx`
+    `tv -i http://xxx/xxx.ts -a aac -v h264 -b 3000 -k flv -T rtmp://127.0.0.1/live/xxx`
 
 - 或者输入 tv 打开 HLS 面板， tv f 打开 FLV 面板，使用方法  **Enter**
