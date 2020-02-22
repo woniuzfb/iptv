@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-sh_ver="1.4.0"
+sh_ver="1.5.0"
 SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
@@ -56,6 +56,11 @@ default='
     "sync_index":"data:0:channels",
     "sync_pairs":"chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live",
     "schedule_file":"",
+    "flv_delay_seconds":20,
+    "flv_restart_nums":20,
+    "hls_delay_seconds":120,
+    "hls_min_bitrates":500,
+    "hls_restart_nums":20,
     "anti_ddos_port":80,
     "anti_ddos_seconds":120,
     "anti_ddos_level":6,
@@ -460,7 +465,7 @@ UpdateSelf()
         printf -v update_date "%(%m-%d)T"
         cp -f "$CHANNELS_FILE" "${CHANNELS_FILE}_$update_date"
         
-        default=$($JQ_FILE '(.playlist_name)="'"$d_playlist_name"'"|(.seg_dir_name)="'"$d_seg_dir_name"'"|(.seg_name)="'"$d_seg_name"'"|(.seg_length)='"$d_seg_length"'|(.seg_count)='"$d_seg_count"'|(.video_codec)="'"$d_video_codec"'"|(.audio_codec)="'"$d_audio_codec"'"|(.video_audio_shift)="'"$d_video_audio_shift"'"|(.quality)="'"$d_quality"'"|(.bitrates)="'"$d_bitrates"'"|(.const)="'"$d_const_yn"'"|(.encrypt)="'"$d_encrypt_yn"'"|(.key_name)="'"$d_key_name"'"|(.input_flags)="'"$d_input_flags"'"|(.output_flags)="'"$d_output_flags"'"|(.sync_file)="'"$d_sync_file"'"|(.sync_index)="'"$d_sync_index"'"|(.sync_pairs)="'"$d_sync_pairs"'"|(.schedule_file)="'"$d_schedule_file"'"|(.anti_ddos_port)='"$d_anti_ddos_port"'|(.anti_ddos_seconds)='"$d_anti_ddos_seconds"'|(.anti_ddos_level)='"$d_anti_ddos_level"'' <<< "$default")
+        default=$($JQ_FILE '(.playlist_name)="'"$d_playlist_name"'"|(.seg_dir_name)="'"$d_seg_dir_name"'"|(.seg_name)="'"$d_seg_name"'"|(.seg_length)='"$d_seg_length"'|(.seg_count)='"$d_seg_count"'|(.video_codec)="'"$d_video_codec"'"|(.audio_codec)="'"$d_audio_codec"'"|(.video_audio_shift)="'"$d_video_audio_shift"'"|(.quality)="'"$d_quality"'"|(.bitrates)="'"$d_bitrates"'"|(.const)="'"$d_const_yn"'"|(.encrypt)="'"$d_encrypt_yn"'"|(.key_name)="'"$d_key_name"'"|(.input_flags)="'"$d_input_flags"'"|(.output_flags)="'"$d_output_flags"'"|(.sync_file)="'"$d_sync_file"'"|(.sync_index)="'"$d_sync_index"'"|(.sync_pairs)="'"$d_sync_pairs"'"|(.schedule_file)="'"$d_schedule_file"'"|(.flv_delay_seconds)='"$d_flv_delay_seconds"'|(.flv_restart_nums)='"$d_flv_restart_nums"'|(.hls_delay_seconds)='"$d_hls_delay_seconds"'|(.hls_min_bitrates)='"$d_hls_min_bitrates"'|(.hls_restart_nums)='"$d_hls_restart_nums"'|(.anti_ddos_port)='"$d_anti_ddos_port"'|(.anti_ddos_seconds)='"$d_anti_ddos_seconds"'|(.anti_ddos_level)='"$d_anti_ddos_level"'' <<< "$default")
 
         $JQ_FILE '. + {default: '"$default"'}' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
@@ -624,17 +629,57 @@ GetDefault()
         d_sync_pairs=${d_sync_pairs%, schedule_file:*}
         d_sync_pairs_text=${d_sync_pairs:-"不设置"}
         d_schedule_file=${d#*schedule_file: }
-        if [[ "$d" == *"anti_ddos_port: "* ]] 
+        if [[ "$d" == *"flv_delay_seconds: "* ]] 
+        then
+            d_schedule_file=${d_schedule_file%, flv_delay_seconds:*}
+            d_flv_delay_seconds=${d#*flv_delay_seconds: }
+            d_flv_delay_seconds=${d_flv_delay_seconds%, flv_restart_nums:*}
+            d_flv_delay_seconds=${d_flv_delay_seconds:-20}
+            d_flv_restart_nums=${d#*flv_restart_nums: }
+            d_flv_restart_nums=${d_flv_restart_nums%, hls_delay_seconds:*}
+            d_flv_restart_nums=${d_flv_restart_nums:-20}
+            d_hls_delay_seconds=${d#*hls_delay_seconds: }
+            d_hls_delay_seconds=${d_hls_delay_seconds%, hls_min_bitrates:*}
+            d_hls_delay_seconds=${d_hls_delay_seconds:-120}
+            d_hls_min_bitrates=${d#*hls_min_bitrates: }
+            d_hls_min_bitrates=${d_hls_min_bitrates%, hls_restart_nums:*}
+            d_hls_min_bitrates=${d_hls_min_bitrates:-500}
+            d_hls_restart_nums=${d#*hls_restart_nums: }
+            d_hls_restart_nums=${d_hls_restart_nums%, anti_ddos_port:*}
+            d_hls_restart_nums=${d_hls_restart_nums:-20}
+            d_anti_ddos_port=${d#*anti_ddos_port: }
+            d_anti_ddos_port=${d_anti_ddos_port%, anti_ddos_seconds:*}
+            d_anti_ddos_port=${d_anti_ddos_port:-80}
+            d_anti_ddos_seconds=${d#*anti_ddos_seconds: }
+            d_anti_ddos_seconds=${d_anti_ddos_seconds%, anti_ddos_level:*}
+            d_anti_ddos_seconds=${d_anti_ddos_seconds:-120}
+            d_anti_ddos_level=${d#*anti_ddos_level: }
+            d_anti_ddos_level=${d_anti_ddos_level%, version:*}
+            d_anti_ddos_level=${d_anti_ddos_level:-6}
+        elif [[ "$d" == *"anti_ddos_port: "* ]] 
         then
             d_schedule_file=${d_schedule_file%, anti_ddos_port:*}
             d_anti_ddos_port=${d#*anti_ddos_port: }
             d_anti_ddos_port=${d_anti_ddos_port%, anti_ddos_seconds:*}
+            d_anti_ddos_port=${d_anti_ddos_port:-80}
             d_anti_ddos_seconds=${d#*anti_ddos_seconds: }
             d_anti_ddos_seconds=${d_anti_ddos_seconds%, anti_ddos_level:*}
+            d_anti_ddos_seconds=${d_anti_ddos_seconds:-120}
             d_anti_ddos_level=${d#*anti_ddos_level: }
             d_anti_ddos_level=${d_anti_ddos_level%, version:*}
+            d_anti_ddos_level=${d_anti_ddos_level:-6}
+            d_flv_delay_seconds=20
+            d_flv_restart_nums=20
+            d_hls_delay_seconds=120
+            d_hls_min_bitrates=500
+            d_hls_restart_nums=20
         else
             d_schedule_file=${d_schedule_file%, version:*}
+            d_flv_delay_seconds=20
+            d_flv_restart_nums=20
+            d_hls_delay_seconds=120
+            d_hls_min_bitrates=500
+            d_hls_restart_nums=20
             d_anti_ddos_port=80
             d_anti_ddos_seconds=120
             d_anti_ddos_level=6
@@ -756,7 +801,10 @@ GetChannelsInfo()
         
     done < <($JQ_FILE -r '.channels | to_entries | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
 
-    [ "$chnls_count" == 0 ] && echo -e "$error 没有发现 频道，请检查 !" && exit 1
+    if [ "$chnls_count" == 0 ] && [ -z "${d_version:-}" ] 
+    then
+        echo -e "$error 没有发现 频道，请检查 !" && exit 1
+    fi
 
     return 0
 }
@@ -896,6 +944,11 @@ ListChannels()
             chnls_video_quality_text="crf值$chnls_quality_index ${chnls_quality_text:-"不设置"}"
         else
             chnls_video_quality_text="比特率值 ${chnls_bitrates_text:-"不设置"}"
+        fi
+
+        if [ -z "${kind:-}" ] && [ "$chnls_video_codec_index" == "copy" ] && [ "$chnls_audio_codec_index" == "copy" ]  
+        then
+            chnls_video_quality_text="原画"
         fi
 
         if [ -z "${kind:-}" ] 
@@ -1077,7 +1130,13 @@ GetChannelInfo(){
                 chnl_flv_status_text=$red"关闭"$plain
             fi
 
-            if [ -z "$chnl_bitrates" ] 
+            if [ -z "${kind:-}" ] && [ "$chnl_video_codec" == "copy" ] && [ "$chnl_audio_codec" == "copy" ]  
+            then
+                chnl_video_quality_text="原画"
+                chnl_playlist_link=${chnl_playlist_link:-}
+                chnl_playlist_link=${chnl_playlist_link//_master.m3u8/.m3u8}
+                chnl_playlist_link_text=${chnl_playlist_link_text//_master.m3u8/.m3u8}
+            elif [ -z "$chnl_bitrates" ] 
             then
                 chnl_playlist_link=${chnl_playlist_link:-}
                 chnl_playlist_link=${chnl_playlist_link//_master.m3u8/.m3u8}
@@ -1120,8 +1179,7 @@ ViewChannelInfo()
         echo -e " 拉流地址   : $green${chnl_flv_pull_link:-"无"}$plain"
     fi
     
-    echo -e " 视频源\t    : $green$chnl_stream_link$plain"
-    #echo -e " 目录\t    : $green$chnl_output_dir_root$plain"
+    echo -e " 直播源\t    : $green$chnl_stream_link$plain"
     echo -e " 视频编码   : $green$chnl_video_codec$plain"
     echo -e " 音频编码   : $green$chnl_audio_codec$plain"
     echo -e " 视频质量   : $green$chnl_video_quality_text$plain"
@@ -1991,29 +2049,38 @@ AddChannel()
     quality_command=""
     bitrates_command=""
 
-    SetQuality
-    
-    if [ -n "$quality" ] 
+    if [ -z "${kind:-}" ] && [ "$video_codec" == "copy" ] && [ "$video_codec" == "copy" ]
     then
-        quality_command="-q $quality"
-    fi
-
-    SetBitrates
-
-    if [ -n "$bitrates" ] 
-    then
-        bitrates_command="-b $bitrates"
-        master=1
-    else
-        master=0
-    fi
-
-    if [ -z "$quality" ] && [ -n "$bitrates" ] 
-    then
-        SetConst
-    else
+        quality=""
+        bitrates=""
         const=""
         const_yn="no"
+        master=0
+    else
+        SetQuality
+        
+        if [ -n "$quality" ] 
+        then
+            quality_command="-q $quality"
+        fi
+
+        SetBitrates
+
+        if [ -n "$bitrates" ] 
+        then
+            bitrates_command="-b $bitrates"
+            master=1
+        else
+            master=0
+        fi
+
+        if [ -z "$quality" ] && [ -n "$bitrates" ] 
+        then
+            SetConst
+        else
+            const=""
+            const_yn="no"
+        fi
     fi
 
     if [ "${kind:-}" == "flv" ] 
@@ -2333,15 +2400,23 @@ EditChannelAll()
     SetVideoCodec
     SetAudioCodec
     SetVideoAudioShift
-    SetQuality
-    SetBitrates
-
-    if [ -z "$quality" ] && [ -n "$bitrates" ]
+    if [ -z "${kind:-}" ] && [ "$video_codec" == "copy" ] && [ "$audio_codec" == "copy" ] 
     then
-        SetConst
-    else
+        quality=""
+        bitrates=""
         const=""
         const_yn="no"
+    else
+        SetQuality
+        SetBitrates
+
+        if [ -z "$quality" ] && [ -n "$bitrates" ]
+        then
+            SetConst
+        else
+            const=""
+            const_yn="no"
+        fi
     fi
 
     SetEncrypt
@@ -2548,18 +2623,26 @@ StartChannel()
     chnl_quality_command=""
     chnl_bitrates_command=""
 
-    if [ -n "$chnl_quality" ] 
+    if [ -z "${kind:-}" ] && [ "$chnl_video_codec" == "copy" ] && [ "$chnl_audio_codec" == "copy" ]
     then
+        chnl_quality=""
+        chnl_bitrates=""
         chnl_const=""
-        chnl_quality_command="-q $chnl_quality"
-    fi
-
-    if [ -n "$chnl_bitrates" ] 
-    then
-        chnl_bitrates_command="-b $chnl_bitrates"
-        master=1
-    else
         master=0
+    else
+        if [ -n "$chnl_quality" ] 
+        then
+            chnl_const=""
+            chnl_quality_command="-q $chnl_quality"
+        fi
+
+        if [ -n "$chnl_bitrates" ] 
+        then
+            chnl_bitrates_command="-b $chnl_bitrates"
+            master=1
+        else
+            master=0
+        fi
     fi
 
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
@@ -4457,12 +4540,12 @@ AntiDDoSSet()
                     ufw --force enable > /dev/null 2>&1
                 fi
             fi
-            GetDefault
+            [ -z "${d_anti_ddos_port:-}" ] && GetDefault
             echo && echo "设置封禁端口"
-            while read -p "(默认: ${d_anti_ddos_port:-80}):" anti_ddos_port
+            while read -p "(默认: $d_anti_ddos_port):" anti_ddos_port
             do
                 case $anti_ddos_port in
-                    "") anti_ddos_port=${d_anti_ddos_port:-80} && break
+                    "") anti_ddos_port=$d_anti_ddos_port && break
                     ;;
                     *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
                     ;;
@@ -4478,10 +4561,10 @@ AntiDDoSSet()
             done
 
             echo && echo "设置封禁ip多少秒"
-            while read -p "(默认: ${d_anti_ddos_seconds:-120}秒):" anti_ddos_seconds
+            while read -p "(默认: $d_anti_ddos_seconds秒):" anti_ddos_seconds
             do
                 case $anti_ddos_seconds in
-                    "") anti_ddos_seconds=${d_anti_ddos_seconds:-120} && break
+                    "") anti_ddos_seconds=$d_anti_ddos_seconds && break
                     ;;
                     *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
                     ;;
@@ -4498,11 +4581,11 @@ AntiDDoSSet()
 
             echo && echo "设置封禁等级(1-9)"
             echo -e "$tip 数值越低越严格，也越容易误伤，很多情况是网络问题导致重复请求并非 DDoS" && echo
-            while read -p "(默认: ${d_anti_ddos_level:-6}):" anti_ddos_level
+            while read -p "(默认: $d_anti_ddos_level):" anti_ddos_level
             do
                 case $anti_ddos_level in
                     "") 
-                        anti_ddos_level=${d_anti_ddos_level:-6}
+                        anti_ddos_level=$d_anti_ddos_level
                         break
                     ;;
                     *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
@@ -4631,12 +4714,12 @@ MonitorError()
     printf '%s\n' "$date_now [LINE:$1] ERROR" >> "$MONITOR_LOG"
 }
 
-MonitorRestartChannel()
+MonitorHlsRestartChannel()
 {
     trap '' HUP INT TERM
     trap 'MonitorError $LINENO' ERR
-    restart_nums=${restart_nums:-20}
-    for((i=0;i<restart_nums;i++))
+    hls_restart_nums=${hls_restart_nums:-20}
+    for((i=0;i<hls_restart_nums;i++))
     do
         action="skip"
         StopChannel > /dev/null 2>&1
@@ -4653,13 +4736,13 @@ MonitorRestartChannel()
                 bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts || true)
                 bit_rate=${bit_rate//N\/A/0}
                 audio_stream=$($FFPROBE -i "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -select_streams a -loglevel quiet || true)
-                if [[ ${bit_rate:-0} -gt $min_bitrates ]] && [ -n "$audio_stream" ]
+                if [[ ${bit_rate:-0} -gt $hls_min_bitrates ]] && [ -n "$audio_stream" ]
                 then
                     printf -v date_now "%(%m-%d %H:%M:%S)T"
                     printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
                     break
                 fi
-            elif [[ $i -eq $((restart_nums - 1)) ]] 
+            elif [[ $i -eq $((hls_restart_nums - 1)) ]] 
             then
                 StopChannel > /dev/null 2>&1
                 printf -v date_now "%(%m-%d %H:%M:%S)T"
@@ -4744,7 +4827,7 @@ Monitor()
                         if [ -n "${flv_first_fail:-}" ]
                         then
                             printf -v flv_fail_date "%(%s)T"
-                            if [ $((flv_fail_date - flv_first_fail)) -gt "$flv_seconds" ] 
+                            if [ $((flv_fail_date - flv_first_fail)) -gt "$flv_delay_seconds" ] 
                             then
                                 action="skip"
                                 StopChannel > /dev/null 2>&1
@@ -4838,7 +4921,7 @@ Monitor()
                         if [ -n "${flv_first_fail:-}" ] 
                         then
                             printf -v flv_fail_date "%(%s)T"
-                            if [ $((flv_fail_date - flv_first_fail)) -gt "$flv_seconds" ] 
+                            if [ $((flv_fail_date - flv_first_fail)) -gt "$flv_delay_seconds" ] 
                             then
                                 action="skip"
                                 StopChannel > /dev/null 2>&1
@@ -4901,11 +4984,11 @@ Monitor()
                 then
                     GetChannelInfo
                     printf '%s\n' "$chnl_channel_name 文件过大重启" >> "$MONITOR_LOG"
-                    MonitorRestartChannel
+                    MonitorHlsRestartChannel
                 fi
             fi
 
-            if [ -n "$monitor_nums" ] 
+            if [ -n "$hls_nums" ] 
             then
                 while IFS= read -r old_file_path
                 do
@@ -4919,7 +5002,7 @@ Monitor()
                     then
                         GetChannelInfo
                         printf '%s\n' "$chnl_channel_name 超时重启" >> "$MONITOR_LOG"
-                        MonitorRestartChannel
+                        MonitorHlsRestartChannel
                         break 1
                     else
                         for dir_name in "${monitor_dir_names_chosen[@]}"
@@ -4928,12 +5011,12 @@ Monitor()
                             then
                                 GetChannelInfo
                                 printf '%s\n' "$chnl_channel_name 超时重启" >> "$MONITOR_LOG"
-                                MonitorRestartChannel
+                                MonitorHlsRestartChannel
                                 break 2
                             fi
                         done  
                     fi
-                done < <(find "$LIVE_ROOT/"* \! -newermt "-$delay_seconds seconds" || true)
+                done < <(find "$LIVE_ROOT/"* \! -newermt "-$hls_delay_seconds seconds" || true)
 
                 for dir_name in "${monitor_dir_names_chosen[@]}"
                 do
@@ -4970,33 +5053,33 @@ Monitor()
                         if [ "$chnl_status" == "off" ] 
                         then
                             printf '%s\n' "$chnl_channel_name 开启" >> "$MONITOR_LOG"
-                            MonitorRestartChannel
+                            MonitorHlsRestartChannel
                             break 1
                         fi
                     fi
                     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
                     FFPROBE="$FFMPEG_ROOT/ffprobe"
                     bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*_00000.ts || true)
-                    bit_rate=${bit_rate:-$min_bitrates}
-                    bit_rate=${bit_rate//N\/A/$min_bitrates}
+                    bit_rate=${bit_rate:-$hls_min_bitrates}
+                    bit_rate=${bit_rate//N\/A/$hls_min_bitrates}
                     #audio_stream=$($FFPROBE -i "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -select_streams a -loglevel quiet || true)
-                    if [[ $bit_rate -lt $min_bitrates ]] # || [ -z "$audio_stream" ]
+                    if [[ $bit_rate -lt $hls_min_bitrates ]] # || [ -z "$audio_stream" ]
                     then
                         output_dir_name=$dir_name
                         fail_count=1
                         for f in "$LIVE_ROOT/$dir_name/$chnl_seg_dir_name/"*.ts
                         do
                             bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$f" || true)
-                            bit_rate=${bit_rate:-$min_bitrates}
-                            bit_rate=${bit_rate//N\/A/$min_bitrates}
-                            if [[ $bit_rate -lt $min_bitrates ]] 
+                            bit_rate=${bit_rate:-$hls_min_bitrates}
+                            bit_rate=${bit_rate//N\/A/$hls_min_bitrates}
+                            if [[ $bit_rate -lt $hls_min_bitrates ]] 
                             then
                                 ((fail_count++))
                             fi
                             if [ "$fail_count" -gt 3 ] 
                             then
                                 printf '%s\n' "$chnl_channel_name 比特率过低重启" >> "$MONITOR_LOG"
-                                MonitorRestartChannel
+                                MonitorHlsRestartChannel
                                 break 1
                             fi
                         done
@@ -5016,23 +5099,21 @@ MonitorSet()
     monitor_channel_names=()
     monitor_flv_push_links=()
     monitor_flv_pull_links=()
-    while IFS= read -r flv_channel
+    GetChannelsInfo
+    for((i=0;i<chnls_count;i++));
     do
-        flv_count=$((flv_count+1))
-        map_channel_name=${flv_channel#*channel_name: }
-        map_channel_name=${map_channel_name%, flv_push_link:*}
-        map_flv_push_link=${flv_channel#*flv_push_link: }
-        map_flv_push_link=${map_flv_push_link%, flv_pull_link:*}
-        map_flv_pull_link=${flv_channel#*flv_pull_link: }
-
-        monitor_channel_names+=("$map_channel_name");
-        monitor_flv_push_links+=("$map_flv_push_link");
-        monitor_flv_pull_links+=("${map_flv_pull_link:-''}");
-    done < <($JQ_FILE -r '.channels | to_entries | map(select(.value.flv_status=="on")) | map("channel_name: \(.value.channel_name), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
-
+        if [ "${chnls_flv_status[i]}" == "on" ] 
+        then
+            flv_count=$((flv_count+1))
+            monitor_channel_names+=("${chnls_channel_name[i]}");
+            monitor_flv_push_links+=("${chnls_flv_push_link[i]}");
+            monitor_flv_pull_links+=("${chnls_flv_pull_link[i]}");
+        fi
+    done
+    
     if [ "$flv_count" -gt 0 ] 
     then
-
+        GetDefault
         echo && echo "请选择需要监控的 FLV 推流频道(多个频道用空格分隔)" && echo
 
         for((i=0;i<flv_count;i++));
@@ -5057,15 +5138,15 @@ MonitorSet()
             then
                 flv_all=1
                 echo && echo "设置超时多少秒自动重启频道"
-                while read -p "(默认: 20秒):" flv_seconds
+                while read -p "(默认: $d_flv_delay_seconds秒):" flv_delay_seconds
                 do
-                    case $flv_seconds in
-                        "") flv_seconds=20 && break
+                    case $flv_delay_seconds in
+                        "") flv_delay_seconds=$d_flv_delay_seconds && break
                         ;;
                         *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
                         ;;
                         *) 
-                            if [ "$flv_seconds" -gt 0 ]
+                            if [ "$flv_delay_seconds" -gt 0 ]
                             then
                                 break
                             else
@@ -5099,15 +5180,15 @@ MonitorSet()
                 ;;
                 *)
                     echo && echo "设置超时多少秒自动重启频道"
-                    while read -p "(默认: 20秒):" flv_seconds
+                    while read -p "(默认: $d_flv_delay_seconds秒):" flv_delay_seconds
                     do
-                        case $flv_seconds in
-                            "") flv_seconds=20 && break
+                        case $flv_delay_seconds in
+                            "") flv_delay_seconds=$d_flv_delay_seconds && break
                             ;;
                             *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
                             ;;
                             *) 
-                                if [ "$flv_seconds" -gt 0 ]
+                                if [ "$flv_delay_seconds" -gt 0 ]
                                 then
                                     break
                                 else
@@ -5122,10 +5203,10 @@ MonitorSet()
         done
 
         echo && echo "请输入尝试重启的次数"
-        while read -p "(默认: 20次):" flv_restart_nums
+        while read -p "(默认: $d_flv_restart_nums次):" flv_restart_nums
         do
             case $flv_restart_nums in
-                "") flv_restart_nums=20 && break
+                "") flv_restart_nums=$d_flv_restart_nums && break
                 ;;
                 *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
                 ;;
@@ -5147,50 +5228,54 @@ MonitorSet()
         then
             echo && echo -e "$error 没有开启的频道！" && echo && exit 1
         fi
+        $JQ_FILE '(.default|.flv_delay_seconds)='"$flv_delay_seconds"'|(.default|.flv_restart_nums)='"$flv_restart_nums"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+        mv "$CHANNELS_TMP" "$CHANNELS_FILE"
         return 0
     fi
     echo && echo "请选择需要监控超时重启的 HLS 频道(多个频道用空格分隔)"
     echo "一般不需要设置，只有在需要重启频道才能继续连接直播源的情况下启用" && echo
     monitor_count=0
     monitor_dir_names=()
-    for dir in "$LIVE_ROOT"/*/
+    [ -z "${d_hls_delay_seconds:-}" ] && GetDefault
+    for((i=0;i<chnls_count;i++));
     do
-        monitor_count=$((monitor_count + 1))
-        file_root=${dir%/*}
-        output_dir_name=${file_root##*/}
-        GetChannelInfo
-        monitor_dir_names+=("$output_dir_name")
-        echo -e "  ${green}$monitor_count.$plain $chnl_channel_name"
+        if [ -e "$LIVE_ROOT/${chnls_output_dir_name[i]}" ] 
+        then
+            monitor_count=$((monitor_count + 1))
+            monitor_dir_names+=("${chnls_output_dir_name[i]}")
+            echo -e "  ${green}$monitor_count.$plain ${chnls_channel_name[i]}"
+        fi
     done
+    
     echo && echo -e "  ${green}$((monitor_count+1)).$plain 全部"
     echo -e "  ${green}$((monitor_count+2)).$plain 不设置" && echo
     
-    while read -p "(默认: 不设置):" monitor_nums
+    while read -p "(默认: 不设置):" hls_nums
     do
-        if [ -z "$monitor_nums" ] || [ "$monitor_nums" == $((monitor_count+2)) ] 
+        if [ -z "$hls_nums" ] || [ "$hls_nums" == $((monitor_count+2)) ] 
         then
-            monitor_nums=""
+            hls_nums=""
             break
         fi
-        IFS=" " read -ra monitor_nums_arr <<< "$monitor_nums"
+        IFS=" " read -ra hls_nums_arr <<< "$hls_nums"
 
         monitor_dir_names_chosen=()
-        if [ "$monitor_nums" == $((monitor_count+1)) ] 
+        if [ "$hls_nums" == $((monitor_count+1)) ] 
         then
             monitor_all=1
             monitor_dir_names_chosen=("${monitor_dir_names[@]}")
 
             echo && echo "设置超时多少秒自动重启频道"
             echo -e "$tip 必须大于 段时长*段数目" && echo
-            while read -p "(默认: 120秒):" delay_seconds
+            while read -p "(默认: $d_hls_delay_seconds秒):" hls_delay_seconds
             do
-                case $delay_seconds in
-                    "") delay_seconds=120 && break
+                case $hls_delay_seconds in
+                    "") hls_delay_seconds=$d_hls_delay_seconds && break
                     ;;
                     *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
                     ;;
                     *) 
-                        if [ "$delay_seconds" -gt 60 ]
+                        if [ "$hls_delay_seconds" -gt 60 ]
                         then
                             break
                         else
@@ -5205,14 +5290,14 @@ MonitorSet()
         fi
 
         error_no=0
-        for monitor_key in "${monitor_nums_arr[@]}"
+        for hls_num in "${hls_nums_arr[@]}"
         do
-            case "$monitor_key" in
+            case "$hls_num" in
                 *[!0-9]*)
                     error_no=1
                 ;;
                 *)
-                    if [ "$monitor_key" -lt 1 ] || [ "$monitor_key" -gt "$monitor_count" ]
+                    if [ "$hls_num" -lt 1 ] || [ "$hls_num" -gt "$monitor_count" ]
                     then
                         error_no=2
                     fi
@@ -5225,22 +5310,22 @@ MonitorSet()
                 echo -e "$error 请输入正确的数字或直接回车 " && echo
             ;;
             *)
-                for monitor_key in "${monitor_nums_arr[@]}"
+                for hls_num in "${hls_nums_arr[@]}"
                 do
-                    monitor_dir_names_chosen+=("${monitor_dir_names[((monitor_key - 1))]}")
+                    monitor_dir_names_chosen+=("${monitor_dir_names[((hls_num - 1))]}")
                 done
 
                 echo && echo "设置超时多少秒自动重启频道"
                 echo -e "$tip 必须大于 段时长*段数目" && echo
-                while read -p "(默认: 120秒):" delay_seconds
+                while read -p "(默认: $d_hls_delay_seconds秒):" hls_delay_seconds
                 do
-                    case $delay_seconds in
-                        "") delay_seconds=120 && break
+                    case $hls_delay_seconds in
+                        "") hls_delay_seconds=$d_hls_delay_seconds && break
                         ;;
                         *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
                         ;;
                         *) 
-                            if [ "$delay_seconds" -gt 60 ]
+                            if [ "$hls_delay_seconds" -gt 60 ]
                             then
                                 break
                             else
@@ -5255,18 +5340,18 @@ MonitorSet()
         esac
     done
 
-    if [ -n "$monitor_nums" ] 
+    if [ -n "$hls_nums" ] 
     then
         echo && echo "请输入最低比特率(kb/s),低于此数值会重启频道"
-        while read -p "(默认: 500):" min_bitrates
+        while read -p "(默认: $d_hls_min_bitrates):" hls_min_bitrates
         do
-            case $min_bitrates in
-                "") min_bitrates=500 && break
+            case $hls_min_bitrates in
+                "") hls_min_bitrates=$d_hls_min_bitrates && break
                 ;;
                 *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
                 ;;
                 *) 
-                    if [ "$min_bitrates" -gt 0 ]
+                    if [ "$hls_min_bitrates" -gt 0 ]
                     then
                         break
                     else
@@ -5276,19 +5361,19 @@ MonitorSet()
             esac
         done
 
-        min_bitrates=$((min_bitrates * 1000))
+        hls_min_bitrates=$((hls_min_bitrates * 1000))
     fi
 
     echo && echo "请输入尝试重启的次数"
-    while read -p "(默认: 20次):" restart_nums
+    while read -p "(默认: $d_hls_restart_nums次):" hls_restart_nums
     do
-        case $restart_nums in
-            "") restart_nums=20 && break
+        case $hls_restart_nums in
+            "") hls_restart_nums=$d_hls_restart_nums && break
             ;;
             *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
             ;;
             *) 
-                if [ "$restart_nums" -gt 0 ]
+                if [ "$hls_restart_nums" -gt 0 ]
                 then
                     break
                 else
@@ -5297,6 +5382,13 @@ MonitorSet()
             ;;
         esac
     done
+
+    flv_delay_seconds=${flv_delay_seconds:-$d_flv_delay_seconds}
+    flv_restart_nums=${flv_restart_nums:-$d_flv_restart_nums}
+    hls_delay_seconds=${hls_delay_seconds:-$d_hls_delay_seconds}
+    hls_min_bitrates=${hls_min_bitrates:-$d_hls_min_bitrates}
+    $JQ_FILE '(.default|.flv_delay_seconds)='"$flv_delay_seconds"'|(.default|.flv_restart_nums)='"$flv_restart_nums"'|(.default|.hls_delay_seconds)='"$hls_delay_seconds"'|(.default|.hls_min_bitrates)='"$((hls_min_bitrates / 1000))"'|(.default|.hls_restart_nums)='"$hls_restart_nums"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
 }
 
 Progress(){
@@ -5316,6 +5408,8 @@ InstallNginx()
     locale-gen zh_CN.UTF-8 >/dev/null 2>&1
     timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
     systemctl restart cron >/dev/null 2>&1
+    apt-get -y install debconf-utils >/dev/null 2>&1
+    echo '* libraries/restart-without-asking boolean true' | sudo debconf-set-selections
     apt-get -y install software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext build-essential >/dev/null 2>&1
     cd ~
 
@@ -6492,18 +6586,38 @@ else
             quality_command=""
             bitrates_command=""
 
-            if [ -z "${const:-}" ]  
+            if [ -z "${kind:-}" ] && [ "${video_codec:-}" == "copy" ] && [ "${audio_codec:-}" == "copy" ]
             then
-                if [ "$d_const_yn" == "yes" ] 
+                quality=""
+                bitrates=""
+                const=""
+                const_yn="no"
+            else
+                if [ -z "${const:-}" ]  
                 then
-                    const="-C"
-                    const_yn="yes"
+                    if [ "$d_const_yn" == "yes" ] 
+                    then
+                        const="-C"
+                        const_yn="yes"
+                    else
+                        const=""
+                        const_yn="no"
+                    fi
                 else
+                    const_yn="yes"
+                fi
+
+                if [ -n "${quality:-}" ] 
+                then
                     const=""
                     const_yn="no"
+                    quality_command="-q $quality"
                 fi
-            else
-                const_yn="yes"
+
+                if [ -n "${bitrates:-}" ] 
+                then
+                    bitrates_command="-b $bitrates"
+                fi
             fi
 
             if [ -z "${encrypt:-}" ]  
@@ -6518,17 +6632,6 @@ else
                 fi
             else
                 encrypt_yn="yes"
-            fi
-
-            if [ -n "${quality:-}" ] 
-            then
-                const=""
-                const_yn="no"
-                quality_command="-q $quality"
-            fi
-            if [ -n "${bitrates:-}" ] 
-            then
-                bitrates_command="-b $bitrates"
             fi
 
             key_name=${key_name:-"$playlist_name"}
