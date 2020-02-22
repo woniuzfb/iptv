@@ -1,4 +1,4 @@
-# 一键管理 IPTV 脚本 mpegts / flv => hls / flv 推流
+# 一键管理 IPTV / v2ray 脚本 mpegts / flv => hls / flv 推流
 
 - HBO 中文直播 + 集各广电直播源
 - 默认如果没有本地频道（channels.json）,会请求远程服务器频道
@@ -81,6 +81,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
     原画输出，不吃CPU，但是片段大，吃带宽
    ```
 
+- v2 一键管理 v2ray 面板 (vmess ws tls)
 - tv n 安装管理 nginx 相关面板(安装 nginx 后才能开启 AntiDDoS)
 - tv m 开启监控 flv推流 和 hls 输出目录，用来应对直播源出现变化导致 ffmpeg 无法继续分割的情况
   - AntiDDoS  默认每2分钟清除被禁 ip，很多时候因为直播源重启/网络等问题浏览器会不停的发送请求同一个文件，所以会有误伤，选项：

@@ -6,6 +6,7 @@ sh_ver="1.4.0"
 SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
+V2_FILE="/usr/local/bin/v2"
 IPTV_ROOT="/usr/local/iptv"
 IP_DENY="$IPTV_ROOT/ip.deny"
 IP_PID="$IPTV_ROOT/ip.pid"
@@ -4438,6 +4439,24 @@ AntiDDoSSet()
         anti_ddos=${anti_ddos:-"Y"}
         if [[ "$anti_ddos" == [Yy] ]] 
         then
+            if ufw show added | grep -q "None" 
+            then
+                echo && echo -e "$info 添加常用 ufw 规则"
+                ufw allow ssh > /dev/null 2>&1
+                ufw allow http > /dev/null 2>&1
+                ufw allow https > /dev/null 2>&1
+
+                if ufw status | grep -q "inactive" 
+                then
+                    current_port=${SSH_CLIENT##* }
+                    if [ "$current_port" != 22 ] 
+                    then
+                        ufw allow "$current_port" > /dev/null 2>&1
+                    fi
+                    echo && echo -e "$info 开启 ufw"
+                    ufw --force enable > /dev/null 2>&1
+                fi
+            fi
             GetDefault
             echo && echo "设置封禁端口"
             while read -p "(默认: ${d_anti_ddos_port:-80}):" anti_ddos_port
@@ -5556,6 +5575,317 @@ then
     UpdateSelf
 fi
 
+if [ "${0##*/}" == "v2" ] 
+then
+        echo && echo -e "  v2ray 管理面板 $plain
+
+  ${green}1.$plain 安装
+  ${green}2.$plain 查看
+  ${green}3.$plain 升级
+————————————
+  ${green}4.$plain 开关
+  ${green}5.$plain 重启
+————————————
+  ${green}6.$plain 配置域名
+ " && echo
+        read -p "请输入数字 [1-6]：" v2ray_num
+        case $v2ray_num in
+            1) 
+                CheckRelease
+                if [ -e "/etc/v2ray/config.json" ] 
+                then
+                    while IFS= read -r line 
+                    do
+                        if [[ "$line" == *"port"* ]] 
+                        then
+                            port=${line#*: }
+                            port=${port%,*}
+                        elif [[ "$line" == *"id"* ]] 
+                        then
+                            id=${line#*: \"}
+                            id=${id%\"*}
+                        elif [[ "$line" == *"path"* ]] 
+                        then
+                            path=${line#*: \"}
+                            path=${path%\"*}
+                            break
+                        fi
+                    done < "/etc/v2ray/config.json"
+
+                    if [ -n "${path:-}" ] 
+                    then
+                        echo && echo -e "$error v2ray 已安装..." && echo && exit 1
+                    fi
+                fi
+
+                echo && echo -e "$info 安装 v2ray..."
+
+                bash <(curl --silent -m 10 https://install.direct/go.sh) > /dev/null
+
+                while IFS= read -r line 
+                do
+                    if [[ "$line" == *"port"* ]] 
+                    then
+                        port=${line#*: }
+                        port=${port%,*}
+                    elif [[ "$line" == *"id"* ]] 
+                    then
+                        id=${line#*: \"}
+                        id=${id%\"*}
+                        break
+                    fi
+                done < "/etc/v2ray/config.json"
+
+                v2ray_config='{
+  "inbounds": [{
+    "port": '"$port"',
+    "listen": "127.0.0.1",
+    "protocol": "vmess",
+    "settings": {
+      "clients": [
+        {
+          "id": "'"$id"'",
+          "level": 1,
+          "alterId": 64
+        }
+      ]
+    },
+    "streamSettings": {
+      "network": "ws",
+      "wsSettings": {
+        "path": "/'"$(RandStr)"'"
+      }
+    }
+  }],
+  "outbounds": [{
+    "protocol": "freedom",
+    "settings": {}
+  },{
+    "protocol": "blackhole",
+    "settings": {},
+    "tag": "blocked"
+  }],
+  "routing": {
+    "rules": [
+      {
+        "type": "field",
+        "ip": ["geoip:private"],
+        "outboundTag": "blocked"
+      }
+    ]
+  }
+}'
+                printf '%s' "$v2ray_config" > "/etc/v2ray/config.json"
+                service v2ray start > /dev/null
+                echo && echo -e "$info v2ray 安装完成..." && echo
+            ;;
+            2) 
+                if [ ! -e "/etc/v2ray/config.json" ] 
+                then
+                    echo && echo -e "$error v2ray 未安装..." && echo && exit 1
+                fi
+
+                while IFS= read -r line 
+                do
+                    if [[ "$line" == *"port"* ]] 
+                    then
+                        port=${line#*: }
+                        port=${port%,*}
+                    elif [[ "$line" == *"id"* ]] 
+                    then
+                        id=${line#*: \"}
+                        id=${id%\"*}
+                    elif [[ "$line" == *"path"* ]] 
+                    then
+                        path=${line#*: \"}
+                        path=${path%\"*}
+                        break
+                    fi
+                done < "/etc/v2ray/config.json"
+
+                if service v2ray status > /dev/null
+                then
+                    echo && echo -e "v2ray: $green开启$plain"
+                else
+                    echo && echo -e "v2ray: $red关闭$plain"
+                fi
+                
+                echo && echo -e "$green端口:$plain $port"
+                echo && echo -e "${green}id:$plain $id"
+                echo && echo -e "${green}协议:$plain vmess"
+                echo && echo -e "${green}网络:$plain ws"
+                echo && echo -e "${green}path:$plain $path"
+                echo && echo -e "${green}security:$plain tls" && echo
+            ;;
+            3) 
+                if [ ! -e "/etc/v2ray/config.json" ] 
+                then
+                    echo && echo -e "$error v2ray 未安装..." && echo && exit 1
+                fi
+                bash <(curl --silent -m 10 https://install.direct/go.sh) > /dev/null
+            ;;
+            4) 
+                if [ ! -e "/etc/v2ray/config.json" ] 
+                then
+                    echo && echo -e "$error v2ray 未安装..." && echo && exit 1
+                fi
+
+                if service v2ray status > /dev/null
+                then
+                    echo && echo "v2ray 正在运行，是否关闭？[Y/n]"
+                    read -p "(默认: Y):" v2ray_stop_yn
+                    v2ray_stop_yn=${v2ray_stop_yn:-"Y"}
+                    if [[ $v2ray_stop_yn == [Yy] ]] 
+                    then
+                        service v2ray  stop
+                        echo && echo -e "$info v2ray 已关闭" && echo
+                    else
+                        echo && echo "已取消..." && echo && exit 1
+                    fi
+                else
+                    echo && echo "v2ray 未运行，是否开启？[Y/n]"
+                    read -p "(默认: Y):" v2ray_start_yn
+                    v2ray_start_yn=${v2ray_start_yn:-"Y"}
+                    if [[ $v2ray_start_yn == [Yy] ]] 
+                    then
+                        service v2ray start
+                        echo && echo -e "$info v2ray 已开启" && echo
+                    else
+                        echo && echo "已取消..." && echo && exit 1
+                    fi
+                fi
+            ;;
+            5) 
+                if [ ! -e "/etc/v2ray/config.json" ] 
+                then
+                    echo && echo -e "$error v2ray 未安装..." && echo && exit 1
+                fi
+                service v2ray restart
+                echo && echo -e "$info v2ray 已重启" && echo
+            ;;
+            6) 
+                if [ ! -e "/etc/v2ray/config.json" ] 
+                then
+                    echo && echo -e "$error v2ray 未安装..." && echo && exit 1
+                else
+                    while IFS= read -r line 
+                    do
+                        if [[ "$line" == *"port"* ]] 
+                        then
+                            port=${line#*: }
+                            port=${port%,*}
+                        elif [[ "$line" == *"id"* ]] 
+                        then
+                            id=${line#*: \"}
+                            id=${id%\"*}
+                        elif [[ "$line" == *"path"* ]] 
+                        then
+                            path=${line#*: \"}
+                            path=${path%\"*}
+                            break
+                        fi
+                    done < "/etc/v2ray/config.json"
+
+                    if [ -z "${path:-}" ] 
+                    then
+                        echo && echo -e "$error v2ray 未安装..." && echo && exit 1
+                    fi
+                fi
+
+                if [ ! -e "/usr/local/nginx" ] 
+                then
+                    echo && echo -e "$error Nginx 未安装! 输入 tv n 安装 Nginx" && echo && exit 1
+                fi
+
+                echo && echo "输入指向本机的域名"
+                read -p "(默认: 取消):" domain
+                [ -z "$domain" ] && echo && echo "已取消..." && echo && exit 1
+                
+                CheckRelease
+
+                echo && echo -e "$info 安装证书..."
+                if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
+                then
+                    if [ "$release" == "rpm" ] 
+                    then
+                        yum -y install socat > /dev/null
+                    else
+                        apt-get -y install socat > /dev/null
+                    fi
+                    bash <(curl --silent -m 10 https://get.acme.sh) > /dev/null
+                fi
+
+                nginx -s stop
+                sleep 1
+                ~/.acme.sh/acme.sh --issue -d "$domain" --standalone -k ec-256 > /dev/null
+                ~/.acme.sh/acme.sh --installcert -d "$domain" --fullchainpath /etc/v2ray/v2ray.crt --keypath /etc/v2ray/v2ray.key --ecc > /dev/null
+                echo && echo -e "$info 证书安装完成..."
+
+                echo && echo -e "$info 配置 Nginx..."
+
+                nginx_conf=$(< "/usr/local/nginx/conf/nginx.conf")
+
+                if ! grep -q "location $PATH {" <<< "$nginx_conf"
+                then
+                    action="add"
+                else
+                    action="edit"
+                fi
+
+                conf=""
+                found=0
+                while IFS= read -r line 
+                do
+                    if [[ $line == *"# HTTPS server"* ]] && [ "$action" == "add" ]
+                    then
+                        conf="$conf
+    server {
+        listen       443 ssl;
+        server_name  $domain;
+
+        access_log off;
+
+        ssl_certificate      /etc/v2ray/v2ray.crt;
+        ssl_certificate_key  /etc/v2ray/v2ray.key;
+        ssl_protocols TLSv1.2 TLSv1.3;
+
+        ssl_ciphers  HIGH:!aNULL:!MD5;
+
+        location /ray {
+            proxy_redirect off;
+            proxy_pass http://127.0.0.1:$port;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection upgrade;
+            proxy_set_header Host \$host;
+            # Show real IP in v2ray access.log
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        }
+    }
+"
+                    elif [ "$action" == "edit" ] && [[ $line == *"443 ssl"* ]] 
+                    then
+                        found=1
+                    elif [ "$action" == "edit" ] && [ "$found" == 1 ] && [[ $line == *"server_name"* ]]
+                    then
+                        line="        server_name  $domain;"
+                    fi
+                    [ -n "$conf" ] && conf="$conf\n"
+                    conf="$conf$line"
+                done < "/usr/local/nginx/conf/nginx.conf"
+
+                echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
+                nginx
+                echo && echo -e "$info 配置 Nginx 完成..."
+                echo && echo -e "$info 域名配置完成" && echo
+            ;;
+            *) echo -e "$error 请输入正确的数字 [1-6]"
+            ;;
+        esac
+        exit 0
+fi
+
 if [[ -n ${1+x} ]]
 then
     case $1 in
@@ -6075,6 +6405,7 @@ then
             exit 1
         fi
     fi
+    [ ! -e "$V2_FILE" ] && ln -s "$SH_FILE" "$V2_FILE"
     echo -e "  IPTV 一键管理脚本（mpegts / flv => hls / flv 推流）${red}[v$sh_ver]$plain
   ---- MTimer | http://hbo.epub.fun ----
 
