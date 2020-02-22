@@ -24,6 +24,7 @@ DEFAULT_CHANNELS_LINK="http://hbo.epub.fun/channels.json"
 LOCK_FILE="$IPTV_ROOT/lock"
 MONITOR_PID="$IPTV_ROOT/monitor.pid"
 MONITOR_LOG="$IPTV_ROOT/monitor.log"
+LOGROTATE_CONFIG="$IPTV_ROOT/logrotate"
 green="\033[32m"
 red="\033[31m"
 plain="\033[0m"
@@ -72,7 +73,7 @@ SyncFile()
         ;;
         "add")
             chnl_pid=$pid
-            if [ -n "$($JQ_FILE '.channels[] | select(.pid=='"$chnl_pid"')' $CHANNELS_FILE)" ]
+            if [[ -n $($JQ_FILE '.channels[] | select(.pid=='"$chnl_pid"')' "$CHANNELS_FILE") ]]
             then
                 GetChannelInfo
             fi
@@ -82,7 +83,6 @@ SyncFile()
         ;;
     esac
 
-    new_pid=${new_pid:-}
     d_sync_file=${d_sync_file:-}
     d_sync_index=${d_sync_index:-}
     d_sync_pairs=${d_sync_pairs:-}
@@ -110,7 +110,7 @@ SyncFile()
 
         if [ "$action" == "stop" ]
         then
-            if [ -n "$($JQ_FILE "$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")' "$d_sync_file")" ] 
+            if [[ -n $($JQ_FILE "$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")' "$d_sync_file") ]] 
             then
                 $JQ_FILE "$jq_index"' -= ['"$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")]' "$d_sync_file" > "${d_sync_file}_tmp"
                 mv "${d_sync_file}_tmp" "$d_sync_file"
@@ -161,7 +161,7 @@ SyncFile()
 
                                 if [ "$value" == "chnl_pid" ] 
                                 then
-                                    if [ -n "$new_pid" ] 
+                                    if [ -n "${new_pid:-}" ] 
                                     then
                                         value=$new_pid
                                     else
@@ -243,7 +243,7 @@ CheckRelease()
     depends=(unzip vim curl cron crond)
     
     for depend in "${depends[@]}"; do
-        if [ ! -x "$(command -v $depend)" ]
+        if [[ ! -x $(command -v "$depend") ]]
         then
             case "$release" in
                 "rpm")
@@ -391,7 +391,7 @@ Uninstall()
             then
                 StopChannel
             fi
-        done <<< $($JQ_FILE '.channels[].pid' $CHANNELS_FILE)
+        done < <($JQ_FILE '.channels[].pid' $CHANNELS_FILE)
         rm -rf "${IPTV_ROOT:-'notfound'}"
         echo && echo -e "$info 卸载完成 !" && echo
     else
@@ -1209,12 +1209,12 @@ SetOutputDirName()
         then
             while :;do
                 output_dir_name=$(RandOutputDirName)
-                if [ -z "$($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'")' $CHANNELS_FILE)" ] 
+                if [[ -z $($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'")' "$CHANNELS_FILE") ]] 
                 then
                     break 2
                 fi
             done
-        elif [ -z "$($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'")' $CHANNELS_FILE)" ]  
+        elif [[ -z $($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'")' "$CHANNELS_FILE") ]]  
         then
             break
         else
@@ -1564,7 +1564,7 @@ SetFlvPush()
     while read -p "(默认: 取消):" flv_push_link
     do
         [ -z "$flv_push_link" ] && echo "已取消..." && exit 1
-        if [ -z "$($JQ_FILE '.channels[] | select(.flv_push_link=="'"$flv_push_link"'")' $CHANNELS_FILE)" ]
+        if [[ -z $($JQ_FILE '.channels[] | select(.flv_push_link=="'"$flv_push_link"'")' "$CHANNELS_FILE") ]]
         then
             break
         else
@@ -1588,7 +1588,7 @@ FlvStreamCreatorWithShift()
     trap 'MonitorError $LINENO' ERR
     pid="$BASHPID"
     rand_pid=$pid
-    while [ -n "$($JQ_FILE '.channels[]|select(.pid=='"$rand_pid"')' "$CHANNELS_FILE")" ] 
+    while [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$rand_pid"')' "$CHANNELS_FILE") ]] 
     do
         true &
         rand_pid=$!
@@ -1777,7 +1777,7 @@ HlsStreamCreatorWithShift()
     trap 'MonitorError $LINENO' ERR
     pid="$BASHPID"
     rand_pid=$pid
-    while [ -n "$($JQ_FILE '.channels[]|select(.pid=='"$rand_pid"')' "$CHANNELS_FILE")" ] 
+    while [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$rand_pid"')' "$CHANNELS_FILE") ]] 
     do
         true &
         rand_pid=$!
@@ -2090,7 +2090,7 @@ AddChannel()
             "$const" "$encrypt" &
         pid=$!
 
-        while [ -n "$($JQ_FILE '.channels[]|select(.pid=='"$pid"')' "$CHANNELS_FILE")" ] 
+        while [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$pid"')' "$CHANNELS_FILE") ]] 
         do
             kill -9 "$pid" >/dev/null 2>&1
             exec "$CREATOR_FILE" -l -i "$stream_link" -s "$seg_length" \
@@ -2610,7 +2610,7 @@ StartChannel()
                 "$chnl_const" "$chnl_encrypt" &
                 new_pid=$!
 
-                while [ -n "$($JQ_FILE '.channels[]|select(.pid=='"$new_pid"')' "$CHANNELS_FILE")" ] 
+                while [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$new_pid"')' "$CHANNELS_FILE") ]] 
                 do
                     kill -9 "$new_pid" >/dev/null 2>&1
                     exec "$CREATOR_FILE" -l -i "$chnl_stream_link" -s "$chnl_seg_length" \
@@ -2632,7 +2632,7 @@ StartChannel()
             "$chnl_const" "$chnl_encrypt" &
             new_pid=$!
 
-            while [ -n "$($JQ_FILE '.channels[]|select(.pid=='"$new_pid"')' "$CHANNELS_FILE")" ] 
+            while [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$new_pid"')' "$CHANNELS_FILE") ]] 
             do
                 kill -9 "$new_pid" >/dev/null 2>&1
                 exec "$CREATOR_FILE" -l -i "$chnl_stream_link" -s "$chnl_seg_length" \
@@ -2807,7 +2807,7 @@ F G H J K L Z X C V B N M
     str_array_size=${#str_array[*]}
     str_len=0
     rand_str=""
-    while [ $str_len -lt $str_size ]
+    while [[ $str_len -lt $str_size ]]
     do
         str_index=$((RANDOM%str_array_size))
         rand_str="$rand_str${str_array[str_index]}"
@@ -2820,7 +2820,7 @@ RandOutputDirName()
 {
     while :;do
         output_dir_name=$(RandStr)
-        if [ -z "$($JQ_FILE '.channels[] | select(.outputDirName=="'"$output_dir_name"'")' $CHANNELS_FILE)" ]
+        if [[ -z $($JQ_FILE '.channels[] | select(.outputDirName=="'"$output_dir_name"'")' "$CHANNELS_FILE") ]]
         then
             echo "$output_dir_name"
             break
@@ -2832,7 +2832,7 @@ RandPlaylistName()
 {
     while :;do
         playlist_name=$(RandStr)
-        if [ -z "$($JQ_FILE '.channels[] | select(.playListName=="'"$playlist_name"'")' $CHANNELS_FILE)" ]
+        if [[ -z $($JQ_FILE '.channels[] | select(.playListName=="'"$playlist_name"'")' "$CHANNELS_FILE") ]]
         then
             echo "$playlist_name"
             break
@@ -2844,7 +2844,7 @@ RandSegDirName()
 {
     while :;do
         seg_dir_name=$(RandStr)
-        if [ -z "$($JQ_FILE '.channels[] | select(.segDirName=="'"$seg_dir_name"'")' $CHANNELS_FILE)" ]
+        if [[ -z $($JQ_FILE '.channels[] | select(.segDirName=="'"$seg_dir_name"'")' "$CHANNELS_FILE") ]]
         then
             echo "$seg_dir_name"
             break
@@ -2876,7 +2876,7 @@ generateScheduleNowtv()
         echo -e "\nNowTV empty: $chnl_nowtv_id\n"
         return 0
     else
-        if [ -z "$($JQ_FILE '.' $SCHEDULE_JSON)" ] 
+        if [[ -z $($JQ_FILE '.' "$SCHEDULE_JSON") ]] 
         then
             printf '{"%s":[]}' "$chnl_nowtv_id" > "$SCHEDULE_JSON"
         fi
@@ -2923,7 +2923,7 @@ generateScheduleNiotv()
     wget --post-data "act=select&day=$date_now_niotv&sch_id=$1" "$SCHEDULE_LINK_NIOTV" -qO "$SCHEDULE_FILE_NIOTV" || true
     #curl -d "day=$date_now_niotv&sch_id=$1" -X POST "$SCHEDULE_LINK_NIOTV" -so "$SCHEDULE_FILE_NIOTV" || true
     
-    if [ -z "$($JQ_FILE '.' $SCHEDULE_JSON)" ] 
+    if [[ -z $($JQ_FILE '.' "$SCHEDULE_JSON") ]] 
     then
         printf '{"%s":[]}' "$chnl_niotv_id" > "$SCHEDULE_JSON"
     fi
@@ -3058,9 +3058,9 @@ generateSchedule()
         programs_title+=("$program_title");
     done < <($JQ_FILE -r '.list[] | select(.key=="'"$date_now"'").values | .[].name | @sh' "$SCHEDULE_FILE")
 
-    IFS=" " read -ra programs_time <<< "$($JQ_FILE -r '[.list[] | select(.key=="'"$date_now"'").values | .[].time] | @sh' $SCHEDULE_FILE)"
+    IFS=" " read -ra programs_time < <($JQ_FILE -r '[.list[] | select(.key=="'"$date_now"'").values | .[].time] | @sh' "$SCHEDULE_FILE")
 
-    if [ -z "$($JQ_FILE '.' $SCHEDULE_JSON)" ] 
+    if [[ -z $($JQ_FILE '.' "$SCHEDULE_JSON") ]] 
     then
         printf '{"%s":[]}' "$chnl_id" > "$SCHEDULE_JSON"
     fi
@@ -3561,11 +3561,11 @@ Schedule()
                     programs_title_local+=("$program_title_local");
                 done < <($JQ_FILE -r '.[].title_local | @sh' "$SCHEDULE_FILE")
 
-                IFS=" " read -ra programs_id <<< "$($JQ_FILE -r '[.[].id] | @sh' $SCHEDULE_FILE)"
-                IFS=" " read -ra programs_time <<< "$($JQ_FILE -r '[.[].time] | @sh' $SCHEDULE_FILE)"
-                IFS=" " read -ra programs_sys_time <<< "$($JQ_FILE -r '[.[].sys_time] | @sh' $SCHEDULE_FILE)"
+                IFS=" " read -ra programs_id < <($JQ_FILE -r '[.[].id] | @sh' "$SCHEDULE_FILE")
+                IFS=" " read -ra programs_time < <($JQ_FILE -r '[.[].time] | @sh' "$SCHEDULE_FILE")
+                IFS=" " read -ra programs_sys_time < <($JQ_FILE -r '[.[].sys_time] | @sh' "$SCHEDULE_FILE")
 
-                if [ -z "$($JQ_FILE '.' $SCHEDULE_JSON)" ] 
+                if [[ -z $($JQ_FILE '.' "$SCHEDULE_JSON") ]] 
                 then
                     printf '{"%s":[]}' "$chnl" > "$SCHEDULE_JSON"
                 fi
@@ -3619,10 +3619,10 @@ Schedule()
 
             programs_count=${#programs_title[@]}
 
-            IFS=" " read -ra programs_time <<< "$($JQ_FILE -r '[.schedule[].schedule_items[].time] | @sh' $SCHEDULE_FILE)"
-            IFS=" " read -ra programs_sys_time <<< "$($JQ_FILE -r '[.schedule[].schedule_items[].iso8601_utc_time] | @sh' $SCHEDULE_FILE)"
+            IFS=" " read -ra programs_time < <($JQ_FILE -r '[.schedule[].schedule_items[].time] | @sh' "$SCHEDULE_FILE")
+            IFS=" " read -ra programs_sys_time < <($JQ_FILE -r '[.schedule[].schedule_items[].iso8601_utc_time] | @sh' "$SCHEDULE_FILE")
 
-            if [ -z "$($JQ_FILE '.' $SCHEDULE_JSON)" ] 
+            if [[ -z $($JQ_FILE '.' "$SCHEDULE_JSON") ]] 
             then
                 printf '{"%s":[]}' "$2" > "$SCHEDULE_JSON"
             fi
@@ -3659,7 +3659,7 @@ Schedule()
             SCHEDULE_TMP="${SCHEDULE_JSON}_tmp"
             wget --no-check-certificate "$SCHEDULE_LINK" -qO "$SCHEDULE_FILE"
 
-            if [ -z "$($JQ_FILE '.' $SCHEDULE_JSON)" ] 
+            if [[ -z $($JQ_FILE '.' "$SCHEDULE_JSON") ]] 
             then
                 printf '{"%s":[]}' "$2" > "$SCHEDULE_JSON"
             fi
@@ -4886,7 +4886,7 @@ Monitor()
                 fi
             fi
 
-            if [ -n "${delay_seconds:-}" ] 
+            if [ -n "$monitor_nums" ] 
             then
                 while IFS= read -r old_file_path
                 do
@@ -5162,7 +5162,7 @@ MonitorSet()
             monitor_dir_names_chosen=("${monitor_dir_names[@]}")
 
             echo && echo "设置超时多少秒自动重启频道"
-            echo "必须大于 段时长*段数目"
+            echo -e "$tip 必须大于 段时长*段数目" && echo
             while read -p "(默认: 120秒):" delay_seconds
             do
                 case $delay_seconds in
@@ -5212,6 +5212,7 @@ MonitorSet()
                 done
 
                 echo && echo "设置超时多少秒自动重启频道"
+                echo -e "$tip 必须大于 段时长*段数目" && echo
                 while read -p "(默认: 120秒):" delay_seconds
                 do
                     case $delay_seconds in
@@ -5219,7 +5220,13 @@ MonitorSet()
                         ;;
                         *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
                         ;;
-                        *) break
+                        *) 
+                            if [ "$delay_seconds" -gt 60 ]
+                            then
+                                break
+                            else
+                                echo && echo -e "$error 请输入正确的数字(大于60)" && echo
+                            fi
                         ;;
                     esac
                 done
@@ -5229,26 +5236,29 @@ MonitorSet()
         esac
     done
 
-    echo && echo "请输入最低比特率(kb/s),低于此数值会重启频道"
-    while read -p "(默认: 500):" min_bitrates
-    do
-        case $min_bitrates in
-            "") min_bitrates=500 && break
-            ;;
-            *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
-            ;;
-            *) 
-                if [ "$min_bitrates" -gt 0 ]
-                then
-                    break
-                else
-                    echo && echo -e "$error 请输入正确的数字(大于0)" && echo
-                fi
-            ;;
-        esac
-    done
+    if [ -n "$monitor_nums" ] 
+    then
+        echo && echo "请输入最低比特率(kb/s),低于此数值会重启频道"
+        while read -p "(默认: 500):" min_bitrates
+        do
+            case $min_bitrates in
+                "") min_bitrates=500 && break
+                ;;
+                *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
+                ;;
+                *) 
+                    if [ "$min_bitrates" -gt 0 ]
+                    then
+                        break
+                    else
+                        echo && echo -e "$error 请输入正确的数字(大于0)" && echo
+                    fi
+                ;;
+            esac
+        done
 
-    min_bitrates=$((min_bitrates * 1000))
+        min_bitrates=$((min_bitrates * 1000))
+    fi
 
     echo && echo "请输入尝试重启的次数"
     while read -p "(默认: 20次):" restart_nums
@@ -5413,6 +5423,63 @@ RestartNginx()
         nginx
     else
         nginx
+    fi
+}
+
+NginxConfigFlv()
+{
+    nginx_conf=$(< "/usr/local/nginx/conf/nginx.conf")
+    if ! grep -q "location /flv" <<< "$nginx_conf"
+    then
+        conf=""
+        found=0
+        while IFS= read -r line 
+        do
+            if [[ "$line" == *"location / "* ]] && [ "$found" == 0 ]
+            then
+                conf="$conf
+        location /flv {
+            access_log  logs/flv.log;
+            flv_live on;
+            chunked_transfer_encoding  on;
+        }
+"
+                found=1
+            fi
+            [ -n "$conf" ] && conf="$conf\n"
+            conf="$conf$line"
+        done <<< "$nginx_conf"
+
+        if ! grep -q "rtmp {" <<< "$nginx_conf" 
+        then
+            conf="$conf
+
+rtmp_auto_push on;
+rtmp_auto_push_reconnect 1s;
+rtmp_socket_dir /tmp;
+
+rtmp {
+    out_queue   4096;
+    out_cork    8;
+    max_streams   128;
+    timeout   15s;
+    drop_idle_publisher   10s;
+    log_interval    120s;
+    log_size    1m;
+
+    server {
+        listen 1935;
+        server_name 127.0.0.1;
+        access_log  logs/flv.log;
+
+        application flv {
+            live on;
+            gop_cache on;
+        }
+    }
+}"
+        fi
+        echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
     fi
 }
 
@@ -5664,7 +5731,7 @@ case "$cmd" in
                 pid=${line#*:}
                 pid=${pid%,*}
                 rand_pid=$pid
-                while [ -n "$($JQ_FILE '.channels[]|select(.pid=='"$rand_pid"')' "$CHANNELS_FILE")" ] 
+                while [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$rand_pid"')' "$CHANNELS_FILE") ]] 
                 do
                     true &
                     rand_pid=$!
@@ -5864,8 +5931,11 @@ case "$cmd" in
 ————————————
   ${green}4.$plain 开关
   ${green}5.$plain 重启
+————————————
+  ${green}6.$plain flv 配置
+  ${green}7.$plain 日志切割
  " && echo
-        read -p "请输入数字 [1-5]：" nginx_num
+        read -p "请输入数字 [1-7]：" nginx_num
         case "$nginx_num" in
             1) 
                 if [ -e "/usr/local/nginx" ] 
@@ -5879,6 +5949,7 @@ case "$cmd" in
                 if [[ $nginx_install_yn == [Yy] ]] 
                 then
                     InstallNginx
+                    NginxConfigFlv
                     echo && echo -e "$info Nginx 安装完成" && echo
                 else
                     echo && echo "已取消..." && echo && exit 1
@@ -5900,8 +5971,89 @@ case "$cmd" in
                 RestartNginx
                 echo && echo -e "$info Nginx 已重启" && echo
             ;;
+            6) 
+                if [ ! -e "/usr/local/nginx" ] 
+                then
+                    echo && echo -e "$error Nginx 未安装 !" && echo
+                else
+                    NginxConfigFlv
+                    if [ -z "${conf:-}" ]
+                    then
+                        echo && echo -e "$error flv 配置已存在!" && echo
+                    else
+                        echo && echo -e "$info flv 配置已添加，是否重启 Nginx ？[Y/n]" && echo
+                        read -p "(默认: Y):" restart_yn
+                        restart_yn=${restart_yn:-"Y"}
+                        if [[ $restart_yn == [Yy] ]] 
+                        then
+                            RestartNginx
+                            echo && echo -e "$info Nginx 已重启" && echo
+                        else
+                            echo && echo "已取消..." && echo && exit 1
+                        fi
+                    fi
+                fi
+            ;;
+            7) 
+                if [ ! -e "$IPTV_ROOT" ] 
+                then
+                    echo && echo -e "$error 请先安装脚本 !" && echo && exit 1
+                fi
+
+                if crontab -l | grep -q "$LOGROTATE_CONFIG" 2> /dev/null
+                then
+                    echo && echo -e "$error 日志切割定时任务已存在 !" && echo
+                else
+                    LOGROTATE_FILE=$(command -v logrotate)
+
+                    if [ ! -x "$LOGROTATE_FILE" ] 
+                    then
+                        echo && echo -e "$error 请先安装 logrotate !" && echo && exit 1
+                    fi
+
+                    logrotate=""
+
+                    if [ -e "/usr/local/nginx" ] 
+                    then
+                        logrotate='
+/usr/local/nginx/logs/*.log {
+  daily
+  missingok
+  rotate 14
+  compress
+  delaycompress
+  notifempty
+  create 660 nobody root
+  sharedscripts
+  postrotate
+    [ ! -f /usr/local/nginx/logs/nginx.pid ] || /bin/kill -USR1 $(< /usr/local/nginx/logs/nginx.pid)
+  endscript
+}
+'
+                    fi
+
+                    logrotate="$logrotate
+$IPTV_ROOT/*.log {
+  daily
+  missingok
+  rotate 3
+  compress
+  nodelaycompress
+  notifempty
+  sharedscripts
+}
+"
+                    printf '%s' "$logrotate" > "$LOGROTATE_CONFIG"
+
+                    crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
+                    printf '%s\n' "0 0 * * * $LOGROTATE_FILE $LOGROTATE_CONFIG" >> "$IPTV_ROOT/cron_tmp"
+                    crontab "$IPTV_ROOT/cron_tmp" > /dev/null
+                    rm -rf "$IPTV_ROOT/cron_tmp"
+                    echo && echo -e "$info 日志切割定时任务开启成功 !" && echo
+                fi
+            ;;
             *)
-            echo -e "$error 请输入正确的数字 [1-5]"
+            echo -e "$error 请输入正确的数字 [1-7]"
             ;;
         esac
         exit 0
@@ -6107,7 +6259,7 @@ else
                     "$const" "$encrypt" &
                 pid=$!
 
-                while [ -n "$($JQ_FILE '.channels[]|select(.pid=='"$pid"')' "$CHANNELS_FILE")" ] 
+                while [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$pid"')' "$CHANNELS_FILE") ]] 
                 do
                     kill -9 "$pid" >/dev/null 2>&1
                     exec "$CREATOR_FILE" -l -i "$stream_link" -s "$seg_length" \

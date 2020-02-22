@@ -81,7 +81,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
     原画输出，不吃CPU，但是片段大，吃带宽
    ```
 
-- tv n 安装管理 nginx 面板
+- tv n 安装管理 nginx 相关面板(安装 nginx 后才能开启 AntiDDoS)
 - tv m 开启监控 flv推流 和 hls 输出目录，用来应对直播源出现变化导致 ffmpeg 无法继续分割的情况
   - AntiDDoS  默认每2分钟清除被禁 ip，很多时候因为直播源重启/网络等问题浏览器会不停的发送请求同一个文件，所以会有误伤，选项：
     - 封禁端口（默认80）
