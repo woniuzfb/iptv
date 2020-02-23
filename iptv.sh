@@ -245,50 +245,89 @@ CheckRelease()
         release_bit="32"
     fi
 
-    update_once=0
-    depends=(unzip vim curl cron crond)
-    
-    for depend in "${depends[@]}"; do
-        if [[ ! -x $(command -v "$depend") ]]
-        then
-            case "$release" in
-                "rpm")
-                    if [ "$depend" != "cron" ]
+    case $release in
+        "rpm") 
+            yum -y update >/dev/null 2>&1
+            depends=(unzip vim curl crond)
+            for depend in "${depends[@]}"
+            do
+                if [[ ! -x $(command -v "$depend") ]] 
+                then
+                    if yum -y install "$depend" >/dev/null 2>&1
                     then
-                        if [ $update_once == 0 ]
-                        then
-                            yum -y update >/dev/null 2>&1
-                            update_once=1
-                        fi
-                        if yum -y install "$depend" >/dev/null 2>&1
-                        then
-                            echo && echo -e "$info 依赖 $depend 安装成功..."
-                        else
-                            echo && echo -e "$error 依赖 $depend 安装失败..." && exit 1
-                        fi
+                        echo && echo -e "$info 依赖 $depend 安装成功..."
+                    else
+                        echo && echo -e "$error 依赖 $depend 安装失败..." && exit 1
                     fi
-                ;;
-                "deb"|"ubu")
-                    if [ "$depend" != "crond" ]
+                fi
+            done
+        ;;
+        "ubu") 
+            apt-get -y update >/dev/null 2>&1
+            depends=(unzip vim curl cron)
+            for depend in "${depends[@]}"
+            do
+                if [[ ! -x $(command -v "$depend") ]] 
+                then
+                    if apt-get -y install "$depend" >/dev/null 2>&1
                     then
-                        if [ $update_once == 0 ]
-                        then
-                            apt-get -y update >/dev/null 2>&1
-                            update_once=1
-                        fi
-                        if apt-get -y install "$depend" >/dev/null 2>&1
-                        then
-                            echo && echo -e "$info 依赖 $depend 安装成功..."
-                        else
-                            echo && echo -e "$error 依赖 $depend 安装失败..." && exit 1
-                        fi
+                        echo && echo -e "$info 依赖 $depend 安装成功..."
+                    else
+                        echo && echo -e "$error 依赖 $depend 安装失败..." && exit 1
                     fi
-                ;;
-                *) echo -e "\n系统不支持!" && exit 1
-                ;;
-            esac
-        fi
-    done
+                fi
+            done
+        ;;
+        "deb") 
+            if [ -e "/etc/apt/sources.list.d/sources-aliyun-0.list" ] 
+            then
+                deb_list=$(< "/etc/apt/sources.list.d/sources-aliyun-0.list")
+                rm -rf "/etc/apt/sources.list.d/sources-aliyun-0.list"
+                rm -rf /var/lib/apt/lists/*
+            else
+                deb_list=$(< "/etc/apt/sources.list")
+            fi
+
+            if grep -q "jessie" <<< "$deb_list"
+            then
+                deb_list="
+deb http://archive.debian.org/debian/ jessie main
+deb-src http://archive.debian.org/debian/ jessie main
+
+deb http://security.debian.org jessie/updates main
+deb-src http://security.debian.org jessie/updates main
+"
+                printf '%s' "$deb_list" > "/etc/apt/sources.list"
+            elif grep -q "wheezy" <<< "$deb_list" 
+            then
+                deb_list="
+deb http://archive.debian.org/debian/ wheezy main
+deb-src http://archive.debian.org/debian/ wheezy main
+
+deb http://security.debian.org wheezy/updates main
+deb-src http://security.debian.org wheezy/updates main
+"
+                printf '%s' "$deb_list" > "/etc/apt/sources.list"
+            fi
+            apt-get clean >/dev/null 2>&1
+            apt-get -y update >/dev/null 2>&1
+            depends=(unzip vim curl cron ufw)
+            for depend in "${depends[@]}"
+            do
+                if [[ ! -x $(command -v "$depend") ]] 
+                then
+                    if apt-get -y install "$depend" >/dev/null 2>&1
+                    then
+                        echo && echo -e "$info 依赖 $depend 安装成功..."
+                    else
+                        echo && echo -e "$error 依赖 $depend 安装失败..." && exit 1
+                    fi
+                fi
+            done
+        ;;
+        *) echo && echo -e "系统不支持!" && exit 1
+        ;;
+    esac
 }
 
 InstallFfmpeg()
@@ -347,7 +386,12 @@ Install()
     then
         echo -e "$error 目录已存在，请先卸载..." && exit 1
     else
-        wget --help | grep -q '\--show-progress' && _PROGRESS_OPT="-q --show-progress" || _PROGRESS_OPT=""
+        if grep -q '\--show-progress' < <(wget --help)
+        then
+            _PROGRESS_OPT="--show-progress"
+        else
+            _PROGRESS_OPT=""
+        fi
         mkdir -p "$IPTV_ROOT"
         echo -e "$info 下载脚本..."
         wget --no-check-certificate "$CREATOR_LINK" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
@@ -412,7 +456,12 @@ Uninstall()
 Update()
 {
     CheckRelease
-    wget --help | grep -q '\--show-progress' && _PROGRESS_OPT="-q --show-progress" || _PROGRESS_OPT=""
+    if grep -q '\--show-progress' < <(wget --help)
+    then
+        _PROGRESS_OPT="--show-progress"
+    else
+        _PROGRESS_OPT=""
+    fi
     rm -rf "$IPTV_ROOT"/ffmpeg-git-*/
     echo -e "$info 更新 FFmpeg..."
     InstallFfmpeg
@@ -5422,7 +5471,7 @@ InstallNginx()
         timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
         systemctl restart cron >/dev/null 2>&1
         apt-get -y install debconf-utils >/dev/null 2>&1
-        echo '* libraries/restart-without-asking boolean true' | sudo debconf-set-selections
+        echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
         apt-get -y install software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext build-essential >/dev/null 2>&1
         echo -n "...40%..."
     fi
@@ -5476,7 +5525,7 @@ InstallNginx()
     make install >/dev/null 2>&1
     kill $progress_pid
     ln -sf /usr/local/nginx/sbin/nginx /usr/local/bin/
-    echo -n "...完成" && echo
+    echo -n "...100%" && echo
 }
 
 UninstallNginx()
@@ -6188,7 +6237,12 @@ case "$cmd" in
     ;;
     "ffmpeg") 
         [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
-        wget --help | grep -q '\--show-progress' && _PROGRESS_OPT="-q --show-progress" || _PROGRESS_OPT=""
+        if grep -q '\--show-progress' < <(wget --help)
+        then
+            _PROGRESS_OPT="--show-progress"
+        else
+            _PROGRESS_OPT=""
+        fi
         mkdir -p "$FFMPEG_MIRROR_ROOT/builds"
         mkdir -p "$FFMPEG_MIRROR_ROOT/releases"
         git_download=0
