@@ -262,9 +262,9 @@ CheckRelease()
                         fi
                         if yum -y install "$depend" >/dev/null 2>&1
                         then
-                            echo -e "$info 依赖 $depend 安装成功..."
+                            echo && echo -e "$info 依赖 $depend 安装成功..."
                         else
-                            echo -e "$error 依赖 $depend 安装失败..." && exit 1
+                            echo && echo -e "$error 依赖 $depend 安装失败..." && exit 1
                         fi
                     fi
                 ;;
@@ -278,9 +278,9 @@ CheckRelease()
                         fi
                         if apt-get -y install "$depend" >/dev/null 2>&1
                         then
-                            echo -e "$info 依赖 $depend 安装成功..."
+                            echo && echo -e "$info 依赖 $depend 安装成功..."
                         else
-                            echo -e "$error 依赖 $depend 安装失败..." && exit 1
+                            echo && echo -e "$error 依赖 $depend 安装失败..." && exit 1
                         fi
                     fi
                 ;;
@@ -305,7 +305,7 @@ InstallFfmpeg()
             ffmpeg_package="ffmpeg-git-i686-static.tar.xz"
         fi
         FFMPEG_PACKAGE_FILE="$IPTV_ROOT/$ffmpeg_package"
-        wget --no-check-certificate "$FFMPEG_MIRROR_LINK/builds/$ffmpeg_package" --show-progress -qO "$FFMPEG_PACKAGE_FILE"
+        wget --no-check-certificate "$FFMPEG_MIRROR_LINK/builds/$ffmpeg_package" $_PROGRESS_OPT -qO "$FFMPEG_PACKAGE_FILE"
         [ ! -e "$FFMPEG_PACKAGE_FILE" ] && echo -e "$error ffmpeg压缩包 下载失败 !" && exit 1
         tar -xJf "$FFMPEG_PACKAGE_FILE" -C "$IPTV_ROOT" && rm -rf "${FFMPEG_PACKAGE_FILE:-'notfound'}"
         FFMPEG=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
@@ -326,7 +326,7 @@ InstallJq()
         jq_ver=$(curl --silent -m 10 "https://api.github.com/repos/stedolan/jq/releases/latest" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
         if [ -n "$jq_ver" ]
         then
-            wget --no-check-certificate "$FFMPEG_MIRROR_LINK/$jq_ver/jq-linux$release_bit" --show-progress -qO "$JQ_FILE"
+            wget --no-check-certificate "$FFMPEG_MIRROR_LINK/$jq_ver/jq-linux$release_bit" $_PROGRESS_OPT -qO "$JQ_FILE"
         fi
         [ ! -e "$JQ_FILE" ] && echo -e "$error 下载JQ解析器失败，请检查 !" && exit 1
         chmod +x "$JQ_FILE"
@@ -338,12 +338,16 @@ InstallJq()
 
 Install()
 {
-    echo -e "$info 检查依赖..."
+    echo -e "$info 检查依赖，耗时可能会很长..."
+    Progress &
+    progress_pid=$!
     CheckRelease
+    kill $progress_pid
     if [ -e "$IPTV_ROOT" ]
     then
         echo -e "$error 目录已存在，请先卸载..." && exit 1
     else
+        wget --help | grep -q '\--show-progress' && _PROGRESS_OPT="-q --show-progress" || _PROGRESS_OPT=""
         mkdir -p "$IPTV_ROOT"
         echo -e "$info 下载脚本..."
         wget --no-check-certificate "$CREATOR_LINK" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
@@ -408,6 +412,7 @@ Uninstall()
 Update()
 {
     CheckRelease
+    wget --help | grep -q '\--show-progress' && _PROGRESS_OPT="-q --show-progress" || _PROGRESS_OPT=""
     rm -rf "$IPTV_ROOT"/ffmpeg-git-*/
     echo -e "$info 更新 FFmpeg..."
     InstallFfmpeg
@@ -801,17 +806,16 @@ GetChannelsInfo()
         
     done < <($JQ_FILE -r '.channels | to_entries | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
 
-    if [ "$chnls_count" == 0 ] && [ -z "${d_version:-}" ] 
-    then
-        echo -e "$error 没有发现 频道，请检查 !" && exit 1
-    fi
-
     return 0
 }
 
 ListChannels()
 {
     GetChannelsInfo
+    if [ "$chnls_count" == 0 ]
+    then
+        echo -e "$error 没有发现 频道，请检查 !" && exit 1
+    fi
     chnls_list=""
     for((index = 0; index < chnls_count; index++)); do
         chnls_status_index=${chnls_status[index]}
@@ -5402,17 +5406,28 @@ Progress(){
 
 InstallNginx()
 {
+    echo -e "$info 检查依赖，耗时可能会很长..."
     Progress &
     progress_pid=$!
-    apt-get -y update >/dev/null 2>&1
-    locale-gen zh_CN.UTF-8 >/dev/null 2>&1
-    timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
-    systemctl restart cron >/dev/null 2>&1
-    apt-get -y install debconf-utils >/dev/null 2>&1
-    echo '* libraries/restart-without-asking boolean true' | sudo debconf-set-selections
-    apt-get -y install software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext build-essential >/dev/null 2>&1
-    cd ~
+    CheckRelease
+    if [ "$release" == "rpm" ] 
+    then
+        yum -y install gcc gcc-c++ >/dev/null 2>&1
+        timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
+        systemctl restart crond >/dev/null 2>&1
+        echo -n "...40%..."
+    else
+        apt-get -y update >/dev/null 2>&1
+        locale-gen zh_CN.UTF-8 >/dev/null 2>&1
+        timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
+        systemctl restart cron >/dev/null 2>&1
+        apt-get -y install debconf-utils >/dev/null 2>&1
+        echo '* libraries/restart-without-asking boolean true' | sudo debconf-set-selections
+        apt-get -y install software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext build-essential >/dev/null 2>&1
+        echo -n "...40%..."
+    fi
 
+    cd ~
     if [ ! -e "./pcre-8.43" ] 
     then
         wget --timeout=10 --tries=3 --no-check-certificate "https://ftp.pcre.org/pub/pcre/pcre-8.43.tar.gz" -qO "pcre-8.43.tar.gz"
@@ -5453,8 +5468,10 @@ InstallNginx()
         tar xzvf "$nginx_name.tar.gz" >/dev/null 2>&1
     fi
 
+    echo -n "...60%..."
     cd "$nginx_name/"
     ./configure --add-module=../nginx-http-flv-module-master --with-pcre=../pcre-8.43 --with-pcre-jit --with-zlib=../zlib-1.2.11 --with-openssl=../openssl-1.1.1d --with-openssl-opt=no-nextprotoneg --with-http_stub_status_module --with-http_ssl_module --with-http_realip_module --with-debug >/dev/null 2>&1
+    echo -n "...80%..."
     make >/dev/null 2>&1
     make install >/dev/null 2>&1
     kill $progress_pid
@@ -6171,6 +6188,7 @@ case "$cmd" in
     ;;
     "ffmpeg") 
         [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+        wget --help | grep -q '\--show-progress' && _PROGRESS_OPT="-q --show-progress" || _PROGRESS_OPT=""
         mkdir -p "$FFMPEG_MIRROR_ROOT/builds"
         mkdir -p "$FFMPEG_MIRROR_ROOT/releases"
         git_download=0
@@ -6217,7 +6235,7 @@ case "$cmd" in
                     line=${line#*<td><a href=\"}
                     git_link=${line%%\" style*}
                     build_file_name=${git_link##*/}
-                    wget --timeout=10 --tries=3 --no-check-certificate "$git_link" --show-progress -qO "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}_tmp"
+                    wget --timeout=10 --tries=3 --no-check-certificate "$git_link" $_PROGRESS_OPT -qO "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}_tmp"
                     if [ ! -s "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}_tmp" ] 
                     then
                         echo && echo -e "$error 无法连接 github !" && exit 1
@@ -6229,7 +6247,7 @@ case "$cmd" in
                         line=${line#*<td><a href=\"}
                         release_link=${line%%\" style*}
                         release_file_name=${release_link##*/}
-                        wget --timeout=10 --tries=3 --no-check-certificate "$release_link" --show-progress -qO "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}_tmp"
+                        wget --timeout=10 --tries=3 --no-check-certificate "$release_link" $_PROGRESS_OPT -qO "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}_tmp"
                         if [ ! -s "$FFMPEG_MIRROR_ROOT/builds/${release_file_name}_tmp" ] 
                         then
                             echo && echo -e "$error 无法连接 github !" && exit 1
@@ -6252,8 +6270,8 @@ case "$cmd" in
         if [ -n "$jq_ver" ]
         then
             mkdir -p "$FFMPEG_MIRROR_ROOT/$jq_ver/"
-            wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/stedolan/jq/releases/download/$jq_ver/jq-linux64" --show-progress -qO "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64_tmp"
-            wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/stedolan/jq/releases/download/$jq_ver/jq-linux32" --show-progress -qO "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp"
+            wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/stedolan/jq/releases/download/$jq_ver/jq-linux64" $_PROGRESS_OPT -qO "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64_tmp"
+            wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/stedolan/jq/releases/download/$jq_ver/jq-linux32" $_PROGRESS_OPT -qO "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp"
             if [ ! -s "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64_tmp" ] || [ ! -s "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp" ]
             then
                 echo && echo -e "$error 无法连接 github !" && exit 1
@@ -6342,11 +6360,6 @@ case "$cmd" in
         exit 0
     ;;
     "n"|"nginx")
-        CheckRelease
-        if [ "$release" == "rpm" ] 
-        then
-            echo -e "$error 系统不支持 !" && echo && exit 1
-        fi
         echo && echo -e "  Nginx 管理面板 $plain
 
   ${green}1.$plain 安装
