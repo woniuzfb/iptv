@@ -2178,18 +2178,24 @@ AddChannel()
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
     FFMPEG="$FFMPEG_ROOT/ffmpeg"
     export FFMPEG
-    FFMPEG_INPUT_FLAGS=${input_flags%\'}
-    FFMPEG_INPUT_FLAGS=${FFMPEG_INPUT_FLAGS#\'}
     AUDIO_CODEC=$audio_codec
     VIDEO_CODEC=$video_codec
     SEGMENT_DIRECTORY=$seg_dir_name
-    FFMPEG_FLAGS=${output_flags%\'}
-    FFMPEG_FLAGS=${FFMPEG_FLAGS#\'}
-    export FFMPEG_INPUT_FLAGS
+    if [[ ${input_flags:0:1} == "'" ]] 
+    then
+        input_flags=${input_flags%\'}
+        input_flags=${input_flags#\'}
+    fi
+    if [[ ${output_flags:0:1} == "'" ]] 
+    then
+        output_flags=${output_flags%\'}
+        output_flags=${output_flags#\'}
+    fi
     export AUDIO_CODEC
     export VIDEO_CODEC
     export SEGMENT_DIRECTORY
-    export FFMPEG_FLAGS
+    export FFMPEG_INPUT_FLAGS=$input_flags
+    export FFMPEG_FLAGS=$output_flags
 
     if [ -n "${kind:-}" ] 
     then
@@ -2701,18 +2707,24 @@ StartChannel()
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
     FFMPEG="$FFMPEG_ROOT/ffmpeg"
     export FFMPEG
-    FFMPEG_INPUT_FLAGS=${chnl_input_flags%\'}
-    FFMPEG_INPUT_FLAGS=${FFMPEG_INPUT_FLAGS#\'}
     AUDIO_CODEC=$chnl_audio_codec
     VIDEO_CODEC=$chnl_video_codec
     SEGMENT_DIRECTORY=$chnl_seg_dir_name
-    FFMPEG_FLAGS=${chnl_output_flags%\'}
-    FFMPEG_FLAGS=${FFMPEG_FLAGS#\'}
-    export FFMPEG_INPUT_FLAGS
+    if [[ ${chnl_input_flags:0:1} == "'" ]] 
+    then
+        chnl_input_flags=${chnl_input_flags%\'}
+        chnl_input_flags=${chnl_input_flags#\'}
+    fi
+    if [[ ${chnl_output_flags:0:1} == "'" ]] 
+    then
+        chnl_output_flags=${chnl_output_flags%\'}
+        chnl_output_flags=${chnl_output_flags#\'}
+    fi
     export AUDIO_CODEC
     export VIDEO_CODEC
     export SEGMENT_DIRECTORY
-    export FFMPEG_FLAGS
+    export FFMPEG_INPUT_FLAGS=$chnl_input_flags
+    export FFMPEG_FLAGS=$chnl_output_flags
 
     if [ -n "${kind:-}" ] 
     then
@@ -5863,6 +5875,21 @@ then
                     fi
                 done < "/etc/v2ray/config.json"
 
+                if [ -e "/usr/local/nginx" ] 
+                then
+                    while IFS= read -r line 
+                    do
+                        if [[ $line == *"server_name"* ]]
+                        then
+                            domain=${line%;*}
+                            domain=${domain##* }
+                        elif [[ $line == *"v2ray.crt"* ]] 
+                        then
+                            break
+                        fi
+                    done < "/usr/local/nginx/conf/nginx.conf"
+                fi
+
                 if service v2ray status > /dev/null
                 then
                     echo && echo -e "v2ray: $green开启$plain"
@@ -5870,6 +5897,7 @@ then
                     echo && echo -e "v2ray: $red关闭$plain"
                 fi
                 
+                [ -n "${domain:-}" ] && echo && echo -e "$green域名:$plain $domain"
                 echo && echo -e "$green端口:$plain $port"
                 echo && echo -e "${green}id:$plain $id"
                 echo && echo -e "${green}协议:$plain vmess"
@@ -6718,8 +6746,11 @@ else
             fi
 
             input_flags=${input_flags:-"$d_input_flags"}
-            input_flags=${input_flags%\'}
-            input_flags=${input_flags#\'}
+            if [[ ${input_flags:0:1} == "'" ]] 
+            then
+                input_flags=${input_flags%\'}
+                input_flags=${input_flags#\'}
+            fi
             export FFMPEG_INPUT_FLAGS=$input_flags
 
             if [ "${output_flags:-}" == "omit" ] 
@@ -6729,9 +6760,13 @@ else
                 output_flags=${d_input_flags}
             fi
 
-            output_flags=${output_flags%\'}
-            output_flags=${output_flags#\'}
+            if [[ ${output_flags:0:1} == "'" ]] 
+            then
+                output_flags=${output_flags%\'}
+                output_flags=${output_flags#\'}
+            fi
             export FFMPEG_FLAGS=$output_flags
+
             channel_name=${channel_name:-"$playlist_name"}
 
             if [ -n "${kind:-}" ] 
