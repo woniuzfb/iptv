@@ -735,6 +735,7 @@ GetDefault()
             d_flv_restart_nums=20
             d_hls_delay_seconds=120
             d_hls_min_bitrates=500
+            d_hls_max_seg_size=5
             d_hls_restart_nums=20
         else
             d_schedule_file=${d_schedule_file%, version:*}
@@ -742,6 +743,7 @@ GetDefault()
             d_flv_restart_nums=20
             d_hls_delay_seconds=120
             d_hls_min_bitrates=500
+            d_hls_max_seg_size=5
             d_hls_restart_nums=20
             d_anti_ddos_port=80
             d_anti_ddos_seconds=120
