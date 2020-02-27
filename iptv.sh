@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-sh_ver="1.5.0"
+sh_ver="1.5.1"
 SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
@@ -60,6 +60,7 @@ default='
     "flv_restart_nums":20,
     "hls_delay_seconds":120,
     "hls_min_bitrates":500,
+    "hls_max_seg_size":5,
     "hls_restart_nums":20,
     "anti_ddos_port":80,
     "anti_ddos_seconds":120,
@@ -519,7 +520,7 @@ UpdateSelf()
         printf -v update_date "%(%m-%d)T"
         cp -f "$CHANNELS_FILE" "${CHANNELS_FILE}_$update_date"
         
-        default=$($JQ_FILE '(.playlist_name)="'"$d_playlist_name"'"|(.seg_dir_name)="'"$d_seg_dir_name"'"|(.seg_name)="'"$d_seg_name"'"|(.seg_length)='"$d_seg_length"'|(.seg_count)='"$d_seg_count"'|(.video_codec)="'"$d_video_codec"'"|(.audio_codec)="'"$d_audio_codec"'"|(.video_audio_shift)="'"$d_video_audio_shift"'"|(.quality)="'"$d_quality"'"|(.bitrates)="'"$d_bitrates"'"|(.const)="'"$d_const_yn"'"|(.encrypt)="'"$d_encrypt_yn"'"|(.key_name)="'"$d_key_name"'"|(.input_flags)="'"$d_input_flags"'"|(.output_flags)="'"$d_output_flags"'"|(.sync_file)="'"$d_sync_file"'"|(.sync_index)="'"$d_sync_index"'"|(.sync_pairs)="'"$d_sync_pairs"'"|(.schedule_file)="'"$d_schedule_file"'"|(.flv_delay_seconds)='"$d_flv_delay_seconds"'|(.flv_restart_nums)='"$d_flv_restart_nums"'|(.hls_delay_seconds)='"$d_hls_delay_seconds"'|(.hls_min_bitrates)='"$d_hls_min_bitrates"'|(.hls_restart_nums)='"$d_hls_restart_nums"'|(.anti_ddos_port)='"$d_anti_ddos_port"'|(.anti_ddos_seconds)='"$d_anti_ddos_seconds"'|(.anti_ddos_level)='"$d_anti_ddos_level"'' <<< "$default")
+        default=$($JQ_FILE '(.playlist_name)="'"$d_playlist_name"'"|(.seg_dir_name)="'"$d_seg_dir_name"'"|(.seg_name)="'"$d_seg_name"'"|(.seg_length)='"$d_seg_length"'|(.seg_count)='"$d_seg_count"'|(.video_codec)="'"$d_video_codec"'"|(.audio_codec)="'"$d_audio_codec"'"|(.video_audio_shift)="'"$d_video_audio_shift"'"|(.quality)="'"$d_quality"'"|(.bitrates)="'"$d_bitrates"'"|(.const)="'"$d_const_yn"'"|(.encrypt)="'"$d_encrypt_yn"'"|(.key_name)="'"$d_key_name"'"|(.input_flags)="'"$d_input_flags"'"|(.output_flags)="'"$d_output_flags"'"|(.sync_file)="'"$d_sync_file"'"|(.sync_index)="'"$d_sync_index"'"|(.sync_pairs)="'"$d_sync_pairs"'"|(.schedule_file)="'"$d_schedule_file"'"|(.flv_delay_seconds)='"$d_flv_delay_seconds"'|(.flv_restart_nums)='"$d_flv_restart_nums"'|(.hls_delay_seconds)='"$d_hls_delay_seconds"'|(.hls_min_bitrates)='"$d_hls_min_bitrates"'|(.hls_max_seg_size)='"$d_hls_max_seg_size"'|(.hls_restart_nums)='"$d_hls_restart_nums"'|(.anti_ddos_port)='"$d_anti_ddos_port"'|(.anti_ddos_seconds)='"$d_anti_ddos_seconds"'|(.anti_ddos_level)='"$d_anti_ddos_level"'' <<< "$default")
 
         $JQ_FILE '. + {default: '"$default"'}' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
@@ -696,8 +697,16 @@ GetDefault()
             d_hls_delay_seconds=${d_hls_delay_seconds%, hls_min_bitrates:*}
             d_hls_delay_seconds=${d_hls_delay_seconds:-120}
             d_hls_min_bitrates=${d#*hls_min_bitrates: }
-            d_hls_min_bitrates=${d_hls_min_bitrates%, hls_restart_nums:*}
+            if [[ "$d" == *"hls_max_seg_size: "* ]] 
+            then
+                d_hls_min_bitrates=${d_hls_min_bitrates%, hls_max_seg_size:*}
+                d_hls_max_seg_size=${d#*hls_max_seg_size: }
+                d_hls_max_seg_size=${d_hls_max_seg_size%, hls_restart_nums:*}
+            else
+                d_hls_min_bitrates=${d_hls_min_bitrates%, hls_restart_nums:*}
+            fi
             d_hls_min_bitrates=${d_hls_min_bitrates:-500}
+            d_hls_max_seg_size=${d_hls_max_seg_size:-5}
             d_hls_restart_nums=${d#*hls_restart_nums: }
             d_hls_restart_nums=${d_hls_restart_nums%, anti_ddos_port:*}
             d_hls_restart_nums=${d_hls_restart_nums:-20}
@@ -3204,7 +3213,7 @@ generateSchedule()
     programs_title=()
     while IFS='' read -r program_title
     do
-        programs_title+=("$program_title");
+        programs_title+=("$program_title")
     done < <($JQ_FILE -r '.list[] | select(.key=="'"$date_now"'").values | .[].name | @sh' "$SCHEDULE_FILE")
 
     IFS=" " read -ra programs_time < <($JQ_FILE -r '[.list[] | select(.key=="'"$date_now"'").values | .[].time] | @sh' "$SCHEDULE_FILE")
@@ -3701,13 +3710,13 @@ Schedule()
                 programs_title=()
                 while IFS='' read -r program_title
                 do
-                    programs_title+=("$program_title");
+                    programs_title+=("$program_title")
                 done < <($JQ_FILE -r '.[].title | @sh' "$SCHEDULE_FILE")
 
                 programs_title_local=()
                 while IFS='' read -r program_title_local
                 do
-                    programs_title_local+=("$program_title_local");
+                    programs_title_local+=("$program_title_local")
                 done < <($JQ_FILE -r '.[].title_local | @sh' "$SCHEDULE_FILE")
 
                 IFS=" " read -ra programs_id < <($JQ_FILE -r '[.[].id] | @sh' "$SCHEDULE_FILE")
@@ -3763,7 +3772,7 @@ Schedule()
             programs_title=()
             while IFS='' read -r program_title
             do
-                programs_title+=("$program_title");
+                programs_title+=("$program_title")
             done < <($JQ_FILE -r '.schedule[].schedule_items[].show_title | @sh' "$SCHEDULE_FILE")
 
             programs_count=${#programs_title[@]}
@@ -4458,9 +4467,9 @@ AntiDDoS()
             map_seg_length=${map_seg_length%, seg_count:*}
             map_seg_count=${channel#*seg_count: }
 
-            chnls_output_dir_name+=("$map_output_dir_name");
-            chnls_seg_length+=("$map_seg_length");
-            chnls_seg_count+=("$map_seg_count");
+            chnls_output_dir_name+=("$map_output_dir_name")
+            chnls_seg_length+=("$map_seg_length")
+            chnls_seg_count+=("$map_seg_count")
         done < <($JQ_FILE -r '.channels | to_entries | map("output_dir_name: \(.value.output_dir_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count)") | .[]' "$CHANNELS_FILE")
 
         output_dir_names=()
@@ -5045,7 +5054,7 @@ Monitor()
                 largest_file_path=${largest_file#* }
                 output_dir_name=${largest_file_path#*$LIVE_ROOT/}
                 output_dir_name=${output_dir_name%%/*}
-                if [ "$largest_file_size" -gt $(( cmd * 1000000)) ]
+                if [ "$largest_file_size" -gt $(( hls_max_seg_size * 1000000)) ]
                 then
                     GetChannelInfo
                     printf '%s\n' "$chnl_channel_name 文件过大重启" >> "$MONITOR_LOG"
@@ -5170,9 +5179,9 @@ MonitorSet()
         if [ "${chnls_flv_status[i]}" == "on" ] 
         then
             flv_count=$((flv_count+1))
-            monitor_channel_names+=("${chnls_channel_name[i]}");
-            monitor_flv_push_links+=("${chnls_flv_push_link[i]}");
-            monitor_flv_pull_links+=("${chnls_flv_pull_link[i]}");
+            monitor_channel_names+=("${chnls_channel_name[i]}")
+            monitor_flv_push_links+=("${chnls_flv_push_link[i]}")
+            monitor_flv_pull_links+=("${chnls_flv_pull_link[i]}")
         fi
     done
     
@@ -5267,24 +5276,27 @@ MonitorSet()
             esac
         done
 
-        echo && echo "请输入尝试重启的次数"
-        while read -p "(默认: $d_flv_restart_nums次):" flv_restart_nums
-        do
-            case $flv_restart_nums in
-                "") flv_restart_nums=$d_flv_restart_nums && break
-                ;;
-                *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
-                ;;
-                *) 
-                    if [ "$flv_restart_nums" -gt 0 ]
-                    then
-                        break
-                    else
-                        echo && echo -e "$error 请输入正确的数字(大于0)" && echo
-                    fi
-                ;;
-            esac
-        done
+        if [ -n "$flv_nums" ] 
+        then
+            echo && echo "请输入尝试重启的次数"
+            while read -p "(默认: $d_flv_restart_nums次):" flv_restart_nums
+            do
+                case $flv_restart_nums in
+                    "") flv_restart_nums=$d_flv_restart_nums && break
+                    ;;
+                    *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
+                    ;;
+                    *) 
+                        if [ "$flv_restart_nums" -gt 0 ]
+                        then
+                            break
+                        else
+                            echo && echo -e "$error 请输入正确的数字(大于0)" && echo
+                        fi
+                    ;;
+                esac
+            done
+        fi
     fi
 
     if ! ls -A $LIVE_ROOT/* > /dev/null 2>&1
@@ -5429,6 +5441,25 @@ MonitorSet()
         hls_min_bitrates=$((hls_min_bitrates * 1000))
     fi
 
+    echo && echo "请输入允许的最大片段"
+    while read -p "(默认: ${d_hls_max_seg_size}M):" hls_max_seg_size
+    do
+        case $hls_max_seg_size in
+            "") hls_max_seg_size=$d_hls_max_seg_size && break
+            ;;
+            *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
+            ;;
+            *) 
+                if [ "$hls_max_seg_size" -gt 0 ]
+                then
+                    break
+                else
+                    echo && echo -e "$error 请输入正确的数字(大于0)" && echo
+                fi
+            ;;
+        esac
+    done
+
     echo && echo "请输入尝试重启的次数"
     while read -p "(默认: $d_hls_restart_nums次):" hls_restart_nums
     do
@@ -5452,7 +5483,7 @@ MonitorSet()
     flv_restart_nums=${flv_restart_nums:-$d_flv_restart_nums}
     hls_delay_seconds=${hls_delay_seconds:-$d_hls_delay_seconds}
     hls_min_bitrates=${hls_min_bitrates:-$d_hls_min_bitrates}
-    $JQ_FILE '(.default|.flv_delay_seconds)='"$flv_delay_seconds"'|(.default|.flv_restart_nums)='"$flv_restart_nums"'|(.default|.hls_delay_seconds)='"$hls_delay_seconds"'|(.default|.hls_min_bitrates)='"$((hls_min_bitrates / 1000))"'|(.default|.hls_restart_nums)='"$hls_restart_nums"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    $JQ_FILE '(.default|.flv_delay_seconds)='"$flv_delay_seconds"'|(.default|.flv_restart_nums)='"$flv_restart_nums"'|(.default|.hls_delay_seconds)='"$hls_delay_seconds"'|(.default|.hls_min_bitrates)='"$((hls_min_bitrates / 1000))"'|(.default|.hls_max_seg_size)='"$hls_max_seg_size"'|(.default|.hls_restart_nums)='"$hls_restart_nums"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
     mv "$CHANNELS_TMP" "$CHANNELS_FILE"
 }
 
@@ -6385,8 +6416,8 @@ case "$cmd" in
             map_channel_name=${map_channel_name%, stream_link:*}
             map_stream_link=${flv_channel#*stream_link: }
 
-            chnls_channel_name+=("$map_channel_name");
-            chnls_stream_link+=("${map_stream_link:-''}");
+            chnls_channel_name+=("$map_channel_name")
+            chnls_stream_link+=("$map_stream_link")
         done < <($JQ_FILE -r '.channels | to_entries | map(select(.value.flv_status=="on")) | map("channel_name: \(.value.channel_name), stream_link: \(.value.stream_link)") | .[]' "$CHANNELS_FILE")
 
         if [ "$flv_count" -gt 0 ] 
@@ -6404,16 +6435,20 @@ case "$cmd" in
         hls_count=0
         chnls_channel_name=()
         chnls_stream_link=()
+        chnls_output_dir_name=()
         while IFS= read -r hls_channel
         do
             hls_count=$((hls_count+1))
             map_channel_name=${hls_channel#*channel_name: }
             map_channel_name=${map_channel_name%, stream_link:*}
             map_stream_link=${hls_channel#*stream_link: }
+            map_stream_link=${map_stream_link%, output_dir_name:*}
+            map_output_dir_name=${hls_channel#*output_dir_name: }
 
-            chnls_channel_name+=("$map_channel_name");
-            chnls_stream_link+=("${map_stream_link:-''}");
-        done < <($JQ_FILE -r '.channels | to_entries | map(select(.value.status=="on")) | map("channel_name: \(.value.channel_name), stream_link: \(.value.stream_link)") | .[]' "$CHANNELS_FILE")
+            chnls_channel_name+=("$map_channel_name")
+            chnls_stream_link+=("$map_stream_link")
+            chnls_output_dir_name+=("$map_output_dir_name")
+        done < <($JQ_FILE -r '.channels | to_entries | map(select(.value.status=="on")) | map("channel_name: \(.value.channel_name), stream_link: \(.value.stream_link), output_dir_name: \(.value.output_dir_name)") | .[]' "$CHANNELS_FILE")
 
         if [ "$hls_count" -gt 0 ] 
         then
@@ -6427,10 +6462,35 @@ case "$cmd" in
 
         echo 
 
+        for((i=0;i<hls_count;i++));
+        do
+            echo -e "  ${green}$((i+1)).$plain ${chnls_channel_name[i]} ${chnls_stream_link[i]}"
+            if [ -e "$LIVE_ROOT/${chnls_output_dir_name[i]}" ] 
+            then
+                ls "$LIVE_ROOT/${chnls_output_dir_name[i]}"/* -lght && echo
+            else
+                echo -e "$error 目录不存在" && echo
+            fi
+        done
+        
+
         if ls -A $LIVE_ROOT/* > /dev/null 2>&1 
         then
-            for d in "$LIVE_ROOT"/*/ ; do
-                ls "$d" -lght
+            for output_dir_root in "$LIVE_ROOT"/* ; do
+                found=0
+                output_dir_name=${output_dir_root#*$LIVE_ROOT/}
+                for((i=0;i<hls_count;i++));
+                do
+                    if [ "$output_dir_name" == "${chnls_output_dir_name[i]}" ] 
+                    then
+                        found=1
+                    fi
+                done
+                if [ "$found" == 0 ] 
+                then
+                    echo && echo -e "$error 未知目录 $output_dir_name" && echo
+                    ls "$output_dir_root"/* -lght
+                fi
             done
         fi
 
