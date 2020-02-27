@@ -35,19 +35,19 @@ body {
   margin: 0 auto;
   font: 1.6rem/1.2 'PingFangSC','helvetica neue','hiragino sans gb','arial','microsoft yahei ui','microsoft yahei','simsun','sans-serif';
   display: grid;
-  grid-template-columns: 1fr 2fr;
+  grid-template-columns: 1fr 8fr;
   grid-gap: 2rem;
 }
 
 header {
-  grid-column: 1 / 3;
+  grid-column: 1 / 9;
   grid-row: 1;
+  text-align: center;
 }
 
 .videoContainer {
-  grid-column: 2;
+  grid-column: 2 / 9;
   grid-row: 2;
-  width: 80%;
 }
 
 .vjs-subs-caps-button {
@@ -55,9 +55,8 @@ header {
 }
 
 .sliderContainer {
-  grid-column: 2;
+  grid-column: 2 / 9;
   grid-row: 3;
-  width: 80%;
 }
 
 .slider {
@@ -122,10 +121,9 @@ header {
 }
 
 aside {
-  grid-column: 1;
+  grid-column: 1 / 2;
   grid-row: 2 / 4;
-  padding-left: .8rem;
-  padding-right: 1.6rem;
+  padding-right: 2rem;
   text-align: right;
   border-right: .1rem solid #999;
 }
@@ -138,13 +136,13 @@ fieldset {
 }
 
 .categories {
-  grid-column: 1 / 3;
+  grid-column: 1 / 9;
   grid-row: 6;
   text-align: center;
 }
 
 section {
-  grid-column: 1 / 3;
+  grid-column: 1 / 9;
   grid-row: 7;
   text-align: center;
 }
@@ -204,12 +202,11 @@ form div + div {
 }
 
 footer {
-  background: #F3F3F3;
+  grid-column: 1 / 9;
+  grid-row: 8;
+  text-align: left;
   padding: .8rem;
   letter-spacing: .1rem;
-  position: fixed;
-  left: 0;
-  bottom: 0;
 }
 
 footer span {
@@ -224,7 +221,7 @@ footer span {
 }
 
 .video-js .vjs-overlay-background {
-  background-color: #646464;
+  background-color: #aba2a2;
   border-radius: 3px;
 }
 
@@ -260,14 +257,14 @@ footer span {
 }
 
 .alert {
-  grid-column: 1 / 3;
+  grid-column: 1 / 9;
   grid-row: 4;
   text-align: center;
   color: red !important;
 }
 
 .upComing {
-  grid-column: 1 / 3;
+  grid-column: 1 / 9;
   grid-row: 5;
   text-align: center;
   color: rgba(0, 200, 0);
@@ -334,23 +331,14 @@ footer span {
 
 @media (max-width: 991.98px) {
   header {
+    text-align: left;
     padding-left: 1.6rem;
-  }
-  .videoContainer, .sliderContainer {
-    width: 95%;
   }
   .categories .hbohd {
     display: none;
   }
   footer span {
     display: none;
-  }
-}
-
-@media (min-width: 992px) {
-  header {
-    grid-column: 2;
-    grid-row: 1;
   }
 }
 
