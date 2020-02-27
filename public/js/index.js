@@ -93,18 +93,97 @@ function switchChannel(e) {
   }
 }
 
+function tsLoad() {
+  let tsUrl = hlsVideoUrl;
+  const mediaSource = new MediaSource();
+  hlsVideoUrl=URL.createObjectURL(mediaSource);
+  videojsLoad();
+
+  mediaSource.addEventListener("sourceopen", async () => {
+    URL.revokeObjectURL(videojs('video').src);
+    mediaSource.duration = 0;
+    let receivedLength = 0;
+    let chunksAll,count = 0,position = 0,chunks = [];
+    let mime = 'video/mp4; codecs="mp4a.40.2,avc1.64001f"';
+    let sourceBuffer = mediaSource.addSourceBuffer(mime);
+    let transmuxer = new muxjs.mp4.Transmuxer();
+
+    const fetchedResource = await fetch(tsUrl);
+    const reader = await fetchedResource.body.getReader();
+
+    sourceBuffer.addEventListener('updateend', () => {
+
+      transmuxer.off('data');
+
+      transmuxer.on('data', function(segment) {
+        if (segment && segment.type === 'combined') {
+          sourceBuffer.appendBuffer(new Uint8Array(segment.data));
+        }
+      })
+    });
+
+    transmuxer.on('data', function(segment) {
+      if (segment && segment.type === 'combined') {
+        let data = new Uint8Array(segment.initSegment.byteLength + segment.data.byteLength);
+        data.set(segment.initSegment, 0);
+        data.set(segment.data, segment.initSegment.byteLength);
+        sourceBuffer.appendBuffer(data);
+      }
+    });
+
+    reader.read().then(function processSegment({ done, value }) {
+      if (done) {
+        mediaSource.endOfStream();
+        return
+      }
+
+      if (count === 0) {
+        transmuxer.push(value);
+        transmuxer.flush();
+        count++;
+      } else if (count < 700) {
+        chunks.push(value);
+        receivedLength += value.length;
+        count++;
+      } else {
+        chunksAll = new Uint8Array(receivedLength);
+        position = 0;
+        for (let chunk of chunks) {
+          chunksAll.set(chunk, position);
+          position += chunk.length;
+        }
+        count = 1;
+        chunks = [];
+        receivedLength = 0;
+        transmuxer.push(chunksAll);
+        transmuxer.flush();
+      }
+
+      return reader.read().then(processSegment)
+    });
+  });
+}
+
 function videojsLoad() {
   if (videoField.hasChildNodes()) {
     videojs('video').dispose();
   }
-  
-  let contentType = hlsVideoUrl.indexOf('.flv') === -1 ? 'application/vnd.apple.mpegurl' : 'video/x-flv';
+
+  let contentType;
+  if (hlsVideoUrl.indexOf('.m3u8') !== -1) {
+    contentType = 'application/vnd.apple.mpegurl';
+  } else if (hlsVideoUrl.indexOf('blob:') !== -1) {
+    contentType = 'video/mp4';
+  } else {
+    contentType = 'video/x-flv';
+  }
+
   const video = document.createElement('video');
   video.id = 'video';
   video.className = 'video-js';
   const noVideojs = document.createElement('p');
   noVideojs.className = 'vjs-no-js';
-  const noVideojsText = document.createTextNode('需启用 JavaScript，或使用更新的浏览器');
+  const noVideojsText = document.createTextNode('港台节目直播、广电直播源');
   noVideojs.appendChild(noVideojsText);
   video.appendChild(noVideojs);
   videoField.appendChild(video);
@@ -170,6 +249,10 @@ function videojsLoad() {
         } else {
           alertInfo('频道不可用！',10);
         }
+      } else if (hlsVideoUrl.indexOf('flv?app=') !== -1 && videojs.browser.IS_IOS) {
+        alertInfo('此频道不支持 ios 系统！',10);
+      /*} else if (videojs.browser.IS_ANDROID) {
+        alertInfo('不支持安卓系统！',10);*/
       } else {
         alertInfo('频道不可用！',10);
       }
@@ -190,15 +273,31 @@ function videojsLoad() {
 function playVideo() {
   if(!programId) {
     let keyArr = Object.keys(sourcesJsonParsed);
-    let index;
+    let index,source;
     while ((index = keyArr.pop()) !== undefined) {
       if (sourcesJsonParsed[index].hasOwnProperty('channels') && sourcesJsonParsed[index].channels[0] && sourcesJsonParsed[index].channels[0].hasOwnProperty('url')) {
-        hlsVideoUrl = sourcesJsonParsed[index].channels[0].url;
+        if (sourcesJsonParsed[index].hasOwnProperty('feature') && sourcesJsonParsed[index].feature.chnl_name) {
+          featureBtn.textContent = sourcesJsonParsed[index].feature.chnl_name;
+          featureBtn.dataset.source = sourcesJsonParsed[index].feature.source_name;
+          featureBtn.dataset.value = sourcesJsonParsed[index].feature.chnl_id;
+        } else {
+          featureBtn.parentNode.removeChild(featureBtn);
+        }
+        if (sourcesJsonParsed[index].hasOwnProperty('ios') && videojs.browser.IS_IOS) {
+          source = sourcesJsonParsed[index].ios;
+        } else if (sourcesJsonParsed[index].hasOwnProperty('android') && videojs.browser.IS_ANDROID) {
+          source = sourcesJsonParsed[index].android;
+        } else if (sourcesJsonParsed[index].hasOwnProperty('default')) {
+          source = sourcesJsonParsed[index].default;
+        } else {
+          source = sourcesJsonParsed[index].channels[0];
+        }
+        hlsVideoUrl = source.url;
         videojsLoad();
         if (sourcesJsonParsed[index].hasOwnProperty('overlay')) {
-          videoOverlay(sourcesJsonParsed[index].overlay,sourcesJsonParsed[index].channels[0]);
+          videoOverlay(sourcesJsonParsed[index].overlay,source);
         }
-        showSchedule(sourcesJsonParsed[index].channels[0].schedule);
+        showSchedule(source.schedule);
         resetSourceReg();
         break;
       }
@@ -231,12 +330,21 @@ function playVideo() {
     if (sourcesJsonParsed[sourceReg].hasOwnProperty('auth_info_url') && sourcesJsonParsed[sourceReg].hasOwnProperty('auth_verify_url')) {
       reqAuth();
     } else {
-      if (localStorage.getItem(sourceReg+'_verify_code')) {
-        hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken=ABCDEFGH&verifycode='+localStorage.getItem(sourceReg+'_verify_code')+'&rate='+rate+'&programid='+programId+'.m3u8';
+      if (sourcesJsonParsed[sourceReg].hasOwnProperty('protocol') && sourcesJsonParsed[sourceReg].protocol) {
+        protocol = sourcesJsonParsed[sourceReg].protocol;
       } else {
-        hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken=ABCDEFGH&rate='+rate+'&programid='+programId+'.m3u8';
+        protocol = 'hls';
       }
-      videojsLoad();
+      if (localStorage.getItem(sourceReg+'_verify_code')) {
+        hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol='+protocol+'&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken=ABCDEFGH&verifycode='+localStorage.getItem(sourceReg+'_verify_code')+'&rate='+rate+'&programid='+programId+'.m3u8';
+      } else {
+        hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol='+protocol+'&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken=ABCDEFGH&rate='+rate+'&programid='+programId+'.m3u8';
+      }
+      if (protocol === 'http') {
+        tsLoad();
+      } else {
+        videojsLoad();
+      }
       showSchedule();
       updateAside();
     }
@@ -344,25 +452,47 @@ function timeoutPromise(ms, promise) {
 
 function reqData(url, data = '', method = 'GET') {
   return new Promise((resolve, reject) => {
+    let config = {};
     if (method === 'GET') {
-      fetch(url + data, {
-        method: method,
-        mode: "cors",
-        cache: "no-cache",
-        credentials: "omit",
-        referrer: "",
-      }).then(response => {
+      if (urls.indexOf(url) !== -1) {
+        config = { 
+          method: method, 
+          mode: "cors",
+          cache: "no-cache",
+          credentials: "omit",
+          referrer: "",
+        };
+      } else {
+        config = { 
+          method: method, 
+          mode: "cors",
+          cache: "no-cache",
+          credentials: "omit",
+        };
+      }
+      fetch(url + data, config).then(response => {
         resolve(response.json());
       }).catch(err => {reject(err);});
     } else {
-      fetch(url, {
-        method: method,
-        mode: "cors",
-        cache: "no-cache",
-        credentials: "omit",
-        referrer: "",
-        body: JSON.stringify(data),
-      }).then(response => {
+      if (urls.indexOf(url) !== -1) {
+        config = { 
+          method: method, 
+          mode: "cors",
+          cache: "no-cache",
+          credentials: "omit",
+          referrer: "",
+          body: JSON.stringify(data),
+        };
+      } else {
+        config = { 
+          method: method, 
+          mode: "cors",
+          cache: "no-cache",
+          credentials: "omit",
+          body: JSON.stringify(data),
+        };
+      }
+      fetch(url, config).then(response => {
         resolve(response.json());
       }).catch(err => {reject(err);});
     }
@@ -811,12 +941,21 @@ function reqAuth() {
         if (response.ret !== 0) {
           console.log(sourcesJsonParsed[sourceReg].auth_verify_url+' 返回错误');
         }
-        if (localStorage.getItem(sourceReg+'_verify_code')) {
-          hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playtoken+'&verifycode='+localStorage.getItem(sourceReg+'_verify_code')+'&rate='+rate+'&programid='+programId+'.m3u8';
+        if (sourcesJsonParsed[sourceReg].hasOwnProperty('protocol') && sourcesJsonParsed[sourceReg].protocol) {
+          protocol = sourcesJsonParsed[sourceReg].protocol;
         } else {
-          hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol=hls&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playtoken+'&rate='+rate+'&programid='+programId+'.m3u8';
+          protocol = 'hls';
         }
-        videojsLoad();
+        if (localStorage.getItem(sourceReg+'_verify_code')) {
+          hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol='+protocol+'&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playtoken+'&verifycode='+localStorage.getItem(sourceReg+'_verify_code')+'&rate='+rate+'&programid='+programId+'.m3u8';
+        } else {
+          hlsVideoUrl = sourcesJsonParsed[sourceReg].play_url+'?playtype=live&protocol='+protocol+'&accesstoken='+localStorage.getItem(sourceReg+'_token')+'&playtoken='+playtoken+'&rate='+rate+'&programid='+programId+'.m3u8';
+        }
+        if (protocol === 'http') {
+          tsLoad();
+        } else {
+          videojsLoad();
+        }
         showSchedule();
         updateAside();
       }).catch(err => {
@@ -850,6 +989,12 @@ function parseJson(json) {
         sourcesListItem.classList.add('white');
       }
       sourcesField.appendChild(sourcesListItem);
+      const entries = Object.entries(element);
+      for (const [key, value] of entries) {
+        if (key.indexOf('_url') !== -1) {
+          urls.push(value);
+        }
+      }
     }
 
     let newIndex = element.name;
@@ -1085,10 +1230,19 @@ function playbackOrUpcoming(e) {
       let showId =  e.target.dataset.id;
       let channel = e.target.dataset.channel;
       let hboLink;
-      if (channel === "hbo") {
-        hboLink = 'https://hboasia.com/HBO/zh-cn/ajax/home_schedule_upcoming_showtimes?channel=' + channel + '&feed=cn&id=' + showId;
-      } else {
-        hboLink = 'https://hboasia.com/HBO/zh-tw/ajax/home_schedule_upcoming_showtimes?channel=' + channel + '&feed=satellite&id=' + showId;
+      switch (channel) {
+        case 'hbo':
+          hboLink = 'https://hboasia.com/HBO/zh-cn/ajax/home_schedule_upcoming_showtimes?channel=' + channel + '&feed=cn&id=' + showId;
+          break;
+        case 'hbotw':
+          hboLink = 'https://hboasia.com/HBO/zh-cn/ajax/home_schedule_upcoming_showtimes?channel=hbo&feed=satellite&id=' + showId;
+          break;
+        case 'hbored':
+          hboLink = 'https://hboasia.com/HBO/zh-cn/ajax/home_schedule_upcoming_showtimes?channel=red&feed=satellite&id=' + showId;
+          break;
+        default:
+          hboLink = 'https://hboasia.com/HBO/zh-tw/ajax/home_schedule_upcoming_showtimes?channel=' + channel + '&feed=satellite&id=' + showId;
+          break;
       }
       //alertInfo('正在查询官网请稍等...');
       reqData(hboLink)
@@ -1131,13 +1285,13 @@ function playbackOrUpcoming(e) {
 
 function switchLink() {
   hlsVideoUrl = linkInputField.value;
-  if (hlsVideoUrl.indexOf('.flv') !== -1 || hlsVideoUrl.indexOf('.m3u8') !== -1) {
+  if (hlsVideoUrl.indexOf('flv') !== -1 || hlsVideoUrl.indexOf('.m3u8') !== -1) {
     videojsLoad();
     deleteSchedule();
   }
 }
 
-let programId,rate,eventId,hlsVideoUrl,sourcesJson,sourcesJsonParsed,jsonChannels = {},schedules = {},overlaysInfo = {};
+let programId,rate,eventId,hlsVideoUrl,protocol,urls = [],sourcesJson,sourcesJsonParsed,jsonChannels = {},schedules = {},overlaysInfo = {};
 let sourceReg = 'hrtn',sourceRegDefault = 'hrtn';
 let localJson = 'channels.json';
 let remoteJson = 'http://hbo.epub.fun/channels.json';
@@ -1161,6 +1315,7 @@ const regBtn = document.querySelector('.regBtn');
 const formToggle = document.querySelector('.formToggle');
 const channelsField = document.querySelector('.channels');
 const categoriesField = document.querySelector('.categories');
+const featureBtn = document.querySelector('.categories ul li:nth-child(1)');
 const switchBtn = document.querySelector('.switch');
 const myList1 = document.querySelector('.channels ul:nth-child(1)');
 const myList1a = document.querySelector('.channels ul:nth-child(2)');
