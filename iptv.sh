@@ -7,6 +7,7 @@ SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
 V2_FILE="/usr/local/bin/v2"
+XC_FILE="/usr/local/bin/cx"
 IPTV_ROOT="/usr/local/iptv"
 IP_DENY="$IPTV_ROOT/ip.deny"
 IP_PID="$IPTV_ROOT/ip.pid"
@@ -26,6 +27,7 @@ LOCK_FILE="$IPTV_ROOT/lock"
 MONITOR_PID="$IPTV_ROOT/monitor.pid"
 MONITOR_LOG="$IPTV_ROOT/monitor.log"
 LOGROTATE_CONFIG="$IPTV_ROOT/logrotate"
+XTREAM_CODES="$IPTV_ROOT/xtream_codes"
 green="\033[32m"
 red="\033[31m"
 plain="\033[0m"
@@ -1683,7 +1685,7 @@ SetSyncPairs()
 
 SetFlvPush()
 {
-    echo && echo "请输入推流地址(比如 rtmp://127.0.0.1/live/xxx )" && echo
+    echo && echo "请输入推流地址(比如 rtmp://127.0.0.1/flv/xxx )" && echo
     while read -p "(默认: 取消):" flv_push_link
     do
         [ -z "$flv_push_link" ] && echo "已取消..." && exit 1
@@ -5707,6 +5709,256 @@ rtmp {
     fi
 }
 
+ListXtreamCodes()
+{
+    ips=()
+    new_domains=()
+    new_accounts=()
+    while IFS= read -r line 
+    do
+        if [[ $line == *"username="* ]] 
+        then
+            domain=${line#*http://}
+            domain=${domain%%/*}
+            username=${line#*username=}
+            username=${username%%&*}
+            password=${line#*password=}
+            password=${password%%&*}
+            ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }')
+        elif [[ $line == *http://*/*/*/* ]] 
+        then
+            tmp_line=${line#*http://}
+            domain=${tmp_line%%/*}
+            tmp_line=${tmp_line#*/}
+            username=${tmp_line%%/*}
+            tmp_line=${tmp_line#*/}
+            password=${tmp_line%%/*}
+            ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }')
+        else
+            ip=${line%% *}
+            tmp_line=${line#* }
+            domain_line=${tmp_line%% *}
+            account_line=${tmp_line#* }
+            IFS="|" read -ra domains <<< "$domain_line"
+            IFS=" " read -ra accounts <<< "$account_line"
+
+            found=0
+            for((i=0;i<${#ips[@]};i++));
+            do
+                IFS='|' read -ra ips_index_arr <<< "${ips[i]}"
+                for ips_index_ip in "${ips_index_arr[@]}"
+                do
+                    if [ "$ips_index_ip" == "$ip" ] 
+                    then
+                        found=1
+                        for domain in "${domains[@]}"
+                        do
+                            if [[ ${new_domains[i]} != *"$domain"* ]] 
+                            then
+                                new_domains[i]="${new_domains[i]}|$domain"
+                            fi
+                        done
+                        
+                        for account in "${accounts[@]}"
+                        do
+                            if [[ ${new_accounts[i]} != *"$account"* ]] 
+                            then
+                                new_accounts[i]="${new_accounts[i]} $account"
+                            fi
+                        done
+                    fi
+                done
+
+                if [ "$found" == 0 ] 
+                then
+                    for domain in "${domains[@]}"
+                    do
+                        if [[ ${new_domains[i]} == *"$domain"* ]] 
+                        then
+                            found=1
+                            ips[i]="${ips[i]}|$ip"
+
+                            for account in "${accounts[@]}"
+                            do
+                                if [[ ${new_accounts[i]} != *"$account"* ]] 
+                                then
+                                    new_accounts[i]="${new_accounts[i]} $account"
+                                fi
+                            done
+                        fi
+                    done
+                fi
+            done
+            
+            if [ "$found" == 0 ] 
+            then
+                ips+=("$ip")
+                new_domains+=("$domain_line")
+                new_accounts+=("$account_line")
+            fi
+            
+            continue
+        fi
+
+        found=0
+        for((i=0;i<${#ips[@]};i++));
+        do
+            if [ "${ips[i]}" == "$ip" ] 
+            then
+                found=1
+                if [[ ${new_domains[i]} != *"$domain"* ]] 
+                then
+                    new_domains[i]="${new_domains[i]}|$domain"
+                fi
+                
+                if [[ ${new_accounts[i]} != *"$account"* ]] 
+                then
+                    new_accounts[i]="${new_accounts[i]} $account"
+                fi
+            fi
+        done
+        
+        if [ "$found" == 0 ] 
+        then
+            ips+=("$ip")
+            new_domains+=("$domain")
+            new_accounts+=("$account")
+        fi
+    done < "$XTREAM_CODES"
+
+    ip_count=${#ips[@]}
+
+    if [ "$ip_count" -gt 0 ] 
+    then
+        printf "" > "$XTREAM_CODES"
+
+        echo
+
+        for((i=0;i<ip_count;i++));
+        do
+            printf '%s\n' "${ips[i]} ${new_domains[i]} ${new_accounts[i]}" >> "$XTREAM_CODES"
+            echo -e "$green$((i+1)).$plain IP: $green${ips[i]//|/, }$plain 域名: $green${new_domains[i]//|/, }$plain" && echo
+            echo -e "$green账号:$plain"
+            IFS=" " read -ra accounts <<< "${new_accounts[i]}"
+            for account in "${accounts[@]}"
+            do
+                echo "${account//:/    }"
+            done
+            echo
+        done
+    else
+        echo && echo -e "$error 没有账号！" && echo && exit 1
+    fi
+}
+
+TestXtreamCodes()
+{
+    echo && echo "请输入测试的序号"
+    while read -p "(默认: 取消):" test_num
+    do
+        case $test_num in
+            "") echo && echo -e "$error 已取消..." && echo && exit 1
+            ;;
+            *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
+            ;;
+            *) 
+                if [ "$test_num" -gt 0 ] && [ ! "$test_num" -gt "$ip_count" ]
+                then
+                    break
+                else
+                    echo && echo -e "$error 请输入正确的序号" && echo
+                fi
+            ;;
+        esac
+    done
+
+    echo && echo "请输入测试的频道ID"
+    while read -p "(默认: 取消):" channel_id
+    do
+        case $channel_id in
+            "") echo && echo -e "$error 已取消..." && exit 1
+            ;;
+            *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
+            ;;
+            *) 
+                if [ "$channel_id" -gt 0 ]
+                then
+                    break
+                else
+                    echo && echo -e "$error 请输入正确的频道ID(大于0)" && echo
+                fi
+            ;;
+        esac
+    done
+
+    if [ -e "$CHANNELS_FILE" ] 
+    then
+        chnls=()
+        while IFS= read -r line 
+        do
+            if [[ $line == *\"status\":* ]] 
+            then
+                line=${line#*: \"}
+                status=${line%\",*}
+            elif [[ $line == *\"stream_link\":* ]] && [[ $line == *http://*/*/*/* ]]
+            then
+                line=${line#*: \"http://}
+                chnl_domain=${line%%/*}
+                line=${line#*/}
+                chnl_username=${line%%/*}
+                line=${line#*/}
+                chnl_password=${line%%/*}
+            elif [[ $line == *\"flv_status\":* ]] 
+            then
+                line=${line#*: \"}
+                flv_status=${line%\",*}
+                if [ -n "${chnl_domain:-}" ] 
+                then
+                    if [ "$status" == "on" ] || [ "$flv_status" == "on" ]
+                    then
+                        chnls+=("$chnl_domain/$chnl_username/$chnl_password")
+                    fi
+                fi
+                chnl_domain=""
+            fi
+        done < "$CHANNELS_FILE"
+    fi
+
+    index=$((test_num-1))
+    domain=${new_domains[index]%%|*}
+    IFS=" " read -ra accounts <<< "${new_accounts[index]}"
+    echo && echo -e "IP: $green${ips[index]}$plain 域名: $green${new_domains[index]//|/ }$plain" && echo
+    echo -e "$green账号:$plain"
+
+    set +euo pipefail
+    for account in "${accounts[@]}"
+    do
+        username=${account%%:*}
+        account=${account#*:}
+        password=${account%%:*}
+
+        found=0
+        for chnl in "${chnls[@]}"
+        do
+            if [ "$domain/$username/$password" == "$chnl" ] 
+            then
+                found=1
+            fi
+        done
+        
+        if [ "$found" == 1 ] 
+        then
+            echo -e "${green}[使用中]$plain $username    $password"
+        elif curl --output /dev/null --silent --fail -r 0-0 "http://$domain/$username/$password/$channel_id"
+        then
+            echo -e "${green}[成功]$plain $username    $password"
+        else
+            echo -e "${red}[失败]$plain $username    $password"
+        fi
+    done
+    echo
+}
+
 Usage()
 {
 
@@ -5748,7 +6000,7 @@ See LICENSE
 
     也可以不输出 HLS，比如 flv 推流
     -k  设置推流类型，比如 -k flv
-    -T  设置推流地址，比如 rtmp://127.0.0.1/live/xxx
+    -T  设置推流地址，比如 rtmp://127.0.0.1/flv/xxx
     -L  输入拉流(播放)地址(可省略)，比如 http://domain.com/live?app=live&stream=xxx
 
     -m  ffmpeg 额外的 INPUT FLAGS
@@ -5767,7 +6019,7 @@ See LICENSE
     不需要转码的设置: -a copy -v copy -n omit
 
     不输出 HLS, 推流 flv :
-        tv -i http://xxx/xxx.ts -a aac -v h264 -b 3000 -k flv -T rtmp://127.0.0.1/live/xxx
+        tv -i http://xxx/xxx.ts -a aac -v h264 -b 3000 -k flv -T rtmp://127.0.0.1/flv/xxx
 
 EOM
 
@@ -5782,7 +6034,7 @@ fi
 
 if [ "${0##*/}" == "v2" ] 
 then
-        echo && echo -e "  v2ray 管理面板 $plain
+    echo && echo -e "  v2ray 管理面板 $plain
 
   ${green}1.$plain 安装
   ${green}2.$plain 查看
@@ -5793,40 +6045,12 @@ then
 ————————————
   ${green}6.$plain 配置域名
  " && echo
-        read -p "请输入数字 [1-6]：" v2ray_num
-        case $v2ray_num in
-            1) 
-                CheckRelease
-                if [ -e "/etc/v2ray/config.json" ] 
-                then
-                    while IFS= read -r line 
-                    do
-                        if [[ "$line" == *"port"* ]] 
-                        then
-                            port=${line#*: }
-                            port=${port%,*}
-                        elif [[ "$line" == *"id"* ]] 
-                        then
-                            id=${line#*: \"}
-                            id=${id%\"*}
-                        elif [[ "$line" == *"path"* ]] 
-                        then
-                            path=${line#*: \"}
-                            path=${path%\"*}
-                            break
-                        fi
-                    done < "/etc/v2ray/config.json"
-
-                    if [ -n "${path:-}" ] 
-                    then
-                        echo && echo -e "$error v2ray 已安装..." && echo && exit 1
-                    fi
-                fi
-
-                echo && echo -e "$info 安装 v2ray..."
-
-                bash <(curl --silent -m 10 https://install.direct/go.sh) > /dev/null
-
+    read -p "请输入数字 [1-6]：" v2ray_num
+    case $v2ray_num in
+        1) 
+            CheckRelease
+            if [ -e "/etc/v2ray/config.json" ] 
+            then
                 while IFS= read -r line 
                 do
                     if [[ "$line" == *"port"* ]] 
@@ -5837,11 +6061,39 @@ then
                     then
                         id=${line#*: \"}
                         id=${id%\"*}
+                    elif [[ "$line" == *"path"* ]] 
+                    then
+                        path=${line#*: \"}
+                        path=${path%\"*}
                         break
                     fi
                 done < "/etc/v2ray/config.json"
 
-                v2ray_config='{
+                if [ -n "${path:-}" ] 
+                then
+                    echo && echo -e "$error v2ray 已安装..." && echo && exit 1
+                fi
+            fi
+
+            echo && echo -e "$info 安装 v2ray..."
+
+            bash <(curl --silent -m 10 https://install.direct/go.sh) > /dev/null
+
+            while IFS= read -r line 
+            do
+                if [[ "$line" == *"port"* ]] 
+                then
+                    port=${line#*: }
+                    port=${port%,*}
+                elif [[ "$line" == *"id"* ]] 
+                then
+                    id=${line#*: \"}
+                    id=${id%\"*}
+                    break
+                fi
+            done < "/etc/v2ray/config.json"
+
+            v2ray_config='{
   "inbounds": [{
     "port": '"$port"',
     "listen": "127.0.0.1",
@@ -5880,16 +6132,115 @@ then
     ]
   }
 }'
-                printf '%s' "$v2ray_config" > "/etc/v2ray/config.json"
-                service v2ray start > /dev/null
-                echo && echo -e "$info v2ray 安装完成..." && echo
-            ;;
-            2) 
-                if [ ! -e "/etc/v2ray/config.json" ] 
-                then
-                    echo && echo -e "$error v2ray 未安装..." && echo && exit 1
-                fi
+            printf '%s' "$v2ray_config" > "/etc/v2ray/config.json"
+            service v2ray start > /dev/null
+            echo && echo -e "$info v2ray 安装完成..." && echo
+        ;;
+        2) 
+            if [ ! -e "/etc/v2ray/config.json" ] 
+            then
+                echo && echo -e "$error v2ray 未安装..." && echo && exit 1
+            fi
 
+            while IFS= read -r line 
+            do
+                if [[ "$line" == *"port"* ]] 
+                then
+                    port=${line#*: }
+                    port=${port%,*}
+                elif [[ "$line" == *"id"* ]] 
+                then
+                    id=${line#*: \"}
+                    id=${id%\"*}
+                elif [[ "$line" == *"path"* ]] 
+                then
+                    path=${line#*: \"}
+                    path=${path%\"*}
+                    break
+                fi
+            done < "/etc/v2ray/config.json"
+
+            if [ -e "/usr/local/nginx" ] 
+            then
+                while IFS= read -r line 
+                do
+                    if [[ $line == *"server_name"* ]]
+                    then
+                        domain=${line%;*}
+                        domain=${domain##* }
+                    elif [[ $line == *"v2ray.crt"* ]] 
+                    then
+                        break
+                    fi
+                done < "/usr/local/nginx/conf/nginx.conf"
+            fi
+
+            if service v2ray status > /dev/null
+            then
+                echo && echo -e "v2ray: $green开启$plain"
+            else
+                echo && echo -e "v2ray: $red关闭$plain"
+            fi
+            
+            [ -n "${domain:-}" ] && echo && echo -e "$green域名:$plain $domain"
+            echo && echo -e "$green端口:$plain $port"
+            echo && echo -e "${green}id:$plain $id"
+            echo && echo -e "${green}协议:$plain vmess"
+            echo && echo -e "${green}网络:$plain ws"
+            echo && echo -e "${green}path:$plain $path"
+            echo && echo -e "${green}security:$plain tls" && echo
+        ;;
+        3) 
+            if [ ! -e "/etc/v2ray/config.json" ] 
+            then
+                echo && echo -e "$error v2ray 未安装..." && echo && exit 1
+            fi
+            bash <(curl --silent -m 10 https://install.direct/go.sh) > /dev/null
+        ;;
+        4) 
+            if [ ! -e "/etc/v2ray/config.json" ] 
+            then
+                echo && echo -e "$error v2ray 未安装..." && echo && exit 1
+            fi
+
+            if service v2ray status > /dev/null
+            then
+                echo && echo "v2ray 正在运行，是否关闭？[Y/n]"
+                read -p "(默认: Y):" v2ray_stop_yn
+                v2ray_stop_yn=${v2ray_stop_yn:-"Y"}
+                if [[ $v2ray_stop_yn == [Yy] ]] 
+                then
+                    service v2ray  stop
+                    echo && echo -e "$info v2ray 已关闭" && echo
+                else
+                    echo && echo "已取消..." && echo && exit 1
+                fi
+            else
+                echo && echo "v2ray 未运行，是否开启？[Y/n]"
+                read -p "(默认: Y):" v2ray_start_yn
+                v2ray_start_yn=${v2ray_start_yn:-"Y"}
+                if [[ $v2ray_start_yn == [Yy] ]] 
+                then
+                    service v2ray start
+                    echo && echo -e "$info v2ray 已开启" && echo
+                else
+                    echo && echo "已取消..." && echo && exit 1
+                fi
+            fi
+        ;;
+        5) 
+            if [ ! -e "/etc/v2ray/config.json" ] 
+            then
+                echo && echo -e "$error v2ray 未安装..." && echo && exit 1
+            fi
+            service v2ray restart
+            echo && echo -e "$info v2ray 已重启" && echo
+        ;;
+        6) 
+            if [ ! -e "/etc/v2ray/config.json" ] 
+            then
+                echo && echo -e "$error v2ray 未安装..." && echo && exit 1
+            else
                 while IFS= read -r line 
                 do
                     if [[ "$line" == *"port"* ]] 
@@ -5908,158 +6259,59 @@ then
                     fi
                 done < "/etc/v2ray/config.json"
 
-                if [ -e "/usr/local/nginx" ] 
-                then
-                    while IFS= read -r line 
-                    do
-                        if [[ $line == *"server_name"* ]]
-                        then
-                            domain=${line%;*}
-                            domain=${domain##* }
-                        elif [[ $line == *"v2ray.crt"* ]] 
-                        then
-                            break
-                        fi
-                    done < "/usr/local/nginx/conf/nginx.conf"
-                fi
-
-                if service v2ray status > /dev/null
-                then
-                    echo && echo -e "v2ray: $green开启$plain"
-                else
-                    echo && echo -e "v2ray: $red关闭$plain"
-                fi
-                
-                [ -n "${domain:-}" ] && echo && echo -e "$green域名:$plain $domain"
-                echo && echo -e "$green端口:$plain $port"
-                echo && echo -e "${green}id:$plain $id"
-                echo && echo -e "${green}协议:$plain vmess"
-                echo && echo -e "${green}网络:$plain ws"
-                echo && echo -e "${green}path:$plain $path"
-                echo && echo -e "${green}security:$plain tls" && echo
-            ;;
-            3) 
-                if [ ! -e "/etc/v2ray/config.json" ] 
+                if [ -z "${path:-}" ] 
                 then
                     echo && echo -e "$error v2ray 未安装..." && echo && exit 1
                 fi
-                bash <(curl --silent -m 10 https://install.direct/go.sh) > /dev/null
-            ;;
-            4) 
-                if [ ! -e "/etc/v2ray/config.json" ] 
-                then
-                    echo && echo -e "$error v2ray 未安装..." && echo && exit 1
-                fi
+            fi
 
-                if service v2ray status > /dev/null
+            if [ ! -e "/usr/local/nginx" ] 
+            then
+                echo && echo -e "$error Nginx 未安装! 输入 tv n 安装 Nginx" && echo && exit 1
+            fi
+
+            echo && echo "输入指向本机的域名"
+            read -p "(默认: 取消):" domain
+            [ -z "$domain" ] && echo && echo "已取消..." && echo && exit 1
+            
+            CheckRelease
+
+            echo && echo -e "$info 安装证书..."
+            if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
+            then
+                if [ "$release" == "rpm" ] 
                 then
-                    echo && echo "v2ray 正在运行，是否关闭？[Y/n]"
-                    read -p "(默认: Y):" v2ray_stop_yn
-                    v2ray_stop_yn=${v2ray_stop_yn:-"Y"}
-                    if [[ $v2ray_stop_yn == [Yy] ]] 
-                    then
-                        service v2ray  stop
-                        echo && echo -e "$info v2ray 已关闭" && echo
-                    else
-                        echo && echo "已取消..." && echo && exit 1
-                    fi
+                    yum -y install socat > /dev/null
                 else
-                    echo && echo "v2ray 未运行，是否开启？[Y/n]"
-                    read -p "(默认: Y):" v2ray_start_yn
-                    v2ray_start_yn=${v2ray_start_yn:-"Y"}
-                    if [[ $v2ray_start_yn == [Yy] ]] 
-                    then
-                        service v2ray start
-                        echo && echo -e "$info v2ray 已开启" && echo
-                    else
-                        echo && echo "已取消..." && echo && exit 1
-                    fi
+                    apt-get -y install socat > /dev/null
                 fi
-            ;;
-            5) 
-                if [ ! -e "/etc/v2ray/config.json" ] 
+                bash <(curl --silent -m 10 https://get.acme.sh) > /dev/null
+            fi
+
+            nginx -s stop
+            sleep 1
+            ~/.acme.sh/acme.sh --issue -d "$domain" --standalone -k ec-256 > /dev/null
+            ~/.acme.sh/acme.sh --installcert -d "$domain" --fullchainpath /etc/v2ray/v2ray.crt --keypath /etc/v2ray/v2ray.key --ecc > /dev/null
+            echo && echo -e "$info 证书安装完成..."
+
+            echo && echo -e "$info 配置 Nginx..."
+
+            nginx_conf=$(< "/usr/local/nginx/conf/nginx.conf")
+
+            if ! grep -q "location $PATH {" <<< "$nginx_conf"
+            then
+                action="add"
+            else
+                action="edit"
+            fi
+
+            conf=""
+            found=0
+            while IFS= read -r line 
+            do
+                if [[ $line == *"# HTTPS server"* ]] && [ "$action" == "add" ]
                 then
-                    echo && echo -e "$error v2ray 未安装..." && echo && exit 1
-                fi
-                service v2ray restart
-                echo && echo -e "$info v2ray 已重启" && echo
-            ;;
-            6) 
-                if [ ! -e "/etc/v2ray/config.json" ] 
-                then
-                    echo && echo -e "$error v2ray 未安装..." && echo && exit 1
-                else
-                    while IFS= read -r line 
-                    do
-                        if [[ "$line" == *"port"* ]] 
-                        then
-                            port=${line#*: }
-                            port=${port%,*}
-                        elif [[ "$line" == *"id"* ]] 
-                        then
-                            id=${line#*: \"}
-                            id=${id%\"*}
-                        elif [[ "$line" == *"path"* ]] 
-                        then
-                            path=${line#*: \"}
-                            path=${path%\"*}
-                            break
-                        fi
-                    done < "/etc/v2ray/config.json"
-
-                    if [ -z "${path:-}" ] 
-                    then
-                        echo && echo -e "$error v2ray 未安装..." && echo && exit 1
-                    fi
-                fi
-
-                if [ ! -e "/usr/local/nginx" ] 
-                then
-                    echo && echo -e "$error Nginx 未安装! 输入 tv n 安装 Nginx" && echo && exit 1
-                fi
-
-                echo && echo "输入指向本机的域名"
-                read -p "(默认: 取消):" domain
-                [ -z "$domain" ] && echo && echo "已取消..." && echo && exit 1
-                
-                CheckRelease
-
-                echo && echo -e "$info 安装证书..."
-                if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
-                then
-                    if [ "$release" == "rpm" ] 
-                    then
-                        yum -y install socat > /dev/null
-                    else
-                        apt-get -y install socat > /dev/null
-                    fi
-                    bash <(curl --silent -m 10 https://get.acme.sh) > /dev/null
-                fi
-
-                nginx -s stop
-                sleep 1
-                ~/.acme.sh/acme.sh --issue -d "$domain" --standalone -k ec-256 > /dev/null
-                ~/.acme.sh/acme.sh --installcert -d "$domain" --fullchainpath /etc/v2ray/v2ray.crt --keypath /etc/v2ray/v2ray.key --ecc > /dev/null
-                echo && echo -e "$info 证书安装完成..."
-
-                echo && echo -e "$info 配置 Nginx..."
-
-                nginx_conf=$(< "/usr/local/nginx/conf/nginx.conf")
-
-                if ! grep -q "location $PATH {" <<< "$nginx_conf"
-                then
-                    action="add"
-                else
-                    action="edit"
-                fi
-
-                conf=""
-                found=0
-                while IFS= read -r line 
-                do
-                    if [[ $line == *"# HTTPS server"* ]] && [ "$action" == "add" ]
-                    then
-                        conf="$conf
+                    conf="$conf
     server {
         listen       443 ssl;
         server_name  $domain;
@@ -6085,26 +6337,112 @@ then
         }
     }
 "
-                    elif [ "$action" == "edit" ] && [[ $line == *"443 ssl"* ]] 
-                    then
-                        found=1
-                    elif [ "$action" == "edit" ] && [ "$found" == 1 ] && [[ $line == *"server_name"* ]]
-                    then
-                        line="        server_name  $domain;"
-                    fi
-                    [ -n "$conf" ] && conf="$conf\n"
-                    conf="$conf$line"
-                done < "/usr/local/nginx/conf/nginx.conf"
+                elif [ "$action" == "edit" ] && [[ $line == *"443 ssl"* ]] 
+                then
+                    found=1
+                elif [ "$action" == "edit" ] && [ "$found" == 1 ] && [[ $line == *"server_name"* ]]
+                then
+                    line="        server_name  $domain;"
+                fi
+                [ -n "$conf" ] && conf="$conf\n"
+                conf="$conf$line"
+            done < "/usr/local/nginx/conf/nginx.conf"
 
-                echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
-                nginx
-                echo && echo -e "$info 配置 Nginx 完成..."
-                echo && echo -e "$info 域名配置完成" && echo
-            ;;
-            *) echo -e "$error 请输入正确的数字 [1-6]"
-            ;;
-        esac
-        exit 0
+            echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
+            nginx
+            echo && echo -e "$info 配置 Nginx 完成..."
+            echo && echo -e "$info 域名配置完成" && echo
+        ;;
+        *) echo -e "$error 请输入正确的数字 [1-6]"
+        ;;
+    esac
+    exit 0
+elif [ "${0##*/}" == "cx" ] 
+then
+    [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+
+    echo && echo -e "  Xtream Codes 面板 $plain
+
+${green}1.$plain 查看账号
+${green}2.$plain 添加账号
+${green}3.$plain 检测账号
+${green}4.$plain 网络获取账号
+${green}5.$plain 替换频道账号
+" && echo
+    read -p "请输入数字 [1-5]：" xtream_codes_num
+
+    case $xtream_codes_num in
+        1) 
+            [ ! -s "$XTREAM_CODES" ] && echo && echo -e "$error 没有账号 !" && echo && exit 1
+            ListXtreamCodes
+        ;;
+        2) 
+            echo && read -p "请输入账号(需包含服务器地址)：" xtream_codes_input
+            [ -z "$xtream_codes_input" ] && echo && echo "已取消..." && echo && exit 1
+
+            if [[ $xtream_codes_input == *"username="* ]] 
+            then
+                domain=${xtream_codes_input#*http://}
+                domain=${domain%%/*}
+                username=${xtream_codes_input#*username=}
+                username=${username%%&*}
+                password=${xtream_codes_input#*password=}
+                password=${password%%&*}
+                ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+            elif [[ $xtream_codes_input == *http://*/*/*/* ]] 
+            then
+                xtream_codes_input=${xtream_codes_input#*http://}
+                domain=${xtream_codes_input%%/*}
+                xtream_codes_input=${xtream_codes_input#*/}
+                username=${xtream_codes_input%%/*}
+                xtream_codes_input=${xtream_codes_input#*/}
+                password=${xtream_codes_input%%/*}
+                ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+            else
+                echo && echo -e "$error 输入错误 !" && echo && exit 1
+            fi
+
+            [ -z "$ip" ] && echo && echo -e "$error 无法解析域名 !" && echo && exit 1
+            printf '%s\n' "$ip $domain $username:$password" >> "$XTREAM_CODES"
+
+            if [ -e "$CHANNELS_FILE" ] 
+            then
+                while IFS= read -r line 
+                do
+                    if [[ $line == *\"stream_link\":* ]] 
+                    then
+                        line=${line#*: \"http://}
+                        chnl_domain=${line%%/*}
+                        if [ "$chnl_domain" == "$domain" ] 
+                        then
+                            line=${line#*/}
+                            username=${line%%/*}
+                            line=${line#*/}
+                            password=${line%%/*}
+                            printf '%s\n' "$ip $chnl_domain $username:$password" >> "$XTREAM_CODES"
+                        fi
+                    fi
+                done < "$CHANNELS_FILE"
+            fi
+
+            echo && echo -e "$info 账号添加成功 !" && echo
+
+            ListXtreamCodes
+        ;;
+        3) 
+            ListXtreamCodes
+            TestXtreamCodes
+        ;;
+        4) 
+            echo && echo -e "$error not ready~" && echo
+        ;;
+        5) 
+            echo && echo -e "$error not ready~" && echo
+        ;;
+        *) echo && echo -e "$error 请输入正确的数字 [1-5]" && echo
+        ;;
+    esac
+    exit 0
 fi
 
 if [[ -n ${1+x} ]]
@@ -6118,7 +6456,7 @@ then
         "m") 
             [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请先安装 !" && exit 1
 
-            cmd=${2:-5}
+            cmd=${2:-}
 
             case $cmd in
                 "s"|"stop") 
@@ -6138,12 +6476,6 @@ then
                     else
                         echo -e "$error 无日志"
                     fi
-                ;;
-                *[!0-9]*)
-                    echo -e "$error 请输入正确的数字(大于0) "
-                ;;
-                0)
-                    echo -e "$error 请输入正确的数字(大于0) "
                 ;;
                 *) 
                     if [ ! -s "$MONITOR_PID" ] 
@@ -6168,60 +6500,6 @@ then
                     fi
                 ;;
             esac
-
-            exit 0
-        ;;
-        "t") 
-            [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
-
-            if [ -z ${2+x} ] 
-            then
-                echo -e "$error 请指定文件 !" && exit 1
-            elif [ ! -e "$2" ] 
-            then
-                echo -e "$error 文件不存在 !" && exit 1
-            fi
-
-            echo && echo "请输入测试的频道ID"
-            while read -p "(默认: 取消):" channel_id
-            do
-                case $channel_id in
-                    "") echo && echo -e "$error 已取消..." && exit 1
-                    ;;
-                    *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
-                    ;;
-                    *) 
-                        if [ "$channel_id" -gt 0 ]
-                        then
-                            break
-                        else
-                            echo && echo -e "$error 请输入正确的ID(大于0)" && echo
-                        fi
-                    ;;
-                esac
-            done
-            
-
-            set +euo pipefail
-            
-            while IFS= read -r line
-            do
-                if [[ $line == *"username="* ]] 
-                then
-                    domain_line=${line#*http://}
-                    domain=${domain_line%%/*}
-                    u_line=${line#*username=}
-                    p_line=${line#*password=}
-                    username=${u_line%%&*}
-                    password=${p_line%%&*}
-                    link="http://$domain/$username/$password/$channel_id"
-                    if curl --output /dev/null --silent --fail -r 0-0 "$link"
-                    then
-                        echo "$link"
-                    fi
-                fi
-            done < "$2"
-
             exit 0
         ;;
         *)
@@ -6469,7 +6747,12 @@ case "$cmd" in
             echo -e "  ${green}$((i+1)).$plain ${chnls_channel_name[i]} ${chnls_stream_link[i]}"
             if [ -e "$LIVE_ROOT/${chnls_output_dir_name[i]}" ] 
             then
-                ls "$LIVE_ROOT/${chnls_output_dir_name[i]}"/* -lght && echo
+                if ls -A "$LIVE_ROOT/${chnls_output_dir_name[i]}"/* > /dev/null 2>&1 
+                then
+                    ls "$LIVE_ROOT/${chnls_output_dir_name[i]}"/* -lght && echo
+                else
+                    echo -e "$error 无" && echo
+                fi
             else
                 echo -e "$error 目录不存在" && echo
             fi
@@ -6560,7 +6843,7 @@ case "$cmd" in
                     NginxConfigFlv
                     if [ -z "${conf:-}" ]
                     then
-                        echo && echo -e "$error flv 配置已存在!" && echo
+                        echo && echo -e "$error flv 配置已存在! flv 推流地址为 rtmp://127.0.0.1/flv/xxx" && echo
                     else
                         echo && echo -e "$info flv 配置已添加，是否重启 Nginx ？[Y/n]" && echo
                         read -p "(默认: Y):" restart_yn
@@ -6633,8 +6916,7 @@ $IPTV_ROOT/*.log {
                     echo && echo -e "$info 日志切割定时任务开启成功 !" && echo
                 fi
             ;;
-            *)
-            echo -e "$error 请输入正确的数字 [1-7]"
+            *) echo && echo -e "$error 请输入正确的数字 [1-7]" && echo
             ;;
         esac
         exit 0
@@ -6657,6 +6939,7 @@ then
         fi
     fi
     [ ! -e "$V2_FILE" ] && ln -s "$SH_FILE" "$V2_FILE"
+    [ ! -e "$XC_FILE" ] && ln -s "$SH_FILE" "$XC_FILE"
     echo -e "  IPTV 一键管理脚本（mpegts / flv => hls / flv 推流）${red}[v$sh_ver]$plain
   ---- MTimer | http://hbo.epub.fun ----
 

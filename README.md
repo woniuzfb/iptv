@@ -44,7 +44,9 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 
 输入 v2 打开 v2ray 管理面板
 
-输入 tv n 打开 Nginx 管理面板
+输入 tv n 打开 nginx 管理面板
+
+输入 cx 打开 Xtream Codes 账号管理面板
 ```
 
 ## 自动更新指定的json文件
@@ -87,7 +89,6 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
     原画输出，不吃CPU，但是片段大，吃带宽
    ```
 
-- v2 一键管理 v2ray 面板 (vmess ws tls)
 - tv n 安装管理 nginx 相关面板(安装 nginx 后才能开启 AntiDDoS)
 - tv m 开启监控 flv推流 和 hls 输出目录，用来应对直播源出现变化导致 ffmpeg 无法继续分割的情况
   - AntiDDoS  默认每2分钟清除被禁 ip，很多时候因为直播源重启/网络等问题浏览器会不停的发送请求同一个文件，所以会有误伤，选项：
@@ -106,8 +107,6 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
   - tv m l 查看监控日志
   - 在 leech 直播源的时候必须打开监控选项，以应对输出低比特率/直播源服务器频繁重启/音轨丢失/等问题
 - tv l 列出所有开启的 flv 和 hls 频道
-- tv t 文件
-  - 检测文件内的 xtream codes 账号链接（形如 /get.php?username=xxx&password=xxx）
 - tv d 请求演示频道 ( 3个凤凰台,1个hbo中文频道 )，添加到 channels.json
   - 都需要先替换 mpegts 链接才能开启
 - ...
@@ -145,8 +144,8 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 
 也可以不输出 HLS，比如 flv 推流
 -k  设置推流类型，比如 -k flv
--T  设置推流地址，比如 rtmp://127.0.0.1/live/xxx
--L  输入拉流(播放)地址(可省略)，比如 http://domain.com/live?app=live&stream=xxx
+-T  设置推流地址，比如 rtmp://127.0.0.1/flv/xxx
+-L  输入拉流(播放)地址(可省略)，比如 http://domain.com/flv?app=flv&stream=xxx
 
 -m  ffmpeg 额外的 INPUT FLAGS
     (默认："-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -nostats -nostdin -hide_banner -loglevel fatal")
@@ -168,6 +167,6 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 
 - 不输出 HLS, 推流 flv :
 
-    `tv -i http://xxx/xxx.ts -a aac -v h264 -b 3000 -k flv -T rtmp://127.0.0.1/live/xxx`
+    `tv -i http://xxx/xxx.ts -a aac -v h264 -b 3000 -k flv -T rtmp://127.0.0.1/flv/xxx`
 
 - 或者输入 tv 打开 HLS 面板， tv f 打开 FLV 面板，使用方法  **Enter**
