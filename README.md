@@ -75,7 +75,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 
    ```bash
     广电直播源mpegts转hls的设置(1核以上, 根据核数和带宽调整)
-    "video_codec": "h264",
+    "video_codec": "libx264",
     "audio_codec": "copy",
     "quality": "40",
     "bitrates": "800",
@@ -117,7 +117,9 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 
 ```bash
 -i  直播源(支持 mpegts / hls / flv ...)
+    可以是视频路径
     hls 链接需包含 .m3u8 标识，没有的可以在结尾加上
+    可以输入不同链接地址(监控按顺序尝试使用)，用空格分隔
 -s  段时长(秒)(默认：6)
 -o  输出目录名称(默认：随机名称)
 
@@ -126,7 +128,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 -S  段所在子目录名称(默认：不使用子目录)
 -t  段名称(前缀)(默认：跟m3u8名称相同)
 -a  音频编码(默认：aac) (不需要转码时输入 copy)
--v  视频编码(默认：h264) (不需要转码时输入 copy)
+-v  视频编码(默认：libx264) (不需要转码时输入 copy)
 -f  画面或声音延迟(格式如： v_3 画面延迟3秒，a_2 声音延迟2秒
     使用此功能*暂时*会忽略部分参数，画面声音不同步时使用)
 -q  crf视频质量(如果设置了输出视频比特率，则优先使用crf视频质量)(数值1~63 越大质量越差)
@@ -148,9 +150,9 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 -L  输入拉流(播放)地址(可省略)，比如 http://domain.com/flv?app=flv&stream=xxx
 
 -m  ffmpeg 额外的 INPUT FLAGS
-    (默认："-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -nostats -nostdin -hide_banner -loglevel fatal")
+    (默认：-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -nostats -nostdin -hide_banner -loglevel fatal)
 -n  ffmpeg 额外的 OUTPUT FLAGS, 可以输入 omit 省略此选项
-    (默认："-g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main")
+    (默认：-g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main)
 ```
 
 ## 举例
@@ -167,6 +169,6 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 
 - 不输出 HLS, 推流 flv :
 
-    `tv -i http://xxx/xxx.ts -a aac -v h264 -b 3000 -k flv -T rtmp://127.0.0.1/flv/xxx`
+    `tv -i http://xxx/xxx.ts -a aac -v libx264 -b 3000 -k flv -T rtmp://127.0.0.1/flv/xxx`
 
 - 或者输入 tv 打开 HLS 面板， tv f 打开 FLV 面板，使用方法  **Enter**
