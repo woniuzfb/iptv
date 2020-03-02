@@ -117,7 +117,9 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 
 ```bash
 -i  直播源(支持 mpegts / hls / flv ...)
+    可以是视频路径
     hls 链接需包含 .m3u8 标识，没有的可以在结尾加上
+    可以输入不同链接地址(监控按顺序尝试使用)，用空格分隔
 -s  段时长(秒)(默认：6)
 -o  输出目录名称(默认：随机名称)
 
@@ -148,9 +150,9 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 -L  输入拉流(播放)地址(可省略)，比如 http://domain.com/flv?app=flv&stream=xxx
 
 -m  ffmpeg 额外的 INPUT FLAGS
-    (默认："-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -nostats -nostdin -hide_banner -loglevel fatal")
+    (默认：-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -nostats -nostdin -hide_banner -loglevel fatal)
 -n  ffmpeg 额外的 OUTPUT FLAGS, 可以输入 omit 省略此选项
-    (默认："-g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main")
+    (默认：-g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main)
 ```
 
 ## 举例
