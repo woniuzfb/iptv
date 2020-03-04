@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-sh_ver="1.6.0"
+sh_ver="1.6.1"
 SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
@@ -44,7 +44,7 @@ default='
     "seg_name":"",
     "seg_length":6,
     "seg_count":5,
-    "video_codec":"h264",
+    "video_codec":"libx264",
     "audio_codec":"aac",
     "video_audio_shift":"",
     "quality":"",
@@ -380,7 +380,7 @@ InstallJq()
 
 Install()
 {
-    echo -e "$info 检查依赖，耗时可能会很长..."
+    echo && echo -e "$info 检查依赖，耗时可能会很长..."
     Progress &
     progress_pid=$!
     CheckRelease
@@ -435,6 +435,14 @@ Uninstall()
     if [[ "$uninstall_yn" == [Yy] ]]
     then
         MonitorStop
+        if crontab -l | grep -q "$LOGROTATE_CONFIG" 2> /dev/null
+        then
+            crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
+            sed -i "#$LOGROTATE_CONFIG#d" "$IPTV_ROOT/cron_tmp"
+            crontab "$IPTV_ROOT/cron_tmp" > /dev/null
+            rm -rf "$IPTV_ROOT/cron_tmp"
+            echo && echo -e "$info 已停止 logrotate" && echo
+        fi
         while IFS= read -r chnl_pid
         do
             GetChannelInfo
@@ -458,6 +466,7 @@ Uninstall()
 
 Update()
 {
+    [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
     CheckRelease
     if grep -q '\--show-progress' < <(wget --help)
     then
@@ -700,30 +709,39 @@ GetDefault()
         d_schedule_file=${d_schedule_file%, flv_delay_seconds:*}
         d_flv_delay_seconds=${d#*, flv_delay_seconds: }
         d_flv_delay_seconds=${d_flv_delay_seconds%, flv_restart_nums:*}
+        [ "$d_flv_delay_seconds" == null ] && d_flv_delay_seconds=20
         d_flv_delay_seconds=${d_flv_delay_seconds:-20}
         d_flv_restart_nums=${d#*, flv_restart_nums: }
         d_flv_restart_nums=${d_flv_restart_nums%, hls_delay_seconds:*}
+        [ "$d_flv_restart_nums" == null ] && d_flv_restart_nums=20
         d_flv_restart_nums=${d_flv_restart_nums:-20}
         d_hls_delay_seconds=${d#*, hls_delay_seconds: }
         d_hls_delay_seconds=${d_hls_delay_seconds%, hls_min_bitrates:*}
+        [ "$d_hls_delay_seconds" == null ] && d_hls_delay_seconds=120
         d_hls_delay_seconds=${d_hls_delay_seconds:-120}
         d_hls_min_bitrates=${d#*, hls_min_bitrates: }
         d_hls_min_bitrates=${d_hls_min_bitrates%, hls_max_seg_size:*}
         d_hls_max_seg_size=${d#*, hls_max_seg_size: }
         d_hls_max_seg_size=${d_hls_max_seg_size%, hls_restart_nums:*}
+        [ "$d_hls_min_bitrates" == null ] && d_hls_min_bitrates=500
         d_hls_min_bitrates=${d_hls_min_bitrates:-500}
+        [ "$d_hls_max_seg_size" == null ] && d_hls_max_seg_size=5
         d_hls_max_seg_size=${d_hls_max_seg_size:-5}
         d_hls_restart_nums=${d#*, hls_restart_nums: }
         d_hls_restart_nums=${d_hls_restart_nums%, anti_ddos_port:*}
+        [ "$d_hls_restart_nums" == null ] && d_hls_restart_nums=20
         d_hls_restart_nums=${d_hls_restart_nums:-20}
         d_anti_ddos_port=${d#*, anti_ddos_port: }
         d_anti_ddos_port=${d_anti_ddos_port%, anti_ddos_seconds:*}
+        [ "$d_anti_ddos_port" == null ] && d_anti_ddos_port=80
         d_anti_ddos_port=${d_anti_ddos_port:-80}
         d_anti_ddos_seconds=${d#*, anti_ddos_seconds: }
         d_anti_ddos_seconds=${d_anti_ddos_seconds%, anti_ddos_level:*}
+        [ "$d_anti_ddos_seconds" == null ] && d_anti_ddos_seconds=120
         d_anti_ddos_seconds=${d_anti_ddos_seconds:-120}
         d_anti_ddos_level=${d#*, anti_ddos_level: }
         d_anti_ddos_level=${d_anti_ddos_level%, version:*}
+        [ "$d_anti_ddos_level" == null ] && d_anti_ddos_level=6
         d_anti_ddos_level=${d_anti_ddos_level:-6}
         d_version=${d#*, version: }
     done < <($JQ_FILE -r 'to_entries | map(select(.key=="default")) | map("playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), schedule_file: \(.value.schedule_file), flv_delay_seconds: \(.value.flv_delay_seconds), flv_restart_nums: \(.value.flv_restart_nums), hls_delay_seconds: \(.value.hls_delay_seconds), hls_min_bitrates: \(.value.hls_min_bitrates), hls_max_seg_size: \(.value.hls_max_seg_size), hls_restart_nums: \(.value.hls_restart_nums), anti_ddos_port: \(.value.anti_ddos_port), anti_ddos_seconds: \(.value.anti_ddos_seconds), anti_ddos_level: \(.value.anti_ddos_level), version: \(.value.version)") | .[]' "$CHANNELS_FILE")
@@ -1519,9 +1537,9 @@ SetBitrates()
 
     if [ -z "$quality" ] 
     then
-        echo -e "$tip 用于指定输出视频比特率"
+        echo -e "$tip 用于指定输出视频比特率，同时可以指定输出的分辨率"
     else
-        echo -e "$tip 用于 -maxrate 和 -bufsize"
+        echo -e "$tip 用于 -maxrate 和 -bufsize，同时可以指定输出的分辨率"
     fi
     
     if [ -z "${kind:-}" ] 
@@ -1836,7 +1854,7 @@ FlvStreamCreatorWithShift()
             fi
 
             $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command \
-            -y -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" "$quality_command" $bitrates_command $resolution \
+            -y -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
             $FFMPEG_FLAGS -f flv "$flv_push_link" || true
 
             $JQ_FILE '(.channels[]|select(.pid=='"$pid"')|.flv_status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
@@ -3294,7 +3312,7 @@ DelChannel()
         fi
         $JQ_FILE '.channels -= [.channels[]|select(.pid=='"$chnl_pid"')]' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
-        echo -e "$info 频道删除成功 !" && echo
+        echo && echo -e "$info 频道删除成功 !" && echo
     done
 }
 
@@ -3359,7 +3377,7 @@ RandSegDirName()
 }
 
 # printf %s "$1" | jq -s -R -r @uri
-urlencode() {
+Urlencode() {
     local LANG=C i c e=''
     for ((i=0;i<${#1};i++)); do
         c=${1:$i:1}
@@ -3369,7 +3387,7 @@ urlencode() {
     echo "$e"
 }
 
-generateScheduleNowtv()
+GenerateScheduleNowtv()
 {
     SCHEDULE_TMP_NOWTV="${SCHEDULE_JSON}_tmp"
 
@@ -3382,13 +3400,10 @@ generateScheduleNowtv()
         echo -e "\nNowTV empty: $chnl_nowtv_id\n"
         return 0
     else
-        if [[ -z $($JQ_FILE '.' "$SCHEDULE_JSON") ]] 
+        if [ ! -s "$SCHEDULE_JSON" ] 
         then
             printf '{"%s":[]}' "$chnl_nowtv_id" > "$SCHEDULE_JSON"
         fi
-
-        $JQ_FILE '.'"$chnl_nowtv_id"' = []' "$SCHEDULE_JSON" > "$SCHEDULE_TMP_NOWTV"
-        mv "$SCHEDULE_TMP_NOWTV" "$SCHEDULE_JSON"
 
         schedule=""
         while IFS= read -r program
@@ -3401,44 +3416,36 @@ generateScheduleNowtv()
             sys_time=${sys_time:0:10}
             [ -n "$schedule" ] && schedule="$schedule,"
             schedule=$schedule'{
-                "title":"'"${title}"'",
-                "time":"'"${time}"'",
-                "sys_time":"'"${sys_time}"'"
+                "title":"'"$title"'",
+                "time":"'"$time"'",
+                "sys_time":"'"$sys_time"'"
             }'
         done < <($JQ_FILE -r '.[0] | to_entries | map("title: \(.value.name), time: \(.value.startTime), sys_time: \(.value.start)") | .[]' <<< "$nowtv_schedule")
-
-        schedule="[$schedule]"
 
         if [ -z "$schedule" ] 
         then
             echo -e "$error\nNowTV not found\n"
         else
-            $JQ_FILE --arg index "$chnl_nowtv_id" --argjson program "$schedule" '.[$index] += $program' "$SCHEDULE_JSON" > "$SCHEDULE_TMP_NOWTV"
+            schedule="[$schedule]"
+            $JQ_FILE --arg index "$chnl_nowtv_id" --argjson program "$schedule" '.[$index] = $program' "$SCHEDULE_JSON" > "$SCHEDULE_TMP_NOWTV"
             mv "$SCHEDULE_TMP_NOWTV" "$SCHEDULE_JSON"
         fi
     fi
 }
 
-generateScheduleNiotv()
+GenerateScheduleNiotv()
 {
-    printf -v date_now_niotv "%(%Y-%m-%d)T"
-    SCHEDULE_LINK_NIOTV="http://www.niotv.com/i_index.php?cont=day"
-    SCHEDULE_FILE_NIOTV="$IPTV_ROOT/${chnl_niotv_id}_niotv_schedule_$date_now_niotv"
-    SCHEDULE_TMP_NIOTV="${SCHEDULE_JSON}_tmp"
-
-    wget --post-data "act=select&day=$date_now_niotv&sch_id=$1" "$SCHEDULE_LINK_NIOTV" -qO "$SCHEDULE_FILE_NIOTV" || true
-    #curl -d "day=$date_now_niotv&sch_id=$1" -X POST "$SCHEDULE_LINK_NIOTV" -so "$SCHEDULE_FILE_NIOTV" || true
-    
-    if [[ -z $($JQ_FILE '.' "$SCHEDULE_JSON") ]] 
+    if [ ! -s "$SCHEDULE_JSON" ] 
     then
         printf '{"%s":[]}' "$chnl_niotv_id" > "$SCHEDULE_JSON"
     fi
 
-    $JQ_FILE '.'"$chnl_niotv_id"' = []' "$SCHEDULE_JSON" > "$SCHEDULE_TMP_NIOTV"
-    mv "$SCHEDULE_TMP_NIOTV" "$SCHEDULE_JSON"
+    printf -v today "%(%Y-%m-%d)T"
+    SCHEDULE_LINK_NIOTV="http://www.niotv.com/i_index.php?cont=day"
 
     empty=1
     check=1
+    schedule=""
     while IFS= read -r line
     do
         if [[ $line == *"<td class=epg_tab_tm>"* ]] 
@@ -3458,10 +3465,10 @@ generateScheduleNiotv()
             title=${title//\"/}
             title=${title//\'/}
             title=${title//\\/\'}
-            sys_time=$(date -d "$date_now_niotv $start_time" +%s)
+            sys_time=$(date -d "$today $start_time" +%s)
 
-            start_time_num=$(date -d "$date_now_niotv $start_time" +%s)
-            end_time_num=$(date -d "$date_now_niotv $end_time" +%s)
+            start_time_num=$(date -d "$today $start_time" +%s)
+            end_time_num=$(date -d "$today $end_time" +%s)
 
             if [ "$check" == 1 ] && [ "$start_time_num" -gt "$end_time_num" ] 
             then
@@ -3470,19 +3477,15 @@ generateScheduleNiotv()
 
             check=0
 
-            $JQ_FILE '.'"$chnl_niotv_id"' += [
-                {
-                    "title":"'"${title}"'",
-                    "time":"'"$start_time"'",
-                    "sys_time":"'"$sys_time"'"
-                }
-            ]' "$SCHEDULE_JSON" > "$SCHEDULE_TMP_NIOTV"
-
-            mv "$SCHEDULE_TMP_NIOTV" "$SCHEDULE_JSON"
+            [ -n "$schedule" ] && schedule="$schedule,"
+            schedule=$schedule'{
+                "title":"'"$title"'",
+                "time":"'"$start_time"'",
+                "sys_time":"'"$sys_time"'"
+            }'
         fi
-    done < "$SCHEDULE_FILE_NIOTV"
-
-    rm -rf "${SCHEDULE_FILE_NIOTV:-'notfound'}"
+    done < <(wget --post-data "act=select&day=$today&sch_id=$1" "$SCHEDULE_LINK_NIOTV" -qO- || true)
+    #curl -d "day=$today&sch_id=$1" -X POST "$SCHEDULE_LINK_NIOTV" || true
 
     if [ "$empty" == 1 ] 
     then
@@ -3494,39 +3497,83 @@ generateScheduleNiotv()
             then
                 match_nowtv=1
                 chnl_nowtv_num=${chnl_nowtv#*:}
-                generateScheduleNowtv "$chnl_nowtv_num"
+                GenerateScheduleNowtv "$chnl_nowtv_num"
                 break
             fi
         done
         [ "$match_nowtv" == 0 ] && echo -e "\nNowTV not found\n"
         return 0
     fi
+
+    $JQ_FILE --arg index "$chnl_niotv_id" --argjson program "[$schedule]" '.[$index] = $program' "$SCHEDULE_JSON" > "${SCHEDULE_JSON}_tmp"
+    mv "${SCHEDULE_JSON}_tmp" "$SCHEDULE_JSON"
 }
 
-generateSchedule()
+GenerateSchedule()
 {
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "$chnl_id" > "$SCHEDULE_JSON"
+    fi
+
     chnl_id=${1%%:*}
     chnl_name=${chnl#*:}
     chnl_name=${chnl_name// /-}
-    chnl_name_encode=$(urlencode "$chnl_name")
+    chnl_name_encode=$(Urlencode "$chnl_name")
 
-    printf -v date_now "%(%Y-%m-%d)T"
+    printf -v today "%(%Y-%m-%d)T"
 
     SCHEDULE_LINK="https://xn--i0yt6h0rn.tw/channel/$chnl_name_encode/index.json"
-    SCHEDULE_FILE="$IPTV_ROOT/${chnl_id}_schedule_$date_now"
-    SCHEDULE_TMP="${SCHEDULE_JSON}_tmp"
 
-    wget --no-check-certificate "$SCHEDULE_LINK" -qO "$SCHEDULE_FILE" || true
-    programs_count=$($JQ_FILE -r '.list[] | select(.key=="'"$date_now"'").values | length' "$SCHEDULE_FILE")
+    schedule=""
+    while IFS= read -r program 
+    do
+        program_title=${program#*name: }
+        program_title=${program_title%%, time: *}
+        program_time=${program#*, time: }
+
+        program_title=${program_title//\"/}
+        program_title=${program_title//\'/}
+        program_title=${program_title//\\/\'}
+        program_time=${program_time//\'/}
+        program_sys_time=$(date -d "$today $program_time" +%s)
+
+        [ -n "$schedule" ] && schedule="$schedule,"
+        schedule=$schedule'{
+            "title":"'"$program_title"'",
+            "time":"'"$program_time"'",
+            "sys_time":"'"$program_sys_time"'"
+        }'
+    done < <($JQ_FILE -r '.list[] | select(.key=="'"$today"'").values | to_entries | map("name: \(.value.name), time: \(.value.time)")[]' <<< $(wget --no-check-certificate "$SCHEDULE_LINK" -qO- || true))
+
     
-    if [[ $programs_count -eq 0 ]]
+    if [ -z "$schedule" ]
     then
-        date_now=${date_now//-/\/}
-        programs_count=$($JQ_FILE -r '.list[] | select(.key=="'"$date_now"'").values | length' "$SCHEDULE_FILE")
-        if [[ $programs_count -eq 0 ]] 
+        today=${today//-/\/}
+        while IFS= read -r program 
+        do
+            program_title=${program#*name: }
+            program_title=${program_title%%, time: *}
+            program_time=${program#*, time: }
+
+            program_title=${program_title//\"/}
+            program_title=${program_title//\'/}
+            program_title=${program_title//\\/\'}
+            program_time=${program_time//\'/}
+            program_sys_time=$(date -d "$today $program_time" +%s)
+
+            [ -n "$schedule" ] && schedule="$schedule,"
+            schedule=$schedule'{
+                "title":"'"$program_title"'",
+                "time":"'"$program_time"'",
+                "sys_time":"'"$program_sys_time"'"
+            }'
+        done < <($JQ_FILE -r '.list[] | select(.key=="'"$today"'").values | to_entries | map("name: \(.value.name), time: \(.value.time)")[]' <<< $(wget --no-check-certificate "$SCHEDULE_LINK" -qO- || true))
+
+        if [ -z "$schedule" ] 
         then
             echo -e "\n\nempty: $1\ntrying NioTV...\n"
-            rm -rf "${SCHEDULE_FILE:-'notfound'}"
+
             match=0
             for chnl_niotv in "${chnls_niotv[@]}" ; do
                 chnl_niotv_id=${chnl_niotv%%:*}
@@ -3534,7 +3581,7 @@ generateSchedule()
                 then
                     match=1
                     chnl_niotv_num=${chnl_niotv#*:}
-                    generateScheduleNiotv "$chnl_niotv_num"
+                    GenerateScheduleNiotv "$chnl_niotv_num"
                 fi
             done
 
@@ -3547,7 +3594,7 @@ generateSchedule()
                     then
                         match=1
                         chnl_nowtv_num=${chnl_nowtv#*:}
-                        generateScheduleNowtv "$chnl_nowtv_num"
+                        GenerateScheduleNowtv "$chnl_nowtv_num"
                         break
                     fi
                 done
@@ -3558,41 +3605,8 @@ generateSchedule()
         fi
     fi
 
-    programs_title=()
-    while IFS='' read -r program_title
-    do
-        programs_title+=("$program_title")
-    done < <($JQ_FILE -r '.list[] | select(.key=="'"$date_now"'").values | .[].name | @sh' "$SCHEDULE_FILE")
-
-    IFS=" " read -ra programs_time < <($JQ_FILE -r '[.list[] | select(.key=="'"$date_now"'").values | .[].time] | @sh' "$SCHEDULE_FILE")
-
-    if [[ -z $($JQ_FILE '.' "$SCHEDULE_JSON") ]] 
-    then
-        printf '{"%s":[]}' "$chnl_id" > "$SCHEDULE_JSON"
-    fi
-
-    $JQ_FILE '.'"$chnl_id"' = []' "$SCHEDULE_JSON" > "$SCHEDULE_TMP"
-    mv "$SCHEDULE_TMP" "$SCHEDULE_JSON"
-
-    rm -rf "${SCHEDULE_FILE:-'notfound'}"
-
-    for((index = 0; index < programs_count; index++)); do
-        programs_title_index=${programs_title[index]//\"/}
-        programs_title_index=${programs_title_index//\'/}
-        programs_title_index=${programs_title_index//\\/\'}
-        programs_time_index=${programs_time[index]//\'/}
-        programs_sys_time_index=$(date -d "$date_now $programs_time_index" +%s)
-
-        $JQ_FILE '.'"$chnl_id"' += [
-            {
-                "title":"'"${programs_title_index}"'",
-                "time":"'"$programs_time_index"'",
-                "sys_time":"'"$programs_sys_time_index"'"
-            }
-        ]' "$SCHEDULE_JSON" > "$SCHEDULE_TMP"
-
-        mv "$SCHEDULE_TMP" "$SCHEDULE_JSON"
-    done
+    $JQ_FILE --arg index "$chnl_id" --argjson program "[$schedule]" '.[$index] = $program' "$SCHEDULE_JSON" > "${SCHEDULE_JSON}_tmp"
+    mv "${SCHEDULE_JSON}_tmp" "$SCHEDULE_JSON"
 }
 
 Schedule()
@@ -4010,7 +4024,7 @@ Schedule()
         count=0
 
         for chnl in "${chnls[@]}" ; do
-            generateSchedule "$chnl"
+            GenerateSchedule "$chnl"
             count=$((count + 1))
             echo -n $count
         done
@@ -4020,7 +4034,12 @@ Schedule()
 
     case $2 in
         "hbo")
-            printf -v date_now "%(%Y-%m-%d)T"
+            printf -v today "%(%Y-%m-%d)T"
+
+            if [ ! -s "$SCHEDULE_JSON" ] 
+            then
+                printf '{"%s":[]}' "hbo" > "$SCHEDULE_JSON"
+            fi
 
             chnls=(
                 "hbo"
@@ -4036,143 +4055,116 @@ Schedule()
 
                 if [ "$chnl" == "hbo" ] 
                 then
-                    SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$date_now&channel=$chnl&feed=cn"
+                    SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$today&channel=$chnl&feed=cn"
                 elif [ "$chnl" == "hbotw" ] 
                 then
-                    SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$date_now&channel=hbo&feed=satellite"
+                    SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$today&channel=hbo&feed=satellite"
                 elif [ "$chnl" == "hbored" ] 
                 then
-                    SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$date_now&channel=red&feed=satellite"
+                    SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$today&channel=red&feed=satellite"
                 elif [ "$chnl" == "cinemax" ] 
                 then
-                    SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$date_now&channel=$chnl&feed=satellite"
+                    SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$today&channel=$chnl&feed=satellite"
                 else
-                    SCHEDULE_LINK="https://hboasia.com/HBO/zh-tw/ajax/home_schedule?date=$date_now&channel=$chnl&feed=satellite"
-                fi
-                
-                SCHEDULE_FILE="$IPTV_ROOT/${chnl}_schedule_$date_now"
-                SCHEDULE_TMP="${SCHEDULE_JSON}_tmp"
-                wget --no-check-certificate "$SCHEDULE_LINK" -qO "$SCHEDULE_FILE"
-                programs_count=$($JQ_FILE -r '. | length' "$SCHEDULE_FILE")
-
-                programs_title=()
-                while IFS='' read -r program_title
-                do
-                    programs_title+=("$program_title")
-                done < <($JQ_FILE -r '.[].title | @sh' "$SCHEDULE_FILE")
-
-                programs_title_local=()
-                while IFS='' read -r program_title_local
-                do
-                    programs_title_local+=("$program_title_local")
-                done < <($JQ_FILE -r '.[].title_local | @sh' "$SCHEDULE_FILE")
-
-                IFS=" " read -ra programs_id < <($JQ_FILE -r '[.[].id] | @sh' "$SCHEDULE_FILE")
-                IFS=" " read -ra programs_time < <($JQ_FILE -r '[.[].time] | @sh' "$SCHEDULE_FILE")
-                IFS=" " read -ra programs_sys_time < <($JQ_FILE -r '[.[].sys_time] | @sh' "$SCHEDULE_FILE")
-
-                if [[ -z $($JQ_FILE '.' "$SCHEDULE_JSON") ]] 
-                then
-                    printf '{"%s":[]}' "$chnl" > "$SCHEDULE_JSON"
+                    SCHEDULE_LINK="https://hboasia.com/HBO/zh-tw/ajax/home_schedule?date=$today&channel=$chnl&feed=satellite"
                 fi
 
-                $JQ_FILE '.'"$chnl"' = []' "$SCHEDULE_JSON" > "$SCHEDULE_TMP"
-                mv "$SCHEDULE_TMP" "$SCHEDULE_JSON"
+                schedule=""
+                while IFS= read -r program 
+                do
+                    program_id=${program#*id: }
+                    program_id=${program_id%%, title: *}
+                    program_title=${program#*, title: }
+                    program_title=${program_title%%, title_local: *}
+                    program_title_local=${program#*, title_local: }
+                    program_title_local=${program_title_local%%, time: *}
+                    program_time=${program#*, time: }
+                    program_time=${program_time%%, sys_time: *}
+                    program_sys_time=${program#*, sys_time: }
 
-                rm -rf "${SCHEDULE_FILE:-'notfound'}"
-
-                for((index = 0; index < programs_count; index++)); do
-                    programs_id_index=${programs_id[index]//\'/}
-                    programs_title_index=${programs_title[index]//\"/}
-                    programs_title_index=${programs_title_index//\'/}
-                    programs_title_index=${programs_title_index//\\/\'}
-                    programs_title_local_index=${programs_title_local[index]//\"/}
-                    programs_title_local_index=${programs_title_local_index//\'/}
-                    programs_title_local_index=${programs_title_local_index//\\/\'}
-                    if [ -n "$programs_title_local_index" ] 
+                    program_id=${program_id//\'/}
+                    program_title=${program_title//\"/}
+                    program_title=${program_title//\'/}
+                    program_title=${program_title//\\/\'}
+                    program_title_local=${program_title_local//\"/}
+                    program_title_local=${program_title_local//\'/}
+                    program_title_local=${program_title_local//\\/\'}
+                    if [ -n "$program_title_local" ] 
                     then
-                        programs_title_index="$programs_title_local_index $programs_title_index"
+                        program_title="$program_title_local $program_title"
                     fi
-                    programs_time_index=${programs_time[index]//\'/}
-                    programs_sys_time_index=${programs_sys_time[index]//\'/}
+                    program_time=${program_time//\'/}
+                    program_sys_time=${program_sys_time//\'/}
 
-                    $JQ_FILE '.'"$chnl"' += [
-                        {
-                            "id":"'"${programs_id_index}"'",
-                            "title":"'"${programs_title_index}"'",
-                            "time":"'"$programs_time_index"'",
-                            "sys_time":"'"$programs_sys_time_index"'"
-                        }
-                    ]' "$SCHEDULE_JSON" > "$SCHEDULE_TMP"
+                    [ -n "$schedule" ] && schedule="$schedule,"
+                    schedule=$schedule'{
+                        "id":"'"$program_id"'",
+                        "title":"'"$program_title"'",
+                        "time":"'"$program_time"'",
+                        "sys_time":"'"$program_sys_time"'"
+                    }'
+                done < <($JQ_FILE -r 'to_entries | map("id: \(.value.id), title: \(.value.title), title_local: \(.value.title_local), time: \(.value.time), sys_time: \(.value.sys_time)")[]' <<< $(wget --no-check-certificate "$SCHEDULE_LINK" -qO-))
 
-                    mv "$SCHEDULE_TMP" "$SCHEDULE_JSON"
-                done
+                if [ -z "$schedule" ] 
+                then
+                    echo -e "$error\n$chnl not found\n"
+                else
+                    $JQ_FILE --arg index "$chnl" --argjson program "[$schedule]" '.[$index] = $program' "$SCHEDULE_JSON" > "${SCHEDULE_JSON}_tmp"
+                    mv "${SCHEDULE_JSON}_tmp" "$SCHEDULE_JSON"
+                fi
             done
         ;;
         "disney")
-            printf -v date_now "%(%Y%m%d)T"
-            SCHEDULE_LINK="https://disney.com.tw/_schedule/full/$date_now/8/%2Fepg"
+            printf -v today "%(%Y%m%d)T"
+            SCHEDULE_LINK="https://disney.com.tw/_schedule/full/$today/8/%2Fepg"
 
-            SCHEDULE_FILE="$IPTV_ROOT/$2_schedule_$date_now"
-            SCHEDULE_TMP="${SCHEDULE_JSON}_tmp"
-            wget --no-check-certificate "$SCHEDULE_LINK" -qO "$SCHEDULE_FILE"
-
-            programs_title=()
-            while IFS='' read -r program_title
-            do
-                programs_title+=("$program_title")
-            done < <($JQ_FILE -r '.schedule[].schedule_items[].show_title | @sh' "$SCHEDULE_FILE")
-
-            programs_count=${#programs_title[@]}
-
-            IFS=" " read -ra programs_time < <($JQ_FILE -r '[.schedule[].schedule_items[].time] | @sh' "$SCHEDULE_FILE")
-            IFS=" " read -ra programs_sys_time < <($JQ_FILE -r '[.schedule[].schedule_items[].iso8601_utc_time] | @sh' "$SCHEDULE_FILE")
-
-            if [[ -z $($JQ_FILE '.' "$SCHEDULE_JSON") ]] 
+            if [ ! -s "$SCHEDULE_JSON" ] 
             then
                 printf '{"%s":[]}' "$2" > "$SCHEDULE_JSON"
             fi
 
-            $JQ_FILE '.'"$2"' = []' "$SCHEDULE_JSON" > "$SCHEDULE_TMP"
-            mv "$SCHEDULE_TMP" "$SCHEDULE_JSON"
+            schedule=""
+            while IFS= read -r program 
+            do
+                program_title=${program#*show_title: }
+                program_title=${program_title%%, time: *}
+                program_time=${program#*, time: }
+                program_time=${program_time%%, iso8601_utc_time: *}
+                program_sys_time=${program#*, iso8601_utc_time: }
 
-            rm -rf "${SCHEDULE_FILE:-'notfound'}"
+                program_title=${program_title//\"/}
+                program_title=${program_title//\'/}
+                program_title=${program_title//\\/\'}
+                program_time=${program_time//\'/}
+                program_sys_time=${program_sys_time//\'/}
+                program_sys_time=$(date -d "$program_sys_time" +%s)
 
-            for((index = 0; index < programs_count; index++)); do
-                programs_title_index=${programs_title[index]//\"/}
-                programs_title_index=${programs_title_index//\'/}
-                programs_title_index=${programs_title_index//\\/\'}
-                programs_time_index=${programs_time[index]//\'/}
-                programs_sys_time_index=${programs_sys_time[index]//\'/}
-                programs_sys_time_index=$(date -d "$programs_sys_time_index" +%s)
+                [ -n "$schedule" ] && schedule="$schedule,"
+                schedule=$schedule'{
+                    "title":"'"$program_title"'",
+                    "time":"'"$program_time"'",
+                    "sys_time":"'"$program_sys_time"'"
+                }'
+            done < <($JQ_FILE -r '.schedule | to_entries | map(.value.schedule_items[]) | to_entries | map("show_title: \(.value.show_title), time: \(.value.time), iso8601_utc_time: \(.value.iso8601_utc_time)")[]' <<< $(wget --no-check-certificate "$SCHEDULE_LINK" -qO-))
 
-                $JQ_FILE '.'"$2"' += [
-                    {
-                        "title":"'"${programs_title_index}"'",
-                        "time":"'"$programs_time_index"'",
-                        "sys_time":"'"$programs_sys_time_index"'"
-                    }
-                ]' "$SCHEDULE_JSON" > "$SCHEDULE_TMP"
-
-                mv "$SCHEDULE_TMP" "$SCHEDULE_JSON"
-            done
+            if [ -z "$schedule" ] 
+            then
+                echo -e "$error\nnot found\n"
+            else
+                $JQ_FILE --arg index "$2" --argjson program "[$schedule]" '.[$index] = $program' "$SCHEDULE_JSON" > "${SCHEDULE_JSON}_tmp"
+                mv "${SCHEDULE_JSON}_tmp" "$SCHEDULE_JSON"
+            fi
         ;;
         "foxmovies")
-            printf -v date_now "%(%Y-%-m-%-d)T"
-            SCHEDULE_LINK="https://www.fng.tw/foxmovies/program.php?go=$date_now"
+            printf -v today "%(%Y-%-m-%-d)T"
+            SCHEDULE_LINK="https://www.fng.tw/foxmovies/program.php?go=$today"
 
-            SCHEDULE_FILE="$IPTV_ROOT/$2_schedule_$date_now"
-            SCHEDULE_TMP="${SCHEDULE_JSON}_tmp"
-            wget --no-check-certificate "$SCHEDULE_LINK" -qO "$SCHEDULE_FILE"
-
-            if [[ -z $($JQ_FILE '.' "$SCHEDULE_JSON") ]] 
+            if [ ! -s "$SCHEDULE_JSON" ] 
             then
                 printf '{"%s":[]}' "$2" > "$SCHEDULE_JSON"
             fi
 
-            $JQ_FILE '.'"$2"' = []' "$SCHEDULE_JSON" > "$SCHEDULE_TMP"
-            mv "$SCHEDULE_TMP" "$SCHEDULE_JSON"
-
+            schedule=""
             while IFS= read -r line
             do
                 if [[ $line == *"<td>"* ]] 
@@ -4186,23 +4178,131 @@ Schedule()
                         line=${line//\"/}
                         line=${line//\'/}
                         line=${line//\\/\'}
-                        sys_time=$(date -d "$date_now $time" +%s)
-                        $JQ_FILE '.'"$2"' += [
-                            {
-                                "title":"'"${line}"'",
-                                "time":"'"$time"'",
-                                "sys_time":"'"$sys_time"'"
-                            }
-                        ]' "$SCHEDULE_JSON" > "$SCHEDULE_TMP"
-
-                        mv "$SCHEDULE_TMP" "$SCHEDULE_JSON"
+                        sys_time=$(date -d "$today $time" +%s)
+                        [ -n "$schedule" ] && schedule="$schedule,"
+                        schedule=$schedule'{
+                            "title":"'"$line"'",
+                            "time":"'"$time"'",
+                            "sys_time":"'"$sys_time"'"
+                        }'
                     else
                         time=${line#* }
                     fi
                 fi
-            done < "$SCHEDULE_FILE"
+            done < <(wget --no-check-certificate "$SCHEDULE_LINK" -qO-)
 
-            rm -rf "${SCHEDULE_FILE:-'notfound'}"
+            if [ -z "$schedule" ] 
+            then
+                echo -e "$error\nnot found\n"
+            else
+                $JQ_FILE --arg index "$2" --argjson program "[$schedule]" '.[$index] = $program' "$SCHEDULE_JSON" > "${SCHEDULE_JSON}_tmp"
+                mv "${SCHEDULE_JSON}_tmp" "$SCHEDULE_JSON"
+            fi
+        ;;
+        "amlh")
+            printf -v today "%(%Y-%-m-%-d)T"
+            timestamp=$(date -d $today +%s)
+
+            TODAY_SCHEDULE_LINK="http://wap.lotustv.cc/wap.php/Sub/program/d/$timestamp"
+            YESTERDAY_SCHEDULE_LINK="http://wap.lotustv.cc/wap.php/Sub/program/d/$((timestamp-86400))"
+
+            if [ ! -s "$SCHEDULE_JSON" ] 
+            then
+                printf '{"%s":[]}' "$2" > "$SCHEDULE_JSON"
+            fi
+
+            found=0
+            schedule=""
+            replace=""
+
+            while IFS= read -r line
+            do
+                if [[ $line == *"program_list"* ]] 
+                then
+                    found=1
+                elif [ "$found" == 1 ] && [[ $line == *"<li>"* ]] 
+                then
+                    line=${line#*<em>}
+                    time=${line%%<\/em>*}
+                    while [ -n "$time" ] 
+                    do
+                        time=${time:0:5}
+                        line=${line#*<span>}
+                        if [ "${flag:-0}" -gt 0 ] && [ "${time:0:1}" == 0 ]
+                        then
+                            title=${line%%<\/span>*}
+                            [ -z "$replace" ] && replace="${title:4:1}"
+                            title="${title//$replace/ }"
+                            if [ "${title:0:4}" == "經典影院" ] 
+                            then
+                                title=${title:5}
+                            fi
+                            sys_time=$(date -d "$today $time" +%s)
+                            [ -n "$schedule" ] && schedule="$schedule,"
+                            schedule=$schedule'{
+                                "title":"'"$title"'",
+                                "time":"'"$time"'",
+                                "sys_time":"'"$sys_time"'"
+                            }'
+                        else
+                            flag=${time:0:1}
+                        fi
+                        line=${line#*<em>}
+                        time=${line%%<\/em>*}
+                    done
+                    break
+                fi
+            done < <(wget --no-check-certificate "$YESTERDAY_SCHEDULE_LINK" -qO-)
+
+            flag=0
+            found=0
+
+            while IFS= read -r line
+            do
+                if [[ $line == *"program_list"* ]] 
+                then
+                    found=1
+                elif [ "$found" == 1 ] && [[ $line == *"<li>"* ]] 
+                then
+                    line=${line#*<em>}
+                    time=${line%%<\/em>*}
+                    while [ -n "$time" ] 
+                    do
+                        time=${time:0:5}
+                        line=${line#*<span>}
+                        if [ ! "$flag" -gt "${time:0:1}" ]
+                        then
+                            flag=${time:0:1}
+                            title=${line%%<\/span>*}
+                            title="${title//$replace/ }"
+                            if [ "${title:0:4}" == "經典影院" ] 
+                            then
+                                title=${title:5}
+                            fi
+                            sys_time=$(date -d "$today $time" +%s)
+                            [ -n "$schedule" ] && schedule="$schedule,"
+                            schedule=$schedule'{
+                                "title":"'"$title"'",
+                                "time":"'"$time"'",
+                                "sys_time":"'"$sys_time"'"
+                            }'
+                        else
+                            break 2
+                        fi
+                        line=${line#*<em>}
+                        time=${line%%<\/em>*}
+                    done
+                    break
+                fi
+            done < <(wget --no-check-certificate "$TODAY_SCHEDULE_LINK" -qO-)
+
+            if [ -z "$schedule" ] 
+            then
+                echo -e "$error\nnot found\n"
+            else
+                $JQ_FILE --arg index "$2" --argjson program "[$schedule]" '.[$index] = $program' "$SCHEDULE_JSON" > "${SCHEDULE_JSON}_tmp"
+                mv "${SCHEDULE_JSON}_tmp" "$SCHEDULE_JSON"
+            fi
         ;;
         *) 
             found=0
@@ -4211,7 +4311,7 @@ Schedule()
                 if [ "$chnl_id" == "$2" ] 
                 then
                     found=1
-                    generateSchedule "$2"
+                    GenerateSchedule "$2"
                 fi
             done
 
@@ -4224,7 +4324,7 @@ Schedule()
                     then
                         found=1
                         chnl_niotv_num=${chnl_niotv#*:}
-                        generateScheduleNiotv "$chnl_niotv_num"
+                        GenerateScheduleNiotv "$chnl_niotv_num"
                     fi
                 done
             fi
@@ -4238,7 +4338,7 @@ Schedule()
                     then
                         found=1
                         chnl_nowtv_num=${chnl_nowtv#*:}
-                        generateScheduleNowtv "$chnl_nowtv_num"
+                        GenerateScheduleNowtv "$chnl_nowtv_num"
                         break
                     fi
                 done
@@ -5714,7 +5814,7 @@ MonitorSet()
     [ -z "${d_hls_delay_seconds:-}" ] && GetDefault
     for((i=0;i<chnls_count;i++));
     do
-        if [ -e "$LIVE_ROOT/${chnls_output_dir_name[i]}" ] && [ "${chnls_live[i]}" == "yes" ]
+        if [ -e "$LIVE_ROOT/${chnls_output_dir_name[i]}" ] && [ "${chnls_live[i]}" == "yes" ] && [ "${chnls_seg_count[i]}" != 0 ]
         then
             monitor_count=$((monitor_count + 1))
             monitor_dir_names+=("${chnls_output_dir_name[i]}")
@@ -5901,7 +6001,7 @@ Progress(){
 
 InstallNginx()
 {
-    echo -e "$info 检查依赖，耗时可能会很长..."
+    echo && echo -e "$info 检查依赖，耗时可能会很长..."
     Progress &
     progress_pid=$!
     CheckRelease
@@ -6305,6 +6405,11 @@ TestXtreamCodes()
                 chnl_domain=${line%%/*}
                 line=${line#*/}
                 chnl_username=${line%%/*}
+                if [ "$chnl_username" == "live" ] 
+                then
+                    line=${line#*/}
+                    chnl_username=${line%%/*}
+                fi
                 line=${line#*/}
                 chnl_password=${line%%/*}
             elif [[ $line == *\"flv_status\":* ]] 
@@ -6329,7 +6434,9 @@ TestXtreamCodes()
     echo && echo -e "IP: $green${ips[index]}$plain 域名: $green${new_domains[index]//|/ }$plain" && echo
     echo -e "$green账号:$plain"
 
-    set +euo pipefail
+    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+    FFPROBE="$FFMPEG_ROOT/ffprobe"
+
     for account in "${accounts[@]}"
     do
         username=${account%%:*}
@@ -6348,9 +6455,14 @@ TestXtreamCodes()
         if [ "$found" == 1 ] 
         then
             echo -e "${green}[使用中]$plain $username    $password"
-        elif curl --output /dev/null --silent --fail -r 0-0 "http://$domain/$username/$password/$channel_id"
+        elif $FFPROBE -i "http://$domain/$username/$password/$channel_id" -timeout 3000000 -show_streams -select_streams a -loglevel quiet > /dev/null # curl --output /dev/null -m 3 --silent --fail -r 0-0
         then
             echo -e "${green}[成功]$plain $username    $password"
+            echo "http://$domain/$username/$password/$channel_id" && echo
+        elif $FFPROBE -i "http://$domain/live/$username/$password/$channel_id.ts" -timeout 3000000 -show_streams -select_streams a -loglevel quiet > /dev/null 
+        then
+            echo -e "${green}[成功]$plain $username    $password"
+            echo "http://$domain/live/$username/$password/$channel_id.ts" && echo
         else
             echo -e "${red}[失败]$plain $username    $password"
         fi
@@ -6383,7 +6495,7 @@ See LICENSE
     -S  段所在子目录名称(默认：不使用子目录)
     -t  段名称(前缀)(默认：跟m3u8名称相同)
     -a  音频编码(默认：aac) (不需要转码时输入 copy)
-    -v  视频编码(默认：h264) (不需要转码时输入 copy)
+    -v  视频编码(默认：libx264) (不需要转码时输入 copy)
     -f  画面或声音延迟(格式如： v_3 画面延迟3秒，a_2 声音延迟2秒
         使用此功能*暂时*会忽略部分参数，画面声音不同步时使用)
     -q  crf视频质量(如果同时设置了输出视频比特率，则优先使用crf视频质量)(数值1~63 越大质量越差)
@@ -6420,7 +6532,7 @@ See LICENSE
     不需要转码的设置: -a copy -v copy -n omit
 
     不输出 HLS, 推流 flv :
-        tv -i http://xxx/xxx.ts -a aac -v h264 -b 3000 -k flv -T rtmp://127.0.0.1/flv/xxx
+        tv -i http://xxx/xxx.ts -a aac -v libx264 -b 3000 -k flv -T rtmp://127.0.0.1/flv/xxx
 
 EOM
 
@@ -6754,7 +6866,7 @@ then
             echo && echo -e "$info 配置 Nginx 完成..."
             echo && echo -e "$info 域名配置完成" && echo
         ;;
-        *) echo -e "$error 请输入正确的数字 [1-6]"
+        *) echo && echo -e "$error 请输入正确的数字 [1-6]" && echo
         ;;
     esac
     exit 0
@@ -6796,6 +6908,11 @@ ${green}5.$plain 替换频道账号
                 domain=${xtream_codes_input%%/*}
                 xtream_codes_input=${xtream_codes_input#*/}
                 username=${xtream_codes_input%%/*}
+                if [ "$username" == "live" ] 
+                then
+                    xtream_codes_input=${xtream_codes_input#*/}
+                    username=${xtream_codes_input%%/*}
+                fi
                 xtream_codes_input=${xtream_codes_input#*/}
                 password=${xtream_codes_input%%/*}
                 ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
@@ -6818,6 +6935,11 @@ ${green}5.$plain 替换频道账号
                         then
                             line=${line#*/}
                             username=${line%%/*}
+                            if [ "$username" == "live" ] 
+                            then
+                                line=${line#*/}
+                                username=${line%%/*}
+                            fi
                             line=${line#*/}
                             password=${line%%/*}
                             printf '%s\n' "$ip $chnl_domain $username:$password" >> "$XTREAM_CODES"
@@ -7380,8 +7502,7 @@ then
         ;;
         9) DelChannel
         ;;
-        *)
-        echo -e "$error 请输入正确的数字 [1-9]"
+        *) echo && echo -e "$error 请输入正确的数字 [1-9]" && echo
         ;;
     esac
 else
