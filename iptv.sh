@@ -431,7 +431,7 @@ Uninstall()
     [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
     CheckRelease
     echo "确定要 卸载此脚本以及产生的全部文件？[y/N]" && echo
-    read -p "(默认: N):" uninstall_yn
+    read -p "(默认: N): " uninstall_yn
     uninstall_yn=${uninstall_yn:-"N"}
     if [[ "$uninstall_yn" == [Yy] ]]
     then
@@ -1283,7 +1283,7 @@ InputChannelsIndex()
 {
     echo -e "请输入频道的序号 "
     echo -e "$tip 多个序号用空格分隔 比如: 5 7 9-11 " && echo
-    while read -p "(默认: 取消):" chnls_index_input
+    while read -p "(默认: 取消): " chnls_index_input
     do
         chnls_pid_chosen=()
         IFS=" " read -ra chnls_index <<< "$chnls_index_input"
@@ -1339,7 +1339,7 @@ SetStreamLink()
     echo && echo "请输入直播源( mpegts / hls / flv ...)"
     echo -e "$tip 可以是视频路径，hls 链接需包含 .m3u8 标识"
     echo -e "$tip 可以输入不同链接地址(监控按顺序尝试使用)，用空格分隔" && echo
-    read -p "(默认: 取消):" stream_links_input
+    read -p "(默认: 取消): " stream_links_input
     [ -z "$stream_links_input" ] && echo "已取消..." && exit 1
     IFS=" " read -ra stream_links <<< "$stream_links_input"
     stream_link=${stream_links[0]}
@@ -1355,7 +1355,7 @@ SetLive()
     else
         echo -e "$tip 选择[n]则无法监控" && echo
     fi
-    read -p "(默认: Y):" live_yn
+    read -p "(默认: Y): " live_yn
     live_yn=${live_yn:-"Y"}
     if [[ "$live_yn" == [Yy] ]]
     then
@@ -1374,7 +1374,7 @@ SetOutputDirName()
 {
     echo "请输入频道输出目录名称"
     echo -e "$tip 是名称不是路径" && echo
-    while read -p "(默认: 随机名称):" output_dir_name
+    while read -p "(默认: 随机名称): " output_dir_name
     do
         if [ -z "$output_dir_name" ] 
         then
@@ -1399,7 +1399,7 @@ SetOutputDirName()
 SetPlaylistName()
 {
     echo "请输入m3u8名称(前缀)"
-    read -p "(默认: $d_playlist_name_text):" playlist_name
+    read -p "(默认: $d_playlist_name_text): " playlist_name
     if [ -z "$playlist_name" ] 
     then
         playlist_name=${d_playlist_name:-$(RandPlaylistName)}
@@ -1410,7 +1410,7 @@ SetPlaylistName()
 SetSegDirName()
 {
     echo "请输入段所在子目录名称"
-    read -p "(默认: $d_seg_dir_name_text):" seg_dir_name
+    read -p "(默认: $d_seg_dir_name_text): " seg_dir_name
     if [ -z "$seg_dir_name" ] 
     then
         seg_dir_name=$d_seg_dir_name
@@ -1421,7 +1421,7 @@ SetSegDirName()
 SetSegName()
 {
     echo "请输入段名称"
-    read -p "(默认: $d_seg_name_text):" seg_name
+    read -p "(默认: $d_seg_name_text): " seg_name
     if [ -z "$seg_name" ] 
     then
         if [ -z "$d_seg_name" ] 
@@ -1441,7 +1441,7 @@ SetSegName()
 SetSegLength()
 {
     echo -e "请输入段的时长(单位：s)"
-    while read -p "(默认: $d_seg_length):" seg_length
+    while read -p "(默认: $d_seg_length): " seg_length
     do
         case "$seg_length" in
             "")
@@ -1467,7 +1467,7 @@ SetSegCount()
 {
     echo "请输入m3u8文件包含的段数目，ffmpeg分割的数目是其2倍"
     echo -e "$tip 如果填0就是无限"
-    while read -p "(默认: $d_seg_count):" seg_count
+    while read -p "(默认: $d_seg_count): " seg_count
     do
         case "$seg_count" in
             "")
@@ -1492,7 +1492,7 @@ SetSegCount()
 SetVideoCodec()
 {
     echo "请输入视频编码(不需要转码时输入 copy)"
-    read -p "(默认: $d_video_codec):" video_codec
+    read -p "(默认: $d_video_codec): " video_codec
     video_codec=${video_codec:-$d_video_codec}
     echo && echo -e "	视频编码: $green $video_codec $plain" && echo
 }
@@ -1500,7 +1500,7 @@ SetVideoCodec()
 SetAudioCodec()
 {
     echo "请输入音频编码(不需要转码时输入 copy)"
-    read -p "(默认: $d_audio_codec):" audio_codec
+    read -p "(默认: $d_audio_codec): " audio_codec
     audio_codec=${audio_codec:-$d_audio_codec}
     echo && echo -e "	音频编码: $green $audio_codec $plain" && echo
 }
@@ -1509,7 +1509,7 @@ SetQuality()
 {
     echo -e "请输入输出视频质量[1-63]"
     echo -e "$tip 改变CRF，数字越大越视频质量越差，如果设置CRF则无法用比特率控制视频质量"
-    while read -p "(默认: $d_quality_text):" quality
+    while read -p "(默认: $d_quality_text): " quality
     do
         case "$quality" in
             "")
@@ -1549,7 +1549,7 @@ SetBitrates()
     同时可以指定输出的分辨率(比如：600-600x400,900-1280x720)"
     fi
 
-    read -p "(默认: ${d_bitrates:-"不设置"}):" bitrates
+    read -p "(默认: ${d_bitrates:-"不设置"}): " bitrates
     bitrates=${bitrates:-$d_bitrates}
     if [ "$bitrates" == "omit" ] 
     then
@@ -1561,7 +1561,7 @@ SetBitrates()
 SetConst()
 {
     echo "是否使用固定码率[y/N]"
-    read -p "(默认: $d_const_text):" const_yn
+    read -p "(默认: $d_const_text): " const_yn
     const_yn=${const_yn:-$d_const_text}
     if [[ "$const_yn" == [Yy] ]]
     then
@@ -1579,7 +1579,7 @@ SetConst()
 SetEncrypt()
 {
     echo "是否加密段[y/N]"
-    read -p "(默认: $d_encrypt_text):" encrypt_yn
+    read -p "(默认: $d_encrypt_text): " encrypt_yn
     encrypt_yn=${encrypt_yn:-$d_encrypt_text}
     if [[ "$encrypt_yn" == [Yy] ]]
     then
@@ -1597,7 +1597,7 @@ SetEncrypt()
 SetKeyName()
 {
     echo "请输入key名称"
-    read -p "(默认: $d_key_name_text):" key_name
+    read -p "(默认: $d_key_name_text): " key_name
     if [ -z "$key_name" ] 
     then
         if [ -z "$d_key_name" ] 
@@ -1630,7 +1630,7 @@ SetInputFlags()
         d_input_flags=${d_input_flags#${lead}}
     fi
     echo "请输入input flags"
-    read -p "(默认: $d_input_flags):" input_flags
+    read -p "(默认: $d_input_flags): " input_flags
     input_flags=${input_flags:-$d_input_flags}
     echo && echo -e "	input flags: $green $input_flags $plain" && echo 
 }
@@ -1642,7 +1642,7 @@ SetOutputFlags()
         d_output_flags=${d_output_flags//-sc_threshold 0/}
     fi
     echo "请输入output flags, 可以输入 omit 省略此选项"
-    read -p "(默认: ${d_output_flags:-"不设置"}):" output_flags
+    read -p "(默认: ${d_output_flags:-"不设置"}): " output_flags
     output_flags=${output_flags:-$d_output_flags}
     if [ "$output_flags" == "omit" ] 
     then
@@ -1658,7 +1658,7 @@ SetVideoAudioShift()
     ${green}2.$plain 设置 声音延迟
     ${green}3.$plain 不设置
     " && echo
-    while read -p "(默认: $d_video_audio_shift_text):" video_audio_shift_num
+    while read -p "(默认: $d_video_audio_shift_text): " video_audio_shift_num
     do
         case $video_audio_shift_num in
             "") 
@@ -1713,7 +1713,7 @@ SetVideoAudioShift()
 SetChannelName()
 {
     echo "请输入频道名称(可以是中文)"
-    read -p "(默认: 跟m3u8名称相同):" channel_name
+    read -p "(默认: 跟m3u8名称相同): " channel_name
     if [ -z "${playlist_name:-}" ] 
     then
         playlist_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').playlist_name' "$CHANNELS_FILE")
@@ -1725,14 +1725,14 @@ SetChannelName()
 SetSyncPairs()
 {
     echo "设置单独的 sync_pairs"
-    read -p "(默认: $d_sync_pairs_text):" sync_pairs
+    read -p "(默认: $d_sync_pairs_text): " sync_pairs
     echo && echo -e "	单独的 sync_pairs: $green ${sync_pairs:-$d_sync_pairs_text} $plain" && echo
 }
 
 SetFlvPushLink()
 {
     echo && echo "请输入推流地址(比如 rtmp://127.0.0.1/flv/xxx )" && echo
-    while read -p "(默认: 取消):" flv_push_link
+    while read -p "(默认: 取消): " flv_push_link
     do
         [ -z "$flv_push_link" ] && echo "已取消..." && exit 1
         if [[ -z $($JQ_FILE '.channels[] | select(.flv_push_link=="'"$flv_push_link"'")' "$CHANNELS_FILE") ]]
@@ -1749,7 +1749,7 @@ SetFlvPullLink()
 {
     echo && echo "请输入拉流(播放)地址"
     echo -e "$tip 监控会验证此链接来确定是否重启频道，如果不确定可以先留空" && echo
-    read -p "(默认: 不设置):" flv_pull_link
+    read -p "(默认: 不设置): " flv_pull_link
     echo && echo -e "	拉流地址: $green ${flv_pull_link:-"不设置"} $plain" && echo
 }
 
@@ -2697,7 +2697,7 @@ EditOutputDirName()
     if [ "$chnl_status" == "on" ]
     then
         echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]" && echo
-        read -p "(默认: N):" stop_channel_yn
+        read -p "(默认: N): " stop_channel_yn
         stop_channel_yn=${stop_channel_yn:-'n'}
         if [[ "$stop_channel_yn" == [Yy] ]]
         then
@@ -2863,7 +2863,7 @@ EditChannelAll()
     then
         kind="flv"
         echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]" && echo
-        read -p "(默认: N):" stop_channel_yn
+        read -p "(默认: N): " stop_channel_yn
         stop_channel_yn=${stop_channel_yn:-'n'}
         if [[ "$stop_channel_yn" == [Yy] ]]
         then
@@ -2876,7 +2876,7 @@ EditChannelAll()
     then
         kind=""
         echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]" && echo
-        read -p "(默认: N):" stop_channel_yn
+        read -p "(默认: N): " stop_channel_yn
         stop_channel_yn=${stop_channel_yn:-'n'}
         if [[ "$stop_channel_yn" == [Yy] ]]
         then
@@ -3003,7 +3003,7 @@ EditChannelMenu()
     ————— 组合[常用] —————
     ${green}23.$plain 修改 段名称、m3u8名称 (防盗链/DDoS)
     " && echo
-        read -p "(默认: 取消):" edit_channel_num
+        read -p "(默认: 取消): " edit_channel_num
         [ -z "$edit_channel_num" ] && echo "已取消..." && exit 1
         case $edit_channel_num in
             1)
@@ -3083,7 +3083,7 @@ EditChannelMenu()
         if [ "$chnl_status" == "on" ] || [ "$chnl_flv_status" == "on" ]
         then
             echo "是否重启此频道？[Y/n]"
-            read -p "(默认: Y):" restart_yn
+            read -p "(默认: Y): " restart_yn
             restart_yn=${restart_yn:-"Y"}
             if [[ "$restart_yn" == [Yy] ]] 
             then
@@ -3096,7 +3096,7 @@ EditChannelMenu()
             fi
         else
             echo "是否启动此频道？[y/N]"
-            read -p "(默认: N):" start_yn
+            read -p "(默认: N): " start_yn
             start_yn=${start_yn:-"N"}
             if [[ "$start_yn" == [Yy] ]] 
             then
@@ -4493,7 +4493,7 @@ TsImg()
                     imgcat --half-height "$IMG_FILE"
                     rm -rf "${IMG_FILE:-notfound}"
                     echo && echo -e "$info 输入图片验证码："
-                    read -p "(默认: 刷新验证码):" pincode
+                    read -p "(默认: 刷新验证码): " pincode
                     [ -z "$pincode" ] && refresh_img=1
                     return 0
                 fi
@@ -4523,7 +4523,7 @@ TsImg()
                 imgcat --half-height "$IMG_FILE"
                 rm -rf "${IMG_FILE:-notfound}"
                 echo && echo -e "$info 输入图片验证码："
-                read -p "(默认: 刷新验证码):" pincode
+                read -p "(默认: 刷新验证码): " pincode
                 [ -z "$pincode" ] && refresh_img=1
                 return 0
             fi
@@ -4541,7 +4541,7 @@ TsRegister()
     while [ "$not_unique" != 0 ] 
     do
         echo && echo -e "$info 输入账号："
-        read -p "(默认: 取消):" account
+        read -p "(默认: 取消): " account
         [ -z "$account" ] && echo "已取消..." && exit 1
         if [ -z "${ts_array[unique_url]:-}" ] 
         then
@@ -4552,7 +4552,7 @@ TsRegister()
     done
 
     echo && echo -e "$info 输入密码："
-    read -p "(默认: 取消):" password
+    read -p "(默认: 取消): " password
     [ -z "$password" ] && echo "已取消..." && exit 1
 
     if [ -n "${ts_array[img_url]:-}" ] 
@@ -4575,7 +4575,7 @@ TsRegister()
                 then
                     echo && echo -e "$info 短信已发送！"
                     echo && echo -e "$info 输入短信验证码："
-                    read -p "(默认: 取消):" smscode
+                    read -p "(默认: 取消): " smscode
                     [ -z "$smscode" ] && echo "已取消..." && exit 1
 
                     declare -A verify_array
@@ -4614,7 +4614,7 @@ TsRegister()
                         then
                             echo && echo -e "$info 注册成功！"
                             echo && echo -e "$info 是否登录账号? [y/N]" && echo
-                            read -p "(默认: N):" login_yn
+                            read -p "(默认: N): " login_yn
                             login_yn=${login_yn:-"N"}
                             if [[ "$login_yn" == [Yy] ]]
                             then
@@ -4653,7 +4653,7 @@ TsRegister()
         then
             echo && echo -e "$info 注册成功！"
             echo && echo -e "$info 是否登录账号? [y/N]" && echo
-            read -p "(默认: N):" login_yn
+            read -p "(默认: N): " login_yn
             login_yn=${login_yn:-"N"}
             if [[ "$login_yn" == [Yy] ]]
             then
@@ -4674,14 +4674,14 @@ TsLogin()
     if [ -z "${account:-}" ] 
     then
         echo && echo -e "$info 输入账号："
-        read -p "(默认: 取消):" account
+        read -p "(默认: 取消): " account
         [ -z "$account" ] && echo "已取消..." && exit 1
     fi
 
     if [ -z "${password:-}" ] 
     then
         echo && echo -e "$info 输入密码："
-        read -p "(默认: 取消):" password
+        read -p "(默认: 取消): " password
         [ -z "$password" ] && echo "已取消..." && exit 1
     fi
 
@@ -4727,7 +4727,7 @@ TsLogin()
         echo -e "$error 账号错误"
         printf '%s\n' "${login_array[@]}"
         echo && echo -e "$info 是否注册账号? [y/N]" && echo
-        read -p "(默认: N):" register_yn
+        read -p "(默认: N): " register_yn
         register_yn=${register_yn:-"N"}
         if [[ "$register_yn" == [Yy] ]]
         then
@@ -4738,7 +4738,7 @@ TsLogin()
     else
         while :; do
             echo && echo -e "$info 输入需要转换的频道号码："
-            read -p "(默认: 取消):" programid
+            read -p "(默认: 取消): " programid
             [ -z "$programid" ] && echo "已取消..." && exit 1
             [[ $programid =~ ^[0-9]{10}$ ]] || { echo -e "$error频道号码错误！"; continue; }
             break
@@ -4788,7 +4788,7 @@ TsLogin()
         if [ "${stream_link:-}" != null ]
         then
             echo && echo -e "$info 检测到此频道原有链接，是否替换成新的ts链接? [Y/n]"
-            read -p "(默认: Y):" change_yn
+            read -p "(默认: Y): " change_yn
             change_yn=${change_yn:-"Y"}
             if [[ "$change_yn" == [Yy] ]]
             then
@@ -4812,7 +4812,7 @@ TsMenu()
     fi
 
     echo && echo -e "$info 是否使用默认频道文件? 默认链接: $DEFAULT_CHANNELS_LINK [Y/n]" && echo
-    read -p "(默认: Y):" use_default_channels_yn
+    read -p "(默认: Y): " use_default_channels_yn
     use_default_channels_yn=${use_default_channels_yn:-"Y"}
     if [[ "$use_default_channels_yn" == [Yy] ]]
     then
@@ -4821,7 +4821,7 @@ TsMenu()
         if [ -n "$local_channels" ] 
         then
             echo && echo -e "$info 是否使用本地频道文件? 本地路径: $d_sync_file [Y/n]" && echo
-            read -p "(默认: Y):" use_local_channels_yn
+            read -p "(默认: Y): " use_local_channels_yn
             use_local_channels_yn=${use_local_channels_yn:-"Y"}
             if [[ "$use_local_channels_yn" == [Yy] ]] 
             then
@@ -4831,7 +4831,7 @@ TsMenu()
         if [ -z "${TS_CHANNELS_FILE:-}" ]
         then
             echo && echo -e "$info 请输入使用的频道文件链接或本地路径: " && echo
-            read -p "(默认: 取消):" TS_CHANNELS_LINK_OR_FILE
+            read -p "(默认: 取消): " TS_CHANNELS_LINK_OR_FILE
             [ -z "$TS_CHANNELS_LINK_OR_FILE" ] && echo "已取消..." && exit 1
             if [ "${TS_CHANNELS_LINK_OR_FILE:0:4}" == "http" ] 
             then
@@ -4870,7 +4870,7 @@ TsMenu()
     done
     
     while :; do
-        echo && read -p "(默认: 取消):" channel_id
+        echo && read -p "(默认: 取消): " channel_id
         [ -z "$channel_id" ] && echo "已取消..." && exit 1
         [[ $channel_id =~ ^[0-9]+$ ]] || { echo -e "$error请输入序号！"; continue; }
         if ((channel_id >= 1 && channel_id <= count)); then
@@ -4886,7 +4886,7 @@ TsMenu()
                 echo && echo -e "$info 部分服务器无法连接此直播源，但可以将ip写入 /etc/hosts 来连接，请选择线路
   ${green}1.$plain 电信
   ${green}2.$plain 联通"
-                read -p "(默认: 取消):" jxtvnet_lane
+                read -p "(默认: 取消): " jxtvnet_lane
                 case $jxtvnet_lane in
                     1) 
                         printf '%s\n' "59.63.205.33 access.jxtvnet.tv" >> "/etc/hosts"
@@ -4907,7 +4907,7 @@ TsMenu()
 
   ${green}1.$plain 登录以获取ts链接
   ${green}2.$plain 注册账号"
-            echo && read -p "(默认: 取消):" channel_act
+            echo && read -p "(默认: 取消): " channel_act
             [ -z "$channel_act" ] && echo "已取消..." && exit 1
             
             case $channel_act in
@@ -5130,7 +5130,7 @@ AntiDDoSSet()
     then
         sleep 1
         echo && echo "是否启动 AntiDDoS [Y/n]"
-        read -p "(默认: Y):" anti_ddos
+        read -p "(默认: Y): " anti_ddos
         anti_ddos=${anti_ddos:-"Y"}
         if [[ "$anti_ddos" == [Yy] ]] 
         then
@@ -5154,7 +5154,7 @@ AntiDDoSSet()
             fi
             [ -z "${d_anti_ddos_port:-}" ] && GetDefault
             echo && echo "设置封禁端口"
-            while read -p "(默认: $d_anti_ddos_port):" anti_ddos_port
+            while read -p "(默认: $d_anti_ddos_port): " anti_ddos_port
             do
                 case $anti_ddos_port in
                     "") anti_ddos_port=$d_anti_ddos_port && break
@@ -5173,7 +5173,7 @@ AntiDDoSSet()
             done
 
             echo && echo "设置封禁ip多少秒"
-            while read -p "(默认: $d_anti_ddos_seconds秒):" anti_ddos_seconds
+            while read -p "(默认: $d_anti_ddos_seconds秒): " anti_ddos_seconds
             do
                 case $anti_ddos_seconds in
                     "") anti_ddos_seconds=$d_anti_ddos_seconds && break
@@ -5193,7 +5193,7 @@ AntiDDoSSet()
 
             echo && echo "设置封禁等级(1-9)"
             echo -e "$tip 数值越低越严格，也越容易误伤，很多情况是网络问题导致重复请求并非 DDoS" && echo
-            while read -p "(默认: $d_anti_ddos_level):" anti_ddos_level
+            while read -p "(默认: $d_anti_ddos_level): " anti_ddos_level
             do
                 case $anti_ddos_level in
                     "") 
@@ -5779,7 +5779,7 @@ MonitorSet()
 
         echo && echo -e "  ${green}$((i+1)).$plain 全部"
         echo -e "  ${green}$((i+2)).$plain 不设置" && echo
-        while read -p "(默认: 不设置):" flv_nums
+        while read -p "(默认: 不设置): " flv_nums
         do
             if [ -z "$flv_nums" ] || [ "$flv_nums" == $((i+2)) ] 
             then
@@ -5792,7 +5792,7 @@ MonitorSet()
             then
                 flv_all=1
                 echo && echo "设置超时多少秒自动重启频道"
-                while read -p "(默认: $d_flv_delay_seconds秒):" flv_delay_seconds
+                while read -p "(默认: $d_flv_delay_seconds秒): " flv_delay_seconds
                 do
                     case $flv_delay_seconds in
                         "") flv_delay_seconds=$d_flv_delay_seconds && break
@@ -5834,7 +5834,7 @@ MonitorSet()
                 ;;
                 *)
                     echo && echo "设置超时多少秒自动重启频道"
-                    while read -p "(默认: $d_flv_delay_seconds秒):" flv_delay_seconds
+                    while read -p "(默认: $d_flv_delay_seconds秒): " flv_delay_seconds
                     do
                         case $flv_delay_seconds in
                             "") flv_delay_seconds=$d_flv_delay_seconds && break
@@ -5859,7 +5859,7 @@ MonitorSet()
         if [ -n "$flv_nums" ] 
         then
             echo && echo "请输入尝试重启的次数"
-            while read -p "(默认: $d_flv_restart_nums次):" flv_restart_nums
+            while read -p "(默认: $d_flv_restart_nums次): " flv_restart_nums
             do
                 case $flv_restart_nums in
                     "") flv_restart_nums=$d_flv_restart_nums && break
@@ -5911,7 +5911,7 @@ MonitorSet()
     echo && echo -e "  ${green}$((monitor_count+1)).$plain 全部"
     echo -e "  ${green}$((monitor_count+2)).$plain 不设置" && echo
     
-    while read -p "(默认: 不设置):" hls_nums
+    while read -p "(默认: 不设置): " hls_nums
     do
         if [ -z "$hls_nums" ] || [ "$hls_nums" == $((monitor_count+2)) ] 
         then
@@ -5928,7 +5928,7 @@ MonitorSet()
 
             echo && echo "设置超时多少秒自动重启频道"
             echo -e "$tip 必须大于 段时长*段数目" && echo
-            while read -p "(默认: $d_hls_delay_seconds秒):" hls_delay_seconds
+            while read -p "(默认: $d_hls_delay_seconds秒): " hls_delay_seconds
             do
                 case $hls_delay_seconds in
                     "") hls_delay_seconds=$d_hls_delay_seconds && break
@@ -5978,7 +5978,7 @@ MonitorSet()
 
                 echo && echo "设置超时多少秒自动重启频道"
                 echo -e "$tip 必须大于 段时长*段数目" && echo
-                while read -p "(默认: $d_hls_delay_seconds秒):" hls_delay_seconds
+                while read -p "(默认: $d_hls_delay_seconds秒): " hls_delay_seconds
                 do
                     case $hls_delay_seconds in
                         "") hls_delay_seconds=$d_hls_delay_seconds && break
@@ -6004,7 +6004,7 @@ MonitorSet()
     if [ -n "$hls_nums" ] 
     then
         echo && echo "请输入最低比特率(kb/s),低于此数值会重启频道"
-        while read -p "(默认: $d_hls_min_bitrates):" hls_min_bitrates
+        while read -p "(默认: $d_hls_min_bitrates): " hls_min_bitrates
         do
             case $hls_min_bitrates in
                 "") hls_min_bitrates=$d_hls_min_bitrates && break
@@ -6026,7 +6026,7 @@ MonitorSet()
     fi
 
     echo && echo "请输入允许的最大片段"
-    while read -p "(默认: ${d_hls_max_seg_size}M):" hls_max_seg_size
+    while read -p "(默认: ${d_hls_max_seg_size}M): " hls_max_seg_size
     do
         case $hls_max_seg_size in
             "") hls_max_seg_size=$d_hls_max_seg_size && break
@@ -6045,7 +6045,7 @@ MonitorSet()
     done
 
     echo && echo "请输入尝试重启的次数"
-    while read -p "(默认: $d_hls_restart_nums次):" hls_restart_nums
+    while read -p "(默认: $d_hls_restart_nums次): " hls_restart_nums
     do
         case $hls_restart_nums in
             "") hls_restart_nums=$d_hls_restart_nums && break
@@ -6168,7 +6168,7 @@ UninstallNginx()
     fi
 
     echo && echo "确定删除 nginx 包括所有配置文件，操作不可恢复？[y/N]"
-    read -p "(默认: N):" nginx_uninstall_yn
+    read -p "(默认: N): " nginx_uninstall_yn
     nginx_uninstall_yn=${nginx_uninstall_yn:-"N"}
 
     if [[ $nginx_uninstall_yn == [Yy] ]] 
@@ -6186,7 +6186,7 @@ ToggleNginx()
     if [ ! -s "/usr/local/nginx/logs/nginx.pid" ] 
     then
         echo && echo "nginx 未运行，是否开启？[Y/n]"
-        read -p "(默认: Y):" nginx_start_yn
+        read -p "(默认: Y): " nginx_start_yn
         nginx_start_yn=${nginx_start_yn:-"Y"}
         if [[ $nginx_start_yn == [Yy] ]] 
         then
@@ -6200,7 +6200,7 @@ ToggleNginx()
         if kill -0  "$PID" 2> /dev/null
         then
             echo && echo "nginx 正在运行，是否关闭？[Y/n]"
-            read -p "(默认: Y):" nginx_stop_yn
+            read -p "(默认: Y): " nginx_stop_yn
             nginx_stop_yn=${nginx_stop_yn:-"Y"}
             if [[ $nginx_stop_yn == [Yy] ]] 
             then
@@ -6211,7 +6211,7 @@ ToggleNginx()
             fi
         else
             echo && echo "nginx 未运行，是否开启？[Y/n]"
-            read -p "(默认: Y):" nginx_start_yn
+            read -p "(默认: Y): " nginx_start_yn
             nginx_start_yn=${nginx_start_yn:-"Y"}
             if [[ $nginx_start_yn == [Yy] ]] 
             then
@@ -6439,7 +6439,7 @@ ListXtreamCodes()
 TestXtreamCodes()
 {
     echo && echo "请输入测试的序号"
-    while read -p "(默认: 取消):" test_num
+    while read -p "(默认: 取消): " test_num
     do
         case $test_num in
             "") echo && echo -e "$error 已取消..." && echo && exit 1
@@ -6458,7 +6458,7 @@ TestXtreamCodes()
     done
 
     echo && echo "请输入测试的频道ID"
-    while read -p "(默认: 取消):" channel_id
+    while read -p "(默认: 取消): " channel_id
     do
         case $channel_id in
             "") echo && echo -e "$error 已取消..." && exit 1
@@ -6814,7 +6814,7 @@ then
             if service v2ray status > /dev/null
             then
                 echo && echo "v2ray 正在运行，是否关闭？[Y/n]"
-                read -p "(默认: Y):" v2ray_stop_yn
+                read -p "(默认: Y): " v2ray_stop_yn
                 v2ray_stop_yn=${v2ray_stop_yn:-"Y"}
                 if [[ $v2ray_stop_yn == [Yy] ]] 
                 then
@@ -6825,7 +6825,7 @@ then
                 fi
             else
                 echo && echo "v2ray 未运行，是否开启？[Y/n]"
-                read -p "(默认: Y):" v2ray_start_yn
+                read -p "(默认: Y): " v2ray_start_yn
                 v2ray_start_yn=${v2ray_start_yn:-"Y"}
                 if [[ $v2ray_start_yn == [Yy] ]] 
                 then
@@ -6879,7 +6879,7 @@ then
             fi
 
             echo && echo "输入指向本机的域名"
-            read -p "(默认: 取消):" domain
+            read -p "(默认: 取消): " domain
             [ -z "$domain" ] && echo && echo "已取消..." && echo && exit 1
             
             CheckRelease
@@ -7082,17 +7082,41 @@ then
                     MonitorStop
                 ;;
                 "l"|"log")
+                    if [ -s "$MONITOR_LOG" ] 
+                    then
+                        echo -e "$info 监控日志: "
+                        count=0
+                        log=""
+                        last_line=""
+                        while IFS= read -r line 
+                        do
+                            if [ "$count" == 10 ] 
+                            then
+                                break
+                            fi
+                            message=${line#* }
+                            message=${message#* }
+                            if [ -z "$last_line" ] 
+                            then
+                                count=$((count+1))
+                                log=$line
+                                last_line=$message
+                            elif [ "$message" != "$last_line" ] 
+                            then
+                                count=$((count+1))
+                                log="$line\n$log"
+                                last_line="$message"
+                            fi
+                        done < <(awk '{a[i++]=$0} END {for (j=i-1; j>=0;) print a[j--] }' "$MONITOR_LOG")
+                        echo -e "$log"
+                    fi
                     if [ -s "$IP_LOG" ] 
                     then
-                        echo -e "$info 监控日志: "
-                        tail -n 10 "$MONITOR_LOG"
                         echo && echo -e "$info AntiDDoS 日志: "
                         tail -n 10 "$IP_LOG"
-                    elif [ -s "$MONITOR_LOG" ] 
+                    fi
+                    if [ ! -s "$MONITOR_LOG" ] && [ ! -s "$IP_LOG" ]
                     then
-                        echo -e "$info 监控日志: "
-                        tail -n 10 "$MONITOR_LOG"
-                    else
                         echo -e "$error 无日志"
                     fi
                 ;;
@@ -7415,13 +7439,15 @@ case "$cmd" in
   ${green}2.$plain 卸载
   ${green}3.$plain 升级
 ————————————
-  ${green}4.$plain 开关
-  ${green}5.$plain 重启
+  ${green}4.$plain 状态
+  ${green}5.$plain 开关
+  ${green}6.$plain 重启
 ————————————
-  ${green}6.$plain flv 配置
-  ${green}7.$plain 日志切割
+  ${green}7.$plain 配置域名和目录
+  ${green}8.$plain flv 配置
+  ${green}9.$plain 日志切割
  " && echo
-        read -p "请输入数字 [1-7]：" nginx_num
+        read -p "请输入数字 [1-9]：" nginx_num
         case "$nginx_num" in
             1) 
                 if [ -e "/usr/local/nginx" ] 
@@ -7430,7 +7456,7 @@ case "$cmd" in
                 fi
 
                 echo && echo "因为是编译 nginx，耗时会很长，是否继续？[y/N]"
-                read -p "(默认: N):" nginx_install_yn
+                read -p "(默认: N): " nginx_install_yn
                 nginx_install_yn=${nginx_install_yn:-"N"}
                 if [[ $nginx_install_yn == [Yy] ]] 
                 then
@@ -7451,13 +7477,193 @@ case "$cmd" in
                 InstallNginx
                 echo && echo -e "$info Nginx 升级完成" && echo
             ;;
-            4) ToggleNginx
+            4) 
+                if [ ! -e "/usr/local/nginx" ] 
+                then
+                    echo && echo -e "$error Nginx 未安装 !" && echo
+                else
+                    if [ ! -s "/usr/local/nginx/logs/nginx.pid" ] 
+                    then
+                        echo && echo -e "nginx 状态: $red关闭$plain" && echo
+                    else
+                        PID=$(< "/usr/local/nginx/logs/nginx.pid")
+                        if kill -0  "$PID" 2> /dev/null
+                        then
+                            echo && echo -e "nginx 状态: $green开启$plain" && echo
+                        else
+                            echo && echo -e "nginx 状态: $red开启$plain" && echo
+                        fi
+                    fi
+
+                    domain=""
+                    flv=0
+                    while IFS= read -r line 
+                    do
+                        if [ -z "$domain" ] && [[ $line == *"server_name"* ]] 
+                        then
+                            line=${line#*server_name  }
+                            domain=${line%;*}
+                        elif [[ $line == *"location /flv"* ]] 
+                        then
+                            flv=1
+                        fi
+                    done < "/usr/local/nginx/conf/nginx.conf"
+
+                    if [ "$domain" == "localhost" ] 
+                    then
+                        echo -e "域名: $red未设置$plain" && echo
+                    else
+                        echo -e "域名: $green${domain// /, }$plain" && echo
+                    fi
+
+                    if [ "$flv" == 0 ]
+                    then
+                        echo -e "flv 配置: $red未设置$plain" && echo
+                    else
+                        echo -e "flv 配置: $green已设置$plain flv 推流地址为 rtmp://127.0.0.1/flv/xxx" && echo
+                    fi
+                fi
             ;;
-            5) 
+            5) ToggleNginx
+            ;;
+            6) 
                 RestartNginx
                 echo && echo -e "$info Nginx 已重启" && echo
             ;;
-            6) 
+            7) 
+                if [ ! -e "/usr/local/nginx" ] 
+                then
+                    echo && echo -e "$error Nginx 未安装 !" && echo && exit 1
+                fi
+
+                echo && echo "输入指向本机的域名"
+                echo -e "$tip 多个域名用空格分隔" && echo
+                read -p "(默认: 不设置域名): " domain
+
+                echo && echo "设置公开的根目录" && echo
+                while read -p "(默认: /usr/local/nginx/html): " root 
+                do
+                    if [ -z "$root" ] 
+                    then
+                        root="/usr/local/nginx/html"
+                        break
+                    elif [ "${root:0:1}" != "/" ] 
+                    then
+                        echo && echo -e "$error 输入错误" && echo
+                    else
+                        if [ "${root: -1}" == "/" ] 
+                        then
+                            root=${root:0:-1}
+                        fi
+
+                        mkdir -p "$root"
+                        break
+                    fi
+                done
+
+                if [ -e "$IPTV_ROOT" ] 
+                then
+                    echo && echo "设置公开目录下的(live目录 - HLS输出目录)位置" && echo
+                    while read -p "(默认: $root/): " live 
+                    do
+                        if [ -z "$live" ] 
+                        then
+                            live=$root
+                            ln -sf "$LIVE_ROOT" "$live/"
+                            break
+                        elif [ "${live:0:1}" != "/" ] 
+                        then
+                            echo && echo -e "$error 输入错误" && echo
+                        else
+                            if [ "${live: -1}" == "/" ] 
+                            then
+                                live=${live:0:-1}
+                            fi
+
+                            mkdir -p "$live"
+                            ln -sf "$LIVE_ROOT" "$live/"
+                            break
+                        fi
+                    done
+                fi
+
+                nginx_conf=$(< "/usr/local/nginx/conf/nginx.conf")
+                if ! grep -q "allow all" <<< "$nginx_conf"
+                then
+                    echo && echo "是否屏蔽所有阿里云ip段 [y/N]" && echo
+                    read -p "(默认: N): " block
+                    block=${block:-"N"}
+                    if [[ $block == [Yy] ]] 
+                    then
+                        echo && echo "输入本机IP"
+                        echo -e "$tip 多个IP用空格分隔" && echo
+
+                        while read -p "(默认: 自动检测): " server_ip
+                        do
+                            [ -z "$server_ip" ] && server_ip=$(dig +short myip.opendns.com @resolver1.opendns.com || true)
+                            [ -z "$server_ip" ] && server_ip=$(curl --silent ipv4.icanhazip.com)
+                            [ -z "$server_ip" ] && server_ip=$(curl --silent api.ip.sb/ip)
+                            [ -z "$server_ip" ] && server_ip=$(curl --silent ipinfo.io/ip)
+                            if [ -z "$server_ip" ]
+                            then
+                                echo && echo -e "$error 无法获取本机IP，请手动输入" && echo
+                            else
+                                break
+                            fi
+                        done
+
+                        start=0
+                        deny="            location ${live#*$root}/${LIVE_ROOT##*/} {"
+
+                        IFS=" " read -ra server_ips <<< "$server_ip"
+                        for ip in "${server_ips[@]}"
+                        do
+                            deny="$deny\n                allow $ip;"
+                        done
+
+                        while IFS= read -r line 
+                        do
+                            if [[ $line == *"ipTabContent"* ]] 
+                            then
+                                start=1
+                            elif [ "$start" == 1 ] && [[ $line == *"AS45102"* ]] 
+                            then
+                                line=${line#*AS45102\/}
+                                ip=${line%\"*}
+                                deny="$deny\n                deny $ip;"
+                            elif [ "$start" == 1 ] && [[ $line == *"</tbody>"* ]] 
+                            then
+                                break
+                            fi
+                        done < <(wget --no-check-certificate https://ipinfo.io/AS45102 -qO-)
+                        deny="$deny\n                allow all;"
+                        deny="$deny\n            }"
+                    fi
+                fi
+
+                conf=""
+                done=0
+                while IFS= read -r line 
+                do
+                    if [ "$done" == 0 ] && [ -n "$domain" ] && [[ $line == *"server_name"* ]] 
+                    then
+                        line="        server_name  $domain;"
+                    elif [ "$done" == 0 ] && [ -n "${deny:-}" ] && [[ $line == *"location / {"* ]]
+                    then
+                        line="$line\n\n$deny"
+                    elif [ "$done" == 0 ] && [[ $line == *"root "* ]] 
+                    then
+                        line="            root   ${root#*/usr/local/nginx/};"
+                        done=1
+                    fi
+                    [ -n "$conf" ] && conf="$conf\n"
+                    conf="$conf$line"
+                done < "/usr/local/nginx/conf/nginx.conf"
+
+                echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
+                echo && echo -e "$info 配置成功" && echo
+            ;;
+            8) 
                 if [ ! -e "/usr/local/nginx" ] 
                 then
                     echo && echo -e "$error Nginx 未安装 !" && echo
@@ -7468,7 +7674,7 @@ case "$cmd" in
                         echo && echo -e "$error flv 配置已存在! flv 推流地址为 rtmp://127.0.0.1/flv/xxx" && echo
                     else
                         echo && echo -e "$info flv 配置已添加，是否重启 Nginx ？[Y/n]" && echo
-                        read -p "(默认: Y):" restart_yn
+                        read -p "(默认: Y): " restart_yn
                         restart_yn=${restart_yn:-"Y"}
                         if [[ $restart_yn == [Yy] ]] 
                         then
@@ -7480,7 +7686,7 @@ case "$cmd" in
                     fi
                 fi
             ;;
-            7) 
+            9) 
                 if [ ! -e "$IPTV_ROOT" ] 
                 then
                     echo && echo -e "$error 请先安装脚本 !" && echo && exit 1
@@ -7544,7 +7750,7 @@ $IPTV_ROOT/*.log {
                     echo && echo -e "$info 日志切割定时任务开启成功 !" && echo
                 fi
             ;;
-            *) echo && echo -e "$error 请输入正确的数字 [1-7]" && echo
+            *) echo && echo -e "$error 请输入正确的数字 [1-9]" && echo
             ;;
         esac
         exit 0
