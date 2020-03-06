@@ -603,7 +603,7 @@ UpdateSelf()
             new_channels=$new_channels'{
                 "pid":'"${chnls_pid[i]}"',
                 "status":"'"${chnls_status[i]}"'",
-                "stream_link":"'"${chnls_stream_link[i]}"'",
+                "stream_link":"'"${chnls_stream_links[i]}"'",
                 "live":"'"${chnls_live[i]}"'",
                 "output_dir_name":"'"${chnls_output_dir_name[i]}"'",
                 "playlist_name":"'"${chnls_playlist_name[i]}"'",
@@ -757,6 +757,7 @@ GetChannelsInfo()
     chnls_pid=()
     chnls_status=()
     chnls_stream_link=()
+    chnls_stream_links=()
     chnls_live=()
     chnls_output_dir_name=()
     chnls_playlist_name=()
@@ -843,6 +844,7 @@ GetChannelsInfo()
         chnls_pid+=("$map_pid")
         chnls_status+=("$map_status")
         chnls_stream_link+=("${map_stream_links[0]}")
+        chnls_stream_links+=("$map_stream_link")
         chnls_live+=("$map_live")
         chnls_output_dir_name+=("$map_output_dir_name")
         chnls_playlist_name+=("$map_playlist_name")
@@ -931,6 +933,11 @@ ListChannels()
                     chnls_quality_text="${chnls_quality_text}[ -maxrate ${chnls_br_a}k -bufsize ${chnls_br_a}k${chnls_br_b} ] "
                     chnls_bitrates_text="${chnls_bitrates_text}[ 比特率 ${chnls_br_a}k${chnls_br_b}${chnls_const_index_text} ] "
                     chnls_playlist_file_text="$chnls_playlist_file_text$green$chnls_output_dir_root/${chnls_playlist_name_index}_$chnls_br_a.m3u8$plain "
+                elif [[ "$chnls_br" == *"x"* ]] 
+                then
+                    chnls_quality_text="${chnls_quality_text}[ 分辨率: $chnls_br ] "
+                    chnls_bitrates_text="${chnls_bitrates_text}[ 分辨率: $chnls_br${chnls_const_index_text} ] "
+                    chnls_playlist_file_text="$chnls_playlist_file_text$green$chnls_output_dir_root/${chnls_playlist_name_index}.m3u8$plain "
                 else
                     chnls_quality_text="${chnls_quality_text}[ -maxrate ${chnls_br}k -bufsize ${chnls_br}k ] "
                     chnls_bitrates_text="${chnls_bitrates_text}[ 比特率 ${chnls_br}k${chnls_const_index_text} ] "
@@ -1177,6 +1184,11 @@ GetChannelInfo()
                         chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br_a}k -bufsize ${chnl_br_a}k${chnl_br_b} ] "
                         chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br_a}k${chnl_br_b}${chnl_const_text} ] "
                         chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br_a.m3u8$plain "
+                    elif [[ "$chnl_br" == *"x"* ]] 
+                    then
+                        chnl_crf_text="${chnl_crf_text}[ 分辨率: $chnl_br ] "
+                        chnl_nocrf_text="${chnl_nocrf_text}[ 分辨率: $chnl_br${chnl_const_text} ] "
+                        chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}.m3u8$plain "
                     else
                         chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br}k -bufsize ${chnl_br}k ] "
                         chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br}k${chnl_const_text} ] "
@@ -1815,16 +1827,26 @@ FlvStreamCreatorWithShift()
                     bitrates=${bitrates%%,*}
                     if [[ "$bitrates" == *"-"* ]] 
                     then
-                        bitrates=${bitrates%-*}
                         resolution=${bitrates#*-}
                         resolution="-vf scale=${resolution//x/:}"
-                    fi
-
-                    if [ -n "$const" ] 
+                        bitrates=${bitrates%-*}
+                        if [ -n "$const" ] 
+                        then
+                            bitrates_command="-b:v ${bitrates}k -bufsize ${bitrates}k -minrate ${bitrates}k -maxrate ${bitrates}k"
+                        else
+                            bitrates_command="-b:v ${bitrates}k"
+                        fi
+                    elif [[ "$bitrates" == *"x"* ]] 
                     then
-                        bitrates_command="-b:v ${bitrates}k -bufsize ${bitrates}k -minrate ${bitrates}k -maxrate ${bitrates}k"
+                        resolution=$bitrates
+                        resolution="-vf scale=${resolution//x/:}"
                     else
-                        bitrates_command="-b:v ${bitrates}k"
+                        if [ -n "$const" ] 
+                        then
+                            bitrates_command="-b:v ${bitrates}k -bufsize ${bitrates}k -minrate ${bitrates}k -maxrate ${bitrates}k"
+                        else
+                            bitrates_command="-b:v ${bitrates}k"
+                        fi
                     fi
                 fi
             elif [ -n "$bitrates" ] 
@@ -1832,21 +1854,28 @@ FlvStreamCreatorWithShift()
                 bitrates=${bitrates%%,*}
                 if [[ "$bitrates" == *"-"* ]] 
                 then
-                    bitrates=${bitrates%-*}
                     resolution=${bitrates#*-}
                     resolution="-vf scale=${resolution//x/:}"
-                fi
-                quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
-                if [ "$VIDEO_CODEC" == "libx265" ]
+                    bitrates=${bitrates%-*}
+                    quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
+                    if [ "$VIDEO_CODEC" == "libx265" ]
+                    then
+                    quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
+                    fi
+                elif [[ "$bitrates" == *"x"* ]] 
                 then
-                  quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
+                    resolution=$bitrates
+                    resolution="-vf scale=${resolution//x/:}"
+                    quality_command="-crf $quality"
+                else
+                    quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
+                    if [ "$VIDEO_CODEC" == "libx265" ]
+                    then
+                    quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
+                    fi
                 fi
             else
                 quality_command="-crf $quality"
-                if [ "$VIDEO_CODEC" == "libx265" ]
-                then
-                  quality_command="$quality_command -x265-params"
-                fi
             fi
 
             if [ -n "${video_shift:-}" ] 
@@ -1889,16 +1918,26 @@ FlvStreamCreatorWithShift()
                     chnl_bitrates=${chnl_bitrates%%,*}
                     if [[ "$chnl_bitrates" == *"-"* ]] 
                     then
-                        chnl_bitrates=${chnl_bitrates%-*}
                         resolution=${chnl_bitrates#*-}
                         resolution="-vf scale=${resolution//x/:}"
-                    fi
-
-                    if [ -n "$chnl_const" ] 
+                        chnl_bitrates=${chnl_bitrates%-*}
+                        if [ -n "$chnl_const" ] 
+                        then
+                            chnl_bitrates_command="-b:v ${chnl_bitrates}k -bufsize ${chnl_bitrates}k -minrate ${chnl_bitrates}k -maxrate ${chnl_bitrates}k"
+                        else
+                            chnl_bitrates_command="-b:v ${chnl_bitrates}k"
+                        fi
+                    elif [[ "$chnl_bitrates" == *"x"* ]] 
                     then
-                        chnl_bitrates_command="-b:v ${chnl_bitrates}k -bufsize ${chnl_bitrates}k -minrate ${chnl_bitrates}k -maxrate ${chnl_bitrates}k"
+                        resolution=$chnl_bitrates
+                        resolution="-vf scale=${resolution//x/:}"
                     else
-                        chnl_bitrates_command="-b:v ${chnl_bitrates}k"
+                        if [ -n "$chnl_const" ] 
+                        then
+                            chnl_bitrates_command="-b:v ${chnl_bitrates}k -bufsize ${chnl_bitrates}k -minrate ${chnl_bitrates}k -maxrate ${chnl_bitrates}k"
+                        else
+                            chnl_bitrates_command="-b:v ${chnl_bitrates}k"
+                        fi
                     fi
                 fi
             elif [ -n "$chnl_bitrates" ] 
@@ -1906,21 +1945,28 @@ FlvStreamCreatorWithShift()
                 chnl_bitrates=${chnl_bitrates%%,*}
                 if [[ "$chnl_bitrates" == *"-"* ]] 
                 then
-                    chnl_bitrates=${chnl_bitrates%-*}
                     resolution=${chnl_bitrates#*-}
                     resolution="-vf scale=${resolution//x/:}"
-                fi
-                chnl_quality_command="-crf $chnl_quality -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k"
-                if [ "$chnl_video_codec" == "libx265" ]
+                    chnl_bitrates=${chnl_bitrates%-*}
+                    chnl_quality_command="-crf $chnl_quality -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k"
+                    if [ "$chnl_video_codec" == "libx265" ]
+                    then
+                    chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
+                    fi
+                elif [[ "$chnl_bitrates" == *"x"* ]] 
                 then
-                  chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
+                    resolution=$chnl_bitrates
+                    resolution="-vf scale=${resolution//x/:}"
+                    chnl_quality_command="-crf $chnl_quality"
+                else
+                    chnl_quality_command="-crf $chnl_quality -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k"
+                    if [ "$chnl_video_codec" == "libx265" ]
+                    then
+                    chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
+                    fi
                 fi
             else
                 chnl_quality_command="-crf $chnl_quality"
-                if [ "$chnl_video_codec" == "libx265" ]
-                then
-                  chnl_quality_command="$chnl_quality_command -x265-params"
-                fi
             fi
 
             if [ -n "${chnl_video_shift:-}" ] 
@@ -1990,16 +2036,26 @@ FlvStreamCreatorWithShift()
                     bitrates=${bitrates%%,*}
                     if [[ "$bitrates" == *"-"* ]] 
                     then
-                        bitrates=${bitrates%-*}
                         resolution=${bitrates#*-}
                         resolution="-vf scale=${resolution//x/:}"
-                    fi
-
-                    if [ -n "$const" ] 
+                        bitrates=${bitrates%-*}
+                        if [ -n "$const" ] 
+                        then
+                            bitrates_command="-b:v ${bitrates}k -bufsize ${bitrates}k -minrate ${bitrates}k -maxrate ${bitrates}k"
+                        else
+                            bitrates_command="-b:v ${bitrates}k"
+                        fi
+                    elif [[ "$bitrates" == *"x"* ]] 
                     then
-                        bitrates_command="-b:v ${bitrates}k -bufsize ${bitrates}k -minrate ${bitrates}k -maxrate ${bitrates}k"
+                        resolution=$bitrates
+                        resolution="-vf scale=${resolution//x/:}"
                     else
-                        bitrates_command="-b:v ${bitrates}k"
+                        if [ -n "$const" ] 
+                        then
+                            bitrates_command="-b:v ${bitrates}k -bufsize ${bitrates}k -minrate ${bitrates}k -maxrate ${bitrates}k"
+                        else
+                            bitrates_command="-b:v ${bitrates}k"
+                        fi
                     fi
                 fi
             elif [ -n "$bitrates" ] 
@@ -2007,21 +2063,28 @@ FlvStreamCreatorWithShift()
                 bitrates=${bitrates%%,*}
                 if [[ "$bitrates" == *"-"* ]] 
                 then
-                    bitrates=${bitrates%-*}
                     resolution=${bitrates#*-}
                     resolution="-vf scale=${resolution//x/:}"
-                fi
-                quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
-                if [ "$VIDEO_CODEC" == "libx265" ]
+                    bitrates=${bitrates%-*}
+                    quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
+                    if [ "$VIDEO_CODEC" == "libx265" ]
+                    then
+                    quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
+                    fi
+                elif [[ "$bitrates" == *"x"* ]] 
                 then
-                  quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
+                    resolution=$bitrates
+                    resolution="-vf scale=${resolution//x/:}"
+                    quality_command="-crf $quality"
+                else
+                    quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
+                    if [ "$VIDEO_CODEC" == "libx265" ]
+                    then
+                    quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
+                    fi
                 fi
             else
                 quality_command="-crf $quality"
-                if [ "$VIDEO_CODEC" == "libx265" ]
-                then
-                  quality_command="$quality_command -x265-params"
-                fi
             fi
 
             if [ -n "${video_shift:-}" ] 
@@ -2115,40 +2178,59 @@ HlsStreamCreatorWithShift()
                     bitrates=${bitrates%%,*}
                     if [[ "$bitrates" == *"-"* ]] 
                     then
-                        bitrates=${bitrates%-*}
                         resolution=${bitrates#*-}
                         resolution="-vf scale=${resolution//x/:}"
-                    fi
-
-                    if [ -n "$const" ] 
+                        bitrates=${bitrates%-*}
+                        if [ -n "$const" ] 
+                        then
+                            bitrates_command="-b:v ${bitrates}k -bufsize ${bitrates}k -minrate ${bitrates}k -maxrate ${bitrates}k"
+                        else
+                            bitrates_command="-b:v ${bitrates}k"
+                        fi
+                        output_name="${playlist_name}_${bitrates}_%05d.ts"
+                    elif [[ "$bitrates" == *"x"* ]] 
                     then
-                        bitrates_command="-b:v ${bitrates}k -bufsize ${bitrates}k -minrate ${bitrates}k -maxrate ${bitrates}k"
+                        resolution=$bitrates
+                        resolution="-vf scale=${resolution//x/:}"
                     else
-                        bitrates_command="-b:v ${bitrates}k"
+                        if [ -n "$const" ] 
+                        then
+                            bitrates_command="-b:v ${bitrates}k -bufsize ${bitrates}k -minrate ${bitrates}k -maxrate ${bitrates}k"
+                        else
+                            bitrates_command="-b:v ${bitrates}k"
+                        fi
+                        output_name="${playlist_name}_${bitrates}_%05d.ts"
                     fi
-                    output_name="${playlist_name}_${bitrates}_%05d.ts"
                 fi
             elif [ -n "$bitrates" ] 
             then
                 bitrates=${bitrates%%,*}
                 if [[ "$bitrates" == *"-"* ]] 
                 then
-                    bitrates=${bitrates%-*}
                     resolution=${bitrates#*-}
                     resolution="-vf scale=${resolution//x/:}"
-                fi
-                quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
-                if [ "$VIDEO_CODEC" == "libx265" ]
+                    bitrates=${bitrates%-*}
+                    quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
+                    if [ "$VIDEO_CODEC" == "libx265" ]
+                    then
+                    quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
+                    fi
+                    output_name="${playlist_name}_${bitrates}_%05d.ts"
+                elif [[ "$bitrates" == *"x"* ]] 
                 then
-                  quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
+                    resolution=$bitrates
+                    resolution="-vf scale=${resolution//x/:}"
+                    quality_command="-crf $quality"
+                else
+                    quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
+                    if [ "$VIDEO_CODEC" == "libx265" ]
+                    then
+                    quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
+                    fi
+                    output_name="${playlist_name}_${bitrates}_%05d.ts"
                 fi
-                output_name="${playlist_name}_${bitrates}_%05d.ts"
             else
                 quality_command="-crf $quality"
-                if [ "$VIDEO_CODEC" == "libx265" ]
-                then
-                  quality_command="$quality_command -x265-params"
-                fi
             fi
 
             if [ -n "${video_shift:-}" ] 
@@ -2196,40 +2278,59 @@ HlsStreamCreatorWithShift()
                     chnl_bitrates=${chnl_bitrates%%,*}
                     if [[ "$chnl_bitrates" == *"-"* ]] 
                     then
-                        chnl_bitrates=${chnl_bitrates%-*}
                         resolution=${chnl_bitrates#*-}
                         resolution="-vf scale=${resolution//x/:}"
-                    fi
-
-                    if [ -n "$chnl_const" ] 
+                        chnl_bitrates=${chnl_bitrates%-*}
+                        if [ -n "$chnl_const" ] 
+                        then
+                            chnl_bitrates_command="-b:v ${chnl_bitrates}k -bufsize ${chnl_bitrates}k -minrate ${chnl_bitrates}k -maxrate ${chnl_bitrates}k"
+                        else
+                            chnl_bitrates_command="-b:v ${chnl_bitrates}k"
+                        fi
+                        output_name="${chnl_playlist_name}_${chnl_bitrates}_%05d.ts"
+                    elif [[ "$chnl_bitrates" == *"x"* ]] 
                     then
-                        chnl_bitrates_command="-b:v ${chnl_bitrates}k -bufsize ${chnl_bitrates}k -minrate ${chnl_bitrates}k -maxrate ${chnl_bitrates}k"
+                        resolution=$chnl_bitrates
+                        resolution="-vf scale=${resolution//x/:}"
                     else
-                        chnl_bitrates_command="-b:v ${chnl_bitrates}k"
+                        if [ -n "$chnl_const" ] 
+                        then
+                            chnl_bitrates_command="-b:v ${chnl_bitrates}k -bufsize ${chnl_bitrates}k -minrate ${chnl_bitrates}k -maxrate ${chnl_bitrates}k"
+                        else
+                            chnl_bitrates_command="-b:v ${chnl_bitrates}k"
+                        fi
+                        output_name="${chnl_playlist_name}_${chnl_bitrates}_%05d.ts"
                     fi
-                    output_name="${chnl_playlist_name}_${chnl_bitrates}_%05d.ts"
                 fi
             elif [ -n "$chnl_bitrates" ] 
             then
                 chnl_bitrates=${chnl_bitrates%%,*}
                 if [[ "$chnl_bitrates" == *"-"* ]] 
                 then
-                    chnl_bitrates=${chnl_bitrates%-*}
                     resolution=${chnl_bitrates#*-}
                     resolution="-vf scale=${resolution//x/:}"
-                fi
-                chnl_quality_command="-crf $chnl_quality -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k"
-                if [ "$chnl_video_codec" == "libx265" ]
+                    chnl_bitrates=${chnl_bitrates%-*}
+                    chnl_quality_command="-crf $chnl_quality -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k"
+                    if [ "$chnl_video_codec" == "libx265" ]
+                    then
+                    chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
+                    fi
+                    output_name="${chnl_playlist_name}_${chnl_bitrates}_%05d.ts"
+                elif [[ "$chnl_bitrates" == *"x"* ]] 
                 then
-                  chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
+                    resolution=$chnl_bitrates
+                    resolution="-vf scale=${resolution//x/:}"
+                    chnl_quality_command="-crf $chnl_quality"
+                else
+                    chnl_quality_command="-crf $chnl_quality -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k"
+                    if [ "$chnl_video_codec" == "libx265" ]
+                    then
+                    chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
+                    fi
+                    output_name="${chnl_playlist_name}_${chnl_bitrates}_%05d.ts"
                 fi
-                output_name="${chnl_playlist_name}_${chnl_bitrates}_%05d.ts"
             else
                 chnl_quality_command="-crf $chnl_quality"
-                if [ "$chnl_video_codec" == "libx265" ]
-                then
-                  chnl_quality_command="$chnl_quality_command -x265-params"
-                fi
             fi
 
             if [ -n "${chnl_video_shift:-}" ] 
@@ -2313,40 +2414,59 @@ HlsStreamCreatorWithShift()
                     bitrates=${bitrates%%,*}
                     if [[ "$bitrates" == *"-"* ]] 
                     then
-                        bitrates=${bitrates%-*}
                         resolution=${bitrates#*-}
                         resolution="-vf scale=${resolution//x/:}"
-                    fi
-
-                    if [ -n "$const" ] 
+                        bitrates=${bitrates%-*}
+                        if [ -n "$const" ] 
+                        then
+                            bitrates_command="-b:v ${bitrates}k -bufsize ${bitrates}k -minrate ${bitrates}k -maxrate ${bitrates}k"
+                        else
+                            bitrates_command="-b:v ${bitrates}k"
+                        fi
+                        output_name="${playlist_name}_${bitrates}_%05d.ts"
+                    elif [[ "$bitrates" == *"x"* ]] 
                     then
-                        bitrates_command="-b:v ${bitrates}k -bufsize ${bitrates}k -minrate ${bitrates}k -maxrate ${bitrates}k"
+                        resolution=$bitrates
+                        resolution="-vf scale=${resolution//x/:}"
                     else
-                        bitrates_command="-b:v ${bitrates}k"
+                        if [ -n "$const" ] 
+                        then
+                            bitrates_command="-b:v ${bitrates}k -bufsize ${bitrates}k -minrate ${bitrates}k -maxrate ${bitrates}k"
+                        else
+                            bitrates_command="-b:v ${bitrates}k"
+                        fi
+                        output_name="${playlist_name}_${bitrates}_%05d.ts"
                     fi
-                    output_name="${playlist_name}_${bitrates}_%05d.ts"
                 fi
             elif [ -n "$bitrates" ] 
             then
                 bitrates=${bitrates%%,*}
                 if [[ "$bitrates" == *"-"* ]] 
                 then
-                    bitrates=${bitrates%-*}
                     resolution=${bitrates#*-}
                     resolution="-vf scale=${resolution//x/:}"
-                fi
-                quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
-                if [ "$VIDEO_CODEC" == "libx265" ]
+                    bitrates=${bitrates%-*}
+                    quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
+                    if [ "$VIDEO_CODEC" == "libx265" ]
+                    then
+                    quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
+                    fi
+                    output_name="${playlist_name}_${bitrates}_%05d.ts"
+                elif [[ "$bitrates" == *"x"* ]] 
                 then
-                  quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
+                    resolution=$bitrates
+                    resolution="-vf scale=${resolution//x/:}"
+                    quality_command="-crf $quality"
+                else
+                    quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
+                    if [ "$VIDEO_CODEC" == "libx265" ]
+                    then
+                    quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
+                    fi
+                    output_name="${playlist_name}_${bitrates}_%05d.ts"
                 fi
-                output_name="${playlist_name}_${bitrates}_%05d.ts"
             else
                 quality_command="-crf $quality"
-                if [ "$VIDEO_CODEC" == "libx265" ]
-                then
-                  quality_command="$quality_command -x265-params"
-                fi
             fi
             
             if [ -n "${video_shift:-}" ] 
@@ -2433,6 +2553,16 @@ HlsStreamCreator()
             action="add"
             SyncFile
 
+            if [ -n "$quality" ] 
+            then
+                quality_command="-q $quality"
+            fi
+
+            if [ -n "$bitrates" ] 
+            then
+                bitrates_command="-b $bitrates"
+            fi
+
             $CREATOR_FILE $live -i "$stream_link" -s "$seg_length" \
             -o "$output_dir_root" $seg_count_command $bitrates_command \
             -p "$playlist_name" -t "$seg_name" $key_name_command $quality_command \
@@ -2456,6 +2586,16 @@ HlsStreamCreator()
             mv "${CHANNELS_TMP}_hls" "$CHANNELS_FILE"
             action="start"
             SyncFile
+
+            if [ -n "$chnl_quality" ] 
+            then
+                chnl_quality_command="-q $chnl_quality"
+            fi
+
+            if [ -n "$chnl_bitrates" ] 
+            then
+                chnl_bitrates_command="-b $chnl_bitrates"
+            fi
 
             $CREATOR_FILE $chnl_live -i "$chnl_stream_link" -s "$chnl_seg_length" \
             -o "$chnl_output_dir_root" $chnl_seg_count_command $chnl_bitrates_command \
@@ -2507,6 +2647,16 @@ HlsStreamCreator()
             action="add"
             SyncFile
 
+            if [ -n "$quality" ] 
+            then
+                quality_command="-q $quality"
+            fi
+
+            if [ -n "$bitrates" ] 
+            then
+                bitrates_command="-b $bitrates"
+            fi
+
             $CREATOR_FILE -l -i "$stream_link" -s "$seg_length" \
             -o "$output_dir_root" -c "$seg_count" $bitrates_command \
             -p "$playlist_name" -t "$seg_name" -K "$key_name" $quality_command \
@@ -2556,18 +2706,17 @@ AddChannel()
         master=0
     else
         SetQuality
-        
-        if [ -n "$quality" ] 
-        then
-            quality_command="-q $quality"
-        fi
 
         SetBitrates
 
         if [ -n "$bitrates" ] 
         then
-            bitrates_command="-b $bitrates"
-            master=1
+            if [[ $bitrates != *"-"* ]] && [[ $bitrates == *"x"* ]]
+            then
+                master=0
+            else
+                master=1
+            fi
         else
             master=0
         fi
@@ -3177,13 +3326,16 @@ StartChannel()
         if [ -n "$chnl_quality" ] 
         then
             chnl_const=""
-            chnl_quality_command="-q $chnl_quality"
         fi
 
         if [ -n "$chnl_bitrates" ] 
         then
-            chnl_bitrates_command="-b $chnl_bitrates"
-            master=1
+            if [[ $chnl_bitrates != *"-"* ]] && [[ $chnl_bitrates == *"x"* ]]
+            then
+                master=0
+            else
+                master=1
+            fi
         else
             master=0
         fi
@@ -4336,8 +4488,13 @@ Schedule()
                         else
                             flag=${time:0:1}
                         fi
-                        line=${line#*<em>}
-                        time=${line%%<\/em>*}
+                        if [[ "$line" == *"<em>"* ]] 
+                        then
+                            line=${line#*<em>}
+                            time=${line%%<\/em>*}
+                        else
+                            break
+                        fi
                     done
                     break
                 fi
@@ -5334,7 +5491,7 @@ MonitorHlsRestartChannel()
     for((i=0;i<hls_restart_nums;i++))
     do
         chnl_stream_links_count=${#chnl_stream_links[@]}
-        chnl_stream_links_index=$((hls_restart_nums % chnl_stream_links_count))
+        chnl_stream_links_index=$((i % chnl_stream_links_count))
         chnl_stream_link=${chnl_stream_links[chnl_stream_links_index]}
         action="skip"
         StopChannel > /dev/null 2>&1
@@ -7861,12 +8018,13 @@ else
             quality_command=""
             bitrates_command=""
 
-            if [ -z "${kind:-}" ] && [ "${video_codec:-}" == "copy" ] && [ "${audio_codec:-}" == "copy" ]
+            if [ -z "${kind:-}" ] && [ "$VIDEO_CODEC" == "copy" ] && [ "$AUDIO_CODEC" == "copy" ]
             then
                 quality=""
                 bitrates=""
                 const=""
                 const_yn="no"
+                master=0
             else
                 if [ -z "${const:-}" ]  
                 then
@@ -7882,16 +8040,22 @@ else
                     const_yn="yes"
                 fi
 
-                if [ -n "${quality:-}" ] 
+                if [ -n "$quality" ] 
                 then
                     const=""
                     const_yn="no"
-                    quality_command="-q $quality"
                 fi
 
-                if [ -n "${bitrates:-}" ] 
+                if [ -n "$bitrates" ] 
                 then
-                    bitrates_command="-b $bitrates"
+                    if [[ $bitrates != *"-"* ]] && [[ $bitrates == *"x"* ]]
+                    then
+                        master=0
+                    else
+                        master=1
+                    fi
+                else
+                    master=0
                 fi
             fi
 
