@@ -469,6 +469,22 @@ Uninstall()
 Update()
 {
     [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+    if [ -s "$MONITOR_PID" ] 
+    then
+        PID=$(< "$MONITOR_PID")
+        if kill -0 "$PID" 2> /dev/null 
+        then
+            echo && echo -e "$info 需要先关闭监控，是否继续? [Y/n]"
+            read -p "(默认: Y): " stop_monitor_yn
+            stop_monitor_yn=${stop_monitor_yn:-"Y"}
+            if [[ $stop_monitor_yn == [Y/y] ]] 
+            then
+                MonitorStop
+            else
+                echo && echo "已取消..." && echo && exit 1
+            fi
+        fi
+    fi
     CheckRelease
     if grep -q '\--show-progress' < <(wget --help)
     then
@@ -3483,50 +3499,44 @@ StopChannel()
 
     stopped=0
 
-    if kill -0 "$chnl_pid" 2> /dev/null 
-    then
-        while IFS= read -r ffmpeg_pid 
-        do
-            if [ -z "$ffmpeg_pid" ] 
-            then
-                if kill -9 "$chnl_pid" 2> /dev/null 
+    while [ "$stopped" == 0 ] 
+    do
+        if kill -0 "$chnl_pid" 2> /dev/null 
+        then
+            while IFS= read -r ffmpeg_pid 
+            do
+                if [ -z "$ffmpeg_pid" ] 
                 then
-                    echo && echo -e "$info 频道进程 $chnl_pid 已停止 !" && echo
-                    stopped=1
-                    break
-                fi
-            else
-                while IFS= read -r real_ffmpeg_pid 
-                do
-                    if [ -z "$real_ffmpeg_pid" ] 
+                    if kill -9 "$chnl_pid" 2> /dev/null 
                     then
-                        if kill -9 "$ffmpeg_pid" 2> /dev/null 
+                        echo && echo -e "$info 频道进程 $chnl_pid 已停止 !" && echo
+                        stopped=1
+                        break
+                    fi
+                else
+                    while IFS= read -r real_ffmpeg_pid 
+                    do
+                        if [ -z "$real_ffmpeg_pid" ] 
+                        then
+                            if kill -9 "$ffmpeg_pid" 2> /dev/null 
+                            then
+                                echo && echo -e "$info 频道进程 $chnl_pid 已停止 !" && echo
+                                stopped=1
+                                break 2
+                            fi
+                        elif kill -9 "$real_ffmpeg_pid" 2> /dev/null 
                         then
                             echo && echo -e "$info 频道进程 $chnl_pid 已停止 !" && echo
                             stopped=1
                             break 2
                         fi
-                    elif kill -9 "$real_ffmpeg_pid" 2> /dev/null 
-                    then
-                        echo && echo -e "$info 频道进程 $chnl_pid 已停止 !" && echo
-                        stopped=1
-                        break 2
-                    fi
-                done <<< $(pgrep -P "$ffmpeg_pid")
-            fi
-        done <<< $(pgrep -P "$chnl_pid")
-    else
-        stopped=1
-    fi
-
-    if [ "$stopped" == 0 ] 
-    then
-        if [ -n "${monitor:-}" ]
-        then
-            return 0
+                    done <<< $(pgrep -P "$ffmpeg_pid")
+                fi
+            done <<< $(pgrep -P "$chnl_pid")
+        else
+            stopped=1
         fi
-        echo -e "$error 关闭频道进程 $chnl_pid 遇到错误，请重试 !" && echo && exit 1
-    fi
+    done
 
     sleep 3
     if [ "${kind:-}" == "flv" ] 
@@ -5588,11 +5598,12 @@ MonitorError()
 
 MonitorTryAccounts()
 {
-    if [[ $chnl_stream_link == *http://*/*/*/* ]] && [ -e "$XTREAM_CODES" ] 
+    if [[ $chnl_stream_link == *http://*/*/*/* ]] && [ -s "$XTREAM_CODES" ] 
     then
-        chnl_domain=${chnl_stream_link#*: \"http://}
+        chnl_domain=${chnl_stream_link#*http://}
         chnl_domain=${chnl_domain%%/*}
-        if [ -z "${accounts:-}" ] 
+        accounts=()
+        if [ "${#accounts[@]}" == 0 ] 
         then
             while IFS= read -r line 
             do
@@ -5605,7 +5616,7 @@ MonitorTryAccounts()
                 fi
             done < "$XTREAM_CODES"
         fi
-        if [ -n "${accounts:-}" ] 
+        if [ "${#accounts[@]}" -gt 0 ] 
         then
             chnls=()
             while IFS= read -r line 
@@ -5657,10 +5668,7 @@ MonitorTryAccounts()
                 if [ "$found" == 0 ] 
                 then
                     action="skip"
-                    while [ "${stopped:-}" == 0 ] 
-                    do
-                        StopChannel > /dev/null 2>&1
-                    done
+                    StopChannel > /dev/null 2>&1
 
                     if [[ $chnl_stream_link == *"/live/"* ]] 
                     then
@@ -5674,25 +5682,61 @@ MonitorTryAccounts()
                     else
                         chnl_stream_links=$chnl_stream_link
                     fi
+
                     StartChannel > /dev/null 2>&1
                     sleep 15
                     GetChannelInfo
-                    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-                    FFPROBE="$FFMPEG_ROOT/ffprobe"
+
                     if [ -n "${kind:-}" ] 
                     then
-                        audio_stream=$($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -show_streams -select_streams a -loglevel quiet || true)
-                        if [ -n "${audio_stream:-}" ] 
+                        audio=0
+                        video=0
+                        while IFS= read -r line 
+                        do
+                            if [[ $line == *"codec_type=audio"* ]] 
+                            then
+                                audio=1
+                            elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]]
+                            then
+                                audio=0
+                            elif [[ $line == *"codec_type=video"* ]] 
+                            then
+                                video=1
+                            fi
+                        done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+
+                        if [ "$audio" == 1 ] && [ "$video" == 1 ]
                         then
                             try_success=1
+                            printf -v date_now "%(%m-%d %H:%M:%S)T"
+                            printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
                             break
                         fi
                     elif ls -A "$LIVE_ROOT/$output_dir_name/"* > /dev/null 2>&1 
                     then
-                        bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts || true)
-                        bit_rate=${bit_rate//N\/A/0}
-                        audio_stream=$($FFPROBE -i "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -select_streams a -loglevel quiet || true)
-                        if [[ ${bit_rate:-0} -gt $hls_min_bitrates ]] && [ -n "$audio_stream" ]
+                        audio=0
+                        video=0
+                        bit_rate=0
+                        while IFS= read -r line 
+                        do
+                            if [[ $line == *"codec_type=audio"* ]] 
+                            then
+                                audio=1
+                            elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
+                            then
+                                audio=0
+                            elif [[ $line == *"codec_type=video"* ]] 
+                            then
+                                video=1
+                            elif [[ $line == *"bit_rate="* ]] 
+                            then
+                                line=${line#*bit_rate=}
+                                line=${line//N\/A/0}
+                                [[ $line -gt $bit_rate ]] && bit_rate=$line
+                            fi
+                        done < <($FFPROBE -i "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+                        [[ $bit_rate -eq 0 ]] && bit_rate=$hls_min_bitrates
+                        if [ "$audio" == 1 ] && [ "$video" == 1 ] && [[ $bit_rate -gt $hls_min_bitrates ]]
                         then
                             try_success=1
                             printf -v date_now "%(%m-%d %H:%M:%S)T"
@@ -5713,45 +5757,63 @@ MonitorHlsRestartChannel()
     hls_restart_nums=${hls_restart_nums:-20}
     for((i=0;i<hls_restart_nums;i++))
     do
-        [[ $chnl_stream_links == *" "* ]] && chnl_stream_links="${chnl_stream_links#* } $chnl_stream_link"
+        if [ "$i" -gt 0 ] && [[ $chnl_stream_links == *" "* ]] 
+        then
+            chnl_stream_links="${chnl_stream_links#* } $chnl_stream_link"
+            chnl_stream_link=${chnl_stream_links%% *}
+        fi
         action="skip"
         StopChannel > /dev/null 2>&1
-        if [ "${stopped:-}" == 1 ] 
+        StartChannel > /dev/null 2>&1
+        sleep 15
+        GetChannelInfo
+        if ls -A "$LIVE_ROOT/$output_dir_name/"* > /dev/null 2>&1 
         then
-            StartChannel > /dev/null 2>&1
-            sleep 15
-            GetChannelInfo
-            if ls -A "$LIVE_ROOT/$output_dir_name/"* > /dev/null 2>&1 
-            then
-                FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-                FFPROBE="$FFMPEG_ROOT/ffprobe"
-                bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts || true)
-                bit_rate=${bit_rate//N\/A/0}
-                audio_stream=$($FFPROBE -i "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -select_streams a -loglevel quiet || true)
-                if [[ ${bit_rate:-0} -gt $hls_min_bitrates ]] && [ -n "$audio_stream" ]
+            audio=0
+            video=0
+            bit_rate=0
+            while IFS= read -r line 
+            do
+                if [[ $line == *"codec_type=audio"* ]] 
                 then
-                    printf -v date_now "%(%m-%d %H:%M:%S)T"
-                    printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
-                    break
-                fi
-            elif [[ $i -eq $((hls_restart_nums - 1)) ]] 
-            then
-                try_success=0
-                MonitorTryAccounts
-                if [ "$try_success" == 0 ] 
+                    audio=1
+                elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
                 then
-                    StopChannel > /dev/null 2>&1
-                    printf -v date_now "%(%m-%d %H:%M:%S)T"
-                    printf '%s\n' "$date_now $chnl_channel_name 重启失败" >> "$MONITOR_LOG"
-                    declare -a new_array
-                    for element in "${monitor_dir_names_chosen[@]}"
-                    do
-                        [ "$element" != "$output_dir_name" ] && new_array+=("$element")
-                    done
-                    monitor_dir_names_chosen=("${new_array[@]}")
-                    unset new_array
-                    break
+                    audio=0
+                elif [[ $line == *"codec_type=video"* ]] 
+                then
+                    video=1
+                elif [[ $line == *"bit_rate="* ]] 
+                then
+                    line=${line#*bit_rate=}
+                    line=${line//N\/A/0}
+                    [[ $line -gt $bit_rate ]] && bit_rate=$line
                 fi
+            done < <($FFPROBE -i "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+            [[ $bit_rate -eq 0 ]] && bit_rate=$hls_min_bitrates
+            if [ "$audio" == 1 ] && [ "$video" == 1 ] && [[ $bit_rate -gt $hls_min_bitrates ]]
+            then
+                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
+                break
+            fi
+        elif [[ $i -eq $((hls_restart_nums - 1)) ]] 
+        then
+            try_success=0
+            MonitorTryAccounts
+            if [ "$try_success" == 0 ] 
+            then
+                StopChannel > /dev/null 2>&1
+                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                printf '%s\n' "$date_now $chnl_channel_name 重启失败" >> "$MONITOR_LOG"
+                declare -a new_array
+                for element in "${monitor_dir_names_chosen[@]}"
+                do
+                    [ "$element" != "$output_dir_name" ] && new_array+=("$element")
+                done
+                monitor_dir_names_chosen=("${new_array[@]}")
+                unset new_array
+                break
             fi
         fi
     done
@@ -5765,6 +5827,8 @@ Monitor()
     mkdir -p "$LIVE_ROOT"
     printf '%s\n' "$date_now 监控启动成功 PID $BASHPID !" >> "$MONITOR_LOG"
     echo -e "$info 监控启动成功 !"
+    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+    FFPROBE="$FFMPEG_ROOT/ffprobe"
     while true; do
         if [ -n "${flv_nums:-}" ] 
         then
@@ -5777,19 +5841,36 @@ Monitor()
                     chnl_flv_pull_link=${chnl_flv_pull_link#\'}
                     chnl_flv_push_link=${monitor_flv_push_links[i]%\'}
                     chnl_flv_push_link=${chnl_flv_push_link#\'}
-                    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-                    FFPROBE="$FFMPEG_ROOT/ffprobe"
-                    audio_stream=$($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -show_streams -select_streams a -loglevel quiet || true)
-                    if [ -z "${audio_stream:-}" ] 
+                    audio=0
+                    video=0
+                    while IFS= read -r line 
+                    do
+                        if [[ $line == *"codec_type=audio"* ]] 
+                        then
+                            audio=1
+                        elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
+                        then
+                            audio=0
+                        elif [[ $line == *"codec_type=video"* ]] 
+                        then
+                            video=1
+                        fi
+                    done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+
+                    if [ "$audio" == 0 ] || [ "$video" == 0 ]
                     then
                         GetChannelInfo
-
-                        [[ $chnl_stream_links == *" "* ]] && chnl_stream_links="${chnl_stream_links#* } $chnl_stream_link"
 
                         if [ "${flv_restart_count:-1}" -gt "${flv_restart_nums:-20}" ] 
                         then
                             try_success=0
                             MonitorTryAccounts
+                            if [ "$try_success" == 1 ] 
+                            then
+                                flv_first_fail=""
+                                flv_restart_count=1
+                                continue
+                            fi
                             if [ "$chnl_flv_status" == "on" ] 
                             then
                                 StopChannel > /dev/null 2>&1
@@ -5825,6 +5906,12 @@ Monitor()
                             break 1
                         fi
 
+                        if [ "${flv_restart_count:-1}" -gt 1 ] && [[ $chnl_stream_links == *" "* ]] 
+                        then
+                            chnl_stream_links="${chnl_stream_links#* } $chnl_stream_link"
+                            chnl_stream_link=${chnl_stream_links%% *}
+                        fi
+
                         if [ -n "${flv_first_fail:-}" ]
                         then
                             printf -v flv_fail_date "%(%s)T"
@@ -5832,16 +5919,13 @@ Monitor()
                             then
                                 action="skip"
                                 StopChannel > /dev/null 2>&1
-                                if [ "${stopped:-}" == 1 ] 
-                                then
-                                    StartChannel > /dev/null 2>&1
-                                    flv_restart_count=${flv_restart_count:-1}
-                                    ((flv_restart_count++))
-                                    flv_first_fail=""
-                                    printf -v date_now "%(%m-%d %H:%M:%S)T"
-                                    printf '%s\n' "$date_now $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
-                                    sleep 10
-                                fi
+                                StartChannel > /dev/null 2>&1
+                                flv_restart_count=${flv_restart_count:-1}
+                                ((flv_restart_count++))
+                                flv_first_fail=""
+                                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                                printf '%s\n' "$date_now $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
+                                sleep 10
                             fi
                         else
                             if [ "$chnl_flv_status" == "off" ] 
@@ -5889,14 +5973,25 @@ Monitor()
                     chnl_flv_pull_link=${chnl_flv_pull_link#\'}
                     chnl_flv_push_link=${monitor_flv_push_links[$((flv_num-1))]%\'}
                     chnl_flv_push_link=${chnl_flv_push_link#\'}
-                    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-                    FFPROBE="$FFMPEG_ROOT/ffprobe"
-                    audio_stream=$($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -show_streams -select_streams a -loglevel quiet || true)
-                    if [ -z "${audio_stream:-}" ] 
+                    audio=0
+                    video=0
+                    while IFS= read -r line 
+                    do
+                        if [[ $line == *"codec_type=audio"* ]] 
+                        then
+                            audio=1
+                        elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
+                        then
+                            audio=0
+                        elif [[ $line == *"codec_type=video"* ]] 
+                        then
+                            video=1
+                        fi
+                    done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+
+                    if [ "$audio" == 0 ] || [ "$video" == 0 ]
                     then
                         GetChannelInfo
-
-                        [[ $chnl_stream_links == *" "* ]] && chnl_stream_links="${chnl_stream_links#* } $chnl_stream_link"
 
                         if [ "${flv_restart_count:-1}" -gt "${flv_restart_nums:-20}" ] 
                         then
@@ -5920,6 +6015,12 @@ Monitor()
                             break 1
                         fi
 
+                        if [ "${flv_restart_count:-1}" -gt 1 ] && [[ $chnl_stream_links == *" "* ]] 
+                        then
+                            chnl_stream_links="${chnl_stream_links#* } $chnl_stream_link"
+                            chnl_stream_link=${chnl_stream_links%% *}
+                        fi
+
                         if [ -n "${flv_first_fail:-}" ] 
                         then
                             printf -v flv_fail_date "%(%s)T"
@@ -5927,16 +6028,13 @@ Monitor()
                             then
                                 action="skip"
                                 StopChannel > /dev/null 2>&1
-                                if [ "${stopped:-}" == 1 ] 
-                                then
-                                    StartChannel > /dev/null 2>&1
-                                    flv_restart_count=${flv_restart_count:-1}
-                                    ((flv_restart_count++))
-                                    flv_first_fail=""
-                                    printf -v date_now "%(%m-%d %H:%M:%S)T"
-                                    printf '%s\n' "$date_now $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
-                                    sleep 10
-                                fi
+                                StartChannel > /dev/null 2>&1
+                                flv_restart_count=${flv_restart_count:-1}
+                                ((flv_restart_count++))
+                                flv_first_fail=""
+                                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                                printf '%s\n' "$date_now $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
+                                sleep 10
                             fi
                         else
                             if [ "$chnl_flv_status" == "off" ] 
@@ -6076,21 +6174,56 @@ Monitor()
                                 fi
                             fi
 
-                            FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-                            FFPROBE="$FFMPEG_ROOT/ffprobe"
-                            bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[i]}/"*_00000.ts || true)
-                            bit_rate=${bit_rate:-$hls_min_bitrates}
-                            bit_rate=${bit_rate//N\/A/$hls_min_bitrates}
-                            #audio_stream=$($FFPROBE -i "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[i]}/"*_00000.ts -show_streams -select_streams a -loglevel quiet || true)
-                            if [[ $bit_rate -lt $hls_min_bitrates ]] # || [ -z "$audio_stream" ]
+                            audio=0
+                            video=0
+                            bit_rate=0
+                            while IFS= read -r line 
+                            do
+                                if [[ $line == *"codec_type=audio"* ]] 
+                                then
+                                    audio=1
+                                elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
+                                then
+                                    audio=0
+                                elif [[ $line == *"codec_type=video"* ]] 
+                                then
+                                    video=1
+                                elif [[ $line == *"bit_rate="* ]] 
+                                then
+                                    line=${line#*bit_rate=}
+                                    line=${line//N\/A/0}
+                                    [[ $line -gt $bit_rate ]] && bit_rate=$line
+                                fi
+                            done < <($FFPROBE -i "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[i]}/"*_00000.ts -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+                            [[ $bit_rate -eq 0 ]] && bit_rate=$hls_min_bitrates
+                            if [ "$audio" == 0 ] || [ "$video" == 0 ] || [[ $bit_rate -lt $hls_min_bitrates ]]
                             then
                                 fail_count=1
                                 for f in "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[i]}/"*.ts
                                 do
-                                    bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$f" || true)
-                                    bit_rate=${bit_rate:-$hls_min_bitrates}
-                                    bit_rate=${bit_rate//N\/A/$hls_min_bitrates}
-                                    if [[ $bit_rate -lt $hls_min_bitrates ]] 
+                                    audio=0
+                                    video=0
+                                    bit_rate=0
+                                    while IFS= read -r line 
+                                    do
+                                        if [[ $line == *"codec_type=audio"* ]] 
+                                        then
+                                            audio=1
+                                        elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
+                                        then
+                                            audio=0
+                                        elif [[ $line == *"codec_type=video"* ]] 
+                                        then
+                                            video=1
+                                        elif [[ $line == *"bit_rate="* ]] 
+                                        then
+                                            line=${line#*bit_rate=}
+                                            line=${line//N\/A/0}
+                                            [[ $line -gt $bit_rate ]] && bit_rate=$line
+                                        fi
+                                    done < <($FFPROBE -i "$f" -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+                                    [[ $bit_rate -eq 0 ]] && bit_rate=$hls_min_bitrates
+                                    if [ "$audio" == 0 ] || [ "$video" == 0 ] || [[ $bit_rate -lt $hls_min_bitrates ]]
                                     then
                                         ((fail_count++))
                                     fi
@@ -6267,7 +6400,7 @@ MonitorSet()
             echo && echo -e "$error 没有开启的频道！" && echo && exit 1
         elif [ -z "${flv_delay_seconds:-}" ] 
         then
-            echo && echo -e "$error 已取消..." && echo && exit 1
+            echo && echo "已取消..." && echo && exit 1
         else
             $JQ_FILE '(.default|.flv_delay_seconds)='"$flv_delay_seconds"'|(.default|.flv_restart_nums)='"$flv_restart_nums"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
             mv "$CHANNELS_TMP" "$CHANNELS_FILE"
@@ -6823,7 +6956,7 @@ TestXtreamCodes()
     while read -p "(默认: 取消): " test_num
     do
         case $test_num in
-            "") echo && echo -e "$error 已取消..." && echo && exit 1
+            "") echo && echo "已取消..." && echo && exit 1
             ;;
             *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
             ;;
@@ -6842,7 +6975,7 @@ TestXtreamCodes()
     while read -p "(默认: 取消): " channel_id
     do
         case $channel_id in
-            "") echo && echo -e "$error 已取消..." && exit 1
+            "") echo && echo "已取消..." && echo && exit 1
             ;;
             *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
             ;;
