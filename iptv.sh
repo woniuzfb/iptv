@@ -29,6 +29,7 @@ MONITOR_PID="$IPTV_ROOT/monitor.pid"
 MONITOR_LOG="$IPTV_ROOT/monitor.log"
 LOGROTATE_CONFIG="$IPTV_ROOT/logrotate"
 XTREAM_CODES="$IPTV_ROOT/xtream_codes"
+XTREAM_CODES_LINK="http://hbo.epub.fun/xtream_codes"
 green="\033[32m"
 red="\033[31m"
 plain="\033[0m"
@@ -1070,10 +1071,9 @@ GetChannelInfo()
         chnl_pid=${chnl_pid%, status:*}
         chnl_status=${channel#*, status: }
         chnl_status=${chnl_status%, stream_link:*}
-        chnl_stream_link_input=${channel#*, stream_link: }
-        chnl_stream_link_input=${chnl_stream_link_input%, live:*}
-        IFS=" " read -ra chnl_stream_links <<< "$chnl_stream_link_input"
-        chnl_stream_link=${chnl_stream_links[0]}
+        chnl_stream_links=${channel#*, stream_link: }
+        chnl_stream_links=${chnl_stream_links%, live:*}
+        chnl_stream_link=${chnl_stream_links%% *}
         chnl_live_yn=${channel#*, live: }
         chnl_live_yn=${chnl_live_yn%, output_dir_name:*}
         if [ "$chnl_live_yn" == "no" ]
@@ -1275,7 +1275,7 @@ ViewChannelInfo()
         echo -e " 拉流地址   : $green${chnl_flv_pull_link:-"无"}$plain"
     fi
     
-    echo -e " 直播源\t    : $green${chnl_stream_link_input// /, }$plain"
+    echo -e " 直播源\t    : $green${chnl_stream_links// /, }$plain"
     echo -e " 无限时长直播: $chnl_live_text"
     echo -e " 视频编码   : $green$chnl_video_codec$plain"
     echo -e " 音频编码   : $green$chnl_audio_codec$plain"
@@ -1888,6 +1888,16 @@ FlvStreamCreatorWithShift()
                 map_command=""
             fi
 
+            if [[ "$FFMPEG_FLAGS" == *"-vf "* ]] && [ -n "$resolution" ]
+            then
+                FFMPEG_FLAGS_A=${FFMPEG_FLAGS%-vf *}
+                FFMPEG_FLAGS_B=${FFMPEG_FLAGS#*-vf }
+                FFMPEG_FLAGS_C=${FFMPEG_FLAGS_B%% *}
+                FFMPEG_FLAGS_B=${FFMPEG_FLAGS_B#* }
+                FFMPEG_FLAGS="$FFMPEG_FLAGS_A $FFMPEG_FLAGS_B"
+                resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
+            fi
+
             $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command \
             -y -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
             $FFMPEG_FLAGS -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
@@ -1904,7 +1914,9 @@ FlvStreamCreatorWithShift()
         ;;
         "StartChannel") 
             new_pid=$pid
-            $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.flv_status)="on"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
+            $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'
+            |(.channels[]|select(.pid=='"$new_pid"')|.flv_status)="on"
+            |(.channels[]|select(.pid=='"$new_pid"')|.stream_link)="'"$chnl_stream_links"'"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
             mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
             action="start"
             SyncFile
@@ -1977,6 +1989,16 @@ FlvStreamCreatorWithShift()
                 map_command="-itsoffset $chnl_audio_shift -i $chnl_stream_link -map 0:a -map 1:v"
             else
                 map_command=""
+            fi
+
+            if [[ "$FFMPEG_FLAGS" == *"-vf "* ]] && [ -n "$resolution" ]
+            then
+                FFMPEG_FLAGS_A=${FFMPEG_FLAGS%-vf *}
+                FFMPEG_FLAGS_B=${FFMPEG_FLAGS#*-vf }
+                FFMPEG_FLAGS_C=${FFMPEG_FLAGS_B%% *}
+                FFMPEG_FLAGS_B=${FFMPEG_FLAGS_B#* }
+                FFMPEG_FLAGS="$FFMPEG_FLAGS_A $FFMPEG_FLAGS_B"
+                resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
             fi
 
             $FFMPEG $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command \
@@ -2095,6 +2117,16 @@ FlvStreamCreatorWithShift()
                 map_command="-itsoffset $audio_shift -i $stream_link -map 0:a -map 1:v"
             else
                 map_command=""
+            fi
+
+            if [[ "$FFMPEG_FLAGS" == *"-vf "* ]] && [ -n "$resolution" ]
+            then
+                FFMPEG_FLAGS_A=${FFMPEG_FLAGS%-vf *}
+                FFMPEG_FLAGS_B=${FFMPEG_FLAGS#*-vf }
+                FFMPEG_FLAGS_C=${FFMPEG_FLAGS_B%% *}
+                FFMPEG_FLAGS_B=${FFMPEG_FLAGS_B#* }
+                FFMPEG_FLAGS="$FFMPEG_FLAGS_A $FFMPEG_FLAGS_B"
+                resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
             fi
 
             $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
@@ -2243,6 +2275,16 @@ HlsStreamCreatorWithShift()
                 map_command=""
             fi
 
+            if [[ "$FFMPEG_FLAGS" == *"-vf "* ]] && [ -n "$resolution" ]
+            then
+                FFMPEG_FLAGS_A=${FFMPEG_FLAGS%-vf *}
+                FFMPEG_FLAGS_B=${FFMPEG_FLAGS#*-vf }
+                FFMPEG_FLAGS_C=${FFMPEG_FLAGS_B%% *}
+                FFMPEG_FLAGS_B=${FFMPEG_FLAGS_B#* }
+                FFMPEG_FLAGS="$FFMPEG_FLAGS_A $FFMPEG_FLAGS_B"
+                resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
+            fi
+
             $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
             -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
             -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
@@ -2263,7 +2305,9 @@ HlsStreamCreatorWithShift()
         "StartChannel") 
             mkdir -p "$chnl_output_dir_root"
             new_pid=$pid
-            $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.status)="on"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_hls_shift"
+            $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'
+            |(.channels[]|select(.pid=='"$new_pid"')|.status)="on"
+            |(.channels[]|select(.pid=='"$new_pid"')|.stream_link)="'"$chnl_stream_links"'"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_hls_shift"
             mv "${CHANNELS_TMP}_hls_shift" "$CHANNELS_FILE"
             action="start"
             SyncFile
@@ -2350,6 +2394,16 @@ HlsStreamCreatorWithShift()
             else
                 chnl_live_command=""
                 chnl_seg_count_command=""
+            fi
+
+            if [[ "$FFMPEG_FLAGS" == *"-vf "* ]] && [ -n "$resolution" ]
+            then
+                FFMPEG_FLAGS_A=${FFMPEG_FLAGS%-vf *}
+                FFMPEG_FLAGS_B=${FFMPEG_FLAGS#*-vf }
+                FFMPEG_FLAGS_C=${FFMPEG_FLAGS_B%% *}
+                FFMPEG_FLAGS_B=${FFMPEG_FLAGS_B#* }
+                FFMPEG_FLAGS="$FFMPEG_FLAGS_A $FFMPEG_FLAGS_B"
+                resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
             fi
 
             $FFMPEG $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
@@ -2479,6 +2533,16 @@ HlsStreamCreatorWithShift()
                 map_command=""
             fi
 
+            if [[ "$FFMPEG_FLAGS" == *"-vf "* ]] && [ -n "$resolution" ]
+            then
+                FFMPEG_FLAGS_A=${FFMPEG_FLAGS%-vf *}
+                FFMPEG_FLAGS_B=${FFMPEG_FLAGS#*-vf }
+                FFMPEG_FLAGS_C=${FFMPEG_FLAGS_B%% *}
+                FFMPEG_FLAGS_B=${FFMPEG_FLAGS_B#* }
+                FFMPEG_FLAGS="$FFMPEG_FLAGS_A $FFMPEG_FLAGS_B"
+                resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
+            fi
+
             $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
             -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
             -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
@@ -2582,7 +2646,9 @@ HlsStreamCreator()
         "StartChannel") 
             mkdir -p "$chnl_output_dir_root"
             new_pid=$pid
-            $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'|(.channels[]|select(.pid=='"$new_pid"')|.status)="on"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_hls"
+            $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'
+            |(.channels[]|select(.pid=='"$new_pid"')|.status)="on"
+            |(.channels[]|select(.pid=='"$new_pid"')|.stream_link)="'"$chnl_stream_links"'"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_hls"
             mv "${CHANNELS_TMP}_hls" "$CHANNELS_FILE"
             action="start"
             SyncFile
@@ -4647,7 +4713,7 @@ TsImg()
                     image=${img_array[image]}
                     refresh_img=0
                     base64 -d <<< "${image#*,}" > "$IMG_FILE"
-                    imgcat --half-height "$IMG_FILE"
+                    /usr/local/bin/imgcat --half-height "$IMG_FILE"
                     rm -rf "${IMG_FILE:-notfound}"
                     echo && echo -e "$info 输入图片验证码："
                     read -p "(默认: 刷新验证码): " pincode
@@ -4677,7 +4743,7 @@ TsImg()
                 image=${img_array[image]}
                 refresh_img=0
                 base64 -d <<< "${image#*,}" > "$IMG_FILE"
-                imgcat --half-height "$IMG_FILE"
+                /usr/local/bin/imgcat --half-height "$IMG_FILE"
                 rm -rf "${IMG_FILE:-notfound}"
                 echo && echo -e "$info 输入图片验证码："
                 read -p "(默认: 刷新验证码): " pincode
@@ -4692,14 +4758,51 @@ TsRegister()
 {
     if [ ! -e "/usr/local/bin/imgcat" ] &&  [ -n "${ts_array[img_url]:-}" ]
     then
-        echo -e "$error 请先安装 imgcat (https://github.com/eddieantonio/imgcat#build)" && exit 1
+        echo && echo -e "$error 缺少 imgcat ,是否现在安装? [y/N]"
+        read -p "(默认: 取消): " imgcat_yn
+        imgcat_yn=${imgcat_yn:-"N"}
+        if [[ $imgcat_yn == [Yy] ]] 
+        then
+            Progress &
+            progress_pid=$!
+            CheckRelease
+            if [ "$release" == "rpm" ] 
+            then
+                yum -y install gcc gcc-c++ ncurses-devel >/dev/null 2>&1
+                echo -n "...50%..."
+            else
+                apt-get -y update >/dev/null 2>&1
+                apt-get -y install debconf-utils libncurses5-dev >/dev/null 2>&1
+                echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
+                apt-get -y install software-properties-common pkg-config build-essential >/dev/null 2>&1
+                echo -n "...50%..."
+            fi
+
+            cd ~
+
+            if [ ! -e "./imgcat-master" ] 
+            then
+                wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/imgcat.zip" -qO "imgcat.zip"
+                unzip "imgcat.zip" >/dev/null 2>&1
+            fi
+
+            cd "./imgcat-master"
+            autoconf >/dev/null 2>&1
+            ./configure >/dev/null 2>&1
+            make >/dev/null 2>&1
+            make install >/dev/null 2>&1
+            kill $progress_pid
+            echo -n "...100%" && echo && echo -e "$info imgcat 安装完成"
+        else
+            echo && echo "已取消..." && echo && exit 1
+        fi
     fi
     not_unique=1
     while [ "$not_unique" != 0 ] 
     do
         echo && echo -e "$info 输入账号："
         read -p "(默认: 取消): " account
-        [ -z "$account" ] && echo "已取消..." && exit 1
+        [ -z "$account" ] && echo && echo "已取消..." && echo && exit 1
         if [ -z "${ts_array[unique_url]:-}" ] 
         then
             not_unique=0
@@ -4710,7 +4813,7 @@ TsRegister()
 
     echo && echo -e "$info 输入密码："
     read -p "(默认: 取消): " password
-    [ -z "$password" ] && echo "已取消..." && exit 1
+    [ -z "$password" ] && echo && echo "已取消..." && echo && exit 1
 
     if [ -n "${ts_array[img_url]:-}" ] 
     then
@@ -5483,6 +5586,126 @@ MonitorError()
     printf '%s\n' "$date_now [LINE:$1] ERROR" >> "$MONITOR_LOG"
 }
 
+MonitorTryAccounts()
+{
+    if [[ $chnl_stream_link == *http://*/*/*/* ]] && [ -e "$XTREAM_CODES" ] 
+    then
+        chnl_domain=${chnl_stream_link#*: \"http://}
+        chnl_domain=${chnl_domain%%/*}
+        if [ -z "${accounts:-}" ] 
+        then
+            while IFS= read -r line 
+            do
+                if [[ $line == *"$chnl_domain"* ]] 
+                then
+                    line=${line#* }
+                    account_line=${line#* }
+                    IFS=" " read -ra accounts <<< "$account_line"
+                    break
+                fi
+            done < "$XTREAM_CODES"
+        fi
+        if [ -n "${accounts:-}" ] 
+        then
+            chnls=()
+            while IFS= read -r line 
+            do
+                if [[ $line == *\"status\":* ]] 
+                then
+                    line=${line#*: \"}
+                    status=${line%\",*}
+                elif [[ $line == *\"stream_link\":* ]] && [[ $line == *http://*/*/*/* ]]
+                then
+                    line=${line#*: \"http://}
+                    domain=${line%%/*}
+                    line=${line#*/}
+                    username=${line%%/*}
+                    if [ "$username" == "live" ] 
+                    then
+                        line=${line#*/}
+                        username=${line%%/*}
+                    fi
+                    line=${line#*/}
+                    password=${line%%/*}
+                elif [[ $line == *\"flv_status\":* ]] 
+                then
+                    line=${line#*: \"}
+                    flv_status=${line%\",*}
+                    if [ -n "${domain:-}" ] 
+                    then
+                        if [ "$status" == "on" ] || [ "$flv_status" == "on" ]
+                        then
+                            chnls+=("$domain/$username/$password")
+                        fi
+                    fi
+                    domain=""
+                fi
+            done < "$CHANNELS_FILE"
+
+            for account in "${accounts[@]}"
+            do
+                found=0
+                for chnl in "${chnls[@]}"
+                do
+                    if [ "$chnl" == "$chnl_domain/${account//:/\/}" ] 
+                    then
+                        found=1
+                        break
+                    fi
+                done
+
+                if [ "$found" == 0 ] 
+                then
+                    action="skip"
+                    while [ "${stopped:-}" == 0 ] 
+                    do
+                        StopChannel > /dev/null 2>&1
+                    done
+
+                    if [[ $chnl_stream_link == *"/live/"* ]] 
+                    then
+                        chnl_stream_link="http://$chnl_domain/live/${account//:/\/}/${chnl_stream_link##*/}"
+                    else
+                        chnl_stream_link="http://$chnl_domain/${account//:/\/}/${chnl_stream_link##*/}"
+                    fi
+                    if [[ $chnl_stream_links == *" "* ]] 
+                    then
+                        chnl_stream_links="$chnl_stream_link ${chnl_stream_links#* }"
+                    else
+                        chnl_stream_links=$chnl_stream_link
+                    fi
+                    StartChannel > /dev/null 2>&1
+                    sleep 15
+                    GetChannelInfo
+                    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+                    FFPROBE="$FFMPEG_ROOT/ffprobe"
+                    if [ -n "${kind:-}" ] 
+                    then
+                        audio_stream=$($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -show_streams -select_streams a -loglevel quiet || true)
+                        if [ -n "${audio_stream:-}" ] 
+                        then
+                            try_success=1
+                            break
+                        fi
+                    elif ls -A "$LIVE_ROOT/$output_dir_name/"* > /dev/null 2>&1 
+                    then
+                        bit_rate=$($FFPROBE -v quiet -show_entries format=bit_rate -of default=noprint_wrappers=1:nokey=1 "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts || true)
+                        bit_rate=${bit_rate//N\/A/0}
+                        audio_stream=$($FFPROBE -i "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -select_streams a -loglevel quiet || true)
+                        if [[ ${bit_rate:-0} -gt $hls_min_bitrates ]] && [ -n "$audio_stream" ]
+                        then
+                            try_success=1
+                            printf -v date_now "%(%m-%d %H:%M:%S)T"
+                            printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
+                            break
+                        fi
+                    fi
+                fi
+            done
+        fi
+    fi
+}
+
 MonitorHlsRestartChannel()
 {
     trap '' HUP INT TERM
@@ -5490,9 +5713,7 @@ MonitorHlsRestartChannel()
     hls_restart_nums=${hls_restart_nums:-20}
     for((i=0;i<hls_restart_nums;i++))
     do
-        chnl_stream_links_count=${#chnl_stream_links[@]}
-        chnl_stream_links_index=$((i % chnl_stream_links_count))
-        chnl_stream_link=${chnl_stream_links[chnl_stream_links_index]}
+        [[ $chnl_stream_links == *" "* ]] && chnl_stream_links="${chnl_stream_links#* } $chnl_stream_link"
         action="skip"
         StopChannel > /dev/null 2>&1
         if [ "${stopped:-}" == 1 ] 
@@ -5515,17 +5736,22 @@ MonitorHlsRestartChannel()
                 fi
             elif [[ $i -eq $((hls_restart_nums - 1)) ]] 
             then
-                StopChannel > /dev/null 2>&1
-                printf -v date_now "%(%m-%d %H:%M:%S)T"
-                printf '%s\n' "$date_now $chnl_channel_name 重启失败" >> "$MONITOR_LOG"
-                declare -a new_array
-                for element in "${monitor_dir_names_chosen[@]}"
-                do
-                    [ "$element" != "$output_dir_name" ] && new_array+=("$element")
-                done
-                monitor_dir_names_chosen=("${new_array[@]}")
-                unset new_array
-                break
+                try_success=0
+                MonitorTryAccounts
+                if [ "$try_success" == 0 ] 
+                then
+                    StopChannel > /dev/null 2>&1
+                    printf -v date_now "%(%m-%d %H:%M:%S)T"
+                    printf '%s\n' "$date_now $chnl_channel_name 重启失败" >> "$MONITOR_LOG"
+                    declare -a new_array
+                    for element in "${monitor_dir_names_chosen[@]}"
+                    do
+                        [ "$element" != "$output_dir_name" ] && new_array+=("$element")
+                    done
+                    monitor_dir_names_chosen=("${new_array[@]}")
+                    unset new_array
+                    break
+                fi
             fi
         fi
     done
@@ -5558,12 +5784,12 @@ Monitor()
                     then
                         GetChannelInfo
 
-                        chnl_stream_links_count=${#chnl_stream_links[@]}
-                        chnl_stream_links_index=$((flv_restart_count % chnl_stream_links_count))
-                        chnl_stream_link=${chnl_stream_links[chnl_stream_links_index]}
+                        [[ $chnl_stream_links == *" "* ]] && chnl_stream_links="${chnl_stream_links#* } $chnl_stream_link"
 
                         if [ "${flv_restart_count:-1}" -gt "${flv_restart_nums:-20}" ] 
                         then
+                            try_success=0
+                            MonitorTryAccounts
                             if [ "$chnl_flv_status" == "on" ] 
                             then
                                 StopChannel > /dev/null 2>&1
@@ -5670,9 +5896,7 @@ Monitor()
                     then
                         GetChannelInfo
 
-                        chnl_stream_links_count=${#chnl_stream_links[@]}
-                        chnl_stream_links_index=$((flv_restart_count % chnl_stream_links_count))
-                        chnl_stream_link=${chnl_stream_links[chnl_stream_links_index]}
+                        [[ $chnl_stream_links == *" "* ]] && chnl_stream_links="${chnl_stream_links#* } $chnl_stream_link"
 
                         if [ "${flv_restart_count:-1}" -gt "${flv_restart_nums:-20}" ] 
                         then
@@ -7130,11 +7354,12 @@ then
 
 ${green}1.$plain 查看账号
 ${green}2.$plain 添加账号
-${green}3.$plain 检测账号
-${green}4.$plain 网络获取账号
-${green}5.$plain 替换频道账号
+${green}3.$plain 更新账号
+${green}4.$plain 检测账号
+${green}5.$plain 网络获取账号
+${green}6.$plain 替换频道账号
 " && echo
-    read -p "请输入数字 [1-5]：" xtream_codes_num
+    read -p "请输入数字 [1-6]：" xtream_codes_num
 
     case $xtream_codes_num in
         1) 
@@ -7172,14 +7397,14 @@ ${green}5.$plain 替换频道账号
                 echo && echo -e "$error 输入错误 !" && echo && exit 1
             fi
 
-            [ -z "$ip" ] && echo && echo -e "$error 无法解析域名 !" && echo && exit 1
+            [ -z "${ip:-}" ] && echo && echo -e "$error 无法解析域名 !" && echo && exit 1
             printf '%s\n' "$ip $domain $username:$password" >> "$XTREAM_CODES"
 
             if [ -e "$CHANNELS_FILE" ] 
             then
                 while IFS= read -r line 
                 do
-                    if [[ $line == *\"stream_link\":* ]] 
+                    if [[ $line == *\"stream_link\":* ]] && [[ $line == *http://*/*/*/* ]]
                     then
                         line=${line#*: \"http://}
                         chnl_domain=${line%%/*}
@@ -7206,16 +7431,59 @@ ${green}5.$plain 替换频道账号
         ;;
         3) 
             [ ! -s "$XTREAM_CODES" ] && echo && echo -e "$error 没有账号 !" && echo && exit 1
+            while IFS= read -r line 
+            do
+                line=${line#* }
+                domain_line=${line%% *}
+                account_line=${line#* }
+                IFS="|" read -ra domains <<< "$domain_line"
+                IFS=" " read -ra accounts <<< "$account_line"
+                for account in "${accounts[@]}"
+                do
+                    for domain in "${domains[@]}"
+                    do
+                        ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+                        if [ -n "${ip:-}" ] 
+                        then
+                            printf '%s\n' "$ip $domain $account" >> "${XTREAM_CODES}_tmp"
+                        fi
+                    done
+                done
+            done < "$XTREAM_CODES"
+            mv "${XTREAM_CODES}_tmp" "$XTREAM_CODES"
+            echo && echo -e "$info 账号更新成功" && echo
+        ;;
+        4) 
+            [ ! -s "$XTREAM_CODES" ] && echo && echo -e "$error 没有账号 !" && echo && exit 1
             ListXtreamCodes
             TestXtreamCodes
         ;;
-        4) 
-            echo && echo -e "$error not ready~" && echo
-        ;;
         5) 
+            while IFS= read -r line 
+            do
+                line=${line#* }
+                domain_line=${line%% *}
+                account_line=${line#* }
+                IFS="|" read -ra domains <<< "$domain_line"
+                IFS=" " read -ra accounts <<< "$account_line"
+                for account in "${accounts[@]}"
+                do
+                    for domain in "${domains[@]}"
+                    do
+                        ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+                        if [ -n "${ip:-}" ] 
+                        then
+                            printf '%s\n' "$ip $domain $account" >> "$XTREAM_CODES"
+                        fi
+                    done
+                done
+            done < <(wget --tries=3 --no-check-certificate $XTREAM_CODES_LINK -qO-)
+            echo && echo -e "$info 账号添加成功" && echo
+        ;;
+        6) 
             echo && echo -e "$error not ready~" && echo
         ;;
-        *) echo && echo -e "$error 请输入正确的数字 [1-5]" && echo
+        *) echo && echo -e "$error 请输入正确的数字 [1-6]" && echo
         ;;
     esac
     exit 0
@@ -7474,6 +7742,7 @@ case "$cmd" in
         fi
 
         wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/winshining/nginx-http-flv-module/archive/master.zip" -qO "$FFMPEG_MIRROR_ROOT/nginx-http-flv-module.zip"
+        wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/eddieantonio/imgcat/archive/master.zip" -qO "$FFMPEG_MIRROR_ROOT/imgcat.zip"
         exit 0
     ;;
     "ts") 
