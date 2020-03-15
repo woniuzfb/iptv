@@ -13,7 +13,7 @@ IP_DENY="$IPTV_ROOT/ip.deny"
 IP_PID="$IPTV_ROOT/ip.pid"
 IP_LOG="$IPTV_ROOT/ip.log"
 FFMPEG_LOG_ROOT="$IPTV_ROOT/ffmpeg"
-FFMPEG_MIRROR_LINK="http://47.241.6.233/ffmpeg"
+FFMPEG_MIRROR_LINK="http://pngquant.com/ffmpeg"
 FFMPEG_MIRROR_ROOT="$IPTV_ROOT/ffmpeg"
 LIVE_ROOT="$IPTV_ROOT/live"
 CREATOR_LINK="https://raw.githubusercontent.com/bentasker/HLS-Stream-Creator/master/HLS-Stream-Creator.sh"
@@ -367,12 +367,12 @@ InstallJq()
     then
         echo -e "$info 开始下载/安装 JSNO解析器 JQ..."
         #experimental# grep -Po '"tag_name": "jq-\K.*?(?=")'
-        jq_ver=$(curl --silent -m 10 "https://api.github.com/repos/stedolan/jq/releases/latest" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+        jq_ver=$(curl --silent -m 10 "$FFMPEG_MIRROR_LINK/jq.json" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
         if [ -n "$jq_ver" ]
         then
             wget --no-check-certificate "$FFMPEG_MIRROR_LINK/$jq_ver/jq-linux$release_bit" $_PROGRESS_OPT -qO "$JQ_FILE"
         fi
-        [ ! -e "$JQ_FILE" ] && echo -e "$error 下载JQ解析器失败，请检查 !" && exit 1
+        [ ! -e "$JQ_FILE" ] && echo -e "$error 下载JQ解析器失败，请重试 !" && exit 1
         chmod +x "$JQ_FILE"
         echo -e "$info JQ解析器 安装完成..." 
     else
@@ -485,6 +485,28 @@ Update()
             fi
         fi
     fi
+
+    while IFS= read -r line 
+    do
+        if [[ $line == *"built on "* ]] 
+        then
+            line=${line#*built on }
+            git_date=${line%<*}
+            break
+        fi
+    done < <(wget --no-check-certificate "$FFMPEG_MIRROR_LINK/index.html" -qO-)
+
+    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+    if [[ ${FFMPEG_ROOT##*/} == *"${git_date:-20200101}"* ]] 
+    then
+        echo && echo -e "$info FFmpeg 已经是最新，是否重装? [y/N]"
+        read -p "(默认: N): " reinstall_ffmpeg_yn
+        reinstall_ffmpeg_yn=${reinstall_ffmpeg_yn:-"N"}
+    else
+        reinstall_ffmpeg_yn="Y"
+    fi
+
+    echo && echo -e "$info 升级中..."
     CheckRelease
     if grep -q '\--show-progress' < <(wget --help)
     then
@@ -492,9 +514,14 @@ Update()
     else
         _PROGRESS_OPT=""
     fi
-    rm -rf "$IPTV_ROOT"/ffmpeg-git-*/
-    echo -e "$info 更新 FFmpeg..."
-    InstallFfmpeg
+
+    if [[ ${reinstall_ffmpeg_yn:-"N"} == [Yy] ]] 
+    then
+        rm -rf "$IPTV_ROOT"/ffmpeg-git-*/
+        echo -e "$info 更新 FFmpeg..."
+        InstallFfmpeg
+    fi
+
     rm -rf "${JQ_FILE:-'notfound'}"
     echo -e "$info 更新 JQ..."
     InstallJq
@@ -546,7 +573,7 @@ UpdateSelf()
     if [ "$d_version" != "$sh_ver" ] 
     then
         echo -e "$info 更新中，请稍等..." && echo
-        printf -v update_date "%(%m-%d)T"
+        printf -v update_date '%(%m-%d)T'
         cp -f "$CHANNELS_FILE" "${CHANNELS_FILE}_$update_date"
         
         default=$($JQ_FILE '(.playlist_name)="'"$d_playlist_name"'"
@@ -895,7 +922,7 @@ ListChannels()
     GetChannelsInfo
     if [ "$chnls_count" == 0 ]
     then
-        echo -e "$error 没有发现 频道，请检查 !" && exit 1
+        echo && echo -e "$error 没有发现 频道，请检查 !" && echo && exit 1
     fi
     chnls_list=""
     for((index = 0; index < chnls_count; index++)); do
@@ -1315,7 +1342,7 @@ InputChannelsIndex()
     do
         chnls_pid_chosen=()
         IFS=" " read -ra chnls_index <<< "$chnls_index_input"
-        [ -z "$chnls_index_input" ] && echo "已取消..." && exit 1
+        [ -z "$chnls_index_input" ] && echo && echo "已取消..." && echo && exit 1
 
         for chnl_index in "${chnls_index[@]}"
         do
@@ -1368,7 +1395,7 @@ SetStreamLink()
     echo -e "$tip 可以是视频路径，hls 链接需包含 .m3u8 标识"
     echo -e "$tip 可以输入不同链接地址(监控按顺序尝试使用)，用空格分隔" && echo
     read -p "(默认: 取消): " stream_links_input
-    [ -z "$stream_links_input" ] && echo "已取消..." && exit 1
+    [ -z "$stream_links_input" ] && echo && echo "已取消..." && echo && exit 1
     IFS=" " read -ra stream_links <<< "$stream_links_input"
     stream_link=${stream_links[0]}
     echo && echo -e "	直播源: $green $stream_link $plain" && echo
@@ -1762,7 +1789,7 @@ SetFlvPushLink()
     echo && echo "请输入推流地址(比如 rtmp://127.0.0.1/flv/xxx )" && echo
     while read -p "(默认: 取消): " flv_push_link
     do
-        [ -z "$flv_push_link" ] && echo "已取消..." && exit 1
+        [ -z "$flv_push_link" ] && echo && echo "已取消..." && echo && exit 1
         if [[ -z $($JQ_FILE '.channels[] | select(.flv_push_link=="'"$flv_push_link"'")' "$CHANNELS_FILE") ]]
         then
             break
@@ -1921,7 +1948,7 @@ FlvStreamCreatorWithShift()
             $JQ_FILE '(.channels[]|select(.pid=='"$pid"')|.flv_status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
             mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
 
-            printf -v date_now "%(%m-%d %H:%M:%S)T"
+            printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now $channel_name flv 关闭" >> "$MONITOR_LOG"
             chnl_pid=$pid
             action="stop"
@@ -2024,7 +2051,7 @@ FlvStreamCreatorWithShift()
             $JQ_FILE '(.channels[]|select(.pid=='"$new_pid"')|.flv_status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
             mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
 
-            printf -v date_now "%(%m-%d %H:%M:%S)T"
+            printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now $chnl_channel_name flv 关闭" >> "$MONITOR_LOG"
             chnl_pid=$new_pid
             action="stop"
@@ -2152,7 +2179,7 @@ FlvStreamCreatorWithShift()
             $JQ_FILE '(.channels[]|select(.pid=='"$pid"')|.flv_status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
             mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
 
-            printf -v date_now "%(%m-%d %H:%M:%S)T"
+            printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now $channel_name flv 关闭" >> "$MONITOR_LOG"
             chnl_pid=$pid
             action="stop"
@@ -2311,7 +2338,7 @@ HlsStreamCreatorWithShift()
             mv "${CHANNELS_TMP}_hls_shift" "$CHANNELS_FILE"
             rm -rf "$LIVE_ROOT/${output_dir_name:-'notfound'}"
 
-            printf -v date_now "%(%m-%d %H:%M:%S)T"
+            printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
             chnl_pid=$pid
             action="stop"
@@ -2432,7 +2459,7 @@ HlsStreamCreatorWithShift()
             mv "${CHANNELS_TMP}_hls_shift" "$CHANNELS_FILE"
             rm -rf "$LIVE_ROOT/${chnl_output_dir_name:-'notfound'}"
 
-            printf -v date_now "%(%m-%d %H:%M:%S)T"
+            printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
             chnl_pid=$new_pid
             action="stop"
@@ -2569,7 +2596,7 @@ HlsStreamCreatorWithShift()
             mv "${CHANNELS_TMP}_hls_shift" "$CHANNELS_FILE"
             rm -rf "$LIVE_ROOT/${output_dir_name:-'notfound'}"
 
-            printf -v date_now "%(%m-%d %H:%M:%S)T"
+            printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
             chnl_pid=$pid
             action="stop"
@@ -2652,7 +2679,7 @@ HlsStreamCreator()
             mv "${CHANNELS_TMP}_hls" "$CHANNELS_FILE"
             rm -rf "$LIVE_ROOT/${output_dir_name:-'notfound'}"
 
-            printf -v date_now "%(%m-%d %H:%M:%S)T"
+            printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
             chnl_pid=$pid
             action="stop"
@@ -2688,7 +2715,7 @@ HlsStreamCreator()
             mv "${CHANNELS_TMP}_hls" "$CHANNELS_FILE"
             rm -rf "$LIVE_ROOT/${chnl_output_dir_name:-'notfound'}"
 
-            printf -v date_now "%(%m-%d %H:%M:%S)T"
+            printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
             chnl_pid=$new_pid
             action="stop"
@@ -2748,7 +2775,7 @@ HlsStreamCreator()
             mv "${CHANNELS_TMP}_hls" "$CHANNELS_FILE"
             rm -rf "$LIVE_ROOT/${output_dir_name:-'notfound'}"
 
-            printf -v date_now "%(%m-%d %H:%M:%S)T"
+            printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
             chnl_pid=$pid
             action="stop"
@@ -2760,12 +2787,13 @@ HlsStreamCreator()
 
 AddChannel()
 {
-    [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+    [ ! -e "$IPTV_ROOT" ] && echo && echo -e "$error 尚未安装，请检查 !" && echo && exit 1
     GetDefault
     SetStreamLink
 
-    if [ "${stream_link:0:1}" == "/" ] && [ -e "${stream_link:0:1}" ]
+    if [ "${stream_link:0:1}" == "/" ] 
     then
+        [ ! -e "$stream_link" ] && echo && echo -e "$error 文件不存在 !" && echo && exit 1
         live=""
         live_yn="no"
     else
@@ -2935,7 +2963,7 @@ EditOutputDirName()
             StopChannel
             echo && echo
         else
-            echo "已取消..." && exit 1
+            echo && echo "已取消..." && echo && exit 1
         fi
     fi
     SetOutputDirName
@@ -3101,7 +3129,7 @@ EditChannelAll()
             StopChannel
             echo && echo
         else
-            echo "已取消..." && exit 1
+            echo && echo "已取消..." && echo && exit 1
         fi
     elif [ "$chnl_status" == "on" ]
     then
@@ -3114,7 +3142,7 @@ EditChannelAll()
             StopChannel
             echo && echo
         else
-            echo "已取消..." && exit 1
+            echo && echo "已取消..." && echo && exit 1
         fi
     fi
     SetStreamLink
@@ -3235,7 +3263,7 @@ EditChannelMenu()
     ${green}23.$plain 修改 段名称、m3u8名称 (防盗链/DDoS)
     " && echo
         read -p "(默认: 取消): " edit_channel_num
-        [ -z "$edit_channel_num" ] && echo "已取消..." && exit 1
+        [ -z "$edit_channel_num" ] && echo && echo "已取消..." && echo && exit 1
         case $edit_channel_num in
             1)
                 EditStreamLink
@@ -3757,7 +3785,7 @@ GenerateScheduleNiotv()
         printf '{"%s":[]}' "$chnl_niotv_id" > "$SCHEDULE_JSON"
     fi
 
-    printf -v today "%(%Y-%m-%d)T"
+    printf -v today '%(%Y-%m-%d)T'
     SCHEDULE_LINK_NIOTV="http://www.niotv.com/i_index.php?cont=day"
 
     empty=1
@@ -3784,7 +3812,7 @@ GenerateScheduleNiotv()
             title=${title//\\/\'}
             sys_time=$(date -d "$today $start_time" +%s)
 
-            start_time_num=$(date -d "$today $start_time" +%s)
+            start_time_num=$sys_time
             end_time_num=$(date -d "$today $end_time" +%s)
 
             if [ "$check" == 1 ] && [ "$start_time_num" -gt "$end_time_num" ] 
@@ -3838,7 +3866,7 @@ GenerateSchedule()
     chnl_name=${chnl_name// /-}
     chnl_name_encode=$(Urlencode "$chnl_name")
 
-    printf -v today "%(%Y-%m-%d)T"
+    printf -v today '%(%Y-%m-%d)T'
 
     SCHEDULE_LINK="https://xn--i0yt6h0rn.tw/channel/$chnl_name_encode/index.json"
 
@@ -4351,7 +4379,7 @@ Schedule()
 
     case $2 in
         "hbo")
-            printf -v today "%(%Y-%m-%d)T"
+            printf -v today '%(%Y-%m-%d)T'
 
             if [ ! -s "$SCHEDULE_JSON" ] 
             then
@@ -4431,8 +4459,236 @@ Schedule()
                 fi
             done
         ;;
+        "hbous")
+            printf -v today '%(%Y-%m-%d)T'
+            sys_time=$(date -d $today +%s)
+            min_sys_time=$((sys_time-7200))
+            max_sys_time=$((sys_time+86400))
+            yesterday=$(printf '%(%Y-%m-%d)T' $((sys_time - 86400)))
+
+            if [ ! -s "$SCHEDULE_JSON" ] 
+            then
+                printf '{"%s":[]}' "hbous_hbo" > "$SCHEDULE_JSON"
+            fi
+
+            chnls=(
+                "hbo:HBO:EAST"
+                "hbo2:HBO2:EAST"
+                "hbosignature:HBO SIGNATURE:EAST"
+                "hbofamily:HBO FAMILY:EAST"
+                "hbocomedy:HBO COMEDY:EAST"
+                "hbozone:HBO ZONE:EAST"
+                "hbolatino:HBO LATINO:EAST"
+                "hbo:HBO:WEST"
+                "hbo2:HBO2:WEST"
+                "hbosignature:HBO SIGNATURE:WEST"
+                "hbofamily:HBO FAMILY:WEST"
+                "hbocomedy:HBO COMEDY:WEST"
+                "hbozone:HBO ZONE:WEST"
+                "hbolatino:HBO LATINO:WEST" )
+
+            if [ "${4:-}" == "WEST" ] || [ "${4:-}" == "west" ]
+            then
+                zone="WEST"
+            else
+                zone="EAST"
+            fi
+
+            hbous_yesterday_schedule=$(wget --no-check-certificate "https://proxy-v4.cms.hbo.com/v1/schedule?date=$yesterday" -qO-)
+            hbous_today_schedule=$(wget --no-check-certificate "https://proxy-v4.cms.hbo.com/v1/schedule?date=$today" -qO-)
+
+            for chnl in "${chnls[@]}" ; do
+                chnl_id=${chnl%%:*}
+                chnl=${chnl#*:}
+                chnl_name=${chnl%:*}
+                chnl_zone=${chnl#*:}
+
+                if [ -n "${3:-}" ] 
+                then
+                    if [ "$3" != "$chnl_id" ] || [ "$zone" != "$chnl_zone" ]
+                    then
+                        continue
+                    fi
+                fi
+
+                schedule=""
+
+                while IFS="=" read -r program_time program_title
+                do
+                    program_sys_time=$(date -d "$program_time" +%s)
+                    if [ "$program_sys_time" -ge "$min_sys_time" ] 
+                    then
+                        program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                        [ -n "$schedule" ] && schedule="$schedule,"
+                        schedule=$schedule'{
+                            "title":"'"$program_title"'",
+                            "time":"'"$program_time"'",
+                            "sys_time":"'"$program_sys_time"'"
+                        }'
+                    fi
+                done < <($JQ_FILE -r --arg channelName "$chnl_name" --arg channelZone "$chnl_zone" '.channels | to_entries | map(select(.value.channelName==$channelName and .value.channelZone==$channelZone))[].value.programAirings | to_entries | map("\(.value.airing.playDate)=\(.value.program.title)")[]' <<< "$hbous_yesterday_schedule")
+
+                min_sys_time=${program_sys_time:-$sys_time}
+
+                while IFS="=" read -r program_time program_title
+                do
+                    program_sys_time=$(date -d "$program_time" +%s)
+                    if [ "$program_sys_time" -le "$max_sys_time" ] && [ "$program_sys_time" -gt "$min_sys_time" ]
+                    then
+                        program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                        [ -n "$schedule" ] && schedule="$schedule,"
+                        schedule=$schedule'{
+                            "title":"'"$program_title"'",
+                            "time":"'"$program_time"'",
+                            "sys_time":"'"$program_sys_time"'"
+                        }'
+                    fi
+                done < <($JQ_FILE -r --arg channelName "$chnl_name" --arg channelZone "$chnl_zone" '.channels | to_entries | map(select(.value.channelName==$channelName and .value.channelZone==$channelZone))[].value.programAirings | to_entries | map("\(.value.airing.playDate)=\(.value.program.title)")[]' <<< "$hbous_today_schedule")
+
+                if [ -n "$schedule" ] 
+                then
+                    $JQ_FILE --arg index "hbous_$chnl_id" --argjson program "[$schedule]" '.[$index] = $program' "$SCHEDULE_JSON" > "${SCHEDULE_JSON}_tmp"
+                    mv "${SCHEDULE_JSON}_tmp" "$SCHEDULE_JSON"
+                fi
+            done
+        ;;
+        "ontvtonight")
+            printf -v today '%(%Y-%m-%d)T'
+            sys_time=$(date -d $today +%s)
+            min_sys_time=$((sys_time-7200))
+            max_sys_time=$((sys_time+86400))
+            yesterday=$(printf '%(%Y-%m-%d)T' $((sys_time - 86400)))
+
+            if [ ! -s "$SCHEDULE_JSON" ] 
+            then
+                printf '{"%s":[]}' "us_abc" > "$SCHEDULE_JSON"
+            fi
+
+            chnls=(
+                "abc@abc@69048344@-04:00"
+                "cbs@cbs@69048345@-04:00"
+                "nbc@nbc@69048423@-04:00"
+                "fox@fox@69048367@-04:00"
+                "msnbc@msnbc@69023101@-04:00"
+                "amc@amc-east@69047124@-04:00"
+                "nickjr@nick-jr@69047681@-04:00"
+                "universalkids@universal-kids@69027178@-04:00"
+                "disneyjr@disney-junior-hdtv-east@69044944@-04:00"
+                "mtvlive@mtv-live-hdtv@69027734@-04:00"
+                "mtvlivehd@mtv-live-hdtv@69038784@+00:00"
+                "comedycentral@comedy-central-east@69036536@-04:00" )
+
+            for chnl in "${chnls[@]}" ; do
+                IFS="@" read -r chnl_id chnl_name chnl_no chnl_zone <<< "$chnl"
+
+                if [ -n "${3:-}" ] && [ "${3:-}" != "$chnl_id" ]
+                then
+                    continue
+                fi
+
+                schedule=""
+                start=0
+
+                while IFS= read -r line
+                do
+                    if [[ $line == *"<tbody>"* ]] 
+                    then
+                        start=1
+                    elif [ "$start" == 1 ] && [[ $line == *"<h5"* ]] && [[ $line == *"</h5>"* ]]
+                    then
+                        line=${line#*>}
+                        program_time=${line%<*}
+                        new_program_time=${program_time% *}
+                        hour=${new_program_time%:*}
+                        if [ "${program_time#* }" == "pm" ] && [ "$hour" -lt 12 ]
+                        then
+                            hour=$((hour+12))
+                            new_program_time="$hour:${new_program_time#*:}"
+                        elif [ "${program_time#* }" == "am" ] && [ "$hour" -eq 12 ]
+                        then
+                            new_program_time="00:${new_program_time#*:}"
+                        fi
+                    elif [ "$start" == 1 ] && [[ $line == *"</a></h5>"* ]] 
+                    then
+                        line=${line%%<\/a>*}
+                        lead=${line%%[^[:blank:]]*}
+                        program_title=${line#${lead}}
+                        program_title=${program_title//amp;/}
+                        program_title=${program_title//&#039;/\'}
+                        program_sys_time=$(date -d "${yesterday}T$new_program_time$chnl_zone" +%s)
+                        if [ "$program_sys_time" -ge "$min_sys_time" ] 
+                        then
+                            program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                            [ -n "$schedule" ] && schedule="$schedule,"
+                            schedule=$schedule'{
+                                "title":"'"$program_title"'",
+                                "time":"'"$program_time"'",
+                                "sys_time":"'"$program_sys_time"'"
+                            }'
+                        fi
+                    elif [ "$start" == 1 ] && [[ $line == *"</tbody>"* ]] 
+                    then
+                        break
+                    fi
+                done < <(wget --no-check-certificate "https://www.ontvtonight.com/guide/listings/channel/$chnl_no/$chnl_name.html?dt=$yesterday" -qO-)
+
+                while IFS= read -r line
+                do
+                    if [[ $line == *"<tbody>"* ]] 
+                    then
+                        start=1
+                    elif [ "$start" == 1 ] && [[ $line == *"<h5"* ]] && [[ $line == *"</h5>"* ]] 
+                    then
+                        line=${line#*>}
+                        program_time=${line%<*}
+                        new_program_time=${program_time% *}
+                        hour=${new_program_time%:*}
+                        if [ "${program_time#* }" == "pm" ] && [ "$hour" -lt 12 ]
+                        then
+                            hour=$((hour+12))
+                            new_program_time="$hour:${new_program_time#*:}"
+                        elif [ "${program_time#* }" == "am" ] && [ "$hour" -eq 12 ]
+                        then
+                            new_program_time="00:${new_program_time#*:}"
+                        fi
+                    elif [ "$start" == 1 ] && [[ $line == *"</a></h5>"* ]] 
+                    then
+                        line=${line%%<\/a>*}
+                        lead=${line%%[^[:blank:]]*}
+                        program_title=${line#${lead}}
+                        program_title=${program_title//amp;/}
+                        program_title=${program_title//&#039;/\'}
+                        program_sys_time=$(date -d "${today}T$new_program_time$chnl_zone" +%s)
+                        if [ "$program_sys_time" -le "$max_sys_time" ] 
+                        then
+                            program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                            [ -n "$schedule" ] && schedule="$schedule,"
+                            schedule=$schedule'{
+                                "title":"'"$program_title"'",
+                                "time":"'"$program_time"'",
+                                "sys_time":"'"$program_sys_time"'"
+                            }'
+                        fi
+                    elif [ "$start" == 1 ] && [[ $line == *"</tbody>"* ]] 
+                    then
+                        break
+                    fi
+                done < <(wget --no-check-certificate "https://www.ontvtonight.com/guide/listings/channel/$chnl_no/$chnl_name.html?dt=$today" -qO-)
+
+                if [ "$chnl_id" != "mtvlivehd" ] 
+                then
+                    chnl_id="us_$chnl_id"
+                fi
+
+                if [ -n "$schedule" ] 
+                then
+                    $JQ_FILE --arg index "$chnl_id" --argjson program "[$schedule]" '.[$index] = $program' "$SCHEDULE_JSON" > "${SCHEDULE_JSON}_tmp"
+                    mv "${SCHEDULE_JSON}_tmp" "$SCHEDULE_JSON"
+                fi
+            done
+        ;;
         "disney")
-            printf -v today "%(%Y%m%d)T"
+            printf -v today '%(%Y%m%d)T'
             SCHEDULE_LINK="https://disney.com.tw/_schedule/full/$today/8/%2Fepg"
 
             if [ ! -s "$SCHEDULE_JSON" ] 
@@ -4473,7 +4729,7 @@ Schedule()
             fi
         ;;
         "foxmovies")
-            printf -v today "%(%Y-%-m-%-d)T"
+            printf -v today '%(%Y-%-m-%-d)T'
             SCHEDULE_LINK="https://www.fng.tw/foxmovies/program.php?go=$today"
 
             if [ ! -s "$SCHEDULE_JSON" ] 
@@ -4517,7 +4773,7 @@ Schedule()
             fi
         ;;
         "amlh")
-            printf -v today "%(%Y-%-m-%-d)T"
+            printf -v today '%(%Y-%-m-%-d)T'
             timestamp=$(date -d $today +%s)
 
             TODAY_SCHEDULE_LINK="http://wap.lotustv.cc/wap.php/Sub/program/d/$timestamp"
@@ -4846,7 +5102,7 @@ TsRegister()
                     echo && echo -e "$info 短信已发送！"
                     echo && echo -e "$info 输入短信验证码："
                     read -p "(默认: 取消): " smscode
-                    [ -z "$smscode" ] && echo "已取消..." && exit 1
+                    [ -z "$smscode" ] && echo && echo "已取消..." && echo && exit 1
 
                     declare -A verify_array
                     while IFS="=" read -r key value
@@ -4869,7 +5125,7 @@ TsRegister()
                         devicetype="yuj"
                         md5_password=$(printf '%s' "$password" | md5sum)
                         md5_password=${md5_password%% *}
-                        printf -v timestamp "%(%s)T"
+                        printf -v timestamp '%(%s)T'
                         timestamp=$((timestamp * 1000))
                         signature="$account|$md5_password|$deviceno|$devicetype|$timestamp"
                         signature=$(printf '%s' "$signature" | md5sum)
@@ -4890,7 +5146,7 @@ TsRegister()
                             then
                                 TsLogin
                             else
-                                echo "已取消..." && exit 1
+                                echo && echo "已取消..." && echo && exit 1
                             fi
                         else
                             echo && echo -e "$error 注册失败！"
@@ -4929,7 +5185,7 @@ TsRegister()
             then
                 TsLogin
             else
-                echo "已取消..." && exit 1
+                echo && echo "已取消..." && echo && exit 1
             fi
         else
             echo && echo -e "$error 发生错误"
@@ -4945,14 +5201,14 @@ TsLogin()
     then
         echo && echo -e "$info 输入账号："
         read -p "(默认: 取消): " account
-        [ -z "$account" ] && echo "已取消..." && exit 1
+        [ -z "$account" ] && echo && echo "已取消..." && echo && exit 1
     fi
 
     if [ -z "${password:-}" ] 
     then
         echo && echo -e "$info 输入密码："
         read -p "(默认: 取消): " password
-        [ -z "$password" ] && echo "已取消..." && exit 1
+        [ -z "$password" ] && echo && echo "已取消..." && echo && exit 1
     fi
 
     str1=$(RandStr)
@@ -4973,7 +5229,7 @@ TsLogin()
         TOKEN_LINK="${ts_array[login_url]}?deviceno=$deviceno&devicetype=3&accounttype=${ts_array[acc_type_login]:-2}&accesstoken=(null)&account=$account&pwd=$md5_password&isforce=1&businessplatform=1"
         token=$(wget --no-check-certificate "$TOKEN_LINK" -qO-)
     else
-        printf -v timestamp "%(%s)T"
+        printf -v timestamp '%(%s)T'
         timestamp=$((timestamp * 1000))
         signature="$deviceno|yuj|${ts_array[acc_type_login]}|$account|$timestamp"
         signature=$(printf '%s' "$signature" | md5sum)
@@ -5003,13 +5259,13 @@ TsLogin()
         then
             TsRegister
         else
-            echo "已取消..." && exit 1
+            echo && echo "已取消..." && echo && exit 1
         fi
     else
         while :; do
             echo && echo -e "$info 输入需要转换的频道号码："
             read -p "(默认: 取消): " programid
-            [ -z "$programid" ] && echo "已取消..." && exit 1
+            [ -z "$programid" ] && echo && echo "已取消..." && echo && exit 1
             [[ $programid =~ ^[0-9]{10}$ ]] || { echo -e "$error频道号码错误！"; continue; }
             break
         done
@@ -5066,7 +5322,7 @@ TsLogin()
                 mv "$CHANNELS_TMP" "$CHANNELS_FILE"
                 echo && echo -e "$info 修改成功 !" && echo
             else
-                echo "已取消..." && exit 1
+                echo && echo "已取消..." && echo && exit 1
             fi
         fi
     fi
@@ -5102,12 +5358,12 @@ TsMenu()
         then
             echo && echo -e "$info 请输入使用的频道文件链接或本地路径: " && echo
             read -p "(默认: 取消): " TS_CHANNELS_LINK_OR_FILE
-            [ -z "$TS_CHANNELS_LINK_OR_FILE" ] && echo "已取消..." && exit 1
+            [ -z "$TS_CHANNELS_LINK_OR_FILE" ] && echo && echo "已取消..." && echo && exit 1
             if [ "${TS_CHANNELS_LINK_OR_FILE:0:4}" == "http" ] 
             then
                 TS_CHANNELS_LINK=$TS_CHANNELS_LINK_OR_FILE
             else
-                [ ! -e "$TS_CHANNELS_LINK_OR_FILE" ] && echo "文件不存在，已取消..." && exit 1
+                [ ! -e "$TS_CHANNELS_LINK_OR_FILE" ] && echo && echo "文件不存在，已取消..." && echo && exit 1
                 TS_CHANNELS_FILE=$TS_CHANNELS_LINK_OR_FILE
             fi
         fi
@@ -5119,7 +5375,7 @@ TsMenu()
     else
         ts_channels=$(wget --no-check-certificate "$TS_CHANNELS_LINK" -qO-)
 
-        [ -z "$ts_channels" ] && echo && echo -e "$error无法连接文件地址，已取消..." && exit 1
+        [ -z "$ts_channels" ] && echo && echo -e "$error 无法连接文件地址，已取消..." && echo && exit 1
     fi
 
     ts_channels_desc=()
@@ -5141,7 +5397,7 @@ TsMenu()
     
     while :; do
         echo && read -p "(默认: 取消): " channel_id
-        [ -z "$channel_id" ] && echo "已取消..." && exit 1
+        [ -z "$channel_id" ] && echo && echo "已取消..." && echo && exit 1
         [[ $channel_id =~ ^[0-9]+$ ]] || { echo -e "$error请输入序号！"; continue; }
         if ((channel_id >= 1 && channel_id <= count)); then
             ((channel_id--))
@@ -5168,7 +5424,7 @@ TsMenu()
                         printf '%s\n' "110.52.240.146 stream.slave.jxtvnet.tv" >> "/etc/hosts"
                         printf '%s\n' "110.52.240.146 slave.jxtvnet.tv" >> "/etc/hosts"
                     ;;
-                    *) echo "已取消..." && exit 1
+                    *) echo && echo "已取消..." && echo && exit 1
                     ;;
                 esac
             fi
@@ -5178,7 +5434,7 @@ TsMenu()
   ${green}1.$plain 登录以获取ts链接
   ${green}2.$plain 注册账号"
             echo && read -p "(默认: 取消): " channel_act
-            [ -z "$channel_act" ] && echo "已取消..." && exit 1
+            [ -z "$channel_act" ] && echo && echo "已取消..." && echo && exit 1
             
             case $channel_act in
                 1) TsLogin
@@ -5226,7 +5482,7 @@ AntiDDoS()
         then
             new_ips=()
             new_jail_time=()
-            printf -v now "%(%s)T"
+            printf -v now '%(%s)T'
 
             update=0
             for((i=0;i<${#ips[@]};i++));
@@ -5306,7 +5562,7 @@ AntiDDoS()
             done
         done
         
-        printf -v now "%(%s)T"
+        printf -v now '%(%s)T'
         jail=$((now + anti_ddos_seconds))
 
         while IFS=' ' read -r counts ip file
@@ -5346,7 +5602,7 @@ AntiDDoS()
                             jail_time+=("$jail")
                             printf '%s\n' "$ip:$jail" >> "$IP_DENY"
                             ufw insert 1 deny from "$ip" to any port "$anti_ddos_port" > /dev/null 2>> "$IP_LOG"
-                            printf -v date_now "%(%m-%d %H:%M:%S)T"
+                            printf -v date_now '%(%m-%d %H:%M:%S)T'
                             printf '%s\n' "$date_now $ip 已被禁" >> "$IP_LOG"
                             ips+=("$ip")
                             break 1
@@ -5363,7 +5619,7 @@ AntiDDoS()
         then
             new_ips=()
             new_jail_time=()
-            printf -v now "%(%s)T"
+            printf -v now '%(%s)T'
 
             update=0
             for((i=0;i<${#ips[@]};i++));
@@ -5498,7 +5754,7 @@ AntiDDoSSet()
 
 MonitorStop()
 {
-    printf -v date_now "%(%m-%d %H:%M:%S)T"
+    printf -v date_now '%(%m-%d %H:%M:%S)T'
     if [ ! -s "$MONITOR_PID" ] 
     then
         echo -e "$error 监控未启动 !"
@@ -5549,7 +5805,7 @@ MonitorStop()
                     then
                         new_ips=()
                         new_jail_time=()
-                        printf -v now "%(%s)T"
+                        printf -v now '%(%s)T'
 
                         update=0
                         for((i=0;i<${#ips[@]};i++));
@@ -5592,7 +5848,7 @@ MonitorStop()
 
 MonitorError()
 {
-    printf -v date_now "%(%m-%d %H:%M:%S)T"
+    printf -v date_now '%(%m-%d %H:%M:%S)T'
     printf '%s\n' "$date_now [LINE:$1] ERROR" >> "$MONITOR_LOG"
 }
 
@@ -5602,6 +5858,19 @@ MonitorTryAccounts()
     then
         chnl_domain=${chnl_stream_link#*http://}
         chnl_domain=${chnl_domain%%/*}
+
+        if [[ $chnl_stream_link == *"/live/"* ]] 
+        then
+            chnl_account=${chnl_stream_link#*/live/}
+            chnl_account=${chnl_account%/*}
+            chnl_account=${chnl_account//\//:}
+        else
+            chnl_account=${chnl_stream_link#*http://}
+            chnl_account=${chnl_account#*/}
+            chnl_account=${chnl_account%/*}
+            chnl_account=${chnl_account//\//:}
+        fi
+
         accounts=()
         if [ "${#accounts[@]}" == 0 ] 
         then
@@ -5616,7 +5885,10 @@ MonitorTryAccounts()
                 fi
             done < "$XTREAM_CODES"
         fi
-        if [ "${#accounts[@]}" -gt 0 ] 
+
+        accounts+=("$chnl_account")
+
+        if [ "${#accounts[@]}" -gt 1 ] 
         then
             chnls=()
             while IFS= read -r line 
@@ -5646,7 +5918,10 @@ MonitorTryAccounts()
                     then
                         if [ "$status" == "on" ] || [ "$flv_status" == "on" ]
                         then
-                            chnls+=("$domain/$username/$password")
+                            if [ "$domain/$username:$password" != "$chnl_domain/$chnl_account" ] 
+                            then
+                                chnls+=("$domain/$username/$password")
+                            fi
                         fi
                     fi
                     domain=""
@@ -5655,6 +5930,13 @@ MonitorTryAccounts()
 
             for account in "${accounts[@]}"
             do
+                if [[ $chnl_stream_link == *"/live/"* ]] 
+                then
+                    chnl_stream_link="http://$chnl_domain/live/${account//:/\/}/${chnl_stream_link##*/}"
+                else
+                    chnl_stream_link="http://$chnl_domain/${account//:/\/}/${chnl_stream_link##*/}"
+                fi
+
                 found=0
                 for chnl in "${chnls[@]}"
                 do
@@ -5665,17 +5947,17 @@ MonitorTryAccounts()
                     fi
                 done
 
-                if [ "$found" == 0 ] 
+                valid=0
+                if [ "$found" == 0 ] && $FFPROBE -i "$chnl_stream_link" -timeout 3000000 -show_streams -select_streams a -loglevel quiet > /dev/null
+                then
+                    valid=1
+                fi
+
+                if [ "$valid" == 1 ] 
                 then
                     action="skip"
                     StopChannel > /dev/null 2>&1
 
-                    if [[ $chnl_stream_link == *"/live/"* ]] 
-                    then
-                        chnl_stream_link="http://$chnl_domain/live/${account//:/\/}/${chnl_stream_link##*/}"
-                    else
-                        chnl_stream_link="http://$chnl_domain/${account//:/\/}/${chnl_stream_link##*/}"
-                    fi
                     if [[ $chnl_stream_links == *" "* ]] 
                     then
                         chnl_stream_links="$chnl_stream_link ${chnl_stream_links#* }"
@@ -5708,7 +5990,7 @@ MonitorTryAccounts()
                         if [ "$audio" == 1 ] && [ "$video" == 1 ]
                         then
                             try_success=1
-                            printf -v date_now "%(%m-%d %H:%M:%S)T"
+                            printf -v date_now '%(%m-%d %H:%M:%S)T'
                             printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
                             break
                         fi
@@ -5739,7 +6021,7 @@ MonitorTryAccounts()
                         if [ "$audio" == 1 ] && [ "$video" == 1 ] && [[ $bit_rate -gt $hls_min_bitrates ]]
                         then
                             try_success=1
-                            printf -v date_now "%(%m-%d %H:%M:%S)T"
+                            printf -v date_now '%(%m-%d %H:%M:%S)T'
                             printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
                             break
                         fi
@@ -5793,7 +6075,7 @@ MonitorHlsRestartChannel()
             [[ $bit_rate -eq 0 ]] && bit_rate=$hls_min_bitrates
             if [ "$audio" == 1 ] && [ "$video" == 1 ] && [[ $bit_rate -gt $hls_min_bitrates ]]
             then
-                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                printf -v date_now '%(%m-%d %H:%M:%S)T'
                 printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
                 break
             fi
@@ -5804,7 +6086,7 @@ MonitorHlsRestartChannel()
             if [ "$try_success" == 0 ] 
             then
                 StopChannel > /dev/null 2>&1
-                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                printf -v date_now '%(%m-%d %H:%M:%S)T'
                 printf '%s\n' "$date_now $chnl_channel_name 重启失败" >> "$MONITOR_LOG"
                 declare -a new_array
                 for element in "${monitor_dir_names_chosen[@]}"
@@ -5901,7 +6183,7 @@ Monitor()
                             flv_restart_count=1
                             ((flv_count--))
 
-                            printf -v date_now "%(%m-%d %H:%M:%S)T"
+                            printf -v date_now '%(%m-%d %H:%M:%S)T'
                             printf '%s\n' "$date_now $chnl_channel_name flv 重启超过${flv_restart_nums:-20}次关闭" >> "$MONITOR_LOG"
                             break 1
                         fi
@@ -5914,7 +6196,7 @@ Monitor()
 
                         if [ -n "${flv_first_fail:-}" ]
                         then
-                            printf -v flv_fail_date "%(%s)T"
+                            printf -v flv_fail_date '%(%s)T'
                             if [ $((flv_fail_date - flv_first_fail)) -gt "$flv_delay_seconds" ] 
                             then
                                 action="skip"
@@ -5923,7 +6205,7 @@ Monitor()
                                 flv_restart_count=${flv_restart_count:-1}
                                 ((flv_restart_count++))
                                 flv_first_fail=""
-                                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                                printf -v date_now '%(%m-%d %H:%M:%S)T'
                                 printf '%s\n' "$date_now $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
                                 sleep 10
                             fi
@@ -5934,11 +6216,11 @@ Monitor()
                                 flv_restart_count=${flv_restart_count:-1}
                                 ((flv_restart_count++))
                                 flv_first_fail=""
-                                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                                printf -v date_now '%(%m-%d %H:%M:%S)T'
                                 printf '%s\n' "$date_now $chnl_channel_name flv 恢复启动" >> "$MONITOR_LOG"
                                 sleep 10
                             else
-                                printf -v flv_first_fail "%(%s)T"
+                                printf -v flv_first_fail '%(%s)T'
                             fi
 
                             new_array=("$chnl_flv_push_link")
@@ -5998,7 +6280,7 @@ Monitor()
                             if [ "$chnl_flv_status" == "on" ] 
                             then
                                 StopChannel > /dev/null 2>&1
-                                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                                printf -v date_now '%(%m-%d %H:%M:%S)T'
                                 printf '%s\n' "$date_now $chnl_channel_name flv 重启超过${flv_restart_nums:-20}次关闭" >> "$MONITOR_LOG"
                             fi
 
@@ -6023,7 +6305,7 @@ Monitor()
 
                         if [ -n "${flv_first_fail:-}" ] 
                         then
-                            printf -v flv_fail_date "%(%s)T"
+                            printf -v flv_fail_date '%(%s)T'
                             if [ $((flv_fail_date - flv_first_fail)) -gt "$flv_delay_seconds" ] 
                             then
                                 action="skip"
@@ -6032,7 +6314,7 @@ Monitor()
                                 flv_restart_count=${flv_restart_count:-1}
                                 ((flv_restart_count++))
                                 flv_first_fail=""
-                                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                                printf -v date_now '%(%m-%d %H:%M:%S)T'
                                 printf '%s\n' "$date_now $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
                                 sleep 10
                             fi
@@ -6043,11 +6325,11 @@ Monitor()
                                 flv_restart_count=${flv_restart_count:-1}
                                 ((flv_restart_count++))
                                 flv_first_fail=""
-                                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                                printf -v date_now '%(%m-%d %H:%M:%S)T'
                                 printf '%s\n' "$date_now $chnl_channel_name flv 恢复启动" >> "$MONITOR_LOG"
                                 sleep 10
                             else
-                                printf -v flv_first_fail "%(%s)T"
+                                printf -v flv_first_fail '%(%s)T'
                             fi
 
                             new_array=("$flv_num")
@@ -7681,7 +7963,7 @@ then
                 *) 
                     if [ ! -s "$MONITOR_PID" ] 
                     then
-                        printf -v date_now "%(%m-%d %H:%M:%S)T"
+                        printf -v date_now '%(%m-%d %H:%M:%S)T'
                         MonitorSet
                         Monitor &
                         AntiDDoSSet
@@ -7692,7 +7974,7 @@ then
                         then
                             echo -e "$error 监控已经在运行 !"
                         else
-                            printf -v date_now "%(%m-%d %H:%M:%S)T"
+                            printf -v date_now '%(%m-%d %H:%M:%S)T'
                             MonitorSet
                             Monitor &
                             AntiDDoSSet
@@ -7713,30 +7995,30 @@ use_menu=1
 while getopts "i:o:p:S:t:s:c:v:a:f:q:b:k:K:m:n:z:T:L:Ce" flag
 do
     use_menu=0
-        case "$flag" in
-            i) stream_link="$OPTARG";;
-            o) output_dir_name="$OPTARG";;
-            p) playlist_name="$OPTARG";;
-            S) seg_dir_name="$OPTARG";;
-            t) seg_name="$OPTARG";;
-            s) seg_length="$OPTARG";;
-            c) seg_count="$OPTARG";;
-            v) video_codec="$OPTARG";;
-            a) audio_codec="$OPTARG";;
-            f) video_audio_shift="$OPTARG";;
-            q) quality="$OPTARG";;
-            b) bitrates="$OPTARG";;
-            C) const="-C";;
-            e) encrypt="-e";;
-            k) kind="$OPTARG";;
-            K) key_name="$OPTARG";;
-            m) input_flags="$OPTARG";;
-            n) output_flags="$OPTARG";;
-            z) channel_name="$OPTARG";;
-            T) flv_push_link="$OPTARG";;
-            L) flv_pull_link="$OPTARG";;
-            *) Usage;
-        esac
+    case "$flag" in
+        i) stream_link="$OPTARG";;
+        o) output_dir_name="$OPTARG";;
+        p) playlist_name="$OPTARG";;
+        S) seg_dir_name="$OPTARG";;
+        t) seg_name="$OPTARG";;
+        s) seg_length="$OPTARG";;
+        c) seg_count="$OPTARG";;
+        v) video_codec="$OPTARG";;
+        a) audio_codec="$OPTARG";;
+        f) video_audio_shift="$OPTARG";;
+        q) quality="$OPTARG";;
+        b) bitrates="$OPTARG";;
+        C) const="-C";;
+        e) encrypt="-e";;
+        k) kind="$OPTARG";;
+        K) key_name="$OPTARG";;
+        m) input_flags="$OPTARG";;
+        n) output_flags="$OPTARG";;
+        z) channel_name="$OPTARG";;
+        T) flv_push_link="$OPTARG";;
+        L) flv_pull_link="$OPTARG";;
+        *) Usage;
+    esac
 done
 
 cmd=$*
@@ -7860,7 +8142,7 @@ case "$cmd" in
 
         sed -i "s+https://johnvansickle.com/ffmpeg/\(builds\|releases\)/\(.*\).tar.xz\"+\1/\2.tar.xz\"+g" "$FFMPEG_MIRROR_ROOT/index.html"
 
-        jq_ver=$(curl --silent -m 10 "https://api.github.com/repos/stedolan/jq/releases/latest" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+        jq_ver=$(curl --silent -m 10 "$FFMPEG_MIRROR_LINK/jq.json" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
         if [ -n "$jq_ver" ]
         then
             mkdir -p "$FFMPEG_MIRROR_ROOT/$jq_ver/"
@@ -7876,6 +8158,7 @@ case "$cmd" in
 
         wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/winshining/nginx-http-flv-module/archive/master.zip" -qO "$FFMPEG_MIRROR_ROOT/nginx-http-flv-module.zip"
         wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/eddieantonio/imgcat/archive/master.zip" -qO "$FFMPEG_MIRROR_ROOT/imgcat.zip"
+        wget --timeout=10 --tries=3 --no-check-certificate "https://api.github.com/repos/stedolan/jq/releases/latest" -qO "$FFMPEG_MIRROR_ROOT/jq.json"
         exit 0
     ;;
     "ts") 
@@ -8209,7 +8492,7 @@ case "$cmd" in
                         line="        server_name  $domain;"
                     elif [ "$done" == 0 ] && [ -n "${deny:-}" ] && [[ $line == *"location / {"* ]]
                     then
-                        line="$line\n\n$deny"
+                        line="$line\n\n$deny\n"
                     elif [ "$done" == 0 ] && [[ $line == *"root "* ]] 
                     then
                         line="            root   ${root#*/usr/local/nginx/};"
@@ -8390,7 +8673,7 @@ else
             then
                 Install
             else
-                echo "已取消..." && exit 1
+                echo && echo "已取消..." && echo && exit 1
             fi
         else
             GetDefault
