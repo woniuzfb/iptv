@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-sh_ver="1.6.1"
+sh_ver="1.7.0"
 SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
@@ -69,6 +69,10 @@ default='
     "anti_ddos_port":80,
     "anti_ddos_seconds":120,
     "anti_ddos_level":6,
+    "anti_leech":"no",
+    "anti_leech_restart_nums":3,
+    "anti_leech_restart_flv_changes":"yes",
+    "anti_leech_restart_hls_changes":"yes",
     "version":"'"$sh_ver"'"
 }'
 
@@ -431,7 +435,7 @@ Uninstall()
 {
     [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
     CheckRelease
-    echo "确定要 卸载此脚本以及产生的全部文件？[y/N]" && echo
+    echo "确定要 卸载此脚本以及产生的全部文件？[y/N]"
     read -p "(默认: N): " uninstall_yn
     uninstall_yn=${uninstall_yn:-"N"}
     if [[ "$uninstall_yn" == [Yy] ]]
@@ -477,7 +481,7 @@ Update()
             echo && echo -e "$info 需要先关闭监控，是否继续? [Y/n]"
             read -p "(默认: Y): " stop_monitor_yn
             stop_monitor_yn=${stop_monitor_yn:-"Y"}
-            if [[ $stop_monitor_yn == [Y/y] ]] 
+            if [[ $stop_monitor_yn == [Yy] ]] 
             then
                 MonitorStop
             else
@@ -603,7 +607,11 @@ UpdateSelf()
         |(.hls_restart_nums)='"$d_hls_restart_nums"'
         |(.anti_ddos_port)='"$d_anti_ddos_port"'
         |(.anti_ddos_seconds)='"$d_anti_ddos_seconds"'
-        |(.anti_ddos_level)='"$d_anti_ddos_level"'' <<< "$default")
+        |(.anti_ddos_level)='"$d_anti_ddos_level"'
+        |(.anti_leech)="'"$d_anti_leech_yn"'"
+        |(.anti_leech_restart_nums)='"$d_anti_leech_restart_nums"'
+        |(.anti_leech_restart_flv_changes)="'"$d_anti_leech_restart_flv_changes_yn"'"
+        |(.anti_leech_restart_hls_changes)="'"$d_anti_leech_restart_hls_changes_yn"'"' <<< "$default")
 
         $JQ_FILE '. + {default: '"$default"'}' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE"
@@ -785,11 +793,45 @@ GetDefault()
         [ "$d_anti_ddos_seconds" == null ] && d_anti_ddos_seconds=120
         d_anti_ddos_seconds=${d_anti_ddos_seconds:-120}
         d_anti_ddos_level=${d#*, anti_ddos_level: }
-        d_anti_ddos_level=${d_anti_ddos_level%, version:*}
+        d_anti_ddos_level=${d_anti_ddos_level%, anti_leech:*}
         [ "$d_anti_ddos_level" == null ] && d_anti_ddos_level=6
         d_anti_ddos_level=${d_anti_ddos_level:-6}
+        d_anti_leech_yn=${d#*, anti_leech: }
+        d_anti_leech_yn=${d_anti_leech_yn%, anti_leech_restart_nums:*}
+        [ "$d_anti_leech_yn" == null ] && d_anti_leech_yn="no"
+        d_anti_leech_yn=${d_anti_leech_yn:-"no"}
+        if [ "$d_anti_leech_yn" == "no" ] 
+        then
+            d_anti_leech="N"
+        else
+            d_anti_leech="Y"
+        fi
+        d_anti_leech_restart_nums=${d#*, anti_leech_restart_nums: }
+        d_anti_leech_restart_nums=${d_anti_leech_restart_nums%, anti_leech_restart_flv_changes:*}
+        [ "$d_anti_leech_restart_nums" == null ] && d_anti_leech_restart_nums=0
+        d_anti_leech_restart_nums=${d_anti_leech_restart_nums:-0}
+        d_anti_leech_restart_flv_changes_yn=${d#*, anti_leech_restart_flv_changes: }
+        d_anti_leech_restart_flv_changes_yn=${d_anti_leech_restart_flv_changes_yn%, anti_leech_restart_hls_changes:*}
+        [ "$d_anti_leech_restart_flv_changes_yn" == null ] && d_anti_leech_restart_flv_changes_yn="no"
+        d_anti_leech_restart_flv_changes_yn=${d_anti_leech_restart_flv_changes_yn:-"no"}
+        if [ "$d_anti_leech_restart_flv_changes_yn" == "no" ] 
+        then
+            d_anti_leech_restart_flv_changes="N"
+        else
+            d_anti_leech_restart_flv_changes="Y"
+        fi
+        d_anti_leech_restart_hls_changes_yn=${d#*, anti_leech_restart_hls_changes: }
+        d_anti_leech_restart_hls_changes_yn=${d_anti_leech_restart_hls_changes_yn%, version:*}
+        [ "$d_anti_leech_restart_hls_changes_yn" == null ] && d_anti_leech_restart_hls_changes_yn="no"
+        d_anti_leech_restart_hls_changes_yn=${d_anti_leech_restart_hls_changes_yn:-"no"}
+        if [ "$d_anti_leech_restart_hls_changes_yn" == "no" ] 
+        then
+            d_anti_leech_restart_hls_changes="N"
+        else
+            d_anti_leech_restart_hls_changes="Y"
+        fi
         d_version=${d#*, version: }
-    done < <($JQ_FILE -r 'to_entries | map(select(.key=="default")) | map("playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), schedule_file: \(.value.schedule_file), flv_delay_seconds: \(.value.flv_delay_seconds), flv_restart_nums: \(.value.flv_restart_nums), hls_delay_seconds: \(.value.hls_delay_seconds), hls_min_bitrates: \(.value.hls_min_bitrates), hls_max_seg_size: \(.value.hls_max_seg_size), hls_restart_nums: \(.value.hls_restart_nums), anti_ddos_port: \(.value.anti_ddos_port), anti_ddos_seconds: \(.value.anti_ddos_seconds), anti_ddos_level: \(.value.anti_ddos_level), version: \(.value.version)") | .[]' "$CHANNELS_FILE")
+    done < <($JQ_FILE -r 'to_entries | map(select(.key=="default")) | map("playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), schedule_file: \(.value.schedule_file), flv_delay_seconds: \(.value.flv_delay_seconds), flv_restart_nums: \(.value.flv_restart_nums), hls_delay_seconds: \(.value.hls_delay_seconds), hls_min_bitrates: \(.value.hls_min_bitrates), hls_max_seg_size: \(.value.hls_max_seg_size), hls_restart_nums: \(.value.hls_restart_nums), anti_ddos_port: \(.value.anti_ddos_port), anti_ddos_seconds: \(.value.anti_ddos_seconds), anti_ddos_level: \(.value.anti_ddos_level), anti_leech: \(.value.anti_leech), anti_leech_restart_nums: \(.value.anti_leech_restart_nums), anti_leech_restart_flv_changes: \(.value.anti_leech_restart_flv_changes), anti_leech_restart_hls_changes: \(.value.anti_leech_restart_hls_changes), version: \(.value.version)") | .[]' "$CHANNELS_FILE")
     #done < <($JQ_FILE -r '.default | to_entries | map([.key,.value]|join(": ")) | join(", ")' "$CHANNELS_FILE")
 }
 
@@ -1355,7 +1397,7 @@ InputChannelsIndex()
                 then
                     echo -e "$error 多选输入错误！" && echo
                     continue 2
-                elif [[ $chnl_index_start -gt 0 ]] && [[ ! $chnl_index_end -gt $chnls_count ]] && [[ $chnl_index_end -gt $chnl_index_start ]] 
+                elif [[ $chnl_index_start -gt 0 ]] && [[ $chnl_index_end -le $chnls_count ]] && [[ $chnl_index_end -gt $chnl_index_start ]] 
                 then
                     ((chnl_index_start--))
                     for((i=chnl_index_start;i<chnl_index_end;i++));
@@ -1959,7 +2001,9 @@ FlvStreamCreatorWithShift()
             new_pid=$pid
             $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'
             |(.channels[]|select(.pid=='"$new_pid"')|.flv_status)="on"
-            |(.channels[]|select(.pid=='"$new_pid"')|.stream_link)="'"$chnl_stream_links"'"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
+            |(.channels[]|select(.pid=='"$new_pid"')|.stream_link)="'"$chnl_stream_links"'"
+            |(.channels[]|select(.pid=='"$new_pid"')|.flv_push_link)="'"$chnl_flv_push_link"'"
+            |(.channels[]|select(.pid=='"$new_pid"')|.flv_pull_link)="'"$chnl_flv_pull_link"'"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_flv_shift"
             mv "${CHANNELS_TMP}_flv_shift" "$CHANNELS_FILE"
             action="start"
             SyncFile
@@ -2350,7 +2394,9 @@ HlsStreamCreatorWithShift()
             new_pid=$pid
             $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'
             |(.channels[]|select(.pid=='"$new_pid"')|.status)="on"
-            |(.channels[]|select(.pid=='"$new_pid"')|.stream_link)="'"$chnl_stream_links"'"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_hls_shift"
+            |(.channels[]|select(.pid=='"$new_pid"')|.stream_link)="'"$chnl_stream_links"'"
+            |(.channels[]|select(.pid=='"$new_pid"')|.playlist_name)="'"$chnl_playlist_name"'"
+            |(.channels[]|select(.pid=='"$new_pid"')|.seg_name)="'"$chnl_seg_name"'"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_hls_shift"
             mv "${CHANNELS_TMP}_hls_shift" "$CHANNELS_FILE"
             action="start"
             SyncFile
@@ -2691,7 +2737,9 @@ HlsStreamCreator()
             new_pid=$pid
             $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'
             |(.channels[]|select(.pid=='"$new_pid"')|.status)="on"
-            |(.channels[]|select(.pid=='"$new_pid"')|.stream_link)="'"$chnl_stream_links"'"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_hls"
+            |(.channels[]|select(.pid=='"$new_pid"')|.stream_link)="'"$chnl_stream_links"'"
+            |(.channels[]|select(.pid=='"$new_pid"')|.playlist_name)="'"$chnl_playlist_name"'"
+            |(.channels[]|select(.pid=='"$new_pid"')|.seg_name)="'"$chnl_seg_name"'"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_hls"
             mv "${CHANNELS_TMP}_hls" "$CHANNELS_FILE"
             action="start"
             SyncFile
@@ -2955,7 +3003,7 @@ EditOutputDirName()
 {
     if [ "$chnl_status" == "on" ]
     then
-        echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]" && echo
+        echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]"
         read -p "(默认: N): " stop_channel_yn
         stop_channel_yn=${stop_channel_yn:-'n'}
         if [[ "$stop_channel_yn" == [Yy] ]]
@@ -3121,7 +3169,7 @@ EditChannelAll()
     if [ "$chnl_flv_status" == "on" ] 
     then
         kind="flv"
-        echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]" && echo
+        echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]"
         read -p "(默认: N): " stop_channel_yn
         stop_channel_yn=${stop_channel_yn:-'n'}
         if [[ "$stop_channel_yn" == [Yy] ]]
@@ -3134,7 +3182,7 @@ EditChannelAll()
     elif [ "$chnl_status" == "on" ]
     then
         kind=""
-        echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]" && echo
+        echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]"
         read -p "(默认: N): " stop_channel_yn
         stop_channel_yn=${stop_channel_yn:-'n'}
         if [[ "$stop_channel_yn" == [Yy] ]]
@@ -3689,7 +3737,7 @@ RandOutputDirName()
 {
     while :;do
         output_dir_name=$(RandStr)
-        if [[ -z $($JQ_FILE '.channels[] | select(.outputDirName=="'"$output_dir_name"'")' "$CHANNELS_FILE") ]]
+        if [[ -z $($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'")' "$CHANNELS_FILE") ]]
         then
             echo "$output_dir_name"
             break
@@ -3701,7 +3749,7 @@ RandPlaylistName()
 {
     while :;do
         playlist_name=$(RandStr)
-        if [[ -z $($JQ_FILE '.channels[] | select(.playListName=="'"$playlist_name"'")' "$CHANNELS_FILE") ]]
+        if [[ -z $($JQ_FILE '.channels[] | select(.playlist_name=="'"$playlist_name"'")' "$CHANNELS_FILE") ]]
         then
             echo "$playlist_name"
             break
@@ -3713,7 +3761,7 @@ RandSegDirName()
 {
     while :;do
         seg_dir_name=$(RandStr)
-        if [[ -z $($JQ_FILE '.channels[] | select(.segDirName=="'"$seg_dir_name"'")' "$CHANNELS_FILE") ]]
+        if [[ -z $($JQ_FILE '.channels[] | select(.seg_dir_name=="'"$seg_dir_name"'")' "$CHANNELS_FILE") ]]
         then
             echo "$seg_dir_name"
             break
@@ -5139,7 +5187,7 @@ TsRegister()
                         if [ "${reg_array[ret]}" == 0 ] 
                         then
                             echo && echo -e "$info 注册成功！"
-                            echo && echo -e "$info 是否登录账号? [y/N]" && echo
+                            echo && echo -e "$info 是否登录账号? [y/N]"
                             read -p "(默认: N): " login_yn
                             login_yn=${login_yn:-"N"}
                             if [[ "$login_yn" == [Yy] ]]
@@ -5178,7 +5226,7 @@ TsRegister()
         if [ "${reg_array[ret]}" == 0 ] 
         then
             echo && echo -e "$info 注册成功！"
-            echo && echo -e "$info 是否登录账号? [y/N]" && echo
+            echo && echo -e "$info 是否登录账号? [y/N]"
             read -p "(默认: N): " login_yn
             login_yn=${login_yn:-"N"}
             if [[ "$login_yn" == [Yy] ]]
@@ -5252,7 +5300,7 @@ TsLogin()
     then
         echo -e "$error 账号错误"
         printf '%s\n' "${login_array[@]}"
-        echo && echo -e "$info 是否注册账号? [y/N]" && echo
+        echo && echo -e "$info 是否注册账号? [y/N]"
         read -p "(默认: N): " register_yn
         register_yn=${register_yn:-"N"}
         if [[ "$register_yn" == [Yy] ]]
@@ -5337,7 +5385,7 @@ TsMenu()
         local_channels=$($JQ_FILE -r '.data[] | select(.reg_url != null)' "$d_sync_file")
     fi
 
-    echo && echo -e "$info 是否使用默认频道文件? 默认链接: $DEFAULT_CHANNELS_LINK [Y/n]" && echo
+    echo && echo -e "$info 是否使用默认频道文件? 默认链接: $DEFAULT_CHANNELS_LINK [Y/n]"
     read -p "(默认: Y): " use_default_channels_yn
     use_default_channels_yn=${use_default_channels_yn:-"Y"}
     if [[ "$use_default_channels_yn" == [Yy] ]]
@@ -5346,7 +5394,7 @@ TsMenu()
     else
         if [ -n "$local_channels" ] 
         then
-            echo && echo -e "$info 是否使用本地频道文件? 本地路径: $d_sync_file [Y/n]" && echo
+            echo && echo -e "$info 是否使用本地频道文件? 本地路径: $d_sync_file [Y/n]"
             read -p "(默认: Y): " use_local_channels_yn
             use_local_channels_yn=${use_local_channels_yn:-"Y"}
             if [[ "$use_local_channels_yn" == [Yy] ]] 
@@ -5965,6 +6013,12 @@ MonitorTryAccounts()
                         chnl_stream_links=$chnl_stream_link
                     fi
 
+                    if [ "$anti_leech_yn" == "yes" ] && [ "$anti_leech_restart_hls_changes_yn" == "yes" ] 
+                    then
+                        chnl_playlist_name=$(RandStr)
+                        chnl_seg_name=$chnl_playlist_name
+                    fi
+
                     StartChannel > /dev/null 2>&1
                     sleep 15
                     GetChannelInfo
@@ -6044,6 +6098,11 @@ MonitorHlsRestartChannel()
             chnl_stream_links="${chnl_stream_links#* } $chnl_stream_link"
             chnl_stream_link=${chnl_stream_links%% *}
         fi
+        if [ "$anti_leech_yn" == "yes" ] && [ "$anti_leech_restart_hls_changes_yn" == "yes" ] 
+        then
+            chnl_playlist_name=$(RandStr)
+            chnl_seg_name=$chnl_playlist_name
+        fi
         action="skip"
         StopChannel > /dev/null 2>&1
         StartChannel > /dev/null 2>&1
@@ -6112,11 +6171,105 @@ Monitor()
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
     FFPROBE="$FFMPEG_ROOT/ffprobe"
     while true; do
+        if [ "$anti_leech_yn" == "yes" ] && [ "$anti_leech_restart_nums" -gt 0 ] && [ "${rand_restart_flv_done:-}" != 0 ] && [ "${rand_restart_hls_done:-}" != 0 ] 
+        then
+            if [ -n "${minutes:-}" ] && [ "${rand_restart_flv_done:-}" == 1 ] && [ "${rand_restart_hls_done:-}" == 1 ] 
+            then
+                declare -a new_array
+                for element in "${minutes[@]}"
+                do
+                    [ "$element" != "$current_minute" ] && new_array+=("$element")
+                done
+                minutes=("${new_array[@]}")
+                unset new_array
+                skip_hour=$current_hour
+            fi
+
+            printf -v current_time '%(%H:%M)T'
+            current_hour=${current_time%:*}
+            current_minute=${current_time#*:}
+            if [ "${current_hour:0:1}" == 0 ] 
+            then
+                current_hour=${current_hour:1}
+            fi
+            if [ "${current_minute:0:1}" == 0 ] 
+            then
+                current_minute=${current_minute:1}
+            fi
+
+            if [ -n "${minutes:-}" ] && [ "${rand_restart_flv_done:-}" == 1 ] && [ "${rand_restart_hls_done:-}" == 1 ] 
+            then
+                for minute in "${minutes[@]}"
+                do
+                    if [ "$current_minute" == "$minute" ] 
+                    then
+                        rand_restart_flv_done=0
+                        rand_restart_hls_done=0
+                        break
+                    fi
+                done
+            else
+                if [ -z "${skip_hour:-}" ] || [ "$current_hour" != "$skip_hour" ]
+                then
+                    rand_restart_flv_done=""
+                    rand_restart_hls_done=""
+
+                    if [ -z "${minutes:-}" ] 
+                    then
+                        minutes=()
+                        for((i=0;i<anti_leech_restart_nums;i++));
+                        do
+                            while true 
+                            do
+                                rand_minute=$((RANDOM % 60))
+                                valid=1
+                                for minute in "${minutes[@]}"
+                                do
+                                    if [ "$minute" == "$rand_minute" ] 
+                                    then
+                                        valid=0
+                                    elif [ "$rand_minute" -gt "$minute" ] && [ "$((rand_minute-minute))" -lt 3 ]
+                                    then
+                                        valid=0
+                                    elif [ "$minute" -gt "$rand_minute" ] && [ "$((minute-rand_minute))" -lt 3 ] 
+                                    then
+                                        valid=0
+                                    fi
+                                done
+                                if [ "$valid" == 1 ] 
+                                then
+                                    break
+                                fi
+                            done
+                            minutes+=("$rand_minute")
+                        done
+                        printf '%s\n' "$current_time 计划重启时间 ${minutes[*]}" >> "$MONITOR_LOG"
+                    fi
+
+                    for minute in "${minutes[@]}"
+                    do
+                        if [ "$current_minute" == "$minute" ] 
+                        then
+                            rand_restart_flv_done=0
+                            rand_restart_hls_done=0
+                            break
+                        fi
+                    done
+                fi
+            fi
+        fi
+
         if [ -n "${flv_nums:-}" ] 
         then
             kind="flv"
+            rand_found=0
             if [ -n "${flv_all:-}" ] 
             then
+                if [ "$flv_count" -eq 0 ] && [ "${rand_restart_flv_done:-}" == 0 ]
+                then
+                    rand_restart_flv_done=1
+                    rand_found=1
+                fi
                 for((i=0;i<flv_count;i++));
                 do
                     chnl_flv_pull_link=${monitor_flv_pull_links[i]%\'}
@@ -6194,6 +6347,18 @@ Monitor()
                             chnl_stream_link=${chnl_stream_links%% *}
                         fi
 
+                        if [ "$anti_leech_yn" == "yes" ] && [ "$anti_leech_restart_flv_changes_yn" == "yes" ] 
+                        then
+                            stream_name=${chnl_flv_push_link##*/}
+                            new_stream_name=$(RandStr)
+                            while [[ -n $($JQ_FILE '.channels[]|select(.flv_push_link=="'"${chnl_flv_push_link%/*}/$new_stream_name"'")' "$CHANNELS_FILE") ]] 
+                            do
+                                new_stream_name=$(RandStr)
+                            done
+                            chnl_flv_push_link="${chnl_flv_push_link%/*}/$new_stream_name"
+                            [ -n "$chnl_flv_pull_link" ] && chnl_flv_pull_link=${chnl_flv_pull_link//stream=$stream_name/stream=$new_stream_name}
+                        fi
+
                         if [ -n "${flv_first_fail:-}" ]
                         then
                             printf -v flv_fail_date '%(%s)T'
@@ -6246,9 +6411,42 @@ Monitor()
                     else
                         flv_first_fail=""
                         flv_restart_count=1
+
+                        if [ "${rand_restart_flv_done:-}" == 0 ]
+                        then
+                            rand_found=1
+                            if [ "${flv_restart_count:-1}" -gt 1 ] && [[ $chnl_stream_links == *" "* ]] 
+                            then
+                                chnl_stream_links="${chnl_stream_links#* } $chnl_stream_link"
+                                chnl_stream_link=${chnl_stream_links%% *}
+                            fi
+
+                            if [ "$anti_leech_restart_flv_changes_yn" == "yes" ] 
+                            then
+                                stream_name=${chnl_flv_push_link##*/}
+                                new_stream_name=$(RandStr)
+                                while [[ -n $($JQ_FILE '.channels[]|select(.flv_push_link=="'"${chnl_flv_push_link%/*}/$new_stream_name"'")' "$CHANNELS_FILE") ]] 
+                                do
+                                    new_stream_name=$(RandStr)
+                                done
+                                chnl_flv_push_link="${chnl_flv_push_link%/*}/$new_stream_name"
+                                [ -n "$chnl_flv_pull_link" ] && chnl_flv_pull_link=${chnl_flv_pull_link//stream=$stream_name/stream=$new_stream_name}
+                            fi
+                            action="skip"
+                            StopChannel > /dev/null 2>&1
+                            StartChannel > /dev/null 2>&1
+                            printf -v date_now '%(%m-%d %H:%M:%S)T'
+                            printf '%s\n' "$date_now $chnl_channel_name flv 随机重启" >> "$MONITOR_LOG"
+                            sleep 10
+                        fi
                     fi
                 done
             else
+                if [ "${rand_restart_flv_done:-}" == 0 ] && [ "${#flv_nums_arr[@]}" -eq 0 ]
+                then
+                    rand_restart_flv_done=1
+                    rand_found=1
+                fi
                 for flv_num in "${flv_nums_arr[@]}"
                 do
                     chnl_flv_pull_link=${monitor_flv_pull_links[$((flv_num-1))]%\'}
@@ -6303,6 +6501,18 @@ Monitor()
                             chnl_stream_link=${chnl_stream_links%% *}
                         fi
 
+                        if [ "$anti_leech_yn" == "yes" ] && [ "$anti_leech_restart_flv_changes_yn" == "yes" ] 
+                        then
+                            stream_name=${chnl_flv_push_link##*/}
+                            new_stream_name=$(RandStr)
+                            while [[ -n $($JQ_FILE '.channels[]|select(.flv_push_link=="'"${chnl_flv_push_link%/*}/$new_stream_name"'")' "$CHANNELS_FILE") ]] 
+                            do
+                                new_stream_name=$(RandStr)
+                            done
+                            chnl_flv_push_link="${chnl_flv_push_link%/*}/$new_stream_name"
+                            [ -n "$chnl_flv_pull_link" ] && chnl_flv_pull_link=${chnl_flv_pull_link//stream=$stream_name/stream=$new_stream_name}
+                        fi
+
                         if [ -n "${flv_first_fail:-}" ] 
                         then
                             printf -v flv_fail_date '%(%s)T'
@@ -6345,9 +6555,43 @@ Monitor()
                     else
                         flv_first_fail=""
                         flv_restart_count=1
+
+                        if [ "${rand_restart_flv_done:-}" == 0 ]
+                        then
+                            rand_found=1
+                            if [ "${flv_restart_count:-1}" -gt 1 ] && [[ $chnl_stream_links == *" "* ]] 
+                            then
+                                chnl_stream_links="${chnl_stream_links#* } $chnl_stream_link"
+                                chnl_stream_link=${chnl_stream_links%% *}
+                            fi
+
+                            if [ "$anti_leech_restart_flv_changes_yn" == "yes" ] 
+                            then
+                                stream_name=${chnl_flv_push_link##*/}
+                                new_stream_name=$(RandStr)
+                                while [[ -n $($JQ_FILE '.channels[]|select(.flv_push_link=="'"${chnl_flv_push_link%/*}/$new_stream_name"'")' "$CHANNELS_FILE") ]] 
+                                do
+                                    new_stream_name=$(RandStr)
+                                done
+                                chnl_flv_push_link="${chnl_flv_push_link%/*}/$new_stream_name"
+                                [ -n "$chnl_flv_pull_link" ] && chnl_flv_pull_link=${chnl_flv_pull_link//stream=$stream_name/stream=$new_stream_name}
+                            fi
+                            action="skip"
+                            StopChannel > /dev/null 2>&1
+                            StartChannel > /dev/null 2>&1
+                            printf -v date_now '%(%m-%d %H:%M:%S)T'
+                            printf '%s\n' "$date_now $chnl_channel_name flv 随机重启" >> "$MONITOR_LOG"
+                            sleep 10
+                        fi
                     fi
                 done
             fi
+            if [ "$rand_found" == 1 ] 
+            then
+                rand_restart_flv_done=1
+            fi
+        else
+            rand_restart_flv_done=1
         fi
 
         kind=""
@@ -6424,7 +6668,14 @@ Monitor()
                     fi
                 done < <(find "$LIVE_ROOT/"* $exclude_command \! -newermt "-$hls_delay_seconds seconds" || true)
 
-                GetChannelsInfo
+                rand_found=0
+                if [ "${#monitor_dir_names_chosen[@]}" -eq 0 ] 
+                then
+                    rand_found=1
+                else
+                    GetChannelsInfo
+                fi
+
                 for output_dir_name in "${monitor_dir_names_chosen[@]}"
                 do
                     found=0
@@ -6518,7 +6769,16 @@ Monitor()
                                     fi
                                 done
                             fi
+
                             found=1
+
+                            if [ "${rand_restart_hls_done:-}" == 0 ]
+                            then
+                                rand_found=1
+                                GetChannelInfo
+                                printf '%s\n' "$chnl_channel_name HLS 随机重启" >> "$MONITOR_LOG"
+                                MonitorHlsRestartChannel
+                            fi
                             break 1
                         fi
                     done
@@ -6535,11 +6795,87 @@ Monitor()
                         break 1
                     fi
                 done
+
+                if [ "$rand_found" == 1 ] 
+                then
+                    rand_restart_hls_done=1
+                fi
+            else
+                rand_restart_hls_done=1
             fi
+        else
+            rand_restart_hls_done=1
         fi
 
         sleep 10
     done
+}
+
+AntiLeech()
+{
+    echo && echo -e "是否开启防盗链? [y/N]"
+    read -p "(默认: ${d_anti_leech}): " anti_leech_yn
+    anti_leech_yn=${anti_leech_yn:-$d_anti_leech}
+    if [[ $anti_leech_yn == [Yy] ]] 
+    then
+        anti_leech_yn="yes"
+
+        echo && echo "请输入每小时随机重启次数[0-15]"
+        while read -p "(默认: $d_anti_leech_restart_nums): " anti_leech_restart_nums
+        do
+            case $anti_leech_restart_nums in
+                "") anti_leech_restart_nums=$d_anti_leech_restart_nums && break
+                ;;
+                *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
+                ;;
+                *) 
+                    if [ "$anti_leech_restart_nums" -ge 0 ] && [ "$anti_leech_restart_nums" -le 15 ]
+                    then
+                        break
+                    else
+                        echo && echo -e "$error 请输入正确的数字(大于等于0)" && echo
+                    fi
+                ;;
+            esac
+        done
+
+
+        if [ -n "${flv_nums:-}" ] 
+        then
+            echo && echo "是否每当重启 FLV 频道更改成随机的推流和拉流地址？[y/N]"
+            read -p "(默认: $d_anti_leech_restart_flv_changes): " anti_leech_restart_flv_changes_yn
+            anti_leech_restart_flv_changes_yn=${anti_leech_restart_flv_changes_yn:-$d_anti_leech_restart_flv_changes}
+            if [[ $anti_leech_restart_flv_changes_yn == [Yy] ]] 
+            then
+                anti_leech_restart_flv_changes_yn="yes"
+            else
+                anti_leech_restart_flv_changes_yn="no"
+            fi
+        else
+            anti_leech_restart_flv_changes_yn=$d_anti_leech_restart_flv_changes_yn
+        fi
+
+        if [ -n "$hls_nums" ] 
+        then
+            echo && echo "是否每当重启 HLS 频道更改成随机的 m3u8 名称和段名称？[y/N]"
+            read -p "(默认: $d_anti_leech_restart_hls_changes): " anti_leech_restart_hls_changes_yn
+            anti_leech_restart_hls_changes_yn=${anti_leech_restart_hls_changes_yn:-$d_anti_leech_restart_hls_changes}
+            if [[ $anti_leech_restart_hls_changes_yn == [Yy] ]] 
+            then
+                anti_leech_restart_hls_changes_yn="yes"
+            else
+                anti_leech_restart_hls_changes_yn="no"
+            fi
+        else
+            anti_leech_restart_hls_changes_yn=$d_anti_leech_restart_hls_changes_yn
+        fi
+
+    else
+        anti_leech_yn="no"
+        anti_leech_restart_nums=$d_anti_leech_restart_nums
+        anti_leech_restart_flv_changes_yn=$d_anti_leech_restart_flv_changes_yn
+        anti_leech_restart_hls_changes_yn=$d_anti_leech_restart_hls_changes_yn
+    fi
 }
 
 MonitorSet()
@@ -6564,7 +6900,7 @@ MonitorSet()
     if [ "$flv_count" -gt 0 ] 
     then
         GetDefault
-        echo && echo "请选择需要监控的 FLV 推流频道(多个频道用空格分隔)" && echo
+        echo && echo "请选择需要监控的 FLV 推流频道(多个频道用空格分隔 比如: 5 7 9-11)" && echo
 
         for((i=0;i<flv_count;i++));
         do
@@ -6616,7 +6952,15 @@ MonitorSet()
                         error_no=1
                     ;;
                     *)
-                        if [ "$flv_num" -lt 1 ] || [ "$flv_num" -gt "$flv_count" ]
+                        if [[ $flv_num == *"-"* ]] 
+                        then
+                            flv_num_start=${flv_num%-*}
+                            flv_num_end=${flv_num#*-}
+                            if [[ $flv_num_start == *[!0-9]* ]] || [[ $flv_num_end == *[!0-9]* ]] || [ "$flv_num_start" -eq 0 ] || [ "$flv_num_end" -eq 0 ] || [ "$flv_num_end" -gt "$flv_count" ] || [ "$flv_num_start" -ge "$flv_num_end" ]
+                            then
+                                error_no=3
+                            fi
+                        elif [ "$flv_num" -lt 1 ] || [ "$flv_num" -gt "$flv_count" ] 
                         then
                             error_no=2
                         fi
@@ -6625,10 +6969,28 @@ MonitorSet()
             done
 
             case "$error_no" in
-                1|2)
+                1|2|3)
                     echo -e "$error 请输入正确的数字或直接回车 " && echo
                 ;;
                 *)
+                    declare -a new_array
+                    for element in "${flv_nums_arr[@]}"
+                    do
+                        if [[ $element == *"-"* ]] 
+                        then
+                            start=${element%-*}
+                            end=${element#*-}
+                            for((i=start;i<=end;i++));
+                            do
+                                new_array+=("$i")
+                            done
+                        else
+                            new_array+=("$element")
+                        fi
+                    done
+                    flv_nums_arr=("${new_array[@]}")
+                    unset new_array
+
                     echo && echo "设置超时多少秒自动重启频道"
                     while read -p "(默认: $d_flv_delay_seconds秒): " flv_delay_seconds
                     do
@@ -6684,7 +7046,13 @@ MonitorSet()
         then
             echo && echo "已取消..." && echo && exit 1
         else
-            $JQ_FILE '(.default|.flv_delay_seconds)='"$flv_delay_seconds"'|(.default|.flv_restart_nums)='"$flv_restart_nums"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+            AntiLeech
+            $JQ_FILE '(.default|.flv_delay_seconds)='"$flv_delay_seconds"'
+            |(.default|.flv_restart_nums)='"$flv_restart_nums"'
+            |(.default|.anti_leech)="'"$anti_leech_yn"'"
+            |(.default|.anti_leech_restart_nums)='"$anti_leech_restart_nums"'
+            |(.default|.anti_leech_restart_flv_changes)="'"$anti_leech_restart_flv_changes_yn"'"
+            |(.default|.anti_leech_restart_hls_changes)="'"$anti_leech_restart_hls_changes_yn"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
             mv "$CHANNELS_TMP" "$CHANNELS_FILE"
             return 0
         fi
@@ -6754,7 +7122,15 @@ MonitorSet()
                     error_no=1
                 ;;
                 *)
-                    if [ "$hls_num" -lt 1 ] || [ "$hls_num" -gt "$monitor_count" ]
+                    if [[ $hls_num == *"-"* ]] 
+                    then
+                        hls_num_start=${hls_num%-*}
+                        hls_num_end=${hls_num#*-}
+                        if [[ $hls_num_start == *[!0-9]* ]] || [[ $hls_num_end == *[!0-9]* ]] || [ "$hls_num_start" -eq 0 ] || [ "$hls_num_end" -eq 0 ] || [ "$hls_num_end" -gt "$monitor_count" ] || [ "$hls_num_start" -ge "$hls_num_end" ]
+                        then
+                            error_no=3
+                        fi
+                    elif [ "$hls_num" -lt 1 ] || [ "$hls_num" -gt "$monitor_count" ] 
                     then
                         error_no=2
                     fi
@@ -6767,6 +7143,24 @@ MonitorSet()
                 echo -e "$error 请输入正确的数字或直接回车 " && echo
             ;;
             *)
+                declare -a new_array
+                for element in "${hls_nums_arr[@]}"
+                do
+                    if [[ $element == *"-"* ]] 
+                    then
+                        start=${element%-*}
+                        end=${element#*-}
+                        for((i=start;i<=end;i++));
+                        do
+                            new_array+=("$i")
+                        done
+                    else
+                        new_array+=("$element")
+                    fi
+                done
+                hls_nums_arr=("${new_array[@]}")
+                unset new_array
+
                 for hls_num in "${hls_nums_arr[@]}"
                 do
                     monitor_dir_names_chosen+=("${monitor_dir_names[((hls_num - 1))]}")
@@ -6859,6 +7253,8 @@ MonitorSet()
         esac
     done
 
+    AntiLeech
+
     flv_delay_seconds=${flv_delay_seconds:-$d_flv_delay_seconds}
     flv_restart_nums=${flv_restart_nums:-$d_flv_restart_nums}
     hls_delay_seconds=${hls_delay_seconds:-$d_hls_delay_seconds}
@@ -6868,7 +7264,11 @@ MonitorSet()
     |(.default|.hls_delay_seconds)='"$hls_delay_seconds"'
     |(.default|.hls_min_bitrates)='"$((hls_min_bitrates / 1000))"'
     |(.default|.hls_max_seg_size)='"$hls_max_seg_size"'
-    |(.default|.hls_restart_nums)='"$hls_restart_nums"'' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    |(.default|.hls_restart_nums)='"$hls_restart_nums"'
+    |(.default|.anti_leech)="'"$anti_leech_yn"'"
+    |(.default|.anti_leech_restart_nums)='"$anti_leech_restart_nums"'
+    |(.default|.anti_leech_restart_flv_changes)="'"$anti_leech_restart_flv_changes_yn"'"
+    |(.default|.anti_leech_restart_hls_changes)="'"$anti_leech_restart_hls_changes_yn"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
     mv "$CHANNELS_TMP" "$CHANNELS_FILE"
 }
 
@@ -7930,7 +8330,7 @@ then
                         last_line=""
                         while IFS= read -r line 
                         do
-                            if [ "$count" == 10 ] 
+                            if [ "$count" == "${3:-10}" ] 
                             then
                                 break
                             fi
@@ -8432,7 +8832,7 @@ case "$cmd" in
                 nginx_conf=$(< "/usr/local/nginx/conf/nginx.conf")
                 if ! grep -q "allow all" <<< "$nginx_conf"
                 then
-                    echo && echo "是否屏蔽所有阿里云ip段 [y/N]" && echo
+                    echo && echo "是否屏蔽所有阿里云ip段 [y/N]"
                     read -p "(默认: N): " block
                     block=${block:-"N"}
                     if [[ $block == [Yy] ]] 
@@ -8515,7 +8915,7 @@ case "$cmd" in
                     then
                         echo && echo -e "$error flv 配置已存在! flv 推流地址为 rtmp://127.0.0.1/flv/xxx" && echo
                     else
-                        echo && echo -e "$info flv 配置已添加，是否重启 Nginx ？[Y/n]" && echo
+                        echo && echo -e "$info flv 配置已添加，是否重启 Nginx ？[Y/n]"
                         read -p "(默认: Y): " restart_yn
                         restart_yn=${restart_yn:-"Y"}
                         if [[ $restart_yn == [Yy] ]] 
