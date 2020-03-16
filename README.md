@@ -17,9 +17,9 @@
 
 ## iptv.sh 一键管理 IPTV 脚本 mpegts / flv => hls / flv 推流
 
-- 【自动化】HLS-Stream-Creator
-- 【扩展】可以设置画面音轨延迟修复不同步的问题，可以不输出 HLS，管理推流 flv 等
 - 自带防护
+- 自带监控
+- 自带防盗链
 - 自建节目表
 - 添加频道
   - 可以用命令行，详见 tv -h
@@ -54,7 +54,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 ```bash
 "sync_file":"/usr/local/nginx/html/channels.json", # 公开目录的json
 "sync_index":"data:2:channels", # 必须指定到m3u8直播源所在的数组这一级，比如这里 ObjectJson.data[2].channels
-"sync_pairs":"chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live,schedule:playlist_name", # 值映射用:号，如果直接赋值用=号（公开的live根目录会自动补上完整的m3u8地址）
+"sync_pairs":"chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live,schedule:output_dir_name", # 值映射用:号，如果直接赋值用=号（公开的live根目录会自动补上完整的m3u8地址）
 "schedule_file":"/usr/local/nginx/html/schedule.json" # 使用命令 tv s 自建节目表
 ```
 
@@ -92,12 +92,17 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
     原画输出，不吃CPU，但是片段大，吃带宽
    ```
 
-- tv n 安装管理 nginx 相关面板(安装 nginx 后才能开启 AntiDDoS)
+- tv n 安装管理 nginx 相关面板(安装 nginx 后才能开启 防护 AntiDDoS)
 - tv m 开启监控 flv推流 和 hls 输出目录，用来应对直播源出现变化导致 ffmpeg 无法继续分割的情况
-  - AntiDDoS  默认每2分钟清除被禁 ip，很多时候因为直播源重启/网络等问题浏览器会不停的发送请求同一个文件，所以会有误伤，选项：
+  - 防护 AntiDDoS  默认每2分钟清除被禁 ip，很多时候因为直播源重启/网络等问题浏览器会不停的发送请求同一个文件，所以会有误伤，选项：
     - 封禁端口（默认80）
     - 封禁时间（默认120秒）
     - 封禁等级（1-9）（默认6，数值越低越严格，也越容易误伤）
+  - 防盗链 选项：
+    - 是否开启
+    - 每小时随机重启次数
+    - 每当重启 FLV 频道更改成随机的推流和拉流地址
+    - 每当重启 HLS 频道更改成随机的 m3u8 名称和段名称
   - 监控 FLV 选项：
     - 是否监控超时（默认20秒）
     - 重启次数（默认20次）
