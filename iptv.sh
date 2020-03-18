@@ -6173,18 +6173,8 @@ Monitor()
     while true; do
         if [ "$anti_leech_yn" == "yes" ] && [ "$anti_leech_restart_nums" -gt 0 ] && [ "${rand_restart_flv_done:-}" != 0 ] && [ "${rand_restart_hls_done:-}" != 0 ] 
         then
-            if [ -n "${minutes:-}" ] && [ "${rand_restart_flv_done:-}" == 1 ] && [ "${rand_restart_hls_done:-}" == 1 ] 
-            then
-                declare -a new_array
-                for element in "${minutes[@]}"
-                do
-                    [ "$element" != "$current_minute" ] && new_array+=("$element")
-                done
-                minutes=("${new_array[@]}")
-                unset new_array
-                skip_hour=$current_hour
-            fi
-
+            current_minute_old=${current_minute:-}
+            current_hour_old=${current_hour:-25}
             printf -v current_time '%(%H:%M)T'
             current_hour=${current_time%:*}
             current_minute=${current_time#*:}
@@ -6197,65 +6187,75 @@ Monitor()
                 current_minute=${current_minute:1}
             fi
 
-            if [ -n "${minutes:-}" ] && [ "${rand_restart_flv_done:-}" == 1 ] && [ "${rand_restart_hls_done:-}" == 1 ] 
+            if [ "$current_hour" != "$current_hour_old" ] 
             then
+                minutes=()
+                skip_hour=""
+            fi
+
+            if [ "${#minutes[@]}" -gt 0 ] && [ "$current_minute" -gt "$current_minute_old" ]
+            then
+                declare -a new_array
                 for minute in "${minutes[@]}"
                 do
-                    if [ "$current_minute" == "$minute" ] 
+                    if [ "$minute" -gt "$current_minute" ] 
+                    then
+                        new_array+=("$minute")
+                    fi
+
+                    if [ "$minute" -eq "$current_minute" ] 
                     then
                         rand_restart_flv_done=0
                         rand_restart_hls_done=0
-                        break
                     fi
                 done
-            else
-                if [ -z "${skip_hour:-}" ] || [ "$current_hour" != "$skip_hour" ]
-                then
-                    rand_restart_flv_done=""
-                    rand_restart_hls_done=""
+                minutes=("${new_array[@]}")
+                unset new_array
+                [ "${#minutes[@]}" -eq 0 ] && skip_hour=$current_hour
+            fi
 
-                    if [ -z "${minutes:-}" ] 
-                    then
-                        minutes=()
-                        for((i=0;i<anti_leech_restart_nums;i++));
-                        do
-                            while true 
+            if [ "${#minutes[@]}" -eq 0 ] && [ "$current_minute" -lt 59 ] && [ "$current_hour" != "${skip_hour:-}" ]
+            then
+                rand_restart_flv_done=""
+                rand_restart_hls_done=""
+                minutes_left=$((59 - current_minute))
+                restart_nums=$anti_leech_restart_nums
+                [ "$restart_nums" -gt "$minutes_left" ] && restart_nums=$minutes_left
+                minute_gap=$((minutes_left / anti_leech_restart_nums / 2))
+                [ "$minute_gap" -eq 0 ] && minute_gap=1
+                for((i=0;i<restart_nums;i++));
+                do
+                    while true 
+                    do
+                        rand_minute=$((RANDOM % 60))
+                        if [ "$rand_minute" -gt "$current_minute" ] 
+                        then
+                            valid=1
+                            for minute in "${minutes[@]}"
                             do
-                                rand_minute=$((RANDOM % 60))
-                                valid=1
-                                for minute in "${minutes[@]}"
-                                do
-                                    if [ "$minute" == "$rand_minute" ] 
-                                    then
-                                        valid=0
-                                    elif [ "$rand_minute" -gt "$minute" ] && [ "$((rand_minute-minute))" -lt 3 ]
-                                    then
-                                        valid=0
-                                    elif [ "$minute" -gt "$rand_minute" ] && [ "$((minute-rand_minute))" -lt 3 ] 
-                                    then
-                                        valid=0
-                                    fi
-                                done
-                                if [ "$valid" == 1 ] 
+                                if [ "$minute" -eq "$rand_minute" ] 
                                 then
+                                    valid=0
+                                    break
+                                elif [ "$minute" -gt "$rand_minute" ] && [ "$((minute-rand_minute))" -lt "$minute_gap" ]
+                                then
+                                    valid=0
+                                    break
+                                elif [ "$rand_minute" -gt "$minute" ] && [ "$((rand_minute-minute))" -lt "$minute_gap" ]
+                                then
+                                    valid=0
                                     break
                                 fi
                             done
-                            minutes+=("$rand_minute")
-                        done
-                        printf '%s\n' "$current_time 计划重启时间 ${minutes[*]}" >> "$MONITOR_LOG"
-                    fi
-
-                    for minute in "${minutes[@]}"
-                    do
-                        if [ "$current_minute" == "$minute" ] 
-                        then
-                            rand_restart_flv_done=0
-                            rand_restart_hls_done=0
-                            break
+                            if [ "$valid" == 1 ] 
+                            then
+                                break
+                            fi
                         fi
                     done
-                fi
+                    minutes+=("$rand_minute")
+                done
+                printf '%s\n' "$current_time 计划重启时间 ${minutes[*]}" >> "$MONITOR_LOG"
             fi
         fi
 
@@ -6820,7 +6820,7 @@ AntiLeech()
     then
         anti_leech_yn="yes"
 
-        echo && echo "请输入每小时随机重启次数[0-15]"
+        echo && echo "请输入每小时随机重启次数"
         while read -p "(默认: $d_anti_leech_restart_nums): " anti_leech_restart_nums
         do
             case $anti_leech_restart_nums in
@@ -6829,7 +6829,7 @@ AntiLeech()
                 *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
                 ;;
                 *) 
-                    if [ "$anti_leech_restart_nums" -ge 0 ] && [ "$anti_leech_restart_nums" -le 15 ]
+                    if [ "$anti_leech_restart_nums" -ge 0 ]
                     then
                         break
                     else
