@@ -10,7 +10,7 @@
 
 ## 怎么看
 
-- 广电+港澳台 <http://hbo.epub.fun/>, 港澳台 <http://mtime.info/>
+- 广电+港澳台 <http://hbo.epub.fun/>, 港澳台 <http://mtime.info/>, 不定时刷新直播源
 - 自定义频道，需把 iptv.html 放到**本地服务器**目录下，修改channels.json
 
 ---
@@ -70,6 +70,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 - tv s disney 更新迪士尼频道节目表
 - tv s foxmovies 更新 FOX MOVIES 节目表
 - tv s amlh 更新 澳门莲花 节目表
+- tv s tvbhd 更新 TVB HD 节目表
 - tv ffmpeg 在主目录下自建 FFmpeg 镜像
 - tv ts 打开广电直播源 注册/登录 面板
   - 在命令行注册账号
