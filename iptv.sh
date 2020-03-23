@@ -354,12 +354,12 @@ InstallFfmpeg()
         fi
         FFMPEG_PACKAGE_FILE="$IPTV_ROOT/$ffmpeg_package"
         wget --no-check-certificate "$FFMPEG_MIRROR_LINK/builds/$ffmpeg_package" $_PROGRESS_OPT -qO "$FFMPEG_PACKAGE_FILE"
-        [ ! -e "$FFMPEG_PACKAGE_FILE" ] && echo -e "$error ffmpeg压缩包 下载失败 !" && exit 1
+        [ ! -e "$FFMPEG_PACKAGE_FILE" ] && echo -e "$error ffmpeg 下载失败 !" && exit 1
         tar -xJf "$FFMPEG_PACKAGE_FILE" -C "$IPTV_ROOT" && rm -rf "${FFMPEG_PACKAGE_FILE:-'notfound'}"
         FFMPEG=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-        [ ! -e "$FFMPEG" ] && echo -e "$error ffmpeg压缩包 解压失败 !" && exit 1
+        [ ! -e "$FFMPEG" ] && echo -e "$error ffmpeg 解压失败 !" && exit 1
         export FFMPEG
-        echo -e "$info FFmpeg 安装完成..."
+        echo -e "$info FFmpeg 安装成功..."
     else
         echo -e "$info FFmpeg 已安装..."
     fi
@@ -376,9 +376,9 @@ InstallJq()
         then
             wget --no-check-certificate "$FFMPEG_MIRROR_LINK/$jq_ver/jq-linux$release_bit" $_PROGRESS_OPT -qO "$JQ_FILE"
         fi
-        [ ! -e "$JQ_FILE" ] && echo -e "$error 下载JQ解析器失败，请重试 !" && exit 1
+        [ ! -e "$JQ_FILE" ] && echo -e "$error 下载JQ解析器失败, 请重试 !" && exit 1
         chmod +x "$JQ_FILE"
-        echo -e "$info JQ解析器 安装完成..." 
+        echo -e "$info JQ解析器 安装完成..."
     else
         echo -e "$info JQ解析器 已安装..."
     fi
@@ -406,7 +406,7 @@ Install()
         wget --no-check-certificate "$CREATOR_LINK" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
         if [ ! -s "$CREATOR_FILE" ] 
         then
-            echo -e "$error 无法连接到 Github ! 尝试备用链接..."
+            echo -e "$error 无法连接 Github ! 尝试备用链接..."
             wget --no-check-certificate "$CREATOR_LINK_BACKUP" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
             if [ ! -s "$CREATOR_FILE" ] 
             then
@@ -579,7 +579,7 @@ UpdateSelf()
         echo -e "$info 更新中，请稍等..." && echo
         printf -v update_date '%(%m-%d)T'
         cp -f "$CHANNELS_FILE" "${CHANNELS_FILE}_$update_date"
-        
+
         default=$($JQ_FILE '(.playlist_name)="'"$d_playlist_name"'"
         |(.seg_dir_name)="'"$d_seg_dir_name"'"
         |(.seg_name)="'"$d_seg_name"'"
@@ -1646,7 +1646,7 @@ SetBitrates()
     同时可以指定输出的分辨率(比如：600-600x400,900-1280x720)"
     fi
 
-    read -p "(默认: ${d_bitrates:-"不设置"}): " bitrates
+    echo && read -p "(默认: ${d_bitrates:-"不设置"}): " bitrates
     bitrates=${bitrates:-$d_bitrates}
     if [ "$bitrates" == "omit" ] 
     then
@@ -4002,6 +4002,105 @@ GenerateSchedule()
     mv "${SCHEDULE_JSON}_tmp" "$SCHEDULE_JSON"
 }
 
+InstallPdf2html()
+{
+    Progress &
+    progress_pid=$!
+    if [ "$release" == "rpm" ] 
+    then
+        yum install cmake gcc gnu-getopt java-1.8.0-openjdk libpng-devel fontforge-devel cairo-devel poppler-devel libspiro-devel freetype-devel libtiff-devel openjpeg libxml2-devel giflibgiflib-devel libjpeg-turbo-devel libuninameslist-devel pango-devel make gcc-c++ >/dev/null 2>&1
+    else
+        apt-get -y update >/dev/null 2>&1
+        apt-get -y install libpoppler-private-dev libpoppler-dev libfontforge-dev pkg-config libopenjp2-7-dev libjpeg-dev libtiff5-dev libpng-dev libfreetype6-dev libgif-dev libgtk-3-dev libxml2-dev libpango1.0-dev libcairo2-dev libspiro-dev libuninameslist-dev python3-dev ninja-build cmake build-essential >/dev/null 2>&1
+    fi
+
+    echo -n "...40%..."
+
+    while IFS= read -r line
+    do
+        if [[ "$line" == *"latest stable release is"* ]] 
+        then
+            line=${line#*<a href=\"}
+            poppler_name=${line%%.tar.xz*}
+        elif [[ "$line" == *"poppler encoding data"* ]] 
+        then
+            line=${line#*<a href=\"}
+            poppler_data_name=${line%%.tar.gz*}
+            break
+        fi
+    done < <( wget --timeout=10 --tries=3 --no-check-certificate "https://poppler.freedesktop.org/" -qO- )
+
+    cd ~
+    if [ ! -e "./$poppler_data_name" ] 
+    then
+        wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/$poppler_data_name.tar.gz" -qO "$poppler_data_name.tar.gz"
+        tar xzvf "$poppler_data_name.tar.gz" >/dev/null 2>&1
+    fi
+
+    cd "$poppler_data_name/"
+    make install >/dev/null 2>&1
+
+    echo -n "...50%..."
+
+    poppler_name="poppler-0.81.0"
+
+    cd ~
+    if [ ! -e "./$poppler_name" ] 
+    then
+        wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/$poppler_name.tar.xz" -qO "$poppler_name.tar.xz"
+        tar -xJf "$poppler_name.tar.xz" >/dev/null 2>&1
+    fi
+
+    cd "$poppler_name/"
+    mkdir -p build
+    cd build
+    cmake -DENABLE_UNSTABLE_API_ABI_HEADERS=ON .. >/dev/null 2>&1
+    make >/dev/null 2>&1
+    make install >/dev/null 2>&1
+
+    echo -n "...70%..."
+
+    cd ~
+    if [ ! -e "./fontforge-20190413" ] 
+    then
+        wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/fontforge-20190413.tar.gz" -qO "fontforge-20190413.tar.gz"
+        tar xzvf "fontforge-20190413.tar.gz" >/dev/null 2>&1
+    fi
+
+    cd "fontforge-20190413/"
+    ./bootstrap >/dev/null 2>&1
+    ./configure >/dev/null 2>&1
+    make >/dev/null 2>&1
+    make install >/dev/null 2>&1
+    echo -n "...90%..."
+
+    cd ~
+    if [ ! -e "./pdf2htmlEX-0.18.7-poppler-0.81.0" ] 
+    then
+        wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/pdf2htmlEX-0.18.7-poppler-0.81.0.zip" -qO "pdf2htmlEX-0.18.7-poppler-0.81.0.zip"
+        unzip "pdf2htmlEX-0.18.7-poppler-0.81.0.zip" >/dev/null 2>&1
+    fi
+
+    cd "pdf2htmlEX-0.18.7-poppler-0.81.0/"
+    ./dobuild >/dev/null 2>&1
+    cd build
+    make install >/dev/null 2>&1
+
+    kill $progress_pid
+    echo && echo -n "...100%" && echo
+
+    if grep -q "profile.d" < "/etc/profile"
+    then
+        echo 'export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig' >> /etc/profile.d/pdf2htmlEX
+        echo 'export LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH:-}' >> /etc/profile.d/pdf2htmlEX
+        # shellcheck source=/dev/null
+        source /etc/profile.d/pdf2htmlEX &>/dev/null
+    else
+        echo 'export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig' >> /etc/profile
+        echo 'export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH' >> /etc/profile
+    fi
+}
+
 Schedule()
 {
     CheckRelease
@@ -4927,6 +5026,424 @@ Schedule()
                 echo -e "$error\nnot found\n"
             else
                 $JQ_FILE --arg index "$2" --argjson program "[$schedule]" '.[$index] = $program' "$SCHEDULE_JSON" > "${SCHEDULE_JSON}_tmp"
+                mv "${SCHEDULE_JSON}_tmp" "$SCHEDULE_JSON"
+            fi
+        ;;
+        "tvbhd")
+            if [[ ! -x $(command -v pdf2htmlEX) ]] 
+            then
+                echo && echo "需要先安装 pdf2htmlEX，因为是编译 pdf2htmlEX，耗时会很长，是否继续？[y/N]"
+                read -p "(默认: N): " pdf2html_install_yn
+                pdf2html_install_yn=${pdf2html_install_yn:-"N"}
+                if [[ $pdf2html_install_yn == [Yy] ]] 
+                then
+                    InstallPdf2html
+                    echo && echo -e "$info pdf2htmlEX 安装完成" && echo
+                    if ! pdf2htmlEX -v > /dev/null 2>&1
+                    then
+                        echo -e "$info 请先输入 source /etc/profile 以启用 pdf2htmlEX" && echo && exit 1
+                    fi
+                else
+                    echo && echo "已取消..." && echo && exit 1
+                fi
+            fi
+
+            wget --timeout=10 --tries=3 --no-check-certificate "https://schedule.tvbusa.com/current/tvb_hd.pdf" -qO "$IPTV_ROOT/tvb_hd.pdf"
+            cd "$IPTV_ROOT"
+            pdf2htmlEX --zoom 1.3 "./tvb_hd.pdf"
+
+            printf -v today '%(%Y-%m-%d)T'
+            sys_time=$(date -d $today +%s)
+            yesterday=$(printf '%(%Y-%m-%d)T' $((sys_time - 86400)))
+
+            weekday_program_title=()
+            weekday_program_time=()
+            saturday_program_title=()
+            saturday_program_time=()
+            sunday_program_title=()
+            sunday_program_time=()
+
+            while IFS= read -r line 
+            do
+                if [[ $line == *"節目表"* ]] 
+                then
+                    line=${line#*"星期日"}
+                    line=${line#*"日期"}
+                    line=${line//"<span class=\"_ _28\"></span>"/}
+                    line=${line//"<div class=\"t m0 x10 ha ya ff2 fs3 fc0 sc0 ls0 ws0\">11:30</div></div>"/}
+                    old_program_time=""
+                    skips=(
+                        "4:sunday"
+                        "6:weekday sunday"
+                        "8:saturday sunday"
+                        "10:saturday sunday"
+                        "11:weekday"
+                        "12:weekday saturday"
+                        "13:saturday sunday"
+                        "15:weekday"
+                        "16:saturday sunday"
+                        "17:saturday sunday"
+                        "18:weekday"
+                        "19:saturday sunday"
+                        "24:saturday sunday"
+                        "25:weekday saturday"
+                        "26:sunday"
+                        "27:sunday"
+                        "28:saturday"
+                        "29:weekday sunday"
+                        "30:saturday"
+                        "31:sunday"
+                        "32:weekday sunday"
+                        "33:saturday"
+                        "34:sunday"
+                        "36:saturday sunday"
+                        "37:weekday"
+                        "38:sunday"
+                        "39:weekday saturday"
+                        "40:sunday"
+                        "41:saturday"
+                        "42:weekday sunday"
+                        "43:saturday sunday"
+                        "44:saturday sunday"
+                        "46:weekday sunday"
+                        "47:weekday"
+                        "48:saturday sunday"
+                        "50:saturday sunday"
+                        "51:weekday"
+                        "52:saturday sunday"
+                        "53:weekday"
+                        "54:saturday sunday"
+                        "56:saturday"
+                        "57:sunday"
+                        "58:saturday"
+                        "59:weekday sunday"
+                        "60:saturday"
+                        "61:sunday"
+                        "62:weekday"
+                        "63:saturday sunday"
+                        "64:weekday"
+                        "65:saturday sunday"
+                        "66:saturday sunday"
+                    )
+                    loop=1
+                    count=0
+                    day="weekday"
+                    while true 
+                    do
+                        class=${line%%\">*}
+                        class=${class#*<div class=\"}
+                        line=${line#*>}
+                        content=${line%%<*}
+
+                        case $content in
+                            ""|" "|"AM"|"PM"|"東岸"|"西岸"|"星期日"|"星期一"|"星期二至六"|"日期"|"Next Day") continue
+                            ;;
+                            *"夏令時間"*) continue
+                            ;;
+                            *"將時鐘"*) continue
+                            ;;
+                            "高清台") 
+                                if [[ -n ${program_title:-} ]] 
+                                then
+                                    if [[ -n ${program_start_date:-} ]] 
+                                    then
+                                        program_title="$program_title $program_start_date"
+                                    fi
+                                    program_title=${program_title//amp;/}
+                                    program_title=${program_title//&#039;/\'}
+                                    if [ "$day" == "weekday" ] 
+                                    then
+                                        if [[ -n $old_program_time ]] 
+                                        then
+                                            weekday_program_title+=("$program_title")
+                                            weekday_program_time+=("$old_program_time")
+                                        else
+                                            index=${#weekday_program_title[@]}
+                                            index=$((index-1))
+                                            weekday_program_title[index]="${weekday_program_title[index]} $program_title"
+                                        fi
+                                    elif [ "$day" == "saturday" ] 
+                                    then
+                                        if [[ -n $old_program_time ]] 
+                                        then
+                                            saturday_program_title+=("$program_title")
+                                            saturday_program_time+=("$old_program_time")
+                                        else
+                                            index=${#saturday_program_title[@]}
+                                            index=$((index-1))
+                                            saturday_program_title[index]="${saturday_program_title[index]} $program_title"
+                                        fi
+                                    elif [ "$day" == "sunday" ] 
+                                    then
+                                        if [[ -n $old_program_time ]] 
+                                        then
+                                            sunday_program_title+=("$program_title")
+                                            sunday_program_time+=("$old_program_time")
+                                        else
+                                            index=${#sunday_program_title[@]}
+                                            index=$((index-1))
+                                            sunday_program_title[index]="${sunday_program_title[index]} $program_title"
+                                        fi
+                                    fi
+                                    program_title=""
+                                    old_program_time=""
+                                    program_sys_time=""
+                                    program_start_date=""
+                                fi
+                                break
+                            ;;
+                            *) 
+                                if [[ ${content:1:1} == "/" ]] && [[ ! ${content:0:1} == *[!0-9]* ]] && [[ ! ${content:2} == *[!0-9]* ]] 
+                                then
+                                    program_start_date=$content
+                                elif [[ ${content:2:1} == "/" ]] && [[ ! ${content:0:2} == *[!0-9]* ]] && [[ ! ${content:3} == *[!0-9]* ]] 
+                                then
+                                    program_start_date=$content
+                                elif [[ ${content:1:1} == ":" ]] 
+                                then
+                                    if [[ ! ${content:0:1} == *[!0-9]* ]] && [[ ! ${content:2} == *[!0-9]* ]] 
+                                    then
+                                        [ -n "${program_time:-}" ] && program_time=""
+                                        if [[ -z ${program_time_east:-} ]] 
+                                        then
+                                            program_time_east=$content
+                                        else
+                                            program_time=$content
+                                            program_time_east=""
+                                        fi
+                                    fi
+                                elif [[ ${content:2:1} == ":" ]] 
+                                then
+                                    if [[ ! ${content:0:2} == *[!0-9]* ]] && [[ ! ${content:3} == *[!0-9]* ]] 
+                                    then
+                                        [ -n "${program_time:-}" ] && program_time=""
+                                        if [[ -z ${program_time_east:-} ]] 
+                                        then
+                                            program_time_east=$content
+                                        else
+                                            program_time=$content
+                                            program_time_east=""
+                                        fi
+                                    fi
+                                else
+                                    old_day=$day
+
+                                    if [ "$count" -gt 0 ] 
+                                    then
+                                        if [ "$old_day" == "sunday" ] 
+                                        then
+                                            day="weekday"
+                                        elif [ "$old_day" == "weekday" ] 
+                                        then
+                                            day="saturday"
+                                        elif [ "$old_day" == "saturday" ] 
+                                        then
+                                            day="sunday"
+                                        fi
+                                    fi
+
+                                    count=$((count+1))
+                                    if [[ $((count % 3)) -eq 0 ]] 
+                                    then
+                                        loop=$((count/3))
+                                    else
+                                        loop=$((count/3 + 1))
+                                    fi
+
+                                    redo=1
+                                    while [ "$redo" -eq 1 ] 
+                                    do
+                                        redo=0
+                                        for skip in "${skips[@]}"
+                                        do
+                                            if [ "${skip%:*}" == "$loop" ] 
+                                            then
+                                                redo=1
+                                                IFS=" " read -ra days <<< "${skip#*:}"
+                                                for ele in "${days[@]}"
+                                                do
+                                                    if [ "$ele" == "$day" ] 
+                                                    then
+                                                        count=$((count+1))
+                                                        if [ "$day" == "sunday" ] 
+                                                        then
+                                                            day="weekday"
+                                                        elif [ "$day" == "weekday" ] 
+                                                        then
+                                                            day="saturday"
+                                                        elif [ "$day" == "saturday" ] 
+                                                        then
+                                                            day="sunday"
+                                                        fi
+                                                    fi
+                                                done
+                                                if [[ $((count % 3)) -eq 0 ]] 
+                                                then
+                                                    new_loop=$((count/3))
+                                                else
+                                                    new_loop=$((count/3 + 1))
+                                                fi
+                                                if [ "$new_loop" == "$loop" ] 
+                                                then
+                                                    redo=0
+                                                else
+                                                    loop=$new_loop
+                                                fi
+                                                break
+                                            fi
+                                        done
+                                    done
+
+                                    case $((count%3)) in
+                                        0) day="sunday"
+                                        ;;
+                                        1) day="weekday"
+                                        ;;
+                                        2) day="saturday"
+                                        ;;
+                                    esac
+
+                                    if [[ -n ${program_title:-} ]] 
+                                    then
+                                        if [[ -n ${program_start_date:-} ]] 
+                                        then
+                                            program_title="$program_title $program_start_date"
+                                        fi
+                                        program_title=${program_title//amp;/}
+                                        program_title=${program_title//&#039;/\'}
+                                        if [ "$old_day" == "weekday" ] 
+                                        then
+                                            if [[ -n $old_program_time ]] 
+                                            then
+                                                weekday_program_title+=("$program_title")
+                                                weekday_program_time+=("$old_program_time")
+                                            else
+                                                index=${#weekday_program_title[@]}
+                                                index=$((index-1))
+                                                weekday_program_title[index]="${weekday_program_title[index]} $program_title"
+                                            fi
+                                        elif [ "$old_day" == "saturday" ] 
+                                        then
+                                            if [[ -n $old_program_time ]] 
+                                            then
+                                                saturday_program_title+=("$program_title")
+                                                saturday_program_time+=("$old_program_time")
+                                            else
+                                                index=${#saturday_program_title[@]}
+                                                index=$((index-1))
+                                                saturday_program_title[index]="${saturday_program_title[index]} $program_title"
+                                            fi
+                                        elif [ "$old_day" == "sunday" ] 
+                                        then
+                                            if [[ -n $old_program_time ]] 
+                                            then
+                                                sunday_program_title+=("$program_title")
+                                                sunday_program_time+=("$old_program_time")
+                                            else
+                                                index=${#sunday_program_title[@]}
+                                                index=$((index-1))
+                                                sunday_program_title[index]="${sunday_program_title[index]} $program_title"
+                                            fi
+                                        fi
+                                        program_title=""
+                                        old_program_time=""
+                                        program_start_date=""
+                                    fi
+
+                                    if [ -n "${program_time_east:-}" ] 
+                                    then
+                                        program_time=$program_time_east
+                                        program_time_east=""
+                                    fi
+
+                                    program_title=$content
+
+                                    if [ -n "$program_time" ] 
+                                    then
+                                        old_program_time=$program_time
+                                        program_time=""
+                                    fi
+                                fi
+                            ;;
+                        esac
+                    done
+                    break
+                fi
+            done < "./tvb_hd.html"
+            weekday=$(printf '%(%u)T')
+            if [ "$weekday" == 1 ] 
+            then
+                p_title=("${sunday_program_title[@]}")
+                p_time=("${sunday_program_time[@]}")
+            elif [ "$weekday" == 0 ] 
+            then
+                p_title=("${saturday_program_title[@]}")
+                p_time=("${saturday_program_time[@]}")
+            else
+                p_title=("${weekday_program_title[@]}")
+                p_time=("${weekday_program_time[@]}")
+            fi
+
+            if [ ! -s "$SCHEDULE_JSON" ] 
+            then
+                printf '{"%s":[]}' "tvbhd" > "$SCHEDULE_JSON"
+            fi
+
+            schedule=""
+            change=0
+            date=$yesterday
+            for((i=0;i<${#p_time[@]};i++));
+            do
+                [ -n "${program_time:-}" ] && program_time_old=$program_time
+
+                program_time=${p_time[i]}
+
+                if [ -n "${program_time_old:-}" ] &&[ "${program_time%:*}" -lt "${program_time_old%:*}" ]
+                then
+                    change=$((change+1))
+                fi
+
+                if [ "$change" == 1 ] 
+                then
+                    hour=${program_time%:*}
+                    hour=$((hour+12))
+                    if [ "$hour" -eq 24 ] 
+                    then
+                        hour="0"
+                        date=$today
+                    fi
+                    new_program_time="$hour:${program_time#*:}"
+                elif [ "$change" == 2 ] 
+                then
+                    date=$today
+                    new_program_time=$program_time
+                else
+                    new_program_time=$program_time
+                fi
+
+                if [[ ${new_program_time:1:1} == ":" ]] 
+                then
+                    new_program_time="0$new_program_time"
+                else
+                    new_program_time=$new_program_time
+                fi
+
+                program_sys_time=$(date -d "${date}T$new_program_time-08:00" +%s)
+                new_program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+
+                program_title=${p_title[i]}
+
+                [ -n "$schedule" ] && schedule="$schedule,"
+                schedule=$schedule'{
+                    "title":"'"$program_title"'",
+                    "time":"'"$new_program_time"'",
+                    "sys_time":"'"$program_sys_time"'"
+                }'
+            done
+
+            if [ -n "$schedule" ] 
+            then
+                $JQ_FILE --arg index "tvbhd" --argjson program "[$schedule]" '.[$index] = $program' "$SCHEDULE_JSON" > "${SCHEDULE_JSON}_tmp"
                 mv "${SCHEDULE_JSON}_tmp" "$SCHEDULE_JSON"
             fi
         ;;
@@ -5928,7 +6445,15 @@ MonitorTryAccounts()
                 then
                     line=${line#* }
                     account_line=${line#* }
-                    IFS=" " read -ra accounts <<< "$account_line"
+                    new_account_line=""
+                    while [[ $account_line == *" "* ]] 
+                    do
+                        [ -n "$new_account_line" ] && new_account_line=" $new_account_line"
+                        new_account_line="${account_line%% *}$new_account_line"
+                        account_line=${account_line#* }
+                    done
+                    new_account_line=${new_account_line:-$account_line}
+                    IFS=" " read -ra accounts <<< "$new_account_line"
                     break
                 fi
             done < "$XTREAM_CODES"
@@ -5996,9 +6521,28 @@ MonitorTryAccounts()
                 done
 
                 valid=0
-                if [ "$found" == 0 ] && $FFPROBE -i "$chnl_stream_link" -timeout 3000000 -show_streams -select_streams a -loglevel quiet > /dev/null
+                if [ "$found" == 0 ] 
                 then
-                    valid=1
+                    audio=0
+                    video=0
+                    while IFS= read -r line 
+                    do
+                        if [[ $line == *"codec_type=audio"* ]] 
+                        then
+                            audio=1
+                        elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
+                        then
+                            audio=0
+                        elif [[ $line == *"codec_type=video"* ]] 
+                        then
+                            video=1
+                        fi
+                    done < <($FFPROBE -i "$chnl_stream_link" -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+
+                    if [ "$audio" == 1 ] && [ "$video" == 1 ]
+                    then
+                        valid=1
+                    fi
                 fi
 
                 if [ "$valid" == 1 ] 
@@ -6072,7 +6616,7 @@ MonitorTryAccounts()
                             fi
                         done < <($FFPROBE -i "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -show_entries format=bit_rate -loglevel quiet || true)
                         [[ $bit_rate -eq 0 ]] && bit_rate=$hls_min_bitrates
-                        if [ "$audio" == 1 ] && [ "$video" == 1 ] && [[ $bit_rate -gt $hls_min_bitrates ]]
+                        if [ "$audio" == 1 ] && [ "$video" == 1 ] && [[ $bit_rate -ge $hls_min_bitrates ]]
                         then
                             try_success=1
                             printf -v date_now '%(%m-%d %H:%M:%S)T'
@@ -6097,6 +6641,15 @@ MonitorHlsRestartChannel()
         then
             chnl_stream_links="${chnl_stream_links#* } $chnl_stream_link"
             chnl_stream_link=${chnl_stream_links%% *}
+        fi
+        if [ "$i" == 3 ] 
+        then
+            try_success=0
+            MonitorTryAccounts
+            if [ "$try_success" == 1 ] 
+            then
+                break
+            fi
         fi
         if [ "$anti_leech_yn" == "yes" ] && [ "$anti_leech_restart_hls_changes_yn" == "yes" ] 
         then
@@ -6132,7 +6685,7 @@ MonitorHlsRestartChannel()
                 fi
             done < <($FFPROBE -i "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -show_entries format=bit_rate -loglevel quiet || true)
             [[ $bit_rate -eq 0 ]] && bit_rate=$hls_min_bitrates
-            if [ "$audio" == 1 ] && [ "$video" == 1 ] && [[ $bit_rate -gt $hls_min_bitrates ]]
+            if [ "$audio" == 1 ] && [ "$video" == 1 ] && [[ $bit_rate -ge $hls_min_bitrates ]]
             then
                 printf -v date_now '%(%m-%d %H:%M:%S)T'
                 printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
@@ -6296,6 +6849,18 @@ Monitor()
                     then
                         GetChannelInfo
 
+                        if [ "${flv_restart_count:-}" == 3 ] 
+                        then
+                            try_success=0
+                            MonitorTryAccounts
+                            if [ "$try_success" == 1 ] 
+                            then
+                                flv_first_fail=""
+                                flv_restart_count=1
+                                continue
+                            fi
+                        fi
+
                         if [ "${flv_restart_count:-1}" -gt "${flv_restart_nums:-20}" ] 
                         then
                             try_success=0
@@ -6356,7 +6921,12 @@ Monitor()
                                 new_stream_name=$(RandStr)
                             done
                             chnl_flv_push_link="${chnl_flv_push_link%/*}/$new_stream_name"
-                            [ -n "$chnl_flv_pull_link" ] && chnl_flv_pull_link=${chnl_flv_pull_link//stream=$stream_name/stream=$new_stream_name}
+                            monitor_flv_push_links[i]=$chnl_flv_push_link
+                            if [ -n "$chnl_flv_pull_link" ] 
+                            then
+                                chnl_flv_pull_link=${chnl_flv_pull_link//stream=$stream_name/stream=$new_stream_name}
+                                monitor_flv_pull_links[i]=$chnl_flv_pull_link
+                            fi
                         fi
 
                         if [ -n "${flv_first_fail:-}" ]
@@ -6430,7 +7000,12 @@ Monitor()
                                     new_stream_name=$(RandStr)
                                 done
                                 chnl_flv_push_link="${chnl_flv_push_link%/*}/$new_stream_name"
-                                [ -n "$chnl_flv_pull_link" ] && chnl_flv_pull_link=${chnl_flv_pull_link//stream=$stream_name/stream=$new_stream_name}
+                                monitor_flv_push_links[i]=$chnl_flv_push_link
+                                if [ -n "$chnl_flv_pull_link" ] 
+                                then
+                                    chnl_flv_pull_link=${chnl_flv_pull_link//stream=$stream_name/stream=$new_stream_name}
+                                    monitor_flv_pull_links[i]=$chnl_flv_pull_link
+                                fi
                             fi
                             action="skip"
                             StopChannel > /dev/null 2>&1
@@ -6473,6 +7048,18 @@ Monitor()
                     then
                         GetChannelInfo
 
+                        if [ "${flv_restart_count:-}" == 1 ] 
+                        then
+                            try_success=0
+                            MonitorTryAccounts
+                            if [ "$try_success" == 1 ] 
+                            then
+                                flv_first_fail=""
+                                flv_restart_count=1
+                                continue
+                            fi
+                        fi
+
                         if [ "${flv_restart_count:-1}" -gt "${flv_restart_nums:-20}" ] 
                         then
                             if [ "$chnl_flv_status" == "on" ] 
@@ -6510,7 +7097,12 @@ Monitor()
                                 new_stream_name=$(RandStr)
                             done
                             chnl_flv_push_link="${chnl_flv_push_link%/*}/$new_stream_name"
-                            [ -n "$chnl_flv_pull_link" ] && chnl_flv_pull_link=${chnl_flv_pull_link//stream=$stream_name/stream=$new_stream_name}
+                            monitor_flv_push_links[i]=$chnl_flv_push_link
+                            if [ -n "$chnl_flv_pull_link" ] 
+                            then
+                                chnl_flv_pull_link=${chnl_flv_pull_link//stream=$stream_name/stream=$new_stream_name}
+                                monitor_flv_pull_links[i]=$chnl_flv_pull_link
+                            fi
                         fi
 
                         if [ -n "${flv_first_fail:-}" ] 
@@ -6574,7 +7166,12 @@ Monitor()
                                     new_stream_name=$(RandStr)
                                 done
                                 chnl_flv_push_link="${chnl_flv_push_link%/*}/$new_stream_name"
-                                [ -n "$chnl_flv_pull_link" ] && chnl_flv_pull_link=${chnl_flv_pull_link//stream=$stream_name/stream=$new_stream_name}
+                                monitor_flv_push_links[i]=$chnl_flv_push_link
+                                if [ -n "$chnl_flv_pull_link" ] 
+                                then
+                                    chnl_flv_pull_link=${chnl_flv_pull_link//stream=$stream_name/stream=$new_stream_name}
+                                    monitor_flv_pull_links[i]=$chnl_flv_pull_link
+                                fi
                             fi
                             action="skip"
                             StopChannel > /dev/null 2>&1
@@ -7292,7 +7889,6 @@ InstallNginx()
         yum -y install gcc gcc-c++ >/dev/null 2>&1
         timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
         systemctl restart crond >/dev/null 2>&1
-        echo -n "...40%..."
     else
         apt-get -y update >/dev/null 2>&1
         locale-gen zh_CN.UTF-8 >/dev/null 2>&1
@@ -7301,8 +7897,9 @@ InstallNginx()
         apt-get -y install debconf-utils >/dev/null 2>&1
         echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
         apt-get -y install software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext build-essential >/dev/null 2>&1
-        echo -n "...40%..."
     fi
+
+    echo -n "...40%..."
 
     cd ~
     if [ ! -e "./pcre-8.43" ] 
@@ -7336,8 +7933,7 @@ InstallNginx()
             nginx_name=${line#*/download/}
             nginx_name=${nginx_name%%.tar.gz*}
         fi
-    done < <( wget "http://nginx.org/en/download.html" -qO- )
-    
+    done < <( wget --timeout=10 --tries=3 --no-check-certificate "https://nginx.org/en/download.html" -qO- )
 
     if [ ! -e "./$nginx_name" ] 
     then
@@ -7506,6 +8102,7 @@ ListXtreamCodes()
             password=${line#*password=}
             password=${password%%&*}
             ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }')
+            account="$username:$password"
         elif [[ $line == *http://*/*/*/* ]] 
         then
             tmp_line=${line#*http://}
@@ -7515,6 +8112,7 @@ ListXtreamCodes()
             tmp_line=${tmp_line#*/}
             password=${tmp_line%%/*}
             ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }')
+            account="$username:$password"
         else
             ip=${line%% *}
             tmp_line=${line#* }
@@ -8246,6 +8844,7 @@ ${green}6.$plain 替换频道账号
         ;;
         3) 
             [ ! -s "$XTREAM_CODES" ] && echo && echo -e "$error 没有账号 !" && echo && exit 1
+            result=""
             while IFS= read -r line 
             do
                 line=${line#* }
@@ -8260,12 +8859,14 @@ ${green}6.$plain 替换频道账号
                         ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
                         if [ -n "${ip:-}" ] 
                         then
-                            printf '%s\n' "$ip $domain $account" >> "${XTREAM_CODES}_tmp"
+                            [ -n "$result" ] && result="$result\n"
+                            result="$result$ip $domain $account"
                         fi
                     done
                 done
             done < "$XTREAM_CODES"
-            mv "${XTREAM_CODES}_tmp" "$XTREAM_CODES"
+            echo -e "$result" >> "$XTREAM_CODES"
+            ListXtreamCodes
             echo && echo -e "$info 账号更新成功" && echo
         ;;
         4) 
@@ -8274,6 +8875,8 @@ ${green}6.$plain 替换频道账号
             TestXtreamCodes
         ;;
         5) 
+            echo && echo -e "$info 稍等..." && echo
+            result=""
             while IFS= read -r line 
             do
                 line=${line#* }
@@ -8288,11 +8891,14 @@ ${green}6.$plain 替换频道账号
                         ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
                         if [ -n "${ip:-}" ] 
                         then
-                            printf '%s\n' "$ip $domain $account" >> "$XTREAM_CODES"
+                            [ -n "$result" ] && result="$result\n"
+                            result="$result$ip $domain $account"
                         fi
                     done
                 done
             done < <(wget --tries=3 --no-check-certificate $XTREAM_CODES_LINK -qO-)
+            echo -e "$result" >> "$XTREAM_CODES"
+            ListXtreamCodes
             echo && echo -e "$info 账号添加成功" && echo
         ;;
         6) 
@@ -8328,27 +8934,44 @@ then
                         count=0
                         log=""
                         last_line=""
+                        printf -v this_hour '%(%H)T'
                         while IFS= read -r line 
                         do
-                            if [ "$count" == "${3:-10}" ] 
+                            if [ "$count" -lt "${3:-10}" ] 
+                            then
+                                message=${line#* }
+                                message=${message#* }
+                                if [ -z "$last_line" ] 
+                                then
+                                    count=$((count+1))
+                                    log=$line
+                                    last_line=$message
+                                elif [ "$message" != "$last_line" ] 
+                                then
+                                    count=$((count+1))
+                                    log="$line\n$log"
+                                    last_line="$message"
+                                fi
+                            fi
+
+                            if [ "${line:2:1}" == "-" ] 
+                            then
+                                hour=${line:6:2}
+                            elif [ "${line:2:1}" == ":" ] 
+                            then
+                                hour=${line:0:2}
+                            fi
+
+                            if [ -n "${hour:-}" ] && [ "$hour" != "$this_hour" ] && [ "$count" -eq "${3:-10}" ] 
                             then
                                 break
-                            fi
-                            message=${line#* }
-                            message=${message#* }
-                            if [ -z "$last_line" ] 
+                            elif [ -n "${hour:-}" ] && [ "$hour" == "$this_hour" ] && [[ $line == *"计划重启时间"* ]]
                             then
-                                count=$((count+1))
-                                log=$line
-                                last_line=$message
-                            elif [ "$message" != "$last_line" ] 
-                            then
-                                count=$((count+1))
-                                log="$line\n$log"
-                                last_line="$message"
+                                [ -z "${found_line:-}" ] && found_line=$line
                             fi
                         done < <(awk '{a[i++]=$0} END {for (j=i-1; j>=0;) print a[j--] }' "$MONITOR_LOG")
                         echo -e "$log"
+                        [ -n "${found_line:-}" ] && echo && echo -e "$green${found_line#* }$plain"
                     fi
                     if [ -s "$IP_LOG" ] 
                     then
@@ -8487,7 +9110,8 @@ case "$cmd" in
             done < "$FFMPEG_MIRROR_ROOT/index.html"
         fi
 
-        wget --no-check-certificate "https://www.johnvansickle.com/ffmpeg/index.html" -qO "$FFMPEG_MIRROR_ROOT/index.html"
+        wget --no-check-certificate "https://www.johnvansickle.com/ffmpeg/index.html" -qO "$FFMPEG_MIRROR_ROOT/index.html_tmp"
+        mv "$FFMPEG_MIRROR_ROOT/index.html_tmp" "$FFMPEG_MIRROR_ROOT/index.html"
         wget --no-check-certificate "https://www.johnvansickle.com/ffmpeg/style.css" -qO "$FFMPEG_MIRROR_ROOT/style.css"
 
         while IFS= read -r line
@@ -8542,7 +9166,34 @@ case "$cmd" in
 
         sed -i "s+https://johnvansickle.com/ffmpeg/\(builds\|releases\)/\(.*\).tar.xz\"+\1/\2.tar.xz\"+g" "$FFMPEG_MIRROR_ROOT/index.html"
 
-        jq_ver=$(curl --silent -m 10 "$FFMPEG_MIRROR_LINK/jq.json" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+        while IFS= read -r line
+        do
+            if [[ "$line" == *"latest stable release is"* ]] 
+            then
+                line=${line#*<a href=\"}
+                poppler_name=${line%%.tar.xz*}
+                poppler_name="poppler-0.81.0"
+                if [ ! -e "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz" ] 
+                then
+                    rm -rf "$FFMPEG_MIRROR_ROOT/poppler-"*.tar.xz
+                    wget --timeout=10 --tries=3 --no-check-certificate "https://poppler.freedesktop.org/$poppler_name.tar.xz" -qO "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz_tmp"
+                    mv "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz_tmp" "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz"
+                fi
+            elif [[ "$line" == *"poppler encoding data"* ]] 
+            then
+                line=${line#*<a href=\"}
+                poppler_data_name=${line%%.tar.gz*}
+                if [ ! -e "$FFMPEG_MIRROR_ROOT/$poppler_data_name.tar.gz" ] 
+                then
+                    rm -rf "$FFMPEG_MIRROR_ROOT/poppler-data-"*.tar.gz
+                    wget --timeout=10 --tries=3 --no-check-certificate "https://poppler.freedesktop.org/$poppler_data_name.tar.gz" -qO "$FFMPEG_MIRROR_ROOT/$poppler_data_name.tar.gz_tmp"
+                    mv "$FFMPEG_MIRROR_ROOT/$poppler_data_name.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/$poppler_data_name.tar.gz"
+                fi
+                break
+            fi
+        done < <( wget --timeout=10 --tries=3 --no-check-certificate "https://poppler.freedesktop.org/" -qO- )
+
+        jq_ver=$(curl --silent -m 10 "https://api.github.com/repos/stedolan/jq/releases/latest" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
         if [ -n "$jq_ver" ]
         then
             mkdir -p "$FFMPEG_MIRROR_ROOT/$jq_ver/"
@@ -8556,9 +9207,24 @@ case "$cmd" in
             mv "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp" "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32"
         fi
 
-        wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/winshining/nginx-http-flv-module/archive/master.zip" -qO "$FFMPEG_MIRROR_ROOT/nginx-http-flv-module.zip"
-        wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/eddieantonio/imgcat/archive/master.zip" -qO "$FFMPEG_MIRROR_ROOT/imgcat.zip"
-        wget --timeout=10 --tries=3 --no-check-certificate "https://api.github.com/repos/stedolan/jq/releases/latest" -qO "$FFMPEG_MIRROR_ROOT/jq.json"
+        wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/winshining/nginx-http-flv-module/archive/master.zip" -qO "$FFMPEG_MIRROR_ROOT/nginx-http-flv-module.zip_tmp"
+        mv "$FFMPEG_MIRROR_ROOT/nginx-http-flv-module.zip_tmp" "$FFMPEG_MIRROR_ROOT/nginx-http-flv-module.zip"
+        wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/eddieantonio/imgcat/archive/master.zip" -qO "$FFMPEG_MIRROR_ROOT/imgcat.zip_tmp"
+        mv "$FFMPEG_MIRROR_ROOT/imgcat.zip_tmp" "$FFMPEG_MIRROR_ROOT/imgcat.zip"
+        wget --timeout=10 --tries=3 --no-check-certificate "https://api.github.com/repos/stedolan/jq/releases/latest" -qO "$FFMPEG_MIRROR_ROOT/jq.json_tmp"
+        mv "$FFMPEG_MIRROR_ROOT/jq.json_tmp" "$FFMPEG_MIRROR_ROOT/jq.json"
+
+        if [ ! -e "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz" ] 
+        then
+            wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/fontforge/fontforge/releases/download/20190413/fontforge-20190413.tar.gz" -qO "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz_tmp"
+            mv "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz"
+        fi
+
+        if [ ! -e "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip" ] 
+        then
+            wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/pdf2htmlEX/pdf2htmlEX/archive/v0.18.7-poppler-0.81.0.zip" -qO "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip_tmp"
+            mv "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip_tmp" "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip"
+        fi
         exit 0
     ;;
     "ts") 
@@ -8688,8 +9354,10 @@ case "$cmd" in
   ${green}7.$plain 配置域名和目录
   ${green}8.$plain flv 配置
   ${green}9.$plain 日志切割
+————————————
+  ${green}10.$plain 安装 pdf2htmlEX
  " && echo
-        read -p "请输入数字 [1-9]：" nginx_num
+        read -p "请输入数字 [1-10]：" nginx_num
         case "$nginx_num" in
             1) 
                 if [ -e "/usr/local/nginx" ] 
@@ -8992,7 +9660,25 @@ $IPTV_ROOT/*.log {
                     echo && echo -e "$info 日志切割定时任务开启成功 !" && echo
                 fi
             ;;
-            *) echo && echo -e "$error 请输入正确的数字 [1-9]" && echo
+            10)
+                if [[ ! -x $(command -v pdf2htmlEX) ]] 
+                then
+                    CheckRelease
+                    echo && echo "因为是编译 pdf2htmlEX，耗时会很长，是否继续？[y/N]"
+                    read -p "(默认: N): " pdf2html_install_yn
+                    pdf2html_install_yn=${pdf2html_install_yn:-"N"}
+                    if [[ $pdf2html_install_yn == [Yy] ]] 
+                    then
+                        InstallPdf2html
+                        echo && echo -e "$info pdf2htmlEX 安装完成，输入 source /etc/profile 可立即使用" && echo
+                    else
+                        echo && echo "已取消..." && echo && exit 1
+                    fi
+                else
+                    echo && echo -e "$error pdf2htmlEX 已存在!" && echo
+                fi
+            ;;
+            *) echo && echo -e "$error 请输入正确的数字 [1-10]" && echo
             ;;
         esac
         exit 0
