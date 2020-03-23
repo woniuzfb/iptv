@@ -1434,8 +1434,7 @@ ViewChannelMenu(){
 SetStreamLink()
 {
     echo && echo "请输入直播源( mpegts / hls / flv ...)"
-    echo -e "$tip 可以是视频路径，hls 链接需包含 .m3u8 标识"
-    echo -e "$tip 可以输入不同链接地址(监控按顺序尝试使用)，用空格分隔" && echo
+    echo -e "$tip 可以是视频路径, 可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔" && echo
     read -p "(默认: 取消): " stream_links_input
     [ -z "$stream_links_input" ] && echo && echo "已取消..." && echo && exit 1
     IFS=" " read -ra stream_links <<< "$stream_links_input"
@@ -1443,14 +1442,31 @@ SetStreamLink()
     echo && echo -e "	直播源: $green $stream_link $plain" && echo
 }
 
+SetIsHls()
+{
+    echo && echo "是否是 HLS 链接? [y/N]"
+    echo -e "$tip 如果直播链接重定向至 .m3u8 地址，请选择 Y" && echo
+    read -p "(默认: N): " is_hls_yn
+    is_hls_yn=${is_hls_yn:-"N"}
+    if [[ "$is_hls_yn" == [Yy] ]]
+    then
+        is_hls=1
+        is_hls_text="是"
+    else
+        is_hls=0
+        is_hls_text="否"
+    fi
+    echo && echo -e "	HLS 链接: $green $is_hls_text $plain" && echo
+}
+
 SetLive()
 {
     echo && echo "是否是无限时长直播源? [Y/n]"
     if [ -z "${kind:-}" ] 
     then
-        echo -e "$tip 选择[Y]则无法使用加密功能，选择[n]则无法设置切割段数目且无法监控" && echo
+        echo -e "$tip 选择 Y 则无法使用加密功能，选择 n 则无法设置切割段数目且无法监控" && echo
     else
-        echo -e "$tip 选择[n]则无法监控" && echo
+        echo -e "$tip 选择 n 则无法监控" && echo
     fi
     read -p "(默认: Y): " live_yn
     live_yn=${live_yn:-"Y"}
@@ -1713,7 +1729,7 @@ SetKeyName()
 
 SetInputFlags()
 {
-    if [[ ${stream_link:-} == *".m3u8"* ]] 
+    if [[ ${stream_link:-} == *".m3u8"* ]] || [ "${is_hls:-0}" -eq 1 ]
     then
         d_input_flags=${d_input_flags//-reconnect_at_eof 1/}
     elif [ "${stream_link:0:4}" == "rtmp" ] 
@@ -1828,7 +1844,7 @@ SetSyncPairs()
 
 SetFlvPushLink()
 {
-    echo && echo "请输入推流地址(比如 rtmp://127.0.0.1/flv/xxx )" && echo
+    echo && echo "请输入推流地址(比如 rtmp://127.0.0.1/flv/xxx )"
     while read -p "(默认: 取消): " flv_push_link
     do
         [ -z "$flv_push_link" ] && echo && echo "已取消..." && echo && exit 1
@@ -1844,7 +1860,7 @@ SetFlvPushLink()
 
 SetFlvPullLink()
 {
-    echo && echo "请输入拉流(播放)地址"
+    echo && echo "请输入拉流(播放)地址, 如 http://domain.com/flv?app=flv&stream=xxx"
     echo -e "$tip 监控会验证此链接来确定是否重启频道，如果不确定可以先留空" && echo
     read -p "(默认: 不设置): " flv_pull_link
     echo && echo -e "	拉流地址: $green ${flv_pull_link:-"不设置"} $plain" && echo
@@ -2842,9 +2858,19 @@ AddChannel()
     if [ "${stream_link:0:1}" == "/" ] 
     then
         [ ! -e "$stream_link" ] && echo && echo -e "$error 文件不存在 !" && echo && exit 1
+        is_hls=0
         live=""
         live_yn="no"
     else
+        if [[ $stream_link == *".m3u8"* ]] 
+        then
+            is_hls=1
+        elif [[ $stream_link == *".flv"* ]] || [[ $stream_link == *".ts"* ]]
+        then
+            is_hls=0
+        else
+            SetIsHls
+        fi
         SetLive
     fi
 
@@ -3194,7 +3220,24 @@ EditChannelAll()
         fi
     fi
     SetStreamLink
-    SetLive
+    if [ "${stream_link:0:1}" == "/" ] 
+    then
+        [ ! -e "$stream_link" ] && echo && echo -e "$error 文件不存在 !" && echo && exit 1
+        is_hls=0
+        live=""
+        live_yn="no"
+    else
+        if [[ $stream_link == *".m3u8"* ]] 
+        then
+            is_hls=1
+        elif [[ $stream_link == *".flv"* ]] || [[ $stream_link == *".ts"* ]]
+        then
+            is_hls=0
+        else
+            SetIsHls
+        fi
+        SetLive
+    fi
     SetOutputDirName
     SetPlaylistName
     SetSegDirName
@@ -4120,6 +4163,7 @@ Schedule()
 #        "hbofamily:HBO Family"
 #        "foxmovies:FOX MOVIES"
 #        "disney:Disney"
+        "mtvlivetw:MTV-Live"
         "tvbfc:TVB 翡翠台"
         "tvbpearl:TVB Pearl"
         "tvbj2:TVB J2"
@@ -4309,6 +4353,7 @@ Schedule()
         "ettodayzh:ETtoday綜合台" )
 
     chnls_niotv=( 
+        "mtvlivetw:751"
         "hbogq:629"
         "hbohits:501"
         "hbosignature:503"
@@ -5028,6 +5073,109 @@ Schedule()
                 $JQ_FILE --arg index "$2" --argjson program "[$schedule]" '.[$index] = $program' "$SCHEDULE_JSON" > "${SCHEDULE_JSON}_tmp"
                 mv "${SCHEDULE_JSON}_tmp" "$SCHEDULE_JSON"
             fi
+        ;;
+        "tvbhk")
+            printf -v today '%(%Y-%m-%d)T'
+            sys_time=$(date -d $today +%s)
+            max_sys_time=$((sys_time+86400))
+            yesterday=$(printf '%(%Y-%m-%d)T' $((sys_time - 86400)))
+
+            if [ ! -s "$SCHEDULE_JSON" ] 
+            then
+                printf '{"%s":[]}' "tvbhk_pearl" > "$SCHEDULE_JSON"
+            fi
+
+            chnls=(
+                "pearl:P"
+                "jade:J"
+                "j2:B"
+                "news:C"
+                "finance:A"
+                "xinghe:X" )
+
+            for chnl in "${chnls[@]}" ; do
+                chnl_name=${chnl%:*}
+                chnl_code=${chnl#*:}
+
+                if [ -n "${3:-}" ] && [ "$3" != "$chnl_name" ] 
+                then
+                    continue
+                fi
+
+                schedule=""
+
+                while IFS= read -r line
+                do
+                    if [[ $line == *"<li"* ]] 
+                    then
+                        while [[ $line == *"<li"* ]] 
+                        do
+                            line=${line#*time=\"}
+                            program_sys_time=${line%%\"*}
+                            if [ "$program_sys_time" -ge "$sys_time" ]
+                            then
+                                line=${line#*<span class=\"time\">}
+                                program_time=${line%%</span>*}
+                                line=${line#*<p class=\"ftit\">}
+                                if [ "${line:0:7}" == "<a href" ] 
+                                then
+                                    line=${line#*>}
+                                fi
+                                program_title=${line%%</p>*}
+                                program_title=${program_title%% <cite*}
+                                program_title=${program_title%%</a>*}
+                                program_title=${program_title//&nbsp;/ }
+                                [ -n "$schedule" ] && schedule="$schedule,"
+                                schedule=$schedule'{
+                                    "title":"'"$program_title"'",
+                                    "time":"'"$program_time"'",
+                                    "sys_time":"'"$program_sys_time"'"
+                                }'
+                            fi
+                        done
+                        break
+                    fi
+                done < <(wget --no-check-certificate "https://programme.tvb.com/ajax.php?action=channellist&code=$chnl_code&date=$yesterday" -qO-)
+
+                while IFS= read -r line
+                do
+                    if [[ $line == *"<li"* ]] 
+                    then
+                        while [[ $line == *"<li"* ]] 
+                        do
+                            line=${line#*time=\"}
+                            program_sys_time=${line%%\"*}
+                            if [ "$program_sys_time" -ge "$sys_time" ] && [ "$program_sys_time" -le "$max_sys_time" ]
+                            then
+                                line=${line#*<span class=\"time\">}
+                                program_time=${line%%</span>*}
+                                line=${line#*<p class=\"ftit\">}
+                                if [ "${line:0:7}" == "<a href" ] 
+                                then
+                                    line=${line#*>}
+                                fi
+                                program_title=${line%%</p>*}
+                                program_title=${program_title%% <cite*}
+                                program_title=${program_title%%</a>*}
+                                program_title=${program_title//&nbsp;/ }
+                                [ -n "$schedule" ] && schedule="$schedule,"
+                                schedule=$schedule'{
+                                    "title":"'"$program_title"'",
+                                    "time":"'"$program_time"'",
+                                    "sys_time":"'"$program_sys_time"'"
+                                }'
+                            fi
+                        done
+                        break
+                    fi
+                done < <(wget --no-check-certificate "https://programme.tvb.com/ajax.php?action=channellist&code=$chnl_code&date=$today" -qO-)
+
+                if [ -n "$schedule" ] 
+                then
+                    $JQ_FILE --arg index "tvbhk_$chnl_name" --argjson program "[$schedule]" '.[$index] = $program' "$SCHEDULE_JSON" > "${SCHEDULE_JSON}_tmp"
+                    mv "${SCHEDULE_JSON}_tmp" "$SCHEDULE_JSON"
+                fi
+            done
         ;;
         "tvbhd")
             if [[ ! -x $(command -v pdf2htmlEX) ]] 
@@ -6537,7 +6685,7 @@ MonitorTryAccounts()
                         then
                             video=1
                         fi
-                    done < <($FFPROBE -i "$chnl_stream_link" -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+                    done < <($FFPROBE -i "$chnl_stream_link" -timeout 10000000 -show_streams -show_entries format=bit_rate -loglevel quiet || true)
 
                     if [ "$audio" == 1 ] && [ "$video" == 1 ]
                     then
@@ -6583,7 +6731,7 @@ MonitorTryAccounts()
                             then
                                 video=1
                             fi
-                        done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+                        done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -timeout 5000000 -show_streams -show_entries format=bit_rate -loglevel quiet || true)
 
                         if [ "$audio" == 1 ] && [ "$video" == 1 ]
                         then
@@ -6843,7 +6991,7 @@ Monitor()
                         then
                             video=1
                         fi
-                    done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+                    done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -timeout 10000000 -show_streams -show_entries format=bit_rate -loglevel quiet || true)
 
                     if [ "$audio" == 0 ] || [ "$video" == 0 ]
                     then
@@ -7042,7 +7190,7 @@ Monitor()
                         then
                             video=1
                         fi
-                    done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+                    done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -timeout 10000000 -show_streams -show_entries format=bit_rate -loglevel quiet || true)
 
                     if [ "$audio" == 0 ] || [ "$video" == 0 ]
                     then
@@ -7417,7 +7565,7 @@ AntiLeech()
     then
         anti_leech_yn="yes"
 
-        echo && echo "请输入每小时随机重启次数"
+        echo && echo "请输入每小时随机重启次数 (大于等于0)"
         while read -p "(默认: $d_anti_leech_restart_nums): " anti_leech_restart_nums
         do
             case $anti_leech_restart_nums in
@@ -7545,19 +7693,19 @@ MonitorSet()
             for flv_num in "${flv_nums_arr[@]}"
             do
                 case "$flv_num" in
+                    *"-"*)
+                        flv_num_start=${flv_num%-*}
+                        flv_num_end=${flv_num#*-}
+                        if [[ $flv_num_start == *[!0-9]* ]] || [[ $flv_num_end == *[!0-9]* ]] || [ "$flv_num_start" -eq 0 ] || [ "$flv_num_end" -eq 0 ] || [ "$flv_num_end" -gt "$flv_count" ] || [ "$flv_num_start" -ge "$flv_num_end" ]
+                        then
+                            error_no=3
+                        fi
+                    ;;
                     *[!0-9]*)
                         error_no=1
                     ;;
                     *)
-                        if [[ $flv_num == *"-"* ]] 
-                        then
-                            flv_num_start=${flv_num%-*}
-                            flv_num_end=${flv_num#*-}
-                            if [[ $flv_num_start == *[!0-9]* ]] || [[ $flv_num_end == *[!0-9]* ]] || [ "$flv_num_start" -eq 0 ] || [ "$flv_num_end" -eq 0 ] || [ "$flv_num_end" -gt "$flv_count" ] || [ "$flv_num_start" -ge "$flv_num_end" ]
-                            then
-                                error_no=3
-                            fi
-                        elif [ "$flv_num" -lt 1 ] || [ "$flv_num" -gt "$flv_count" ] 
+                        if [ "$flv_num" -lt 1 ] || [ "$flv_num" -gt "$flv_count" ] 
                         then
                             error_no=2
                         fi
@@ -7654,7 +7802,7 @@ MonitorSet()
             return 0
         fi
     fi
-    echo && echo "请选择需要监控超时和低比特率重启的 HLS 频道(多个频道用空格分隔)" && echo
+    echo && echo "请选择需要监控超时和低比特率重启的 HLS 频道(多个频道用空格分隔 比如 5 7 9-11)" && echo
     monitor_count=0
     monitor_dir_names=()
     exclude_paths=()
@@ -7715,19 +7863,19 @@ MonitorSet()
         for hls_num in "${hls_nums_arr[@]}"
         do
             case "$hls_num" in
+                *"-"*)
+                    hls_num_start=${hls_num%-*}
+                    hls_num_end=${hls_num#*-}
+                    if [[ $hls_num_start == *[!0-9]* ]] || [[ $hls_num_end == *[!0-9]* ]] || [ "$hls_num_start" -eq 0 ] || [ "$hls_num_end" -eq 0 ] || [ "$hls_num_end" -gt "$monitor_count" ] || [ "$hls_num_start" -ge "$hls_num_end" ]
+                    then
+                        error_no=3
+                    fi
+                ;;
                 *[!0-9]*)
                     error_no=1
                 ;;
                 *)
-                    if [[ $hls_num == *"-"* ]] 
-                    then
-                        hls_num_start=${hls_num%-*}
-                        hls_num_end=${hls_num#*-}
-                        if [[ $hls_num_start == *[!0-9]* ]] || [[ $hls_num_end == *[!0-9]* ]] || [ "$hls_num_start" -eq 0 ] || [ "$hls_num_end" -eq 0 ] || [ "$hls_num_end" -gt "$monitor_count" ] || [ "$hls_num_start" -ge "$hls_num_end" ]
-                        then
-                            error_no=3
-                        fi
-                    elif [ "$hls_num" -lt 1 ] || [ "$hls_num" -gt "$monitor_count" ] 
+                    if [ "$hls_num" -lt 1 ] || [ "$hls_num" -gt "$monitor_count" ] 
                     then
                         error_no=2
                     fi
@@ -8374,7 +8522,6 @@ See LICENSE
 
     -i  直播源(支持 mpegts / hls / flv ...)
         可以是视频路径
-        hls 链接需包含 .m3u8 标识
         可以输入不同链接地址(监控按顺序尝试使用)，用空格分隔
     -s  段时长(秒)(默认：6)
     -o  输出目录名称(默认：随机名称)
@@ -8409,6 +8556,7 @@ See LICENSE
         (默认：-reconnect 1 -reconnect_at_eof 1 
         -reconnect_streamed 1 -reconnect_delay_max 2000 
         -timeout 2000000000 -y -nostats -nostdin -hide_banner -loglevel fatal)
+        如果是 hls 链接，需去除 -reconnect_at_eof 1
     -n  ffmpeg 额外的 OUTPUT FLAGS, 可以输入 omit 省略此选项
         (默认：-g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main)
 

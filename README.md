@@ -63,14 +63,15 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 ## 快捷键
 
 - tv e 手动修改 channels.json
-- tv s 更新 180+ 节目表 (tv s 频道ID 可以个别更新节目表)
+- tv s 更新 180+ 台湾/香港节目表 (tv s 频道ID 可以个别更新节目表)
 - tv s hbo 更新 hbo 亚洲各台节目表
 - tv s hbous 更新 hbo 美国各台节目表
 - tv s ontvtonight 更新美国各台节目表
 - tv s disney 更新迪士尼频道节目表
 - tv s foxmovies 更新 FOX MOVIES 节目表
 - tv s amlh 更新 澳门莲花 节目表
-- tv s tvbhd 更新 TVB HD 节目表
+- tv s tvbhk 更新 TVB 香港各台节目表
+- tv s tvbhd 更新 TVB HD 节目表 (使用pdf2htmlEX)
 - tv ffmpeg 在主目录下自建 FFmpeg 镜像
 - tv ts 打开广电直播源 注册/登录 面板
   - 在命令行注册账号
@@ -127,7 +128,6 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 ```bash
 -i  直播源(支持 mpegts / hls / flv ...)
     可以是视频路径
-    hls 链接需包含 .m3u8 标识，没有的可以在结尾加上
     可以输入不同链接地址(监控按顺序尝试使用)，用空格分隔
 -s  段时长(秒)(默认：6)
 -o  输出目录名称(默认：随机名称)
@@ -160,6 +160,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 
 -m  ffmpeg 额外的 INPUT FLAGS
     (默认：-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -nostats -nostdin -hide_banner -loglevel fatal)
+    如果是 hls 链接，需去除 -reconnect_at_eof 1
 -n  ffmpeg 额外的 OUTPUT FLAGS, 可以输入 omit 省略此选项
     (默认：-g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main)
 ```
