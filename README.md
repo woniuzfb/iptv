@@ -52,8 +52,8 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 ## 自动更新指定的json文件
 
 ```bash
-"sync_file":"/usr/local/nginx/html/channels.json", # 公开目录的json
-"sync_index":"data:2:channels", # 必须指定到m3u8直播源所在的数组这一级，比如这里 ObjectJson.data[2].channels
+"sync_file":"/usr/local/nginx/html/channels.json", # 公开目录的json，多个文件用空格分隔
+"sync_index":"data:2:channels", # 必须指定到m3u8直播源所在的数组这一级，比如这里 ObjectJson.data[2].channels ， 多个 sync_index 用空格分隔
 "sync_pairs":"chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live,schedule:output_dir_name", # 值映射用:号，如果直接赋值用=号（公开的live根目录会自动补上完整的m3u8地址）
 "schedule_file":"/usr/local/nginx/html/schedule.json" # 使用命令 tv s 自建节目表
 ```
@@ -161,6 +161,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 -m  ffmpeg 额外的 INPUT FLAGS
     (默认：-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -nostats -nostdin -hide_banner -loglevel fatal)
     如果是 hls 链接，需去除 -reconnect_at_eof 1
+    如果要查看详细日志 fatal 改成 error / warning / ...
 -n  ffmpeg 额外的 OUTPUT FLAGS, 可以输入 omit 省略此选项
     (默认：-g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main)
 ```
