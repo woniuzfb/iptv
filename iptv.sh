@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-sh_ver="1.7.0"
+sh_ver="1.8.0"
 SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
@@ -56,6 +56,7 @@ default='
     "key_name":"",
     "input_flags":"-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -nostats -nostdin -hide_banner -loglevel fatal",
     "output_flags":"-g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main",
+    "sync":"yes",
     "sync_file":"",
     "sync_index":"data:0:channels",
     "sync_pairs":"chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live",
@@ -84,140 +85,150 @@ SyncFile()
             return
         ;;      
         "start"|"stop")
-            GetDefault
+            if [ -z "${d_version:-}" ] 
+            then
+                GetDefault
+            fi
         ;;
         "add")
             chnl_pid=$pid
-            if [[ -n $($JQ_FILE '.channels[] | select(.pid=='"$chnl_pid"')' "$CHANNELS_FILE") ]]
-            then
-                GetChannelInfo
-            fi
+            GetChannelInfo
         ;;
         *)
             echo -e "$error $action ???" && exit 1
         ;;
     esac
 
-    d_sync_file=${d_sync_file:-}
-    d_sync_index=${d_sync_index:-}
-    d_sync_pairs=${d_sync_pairs:-}
-    if [ -n "$d_sync_file" ] && [ -n "$d_sync_index" ] && [ -n "$d_sync_pairs" ]
-    then
-        chnl_sync_pairs=${chnl_sync_pairs:-$d_sync_pairs}
-        jq_index=""
-        while IFS=':' read -ra index_arr
-        do
-            for a in "${index_arr[@]}"
-            do
-                case $a in
-                    '') 
-                        echo -e "$error sync设置错误..." && exit 1
-                    ;;
-                    *[!0-9]*)
-                        jq_index="$jq_index.$a"
-                    ;;
-                    *) 
-                        jq_index="${jq_index}[$a]"
-                    ;;
-                esac
-            done
-        done <<< "$d_sync_index"
+    chnl_sync_file=${chnl_sync_file:-$d_sync_file}
+    chnl_sync_index=${chnl_sync_index:-$d_sync_index}
+    chnl_sync_pairs=${chnl_sync_pairs:-$d_sync_pairs}
 
-        if [ "$action" == "stop" ]
-        then
-            if [[ -n $($JQ_FILE "$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")' "$d_sync_file") ]] 
-            then
-                $JQ_FILE "$jq_index"' -= ['"$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")]' "$d_sync_file" > "${d_sync_file}_tmp"
-                mv "${d_sync_file}_tmp" "$d_sync_file"
-            fi
-        else
-            jq_channel_add="[{"
-            jq_channel_edit=""
-            while IFS=',' read -ra index_arr
+    if [ "$chnl_sync_yn" == "yes" ] && [ -n "$chnl_sync_file" ] && [ -n "$chnl_sync_index" ] && [ -n "$chnl_sync_pairs" ]
+    then
+        IFS=" " read -ra chnl_sync_files <<< "$chnl_sync_file"
+        IFS=" " read -ra chnl_sync_indexs <<< "$chnl_sync_index"
+
+        sync_count=${#chnl_sync_files[@]}
+        [ "${#chnl_sync_indexs[@]}" -lt "$sync_count" ] && sync_count=${#chnl_sync_indexs[@]}
+
+        for((i=0;i<sync_count;i++));
+        do
+            jq_index=""
+            while IFS=':' read -ra index_arr
             do
-                for b in "${index_arr[@]}"
+                for a in "${index_arr[@]}"
                 do
-                    case $b in
+                    case $a in
                         '') 
                             echo -e "$error sync设置错误..." && exit 1
                         ;;
+                        *[!0-9]*)
+                            jq_index="$jq_index.$a"
+                        ;;
                         *) 
-                            if [[ $b == *"="* ]] 
-                            then
-                                key=${b%=*}
-                                value=${b#*=}
-                                if [[ $value == *"http"* ]]  
-                                then
-                                    if [ -n "${kind:-}" ] 
-                                    then
-                                        if [ "$kind" == "flv" ] 
-                                        then
-                                            value=$chnl_flv_pull_link
-                                        else
-                                            value=""
-                                        fi
-                                    elif [ -z "${master:-}" ] || [ "$master" == 1 ]
-                                    then
-                                        value="$value/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
-                                    else
-                                        value="$value/$chnl_output_dir_name/${chnl_playlist_name}.m3u8"
-                                    fi
-                                fi
-                                if [ -z "$jq_channel_edit" ] 
-                                then
-                                    jq_channel_edit="$jq_channel_edit(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key)=\"${value}\""
-                                else
-                                    jq_channel_edit="$jq_channel_edit|(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key)=\"${value}\""
-                                fi
-                            else
-                                key=${b%:*}
-                                value=${b#*:}
-                                value="chnl_$value"
+                            jq_index="${jq_index}[$a]"
+                        ;;
+                    esac
+                done
+            done <<< "${chnl_sync_indexs[i]}"
 
-                                if [ "$value" == "chnl_pid" ] 
+            if [ "$action" == "stop" ]
+            then
+                if [[ -n $($JQ_FILE "$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")' "${chnl_sync_files[i]}") ]] 
+                then
+                    $JQ_FILE "$jq_index"' -= ['"$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")]' "${chnl_sync_files[i]}" > "${chnl_sync_files[i]}_tmp"
+                    mv "${chnl_sync_files[i]}_tmp" "${chnl_sync_files[i]}"
+                fi
+            else
+                jq_channel_add="[{"
+                jq_channel_edit=""
+                while IFS=',' read -ra index_arr
+                do
+                    for b in "${index_arr[@]}"
+                    do
+                        case $b in
+                            '') 
+                                echo -e "$error sync设置错误..." && exit 1
+                            ;;
+                            *) 
+                                if [[ $b == *"="* ]] 
                                 then
-                                    if [ -n "${new_pid:-}" ] 
+                                    key=${b%=*}
+                                    value=${b#*=}
+                                    if [[ $value == *"http"* ]]  
                                     then
-                                        value=$new_pid
-                                    else
-                                        value=${!value}
+                                        if [ -n "${kind:-}" ] 
+                                        then
+                                            if [ "$kind" == "flv" ] 
+                                            then
+                                                value=$chnl_flv_pull_link
+                                            else
+                                                value=""
+                                            fi
+                                        elif [ -z "${master:-}" ] || [ "$master" == 1 ]
+                                        then
+                                            value="$value/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
+                                        else
+                                            value="$value/$chnl_output_dir_name/${chnl_playlist_name}.m3u8"
+                                        fi
                                     fi
-                                    key_last=$key
-                                    value_last=$value
-                                else 
-                                    value=${!value}
                                     if [ -z "$jq_channel_edit" ] 
                                     then
                                         jq_channel_edit="$jq_channel_edit(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key)=\"${value}\""
                                     else
                                         jq_channel_edit="$jq_channel_edit|(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key)=\"${value}\""
                                     fi
+                                else
+                                    key=${b%:*}
+                                    value=${b#*:}
+                                    value="chnl_$value"
+
+                                    if [ "$value" == "chnl_pid" ] 
+                                    then
+                                        if [ -n "${new_pid:-}" ] 
+                                        then
+                                            value=$new_pid
+                                        else
+                                            value=${!value}
+                                        fi
+                                        key_last=$key
+                                        value_last=$value
+                                    else 
+                                        value=${!value}
+                                        if [ -z "$jq_channel_edit" ] 
+                                        then
+                                            jq_channel_edit="$jq_channel_edit(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key)=\"${value}\""
+                                        else
+                                            jq_channel_edit="$jq_channel_edit|(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key)=\"${value}\""
+                                        fi
+                                    fi
                                 fi
-                            fi
 
-                            if [ "$jq_channel_add" == "[{" ] 
-                            then
-                                jq_channel_add="$jq_channel_add\"$key\":\"${value}\""
-                            else
-                                jq_channel_add="$jq_channel_add,\"$key\":\"${value}\""
-                            fi
+                                if [ "$jq_channel_add" == "[{" ] 
+                                then
+                                    jq_channel_add="$jq_channel_add\"$key\":\"${value}\""
+                                else
+                                    jq_channel_add="$jq_channel_add,\"$key\":\"${value}\""
+                                fi
 
-                        ;;
-                    esac
-                done
-            done <<< "$chnl_sync_pairs"
-            [ -s "$d_sync_file" ] || printf '{"%s":0}' "ret" > "$d_sync_file"
-            if [ "$action" == "add" ] || [[ -z $($JQ_FILE "$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")' "$d_sync_file") ]]
-            then
-                jq_channel_add="${jq_channel_add}}]"
-                $JQ_FILE "$jq_index"' += '"$jq_channel_add"'' "$d_sync_file" > "${d_sync_file}_tmp"
-                mv "${d_sync_file}_tmp" "$d_sync_file"
-            else
-                jq_channel_edit="$jq_channel_edit|(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key_last)=\"${value_last}\""
-                $JQ_FILE "${jq_channel_edit}" "$d_sync_file" > "${d_sync_file}_tmp"
-                mv "${d_sync_file}_tmp" "$d_sync_file"
+                            ;;
+                        esac
+                    done
+                done <<< "$chnl_sync_pairs"
+                [ -s "${chnl_sync_files[i]}" ] || printf '{"%s":0}' "ret" > "${chnl_sync_files[i]}"
+                if [ "$action" == "add" ] || [[ -z $($JQ_FILE "$jq_index"'[]|select(.chnl_pid=="'"$chnl_pid"'")' "${chnl_sync_files[i]}") ]]
+                then
+                    jq_channel_add="${jq_channel_add}}]"
+                    $JQ_FILE "$jq_index"' += '"$jq_channel_add"'' "${chnl_sync_files[i]}" > "${chnl_sync_files[i]}_tmp"
+                    mv "${chnl_sync_files[i]}_tmp" "${chnl_sync_files[i]}"
+                else
+                    jq_channel_edit="$jq_channel_edit|(${jq_index}[]|select(.chnl_pid==\"$chnl_pid\")|.$key_last)=\"${value_last}\""
+                    $JQ_FILE "${jq_channel_edit}" "${chnl_sync_files[i]}" > "${chnl_sync_files[i]}_tmp"
+                    mv "${chnl_sync_files[i]}_tmp" "${chnl_sync_files[i]}"
+                fi
             fi
-        fi
+        done
+
         echo -e "$info sync 执行成功..."
     fi
     action=""
@@ -355,7 +366,7 @@ InstallFfmpeg()
         FFMPEG_PACKAGE_FILE="$IPTV_ROOT/$ffmpeg_package"
         wget --no-check-certificate "$FFMPEG_MIRROR_LINK/builds/$ffmpeg_package" $_PROGRESS_OPT -qO "$FFMPEG_PACKAGE_FILE"
         [ ! -e "$FFMPEG_PACKAGE_FILE" ] && echo -e "$error ffmpeg 下载失败 !" && exit 1
-        tar -xJf "$FFMPEG_PACKAGE_FILE" -C "$IPTV_ROOT" && rm -rf "${FFMPEG_PACKAGE_FILE:-'notfound'}"
+        tar -xJf "$FFMPEG_PACKAGE_FILE" -C "$IPTV_ROOT" && rm -rf "${FFMPEG_PACKAGE_FILE:-notfound}"
         FFMPEG=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
         [ ! -e "$FFMPEG" ] && echo -e "$error ffmpeg 解压失败 !" && exit 1
         export FFMPEG
@@ -411,7 +422,7 @@ Install()
             if [ ! -s "$CREATOR_FILE" ] 
             then
                 echo -e "$error 无法连接备用链接!"
-                rm -rf "${IPTV_ROOT:-'notfound'}"
+                rm -rf "${IPTV_ROOT:-notfound}"
                 exit 1
             fi
         fi
@@ -437,7 +448,7 @@ Uninstall()
     CheckRelease
     echo "确定要 卸载此脚本以及产生的全部文件？[y/N]"
     read -p "(默认: N): " uninstall_yn
-    uninstall_yn=${uninstall_yn:-"N"}
+    uninstall_yn=${uninstall_yn:-N}
     if [[ "$uninstall_yn" == [Yy] ]]
     then
         MonitorStop
@@ -463,7 +474,7 @@ Uninstall()
                 StopChannel
             fi
         done < <($JQ_FILE '.channels[].pid' $CHANNELS_FILE)
-        rm -rf "${IPTV_ROOT:-'notfound'}"
+        rm -rf "${IPTV_ROOT:-notfound}"
         echo && echo -e "$info 卸载完成 !" && echo
     else
         echo && echo -e "$info 卸载已取消..." && echo
@@ -480,7 +491,7 @@ Update()
         then
             echo && echo -e "$info 需要先关闭监控，是否继续? [Y/n]"
             read -p "(默认: Y): " stop_monitor_yn
-            stop_monitor_yn=${stop_monitor_yn:-"Y"}
+            stop_monitor_yn=${stop_monitor_yn:-Y}
             if [[ $stop_monitor_yn == [Yy] ]] 
             then
                 MonitorStop
@@ -505,7 +516,7 @@ Update()
     then
         echo && echo -e "$info FFmpeg 已经是最新，是否重装? [y/N]"
         read -p "(默认: N): " reinstall_ffmpeg_yn
-        reinstall_ffmpeg_yn=${reinstall_ffmpeg_yn:-"N"}
+        reinstall_ffmpeg_yn=${reinstall_ffmpeg_yn:-N}
     else
         reinstall_ffmpeg_yn="Y"
     fi
@@ -519,14 +530,14 @@ Update()
         _PROGRESS_OPT=""
     fi
 
-    if [[ ${reinstall_ffmpeg_yn:-"N"} == [Yy] ]] 
+    if [[ ${reinstall_ffmpeg_yn:-N} == [Yy] ]] 
     then
         rm -rf "$IPTV_ROOT"/ffmpeg-git-*/
         echo -e "$info 更新 FFmpeg..."
         InstallFfmpeg
     fi
 
-    rm -rf "${JQ_FILE:-'notfound'}"
+    rm -rf "${JQ_FILE:-notfound}"
     echo -e "$info 更新 JQ..."
     InstallJq
     echo -e "$info 更新 iptv 脚本..."
@@ -540,7 +551,7 @@ Update()
 
     if [ "$sh_new_ver" != "$sh_ver" ] 
     then
-        rm -rf "${LOCK_FILE:-'notfound'}"
+        rm -rf "${LOCK_FILE:-notfound}"
     fi
     wget --no-check-certificate "$SH_LINK" -qO "$SH_FILE" && chmod +x "$SH_FILE"
     if [ ! -s "$SH_FILE" ] 
@@ -553,7 +564,7 @@ Update()
         fi
     fi
 
-    rm -rf ${CREATOR_FILE:-'notfound'}
+    rm -rf ${CREATOR_FILE:-notfound}
     echo -e "$info 更新 Hls Stream Creator 脚本..."
     wget --no-check-certificate "$CREATOR_LINK" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
     if [ ! -s "$CREATOR_FILE" ] 
@@ -595,6 +606,7 @@ UpdateSelf()
         |(.key_name)="'"$d_key_name"'"
         |(.input_flags)="'"$d_input_flags"'"
         |(.output_flags)="'"$d_output_flags"'"
+        |(.sync)="'"$d_sync_yn"'"
         |(.sync_file)="'"$d_sync_file"'"
         |(.sync_index)="'"$d_sync_index"'"
         |(.sync_pairs)="'"$d_sync_pairs"'"
@@ -644,6 +656,12 @@ UpdateSelf()
             output_flags=${output_flags#\'}
             channel_name=${chnls_channel_name[i]%\'}
             channel_name=${channel_name#\'}
+            sync=${chnls_sync[i]%\'}
+            sync=${sync#\'}
+            sync_file=${chnls_sync_file[i]%\'}
+            sync_file=${sync_file#\'}
+            sync_index=${chnls_sync_index[i]%\'}
+            sync_index=${sync_index#\'}
             sync_pairs=${chnls_sync_pairs[i]%\'}
             sync_pairs=${sync_pairs#\'}
             flv_push_link=${chnls_flv_push_link[i]%\'}
@@ -674,6 +692,9 @@ UpdateSelf()
                 "input_flags":"'"$input_flags"'",
                 "output_flags":"'"$output_flags"'",
                 "channel_name":"'"$channel_name"'",
+                "sync":"'"$sync"'",
+                "sync_file":"'"$sync_file"'",
+                "sync_index":"'"$sync_index"'",
                 "sync_pairs":"'"$sync_pairs"'",
                 "flv_status":"'"${chnls_flv_status[i]:-off}"'",
                 "flv_push_link":"'"$flv_push_link"'",
@@ -693,13 +714,13 @@ GetDefault()
     do
         d_playlist_name=${d#*playlist_name: }
         d_playlist_name=${d_playlist_name%, seg_dir_name:*}
-        d_playlist_name_text=${d_playlist_name:-"随机名称"}
+        d_playlist_name_text=${d_playlist_name:-随机名称}
         d_seg_dir_name=${d#*, seg_dir_name: }
         d_seg_dir_name=${d_seg_dir_name%, seg_name:*}
-        d_seg_dir_name_text=${d_seg_dir_name:-"不使用"}
+        d_seg_dir_name_text=${d_seg_dir_name:-不使用}
         d_seg_name=${d#*, seg_name: }
         d_seg_name=${d_seg_name%, seg_length:*}
-        d_seg_name_text=${d_seg_name:-"跟m3u8名称相同"}
+        d_seg_name_text=${d_seg_name:-跟m3u8名称相同}
         d_seg_length=${d#*, seg_length: }
         d_seg_length=${d_seg_length%, seg_count:*}
         d_seg_count=${d#*, seg_count: }
@@ -724,7 +745,6 @@ GetDefault()
         fi
         d_quality=${d#*, quality: }
         d_quality=${d_quality%, bitrates:*}
-        d_quality_text=${d_quality:-"不设置"}
         d_bitrates=${d#*, bitrates: }
         d_bitrates=${d_bitrates%, const:*}
         d_const_yn=${d#*, const: }
@@ -746,18 +766,26 @@ GetDefault()
         else
             d_encrypt_text="Y"
         fi
-        d_key_name_text=${d_key_name:-"跟m3u8名称相同"}
+        d_key_name_text=${d_key_name:-跟m3u8名称相同}
         d_input_flags=${d#*, input_flags: }
         d_input_flags=${d_input_flags%, output_flags:*}
         d_output_flags=${d#*, output_flags: }
-        d_output_flags=${d_output_flags%, sync_file:*}
+        d_output_flags=${d_output_flags%, sync:*}
+        d_sync_yn=${d#*, sync: }
+        d_sync_yn=${d_sync_yn%, sync_file:*}
+        [ "$d_sync_yn" == null ] && d_sync_yn="yes"
+        if [ "$d_sync_yn" == "no" ] 
+        then
+            d_sync_text="N"
+        else
+            d_sync_text="Y"
+        fi
         d_sync_file=${d#*, sync_file: }
         d_sync_file=${d_sync_file%, sync_index:*}
         d_sync_index=${d#*, sync_index: }
         d_sync_index=${d_sync_index%, sync_pairs:*}
         d_sync_pairs=${d#*, sync_pairs: }
         d_sync_pairs=${d_sync_pairs%, schedule_file:*}
-        d_sync_pairs_text=${d_sync_pairs:-"不设置"}
         d_schedule_file=${d#*, schedule_file: }
         d_schedule_file=${d_schedule_file%, flv_delay_seconds:*}
         d_flv_delay_seconds=${d#*, flv_delay_seconds: }
@@ -799,7 +827,7 @@ GetDefault()
         d_anti_leech_yn=${d#*, anti_leech: }
         d_anti_leech_yn=${d_anti_leech_yn%, anti_leech_restart_nums:*}
         [ "$d_anti_leech_yn" == null ] && d_anti_leech_yn="no"
-        d_anti_leech_yn=${d_anti_leech_yn:-"no"}
+        d_anti_leech_yn=${d_anti_leech_yn:-no}
         if [ "$d_anti_leech_yn" == "no" ] 
         then
             d_anti_leech="N"
@@ -813,7 +841,7 @@ GetDefault()
         d_anti_leech_restart_flv_changes_yn=${d#*, anti_leech_restart_flv_changes: }
         d_anti_leech_restart_flv_changes_yn=${d_anti_leech_restart_flv_changes_yn%, anti_leech_restart_hls_changes:*}
         [ "$d_anti_leech_restart_flv_changes_yn" == null ] && d_anti_leech_restart_flv_changes_yn="no"
-        d_anti_leech_restart_flv_changes_yn=${d_anti_leech_restart_flv_changes_yn:-"no"}
+        d_anti_leech_restart_flv_changes_yn=${d_anti_leech_restart_flv_changes_yn:-no}
         if [ "$d_anti_leech_restart_flv_changes_yn" == "no" ] 
         then
             d_anti_leech_restart_flv_changes="N"
@@ -823,7 +851,7 @@ GetDefault()
         d_anti_leech_restart_hls_changes_yn=${d#*, anti_leech_restart_hls_changes: }
         d_anti_leech_restart_hls_changes_yn=${d_anti_leech_restart_hls_changes_yn%, version:*}
         [ "$d_anti_leech_restart_hls_changes_yn" == null ] && d_anti_leech_restart_hls_changes_yn="no"
-        d_anti_leech_restart_hls_changes_yn=${d_anti_leech_restart_hls_changes_yn:-"no"}
+        d_anti_leech_restart_hls_changes_yn=${d_anti_leech_restart_hls_changes_yn:-no}
         if [ "$d_anti_leech_restart_hls_changes_yn" == "no" ] 
         then
             d_anti_leech_restart_hls_changes="N"
@@ -831,7 +859,7 @@ GetDefault()
             d_anti_leech_restart_hls_changes="Y"
         fi
         d_version=${d#*, version: }
-    done < <($JQ_FILE -r 'to_entries | map(select(.key=="default")) | map("playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), schedule_file: \(.value.schedule_file), flv_delay_seconds: \(.value.flv_delay_seconds), flv_restart_nums: \(.value.flv_restart_nums), hls_delay_seconds: \(.value.hls_delay_seconds), hls_min_bitrates: \(.value.hls_min_bitrates), hls_max_seg_size: \(.value.hls_max_seg_size), hls_restart_nums: \(.value.hls_restart_nums), anti_ddos_port: \(.value.anti_ddos_port), anti_ddos_seconds: \(.value.anti_ddos_seconds), anti_ddos_level: \(.value.anti_ddos_level), anti_leech: \(.value.anti_leech), anti_leech_restart_nums: \(.value.anti_leech_restart_nums), anti_leech_restart_flv_changes: \(.value.anti_leech_restart_flv_changes), anti_leech_restart_hls_changes: \(.value.anti_leech_restart_hls_changes), version: \(.value.version)") | .[]' "$CHANNELS_FILE")
+    done < <($JQ_FILE -r 'to_entries | map(select(.key=="default")) | map("playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), schedule_file: \(.value.schedule_file), flv_delay_seconds: \(.value.flv_delay_seconds), flv_restart_nums: \(.value.flv_restart_nums), hls_delay_seconds: \(.value.hls_delay_seconds), hls_min_bitrates: \(.value.hls_min_bitrates), hls_max_seg_size: \(.value.hls_max_seg_size), hls_restart_nums: \(.value.hls_restart_nums), anti_ddos_port: \(.value.anti_ddos_port), anti_ddos_seconds: \(.value.anti_ddos_seconds), anti_ddos_level: \(.value.anti_ddos_level), anti_leech: \(.value.anti_leech), anti_leech_restart_nums: \(.value.anti_leech_restart_nums), anti_leech_restart_flv_changes: \(.value.anti_leech_restart_flv_changes), anti_leech_restart_hls_changes: \(.value.anti_leech_restart_hls_changes), version: \(.value.version)") | .[]' "$CHANNELS_FILE")
     #done < <($JQ_FILE -r '.default | to_entries | map([.key,.value]|join(": ")) | join(", ")' "$CHANNELS_FILE")
 }
 
@@ -862,6 +890,9 @@ GetChannelsInfo()
     chnls_input_flags=()
     chnls_output_flags=()
     chnls_channel_name=()
+    chnls_sync=()
+    chnls_sync_file=()
+    chnls_sync_index=()
     chnls_sync_pairs=()
     chnls_flv_status=()
     chnls_flv_push_link=()
@@ -898,7 +929,7 @@ GetChannelsInfo()
         map_audio_codec=${map_audio_codec%, video_audio_shift:*}
         map_video_audio_shift=${channel#*, video_audio_shift: }
         map_video_audio_shift=${map_video_audio_shift%, quality:*}
-        map_video_audio_shift=${map_video_audio_shift//null/}
+        [ "$map_video_audio_shift" == null ] && map_video_audio_shift=""
         map_quality=${channel#*, quality: }
         map_quality=${map_quality%, bitrates:*}
         map_bitrates=${channel#*, bitrates: }
@@ -914,10 +945,19 @@ GetChannelsInfo()
         map_output_flags=${channel#*, output_flags: }
         map_output_flags=${map_output_flags%, channel_name:*}
         map_channel_name=${channel#*, channel_name: }
-        map_channel_name=${map_channel_name%, sync_pairs:*}
+        map_channel_name=${map_channel_name%, sync:*}
+        map_sync=${channel#*, sync: }
+        map_sync=${map_sync%, sync_file:*}
+        [ "$map_sync" == null ] && map_sync="yes"
+        map_sync_file=${channel#*, sync_file: }
+        map_sync_file=${map_sync_file%, sync_index:*}
+        [ "$map_sync_file" == null ] && map_sync_file=""
+        map_sync_index=${channel#*, sync_index: }
+        map_sync_index=${map_sync_index%, sync_pairs:*}
+        [ "$map_sync_index" == null ] && map_sync_index=""
         map_sync_pairs=${channel#*, sync_pairs: }
         map_sync_pairs=${map_sync_pairs%, flv_status:*}
-        map_sync_pairs=${map_sync_pairs//null/}
+        [ "$map_sync_pairs" == null ] && map_sync_pairs=""
         map_flv_status=${channel#*, flv_status: }
         map_flv_status=${map_flv_status%, flv_push_link:*}
         map_flv_status=${map_flv_status//null/off}
@@ -949,12 +989,15 @@ GetChannelsInfo()
         chnls_input_flags+=("${map_input_flags:-''}")
         chnls_output_flags+=("${map_output_flags:-''}")
         chnls_channel_name+=("$map_channel_name")
+        chnls_sync+=("${map_sync:-''}")
+        chnls_sync_file+=("${map_sync_file:-''}")
+        chnls_sync_index+=("${map_sync_index:-''}")
         chnls_sync_pairs+=("${map_sync_pairs:-''}")
         chnls_flv_status+=("$map_flv_status")
         chnls_flv_push_link+=("${map_flv_push_link:-''}")
         chnls_flv_pull_link+=("${map_flv_pull_link:-''}")
         
-    done < <($JQ_FILE -r '.channels | to_entries | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), live: \(.value.live), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
+    done < <($JQ_FILE -r '.channels | to_entries | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), live: \(.value.live), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
 
     return 0
 }
@@ -970,6 +1013,7 @@ ListChannels()
     for((index = 0; index < chnls_count; index++)); do
         chnls_status_index=${chnls_status[index]}
         chnls_pid_index=${chnls_pid[index]}
+        chnls_stream_link_index=${chnls_stream_link[index]}
         chnls_live_index=${chnls_live[index]}
         chnls_output_dir_name_index=${chnls_output_dir_name[index]}
         chnls_output_dir_root="$LIVE_ROOT/$chnls_output_dir_name_index"
@@ -1102,9 +1146,9 @@ ListChannels()
 
         if [ -n "$chnls_quality_index" ] 
         then
-            chnls_video_quality_text="crf值$chnls_quality_index ${chnls_quality_text:-"不设置"}"
+            chnls_video_quality_text="crf值$chnls_quality_index ${chnls_quality_text:-不设置}"
         else
-            chnls_video_quality_text="比特率值 ${chnls_bitrates_text:-"不设置"}"
+            chnls_video_quality_text="比特率值 ${chnls_bitrates_text:-不设置}"
         fi
 
         if [ -z "${kind:-}" ] && [ "$chnls_video_codec_index" == "copy" ] && [ "$chnls_audio_codec_index" == "copy" ]  
@@ -1112,9 +1156,16 @@ ListChannels()
             chnls_video_quality_text="原画"
         fi
 
+        if [ "$index" -lt 9 ] 
+        then
+            blank=" "
+        else
+            blank=""
+        fi
+
         if [ -z "${kind:-}" ] 
         then
-            chnls_list=$chnls_list"# $green$((index+1))$plain 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_status_text 频道名称: $green${chnls_channel_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain m3u8位置: $chnls_playlist_file_text\n\n"
+            chnls_list=$chnls_list"# $green$((index+1))$plain $blank进程ID: $green${chnls_pid_index}$plain 状态: $chnls_status_text 频道名称: $green${chnls_channel_name_index}$plain\n     编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain\n     源: $green$chnls_stream_link_index$plain\n     m3u8位置: $chnls_playlist_file_text\n\n"
         elif [ "$kind" == "flv" ] 
         then
             if [ "$chnls_flv_status_index" == "on" ] 
@@ -1123,7 +1174,7 @@ ListChannels()
             else
                 chnls_flv_status_text=$red"关闭"$plain
             fi
-            chnls_list=$chnls_list"# $green$((index+1))$plain 进程ID: $green${chnls_pid_index}$plain 状态: $chnls_flv_status_text 频道名称: $green${chnls_channel_name_index}$plain 编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain flv推流地址: $green${chnls_flv_push_link_index:-"无"}$plain flv拉流地址: $green${chnls_flv_pull_link_index:-"无"}$plain\n\n"
+            chnls_list=$chnls_list"# $green$((index+1))$plain $blank进程ID: $green${chnls_pid_index}$plain 状态: $chnls_flv_status_text 频道名称: $green${chnls_channel_name_index}$plain\n     编码: $green$chnls_video_codec_index:$chnls_audio_codec_index$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain\n     flv推流地址: $green${chnls_flv_push_link_index:-无}$plain\n     flv拉流地址: $green${chnls_flv_pull_link_index:-无}$plain\n\n"
         fi
         
     done
@@ -1133,7 +1184,7 @@ ListChannels()
 
 GetChannelInfo()
 {
-    if [ -z "${d_sync_file:-}" ] 
+    if [ -z "${d_version:-}" ] 
     then
         GetDefault
     fi
@@ -1214,11 +1265,11 @@ GetChannelInfo()
             chnl_const="-C"
             chnl_const_text=" 固定频率:是"
         fi
-        chnl_encrypt=${channel#*, encrypt: }
-        chnl_encrypt=${chnl_encrypt%, key_name:*}
+        chnl_encrypt_yn=${channel#*, encrypt: }
+        chnl_encrypt_yn=${chnl_encrypt_yn%, key_name:*}
         chnl_key_name=${channel#*, key_name: }
         chnl_key_name=${chnl_key_name%, input_flags:*}
-        if [ "$chnl_encrypt" == "no" ]
+        if [ "$chnl_encrypt_yn" == "no" ]
         then
             chnl_encrypt=""
             chnl_encrypt_text=$red"否"$plain
@@ -1233,7 +1284,19 @@ GetChannelInfo()
         chnl_output_flags=${channel#*, output_flags: }
         chnl_output_flags=${chnl_output_flags%, channel_name:*}
         chnl_channel_name=${channel#*, channel_name: }
-        chnl_channel_name=${chnl_channel_name%, sync_pairs:*}
+        chnl_channel_name=${chnl_channel_name%, sync:*}
+        chnl_sync_yn=${channel#*, sync: }
+        chnl_sync_yn=${chnl_sync_yn%, sync_file:*}
+        if [ "$chnl_sync_yn" == "no" ]
+        then
+            chnl_sync_text="$red禁用$plain"
+        else
+            chnl_sync_text="$green启用$plain"
+        fi
+        chnl_sync_file=${channel#*, sync_file: }
+        chnl_sync_file=${chnl_sync_file%, sync_index:*}
+        chnl_sync_index=${channel#*, sync_index: }
+        chnl_sync_index=${chnl_sync_index%, sync_pairs:*}
         chnl_sync_pairs=${channel#*, sync_pairs: }
         chnl_sync_pairs=${chnl_sync_pairs%, flv_status:*}
         chnl_flv_status=${channel#*, flv_status: }
@@ -1251,7 +1314,7 @@ GetChannelInfo()
                 chnl_status_text=$red"关闭"$plain
             fi
 
-            chnl_seg_dir_name_text=${chnl_seg_dir_name:-"不使用"}
+            chnl_seg_dir_name_text=${chnl_seg_dir_name:-不使用}
             chnl_seg_length_text=$chnl_seg_length"s"
 
             chnl_crf_text=""
@@ -1284,21 +1347,29 @@ GetChannelInfo()
                 chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}.m3u8$plain "
             fi
 
-            if [ -n "$d_sync_file" ] && [ -n "$d_sync_index" ] && [ -n "$d_sync_pairs" ] && [[ $d_sync_pairs == *"=http"* ]] 
+            if [ "$chnl_sync_yn" == "yes" ]
             then
-                chnl_playlist_link=${d_sync_pairs#*=http}
-                chnl_playlist_link=${chnl_playlist_link%%,*}
-                chnl_playlist_link="http$chnl_playlist_link/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
-                chnl_playlist_link_text="$green$chnl_playlist_link$plain"
+                sync_file=${chnl_sync_file:-$d_sync_file}
+                sync_index=${chnl_sync_index:-$d_sync_index}
+                sync_pairs=${chnl_sync_pairs:-$d_sync_pairs}
+                if [ -n "$sync_file" ] && [ -n "$sync_index" ] && [ -n "$sync_pairs" ] && [[ $sync_pairs == *"=http"* ]]
+                then
+                    chnl_playlist_link=${sync_pairs#*=http}
+                    chnl_playlist_link=${chnl_playlist_link%%,*}
+                    chnl_playlist_link="http$chnl_playlist_link/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
+                    chnl_playlist_link_text="$green$chnl_playlist_link$plain"
+                else
+                    chnl_playlist_link_text="$red请先设置 sync$plain"
+                fi
             else
-                chnl_playlist_link_text="$red请先设置 sync$plain"
+                chnl_playlist_link_text="$red请先启用 sync$plain"
             fi
 
             if [ -n "$chnl_quality" ] 
             then
-                chnl_video_quality_text="crf值$chnl_quality ${chnl_crf_text:-"不设置"}"
+                chnl_video_quality_text="crf值$chnl_quality ${chnl_crf_text:-不设置}"
             else
-                chnl_video_quality_text="比特率值 ${chnl_nocrf_text:-"不设置"}"
+                chnl_video_quality_text="比特率值 ${chnl_nocrf_text:-不设置}"
             fi
 
             if [ "$chnl_flv_status" == "on" ]
@@ -1321,7 +1392,7 @@ GetChannelInfo()
                 chnl_playlist_link_text=${chnl_playlist_link_text//_master.m3u8/.m3u8}
             fi
         fi
-    done < <($JQ_FILE -r '.channels | to_entries | map(select('"$select"')) | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), live: \(.value.live), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
+    done < <($JQ_FILE -r '.channels | to_entries | map(select('"$select"')) | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), live: \(.value.live), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
 
     if [ "$found" == 0 ] && [ -z "${monitor:-}" ]
     then
@@ -1356,8 +1427,8 @@ ViewChannelInfo()
     elif [ "$kind" == "flv" ] 
     then
         echo -e " 状态\t    : $chnl_flv_status_text"
-        echo -e " 推流地址   : $green${chnl_flv_push_link:-"无"}$plain"
-        echo -e " 拉流地址   : $green${chnl_flv_pull_link:-"无"}$plain"
+        echo -e " 推流地址   : $green${chnl_flv_push_link:-无}$plain"
+        echo -e " 拉流地址   : $green${chnl_flv_pull_link:-无}$plain"
     fi
     
     echo -e " 直播源\t    : $green${chnl_stream_links// /, }$plain"
@@ -1367,11 +1438,20 @@ ViewChannelInfo()
     echo -e " 视频质量   : $green$chnl_video_quality_text$plain"
     echo -e " 延迟\t    : $green$chnl_video_audio_shift_text$plain"
 
-    echo -e " input flags    : $green${chnl_input_flags:-"不设置"}$plain"
-    echo -e " output flags   : $green${chnl_output_flags:-"不设置"}$plain"
+    echo -e " input flags    : $green${chnl_input_flags:-不设置}$plain"
+    echo -e " output flags   : $green${chnl_output_flags:-不设置}$plain"
+    echo -e " sync           : $chnl_sync_text"
+    if [ -n "$chnl_sync_file" ] 
+    then
+        echo -e " sync_file      : $green${chnl_sync_file// /, }$plain"
+    fi
+    if [ -n "$chnl_sync_index" ] 
+    then
+        echo -e " sync_index     : $green${chnl_sync_index// /, }$plain"
+    fi
     if [ -n "$chnl_sync_pairs" ] 
     then
-        echo -e " sync_pairs     : $green${chnl_sync_pairs}$plain"
+        echo -e " sync_pairs     : $green$chnl_sync_pairs$plain"
     fi
     echo
 }
@@ -1447,7 +1527,7 @@ SetIsHls()
     echo && echo "是否是 HLS 链接? [y/N]"
     echo -e "$tip 如果直播链接重定向至 .m3u8 地址，请选择 Y" && echo
     read -p "(默认: N): " is_hls_yn
-    is_hls_yn=${is_hls_yn:-"N"}
+    is_hls_yn=${is_hls_yn:-N}
     if [[ "$is_hls_yn" == [Yy] ]]
     then
         is_hls=1
@@ -1469,7 +1549,7 @@ SetLive()
         echo -e "$tip 选择 n 则无法监控" && echo
     fi
     read -p "(默认: Y): " live_yn
-    live_yn=${live_yn:-"Y"}
+    live_yn=${live_yn:-Y}
     if [[ "$live_yn" == [Yy] ]]
     then
         live="-l"
@@ -1528,7 +1608,7 @@ SetSegDirName()
     then
         seg_dir_name=$d_seg_dir_name
     fi
-    echo && echo -e "	段子目录名: $green ${seg_dir_name:-"不使用"} $plain" && echo
+    echo && echo -e "	段子目录名: $green ${seg_dir_name:-不使用} $plain" && echo
 }
 
 SetSegName()
@@ -1579,7 +1659,7 @@ SetSegLength()
 SetSegCount()
 {
     echo "请输入m3u8文件包含的段数目，ffmpeg分割的数目是其2倍"
-    echo -e "$tip 如果填0就是无限"
+    echo -e "$tip 如果填0就是无限" && echo
     while read -p "(默认: $d_seg_count): " seg_count
     do
         case "$seg_count" in
@@ -1622,7 +1702,7 @@ SetQuality()
 {
     echo -e "请输入输出视频质量[1-63]"
     echo -e "$tip 改变CRF，数字越大越视频质量越差，如果设置CRF则无法用比特率控制视频质量"
-    while read -p "(默认: $d_quality_text): " quality
+    while read -p "(默认: ${d_quality:-不设置}): " quality
     do
         case "$quality" in
             "")
@@ -1642,7 +1722,7 @@ SetQuality()
             ;;
         esac
     done
-    echo && echo -e "	crf视频质量: $green ${quality:-"不设置"} $plain" && echo
+    echo && echo -e "	crf视频质量: $green ${quality:-不设置} $plain" && echo
 }
 
 SetBitrates()
@@ -1662,13 +1742,13 @@ SetBitrates()
     同时可以指定输出的分辨率(比如：600-600x400,900-1280x720)"
     fi
 
-    echo && read -p "(默认: ${d_bitrates:-"不设置"}): " bitrates
+    echo && read -p "(默认: ${d_bitrates:-不设置}): " bitrates
     bitrates=${bitrates:-$d_bitrates}
     if [ "$bitrates" == "omit" ] 
     then
         bitrates=""
     fi
-    echo && echo -e "	比特率: $green ${bitrates:-"不设置"} $plain" && echo
+    echo && echo -e "	比特率: $green ${bitrates:-不设置} $plain" && echo
 }
 
 SetConst()
@@ -1755,13 +1835,13 @@ SetOutputFlags()
         d_output_flags=${d_output_flags//-sc_threshold 0/}
     fi
     echo "请输入output flags, 可以输入 omit 省略此选项"
-    read -p "(默认: ${d_output_flags:-"不设置"}): " output_flags
+    read -p "(默认: ${d_output_flags:-不设置}): " output_flags
     output_flags=${output_flags:-$d_output_flags}
     if [ "$output_flags" == "omit" ] 
     then
         output_flags=""
     fi
-    echo && echo -e "	output flags: $green ${output_flags:-"不设置"} $plain" && echo 
+    echo && echo -e "	output flags: $green ${output_flags:-不设置} $plain" && echo 
 }
 
 SetVideoAudioShift()
@@ -1835,11 +1915,46 @@ SetChannelName()
     echo && echo -e "	频道名称: $green $channel_name $plain" && echo
 }
 
+SetSync()
+{
+    echo "是否启用 sync ? [Y/n]"
+    read -p "(默认: $d_sync_text): " sync_yn
+    sync_yn=${sync_yn:-$d_sync_text}
+    if [[ "$sync_yn" == [Yy] ]]
+    then
+        sync_yn="yes"
+        sync_text="$green启用$plain"
+    else
+        sync_yn="no"
+        sync_text="$red禁用$plain"
+    fi
+    echo && echo -e "	sync: $sync_text" && echo
+}
+
+SetSyncFile()
+{
+    echo "设置单独的 sync_file"
+    echo -e "$tip 多个文件用空格分隔" && echo
+    read -p "(默认: ${d_sync_file:-不设置}): " sync_file
+    sync_file_text=${sync_file:-$d_sync_file}
+    echo && echo -e "	单独的 sync_file: $green ${sync_file_text:-不设置} $plain" && echo
+}
+
+SetSyncIndex()
+{
+    echo "设置单独的 sync_index"
+    echo -e "$tip 多个 sync_index 用空格分隔" && echo
+    read -p "(默认: ${d_sync_index:-不设置}): " sync_index
+    sync_index_text=${sync_index:-$d_sync_index}
+    echo && echo -e "	单独的 sync_index: $green ${sync_index_text:-不设置} $plain" && echo
+}
+
 SetSyncPairs()
 {
     echo "设置单独的 sync_pairs"
-    read -p "(默认: $d_sync_pairs_text): " sync_pairs
-    echo && echo -e "	单独的 sync_pairs: $green ${sync_pairs:-$d_sync_pairs_text} $plain" && echo
+    read -p "(默认: ${d_sync_pairs:-不设置}): " sync_pairs
+    sync_pairs_text=${sync_pairs:-$d_sync_pairs}
+    echo && echo -e "	单独的 sync_pairs: $green ${sync_pairs_text:-不设置} $plain" && echo
 }
 
 SetFlvPushLink()
@@ -1863,7 +1978,7 @@ SetFlvPullLink()
     echo && echo "请输入拉流(播放)地址, 如 http://domain.com/flv?app=flv&stream=xxx"
     echo -e "$tip 监控会验证此链接来确定是否重启频道，如果不确定可以先留空" && echo
     read -p "(默认: 不设置): " flv_pull_link
-    echo && echo -e "	拉流地址: $green ${flv_pull_link:-"不设置"} $plain" && echo
+    echo && echo -e "	拉流地址: $green ${flv_pull_link:-不设置} $plain" && echo
 }
 
 FlvStreamCreatorWithShift()
@@ -1909,6 +2024,9 @@ FlvStreamCreatorWithShift()
                     "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
                     "output_flags":"'"$FFMPEG_FLAGS"'",
                     "channel_name":"'"$channel_name"'",
+                    "sync":"'"$sync_yn"'",
+                    "sync_file":"'"$sync_file"'",
+                    "sync_index":"'"$sync_index"'",
                     "sync_pairs":"'"$sync_pairs"'",
                     "flv_status":"on",
                     "flv_push_link":"'"$flv_push_link"'",
@@ -2142,6 +2260,9 @@ FlvStreamCreatorWithShift()
                     "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
                     "output_flags":"'"$FFMPEG_FLAGS"'",
                     "channel_name":"'"$channel_name"'",
+                    "sync":"'"$sync_yn"'",
+                    "sync_file":"",
+                    "sync_index":"",
                     "sync_pairs":"",
                     "flv_status":"on",
                     "flv_push_link":"'"$flv_push_link"'",
@@ -2293,6 +2414,9 @@ HlsStreamCreatorWithShift()
                     "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
                     "output_flags":"'"$FFMPEG_FLAGS"'",
                     "channel_name":"'"$channel_name"'",
+                    "sync":"'"$sync_yn"'",
+                    "sync_file":"'"$sync_file"'",
+                    "sync_index":"'"$sync_index"'",
                     "sync_pairs":"'"$sync_pairs"'",
                     "flv_status":"off",
                     "flv_push_link":"",
@@ -2396,7 +2520,7 @@ HlsStreamCreatorWithShift()
 
             $JQ_FILE '(.channels[]|select(.pid=='"$pid"')|.status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_hls_shift"
             mv "${CHANNELS_TMP}_hls_shift" "$CHANNELS_FILE"
-            rm -rf "$LIVE_ROOT/${output_dir_name:-'notfound'}"
+            rm -rf "$LIVE_ROOT/${output_dir_name:-notfound}"
 
             printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
@@ -2519,7 +2643,7 @@ HlsStreamCreatorWithShift()
 
             $JQ_FILE '(.channels[]|select(.pid=='"$new_pid"')|.status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_hls_shift"
             mv "${CHANNELS_TMP}_hls_shift" "$CHANNELS_FILE"
-            rm -rf "$LIVE_ROOT/${chnl_output_dir_name:-'notfound'}"
+            rm -rf "$LIVE_ROOT/${chnl_output_dir_name:-notfound}"
 
             printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
@@ -2553,6 +2677,9 @@ HlsStreamCreatorWithShift()
                     "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
                     "output_flags":"'"$FFMPEG_FLAGS"'",
                     "channel_name":"'"$channel_name"'",
+                    "sync":"'"$sync_yn"'",
+                    "sync_file":"",
+                    "sync_index":"",
                     "sync_pairs":"",
                     "flv_status":"off",
                     "flv_push_link":"",
@@ -2656,7 +2783,7 @@ HlsStreamCreatorWithShift()
 
             $JQ_FILE '(.channels[]|select(.pid=='"$pid"')|.status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_hls_shift"
             mv "${CHANNELS_TMP}_hls_shift" "$CHANNELS_FILE"
-            rm -rf "$LIVE_ROOT/${output_dir_name:-'notfound'}"
+            rm -rf "$LIVE_ROOT/${output_dir_name:-notfound}"
 
             printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
@@ -2712,6 +2839,9 @@ HlsStreamCreator()
                     "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
                     "output_flags":"'"$FFMPEG_FLAGS"'",
                     "channel_name":"'"$channel_name"'",
+                    "sync":"'"$sync_yn"'",
+                    "sync_file":"'"$sync_file"'",
+                    "sync_index":"'"$sync_index"'",
                     "sync_pairs":"'"$sync_pairs"'",
                     "flv_status":"off",
                     "flv_push_link":"",
@@ -2739,7 +2869,7 @@ HlsStreamCreator()
 
             $JQ_FILE '(.channels[]|select(.pid=='"$pid"')|.status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_hls"
             mv "${CHANNELS_TMP}_hls" "$CHANNELS_FILE"
-            rm -rf "$LIVE_ROOT/${output_dir_name:-'notfound'}"
+            rm -rf "$LIVE_ROOT/${output_dir_name:-notfound}"
 
             printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
@@ -2777,7 +2907,7 @@ HlsStreamCreator()
 
             $JQ_FILE '(.channels[]|select(.pid=='"$new_pid"')|.status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_hls"
             mv "${CHANNELS_TMP}_hls" "$CHANNELS_FILE"
-            rm -rf "$LIVE_ROOT/${chnl_output_dir_name:-'notfound'}"
+            rm -rf "$LIVE_ROOT/${chnl_output_dir_name:-notfound}"
 
             printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
@@ -2810,6 +2940,9 @@ HlsStreamCreator()
                     "input_flags":"'"$FFMPEG_INPUT_FLAGS"'",
                     "output_flags":"'"$FFMPEG_FLAGS"'",
                     "channel_name":"'"$channel_name"'",
+                    "sync":"'"$sync_yn"'",
+                    "sync_file":"",
+                    "sync_index":"",
                     "sync_pairs":"",
                     "flv_status":"off",
                     "flv_push_link":"",
@@ -2837,7 +2970,7 @@ HlsStreamCreator()
 
             $JQ_FILE '(.channels[]|select(.pid=='"$pid"')|.status)="off"' "$CHANNELS_FILE" > "${CHANNELS_TMP}_hls"
             mv "${CHANNELS_TMP}_hls" "$CHANNELS_FILE"
-            rm -rf "$LIVE_ROOT/${output_dir_name:-'notfound'}"
+            rm -rf "$LIVE_ROOT/${output_dir_name:-notfound}"
 
             printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
@@ -2959,10 +3092,15 @@ AddChannel()
     SetInputFlags
     SetOutputFlags
     SetChannelName
-    if [ -n "$d_sync_file" ] && [ -n "$d_sync_index" ] && [ -n "$d_sync_pairs" ]
+    SetSync
+    if [ "$sync_yn" == "yes" ]
     then
+        SetSyncFile
+        SetSyncIndex
         SetSyncPairs
     else
+        sync_file=""
+        sync_index=""
         sync_pairs=""
     fi
 
@@ -3031,7 +3169,7 @@ EditOutputDirName()
     then
         echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]"
         read -p "(默认: N): " stop_channel_yn
-        stop_channel_yn=${stop_channel_yn:-'n'}
+        stop_channel_yn=${stop_channel_yn:-n}
         if [[ "$stop_channel_yn" == [Yy] ]]
         then
             StopChannel
@@ -3166,6 +3304,30 @@ EditChannelName()
     echo && echo -e "$info 频道名称修改成功 !" && echo
 }
 
+EditSync()
+{
+    SetSync
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.sync)="'"$sync_yn"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info 是否开启 sync 修改成功 !" && echo
+}
+
+EditSyncFile()
+{
+    SetSyncFile
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.sync_file)="'"$sync_file"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info sync_file 修改成功 !" && echo
+}
+
+EditSyncIndex()
+{
+    SetSyncIndex
+    $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.sync_index)="'"$sync_index"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
+    mv "$CHANNELS_TMP" "$CHANNELS_FILE"
+    echo && echo -e "$info sync_index 修改成功 !" && echo
+}
+
 EditSyncPairs()
 {
     SetSyncPairs
@@ -3197,7 +3359,7 @@ EditChannelAll()
         kind="flv"
         echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]"
         read -p "(默认: N): " stop_channel_yn
-        stop_channel_yn=${stop_channel_yn:-'n'}
+        stop_channel_yn=${stop_channel_yn:-n}
         if [[ "$stop_channel_yn" == [Yy] ]]
         then
             StopChannel
@@ -3210,7 +3372,7 @@ EditChannelAll()
         kind=""
         echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]"
         read -p "(默认: N): " stop_channel_yn
-        stop_channel_yn=${stop_channel_yn:-'n'}
+        stop_channel_yn=${stop_channel_yn:-n}
         if [[ "$stop_channel_yn" == [Yy] ]]
         then
             StopChannel
@@ -3276,10 +3438,15 @@ EditChannelAll()
     SetInputFlags
     SetOutputFlags
     SetChannelName
-    if [ -n "$d_sync_file" ] && [ -n "$d_sync_index" ] && [ -n "$d_sync_pairs" ]
+    SetSync
+    if [ "$sync_yn" == "yes" ]
     then
+        SetSyncFile
+        SetSyncIndex
         SetSyncPairs
     else
+        sync_file=""
+        sync_index=""
         sync_pairs=""
     fi
     SetFlvPushLink
@@ -3346,12 +3513,15 @@ EditChannelMenu()
     ${green}16.$plain 修改 input flags
     ${green}17.$plain 修改 output flags
     ${green}18.$plain 修改 频道名称
-    ${green}19.$plain 修改 sync pairs
-    ${green}20.$plain 修改 推流地址
-    ${green}21.$plain 修改 拉流地址
-    ${green}22.$plain 修改 全部配置
+    ${green}19.$plain 修改 是否开启 sync
+    ${green}20.$plain 修改 sync file
+    ${green}21.$plain 修改 sync index
+    ${green}22.$plain 修改 sync pairs
+    ${green}23.$plain 修改 推流地址
+    ${green}24.$plain 修改 拉流地址
+    ${green}25.$plain 修改 全部配置
     ————— 组合[常用] —————
-    ${green}23.$plain 修改 段名称、m3u8名称 (防盗链/DDoS)
+    ${green}26.$plain 修改 段名称、m3u8名称 (防盗链/DDoS)
     " && echo
         read -p "(默认: 取消): " edit_channel_num
         [ -z "$edit_channel_num" ] && echo && echo "已取消..." && echo && exit 1
@@ -3411,18 +3581,27 @@ EditChannelMenu()
                 EditChannelName
             ;;
             19)
-                EditSyncPairs
+                EditSync
             ;;
             20)
-                EditFlvPushLink
+                EditSyncFile
             ;;
             21)
-                EditFlvPullLink
+                EditSyncIndex
             ;;
             22)
-                EditChannelAll
+                EditSyncPairs
             ;;
             23)
+                EditFlvPushLink
+            ;;
+            24)
+                EditFlvPullLink
+            ;;
+            25)
+                EditChannelAll
+            ;;
+            26)
                 EditForSecurity
             ;;
             *)
@@ -3434,7 +3613,7 @@ EditChannelMenu()
         then
             echo "是否重启此频道？[Y/n]"
             read -p "(默认: Y): " restart_yn
-            restart_yn=${restart_yn:-"Y"}
+            restart_yn=${restart_yn:-Y}
             if [[ "$restart_yn" == [Yy] ]] 
             then
                 StopChannel
@@ -3447,7 +3626,7 @@ EditChannelMenu()
         else
             echo "是否启动此频道？[y/N]"
             read -p "(默认: N): " start_yn
-            start_yn=${start_yn:-"N"}
+            start_yn=${start_yn:-N}
             if [[ "$start_yn" == [Yy] ]] 
             then
                 GetChannelInfo
@@ -3662,14 +3841,14 @@ StopChannel()
     then
         chnl_flv_status="off"
         echo && echo -e "$info 频道[ $chnl_channel_name ]已关闭 !" && echo
-    elif [ -e "$LIVE_ROOT/${chnl_output_dir_name:-'notfound'}" ] 
+    elif [ -e "$LIVE_ROOT/${chnl_output_dir_name:-notfound}" ] 
     then
         chnl_status="off"
         $JQ_FILE '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
         mv "$CHANNELS_TMP" "$CHANNELS_FILE" 2>/dev/null || true
-        action=${action:-"stop"}
+        action=${action:-stop}
         SyncFile
-        rm -rf "$LIVE_ROOT/${chnl_output_dir_name:-'notfound'}"
+        rm -rf "$LIVE_ROOT/${chnl_output_dir_name:-notfound}"
         echo && echo -e "$info 频道[ $chnl_channel_name ]目录删除成功 !" && echo
     else
         chnl_status="off"
@@ -5182,7 +5361,7 @@ Schedule()
             then
                 echo && echo "需要先安装 pdf2htmlEX，因为是编译 pdf2htmlEX，耗时会很长，是否继续？[y/N]"
                 read -p "(默认: N): " pdf2html_install_yn
-                pdf2html_install_yn=${pdf2html_install_yn:-"N"}
+                pdf2html_install_yn=${pdf2html_install_yn:-N}
                 if [[ $pdf2html_install_yn == [Yy] ]] 
                 then
                     InstallPdf2html
@@ -5739,7 +5918,7 @@ TsRegister()
     then
         echo && echo -e "$error 缺少 imgcat ,是否现在安装? [y/N]"
         read -p "(默认: 取消): " imgcat_yn
-        imgcat_yn=${imgcat_yn:-"N"}
+        imgcat_yn=${imgcat_yn:-N}
         if [[ $imgcat_yn == [Yy] ]] 
         then
             Progress &
@@ -5854,7 +6033,7 @@ TsRegister()
                             echo && echo -e "$info 注册成功！"
                             echo && echo -e "$info 是否登录账号? [y/N]"
                             read -p "(默认: N): " login_yn
-                            login_yn=${login_yn:-"N"}
+                            login_yn=${login_yn:-N}
                             if [[ "$login_yn" == [Yy] ]]
                             then
                                 TsLogin
@@ -5893,7 +6072,7 @@ TsRegister()
             echo && echo -e "$info 注册成功！"
             echo && echo -e "$info 是否登录账号? [y/N]"
             read -p "(默认: N): " login_yn
-            login_yn=${login_yn:-"N"}
+            login_yn=${login_yn:-N}
             if [[ "$login_yn" == [Yy] ]]
             then
                 TsLogin
@@ -5967,7 +6146,7 @@ TsLogin()
         printf '%s\n' "${login_array[@]}"
         echo && echo -e "$info 是否注册账号? [y/N]"
         read -p "(默认: N): " register_yn
-        register_yn=${register_yn:-"N"}
+        register_yn=${register_yn:-N}
         if [[ "$register_yn" == [Yy] ]]
         then
             TsRegister
@@ -6028,7 +6207,7 @@ TsLogin()
         then
             echo && echo -e "$info 检测到此频道原有链接，是否替换成新的ts链接? [Y/n]"
             read -p "(默认: Y): " change_yn
-            change_yn=${change_yn:-"Y"}
+            change_yn=${change_yn:-Y}
             if [[ "$change_yn" == [Yy] ]]
             then
                 $JQ_FILE '(.channels[]|select(.stream_link=="'"$stream_link"'")|.stream_link)="'"$TS_LINK"'"' "$CHANNELS_FILE" > "$CHANNELS_TMP"
@@ -6045,26 +6224,21 @@ TsMenu()
 {
     GetDefault
 
-    if [ -n "$d_sync_file" ] 
-    then
-        local_channels=$($JQ_FILE -r '.data[] | select(.reg_url != null)' "$d_sync_file")
-    fi
-
     echo && echo -e "$info 是否使用默认频道文件? 默认链接: $DEFAULT_CHANNELS_LINK [Y/n]"
     read -p "(默认: Y): " use_default_channels_yn
-    use_default_channels_yn=${use_default_channels_yn:-"Y"}
+    use_default_channels_yn=${use_default_channels_yn:-Y}
     if [[ "$use_default_channels_yn" == [Yy] ]]
     then
         TS_CHANNELS_LINK=$DEFAULT_CHANNELS_LINK
     else
-        if [ -n "$local_channels" ] 
+        if [ -n "$d_sync_file" ] && [[ -n $($JQ_FILE -r '.data[] | select(.reg_url != null)' "${d_sync_file%% *}") ]] 
         then
-            echo && echo -e "$info 是否使用本地频道文件? 本地路径: $d_sync_file [Y/n]"
+            echo && echo -e "$info 是否使用本地频道文件? 本地路径: ${d_sync_file%% *} [Y/n]"
             read -p "(默认: Y): " use_local_channels_yn
-            use_local_channels_yn=${use_local_channels_yn:-"Y"}
+            use_local_channels_yn=${use_local_channels_yn:-Y}
             if [[ "$use_local_channels_yn" == [Yy] ]] 
             then
-                TS_CHANNELS_FILE=$d_sync_file
+                TS_CHANNELS_FILE=${d_sync_file%% *}
             fi
         fi
         if [ -z "${TS_CHANNELS_FILE:-}" ]
@@ -6370,7 +6544,7 @@ AntiDDoSSet()
         sleep 1
         echo && echo "是否启动 AntiDDoS [Y/n]"
         read -p "(默认: Y): " anti_ddos
-        anti_ddos=${anti_ddos:-"Y"}
+        anti_ddos=${anti_ddos:-Y}
         if [[ "$anti_ddos" == [Yy] ]] 
         then
             if ufw show added | grep -q "None" 
@@ -6685,7 +6859,7 @@ MonitorTryAccounts()
                         then
                             video=1
                         fi
-                    done < <($FFPROBE -i "$chnl_stream_link" -timeout 10000000 -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+                    done < <($FFPROBE -i "$chnl_stream_link" -timeout 5000000 -show_streams -show_entries format=bit_rate -loglevel quiet || true)
 
                     if [ "$audio" == 1 ] && [ "$video" == 1 ]
                     then
@@ -6991,7 +7165,7 @@ Monitor()
                         then
                             video=1
                         fi
-                    done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -timeout 10000000 -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+                    done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -timeout 5000000 -show_streams -show_entries format=bit_rate -loglevel quiet || true)
 
                     if [ "$audio" == 0 ] || [ "$video" == 0 ]
                     then
@@ -7190,7 +7364,7 @@ Monitor()
                         then
                             video=1
                         fi
-                    done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -timeout 10000000 -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+                    done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -timeout 5000000 -show_streams -show_entries format=bit_rate -loglevel quiet || true)
 
                     if [ "$audio" == 0 ] || [ "$video" == 0 ]
                     then
@@ -7628,6 +7802,7 @@ MonitorSet()
     monitor=1
     flv_count=0
     monitor_channel_names=()
+    monitor_stream_links=()
     monitor_flv_push_links=()
     monitor_flv_pull_links=()
     GetChannelsInfo
@@ -7637,6 +7812,7 @@ MonitorSet()
         then
             flv_count=$((flv_count+1))
             monitor_channel_names+=("${chnls_channel_name[i]}")
+            monitor_stream_links+=("${chnls_stream_link[i]}")
             monitor_flv_push_links+=("${chnls_flv_push_link[i]}")
             monitor_flv_pull_links+=("${chnls_flv_pull_link[i]}")
         fi
@@ -7649,9 +7825,15 @@ MonitorSet()
 
         for((i=0;i<flv_count;i++));
         do
+            if [ "$i" -lt 9 ] 
+            then
+                blank=" "
+            else
+                blank=""
+            fi
             flv_pull_link=${monitor_flv_pull_links[i]%\'}
             flv_pull_link=${flv_pull_link#\'}
-            echo -e "  ${green}$((i+1)).$plain ${monitor_channel_names[i]} ${flv_pull_link}"
+            echo -e "  ${green}$((i+1)).$plain $blank${monitor_channel_names[i]}\n      源: ${monitor_stream_links[i]}\n      pull: ${flv_pull_link:-无}\n"
         done
 
         echo && echo -e "  ${green}$((i+1)).$plain 全部"
@@ -8109,7 +8291,7 @@ UninstallNginx()
 
     echo && echo "确定删除 nginx 包括所有配置文件，操作不可恢复？[y/N]"
     read -p "(默认: N): " nginx_uninstall_yn
-    nginx_uninstall_yn=${nginx_uninstall_yn:-"N"}
+    nginx_uninstall_yn=${nginx_uninstall_yn:-N}
 
     if [[ $nginx_uninstall_yn == [Yy] ]] 
     then
@@ -8127,7 +8309,7 @@ ToggleNginx()
     then
         echo && echo "nginx 未运行，是否开启？[Y/n]"
         read -p "(默认: Y): " nginx_start_yn
-        nginx_start_yn=${nginx_start_yn:-"Y"}
+        nginx_start_yn=${nginx_start_yn:-Y}
         if [[ $nginx_start_yn == [Yy] ]] 
         then
             nginx
@@ -8141,7 +8323,7 @@ ToggleNginx()
         then
             echo && echo "nginx 正在运行，是否关闭？[Y/n]"
             read -p "(默认: Y): " nginx_stop_yn
-            nginx_stop_yn=${nginx_stop_yn:-"Y"}
+            nginx_stop_yn=${nginx_stop_yn:-Y}
             if [[ $nginx_stop_yn == [Yy] ]] 
             then
                 nginx -s stop
@@ -8152,7 +8334,7 @@ ToggleNginx()
         else
             echo && echo "nginx 未运行，是否开启？[Y/n]"
             read -p "(默认: Y): " nginx_start_yn
-            nginx_start_yn=${nginx_start_yn:-"Y"}
+            nginx_start_yn=${nginx_start_yn:-Y}
             if [[ $nginx_start_yn == [Yy] ]] 
             then
                 nginx
@@ -8757,7 +8939,7 @@ then
             then
                 echo && echo "v2ray 正在运行，是否关闭？[Y/n]"
                 read -p "(默认: Y): " v2ray_stop_yn
-                v2ray_stop_yn=${v2ray_stop_yn:-"Y"}
+                v2ray_stop_yn=${v2ray_stop_yn:-Y}
                 if [[ $v2ray_stop_yn == [Yy] ]] 
                 then
                     service v2ray  stop
@@ -8768,7 +8950,7 @@ then
             else
                 echo && echo "v2ray 未运行，是否开启？[Y/n]"
                 read -p "(默认: Y): " v2ray_start_yn
-                v2ray_start_yn=${v2ray_start_yn:-"Y"}
+                v2ray_start_yn=${v2ray_start_yn:-Y}
                 if [[ $v2ray_start_yn == [Yy] ]] 
                 then
                     service v2ray start
@@ -9202,7 +9384,7 @@ case "$cmd" in
         [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
         GetDefault
         [ -z "$d_sync_file" ] && echo -e "$error sync_file 未设置，请检查 !" && exit 1
-        vi "$d_sync_file" && exit 0
+        vi "${d_sync_file%% *}" && exit 0
     ;;
     "d")
         [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
@@ -9388,16 +9570,20 @@ case "$cmd" in
         flv_count=0
         chnls_channel_name=()
         chnls_stream_link=()
+        chnls_flv_pull_link=()
         while IFS= read -r flv_channel
         do
             flv_count=$((flv_count+1))
             map_channel_name=${flv_channel#*channel_name: }
             map_channel_name=${map_channel_name%, stream_link:*}
             map_stream_link=${flv_channel#*, stream_link: }
+            map_stream_link=${map_stream_link%, flv_pull_link:*}
+            map_flv_pull_link=${flv_channel#*, flv_pull_link: }
 
             chnls_channel_name+=("$map_channel_name")
             chnls_stream_link+=("${map_stream_link// /, }")
-        done < <($JQ_FILE -r '.channels | to_entries | map(select(.value.flv_status=="on")) | map("channel_name: \(.value.channel_name), stream_link: \(.value.stream_link)") | .[]' "$CHANNELS_FILE")
+            chnls_flv_pull_link+=("${map_flv_pull_link:-''}")
+        done < <($JQ_FILE -r '.channels | to_entries | map(select(.value.flv_status=="on")) | map("channel_name: \(.value.channel_name), stream_link: \(.value.stream_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
 
         if [ "$flv_count" -gt 0 ] 
         then
@@ -9406,7 +9592,15 @@ case "$cmd" in
 
             for((i=0;i<flv_count;i++));
             do
-                echo -e "  ${green}$((i+1)).$plain ${chnls_channel_name[i]} ${chnls_stream_link[i]}"
+                if [ "$i" -lt 9 ] 
+                then
+                    blank=" "
+                else
+                    blank=""
+                fi
+                chnl_flv_pull_link=${chnls_flv_pull_link[i]%\'}
+                chnl_flv_pull_link=${chnl_flv_pull_link#\'}
+                echo -e "  ${green}$((i+1)).$plain $blank${chnls_channel_name[i]}\n      源: ${chnls_stream_link[i]}\n      pull: ${chnl_flv_pull_link:-无}\n"
             done
         fi
 
@@ -9435,7 +9629,13 @@ case "$cmd" in
 
             for((i=0;i<hls_count;i++));
             do
-                echo -e "  ${green}$((i+1)).$plain ${chnls_channel_name[i]} ${chnls_stream_link[i]}"
+                if [ "$i" -lt 9 ] 
+                then
+                    blank=" "
+                else
+                    blank=""
+                fi
+                echo -e "  ${green}$((i+1)).$plain $blank${chnls_channel_name[i]}\n      源: ${chnls_stream_link[i]}\n"
             done
         fi
 
@@ -9515,7 +9715,7 @@ case "$cmd" in
 
                 echo && echo "因为是编译 nginx，耗时会很长，是否继续？[y/N]"
                 read -p "(默认: N): " nginx_install_yn
-                nginx_install_yn=${nginx_install_yn:-"N"}
+                nginx_install_yn=${nginx_install_yn:-N}
                 if [[ $nginx_install_yn == [Yy] ]] 
                 then
                     InstallNginx
@@ -9650,7 +9850,7 @@ case "$cmd" in
                 then
                     echo && echo "是否屏蔽所有阿里云ip段 [y/N]"
                     read -p "(默认: N): " block
-                    block=${block:-"N"}
+                    block=${block:-N}
                     if [[ $block == [Yy] ]] 
                     then
                         echo && echo "输入本机IP"
@@ -9733,7 +9933,7 @@ case "$cmd" in
                     else
                         echo && echo -e "$info flv 配置已添加，是否重启 Nginx ？[Y/n]"
                         read -p "(默认: Y): " restart_yn
-                        restart_yn=${restart_yn:-"Y"}
+                        restart_yn=${restart_yn:-Y}
                         if [[ $restart_yn == [Yy] ]] 
                         then
                             RestartNginx
@@ -9814,7 +10014,7 @@ $IPTV_ROOT/*.log {
                     CheckRelease
                     echo && echo "因为是编译 pdf2htmlEX，耗时会很长，是否继续？[y/N]"
                     read -p "(默认: N): " pdf2html_install_yn
-                    pdf2html_install_yn=${pdf2html_install_yn:-"N"}
+                    pdf2html_install_yn=${pdf2html_install_yn:-N}
                     if [[ $pdf2html_install_yn == [Yy] ]] 
                     then
                         InstallPdf2html
@@ -9902,7 +10102,7 @@ else
         if [ ! -e "$FFMPEG" ]
         then
             echo && read -p "尚未安装,是否现在安装？[y/N] (默认: N): " install_yn
-            install_yn=${install_yn:-"N"}
+            install_yn=${install_yn:-N}
             if [[ "$install_yn" == [Yy] ]]
             then
                 Install
@@ -9912,15 +10112,15 @@ else
         else
             GetDefault
             export FFMPEG
-            output_dir_name=${output_dir_name:-"$(RandOutputDirName)"}
+            output_dir_name=${output_dir_name:-$(RandOutputDirName)}
             output_dir_root="$LIVE_ROOT/$output_dir_name"
-            playlist_name=${playlist_name:-"$(RandPlaylistName)"}
+            playlist_name=${playlist_name:-$(RandPlaylistName)}
             export SEGMENT_DIRECTORY=${seg_dir_name:-}
-            seg_name=${seg_name:-"$playlist_name"}
-            seg_length=${seg_length:-"$d_seg_length"}
-            seg_count=${seg_count:-"$d_seg_count"}
-            export AUDIO_CODEC=${audio_codec:-"$d_audio_codec"}
-            export VIDEO_CODEC=${video_codec:-"$d_video_codec"}
+            seg_name=${seg_name:-$playlist_name}
+            seg_length=${seg_length:-$d_seg_length}
+            seg_count=${seg_count:-$d_seg_count}
+            export AUDIO_CODEC=${audio_codec:-$d_audio_codec}
+            export VIDEO_CODEC=${video_codec:-$d_video_codec}
             
             video_audio_shift=${video_audio_shift:-}
             v_or_a=${video_audio_shift%_*}
@@ -9932,8 +10132,8 @@ else
                 audio_shift=${video_audio_shift#*_}
             fi
 
-            quality=${quality:-"$d_quality"}
-            bitrates=${bitrates:-"$d_bitrates"}
+            quality=${quality:-$d_quality}
+            bitrates=${bitrates:-$d_bitrates}
             quality_command=""
             bitrates_command=""
 
@@ -9992,7 +10192,7 @@ else
                 encrypt_yn="yes"
             fi
 
-            key_name=${key_name:-"$playlist_name"}
+            key_name=${key_name:-$playlist_name}
 
             if [[ $stream_link == *".m3u8"* ]] 
             then
@@ -10008,7 +10208,7 @@ else
                 d_input_flags=${d_input_flags#${lead}}
             fi
 
-            input_flags=${input_flags:-"$d_input_flags"}
+            input_flags=${input_flags:-$d_input_flags}
             if [[ ${input_flags:0:1} == "'" ]] 
             then
                 input_flags=${input_flags%\'}
@@ -10030,7 +10230,8 @@ else
             fi
             export FFMPEG_FLAGS=$output_flags
 
-            channel_name=${channel_name:-"$playlist_name"}
+            channel_name=${channel_name:-$playlist_name}
+            sync_yn=$d_sync_yn
 
             [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
             from="command"
