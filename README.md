@@ -160,7 +160,8 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 
 -m  ffmpeg 额外的 INPUT FLAGS
     (默认：-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -nostats -nostdin -hide_banner -loglevel fatal)
-    如果是 hls 链接，需去除 -reconnect_at_eof 1
+    如果输入的直播源是 hls 链接，需去除 -reconnect_at_eof 1
+    如果输入的直播源是 rtmp 或本地链接，需去除 -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000
     如果要查看详细日志 fatal 改成 error / warning / ...
 -n  ffmpeg 额外的 OUTPUT FLAGS, 可以输入 omit 省略此选项
     (默认：-g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main)
