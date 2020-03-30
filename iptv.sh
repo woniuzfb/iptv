@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-sh_ver="1.9.0"
+sh_ver="1.9.1"
 SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
@@ -482,7 +482,8 @@ Install()
             --arg audio_codec "aac" --arg video_audio_shift '' \
             --arg quality '' --arg bitrates "900-1280x720" \
             --arg const "no" --arg encrypt "no" \
-            --arg key_name '' --arg input_flags "-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -nostats -nostdin -hide_banner -loglevel fatal" \
+            --arg keyinfo_name '' --arg key_name '' \
+            --arg input_flags "-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -timeout 2000000000 -y -nostats -nostdin -hide_banner -loglevel fatal" \
             --arg output_flags "-g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main" --arg sync "yes" \
             --arg sync_file '' --arg sync_index "data:0:channels" \
             --arg sync_pairs "chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live" --arg schedule_file '' \
@@ -506,6 +507,7 @@ Install()
                 bitrates: $bitrates,
                 const: $const,
                 encrypt: $encrypt,
+                keyinfo_name: $keyinfo_name,
                 key_name: $key_name,
                 input_flags: $input_flags,
                 output_flags: $output_flags,
@@ -549,7 +551,7 @@ Uninstall()
     echo "确定要 卸载此脚本以及产生的全部文件？[y/N]"
     read -p "(默认: N): " uninstall_yn
     uninstall_yn=${uninstall_yn:-N}
-    if [[ "$uninstall_yn" == [Yy] ]]
+    if [[ $uninstall_yn == [Yy] ]]
     then
         MonitorStop
         if crontab -l | grep -q "$LOGROTATE_CONFIG" 2> /dev/null
@@ -730,7 +732,10 @@ GetDefault()
         fi
         d_encrypt_yn=${d#*, encrypt: }
         d_encrypt_yn=${d_encrypt_yn%, key_name:*}
-        d_encrypt_yn=${d_encrypt_yn%, key_name:*}
+        d_encrypt_yn=${d_encrypt_yn%, keyinfo_name:*}
+        d_keyinfo_name=${d#*, keyinfo_name: }
+        d_keyinfo_name=${d_keyinfo_name%, key_name:*}
+        [ "$d_keyinfo_name" == null ] && d_keyinfo_name=""
         d_key_name=${d#*, key_name: }
         d_key_name=${d_key_name%, input_flags:*}
         if [ "$d_encrypt_yn" == "no" ] 
@@ -739,7 +744,6 @@ GetDefault()
         else
             d_encrypt_text="Y"
         fi
-        d_key_name_text=${d_key_name:-跟m3u8名称相同}
         d_input_flags=${d#*, input_flags: }
         d_input_flags=${d_input_flags%, output_flags:*}
         d_output_flags=${d#*, output_flags: }
@@ -833,7 +837,7 @@ GetDefault()
         fi
         d_version=${d#*, version: }
         d_version=${d_version%\"}
-    done < <($JQ_FILE 'to_entries | map(select(.key=="default")) | map("playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), schedule_file: \(.value.schedule_file), flv_delay_seconds: \(.value.flv_delay_seconds), flv_restart_nums: \(.value.flv_restart_nums), hls_delay_seconds: \(.value.hls_delay_seconds), hls_min_bitrates: \(.value.hls_min_bitrates), hls_max_seg_size: \(.value.hls_max_seg_size), hls_restart_nums: \(.value.hls_restart_nums), anti_ddos_port: \(.value.anti_ddos_port), anti_ddos_seconds: \(.value.anti_ddos_seconds), anti_ddos_level: \(.value.anti_ddos_level), anti_leech: \(.value.anti_leech), anti_leech_restart_nums: \(.value.anti_leech_restart_nums), anti_leech_restart_flv_changes: \(.value.anti_leech_restart_flv_changes), anti_leech_restart_hls_changes: \(.value.anti_leech_restart_hls_changes), version: \(.value.version)") | .[]' "$CHANNELS_FILE")
+    done < <($JQ_FILE 'to_entries | map(select(.key=="default")) | map("playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), keyinfo_name: \(.value.keyinfo_name), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), schedule_file: \(.value.schedule_file), flv_delay_seconds: \(.value.flv_delay_seconds), flv_restart_nums: \(.value.flv_restart_nums), hls_delay_seconds: \(.value.hls_delay_seconds), hls_min_bitrates: \(.value.hls_min_bitrates), hls_max_seg_size: \(.value.hls_max_seg_size), hls_restart_nums: \(.value.hls_restart_nums), anti_ddos_port: \(.value.anti_ddos_port), anti_ddos_seconds: \(.value.anti_ddos_seconds), anti_ddos_level: \(.value.anti_ddos_level), anti_leech: \(.value.anti_leech), anti_leech_restart_nums: \(.value.anti_leech_restart_nums), anti_leech_restart_flv_changes: \(.value.anti_leech_restart_flv_changes), anti_leech_restart_hls_changes: \(.value.anti_leech_restart_hls_changes), version: \(.value.version)") | .[]' "$CHANNELS_FILE")
     #done < <($JQ_FILE '.default | to_entries | map([.key,.value]|join(": ")) | join(", ")' "$CHANNELS_FILE")
 }
 
@@ -860,6 +864,7 @@ GetChannelsInfo()
     chnls_bitrates=()
     chnls_const=()
     chnls_encrypt=()
+    chnls_keyinfo_name=()
     chnls_key_name=()
     chnls_input_flags=()
     chnls_output_flags=()
@@ -911,7 +916,10 @@ GetChannelsInfo()
         map_const=${channel#*, const: }
         map_const=${map_const%, encrypt:*}
         map_encrypt=${channel#*, encrypt: }
-        map_encrypt=${map_encrypt%, key_name:*}
+        map_encrypt=${map_encrypt%, keyinfo_name:*}
+        map_keyinfo_name=${channel#*, keyinfo_name: }
+        map_keyinfo_name=${map_keyinfo_name%, key_name:*}
+        [ "$map_keyinfo_name" == null ] && map_keyinfo_name=$(RandStr)
         map_key_name=${channel#*, key_name: }
         map_key_name=${map_key_name%, input_flags:*}
         map_input_flags=${channel#*, input_flags: }
@@ -960,6 +968,7 @@ GetChannelsInfo()
         chnls_bitrates+=("$map_bitrates")
         chnls_const+=("$map_const")
         chnls_encrypt+=("$map_encrypt")
+        chnls_keyinfo_name+=("$map_keyinfo_name")
         chnls_key_name+=("$map_key_name")
         chnls_input_flags+=("$map_input_flags")
         chnls_output_flags+=("$map_output_flags")
@@ -972,7 +981,7 @@ GetChannelsInfo()
         chnls_flv_push_link+=("$map_flv_push_link")
         chnls_flv_pull_link+=("$map_flv_pull_link")
         
-    done < <($JQ_FILE '.channels | to_entries | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), live: \(.value.live), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
+    done < <($JQ_FILE '.channels | to_entries | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), live: \(.value.live), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), keyinfo_name: \(.value.keyinfo_name), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
 
     return 0
 }
@@ -1016,14 +1025,14 @@ ListChannels()
         then
             while IFS= read -r chnls_br
             do
-                if [[ "$chnls_br" == *"-"* ]]
+                if [[ $chnls_br == *"-"* ]]
                 then
                     chnls_br_a=${chnls_br%-*}
                     chnls_br_b=" 分辨率: ${chnls_br#*-}"
                     chnls_quality_text="${chnls_quality_text}[ -maxrate ${chnls_br_a}k -bufsize ${chnls_br_a}k${chnls_br_b} ] "
                     chnls_bitrates_text="${chnls_bitrates_text}[ 比特率 ${chnls_br_a}k${chnls_br_b}${chnls_const_index_text} ] "
                     chnls_playlist_file_text="$chnls_playlist_file_text$chnls_output_dir_root/${chnls_playlist_name[index]}_$chnls_br_a.m3u8 "
-                elif [[ "$chnls_br" == *"x"* ]] 
+                elif [[ $chnls_br == *"x"* ]] 
                 then
                     chnls_quality_text="${chnls_quality_text}[ 分辨率: $chnls_br ] "
                     chnls_bitrates_text="${chnls_bitrates_text}[ 分辨率: $chnls_br${chnls_const_index_text} ] "
@@ -1214,7 +1223,9 @@ GetChannelInfo()
             chnl_const_text=" 固定频率:是"
         fi
         chnl_encrypt_yn=${channel#*, encrypt: }
-        chnl_encrypt_yn=${chnl_encrypt_yn%, key_name:*}
+        chnl_encrypt_yn=${chnl_encrypt_yn%, keyinfo_name:*}
+        chnl_keyinfo_name=${channel#*, keyinfo_name: }
+        chnl_keyinfo_name=${chnl_keyinfo_name%, key_name:*}
         chnl_key_name=${channel#*, key_name: }
         chnl_key_name=${chnl_key_name%, input_flags:*}
         if [ "$chnl_encrypt_yn" == "no" ]
@@ -1274,14 +1285,14 @@ GetChannelInfo()
             then
                 while IFS= read -r chnl_br
                 do
-                    if [[ "$chnl_br" == *"-"* ]]
+                    if [[ $chnl_br == *"-"* ]]
                     then
                         chnl_br_a=${chnl_br%-*}
                         chnl_br_b=" 分辨率: ${chnl_br#*-}"
                         chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br_a}k -bufsize ${chnl_br_a}k${chnl_br_b} ] "
                         chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br_a}k${chnl_br_b}${chnl_const_text} ] "
                         chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br_a.m3u8$plain "
-                    elif [[ "$chnl_br" == *"x"* ]] 
+                    elif [[ $chnl_br == *"x"* ]] 
                     then
                         chnl_crf_text="${chnl_crf_text}[ 分辨率: $chnl_br ] "
                         chnl_nocrf_text="${chnl_nocrf_text}[ 分辨率: $chnl_br${chnl_const_text} ] "
@@ -1341,7 +1352,7 @@ GetChannelInfo()
                 chnl_playlist_link_text=${chnl_playlist_link_text//_master.m3u8/.m3u8}
             fi
         fi
-    done < <($JQ_FILE '.channels | to_entries | map(select('"$select"')) | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), live: \(.value.live), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
+    done < <($JQ_FILE '.channels | to_entries | map(select('"$select"')) | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), live: \(.value.live), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), keyinfo_name: \(.value.keyinfo_name), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
 
     if [ "$found" == 0 ] && [ -z "${monitor:-}" ]
     then
@@ -1477,7 +1488,7 @@ SetIsHls()
     echo -e "$tip 如果直播链接重定向至 .m3u8 地址，请选择 Y" && echo
     read -p "(默认: N): " is_hls_yn
     is_hls_yn=${is_hls_yn:-N}
-    if [[ "$is_hls_yn" == [Yy] ]]
+    if [[ $is_hls_yn == [Yy] ]]
     then
         is_hls=1
         is_hls_text="是"
@@ -1499,7 +1510,7 @@ SetLive()
     fi
     read -p "(默认: Y): " live_yn
     live_yn=${live_yn:-Y}
-    if [[ "$live_yn" == [Yy] ]]
+    if [[ $live_yn == [Yy] ]]
     then
         live="-l"
         live_yn="yes"
@@ -1649,7 +1660,7 @@ SetAudioCodec()
 
 SetQuality()
 {
-    echo -e "请输入输出视频质量[1-63]"
+    echo -e "请输入输出视频质量[0-63]"
     echo -e "$tip 改变CRF，数字越大越视频质量越差，如果设置CRF则无法用比特率控制视频质量"
     while read -p "(默认: ${d_quality:-不设置}): " quality
     do
@@ -1659,14 +1670,14 @@ SetQuality()
                 break
             ;;
             *[!0-9]*)
-                echo -e "$error 请输入正确的数字(大于0,小于等于63)或直接回车 "
+                echo -e "$error 请输入正确的数字(大于等于0,小于等于63)或直接回车 "
             ;;
             *)
-                if [ "$quality" -gt 0 ] && [ "$quality" -lt 63 ]
+                if [ "$quality" -ge 0 ] && [ "$quality" -lt 63 ]
                 then
                     break
                 else
-                    echo -e "$error 请输入正确的数字(大于0,小于等于63)或直接回车 "
+                    echo -e "$error 请输入正确的数字(大于等于0,小于等于63)或直接回车 "
                 fi
             ;;
         esac
@@ -1705,7 +1716,7 @@ SetConst()
     echo "是否使用固定码率[y/N]"
     read -p "(默认: $d_const_text): " const_yn
     const_yn=${const_yn:-$d_const_text}
-    if [[ "$const_yn" == [Yy] ]]
+    if [[ $const_yn == [Yy] ]]
     then
         const="-C"
         const_yn="yes"
@@ -1723,7 +1734,7 @@ SetEncrypt()
     echo "是否加密段[y/N]"
     read -p "(默认: $d_encrypt_text): " encrypt_yn
     encrypt_yn=${encrypt_yn:-$d_encrypt_text}
-    if [[ "$encrypt_yn" == [Yy] ]]
+    if [[ $encrypt_yn == [Yy] ]]
     then
         encrypt="-e"
         encrypt_yn="yes"
@@ -1736,24 +1747,22 @@ SetEncrypt()
     echo && echo -e "	加密段: $green $encrypt_text $plain" && echo 
 }
 
+SetKeyInfoName()
+{
+    echo "请输入 keyinfo 名称"
+    read -p "(默认: ${d_keyinfo_name:-随机}): " keyinfo_name
+    keyinfo_name=${keyinfo_name:-$d_keyinfo_name}
+    keyinfo_name=${keyinfo_name:-$(RandStr)}
+    echo && echo -e "	keyinfo 名称: $green $keyinfo_name $plain" && echo 
+}
+
 SetKeyName()
 {
-    echo "请输入key名称"
-    read -p "(默认: $d_key_name_text): " key_name
-    if [ -z "$key_name" ] 
-    then
-        if [ -z "$d_key_name" ] 
-        then
-            if [ -z "${playlist_name:-}" ] 
-            then
-                playlist_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').playlist_name' "$CHANNELS_FILE")
-            fi
-            key_name=$playlist_name
-        else
-            key_name=$d_key_name
-        fi
-    fi
-    echo && echo -e "	key名称: $green $key_name $plain" && echo 
+    echo "请输入 key 名称"
+    read -p "(默认: ${d_key_name:-随机}): " key_name
+    key_name=${key_name:-$d_key_name}
+    key_name=${key_name:-$(RandStr)}
+    echo && echo -e "	key 名称: $green $key_name $plain" && echo 
 }
 
 SetInputFlags()
@@ -1869,7 +1878,7 @@ SetSync()
     echo "是否启用 sync ? [Y/n]"
     read -p "(默认: $d_sync_text): " sync_yn
     sync_yn=${sync_yn:-$d_sync_text}
-    if [[ "$sync_yn" == [Yy] ]]
+    if [[ $sync_yn == [Yy] ]]
     then
         sync_yn="yes"
         sync_text="$green启用$plain"
@@ -1959,7 +1968,8 @@ FlvStreamCreatorWithShift()
                 --arg video_codec "$VIDEO_CODEC" --arg audio_codec "$AUDIO_CODEC" \
                 --arg video_audio_shift "$video_audio_shift" --arg quality "$quality" \
                 --arg bitrates "$bitrates" --arg const "$const_yn" \
-                --arg encrypt "$encrypt_yn" --arg key_name "$key_name" \
+                --arg encrypt "$encrypt_yn" --arg keyinfo_name "$keyinfo_name" \
+                --arg key_name "$key_name" \
                 --arg input_flags "$FFMPEG_INPUT_FLAGS" --arg output_flags "$FFMPEG_FLAGS" \
                 --arg channel_name "$channel_name" --arg sync "$sync_yn" \
                 --arg sync_file "$sync_file" --arg sync_index "$sync_index" \
@@ -1983,6 +1993,7 @@ FlvStreamCreatorWithShift()
                     bitrates: $bitrates,
                     const: $const,
                     encrypt: $encrypt,
+                    keyinfo_name: $keyinfo_name,
                     key_name: $key_name,
                     input_flags: $input_flags,
                     output_flags: $output_flags,
@@ -2008,7 +2019,7 @@ FlvStreamCreatorWithShift()
                 if [ -n "$bitrates" ] 
                 then
                     bitrates=${bitrates%%,*}
-                    if [[ "$bitrates" == *"-"* ]] 
+                    if [[ $bitrates == *"-"* ]] 
                     then
                         resolution=${bitrates#*-}
                         resolution="-vf scale=${resolution//x/:}"
@@ -2019,7 +2030,7 @@ FlvStreamCreatorWithShift()
                         else
                             bitrates_command="-b:v ${bitrates}k"
                         fi
-                    elif [[ "$bitrates" == *"x"* ]] 
+                    elif [[ $bitrates == *"x"* ]] 
                     then
                         resolution=$bitrates
                         resolution="-vf scale=${resolution//x/:}"
@@ -2035,7 +2046,7 @@ FlvStreamCreatorWithShift()
             elif [ -n "$bitrates" ] 
             then
                 bitrates=${bitrates%%,*}
-                if [[ "$bitrates" == *"-"* ]] 
+                if [[ $bitrates == *"-"* ]] 
                 then
                     resolution=${bitrates#*-}
                     resolution="-vf scale=${resolution//x/:}"
@@ -2045,7 +2056,7 @@ FlvStreamCreatorWithShift()
                     then
                     quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
                     fi
-                elif [[ "$bitrates" == *"x"* ]] 
+                elif [[ $bitrates == *"x"* ]] 
                 then
                     resolution=$bitrates
                     resolution="-vf scale=${resolution//x/:}"
@@ -2071,7 +2082,7 @@ FlvStreamCreatorWithShift()
                 map_command=""
             fi
 
-            if [[ "$FFMPEG_FLAGS" == *"-vf "* ]] && [ -n "$resolution" ]
+            if [[ $FFMPEG_FLAGS == *"-vf "* ]] && [ -n "$resolution" ]
             then
                 FFMPEG_FLAGS_A=${FFMPEG_FLAGS%-vf *}
                 FFMPEG_FLAGS_B=${FFMPEG_FLAGS#*-vf }
@@ -2112,7 +2123,7 @@ FlvStreamCreatorWithShift()
                 if [ -n "$chnl_bitrates" ] 
                 then
                     chnl_bitrates=${chnl_bitrates%%,*}
-                    if [[ "$chnl_bitrates" == *"-"* ]] 
+                    if [[ $chnl_bitrates == *"-"* ]] 
                     then
                         resolution=${chnl_bitrates#*-}
                         resolution="-vf scale=${resolution//x/:}"
@@ -2123,7 +2134,7 @@ FlvStreamCreatorWithShift()
                         else
                             chnl_bitrates_command="-b:v ${chnl_bitrates}k"
                         fi
-                    elif [[ "$chnl_bitrates" == *"x"* ]] 
+                    elif [[ $chnl_bitrates == *"x"* ]] 
                     then
                         resolution=$chnl_bitrates
                         resolution="-vf scale=${resolution//x/:}"
@@ -2139,7 +2150,7 @@ FlvStreamCreatorWithShift()
             elif [ -n "$chnl_bitrates" ] 
             then
                 chnl_bitrates=${chnl_bitrates%%,*}
-                if [[ "$chnl_bitrates" == *"-"* ]] 
+                if [[ $chnl_bitrates == *"-"* ]] 
                 then
                     resolution=${chnl_bitrates#*-}
                     resolution="-vf scale=${resolution//x/:}"
@@ -2149,7 +2160,7 @@ FlvStreamCreatorWithShift()
                     then
                     chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
                     fi
-                elif [[ "$chnl_bitrates" == *"x"* ]] 
+                elif [[ $chnl_bitrates == *"x"* ]] 
                 then
                     resolution=$chnl_bitrates
                     resolution="-vf scale=${resolution//x/:}"
@@ -2175,7 +2186,7 @@ FlvStreamCreatorWithShift()
                 map_command=""
             fi
 
-            if [[ "$FFMPEG_FLAGS" == *"-vf "* ]] && [ -n "$resolution" ]
+            if [[ $FFMPEG_FLAGS == *"-vf "* ]] && [ -n "$resolution" ]
             then
                 FFMPEG_FLAGS_A=${FFMPEG_FLAGS%-vf *}
                 FFMPEG_FLAGS_B=${FFMPEG_FLAGS#*-vf }
@@ -2209,7 +2220,8 @@ FlvStreamCreatorWithShift()
                 --arg video_codec "$VIDEO_CODEC" --arg audio_codec "$AUDIO_CODEC" \
                 --arg video_audio_shift "$video_audio_shift" --arg quality "$quality" \
                 --arg bitrates "$bitrates" --arg const "$const_yn" \
-                --arg encrypt "$encrypt_yn" --arg key_name "$key_name" \
+                --arg encrypt "$encrypt_yn" --arg keyinfo_name "$keyinfo_name" \
+                --arg key_name "$key_name" \
                 --arg input_flags "$FFMPEG_INPUT_FLAGS" --arg output_flags "$FFMPEG_FLAGS" \
                 --arg channel_name "$channel_name" --arg sync "$sync_yn" \
                 --arg sync_file '' --arg sync_index '' \
@@ -2259,7 +2271,7 @@ FlvStreamCreatorWithShift()
                 if [ -n "$bitrates" ] 
                 then
                     bitrates=${bitrates%%,*}
-                    if [[ "$bitrates" == *"-"* ]] 
+                    if [[ $bitrates == *"-"* ]] 
                     then
                         resolution=${bitrates#*-}
                         resolution="-vf scale=${resolution//x/:}"
@@ -2270,7 +2282,7 @@ FlvStreamCreatorWithShift()
                         else
                             bitrates_command="-b:v ${bitrates}k"
                         fi
-                    elif [[ "$bitrates" == *"x"* ]] 
+                    elif [[ $bitrates == *"x"* ]] 
                     then
                         resolution=$bitrates
                         resolution="-vf scale=${resolution//x/:}"
@@ -2286,7 +2298,7 @@ FlvStreamCreatorWithShift()
             elif [ -n "$bitrates" ] 
             then
                 bitrates=${bitrates%%,*}
-                if [[ "$bitrates" == *"-"* ]] 
+                if [[ $bitrates == *"-"* ]] 
                 then
                     resolution=${bitrates#*-}
                     resolution="-vf scale=${resolution//x/:}"
@@ -2296,7 +2308,7 @@ FlvStreamCreatorWithShift()
                     then
                     quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
                     fi
-                elif [[ "$bitrates" == *"x"* ]] 
+                elif [[ $bitrates == *"x"* ]] 
                 then
                     resolution=$bitrates
                     resolution="-vf scale=${resolution//x/:}"
@@ -2322,7 +2334,7 @@ FlvStreamCreatorWithShift()
                 map_command=""
             fi
 
-            if [[ "$FFMPEG_FLAGS" == *"-vf "* ]] && [ -n "$resolution" ]
+            if [[ $FFMPEG_FLAGS == *"-vf "* ]] && [ -n "$resolution" ]
             then
                 FFMPEG_FLAGS_A=${FFMPEG_FLAGS%-vf *}
                 FFMPEG_FLAGS_B=${FFMPEG_FLAGS#*-vf }
@@ -2349,7 +2361,7 @@ FlvStreamCreatorWithShift()
     esac
 }
 
-HlsStreamCreatorWithShift()
+HlsStreamCreatorPlus()
 {
     trap '' HUP INT QUIT TERM
     trap 'MonitorError $LINENO' ERR
@@ -2378,7 +2390,8 @@ HlsStreamCreatorWithShift()
                 --arg video_codec "$VIDEO_CODEC" --arg audio_codec "$AUDIO_CODEC" \
                 --arg video_audio_shift "$video_audio_shift" --arg quality "$quality" \
                 --arg bitrates "$bitrates" --arg const "$const_yn" \
-                --arg encrypt "$encrypt_yn" --arg key_name "$key_name" \
+                --arg encrypt "$encrypt_yn" --arg keyinfo_name "$keyinfo_name" \
+                --arg key_name "$key_name" \
                 --arg input_flags "$FFMPEG_INPUT_FLAGS" --arg output_flags "$FFMPEG_FLAGS" \
                 --arg channel_name "$channel_name" --arg sync "$sync_yn" \
                 --arg sync_file "$sync_file" --arg sync_index "$sync_index" \
@@ -2402,6 +2415,7 @@ HlsStreamCreatorWithShift()
                     bitrates: $bitrates,
                     const: $const,
                     encrypt: $encrypt,
+                    keyinfo_name: $keyinfo_name,
                     key_name: $key_name,
                     input_flags: $input_flags,
                     output_flags: $output_flags,
@@ -2422,14 +2436,14 @@ HlsStreamCreatorWithShift()
             SyncFile
 
             resolution=""
-            output_name="${playlist_name}_%05d.ts"
+            output_name="${seg_name}_%05d"
 
             if [ -z "$quality" ]
             then
                 if [ -n "$bitrates" ] 
                 then
                     bitrates=${bitrates%%,*}
-                    if [[ "$bitrates" == *"-"* ]] 
+                    if [[ $bitrates == *"-"* ]] 
                     then
                         resolution=${bitrates#*-}
                         resolution="-vf scale=${resolution//x/:}"
@@ -2440,8 +2454,8 @@ HlsStreamCreatorWithShift()
                         else
                             bitrates_command="-b:v ${bitrates}k"
                         fi
-                        output_name="${playlist_name}_${bitrates}_%05d.ts"
-                    elif [[ "$bitrates" == *"x"* ]] 
+                        output_name="${seg_name}_${bitrates}_%05d"
+                    elif [[ $bitrates == *"x"* ]] 
                     then
                         resolution=$bitrates
                         resolution="-vf scale=${resolution//x/:}"
@@ -2452,13 +2466,13 @@ HlsStreamCreatorWithShift()
                         else
                             bitrates_command="-b:v ${bitrates}k"
                         fi
-                        output_name="${playlist_name}_${bitrates}_%05d.ts"
+                        output_name="${seg_name}_${bitrates}_%05d"
                     fi
                 fi
             elif [ -n "$bitrates" ] 
             then
                 bitrates=${bitrates%%,*}
-                if [[ "$bitrates" == *"-"* ]] 
+                if [[ $bitrates == *"-"* ]] 
                 then
                     resolution=${bitrates#*-}
                     resolution="-vf scale=${resolution//x/:}"
@@ -2468,8 +2482,8 @@ HlsStreamCreatorWithShift()
                     then
                     quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
                     fi
-                    output_name="${playlist_name}_${bitrates}_%05d.ts"
-                elif [[ "$bitrates" == *"x"* ]] 
+                    output_name="${seg_name}_${bitrates}_%05d"
+                elif [[ $bitrates == *"x"* ]] 
                 then
                     resolution=$bitrates
                     resolution="-vf scale=${resolution//x/:}"
@@ -2480,7 +2494,7 @@ HlsStreamCreatorWithShift()
                     then
                     quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
                     fi
-                    output_name="${playlist_name}_${bitrates}_%05d.ts"
+                    output_name="${seg_name}_${bitrates}_%05d"
                 fi
             else
                 quality_command="-crf $quality"
@@ -2496,7 +2510,7 @@ HlsStreamCreatorWithShift()
                 map_command=""
             fi
 
-            if [[ "$FFMPEG_FLAGS" == *"-vf "* ]] && [ -n "$resolution" ]
+            if [[ $FFMPEG_FLAGS == *"-vf "* ]] && [ -n "$resolution" ]
             then
                 FFMPEG_FLAGS_A=${FFMPEG_FLAGS%-vf *}
                 FFMPEG_FLAGS_B=${FFMPEG_FLAGS#*-vf }
@@ -2506,11 +2520,33 @@ HlsStreamCreatorWithShift()
                 resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
             fi
 
-            $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
-            -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-            -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
-            -segment_time "$seg_length" -segment_format mpeg_ts -segment_list_flags +live \
-            -segment_list_size "$seg_count" -segment_wrap $((seg_count * 2)) $FFMPEG_FLAGS "$output_dir_root/$output_name" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
+            if [ "$live_yn" == "yes" ] 
+            then
+                live_command="-segment_list_flags +live"
+                seg_count_command="-segment_list_size $seg_count -segment_wrap $((seg_count * 2))"
+                hls_flags_command="-hls_flags periodic_rekey+delete_segments"
+            else
+                live_command=""
+                seg_count_command=""
+                hls_flags_command="-hls_flags periodic_rekey"
+            fi
+
+            if [ "$encrypt_yn" == "yes" ]
+            then
+                openssl rand 16 > "$output_dir_root/$key_name.key"
+                echo -e "$key_name.key\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
+                $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+                -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
+                -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$seg_length" \
+                -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
+                $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_name/$output_name.ts" "$output_dir_root/$playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
+            else
+                $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+                -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
+                -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
+                -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
+                $seg_count_command $FFMPEG_FLAGS "$output_dir_root/$seg_dir_name/$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
+            fi
 
             JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$pid"')|.status)="off"'
 
@@ -2529,19 +2565,20 @@ HlsStreamCreatorWithShift()
             |(.channels[]|select(.pid=='"$new_pid"')|.status)="on"
             |(.channels[]|select(.pid=='"$new_pid"')|.stream_link)="'"$chnl_stream_links"'"
             |(.channels[]|select(.pid=='"$new_pid"')|.playlist_name)="'"$chnl_playlist_name"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.seg_name)="'"$chnl_seg_name"'"'
+            |(.channels[]|select(.pid=='"$new_pid"')|.seg_name)="'"$chnl_seg_name"'"
+            |(.channels[]|select(.pid=='"$new_pid"')|.key_name)="'"$chnl_key_name"'"'
             action="start"
             SyncFile
 
             resolution=""
-            output_name="${chnl_playlist_name}_%05d.ts"
+            output_name="${chnl_seg_name}_%05d"
 
             if [ -z "$chnl_quality" ]
             then
                 if [ -n "$chnl_bitrates" ] 
                 then
                     chnl_bitrates=${chnl_bitrates%%,*}
-                    if [[ "$chnl_bitrates" == *"-"* ]] 
+                    if [[ $chnl_bitrates == *"-"* ]] 
                     then
                         resolution=${chnl_bitrates#*-}
                         resolution="-vf scale=${resolution//x/:}"
@@ -2552,8 +2589,8 @@ HlsStreamCreatorWithShift()
                         else
                             chnl_bitrates_command="-b:v ${chnl_bitrates}k"
                         fi
-                        output_name="${chnl_playlist_name}_${chnl_bitrates}_%05d.ts"
-                    elif [[ "$chnl_bitrates" == *"x"* ]] 
+                        output_name="${chnl_seg_name}_${chnl_bitrates}_%05d"
+                    elif [[ $chnl_bitrates == *"x"* ]] 
                     then
                         resolution=$chnl_bitrates
                         resolution="-vf scale=${resolution//x/:}"
@@ -2564,13 +2601,13 @@ HlsStreamCreatorWithShift()
                         else
                             chnl_bitrates_command="-b:v ${chnl_bitrates}k"
                         fi
-                        output_name="${chnl_playlist_name}_${chnl_bitrates}_%05d.ts"
+                        output_name="${chnl_seg_name}_${chnl_bitrates}_%05d"
                     fi
                 fi
             elif [ -n "$chnl_bitrates" ] 
             then
                 chnl_bitrates=${chnl_bitrates%%,*}
-                if [[ "$chnl_bitrates" == *"-"* ]] 
+                if [[ $chnl_bitrates == *"-"* ]] 
                 then
                     resolution=${chnl_bitrates#*-}
                     resolution="-vf scale=${resolution//x/:}"
@@ -2580,8 +2617,8 @@ HlsStreamCreatorWithShift()
                     then
                     chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
                     fi
-                    output_name="${chnl_playlist_name}_${chnl_bitrates}_%05d.ts"
-                elif [[ "$chnl_bitrates" == *"x"* ]] 
+                    output_name="${chnl_seg_name}_${chnl_bitrates}_%05d"
+                elif [[ $chnl_bitrates == *"x"* ]] 
                 then
                     resolution=$chnl_bitrates
                     resolution="-vf scale=${resolution//x/:}"
@@ -2592,7 +2629,7 @@ HlsStreamCreatorWithShift()
                     then
                     chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
                     fi
-                    output_name="${chnl_playlist_name}_${chnl_bitrates}_%05d.ts"
+                    output_name="${chnl_seg_name}_${chnl_bitrates}_%05d"
                 fi
             else
                 chnl_quality_command="-crf $chnl_quality"
@@ -2612,12 +2649,14 @@ HlsStreamCreatorWithShift()
             then
                 chnl_live_command="-segment_list_flags +live"
                 chnl_seg_count_command="-segment_list_size $chnl_seg_count -segment_wrap $((chnl_seg_count * 2))"
+                chnl_hls_flags_command="-hls_flags periodic_rekey+delete_segments"
             else
                 chnl_live_command=""
                 chnl_seg_count_command=""
+                chnl_hls_flags_command="-hls_flags periodic_rekey"
             fi
 
-            if [[ "$FFMPEG_FLAGS" == *"-vf "* ]] && [ -n "$resolution" ]
+            if [[ $FFMPEG_FLAGS == *"-vf "* ]] && [ -n "$resolution" ]
             then
                 FFMPEG_FLAGS_A=${FFMPEG_FLAGS%-vf *}
                 FFMPEG_FLAGS_B=${FFMPEG_FLAGS#*-vf }
@@ -2627,11 +2666,22 @@ HlsStreamCreatorWithShift()
                 resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
             fi
 
-            $FFMPEG $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
-            -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
-            -threads 0 -flags -global_header -f segment -segment_list "$chnl_output_dir_root/$chnl_playlist_name.m3u8" \
-            -segment_time "$chnl_seg_length" -segment_format mpeg_ts $chnl_live_command \
-            $chnl_seg_count_command $FFMPEG_FLAGS "$chnl_output_dir_root/$output_name" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" || true
+            if [ "$chnl_encrypt_yn" == "yes" ] 
+            then
+                openssl rand 16 > "$chnl_output_dir_root/$chnl_key_name.key"
+                echo -e "$chnl_key_name.key\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
+                $FFMPEG $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
+                -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
+                -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$chnl_seg_length" \
+                -hls_list_size $chnl_seg_count -hls_delete_threshold $chnl_seg_count -hls_key_info_file "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo" \
+                $chnl_hls_flags_command -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_name/$output_name.ts" "$chnl_output_dir_root/$chnl_playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" || true
+            else
+                $FFMPEG $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
+                -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
+                -threads 0 -flags -global_header -f segment -segment_list "$chnl_output_dir_root/$chnl_playlist_name.m3u8" \
+                -segment_time "$chnl_seg_length" -segment_format mpeg_ts $chnl_live_command \
+                $chnl_seg_count_command $FFMPEG_FLAGS "$chnl_output_dir_root/$chnl_seg_dir_name/$output_name.ts" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" || true
+            fi
 
             JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$new_pid"')|.status)="off"'
 
@@ -2654,7 +2704,8 @@ HlsStreamCreatorWithShift()
                 --arg video_codec "$VIDEO_CODEC" --arg audio_codec "$AUDIO_CODEC" \
                 --arg video_audio_shift "$video_audio_shift" --arg quality "$quality" \
                 --arg bitrates "$bitrates" --arg const "$const_yn" \
-                --arg encrypt "$encrypt_yn" --arg key_name "$key_name" \
+                --arg encrypt "$encrypt_yn" --arg keyinfo_name "$keyinfo_name" \
+                --arg key_name "$key_name" \
                 --arg input_flags "$FFMPEG_INPUT_FLAGS" --arg output_flags "$FFMPEG_FLAGS" \
                 --arg channel_name "$channel_name" --arg sync "$sync_yn" \
                 --arg sync_file '' --arg sync_index '' \
@@ -2678,6 +2729,7 @@ HlsStreamCreatorWithShift()
                     bitrates: $bitrates,
                     const: $const,
                     encrypt: $encrypt,
+                    keyinfo_name: $keyinfo_name,
                     key_name: $key_name,
                     input_flags: $input_flags,
                     output_flags: $output_flags,
@@ -2698,14 +2750,14 @@ HlsStreamCreatorWithShift()
             SyncFile
 
             resolution=""
-            output_name="${playlist_name}_%05d.ts"
+            output_name="${seg_name}_%05d"
 
             if [ -z "$quality" ]
             then
                 if [ -n "$bitrates" ] 
                 then
                     bitrates=${bitrates%%,*}
-                    if [[ "$bitrates" == *"-"* ]] 
+                    if [[ $bitrates == *"-"* ]] 
                     then
                         resolution=${bitrates#*-}
                         resolution="-vf scale=${resolution//x/:}"
@@ -2716,8 +2768,8 @@ HlsStreamCreatorWithShift()
                         else
                             bitrates_command="-b:v ${bitrates}k"
                         fi
-                        output_name="${playlist_name}_${bitrates}_%05d.ts"
-                    elif [[ "$bitrates" == *"x"* ]] 
+                        output_name="${seg_name}_${bitrates}_%05d"
+                    elif [[ $bitrates == *"x"* ]] 
                     then
                         resolution=$bitrates
                         resolution="-vf scale=${resolution//x/:}"
@@ -2728,13 +2780,13 @@ HlsStreamCreatorWithShift()
                         else
                             bitrates_command="-b:v ${bitrates}k"
                         fi
-                        output_name="${playlist_name}_${bitrates}_%05d.ts"
+                        output_name="${seg_name}_${bitrates}_%05d"
                     fi
                 fi
             elif [ -n "$bitrates" ] 
             then
                 bitrates=${bitrates%%,*}
-                if [[ "$bitrates" == *"-"* ]] 
+                if [[ $bitrates == *"-"* ]] 
                 then
                     resolution=${bitrates#*-}
                     resolution="-vf scale=${resolution//x/:}"
@@ -2744,8 +2796,8 @@ HlsStreamCreatorWithShift()
                     then
                     quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
                     fi
-                    output_name="${playlist_name}_${bitrates}_%05d.ts"
-                elif [[ "$bitrates" == *"x"* ]] 
+                    output_name="${seg_name}_${bitrates}_%05d"
+                elif [[ $bitrates == *"x"* ]] 
                 then
                     resolution=$bitrates
                     resolution="-vf scale=${resolution//x/:}"
@@ -2756,7 +2808,7 @@ HlsStreamCreatorWithShift()
                     then
                     quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
                     fi
-                    output_name="${playlist_name}_${bitrates}_%05d.ts"
+                    output_name="${seg_name}_${bitrates}_%05d"
                 fi
             else
                 quality_command="-crf $quality"
@@ -2772,7 +2824,7 @@ HlsStreamCreatorWithShift()
                 map_command=""
             fi
 
-            if [[ "$FFMPEG_FLAGS" == *"-vf "* ]] && [ -n "$resolution" ]
+            if [[ $FFMPEG_FLAGS == *"-vf "* ]] && [ -n "$resolution" ]
             then
                 FFMPEG_FLAGS_A=${FFMPEG_FLAGS%-vf *}
                 FFMPEG_FLAGS_B=${FFMPEG_FLAGS#*-vf }
@@ -2782,11 +2834,33 @@ HlsStreamCreatorWithShift()
                 resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
             fi
 
-            $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
-            -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-            -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
-            -segment_time "$seg_length" -segment_format mpeg_ts -segment_list_flags +live \
-            -segment_list_size "$seg_count" -segment_wrap $((seg_count * 2)) $FFMPEG_FLAGS "$output_dir_root/$output_name" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
+            if [ "$live_yn" == "yes" ] 
+            then
+                live_command="-segment_list_flags +live"
+                seg_count_command="-segment_list_size $seg_count -segment_wrap $((seg_count * 2))"
+                hls_flags_command="-hls_flags periodic_rekey+delete_segments"
+            else
+                live_command=""
+                seg_count_command=""
+                hls_flags_command="-hls_flags periodic_rekey"
+            fi
+
+            if [ "$encrypt_yn" == "yes" ]
+            then
+                openssl rand 16 > "$output_dir_root/$key_name.key"
+                echo -e "$key_name.key\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
+                $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+                -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
+                -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$seg_length" \
+                -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
+                $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_name/$output_name.ts" "$output_dir_root/$playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
+            else
+                $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+                -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
+                -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
+                -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
+                $seg_count_command $FFMPEG_FLAGS "$output_dir_root/$seg_dir_name/$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
+            fi
 
             JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$pid"')|.status)="off"'
 
@@ -2905,7 +2979,8 @@ HlsStreamCreator()
             |(.channels[]|select(.pid=='"$new_pid"')|.status)="on"
             |(.channels[]|select(.pid=='"$new_pid"')|.stream_link)="'"$chnl_stream_links"'"
             |(.channels[]|select(.pid=='"$new_pid"')|.playlist_name)="'"$chnl_playlist_name"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.seg_name)="'"$chnl_seg_name"'"'
+            |(.channels[]|select(.pid=='"$new_pid"')|.seg_name)="'"$chnl_seg_name"'"
+            |(.channels[]|select(.pid=='"$new_pid"')|.key_name)="'"$chnl_key_name"'"'
             action="start"
             SyncFile
 
@@ -3038,8 +3113,8 @@ AddChannel()
     else
         SetIsHls
     fi
-    SetLive
 
+    SetLive
     SetVideoCodec
     SetAudioCodec
     SetVideoAudioShift
@@ -3056,7 +3131,6 @@ AddChannel()
         master=0
     else
         SetQuality
-
         SetBitrates
 
         if [ -n "$bitrates" ] 
@@ -3103,22 +3177,20 @@ AddChannel()
         then
             SetSegCount
             seg_count_command="-c $seg_count"
-            encrypt=""
-            encrypt_yn="no"
-            key_name=$playlist_name
-            key_name_command=""
         else
             seg_count=$d_seg_count
             seg_count_command=""
-            SetEncrypt
-            if [ -n "$encrypt" ] 
-            then
-                SetKeyName
-                key_name_command="-K $key_name"
-            else
-                key_name=$playlist_name
-                key_name_command=""
-            fi
+        fi
+        SetEncrypt
+        if [ -n "$encrypt" ] 
+        then
+            SetKeyInfoName
+            SetKeyName
+            key_name_command="-K $key_name"
+        else
+            keyinfo_name=$(RandStr)
+            key_name=$(RandStr)
+            key_name_command=""
         fi
     fi
 
@@ -3126,6 +3198,7 @@ AddChannel()
     SetOutputFlags
     SetChannelName
     SetSync
+
     if [ "$sync_yn" == "yes" ]
     then
         SetSyncFile
@@ -3170,9 +3243,9 @@ AddChannel()
         else
             echo && echo -e "$error 暂不支持输出 $kind ..." && echo && exit 1
         fi
-    elif [ -n "${video_audio_shift:-}" ] 
+    elif [ -n "${video_audio_shift:-}" ] || { [ "$encrypt_yn" == "yes" ] && [ "$live_yn" == "yes" ]; }
     then
-        ( HlsStreamCreatorWithShift ) > /dev/null 2>/dev/null </dev/null &
+        ( HlsStreamCreatorPlus ) > /dev/null 2>/dev/null </dev/null &
     else
         ( HlsStreamCreator ) > /dev/null 2>/dev/null </dev/null &
     fi
@@ -3201,7 +3274,7 @@ EditOutputDirName()
         echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]"
         read -p "(默认: N): " stop_channel_yn
         stop_channel_yn=${stop_channel_yn:-n}
-        if [[ "$stop_channel_yn" == [Yy] ]]
+        if [[ $stop_channel_yn == [Yy] ]]
         then
             StopChannel
             echo && echo
@@ -3280,7 +3353,7 @@ EditBitrates()
 EditConst()
 {
     SetConst
-    JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.const)="'"$const"'"'
+    JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.const)="'"$const_yn"'"'
     echo && echo -e "$info 是否固定码率修改成功 !" && echo
 }
 
@@ -3369,7 +3442,7 @@ EditChannelAll()
         echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]"
         read -p "(默认: N): " stop_channel_yn
         stop_channel_yn=${stop_channel_yn:-n}
-        if [[ "$stop_channel_yn" == [Yy] ]]
+        if [[ $stop_channel_yn == [Yy] ]]
         then
             StopChannel
             echo && echo
@@ -3382,7 +3455,7 @@ EditChannelAll()
         echo && echo -e "$error 检测到频道正在运行，是否现在关闭？[y/N]"
         read -p "(默认: N): " stop_channel_yn
         stop_channel_yn=${stop_channel_yn:-n}
-        if [[ "$stop_channel_yn" == [Yy] ]]
+        if [[ $stop_channel_yn == [Yy] ]]
         then
             StopChannel
             echo && echo
@@ -3390,6 +3463,7 @@ EditChannelAll()
             echo && echo "已取消..." && echo && exit 1
         fi
     fi
+
     SetStreamLink
 
     if [ "${stream_link:0:1}" == "/" ] 
@@ -3408,18 +3482,26 @@ EditChannelAll()
     else
         SetIsHls
     fi
-    SetLive
 
+    SetLive
     SetOutputDirName
     SetPlaylistName
     SetSegDirName
     SetSegName
     SetSegLength
-    SetSegCount
+
+    if [ -n "$live" ] 
+    then
+        SetSegCount
+    else
+        seg_count=$d_seg_count
+    fi
+
     SetVideoCodec
     SetAudioCodec
     SetVideoAudioShift
-    if [ -z "${kind:-}" ] && [ "$video_codec" == "copy" ] && [ "$audio_codec" == "copy" ] 
+
+    if [ -z "${kind:-}" ] && [ "$video_codec" == "copy" ] && [ "$video_codec" == "copy" ]
     then
         quality=""
         bitrates=""
@@ -3429,7 +3511,7 @@ EditChannelAll()
         SetQuality
         SetBitrates
 
-        if [ -z "$quality" ] && [ -n "$bitrates" ]
+        if [ -z "$quality" ] && [ -n "$bitrates" ] 
         then
             SetConst
         else
@@ -3438,17 +3520,47 @@ EditChannelAll()
         fi
     fi
 
-    SetEncrypt
-    if [ -n "$encrypt" ] 
+    if [ "${kind:-}" == "flv" ] 
     then
-        SetKeyName
-    else
+        SetFlvPushLink
+        SetFlvPullLink
+        output_dir_name=$(RandOutputDirName)
+        playlist_name=$(RandPlaylistName)
+        seg_dir_name=$d_seg_dir_name
+        seg_name=$playlist_name
+        seg_length=$d_seg_length
+        seg_count=$d_seg_count
+        encrypt=""
+        encrypt_yn="no"
         key_name=$playlist_name
+    else
+        SetOutputDirName
+        SetPlaylistName
+        SetSegDirName
+        SetSegName
+        SetSegLength
+        if [ -n "$live" ] 
+        then
+            SetSegCount
+        else
+            seg_count=$d_seg_count
+        fi
+        SetEncrypt
+        if [ -n "$encrypt" ] 
+        then
+            SetKeyInfoName
+            SetKeyName
+        else
+            keyinfo_name=$(RandStr)
+            key_name=$(RandStr)
+        fi
     fi
+
     SetInputFlags
     SetOutputFlags
     SetChannelName
     SetSync
+
     if [ "$sync_yn" == "yes" ]
     then
         SetSyncFile
@@ -3459,8 +3571,7 @@ EditChannelAll()
         sync_index=""
         sync_pairs=""
     fi
-    SetFlvPushLink
-    SetFlvPullLink
+
     JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.stream_link)="'"$stream_links_input"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.live)="'"$live_yn"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.output_dir_name)="'"$output_dir_name"'"
@@ -3474,16 +3585,21 @@ EditChannelAll()
     |(.channels[]|select(.pid=='"$chnl_pid"')|.video_audio_shift)="'"$video_audio_shift"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.quality)="'"$quality"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.bitrates)="'"$bitrates"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.const)="'"$const"'"
+    |(.channels[]|select(.pid=='"$chnl_pid"')|.const)="'"$const_yn"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.encrypt)="'"$encrypt_yn"'"
+    |(.channels[]|select(.pid=='"$chnl_pid"')|.keyinfo_name)="'"$keyinfo_name"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.key_name)="'"$key_name"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.input_flags)="'"$input_flags"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.output_flags)="'"$output_flags"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.channel_name)="'"$channel_name"'"
+    |(.channels[]|select(.pid=='"$chnl_pid"')|.sync)="'"$sync_yn"'"
+    |(.channels[]|select(.pid=='"$chnl_pid"')|.sync_file)="'"$sync_file"'"
+    |(.channels[]|select(.pid=='"$chnl_pid"')|.sync_index)="'"$sync_index"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.sync_pairs)="'"$sync_pairs"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.flv_push_link)="'"$flv_push_link"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.flv_pull_link)="'"$flv_pull_link"'"'
-    echo && echo -e "$info 频道修改成功 !" && echo
+
+    echo && echo -e "$info 频道 [ $channel_name ] 修改成功 !" && echo
 }
 
 EditForSecurity()
@@ -3622,7 +3738,7 @@ EditChannelMenu()
             echo "是否重启此频道？[Y/n]"
             read -p "(默认: Y): " restart_yn
             restart_yn=${restart_yn:-Y}
-            if [[ "$restart_yn" == [Yy] ]] 
+            if [[ $restart_yn == [Yy] ]] 
             then
                 StopChannel
                 GetChannelInfo
@@ -3635,7 +3751,7 @@ EditChannelMenu()
             echo "是否启动此频道？[y/N]"
             read -p "(默认: N): " start_yn
             start_yn=${start_yn:-N}
-            if [[ "$start_yn" == [Yy] ]] 
+            if [[ $start_yn == [Yy] ]] 
             then
                 GetChannelInfo
                 StartChannel
@@ -3776,9 +3892,9 @@ StartChannel()
         fi
         rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.log"
         rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.err"
-        if [ -n "${chnl_video_audio_shift:-}" ] 
+        if [ -n "${chnl_video_audio_shift:-}" ] || { [ "$chnl_encrypt_yn" == "yes" ] && [ "$chnl_live_yn" == "yes" ]; }
         then
-            ( HlsStreamCreatorWithShift ) > /dev/null 2>/dev/null </dev/null &
+            ( HlsStreamCreatorPlus ) > /dev/null 2>/dev/null </dev/null &
         else
             ( HlsStreamCreator ) > /dev/null 2>/dev/null </dev/null &
         fi
@@ -4233,11 +4349,11 @@ InstallPdf2html()
 
     while IFS= read -r line
     do
-        if [[ "$line" == *"latest stable release is"* ]] 
+        if [[ $line == *"latest stable release is"* ]] 
         then
             line=${line#*<a href=\"}
             poppler_name=${line%%.tar.xz*}
-        elif [[ "$line" == *"poppler encoding data"* ]] 
+        elif [[ $line == *"poppler encoding data"* ]] 
         then
             line=${line#*<a href=\"}
             poppler_data_name=${line%%.tar.gz*}
@@ -4335,6 +4451,7 @@ Schedule()
 #        "hbofamily:HBO Family"
 #        "foxmovies:FOX MOVIES"
 #        "disney:Disney"
+        "minshi:民視"
         "mtvlivetw:MTV-Live"
         "tvbfc:TVB 翡翠台"
         "tvbpearl:TVB Pearl"
@@ -4481,7 +4598,7 @@ Schedule()
         "foxcrime:FOXCRIME"
         "foxnews:FOX News Channel"
         "animax:Animax"
-        "mtv:MTV綜合電視台"
+        "mtvtw:MTV綜合電視台"
         "ndmuch:年代MUCH"
         "ndxw:年代新聞"
         "nhk:NHK"
@@ -4525,6 +4642,7 @@ Schedule()
         "ettodayzh:ETtoday綜合台" )
 
     chnls_niotv=( 
+        "minshi:16"
         "mtvlivetw:751"
         "hbogq:629"
         "hbohits:501"
@@ -4628,7 +4746,7 @@ Schedule()
         "cinemax:49"
         "hlwdy:52"
         "animax:84"
-        "mtv:69"
+        "mtvtw:69"
         "ndmuch:25"
         "ndxw:40"
         "nhk:74"
@@ -4934,6 +5052,7 @@ Schedule()
                 "disneyjr@disney-junior-hdtv-east@69044944@-04:00"
                 "mtvlive@mtv-live-hdtv@69027734@-04:00"
                 "mtvlivehd@mtv-live-hdtv@69038784@+00:00"
+                "mtvdance@mtv-dance@69036268@+02:00"
                 "comedycentral@comedy-central-east@69036536@-04:00" )
 
             for chnl in "${chnls[@]}" ; do
@@ -4946,6 +5065,13 @@ Schedule()
 
                 schedule=""
                 start=0
+
+                if [ "$chnl_id" == "mtvdance" ] 
+                then
+                    uk="uk/"
+                else
+                    uk=""
+                fi
 
                 while IFS= read -r line
                 do
@@ -4988,7 +5114,7 @@ Schedule()
                     then
                         break
                     fi
-                done < <(wget --no-check-certificate "https://www.ontvtonight.com/guide/listings/channel/$chnl_no/$chnl_name.html?dt=$yesterday" -qO-)
+                done < <(wget --no-check-certificate "https://www.ontvtonight.com/${uk}guide/listings/channel/$chnl_no/$chnl_name.html?dt=$yesterday" -qO-)
 
                 while IFS= read -r line
                 do
@@ -5031,9 +5157,9 @@ Schedule()
                     then
                         break
                     fi
-                done < <(wget --no-check-certificate "https://www.ontvtonight.com/guide/listings/channel/$chnl_no/$chnl_name.html?dt=$today" -qO-)
+                done < <(wget --no-check-certificate "https://www.ontvtonight.com/${uk}guide/listings/channel/$chnl_no/$chnl_name.html?dt=$today" -qO-)
 
-                if [ "$chnl_id" != "mtvlivehd" ] 
+                if [ "$chnl_id" != "mtvlivehd" ] && [ "$chnl_id" != "mtvdance" ]
                 then
                     chnl_id="us_$chnl_id"
                 fi
@@ -5170,7 +5296,7 @@ Schedule()
                         else
                             flag=${time:0:1}
                         fi
-                        if [[ "$line" == *"<em>"* ]] 
+                        if [[ $line == *"<em>"* ]] 
                         then
                             line=${line#*<em>}
                             time=${line%%<\/em>*}
@@ -6014,7 +6140,7 @@ TsRegister()
                             echo && echo -e "$info 是否登录账号? [y/N]"
                             read -p "(默认: N): " login_yn
                             login_yn=${login_yn:-N}
-                            if [[ "$login_yn" == [Yy] ]]
+                            if [[ $login_yn == [Yy] ]]
                             then
                                 TsLogin
                             else
@@ -6053,7 +6179,7 @@ TsRegister()
             echo && echo -e "$info 是否登录账号? [y/N]"
             read -p "(默认: N): " login_yn
             login_yn=${login_yn:-N}
-            if [[ "$login_yn" == [Yy] ]]
+            if [[ $login_yn == [Yy] ]]
             then
                 TsLogin
             else
@@ -6127,7 +6253,7 @@ TsLogin()
         echo && echo -e "$info 是否注册账号? [y/N]"
         read -p "(默认: N): " register_yn
         register_yn=${register_yn:-N}
-        if [[ "$register_yn" == [Yy] ]]
+        if [[ $register_yn == [Yy] ]]
         then
             TsRegister
         else
@@ -6188,7 +6314,7 @@ TsLogin()
             echo && echo -e "$info 检测到此频道原有链接，是否替换成新的ts链接? [Y/n]"
             read -p "(默认: Y): " change_yn
             change_yn=${change_yn:-Y}
-            if [[ "$change_yn" == [Yy] ]]
+            if [[ $change_yn == [Yy] ]]
             then
                 JQ update "$CHANNELS_FILE" '(.channels[]|select(.stream_link=="'"$stream_link"'")|.stream_link)="'"$TS_LINK"'"'
                 echo && echo -e "$info 修改成功 !" && echo
@@ -6206,7 +6332,7 @@ TsMenu()
     echo && echo -e "$info 是否使用默认频道文件? 默认链接: $DEFAULT_CHANNELS_LINK [Y/n]"
     read -p "(默认: Y): " use_default_channels_yn
     use_default_channels_yn=${use_default_channels_yn:-Y}
-    if [[ "$use_default_channels_yn" == [Yy] ]]
+    if [[ $use_default_channels_yn == [Yy] ]]
     then
         TS_CHANNELS_LINK=$DEFAULT_CHANNELS_LINK
     else
@@ -6215,7 +6341,7 @@ TsMenu()
             echo && echo -e "$info 是否使用本地频道文件? 本地路径: ${d_sync_file%% *} [Y/n]"
             read -p "(默认: Y): " use_local_channels_yn
             use_local_channels_yn=${use_local_channels_yn:-Y}
-            if [[ "$use_local_channels_yn" == [Yy] ]] 
+            if [[ $use_local_channels_yn == [Yy] ]] 
             then
                 TS_CHANNELS_FILE=${d_sync_file%% *}
             fi
@@ -6332,7 +6458,7 @@ AntiDDoS()
     then
         while IFS= read -r line
         do
-            if [[ "$line" == *:* ]] 
+            if [[ $line == *:* ]] 
             then
                 ip=${line%:*}
                 jail=${line#*:}
@@ -6434,7 +6560,7 @@ AntiDDoS()
 
         while IFS=' ' read -r counts ip access_file
         do
-            if [[ "$access_file" == *".ts" ]] 
+            if [[ $access_file == *".ts" ]] 
             then
                 seg_name=${access_file##*/}
                 access_file=${access_file%/*}
@@ -6525,7 +6651,7 @@ AntiDDoSSet()
         echo && echo "是否启动 AntiDDoS [Y/n]"
         read -p "(默认: Y): " anti_ddos
         anti_ddos=${anti_ddos:-Y}
-        if [[ "$anti_ddos" == [Yy] ]] 
+        if [[ $anti_ddos == [Yy] ]] 
         then
             if ufw show added | grep -q "None" 
             then
@@ -6655,7 +6781,7 @@ MonitorStop()
                     GetDefault
                     while IFS= read -r line
                     do
-                        if [[ "$line" == *:* ]] 
+                        if [[ $line == *:* ]] 
                         then
                             ip=${line%:*}
                             jail=${line#*:}
@@ -6838,7 +6964,7 @@ MonitorTryAccounts()
                         then
                             video=1
                         fi
-                    done < <($FFPROBE -i "$chnl_stream_link" -timeout 5000000 -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+                    done < <($FFPROBE -i "$chnl_stream_link" -timeout 5000000 -show_streams -loglevel quiet || true)
 
                     if [ "$audio" == 1 ] && [ "$video" == 1 ]
                     then
@@ -6862,6 +6988,13 @@ MonitorTryAccounts()
                     then
                         chnl_playlist_name=$(RandStr)
                         chnl_seg_name=$chnl_playlist_name
+                        if [ "$chnl_encrypt_yn" == "yes" ] 
+                        then
+                            mkdir -p "$chnl_output_dir_root"
+                            chnl_key_name=$(RandStr)
+                            openssl rand 16 > "$chnl_output_dir_root/$chnl_key_name.key"
+                            echo -e "$chnl_key_name.key\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
+                        fi
                     fi
 
                     StartChannel > /dev/null 2>&1
@@ -6884,7 +7017,7 @@ MonitorTryAccounts()
                             then
                                 video=1
                             fi
-                        done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -timeout 5000000 -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+                        done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -timeout 5000000 -show_streams -loglevel quiet || true)
 
                         if [ "$audio" == 1 ] && [ "$video" == 1 ]
                         then
@@ -6893,31 +7026,70 @@ MonitorTryAccounts()
                             printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
                             break
                         fi
-                    elif ls -A "$LIVE_ROOT/$output_dir_name/"* > /dev/null 2>&1 
+                    elif ls -A "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts > /dev/null 2>&1 
                     then
+                        if [ "$chnl_encrypt_yn" == "yes" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key" ]
+                        then
+                            line_no=0
+                            while IFS= read -r line 
+                            do
+                                line_no=$((line_no+1))
+                                if [ "$line_no" == 3 ] 
+                                then
+                                    iv_hex=$line
+                                fi
+                            done < "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo"
+
+                            encrypt_key=$(hexdump -e '16/1 "%02x"' < "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key")
+                            encrypt_command="-key $encrypt_key -iv $iv_hex"
+                        else
+                            encrypt_command=""
+                        fi
+
                         audio=0
                         video=0
-                        bit_rate=0
-                        while IFS= read -r line 
+                        video_bitrate=0
+                        bitrate_check=0
+
+                        f_count=1
+                        for f in "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts
                         do
-                            if [[ $line == *"codec_type=audio"* ]] 
+                            ((f_count++))
+                        done
+
+                        f_num=$((f_count/2))
+                        f_count=1
+
+                        for f in "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts
+                        do
+                            if [ "$f_count" -lt "$f_num" ] 
                             then
-                                audio=1
-                            elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
-                            then
-                                audio=0
-                            elif [[ $line == *"codec_type=video"* ]] 
-                            then
-                                video=1
-                            elif [[ $line == *"bit_rate="* ]] 
-                            then
-                                line=${line#*bit_rate=}
-                                line=${line//N\/A/0}
-                                [[ $line -gt $bit_rate ]] && bit_rate=$line
+                                ((f_count++))
+                                continue
                             fi
-                        done < <($FFPROBE -i "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -show_entries format=bit_rate -loglevel quiet || true)
-                        [[ $bit_rate -eq 0 ]] && bit_rate=$hls_min_bitrates
-                        if [ "$audio" == 1 ] && [ "$video" == 1 ] && [[ $bit_rate -ge $hls_min_bitrates ]]
+                            [ -n "$encrypt_command" ] && f="crypto:$f"
+                            while IFS= read -r line 
+                            do
+                                if [[ $line == *"codec_type=video"* ]] 
+                                then
+                                    video=1
+                                elif [ "$bitrate_check" == 0 ] && [ "$video" == 1 ] && [[ $line == *"bit_rate="* ]] 
+                                then
+                                    line=${line#*bit_rate=}
+                                    video_bitrate=${line//N\/A/$hls_min_bitrates}
+                                    bitrate_check=1
+                                elif [[ $line == *"codec_type=audio"* ]] 
+                                then
+                                    audio=1
+                                elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
+                                then
+                                    audio=0
+                                fi
+                            done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet || true)
+                            break
+                        done
+
+                        if [ "$audio" == 1 ] && [ "$video" == 1 ] && [[ $video_bitrate -ge $hls_min_bitrates ]]
                         then
                             try_success=1
                             printf -v date_now '%(%m-%d %H:%M:%S)T'
@@ -6950,41 +7122,88 @@ MonitorHlsRestartChannel()
                 break
             fi
         fi
+        action="skip"
+        StopChannel > /dev/null 2>&1
         if [ "$anti_leech_yn" == "yes" ] && [ "$anti_leech_restart_hls_changes_yn" == "yes" ] 
         then
             chnl_playlist_name=$(RandStr)
             chnl_seg_name=$chnl_playlist_name
+            if [ "$chnl_encrypt_yn" == "yes" ] 
+            then
+                mkdir -p "$chnl_output_dir_root"
+                chnl_key_name=$(RandStr)
+                openssl rand 16 > "$chnl_output_dir_root/$chnl_key_name.key"
+                echo -e "$chnl_key_name.key\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
+            fi
         fi
-        action="skip"
-        StopChannel > /dev/null 2>&1
         StartChannel > /dev/null 2>&1
         sleep 15
         GetChannelInfo
-        if ls -A "$LIVE_ROOT/$output_dir_name/"* > /dev/null 2>&1 
+        if ls -A "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts > /dev/null 2>&1 
         then
+            if [ "$chnl_encrypt_yn" == "yes" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key" ]
+            then
+                line_no=0
+                while IFS= read -r line 
+                do
+                    line_no=$((line_no+1))
+                    if [ "$line_no" == 3 ] 
+                    then
+                        iv_hex=$line
+                    fi
+                done < "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo"
+                # xxd -p $KEY_FILE
+                encrypt_key=$(hexdump -e '16/1 "%02x"' < "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key")
+                encrypt_command="-key $encrypt_key -iv $iv_hex"
+            else
+                encrypt_command=""
+            fi
+
             audio=0
             video=0
-            bit_rate=0
-            while IFS= read -r line 
+            video_bitrate=0
+            bitrate_check=0
+
+            f_count=1
+            for f in "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts
             do
-                if [[ $line == *"codec_type=audio"* ]] 
+                ((f_count++))
+            done
+
+            f_num=$((f_count/2))
+            f_count=1
+
+
+            for f in "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts
+            do
+                if [ "$f_count" -lt "$f_num" ] 
                 then
-                    audio=1
-                elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
-                then
-                    audio=0
-                elif [[ $line == *"codec_type=video"* ]] 
-                then
-                    video=1
-                elif [[ $line == *"bit_rate="* ]] 
-                then
-                    line=${line#*bit_rate=}
-                    line=${line//N\/A/0}
-                    [[ $line -gt $bit_rate ]] && bit_rate=$line
+                    ((f_count++))
+                    continue
                 fi
-            done < <($FFPROBE -i "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*_00000.ts -show_streams -show_entries format=bit_rate -loglevel quiet || true)
-            [[ $bit_rate -eq 0 ]] && bit_rate=$hls_min_bitrates
-            if [ "$audio" == 1 ] && [ "$video" == 1 ] && [[ $bit_rate -ge $hls_min_bitrates ]]
+                [ -n "$encrypt_command" ] && f="crypto:$f"
+                while IFS= read -r line 
+                do
+                    if [[ $line == *"codec_type=video"* ]] 
+                    then
+                        video=1
+                    elif [ "$bitrate_check" == 0 ] && [ "$video" == 1 ] && [[ $line == *"bit_rate="* ]] 
+                    then
+                        line=${line#*bit_rate=}
+                        video_bitrate=${line//N\/A/$hls_min_bitrates}
+                        bitrate_check=1
+                    elif [[ $line == *"codec_type=audio"* ]] 
+                    then
+                        audio=1
+                    elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
+                    then
+                        audio=0
+                    fi
+                done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet || true)
+                break
+            done
+
+            if [ "$audio" == 1 ] && [ "$video" == 1 ] && [[ $video_bitrate -ge $hls_min_bitrates ]]
             then
                 printf -v date_now '%(%m-%d %H:%M:%S)T'
                 printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
@@ -7140,7 +7359,7 @@ Monitor()
                         then
                             video=1
                         fi
-                    done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -timeout 5000000 -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+                    done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -timeout 5000000 -show_streams -loglevel quiet || true)
 
                     if [ "$audio" == 0 ] || [ "$video" == 0 ]
                     then
@@ -7335,7 +7554,7 @@ Monitor()
                         then
                             video=1
                         fi
-                    done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -timeout 5000000 -show_streams -show_entries format=bit_rate -loglevel quiet || true)
+                    done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -timeout 5000000 -show_streams -loglevel quiet || true)
 
                     if [ "$audio" == 0 ] || [ "$video" == 0 ]
                     then
@@ -7520,9 +7739,15 @@ Monitor()
 
             if [ -n "${hls_nums:-}" ] 
             then
+                if [ -z "${loop:-}" ] || [ "$loop" -eq 10 ]
+                then
+                    loop=1
+                else
+                    ((loop++))
+                fi
                 while IFS= read -r old_file_path
                 do
-                    if [[ "$old_file_path" == *"_master.m3u8" ]] 
+                    if [[ $old_file_path == *"_master.m3u8" ]] || [[ $old_file_path == *".key" ]] || [[ $old_file_path == *".keyinfo" ]]
                     then
                         continue
                     fi
@@ -7573,6 +7798,8 @@ Monitor()
                     do
                         if [ "${chnls_output_dir_name[i]}" == "$output_dir_name" ] 
                         then
+                            found=1
+
                             if [ "${chnls_status[i]}" == "off" ] 
                             then
                                 sleep 5
@@ -7597,56 +7824,108 @@ Monitor()
                                 fi
                             fi
 
+                            if [ "$loop" -gt 1 ]
+                            then
+                                break 1
+                            fi
+
+                            if [ "${chnls_encrypt[i]}" == "yes" ] && [ -e "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[i]}.keyinfo" ] && [ -e "$LIVE_ROOT/$output_dir_name/${chnls_key_name[i]}.key" ]
+                            then
+                                line_no=0
+                                while IFS= read -r line 
+                                do
+                                    line_no=$((line_no+1))
+                                    if [ "$line_no" == 3 ] 
+                                    then
+                                        iv_hex=$line
+                                    fi
+                                done < "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[i]}.keyinfo"
+
+                                encrypt_key=$(hexdump -e '16/1 "%02x"' < "$LIVE_ROOT/$output_dir_name/${chnls_key_name[i]}.key")
+                                encrypt_command="-key $encrypt_key -iv $iv_hex"
+                            else
+                                encrypt_command=""
+                            fi
+
                             audio=0
                             video=0
-                            bit_rate=0
-                            while IFS= read -r line 
+                            video_bitrate=0
+                            bitrate_check=0
+                            f_count=1
+                            for f in "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[i]}/"*.ts
                             do
-                                if [[ $line == *"codec_type=audio"* ]] 
+                                ((f_count++))
+                            done
+
+                            f_num=$((f_count/2))
+                            f_count=1
+
+                            for f in "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[i]}/"*.ts
+                            do
+                                if [ "$f_count" -lt "$f_num" ] 
                                 then
-                                    audio=1
-                                elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
-                                then
-                                    audio=0
-                                elif [[ $line == *"codec_type=video"* ]] 
-                                then
-                                    video=1
-                                elif [[ $line == *"bit_rate="* ]] 
-                                then
-                                    line=${line#*bit_rate=}
-                                    line=${line//N\/A/0}
-                                    [[ $line -gt $bit_rate ]] && bit_rate=$line
+                                    ((f_count++))
+                                    continue
                                 fi
-                            done < <($FFPROBE -i "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[i]}/"*_00000.ts -show_streams -show_entries format=bit_rate -loglevel quiet || true)
-                            [[ $bit_rate -eq 0 ]] && bit_rate=$hls_min_bitrates
-                            if [ "$audio" == 0 ] || [ "$video" == 0 ] || [[ $bit_rate -lt $hls_min_bitrates ]]
+                                [ -n "$encrypt_command" ] && f="crypto:$f"
+                                while IFS= read -r line 
+                                do
+                                    if [[ $line == *"codec_type=video"* ]] 
+                                    then
+                                        video=1
+                                    elif [ "$bitrate_check" == 0 ] && [ "$video" == 1 ] && [[ $line == *"bit_rate="* ]] 
+                                    then
+                                        line=${line#*bit_rate=}
+                                        video_bitrate=${line//N\/A/$hls_min_bitrates}
+                                        bitrate_check=1
+                                    elif [[ $line == *"codec_type=audio"* ]] 
+                                    then
+                                        audio=1
+                                    elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
+                                    then
+                                        audio=0
+                                    fi
+                                done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet || true)
+                                break
+                            done
+
+                            if [ "$audio" == 0 ] || [ "$video" == 0 ] || [[ $video_bitrate -lt $hls_min_bitrates ]]
                             then
+                                [ -n "$encrypt_command" ] && f="crypto:$f"
                                 fail_count=1
+                                f_count=1
                                 for f in "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[i]}/"*.ts
                                 do
+                                    if [ "$f_count" -lt "$f_num" ] 
+                                    then
+                                        ((f_count++))
+                                        continue
+                                    fi
+                                    [ ! -e "$f" ] && continue
                                     audio=0
                                     video=0
-                                    bit_rate=0
+                                    video_bitrate=0
+                                    bitrate_check=0
                                     while IFS= read -r line 
                                     do
-                                        if [[ $line == *"codec_type=audio"* ]] 
+                                        if [[ $line == *"codec_type=video"* ]] 
+                                        then
+                                            video=1
+                                        elif [ "$bitrate_check" == 0 ] && [ "$video" == 1 ] && [[ $line == *"bit_rate="* ]] 
+                                        then
+                                            line=${line#*bit_rate=}
+                                            video_bitrate=${line//N\/A/$hls_min_bitrates}
+                                            bitrate_check=1
+                                        elif [[ $line == *"codec_type=audio"* ]] 
                                         then
                                             audio=1
                                         elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
                                         then
                                             audio=0
-                                        elif [[ $line == *"codec_type=video"* ]] 
-                                        then
-                                            video=1
-                                        elif [[ $line == *"bit_rate="* ]] 
-                                        then
-                                            line=${line#*bit_rate=}
-                                            line=${line//N\/A/0}
-                                            [[ $line -gt $bit_rate ]] && bit_rate=$line
                                         fi
-                                    done < <($FFPROBE -i "$f" -show_streams -show_entries format=bit_rate -loglevel quiet || true)
-                                    [[ $bit_rate -eq 0 ]] && bit_rate=$hls_min_bitrates
-                                    if [ "$audio" == 0 ] || [ "$video" == 0 ] || [[ $bit_rate -lt $hls_min_bitrates ]]
+                                    done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet || true)
+
+                                    if [ "$audio" == 0 ] || [ "$video" == 0 ] || [[ $video_bitrate -lt $hls_min_bitrates ]]
                                     then
                                         ((fail_count++))
                                     fi
@@ -7659,8 +7938,6 @@ Monitor()
                                     fi
                                 done
                             fi
-
-                            found=1
 
                             if [ "${rand_restart_hls_done:-}" == 0 ]
                             then
@@ -7747,7 +8024,7 @@ AntiLeech()
 
         if [ -n "$hls_nums" ] 
         then
-            echo && echo "是否每当重启 HLS 频道更改成随机的 m3u8 名称和段名称？[y/N]"
+            echo && echo "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 段名称, key 名称 ? [y/N]"
             read -p "(默认: $d_anti_leech_restart_hls_changes): " anti_leech_restart_hls_changes_yn
             anti_leech_restart_hls_changes_yn=${anti_leech_restart_hls_changes_yn:-$d_anti_leech_restart_hls_changes}
             if [[ $anti_leech_restart_hls_changes_yn == [Yy] ]] 
@@ -8226,7 +8503,7 @@ InstallNginx()
 
     while IFS= read -r line
     do
-        if [[ "$line" == *"/download/"* ]] 
+        if [[ $line == *"/download/"* ]] 
         then
             nginx_name=${line#*/download/}
             nginx_name=${nginx_name%%.tar.gz*}
@@ -8336,7 +8613,7 @@ NginxConfigFlv()
         found=0
         while IFS= read -r line 
         do
-            if [[ "$line" == *"location / "* ]] && [ "$found" == 0 ]
+            if [[ $line == *"location / "* ]] && [ "$found" == 0 ]
             then
                 conf="$conf
         location /flv {
@@ -8684,7 +8961,7 @@ See LICENSE
     -v  视频编码(默认：libx264) (不需要转码时输入 copy)
     -f  画面或声音延迟(格式如： v_3 画面延迟3秒，a_2 声音延迟2秒
         使用此功能*暂时*会忽略部分参数，画面声音不同步时使用)
-    -q  crf视频质量(如果同时设置了输出视频比特率，则优先使用crf视频质量)(数值1~63 越大质量越差)
+    -q  crf视频质量(如果同时设置了输出视频比特率，则优先使用crf视频质量)(数值0~63 越大质量越差)
         (默认: 不设置crf视频质量值)
     -b  输出视频的比特率(kb/s)(默认：900-1280x720)
         如果已经设置crf视频质量值，则比特率用于 -maxrate -bufsize
@@ -8768,7 +9045,8 @@ UpdateSelf()
             --arg audio_codec "$d_audio_codec" --arg video_audio_shift "$d_video_audio_shift" \
             --arg quality "$d_quality" --arg bitrates "$d_bitrates" \
             --arg const "$d_const_yn" --arg encrypt "$d_encrypt_yn" \
-            --arg key_name "$d_key_name" --arg input_flags "$d_input_flags" \
+            --arg keyinfo_name "$d_keyinfo_name" --arg key_name "$d_key_name" \
+            --arg input_flags "$d_input_flags" \
             --arg output_flags "$d_output_flags" --arg sync "$d_sync_yn" \
             --arg sync_file "$d_sync_file" --arg sync_index "$d_sync_index" \
             --arg sync_pairs "$d_sync_pairs" --arg schedule_file "$d_schedule_file" \
@@ -8792,6 +9070,7 @@ UpdateSelf()
                 bitrates: $bitrates,
                 const: $const,
                 encrypt: $encrypt,
+                keyinfo_name: $keyinfo_name,
                 key_name: $key_name,
                 input_flags: $input_flags,
                 output_flags: $output_flags,
@@ -8835,6 +9114,7 @@ UpdateSelf()
                 --arg video_audio_shift "${chnls_video_audio_shift[i]}" --arg quality "${chnls_quality[i]}" \
                 --arg bitrates "${chnls_bitrates[i]}" --arg const "${chnls_const[i]}" \
                 --arg encrypt "${chnls_encrypt[i]}" --arg key_name "${chnls_key_name[i]}" \
+                --arg keyinfo_name "${chnls_keyinfo_name[i]}" \
                 --arg input_flags "${chnls_input_flags[i]}" --arg output_flags "${chnls_output_flags[i]}" \
                 --arg channel_name "${chnls_channel_name[i]}" --arg sync "${chnls_sync[i]}" \
                 --arg sync_file "${chnls_sync_file[i]}" --arg sync_index "${chnls_sync_index[i]}" \
@@ -8858,6 +9138,7 @@ UpdateSelf()
                     bitrates: $bitrates,
                     const: $const,
                     encrypt: $encrypt,
+                    keyinfo_name: $keyinfo_name,
                     key_name: $key_name,
                     input_flags: $input_flags,
                     output_flags: $output_flags,
@@ -8906,15 +9187,15 @@ then
             then
                 while IFS= read -r line 
                 do
-                    if [[ "$line" == *"port"* ]] 
+                    if [[ $line == *"port"* ]] 
                     then
                         port=${line#*: }
                         port=${port%,*}
-                    elif [[ "$line" == *"id"* ]] 
+                    elif [[ $line == *"id"* ]] 
                     then
                         id=${line#*: \"}
                         id=${id%\"*}
-                    elif [[ "$line" == *"path"* ]] 
+                    elif [[ $line == *"path"* ]] 
                     then
                         path=${line#*: \"}
                         path=${path%\"*}
@@ -8934,11 +9215,11 @@ then
 
             while IFS= read -r line 
             do
-                if [[ "$line" == *"port"* ]] 
+                if [[ $line == *"port"* ]] 
                 then
                     port=${line#*: }
                     port=${port%,*}
-                elif [[ "$line" == *"id"* ]] 
+                elif [[ $line == *"id"* ]] 
                 then
                     id=${line#*: \"}
                     id=${id%\"*}
@@ -8997,15 +9278,15 @@ then
 
             while IFS= read -r line 
             do
-                if [[ "$line" == *"port"* ]] 
+                if [[ $line == *"port"* ]] 
                 then
                     port=${line#*: }
                     port=${port%,*}
-                elif [[ "$line" == *"id"* ]] 
+                elif [[ $line == *"id"* ]] 
                 then
                     id=${line#*: \"}
                     id=${id%\"*}
-                elif [[ "$line" == *"path"* ]] 
+                elif [[ $line == *"path"* ]] 
                 then
                     path=${line#*: \"}
                     path=${path%\"*}
@@ -9096,15 +9377,15 @@ then
             else
                 while IFS= read -r line 
                 do
-                    if [[ "$line" == *"port"* ]] 
+                    if [[ $line == *"port"* ]] 
                     then
                         port=${line#*: }
                         port=${port%,*}
-                    elif [[ "$line" == *"id"* ]] 
+                    elif [[ $line == *"id"* ]] 
                     then
                         id=${line#*: \"}
                         id=${id%\"*}
-                    elif [[ "$line" == *"path"* ]] 
+                    elif [[ $line == *"path"* ]] 
                     then
                         path=${line#*: \"}
                         path=${path%\"*}
@@ -9467,11 +9748,12 @@ fi
 
 use_menu=1
 
-while getopts "i:o:p:S:t:s:c:v:a:f:q:b:k:K:m:n:z:T:L:Ce" flag
+while getopts "i:l:o:p:S:t:s:c:v:a:f:q:b:k:K:m:n:z:T:L:Ce" flag
 do
     use_menu=0
     case "$flag" in
         i) stream_link="$OPTARG";;
+        l) live_yn="no";;
         o) output_dir_name="$OPTARG";;
         p) playlist_name="$OPTARG";;
         S) seg_dir_name="$OPTARG";;
@@ -9619,7 +9901,7 @@ case "$cmd" in
 
         while IFS= read -r line
         do
-            if [[ "$line" == *"latest stable release is"* ]] 
+            if [[ $line == *"latest stable release is"* ]] 
             then
                 line=${line#*<a href=\"}
                 poppler_name=${line%%.tar.xz*}
@@ -9630,7 +9912,7 @@ case "$cmd" in
                     wget --timeout=10 --tries=3 --no-check-certificate "https://poppler.freedesktop.org/$poppler_name.tar.xz" -qO "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz_tmp"
                     mv "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz_tmp" "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz"
                 fi
-            elif [[ "$line" == *"poppler encoding data"* ]] 
+            elif [[ $line == *"poppler encoding data"* ]] 
             then
                 line=${line#*<a href=\"}
                 poppler_data_name=${line%%.tar.gz*}
@@ -10248,7 +10530,7 @@ else
         then
             echo && read -p "尚未安装,是否现在安装？[y/N] (默认: N): " install_yn
             install_yn=${install_yn:-N}
-            if [[ "$install_yn" == [Yy] ]]
+            if [[ $install_yn == [Yy] ]]
             then
                 Install
             else
@@ -10257,6 +10539,7 @@ else
         else
             GetDefault
             export FFMPEG
+            live_yn=${live_yn:-yes}
             output_dir_name=${output_dir_name:-$(RandOutputDirName)}
             output_dir_root="$LIVE_ROOT/$output_dir_name"
             playlist_name=${playlist_name:-$(RandPlaylistName)}
@@ -10337,7 +10620,10 @@ else
                 encrypt_yn="yes"
             fi
 
-            key_name=${key_name:-$playlist_name}
+            keyinfo_name=${keyinfo_name:-$d_keyinfo_name}
+            keyinfo_name=${keyinfo_name:-$(RandStr)}
+            key_name=${key_name:-$d_key_name}
+            key_name=${key_name:-$(RandStr)}
 
             if [ "${stream_link:0:4}" == "rtmp" ] || [ "${stream_link:0:1}" == "/" ]
             then
@@ -10395,9 +10681,9 @@ else
                 else
                     echo && echo -e "$error 暂不支持输出 $kind ..." && echo && exit 1
                 fi
-            elif [ -n "${video_audio_shift:-}" ] 
+            elif [ -n "${video_audio_shift:-}" ] || [ "$encrypt_yn" == "yes" ]
             then
-                ( HlsStreamCreatorWithShift ) > /dev/null 2>/dev/null </dev/null &
+                ( HlsStreamCreatorPlus ) > /dev/null 2>/dev/null </dev/null &
             else
                 ( HlsStreamCreator ) > /dev/null 2>/dev/null </dev/null &
             fi
