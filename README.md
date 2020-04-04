@@ -85,7 +85,6 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
     "audio_codec": "copy",
     "quality": "40",
     "bitrates": "800",
-    "const": "",
     片段大小700~800K，但是非常吃CPU
 
     也可以直接 copy ，相当于复制
