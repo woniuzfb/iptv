@@ -2,11 +2,13 @@
 
 set -euo pipefail
 
-sh_ver="1.9.4"
+sh_ver="1.10.0"
 SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
 V2_FILE="/usr/local/bin/v2"
+V2CTL_FILE="/usr/bin/v2ray/v2ctl"
+V2_CONFIG="/etc/v2ray/config.json"
 XC_FILE="/usr/local/bin/cx"
 IPTV_ROOT="/usr/local/iptv"
 IP_DENY="$IPTV_ROOT/ip.deny"
@@ -59,6 +61,7 @@ JQ()
             if [ -n "${jq_path:-}" ] 
             then
                 $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) += $value' "$file" > "${file}_tmp"
+                jq_path=""
             else
                 $JQ_FILE --arg index "$3" --argjson value "$4" '.[$index] += $value' "$file" > "${file}_tmp"
             fi
@@ -69,13 +72,25 @@ JQ()
             mv "${file}_tmp" "$file"
         ;;
         "replace") 
-            $JQ_FILE --arg index "$3" --argjson value "$4" '.[$index] = $value' "$file" > "${file}_tmp"
+            if [ -n "${jq_path:-}" ] 
+            then
+                $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) = $value' "$file" > "${file}_tmp"
+                jq_path=""
+            else
+                $JQ_FILE --arg index "$3" --argjson value "$4" '.[$index] = $value' "$file" > "${file}_tmp"
+            fi
             mv "${file}_tmp" "$file"
         ;;
         "delete") 
             if [ -n "${jq_path:-}" ] 
             then
-                $JQ_FILE --argjson path "$jq_path" 'del(getpath($path)[] | select(.'"$3"'=='"$4"'))' "$file" > "${file}_tmp"
+                if [ -z "${4:-}" ] 
+                then
+                    $JQ_FILE --argjson path "$jq_path" --arg index "$3" 'del(getpath($path)[$index|tonumber])' "$file" > "${file}_tmp"
+                else
+                    $JQ_FILE --argjson path "$jq_path" 'del(getpath($path)[] | select(.'"$3"'=='"$4"'))' "$file" > "${file}_tmp"
+                fi
+                jq_path=""
             else
                 $JQ_FILE --arg index "$3" 'del(.[$index][] | select(.pid=='"$4"'))' "$file" > "${file}_tmp"
             fi
@@ -276,7 +291,6 @@ SyncFile()
         echo -e "$info sync 执行成功..."
     fi
     action=""
-    jq_path=""
 }
 
 CheckRelease()
@@ -476,7 +490,7 @@ Install()
         InstallJq
 
         default=$(
-        $JQ_FILE -n --arg playlist_name '' --arg seg_dir_name '' \
+        $JQ_FILE -n --arg proxy '' --arg playlist_name '' --arg seg_dir_name '' \
             --arg seg_name '' --arg seg_length 6 \
             --arg seg_count 6 --arg video_codec "libx264" \
             --arg audio_codec "aac" --arg video_audio_shift '' \
@@ -497,6 +511,7 @@ Install()
             --arg anti_leech_restart_nums 3 --arg anti_leech_restart_flv_changes "yes" \
             --arg anti_leech_restart_hls_changes "yes" --arg version "$sh_ver" \
             '{
+                proxy: $proxy,
                 playlist_name: $playlist_name,
                 seg_dir_name: $seg_dir_name,
                 seg_name: $seg_name,
@@ -645,6 +660,7 @@ Update()
     rm -rf "${JQ_FILE:-notfound}"
     echo -e "$info 更新 JQ..."
     InstallJq
+
     echo -e "$info 更新 iptv 脚本..."
     sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1 || true)
     if [ -z "$sh_new_ver" ] 
@@ -656,17 +672,22 @@ Update()
 
     if [ "$sh_new_ver" != "$sh_ver" ] 
     then
-        rm -rf "${LOCK_FILE:-notfound}"
+        rm -rf "$LOCK_FILE"
     fi
+
     wget --no-check-certificate "$SH_LINK" -qO "$SH_FILE" && chmod +x "$SH_FILE"
+
     if [ ! -s "$SH_FILE" ] 
     then
         wget --no-check-certificate "$SH_LINK_BACKUP" -qO "$SH_FILE"
         if [ ! -s "$SH_FILE" ] 
         then
-            echo -e "$error 无法连接备用链接!"
-            exit 1
+            echo -e "$error 无法连接备用链接!" && echo && exit 1
+        else
+            echo -e "$info iptv 脚本更新完成" && echo
         fi
+    else
+        echo -e "$info iptv 脚本更新完成"
     fi
 
     rm -rf ${CREATOR_FILE:-notfound}
@@ -691,7 +712,10 @@ GetDefault()
 {
     while IFS= read -r d
     do
-        d_playlist_name=${d#*playlist_name: }
+        d_proxy=${d#*proxy: }
+        d_proxy=${d_proxy%, playlist_name:*}
+        [ "$d_proxy" == null ] && d_proxy=""
+        d_playlist_name=${d#*, playlist_name: }
         d_playlist_name=${d_playlist_name%, seg_dir_name:*}
         d_playlist_name_text=${d_playlist_name:-随机名称}
         d_seg_dir_name=${d#*, seg_dir_name: }
@@ -848,7 +872,7 @@ GetDefault()
         fi
         d_version=${d#*, version: }
         d_version=${d_version%\"}
-    done < <($JQ_FILE 'to_entries | map(select(.key=="default")) | map("playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), encrypt_session: \(.value.encrypt_session), keyinfo_name: \(.value.keyinfo_name), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), schedule_file: \(.value.schedule_file), flv_delay_seconds: \(.value.flv_delay_seconds), flv_restart_nums: \(.value.flv_restart_nums), hls_delay_seconds: \(.value.hls_delay_seconds), hls_min_bitrates: \(.value.hls_min_bitrates), hls_max_seg_size: \(.value.hls_max_seg_size), hls_restart_nums: \(.value.hls_restart_nums), hls_key_period: \(.value.hls_key_period), anti_ddos_port: \(.value.anti_ddos_port), anti_ddos_seconds: \(.value.anti_ddos_seconds), anti_ddos_level: \(.value.anti_ddos_level), anti_leech: \(.value.anti_leech), anti_leech_restart_nums: \(.value.anti_leech_restart_nums), anti_leech_restart_flv_changes: \(.value.anti_leech_restart_flv_changes), anti_leech_restart_hls_changes: \(.value.anti_leech_restart_hls_changes), version: \(.value.version)") | .[]' "$CHANNELS_FILE")
+    done < <($JQ_FILE 'to_entries | map(select(.key=="default")) | map("proxy: \(.value.proxy), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), encrypt_session: \(.value.encrypt_session), keyinfo_name: \(.value.keyinfo_name), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), schedule_file: \(.value.schedule_file), flv_delay_seconds: \(.value.flv_delay_seconds), flv_restart_nums: \(.value.flv_restart_nums), hls_delay_seconds: \(.value.hls_delay_seconds), hls_min_bitrates: \(.value.hls_min_bitrates), hls_max_seg_size: \(.value.hls_max_seg_size), hls_restart_nums: \(.value.hls_restart_nums), hls_key_period: \(.value.hls_key_period), anti_ddos_port: \(.value.anti_ddos_port), anti_ddos_seconds: \(.value.anti_ddos_seconds), anti_ddos_level: \(.value.anti_ddos_level), anti_leech: \(.value.anti_leech), anti_leech_restart_nums: \(.value.anti_leech_restart_nums), anti_leech_restart_flv_changes: \(.value.anti_leech_restart_flv_changes), anti_leech_restart_hls_changes: \(.value.anti_leech_restart_hls_changes), version: \(.value.version)") | .[]' "$CHANNELS_FILE")
     #done < <($JQ_FILE '.default | to_entries | map([.key,.value]|join(": ")) | join(", ")' "$CHANNELS_FILE")
 }
 
@@ -862,6 +886,7 @@ GetChannelsInfo()
     chnls_stream_link=()
     chnls_stream_links=()
     chnls_live=()
+    chnls_proxy=()
     chnls_output_dir_name=()
     chnls_playlist_name=()
     chnls_seg_dir_name=()
@@ -902,8 +927,11 @@ GetChannelsInfo()
         map_stream_link=${map_stream_link%, live:*}
         IFS=" " read -ra map_stream_links <<< "$map_stream_link"
         map_live=${channel#*, live: }
-        map_live=${map_live%, output_dir_name:*}
+        map_live=${map_live%, proxy:*}
         [ "$map_live" == null ] && map_live="yes"
+        map_proxy=${channel#*, proxy: }
+        map_proxy=${map_proxy%, output_dir_name:*}
+        [ "$map_proxy" == null ] && map_proxy=""
         map_output_dir_name=${channel#*, output_dir_name: }
         map_output_dir_name=${map_output_dir_name%, playlist_name:*}
         map_playlist_name=${channel#*, playlist_name: }
@@ -986,6 +1014,7 @@ GetChannelsInfo()
         chnls_stream_link+=("${map_stream_links[0]}")
         chnls_stream_links+=("$map_stream_link")
         chnls_live+=("$map_live")
+        chnls_proxy+=("$map_proxy")
         chnls_output_dir_name+=("$map_output_dir_name")
         chnls_playlist_name+=("$map_playlist_name")
         chnls_seg_dir_name+=("$map_seg_dir_name")
@@ -1014,8 +1043,7 @@ GetChannelsInfo()
         chnls_flv_status+=("$map_flv_status")
         chnls_flv_push_link+=("$map_flv_push_link")
         chnls_flv_pull_link+=("$map_flv_pull_link")
-        
-    done < <($JQ_FILE '.channels | to_entries | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), live: \(.value.live), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), encrypt_session: \(.value.encrypt_session), keyinfo_name: \(.value.keyinfo_name), key_name: \(.value.key_name), key_time: \(.value.key_time), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), channel_time: \(.value.channel_time), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
+    done < <($JQ_FILE '.channels | to_entries | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), live: \(.value.live), proxy: \(.value.proxy), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), encrypt_session: \(.value.encrypt_session), keyinfo_name: \(.value.keyinfo_name), key_name: \(.value.key_name), key_time: \(.value.key_time), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), channel_time: \(.value.channel_time), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
 
     return 0
 }
@@ -1093,6 +1121,13 @@ ListChannels()
             chnls_video_quality_text="原画"
         fi
 
+        if [ -n "${chnls_proxy[index]}" ] 
+        then
+            chnls_proxy_text="[代理]"
+        else
+            chnls_proxy_text=""
+        fi
+
         if [ "$index" -lt 9 ] 
         then
             blank=" "
@@ -1108,7 +1143,7 @@ ListChannels()
             else
                 chnls_status_text=$red"关闭"$plain
             fi
-            chnls_list=$chnls_list"# $green$((index+1))$plain $blank进程ID: $green${chnls_pid[index]}$plain 状态: $chnls_status_text 频道名称: $green${chnls_channel_name[index]}$plain\n     编码: $green${chnls_video_codec[index]}:${chnls_audio_codec[index]}$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain\n     源: ${chnls_stream_link[index]}\n     m3u8位置: $chnls_playlist_file_text\n\n"
+            chnls_list=$chnls_list"# $green$((index+1))$plain $blank进程ID: $green${chnls_pid[index]}$plain 状态: $chnls_status_text 频道名称: $green${chnls_channel_name[index]} $chnls_proxy_text$plain\n     编码: $green${chnls_video_codec[index]}:${chnls_audio_codec[index]}$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain\n     源: ${chnls_stream_link[index]}\n     m3u8位置: $chnls_playlist_file_text\n\n"
         elif [ "$kind" == "flv" ] 
         then
             if [ "${chnls_flv_status[index]}" == "on" ] 
@@ -1117,10 +1152,18 @@ ListChannels()
             else
                 chnls_flv_status_text=$red"关闭"$plain
             fi
-            chnls_list=$chnls_list"# $green$((index+1))$plain $blank进程ID: $green${chnls_pid[index]}$plain 状态: $chnls_flv_status_text 频道名称: $green${chnls_channel_name[index]}$plain\n     编码: $green${chnls_video_codec[index]}:${chnls_audio_codec[index]}$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain\n     flv推流地址: ${chnls_flv_push_link[index]:-无}\n     flv拉流地址: ${chnls_flv_pull_link[index]:-无}\n\n"
+            chnls_list=$chnls_list"# $green$((index+1))$plain $blank进程ID: $green${chnls_pid[index]}$plain 状态: $chnls_flv_status_text 频道名称: $green${chnls_channel_name[index]} $chnls_proxy_text$plain\n     编码: $green${chnls_video_codec[index]}:${chnls_audio_codec[index]}$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain\n     flv推流地址: ${chnls_flv_push_link[index]:-无}\n     flv拉流地址: ${chnls_flv_pull_link[index]:-无}\n\n"
         fi
-        
     done
+
+    if [ "$menu_num" -eq 7 ] 
+    then
+        chnls_list=$chnls_list"# $green$((chnls_count+1))$plain $blank开启所有关闭的频道\n\n"
+        chnls_list=$chnls_list"# $green$((chnls_count+2))$plain $blank关闭所有开启的频道\n\n"
+    elif [ "$menu_num" -eq 8 ] 
+    then
+        chnls_list=$chnls_list"# $green$((chnls_count+1))$plain $blank重启所有开启的频道\n\n"
+    fi
     echo && echo -e "=== 频道总数 $green $chnls_count $plain" && echo
     echo -e "$chnls_list"
 }
@@ -1154,7 +1197,7 @@ GetChannelInfo()
         chnl_stream_links=${chnl_stream_links%, live:*}
         chnl_stream_link=${chnl_stream_links%% *}
         chnl_live_yn=${channel#*, live: }
-        chnl_live_yn=${chnl_live_yn%, output_dir_name:*}
+        chnl_live_yn=${chnl_live_yn%, proxy:*}
         if [ "$chnl_live_yn" == "no" ]
         then
             chnl_live=""
@@ -1163,6 +1206,8 @@ GetChannelInfo()
             chnl_live="-l"
             chnl_live_text="$green是$plain"
         fi
+        chnl_proxy=${channel#*, proxy: }
+        chnl_proxy=${chnl_proxy%, output_dir_name:*}
         chnl_output_dir_name=${channel#*, output_dir_name: }
         chnl_output_dir_name=${chnl_output_dir_name%, playlist_name:*}
         chnl_output_dir_root="$LIVE_ROOT/$chnl_output_dir_name"
@@ -1269,7 +1314,7 @@ GetChannelInfo()
             fi
 
             chnl_seg_dir_name_text=${chnl_seg_dir_name:-不使用}
-            chnl_seg_length_text=$chnl_seg_length"s"
+            chnl_seg_length_text=$chnl_seg_length" s"
 
             chnl_crf_text=""
             chnl_nocrf_text=""
@@ -1346,7 +1391,7 @@ GetChannelInfo()
                 chnl_playlist_link_text=${chnl_playlist_link_text//_master.m3u8/.m3u8}
             fi
         fi
-    done < <($JQ_FILE '.channels | to_entries | map(select('"$select"')) | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), live: \(.value.live), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), encrypt_session: \(.value.encrypt_session), keyinfo_name: \(.value.keyinfo_name), key_name: \(.value.key_name), key_time: \(.value.key_time), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), channel_time: \(.value.channel_time), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
+    done < <($JQ_FILE '.channels | to_entries | map(select('"$select"')) | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), live: \(.value.live), proxy: \(.value.proxy), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), encrypt_session: \(.value.encrypt_session), keyinfo_name: \(.value.keyinfo_name), key_name: \(.value.key_name), key_time: \(.value.key_time), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), channel_time: \(.value.channel_time), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
 
     if [ "$found" == 0 ] && [ -z "${monitor:-}" ]
     then
@@ -1385,6 +1430,7 @@ ViewChannelInfo()
     
     echo -e " 直播源\t    : $green${chnl_stream_links// /, }$plain"
     echo -e " 无限时长直播: $chnl_live_text"
+    echo -e " 代理\t    : $green${chnl_proxy:-无}$plain"
     echo -e " 视频编码   : $green$chnl_video_codec$plain"
     echo -e " 音频编码   : $green$chnl_audio_codec$plain"
     echo -e " 视频质量   : $green$chnl_video_quality_text$plain"
@@ -1415,6 +1461,63 @@ InputChannelsIndex()
     while read -p "(默认: 取消): " chnls_index_input
     do
         chnls_pid_chosen=()
+
+        if [[ $menu_num -eq 7 ]] 
+        then
+            if [[ $chnls_index_input == $((chnls_count+1)) ]] 
+            then
+                found_chnls_off=0
+                for((i=0;i<chnls_count;i++));
+                do
+                    if [[ -z ${kind:-} ]] && [[ ${chnls_status[i]} == "off" ]]
+                    then
+                        chnls_pid_chosen+=("${chnls_pid[i]}")
+                        found_chnls_off=1
+                    elif [[ ${kind:-} == "flv" ]] && [[ ${chnls_flv_status[i]} == "off" ]]
+                    then
+                        chnls_pid_chosen+=("${chnls_pid[i]}")
+                        found_chnls_off=1
+                    fi
+                done
+                [[ $found_chnls_off -eq 0 ]] && echo && echo -e "$error 没有找到关闭的频道" && echo && exit 1
+                break
+            elif [[ $chnls_index_input == $((chnls_count+2)) ]] 
+            then
+                found_chnls_on=0
+                for((i=0;i<chnls_count;i++));
+                do
+                    if [[ -z ${kind:-} ]] && [[ ${chnls_status[i]} == "on" ]]
+                    then
+                        chnls_pid_chosen+=("${chnls_pid[i]}")
+                        found_chnls_on=1
+                    elif [[ ${kind:-} == "flv" ]] && [[ ${chnls_flv_status[i]} == "on" ]]
+                    then
+                        chnls_pid_chosen+=("${chnls_pid[i]}")
+                        found_chnls_on=1
+                    fi
+                done
+                [[ $found_chnls_on -eq 0 ]] && echo && echo -e "$error 没有找到开启的频道" && echo && exit 1
+                break
+            fi
+        elif [[ $menu_num -eq 8 ]] && [[ $chnls_index_input == $((chnls_count+1)) ]]
+        then
+            found_chnls_on=0
+            for((i=0;i<chnls_count;i++));
+            do
+                if [[ -z ${kind:-} ]] && [[ ${chnls_status[i]} == "on" ]]
+                then
+                    chnls_pid_chosen+=("${chnls_pid[i]}")
+                    found_chnls_on=1
+                elif [[ ${kind:-} == "flv" ]] && [[ ${chnls_flv_status[i]} == "on" ]]
+                then
+                    chnls_pid_chosen+=("${chnls_pid[i]}")
+                    found_chnls_on=1
+                fi
+            done
+            [[ $found_chnls_on -eq 0 ]] && echo && echo -e "$error 没有找到开启的频道" && echo && exit 1
+            break
+        fi
+
         IFS=" " read -ra chnls_index <<< "$chnls_index_input"
         [ -z "$chnls_index_input" ] && echo && echo "已取消..." && echo && exit 1
 
@@ -1515,6 +1618,19 @@ SetLive()
     echo && echo -e "	无限时长: $green $live_text $plain" && echo
 }
 
+SetProxy()
+{
+    echo && echo "请输入 ffmpeg 代理, 比如 http://username:passsword@127.0.0.1:5555"
+    echo -e "$tip 可以使用脚本自带的 v2ray 管理面板添加代理, 可以输入 omit 省略此选项" && echo
+    read -p "(默认: ${d_proxy:-不设置}): " proxy
+    proxy=${proxy:-$d_proxy}
+    if [ "$proxy" == "omit" ] 
+    then
+        proxy=""
+    fi
+    echo && echo -e "	ffmpeg 代理: $green ${proxy:-不设置} $plain" && echo
+}
+
 SetOutputDirName()
 {
     echo "请输入频道输出目录名称"
@@ -1594,18 +1710,18 @@ SetSegLength()
                 break
             ;;
             *[!0-9]*)
-                echo -e "$error 请输入正确的数字(大于0) "
+                echo -e "$error 请输入正确的数字(大于0) " && echo
             ;;
             *)
                 if [ "$seg_length" -ge 1 ]; then
                     break
                 else
-                    echo -e "$error 请输入正确的数字(大于0)"
+                    echo -e "$error 请输入正确的数字(大于0)" && echo
                 fi
             ;;
         esac
     done
-    echo && echo -e "	段时长: $green ${seg_length}s $plain" && echo
+    echo && echo -e "	段时长: $green ${seg_length} s $plain" && echo
 }
 
 SetSegCount()
@@ -1620,13 +1736,13 @@ SetSegCount()
                 break
             ;;
             *[!0-9]*)
-                echo -e "$error 请输入正确的数字(大于等于0) "
+                echo -e "$error 请输入正确的数字(大于等于0) " && echo
             ;;
             *)
                 if [ "$seg_count" -ge 0 ]; then
                     break
                 else
-                    echo -e "$error 请输入正确的数字(大于等于0)"
+                    echo -e "$error 请输入正确的数字(大于等于0)" && echo
                 fi
             ;;
         esac
@@ -1662,14 +1778,14 @@ SetQuality()
                 break
             ;;
             *[!0-9]*)
-                echo -e "$error 请输入正确的数字(大于等于0,小于等于63)或直接回车 "
+                echo -e "$error 请输入正确的数字(大于等于0,小于等于63)或直接回车 " && echo
             ;;
             *)
                 if [ "$quality" -ge 0 ] && [ "$quality" -lt 63 ]
                 then
                     break
                 else
-                    echo -e "$error 请输入正确的数字(大于等于0,小于等于63)或直接回车 "
+                    echo -e "$error 请输入正确的数字(大于等于0,小于等于63)或直接回车 " && echo
                 fi
             ;;
         esac
@@ -1981,6 +2097,7 @@ FlvStreamCreatorWithShift()
             new_channel=$(
             $JQ_FILE -n --arg pid "$pid" --arg status "off" \
                 --arg stream_link "$stream_links_input" --arg live "$live_yn" \
+                --arg proxy "$proxy" \
                 --arg output_dir_name "$output_dir_name" --arg playlist_name "$playlist_name" \
                 --arg seg_dir_name "$SEGMENT_DIRECTORY" --arg seg_name "$seg_name" \
                 --arg seg_length "$seg_length" --arg seg_count "$seg_count" \
@@ -1999,6 +2116,7 @@ FlvStreamCreatorWithShift()
                     status: $status,
                     stream_link: $stream_link,
                     live: $live,
+                    proxy: $proxy,
                     output_dir_name: $output_dir_name,
                     playlist_name: $playlist_name,
                     seg_dir_name: $seg_dir_name,
@@ -2114,7 +2232,7 @@ FlvStreamCreatorWithShift()
                 resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
             fi
 
-            $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command \
+            $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command \
             -y -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
             $FFMPEG_FLAGS -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
 
@@ -2219,7 +2337,7 @@ FlvStreamCreatorWithShift()
                 resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
             fi
 
-            $FFMPEG $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command \
+            $FFMPEG $chnl_proxy_command $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command \
             -y -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
             $FFMPEG_FLAGS -f flv "$chnl_flv_push_link" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" || true
 
@@ -2236,7 +2354,8 @@ FlvStreamCreatorWithShift()
         "command") 
             new_channel=$(
             $JQ_FILE -n --arg pid "$pid" --arg status "off" \
-                --arg stream_link "$stream_link" --arg live "yes" \
+                --arg stream_link "$stream_link" --arg live "$live_yn" \
+                --arg proxy "$proxy" \
                 --arg output_dir_name "$output_dir_name" --arg playlist_name "$playlist_name" \
                 --arg seg_dir_name "$SEGMENT_DIRECTORY" --arg seg_name "$seg_name" \
                 --arg seg_length "$seg_length" --arg seg_count "$seg_count" \
@@ -2255,6 +2374,7 @@ FlvStreamCreatorWithShift()
                     status: $status,
                     stream_link: $stream_link,
                     live: $live,
+                    proxy: $proxy,
                     output_dir_name: $output_dir_name,
                     playlist_name: $playlist_name,
                     seg_dir_name: $seg_dir_name,
@@ -2371,7 +2491,7 @@ FlvStreamCreatorWithShift()
                 resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
             fi
 
-            $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+            $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
             -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
             $FFMPEG_FLAGS -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
 
@@ -2411,6 +2531,7 @@ HlsStreamCreatorPlus()
             new_channel=$(
             $JQ_FILE -n --arg pid "$pid" --arg status "on" \
                 --arg stream_link "$stream_links_input" --arg live "$live_yn" \
+                --arg proxy "$proxy" \
                 --arg output_dir_name "$output_dir_name" --arg playlist_name "$playlist_name" \
                 --arg seg_dir_name "$SEGMENT_DIRECTORY" --arg seg_name "$seg_name" \
                 --arg seg_length "$seg_length" --arg seg_count "$seg_count" \
@@ -2429,6 +2550,7 @@ HlsStreamCreatorPlus()
                     status: $status,
                     stream_link: $stream_link,
                     live: $live,
+                    proxy: $proxy,
                     output_dir_name: $output_dir_name,
                     playlist_name: $playlist_name,
                     seg_dir_name: $seg_dir_name,
@@ -2570,13 +2692,13 @@ HlsStreamCreatorPlus()
                 else
                     echo -e "$key_name.key\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
                 fi
-                $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+                $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
                 -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
                 -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$seg_length" \
                 -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
                 $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_name/$output_name.ts" "$output_dir_root/$playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
             else
-                $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+                $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
                 -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
                 -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
                 -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
@@ -2712,13 +2834,13 @@ HlsStreamCreatorPlus()
                 else
                     echo -e "$chnl_key_name.key\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
                 fi
-                $FFMPEG $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
+                $FFMPEG $chnl_proxy_command $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
                 -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
                 -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$chnl_seg_length" \
                 -hls_list_size $chnl_seg_count -hls_delete_threshold $chnl_seg_count -hls_key_info_file "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo" \
                 $chnl_hls_flags_command -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_name/$output_name.ts" "$chnl_output_dir_root/$chnl_playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" || true
             else
-                $FFMPEG $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
+                $FFMPEG $chnl_proxy_command $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
                 -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
                 -threads 0 -flags -global_header -f segment -segment_list "$chnl_output_dir_root/$chnl_playlist_name.m3u8" \
                 -segment_time "$chnl_seg_length" -segment_format mpeg_ts $chnl_live_command \
@@ -2739,7 +2861,8 @@ HlsStreamCreatorPlus()
             mkdir -p "$output_dir_root"
             new_channel=$(
             $JQ_FILE -n --arg pid "$pid" --arg status "on" \
-                --arg stream_link "$stream_link" --arg live "yes" \
+                --arg stream_link "$stream_link" --arg live "$live_yn" \
+                --arg proxy "$proxy" \
                 --arg output_dir_name "$output_dir_name" --arg playlist_name "$playlist_name" \
                 --arg seg_dir_name "$SEGMENT_DIRECTORY" --arg seg_name "$seg_name" \
                 --arg seg_length "$seg_length" --arg seg_count "$seg_count" \
@@ -2758,6 +2881,7 @@ HlsStreamCreatorPlus()
                     status: $status,
                     stream_link: $stream_link,
                     live: $live,
+                    proxy: $proxy,
                     output_dir_name: $output_dir_name,
                     playlist_name: $playlist_name,
                     seg_dir_name: $seg_dir_name,
@@ -2899,13 +3023,13 @@ HlsStreamCreatorPlus()
                 else
                     echo -e "$key_name.key\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
                 fi
-                $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+                $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
                 -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
                 -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$seg_length" \
                 -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
                 $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_name/$output_name.ts" "$output_dir_root/$playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
             else
-                $FFMPEG $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+                $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
                 -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
                 -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
                 -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
@@ -2948,6 +3072,7 @@ HlsStreamCreator()
             new_channel=$(
             $JQ_FILE -n --arg pid "$pid" --arg status "on" \
                 --arg stream_link "$stream_links_input" --arg live "$live_yn" \
+                --arg proxy "$proxy" \
                 --arg output_dir_name "$output_dir_name" --arg playlist_name "$playlist_name" \
                 --arg seg_dir_name "$SEGMENT_DIRECTORY" --arg seg_name "$seg_name" \
                 --arg seg_length "$seg_length" --arg seg_count "$seg_count" \
@@ -2966,6 +3091,7 @@ HlsStreamCreator()
                     status: $status,
                     stream_link: $stream_link,
                     live: $live,
+                    proxy: $proxy,
                     output_dir_name: $output_dir_name,
                     playlist_name: $playlist_name,
                     seg_dir_name: $seg_dir_name,
@@ -3011,6 +3137,8 @@ HlsStreamCreator()
             then
                 bitrates_command="-b $bitrates"
             fi
+
+            export http_proxy="$proxy"
 
             $CREATOR_FILE $live -i "$stream_link" -s "$seg_length" \
             -o "$output_dir_root" $seg_count_command $bitrates_command \
@@ -3051,6 +3179,8 @@ HlsStreamCreator()
                 chnl_bitrates_command="-b $chnl_bitrates"
             fi
 
+            export http_proxy="$chnl_proxy"
+
             $CREATOR_FILE $chnl_live -i "$chnl_stream_link" -s "$chnl_seg_length" \
             -o "$chnl_output_dir_root" $chnl_seg_count_command $chnl_bitrates_command \
             -p "$chnl_playlist_name" -t "$chnl_seg_name" $chnl_key_name_command $chnl_quality_command \
@@ -3070,7 +3200,8 @@ HlsStreamCreator()
             mkdir -p "$output_dir_root"
             new_channel=$(
             $JQ_FILE -n --arg pid "$pid" --arg status "on" \
-                --arg stream_link "$stream_link" --arg live "yes" \
+                --arg stream_link "$stream_link" --arg live "$live_yn" \
+                --arg proxy "$proxy" \
                 --arg output_dir_name "$output_dir_name" --arg playlist_name "$playlist_name" \
                 --arg seg_dir_name "$SEGMENT_DIRECTORY" --arg seg_name "$seg_name" \
                 --arg seg_length "$seg_length" --arg seg_count "$seg_count" \
@@ -3089,6 +3220,7 @@ HlsStreamCreator()
                     status: $status,
                     stream_link: $stream_link,
                     live: $live,
+                    proxy: $proxy,
                     output_dir_name: $output_dir_name,
                     playlist_name: $playlist_name,
                     seg_dir_name: $seg_dir_name,
@@ -3134,6 +3266,8 @@ HlsStreamCreator()
             then
                 bitrates_command="-b $bitrates"
             fi
+
+            export http_proxy="$proxy"
 
             $CREATOR_FILE -l -i "$stream_link" -s "$seg_length" \
             -o "$output_dir_root" -c "$seg_count" $bitrates_command \
@@ -3177,6 +3311,21 @@ AddChannel()
     fi
 
     SetLive
+
+    if [ "${stream_link:0:4}" == "http" ] 
+    then
+        SetProxy
+    else
+        proxy=""
+    fi
+
+    if [ -n "$proxy" ] 
+    then
+        proxy_command="-http_proxy $proxy"
+    else
+        proxy_command=""
+    fi
+
     SetVideoCodec
     SetAudioCodec
     SetVideoAudioShift
@@ -3228,6 +3377,7 @@ AddChannel()
         seg_count=$d_seg_count
         encrypt=""
         encrypt_yn="no"
+        encrypt_session_yn="no"
         keyinfo_name=$(RandStr)
         key_name=$(RandStr)
     else
@@ -3547,6 +3697,14 @@ EditChannelAll()
     fi
 
     SetLive
+
+    if [ "${stream_link:0:4}" == "http" ] 
+    then
+        SetProxy
+    else
+        proxy=""
+    fi
+
     SetOutputDirName
     SetPlaylistName
     SetSegDirName
@@ -3638,6 +3796,7 @@ EditChannelAll()
 
     JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.stream_link)="'"$stream_links_input"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.live)="'"$live_yn"'"
+    |(.channels[]|select(.pid=='"$chnl_pid"')|.proxy)="'"$proxy"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.output_dir_name)="'"$output_dir_name"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.playlist_name)="'"$playlist_name"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.seg_dir_name)="'"$seg_dir_name"'"
@@ -3867,6 +4026,7 @@ StartChannel()
     then
         chnl_input_flags=${chnl_input_flags//-reconnect_at_eof 1/}
     fi
+
     chnl_quality_command=""
     chnl_bitrates_command=""
 
@@ -3875,6 +4035,14 @@ StartChannel()
         chnl_seg_count_command="-c $chnl_seg_count"
     else
         chnl_seg_count_command=""
+    fi
+
+    if [ "${chnl_stream_link:0:4}" == "http" ] && [ -n "$chnl_proxy" ]
+    then
+        chnl_proxy_command="-http_proxy $chnl_proxy"
+    else
+        chnl_proxy=""
+        chnl_proxy_command=""
     fi
 
     if [ -n "$chnl_encrypt" ] 
@@ -4140,18 +4308,13 @@ DelChannel()
         JQ delete "$CHANNELS_FILE" channels "$chnl_pid"
         rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.log"
         rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.err"
-        echo && echo -e "$info 频道删除成功 !" && echo
+        echo && echo -e "$info 频道[ $chnl_channel_name ]删除成功 !" && echo
     done
 }
 
 RandStr()
 {
-    if [ -z ${1+x} ] 
-    then
-        str_size=8
-    else
-        str_size=$1
-    fi
+    str_size=${1:-8}
     str_array=(
         q w e r t y u i o p a s d f g h j k l z x c v b n m Q W E R T Y U I O P A S D
 F G H J K L Z X C V B N M
@@ -5464,7 +5627,14 @@ Schedule()
                 "j2:B"
                 "news:C"
                 "finance:A"
-                "xinghe:X" )
+                "xinghe:X"
+                "classic:E"
+                "koreandrama:K"
+                "japanesedrama:D"
+                "chinesedrama:U"
+                "asianvariety:V"
+                "food:L"
+                "classicmovies:W" )
 
             for chnl in "${chnls[@]}" ; do
                 chnl_name=${chnl%:*}
@@ -5963,6 +6133,82 @@ Schedule()
                 JQ replace "$SCHEDULE_JSON" "tvbhd" "[$schedule]"
             fi
         ;;
+        "singteltv")
+            printf -v today '%(%Y%m%d)T'
+
+            if [ ! -s "$SCHEDULE_JSON" ] 
+            then
+                printf '{"%s":[]}' "my_tvbjade" > "$SCHEDULE_JSON"
+            fi
+
+            chnls=(
+                "ch8:3"
+                "chu:7"
+                "kidschannel:243"
+                "ele:501"
+                "jiale:502"
+                "starchinese:507"
+                "tvbjade:511"
+                "nowjelli:512"
+                "one:513"
+                "xingkong:516"
+                "xinghe:517"
+                "tvn:518"
+                "gem:519"
+                "ettvasia:521"
+                "oh!k:525"
+                "entertainment:531"
+                "cbo:532"
+                "foodandhealth:533"
+                "cctventertainment:534"
+                "dragontvintl:535"
+                "channelvchina:547"
+                "mtvchina:550"
+                "cctv4:555"
+                "ctiasia:557"
+                "ettvnews:561"
+                "scmhd:571"
+                "scmlegend:573"
+                "ccm:580"
+                "celestialmovies:585" )
+
+            schedule_today=$(wget "http://singteltv.com.sg/epg/channel$today.html" -qO-)
+
+            for chnl in "${chnls[@]}" ; do
+                chnl_name=${chnl%:*}
+                chnl_id=${chnl#*:}
+
+                if [ -n "${3:-}" ] && [ "$3" != "$chnl_name" ]
+                then
+                    continue
+                fi
+
+                schedule=""
+
+                line=$(grep -o -P '(?<=ch-'"$chnl_id"').*?(?=</ul>)' <<< "$schedule_today")
+                while [[ $line == *"li-time"* ]] 
+                do
+                    line=${line#*<span class=\"li-time\">}
+                    program_time=${line%%<\/span>*}
+                    line=${line#*<span class=\"li-title\">}
+                    program_title=${line%%<\/span>*}
+                    program_title=${program_title%% / *}
+                    program_title=${program_title//\"/\\\"}
+                    program_sys_time=$(date -d "$today $program_time" +%s)
+                    [ -n "$schedule" ] && schedule="$schedule,"
+                    schedule=$schedule'{
+                        "title":"'"$program_title"'",
+                        "time":"'"$program_time"'",
+                        "sys_time":"'"$program_sys_time"'"
+                    }'
+                done
+
+                if [ -n "$schedule" ] 
+                then
+                    JQ replace "$SCHEDULE_JSON" "my_$chnl_name" "[$schedule]"
+                fi
+            done
+        ;;
         *) 
             found=0
             for chnl in "${chnls[@]}" ; do
@@ -6024,16 +6270,11 @@ TsImg()
     IMG_FILE="$IPTV_ROOT/ts_yzm.jpg"
     if [ -n "${ts_array[refresh_token_url]:-}" ] 
     then
-        str1=$(RandStr)
-        str2=$(RandStr 4)
-        str3=$(RandStr 4)
-        str4=$(RandStr 4)
-        str5=$(RandStr 12)
-        deviceno="$str1-$str2-$str3-$str4-$str5"
-        str6=$(printf '%s' "$deviceno" | md5sum)
-        str6=${str6%% *}
-        str6=${str6:7:1}
-        deviceno="$deviceno$str6"
+        deviceno=$(< /proc/sys/kernel/random/uuid)
+        str=$(printf '%s' "$deviceno" | md5sum)
+        str=${str%% *}
+        str=${str:7:1}
+        deviceno="$deviceno$str"
         declare -A token_array
         while IFS="=" read -r key value
         do
@@ -6195,16 +6436,11 @@ TsRegister()
 
                     if [ "${verify_array[ret]}" == 0 ] 
                     then
-                        str1=$(RandStr)
-                        str2=$(RandStr 4)
-                        str3=$(RandStr 4)
-                        str4=$(RandStr 4)
-                        str5=$(RandStr 12)
-                        deviceno="$str1-$str2-$str3-$str4-$str5"
-                        str6=$(printf '%s' "$deviceno" | md5sum)
-                        str6=${str6%% *}
-                        str6=${str6:7:1}
-                        deviceno="$deviceno$str6"
+                        deviceno=$(< /proc/sys/kernel/random/uuid)
+                        str=$(printf '%s' "$deviceno" | md5sum)
+                        str=${str%% *}
+                        str=${str:7:1}
+                        deviceno="$deviceno$str"
                         devicetype="yuj"
                         md5_password=$(printf '%s' "$password" | md5sum)
                         md5_password=${md5_password%% *}
@@ -6294,16 +6530,11 @@ TsLogin()
         [ -z "$password" ] && echo && echo "已取消..." && echo && exit 1
     fi
 
-    str1=$(RandStr)
-    str2=$(RandStr 4)
-    str3=$(RandStr 4)
-    str4=$(RandStr 4)
-    str5=$(RandStr 12)
-    deviceno="$str1-$str2-$str3-$str4-$str5"
-    str6=$(printf '%s' "$deviceno" | md5sum)
-    str6=${str6%% *}
-    str6=${str6:7:1}
-    deviceno="$deviceno$str6"
+    deviceno=$(< /proc/sys/kernel/random/uuid)
+    str=$(printf '%s' "$deviceno" | md5sum)
+    str=${str%% *}
+    str=${str:7:1}
+    deviceno="$deviceno$str"
     md5_password=$(printf '%s' "$password" | md5sum)
     md5_password=${md5_password%% *}
 
@@ -6948,6 +7179,13 @@ MonitorTryAccounts()
             chnl_account=${chnl_account//\//:}
         fi
 
+        if [ -n "$chnl_proxy" ]
+        then
+            chnl_proxy_command="-http_proxy $chnl_proxy"
+        else
+            chnl_proxy_command=""
+        fi
+
         accounts=()
         if [ "${#accounts[@]}" == 0 ] 
         then
@@ -7049,7 +7287,7 @@ MonitorTryAccounts()
                         then
                             video=1
                         fi
-                    done < <($FFPROBE -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet || true)
+                    done < <($FFPROBE $chnl_proxy_command -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet || true)
 
                     if [ "$audio" == 1 ] && [ "$video" == 1 ]
                     then
@@ -7341,17 +7579,9 @@ Monitor()
         then
             current_minute_old=${current_minute:-}
             current_hour_old=${current_hour:-25}
-            printf -v current_time '%(%H:%M)T'
+            printf -v current_time '%(%-H:%-M)T'
             current_hour=${current_time%:*}
             current_minute=${current_time#*:}
-            if [ "${current_hour:0:1}" == 0 ] 
-            then
-                current_hour=${current_hour:1}
-            fi
-            if [ "${current_minute:0:1}" == 0 ] 
-            then
-                current_minute=${current_minute:1}
-            fi
 
             if [ "$current_hour" != "$current_hour_old" ] 
             then
@@ -7831,149 +8061,166 @@ Monitor()
                     fi
                 fi
             fi
+        fi
 
-            if [ -n "${hls_nums:-}" ] 
+        if [ "${#monitor_dir_names_chosen[@]}" -gt 0 ] 
+        then
+            rand_found=0
+            printf -v now '%(%s)T'
+            if [ -z "${loop:-}" ] || [ "$loop" -eq 10 ]
             then
-                printf -v now '%(%s)T'
-                if [ -z "${loop:-}" ] || [ "$loop" -eq 10 ]
+                loop=1
+            else
+                ((loop++))
+            fi
+            while IFS= read -r old_file_path
+            do
+                if [[ $old_file_path == *"_master.m3u8" ]] || [[ $old_file_path == *".key" ]] || [[ $old_file_path == *".keyinfo" ]]
                 then
-                    loop=1
-                else
-                    ((loop++))
+                    continue
                 fi
-                while IFS= read -r old_file_path
+                output_dir_name=${old_file_path#*$LIVE_ROOT/}
+                output_dir_name=${output_dir_name%%/*}
+                for dir_name in "${monitor_dir_names_chosen[@]}"
                 do
-                    if [[ $old_file_path == *"_master.m3u8" ]] || [[ $old_file_path == *".key" ]] || [[ $old_file_path == *".keyinfo" ]]
-                    then
-                        continue
-                    fi
-                    output_dir_name=${old_file_path#*$LIVE_ROOT/}
-                    output_dir_name=${output_dir_name%%/*}
-                    if [ "${monitor_all}" == 1 ] 
+                    if [ "$dir_name" == "$output_dir_name" ] 
                     then
                         GetChannelInfo
                         if [ -n "$chnl_live" ] 
                         then
                             printf '%s\n' "$chnl_channel_name 超时重启" >> "$MONITOR_LOG"
                             MonitorHlsRestartChannel
-                            break 1
+                            break 2
                         else
                             exclude_paths+=("$LIVE_ROOT/$output_dir_name")
                         fi
-                    else
-                        for dir_name in "${monitor_dir_names_chosen[@]}"
-                        do
-                            if [ "$dir_name" == "$output_dir_name" ] 
-                            then
-                                GetChannelInfo
-                                if [ -n "$chnl_live" ] 
-                                then
-                                    printf '%s\n' "$chnl_channel_name 超时重启" >> "$MONITOR_LOG"
-                                    MonitorHlsRestartChannel
-                                    break 2
-                                else
-                                    exclude_paths+=("$LIVE_ROOT/$output_dir_name")
-                                fi
-                            fi
-                        done  
                     fi
-                done < <(find "$LIVE_ROOT/"* $exclude_command \! -newermt "-$hls_delay_seconds seconds" || true)
+                done
+            done < <(find "$LIVE_ROOT/"* $exclude_command \! -newermt "-$hls_delay_seconds seconds" || true)
 
-                rand_found=0
-                if [ "${#monitor_dir_names_chosen[@]}" -eq 0 ] 
-                then
-                    rand_found=1
-                else
-                    GetChannelsInfo
-                fi
+            GetChannelsInfo
 
-                for output_dir_name in "${monitor_dir_names_chosen[@]}"
+            for output_dir_name in "${monitor_dir_names_chosen[@]}"
+            do
+                found=0
+                for((i=0;i<chnls_count;i++));
                 do
-                    found=0
-                    for((i=0;i<chnls_count;i++));
-                    do
-                        if [ "${chnls_output_dir_name[i]}" == "$output_dir_name" ] 
+                    if [ "${chnls_output_dir_name[i]}" == "$output_dir_name" ] 
+                    then
+                        found=1
+
+                        if [ "${chnls_status[i]}" == "off" ] 
                         then
-                            found=1
-
-                            if [ "${chnls_status[i]}" == "off" ] 
+                            sleep 5
+                            chnl_status=""
+                            GetChannelInfo
+                            if [ -z "$chnl_status" ] 
                             then
-                                sleep 5
-                                chnl_status=""
-                                GetChannelInfo
-                                if [ -z "$chnl_status" ] 
-                                then
-                                    declare -a new_array
-                                    for element in "${monitor_dir_names_chosen[@]}"
-                                    do
-                                        [ "$element" != "$output_dir_name" ] && new_array+=("$element")
-                                    done
-                                    monitor_dir_names_chosen=("${new_array[@]}")
-                                    unset new_array
-                                    break 2
-                                fi
-                                if [ "$chnl_status" == "off" ] 
-                                then
-                                    printf '%s\n' "$chnl_channel_name 开启" >> "$MONITOR_LOG"
-                                    MonitorHlsRestartChannel
-                                    break 2
-                                fi
-                            fi
-
-                            if [ "${rand_restart_hls_done:-}" != 0 ] && [ "$anti_leech_yn" == "yes" ] && [ "${chnls_encrypt[i]}" == "yes" ] && [[ $((now-chnls_key_time[i])) -gt $hls_key_period ]] && ls -A "$LIVE_ROOT/$output_dir_name/"*.key > /dev/null 2>&1
-                            then
-                                while IFS= read -r old_key 
+                                declare -a new_array
+                                for element in "${monitor_dir_names_chosen[@]}"
                                 do
-                                    old_key_name=${old_key##*/}
-                                    old_key_name=${old_key_name%%.*}
-                                    [ "$old_key_name" != "${chnls_key_name[i]}" ] && rm -rf "$old_key"
-                                done < <(find "$LIVE_ROOT/$output_dir_name/"*.key \! -newermt "-$hls_delay_seconds seconds" || true)
-
-                                new_key_name=$(RandStr)
-                                openssl rand 16 > "$LIVE_ROOT/$output_dir_name/$new_key_name.key"
-                                if [ "${chnls_encrypt_session[i]}" == "yes" ] 
-                                then
-                                    echo -e "/keys?key=$new_key_name&channel=$output_dir_name\n$LIVE_ROOT/$output_dir_name/$new_key_name.key\n$(openssl rand -hex 16)" > "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[i]}.keyinfo"
-                                else
-                                    echo -e "$new_key_name.key\n$LIVE_ROOT/$output_dir_name/$new_key_name.key\n$(openssl rand -hex 16)" > "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[i]}.keyinfo"
-                                fi
-                                JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"${chnls_pid[i]}"')|.key_name)="'"$new_key_name"'"
-                                |(.channels[]|select(.pid=='"${chnls_pid[i]}"')|.key_time)='"$now"''
-                            fi
-
-                            if [ "$loop" == 1 ] && { [ "$anti_leech_yn" == "no" ] || [ "${chnls_encrypt[i]}" == "no" ]; }
-                            then
-                                if [ "${chnls_encrypt[i]}" == "yes" ] && [ -e "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[i]}.keyinfo" ] && [ -e "$LIVE_ROOT/$output_dir_name/${chnls_key_name[i]}.key" ]
-                                then
-                                    line_no=0
-                                    while IFS= read -r line 
-                                    do
-                                        line_no=$((line_no+1))
-                                        if [ "$line_no" == 3 ] 
-                                        then
-                                            iv_hex=$line
-                                        fi
-                                    done < "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[i]}.keyinfo"
-
-                                    encrypt_key=$(hexdump -e '16/1 "%02x"' < "$LIVE_ROOT/$output_dir_name/${chnls_key_name[i]}.key")
-                                    encrypt_command="-key $encrypt_key -iv $iv_hex"
-                                else
-                                    encrypt_command=""
-                                fi
-
-                                audio=0
-                                video=0
-                                video_bitrate=0
-                                bitrate_check=0
-                                f_count=1
-                                for f in "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[i]}/"*.ts
-                                do
-                                    ((f_count++))
+                                    [ "$element" != "$output_dir_name" ] && new_array+=("$element")
                                 done
+                                monitor_dir_names_chosen=("${new_array[@]}")
+                                unset new_array
+                                break 2
+                            fi
+                            if [ "$chnl_status" == "off" ] 
+                            then
+                                printf '%s\n' "$chnl_channel_name 开启" >> "$MONITOR_LOG"
+                                MonitorHlsRestartChannel
+                                break 2
+                            fi
+                        fi
 
-                                f_num=$((f_count/2))
+                        if [ "${rand_restart_hls_done:-}" != 0 ] && [ "$anti_leech_yn" == "yes" ] && [ "${chnls_encrypt[i]}" == "yes" ] && [[ $((now-chnls_key_time[i])) -gt $hls_key_period ]] && ls -A "$LIVE_ROOT/$output_dir_name/"*.key > /dev/null 2>&1
+                        then
+                            while IFS= read -r old_key 
+                            do
+                                old_key_name=${old_key##*/}
+                                old_key_name=${old_key_name%%.*}
+                                [ "$old_key_name" != "${chnls_key_name[i]}" ] && rm -rf "$old_key"
+                            done < <(find "$LIVE_ROOT/$output_dir_name/"*.key \! -newermt "-$hls_delay_seconds seconds" || true)
+
+                            new_key_name=$(RandStr)
+                            openssl rand 16 > "$LIVE_ROOT/$output_dir_name/$new_key_name.key"
+                            if [ "${chnls_encrypt_session[i]}" == "yes" ] 
+                            then
+                                echo -e "/keys?key=$new_key_name&channel=$output_dir_name\n$LIVE_ROOT/$output_dir_name/$new_key_name.key\n$(openssl rand -hex 16)" > "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[i]}.keyinfo"
+                            else
+                                echo -e "$new_key_name.key\n$LIVE_ROOT/$output_dir_name/$new_key_name.key\n$(openssl rand -hex 16)" > "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[i]}.keyinfo"
+                            fi
+                            JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"${chnls_pid[i]}"')|.key_name)="'"$new_key_name"'"
+                            |(.channels[]|select(.pid=='"${chnls_pid[i]}"')|.key_time)='"$now"''
+                        fi
+
+                        if [ "$loop" == 1 ] && { [ "$anti_leech_yn" == "no" ] || [ "${chnls_encrypt[i]}" == "no" ]; }
+                        then
+                            if [ "${chnls_encrypt[i]}" == "yes" ] && [ -e "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[i]}.keyinfo" ] && [ -e "$LIVE_ROOT/$output_dir_name/${chnls_key_name[i]}.key" ]
+                            then
+                                line_no=0
+                                while IFS= read -r line 
+                                do
+                                    line_no=$((line_no+1))
+                                    if [ "$line_no" == 3 ] 
+                                    then
+                                        iv_hex=$line
+                                    fi
+                                done < "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[i]}.keyinfo"
+
+                                encrypt_key=$(hexdump -e '16/1 "%02x"' < "$LIVE_ROOT/$output_dir_name/${chnls_key_name[i]}.key")
+                                encrypt_command="-key $encrypt_key -iv $iv_hex"
+                            else
+                                encrypt_command=""
+                            fi
+
+                            audio=0
+                            video=0
+                            video_bitrate=0
+                            bitrate_check=0
+                            f_count=1
+                            for f in "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[i]}/"*.ts
+                            do
+                                ((f_count++))
+                            done
+
+                            f_num=$((f_count/2))
+                            f_count=1
+
+                            for f in "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[i]}/"*.ts
+                            do
+                                if [ "$f_count" -lt "$f_num" ] 
+                                then
+                                    ((f_count++))
+                                    continue
+                                fi
+                                [ -n "$encrypt_command" ] && f="crypto:$f"
+                                while IFS= read -r line 
+                                do
+                                    if [[ $line == *"codec_type=video"* ]] 
+                                    then
+                                        video=1
+                                    elif [ "$bitrate_check" == 0 ] && [ "$video" == 1 ] && [[ $line == *"bit_rate="* ]] 
+                                    then
+                                        line=${line#*bit_rate=}
+                                        video_bitrate=${line//N\/A/$hls_min_bitrates}
+                                        bitrate_check=1
+                                    elif [[ $line == *"codec_type=audio"* ]] 
+                                    then
+                                        audio=1
+                                    elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
+                                    then
+                                        audio=0
+                                    fi
+                                done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet || true)
+                                break
+                            done
+
+                            if [ "$audio" == 0 ] || [ "$video" == 0 ] || [[ $video_bitrate -lt $hls_min_bitrates ]]
+                            then
+                                [ -n "$encrypt_command" ] && f="crypto:$f"
+                                fail_count=1
                                 f_count=1
-
                                 for f in "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[i]}/"*.ts
                                 do
                                     if [ "$f_count" -lt "$f_num" ] 
@@ -7981,7 +8228,11 @@ Monitor()
                                         ((f_count++))
                                         continue
                                     fi
-                                    [ -n "$encrypt_command" ] && f="crypto:$f"
+                                    [ ! -e "$f" ] && continue
+                                    audio=0
+                                    video=0
+                                    video_bitrate=0
+                                    bitrate_check=0
                                     while IFS= read -r line 
                                     do
                                         if [[ $line == *"codec_type=video"* ]] 
@@ -8000,89 +8251,46 @@ Monitor()
                                             audio=0
                                         fi
                                     done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet || true)
-                                    break
+
+                                    if [ "$audio" == 0 ] || [ "$video" == 0 ] || [[ $video_bitrate -lt $hls_min_bitrates ]]
+                                    then
+                                        ((fail_count++))
+                                    fi
+                                    if [ "$fail_count" -gt 3 ] 
+                                    then
+                                        GetChannelInfo
+                                        printf '%s\n' "$chnl_channel_name 比特率过低重启" >> "$MONITOR_LOG"
+                                        MonitorHlsRestartChannel
+                                        break 2
+                                    fi
                                 done
-
-                                if [ "$audio" == 0 ] || [ "$video" == 0 ] || [[ $video_bitrate -lt $hls_min_bitrates ]]
-                                then
-                                    [ -n "$encrypt_command" ] && f="crypto:$f"
-                                    fail_count=1
-                                    f_count=1
-                                    for f in "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[i]}/"*.ts
-                                    do
-                                        if [ "$f_count" -lt "$f_num" ] 
-                                        then
-                                            ((f_count++))
-                                            continue
-                                        fi
-                                        [ ! -e "$f" ] && continue
-                                        audio=0
-                                        video=0
-                                        video_bitrate=0
-                                        bitrate_check=0
-                                        while IFS= read -r line 
-                                        do
-                                            if [[ $line == *"codec_type=video"* ]] 
-                                            then
-                                                video=1
-                                            elif [ "$bitrate_check" == 0 ] && [ "$video" == 1 ] && [[ $line == *"bit_rate="* ]] 
-                                            then
-                                                line=${line#*bit_rate=}
-                                                video_bitrate=${line//N\/A/$hls_min_bitrates}
-                                                bitrate_check=1
-                                            elif [[ $line == *"codec_type=audio"* ]] 
-                                            then
-                                                audio=1
-                                            elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
-                                            then
-                                                audio=0
-                                            fi
-                                        done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet || true)
-
-                                        if [ "$audio" == 0 ] || [ "$video" == 0 ] || [[ $video_bitrate -lt $hls_min_bitrates ]]
-                                        then
-                                            ((fail_count++))
-                                        fi
-                                        if [ "$fail_count" -gt 3 ] 
-                                        then
-                                            GetChannelInfo
-                                            printf '%s\n' "$chnl_channel_name 比特率过低重启" >> "$MONITOR_LOG"
-                                            MonitorHlsRestartChannel
-                                            break 2
-                                        fi
-                                    done
-                                fi
                             fi
-
-                            if [ "${rand_restart_hls_done:-}" == 0 ]
-                            then
-                                rand_found=1
-                                GetChannelInfo
-                                printf '%s\n' "$chnl_channel_name HLS 随机重启" >> "$MONITOR_LOG"
-                                MonitorHlsRestartChannel
-                            fi
-                            break 1
                         fi
-                    done
-
-                    if [ "$found" == 0 ] 
-                    then
-                        declare -a new_array
-                        for element in "${monitor_dir_names_chosen[@]}"
-                        do
-                            [ "$element" != "$output_dir_name" ] && new_array+=("$element")
-                        done
-                        monitor_dir_names_chosen=("${new_array[@]}")
-                        unset new_array
                         break 1
                     fi
                 done
 
-                if [ "$rand_found" == 1 ] 
+                if [ "$found" == 0 ] 
                 then
-                    rand_restart_hls_done=1
+                    declare -a new_array
+                    for element in "${monitor_dir_names_chosen[@]}"
+                    do
+                        [ "$element" != "$output_dir_name" ] && new_array+=("$element")
+                    done
+                    monitor_dir_names_chosen=("${new_array[@]}")
+                    unset new_array
+                    break 1
+                elif [ "${rand_restart_hls_done:-}" == 0 ] 
+                then
+                    rand_found=1
+                    GetChannelInfo
+                    printf '%s\n' "$chnl_channel_name HLS 随机重启" >> "$MONITOR_LOG"
+                    MonitorHlsRestartChannel
                 fi
-            else
+            done
+
+            if [ "$rand_found" == 1 ] 
+            then
                 rand_restart_hls_done=1
             fi
         else
@@ -8121,6 +8329,18 @@ AntiLeech()
             esac
         done
 
+        if [ "$anti_leech_restart_nums" -gt 0 ] 
+        then
+            echo && echo "是否下个小时开始随机重启？[y/N]"
+            read -p "(默认: N): " anti_leech_restart_next_hour_yn
+            anti_leech_restart_next_hour_yn=${anti_leech_restart_next_hour_yn:-N}
+            if [[ $anti_leech_restart_next_hour_yn == [Yy] ]] 
+            then
+                printf -v current_hour '%(%-H)T'
+                skip_hour=$current_hour
+                minutes=()
+            fi
+        fi
 
         if [ -n "${flv_nums:-}" ] 
         then
@@ -8379,7 +8599,6 @@ MonitorSet()
         monitor_dir_names_chosen=()
         if [ "$hls_nums" == $((monitor_count+1)) ] 
         then
-            monitor_all=1
             monitor_dir_names_chosen=("${monitor_dir_names[@]}")
 
             echo && echo "设置超时多少秒自动重启频道"
@@ -8402,8 +8621,6 @@ MonitorSet()
                 esac
             done
             break
-        else
-            monitor_all=0
         fi
 
         error_no=0
@@ -8966,9 +9183,64 @@ TestXtreamCodes()
         esac
     done
 
+    chnls=()
+
+    echo && echo "输入 ffmpeg 代理, 比如 http://username:passsword@127.0.0.1:5555"
+    read -p "(默认: 不设置): " proxy
+
+    if [ -n "$proxy" ] 
+    then
+        proxy_command="-http_proxy $proxy"
+        echo && echo "代理服务器如果有正在使用的账号需要排除，输入代理服务器的 channels.json 链接或本地路径"
+        read -p "(默认: 无): " proxy_channels_json
+        if [ -n "$proxy_channels_json" ] 
+        then
+            if [ "${proxy_channels_json:0:1}" == "/" ] 
+            then
+                proxy_channels=$(< "$proxy_channels_json")
+            else
+                proxy_channels=$(wget --no-check-certificate "$proxy_channels_json" -qO-)
+            fi
+            while IFS= read -r line 
+            do
+                if [[ $line == *\"status\":* ]] 
+                then
+                    line=${line#*: \"}
+                    status=${line%\",*}
+                elif [[ $line == *\"stream_link\":* ]] && [[ $line == *http://*/*/*/* ]]
+                then
+                    line=${line#*: \"http://}
+                    chnl_domain=${line%%/*}
+                    line=${line#*/}
+                    chnl_username=${line%%/*}
+                    if [ "$chnl_username" == "live" ] 
+                    then
+                        line=${line#*/}
+                        chnl_username=${line%%/*}
+                    fi
+                    line=${line#*/}
+                    chnl_password=${line%%/*}
+                elif [[ $line == *\"flv_status\":* ]] 
+                then
+                    line=${line#*: \"}
+                    flv_status=${line%\",*}
+                    if [ -n "${chnl_domain:-}" ] 
+                    then
+                        if [ "$status" == "on" ] || [ "$flv_status" == "on" ]
+                        then
+                            chnls+=("$chnl_domain/$chnl_username/$chnl_password")
+                        fi
+                    fi
+                    chnl_domain=""
+                fi
+            done <<< "$proxy_channels"
+        fi
+    else
+        proxy_command=""
+    fi
+
     if [ -e "$CHANNELS_FILE" ] 
     then
-        chnls=()
         while IFS= read -r line 
         do
             if [[ $line == *\"status\":* ]] 
@@ -9038,11 +9310,11 @@ TestXtreamCodes()
         else
             for domain in "${domains[@]}"
             do
-                if $FFPROBE -i "http://$domain/$username/$password/$channel_id" -rw_timeout 3000000 -show_streams -select_streams a -loglevel quiet > /dev/null # curl --output /dev/null -m 3 --silent --fail -r 0-0
+                if $FFPROBE $proxy_command -i "http://$domain/$username/$password/$channel_id" -rw_timeout 3000000 -show_streams -select_streams a -loglevel quiet > /dev/null # curl --output /dev/null -m 3 --silent --fail -r 0-0
                 then
                     echo -e "${green}[成功]$plain $username    $password    $green$domain$plain"
                     echo "http://$domain/$username/$password/$channel_id" && echo
-                elif $FFPROBE -i "http://$domain/live/$username/$password/$channel_id.ts" -rw_timeout 3000000 -show_streams -select_streams a -loglevel quiet > /dev/null 
+                elif $FFPROBE $proxy_command -i "http://$domain/live/$username/$password/$channel_id.ts" -rw_timeout 3000000 -show_streams -select_streams a -loglevel quiet > /dev/null 
                 then
                     echo -e "${green}[成功]$plain $username    $password    $green$domain$plain"
                     echo "http://$domain/live/$username/$password/$channel_id.ts" && echo
@@ -9066,13 +9338,16 @@ Copyright (C) 2013 B Tasker, D Atanasov
 Released under BSD 3 Clause License
 See LICENSE
 
-使用方法: tv -i [直播源] [-s 段时长(秒)] [-o 输出目录名称] [-c m3u8包含的段数目] [-b 比特率] [-p m3u8文件名称] [-C]
+使用方法: tv -i [直播源] [-s 段时长(秒)] [-o 输出目录名称] [-c m3u8包含的段数目] [-b 比特率] [-p m3u8文件名称] [-C] [-l] [-P http代理]
 
     -i  直播源(支持 mpegts / hls / flv ...)
         可以是视频路径
         可以输入不同链接地址(监控按顺序尝试使用)，用空格分隔
     -s  段时长(秒)(默认：6)
     -o  输出目录名称(默认：随机名称)
+
+    -l  非无限时长直播, 无法设置切割段数目且无法监控(默认：不设置)
+    -P  ffmpeg 的 http 代理, 直播源是 http 链接时可用(默认：不设置)
 
     -p  m3u8名称(前缀)(默认：随机)
     -c  m3u8里包含的段数目(默认：5)
@@ -9162,7 +9437,7 @@ UpdateSelf()
 
         d_input_flags=${d_input_flags//-timeout 2000000000/-rw_timeout 10000000}
         default=$(
-        $JQ_FILE -n --arg playlist_name "$d_playlist_name" --arg seg_dir_name "$d_seg_dir_name" \
+        $JQ_FILE -n --arg proxy "$d_proxy" --arg playlist_name "$d_playlist_name" --arg seg_dir_name "$d_seg_dir_name" \
             --arg seg_name "$d_seg_name" --arg seg_length "$d_seg_length" \
             --arg seg_count "$d_seg_count" --arg video_codec "$d_video_codec" \
             --arg audio_codec "$d_audio_codec" --arg video_audio_shift "$d_video_audio_shift" \
@@ -9183,6 +9458,7 @@ UpdateSelf()
             --arg anti_leech_restart_nums "$d_anti_leech_restart_nums" --arg anti_leech_restart_flv_changes "$d_anti_leech_restart_flv_changes_yn" \
             --arg anti_leech_restart_hls_changes "$d_anti_leech_restart_hls_changes_yn" --arg version "$sh_ver" \
             '{
+                proxy: $proxy,
                 playlist_name: $playlist_name,
                 seg_dir_name: $seg_dir_name,
                 seg_name: $seg_name,
@@ -9235,6 +9511,7 @@ UpdateSelf()
             new_channel=$(
             $JQ_FILE -n --arg pid "${chnls_pid[i]}" --arg status "${chnls_status[i]}" \
                 --arg stream_link "${chnls_stream_links[i]}" --arg live "${chnls_live[i]}" \
+                --arg proxy "${chnls_proxy[i]}" \
                 --arg output_dir_name "${chnls_output_dir_name[i]}" --arg playlist_name "${chnls_playlist_name[i]}" \
                 --arg seg_dir_name "${chnls_seg_dir_name[i]}" --arg seg_name "${chnls_seg_name[i]}" \
                 --arg seg_length "${chnls_seg_length[i]}" --arg seg_count "${chnls_seg_count[i]}" \
@@ -9255,6 +9532,7 @@ UpdateSelf()
                     status: $status,
                     stream_link: $stream_link,
                     live: $live,
+                    proxy: $proxy,
                     output_dir_name: $output_dir_name,
                     playlist_name: $playlist_name,
                     seg_dir_name: $seg_dir_name,
@@ -9299,24 +9577,2205 @@ then
     UpdateSelf
 fi
 
-if [ "${0##*/}" == "v2" ] 
+V2rayConfigInstall()
+{
+    while IFS= read -r line 
+    do
+        if [[ $line == *"port"* ]] 
+        then
+            port=${line#*: }
+            port=${port%,*}
+        elif [[ $line == *"id"* ]] 
+        then
+            id=${line#*: \"}
+            id=${id%\"*}
+            break
+        fi
+    done < "$V2_CONFIG"
+
+    $JQ_FILE -n --arg port "$port" --arg id "$id" --arg path "${path:-/$(RandStr)}" \
+'{
+  "log": {
+    "access": "none",
+    "error": "/var/log/v2ray/error.log",
+    "loglevel": "error"
+  },
+  "inbounds": [
+    {
+      "listen": "127.0.0.1",
+      "port": $port | tonumber,
+      "protocol": "vmess",
+      "settings": {
+        "clients": [
+          {
+            "id": $id,
+            "level": 0,
+            "alterId": 64,
+            "email": "name@localhost"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": $path
+        }
+      },
+      "tag": "nginx-1"
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "settings": {}
+    },
+    {
+      "protocol": "blackhole",
+      "settings": {},
+      "tag": "blocked"
+    }
+  ],
+  "routing": {
+    "rules": [
+      {
+        "type": "field",
+        "ip": [
+          "geoip:private"
+        ],
+        "outboundTag": "blocked"
+      }
+    ]
+  },
+  "PolicyObject": {
+    "levels": {
+      "0": {
+        "handshake": 4,
+        "connIdle": 300,
+        "uplinkOnly": 2,
+        "downlinkOnly": 5,
+        "statsUserUplink": true,
+        "statsUserDownlink": true
+      }
+    },
+    "system": {
+      "statsInboundUplink": true,
+      "statsInboundDownlink": true
+    }
+  }
+}' > "$V2_CONFIG"
+}
+
+V2rayConfigUpdate()
+{
+    if ! grep -q '"tag": "nginx-1"' < "$V2_CONFIG"
+    then
+        if grep -q '"path": "' < "$V2_CONFIG" 
+        then
+            while IFS= read -r line 
+            do
+                if [[ $line == *"path"* ]] 
+                then
+                    path=${line#*: \"}
+                    path=${path%\"*}
+                    break
+                fi
+            done < "$V2_CONFIG"
+        fi
+        V2rayConfigInstall
+        echo && echo -e "$info v2ray 配置文件已更新" && echo
+    fi
+}
+
+V2rayGetInbounds()
+{
+    inbounds_count=0
+    inbounds_nginx_count=0
+    inbounds_nginx_index=()
+    inbounds_forward_count=0
+    inbounds_listen=()
+    inbounds_port=()
+    inbounds_protocol=()
+    inbounds_network=()
+    inbounds_path=()
+    inbounds_tag=()
+    inbounds_timeout=()
+    inbounds_allow_transparent=()
+    inbounds_user_level=()
+
+    while IFS= read -r inbound
+    do
+        map_listen=${inbound#*listen: }
+        map_listen=${map_listen%, port:*}
+        map_port=${inbound#*, port: }
+        map_port=${map_port%, protocol:*}
+        map_protocol=${inbound#*, protocol: }
+        map_protocol=${map_protocol%, network:*}
+        map_network=${inbound#*, network: }
+        map_network=${map_network%, path:*}
+        [ "$map_network" == null ] && map_network=""
+        map_path=${inbound#*, path: }
+        map_path=${map_path%, tag:*}
+        [ "$map_path" == null ] && map_path=""
+        map_tag=${inbound#*, tag: }
+        map_tag=${map_tag%, timeout:*}
+        if [ "${map_tag:0:6}" == "nginx-" ] 
+        then
+            inbounds_nginx_count=$((inbounds_nginx_count+1))
+            inbounds_nginx_index+=("$inbounds_count")
+        else
+            inbounds_forward_count=$((inbounds_forward_count+1))
+        fi
+        map_timeout=${inbound#*, timeout: }
+        map_timeout=${map_timeout%, allowTransparent:*}
+        [ "$map_timeout" == null ] && map_timeout=""
+        map_allow_transparent=${inbound#*, allowTransparent: }
+        map_allow_transparent=${map_allow_transparent%, userLevel:*}
+        [ "$map_allow_transparent" == null ] && map_allow_transparent=""
+        map_user_level=${inbound#*, userLevel: }
+        map_user_level=${map_user_level%\"}
+        [ "$map_user_level" == null ] && map_user_level=""
+
+        inbounds_listen+=("$map_listen")
+        inbounds_port+=("$map_port")
+        inbounds_protocol+=("$map_protocol")
+        inbounds_network+=("$map_network")
+        inbounds_path+=("$map_path")
+        inbounds_tag+=("$map_tag")
+        inbounds_timeout+=("$map_timeout")
+        inbounds_allow_transparent+=("$map_allow_transparent")
+        inbounds_user_level+=("$map_user_level")
+        inbounds_count=$((inbounds_count+1))
+    done < <($JQ_FILE '.inbounds | to_entries | map("listen: \(.value.listen), port: \(.value.port), protocol: \(.value.protocol), network: \(.value.streamSettings.network), path: \(.value.streamSettings.wsSettings.path), tag: \(.value.tag), timeout: \(.value.settings.timeout), allowTransparent: \(.value.settings.allowTransparent), userLevel: \(.value.settings.userLevel)") | .[]' "$V2_CONFIG")
+
+    return 0
+}
+
+V2rayGetOutbounds()
+{
+    outbounds_count=0
+    outbounds_index=0
+    outbounds_vmess_count=0
+    outbounds_http_count=0
+    outbounds_https_count=0
+    outbounds_protocol=()
+    outbounds_tag=()
+    outbounds_security=()
+    outbounds_allow_insecure=()
+    outbounds_proxy_settings_tag=()
+
+    while IFS= read -r outbound
+    do
+        map_protocol=${outbound#*protocol: }
+        map_protocol=${map_protocol%, tag:*}
+        map_tag=${outbound#*, tag: }
+        map_tag=${map_tag%, proxy_settings_tag:*}
+        [ "$map_tag" == null ] && map_tag=""
+        map_proxy_settings_tag=${outbound#*, proxy_settings_tag: }
+        map_proxy_settings_tag=${map_proxy_settings_tag%, security:*}
+        [ "$map_proxy_settings_tag" == null ] && map_proxy_settings_tag=""
+        map_security=${outbound#*, security: }
+        map_security=${map_security%, allowInsecure:*}
+        [ "$map_security" == null ] && map_security=""
+        map_allow_insecure=${outbound#*, allowInsecure: }
+        map_allow_insecure=${map_allow_insecure%\"}
+        [ "$map_allow_insecure" == null ] && map_allow_insecure=""
+
+        if [ -n "$map_tag" ] 
+        then
+            if [ -n "$map_proxy_settings_tag" ] 
+            then
+                outbounds_proxy_settings_tag+=("$map_proxy_settings_tag")
+            else
+                outbounds_proxy_settings_tag+=("")
+            fi
+            if [ "$map_tag" != "blocked" ] 
+            then
+                outbounds_count=$((outbounds_count+1))
+                if [ "$map_protocol" == "vmess" ] 
+                then
+                    outbounds_vmess_count=$((outbounds_vmess_count+1))
+                elif [ "$map_protocol" == "http" ] 
+                then
+                    if [ -n "$map_security" ] 
+                    then
+                        outbounds_https_count=$((outbounds_https_count+1))
+                    else
+                        outbounds_http_count=$((outbounds_http_count+1))
+                    fi
+                fi
+                outbounds_protocol+=("$map_protocol")
+                outbounds_tag+=("$map_tag")
+                outbounds_security+=("$map_security")
+                outbounds_allow_insecure+=("$map_allow_insecure")
+            fi
+        fi
+
+        outbounds_index=$((outbounds_index+1))
+
+    done < <($JQ_FILE '.outbounds | to_entries | map("protocol: \(.value.protocol), tag: \(.value.tag), proxy_settings_tag: \(.value.proxySettings.tag), security: \(.value.streamSettings.security), allowInsecure: \(.value.streamSettings.tlsSettings.allowInsecure)") | .[]' "$V2_CONFIG")
+
+    outbounds_proxy_forward=()
+    for((i=0;i<${#outbounds_tag[@]};i++));
+    do
+        found=0
+        for((j=0;j<${#outbounds_proxy_settings_tag[@]};j++));
+        do
+            if [ "${outbounds_proxy_settings_tag[j]}" == "${outbounds_tag[i]}" ] 
+            then
+                found=1
+                outbounds_proxy_forward+=("true")
+                break
+            fi
+        done
+
+        if [ "$found" -eq 0 ] 
+        then
+            outbounds_proxy_forward+=("false")
+        fi
+    done
+}
+
+V2rayGetRules()
+{
+    rules_outbound_tag=()
+    while IFS= read -r outbound_tag 
+    do
+        rules_outbound_tag+=("$outbound_tag")
+    done < <($JQ_FILE '.routing.rules | to_entries | map("\(.value.outboundTag)") | .[]' "$V2_CONFIG")
+    rules_count=${#rules_outbound_tag[@]}
+}
+
+V2rayGetLevels()
+{
+    levels_id=()
+    levels_handshake=()
+    levels_connIdle=()
+    levels_uplinkOnly=()
+    levels_downlinkOnly=()
+    levels_statsUserUplink=()
+    levels_statsUserDownlink=()
+    levels_bufferSize=()
+    while IFS= read -r level 
+    do
+        map_id=${level#*id: }
+        map_id=${map_id%, handshake:*}
+        map_handshake=${level#*, handshake: }
+        map_handshake=${map_handshake%, connIdle:*}
+        map_connIdle=${level#*, connIdle: }
+        map_connIdle=${map_connIdle%, uplinkOnly:*}
+        map_uplinkOnly=${level#*, uplinkOnly: }
+        map_uplinkOnly=${map_uplinkOnly%, downlinkOnly:*}
+        map_downlinkOnly=${level#*, downlinkOnly: }
+        map_downlinkOnly=${map_downlinkOnly%, statsUserUplink:*}
+        map_statsUserUplink=${level#*, statsUserUplink: }
+        map_statsUserUplink=${map_statsUserUplink%, statsUserDownlink:*}
+        map_statsUserDownlink=${level#*, statsUserDownlink: }
+        map_statsUserDownlink=${map_statsUserDownlink%, bufferSize:*}
+        map_bufferSize=${level#*, bufferSize: }
+        map_bufferSize=${map_bufferSize%\"}
+        [ "$map_bufferSize" == null ] && map_bufferSize=""
+
+        levels_id+=("$map_id")
+        levels_handshake+=("$map_handshake")
+        levels_connIdle+=("$map_connIdle")
+        levels_uplinkOnly+=("$map_uplinkOnly")
+        levels_downlinkOnly+=("$map_downlinkOnly")
+        levels_statsUserUplink+=("$map_statsUserUplink")
+        levels_statsUserDownlink+=("$map_statsUserDownlink")
+        levels_bufferSize+=("$map_bufferSize")
+    done < <($JQ_FILE '.PolicyObject.levels | to_entries | map("id: \(.key), handshake: \(.value.handshake), connIdle: \(.value.connIdle), uplinkOnly: \(.value.uplinkOnly), downlinkOnly: \(.value.downlinkOnly), statsUserUplink: \(.value.statsUserUplink), statsUserDownlink: \(.value.statsUserDownlink), bufferSize: \(.value.bufferSize)") | .[]' "$V2_CONFIG")
+    levels_count=${#levels_id[@]}
+}
+
+V2rayListForward()
+{
+    V2rayGetInbounds
+    V2rayGetOutbounds
+
+    echo && echo && echo -e "=== 入站转发账号组数 $green $inbounds_forward_count $plain" && echo
+
+    inbounds_forward_list=""
+    index=0
+    for((i=0;i<inbounds_count;i++));
+    do
+        if [[ ${inbounds_tag[i]} == "nginx-"* ]] 
+        then
+            continue
+        fi
+
+        index=$((index+1))
+        if [ "$index" -lt 9 ] 
+        then
+            blank=" "
+        else
+            blank=""
+        fi
+
+        if [ -n "${inbounds_network[i]}" ] 
+        then
+            stream_settings_list="\n     网络: $green${inbounds_network[i]}$plain 路径: $green${inbounds_path[i]}$plain 加密: $green否$plain"
+        else
+            stream_settings_list=""
+        fi
+
+        if [ -n "${inbounds_timeout[i]}" ] 
+        then
+            http_list="\n     超时: $green${inbounds_timeout[i]}$plain 转发所有请求: $green${inbounds_allow_transparent[i]}$plain 等级: $green${inbounds_user_level[i]}$plain"
+        else
+            http_list=""
+        fi
+
+        inbounds_forward_list=$inbounds_forward_list"# $green$index$plain $blank组名: $green${inbounds_tag[i]}$plain 协议: $green${inbounds_protocol[i]}$plain 地址: $green${inbounds_listen[i]}:${inbounds_port[i]}$plain$stream_settings_list$http_list\n\n"
+    done
+    [ -n "$inbounds_forward_list" ] && echo -e "$inbounds_forward_list" && echo
+
+    echo && echo -e "=== 出站转发账号组数 $green $outbounds_count $plain" && echo
+
+    outbounds_list=""
+    for((i=0;i<outbounds_count;i++));
+    do
+        if [ "$i" -lt 9 ] 
+        then
+            blank=" "
+        else
+            blank=""
+        fi
+
+        if [ -n "${outbounds_security[i]}" ] 
+        then
+            protocol="https"
+            stream_settings_list="\n     security: $green${outbounds_security[i]}$plain 检测证书有效性: $green${outbounds_allow_insecure[i]}$plain"
+        else
+            protocol=${outbounds_protocol[i]}
+            stream_settings_list=""
+        fi
+
+        if [ -n "${outbounds_proxy_settings_tag[i]}" ] 
+        then
+            proxy_list="\n     前置代理: $green终$plain"
+        elif [ "${outbounds_proxy_forward[i]}" == "true" ] 
+        then
+            proxy_list="\n     前置代理: $green始$plain"
+        else
+            proxy_list=""
+        fi
+
+        outbounds_list=$outbounds_list"# $green$((i+inbounds_forward_count+1))$plain $blank组名: $green${outbounds_tag[i]}$plain 协议: $green$protocol$plain$stream_settings_list$proxy_list\n\n"
+    done
+    [ -n "$outbounds_list" ] && echo -e "$outbounds_list" && echo
+    return 0
+}
+
+V2rayListNginx()
+{
+    V2rayGetInbounds
+
+    [ "$inbounds_nginx_count" -eq 0 ] && echo && echo -e "$error 没有账号组" && echo && exit 1
+
+    echo && echo && echo -e "=== Nginx 账号组数 $green $inbounds_nginx_count $plain" && echo
+
+    nginx_list=""
+
+    for((i=0;i<inbounds_nginx_count;i++));
+    do
+        inbounds_index=${inbounds_nginx_index[i]}
+        if [ "$i" -lt 9 ] 
+        then
+            blank=" "
+        else
+            blank=""
+        fi
+        if [ -n "${inbounds_network[inbounds_index]}" ] 
+        then
+            stream_settings_list="\n     网络: $green${inbounds_network[inbounds_index]}$plain 路径: $green${inbounds_path[inbounds_index]}$plain 加密: $green否$plain"
+        else
+            stream_settings_list=""
+        fi
+        nginx_list=$nginx_list"# $green$((i+1))$plain $blank组名: $green${inbounds_tag[inbounds_index]}$plain 协议: $green${inbounds_protocol[inbounds_index]}$plain 地址: $green${inbounds_listen[inbounds_index]}:${inbounds_port[inbounds_index]}$plain$stream_settings_list\n\n"
+    done
+
+    echo -e "$nginx_list" && echo
+}
+
+V2rayDeleteNginx()
+{
+    echo "输入序号"
+    while read -p "(默认: 取消): " nginx_num
+    do
+        case "$nginx_num" in
+            "")
+                echo && echo "已取消..." && echo && exit 1
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的序号" && echo
+            ;;
+            *)
+                if [ "$nginx_num" -gt 0 ] && [ "$nginx_num" -le $inbounds_nginx_count ]
+                then
+                    nginx_num=$((nginx_num-1))
+                    nginx_index=${inbounds_nginx_index[nginx_num]}
+                    break
+                else
+                    echo -e "$error 请输入正确的序号" && echo
+                fi
+            ;;
+        esac
+    done
+
+    jq_path='["inbounds"]'
+    JQ delete "$V2_CONFIG" "$nginx_index"
+    echo && echo -e "$info 账号组删除成功" && echo
+}
+
+V2rayListNginxAccounts()
+{
+    echo "输入序号"
+    while read -p "(默认: 取消): " nginx_num
+    do
+        case "$nginx_num" in
+            "")
+                echo && echo "已取消..." && echo && exit 1
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的序号" && echo
+            ;;
+            *)
+                if [ "$nginx_num" -gt 0 ] && [ "$nginx_num" -le $inbounds_nginx_count ]
+                then
+                    nginx_num=$((nginx_num-1))
+                    nginx_index=${inbounds_nginx_index[nginx_num]}
+                    break
+                else
+                    echo -e "$error 请输入正确的序号" && echo
+                fi
+            ;;
+        esac
+    done
+
+    if [ -e "/usr/local/nginx" ] 
+    then
+        nginx_client_ports=()
+        nginx_domains=()
+        nginx_cert_names=()
+        nginx_path=()
+        nginx_server_ports=()
+        while IFS= read -r line 
+        do
+            if [[ $line == *"server "* ]] 
+            then
+                ports=""
+                port=""
+                domain=""
+                found=0
+            elif [[ $line == *"listen "* ]] 
+            then
+                while [[ $line == *"listen "* ]] 
+                do
+                    line=${line#*listen}
+                    p=${line%%;*}
+                    p=${p// ssl/}
+                    lead=${p%%[^[:blank:]]*}
+                    p=${p#${lead}}
+                    [ -n "$port" ] && port="$port "
+                    port="$port$p"
+                done
+                [ -n "$ports" ] && ports="$ports "
+                ports="$ports$port"
+            elif [[ $line == *"server_name "* ]]
+            then
+                line=${line%;*}
+                line=${line#*server_name }
+                lead=${line%%[^[:blank:]]*}
+                domain=${line#${lead}}
+            elif [ -n "${ports:-}" ] && [ -n "${domain:-}" ] && { [[ $line == *"v2ray.crt"* ]]  || [[ $line == *"$domain.crt"* ]]; }
+            then
+                line=${line%.crt*}
+                nginx_client_ports+=("$ports")
+                nginx_domains+=("$domain")
+                nginx_cert_names+=("${line##*/}")
+                found=1
+            elif [ "${found:-0}" -eq 1 ] && [ -n "${ports:-}" ] && [ -n "${domain:-}" ] &&  [[ $line == *"location "* ]]
+            then
+                line=${line#*location }
+                lead=${line%%[^[:blank:]]*}
+                line=${line#${lead}}
+                path=${line%% *}
+                nginx_path+=("$path")
+            elif [ "${found:-0}" -eq 1 ] && [ -n "${ports:-}" ] && [ -n "${domain:-}" ] && [[ $line == *"proxy_pass "* ]]
+            then
+                line=${line##*:}
+                nginx_server_ports+=("${line%;*}")
+                found=0
+            fi
+        done < "/usr/local/nginx/conf/nginx.conf"
+    fi
+
+    accounts_count=0
+    accounts_list=""
+    while IFS=' ' read -r map_id map_level map_alter_id map_email
+    do
+        accounts_count=$((accounts_count+1))
+        if [ "$accounts_count" -lt 9 ] 
+        then
+            blank=" "
+        else
+            blank=""
+        fi
+        accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}ID: $green$map_id$plain 等级: $green$map_level$plain alterId: $green$map_alter_id$plain 邮箱: $green$map_email$plain\n\n"
+    done < <($JQ_FILE -r '.inbounds['"$nginx_index"'].settings.clients | to_entries | map("\(.value.id) \(.value.level) \(.value.alterId) \(.value.email)") | .[]' "$V2_CONFIG")
+
+    if service v2ray status > /dev/null
+    then
+        echo && echo -e "v2ray: $green开启$plain"
+    else
+        echo && echo -e "v2ray: $red关闭$plain"
+    fi
+
+    for((i=0;i<${#nginx_domains[@]};i++));
+    do
+        if [ "${nginx_server_ports[i]}" == "${inbounds_port[nginx_index]}" ] && [ "${nginx_path[i]}" == "${inbounds_path[nginx_index]}" ]
+        then
+            echo && echo -e "$green域名:$plain ${nginx_domains[i]}"
+            echo && echo -e "$green端口:$plain ${nginx_client_ports[i]}"
+            echo && echo -e "$green协议:$plain vmess"
+            echo && echo -e "$green网络:$plain ws"
+            echo && echo -e "${green}path:$plain ${nginx_path[i]}"
+            echo && echo -e "${green}security:$plain tls" && echo
+        fi
+    done
+
+    if [ -n "$accounts_list" ] 
+    then
+        echo && echo "可用账号:"
+        echo && echo -e "$accounts_list" && echo
+    else
+        echo && echo "此账号组没有账号" && echo
+    fi
+}
+
+GetFreePort() {
+    read lport uport < /proc/sys/net/ipv4/ip_local_port_range
+    while true; do
+        candidate=$((lport+RANDOM%(uport-lport)))
+        if ! ( echo -n "" >/dev/tcp/127.0.0.1/"$candidate" )  >/dev/null 2>&1
+        then
+            echo "$candidate"
+            break
+        fi
+    done
+}
+
+V2raySetListen()
+{
+    if [ "$forward_num" -eq 1 ] 
+    then
+        echo && echo "是否对外公开 ? [y/N]"
+        read -p "(默认: N): " public_address_yn
+        public_address_yn=${public_address_yn:-N}
+        if [[ $public_address_yn == [Yy] ]]
+        then
+            listen="0.0.0.0"
+        else
+            listen="127.0.0.1"
+        fi
+    else
+        listen="0.0.0.0"
+    fi
+
+    echo && echo -e "	监听地址: $green $listen $plain" && echo
+}
+
+V2raySetAddress()
+{
+    echo "输入服务器地址(ip或域名)"
+    read -p "(默认：取消): " address
+    [ -z "$address" ] && echo && echo -e "已取消..." && echo && exit 1
+    echo && echo -e "	服务器地址: $green $address $plain" && echo
+}
+
+V2raySetPort()
+{
+    echo "请输入端口"
+    while read -p "(默认: 随机生成): " port
+    do
+        case "$port" in
+            "")
+                port=$(GetFreePort)
+                break
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的数字！(1-65535) " && echo
+            ;;
+            *)
+                if [ "$port" -ge 1 ] && [ "$port" -le 65535 ]
+                then
+                    if ( echo -n "" >/dev/tcp/127.0.0.1/"$port" )  >/dev/null 2>&1
+                    then
+                        echo -e "$error 端口已被其他程序占用！请重新输入！ " && echo
+                    else
+                        break
+                    fi
+                else
+                    echo -e "$error 请输入正确的数字！(1-65535) " && echo
+                fi
+            ;;
+        esac
+    done
+
+    echo && echo -e "	端口: $green $port $plain" && echo
+}
+
+V2raySetOutboundsPort()
+{
+    echo "请输入端口"
+    while read -p "(默认: 取消): " port
+    do
+        case "$port" in
+            "")
+                echo && echo -e "已取消..." && echo && exit 1
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的数字！" && echo
+            ;;
+            *)
+                if [ "$port" -gt 0 ]
+                then
+                    break
+                else
+                    echo -e "$error 请输入正确的数字！" && echo
+                fi
+            ;;
+        esac
+    done
+    echo && echo -e "	端口: $green $port $plain" && echo
+}
+
+V2raySetProtocol()
+{
+    echo -e "选择协议
+
+  ${green}1.$plain vmess
+  ${green}2.$plain http
+ " && echo
+    while true 
+    do
+        if [ "$forward_num" -eq 1 ] 
+        then
+            read -p "(默认：2): " protocol_num
+            protocol_num=${protocol_num:-2}
+        else
+            read -p "(默认：1): " protocol_num
+            protocol_num=${protocol_num:-1}
+        fi
+        case $protocol_num in
+            1) 
+                protocol="vmess"
+                break
+            ;;
+            2) 
+                protocol="http"
+                break
+            ;;
+            *) echo && echo -e "$error 输入错误" && echo
+            ;;
+        esac
+    done
+
+    echo && echo -e "	协议: $green $protocol $plain" && echo
+}
+
+V2raySetStreamSettings()
+{
+    echo -e "选择网络类型
+
+  ${green}1.$plain tcp
+  ${green}2.$plain kcp
+  ${green}3.$plain ws
+  ${green}4.$plain http
+  ${green}5.$plain domainsocket
+  ${green}6.$plain quic
+    " && echo
+    while read -p "(默认：3): " network_num 
+    do
+        case $network_num in
+            1) 
+                network="tcp"
+                break
+            ;;
+            2) 
+                network="kcp"
+                break
+            ;;
+            ""|3) 
+                network="ws"
+                break
+            ;;
+            4) 
+                network="http"
+                break
+            ;;
+            5) 
+                network="domainsocket"
+                break
+            ;;
+            6) 
+                network="quic"
+                break
+            ;;
+            *) echo && echo -e "$error 输入错误" && echo
+            ;;
+        esac
+    done
+    echo && echo -e "	网络: $green $protocol $plain" && echo
+    if [ "$network" == "ws" ] 
+    then
+        path="/$(RandStr)"
+        echo -e "	路径: $green $path $plain" && echo
+    fi
+}
+
+V2raySetId()
+{
+    echo "输入 id"
+    read -p "(默认：随机): " id
+    id=${id:-$($V2CTL_FILE uuid)}
+
+    echo && echo -e "	id: $green $id $plain" && echo
+}
+
+V2raySetAlterId()
+{
+    echo -e "请输入 alterId"
+    while read -p "(默认: 64): " alter_id
+    do
+        case "$alter_id" in
+            "")
+                alter_id=64
+                break
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的数字(0-65535) " && echo
+            ;;
+            *)
+                if [ "$alter_id" -ge 0 ] && [ "$alter_id" -le 65535 ]
+                then
+                    break
+                else
+                    echo -e "$error 请输入正确的数字(0-65535)" && echo
+                fi
+            ;;
+        esac
+    done
+    echo && echo -e "	alterId: $green $alter_id $plain" && echo
+}
+
+V2raySetEmail()
+{
+    echo "输入邮箱"
+    read -p "(默认：随机): " email
+    email=${email:-$(RandStr)@localhost}
+
+    echo && echo -e "	邮箱: $green $email $plain" && echo
+}
+
+V2raySetTimeout()
+{
+    echo -e "入站数据的时间限制(秒)"
+    while read -p "(默认: 60): " timeout
+    do
+        case "$timeout" in
+            "")
+                timeout=60
+                break
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的数字(大于0) " && echo
+            ;;
+            *)
+                if [ "$timeout" -gt 0 ]
+                then
+                    break
+                else
+                    echo -e "$error 请输入正确的数字(大于0)" && echo
+                fi
+            ;;
+        esac
+    done
+    echo && echo -e "	timeout: $green $timeout $plain" && echo
+}
+
+V2raySetAllowTransparent()
+{
+    echo "转发所有 HTTP 请求, 而非只是代理请求 ? [y/N]"
+    echo -e "$tip 若配置不当，开启此选项会导致死循环" && echo
+    read -p "(默认: N): " allow_transparent_yn
+    allow_transparent_yn=${allow_transparent_yn:-N}
+    if [[ $allow_transparent_yn == [Yy] ]]
+    then
+        allow_transparent="true"
+    else
+        allow_transparent="false"
+    fi
+    echo && echo -e "	allowTransparent: $green $allow_transparent $plain" && echo 
+}
+
+V2raySetAllowInsecure()
+{
+    echo "是否检测证书有效性 ? [Y/n]"
+    echo -e "$tip 在自定义证书的情况开可以关闭" && echo
+    read -p "(默认: Y): " allow_insecure_yn
+    allow_insecure_yn=${allow_insecure_yn:-Y}
+    if [[ $allow_insecure_yn == [Yy] ]]
+    then
+        allow_insecure="false"
+    else
+        allow_insecure="true"
+    fi
+    echo && echo -e "	allowInsecure: $green $allow_insecure $plain" && echo 
+}
+
+V2rayListLevels()
+{
+    V2rayGetLevels
+    echo && echo && echo -e "=== 用户等级数 $green $levels_count $plain" && echo
+
+    levels_list=""
+    for((i=0;i<levels_count;i++));
+    do
+        if [ "$i" -lt 9 ] 
+        then
+            blank=" "
+        else
+            blank=""
+        fi
+
+        if [ -n "${levels_bufferSize[i]}" ] 
+        then
+            buffer_size=${levels_bufferSize[i]}
+            buffer_size_list=" bufferSize: $green${buffer_size}$plain"
+        else
+            buffer_size=""
+            buffer_size_list=" bufferSize: $green自动$plain"
+        fi
+
+        levels_list=$levels_list"# $green$((i+1))$plain $blank等级: $green${levels_id[i]}$plain 握手: $green${levels_handshake[i]}$plain 超时: $green${levels_connIdle[i]}$plain\n     下行中断: $green${levels_uplinkOnly[i]}$plain 上行中断: $green${levels_downlinkOnly[i]}$plain\n     上行流量统计: $green${levels_statsUserUplink[i]}$plain 下行流量统计: $green${levels_statsUserDownlink[i]}$plain$buffer_size_list\n\n"
+    done
+    [ -n "$levels_list" ] && echo -e "$levels_list" && echo
+    return 0
+}
+
+V2raySetLevel()
+{
+    V2rayListLevels
+    echo -e "选择等级"
+    while read -p "(默认: 1): " level
+    do
+        case "$level" in
+            "")
+                level=0
+                break
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的序号" && echo
+            ;;
+            *)
+                if [ "$level" -gt 0 ] && [ "$level" -le $((levels_count+1)) ]
+                then
+                    level=$((level-1))
+                    break
+                else
+                    echo -e "$error 请输入正确的序号" && echo
+                fi
+            ;;
+        esac
+    done
+    echo && echo -e "	等级: $green $level $plain" && echo
+}
+
+V2raySetHttpAccount()
+{
+    echo "输入用户名"
+    read -p "(默认：随机): " user
+    user=${user:-$(RandStr)}
+
+    echo && echo -e "	用户名: $green $user $plain" && echo
+
+    echo "输入密码"
+    read -p "(默认：随机): " pass
+    pass=${pass:-$(RandStr)}
+
+    echo && echo -e "	密码: $green $pass $plain" && echo
+}
+
+GetFreeTag()
+{
+    while true 
+    do
+        free_tag=$(RandStr)
+        if ! grep -q '"tag": "'"$free_tag"'"' < "$V2_CONFIG"
+        then
+            echo "$free_tag"
+            break
+        fi
+    done
+}
+
+V2raySetTag()
+{
+    echo "输入组名"
+    read -p "(默认：随机): " tag
+    tag=${tag:-$(GetFreeTag)}
+
+    echo && echo -e "	组名: $green $tag $plain" && echo
+}
+
+V2raySetSecurity()
+{
+    echo -e "选择加密方式
+
+  ${green}1.$plain aes-128-gcm
+  ${green}2.$plain chacha20-poly1305
+  ${green}3.$plain auto
+  ${green}4.$plain none
+    " && echo
+    while read -p "(默认：3): " security_num 
+    do
+        case $security_num in
+            1) 
+                security="aes-128-gcm"
+                break
+            ;;
+            2) 
+                security="chacha20-poly1305"
+                break
+            ;;
+            ""|3) 
+                security="auto"
+                break
+            ;;
+            *) echo && echo -e "$error 输入错误" && echo
+            ;;
+        esac
+    done
+    echo && echo -e "	加密方式: $green $security $plain" && echo
+}
+
+V2rayAddInbound()
+{
+    V2raySetListen
+    V2raySetPort
+    V2raySetProtocol
+    V2raySetLevel
+    V2raySetTag
+
+    if [ "$protocol" == "vmess" ] 
+    then
+        V2raySetStreamSettings
+
+        new_inbound=$(
+        $JQ_FILE -n --arg listen "$listen" --arg port "$port" \
+            --arg protocol "$protocol" --arg network "$network" \
+            --arg path "$path" --arg tag "$tag" \
+        '{
+            "listen": $listen,
+            "port": $port | tonumber,
+            "protocol": "vmess",
+            "settings": {
+            "clients": []
+            },
+            "streamSettings": {
+            "network": $network,
+            "wsSettings": {
+                "path": $path
+            }
+            },
+            "tag": $tag
+        }')
+    else
+        V2raySetTimeout
+        V2raySetAllowTransparent
+
+        new_inbound=$(
+        $JQ_FILE -n --arg listen "$listen" --arg port "$port" \
+            --arg protocol "$protocol" --arg timeout "$timeout" \
+            --arg allowTransparent "$allow_transparent" --arg userLevel "$level" --arg tag "$tag" \
+        '{
+            "listen": $listen,
+            "port": $port | tonumber,
+            "protocol": "http",
+            "settings": {
+                "timeout": $timeout | tonumber,
+                "accounts": [],
+                "allowTransparent": $allowTransparent | test("true"),
+                "userLevel": $userLevel | tonumber
+            },
+            "tag": $tag
+        }')
+    fi
+
+    JQ add "$V2_CONFIG" inbounds "[$new_inbound]"
+
+    echo && echo -e "$info 入站转发组添加成功" && echo
+}
+
+V2rayAddOutbound()
+{
+    V2raySetTag
+    V2raySetProtocol
+
+    echo "是否是前置代理 ? [y/N]"
+    read -p "(默认: N): " forward_proxy_yn
+    forward_proxy_yn=${forward_proxy_yn:-N}
+    if [[ $forward_proxy_yn == [Yy] ]]
+    then
+        echo && echo "是否是 https 前置代理 ? [y/N]"
+        read -p "(默认: N): " forward_proxy_https_yn
+        forward_proxy_https_yn=${forward_proxy_https_yn:-N}
+        if [[ $forward_proxy_https_yn == [Yy] ]] 
+        then
+            V2raySetAllowInsecure
+            new_outbound=$(
+            $JQ_FILE -n --arg protocol "$protocol" --arg tag "$tag" --arg allowInsecure "$allow_insecure" \
+            '{
+                "protocol": $protocol,
+                "settings": {
+                    "servers": []
+                },
+                "streamSettings": {
+                    "security": "tls",
+                    "tlsSettings": {
+                    "allowInsecure": $allowInsecure | test("true")
+                    }
+                },
+                "tag": $tag
+            }')
+        else
+            new_outbound=$(
+            $JQ_FILE -n --arg protocol "$protocol" --arg tag "$tag" \
+            '{
+                "protocol": $protocol,
+                "settings": {
+                    "servers": []
+                },
+                "tag": $tag
+            }')
+        fi
+        while true 
+        do
+            new_outbound_proxy_tag=$(GetFreeTag)
+            [ "$new_outbound_proxy_tag" != "$tag" ] && break
+        done
+
+        new_outbound_proxy=$(
+        $JQ_FILE -n --arg proxy_tag "$tag" --arg tag "$new_outbound_proxy_tag" \
+        '{
+            "protocol": "vmess",
+            "settings": {
+                "vnext": []
+            },
+            "proxySettings": {
+                "tag": $proxy_tag  
+            }
+            "tag": $tag
+        }')
+        JQ add "$V2_CONFIG" outbounds "[$new_outbound_proxy]"
+    elif [ "$protocol" == "vmess" ] 
+    then
+        new_outbound=$(
+        $JQ_FILE -n --arg protocol "$protocol" --arg tag "$tag" \
+        '{
+            "protocol": $protocol,
+            "settings": {
+                "vnext": []
+            },
+            "tag": $tag
+        }')
+    else
+        new_outbound=$(
+        $JQ_FILE -n --arg protocol "$protocol" --arg tag "$tag" \
+        '{
+            "protocol": $protocol,
+            "settings": {
+                "servers": []
+            },
+            "tag": $tag
+        }')
+    fi
+
+    JQ add "$V2_CONFIG" outbounds "[$new_outbound]"
+
+    echo && echo -e "$info 出站转发组添加成功" && echo
+}
+
+V2rayAddRoutingRules()
+{
+    jq_path='["routing","rules"]'
+    new_rule=$(
+    $JQ_FILE -n --arg inbound_tag "$inbound_tag" --arg outbound_tag "$outbound_tag" \
+    '{
+        "type": "field",
+        "inboundTag": [
+          $inbound_tag
+        ],
+        "outboundTag": $outbound_tag
+    }')
+    JQ add "$V2_CONFIG" "[$new_rule]"
+    echo && echo -e "$info 路由设置成功" && echo
+}
+
+V2rayAddForward()
+{
+    echo && echo -e "选择此服务器在 代理转发链 中的位置
+
+  ${green}1.$plain $red起始服务器$plain <=> 中转服务器 <=> 目标服务器
+  ${green}2.$plain 起始服务器 <=> $red中转服务器$plain <=> 目标服务器
+  ${green}3.$plain 起始服务器 <=> 中转服务器 <=> $red目标服务器$plain
+ " && echo
+    read -p "请输入数字 [1-3]：" forward_num
+    case $forward_num in
+        1|2) 
+            V2rayAddInbound
+            inbound_tag=$tag
+            echo && echo -e "$info 设置出站转发组" && echo
+            V2rayAddOutbound
+            outbound_tag=$tag
+            V2rayAddRoutingRules
+        ;;
+        3) 
+            V2rayAddInbound
+        ;;
+        *) echo && echo -e "已取消..." && echo && exit 1
+        ;;
+    esac
+}
+
+V2rayDeleteForward()
+{
+    forward_count=$((inbounds_forward_count+outbounds_count))
+    [ "$forward_count" -eq 0 ] && echo && echo -e "$error 没有转发账号组" && echo && exit 1
+    echo -e "输入需要删除的组序号"
+    while read -p "(默认: 取消): " delete_forward_num
+    do
+        case "$delete_forward_num" in
+            "")
+                echo && echo "已取消..." && echo && exit 1
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的序号" && echo
+            ;;
+            *)
+                if [ "$delete_forward_num" -gt 0 ] && [ "$delete_forward_num" -le $forward_count ]
+                then
+                    break
+                else
+                    echo -e "$error 请输入正确的序号" && echo
+                fi
+            ;;
+        esac
+    done
+
+    if [ "$delete_forward_num" -gt "$inbounds_forward_count" ] 
+    then
+        jq_path='["outbounds"]'
+        match_index=$((delete_forward_num-inbounds_forward_count-1))
+        match="${outbounds_tag[match_index]}"
+    else
+        jq_path='["inbounds"]'
+        match_index=$((delete_forward_num+inbounds_nginx_count-1))
+        match="${inbounds_tag[match_index]}"
+    fi
+
+    JQ delete "$V2_CONFIG" tag "\"$match\""
+    echo && echo -e "$info 转发账号组删除成功" && echo
+}
+
+V2rayAddForwardAccount()
+{
+    forward_count=$((inbounds_forward_count+outbounds_count))
+    [ "$forward_count" -eq 0 ] && echo && echo -e "$error 没有转发账号组, 请先添加组" && echo && exit 1
+    echo -e "输入组序号"
+    while read -p "(默认: 取消): " add_forward_account_num
+    do
+        case "$add_forward_account_num" in
+            "")
+                echo && echo "已取消..." && echo && exit 1
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的序号" && echo
+            ;;
+            *)
+                if [ "$add_forward_account_num" -gt 0 ] && [ "$add_forward_account_num" -le $forward_count ]
+                then
+                    break
+                else
+                    echo -e "$error 请输入正确的序号" && echo
+                fi
+            ;;
+        esac
+    done
+
+    V2raySetLevel
+
+    if [ "$add_forward_account_num" -gt "$inbounds_forward_count" ] 
+    then
+        match_index=$((add_forward_account_num-inbounds_forward_count-1))
+        outbounds_index=$((match_index+2))
+        V2raySetAddress
+        V2raySetOutboundsPort
+        if [ "${outbounds_protocol[match_index]}" == "vmess" ] 
+        then
+            V2raySetId
+            V2raySetAlterId
+            V2raySetSecurity
+
+            found=0
+            vnext_index=0
+
+            while IFS="=" read -r map_address map_port 
+            do
+                vnext_index=$((vnext_index+1))
+                if [ "$map_address" == "$address" ] && [ "$map_port" == "$port" ]
+                then
+                    found=1
+                    break
+                fi
+            done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings.vnext | to_entries | map("\(.value.address)=\(.value.port)") | .[]' "$V2_CONFIG")
+
+            if [ "$found" -eq 0 ] 
+            then
+                jq_path='["outbounds",'"$outbounds_index"',"settings","vnext"]'
+                new_account=$(
+                $JQ_FILE -n --arg address "$address" --arg port "$port" \
+                    --arg id "$id" --arg alterId "$alter_id" \
+                    --arg security "$security" --arg level "$level" \
+                '{
+                    "address": $address,
+                    "port": $port | tonumber,
+                    "users": [
+                        {
+                            "id": $id,
+                            "alterId": $alterId | tonumber,
+                            "security": $security,
+                            "level": $level | tonumber
+                        }
+                    ]
+                }')
+            else
+                jq_path='["outbounds",'"$outbounds_index"',"settings","vnext",'"$((vnext_index-1))"']'
+                new_account=$(
+                $JQ_FILE -n --arg id "$id" --arg alterId "$alter_id" \
+                    --arg security "$security" --arg level "$level" \
+                '{
+                    "id": $id,
+                    "alterId": $alterId | tonumber,
+                    "security": $security,
+                    "level": $level | tonumber
+                }')
+            fi
+
+        else
+            V2raySetHttpAccount
+
+            found=0
+            servers_index=0
+
+            while IFS="=" read -r map_address map_port 
+            do
+                servers_index=$((servers_index+1))
+                if [ "$map_address" == "$address" ] && [ "$map_port" == "$port" ]
+                then
+                    found=1
+                    break
+                fi
+            done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings.servers | to_entries | map("\(.value.address)=\(.value.port)") | .[]' "$V2_CONFIG")
+
+            if [ "$found" -eq 0 ] 
+            then
+                jq_path='["outbounds",'"$outbounds_index"',"settings","servers"]'
+                new_account=$(
+                $JQ_FILE -n --arg address "$address" --arg port "$port" \
+                    --arg user "$user" --arg pass "$pass" \
+                '{
+                    "address": $address,
+                    "port": $port | tonumber,
+                    "users": [
+                        {
+                            "user": $user,
+                            "pass": $pass
+                        }
+                    ]
+                }')
+            else
+                jq_path='["outbounds",'"$outbounds_index"',"settings","servers",'"$((servers_index-1))"']'
+                new_account=$(
+                $JQ_FILE -n --arg user "$user" --arg pass "$pass" \
+                '{
+                    "user": $user,
+                    "pass": $pass
+                }')
+            fi
+        fi
+    else
+        match_index=$((add_forward_account_num+inbounds_nginx_count-1))
+        if [ "${inbounds_protocol[match_index]}" == "vmess" ] 
+        then
+            V2raySetId
+            V2raySetAlterId
+            V2raySetEmail
+            jq_path='["inbounds",'"$match_index"',"settings","clients"]'
+            new_account=$(
+            $JQ_FILE -n --arg id "$id" --arg level "$level" \
+                --arg alterId "$alter_id" --arg email "$email" \
+            '{
+                "id": $id,
+                "level": $level | tonumber,
+                "alterId": $alterId | tonumber,
+                "email": $email
+            }')
+        else
+            V2raySetHttpAccount
+            jq_path='["inbounds",'"$match_index"',"settings","accounts"]'
+            new_account=$(
+            $JQ_FILE -n --arg user "$user" --arg pass "$pass" \
+            '{
+                "user": $user,
+                "pass": $pass
+            }')
+        fi
+    fi
+    JQ add "$V2_CONFIG" "[$new_account]"
+    echo && echo -e "$info 转发账号添加成功" && echo
+}
+
+V2rayDeleteForwardAccount()
+{
+    forward_count=$((inbounds_forward_count+outbounds_count))
+    [ "$forward_count" -eq 0 ] && echo && echo -e "$error 没有转发账号组" && echo && exit 1
+    echo -e "输入组序号"
+    while read -p "(默认: 取消): " delete_forward_account_num
+    do
+        case "$delete_forward_account_num" in
+            "")
+                echo && echo "已取消..." && echo && exit 1
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的序号" && echo
+            ;;
+            *)
+                if [ "$delete_forward_account_num" -gt 0 ] && [ "$delete_forward_account_num" -le $forward_count ]
+                then
+                    break
+                else
+                    echo -e "$error 请输入正确的序号" && echo
+                fi
+            ;;
+        esac
+    done
+
+    if [ "$delete_forward_account_num" -gt "$inbounds_forward_count" ] 
+    then
+        match_index=$((delete_forward_account_num-inbounds_forward_count-1))
+        outbounds_index=$((match_index+2))
+
+        if [ "${outbounds_protocol[match_index]}" == "vmess" ] 
+        then
+            vnext_count=0
+            vnext_list=""
+            while IFS="=" read -r map_address map_port
+            do
+                vnext_count=$((vnext_count+1))
+                if [ "$vnext_count" -lt 9 ] 
+                then
+                    blank=" "
+                else
+                    blank=""
+                fi
+                vnext_list=$vnext_list"# $green$vnext_count$plain $blank服务器: $green$map_address$plain 端口: $green$map_port$plain\n\n"
+            done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings.vnext | to_entries | map("\(.value.address)=\(.value.port)") | .[]' "$V2_CONFIG")
+
+            if [ -z "$vnext_list" ] 
+            then
+                echo && echo -e "$error 此转发账号组里没有账号" && echo && exit 1
+            else
+                echo -e "$vnext_list"
+                echo "输入服务器序号"
+                while read -p "(默认: 取消): " vnext_index
+                do
+                    case "$vnext_index" in
+                        "")
+                            echo && echo "已取消..." && echo && exit 1
+                        ;;
+                        *[!0-9]*)
+                            echo -e "$error 请输入正确的序号" && echo
+                        ;;
+                        *)
+                            if [ "$vnext_index" -gt 0 ] && [ "$vnext_index" -le "$vnext_count" ]
+                            then
+                                vnext_index=$((vnext_index-1))
+                                break
+                            else
+                                echo -e "$error 请输入正确的序号" && echo
+                            fi
+                        ;;
+                    esac
+                done
+
+                accounts_list=""
+                accounts_count=0
+                while IFS=' ' read -r map_id map_alter_id map_security map_level
+                do
+                    accounts_count=$((accounts_count+1))
+                    if [ "$accounts_count" -lt 9 ] 
+                    then
+                        blank=" "
+                    else
+                        blank=""
+                    fi
+                    accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}ID: $green$map_id$plain alterId: $green$map_alter_id$plain 加密方式: $green$map_security$plain 等级: $green$map_level$plain\n\n"
+                done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings.vnext['"$vnext_index"'].users | to_entries | map("\(.value.id) \(.value.alterId) \(.value.security) \(.value.level)") | .[]' "$V2_CONFIG")
+
+                if [ -z "$accounts_list" ] 
+                then
+                    echo && echo "此服务器没有账号，是否删除此服务器 ? [y/N]"
+                    read -p "(默认: N): " delete_server
+                    delete_server=${delete_server:-N}
+                    if [[ $delete_server == [Yy] ]] 
+                    then
+                        jq_path='["outbounds",'"$outbounds_index"',"settings","vnext"]'
+                        JQ delete "$V2_CONFIG" "$vnext_index"
+                        echo && echo -e "$info 服务器删除成功" && echo
+                    else
+                        echo && echo "已取消" && echo && exit 1
+                    fi
+                else
+                    accounts_list=$accounts_list"# $green$((accounts_count+1))$plain ${blank}删除所有账号\n\n"
+                    accounts_list=$accounts_list"# $green$((accounts_count+2))$plain ${blank}删除此服务器"
+                    echo && echo -e "$accounts_list" && echo
+                    echo "输入序号"
+                    while read -p "(默认: 取消): " accounts_index
+                    do
+                        case "$accounts_index" in
+                            "")
+                                echo && echo "已取消..." && echo && exit 1
+                            ;;
+                            *[!0-9]*)
+                                echo -e "$error 请输入正确的序号" && echo
+                            ;;
+                            *)
+                                if [ "$accounts_index" -gt 0 ] && [ "$accounts_index" -le $((accounts_count+2)) ]
+                                then
+                                    accounts_index=$((accounts_index-1))
+                                    break
+                                else
+                                    echo -e "$error 请输入正确的序号" && echo
+                                fi
+                            ;;
+                        esac
+                    done
+
+                    if [ "$accounts_index" == "$((accounts_count+1))" ] 
+                    then
+                        jq_path='["outbounds",'"$outbounds_index"',"settings","vnext"]'
+                        JQ delete "$V2_CONFIG" "$vnext_index"
+                        echo && echo -e "$info 服务器删除成功" && echo
+                    elif [ "$accounts_index" == "$accounts_count" ] 
+                    then
+                        jq_path='["outbounds",'"$outbounds_index"',"settings","vnext",'"$vnext_index"',"users"]'
+                        JQ replace "$V2_CONFIG" "[]"
+                        echo && echo -e "$info 账号删除成功" && echo
+                    else
+                        jq_path='["outbounds",'"$outbounds_index"',"settings","vnext",'"$vnext_index"',"users"]'
+                        JQ delete "$V2_CONFIG" "$accounts_index"
+                        echo && echo -e "$info 账号删除成功" && echo
+                    fi
+                fi
+            fi
+        else
+            servers_count=0
+            servers_list=""
+            while IFS="=" read -r map_address map_port
+            do
+                servers_count=$((servers_count+1))
+                if [ "$servers_count" -lt 9 ] 
+                then
+                    blank=" "
+                else
+                    blank=""
+                fi
+                servers_list=$servers_list"# $green$servers_count$plain $blank服务器: $green$map_address$plain 端口: $green$map_port$plain\n\n"
+            done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings.servers | to_entries | map("\(.value.address)=\(.value.port)") | .[]' "$V2_CONFIG")
+
+            if [ -z "$servers_list" ] 
+            then
+                echo && echo -e "$error 此转发账号组里没有账号" && echo && exit 1
+            else
+                echo && echo -e "$servers_list"
+                echo "输入服务器序号"
+                while read -p "(默认: 取消): " servers_index
+                do
+                    case "$servers_index" in
+                        "")
+                            echo && echo "已取消..." && echo && exit 1
+                        ;;
+                        *[!0-9]*)
+                            echo -e "$error 请输入正确的序号" && echo
+                        ;;
+                        *)
+                            if [ "$servers_index" -gt 0 ] && [ "$servers_index" -le "$servers_count" ]
+                            then
+                                servers_index=$((servers_index-1))
+                                break
+                            else
+                                echo -e "$error 请输入正确的序号" && echo
+                            fi
+                        ;;
+                    esac
+                done
+
+                accounts_list=""
+                accounts_count=0
+                while IFS= read -r line
+                do
+                    accounts_count=$((accounts_count+1))
+                    if [ "$accounts_count" -lt 9 ] 
+                    then
+                        blank=" "
+                    else
+                        blank=""
+                    fi
+                    map_user=${line#*user: }
+                    map_user=${map_user%, pass: *}
+                    map_pass=${line#*, pass: }
+                    map_pass=${map_pass%\"}
+                    accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}用户名: $green$map_user$plain 密码: $green$map_pass$plain\n\n"
+                done < <($JQ_FILE '.outbounds['"$outbounds_index"'].settings.servers['"$servers_index"'].users | to_entries | map("user: \(.value.user), pass: \(.value.pass)") | .[]' "$V2_CONFIG")
+
+                if [ -z "$accounts_list" ] 
+                then
+                    echo && echo "此服务器没有账号，是否删除此服务器 ? [y/N]"
+                    read -p "(默认: N): " delete_server
+                    delete_server=${delete_server:-N}
+                    if [[ $delete_server == [Yy] ]] 
+                    then
+                        jq_path='["outbounds",'"$outbounds_index"',"settings","servers"]'
+                        JQ delete "$V2_CONFIG" "$servers_index"
+                        echo && echo -e "$info 服务器删除成功" && echo
+                    else
+                        echo && echo "已取消" && echo && exit 1
+                    fi
+                else
+                    accounts_list=$accounts_list"# $green$((accounts_count+1))$plain ${blank}删除所有账号\n\n"
+                    accounts_list=$accounts_list"# $green$((accounts_count+2))$plain ${blank}删除此服务器"
+                    echo && echo -e "$accounts_list" && echo
+                    echo "输入序号"
+                    while read -p "(默认: 取消): " accounts_index
+                    do
+                        case "$accounts_index" in
+                            "")
+                                echo && echo "已取消..." && echo && exit 1
+                            ;;
+                            *[!0-9]*)
+                                echo -e "$error 请输入正确的序号" && echo
+                            ;;
+                            *)
+                                if [ "$accounts_index" -gt 0 ] && [ "$accounts_index" -le $((accounts_count+2)) ]
+                                then
+                                    accounts_index=$((accounts_index-1))
+                                    break
+                                else
+                                    echo -e "$error 请输入正确的序号" && echo
+                                fi
+                            ;;
+                        esac
+                    done
+
+                    if [ "$accounts_index" == "$((accounts_count+1))" ] 
+                    then
+                        jq_path='["outbounds",'"$outbounds_index"',"settings","servers"]'
+                        JQ delete "$V2_CONFIG" "$servers_index"
+                        echo && echo -e "$info 服务器删除成功" && echo
+                    elif [ "$accounts_index" == "$accounts_count" ] 
+                    then
+                        jq_path='["outbounds",'"$outbounds_index"',"settings","servers",'"$servers_index"',"users"]'
+                        JQ replace "$V2_CONFIG" "[]"
+                        echo && echo -e "$info 账号删除成功" && echo
+                    else
+                        jq_path='["outbounds",'"$outbounds_index"',"settings","servers",'"$servers_index"',"users"]'
+                        JQ delete "$V2_CONFIG" "$accounts_index"
+                        echo && echo -e "$info 账号删除成功" && echo
+                    fi
+                fi
+            fi
+        fi
+    else
+        match_index=$((delete_forward_account_num+inbounds_nginx_count-1))
+        if [ "${inbounds_protocol[match_index]}" == "vmess" ] 
+        then
+            accounts_count=0
+            accounts_list=""
+            while IFS=' ' read -r map_id map_alter_id map_security map_level
+            do
+                accounts_count=$((accounts_count+1))
+                if [ "$accounts_count" -lt 9 ] 
+                then
+                    blank=" "
+                else
+                    blank=""
+                fi
+                accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}ID: $green$map_id$plain alterId: $green$map_alter_id$plain 加密方式: $green$map_security$plain 等级: $green$map_level$plain\n\n"
+            done < <($JQ_FILE -r '.inbounds['"$match_index"'].settings.clients | to_entries | map("\(.value.id) \(.value.alterId) \(.value.security) \(.value.level)") | .[]' "$V2_CONFIG")
+
+            if [ -z "$accounts_list" ] 
+            then
+                echo && echo -e "$error 此账户组没有账号" && echo && exit 1
+            else
+                accounts_list=$accounts_list"# $green$((accounts_count+1))$plain ${blank}删除所有账号"
+                echo && echo -e "$accounts_list" && echo
+                echo "输入序号"
+                while read -p "(默认: 取消): " accounts_index
+                do
+                    case "$accounts_index" in
+                        "")
+                            echo && echo "已取消..." && echo && exit 1
+                        ;;
+                        *[!0-9]*)
+                            echo -e "$error 请输入正确的序号" && echo
+                        ;;
+                        *)
+                            if [ "$accounts_index" -gt 0 ] && [ "$accounts_index" -le $((accounts_count+1)) ]
+                            then
+                                accounts_index=$((accounts_index-1))
+                                break
+                            else
+                                echo -e "$error 请输入正确的序号" && echo
+                            fi
+                        ;;
+                    esac
+                done
+
+                if [ "$accounts_index" == "$accounts_count" ] 
+                then
+                    jq_path='["inbounds",'"$match_index"',"settings","clients"]'
+                    JQ replace "$V2_CONFIG" "[]"
+                else
+                    jq_path='["inbounds",'"$match_index"',"settings","clients"]'
+                    JQ delete "$V2_CONFIG" "$accounts_index"
+                fi
+                echo && echo -e "$info 账号删除成功" && echo
+            fi
+        else
+            accounts_list=""
+            accounts_count=0
+            while IFS= read -r line
+            do
+                accounts_count=$((accounts_count+1))
+                if [ "$accounts_count" -lt 9 ] 
+                then
+                    blank=" "
+                else
+                    blank=""
+                fi
+                map_user=${line#*user: }
+                map_user=${map_user%, pass: *}
+                map_pass=${line#*, pass: }
+                map_pass=${map_pass%\"}
+                accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}用户名: $green$map_user$plain 密码: $green$map_pass$plain\n\n"
+            done < <($JQ_FILE '.inbounds['"$match_index"'].settings.accounts | to_entries | map("user: \(.value.user), pass: \(.value.pass)") | .[]' "$V2_CONFIG")
+
+            if [ -z "$accounts_list" ] 
+            then
+                 echo && echo -e "$error 此账户组没有账号" && echo && exit 1
+            else
+                accounts_list=$accounts_list"# $green$((accounts_count+1))$plain ${blank}删除所有账号"
+                echo && echo -e "$accounts_list" && echo
+                echo "输入序号"
+                while read -p "(默认: 取消): " accounts_index
+                do
+                    case "$accounts_index" in
+                        "")
+                            echo && echo "已取消..." && echo && exit 1
+                        ;;
+                        *[!0-9]*)
+                            echo -e "$error 请输入正确的序号" && echo
+                        ;;
+                        *)
+                            if [ "$accounts_index" -gt 0 ] && [ "$accounts_index" -le $((accounts_count+1)) ]
+                            then
+                                accounts_index=$((accounts_index-1))
+                                break
+                            else
+                                echo -e "$error 请输入正确的序号" && echo
+                            fi
+                        ;;
+                    esac
+                done
+
+                if [ "$accounts_index" == "$accounts_count" ] 
+                then
+                    jq_path='["inbounds",'"$match_index"',"settings","accounts"]'
+                    JQ replace "$V2_CONFIG" "[]"
+                else
+                    jq_path='["inbounds",'"$match_index"',"settings","accounts"]'
+                    JQ delete "$V2_CONFIG" "$accounts_index"
+                fi
+                echo && echo -e "$info 账号删除成功" && echo
+            fi
+        fi
+    fi
+}
+
+V2rayListForwardAccount()
+{
+    if service v2ray status > /dev/null
+    then
+        echo && echo -e "v2ray: $green开启$plain" && echo
+    else
+        echo && echo -e "v2ray: $red关闭$plain" && echo
+    fi
+    forward_count=$((inbounds_forward_count+outbounds_count))
+    [ "$forward_count" -eq 0 ] && echo && echo -e "$error 没有转发账号组" && echo && exit 1
+    echo -e "输入组序号"
+    while read -p "(默认: 取消): " list_forward_account_num
+    do
+        case "$list_forward_account_num" in
+            "")
+                echo && echo "已取消..." && echo && exit 1
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的序号" && echo
+            ;;
+            *)
+                if [ "$list_forward_account_num" -gt 0 ] && [ "$list_forward_account_num" -le $forward_count ]
+                then
+                    break
+                else
+                    echo -e "$error 请输入正确的序号" && echo
+                fi
+            ;;
+        esac
+    done
+
+    if [ "$list_forward_account_num" -gt "$inbounds_forward_count" ] 
+    then
+        match_index=$((list_forward_account_num-inbounds_forward_count-1))
+        outbounds_index=$((match_index+2))
+
+        if [ "${outbounds_protocol[match_index]}" == "vmess" ] 
+        then
+            vnext_count=0
+            vnext_list=""
+            while IFS="=" read -r map_address map_port
+            do
+                vnext_count=$((vnext_count+1))
+                if [ "$vnext_count" -lt 9 ] 
+                then
+                    blank=" "
+                else
+                    blank=""
+                fi
+                vnext_list=$vnext_list"# $green$vnext_count$plain $blank服务器: $green$map_address$plain 端口: $green$map_port$plain\n\n"
+            done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings.vnext | to_entries | map("\(.value.address)=\(.value.port)") | .[]' "$V2_CONFIG")
+
+            if [ -z "$vnext_list" ] 
+            then
+                echo && echo -e "$error 此转发账号组里没有账号" && echo && exit 1
+            else
+                echo && echo -e "$vnext_list"
+                echo "输入服务器序号"
+                while read -p "(默认: 取消): " vnext_index
+                do
+                    case "$vnext_index" in
+                        "")
+                            echo && echo "已取消..." && echo && exit 1
+                        ;;
+                        *[!0-9]*)
+                            echo -e "$error 请输入正确的序号" && echo
+                        ;;
+                        *)
+                            if [ "$vnext_index" -gt 0 ] && [ "$vnext_index" -le "$vnext_count" ]
+                            then
+                                vnext_index=$((vnext_index-1))
+                                break
+                            else
+                                echo -e "$error 请输入正确的序号" && echo
+                            fi
+                        ;;
+                    esac
+                done
+
+                accounts_list=""
+                accounts_count=0
+                while IFS=' ' read -r map_id map_alter_id map_security map_level
+                do
+                    accounts_count=$((accounts_count+1))
+                    if [ "$accounts_count" -lt 9 ] 
+                    then
+                        blank=" "
+                    else
+                        blank=""
+                    fi
+                    accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}ID: $green$map_id$plain alterId: $green$map_alter_id$plain 加密方式: $green$map_security$plain 等级: $green$map_level$plain\n\n"
+                done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings.vnext['"$vnext_index"'].users | to_entries | map("\(.value.id) \(.value.alterId) \(.value.security) \(.value.level)") | .[]' "$V2_CONFIG")
+
+                if [ -z "$accounts_list" ] 
+                then
+                    echo && echo -e "$error 此服务器里没有账号" && echo && exit 1
+                else
+                    echo && echo -e "$accounts_list" && echo
+                fi
+            fi
+        else
+            servers_count=0
+            servers_address=()
+            servers_port=()
+            servers_list=""
+            while IFS="=" read -r map_address map_port
+            do
+                servers_count=$((servers_count+1))
+                servers_address+=("$map_address")
+                servers_port+=("$map_port")
+                if [ "$servers_count" -lt 9 ] 
+                then
+                    blank=" "
+                else
+                    blank=""
+                fi
+                servers_list=$servers_list"# $green$servers_count$plain $blank服务器: $green$map_address$plain 端口: $green$map_port$plain\n\n"
+            done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings.servers | to_entries | map("\(.value.address)=\(.value.port)") | .[]' "$V2_CONFIG")
+
+            if [ -z "$servers_list" ] 
+            then
+                echo && echo -e "$error 此转发账号组里没有账号" && echo && exit 1
+            else
+                echo && echo -e "$servers_list"
+                echo "输入服务器序号"
+                while read -p "(默认: 取消): " servers_index
+                do
+                    case "$servers_index" in
+                        "")
+                            echo && echo "已取消..." && echo && exit 1
+                        ;;
+                        *[!0-9]*)
+                            echo -e "$error 请输入正确的序号" && echo
+                        ;;
+                        *)
+                            if [ "$servers_index" -gt 0 ] && [ "$servers_index" -le "$servers_count" ]
+                            then
+                                servers_index=$((servers_index-1))
+                                break
+                            else
+                                echo -e "$error 请输入正确的序号" && echo
+                            fi
+                        ;;
+                    esac
+                done
+
+                accounts_list=""
+                accounts_count=0
+                while IFS= read -r line
+                do
+                    accounts_count=$((accounts_count+1))
+                    if [ "$accounts_count" -lt 9 ] 
+                    then
+                        blank=" "
+                    else
+                        blank=""
+                    fi
+                    map_user=${line#*user: }
+                    map_user=${map_user%, pass: *}
+                    map_pass=${line#*, pass: }
+                    map_pass=${map_pass%\"}
+                    accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}用户名: $green$map_user$plain 密码: $green$map_pass$plain 链接: $green${outbounds_protocol[match_index]}://$map_user:$map_pass@${servers_address[servers_index]}:${servers_port[servers_index]}$plain\n\n"
+                done < <($JQ_FILE '.outbounds['"$outbounds_index"'].settings.servers['"$servers_index"'].users | to_entries | map("user: \(.value.user), pass: \(.value.pass)") | .[]' "$V2_CONFIG")
+
+                if [ -z "$accounts_list" ] 
+                then
+                    echo && echo -e "$error 此服务器里没有账号" && echo && exit 1
+                else
+                    echo && echo -e "$accounts_list" && echo
+                fi
+            fi
+        fi
+    else
+        match_index=$((list_forward_account_num+inbounds_nginx_count-1))
+        if [ "${inbounds_protocol[match_index]}" == "vmess" ] 
+        then
+            accounts_count=0
+            accounts_list=""
+            while IFS=' ' read -r map_id map_alter_id map_security map_level
+            do
+                accounts_count=$((accounts_count+1))
+                if [ "$accounts_count" -lt 9 ] 
+                then
+                    blank=" "
+                else
+                    blank=""
+                fi
+                accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}ID: $green$map_id$plain alterId: $green$map_alter_id$plain 加密方式: $green$map_security$plain 等级: $green$map_level$plain\n\n"
+            done < <($JQ_FILE -r '.inbounds['"$match_index"'].settings.clients | to_entries | map("\(.value.id) \(.value.alterId) \(.value.security) \(.value.level)") | .[]' "$V2_CONFIG")
+
+            if [ -z "$accounts_list" ] 
+            then
+                echo && echo -e "$error 此账户组没有账号" && echo && exit 1
+            else
+                echo && echo -e "$accounts_list" && echo
+            fi
+        else
+            accounts_list=""
+            accounts_count=0
+            while IFS= read -r line
+            do
+                accounts_count=$((accounts_count+1))
+                if [ "$accounts_count" -lt 9 ] 
+                then
+                    blank=" "
+                else
+                    blank=""
+                fi
+                map_user=${line#*user: }
+                map_user=${map_user%, pass: *}
+                map_pass=${line#*, pass: }
+                map_pass=${map_pass%\"}
+                accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}用户名: $green$map_user$plain 密码: $green$map_pass$plain 链接: $green${inbounds_protocol[match_index]}://$map_user:$map_pass@${inbounds_listen[match_index]}:${inbounds_port[match_index]}$plain\n\n"
+            done < <($JQ_FILE '.inbounds['"$match_index"'].settings.accounts | to_entries | map("user: \(.value.user), pass: \(.value.pass)") | .[]' "$V2_CONFIG")
+
+            if [ -z "$accounts_list" ] 
+            then
+                 echo && echo -e "$error 此账户组没有账号" && echo && exit 1
+            else
+                echo && echo -e "$accounts_list" && echo
+            fi
+        fi
+    fi
+}
+
+V2rayConfigDomain()
+{
+
+    if [ ! -e "/usr/local/nginx" ] 
+    then
+        echo && echo -e "$error Nginx 未安装! 输入 tv n 安装 Nginx" && echo && exit 1
+    fi
+
+    echo && echo "输入指向本机的域名"
+    read -p "(默认: 取消): " new_domain
+    [ -z "$new_domain" ] && echo && echo "已取消..." && echo && exit 1
+
+    echo && echo -e "$info 安装证书..."
+    CheckRelease
+    if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
+    then
+        if [ "$release" == "rpm" ] 
+        then
+            yum -y install socat > /dev/null
+        else
+            apt-get -y install socat > /dev/null
+        fi
+        bash <(curl --silent -m 10 https://get.acme.sh) > /dev/null
+    fi
+
+    nginx -s stop
+    sleep 1
+
+    ~/.acme.sh/acme.sh --force --issue -d "$new_domain" --standalone -k ec-256 > /dev/null
+    ~/.acme.sh/acme.sh --force --installcert -d "$new_domain" --fullchainpath /etc/v2ray/"$new_domain".crt --keypath /etc/v2ray/"$new_domain".key --ecc > /dev/null
+
+    echo && echo -e "$info 证书安装完成..."
+
+    echo && echo -e "$info 配置 Nginx..."
+
+    V2rayListNginx
+
+    echo "输入序号"
+    while read -p "(默认: 取消): " nginx_num
+    do
+        case "$nginx_num" in
+            "")
+                echo && echo "已取消..." && echo && exit 1
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的序号" && echo
+            ;;
+            *)
+                if [ "$nginx_num" -gt 0 ] && [ "$nginx_num" -le $inbounds_nginx_count ]
+                then
+                    nginx_num=$((nginx_num-1))
+                    nginx_index=${inbounds_nginx_index[nginx_num]}
+                    break
+                else
+                    echo -e "$error 请输入正确的序号" && echo
+                fi
+            ;;
+        esac
+    done
+
+    nginx_client_ports=()
+    nginx_domains=()
+    nginx_cert_names=()
+    nginx_path=()
+    nginx_server_ports=()
+    while IFS= read -r line 
+    do
+        if [[ $line == *"server "* ]] 
+        then
+            ports=""
+            port=""
+            domain=""
+            found=0
+        elif [[ $line == *"listen "* ]] 
+        then
+            while [[ $line == *"listen "* ]] 
+            do
+                line=${line#*listen}
+                p=${line%%;*}
+                p=${p// ssl/}
+                lead=${p%%[^[:blank:]]*}
+                p=${p#${lead}}
+                [ -n "$port" ] && port="$port "
+                port="$port$p"
+            done
+            [ -n "$ports" ] && ports="$ports "
+            ports="$ports$port"
+        elif [[ $line == *"server_name "* ]]
+        then
+            line=${line%;*}
+            line=${line#*server_name }
+            lead=${line%%[^[:blank:]]*}
+            domain=${line#${lead}}
+        elif [ -n "${ports:-}" ] && [ -n "${domain:-}" ] && { [[ $line == *"v2ray.crt"* ]]  || [[ $line == *"$domain.crt"* ]]; }
+        then
+            line=${line%.crt*}
+            nginx_client_ports+=("$ports")
+            nginx_domains+=("$domain")
+            nginx_cert_names+=("${line##*/}")
+            found=1
+        elif [ "${found:-0}" -eq 1 ] && [ -n "${ports:-}" ] && [ -n "${domain:-}" ] &&  [[ $line == *"location "* ]]
+        then
+            line=${line#*location }
+            lead=${line%%[^[:blank:]]*}
+            line=${line#${lead}}
+            path=${line%% *}
+            nginx_path+=("$path")
+        elif [ "${found:-0}" -eq 1 ] && [ -n "${ports:-}" ] && [ -n "${domain:-}" ] && [[ $line == *"proxy_pass "* ]]
+        then
+            line=${line##*:}
+            nginx_server_ports+=("${line%;*}")
+        fi
+    done < "/usr/local/nginx/conf/nginx.conf"
+
+    for((i=0;i<${#nginx_domains[@]};i++));
+    do
+        if [[ ${nginx_domains[i]} == *"$new_domain"* ]] 
+        then
+            if [ "${nginx_cert_names[i]}" != "$new_domain" ] 
+            then
+                sed -i "s+/etc/v2ray/${nginx_cert_names[i]}.crt+/etc/v2ray/$new_domain.crt+g" "/usr/local/nginx/conf/nginx.conf"
+                sed -i "s+/etc/v2ray/${nginx_cert_names[i]}.key+/etc/v2ray/$new_domain.key+g" "/usr/local/nginx/conf/nginx.conf"
+                rm -rf "/etc/v2ray/${nginx_cert_names[i]}.crt"
+                rm -rf "/etc/v2ray/${nginx_cert_names[i]}.key"
+            fi
+            nginx
+            echo && echo -e "$error 此域名配置已存在" && echo && exit 1
+        fi
+    done
+
+    conf=""
+    while IFS= read -r line 
+    do
+        if [[ $line == *"# HTTPS server"* ]]
+        then
+            conf="$conf
+    server {
+        listen       443 ssl;
+        server_name  $new_domain;
+
+        access_log off;
+
+        ssl_certificate      /etc/v2ray/$new_domain.crt;
+        ssl_certificate_key  /etc/v2ray/$new_domain.key;
+        ssl_protocols TLSv1.2 TLSv1.3;
+
+        ssl_ciphers  HIGH:!aNULL:!MD5;
+
+        location ${inbounds_path[nginx_index]} {
+            proxy_redirect off;
+            proxy_pass http://127.0.0.1:${inbounds_port[nginx_index]};
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection upgrade;
+            proxy_set_header Host \$host;
+            # Show real IP in v2ray access.log
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        }
+    }
+"
+        fi
+        [ -n "$conf" ] && conf="$conf\n"
+        conf="$conf$line"
+    done < "/usr/local/nginx/conf/nginx.conf"
+
+    echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
+    nginx
+    echo && echo -e "$info 配置 Nginx 完成..."
+    echo && echo -e "$info 域名配置完成" && echo
+}
+
+if [ "${0##*/}" == "v2" ] || [ "${0##*/}" == "v2.sh" ] 
 then
+    [ ! -e "$SH_FILE" ] && wget --no-check-certificate "$SH_LINK" -qO "$SH_FILE" && chmod +x "$SH_FILE"
+    if [ ! -s "$SH_FILE" ] 
+    then
+        echo && echo -e "$error 无法连接到 Github ! 尝试备用链接..."
+        wget --no-check-certificate "$SH_LINK_BACKUP" -qO "$SH_FILE" && chmod +x "$SH_FILE"
+        if [ ! -s "$SH_FILE" ] 
+        then
+            echo && echo -e "$error 无法连接备用链接!" && echo && exit 1
+        fi
+    fi
+    [ ! -e "$V2_FILE" ] && ln -s "$SH_FILE" "$V2_FILE"
+    [ ! -e "$XC_FILE" ] && ln -s "$SH_FILE" "$XC_FILE"
+
+    case $* in
+        "e") 
+            [ ! -e "$V2_CONFIG" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
+            vi "$V2_CONFIG" && exit 0
+        ;;
+        *) 
+        ;;
+    esac
+
     echo && echo -e "  v2ray 管理面板 $plain
 
   ${green}1.$plain 安装
-  ${green}2.$plain 查看
-  ${green}3.$plain 升级
+  ${green}2.$plain 升级
+  ${green}3.$plain 配置域名
 ————————————
-  ${green}4.$plain 开关
-  ${green}5.$plain 重启
+  ${green}4.$plain 查看账号
+  ${green}5.$plain 添加账号组
+  ${green}6.$plain 添加账号
 ————————————
-  ${green}6.$plain 配置域名
- " && echo
-    read -p "请输入数字 [1-6]：" v2ray_num
+  ${green}7.$plain 查看转发账号
+  ${green}8.$plain 添加转发账号组
+  ${green}9.$plain 添加转发账号
+————————————
+  ${green}10.$plain 删除账号组
+  ${green}11.$plain 删除账号
+  ${green}12.$plain 删除转发账号组
+  ${green}13.$plain 删除转发账号
+————————————
+  ${green}14.$plain 设置路由
+  ${green}15.$plain 设置等级
+————————————
+  ${green}16.$plain 查看流量
+  ${green}17.$plain 开关
+  ${green}18.$plain 重启
+
+ $tip 输入: v2 打开面板" && echo
+    read -p "请输入数字 [1-18]：" v2ray_num
     case $v2ray_num in
         1) 
-            CheckRelease
-            if [ -e "/etc/v2ray/config.json" ] 
+            if [ -e "$V2_CONFIG" ] 
             then
                 while IFS= read -r line 
                 do
@@ -9334,7 +11793,7 @@ then
                         path=${path%\"*}
                         break
                     fi
-                done < "/etc/v2ray/config.json"
+                done < "$V2_CONFIG"
 
                 if [ -n "${path:-}" ] 
                 then
@@ -9342,130 +11801,138 @@ then
                 fi
             fi
 
+            echo && echo -e "$info 检查依赖，耗时可能会很长..."
+            CheckRelease
             echo && echo -e "$info 安装 v2ray..."
 
             bash <(curl --silent -m 10 https://install.direct/go.sh) > /dev/null
 
-            while IFS= read -r line 
-            do
-                if [[ $line == *"port"* ]] 
-                then
-                    port=${line#*: }
-                    port=${port%,*}
-                elif [[ $line == *"id"* ]] 
-                then
-                    id=${line#*: \"}
-                    id=${id%\"*}
-                    break
-                fi
-            done < "/etc/v2ray/config.json"
+            V2rayConfigInstall
 
-            v2ray_config='{
-  "inbounds": [{
-    "port": '"$port"',
-    "listen": "127.0.0.1",
-    "protocol": "vmess",
-    "settings": {
-      "clients": [
-        {
-          "id": "'"$id"'",
-          "level": 1,
-          "alterId": 64
-        }
-      ]
-    },
-    "streamSettings": {
-      "network": "ws",
-      "wsSettings": {
-        "path": "/'"$(RandStr)"'"
-      }
-    }
-  }],
-  "outbounds": [{
-    "protocol": "freedom",
-    "settings": {}
-  },{
-    "protocol": "blackhole",
-    "settings": {},
-    "tag": "blocked"
-  }],
-  "routing": {
-    "rules": [
-      {
-        "type": "field",
-        "ip": ["geoip:private"],
-        "outboundTag": "blocked"
-      }
-    ]
-  }
-}'
-            printf '%s' "$v2ray_config" > "/etc/v2ray/config.json"
             service v2ray start > /dev/null
-            echo && echo -e "$info v2ray 安装完成..." && echo
+            echo && echo -e "$info v2ray 安装完成, 请配置域名..." && echo
         ;;
         2) 
-            if [ ! -e "/etc/v2ray/config.json" ] 
+            if [ ! -e "$V2_CONFIG" ] 
             then
                 echo && echo -e "$error v2ray 未安装..." && echo && exit 1
             fi
 
-            while IFS= read -r line 
-            do
-                if [[ $line == *"port"* ]] 
+            bash <(curl --silent -m 10 https://install.direct/go.sh) > /dev/null
+            V2rayConfigUpdate
+
+            echo -e "$info 更新 v2ray 脚本..." && echo
+
+            sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1 || true)
+
+            if [ -z "$sh_new_ver" ] 
+            then
+                echo -e "$error 无法连接到 Github ! 尝试备用链接..." && echo
+                sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1 || true)
+                [ -z "$sh_new_ver" ] && echo -e "$error 无法连接备用链接!" && echo && exit 1
+            fi
+
+            if [ "$sh_new_ver" != "$sh_ver" ] 
+            then
+                [ -e "$LOCK_FILE" ] && rm -rf "$LOCK_FILE"
+            fi
+
+            wget --no-check-certificate "$SH_LINK" -qO "$SH_FILE" && chmod +x "$SH_FILE"
+
+            if [ ! -s "$SH_FILE" ] 
+            then
+                wget --no-check-certificate "$SH_LINK_BACKUP" -qO "$SH_FILE"
+                if [ ! -s "$SH_FILE" ] 
                 then
-                    port=${line#*: }
-                    port=${port%,*}
-                elif [[ $line == *"id"* ]] 
-                then
-                    id=${line#*: \"}
-                    id=${id%\"*}
-                elif [[ $line == *"path"* ]] 
-                then
-                    path=${line#*: \"}
-                    path=${path%\"*}
-                    break
+                    echo -e "$error 无法连接备用链接!" && echo && exit 1
+                else
+                    echo -e "$info v2ray 脚本更新完成" && echo
                 fi
-            done < "/etc/v2ray/config.json"
-
-            if [ -e "/usr/local/nginx" ] 
-            then
-                while IFS= read -r line 
-                do
-                    if [[ $line == *"server_name"* ]]
-                    then
-                        domain=${line%;*}
-                        domain=${domain##* }
-                    elif [[ $line == *"v2ray.crt"* ]] 
-                    then
-                        break
-                    fi
-                done < "/usr/local/nginx/conf/nginx.conf"
-            fi
-
-            if service v2ray status > /dev/null
-            then
-                echo && echo -e "v2ray: $green开启$plain"
             else
-                echo && echo -e "v2ray: $red关闭$plain"
+                echo -e "$info v2ray 脚本更新完成" && echo
             fi
-            
-            [ -n "${domain:-}" ] && echo && echo -e "$green域名:$plain $domain"
-            echo && echo -e "$green端口:$plain $port"
-            echo && echo -e "${green}id:$plain $id"
-            echo && echo -e "${green}协议:$plain vmess"
-            echo && echo -e "${green}网络:$plain ws"
-            echo && echo -e "${green}path:$plain $path"
-            echo && echo -e "${green}security:$plain tls" && echo
+
+            echo -e "$info 升级完成" && echo
         ;;
         3) 
-            if [ ! -e "/etc/v2ray/config.json" ] 
+            if [ ! -e "$V2_CONFIG" ] 
             then
                 echo && echo -e "$error v2ray 未安装..." && echo && exit 1
             fi
-            bash <(curl --silent -m 10 https://install.direct/go.sh) > /dev/null
+            V2rayConfigUpdate
+            V2rayConfigDomain
         ;;
         4) 
-            if [ ! -e "/etc/v2ray/config.json" ] 
+            if [ ! -e "$V2_CONFIG" ] 
+            then
+                echo && echo -e "$error v2ray 未安装..." && echo && exit 1
+            fi
+            V2rayConfigUpdate
+            V2rayListNginx
+            V2rayListNginxAccounts
+        ;;
+        5)
+            echo && echo -e "$error not ready~" && echo && exit 1
+            V2rayConfigUpdate
+            V2rayAddNginx
+        ;;
+        6)
+            echo && echo -e "$error not ready~" && echo && exit 1
+            V2rayConfigUpdate
+            V2rayAddNginxAccount
+        ;;
+        7)
+            V2rayConfigUpdate
+            V2rayListForward
+            V2rayListForwardAccount
+        ;;
+        8)
+            V2rayConfigUpdate
+            V2rayListForward
+            V2rayAddForward
+        ;;
+        9)
+            V2rayConfigUpdate
+            V2rayListForward
+            V2rayAddForwardAccount
+        ;;
+        10)
+            V2rayConfigUpdate
+            V2rayListNginx
+            V2rayDeleteNginx
+        ;;
+        11)
+            echo && echo -e "$error not ready~" && echo && exit 1
+            V2rayConfigUpdate
+            V2rayDeleteNginxAccount
+        ;;
+        12)
+            V2rayConfigUpdate
+            V2rayListForward
+            V2rayDeleteForward
+        ;;
+        13)
+            V2rayConfigUpdate
+            V2rayListForward
+            V2rayDeleteForwardAccount
+        ;;
+        14)
+            echo && echo -e "$error not ready~" && echo && exit 1
+            V2rayConfigUpdate
+            V2rayConfigRouting
+        ;;
+        15)
+            echo && echo -e "$error not ready~" && echo && exit 1
+            V2rayConfigUpdate
+            V2rayConfigLevels
+        ;;
+        16)
+            echo && echo -e "$error not ready~" && echo && exit 1
+            V2rayConfigUpdate
+            V2rayListTraffic
+        ;;
+        17) 
+            if [ ! -e "$V2_CONFIG" ] 
             then
                 echo && echo -e "$error v2ray 未安装..." && echo && exit 1
             fi
@@ -9495,132 +11962,15 @@ then
                 fi
             fi
         ;;
-        5) 
-            if [ ! -e "/etc/v2ray/config.json" ] 
+        18) 
+            if [ ! -e "$V2_CONFIG" ] 
             then
                 echo && echo -e "$error v2ray 未安装..." && echo && exit 1
             fi
             service v2ray restart
             echo && echo -e "$info v2ray 已重启" && echo
         ;;
-        6) 
-            if [ ! -e "/etc/v2ray/config.json" ] 
-            then
-                echo && echo -e "$error v2ray 未安装..." && echo && exit 1
-            else
-                while IFS= read -r line 
-                do
-                    if [[ $line == *"port"* ]] 
-                    then
-                        port=${line#*: }
-                        port=${port%,*}
-                    elif [[ $line == *"id"* ]] 
-                    then
-                        id=${line#*: \"}
-                        id=${id%\"*}
-                    elif [[ $line == *"path"* ]] 
-                    then
-                        path=${line#*: \"}
-                        path=${path%\"*}
-                        break
-                    fi
-                done < "/etc/v2ray/config.json"
-
-                if [ -z "${path:-}" ] 
-                then
-                    echo && echo -e "$error v2ray 未安装..." && echo && exit 1
-                fi
-            fi
-
-            if [ ! -e "/usr/local/nginx" ] 
-            then
-                echo && echo -e "$error Nginx 未安装! 输入 tv n 安装 Nginx" && echo && exit 1
-            fi
-
-            echo && echo "输入指向本机的域名"
-            read -p "(默认: 取消): " domain
-            [ -z "$domain" ] && echo && echo "已取消..." && echo && exit 1
-            
-            CheckRelease
-
-            echo && echo -e "$info 安装证书..."
-            if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
-            then
-                if [ "$release" == "rpm" ] 
-                then
-                    yum -y install socat > /dev/null
-                else
-                    apt-get -y install socat > /dev/null
-                fi
-                bash <(curl --silent -m 10 https://get.acme.sh) > /dev/null
-            fi
-
-            nginx -s stop
-            sleep 1
-            ~/.acme.sh/acme.sh --issue -d "$domain" --standalone -k ec-256 > /dev/null
-            ~/.acme.sh/acme.sh --installcert -d "$domain" --fullchainpath /etc/v2ray/v2ray.crt --keypath /etc/v2ray/v2ray.key --ecc > /dev/null
-            echo && echo -e "$info 证书安装完成..."
-
-            echo && echo -e "$info 配置 Nginx..."
-
-            nginx_conf=$(< "/usr/local/nginx/conf/nginx.conf")
-
-            if ! grep -q "location $PATH {" <<< "$nginx_conf"
-            then
-                action="add"
-            else
-                action="edit"
-            fi
-
-            conf=""
-            found=0
-            while IFS= read -r line 
-            do
-                if [[ $line == *"# HTTPS server"* ]] && [ "$action" == "add" ]
-                then
-                    conf="$conf
-    server {
-        listen       443 ssl;
-        server_name  $domain;
-
-        access_log off;
-
-        ssl_certificate      /etc/v2ray/v2ray.crt;
-        ssl_certificate_key  /etc/v2ray/v2ray.key;
-        ssl_protocols TLSv1.2 TLSv1.3;
-
-        ssl_ciphers  HIGH:!aNULL:!MD5;
-
-        location /ray {
-            proxy_redirect off;
-            proxy_pass http://127.0.0.1:$port;
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade \$http_upgrade;
-            proxy_set_header Connection upgrade;
-            proxy_set_header Host \$host;
-            # Show real IP in v2ray access.log
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        }
-    }
-"
-                elif [ "$action" == "edit" ] && [[ $line == *"443 ssl"* ]] 
-                then
-                    found=1
-                elif [ "$action" == "edit" ] && [ "$found" == 1 ] && [[ $line == *"server_name"* ]]
-                then
-                    line="        server_name  $domain;"
-                fi
-                [ -n "$conf" ] && conf="$conf\n"
-                conf="$conf$line"
-            done < "/usr/local/nginx/conf/nginx.conf"
-
-            echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
-            nginx
-            echo && echo -e "$info 配置 Nginx 完成..."
-            echo && echo -e "$info 域名配置完成" && echo
-        ;;
-        *) echo && echo -e "$error 请输入正确的数字 [1-6]" && echo
+        *) echo && echo -e "$error 请输入正确的数字 [1-18]" && echo
         ;;
     esac
     exit 0
@@ -9881,12 +12231,13 @@ fi
 
 use_menu=1
 
-while getopts "i:l:o:p:S:t:s:c:v:a:f:q:b:k:K:m:n:z:T:L:Ce" flag
+while getopts "i:l:P:o:p:S:t:s:c:v:a:f:q:b:k:K:m:n:z:T:L:Ce" flag
 do
     use_menu=0
     case "$flag" in
         i) stream_link="$OPTARG";;
         l) live_yn="no";;
+        P) proxy="$OPTARG";;
         o) output_dir_name="$OPTARG";;
         p) playlist_name="$OPTARG";;
         S) seg_dir_name="$OPTARG";;
@@ -10673,6 +13024,17 @@ else
             GetDefault
             export FFMPEG
             live_yn=${live_yn:-yes}
+            proxy=${proxy:-$d_proxy}
+            if [ "${stream_link:0:4}" != "http" ] 
+            then
+                proxy=""
+            fi
+            if [ -n "$proxy" ] 
+            then
+                proxy_command="-http_proxy $proxy"
+            else
+                proxy_command=""
+            fi
             output_dir_name=${output_dir_name:-$(RandOutputDirName)}
             output_dir_root="$LIVE_ROOT/$output_dir_name"
             playlist_name=${playlist_name:-$(RandPlaylistName)}
