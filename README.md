@@ -15,9 +15,36 @@
 
 ---
 
+## 一键管理 v2ray 脚本
+
+``` bash
+wget -q http://hbo.epub.fun/v2.sh && bash v2.sh
+```
+
+- 多用户多账号管理
+- 配合 Nginx 域名管理
+- 代理转发账号管理
+
+---
+
 ## iptv.sh 一键管理 IPTV 脚本 mpegts / flv => hls / flv 推流
 
-- 自带加密
+``` bash
+wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
+
+始终用最新的脚本，升级方式
+  - 通过 tv 面板（推荐）
+  或
+  - 用这里的 iptv.sh 覆盖 /usr/local/bin/tv ，删除主目录 /usr/local/iptv 下的 lock 文件
+
+输入 v2 打开 v2ray 管理面板
+
+输入 tv n 打开 nginx 管理面板
+
+输入 cx 打开 Xtream Codes 账号管理面板
+```
+
+- 自带加密 NODE.JS <- HTTP -> NginX <- HTTPS -> CLIENT
 - 自带防护
 - 自带监控
 - 自带防盗链
@@ -34,21 +61,6 @@
   - FFmpeg-git*-static
   - jq
   - live/ [ hls输出目录 ]
-
-``` bash
-wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
-
-始终用最新的脚本，升级方式
-  - 通过 tv 面板（推荐）
-  或
-  - 用这里的 iptv.sh 覆盖 /usr/local/bin/tv ，删除主目录 /usr/local/iptv 下的 lock 文件
-
-输入 v2 打开 v2ray 管理面板
-
-输入 tv n 打开 nginx 管理面板
-
-输入 cx 打开 Xtream Codes 账号管理面板
-```
 
 ## 自动更新指定的json文件
 
@@ -123,7 +135,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 
 ## 参数详解
 
-使用方法: tv -i [直播源] [-s 段时长(秒)] [-o 输出目录名称] [-c m3u8包含的段数目] [-b 比特率] [-p m3u8文件名称] [-C]
+使用方法: tv -i [直播源] [-s 段时长(秒)] [-o 输出目录名称] [-c m3u8包含的段数目] [-b 比特率] [-p m3u8文件名称] [-C] [-l] [-P http代理]
 
 ```bash
 -i  直播源(支持 mpegts / hls / flv ...)
@@ -131,6 +143,9 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
     可以输入不同链接地址(监控按顺序尝试使用)，用空格分隔
 -s  段时长(秒)(默认：6)
 -o  输出目录名称(默认：随机名称)
+
+-l  非无限时长直播, 无法设置切割段数目且无法监控(默认：不设置)
+-P  ffmpeg 的 http 代理, 直播源是 http 链接时可用(默认：不设置)
 
 -p  m3u8名称(前缀)(默认：随机)
 -c  m3u8里包含的段数目(默认：5)
