@@ -11,8 +11,8 @@ V2CTL_FILE="/usr/bin/v2ray/v2ctl"
 V2_CONFIG="/etc/v2ray/config.json"
 XC_FILE="/usr/local/bin/cx"
 IPTV_ROOT="/usr/local/iptv"
+NODE_ROOT="$IPTV_ROOT/node"
 IP_DENY="$IPTV_ROOT/ip.deny"
-IP_PID="$IPTV_ROOT/ip.pid"
 IP_LOG="$IPTV_ROOT/ip.log"
 FFMPEG_LOG_ROOT="$IPTV_ROOT/ffmpeg"
 FFMPEG_MIRROR_LINK="http://pngquant.com/ffmpeg"
@@ -26,7 +26,6 @@ CHANNELS_FILE="$IPTV_ROOT/channels.json"
 DEFAULT_DEMOS="http://hbo.epub.fun/default.json"
 DEFAULT_CHANNELS_LINK="http://hbo.epub.fun/channels.json"
 LOCK_FILE="$IPTV_ROOT/lock"
-MONITOR_PID="$IPTV_ROOT/monitor.pid"
 MONITOR_LOG="$IPTV_ROOT/monitor.log"
 LOGROTATE_CONFIG="$IPTV_ROOT/logrotate"
 XTREAM_CODES="$IPTV_ROOT/xtream_codes"
@@ -53,7 +52,7 @@ JQ()
 
     trap '
         [ -e "${file}_tmp" ] && rm -rf "${file}_tmp"
-        [ -d "$file.lockdir" ] && rm -rf "$file.lockdir" 
+        [ -d "$file.lockdir" ] && rm -rf "$file.lockdir"
     ' EXIT
 
     case $1 in
@@ -99,6 +98,8 @@ JQ()
     esac
 
     rm -rf "$file.lockdir"
+
+    trap - EXIT
 }
 
 SyncFile()
@@ -288,7 +289,7 @@ SyncFile()
             fi
         done
 
-        echo -e "$info sync 执行成功..."
+        echo && echo -e "$info sync 执行成功..."
     fi
     action=""
 }
@@ -604,20 +605,16 @@ Uninstall()
 Update()
 {
     [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
-    if [ -s "$MONITOR_PID" ] 
+    if ls -A "/tmp/monitor.lockdir/"* > /dev/null 2>&1
     then
-        PID=$(< "$MONITOR_PID")
-        if kill -0 "$PID" 2> /dev/null 
+        echo && echo -e "$info 需要先关闭监控，是否继续? [Y/n]"
+        read -p "(默认: Y): " stop_monitor_yn
+        stop_monitor_yn=${stop_monitor_yn:-Y}
+        if [[ $stop_monitor_yn == [Yy] ]] 
         then
-            echo && echo -e "$info 需要先关闭监控，是否继续? [Y/n]"
-            read -p "(默认: Y): " stop_monitor_yn
-            stop_monitor_yn=${stop_monitor_yn:-Y}
-            if [[ $stop_monitor_yn == [Yy] ]] 
-            then
-                MonitorStop
-            else
-                echo && echo "已取消..." && echo && exit 1
-            fi
+            MonitorStop
+        else
+            echo && echo "已取消..." && echo && exit 1
         fi
     fi
 
@@ -1849,10 +1846,10 @@ SetEncrypt()
         encrypt_text="是"
         if [ "${live_yn:-}" == "yes" ] && [[ ! -x $(command -v openssl) ]]
         then
-            echo "是否安装 openssl ? [Y/n]"
-            read -p "(默认: Y): " install_openssl_yn
-            install_openssl_yn=${install_openssl_yn:-Y}
-            if [[ $install_openssl_yn == [Yy] ]]
+            echo && echo "是否安装 openssl ? [Y/n]"
+            read -p "(默认: Y): " openssl_install_yn
+            openssl_install_yn=${openssl_install_yn:-Y}
+            if [[ $openssl_install_yn == [Yy] ]]
             then
                 echo
                 Progress &
@@ -1872,14 +1869,82 @@ SetEncrypt()
                 encrypt_text="否"
             fi
         fi
+
+        if [ -d "$NODE_ROOT" ] 
+        then
+            if [ "$d_encrypt_session_yn" == "no" ] 
+            then
+                d_encrypt_session_text="N"
+            else
+                d_encrypt_session_text="Y"
+            fi
+            echo && echo "是否加密 session ? [y/N]"
+            read -p "(默认: $d_encrypt_session_text): " encrypt_session_yn
+            encrypt_session_yn=${encrypt_session_yn:-$d_encrypt_session_text}
+            if [[ $encrypt_session_yn == [Yy] ]]
+            then
+                encrypt_session_yn="yes"
+                encrypt_session_text="是"
+
+                if [ ! -e "/usr/local/nginx" ] 
+                then
+                    echo && echo "需安装 nginx，耗时会很长，是否继续？[y/N]"
+                    read -p "(默认: N): " nginx_install_yn
+                    nginx_install_yn=${nginx_install_yn:-N}
+                    if [[ $nginx_install_yn == [Yy] ]] 
+                    then
+                        InstallNginx
+                        NginxConfigFlv
+                        echo && echo -e "$info Nginx 安装完成"
+                    else
+                        encrypt_session_yn="no"
+                        encrypt_session_text="否"
+                    fi
+                fi
+
+                if [ ! -e "/usr/local/nginx" ] 
+                then
+                    encrypt_session_yn="no"
+                    encrypt_session_text="否"
+                elif [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]]
+                then
+                    echo && echo "需安装配置 nodejs, 是否继续 ? [Y/n]"
+                    read -p "(默认: Y): " nodejs_install_yn
+                    if [[ $nodejs_install_yn == [Yy] ]] 
+                    then
+                        InstallNodejs
+                        if [[ -x $(command -v node) ]] && [[ -x $(command -v npm) ]] 
+                        then
+                            ConfigNodejs
+                        else
+                            echo && echo -e "$error nodejs 安装发生错误"
+                            encrypt_session_yn="no"
+                            encrypt_session_text="否"
+                        fi
+                    else
+                        encrypt_session_yn="no"
+                        encrypt_session_text="否"
+                    fi
+                elif [ ! -d "$NODE_ROOT" ] 
+                then
+                    ConfigNodejs
+                fi
+            else
+                encrypt_session_yn="no"
+                encrypt_session_text="否"
+            fi
+            echo && echo -e "	加密 session: $green $encrypt_session_text $plain"
+        else
+            encrypt_session_yn="no"
+            encrypt_session_text="否"
+        fi
     else
         encrypt=""
         encrypt_yn="no"
         encrypt_text="否"
+        encrypt_session_yn="no"
     fi
-    # TODO
-    encrypt_session_yn="no"
-    echo && echo -e "	加密段: $green $encrypt_text $plain" && echo 
+    echo && echo -e "	加密段: $green $encrypt_text $plain" && echo
 }
 
 SetKeyInfoName()
@@ -2074,10 +2139,38 @@ SetFlvPullLink()
     echo && echo -e "	拉流地址: $green ${flv_pull_link:-不设置} $plain" && echo
 }
 
+PrepTerm()
+{
+    unset term_child_pid
+    unset term_kill_needed
+    trap 'HandleTerm' TERM
+}
+
+HandleTerm()
+{
+    if [ -n "${term_child_pid:-}" ]
+    then
+        kill -TERM "$term_child_pid" 2>/dev/null
+    else
+        term_kill_needed="yes"
+    fi
+}
+
+WaitTerm()
+{
+    term_child_pid=$!
+    if [ -n "${term_kill_needed:-}" ]
+    then
+        kill -TERM "$term_child_pid" 2>/dev/null 
+    fi
+    wait $term_child_pid
+    trap - TERM
+    wait $term_child_pid
+}
+
 FlvStreamCreatorWithShift()
 {
-    trap '' HUP INT QUIT TERM
-    trap 'MonitorError $LINENO' ERR
+    trap '' HUP INT
     pid="$BASHPID"
     mkdir -p "/tmp/flv.lockdir"
     mkdir -m 755 "/tmp/flv.lockdir/$pid"
@@ -2151,6 +2244,16 @@ FlvStreamCreatorWithShift()
 
             action="add"
             SyncFile
+
+            trap '
+                JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$pid)|.flv_status)=\"off\""
+                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                printf "%s\n" "$date_now $channel_name FLV 关闭" >> "$MONITOR_LOG"
+                chnl_pid=$pid
+                action="stop"
+                SyncFile
+                rm -rf "/tmp/flv.lockdir/$pid"
+            ' EXIT
 
             resolution=""
 
@@ -2232,19 +2335,11 @@ FlvStreamCreatorWithShift()
                 resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
             fi
 
+            PrepTerm
             $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command \
             -y -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-            $FFMPEG_FLAGS -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
-
-            JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$pid"')|.flv_status)="off"'
-
-            printf -v date_now '%(%m-%d %H:%M:%S)T'
-            printf '%s\n' "$date_now $channel_name flv 关闭" >> "$MONITOR_LOG"
-            chnl_pid=$pid
-            action="stop"
-            SyncFile
-            rm -rf "/tmp/flv.lockdir/$pid"
-            kill -9 "$chnl_pid"
+            $FFMPEG_FLAGS -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+            WaitTerm
         ;;
         "StartChannel") 
             new_pid=$pid
@@ -2256,6 +2351,16 @@ FlvStreamCreatorWithShift()
             |(.channels[]|select(.pid=='"$new_pid"')|.channel_time)='"$chnl_channel_time"''
             action="start"
             SyncFile
+
+            trap '
+                JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$new_pid)|.flv_status)=\"off\""
+                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                printf "%s\n" "$date_now $chnl_channel_name FLV 关闭" >> "$MONITOR_LOG"
+                chnl_pid=$new_pid
+                action="stop"
+                SyncFile
+                rm -rf "/tmp/flv.lockdir/$chnl_pid"
+            ' EXIT
 
             resolution=""
 
@@ -2337,19 +2442,11 @@ FlvStreamCreatorWithShift()
                 resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
             fi
 
+            PrepTerm
             $FFMPEG $chnl_proxy_command $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command \
             -y -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
-            $FFMPEG_FLAGS -f flv "$chnl_flv_push_link" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" || true
-
-            JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$new_pid"')|.flv_status)="off"'
-
-            printf -v date_now '%(%m-%d %H:%M:%S)T'
-            printf '%s\n' "$date_now $chnl_channel_name flv 关闭" >> "$MONITOR_LOG"
-            chnl_pid=$new_pid
-            action="stop"
-            SyncFile
-            rm -rf "/tmp/flv.lockdir/$chnl_pid"
-            kill -9 "$chnl_pid"
+            $FFMPEG_FLAGS -f flv "$chnl_flv_push_link" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+            WaitTerm
         ;;
         "command") 
             new_channel=$(
@@ -2410,6 +2507,16 @@ FlvStreamCreatorWithShift()
 
             action="add"
             SyncFile
+
+            trap '
+                JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$pid)|.flv_status)=\"off\""
+                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                printf "%s\n" "$date_now $channel_name FLV 关闭" >> "$MONITOR_LOG"
+                chnl_pid=$pid
+                action="stop"
+                SyncFile
+                rm -rf "/tmp/flv.lockdir/$pid"
+            ' EXIT
 
             resolution=""
 
@@ -2491,27 +2598,18 @@ FlvStreamCreatorWithShift()
                 resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
             fi
 
+            PrepTerm
             $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
             -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-            $FFMPEG_FLAGS -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
-
-            JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$pid"')|.flv_status)="off"'
-
-            printf -v date_now '%(%m-%d %H:%M:%S)T'
-            printf '%s\n' "$date_now $channel_name flv 关闭" >> "$MONITOR_LOG"
-            chnl_pid=$pid
-            action="stop"
-            SyncFile
-            rm -rf "/tmp/flv.lockdir/$chnl_pid"
-            kill -9 "$chnl_pid"
+            $FFMPEG_FLAGS -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+            WaitTerm
         ;;
     esac
 }
 
 HlsStreamCreatorPlus()
 {
-    trap '' HUP INT QUIT TERM
-    trap 'MonitorError $LINENO' ERR
+    trap '' HUP INT
     pid="$BASHPID"
     if [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$pid"')' "$CHANNELS_FILE") ]] 
     then
@@ -2586,6 +2684,17 @@ HlsStreamCreatorPlus()
 
             action="add"
             SyncFile
+
+            trap '
+                JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$pid)|.status)=\"off\""
+                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                printf "%s\n" "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
+                chnl_pid=$pid
+                action="stop"
+                SyncFile
+                sleep $seg_length
+                rm -rf "$LIVE_ROOT/${output_dir_name:-notfound}"
+            ' EXIT
 
             resolution=""
             output_name="${seg_name}_%05d"
@@ -2692,28 +2801,22 @@ HlsStreamCreatorPlus()
                 else
                     echo -e "$key_name.key\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
                 fi
+                PrepTerm
                 $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
                 -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
                 -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$seg_length" \
                 -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
-                $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_name/$output_name.ts" "$output_dir_root/$playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
+                $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_name/$output_name.ts" "$output_dir_root/$playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                WaitTerm
             else
+                PrepTerm
                 $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
                 -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
                 -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
                 -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
-                $seg_count_command $FFMPEG_FLAGS "$output_dir_root/$seg_dir_name/$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
+                $seg_count_command $FFMPEG_FLAGS "$output_dir_root/$seg_dir_name/$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                WaitTerm
             fi
-
-            JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$pid"')|.status)="off"'
-
-            printf -v date_now '%(%m-%d %H:%M:%S)T'
-            printf '%s\n' "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
-            chnl_pid=$pid
-            action="stop"
-            SyncFile
-            rm -rf "$LIVE_ROOT/${output_dir_name:-notfound}"
-            kill -9 "$pid"
         ;;
         "StartChannel") 
             mkdir -p "$chnl_output_dir_root"
@@ -2728,6 +2831,17 @@ HlsStreamCreatorPlus()
             |(.channels[]|select(.pid=='"$new_pid"')|.channel_time)='"$chnl_channel_time"''
             action="start"
             SyncFile
+
+            trap '
+                JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$new_pid)|.status)=\"off\""
+                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                printf "%s\n" "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
+                chnl_pid=$new_pid
+                action="stop"
+                SyncFile
+                sleep $chnl_seg_length
+                rm -rf "$LIVE_ROOT/${chnl_output_dir_name:-notfound}"
+            ' EXIT
 
             resolution=""
             output_name="${chnl_seg_name}_%05d"
@@ -2834,28 +2948,22 @@ HlsStreamCreatorPlus()
                 else
                     echo -e "$chnl_key_name.key\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
                 fi
+                PrepTerm
                 $FFMPEG $chnl_proxy_command $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
                 -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
                 -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$chnl_seg_length" \
                 -hls_list_size $chnl_seg_count -hls_delete_threshold $chnl_seg_count -hls_key_info_file "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo" \
-                $chnl_hls_flags_command -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_name/$output_name.ts" "$chnl_output_dir_root/$chnl_playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" || true
+                $chnl_hls_flags_command -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_name/$output_name.ts" "$chnl_output_dir_root/$chnl_playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+                WaitTerm
             else
+                PrepTerm
                 $FFMPEG $chnl_proxy_command $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
                 -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
                 -threads 0 -flags -global_header -f segment -segment_list "$chnl_output_dir_root/$chnl_playlist_name.m3u8" \
                 -segment_time "$chnl_seg_length" -segment_format mpeg_ts $chnl_live_command \
-                $chnl_seg_count_command $FFMPEG_FLAGS "$chnl_output_dir_root/$chnl_seg_dir_name/$output_name.ts" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" || true
+                $chnl_seg_count_command $FFMPEG_FLAGS "$chnl_output_dir_root/$chnl_seg_dir_name/$output_name.ts" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+                WaitTerm
             fi
-
-            JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$new_pid"')|.status)="off"'
-
-            printf -v date_now '%(%m-%d %H:%M:%S)T'
-            printf '%s\n' "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
-            chnl_pid=$new_pid
-            action="stop"
-            SyncFile
-            rm -rf "$LIVE_ROOT/${chnl_output_dir_name:-notfound}"
-            kill -9 "$new_pid"
         ;;
         "command") 
             mkdir -p "$output_dir_root"
@@ -2917,6 +3025,17 @@ HlsStreamCreatorPlus()
 
             action="add"
             SyncFile
+
+            trap '
+                JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$pid)|.status)=\"off\""
+                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                printf "%s\n" "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
+                chnl_pid=$pid
+                action="stop"
+                SyncFile
+                sleep $seg_length
+                rm -rf "$LIVE_ROOT/${output_dir_name:-notfound}"
+            ' EXIT
 
             resolution=""
             output_name="${seg_name}_%05d"
@@ -3023,36 +3142,29 @@ HlsStreamCreatorPlus()
                 else
                     echo -e "$key_name.key\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
                 fi
+                PrepTerm
                 $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
                 -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
                 -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$seg_length" \
                 -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
-                $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_name/$output_name.ts" "$output_dir_root/$playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
+                $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_name/$output_name.ts" "$output_dir_root/$playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                WaitTerm
             else
+                PrepTerm
                 $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
                 -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
                 -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
                 -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
-                $seg_count_command $FFMPEG_FLAGS "$output_dir_root/$seg_dir_name/$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
+                $seg_count_command $FFMPEG_FLAGS "$output_dir_root/$seg_dir_name/$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                WaitTerm
             fi
-
-            JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$pid"')|.status)="off"'
-
-            printf -v date_now '%(%m-%d %H:%M:%S)T'
-            printf '%s\n' "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
-            chnl_pid=$pid
-            action="stop"
-            SyncFile
-            rm -rf "$LIVE_ROOT/${output_dir_name:-notfound}"
-            kill -9 "$pid"
         ;;
     esac
 }
 
 HlsStreamCreator()
 {
-    trap '' HUP INT QUIT TERM
-    trap 'MonitorError $LINENO' ERR
+    trap '' HUP INT
     pid="$BASHPID"
     if [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$pid"')' "$CHANNELS_FILE") ]] 
     then
@@ -3128,6 +3240,17 @@ HlsStreamCreator()
             action="add"
             SyncFile
 
+            trap '
+                JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$pid)|.status)=\"off\""
+                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                printf "%s\n" "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
+                chnl_pid=$pid
+                action="stop"
+                SyncFile
+                sleep $seg_length
+                rm -rf "$LIVE_ROOT/${output_dir_name:-notfound}"
+            ' EXIT
+
             if [ -n "$quality" ] 
             then
                 quality_command="-q $quality"
@@ -3140,20 +3263,12 @@ HlsStreamCreator()
 
             export http_proxy="$proxy"
 
+            PrepTerm
             $CREATOR_FILE $live -i "$stream_link" -s "$seg_length" \
             -o "$output_dir_root" $seg_count_command $bitrates_command \
             -p "$playlist_name" -t "$seg_name" $key_name_command $quality_command \
-            "$const" "$encrypt" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
-
-            JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$pid"')|.status)="off"'
-
-            printf -v date_now '%(%m-%d %H:%M:%S)T'
-            printf '%s\n' "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
-            chnl_pid=$pid
-            action="stop"
-            SyncFile
-            rm -rf "$LIVE_ROOT/${output_dir_name:-notfound}"
-            kill -9 "$pid"
+            "$const" "$encrypt" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+            WaitTerm
         ;;
         "StartChannel") 
             mkdir -p "$chnl_output_dir_root"
@@ -3169,6 +3284,17 @@ HlsStreamCreator()
             action="start"
             SyncFile
 
+            trap '
+                JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$new_pid)|.status)=\"off\""
+                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                printf "%s\n" "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
+                chnl_pid=$new_pid
+                action="stop"
+                SyncFile
+                sleep $chnl_seg_length
+                rm -rf "$LIVE_ROOT/${chnl_output_dir_name:-notfound}"
+            ' EXIT
+
             if [ -n "$chnl_quality" ] 
             then
                 chnl_quality_command="-q $chnl_quality"
@@ -3181,20 +3307,12 @@ HlsStreamCreator()
 
             export http_proxy="$chnl_proxy"
 
+            PrepTerm
             $CREATOR_FILE $chnl_live -i "$chnl_stream_link" -s "$chnl_seg_length" \
             -o "$chnl_output_dir_root" $chnl_seg_count_command $chnl_bitrates_command \
             -p "$chnl_playlist_name" -t "$chnl_seg_name" $chnl_key_name_command $chnl_quality_command \
-            "$chnl_const" "$chnl_encrypt" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" || true
-
-            JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$new_pid"')|.status)="off"'
-
-            printf -v date_now '%(%m-%d %H:%M:%S)T'
-            printf '%s\n' "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
-            chnl_pid=$new_pid
-            action="stop"
-            SyncFile
-            rm -rf "$LIVE_ROOT/${chnl_output_dir_name:-notfound}"
-            kill -9 "$new_pid"
+            "$chnl_const" "$chnl_encrypt" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+            WaitTerm
         ;;
         "command") 
             mkdir -p "$output_dir_root"
@@ -3257,6 +3375,17 @@ HlsStreamCreator()
             action="add"
             SyncFile
 
+            trap '
+                JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$pid)|.status)=\"off\""
+                printf -v date_now "%(%m-%d %H:%M:%S)T"
+                printf "%s\n" "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
+                chnl_pid=$pid
+                action="stop"
+                SyncFile
+                sleep $seg_length
+                rm -rf "$LIVE_ROOT/${output_dir_name:-notfound}"
+            ' EXIT
+
             if [ -n "$quality" ] 
             then
                 quality_command="-q $quality"
@@ -3269,20 +3398,12 @@ HlsStreamCreator()
 
             export http_proxy="$proxy"
 
+            PrepTerm
             $CREATOR_FILE -l -i "$stream_link" -s "$seg_length" \
             -o "$output_dir_root" -c "$seg_count" $bitrates_command \
             -p "$playlist_name" -t "$seg_name" -K "$key_name" $quality_command \
-            "$const" "$encrypt" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" || true
-
-            JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$pid"')|.status)="off"'
-
-            printf -v date_now '%(%m-%d %H:%M:%S)T'
-            printf '%s\n' "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
-            chnl_pid=$pid
-            action="stop"
-            SyncFile
-            rm -rf "$LIVE_ROOT/${output_dir_name:-notfound}"
-            kill -9 "$pid"
+            "$const" "$encrypt" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+            WaitTerm
         ;;
     esac
 }
@@ -4154,86 +4275,53 @@ StopChannel()
         echo -e "$error FLV 频道正开启，走错片场了？" && echo && exit 1
     fi
 
-    stopped=0
-    manual_delete=0
-
-    while [ "$stopped" == 0 ] 
-    do
-        if kill -0 "$chnl_pid" 2> /dev/null 
-        then
-            while IFS= read -r ffmpeg_pid 
-            do
-                if [ -z "$ffmpeg_pid" ] 
-                then
-                    if kill -9 "$chnl_pid" 2> /dev/null 
-                    then
-                        echo && echo -e "$info 频道进程 $chnl_pid 已停止 !" && echo
-                        stopped=1
-                        manual_delete=1
-                        break
-                    fi
-                else
-                    while IFS= read -r real_ffmpeg_pid 
-                    do
-                        if [ -z "$real_ffmpeg_pid" ] 
-                        then
-                            if kill -9 "$ffmpeg_pid" 2> /dev/null 
-                            then
-                                echo && echo -e "$info 频道进程 $chnl_pid 已停止 !" && echo
-                                stopped=1
-                                break 2
-                            fi
-                        elif kill -9 "$real_ffmpeg_pid" 2> /dev/null 
-                        then
-                            echo && echo -e "$info 频道进程 $chnl_pid 已停止 !" && echo
-                            stopped=1
-                            break 2
-                        fi
-                    done <<< $(pgrep -P "$ffmpeg_pid")
-                fi
-            done <<< $(pgrep -P "$chnl_pid")
-        else
-            stopped=1
-            manual_delete=1
-        fi
-    done
-
     if [ "${kind:-}" == "flv" ] 
     then
-        if [ "$manual_delete" -eq 1 ] 
+        if kill -0 "$chnl_pid" 2> /dev/null 
         then
+            echo && echo -e "$info 关闭频道, 请稍等..."
+            if kill "$chnl_pid" 2> /dev/null
+            then
+                until [ ! -d "/tmp/flv.lockdir/$chnl_pid" ] 
+                do
+                    sleep 1
+                done
+            else
+                echo && echo -e "$error 频道关闭失败, 请重试 !" && exit 1
+            fi
+        else
             JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.flv_status)="off"'
             printf -v date_now '%(%m-%d %H:%M:%S)T'
-            printf '%s\n' "$date_now $chnl_channel_name flv 关闭" >> "$MONITOR_LOG"
+            printf '%s\n' "$date_now $chnl_channel_name FLV 关闭" >> "$MONITOR_LOG"
             action="stop"
             SyncFile
             rm -rf "/tmp/flv.lockdir/$chnl_pid"
-        else
-            until [ ! -d "/tmp/flv.lockdir/$chnl_pid" ] 
-            do
-                sleep 1
-            done
         fi
         chnl_flv_status="off"
-        echo && echo -e "$info 频道[ $chnl_channel_name ]已关闭 !" && echo
     else
-        if [ "$manual_delete" -eq 1 ] 
+        if kill -0 "$chnl_pid" 2> /dev/null 
         then
+            echo && echo -e "$info 关闭频道, 请稍等..."
+            if kill "$chnl_pid" 2> /dev/null 
+            then
+                until [ ! -d "$LIVE_ROOT/$chnl_output_dir_name" ] 
+                do
+                    sleep 1
+                done
+            else
+                echo && echo -e "$error 频道关闭失败, 请重试 !" && echo && exit 1
+            fi
+        else
             JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"'
             printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
             action="stop"
             SyncFile
             rm -rf "$LIVE_ROOT/${chnl_output_dir_name:-notfound}"
-        else
-            until [ ! -d "$LIVE_ROOT/$chnl_output_dir_name" ] 
-            do
-                sleep 1
-            done
         fi
         chnl_status="off"
-        echo && echo -e "$info 频道[ $chnl_channel_name ]已关闭 !" && echo
     fi
+    echo && echo -e "$info 频道[ $chnl_channel_name ]已关闭 !" && echo
 }
 
 RestartChannel()
@@ -6763,9 +6851,14 @@ TsMenu()
 
 AntiDDoS()
 {
-    trap '' HUP INT TERM QUIT
+    trap '' HUP INT
     trap 'MonitorError $LINENO' ERR
-    printf '%s' "$BASHPID" > "$IP_PID"
+    trap '
+        [ -e "/tmp/monitor.lockdir/$BASHPID" ] && rm -rf "/tmp/monitor.lockdir/$BASHPID"
+    ' EXIT
+
+    mkdir -p "/tmp/monitor.lockdir" 
+    printf '%s' "" > "/tmp/monitor.lockdir/$BASHPID"
 
     ips=()
     jail_time=()
@@ -6822,7 +6915,6 @@ AntiDDoS()
         fi
     fi
 
-    echo && echo -e "$info AntiDDoS 启动成功 !"
     printf '%s\n' "$date_now AntiDDoS 启动成功 PID $BASHPID !" >> "$MONITOR_LOG"
     
     while true; do
@@ -7063,93 +7155,85 @@ AntiDDoSSet()
 MonitorStop()
 {
     printf -v date_now '%(%m-%d %H:%M:%S)T'
-    if [ ! -s "$MONITOR_PID" ] 
+    if ! ls -A "/tmp/monitor.lockdir/"* > /dev/null 2>&1
     then
-        echo -e "$error 监控未启动 !"
+        echo && echo -e "$error 监控未启动 !" && echo
     else
-        PID=$(< "$MONITOR_PID")
-        if kill -0 "$PID" 2> /dev/null
-        then
-            if kill -9 "$PID" 2> /dev/null 
+        for PID in "/tmp/monitor.lockdir/"*
+        do
+            PID=${PID##*/}
+            if kill -0 "$PID" 2> /dev/null
             then
-                printf '%s\n' "$date_now 监控关闭成功 PID $PID !" >> "$MONITOR_LOG"
-                echo -e "$info 监控关闭成功 !"
+                kill "$PID"
+                printf '%s\n' "$date_now 关闭监控 PID $PID !" >> "$MONITOR_LOG"
             else
-                printf '%s\n' "$date_now 监控关闭失败 PID $PID !" >> "$MONITOR_LOG"
-                echo -e "$error 监控关闭失败 !"
+                rm -rf "/tmp/monitor.lockdir/$PID"
             fi
-        else
-            echo -e "$error 监控未启动 !"
-        fi
+        done
+
+        echo && echo -e "$info 关闭监控, 稍等..."
+
+        until ! ls -A "/tmp/monitor.lockdir/"* > /dev/null 2>&1 
+        do
+            sleep 1
+        done
+
+        rm -rf "/tmp/monitor.lockdir/"
+        echo && echo -e "$info 监控关闭成功 !" && echo
     fi
 
-    if [ -s "$IP_PID" ] 
+    if [ -s "$IP_DENY" ] 
     then
-        PID=$(< "$IP_PID")
-        if kill -0 "$PID" 2> /dev/null
-        then
-            if kill -9 "$PID" 2> /dev/null 
+        ips=()
+        jail_time=()
+        GetDefault
+        while IFS= read -r line
+        do
+            if [[ $line == *:* ]] 
             then
-                if [ -s "$IP_DENY" ] 
-                then
-                    ips=()
-                    jail_time=()
-                    GetDefault
-                    while IFS= read -r line
-                    do
-                        if [[ $line == *:* ]] 
-                        then
-                            ip=${line%:*}
-                            jail=${line#*:}
-                            ips+=("$ip")
-                            jail_time+=("$jail")
-                        else
-                            ip=$line
-                            ufw delete deny from "$ip" to any port "$d_anti_ddos_port"
-                        fi
-                    done < "$IP_DENY"
-
-                    if [ -n "${ips:-}" ] 
-                    then
-                        new_ips=()
-                        new_jail_time=()
-                        printf -v now '%(%s)T'
-
-                        update=0
-                        for((i=0;i<${#ips[@]};i++));
-                        do
-                            if [ "$now" -gt "${jail_time[i]}" ] 
-                            then
-                                ufw delete deny from "${ips[i]}" to any port "$d_anti_ddos_port"
-                                update=1
-                            else
-                                new_ips+=("${ips[i]}")
-                                new_jail_time+=("${jail_time[i]}")
-                            fi
-                        done
-
-                        if [ "$update" == 1 ] 
-                        then
-                            ips=("${new_ips[@]}")
-                            jail_time=("${new_jail_time[@]}")
-
-                            printf '%s' "" > "$IP_DENY"
-
-                            for((i=0;i<${#ips[@]};i++));
-                            do
-                                printf '%s\n' "${ips[i]}:${jail_time[i]}" >> "$IP_DENY"
-                            done
-                        fi
-                    else
-                        printf '%s' "" > "$IP_DENY"
-                    fi
-                fi
-                printf '%s\n' "$date_now AntiDDoS 关闭成功 PID $PID !" >> "$MONITOR_LOG"
-                echo -e "$info AntiDDoS 关闭成功 !"
+                ip=${line%:*}
+                jail=${line#*:}
+                ips+=("$ip")
+                jail_time+=("$jail")
             else
-                printf '%s\n' "$date_now AntiDDoS 关闭失败 PID $PID !" >> "$MONITOR_LOG"
-                echo -e "$error AntiDDoS 关闭失败 !"
+                ip=$line
+                ufw delete deny from "$ip" to any port "$d_anti_ddos_port"
             fi
+        done < "$IP_DENY"
+
+        if [ -n "${ips:-}" ] 
+        then
+            new_ips=()
+            new_jail_time=()
+            printf -v now '%(%s)T'
+
+            update=0
+            for((i=0;i<${#ips[@]};i++));
+            do
+                if [ "$now" -gt "${jail_time[i]}" ] 
+                then
+                    ufw delete deny from "${ips[i]}" to any port "$d_anti_ddos_port"
+                    update=1
+                else
+                    new_ips+=("${ips[i]}")
+                    new_jail_time+=("${jail_time[i]}")
+                fi
+            done
+
+            if [ "$update" == 1 ] 
+            then
+                ips=("${new_ips[@]}")
+                jail_time=("${new_jail_time[@]}")
+
+                printf '%s' "" > "$IP_DENY"
+
+                for((i=0;i<${#ips[@]};i++));
+                do
+                    printf '%s\n' "${ips[i]}:${jail_time[i]}" >> "$IP_DENY"
+                done
+            fi
+        else
+            printf '%s' "" > "$IP_DENY"
         fi
     fi
 }
@@ -7566,12 +7650,20 @@ MonitorHlsRestartChannel()
 
 Monitor()
 {
-    trap '' HUP INT TERM QUIT
+    trap '' HUP INT
     trap 'MonitorError $LINENO' ERR
-    printf '%s' "$BASHPID" > "$MONITOR_PID"
+
+    trap '
+        [ -e "/tmp/monitor.lockdir/$BASHPID" ] && rm -rf "/tmp/monitor.lockdir/$BASHPID"
+        exit 
+    ' TERM
+
+    mkdir -p "/tmp/monitor.lockdir" 
+    printf '%s' "" > "/tmp/monitor.lockdir/$BASHPID"
+
     mkdir -p "$LIVE_ROOT"
     printf '%s\n' "$date_now 监控启动成功 PID $BASHPID !" >> "$MONITOR_LOG"
-    echo -e "$info 监控启动成功 !"
+
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
     FFPROBE="$FFMPEG_ROOT/ffprobe"
     while true; do
@@ -7579,9 +7671,18 @@ Monitor()
         then
             current_minute_old=${current_minute:-}
             current_hour_old=${current_hour:-25}
-            printf -v current_time '%(%-H:%-M)T'
+            printf -v current_time '%(%H:%M)T'
             current_hour=${current_time%:*}
             current_minute=${current_time#*:}
+
+            if [ "${current_hour:0:1}" == 0 ] 
+            then
+                current_hour=${current_hour:1}
+            fi
+            if [ "${current_minute:0:1}" == 0 ] 
+            then
+                current_minute=${current_minute:1}
+            fi
 
             if [ "$current_hour" != "$current_hour_old" ] 
             then
@@ -8140,7 +8241,7 @@ Monitor()
                                 old_key_name=${old_key##*/}
                                 old_key_name=${old_key_name%%.*}
                                 [ "$old_key_name" != "${chnls_key_name[i]}" ] && rm -rf "$old_key"
-                            done < <(find "$LIVE_ROOT/$output_dir_name/"*.key \! -newermt "-$hls_delay_seconds seconds" || true)
+                            done < <(find "$LIVE_ROOT/$output_dir_name/"*.key \! -newermt "-$hls_key_expire_seconds seconds" || true)
 
                             new_key_name=$(RandStr)
                             openssl rand 16 > "$LIVE_ROOT/$output_dir_name/$new_key_name.key"
@@ -8372,10 +8473,10 @@ AntiLeech()
             echo && echo "每隔多少秒更改加密频道的 key ? "
             read -p "(默认: $d_hls_key_period): " hls_key_period
             hls_key_period=${hls_key_period:-$d_hls_key_period}
+            hls_key_expire_seconds=$((hls_key_period+hls_delay_seconds))
         else
             anti_leech_restart_hls_changes_yn=$d_anti_leech_restart_hls_changes_yn
         fi
-
     else
         anti_leech_yn="no"
         anti_leech_restart_nums=$d_anti_leech_restart_nums
@@ -8392,6 +8493,7 @@ MonitorSet()
     monitor_stream_links=()
     monitor_flv_push_links=()
     monitor_flv_pull_links=()
+    monitor_dir_names_chosen=()
     GetChannelsInfo
     for((i=0;i<chnls_count;i++));
     do
@@ -8596,7 +8698,6 @@ MonitorSet()
         fi
         IFS=" " read -ra hls_nums_arr <<< "$hls_nums"
 
-        monitor_dir_names_chosen=()
         if [ "$hls_nums" == $((monitor_count+1)) ] 
         then
             monitor_dir_names_chosen=("${monitor_dir_names[@]}")
@@ -8799,7 +8900,8 @@ InstallNginx()
     CheckRelease
     if [ "$release" == "rpm" ] 
     then
-        yum -y install gcc gcc-c++ >/dev/null 2>&1
+        yum -y install gcc gcc-c++ make >/dev/null 2>&1
+        # yum groupinstall 'Development Tools'
         timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
         systemctl restart crond >/dev/null 2>&1
     else
@@ -9326,6 +9428,31 @@ TestXtreamCodes()
     done
     echo
 }
+
+InstallNodejs()
+{
+    echo && echo -e "$info 检查依赖，耗时可能会很长..."
+    Progress &
+    progress_pid=$!
+    CheckRelease
+    if [ "$release" == "rpm" ] 
+    then
+        yum -y install gcc-c++ make >/dev/null 2>&1
+        # yum groupinstall 'Development Tools'
+        if bash <(curl -sL https://rpm.nodesource.com/setup_10.x) > /dev/null
+        then
+            yum -y install nodejs
+        fi
+    else
+        apt-get -y update >/dev/null 2>&1
+        apt-get -y install nodejs >/dev/null 2>&1
+    fi
+
+    kill $progress_pid
+    echo -n "...100%" && echo && echo -e "$info nodejs 安装完成"
+}
+
+#ConfigNodejs()
 
 Usage()
 {
@@ -12200,25 +12327,19 @@ then
                     fi
                 ;;
                 *) 
-                    if [ ! -s "$MONITOR_PID" ] 
+                    if ls -A "/tmp/monitor.lockdir/"* > /dev/null 2>&1
                     then
+                        echo && echo -e "$error 监控已经在运行 !" && echo && exit 1
+                    else
                         printf -v date_now '%(%m-%d %H:%M:%S)T'
                         MonitorSet
-                        Monitor &
+                        ( Monitor ) > /dev/null 2>/dev/null </dev/null &
+                        echo && echo -e "$info 监控启动成功 !"
+                        [ -e "$IPTV_ROOT/monitor.pid" ] && rm -rf "$IPTV_ROOT/monitor.pid"
                         AntiDDoSSet
-                        AntiDDoS &
-                    else
-                        PID=$(< "$MONITOR_PID")
-                        if kill -0 "$PID" 2> /dev/null 
-                        then
-                            echo -e "$error 监控已经在运行 !"
-                        else
-                            printf -v date_now '%(%m-%d %H:%M:%S)T'
-                            MonitorSet
-                            Monitor &
-                            AntiDDoSSet
-                            AntiDDoS &
-                        fi
+                        ( AntiDDoS ) > /dev/null 2>/dev/null </dev/null &
+                        echo && echo -e "$info AntiDDoS 启动成功 !" && echo
+                        [ -e "$IPTV_ROOT/ip.pid" ] && rm -rf "$IPTV_ROOT/ip.pid"
                     fi
                 ;;
             esac
