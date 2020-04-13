@@ -1,4 +1,4 @@
-# 一键管理 IPTV / v2ray 脚本 mpegts / flv => hls / flv 推流
+# 一键管理 IPTV / v2ray 脚本 mpegts / hls / flv => hls / flv 推流
 
 - HBO 中文直播 + 集各广电直播源
 - 默认如果没有本地频道（channels.json）,会请求远程服务器频道
@@ -27,7 +27,7 @@ wget -q http://hbo.epub.fun/v2.sh && bash v2.sh
 
 ---
 
-## iptv.sh 一键管理 IPTV 脚本 mpegts / flv => hls / flv 推流
+## iptv.sh 一键管理 IPTV 脚本 mpegts / flv / hls / youtube => hls / flv 推流
 
 ``` bash
 wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
@@ -138,7 +138,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 使用方法: tv -i [直播源] [-s 段时长(秒)] [-o 输出目录名称] [-c m3u8包含的段数目] [-b 比特率] [-p m3u8文件名称] [-C] [-l] [-P http代理]
 
 ```bash
--i  直播源(支持 mpegts / hls / flv ...)
+-i  直播源(支持 mpegts / hls / flv / youtube ...)
     可以是视频路径
     可以输入不同链接地址(监控按顺序尝试使用)，用空格分隔
 -s  段时长(秒)(默认：6)
