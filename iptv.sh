@@ -6,6 +6,7 @@ sh_ver="1.18.0"
 SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
+NX_FILE="/usr/local/bin/nx"
 V2_FILE="/usr/local/bin/v2"
 V2CTL_FILE="/usr/bin/v2ray/v2ctl"
 V2_CONFIG="/etc/v2ray/config.json"
@@ -333,6 +334,15 @@ CheckRelease()
                     fi
                 fi
             done
+            if [[ ! -x $(command -v dig) ]] 
+            then
+                if yum -y install bind-utils >/dev/null 2>&1
+                then
+                    echo && echo -e "$info 依赖 dig 安装成功..."
+                else
+                    echo && echo -e "$error 依赖 dig 安装失败..." && exit 1
+                fi
+            fi
         ;;
         "ubu") 
             apt-get -y update >/dev/null 2>&1
@@ -349,6 +359,15 @@ CheckRelease()
                     fi
                 fi
             done
+            if [[ ! -x $(command -v dig) ]] 
+            then
+                if apt-get -y install dnsutils >/dev/null 2>&1
+                then
+                    echo && echo -e "$info 依赖 dig 安装成功..."
+                else
+                    echo && echo -e "$error 依赖 dig 安装失败..." && exit 1
+                fi
+            fi
         ;;
         "deb") 
             if [ -e "/etc/apt/sources.list.d/sources-aliyun-0.list" ] 
@@ -396,6 +415,15 @@ deb-src http://security.debian.org wheezy/updates main
                     fi
                 fi
             done
+            if [[ ! -x $(command -v dig) ]] 
+            then
+                if apt-get -y install dnsutils >/dev/null 2>&1
+                then
+                    echo && echo -e "$info 依赖 dig 安装成功..."
+                else
+                    echo && echo -e "$error 依赖 dig 安装失败..." && exit 1
+                fi
+            fi
         ;;
         *) echo && echo -e "系统不支持!" && exit 1
         ;;
@@ -450,9 +478,9 @@ InstallJq()
 Install()
 {
     echo && echo -e "$info 检查依赖，耗时可能会很长..."
+    CheckRelease
     Progress &
     progress_pid=$!
-    CheckRelease
     kill $progress_pid
     if [ -e "$IPTV_ROOT" ]
     then
@@ -559,13 +587,16 @@ Install()
 Uninstall()
 {
     [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
-    CheckRelease
     echo "确定要 卸载此脚本以及产生的全部文件？[y/N]"
     read -p "(默认: N): " uninstall_yn
     uninstall_yn=${uninstall_yn:-N}
     if [[ $uninstall_yn == [Yy] ]]
     then
         MonitorStop
+        if [ -d "$NODE_ROOT" ] 
+        then
+            pm2 stop 0
+        fi
         if crontab -l | grep -q "$LOGROTATE_CONFIG" 2> /dev/null
         then
             crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
@@ -587,6 +618,7 @@ Uninstall()
                 StopChannel
             fi
         done < <($JQ_FILE '.channels[].pid' $CHANNELS_FILE)
+        StopChannelsForce
         rm -rf "${IPTV_ROOT:-notfound}"
         echo && echo -e "$info 卸载完成 !" && echo
     else
@@ -1816,8 +1848,8 @@ SetStreamLink()
                             lead=${line%%[^[:blank:]]*}
                             line=${line#${lead}}
                             line=${line// $bitrate/}
-                            tail=${line##*[^[:blank:]]}
-                            line=${line%${tail}}
+                            trail=${line##*[^[:blank:]]}
+                            line=${line%${trail}}
                             resolution="分辨率: $green$resolution$plain, $green${line##* }$plain, "
                             note="其它: $line$note"
                         fi
@@ -2173,74 +2205,71 @@ SetEncrypt()
             fi
         fi
 
-        if [ -d "$NODE_ROOT" ] 
+        if [ "$d_encrypt_session_yn" == "no" ] 
         then
-            if [ "$d_encrypt_session_yn" == "no" ] 
-            then
-                d_encrypt_session_text="N"
-            else
-                d_encrypt_session_text="Y"
-            fi
-            echo && echo "是否加密 session ? [y/N]"
-            read -p "(默认: $d_encrypt_session_text): " encrypt_session_yn
-            encrypt_session_yn=${encrypt_session_yn:-$d_encrypt_session_text}
-            if [[ $encrypt_session_yn == [Yy] ]]
-            then
-                encrypt_session_yn="yes"
-                encrypt_session_text="是"
+            d_encrypt_session_text="N"
+        else
+            d_encrypt_session_text="Y"
+        fi
+        echo && echo "是否加密 session ? [y/N]"
+        echo -e "$tip 加密后只能通过网页浏览" && echo
+        read -p "(默认: $d_encrypt_session_text): " encrypt_session_yn
+        encrypt_session_yn=${encrypt_session_yn:-$d_encrypt_session_text}
+        if [[ $encrypt_session_yn == [Yy] ]]
+        then
+            encrypt_session_yn="yes"
+            encrypt_session_text="是"
 
-                if [ ! -e "/usr/local/nginx" ] 
+            if [ ! -e "/usr/local/nginx" ] 
+            then
+                echo && echo "需安装 nginx，耗时会很长，是否继续？[y/N]"
+                read -p "(默认: N): " nginx_install_yn
+                nginx_install_yn=${nginx_install_yn:-N}
+                if [[ $nginx_install_yn == [Yy] ]] 
                 then
-                    echo && echo "需安装 nginx，耗时会很长，是否继续？[y/N]"
-                    read -p "(默认: N): " nginx_install_yn
-                    nginx_install_yn=${nginx_install_yn:-N}
-                    if [[ $nginx_install_yn == [Yy] ]] 
-                    then
-                        InstallNginx
-                        NginxConfigFlv
-                        echo && echo -e "$info Nginx 安装完成"
-                    else
-                        encrypt_session_yn="no"
-                        encrypt_session_text="否"
-                    fi
-                fi
-
-                if [ ! -e "/usr/local/nginx" ] 
-                then
+                    InstallNginx
+                    echo && echo -e "$info Nginx 安装完成"
+                else
                     encrypt_session_yn="no"
                     encrypt_session_text="否"
-                elif [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]]
+                fi
+            fi
+
+            if [ ! -e "/usr/local/nginx" ] 
+            then
+                encrypt_session_yn="no"
+                encrypt_session_text="否"
+            elif [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]]
+            then
+                echo && echo "需安装配置 nodejs, 是否继续 ? [Y/n]"
+                read -p "(默认: Y): " nodejs_install_yn
+                if [[ $nodejs_install_yn == [Yy] ]] 
                 then
-                    echo && echo "需安装配置 nodejs, 是否继续 ? [Y/n]"
-                    read -p "(默认: Y): " nodejs_install_yn
-                    if [[ $nodejs_install_yn == [Yy] ]] 
+                    InstallNodejs
+                    if [[ -x $(command -v node) ]] && [[ -x $(command -v npm) ]] 
                     then
-                        InstallNodejs
-                        if [[ -x $(command -v node) ]] && [[ -x $(command -v npm) ]] 
+                        if [ ! -d "$NODE_ROOT" ] 
                         then
-                            ConfigNodejs
-                        else
-                            echo && echo -e "$error nodejs 安装发生错误"
-                            encrypt_session_yn="no"
-                            encrypt_session_text="否"
+                            NodejsConfig
                         fi
                     else
+                        echo && echo -e "$error nodejs 安装发生错误"
                         encrypt_session_yn="no"
                         encrypt_session_text="否"
                     fi
-                elif [ ! -d "$NODE_ROOT" ] 
-                then
-                    ConfigNodejs
+                else
+                    encrypt_session_yn="no"
+                    encrypt_session_text="否"
                 fi
-            else
-                encrypt_session_yn="no"
-                encrypt_session_text="否"
+            elif [ ! -d "$NODE_ROOT" ] 
+            then
+                NodejsConfig
             fi
-            echo && echo -e "	加密 session: $green $encrypt_session_text $plain"
         else
             encrypt_session_yn="no"
             encrypt_session_text="否"
         fi
+        echo && echo -e "	加密 session: $green $encrypt_session_text $plain"
     else
         encrypt=""
         encrypt_yn="no"
@@ -4665,7 +4694,7 @@ StopChannelsForce()
             [ -d "$sync_file.lockdir" ] && rm -rf "$sync_file.lockdir"
         done
         action="stop"
-        SyncFile
+        SyncFile > /dev/null
         if [ "${chnl_live_yn}" == "yes" ] 
         then
             rm -rf "$chnl_output_dir_root"
@@ -5026,6 +5055,8 @@ GenerateSchedule()
 
 InstallPdf2html()
 {
+    echo && echo -e "$info 检查依赖，耗时可能会很长..."
+    CheckRelease
     Progress &
     progress_pid=$!
     if [ "$release" == "rpm" ] 
@@ -6644,6 +6675,63 @@ Schedule()
                 if [ -n "$schedule" ] 
                 then
                     JQ replace "$SCHEDULE_JSON" "my_$chnl_name" "[$schedule]"
+                fi
+            done
+        ;;
+        "cntv")
+            printf -v today '%(%Y%m%d)T'
+
+            if [ ! -s "$SCHEDULE_JSON" ] 
+            then
+                printf '{"%s":[]}' "cctv13" > "$SCHEDULE_JSON"
+            fi
+
+            chnls=(
+                "cctv1"
+                "cctv2"
+                "cctv3"
+                "cctv4"
+                "cctv5"
+                "cctv6"
+                "cctv7"
+                "cctv8"
+                "cctvjilu"
+                "cctv10"
+                "cctv11"
+                "cctv12"
+                "cctv13"
+                "cctvchild"
+                "cctv15"
+                "cctv5plus"
+                "cctv17"
+                "cctveurope"
+                "cctvamerica" )
+
+            for chnl in "${chnls[@]}" ; do
+
+                if [ -n "${3:-}" ] && [ "$3" != "$chnl" ]
+                then
+                    continue
+                fi
+
+                schedule=""
+                schedule_today=$(wget "http://api.cntv.cn/epg/getEpgInfoByChannelNew?c=$chnl&serviceId=tvcctv&d=$today" -qO-)
+
+                while IFS=" = " read -r program_title program_sys_time program_time
+                do
+                    program_title=${program_title#\"}
+                    program_time=${program_time%\"}
+                    [ -n "$schedule" ] && schedule="$schedule,"
+                    schedule=$schedule'{
+                        "title":"'"$program_title"'",
+                        "time":"'"$program_time"'",
+                        "sys_time":"'"$program_sys_time"'"
+                    }'
+                done < <($JQ_FILE ".data.$chnl.list|to_entries|map(\"\(.value.title) = \(.value.startTime) = \(.value.showTime)\")|.[]" <<< "$schedule_today")
+
+                if [ -n "$schedule" ] 
+                then
+                    JQ replace "$SCHEDULE_JSON" "$chnl" "[$schedule]"
                 fi
             done
         ;;
@@ -9247,9 +9335,9 @@ Progress(){
 InstallNginx()
 {
     echo && echo -e "$info 检查依赖，耗时可能会很长..."
+    CheckRelease
     Progress &
     progress_pid=$!
-    CheckRelease
     if [ "$release" == "rpm" ] 
     then
         yum -y install gcc gcc-c++ make >/dev/null 2>&1
@@ -9332,7 +9420,7 @@ UninstallNginx()
 
     if [[ $nginx_uninstall_yn == [Yy] ]] 
     then
-        nginx -s stop
+        nginx -s stop 2> /dev/null || true
         rm -rf /usr/local/nginx/
         echo && echo -e "$info Nginx 卸载完成" && echo
     else
@@ -9393,63 +9481,6 @@ RestartNginx()
         nginx
     else
         nginx
-    fi
-}
-
-NginxConfigFlv()
-{
-    nginx_conf=$(< "/usr/local/nginx/conf/nginx.conf")
-    if ! grep -q "location /flv" <<< "$nginx_conf"
-    then
-        conf=""
-        found=0
-        while IFS= read -r line 
-        do
-            if [[ $line == *"location / "* ]] && [ "$found" == 0 ]
-            then
-                conf="$conf
-        location /flv {
-            access_log  logs/flv.log;
-            flv_live on;
-            chunked_transfer_encoding  on;
-        }
-"
-                found=1
-            fi
-            [ -n "$conf" ] && conf="$conf\n"
-            conf="$conf$line"
-        done <<< "$nginx_conf"
-
-        if ! grep -q "rtmp {" <<< "$nginx_conf" 
-        then
-            conf="$conf
-
-rtmp_auto_push on;
-rtmp_auto_push_reconnect 1s;
-rtmp_socket_dir /tmp;
-
-rtmp {
-    out_queue   4096;
-    out_cork    8;
-    max_streams   128;
-    timeout   15s;
-    drop_idle_publisher   10s;
-    log_interval    120s;
-    log_size    1m;
-
-    server {
-        listen 1935;
-        server_name 127.0.0.1;
-        access_log  logs/flv.log;
-
-        application flv {
-            live on;
-            gop_cache on;
-        }
-    }
-}"
-        fi
-        echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
     fi
 }
 
@@ -9782,19 +9813,1755 @@ TestXtreamCodes()
     echo
 }
 
+GetServerIp()
+{
+    ip=$(dig +short myip.opendns.com @resolver1.opendns.com || true)
+    [ -z "$ip" ] && ip=$(curl --silent ipv4.icanhazip.com)
+    [ -z "$ip" ] && ip=$(curl --silent api.ip.sb/ip)
+    [ -z "$ip" ] && ip=$(curl --silent ipinfo.io/ip)
+    echo "$ip"
+}
+
+NginxConfigServerHttpPort()
+{
+    echo && echo "输入 http 端口"
+    echo -e "$tip 也可以输入 IP:端口 组合" && echo
+    read -p "(默认: 80): " server_http_port
+    server_http_port=${server_http_port:-80}
+}
+
+NginxConfigServerHttpsPort()
+{
+    echo && echo "输入 https 端口"
+    echo -e "$tip 也可以输入 IP:端口 组合" && echo
+    read -p "(默认: 443): " server_https_port
+    server_https_port=${server_https_port:-443}
+}
+
+NginxConfigServerRoot()
+{
+    echo && echo "设置公开的根目录"
+    while read -p "(默认: /usr/local/nginx/html): " server_root 
+    do
+        if [ -z "$server_root" ] 
+        then
+            server_root="/usr/local/nginx/html"
+            break
+        elif [ "${server_root:0:1}" != "/" ] 
+        then
+            echo && echo -e "$error 输入错误" && echo
+        else
+            if [ "${server_root: -1}" == "/" ] 
+            then
+                server_root=${server_root:0:-1}
+            fi
+
+            mkdir -p "$server_root"
+            break
+        fi
+    done
+}
+
+NginxConfigServerLiveRoot()
+{
+    echo && echo "设置公开目录下的(live目录 - HLS输出目录)位置"
+    while read -p "(默认: $server_root/): " server_live_root 
+    do
+        if [ -z "$server_live_root" ] 
+        then
+            server_live_root=$server_root
+            ln -sf "$LIVE_ROOT" "$server_live_root/"
+            break
+        elif [ "${server_live_root:0:1}" != "/" ] 
+        then
+            echo && echo -e "$error 输入错误" && echo
+        else
+            if [ "${server_live_root: -1}" == "/" ] 
+            then
+                server_live_root=${server_live_root:0:-1}
+            fi
+
+            mkdir -p "$server_live_root"
+            ln -sf "$LIVE_ROOT" "$server_live_root/"
+            break
+        fi
+    done
+}
+
+NginxConfigBlockAliyun()
+{
+    echo && echo "是否屏蔽所有阿里云ip段 [y/N]"
+    read -p "(默认: N): " block_aliyun_yn
+    block_aliyun_yn=${block_aliyun_yn:-N}
+    if [[ $block_aliyun_yn == [Yy] ]] 
+    then
+        echo && echo "输入本机IP"
+        echo -e "$tip 多个IP用空格分隔" && echo
+
+        while read -p "(默认: 自动检测): " server_ip
+        do
+            server_ip=${server_ip:-$(GetServerIp)}
+            if [ -z "$server_ip" ]
+            then
+                echo && echo -e "$error 无法获取本机IP，请手动输入" && echo
+            else
+                break
+            fi
+        done
+
+        start=0
+        deny_aliyun="\n            location ${server_live_root#*$server_root}/${LIVE_ROOT##*/} {"
+
+        IFS=" " read -ra server_ips <<< "$server_ip"
+        for ip in "${server_ips[@]}"
+        do
+            deny_aliyun="$deny_aliyun\n                allow $ip;"
+        done
+
+        while IFS= read -r line 
+        do
+            if [[ $line == *"ipTabContent"* ]] 
+            then
+                start=1
+            elif [ "$start" == 1 ] && [[ $line == *"AS45102"* ]] 
+            then
+                line=${line#*AS45102\/}
+                ip=${line%\"*}
+                deny_aliyun="$deny_aliyun\n                deny $ip;"
+            elif [ "$start" == 1 ] && [[ $line == *"</tbody>"* ]] 
+            then
+                break
+            fi
+        done < <(wget --no-check-certificate https://ipinfo.io/AS45102 -qO-)
+        deny_aliyun="$deny_aliyun\n                allow all;"
+        deny_aliyun="$deny_aliyun\n            }\n\n"
+    fi
+}
+
+NginxCheckDomains()
+{
+    if [ ! -e "/usr/local/nginx" ] 
+    then
+        echo && echo -e "$error Nginx 未安装 !" && echo && exit 1
+    fi
+    mkdir -p "/usr/local/nginx/conf/sites_crt/"
+    mkdir -p "/usr/local/nginx/conf/sites_available/"
+    mkdir -p "/usr/local/nginx/conf/sites_enabled/"
+    conf=""
+    server_conf=""
+    server_found=0
+    server_flag=0
+    server_localhost=0
+    server_localhost_found=0
+    server_domains=()
+    http_found=0
+    http_flag=0
+    sites_found=0
+    rtmp_found=0
+    while IFS= read -r line 
+    do
+        lead=${line%%[^[:blank:]]*}
+        first_char=${line#${lead}}
+        first_char=${first_char:0:1}
+
+        if [[ $line == *"rtmp {"* ]] && [[ $first_char != "#" ]]
+        then
+            rtmp_found=1
+        fi
+
+        if [[ $line == *"http {"* ]] && [[ $first_char != "#" ]]
+        then
+            http_found=1
+        fi
+
+        if [[ $http_found -eq 1 ]] && [[ $line == *"{"* ]] 
+        then
+            http_flag=$((http_flag+1))
+        fi
+
+        if [[ $http_found -eq 1 ]] && [[ $line == *"sites_enabled/*.conf"* ]] 
+        then
+            sites_found=1
+        fi
+
+        if [[ $http_found -eq 1 ]] && [[ $line == *"}"* ]] 
+        then
+            http_flag=$((http_flag-1))
+            if [[ $http_flag -eq 0 ]] 
+            then
+                if [[ $sites_found -eq 0 ]] 
+                then
+                    line="    include sites_enabled/*.conf;\n$line"
+                fi
+                if [[ $server_localhost_found -eq 0 ]] 
+                then
+                    line="
+    server {
+        listen       80;
+        server_name  localhost;
+
+        access_log logs/access.log;
+
+        location /flv {
+            flv_live on;
+            chunked_transfer_encoding  on;
+        }
+
+        location / {
+            root   html;
+            index  index.html index.htm;
+        }
+
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+            root   html;
+        }
+    }\n\n$line"
+                fi
+                http_found=0
+            fi
+        fi
+
+        if [[ $http_found -eq 1 ]] && [[ $line == *"server {"* ]] && [[ $first_char != "#" ]]
+        then
+            server_conf=""
+            server_found=1
+            server_localhost=0
+            server_domains=()
+        fi
+
+        if [[ $server_found -eq 1 ]] && [[ $line == *"{"* ]] 
+        then
+            server_flag=$((server_flag+1))
+        fi
+
+        if [[ $server_found -eq 1 ]] && [[ $line == *"}"* ]] 
+        then
+            server_flag=$((server_flag-1))
+        fi
+
+        if [[ $server_found -eq 1 ]] && [[ $line == *"server_name "* ]] 
+        then
+            server_names=${line#*server_name }
+            server_names=${server_names%;*}
+            lead=${server_names%%[^[:blank:]]*}
+            server_names=${server_names#${lead}}
+            IFS=" " read -ra server_names_array <<< "$server_names"
+            for server_name in "${server_names_array[@]}"
+            do
+                if [[ $server_name == "localhost" ]]
+                then
+                    server_localhost=1
+                    server_localhost_found=1
+                else
+                    server_domains+=("$server_name")
+                fi
+            done
+
+            if [[ $server_localhost -eq 1 ]] 
+            then
+                line="${line%%server_name*}server_name localhost;"
+            fi
+        fi
+
+        if [[ $server_found -eq 1 ]] && [[ $line == *"ssl_certificate"* ]] 
+        then
+            CERT_FILE=${line%;*}
+            CERT_FILE=${CERT_FILE##* }
+            new_crt_name="$server_names.${CERT_FILE##*.}"
+            [ -e "$CERT_FILE" ] && mv "$CERT_FILE" "/usr/local/nginx/conf/sites_crt/$new_crt_name"
+            line=${line%;*}
+            line=${line% *}
+            line="$line /usr/local/nginx/conf/sites_crt/$new_crt_name;"
+        fi
+
+        if [[ $server_found -eq 1 ]] 
+        then
+            [ -n "$server_conf" ] && server_conf="$server_conf\n"
+            server_conf="$server_conf$line"
+            if [[ $server_flag -eq 0 ]] && [[ $line == *"}"* ]] 
+            then
+                server_found=0
+                if [[ ${#server_domains[@]} -gt 0 ]] 
+                then
+                    for server_domain in "${server_domains[@]}"
+                    do
+                        server_domain_conf=""
+                        while IFS= read -r server_domain_line 
+                        do
+                            if [[ $server_domain_line == *"server_name "* ]] 
+                            then
+                                server_domain_line="${server_domain_line%%server_name*}server_name $server_domain;"
+                            fi
+                            [ -n "$server_domain_conf" ] && server_domain_conf="$server_domain_conf\n"
+                            server_domain_conf="$server_domain_conf$server_domain_line"
+                        done < <(echo -e "$server_conf")
+                        echo -e "$server_domain_conf\n" >> "/usr/local/nginx/conf/sites_available/$server_domain.conf"
+                        ln -sf "/usr/local/nginx/conf/sites_available/$server_domain.conf" "/usr/local/nginx/conf/sites_enabled/"
+                    done
+                fi
+                if [[ $server_localhost -eq 0 ]] && [[ ${#server_domains[@]} -gt 0 ]]
+                then
+                    continue
+                else
+                    line=$server_conf
+                fi
+            fi
+        fi
+
+        if [[ $server_found -eq 0 ]] 
+        then
+            [ -n "$conf" ] && conf="$conf\n"
+            conf="$conf$line"
+        fi
+    done < "/usr/local/nginx/conf/nginx.conf"
+    if [[ $rtmp_found -eq 1 ]] 
+    then
+        echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
+    else
+        echo -e "$conf
+
+rtmp_auto_push on;
+rtmp_auto_push_reconnect 1s;
+rtmp_socket_dir /tmp;
+
+rtmp {
+    out_queue   4096;
+    out_cork    8;
+    max_streams   128;
+    timeout   15s;
+    drop_idle_publisher   10s;
+    log_interval    120s;
+    log_size    1m;
+
+    server {
+        listen 1935;
+        server_name 127.0.0.1;
+        access_log  logs/flv.log;
+
+        application flv {
+            live on;
+            gop_cache on;
+        }
+    }
+}" > "/usr/local/nginx/conf/nginx.conf"
+    fi
+}
+
+NginxConfigCorsHost()
+{
+    echo && echo -e "$info 配置 cors..."
+    cors_domains=""
+    if ls -A "/usr/local/nginx/conf/sites_available/"* > /dev/null 2>&1
+    then
+        for f in "/usr/local/nginx/conf/sites_available/"*
+        do
+            domain=${f##*/}
+            domain=${domain%.conf}
+            if [[ $domain =~ ^[A-Za-z0-9.]*$ ]] 
+            then
+                cors_domains="$cors_domains
+        \"~http://$domain\" http://$domain;
+        \"~https://$domain\" https://$domain;"
+            fi
+        done
+    fi
+    server_ip=$(GetServerIp)
+    cors_domains="$cors_domains
+        \"~http://$server_ip\" http://$server_ip;"
+    if ! grep -q "map \$http_origin \$corsHost" < "/usr/local/nginx/conf/nginx.conf"
+    then
+        conf=""
+        found=0
+        while IFS= read -r line 
+        do
+            if [ "$found" -eq 0 ] && [[ $line == *"server {"* ]]
+            then
+                lead=${line%%[^[:blank:]]*}
+                first_char=${line#${lead}}
+                first_char=${first_char:0:1}
+                if [[ $first_char != "#" ]] 
+                then
+                    line="
+    map \$http_origin \$corsHost {
+        default *;$cors_domains
+    }\n\n$line"
+                    found=1
+                fi
+            fi
+            [ -n "$conf" ] && conf="$conf\n"
+            conf="$conf$line"
+        done < "/usr/local/nginx/conf/nginx.conf"
+        echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
+    else
+        conf=""
+        found=0
+        while IFS= read -r line 
+        do
+            if [ "$found" -eq 0 ] && [[ $line == *"map \$http_origin \$corsHost"* ]]
+            then
+                found=1
+                continue
+            fi
+            if [ "$found" -eq 1 ] && [[ $line == *"}"* ]] 
+            then
+                line="    map \$http_origin \$corsHost {\n        default *;$cors_domains\n    }"
+                found=0
+            fi
+            if [ "$found" -eq 1 ] 
+            then
+                continue
+            fi
+            [ -n "$conf" ] && conf="$conf\n"
+            conf="$conf$line"
+        done < "/usr/local/nginx/conf/nginx.conf"
+        echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
+    fi
+}
+
+NginxConfigSsl()
+{
+    if ! grep -q "ssl_session_cache " < "/usr/local/nginx/conf/nginx.conf"
+    then
+        conf=""
+        found=0
+        while IFS= read -r line 
+        do
+            if [ "$found" -eq 0 ] && [[ $line == *"server {"* ]]
+            then
+                lead=${line%%[^[:blank:]]*}
+                first_char=${line#${lead}}
+                first_char=${first_char:0:1}
+                if [[ $first_char != "#" ]] 
+                then
+                    line="
+    ssl_session_cache           shared:SSL:10m;
+    ssl_session_timeout         10m;
+    ssl_prefer_server_ciphers   on;
+    ssl_protocols               TLSv1.2 TLSv1.3;
+    ssl_ciphers                 HIGH:!aNULL:!MD5;
+
+$line"
+                    found=1
+                fi
+            fi
+            [ -n "$conf" ] && conf="$conf\n"
+            conf="$conf$line"
+        done < "/usr/local/nginx/conf/nginx.conf"
+        echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
+    fi
+}
+
+NginxListDomains()
+{
+    nginx_domains_list=""
+    nginx_domains_count=0
+    nginx_domains=()
+    nginx_domains_status=()
+    if ls -A "/usr/local/nginx/conf/sites_available/"* > /dev/null 2>&1
+    then
+        for f in "/usr/local/nginx/conf/sites_available/"*
+        do
+            nginx_domains_count=$((nginx_domains_count+1))
+            domain=${f##*/}
+            domain=${domain%.conf}
+            if [ -e "/usr/local/nginx/conf/sites_enabled/$domain.conf" ] 
+            then
+                domain_status=1
+                domain_status_text="$green [开启] $plain"
+            else
+                domain_status=0
+                domain_status_text="$red [关闭] $plain"
+            fi
+            nginx_domains_list=$nginx_domains_list"$green$nginx_domains_count.$plain $domain $domain_status_text\n\n"
+            nginx_domains+=("$domain")
+            nginx_domains_status+=("$domain_status")
+        done
+    fi
+    [ -n "$nginx_domains_list" ] && echo && echo -e "$green域名列表:$plain\n\n$nginx_domains_list"
+    return 0
+}
+
+NginxListDomain()
+{
+    nginx_domain_list=""
+    nginx_domain_server_found=0
+    nginx_domain_server_flag=0
+    nginx_domain_servers_count=0
+    nginx_domain_servers_https_port=()
+    nginx_domain_servers_http_port=()
+    nginx_domain_servers_root=()
+    while IFS= read -r line 
+    do
+        if [[ $line == *"server {"* ]] 
+        then
+            nginx_domain_server_found=1
+            https_ports=""
+            http_ports=""
+            nodejs_found=0
+            flv_found=0
+            root=""
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"{"* ]] 
+        then
+            nginx_domain_server_flag=$((nginx_domain_server_flag+1))
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"}"* ]] 
+        then
+            nginx_domain_server_flag=$((nginx_domain_server_flag-1))
+            if [[ $nginx_domain_server_flag -eq 0 ]] 
+            then
+                nginx_domain_server_found=0
+                nginx_domain_servers_count=$((nginx_domain_servers_count+1))
+                nginx_domain_servers_https_port+=("$https_ports")
+                nginx_domain_servers_http_port+=("$http_ports")
+                nginx_domain_servers_root+=("$root")
+                if [[ $flv_found -eq 1 ]] 
+                then
+                    flv_status="$green已配置$plain"
+                else
+                    flv_status="$red未配置$plain"
+                fi
+                if [[ $nodejs_found -eq 1 ]] 
+                then
+                    nodejs_status="$green已配置$plain"
+                else
+                    nodejs_status="$red未配置$plain"
+                fi
+                nginx_domain_list=$nginx_domain_list"$green$nginx_domain_servers_count.$plain https 端口: $green${https_ports:-无}$plain, http 端口: $green${http_ports:-无}$plain, flv: $flv_status, nodejs: $nodejs_status\n\n"
+            fi
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *" ssl;"* ]]
+        then
+            https_port=${line#*listen}
+            https_port=${https_port// ssl;/}
+            lead=${https_port%%[^[:blank:]]*}
+            https_port=${https_port#${lead}}
+            https_ports="$https_ports$https_port "
+        elif [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"listen "* ]] 
+        then
+            http_port=${line#*listen}
+            http_port=${http_port%;*}
+            lead=${http_port%%[^[:blank:]]*}
+            http_port=${http_port#${lead}}
+            [ -n "$http_ports" ] && http_ports="$http_ports "
+            http_ports="$http_ports$http_port"
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"location /flv "* ]]
+        then
+            flv_found=1
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"root "* ]]
+        then
+            root="${line#*root}"
+            root=${line%;*}
+            lead=${root%%[^[:blank:]]*}
+            root=${root#${lead}}
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"proxy_pass http://nodejs"* ]]
+        then
+            nodejs_found=1
+        fi
+    done < "/usr/local/nginx/conf/sites_available/${nginx_domains[nginx_domains_index]}.conf"
+
+    if [ "${action:-}" == "edit" ] 
+    then
+        nginx_domain_update_crt_number=$((nginx_domain_servers_count+1))
+        nginx_domain_add_server_number=$((nginx_domain_servers_count+2))
+        nginx_domain_edit_server_number=$((nginx_domain_servers_count+3))
+        nginx_domain_delete_server_number=$((nginx_domain_servers_count+4))
+        nginx_domain_list="$nginx_domain_list$green$nginx_domain_update_crt_number.$plain 更新证书\n\n"
+        nginx_domain_list="$nginx_domain_list$green$nginx_domain_add_server_number.$plain 添加配置\n\n"
+        nginx_domain_list="$nginx_domain_list$green$nginx_domain_edit_server_number.$plain 修改配置\n\n"
+        nginx_domain_list="$nginx_domain_list$green$nginx_domain_delete_server_number.$plain 删除配置\n\n"
+    fi
+
+    echo && echo -e "域名 $green${nginx_domains[nginx_domains_index]}$plain 配置:\n\n$nginx_domain_list"
+}
+
+NginxDomainServerToggleFlv()
+{
+    nginx_domain_server_found=0
+    nginx_domain_server_flag=0
+    conf=""
+    while IFS= read -r line 
+    do
+        if [[ $line == *"server {"* ]] 
+        then
+            nginx_domain_server_found=1
+            https_ports=""
+            http_ports=""
+            flv_flag=0
+            flv_found=0
+            flv_add=0
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"{"* ]] 
+        then
+            nginx_domain_server_flag=$((nginx_domain_server_flag+1))
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"}"* ]] 
+        then
+            nginx_domain_server_flag=$((nginx_domain_server_flag-1))
+            if [[ $nginx_domain_server_flag -eq 0 ]] 
+            then
+                nginx_domain_server_found=0
+                if [[ $flv_add -eq 0 ]] && [[ $flv_found -eq 0 ]] && [[ $https_ports == "${nginx_domain_servers_https_port[nginx_domain_server_index]}" ]] && [[ $http_ports == "${nginx_domain_servers_http_port[nginx_domain_server_index]}" ]] 
+                then
+                    line="
+        location /flv {
+            flv_live on;
+            chunked_transfer_encoding  on;
+        }\n$line"
+                fi
+            fi
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *" ssl;"* ]]
+        then
+            https_port=${line#*listen}
+            https_port=${https_port// ssl;/}
+            lead=${https_port%%[^[:blank:]]*}
+            https_port=${https_port#${lead}}
+            https_ports="$https_ports$https_port "
+        elif [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"listen "* ]] 
+        then
+            http_port=${line#*listen}
+            http_port=${http_port%;*}
+            lead=${http_port%%[^[:blank:]]*}
+            http_port=${http_port#${lead}}
+            [ -n "$http_ports" ] && http_ports="$http_ports "
+            http_ports="$http_ports$http_port"
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"location /flv "* ]] && [[ $https_ports == "${nginx_domain_servers_https_port[nginx_domain_server_index]}" ]] && [[ $http_ports == "${nginx_domain_servers_http_port[nginx_domain_server_index]}" ]] 
+        then
+            flv_flag=1
+            flv_found=1
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $flv_flag -eq 1 ]] 
+        then
+            if [[ $line == *"}"* ]] 
+            then
+                flv_flag=0
+            fi
+            continue
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"location "* ]] && [[ $line != *"location /flv "* ]] && [[ $flv_found -eq 0 ]] && [[ $https_ports == "${nginx_domain_servers_https_port[nginx_domain_server_index]}" ]] && [[ $http_ports == "${nginx_domain_servers_http_port[nginx_domain_server_index]}" ]] 
+        then
+            flv_add=1
+            line="        location /flv {
+            flv_live on;
+            chunked_transfer_encoding  on;
+        }\n\n$line"
+        fi
+
+        if [ "${last_line:-}" == "#" ] && [ "$line" == "" ]
+        then
+            continue
+        fi
+        last_line="$line#"
+        [ -n "$conf" ] && conf="$conf\n"
+        conf="$conf$line"
+    done < "/usr/local/nginx/conf/sites_available/${nginx_domains[nginx_domains_index]}.conf"
+    unset last_line
+    echo -e "$conf" > "/usr/local/nginx/conf/sites_available/${nginx_domains[nginx_domains_index]}.conf"
+    echo && echo -e "$info flv 配置修改成功" && echo
+}
+
+NginxDomainServerToggleNodejs()
+{
+    nginx_domain_server_found=0
+    nginx_domain_server_flag=0
+    conf=""
+    while IFS= read -r line 
+    do
+        if [[ $line == *"server {"* ]] 
+        then
+            nginx_domain_server_found=1
+            https_ports=""
+            http_ports=""
+            nodejs_flag=0
+            nodejs_found=0
+            nodejs_add=0
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"{"* ]] 
+        then
+            nginx_domain_server_flag=$((nginx_domain_server_flag+1))
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"}"* ]] 
+        then
+            nginx_domain_server_flag=$((nginx_domain_server_flag-1))
+            if [[ $nginx_domain_server_flag -eq 0 ]] 
+            then
+                nginx_domain_server_found=0
+                if [[ $nodejs_add -eq 0 ]] && [[ $nodejs_found -eq 0 ]] && [[ $https_ports == "${nginx_domain_servers_https_port[nginx_domain_server_index]}" ]] && [[ $http_ports == "${nginx_domain_servers_http_port[nginx_domain_server_index]}" ]] 
+                then
+                    if [ -n "$https_ports" ] && [ -n "$http_ports" ]
+                    then
+                        scheme="\$scheme"
+                        proxy_cookie_path=""
+                    elif [ -n "$https_ports" ] 
+                    then
+                        scheme="https"
+                        proxy_cookie_path="\n            proxy_cookie_path / /\$samesite_none;"
+                    else
+                        scheme="http"
+                        proxy_cookie_path=""
+                    fi
+
+                    line="
+        location = / {
+            proxy_redirect off;
+            proxy_pass http://nodejs;
+            proxy_read_timeout 10s;
+            proxy_send_timeout 10s;
+
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            proxy_cache_bypass 1;
+            proxy_no_cache 1;$proxy_cookie_path
+            proxy_cookie_domain localhost ${nginx_domains[nginx_domains_index]};
+        }
+
+        location = /channels.json {
+            return 302 /channels;
+        }
+
+        location = /remote {
+            proxy_redirect off;
+            proxy_pass http://nodejs;
+            proxy_read_timeout 10s;
+            proxy_send_timeout 10s;
+
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            proxy_cache_bypass 1;
+            proxy_no_cache 1;$proxy_cookie_path
+            proxy_cookie_domain localhost ${nginx_domains[nginx_domains_index]};
+        }
+
+        location = /remote.json {
+            return 302 /remote;
+        }
+
+        location = /keys {
+            proxy_redirect off;
+            proxy_pass http://nodejs;
+            proxy_read_timeout 10s;
+            proxy_send_timeout 10s;
+
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            proxy_cache_bypass 1;
+            proxy_no_cache 1;$proxy_cookie_path
+            proxy_cookie_domain localhost ${nginx_domains[nginx_domains_index]};
+        }
+
+        location ~ \.(keyinfo|key)$ {
+            return 403;
+        }\n$line"
+                fi
+            fi
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *" ssl;"* ]]
+        then
+            https_port=${line#*listen}
+            https_port=${https_port// ssl;/}
+            lead=${https_port%%[^[:blank:]]*}
+            https_port=${https_port#${lead}}
+            https_ports="$https_ports$https_port "
+        elif [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"listen "* ]] 
+        then
+            http_port=${line#*listen}
+            http_port=${http_port%;*}
+            lead=${http_port%%[^[:blank:]]*}
+            http_port=${http_port#${lead}}
+            [ -n "$http_ports" ] && http_ports="$http_ports "
+            http_ports="$http_ports$http_port"
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"location = / {"* ]] && [[ $https_ports == "${nginx_domain_servers_https_port[nginx_domain_server_index]}" ]] && [[ $http_ports == "${nginx_domain_servers_http_port[nginx_domain_server_index]}" ]] 
+        then
+            nodejs_flag=1
+            nodejs_found=1
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $nodejs_flag -eq 1 ]] 
+        then
+            if [[ $line == *"}"* ]] 
+            then
+                nodejs_flag=0
+            fi
+            [[ "${enable_nodejs:-0}" -eq 1 ]] || continue
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && { [[ $line == *"location = /channels.json "* ]] || [[ $line == *"location = /remote "* ]] || [[ $line == *"location = /remote.json "* ]] || [[ $line == *"location = /keys "* ]] || [[ $line == *"location ~ \.(keyinfo|key)"* ]]; }
+        then
+            nodejs_flag=1
+            [[ "${enable_nodejs:-0}" -eq 1 ]] || continue
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"location "* ]] && [[ $line != *"location = / {"* ]] && [[ $nodejs_found -eq 0 ]] && [[ $https_ports == "${nginx_domain_servers_https_port[nginx_domain_server_index]}" ]] && [[ $http_ports == "${nginx_domain_servers_http_port[nginx_domain_server_index]}" ]] 
+        then
+            nodejs_add=1
+            if [ -n "$https_ports" ] && [ -n "$http_ports" ]
+            then
+                scheme="\$scheme"
+                proxy_cookie_path=""
+            elif [ -n "$https_ports" ] 
+            then
+                scheme="https"
+                proxy_cookie_path="\n            proxy_cookie_path / /\$samesite_none;"
+            else
+                scheme="http"
+                proxy_cookie_path=""
+            fi
+
+            line="        location = / {
+            proxy_redirect off;
+            proxy_pass http://nodejs;
+            proxy_read_timeout 10s;
+            proxy_send_timeout 10s;
+
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            proxy_cache_bypass 1;
+            proxy_no_cache 1;$proxy_cookie_path
+            proxy_cookie_domain localhost ${nginx_domains[nginx_domains_index]};
+        }
+
+        location = /channels.json {
+            return 302 /channels;
+        }
+
+        location = /remote {
+            proxy_redirect off;
+            proxy_pass http://nodejs;
+            proxy_read_timeout 10s;
+            proxy_send_timeout 10s;
+
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            proxy_cache_bypass 1;
+            proxy_no_cache 1;$proxy_cookie_path
+            proxy_cookie_domain localhost ${nginx_domains[nginx_domains_index]};
+        }
+
+        location = /remote.json {
+            return 302 /remote;
+        }
+
+        location = /keys {
+            proxy_redirect off;
+            proxy_pass http://nodejs;
+            proxy_read_timeout 10s;
+            proxy_send_timeout 10s;
+
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            proxy_cache_bypass 1;
+            proxy_no_cache 1;$proxy_cookie_path
+            proxy_cookie_domain localhost ${nginx_domains[nginx_domains_index]};
+        }
+
+        location ~ \.(keyinfo|key)$ {
+            return 403;
+        }\n\n$line"
+        fi
+
+        if [ "${last_line:-}" == "#" ] && [ "$line" == "" ]
+        then
+            continue
+        fi
+        last_line="$line#"
+        [ -n "$conf" ] && conf="$conf\n"
+        conf="$conf$line"
+    done < "/usr/local/nginx/conf/sites_available/${nginx_domains[nginx_domains_index]}.conf"
+    unset last_line
+    echo -e "$conf" > "/usr/local/nginx/conf/sites_available/${nginx_domains[nginx_domains_index]}.conf"
+    echo && echo -e "$info nodejs 配置修改成功" && echo
+}
+
+NginxDomainUpdateCrt()
+{
+    echo && echo -e "$info 更新证书..."
+    if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
+    then
+        echo && echo -e "$info 检查依赖..."
+        CheckRelease
+        if [ "$release" == "rpm" ] 
+        then
+            yum -y install socat > /dev/null
+        else
+            apt-get -y install socat > /dev/null
+        fi
+        bash <(curl --silent -m 10 https://get.acme.sh) > /dev/null
+    fi
+
+    nginx -s stop 2> /dev/null || true
+    sleep 1
+
+    ~/.acme.sh/acme.sh --force --issue -d "${nginx_domains[nginx_domains_index]}" --standalone -k ec-256 > /dev/null
+    ~/.acme.sh/acme.sh --force --installcert -d "${nginx_domains[nginx_domains_index]}" --fullchainpath /usr/local/nginx/conf/sites_crt/"${nginx_domains[nginx_domains_index]}".crt --keypath /usr/local/nginx/conf/sites_crt/"${nginx_domains[nginx_domains_index]}".key --ecc > /dev/null
+
+    nginx
+    echo && echo -e "$info 证书更新完成..."
+}
+
+NginxEditDomain()
+{
+    NginxListDomains
+
+    echo "输入序号"
+    while read -p "(默认: 取消): " nginx_domains_index
+    do
+        case "$nginx_domains_index" in
+            "")
+                echo && echo "已取消..." && echo && exit 1
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的序号" && echo
+            ;;
+            *)
+                if [ "$nginx_domains_index" -gt 0 ] && [ "$nginx_domains_index" -le "$nginx_domains_count" ]
+                then
+                    nginx_domains_index=$((nginx_domains_index-1))
+                    break
+                else
+                    echo -e "$error 请输入正确的序号" && echo
+                fi
+            ;;
+        esac
+    done
+
+    action="edit"
+
+    NginxListDomain
+
+    echo "输入序号"
+    while read -p "(默认: 取消): " nginx_domain_server_num
+    do
+        case "$nginx_domain_server_num" in
+            "")
+                echo && echo "已取消..." && echo && exit 1
+            ;;
+            $nginx_domain_update_crt_number)
+                NginxDomainUpdateCrt
+                exit 0
+            ;;
+            $nginx_domain_add_server_number)
+                NginxDomainAddServer
+                exit 0
+            ;;
+            $nginx_domain_edit_server_number)
+                NginxDomainEditServer
+                exit 0
+            ;;
+            $nginx_domain_delete_server_number)
+                NginxDomainDeleteServer
+                exit 0
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的序号" && echo
+            ;;
+            *)
+                if [ "$nginx_domain_server_num" -gt 0 ] && [ "$nginx_domain_server_num" -le "$nginx_domain_servers_count" ]
+                then
+                    nginx_domain_server_index=$((nginx_domain_server_num-1))
+                    break
+                else
+                    echo -e "$error 请输入正确的序号" && echo
+                fi
+            ;;
+        esac
+    done
+
+    echo && echo -e "选择操作
+
+  ${green}1.$plain 开关 flv 设置
+  ${green}2.$plain 开关 nodejs 设置
+  ${green}3.$plain 修改 http 端口
+  ${green}4.$plain 修改 https 端口
+    " && echo
+    while read -p "(默认：取消): " nginx_domain_server_action_num 
+    do
+        case $nginx_domain_server_action_num in
+            "") 
+                echo && echo "已取消..." && echo && exit 1
+            ;;
+            1) 
+                NginxDomainServerToggleFlv
+                break
+            ;;
+            2) 
+                NginxDomainServerToggleNodejs
+                break
+            ;;
+            3) 
+                NginxDomainServerEditHttpPorts
+                break
+            ;;
+            4) 
+                NginxDomainServerEditHttpsPorts
+                break
+            ;;
+            *) echo && echo -e "$error 输入错误" && echo
+            ;;
+        esac
+    done
+}
+
+NginxToggleDomain()
+{
+    NginxListDomains
+
+    echo "输入序号"
+    while read -p "(默认: 取消): " nginx_domains_index
+    do
+        case "$nginx_domains_index" in
+            "")
+                echo && echo "已取消..." && echo && exit 1
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的序号" && echo
+            ;;
+            *)
+                if [ "$nginx_domains_index" -gt 0 ] && [ "$nginx_domains_index" -le "$nginx_domains_count" ]
+                then
+                    nginx_domains_index=$((nginx_domains_index-1))
+                    break
+                else
+                    echo -e "$error 请输入正确的序号" && echo
+                fi
+            ;;
+        esac
+    done
+
+    server_domain=${nginx_domains[nginx_domains_index]}
+    if [ "${nginx_domains_status[nginx_domains_index]}" -eq 1 ] 
+    then
+        NginxDisableDomain
+        echo && echo -e "$info $server_domain 关闭成功" && echo
+    else
+        NginxEnableDomain
+        echo && echo -e "$info $server_domain 开启成功" && echo
+    fi
+}
+
+NginxDeleteDomain()
+{
+    NginxListDomains
+
+    echo "输入序号"
+    while read -p "(默认: 取消): " nginx_domains_index
+    do
+        case "$nginx_domains_index" in
+            "")
+                echo && echo "已取消..." && echo && exit 1
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的序号" && echo
+            ;;
+            *)
+                if [ "$nginx_domains_index" -gt 0 ] && [ "$nginx_domains_index" -le "$nginx_domains_count" ]
+                then
+                    nginx_domains_index=$((nginx_domains_index-1))
+                    break
+                else
+                    echo -e "$error 请输入正确的序号" && echo
+                fi
+            ;;
+        esac
+    done
+
+    server_domain=${nginx_domains[nginx_domains_index]}
+    if [ "${nginx_domains_status[nginx_domains_index]}" -eq 1 ] 
+    then
+        NginxDisableDomain
+    fi
+    rm -rf "/usr/local/nginx/conf/sites_available/$server_domain.conf"
+    echo && echo -e "$info $server_domain 删除成功" && echo
+}
+
+DomainInstallCert()
+{
+    if [ -e "/usr/local/nginx/conf/sites_crt/$server_domain.crt" ] && [ -e "/usr/local/nginx/conf/sites_crt/$server_domain.key" ]
+    then
+        echo && echo -e "$info 检测到证书已存在，是否重新安装证书 ? [y/N]"
+        read -p "(默认: N): " reinstall_crt_yn
+        reinstall_crt_yn=${reinstall_crt_yn:-N}
+        if [[ $reinstall_crt_yn == [Nn] ]] 
+        then
+            return 0
+        fi
+    fi
+
+    echo && echo -e "$info 安装证书..."
+
+    if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
+    then
+        echo && echo -e "$info 检查依赖..."
+        CheckRelease
+        if [ "$release" == "rpm" ] 
+        then
+            yum -y install socat > /dev/null
+        else
+            apt-get -y install socat > /dev/null
+        fi
+        bash <(curl --silent -m 10 https://get.acme.sh) > /dev/null
+    fi
+
+    nginx -s stop 2> /dev/null || true
+    sleep 1
+
+    ~/.acme.sh/acme.sh --force --issue -d "$server_domain" --standalone -k ec-256 > /dev/null
+    ~/.acme.sh/acme.sh --force --installcert -d "$server_domain" --fullchainpath "/usr/local/nginx/conf/sites_crt/$server_domain.crt" --keypath "/usr/local/nginx/conf/sites_crt/$server_domain.key" --ecc > /dev/null
+
+    nginx
+    echo && echo -e "$info 证书安装完成..."
+}
+
+PrettyConfig()
+{
+    last_line=""
+    new_conf=""
+    while IFS= read -r line 
+    do
+        if [ "$last_line" == "#" ] && [ "$line" == "" ]
+        then
+            continue
+        fi
+        last_line="$line#"
+        [ -n "$new_conf" ] && new_conf="$new_conf\n"
+        new_conf="$new_conf$line"
+    done < <(echo -e "$conf")
+    unset last_line
+    conf=$new_conf
+}
+
+NginxConfigLocalhost()
+{
+    NginxCheckDomains
+    NginxConfigSsl
+
+    NginxConfigServerHttpPort
+    NginxConfigServerRoot
+    NginxConfigServerLiveRoot
+    NginxConfigBlockAliyun
+    [[ ${enable_nodejs:-0} -eq 1 ]] && NginxConfigUpstream
+
+    conf=""
+
+    server_conf=""
+    server_found=0
+    server_flag=0
+    block_aliyun_done=0
+
+    while IFS= read -r line 
+    do
+        new_line=""
+
+        if [[ $line == *"server {"* ]] 
+        then
+            lead=${line%%[^[:blank:]]*}
+            first_char=${line#${lead}}
+            first_char=${first_char:0:1}
+            if [[ $first_char != "#" ]] 
+            then
+                server_conf=""
+                server_conf_new=""
+                server_found=1
+                localhost_found=0
+                location_found=0
+                skip_location=0
+                flv_found=0
+            fi
+        fi
+
+        if [[ $server_found -eq 1 ]] && [[ $line == *"{"* ]] 
+        then
+            server_flag=$((server_flag+1))
+        fi
+
+        if [[ $server_found -eq 1 ]] && [[ $line == *"}"* ]] 
+        then
+            server_flag=$((server_flag-1))
+        fi
+
+        if [[ $server_found -eq 1 ]] && [[ $line == *"listen "* ]] 
+        then
+            new_line="${line%%listen*}listen $server_http_port;"
+        fi
+
+        if [[ $server_found -eq 1 ]] && [[ $line == *" localhost;"* ]] 
+        then
+            localhost_found=1
+        fi
+
+        if [[ $server_found -eq 1 ]] && [[ $localhost_found -eq 1 ]] && [[ ${enable_nodejs:-0} -eq 1 ]] && [[ $location_found -eq 0 ]] && { [[ $line == *"location = / "* ]] || [[ $line == *"location = /channels.json "* ]] || [[ $line == *"location = /remote "* ]] || [[ $line == *"location = /remote.json "* ]] || [[ $line == *"location = /keys "* ]] || [[ $line == *"location ~ \.(keyinfo|key)"* ]] || [[ $skip_location -eq 1 ]]; }
+        then
+            if [[ $line == *"location = / "* ]] || [[ $line == *"location = /channels.json "* ]] || [[ $line == *"location = /remote "* ]] || [[ $line == *"location = /remote.json "* ]] || [[ $line == *"location = /keys "* ]] || [[ $line == *"location ~ \.(keyinfo|key)"* ]] 
+            then
+                skip_location=1
+            elif [[ $line == *"}"* ]] 
+            then
+                skip_location=0
+            fi
+            continue
+        fi
+
+        if [[ $server_found -eq 1 ]] && [[ $localhost_found -eq 1 ]] && [[ $line == *"location /flv "* ]]
+        then
+            flv_found=1
+        fi
+
+        if [[ $server_found -eq 1 ]] && [[ $localhost_found -eq 1 ]] && [[ $flv_found -eq 1 ]]
+        then
+            if [[ $line == *"}"* ]] 
+            then
+                flv_found=0
+            fi
+            continue
+        fi
+
+        if [[ $server_found -eq 1 ]] && [[ $localhost_found -eq 1 ]] && [[ $line == *"add_header "* ]]
+        then
+            continue
+        fi
+
+        if [[ $server_found -eq 1 ]] && [[ $localhost_found -eq 1 ]] && [[ $line == *"location "* ]] && [[ $line == *" / "* ]] 
+        then
+            if [[ ${enable_nodejs:-0} -eq 1 ]] 
+            then
+                enable_nodejs=0
+                server_ip=${server_ip:-$(GetServerIp)}
+            line="        location = / {
+            proxy_redirect off;
+            proxy_pass http://nodejs;
+            proxy_read_timeout 10s;
+            proxy_send_timeout 10s;
+
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto http;
+
+            proxy_cache_bypass 1;
+            proxy_no_cache 1;
+            proxy_cookie_domain localhost $server_ip;
+        }
+
+        location = /channels.json {
+            return 302 /channels;
+        }
+
+        location = /remote {
+            proxy_redirect off;
+            proxy_pass http://nodejs;
+            proxy_read_timeout 10s;
+            proxy_send_timeout 10s;
+
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto http;
+
+            proxy_cache_bypass 1;
+            proxy_no_cache 1;
+            proxy_cookie_domain localhost $server_ip;
+        }
+
+        location = /remote.json {
+            return 302 /remote;
+        }
+
+        location = /keys {
+            proxy_redirect off;
+            proxy_pass http://nodejs;
+            proxy_read_timeout 10s;
+            proxy_send_timeout 10s;
+
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto http;
+
+            proxy_cache_bypass 1;
+            proxy_no_cache 1;
+            proxy_cookie_domain localhost $server_ip;
+        }
+
+        location ~ \.(keyinfo|key)$ {
+            return 403;
+        }\n\n$line"
+            fi
+            line="        add_header Access-Control-Allow-Origin \$corsHost;
+        add_header Vary Origin;
+        add_header X-Frame-Options SAMEORIGIN;
+        add_header Access-Control-Allow-Credentials true;
+        add_header Cache-Control no-cache;
+
+        location /flv {
+            flv_live on;
+            chunked_transfer_encoding  on;
+        }\n\n$line"
+            location_found=1
+        fi
+
+        if [[ $server_found -eq 1 ]] && [[ $location_found -eq 1 ]] && [[ $block_aliyun_done -eq 0 ]] && [[ $line == *"{"* ]]
+        then
+            line="$line${deny_aliyun:-}"
+            block_aliyun_done=1
+        fi
+
+        if [[ $server_found -eq 1 ]] && [[ $location_found -eq 1 ]] && [[ $line == *"root "* ]]
+        then
+            new_line="${line%%root*}root ${server_root#*/usr/local/nginx/};"
+        fi
+
+        if [[ $server_found -eq 1 ]] && [[ $location_found -eq 1 ]] && [[ $line == *"}"* ]]
+        then
+            location_found=0
+        fi
+
+        if [[ $server_found -eq 1 ]] 
+        then
+            [ -n "$server_conf" ] && server_conf="$server_conf\n"
+            server_conf="$server_conf$line"
+            [ -n "$server_conf_new" ] && server_conf_new="$server_conf_new\n"
+            if [ -n "$new_line" ] 
+            then
+                server_conf_new="$server_conf_new$new_line"
+            else
+                server_conf_new="$server_conf_new$line"
+            fi
+            if [[ $server_flag -eq 0 ]] && [[ $line == *"}"* ]] 
+            then
+                server_found=0
+
+                if [[ $localhost_found -eq 1 ]]
+                then
+                    line=$server_conf_new
+                else
+                    line=$server_conf
+                fi
+            fi
+        fi
+
+        if [[ $server_found -eq 0 ]] 
+        then
+            [ -n "$conf" ] && conf="$conf\n"
+            conf="$conf$line"
+        fi
+    done < "/usr/local/nginx/conf/nginx.conf"
+
+    PrettyConfig
+    echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
+
+    NginxConfigCorsHost
+    nginx -s stop 2> /dev/null || true
+    nginx
+    echo && echo -e "$info localhost 配置成功" && echo
+}
+
+NginxEnableDomain()
+{
+    ln -sf "/usr/local/nginx/conf/sites_available/$server_domain.conf" "/usr/local/nginx/conf/sites_enabled/$server_domain.conf"
+    nginx -s stop 2> /dev/null || true
+    nginx
+}
+
+NginxDisableDomain()
+{
+    rm -rf "/usr/local/nginx/conf/sites_enabled/$server_domain.conf"
+    nginx -s stop 2> /dev/null || true
+    nginx
+}
+
+NginxAppendHttpConf()
+{
+    printf '%s' "    server {
+        listen      $server_http_port;
+        server_name $server_domain;
+
+        access_log logs/access.log;
+
+        add_header Access-Control-Allow-Origin \$corsHost;
+        add_header Vary Origin;
+        add_header X-Frame-Options SAMEORIGIN;
+        add_header Access-Control-Allow-Credentials true;
+        add_header Cache-Control no-cache;
+
+        location / {${deny_aliyun:-}
+            root   ${server_root#*/usr/local/nginx/};
+        }
+    }
+
+" >> "/usr/local/nginx/conf/sites_available/$server_domain.conf"
+}
+
+NginxAppendHttpRedirectConf()
+{
+    echo && read -p "输入网址: " http_redirect_address
+    printf '%s' "    server {
+        listen      $server_http_port;
+        server_name $server_domain;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header Connection \"\";
+
+        location / {
+            return 301 $http_redirect_address\$request_uri;
+        }
+    }
+
+" >> "/usr/local/nginx/conf/sites_available/$server_domain.conf"
+}
+
+NginxAppendHttpRedirectToHttpsConf()
+{
+    printf '%s' "    server {
+        listen      $server_http_port;
+        server_name $server_domain;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header Connection \"\";
+
+        location / {
+            return 301 https://$server_domain\$request_uri;
+        }
+    }
+
+" > "/usr/local/nginx/conf/sites_available/$server_domain.conf"
+}
+
+NginxAppendHttpsConf()
+{
+    printf '%s' "    server {
+        listen      $server_https_port ssl;
+        server_name $server_domain;
+
+        access_log logs/access.log;
+
+        ssl_certificate      /usr/local/nginx/conf/sites_crt/$server_domain.crt;
+        ssl_certificate_key  /usr/local/nginx/conf/sites_crt/$server_domain.key;
+
+        add_header Access-Control-Allow-Origin \$corsHost;
+        add_header Vary Origin;
+        add_header X-Frame-Options SAMEORIGIN;
+        add_header Access-Control-Allow-Credentials true;
+        add_header Cache-Control no-cache;
+
+        location / {${deny_aliyun:-}
+            root   ${server_root#*/usr/local/nginx/};
+        }
+    }
+
+" >> "/usr/local/nginx/conf/sites_available/$server_domain.conf"
+}
+
+NginxAppendHttpsRedirectConf()
+{
+    echo && read -p "输入网址: " https_redirect_address
+    printf '%s' "    server {
+        listen      $server_https_port;
+        server_name $server_domain;
+
+        access_log off;
+
+        ssl_certificate      /usr/local/nginx/conf/sites_crt/$server_domain.crt;
+        ssl_certificate_key  /usr/local/nginx/conf/sites_crt/$server_domain.key;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header Connection \"\";
+
+        location / {
+            return 301 $https_redirect_address\$request_uri;
+        }
+    }
+
+" >> "/usr/local/nginx/conf/sites_available/$server_domain.conf"
+}
+
+NginxAppendHttpHttpsRedirectConf()
+{
+    echo && read -p "输入网址: " http_https_redirect_address
+    printf '%s' "    server {
+        listen      $server_http_port;
+        listen      $server_https_port;
+        server_name $server_domain;
+
+        access_log off;
+
+        ssl_certificate      /usr/local/nginx/conf/sites_crt/$server_domain.crt;
+        ssl_certificate_key  /usr/local/nginx/conf/sites_crt/$server_domain.key;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header Connection \"\";
+
+        location / {
+            return 301 $http_https_redirect_address\$request_uri;
+        }
+    }
+
+" >> "/usr/local/nginx/conf/sites_available/$server_domain.conf"
+}
+
+NginxAppendHttpHttpsConf()
+{
+    printf '%s' "    server {
+        listen      $server_http_port;
+        listen      $server_https_port ssl;
+        server_name $server_domain;
+
+        access_log logs/access.log;
+
+        ssl_certificate      /usr/local/nginx/conf/sites_crt/$server_domain.crt;
+        ssl_certificate_key  /usr/local/nginx/conf/sites_crt/$server_domain.key;
+
+        add_header Access-Control-Allow-Origin \$corsHost;
+        add_header Vary Origin;
+        add_header X-Frame-Options SAMEORIGIN;
+        add_header Access-Control-Allow-Credentials true;
+        add_header Cache-Control no-cache;
+
+        location / {${deny_aliyun:-}
+            root   ${server_root#*/usr/local/nginx/};
+        }
+    }
+
+" > "/usr/local/nginx/conf/sites_available/$server_domain.conf"
+}
+
+NginxAddDomain()
+{
+    NginxCheckDomains
+    NginxListDomains
+    NginxConfigSsl
+
+    echo && echo "输入指向本机的IP或域名"
+    echo -e "$tip 多个域名用空格分隔" && echo
+    read -p "(默认: 取消): " domains
+
+    if [ -n "$domains" ] 
+    then
+        IFS=" " read -ra new_domains <<< "$domains"
+        for server_domain in "${new_domains[@]}"
+        do
+            if [ -e "/usr/local/nginx/conf/sites_available/$server_domain.conf" ] 
+            then
+                echo && echo -e "$error $server_domain 已存在"
+                continue
+            fi
+
+            if [[ $server_domain =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ ! $server_domain =~ ^[A-Za-z0-9.]*$ ]]
+            then
+                server_num=1
+            else
+                echo && echo -e "选择网站类型
+
+  ${green}1.$plain http
+  ${green}2.$plain http => https
+  ${green}3.$plain http +  https
+ " && echo
+                read -p "请输入数字 [1-3]：" server_num
+            fi
+
+            case $server_num in
+                1) 
+                    NginxConfigServerHttpPort
+                    echo && echo "是否设置跳转到其它网址 ? [y/N]"
+                    read -p "(默认: N): " http_redirect_yn
+                    http_redirect_yn=${http_redirect_yn:-N}
+                    if [[ $http_redirect_yn == "Y" ]] 
+                    then
+                        NginxAppendHttpRedirectConf
+                    else
+                        NginxConfigServerRoot
+                        NginxConfigServerLiveRoot
+                        NginxConfigBlockAliyun
+                        NginxAppendHttpConf
+                    fi
+                    NginxConfigCorsHost
+                    NginxEnableDomain
+                    echo && echo -e "$info $server_domain 配置成功" && echo
+                ;;
+                2) 
+                    DomainInstallCert
+
+                    echo && echo "是否设置 http 跳转 https ? [Y/n]"
+                    read -p "(默认: Y): " http_to_https_yn
+                    http_to_https_yn=${http_to_https_yn:-Y}
+                    if [[ $http_to_https_yn == [Yy] ]] 
+                    then
+                        echo && echo -e "$info 设置 $server_domain http 配置"
+                        NginxConfigServerHttpPort
+                        NginxAppendHttpRedirectToHttpsConf
+                    fi
+
+                    NginxConfigServerHttpsPort
+                    echo && echo "是否设置 https 跳转到其它网址 ? [y/N]"
+                    read -p "(默认: N): " https_redirect_yn
+                    https_redirect_yn=${https_redirect_yn:-N}
+                    if [[ $https_redirect_yn == [Yy] ]] 
+                    then
+                        NginxAppendHttpsRedirectConf
+                    else
+                        NginxConfigServerRoot
+                        NginxConfigServerLiveRoot
+                        NginxConfigBlockAliyun
+                        NginxAppendHttpsConf
+                    fi
+                    NginxConfigCorsHost
+                    NginxEnableDomain
+                    echo && echo -e "$info $server_domain 配置成功" && echo
+                ;;
+                3) 
+                    DomainInstallCert
+                    echo && echo "http 和 https 是否使用相同的目录? [Y/n]"
+                    read -p "(默认: Y): " http_https_same_dir_yn
+                    http_https_same_dir_yn=${http_https_same_dir_yn:-Y}
+
+                    if [[ $http_https_same_dir_yn == [Yy] ]] 
+                    then
+                        NginxConfigServerHttpPort
+                        NginxConfigServerHttpsPort
+                        echo && echo "是否设置跳转到其它网址 ? [y/N]"
+                        read -p "(默认: N): " http_https_redirect_yn
+                        http_https_redirect_yn=${http_https_redirect_yn:-N}
+                        if [[ $http_https_redirect_yn == "Y" ]] 
+                        then
+                            NginxAppendHttpHttpsRedirectConf
+                        else
+                            NginxConfigServerRoot
+                            NginxConfigServerLiveRoot
+                            NginxConfigBlockAliyun
+                            NginxAppendHttpHttpsConf
+                        fi
+                    else
+                        NginxConfigServerHttpPort
+                        echo && echo "是否设置 http 跳转到其它网址 ? [y/N]"
+                        read -p "(默认: N): " http_redirect_yn
+                        http_redirect_yn=${http_redirect_yn:-N}
+                        if [[ $http_redirect_yn == [Yy] ]] 
+                        then
+                            NginxAppendHttpRedirectConf
+                            NginxConfigServerHttpsPort
+
+                            echo && echo "是否设置 https 跳转到其它网址 ? [y/N]"
+                            read -p "(默认: N): " https_redirect_yn
+                            https_redirect_yn=${https_redirect_yn:-N}
+
+                            if [[ $https_redirect_yn == [Yy] ]] 
+                            then
+                                NginxAppendHttpsRedirectConf
+                            else
+                                NginxConfigServerRoot
+                                NginxConfigServerLiveRoot
+                                NginxConfigBlockAliyun
+                                NginxAppendHttpsConf
+                            fi
+                        else
+                            NginxConfigServerRoot
+                            NginxConfigServerLiveRoot
+                            NginxConfigBlockAliyun
+
+                            server_http_root=$server_root
+                            server_http_live_root=$server_live_root
+                            server_http_deny=$deny_aliyun
+
+                            NginxConfigServerHttpsPort
+                            echo && echo "是否设置 https 跳转到其它网址 ? [y/N]"
+                            read -p "(默认: N): " https_redirect_yn
+                            https_redirect_yn=${https_redirect_yn:-N}
+
+                            if [[ $https_redirect_yn == [Yy] ]] 
+                            then
+                                NginxAppendHttpConf
+                                NginxAppendHttpsRedirectConf
+                            else
+                                server_root=""
+                                server_live_root=""
+                                deny_aliyun=""
+                                NginxConfigServerRoot
+                                NginxConfigServerLiveRoot
+                                NginxConfigBlockAliyun
+
+                                server_https_root=$server_root
+                                server_https_live_root=$server_live_root
+                                server_https_deny=$deny_aliyun
+
+                                if [ "$server_http_root" == "$server_https_root" ] && [ "$server_http_live_root" == "$server_https_live_root" ] && [ "$server_http_deny" == "$server_https_deny" ]
+                                then
+                                    NginxAppendHttpHttpsConf
+                                else
+                                    NginxAppendHttpConf
+                                    NginxAppendHttpsConf
+                                fi
+                            fi
+                        fi
+                    fi
+                    NginxConfigCorsHost
+                    NginxEnableDomain
+                    echo && echo -e "$info $server_domain 配置成功" && echo
+                ;;
+                *) echo && echo "已取消..." && echo && exit 1
+                ;;
+            esac
+        done
+    else
+        echo && echo -e "已取消..." && echo && exit 1
+    fi
+}
+
 InstallNodejs()
 {
     echo && echo -e "$info 检查依赖，耗时可能会很长..."
+    CheckRelease
     Progress &
     progress_pid=$!
-    CheckRelease
     if [ "$release" == "rpm" ] 
     then
         yum -y install gcc-c++ make >/dev/null 2>&1
         # yum groupinstall 'Development Tools'
         if bash <(curl -sL https://rpm.nodesource.com/setup_10.x) > /dev/null
         then
-            yum -y install nodejs
+            yum -y install nodejs >/dev/null 2>&1
         fi
     else
         apt-get -y update >/dev/null 2>&1
@@ -9805,16 +11572,305 @@ InstallNodejs()
     echo -n "...100%" && echo && echo -e "$info nodejs 安装完成"
 }
 
-#ConfigNodejs()
+NodejsInstallMongodb()
+{
+    echo && echo -e "$info 安装 mongodb..."
+    ulimit -f unlimited
+    ulimit -t unlimited
+    ulimit -v unlimited
+    ulimit -n 64000
+    ulimit -m unlimited
+    ulimit -u 32000
+    CheckRelease
+    if [ "$release" == "rpm" ] 
+    then
+        printf '%s' "
+[mongodb-org-4.2]
+name=MongoDB Repository
+baseurl=https://repo.mongodb.org/yum/redhat/\$releasever/mongodb-org/4.2/x86_64/
+gpgcheck=1
+enabled=1
+gpgkey=https://www.mongodb.org/static/pgp/server-4.2.asc
+" > "/etc/yum.repos.d/mongodb-org-4.2.repo"
+        yum install -y mongodb-org >/dev/null 2>&1
+    else
+        if ! wget -qO - https://www.mongodb.org/static/pgp/server-4.2.asc | apt-key add - > /dev/null 2>&1
+        then
+            apt-get install gnupg >/dev/null 2>&1
+            wget -qO - https://www.mongodb.org/static/pgp/server-4.2.asc | apt-key add - > /dev/null
+        fi
+
+        if grep -q "xenial" < "/etc/apt/sources.list"
+        then
+            echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/4.2 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.2.list
+        else
+            echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/4.2 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.2.list
+        fi
+
+        apt-get -y update >/dev/null 2>&1
+        apt-get install -y mongodb-org >/dev/null 2>&1
+    fi
+
+    if [[ $(ps --no-headers -o comm 1) == "systemd" ]] 
+    then
+        if ! systemctl start mongod > /dev/null 2>&1
+        then
+            systemctl daemon-reload
+            systemctl start mongod > /dev/null 2>&1
+        fi
+        mongo admin --eval "db.getSiblingDB('admin').createUser({user: '$username', pwd: '$password', roles: ['root']})"
+        systemctl restart mongod
+    else
+        service mongod start
+        mongo admin --eval "db.getSiblingDB('admin').createUser({user: '$username', pwd: '$password', roles: ['root']})"
+        service mongod restart
+    fi
+}
+
+NginxConfigSameSiteNone()
+{
+    if ! grep -q "map \$http_user_agent \$samesite_none" < "/usr/local/nginx/conf/nginx.conf"
+    then
+        conf=""
+        found=0
+        while IFS= read -r line 
+        do
+            if [ "$found" -eq 0 ] && [[ $line == *"server "* ]]
+            then
+                lead=${line%%[^[:blank:]]*}
+                first_char=${line#${lead}}
+                first_char=${first_char:0:1}
+                if [[ $first_char != "#" ]] 
+                then
+                    line="
+    map \$http_user_agent \$samesite_none {
+        default \"; Secure\";
+        \"~Chrom[^ \/]+\/8[\d][\.\d]*\" \"; Secure; SameSite=None\";
+    }\n\n$line"
+                    found=1
+                fi
+            fi
+            [ -n "$conf" ] && conf="$conf\n"
+            conf="$conf$line"
+        done < "/usr/local/nginx/conf/nginx.conf"
+        echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
+    fi
+}
+
+NginxConfigUpstream()
+{
+    if ! grep -q "upstream nodejs" < "/usr/local/nginx/conf/nginx.conf"
+    then
+        conf=""
+        found=0
+        while IFS= read -r line 
+        do
+            if [ "$found" -eq 0 ] && [[ $line == *"server "* ]]
+            then
+                lead=${line%%[^[:blank:]]*}
+                first_char=${line#${lead}}
+                first_char=${first_char:0:1}
+                if [[ $first_char != "#" ]] 
+                then
+                    line="
+    upstream nodejs {
+        ip_hash;
+        server 127.0.0.1:$nodejs_port;
+    }\n\n$line"
+                    found=1
+                fi
+            fi
+            [ -n "$conf" ] && conf="$conf\n"
+            conf="$conf$line"
+        done < "/usr/local/nginx/conf/nginx.conf"
+        echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
+    fi
+}
+
+NodejsConfig()
+{
+    enable_nodejs=1
+    NginxCheckDomains
+    NginxListDomains
+    [ "$nginx_domains_count" -eq 0 ] && echo && echo -e "$green域名列表:$plain\n\n无\n\n"
+    config_localhost_num=$((nginx_domains_count+1))
+    add_new_domain_num=$((nginx_domains_count+2))
+    echo -e "$green$config_localhost_num.$plain 使用本地 IP\n\n$green$add_new_domain_num.$plain 添加域名\n\n"
+
+    echo "输入序号"
+    while read -p "(默认: $config_localhost_num): " nginx_domains_index
+    do
+        case "$nginx_domains_index" in
+            ""|$config_localhost_num)
+                nginx_domains_index=$config_localhost_num
+                NginxConfigLocalhost
+                break
+            ;;
+            $add_new_domain_num)
+                NginxAddDomain
+                break
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的序号" && echo
+            ;;
+            *)
+                if [ "$nginx_domains_index" -gt 0 ] && [ "$nginx_domains_index" -le "$add_new_domain_num" ]
+                then
+                    nginx_domains_index=$((nginx_domains_index-1))
+                    break
+                else
+                    echo -e "$error 请输入正确的序号" && echo
+                fi
+            ;;
+        esac
+    done
+
+    if [[ $nginx_domains_index -lt $nginx_domains_count ]] 
+    then
+        NginxListDomain
+
+        echo "输入序号"
+        while read -p "(默认: 取消): " nginx_domain_server_num
+        do
+            case "$nginx_domain_server_num" in
+                "")
+                    echo && echo "已取消..." && echo && exit 1
+                ;;
+                *[!0-9]*)
+                    echo -e "$error 请输入正确的序号" && echo
+                ;;
+                *)
+                    if [ "$nginx_domain_server_num" -gt 0 ] && [ "$nginx_domain_server_num" -le "$nginx_domain_servers_count" ]
+                    then
+                        nginx_domain_server_index=$((nginx_domain_server_num-1))
+                        break
+                    else
+                        echo -e "$error 请输入正确的序号" && echo
+                    fi
+                ;;
+            esac
+        done
+        server_root=${nginx_domain_servers_root[nginx_domain_server_index]}
+        NginxConfigServerLiveRoot
+    fi
+
+    NginxDomainServerToggleNodejs
+
+    NginxConfigSameSiteNone
+    nodejs_port=$(GetFreePort)
+    NginxConfigUpstream
+
+    mkdir -p "$NODE_ROOT"
+    username=$(RandStr)
+    password=$(RandStr)
+    NodejsInstallMongodb
+
+    echo "
+const express = require('express');
+const session = require('express-session');
+const MongoDBStore = require('connect-mongodb-session')(session);
+
+const store = new MongoDBStore({
+    uri: 'mongodb://$username:$password@127.0.0.1/admin',
+    databaseName: 'encrypt',
+    collection: 'sessions'
+});
+
+const app = express();
+const port = $nodejs_port;
+
+app.set('trust proxy', 1);
+app.use(session({name: '$(RandStr)', resave: false, saveUninitialized: true, secret: '$(RandStr)', store: store, cookie: { domain: 'localhost', maxAge: 60 * 60 * 1000, httpOnly: true }}));
+
+app.get('/', function(req, res){
+    sessionData = req.session || {};
+    sessionData.websiteUser = true;
+    res.sendFile('$server_root/index.html');
+});
+
+app.get('/remote', function(req, res){
+    sessionData = req.session || {};
+    sessionData.websiteUser = true;
+    res.sendFile('$server_root/channels.json');
+});
+
+app.get('/channels', function(req, res){
+    sessionData = req.session;
+    if (!sessionData.websiteUser){
+        res.send('error');
+        return;
+    }
+    res.sendFile('$server_root/channels.json');
+});
+
+app.get('/keys', function(req, res){
+    sessionData = req.session;
+    if (!sessionData.websiteUser){
+        res.send('error');
+        return;
+    }
+    let keyName = req.query.key;
+    let channelDirName = req.query.channel;
+    if (keyName && channelDirName){
+        res.sendFile('$server_live_root/${LIVE_ROOT##*/}/' + channelDirName + '/' + keyName + '.key');
+    }
+});
+
+app.listen(port, () => console.log(`App listening on port \${port}!`))
+
+" > "$NODE_ROOT/index.js"
+
+    $JQ_FILE -n \
+'{
+  "name": "node",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "connect-mongodb-session": "^2.3.1",
+    "express": "^4.17.1",
+    "express-session": "^1.17.0"
+  }
+}' > "$NODE_ROOT/package.json"
+
+    if [[ ! -x $(command -v git) ]] 
+    then
+        echo && echo -e "$info 安装 git..."
+        if [ "$release" == "rpm" ] 
+        then
+            yum -y install git > /dev/null
+        elif [ "$release" == "ubu" ] 
+        then
+            add-apt-repository ppa:git-core/ppa
+            apt-get -y update
+            apt-get -y install git > /dev/null
+        else
+            apt-get -y install git > /dev/null
+        fi
+        echo && echo -e "$info git 安装成功..." && echo
+    fi
+
+    cd "$NODE_ROOT"
+    npm install
+    npm install -g pm2
+    pm2 start "$NODE_ROOT/index.js"
+    echo && echo -e "$info nodejs 配置完成"
+}
 
 Usage()
 {
 
 cat << EOM
-HTTP Live Stream Creator
-Wrapper By MTimer
 
-Copyright (C) 2013 B Tasker, D Atanasov
+A [ ffmpeg / v2ray / nginx ] Wrapper Script By MTimer
+
+Copyright (C) 2019
 Released under BSD 3 Clause License
 See LICENSE
 
@@ -9847,7 +11903,7 @@ See LICENSE
         可以输入 omit 省略此选项
     -C  固定码率(只有在没有设置crf视频质量的情况下才有效)(默认：否)
     -e  加密段(默认：不加密)
-    -K  Key名称(默认：跟m3u8名称相同)
+    -K  Key名称(默认：随机)
     -z  频道名称(默认：跟m3u8名称相同)
 
     也可以不输出 HLS，比如 flv 推流
@@ -10045,6 +12101,8 @@ fi
 
 V2rayConfigInstall()
 {
+    printf -v update_date '%(%m-%d)T'
+    cp -f "$V2_CONFIG" "${V2_CONFIG}_$update_date"
     while IFS= read -r line 
     do
         if [[ $line == *"port"* ]] 
@@ -10059,7 +12117,7 @@ V2rayConfigInstall()
         fi
     done < "$V2_CONFIG"
 
-    $JQ_FILE -n --arg port "$port" --arg id "$id" --arg path "${path:-/$(RandStr)}" \
+    $JQ_FILE -n --arg port "${port:-$(GetFreePort)}" --arg id "${id:-$($V2CTL_FILE uuid)}" --arg path "${path:-/$(RandStr)}" \
 '{
   "log": {
     "access": "none",
@@ -10133,6 +12191,10 @@ V2rayConfigInstall()
 
 V2rayConfigUpdate()
 {
+    if [ ! -e "$V2_CONFIG" ] 
+    then
+        echo && echo -e "$error v2ray 未安装..." && echo && exit 1
+    fi
     if ! grep -q '"tag": "nginx-1"' < "$V2_CONFIG"
     then
         if grep -q '"path": "' < "$V2_CONFIG" 
@@ -10493,6 +12555,16 @@ V2rayDeleteNginx()
     echo && echo -e "$info 账号组删除成功" && echo
 }
 
+V2rayStatus()
+{
+    if service v2ray status > /dev/null 2>&1
+    then
+        echo && echo -e "v2ray: $green开启$plain" && echo
+    else
+        echo && echo -e "v2ray: $red关闭$plain" && echo
+    fi
+}
+
 V2rayListNginxAccounts()
 {
     echo "输入序号"
@@ -10518,63 +12590,151 @@ V2rayListNginxAccounts()
         esac
     done
 
-    if [ -e "/usr/local/nginx" ] 
+    accounts_count=0
+    accounts_list=""
+    while IFS=' ' read -r map_id map_level map_alter_id map_email
+    do
+        accounts_count=$((accounts_count+1))
+        if [ "$accounts_count" -lt 9 ] 
+        then
+            blank=" "
+        else
+            blank=""
+        fi
+        accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}ID: $green$map_id$plain 等级: $green$map_level$plain alterId: $green$map_alter_id$plain 邮箱: $green$map_email$plain\n\n"
+    done < <($JQ_FILE -r '.inbounds['"$nginx_index"'].settings.clients | to_entries | map("\(.value.id) \(.value.level) \(.value.alterId) \(.value.email)") | .[]' "$V2_CONFIG")
+
+    V2rayListDomainsInbound
+
+    if [ -n "$accounts_list" ] 
     then
-        nginx_client_ports=()
-        nginx_domains=()
-        nginx_cert_names=()
-        nginx_path=()
-        nginx_server_ports=()
-        while IFS= read -r line 
-        do
-            if [[ $line == *"server "* ]] 
-            then
-                ports=""
-                port=""
-                domain=""
-                found=0
-            elif [[ $line == *"listen "* ]] 
-            then
-                while [[ $line == *"listen "* ]] 
-                do
-                    line=${line#*listen}
-                    p=${line%%;*}
-                    p=${p// ssl/}
-                    lead=${p%%[^[:blank:]]*}
-                    p=${p#${lead}}
-                    [ -n "$port" ] && port="$port "
-                    port="$port$p"
-                done
-                [ -n "$ports" ] && ports="$ports "
-                ports="$ports$port"
-            elif [[ $line == *"server_name "* ]]
-            then
-                line=${line%;*}
-                line=${line#*server_name }
-                lead=${line%%[^[:blank:]]*}
-                domain=${line#${lead}}
-            elif [ -n "${ports:-}" ] && [ -n "${domain:-}" ] && { [[ $line == *"v2ray.crt"* ]]  || [[ $line == *"$domain.crt"* ]]; }
-            then
-                line=${line%.crt*}
-                nginx_client_ports+=("$ports")
-                nginx_domains+=("$domain")
-                nginx_cert_names+=("${line##*/}")
-                found=1
-            elif [ "${found:-0}" -eq 1 ] && [ -n "${ports:-}" ] && [ -n "${domain:-}" ] &&  [[ $line == *"location "* ]]
-            then
-                line=${line#*location }
-                lead=${line%%[^[:blank:]]*}
-                line=${line#${lead}}
-                path=${line%% *}
-                nginx_path+=("$path")
-            elif [ "${found:-0}" -eq 1 ] && [ -n "${ports:-}" ] && [ -n "${domain:-}" ] && [[ $line == *"proxy_pass "* ]]
-            then
-                line=${line##*:}
-                nginx_server_ports+=("${line%;*}")
-                found=0
-            fi
-        done < "/usr/local/nginx/conf/nginx.conf"
+        echo "可用账号:"
+        echo && echo -e "$accounts_list" && echo
+    else
+        echo && echo "此账号组没有账号" && echo
     fi
+}
+
+V2raySetNginxTag()
+{
+    echo "输入组名"
+    read -p "(默认：随机): " tag
+    i=0
+    while true 
+    do
+        i=$((i+1))
+        tag="nginx-$i"
+        if ! grep -q '"tag": "'"$tag"'"' < "$V2_CONFIG"
+        then
+            break
+        fi
+    done
+    echo && echo -e "	组名: $green $tag $plain" && echo
+}
+
+V2rayAddNginx()
+{
+    listen="127.0.0.1"
+    echo
+    V2raySetPort
+    protocol="vmess"
+    V2raySetNginxTag
+    V2raySetStreamSettings
+
+    new_inbound=$(
+    $JQ_FILE -n --arg listen "$listen" --arg port "$port" \
+        --arg protocol "$protocol" --arg network "$network" \
+        --arg path "$path" --arg tag "$tag" \
+    '{
+        "listen": $listen,
+        "port": $port | tonumber,
+        "protocol": $protocol,
+        "settings": {
+            "clients": []
+        },
+        "streamSettings": {
+        "network": $network,
+        "wsSettings": {
+            "path": $path
+        }
+        },
+        "tag": $tag
+    }')
+
+    JQ add "$V2_CONFIG" inbounds "[$new_inbound]"
+
+    echo && echo -e "$info 账号组添加成功" && echo
+}
+
+V2rayAddNginxAccount()
+{
+    [ "$inbounds_nginx_count" -eq 0 ] && echo && echo -e "$error 没有账号组, 请先添加组" && echo && exit 1
+    echo -e "输入组序号"
+    while read -p "(默认: 取消): " nginx_num
+    do
+        case "$nginx_num" in
+            "")
+                echo && echo "已取消..." && echo && exit 1
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的序号" && echo
+            ;;
+            *)
+                if [ "$nginx_num" -gt 0 ] && [ "$nginx_num" -le $inbounds_nginx_count ]
+                then
+                    nginx_num=$((nginx_num-1))
+                    nginx_index=${inbounds_nginx_index[nginx_num]}
+                    break
+                else
+                    echo -e "$error 请输入正确的序号" && echo
+                fi
+            ;;
+        esac
+    done
+
+    V2raySetLevel
+    V2raySetId
+    V2raySetAlterId
+    V2raySetEmail
+    jq_path='["inbounds",'"$nginx_index"',"settings","clients"]'
+    new_account=$(
+    $JQ_FILE -n --arg id "$id" --arg level "$level" \
+        --arg alterId "$alter_id" --arg email "$email" \
+    '{
+        "id": $id,
+        "level": $level | tonumber,
+        "alterId": $alterId | tonumber,
+        "email": $email
+    }')
+
+    JQ add "$V2_CONFIG" "[$new_account]"
+    echo && echo -e "$info 账号添加成功" && echo
+}
+
+V2rayDeleteNginxAccount()
+{
+    echo "输入序号"
+    while read -p "(默认: 取消): " nginx_num
+    do
+        case "$nginx_num" in
+            "")
+                echo && echo "已取消..." && echo && exit 1
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的序号" && echo
+            ;;
+            *)
+                if [ "$nginx_num" -gt 0 ] && [ "$nginx_num" -le $inbounds_nginx_count ]
+                then
+                    nginx_num=$((nginx_num-1))
+                    nginx_index=${inbounds_nginx_index[nginx_num]}
+                    break
+                else
+                    echo -e "$error 请输入正确的序号" && echo
+                fi
+            ;;
+        esac
+    done
 
     accounts_count=0
     accounts_list=""
@@ -10590,32 +12750,44 @@ V2rayListNginxAccounts()
         accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}ID: $green$map_id$plain 等级: $green$map_level$plain alterId: $green$map_alter_id$plain 邮箱: $green$map_email$plain\n\n"
     done < <($JQ_FILE -r '.inbounds['"$nginx_index"'].settings.clients | to_entries | map("\(.value.id) \(.value.level) \(.value.alterId) \(.value.email)") | .[]' "$V2_CONFIG")
 
-    if service v2ray status > /dev/null
+    if [ -z "$accounts_list" ] 
     then
-        echo && echo -e "v2ray: $green开启$plain"
+        echo && echo -e "$error 此账户组没有账号" && echo && exit 1
     else
-        echo && echo -e "v2ray: $red关闭$plain"
-    fi
+        V2rayListDomainsInbound
+        accounts_list=$accounts_list"# $green$((accounts_count+1))$plain ${blank}删除所有账号"
+        echo -e "可用账号:\n\n$accounts_list" && echo
+        echo "输入序号"
+        while read -p "(默认: 取消): " accounts_index
+        do
+            case "$accounts_index" in
+                "")
+                    echo && echo "已取消..." && echo && exit 1
+                ;;
+                *[!0-9]*)
+                    echo -e "$error 请输入正确的序号" && echo
+                ;;
+                *)
+                    if [ "$accounts_index" -gt 0 ] && [ "$accounts_index" -le $((accounts_count+1)) ]
+                    then
+                        accounts_index=$((accounts_index-1))
+                        break
+                    else
+                        echo -e "$error 请输入正确的序号" && echo
+                    fi
+                ;;
+            esac
+        done
 
-    for((i=0;i<${#nginx_domains[@]};i++));
-    do
-        if [ "${nginx_server_ports[i]}" == "${inbounds_port[nginx_index]}" ] && [ "${nginx_path[i]}" == "${inbounds_path[nginx_index]}" ]
+        if [ "$accounts_index" == "$accounts_count" ] 
         then
-            echo && echo -e "$green域名:$plain ${nginx_domains[i]}"
-            echo && echo -e "$green端口:$plain ${nginx_client_ports[i]}"
-            echo && echo -e "$green协议:$plain vmess"
-            echo && echo -e "$green网络:$plain ws"
-            echo && echo -e "${green}path:$plain ${nginx_path[i]}"
-            echo && echo -e "${green}security:$plain tls" && echo
+            jq_path='["inbounds",'"$match_index"',"settings","clients"]'
+            JQ replace "$V2_CONFIG" "[]"
+        else
+            jq_path='["inbounds",'"$match_index"',"settings","clients"]'
+            JQ delete "$V2_CONFIG" "$accounts_index"
         fi
-    done
-
-    if [ -n "$accounts_list" ] 
-    then
-        echo && echo "可用账号:"
-        echo && echo -e "$accounts_list" && echo
-    else
-        echo && echo "此账号组没有账号" && echo
+        echo && echo -e "$info 账号删除成功" && echo
     fi
 }
 
@@ -10634,7 +12806,7 @@ GetFreePort() {
 
 V2raySetListen()
 {
-    if [ "$forward_num" -eq 1 ] 
+    if [ "$forward_num" -eq 1 ] || [ "$forward_num" -eq 3 ]
     then
         echo && echo "是否对外公开 ? [y/N]"
         read -p "(默认: N): " public_address_yn
@@ -10760,8 +12932,7 @@ V2raySetStreamSettings()
   ${green}3.$plain ws
   ${green}4.$plain http
   ${green}5.$plain domainsocket
-  ${green}6.$plain quic
-    " && echo
+  ${green}6.$plain quic" && echo
     while read -p "(默认：3): " network_num 
     do
         case $network_num in
@@ -10991,6 +13162,7 @@ V2raySetTag()
 {
     echo "输入组名"
     read -p "(默认：随机): " tag
+    tag=${tag//nginx-/}
     tag=${tag:-$(GetFreeTag)}
 
     echo && echo -e "	组名: $green $tag $plain" && echo
@@ -11048,7 +13220,7 @@ V2rayAddInbound()
             "port": $port | tonumber,
             "protocol": "vmess",
             "settings": {
-            "clients": []
+                "clients": []
             },
             "streamSettings": {
             "network": $network,
@@ -11793,12 +13965,6 @@ V2rayDeleteForwardAccount()
 
 V2rayListForwardAccount()
 {
-    if service v2ray status > /dev/null
-    then
-        echo && echo -e "v2ray: $green开启$plain" && echo
-    else
-        echo && echo -e "v2ray: $red关闭$plain" && echo
-    fi
     forward_count=$((inbounds_forward_count+outbounds_count))
     [ "$forward_count" -eq 0 ] && echo && echo -e "$error 没有转发账号组" && echo && exit 1
     echo -e "输入组序号"
@@ -11967,10 +14133,7 @@ V2rayListForwardAccount()
         match_index=$((list_forward_account_num+inbounds_nginx_count-1))
         if [ "${inbounds_listen[match_index]}" == "0.0.0.0" ] 
         then
-            server_ip=$(dig +short myip.opendns.com @resolver1.opendns.com || true)
-            [ -z "$server_ip" ] && server_ip=$(curl --silent ipv4.icanhazip.com)
-            [ -z "$server_ip" ] && server_ip=$(curl --silent api.ip.sb/ip)
-            [ -z "$server_ip" ] && server_ip=$(curl --silent ipinfo.io/ip)
+            server_ip=$(GetServerIp)
         else
             server_ip=${inbounds_listen[match_index]}
         fi
@@ -12025,22 +14188,211 @@ V2rayListForwardAccount()
     fi
 }
 
-V2rayConfigDomain()
+V2rayListDomains()
 {
+    v2ray_domains_list=""
+    v2ray_domains_count=0
+    v2ray_domains=()
 
-    if [ ! -e "/usr/local/nginx" ] 
+    if ls -A "/usr/local/nginx/conf/sites_available/"* > /dev/null 2>&1
     then
-        echo && echo -e "$error Nginx 未安装! 输入 tv n 安装 Nginx" && echo && exit 1
+        for f in "/usr/local/nginx/conf/sites_available/"*
+        do
+            domain=${f##*/}
+            [[ "$domain" =~ ^[A-Za-z0-9.]*$ ]] || continue
+            v2ray_domains_count=$((v2ray_domains_count+1))
+            domain=${domain%.conf}
+            v2ray_domains+=("$domain")
+            if [ -e "/usr/local/nginx/conf/sites_enabled/$domain.conf" ] && grep -q "proxy_pass http://127.0.0.1:" < "/usr/local/nginx/conf/sites_enabled/$domain.conf" 
+            then
+                v2ray_domain_status_text="v2ray: $green开启$plain"
+                v2ray_domains_on+=("$domain")
+            else
+                v2ray_domain_status_text="v2ray: $red关闭$plain"
+            fi
+            v2ray_domains_list=$v2ray_domains_list"$green$v2ray_domains_count.$plain $domain    $v2ray_domain_status_text\n\n"
+        done
     fi
+    v2ray_add_domain_num=$((v2ray_domains_count+1))
+    echo && echo -e "$green域名列表:$plain\n\n${v2ray_domains_list:-无\n\n}$green$v2ray_add_domain_num.$plain 添加域名\n\n"
+}
 
-    echo && echo "输入指向本机的域名"
-    read -p "(默认: 取消): " new_domain
-    [ -z "$new_domain" ] && echo && echo "已取消..." && echo && exit 1
+V2rayListDomainsInbound()
+{
+    v2ray_domains_inbound_list=""
+    v2ray_domains_inbound_count=0
+    v2ray_domains_inbound=()
+    v2ray_domains_inbound_https_port=()
 
-    echo && echo -e "$info 安装证书..."
-    CheckRelease
+    if ls -A "/usr/local/nginx/conf/sites_available/"* > /dev/null 2>&1
+    then
+        for f in "/usr/local/nginx/conf/sites_available/"*
+        do
+            domain=${f##*/}
+            domain=${domain%.conf}
+            if [ -e "/usr/local/nginx/conf/sites_enabled/$domain.conf" ] 
+            then
+                v2ray_status_text="$green开启$plain"
+            else
+                v2ray_status_text="$red关闭$plain"
+            fi
+            if [[ "$domain" =~ ^[A-Za-z0-9.]*$ ]] || grep -q "proxy_pass http://127.0.0.1:${inbounds_port[nginx_index]}" < "/usr/local/nginx/conf/sites_available/$domain.conf" 
+            then
+                server_found=0
+                server_flag=0
+                while IFS= read -r line 
+                do
+                    if [[ $line == *"server {"* ]] 
+                    then
+                        server_found=1
+                        server_ports=""
+                        is_inbound=0
+                    fi
+
+                    if [[ $server_found -eq 1 ]] && [[ $line == *"{"* ]]
+                    then
+                        server_flag=$((server_flag+1))
+                    fi
+
+                    if [[ $server_found -eq 1 ]] && [[ $line == *"}"* ]]
+                    then
+                        server_flag=$((server_flag-1))
+                        if [[ $server_flag -eq 0 ]] 
+                        then
+                            server_found=0
+                            if [[ $is_inbound -eq 1 ]]
+                            then
+                                v2ray_domains_inbound_count=$((v2ray_domains_inbound_count+1))
+                                v2ray_domains_inbound+=("$domain")
+                                v2ray_domains_inbound_https_port+=("$server_ports")
+                                if [[ $v2ray_domains_inbound_count -gt 9 ]] 
+                                then
+                                    blank=" "
+                                else
+                                    blank=""
+                                fi
+                                v2ray_domains_inbound_list=$v2ray_domains_inbound_list"$green$v2ray_domains_inbound_count.$plain 域名: $green$domain$plain, 端口: $green$server_ports$plain, 协议: ${green}vmess$plain, 网络: ${green}ws$plain\n$blank   path: $green${inbounds_path[nginx_index]}$plain, security: ${green}tls$plain, 状态: $v2ray_status_text\n\n"
+                            fi
+                        fi
+                    fi
+
+                    if [[ $server_found -eq 1 ]] && [[ $line == *"listen "* ]]
+                    then
+                        line=${line#*listen }
+                        line=${line% ssl;*}
+                        lead=${line%%[^[:blank:]]*}
+                        line=${line#${lead}}
+                        [ -n "$server_ports" ] && server_ports="$server_ports "
+                        server_ports="$server_ports$line"
+                    fi
+
+                    if [[ $server_found -eq 1 ]] && [[ $line == *"proxy_pass http://127.0.0.1:${inbounds_port[nginx_index]}"* ]]
+                    then
+                        is_inbound=1
+                    fi
+                done < "/usr/local/nginx/conf/sites_available/$domain.conf"
+            else
+                continue
+            fi
+        done
+    fi
+    echo && echo -e "绑定的$green域名列表:$plain\n\n${v2ray_domains_inbound_list:-无\n\n}\n\n"
+}
+
+V2rayListDomain()
+{
+    v2ray_domain_list=""
+    v2ray_domain_server_found=0
+    v2ray_domain_server_flag=0
+    v2ray_domain_servers_count=0
+    v2ray_domain_servers_https_port=()
+    v2ray_domain_servers_v2ray_path=()
+    v2ray_domain_servers_v2ray_port=()
+    while IFS= read -r line 
+    do
+        if [[ $line == *"server {"* ]] 
+        then
+            v2ray_domain_server_found=1
+            https_ports=""
+            v2ray_path=""
+            v2ray_port=""
+            v2ray_path_status=0
+        fi
+
+        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"{"* ]] 
+        then
+            v2ray_domain_server_flag=$((v2ray_domain_server_flag+1))
+        fi
+
+        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"}"* ]] 
+        then
+            v2ray_domain_server_flag=$((v2ray_domain_server_flag-1))
+            if [[ $v2ray_domain_server_flag -eq 0 ]] 
+            then
+                v2ray_domain_server_found=0
+                if [ -n "$https_ports" ] 
+                then
+                    v2ray_domain_servers_count=$((v2ray_domain_servers_count+1))
+                    v2ray_domain_servers_https_port+=("$https_ports")
+                    [ -z "$v2ray_port" ] && v2ray_path=""
+                    v2ray_domain_servers_v2ray_path+=("$v2ray_path")
+                    v2ray_domain_servers_v2ray_port+=("$v2ray_port")
+                    if [ -n "$v2ray_port" ] 
+                    then
+                        v2ray_port_status="$green$v2ray_port$plain"
+                    else
+                        v2ray_port_status="$red关闭$plain"
+                    fi
+                    v2ray_domain_list=$v2ray_domain_list"$green$v2ray_domain_servers_count.$plain https 端口: $green$https_ports$plain, v2ray 端口: $v2ray_port_status\n\n"
+                fi
+            fi
+        fi
+
+        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *" ssl;"* ]]
+        then
+            https_port=${line#*listen}
+            https_port=${https_port// ssl;/}
+            lead=${https_port%%[^[:blank:]]*}
+            https_port=${https_port#${lead}}
+            [ -n "$https_ports" ] && https_ports="$https_ports "
+            https_ports="$https_ports$https_port"
+        fi
+
+        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"location "* ]] && [[ $v2ray_path_status -eq 0 ]]
+        then
+            v2ray_path=${line#*location }
+            lead=${v2ray_path%%[^[:blank:]]*}
+            v2ray_path=${v2ray_path#${lead}}
+            v2ray_path=${v2ray_path%% *}
+        fi
+
+        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"proxy_pass http://127.0.0.1:"* ]]
+        then
+            v2ray_port=${line##*:}
+            v2ray_port=${v2ray_port%;*}
+            v2ray_path_status=1
+        fi
+    done < "/usr/local/nginx/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
+
+    v2ray_domain_update_crt_number=$((v2ray_domain_servers_count+1))
+    v2ray_domain_add_server_number=$((v2ray_domain_servers_count+2))
+    v2ray_domain_edit_server_number=$((v2ray_domain_servers_count+3))
+    v2ray_domain_delete_server_number=$((v2ray_domain_servers_count+4))
+    v2ray_domain_list="$v2ray_domain_list$green$v2ray_domain_update_crt_number.$plain 更新证书\n\n"
+    v2ray_domain_list="$v2ray_domain_list$green$v2ray_domain_add_server_number.$plain 添加配置\n\n"
+    v2ray_domain_list="$v2ray_domain_list$green$v2ray_domain_edit_server_number.$plain 修改配置\n\n"
+    v2ray_domain_list="$v2ray_domain_list$green$v2ray_domain_delete_server_number.$plain 删除配置\n\n"
+
+    echo && echo -e "域名 $green${v2ray_domains[v2ray_domains_index]}$plain 配置:\n\n$v2ray_domain_list"
+}
+
+V2rayDomainUpdateCrt()
+{
+    echo && echo -e "$info 更新证书..."
     if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
     then
+        echo && echo -e "$info 检查依赖..."
+        CheckRelease
         if [ "$release" == "rpm" ] 
         then
             yum -y install socat > /dev/null
@@ -12050,19 +14402,106 @@ V2rayConfigDomain()
         bash <(curl --silent -m 10 https://get.acme.sh) > /dev/null
     fi
 
-    nginx -s stop
+    nginx -s stop 2> /dev/null || true
     sleep 1
 
-    ~/.acme.sh/acme.sh --force --issue -d "$new_domain" --standalone -k ec-256 > /dev/null
-    ~/.acme.sh/acme.sh --force --installcert -d "$new_domain" --fullchainpath /etc/v2ray/"$new_domain".crt --keypath /etc/v2ray/"$new_domain".key --ecc > /dev/null
+    ~/.acme.sh/acme.sh --force --issue -d "${v2ray_domains[v2ray_domains_index]}" --standalone -k ec-256 > /dev/null
+    ~/.acme.sh/acme.sh --force --installcert -d "${v2ray_domains[v2ray_domains_index]}" --fullchainpath /usr/local/nginx/conf/sites_crt/"${v2ray_domains[v2ray_domains_index]}".crt --keypath /usr/local/nginx/conf/sites_crt/"${v2ray_domains[v2ray_domains_index]}".key --ecc > /dev/null
 
-    echo && echo -e "$info 证书安装完成..."
+    nginx
+    echo && echo -e "$info 证书更新完成..."
+}
 
-    echo && echo -e "$info 配置 Nginx..."
+V2rayAppendDomainConf()
+{
+printf '%s' "    server {
+        listen      $server_https_port ssl;
+        server_name $server_domain;
 
+        access_log off;
+
+        ssl_certificate      /usr/local/nginx/conf/sites_crt/$server_domain.crt;
+        ssl_certificate_key  /usr/local/nginx/conf/sites_crt/$server_domain.key;
+
+        location ${inbounds_path[nginx_index]} {
+            proxy_redirect off;
+            proxy_pass http://127.0.0.1:${inbounds_port[nginx_index]};
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection upgrade;
+            proxy_set_header Host \$host;
+            # Show real IP in v2ray access.log
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        }
+    }
+
+" >> "/usr/local/nginx/conf/sites_available/$server_domain.conf"
+}
+
+V2rayAddDomain()
+{
+    if [ ! -e "/usr/local/nginx" ] 
+    then
+        echo && echo -e "$error Nginx 未安装 ! 输入 nx 安装 nginx" && echo && exit 1
+    fi
+
+    NginxConfigSsl
+
+    echo && echo "输入指向本机的IP或域名"
+    echo -e "$tip 多个域名用空格分隔" && echo
+    read -p "(默认: 取消): " server_domain
+
+    if [ -n "$server_domain" ] 
+    then
+        if [[ $server_domain =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ ! $server_domain =~ ^[A-Za-z0-9.]*$ ]] 
+        then
+            echo && echo -e "$error 域名格式错误" && echo && exit 1
+        elif [ -e "/usr/local/nginx/conf/sites_available/$server_domain.conf" ] 
+        then
+            echo && echo -e "$error $server_domain 已存在" && echo && exit 1
+        fi
+
+        NginxConfigServerHttpsPort
+        V2rayListNginx
+
+        echo && echo "绑定账号组,输入序号"
+        while read -p "(默认: 取消): " nginx_num
+        do
+            case "$nginx_num" in
+                "")
+                    echo && echo "已取消..." && echo && exit 1
+                ;;
+                *[!0-9]*)
+                    echo -e "$error 请输入正确的序号" && echo
+                ;;
+                *)
+                    if [ "$nginx_num" -gt 0 ] && [ "$nginx_num" -le $inbounds_nginx_count ]
+                    then
+                        nginx_num=$((nginx_num-1))
+                        nginx_index=${inbounds_nginx_index[nginx_num]}
+                        break
+                    else
+                        echo -e "$error 请输入正确的序号" && echo
+                    fi
+                ;;
+            esac
+        done
+
+        DomainInstallCert
+        V2rayAppendDomainConf
+        NginxEnableDomain
+        NginxConfigCorsHost
+        echo && echo -e "$info 域名 $server_domain 添加完成..." && echo
+    else
+        echo && echo -e "已取消..." && echo && exit 1
+    fi
+}
+
+V2rayDomainServerAddV2rayPort()
+{
     V2rayListNginx
-
-    echo "输入序号"
+    echo && echo "绑定账号组,输入序号"
     while read -p "(默认: 取消): " nginx_num
     do
         case "$nginx_num" in
@@ -12085,94 +14524,68 @@ V2rayConfigDomain()
         esac
     done
 
-    nginx_client_ports=()
-    nginx_domains=()
-    nginx_cert_names=()
-    nginx_path=()
-    nginx_server_ports=()
-    while IFS= read -r line 
-    do
-        if [[ $line == *"server "* ]] 
-        then
-            ports=""
-            port=""
-            domain=""
-            found=0
-        elif [[ $line == *"listen "* ]] 
-        then
-            while [[ $line == *"listen "* ]] 
-            do
-                line=${line#*listen}
-                p=${line%%;*}
-                p=${p// ssl/}
-                lead=${p%%[^[:blank:]]*}
-                p=${p#${lead}}
-                [ -n "$port" ] && port="$port "
-                port="$port$p"
-            done
-            [ -n "$ports" ] && ports="$ports "
-            ports="$ports$port"
-        elif [[ $line == *"server_name "* ]]
-        then
-            line=${line%;*}
-            line=${line#*server_name }
-            lead=${line%%[^[:blank:]]*}
-            domain=${line#${lead}}
-        elif [ -n "${ports:-}" ] && [ -n "${domain:-}" ] && { [[ $line == *"v2ray.crt"* ]]  || [[ $line == *"$domain.crt"* ]]; }
-        then
-            line=${line%.crt*}
-            nginx_client_ports+=("$ports")
-            nginx_domains+=("$domain")
-            nginx_cert_names+=("${line##*/}")
-            found=1
-        elif [ "${found:-0}" -eq 1 ] && [ -n "${ports:-}" ] && [ -n "${domain:-}" ] &&  [[ $line == *"location "* ]]
-        then
-            line=${line#*location }
-            lead=${line%%[^[:blank:]]*}
-            line=${line#${lead}}
-            path=${line%% *}
-            nginx_path+=("$path")
-        elif [ "${found:-0}" -eq 1 ] && [ -n "${ports:-}" ] && [ -n "${domain:-}" ] && [[ $line == *"proxy_pass "* ]]
-        then
-            line=${line##*:}
-            nginx_server_ports+=("${line%;*}")
-        fi
-    done < "/usr/local/nginx/conf/nginx.conf"
-
-    for((i=0;i<${#nginx_domains[@]};i++));
-    do
-        if [[ ${nginx_domains[i]} == *"$new_domain"* ]] 
-        then
-            if [ "${nginx_cert_names[i]}" != "$new_domain" ] 
-            then
-                sed -i "s+/etc/v2ray/${nginx_cert_names[i]}.crt+/etc/v2ray/$new_domain.crt+g" "/usr/local/nginx/conf/nginx.conf"
-                sed -i "s+/etc/v2ray/${nginx_cert_names[i]}.key+/etc/v2ray/$new_domain.key+g" "/usr/local/nginx/conf/nginx.conf"
-                rm -rf "/etc/v2ray/${nginx_cert_names[i]}.crt"
-                rm -rf "/etc/v2ray/${nginx_cert_names[i]}.key"
-            fi
-            nginx
-            echo && echo -e "$error 此域名配置已存在" && echo && exit 1
-        fi
-    done
-
+    v2ray_domain_server_found=0
+    v2ray_domain_server_flag=0
     conf=""
+    index=0
     while IFS= read -r line 
     do
-        if [[ $line == *"# HTTPS server"* ]]
+        line_edit=""
+        line_add=""
+        if [[ $line == *"server {"* ]] 
         then
-            conf="$conf
-    server {
-        listen       443 ssl;
-        server_name  $new_domain;
+            v2ray_domain_server_found=1
+            v2ray_port_found=0
+            https_ports=""
+            v2ray_port=""
+            server_conf=""
+            server_conf_edit=""
+            server_conf_add=""
+        fi
 
-        access_log off;
+        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"{"* ]] 
+        then
+            v2ray_domain_server_flag=$((v2ray_domain_server_flag+1))
+        fi
 
-        ssl_certificate      /etc/v2ray/$new_domain.crt;
-        ssl_certificate_key  /etc/v2ray/$new_domain.key;
-        ssl_protocols TLSv1.2 TLSv1.3;
+        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"}"* ]] 
+        then
+            v2ray_domain_server_flag=$((v2ray_domain_server_flag-1))
+            if [[ $v2ray_domain_server_flag -eq 0 ]] 
+            then
+                v2ray_domain_server_found=0
+                if [ -n "$https_ports" ] 
+                then
+                    if [[ $index -eq $v2ray_domain_server_index ]] 
+                    then
+                        if [ "$v2ray_port_found" -eq 1 ] 
+                        then
+                            line="$server_conf_edit\n$line"
+                        else
+                            line="$server_conf_add\n$line"
+                        fi
+                    else
+                        line="$server_conf\n$line"
+                    fi
+                    index=$((index+1))
+                else
+                    line="$server_conf\n$line"
+                fi
+            fi
+        fi
 
-        ssl_ciphers  HIGH:!aNULL:!MD5;
+        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *" ssl;"* ]]
+        then
+            https_port=${line#*listen}
+            https_port=${https_port// ssl;/}
+            lead=${https_port%%[^[:blank:]]*}
+            https_port=${https_port#${lead}}
+            https_ports="$https_ports$https_port "
+        fi
 
+        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"ssl_certificate_key "* ]]
+        then
+            line_add="$line\n
         location ${inbounds_path[nginx_index]} {
             proxy_redirect off;
             proxy_pass http://127.0.0.1:${inbounds_port[nginx_index]};
@@ -12183,22 +14596,246 @@ V2rayConfigDomain()
             # Show real IP in v2ray access.log
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        }
-    }
-"
+        }"
         fi
-        [ -n "$conf" ] && conf="$conf\n"
-        conf="$conf$line"
-    done < "/usr/local/nginx/conf/nginx.conf"
 
-    echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
-    nginx
-    echo && echo -e "$info 配置 Nginx 完成..."
-    echo && echo -e "$info 域名配置完成" && echo
+        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"proxy_pass http://127.0.0.1:"* ]]
+        then
+            v2ray_port_found=1
+            v2ray_port=${line##*:}
+            v2ray_port=${v2ray_port%;*}
+            line_edit="${line%%proxy_pass*}proxy_pass http://127.0.0.1:${inbounds_port[nginx_index]};"
+        fi
+
+        if [[ $v2ray_domain_server_found -eq 1 ]] 
+        then
+            [ -n "$server_conf" ] && server_conf="$server_conf\n"
+            server_conf="$server_conf$line"
+            [ -n "$server_conf_edit" ] && server_conf_edit="$server_conf_edit\n"
+            if [ -n "$line_edit" ] 
+            then
+                server_conf_edit="$server_conf_edit$line_edit"
+            else
+                server_conf_edit="$server_conf_edit$line"
+            fi
+            [ -n "$server_conf_add" ] && server_conf_add="$server_conf_add\n"
+            if [ -n "$line_add" ] 
+            then
+                server_conf_add="$server_conf_add$line_add"
+            else
+                server_conf_add="$server_conf_add$line"
+            fi
+        fi
+
+        if [[ $v2ray_domain_server_found -eq 0 ]] 
+        then
+            [ -n "$conf" ] && conf="$conf\n"
+            conf="$conf$line"
+        fi
+    done < "/usr/local/nginx/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
+    PrettyConfig
+    echo -e "$conf" > "/usr/local/nginx/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
+    ln -sf "/usr/local/nginx/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf" "/usr/local/nginx/conf/sites_enabled/${v2ray_domains[v2ray_domains_index]}.conf"
+    if [ -n "${v2ray_domain_servers_v2ray_port[v2ray_domain_server_index]}" ] 
+    then
+        echo && echo -e "$info v2ray 端口修改成功" && echo
+    else
+        echo && echo -e "$info v2ray 端口添加成功" && echo
+    fi
 }
 
-if [ "${0##*/}" == "v2" ] || [ "${0##*/}" == "v2.sh" ] 
-then
+V2rayDomainServerRemoveV2rayPort()
+{
+    v2ray_domain_server_found=0
+    v2ray_domain_server_flag=0
+    conf=""
+    index=0
+    while IFS= read -r line 
+    do
+        if [[ $line == *"server {"* ]] 
+        then
+            v2ray_domain_server_found=1
+            v2ray_block_found=0
+            https_ports=""
+        fi
+
+        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"{"* ]] 
+        then
+            v2ray_domain_server_flag=$((v2ray_domain_server_flag+1))
+        fi
+
+        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"}"* ]] 
+        then
+            v2ray_domain_server_flag=$((v2ray_domain_server_flag-1))
+            if [[ $v2ray_domain_server_flag -eq 0 ]] 
+            then
+                v2ray_domain_server_found=0
+                if [ -n "$https_ports" ] 
+                then
+                    index=$((index+1))
+                fi
+            fi
+        fi
+
+        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *" ssl;"* ]]
+        then
+            https_port=${line#*listen}
+            https_port=${https_port// ssl;/}
+            lead=${https_port%%[^[:blank:]]*}
+            https_port=${https_port#${lead}}
+            https_ports="$https_ports$https_port "
+        fi
+
+        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"location ${v2ray_domain_servers_v2ray_path[v2ray_domain_server_index]} "* ]] && [ -n "$https_ports" ] && [[ $index -eq $v2ray_domain_server_index ]]
+        then
+            v2ray_block_found=1
+        fi
+
+        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $v2ray_block_found -eq 1 ]] 
+        then
+            if [[ $line == *"}"* ]] 
+            then
+                v2ray_block_found=0
+            fi
+            continue
+        fi
+
+        if [ "${last_line:-}" == "#" ] && [ "$line" == "" ]
+        then
+            continue
+        fi
+        last_line="$line#"
+        [ -n "$conf" ] && conf="$conf\n"
+        conf="$conf$line"
+    done < "/usr/local/nginx/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
+    unset last_line
+    echo -e "$conf" > "/usr/local/nginx/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
+    ln -sf "/usr/local/nginx/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf" "/usr/local/nginx/conf/sites_enabled/${v2ray_domains[v2ray_domains_index]}.conf"
+    echo && echo -e "$info v2ray 端口关闭成功" && echo
+}
+
+V2rayConfigDomain()
+{
+    if [ ! -e "/usr/local/nginx" ] 
+    then
+        echo && echo -e "$error Nginx 未安装! 输入 nx 安装 Nginx" && echo && exit 1
+    fi
+
+    V2rayListDomains
+
+    echo "输入序号"
+    while read -p "(默认: 取消): " v2ray_domains_index
+    do
+        case "$v2ray_domains_index" in
+            "")
+                echo && echo "已取消..." && echo && exit 1
+            ;;
+            $v2ray_add_domain_num)
+                V2rayAddDomain
+                exit
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的序号" && echo
+            ;;
+            *)
+                if [ "$v2ray_domains_index" -gt 0 ] && [ "$v2ray_domains_index" -lt "$v2ray_add_domain_num" ]
+                then
+                    v2ray_domains_index=$((v2ray_domains_index-1))
+                    break
+                else
+                    echo -e "$error 请输入正确的序号" && echo
+                fi
+            ;;
+        esac
+    done
+
+    V2rayListDomain
+
+    echo "输入序号"
+    while read -p "(默认: 取消): " v2ray_domain_server_num
+    do
+        case "$v2ray_domain_server_num" in
+            "")
+                echo && echo "已取消..." && echo && exit 1
+            ;;
+            $v2ray_domain_update_crt_number)
+                V2rayDomainUpdateCrt
+                exit 0
+            ;;
+            $v2ray_domain_add_server_number)
+                V2rayDomainAddServer
+                exit 0
+            ;;
+            $v2ray_domain_edit_server_number)
+                V2rayDomainEditServer
+                exit 0
+            ;;
+            $v2ray_domain_delete_server_number)
+                V2rayDomainDeleteServer
+                exit 0
+            ;;
+            *[!0-9]*)
+                echo -e "$error 请输入正确的序号" && echo
+            ;;
+            *)
+                if [ "$v2ray_domain_server_num" -gt 0 ] && [ "$v2ray_domain_server_num" -le "$v2ray_domain_servers_count" ]
+                then
+                    v2ray_domain_server_index=$((v2ray_domain_server_num-1))
+                    break
+                else
+                    echo -e "$error 请输入正确的序号" && echo
+                fi
+            ;;
+        esac
+    done
+
+    if [ -n "${v2ray_domain_servers_v2ray_port[v2ray_domain_server_index]}" ] 
+    then
+        echo && echo -e "选择操作
+
+  ${green}1.$plain 修改 https 端口
+  ${green}2.$plain 修改 v2ray 端口
+  ${green}3.$plain 关闭 v2ray 端口
+    " && echo
+    else
+        echo && echo -e "选择操作
+
+  ${green}1.$plain 修改 https 端口
+  ${green}2.$plain 开启 v2ray 端口
+    " && echo
+    fi
+
+    while read -p "(默认：取消): " v2ray_domain_server_action_num 
+    do
+        case $v2ray_domain_server_action_num in
+            "") 
+                echo && echo "已取消..." && echo && exit 1
+            ;;
+            1) 
+                V2rayDomainServerEditHttpsPort
+                break
+            ;;
+            2) 
+                V2rayDomainServerAddV2rayPort
+                break
+            ;;
+            3) 
+                if [ -n "${v2ray_domain_servers_v2ray_port[v2ray_domain_server_index]}" ] 
+                then
+                    V2rayDomainServerRemoveV2rayPort
+                    break
+                else
+                    echo && echo -e "$error 输入错误" && echo
+                fi
+            ;;
+            *) echo && echo -e "$error 输入错误" && echo
+            ;;
+        esac
+    done
+}
+
+CheckShFile()
+{
     [ ! -e "$SH_FILE" ] && wget --no-check-certificate "$SH_LINK" -qO "$SH_FILE" && chmod +x "$SH_FILE"
     if [ ! -s "$SH_FILE" ] 
     then
@@ -12209,13 +14846,316 @@ then
             echo && echo -e "$error 无法连接备用链接!" && echo && exit 1
         fi
     fi
+    [ ! -e "$NX_FILE" ] && ln -s "$SH_FILE" "$NX_FILE"
     [ ! -e "$V2_FILE" ] && ln -s "$SH_FILE" "$V2_FILE"
     [ ! -e "$XC_FILE" ] && ln -s "$SH_FILE" "$XC_FILE"
+
+    return 0
+}
+
+if [ "${0##*/}" == "nx" ] || [ "${0##*/}" == "nx.sh" ]
+then
+    CheckShFile
+
+    echo && echo -e "  Nginx 管理面板 $plain
+
+  ${green}1.$plain 安装
+  ${green}2.$plain 卸载
+  ${green}3.$plain 升级
+————————————
+  ${green}4.$plain 查看域名
+  ${green}5.$plain 添加域名
+  ${green}6.$plain 修改域名
+  ${green}7.$plain 开关域名
+  ${green}8.$plain 修改本地
+————————————
+  ${green}9.$plain 状态
+ ${green}10.$plain 开关
+ ${green}11.$plain 重启
+————————————
+ ${green}12.$plain 删除域名
+ ${green}13.$plain 日志切割
+————————————
+ ${green}14.$plain 安装 nodejs
+ ${green}15.$plain 安装 pdf2htmlEX
+ ${green}16.$plain 安装 tesseract
+ " && echo
+    read -p "请输入数字 [1-16]：" nginx_num
+    case "$nginx_num" in
+        1) 
+            if [ -e "/usr/local/nginx" ] 
+            then
+                echo && echo -e "$error Nginx 已经存在 !" && echo && exit 1
+            fi
+
+            echo && echo "因为是编译 nginx，耗时会很长，是否继续？[y/N]"
+            read -p "(默认: N): " nginx_install_yn
+            nginx_install_yn=${nginx_install_yn:-N}
+            if [[ $nginx_install_yn == [Yy] ]] 
+            then
+                InstallNginx
+                echo && echo -e "$info Nginx 安装完成" && echo
+            else
+                echo && echo "已取消..." && echo && exit 1
+            fi
+        ;;
+        2) UninstallNginx
+        ;;
+        3) 
+            if [ ! -e "/usr/local/nginx" ] 
+            then
+                echo && echo -e "$error Nginx 未安装 !" && echo && exit 1
+            fi
+
+            echo && echo -e "$info 更新 nginx 脚本..." && echo
+
+            sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1 || true)
+
+            if [ -z "$sh_new_ver" ] 
+            then
+                echo -e "$error 无法连接到 Github ! 尝试备用链接..." && echo
+                sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1 || true)
+                [ -z "$sh_new_ver" ] && echo -e "$error 无法连接备用链接!" && echo && exit 1
+            fi
+
+            if [ "$sh_new_ver" != "$sh_ver" ] 
+            then
+                [ -e "$LOCK_FILE" ] && rm -rf "$LOCK_FILE"
+            fi
+
+            wget --no-check-certificate "$SH_LINK" -qO "$SH_FILE" && chmod +x "$SH_FILE"
+
+            if [ ! -s "$SH_FILE" ] 
+            then
+                wget --no-check-certificate "$SH_LINK_BACKUP" -qO "$SH_FILE"
+                if [ ! -s "$SH_FILE" ] 
+                then
+                    echo -e "$error 无法连接备用链接!" && echo && exit 1
+                else
+                    echo -e "$info nginx 脚本更新完成" && echo
+                fi
+            else
+                echo -e "$info nginx 脚本更新完成" && echo
+            fi
+
+            echo && echo "是否重新编译 nginx ？[y/N]"
+            read -p "(默认: N): " nginx_install_yn
+            nginx_install_yn=${nginx_install_yn:-N}
+            if [[ $nginx_install_yn == [Yy] ]] 
+            then
+                InstallNginx
+                echo && echo -e "$info Nginx 升级完成" && echo
+            else
+                echo && echo "已取消..." && echo && exit 1
+            fi
+        ;;
+        4) 
+            NginxCheckDomains
+            NginxListDomains
+            if [ "$nginx_domains_count" -eq 0 ] 
+            then
+                echo && echo -e "$error 没有域名" && echo
+            else
+                echo "输入序号"
+                while read -p "(默认: 取消): " nginx_domains_index
+                do
+                    case "$nginx_domains_index" in
+                        "")
+                            echo && echo "已取消..." && echo && exit 1
+                        ;;
+                        *[!0-9]*)
+                            echo -e "$error 请输入正确的序号" && echo
+                        ;;
+                        *)
+                            if [ "$nginx_domains_index" -gt 0 ] && [ "$nginx_domains_index" -le "$nginx_domains_count" ]
+                            then
+                                nginx_domains_index=$((nginx_domains_index-1))
+                                break
+                            else
+                                echo -e "$error 请输入正确的序号" && echo
+                            fi
+                        ;;
+                    esac
+                done
+
+                NginxListDomain
+            fi
+        ;;
+        5) 
+            NginxAddDomain
+        ;;
+        6) 
+            NginxCheckDomains
+            NginxEditDomain
+        ;;
+        7) 
+            NginxCheckDomains
+            NginxToggleDomain
+        ;;
+        8) 
+            NginxConfigLocalhost
+        ;;
+        9) 
+            if [ ! -e "/usr/local/nginx" ] 
+            then
+                echo && echo -e "$error Nginx 未安装 !" && echo
+            else
+                if [ ! -s "/usr/local/nginx/logs/nginx.pid" ] 
+                then
+                    echo && echo -e "nginx 状态: $red关闭$plain" && echo
+                else
+                    PID=$(< "/usr/local/nginx/logs/nginx.pid")
+                    if kill -0  "$PID" 2> /dev/null
+                    then
+                        echo && echo -e "nginx 状态: $green开启$plain" && echo
+                    else
+                        echo && echo -e "nginx 状态: $red开启$plain" && echo
+                    fi
+                fi
+            fi
+        ;;
+        10) ToggleNginx
+        ;;
+        11) 
+            RestartNginx
+            echo && echo -e "$info Nginx 已重启" && echo
+        ;;
+        12) 
+            NginxCheckDomains
+            NginxDeleteDomain
+        ;;
+        13) 
+            if [ ! -e "$IPTV_ROOT" ] 
+            then
+                echo && echo -e "$error 请先安装脚本 !" && echo && exit 1
+            fi
+
+            if [ -e "/usr/local/nginx" ] 
+            then
+                chown nobody:root /usr/local/nginx/logs/*.log
+                chmod 660 /usr/local/nginx/logs/*.log
+            fi
+
+            if crontab -l | grep -q "$LOGROTATE_CONFIG" 2> /dev/null
+            then
+                echo && echo -e "$error 日志切割定时任务已存在 !" && echo
+            else
+                LOGROTATE_FILE=$(command -v logrotate)
+
+                if [ ! -x "$LOGROTATE_FILE" ] 
+                then
+                    echo && echo -e "$error 请先安装 logrotate !" && echo && exit 1
+                fi
+
+                logrotate=""
+
+                if [ -e "/usr/local/nginx" ] 
+                then
+                    logrotate='
+/usr/local/nginx/logs/*.log {
+  daily
+  missingok
+  rotate 14
+  compress
+  delaycompress
+  notifempty
+  create 660 nobody root
+  sharedscripts
+  postrotate
+    [ ! -f /usr/local/nginx/logs/nginx.pid ] || /bin/kill -USR1 `cat /usr/local/nginx/logs/nginx.pid`
+  endscript
+}
+'
+                fi
+
+                logrotate="$logrotate
+$IPTV_ROOT/*.log {
+  monthly
+  missingok
+  rotate 3
+  compress
+  nodelaycompress
+  notifempty
+  sharedscripts
+}
+"
+                printf '%s' "$logrotate" > "$LOGROTATE_CONFIG"
+
+                crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
+                printf '%s\n' "0 0 * * * $LOGROTATE_FILE $LOGROTATE_CONFIG" >> "$IPTV_ROOT/cron_tmp"
+                crontab "$IPTV_ROOT/cron_tmp" > /dev/null
+                rm -rf "$IPTV_ROOT/cron_tmp"
+                echo && echo -e "$info 日志切割定时任务开启成功 !" && echo
+            fi
+        ;;
+        14)
+            if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
+            then
+                InstallNodejs
+            fi
+            if [ ! -d "$NODE_ROOT" ] 
+            then
+                if [[ -x $(command -v node) ]] && [[ -x $(command -v npm) ]] 
+                then
+                    NodejsConfig
+                else
+                    echo && echo -e "$error nodejs 安装发生错误" && echo && exit 1
+                fi
+            else
+                echo && echo -e "$error nodejs 配置已存在" && echo && exit 1
+            fi
+        ;;
+        15)
+            if [[ ! -x $(command -v pdf2htmlEX) ]] 
+            then
+                echo && echo "因为是编译 pdf2htmlEX，耗时会很长，是否继续？[y/N]"
+                read -p "(默认: N): " pdf2html_install_yn
+                pdf2html_install_yn=${pdf2html_install_yn:-N}
+                if [[ $pdf2html_install_yn == [Yy] ]] 
+                then
+                    InstallPdf2html
+                    echo && echo -e "$info pdf2htmlEX 安装完成，输入 source /etc/profile 可立即使用" && echo
+                else
+                    echo && echo "已取消..." && echo && exit 1
+                fi
+            else
+                echo && echo -e "$error pdf2htmlEX 已存在!" && echo
+            fi
+        ;;
+        16)
+            if [[ ! -x $(command -v tesseract) ]] 
+            then
+                echo && echo -e "$info 检查依赖，耗时可能会很长..."
+                CheckRelease
+                echo
+                if [ "$release" == "ubu" ] 
+                then
+                    add-apt-repository ppa:alex-p/tesseract-ocr
+                    apt-get -y update
+                    apt-get -y install tesseract
+                elif [ "$release" == "ubu" ] 
+                then
+                    echo && echo -e "$info 参考 https://notesalexp.org/tesseract-ocr/ ..." && echo
+                else
+                    echo && echo -e "$info 参考 https://tesseract-ocr.github.io/tessdoc/Home.html ..." && echo
+                fi
+            else
+                echo && echo -e "$error tesseract 已存在!" && echo
+            fi
+        ;;
+        *) echo && echo -e "$error 请输入正确的数字 [1-16]" && echo
+        ;;
+    esac
+    exit 0
+elif [ "${0##*/}" == "v2" ] || [ "${0##*/}" == "v2.sh" ] 
+then
+    CheckShFile
+    [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
 
     case $* in
         "e") 
             [ ! -e "$V2_CONFIG" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
-            vi "$V2_CONFIG" && exit 0
+            vim "$V2_CONFIG" && exit 0
         ;;
         *) 
         ;;
@@ -12277,27 +15217,47 @@ then
                 fi
             fi
 
+            if grep -q '\--show-progress' < <(wget --help)
+            then
+                _PROGRESS_OPT="--show-progress"
+            else
+                _PROGRESS_OPT=""
+            fi
+
             echo && echo -e "$info 检查依赖，耗时可能会很长..."
             CheckRelease
-            echo && echo -e "$info 安装 v2ray..."
+            InstallJq
 
+            echo && echo -e "$info 安装 v2ray..."
             bash <(curl --silent -m 10 https://install.direct/go.sh) > /dev/null
 
             V2rayConfigInstall
 
-            service v2ray start > /dev/null
+            service v2ray start > /dev/null 2>&1
             echo && echo -e "$info v2ray 安装完成, 请配置域名..." && echo
         ;;
         2) 
-            if [ ! -e "$V2_CONFIG" ] 
+            if grep -q '\--show-progress' < <(wget --help)
             then
-                echo && echo -e "$error v2ray 未安装..." && echo && exit 1
+                _PROGRESS_OPT="--show-progress"
+            else
+                _PROGRESS_OPT=""
             fi
 
-            bash <(curl --silent -m 10 https://install.direct/go.sh) > /dev/null
-            V2rayConfigUpdate
+            echo && echo -e "$info 检查依赖，耗时可能会很长..."
+            CheckRelease
 
-            echo -e "$info 更新 v2ray 脚本..." && echo
+            rm -rf "${JQ_FILE:-notfound}"
+            echo && echo -e "$info 更新 JQ..." && echo
+            InstallJq
+
+            echo
+            V2rayConfigUpdate
+            echo
+
+            bash <(curl --silent -m 10 https://install.direct/go.sh) > /dev/null
+
+            echo && echo -e "$info 更新 v2ray 脚本..." && echo
 
             sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1 || true)
 
@@ -12331,33 +15291,30 @@ then
             echo -e "$info 升级完成" && echo
         ;;
         3) 
-            if [ ! -e "$V2_CONFIG" ] 
-            then
-                echo && echo -e "$error v2ray 未安装..." && echo && exit 1
-            fi
             V2rayConfigUpdate
+            NginxCheckDomains
             V2rayConfigDomain
         ;;
         4) 
-            if [ ! -e "$V2_CONFIG" ] 
-            then
-                echo && echo -e "$error v2ray 未安装..." && echo && exit 1
-            fi
+            V2rayStatus
             V2rayConfigUpdate
+            NginxCheckDomains
             V2rayListNginx
             V2rayListNginxAccounts
         ;;
         5)
-            echo && echo -e "$error not ready~" && echo && exit 1
             V2rayConfigUpdate
+            NginxCheckDomains
             V2rayAddNginx
         ;;
         6)
-            echo && echo -e "$error not ready~" && echo && exit 1
             V2rayConfigUpdate
+            NginxCheckDomains
+            V2rayListNginx
             V2rayAddNginxAccount
         ;;
         7)
+            V2rayStatus
             V2rayConfigUpdate
             V2rayListForward
             V2rayListForwardAccount
@@ -12378,8 +15335,8 @@ then
             V2rayDeleteNginx
         ;;
         11)
-            echo && echo -e "$error not ready~" && echo && exit 1
             V2rayConfigUpdate
+            V2rayListNginx
             V2rayDeleteNginxAccount
         ;;
         12)
@@ -12413,14 +15370,14 @@ then
                 echo && echo -e "$error v2ray 未安装..." && echo && exit 1
             fi
 
-            if service v2ray status > /dev/null
+            if service v2ray status > /dev/null 2>&1
             then
                 echo && echo "v2ray 正在运行，是否关闭？[Y/n]"
                 read -p "(默认: Y): " v2ray_stop_yn
                 v2ray_stop_yn=${v2ray_stop_yn:-Y}
                 if [[ $v2ray_stop_yn == [Yy] ]] 
                 then
-                    service v2ray  stop
+                    service v2ray stop > /dev/null 2>&1
                     echo && echo -e "$info v2ray 已关闭" && echo
                 else
                     echo && echo "已取消..." && echo && exit 1
@@ -12431,7 +15388,7 @@ then
                 v2ray_start_yn=${v2ray_start_yn:-Y}
                 if [[ $v2ray_start_yn == [Yy] ]] 
                 then
-                    service v2ray start
+                    service v2ray start > /dev/null 2>&1
                     echo && echo -e "$info v2ray 已开启" && echo
                 else
                     echo && echo "已取消..." && echo && exit 1
@@ -12443,7 +15400,7 @@ then
             then
                 echo && echo -e "$error v2ray 未安装..." && echo && exit 1
             fi
-            service v2ray restart
+            service v2ray restart > /dev/null 2>&1
             echo && echo -e "$info v2ray 已重启" && echo
         ;;
         *) echo && echo -e "$error 请输入正确的数字 [1-18]" && echo
@@ -12736,13 +15693,13 @@ cmd=$*
 case "$cmd" in
     "e") 
         [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
-        vi "$CHANNELS_FILE" && exit 0
+        vim "$CHANNELS_FILE" && exit 0
     ;;
     "ee") 
         [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
         GetDefault
         [ -z "$d_sync_file" ] && echo -e "$error sync_file 未设置，请检查 !" && exit 1
-        vi "${d_sync_file%% *}" && exit 0
+        vim "${d_sync_file%% *}" && exit 0
     ;;
     "d")
         [ ! -e "$IPTV_ROOT" ] && echo -e "$error 尚未安装，请检查 !" && exit 1
@@ -13046,391 +16003,14 @@ case "$cmd" in
 
         exit 0
     ;;
-    "n"|"nginx")
-        echo && echo -e "  Nginx 管理面板 $plain
-
-  ${green}1.$plain 安装
-  ${green}2.$plain 卸载
-  ${green}3.$plain 升级
-————————————
-  ${green}4.$plain 状态
-  ${green}5.$plain 开关
-  ${green}6.$plain 重启
-————————————
-  ${green}7.$plain 配置域名和目录
-  ${green}8.$plain flv 配置
-  ${green}9.$plain 日志切割
-————————————
-  ${green}10.$plain 安装 pdf2htmlEX
-  ${green}11.$plain 安装 tesseract
- " && echo
-        read -p "请输入数字 [1-11]：" nginx_num
-        case "$nginx_num" in
-            1) 
-                if [ -e "/usr/local/nginx" ] 
-                then
-                    echo && echo -e "$error Nginx 已经存在 !" && echo && exit 1
-                fi
-
-                echo && echo "因为是编译 nginx，耗时会很长，是否继续？[y/N]"
-                read -p "(默认: N): " nginx_install_yn
-                nginx_install_yn=${nginx_install_yn:-N}
-                if [[ $nginx_install_yn == [Yy] ]] 
-                then
-                    InstallNginx
-                    NginxConfigFlv
-                    echo && echo -e "$info Nginx 安装完成" && echo
-                else
-                    echo && echo "已取消..." && echo && exit 1
-                fi
-            ;;
-            2) UninstallNginx
-            ;;
-            3) 
-                if [ ! -e "/usr/local/nginx" ] 
-                then
-                    echo && echo -e "$error Nginx 未安装 !" && echo && exit 1
-                fi
-                InstallNginx
-                echo && echo -e "$info Nginx 升级完成" && echo
-            ;;
-            4) 
-                if [ ! -e "/usr/local/nginx" ] 
-                then
-                    echo && echo -e "$error Nginx 未安装 !" && echo
-                else
-                    if [ ! -s "/usr/local/nginx/logs/nginx.pid" ] 
-                    then
-                        echo && echo -e "nginx 状态: $red关闭$plain" && echo
-                    else
-                        PID=$(< "/usr/local/nginx/logs/nginx.pid")
-                        if kill -0  "$PID" 2> /dev/null
-                        then
-                            echo && echo -e "nginx 状态: $green开启$plain" && echo
-                        else
-                            echo && echo -e "nginx 状态: $red开启$plain" && echo
-                        fi
-                    fi
-
-                    domain=""
-                    flv=0
-                    while IFS= read -r line 
-                    do
-                        if [ -z "$domain" ] && [[ $line == *"server_name"* ]] 
-                        then
-                            line=${line#*server_name  }
-                            domain=${line%;*}
-                        elif [[ $line == *"location /flv"* ]] 
-                        then
-                            flv=1
-                        fi
-                    done < "/usr/local/nginx/conf/nginx.conf"
-
-                    if [ "$domain" == "localhost" ] 
-                    then
-                        echo -e "域名: $red未设置$plain" && echo
-                    else
-                        echo -e "域名: $green${domain// /, }$plain" && echo
-                    fi
-
-                    if [ "$flv" == 0 ]
-                    then
-                        echo -e "flv 配置: $red未设置$plain" && echo
-                    else
-                        echo -e "flv 配置: $green已设置$plain flv 推流地址为 rtmp://127.0.0.1/flv/xxx" && echo
-                    fi
-                fi
-            ;;
-            5) ToggleNginx
-            ;;
-            6) 
-                RestartNginx
-                echo && echo -e "$info Nginx 已重启" && echo
-            ;;
-            7) 
-                if [ ! -e "/usr/local/nginx" ] 
-                then
-                    echo && echo -e "$error Nginx 未安装 !" && echo && exit 1
-                fi
-
-                echo && echo "输入指向本机的域名"
-                echo -e "$tip 多个域名用空格分隔" && echo
-                read -p "(默认: 不设置域名): " domain
-
-                echo && echo "设置公开的根目录" && echo
-                while read -p "(默认: /usr/local/nginx/html): " root 
-                do
-                    if [ -z "$root" ] 
-                    then
-                        root="/usr/local/nginx/html"
-                        break
-                    elif [ "${root:0:1}" != "/" ] 
-                    then
-                        echo && echo -e "$error 输入错误" && echo
-                    else
-                        if [ "${root: -1}" == "/" ] 
-                        then
-                            root=${root:0:-1}
-                        fi
-
-                        mkdir -p "$root"
-                        break
-                    fi
-                done
-
-                if [ -e "$IPTV_ROOT" ] 
-                then
-                    echo && echo "设置公开目录下的(live目录 - HLS输出目录)位置" && echo
-                    while read -p "(默认: $root/): " live 
-                    do
-                        if [ -z "$live" ] 
-                        then
-                            live=$root
-                            ln -sf "$LIVE_ROOT" "$live/"
-                            break
-                        elif [ "${live:0:1}" != "/" ] 
-                        then
-                            echo && echo -e "$error 输入错误" && echo
-                        else
-                            if [ "${live: -1}" == "/" ] 
-                            then
-                                live=${live:0:-1}
-                            fi
-
-                            mkdir -p "$live"
-                            ln -sf "$LIVE_ROOT" "$live/"
-                            break
-                        fi
-                    done
-                fi
-
-                nginx_conf=$(< "/usr/local/nginx/conf/nginx.conf")
-                if ! grep -q "allow all" <<< "$nginx_conf"
-                then
-                    echo && echo "是否屏蔽所有阿里云ip段 [y/N]"
-                    read -p "(默认: N): " block
-                    block=${block:-N}
-                    if [[ $block == [Yy] ]] 
-                    then
-                        echo && echo "输入本机IP"
-                        echo -e "$tip 多个IP用空格分隔" && echo
-
-                        while read -p "(默认: 自动检测): " server_ip
-                        do
-                            [ -z "$server_ip" ] && server_ip=$(dig +short myip.opendns.com @resolver1.opendns.com || true)
-                            [ -z "$server_ip" ] && server_ip=$(curl --silent ipv4.icanhazip.com)
-                            [ -z "$server_ip" ] && server_ip=$(curl --silent api.ip.sb/ip)
-                            [ -z "$server_ip" ] && server_ip=$(curl --silent ipinfo.io/ip)
-                            if [ -z "$server_ip" ]
-                            then
-                                echo && echo -e "$error 无法获取本机IP，请手动输入" && echo
-                            else
-                                break
-                            fi
-                        done
-
-                        start=0
-                        deny="            location ${live#*$root}/${LIVE_ROOT##*/} {"
-
-                        IFS=" " read -ra server_ips <<< "$server_ip"
-                        for ip in "${server_ips[@]}"
-                        do
-                            deny="$deny\n                allow $ip;"
-                        done
-
-                        while IFS= read -r line 
-                        do
-                            if [[ $line == *"ipTabContent"* ]] 
-                            then
-                                start=1
-                            elif [ "$start" == 1 ] && [[ $line == *"AS45102"* ]] 
-                            then
-                                line=${line#*AS45102\/}
-                                ip=${line%\"*}
-                                deny="$deny\n                deny $ip;"
-                            elif [ "$start" == 1 ] && [[ $line == *"</tbody>"* ]] 
-                            then
-                                break
-                            fi
-                        done < <(wget --no-check-certificate https://ipinfo.io/AS45102 -qO-)
-                        deny="$deny\n                allow all;"
-                        deny="$deny\n            }"
-                    fi
-                fi
-
-                conf=""
-                done=0
-                while IFS= read -r line 
-                do
-                    if [ "$done" == 0 ] && [ -n "$domain" ] && [[ $line == *"server_name"* ]] 
-                    then
-                        line="        server_name  $domain;"
-                    elif [ "$done" == 0 ] && [ -n "${deny:-}" ] && [[ $line == *"location / {"* ]]
-                    then
-                        line="$line\n\n$deny\n"
-                    elif [ "$done" == 0 ] && [[ $line == *"root "* ]] 
-                    then
-                        line="            root   ${root#*/usr/local/nginx/};"
-                        done=1
-                    fi
-                    [ -n "$conf" ] && conf="$conf\n"
-                    conf="$conf$line"
-                done < "/usr/local/nginx/conf/nginx.conf"
-
-                echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
-                echo && echo -e "$info 配置成功" && echo
-            ;;
-            8) 
-                if [ ! -e "/usr/local/nginx" ] 
-                then
-                    echo && echo -e "$error Nginx 未安装 !" && echo
-                else
-                    NginxConfigFlv
-                    if [ -z "${conf:-}" ]
-                    then
-                        echo && echo -e "$error flv 配置已存在! flv 推流地址为 rtmp://127.0.0.1/flv/xxx" && echo
-                    else
-                        echo && echo -e "$info flv 配置已添加，是否重启 Nginx ？[Y/n]"
-                        read -p "(默认: Y): " restart_yn
-                        restart_yn=${restart_yn:-Y}
-                        if [[ $restart_yn == [Yy] ]] 
-                        then
-                            RestartNginx
-                            echo && echo -e "$info Nginx 已重启" && echo
-                        else
-                            echo && echo "已取消..." && echo && exit 1
-                        fi
-                    fi
-                fi
-            ;;
-            9) 
-                if [ ! -e "$IPTV_ROOT" ] 
-                then
-                    echo && echo -e "$error 请先安装脚本 !" && echo && exit 1
-                fi
-
-                if [ -e "/usr/local/nginx" ] 
-                then
-                    chown nobody:root /usr/local/nginx/logs/*.log
-                    chmod 660 /usr/local/nginx/logs/*.log
-                fi
-
-                if crontab -l | grep -q "$LOGROTATE_CONFIG" 2> /dev/null
-                then
-                    echo && echo -e "$error 日志切割定时任务已存在 !" && echo
-                else
-                    LOGROTATE_FILE=$(command -v logrotate)
-
-                    if [ ! -x "$LOGROTATE_FILE" ] 
-                    then
-                        echo && echo -e "$error 请先安装 logrotate !" && echo && exit 1
-                    fi
-
-                    logrotate=""
-
-                    if [ -e "/usr/local/nginx" ] 
-                    then
-                        logrotate='
-/usr/local/nginx/logs/*.log {
-  daily
-  missingok
-  rotate 14
-  compress
-  delaycompress
-  notifempty
-  create 660 nobody root
-  sharedscripts
-  postrotate
-    [ ! -f /usr/local/nginx/logs/nginx.pid ] || /bin/kill -USR1 `cat /usr/local/nginx/logs/nginx.pid`
-  endscript
-}
-'
-                    fi
-
-                    logrotate="$logrotate
-$IPTV_ROOT/*.log {
-  monthly
-  missingok
-  rotate 3
-  compress
-  nodelaycompress
-  notifempty
-  sharedscripts
-}
-"
-                    printf '%s' "$logrotate" > "$LOGROTATE_CONFIG"
-
-                    crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
-                    printf '%s\n' "0 0 * * * $LOGROTATE_FILE $LOGROTATE_CONFIG" >> "$IPTV_ROOT/cron_tmp"
-                    crontab "$IPTV_ROOT/cron_tmp" > /dev/null
-                    rm -rf "$IPTV_ROOT/cron_tmp"
-                    echo && echo -e "$info 日志切割定时任务开启成功 !" && echo
-                fi
-            ;;
-            10)
-                if [[ ! -x $(command -v pdf2htmlEX) ]] 
-                then
-                    echo && echo -e "$info 检查依赖，耗时可能会很长..."
-                    CheckRelease
-                    echo && echo "因为是编译 pdf2htmlEX，耗时会很长，是否继续？[y/N]"
-                    read -p "(默认: N): " pdf2html_install_yn
-                    pdf2html_install_yn=${pdf2html_install_yn:-N}
-                    if [[ $pdf2html_install_yn == [Yy] ]] 
-                    then
-                        InstallPdf2html
-                        echo && echo -e "$info pdf2htmlEX 安装完成，输入 source /etc/profile 可立即使用" && echo
-                    else
-                        echo && echo "已取消..." && echo && exit 1
-                    fi
-                else
-                    echo && echo -e "$error pdf2htmlEX 已存在!" && echo
-                fi
-            ;;
-            11)
-                if [[ ! -x $(command -v tesseract) ]] 
-                then
-                    echo && echo -e "$info 检查依赖，耗时可能会很长..."
-                    CheckRelease
-                    echo
-                    if [ "$release" == "ubu" ] 
-                    then
-                        add-apt-repository ppa:alex-p/tesseract-ocr
-                        apt-get -y update
-                        apt-get -y install tesseract
-                    elif [ "$release" == "ubu" ] 
-                    then
-                        echo && echo -e "$info 参考 https://notesalexp.org/tesseract-ocr/ ..." && echo
-                    else
-                        echo && echo -e "$info 参考 https://tesseract-ocr.github.io/tessdoc/Home.html ..." && echo
-                    fi
-                else
-                    echo && echo -e "$error tesseract 已存在!" && echo
-                fi
-            ;;
-            *) echo && echo -e "$error 请输入正确的数字 [1-11]" && echo
-            ;;
-        esac
-        exit 0
-    ;;
     *)
     ;;
 esac
 
 if [ "$use_menu" == "1" ]
 then
-    [ ! -e "$SH_FILE" ] && wget --no-check-certificate "$SH_LINK" -qO "$SH_FILE" && chmod +x "$SH_FILE"
-    if [ ! -s "$SH_FILE" ] 
-    then
-        echo -e "$error 无法连接到 Github ! 尝试备用链接..."
-        wget --no-check-certificate "$SH_LINK_BACKUP" -qO "$SH_FILE" && chmod +x "$SH_FILE"
-        if [ ! -s "$SH_FILE" ] 
-        then
-            echo -e "$error 无法连接备用链接!"
-            exit 1
-        fi
-    fi
-    [ ! -e "$V2_FILE" ] && ln -s "$SH_FILE" "$V2_FILE"
-    [ ! -e "$XC_FILE" ] && ln -s "$SH_FILE" "$XC_FILE"
+    CheckShFile
+
     echo && echo -e "  IPTV 一键管理脚本（mpegts / flv => hls / flv 推流）${red}[v$sh_ver]$plain
   ---- MTimer | http://hbo.epub.fun ----
 
@@ -13477,10 +16057,7 @@ else
     then
         Usage
     else
-        CheckRelease
-        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-        FFMPEG="$FFMPEG_ROOT/ffmpeg"
-        if [ ! -e "$FFMPEG" ]
+        if [ ! -e "$IPTV_ROOT" ]
         then
             echo && read -p "尚未安装,是否现在安装？[y/N] (默认: N): " install_yn
             install_yn=${install_yn:-N}
@@ -13491,6 +16068,9 @@ else
                 echo && echo "已取消..." && echo && exit 1
             fi
         else
+            CheckRelease
+            FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+            FFMPEG="$FFMPEG_ROOT/ffmpeg"
             GetDefault
             export FFMPEG
             live_yn=${live_yn:-yes}

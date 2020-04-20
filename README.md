@@ -1,33 +1,46 @@
-# 一键管理 IPTV / v2ray 脚本 mpegts / hls / flv => hls / flv 推流
+# 一键管理 [ IPTV / v2ray / Nginx ] 脚本 (... => hls <=> flv <= ...)
 
-- HBO 中文直播 + 集各广电直播源
-- 默认如果没有本地频道（channels.json）,会请求远程服务器频道
-- 带节目表
-- 广电源支持回看
-- 广电源支持直接播放ts流
-- HBO 支持节目预告
-- 仅作为宽带测试用
+## A [ ffmpeg / v2ray / Nginx ] wrapper
 
-## 怎么看
+## 演示
 
 - 广电+港澳台 <http://hbo.epub.fun/>, 港澳台 <http://mtime.info/>, 不定时刷新直播源
 - 自定义频道，需把 iptv.html 放到**本地服务器**目录下，修改channels.json
-
+- 集各广电直播源, 带节目表, 支持回看, 支持直接播放ts流
+- 默认如果没有本地频道（channels.json）, 会请求远程服务器频道
+- HBO 支持节目预告
+- 仅作为宽带测试用
+  
 ---
 
 ## 一键管理 v2ray 脚本
 
 ``` bash
 wget -q http://hbo.epub.fun/v2.sh && bash v2.sh
+
+输入 v2 打开 v2ray 管理面板
+
 ```
 
 - 多用户多账号管理
-- 配合 Nginx 域名管理
 - 代理转发账号管理
+  
+---
+
+## 一键管理 nginx 脚本
+
+``` bash
+wget -q http://hbo.epub.fun/nx.sh && bash nx.sh
+
+输入 nx 打开 Nginx 管理面板
+
+```
+
+- 多域名管理
 
 ---
 
-## iptv.sh 一键管理 IPTV 脚本 mpegts / flv / hls / youtube => hls / flv 推流
+## 一键管理 IPTV 脚本 - A ffmpeg wrapper
 
 ``` bash
 wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
@@ -37,11 +50,8 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
   或
   - 用这里的 iptv.sh 覆盖 /usr/local/bin/tv ，删除主目录 /usr/local/iptv 下的 lock 文件
 
-输入 v2 打开 v2ray 管理面板
-
-输入 tv n 打开 nginx 管理面板
-
 输入 cx 打开 Xtream Codes 账号管理面板
+
 ```
 
 - 自带加密 NODE.JS <- HTTP -> NginX <- HTTPS -> CLIENT
@@ -61,6 +71,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
   - FFmpeg-git*-static
   - jq
   - live/ [ hls输出目录 ]
+  - node/ [ 加密 session ]
 
 ## 自动更新指定的json文件
 
@@ -76,15 +87,17 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 ## 快捷键
 
 - tv e 手动修改 channels.json
-- tv s 更新 180+ 台湾/香港节目表 (tv s 频道ID 可以个别更新节目表)
-- tv s hbo 更新 hbo 亚洲各台节目表
-- tv s hbous 更新 hbo 美国各台节目表
-- tv s ontvtonight 更新美国各台节目表
-- tv s disney 更新迪士尼频道节目表
-- tv s foxmovies 更新 FOX MOVIES 节目表
-- tv s amlh 更新 澳门莲花 节目表
-- tv s tvbhk 更新 TVB 香港各台节目表
-- tv s tvbhd 更新 TVB HD 节目表 (使用pdf2htmlEX)
+- tv s 更新 台湾/香港/国外 节目表 (tv s 频道ID 可以个别更新节目表)
+  - tv s hbo 更新 hbo 亚洲各台节目表
+  - tv s hbous 更新 hbo 美国各台节目表
+  - tv s ontvtonight 更新美国各台节目表
+  - tv s disney 更新迪士尼频道节目表
+  - tv s foxmovies 更新 FOX MOVIES 节目表
+  - tv s amlh 更新 澳门莲花 节目表
+  - tv s tvbhk 更新 TVB 香港各台节目表
+  - tv s tvbhd 更新 TVB HD 节目表 (使用pdf2htmlEX)
+  - tv s singteltv 更新东南亚各台节目表
+  - tv s cntv 更新 cctv 各台节目表
 - tv ffmpeg 在主目录下自建 FFmpeg 镜像
 - tv ts 打开广电直播源 注册/登录 面板
   - 在命令行注册账号
@@ -106,7 +119,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
     原画输出，不吃CPU，但是片段大，吃带宽
    ```
 
-- tv n 安装管理 nginx 相关面板(安装 nginx 后才能开启 防护 AntiDDoS)
+- nx 安装管理 nginx  后才能开启 防护 AntiDDoS
 - tv m 开启监控 flv推流 和 hls 输出目录，用来应对直播源出现变化导致 ffmpeg 无法继续分割的情况
   - 防护 AntiDDoS  默认每2分钟清除被禁 ip，很多时候因为直播源重启/网络等问题浏览器会不停的发送请求同一个文件，所以会有误伤，选项：
     - 封禁端口（默认80）
@@ -117,6 +130,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
     - 每小时随机重启次数
     - 每当重启 FLV 频道更改成随机的推流和拉流地址
     - 每当重启 HLS 频道更改成随机的 m3u8 名称和段名称
+    - 每隔多少秒更改加密频道的 key
   - 监控 FLV 选项：
     - 是否监控超时（默认20秒）
     - 重启次数（默认20次）
@@ -165,7 +179,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
     可以输入 omit 省略此选项
 -C  固定码率(只有在没有设置crf视频质量的情况下才有效)(默认：否)
 -e  加密段(默认：不加密)
--K  Key名称(默认：跟m3u8名称相同)
+-K  Key名称(默认：随机)
 -z  频道名称(默认：跟m3u8名称相同)
 
 也可以不输出 HLS，比如 flv 推流
@@ -178,7 +192,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
     如果输入的直播源是 hls 链接，需去除 -reconnect_at_eof 1
     如果输入的直播源是 rtmp 或本地链接，需去除 -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000
     如果要查看详细日志 fatal 改成 error / warning / ...
--n  ffmpeg 额外的 OUTPUT FLAGS, 可以输入 omit 省略此选项
+-n  ffmpeg 额外的 OUTPUT FLAGS, 可以输入 omit 省略此选项 (除非有特殊需求, 不需要转码时请省略此选项)
     (默认：-g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main)
 ```
 
