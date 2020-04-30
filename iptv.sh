@@ -321,7 +321,7 @@ CheckRelease()
     case $release in
         "rpm") 
             yum -y update >/dev/null 2>&1
-            depends=(unzip vim curl crond)
+            depends=(unzip vim curl crond logrotate)
             for depend in "${depends[@]}"
             do
                 if [[ ! -x $(command -v "$depend") ]] 
@@ -343,10 +343,19 @@ CheckRelease()
                     echo && echo -e "$error 依赖 dig 安装失败..." && exit 1
                 fi
             fi
+            if [[ ! -x $(command -v hexdump) ]] 
+            then
+                if yum -y install util-linux >/dev/null 2>&1
+                then
+                    echo && echo -e "$info 依赖 hexdump 安装成功..."
+                else
+                    echo && echo -e "$error 依赖 hexdump 安装失败..." && exit 1
+                fi
+            fi
         ;;
         "ubu") 
             apt-get -y update >/dev/null 2>&1
-            depends=(unzip vim curl cron)
+            depends=(unzip vim curl cron ufw python3 logrotate)
             for depend in "${depends[@]}"
             do
                 if [[ ! -x $(command -v "$depend") ]] 
@@ -366,6 +375,24 @@ CheckRelease()
                     echo && echo -e "$info 依赖 dig 安装成功..."
                 else
                     echo && echo -e "$error 依赖 dig 安装失败..." && exit 1
+                fi
+            fi
+            if [[ ! -x $(command -v locale-gen) ]] 
+            then
+                if apt-get -y install locales >/dev/null 2>&1
+                then
+                    echo && echo -e "$info 依赖 dig 安装成功..."
+                else
+                    echo && echo -e "$error 依赖 dig 安装失败..." && exit 1
+                fi
+            fi
+            if [[ ! -x $(command -v hexdump) ]] 
+            then
+                if apt-get -y install bsdmainutils >/dev/null 2>&1
+                then
+                    echo && echo -e "$info 依赖 hexdump 安装成功..."
+                else
+                    echo && echo -e "$error 依赖 hexdump 安装失败..." && exit 1
                 fi
             fi
         ;;
@@ -402,7 +429,7 @@ deb-src http://security.debian.org wheezy/updates main
             fi
             apt-get clean >/dev/null 2>&1
             apt-get -y update >/dev/null 2>&1
-            depends=(unzip vim curl cron ufw)
+            depends=(unzip vim curl cron ufw python3 logrotate)
             for depend in "${depends[@]}"
             do
                 if [[ ! -x $(command -v "$depend") ]] 
@@ -422,6 +449,24 @@ deb-src http://security.debian.org wheezy/updates main
                     echo && echo -e "$info 依赖 dig 安装成功..."
                 else
                     echo && echo -e "$error 依赖 dig 安装失败..." && exit 1
+                fi
+            fi
+            if [[ ! -x $(command -v locale-gen) ]] 
+            then
+                if apt-get -y install locales >/dev/null 2>&1
+                then
+                    echo && echo -e "$info 依赖 dig 安装成功..."
+                else
+                    echo && echo -e "$error 依赖 dig 安装失败..." && exit 1
+                fi
+            fi
+            if [[ ! -x $(command -v hexdump) ]] 
+            then
+                if apt-get -y install bsdmainutils >/dev/null 2>&1
+                then
+                    echo && echo -e "$info 依赖 hexdump 安装成功..."
+                else
+                    echo && echo -e "$error 依赖 hexdump 安装失败..." && exit 1
                 fi
             fi
         ;;
@@ -513,7 +558,7 @@ Install()
         default=$(
         $JQ_FILE -n --arg proxy '' --arg playlist_name '' --arg seg_dir_name '' \
             --arg seg_name '' --arg seg_length 6 \
-            --arg seg_count 6 --arg video_codec "libx264" \
+            --arg seg_count 5 --arg video_codec "libx264" \
             --arg audio_codec "aac" --arg video_audio_shift '' \
             --arg quality '' --arg bitrates "900-1280x720" \
             --arg const "no" --arg encrypt "no" \
@@ -593,7 +638,7 @@ Uninstall()
     if [[ $uninstall_yn == [Yy] ]]
     then
         MonitorStop
-        if [ -d "$NODE_ROOT" ] 
+        if [ -e "$NODE_ROOT/index.js" ] 
         then
             pm2 stop 0
         fi
@@ -1078,7 +1123,7 @@ ListChannels()
     GetChannelsInfo
     if [ "$chnls_count" == 0 ]
     then
-        echo && echo -e "$error 没有发现 频道，请检查 !" && echo && exit 1
+        echo && echo -e "$error 没有发现频道，请检查 !" && echo && exit 1
     fi
     chnls_list=""
     for((index = 0; index < chnls_count; index++)); do
@@ -1804,6 +1849,10 @@ SetStreamLink()
         then
             InstallYoutubeDl
         fi
+        if [[ ! -x $(command -v python) ]] 
+        then
+            ln -s /usr/bin/python3 /usr/bin/python
+        fi
         for((i=0;i<${#stream_links[@]};i++));
         do
             link="${stream_links[i]}"
@@ -2101,7 +2150,7 @@ SetAudioCodec()
 SetQuality()
 {
     echo -e "请输入输出视频质量[0-63]"
-    echo -e "$tip 改变CRF，数字越大越视频质量越差，如果设置CRF则无法用比特率控制视频质量"
+    echo -e "$tip 改变CRF，数字越大越视频质量越差，如果设置CRF则无法用比特率控制视频质量" && echo
     while read -p "(默认: ${d_quality:-不设置}): " quality
     do
         case "$quality" in
@@ -2243,12 +2292,13 @@ SetEncrypt()
             then
                 echo && echo "需安装配置 nodejs, 是否继续 ? [Y/n]"
                 read -p "(默认: Y): " nodejs_install_yn
+                nodejs_install_yn=${nodejs_install_yn:-Y}
                 if [[ $nodejs_install_yn == [Yy] ]] 
                 then
                     InstallNodejs
                     if [[ -x $(command -v node) ]] && [[ -x $(command -v npm) ]] 
                     then
-                        if [ ! -d "$NODE_ROOT" ] 
+                        if [ ! -e "$NODE_ROOT/index.js" ] 
                         then
                             NodejsConfig
                         fi
@@ -2261,7 +2311,7 @@ SetEncrypt()
                     encrypt_session_yn="no"
                     encrypt_session_text="否"
                 fi
-            elif [ ! -d "$NODE_ROOT" ] 
+            elif [ ! -e "$NODE_ROOT/index.js" ] 
             then
                 NodejsConfig
             fi
@@ -4677,7 +4727,7 @@ StopChannel()
 
 StopChannelsForce()
 {
-    killall ffmpeg > /dev/null 2>&1 || true
+    pkill -9 -f ffmpeg 2> /dev/null || true
     pkill -f 'tv m' 2> /dev/null || true
     [ -d "$CHANNELS_FILE.lockdir" ] && rm -rf "$CHANNELS_FILE.lockdir"
     GetChannelsInfo
@@ -5364,6 +5414,10 @@ Schedule()
         "ettodayzh:ETtoday綜合台" )
 
     chnls_niotv=( 
+        "msxw:45"
+        "tsxw:637"
+        "slxw:38"
+        "tvbsxw:41"
         "minshi:16"
         "mtvlivetw:751"
         "hbogq:629"
@@ -5892,7 +5946,7 @@ Schedule()
                 fi
             done
         ;;
-        "disney")
+        "disneyjr")
             printf -v today '%(%Y%m%d)T'
             SCHEDULE_LINK="https://disney.com.tw/_schedule/full/$today/8/%2Fepg"
 
@@ -6611,6 +6665,7 @@ Schedule()
             fi
 
             chnls=(
+                "ch5:2"
                 "ch8:3"
                 "chu:7"
                 "kidschannel:243"
@@ -6654,7 +6709,7 @@ Schedule()
 
                 schedule=""
 
-                line=$(grep -o -P '(?<=ch-'"$chnl_id"').*?(?=</ul>)' <<< "$schedule_today")
+                line=$(grep -o -P '(?<=ch-'"$chnl_id"'").*?(?=</ul>)' <<< "$schedule_today")
                 while [[ $line == *"li-time"* ]] 
                 do
                     line=${line#*<span class=\"li-time\">}
@@ -6732,6 +6787,93 @@ Schedule()
                 if [ -n "$schedule" ] 
                 then
                     JQ replace "$SCHEDULE_JSON" "$chnl" "[$schedule]"
+                fi
+            done
+        ;;
+        "tvbs")
+            printf -v today '%(%Y-%m-%d)T'
+
+            if [ ! -s "$SCHEDULE_JSON" ] 
+            then
+                printf '{"%s":[]}' "tvbs" > "$SCHEDULE_JSON"
+            fi
+
+            chnls=( tvbsxw tvbshl tvbs tvbsjc tvbsyz )
+            chn_order=0
+            lang=2
+
+            for chnl in "${chnls[@]}"
+            do
+                chn_order=$((chn_order+1))
+                if [ -n "${3:-}" ] && [ "$3" != "$chnl" ]
+                then
+                    continue
+                fi
+
+                schedule=""
+                schedule_today=$(wget --no-check-certificate "https://tvbsapp.tvbs.com.tw/pg_api/pg_list/$chn_order/$today/1/$lang" -qO-)
+
+                while IFS="=" read -r program_time program_title
+                do
+                    program_time=${program_time#\"}
+                    program_title=${program_title%\"}
+                    program_sys_time=$(date -d "$today $program_time" +%s)
+                    [ -n "$schedule" ] && schedule="$schedule,"
+                    schedule=$schedule'{
+                        "title":"'"$program_title"'",
+                        "time":"'"$program_time"'",
+                        "sys_time":"'"$program_sys_time"'"
+                    }'
+                done < <($JQ_FILE '.data|to_entries|map(select(.value.date=="'"$today"'"))|.[].value.data|to_entries|map("\(.value.pg_hour)=\(.value.pg_name)")|.[]' <<< "$schedule_today")
+
+                if [ -n "$schedule" ] 
+                then
+                    JQ replace "$SCHEDULE_JSON" "$chnl" "[$schedule]"
+                fi
+            done
+        ;;
+        "astro")
+            printf -v today '%(%Y-%m-%d)T'
+
+            if [ ! -s "$SCHEDULE_JSON" ] 
+            then
+                printf '{"%s":[]}' "iqiyi" > "$SCHEDULE_JSON"
+            fi
+
+            chnls=(
+                "iqiyi:355" )
+
+            for chnl in "${chnls[@]}"
+            do
+                chnl_name=${chnl%:*}
+                chnl_id=${chnl#*:}
+
+                if [ -n "${3:-}" ] && [ "$3" != "$chnl_name" ]
+                then
+                    continue
+                fi
+
+                schedule=""
+                schedule_today=$(wget --no-check-certificate "https://contenthub-api.eco.astro.com.my/channel/$chnl_id.json" -qO-)
+
+                while IFS="=" read -r program_time program_title
+                do
+                    program_time=${program_time#\"}
+                    program_sys_time=$(date -d "$program_time" +%s)
+                    program_time=${program_time#* }
+                    program_time=${program_time:0:5}
+                    program_title=${program_title%\"}
+                    [ -n "$schedule" ] && schedule="$schedule,"
+                    schedule=$schedule'{
+                        "title":"'"$program_title"'",
+                        "time":"'"$program_time"'",
+                        "sys_time":"'"$program_sys_time"'"
+                    }'
+                done < <($JQ_FILE '.response.schedule["'"$today"'"]|to_entries|map("\(.value.datetime)=\(.value.title)")|.[]' <<< "$schedule_today")
+
+                if [ -n "$schedule" ] 
+                then
+                    JQ replace "$SCHEDULE_JSON" "$chnl_name" "[$schedule]"
                 fi
             done
         ;;
@@ -7502,6 +7644,7 @@ AntiDDoSSet()
         then
             if ufw show added | grep -q "None" 
             then
+                [ -x "$(command -v iptables)" ] && iptables -F
                 echo && echo -e "$info 添加常用 ufw 规则"
                 ufw allow ssh > /dev/null 2>&1
                 ufw allow http > /dev/null 2>&1
@@ -9942,7 +10085,7 @@ NginxCheckDomains()
 {
     if [ ! -e "/usr/local/nginx" ] 
     then
-        echo && echo -e "$error Nginx 未安装 !" && echo && exit 1
+        echo && echo -e "$error Nginx 未安装 ! 输入 nx 安装 nginx" && echo && exit 1
     fi
     mkdir -p "/usr/local/nginx/conf/sites_crt/"
     mkdir -p "/usr/local/nginx/conf/sites_available/"
@@ -10221,35 +10364,40 @@ NginxConfigCorsHost()
 
 NginxConfigSsl()
 {
-    if ! grep -q "ssl_session_cache " < "/usr/local/nginx/conf/nginx.conf"
-    then
-        conf=""
-        found=0
-        while IFS= read -r line 
-        do
-            if [ "$found" -eq 0 ] && [[ $line == *"server {"* ]]
+    conf=""
+    found=0
+    while IFS= read -r line 
+    do
+        if [ "$found" -eq 0 ] && { [[ $line == *"ssl_session_cache "* ]] || [[ $line == *"ssl_session_timeout "* ]] || [[ $line == *"ssl_prefer_server_ciphers "* ]] || [[ $line == *"ssl_protocols "* ]] || [[ $line == *"ssl_ciphers "* ]] || [[ $line == *"ssl_stapling "* ]] || [[ $line == *"ssl_stapling_verify "* ]] || [[ $line == *"resolver "* ]]; }
+        then
+            continue
+        fi
+        if [ "$found" -eq 0 ] && [[ $line == *"server {"* ]]
+        then
+            lead=${line%%[^[:blank:]]*}
+            first_char=${line#${lead}}
+            first_char=${first_char:0:1}
+            if [[ $first_char != "#" ]] 
             then
-                lead=${line%%[^[:blank:]]*}
-                first_char=${line#${lead}}
-                first_char=${first_char:0:1}
-                if [[ $first_char != "#" ]] 
-                then
-                    line="
+                line="
     ssl_session_cache           shared:SSL:10m;
     ssl_session_timeout         10m;
     ssl_prefer_server_ciphers   on;
     ssl_protocols               TLSv1.2 TLSv1.3;
     ssl_ciphers                 HIGH:!aNULL:!MD5;
+    ssl_stapling on;
+    ssl_stapling_verify on;
+    resolver 8.8.8.8;
 
 $line"
-                    found=1
-                fi
+                found=1
             fi
-            [ -n "$conf" ] && conf="$conf\n"
-            conf="$conf$line"
-        done < "/usr/local/nginx/conf/nginx.conf"
-        echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
-    fi
+        fi
+        [ -n "$conf" ] && conf="$conf\n"
+        conf="$conf$line"
+    done < "/usr/local/nginx/conf/nginx.conf"
+    PrettyConfig
+    echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
 }
 
 NginxListDomains()
@@ -10358,10 +10506,14 @@ NginxListDomain()
 
         if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"root "* ]]
         then
-            root="${line#*root}"
-            root=${line%;*}
+            root=${line#*root}
+            root=${root%;*}
             lead=${root%%[^[:blank:]]*}
             root=${root#${lead}}
+            if [[ ${root:0:1} != "/" ]] 
+            then
+                root="/usr/local/nginx/$root"
+            fi
         fi
 
         if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"proxy_pass http://nodejs"* ]]
@@ -10492,7 +10644,8 @@ NginxDomainServerToggleNodejs()
             http_ports=""
             nodejs_flag=0
             nodejs_found=0
-            nodejs_add=0
+            location_found=0
+            add_header_found=0
         fi
 
         if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"{"* ]] 
@@ -10506,23 +10659,46 @@ NginxDomainServerToggleNodejs()
             if [[ $nginx_domain_server_flag -eq 0 ]] 
             then
                 nginx_domain_server_found=0
-                if [[ $nodejs_add -eq 0 ]] && [[ $nodejs_found -eq 0 ]] && [[ $https_ports == "${nginx_domain_servers_https_port[nginx_domain_server_index]}" ]] && [[ $http_ports == "${nginx_domain_servers_http_port[nginx_domain_server_index]}" ]] 
+                if [[ $location_found -eq 0 ]] && [[ $https_ports == "${nginx_domain_servers_https_port[nginx_domain_server_index]}" ]] && [[ $http_ports == "${nginx_domain_servers_http_port[nginx_domain_server_index]}" ]]
                 then
-                    if [ -n "$https_ports" ] && [ -n "$http_ports" ]
-                    then
-                        scheme="\$scheme"
-                        proxy_cookie_path=""
-                    elif [ -n "$https_ports" ] 
-                    then
-                        scheme="https"
-                        proxy_cookie_path="\n            proxy_cookie_path / /\$samesite_none;"
-                    else
-                        scheme="http"
-                        proxy_cookie_path=""
-                    fi
-
                     line="
+        location / {
+            root   ${server_root#*/usr/local/nginx/};
+            index  index.html index.htm;
+        }\n$line"
+                    if [[ $nodejs_found -eq 0 ]]
+                    then
+                        if [ -n "$https_ports" ] && [ -n "$http_ports" ]
+                        then
+                            scheme="\$scheme"
+                            proxy_cookie_path=""
+                        elif [ -n "$https_ports" ] 
+                        then
+                            scheme="https"
+                            proxy_cookie_path="\n            proxy_cookie_path / /\$samesite_none;"
+                        else
+                            scheme="http"
+                            proxy_cookie_path=""
+                        fi
+
+                        line="
         location = / {
+            proxy_redirect off;
+            proxy_pass http://nodejs;
+            proxy_read_timeout 10s;
+            proxy_send_timeout 10s;
+
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            proxy_cache_bypass 1;
+            proxy_no_cache 1;$proxy_cookie_path
+            proxy_cookie_domain localhost ${nginx_domains[nginx_domains_index]};
+        }
+
+        location = /channels {
             proxy_redirect off;
             proxy_pass http://nodejs;
             proxy_read_timeout 10s;
@@ -10581,6 +10757,7 @@ NginxDomainServerToggleNodejs()
         location ~ \.(keyinfo|key)$ {
             return 403;
         }\n$line"
+                    fi
                 fi
             fi
         fi
@@ -10600,6 +10777,11 @@ NginxDomainServerToggleNodejs()
             http_port=${http_port#${lead}}
             [ -n "$http_ports" ] && http_ports="$http_ports "
             http_ports="$http_ports$http_port"
+        fi
+
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"add_header "* ]] 
+        then
+            add_header_found=1
         fi
 
         if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"location = / {"* ]] && [[ $https_ports == "${nginx_domain_servers_https_port[nginx_domain_server_index]}" ]] && [[ $http_ports == "${nginx_domain_servers_http_port[nginx_domain_server_index]}" ]] 
@@ -10623,23 +10805,41 @@ NginxDomainServerToggleNodejs()
             [[ "${enable_nodejs:-0}" -eq 1 ]] || continue
         fi
 
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"location "* ]] && [[ $line != *"location = / {"* ]] && [[ $nodejs_found -eq 0 ]] && [[ $https_ports == "${nginx_domain_servers_https_port[nginx_domain_server_index]}" ]] && [[ $http_ports == "${nginx_domain_servers_http_port[nginx_domain_server_index]}" ]] 
+        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"location / "* ]]
         then
-            nodejs_add=1
-            if [ -n "$https_ports" ] && [ -n "$http_ports" ]
+            location_found=1
+            if [[ $nodejs_found -eq 0 ]] && [[ $https_ports == "${nginx_domain_servers_https_port[nginx_domain_server_index]}" ]] && [[ $http_ports == "${nginx_domain_servers_http_port[nginx_domain_server_index]}" ]]
             then
-                scheme="\$scheme"
-                proxy_cookie_path=""
-            elif [ -n "$https_ports" ] 
-            then
-                scheme="https"
-                proxy_cookie_path="\n            proxy_cookie_path / /\$samesite_none;"
-            else
-                scheme="http"
-                proxy_cookie_path=""
-            fi
+                if [ -n "$https_ports" ] && [ -n "$http_ports" ]
+                then
+                    scheme="\$scheme"
+                    proxy_cookie_path=""
+                elif [ -n "$https_ports" ] 
+                then
+                    scheme="https"
+                    proxy_cookie_path="\n            proxy_cookie_path / /\$samesite_none;"
+                else
+                    scheme="http"
+                    proxy_cookie_path=""
+                fi
 
-            line="        location = / {
+                line="        location = / {
+            proxy_redirect off;
+            proxy_pass http://nodejs;
+            proxy_read_timeout 10s;
+            proxy_send_timeout 10s;
+
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            proxy_cache_bypass 1;
+            proxy_no_cache 1;$proxy_cookie_path
+            proxy_cookie_domain localhost ${nginx_domains[nginx_domains_index]};
+        }
+
+        location = /channels {
             proxy_redirect off;
             proxy_pass http://nodejs;
             proxy_read_timeout 10s;
@@ -10698,6 +10898,15 @@ NginxDomainServerToggleNodejs()
         location ~ \.(keyinfo|key)$ {
             return 403;
         }\n\n$line"
+                if [[ $add_header_found -eq 0 ]] 
+                then
+                    line="        add_header Access-Control-Allow-Origin \$corsHost;
+        add_header Vary Origin;
+        add_header X-Frame-Options SAMEORIGIN;
+        add_header Access-Control-Allow-Credentials true;
+        add_header Cache-Control no-cache;\n\n$line"
+                fi
+            fi
         fi
 
         if [ "${last_line:-}" == "#" ] && [ "$line" == "" ]
@@ -10825,6 +11034,12 @@ NginxEditDomain()
                 break
             ;;
             2) 
+                server_root=${nginx_domain_servers_root[nginx_domain_server_index]}
+                if [ -z "$server_root" ] 
+                then
+                    NginxConfigServerRoot
+                    NginxConfigServerLiveRoot
+                fi
                 NginxDomainServerToggleNodejs
                 break
             ;;
@@ -10979,7 +11194,6 @@ NginxConfigLocalhost()
     NginxConfigServerRoot
     NginxConfigServerLiveRoot
     NginxConfigBlockAliyun
-    [[ ${enable_nodejs:-0} -eq 1 ]] && NginxConfigUpstream
 
     conf=""
 
@@ -11067,6 +11281,22 @@ NginxConfigLocalhost()
                 enable_nodejs=0
                 server_ip=${server_ip:-$(GetServerIp)}
             line="        location = / {
+            proxy_redirect off;
+            proxy_pass http://nodejs;
+            proxy_read_timeout 10s;
+            proxy_send_timeout 10s;
+
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto http;
+
+            proxy_cache_bypass 1;
+            proxy_no_cache 1;
+            proxy_cookie_domain localhost $server_ip;
+        }
+
+        location = /channels {
             proxy_redirect off;
             proxy_pass http://nodejs;
             proxy_read_timeout 10s;
@@ -11564,8 +11794,10 @@ InstallNodejs()
             yum -y install nodejs >/dev/null 2>&1
         fi
     else
-        apt-get -y update >/dev/null 2>&1
-        apt-get -y install nodejs >/dev/null 2>&1
+        if bash <(curl -sL https://deb.nodesource.com/setup_10.x) > /dev/null 
+        then
+            apt-get install -y nodejs >/dev/null 2>&1
+        fi
     fi
 
     kill $progress_pid
@@ -11574,7 +11806,7 @@ InstallNodejs()
 
 NodejsInstallMongodb()
 {
-    echo && echo -e "$info 安装 mongodb..."
+    echo && echo -e "$info 安装 mongodb, 请等待..."
     ulimit -f unlimited
     ulimit -t unlimited
     ulimit -v unlimited
@@ -11618,13 +11850,11 @@ gpgkey=https://www.mongodb.org/static/pgp/server-4.2.asc
             systemctl daemon-reload
             systemctl start mongod > /dev/null 2>&1
         fi
-        mongo admin --eval "db.getSiblingDB('admin').createUser({user: '$username', pwd: '$password', roles: ['root']})"
-        systemctl restart mongod
     else
         service mongod start
-        mongo admin --eval "db.getSiblingDB('admin').createUser({user: '$username', pwd: '$password', roles: ['root']})"
-        service mongod restart
     fi
+    sleep 3
+    echo && echo -e "$info mongodb 安装成功"
 }
 
 NginxConfigSameSiteNone()
@@ -11659,32 +11889,44 @@ NginxConfigSameSiteNone()
 
 NginxConfigUpstream()
 {
-    if ! grep -q "upstream nodejs" < "/usr/local/nginx/conf/nginx.conf"
-    then
-        conf=""
-        found=0
-        while IFS= read -r line 
-        do
-            if [ "$found" -eq 0 ] && [[ $line == *"server "* ]]
+    conf=""
+    upstream_found=0
+    server_found=0
+    while IFS= read -r line 
+    do
+        if [[ $line == *"upstream nodejs "* ]] 
+        then
+            upstream_found=2
+        fi
+        if [[ $upstream_found -eq 2 ]]
+        then
+            if [[ $line == *"server 127.0.0.1:"* ]] 
             then
-                lead=${line%%[^[:blank:]]*}
-                first_char=${line#${lead}}
-                first_char=${first_char:0:1}
-                if [[ $first_char != "#" ]] 
-                then
-                    line="
+                line="${line%server *}server 127.0.0.1:$nodejs_port;"
+            elif [[ $line == *"}"* ]] 
+            then
+                upstream_found=1
+            fi
+        fi
+        if [[ $upstream_found -eq 0 ]] && [[ $server_found -eq 0 ]] && [[ $line == *"server "* ]]
+        then
+            lead=${line%%[^[:blank:]]*}
+            first_char=${line#${lead}}
+            first_char=${first_char:0:1}
+            if [[ $first_char != "#" ]] 
+            then
+                line="
     upstream nodejs {
-        ip_hash;
+        #ip_hash;
         server 127.0.0.1:$nodejs_port;
     }\n\n$line"
-                    found=1
-                fi
+                server_found=1
             fi
-            [ -n "$conf" ] && conf="$conf\n"
-            conf="$conf$line"
-        done < "/usr/local/nginx/conf/nginx.conf"
-        echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
-    fi
+        fi
+        [ -n "$conf" ] && conf="$conf\n"
+        conf="$conf$line"
+    done < "/usr/local/nginx/conf/nginx.conf"
+    echo -e "$conf" > "/usr/local/nginx/conf/nginx.conf"
 }
 
 NodejsConfig()
@@ -11751,20 +11993,37 @@ NodejsConfig()
             esac
         done
         server_root=${nginx_domain_servers_root[nginx_domain_server_index]}
+        if [ -z "$server_root" ] 
+        then
+            NginxConfigServerRoot
+        fi
         NginxConfigServerLiveRoot
+        NginxDomainServerToggleNodejs
+        NginxConfigSsl
     fi
-
-    NginxDomainServerToggleNodejs
 
     NginxConfigSameSiteNone
     nodejs_port=$(GetFreePort)
     NginxConfigUpstream
 
-    mkdir -p "$NODE_ROOT"
     username=$(RandStr)
     password=$(RandStr)
-    NodejsInstallMongodb
 
+    if [[ ! -x $(command -v mongo) ]] 
+    then
+        NodejsInstallMongodb
+    fi
+
+    if [[ $(ps --no-headers -o comm 1) == "systemd" ]] 
+    then
+        mongo admin --eval "db.getSiblingDB('admin').createUser({user: '${username}', pwd: '${password}', roles: ['root']})"
+        systemctl restart mongod
+    else
+        mongo admin --eval "db.getSiblingDB('admin').createUser({user: '${username}', pwd: '${password}', roles: ['root']})"
+        service mongod restart
+    fi
+
+    mkdir -p "$NODE_ROOT"
     echo "
 const express = require('express');
 const session = require('express-session');
@@ -11816,7 +12075,7 @@ app.get('/keys', function(req, res){
     }
 });
 
-app.listen(port, () => console.log(`App listening on port \${port}!`))
+app.listen(port, () => console.log(\`App listening on port \${port}!\`))
 
 " > "$NODE_ROOT/index.js"
 
@@ -11842,12 +12101,13 @@ app.listen(port, () => console.log(`App listening on port \${port}!`))
     if [[ ! -x $(command -v git) ]] 
     then
         echo && echo -e "$info 安装 git..."
+        CheckRelease
         if [ "$release" == "rpm" ] 
         then
             yum -y install git > /dev/null
         elif [ "$release" == "ubu" ] 
         then
-            add-apt-repository ppa:git-core/ppa
+            add-apt-repository ppa:git-core/ppa -y > /dev/null 
             apt-get -y update
             apt-get -y install git > /dev/null
         else
@@ -14857,7 +15117,7 @@ if [ "${0##*/}" == "nx" ] || [ "${0##*/}" == "nx.sh" ]
 then
     CheckShFile
 
-    echo && echo -e "  Nginx 管理面板 $plain
+    echo && echo -e "  Nginx 管理面板 $plain${red}[v$sh_ver]$plain
 
   ${green}1.$plain 安装
   ${green}2.$plain 卸载
@@ -14879,7 +15139,8 @@ then
  ${green}14.$plain 安装 nodejs
  ${green}15.$plain 安装 pdf2htmlEX
  ${green}16.$plain 安装 tesseract
- " && echo
+
+ $tip 输入: nx 打开面板" && echo
     read -p "请输入数字 [1-16]：" nginx_num
     case "$nginx_num" in
         1) 
@@ -15093,7 +15354,7 @@ $IPTV_ROOT/*.log {
             then
                 InstallNodejs
             fi
-            if [ ! -d "$NODE_ROOT" ] 
+            if [ ! -e "$NODE_ROOT/index.js" ] 
             then
                 if [[ -x $(command -v node) ]] && [[ -x $(command -v npm) ]] 
                 then
@@ -15130,7 +15391,7 @@ $IPTV_ROOT/*.log {
                 echo
                 if [ "$release" == "ubu" ] 
                 then
-                    add-apt-repository ppa:alex-p/tesseract-ocr
+                    add-apt-repository ppa:alex-p/tesseract-ocr -y
                     apt-get -y update
                     apt-get -y install tesseract
                 elif [ "$release" == "ubu" ] 
@@ -15161,7 +15422,7 @@ then
         ;;
     esac
 
-    echo && echo -e "  v2ray 管理面板 $plain
+    echo && echo -e "  v2ray 管理面板 $plain${red}[v$sh_ver]$plain
 
   ${green}1.$plain 安装
   ${green}2.$plain 升级
@@ -16011,7 +16272,7 @@ if [ "$use_menu" == "1" ]
 then
     CheckShFile
 
-    echo && echo -e "  IPTV 一键管理脚本（mpegts / flv => hls / flv 推流）${red}[v$sh_ver]$plain
+    echo && echo -e "  IPTV 一键管理脚本 ${red}[v$sh_ver]$plain
   ---- MTimer | http://hbo.epub.fun ----
 
   ${green}1.$plain 安装
