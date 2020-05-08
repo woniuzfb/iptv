@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-sh_ver="1.18.0"
+sh_ver="1.19.0"
 SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
@@ -352,6 +352,15 @@ CheckRelease()
                     echo && echo -e "$error 依赖 hexdump 安装失败..." && exit 1
                 fi
             fi
+            if [[ ! -x $(command -v ss) ]] 
+            then
+                if yum -y install iproute >/dev/null 2>&1
+                then
+                    echo && echo -e "$info 依赖 ss 安装成功..."
+                else
+                    echo && echo -e "$error 依赖 ss 安装失败..." && exit 1
+                fi
+            fi
         ;;
         "ubu") 
             apt-get -y update >/dev/null 2>&1
@@ -572,7 +581,9 @@ Install()
             --arg hls_delay_seconds 120 --arg hls_min_bitrates 500 \
             --arg hls_max_seg_size 5 --arg hls_restart_nums 20 \
             --arg hls_key_period 30 \
-            --arg anti_ddos_port 80 --arg anti_ddos_seconds 120 \
+            --arg anti_ddos_port 80 --arg anti_ddos_syn_flood "no" \
+            --arg anti_ddos_syn_flood_delay_seconds 3 --arg anti_ddos_syn_flood_seconds 3600 \
+            --arg anti_ddos "no" --arg anti_ddos_seconds 120 \
             --arg anti_ddos_level 6 --arg anti_leech "no" \
             --arg anti_leech_restart_nums 3 --arg anti_leech_restart_flv_changes "yes" \
             --arg anti_leech_restart_hls_changes "yes" --arg version "$sh_ver" \
@@ -607,7 +618,11 @@ Install()
                 hls_max_seg_size: $hls_max_seg_size | tonumber,
                 hls_restart_nums: $hls_restart_nums | tonumber,
                 hls_key_period: $hls_key_period | tonumber,
-                anti_ddos_port: $anti_ddos_port | tonumber,
+                anti_ddos_port: $anti_ddos_port,
+                anti_ddos_syn_flood: $anti_ddos_syn_flood,
+                anti_ddos_syn_flood_delay_seconds: $anti_ddos_syn_flood_delay_seconds | tonumber,
+                anti_ddos_syn_flood_seconds: $anti_ddos_syn_flood_seconds | tonumber,
+                anti_ddos: $anti_ddos,
                 anti_ddos_seconds: $anti_ddos_seconds | tonumber,
                 anti_ddos_level: $anti_ddos_level | tonumber,
                 anti_leech: $anti_leech,
@@ -895,9 +910,39 @@ GetDefault()
         [ "$d_hls_key_period" == null ] && d_hls_key_period=30
         d_hls_key_period=${d_hls_key_period:-30}
         d_anti_ddos_port=${d#*, anti_ddos_port: }
-        d_anti_ddos_port=${d_anti_ddos_port%, anti_ddos_seconds:*}
+        d_anti_ddos_port=${d_anti_ddos_port%, anti_ddos_syn_flood:*}
         [ "$d_anti_ddos_port" == null ] && d_anti_ddos_port=80
         d_anti_ddos_port=${d_anti_ddos_port:-80}
+        d_anti_ddos_port_text=${d_anti_ddos_port//,/ }
+        d_anti_ddos_port_text=${d_anti_ddos_port_text//:/-}
+        d_anti_ddos_syn_flood_yn=${d#*, anti_ddos_syn_flood: }
+        d_anti_ddos_syn_flood_yn=${d_anti_ddos_syn_flood_yn%, anti_ddos_syn_flood_delay_seconds:*}
+        [ "$d_anti_ddos_syn_flood_yn" == null ] && d_anti_ddos_syn_flood_yn="no"
+        d_anti_ddos_syn_flood_yn=${d_anti_ddos_syn_flood_yn:-no}
+        if [ "$d_anti_ddos_syn_flood_yn" == "no" ] 
+        then
+            d_anti_ddos_syn_flood="N"
+        else
+            d_anti_ddos_syn_flood="Y"
+        fi
+        d_anti_ddos_syn_flood_delay_seconds=${d#*, anti_ddos_syn_flood_delay_seconds: }
+        d_anti_ddos_syn_flood_delay_seconds=${d_anti_ddos_syn_flood_delay_seconds%, anti_ddos_syn_flood_seconds:*}
+        [ "$d_anti_ddos_syn_flood_delay_seconds" == null ] && d_anti_ddos_syn_flood_delay_seconds=3
+        d_anti_ddos_syn_flood_delay_seconds=${d_anti_ddos_syn_flood_delay_seconds:-3}
+        d_anti_ddos_syn_flood_seconds=${d#*, anti_ddos_syn_flood_seconds: }
+        d_anti_ddos_syn_flood_seconds=${d_anti_ddos_syn_flood_seconds%, anti_ddos:*}
+        [ "$d_anti_ddos_syn_flood_seconds" == null ] && d_anti_ddos_syn_flood_seconds=3600
+        d_anti_ddos_syn_flood_seconds=${d_anti_ddos_syn_flood_seconds:-3600}
+        d_anti_ddos_yn=${d#*, anti_ddos: }
+        d_anti_ddos_yn=${d_anti_ddos_yn%, anti_ddos_seconds:*}
+        [ "$d_anti_ddos_yn" == null ] && d_anti_ddos_yn="no"
+        d_anti_ddos_yn=${d_anti_ddos_yn:-no}
+        if [ "$d_anti_ddos_yn" == "no" ] 
+        then
+            d_anti_ddos="N"
+        else
+            d_anti_ddos="Y"
+        fi
         d_anti_ddos_seconds=${d#*, anti_ddos_seconds: }
         d_anti_ddos_seconds=${d_anti_ddos_seconds%, anti_ddos_level:*}
         [ "$d_anti_ddos_seconds" == null ] && d_anti_ddos_seconds=120
@@ -942,7 +987,7 @@ GetDefault()
         fi
         d_version=${d#*, version: }
         d_version=${d_version%\"}
-    done < <($JQ_FILE 'to_entries | map(select(.key=="default")) | map("proxy: \(.value.proxy), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), encrypt_session: \(.value.encrypt_session), keyinfo_name: \(.value.keyinfo_name), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), schedule_file: \(.value.schedule_file), flv_delay_seconds: \(.value.flv_delay_seconds), flv_restart_nums: \(.value.flv_restart_nums), hls_delay_seconds: \(.value.hls_delay_seconds), hls_min_bitrates: \(.value.hls_min_bitrates), hls_max_seg_size: \(.value.hls_max_seg_size), hls_restart_nums: \(.value.hls_restart_nums), hls_key_period: \(.value.hls_key_period), anti_ddos_port: \(.value.anti_ddos_port), anti_ddos_seconds: \(.value.anti_ddos_seconds), anti_ddos_level: \(.value.anti_ddos_level), anti_leech: \(.value.anti_leech), anti_leech_restart_nums: \(.value.anti_leech_restart_nums), anti_leech_restart_flv_changes: \(.value.anti_leech_restart_flv_changes), anti_leech_restart_hls_changes: \(.value.anti_leech_restart_hls_changes), version: \(.value.version)") | .[]' "$CHANNELS_FILE")
+    done < <($JQ_FILE 'to_entries | map(select(.key=="default")) | map("proxy: \(.value.proxy), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), encrypt_session: \(.value.encrypt_session), keyinfo_name: \(.value.keyinfo_name), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), schedule_file: \(.value.schedule_file), flv_delay_seconds: \(.value.flv_delay_seconds), flv_restart_nums: \(.value.flv_restart_nums), hls_delay_seconds: \(.value.hls_delay_seconds), hls_min_bitrates: \(.value.hls_min_bitrates), hls_max_seg_size: \(.value.hls_max_seg_size), hls_restart_nums: \(.value.hls_restart_nums), hls_key_period: \(.value.hls_key_period), anti_ddos_port: \(.value.anti_ddos_port), anti_ddos_syn_flood: \(.value.anti_ddos_syn_flood), anti_ddos_syn_flood_delay_seconds: \(.value.anti_ddos_syn_flood_delay_seconds), anti_ddos_syn_flood_seconds: \(.value.anti_ddos_syn_flood_seconds), anti_ddos: \(.value.anti_ddos), anti_ddos_seconds: \(.value.anti_ddos_seconds), anti_ddos_level: \(.value.anti_ddos_level), anti_leech: \(.value.anti_leech), anti_leech_restart_nums: \(.value.anti_leech_restart_nums), anti_leech_restart_flv_changes: \(.value.anti_leech_restart_flv_changes), anti_leech_restart_hls_changes: \(.value.anti_leech_restart_hls_changes), version: \(.value.version)") | .[]' "$CHANNELS_FILE")
     #done < <($JQ_FILE '.default | to_entries | map([.key,.value]|join(": ")) | join(", ")' "$CHANNELS_FILE")
 }
 
@@ -7443,6 +7488,11 @@ AntiDDoS()
     ips=()
     jail_time=()
 
+    if [[ $d_anti_ddos_port == *","* ]] || [[ $d_anti_ddos_port == *"-"* ]] 
+    then
+        d_anti_ddos_port="$d_anti_ddos_port proto tcp"
+    fi
+
     if [ -s "$IP_DENY" ]  
     then
         while IFS= read -r line
@@ -7455,7 +7505,7 @@ AntiDDoS()
                 jail_time+=("$jail")
             else
                 ip=$line
-                ufw delete deny from "$ip" to any port "$anti_ddos_port" > /dev/null 2>> "$IP_LOG"
+                ufw delete deny from "$ip" to any port $d_anti_ddos_port > /dev/null 2>> "$IP_LOG"
             fi
         done < "$IP_DENY"
 
@@ -7470,7 +7520,7 @@ AntiDDoS()
             do
                 if [ "$now" -gt "${jail_time[i]}" ] 
                 then
-                    ufw delete deny from "${ips[i]}" to any port "$anti_ddos_port" > /dev/null 2>> "$IP_LOG"
+                    ufw delete deny from "${ips[i]}" to any port $d_anti_ddos_port > /dev/null 2>> "$IP_LOG"
                     update=1
                 else
                     new_ips+=("${ips[i]}")
@@ -7496,94 +7546,47 @@ AntiDDoS()
     fi
 
     printf '%s\n' "$date_now AntiDDoS 启动成功 PID $BASHPID !" >> "$MONITOR_LOG"
-    
+
+    current_ip=${SSH_CLIENT%% *}
+    [ -n "${anti_ddos_level:-}" ] && ((anti_ddos_level++))
+
     while true
     do
-        chnls_count=0
-        chnls_output_dir_name=()
-        chnls_seg_length=()
-        chnls_seg_count=()
-        while IFS= read -r channel
-        do
-            chnls_count=$((chnls_count+1))
-            map_output_dir_name=${channel#*output_dir_name: }
-            map_output_dir_name=${map_output_dir_name%, seg_length:*}
-            map_seg_length=${channel#*seg_length: }
-            map_seg_length=${map_seg_length%, seg_count:*}
-            map_seg_count=${channel#*seg_count: }
-            map_seg_count=${map_seg_count%\"}
-
-            chnls_output_dir_name+=("$map_output_dir_name")
-            chnls_seg_length+=("$map_seg_length")
-            chnls_seg_count+=("$map_seg_count")
-        done < <($JQ_FILE '.channels | to_entries | map("output_dir_name: \(.value.output_dir_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count)") | .[]' "$CHANNELS_FILE")
-
-        output_dir_names=()
-        triggers=()
-        for output_dir_root in "$LIVE_ROOT"/*
-        do
-            output_dir_name=${output_dir_root#*$LIVE_ROOT/}
-
-            for((i=0;i<chnls_count;i++));
+        if [ "$anti_ddos_syn_flood_yn" == "yes" ] 
+        then
+            anti_ddos_syn_flood_ips=()
+            while IFS= read -r anti_ddos_syn_flood_ip 
             do
-                if [ "$output_dir_name" == "${chnls_output_dir_name[i]}" ] 
-                then
-                    chnl_seg_count=${chnls_seg_count[i]}
-                    if [ "$chnl_seg_count" != 0 ] 
-                    then
-                        chnl_seg_length=${chnls_seg_length[i]}
-                        trigger=$(( 60 * anti_ddos_level / (chnl_seg_length * chnl_seg_count) ))
-                        if [ "$trigger" == 0 ] 
-                        then
-                            trigger=1
-                        fi
-                        output_dir_names+=("$output_dir_name")
-                        triggers+=("$trigger")
-                    fi
-                fi
-            done
-        done
-        
-        printf -v now '%(%s)T'
-        jail=$((now + anti_ddos_seconds))
+                anti_ddos_syn_flood_ips+=("$anti_ddos_syn_flood_ip")
+            done < <(ss -taH|awk '{gsub(/.*:/, "", $4);gsub(/:.*/, "", $5); if ($1 == "SYN-RECV" && $5 != "'"$current_ip"'" && ('"$anti_ddos_ports_command$anti_ddos_ports_range_command"')) print $5}')
 
-        while IFS=' ' read -r counts ip access_file
-        do
-            if [[ $access_file == *".ts" ]] 
-            then
-                seg_name=${access_file##*/}
-                access_file=${access_file%/*}
-                dir_name=${access_file##*/}
-                access_file=${access_file%/*}
-                to_ban=0
+            sleep "$anti_ddos_syn_flood_delay_seconds"
 
-                if [ -e "$LIVE_ROOT/$dir_name/$seg_name" ] 
-                then
-                    output_dir_name=$dir_name
-                    to_ban=1
-                elif [ -e "$LIVE_ROOT/${access_file##*/}/$dir_name/$seg_name" ] 
-                then
-                    output_dir_name=${access_file##*/}
-                    to_ban=1
-                fi
+            printf -v now '%(%s)T'
+            jail=$((now + anti_ddos_syn_flood_seconds))
 
+            while IFS= read -r anti_ddos_syn_flood_ip 
+            do
+                to_ban=1
                 for banned_ip in "${ips[@]}"
                 do
-                    if [ "$banned_ip" == "$ip" ] 
+                    if [ "$banned_ip" == "$anti_ddos_syn_flood_ip/24" ] 
                     then
                         to_ban=0
+                        break 1
                     fi
                 done
 
-                if [ "$to_ban" == 1 ] 
+                if [ "$to_ban" -eq 1 ] 
                 then
-                    for((i=0;i<${#output_dir_names[@]};i++));
+                    for ip in "${anti_ddos_syn_flood_ips[@]}"
                     do
-                        if [ "${output_dir_names[i]}" == "$output_dir_name" ] && [ "$counts" -gt "${triggers[i]}" ]
+                        if [ "$ip" == "$anti_ddos_syn_flood_ip" ] 
                         then
+                            ip="$ip/24"
                             jail_time+=("$jail")
                             printf '%s\n' "$ip:$jail" >> "$IP_DENY"
-                            ufw insert 1 deny from "$ip" to any port "$anti_ddos_port" > /dev/null 2>> "$IP_LOG"
+                            ufw insert 1 deny from "$ip" to any port $anti_ddos_port > /dev/null 2>> "$IP_LOG"
                             printf -v date_now '%(%m-%d %H:%M:%S)T'
                             printf '%s\n' "$date_now $ip 已被禁" >> "$IP_LOG"
                             ips+=("$ip")
@@ -7591,10 +7594,110 @@ AntiDDoS()
                         fi
                     done
                 fi
-            fi
-        done< <(awk -v d1="$(printf '%(%d/%b/%Y:%H:%M:%S)T' $((now-60)))" '{gsub(/^[\[\t]+/, "", $4); if ( $4 > d1 ) print $1,$7;}' /usr/local/nginx/logs/access.log | sort | uniq -c | sort -k1 -nr)
-        # date --date '-1 min' '+%d/%b/%Y:%T'
-        # awk -v d1="$(printf '%(%d/%b/%Y:%H:%M:%S)T' $((now-60)))" '{gsub(/^[\[\t]+/, "", $4); if ($7 ~ "'"$link"'" && $4 > d1 ) print $1;}' /usr/local/nginx/logs/access.log | sort | uniq -c | sort -fr
+            done < <(ss -taH|awk '{gsub(/.*:/, "", $4);gsub(/:.*/, "", $5); if ($1 == "SYN-RECV" && $5 != "'"$current_ip"'" && ('"$anti_ddos_ports_command$anti_ddos_ports_range_command"')) print $5}')
+        fi
+
+        if [ "$anti_ddos_yn" == "yes" ] 
+        then
+            chnls_count=0
+            chnls_output_dir_name=()
+            chnls_seg_length=()
+            chnls_seg_count=()
+            while IFS= read -r channel
+            do
+                chnls_count=$((chnls_count+1))
+                map_output_dir_name=${channel#*output_dir_name: }
+                map_output_dir_name=${map_output_dir_name%, seg_length:*}
+                map_seg_length=${channel#*seg_length: }
+                map_seg_length=${map_seg_length%, seg_count:*}
+                map_seg_count=${channel#*seg_count: }
+                map_seg_count=${map_seg_count%\"}
+
+                chnls_output_dir_name+=("$map_output_dir_name")
+                chnls_seg_length+=("$map_seg_length")
+                chnls_seg_count+=("$map_seg_count")
+            done < <($JQ_FILE '.channels | to_entries | map("output_dir_name: \(.value.output_dir_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count)") | .[]' "$CHANNELS_FILE")
+
+            output_dir_names=()
+            triggers=()
+            for output_dir_root in "$LIVE_ROOT"/*
+            do
+                output_dir_name=${output_dir_root#*$LIVE_ROOT/}
+
+                for((i=0;i<chnls_count;i++));
+                do
+                    if [ "$output_dir_name" == "${chnls_output_dir_name[i]}" ] 
+                    then
+                        chnl_seg_count=${chnls_seg_count[i]}
+                        if [ "$chnl_seg_count" != 0 ] 
+                        then
+                            chnl_seg_length=${chnls_seg_length[i]}
+                            trigger=$(( 60 * anti_ddos_level / (chnl_seg_length * chnl_seg_count) ))
+                            if [ "$trigger" == 0 ] 
+                            then
+                                trigger=1
+                            fi
+                            output_dir_names+=("$output_dir_name")
+                            triggers+=("$trigger")
+                        fi
+                    fi
+                done
+            done
+
+            printf -v now '%(%s)T'
+            jail=$((now + anti_ddos_seconds))
+
+            while IFS=' ' read -r counts ip access_file
+            do
+                if [[ $access_file == *".ts" ]] 
+                then
+                    seg_name=${access_file##*/}
+                    access_file=${access_file%/*}
+                    dir_name=${access_file##*/}
+                    access_file=${access_file%/*}
+                    to_ban=0
+
+                    if [ -e "$LIVE_ROOT/$dir_name/$seg_name" ] 
+                    then
+                        output_dir_name=$dir_name
+                        to_ban=1
+                    elif [ -e "$LIVE_ROOT/${access_file##*/}/$dir_name/$seg_name" ] 
+                    then
+                        output_dir_name=${access_file##*/}
+                        to_ban=1
+                    fi
+
+                    for banned_ip in "${ips[@]}"
+                    do
+                        if [ "$banned_ip" == "$ip" ] 
+                        then
+                            to_ban=0
+                            break 1
+                        fi
+                    done
+
+                    if [ "$to_ban" == 1 ] 
+                    then
+                        for((i=0;i<${#output_dir_names[@]};i++));
+                        do
+                            if [ "${output_dir_names[i]}" == "$output_dir_name" ] && [ "$counts" -gt "${triggers[i]}" ]
+                            then
+                                jail_time+=("$jail")
+                                printf '%s\n' "$ip:$jail" >> "$IP_DENY"
+                                ufw insert 1 deny from "$ip" to any port $anti_ddos_port > /dev/null 2>> "$IP_LOG"
+                                printf -v date_now '%(%m-%d %H:%M:%S)T'
+                                printf '%s\n' "$date_now $ip 已被禁" >> "$IP_LOG"
+                                ips+=("$ip")
+                                break 1
+                            fi
+                        done
+                    fi
+                fi
+            done< <(awk -v d1="$(printf '%(%d/%b/%Y:%H:%M:%S)T' $((now-60)))" '{gsub(/^[\[\t]+/, "", $4); if ( $4 > d1 ) print $1,$7;}' /usr/local/nginx/logs/access.log | sort | uniq -c | sort -k1 -nr)
+            # date --date '-1 min' '+%d/%b/%Y:%T'
+            # awk -v d1="$(printf '%(%d/%b/%Y:%H:%M:%S)T' $((now-60)))" '{gsub(/^[\[\t]+/, "", $4); if ($7 ~ "'"$link"'" && $4 > d1 ) print $1;}' /usr/local/nginx/logs/access.log | sort | uniq -c | sort -fr
+        fi
+
         sleep 10
 
         if [ -n "${ips:-}" ] 
@@ -7608,7 +7711,7 @@ AntiDDoS()
             do
                 if [ "$now" -gt "${jail_time[i]}" ] 
                 then
-                    ufw delete deny from "${ips[i]}" to any port "$anti_ddos_port" > /dev/null 2>> "$IP_LOG"
+                    ufw delete deny from "${ips[i]}" to any port $anti_ddos_port > /dev/null 2>> "$IP_LOG"
                     update=1
                 else
                     new_ips+=("${ips[i]}")
@@ -7637,41 +7740,151 @@ AntiDDoSSet()
     if [ -x "$(command -v ufw)" ] && [ -s "/usr/local/nginx/logs/access.log" ] && ls -A $LIVE_ROOT/* > /dev/null 2>&1
     then
         sleep 1
-        echo && echo "是否启动 AntiDDoS [Y/n]"
-        read -p "(默认: Y): " anti_ddos
-        anti_ddos=${anti_ddos:-Y}
-        if [[ $anti_ddos == [Yy] ]] 
-        then
-            if ufw show added | grep -q "None" 
-            then
-                [ -x "$(command -v iptables)" ] && iptables -F
-                echo && echo -e "$info 添加常用 ufw 规则"
-                ufw allow ssh > /dev/null 2>&1
-                ufw allow http > /dev/null 2>&1
-                ufw allow https > /dev/null 2>&1
 
-                if ufw status | grep -q "inactive" 
+        if ufw show added | grep -q "None" 
+        then
+            [ -x "$(command -v iptables)" ] && iptables -F
+            echo && echo -e "$info 添加常用 ufw 规则"
+            ufw allow ssh > /dev/null 2>&1
+            ufw allow http > /dev/null 2>&1
+            ufw allow https > /dev/null 2>&1
+
+            if ufw status | grep -q "inactive" 
+            then
+                current_port=${SSH_CLIENT##* }
+                if [ "$current_port" != 22 ] 
                 then
-                    current_port=${SSH_CLIENT##* }
-                    if [ "$current_port" != 22 ] 
-                    then
-                        ufw allow "$current_port" > /dev/null 2>&1
-                    fi
-                    echo && echo -e "$info 开启 ufw"
-                    ufw --force enable > /dev/null 2>&1
+                    ufw allow "$current_port" > /dev/null 2>&1
                 fi
+                echo && echo -e "$info 开启 ufw"
+                ufw --force enable > /dev/null 2>&1
             fi
-            [ -z "${d_anti_ddos_port:-}" ] && GetDefault
-            echo && echo "设置封禁端口"
-            while read -p "(默认: $d_anti_ddos_port): " anti_ddos_port
+        fi
+
+        [ -z "${d_anti_ddos_port:-}" ] && GetDefault
+
+        echo && echo "设置封禁端口"
+        echo -e "$tip 多个端口用空格分隔 比如 22 80 443 12480-12489" && echo
+        while read -p "(默认: $d_anti_ddos_port_text): " anti_ddos_ports
+        do
+            anti_ddos_ports=${anti_ddos_ports:-$d_anti_ddos_port_text}
+            if [ -z "$anti_ddos_ports" ] 
+            then
+                echo && echo -e "$error 请输入正确的数字" && echo
+                continue
+            fi
+
+            IFS=" " read -ra anti_ddos_ports_arr <<< "$anti_ddos_ports"
+
+            error_no=0
+            for anti_ddos_port in "${anti_ddos_ports_arr[@]}"
             do
-                case $anti_ddos_port in
-                    "") anti_ddos_port=$d_anti_ddos_port && break
+                case "$anti_ddos_port" in
+                    *"-"*)
+                        anti_ddos_ports_start=${anti_ddos_port%-*}
+                        anti_ddos_ports_end=${anti_ddos_port#*-}
+                        if [[ $anti_ddos_ports_start == *[!0-9]* ]] || [[ $anti_ddos_ports_end == *[!0-9]* ]] || [ "$anti_ddos_ports_start" -eq 0 ] || [ "$anti_ddos_ports_end" -eq 0 ] || [ "$anti_ddos_ports_start" -ge "$anti_ddos_ports_end" ]
+                        then
+                            error_no=3
+                        fi
+                    ;;
+                    *[!0-9]*)
+                        error_no=1
+                    ;;
+                    *)
+                        if [ "$anti_ddos_port" -lt 1 ]  
+                        then
+                            error_no=2
+                        fi
+                    ;;
+                esac
+            done
+
+            case "$error_no" in
+                1|2|3)
+                    echo && echo -e "$error 请输入正确的数字" && echo
+                ;;
+                *)
+                    anti_ddos_ports_command=""
+                    anti_ddos_ports_range_command=""
+                    for anti_ddos_port in "${anti_ddos_ports_arr[@]}"
+                    do
+                        if [[ $anti_ddos_port -eq 80 ]] 
+                        then
+                            anti_ddos_port="http"
+                        elif [[ $anti_ddos_port -eq 443 ]] 
+                        then
+                            anti_ddos_port="https"
+                        elif [[ $anti_ddos_port -eq 22 ]] 
+                        then
+                            anti_ddos_port="ssh"
+                        elif [[ $anti_ddos_port == *"-"* ]] 
+                        then
+                            anti_ddos_ports_start=${anti_ddos_port%-*}
+                            anti_ddos_ports_end=${anti_ddos_port#*-}
+                            if [[ anti_ddos_ports_start -le 22 && $anti_ddos_ports_end -ge 22 ]] 
+                            then
+                                [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command="$anti_ddos_ports_command|"
+                                anti_ddos_ports_command=$anti_ddos_ports_command"ssh"
+                            elif [[ anti_ddos_ports_start -le 80 && $anti_ddos_ports_end -ge 80 ]] 
+                            then
+                                [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command="$anti_ddos_ports_command|"
+                                anti_ddos_ports_command=$anti_ddos_ports_command"http"
+                            elif [[ anti_ddos_ports_start -le 443 && $anti_ddos_ports_end -ge 443 ]] 
+                            then
+                                [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command="$anti_ddos_ports_command|"
+                                anti_ddos_ports_command=$anti_ddos_ports_command"https"
+                            fi
+                            [ -n "$anti_ddos_ports_range_command" ] && anti_ddos_ports_range_command="$anti_ddos_ports_range_command || "
+                            anti_ddos_ports_range_command=$anti_ddos_ports_range_command'($4 >= '"$anti_ddos_ports_start"' && $4 <= '"$anti_ddos_ports_end"')'
+                            continue
+                        fi
+
+                        [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command="$anti_ddos_ports_command|"
+                        anti_ddos_ports_command="$anti_ddos_ports_command$anti_ddos_port"
+                    done
+
+                    [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command='$4 ~ /^('"$anti_ddos_ports_command"')$/'
+                    if [ -n "$anti_ddos_ports_range_command" ] 
+                    then
+                        anti_ddos_ports_range_command='$4 ~ /^[0-9]+$/ && ('"$anti_ddos_ports_range_command"')'
+                        [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_range_command=' || ('"$anti_ddos_ports_range_command"')'
+                    fi
+                    if [[ $anti_ddos_ports == *" "* ]] || [[ $anti_ddos_ports == *"-"* ]]
+                    then
+                        anti_ddos_port=${anti_ddos_ports// /,}
+                        anti_ddos_port=${anti_ddos_port//-/:}
+                        anti_ddos_port="$anti_ddos_port proto tcp"
+                    else
+                        anti_ddos_port=$anti_ddos_ports
+                    fi
+                    break
+                ;;
+            esac
+        done
+
+        echo && echo "是否开启 SYN Flood attack 防御 ? [y/N]"
+        read -p "(默认: $d_anti_ddos_syn_flood): " anti_ddos_syn_flood_yn
+        anti_ddos_syn_flood_yn=${anti_ddos_syn_flood_yn:-$d_anti_ddos_syn_flood}
+        if [[ $anti_ddos_syn_flood_yn == [Yy] ]] 
+        then
+            anti_ddos_syn_flood_yn="yes"
+            sysctl -w net.ipv4.tcp_synack_retries=3
+            sysctl -w net.ipv4.tcp_syn_retries=3
+            sysctl -w net.ipv4.tcp_syncookies=1
+            sysctl -w net.ipv4.tcp_max_syn_backlog=2048
+            #iptables -A INPUT -p tcp --syn -m limit --limit 1/s -j ACCEPT --limit 1/s
+
+            echo && echo "设置判断为 SYN Flood attack 的时间 (秒)"
+            while read -p "(默认: $d_anti_ddos_syn_flood_delay_seconds 秒): " anti_ddos_syn_flood_delay_seconds
+            do
+                case $anti_ddos_syn_flood_delay_seconds in
+                    "") anti_ddos_syn_flood_delay_seconds=$d_anti_ddos_syn_flood_delay_seconds && break
                     ;;
                     *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
                     ;;
                     *) 
-                        if [ "$anti_ddos_port" -gt 0 ]
+                        if [ "$anti_ddos_syn_flood_delay_seconds" -gt 0 ]
                         then
                             break
                         else
@@ -7681,8 +7894,37 @@ AntiDDoSSet()
                 esac
             done
 
-            echo && echo "设置封禁ip多少秒"
-            while read -p "(默认: $d_anti_ddos_seconds秒): " anti_ddos_seconds
+            echo && echo "设置封禁 SYN Flood attack ip 多少秒"
+            while read -p "(默认: $d_anti_ddos_syn_flood_seconds 秒): " anti_ddos_syn_flood_seconds
+            do
+                case $anti_ddos_syn_flood_seconds in
+                    "") anti_ddos_syn_flood_seconds=$d_anti_ddos_syn_flood_seconds && break
+                    ;;
+                    *[!0-9]*) echo && echo -e "$error 请输入正确的数字" && echo
+                    ;;
+                    *) 
+                        if [ "$anti_ddos_syn_flood_seconds" -gt 0 ]
+                        then
+                            break
+                        else
+                            echo && echo -e "$error 请输入正确的数字(大于0)" && echo
+                        fi
+                    ;;
+                esac
+            done
+        else
+            anti_ddos_syn_flood_yn="no"
+        fi
+
+        echo && echo "是否开启 iptv 防御 ? [y/N]"
+        read -p "(默认: $d_anti_ddos): " anti_ddos_yn
+        anti_ddos_yn=${anti_ddos_yn:-$d_anti_ddos}
+        if [[ $anti_ddos_yn == [Yy] ]] 
+        then
+            anti_ddos_yn="yes"
+
+            echo && echo "设置封禁用户 ip 多少秒"
+            while read -p "(默认: $d_anti_ddos_seconds 秒): " anti_ddos_seconds
             do
                 case $anti_ddos_seconds in
                     "") anti_ddos_seconds=$d_anti_ddos_seconds && break
@@ -7721,13 +7963,23 @@ AntiDDoSSet()
                     ;;
                 esac
             done
-
-            JQ update "$CHANNELS_FILE" '(.default|.anti_ddos_port)='"$anti_ddos_port"'|(.default|.anti_ddos_seconds)='"$anti_ddos_seconds"'|(.default|.anti_ddos_level)='"$anti_ddos_level"''
-
-            ((anti_ddos_level++))
-
         else
+            anti_ddos_yn="no"
+        fi
+
+        if [ "$anti_ddos_syn_flood_yn" == "no" ] && [ "$anti_ddos_yn" == "no" ] 
+        then
             echo && echo "不启动 AntiDDoS ..." && echo && exit 0
+        else
+            anti_ddos_ports=${anti_ddos_port:-$d_anti_ddos_port}
+            anti_ddos_ports=${anti_ddos_port%% *}
+            JQ update "$CHANNELS_FILE" '(.default|.anti_ddos_syn_flood)="'"${anti_ddos_syn_flood_yn:-$d_anti_ddos_syn_flood_yn}"'"
+            |(.default|.anti_ddos_syn_flood_delay_seconds)='"${anti_ddos_syn_flood_delay_seconds:-$d_anti_ddos_syn_flood_delay_seconds}"'
+            |(.default|.anti_ddos_syn_flood_seconds)='"${anti_ddos_syn_flood_seconds:-$d_anti_ddos_syn_flood_seconds}"'
+            |(.default|.anti_ddos)="'"${anti_ddos_yn:-$d_anti_ddos_yn}"'"
+            |(.default|.anti_ddos_port)="'"$anti_ddos_ports"'"
+            |(.default|.anti_ddos_seconds)='"${anti_ddos_seconds:-$d_anti_ddos_seconds}"'
+            |(.default|.anti_ddos_level)='"${anti_ddos_level:-$d_anti_ddos_level}"''
         fi
     else
         exit 0
@@ -7769,6 +8021,10 @@ MonitorStop()
         ips=()
         jail_time=()
         GetDefault
+        if [[ $d_anti_ddos_port == *","* ]] || [[ $d_anti_ddos_port == *"-"* ]] 
+        then
+            d_anti_ddos_port="$d_anti_ddos_port proto tcp"
+        fi
         while IFS= read -r line
         do
             if [[ $line == *:* ]] 
@@ -7779,7 +8035,7 @@ MonitorStop()
                 jail_time+=("$jail")
             else
                 ip=$line
-                ufw delete deny from "$ip" to any port "$d_anti_ddos_port"
+                ufw delete deny from "$ip" to any port $d_anti_ddos_port
             fi
         done < "$IP_DENY"
 
@@ -7794,7 +8050,7 @@ MonitorStop()
             do
                 if [ "$now" -gt "${jail_time[i]}" ] 
                 then
-                    ufw delete deny from "${ips[i]}" to any port "$d_anti_ddos_port"
+                    ufw delete deny from "${ips[i]}" to any port $d_anti_ddos_port
                     update=1
                 else
                     new_ips+=("${ips[i]}")
@@ -12234,8 +12490,10 @@ UpdateSelf()
             --arg flv_delay_seconds "$d_flv_delay_seconds" --arg flv_restart_nums "$d_flv_restart_nums" \
             --arg hls_delay_seconds "$d_hls_delay_seconds" --arg hls_min_bitrates "$d_hls_min_bitrates" \
             --arg hls_max_seg_size "$d_hls_max_seg_size" --arg hls_restart_nums "$d_hls_restart_nums" \
-            --arg hls_key_period "$d_hls_key_period" \
-            --arg anti_ddos_port "$d_anti_ddos_port" --arg anti_ddos_seconds "$d_anti_ddos_seconds" \
+            --arg hls_key_period "$d_hls_key_period" --arg anti_ddos_port "$d_anti_ddos_port" \
+            --arg anti_ddos_syn_flood "$d_anti_ddos_syn_flood_yn" --arg anti_ddos_syn_flood_delay_seconds "$d_anti_ddos_syn_flood_delay_seconds" \
+            --arg anti_ddos_syn_flood_seconds "$d_anti_ddos_syn_flood_seconds" --arg anti_ddos "$d_anti_ddos_yn" \
+            --arg anti_ddos_seconds "$d_anti_ddos_seconds" \
             --arg anti_ddos_level "$d_anti_ddos_level" --arg anti_leech "$d_anti_leech_yn" \
             --arg anti_leech_restart_nums "$d_anti_leech_restart_nums" --arg anti_leech_restart_flv_changes "$d_anti_leech_restart_flv_changes_yn" \
             --arg anti_leech_restart_hls_changes "$d_anti_leech_restart_hls_changes_yn" --arg version "$sh_ver" \
@@ -12270,7 +12528,11 @@ UpdateSelf()
                 hls_max_seg_size: $hls_max_seg_size | tonumber,
                 hls_restart_nums: $hls_restart_nums | tonumber,
                 hls_key_period: $hls_key_period | tonumber,
-                anti_ddos_port: $anti_ddos_port | tonumber,
+                anti_ddos_port: $anti_ddos_port,
+                anti_ddos_syn_flood: $anti_ddos_syn_flood,
+                anti_ddos_syn_flood_delay_seconds: $anti_ddos_syn_flood_delay_seconds | tonumber,
+                anti_ddos_syn_flood_seconds: $anti_ddos_syn_flood_seconds | tonumber,
+                anti_ddos: $anti_ddos,
                 anti_ddos_seconds: $anti_ddos_seconds | tonumber,
                 anti_ddos_level: $anti_ddos_level | tonumber,
                 anti_leech: $anti_leech,
