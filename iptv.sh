@@ -320,7 +320,7 @@ CheckRelease()
 
     case $release in
         "rpm") 
-            yum -y update >/dev/null 2>&1
+            #yum -y update >/dev/null 2>&1
             depends=(unzip vim curl crond logrotate)
             for depend in "${depends[@]}"
             do
@@ -1998,6 +1998,25 @@ SetStreamLink()
         stream_link=${stream_links[0]}
     fi
 
+    if [ "${stream_link:13:12}" == "fengshows.cn" ] 
+    then
+        ts=$(date +%s%3N)
+        tx_time=$(printf '%X' $((ts/1000+1800)))
+
+        stream_link=${stream_link%\?*}
+
+        relative_path=${stream_link#*//}
+        relative_path="/${relative_path#*/}"
+
+        tx_secret=$(printf '%s' "obb9Lxyv5C${relative_path%.*}$tx_time" | md5sum)
+        tx_secret=${tx_secret%% *}
+
+        stream_link="$stream_link?txSecret=$tx_secret&txTime=$tx_time"
+        #token=$(printf '%s' "$ts/${relative_path:1}ifengims" | md5sum)
+        #token=${token%% *}
+        #stream_link_md5="$stream_link?ts=$ts&token=$token"
+    fi
+
     echo && echo -e "	直播源: $green $stream_link $plain" && echo
 }
 
@@ -2057,7 +2076,7 @@ SetProxy()
 
 SetOutputDirName()
 {
-    echo "请输入频道输出目录名称"
+    echo && echo "请输入频道输出目录名称"
     echo -e "$tip 是名称不是路径" && echo
     while read -p "(默认: 随机名称): " output_dir_name
     do
@@ -2083,7 +2102,7 @@ SetOutputDirName()
 
 SetPlaylistName()
 {
-    echo "请输入m3u8名称(前缀)"
+    echo && echo "请输入m3u8名称(前缀)"
     read -p "(默认: $d_playlist_name_text): " playlist_name
     if [ -z "$playlist_name" ] 
     then
@@ -2094,7 +2113,7 @@ SetPlaylistName()
 
 SetSegDirName()
 {
-    echo "请输入段所在子目录名称"
+    echo && echo "请输入段所在子目录名称"
     read -p "(默认: $d_seg_dir_name_text): " seg_dir_name
     if [ -z "$seg_dir_name" ] 
     then
@@ -2105,7 +2124,7 @@ SetSegDirName()
 
 SetSegName()
 {
-    echo "请输入段名称"
+    echo && echo "请输入段名称"
     read -p "(默认: $d_seg_name_text): " seg_name
     if [ -z "$seg_name" ] 
     then
@@ -2120,12 +2139,12 @@ SetSegName()
             seg_name=$d_seg_name
         fi
     fi
-    echo && echo -e "	段名称: $green $seg_name $plain" && echo 
+    echo && echo -e "	段名称: $green $seg_name $plain" && echo
 }
 
 SetSegLength()
 {
-    echo -e "请输入段的时长(单位：s)"
+    echo && echo -e "请输入段的时长(单位：s)"
     while read -p "(默认: $d_seg_length): " seg_length
     do
         case "$seg_length" in
@@ -2151,7 +2170,7 @@ SetSegLength()
 
 SetSegCount()
 {
-    echo "请输入m3u8文件包含的段数目，ffmpeg分割的数目是其2倍"
+    echo && echo "请输入m3u8文件包含的段数目，ffmpeg分割的数目是其2倍"
     echo -e "$tip 如果填0就是无限" && echo
     while read -p "(默认: $d_seg_count): " seg_count
     do
@@ -2178,7 +2197,7 @@ SetSegCount()
 
 SetVideoCodec()
 {
-    echo "请输入视频编码(不需要转码时输入 copy)"
+    echo && echo "请输入视频编码(不需要转码时输入 copy)"
     read -p "(默认: $d_video_codec): " video_codec
     video_codec=${video_codec:-$d_video_codec}
     echo && echo -e "	视频编码: $green $video_codec $plain" && echo
@@ -2186,7 +2205,7 @@ SetVideoCodec()
 
 SetAudioCodec()
 {
-    echo "请输入音频编码(不需要转码时输入 copy)"
+    echo && echo "请输入音频编码(不需要转码时输入 copy)"
     read -p "(默认: $d_audio_codec): " audio_codec
     audio_codec=${audio_codec:-$d_audio_codec}
     echo && echo -e "	音频编码: $green $audio_codec $plain" && echo
@@ -2194,7 +2213,7 @@ SetAudioCodec()
 
 SetQuality()
 {
-    echo -e "请输入输出视频质量[0-63]"
+    echo && echo -e "请输入输出视频质量[0-63]"
     echo -e "$tip 改变CRF，数字越大越视频质量越差，如果设置CRF则无法用比特率控制视频质量" && echo
     while read -p "(默认: ${d_quality:-不设置}): " quality
     do
@@ -2221,7 +2240,7 @@ SetQuality()
 
 SetBitrates()
 {
-    echo "请输入比特率(kb/s), 可以输入 omit 省略此选项"
+    echo && echo "请输入比特率(kb/s), 可以输入 omit 省略此选项"
 
     if [ -z "$quality" ] 
     then
@@ -2247,7 +2266,7 @@ SetBitrates()
 
 SetConst()
 {
-    echo "是否使用固定码率[y/N]"
+    echo && echo "是否使用固定码率[y/N]"
     read -p "(默认: $d_const_text): " const_yn
     const_yn=${const_yn:-$d_const_text}
     if [[ $const_yn == [Yy] ]]
@@ -2260,12 +2279,12 @@ SetConst()
         const_yn="no"
         const_text="否"
     fi
-    echo && echo -e "	固定码率: $green $const_text $plain" && echo 
+    echo && echo -e "	固定码率: $green $const_text $plain" && echo
 }
 
 SetEncrypt()
 {
-    echo "是否加密段[y/N]"
+    echo && echo "是否加密段[y/N]"
     read -p "(默认: $d_encrypt_text): " encrypt_yn
     encrypt_yn=${encrypt_yn:-$d_encrypt_text}
     if [[ $encrypt_yn == [Yy] ]]
@@ -2376,20 +2395,20 @@ SetEncrypt()
 
 SetKeyInfoName()
 {
-    echo "请输入 keyinfo 名称"
+    echo && echo "请输入 keyinfo 名称"
     read -p "(默认: ${d_keyinfo_name:-随机}): " keyinfo_name
     keyinfo_name=${keyinfo_name:-$d_keyinfo_name}
     keyinfo_name=${keyinfo_name:-$(RandStr)}
-    echo && echo -e "	keyinfo 名称: $green $keyinfo_name $plain" && echo 
+    echo && echo -e "	keyinfo 名称: $green $keyinfo_name $plain" && echo
 }
 
 SetKeyName()
 {
-    echo "请输入 key 名称"
+    echo && echo "请输入 key 名称"
     read -p "(默认: ${d_key_name:-随机}): " key_name
     key_name=${key_name:-$d_key_name}
     key_name=${key_name:-$(RandStr)}
-    echo && echo -e "	key 名称: $green $key_name $plain" && echo 
+    echo && echo -e "	key 名称: $green $key_name $plain" && echo
 }
 
 SetInputFlags()
@@ -2407,10 +2426,10 @@ SetInputFlags()
         lead=${d_input_flags%%[^[:blank:]]*}
         d_input_flags=${d_input_flags#${lead}}
     fi
-    echo "请输入input flags"
+    echo && echo "请输入input flags"
     read -p "(默认: $d_input_flags): " input_flags
     input_flags=${input_flags:-$d_input_flags}
-    echo && echo -e "	input flags: $green $input_flags $plain" && echo 
+    echo && echo -e "	input flags: $green $input_flags $plain" && echo
 }
 
 SetOutputFlags()
@@ -2419,14 +2438,14 @@ SetOutputFlags()
     then
         d_output_flags=${d_output_flags//-sc_threshold 0/}
     fi
-    echo "请输入output flags, 可以输入 omit 省略此选项"
+    echo && echo "请输入output flags, 可以输入 omit 省略此选项"
     read -p "(默认: ${d_output_flags:-不设置}): " output_flags
     output_flags=${output_flags:-$d_output_flags}
     if [ "$output_flags" == "omit" ] 
     then
         output_flags=""
     fi
-    echo && echo -e "	output flags: $green ${output_flags:-不设置} $plain" && echo 
+    echo && echo -e "	output flags: $green ${output_flags:-不设置} $plain" && echo
 }
 
 SetVideoAudioShift()
@@ -2435,7 +2454,7 @@ SetVideoAudioShift()
     ${green}1.$plain 设置 画面延迟
     ${green}2.$plain 设置 声音延迟
     ${green}3.$plain 不设置
-    " && echo
+    "
     while read -p "(默认: $d_video_audio_shift_text): " video_audio_shift_num
     do
         case $video_audio_shift_num in
@@ -2485,12 +2504,12 @@ SetVideoAudioShift()
         esac
     done
 
-    echo && echo -e "	延迟: $green $video_audio_shift_text $plain" && echo 
+    echo && echo -e "	延迟: $green $video_audio_shift_text $plain" && echo
 }
 
 SetChannelName()
 {
-    echo "请输入频道名称(可以是中文)"
+    echo && echo "请输入频道名称(可以是中文)"
     read -p "(默认: 跟m3u8名称相同): " channel_name
     if [ -z "${playlist_name:-}" ] 
     then
@@ -2502,7 +2521,7 @@ SetChannelName()
 
 SetSync()
 {
-    echo "是否启用 sync ? [Y/n]"
+    echo && echo "是否启用 sync ? [Y/n]"
     read -p "(默认: $d_sync_text): " sync_yn
     sync_yn=${sync_yn:-$d_sync_text}
     if [[ $sync_yn == [Yy] ]]
@@ -2518,7 +2537,7 @@ SetSync()
 
 SetSyncFile()
 {
-    echo "设置单独的 sync_file"
+    echo && echo "设置单独的 sync_file"
     echo -e "$tip 多个文件用空格分隔" && echo
     read -p "(默认: ${d_sync_file:-不设置}): " sync_file
     sync_file_text=${sync_file:-$d_sync_file}
@@ -2527,7 +2546,7 @@ SetSyncFile()
 
 SetSyncIndex()
 {
-    echo "设置单独的 sync_index"
+    echo && echo "设置单独的 sync_index"
     echo -e "$tip 多个 sync_index 用空格分隔" && echo
     read -p "(默认: ${d_sync_index:-不设置}): " sync_index
     sync_index_text=${sync_index:-$d_sync_index}
@@ -2536,7 +2555,7 @@ SetSyncIndex()
 
 SetSyncPairs()
 {
-    echo "设置单独的 sync_pairs"
+    echo && echo "设置单独的 sync_pairs"
     read -p "(默认: ${d_sync_pairs:-不设置}): " sync_pairs
     sync_pairs_text=${sync_pairs:-$d_sync_pairs}
     echo && echo -e "	单独的 sync_pairs: $green ${sync_pairs_text:-不设置} $plain" && echo
@@ -4580,6 +4599,22 @@ StartChannel()
         chnl_stream_link=$(youtube-dl -f "$code" -g "$chnl_stream_link")
     fi
 
+    if [ "${chnl_stream_link:13:12}" == "fengshows.cn" ] 
+    then
+        ts=$(date +%s%3N)
+        tx_time=$(printf '%X' $((ts/1000+1800)))
+
+        chnl_stream_link=${chnl_stream_link%\?*}
+
+        relative_path=${chnl_stream_link#*//}
+        relative_path="/${relative_path#*/}"
+
+        tx_secret=$(printf '%s' "obb9Lxyv5C${relative_path%.*}$tx_time" | md5sum)
+        tx_secret=${tx_secret%% *}
+
+        chnl_stream_link="$chnl_stream_link?txSecret=$tx_secret&txTime=$tx_time"
+    fi
+
     if [ "${chnl_stream_link:0:4}" == "rtmp" ] || [ "${chnl_stream_link:0:1}" == "/" ]
     then
         chnl_input_flags=${chnl_input_flags//-timeout 2000000000/}
@@ -5462,6 +5497,7 @@ Schedule()
         "msxw:45"
         "tsxw:637"
         "slxw:38"
+        "slinews:172"
         "tvbsxw:41"
         "minshi:16"
         "mtvlivetw:751"
@@ -7969,6 +8005,7 @@ AntiDDoSSet()
 
         if [ "$anti_ddos_syn_flood_yn" == "no" ] && [ "$anti_ddos_yn" == "no" ] 
         then
+            JQ update "$CHANNELS_FILE" '(.default|.anti_ddos_syn_flood)="no"|(.default|.anti_ddos)="no"'
             echo && echo "不启动 AntiDDoS ..." && echo && exit 0
         else
             anti_ddos_ports=${anti_ddos_port:-$d_anti_ddos_port}
