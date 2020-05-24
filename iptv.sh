@@ -57,15 +57,23 @@
 #         tv -i http://xxx/xxx.ts -a aac -v libx264 -b 3000 -k flv -T rtmp://127.0.0.1/flv/xxx
 #
 # 快捷键:
+#     tv 打开 HLS 管理面板
+#     tv f 打开 FLV 管理面板
+#
+#     tv e 手动修改 channels.json
 #     tv m 开启监控
-#         tv m l 查看监控日志
+#         tv m l [行数] 查看监控日志
 #         tv m s 关闭监控
 #
 #     tv l 列出所有开启的频道
+#
+#     cx 打开 xtream codes 面板
+#     v2 打开 v2ray 面板
+#     nx 打开 nginx 面板
 
 set -euo pipefail
 
-sh_ver="1.22.0"
+sh_ver="1.24.0"
 sh_debug=0
 SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
@@ -628,7 +636,9 @@ Install()
         InstallJq
 
         default=$(
-        $JQ_FILE -n --arg proxy '' --arg playlist_name '' --arg seg_dir_name '' \
+        $JQ_FILE -n --arg proxy '' --arg user_agent 'Mozilla/5.0 (QtEmbedded; U; Linux; C)' \
+            --arg headers '' --arg cookies 'stb_lang=en; timezone=Europe/Amsterdam' \
+            --arg playlist_name '' --arg seg_dir_name '' \
             --arg seg_name '' --arg seg_length 6 \
             --arg seg_count 5 --arg video_codec "libx264" \
             --arg audio_codec "aac" --arg video_audio_shift '' \
@@ -652,6 +662,9 @@ Install()
             --arg recheck_period 0 --arg version "$sh_ver" \
             '{
                 proxy: $proxy,
+                user_agent: $user_agent,
+                headers: $headers,
+                cookies: $cookies,
                 playlist_name: $playlist_name,
                 seg_dir_name: $seg_dir_name,
                 seg_name: $seg_name,
@@ -862,8 +875,17 @@ GetDefault()
     while IFS= read -r d
     do
         d_proxy=${d#*proxy: }
-        d_proxy=${d_proxy%, playlist_name:*}
+        d_proxy=${d_proxy%, user_agent:*}
         [ "$d_proxy" == null ] && d_proxy=""
+        d_user_agent=${d#*, user_agent: }
+        d_user_agent=${d_user_agent%, headers:*}
+        [ "$d_user_agent" == null ] && d_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
+        d_headers=${d#*, headers: }
+        d_headers=${d_headers%, cookies:*}
+        [ "$d_headers" == null ] && d_headers=""
+        d_cookies=${d#*, cookies: }
+        d_cookies=${d_cookies%, playlist_name:*}
+        [ "$d_cookies" == null ] && d_cookies="stb_lang=en; timezone=Europe/Amsterdam"
         d_playlist_name=${d#*, playlist_name: }
         d_playlist_name=${d_playlist_name%, seg_dir_name:*}
         d_playlist_name_text=${d_playlist_name:-随机名称}
@@ -1061,7 +1083,7 @@ GetDefault()
         fi
         d_version=${d#*, version: }
         d_version=${d_version%\"}
-    done < <($JQ_FILE 'to_entries | map(select(.key=="default")) | map("proxy: \(.value.proxy), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), encrypt_session: \(.value.encrypt_session), keyinfo_name: \(.value.keyinfo_name), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), schedule_file: \(.value.schedule_file), flv_delay_seconds: \(.value.flv_delay_seconds), flv_restart_nums: \(.value.flv_restart_nums), hls_delay_seconds: \(.value.hls_delay_seconds), hls_min_bitrates: \(.value.hls_min_bitrates), hls_max_seg_size: \(.value.hls_max_seg_size), hls_restart_nums: \(.value.hls_restart_nums), hls_key_period: \(.value.hls_key_period), anti_ddos_port: \(.value.anti_ddos_port), anti_ddos_syn_flood: \(.value.anti_ddos_syn_flood), anti_ddos_syn_flood_delay_seconds: \(.value.anti_ddos_syn_flood_delay_seconds), anti_ddos_syn_flood_seconds: \(.value.anti_ddos_syn_flood_seconds), anti_ddos: \(.value.anti_ddos), anti_ddos_seconds: \(.value.anti_ddos_seconds), anti_ddos_level: \(.value.anti_ddos_level), anti_leech: \(.value.anti_leech), anti_leech_restart_nums: \(.value.anti_leech_restart_nums), anti_leech_restart_flv_changes: \(.value.anti_leech_restart_flv_changes), anti_leech_restart_hls_changes: \(.value.anti_leech_restart_hls_changes), recheck_period: \(.value.recheck_period), version: \(.value.version)") | .[]' "$CHANNELS_FILE")
+    done < <($JQ_FILE 'to_entries | map(select(.key=="default")) | map("proxy: \(.value.proxy), user_agent: \(.value.user_agent), headers: \(.value.headers), cookies: \(.value.cookies), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), encrypt_session: \(.value.encrypt_session), keyinfo_name: \(.value.keyinfo_name), key_name: \(.value.key_name), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), schedule_file: \(.value.schedule_file), flv_delay_seconds: \(.value.flv_delay_seconds), flv_restart_nums: \(.value.flv_restart_nums), hls_delay_seconds: \(.value.hls_delay_seconds), hls_min_bitrates: \(.value.hls_min_bitrates), hls_max_seg_size: \(.value.hls_max_seg_size), hls_restart_nums: \(.value.hls_restart_nums), hls_key_period: \(.value.hls_key_period), anti_ddos_port: \(.value.anti_ddos_port), anti_ddos_syn_flood: \(.value.anti_ddos_syn_flood), anti_ddos_syn_flood_delay_seconds: \(.value.anti_ddos_syn_flood_delay_seconds), anti_ddos_syn_flood_seconds: \(.value.anti_ddos_syn_flood_seconds), anti_ddos: \(.value.anti_ddos), anti_ddos_seconds: \(.value.anti_ddos_seconds), anti_ddos_level: \(.value.anti_ddos_level), anti_leech: \(.value.anti_leech), anti_leech_restart_nums: \(.value.anti_leech_restart_nums), anti_leech_restart_flv_changes: \(.value.anti_leech_restart_flv_changes), anti_leech_restart_hls_changes: \(.value.anti_leech_restart_hls_changes), recheck_period: \(.value.recheck_period), version: \(.value.version)") | .[]' "$CHANNELS_FILE")
     #done < <($JQ_FILE '.default | to_entries | map([.key,.value]|join(": ")) | join(", ")' "$CHANNELS_FILE")
 }
 
@@ -1076,6 +1098,9 @@ GetChannelsInfo()
     chnls_stream_links=()
     chnls_live=()
     chnls_proxy=()
+    chnls_user_agent=()
+    chnls_headers=()
+    chnls_cookies=()
     chnls_output_dir_name=()
     chnls_playlist_name=()
     chnls_seg_dir_name=()
@@ -1119,8 +1144,17 @@ GetChannelsInfo()
         map_live=${map_live%, proxy:*}
         [ "$map_live" == null ] && map_live="yes"
         map_proxy=${channel#*, proxy: }
-        map_proxy=${map_proxy%, output_dir_name:*}
+        map_proxy=${map_proxy%, user_agent:*}
         [ "$map_proxy" == null ] && map_proxy=""
+        map_user_agent=${channel#*, user_agent: }
+        map_user_agent=${map_user_agent%, headers:*}
+        [ "$map_user_agent" == null ] && map_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
+        map_headers=${channel#*, headers: }
+        map_headers=${map_headers%, cookies:*}
+        [ "$map_headers" == null ] && map_headers=""
+        map_cookies=${channel#*, cookies: }
+        map_cookies=${map_cookies%, output_dir_name:*}
+        [ "$map_cookies" == null ] && map_cookies="stb_lang=en; timezone=Europe/Amsterdam"
         map_output_dir_name=${channel#*, output_dir_name: }
         map_output_dir_name=${map_output_dir_name%, playlist_name:*}
         map_playlist_name=${channel#*, playlist_name: }
@@ -1204,6 +1238,9 @@ GetChannelsInfo()
         chnls_stream_links+=("$map_stream_link")
         chnls_live+=("$map_live")
         chnls_proxy+=("$map_proxy")
+        chnls_user_agent+=("$map_user_agent")
+        chnls_headers+=("$map_headers")
+        chnls_cookies+=("$map_cookies")
         chnls_output_dir_name+=("$map_output_dir_name")
         chnls_playlist_name+=("$map_playlist_name")
         chnls_seg_dir_name+=("$map_seg_dir_name")
@@ -1232,7 +1269,7 @@ GetChannelsInfo()
         chnls_flv_status+=("$map_flv_status")
         chnls_flv_push_link+=("$map_flv_push_link")
         chnls_flv_pull_link+=("$map_flv_pull_link")
-    done < <($JQ_FILE '.channels | to_entries | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), live: \(.value.live), proxy: \(.value.proxy), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), encrypt_session: \(.value.encrypt_session), keyinfo_name: \(.value.keyinfo_name), key_name: \(.value.key_name), key_time: \(.value.key_time), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), channel_time: \(.value.channel_time), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
+    done < <($JQ_FILE '.channels | to_entries | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), live: \(.value.live), proxy: \(.value.proxy), user_agent: \(.value.user_agent), headers: \(.value.headers), cookies: \(.value.cookies), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), encrypt_session: \(.value.encrypt_session), keyinfo_name: \(.value.keyinfo_name), key_name: \(.value.key_name), key_time: \(.value.key_time), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), channel_time: \(.value.channel_time), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
 
     return 0
 }
@@ -1396,13 +1433,24 @@ GetChannelInfo()
             chnl_live_text="$green是$plain"
         fi
         chnl_proxy=${channel#*, proxy: }
-        chnl_proxy=${chnl_proxy%, output_dir_name:*}
+        chnl_proxy=${chnl_proxy%, user_agent:*}
         if [ "${chnl_stream_link:0:4}" == "http" ] && [ -n "$chnl_proxy" ]
         then
             chnl_proxy_command="-http_proxy $chnl_proxy"
         else
+            chnl_proxy=""
             chnl_proxy_command=""
         fi
+        chnl_user_agent=${channel#*, user_agent: }
+        chnl_user_agent=${chnl_user_agent%, headers:*}
+        chnl_headers=${channel#*, headers: }
+        chnl_headers=${chnl_headers%, cookies:*}
+        if [ -n "$chnl_headers" ] && [[ ! $chnl_headers == *"\r\n" ]] && [[ $chnl_headers == *"\r\n"* ]]
+        then
+            chnl_headers="$chnl_headers\r\n"
+        fi
+        chnl_cookies=${channel#*, cookies: }
+        chnl_cookies=${chnl_cookies%, output_dir_name:*}
         chnl_output_dir_name=${channel#*, output_dir_name: }
         chnl_output_dir_name=${chnl_output_dir_name%, playlist_name:*}
         chnl_output_dir_root="$LIVE_ROOT/$chnl_output_dir_name"
@@ -1416,6 +1464,12 @@ GetChannelInfo()
         chnl_seg_length=${chnl_seg_length%, seg_count:*}
         chnl_seg_count=${channel#*, seg_count: }
         chnl_seg_count=${chnl_seg_count%, video_codec:*}
+        if [ -n "$chnl_live" ]
+        then
+            chnl_seg_count_command="-c $chnl_seg_count"
+        else
+            chnl_seg_count_command=""
+        fi
         chnl_video_codec=${channel#*, video_codec: }
         chnl_video_codec=${chnl_video_codec%, audio_codec:*}
         chnl_audio_codec=${channel#*, audio_codec: }
@@ -1468,6 +1522,12 @@ GetChannelInfo()
         chnl_keyinfo_name=${chnl_keyinfo_name%, key_name:*}
         chnl_key_name=${channel#*, key_name: }
         chnl_key_name=${chnl_key_name%, key_time:*}
+        if [ -n "$chnl_encrypt" ] 
+        then
+            chnl_key_name_command="-K $chnl_key_name"
+        else
+            chnl_key_name_command=""
+        fi
         chnl_key_time=${channel#*, key_time: }
         chnl_key_time=${chnl_key_time%, input_flags:*}
         chnl_input_flags=${channel#*, input_flags: }
@@ -1480,12 +1540,6 @@ GetChannelInfo()
         chnl_channel_time=${chnl_channel_time%, sync:*}
         chnl_sync_yn=${channel#*, sync: }
         chnl_sync_yn=${chnl_sync_yn%, sync_file:*}
-        if [ "$chnl_sync_yn" == "no" ]
-        then
-            chnl_sync_text="$red禁用$plain"
-        else
-            chnl_sync_text="$green启用$plain"
-        fi
         chnl_sync_file=${channel#*, sync_file: }
         chnl_sync_file=${chnl_sync_file%, sync_index:*}
         chnl_sync_index=${channel#*, sync_index: }
@@ -1501,6 +1555,12 @@ GetChannelInfo()
 
         if [ -z "${monitor:-}" ] 
         then
+            if [ "$chnl_sync_yn" == "no" ]
+            then
+                chnl_sync_text="$red禁用$plain"
+            else
+                chnl_sync_text="$green启用$plain"
+            fi
             if [ "$chnl_status" == "on" ]
             then
                 chnl_status_text=$green"开启"$plain
@@ -1592,9 +1652,9 @@ GetChannelInfo()
                 chnl_playlist_link_text=${chnl_playlist_link_text//_master.m3u8/.m3u8}
             fi
         fi
-    done < <($JQ_FILE '.channels | to_entries | map(select('"$select"')) | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), live: \(.value.live), proxy: \(.value.proxy), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), encrypt_session: \(.value.encrypt_session), keyinfo_name: \(.value.keyinfo_name), key_name: \(.value.key_name), key_time: \(.value.key_time), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), channel_time: \(.value.channel_time), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
+    done < <($JQ_FILE '.channels | to_entries | map(select('"$select"')) | map("pid: \(.value.pid), status: \(.value.status), stream_link: \(.value.stream_link), live: \(.value.live), proxy: \(.value.proxy), user_agent: \(.value.user_agent), headers: \(.value.headers), cookies: \(.value.cookies), output_dir_name: \(.value.output_dir_name), playlist_name: \(.value.playlist_name), seg_dir_name: \(.value.seg_dir_name), seg_name: \(.value.seg_name), seg_length: \(.value.seg_length), seg_count: \(.value.seg_count), video_codec: \(.value.video_codec), audio_codec: \(.value.audio_codec), video_audio_shift: \(.value.video_audio_shift), quality: \(.value.quality), bitrates: \(.value.bitrates), const: \(.value.const), encrypt: \(.value.encrypt), encrypt_session: \(.value.encrypt_session), keyinfo_name: \(.value.keyinfo_name), key_name: \(.value.key_name), key_time: \(.value.key_time), input_flags: \(.value.input_flags), output_flags: \(.value.output_flags), channel_name: \(.value.channel_name), channel_time: \(.value.channel_time), sync: \(.value.sync), sync_file: \(.value.sync_file), sync_index: \(.value.sync_index), sync_pairs: \(.value.sync_pairs), flv_status: \(.value.flv_status), flv_push_link: \(.value.flv_push_link), flv_pull_link: \(.value.flv_pull_link)") | .[]' "$CHANNELS_FILE")
 
-    if [ "$chn_found" -eq 0 ]
+    if [ "$chn_found" -eq 0 ] && [ -z "${monitor:-}" ]
     then
         Println "$error 频道发生变化，请重试 !\n" && exit 1
     fi
@@ -1639,6 +1699,13 @@ GetChannelInfoLite()
         else
             chnl_proxy_command=""
         fi
+        chnl_user_agent=${chnls_user_agent[i]}
+        chnl_headers=${chnls_headers[i]}
+        if [ -n "$chnl_headers" ] && [[ ! $chnl_headers == *"\r\n" ]] && [[ $chnl_headers == *"\r\n"* ]]
+        then
+            chnl_headers="$chnl_headers\r\n"
+        fi
+        chnl_cookies=${chnls_cookies[i]}
         chnl_output_dir_name=${chnls_output_dir_name[i]}
         chnl_output_dir_root="$LIVE_ROOT/$chnl_output_dir_name"
         chnl_playlist_name=${chnls_playlist_name[i]}
@@ -1836,6 +1903,9 @@ ViewChannelInfo()
     printf "%s\r\e[20C$green%s$plain\n" " 直播源" "${chnl_stream_links// /, }"
     printf '%b' " 无限时长直播\r\e[20C$chnl_live_text\n"
     printf "%s\r\e[20C$green%s$plain\n" " 代理" "${chnl_proxy:-无}"
+    printf "%s\r\e[20C$green%s$plain\n" " user agent" "${chnl_user_agent:-无}"
+    printf "%s\r\e[20C$green%s$plain\n" " headers" "${chnl_headers:-无}"
+    printf "%s\r\e[20C$green%s$plain\n" " cookies" "${chnl_cookies:-无}"
     printf "%s\r\e[20C$green%s$plain\n" " 视频编码" "$chnl_video_codec"
     printf "%s\r\e[20C$green%s$plain\n" " 音频编码" "$chnl_audio_codec"
     printf '%b' " 视频质量\r\e[20C$chnl_video_quality_text\n"
@@ -1980,6 +2050,11 @@ InstallYoutubeDl()
 
 SetStreamLink()
 {
+    if [ "${xc:-0}" -eq 1 ] 
+    then
+        Println "	直播源: $green $stream_link $plain\n"
+        return 0
+    fi
     Println "请输入直播源( mpegts / hls / flv / youtube ...)"
     echo -e "$tip 可以是视频路径, 可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔\n"
     read -p "(默认: 取消): " stream_links_input
@@ -1999,7 +2074,7 @@ SetStreamLink()
         for((i=0;i<${#stream_links[@]};i++));
         do
             link="${stream_links[i]}"
-            if { [[ $link == *"https://www.youtube.com"* ]] || [[ $link == *"https://youtube.com"* ]]; } && [[ $link != *".m3u8"* ]] && [[ $link != *"|"* ]]
+            if { [ "${link:0:23}" == "https://www.youtube.com" ] || [ "${link:0:19}" == "https://youtube.com" ]; } && [[ $link != *".m3u8"* ]] && [[ $link != *"|"* ]]
             then
                 Println "$info 查询 $green$link$plain 视频信息..."
 
@@ -2181,6 +2256,64 @@ SetProxy()
         proxy=""
     fi
     Println "	ffmpeg 代理: $green ${proxy:-不设置} $plain\n"
+}
+
+SetUserAgent()
+{
+    if [ "${xc:-0}" -eq 1 ] 
+    then
+        Println "	ffmpeg UA: $green ${user_agent:-不设置} $plain\n"
+        return 0
+    fi
+    Println "请输入 ffmpeg 的 user agent"
+    echo -e "$tip 可以输入 omit 省略此选项\n"
+    read -p "(默认: ${d_user_agent:-不设置}): " user_agent
+    user_agent=${user_agent:-$d_user_agent}
+    if [ "$user_agent" == "omit" ] 
+    then
+        user_agent=""
+    fi
+    Println "	ffmpeg UA: $green ${user_agent:-不设置} $plain\n"
+}
+
+SetHeaders()
+{
+    if [ "${xc:-0}" -eq 1 ] 
+    then
+        Println "	ffmpeg headers: $green ${headers:-不设置} $plain\n"
+        return 0
+    fi
+    Println "请输入 ffmpeg headers"
+    echo -e "$tip 多个 header 用 \\\r\\\n 分隔, 可以输入 omit 省略此选项\n"
+    read -p "(默认: ${d_headers:-不设置}): " headers
+    headers=${headers:-$d_headers}
+    if [ "$headers" == "omit" ] 
+    then
+        headers=""
+    fi
+    if [ -n "$headers" ] && [[ ! $headers == *"\r\n" ]] && [[ $headers == *"\r\n"* ]]
+    then
+        headers="$headers\r\n"
+    fi
+    Println "	ffmpeg headers: $green ${headers:-不设置} $plain\n"
+}
+
+SetCookies()
+{
+    if [ "${xc:-0}" -eq 1 ] 
+    then
+        Println "	ffmpeg cookies: $green ${cookies:-不设置} $plain\n"
+        return 0
+    fi
+    Println "请输入 ffmpeg cookies"
+    echo -e "$tip 多个 cookies 用 ; 分隔, 可以输入 omit 省略此选项\n"
+    read -p "(默认: ${d_cookies:-不设置}): " cookies
+    cookies=${cookies:-$d_cookies}
+    if [ "$cookies" == "omit" ] 
+    then
+        cookies=""
+    fi
+    Println "	ffmpeg cookies: $green ${cookies:-不设置} $plain\n"
 }
 
 SetOutputDirName()
@@ -2756,7 +2889,8 @@ FlvStreamCreatorWithShift()
             new_channel=$(
             $JQ_FILE -n --arg pid "$pid" --arg status "off" \
                 --arg stream_link "$stream_links_input" --arg live "$live_yn" \
-                --arg proxy "$proxy" \
+                --arg proxy "$proxy" --arg user_agent "$user_agent" \
+                --arg headers "$headers" --arg cookies "$cookies" \
                 --arg output_dir_name "$output_dir_name" --arg playlist_name "$playlist_name" \
                 --arg seg_dir_name "$SEGMENT_DIRECTORY" --arg seg_name "$seg_name" \
                 --arg seg_length "$seg_length" --arg seg_count "$seg_count" \
@@ -2776,6 +2910,9 @@ FlvStreamCreatorWithShift()
                     stream_link: $stream_link,
                     live: $live,
                     proxy: $proxy,
+                    user_agent: $user_agent,
+                    headers: $headers,
+                    cookies: $cookies,
                     output_dir_name: $output_dir_name,
                     playlist_name: $playlist_name,
                     seg_dir_name: $seg_dir_name,
@@ -2901,17 +3038,29 @@ FlvStreamCreatorWithShift()
                 resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
             fi
 
-            PrepTerm
-            $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command \
-            -y -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-            $FFMPEG_FLAGS -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
-            WaitTerm
+            if [ "${stream_link:0:4}" == "http" ] 
+            then
+                PrepTerm
+                $FFMPEG $proxy_command -user_agent "$user_agent" -headers $"$headers" -cookies "$cookies" $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command \
+                -y -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
+                $FFMPEG_FLAGS -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                WaitTerm
+            else
+                PrepTerm
+                $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command \
+                -y -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
+                $FFMPEG_FLAGS -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                WaitTerm
+            fi
         ;;
         "StartChannel") 
             new_pid=$pid
             JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'
             |(.channels[]|select(.pid=='"$new_pid"')|.flv_status)="on"
             |(.channels[]|select(.pid=='"$new_pid"')|.stream_link)="'"$chnl_stream_links"'"
+            |(.channels[]|select(.pid=='"$new_pid"')|.user_agent)="'"$chnl_user_agent"'"
+            |(.channels[]|select(.pid=='"$new_pid"')|.headers)="'"$chnl_headers"'"
+            |(.channels[]|select(.pid=='"$new_pid"')|.cookies)="'"$chnl_cookies"'"
             |(.channels[]|select(.pid=='"$new_pid"')|.flv_push_link)="'"$chnl_flv_push_link"'"
             |(.channels[]|select(.pid=='"$new_pid"')|.flv_pull_link)="'"$chnl_flv_pull_link"'"
             |(.channels[]|select(.pid=='"$new_pid"')|.channel_time)='"$chnl_channel_time"''
@@ -3008,11 +3157,20 @@ FlvStreamCreatorWithShift()
                 resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
             fi
 
-            PrepTerm
-            $FFMPEG $chnl_proxy_command $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command \
-            -y -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
-            $FFMPEG_FLAGS -f flv "$chnl_flv_push_link" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
-            WaitTerm
+            if [ "${chnl_stream_link:0:4}" == "http" ] 
+            then
+                PrepTerm
+                $FFMPEG $chnl_proxy_command -user_agent "$chnl_user_agent" -headers $"$chnl_headers" -cookies "$chnl_cookies" $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command \
+                -y -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
+                $FFMPEG_FLAGS -f flv "$chnl_flv_push_link" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+                WaitTerm
+            else
+                PrepTerm
+                $FFMPEG $chnl_proxy_command $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command \
+                -y -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
+                $FFMPEG_FLAGS -f flv "$chnl_flv_push_link" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+                WaitTerm
+            fi
         ;;
         "command") 
             new_channel=$(
@@ -3164,11 +3322,20 @@ FlvStreamCreatorWithShift()
                 resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
             fi
 
-            PrepTerm
-            $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
-            -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-            $FFMPEG_FLAGS -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
-            WaitTerm
+            if [ "${stream_link:0:4}" == "http" ] 
+            then
+                PrepTerm
+                $FFMPEG $proxy_command -user_agent "$user_agent" -headers $"$headers" -cookies "$cookies" $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+                -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
+                $FFMPEG_FLAGS -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                WaitTerm
+            else
+                PrepTerm
+                $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+                -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
+                $FFMPEG_FLAGS -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                WaitTerm
+            fi
         ;;
     esac
 }
@@ -3196,7 +3363,8 @@ HlsStreamCreatorPlus()
             new_channel=$(
             $JQ_FILE -n --arg pid "$pid" --arg status "on" \
                 --arg stream_link "$stream_links_input" --arg live "$live_yn" \
-                --arg proxy "$proxy" \
+                --arg proxy "$proxy" --arg user_agent "$user_agent" \
+                --arg headers "$headers" --arg cookies "$cookies" \
                 --arg output_dir_name "$output_dir_name" --arg playlist_name "$playlist_name" \
                 --arg seg_dir_name "$SEGMENT_DIRECTORY" --arg seg_name "$seg_name" \
                 --arg seg_length "$seg_length" --arg seg_count "$seg_count" \
@@ -3216,6 +3384,9 @@ HlsStreamCreatorPlus()
                     stream_link: $stream_link,
                     live: $live,
                     proxy: $proxy,
+                    user_agent: $user_agent,
+                    headers: $headers,
+                    cookies: $cookies,
                     output_dir_name: $output_dir_name,
                     playlist_name: $playlist_name,
                     seg_dir_name: $seg_dir_name,
@@ -3374,21 +3545,43 @@ HlsStreamCreatorPlus()
                 else
                     echo -e "$key_name.key\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
                 fi
-                PrepTerm
-                $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
-                -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-                -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$seg_length" \
-                -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
-                $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_path$output_name.ts" "$output_dir_root/$playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
-                WaitTerm
+                if [ "${stream_link:0:4}" == "http" ] 
+                then
+                    PrepTerm
+                    $FFMPEG $proxy_command -user_agent "$user_agent" -headers $"$headers" -cookies "$cookies" $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+                    -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
+                    -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$seg_length" \
+                    -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
+                    $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_path$output_name.ts" "$output_dir_root/$playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                    WaitTerm
+                else
+                    PrepTerm
+                    $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+                    -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
+                    -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$seg_length" \
+                    -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
+                    $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_path$output_name.ts" "$output_dir_root/$playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                    WaitTerm
+                fi
             else
-                PrepTerm
-                $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
-                -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-                -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
-                -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
-                $seg_count_command $FFMPEG_FLAGS "$output_dir_root/$seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
-                WaitTerm
+                if [ "${stream_link:0:4}" == "http" ] 
+                then
+                    PrepTerm
+                    $FFMPEG $proxy_command -user_agent "$user_agent" -headers $"$headers" -cookies "$cookies" $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+                    -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
+                    -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
+                    -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
+                    $seg_count_command $FFMPEG_FLAGS "$output_dir_root/$seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                    WaitTerm
+                else
+                    PrepTerm
+                    $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+                    -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
+                    -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
+                    -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
+                    $seg_count_command $FFMPEG_FLAGS "$output_dir_root/$seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                    WaitTerm
+                fi
             fi
         ;;
         "StartChannel") 
@@ -3397,6 +3590,9 @@ HlsStreamCreatorPlus()
             JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'
             |(.channels[]|select(.pid=='"$new_pid"')|.status)="on"
             |(.channels[]|select(.pid=='"$new_pid"')|.stream_link)="'"$chnl_stream_links"'"
+            |(.channels[]|select(.pid=='"$new_pid"')|.user_agent)="'"$chnl_user_agent"'"
+            |(.channels[]|select(.pid=='"$new_pid"')|.headers)="'"$chnl_headers"'"
+            |(.channels[]|select(.pid=='"$new_pid"')|.cookies)="'"$chnl_cookies"'"
             |(.channels[]|select(.pid=='"$new_pid"')|.playlist_name)="'"$chnl_playlist_name"'"
             |(.channels[]|select(.pid=='"$new_pid"')|.seg_name)="'"$chnl_seg_name"'"
             |(.channels[]|select(.pid=='"$new_pid"')|.key_name)="'"$chnl_key_name"'"
@@ -3527,21 +3723,43 @@ HlsStreamCreatorPlus()
                 else
                     echo -e "$chnl_key_name.key\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
                 fi
-                PrepTerm
-                $FFMPEG $chnl_proxy_command $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
-                -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
-                -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$chnl_seg_length" \
-                -hls_list_size $chnl_seg_count -hls_delete_threshold $chnl_seg_count -hls_key_info_file "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo" \
-                $chnl_hls_flags_command -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_path$output_name.ts" "$chnl_output_dir_root/$chnl_playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
-                WaitTerm
+                if [ "${chnl_stream_link:0:4}" == "http" ] 
+                then
+                    PrepTerm
+                    $FFMPEG $chnl_proxy_command -user_agent "$chnl_user_agent" -headers $"$chnl_headers" -cookies "$chnl_cookies" $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
+                    -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
+                    -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$chnl_seg_length" \
+                    -hls_list_size $chnl_seg_count -hls_delete_threshold $chnl_seg_count -hls_key_info_file "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo" \
+                    $chnl_hls_flags_command -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_path$output_name.ts" "$chnl_output_dir_root/$chnl_playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+                    WaitTerm
+                else
+                    PrepTerm
+                    $FFMPEG $chnl_proxy_command $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
+                    -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
+                    -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$chnl_seg_length" \
+                    -hls_list_size $chnl_seg_count -hls_delete_threshold $chnl_seg_count -hls_key_info_file "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo" \
+                    $chnl_hls_flags_command -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_path$output_name.ts" "$chnl_output_dir_root/$chnl_playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+                    WaitTerm
+                fi
             else
-                PrepTerm
-                $FFMPEG $chnl_proxy_command $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
-                -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
-                -threads 0 -flags -global_header -f segment -segment_list "$chnl_output_dir_root/$chnl_playlist_name.m3u8" \
-                -segment_time "$chnl_seg_length" -segment_format mpeg_ts $chnl_live_command \
-                $chnl_seg_count_command $FFMPEG_FLAGS "$chnl_output_dir_root/$chnl_seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
-                WaitTerm
+                if [ "${chnl_stream_link:0:4}" == "http" ] 
+                then
+                    PrepTerm
+                    $FFMPEG $chnl_proxy_command -user_agent "$chnl_user_agent" -headers $"$chnl_headers" -cookies "$chnl_cookies" $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
+                    -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
+                    -threads 0 -flags -global_header -f segment -segment_list "$chnl_output_dir_root/$chnl_playlist_name.m3u8" \
+                    -segment_time "$chnl_seg_length" -segment_format mpeg_ts $chnl_live_command \
+                    $chnl_seg_count_command $FFMPEG_FLAGS "$chnl_output_dir_root/$chnl_seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+                    WaitTerm
+                else
+                    PrepTerm
+                    $FFMPEG $chnl_proxy_command $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
+                    -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
+                    -threads 0 -flags -global_header -f segment -segment_list "$chnl_output_dir_root/$chnl_playlist_name.m3u8" \
+                    -segment_time "$chnl_seg_length" -segment_format mpeg_ts $chnl_live_command \
+                    $chnl_seg_count_command $FFMPEG_FLAGS "$chnl_output_dir_root/$chnl_seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+                    WaitTerm
+                fi
             fi
         ;;
         "command") 
@@ -3727,21 +3945,43 @@ HlsStreamCreatorPlus()
                 else
                     echo -e "$key_name.key\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
                 fi
-                PrepTerm
-                $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
-                -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-                -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$seg_length" \
-                -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
-                $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_path$output_name.ts" "$output_dir_root/$playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
-                WaitTerm
+                if [ "${stream_link:0:4}" == "http" ] 
+                then
+                    PrepTerm
+                    $FFMPEG $proxy_command -user_agent "$user_agent" -headers $"$headers" -cookies "$cookies" $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+                    -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
+                    -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$seg_length" \
+                    -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
+                    $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_path$output_name.ts" "$output_dir_root/$playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                    WaitTerm
+                else
+                    PrepTerm
+                    $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+                    -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
+                    -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$seg_length" \
+                    -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
+                    $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_path$output_name.ts" "$output_dir_root/$playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                    WaitTerm
+                fi
             else
-                PrepTerm
-                $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
-                -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-                -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
-                -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
-                $seg_count_command $FFMPEG_FLAGS "$output_dir_root/$seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
-                WaitTerm
+                if [ "${stream_link:0:4}" == "http" ] 
+                then
+                    PrepTerm
+                    $FFMPEG $proxy_command -user_agent "$user_agent" -headers $"$headers" -cookies "$cookies" $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+                    -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
+                    -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
+                    -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
+                    $seg_count_command $FFMPEG_FLAGS "$output_dir_root/$seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                    WaitTerm
+                else
+                    PrepTerm
+                    $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
+                    -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
+                    -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
+                    -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
+                    $seg_count_command $FFMPEG_FLAGS "$output_dir_root/$seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                    WaitTerm
+                fi
             fi
         ;;
     esac
@@ -3770,7 +4010,8 @@ HlsStreamCreator()
             new_channel=$(
             $JQ_FILE -n --arg pid "$pid" --arg status "on" \
                 --arg stream_link "$stream_links_input" --arg live "$live_yn" \
-                --arg proxy "$proxy" \
+                --arg proxy "$proxy" --arg user_agent "$user_agent" \
+                --arg headers "$headers" --arg cookies "$cookies" \
                 --arg output_dir_name "$output_dir_name" --arg playlist_name "$playlist_name" \
                 --arg seg_dir_name "$SEGMENT_DIRECTORY" --arg seg_name "$seg_name" \
                 --arg seg_length "$seg_length" --arg seg_count "$seg_count" \
@@ -3790,6 +4031,9 @@ HlsStreamCreator()
                     stream_link: $stream_link,
                     live: $live,
                     proxy: $proxy,
+                    user_agent: $user_agent,
+                    headers: $headers,
+                    cookies: $cookies,
                     output_dir_name: $output_dir_name,
                     playlist_name: $playlist_name,
                     seg_dir_name: $seg_dir_name,
@@ -3861,6 +4105,9 @@ HlsStreamCreator()
             JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'
             |(.channels[]|select(.pid=='"$new_pid"')|.status)="on"
             |(.channels[]|select(.pid=='"$new_pid"')|.stream_link)="'"$chnl_stream_links"'"
+            |(.channels[]|select(.pid=='"$new_pid"')|.user_agent)="'"$chnl_user_agent"'"
+            |(.channels[]|select(.pid=='"$new_pid"')|.headers)="'"$chnl_headers"'"
+            |(.channels[]|select(.pid=='"$new_pid"')|.cookies)="'"$chnl_cookies"'"
             |(.channels[]|select(.pid=='"$new_pid"')|.playlist_name)="'"$chnl_playlist_name"'"
             |(.channels[]|select(.pid=='"$new_pid"')|.seg_name)="'"$chnl_seg_name"'"
             |(.channels[]|select(.pid=='"$new_pid"')|.key_name)="'"$chnl_key_name"'"
@@ -4019,8 +4266,14 @@ AddChannel()
     if [ "${stream_link:0:4}" == "http" ] 
     then
         SetProxy
+        SetUserAgent
+        SetHeaders
+        SetCookies
     else
         proxy=""
+        user_agent=""
+        headers=""
+        cookies=""
     fi
 
     if [ -n "$proxy" ] 
@@ -4197,6 +4450,34 @@ EditLive()
     SetLive
     JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.live)="'"$live_yn"'"'
     Println "$info 无限时长直播修改成功 !\n"
+}
+
+EditProxy()
+{
+    SetProxy
+    JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.proxy)="'"$proxy"'"'
+    Println "$info 代理修改成功 !\n"
+}
+
+EditUserAgent()
+{
+    SetUserAgent
+    JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.user_agent)="'"$user_agent"'"'
+    Println "$info user agent 修改成功 !\n"
+}
+
+EditHeaders()
+{
+    SetHeaders
+    JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.headers)="'"$headers"'"'
+    Println "$info headers 修改成功 !\n"
+}
+
+EditCookies()
+{
+    SetCookies
+    JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.cookies)="'"$cookies"'"'
+    Println "$info cookies 修改成功 !\n"
 }
 
 EditOutputDirName()
@@ -4420,8 +4701,14 @@ EditChannelAll()
     if [ "${stream_link:0:4}" == "http" ] 
     then
         SetProxy
+        SetUserAgent
+        SetHeaders
+        SetCookies
     else
         proxy=""
+        user_agent=""
+        headers=""
+        cookies=""
     fi
 
     SetOutputDirName
@@ -4516,6 +4803,9 @@ EditChannelAll()
     JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.stream_link)="'"$stream_links_input"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.live)="'"$live_yn"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.proxy)="'"$proxy"'"
+    |(.channels[]|select(.pid=='"$chnl_pid"')|.user_agent)="'"$user_agent"'"
+    |(.channels[]|select(.pid=='"$chnl_pid"')|.headers)="'"$headers"'"
+    |(.channels[]|select(.pid=='"$chnl_pid"')|.cookies)="'"$cookies"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.output_dir_name)="'"$output_dir_name"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.playlist_name)="'"$playlist_name"'"
     |(.channels[]|select(.pid=='"$chnl_pid"')|.seg_dir_name)="'"$seg_dir_name"'"
@@ -4563,31 +4853,35 @@ EditChannelMenu()
         Println "你要修改什么？
     ${green}1.$plain 修改 直播源
     ${green}2.$plain 修改 无限时长直播
-    ${green}3.$plain 修改 输出目录名称
-    ${green}4.$plain 修改 m3u8名称
-    ${green}5.$plain 修改 段所在子目录名称
-    ${green}6.$plain 修改 段名称
-    ${green}7.$plain 修改 段时长
-    ${green}8.$plain 修改 段数目
-    ${green}9.$plain 修改 视频编码
-    ${green}10.$plain 修改 音频编码
-    ${green}11.$plain 修改 crf质量值
-    ${green}12.$plain 修改 比特率
-    ${green}13.$plain 修改 是否固定码率
-    ${green}14.$plain 修改 是否加密
-    ${green}15.$plain 修改 key名称
-    ${green}16.$plain 修改 输入参数
-    ${green}17.$plain 修改 输出参数
-    ${green}18.$plain 修改 频道名称
-    ${green}19.$plain 修改 是否开启 sync
-    ${green}20.$plain 修改 sync file
-    ${green}21.$plain 修改 sync index
-    ${green}22.$plain 修改 sync pairs
-    ${green}23.$plain 修改 推流地址
-    ${green}24.$plain 修改 拉流地址
-    ${green}25.$plain 修改 全部配置
+    ${green}3.$plain 修改 代理
+    ${green}4.$plain 修改 user agent
+    ${green}5.$plain 修改 headers
+    ${green}6.$plain 修改 cookies
+    ${green}7.$plain 修改 输出目录名称
+    ${green}8.$plain 修改 m3u8名称
+    ${green}9.$plain 修改 段所在子目录名称
+   ${green}10.$plain 修改 段名称
+   ${green}11.$plain 修改 段时长
+   ${green}12.$plain 修改 段数目
+   ${green}13.$plain 修改 视频编码
+   ${green}14.$plain 修改 音频编码
+   ${green}15.$plain 修改 crf质量值
+   ${green}16.$plain 修改 比特率
+   ${green}17.$plain 修改 是否固定码率
+   ${green}18.$plain 修改 是否加密
+   ${green}19.$plain 修改 key名称
+   ${green}20.$plain 修改 输入参数
+   ${green}21.$plain 修改 输出参数
+   ${green}22.$plain 修改 频道名称
+   ${green}23.$plain 修改 是否开启 sync
+   ${green}24.$plain 修改 sync file
+   ${green}25.$plain 修改 sync index
+   ${green}26.$plain 修改 sync pairs
+   ${green}27.$plain 修改 推流地址
+   ${green}28.$plain 修改 拉流地址
+   ${green}29.$plain 修改 全部配置
     ————— 组合[常用] —————
-    ${green}26.$plain 修改 段名称、m3u8名称 (防盗链/DDoS)
+   ${green}30.$plain 修改 段名称、m3u8名称 (防盗链/DDoS)
     \n"
         read -p "(默认: 取消): " edit_channel_num
         [ -z "$edit_channel_num" ] && Println "已取消...\n" && exit 1
@@ -4599,75 +4893,87 @@ EditChannelMenu()
                 EditLive
             ;;
             3)
-                EditOutputDirName
+                EditProxy
             ;;
             4)
-                EditPlaylistName
+                EditUserAgent
             ;;
             5)
-                EditSegDirName
+                EditHeaders
             ;;
             6)
-                EditSegName
+                EditCookies
             ;;
             7)
-                EditSegLength
+                EditOutputDirName
             ;;
             8)
-                EditSegCount
+                EditPlaylistName
             ;;
             9)
-                EditVideoCodec
+                EditSegDirName
             ;;
             10)
-                EditAudioCodec
+                EditSegName
             ;;
             11)
-                EditQuality
+                EditSegLength
             ;;
             12)
-                EditBitrates
+                EditSegCount
             ;;
             13)
-                EditConst
+                EditVideoCodec
             ;;
             14)
-                EditEncrypt
+                EditAudioCodec
             ;;
             15)
-                EditKeyName
+                EditQuality
             ;;
             16)
-                EditInputFlags
+                EditBitrates
             ;;
             17)
-                EditOutputFlags
+                EditConst
             ;;
             18)
-                EditChannelName
+                EditEncrypt
             ;;
             19)
-                EditSync
+                EditKeyName
             ;;
             20)
-                EditSyncFile
+                EditInputFlags
             ;;
             21)
-                EditSyncIndex
+                EditOutputFlags
             ;;
             22)
-                EditSyncPairs
+                EditChannelName
             ;;
             23)
-                EditFlvPushLink
+                EditSync
             ;;
             24)
-                EditFlvPullLink
+                EditSyncFile
             ;;
             25)
-                EditChannelAll
+                EditSyncIndex
             ;;
             26)
+                EditSyncPairs
+            ;;
+            27)
+                EditFlvPushLink
+            ;;
+            28)
+                EditFlvPullLink
+            ;;
+            29)
+                EditChannelAll
+            ;;
+            30)
                 EditForSecurity
             ;;
             *)
@@ -4707,55 +5013,45 @@ EditChannelMenu()
 
 TestXtreamCodesLink()
 {
-    to_try=0
     if [ -z "${xtream_codes_domains:-}" ] 
     then
         GetXtreamCodesDomains
     fi
-    chnl_account=""
-    if [[ $chnl_stream_link == *http://*/*/*/* ]] 
+
+    if [ -z "${FFPROBE:-}" ] 
     then
-        chnl_domain=${chnl_stream_link#*http://}
-        chnl_domain=${chnl_domain%%/*}
+        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+        FFPROBE="$FFMPEG_ROOT/ffprobe"
+    fi
+
+    to_try=0
+
+    if [[ ${chnl_stream_link##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+    then
+        chnl_domain=${chnl_stream_link%%|*}
+        chnl_mac=${chnl_stream_link##*|}
+        chnl_cmd=${chnl_stream_link%|*}
+        chnl_cmd=${chnl_cmd##*|}
 
         for xc_domain in "${xtream_codes_domains[@]}"
         do
             if [ "$xc_domain" == "$chnl_domain" ] 
             then
-                if [[ $chnl_stream_link == *"/live/"* ]] 
-                then
-                    chnl_account=${chnl_stream_link#*/live/}
-                    chnl_account=${chnl_account%/*}
-                    chnl_account=${chnl_account//\//:}
-                else
-                    chnl_account=${chnl_stream_link#*http://}
-                    chnl_account=${chnl_account#*/}
-                    chnl_account=${chnl_account%/*}
-                    chnl_account=${chnl_account//\//:}
-                fi
+                Println "$info 频道[ $chnl_channel_name ]检测账号中..."
+                GetXtreamCodesChnls
+                for xc_chnl_mac in "${xc_chnls_mac[@]}"
+                do
+                    if [ "$xc_chnl_mac" == "$chnl_domain/$chnl_mac" ] 
+                    then
+                        to_try=1
+                        break
+                    fi
+                done
                 break
             fi
         done
-    fi
-    if [ -n "$chnl_account" ] 
-    then
-        if [ -z "${FFPROBE:-}" ] 
-        then
-            FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-            FFPROBE="$FFMPEG_ROOT/ffprobe"
-        fi
-        Println "$info 频道[ $chnl_channel_name ]检测账号中..."
-        GetXtreamCodesChnls
-        xc_chnl_found=0
-        for xc_chnl in "${xc_chnls[@]}"
-        do
-            if [ "$xc_chnl" == "$chnl_domain/$chnl_account" ] 
-            then
-                xc_chnl_found=1
-                break
-            fi
-        done
-        if [ "$xc_chnl_found" -eq 1 ] 
+
+        if [ "$to_try" -eq 1 ] 
         then
             to_try=1
             try_success=0
@@ -4765,6 +5061,145 @@ TestXtreamCodesLink()
                 Println "$error 没有可用账号"
             fi
         else
+            token=""
+            access_token=""
+            profile=""
+            chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
+            server="http://$chnl_domain"
+            mac=$(Urlencode "$chnl_mac")
+            timezone=$(Urlencode "Europe/Amsterdam")
+            chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
+            token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
+            profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
+            genres_url="$server/portal.php?type=itv&action=get_genres&JsHttpRequest=1-xml"
+
+            token=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                --header="Cookie: $chnl_cookies" "$token_url" -qO- \
+                | $JQ_FILE -r '.js.token' || true)
+            if [ -z "$token" ] 
+            then
+                Println "$error 无法连接 $chnl_domain, 请重试!\n" && exit 1
+            fi
+            access_token=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                --header="Authorization: Bearer $token" \
+                --header="Cookie: $chnl_cookies" "$token_url" -qO- \
+                | $JQ_FILE -r '.js.token' || true)
+            if [ -z "$access_token" ] 
+            then
+                Println "$error 无法连接 $chnl_domain, 请重试!\n" && exit 1
+            fi
+            chnl_headers="Authorization: Bearer $access_token"
+            profile=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                --header="$chnl_headers" \
+                --header="Cookie: $chnl_cookies" "$profile_url" -qO- || true)
+            if [ -z "$profile" ] 
+            then
+                Println "$error 无法连接 $chnl_domain, 请重试!\n" && exit 1
+            fi
+
+            if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
+            then
+                to_try=1
+                try_success=0
+                MonitorTryAccounts
+                if [ "$try_success" -eq 0 ] 
+                then
+                    Println "$error 没有可用账号"
+                fi
+            else
+                create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
+                chnl_stream_link=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                    --header="$chnl_headers" \
+                    --header="Cookie: $chnl_cookies" "$create_link_url" -qO- \
+                    | $JQ_FILE -r '.js.cmd')
+                chnl_stream_link=${chnl_stream_link#* }
+                IFS="/" read -ra s <<< "$chnl_stream_link"
+                if [ "${s[3]}" == "live" ] 
+                then
+                    chnl_stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[5]}/${s[-1]}"
+                else
+                    chnl_stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[-1]}"
+                fi
+                if [[ $chnl_stream_links == *" "* ]] 
+                then
+                    chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac ${chnl_stream_links#* }"
+                else
+                    chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac"
+                fi
+
+                audio=0
+                video=0
+                while IFS= read -r line 
+                do
+                    if [[ $line == *"codec_type=audio"* ]] 
+                    then
+                        audio=1
+                    elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
+                    then
+                        audio=0
+                    elif [[ $line == *"codec_type=video"* ]] 
+                    then
+                        video=1
+                    fi
+                done < <($FFPROBE $chnl_proxy_command -user_agent "$chnl_user_agent" -headers $"$chnl_headers" -cookies "$chnl_cookies" -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet || true)
+
+                if [ "$audio" -eq 0 ] || [ "$video" -eq 0 ]
+                then
+                    to_try=1
+                    try_success=0
+                    MonitorTryAccounts
+                    if [ "$try_success" -eq 0 ] 
+                    then
+                        Println "$error 没有可用账号"
+                    fi
+                fi
+            fi
+        fi
+    elif [[ $chnl_stream_link =~ http://([^/]+)/([^/]+)/([^/]+)/ ]] 
+    then
+        chnl_domain=${BASH_REMATCH[1]}
+
+        for xc_domain in "${xtream_codes_domains[@]}"
+        do
+            if [ "$xc_domain" == "$chnl_domain" ] 
+            then
+                Println "$info 频道[ $chnl_channel_name ]检测账号中..."
+                to_try=1
+                break
+            fi
+        done
+
+        xc_chnl_found=0
+        if [ "$to_try" -eq 1 ] 
+        then
+            if [ "${BASH_REMATCH[2]}" == "live" ] && [[ $chnl_stream_link =~ http://([^/]+)/live/([^/]+)/([^/]+)/ ]] 
+            then
+                chnl_account="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}"
+            else
+                chnl_account="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}"
+            fi
+            GetXtreamCodesChnls
+            for xc_chnl in "${xc_chnls[@]}"
+            do
+                if [ "$xc_chnl" == "$chnl_domain/$chnl_account" ] 
+                then
+                    xc_chnl_found=1
+                    break
+                fi
+            done
+        fi
+
+        if [ "$xc_chnl_found" -eq 1 ] 
+        then
+            to_try=1
+            try_success=0
+            MonitorTryAccounts
+            if [ "$try_success" -eq 0 ] 
+            then
+                Println "$error 没有可用账号"
+            fi
+        elif [ "$to_try" -eq 1 ] 
+        then
             audio=0
             video=0
             while IFS= read -r line 
@@ -4779,17 +5214,18 @@ TestXtreamCodesLink()
                 then
                     video=1
                 fi
-            done < <($FFPROBE $chnl_proxy_command -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet || true)
+            done < <($FFPROBE $chnl_proxy_command -user_agent "$chnl_user_agent" -headers $"$chnl_headers" -cookies "$chnl_cookies" -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet || true)
 
-            if [ "$audio" -eq 0 ] || [ "$video" -eq 0 ]
+            if [ "$audio" -eq 0 ] || [ "$video" -eq 0 ] 
             then
-                to_try=1
                 try_success=0
                 MonitorTryAccounts
                 if [ "$try_success" -eq 0 ] 
                 then
                     Println "$error 没有可用账号"
                 fi
+            else
+                to_try=0
             fi
         fi
     fi
@@ -4832,19 +5268,18 @@ ToggleChannel()
 
 StartChannel()
 {
-    if [[ $chnl_stream_link == *"https://www.youtube.com"* ]] || [[ $chnl_stream_link == *"https://youtube.com"* ]] 
+    if [ "${chnl_stream_link:0:23}" == "https://www.youtube.com" ] || [ "${chnl_stream_link:0:19}" == "https://youtube.com" ] 
     then
         if [[ ! -x $(command -v youtube-dl) ]] 
         then
             InstallYoutubeDl
         fi
 
+        Println "$info 解析 youtube 链接..."
         code=${chnl_stream_link#*|}
         chnl_stream_link=${chnl_stream_link%|*}
         chnl_stream_link=$(youtube-dl -f "$code" -g "$chnl_stream_link")
-    fi
-
-    if [ "${chnl_stream_link:13:12}" == "fengshows.cn" ] 
+    elif [ "${chnl_stream_link:13:12}" == "fengshows.cn" ] 
     then
         ts=$(date +%s%3N)
         tx_time=$(printf '%X' $((ts/1000+1800)))
@@ -4869,9 +5304,7 @@ StartChannel()
                 break
             fi
         done < <(wget --no-check-certificate "$chnl_stream_link" -qO- || true)
-    fi
-
-    if [ "${chnl_stream_link:0:4}" == "rtmp" ] || [ "${chnl_stream_link:0:1}" == "/" ]
+    elif [ "${chnl_stream_link:0:4}" == "rtmp" ] || [ "${chnl_stream_link:0:1}" == "/" ]
     then
         chnl_input_flags=${chnl_input_flags//-timeout 2000000000/}
         chnl_input_flags=${chnl_input_flags//-reconnect 1/}
@@ -4880,35 +5313,15 @@ StartChannel()
         chnl_input_flags=${chnl_input_flags//-reconnect_delay_max 2000/}
         lead=${chnl_input_flags%%[^[:blank:]]*}
         chnl_input_flags=${chnl_input_flags#${lead}}
-    elif [[ ${chnl_stream_link:-} == *".m3u8"* ]] 
+    fi
+
+    if [[ ${chnl_stream_link:-} == *".m3u8"* ]] 
     then
         chnl_input_flags=${chnl_input_flags//-reconnect_at_eof 1/}
     fi
 
     chnl_quality_command=""
     chnl_bitrates_command=""
-
-    if [ -n "$chnl_live" ]
-    then
-        chnl_seg_count_command="-c $chnl_seg_count"
-    else
-        chnl_seg_count_command=""
-    fi
-
-    if [ "${chnl_stream_link:0:4}" == "http" ] && [ -n "$chnl_proxy" ]
-    then
-        chnl_proxy_command="-http_proxy $chnl_proxy"
-    else
-        chnl_proxy=""
-        chnl_proxy_command=""
-    fi
-
-    if [ -n "$chnl_encrypt" ] 
-    then
-        chnl_key_name_command="-K $chnl_key_name"
-    else
-        chnl_key_name_command=""
-    fi
 
     if [ -z "${kind:-}" ] && [ "$chnl_video_codec" == "copy" ] && [ "$chnl_audio_codec" == "copy" ]
     then
@@ -5550,7 +5963,7 @@ InstallPdf2html()
     make install >/dev/null 2>&1
 
     kill $progress_pid
-    Println -n "...100%\n"
+    echo -n "...100%\n"
 
     if grep -q "profile.d" < "/etc/profile"
     then
@@ -8405,6 +8818,7 @@ MonitorError()
 MonitorTryAccounts()
 {
     accounts=()
+    macs=()
 
     while IFS= read -r line 
     do
@@ -8412,20 +8826,288 @@ MonitorTryAccounts()
         then
             line=${line#* }
             account_line=${line#* }
-            new_account_line=""
-            while [[ $account_line == *" "* ]] 
-            do
-                [ -n "$new_account_line" ] && new_account_line=" $new_account_line"
-                new_account_line="${account_line%% *}$new_account_line"
-                account_line=${account_line#* }
-            done
-            new_account_line=${new_account_line:-$account_line}
+            if [[ $account_line == *" "* ]] 
+            then
+                new_account_line=""
+                while [[ $account_line == *" "* ]] 
+                do
+                    if [[ ${account_line%% *} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+                    then
+                        macs+=("${account_line%% *}")
+                        account_line=${account_line#* }
+                        continue
+                    fi
+                    [ -n "$new_account_line" ] && new_account_line=" $new_account_line"
+                    new_account_line="${account_line%% *}$new_account_line"
+                    account_line=${account_line#* }
+                done
+            elif [[ $account_line =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+            then
+                macs+=("$account_line")
+            else
+                new_account_line=$account_line
+            fi
+
             IFS=" " read -ra accounts <<< "$new_account_line"
             break
         fi
     done < "$XTREAM_CODES"
 
-    if [ "${#accounts[@]}" -gt 0 ] 
+    if [ -n "${chnl_mac:-}" ] 
+    then
+        if [ "${#macs[@]}" -gt 0 ] 
+        then
+            macs+=("$chnl_mac")
+            for mac_address in "${macs[@]}"
+            do
+                xc_chnl_found=0
+                for xc_chnl_mac in "${xc_chnls_mac[@]}"
+                do
+                    if [ "$xc_chnl_mac" == "$chnl_domain/$mac_address" ] 
+                    then
+                        xc_chnl_found=1
+                        break
+                    fi
+                done
+
+                valid=0
+                if [ "$xc_chnl_found" -eq 0 ] 
+                then
+                    token=""
+                    access_token=""
+                    profile=""
+                    chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
+                    server="http://$chnl_domain"
+                    mac=$(Urlencode "$mac_address")
+                    timezone=$(Urlencode "Europe/Amsterdam")
+                    chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
+                    token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
+                    profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
+                    genres_url="$server/portal.php?type=itv&action=get_genres&JsHttpRequest=1-xml"
+
+                    token=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                        --header="Cookie: $chnl_cookies" "$token_url" -qO- \
+                        | $JQ_FILE -r '.js.token' || true)
+                    if [ -z "$token" ] 
+                    then
+                        break
+                    fi
+                    access_token=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                        --header="Authorization: Bearer $token" \
+                        --header="Cookie: $chnl_cookies" "$token_url" -qO- \
+                        | $JQ_FILE -r '.js.token' || true)
+                    if [ -z "$access_token" ] 
+                    then
+                        break
+                    fi
+                    chnl_headers="Authorization: Bearer $access_token"
+                    profile=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                        --header="$chnl_headers" \
+                        --header="Cookie: $chnl_cookies" "$profile_url" -qO- || true)
+                    if [ -z "$profile" ] 
+                    then
+                        break
+                    fi
+
+                    if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
+                    then
+                        continue
+                    fi
+
+                    create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
+                    chnl_stream_link=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                        --header="$chnl_headers" \
+                        --header="Cookie: $chnl_cookies" "$create_link_url" -qO- \
+                        | $JQ_FILE -r '.js.cmd')
+                    chnl_stream_link=${chnl_stream_link#* }
+                    IFS="/" read -ra s <<< "$chnl_stream_link"
+                    if [ "${s[3]}" == "live" ] 
+                    then
+                        chnl_stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[5]}/${s[-1]}"
+                    else
+                        chnl_stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[-1]}"
+                    fi
+
+                    audio=0
+                    video=0
+                    while IFS= read -r line 
+                    do
+                        if [[ $line == *"codec_type=audio"* ]] 
+                        then
+                            audio=1
+                        elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
+                        then
+                            audio=0
+                        elif [[ $line == *"codec_type=video"* ]] 
+                        then
+                            video=1
+                        fi
+                    done < <($FFPROBE $chnl_proxy_command -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet || true)
+
+                    if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ]
+                    then
+                        valid=1
+                    fi
+
+                    if [ "$valid" -eq 1 ] 
+                    then
+                        action="skip"
+                        StopChannel
+
+                        if [[ $chnl_stream_links == *" "* ]] 
+                        then
+                            chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$mac_address ${chnl_stream_links#* }"
+                        else
+                            chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$mac_address"
+                        fi
+
+                        if [ -n "${monitor:-}" ] && [ "$anti_leech_yn" == "yes" ]
+                        then
+                            if [ -z "${kind:-}" ] && [ "$anti_leech_restart_hls_changes_yn" == "yes" ]
+                            then
+                                chnl_playlist_name=$(RandStr)
+                                chnl_seg_name=$chnl_playlist_name
+                                if [ "$chnl_encrypt_yn" == "yes" ] 
+                                then
+                                    mkdir -p "$chnl_output_dir_root"
+                                    chnl_key_name=$(RandStr)
+                                    openssl rand 16 > "$chnl_output_dir_root/$chnl_key_name.key"
+                                    if [ "$chnl_encrypt_session_yn" == "yes" ] 
+                                    then
+                                        echo -e "/keys?key=$chnl_key_name&channel=$chnl_output_dir_name\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
+                                    else
+                                        echo -e "$chnl_key_name.key\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
+                                    fi
+                                fi
+                            elif [ "${kind:-}" == "flv" ] && [ "$anti_leech_restart_flv_changes_yn" == "yes" ]
+                            then
+                                stream_name=${chnl_flv_push_link##*/}
+                                new_stream_name=$(RandStr)
+                                while [[ -n $($JQ_FILE '.channels[]|select(.flv_push_link=="'"${chnl_flv_push_link%/*}/$new_stream_name"'")' "$CHANNELS_FILE") ]] 
+                                do
+                                    new_stream_name=$(RandStr)
+                                done
+                                chnl_flv_push_link="${chnl_flv_push_link%/*}/$new_stream_name"
+                                monitor_flv_push_links[i]=$chnl_flv_push_link
+                                if [ -n "$chnl_flv_pull_link" ] 
+                                then
+                                    chnl_flv_pull_link=${chnl_flv_pull_link//stream=$stream_name/stream=$new_stream_name}
+                                    monitor_flv_pull_links[i]=$chnl_flv_pull_link
+                                fi
+                            fi
+                        fi
+
+                        StartChannel
+                        if [ -z "${monitor:-}" ] 
+                        then
+                            try_success=1
+                            sleep 3
+                            break
+                        fi
+                        sleep 15
+                        GetChannelInfo
+
+                        if [ "${kind:-}" == "flv" ] 
+                        then
+                            audio=0
+                            video=0
+                            while IFS= read -r line 
+                            do
+                                if [[ $line == *"codec_type=audio"* ]] 
+                                then
+                                    audio=1
+                                elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]]
+                                then
+                                    audio=0
+                                elif [[ $line == *"codec_type=video"* ]] 
+                                then
+                                    video=1
+                                fi
+                            done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -rw_timeout 10000000 -show_streams -loglevel quiet || true)
+
+                            if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ]
+                            then
+                                try_success=1
+                                printf -v date_now '%(%m-%d %H:%M:%S)T'
+                                printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
+                                break
+                            fi
+                        elif ls -A "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts > /dev/null 2>&1 
+                        then
+                            if [ "$chnl_encrypt_yn" == "yes" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key" ]
+                            then
+                                line_no=0
+                                while IFS= read -r line 
+                                do
+                                    line_no=$((line_no+1))
+                                    if [ "$line_no" -eq 3 ] 
+                                    then
+                                        iv_hex=$line
+                                    fi
+                                done < "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo"
+
+                                encrypt_key=$(hexdump -e '16/1 "%02x"' < "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key")
+                                encrypt_command="-key $encrypt_key -iv $iv_hex"
+                            else
+                                encrypt_command=""
+                            fi
+
+                            audio=0
+                            video=0
+                            video_bitrate=0
+                            bitrate_check=0
+
+                            f_count=1
+                            for f in "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts
+                            do
+                                ((f_count++))
+                            done
+
+                            f_num=$((f_count/2))
+                            f_count=1
+
+                            for f in "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts
+                            do
+                                if [ "$f_count" -lt "$f_num" ] 
+                                then
+                                    ((f_count++))
+                                    continue
+                                fi
+                                [ -n "$encrypt_command" ] && f="crypto:$f"
+                                while IFS= read -r line 
+                                do
+                                    if [[ $line == *"codec_type=video"* ]] 
+                                    then
+                                        video=1
+                                    elif [ "$bitrate_check" -eq 0 ] && [ "$video" -eq 1 ] && [[ $line == *"bit_rate="* ]] 
+                                    then
+                                        line=${line#*bit_rate=}
+                                        video_bitrate=${line//N\/A/$hls_min_bitrates}
+                                        bitrate_check=1
+                                    elif [[ $line == *"codec_type=audio"* ]] 
+                                    then
+                                        audio=1
+                                    elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
+                                    then
+                                        audio=0
+                                    fi
+                                done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet || true)
+                                break
+                            done
+
+                            if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ] && [[ $video_bitrate -ge $hls_min_bitrates ]]
+                            then
+                                try_success=1
+                                printf -v date_now '%(%m-%d %H:%M:%S)T'
+                                printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
+                                break
+                            fi
+                        fi
+                    fi
+                fi
+            done
+        fi
+    elif [ "${#accounts[@]}" -gt 0 ] 
     then
         accounts+=("$chnl_account")
 
@@ -8656,6 +9338,7 @@ GetXtreamCodesDomains()
 GetXtreamCodesChnls()
 {
     xc_chnls=()
+    xc_chnls_mac=()
     if [ "${#xtream_codes_domains[@]}" -gt 0 ] 
     then
         while IFS= read -r line 
@@ -8663,46 +9346,62 @@ GetXtreamCodesChnls()
             if [[ $line == *\"status\":* ]] 
             then
                 line=${line#*: \"}
-                status=${line%\",*}
-            elif [[ $line == *\"stream_link\":* ]] && [[ $line == *http://*/*/*/* ]]
+                f_status=${line%\",*}
+            elif [[ $line == *\"stream_link\":* ]]
             then
-                line=${line#*: \"http://}
-                domain=${line%%/*}
-                line=${line#*/}
-                username=${line%%/*}
-                if [ "$username" == "live" ] 
+                line=${line#*: \"}
+                line=${line%\",*}
+                line=${line%% *}
+                if [[ ${line##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
                 then
+                    f_mac=${line##*|}
+                    f_domain=${line%%|*}
+                elif [[ $line == http://*/*/*/* ]] 
+                then
+                    line=${line#*http://}
+                    f_domain=${line%%/*}
                     line=${line#*/}
-                    username=${line%%/*}
+                    f_username=${line%%/*}
+                    if [ "$f_username" == "live" ] 
+                    then
+                        line=${line#*/}
+                        f_username=${line%%/*}
+                    fi
+                    line=${line#*/}
+                    f_password=${line%%/*}
                 fi
-                line=${line#*/}
-                password=${line%%/*}
             elif [[ $line == *\"output_dir_name\":* ]] 
             then
                 line=${line#*: \"}
-                dir_name=${line%\",*}
+                f_dir_name=${line%\",*}
             elif [[ $line == *\"flv_status\":* ]] 
             then
                 line=${line#*: \"}
-                flv_status=${line%\",*}
+                f_flv_status=${line%\",*}
             elif [[ $line == *\"flv_push_link\":* ]] 
             then
                 line=${line#*: \"}
-                flv_push_link=${line%\",*}
-                if [ -n "${domain:-}" ] 
+                f_flv_push_link=${line%\",*}
+                if [ -n "${f_domain:-}" ] 
                 then
                     for xc_domain in "${xtream_codes_domains[@]}"
                     do
-                        if [ "$xc_domain" == "$domain" ] 
+                        if [ "$xc_domain" == "$f_domain" ] 
                         then
-                            if { [ "$status" == "on" ] && [ "$dir_name" != "$chnl_output_dir_name" ]; } || { [ "$flv_status" == "on" ] && [ "$flv_push_link" != "$chnl_flv_push_link" ]; }
+                            if { [ "$f_status" == "on" ] && [ "$f_dir_name" != "${chnl_output_dir_name:-}" ]; } || { [ "$f_flv_status" == "on" ] && [ "$f_flv_push_link" != "${chnl_flv_push_link:-}" ]; }
                             then
-                                xc_chnls+=("$domain/$username:$password")
+                                if [ -n "${f_mac:-}" ] 
+                                then
+                                    xc_chnls_mac+=("$f_domain/$f_mac")
+                                else
+                                    xc_chnls+=("$f_domain/$f_username:$f_password")
+                                fi
                             fi
                         fi
                     done
                 fi
-                domain=""
+                f_domain=""
+                f_mac=""
             fi
         done < "$CHANNELS_FILE"
     fi
@@ -8791,60 +9490,202 @@ MonitorHlsRestartChannel()
             chnl_stream_link=${chnl_stream_links%% *}
         fi
 
-        chnl_account=""
-        if [[ $chnl_stream_link == *http://*/*/*/* ]] 
+        chnl_mac=""
+        if [[ ${chnl_stream_link##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
         then
-            chnl_domain=${chnl_stream_link#*http://}
-            chnl_domain=${chnl_domain%%/*}
+            chnl_domain=${chnl_stream_link%%|*}
+            chnl_mac=${chnl_stream_link##*|}
+            chnl_cmd=${chnl_stream_link%|*}
+            chnl_cmd=${chnl_cmd##*|}
 
+            to_try=0
             for xc_domain in "${xtream_codes_domains[@]}"
             do
                 if [ "$xc_domain" == "$chnl_domain" ] 
                 then
-                    if [[ $chnl_stream_link == *"/live/"* ]] 
-                    then
-                        chnl_account=${chnl_stream_link#*/live/}
-                        chnl_account=${chnl_account%/*}
-                        chnl_account=${chnl_account//\//:}
-                    else
-                        chnl_account=${chnl_stream_link#*http://}
-                        chnl_account=${chnl_account#*/}
-                        chnl_account=${chnl_account%/*}
-                        chnl_account=${chnl_account//\//:}
-                    fi
+                    to_try=1
+                    for domain in "${domains_tried[@]}"
+                    do
+                        if [ "$domain" == "$chnl_domain" ] 
+                        then
+                            to_try=0
+                            break
+                        fi
+                    done
                     break
                 fi
             done
-        fi
 
-        if [ -n "$chnl_account" ] 
-        then
-            to_try=1
-            for domain in "${domains_tried[@]}"
-            do
-                if [ "$domain" == "$chnl_domain" ] 
+            xc_chnl_found=0
+            if [ "$to_try" -eq 1 ] 
+            then
+                to_try=0
+                for xc_chnl_mac in "${xc_chnls_mac[@]}"
+                do
+                    if [ "$xc_chnl_mac" == "$chnl_domain/$chnl_mac" ] 
+                    then
+                        xc_chnl_found=1
+                        break
+                    fi
+                done
+            fi
+
+            if [ "$xc_chnl_found" -eq 1 ]
+            then
+                domains_tried+=("$chnl_domain")
+                try_success=0
+                MonitorTryAccounts
+                if [ "$try_success" -eq 1 ] 
                 then
-                    to_try=0
-                    break
+                    MonitorHlsRestartSuccess
+                else
+                    if [[ $restart_i -eq $((restart_nums-1)) ]] 
+                    then
+                        MonitorHlsRestartFail
+                    else
+                        continue
+                    fi
                 fi
-            done
+                break
+            fi
+
+            token=""
+            access_token=""
+            profile=""
+            chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
+            server="http://$chnl_domain"
+            mac=$(Urlencode "$chnl_mac")
+            timezone=$(Urlencode "Europe/Amsterdam")
+            chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
+            token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
+            profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
+            genres_url="$server/portal.php?type=itv&action=get_genres&JsHttpRequest=1-xml"
+
+            token=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                --header="Cookie: $chnl_cookies" "$token_url" -qO- \
+                | $JQ_FILE -r '.js.token' || true)
+            if [ -z "$token" ] 
+            then
+                if [[ $restart_i -eq $((restart_nums-1)) ]] 
+                then
+                    MonitorHlsRestartFail
+                    break
+                else
+                    continue
+                fi
+            fi
+            access_token=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                --header="Authorization: Bearer $token" \
+                --header="Cookie: $chnl_cookies" "$token_url" -qO- \
+                | $JQ_FILE -r '.js.token' || true)
+            if [ -z "$access_token" ] 
+            then
+                if [[ $restart_i -eq $((restart_nums-1)) ]] 
+                then
+                    MonitorHlsRestartFail
+                    break
+                else
+                    continue
+                fi
+            fi
+            chnl_headers="Authorization: Bearer $access_token"
+            profile=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                --header="$chnl_headers" \
+                --header="Cookie: $chnl_cookies" "$profile_url" -qO- || true)
+            if [ -z "$profile" ] 
+            then
+                if [[ $restart_i -eq $((restart_nums-1)) ]] 
+                then
+                    MonitorHlsRestartFail
+                    break
+                else
+                    continue
+                fi
+            fi
+
+            if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
+            then
+                if [ "$to_try" -eq 1 ] 
+                then
+                    domains_tried+=("$chnl_domain")
+                    try_success=0
+                    MonitorTryAccounts
+                    if [ "$try_success" -eq 1 ] 
+                    then
+                        MonitorHlsRestartSuccess
+                    else
+                        MonitorHlsRestartFail
+                    fi
+                else
+                    MonitorHlsRestartFail
+                fi
+                break
+            else
+                create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
+                chnl_stream_link=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                    --header="$chnl_headers" \
+                    --header="Cookie: $chnl_cookies" "$create_link_url" -qO- \
+                    | $JQ_FILE -r '.js.cmd')
+                chnl_stream_link=${chnl_stream_link#* }
+                IFS="/" read -ra s <<< "$chnl_stream_link"
+                if [ "${s[3]}" == "live" ] 
+                then
+                    chnl_stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[5]}/${s[-1]}"
+                else
+                    chnl_stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[-1]}"
+                fi
+                if [[ $chnl_stream_links == *" "* ]] 
+                then
+                    chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac ${chnl_stream_links#* }"
+                else
+                    chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac"
+                fi
+            fi
         else
             to_try=0
-        fi
+            if [[ $chnl_stream_link =~ http://([^/]+)/([^/]+)/([^/]+)/ ]] 
+            then
+                chnl_domain=${BASH_REMATCH[1]}
 
-        if [ "$to_try" -eq 1 ]
-        then
+                for xc_domain in "${xtream_codes_domains[@]}"
+                do
+                    if [ "$xc_domain" == "$chnl_domain" ] 
+                    then
+                        to_try=1
+                        for domain in "${domains_tried[@]}"
+                        do
+                            if [ "$domain" == "$chnl_domain" ] 
+                            then
+                                to_try=0
+                                break
+                            fi
+                        done
+                        break
+                    fi
+                done
+            fi
+
             xc_chnl_found=0
-            for xc_chnl in "${xc_chnls[@]}"
-            do
-                if [ "$xc_chnl" == "$chnl_domain/$chnl_account" ] 
+            if [ "$to_try" -eq 1 ] 
+            then
+                to_try=0
+                if [ "${BASH_REMATCH[2]}" == "live" ] && [[ $chnl_stream_link =~ http://([^/]+)/live/([^/]+)/([^/]+)/ ]]
                 then
-                    xc_chnl_found=1
-                    break
+                    chnl_account="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}"
+                else
+                    chnl_account="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}"
                 fi
-            done
+                for xc_chnl in "${xc_chnls[@]}"
+                do
+                    if [ "$xc_chnl" == "$chnl_domain/$chnl_account" ] 
+                    then
+                        xc_chnl_found=1
+                        break
+                    fi
+                done
+            fi
 
-            if [ "$xc_chnl_found" -eq 1 ] 
+            if [ "$xc_chnl_found" -eq 1 ]
             then
                 domains_tried+=("$chnl_domain")
                 try_success=0
@@ -9023,7 +9864,7 @@ MonitorFlvRestartFail()
     unset new_array
 
     printf -v date_now '%(%m-%d %H:%M:%S)T'
-    printf '%s\n' "$date_now $chnl_channel_name flv 重启超过${flv_restart_nums:-20}次关闭" >> "$MONITOR_LOG"
+    printf '%s\n' "$date_now $chnl_channel_name FLV 重启超过${flv_restart_nums:-20}次关闭" >> "$MONITOR_LOG"
 }
 
 MonitorFlvRestartChannel()
@@ -9059,60 +9900,201 @@ MonitorFlvRestartChannel()
             chnl_stream_link=${chnl_stream_links%% *}
         fi
 
-        chnl_account=""
-        if [[ $chnl_stream_link == *http://*/*/*/* ]] 
+        chnl_mac=""
+        if [[ ${chnl_stream_link##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
         then
-            chnl_domain=${chnl_stream_link#*http://}
-            chnl_domain=${chnl_domain%%/*}
+            chnl_domain=${chnl_stream_link%%|*}
+            chnl_mac=${chnl_stream_link##*|}
+            chnl_cmd=${chnl_stream_link%|*}
+            chnl_cmd=${chnl_cmd##*|}
 
+            to_try=0
             for xc_domain in "${xtream_codes_domains[@]}"
             do
                 if [ "$xc_domain" == "$chnl_domain" ] 
                 then
-                    if [[ $chnl_stream_link == *"/live/"* ]] 
-                    then
-                        chnl_account=${chnl_stream_link#*/live/}
-                        chnl_account=${chnl_account%/*}
-                        chnl_account=${chnl_account//\//:}
-                    else
-                        chnl_account=${chnl_stream_link#*http://}
-                        chnl_account=${chnl_account#*/}
-                        chnl_account=${chnl_account%/*}
-                        chnl_account=${chnl_account//\//:}
-                    fi
+                    to_try=1
+                    for domain in "${domains_tried[@]}"
+                    do
+                        if [ "$domain" == "$chnl_domain" ] 
+                        then
+                            to_try=0
+                            break
+                        fi
+                    done
                     break
                 fi
             done
-        fi
 
-        if [ -n "$chnl_account" ] 
-        then
-            to_try=1
-            for domain in "${domains_tried[@]}"
-            do
-                if [ "$domain" == "$chnl_domain" ] 
-                then
-                    to_try=0
-                    break
-                fi
-            done
-        else
-            to_try=0
-        fi
-
-        if [ "$to_try" -eq 1 ]  
-        then
             xc_chnl_found=0
-            for xc_chnl in "${xc_chnls[@]}"
-            do
-                if [ "$xc_chnl" == "$chnl_domain/$chnl_account" ] 
-                then
-                    xc_chnl_found=1
-                    break
-                fi
-            done
+            if [ "$to_try" -eq 1 ] 
+            then
+                for xc_chnl_mac in "${xc_chnls_mac[@]}"
+                do
+                    if [ "$xc_chnl_mac" == "$chnl_domain/$chnl_mac" ] 
+                    then
+                        xc_chnl_found=1
+                        break
+                    fi
+                done
+            fi
 
             if [ "$xc_chnl_found" -eq 1 ] 
+            then
+                domains_tried+=("$chnl_domain")
+                try_success=0
+                MonitorTryAccounts
+                if [ "$try_success" -eq 1 ] 
+                then
+                    MonitorFlvRestartSuccess
+                else
+                    if [[ $restart_i -eq $((restart_nums-1)) ]] 
+                    then
+                        MonitorFlvRestartFail
+                    else
+                        continue
+                    fi
+                fi
+                break
+            fi
+
+            token=""
+            access_token=""
+            profile=""
+            chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
+            server="http://$chnl_domain"
+            mac=$(Urlencode "$chnl_mac")
+            timezone=$(Urlencode "Europe/Amsterdam")
+            chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
+            token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
+            profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
+            genres_url="$server/portal.php?type=itv&action=get_genres&JsHttpRequest=1-xml"
+
+            token=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                --header="Cookie: $chnl_cookies" "$token_url" -qO- \
+                | $JQ_FILE -r '.js.token' || true)
+            if [ -z "$token" ] 
+            then
+                if [[ $restart_i -eq $((restart_nums-1)) ]] 
+                then
+                    MonitorFlvRestartFail
+                    break
+                else
+                    continue
+                fi
+            fi
+            access_token=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                --header="Authorization: Bearer $token" \
+                --header="Cookie: $chnl_cookies" "$token_url" -qO- \
+                | $JQ_FILE -r '.js.token' || true)
+            if [ -z "$access_token" ] 
+            then
+                if [[ $restart_i -eq $((restart_nums-1)) ]] 
+                then
+                    MonitorFlvRestartFail
+                    break
+                else
+                    continue
+                fi
+            fi
+            chnl_headers="Authorization: Bearer $access_token"
+            profile=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                --header="$chnl_headers" \
+                --header="Cookie: $chnl_cookies" "$profile_url" -qO- || true)
+            if [ -z "$profile" ] 
+            then
+                if [[ $restart_i -eq $((restart_nums-1)) ]] 
+                then
+                    MonitorFlvRestartFail
+                    break
+                else
+                    continue
+                fi
+            fi
+
+            if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
+            then
+                if [ "$to_try" -eq 1 ] 
+                then
+                    domains_tried+=("$chnl_domain")
+                    try_success=0
+                    MonitorTryAccounts
+                    if [ "$try_success" -eq 1 ] 
+                    then
+                        MonitorFlvRestartSuccess
+                    else
+                        MonitorFlvRestartFail
+                    fi
+                else
+                    MonitorFlvRestartFail
+                fi
+                break
+            else
+                create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
+                chnl_stream_link=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                    --header="$chnl_headers" \
+                    --header="Cookie: $chnl_cookies" "$create_link_url" -qO- \
+                    | $JQ_FILE -r '.js.cmd')
+                chnl_stream_link=${chnl_stream_link#* }
+                IFS="/" read -ra s <<< "$chnl_stream_link"
+                if [ "${s[3]}" == "live" ] 
+                then
+                    chnl_stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[5]}/${s[-1]}"
+                else
+                    chnl_stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[-1]}"
+                fi
+                if [[ $chnl_stream_links == *" "* ]] 
+                then
+                    chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac ${chnl_stream_links#* }"
+                else
+                    chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac"
+                fi
+            fi
+        else
+            to_try=0
+            if [[ $chnl_stream_link =~ http://([^/]+)/([^/]+)/([^/]+)/ ]] 
+            then
+                chnl_domain=${BASH_REMATCH[1]}
+
+                for xc_domain in "${xtream_codes_domains[@]}"
+                do
+                    if [ "$xc_domain" == "$chnl_domain" ] 
+                    then
+                        to_try=1
+                        for domain in "${domains_tried[@]}"
+                        do
+                            if [ "$domain" == "$chnl_domain" ] 
+                            then
+                                to_try=0
+                                break
+                            fi
+                        done
+                        break
+                    fi
+                done
+            fi
+
+            xc_chnl_found=0
+            if [ "$to_try" -eq 1 ] 
+            then
+                to_try=0
+                if [ "${BASH_REMATCH[2]}" == "live" ] && [[ $chnl_stream_link =~ http://([^/]+)/live/([^/]+)/([^/]+)/ ]] 
+                then
+                    chnl_account="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}"
+                else
+                    chnl_account="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}"
+                fi
+                for xc_chnl in "${xc_chnls[@]}"
+                do
+                    if [ "$xc_chnl" == "$chnl_domain/$chnl_account" ] 
+                    then
+                        xc_chnl_found=1
+                        break
+                    fi
+                done
+            fi
+
+            if [ "$xc_chnl_found" -eq 1 ]  
             then
                 domains_tried+=("$chnl_domain")
                 try_success=0
@@ -9388,14 +10370,14 @@ Monitor()
                         then
                             flv_first_fail=""
                             printf -v date_now '%(%m-%d %H:%M:%S)T'
-                            printf '%s\n' "$date_now $chnl_channel_name flv 超时重启" >> "$MONITOR_LOG"
+                            printf '%s\n' "$date_now $chnl_channel_name FLV 超时重启" >> "$MONITOR_LOG"
                             MonitorFlvRestartChannel
                         fi
                     else
                         if [ "$chnl_flv_status" == "off" ] 
                         then
                             printf -v date_now '%(%m-%d %H:%M:%S)T'
-                            printf '%s\n' "$date_now $chnl_channel_name flv 恢复启动" >> "$MONITOR_LOG"
+                            printf '%s\n' "$date_now $chnl_channel_name FLV 恢复启动" >> "$MONITOR_LOG"
                             MonitorFlvRestartChannel
                         else
                             printf -v flv_first_fail '%(%s)T'
@@ -9417,7 +10399,7 @@ Monitor()
                     then
                         rand_found=1
                         printf -v date_now '%(%m-%d %H:%M:%S)T'
-                        printf '%s\n' "$date_now $chnl_channel_name flv 随机重启" >> "$MONITOR_LOG"
+                        printf '%s\n' "$date_now $chnl_channel_name FLV 随机重启" >> "$MONITOR_LOG"
                         MonitorFlvRestartChannel
                     fi
                 fi
@@ -9512,7 +10494,12 @@ Monitor()
 
                         if [ "${chnls_status[i]}" == "off" ] 
                         then
-                            sleep 5
+                            if [ "${chnls_stream_link[i]:0:23}" == "https://www.youtube.com" ] || [ "${chnls_stream_link[i]:0:19}" == "https://youtube.com" ]
+                            then
+                                sleep 10
+                            else
+                                sleep 5
+                            fi
                             chnl_status=""
                             GetChannelInfo
                             if [ -z "$chnl_status" ] 
@@ -10205,7 +11192,7 @@ MonitorSet()
 }
 
 Progress(){
-    Println -ne "$info 安装中，请等待..."
+    echo -ne "$info 安装中，请等待..."
     while true
     do
         echo -n "."
@@ -10238,10 +11225,10 @@ InstallNginx()
     echo -n "...40%..."
 
     cd ~
-    if [ ! -e "./pcre-8.43" ] 
+    if [ ! -e "./pcre-8.44" ] 
     then
-        wget --timeout=10 --tries=3 --no-check-certificate "https://ftp.pcre.org/pub/pcre/pcre-8.43.tar.gz" -qO "pcre-8.43.tar.gz"
-        tar xzvf "pcre-8.43.tar.gz" >/dev/null 2>&1
+        wget --timeout=10 --tries=3 --no-check-certificate "https://ftp.pcre.org/pub/pcre/pcre-8.44.tar.gz" -qO "pcre-8.44.tar.gz"
+        tar xzvf "pcre-8.44.tar.gz" >/dev/null 2>&1
     fi
 
     if [ ! -e "./zlib-1.2.11" ] 
@@ -10250,10 +11237,10 @@ InstallNginx()
         tar xzvf "zlib-1.2.11.tar.gz" >/dev/null 2>&1
     fi
 
-    if [ ! -e "./openssl-1.1.1d" ] 
+    if [ ! -e "./openssl-1.1.1g" ] 
     then
-        wget --timeout=10 --tries=3 --no-check-certificate "https://www.openssl.org/source/openssl-1.1.1d.tar.gz" -qO "openssl-1.1.1d.tar.gz"
-        tar xzvf "openssl-1.1.1d.tar.gz" >/dev/null 2>&1
+        wget --timeout=10 --tries=3 --no-check-certificate "https://www.openssl.org/source/openssl-1.1.1g.tar.gz" -qO "openssl-1.1.1g.tar.gz"
+        tar xzvf "openssl-1.1.1g.tar.gz" >/dev/null 2>&1
     fi
 
     if [ ! -e "./nginx-http-flv-module-master" ] 
@@ -10279,7 +11266,7 @@ InstallNginx()
 
     echo -n "...60%..."
     cd "$nginx_name/"
-    ./configure --add-module=../nginx-http-flv-module-master --with-pcre=../pcre-8.43 --with-pcre-jit --with-zlib=../zlib-1.2.11 --with-openssl=../openssl-1.1.1d --with-openssl-opt=no-nextprotoneg --with-http_stub_status_module --with-http_ssl_module --with-http_realip_module --with-debug >/dev/null 2>&1
+    ./configure --add-module=../nginx-http-flv-module-master --with-pcre=../pcre-8.44 --with-pcre-jit --with-zlib=../zlib-1.2.11 --with-openssl=../openssl-1.1.1g --with-openssl-opt=no-nextprotoneg --with-http_stub_status_module --with-http_ssl_module --with-http_realip_module --with-debug >/dev/null 2>&1
     echo -n "...80%..."
     make >/dev/null 2>&1
     make install >/dev/null 2>&1
@@ -10365,8 +11352,76 @@ RestartNginx()
     fi
 }
 
+AddXtreamCodesAccount()
+{
+    echo && read -p "请输入账号(需包含服务器地址)：" xtream_codes_input
+    [ -z "$xtream_codes_input" ] && Println "已取消...\n" && exit 1
+
+    if [[ $xtream_codes_input == *"username="* ]] 
+    then
+        domain=${xtream_codes_input#*http://}
+        domain=${domain%%/*}
+        username=${xtream_codes_input#*username=}
+        username=${username%%&*}
+        password=${xtream_codes_input#*password=}
+        password=${password%%&*}
+        ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+    elif [[ $xtream_codes_input =~ http://([^/]+)/([^/]+)/([^/]+)/ ]] 
+    then
+        if [ "${BASH_REMATCH[2]}" == "live" ] 
+        then
+            if [[ $line =~ http://([^/]+)/live/([^/]+)/([^/]+)/ ]] 
+            then
+                domain=${BASH_REMATCH[1]}
+                username=${BASH_REMATCH[2]}
+                password=${BASH_REMATCH[3]}
+            else
+                Println "$error 输入错误 !\n" && exit 1
+            fi
+        else
+            domain=${BASH_REMATCH[1]}
+            username=${BASH_REMATCH[2]}
+            password=${BASH_REMATCH[3]}
+        fi
+        ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+    else
+        Println "$error 输入错误 !\n" && exit 1
+    fi
+
+    [ -z "${ip:-}" ] && Println "$error 无法解析域名 !\n" && exit 1
+    printf '%s\n' "$ip $domain $username:$password" >> "$XTREAM_CODES"
+
+    if [ -e "$CHANNELS_FILE" ] 
+    then
+        while IFS= read -r line 
+        do
+            if [[ $line == *\"stream_link\":* ]] && [[ $line == *http://*/*/*/* ]]
+            then
+                line=${line#*: \"http://}
+                chnl_domain=${line%%/*}
+                if [ "$chnl_domain" == "$domain" ] 
+                then
+                    line=${line#*/}
+                    username=${line%%/*}
+                    if [ "$username" == "live" ] 
+                    then
+                        line=${line#*/}
+                        username=${line%%/*}
+                    fi
+                    line=${line#*/}
+                    password=${line%%/*}
+                    printf '%s\n' "$ip $chnl_domain $username:$password" >> "$XTREAM_CODES"
+                fi
+            fi
+        done < "$CHANNELS_FILE"
+    fi
+
+    Println "$info 账号添加成功 !\n"
+}
+
 ListXtreamCodes()
 {
+    [ ! -s "$XTREAM_CODES" ] && Println "$error 没有账号 !\n" && exit 1
     ips=()
     new_domains=()
     new_accounts=()
@@ -10383,20 +11438,94 @@ ListXtreamCodes()
             ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
             [ -z "$ip" ] && continue
             account="$username:$password"
-        elif [[ $line == *http://*/*/*/* ]] 
+        elif [[ $line =~ http://([^/]+)/([^/]+)/([^/]+)/ ]] 
         then
-            tmp_line=${line#*http://}
-            domain=${tmp_line%%/*}
-            tmp_line=${tmp_line#*/}
-            username=${tmp_line%%/*}
-            tmp_line=${tmp_line#*/}
-            password=${tmp_line%%/*}
+            if [ "${BASH_REMATCH[2]}" == "live" ] 
+            then
+                if [[ $line =~ http://([^/]+)/live/([^/]+)/([^/]+)/ ]] 
+                then
+                    domain=${BASH_REMATCH[1]}
+                    username=${BASH_REMATCH[2]}
+                    password=${BASH_REMATCH[3]}
+                else
+                    continue
+                fi
+            else
+                domain=${BASH_REMATCH[1]}
+                username=${BASH_REMATCH[2]}
+                password=${BASH_REMATCH[3]}
+            fi
             ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
             [ -z "$ip" ] && continue
             account="$username:$password"
         elif [[ ! $line =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+ ]] 
         then
-            continue
+            if [[ $line =~ http://([^/]+)/ ]] 
+            then
+                stb_domain=${BASH_REMATCH[1]}
+                continue
+            elif [ -n "${stb_domain:-}" ] && [[ $line =~ (([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})) ]]
+            then
+                domain=$stb_domain
+                ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+                [ -z "$ip" ] && continue
+                mac_address=${BASH_REMATCH[1]}
+
+                if [ -z "${test_mac:-}" ] 
+                then
+                    Println "$info 验证中 ..."
+                    test_mac=1
+                fi
+
+                token=""
+                access_token=""
+                profile=""
+                server="http://$domain"
+                mac=$(Urlencode "$mac_address")
+                timezone=$(Urlencode "Europe/Amsterdam")
+                token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
+                profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
+
+                token=$(wget --timeout=10 --tries=3 --user-agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)" --no-check-certificate \
+                    --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" -qO- \
+                    | $JQ_FILE -r '.js.token' || true)
+                if [ -z "$token" ] 
+                then
+                    Println "$error 无法连接 $domain"
+                    stb_domain=""
+                    continue
+                fi
+                access_token=$(wget --timeout=10 --tries=3 --user-agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)" --no-check-certificate \
+                    --header="Authorization: Bearer $token" \
+                    --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" -qO- \
+                    | $JQ_FILE -r '.js.token' || true)
+                if [ -z "$access_token" ] 
+                then
+                    Println "$error 无法连接 $domain"
+                    stb_domain=""
+                    continue
+                fi
+                profile=$(wget --timeout=10 --tries=3 --user-agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)" --no-check-certificate \
+                    --header="Authorization: Bearer $access_token" \
+                    --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url" -qO- || true)
+                if [ -z "$profile" ] 
+                then
+                    Println "$error 无法连接 $domain"
+                    stb_domain=""
+                    continue
+                fi
+
+                if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
+                then
+                    Println "$error $mac_address 地址错误!"
+                    continue
+                else
+                    account=$mac_address
+                fi
+            else
+                stb_domain=""
+                continue
+            fi
         else
             ip=${line%% *}
             tmp_line=${line#* }
@@ -10512,46 +11641,195 @@ ListXtreamCodes()
             new_domains+=("$domain")
             new_accounts+=("$account")
         fi
-    done < "$XTREAM_CODES"
+    done < <(awk '{gsub(/<[^>]*>/,""); print }' "$XTREAM_CODES")
 
-    ip_count=${#ips[@]}
+    ips_count=${#ips[@]}
 
-    if [ "$ip_count" -gt 0 ] 
+    if [ "$ips_count" -gt 0 ] 
     then
-        printf "" > "$XTREAM_CODES"
+        print_list=""
+        xtream_codes_list=""
+        ips_acc_count=0
+        ips_acc=()
+        ips_mac_count=0
+        ips_mac=()
 
-        echo
-
-        for((i=0;i<ip_count;i++));
+        for((i=0;i<ips_count;i++));
         do
-            printf '%s\n' "${ips[i]} ${new_domains[i]} ${new_accounts[i]}" >> "$XTREAM_CODES"
-            echo -e "$green$((i+1)).$plain IP: $green${ips[i]//|/, }$plain 域名: $green${new_domains[i]//|/, }$plain\n\n$green账号:$plain"
+            print_list="$print_list${ips[i]} ${new_domains[i]} ${new_accounts[i]}\n"
             IFS=" " read -ra accounts <<< "${new_accounts[i]}"
             accounts_list=""
+            macs_num=0
+            accs_num=0
             for account in "${accounts[@]}"
             do
-                printf "%s\r\e[20C%s\n" "${account%:*}" "${account#*:}"
+                if [ "${1:-}" == "mac" ] 
+                then
+                    if [[ $account =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+                    then
+                        macs_num=$((macs_num+1))
+                        accounts_list="$accounts_list${account}\n"
+                    fi
+                elif [[ ! $account =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+                then
+                    accs_num=$((accs_num+1))
+                    accounts_list="$accounts_list${account%:*}\r\e[20C${account#*:}\n"
+                fi
             done
-            echo
+            if [ -n "$accounts_list" ] 
+            then
+                if [ "${1:-}" == "mac" ] 
+                then
+                    ips_mac+=("$i")
+                    ips_mac_count=$((ips_mac_count+1))
+                    xtream_codes_list="$xtream_codes_list$green$ips_mac_count.$plain IP: $green${ips[i]//|/, }$plain 域名: $green${new_domains[i]//|/, }$plain mac 地址个数: $green$macs_num$plain\n\n"
+                else
+                    ips_acc+=("$i")
+                    ips_acc_count=$((ips_acc_count+1))
+                    xtream_codes_list="$xtream_codes_list$green$ips_acc_count.$plain IP: $green${ips[i]//|/, }$plain 域名: $green${new_domains[i]//|/, }$plain 账号个数: $green$accs_num$plain\n\n"
+                fi
+            fi
         done
+
+        printf '%b' "$print_list" > "$XTREAM_CODES"
+        if [ "${1:-}" == "mac" ] && [ "$ips_mac_count" -eq 0 ]
+        then
+            Println "$error 请先添加 mac 地址！\n" && exit 1
+        else
+            Println "$xtream_codes_list"
+        fi
     else
         Println "$error 没有账号！\n" && exit 1
     fi
 }
 
-TestXtreamCodes()
+ViewXtreamCodesAcc()
 {
-    Println "请输入测试的序号"
-    while read -p "(默认: 取消): " test_num
+    ListXtreamCodes
+
+    Println "请输入服务器的序号"
+    while read -p "(默认: 取消): " server_num
     do
-        case $test_num in
+        case $server_num in
             "") Println "已取消...\n" && exit 1
             ;;
             *[!0-9]*) Println "$error 请输入正确的数字\n"
             ;;
             *) 
-                if [ "$test_num" -gt 0 ] && [ ! "$test_num" -gt "$ip_count" ]
+                if [ "$server_num" -gt 0 ] && [ "$server_num" -le "$ips_acc_count" ]
                 then
+                    ips_index=${ips_acc[$((server_num-1))]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    domain=${new_domains[ips_index]}
+
+    if [[ $domain == *"|"* ]] 
+    then
+        IFS="|" read -ra domains <<< "$domain"
+        domains_list=""
+        domains_count=${#domains[@]}
+        for((i=0;i<domains_count;i++));
+        do
+            domains_list="$domains_list$green$((i+1)).$plain ${domains[i]}\n\n"
+        done
+        Println "$domains_list"
+
+        Println "请选择域名"
+        while read -p "(默认: 取消): " domains_num
+        do
+            case $domains_num in
+                "") Println "已取消...\n" && exit 1
+                ;;
+                *[!0-9]*) Println "$error 请输入正确的数字\n"
+                ;;
+                *) 
+                    if [ "$domains_num" -gt 0 ] && [ "$domains_num" -le "$domains_count" ]
+                    then
+                        domain=${domains[$((domains_num-1))]}
+                        break
+                    else
+                        Println "$error 请输入正确的序号\n"
+                    fi
+                ;;
+            esac
+        done
+    fi
+
+    account=${new_accounts[ips_index]}
+    IFS=" " read -ra accounts <<< "$account"
+
+    accs=()
+    for account in "${accounts[@]}"
+    do
+        if [[ ! $account =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+        then
+            accs+=("$account")
+        fi
+    done
+
+    GetXtreamCodesDomains
+    GetXtreamCodesChnls
+
+    accs_count=${#accs[@]}
+    if [ "$accs_count" -gt 1 ] 
+    then
+        accs_list="账号: \n\n"
+        for((i=0;i<accs_count;i++));
+        do
+            using=""
+            if [ "$i" -lt 9 ] 
+            then
+                blank=" "
+            else
+                blank=""
+            fi
+            for xc_chnl in "${xc_chnls[@]}"
+            do
+                if [ "$xc_chnl" == "$domain/${accs[i]}" ] 
+                then
+                    using="${red}[使用中]$plain"
+                    break
+                fi
+            done
+            accs_list="$accs_list$blank$green$((i+1)).$plain ${accs[i]%:*}\r\e[20C${accs[i]#*:} $using\n\n"
+        done
+        Println "$accs_list"
+    else
+        using=""
+        for xc_chnl in "${xc_chnls[@]}"
+        do
+            if [ "$xc_chnl" == "$domain/${accs[i]}" ] 
+            then
+                using="${red}[使用中]$plain"
+                break
+            fi
+        done
+        Println "账号: \n\n${green}1.$plain ${accs[0]%:*}\r\e[20C${accs[0]#*:} $using\n"
+    fi
+}
+
+TestXtreamCodes()
+{
+    ListXtreamCodes
+
+    Println "请输入服务器的序号"
+    while read -p "(默认: 取消): " server_num
+    do
+        case $server_num in
+            "") Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            ;;
+            *) 
+                if [ "$server_num" -gt 0 ] && [ "$server_num" -le "$ips_acc_count" ]
+                then
+                    ips_index=${ips_acc[$((server_num-1))]}
                     break
                 else
                     Println "$error 请输入正确的序号\n"
@@ -10672,10 +11950,9 @@ TestXtreamCodes()
         done < "$CHANNELS_FILE"
     fi
 
-    index=$((test_num-1))
-    IFS="|" read -ra domains <<< "${new_domains[index]}"
-    IFS=" " read -ra accounts <<< "${new_accounts[index]}"
-    Println "IP: $green${ips[index]}$plain 域名: $green${new_domains[index]//|/ }$plain"
+    IFS="|" read -ra domains <<< "${new_domains[ips_index]}"
+    IFS=" " read -ra accounts <<< "${new_accounts[ips_index]}"
+    Println "IP: $green${ips[ips_index]}$plain 域名: $green${new_domains[ips_index]//|/ }$plain"
     Println "$green账号:$plain"
 
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
@@ -10721,6 +11998,596 @@ TestXtreamCodes()
         fi
     done
     echo
+}
+
+ViewXtreamCodesMac()
+{
+    ListXtreamCodes mac
+
+    Println "请输入服务器的序号"
+    while read -p "(默认: 取消): " server_num
+    do
+        case $server_num in
+            "") Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            ;;
+            *) 
+                if [ "$server_num" -gt 0 ] && [ "$server_num" -le "$ips_mac_count" ]
+                then
+                    ips_index=${ips_mac[$((server_num-1))]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    domain=${new_domains[ips_index]}
+
+    if [[ $domain == *"|"* ]] 
+    then
+        IFS="|" read -ra domains <<< "$domain"
+        domains_list=""
+        domains_count=${#domains[@]}
+        for((i=0;i<domains_count;i++));
+        do
+            domains_list="$domains_list$green$((i+1)).$plain ${domains[i]}\n\n"
+        done
+        Println "$domains_list"
+
+        Println "请选择域名"
+        while read -p "(默认: 取消): " domains_num
+        do
+            case $domains_num in
+                "") Println "已取消...\n" && exit 1
+                ;;
+                *[!0-9]*) Println "$error 请输入正确的数字\n"
+                ;;
+                *) 
+                    if [ "$domains_num" -gt 0 ] && [ "$domains_num" -le "$domains_count" ]
+                    then
+                        domain=${domains[$((domains_num-1))]}
+                        break
+                    else
+                        Println "$error 请输入正确的序号\n"
+                    fi
+                ;;
+            esac
+        done
+    fi
+
+    account=${new_accounts[ips_index]}
+    IFS=" " read -ra accounts <<< "$account"
+
+    macs=()
+    for account in "${accounts[@]}"
+    do
+        if [[ $account =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+        then
+            macs+=("$account")
+        fi
+    done
+
+    GetXtreamCodesDomains
+    GetXtreamCodesChnls
+
+    macs_count=${#macs[@]}
+    if [ "$macs_count" -gt 1 ] 
+    then
+        macs_list="mac 地址: \n\n"
+        for((i=0;i<macs_count;i++));
+        do
+            using=""
+            if [ "$i" -lt 9 ] 
+            then
+                blank=" "
+            else
+                blank=""
+            fi
+            for xc_chnl_mac in "${xc_chnls_mac[@]}"
+            do
+                if [ "$xc_chnl_mac" == "$domain/${macs[i]}" ] 
+                then
+                    using="${red}[使用中]$plain"
+                    break
+                fi
+            done
+            macs_list="$macs_list$blank$green$((i+1)).$plain ${macs[i]} $using\n\n"
+        done
+        Println "$macs_list"
+    else
+        using=""
+        for xc_chnl_mac in "${xc_chnls_mac[@]}"
+        do
+            if [ "$xc_chnl_mac" == "$domain/${macs[i]}" ] 
+            then
+                using="${red}[使用中]$plain"
+                break
+            fi
+        done
+        Println "mac 地址: \n\n$green$((i+1)).$plain ${macs[0]} $using\n"
+    fi
+}
+
+ViewXtreamCodesChnls()
+{
+    ListXtreamCodes mac
+
+    Println "请输入服务器的序号"
+    while read -p "(默认: 取消): " server_num
+    do
+        case $server_num in
+            "") Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            ;;
+            *) 
+                if [ "$server_num" -gt 0 ] && [ "$server_num" -le "$ips_mac_count" ]
+                then
+                    ips_index=${ips_mac[$((server_num-1))]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    domain=${new_domains[ips_index]}
+
+    if [[ $domain == *"|"* ]] 
+    then
+        IFS="|" read -ra domains <<< "$domain"
+        domains_list=""
+        domains_count=${#domains[@]}
+        for((i=0;i<domains_count;i++));
+        do
+            domains_list="$domains_list$green$((i+1)).$plain ${domains[i]}\n\n"
+        done
+        Println "$domains_list"
+
+        Println "请选择域名"
+        while read -p "(默认: 取消): " domains_num
+        do
+            case $domains_num in
+                "") Println "已取消...\n" && exit 1
+                ;;
+                *[!0-9]*) Println "$error 请输入正确的数字\n"
+                ;;
+                *) 
+                    if [ "$domains_num" -gt 0 ] && [ "$domains_num" -le "$domains_count" ]
+                    then
+                        domain=${domains[$((domains_num-1))]}
+                        break
+                    else
+                        Println "$error 请输入正确的序号\n"
+                    fi
+                ;;
+            esac
+        done
+    fi
+
+    account=${new_accounts[ips_index]}
+    IFS=" " read -ra accounts <<< "$account"
+
+    macs=()
+    for account in "${accounts[@]}"
+    do
+        if [[ $account =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+        then
+            macs+=("$account")
+        fi
+    done
+
+    GetXtreamCodesDomains
+    GetXtreamCodesChnls
+        
+    macs_count=${#macs[@]}
+    if [ "$macs_count" -gt 1 ] 
+    then
+        macs_list="mac 地址: \n\n"
+        for((i=0;i<macs_count;i++));
+        do
+            using=""
+            if [ "$i" -lt 9 ] 
+            then
+                blank=" "
+            else
+                blank=""
+            fi
+            for xc_chnl_mac in "${xc_chnls_mac[@]}"
+            do
+                if [ "$xc_chnl_mac" == "$domain/${macs[i]}" ] 
+                then
+                    using="${red}[使用中]$plain"
+                    break
+                fi
+            done
+            macs_list="$macs_list$blank$green$((i+1)).$plain ${macs[i]} $using\n\n"
+        done
+        Println "$macs_list"
+
+        Println "请选择 mac"
+        while read -p "(默认: 取消): " macs_num
+        do
+            case $macs_num in
+                "") Println "已取消...\n" && exit 1
+                ;;
+                *[!0-9]*) Println "$error 请输入正确的数字\n"
+                ;;
+                *) 
+                    if [ "$macs_num" -gt 0 ] && [ "$macs_num" -le "$macs_count" ]
+                    then
+                        mac_address=${macs[$((macs_num-1))]}
+                        for xc_chnl_mac in "${xc_chnls_mac[@]}"
+                        do
+                            if [ "$xc_chnl_mac" == "$domain/$mac_address" ] 
+                            then
+                                Println "$error 此账号已经在使用!\n"
+                                continue 2
+                            fi
+                        done
+                        break
+                    else
+                        Println "$error 请输入正确的序号\n"
+                    fi
+                ;;
+            esac
+        done
+    else
+        mac_address=${macs[0]}
+    fi
+
+    token=""
+    access_token=""
+    profile=""
+    user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
+    server="http://$domain"
+    mac=$(Urlencode "$mac_address")
+    timezone=$(Urlencode "Europe/Amsterdam")
+    cookies="mac=$mac; stb_lang=en; timezone=$timezone"
+    token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
+    profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
+    genres_url="$server/portal.php?type=itv&action=get_genres&JsHttpRequest=1-xml"
+
+    token=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
+        --header="Cookie: $cookies" "$token_url" -qO- \
+        | $JQ_FILE -r '.js.token' || true)
+    if [ -z "$token" ] 
+    then
+        Println "$error 无法连接 $domain, 请重试!\n" && exit 1
+    fi
+    access_token=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
+        --header="Authorization: Bearer $token" \
+        --header="Cookie: $cookies" "$token_url" -qO- \
+        | $JQ_FILE -r '.js.token' || true)
+    if [ -z "$access_token" ] 
+    then
+        Println "$error 无法连接 $domain, 请重试!\n" && exit 1
+    fi
+    headers="Authorization: Bearer $access_token"
+    profile=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
+        --header="$headers" \
+        --header="Cookie: $cookies" "$profile_url" -qO- || true)
+    if [ -z "$profile" ] 
+    then
+        Println "$error 无法连接 $domain, 请重试!\n" && exit 1
+    fi
+
+    if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
+    then
+        Println "$error mac 地址错误!\n" && exit 1
+    fi
+
+    genres_list=""
+    genres_count=0
+    genres_id=()
+    while IFS= read -r line
+    do
+        map_id=${line#*id: }
+        map_id=${map_id%, title:*}
+        map_title=${line#*, title: }
+        map_title=${map_title%\"}
+        genres_count=$((genres_count+1))
+        genres_id+=("$map_id")
+        genres_list="$genres_list$green$genres_count.$plain $map_title\n\n"
+    done < <(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
+        --header="$headers" \
+        --header="Cookie: $cookies" "$genres_url" -qO- | $JQ_FILE '.js | to_entries | map("id: \(.value.id), title: \(.value.title)") | .[]')
+
+    if [ -n "$genres_list" ] 
+    then
+        genres_list_pages=()
+        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+        FFPROBE="$FFMPEG_ROOT/ffprobe"
+        while true 
+        do
+            Println "$genres_list\n"
+
+            while read -p "输入分类序号(默认: 取消): " genres_num 
+            do
+                case "$genres_num" in
+                    "")
+                        Println "已取消...\n" && exit
+                    ;;
+                    *[!0-9]*)
+                        Println "$error 请输入正确的序号\n"
+                    ;;
+                    *)
+                        if [ "$genres_num" -gt 0 ] && [ "$genres_num" -le "$genres_count" ]
+                        then
+                            genres_index=$((genres_num-1))
+                            break
+                        else
+                            Println "$error 请输入正确的序号\n"
+                        fi
+                    ;;
+                esac
+            done
+
+            if [ -n "${genres_list_pages[genres_index]:-}" ] 
+            then
+                ordered_list_page=${genres_list_pages[genres_index]}
+            else
+                ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=1&JsHttpRequest=1-xml"
+                ordered_list_page=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
+                    --header="$headers" \
+                    --header="Cookie: $cookies" "$ordered_list_url" -qO-)
+                [ -z "$ordered_list_page" ] && Println "$error 返回错误, 请重试\n" && exit 1
+                genres_list_pages[genres_index]="$ordered_list_page"
+            fi
+
+            exec 100< <($JQ_FILE -r '.js.total_items, .js.max_page_items' <<< "$ordered_list_page")
+            read total_items <&100
+            read max_page_items <&100
+            exec 100<&-
+
+            if [ "$total_items" == null ] || [ "${total_items:-0}" -eq 0 ] 
+            then
+                Println "$error 此分类没有频道!\n"
+                continue
+            fi
+
+            if [ "$total_items" -le "$max_page_items" ] 
+            then
+                pages=1
+            else
+                pages=$((total_items / max_page_items))
+                if [ "$total_items" -gt $((pages * max_page_items)) ] 
+                then
+                    pages=$((pages+1))
+                fi
+            fi
+
+            page=1
+            ordered_list_pages=()
+
+            while true 
+            do
+                if [ "${#ordered_list_pages[@]}" -ge "$page" ] 
+                then
+                    page_index=$((page-1))
+                    ordered_list_page=${ordered_list_pages[page_index]}
+                else
+                    if [ "$page" -gt 1 ] 
+                    then
+                        ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=$page&JsHttpRequest=1-xml"
+                        ordered_list_page=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
+                            --header="$headers" \
+                            --header="Cookie: $cookies" "$ordered_list_url" -qO-)
+                    fi
+                    ordered_list_pages+=("$ordered_list_page")
+                fi
+
+                xc_chnls_id=()
+                xc_chnls_name=()
+                xc_chnls_cmd=()
+                xc_chnls_list=""
+                xc_chnls_count=0
+                while IFS= read -r line
+                do
+                    xc_chnls_count=$((xc_chnls_count+1))
+                    map_id=${line#*id: }
+                    map_id=${map_id%, name:*}
+                    map_name=${line#*, name: }
+                    map_name=${map_name%, cmd:*}
+                    map_cmd=${line#*, cmd: }
+                    map_cmd=${map_cmd%\"}
+                    map_cmd=${map_cmd#* }
+                    xc_chnls_id+=("$map_id")
+                    xc_chnls_name+=("$map_name")
+                    xc_chnls_cmd+=("$map_cmd")
+                    xc_chnls_list="$xc_chnls_list# $green$xc_chnls_count$plain $map_name\n\n"
+                done < <($JQ_FILE '.js.data | to_entries | map("id: \(.value.id), name: \(.value.name), cmd: \(.value.cmd)") | .[]' <<< "$ordered_list_page")
+
+                Println "$xc_chnls_list"
+                echo -e "$tip 输入 a 返回上级页面"
+                if [ "$pages" -gt 1 ] 
+                then
+                    Println "当前第 $page 页, 共 $pages 页"
+                    if [ "$page" -eq 1 ] 
+                    then
+                        echo -e "$tip 输入 x 转到下一页"
+                    elif [ "$page" -eq "$pages" ] 
+                    then
+                        echo -e "$tip 输入 z 转到上一页"
+                    else
+                        echo -e "$tip 输入 z 转到上一页, 输入 x 转到下一页"
+                    fi
+                fi
+
+                echo && while read -p "输入频道序号: " xc_chnls_num 
+                do
+                    case "$xc_chnls_num" in
+                        a)
+                            continue 3
+                        ;;
+                        z)
+                            if [ "$page" -gt 1 ]
+                            then
+                                page=$((page-1))
+                                continue 2
+                            else
+                                Println "$error 没有上一页\n"
+                            fi
+                        ;;
+                        x)
+                            if [ "$page" -lt "$pages" ]
+                            then
+                                page=$((page+1))
+                                continue 2
+                            else
+                                Println "$error 没有下一页\n"
+                            fi
+                        ;;
+                        ""|*[!0-9]*)
+                            Println "$error 请输入正确的序号\n"
+                        ;;
+                        *)
+                            if [ "$xc_chnls_num" -gt 0 ] && [ "$xc_chnls_num" -le "$xc_chnls_count" ]
+                            then
+                                xc_chnls_index=$((xc_chnls_num-1))
+                                break
+                            else
+                                Println "$error 请输入正确的序号\n"
+                            fi
+                        ;;
+                    esac
+                done
+
+                create_link_url="$server/portal.php?type=itv&action=create_link&cmd=${xc_chnls_cmd[xc_chnls_index]}&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
+
+                stream_link=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
+                    --header="$headers" \
+                    --header="Cookie: $cookies" "$create_link_url" -qO- \
+                    | $JQ_FILE -r '.js.cmd')
+                stream_link=${stream_link#* }
+                IFS="/" read -ra s <<< "$stream_link"
+                if [ "${s[3]}" == "live" ] 
+                then
+                    stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[5]}/${s[-1]}"
+                else
+                    stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[-1]}"
+                fi
+                Println "$green${xc_chnls_name[xc_chnls_index]}:$plain $stream_link\n"
+                $FFPROBE -i "$stream_link" -user_agent "$user_agent" \
+                    -headers "$headers"$'\r\n' \
+                    -cookies "$cookies" -hide_banner
+
+                Println "是否添加此频道？[y/N]"
+                read -p "(默认: N): " add_channel_yn
+                add_channel_yn=${add_channel_yn:-N}
+                if [[ $add_channel_yn == [Yy] ]] 
+                then
+                    Println "是否推流 flv ？[y/N]"
+                    read -p "(默认: N): " add_channel_flv_yn
+                    add_channel_flv_yn=${add_channel_flv_yn:-N}
+                    if [[ $add_channel_flv_yn == [Yy] ]] 
+                    then
+                        kind="flv"
+                    fi
+                    xc=1
+                    stream_links_input="$domain|$stream_link|${xc_chnls_cmd[xc_chnls_index]}|$mac_address"
+                    AddChannel
+                else
+                    Println "是否继续？[y/N]"
+                    read -p "(默认: N): " continue_yn
+                    continue_yn=${continue_yn:-N}
+                    if [[ $continue_yn == [Yy] ]] 
+                    then
+                        continue
+                    fi
+                fi
+                break
+            done
+            break
+        done
+    else
+        Println "$error 找不到分类!\n" && exit 1
+    fi
+}
+
+AddXtreamCodesMac()
+{
+    echo && read -p "请输入服务器地址：" server
+    [ -z "$server" ] && Println "已取消...\n" && exit 1
+
+    domain=${server#*http://}
+    domain=${domain%%/*}
+    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+
+    [ -z "${ip:-}" ] && Println "$error 无法解析域名 !\n" && exit 1
+    server="http://$domain"
+
+    echo && read -p "请输入 mac 地址(多个地址空格分隔)：" mac_address
+    [ -z "$mac_address" ] && Println "已取消...\n" && exit 1
+
+    IFS=" " read -ra macs <<< "$mac_address"
+    Println "$info 验证中..."
+
+    add_mac_success=0
+    for mac_address in "${macs[@]}"
+    do
+        token=""
+        access_token=""
+        profile=""
+        mac=$(Urlencode "$mac_address")
+        timezone=$(Urlencode "Europe/Amsterdam")
+        token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
+        profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
+
+        token=$(wget --timeout=10 --tries=3 --user-agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)" --no-check-certificate \
+            --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" -qO- \
+            | $JQ_FILE -r '.js.token' || true)
+        if [ -z "$token" ] 
+        then
+            if [ "$add_mac_success" -eq 0 ] 
+            then
+                Println "$error 无法连接 $domain, 请重试!\n" && exit 1
+            else
+                Println "$error $mac_address 遇到错误, 请重试!"
+                continue
+            fi
+        fi
+        access_token=$(wget --timeout=10 --tries=3 --user-agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)" --no-check-certificate \
+            --header="Authorization: Bearer $token" \
+            --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" -qO- \
+            | $JQ_FILE -r '.js.token' || true)
+        if [ -z "$access_token" ] 
+        then
+            if [ "$add_mac_success" -eq 0 ] 
+            then
+                Println "$error 无法连接 $domain, 请重试!\n" && exit 1
+            else
+                Println "$error $mac_address 遇到错误, 请重试!"
+                continue
+            fi
+        fi
+        profile=$(wget --timeout=10 --tries=3 --user-agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)" --no-check-certificate \
+            --header="Authorization: Bearer $access_token" \
+            --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url" -qO- || true)
+        if [ -z "$profile" ] 
+        then
+            if [ "$add_mac_success" -eq 0 ] 
+            then
+                Println "$error 无法连接 $domain, 请重试!\n" && exit 1
+            else
+                Println "$error $mac_address 遇到错误, 请重试!"
+                continue
+            fi
+        fi
+
+        if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
+        then
+            Println "$error $mac_address 地址错误!\n"
+            continue
+        fi
+
+        add_mac_success=1
+        printf '%s\n' "$ip $domain $mac_address" >> "$XTREAM_CODES"
+    done
 }
 
 GetServerIp()
@@ -10815,17 +12682,20 @@ NginxConfigBlockAliyun()
             then
                 Println "$error 无法获取本机IP，请手动输入\n"
             else
+                Println "$info      本机IP: $server_ip\n"
                 break
             fi
         done
 
         start=0
-        deny_aliyun="\n            location ${server_live_root#*$server_root}/${LIVE_ROOT##*/} {"
+        deny_aliyun="
+            location ${server_live_root#*$server_root}/${LIVE_ROOT##*/} {"
 
         IFS=" " read -ra server_ips <<< "$server_ip"
         for ip in "${server_ips[@]}"
         do
-            deny_aliyun="$deny_aliyun\n                allow $ip;"
+            deny_aliyun="$deny_aliyun
+                allow $ip;"
         done
 
         while IFS= read -r line 
@@ -10837,14 +12707,19 @@ NginxConfigBlockAliyun()
             then
                 line=${line#*AS45102\/}
                 ip=${line%\"*}
-                deny_aliyun="$deny_aliyun\n                deny $ip;"
+                deny_aliyun="$deny_aliyun
+                deny $ip;"
             elif [ "$start" -eq 1 ] && [[ $line == *"</tbody>"* ]] 
             then
                 break
             fi
         done < <(wget --no-check-certificate https://ipinfo.io/AS45102 -qO-)
-        deny_aliyun="$deny_aliyun\n                allow all;"
-        deny_aliyun="$deny_aliyun\n            }\n\n"
+        deny_aliyun="$deny_aliyun
+                allow all;"
+        deny_aliyun="$deny_aliyun
+            }
+
+"
     fi
 }
 
@@ -12041,13 +13916,18 @@ NginxConfigLocalhost()
             continue
         fi
 
-        if [[ $server_found -eq 1 ]] && [[ $localhost_found -eq 1 ]] && [[ $line == *"location "* ]] && [[ $line == *" / "* ]] 
+        if [[ $server_found -eq 1 ]] && [[ $location_found -eq 1 ]] && [[ $line == *"}"* ]]
+        then
+            location_found=0
+        fi
+
+        if [[ $server_found -eq 1 ]] && [[ $localhost_found -eq 1 ]] && [[ $location_found -eq 0 ]] && [[ $line == *"location "* ]] && [[ $line == *" / "* ]] 
         then
             if [[ ${enable_nodejs:-0} -eq 1 ]] 
             then
                 enable_nodejs=0
                 server_ip=${server_ip:-$(GetServerIp)}
-            line="        location = / {
+                line="        location = / {
             proxy_redirect off;
             proxy_pass http://nodejs;
             proxy_read_timeout 10s;
@@ -12144,12 +14024,7 @@ NginxConfigLocalhost()
 
         if [[ $server_found -eq 1 ]] && [[ $location_found -eq 1 ]] && [[ $line == *"root "* ]]
         then
-            new_line="${line%%root*}root ${server_root#*/usr/local/nginx/};"
-        fi
-
-        if [[ $server_found -eq 1 ]] && [[ $location_found -eq 1 ]] && [[ $line == *"}"* ]]
-        then
-            location_found=0
+            line="${line%%root*}root   ${server_root#*/usr/local/nginx/};"
         fi
 
         if [[ $server_found -eq 1 ]] 
@@ -12222,6 +14097,7 @@ NginxAppendHttpConf()
 
         location / {${deny_aliyun:-}
             root   ${server_root#*/usr/local/nginx/};
+            index  index.html index.htm;
         }
     }
 
@@ -12284,6 +14160,7 @@ NginxAppendHttpsConf()
 
         location / {${deny_aliyun:-}
             root   ${server_root#*/usr/local/nginx/};
+            index  index.html index.htm;
         }
     }
 
@@ -12359,6 +14236,7 @@ NginxAppendHttpHttpsConf()
 
         location / {${deny_aliyun:-}
             root   ${server_root#*/usr/local/nginx/};
+            index  index.html index.htm;
         }
     }
 
@@ -12922,7 +14800,9 @@ UpdateSelf()
 
         d_input_flags=${d_input_flags//-timeout 2000000000/-rw_timeout 10000000}
         default=$(
-        $JQ_FILE -n --arg proxy "$d_proxy" --arg playlist_name "$d_playlist_name" --arg seg_dir_name "$d_seg_dir_name" \
+        $JQ_FILE -n --arg proxy "$d_proxy" --arg user_agent "$d_user_agent" \
+            --arg headers "$d_headers" --arg cookies "$d_cookies" \
+            --arg playlist_name "$d_playlist_name" --arg seg_dir_name "$d_seg_dir_name" \
             --arg seg_name "$d_seg_name" --arg seg_length "$d_seg_length" \
             --arg seg_count "$d_seg_count" --arg video_codec "$d_video_codec" \
             --arg audio_codec "$d_audio_codec" --arg video_audio_shift "$d_video_audio_shift" \
@@ -12946,6 +14826,9 @@ UpdateSelf()
             --arg recheck_period "$d_recheck_period" --arg version "$sh_ver" \
             '{
                 proxy: $proxy,
+                user_agent: $user_agent,
+                headers: $headers,
+                cookies: $cookies,
                 playlist_name: $playlist_name,
                 seg_dir_name: $seg_dir_name,
                 seg_name: $seg_name,
@@ -13003,7 +14886,8 @@ UpdateSelf()
             new_channel=$(
             $JQ_FILE -n --arg pid "${chnls_pid[i]}" --arg status "${chnls_status[i]}" \
                 --arg stream_link "${chnls_stream_links[i]}" --arg live "${chnls_live[i]}" \
-                --arg proxy "${chnls_proxy[i]}" \
+                --arg proxy "${chnls_proxy[i]}" --arg user_agent "${chnls_user_agent[i]}" \
+                --arg headers "${chnls_headers[i]}" --arg cookies "${chnls_cookies[i]}" \
                 --arg output_dir_name "${chnls_output_dir_name[i]}" --arg playlist_name "${chnls_playlist_name[i]}" \
                 --arg seg_dir_name "${chnls_seg_dir_name[i]}" --arg seg_name "${chnls_seg_name[i]}" \
                 --arg seg_length "${chnls_seg_length[i]}" --arg seg_count "${chnls_seg_count[i]}" \
@@ -13025,6 +14909,9 @@ UpdateSelf()
                     stream_link: $stream_link,
                     live: $live,
                     proxy: $proxy,
+                    user_agent: $user_agent,
+                    headers: $headers,
+                    cookies: $cookies,
                     output_dir_name: $output_dir_name,
                     playlist_name: $playlist_name,
                     seg_dir_name: $seg_dir_name,
@@ -16146,17 +18033,17 @@ then
   ${green}8.$plain 添加转发账号组
   ${green}9.$plain 添加转发账号
 ————————————
-  ${green}10.$plain 删除账号组
-  ${green}11.$plain 删除账号
-  ${green}12.$plain 删除转发账号组
-  ${green}13.$plain 删除转发账号
+ ${green}10.$plain 删除账号组
+ ${green}11.$plain 删除账号
+ ${green}12.$plain 删除转发账号组
+ ${green}13.$plain 删除转发账号
 ————————————
-  ${green}14.$plain 设置路由
-  ${green}15.$plain 设置等级
+ ${green}14.$plain 设置路由
+ ${green}15.$plain 设置等级
 ————————————
-  ${green}16.$plain 查看流量
-  ${green}17.$plain 开关
-  ${green}18.$plain 重启
+ ${green}16.$plain 查看流量
+ ${green}17.$plain 开关
+ ${green}18.$plain 重启
 
  $tip 输入: v2 打开面板\n"
     read -p "请输入数字 [1-18]：" v2ray_num
@@ -16388,77 +18275,21 @@ ${green}1.$plain 查看账号
 ${green}2.$plain 添加账号
 ${green}3.$plain 更新账号
 ${green}4.$plain 检测账号
-${green}5.$plain 网络获取账号
-${green}6.$plain 替换频道账号
-\n"
-    read -p "请输入数字 [1-6]：" xtream_codes_num
+${green}5.$plain 获取账号
+————————————
+${green}6.$plain 查看 mac 地址
+${green}7.$plain 添加 mac 地址
+${green}8.$plain 浏览频道
+
+"
+    read -p "请输入数字 [1-8]：" xtream_codes_num
 
     case $xtream_codes_num in
         1) 
-            [ ! -s "$XTREAM_CODES" ] && Println "$error 没有账号 !\n" && exit 1
-            ListXtreamCodes
+            ViewXtreamCodesAcc
         ;;
         2) 
-            echo && read -p "请输入账号(需包含服务器地址)：" xtream_codes_input
-            [ -z "$xtream_codes_input" ] && Println "已取消...\n" && exit 1
-
-            if [[ $xtream_codes_input == *"username="* ]] 
-            then
-                domain=${xtream_codes_input#*http://}
-                domain=${domain%%/*}
-                username=${xtream_codes_input#*username=}
-                username=${username%%&*}
-                password=${xtream_codes_input#*password=}
-                password=${password%%&*}
-                ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
-            elif [[ $xtream_codes_input == *http://*/*/*/* ]] 
-            then
-                xtream_codes_input=${xtream_codes_input#*http://}
-                domain=${xtream_codes_input%%/*}
-                xtream_codes_input=${xtream_codes_input#*/}
-                username=${xtream_codes_input%%/*}
-                if [ "$username" == "live" ] 
-                then
-                    xtream_codes_input=${xtream_codes_input#*/}
-                    username=${xtream_codes_input%%/*}
-                fi
-                xtream_codes_input=${xtream_codes_input#*/}
-                password=${xtream_codes_input%%/*}
-                ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
-            else
-                Println "$error 输入错误 !\n" && exit 1
-            fi
-
-            [ -z "${ip:-}" ] && Println "$error 无法解析域名 !\n" && exit 1
-            printf '%s\n' "$ip $domain $username:$password" >> "$XTREAM_CODES"
-
-            if [ -e "$CHANNELS_FILE" ] 
-            then
-                while IFS= read -r line 
-                do
-                    if [[ $line == *\"stream_link\":* ]] && [[ $line == *http://*/*/*/* ]]
-                    then
-                        line=${line#*: \"http://}
-                        chnl_domain=${line%%/*}
-                        if [ "$chnl_domain" == "$domain" ] 
-                        then
-                            line=${line#*/}
-                            username=${line%%/*}
-                            if [ "$username" == "live" ] 
-                            then
-                                line=${line#*/}
-                                username=${line%%/*}
-                            fi
-                            line=${line#*/}
-                            password=${line%%/*}
-                            printf '%s\n' "$ip $chnl_domain $username:$password" >> "$XTREAM_CODES"
-                        fi
-                    fi
-                done < "$CHANNELS_FILE"
-            fi
-
-            Println "$info 账号添加成功 !\n"
-
+            AddXtreamCodesAccount
             ListXtreamCodes
         ;;
         3) 
@@ -16472,17 +18303,17 @@ ${green}6.$plain 替换频道账号
                 account_line=${line#* }
                 IFS="|" read -ra domains <<< "$domain_line"
                 IFS=" " read -ra accounts <<< "$account_line"
-                for account in "${accounts[@]}"
+                for domain in "${domains[@]}"
                 do
-                    for domain in "${domains[@]}"
-                    do
-                        ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
-                        if [ -n "${ip:-}" ] 
-                        then
+                    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+                    if [ -n "${ip:-}" ] 
+                    then
+                        for account in "${accounts[@]}"
+                        do
                             [ -n "$result" ] && result="$result\n"
                             result="$result$ip $domain $account"
-                        fi
-                    done
+                        done
+                    fi
                 done
             done < "$XTREAM_CODES"
             echo -e "$result" >> "$XTREAM_CODES"
@@ -16490,8 +18321,6 @@ ${green}6.$plain 替换频道账号
             Println "$info 账号更新成功\n"
         ;;
         4) 
-            [ ! -s "$XTREAM_CODES" ] && Println "$error 没有账号 !\n" && exit 1
-            ListXtreamCodes
             TestXtreamCodes
         ;;
         5) 
@@ -16504,17 +18333,17 @@ ${green}6.$plain 替换频道账号
                 account_line=${line#* }
                 IFS="|" read -ra domains <<< "$domain_line"
                 IFS=" " read -ra accounts <<< "$account_line"
-                for account in "${accounts[@]}"
+                for domain in "${domains[@]}"
                 do
-                    for domain in "${domains[@]}"
-                    do
-                        ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
-                        if [ -n "${ip:-}" ] 
-                        then
+                    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+                    if [ -n "${ip:-}" ] 
+                    then
+                        for account in "${accounts[@]}"
+                        do
                             [ -n "$result" ] && result="$result\n"
                             result="$result$ip $domain $account"
-                        fi
-                    done
+                        done
+                    fi
                 done
             done < <(wget --tries=3 --no-check-certificate $XTREAM_CODES_LINK -qO-)
             echo -e "$result" >> "$XTREAM_CODES"
@@ -16522,9 +18351,20 @@ ${green}6.$plain 替换频道账号
             Println "$info 账号添加成功\n"
         ;;
         6) 
-            Println "$error not ready~\n"
+            ViewXtreamCodesMac
         ;;
-        *) Println "$error 请输入正确的数字 [1-6]\n"
+        7) 
+            AddXtreamCodesMac
+            if [ "$add_mac_success" -eq 1 ] 
+            then
+                ListXtreamCodes mac
+                Println "$info mac 添加成功!\n"
+            fi
+        ;;
+        8) 
+            ViewXtreamCodesChnls
+        ;;
+        *) Println "$error 请输入正确的数字 [1-8]\n"
         ;;
     esac
     exit 0
@@ -17069,6 +18909,13 @@ else
             else
                 proxy_command=""
             fi
+            user_agent=$d_user_agent
+            headers=$d_headers
+            if [ -n "$headers" ] && [[ ! $headers == *"\r\n" ]] && [[ $headers == *"\r\n"* ]]
+            then
+                headers="$headers\r\n"
+            fi
+            cookies=$d_cookies
             output_dir_name=${output_dir_name:-$(RandOutputDirName)}
             output_dir_root="$LIVE_ROOT/$output_dir_name"
             playlist_name=${playlist_name:-$(RandPlaylistName)}

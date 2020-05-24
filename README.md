@@ -50,8 +50,12 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
   或
   - 用这里的 iptv.sh 覆盖 /usr/local/bin/tv ，删除主目录 /usr/local/iptv 下的 lock 文件
 
-输入 cx 打开 Xtream Codes 账号管理面板
+```
 
+## 一键管理 xtream codes 频道
+
+``` bash
+输入 cx 打开 Xtream Codes 账号/频道 管理面板
 ```
 
 - 自带加密 NODE.JS <- HTTP -> NginX <- HTTPS -> CLIENT
