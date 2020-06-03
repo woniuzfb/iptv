@@ -91,17 +91,9 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 ## 快捷键
 
 - tv e 手动修改 channels.json
-- tv s 更新 台湾/香港/国外 节目表 (tv s 频道ID 可以个别更新节目表)
-  - tv s hbo 更新 hbo 亚洲各台节目表
-  - tv s hbous 更新 hbo 美国各台节目表
-  - tv s ontvtonight 更新美国各台节目表
-  - tv s disney 更新迪士尼频道节目表
-  - tv s foxmovies 更新 FOX MOVIES 节目表
-  - tv s amlh 更新 澳门莲花 节目表
-  - tv s tvbhk 更新 TVB 香港各台节目表
-  - tv s tvbhd 更新 TVB HD 节目表 (使用pdf2htmlEX)
-  - tv s singteltv 更新东南亚各台节目表
-  - tv s cntv 更新 cctv 各台节目表
+- tv s 打开节目表管理面板 CCTV/台湾/香港/国外 节目表
+  - 手动选择需要每日更新节目表的频道
+  - 自动配置到 cron
 - tv ffmpeg 在主目录下自建 FFmpeg 镜像
 - tv ts 打开广电直播源 注册/登录 面板
   - 在命令行注册账号
