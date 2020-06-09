@@ -59,6 +59,7 @@
 # 快捷键:
 #     tv 打开 HLS 管理面板
 #     tv f 打开 FLV 管理面板
+#     tv v 打开 VIP 面板
 #
 #     tv e 手动修改 channels.json
 #     tv m 开启监控
@@ -86,6 +87,8 @@ V2CTL_FILE="/usr/bin/v2ray/v2ctl"
 V2_CONFIG="/etc/v2ray/config.json"
 XC_FILE="/usr/local/bin/cx"
 IPTV_ROOT="/usr/local/iptv"
+C_ROOT="$IPTV_ROOT/c"
+MD5SUM_FILE="$C_ROOT/md5sum"
 NODE_ROOT="$IPTV_ROOT/node"
 IP_DENY="$IPTV_ROOT/ip.deny"
 IP_LOG="$IPTV_ROOT/ip.log"
@@ -105,9 +108,13 @@ MONITOR_LOG="$IPTV_ROOT/monitor.log"
 LOGROTATE_CONFIG="$IPTV_ROOT/logrotate"
 CRON_FILE="$IPTV_ROOT/cron"
 XTREAM_CODES="$IPTV_ROOT/xtream_codes"
+VIP_FILE="$IPTV_ROOT/vip.json"
+VIP_ROOT="$IPTV_ROOT/vip"
+VIP_USERS_ROOT="$VIP_ROOT/users"
 XTREAM_CODES_LINK="http://hbo.epub.fun/xtream_codes"
 green="\e[32m"
 red="\e[31m"
+blue="\e[34m"
 plain="\e[0m"
 gray_underlined="\e[37;4;2m"
 info="${green}[信息]$plain"
@@ -147,7 +154,18 @@ JQ()
                 fi
             ;;
             "update") 
-                $JQ_FILE "$3" "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                if [ -n "${jq_path:-}" ] 
+                then
+                    if [ "${4:-}" == "number" ] 
+                    then
+                        $JQ_FILE --argjson path "$jq_path" --arg value "$3" 'getpath($path) = ($value | tonumber)' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                    else
+                        $JQ_FILE --argjson path "$jq_path" --arg value "$3" 'getpath($path) = $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                    fi
+                    jq_path=""
+                else
+                    $JQ_FILE "$3" "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                fi
             ;;
             "replace") 
                 if [ -n "${jq_path:-}" ] 
@@ -404,6 +422,16 @@ CheckRelease()
     case $release in
         "rpm") 
             #yum -y update >/dev/null 2>&1
+            if ! grep -q "export LANG=en_US.UTF-8" < "$HOME/.bashrc"
+            then
+                echo "export LANG=en_US.UTF-8" >> "$HOME/.bashrc"
+            fi
+            if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
+            then
+                setenforce permissive
+                sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+            fi
+            yum -y install glibc-locale-source glibc-langpack-en >/dev/null 2>&1
             localedef -c -f UTF-8 -i en_US en_US.UTF-8 >/dev/null 2>&1 || true
             depends=(unzip vim curl crond logrotate)
             for depend in "${depends[@]}"
@@ -1286,6 +1314,7 @@ GetChannelInfo()
     do
         chn_found=1
         chnl_pid=${chnl_pid#\"}
+        chnl_flv_pull_link=${chnl_flv_pull_link%\"}
         if [ "$chnl_live_yn" == "no" ]
         then
             chnl_live=""
@@ -2042,6 +2071,25 @@ SetStreamLink()
 
     if [ "${stream_link:13:12}" == "fengshows.cn" ] 
     then
+        xc=1
+        user_agent="FengWatch/3.1.8 (iPhone; iOS 13.5; Scale/2.00)"
+        headers="fengshows-client: app(ios,30$(GetFreePort 4000 6000)7);iPhone12,1;13.5\r\n"
+        cookies=""
+
+        feng_id=${stream_link##*/}
+        feng_id=${feng_id%%.*}
+        feng_id=$(tr '[:upper:]' '[:lower:]' <<< "$feng_id")
+
+        while IFS=" " read -r title stream_link
+        do
+            if { [[ $feng_id == *"pin"* ]] && [ "$title" == "資訊台" ]; } || { [[ $feng_id == *"pcc"* ]] && [ "$title" == "中文台" ]; } || { [[ $feng_id == *"phk"* ]] && [ "$title" == "香港台" ]; }
+            then
+                break
+            fi
+        done < <(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
+            --header="${headers:0:-4}" "https://api.fengshows.cn/live?live_type=tv&page=1&page_size=15" -qO- \
+            | $JQ_FILE -r '.[]|[.title,.live_url_fhd]|join(" ")')
+
         ts=$(date +%s%3N)
         tx_time=$(printf '%X' $((ts/1000+1800)))
 
@@ -2054,6 +2102,12 @@ SetStreamLink()
         tx_secret=${tx_secret%% *}
 
         stream_link="$stream_link?txSecret=$tx_secret&txTime=$tx_time"
+        if [[ $stream_links_input == *" "* ]] 
+        then
+            stream_links_input="$stream_link ${stream_links_input#* }"
+        else
+            stream_links_input=$stream_link
+        fi
         #token=$(printf '%s' "$ts/${relative_path:1}ifengims" | md5sum)
         #token=${token%% *}
         #stream_link_md5="$stream_link?ts=$ts&token=$token"
@@ -2069,7 +2123,7 @@ SetStreamLink()
         query_string="$token_url&feed&client_ip=$(GetServerIp)"
         query_string=$(Urlencode "$query_string")
         stream_link=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
-            --header="$headers" \
+            --header="${headers:0:-4}" \
             "http://news.tvb.com/ajax_call/getVideo.php?token=$query_string" -qO- \
             | $JQ_FILE -r '.url')
     elif [[ "$stream_link" == *"4gtv.tv/"* ]] 
@@ -2100,53 +2154,31 @@ SetStreamLink()
         hexiv=$(echo -n $iv | hexdump -v -e '/1 "%02x"')
         post_data='{"fnCHANNEL_ID":'"$fnCHANNEL_ID"',"fsASSET_ID":"'"$fsASSET_ID"'","fsDEVICE_TYPE":"pc","clsIDENTITY_VALIDATE_ARUS":{"fsVALUE":""}}'
         post_data=$(echo -n "$post_data" | openssl enc -aes-256-cbc -iv "$hexiv" -K "$hexkey" -a)
-        stream_link_data=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
-            --header="$headers" \
+
+        for((try_i=0;try_i<10;try_i++));
+        do
+            stream_link_data=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
+            --header="${headers:0:-4}" \
             --post-data "value=$(Urlencode ${post_data//[[:space:]]/})" \
-            "https://api2.4gtv.tv/Channel/GetChannelUrl3" -qO- \
-            | $JQ_FILE -r '.Data')
+            "https://api2.4gtv.tv/Channel/GetChannelUrl3" -qO- || true)
+            if [ -n "$stream_link_data" ] 
+            then
+                break
+            fi
+        done
+
+        if [ -z "$stream_link_data" ] 
+        then
+            Println "$error 无法连接 4gtv !\n" && exit 1
+        fi
+
+        stream_link_data=$($JQ_FILE -r '.Data' <<< "$stream_link_data")
         if [ "$stream_link_data" == null ] 
         then
             Println "$error 此服务器 ip 不支持!\n" && exit 1
         else
             stream_link=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
                 | $JQ_FILE -r '.flstURLs[0]')
-        fi
-    elif [[ "$stream_link" =~ ^http://([^/]+)/([^/]+)/([^/]+)/([^/]+)/playlist\.m3u8 ]] 
-    then
-        port=${BASH_REMATCH[1]#*:}
-        if [ "${port:0:1}" -eq 1 ] 
-        then
-            stream_link_new="http://${BASH_REMATCH[1]%:*}:${port:1}/${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/playlist.m3u8"
-            if curl "$stream_link_new" --output /dev/null -m 3 --silent --fail -r 0-0 
-            then
-                stream_link=$stream_link_new
-                if [[ $stream_links_input == *" "* ]] 
-                then
-                    stream_links_input="$stream_link ${stream_links_input#* }"
-                else
-                    stream_links_input=$stream_link
-                fi
-            fi
-        elif ! curl "$stream_link" --output /dev/null -m 3 --silent --fail -r 0-0 
-        then
-            port="1$port"
-            while IFS= read -r line 
-            do
-                if [[ $line == *"URL: "* ]] 
-                then
-                    line=${line#*m3u8}
-                    line=${line%<*}
-                    stream_link="http://${BASH_REMATCH[1]%:*}:$port/${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/playlist.m3u8$line"
-                    if [[ $stream_links_input == *" "* ]] 
-                    then
-                        stream_links_input="$stream_link ${stream_links_input#* }"
-                    else
-                        stream_links_input=$stream_link
-                    fi
-                    break
-                fi
-            done < <(wget --timeout=10 --tries=3 "http://${BASH_REMATCH[1]%:*}:$port/${BASH_REMATCH[2]}/op/html/index.php/info.php?name=${BASH_REMATCH[4]}" -qO- 2>/dev/null)
         fi
     fi
 
@@ -4220,7 +4252,7 @@ FilterString()
 {
     for var in "${@}"
     do
-        read -r ${var?} <<<"${!var//^/-}"
+        read -r ${var?} <<< "${!var//^/-}"
     done
 }
 
@@ -4249,13 +4281,13 @@ AddChannel()
 
     SetLive
 
-    if [ "${stream_link:0:4}" == "http" ] 
+    if [ "${stream_link:0:4}" == "http" ] || [[ $stream_link == *"|http"* ]]
     then
         SetProxy
         if [[ $stream_link == http://*.macaulotustv.com/* ]] 
         then
             user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.61 Safari/537.36"
-            headers="Origin: http://www.lotustv.cc\r\nReferer: http://www.lotustv.cc/index.php/index/live.html"
+            headers="Origin: http://www.lotustv.cc\r\nReferer: http://www.lotustv.cc/index.php/index/live.html\r\n"
             cookies=""
         else
             SetUserAgent
@@ -4859,7 +4891,8 @@ EditChannelMenu()
     do
         GetChannelInfo
         ViewChannelInfo
-        Println "你要修改什么？
+        Println "选择修改内容
+
     ${green}1.$plain 修改 直播源
     ${green}2.$plain 修改 无限时长直播
     ${green}3.$plain 修改 代理
@@ -5117,18 +5150,21 @@ TestXtreamCodesLink()
                 fi
             else
                 create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
-                chnl_stream_link=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                cmd=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
                     --header="$chnl_headers" \
                     --header="Cookie: $chnl_cookies" "$create_link_url" -qO- \
-                    | $JQ_FILE -r '.js.cmd')
-                chnl_stream_link=${chnl_stream_link#* }
-                IFS="/" read -ra s <<< "$chnl_stream_link"
-                if [ "${s[3]}" == "live" ] 
+                    | $JQ_FILE -r '.js.cmd' || true)
+
+                if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
                 then
-                    chnl_stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[5]}/${s[-1]}"
+                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}/${BASH_REMATCH[6]}"
+                elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                then
+                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
                 else
-                    chnl_stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[-1]}"
+                    Println "$error $chnl_domain 返回错误, 请重试!\n" && exit 1
                 fi
+
                 if [[ $chnl_stream_links == *" "* ]] 
                 then
                     chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac ${chnl_stream_links#* }"
@@ -5293,6 +5329,24 @@ StartChannel()
         chnl_stream_link=$(youtube-dl -f "$code" -g "$chnl_stream_link")
     elif [ "${chnl_stream_link:13:12}" == "fengshows.cn" ] 
     then
+        chnl_user_agent="FengWatch/3.1.8 (iPhone; iOS 13.5; Scale/2.00)"
+        chnl_headers="fengshows-client: app(ios,30$(GetFreePort 4000 6000)7);iPhone12,1;13.5\r\n"
+        chnl_cookies=""
+
+        feng_id=${chnl_stream_link##*/}
+        feng_id=${feng_id%%.*}
+        feng_id=$(tr '[:upper:]' '[:lower:]' <<< "$feng_id")
+
+        while IFS=" " read -r title chnl_stream_link
+        do
+            if { [[ $feng_id == *"pin"* ]] && [ "$title" == "資訊台" ]; } || { [[ $feng_id == *"pcc"* ]] && [ "$title" == "中文台" ]; } || { [[ $feng_id == *"phk"* ]] && [ "$title" == "香港台" ]; }
+            then
+                break
+            fi
+        done < <(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+            --header="${chnl_headers:0:-4}" "https://api.fengshows.cn/live?live_type=tv&page=1&page_size=15" -qO- \
+            | $JQ_FILE -r '.[]|[.title,.live_url_fhd]|join(" ")')
+
         ts=$(date +%s%3N)
         tx_time=$(printf '%X' $((ts/1000+1800)))
 
@@ -5316,18 +5370,17 @@ StartChannel()
         query_string="$token_url&feed&client_ip=$(GetServerIp)"
         query_string=$(Urlencode "$query_string")
         chnl_stream_link=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
-            --header="$chnl_headers" \
+            --header="${chnl_headers:0:-4}" \
             "http://news.tvb.com/ajax_call/getVideo.php?token=$query_string" -qO- \
             | $JQ_FILE -r '.url')
     elif [[ "$chnl_stream_link" == *"4gtv.tv/"* ]] 
     then
-        xc=1
         chnl_user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
-        chnl_headers="Referer: $stream_link\r\n"
+        chnl_headers="Referer: $chnl_stream_link\r\n"
         chnl_cookies=""
-        fnCHANNEL_ID=${stream_link#*channel_id=}
+        fnCHANNEL_ID=${chnl_stream_link#*channel_id=}
         fnCHANNEL_ID=${fnCHANNEL_ID%%&*}
-        fsASSET_ID=${stream_link#*asset_id=}
+        fsASSET_ID=${chnl_stream_link#*asset_id=}
         fsASSET_ID=${fsASSET_ID%%&*}
         key="ilyB29ZdruuQjC45JhBBR7o2Z8WJ26Vg"
         iv="JUMxvVMmszqUTeKn"
@@ -5335,58 +5388,36 @@ StartChannel()
         hexiv=$(echo -n $iv | hexdump -v -e '/1 "%02x"')
         post_data='{"fnCHANNEL_ID":'"$fnCHANNEL_ID"',"fsASSET_ID":"'"$fsASSET_ID"'","fsDEVICE_TYPE":"pc","clsIDENTITY_VALIDATE_ARUS":{"fsVALUE":""}}'
         post_data=$(echo -n "$post_data" | openssl enc -aes-256-cbc -iv "$hexiv" -K "$hexkey" -a)
-        stream_link_data=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
-            --header="$chnl_headers" \
+        for((try_i=0;try_i<10;try_i++));
+        do
+            stream_link_data=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+            --header="${chnl_headers:0:-4}" \
             --post-data "value=$(Urlencode ${post_data//[[:space:]]/})" \
-            "https://api2.4gtv.tv/Channel/GetChannelUrl3" -qO- \
-            | $JQ_FILE -r '.Data')
-        if [ "$stream_link_data" == null ] 
-        then
-            Println "$error 此服务器 ip 不支持!\n" && exit 1
-        else
-            chnl_stream_link=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
-                | $JQ_FILE -r '.flstURLs[0]')
-        fi
-    elif [[ "$chnl_stream_link" =~ ^http://([^/]+)/([^/]+)/([^/]+)/([^/]+)/playlist\.m3u8 ]] 
-    then
-        port=${BASH_REMATCH[1]#*:}
-        if [ "${port:0:1}" -eq 1 ] 
-        then
-            chnl_stream_link_new="http://${BASH_REMATCH[1]%:*}:${port:1}/${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/playlist.m3u8"
-            if curl "$chnl_stream_link_new" --output /dev/null -m 3 --silent --fail -r 0-0 
+            "https://api2.4gtv.tv/Channel/GetChannelUrl3" -qO- || true)
+            if [ -n "$stream_link_data" ] 
             then
-                chnl_stream_link=$chnl_stream_link_new
-                if [[ $chnl_stream_links == *" "* ]] 
-                then
-                    chnl_stream_links="$chnl_stream_link ${chnl_stream_links#* }"
-                else
-                    chnl_stream_links=$chnl_stream_link
-                fi
+                break
             fi
-        elif ! curl "$chnl_stream_link" --output /dev/null -m 3 --silent --fail -r 0-0 
+        done
+        if [ -n "$stream_link_data" ] 
         then
-            port="1$port"
-            while IFS= read -r line 
-            do
-                if [[ $line == *"URL: "* ]] 
-                then
-                    line=${line#*m3u8}
-                    line=${line%<*}
-                    chnl_stream_link="http://${BASH_REMATCH[1]%:*}:$port/${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/playlist.m3u8$line"
-                    if [[ $chnl_stream_links == *" "* ]] 
-                    then
-                        chnl_stream_links="$chnl_stream_link ${chnl_stream_links#* }"
-                    else
-                        chnl_stream_links=$chnl_stream_link
-                    fi
-                    break
-                fi
-            done < <(wget --timeout=10 --tries=3 "http://${BASH_REMATCH[1]%:*}:$port/${BASH_REMATCH[2]}/op/html/index.php/info.php?name=${BASH_REMATCH[4]}" -qO- 2>/dev/null)
+            stream_link_data=$($JQ_FILE -r '.Data' <<< "$stream_link_data")
+            if [ "$stream_link_data" != null ] 
+            then
+                chnl_stream_link=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
+                    | $JQ_FILE -r '.flstURLs[0]')
+            elif [ -z "${monitor:-}" ] 
+            then
+                Println "$error 此服务器 ip 不支持!\n" && exit 1
+            fi
+        elif [ -z "${monitor:-}" ] 
+        then
+            Println "$error 无法连接 4gtv !\n" && exit 1
         fi
     elif [[ $chnl_stream_link == http://*.macaulotustv.com/* ]] 
     then
         chnl_user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.61 Safari/537.36"
-        chnl_headers="Origin: http://www.lotustv.cc\r\nReferer: http://www.lotustv.cc/index.php/index/live.html"
+        chnl_headers="Origin: http://www.lotustv.cc\r\nReferer: http://www.lotustv.cc/index.php/index/live.html\r\n"
         chnl_cookies=""
     elif [ "${chnl_stream_link:0:4}" == "rtmp" ] || [ "${chnl_stream_link:0:1}" == "/" ]
     then
@@ -7291,7 +7322,7 @@ ScheduleView()
     do
         if [ "${cron_providers[i]}" == "$provider" ] 
         then
-            IFS="|" read -r -a cron_chnls <<< "${cron_chnls[i]}"
+            IFS="|" read -r -a cron_chnls <<< "${cron_chnls[i]}|"
             break
         fi
     done
@@ -7312,7 +7343,7 @@ ScheduleView()
         done
         chnl_name=${chnl##*:}
         chnls_count=$((chnls_count+1))
-        chnls_list="$chnls_list$green$chnls_count.$plain $chnl_name $using\n\n"
+        chnls_list="$chnls_list$green$chnls_count.$plain $chnl_name [${chnl%%:*}] $using\n\n"
     done
 
     chnls=("${!var}")
@@ -7450,7 +7481,7 @@ ScheduleViewCron()
                 if [ "$provider_num" -gt 0 ] && [ "$provider_num" -le "$cron_providers_count" ]
                 then
                     provider="${cron_providers[$((provider_num-1))]}"
-                    IFS="|" read -r -a chnls <<< "${cron_chnls[$((provider_num-1))]}"
+                    IFS="|" read -r -a chnls <<< "${cron_chnls[$((provider_num-1))]}|"
                     break
                 else
                     Println "$error 请输入正确的数字\n"
@@ -7560,7 +7591,7 @@ ScheduleExe()
                 if [[ -n ${!var:-} ]] 
                 then
                     unset "$provider"_chnls
-                    IFS="|" read -r -a "$provider"_chnls <<< "$chnls"
+                    IFS="|" read -r -a "$provider"_chnls <<< "${chnls}|"
                 fi
                 if [ "$provider" == "other" ] 
                 then
@@ -7577,6 +7608,10 @@ ScheduleExe()
                 fi
             fi
         done < <($JQ_FILE -r '.schedule[]|[.provider,(.chnls|sort|join("|")| if .=="" then "null" else . end),.option]|join("=")' "$CRON_FILE")
+        if [ -e "/tmp/vip.pid" ] 
+        then
+            printf '%s' "" > "$VIP_USERS_ROOT/epg.update"
+        fi
     else
         Println "$error 计划任务为空, 请先添加频道 !\n"
     fi
@@ -7634,6 +7669,8 @@ Schedule()
 #        "foxmovies:FOX MOVIES"
 #        "disney:Disney"
         "minshi:民視"
+        "minshidiyi:民視第一台"
+        "minshitaiwan:民視台灣台"
         "mtvlivetw:MTV-Live"
         "tvbfc:TVB 翡翠台"
         "tvbpearl:TVB Pearl"
@@ -7825,6 +7862,8 @@ Schedule()
         "slinews:172:三立 iNews"
         "tvbsxw:41:TVBS 新闻"
         "minshi:16:民视"
+        "minshidiyi:638:民视第一台"
+        "minshitaiwan:742:民视台湾台"
         "mtvlivetw:751:MTV Live 台湾"
         "hbogq:629:HBO HD"
         "hbohits:501:HBO 强档"
@@ -8187,7 +8226,7 @@ Schedule()
                 then
                     found=1
                     unset "$2"_chnls
-                    read -r -a "$2"_chnls <<< "$chnl"
+                    IFS= read -r -a "$2"_chnls <<< "$chnl"
                     break
                 fi
             done
@@ -8278,7 +8317,7 @@ Schedule()
                     found=1
                     unset jiushi_chnls
                     IFS="|" read -r -a jiushi_chnls <<< "$jiushi_chnl"
-                    ScheduleJiuShi
+                    ScheduleJiushi
                     break
                 fi
             done
@@ -8321,6 +8360,9 @@ Schedule()
             elif [ -z "${schedule:-}" ] 
             then
                 Println "$error $2 failed !"
+            elif [ -e "/tmp/vip.pid" ] 
+            then
+                printf '%s' "" > "$VIP_USERS_ROOT/epg.update"
             fi
         ;;
     esac
@@ -9542,17 +9584,19 @@ MonitorTryAccounts()
                     fi
 
                     create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
-                    chnl_stream_link=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                    cmd=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
                         --header="$chnl_headers" \
                         --header="Cookie: $chnl_cookies" "$create_link_url" -qO- \
-                        | $JQ_FILE -r '.js.cmd')
-                    chnl_stream_link=${chnl_stream_link#* }
-                    IFS="/" read -ra s <<< "$chnl_stream_link"
-                    if [ "${s[3]}" == "live" ] 
+                        | $JQ_FILE -r '.js.cmd' || true)
+
+                    if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
                     then
-                        chnl_stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[5]}/${s[-1]}"
+                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}/${BASH_REMATCH[6]}"
+                    elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                    then
+                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
                     else
-                        chnl_stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[-1]}"
+                        continue
                     fi
 
                     audio=0
@@ -10249,18 +10293,35 @@ MonitorHlsRestartChannel()
                 break
             else
                 create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
-                chnl_stream_link=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                cmd=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
                     --header="$chnl_headers" \
                     --header="Cookie: $chnl_cookies" "$create_link_url" -qO- \
-                    | $JQ_FILE -r '.js.cmd')
-                chnl_stream_link=${chnl_stream_link#* }
-                IFS="/" read -ra s <<< "$chnl_stream_link"
-                if [ "${s[3]}" == "live" ] 
+                    | $JQ_FILE -r '.js.cmd' || true)
+
+                if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
                 then
-                    chnl_stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[5]}/${s[-1]}"
+                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}/${BASH_REMATCH[6]}"
+                elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                then
+                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
                 else
-                    chnl_stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[-1]}"
+                    if [ "$to_try" -eq 1 ] 
+                    then
+                        domains_tried+=("$chnl_domain")
+                        try_success=0
+                        MonitorTryAccounts
+                        if [ "$try_success" -eq 1 ] 
+                        then
+                            MonitorHlsRestartSuccess
+                        else
+                            MonitorHlsRestartFail
+                        fi
+                    else
+                        MonitorHlsRestartFail
+                    fi
+                    break
                 fi
+
                 if [[ $chnl_stream_links == *" "* ]] 
                 then
                     chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac ${chnl_stream_links#* }"
@@ -10658,18 +10719,35 @@ MonitorFlvRestartChannel()
                 break
             else
                 create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
-                chnl_stream_link=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                cmd=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
                     --header="$chnl_headers" \
                     --header="Cookie: $chnl_cookies" "$create_link_url" -qO- \
-                    | $JQ_FILE -r '.js.cmd')
-                chnl_stream_link=${chnl_stream_link#* }
-                IFS="/" read -ra s <<< "$chnl_stream_link"
-                if [ "${s[3]}" == "live" ] 
+                    | $JQ_FILE -r '.js.cmd' || true)
+
+                if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
                 then
-                    chnl_stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[5]}/${s[-1]}"
+                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}/${BASH_REMATCH[6]}"
+                elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                then
+                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
                 else
-                    chnl_stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[-1]}"
+                    if [ "$to_try" -eq 1 ] 
+                    then
+                        domains_tried+=("$chnl_domain")
+                        try_success=0
+                        MonitorTryAccounts
+                        if [ "$try_success" -eq 1 ] 
+                        then
+                            MonitorFlvRestartSuccess
+                        else
+                            MonitorFlvRestartFail
+                        fi
+                    else
+                        MonitorFlvRestartFail
+                    fi
+                    break
                 fi
+
                 if [[ $chnl_stream_links == *" "* ]] 
                 then
                     chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac ${chnl_stream_links#* }"
@@ -11678,7 +11756,7 @@ MonitorSet()
         done
 
         case "$error_no" in
-            1|2)
+            1|2|3)
                 Println "$error 请输入正确的数字或直接回车 \n"
             ;;
             *)
@@ -12736,6 +12814,46 @@ ViewXtreamCodesMac()
     fi
 }
 
+SearchXtreamCodesChnls()
+{
+    search_result=""
+
+    for((i=1;i<=pages;i++));
+    do
+        if [ "$i" -gt 1 ] 
+        then
+            echo -en "\r$((i*100/pages))%"
+        else
+            Println "$info 搜索进度"
+            echo -n "$((i*100/pages))%"
+        fi
+        sleep 1
+        page_index=$((i-1))
+        if [ -n "${ordered_list_pages[page_index]:-}" ] 
+        then
+            ordered_list_page=${ordered_list_pages[page_index]}
+        else
+            if [ "$i" -gt 1 ] 
+            then
+                ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=$i&JsHttpRequest=1-xml"
+                ordered_list_page=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
+                    --header="$headers" \
+                    --header="Cookie: $cookies" "$ordered_list_url" -qO-)
+            fi
+            ordered_list_pages[page_index]=$ordered_list_page
+        fi
+
+        while IFS= read -r name
+        do
+            name_lower=$(tr '[:upper:]' '[:lower:]' <<< "$name")
+            if [[ $name_lower == *"$search_phrase"* ]] 
+            then
+                search_result="$search_result页数: $green$i$plain 频道名称: $green$name$plain\n\n"
+            fi
+        done < <($JQ_FILE '.js.data[].name' <<< "$ordered_list_page")
+    done
+}
+
 ViewXtreamCodesChnls()
 {
     while true 
@@ -13010,9 +13128,9 @@ ViewXtreamCodesChnls()
 
                     while true 
                     do
-                        if [ "${#ordered_list_pages[@]}" -ge "$page" ] 
+                        page_index=$((page-1))
+                        if [ -n "${ordered_list_pages[page_index]:-}" ] 
                         then
-                            page_index=$((page-1))
                             ordered_list_page=${ordered_list_pages[page_index]}
                         else
                             if [ "$page" -gt 1 ] 
@@ -13022,7 +13140,7 @@ ViewXtreamCodesChnls()
                                     --header="$headers" \
                                     --header="Cookie: $cookies" "$ordered_list_url" -qO-)
                             fi
-                            ordered_list_pages+=("$ordered_list_page")
+                            ordered_list_pages[page_index]=$ordered_list_page
                         fi
 
                         xc_chnls_id=()
@@ -13048,6 +13166,8 @@ ViewXtreamCodesChnls()
 
                         Println "$xc_chnls_list"
                         echo -e "$tip 输入 a 返回上级页面"
+                        echo -e "$tip 输入 s 频道名称 搜索频道"
+                        echo -e "$tip 输入 p 页数 跳转页面"
                         if [ "$pages" -gt 1 ] 
                         then
                             Println "当前第 $page 页, 共 $pages 页"
@@ -13064,6 +13184,36 @@ ViewXtreamCodesChnls()
 
                         echo && while read -p "输入频道序号: " xc_chnls_num 
                         do
+                            if [[ $xc_chnls_num =~ ^s\ * ]] 
+                            then
+                                search_phrase=${xc_chnls_num#*s }
+                                lead=${search_phrase%%[^[:blank:]]*}
+                                search_phrase=${search_phrase#${lead}}
+                                if [ -z "$search_phrase" ] 
+                                then
+                                    Println "$error 搜索内容不能为空\n"
+                                else
+                                    SearchXtreamCodesChnls 2>> "$MONITOR_LOG"
+                                fi
+
+                                if [ -n "$search_result" ] 
+                                then
+                                    Println "搜索结果:\n\n$search_result"
+                                else
+                                    Println "$error 没有搜索结果\n"
+                                fi
+                                continue
+                            elif [[ $xc_chnls_num =~ ^p\ [0-9]+ ]] 
+                            then
+                                if [ "${xc_chnls_num#* }" -le "$pages" ]
+                                then
+                                    page=${xc_chnls_num#* }
+                                    continue 2
+                                else
+                                    Println "$error 页数错误\n"
+                                    continue
+                                fi
+                            fi
                             case "$xc_chnls_num" in
                                 a)
                                     continue 3
@@ -13103,18 +13253,22 @@ ViewXtreamCodesChnls()
 
                         create_link_url="$server/portal.php?type=itv&action=create_link&cmd=${xc_chnls_cmd[xc_chnls_index]}&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
 
-                        stream_link=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
+                        cmd=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
                             --header="$headers" \
                             --header="Cookie: $cookies" "$create_link_url" -qO- \
                             | $JQ_FILE -r '.js.cmd')
-                        stream_link=${stream_link#* }
-                        IFS="/" read -ra s <<< "$stream_link"
-                        if [ "${s[3]}" == "live" ] 
+
+                        if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
                         then
-                            stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[5]}/${s[-1]}"
+                            stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}/${BASH_REMATCH[6]}"
+                        elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                        then
+                            stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
                         else
-                            stream_link="${s[0]}//${s[2]}/${s[3]}/${s[4]}/${s[-1]}"
+                            Println "$error 返回错误, 请重试"
+                            continue
                         fi
+
                         Println "$green${xc_chnls_name[xc_chnls_index]}:$plain $stream_link\n"
                         if $FFPROBE -i "$stream_link" -user_agent "$user_agent" \
                             -headers "$headers"$'\r\n' \
@@ -14100,7 +14254,7 @@ NginxDomainServerToggleNodejs()
             [[ "${enable_nodejs:-0}" -eq 1 ]] || continue
         fi
 
-        if [[ $nginx_domain_server_found -eq 1 ]] && { [[ $line == *"location = /channels.json "* ]] || [[ $line == *"location = /remote "* ]] || [[ $line == *"location = /remote.json "* ]] || [[ $line == *"location = /keys "* ]] || [[ $line == *"location ~ \.(keyinfo|key)"* ]]; }
+        if [[ $nginx_domain_server_found -eq 1 ]] && { [[ $line == *"location = /channels "* ]] || [[ $line == *"location = /channels.json "* ]] || [[ $line == *"location = /remote "* ]] || [[ $line == *"location = /remote.json "* ]] || [[ $line == *"location = /keys "* ]] || [[ $line == *"location ~ \.(keyinfo|key)"* ]]; }
         then
             nodejs_flag=1
             [[ "${enable_nodejs:-0}" -eq 1 ]] || continue
@@ -14220,7 +14374,7 @@ NginxDomainServerToggleNodejs()
     done < "/usr/local/nginx/conf/sites_available/${nginx_domains[nginx_domains_index]}.conf"
     unset last_line
     echo -e "$conf" > "/usr/local/nginx/conf/sites_available/${nginx_domains[nginx_domains_index]}.conf"
-    Println "$info nodejs 配置修改成功\n"
+    Println "$info nodejs 配置修改成功, 请确保已经安装 nodejs\n"
 }
 
 NginxDomainUpdateCrt()
@@ -14544,9 +14698,9 @@ NginxConfigLocalhost()
             localhost_found=1
         fi
 
-        if [[ $server_found -eq 1 ]] && [[ $localhost_found -eq 1 ]] && [[ ${enable_nodejs:-0} -eq 1 ]] && [[ $location_found -eq 0 ]] && { [[ $line == *"location = / "* ]] || [[ $line == *"location = /channels.json "* ]] || [[ $line == *"location = /remote "* ]] || [[ $line == *"location = /remote.json "* ]] || [[ $line == *"location = /keys "* ]] || [[ $line == *"location ~ \.(keyinfo|key)"* ]] || [[ $skip_location -eq 1 ]]; }
+        if [[ $server_found -eq 1 ]] && [[ $localhost_found -eq 1 ]] && [[ ${enable_nodejs:-0} -eq 1 ]] && [[ $location_found -eq 0 ]] && { [[ $line == *"location = / "* ]] || [[ $line == *"location = /channels "* ]] || [[ $line == *"location = /channels.json "* ]] || [[ $line == *"location = /remote "* ]] || [[ $line == *"location = /remote.json "* ]] || [[ $line == *"location = /keys "* ]] || [[ $line == *"location ~ \.(keyinfo|key)"* ]] || [[ $skip_location -eq 1 ]]; }
         then
-            if [[ $line == *"location = / "* ]] || [[ $line == *"location = /channels.json "* ]] || [[ $line == *"location = /remote "* ]] || [[ $line == *"location = /remote.json "* ]] || [[ $line == *"location = /keys "* ]] || [[ $line == *"location ~ \.(keyinfo|key)"* ]] 
+            if [[ $line == *"location = / "* ]] || [[ $line == *"location = /channels "* ]] || [[ $line == *"location = /channels.json "* ]] || [[ $line == *"location = /remote "* ]] || [[ $line == *"location = /remote.json "* ]] || [[ $line == *"location = /keys "* ]] || [[ $line == *"location ~ \.(keyinfo|key)"* ]] 
             then
                 skip_location=1
             elif [[ $line == *"}"* ]] 
@@ -15105,7 +15259,7 @@ InstallNodejs()
     fi
 
     kill $progress_pid
-    echo -n "...100%" && Println "$info nodejs 安装完成"
+    echo -en "...100%\n" && Println "$info nodejs 安装完成"
 }
 
 NodejsInstallMongodb()
@@ -16308,7 +16462,14 @@ V2rayDeleteNginxAccount()
 }
 
 GetFreePort() {
-    read lport uport < /proc/sys/net/ipv4/ip_local_port_range
+    if [ -n "${1:-}" ] && [ -n "${2:-}" ]
+    then
+        lport=$1
+        uport=$2
+    else
+        read lport uport < /proc/sys/net/ipv4/ip_local_port_range
+    fi
+
     while true
     do
         candidate=$((lport+RANDOM%(uport-lport)))
@@ -19102,7 +19263,7 @@ then
                     fi
                     if [ ! -s "$MONITOR_LOG" ] && [ ! -s "$IP_LOG" ]
                     then
-                        Println "$error 无日志"
+                        Println "$error 无日志\n"
                     fi
                 ;;
                 *) 
@@ -19326,9 +19487,14 @@ case "$cmd" in
         TsMenu
         exit 0
     ;;
-    "f") 
+    "f"|"flv") 
         [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装，请检查 !\n" && exit 1
         kind="flv"
+        color="$blue"
+    ;;
+    "v"|"vip") 
+        [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装，请检查 !\n" && exit 1
+        vip=1
     ;;
     "l"|"ll") 
         flv_count=0
@@ -19493,29 +19659,1592 @@ do
     esac
 done
 
-if [ "$use_menu" == "1" ]
-then
-    CheckShFile
+SetVipHostIp()
+{
+    Println "请输入 VIP 频道所在服务器 IP/域名"
+    read -p "(默认: 取消): " vip_host_ip
+    [ -z "$vip_host_ip" ] && Println "已取消...\n" && exit 1
+    Println "	VIP 服务器 IP/域名: $green $vip_host_ip $plain\n"
+}
+
+SetVipHostPort()
+{
+    Println "请输入 VIP 频道所在服务器端口"
+    read -p "(默认: 取消): " vip_host_port
+    [ -z "$vip_host_port" ] && Println "已取消...\n" && exit 1
+    Println "	VIP 服务器端口: $green $vip_host_port $plain\n"
+}
+
+SetVipHostSeed()
+{
+    Println "请输入 VIP 频道所在服务器的 seed"
+    read -p "(默认: 取消): " vip_host_seed
+    [ -z "$vip_host_seed" ] && Println "已取消...\n" && exit 1
+    Println "	VIP 服务器 seed: $green $vip_host_seed $plain\n"
+}
+
+SetVipHostToken()
+{
+    Println "请输入 VIP 频道所在服务器的 token"
+    read -p "(默认: 不设置): " vip_host_token
+    Println "	VIP 服务器 token: $green ${vip_host_token:-不设置} $plain\n"
+}
+
+SetVipHostStatus()
+{
+    Println "是否开启用此 VIP 服务器 [Y/n]"
+    read -p "(默认: 是): " vip_host_status
+    vip_host_status=${vip_host_status:-Y}
+    if [[ $vip_host_status == [Yy] ]] 
+    then
+        vip_host_status_yn="on"
+        vip_host_status_text="$green启用$plain"
+    else
+        vip_host_status_yn="off"
+        vip_host_status_text="$red禁用$plain"
+    fi
+    Println "	VIP 服务器状态: $vip_host_status_text\n"
+}
+
+AddVipHost()
+{
+    SetVipHostIp
+    SetVipHostPort
+    SetVipHostSeed
+    SetVipHostToken
+    SetVipHostStatus
+
+    if [ ! -s "$VIP_FILE" ] 
+    then
+        printf '{"%s":{},"%s":[],"%s":[]}' "config" "users" "hosts" > "$VIP_FILE"
+    fi
+
+    new_host=$(
+    $JQ_FILE -n --arg ip "$vip_host_ip" --arg port "$vip_host_port" \
+        --arg seed "$vip_host_seed" --arg token "$vip_host_token" \
+        --arg status "$vip_host_status_yn"
+        '{
+            ip: $ip,
+            port: $port | tonumber,
+            seed: $seed,
+            token: $token,
+            status: $status,
+            channels: []
+        }'
+    )
+
+    jq_path='["hosts"]'
+    JQ add "$VIP_FILE" "[$new_host]"
+    Println "$info VIP 服务器添加成功\n"
+}
+
+EditVipHost()
+{
+    ListVipHosts
+    echo -e "选择 VIP 服务器"
+    while read -p "(默认: 取消): " vip_hosts_num
+    do
+        case "$vip_hosts_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$vip_hosts_num" -gt 0 ] && [ "$vip_hosts_num" -le "$vip_hosts_count" ]
+                then
+                    vip_hosts_index=$((vip_hosts_num-1))
+                    vip_host_ip=${vip_hosts_ip[vip_hosts_index]}
+                    vip_host_port=${vip_hosts_port[vip_hosts_index]}
+                    vip_host_seed=${vip_hosts_seed[vip_hosts_index]}
+                    vip_host_token=${vip_hosts_token[vip_hosts_index]}
+                    vip_host_status_yn=${vip_hosts_status_yn[vip_hosts_index]}
+                    if [ "$vip_host_status_yn" == "yes" ] 
+                    then
+                        vip_host_status_text="$green启用$plain"
+                    else
+                        vip_host_status_text="$red禁用$plain"
+                    fi
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "
+选择修改内容
+
+    ${green}1.$plain 修改 IP/域名
+    ${green}2.$plain 修改 端口
+    ${green}3.$plain 修改 seed
+    ${green}4.$plain 修改 token
+    ${green}5.$plain 修改 状态
+
+"
+    read -p "(默认: 取消): " edit_vip_host_num
+
+    case $edit_vip_host_num in
+        1) 
+            Println "原 IP/域名: $red$vip_host_ip$plain"
+            SetVipHostIp
+            jq_path='["hosts",'"$vip_hosts_index"',"ip"]'
+            JQ update "$VIP_FILE" "$vip_host_ip"
+            Println "$info IP/域名 修改成功\n"
+        ;;
+        2) 
+            Println "原端口: $red$vip_host_port$plain"
+            SetVipHostPort
+            jq_path='["hosts",'"$vip_hosts_index"',"port"]'
+            JQ update "$VIP_FILE" "$vip_host_port" number
+            Println "$info 端口 修改成功\n"
+        ;;
+        3) 
+            Println "原 seed: $red$vip_host_seed$plain"
+            SetVipHostSeed
+            jq_path='["hosts",'"$vip_hosts_index"',"seed"]'
+            JQ update "$VIP_FILE" "$vip_host_seed"
+            Println "$info seed 修改成功\n"
+        ;;
+        4) 
+            Println "原 token: $red$vip_host_token$plain"
+            SetVipHostToken
+            jq_path='["hosts",'"$vip_hosts_index"',"token"]'
+            JQ update "$VIP_FILE" "$vip_host_token"
+            Println "$info token 修改成功\n"
+        ;;
+        5) 
+            Println "原状态: $vip_host_status_text"
+            SetVipHostStatus
+            jq_path='["hosts",'"$vip_hosts_index"',"status"]'
+            JQ update "$VIP_FILE" "$vip_host_status_yn"
+            Println "$info 状态修改成功\n"
+        ;;
+        *) Println "已取消...\n" && exit 1
+        ;;
+    esac
+}
+
+GetVipHosts()
+{
+    vip_hosts_list=""
+    vip_hosts_count=0
+    vip_hosts_ip=()
+    vip_hosts_port=()
+    vip_hosts_seed=()
+    vip_hosts_token=()
+    vip_hosts_status_yn=()
+    vip_hosts_channel_count=()
+    vip_hosts_channel_id=()
+    vip_hosts_channel_name=()
+    vip_hosts_channel_epg_id=()
+    while IFS="^" read -r ip port seed token status_yn channels_count channels_id channels_name channels_epg_id
+    do
+        vip_hosts_count=$((vip_hosts_count+1))
+        ip=${ip#\"}
+        vip_hosts_ip+=("$ip")
+        vip_hosts_port+=("$port")
+        vip_hosts_seed+=("$seed")
+        vip_hosts_token+=("$token")
+        vip_hosts_status_yn+=("$status_yn")
+        if [ "$status_yn" == "on" ] 
+        then
+            status_text="$green [启用] $plain"
+        else
+            status_text="$red [禁用] $plain"
+        fi
+        vip_hosts_channel_count+=("$channels_count")
+        vip_hosts_channel_id+=("$channels_id")
+        vip_hosts_channel_name+=("$channels_name")
+        channels_epg_id=${channels_epg_id%\"}
+        vip_hosts_channel_epg_id+=("$channels_epg_id")
+        if [ "$vip_hosts_count" -lt 10 ] 
+        then
+            blank=" "
+        else
+            blank=""
+        fi
+        vip_hosts_list="$vip_hosts_list$blank$green$vip_hosts_count.$plain 服务器: $green$ip$plain  端口: $green$port$plain  频道数: $green$channels_count$plain$status_text\n    seed: $green$seed$plain  token: $green${token:-无}$plain\n\n"
+    done < <($JQ_FILE '.hosts[]|[.ip,.port,.seed,.token,.status,(.channels|length),([.channels[].id]|join("|")),([.channels[].name]|join("|")),([.channels[].epg_id]|join("|"))]|join("^")' "$VIP_FILE")
+    return 0
+}
+
+ListVipHosts()
+{
+    if [ ! -s "$VIP_FILE" ] 
+    then
+        Println "$error 请先添加 VIP 服务器\n" && exit 1
+    fi
+
+    GetVipHosts
+
+    if [ "$vip_hosts_count" -gt 0 ] 
+    then
+        Println "$vip_hosts_list"
+    else
+        Println "$error 请先添加 VIP 服务器\n" && exit 1
+    fi
+}
+
+ViewVipHost()
+{
+    ListVipChannels
+}
+
+DelVipHost()
+{
+    ListVipHosts
+    echo -e "选择 VIP 服务器"
+    while read -p "(默认: 取消): " vip_hosts_num
+    do
+        case "$vip_hosts_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$vip_hosts_num" -gt 0 ] && [ "$vip_hosts_num" -le "$vip_hosts_count" ]
+                then
+                    vip_hosts_index=$((vip_hosts_num-1))
+                    vip_host_ip=${vip_hosts_ip[vip_hosts_index]}
+                    vip_host_port=${vip_hosts_port[vip_hosts_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    jq_path='["hosts"]'
+    JQ delete "$VIP_FILE" "$vip_hosts_index"
+
+    Println "服务器 ${green}[ $vip_host_ip ]$plain 删除成功\n"
+}
+
+SetVipUserIp()
+{
+    Println "请输入用户的 IP"
+    read -p "(默认: 本机 IP): " vip_user_ip
+    [ -z "$vip_user_ip" ] && vip_user_ip=$(GetServerIp)
+    if [[ -n $($JQ_FILE '.users[]|select(.ip=="'"$vip_user_ip"'")' "$VIP_FILE") ]] 
+    then
+        Println "$error 此 IP 已存在\n" && exit 1
+    fi
+    Println "	用户 IP: $green $vip_user_ip $plain\n"
+}
+
+SetVipUserLicense()
+{
+    Println "请输入用户的授权码"
+    read -p "(默认: 自动生成): " vip_user_license
+    if [ -z "$vip_user_license" ] 
+    then
+        random_number=$(od -An -N6 -t u8 < /dev/urandom)
+        vip_user_license="m${random_number: -12}"
+        while [[ -n $($JQ_FILE '.users[]|select(.license=="'"$vip_user_license"'")' "$VIP_FILE") ]] 
+        do
+            random_number=$(od -An -N6 -t u8 < /dev/urandom)
+            vip_user_license="m${random_number: -12}"
+        done
+    elif [[ -n $($JQ_FILE '.users[]|select(.license=="'"$vip_user_license"'")' "$VIP_FILE") ]] 
+    then
+        Println "$error 此授权码已存在\n" && exit 1
+    fi
+    Println "	用户 license: $green $vip_user_license $plain\n"
+}
+
+SetVipUserSum()
+{
+    Println "选择验证类型
+
+  ${green}1.$plain ssum (一天)
+  ${green}2.$plain tsum (可控制天数)
+  ${green}3.$plain isum (永久)
+
+"
+
+    while read -p "(默认: 2): " vip_user_sum_num 
+    do
+        case $vip_user_sum_num in
+            1) 
+                vip_user_expire_days=1
+                vip_user_sum="ssum"
+                printf -v now '%(%s)T' 
+                vip_user_expire=$((now+86400))
+                break
+            ;;
+            2|"") 
+                vip_user_sum="tsum"
+                Println "请输入天数"
+                while read -p "(默认: 1): " vip_user_expire_days 
+                do
+                    case $vip_user_expire_days in
+                        ""|1) 
+                            vip_user_expire_days=1
+                            printf -v now '%(%s)T' 
+                            vip_user_expire=$((now+86400))
+                            break 2
+                        ;;
+                        *[!0-9]*) 
+                            Println "$error 输入错误\n"
+                        ;;
+                        *) 
+                            if [[ $vip_user_expire_days -gt 1 ]]
+                            then
+                                printf -v now '%(%s)T' 
+                                vip_user_expire=$((now+86400*vip_user_expire_days))
+                                break 2
+                            else
+                                Println "$error 输入错误\n"
+                            fi
+                        ;;
+                    esac
+                done
+            ;;
+            3) 
+                vip_user_expire_days=""
+                vip_user_sum="isum"
+                vip_user_expire=0
+                break
+            ;;
+            *) Println "$error 输入错误\n"
+            ;;
+        esac
+    done
+    Println "	验证类型: $green $vip_user_sum $plain\n	到期天数: $green ${vip_user_expire_days:-无} $plain\n"
+}
+
+SetVipUserName()
+{
+    Println "请输入用户名称(可以是中文)"
+    read -p "(默认: 随机): " vip_user_name
+    if [ -z "$vip_user_name" ] 
+    then
+        vip_user_name=$(RandStr)
+        while [[ -n $($JQ_FILE '.users[]|select(.name=="'"$vip_user_name"'")' "$VIP_FILE") ]] 
+        do
+            vip_user_name=$(RandStr)
+        done
+    elif [[ -n $($JQ_FILE '.users[]|select(.name=="'"$vip_user_name"'")' "$VIP_FILE") ]] 
+    then
+        Println "$error 此用户名已存在\n" && exit 1
+    fi
+    Println "	用户名称: $green $vip_user_name $plain\n"
+}
+
+AddVipUser()
+{
+    if [ ! -s "$VIP_FILE" ] 
+    then
+        printf '{"%s":{},"%s":[],"%s":[]}' "config" "users" "hosts" > "$VIP_FILE"
+    fi
+
+    SetVipUserIp
+    SetVipUserLicense
+    SetVipUserSum
+    SetVipUserName
+
+    new_user=$(
+    $JQ_FILE -n --arg ip "$vip_user_ip" --arg license "$vip_user_license" \
+        --arg sum "$vip_user_sum" --arg expire "$vip_user_expire" \
+        --arg name "$vip_user_name" \
+        '{
+            ip: $ip,
+            license: $license,
+            sum: $sum,
+            expire: $expire | tonumber,
+            name: $name
+        }'
+    )
+
+    jq_path='["users"]'
+    JQ add "$VIP_FILE" "[$new_user]"
+
+    Println "$info 添加成功\n"
+}
+
+EditVipUser()
+{
+    ListVipUsers
+
+    while read -p "请选择用户: " vip_users_num
+    do
+        case "$vip_users_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$vip_users_num" -gt 0 ] && [ "$vip_users_num" -le "$vip_users_count" ]
+                then
+                    vip_users_index=$((vip_users_num-1))
+                    vip_user_ip=${vip_users_ip[vip_users_index]}
+                    vip_user_license=${vip_users_license[vip_users_index]}
+                    vip_user_sum=${vip_users_sum[vip_users_index]}
+                    vip_user_expire=${vip_users_expire[vip_users_index]}
+                    if [ "$vip_user_expire" -gt 0 ] 
+                    then
+                        vip_user_expire_text=$(date +%c --date=@"$vip_user_expire")
+                    else
+                        vip_user_expire_text="无"
+                    fi
+                    vip_user_name=${vip_users_name[vip_users_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "
+选择修改内容
+
+    ${green}1.$plain 修改 用户名
+    ${green}2.$plain 修改 IP
+    ${green}3.$plain 修改 授权码
+    ${green}4.$plain 修改 验证类型/到期日
+
+"
+    read -p "(默认: 取消): " edit_vip_user_num
+
+    case $edit_vip_user_num in
+        1) 
+            Println "原用户名: $red$vip_user_name$plain"
+            SetVipUserName
+            jq_path='["users",'"$vip_users_index"',"name"]'
+            JQ update "$VIP_FILE" "$vip_user_name"
+            Println "$info 用户名修改成功\n"
+        ;;
+        2) 
+            Println "原 IP: $red$vip_user_ip$plain"
+            SetVipUserIp
+            jq_path='["users",'"$vip_users_index"',"ip"]'
+            JQ update "$VIP_FILE" "$vip_user_ip"
+            Println "$info IP 修改成功\n"
+        ;;
+        3) 
+            Println "原授权码: $red$vip_user_license$plain"
+            SetVipUserLicense
+            jq_path='["users",'"$vip_users_index"',"license"]'
+            JQ update "$VIP_FILE" "$vip_user_license"
+            Println "$info 授权码修改成功\n"
+        ;;
+        4) 
+            Println "原验证类型: $red$vip_user_sum$plain\n原到期日: $red$vip_user_expire_text$plain"
+            SetVipUserSum
+            jq_path='["users",'"$vip_users_index"',"sum"]'
+            JQ update "$VIP_FILE" "$vip_user_sum"
+            jq_path='["users",'"$vip_users_index"',"expire"]'
+            JQ update "$VIP_FILE" "$vip_user_expire" number
+            Println "$info 验证类型/到期日修改成功\n"
+        ;;
+        *) Println "已取消...\n" && exit 1
+        ;;
+    esac
+}
+
+GetVipUsers()
+{
+    GetVipConfig
+    vip_users_list=""
+    vip_users_count=0
+    vip_users_ip=()
+    vip_users_license=()
+    vip_users_sum=()
+    vip_users_expire=()
+    vip_users_name=()
+    while IFS=":" read -r ip license sum expire name
+    do
+        vip_users_count=$((vip_users_count+1))
+        ip=${ip#\"}
+        vip_users_ip+=("$ip")
+        vip_users_license+=("$license")
+        vip_users_sum+=("$sum")
+        vip_users_expire+=("$expire")
+        name=${name%\"}
+        vip_users_name+=("$name")
+        if [ "$vip_users_count" -lt 10 ] 
+        then
+            blank=" "
+        else
+            blank=""
+        fi
+        if [ "$expire" -gt 0 ] 
+        then
+            expire_text=$(date +%c --date=@"$expire")
+        else
+            expire_text="无"
+        fi
+        if [ -n "${vip_public_host:-}" ] 
+        then
+            m3u_link="$vip_public_host/vip/$license/playlist.m3u"
+        else
+            m3u_link="${FFMPEG_MIRROR_LINK%/*}/vip/$license/playlist.m3u"
+        fi
+        vip_users_list="$vip_users_list$blank$green$vip_users_count.$plain 用户名: $green$name$plain  ip: $green$ip$plain  到期日: $green$expire_text$plain\n    授权码: $green$license$plain  认证方式: $green$sum$plain\n    m3u 播放链接: $green$m3u_link$plain\n\n"
+    done < <($JQ_FILE '.users[]|[.ip,.license,.sum,.expire,.name]|join(":")' "$VIP_FILE")
+    return 0
+}
+
+ListVipUsers()
+{
+    if [ ! -s "$VIP_FILE" ] 
+    then
+        Println "$error 请先添加 VIP 服务器\n" && exit 1
+    fi
+
+    GetVipUsers
+
+    if [ "$vip_users_count" -gt 0 ] 
+    then
+        Println "$vip_users_list"
+    else
+        Println "$error 请先添加用户\n" && exit 1
+    fi
+}
+
+ViewVipUser()
+{
+    ListVipUsers
+}
+
+DelVipUser()
+{
+    ListVipUsers
+
+    while read -p "请选择用户: " vip_users_num
+    do
+        case "$vip_users_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$vip_users_num" -gt 0 ] && [ "$vip_users_num" -le "$vip_users_count" ]
+                then
+                    vip_users_index=$((vip_users_num-1))
+                    vip_user_ip=${vip_users_ip[vip_users_index]}
+                    vip_user_license=${vip_users_license[vip_users_index]}
+                    vip_user_sum=${vip_users_sum[vip_users_index]}
+                    vip_user_expire=${vip_users_expire[vip_users_index]}
+                    vip_user_name=${vip_users_name[vip_users_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    jq_path='["users"]'
+    JQ delete "$VIP_FILE" "$vip_users_index"
+
+    Println "用户 ${green}$vip_user_name [ $vip_user_license ]$plain 删除成功"
+    Println "$tip 同一用户2分钟内不能使用不同的授权码\n"
+}
+
+SetVipChannelId()
+{
+    Println "请输入频道 ID, 同时也是目录名称"
+    read -p "(默认: 取消): " vip_channel_id
+
+    [ -z "$vip_channel_id" ] && Println "已取消...\n" && exit 1
+
+    if [[ -n $($JQ_FILE --arg vip_host_ip "$vip_host_ip" --arg vip_channel_id "$vip_channel_id" '.hosts[] | select(.ip==$vip_host_ip).channels[] | select(.id==$vip_channel_id)' "$VIP_FILE") ]] 
+    then
+        Println "$error $vip_channel_id 频道已经存在\n" && exit 1
+    fi
+}
+
+SetVipChannelName()
+{
+    Println "请输入频道名称(可以是中文)"
+    read -p "(默认: 取消): " vip_channel_name
+    [ -z "$vip_channel_name" ] && Println "已取消...\n" && exit 1
+    Println "	VIP 频道名称: $green $vip_channel_name $plain\n"
+}
+
+SetVipChannelEpgId()
+{
+    Println "请输入频道 epg id"
+    read -p "(默认: 不设置): " vip_channel_epg_id
+    Println "	VIP 频道 epg: $green ${vip_channel_epg_id:-不设置} $plain\n"
+}
+
+AddVipChannel()
+{
+    ListVipHosts
+    echo -e "选择 VIP 服务器"
+    while read -p "(默认: 取消): " vip_hosts_num
+    do
+        case "$vip_hosts_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$vip_hosts_num" -gt 0 ] && [ "$vip_hosts_num" -le "$vip_hosts_count" ]
+                then
+                    vip_hosts_index=$((vip_hosts_num-1))
+                    vip_host_ip=${vip_hosts_ip[vip_hosts_index]}
+                    vip_host_port=${vip_hosts_port[vip_hosts_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "是否批量添加? [y/N]"
+    read -p "(默认: 否): " vip_bulk_add
+    vip_bulk_add=${vip_bulk_add:-N}
+    if [[ $vip_bulk_add == [Yy] ]] 
+    then
+        Println "请输入频道 ID, 同时也是目录名称和频道名称, 用空格分隔"
+        read -p "(默认: 取消): " vip_channel
+        IFS=" " read -r -a vip_channels <<< "$vip_channel"
+        for vip_channel in "${vip_channels[@]}"
+        do
+            new_channel=$(
+            $JQ_FILE -n --arg id "$vip_channel" --arg name "$vip_channel" \
+                '{
+                    id: $id,
+                    name: $name
+                }'
+            )
+
+            jq_path='["hosts",'"$vip_hosts_index"',"channels"]'
+            JQ add "$VIP_FILE" "[$new_channel]"
+        done
+        Println "$info 批量添加成功\n"
+    else
+        SetVipChannelId
+        SetVipChannelName
+        SetVipChannelEpgId
+        new_channel=$(
+        $JQ_FILE -n --arg id "$vip_channel_id" --arg name "$vip_channel_name" \
+            --arg epg_id "$vip_channel_epg_id"
+            '{
+                id: $id,
+                name: $name,
+                epg_id: $epg_id
+            }'
+        )
+
+        jq_path='["hosts",'"$vip_hosts_index"',"channels"]'
+        JQ add "$VIP_FILE" "[$new_channel]"
+        Println "$info 频道 $vip_channel_name 添加成功\n"
+    fi
+}
+
+EditVipChannel()
+{
+    ListVipChannels
+    echo -e "$tip 多个频道用空格分隔, 比如 5 7 9-11"
+    while read -p "请选择频道: " vip_channels_num
+    do
+        IFS=" " read -ra vip_channels_num_arr <<< "$vip_channels_num"
+
+        error_no=0
+        for vip_channel_num in "${vip_channels_num_arr[@]}"
+        do
+            case "$vip_channel_num" in
+                *"-"*)
+                    vip_channel_num_start=${vip_channel_num%-*}
+                    vip_channel_num_end=${vip_channel_num#*-}
+                    if [[ $vip_channel_num_start == *[!0-9]* ]] || [[ $vip_channel_num_end == *[!0-9]* ]] || [ "$vip_channel_num_start" -eq 0 ] || [ "$vip_channel_num_end" -eq 0 ] || [ "$vip_channel_num_end" -gt "$vip_channels_count" ] || [ "$vip_channel_num_start" -ge "$vip_channel_num_end" ]
+                    then
+                        error_no=3
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                ;;
+                *)
+                    if [ "$vip_channel_num" -lt 1 ] || [ "$vip_channel_num" -gt "$vip_channels_count" ] 
+                    then
+                        error_no=2
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error 请输入正确的数字或直接回车 \n"
+            ;;
+            *)
+                for vip_channels_num in "${vip_channels_num_arr[@]}"
+                do
+                    vip_channels_index=$((vip_channels_num-1))
+                    vip_channel_id=${vip_channels_id[vip_channels_index]}
+                    vip_channel_name=${vip_channels_name[vip_channels_index]}
+                    vip_channel_epg_id=${vip_channels_epg_id[vip_channels_index]}
+
+                    Println "
+选择修改内容
+
+    ${green}1.$plain 修改频道 ID 
+    ${green}2.$plain 修改频道名称
+    ${green}3.$plain 修改频道 epg
+
+"
+                    read -p "(默认: 取消): " edit_vip_channel_num
+
+                    case $edit_vip_channel_num in
+                        1) 
+                            Println "原频道[$vip_channel_name] ID: $red$vip_channel_id$plain"
+                            SetVipChannelId
+                            jq_path='["hosts",'"$vip_hosts_index"',"channels",'"$vip_channels_index"',"id"]'
+                            JQ update "$VIP_FILE" "$vip_channel_id"
+                            Println "$info 频道 ID 修改成功\n"
+                        ;;
+                        2) 
+                            Println "原频道名称: $red$vip_channel_name$plain"
+                            SetVipChannelName
+                            jq_path='["hosts",'"$vip_hosts_index"',"channels",'"$vip_channels_index"',"name"]'
+                            JQ update "$VIP_FILE" "$vip_channel_name"
+                            Println "$info 频道名称修改成功\n"
+                        ;;
+                        3) 
+                            Println "原频道[$vip_channel_name] epg: $red${vip_channel_epg_id:-无}$plain"
+                            SetVipChannelEpgId
+                            jq_path='["hosts",'"$vip_hosts_index"',"channels",'"$vip_channels_index"',"epg_id"]'
+                            JQ update "$VIP_FILE" "$vip_channel_epg_id"
+                            Println "$info 频道 epg 修改成功\n"
+                        ;;
+                        *) Println "已取消...\n" && exit 1
+                        ;;
+                    esac
+                done
+                break
+            ;;
+        esac
+    done
+}
+
+ListVipChannels()
+{
+    ListVipHosts
+    while read -p "选择 VIP 服务器: " vip_hosts_num
+    do
+        case "$vip_hosts_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$vip_hosts_num" -gt 0 ] && [ "$vip_hosts_num" -le "$vip_hosts_count" ]
+                then
+                    vip_hosts_index=$((vip_hosts_num-1))
+                    vip_host_ip=${vip_hosts_ip[vip_hosts_index]}
+                    vip_host_port=${vip_hosts_port[vip_hosts_index]}
+                    vip_host_seed=${vip_hosts_seed[vip_hosts_index]}
+                    vip_host_token=${vip_hosts_token[vip_hosts_index]}
+                    vip_channel_id=${vip_hosts_channel_id[vip_hosts_index]}
+                    vip_channel_name=${vip_hosts_channel_name[vip_hosts_index]}
+                    vip_channel_epg_id=${vip_hosts_channel_epg_id[vip_hosts_index]}
+                    IFS="|" read -r -a vip_channels_id <<< "$vip_channel_id"
+                    IFS="|" read -r -a vip_channels_name <<< "$vip_channel_name"
+                    IFS="|" read -r -a vip_channels_epg_id <<< "${vip_channel_epg_id}|"
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    vip_channels_list=""
+    vip_channels_count=${vip_hosts_channel_count[vip_hosts_index]}
+
+    flag=0
+    for((i=0;i<vip_channels_count;i++));
+    do
+        if [ "$flag" -eq 0 ] 
+        then
+            flag=1
+            i_last=$i
+            if [ "$vip_channels_count" -eq 1 ] 
+            then
+                vip_channels_list="$vip_channels_list $green$((i+1)).$plain ${vip_channels_name[i]}\n频道ID: ${vip_channels_id[i]}\nEPG ID: ${vip_channels_epg_id[i]:-无}\n"
+            else
+                vip_channels_list="$vip_channels_list $green$((i+1)).$plain ${vip_channels_name[i]}"
+            fi
+        else
+            flag=0
+            vip_channels_list="$vip_channels_list\r\e[40C$green$((i+1)).$plain ${vip_channels_name[i]}\n 频道ID: ${vip_channels_id[i_last]}\r\e[40C频道ID: ${vip_channels_id[i]}\n EPG ID: ${vip_channels_epg_id[i_last]:-无}\r\e[40CEPG ID: ${vip_channels_epg_id[i]:-无}\n\n"
+        fi
+    done
+
+    if [ -n "$vip_channels_list" ] 
+    then
+        Println "$vip_channels_list\n"
+    else
+        Println "$error 请先添加频道\n" && exit 1
+    fi
+}
+
+GetVipStreamLink()
+{
+    seed=$vip_host_seed
+    tid=$vip_user_license
+    tid_lower=$(tr '[:upper:]' '[:lower:]' <<< "$tid")
+    if [ "$vip_user_expire" -gt 0 ] 
+    then
+        day=$((vip_user_expire/86400))
+        st2=$vip_user_expire
+    else
+        printf -v now '%(%s)T'
+        st2=$((now+86400*720))
+    fi
+
+    token=$vip_host_token
+    ss=$(printf '%s' "$st2$token$vip_user_ip$tid" | md5sum)
+    ss=${ss%% *}
+    ct2=$(date +%s%3N)
+    vip_channel_id_lower=$(tr '[:upper:]' '[:lower:]' <<< "$vip_channel_id")
+    cs=$(printf '%s' "$st2$ss$ct2$vip_channel_id_lower$tid_lower" | md5sum)
+    cs=${cs%% *}
+
+    case $vip_user_sum in
+        "ssum") 
+            ssum="$seed/$vip_channel_id/playlist.m3u8$tid$day"
+            ssum=$(printf '%s' "$ssum" | md5sum)
+            ssum=${ssum%% *}
+            stream_link="http://$vip_host_ip:$vip_host_port/$vip_channel_id/playlist.m3u8?tid=$tid&ssum=$ssum&st2=$st2&ss=$ss&ct2=$ct2&cs=$cs"
+        ;;
+        "tsum") 
+            ct=$day
+            tsum="$seed/$vip_channel_id/playlist.m3u8$tid$ct"
+            tsum=$(printf '%s' "$tsum" | md5sum)
+            tsum=${tsum%% *}
+            stream_link="http://$vip_host_ip:$vip_host_port/$vip_channel_id/playlist.m3u8?tid=$tid&ct=$ct&tsum=$tsum&st2=$st2&ss=$ss&ct2=$ct2&cs=$cs"
+        ;;
+        "isum") 
+            isum="$seed$vip_user_ip/$vip_channel_id/playlist.m3u8$tid"
+            isum=$(printf '%s' "$isum" | md5sum)
+            isum=${isum%% *}
+            stream_link="http://$vip_host_ip:$vip_host_port/$vip_channel_id/playlist.m3u8?tid=$tid&isum=$isum&st2=$st2&ss=$ss&ct2=$ct2&cs=$cs"
+        ;;
+    esac
+}
+
+ViewVipChannel()
+{
+    ListVipChannels
+
+    while read -p "请选择频道: " vip_channels_num
+    do
+        case "$vip_channels_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$vip_channels_num" -gt 0 ] && [ "$vip_channels_num" -le "$vip_channels_count" ]
+                then
+                    vip_channels_index=$((vip_channels_num-1))
+                    vip_channel_id=${vip_channels_id[vip_channels_index]}
+                    vip_channel_name=${vip_channels_name[vip_channels_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    ListVipUsers
+
+    while read -p "请选择用户: " vip_users_num
+    do
+        case "$vip_users_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$vip_users_num" -gt 0 ] && [ "$vip_users_num" -le "$vip_users_count" ]
+                then
+                    vip_users_index=$((vip_users_num-1))
+                    vip_user_ip=${vip_users_ip[vip_users_index]}
+                    vip_user_license=${vip_users_license[vip_users_index]}
+                    vip_user_sum=${vip_users_sum[vip_users_index]}
+                    vip_user_expire=${vip_users_expire[vip_users_index]}
+                    vip_user_name=${vip_users_name[vip_users_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    GetVipStreamLink
+
+    if [ -z "${vip_public_host:-}" ] 
+    then
+        ConfigVip
+    fi
+    if [ -n "${vip_public_host:-}" ] 
+    then
+        Println "频道 ${green}[ $vip_channel_name ]$plain\n\n源链接: $stream_link\n\nm3u8地址: $vip_public_host/vip/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
+    else
+        Println "频道 ${green}[ $vip_channel_name ]$plain\n\n源链接: $stream_link\n\nm3u8地址: $VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
+    fi
+}
+
+DelVipChannel()
+{
+    ListVipChannels
+
+    while read -p "请选择频道: " vip_channels_num
+    do
+        case "$vip_channels_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$vip_channels_num" -gt 0 ] && [ "$vip_channels_num" -le "$vip_channels_count" ]
+                then
+                    vip_channels_index=$((vip_channels_num-1))
+                    vip_channel_id=${vip_channels_id[vip_channels_index]}
+                    vip_channel_name=${vip_channels_name[vip_channels_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    jq_path='["hosts",'"$vip_hosts_index"',"channels"]'
+    JQ delete "$VIP_FILE" "$vip_channels_index"
+
+    Println "频道 ${green}[ $vip_channel_name ]$plain 删除成功\n"
+}
+
+GetVipConfig()
+{
+    while IFS=" " read -r key value
+    do
+        if [ -z "$key" ] 
+        then
+            break
+        else
+            read -r vip_${key?} <<< "$value"
+        fi
+    done < <($JQ_FILE -r '.config|to_entries[]|[.key,.value]|join(" ")' "$VIP_FILE")
+    return 0
+}
+
+ConfigVipPublicRoot()
+{
+    Println "请输入公开目录, 比如 /usr/local/nginx/html"
+    read -p "(默认: 不公开): " vip_public_root
+    if [ -n "$vip_public_root" ] 
+    then
+        vip_public_root=${vip_public_root%\/}
+    fi
+    JQ update "$VIP_FILE" '(.config|.public_root)="'"$vip_public_root"'"'
+    Println "	VIP 公开目录: $green ${vip_public_root:-无} $plain\n"
+}
+
+ConfigVipPublicHost()
+{
+    Println "请输入公开目录的 域名 或者 IP 网址, 比如 http://localhost"
+    read -p "(默认: 不设置): " vip_public_host
+    JQ update "$VIP_FILE" '(.config|.public_host)="'"$vip_public_host"'"'
+    Println "	公开目录 域名 或者 IP: $green ${vip_public_host:-不设置} $plain\n"
+}
+
+ConfigVip()
+{
+    ConfigVipPublicRoot
+    if [ -n "$vip_public_root" ] 
+    then
+        ConfigVipPublicHost
+    fi
+}
+
+ProcessVipLists()
+{
+    [ ! -d "$VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/${vip_channels_id[k]}" ] && mkdir -p "$VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/${vip_channels_id[k]}"
+    printf '#EXTM3U\n#EXT-X-STREAM-INF:PROGRAM-ID=%s,BANDWIDTH=1500002\n%s' \
+    "$program_id" "$stream_link" > "$VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/${vip_channels_id[k]}/playlist.m3u8"
+    if [ "$k" -eq 0 ] 
+    then
+        m3u_list="$m3u_list#EXTINF:-1,===== $vip_host_ip:$vip_host_port ${vip_channels_name[k]} =====\n$stream_link\n"
+    else
+        m3u_list="$m3u_list#EXTINF:-1,${vip_channels_name[k]}\n$stream_link\n"
+    fi
+    epg_id=${vip_channels_epg_id[k]}
+    if [ -n "$epg_id" ] && [ -n "${schedules_id:-}" ]
+    then
+        for((m=0;m<${#schedules_id[@]};m++));
+        do
+            if [ "${schedules_id[m]}" == "$epg_id" ] && [ -n "${schedules_sys_time[m]}" ]
+            then
+                IFS="^" read -r -a sys_times <<< "${schedules_sys_time[m]}"
+                IFS="^" read -r -a titles <<< "${schedules_title[m]}"
+                epg_list="$epg_list<channel id=\"$program_id\">\n<display-name lang=\"zh\">${vip_channels_name[k]}</display-name>\n</channel>\n"
+                programs_count=${#sys_times[@]}
+                for((n=0;n<programs_count;n++));
+                do
+                    printf -v start '%(%Y%m%d%H%M%S)T' "${sys_times[n]}"
+                    if [ "$n" -eq $((programs_count-1)) ] 
+                    then
+                        stop=$(date -d 'tomorrow 00:00:00' "+%Y%m%d%H%M%S")
+                    else
+                        printf -v stop '%(%Y%m%d%H%M%S)T' "${sys_times[$((n+1))]}"
+                    fi
+                    epg_list="$epg_list<programme start=\"$start +0800\" stop=\"$stop +0800\" channel=\"$program_id\">\n<title lang=\"zh\">${titles[n]}</title>\n</programme>\n"
+                done
+                break
+            fi
+        done
+    fi
+}
+
+GetSchedules()
+{
+    GetDefault
+    if [ -n "$d_schedule_file" ] && [ -s "$d_schedule_file" ]
+    then
+        schedules_id=()
+        schedules_sys_time=()
+        schedules_title=()
+        while IFS="%" read -r schedule_id schedule_sys_time schedule_tile
+        do
+            schedules_id+=("${schedule_id#\"}")
+            schedules_sys_time+=("$schedule_sys_time")
+            schedules_title+=("${schedule_tile%\"}")
+        done < <($JQ_FILE -M 'to_entries[]|[.key,([.value[].sys_time]|join("^")),([.value[].title]|join("^"))]|join("%")' "$d_schedule_file")
+    fi
+}
+
+MonitorVip()
+{
+    trap '' HUP INT
+    trap 'MonitorError $LINENO' ERR
+
+    trap '
+        [ -n "$vip_public_root" ] && rm -rf "$vip_public_root/vip"
+        [ -e "/tmp/vip.pid" ] && rm -f "/tmp/vip.pid"
+        exit 
+    ' TERM
+
+    mkdir -p "/tmp" 
+    printf '%s' "$BASHPID" > "/tmp/vip.pid"
+    printf -v date_now '%(%m-%d %H:%M:%S)T'
+    printf '%s\n' "$date_now 启动 VIP  PID $BASHPID !" >> "$MONITOR_LOG"
+    printf -v now '%(%s)T'
+    never=$((now+86400*720))
+
+    GetSchedules
+
+    while true 
+    do
+        if [ "$vip_hosts_count" -gt 0 ] && [ "$vip_users_count" -gt 0 ]
+        then
+            if [ -e "$VIP_USERS_ROOT/epg.update" ] 
+            then
+                GetSchedules
+            fi
+            ct2=$(date +%s%3N)
+            epg_update=1
+            for((i=0;i<vip_users_count;i++));
+            do
+                vip_user_ip=${vip_users_ip[i]}
+                vip_user_license=${vip_users_license[i]}
+                vip_user_sum=${vip_users_sum[i]}
+                vip_user_expire=${vip_users_expire[i]}
+                vip_user_name=${vip_users_name[i]}
+
+                tid=$vip_user_license
+                #tid_lower=$(tr '[:upper:]' '[:lower:]' <<< "$tid")
+                tid_lower=$tid
+                if [ "$vip_user_expire" -gt 0 ] 
+                then
+                    day=$((vip_user_expire/86400))
+                    st2=$vip_user_expire
+                else
+                    st2=$never
+                fi
+
+                if [ "$now" -lt "$vip_user_expire" ] || [ "$vip_user_expire" -eq 0 ]
+                then
+                    if [ ! -e "$VIP_USERS_ROOT/$vip_user_license/license.json" ] 
+                    then
+                        license_json=$(
+                        $JQ_FILE -n --arg ip "$vip_user_ip" --arg license "$vip_user_license" \
+                            --arg sum "$vip_user_sum" --arg expire "$vip_user_expire" \
+                            --arg name "$vip_user_name" \
+                            '{
+                                ip: $ip,
+                                license: $license,
+                                sum: $sum,
+                                expire: $expire | tonumber,
+                                name: $name
+                            }'
+                        )
+                        [ ! -d "$VIP_USERS_ROOT/$vip_user_license" ] && mkdir -p "$VIP_USERS_ROOT/$vip_user_license"
+                        printf '[%s]' "$license_json" > "$VIP_USERS_ROOT/$vip_user_license/license.json"
+                    fi
+                    m3u_list=""
+                    epg_list=""
+                    program_id=0
+                    for((j=0;j<vip_hosts_count;j++));
+                    do
+                        vip_host_ip=${vip_hosts_ip[j]}
+                        vip_host_port=${vip_hosts_port[j]}
+                        vip_host_seed=${vip_hosts_seed[j]}
+                        vip_host_token=${vip_hosts_token[j]}
+                        vip_host_status_yn=${vip_hosts_status_yn[j]}
+                        vip_channels_count=${vip_hosts_channel_count[j]}
+                        vip_channel_id=${vip_hosts_channel_id[j]}
+                        vip_channel_name=${vip_hosts_channel_name[j]}
+                        vip_channel_epg_id=${vip_hosts_channel_epg_id[j]}
+
+                        if [ "$vip_host_status_yn" == "on" ] && [ "$vip_channels_count" -gt 0 ] 
+                        then
+                            vip_channel_id_lower=$(tr '[:upper:]' '[:lower:]' <<< "$vip_channel_id")
+                            IFS="|" read -r -a vip_channels_id_lower <<< "$vip_channel_id_lower"
+                            IFS="|" read -r -a vip_channels_id <<< "$vip_channel_id"
+                            IFS="|" read -r -a vip_channels_name <<< "$vip_channel_name"
+                            IFS="|" read -r -a vip_channels_epg_id <<< "${vip_channel_epg_id}|"
+
+                            seed=$vip_host_seed
+                            token=$vip_host_token
+                            ss=$($MD5SUM_FILE "$st2$token$vip_user_ip$tid")
+
+                            cs=()
+                            for vip_channel_id in "${vip_channels_id_lower[@]}"
+                            do
+                                cs+=("$st2$ss$ct2$vip_channel_id$tid_lower")
+                            done
+                            mapfile -t vip_channels_cs < <($MD5SUM_FILE "${cs[@]}")
+
+                            case $vip_user_sum in
+                                "ssum") 
+                                    ssum=()
+                                    for vip_channel_id in "${vip_channels_id[@]}"
+                                    do
+                                        ssum+=("$seed/$vip_channel_id/playlist.m3u8$tid$day")
+                                    done
+                                    mapfile -t vip_channels_ssum < <($MD5SUM_FILE "${ssum[@]}")
+                                    for((k=0;k<vip_channels_count;k++));
+                                    do
+                                        program_id=$((program_id+1))
+                                        stream_link="http://$vip_host_ip:$vip_host_port/${vip_channels_id[k]}/playlist.m3u8?tid=$tid&ssum=${vip_channels_ssum[k]}&st2=$st2&ss=$ss&ct2=$ct2&cs=${vip_channels_cs[k]}"
+                                        ProcessVipLists
+                                    done
+                                ;;
+                                "tsum") 
+                                    ct=$day
+                                    tsum=()
+                                    for vip_channel_id in "${vip_channels_id[@]}"
+                                    do
+                                        tsum+=("$seed/$vip_channel_id/playlist.m3u8$tid$ct")
+                                    done
+                                    mapfile -t vip_channels_tsum < <($MD5SUM_FILE "${tsum[@]}")
+                                    for((k=0;k<vip_channels_count;k++));
+                                    do
+                                        program_id=$((program_id+1))
+                                        stream_link="http://$vip_host_ip:$vip_host_port/${vip_channels_id[k]}/playlist.m3u8?tid=$tid&ct=$ct&tsum=${vip_channels_tsum[k]}&st2=$st2&ss=$ss&ct2=$ct2&cs=${vip_channels_cs[k]}"
+                                        ProcessVipLists
+                                    done
+                                ;;
+                                "isum") 
+                                    isum=()
+                                    for vip_channel_id in "${vip_channels_id[@]}"
+                                    do
+                                        isum+=("$seed$vip_user_ip/$vip_channel_id/playlist.m3u8$tid")
+                                    done
+                                    mapfile -t vip_channels_isum < <($MD5SUM_FILE "${isum[@]}")
+                                    for((k=0;k<vip_channels_count;k++));
+                                    do
+                                        program_id=$((program_id+1))
+                                        stream_link="http://$vip_host_ip:$vip_host_port/${vip_channels_id[k]}/playlist.m3u8?tid=$tid&isum=${vip_channels_isum[k]}&st2=$st2&ss=$ss&ct2=$ct2&cs=${vip_channels_cs[k]}"
+                                        ProcessVipLists
+                                    done
+                                ;;
+                            esac
+                        elif [ -d "$VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port" ] 
+                        then
+                            rm -rf "$VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}${vip_host_port:-notfound}"
+                        fi
+                    done
+                    [ -n "$m3u_list" ] && echo -e "#EXTM3U\n$m3u_list" > "$VIP_USERS_ROOT/$vip_user_license/playlist.m3u"
+                    if { [ "$epg_update" -eq 1 ] || [ -e "$VIP_USERS_ROOT/epg.update" ]; } && [ -n "$epg_list" ]
+                    then
+                        epg_update=0
+                        echo -e "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<tv>\n$epg_list</tv>" > "$VIP_USERS_ROOT/epg.xml.new"
+                        mv "$VIP_USERS_ROOT/epg.xml.new" "$VIP_USERS_ROOT/epg.xml"
+                        [ -e "$VIP_USERS_ROOT/epg.update" ] && rm -f "$VIP_USERS_ROOT/epg.update"
+                    fi
+                elif [ -d "$VIP_USERS_ROOT/$vip_user_license" ] 
+                then
+                    rm -rf "$VIP_USERS_ROOT/${vip_user_license:-notfound}"
+                fi
+            done
+        fi
+
+        sleep 60
+
+        vip_users_license_old=("${vip_users_license[@]}")
+        vip_hosts_channel_id_old=("${vip_hosts_channel_id[@]}")
+
+        GetVipHosts
+        GetVipUsers
+
+        for vip_user_license_old in "${vip_users_license_old[@]}"
+        do
+            user_found=0
+            for vip_user_license in "${vip_users_license[@]}"
+            do
+                if [ "$vip_user_license" == "$vip_user_license_old" ] 
+                then
+                    user_found=1
+                    break
+                fi
+            done
+            if [ "$user_found" -eq 0 ] 
+            then
+                [ -d "$VIP_USERS_ROOT/$vip_user_license_old" ] && rm -rf "$VIP_USERS_ROOT/${vip_user_license_old:-notfound}"
+            else
+                for vip_host_channel_id_old in "${vip_hosts_channel_id_old[@]}"
+                do
+                    channel_found=0
+                    for vip_host_channel_id in "${vip_hosts_channel_id[@]}"
+                    do
+                        if [ "$vip_host_channel_id" == "$vip_host_channel_id_old" ] 
+                        then
+                            channel_found=1
+                            break
+                        fi
+                    done
+                    if [ "$channel_found" -eq 0 ] 
+                    then
+                        [ -d "$VIP_USERS_ROOT/$vip_user_license_old/${vip_host_ip//./}$vip_host_port/$vip_host_channel_id_old" ] && rm -rf "$VIP_USERS_ROOT/$vip_user_license_old/${vip_host_ip//./}$vip_host_port/${vip_host_channel_id_old:-notfound}"
+                    fi
+                done
+            fi
+        done
+        printf -v now '%(%s)T'
+    done
+}
+
+EnableVip()
+{
+    if [ -s "/tmp/vip.pid" ] && kill -0 "$(< /tmp/vip.pid)" 2> /dev/null
+    then
+        Println "$error VIP 已开启\n" && exit 1
+    fi
+
+    GetVipHosts
+
+    if [ "$vip_hosts_count" -gt 0 ] 
+    then
+        GetVipUsers
+
+        if [ "$vip_users_count" -gt 0 ] 
+        then
+            if [ ! -e "$MD5SUM_FILE" ] 
+            then
+                Println "$info 安装 md5sum..."
+                if [[ ! -x $(command -v gcc) ]] 
+                then
+                    CheckRelease
+                    if [ "$release" == "rpm" ] 
+                    then
+                        yum -y install gcc gcc-c++ >/dev/null 2>&1
+                    else
+                        apt-get -y install build-essential >/dev/null 2>&1
+                    fi
+                fi
+                mkdir -p "$C_ROOT"
+                wget --timeout=10 --tries=3 --no-check-certificate "${FFMPEG_MIRROR_LINK%/*}/c/md5sum.c" -qO "$MD5SUM_FILE.c"
+                gcc -Wall -O3 -o "$MD5SUM_FILE" "$MD5SUM_FILE.c"
+                Println "$info md5sum 安装成功"
+            fi
+            if [ -z "${vip_public_root:-}" ] 
+            then
+                ConfigVip
+            fi
+            [ -n "$vip_public_root" ] && ln -sfT "$VIP_USERS_ROOT" "$vip_public_root/vip"
+            ( MonitorVip ) > /dev/null 2>> "$MONITOR_LOG" &
+            Println "$info VIP 开启成功\n"
+        else
+            Println "$error 请先添加用户\n" && exit 1
+        fi
+    else
+        Println "$error 请先添加 VIP 服务器\n" && exit 1
+    fi
+}
+
+DisableVip()
+{
+    if [ -s "/tmp/vip.pid" ] 
+    then
+        vip_pid=$(< /tmp/vip.pid)
+        if kill -0 "$vip_pid" 2> /dev/null
+        then
+            kill "$vip_pid" 2> /dev/null
+            printf -v date_now '%(%m-%d %H:%M:%S)T'
+            printf '%s\n' "$date_now 关闭 VIP  PID $vip_pid !" >> "$MONITOR_LOG"
+            Println "$info 关闭 VIP, 稍等..."
+            until [ ! -e "/tmp/vip.pid" ]
+            do
+                sleep 1
+            done
+            Println "$info VIP 关闭成功\n"
+        else
+            Println "$error VIP 未开启\n"
+        fi
+    else
+        Println "$error VIP 未开启\n"
+    fi
+}
+
+ViewVipUserChannel()
+{
+    if [ ! -s "$VIP_FILE" ] 
+    then
+        Println "$error 请先输入授权码, 加微信 woniuzfb 或 tg @ woniuzfb\n"
+    else
+        GetVipUsers
+        printf -v now '%(%s)T'
+        vip_users_list=""
+        for((i=0;i<vip_users_count;i++));
+        do
+            vip_user_ip=${vip_users_ip[i]}
+            vip_user_license=${vip_users_license[i]}
+            vip_user_expire=${vip_users_expire[i]}
+            vip_user_name=${vip_users_name[i]}
+
+            if [ "$i" -lt 9 ] 
+            then
+                blank=" "
+            else
+                blank=""
+            fi
+            if [ "$vip_user_expire" -gt 0 ] 
+            then
+                expire_text=$(date +%c --date=@"$vip_user_expire")
+            else
+                expire_text="无"
+            fi
+            if [ "$now" -lt "$vip_user_expire" ] || [ "$vip_user_expire" -eq 0 ]
+            then
+                vip_users_list="$vip_users_list$blank$green$((i+1)).$plain 用户名: $green$vip_user_name$plain  ip: $green$vip_user_ip$plain  到期日: $green$expire_text$plain\n    授权码: $green$vip_user_license$plain\n    m3u 播放链接: $green${FFMPEG_MIRROR_LINK%/*}/vip/$vip_user_license/playlist.m3u$plain\n\n"
+            fi
+        done
+
+        if [ -n "$vip_users_list" ] 
+        then
+            Println "$vip_users_list"
+        elif [ "$vip_users_count" -eq 0 ] 
+        then
+            Println "$error 授权码不存在, 请联系微信 woniuzfb 或 tg @ woniuzfb\n"
+        else
+            Println "$error 授权码已过期, 请联系微信 woniuzfb 或 tg @ woniuzfb\n"
+        fi
+    fi
+}
+
+VerifyVipLicense()
+{
+    Println "请输入授权码"
+    read -p "(默认: 取消): " vip_user_license
+    [ -z "$vip_user_license" ] && Println "已取消...\n" && exit 1
+    
+    if vip_user=$(wget --timeout=10 --tries=3 --no-check-certificate "${FFMPEG_MIRROR_LINK%/*}/vip/$vip_user_license/license.json" -qO- 2> /dev/null)
+    then
+        if [ ! -s "$VIP_FILE" ] 
+        then
+            printf '{"%s":{},"%s":[],"%s":[]}' "config" "users" "hosts" > "$VIP_FILE"
+        fi
+        license_ip=$($JQ_FILE '.[].ip' <<< "$vip_user")
+        jq_path='["users"]'
+        JQ delete "$VIP_FILE" ip "$license_ip"
+        JQ add "$VIP_FILE" "$vip_user"
+        Println "$info 授权码验证成功\n"
+    else
+        Println "$error 授权码验证失败, 请联系微信 woniuzfb 或 tg @ woniuzfb\n"
+    fi
+}
+
+VipMenuUser()
+{
+    Println "  VIP 面板
+
+  ${red}1.$plain 查看 VIP 频道
+  ${red}2.$plain 输入 VIP 授权码
+
+ $tip 输入: h 切换到 HLS 面板, f 切换到 FLV 面板\n\n"
+    read -p "请输入数字 [1-2]: " vip_menu_num
+    case "$vip_menu_num" in
+        h)
+            kind=""
+            color=$green
+            Menu
+        ;;
+        f)
+            kind="flv"
+            color=$blue
+            Menu
+        ;;
+        1) ViewVipUserChannel
+        ;;
+        2) VerifyVipLicense
+        ;;
+        *) Println "$error 请输入正确的数字 [1-2]\n"
+        ;;
+    esac
+}
+
+VipMenu()
+{
+    [ ! -e "$IPTV_ROOT" ] && Println "$error 请先输入 tv 安装 !\n" && exit 1
+    if [ ! -e "$IPTV_ROOT/VIP" ] 
+    then
+        VipMenuUser
+        return 0
+    fi
+    Println "  VIP 面板
+
+  ${red}1.$plain 查看 VIP 用户
+  ${red}2.$plain 添加 VIP 用户
+  ${red}3.$plain 设置 VIP 用户
+  ${red}4.$plain 查看 VIP 频道
+  ${red}5.$plain 添加 VIP 频道
+  ${red}6.$plain 设置 VIP 频道
+  ${red}7.$plain 查看 VIP 服务器
+  ${red}8.$plain 添加 VIP 服务器
+  ${red}9.$plain 设置 VIP 服务器
+ ${red}10.$plain 删除 VIP 用户
+ ${red}11.$plain 删除 VIP 频道
+ ${red}12.$plain 删除 VIP 服务器
+ ${red}13.$plain 开启 VIP
+ ${red}14.$plain 关闭 VIP
+
+ $tip 输入: h 切换到 HLS 面板, f 切换到 FLV 面板\n\n"
+    read -p "请输入数字 [1-14]: " vip_menu_num
+    case "$vip_menu_num" in
+        h)
+            kind=""
+            color=$green
+            Menu
+        ;;
+        f)
+            kind="flv"
+            color=$blue
+            Menu
+        ;;
+        1) ViewVipUser
+        ;;
+        2) AddVipUser
+        ;;
+        3) EditVipUser
+        ;;
+        4) ViewVipChannel
+        ;;
+        5) AddVipChannel
+        ;;
+        6) EditVipChannel
+        ;;
+        7) ViewVipHost
+        ;;
+        8) AddVipHost
+        ;;
+        9) EditVipHost
+        ;;
+        10) DelVipUser
+        ;;
+        11) DelVipChannel
+        ;;
+        12) DelVipHost
+        ;;
+        13) EnableVip
+        ;;
+        14) DisableVip
+        ;;
+        *) Println "$error 请输入正确的数字 [1-14]\n"
+        ;;
+    esac
+}
+
+Menu()
+{
+    color=${color:-$green}
+
+    if [ -z "${kind:-}" ] 
+    then
+        title="HLS"
+        msg="f 切换到 FLV 面板, v 切换到 VIP 面板"
+    elif [ "$kind" == "flv" ] 
+    then
+        title="FLV"
+        msg="h 切换到 HLS 面板, v 切换到 VIP 面板"
+    fi
 
     Println "  ${gray_underlined}MTimer | http://hbo.epub.fun$plain
 
   IPTV 一键管理脚本 ${red}[v$sh_ver]$plain
 
-  ${green}1.$plain 安装
-  ${green}2.$plain 卸载
-  ${green}3.$plain 升级脚本
+  ${color}1.$plain 安装
+  ${color}2.$plain 卸载
+  ${color}3.$plain 升级脚本
 ————————————
-  ${green}4.$plain 查看频道
-  ${green}5.$plain 添加频道
-  ${green}6.$plain 修改频道
-  ${green}7.$plain 开关频道
-  ${green}8.$plain 重启频道
-  ${green}9.$plain 查看日志
- ${green}10.$plain 删除频道
+  ${color}4.$plain 查看频道
+  ${color}5.$plain 添加频道
+  ${color}6.$plain 修改频道
+  ${color}7.$plain 开关频道
+  ${color}8.$plain 重启频道
+  ${color}9.$plain 查看日志
+ ${color}10.$plain 删除频道
 
- $tip 输入: tv 打开 HLS 面板, tv f 打开 FLV 面板\n\n"
+ $tip 当前: ${green}$title$plain 面板
+ $tip 输入: $msg\n\n"
     read -p "请输入数字 [1-10]: " menu_num
     case "$menu_num" in
+        h)
+            kind=""
+            color=$green
+            Menu
+        ;;
+        f)
+            kind="flv"
+            color=$blue
+            Menu
+        ;;
+        v)
+            VipMenu
+        ;;
         1) Install
         ;;
         2) Uninstall
@@ -19539,6 +21268,17 @@ then
         *) Println "$error 请输入正确的数字 [1-10]\n"
         ;;
     esac
+}
+
+if [ "$use_menu" == "1" ]
+then
+    CheckShFile
+    if [ "${vip:-0}" -eq 1 ] 
+    then
+        VipMenu
+    else
+        Menu
+    fi
 else
     if [ -z "${stream_link:-}" ]
     then

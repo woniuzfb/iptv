@@ -58,11 +58,18 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 输入 cx 打开 Xtream Codes 账号/频道 管理面板
 ```
 
+## VIP 面板 [付费]
+
+``` bash
+输入 tv v 直接打开 VIP 面板, 享 VIP 直播源
+```
+
 - 自带加密 NODE.JS <- HTTP -> NginX <- HTTPS -> CLIENT
 - 自带防护
 - 自带监控
 - 自带防盗链
 - 自建节目表
+- 自带 VIP 模块
 - 添加频道
   - 可以用命令行，详见 tv -h
   - 也可以使用 shell 对话，输入 tv 打开面板
