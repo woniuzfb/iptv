@@ -1,6 +1,6 @@
-# 一键管理 [ IPTV / v2ray / Nginx ] 脚本 (... => hls <=> flv <= ...)
+# 一键管理 [ IPTV / v2ray / Nginx / OpenResty ] 脚本
 
-## A [ ffmpeg / v2ray / Nginx ] wrapper
+## A [ ffmpeg / v2ray / Nginx / OpenResty ] wrapper (... => hls <=> flv <= ...)
 
 ## 演示
 
@@ -37,6 +37,19 @@ wget -q http://hbo.epub.fun/nx.sh && bash nx.sh
 ```
 
 - 多域名管理
+  
+---
+
+## 一键管理 OpenResty 脚本
+
+``` bash
+wget -q http://hbo.epub.fun/or.sh && bash or.sh
+
+输入 or 打开 OpenResty 管理面板
+
+```
+
+- 配置文件和上面的 nginx 不相关
 
 ---
 
