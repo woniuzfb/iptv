@@ -1,6 +1,6 @@
-# 一键管理 [ IPTV / v2ray / Nginx / OpenResty ] 脚本
+# 一键管理 IPTV / v2ray / Nginx / OpenResty / CFP CNAME 脚本
 
-## A [ ffmpeg / v2ray / Nginx / OpenResty ] wrapper (... => hls <=> flv <= ...)
+## A ffmpeg / v2ray / Nginx / OpenResty wrapper (... => hls <=> flv <= ...)
 
 ## 演示
 
@@ -24,6 +24,22 @@ wget -q http://hbo.epub.fun/v2.sh && bash v2.sh
 
 - 多用户多账号管理
 - 代理转发账号管理
+  
+---
+
+## 一键管理 Cloudflare Partner CNAME 脚本
+
+``` bash
+wget -q http://hbo.epub.fun/cf.sh && bash cf.sh
+
+输入 cf 打开 CFP CNAME 管理面板
+
+```
+
+Mac/Linux 一键获取最优 IP 可以用脚本 [cloudflare-fping](https://github.com/woniuzfb/cloudflare-fping)
+
+- 多 CFP 管理
+- 可用找些公开的 CFP host key 添加, 就可以直接与 Cloudflare 官方通信, 不需要通过第三方面板输入账号密码, 避免了泄漏
   
 ---
 
@@ -71,11 +87,17 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 输入 cx 打开 Xtream Codes 账号/频道 管理面板
 ```
 
-## VIP 面板 [付费]
+## VIP 面板 ING ... [付费]
 
 ``` bash
 输入 tv v 直接打开 VIP 面板, 享 VIP 直播源
 ```
+
+- IP 控制
+- 自带 m3u, epg
+- 出售资源
+
+---
 
 - 自带加密 NODE.JS <- HTTP -> NginX <- HTTPS -> CLIENT
 - 自带防护
