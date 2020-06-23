@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# A [ ffmpeg / v2ray / nginx / openresty ] Wrapper Script By MTimer
+# A [ ffmpeg / v2ray / nginx / openresty / CFP CNAME ] Wrapper Script By MTimer
 # Copyright (C) 2019
 # Released under BSD 3 Clause License
 #
@@ -72,6 +72,8 @@
 #     cx 打开 xtream codes 面板
 #     v2 打开 v2ray 面板
 #     nx 打开 nginx 面板
+#     or 打开 openresty 面板
+#     cf 打开 cloudflare partner cname 面板
 
 set -euo pipefail
 
@@ -81,6 +83,8 @@ export LANG=en_US.UTF-8
 SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
+CF_FILE="/usr/local/bin/cf"
+CF_CONFIG="$HOME/cloudflare.json"
 OR_FILE="/usr/local/bin/or"
 NX_FILE="/usr/local/bin/nx"
 V2_FILE="/usr/local/bin/v2"
@@ -656,13 +660,6 @@ Install()
 {
     Println "$info 检查依赖，耗时可能会很长..."
     CheckRelease
-    Progress &
-    progress_pid=$!
-    trap '
-        kill $progress_pid 2> /dev/null
-    ' EXIT
-    kill $progress_pid
-    trap - EXIT
     if [ -e "$IPTV_ROOT" ]
     then
         Println "$error 目录已存在，请先卸载..." && exit 1
@@ -8389,14 +8386,20 @@ Schedule()
                 for provider_chnl in "${!provider_chnls}"
                 do
                     chnl_id=${provider_chnl%%:*}
-                    chnl_name=${provider_chnl#*:}
+                    chnl_name=${provider_chnl##*:}
                     if [ "$chnl_id" == "$2" ] 
                     then
                         found=1
                         unset "${provider_id}_chnls"
                         IFS="|" read -r -a "${provider_id}_chnls" <<< "${provider_chnl}|"
-                        chnl_id=$(tr '[:lower:]' '[:upper:]' <<< "${chnl_id:0:1}")"${chnl_id:1}"
-                        Schedule"$chnl_id" "${3:-}"
+                        if [ "$provider_id" == "other" ] 
+                        then
+                            chnl_id=$(tr '[:lower:]' '[:upper:]' <<< "${chnl_id:0:1}")"${chnl_id:1}"
+                            Schedule"$chnl_id" "${3:-}"
+                        else
+                            provider_id_upper=$(tr '[:lower:]' '[:upper:]' <<< "${provider_id:0:1}")"${provider_id:1}"
+                            Schedule"$provider_id_upper" "${3:-}"
+                        fi
                         break
                     fi
                 done
@@ -8885,7 +8888,7 @@ TsMenu()
                 ts_array[$key]="$value"
             done < <($JQ_FILE -r '[.data[] | select(.reg_url != null)]['"$channel_id"'] | to_entries | map("\(.key)=\(.value)") | .[]' <<< "$ts_channels")
 
-            if [ "${ts_array[name]}" == "jxtvnet" ] && ! nc -z "access.jxtvnet.tv" 81 2> /dev/null
+            if [ "${ts_array[name]}" == "jxtvnet" ] && ! nc -z -w 3 "access.jxtvnet.tv" 81 2> /dev/null
             then
                 Println "$info 部分服务器无法连接此直播源，但可以将ip写入 /etc/hosts 来连接，请选择线路
   ${green}1.$plain 电信
@@ -12338,11 +12341,17 @@ ListXtreamCodes()
             account="$username:$password"
         elif [[ ! $line =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+ ]] 
         then
-            if [[ $line =~ http://([^/]+)/ ]] 
+            if [[ $line =~ http://([^/]+)/ ]]
             then
                 stb_domain=${BASH_REMATCH[1]}
-                continue
-            elif [ -n "${stb_domain:-}" ] && [[ $line =~ (([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})) ]]
+
+                if [[ ! $line =~ (([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})) ]] 
+                then
+                    continue
+                fi
+            fi
+
+            if [ -n "${stb_domain:-}" ] && [[ $line =~ (([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})) ]]
             then
                 domain=$stb_domain
                 ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
@@ -12401,7 +12410,6 @@ ListXtreamCodes()
                     account=$mac_address
                 fi
             else
-                stb_domain=""
                 continue
             fi
         else
@@ -13024,6 +13032,8 @@ SearchXtreamCodesChnls()
 
         while IFS= read -r name
         do
+            name=${name#\"}
+            name=${name%\"}
             name_lower=$(tr '[:upper:]' '[:lower:]' <<< "$name")
             if [[ $name_lower == *"$search_phrase"* ]] 
             then
@@ -13437,17 +13447,18 @@ ViewXtreamCodesChnls()
                             --header="Cookie: $cookies" "$create_link_url" -qO- \
                             | $JQ_FILE -r '.js.cmd')
 
-                        if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                        if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
                         then
-                            stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}/${BASH_REMATCH[6]}"
+                            stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
                         elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
                         then
-                            stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
+                            stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
                         else
                             Println "$error 返回错误, 请重试"
                             continue
                         fi
 
+                        stream_link=${stream_link// /}
                         Println "$green${xc_chnls_name[xc_chnls_index]}:$plain $stream_link\n"
                         if $FFPROBE -i "$stream_link" -user_agent "$user_agent" \
                             -headers "$headers"$'\r\n' \
@@ -18799,26 +18810,6 @@ V2rayConfigDomain()
     done
 }
 
-CheckShFile()
-{
-    [ ! -e "$SH_FILE" ] && wget --no-check-certificate "$SH_LINK" -qO "$SH_FILE" && chmod +x "$SH_FILE"
-    if [ ! -s "$SH_FILE" ] 
-    then
-        Println "$error 无法连接到 Github ! 尝试备用链接..."
-        wget --no-check-certificate "$SH_LINK_BACKUP" -qO "$SH_FILE" && chmod +x "$SH_FILE"
-        if [ ! -s "$SH_FILE" ] 
-        then
-            Println "$error 无法连接备用链接!\n" && exit 1
-        fi
-    fi
-    [ ! -e "$OR_FILE" ] && ln -s "$SH_FILE" "$OR_FILE"
-    [ ! -e "$NX_FILE" ] && ln -s "$SH_FILE" "$NX_FILE"
-    [ ! -e "$V2_FILE" ] && ln -s "$SH_FILE" "$V2_FILE"
-    [ ! -e "$XC_FILE" ] && ln -s "$SH_FILE" "$XC_FILE"
-
-    return 0
-}
-
 InstallOpenresty()
 {
     Println "$info 检查依赖，耗时可能会很长..."
@@ -18962,7 +18953,996 @@ InstallOpenresty()
     echo -n "...100%" && echo
 }
 
-if [ "${0##*/}" == "or" ] || [ "${0##*/}" == "or.sh" ]
+CheckShFile()
+{
+    [ ! -e "$SH_FILE" ] && wget --no-check-certificate "$SH_LINK" -qO "$SH_FILE" && chmod +x "$SH_FILE"
+    if [ ! -s "$SH_FILE" ] 
+    then
+        Println "$error 无法连接到 Github ! 尝试备用链接..."
+        wget --no-check-certificate "$SH_LINK_BACKUP" -qO "$SH_FILE" && chmod +x "$SH_FILE"
+        if [ ! -s "$SH_FILE" ] 
+        then
+            Println "$error 无法连接备用链接!\n" && exit 1
+        fi
+    fi
+    [ ! -e "$CF_FILE" ] && ln -s "$SH_FILE" "$CF_FILE"
+    [ ! -e "$OR_FILE" ] && ln -s "$SH_FILE" "$OR_FILE"
+    [ ! -e "$NX_FILE" ] && ln -s "$SH_FILE" "$NX_FILE"
+    [ ! -e "$V2_FILE" ] && ln -s "$SH_FILE" "$V2_FILE"
+    [ ! -e "$XC_FILE" ] && ln -s "$SH_FILE" "$XC_FILE"
+
+    return 0
+}
+
+SetCloudflareHostKey()
+{
+    Println "请输入 CFP host key"
+    read -p "(默认: 取消): " cf_host_key
+    [ -z "$cf_host_key" ] && Println "已取消...\n" && exit 1
+
+    IFS=" " read -r result msg < <(curl --silent -Lm 10 https://api.cloudflare.com/host-gw.html \
+        -d 'act=zone_list' \
+        -d "host_key=$cf_host_key" \
+        -d 'limit=1' \
+        -d 'offset=0' \
+        -d 'zone_status=ALL' \
+        -d 'sub_status=ALL' \
+        | $JQ_FILE '[.result,.msg]|join(" ")'
+    ) || true
+
+    result=${result#\"}
+    msg=${msg%\"}
+
+    if [ -z "$result" ] || [ "$result" == "error" ]
+    then
+        Println "$error $msg\n" && exit 1
+    fi
+
+    Println "	CFP: $green $cf_host_key $plain\n"
+}
+
+SetCloudflareHostName()
+{
+    Println "请输入 CFP 邮箱或名称, 便于区分 host key"
+    read -p "(默认: 取消): " cf_host_name
+    [ -z "$cf_host_name" ] && Println "已取消...\n" && exit 1
+    Println "	CFP 邮箱或名称: $green $cf_host_name $plain\n"
+}
+
+AddCloudflareHost()
+{
+    SetCloudflareHostKey
+    SetCloudflareHostName
+
+    if [ ! -s "$CF_CONFIG" ] 
+    then
+        printf '{"%s":[],"%s":[]}' "users" "hosts" > "$CF_CONFIG"
+    fi
+
+    new_host=$(
+    $JQ_FILE -n --arg name "$cf_host_name" --arg key "$cf_host_key" \
+        '{
+            name: $name,
+            key: $key,
+            free: 0,
+            zones: []
+        }'
+    )
+
+    jq_path='["hosts"]'
+    JQ add "$CF_CONFIG" "[$new_host]"
+    Println "$info CFP 添加成功\n"
+}
+
+SetCloudflareUserEmail()
+{
+    Println "请输入用户邮箱"
+    read -p "(默认: 取消): " cf_user_email
+    [ -z "$cf_user_email" ] && Println "已取消...\n" && exit 1
+    Println "	用户邮箱: $green $cf_user_email $plain\n"
+}
+
+SetCloudflareUserPass()
+{
+    Println "请输入用户密码"
+    read -p "(默认: 取消): " cf_user_pass
+    [ -z "$cf_user_pass" ] && Println "已取消...\n" && exit 1
+    Println "	用户密码: $green $cf_user_pass $plain\n"
+}
+
+AddCloudflareUser()
+{
+    SetCloudflareUserEmail
+    SetCloudflareUserPass
+
+    if [ ! -s "$CF_CONFIG" ] 
+    then
+        printf '{"%s":[],"%s":[]}' "users" "hosts" > "$CF_CONFIG"
+    fi
+
+    new_user=$(
+    $JQ_FILE -n --arg email "$cf_user_email" --arg pass "$cf_user_pass" \
+        '{
+            email: $email,
+            pass: $pass
+        }'
+    )
+
+    jq_path='["users"]'
+    JQ add "$CF_CONFIG" "[$new_user]"
+    Println "$info 用户添加成功\n"
+}
+
+ViewCloudflareUser()
+{
+    ListCloudflareUsers
+}
+
+GetCloudflareHosts()
+{
+    cf_hosts_list=""
+    cf_hosts_count=0
+    cf_hosts_name=()
+    cf_hosts_key=()
+    cf_hosts_zones_count=()
+    cf_hosts_zone_name=()
+    cf_hosts_zone_resolve_to=()
+    cf_hosts_zone_user_email=()
+    cf_hosts_zone_user_unique_id=()
+    cf_hosts_zone_subdomains=()
+    while IFS="^" read -r name key zones_count zone_name zone_resolve_to zone_user_email zone_user_unique_id zone_subdomains
+    do
+        cf_hosts_count=$((cf_hosts_count+1))
+        name=${name#\"}
+        cf_hosts_name+=("$name")
+        cf_hosts_key+=("$key")
+        cf_hosts_zones_count+=("$zones_count")
+        cf_hosts_zone_name+=("$zone_name")
+        cf_hosts_zone_resolve_to+=("$zone_resolve_to")
+        cf_hosts_zone_user_email+=("$zone_user_email")
+        cf_hosts_zone_user_unique_id+=("$zone_user_unique_id")
+        zone_subdomains=${zone_subdomains%\"}
+        cf_hosts_zone_subdomains+=("$zone_subdomains")
+
+        if [ "$cf_hosts_count" -lt 10 ] 
+        then
+            blank=" "
+        else
+            blank=""
+        fi
+        cf_hosts_list="$cf_hosts_list$blank$green$cf_hosts_count.$plain CFP: $green$name$plain  host key: $green$key$plain  域名数: $green$zones_count$plain\n\n"
+    done < <($JQ_FILE '.hosts[]|[.name,.key,(.zones|length),([.zones[].name]|join("|")),([.zones[].resolve_to]|join("|")),([.zones[].user_email]|join("|")),([.zones[].user_unique_id]|join("|")),([.zones[].subdomains]|join("|"))]|join("^")' "$CF_CONFIG")
+    return 0
+}
+
+ListCloudflareHosts()
+{
+    if [ ! -s "$CF_CONFIG" ] 
+    then
+        Println "$error 请先添加 CFP\n" && exit 1
+    fi
+
+    GetCloudflareHosts
+
+    if [ "$cf_hosts_count" -gt 0 ] 
+    then
+        Println "$cf_hosts_list"
+    else
+        Println "$error 请先添加 CFP\n" && exit 1
+    fi
+}
+
+ViewCloudflareHost()
+{
+    ListCloudflareHosts
+}
+
+SetCloudflareZoneResolve()
+{
+    Println "请输入子域名经 cloudflare 中转后默认解析到的地址, 比如 resolve-to-cloudflare.example.com"
+    echo -e "$tip 此地址应指向源站\n"
+    read -p "(默认: 取消): " cf_zone_resolve_to
+    [ -z "$cf_zone_resolve_to" ] && Println "已取消...\n" && exit 1
+    Println "	默认解析地址: $green $cf_zone_resolve_to $plain\n"
+}
+
+GetCloudflareUsers()
+{
+    cf_users_list=""
+    cf_users_count=0
+    cf_users_email=()
+    cf_users_pass=()
+    while IFS=" " read -r email pass
+    do
+        cf_users_count=$((cf_users_count+1))
+        email=${email#\"}
+        cf_users_email+=("$email")
+        pass=${pass%\"}
+        cf_users_pass+=("$pass")
+
+        if [ "$cf_users_count" -lt 10 ] 
+        then
+            blank=" "
+        else
+            blank=""
+        fi
+        cf_users_list="$cf_users_list$blank$green$cf_users_count.$plain 邮箱: $green$email$plain  密码: $green$pass$plain\n\n"
+    done < <($JQ_FILE '.users[]|[.email,.pass]|join(" ")' "$CF_CONFIG")
+    return 0
+}
+
+ListCloudflareUsers()
+{
+    GetCloudflareUsers
+
+    if [ "$cf_users_count" -gt 0 ] 
+    then
+        Println "$cf_users_list"
+    else
+        Println "$error 没有用户\n"
+    fi
+}
+
+AddCloudflareZone()
+{
+    GetCloudflareUsers
+
+    if [ "$cf_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
+
+    ListCloudflareHosts
+
+    echo -e "选择 CFP"
+    while read -p "(默认: 取消): " cf_hosts_num
+    do
+        case "$cf_hosts_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_hosts_num" -gt 0 ] && [ "$cf_hosts_num" -le "$cf_hosts_count" ]
+                then
+                    cf_hosts_index=$((cf_hosts_num-1))
+                    cf_host_name=${cf_hosts_name[cf_hosts_index]}
+                    cf_host_key=${cf_hosts_key[cf_hosts_index]}
+                    cf_host_zone_name=${cf_hosts_zone_name[cf_hosts_index]}
+                    IFS="|" read -r -a cf_host_zones_name <<< "$cf_host_zone_name"
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "$cf_users_list"
+
+    echo -e "选择用户"
+    while read -p "(默认: 取消): " cf_users_num
+    do
+        case "$cf_users_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
+                then
+                    cf_users_index=$((cf_users_num-1))
+                    cf_user_email=${cf_users_email[cf_users_index]}
+                    cf_user_pass=${cf_users_pass[cf_users_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    result=""
+    until [ "$result" == "success" ] 
+    do
+        random_number=$(od -An -N6 -t u8 < /dev/urandom)
+        cf_user_unique_id=${random_number: -12}
+        IFS="^" read -r result err_code msg < <(curl --silent -Lm 10 https://api.cloudflare.com/host-gw.html \
+            -d 'act=user_create' \
+            -d "host_key=$cf_host_key" \
+            -d "cloudflare_email=$cf_user_email" \
+            -d "cloudflare_pass=$cf_user_pass" \
+            -d "unique_id=$cf_user_unique_id" \
+            | $JQ_FILE '[.result,.err_code,.msg]|join("^")'
+        ) || true
+
+        result=${result#\"}
+        msg=${msg%\"}
+        if [ -n "$err_code" ] && [ "$err_code" -eq 117 ] 
+        then
+            continue
+        fi
+        break
+    done
+
+    Println "请输入根域名"
+    echo -e "$tip 如果域名已经由 cloudflare 解析, 请先到官方 cloudflare 面板中删除\n"
+    while read -p "(默认: 取消): " cf_zone_name
+    do
+        if [ -z "$cf_zone_name" ] 
+        then
+            Println "已取消...\n"
+            exit 1
+        elif [[ $cf_zone_name =~ ^([^.]+).([^.]+)$ ]] 
+        then
+            Println "	域名: $green $cf_zone_name $plain\n"
+            break
+        else
+            Println "$error 输入错误, 请输入根域名, 不能是二级域名"
+        fi
+    done
+
+    found=0
+    for cf_host_zone_name in "${cf_host_zones_name[@]}"
+    do
+        if [ "$cf_host_zone_name" == "$cf_zone_name" ] 
+        then
+            found=1
+            break
+        fi
+    done
+
+    if [ "$found" -eq 1 ] 
+    then
+        Println "$error 域名已经存在\n"
+    else
+        SetCloudflareZoneResolve
+
+        new_zone=$(
+        $JQ_FILE -n --arg name "$cf_zone_name" --arg resolve_to "$cf_zone_resolve_to" \
+            --arg user_email "$cf_user_email" --arg user_unique_id "$cf_user_unique_id" \
+            '{
+                name: $name,
+                resolve_to: $resolve_to,
+                user_email: $user_email,
+                user_unique_id: $user_unique_id | tonumber
+            }'
+        )
+
+        jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
+        JQ add "$CF_CONFIG" "[$new_zone]"
+        Println "$info 源站添加成功\n"
+    fi
+}
+
+ListCloudflareZones()
+{
+    ListCloudflareHosts
+
+    echo -e "选择 CFP"
+    while read -p "(默认: 取消): " cf_hosts_num
+    do
+        case "$cf_hosts_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_hosts_num" -gt 0 ] && [ "$cf_hosts_num" -le "$cf_hosts_count" ]
+                then
+                    cf_hosts_index=$((cf_hosts_num-1))
+                    cf_host_name=${cf_hosts_name[cf_hosts_index]}
+                    cf_host_key=${cf_hosts_key[cf_hosts_index]}
+                    cf_zones_count=${cf_hosts_zones_count[cf_hosts_index]}
+                    cf_zone_name=${cf_hosts_zone_name[cf_hosts_index]}
+                    cf_zone_resolve_to=${cf_hosts_zone_resolve_to[cf_hosts_index]}
+                    cf_zone_user_email=${cf_hosts_zone_user_email[cf_hosts_index]}
+                    cf_zone_user_unique_id=${cf_hosts_zone_user_unique_id[cf_hosts_index]}
+                    IFS="|" read -r -a cf_zones_name <<< "$cf_zone_name"
+                    IFS="|" read -r -a cf_zones_user_email <<< "$cf_zone_user_email"
+                    IFS="|" read -r -a cf_zones_user_unique_id <<< "$cf_zone_user_unique_id"
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    cf_zones_list=""
+    for((i=0;i<cf_zones_count;i++));
+    do
+        cf_zones_list="$cf_zones_list$green$((i+1)).$plain 源站: $green${cf_zones_name[i]}$plain 用户: $green${cf_zones_user_email[i]}$plain\n\n"
+    done
+
+    [ -z "$cf_zones_list" ] && Println "$error 请先添加源站\n" && exit 1
+
+    Println "$cf_zones_list"
+}
+
+ViewCloudflareZone()
+{
+    ListCloudflareZones
+}
+
+GetCloudflareZoneInfo()
+{
+    IFS="^" read -r result cf_zone_hosted_cnames cf_zone_forward_tos cf_zone_ssl_status cf_zone_ssl_meta_tag msg < <(curl --silent -Lm 10 https://api.cloudflare.com/host-gw.html \
+        -d 'act=zone_lookup' \
+        -d "host_key=$cf_host_key" \
+        -d "user_key=$cf_user_key" \
+        -d "zone_name=$cf_zone_name" \
+        | $JQ_FILE '[.result,([(.response.hosted_cnames| if .== null then {} else . end)|to_entries[]
+        |([.key,.value]|join("="))]
+        |join("|")),([(.response.forward_tos| if .== null then {} else . end)|to_entries[]
+        |([.key,.value]|join("="))]
+        |join("|")),.response.ssl_status,.response.ssl_meta_tag,.msg]|join("^")'
+    ) || true
+
+    result=${result#\"}
+    msg=${msg%\"}
+
+    if [ -z "$result" ] || [ "$result" == "error" ]
+    then
+        Println "$error $msg\n" && exit 1
+    fi
+
+    IFS="|" read -r -a cf_zone_hosted_cnames_arr <<< "$cf_zone_hosted_cnames"
+    IFS="|" read -r -a cf_zone_forward_tos_arr <<< "$cf_zone_forward_tos"
+
+    cf_hosted_cnames=()
+    cf_resolve_tos=()
+    cf_forward_tos=()
+
+    for cf_zone_hosted_cname in "${cf_zone_hosted_cnames_arr[@]}"
+    do
+        cf_hosted_cname=${cf_zone_hosted_cname%%=*}
+        cf_resolve_to=${cf_zone_hosted_cname#*=}
+        cf_hosted_cnames+=("$cf_hosted_cname")
+        cf_resolve_tos+=("$cf_resolve_to")
+        for cf_zone_forward_to in "${cf_zone_forward_tos_arr[@]}"
+        do
+            if [ "${cf_zone_forward_to%%=*}" == "$cf_hosted_cname" ] 
+            then
+                cf_forward_tos+=("${cf_zone_forward_to#*=}")
+                break
+            fi
+        done
+    done
+}
+
+GetCloudflareUserInfo()
+{
+    IFS="^" read -r result cf_user_key msg < <(curl --silent -Lm 10 https://api.cloudflare.com/host-gw.html \
+        -d 'act=user_lookup' \
+        -d "host_key=$cf_host_key" \
+        -d "unique_id=$cf_user_unique_id" \
+        | $JQ_FILE '[.result,.response.user_key,.msg]|join("^")'
+    ) || true
+
+    result=${result#\"}
+    msg=${msg%\"}
+
+    if [ -z "$result" ] || [ "$result" == "error" ]
+    then
+        Println "$error $msg\n" && exit 1
+    fi
+}
+
+AddCloudflareSubdomain()
+{
+    ListCloudflareZones
+
+    echo -e "选择源站"
+    while read -p "(默认: 取消): " cf_zones_num
+    do
+        case "$cf_zones_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_zones_num" -gt 0 ] && [ "$cf_zones_num" -le "$cf_zones_count" ]
+                then
+                    cf_zones_index=$((cf_zones_num-1))
+                    cf_zone_name=${cf_zones_name[cf_zones_index]}
+                    cf_user_email=${cf_zones_user_email[cf_zones_index]}
+                    cf_user_unique_id=${cf_zones_user_unique_id[cf_zones_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    #cf_user_pass=$($JQ_FILE -r '.users[]|select(.email=="'"$cf_user_email"'") | .pass' $CF_CONFIG)
+
+    #[ -z "$cf_user_pass" ] && Println "$error 用户 $cf_user_email 不存在\n" && exit 1
+
+    GetCloudflareUserInfo
+
+    Println "请输入子域名前缀, 比如 www, 多个前缀用空格分隔"
+    read -p "(默认: 取消): " cf_zone_subdomains_prefix_input
+    [ -z "$cf_zone_subdomains_prefix_input" ] && Println "已取消...\n" && exit 1
+    Println "	子域名: $green $cf_zone_subdomains_prefix_input $plain\n"
+
+    IFS=" " read -r -a cf_zone_subdomains_prefix <<< "$cf_zone_subdomains_prefix_input"
+    cf_zone_subdomains_resolve_to=()
+    for cf_zone_subdomain_prefix in "${cf_zone_subdomains_prefix[@]}"
+    do
+        Println "请输入子域名 $cf_zone_subdomain_prefix.$cf_zone_name 经 cloudflare 中转后解析地址"
+        read -p "(默认: $cf_zone_resolve_to): " cf_zone_subdomain_resolve_to
+        cf_zone_subdomain_resolve_to=${cf_zone_subdomain_resolve_to:-$cf_zone_resolve_to}
+        cf_zone_subdomains_resolve_to+=("$cf_zone_subdomain_resolve_to")
+    done
+
+    GetCloudflareZoneInfo
+    for((i=0;i<${#cf_hosted_cnames[@]};i++));
+    do
+        if [[ ${cf_hosted_cnames[i]} =~ ^([^.]+).([^.]+)$ ]] 
+        then
+            continue
+        fi
+        found=0
+        for cf_zone_subdomain_prefix in "${cf_zone_subdomains_prefix[@]}"
+        do
+            if [ "$cf_zone_subdomain_prefix.$cf_zone_name" == "${cf_hosted_cnames[i]}" ] 
+            then
+                found=1
+                break
+            fi
+        done
+
+        if [ "$found" -eq 0 ] 
+        then
+            cf_hosted_cname=${cf_hosted_cnames[i]}
+            cf_hosted_cname=${cf_hosted_cname%.*}
+            cf_hosted_cname_prefix=${cf_hosted_cname%.*}
+            cf_zone_subdomains_prefix+=("$cf_hosted_cname_prefix")
+            cf_zone_subdomains_resolve_to+=("${cf_resolve_tos[i]}")
+        fi
+    done
+
+    subdomains=""
+
+    for((i=0;i<${#cf_zone_subdomains_prefix[@]};i++));
+    do
+        [ -n "$subdomains" ] && subdomains="$subdomains,"
+        if [ "${cf_zone_subdomains_resolve_to[i]}" != "$cf_zone_resolve_to" ] 
+        then
+            subdomains="$subdomains${cf_zone_subdomains_prefix[i]}:${cf_zone_subdomains_resolve_to[i]}"
+        else
+            subdomains="$subdomains${cf_zone_subdomains_prefix[i]}"
+        fi
+    done
+
+    IFS="^" read -r result cf_zone_hosted_cnames cf_zone_forward_tos msg < <(curl --silent -Lm 10 https://api.cloudflare.com/host-gw.html \
+        -d 'act=zone_set' \
+        -d "host_key=$cf_host_key" \
+        -d "user_key=$cf_user_key" \
+        -d "zone_name=$cf_zone_name" \
+        -d "resolve_to=$cf_zone_resolve_to" \
+        -d "subdomains=$subdomains" \
+        | $JQ_FILE '[.result,([(.response.hosted_cnames| if .== null then {} else . end)|to_entries[]
+        |([.key,.value]|join("="))]
+        |join("|")),([(.response.forward_tos| if .== null then {} else . end)|to_entries[]
+        |([.key,.value]|join("="))]
+        |join("|")),.msg]|join("^")'
+    ) || true
+
+    result=${result#\"}
+    msg=${msg%\"}
+
+    if [ -z "$result" ] || [ "$result" == "error" ]
+    then
+        Println "$error $msg\n" && exit 1
+    fi
+
+    IFS="|" read -r -a cf_zone_hosted_cnames_arr <<< "$cf_zone_hosted_cnames"
+    IFS="|" read -r -a cf_zone_forward_tos_arr <<< "$cf_zone_forward_tos"
+
+    cf_hosted_cnames=()
+    cf_resolve_tos=()
+    cf_forward_tos=()
+
+    for cf_zone_hosted_cname in "${cf_zone_hosted_cnames_arr[@]}"
+    do
+        cf_hosted_cname=${cf_zone_hosted_cname%%=*}
+        cf_resolve_to=${cf_zone_hosted_cname#*=}
+        cf_hosted_cnames+=("$cf_hosted_cname")
+        cf_resolve_tos+=("$cf_resolve_to")
+        for cf_zone_forward_to in "${cf_zone_forward_tos_arr[@]}"
+        do
+            if [ "${cf_zone_forward_to%%=*}" == "$cf_hosted_cname" ] 
+            then
+                cf_forward_tos+=("${cf_zone_forward_to#*=}")
+                break
+            fi
+        done
+    done
+
+    msg=""
+    for((i=0;i<${#cf_hosted_cnames[@]};i++));
+    do
+        for cf_zone_subdomain_prefix in "${cf_zone_subdomains_prefix[@]}"
+        do
+            if [ "$cf_zone_subdomain_prefix.$cf_zone_name" == "${cf_hosted_cnames[i]}" ] 
+            then
+                msg="$msg请添加域名 $green${cf_hosted_cnames[i]}$plain CNAME 记录到 $green${cf_forward_tos[i]}$plain\n\n"
+                break
+            fi
+        done
+    done
+
+    Println "$msg"
+    Println "$info 子域名添加成功\n"
+}
+
+ViewCloudflareSubdomain()
+{
+    ListCloudflareZones
+
+    echo -e "选择源站"
+    while read -p "(默认: 取消): " cf_zones_num
+    do
+        case "$cf_zones_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_zones_num" -gt 0 ] && [ "$cf_zones_num" -le "$cf_zones_count" ]
+                then
+                    cf_zones_index=$((cf_zones_num-1))
+                    cf_zone_name=${cf_zones_name[cf_zones_index]}
+                    cf_user_email=${cf_zones_user_email[cf_zones_index]}
+                    cf_user_unique_id=${cf_zones_user_unique_id[cf_zones_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    #cf_user_pass=$($JQ_FILE -r '.users[]|select(.email=="'"$cf_user_email"'") | .pass' $CF_CONFIG)
+
+    #[ -z "$cf_user_pass" ] && Println "$error 用户 $cf_user_email 不存在\n" && exit 1
+
+    GetCloudflareUserInfo
+    GetCloudflareZoneInfo
+
+    cf_subdomains_list=""
+    for((i=0;i<${#cf_hosted_cnames[@]};i++));
+    do
+        if [ "$i" -lt 9 ] 
+        then
+            blank=" "
+        else
+            blank=""
+        fi
+        cf_subdomains_list="$cf_subdomains_list$green$((i+1)).$plain$blank CNAME: $green${cf_hosted_cnames[i]}$plain => $green${cf_resolve_tos[i]}$plain\n   $blank解析地址: $green${cf_forward_tos[i]}$plain\n\n"
+    done
+
+    if [ -n "$cf_subdomains_list" ] 
+    then
+        Println "$cf_subdomains_list"
+    else
+        Println "$error 没有子域名\n"
+    fi
+}
+
+DelCloudflareZone()
+{
+    ListCloudflareZones
+
+    echo -e "选择源站"
+    while read -p "(默认: 取消): " cf_zones_num
+    do
+        case "$cf_zones_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_zones_num" -gt 0 ] && [ "$cf_zones_num" -le "$cf_zones_count" ]
+                then
+                    cf_zones_index=$((cf_zones_num-1))
+                    cf_zone_name=${cf_zones_name[cf_zones_index]}
+                    cf_user_email=${cf_zones_user_email[cf_zones_index]}
+                    cf_user_unique_id=${cf_zones_user_unique_id[cf_zones_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    GetCloudflareUserInfo
+
+    IFS="^" read -r result msg < <(curl --silent -Lm 10 https://api.cloudflare.com/host-gw.html \
+        -d 'act=zone_delete' \
+        -d "host_key=$cf_host_key" \
+        -d "user_key=$cf_user_key" \
+        -d "zone_name=$cf_zone_name" \
+        | $JQ_FILE '[.result,.msg]|join("^")'
+    ) || true
+
+    result=${result#\"}
+    msg=${msg%\"}
+
+    if [ -z "$result" ] || [ "$result" == "error" ]
+    then
+        Println "$error $msg\n" && exit 1
+    fi
+
+    jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
+    JQ delete "$CF_CONFIG" "$cf_zones_index"
+    Println "$info $cf_zone_name 删除成功\n"
+}
+
+DelCloudflareHost()
+{
+    ListCloudflareHosts
+
+    echo -e "选择 CFP"
+    while read -p "(默认: 取消): " cf_hosts_num
+    do
+        case "$cf_hosts_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_hosts_num" -gt 0 ] && [ "$cf_hosts_num" -le "$cf_hosts_count" ]
+                then
+                    cf_hosts_index=$((cf_hosts_num-1))
+                    cf_host_name=${cf_hosts_name[cf_hosts_index]}
+                    cf_host_key=${cf_hosts_key[cf_hosts_index]}
+                    cf_zones_count=${cf_hosts_zones_count[cf_hosts_index]}
+                    cf_zone_name=${cf_hosts_zone_name[cf_hosts_index]}
+                    cf_zone_user_unique_id=${cf_hosts_zone_user_unique_id[cf_hosts_index]}
+                    IFS="|" read -r -a cf_zones_name <<< "$cf_zone_name"
+                    IFS="|" read -r -a cf_zones_user_unique_id <<< "$cf_zone_user_unique_id"
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    if [ "$cf_zones_count" -gt 0 ] 
+    then
+        Println "是否删除此 CFP 下所有的源站? [y/N]"
+        read -p "(默认: 否): " del_zones_yn
+        del_zones_yn=${del_zones_yn:-N}
+        if [[ $del_zones_yn == [Yy] ]] 
+        then
+            for((i=0;i<${#cf_zones_name[@]};i++));
+            do
+                cf_zone_name=${cf_zones_name[i]}
+                cf_user_unique_id=${cf_zones_user_unique_id[i]}
+
+                GetCloudflareUserInfo
+
+                IFS="^" read -r result msg < <(curl --silent -Lm 10 https://api.cloudflare.com/host-gw.html \
+                    -d 'act=zone_delete' \
+                    -d "host_key=$cf_host_key" \
+                    -d "user_key=$cf_user_key" \
+                    -d "zone_name=$cf_zone_name" \
+                    | $JQ_FILE '[.result,.msg]|join("^")'
+                ) || true
+
+                result=${result#\"}
+                msg=${msg%\"}
+
+                if [ -z "$result" ] || [ "$result" == "error" ]
+                then
+                    Println "$error 删除 $cf_zone_name 发送错误: $msg\n" && exit 1
+                fi
+
+                jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
+                JQ delete "$CF_CONFIG" "$i"
+
+                Println "$info $cf_zone_name 删除成功\n"
+            done
+        else
+            Println "已取消...\n"
+            exit 1
+        fi
+    fi
+}
+
+EditCloudflareUser()
+{
+    ListCloudflareUsers
+
+    echo -e "选择用户"
+    while read -p "(默认: 取消): " cf_users_num
+    do
+        case "$cf_users_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
+                then
+                    cf_users_index=$((cf_users_num-1))
+                    cf_user_email=${cf_users_email[cf_users_index]}
+                    cf_user_pass=${cf_users_pass[cf_users_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "请输入用户邮箱"
+    read -p "(默认: $cf_user_email): " new_cf_user_email
+    new_cf_user_email=${new_cf_user_email:-$cf_user_email}
+    Println "	用户邮箱: $green $new_cf_user_email $plain\n"
+
+    Println "请输入用户密码"
+    read -p "(默认: $cf_user_pass): " new_cf_user_pass
+    new_cf_user_pass=${new_cf_user_pass:-$cf_user_pass}
+    Println "	用户密码: $green $new_cf_user_pass $plain\n"
+
+    new_user=$(
+    $JQ_FILE -n --arg email "$new_cf_user_email" --arg pass "$new_cf_user_pass" \
+        '{
+            email: $email,
+            pass: $pass
+        }'
+    )
+
+    jq_path='["users",'"$cf_users_index"']'
+    JQ replace "$CF_CONFIG" "$new_user"
+    Println "$info 用户修改成功\n"
+}
+
+RegenCloudflareHost()
+{
+    ListCloudflareHosts
+
+    echo -e "选择 CFP"
+    while read -p "(默认: 取消): " cf_hosts_num
+    do
+        case "$cf_hosts_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_hosts_num" -gt 0 ] && [ "$cf_hosts_num" -le "$cf_hosts_count" ]
+                then
+                    cf_hosts_index=$((cf_hosts_num-1))
+                    cf_host_name=${cf_hosts_name[cf_hosts_index]}
+                    cf_host_key=${cf_hosts_key[cf_hosts_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    IFS="^" read -r result new_cf_host_key msg < <(curl --silent -Lm 10 https://api.cloudflare.com/host-gw.html \
+        -d 'act=host_key_regen' \
+        -d "host_key=$cf_host_key" \
+        | $JQ_FILE '[.result,.request."host:key".__host_key,.msg]|join("^")'
+    ) || true
+
+    result=${result#\"}
+    msg=${msg%\"}
+
+    if [ -z "$result" ] || [ "$result" == "error" ]
+    then
+        Println "$error $msg\n" && exit 1
+    fi
+
+    jq_path='["hosts",'"$cf_hosts_index"',"key"]'
+    JQ update "$CF_CONFIG" "$new_cf_host_key"
+
+    Println "$info $cf_host_name host key 修改成功"
+}
+
+if [ "${0##*/}" == "cf" ] || [ "${0##*/}" == "cf.sh" ]
+then
+    CheckShFile
+
+    if [ -d "$IPTV_ROOT" ]
+    then
+        CF_CONFIG_NEW="$IPTV_ROOT/${CF_CONFIG##*/}"
+
+        if [ -e "$CF_CONFIG" ] && [ ! -e "$CF_CONFIG_NEW" ]
+        then
+            mv "$CF_CONFIG" "$CF_CONFIG_NEW"
+        fi
+
+        CF_CONFIG=$CF_CONFIG_NEW
+    fi
+
+    Println "  cloudflare partner cname 面板 $plain${red}[v$sh_ver]$plain
+
+  ${green}1.$plain 查看 子域名
+  ${green}2.$plain 添加 子域名
+  ${green}3.$plain 查看 源站
+  ${green}4.$plain 添加 源站
+  ${green}5.$plain 查看 用户
+  ${green}6.$plain 添加 用户
+  ${green}7.$plain 更改 用户
+  ${green}8.$plain 查看 CFP
+  ${green}9.$plain 添加 CFP
+ ${green}10.$plain 更改 CFP
+ ${green}11.$plain 删除 子域名
+ ${green}12.$plain 删除 源站
+ ${green}13.$plain 删除 用户
+ ${green}14.$plain 删除 CFP
+ ${green}15.$plain 获取最优 IP
+
+ $tip 输入: cf 打开面板\n\n"
+    read -p "请输入数字 [1-15]: " cloudflare_num
+    case $cloudflare_num in
+        1) ViewCloudflareSubdomain
+        ;;
+        2) AddCloudflareSubdomain
+        ;;
+        3) ViewCloudflareZone
+        ;;
+        4) AddCloudflareZone
+        ;;
+        5) ViewCloudflareUser
+        ;;
+        6) AddCloudflareUser
+        ;;
+        7) EditCloudflareUser
+        ;;
+        8) ViewCloudflareHost
+        ;;
+        9) AddCloudflareHost
+        ;;
+        10) RegenCloudflareHost
+        ;;
+        11) DelCloudflareSubdomain
+        ;;
+        12) DelCloudflareZone
+        ;;
+        13) DelCloudflareUser
+        ;;
+        14) DelCloudflareHost
+        ;;
+        15) 
+            Println "$info 一键获取最优 IP 脚本 Mac/Linux: https://github.com/woniuzfb/cloudflare-fping\n"
+        ;;
+        *) Println "$error 请输入正确的数字 [1-15]\n"
+        ;;
+    esac
+    exit 0
+elif [ "${0##*/}" == "or" ] || [ "${0##*/}" == "or.sh" ]
 then
     CheckShFile
 
@@ -18992,7 +19972,9 @@ then
 ————————————
  ${green}14.$plain 安装 nodejs
 
- $tip 输入: or 打开面板\n"
+ $tip 输入: or 打开面板
+
+"
     read -p "请输入数字 [1-14]: " openresty_num
     case "$openresty_num" in
         1) 
@@ -19104,7 +20086,9 @@ then
  ${green}15.$plain 安装 pdf2htmlEX
  ${green}16.$plain 安装 tesseract
 
- $tip 输入: nx 打开面板\n"
+ $tip 输入: nx 打开面板
+
+"
     read -p "请输入数字 [1-16]: " nginx_num
     case "$nginx_num" in
         1) 
@@ -19280,7 +20264,9 @@ then
  ${green}18.$plain 重启
 
  $tip 使用: ${green}$nginx_name$plain
- $tip 输入: v2 打开面板\n"
+ $tip 输入: v2 打开面板
+
+"
     read -p "请输入数字 [1-18]: " v2ray_num
     case $v2ray_num in
         1) 
@@ -21214,8 +22200,8 @@ ProcessVipLists()
         do
             if [ "${schedules_id[m]}" == "$epg_id" ] && [ -n "${schedules_sys_time[m]}" ]
             then
-                IFS="^" read -r -a sys_times <<< "${schedules_sys_time[m]}"
-                IFS="^" read -r -a titles <<< "${schedules_title[m]}"
+                IFS="^" read -r -a sys_times <<< "${schedules_sys_time[m]}^"
+                IFS="^" read -r -a titles <<< "${schedules_title[m]}^"
                 epg_list="$epg_list<channel id=\"$program_id\">\n<display-name lang=\"zh\">${vip_channels_name[k]}</display-name>\n</channel>\n"
                 programs_count=${#sys_times[@]}
                 for((n=0;n<programs_count;n++));
