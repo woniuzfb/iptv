@@ -18979,8 +18979,8 @@ SetCloudflareHostKey()
     Println "请输入 CFP host key"
     read -p "(默认: 取消): " cf_host_key
     [ -z "$cf_host_key" ] && Println "已取消...\n" && exit 1
-
-    IFS=" " read -r result msg < <(curl --silent -Lm 10 https://api.cloudflare.com/host-gw.html \
+    Println "$info 稍等..."
+    IFS=" " read -r result msg < <(curl --silent -Lm 50 https://api.cloudflare.com/host-gw.html \
         -d 'act=zone_list' \
         -d "host_key=$cf_host_key" \
         -d 'limit=1' \
@@ -18995,7 +18995,7 @@ SetCloudflareHostKey()
 
     if [ -z "$result" ] || [ "$result" == "error" ]
     then
-        Println "$error $msg\n" && exit 1
+        Println "$error ${msg:-超时, 请重试}\n" && exit 1
     fi
 
     Println "	CFP: $green $cf_host_key $plain\n"
@@ -19247,12 +19247,13 @@ AddCloudflareZone()
         esac
     done
 
+    Println "$info 稍等..."
     result=""
     until [ "$result" == "success" ] 
     do
         random_number=$(od -An -N6 -t u8 < /dev/urandom)
         cf_user_unique_id=${random_number: -12}
-        IFS="^" read -r result err_code msg < <(curl --silent -Lm 10 https://api.cloudflare.com/host-gw.html \
+        IFS="^" read -r result err_code msg < <(curl --silent -Lm 50 https://api.cloudflare.com/host-gw.html \
             -d 'act=user_create' \
             -d "host_key=$cf_host_key" \
             -d "cloudflare_email=$cf_user_email" \
@@ -19346,6 +19347,7 @@ ListCloudflareZones()
                     cf_zone_user_email=${cf_hosts_zone_user_email[cf_hosts_index]}
                     cf_zone_user_unique_id=${cf_hosts_zone_user_unique_id[cf_hosts_index]}
                     IFS="|" read -r -a cf_zones_name <<< "$cf_zone_name"
+                    IFS="|" read -r -a cf_zones_resolve_to <<< "$cf_zone_resolve_to"
                     IFS="|" read -r -a cf_zones_user_email <<< "$cf_zone_user_email"
                     IFS="|" read -r -a cf_zones_user_unique_id <<< "$cf_zone_user_unique_id"
                     break
@@ -19374,7 +19376,7 @@ ViewCloudflareZone()
 
 GetCloudflareZoneInfo()
 {
-    IFS="^" read -r result cf_zone_hosted_cnames cf_zone_forward_tos cf_zone_ssl_status cf_zone_ssl_meta_tag msg < <(curl --silent -Lm 10 https://api.cloudflare.com/host-gw.html \
+    IFS="^" read -r result cf_zone_hosted_cnames cf_zone_forward_tos cf_zone_ssl_status cf_zone_ssl_meta_tag msg < <(curl --silent -Lm 50 https://api.cloudflare.com/host-gw.html \
         -d 'act=zone_lookup' \
         -d "host_key=$cf_host_key" \
         -d "user_key=$cf_user_key" \
@@ -19391,7 +19393,7 @@ GetCloudflareZoneInfo()
 
     if [ -z "$result" ] || [ "$result" == "error" ]
     then
-        Println "$error $msg\n" && exit 1
+        Println "$error ${msg:-超时, 请重试}\n" && exit 1
     fi
 
     IFS="|" read -r -a cf_zone_hosted_cnames_arr <<< "$cf_zone_hosted_cnames"
@@ -19420,7 +19422,7 @@ GetCloudflareZoneInfo()
 
 GetCloudflareUserInfo()
 {
-    IFS="^" read -r result cf_user_key msg < <(curl --silent -Lm 10 https://api.cloudflare.com/host-gw.html \
+    IFS="^" read -r result cf_user_key msg < <(curl --silent -Lm 50 https://api.cloudflare.com/host-gw.html \
         -d 'act=user_lookup' \
         -d "host_key=$cf_host_key" \
         -d "unique_id=$cf_user_unique_id" \
@@ -19432,7 +19434,12 @@ GetCloudflareUserInfo()
 
     if [ -z "$result" ] || [ "$result" == "error" ]
     then
-        Println "$error $msg\n" && exit 1
+        Println "$error ${msg:-超时, 请重试}\n" && exit 1
+    fi
+
+    if [ -z "$cf_user_key" ] 
+    then
+        Println "$error 源站 $cf_zone_name 的用户已被 CFP 删除或未添加成功, 可以到 Cloudflare 官网手动删除源站或重新添加 !"
     fi
 }
 
@@ -19455,6 +19462,7 @@ AddCloudflareSubdomain()
                 then
                     cf_zones_index=$((cf_zones_num-1))
                     cf_zone_name=${cf_zones_name[cf_zones_index]}
+                    cf_zone_resolve_to=${cf_zones_resolve_to[cf_zones_index]}
                     cf_user_email=${cf_zones_user_email[cf_zones_index]}
                     cf_user_unique_id=${cf_zones_user_unique_id[cf_zones_index]}
                     break
@@ -19526,14 +19534,15 @@ AddCloudflareSubdomain()
         fi
     done
 
-    IFS="^" read -r result cf_zone_hosted_cnames cf_zone_forward_tos msg < <(curl --silent -Lm 10 https://api.cloudflare.com/host-gw.html \
+    Println "$info 稍等..."
+    IFS="^" read -r result cf_zone_resolving_to cf_zone_hosted_cnames cf_zone_forward_tos msg < <(curl --silent -Lm 20 https://api.cloudflare.com/host-gw.html \
         -d 'act=zone_set' \
         -d "host_key=$cf_host_key" \
         -d "user_key=$cf_user_key" \
         -d "zone_name=$cf_zone_name" \
         -d "resolve_to=$cf_zone_resolve_to" \
         -d "subdomains=$subdomains" \
-        | $JQ_FILE '[.result,([(.response.hosted_cnames| if .== null then {} else . end)|to_entries[]
+        | $JQ_FILE '[.result,.response.resolving_to,([(.response.hosted_cnames| if .== null then {} else . end)|to_entries[]
         |([.key,.value]|join("="))]
         |join("|")),([(.response.forward_tos| if .== null then {} else . end)|to_entries[]
         |([.key,.value]|join("="))]
@@ -19545,7 +19554,7 @@ AddCloudflareSubdomain()
 
     if [ -z "$result" ] || [ "$result" == "error" ]
     then
-        Println "$error $msg\n" && exit 1
+        Println "$error ${msg:-连接超时, 请查看是否已经完成}\n" && exit 1
     fi
 
     IFS="|" read -r -a cf_zone_hosted_cnames_arr <<< "$cf_zone_hosted_cnames"
@@ -19571,7 +19580,27 @@ AddCloudflareSubdomain()
         done
     done
 
-    msg=""
+    if [ "$cf_zone_resolving_to" != "$cf_zone_name" ] 
+    then
+        found=0
+        for cf_resolve_to in "${cf_resolve_tos[@]}"
+        do
+            if [ "$cf_resolve_to" == "$cf_zone_name" ] 
+            then
+                found=1
+                break
+            fi
+        done
+        if [ "$found" -eq 0 ] && [[ ${cf_forward_tos[0]} =~ ([^.]+).([^.]+).([^.]+)$ ]] 
+        then
+            cf_zone_name_resolve_to="$cf_zone_name.${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+            msg="请添加域名 $green$cf_zone_name$plain CNAME 记录到 $green$cf_zone_name_resolve_to$plain\n\n"
+        else
+            msg=""
+        fi
+    else
+        msg=""
+    fi
     for((i=0;i<${#cf_hosted_cnames[@]};i++));
     do
         for cf_zone_subdomain_prefix in "${cf_zone_subdomains_prefix[@]}"
@@ -19636,12 +19665,26 @@ ViewCloudflareSubdomain()
         cf_subdomains_list="$cf_subdomains_list$green$((i+1)).$plain$blank CNAME: $green${cf_hosted_cnames[i]}$plain => $green${cf_resolve_tos[i]}$plain\n   $blank解析地址: $green${cf_forward_tos[i]}$plain\n\n"
     done
 
-    if [ -n "$cf_subdomains_list" ] 
+    if [ -z "$cf_subdomains_list" ] 
     then
-        Println "$cf_subdomains_list"
+        cf_subdomains_list="$error 没有子域名\n\n$tip 至少添加一个子域名才能激活源站 cloudflare 解析\n"
+        ssl_status=""
+        ssl_meta_tag=""
+    elif [ "$cf_zone_ssl_status" == "ready" ] 
+    then
+        ssl_status="SSL 状态: $green激活$plain\n"
+        ssl_meta_tag=""
     else
-        Println "$error 没有子域名\n"
+        ssl_status="SSL 状态: $red无$plain\n"
+        if [ -n "$cf_zone_ssl_meta_tag" ]
+        then
+            ssl_meta_tag="\n请在子域名页面 HEAD 处添加 $green$cf_zone_ssl_meta_tag$plain 以激活 ssl\n"
+        else
+            ssl_meta_tag=""
+        fi
     fi
+
+    Println "${cf_subdomains_list}$ssl_status$ssl_meta_tag"
 }
 
 DelCloudflareZone()
@@ -19674,13 +19717,13 @@ DelCloudflareZone()
     done
 
     GetCloudflareUserInfo
-
-    IFS="^" read -r result msg < <(curl --silent -Lm 10 https://api.cloudflare.com/host-gw.html \
+    Println "$info 稍等..."
+    IFS="^" read -r result err_code msg < <(curl --silent -Lm 50 https://api.cloudflare.com/host-gw.html \
         -d 'act=zone_delete' \
         -d "host_key=$cf_host_key" \
         -d "user_key=$cf_user_key" \
         -d "zone_name=$cf_zone_name" \
-        | $JQ_FILE '[.result,.msg]|join("^")'
+        | $JQ_FILE '[.result,.err_code,.msg]|join("^")'
     ) || true
 
     result=${result#\"}
@@ -19688,12 +19731,29 @@ DelCloudflareZone()
 
     if [ -z "$result" ] || [ "$result" == "error" ]
     then
-        Println "$error $msg\n" && exit 1
+        if [ "$err_code" -eq 115 ] 
+        then
+            Println "$error 此用户已被 CFP 删除或未添加成功, 可以到 Cloudflare 官网手动删除源站或者重新添加 !"
+            Println "是否仍要删除此源站 ? [y/N]"
+            echo -e "$tip 只有这里和官网都删除才能重新添加此源站\n"
+            read -p "(默认: N): " del_zone_yn
+            del_zone_yn=${del_zone_yn:-N}
+            if [[ $del_zone_yn == [Yy] ]] 
+            then
+                jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
+                JQ delete "$CF_CONFIG" "$cf_zones_index"
+                Println "$info $cf_zone_name 删除成功\n"
+            else
+                Println "已取消...\n"
+            fi
+        else
+            Println "$error ${msg:-超时, 请重试}\n"
+        fi
+    else
+        jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
+        JQ delete "$CF_CONFIG" "$cf_zones_index"
+        Println "$info $cf_zone_name 删除成功\n"
     fi
-
-    jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
-    JQ delete "$CF_CONFIG" "$cf_zones_index"
-    Println "$info $cf_zone_name 删除成功\n"
 }
 
 DelCloudflareHost()
@@ -19743,7 +19803,7 @@ DelCloudflareHost()
 
                 GetCloudflareUserInfo
 
-                IFS="^" read -r result msg < <(curl --silent -Lm 10 https://api.cloudflare.com/host-gw.html \
+                IFS="^" read -r result msg < <(curl --silent -Lm 50 https://api.cloudflare.com/host-gw.html \
                     -d 'act=zone_delete' \
                     -d "host_key=$cf_host_key" \
                     -d "user_key=$cf_user_key" \
@@ -19756,7 +19816,7 @@ DelCloudflareHost()
 
                 if [ -z "$result" ] || [ "$result" == "error" ]
                 then
-                    Println "$error 删除 $cf_zone_name 发送错误: $msg\n" && exit 1
+                    Println "$error 删除 $cf_zone_name 发送错误: ${msg:-超时, 请重试}\n" && exit 1
                 fi
 
                 jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
@@ -19826,7 +19886,8 @@ RegenCloudflareHost()
 {
     ListCloudflareHosts
 
-    echo -e "选择 CFP"
+    echo "选择 CFP"
+    echo -e "$tip 请勿更改公开的 CFP !\n"
     while read -p "(默认: 取消): " cf_hosts_num
     do
         case "$cf_hosts_num" in
@@ -19850,7 +19911,8 @@ RegenCloudflareHost()
         esac
     done
 
-    IFS="^" read -r result new_cf_host_key msg < <(curl --silent -Lm 10 https://api.cloudflare.com/host-gw.html \
+    Println "$info 稍等..."
+    IFS="^" read -r result new_cf_host_key msg < <(curl --silent -Lm 50 https://api.cloudflare.com/host-gw.html \
         -d 'act=host_key_regen' \
         -d "host_key=$cf_host_key" \
         | $JQ_FILE '[.result,.request."host:key".__host_key,.msg]|join("^")'
@@ -19861,7 +19923,7 @@ RegenCloudflareHost()
 
     if [ -z "$result" ] || [ "$result" == "error" ]
     then
-        Println "$error $msg\n" && exit 1
+        Println "$error ${msg:-超时, 请重试}\n" && exit 1
     fi
 
     jq_path='["hosts",'"$cf_hosts_index"',"key"]'
