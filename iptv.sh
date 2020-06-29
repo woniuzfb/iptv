@@ -2117,7 +2117,7 @@ SetStreamLink()
         #token=$(printf '%s' "$ts/${relative_path:1}ifengims" | md5sum)
         #token=${token%% *}
         #stream_link_md5="$stream_link?ts=$ts&token=$token"
-    elif [[ "$stream_link" == *"news.tvb.com"* ]] 
+    elif [[ $stream_link == *"news.tvb.com"* ]] 
     then
         xc=1
         user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
@@ -2132,7 +2132,82 @@ SetStreamLink()
             --header="${headers:0:-4}" \
             "http://news.tvb.com/ajax_call/getVideo.php?token=$query_string" -qO- \
             | $JQ_FILE -r '.url')
-    elif [[ "$stream_link" == *"4gtv.tv/"* ]] 
+    elif [[ $stream_link =~ ^https://embed.4gtv.tv/HiNet/(.+).html ]] 
+    then
+        if [[ ! -x $(command -v openssl) ]] 
+        then
+            Println "是否安装 openssl ? [Y/n]"
+            read -p "(默认: Y): " openssl_install_yn
+            openssl_install_yn=${openssl_install_yn:-Y}
+            if [[ $openssl_install_yn == [Yy] ]]
+            then
+                InstallOpenssl
+            else
+                Println "已取消\n..." && exit 1
+            fi
+        fi
+        hinet_4gtv=(
+            "litv-longturn14:寰宇新聞台"
+            "4gtv-4gtv052:華視新聞資訊台"
+            "4gtv-4gtv012:空中英語教室"
+            "litv-ftv07:民視旅遊台"
+            "litv-ftv15:i-Fun動漫台"
+            "4gtv-live206:幸福空間居家台"
+            "4gtv-4gtv070:愛爾達娛樂台"
+            "litv-longturn17:亞洲旅遊台"
+            "4gtv-4gtv025:MTV Live HD"
+            "litv-longturn15:寰宇新聞台灣台"
+            "4gtv-4gtv001:民視台灣台"
+            "4gtv-4gtv074:中視新聞台"
+            "4gtv-4gtv011:影迷數位電影台"
+            "4gtv-4gtv047:靖天日本台"
+            "litv-longturn11:龍華日韓台"
+            "litv-longturn12:龍華偶像台"
+            "4gtv-4gtv042:公視戲劇"
+            "litv-ftv12:i-Fun動漫台3"
+            "4gtv-4gtv002:民視無線台"
+            "4gtv-4gtv027:CI 罪案偵查頻道"
+            "4gtv-4gtv013:CNEX DOC CHANNEL"
+            "litv-longturn03:龍華電影台"
+            "4gtv-4gtv004:民視綜藝台"
+            "litv-longturn20:ELTV英語學習台"
+            "litv-longturn01:龍華卡通台"
+            "4gtv-4gtv040:中視無線台"
+            "litv-longturn02:Baby First"
+            "4gtv-4gtv003:民視第一台"
+            "4gtv-4gtv007:大愛電視台"
+            "4gtv-4gtv076:SMART 知識頻道"
+            "4gtv-4gtv030:CNBC"
+            "litv-ftv10:半島電視台"
+        )
+
+        for channel in "${hinet_4gtv[@]}"
+        do
+            channel_id=${channel%%:*}
+            channel_name=${channel#*:}
+            channel_name_enc=$(Urlencode "$channel_name")
+            if [[ $channel_name_enc == "${BASH_REMATCH[1]}" ]] 
+            then
+                xc=1
+                user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+                headers="Referer: https://embed.4gtv.tv/HiNet/$channel_name_enc.html?ar=0&as=1&volume=0\r\n"
+                cookies=""
+                stream_link_data=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
+                --header="${headers:0:-4}" \
+                "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)" -qO- || true)
+                if [ -n "$stream_link_data" ] 
+                then
+                    stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
+                    hexkey=$(echo -n "VxzAfiseH0AbLShkQOPwdsssw5KyLeuv" | hexdump -v -e '/1 "%02x"')
+                    hexiv=$(echo -n "${stream_link_data:0:16}" | hexdump -v -e '/1 "%02x"')
+                    stream_link=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+                else
+                    Println "$error 无法连接 4gtv !\n" && exit 1
+                fi
+                break
+            fi
+        done
+    elif [[ $stream_link == *"4gtv.tv/"* ]] 
     then
         if [[ ! -x $(command -v openssl) ]] 
         then
@@ -5413,7 +5488,7 @@ StartChannel()
         tx_secret=${tx_secret%% *}
 
         chnl_stream_link="$chnl_stream_link?txSecret=$tx_secret&txTime=$tx_time"
-    elif [[ "$chnl_stream_link" == *"news.tvb.com"* ]] 
+    elif [[ $chnl_stream_link == *"news.tvb.com"* ]] 
     then
         chnl_user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
         chnl_headers="Referer: $chnl_stream_link\r\n"
@@ -5427,7 +5502,71 @@ StartChannel()
             --header="${chnl_headers:0:-4}" \
             "http://news.tvb.com/ajax_call/getVideo.php?token=$query_string" -qO- \
             | $JQ_FILE -r '.url')
-    elif [[ "$chnl_stream_link" == *"4gtv.tv/"* ]] 
+    elif [[ $chnl_stream_link =~ ^https://embed.4gtv.tv/HiNet/(.+).html ]] 
+    then
+        hinet_4gtv=(
+            "litv-longturn14:寰宇新聞台"
+            "4gtv-4gtv052:華視新聞資訊台"
+            "4gtv-4gtv012:空中英語教室"
+            "litv-ftv07:民視旅遊台"
+            "litv-ftv15:i-Fun動漫台"
+            "4gtv-live206:幸福空間居家台"
+            "4gtv-4gtv070:愛爾達娛樂台"
+            "litv-longturn17:亞洲旅遊台"
+            "4gtv-4gtv025:MTV Live HD"
+            "litv-longturn15:寰宇新聞台灣台"
+            "4gtv-4gtv001:民視台灣台"
+            "4gtv-4gtv074:中視新聞台"
+            "4gtv-4gtv011:影迷數位電影台"
+            "4gtv-4gtv047:靖天日本台"
+            "litv-longturn11:龍華日韓台"
+            "litv-longturn12:龍華偶像台"
+            "4gtv-4gtv042:公視戲劇"
+            "litv-ftv12:i-Fun動漫台3"
+            "4gtv-4gtv002:民視無線台"
+            "4gtv-4gtv027:CI 罪案偵查頻道"
+            "4gtv-4gtv013:CNEX DOC CHANNEL"
+            "litv-longturn03:龍華電影台"
+            "4gtv-4gtv004:民視綜藝台"
+            "litv-longturn20:ELTV英語學習台"
+            "litv-longturn01:龍華卡通台"
+            "4gtv-4gtv040:中視無線台"
+            "litv-longturn02:Baby First"
+            "4gtv-4gtv003:民視第一台"
+            "4gtv-4gtv007:大愛電視台"
+            "4gtv-4gtv076:SMART 知識頻道"
+            "4gtv-4gtv030:CNBC"
+            "litv-ftv10:半島電視台"
+        )
+
+        for channel in "${hinet_4gtv[@]}"
+        do
+            channel_id=${channel%%:*}
+            channel_name=${channel#*:}
+            channel_name_enc=$(Urlencode "$channel_name")
+            if [[ $channel_name_enc == "${BASH_REMATCH[1]}" ]] 
+            then
+                xc=1
+                chnl_user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+                chnl_headers="Referer: https://embed.4gtv.tv/HiNet/$channel_name_enc.html?ar=0&as=1&volume=0\r\n"
+                chnl_cookies=""
+                stream_link_data=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                --header="${chnl_headers:0:-4}" \
+                "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)" -qO- || true)
+                if [ -n "$stream_link_data" ] 
+                then
+                    stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
+                    hexkey=$(echo -n "VxzAfiseH0AbLShkQOPwdsssw5KyLeuv" | hexdump -v -e '/1 "%02x"')
+                    hexiv=$(echo -n "${stream_link_data:0:16}" | hexdump -v -e '/1 "%02x"')
+                    chnl_stream_link=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+                elif [ -z "${monitor:-}" ]
+                then
+                    Println "$error 无法连接 4gtv !\n" && exit 1
+                fi
+                break
+            fi
+        done
+    elif [[ $chnl_stream_link == *"4gtv.tv/"* ]] 
     then
         chnl_user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
         chnl_headers="Referer: $chnl_stream_link\r\n"
@@ -5835,7 +5974,7 @@ Urlencode() {
     local LANG=C i c e=''
     for ((i=0;i<${#1};i++)); do
         c=${1:$i:1}
-        [[ "$c" =~ [a-zA-Z0-9\.\~\_\-] ]] || printf -v c '%%%02X' "'$c"
+        [[ $c =~ [a-zA-Z0-9\.\~\_\-] ]] || printf -v c '%%%02x' "'$c"
         e+="$c"
     done
     echo "$e"
@@ -7322,7 +7461,7 @@ GetCronChnls()
     cron_providers_count=0
     while IFS= read -r line 
     do
-        if [[ "$line" == *"|"* ]] 
+        if [[ $line == *"|"* ]] 
         then
             cron_providers_count=$((cron_providers_count+1))
             if [ "$cron_providers_count" -lt 10 ] 
@@ -7450,6 +7589,7 @@ ScheduleAddChannel()
         JQ update "$CRON_FILE" '(.schedule[]|select(.provider=="'"$provider"'").chnls) += ["'"$chnl"'"]'
         add_provider=0
     fi
+    Println "$info 频道 [ ${chnl##*:} ] 添加成功"
 }
 
 ScheduleAdd()
@@ -7526,7 +7666,6 @@ ScheduleAdd()
             ;;
         esac
     done
-    Println "$info 添加成功\n"
 }
 
 ScheduleDelChannel()
@@ -14441,13 +14580,13 @@ NginxDomainServerToggleNodejs()
             then
                 nodejs_flag=0
             fi
-            [[ "${enable_nodejs:-0}" -eq 1 ]] || continue
+            [[ ${enable_nodejs:-0} -eq 1 ]] || continue
         fi
 
         if [[ $nginx_domain_server_found -eq 1 ]] && { [[ $line == *"location = /channels "* ]] || [[ $line == *"location = /channels.json "* ]] || [[ $line == *"location = /remote "* ]] || [[ $line == *"location = /remote.json "* ]] || [[ $line == *"location = /keys "* ]] || [[ $line == *"location ~ \.(keyinfo|key)"* ]]; }
         then
             nodejs_flag=1
-            [[ "${enable_nodejs:-0}" -eq 1 ]] || continue
+            [[ ${enable_nodejs:-0} -eq 1 ]] || continue
         fi
 
         if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"location / "* ]]
@@ -18175,7 +18314,7 @@ V2rayListDomains()
         for f in "$nginx_prefix/conf/sites_available/"*
         do
             domain=${f##*/}
-            [[ "$domain" =~ ^[A-Za-z0-9.]*$ ]] || continue
+            [[ $domain =~ ^[A-Za-z0-9.]*$ ]] || continue
             v2ray_domains_count=$((v2ray_domains_count+1))
             domain=${domain%.conf}
             v2ray_domains+=("$domain")
@@ -18212,7 +18351,7 @@ V2rayListDomainsInbound()
             else
                 v2ray_status_text="$red关闭$plain"
             fi
-            if [[ "$domain" =~ ^[A-Za-z0-9.]*$ ]] || grep -q "proxy_pass http://127.0.0.1:${inbounds_port[nginx_index]}" < "$nginx_prefix/conf/sites_available/$domain.conf" 
+            if [[ $domain =~ ^[A-Za-z0-9.]*$ ]] || grep -q "proxy_pass http://127.0.0.1:${inbounds_port[nginx_index]}" < "$nginx_prefix/conf/sites_available/$domain.conf" 
             then
                 server_found=0
                 server_flag=0
@@ -21112,6 +21251,243 @@ case "$cmd" in
         then
             Println "$error 没有开启的频道 !\n" && exit 1
         fi
+
+        exit 0
+    ;;
+    "4g")
+        if [[ ! -x $(command -v openssl) ]] 
+        then
+            Println "是否安装 openssl ? [Y/n]"
+            read -p "(默认: Y): " openssl_install_yn
+            openssl_install_yn=${openssl_install_yn:-Y}
+            if [[ $openssl_install_yn == [Yy] ]]
+            then
+                InstallOpenssl
+            else
+                Println "已取消\n..." && exit 1
+            fi
+        fi
+        hinet_4gtv=(
+            "litv-longturn14:寰宇新聞台"
+            "4gtv-4gtv052:華視新聞資訊台"
+            "4gtv-4gtv012:空中英語教室"
+            "litv-ftv07:民視旅遊台"
+            "litv-ftv15:i-Fun動漫台"
+            "4gtv-live206:幸福空間居家台"
+            "4gtv-4gtv070:愛爾達娛樂台"
+            "litv-longturn17:亞洲旅遊台"
+            "4gtv-4gtv025:MTV Live HD"
+            "litv-longturn15:寰宇新聞台灣台"
+            "4gtv-4gtv001:民視台灣台"
+            "4gtv-4gtv074:中視新聞台"
+            "4gtv-4gtv011:影迷數位電影台"
+            "4gtv-4gtv047:靖天日本台"
+            "litv-longturn11:龍華日韓台"
+            "litv-longturn12:龍華偶像台"
+            "4gtv-4gtv042:公視戲劇"
+            "litv-ftv12:i-Fun動漫台3"
+            "4gtv-4gtv002:民視無線台"
+            "4gtv-4gtv027:CI 罪案偵查頻道"
+            "4gtv-4gtv013:CNEX DOC CHANNEL"
+            "litv-longturn03:龍華電影台"
+            "4gtv-4gtv004:民視綜藝台"
+            "litv-longturn20:ELTV英語學習台"
+            "litv-longturn01:龍華卡通台"
+            "4gtv-4gtv040:中視無線台"
+            "litv-longturn02:Baby First"
+            "4gtv-4gtv003:民視第一台"
+            "4gtv-4gtv007:大愛電視台"
+            "4gtv-4gtv076:SMART 知識頻道"
+            "4gtv-4gtv030:CNBC"
+            "litv-ftv10:半島電視台"
+        )
+
+        hinet_4gtv_count=${#hinet_4gtv[@]}
+        hinet_4gtv_list=""
+        for((i=0;i<hinet_4gtv_count;i++));
+        do
+            hinet_4gtv_list="$hinet_4gtv_list$green$((i+1)).$plain\r\e[6C${hinet_4gtv[i]#*:}\n\n"
+        done
+
+        #headers="Referer: $chnl_stream_link\r\n"
+
+        xc=1
+        user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+        cookies=""
+
+        _4gtv_set_id=4
+        Println "$info 获取频道 ..."
+        IFS="^" read -r _4gtv_chnl_id _4gtv_chnl_name _4gtv_chnl_aid < <(wget \
+            --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
+            --header="Referer: https://www.4gtv.tv/channel.html?channelSet_id=$_4gtv_set_id" https://api2.4gtv.tv/Channel/GetChannelBySetId/$_4gtv_set_id/pc/L -qO- \
+            | $JQ_FILE -r '[([.Data[].fnID]|join("|")),([.Data[].fsNAME]|join("|")),([.Data[].fs4GTV_ID]|join("|"))]|join("^")'
+        ) || true
+
+        IFS="|" read -r -a _4gtv_chnls_id <<< "$_4gtv_chnl_id"
+        IFS="|" read -r -a _4gtv_chnls_name <<< "$_4gtv_chnl_name"
+        IFS="|" read -r -a _4gtv_chnls_aid <<< "$_4gtv_chnl_aid"
+
+        if [ -n "${_4gtv_chnls_id:-}" ] 
+        then
+            _4gtv_list=""
+            _4gtv_chnls_count=${#_4gtv_chnls_id[@]}
+            for((i=0;i<_4gtv_chnls_count;i++));
+            do
+                _4gtv_list="$_4gtv_list$green$((i+hinet_4gtv_count+1)).$plain\r\e[6C${_4gtv_chnls_name[i]}\n\n"
+            done
+            chnls_list="HiNet 4gtv 频道:\n\n${hinet_4gtv_list}4gtv 官网频道:\n\n$_4gtv_list"
+        else
+            _4gtv_chnls_count=0
+            chnls_list="HiNet 4gtv 频道:\n\n$hinet_4gtv_list"
+        fi
+
+        chnls_count=$((hinet_4gtv_count+_4gtv_chnls_count))
+        Println "$chnls_list"
+        echo -e "选择需要添加的频道序号, 多个频道用空格分隔, 比如 5 7 9-11"
+        while read -p "(默认: 取消): " chnls_num 
+        do
+            [ -z "$chnls_num" ] && Println "已取消...\n" && exit 1
+            IFS=" " read -ra chnls_num_arr <<< "$chnls_num"
+
+            error_no=0
+            for chnl_num in "${chnls_num_arr[@]}"
+            do
+                case "$chnl_num" in
+                    *"-"*)
+                        chnl_num_start=${chnl_num%-*}
+                        chnl_num_end=${chnl_num#*-}
+                        if [[ $chnl_num_start == *[!0-9]* ]] || [[ $chnl_num_end == *[!0-9]* ]] || \
+                        [ "$chnl_num_start" -eq 0 ] || [ "$chnl_num_end" -eq 0 ] || \
+                        [ "$chnl_num_end" -gt "$chnls_count" ] || \
+                        [ "$chnl_num_start" -ge "$chnl_num_end" ]
+                        then
+                            error_no=3
+                        fi
+                    ;;
+                    *[!0-9]*)
+                        error_no=1
+                    ;;
+                    *)
+                        if [ "$chnl_num" -lt 1 ] || [ "$chnl_num" -gt "$chnls_count" ] 
+                        then
+                            error_no=2
+                        fi
+                    ;;
+                esac
+            done
+
+            case "$error_no" in
+                1|2|3)
+                    Println "$error 请输入正确的数字\n"
+                ;;
+                *)
+                    declare -a new_array
+                    for element in "${chnls_num_arr[@]}"
+                    do
+                        if [[ $element == *"-"* ]] 
+                        then
+                            start=${element%-*}
+                            end=${element#*-}
+                            for((i=start;i<=end;i++));
+                            do
+                                new_array+=("$i")
+                            done
+                        else
+                            new_array+=("$element")
+                        fi
+                    done
+                    chnls_num_arr=("${new_array[@]}")
+                    unset new_array
+                    break
+                ;;
+            esac
+        done
+
+        for chnl_num in "${chnls_num_arr[@]}"
+        do
+            if [ "$chnl_num" -le "$hinet_4gtv_count" ] 
+            then
+                hinet_4gtv_chnl_index=$((chnl_num-1))
+                hinet_4gtv_chnl_id=${hinet_4gtv[hinet_4gtv_chnl_index]%%:*}
+                hinet_4gtv_chnl_name=${hinet_4gtv[hinet_4gtv_chnl_index]#*:}
+                hinet_4gtv_chnl_name_enc=$(Urlencode "$hinet_4gtv_chnl_name")
+                Println "$info 添加频道 [ $hinet_4gtv_chnl_name ]\n"
+                Println "是否推流 flv ？[y/N]"
+                read -p "(默认: N): " add_channel_flv_yn
+                add_channel_flv_yn=${add_channel_flv_yn:-N}
+                if [[ $add_channel_flv_yn == [Yy] ]] 
+                then
+                    kind="flv"
+                else
+                    kind=""
+                fi
+                stream_links_input="https://embed.4gtv.tv/HiNet/$hinet_4gtv_chnl_name_enc.html"
+                headers="Referer: $stream_links_input?ar=0&as=1&volume=0\r\n"
+                stream_link_data=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
+                --header="${headers:0:-4}" \
+                "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$hinet_4gtv_chnl_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)" -qO- || true)
+                if [ -n "$stream_link_data" ] 
+                then
+                    stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
+                    hexkey=$(echo -n "VxzAfiseH0AbLShkQOPwdsssw5KyLeuv" | hexdump -v -e '/1 "%02x"')
+                    hexiv=$(echo -n "${stream_link_data:0:16}" | hexdump -v -e '/1 "%02x"')
+                    stream_link=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+                else
+                    Println "$error 无法连接 4gtv !\n" && exit 1
+                fi
+                AddChannel
+            else
+                _4gtv_chnl_index=$((chnl_num-hinet_4gtv_count-1))
+                _4gtv_chnl_id=${_4gtv_chnls_id[_4gtv_chnl_index]}
+                _4gtv_chnl_name=${_4gtv_chnls_name[_4gtv_chnl_index]}
+                _4gtv_chnl_aid=${_4gtv_chnls_aid[_4gtv_chnl_index]}
+                Println "$info 添加频道 [ $_4gtv_chnl_name ]\n"
+                Println "是否推流 flv ？[y/N]"
+                read -p "(默认: N): " add_channel_flv_yn
+                add_channel_flv_yn=${add_channel_flv_yn:-N}
+                if [[ $add_channel_flv_yn == [Yy] ]] 
+                then
+                    kind="flv"
+                else
+                    kind=""
+                fi
+                stream_links_input="https://www.4gtv.tv/channel_sub.html?channelSet_id=$_4gtv_set_id&asset_id=$_4gtv_chnl_aid&channel_id=$_4gtv_chnl_id"
+                headers="Referer: $stream_links_input\r\n"
+                key="ilyB29ZdruuQjC45JhBBR7o2Z8WJ26Vg"
+                iv="JUMxvVMmszqUTeKn"
+                hexkey=$(echo -n $key | hexdump -v -e '/1 "%02x"')
+                hexiv=$(echo -n $iv | hexdump -v -e '/1 "%02x"')
+                post_data='{"fnCHANNEL_ID":'"$_4gtv_chnl_id"',"fsASSET_ID":"'"$_4gtv_chnl_aid"'","fsDEVICE_TYPE":"pc","clsIDENTITY_VALIDATE_ARUS":{"fsVALUE":""}}'
+                post_data=$(echo -n "$post_data" | openssl enc -aes-256-cbc -iv "$hexiv" -K "$hexkey" -a)
+
+                for((try_i=0;try_i<10;try_i++));
+                do
+                    stream_link_data=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
+                    --header="${headers:0:-4}" \
+                    --post-data "value=$(Urlencode ${post_data//[[:space:]]/})" \
+                    "https://api2.4gtv.tv/Channel/GetChannelUrl3" -qO- || true)
+                    if [ -n "$stream_link_data" ] 
+                    then
+                        break
+                    fi
+                done
+
+                if [ -z "$stream_link_data" ] 
+                then
+                    Println "$error 无法连接 4gtv !\n" && exit 1
+                fi
+
+                stream_link_data=$($JQ_FILE -r '.Data' <<< "$stream_link_data")
+                if [ "$stream_link_data" == null ] 
+                then
+                    Println "$error 此服务器 ip 不支持此频道!\n"
+                else
+                    stream_link=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
+                        | $JQ_FILE -r '.flstURLs[0]')
+                    AddChannel
+                fi
+            fi
+        done
 
         exit 0
     ;;

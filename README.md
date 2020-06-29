@@ -87,6 +87,14 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 输入 cx 打开 Xtream Codes 账号/频道 管理面板
 ```
 
+## 自动解析 youtube, 4gtv, tvb ... 等链接
+
+- 输入 youtube 链接
+- 输入 tv 4g 打开 4gtv 频道面板
+- 输入凤凰秀(fengshows.cn)直播链接
+- 输入 tvb 官网直播页面链接
+- 输入 澳门莲花官网免费[直播链接](http://live-hls.macaulotustv.com/lotustv/5562e9e4d409d24c9600075c.m3u8)
+
 ## VIP 面板 ING ... [付费]
 
 ``` bash
