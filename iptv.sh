@@ -1898,6 +1898,222 @@ InstallOpenssl()
     echo -n "...100%" && Println "$info openssl 安装完成"
 }
 
+Add4gtvLink()
+{
+    stream_links_resolution=()
+    stream_links_uri=()
+    stream_links_list=""
+    stream_links_count=0
+    while IFS= read -r line 
+    do
+        if [[ $line =~ RESOLUTION=([^ ]+) ]] 
+        then
+            stream_links_resolution+=("${BASH_REMATCH[1]%%,*}")
+            stream_links_count=$((stream_links_count+1))
+            stream_links_list="$stream_links_list$green$stream_links_count.$plain\r\e[6C${BASH_REMATCH[1]%%,*}\n\n"
+        elif [[ $line =~ m3u8 ]] 
+        then
+            stream_links_uri+=("$line")
+        fi
+    done < <(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate --header="${headers:0:-4}" "$stream_links_url" -qO-)
+    if [ -n "$stream_links_list" ] 
+    then
+        if [[ $stream_link =~ \|([^|]+)$ ]] 
+        then
+            stream_link_resolution=${BASH_REMATCH[1]}
+            if [[ $stream_link_resolution == *,* ]] 
+            then
+                stream_links_resolution_all=$(printf ",%s" "${stream_links_resolution[@]}")
+                stream_links_resolution_all=${stream_links_resolution_all:1}
+                if [[ "$stream_links_input" == *" "* ]] 
+                then
+                    stream_links_input="${stream_link%%|*}|$stream_links_resolution_all ${stream_links_input#* }"
+                else
+                    stream_links_input="${stream_link%%|*}|$stream_links_resolution_all"
+                fi
+                stream_link=$stream_links_url
+            else
+                found=0
+                for((i=0;i<stream_links_count;i++));
+                do
+                    if [ "${stream_links_resolution[i]}" == "$stream_link_resolution" ] 
+                    then
+                        found=1
+                        stream_link="${stream_links_url%/*}/${stream_links_uri[i]}"
+                        break
+                    fi
+                done
+                if [ "$found" -eq 0 ] 
+                then
+                    stream_links_index=$((stream_links_count-1))
+                    if [[ "$stream_links_input" == *" "* ]] 
+                    then
+                        stream_links_input="${stream_link%%|*}|${stream_links_resolution[stream_links_index]} ${stream_links_input#* }"
+                    else
+                        stream_links_input="${stream_link%%|*}|${stream_links_resolution[stream_links_index]}"
+                    fi
+                    stream_link="${stream_links_url%/*}/${stream_links_uri[stream_links_index]}"
+                fi
+            fi
+        else
+            stream_links_select_all=$((stream_links_count+1))
+            stream_links_list="$stream_links_list$green$stream_links_select_all.$plain\r\e[6C全部"
+            Println "$stream_links_list"
+            Println "选择分辨率"
+            while read -p "(默认: $stream_links_count): " stream_links_num 
+            do
+                stream_links_num=${stream_links_num:-$stream_links_count}
+                case $stream_links_num in
+                    $stream_links_select_all)
+                        stream_links_resolution_all=$(printf ",%s" "${stream_links_resolution[@]}")
+                        stream_links_resolution_all=${stream_links_resolution_all:1}
+                        if [[ "$stream_links_input" == *" "* ]] 
+                        then
+                            stream_links_input="$stream_link|$stream_links_resolution_all ${stream_links_input#* }"
+                        else
+                            stream_links_input="$stream_link|$stream_links_resolution_all"
+                        fi
+                        stream_link=$stream_links_url
+                        break
+                    ;;
+                    *[!0-9]*)
+                        Println "$error 请输入正确的数字\n"
+                    ;;
+                    *)
+                        if [ "$stream_links_num" -ge 1 ] && [ "$stream_links_num" -lt "$stream_links_select_all" ]
+                        then
+                            stream_links_index=$((stream_links_num-1))
+                            if [[ "$stream_links_input" == *" "* ]] 
+                            then
+                                stream_links_input="$stream_link|${stream_links_resolution[stream_links_index]} ${stream_links_input#* }"
+                            else
+                                stream_links_input="$stream_link|${stream_links_resolution[stream_links_index]}"
+                            fi
+                            stream_link="${stream_links_url%/*}/${stream_links_uri[stream_links_index]}"
+                            break
+                        else
+                            Println "$error 请输入正确的数字\n"
+                        fi
+                    ;;
+                esac
+            done
+        fi
+    fi
+}
+
+Start4gtvLink()
+{
+    chnl_stream_links_resolution=()
+    chnl_stream_links_uri=()
+    chnl_stream_links_list=""
+    chnl_stream_links_count=0
+    while IFS= read -r line 
+    do
+        if [[ $line =~ RESOLUTION=([^ ]+) ]] 
+        then
+            chnl_stream_links_resolution+=("${BASH_REMATCH[1]%%,*}")
+            chnl_stream_links_count=$((chnl_stream_links_count+1))
+            chnl_stream_links_list="$chnl_stream_links_list$green$chnl_stream_links_count.$plain\r\e[6C${BASH_REMATCH[1]%%,*}\n\n"
+        elif [[ $line =~ m3u8 ]] 
+        then
+            chnl_stream_links_uri+=("$line")
+        fi
+    done < <(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate --header="${chnl_headers:0:-4}" "$chnl_stream_links_url" -qO-)
+    if [ -n "$chnl_stream_links_list" ] 
+    then
+        if [[ $chnl_stream_link =~ \|([^|]+)$ ]] 
+        then
+            chnl_stream_link_resolution=${BASH_REMATCH[1]}
+            if [[ $chnl_stream_link_resolution == *,* ]] 
+            then
+                chnl_stream_links_resolution_all=$(printf ",%s" "${chnl_stream_links_resolution[@]}")
+                chnl_stream_links_resolution_all=${chnl_stream_links_resolution_all:1}
+                if [[ "$chnl_stream_links" == *" "* ]] 
+                then
+                    chnl_stream_links="${chnl_stream_link%%|*}|$chnl_stream_links_resolution_all ${chnl_stream_links#* }"
+                else
+                    chnl_stream_links="${chnl_stream_link%%|*}|$chnl_stream_links_resolution_all"
+                fi
+                chnl_stream_link=$chnl_stream_links_url
+            else
+                found=0
+                for((i=0;i<chnl_stream_links_count;i++));
+                do
+                    if [ "${chnl_stream_links_resolution[i]}" == "$chnl_stream_link_resolution" ] 
+                    then
+                        found=1
+                        chnl_stream_link="${chnl_stream_links_url%/*}/${chnl_stream_links_uri[i]}"
+                        break
+                    fi
+                done
+                if [ "$found" -eq 0 ] 
+                then
+                    chnl_stream_links_index=$((chnl_stream_links_count-1))
+                    if [[ "$chnl_stream_links" == *" "* ]] 
+                    then
+                        chnl_stream_links="${chnl_stream_link%%|*}|${chnl_stream_links_resolution[chnl_stream_links_index]} ${chnl_stream_links#* }"
+                    else
+                        chnl_stream_links="${chnl_stream_link%%|*}|${chnl_stream_links_resolution[chnl_stream_links_index]}"
+                    fi
+                    chnl_stream_link="${chnl_stream_links_url%/*}/${chnl_stream_links_uri[chnl_stream_links_index]}"
+                fi
+            fi
+        elif [ -z "${monitor:-}" ] 
+        then
+            chnl_stream_links_select_all=$((chnl_stream_links_count+1))
+            chnl_stream_links_list="$chnl_stream_links_list$green$chnl_stream_links_select_all.$plain\r\e[6C全部"
+            Println "$chnl_stream_links_list"
+            Println "选择分辨率"
+            while read -p "(默认: $chnl_stream_links_count): " chnl_stream_links_num 
+            do
+                chnl_stream_links_num=${chnl_stream_links_num:-$chnl_stream_links_count}
+                case $chnl_stream_links_num in
+                    $chnl_stream_links_select_all)
+                        chnl_stream_links_resolution_all=$(printf ",%s" "${chnl_stream_links_resolution[@]}")
+                        chnl_stream_links_resolution_all=${chnl_stream_links_resolution_all:1}
+                        if [[ "$chnl_stream_links" == *" "* ]] 
+                        then
+                            chnl_stream_links="$chnl_stream_link|$chnl_stream_links_resolution_all ${chnl_stream_links#* }"
+                        else
+                            chnl_stream_links="$chnl_stream_link|$chnl_stream_links_resolution_all"
+                        fi
+                        chnl_stream_link=$chnl_stream_links_url
+                        break
+                    ;;
+                    *[!0-9]*)
+                        Println "$error 请输入正确的数字\n"
+                    ;;
+                    *)
+                        if [ "$chnl_stream_links_num" -ge 1 ] && [ "$chnl_stream_links_num" -lt "$chnl_stream_links_select_all" ]
+                        then
+                            chnl_stream_links_index=$((chnl_stream_links_num-1))
+                            if [[ "$chnl_stream_links" == *" "* ]] 
+                            then
+                                chnl_stream_links="$chnl_stream_link|${chnl_stream_links_resolution[chnl_stream_links_index]} ${chnl_stream_links#* }"
+                            else
+                                chnl_stream_links="$chnl_stream_link|${chnl_stream_links_resolution[chnl_stream_links_index]}"
+                            fi
+                            chnl_stream_link="${chnl_stream_links_url%/*}/${chnl_stream_links_uri[chnl_stream_links_index]}"
+                            break
+                        else
+                            Println "$error 请输入正确的数字\n"
+                        fi
+                    ;;
+                esac
+            done
+        else
+            chnl_stream_links_index=$((chnl_stream_links_count-1))
+            if [[ "$chnl_stream_links" == *" "* ]] 
+            then
+                chnl_stream_links="$chnl_stream_link|${chnl_stream_links_resolution[chnl_stream_links_index]} ${chnl_stream_links#* }"
+            else
+                chnl_stream_links="$chnl_stream_link|${chnl_stream_links_resolution[chnl_stream_links_index]}"
+            fi
+            chnl_stream_link="${chnl_stream_links_url%/*}/${chnl_stream_links_uri[chnl_stream_links_index]}"
+        fi
+    fi
+}
+
 SetStreamLink()
 {
     if [ "${xc:-0}" -eq 1 ] 
@@ -2146,6 +2362,7 @@ SetStreamLink()
                 Println "已取消\n..." && exit 1
             fi
         fi
+        Println "$info 解析 4gtv 链接 ..."
         hinet_4gtv=(
             "litv-longturn14:寰宇新聞台"
             "4gtv-4gtv052:華視新聞資訊台"
@@ -2181,12 +2398,13 @@ SetStreamLink()
             "litv-ftv10:半島電視台"
         )
 
+        stream_link_uri_name=${BASH_REMATCH[1]}
         for channel in "${hinet_4gtv[@]}"
         do
             channel_id=${channel%%:*}
             channel_name=${channel#*:}
             channel_name_enc=$(Urlencode "$channel_name")
-            if [[ $channel_name_enc == "${BASH_REMATCH[1]}" ]] 
+            if [[ $channel_name_enc == "$stream_link_uri_name" ]] 
             then
                 xc=1
                 user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
@@ -2200,7 +2418,8 @@ SetStreamLink()
                     stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
                     hexkey=$(echo -n "VxzAfiseH0AbLShkQOPwdsssw5KyLeuv" | hexdump -v -e '/1 "%02x"')
                     hexiv=$(echo -n "${stream_link_data:0:16}" | hexdump -v -e '/1 "%02x"')
-                    stream_link=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+                    stream_links_url=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+                    Add4gtvLink
                 else
                     Println "$error 无法连接 4gtv !\n" && exit 1
                 fi
@@ -2221,14 +2440,17 @@ SetStreamLink()
                 Println "已取消\n..." && exit 1
             fi
         fi
+        Println "$info 解析 4gtv 链接 ..."
         xc=1
         user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
-        headers="Referer: $stream_link\r\n"
+        headers="Referer: ${stream_link%%|*}\r\n"
         cookies=""
         fnCHANNEL_ID=${stream_link#*channel_id=}
         fnCHANNEL_ID=${fnCHANNEL_ID%%&*}
+        fnCHANNEL_ID=${fnCHANNEL_ID%%|*}
         fsASSET_ID=${stream_link#*asset_id=}
         fsASSET_ID=${fsASSET_ID%%&*}
+        fsASSET_ID=${fsASSET_ID%%|*}
         key="ilyB29ZdruuQjC45JhBBR7o2Z8WJ26Vg"
         iv="JUMxvVMmszqUTeKn"
         hexkey=$(echo -n $key | hexdump -v -e '/1 "%02x"')
@@ -2258,8 +2480,9 @@ SetStreamLink()
         then
             Println "$error 此服务器 ip 不支持!\n" && exit 1
         else
-            stream_link=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
+            stream_links_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
                 | $JQ_FILE -r '.flstURLs[0]')
+            Add4gtvLink
         fi
     fi
 
@@ -2754,7 +2977,8 @@ SetKeyName()
 
 SetInputFlags()
 {
-    if [[ ${stream_link:-} == *".m3u8"* ]] || [ "${is_hls:-0}" -eq 1 ]
+    stream_link=${stream_link:-}
+    if [[ $stream_link == *".m3u8"* ]] || [ "${is_hls:-0}" -eq 1 ]
     then
         d_input_flags=${d_input_flags//-reconnect_at_eof 1/}
     elif [ "${stream_link:0:4}" == "rtmp" ] || [ "${is_local:-0}" -eq 1 ]
@@ -2767,7 +2991,7 @@ SetInputFlags()
         lead=${d_input_flags%%[^[:blank:]]*}
         d_input_flags=${d_input_flags#${lead}}
     fi
-    Println "请输入额外的输入参数"
+    Println "请输入 ffmpeg 额外的输入参数"
     read -p "(默认: $d_input_flags): " input_flags
     input_flags=${input_flags:-$d_input_flags}
     Println "	输入参数: $green ${input_flags:-无} $plain\n"
@@ -2779,7 +3003,7 @@ SetOutputFlags()
     then
         d_output_flags=${d_output_flags//-sc_threshold 0/}
     fi
-    Println "请输入额外的输出参数, 可以输入 omit 省略此选项"
+    Println "请输入 ffmpeg 额外的输出参数, 可以输入 omit 省略此选项"
     read -p "(默认: ${d_output_flags:-不设置}): " output_flags
     output_flags=${output_flags:-$d_output_flags}
     if [ "$output_flags" == "omit" ] 
@@ -5161,10 +5385,15 @@ EditChannelMenu()
             then
                 StopChannel
                 GetChannelInfo
+                TestXtreamCodesLink
+                if [ "$to_try" -eq 1 ] 
+                then
+                    continue
+                fi
                 StartChannel
                 Println "$info 频道重启成功 !\n"
             else
-                echo "不重启..."
+                Println "不重启 ...\n"
             fi
         else
             echo "是否启动此频道？[y/N]"
@@ -5173,10 +5402,15 @@ EditChannelMenu()
             if [[ $start_yn == [Yy] ]] 
             then
                 GetChannelInfo
+                TestXtreamCodesLink
+                if [ "$to_try" -eq 1 ] 
+                then
+                    continue
+                fi
                 StartChannel
                 Println "$info 频道启动成功 !\n"
             else
-                echo "不启动..."
+                Println "不启动 ...\n"
             fi
         fi
     done
@@ -5302,6 +5536,14 @@ TestXtreamCodesLink()
                 fi
 
                 printf -v chnl_headers_command '%b' "$chnl_headers"
+
+                Println "$info 跳过检测频道 [ $chnl_channel_name ] 直接开启 ? [y/N]"
+                read -p "(默认: N): " skip_check_yn
+                skip_check_yn=${skip_check_yn:-N}
+                if [[ $skip_check_yn == [Yy] ]] 
+                then
+                    return 0
+                fi
 
                 audio=0
                 video=0
@@ -5504,6 +5746,7 @@ StartChannel()
             | $JQ_FILE -r '.url')
     elif [[ $chnl_stream_link =~ ^https://embed.4gtv.tv/HiNet/(.+).html ]] 
     then
+        Println "$info 解析 [ $chnl_channel_name ] 链接 ..."
         hinet_4gtv=(
             "litv-longturn14:寰宇新聞台"
             "4gtv-4gtv052:華視新聞資訊台"
@@ -5558,7 +5801,8 @@ StartChannel()
                     stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
                     hexkey=$(echo -n "VxzAfiseH0AbLShkQOPwdsssw5KyLeuv" | hexdump -v -e '/1 "%02x"')
                     hexiv=$(echo -n "${stream_link_data:0:16}" | hexdump -v -e '/1 "%02x"')
-                    chnl_stream_link=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+                    chnl_stream_links_url=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+                    Start4gtvLink
                 elif [ -z "${monitor:-}" ]
                 then
                     Println "$error 无法连接 4gtv !\n" && exit 1
@@ -5568,13 +5812,16 @@ StartChannel()
         done
     elif [[ $chnl_stream_link == *"4gtv.tv/"* ]] 
     then
+        Println "$info 解析 [ $chnl_channel_name ] 链接 ..."
         chnl_user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
-        chnl_headers="Referer: $chnl_stream_link\r\n"
+        chnl_headers="Referer: ${chnl_stream_link%%|*}\r\n"
         chnl_cookies=""
         fnCHANNEL_ID=${chnl_stream_link#*channel_id=}
         fnCHANNEL_ID=${fnCHANNEL_ID%%&*}
+        fnCHANNEL_ID=${fnCHANNEL_ID%%|*}
         fsASSET_ID=${chnl_stream_link#*asset_id=}
         fsASSET_ID=${fsASSET_ID%%&*}
+        fsASSET_ID=${fsASSET_ID%%|*}
         key="ilyB29ZdruuQjC45JhBBR7o2Z8WJ26Vg"
         iv="JUMxvVMmszqUTeKn"
         hexkey=$(echo -n $key | hexdump -v -e '/1 "%02x"')
@@ -5597,8 +5844,9 @@ StartChannel()
             stream_link_data=$($JQ_FILE -r '.Data' <<< "$stream_link_data")
             if [ "$stream_link_data" != null ] 
             then
-                chnl_stream_link=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
+                chnl_stream_links_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
                     | $JQ_FILE -r '.flstURLs[0]')
+                Start4gtvLink
             elif [ -z "${monitor:-}" ] 
             then
                 Println "$error 此服务器 ip 不支持!\n" && exit 1
@@ -9876,11 +10124,11 @@ MonitorTryAccounts()
                             sleep 3
                             break
                         fi
-                        sleep 15
-                        GetChannelInfo
 
                         if [ "${kind:-}" == "flv" ] 
                         then
+                            sleep 15
+                            GetChannelInfo
                             audio=0
                             video=0
                             while IFS= read -r line 
@@ -9904,75 +10152,79 @@ MonitorTryAccounts()
                                 printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
                                 break
                             fi
-                        elif ls -A "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts > /dev/null 2>&1 
-                        then
-                            if [ "$chnl_encrypt_yn" == "yes" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key" ]
+                        else
+                            sleep $((15+chnl_seg_length))
+                            GetChannelInfo
+                            if ls -A "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts > /dev/null 2>&1 
                             then
-                                line_no=0
-                                while IFS= read -r line 
-                                do
-                                    line_no=$((line_no+1))
-                                    if [ "$line_no" -eq 3 ] 
-                                    then
-                                        iv_hex=$line
-                                    fi
-                                done < "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo"
-
-                                encrypt_key=$(hexdump -e '16/1 "%02x"' < "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key")
-                                encrypt_command="-key $encrypt_key -iv $iv_hex"
-                            else
-                                encrypt_command=""
-                            fi
-
-                            audio=0
-                            video=0
-                            video_bitrate=0
-                            bitrate_check=0
-
-                            f_count=1
-                            for f in "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts
-                            do
-                                ((f_count++))
-                            done
-
-                            f_num=$((f_count/2))
-                            f_count=1
-
-                            for f in "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts
-                            do
-                                if [ "$f_count" -lt "$f_num" ] 
+                                if [ "$chnl_encrypt_yn" == "yes" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key" ]
                                 then
-                                    ((f_count++))
-                                    continue
-                                fi
-                                [ -n "$encrypt_command" ] && f="crypto:$f"
-                                while IFS= read -r line 
-                                do
-                                    if [[ $line == *"codec_type=video"* ]] 
-                                    then
-                                        video=1
-                                    elif [ "$bitrate_check" -eq 0 ] && [ "$video" -eq 1 ] && [[ $line == *"bit_rate="* ]] 
-                                    then
-                                        line=${line#*bit_rate=}
-                                        video_bitrate=${line//N\/A/$hls_min_bitrates}
-                                        bitrate_check=1
-                                    elif [[ $line == *"codec_type=audio"* ]] 
-                                    then
-                                        audio=1
-                                    elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
-                                    then
-                                        audio=0
-                                    fi
-                                done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet || true)
-                                break
-                            done
+                                    line_no=0
+                                    while IFS= read -r line 
+                                    do
+                                        line_no=$((line_no+1))
+                                        if [ "$line_no" -eq 3 ] 
+                                        then
+                                            iv_hex=$line
+                                        fi
+                                    done < "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo"
 
-                            if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ] && [[ $video_bitrate -ge $hls_min_bitrates ]]
-                            then
-                                try_success=1
-                                printf -v date_now '%(%m-%d %H:%M:%S)T'
-                                printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
-                                break
+                                    encrypt_key=$(hexdump -e '16/1 "%02x"' < "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key")
+                                    encrypt_command="-key $encrypt_key -iv $iv_hex"
+                                else
+                                    encrypt_command=""
+                                fi
+
+                                audio=0
+                                video=0
+                                video_bitrate=0
+                                bitrate_check=0
+
+                                f_count=1
+                                for f in "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts
+                                do
+                                    ((f_count++))
+                                done
+
+                                f_num=$((f_count/2))
+                                f_count=1
+
+                                for f in "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts
+                                do
+                                    if [ "$f_count" -lt "$f_num" ] 
+                                    then
+                                        ((f_count++))
+                                        continue
+                                    fi
+                                    [ -n "$encrypt_command" ] && f="crypto:$f"
+                                    while IFS= read -r line 
+                                    do
+                                        if [[ $line == *"codec_type=video"* ]] 
+                                        then
+                                            video=1
+                                        elif [ "$bitrate_check" -eq 0 ] && [ "$video" -eq 1 ] && [[ $line == *"bit_rate="* ]] 
+                                        then
+                                            line=${line#*bit_rate=}
+                                            video_bitrate=${line//N\/A/$hls_min_bitrates}
+                                            bitrate_check=1
+                                        elif [[ $line == *"codec_type=audio"* ]] 
+                                        then
+                                            audio=1
+                                        elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
+                                        then
+                                            audio=0
+                                        fi
+                                    done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet || true)
+                                    break
+                                done
+
+                                if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ] && [[ $video_bitrate -ge $hls_min_bitrates ]]
+                                then
+                                    try_success=1
+                                    printf -v date_now '%(%m-%d %H:%M:%S)T'
+                                    printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
+                                    break
+                                fi
                             fi
                         fi
                     fi
@@ -10082,11 +10334,11 @@ MonitorTryAccounts()
                     sleep 3
                     break
                 fi
-                sleep 15
-                GetChannelInfo
 
                 if [ "${kind:-}" == "flv" ] 
                 then
+                    sleep 15
+                    GetChannelInfo
                     audio=0
                     video=0
                     while IFS= read -r line 
@@ -10110,75 +10362,79 @@ MonitorTryAccounts()
                         printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
                         break
                     fi
-                elif ls -A "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts > /dev/null 2>&1 
-                then
-                    if [ "$chnl_encrypt_yn" == "yes" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key" ]
+                else
+                    sleep $((15+chnl_seg_length))
+                    GetChannelInfo
+                    if ls -A "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts > /dev/null 2>&1 
                     then
-                        line_no=0
-                        while IFS= read -r line 
-                        do
-                            line_no=$((line_no+1))
-                            if [ "$line_no" -eq 3 ] 
-                            then
-                                iv_hex=$line
-                            fi
-                        done < "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo"
-
-                        encrypt_key=$(hexdump -e '16/1 "%02x"' < "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key")
-                        encrypt_command="-key $encrypt_key -iv $iv_hex"
-                    else
-                        encrypt_command=""
-                    fi
-
-                    audio=0
-                    video=0
-                    video_bitrate=0
-                    bitrate_check=0
-
-                    f_count=1
-                    for f in "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts
-                    do
-                        ((f_count++))
-                    done
-
-                    f_num=$((f_count/2))
-                    f_count=1
-
-                    for f in "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts
-                    do
-                        if [ "$f_count" -lt "$f_num" ] 
+                        if [ "$chnl_encrypt_yn" == "yes" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key" ]
                         then
-                            ((f_count++))
-                            continue
-                        fi
-                        [ -n "$encrypt_command" ] && f="crypto:$f"
-                        while IFS= read -r line 
-                        do
-                            if [[ $line == *"codec_type=video"* ]] 
-                            then
-                                video=1
-                            elif [ "$bitrate_check" -eq 0 ] && [ "$video" -eq 1 ] && [[ $line == *"bit_rate="* ]] 
-                            then
-                                line=${line#*bit_rate=}
-                                video_bitrate=${line//N\/A/$hls_min_bitrates}
-                                bitrate_check=1
-                            elif [[ $line == *"codec_type=audio"* ]] 
-                            then
-                                audio=1
-                            elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
-                            then
-                                audio=0
-                            fi
-                        done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet || true)
-                        break
-                    done
+                            line_no=0
+                            while IFS= read -r line 
+                            do
+                                line_no=$((line_no+1))
+                                if [ "$line_no" -eq 3 ] 
+                                then
+                                    iv_hex=$line
+                                fi
+                            done < "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo"
 
-                    if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ] && [[ $video_bitrate -ge $hls_min_bitrates ]]
-                    then
-                        try_success=1
-                        printf -v date_now '%(%m-%d %H:%M:%S)T'
-                        printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
-                        break
+                            encrypt_key=$(hexdump -e '16/1 "%02x"' < "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key")
+                            encrypt_command="-key $encrypt_key -iv $iv_hex"
+                        else
+                            encrypt_command=""
+                        fi
+
+                        audio=0
+                        video=0
+                        video_bitrate=0
+                        bitrate_check=0
+
+                        f_count=1
+                        for f in "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts
+                        do
+                            ((f_count++))
+                        done
+
+                        f_num=$((f_count/2))
+                        f_count=1
+
+                        for f in "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts
+                        do
+                            if [ "$f_count" -lt "$f_num" ] 
+                            then
+                                ((f_count++))
+                                continue
+                            fi
+                            [ -n "$encrypt_command" ] && f="crypto:$f"
+                            while IFS= read -r line 
+                            do
+                                if [[ $line == *"codec_type=video"* ]] 
+                                then
+                                    video=1
+                                elif [ "$bitrate_check" -eq 0 ] && [ "$video" -eq 1 ] && [[ $line == *"bit_rate="* ]] 
+                                then
+                                    line=${line#*bit_rate=}
+                                    video_bitrate=${line//N\/A/$hls_min_bitrates}
+                                    bitrate_check=1
+                                elif [[ $line == *"codec_type=audio"* ]] 
+                                then
+                                    audio=1
+                                elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
+                                then
+                                    audio=0
+                                fi
+                            done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet || true)
+                            break
+                        done
+
+                        if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ] && [[ $video_bitrate -ge $hls_min_bitrates ]]
+                        then
+                            try_success=1
+                            printf -v date_now '%(%m-%d %H:%M:%S)T'
+                            printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
+                            break
+                        fi
                     fi
                 fi
             fi
@@ -10613,8 +10869,9 @@ MonitorHlsRestartChannel()
                 fi
             fi
         fi
+
         StartChannel
-        sleep 15
+        sleep $((15+chnl_seg_length))
         GetChannelInfo
 
         if ls -A "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts > /dev/null 2>&1 
@@ -12320,13 +12577,13 @@ ToggleNginx()
 {
     if [ ! -s "$nginx_prefix/logs/nginx.pid" ] 
     then
-        Println "nginx 未运行，是否开启？[Y/n]"
+        Println "$nginx_name 未运行，是否开启？[Y/n]"
         read -p "(默认: Y): " nginx_start_yn
         nginx_start_yn=${nginx_start_yn:-Y}
         if [[ $nginx_start_yn == [Yy] ]] 
         then
             $NGINX_FILE
-            Println "$info Nginx 已开启\n"
+            Println "$info $nginx_name 已开启\n"
         else
             Println "已取消...\n" && exit 1
         fi
@@ -12334,24 +12591,24 @@ ToggleNginx()
         PID=$(< "$nginx_prefix/logs/nginx.pid")
         if kill -0 "$PID" 2> /dev/null
         then
-            Println "nginx 正在运行，是否关闭？[Y/n]"
+            Println "$nginx_name 正在运行，是否关闭？[Y/n]"
             read -p "(默认: Y): " nginx_stop_yn
             nginx_stop_yn=${nginx_stop_yn:-Y}
             if [[ $nginx_stop_yn == [Yy] ]] 
             then
                 $NGINX_FILE -s stop
-                Println "$info Nginx 已关闭\n"
+                Println "$info $nginx_name 已关闭\n"
             else
                 Println "已取消...\n" && exit 1
             fi
         else
-            Println "nginx 未运行，是否开启？[Y/n]"
+            Println "$nginx_name 未运行，是否开启？[Y/n]"
             read -p "(默认: Y): " nginx_start_yn
             nginx_start_yn=${nginx_start_yn:-Y}
             if [[ $nginx_start_yn == [Yy] ]] 
             then
                 $NGINX_FILE
-                Println "$info Nginx 已开启\n"
+                Println "$info $nginx_name 已开启\n"
             else
                 Println "已取消...\n" && exit 1
             fi
@@ -16608,7 +16865,7 @@ V2rayListNginx()
 
     [ "$inbounds_nginx_count" -eq 0 ] && Println "$error 没有账号组\n" && exit 1
 
-    Println "\n=== Nginx 账号组数 $green $inbounds_nginx_count $plain"
+    Println "\n=== $nginx_name 账号组数 $green $inbounds_nginx_count $plain"
 
     nginx_list=""
 
@@ -21421,6 +21678,7 @@ case "$cmd" in
                 else
                     kind=""
                 fi
+                Println "$info 解析 [ $hinet_4gtv_chnl_name ] 链接 ..."
                 stream_links_input="https://embed.4gtv.tv/HiNet/$hinet_4gtv_chnl_name_enc.html"
                 headers="Referer: $stream_links_input?ar=0&as=1&volume=0\r\n"
                 stream_link_data=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
@@ -21431,7 +21689,9 @@ case "$cmd" in
                     stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
                     hexkey=$(echo -n "VxzAfiseH0AbLShkQOPwdsssw5KyLeuv" | hexdump -v -e '/1 "%02x"')
                     hexiv=$(echo -n "${stream_link_data:0:16}" | hexdump -v -e '/1 "%02x"')
-                    stream_link=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+                    stream_link=$stream_links_input
+                    stream_links_url=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+                    Add4gtvLink
                 else
                     Println "$error 无法连接 4gtv !\n" && exit 1
                 fi
@@ -21451,6 +21711,7 @@ case "$cmd" in
                 else
                     kind=""
                 fi
+                Println "$info 解析 [ $_4gtv_chnl_name ] 链接 ..."
                 stream_links_input="https://www.4gtv.tv/channel_sub.html?channelSet_id=$_4gtv_set_id&asset_id=$_4gtv_chnl_aid&channel_id=$_4gtv_chnl_id"
                 headers="Referer: $stream_links_input\r\n"
                 key="ilyB29ZdruuQjC45JhBBR7o2Z8WJ26Vg"
@@ -21482,8 +21743,10 @@ case "$cmd" in
                 then
                     Println "$error 此服务器 ip 不支持此频道!\n"
                 else
-                    stream_link=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
+                    stream_link=$stream_links_input
+                    stream_links_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
                         | $JQ_FILE -r '.flstURLs[0]')
+                    Add4gtvLink
                     AddChannel
                 fi
             fi
