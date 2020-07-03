@@ -69,6 +69,8 @@
 #     tv l 列出所有开启的频道
 #     tv s 节目表管理面板
 #
+#     tv 4g 管理 4gtv 频道面板
+#
 #     cx 打开 xtream codes 面板
 #     v2 打开 v2ray 面板
 #     nx 打开 nginx 面板
@@ -113,6 +115,7 @@ MONITOR_LOG="$IPTV_ROOT/monitor.log"
 LOGROTATE_CONFIG="$IPTV_ROOT/logrotate"
 CRON_FILE="$IPTV_ROOT/cron"
 XTREAM_CODES="$IPTV_ROOT/xtream_codes"
+SERVICES_FILE="$IPTV_ROOT/services.json"
 VIP_FILE="$IPTV_ROOT/vip.json"
 VIP_ROOT="$IPTV_ROOT/vip"
 VIP_USERS_ROOT="$VIP_ROOT/users"
@@ -1244,13 +1247,6 @@ ListChannels()
             chnls_proxy_text=""
         fi
 
-        if [ "$index" -lt 9 ] 
-        then
-            blank=" "
-        else
-            blank=""
-        fi
-
         if [ -z "${kind:-}" ] 
         then
             if [ "${chnls_status[index]}" == "on" ]
@@ -1259,7 +1255,7 @@ ListChannels()
             else
                 chnls_status_text=$red"关闭"$plain
             fi
-            chnls_list=$chnls_list"# $green$((index+1))$plain $blank进程ID: $green${chnls_pid[index]}$plain 状态: $chnls_status_text 频道名称: $green${chnls_channel_name[index]} $chnls_proxy_text$plain\n     编码: $green${chnls_video_codec[index]}:${chnls_audio_codec[index]}$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain\n     源: ${chnls_stream_link[index]}\n     m3u8位置: $chnls_playlist_file_text\n\n"
+            chnls_list=$chnls_list"# $green$((index+1))$plain\r\e[6C进程ID: $green${chnls_pid[index]}$plain 状态: $chnls_status_text 频道名称: $green${chnls_channel_name[index]} $chnls_proxy_text$plain\n\r\e[6C编码: $green${chnls_video_codec[index]}:${chnls_audio_codec[index]}$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain\n\r\e[6C源: ${chnls_stream_link[index]}\n\r\e[6Cm3u8位置: $chnls_playlist_file_text\n\n"
         elif [ "$kind" == "flv" ] 
         then
             if [ "${chnls_flv_status[index]}" == "on" ] 
@@ -1268,17 +1264,17 @@ ListChannels()
             else
                 chnls_flv_status_text=$red"关闭"$plain
             fi
-            chnls_list=$chnls_list"# $green$((index+1))$plain $blank进程ID: $green${chnls_pid[index]}$plain 状态: $chnls_flv_status_text 频道名称: $green${chnls_channel_name[index]} $chnls_proxy_text$plain\n     编码: $green${chnls_video_codec[index]}:${chnls_audio_codec[index]}$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain\n     flv推流地址: ${chnls_flv_push_link[index]:-无}\n     flv拉流地址: ${chnls_flv_pull_link[index]:-无}\n\n"
+            chnls_list=$chnls_list"# $green$((index+1))$plain\r\e[6C进程ID: $green${chnls_pid[index]}$plain 状态: $chnls_flv_status_text 频道名称: $green${chnls_channel_name[index]} $chnls_proxy_text$plain\n\r\e[6C编码: $green${chnls_video_codec[index]}:${chnls_audio_codec[index]}$plain 延迟: $green$chnls_video_audio_shift_text$plain 视频质量: $green$chnls_video_quality_text$plain\n\r\e[6Cflv推流地址: ${chnls_flv_push_link[index]:-无}\n\r\e[6Cflv拉流地址: ${chnls_flv_pull_link[index]:-无}\n\n"
         fi
     done
 
     if [ "$menu_num" -eq 7 ] 
     then
-        chnls_list=$chnls_list"# $green$((chnls_count+1))$plain $blank开启所有关闭的频道\n\n"
-        chnls_list=$chnls_list"# $green$((chnls_count+2))$plain $blank关闭所有开启的频道\n\n"
+        chnls_list=$chnls_list"# $green$((chnls_count+1))$plain\r\e[6C开启所有关闭的频道\n\n"
+        chnls_list=$chnls_list"# $green$((chnls_count+2))$plain\r\e[6C关闭所有开启的频道\n\n"
     elif [ "$menu_num" -eq 8 ] 
     then
-        chnls_list=$chnls_list"# $green$((chnls_count+1))$plain $blank重启所有开启的频道\n\n"
+        chnls_list=$chnls_list"# $green$((chnls_count+1))$plain\r\e[6C重启所有开启的频道\n\n"
     fi
     Println "=== 频道总数 $green $chnls_count $plain"
     Println "$chnls_list"
@@ -1898,6 +1894,445 @@ InstallOpenssl()
     echo -n "...100%" && Println "$info openssl 安装完成"
 }
 
+Set4gtvAccEmail()
+{
+    Println "输入新账号邮箱"
+    while read -p "(默认: 随机): " _4gtv_acc_email 
+    do
+        [ -z "$_4gtv_acc_email" ] && _4gtv_acc_email="$(RandStr)_$(printf '%(%s)T')@gmail.com"
+        if [[ $_4gtv_acc_email =~ ^[A-Za-z0-9](([_\.\-]?[a-zA-Z0-9]+)*)@([A-Za-z0-9]+)(([\.\-]?[a-zA-Z0-9]+)*)\.([A-Za-z]{2,})$ ]] 
+        then
+            break
+        else
+            Println "$error 邮箱格式错误, 请重新输入"
+        fi
+    done
+    Println "	4gtv 账号邮箱: $green $_4gtv_acc_email $plain\n"
+}
+
+Set4gtvAccPass()
+{
+    Println "输入新账号密码(字母或数字 8-12 位)"
+    while read -p "(默认: 随机): " _4gtv_acc_pass 
+    do
+        [ -z "$_4gtv_acc_pass" ] && _4gtv_acc_pass=$(RandStr)
+        if [[ $_4gtv_acc_pass =~ ^[A-Za-z0-9]{8,12}$ ]] 
+        then
+            break
+        else
+            Println "$error 账号密码格式错误, 请重新输入"
+        fi
+    done
+    Println "	4gtv 账号密码: $green $_4gtv_acc_pass $plain\n"
+}
+
+Reg4gtvAcc()
+{
+    Set4gtvAccEmail
+    Set4gtvAccPass
+    IFS=" " read -r result msg < <(curl --silent -Lm 10 'https://api2.4gtv.tv/Account/Register' \
+        -H "User-Agent: $user_agent" \
+        -H 'Origin: https://www.4gtv.tv' \
+        -H 'Referer: https://www.4gtv.tv/signup.html' \
+        -d "fnREGISTER_TYPE=1&fsLOGIN_TYPE=&fsLINK_ID=&fsUSER=$_4gtv_acc_email&fsLOGIN_TYPE=&fsLINK_ID=&fsPASSWORD=$_4gtv_acc_pass&fsPASSWORD1=$_4gtv_acc_pass&fnBIRTH_YEAR=$((RANDOM%20+1980))&fsSEX=male" \
+        | $JQ_FILE -r '[.Success,.ErrMessage]|join(" ")'
+    ) || true
+
+    if [ "$result" == "true" ]
+    then
+        if [ ! -s "$SERVICES_FILE" ] 
+        then
+            printf '{"%s":{"%s":[]}}' "4gtv" "accounts" > "$SERVICES_FILE"
+        fi
+        new_acc=$(
+        $JQ_FILE -n --arg email "$_4gtv_acc_email" --arg password "$_4gtv_acc_pass" \
+            '{
+                email: $email,
+                password: $password
+            }'
+        )
+        jq_path='["4gtv","accounts"]'
+        JQ add "$SERVICES_FILE" "[$new_acc]"
+        Println "$info 账号注册成功\n"
+    else
+        Println "$error 账号注册失败, 请重试\n\n$msg\n"
+    fi
+}
+
+GetServiceAccs()
+{
+    if [ ! -s "$SERVICES_FILE" ] 
+    then
+        printf '{"%s":{"%s":[]}}' "4gtv" "accounts" > "$SERVICES_FILE"
+    elif [[ $($JQ_FILE -r --arg service_name "4gtv" '.[$service_name]' "$SERVICES_FILE") == null ]] 
+    then
+        jq_path='["4gtv","accounts"]'
+        JQ replace "$SERVICES_FILE" "[]"
+    fi
+    IFS="^" read -r _4gtv_acc_email _4gtv_acc_pass _4gtv_acc_token < <($JQ_FILE -r --arg service_name "$service_name" '[([.[$service_name].accounts[].email]|join("|")),([.[$service_name].accounts[].password]|join("|")),([.[$service_name].accounts[].token]|join("|"))]|join("^")' "$SERVICES_FILE")
+    IFS="|" read -r -a _4gtv_accs_email <<< "$_4gtv_acc_email"
+    IFS="|" read -r -a _4gtv_accs_pass <<< "$_4gtv_acc_pass"
+    IFS="|" read -r -a _4gtv_accs_token <<< "${_4gtv_acc_token}|"
+}
+
+List4gtvAccs()
+{
+    GetServiceAccs
+    _4gtv_accs_count=${#_4gtv_accs_email[@]}
+    _4gtv_accs_list=""
+    for((i=0;i<_4gtv_accs_count;i++));
+    do
+        if [ -n "${_4gtv_accs_token[i]}" ]
+        then
+            is_login="$green [ 已登录 ] $plain"
+        else
+            is_login=""
+        fi
+        _4gtv_accs_list="$_4gtv_accs_list $green$((i+1)).$plain\r\e[6C邮箱: $green${_4gtv_accs_email[i]}$plain$is_login\n\e[6C密码: $green${_4gtv_accs_pass[i]}$plain\n\n"
+    done
+    if [ -n "$_4gtv_accs_list" ] 
+    then
+        Println "$_4gtv_accs_list"
+    else
+        Println "$error 没有账号\n"
+    fi
+}
+
+InstallImageMagick()
+{
+    Progress &
+    progress_pid=$!
+    trap '
+        kill $progress_pid 2> /dev/null
+    ' EXIT
+    wget --no-check-certificate "https://imagemagick.org/download/binaries/magick" -qO "$MAGICK_FILE"
+    chmod +x "$MAGICK_FILE"
+    [ -z "${release:-}" ] && CheckRelease
+    if [ "$release" == "rpm" ] 
+    then
+        yum -y install fontconfig freetype freetype-devel fontconfig-devel >/dev/null 2>&1
+    else
+        apt-get -y install fontconfig libfontconfig1 libharfbuzz-dev >/dev/null 2>&1
+    fi
+    kill $progress_pid
+    trap - EXIT
+    echo -n "...100%" && Println "$info magick 安装完成"
+}
+
+Login4gtvAcc()
+{
+    if [ ! -e "/usr/local/bin/imgcat" ] 
+    then
+        InstallImgcat
+    fi
+
+    List4gtvAccs
+
+    _4gtv_input_acc_num=$((_4gtv_accs_count+1))
+    echo -e " $green$_4gtv_input_acc_num.$plain\r\e[6C手动输入\n"
+
+    echo -e "选择账号"
+    while read -p "(默认: 取消): " _4gtv_accs_num
+    do
+        case "$_4gtv_accs_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            $_4gtv_input_acc_num)
+                _4gtv_accs_index=$((_4gtv_accs_num-1))
+                Set4gtvAccEmail
+                Set4gtvAccPass
+                new_acc=$(
+                $JQ_FILE -n --arg email "$_4gtv_acc_email" --arg password "$_4gtv_acc_pass" \
+                    '{
+                        email: $email,
+                        password: $password
+                    }'
+                )
+                jq_path='["4gtv","accounts"]'
+                JQ add "$SERVICES_FILE" "[$new_acc]"
+                Println "$info 账号添加成功\n"
+                break
+            ;;
+            *)
+                if [ "$_4gtv_accs_num" -gt 0 ] && [ "$_4gtv_accs_num" -le "$_4gtv_accs_count" ]
+                then
+                    _4gtv_accs_index=$((_4gtv_accs_num-1))
+                    _4gtv_acc_email=${_4gtv_accs_email[_4gtv_accs_index]}
+                    _4gtv_acc_pass=${_4gtv_accs_pass[_4gtv_accs_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    IMG_FILE="$IPTV_ROOT/4gtv.png"
+    MAGICK_FILE="$IPTV_ROOT/magick"
+    rm -f "${IMG_FILE:-notfound}"
+    if [[ ! -x $MAGICK_FILE ]] 
+    then
+        Println "$info 安装 magick"
+        InstallImageMagick
+    fi
+    while true 
+    do
+        if curl --silent -Lm 20 "https://www.4gtv.tv/validatecode?t=$(date +%s%3N)" \
+            -H 'authority: www.4gtv.tv' \
+            -H "User-Agent: $user_agent" \
+            -H 'referer: https://www.4gtv.tv/channel.html' | $MAGICK_FILE gif:- "$IMG_FILE" 2> /dev/null
+        then
+            /usr/local/bin/imgcat --half-height "$IMG_FILE"
+            rm -f "${IMG_FILE:-notfound}"
+            Println "$info 输入图片验证码: "
+            read -p "(默认: 刷新验证码): " validatecode
+            [ -z "$validatecode" ] && continue
+        else
+            Println "$info 尝试修复 magick ..."
+            InstallImageMagick
+            rm -f "${IMG_FILE:-notfound}"
+            Println "$error 连接发生错误, 请重试\n"
+            exit 1
+        fi
+
+        Println "$info 登录账号..."
+        IFS="^" read -r result msg token < <(curl --silent -Lm 20 'https://api2.4gtv.tv/Account/SignIn' \
+            -H "User-Agent: $user_agent" \
+            -H 'Origin: https://www.4gtv.tv' \
+            -H 'Referer: https://www.4gtv.tv/channel.html' \
+            -d "fsUSER=$_4gtv_acc_email&fsPASSWORD=$_4gtv_acc_pass&fsVALIDATE_CODE=$validatecode" \
+            | $JQ_FILE -r '[.Success,.ErrMessage,.Data]|join("^")'
+        ) || true
+
+        if [ "$result" == "true" ]
+        then
+            break
+        else
+            Println "$error 账号登录失败, 请重试\n\n$msg\n"
+        fi
+    done
+
+    jq_path='["4gtv","accounts",'"$_4gtv_accs_index"',"token"]'
+    JQ update "$SERVICES_FILE" "$token"
+    Println "$info 账号登录成功"
+    Println "$info 验证账号..."
+    for((i=0;i<3;i++));
+    do
+        random_number=$(od -An -N6 -t u8 < /dev/urandom)
+        random_number=${random_number: -12}
+        fsLINK_ID="$random_number${random_number:0:9}"
+        IFS="^" read -r result < <(curl --silent -Lm 20 'https://api2.4gtv.tv/Account/SignIn' \
+            -H "User-Agent: $user_agent" \
+            -H 'Origin: https://www.4gtv.tv' \
+            -H 'Referer: https://www.4gtv.tv/channel_sub.html?channelSet_id=1&asset_id=4gtv-4gtv003&channel_id=1' \
+            -d "fsLOGIN_TYPE=03&fsLINK_ID=$fsLINK_ID&clsIDENTITY_VALIDATE_ARUS%5BfsVALUE%5D=$(UrlencodeUpper $token)" \
+            | $JQ_FILE -r '.Success'
+        ) || true
+
+        if [ "$result" == "true" ] 
+        then
+            break
+        fi
+    done
+    Println "$info 账号验证成功"
+    Println "$info 开启 7 天豪华套餐"
+
+    IFS="^" read -r result msg < <(curl --silent -Lm 20 'https://api2.4gtv.tv/Account/AccountPromo' \
+        -H "User-Agent: $user_agent" \
+        -H 'Origin: https://www.4gtv.tv' \
+        -H 'Referer: https://www.4gtv.tv/channel_sub.html?channelSet_id=1&asset_id=4gtv-4gtv003&channel_id=1' \
+        -d "fsVALUE=$(UrlencodeUpper $token)" \
+        | $JQ_FILE -r '[.Success,.ErrMessage]|join("^")'
+    ) || true
+
+    if [ "$result" == "true" ] 
+    then
+        Println "$info 7 天豪华套餐开启成功\n"
+    else
+        Println "$error 开启 7 天豪华套餐发生错误, 请重试\n\n$msg\n"
+    fi
+}
+
+View4gtvAcc()
+{
+    List4gtvAccs
+
+    if [ "$_4gtv_accs_count" -eq 0 ] 
+    then
+        exit 1
+    fi
+
+    echo -e "选择账号"
+    while read -p "(默认: 取消): " _4gtv_accs_num
+    do
+        case "$_4gtv_accs_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$_4gtv_accs_num" -gt 0 ] && [ "$_4gtv_accs_num" -le "$_4gtv_accs_count" ]
+                then
+                    _4gtv_accs_index=$((_4gtv_accs_num-1))
+                    fsVALUE=${_4gtv_accs_token[_4gtv_accs_index]}
+                    if [ -z "$fsVALUE" ] 
+                    then
+                        Println "$error 请先登录此账号\n"
+                        exit 1
+                    else
+                        Println "$info 查询中..."
+                        IFS="^" read -r result msg fnLEFT_PROMO_DAYS < <(curl --silent -Lm 20 'https://api2.4gtv.tv//Account/GetAccountInfo' \
+                            -H "User-Agent: $user_agent" \
+                            -H 'Origin: https://www.4gtv.tv' \
+                            -H 'Referer: https://www.4gtv.tv/channel.html' \
+                            -d "clsIDENTITY_VALIDATE_ARUS%5BfsVALUE%5D=$(UrlencodeUpper $fsVALUE)" \
+                            | $JQ_FILE -r '[.Success,.ErrMessage,.Data.fnLEFT_PROMO_DAYS]|join("^")'
+                        ) || true
+                        if [ "$result" == "true" ] 
+                        then
+                            if [ "$fnLEFT_PROMO_DAYS" -eq -1 ] 
+                            then
+                                days_left="${red}未开通$plain"
+                            else
+                                days_left="还剩 ${green}$fnLEFT_PROMO_DAYS$plain 天"
+                            fi
+                            Println "$info 豪华套餐: $days_left\n"
+                        else
+                            Println "$error 查询遇到错误\n\n$msg\n"
+                        fi
+                    fi
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+}
+
+Edit4gtvAcc()
+{
+    List4gtvAccs
+
+    if [ "$_4gtv_accs_count" -eq 0 ] 
+    then
+        exit 1
+    fi
+
+    echo -e "选择账号"
+    while read -p "(默认: 取消): " _4gtv_accs_num
+    do
+        case "$_4gtv_accs_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$_4gtv_accs_num" -gt 0 ] && [ "$_4gtv_accs_num" -le "$_4gtv_accs_count" ]
+                then
+                    _4gtv_accs_index=$((_4gtv_accs_num-1))
+                    Set4gtvAccEmail
+                    Set4gtvAccPass
+                    new_acc=$(
+                    $JQ_FILE -n --arg email "$_4gtv_acc_email" --arg password "$_4gtv_acc_pass" \
+                        '{
+                            email: $email,
+                            password: $password
+                        }'
+                    )
+                    jq_path='["4gtv","accounts",'"$_4gtv_accs_index"']'
+                    JQ replace "$SERVICES_FILE" "$new_acc"
+                    Println "$info 账号修改成功\n"
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+}
+
+Del4gtvAcc()
+{
+    List4gtvAccs
+
+    if [ "$_4gtv_accs_count" -eq 0 ] 
+    then
+        exit 1
+    fi
+
+    echo -e "选择账号"
+    while read -p "(默认: 取消): " _4gtv_accs_num
+    do
+        case "$_4gtv_accs_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$_4gtv_accs_num" -gt 0 ] && [ "$_4gtv_accs_num" -le "$_4gtv_accs_count" ]
+                then
+                    _4gtv_accs_index=$((_4gtv_accs_num-1))
+                    jq_path='["4gtv","accounts"]'
+                    JQ delete "$SERVICES_FILE" "$_4gtv_accs_index"
+                    Println "$info 账号删除成功\n"
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+}
+
+Get4gtvAccToken()
+{
+    List4gtvAccs
+
+    if [ "$_4gtv_accs_count" -eq 0 ] 
+    then
+        exit 1
+    fi
+
+    echo -e "选择账号"
+    while read -p "(默认: 取消): " _4gtv_accs_num
+    do
+        case "$_4gtv_accs_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$_4gtv_accs_num" -gt 0 ] && [ "$_4gtv_accs_num" -le "$_4gtv_accs_count" ]
+                then
+                    _4gtv_accs_index=$((_4gtv_accs_num-1))
+                    fsVALUE=${_4gtv_accs_token[_4gtv_accs_index]}
+                    if [ -z "$fsVALUE" ] 
+                    then
+                        Println "$error 请先登录此账号\n"
+                        exit 1
+                    fi
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+}
+
 Add4gtvLink()
 {
     stream_links_resolution=()
@@ -1910,7 +2345,7 @@ Add4gtvLink()
         then
             stream_links_resolution+=("${BASH_REMATCH[1]%%,*}")
             stream_links_count=$((stream_links_count+1))
-            stream_links_list="$stream_links_list$green$stream_links_count.$plain\r\e[6C${BASH_REMATCH[1]%%,*}\n\n"
+            stream_links_list="$stream_links_list $green$stream_links_count.$plain\r\e[6C${BASH_REMATCH[1]%%,*}\n\n"
         elif [[ $line =~ m3u8 ]] 
         then
             stream_links_uri+=("$line")
@@ -1957,7 +2392,7 @@ Add4gtvLink()
             fi
         else
             stream_links_select_all=$((stream_links_count+1))
-            stream_links_list="$stream_links_list$green$stream_links_select_all.$plain\r\e[6C全部"
+            stream_links_list="$stream_links_list $green$stream_links_select_all.$plain\r\e[6C全部"
             Println "$stream_links_list"
             Println "选择分辨率"
             while read -p "(默认: $stream_links_count): " stream_links_num 
@@ -2013,7 +2448,7 @@ Start4gtvLink()
         then
             chnl_stream_links_resolution+=("${BASH_REMATCH[1]%%,*}")
             chnl_stream_links_count=$((chnl_stream_links_count+1))
-            chnl_stream_links_list="$chnl_stream_links_list$green$chnl_stream_links_count.$plain\r\e[6C${BASH_REMATCH[1]%%,*}\n\n"
+            chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_count.$plain\r\e[6C${BASH_REMATCH[1]%%,*}\n\n"
         elif [[ $line =~ m3u8 ]] 
         then
             chnl_stream_links_uri+=("$line")
@@ -2061,7 +2496,7 @@ Start4gtvLink()
         elif [ -z "${monitor:-}" ] 
         then
             chnl_stream_links_select_all=$((chnl_stream_links_count+1))
-            chnl_stream_links_list="$chnl_stream_links_list$green$chnl_stream_links_select_all.$plain\r\e[6C全部"
+            chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_select_all.$plain\r\e[6C全部"
             Println "$chnl_stream_links_list"
             Println "选择分辨率"
             while read -p "(默认: $chnl_stream_links_count): " chnl_stream_links_num 
@@ -2133,7 +2568,7 @@ SetStreamLink()
             stream_links_list=""
             for((i=0;i<stream_links_count;i++));
             do
-                stream_links_list="$stream_links_list$green$((i+1)).$plain ${stream_links[i]}\n\n"
+                stream_links_list="$stream_links_list $green$((i+1)).$plain\r\e[6C${stream_links[i]}\n\n"
             done
             re=""
             for((i=stream_links_count;i>0;i--));
@@ -2343,7 +2778,7 @@ SetStreamLink()
         chnl=${chnl##*/}
         token_url=$(wget --no-check-certificate "http://api.news.tvb.com/news/v2.2.1/live?profile=web" -qO- | $JQ_FILE -r '.items[]|select(.path=="'"$chnl"'").video.ios[]|select(.type=="hd").url')
         query_string="$token_url&feed&client_ip=$(GetServerIp)"
-        query_string=$(Urlencode "$query_string")
+        query_string=$(UrlencodeUpper "$query_string")
         stream_link=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
             --header="${headers:0:-4}" \
             "http://news.tvb.com/ajax_call/getVideo.php?token=$query_string" -qO- \
@@ -2445,6 +2880,23 @@ SetStreamLink()
         user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
         headers="Referer: ${stream_link%%|*}\r\n"
         cookies=""
+        set_id=${chnl_stream_link#*channelSet_id=}
+        set_id=${set_id%%&*}
+        set_id=${set_id%%|*}
+        fsVALUE=""
+        if [ "$set_id" -eq 1 ] 
+        then
+            service_name="4gtv"
+            GetServiceAccs
+            for((i=0;i<${#_4gtv_accs_token[@]};i++));
+            do
+                if [ -n "${_4gtv_accs_token[i]}" ] 
+                then
+                    fsVALUE=${_4gtv_accs_token[i]}
+                    break
+                fi
+            done
+        fi
         fnCHANNEL_ID=${stream_link#*channel_id=}
         fnCHANNEL_ID=${fnCHANNEL_ID%%&*}
         fnCHANNEL_ID=${fnCHANNEL_ID%%|*}
@@ -2455,14 +2907,20 @@ SetStreamLink()
         iv="JUMxvVMmszqUTeKn"
         hexkey=$(echo -n $key | hexdump -v -e '/1 "%02x"')
         hexiv=$(echo -n $iv | hexdump -v -e '/1 "%02x"')
-        post_data='{"fnCHANNEL_ID":'"$fnCHANNEL_ID"',"fsASSET_ID":"'"$fsASSET_ID"'","fsDEVICE_TYPE":"pc","clsIDENTITY_VALIDATE_ARUS":{"fsVALUE":""}}'
+        post_data='{"fnCHANNEL_ID":'"$fnCHANNEL_ID"',"fsASSET_ID":"'"$fsASSET_ID"'","fsDEVICE_TYPE":"pc","clsIDENTITY_VALIDATE_ARUS":{"fsVALUE":"'"$fsVALUE"'"}}'
         post_data=$(echo -n "$post_data" | openssl enc -aes-256-cbc -iv "$hexiv" -K "$hexkey" -a)
+        if [ -n "$fsVALUE" ] 
+        then
+            value="$(UrlencodeUpper ${post_data//[[:space:]]/})"
+        else
+            value="$(Urlencode ${post_data//[[:space:]]/})"
+        fi
 
         for((try_i=0;try_i<10;try_i++));
         do
             stream_link_data=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
             --header="${headers:0:-4}" \
-            --post-data "value=$(Urlencode ${post_data//[[:space:]]/})" \
+            --post-data "value=$value" \
             "https://api2.4gtv.tv/Channel/GetChannelUrl3" -qO- || true)
             if [ -n "$stream_link_data" ] 
             then
@@ -5471,8 +5929,8 @@ TestXtreamCodesLink()
             profile=""
             chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
             server="http://$chnl_domain"
-            mac=$(Urlencode "$chnl_mac")
-            timezone=$(Urlencode "Europe/Amsterdam")
+            mac=$(UrlencodeUpper "$chnl_mac")
+            timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
             token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
             profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
@@ -5739,7 +6197,7 @@ StartChannel()
         chnl=${chnl##*/}
         token_url=$(wget --no-check-certificate "http://api.news.tvb.com/news/v2.2.1/live?profile=web" -qO- | $JQ_FILE -r '.items[]|select(.path=="'"$chnl"'").video.ios[]|select(.type=="hd").url')
         query_string="$token_url&feed&client_ip=$(GetServerIp)"
-        query_string=$(Urlencode "$query_string")
+        query_string=$(UrlencodeUpper "$query_string")
         chnl_stream_link=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
             --header="${chnl_headers:0:-4}" \
             "http://news.tvb.com/ajax_call/getVideo.php?token=$query_string" -qO- \
@@ -5816,6 +6274,23 @@ StartChannel()
         chnl_user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
         chnl_headers="Referer: ${chnl_stream_link%%|*}\r\n"
         chnl_cookies=""
+        set_id=${chnl_stream_link#*channelSet_id=}
+        set_id=${set_id%%&*}
+        set_id=${set_id%%|*}
+        fsVALUE=""
+        if [ "$set_id" -eq 1 ] 
+        then
+            service_name="4gtv"
+            GetServiceAccs
+            for((i=0;i<${#_4gtv_accs_token[@]};i++));
+            do
+                if [ -n "${_4gtv_accs_token[i]}" ] 
+                then
+                    fsVALUE=${_4gtv_accs_token[i]}
+                    break
+                fi
+            done
+        fi
         fnCHANNEL_ID=${chnl_stream_link#*channel_id=}
         fnCHANNEL_ID=${fnCHANNEL_ID%%&*}
         fnCHANNEL_ID=${fnCHANNEL_ID%%|*}
@@ -5826,13 +6301,19 @@ StartChannel()
         iv="JUMxvVMmszqUTeKn"
         hexkey=$(echo -n $key | hexdump -v -e '/1 "%02x"')
         hexiv=$(echo -n $iv | hexdump -v -e '/1 "%02x"')
-        post_data='{"fnCHANNEL_ID":'"$fnCHANNEL_ID"',"fsASSET_ID":"'"$fsASSET_ID"'","fsDEVICE_TYPE":"pc","clsIDENTITY_VALIDATE_ARUS":{"fsVALUE":""}}'
+        post_data='{"fnCHANNEL_ID":'"$fnCHANNEL_ID"',"fsASSET_ID":"'"$fsASSET_ID"'","fsDEVICE_TYPE":"pc","clsIDENTITY_VALIDATE_ARUS":{"fsVALUE":"'$fsVALUE'"}}'
         post_data=$(echo -n "$post_data" | openssl enc -aes-256-cbc -iv "$hexiv" -K "$hexkey" -a)
+        if [ -n "$fsVALUE" ] 
+        then
+            value="$(UrlencodeUpper ${post_data//[[:space:]]/})"
+        else
+            value="$(Urlencode ${post_data//[[:space:]]/})"
+        fi
         for((try_i=0;try_i<10;try_i++));
         do
             stream_link_data=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
             --header="${chnl_headers:0:-4}" \
-            --post-data "value=$(Urlencode ${post_data//[[:space:]]/})" \
+            --post-data "value=$value" \
             "https://api2.4gtv.tv/Channel/GetChannelUrl3" -qO- || true)
             if [ -n "$stream_link_data" ] 
             then
@@ -6164,7 +6645,7 @@ DelChannel()
 
 RandStr()
 {
-    str_size=${1:-8}
+    str_size=8
     str_array=(
         q w e r t y u i o p a s d f g h j k l z x c v b n m Q W E R T Y U I O P A S D
 F G H J K L Z X C V B N M
@@ -6223,6 +6704,16 @@ Urlencode() {
     for ((i=0;i<${#1};i++)); do
         c=${1:$i:1}
         [[ $c =~ [a-zA-Z0-9\.\~\_\-] ]] || printf -v c '%%%02x' "'$c"
+        e+="$c"
+    done
+    echo "$e"
+}
+
+UrlencodeUpper() {
+    local LANG=C i c e=''
+    for ((i=0;i<${#1};i++)); do
+        c=${1:$i:1}
+        [[ $c =~ [a-zA-Z0-9\.\~\_\-] ]] || printf -v c '%%%02X' "'$c"
         e+="$c"
     done
     echo "$e"
@@ -7680,7 +8171,58 @@ ScheduleAstro()
             JQ replace "$SCHEDULE_JSON" "$chnl_id" "[$schedule]"
             Println "$info $chnl_name [$chnl_id] astro 节目表更新成功"
         else
-            Println "$info $chnl_name [$chnl_id] astro 节目表更新失败"
+            Println "$error $chnl_name [$chnl_id] astro 节目表更新失败"
+        fi
+    done
+}
+
+Schedule_4gtv()
+{
+    printf -v today '%(%Y-%m-%d)T'
+
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "minshidiyi" > "$SCHEDULE_JSON"
+    fi
+
+    for chnl in "${_4gtv_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        _4gtv_id=${chnl#*:}
+        chnl_name=${_4gtv_id#*:}
+        _4gtv_id=${_4gtv_id%%:*}
+
+        schedule=""
+
+        while IFS="=" read -r program_date program_time program_title
+        do
+            program_date=${program_date#\"}
+            if [ "$today" == "$program_date" ] 
+            then
+                program_sys_time=$(date -d "$program_date $program_time" +%s)
+                program_time=${program_time%:*}
+                program_title=${program_title%\"}
+                [ -n "$schedule" ] && schedule="$schedule,"
+                schedule=$schedule'{
+                    "title":"'"$program_title"'",
+                    "time":"'"$program_time"'",
+                    "sys_time":"'"$program_sys_time"'"
+                }'
+            elif [ -n "$schedule" ] 
+            then
+                break
+            fi
+        done < <(wget --no-check-certificate "https://www.4gtv.tv/proglist/$_4gtv_id.txt" \
+            --timeout=10 --tries=3 --user-agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36" --no-check-certificate \
+            --header="Referer: https://www.4gtv.tv/channel_sub.html?channelSet_id=1&asset_id=$_4gtv_id&channel_id=1" \
+            -qO- | $JQ_FILE 'to_entries|map("\(.value.sdate)=\(.value.stime)=\(.value.title)")|.[]')
+
+        if [ -n "$schedule" ] 
+        then
+            JQ replace "$SCHEDULE_JSON" "$chnl_id" "[$schedule]"
+            Println "$info $chnl_name [$chnl_id] 4gtv 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] 4gtv 节目表更新失败"
         fi
     done
 }
@@ -7712,12 +8254,6 @@ GetCronChnls()
         if [[ $line == *"|"* ]] 
         then
             cron_providers_count=$((cron_providers_count+1))
-            if [ "$cron_providers_count" -lt 10 ] 
-            then
-                blank=" "
-            else
-                blank=""
-            fi
             cron_provider=${line%%|*}
             for provider in "${providers[@]}"
             do
@@ -7730,7 +8266,7 @@ GetCronChnls()
 
             cron_providers+=("$cron_provider")
             cron_chnls+=("${line#*|}")
-            cron_providers_list="$cron_providers_list$blank$green$cron_providers_count.$plain $cron_provider_name\n\n"
+            cron_providers_list="$cron_providers_list $green$cron_providers_count.$plain\r\e[6C$cron_provider_name\n\n"
         fi
     done < <($JQ_FILE -r '.schedule[]|[.provider,.chnls[]]|join("|")' "$CRON_FILE")
 }
@@ -7745,13 +8281,7 @@ ScheduleView()
     for provider in "${providers[@]}"
     do
         providers_count=$((providers_count+1))
-        if [ "$providers_count" -lt 10 ] 
-        then
-            blank=" "
-        else
-            blank=""
-        fi
-        providers_list="$providers_list$blank$green$providers_count.$plain ${provider#*:} [${provider%%:*}]\n\n"
+        providers_list="$providers_list $green$providers_count.$plain\r\e[6C${provider#*:} [${provider%%:*}]\n\n"
     done
 
     Println "节目表来源\n\n$providers_list"
@@ -7804,7 +8334,7 @@ ScheduleView()
         done
         chnl_name=${chnl##*:}
         chnls_count=$((chnls_count+1))
-        chnls_list="$chnls_list$green$chnls_count.$plain $chnl_name [${chnl%%:*}] $using\n\n"
+        chnls_list="$chnls_list $green$chnls_count.$plain\r\e[6C$chnl_name [${chnl%%:*}] $using\n\n"
     done
 
     chnls=("${!var}")
@@ -7843,7 +8373,7 @@ ScheduleAddChannel()
 ScheduleAdd()
 {
     ScheduleView
-    echo -e "$green$((chnls_count+1)).$plain 全部"
+    echo -e " $green$((chnls_count+1)).$plain 全部"
 
     Println "$tip (多个频道用空格分隔 比如: 5 7 9-11)\n"
 
@@ -7958,7 +8488,7 @@ ScheduleViewCron()
     do
         chnl_name=${chnl##*:}
         chnls_count=$((chnls_count+1))
-        chnls_list="$chnls_list$green$chnls_count.$plain $chnl_name\n\n"
+        chnls_list="$chnls_list $green$chnls_count.$plain\r\e[6C$chnl_name\n\n"
     done
     
     Println "计划任务频道\n\n$chnls_list"
@@ -7968,7 +8498,7 @@ ScheduleDel()
 {
     ScheduleViewCron
 
-    echo -e "$green$((chnls_count+1)).$plain 全部"
+    echo -e " $green$((chnls_count+1)).$plain 全部"
 
     Println "$tip (多个频道用空格分隔 比如: 5 7 9-11)\n"
 
@@ -8243,9 +8773,9 @@ Schedule()
         "titvyjm:原住民"
         "history:歷史頻道"
         "history2:HISTORY 2"
+        "gjdl:國家地理高畫質頻道"
         "gjdlyr:國家地理高畫質悠人頻道"
         "gjdlys:國家地理高畫質野生頻道"
-        "gjdlgq:國家地理高畫質頻道"
         "bbcearth:BBC Earth"
         "bbcworldnews:BBC World News"
         "bbclifestyle:BBC Lifestyle Channel"
@@ -8288,7 +8818,9 @@ Schedule()
         "mdrb:曼迪日本台"
         "smartzs:Smart知識台"
         "tv5monde:TV5MONDE"
-        "outdoor:Outdoor"
+        "outdoor:Outdoor-Channel"
+        "fashionone:Fashion-One"
+        "ifundm:i-Fun動漫台"
         "eentertainment:E! Entertainment"
         "davinci:DaVinCi Learning達文西頻道"
         "my101zh:MY101綜合台"
@@ -8651,6 +9183,134 @@ Schedule()
 
     astro_chnls=( "iqiyi:355:astro 爱奇艺" )
 
+    _4gtv_chnls=(
+        "minshidiyi:4gtv-4gtv003:民視第一台"
+        "minshitaiwan:4gtv-4gtv001:民視台灣台"
+        "minshi:4gtv-4gtv002:民視"
+        "zsjc:4gtv-4gtv064:中視菁采台"
+        "zs:4gtv-4gtv040:中視"
+        "zsjd:4gtv-4gtv080:中視經典台"
+        "hs:4gtv-4gtv041:華視"
+        "slzh:4gtv-live207:三立綜合台"
+        "kjds:4gtv-4gtv043:客家電視台"
+        "bdzy:4gtv-4gtv039:八大綜藝台"
+        "tvbsjc:4gtv-4gtv086:TVBS精采台"
+        "aedyl:4gtv-4gtv070:愛爾達娛樂台"
+        "jtzh:4gtv-4gtv046:靖天綜合台"
+        "jtrb:4gtv-4gtv047:靖天日本台"
+        "xtryt:4gtv-4gtv050:新唐人亞太台"
+        "ztzh:4gtv-4gtv033:中天綜合台"
+        "kzyyjs:4gtv-4gtv012:空中英語教室"
+        "dwx:4gtv-4gtv018:達文西頻道"
+        "eltvshyy:litv-longturn20:ELTV生活英語台"
+        "nickjr:4gtv-4gtv032:Nick Jr. 兒童頻道"
+        "lhkt:litv-longturn01:龍華卡通台"
+        "jtkt:4gtv-4gtv044:靖天卡通台"
+        "jykt:4gtv-4gtv057:靖洋卡通Nice Bingo"
+        "ifundm:litv-ftv15:i-Fun動漫台"
+        "ifundm2:litv-ftv11:i-Fun動漫台2"
+        "ifundm3:litv-ftv12:i-Fun動漫台3"
+        "babyfirst:litv-longturn02:Baby First"
+        "momoqz:4gtv-4gtv107:MOMO親子台"
+        "boomerang:4gtv-live202:Boomerang"
+        "cnkt:4gtv-live205:CN卡通"
+        "dsgw1:4gtv-live047:東森購物一台"
+        "dsxw:litv-ftv14:東森新聞台"
+        "ztxw:4gtv-4gtv009:中天新聞台"
+        "msxw:litv-ftv13:民視新聞台"
+        "slcjxw:4gtv-4gtv089:三立財經新聞iNEWS"
+        "tvbsxw:4gtv-4gtv072:TVBS新聞"
+        "dscjxw:4gtv-4gtv019:東森財經新聞台"
+        "zsxw:4gtv-4gtv074:中視新聞"
+        "hsxw:4gtv-4gtv052:華視新聞"
+        "hyxw:litv-longturn14:寰宇新聞台"
+        "hyxwtw:litv-longturn15:寰宇新聞台灣台"
+        "zhcj:4gtv-4gtv060:中華財經台"
+        "dsgw2:4gtv-live046:東森購物二台"
+        "mszy:4gtv-4gtv004:民視綜藝台"
+        "zglgtx:4gtv-4gtv006:豬哥亮歌廳秀"
+        "jtyl:4gtv-4gtv062:靖天育樂台"
+        "jtgj:4gtv-4gtv063:KLT-靖天國際台"
+        "jthl:4gtv-4gtv054:Nice TV 靖天歡樂台"
+        "jtzx:4gtv-4gtv065:靖天資訊台"
+        "hymbczh:4gtv-4gtv015:華藝MBC綜合台"
+        "hgyl:4gtv-4gtv016:韓國娛樂台 KMTV"
+        "comedycentral:4gtv-4gtv024:Comedy Central 爆笑頻道"
+        "lifetime:4gtv-4gtv029:Lifetime 娛樂頻道"
+        "dyys:4gtv-4gtv031:電影原聲台CMusic"
+        "traceurban:4gtv-4gtv082:TRACE Urban"
+        "mtvlivetw:4gtv-4gtv025:MTV Live HD 音樂頻道"
+        "mezzolive:4gtv-4gtv083:Mezzo Live HD"
+        "classica:4gtv-4gtv059:CLASSICA 古典樂"
+        "mdqys:litv-longturn16:梅迪奇藝術頻道"
+        "bsgq:litv-longturn05:博斯高球台"
+        "bsgq2:litv-longturn06:博斯高球二台"
+        "bsyd:litv-longturn07:博斯運動一台"
+        "bswx:litv-longturn10:博斯無限台"
+        "bswq:litv-longturn09:博斯網球台"
+        "bsyd2:litv-longturn08:博斯運動二台"
+        "bsml:litv-longturn04:博斯魅力台"
+        "tracesportstars:4gtv-4gtv077:TRACE Sport Stars"
+        "zlty:4gtv-4gtv101:智林體育台"
+        "ssydx:4gtv-4gtv014:時尚運動X"
+        "cmtv:4gtv-live201:車迷TV"
+        "ginxesportstv:4gtv-4gtv053:GINX Esports TV"
+        "yzly:litv-longturn17:亞洲旅遊台"
+        "msly:litv-ftv07:民視旅遊台"
+        "outdoor:4gtv-4gtv078:Outdoor Channel"
+        "travel:4gtv-4gtv079:Travel Channel"
+        "fashionone:litv-longturn19:Fashion One"
+        "xfkjjj:4gtv-live206:幸福空間居家台"
+        "lovenature:4gtv-live208:Love Nature"
+        "history:4gtv-4gtv026:History 歷史頻道"
+        "history2:4gtv-4gtv028:HISTORY 2 頻道"
+        "smithsonian:4gtv-4gtv088:Smithsonian Channel"
+        "smartzs:4gtv-4gtv076:SMART 知識頻道"
+        "luxe:4gtv-live121:LUXE TV Channel"
+        "tv5monde:4gtv-live122:TV5MONDE STYLE HD 生活時尚"
+        "gsxj:4gtv-4gtv042:公視戲劇"
+        "msyj:litv-ftv09:民視影劇台"
+        "lhxj:litv-longturn18:龍華戲劇台"
+        "lhox:litv-longturn12:龍華偶像台"
+        "lhrh:litv-longturn11:龍華日韓台"
+        "bdjc:4gtv-4gtv034:八大精彩台"
+        "tyjd:4gtv-4gtv112:天映經典頻道"
+        "jtxj:4gtv-4gtv058:靖天戲劇台"
+        "jyxj:4gtv-4gtv045:靖洋戲劇台"
+        "cizazt:4gtv-4gtv027:CI 罪案偵查頻道"
+        "snhrjs:4gtv-4gtv013:視納華仁紀實頻道"
+        "ymjs:4gtv-4gtv105:影迷數位紀實台"
+        "jgbdx:4gtv-4gtv144:金光布袋戲"
+        "blueantextreme:4gtv-live138:BLUE ANT EXTREME"
+        "ccyj:4gtv-4gtv049:采昌影劇台"
+        "jtyh:4gtv-4gtv055:靖天映畫"
+        "jtdy:4gtv-4gtv061:靖天電影台"
+        "lhdy:litv-longturn03:龍華電影台"
+        "ydy1:4gtv-4gtv075:优電影一台"
+        "ydy2:4gtv-4gtv081:优電影二台"
+        "ydy3:4gtv-4gtv087:优電影三台"
+        "ymdy:4gtv-4gtv011:影迷數位電影台"
+        "amc:4gtv-4gtv017:AMC"
+        "cinemaworld:4gtv-4gtv069:CinemaWorld"
+        "warner:4gtv-4gtv037:Warner TV"
+        "catchplaydy:4gtv-live048:CATCHPLAY電影台"
+        "mycinemaeurope:4gtv-live157:My Cinema Europe HD 我的歐洲電影"
+        "hxx2:litv-ftv17:好消息2台"
+        "hxx:litv-ftv16:好消息"
+        "dads:4gtv-4gtv007:大愛電視"
+        "da2:4gtv-4gtv106:大愛二台"
+        "rjws:4gtv-4gtv008:人間衛視"
+        "bdgjxw:litv-ftv10:半島國際新聞台"
+        "voamgzy:litv-ftv03:VOA美國之音"
+        "cnbcasiacj:4gtv-4gtv030:CNBC Asia 財經台"
+        "dwdgzs:4gtv-4gtv071:DW德國之聲"
+        "vtv4:4gtv-4gtv108:VTV4"
+        "cnnttxw:4gtv-live203:CNN頭條新聞台"
+        "cnngjxw:4gtv-live204:CNN國際新聞台"
+        "gh1:4gtv-4gtv084:國會頻道1"
+        "gh2:4gtv-4gtv085:國會頻道2"
+    )
+
     other_chnls=(
         "disneyjr:迪士尼儿童频道(台湾)"
         "foxmovies:fox movies (台湾)"
@@ -8669,6 +9329,7 @@ Schedule()
         "cntv:cntv 节目表"
         "tvbs:tvbs 节目表"
         "astro:astro 节目表"
+        "_4gtv:4gtv 节目表"
         "other:其它节目表"
     )
 
@@ -8722,6 +9383,9 @@ Schedule()
         ;;
         "astro")
             ScheduleAstro
+        ;;
+        "_4gtv"|"4gtv")
+            Schedule_4gtv
         ;;
         "other")
             ScheduleOther
@@ -8901,51 +9565,56 @@ TsImg()
     fi
 }
 
+InstallImgcat()
+{
+    Println "$error 缺少 imgcat ,是否现在安装? [y/N]"
+    read -p "(默认: 取消): " imgcat_install_yn
+    imgcat_install_yn=${imgcat_install_yn:-N}
+    if [[ $imgcat_install_yn == [Yy] ]] 
+    then
+        Progress &
+        progress_pid=$!
+        trap '
+            kill $progress_pid 2> /dev/null
+        ' EXIT
+        CheckRelease
+        if [ "$release" == "rpm" ] 
+        then
+            yum -y install gcc gcc-c++ make ncurses-devel autoconf >/dev/null 2>&1
+            echo -n "...50%..."
+        else
+            apt-get -y install debconf-utils libncurses5-dev autotools-dev autoconf >/dev/null 2>&1
+            echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
+            apt-get -y install software-properties-common pkg-config build-essential >/dev/null 2>&1
+            echo -n "...50%..."
+        fi
+
+        cd ~
+
+        if [ ! -e "./imgcat-master" ] 
+        then
+            wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/imgcat.zip" -qO "imgcat.zip"
+            unzip "imgcat.zip" >/dev/null 2>&1
+        fi
+
+        cd "./imgcat-master"
+        autoconf >/dev/null 2>&1
+        ./configure >/dev/null 2>&1
+        make >/dev/null 2>&1
+        make install >/dev/null 2>&1
+        kill $progress_pid
+        trap - EXIT
+        echo -n "...100%" && Println "$info imgcat 安装完成"
+    else
+        Println "已取消...\n" && exit 1
+    fi
+}
+
 TsRegister()
 {
     if [ ! -e "/usr/local/bin/imgcat" ] &&  [ -n "${ts_array[img_url]:-}" ]
     then
-        Println "$error 缺少 imgcat ,是否现在安装? [y/N]"
-        read -p "(默认: 取消): " imgcat_yn
-        imgcat_yn=${imgcat_yn:-N}
-        if [[ $imgcat_yn == [Yy] ]] 
-        then
-            Progress &
-            progress_pid=$!
-            trap '
-                kill $progress_pid 2> /dev/null
-            ' EXIT
-            CheckRelease
-            if [ "$release" == "rpm" ] 
-            then
-                yum -y install gcc gcc-c++ ncurses-devel >/dev/null 2>&1
-                echo -n "...50%..."
-            else
-                apt-get -y install debconf-utils libncurses5-dev >/dev/null 2>&1
-                echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
-                apt-get -y install software-properties-common pkg-config build-essential >/dev/null 2>&1
-                echo -n "...50%..."
-            fi
-
-            cd ~
-
-            if [ ! -e "./imgcat-master" ] 
-            then
-                wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/imgcat.zip" -qO "imgcat.zip"
-                unzip "imgcat.zip" >/dev/null 2>&1
-            fi
-
-            cd "./imgcat-master"
-            autoconf >/dev/null 2>&1
-            ./configure >/dev/null 2>&1
-            make >/dev/null 2>&1
-            make install >/dev/null 2>&1
-            kill $progress_pid
-            trap - EXIT
-            echo -n "...100%" && Println "$info imgcat 安装完成"
-        else
-            Println "已取消...\n" && exit 1
-        fi
+        InstallImgcat
     fi
     not_unique=1
     while [ "$not_unique" != 0 ] 
@@ -9996,8 +10665,8 @@ MonitorTryAccounts()
                     profile=""
                     chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
                     server="http://$chnl_domain"
-                    mac=$(Urlencode "$mac_address")
-                    timezone=$(Urlencode "Europe/Amsterdam")
+                    mac=$(UrlencodeUpper "$mac_address")
+                    timezone=$(UrlencodeUpper "Europe/Amsterdam")
                     chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
                     token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
                     profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
@@ -10157,20 +10826,17 @@ MonitorTryAccounts()
                             GetChannelInfo
                             if ls -A "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts > /dev/null 2>&1 
                             then
-                                if [ "$chnl_encrypt_yn" == "yes" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key" ]
+                                if [ "$chnl_encrypt_yn" == "yes" ] 
                                 then
-                                    line_no=0
-                                    while IFS= read -r line 
-                                    do
-                                        line_no=$((line_no+1))
-                                        if [ "$line_no" -eq 3 ] 
-                                        then
-                                            iv_hex=$line
-                                        fi
-                                    done < "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo"
-
+                                    if [ -e "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo" ] && \
+                                    [ -e "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key" ] && \
+                                    iv_hex=$(awk 'NR==3{print}' "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo") && \
                                     encrypt_key=$(hexdump -e '16/1 "%02x"' < "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key")
-                                    encrypt_command="-key $encrypt_key -iv $iv_hex"
+                                    then
+                                        encrypt_command="-key $encrypt_key -iv $iv_hex"
+                                    else
+                                        continue
+                                    fi
                                 else
                                     encrypt_command=""
                                 fi
@@ -10367,20 +11033,17 @@ MonitorTryAccounts()
                     GetChannelInfo
                     if ls -A "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts > /dev/null 2>&1 
                     then
-                        if [ "$chnl_encrypt_yn" == "yes" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key" ]
+                        if [ "$chnl_encrypt_yn" == "yes" ] 
                         then
-                            line_no=0
-                            while IFS= read -r line 
-                            do
-                                line_no=$((line_no+1))
-                                if [ "$line_no" -eq 3 ] 
-                                then
-                                    iv_hex=$line
-                                fi
-                            done < "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo"
-
+                            if [ -e "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo" ] && \
+                            [ -e "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key" ] && \
+                            iv_hex=$(awk 'NR==3{print}' "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo") && \
                             encrypt_key=$(hexdump -e '16/1 "%02x"' < "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key")
-                            encrypt_command="-key $encrypt_key -iv $iv_hex"
+                            then
+                                encrypt_command="-key $encrypt_key -iv $iv_hex"
+                            else
+                                continue
+                            fi
                         else
                             encrypt_command=""
                         fi
@@ -10647,7 +11310,6 @@ MonitorHlsRestartChannel()
             xc_chnl_found=0
             if [ "$to_try" -eq 1 ] 
             then
-                to_try=0
                 for xc_chnl_mac in "${xc_chnls_mac[@]}"
                 do
                     if [ "$xc_chnl_mac" == "$chnl_domain/$chnl_mac" ] 
@@ -10666,15 +11328,14 @@ MonitorHlsRestartChannel()
                 if [ "$try_success" -eq 1 ] 
                 then
                     MonitorHlsRestartSuccess
+                    break
+                elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                then
+                    MonitorHlsRestartFail
+                    break
                 else
-                    if [[ $restart_i -eq $((restart_nums-1)) ]] 
-                    then
-                        MonitorHlsRestartFail
-                    else
-                        continue
-                    fi
+                    continue
                 fi
-                break
             fi
 
             token=""
@@ -10682,8 +11343,8 @@ MonitorHlsRestartChannel()
             profile=""
             chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
             server="http://$chnl_domain"
-            mac=$(Urlencode "$chnl_mac")
-            timezone=$(Urlencode "Europe/Amsterdam")
+            mac=$(UrlencodeUpper "$chnl_mac")
+            timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
             token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
             profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
@@ -10694,7 +11355,23 @@ MonitorHlsRestartChannel()
                 | $JQ_FILE -r '.js.token' || true)
             if [ -z "$token" ] 
             then
-                if [[ $restart_i -eq $((restart_nums-1)) ]] 
+                if [ "$to_try" -eq 1 ] 
+                then
+                    domains_tried+=("$chnl_domain")
+                    try_success=0
+                    MonitorTryAccounts
+                    if [ "$try_success" -eq 1 ] 
+                    then
+                        MonitorHlsRestartSuccess
+                        break
+                    elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                    then
+                        MonitorHlsRestartFail
+                        break
+                    else
+                        continue
+                    fi
+                elif [[ $restart_i -eq $((restart_nums-1)) ]] 
                 then
                     MonitorHlsRestartFail
                     break
@@ -10708,7 +11385,23 @@ MonitorHlsRestartChannel()
                 | $JQ_FILE -r '.js.token' || true)
             if [ -z "$access_token" ] 
             then
-                if [[ $restart_i -eq $((restart_nums-1)) ]] 
+                if [ "$to_try" -eq 1 ] 
+                then
+                    domains_tried+=("$chnl_domain")
+                    try_success=0
+                    MonitorTryAccounts
+                    if [ "$try_success" -eq 1 ] 
+                    then
+                        MonitorHlsRestartSuccess
+                        break
+                    elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                    then
+                        MonitorHlsRestartFail
+                        break
+                    else
+                        continue
+                    fi
+                elif [[ $restart_i -eq $((restart_nums-1)) ]] 
                 then
                     MonitorHlsRestartFail
                     break
@@ -10722,7 +11415,23 @@ MonitorHlsRestartChannel()
                 --header="Cookie: $chnl_cookies" "$profile_url" -qO- || true)
             if [ -z "$profile" ] 
             then
-                if [[ $restart_i -eq $((restart_nums-1)) ]] 
+                if [ "$to_try" -eq 1 ] 
+                then
+                    domains_tried+=("$chnl_domain")
+                    try_success=0
+                    MonitorTryAccounts
+                    if [ "$try_success" -eq 1 ] 
+                    then
+                        MonitorHlsRestartSuccess
+                        break
+                    elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                    then
+                        MonitorHlsRestartFail
+                        break
+                    else
+                        continue
+                    fi
+                elif [[ $restart_i -eq $((restart_nums-1)) ]] 
                 then
                     MonitorHlsRestartFail
                     break
@@ -10741,13 +11450,21 @@ MonitorHlsRestartChannel()
                     if [ "$try_success" -eq 1 ] 
                     then
                         MonitorHlsRestartSuccess
-                    else
+                        break
+                    elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                    then
                         MonitorHlsRestartFail
+                        break
+                    else
+                        continue
                     fi
-                else
+                elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                then
                     MonitorHlsRestartFail
+                    break
+                else
+                    continue
                 fi
-                break
             else
                 create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
                 cmd=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
@@ -10770,13 +11487,21 @@ MonitorHlsRestartChannel()
                         if [ "$try_success" -eq 1 ] 
                         then
                             MonitorHlsRestartSuccess
-                        else
+                            break
+                        elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                        then
                             MonitorHlsRestartFail
+                            break
+                        else
+                            continue
                         fi
-                    else
+                    elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                    then
                         MonitorHlsRestartFail
+                        break
+                    else
+                        continue
                     fi
-                    break
                 fi
 
                 if [[ $chnl_stream_links == *" "* ]] 
@@ -10813,7 +11538,6 @@ MonitorHlsRestartChannel()
             xc_chnl_found=0
             if [ "$to_try" -eq 1 ] 
             then
-                to_try=0
                 if [ "${BASH_REMATCH[2]}" == "live" ] && [[ $chnl_stream_link =~ ^http://([^/]+)/live/([^/]+)/([^/]+)/ ]]
                 then
                     chnl_account="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}"
@@ -10838,15 +11562,14 @@ MonitorHlsRestartChannel()
                 if [ "$try_success" -eq 1 ] 
                 then
                     MonitorHlsRestartSuccess
+                    break
+                elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                then
+                    MonitorHlsRestartFail
+                    break
                 else
-                    if [[ $restart_i -eq $((restart_nums-1)) ]] 
-                    then
-                        MonitorHlsRestartFail
-                    else
-                        continue
-                    fi
+                    continue
                 fi
-                break
             fi
         fi
 
@@ -10876,71 +11599,73 @@ MonitorHlsRestartChannel()
 
         if ls -A "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts > /dev/null 2>&1 
         then
-            if [ "$chnl_encrypt_yn" == "yes" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo" ] && [ -e "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key" ]
+            skip_check_stream=0
+            if [ "$chnl_encrypt_yn" == "yes" ] 
             then
-                line_no=0
-                while IFS= read -r line 
-                do
-                    line_no=$((line_no+1))
-                    if [ "$line_no" -eq 3 ] 
-                    then
-                        iv_hex=$line
-                    fi
-                done < "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo"
-                # xxd -p $KEY_FILE
+                if [ -e "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo" ] && \
+                [ -e "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key" ] && \
+                iv_hex=$(awk 'NR==3{print}' "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo") && \
                 encrypt_key=$(hexdump -e '16/1 "%02x"' < "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key")
-                encrypt_command="-key $encrypt_key -iv $iv_hex"
+                then
+                    encrypt_command="-key $encrypt_key -iv $iv_hex"
+                else
+                    skip_check_stream=1
+                fi
+                # xxd -p $KEY_FILE
             else
                 encrypt_command=""
             fi
 
-            audio=0
-            video=0
-            video_bitrate=0
-            bitrate_check=0
-
-            f_count=1
-            for f in "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts
-            do
-                ((f_count++))
-            done
-
-            f_num=$((f_count/2))
-            f_count=1
-
-            for f in "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts
-            do
-                if [ "$f_count" -lt "$f_num" ] 
-                then
-                    ((f_count++))
-                    continue
-                fi
-                [ -n "$encrypt_command" ] && f="crypto:$f"
-                while IFS= read -r line 
-                do
-                    if [[ $line == *"codec_type=video"* ]] 
-                    then
-                        video=1
-                    elif [ "$bitrate_check" -eq 0 ] && [ "$video" -eq 1 ] && [[ $line == *"bit_rate="* ]] 
-                    then
-                        line=${line#*bit_rate=}
-                        video_bitrate=${line//N\/A/$hls_min_bitrates}
-                        bitrate_check=1
-                    elif [[ $line == *"codec_type=audio"* ]] 
-                    then
-                        audio=1
-                    elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
-                    then
-                        audio=0
-                    fi
-                done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet || true)
-                break
-            done
-
-            if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ] && [[ $video_bitrate -ge $hls_min_bitrates ]]
+            if [ "$skip_check_stream" -eq 0 ] 
             then
-                MonitorHlsRestartSuccess
-                break
+                audio=0
+                video=0
+                video_bitrate=0
+                bitrate_check=0
+
+                f_count=1
+                for f in "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts
+                do
+                    ((f_count++))
+                done
+
+                f_num=$((f_count/2))
+                f_count=1
+
+                for f in "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts
+                do
+                    if [ "$f_count" -lt "$f_num" ] 
+                    then
+                        ((f_count++))
+                        continue
+                    fi
+                    [ -n "$encrypt_command" ] && f="crypto:$f"
+                    while IFS= read -r line 
+                    do
+                        if [[ $line == *"codec_type=video"* ]] 
+                        then
+                            video=1
+                        elif [ "$bitrate_check" -eq 0 ] && [ "$video" -eq 1 ] && [[ $line == *"bit_rate="* ]] 
+                        then
+                            line=${line#*bit_rate=}
+                            video_bitrate=${line//N\/A/$hls_min_bitrates}
+                            bitrate_check=1
+                        elif [[ $line == *"codec_type=audio"* ]] 
+                        then
+                            audio=1
+                        elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
+                        then
+                            audio=0
+                        fi
+                    done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet || true)
+                    break
+                done
+
+                if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ] && [[ $video_bitrate -ge $hls_min_bitrates ]]
+                then
+                    MonitorHlsRestartSuccess
+                    break
+                fi
             fi
         fi
 
@@ -10959,6 +11684,7 @@ MonitorHlsRestartChannel()
         if [[ $restart_i -eq $((restart_nums - 1)) ]] 
         then
             MonitorHlsRestartFail
+            break
         fi
     done
 }
@@ -11093,15 +11819,14 @@ MonitorFlvRestartChannel()
                 if [ "$try_success" -eq 1 ] 
                 then
                     MonitorFlvRestartSuccess
+                    break
+                elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                then
+                    MonitorFlvRestartFail
+                    break
                 else
-                    if [[ $restart_i -eq $((restart_nums-1)) ]] 
-                    then
-                        MonitorFlvRestartFail
-                    else
-                        continue
-                    fi
+                    continue
                 fi
-                break
             fi
 
             token=""
@@ -11109,8 +11834,8 @@ MonitorFlvRestartChannel()
             profile=""
             chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
             server="http://$chnl_domain"
-            mac=$(Urlencode "$chnl_mac")
-            timezone=$(Urlencode "Europe/Amsterdam")
+            mac=$(UrlencodeUpper "$chnl_mac")
+            timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
             token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
             profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
@@ -11121,7 +11846,23 @@ MonitorFlvRestartChannel()
                 | $JQ_FILE -r '.js.token' || true)
             if [ -z "$token" ] 
             then
-                if [[ $restart_i -eq $((restart_nums-1)) ]] 
+                if [ "$to_try" -eq 1 ] 
+                then
+                    domains_tried+=("$chnl_domain")
+                    try_success=0
+                    MonitorTryAccounts
+                    if [ "$try_success" -eq 1 ] 
+                    then
+                        MonitorFlvRestartSuccess
+                        break
+                    elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                    then
+                        MonitorFlvRestartFail
+                        break
+                    else
+                        continue
+                    fi
+                elif [[ $restart_i -eq $((restart_nums-1)) ]] 
                 then
                     MonitorFlvRestartFail
                     break
@@ -11135,7 +11876,23 @@ MonitorFlvRestartChannel()
                 | $JQ_FILE -r '.js.token' || true)
             if [ -z "$access_token" ] 
             then
-                if [[ $restart_i -eq $((restart_nums-1)) ]] 
+                if [ "$to_try" -eq 1 ] 
+                then
+                    domains_tried+=("$chnl_domain")
+                    try_success=0
+                    MonitorTryAccounts
+                    if [ "$try_success" -eq 1 ] 
+                    then
+                        MonitorFlvRestartSuccess
+                        break
+                    elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                    then
+                        MonitorFlvRestartFail
+                        break
+                    else
+                        continue
+                    fi
+                elif [[ $restart_i -eq $((restart_nums-1)) ]] 
                 then
                     MonitorFlvRestartFail
                     break
@@ -11149,7 +11906,23 @@ MonitorFlvRestartChannel()
                 --header="Cookie: $chnl_cookies" "$profile_url" -qO- || true)
             if [ -z "$profile" ] 
             then
-                if [[ $restart_i -eq $((restart_nums-1)) ]] 
+                if [ "$to_try" -eq 1 ] 
+                then
+                    domains_tried+=("$chnl_domain")
+                    try_success=0
+                    MonitorTryAccounts
+                    if [ "$try_success" -eq 1 ] 
+                    then
+                        MonitorFlvRestartSuccess
+                        break
+                    elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                    then
+                        MonitorFlvRestartFail
+                        break
+                    else
+                        continue
+                    fi
+                elif [[ $restart_i -eq $((restart_nums-1)) ]] 
                 then
                     MonitorFlvRestartFail
                     break
@@ -11168,13 +11941,21 @@ MonitorFlvRestartChannel()
                     if [ "$try_success" -eq 1 ] 
                     then
                         MonitorFlvRestartSuccess
-                    else
+                        break
+                    elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                    then
                         MonitorFlvRestartFail
+                        break
+                    else
+                        continue
                     fi
-                else
+                elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                then
                     MonitorFlvRestartFail
+                    break
+                else
+                    continue
                 fi
-                break
             else
                 create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
                 cmd=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
@@ -11197,13 +11978,21 @@ MonitorFlvRestartChannel()
                         if [ "$try_success" -eq 1 ] 
                         then
                             MonitorFlvRestartSuccess
-                        else
+                            break
+                        elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                        then
                             MonitorFlvRestartFail
+                            break
+                        else
+                            continue
                         fi
-                    else
+                    elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                    then
                         MonitorFlvRestartFail
+                        break
+                    else
+                        continue
                     fi
-                    break
                 fi
 
                 if [[ $chnl_stream_links == *" "* ]] 
@@ -11265,15 +12054,14 @@ MonitorFlvRestartChannel()
                 if [ "$try_success" -eq 1 ] 
                 then
                     MonitorFlvRestartSuccess
+                    break
+                elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                then
+                    MonitorFlvRestartFail
+                    break
                 else
-                    if [[ $restart_i -eq $((restart_nums-1)) ]] 
-                    then
-                        MonitorFlvRestartFail
-                    else
-                        continue
-                    fi
+                    continue
                 fi
-                break
             fi
         fi
 
@@ -11338,6 +12126,7 @@ MonitorFlvRestartChannel()
         if [[ $restart_i -eq $((restart_nums - 1)) ]] 
         then
             MonitorFlvRestartFail
+            break
         fi
     done
 }
@@ -11707,20 +12496,19 @@ Monitor()
 
                         if [ "$loop" -eq 1 ] && { [ "$anti_leech_yn" == "no" ] || [ "${chnls_encrypt[i]}" == "no" ]; }
                         then
-                            if [ "${chnls_encrypt[i]}" == "yes" ] && [ -e "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[i]}.keyinfo" ] && [ -e "$LIVE_ROOT/$output_dir_name/${chnls_key_name[i]}.key" ]
+                            if [ "${chnls_encrypt[i]}" == "yes" ] 
                             then
-                                line_no=0
-                                while IFS= read -r line 
-                                do
-                                    line_no=$((line_no+1))
-                                    if [ "$line_no" -eq 3 ] 
-                                    then
-                                        iv_hex=$line
-                                    fi
-                                done < "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[i]}.keyinfo"
-
+                                if [ -e "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[i]}.keyinfo" ] && \
+                                [ -e "$LIVE_ROOT/$output_dir_name/${chnls_key_name[i]}.key" ] && \
+                                iv_hex=$(awk 'NR==3{print}' "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[i]}.keyinfo") && \
                                 encrypt_key=$(hexdump -e '16/1 "%02x"' < "$LIVE_ROOT/$output_dir_name/${chnls_key_name[i]}.key")
-                                encrypt_command="-key $encrypt_key -iv $iv_hex"
+                                then
+                                    encrypt_command="-key $encrypt_key -iv $iv_hex"
+                                else
+                                    printf '%s\n' "$chnl_channel_name 开启" >> "$MONITOR_LOG"
+                                    MonitorHlsRestartChannel
+                                    break 2
+                                fi
                             else
                                 encrypt_command=""
                             fi
@@ -11987,14 +12775,8 @@ MonitorSet()
         result=""
         for((i=0;i<flv_count;i++));
         do
-            if [ "$i" -lt 9 ] 
-            then
-                blank=" "
-            else
-                blank=""
-            fi
             flv_pull_link=${monitor_flv_pull_links[i]}
-            result=$result"  $green$((i+1)).$plain $blank${monitor_channel_names[i]}\n      源: ${monitor_stream_links[i]}\n      pull: ${flv_pull_link:-无}\n\n"
+            result=$result"  $green$((i+1)).$plain\r\e[6C${monitor_channel_names[i]}\n\r\e[6C源: ${monitor_stream_links[i]}\n\r\e[6Cpull: ${flv_pull_link:-无}\n\n"
         done
 
         Println "$result"
@@ -12146,7 +12928,7 @@ MonitorSet()
         then
             monitor_count=$((monitor_count + 1))
             monitor_dir_names+=("${chnls_output_dir_name[i]}")
-            result=$result"  $green$monitor_count.$plain ${chnls_channel_name[i]}\n\n"
+            result=$result"  $green$monitor_count.$plain\r\e[6C${chnls_channel_name[i]}\n\n"
         fi
     done
 
@@ -12696,6 +13478,108 @@ AddXtreamCodesAccount()
     Println "$info 账号添加成功 !\n"
 }
 
+VerifyXtreamCodesMac()
+{
+    if [ "${test_mac_domain:-}" != "$domain" ] 
+    then
+        Println "$info 验证 $domain ..."
+        test_mac_domain=$domain
+    fi
+    to_continue=0
+    if [ "${skip_domain:-}" == "$domain" ] 
+    then
+        to_continue=1
+        return 0
+    fi
+    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+    if [ -z "$ip" ] 
+    then
+        to_continue=1
+        skip_domain=$domain
+        return 0
+    fi
+    if [ -n "${skip_mac_ip:-}" ] 
+    then
+        for((i=0;i<${#skip_mac_ip[@]};i++));
+        do
+            if [ "${skip_mac_ip[i]}" == "$ip" ] && [[ ${skip_mac[i]} == *"${BASH_REMATCH[1]}"* ]] 
+            then
+                to_continue=1
+                return 0
+            fi
+        done
+    fi
+    mac_address=${BASH_REMATCH[1]}
+    token=""
+    access_token=""
+    profile=""
+    server="http://$domain"
+    mac=$(UrlencodeUpper "$mac_address")
+    timezone=$(UrlencodeUpper "Europe/Amsterdam")
+    token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
+    profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
+
+    token=$(wget --timeout=10 --tries=2 --user-agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)" --no-check-certificate \
+        --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" -qO- \
+        | $JQ_FILE -r '.js.token' || true)
+    if [ -z "$token" ] 
+    then
+        Println "$error 无法连接 $domain"
+        stb_domain=""
+        to_continue=1
+        skip_domain=$domain
+        return 0
+    fi
+    access_token=$(wget --timeout=10 --tries=1 --user-agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)" --no-check-certificate \
+        --header="Authorization: Bearer $token" \
+        --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" -qO- \
+        | $JQ_FILE -r '.js.token' || true)
+    if [ -z "$access_token" ] 
+    then
+        Println "$error 无法连接 $domain"
+        stb_domain=""
+        to_continue=1
+        return 0
+    fi
+    profile=$(wget --timeout=10 --tries=1 --user-agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)" --no-check-certificate \
+        --header="Authorization: Bearer $access_token" \
+        --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url" -qO- || true)
+    if [ -z "$profile" ] 
+    then
+        Println "$error 无法连接 $domain"
+        stb_domain=""
+        to_continue=1
+        return 0
+    fi
+
+    if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
+    then
+        Println "$error $mac_address 地址错误!"
+        to_continue=1
+        if [ -z "${skip_mac_ip:-}" ] 
+        then
+            skip_mac_ip=()
+        fi
+        if [ -z "${skip_mac:-}" ] 
+        then
+            skip_mac=()
+        fi
+        for((i=0;i<${#skip_mac_ip[@]};i++));
+        do
+            if [ "${skip_mac_ip[i]}" == "$ip" ] 
+            then
+                skip_mac[i]="${skip_mac[i]} $ip"
+                return 0
+            fi
+        done
+        skip_mac_ip+=("$ip")
+        skip_mac+=("$mac_address")
+        return 0
+    else
+        account=$mac_address
+    fi
+}
+
 ListXtreamCodes()
 {
     [ ! -s "$XTREAM_CODES" ] && Println "$error 没有账号 !\n" && exit 1
@@ -12750,62 +13634,21 @@ ListXtreamCodes()
             if [ -n "${stb_domain:-}" ] && [[ $line =~ (([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})) ]]
             then
                 domain=$stb_domain
-                ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
-                [ -z "$ip" ] && continue
-                mac_address=${BASH_REMATCH[1]}
-
-                if [ -z "${test_mac:-}" ] 
+                VerifyXtreamCodesMac
+                if [ "$to_continue" -eq 1 ] 
                 then
-                    Println "$info 验证中 ..."
-                    test_mac=1
-                fi
-
-                token=""
-                access_token=""
-                profile=""
-                server="http://$domain"
-                mac=$(Urlencode "$mac_address")
-                timezone=$(Urlencode "Europe/Amsterdam")
-                token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
-                profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
-
-                token=$(wget --timeout=10 --tries=3 --user-agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)" --no-check-certificate \
-                    --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" -qO- \
-                    | $JQ_FILE -r '.js.token' || true)
-                if [ -z "$token" ] 
-                then
-                    Println "$error 无法连接 $domain"
-                    stb_domain=""
                     continue
-                fi
-                access_token=$(wget --timeout=10 --tries=3 --user-agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)" --no-check-certificate \
-                    --header="Authorization: Bearer $token" \
-                    --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" -qO- \
-                    | $JQ_FILE -r '.js.token' || true)
-                if [ -z "$access_token" ] 
-                then
-                    Println "$error 无法连接 $domain"
-                    stb_domain=""
-                    continue
-                fi
-                profile=$(wget --timeout=10 --tries=3 --user-agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)" --no-check-certificate \
-                    --header="Authorization: Bearer $access_token" \
-                    --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url" -qO- || true)
-                if [ -z "$profile" ] 
-                then
-                    Println "$error 无法连接 $domain"
-                    stb_domain=""
-                    continue
-                fi
-
-                if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
-                then
-                    Println "$error $mac_address 地址错误!"
-                    continue
-                else
-                    account=$mac_address
                 fi
             else
+                continue
+            fi
+        elif [ "${test_mac:-0}" -eq 1 ] && [[ $line =~ (([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})) ]] 
+        then
+            domain=${line#* }
+            domain=${domain%% *}
+            VerifyXtreamCodesMac
+            if [ "$to_continue" -eq 1 ] 
+            then
                 continue
             fi
         else
@@ -12964,11 +13807,11 @@ ListXtreamCodes()
                 then
                     ips_mac+=("$i")
                     ips_mac_count=$((ips_mac_count+1))
-                    xtream_codes_list="$xtream_codes_list$green$ips_mac_count.$plain IP: $green${ips[i]//|/, }$plain 域名: $green${new_domains[i]//|/, }$plain mac 地址个数: $green$macs_num$plain\n\n"
+                    xtream_codes_list="$xtream_codes_list $green$ips_mac_count.$plain IP: $green${ips[i]//|/, }$plain 域名: $green${new_domains[i]//|/, }$plain mac 地址个数: $green$macs_num$plain\n\n"
                 else
                     ips_acc+=("$i")
                     ips_acc_count=$((ips_acc_count+1))
-                    xtream_codes_list="$xtream_codes_list$green$ips_acc_count.$plain IP: $green${ips[i]//|/, }$plain 域名: $green${new_domains[i]//|/, }$plain 账号个数: $green$accs_num$plain\n\n"
+                    xtream_codes_list="$xtream_codes_list $green$ips_acc_count.$plain IP: $green${ips[i]//|/, }$plain 域名: $green${new_domains[i]//|/, }$plain 账号个数: $green$accs_num$plain\n\n"
                 fi
             fi
         done
@@ -13018,7 +13861,7 @@ ViewXtreamCodesAcc()
         domains_count=${#domains[@]}
         for((i=0;i<domains_count;i++));
         do
-            domains_list="$domains_list$green$((i+1)).$plain ${domains[i]}\n\n"
+            domains_list="$domains_list $green$((i+1)).$plain\r\e[6C${domains[i]}\n\n"
         done
         Println "$domains_list"
 
@@ -13065,12 +13908,6 @@ ViewXtreamCodesAcc()
         for((i=0;i<accs_count;i++));
         do
             using=""
-            if [ "$i" -lt 9 ] 
-            then
-                blank=" "
-            else
-                blank=""
-            fi
             for xc_chnl in "${xc_chnls[@]}"
             do
                 if [ "$xc_chnl" == "$domain/${accs[i]}" ] 
@@ -13079,7 +13916,7 @@ ViewXtreamCodesAcc()
                     break
                 fi
             done
-            accs_list="$accs_list$blank$green$((i+1)).$plain ${accs[i]%:*}\r\e[20C${accs[i]#*:} $using\n\n"
+            accs_list="$accs_list $green$((i+1)).$plain\r\e[6C${accs[i]%:*}\r\e[20C${accs[i]#*:} $using\n\n"
         done
         Println "$accs_list"
     else
@@ -13319,7 +14156,7 @@ ViewXtreamCodesMac()
         domains_count=${#domains[@]}
         for((i=0;i<domains_count;i++));
         do
-            domains_list="$domains_list$green$((i+1)).$plain ${domains[i]}\n\n"
+            domains_list="$domains_list $green$((i+1)).$plain\r\e[6C${domains[i]}\n\n"
         done
         Println "$domains_list"
 
@@ -13366,12 +14203,6 @@ ViewXtreamCodesMac()
         for((i=0;i<macs_count;i++));
         do
             using=""
-            if [ "$i" -lt 9 ] 
-            then
-                blank=" "
-            else
-                blank=""
-            fi
             for xc_chnl_mac in "${xc_chnls_mac[@]}"
             do
                 if [ "$xc_chnl_mac" == "$domain/${macs[i]}" ] 
@@ -13380,7 +14211,7 @@ ViewXtreamCodesMac()
                     break
                 fi
             done
-            macs_list="$macs_list$blank$green$((i+1)).$plain ${macs[i]} $using\n\n"
+            macs_list="$macs_list $green$((i+1)).$plain\r\e[6C${macs[i]} $using\n\n"
         done
         Println "$macs_list"
     else
@@ -13479,7 +14310,7 @@ ViewXtreamCodesChnls()
             domains_count=${#domains[@]}
             for((i=0;i<domains_count;i++));
             do
-                domains_list="$domains_list$green$((i+1)).$plain ${domains[i]}\n\n"
+                domains_list="$domains_list $green$((i+1)).$plain\r\e[6C${domains[i]}\n\n"
             done
             Println "$domains_list"
 
@@ -13526,12 +14357,6 @@ ViewXtreamCodesChnls()
             for((i=0;i<macs_count;i++));
             do
                 using=""
-                if [ "$i" -lt 9 ] 
-                then
-                    blank=" "
-                else
-                    blank=""
-                fi
                 for xc_chnl_mac in "${xc_chnls_mac[@]}"
                 do
                     if [ "$xc_chnl_mac" == "$domain/${macs[i]}" ] 
@@ -13540,7 +14365,7 @@ ViewXtreamCodesChnls()
                         break
                     fi
                 done
-                macs_list="$macs_list$blank$green$((i+1)).$plain ${macs[i]} $using\n\n"
+                macs_list="$macs_list $green$((i+1)).$plain\r\e[6C${macs[i]} $using\n\n"
             done
             Println "$macs_list"
 
@@ -13580,8 +14405,8 @@ ViewXtreamCodesChnls()
         profile=""
         user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
         server="http://$domain"
-        mac=$(Urlencode "$mac_address")
-        timezone=$(Urlencode "Europe/Amsterdam")
+        mac=$(UrlencodeUpper "$mac_address")
+        timezone=$(UrlencodeUpper "Europe/Amsterdam")
         cookies="mac=$mac; stb_lang=en; timezone=$timezone"
         token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
         profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
@@ -13629,7 +14454,7 @@ ViewXtreamCodesChnls()
                 map_title=${map_title%\"}
                 genres_count=$((genres_count+1))
                 genres_id+=("$map_id")
-                genres_list="$genres_list$green$genres_count.$plain $map_title\n\n"
+                genres_list="$genres_list $green$genres_count.$plain\r\e[6C$map_title\n\n"
             done < <(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
                 --header="$headers" \
                 --header="Cookie: $cookies" "$genres_url" -qO- | $JQ_FILE '.js | to_entries | map("id: \(.value.id), title: \(.value.title)") | .[]')
@@ -13892,9 +14717,10 @@ ViewXtreamCodesChnls()
                             if [[ $continue_yn == [Yy] ]] 
                             then
                                 continue
+                            else
+                                Println "已取消...\n"
                             fi
                         fi
-
                         break
                     done
                     break
@@ -13932,8 +14758,8 @@ AddXtreamCodesMac()
         token=""
         access_token=""
         profile=""
-        mac=$(Urlencode "$mac_address")
-        timezone=$(Urlencode "Europe/Amsterdam")
+        mac=$(UrlencodeUpper "$mac_address")
+        timezone=$(UrlencodeUpper "Europe/Amsterdam")
         token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
         profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
 
@@ -13992,6 +14818,7 @@ AddXtreamCodesMac()
 GetServerIp()
 {
     ip=$(dig +short myip.opendns.com @resolver1.opendns.com || true)
+    [ -z "$ip" ] && ip=$(curl --silent whatismyip.akamai.com)
     [ -z "$ip" ] && ip=$(curl --silent ipv4.icanhazip.com)
     [ -z "$ip" ] && ip=$(curl --silent api.ip.sb/ip)
     [ -z "$ip" ] && ip=$(curl --silent ipinfo.io/ip)
@@ -14462,7 +15289,7 @@ NginxListDomains()
                 domain_status=0
                 domain_status_text="$red [关闭] $plain"
             fi
-            nginx_domains_list=$nginx_domains_list"$green$nginx_domains_count.$plain $domain $domain_status_text\n\n"
+            nginx_domains_list="$nginx_domains_list $green$nginx_domains_count.$plain\r\e[6C$domain $domain_status_text\n\n"
             nginx_domains+=("$domain")
             nginx_domains_status+=("$domain_status")
         done
@@ -14569,10 +15396,10 @@ NginxListDomain()
         nginx_domain_add_server_number=$((nginx_domain_servers_count+2))
         nginx_domain_edit_server_number=$((nginx_domain_servers_count+3))
         nginx_domain_delete_server_number=$((nginx_domain_servers_count+4))
-        nginx_domain_list="$nginx_domain_list$green$nginx_domain_update_crt_number.$plain 更新证书\n\n"
-        nginx_domain_list="$nginx_domain_list$green$nginx_domain_add_server_number.$plain 添加配置\n\n"
-        nginx_domain_list="$nginx_domain_list$green$nginx_domain_edit_server_number.$plain 修改配置\n\n"
-        nginx_domain_list="$nginx_domain_list$green$nginx_domain_delete_server_number.$plain 删除配置\n\n"
+        nginx_domain_list="$nginx_domain_list $green$nginx_domain_update_crt_number.$plain 更新证书\n\n"
+        nginx_domain_list="$nginx_domain_list $green$nginx_domain_add_server_number.$plain 添加配置\n\n"
+        nginx_domain_list="$nginx_domain_list $green$nginx_domain_edit_server_number.$plain 修改配置\n\n"
+        nginx_domain_list="$nginx_domain_list $green$nginx_domain_delete_server_number.$plain 删除配置\n\n"
     fi
 
     Println "域名 $green${nginx_domains[nginx_domains_index]}$plain 配置:\n\n$nginx_domain_list"
@@ -16797,28 +17624,22 @@ V2rayListForward()
         fi
 
         index=$((index+1))
-        if [ "$index" -lt 9 ] 
-        then
-            blank=" "
-        else
-            blank=""
-        fi
 
         if [ -n "${inbounds_network[i]}" ] 
         then
-            stream_settings_list="\n     网络: $green${inbounds_network[i]}$plain 路径: $green${inbounds_path[i]}$plain 加密: $green否$plain"
+            stream_settings_list="\n\r\e[6C网络: $green${inbounds_network[i]}$plain 路径: $green${inbounds_path[i]}$plain 加密: $green否$plain"
         else
             stream_settings_list=""
         fi
 
         if [ -n "${inbounds_timeout[i]}" ] 
         then
-            http_list="\n     超时: $green${inbounds_timeout[i]}$plain 转发所有请求: $green${inbounds_allow_transparent[i]}$plain 等级: $green${inbounds_user_level[i]}$plain"
+            http_list="\n\r\e[6C超时: $green${inbounds_timeout[i]}$plain 转发所有请求: $green${inbounds_allow_transparent[i]}$plain 等级: $green${inbounds_user_level[i]}$plain"
         else
             http_list=""
         fi
 
-        inbounds_forward_list=$inbounds_forward_list"# $green$index$plain $blank组名: $green${inbounds_tag[i]}$plain 协议: $green${inbounds_protocol[i]}$plain 地址: $green${inbounds_listen[i]}:${inbounds_port[i]}$plain$stream_settings_list$http_list\n\n"
+        inbounds_forward_list=$inbounds_forward_list"# $green$index$plain\r\e[6C组名: $green${inbounds_tag[i]}$plain 协议: $green${inbounds_protocol[i]}$plain 地址: $green${inbounds_listen[i]}:${inbounds_port[i]}$plain$stream_settings_list$http_list\n\n"
     done
     [ -n "$inbounds_forward_list" ] && echo -e "$inbounds_forward_list\n"
 
@@ -16827,17 +17648,10 @@ V2rayListForward()
     outbounds_list=""
     for((i=0;i<outbounds_count;i++));
     do
-        if [ "$i" -lt 9 ] 
-        then
-            blank=" "
-        else
-            blank=""
-        fi
-
         if [ -n "${outbounds_security[i]}" ] 
         then
             protocol="https"
-            stream_settings_list="\n     security: $green${outbounds_security[i]}$plain 检测证书有效性: $green${outbounds_allow_insecure[i]}$plain"
+            stream_settings_list="\n\r\e[6Csecurity: $green${outbounds_security[i]}$plain 检测证书有效性: $green${outbounds_allow_insecure[i]}$plain"
         else
             protocol=${outbounds_protocol[i]}
             stream_settings_list=""
@@ -16845,15 +17659,15 @@ V2rayListForward()
 
         if [ -n "${outbounds_proxy_settings_tag[i]}" ] 
         then
-            proxy_list="\n     前置代理: $green终$plain"
+            proxy_list="\n\r\e[6C前置代理: $green终$plain"
         elif [ "${outbounds_proxy_forward[i]}" == "true" ] 
         then
-            proxy_list="\n     前置代理: $green始$plain"
+            proxy_list="\n\r\e[6C前置代理: $green始$plain"
         else
             proxy_list=""
         fi
 
-        outbounds_list=$outbounds_list"# $green$((i+inbounds_forward_count+1))$plain $blank组名: $green${outbounds_tag[i]}$plain 协议: $green$protocol$plain$stream_settings_list$proxy_list\n\n"
+        outbounds_list=$outbounds_list"# $green$((i+inbounds_forward_count+1))$plain\r\e[6C组名: $green${outbounds_tag[i]}$plain 协议: $green$protocol$plain$stream_settings_list$proxy_list\n\n"
     done
     [ -n "$outbounds_list" ] && echo -e "$outbounds_list\n"
     return 0
@@ -16872,19 +17686,13 @@ V2rayListNginx()
     for((i=0;i<inbounds_nginx_count;i++));
     do
         inbounds_index=${inbounds_nginx_index[i]}
-        if [ "$i" -lt 9 ] 
-        then
-            blank=" "
-        else
-            blank=""
-        fi
         if [ -n "${inbounds_network[inbounds_index]}" ] 
         then
-            stream_settings_list="\n     网络: $green${inbounds_network[inbounds_index]}$plain 路径: $green${inbounds_path[inbounds_index]}$plain 加密: $green否$plain"
+            stream_settings_list="\n\r\e[6C网络: $green${inbounds_network[inbounds_index]}$plain 路径: $green${inbounds_path[inbounds_index]}$plain 加密: $green否$plain"
         else
             stream_settings_list=""
         fi
-        nginx_list=$nginx_list"# $green$((i+1))$plain $blank组名: $green${inbounds_tag[inbounds_index]}$plain 协议: $green${inbounds_protocol[inbounds_index]}$plain 地址: $green${inbounds_listen[inbounds_index]}:${inbounds_port[inbounds_index]}$plain$stream_settings_list\n\n"
+        nginx_list=$nginx_list"# $green$((i+1))$plain\r\e[6C组名: $green${inbounds_tag[inbounds_index]}$plain 协议: $green${inbounds_protocol[inbounds_index]}$plain 地址: $green${inbounds_listen[inbounds_index]}:${inbounds_port[inbounds_index]}$plain$stream_settings_list\n\n"
     done
 
     Println "$nginx_list\n"
@@ -16960,13 +17768,7 @@ V2rayListNginxAccounts()
     while IFS=' ' read -r map_id map_level map_alter_id map_email
     do
         accounts_count=$((accounts_count+1))
-        if [ "$accounts_count" -lt 9 ] 
-        then
-            blank=" "
-        else
-            blank=""
-        fi
-        accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}ID: $green$map_id$plain 等级: $green$map_level$plain alterId: $green$map_alter_id$plain 邮箱: $green$map_email$plain\n\n"
+        accounts_list=$accounts_list"# $green$accounts_count$plain\r\e[6CID: $green$map_id$plain 等级: $green$map_level$plain alterId: $green$map_alter_id$plain 邮箱: $green$map_email$plain\n\n"
     done < <($JQ_FILE -r '.inbounds['"$nginx_index"'].settings.clients | to_entries | map("\(.value.id) \(.value.level) \(.value.alterId) \(.value.email)") | .[]' "$V2_CONFIG")
 
     V2rayListDomainsInbound
@@ -17106,13 +17908,7 @@ V2rayDeleteNginxAccount()
     while IFS=' ' read -r map_id map_level map_alter_id map_email
     do
         accounts_count=$((accounts_count+1))
-        if [ "$accounts_count" -lt 9 ] 
-        then
-            blank=" "
-        else
-            blank=""
-        fi
-        accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}ID: $green$map_id$plain 等级: $green$map_level$plain alterId: $green$map_alter_id$plain 邮箱: $green$map_email$plain\n\n"
+        accounts_list=$accounts_list"# $green$accounts_count$plain\r\e[6CID: $green$map_id$plain 等级: $green$map_level$plain alterId: $green$map_alter_id$plain 邮箱: $green$map_email$plain\n\n"
     done < <($JQ_FILE -r '.inbounds['"$nginx_index"'].settings.clients | to_entries | map("\(.value.id) \(.value.level) \(.value.alterId) \(.value.email)") | .[]' "$V2_CONFIG")
 
     if [ -z "$accounts_list" ] 
@@ -17120,7 +17916,7 @@ V2rayDeleteNginxAccount()
         Println "$error 此账户组没有账号\n" && exit 1
     else
         V2rayListDomainsInbound
-        accounts_list=$accounts_list"# $green$((accounts_count+1))$plain ${blank}删除所有账号"
+        accounts_list=$accounts_list"# $green$((accounts_count+1))$plain\r\e[6C删除所有账号"
         echo -e "可用账号:\n\n$accounts_list\n"
         echo "输入序号"
         while read -p "(默认: 取消): " accounts_index
@@ -17452,13 +18248,6 @@ V2rayListLevels()
     levels_list=""
     for((i=0;i<levels_count;i++));
     do
-        if [ "$i" -lt 9 ] 
-        then
-            blank=" "
-        else
-            blank=""
-        fi
-
         if [ -n "${levels_bufferSize[i]}" ] 
         then
             buffer_size=${levels_bufferSize[i]}
@@ -17468,7 +18257,7 @@ V2rayListLevels()
             buffer_size_list=" bufferSize: $green自动$plain"
         fi
 
-        levels_list=$levels_list"# $green$((i+1))$plain $blank等级: $green${levels_id[i]}$plain 握手: $green${levels_handshake[i]}$plain 超时: $green${levels_connIdle[i]}$plain\n     下行中断: $green${levels_uplinkOnly[i]}$plain 上行中断: $green${levels_downlinkOnly[i]}$plain\n     上行流量统计: $green${levels_statsUserUplink[i]}$plain 下行流量统计: $green${levels_statsUserDownlink[i]}$plain$buffer_size_list\n\n"
+        levels_list=$levels_list"# $green$((i+1))$plain\r\e[6C等级: $green${levels_id[i]}$plain 握手: $green${levels_handshake[i]}$plain 超时: $green${levels_connIdle[i]}$plain\n\r\e[6C下行中断: $green${levels_uplinkOnly[i]}$plain 上行中断: $green${levels_downlinkOnly[i]}$plain\n\r\e[6C上行流量统计: $green${levels_statsUserUplink[i]}$plain 下行流量统计: $green${levels_statsUserDownlink[i]}$plain$buffer_size_list\n\n"
     done
     Println "$levels_list\n"
     return 0
@@ -17995,13 +18784,7 @@ V2rayDeleteForwardAccount()
             while IFS="=" read -r map_address map_port
             do
                 vnext_count=$((vnext_count+1))
-                if [ "$vnext_count" -lt 9 ] 
-                then
-                    blank=" "
-                else
-                    blank=""
-                fi
-                vnext_list=$vnext_list"# $green$vnext_count$plain $blank服务器: $green$map_address$plain 端口: $green$map_port$plain\n\n"
+                vnext_list=$vnext_list"# $green$vnext_count$plain\r\e[6C服务器: $green$map_address$plain 端口: $green$map_port$plain\n\n"
             done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings.vnext | to_entries | map("\(.value.address)=\(.value.port)") | .[]' "$V2_CONFIG")
 
             if [ -z "$vnext_list" ] 
@@ -18036,13 +18819,7 @@ V2rayDeleteForwardAccount()
                 while IFS=' ' read -r map_id map_alter_id map_security map_level
                 do
                     accounts_count=$((accounts_count+1))
-                    if [ "$accounts_count" -lt 9 ] 
-                    then
-                        blank=" "
-                    else
-                        blank=""
-                    fi
-                    accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}ID: $green$map_id$plain alterId: $green$map_alter_id$plain 加密方式: $green$map_security$plain 等级: $green$map_level$plain\n\n"
+                    accounts_list=$accounts_list"# $green$accounts_count$plain\r\e[6CID: $green$map_id$plain alterId: $green$map_alter_id$plain 加密方式: $green$map_security$plain 等级: $green$map_level$plain\n\n"
                 done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings.vnext['"$vnext_index"'].users | to_entries | map("\(.value.id) \(.value.alterId) \(.value.security) \(.value.level)") | .[]' "$V2_CONFIG")
 
                 if [ -z "$accounts_list" ] 
@@ -18059,8 +18836,8 @@ V2rayDeleteForwardAccount()
                         Println "已取消\n" && exit 1
                     fi
                 else
-                    accounts_list=$accounts_list"# $green$((accounts_count+1))$plain ${blank}删除所有账号\n\n"
-                    accounts_list=$accounts_list"# $green$((accounts_count+2))$plain ${blank}删除此服务器"
+                    accounts_list=$accounts_list"# $green$((accounts_count+1))$plain\r\e[6C删除所有账号\n\n"
+                    accounts_list=$accounts_list"# $green$((accounts_count+2))$plain\r\e[6C删除此服务器"
                     Println "$accounts_list\n"
                     echo "输入序号"
                     while read -p "(默认: 取消): " accounts_index
@@ -18107,13 +18884,7 @@ V2rayDeleteForwardAccount()
             while IFS="=" read -r map_address map_port
             do
                 servers_count=$((servers_count+1))
-                if [ "$servers_count" -lt 9 ] 
-                then
-                    blank=" "
-                else
-                    blank=""
-                fi
-                servers_list=$servers_list"# $green$servers_count$plain $blank服务器: $green$map_address$plain 端口: $green$map_port$plain\n\n"
+                servers_list=$servers_list"# $green$servers_count$plain\r\e[6C服务器: $green$map_address$plain 端口: $green$map_port$plain\n\n"
             done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings.servers | to_entries | map("\(.value.address)=\(.value.port)") | .[]' "$V2_CONFIG")
 
             if [ -z "$servers_list" ] 
@@ -18148,17 +18919,11 @@ V2rayDeleteForwardAccount()
                 while IFS= read -r line
                 do
                     accounts_count=$((accounts_count+1))
-                    if [ "$accounts_count" -lt 9 ] 
-                    then
-                        blank=" "
-                    else
-                        blank=""
-                    fi
                     map_user=${line#*user: }
                     map_user=${map_user%, pass: *}
                     map_pass=${line#*, pass: }
                     map_pass=${map_pass%\"}
-                    accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}用户名: $green$map_user$plain 密码: $green$map_pass$plain\n\n"
+                    accounts_list=$accounts_list"# $green$accounts_count$plain\r\e[6C用户名: $green$map_user$plain 密码: $green$map_pass$plain\n\n"
                 done < <($JQ_FILE '.outbounds['"$outbounds_index"'].settings.servers['"$servers_index"'].users | to_entries | map("user: \(.value.user), pass: \(.value.pass)") | .[]' "$V2_CONFIG")
 
                 if [ -z "$accounts_list" ] 
@@ -18175,8 +18940,8 @@ V2rayDeleteForwardAccount()
                         Println "已取消\n" && exit 1
                     fi
                 else
-                    accounts_list=$accounts_list"# $green$((accounts_count+1))$plain ${blank}删除所有账号\n\n"
-                    accounts_list=$accounts_list"# $green$((accounts_count+2))$plain ${blank}删除此服务器"
+                    accounts_list=$accounts_list"# $green$((accounts_count+1))$plain\r\e[6C删除所有账号\n\n"
+                    accounts_list=$accounts_list"# $green$((accounts_count+2))$plain\r\e[6C删除此服务器"
                     Println "$accounts_list\n"
                     echo "输入序号"
                     while read -p "(默认: 取消): " accounts_index
@@ -18227,20 +18992,14 @@ V2rayDeleteForwardAccount()
             while IFS=' ' read -r map_id map_alter_id map_security map_level
             do
                 accounts_count=$((accounts_count+1))
-                if [ "$accounts_count" -lt 9 ] 
-                then
-                    blank=" "
-                else
-                    blank=""
-                fi
-                accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}ID: $green$map_id$plain alterId: $green$map_alter_id$plain 加密方式: $green$map_security$plain 等级: $green$map_level$plain\n\n"
+                accounts_list=$accounts_list"# $green$accounts_count$plain\r\e[6CID: $green$map_id$plain alterId: $green$map_alter_id$plain 加密方式: $green$map_security$plain 等级: $green$map_level$plain\n\n"
             done < <($JQ_FILE -r '.inbounds['"$match_index"'].settings.clients | to_entries | map("\(.value.id) \(.value.alterId) \(.value.security) \(.value.level)") | .[]' "$V2_CONFIG")
 
             if [ -z "$accounts_list" ] 
             then
                 Println "$error 此账户组没有账号\n" && exit 1
             else
-                accounts_list=$accounts_list"# $green$((accounts_count+1))$plain ${blank}删除所有账号"
+                accounts_list=$accounts_list"# $green$((accounts_count+1))$plain\r\e[6C删除所有账号"
                 Println "$accounts_list\n"
                 echo "输入序号"
                 while read -p "(默认: 取消): " accounts_index
@@ -18280,24 +19039,18 @@ V2rayDeleteForwardAccount()
             while IFS= read -r line
             do
                 accounts_count=$((accounts_count+1))
-                if [ "$accounts_count" -lt 9 ] 
-                then
-                    blank=" "
-                else
-                    blank=""
-                fi
                 map_user=${line#*user: }
                 map_user=${map_user%, pass: *}
                 map_pass=${line#*, pass: }
                 map_pass=${map_pass%\"}
-                accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}用户名: $green$map_user$plain 密码: $green$map_pass$plain\n\n"
+                accounts_list=$accounts_list"# $green$accounts_count$plain\r\e[6C用户名: $green$map_user$plain 密码: $green$map_pass$plain\n\n"
             done < <($JQ_FILE '.inbounds['"$match_index"'].settings.accounts | to_entries | map("user: \(.value.user), pass: \(.value.pass)") | .[]' "$V2_CONFIG")
 
             if [ -z "$accounts_list" ] 
             then
                  Println "$error 此账户组没有账号\n" && exit 1
             else
-                accounts_list=$accounts_list"# $green$((accounts_count+1))$plain ${blank}删除所有账号"
+                accounts_list=$accounts_list"# $green$((accounts_count+1))$plain\r\e[6C删除所有账号"
                 Println "$accounts_list\n"
                 echo "输入序号"
                 while read -p "(默认: 取消): " accounts_index
@@ -18372,13 +19125,7 @@ V2rayListForwardAccount()
             while IFS="=" read -r map_address map_port
             do
                 vnext_count=$((vnext_count+1))
-                if [ "$vnext_count" -lt 9 ] 
-                then
-                    blank=" "
-                else
-                    blank=""
-                fi
-                vnext_list=$vnext_list"# $green$vnext_count$plain $blank服务器: $green$map_address$plain 端口: $green$map_port$plain\n\n"
+                vnext_list=$vnext_list"# $green$vnext_count$plain\r\e[6C服务器: $green$map_address$plain 端口: $green$map_port$plain\n\n"
             done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings.vnext | to_entries | map("\(.value.address)=\(.value.port)") | .[]' "$V2_CONFIG")
 
             if [ -z "$vnext_list" ] 
@@ -18413,13 +19160,7 @@ V2rayListForwardAccount()
                 while IFS=' ' read -r map_id map_alter_id map_security map_level
                 do
                     accounts_count=$((accounts_count+1))
-                    if [ "$accounts_count" -lt 9 ] 
-                    then
-                        blank=" "
-                    else
-                        blank=""
-                    fi
-                    accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}ID: $green$map_id$plain alterId: $green$map_alter_id$plain 加密方式: $green$map_security$plain 等级: $green$map_level$plain\n\n"
+                    accounts_list=$accounts_list"# $green$accounts_count$plain\r\e[6CID: $green$map_id$plain alterId: $green$map_alter_id$plain 加密方式: $green$map_security$plain 等级: $green$map_level$plain\n\n"
                 done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings.vnext['"$vnext_index"'].users | to_entries | map("\(.value.id) \(.value.alterId) \(.value.security) \(.value.level)") | .[]' "$V2_CONFIG")
 
                 if [ -z "$accounts_list" ] 
@@ -18439,13 +19180,7 @@ V2rayListForwardAccount()
                 servers_count=$((servers_count+1))
                 servers_address+=("$map_address")
                 servers_port+=("$map_port")
-                if [ "$servers_count" -lt 9 ] 
-                then
-                    blank=" "
-                else
-                    blank=""
-                fi
-                servers_list=$servers_list"# $green$servers_count$plain $blank服务器: $green$map_address$plain 端口: $green$map_port$plain\n\n"
+                servers_list=$servers_list"# $green$servers_count$plain\r\e[6C服务器: $green$map_address$plain 端口: $green$map_port$plain\n\n"
             done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings.servers | to_entries | map("\(.value.address)=\(.value.port)") | .[]' "$V2_CONFIG")
 
             if [ -z "$servers_list" ] 
@@ -18480,17 +19215,11 @@ V2rayListForwardAccount()
                 while IFS= read -r line
                 do
                     accounts_count=$((accounts_count+1))
-                    if [ "$accounts_count" -lt 9 ] 
-                    then
-                        blank=" "
-                    else
-                        blank=""
-                    fi
                     map_user=${line#*user: }
                     map_user=${map_user%, pass: *}
                     map_pass=${line#*, pass: }
                     map_pass=${map_pass%\"}
-                    accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}用户名: $green$map_user$plain 密码: $green$map_pass$plain 链接: $green${outbounds_protocol[match_index]}://$map_user:$map_pass@${servers_address[servers_index]}:${servers_port[servers_index]}$plain\n\n"
+                    accounts_list=$accounts_list"# $green$accounts_count$plain\r\e[6C用户名: $green$map_user$plain 密码: $green$map_pass$plain 链接: $green${outbounds_protocol[match_index]}://$map_user:$map_pass@${servers_address[servers_index]}:${servers_port[servers_index]}$plain\n\n"
                 done < <($JQ_FILE '.outbounds['"$outbounds_index"'].settings.servers['"$servers_index"'].users | to_entries | map("user: \(.value.user), pass: \(.value.pass)") | .[]' "$V2_CONFIG")
 
                 if [ -z "$accounts_list" ] 
@@ -18516,13 +19245,7 @@ V2rayListForwardAccount()
             while IFS=' ' read -r map_id map_alter_id map_security map_level
             do
                 accounts_count=$((accounts_count+1))
-                if [ "$accounts_count" -lt 9 ] 
-                then
-                    blank=" "
-                else
-                    blank=""
-                fi
-                accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}ID: $green$map_id$plain alterId: $green$map_alter_id$plain 加密方式: $green$map_security$plain 等级: $green$map_level$plain\n\n"
+                accounts_list=$accounts_list"# $green$accounts_count$plain\r\e[6CID: $green$map_id$plain alterId: $green$map_alter_id$plain 加密方式: $green$map_security$plain 等级: $green$map_level$plain\n\n"
             done < <($JQ_FILE -r '.inbounds['"$match_index"'].settings.clients | to_entries | map("\(.value.id) \(.value.alterId) \(.value.security) \(.value.level)") | .[]' "$V2_CONFIG")
 
             if [ -z "$accounts_list" ] 
@@ -18537,17 +19260,11 @@ V2rayListForwardAccount()
             while IFS= read -r line
             do
                 accounts_count=$((accounts_count+1))
-                if [ "$accounts_count" -lt 9 ] 
-                then
-                    blank=" "
-                else
-                    blank=""
-                fi
                 map_user=${line#*user: }
                 map_user=${map_user%, pass: *}
                 map_pass=${line#*, pass: }
                 map_pass=${map_pass%\"}
-                accounts_list=$accounts_list"# $green$accounts_count$plain ${blank}用户名: $green$map_user$plain 密码: $green$map_pass$plain 链接: $green${inbounds_protocol[match_index]}://$map_user:$map_pass@$server_ip:${inbounds_port[match_index]}$plain\n\n"
+                accounts_list=$accounts_list"# $green$accounts_count$plain\r\e[6C用户名: $green$map_user$plain 密码: $green$map_pass$plain 链接: $green${inbounds_protocol[match_index]}://$map_user:$map_pass@$server_ip:${inbounds_port[match_index]}$plain\n\n"
             done < <($JQ_FILE '.inbounds['"$match_index"'].settings.accounts | to_entries | map("user: \(.value.user), pass: \(.value.pass)") | .[]' "$V2_CONFIG")
 
             if [ -z "$accounts_list" ] 
@@ -18582,7 +19299,7 @@ V2rayListDomains()
             else
                 v2ray_domain_status_text="v2ray: $red关闭$plain"
             fi
-            v2ray_domains_list=$v2ray_domains_list"$green$v2ray_domains_count.$plain $domain    $v2ray_domain_status_text\n\n"
+            v2ray_domains_list="$v2ray_domains_list $green$v2ray_domains_count.$plain\r\e[6C$domain    $v2ray_domain_status_text\n\n"
         done
     fi
     v2ray_add_domain_num=$((v2ray_domains_count+1))
@@ -18637,13 +19354,7 @@ V2rayListDomainsInbound()
                                 v2ray_domains_inbound_count=$((v2ray_domains_inbound_count+1))
                                 v2ray_domains_inbound+=("$domain")
                                 v2ray_domains_inbound_https_port+=("$server_ports")
-                                if [[ $v2ray_domains_inbound_count -gt 9 ]] 
-                                then
-                                    blank=" "
-                                else
-                                    blank=""
-                                fi
-                                v2ray_domains_inbound_list=$v2ray_domains_inbound_list"$green$v2ray_domains_inbound_count.$plain 域名: $green$domain$plain, 端口: $green$server_ports$plain, 协议: ${green}vmess$plain, 网络: ${green}ws$plain\n$blank   path: $green${inbounds_path[nginx_index]}$plain, security: ${green}tls$plain, 状态: $v2ray_status_text\n\n"
+                                v2ray_domains_inbound_list=$v2ray_domains_inbound_list"$green$v2ray_domains_inbound_count.$plain\r\e[6C域名: $green$domain$plain, 端口: $green$server_ports$plain, 协议: ${green}vmess$plain, 网络: ${green}ws$plain\n\r\e[6Cpath: $green${inbounds_path[nginx_index]}$plain, security: ${green}tls$plain, 状态: $v2ray_status_text\n\n"
                             fi
                         fi
                     fi
@@ -18750,10 +19461,10 @@ V2rayListDomain()
     v2ray_domain_add_server_number=$((v2ray_domain_servers_count+2))
     v2ray_domain_edit_server_number=$((v2ray_domain_servers_count+3))
     v2ray_domain_delete_server_number=$((v2ray_domain_servers_count+4))
-    v2ray_domain_list="$v2ray_domain_list$green$v2ray_domain_update_crt_number.$plain 更新证书\n\n"
-    v2ray_domain_list="$v2ray_domain_list$green$v2ray_domain_add_server_number.$plain 添加配置\n\n"
-    v2ray_domain_list="$v2ray_domain_list$green$v2ray_domain_edit_server_number.$plain 修改配置\n\n"
-    v2ray_domain_list="$v2ray_domain_list$green$v2ray_domain_delete_server_number.$plain 删除配置\n\n"
+    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_update_crt_number.$plain 更新证书\n\n"
+    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_add_server_number.$plain 添加配置\n\n"
+    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_edit_server_number.$plain 修改配置\n\n"
+    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_delete_server_number.$plain 删除配置\n\n"
 
     Println "域名 $green${v2ray_domains[v2ray_domains_index]}$plain 配置:\n\n$v2ray_domain_list"
 }
@@ -19500,13 +20211,7 @@ GetCloudflareHosts()
         zone_subdomains=${zone_subdomains%\"}
         cf_hosts_zone_subdomains+=("$zone_subdomains")
 
-        if [ "$cf_hosts_count" -lt 10 ] 
-        then
-            blank=" "
-        else
-            blank=""
-        fi
-        cf_hosts_list="$cf_hosts_list$blank$green$cf_hosts_count.$plain CFP: $green$name$plain  host key: $green$key$plain  域名数: $green$zones_count$plain\n\n"
+        cf_hosts_list="$cf_hosts_list $green$cf_hosts_count.$plain\r\e[6CCFP: $green$name$plain  host key: $green$key$plain  域名数: $green$zones_count$plain\n\n"
     done < <($JQ_FILE '.hosts[]|[.name,.key,(.zones|length),([.zones[].name]|join("|")),([.zones[].resolve_to]|join("|")),([.zones[].user_email]|join("|")),([.zones[].user_unique_id]|join("|")),([.zones[].subdomains]|join("|"))]|join("^")' "$CF_CONFIG")
     return 0
 }
@@ -19556,13 +20261,7 @@ GetCloudflareUsers()
         pass=${pass%\"}
         cf_users_pass+=("$pass")
 
-        if [ "$cf_users_count" -lt 10 ] 
-        then
-            blank=" "
-        else
-            blank=""
-        fi
-        cf_users_list="$cf_users_list$blank$green$cf_users_count.$plain 邮箱: $green$email$plain  密码: $green$pass$plain\n\n"
+        cf_users_list="$cf_users_list $green$cf_users_count.$plain\r\e[6C邮箱: $green$email$plain  密码: $green$pass$plain\n\n"
     done < <($JQ_FILE '.users[]|[.email,.pass]|join(" ")' "$CF_CONFIG")
     return 0
 }
@@ -19757,7 +20456,7 @@ ListCloudflareZones()
     cf_zones_list=""
     for((i=0;i<cf_zones_count;i++));
     do
-        cf_zones_list="$cf_zones_list$green$((i+1)).$plain 源站: $green${cf_zones_name[i]}$plain 用户: $green${cf_zones_user_email[i]}$plain\n\n"
+        cf_zones_list="$cf_zones_list $green$((i+1)).$plain\r\e[6C源站: $green${cf_zones_name[i]}$plain 用户: $green${cf_zones_user_email[i]}$plain\n\n"
     done
 
     [ -z "$cf_zones_list" ] && Println "$error 请先添加源站\n" && exit 1
@@ -20052,13 +20751,7 @@ ViewCloudflareSubdomain()
     cf_subdomains_list=""
     for((i=0;i<${#cf_hosted_cnames[@]};i++));
     do
-        if [ "$i" -lt 9 ] 
-        then
-            blank=" "
-        else
-            blank=""
-        fi
-        cf_subdomains_list="$cf_subdomains_list$green$((i+1)).$plain$blank CNAME: $green${cf_hosted_cnames[i]}$plain => $green${cf_resolve_tos[i]}$plain\n   $blank解析地址: $green${cf_forward_tos[i]}$plain\n\n"
+        cf_subdomains_list="$cf_subdomains_list $green$((i+1)).$plain\r\e[6CCNAME: $green${cf_hosted_cnames[i]}$plain => $green${cf_resolve_tos[i]}$plain\n\r\e[6C解析地址: $green${cf_forward_tos[i]}$plain\n\n"
     done
 
     if [ -z "$cf_subdomains_list" ] 
@@ -20976,7 +21669,7 @@ ${green}8.$plain 浏览频道
         ;;
         3) 
             [ ! -s "$XTREAM_CODES" ] && Println "$error 没有账号 !\n" && exit 1
-            Println "$info 更新中...\n"
+            Println "$info 更新中..."
             result=""
             while IFS= read -r line 
             do
@@ -20998,7 +21691,8 @@ ${green}8.$plain 浏览频道
                     fi
                 done
             done < "$XTREAM_CODES"
-            echo -e "$result" >> "$XTREAM_CODES"
+            echo -e "$result" > "$XTREAM_CODES"
+            test_mac=1
             ListXtreamCodes
             Println "$info 账号更新成功\n"
         ;;
@@ -21412,14 +22106,8 @@ case "$cmd" in
             result=""
             for((i=0;i<flv_count;i++));
             do
-                if [ "$i" -lt 9 ] 
-                then
-                    blank=" "
-                else
-                    blank=""
-                fi
                 chnl_flv_pull_link=${chnls_flv_pull_link[i]}
-                result=$result"  $green$((i+1)).$plain $blank$green${chnls_channel_name[i]}$plain\n      源: ${chnls_stream_link[i]}\n      pull: ${chnl_flv_pull_link:-无}\n\n"
+                result=$result"  $green$((i+1)).$plain\r\e[6C$green${chnls_channel_name[i]}$plain\n\r\e[6C源: ${chnls_stream_link[i]}\n\r\e[6Cpull: ${chnl_flv_pull_link:-无}\n\n"
             done
             Println "$result"
         fi
@@ -21450,13 +22138,7 @@ case "$cmd" in
             result=""
             for((i=0;i<hls_count;i++));
             do
-                if [ "$i" -lt 9 ] 
-                then
-                    blank=" "
-                else
-                    blank=""
-                fi
-                result=$result"  $green$((i+1)).$plain $blank$green${chnls_channel_name[i]}$plain\n      源: ${chnls_stream_link[i]}\n\n"
+                result=$result"  $green$((i+1)).$plain\r\e[6C$green${chnls_channel_name[i]}$plain\n\r\e[6C源: ${chnls_stream_link[i]}\n\n"
             done
             Println "$result"
         fi
@@ -21512,6 +22194,11 @@ case "$cmd" in
         exit 0
     ;;
     "4g")
+        if [ ! -d "$IPTV_ROOT" ] 
+        then
+            Println "$error 请先安装脚本 !\n" && exit 1
+        fi
+
         if [[ ! -x $(command -v openssl) ]] 
         then
             Println "是否安装 openssl ? [Y/n]"
@@ -21524,6 +22211,60 @@ case "$cmd" in
                 Println "已取消\n..." && exit 1
             fi
         fi
+
+        service_name="4gtv"
+        user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+
+        Println "  4gtv 面板
+
+  ${green}1.$plain 注册账号
+  ${green}2.$plain 登录账号
+  ${green}3.$plain 查看账号
+  ${green}4.$plain 修改账号
+  ${green}5.$plain 删除账号
+  ${green}6.$plain 使用免费频道
+  ${green}7.$plain 使用豪华频道
+
+"
+        while read -p "(默认: 6): " _4gtv_menu_num 
+        do
+            _4gtv_menu_num=${_4gtv_menu_num:-6}
+            case "$_4gtv_menu_num" in
+                1) 
+                    Reg4gtvAcc
+                    exit 0
+                ;;
+                2) 
+                    Login4gtvAcc
+                    exit 0
+                ;;
+                3) 
+                    View4gtvAcc
+                    exit 0
+                ;;
+                4) 
+                    Edit4gtvAcc
+                    exit 0
+                ;;
+                5) 
+                    Del4gtvAcc
+                    exit 0
+                ;;
+                6) 
+                    _4gtv_set_id=4
+                    fsVALUE=""
+                    break
+                ;;
+                7) 
+                    Get4gtvAccToken
+                    _4gtv_set_id=1
+                    break
+                ;;
+                *) Println "$error 请输入正确的数字 [1-7]\n"
+                ;;
+            esac
+        done
+
         hinet_4gtv=(
             "litv-longturn14:寰宇新聞台"
             "4gtv-4gtv052:華視新聞資訊台"
@@ -21563,16 +22304,14 @@ case "$cmd" in
         hinet_4gtv_list=""
         for((i=0;i<hinet_4gtv_count;i++));
         do
-            hinet_4gtv_list="$hinet_4gtv_list$green$((i+1)).$plain\r\e[6C${hinet_4gtv[i]#*:}\n\n"
+            hinet_4gtv_list="$hinet_4gtv_list $green$((i+1)).$plain\r\e[6C${hinet_4gtv[i]#*:}\n\n"
         done
 
         #headers="Referer: $chnl_stream_link\r\n"
 
         xc=1
-        user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
         cookies=""
 
-        _4gtv_set_id=4
         Println "$info 获取频道 ..."
         IFS="^" read -r _4gtv_chnl_id _4gtv_chnl_name _4gtv_chnl_aid < <(wget \
             --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
@@ -21590,7 +22329,7 @@ case "$cmd" in
             _4gtv_chnls_count=${#_4gtv_chnls_id[@]}
             for((i=0;i<_4gtv_chnls_count;i++));
             do
-                _4gtv_list="$_4gtv_list$green$((i+hinet_4gtv_count+1)).$plain\r\e[6C${_4gtv_chnls_name[i]}\n\n"
+                _4gtv_list="$_4gtv_list $green$((i+hinet_4gtv_count+1)).$plain\r\e[6C${_4gtv_chnls_name[i]}\n\n"
             done
             chnls_list="HiNet 4gtv 频道:\n\n${hinet_4gtv_list}4gtv 官网频道:\n\n$_4gtv_list"
         else
@@ -21718,14 +22457,20 @@ case "$cmd" in
                 iv="JUMxvVMmszqUTeKn"
                 hexkey=$(echo -n $key | hexdump -v -e '/1 "%02x"')
                 hexiv=$(echo -n $iv | hexdump -v -e '/1 "%02x"')
-                post_data='{"fnCHANNEL_ID":'"$_4gtv_chnl_id"',"fsASSET_ID":"'"$_4gtv_chnl_aid"'","fsDEVICE_TYPE":"pc","clsIDENTITY_VALIDATE_ARUS":{"fsVALUE":""}}'
+                post_data='{"fnCHANNEL_ID":'"$_4gtv_chnl_id"',"fsASSET_ID":"'"$_4gtv_chnl_aid"'","fsDEVICE_TYPE":"pc","clsIDENTITY_VALIDATE_ARUS":{"fsVALUE":"'"$fsVALUE"'"}}'
                 post_data=$(echo -n "$post_data" | openssl enc -aes-256-cbc -iv "$hexiv" -K "$hexkey" -a)
+                if [ -n "$fsVALUE" ] 
+                then
+                    value="$(UrlencodeUpper ${post_data//[[:space:]]/})"
+                else
+                    value="$(Urlencode ${post_data//[[:space:]]/})"
+                fi
 
                 for((try_i=0;try_i<10;try_i++));
                 do
                     stream_link_data=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
                     --header="${headers:0:-4}" \
-                    --post-data "value=$(Urlencode ${post_data//[[:space:]]/})" \
+                    --post-data "value=$value" \
                     "https://api2.4gtv.tv/Channel/GetChannelUrl3" -qO- || true)
                     if [ -n "$stream_link_data" ] 
                     then
@@ -21992,13 +22737,7 @@ GetVipHosts()
         vip_hosts_channel_name+=("$channels_name")
         channels_epg_id=${channels_epg_id%\"}
         vip_hosts_channel_epg_id+=("$channels_epg_id")
-        if [ "$vip_hosts_count" -lt 10 ] 
-        then
-            blank=" "
-        else
-            blank=""
-        fi
-        vip_hosts_list="$vip_hosts_list$blank$green$vip_hosts_count.$plain 服务器: $green$ip$plain  端口: $green$port$plain  频道数: $green$channels_count$plain$status_text\n    seed: $green$seed$plain  token: $green${token:-无}$plain\n\n"
+        vip_hosts_list="$vip_hosts_list $green$vip_hosts_count.$plain\r\e[6C服务器: $green$ip$plain  端口: $green$port$plain  频道数: $green$channels_count$plain$status_text\n\r\e[6Cseed: $green$seed$plain  token: $green${token:-无}$plain\n\n"
     done < <($JQ_FILE '.hosts[]|[.ip,.port,.seed,.token,.status,(.channels|length),([.channels[].id]|join("|")),([.channels[].name]|join("|")),([.channels[].epg_id]|join("|"))]|join("^")' "$VIP_FILE")
     return 0
 }
@@ -22303,12 +23042,6 @@ GetVipUsers()
         vip_users_expire+=("$expire")
         name=${name%\"}
         vip_users_name+=("$name")
-        if [ "$vip_users_count" -lt 10 ] 
-        then
-            blank=" "
-        else
-            blank=""
-        fi
         if [ "$expire" -gt 0 ] 
         then
             expire_text=$(date +%c --date=@"$expire")
@@ -22321,7 +23054,7 @@ GetVipUsers()
         else
             m3u_link="${FFMPEG_MIRROR_LINK%/*}/vip/$license/playlist.m3u"
         fi
-        vip_users_list="$vip_users_list$blank$green$vip_users_count.$plain 用户名: $green$name$plain  ip: $green$ip$plain  到期日: $green$expire_text$plain\n    授权码: $green$license$plain  认证方式: $green$sum$plain\n    m3u 播放链接: $green$m3u_link$plain\n\n"
+        vip_users_list="$vip_users_list $green$vip_users_count.$plain\r\e[6C用户名: $green$name$plain  ip: $green$ip$plain  到期日: $green$expire_text$plain\n\r\e[6C授权码: $green$license$plain  认证方式: $green$sum$plain\n\r\e[6Cm3u 播放链接: $green$m3u_link$plain\n\n"
     done < <($JQ_FILE '.users[]|[.ip,.license,.sum,.expire,.name]|join(":")' "$VIP_FILE")
     return 0
 }
@@ -22632,7 +23365,7 @@ ListVipChannels()
             i_last=$i
             if [ "$vip_channels_count" -eq 1 ] 
             then
-                vip_channels_list="$vip_channels_list $green$((i+1)).$plain ${vip_channels_name[i]}\n频道ID: ${vip_channels_id[i]}\nEPG ID: ${vip_channels_epg_id[i]:-无}\n"
+                vip_channels_list="$vip_channels_list $green$((i+1)).$plain ${vip_channels_name[i]}\n 频道ID: ${vip_channels_id[i]}\n EPG ID: ${vip_channels_epg_id[i]:-无}\n"
             else
                 vip_channels_list="$vip_channels_list $green$((i+1)).$plain ${vip_channels_name[i]}"
             fi
@@ -23239,12 +23972,6 @@ ViewVipUserChannel()
             vip_user_expire=${vip_users_expire[i]}
             vip_user_name=${vip_users_name[i]}
 
-            if [ "$i" -lt 9 ] 
-            then
-                blank=" "
-            else
-                blank=""
-            fi
             if [ "$vip_user_expire" -gt 0 ] 
             then
                 expire_text=$(date +%c --date=@"$vip_user_expire")
@@ -23253,7 +23980,7 @@ ViewVipUserChannel()
             fi
             if [ "$now" -lt "$vip_user_expire" ] || [ "$vip_user_expire" -eq 0 ]
             then
-                vip_users_list="$vip_users_list$blank$green$((i+1)).$plain 用户名: $green$vip_user_name$plain  ip: $green$vip_user_ip$plain  到期日: $green$expire_text$plain\n    授权码: $green$vip_user_license$plain\n    m3u 播放链接: $green${FFMPEG_MIRROR_LINK%/*}/vip/$vip_user_license/playlist.m3u$plain\n\n"
+                vip_users_list="$vip_users_list $green$((i+1)).$plain\r\e[6C用户名: $green$vip_user_name$plain  ip: $green$vip_user_ip$plain  到期日: $green$expire_text$plain\n\r\e[6C授权码: $green$vip_user_license$plain\n\r\e[6Cm3u 播放链接: $green${FFMPEG_MIRROR_LINK%/*}/vip/$vip_user_license/playlist.m3u$plain\n\n"
             fi
         done
 
