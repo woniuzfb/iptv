@@ -1,17 +1,8 @@
-# 一键管理 IPTV / v2ray / Nginx / OpenResty / CFP CNAME 脚本
+# 一键管理 IPTV / v2ray / Nginx / OpenResty / cloudflare partner,workers / IBM CF 脚本
 
 ## A ffmpeg / v2ray / Nginx / OpenResty wrapper (... => hls <=> flv <= ...)
 
-## 演示
-
-- 广电+港澳台 <http://hbo.epub.fun/>, 港澳台 <http://mtime.info/>, 不定时刷新直播源
-- 自定义频道，需把 iptv.html 放到**本地服务器**目录下，修改channels.json
-- 集各广电直播源, 带节目表, 支持回看, 支持直接播放ts流
-- 默认如果没有本地频道（channels.json）, 会请求远程服务器频道
-- HBO 支持节目预告
-- 仅作为宽带测试用
-  
----
+## [演示](http://mtime.info/)
 
 ## 一键管理 v2ray 脚本
 
@@ -27,19 +18,32 @@ wget -q http://hbo.epub.fun/v2.sh && bash v2.sh
   
 ---
 
-## 一键管理 Cloudflare Partner CNAME 脚本
+## 一键管理 IBM Cloud Foundry 脚本
+
+``` bash
+wget -q http://hbo.epub.fun/ibm.sh && bash ibm.sh
+
+输入 ibm 打开 ibm CF 管理面板
+
+```
+
+- 多 用户、APP、路由 管理
+  
+---
+
+## 一键管理 cloudflare partner,workers 脚本
 
 ``` bash
 wget -q http://hbo.epub.fun/cf.sh && bash cf.sh
 
-输入 cf 打开 CFP CNAME 管理面板
+输入 cf 打开 cloudflare partner,workers 管理面板
 
 ```
 
 Mac/Linux 一键获取最优 IP 可以用脚本 [cloudflare-fping](https://github.com/woniuzfb/cloudflare-fping)
 
 - 多 CFP 管理
-- 可用找些公开的 CFP host key 添加, 就可以直接与 Cloudflare 官方通信, 不需要通过第三方面板输入账号密码, 避免了泄漏
+- 勿更改公开的 CFP host key
   
 ---
 

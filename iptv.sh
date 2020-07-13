@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# A [ ffmpeg / v2ray / nginx / openresty / CFP CNAME ] Wrapper Script By MTimer
+# A [ ffmpeg / v2ray / nginx / openresty / cloudflare partner,workers / IBM CF ] Wrapper Script By MTimer
 # Copyright (C) 2019
 # Released under BSD 3 Clause License
 #
@@ -75,18 +75,23 @@
 #     v2 打开 v2ray 面板
 #     nx 打开 nginx 面板
 #     or 打开 openresty 面板
-#     cf 打开 cloudflare partner cname 面板
+#     cf 打开 cloudflare partner / workers 面板
+#     ibm 打开 IBM Cloud Foundry 面板
 
 set -euo pipefail
 
-sh_ver="1.25.0"
+sh_ver="1.26.0"
 sh_debug=0
 export LANG=en_US.UTF-8
 SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
+IBM_FILE="/usr/local/bin/ibm"
 CF_FILE="/usr/local/bin/cf"
 CF_CONFIG="$HOME/cloudflare.json"
+CF_WORKERS_ROOT="$HOME/workers"
+CF_WORKERS_FILE="$CF_WORKERS_ROOT/cloudflare_workers.py"
+IBM_CONFIG="$HOME/ibm.json"
 OR_FILE="/usr/local/bin/or"
 NX_FILE="/usr/local/bin/nx"
 V2_FILE="/usr/local/bin/v2"
@@ -646,7 +651,7 @@ InstallJq()
     then
         Println "$info 开始下载/安装 JQ..."
         #experimental# grep -Po '"tag_name": "jq-\K.*?(?=")'
-        jq_ver=$(curl --silent -m 10 "$FFMPEG_MIRROR_LINK/jq.json" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+        jq_ver=$(curl --silent -m 10 "$FFMPEG_MIRROR_LINK/jq.json" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') || true
         if [ -n "$jq_ver" ]
         then
             wget --no-check-certificate "$FFMPEG_MIRROR_LINK/$jq_ver/jq-linux$release_bit" $_PROGRESS_OPT -qO "$JQ_FILE"
@@ -692,7 +697,8 @@ Install()
         InstallJq
 
         default=$(
-        $JQ_FILE -n --arg proxy '' --arg user_agent 'Mozilla/5.0 (QtEmbedded; U; Linux; C)' \
+        $JQ_FILE -n --arg proxy '' --arg xc_proxy '' \
+            --arg user_agent 'Mozilla/5.0 (QtEmbedded; U; Linux; C)' \
             --arg headers '' --arg cookies 'stb_lang=en; timezone=Europe/Amsterdam' \
             --arg playlist_name '' --arg seg_dir_name '' \
             --arg seg_name '' --arg seg_length 6 \
@@ -718,6 +724,7 @@ Install()
             --arg recheck_period 0 --arg version "$sh_ver" \
             '{
                 proxy: $proxy,
+                xc_proxy: $xc_proxy,
                 user_agent: $user_agent,
                 headers: $headers,
                 cookies: $cookies,
@@ -876,11 +883,11 @@ Update()
     InstallJq
 
     Println "$info 更新 iptv 脚本..."
-    sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1 || true)
+    sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
     if [ -z "$sh_new_ver" ] 
     then
         Println "$error 无法连接到 Github ! 尝试备用链接..."
-        sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1 || true)
+        sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
         [ -z "$sh_new_ver" ] && Println "$error 无法连接备用链接!" && exit 1
     fi
 
@@ -928,7 +935,7 @@ Update()
 
 GetDefault()
 {
-    while IFS="^" read -r d_proxy d_user_agent d_headers d_cookies d_playlist_name \
+    while IFS="^" read -r d_proxy d_xc_proxy d_user_agent d_headers d_cookies d_playlist_name \
     d_seg_dir_name d_seg_name d_seg_length d_seg_count d_video_codec d_audio_codec \
     d_video_audio_shift d_quality d_bitrates d_const_yn d_encrypt_yn d_encrypt_session_yn \
     d_keyinfo_name d_key_name d_input_flags d_output_flags d_sync_yn d_sync_file \
@@ -1037,7 +1044,7 @@ GetDefault()
         fi
         d_version=${d_version%\"}
         break
-    done < <($JQ_FILE -M '.default | [.proxy,.user_agent,.headers,.cookies,.playlist_name,
+    done < <($JQ_FILE -M '.default | [.proxy,.xc_proxy,.user_agent,.headers,.cookies,.playlist_name,
     .seg_dir_name,.seg_name,.seg_length,.seg_count,.video_codec,.audio_codec,
     .video_audio_shift,.quality,.bitrates,.const,.encrypt,.encrypt_session,
     .keyinfo_name,.key_name,.input_flags,.output_flags,.sync,.sync_file,
@@ -1300,7 +1307,7 @@ GetChannelInfo()
         select_json='{ "output_dir_name": "'"$output_dir_name"'" }'
     fi
 
-    chn_found=0
+    chnl_found=0
     while IFS="^" read -r chnl_pid chnl_status chnl_stream_links chnl_live_yn chnl_proxy \
     chnl_user_agent chnl_headers chnl_cookies chnl_output_dir_name chnl_playlist_name \
     chnl_seg_dir_name chnl_seg_name chnl_seg_length chnl_seg_count chnl_video_codec \
@@ -1310,7 +1317,7 @@ GetChannelInfo()
     chnl_sync_file chnl_sync_index chnl_sync_pairs chnl_flv_status chnl_flv_push_link \
     chnl_flv_pull_link
     do
-        chn_found=1
+        chnl_found=1
         chnl_pid=${chnl_pid#\"}
         chnl_flv_pull_link=${chnl_flv_pull_link%\"}
         if [ "$chnl_live_yn" == "no" ]
@@ -1481,7 +1488,7 @@ GetChannelInfo()
         break
     done < <($JQ_FILE -M --arg select_index "$select_index" --argjson select_json "$select_json" '.channels[] | select(.[$select_index] == $select_json[$select_index]) | join("^")' "$CHANNELS_FILE")
 
-    if [ "$chn_found" -eq 0 ] && [ -z "${monitor:-}" ]
+    if [ "$chnl_found" -eq 0 ] && [ -z "${monitor:-}" ]
     then
         Println "$error 频道发生变化，请重试 !\n" && exit 1
     fi
@@ -1904,7 +1911,7 @@ Set4gtvAccEmail()
         then
             break
         else
-            Println "$error 邮箱格式错误, 请重新输入"
+            Println "$error 邮箱格式错误, 请重新输入\n"
         fi
     done
     Println "	4gtv 账号邮箱: $green $_4gtv_acc_email $plain\n"
@@ -1920,7 +1927,7 @@ Set4gtvAccPass()
         then
             break
         else
-            Println "$error 账号密码格式错误, 请重新输入"
+            Println "$error 账号密码格式错误, 请重新输入\n"
         fi
     done
     Println "	4gtv 账号密码: $green $_4gtv_acc_pass $plain\n"
@@ -2847,7 +2854,7 @@ SetStreamLink()
                 cookies=""
                 stream_link_data=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
                 --header="${headers:0:-4}" \
-                "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)" -qO- || true)
+                "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)" -qO-) || true
                 if [ -n "$stream_link_data" ] 
                 then
                     stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
@@ -2921,7 +2928,7 @@ SetStreamLink()
             stream_link_data=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
             --header="${headers:0:-4}" \
             --post-data "value=$value" \
-            "https://api2.4gtv.tv/Channel/GetChannelUrl3" -qO- || true)
+            "https://api2.4gtv.tv/Channel/GetChannelUrl3" -qO-) || true
             if [ -n "$stream_link_data" ] 
             then
                 break
@@ -3821,7 +3828,6 @@ FlvStreamCreatorWithShift()
 
             if [ "${stream_link:0:4}" == "http" ] 
             then
-                printf -v headers_command '%b' "$headers"
                 PrepTerm
                 $FFMPEG $proxy_command -user_agent "$user_agent" -headers "$headers_command" -cookies "$cookies" $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command \
                 -y -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
@@ -3941,7 +3947,6 @@ FlvStreamCreatorWithShift()
 
             if [ "${chnl_stream_link:0:4}" == "http" ] 
             then
-                printf -v chnl_headers_command '%b' "$chnl_headers"
                 PrepTerm
                 $FFMPEG $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies" $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command \
                 -y -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
@@ -4111,7 +4116,6 @@ FlvStreamCreatorWithShift()
 
             if [ "${stream_link:0:4}" == "http" ] 
             then
-                printf -v headers_command '%b' "$headers"
                 PrepTerm
                 $FFMPEG $proxy_command -user_agent "$user_agent" -headers "$headers_command" -cookies "$cookies" $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
                 -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
@@ -4338,7 +4342,6 @@ HlsStreamCreatorPlus()
                 fi
                 if [ "${stream_link:0:4}" == "http" ] 
                 then
-                    printf -v headers_command '%b' "$headers"
                     PrepTerm
                     $FFMPEG $proxy_command -user_agent "$user_agent" -headers "$headers_command" -cookies "$cookies" $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
                     -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
@@ -4358,7 +4361,6 @@ HlsStreamCreatorPlus()
             else
                 if [ "${stream_link:0:4}" == "http" ] 
                 then
-                    printf -v headers_command '%b' "$headers"
                     PrepTerm
                     $FFMPEG $proxy_command -user_agent "$user_agent" -headers "$headers_command" -cookies "$cookies" $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
                     -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
@@ -4522,7 +4524,6 @@ HlsStreamCreatorPlus()
                 if [ "${chnl_stream_link:0:4}" == "http" ] 
                 then
                     # https://stackoverflow.com/questions/23235651/how-can-i-do-ansi-c-quoting-of-an-existing-bash-variable
-                    printf -v chnl_headers_command '%b' "$chnl_headers"
                     PrepTerm
                     $FFMPEG $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies" $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
                     -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
@@ -4542,7 +4543,6 @@ HlsStreamCreatorPlus()
             else
                 if [ "${chnl_stream_link:0:4}" == "http" ] 
                 then
-                    printf -v chnl_headers_command '%b' "$chnl_headers"
                     PrepTerm
                     $FFMPEG $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies" $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
                     -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
@@ -4753,7 +4753,6 @@ HlsStreamCreatorPlus()
                 fi
                 if [ "${stream_link:0:4}" == "http" ] 
                 then
-                    printf -v headers_command '%b' "$headers"
                     PrepTerm
                     $FFMPEG $proxy_command -user_agent "$user_agent" -headers "$headers_command" -cookies "$cookies" $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
                     -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
@@ -4773,7 +4772,6 @@ HlsStreamCreatorPlus()
             else
                 if [ "${stream_link:0:4}" == "http" ] 
                 then
-                    printf -v headers_command '%b' "$headers"
                     PrepTerm
                     $FFMPEG $proxy_command -user_agent "$user_agent" -headers "$headers_command" -cookies "$cookies" $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
                     -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
@@ -5248,6 +5246,8 @@ AddChannel()
         output_flags channel_name sync_file sync_index sync_pairs flv_push_link \
         flv_pull_link
 
+    [ -z "${headers_command:-}" ] && printf -v headers_command '%b' "$headers"
+
     if [ -n "${kind:-}" ] 
     then
         if [ "$kind" == "flv" ] 
@@ -5277,6 +5277,8 @@ AddChannel()
             ( HlsStreamCreator ) > /dev/null 2> /dev/null < /dev/null &
         fi
     fi
+
+    headers_command=""
 
     Println "$info 频道添加成功 !\n"
 }
@@ -5547,7 +5549,7 @@ EditChannelAll()
         if [[ $stream_link == http://*.macaulotustv.com/* ]] 
         then
             user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.61 Safari/537.36"
-            headers="Origin: http://www.lotustv.cc\r\nReferer: http://www.lotustv.cc/index.php/index/live.html"
+            headers="Origin: http://www.lotustv.cc\r\nReferer: http://www.lotustv.cc/index.php/index/live.html\r\n"
             cookies=""
         else
             SetUserAgent
@@ -5924,11 +5926,30 @@ TestXtreamCodesLink()
                 Println "$error 没有可用账号"
             fi
         else
+
+            if [ -z "${d_version:-}" ] 
+            then
+                GetDefault
+            fi
+
+            if [ -n "${d_xc_proxy:-}" ] 
+            then
+                if [ "${d_xc_proxy: -1}" == "/" ] 
+                then
+                    server="${d_xc_proxy:0:-1}"
+                else
+                    server=$d_xc_proxy
+                fi
+                xc_host_header=$chnl_domain
+            else
+                server="http://$chnl_domain"
+                xc_host_header=""
+            fi
+
             token=""
             access_token=""
             profile=""
             chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
-            server="http://$chnl_domain"
             mac=$(UrlencodeUpper "$chnl_mac")
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
@@ -5937,24 +5958,27 @@ TestXtreamCodesLink()
             genres_url="$server/portal.php?type=itv&action=get_genres&JsHttpRequest=1-xml"
 
             token=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                --header="xc_host: $xc_host_header" \
                 --header="Cookie: $chnl_cookies" "$token_url" -qO- \
-                | $JQ_FILE -r '.js.token' || true)
+                | $JQ_FILE -r '.js.token') || true
             if [ -z "$token" ] 
             then
                 Println "$error 无法连接 $chnl_domain, 请重试!\n" && exit 1
             fi
             access_token=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                --header="xc_host: $xc_host_header" \
                 --header="Authorization: Bearer $token" \
                 --header="Cookie: $chnl_cookies" "$token_url" -qO- \
-                | $JQ_FILE -r '.js.token' || true)
+                | $JQ_FILE -r '.js.token') || true
             if [ -z "$access_token" ] 
             then
                 Println "$error 无法连接 $chnl_domain, 请重试!\n" && exit 1
             fi
-            chnl_headers="Authorization: Bearer $access_token"
+            chnl_headers="Authorization: Bearer $access_token\r\n"
             profile=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
-                --header="$chnl_headers" \
-                --header="Cookie: $chnl_cookies" "$profile_url" -qO- || true)
+                --header="xc_host: $xc_host_header" \
+                --header="${chnl_headers:0:-4}" \
+                --header="Cookie: $chnl_cookies" "$profile_url" -qO-) || true
             if [ -z "$profile" ] 
             then
                 Println "$error 无法连接 $chnl_domain, 请重试!\n" && exit 1
@@ -5970,20 +5994,43 @@ TestXtreamCodesLink()
                     Println "$error 没有可用账号"
                 fi
             else
-                create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
-                cmd=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
-                    --header="$chnl_headers" \
-                    --header="Cookie: $chnl_cookies" "$create_link_url" -qO- \
-                    | $JQ_FILE -r '.js.cmd' || true)
-
-                if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                if [ -n "$d_xc_proxy" ] 
                 then
-                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}/${BASH_REMATCH[6]}"
-                elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
-                then
-                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
+                    if [ "${d_xc_proxy: -1}" == "/" ] 
+                    then
+                        chnl_stream_link="${d_xc_proxy:0:-1}"
+                    else
+                        chnl_stream_link=$d_xc_proxy
+                    fi
+                    chnl_stream_link=$(curl -k -s -o /dev/null -w '%{redirect_url}' "$chnl_stream_link" \
+                        -H "xc_host: $xc_host_header" \
+                        -H "User-Agent: $chnl_user_agent" \
+                        -H "${chnl_headers:0:-4}" \
+                        -H "cmd: $chnl_cmd" \
+                        -H "cookie: $chnl_cookies")
+                    if [[ ! $chnl_stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
+                    then
+                        Println "$error $chnl_domain 返回错误, 请重试!\n" && exit 1
+                    fi
+                    printf -v chnl_headers_command '%b' "$chnl_headers"
                 else
-                    Println "$error $chnl_domain 返回错误, 请重试!\n" && exit 1
+                    create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
+                    cmd=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                        --header="xc_host: $xc_host_header" \
+                        --header="${chnl_headers:0:-4}" \
+                        --header="Cookie: $chnl_cookies" "$create_link_url" -qO- \
+                        | $JQ_FILE -r '.js.cmd') || true
+
+                    if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                    then
+                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}/${BASH_REMATCH[6]}"
+                    elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                    then
+                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
+                    else
+                        Println "$error $chnl_domain 返回错误, 请重试!\n" && exit 1
+                    fi
+                    printf -v chnl_headers_command '%b' "$chnl_headers"
                 fi
 
                 if [[ $chnl_stream_links == *" "* ]] 
@@ -5993,10 +6040,8 @@ TestXtreamCodesLink()
                     chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac"
                 fi
 
-                printf -v chnl_headers_command '%b' "$chnl_headers"
-
                 Println "$info 跳过检测频道 [ $chnl_channel_name ] 直接开启 ? [y/N]"
-                read -p "(默认: N): " skip_check_yn
+                read -t 3 -p "(默认: 3 秒后自动检测): " skip_check_yn || true && echo
                 skip_check_yn=${skip_check_yn:-N}
                 if [[ $skip_check_yn == [Yy] ]] 
                 then
@@ -6147,6 +6192,10 @@ StartChannel()
 {
     if [ "${chnl_stream_link:0:23}" == "https://www.youtube.com" ] || [ "${chnl_stream_link:0:19}" == "https://youtube.com" ] 
     then
+        chnl_user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+        chnl_headers=""
+        chnl_cookies=""
+
         if [[ ! -x $(command -v youtube-dl) ]] 
         then
             InstallYoutubeDl
@@ -6155,7 +6204,10 @@ StartChannel()
         Println "$info 解析 youtube 链接..."
         code=${chnl_stream_link#*|}
         chnl_stream_link=${chnl_stream_link%|*}
-        chnl_stream_link=$(youtube-dl -f "$code" -g "$chnl_stream_link")
+        if ! chnl_stream_link=$(youtube-dl -f "$code" -g "$chnl_stream_link")
+        then
+            Println "$error 解析发生错误, 直播链接不存在 ?"
+        fi
     elif [ "${chnl_stream_link:13:12}" == "fengshows.cn" ] 
     then
         chnl_user_agent="FengWatch/3.1.8 (iPhone; iOS 13.5; Scale/2.00)"
@@ -6253,7 +6305,7 @@ StartChannel()
                 chnl_cookies=""
                 stream_link_data=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
                 --header="${chnl_headers:0:-4}" \
-                "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)" -qO- || true)
+                "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)" -qO-) || true
                 if [ -n "$stream_link_data" ] 
                 then
                     stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
@@ -6314,7 +6366,7 @@ StartChannel()
             stream_link_data=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
             --header="${chnl_headers:0:-4}" \
             --post-data "value=$value" \
-            "https://api2.4gtv.tv/Channel/GetChannelUrl3" -qO- || true)
+            "https://api2.4gtv.tv/Channel/GetChannelUrl3" -qO-) || true
             if [ -n "$stream_link_data" ] 
             then
                 break
@@ -6418,6 +6470,8 @@ StartChannel()
         chnl_keyinfo_name chnl_key_name chnl_input_flags chnl_output_flags chnl_channel_name \
         chnl_sync_file chnl_sync_index chnl_sync_pairs chnl_flv_push_link chnl_flv_pull_link
 
+    [ -z "${chnl_headers_command:-}" ] && printf -v chnl_headers_command '%b' "$chnl_headers"
+
     if [ -n "${kind:-}" ] 
     then
         if [ "$chnl_status" == "on" ] 
@@ -6462,6 +6516,8 @@ StartChannel()
             fi
         fi
     fi
+
+    chnl_headers_command=""
 
     Println "$info 频道[ $chnl_channel_name ]已开启 !\n"
 }
@@ -6729,7 +6785,7 @@ ScheduleNowtv()
         nowtv_id=${nowtv_id%%:*}
         SCHEDULE_LINK_NOWTV="https://nowplayer.now.com/tvguide/epglist?channelIdList%5B%5D=$nowtv_id&day=1"
 
-        nowtv_schedule=$(curl --cookie "LANG=zh" -s "$SCHEDULE_LINK_NOWTV" || true)
+        nowtv_schedule=$(curl --cookie "LANG=zh" -s "$SCHEDULE_LINK_NOWTV") || true
 
         if [ -z "${nowtv_schedule:-}" ]
         then
@@ -8101,13 +8157,13 @@ ScheduleTvbs()
 
     for chnl in "${tvbs_chnls[@]}"
     do
-        chn_id=${chnl%%:*}
-        chn_order=${chnl#*:}
-        chnl_name=${chn_order#*:}
-        chn_order=${chn_order%%:*}
+        chnl_id=${chnl%%:*}
+        chnl_order=${chnl#*:}
+        chnl_name=${chnl_order#*:}
+        chnl_order=${chnl_order%%:*}
 
         schedule=""
-        schedule_today=$(wget --no-check-certificate "https://tvbsapp.tvbs.com.tw/pg_api/pg_list/$chn_order/$today/1/$lang" -qO-)
+        schedule_today=$(wget --no-check-certificate "https://tvbsapp.tvbs.com.tw/pg_api/pg_list/$chnl_order/$today/1/$lang" -qO-)
 
         while IFS="=" read -r program_time program_title
         do
@@ -8124,7 +8180,7 @@ ScheduleTvbs()
 
         if [ -n "$schedule" ] 
         then
-            JQ replace "$SCHEDULE_JSON" "$chn_id" "[$schedule]"
+            JQ replace "$SCHEDULE_JSON" "$chnl_id" "[$schedule]"
             Println "$info $chnl_name [$chnl_id] tvbs 节目表更新成功"
         else
             Println "$error $chnl_name [$chnl_id] tvbs 节目表更新失败"
@@ -8373,7 +8429,7 @@ ScheduleAddChannel()
 ScheduleAdd()
 {
     ScheduleView
-    echo -e " $green$((chnls_count+1)).$plain 全部"
+    echo -e " $green$((chnls_count+1)).$plain\r\e[6C全部"
 
     Println "$tip (多个频道用空格分隔 比如: 5 7 9-11)\n"
 
@@ -8498,7 +8554,7 @@ ScheduleDel()
 {
     ScheduleViewCron
 
-    echo -e " $green$((chnls_count+1)).$plain 全部"
+    echo -e " $green$((chnls_count+1)).$plain\r\e[6C全部"
 
     Println "$tip (多个频道用空格分隔 比如: 5 7 9-11)\n"
 
@@ -9176,7 +9232,7 @@ Schedule()
     tvbs_chnls=( 
         "tvbsxw:1:TVBS 新闻"
         "tvbshl:2:TVBS 欢乐台"
-        "tvbs:3:TVBS"
+        "tvbshd:3:TVBS HD"
         "tvbsjc:4:TVBS 精采台"
         "tvbsyz:5:TVBS 亚洲"
     )
@@ -9929,7 +9985,7 @@ TsMenu()
         desc=${ts_channels_desc[i]//\"/}
         desc=${desc//\'/}
         desc=${desc//\\/\'}
-        echo -e "$green$((i+1)).$plain $desc"
+        echo -e "$green$((i+1)).$plain\r\e[6C$desc"
     done
     
     while :; do
@@ -10644,6 +10700,10 @@ MonitorTryAccounts()
     then
         if [ "${#macs[@]}" -gt 0 ] 
         then
+            if [ -z "${d_version:-}" ] 
+            then
+                GetDefault
+            fi
             macs+=("$chnl_mac")
             for mac_address in "${macs[@]}"
             do
@@ -10660,11 +10720,24 @@ MonitorTryAccounts()
                 valid=0
                 if [ "$xc_chnl_found" -eq 0 ] 
                 then
+                    if [ -n "${d_xc_proxy:-}" ] 
+                    then
+                        if [ "${d_xc_proxy: -1}" == "/" ] 
+                        then
+                            server="${d_xc_proxy:0:-1}"
+                        else
+                            server=$d_xc_proxy
+                        fi
+                        xc_host_header=$chnl_domain
+                    else
+                        server="http://$chnl_domain"
+                        xc_host_header=""
+                    fi
+
                     token=""
                     access_token=""
                     profile=""
                     chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
-                    server="http://$chnl_domain"
                     mac=$(UrlencodeUpper "$mac_address")
                     timezone=$(UrlencodeUpper "Europe/Amsterdam")
                     chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
@@ -10673,24 +10746,27 @@ MonitorTryAccounts()
                     genres_url="$server/portal.php?type=itv&action=get_genres&JsHttpRequest=1-xml"
 
                     token=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                        --header="xc_host: $xc_host_header" \
                         --header="Cookie: $chnl_cookies" "$token_url" -qO- \
-                        | $JQ_FILE -r '.js.token' || true)
+                        | $JQ_FILE -r '.js.token') || true
                     if [ -z "$token" ] 
                     then
                         break
                     fi
                     access_token=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                        --header="xc_host: $xc_host_header" \
                         --header="Authorization: Bearer $token" \
                         --header="Cookie: $chnl_cookies" "$token_url" -qO- \
-                        | $JQ_FILE -r '.js.token' || true)
+                        | $JQ_FILE -r '.js.token') || true
                     if [ -z "$access_token" ] 
                     then
                         break
                     fi
-                    chnl_headers="Authorization: Bearer $access_token"
+                    chnl_headers="Authorization: Bearer $access_token\r\n"
                     profile=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
-                        --header="$chnl_headers" \
-                        --header="Cookie: $chnl_cookies" "$profile_url" -qO- || true)
+                        --header="xc_host: $xc_host_header" \
+                        --header="${chnl_headers:0:-4}" \
+                        --header="Cookie: $chnl_cookies" "$profile_url" -qO-) || true
                     if [ -z "$profile" ] 
                     then
                         break
@@ -10701,20 +10777,43 @@ MonitorTryAccounts()
                         continue
                     fi
 
-                    create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
-                    cmd=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
-                        --header="$chnl_headers" \
-                        --header="Cookie: $chnl_cookies" "$create_link_url" -qO- \
-                        | $JQ_FILE -r '.js.cmd' || true)
-
-                    if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                    if [ -n "$d_xc_proxy" ] 
                     then
-                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}/${BASH_REMATCH[6]}"
-                    elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
-                    then
-                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
+                        if [ "${d_xc_proxy: -1}" == "/" ] 
+                        then
+                            chnl_stream_link="${d_xc_proxy:0:-1}"
+                        else
+                            chnl_stream_link=$d_xc_proxy
+                        fi
+                        chnl_stream_link=$(curl -k -s -o /dev/null -w '%{redirect_url}' "$chnl_stream_link" \
+                            -H "xc_host: $xc_host_header" \
+                            -H "User-Agent: $chnl_user_agent" \
+                            -H "${chnl_headers:0:-4}" \
+                            -H "cmd: $chnl_cmd" \
+                            -H "cookie: $chnl_cookies")
+                        if [[ ! $chnl_stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
+                        then
+                            continue
+                        fi
+                        printf -v chnl_headers_command '%b' "$chnl_headers"
                     else
-                        continue
+                        create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
+                        cmd=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                            --header="xc_host: $xc_host_header" \
+                            --header="${chnl_headers:0:-4}" \
+                            --header="Cookie: $chnl_cookies" "$create_link_url" -qO- \
+                            | $JQ_FILE -r '.js.cmd') || true
+
+                        if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                        then
+                            chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}/${BASH_REMATCH[6]}"
+                        elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                        then
+                            chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
+                        else
+                            continue
+                        fi
+                        printf -v chnl_headers_command '%b' "$chnl_headers"
                     fi
 
                     audio=0
@@ -10731,7 +10830,7 @@ MonitorTryAccounts()
                         then
                             video=1
                         fi
-                    done < <($FFPROBE $chnl_proxy_command -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet || true)
+                    done < <($FFPROBE $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies" -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet || true)
 
                     if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ]
                     then
@@ -11338,11 +11437,23 @@ MonitorHlsRestartChannel()
                 fi
             fi
 
+            if [ -n "${d_xc_proxy:-}" ] 
+            then
+                if [ "${d_xc_proxy: -1}" == "/" ] 
+                then
+                    server="${d_xc_proxy:0:-1}"
+                else
+                    server=$d_xc_proxy
+                fi
+                xc_host_header=$chnl_domain
+            else
+                server="http://$chnl_domain"
+                xc_host_header=""
+            fi
             token=""
             access_token=""
             profile=""
             chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
-            server="http://$chnl_domain"
             mac=$(UrlencodeUpper "$chnl_mac")
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
@@ -11351,8 +11462,9 @@ MonitorHlsRestartChannel()
             genres_url="$server/portal.php?type=itv&action=get_genres&JsHttpRequest=1-xml"
 
             token=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                --header="xc_host: $xc_host_header" \
                 --header="Cookie: $chnl_cookies" "$token_url" -qO- \
-                | $JQ_FILE -r '.js.token' || true)
+                | $JQ_FILE -r '.js.token') || true
             if [ -z "$token" ] 
             then
                 if [ "$to_try" -eq 1 ] 
@@ -11380,9 +11492,10 @@ MonitorHlsRestartChannel()
                 fi
             fi
             access_token=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                --header="xc_host: $xc_host_header" \
                 --header="Authorization: Bearer $token" \
                 --header="Cookie: $chnl_cookies" "$token_url" -qO- \
-                | $JQ_FILE -r '.js.token' || true)
+                | $JQ_FILE -r '.js.token') || true
             if [ -z "$access_token" ] 
             then
                 if [ "$to_try" -eq 1 ] 
@@ -11409,10 +11522,11 @@ MonitorHlsRestartChannel()
                     continue
                 fi
             fi
-            chnl_headers="Authorization: Bearer $access_token"
+            chnl_headers="Authorization: Bearer $access_token\r\n"
             profile=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
-                --header="$chnl_headers" \
-                --header="Cookie: $chnl_cookies" "$profile_url" -qO- || true)
+                --header="xc_host: $xc_host_header" \
+                --header="${chnl_headers:0:-4}" \
+                --header="Cookie: $chnl_cookies" "$profile_url" -qO-) || true
             if [ -z "$profile" ] 
             then
                 if [ "$to_try" -eq 1 ] 
@@ -11466,28 +11580,38 @@ MonitorHlsRestartChannel()
                     continue
                 fi
             else
-                create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
-                cmd=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
-                    --header="$chnl_headers" \
-                    --header="Cookie: $chnl_cookies" "$create_link_url" -qO- \
-                    | $JQ_FILE -r '.js.cmd' || true)
-
-                if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                if [ -n "$d_xc_proxy" ] 
                 then
-                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}/${BASH_REMATCH[6]}"
-                elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
-                then
-                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
-                else
-                    if [ "$to_try" -eq 1 ] 
+                    if [ "${d_xc_proxy: -1}" == "/" ] 
                     then
-                        domains_tried+=("$chnl_domain")
-                        try_success=0
-                        MonitorTryAccounts
-                        if [ "$try_success" -eq 1 ] 
+                        chnl_stream_link="${d_xc_proxy:0:-1}"
+                    else
+                        chnl_stream_link=$d_xc_proxy
+                    fi
+                    chnl_stream_link=$(curl -k -s -o /dev/null -w '%{redirect_url}' "$chnl_stream_link" \
+                        -H "xc_host: $xc_host_header" \
+                        -H "User-Agent: $chnl_user_agent" \
+                        -H "${chnl_headers:0:-4}" \
+                        -H "cmd: $chnl_cmd" \
+                        -H "cookie: $chnl_cookies")
+                    if [[ ! $chnl_stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
+                    then
+                        if [ "$to_try" -eq 1 ] 
                         then
-                            MonitorHlsRestartSuccess
-                            break
+                            domains_tried+=("$chnl_domain")
+                            try_success=0
+                            MonitorTryAccounts
+                            if [ "$try_success" -eq 1 ] 
+                            then
+                                MonitorHlsRestartSuccess
+                                break
+                            elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                            then
+                                MonitorHlsRestartFail
+                                break
+                            else
+                                continue
+                            fi
                         elif [[ $restart_i -eq $((restart_nums-1)) ]] 
                         then
                             MonitorHlsRestartFail
@@ -11495,13 +11619,48 @@ MonitorHlsRestartChannel()
                         else
                             continue
                         fi
-                    elif [[ $restart_i -eq $((restart_nums-1)) ]] 
-                    then
-                        MonitorHlsRestartFail
-                        break
-                    else
-                        continue
                     fi
+                    printf -v chnl_headers_command '%b' "$chnl_headers"
+                else
+                    create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
+                    cmd=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                        --header="xc_host: $xc_host_header" \
+                        --header="${chnl_headers:0:-4}" \
+                        --header="Cookie: $chnl_cookies" "$create_link_url" -qO- \
+                        | $JQ_FILE -r '.js.cmd') || true
+
+                    if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                    then
+                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}/${BASH_REMATCH[6]}"
+                    elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                    then
+                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
+                    else
+                        if [ "$to_try" -eq 1 ] 
+                        then
+                            domains_tried+=("$chnl_domain")
+                            try_success=0
+                            MonitorTryAccounts
+                            if [ "$try_success" -eq 1 ] 
+                            then
+                                MonitorHlsRestartSuccess
+                                break
+                            elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                            then
+                                MonitorHlsRestartFail
+                                break
+                            else
+                                continue
+                            fi
+                        elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                        then
+                            MonitorHlsRestartFail
+                            break
+                        else
+                            continue
+                        fi
+                    fi
+                    printf -v chnl_headers_command '%b' "$chnl_headers"
                 fi
 
                 if [[ $chnl_stream_links == *" "* ]] 
@@ -11829,11 +11988,24 @@ MonitorFlvRestartChannel()
                 fi
             fi
 
+            if [ -n "${d_xc_proxy:-}" ] 
+            then
+                if [ "${d_xc_proxy: -1}" == "/" ] 
+                then
+                    server="${d_xc_proxy:0:-1}"
+                else
+                    server=$d_xc_proxy
+                fi
+                xc_host_header=$chnl_domain
+            else
+                server="http://$chnl_domain"
+                xc_host_header=""
+            fi
+
             token=""
             access_token=""
             profile=""
             chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
-            server="http://$chnl_domain"
             mac=$(UrlencodeUpper "$chnl_mac")
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
@@ -11842,8 +12014,9 @@ MonitorFlvRestartChannel()
             genres_url="$server/portal.php?type=itv&action=get_genres&JsHttpRequest=1-xml"
 
             token=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                --header="xc_host: $xc_host_header" \
                 --header="Cookie: $chnl_cookies" "$token_url" -qO- \
-                | $JQ_FILE -r '.js.token' || true)
+                | $JQ_FILE -r '.js.token') || true
             if [ -z "$token" ] 
             then
                 if [ "$to_try" -eq 1 ] 
@@ -11871,9 +12044,10 @@ MonitorFlvRestartChannel()
                 fi
             fi
             access_token=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                --header="xc_host: $xc_host_header" \
                 --header="Authorization: Bearer $token" \
                 --header="Cookie: $chnl_cookies" "$token_url" -qO- \
-                | $JQ_FILE -r '.js.token' || true)
+                | $JQ_FILE -r '.js.token') || true
             if [ -z "$access_token" ] 
             then
                 if [ "$to_try" -eq 1 ] 
@@ -11900,10 +12074,11 @@ MonitorFlvRestartChannel()
                     continue
                 fi
             fi
-            chnl_headers="Authorization: Bearer $access_token"
+            chnl_headers="Authorization: Bearer $access_token\r\n"
             profile=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
-                --header="$chnl_headers" \
-                --header="Cookie: $chnl_cookies" "$profile_url" -qO- || true)
+                --header="xc_host: $xc_host_header" \
+                --header="${chnl_headers:0:-4}" \
+                --header="Cookie: $chnl_cookies" "$profile_url" -qO-) || true
             if [ -z "$profile" ] 
             then
                 if [ "$to_try" -eq 1 ] 
@@ -11957,28 +12132,38 @@ MonitorFlvRestartChannel()
                     continue
                 fi
             else
-                create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
-                cmd=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
-                    --header="$chnl_headers" \
-                    --header="Cookie: $chnl_cookies" "$create_link_url" -qO- \
-                    | $JQ_FILE -r '.js.cmd' || true)
-
-                if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                if [ -n "$d_xc_proxy" ] 
                 then
-                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}/${BASH_REMATCH[6]}"
-                elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
-                then
-                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
-                else
-                    if [ "$to_try" -eq 1 ] 
+                    if [ "${d_xc_proxy: -1}" == "/" ] 
                     then
-                        domains_tried+=("$chnl_domain")
-                        try_success=0
-                        MonitorTryAccounts
-                        if [ "$try_success" -eq 1 ] 
+                        chnl_stream_link="${d_xc_proxy:0:-1}"
+                    else
+                        chnl_stream_link=$d_xc_proxy
+                    fi
+                    chnl_stream_link=$(curl -k -s -o /dev/null -w '%{redirect_url}' "$chnl_stream_link" \
+                        -H "xc_host: $xc_host_header" \
+                        -H "User-Agent: $chnl_user_agent" \
+                        -H "${chnl_headers:0:-4}" \
+                        -H "cmd: $chnl_cmd" \
+                        -H "cookie: $chnl_cookies")
+                    if [[ ! $chnl_stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
+                    then
+                        if [ "$to_try" -eq 1 ] 
                         then
-                            MonitorFlvRestartSuccess
-                            break
+                            domains_tried+=("$chnl_domain")
+                            try_success=0
+                            MonitorTryAccounts
+                            if [ "$try_success" -eq 1 ] 
+                            then
+                                MonitorFlvRestartSuccess
+                                break
+                            elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                            then
+                                MonitorFlvRestartFail
+                                break
+                            else
+                                continue
+                            fi
                         elif [[ $restart_i -eq $((restart_nums-1)) ]] 
                         then
                             MonitorFlvRestartFail
@@ -11986,13 +12171,48 @@ MonitorFlvRestartChannel()
                         else
                             continue
                         fi
-                    elif [[ $restart_i -eq $((restart_nums-1)) ]] 
-                    then
-                        MonitorFlvRestartFail
-                        break
-                    else
-                        continue
                     fi
+                    printf -v chnl_headers_command '%b' "$chnl_headers"
+                else
+                    create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
+                    cmd=$(wget --timeout=10 --tries=3 --user-agent="$chnl_user_agent" --no-check-certificate \
+                        --header="xc_host: $xc_host_header" \
+                        --header="${chnl_headers:0:-4}" \
+                        --header="Cookie: $chnl_cookies" "$create_link_url" -qO- \
+                        | $JQ_FILE -r '.js.cmd') || true
+
+                    if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                    then
+                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}/${BASH_REMATCH[6]}"
+                    elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                    then
+                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
+                    else
+                        if [ "$to_try" -eq 1 ] 
+                        then
+                            domains_tried+=("$chnl_domain")
+                            try_success=0
+                            MonitorTryAccounts
+                            if [ "$try_success" -eq 1 ] 
+                            then
+                                MonitorFlvRestartSuccess
+                                break
+                            elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                            then
+                                MonitorFlvRestartFail
+                                break
+                            else
+                                continue
+                            fi
+                        elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                        then
+                            MonitorFlvRestartFail
+                            break
+                        else
+                            continue
+                        fi
+                    fi
+                    printf -v chnl_headers_command '%b' "$chnl_headers"
                 fi
 
                 if [[ $chnl_stream_links == *" "* ]] 
@@ -12377,7 +12597,7 @@ Monitor()
             if [ -n "${hls_max_seg_size:-}" ] 
             then
                 
-                largest_file=$(find "$LIVE_ROOT" $exclude_command -type f -name "*.ts" -printf "%s %p\n" 2>> "$MONITOR_LOG" | sort -n | tail -1 || true)
+                largest_file=$(find "$LIVE_ROOT" $exclude_command -type f -name "*.ts" -printf "%s %p\n" 2>> "$MONITOR_LOG" | sort -n | tail -1) || true
                 if [ -n "${largest_file:-}" ] 
                 then
                     largest_file_size=${largest_file%% *}
@@ -12780,8 +13000,8 @@ MonitorSet()
         done
 
         Println "$result"
-        Println "  $green$((flv_count+1)).$plain 全部"
-        Println "  $green$((flv_count+2)).$plain 不设置\n"
+        Println "  $green$((flv_count+1)).$plain\r\e[6C全部"
+        Println "  $green$((flv_count+2)).$plain\r\e[6C不设置\n"
         while read -p "(默认: 不设置): " flv_nums
         do
             if [ -z "$flv_nums" ] || [ "$flv_nums" == $((flv_count+2)) ] 
@@ -12933,8 +13153,8 @@ MonitorSet()
     done
 
     Println "$result"
-    Println "  $green$((monitor_count+1)).$plain 全部"
-    Println "  $green$((monitor_count+2)).$plain 不设置\n"
+    Println "  $green$((monitor_count+1)).$plain\r\e[6C全部"
+    Println "  $green$((monitor_count+2)).$plain\r\e[6C不设置\n"
     
     while read -p "(默认: 不设置): " hls_nums
     do
@@ -13260,12 +13480,12 @@ UpdateNginx()
 
     Println "$info 更新 $nginx_name 脚本...\n"
 
-    sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1 || true)
+    sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
 
     if [ -z "$sh_new_ver" ] 
     then
         Println "$error 无法连接到 Github ! 尝试备用链接...\n"
-        sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1 || true)
+        sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
         [ -z "$sh_new_ver" ] && Println "$error 无法连接备用链接!\n" && exit 1
     fi
 
@@ -13409,6 +13629,7 @@ RestartNginx()
     else
         $NGINX_FILE
     fi
+    Println "$info $nginx_name 重启成功\n"
 }
 
 AddXtreamCodesAccount()
@@ -13424,7 +13645,7 @@ AddXtreamCodesAccount()
         username=${username%%&*}
         password=${xtream_codes_input#*password=}
         password=${password%%&*}
-        ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+        ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
     elif [[ $xtream_codes_input =~ ^http://([^/]+)/([^/]+)/([^/]+)/ ]] 
     then
         if [ "${BASH_REMATCH[2]}" == "live" ] 
@@ -13442,7 +13663,7 @@ AddXtreamCodesAccount()
             username=${BASH_REMATCH[2]}
             password=${BASH_REMATCH[3]}
         fi
-        ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+        ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
     else
         Println "$error 输入错误 !\n" && exit 1
     fi
@@ -13491,7 +13712,7 @@ VerifyXtreamCodesMac()
         to_continue=1
         return 0
     fi
-    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
     if [ -z "$ip" ] 
     then
         to_continue=1
@@ -13513,15 +13734,33 @@ VerifyXtreamCodesMac()
     token=""
     access_token=""
     profile=""
-    server="http://$domain"
+    if [ -z "${d_version:-}" ] 
+    then
+        GetDefault
+    fi
+
+    if [ -n "${d_xc_proxy:-}" ] 
+    then
+        if [ "${d_xc_proxy: -1}" == "/" ] 
+        then
+            server="${d_xc_proxy:0:-1}"
+        else
+            server=$d_xc_proxy
+        fi
+        xc_host_header=$domain
+    else
+        server="http://$domain"
+        xc_host_header=""
+    fi
     mac=$(UrlencodeUpper "$mac_address")
     timezone=$(UrlencodeUpper "Europe/Amsterdam")
     token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
     profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
 
     token=$(wget --timeout=10 --tries=2 --user-agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)" --no-check-certificate \
+        --header="xc_host: $xc_host_header" \
         --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" -qO- \
-        | $JQ_FILE -r '.js.token' || true)
+        | $JQ_FILE -r '.js.token') || true
     if [ -z "$token" ] 
     then
         Println "$error 无法连接 $domain"
@@ -13531,9 +13770,10 @@ VerifyXtreamCodesMac()
         return 0
     fi
     access_token=$(wget --timeout=10 --tries=1 --user-agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)" --no-check-certificate \
+        --header="xc_host: $xc_host_header" \
         --header="Authorization: Bearer $token" \
         --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" -qO- \
-        | $JQ_FILE -r '.js.token' || true)
+        | $JQ_FILE -r '.js.token') || true
     if [ -z "$access_token" ] 
     then
         Println "$error 无法连接 $domain"
@@ -13542,8 +13782,9 @@ VerifyXtreamCodesMac()
         return 0
     fi
     profile=$(wget --timeout=10 --tries=1 --user-agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)" --no-check-certificate \
+        --header="xc_host: $xc_host_header" \
         --header="Authorization: Bearer $access_token" \
-        --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url" -qO- || true)
+        --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url" -qO-) || true
     if [ -z "$profile" ] 
     then
         Println "$error 无法连接 $domain"
@@ -13596,7 +13837,7 @@ ListXtreamCodes()
             username=${username%%&*}
             password=${line#*password=}
             password=${password%%&*}
-            ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+            ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
             [ -z "$ip" ] && continue
             account="$username:$password"
         elif [[ $line =~ http://([^/]+)/([^/]+)/([^/]+)/ ]] 
@@ -13616,7 +13857,7 @@ ListXtreamCodes()
                 username=${BASH_REMATCH[2]}
                 password=${BASH_REMATCH[3]}
             fi
-            ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+            ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
             [ -z "$ip" ] && continue
             account="$username:$password"
         elif [[ ! $line =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+ ]] 
@@ -13634,7 +13875,7 @@ ListXtreamCodes()
             if [ -n "${stb_domain:-}" ] && [[ $line =~ (([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})) ]]
             then
                 domain=$stb_domain
-                VerifyXtreamCodesMac
+                VerifyXtreamCodesMac 2> /dev/null
                 if [ "$to_continue" -eq 1 ] 
                 then
                     continue
@@ -13646,7 +13887,7 @@ ListXtreamCodes()
         then
             domain=${line#* }
             domain=${domain%% *}
-            VerifyXtreamCodesMac
+            VerifyXtreamCodesMac 2> /dev/null
             if [ "$to_continue" -eq 1 ] 
             then
                 continue
@@ -14224,7 +14465,7 @@ ViewXtreamCodesMac()
                 break
             fi
         done
-        Println "mac 地址: \n\n$green$((i+1)).$plain ${macs[0]} $using\n"
+        Println "mac 地址: \n\n$green$((i+1)).$plain\r\e[6C${macs[0]} $using\n"
     fi
 }
 
@@ -14251,7 +14492,7 @@ SearchXtreamCodesChnls()
             then
                 ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=$i&JsHttpRequest=1-xml"
                 ordered_list_page=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
-                    --header="$headers" \
+                    --header="${headers:0:-4}" \
                     --header="Cookie: $cookies" "$ordered_list_url" -qO-)
             fi
             ordered_list_pages[page_index]=$ordered_list_page
@@ -14404,10 +14645,23 @@ ViewXtreamCodesChnls()
         access_token=""
         profile=""
         user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
-        server="http://$domain"
         mac=$(UrlencodeUpper "$mac_address")
         timezone=$(UrlencodeUpper "Europe/Amsterdam")
+        GetDefault
         cookies="mac=$mac; stb_lang=en; timezone=$timezone"
+        if [ -n "${d_xc_proxy:-}" ] 
+        then
+            if [ "${d_xc_proxy: -1}" == "/" ] 
+            then
+                server="${d_xc_proxy:0:-1}"
+            else
+                server=$d_xc_proxy
+            fi
+            xc_host_header=$domain
+        else
+            server="http://$domain"
+            xc_host_header=""
+        fi
         token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
         profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
         genres_url="$server/portal.php?type=itv&action=get_genres&JsHttpRequest=1-xml"
@@ -14415,24 +14669,24 @@ ViewXtreamCodesChnls()
         while true 
         do
             token=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
-                --header="Cookie: $cookies" "$token_url" -qO- \
-                | $JQ_FILE -r '.js.token' || true)
+                --header="xc_host: $xc_host_header" --header="Cookie: $cookies" "$token_url" -qO- \
+                | $JQ_FILE -r '.js.token') || true
             if [ -z "$token" ] 
             then
                 Println "$error 无法连接 $domain, 请重试!\n" && exit 1
             fi
             access_token=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
-                --header="Authorization: Bearer $token" \
+                --header="xc_host: $xc_host_header" --header="Authorization: Bearer $token" \
                 --header="Cookie: $cookies" "$token_url" -qO- \
-                | $JQ_FILE -r '.js.token' || true)
+                | $JQ_FILE -r '.js.token') || true
             if [ -z "$access_token" ] 
             then
                 Println "$error 无法连接 $domain, 请重试!\n" && exit 1
             fi
-            headers="Authorization: Bearer $access_token"
+            headers="Authorization: Bearer $access_token\r\n"
             profile=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
-                --header="$headers" \
-                --header="Cookie: $cookies" "$profile_url" -qO- || true)
+                --header="xc_host: $xc_host_header" --header="${headers:0:-4}" \
+                --header="Cookie: $cookies" "$profile_url" -qO-) || true
             if [ -z "$profile" ] 
             then
                 Println "$error 无法连接 $domain, 请重试!\n" && exit 1
@@ -14456,7 +14710,7 @@ ViewXtreamCodesChnls()
                 genres_id+=("$map_id")
                 genres_list="$genres_list $green$genres_count.$plain\r\e[6C$map_title\n\n"
             done < <(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
-                --header="$headers" \
+                --header="xc_host: $xc_host_header" --header="${headers:0:-4}" \
                 --header="Cookie: $cookies" "$genres_url" -qO- | $JQ_FILE '.js | to_entries | map("id: \(.value.id), title: \(.value.title)") | .[]')
 
             if [ -n "$genres_list" ] 
@@ -14505,7 +14759,7 @@ ViewXtreamCodesChnls()
                     else
                         ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=1&JsHttpRequest=1-xml"
                         ordered_list_page=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
-                            --header="$headers" \
+                            --header="xc_host: $xc_host_header" --header="${headers:0:-4}" \
                             --header="Cookie: $cookies" "$ordered_list_url" -qO-)
                         [ -z "$ordered_list_page" ] && return_err=1 && continue 2
                         genres_list_pages[genres_index]="$ordered_list_page"
@@ -14547,7 +14801,7 @@ ViewXtreamCodesChnls()
                             then
                                 ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=$page&JsHttpRequest=1-xml"
                                 ordered_list_page=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
-                                    --header="$headers" \
+                                    --header="xc_host: $xc_host_header" --header="${headers:0:-4}" \
                                     --header="Cookie: $cookies" "$ordered_list_url" -qO-)
                             fi
                             ordered_list_pages[page_index]=$ordered_list_page
@@ -14661,28 +14915,58 @@ ViewXtreamCodesChnls()
                             esac
                         done
 
-                        create_link_url="$server/portal.php?type=itv&action=create_link&cmd=${xc_chnls_cmd[xc_chnls_index]}&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
-
-                        cmd=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
-                            --header="$headers" \
-                            --header="Cookie: $cookies" "$create_link_url" -qO- \
-                            | $JQ_FILE -r '.js.cmd')
-
-                        if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
+                        if [ -n "$d_xc_proxy" ] 
                         then
-                            stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
-                        elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
-                        then
-                            stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                            if [ "${d_xc_proxy: -1}" == "/" ] 
+                            then
+                                stream_link="${d_xc_proxy:0:-1}"
+                            else
+                                stream_link=$d_xc_proxy
+                            fi
+                            stream_link=$(curl -k -s -o /dev/null -w '%{redirect_url}' "$stream_link" \
+                                -H "xc_host: $xc_host_header" \
+                                -H "User-Agent: $user_agent" \
+                                -H "${headers:0:-4}" \
+                                -H "cmd: ${xc_chnls_cmd[xc_chnls_index]}" \
+                                -H "cookie: $cookies")
+                            if [[ ! $stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
+                            then
+                                Println "$error 返回错误, 请重试"
+                                continue
+                            fi
+                            #curl -k -L -o - "$stream_link" \
+                            #    -H "xc_host: ${BASH_REMATCH[2]}" \
+                            #    -H "redirect: ${BASH_REMATCH[3]}" \
+                            #    -H "User-Agent: $user_agent" \
+                            #    -H "${headers:0:-4}" \
+                            #    -H "cookie: $cookies"
+                            Println "$green${xc_chnls_name[xc_chnls_index]}:$plain $stream_link\n"
+                            #printf -v headers_command '%b' "xc_host: ${BASH_REMATCH[2]}\r\nredirect: ${BASH_REMATCH[3]}\r\n$headers"
+                            printf -v headers_command '%b' "$headers"
                         else
-                            Println "$error 返回错误, 请重试"
-                            continue
-                        fi
+                            create_link_url="$server/portal.php?type=itv&action=create_link&cmd=${xc_chnls_cmd[xc_chnls_index]}&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
 
-                        stream_link=${stream_link// /}
-                        Println "$green${xc_chnls_name[xc_chnls_index]}:$plain $stream_link\n"
+                            cmd=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
+                                --header="${headers:0:-4}" \
+                                --header="Cookie: $cookies" "$create_link_url" -qO- \
+                                | $JQ_FILE -r '.js.cmd')
+
+                            if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
+                            then
+                                stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                            elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                            then
+                                stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                            else
+                                Println "$error 返回错误, 请重试"
+                                continue
+                            fi
+                            stream_link=${stream_link// /}
+                            Println "$green${xc_chnls_name[xc_chnls_index]}:$plain $stream_link\n"
+                            printf -v headers_command '%b' "$headers"
+                        fi
                         if $FFPROBE -i "$stream_link" -user_agent "$user_agent" \
-                            -headers "$headers"$'\r\n' \
+                            -headers "$headers_command" \
                             -cookies "$cookies" -hide_banner 
                         then
                             Println "是否添加此频道？[y/N]"
@@ -14741,16 +15025,34 @@ AddXtreamCodesMac()
 
     domain=${server#*http://}
     domain=${domain%%/*}
-    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
 
     [ -z "${ip:-}" ] && Println "$error 无法解析域名 !\n" && exit 1
-    server="http://$domain"
 
     echo && read -p "请输入 mac 地址(多个地址空格分隔): " mac_address
     [ -z "$mac_address" ] && Println "已取消...\n" && exit 1
 
     IFS=" " read -ra macs <<< "$mac_address"
     Println "$info 验证中..."
+
+    if [ -z "${d_version:-}" ] 
+    then
+        GetDefault
+    fi
+
+    if [ -n "${d_xc_proxy:-}" ] 
+    then
+        if [ "${d_xc_proxy: -1}" == "/" ] 
+        then
+            server="${d_xc_proxy:0:-1}"
+        else
+            server=$d_xc_proxy
+        fi
+        xc_host_header=$domain
+    else
+        server="http://$domain"
+        xc_host_header=""
+    fi
 
     add_mac_success=0
     for mac_address in "${macs[@]}"
@@ -14764,8 +15066,9 @@ AddXtreamCodesMac()
         profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
 
         token=$(wget --timeout=10 --tries=3 --user-agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)" --no-check-certificate \
+            --header="xc_host: $xc_host_header" \
             --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" -qO- \
-            | $JQ_FILE -r '.js.token' || true)
+            | $JQ_FILE -r '.js.token') || true
         if [ -z "$token" ] 
         then
             if [ "$add_mac_success" -eq 0 ] 
@@ -14777,9 +15080,10 @@ AddXtreamCodesMac()
             fi
         fi
         access_token=$(wget --timeout=10 --tries=3 --user-agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)" --no-check-certificate \
+            --header="xc_host: $xc_host_header" \
             --header="Authorization: Bearer $token" \
             --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" -qO- \
-            | $JQ_FILE -r '.js.token' || true)
+            | $JQ_FILE -r '.js.token') || true
         if [ -z "$access_token" ] 
         then
             if [ "$add_mac_success" -eq 0 ] 
@@ -14791,8 +15095,9 @@ AddXtreamCodesMac()
             fi
         fi
         profile=$(wget --timeout=10 --tries=3 --user-agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)" --no-check-certificate \
+            --header="xc_host: $xc_host_header" \
             --header="Authorization: Bearer $access_token" \
-            --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url" -qO- || true)
+            --header="Cookie: mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url" -qO-) || true
         if [ -z "$profile" ] 
         then
             if [ "$add_mac_success" -eq 0 ] 
@@ -14817,7 +15122,7 @@ AddXtreamCodesMac()
 
 GetServerIp()
 {
-    ip=$(dig +short myip.opendns.com @resolver1.opendns.com || true)
+    ip=$(dig +short myip.opendns.com @resolver1.opendns.com) || true
     [ -z "$ip" ] && ip=$(curl --silent whatismyip.akamai.com)
     [ -z "$ip" ] && ip=$(curl --silent ipv4.icanhazip.com)
     [ -z "$ip" ] && ip=$(curl --silent api.ip.sb/ip)
@@ -15162,6 +15467,7 @@ rtmp {
 NginxConfigCorsHost()
 {
     Println "$info 配置 cors..."
+    hosts=()
     cors_domains=""
     if ls -A "$nginx_prefix/conf/sites_available/"* > /dev/null 2>&1
     then
@@ -15171,6 +15477,7 @@ NginxConfigCorsHost()
             domain=${domain%.conf}
             if [[ $domain =~ ^[A-Za-z0-9.]*$ ]] 
             then
+                hosts+=("$domain")
                 cors_domains="$cors_domains
         \"~http://$domain\" http://$domain;
         \"~https://$domain\" https://$domain;"
@@ -15221,6 +15528,21 @@ NginxConfigCorsHost()
             fi
             if [ "$found" -eq 1 ] 
             then
+                if [[ $line =~ http([^\"]+) ]] 
+                then
+                    host_found=0
+                    for host in "${hosts[@]}"
+                    do
+                        if [ "$host" == "${BASH_REMATCH[1]#*//}" ] 
+                        then
+                            host_found=1
+                            break
+                        fi
+                    done
+
+                    [[ $host_found -eq 0 ]] && cors_domains="$cors_domains
+        \"~http${BASH_REMATCH[1]}\" http${BASH_REMATCH[1]};"
+                fi
                 continue
             fi
             [ -n "$conf" ] && conf="$conf\n"
@@ -15346,7 +15668,7 @@ NginxListDomain()
                 else
                     nodejs_status="$red未配置$plain"
                 fi
-                nginx_domain_list=$nginx_domain_list"$green$nginx_domain_servers_count.$plain https 端口: $green${https_ports:-无}$plain, http 端口: $green${http_ports:-无}$plain, flv: $flv_status, nodejs: $nodejs_status\n\n"
+                nginx_domain_list=$nginx_domain_list" $green$nginx_domain_servers_count.$plain https 端口: $green${https_ports:-无}$plain, http 端口: $green${http_ports:-无}$plain, flv: $flv_status, nodejs: $nodejs_status\n\n"
             fi
         fi
 
@@ -17135,7 +17457,8 @@ UpdateSelf()
 
         d_input_flags=${d_input_flags//-timeout 2000000000/-rw_timeout 10000000}
         default=$(
-        $JQ_FILE -n --arg proxy "$d_proxy" --arg user_agent "$d_user_agent" \
+        $JQ_FILE -n --arg proxy "$d_proxy" --arg xc_proxy "$d_xc_proxy" \
+            --arg user_agent "$d_user_agent" \
             --arg headers "$d_headers" --arg cookies "$d_cookies" \
             --arg playlist_name "$d_playlist_name" --arg seg_dir_name "$d_seg_dir_name" \
             --arg seg_name "$d_seg_name" --arg seg_length "$d_seg_length" \
@@ -17161,6 +17484,7 @@ UpdateSelf()
             --arg recheck_period "$d_recheck_period" --arg version "$sh_ver" \
             '{
                 proxy: $proxy,
+                xc_proxy: $xc_proxy,
                 user_agent: $user_agent,
                 headers: $headers,
                 cookies: $cookies,
@@ -20072,6 +20396,8 @@ CheckShFile()
             Println "$error 无法连接备用链接!\n" && exit 1
         fi
     fi
+
+    [ ! -e "$IBM_FILE" ] && ln -s "$SH_FILE" "$IBM_FILE"
     [ ! -e "$CF_FILE" ] && ln -s "$SH_FILE" "$CF_FILE"
     [ ! -e "$OR_FILE" ] && ln -s "$SH_FILE" "$OR_FILE"
     [ ! -e "$NX_FILE" ] && ln -s "$SH_FILE" "$NX_FILE"
@@ -20144,23 +20470,66 @@ AddCloudflareHost()
 SetCloudflareUserEmail()
 {
     Println "请输入用户邮箱"
-    read -p "(默认: 取消): " cf_user_email
-    [ -z "$cf_user_email" ] && Println "已取消...\n" && exit 1
+    while read -p "(默认: 随机): " cf_user_email 
+    do
+        [ -z "$cf_user_email" ] && cf_user_email="$(RandStr)_$(printf '%(%s)T')@gmail.com"
+        if [[ $cf_user_email =~ ^[A-Za-z0-9](([_\.\-]?[a-zA-Z0-9]+)*)@([A-Za-z0-9]+)(([\.\-]?[a-zA-Z0-9]+)*)\.([A-Za-z]{2,})$ ]] 
+        then
+            break
+        else
+            Println "$error 邮箱格式错误, 请重新输入\n"
+        fi
+    done
     Println "	用户邮箱: $green $cf_user_email $plain\n"
 }
 
 SetCloudflareUserPass()
 {
-    Println "请输入用户密码"
-    read -p "(默认: 取消): " cf_user_pass
-    [ -z "$cf_user_pass" ] && Println "已取消...\n" && exit 1
+    Println "输入用户密码"
+    while read -p "(默认: 随机): " cf_user_pass 
+    do
+        [ -z "$cf_user_pass" ] && cf_user_pass=$(RandStr)
+        if [[ ${#cf_user_pass} -ge 8 ]] 
+        then
+            break
+        else
+            Println "$error 账号密码至少 8 位\n"
+        fi
+    done
     Println "	用户密码: $green $cf_user_pass $plain\n"
+}
+
+SetCloudflareUserToken()
+{
+    Println "请输入用户 Token"
+    read -p "(默认: 不设置): " cf_user_token
+    if [ -n "$cf_user_token" ] 
+    then
+        if [[ $(curl -s -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+            -H "Authorization: Bearer $cf_user_token" \
+            -H "Content-Type:application/json" | $JQ_FILE -r '.success') == "false" ]]
+        then
+            Println "$error Token 验证失败\n"
+            exit 1
+        fi
+    fi
+    Println "	用户 Token: $green ${cf_user_token:-不设置} $plain\n"
+}
+
+SetCloudflareUserKey()
+{
+    Println "请输入用户 Global API KEY"
+    echo -e "$tip 一般不需要设置\n"
+    read -p "(默认: 不设置): " cf_user_key
+    Println "	用户 Key: $green ${cf_user_key:-不设置} $plain\n"
 }
 
 AddCloudflareUser()
 {
     SetCloudflareUserEmail
     SetCloudflareUserPass
+    SetCloudflareUserToken
+    SetCloudflareUserKey
 
     if [ ! -s "$CF_CONFIG" ] 
     then
@@ -20169,9 +20538,12 @@ AddCloudflareUser()
 
     new_user=$(
     $JQ_FILE -n --arg email "$cf_user_email" --arg pass "$cf_user_pass" \
+        --arg token "$cf_user_token" --arg key "$cf_user_key" \
         '{
             email: $email,
-            pass: $pass
+            pass: $pass,
+            token: $token,
+            key: $key
         }'
     )
 
@@ -20253,21 +20625,30 @@ GetCloudflareUsers()
     cf_users_count=0
     cf_users_email=()
     cf_users_pass=()
-    while IFS=" " read -r email pass
+    cf_users_token=()
+    cf_users_key=()
+    while IFS="^" read -r email pass token key
     do
         cf_users_count=$((cf_users_count+1))
         email=${email#\"}
         cf_users_email+=("$email")
-        pass=${pass%\"}
         cf_users_pass+=("$pass")
+        cf_users_token+=("$token")
+        key=${key%\"}
+        cf_users_key+=("$key")
 
-        cf_users_list="$cf_users_list $green$cf_users_count.$plain\r\e[6C邮箱: $green$email$plain  密码: $green$pass$plain\n\n"
-    done < <($JQ_FILE '.users[]|[.email,.pass]|join(" ")' "$CF_CONFIG")
+        cf_users_list="$cf_users_list $green$cf_users_count.$plain\r\e[6C邮箱: $green$email$plain  密码: $green$pass$plain\n\e[6CToken: $green${token:-无}$plain\n\e[6CKey: $green${key:-无}$plain\n\n"
+    done < <($JQ_FILE '.users[]|[.email,.pass,.token,.key]|join("^")' "$CF_CONFIG")
     return 0
 }
 
 ListCloudflareUsers()
 {
+    if [ ! -s "$CF_CONFIG" ] 
+    then
+        Println "$error 请先添加用户\n" && exit 1
+    fi
+
     GetCloudflareUsers
 
     if [ "$cf_users_count" -gt 0 ] 
@@ -20359,11 +20740,10 @@ AddCloudflareZone()
 
         result=${result#\"}
         msg=${msg%\"}
-        if [ -n "$err_code" ] && [ "$err_code" -eq 117 ] 
+        if [ "$result" == "error" ] 
         then
-            continue
+            Println "$error $msg"
         fi
-        break
     done
 
     Println "请输入根域名"
@@ -20374,7 +20754,7 @@ AddCloudflareZone()
         then
             Println "已取消...\n"
             exit 1
-        elif [[ $cf_zone_name =~ ^([^.]+).([^.]+)$ ]] 
+        elif [[ $cf_zone_name =~ ^([a-zA-Z0-9][\-a-zA-Z0-9]*\.)+[\-a-zA-Z0-9]{2,20}$ ]] 
         then
             Println "	域名: $green $cf_zone_name $plain\n"
             break
@@ -20513,6 +20893,223 @@ GetCloudflareZoneInfo()
             fi
         done
     done
+}
+
+MoveCloudflareZone()
+{
+    ListCloudflareZones
+
+    echo -e "选择源站"
+    while read -p "(默认: 取消): " cf_zones_num
+    do
+        case "$cf_zones_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_zones_num" -gt 0 ] && [ "$cf_zones_num" -le "$cf_zones_count" ]
+                then
+                    cf_zones_index=$((cf_zones_num-1))
+                    cf_zone_name=${cf_zones_name[cf_zones_index]}
+                    cf_zone_resolve_to=${cf_zones_resolve_to[cf_zones_index]}
+                    cf_user_email=${cf_zones_user_email[cf_zones_index]}
+                    cf_user_unique_id=${cf_zones_user_unique_id[cf_zones_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    GetCloudflareUserInfo
+
+    GetCloudflareZoneInfo
+
+    Println "$info 删除源站 ..."
+
+    IFS="^" read -r result err_code msg < <(curl --silent -Lm 50 https://api.cloudflare.com/host-gw.html \
+        -d 'act=zone_delete' \
+        -d "host_key=$cf_host_key" \
+        -d "user_key=$cf_user_key" \
+        -d "zone_name=$cf_zone_name" \
+        | $JQ_FILE '[.result,.err_code,.msg]|join("^")'
+    ) || true
+
+    result=${result#\"}
+    msg=${msg%\"}
+
+    if [ -z "$result" ] || [ "$result" == "error" ]
+    then
+        if [ "$err_code" -eq 115 ] || [ "$err_code" -eq 703 ]
+        then
+            Println "$error 此用户已被 CFP 删除或未添加成功, 可以到 Cloudflare 官网手动删除源站或者重新添加 !"
+        else
+            Println "$error ${msg:-超时, 请重试}\n"
+        fi
+        exit 1
+    else
+        jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
+        JQ delete "$CF_CONFIG" "$cf_zones_index"
+        Println "$info $cf_zone_name 删除成功"
+    fi
+
+    ListCloudflareHosts
+
+    echo -e "选择移动到的 CFP"
+    while read -p "(默认: 取消): " cf_hosts_num
+    do
+        case "$cf_hosts_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_hosts_num" -gt 0 ] && [ "$cf_hosts_num" -le "$cf_hosts_count" ]
+                then
+                    cf_hosts_index=$((cf_hosts_num-1))
+                    cf_host_name=${cf_hosts_name[cf_hosts_index]}
+                    cf_host_key=${cf_hosts_key[cf_hosts_index]}
+                    cf_host_zone_name=${cf_hosts_zone_name[cf_hosts_index]}
+                    IFS="|" read -r -a cf_host_zones_name <<< "$cf_host_zone_name"
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    found=0
+    for cf_host_zone_name in "${cf_host_zones_name[@]}"
+    do
+        if [ "$cf_host_zone_name" == "$cf_zone_name" ] 
+        then
+            found=1
+            break
+        fi
+    done
+
+    if [ "$found" -eq 1 ] 
+    then
+        Println "$error 域名已经存在\n"
+    else
+        GetCloudflareUsers
+
+        Println "$cf_users_list"
+
+        echo -e "选择移动到的用户"
+        while read -p "(默认: 取消): " cf_users_num
+        do
+            case "$cf_users_num" in
+                "")
+                    Println "已取消...\n" && exit 1
+                ;;
+                *[!0-9]*)
+                    Println "$error 请输入正确的序号\n"
+                ;;
+                *)
+                    if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
+                    then
+                        cf_users_index=$((cf_users_num-1))
+                        cf_user_email=${cf_users_email[cf_users_index]}
+                        cf_user_pass=${cf_users_pass[cf_users_index]}
+                        break
+                    else
+                        Println "$error 请输入正确的序号\n"
+                    fi
+                ;;
+            esac
+        done
+
+        Println "$info 移动中 ..."
+        cf_user_key=""
+        until [ -n "$cf_user_key" ] 
+        do
+            random_number=$(od -An -N6 -t u8 < /dev/urandom)
+            cf_user_unique_id=${random_number: -12}
+            IFS="^" read -r result cf_user_key msg < <(curl --silent -Lm 50 https://api.cloudflare.com/host-gw.html \
+                -d 'act=user_create' \
+                -d "host_key=$cf_host_key" \
+                -d "cloudflare_email=$cf_user_email" \
+                -d "cloudflare_pass=$cf_user_pass" \
+                -d "unique_id=$cf_user_unique_id" \
+                | $JQ_FILE '[.result,.response.user_key,.msg]|join("^")'
+            ) || true
+
+            result=${result#\"}
+            msg=${msg%\"}
+            if [ "$result" == "error" ] 
+            then
+                Println "$error $msg"
+                if [[ $msg == *"assword"* ]] 
+                then
+                    Println "$error 请检查密码是否正确\n"
+                    exit 1
+                fi
+            fi
+        done
+
+        new_zone=$(
+        $JQ_FILE -n --arg name "$cf_zone_name" --arg resolve_to "$cf_zone_resolve_to" \
+            --arg user_email "$cf_user_email" --arg user_unique_id "$cf_user_unique_id" \
+            '{
+                name: $name,
+                resolve_to: $resolve_to,
+                user_email: $user_email,
+                user_unique_id: $user_unique_id | tonumber
+            }'
+        )
+
+        jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
+        JQ add "$CF_CONFIG" "[$new_zone]"
+
+        subdomains=""
+
+        for((i=0;i<${#cf_hosted_cnames[@]};i++));
+        do
+            if [[ ${cf_hosted_cnames[i]} =~ ^([^.]+).([^.]+)$ ]] 
+            then
+                continue
+            fi
+            cf_hosted_cname=${cf_hosted_cnames[i]}
+            cf_hosted_cname=${cf_hosted_cname%.*}
+            cf_hosted_cname_prefix=${cf_hosted_cname%.*}
+            [ -n "$subdomains" ] && subdomains="$subdomains,"
+            subdomains="$subdomains$cf_hosted_cname_prefix:${cf_resolve_tos[i]}"
+        done
+
+        GetCloudflareUserInfo
+
+        IFS="^" read -r result cf_zone_resolving_to cf_zone_hosted_cnames cf_zone_forward_tos msg < <(curl --silent -Lm 20 https://api.cloudflare.com/host-gw.html \
+            -d 'act=zone_set' \
+            -d "host_key=$cf_host_key" \
+            -d "user_key=$cf_user_key" \
+            -d "zone_name=$cf_zone_name" \
+            -d "resolve_to=$cf_zone_resolve_to" \
+            -d "subdomains=$subdomains" \
+            | $JQ_FILE '[.result,.response.resolving_to,([(.response.hosted_cnames| if .== null then {} else . end)|to_entries[]
+            |([.key,.value]|join("="))]
+            |join("|")),([(.response.forward_tos| if .== null then {} else . end)|to_entries[]
+            |([.key,.value]|join("="))]
+            |join("|")),.msg]|join("^")'
+        ) || true
+
+        result=${result#\"}
+        msg=${msg%\"}
+
+        if [ -z "$result" ] || [ "$result" == "error" ]
+        then
+            Println "$error ${msg:-连接超时, 请查看是否已经完成}\n" && exit 1
+        fi
+
+        Println "$info 源站移动成功\n"
+    fi
 }
 
 GetCloudflareUserInfo()
@@ -20820,7 +21417,7 @@ DelCloudflareZone()
 
     if [ -z "$result" ] || [ "$result" == "error" ]
     then
-        if [ "$err_code" -eq 115 ] 
+        if [ "$err_code" -eq 115 ] || [ "$err_code" -eq 703 ]
         then
             Println "$error 此用户已被 CFP 删除或未添加成功, 可以到 Cloudflare 官网手动删除源站或者重新添加 !"
             Println "是否仍要删除此源站 ? [y/N]"
@@ -20924,6 +21521,12 @@ EditCloudflareUser()
 {
     ListCloudflareUsers
 
+    if [ "$cf_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
+
     echo -e "选择用户"
     while read -p "(默认: 取消): " cf_users_num
     do
@@ -20940,6 +21543,8 @@ EditCloudflareUser()
                     cf_users_index=$((cf_users_num-1))
                     cf_user_email=${cf_users_email[cf_users_index]}
                     cf_user_pass=${cf_users_pass[cf_users_index]}
+                    cf_user_token=${cf_users_token[cf_users_index]}
+                    cf_user_key=${cf_users_key[cf_users_index]}
                     break
                 else
                     Println "$error 请输入正确的序号\n"
@@ -20949,20 +21554,33 @@ EditCloudflareUser()
     done
 
     Println "请输入用户邮箱"
-    read -p "(默认: $cf_user_email): " new_cf_user_email
-    new_cf_user_email=${new_cf_user_email:-$cf_user_email}
-    Println "	用户邮箱: $green $new_cf_user_email $plain\n"
+    read -p "(默认: $cf_user_email): " cf_user_email_new
+    cf_user_email_new=${cf_user_email_new:-$cf_user_email}
+    Println "	用户邮箱: $green $cf_user_email_new $plain\n"
 
     Println "请输入用户密码"
-    read -p "(默认: $cf_user_pass): " new_cf_user_pass
-    new_cf_user_pass=${new_cf_user_pass:-$cf_user_pass}
-    Println "	用户密码: $green $new_cf_user_pass $plain\n"
+    read -p "(默认: $cf_user_pass): " cf_user_pass_new
+    cf_user_pass_new=${cf_user_pass_new:-$cf_user_pass}
+    Println "	用户密码: $green $cf_user_pass_new $plain\n"
+
+    Println "请输入用户 Token"
+    read -p "(默认: ${cf_user_token:-不设置}): " cf_user_token_new
+    cf_user_token_new=${cf_user_token_new:-$cf_user_token}
+    Println "	用户 Token: $green ${cf_user_token_new:-不设置} $plain\n"
+
+    Println "请输入用户 Key"
+    read -p "(默认: ${cf_user_key:-不设置}): " cf_user_key_new
+    cf_user_key_new=${cf_user_key_new:-$cf_user_key}
+    Println "	用户 Token: $green ${cf_user_key_new:-不设置} $plain\n"
 
     new_user=$(
-    $JQ_FILE -n --arg email "$new_cf_user_email" --arg pass "$new_cf_user_pass" \
+    $JQ_FILE -n --arg email "$cf_user_email_new" --arg pass "$cf_user_pass_new" \
+        --arg token "$cf_user_token_new" --arg key "$cf_user_key_new" \
         '{
             email: $email,
-            pass: $pass
+            pass: $pass,
+            token: $token,
+            key: $key
         }'
     )
 
@@ -21001,7 +21619,7 @@ RegenCloudflareHost()
     done
 
     Println "$info 稍等..."
-    IFS="^" read -r result new_cf_host_key msg < <(curl --silent -Lm 50 https://api.cloudflare.com/host-gw.html \
+    IFS="^" read -r result cf_host_key_new msg < <(curl --silent -Lm 50 https://api.cloudflare.com/host-gw.html \
         -d 'act=host_key_regen' \
         -d "host_key=$cf_host_key" \
         | $JQ_FILE '[.result,.request."host:key".__host_key,.msg]|join("^")'
@@ -21016,14 +21634,2030 @@ RegenCloudflareHost()
     fi
 
     jq_path='["hosts",'"$cf_hosts_index"',"key"]'
-    JQ update "$CF_CONFIG" "$new_cf_host_key"
+    JQ update "$CF_CONFIG" "$cf_host_key_new"
 
     Println "$info $cf_host_name host key 修改成功"
 }
 
-if [ "${0##*/}" == "cf" ] || [ "${0##*/}" == "cf.sh" ]
+InstallIbmcfCli()
+{
+    if [[ -x $(command -v ibmcloud) ]] 
+    then
+        Println "$error IBM CF CLI 已存在\n"
+        exit 1
+    fi
+    Println "$info 安装 IBM CF CLI ..."
+    curl -sL https://ibm.biz/idt-installer | bash
+    ibmcloud cf install
+}
+
+UpdateIbmcfCli()
+{
+    if [[ ! -x $(command -v ibmcloud) ]] 
+    then
+        Println "$error IBM CF CLI 未安装\n"
+        exit 1
+    fi
+    Println "$info 更新 IBM CF CLI ..."
+    ibmcloud update
+    ibmcloud cf install -f
+}
+
+GetIbmUsers()
+{
+    ibm_users_list=""
+    ibm_users_count=0
+    ibm_users_email=()
+    ibm_users_pass=()
+    ibm_users_region=()
+    ibm_users_resource_group=()
+    ibm_users_org=()
+    ibm_users_space=()
+    while IFS=" " read -r email pass region resource_group org space
+    do
+        ibm_users_count=$((ibm_users_count+1))
+        email=${email#\"}
+        ibm_users_email+=("$email")
+        ibm_users_pass+=("$pass")
+        ibm_users_region+=("$region")
+        ibm_users_resource_group+=("$resource_group")
+        ibm_users_org+=("$org")
+        space=${space%\"}
+        ibm_users_space+=("$space")
+
+        ibm_users_list="$ibm_users_list $green$ibm_users_count.$plain\r\e[6C地区: $green$region$plain  资源组: $green$resource_group$plain\n\e[6C邮箱: $green$email$plain  密码: $green$pass$plain\n\e[6C组织: $green$org$plain  空间: $green$space$plain\n\n"
+    done < <($JQ_FILE '.users[]|[.email,.pass,.region,.resource_group,.org,.space]|join(" ")' "$IBM_CONFIG")
+    return 0
+}
+
+GetIbmcfApps()
+{
+    ibm_cf_apps_list=""
+    ibm_cf_apps_count=0
+    ibm_cf_apps_name=()
+    ibm_cf_apps_user_email=()
+    ibm_cf_apps_routes_count=()
+    ibm_cf_apps_route_hostname=()
+    ibm_cf_apps_route_port=()
+    ibm_cf_apps_route_domain=()
+    ibm_cf_apps_route_path=()
+    while IFS="^" read -r name user_email routes_count route_hostname route_port route_domain route_path
+    do
+        ibm_cf_apps_count=$((ibm_cf_apps_count+1))
+        name=${name#\"}
+        ibm_cf_apps_name+=("$name")
+        ibm_cf_apps_user_email+=("$user_email")
+        ibm_cf_apps_routes_count+=("$routes_count")
+        ibm_cf_apps_route_hostname+=("$route_hostname")
+        ibm_cf_apps_route_port+=("$route_port")
+        ibm_cf_apps_route_domain+=("$route_domain")
+        route_path=${route_path%\"}
+        ibm_cf_apps_route_path+=("$route_path")
+
+        ibm_cf_apps_list="$ibm_cf_apps_list $green$ibm_cf_apps_count.$plain\r\e[6CAPP: $green$name$plain  用户: $green$user_email$plain  路由数: $green$routes_count$plain\n\n"
+    done < <($JQ_FILE '.cf.apps[]|[.name,.user_email,(.routes|length),([.routes[].hostname]|join("|")),([.routes[].port]|join("|")),([.routes[].domain]|join("|")),([.routes[].path]|join("|"))]|join("^")' "$IBM_CONFIG")
+    return 0
+}
+
+ListIbmUsers()
+{
+    if [ ! -s "$IBM_CONFIG" ] 
+    then
+        Println "$error 请先添加用户\n" && exit 1
+    fi
+
+    GetIbmUsers
+
+    if [ "$ibm_users_count" -gt 0 ] 
+    then
+        Println "$ibm_users_list"
+    else
+        Println "$error 没有用户\n"
+    fi
+}
+
+ViewIbmUser()
+{
+    ListIbmUsers
+}
+
+LoginIbmUser()
+{
+    ListIbmUsers
+
+    if [ "$ibm_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
+
+    echo -e "选择用户"
+    while read -p "(默认: 取消): " ibm_users_num
+    do
+        case "$ibm_users_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$ibm_users_num" -gt 0 ] && [ "$ibm_users_num" -le "$ibm_users_count" ]
+                then
+                    ibm_users_index=$((ibm_users_num-1))
+                    ibm_user_email=${ibm_users_email[ibm_users_index]}
+                    ibm_user_pass=${ibm_users_pass[ibm_users_index]}
+                    ibm_user_region=${ibm_users_region[ibm_users_index]}
+                    ibm_user_resource_group=${ibm_users_resource_group[ibm_users_index]}
+                    ibm_user_org=${ibm_users_org[ibm_users_index]}
+                    ibm_user_space=${ibm_users_space[ibm_users_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
+    ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
+    ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
+}
+
+UpdateIbmcfApp()
+{
+    ListIbmcfApps
+
+    echo -e "选择 APP"
+    while read -p "(默认: 取消): " ibm_cf_apps_num
+    do
+        case "$ibm_cf_apps_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$ibm_cf_apps_num" -gt 0 ] && [ "$ibm_cf_apps_num" -le "$ibm_cf_apps_count" ]
+                then
+                    ibm_cf_apps_index=$((ibm_cf_apps_num-1))
+                    ibm_cf_app_name=${ibm_cf_apps_name[ibm_cf_apps_index]}
+                    ibm_user_email=${ibm_cf_apps_user_email[ibm_cf_apps_index]}
+                    ibm_cf_app_routes_count=${ibm_cf_apps_routes_count[ibm_cf_apps_index]}
+                    ibm_cf_app_route_hostname=${ibm_cf_apps_route_hostname[ibm_cf_apps_index]}
+                    ibm_cf_app_route_port=${ibm_cf_apps_route_port[ibm_cf_apps_index]}
+                    ibm_cf_app_route_domain=${ibm_cf_apps_route_domain[ibm_cf_apps_index]}
+                    ibm_cf_app_route_path=${ibm_cf_apps_route_path[ibm_cf_apps_index]}
+                    IFS="|" read -r -a ibm_cf_app_routes_hostname <<< "$ibm_cf_app_route_hostname"
+                    IFS="|" read -r -a ibm_cf_app_routes_port <<< "$ibm_cf_app_route_port"
+                    IFS="|" read -r -a ibm_cf_app_routes_domain <<< "$ibm_cf_app_route_domain"
+                    IFS="|" read -r -a ibm_cf_app_routes_path <<< "${ibm_cf_app_route_path}|"
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    GetIbmUsers
+
+    for((i=0;i<ibm_users_count;i++));
+    do
+        if [ "${ibm_users_email[i]}" == "$ibm_user_email" ] 
+        then
+            ibm_user_pass=${ibm_users_pass[i]}
+            ibm_user_region=${ibm_users_region[i]}
+            ibm_user_resource_group=${ibm_users_resource_group[i]}
+            ibm_user_org=${ibm_users_org[i]}
+            ibm_user_space=${ibm_users_space[i]}
+            break
+        fi
+    done
+
+    if [ -z "${ibm_user_pass:-}" ] 
+    then
+        Println "$error 没有找到用户 $ibm_user_email\n"
+        exit 1
+    fi
+
+    Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
+    ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
+    ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
+
+    #ibmcloud cf create-app-manifest "$ibm_cf_app_name"
+    #ibmcloud cf push -f "${ibm_cf_app_name}_manifest.yml"
+}
+
+SetIbmUserEmail()
+{
+    Println "请输入用户邮箱"
+    read -p "(默认: 取消): " ibm_user_email
+    [ -z "$ibm_user_email" ] && Println "已取消...\n" && exit 1
+    if [[ -n $($JQ_FILE '.users[]|select(.email=="'"$ibm_user_email"'")' "$IBM_CONFIG") ]] 
+    then
+        Println "$error 用户已经存在\n"
+        exit 1
+    fi
+    Println "	用户邮箱: $green $ibm_user_email $plain\n"
+}
+
+SetIbmUserPass()
+{
+    Println "请输入用户密码"
+    read -p "(默认: 取消): " ibm_user_pass
+    [ -z "$ibm_user_pass" ] && Println "已取消...\n" && exit 1
+    Println "	用户密码: $green $ibm_user_pass $plain\n"
+}
+
+SetIbmUserRegion()
+{
+    ibmcloud regions
+    Println "请输入账号所在区域名称"
+    read -p "(默认: us-south): " ibm_user_region
+    ibm_user_region=${ibm_user_region:-us-south}
+    Println "	区域: $green $ibm_user_region $plain\n"
+}
+
+SetIbmUserResourceGroup()
+{
+    ibmcloud resource groups
+    Println "请输入资源组名称"
+    read -p "(默认: Default): " ibm_user_resource_group
+    ibm_user_resource_group=${ibm_user_resource_group:-Default}
+    Println "	资源组: $green $ibm_user_resource_group $plain\n"
+}
+
+SetIbmUserOrg()
+{
+    ibmcloud account orgs
+    Println "请输入组织名称"
+    read -p "(默认: $ibm_user_email): " ibm_user_org
+    ibm_user_org=${ibm_user_org:-$ibm_user_email}
+    Println "	组织: $green $ibm_user_org $plain\n"
+}
+
+SetIbmUserSpace()
+{
+    ibmcloud account spaces
+    Println "请输入空间名称"
+    read -p "(默认: dev): " ibm_user_space
+    ibm_user_space=${ibm_user_space:-dev}
+    Println "	空间: $green $ibm_user_space $plain\n"
+}
+
+GetIbmApi()
+{
+    while IFS= read -r line 
+    do
+        if [[ $line == *"endpoint:"* ]] 
+        then
+            ibm_api=${line##* }
+            break
+        fi
+    done < <(ibmcloud api)
+
+    if [ -z "${ibm_api:-}" ] 
+    then
+        Println "$error 无法获取 ibmcloud api ?\n"
+        exit 1
+    fi
+}
+
+AddIbmUser()
+{
+    if [ ! -s "$IBM_CONFIG" ] 
+    then
+        printf '{"%s":[],"%s":{"%s":[]}}' "users" "cf" "apps" > "$IBM_CONFIG"
+    fi
+
+    SetIbmUserEmail
+    SetIbmUserPass
+
+    GetIbmApi
+
+    ibmcloud api "$ibm_api"
+
+    SetIbmUserRegion
+
+    Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
+    ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region"
+
+    SetIbmUserResourceGroup
+
+    ibmcloud target -g "$ibm_user_resource_group"
+
+    SetIbmUserOrg
+
+    ibmcloud target -o "$ibm_user_org"
+
+    SetIbmUserSpace
+
+    ibmcloud target -s "$ibm_user_space"
+
+    new_user=$(
+    $JQ_FILE -n --arg email "$ibm_user_email" --arg pass "$ibm_user_pass" \
+        --arg region "$ibm_user_region" --arg resource_group "$ibm_user_resource_group" \
+        --arg org "$ibm_user_org" --arg space "$ibm_user_space" \
+        '{
+            email: $email,
+            pass: $pass,
+            region: $region,
+            resource_group: $resource_group,
+            org: $org,
+            space: $space
+        }'
+    )
+
+    jq_path='["users"]'
+    JQ add "$IBM_CONFIG" "[$new_user]"
+    Println "$info 用户添加成功\n"
+}
+
+EditIbmUser()
+{
+    ListIbmUsers
+
+    if [ "$ibm_users_count" -eq 0 ] 
+    then
+        echo -e "$error 请先添加用户\n"
+        exit 1
+    fi
+
+    echo -e "选择用户"
+    while read -p "(默认: 取消): " ibm_users_num
+    do
+        case "$ibm_users_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$ibm_users_num" -gt 0 ] && [ "$ibm_users_num" -le "$ibm_users_count" ]
+                then
+                    ibm_users_index=$((ibm_users_num-1))
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    SetIbmUserEmail
+    SetIbmUserPass
+
+    GetIbmApi
+
+    ibmcloud api "$ibm_api"
+
+    SetIbmUserRegion
+
+    Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
+    ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region"
+
+    SetIbmUserResourceGroup
+
+    ibmcloud target -g "$ibm_user_resource_group"
+
+    SetIbmUserOrg
+
+    ibmcloud target -o "$ibm_user_org"
+
+    SetIbmUserSpace
+
+    ibmcloud target -s "$ibm_user_space"
+
+    new_user=$(
+    $JQ_FILE -n --arg email "$ibm_user_email" --arg pass "$ibm_user_pass" \
+        --arg region "$ibm_user_region" --arg resource_group "$ibm_user_resource_group" \
+        --arg org "$ibm_user_org" --arg space "$ibm_user_space" \
+        '{
+            email: $email,
+            pass: $pass,
+            region: $region,
+            resource_group: $resource_group,
+            org: $org,
+            space: $space
+        }'
+    )
+
+    jq_path='["users",'"$ibm_users_index"']'
+    JQ replace "$IBM_CONFIG" "[$new_user]"
+    Println "$info 用户修改成功\n"
+}
+
+SetIbmcfAppName()
+{
+    Println "请输入 APP 名称\n$tip 确保已经在官网建立此 CF APP, 也可以用命令 ibmcloud dev create 新建\n"
+    read -p "(默认: 取消): " ibm_cf_app_name
+    [ -z "$ibm_cf_app_name" ] && Println "已取消...\n" && exit 1
+    if [[ -n $($JQ_FILE '.cf.apps[]|select(.user_email=="'"$ibm_user_email"'" and .name=="'"$ibm_cf_app_name"'")' "$IBM_CONFIG") ]] 
+    then
+        Println "$error 此 APP 已存在\n"
+        exit 1
+    fi
+    Println "	APP: $green $ibm_cf_app_name $plain\n"
+}
+
+AddIbmcfApp()
+{
+    LoginIbmUser
+
+    ibmcloud cf apps
+
+    SetIbmcfAppName
+
+    Println "$info 查询路由 ..."
+
+    app_guid=$(ibmcloud cf app "$ibm_cf_app_name" --guid -q)
+
+    IFS="^" read -r route_guid hostname domain_guid path < <(ibmcloud cf curl "/v2/apps/$app_guid/routes" -q \
+        | $JQ_FILE -r '[([.resources[].metadata.guid]|join("|")),([.resources[].entity.host]|join("|")),([.resources[].entity.domain_guid]|join("|")),([.resources[].entity.path]|join("|"))]|join("^")')
+
+    ibm_cf_app_routes_count=0
+    if [ -n "$route_guid" ] 
+    then
+        IFS="|" read -r -a ibm_cf_app_routes_guid <<< "$route_guid"
+        IFS="|" read -r -a ibm_cf_app_routes_hostname <<< "$hostname"
+        IFS="|" read -r -a ibm_cf_app_routes_domain_guid <<< "$domain_guid"
+        IFS="|" read -r -a ibm_cf_app_routes_path <<< "${path}|"
+        ibm_cf_app_routes_count=${#ibm_cf_app_routes_guid[@]}
+
+        IFS="^" read -r port route_guid < <(ibmcloud cf curl "/v2/route_mappings?q=app_guid:$app_guid" -q \
+            | $JQ_FILE -r '[([.resources[].entity.app_port]|join("|")),([.resources[].entity.route_guid]|join("|"))]|join("^")')
+
+        IFS="|" read -r -a ports <<< "$port"
+        IFS="|" read -r -a routes_guid <<< "$route_guid"
+
+        IFS="^" read -r domain domain_guid < <(ibmcloud cf curl "/v2/domains" -q \
+            | $JQ_FILE -r '[([.resources[].entity.name]|join("|")),([.resources[].metadata.guid]|join("|"))]|join("^")')
+
+        IFS="|" read -r -a domains <<< "$domain"
+        IFS="|" read -r -a domains_guid <<< "$domain_guid"
+
+        ibm_cf_app_routes_port=()
+        ibm_cf_app_routes_domain=()
+
+        for((i=0;i<ibm_cf_app_routes_count;i++));
+        do
+            for((j=0;j<ibm_cf_app_routes_count;j++));
+            do
+                if [ "${routes_guid[j]}" == "${ibm_cf_app_routes_guid[i]}" ] 
+                then
+                    ibm_cf_app_routes_port+=("${ports[j]}")
+                    break
+                fi
+            done
+
+            for((k=0;k<${#domains_guid[@]};k++));
+            do
+                if [ "${domains_guid[k]}" == "${ibm_cf_app_routes_domain_guid[i]}" ] 
+                then
+                    ibm_cf_app_routes_domain+=("${domains[k]}")
+                    break
+                fi
+            done
+        done
+
+        for ibm_cf_app_route_guid in "${ibm_cf_app_routes_guid[@]}"
+        do
+            for((i=0;i<ibm_cf_app_routes_count;i++));
+            do
+                if [ "${routes_guid[i]}" == "$ibm_cf_app_route_guid" ] 
+                then
+                    ibm_cf_app_routes_port+=("${ports[i]}")
+                    break
+                fi
+            done
+        done
+    fi
+
+    ibm_cf_app_routes=""
+    for((i=0;i<ibm_cf_app_routes_count;i++));
+    do
+        [ -n "$ibm_cf_app_routes" ] && ibm_cf_app_routes="$ibm_cf_app_routes,"
+        ibm_cf_app_route=$(
+        $JQ_FILE -n --arg hostname "${ibm_cf_app_routes_hostname[i]}" --arg port "${ibm_cf_app_routes_port[i]}" \
+            --arg domain "${ibm_cf_app_routes_domain[i]}" --arg path "${ibm_cf_app_routes_path[i]}" \
+            '{
+                hostname: $hostname,
+                port: $port | tonumber,
+                domain: $domain,
+                path: $path
+            }'
+        )
+        ibm_cf_app_routes="$ibm_cf_app_routes$ibm_cf_app_route"
+    done
+
+    ibm_cf_app=$(
+    $JQ_FILE -n --arg name "$ibm_cf_app_name" --arg user_email "$ibm_user_email" \
+        --argjson routes "[$ibm_cf_app_routes]" \
+        '{
+            name: $name,
+            user_email: $user_email,
+            routes: $routes
+        }'
+    )
+
+    jq_path='["cf","apps"]'
+    JQ add "$IBM_CONFIG" "[$ibm_cf_app]"
+
+    Println "$info APP 添加成功\n"
+}
+
+ListIbmcfApps()
+{
+    if [ ! -s "$IBM_CONFIG" ] 
+    then
+        Println "$error 请先添加 APP\n" && exit 1
+    fi
+
+    GetIbmcfApps
+
+    if [ "$ibm_cf_apps_count" -gt 0 ] 
+    then
+        Println "$ibm_cf_apps_list"
+    else
+        Println "$error 没有 APP\n"
+        exit 1
+    fi
+}
+
+ViewIbmcfApp()
+{
+    ListIbmcfApps
+
+    echo -e "选择 APP"
+    while read -p "(默认: 取消): " ibm_cf_apps_num
+    do
+        case "$ibm_cf_apps_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$ibm_cf_apps_num" -gt 0 ] && [ "$ibm_cf_apps_num" -le "$ibm_cf_apps_count" ]
+                then
+                    ibm_cf_apps_index=$((ibm_cf_apps_num-1))
+                    ibm_cf_app_name=${ibm_cf_apps_name[ibm_cf_apps_index]}
+                    ibm_user_email=${ibm_cf_apps_user_email[ibm_cf_apps_index]}
+                    ibm_cf_app_routes_count=${ibm_cf_apps_routes_count[ibm_cf_apps_index]}
+                    ibm_cf_app_route_hostname=${ibm_cf_apps_route_hostname[ibm_cf_apps_index]}
+                    ibm_cf_app_route_port=${ibm_cf_apps_route_port[ibm_cf_apps_index]}
+                    ibm_cf_app_route_domain=${ibm_cf_apps_route_domain[ibm_cf_apps_index]}
+                    ibm_cf_app_route_path=${ibm_cf_apps_route_path[ibm_cf_apps_index]}
+                    IFS="|" read -r -a ibm_cf_app_routes_hostname <<< "$ibm_cf_app_route_hostname"
+                    IFS="|" read -r -a ibm_cf_app_routes_port <<< "$ibm_cf_app_route_port"
+                    IFS="|" read -r -a ibm_cf_app_routes_domain <<< "$ibm_cf_app_route_domain"
+                    IFS="|" read -r -a ibm_cf_app_routes_path <<< "${ibm_cf_app_route_path}|"
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    GetIbmUsers
+
+    for((i=0;i<ibm_users_count;i++));
+    do
+        if [ "${ibm_users_email[i]}" == "$ibm_user_email" ] 
+        then
+            ibm_user_pass=${ibm_users_pass[i]}
+            ibm_user_region=${ibm_users_region[i]}
+            ibm_user_resource_group=${ibm_users_resource_group[i]}
+            ibm_user_org=${ibm_users_org[i]}
+            ibm_user_space=${ibm_users_space[i]}
+            break
+        fi
+    done
+
+    if [ -z "${ibm_user_pass:-}" ] 
+    then
+        Println "$error 没有找到用户 $ibm_user_email\n"
+        exit 1
+    fi
+
+    ibm_cf_app_routes_list=""
+    for((i=0;i<ibm_cf_app_routes_count;i++));
+    do
+        ibm_cf_app_routes_list="$ibm_cf_app_routes_list $green$((i+1)).$plain\r\e[6CHost: $green${ibm_cf_app_routes_hostname[i]}$plain  端口: $green${ibm_cf_app_routes_port[i]}$plain\n\e[6C域名: $green${ibm_cf_app_routes_domain[i]}$plain  路径: $green${ibm_cf_app_routes_path[i]:-无}$plain\n\n"
+    done
+
+    Println "APP: $green$ibm_cf_app_name$plain\n\n区域: $green$ibm_user_region$plain\n\n用户: $green$ibm_user_email$plain\n\n资源组: $green$ibm_user_resource_group$plain\n\n组织：$green$ibm_user_org$plain\n\n空间：$green$ibm_user_space$plain\n\n路由:\n\n${ibm_cf_app_routes_list:-无}\n"
+}
+
+SetIbmcfAppRouteDomain()
+{
+    IFS="|" read -r domain < <(ibmcloud cf curl "/v2/domains" -q \
+        | $JQ_FILE -r '[.resources[].entity.name]|join("|")')
+
+    if [ -z "$domain" ] 
+    then
+        Println "$error 无法获取域名, 请重试"
+    fi
+
+    IFS="|" read -r -a domains <<< "$domain"
+
+    domains_list=""
+    domains_count=0
+    for((i=0;i<${#domains[@]};i++));
+    do
+        domains_count=$((domains_count+1))
+        if [[ ${domains[i]} == *"cf.appdomain.cloud" ]] 
+        then
+            default_domain_num=$domains_count
+        fi
+        domains_list="$domains_list $green$domains_count.$plain ${domains[i]}\n\n"
+    done
+
+    default_domain_num=${default_domain_num:-1}
+
+    Println "$domains_list"
+    echo -e "选择域名"
+    while read -p "(默认: $default_domain_num): " domains_num
+    do
+        case $domains_num in
+            "") 
+                domains_index=$((default_domain_num-1))
+                ibm_cf_app_route_domain=${domains[domains_index]}
+                break
+            ;;
+            *[!0-9]*) 
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *) 
+                if [ "$domains_num" -gt 0 ] && [ "$domains_num" -le "$domains_count" ]
+                then
+                    domains_index=$((default_domain_num-1))
+                    ibm_cf_app_route_domain=${domains[domains_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "	路由域名: $green $ibm_cf_app_route_domain $plain\n"
+}
+
+SetIbmcfAppRouteHostname()
+{
+    Println "请输入 http 路由 hostname (子域名名称)"
+    read -p "(默认: 取消): " ibm_cf_app_route_hostname
+    [ -z "$ibm_cf_app_route_hostname" ] && Println "已取消...\n" && exit 1
+    Println "	路由 hostname: $green $ibm_cf_app_route_hostname $plain\n"
+}
+
+SetIbmcfAppRoutePath()
+{
+    Println "请输入 http 路由 path"
+    read -p "(默认: 不设置): " ibm_cf_app_route_path
+    Println "	路由 path: $green ${ibm_cf_app_route_path:-不设置} $plain\n"
+}
+
+SetIbmcfAppRoutePort()
+{
+    Println "请输入路由指向的 APP 端口"
+    while read -p "(默认: 取消): " ibm_cf_app_route_port 
+    do
+        case $ibm_cf_app_route_port in
+            "") 
+                Println "已取消...\n"
+                exit 1
+            ;;
+            *[!0-9]*) 
+                Println "$error 请输入正确的端口\n"
+            ;;
+            *) 
+                break
+            ;;
+        esac
+    done
+
+    Println "	路由端口: $green $ibm_cf_app_route_port $plain\n"
+}
+
+AddIbmcfAppRoute()
+{
+    ViewIbmcfApp
+
+    Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
+    ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
+    ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
+
+    SetIbmcfAppRouteDomain
+    SetIbmcfAppRouteHostname
+    SetIbmcfAppRoutePath
+
+    for((i=0;i<ibm_cf_app_routes_count;i++));
+    do
+        if [ "${ibm_cf_app_routes_domain[i]}" == "$ibm_cf_app_route_domain" ] && [ "${ibm_cf_app_routes_hostname[i]}" == "$ibm_cf_app_route_hostname" ] && [ "${ibm_cf_app_routes_path[i]}" == "$ibm_cf_app_route_path" ]
+        then
+            Println "$error 此路由已经存在\n"
+            exit 1
+        fi
+    done
+
+    SetIbmcfAppRoutePort
+
+    ibmcloud cf create-route "$ibm_user_space" "$ibm_cf_app_route_domain" --hostname "$ibm_cf_app_route_hostname" --path "$ibm_cf_app_route_path"
+    ibm_cf_app_route_guid=$(ibmcloud cf curl "/v2/routes?q=host:$ibm_cf_app_route_hostname" -q | $JQ_FILE -r '.resources[0].metadata.guid')
+
+    ibm_cf_app_routes_port+=("$ibm_cf_app_route_port")
+    ibm_cf_app_routes_port_unique=()
+    for port in "${ibm_cf_app_routes_port[@]}"
+    do
+        for port_unique in "${ibm_cf_app_routes_port_unique[@]}"
+        do
+            if [ "$port_unique" == "$port" ] 
+            then
+                continue 2
+            fi
+        done
+        ibm_cf_app_routes_port_unique+=("$port")
+    done
+
+    printf -v ibm_cf_app_route_ports_list ',%s' "${ibm_cf_app_routes_port_unique[@]}"
+    ibm_cf_app_route_ports_list=${ibm_cf_app_route_ports_list:1}
+
+    app_guid=$(ibmcloud cf app "$ibm_cf_app_name" --guid -q)
+    ibmcloud cf curl "/v2/apps/$app_guid" -X PUT -d '{"ports": ['"$ibm_cf_app_route_ports_list"']}'
+    ibmcloud cf curl /v2/route_mappings -X POST -d '{"app_guid": "'"$app_guid"'", "route_guid": "'"$ibm_cf_app_route_guid"'", "app_port": '"$ibm_cf_app_route_port"'}'
+
+    ibm_cf_app_route=$(
+    $JQ_FILE -n --arg hostname "$ibm_cf_app_route_hostname" --arg port "$ibm_cf_app_route_port" \
+        --arg domain "$ibm_cf_app_route_domain" --arg path "$ibm_cf_app_route_path" \
+        '{
+            hostname: $hostname,
+            port: $port | tonumber,
+            domain: $domain,
+            path: $path
+        }'
+    )
+
+    jq_path='["cf","apps",'"$ibm_cf_apps_index"',"routes"]'
+    JQ add "$IBM_CONFIG" "[$ibm_cf_app_route]"
+
+    Println "$info 路由添加成功"
+}
+
+DelIbmApp()
+{
+    ViewIbmcfApp
+
+    Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
+    ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
+    ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
+
+    Println "$info 是否删除 APP 绑定的路由 ? [Y/n]"
+    read -p "(默认: Y)" delete_app_routes_yn
+    delete_app_routes_yn=${delete_app_routes_yn:-Y}
+
+    if [[ $delete_app_routes_yn == [Yy] ]] 
+    then
+        ibmcloud cf delete "$ibm_cf_app_name" -r
+    else
+        ibmcloud cf delete "$ibm_cf_app_name"
+    fi
+
+    jq_path='["cf","apps"]'
+    JQ delete "$IBM_CONFIG" "$ibm_cf_apps_index"
+
+    Println "$info APP 删除成功"
+}
+
+DelIbmAppRoute()
+{
+    ViewIbmcfApp
+
+    echo -e "选择需要删除的路由"
+    while read -p "(默认: 取消): " ibm_cf_app_routes_num
+    do
+        case $ibm_cf_app_routes_num in
+            "") 
+                Println "已取消 ...\n"
+                exit 1
+            ;;
+            *[!0-9]*) 
+                Println "$error 请输入正确的端口\n"
+            ;;
+            *) 
+                if [ "$ibm_cf_app_routes_num" -gt 0 ] && [ "$ibm_cf_app_routes_num" -le "$ibm_cf_app_routes_count" ]
+                then
+                    ibm_cf_app_routes_index=$((ibm_cf_app_routes_num-1))
+                    ibm_cf_app_route_domain=${ibm_cf_app_routes_domain[ibm_cf_app_routes_index]}
+                    ibm_cf_app_route_hostname=${ibm_cf_app_routes_hostname[ibm_cf_app_routes_index]}
+                    ibm_cf_app_route_port=${ibm_cf_app_routes_port[ibm_cf_app_routes_index]}
+                    ibm_cf_app_route_path=${ibm_cf_app_routes_path[ibm_cf_app_routes_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
+    ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
+    ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
+
+    ibm_cf_app_routes_port_unique=()
+    for((i=0;i<ibm_cf_app_routes_count;i++));
+    do
+        [[ $i -eq "$ibm_cf_app_routes_index" ]] && continue
+        for port_unique in "${ibm_cf_app_routes_port_unique[@]}"
+        do
+            if [ "$port_unique" == "${ibm_cf_app_routes_port[i]}" ] 
+            then
+                continue 2
+            fi
+        done
+        ibm_cf_app_routes_port_unique+=("${ibm_cf_app_routes_port[i]}")
+    done
+
+    printf -v ibm_cf_app_route_ports_list ',%s' "${ibm_cf_app_routes_port_unique[@]}"
+    ibm_cf_app_route_ports_list=${ibm_cf_app_route_ports_list:1}
+
+    app_guid=$(ibmcloud cf app "$ibm_cf_app_name" --guid -q)
+    ibmcloud cf curl "/v2/apps/$app_guid" -X PUT -d '{"ports": ['"$ibm_cf_app_route_ports_list"']}'
+
+    if ibmcloud cf delete-route "$ibm_cf_app_route_domain" --hostname "$ibm_cf_app_route_hostname" --path "$ibm_cf_app_route_path" -f
+    then
+        jq_path='["cf","apps",'"$ibm_cf_apps_index"',"routes"]'
+        JQ delete "$IBM_CONFIG" "$ibm_cf_app_routes_index"
+
+        Println "$info 路由删除成功"
+    fi
+}
+
+IbmcfMenu()
+{
+    if [ -d "$IPTV_ROOT" ]
+    then
+        IBM_CONFIG_NEW="$IPTV_ROOT/${IBM_CONFIG##*/}"
+
+        if [ -e "$IBM_CONFIG" ] && [ ! -e "$IBM_CONFIG_NEW" ]
+        then
+            mv "$IBM_CONFIG" "$IBM_CONFIG_NEW"
+        fi
+
+        IBM_CONFIG=$IBM_CONFIG_NEW
+    fi
+
+    Println "  IBM CF 面板 $plain${red}[v$sh_ver]$plain
+
+  ${green}1.$plain 安装 IBM CF CLI
+  ${green}2.$plain 更新 IBM CF CLI
+  ${green}3.$plain 查看 用户
+  ${green}4.$plain 登录 用户
+  ${green}5.$plain 添加 用户
+  ${green}6.$plain 更改 用户
+  ${green}7.$plain 查看 APP
+  ${green}8.$plain 添加 APP
+  ${green}9.$plain 添加 APP 路由
+ ${green}10.$plain 删除 APP
+ ${green}11.$plain 删除 APP 路由
+
+ $tip 输入: ibm 打开面板\n\n"
+    read -p "(默认: 取消): " ibm_cf_num
+    case $ibm_cf_num in
+        1) InstallIbmcfCli
+        ;;
+        2) UpdateIbmcfCli
+        ;;
+        3) ViewIbmUser
+        ;;
+        4) LoginIbmUser
+        ;;
+        5) AddIbmUser
+        ;;
+        6) EditIbmUser
+        ;;
+        7) ViewIbmcfApp
+        ;;
+        8) AddIbmcfApp
+        ;;
+        9) AddIbmcfAppRoute
+        ;;
+        10) DelIbmApp
+        ;;
+        11) DelIbmAppRoute
+        ;;
+        *) Println "$error 请输入正确的数字 [1-11]\n"
+        ;;
+    esac
+    exit 0
+}
+
+UpdateCloudflareToken()
+{
+    ListCloudflareUsers
+
+    if [ "$cf_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
+
+    echo -e "选择用户"
+    while read -p "(默认: 取消): " cf_users_num
+    do
+        case "$cf_users_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
+                then
+                    cf_users_index=$((cf_users_num-1))
+                    cf_user_email=${cf_users_email[cf_users_index]}
+                    cf_user_pass=${cf_users_pass[cf_users_index]}
+                    cf_user_key=${cf_users_key[cf_users_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    if [ -z "$cf_user_key" ] 
+    then
+        Println "$error 此用户没有 Global API Key, 请手动添加\n"
+        exit 1
+    fi
+
+    IFS="#" read -r success token < <(curl -s \
+        -X GET "https://api.cloudflare.com/client/v4/user/tokens?page=1&per_page=50&direction=desc" \
+        -H "X-Auth-Email:$cf_user_email" \
+        -H "X-Auth-Key:$cf_user_key" \
+        -H "Content-Type: application/json" \
+        | $JQ_FILE '[.success,(.result|to_entries|map([.value.id,.value.name,.value.status,([.value.policies[].permission_groups[].name]|join(", "))]|join("|"))|join("^"))]|join("#")' 2> /dev/null
+    ) || true
+
+    success=${success#\"}
+    token=${token%\"}
+
+    if [ "$success" != "true" ] 
+    then
+        Println "$error 获取 Token 错误, 用户 Token 必须是 Global API Key 才可以获取\n"
+        exit 1
+    fi
+
+    IFS="^" read -r -a tokens <<< "$token"
+    tokens_count=${#tokens[@]}
+    tokens_list=""
+    tokens_id=()
+
+    for((i=0;i<tokens_count;i++));
+    do
+        IFS="|" read -r token_id token_name token_status token_permission <<< "${tokens[i]}"
+        tokens_id+=("$token_id")
+        tokens_list="$tokens_list $green$((i+1)).$plain\r\e[6C名称: $green$token_name$plain  状态: $green$token_status$plain\n\e[6C权限: $green${token_permission:-无}$plain\n\n"
+    done
+
+    Println "$tokens_list"
+
+    echo -e "选择 Token"
+
+    while read -p "(默认: 取消): " tokens_num
+    do
+        case $tokens_num in
+            "") 
+                Println "已取消 ...\n"
+                exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *) 
+                if [ "$tokens_num" -gt 0 ] && [ "$tokens_num" -le "$tokens_count" ] 
+                then
+                    tokens_index=$((tokens_num-1))
+                    token_id=${tokens_id[tokens_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "$info 更新 Token"
+    cf_user_token_new=$(curl -s -X PUT https://api.cloudflare.com/client/v4/user/tokens/$token_id/value \
+        -H "X-Auth-Email:$cf_user_email" \
+        -H "X-Auth-Key:$cf_user_key" \
+        -H "Content-Type: application/json" \
+        --data '{}' | $JQ_FILE -r '.result'
+    ) || true
+    if [ -z "$cf_user_token_new" ] || [ "$cf_user_token_new" == null ]
+    then
+        Println "$error 更新 Token 失败\n"
+    else
+        Println "$info Token 更新成功: $cf_user_token_new\n"
+    fi
+}
+
+CloudflarePartnerMenu()
+{
+    Println "  cloudflare 面板 $plain${red}[v$sh_ver]$plain
+
+  ${green}1.$plain 查看 子域名
+  ${green}2.$plain 添加 子域名
+  ${green}3.$plain 查看 源站
+  ${green}4.$plain 添加 源站
+  ${green}5.$plain 移动 源站
+  ${green}6.$plain 查看 用户
+  ${green}7.$plain 添加 用户
+  ${green}8.$plain 更改 用户
+  ${green}9.$plain 更新 用户 Token
+ ${green}10.$plain 查看 CFP
+ ${green}11.$plain 添加 CFP
+ ${green}12.$plain 更改 CFP
+ ${green}13.$plain 删除 源站
+ ${green}14.$plain 删除 用户
+ ${green}15.$plain 删除 CFP
+ ${green}16.$plain 获取最优 IP
+ ${green}17.$plain IBM CF 加速
+
+ $tip 当前: ${green}partner $plain 面板
+ $tip 输入: w 切换到 workers 面板\n\n"
+    read -p "请输入数字 [1-17]: " cloudflare_partner_num
+    case $cloudflare_partner_num in
+        w)
+            CloudflareWorkersMenu
+        ;;
+        1) ViewCloudflareSubdomain
+        ;;
+        2) AddCloudflareSubdomain
+        ;;
+        3) ViewCloudflareZone
+        ;;
+        4) AddCloudflareZone
+        ;;
+        5) MoveCloudflareZone
+        ;;
+        6) ViewCloudflareUser
+        ;;
+        7) AddCloudflareUser
+        ;;
+        8) EditCloudflareUser
+        ;;
+        9) UpdateCloudflareToken
+        ;;
+        10) ViewCloudflareHost
+        ;;
+        11) AddCloudflareHost
+        ;;
+        12) RegenCloudflareHost
+        ;;
+        13) DelCloudflareZone
+        ;;
+        14) DelCloudflareUser
+        ;;
+        15) DelCloudflareHost
+        ;;
+        16) 
+            Println "$info 一键获取最优 IP 脚本 Mac/Linux: \n\nhttps://github.com/woniuzfb/cloudflare-fping\n"
+        ;;
+        17)
+            IbmcfMenu
+        ;;
+        *) Println "$error 请输入正确的数字 [1-17]\n"
+        ;;
+    esac
+    exit 0
+}
+
+InstallWrangler()
+{
+    if [[ -x $(command -v cargo) ]] 
+    then
+        Println "$info 检测到 cargo, 使用 cargo 安装 wrangler ? [y/N]"
+        echo -e "$tip 否则使用 npm 安装\n"
+        read -p "(默认: N): " user_cargo_yn
+        user_cargo_yn=${user_cargo_yn:-N}
+        if [[ $user_cargo_yn == [Yy] ]] 
+        then
+            cargo install wrangler
+            Println "$info wrangler 安装成功\n"
+            exit 0
+        fi
+    fi
+    if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
+    then
+        InstallNodejs
+    fi
+    npm i @cloudflare/wrangler -g --unsafe-perm=true --allow-root
+    Println "$info wrangler 安装成功\n"
+}
+
+UpdateWrangler()
+{
+    if [[ ! -x $(command -v wrangler) ]] 
+    then
+        Println "$error wrangler 未安装\n"
+        exit 1
+    fi
+    if [[ -x $(command -v cargo) ]] 
+    then
+        Println "$info 检测到 cargo, 使用 cargo 更新 wrangler ? [y/N]"
+        echo -e "$tip 否则使用 npm 更新\n"
+        read -p "(默认: N): " user_cargo_yn
+        user_cargo_yn=${user_cargo_yn:-N}
+        if [[ $user_cargo_yn == [Yy] ]] 
+        then
+            cargo install wrangler --force
+            Println "$info wrangler 更新成功\n"
+            exit 0
+        fi
+    fi
+    if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
+    then
+        InstallNodejs
+    fi
+    npm uninstall -g @cloudflare/wrangler && npm install -g @cloudflare/wrangler --unsafe-perm=true --allow-root
+    Println "$info wrangler 更新成功\n"
+}
+
+SetCloudflareWorkerName()
+{
+    Println "请输入 cloudflare worker 名称"
+    read -p "(默认: 取消): " cf_worker_name
+    [ -z "$cf_worker_name" ] && Println "已取消...\n" && exit 1
+    Println "	worker 名称: $green $cf_worker_name $plain\n"
+}
+
+SetCloudflareWorkerPath()
+{
+    Println "请输入 cloudflare worker 路径名称"
+    while read -p "(默认: 取消): " cf_worker_path 
+    do
+        case $cf_worker_path in
+            "") 
+                Println "已取消 ...\n"
+                exit 1
+            ;;
+            *[!0-9A-Za-z_-.@]*) 
+                Println "$error 路径格式错误\n"
+            ;;
+            *) 
+                break
+            ;;
+        esac
+    done
+    Println "	worker 路径: $green $cf_worker_path $plain\n"
+}
+
+SetCloudflareWorkerProjectName()
+{
+    Println "请输入 cloudflare worker 项目名称"
+    while read -p "(默认: 随机): " cf_worker_project_name 
+    do
+        case $cf_worker_project_name in
+            "") 
+                printf -v cf_worker_project_name '%(%s)T'
+                cf_worker_project_name="$(RandStr)_$cf_worker_project_name"
+                break
+            ;;
+            *) 
+                if [[ $cf_worker_project_name =~ ^[A-Za-z]([a-zA-Z0-9\_\-]{1,61})[A-Za-z0-9]$ ]] 
+                then
+                    cf_worker_project_name=$(tr '[:upper:]' '[:lower:]' <<< "$cf_worker_project_name")
+                    break
+                else
+                    Println "$error 项目名称格式错误(要求: 字母开头, 字母或数字结尾, 1 - 63 位字母数字_-)\n"
+                fi
+            ;;
+        esac
+    done
+    Println "	worker 项目名称: $green $cf_worker_project_name $plain\n"
+}
+
+AddCloudflareWorker()
+{
+    if [ ! -s "$CF_CONFIG" ] 
+    then
+        printf '{"%s":[],"%s":[],"%s":[]}' "users" "hosts" "workers" > "$CF_CONFIG"
+    fi
+
+    [ ! -d "$CF_WORKERS_ROOT" ] && mkdir -p "$CF_WORKERS_ROOT"
+    cd "$CF_WORKERS_ROOT"
+
+    Println "
+  ${green}1.$plain stream proxy ( 适用于 IBM CF 中转加速 )
+  ${green}2.$plain xtream codes proxy
+  ${green}3.$plain 自定义 worker
+
+    "
+    while read -p "选择 worker: " add_cf_worker_num 
+    do
+        case $add_cf_worker_num in
+            1) 
+                if [ ! -d "$CF_WORKERS_ROOT/stream_proxy" ] 
+                then
+                    wrangler generate "stream_proxy"
+                    wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/stream_proxy.js" -qO "$CF_WORKERS_ROOT/stream_proxy/index.js"
+                fi
+
+                SetCloudflareWorkerName
+                cf_worker_path="stream_proxy"
+                SetCloudflareWorkerProjectName
+                break
+            ;;
+            2) 
+                if [ ! -d "$CF_WORKERS_ROOT/xtream_codes_proxy" ] 
+                then
+                    wrangler generate "xtream_codes_proxy"
+                    wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/xtream_codes_proxy.js" -qO "$CF_WORKERS_ROOT/xtream_codes_proxy/index.js"
+                fi
+
+                SetCloudflareWorkerName
+                cf_worker_path="xtream_codes_proxy"
+                SetCloudflareWorkerProjectName
+                break
+            ;;
+            3) 
+                ListCloudflareWorkers
+                SetCloudflareWorkerName
+                SetCloudflareWorkerPath
+                SetCloudflareWorkerProjectName
+
+                if [ -d "$CF_WORKERS_ROOT/$cf_worker_path" ] 
+                then
+                    Println "$error 路径已经存在, 是否仍要添加 ? [y/N]"
+                    read -p "(默认: N): " force_add_yn
+                    force_add_yn=${force_add_yn:-N}
+                    if [[ $force_add_yn == [Nn] ]] 
+                    then
+                        Println "已取消 ...\n"
+                        exit 1
+                    fi
+                else
+                    wrangler generate "$cf_worker_path"
+                fi
+                break
+            ;;
+            *) 
+                Println "$error 请输入正确的序号\n"
+            ;;
+        esac
+    done
+
+    new_worker=$(
+    $JQ_FILE -n --arg name "$cf_worker_name" --arg path "$cf_worker_path" --arg project_name "$cf_worker_project_name" \
+        '{
+            name: $name,
+            path: $path,
+            project_name: $project_name
+        }'
+    )
+    jq_path='["workers"]'
+    JQ add "$CF_CONFIG" "[$new_worker]"
+    Println "$info worker: $cf_worker_name 添加成功\n"
+}
+
+GetCloudflareWorkers()
+{
+    cf_workers_list=""
+    cf_workers_count=0
+    cf_workers_name=()
+    cf_workers_path=()
+    cf_workers_project_name=()
+    while IFS=" " read -r name path project_name
+    do
+        cf_workers_count=$((cf_workers_count+1))
+        name=${name#\"}
+        cf_workers_name+=("$name")
+        cf_workers_path+=("$path")
+        project_name=${project_name%\"}
+        cf_workers_project_name+=("$project_name")
+
+        cf_workers_list="$cf_workers_list $green$cf_workers_count.$plain\r\e[6C名称: $green$name$plain  路径: $green$path$plain\n\e[6C项目名称: $green$project_name$plain\n\n"
+    done < <($JQ_FILE '(.workers| if .== null then [] else . end)[]|[.name,.path,.project_name]|join(" ")' "$CF_CONFIG")
+    return 0
+}
+
+ListCloudflareWorkers()
+{
+    if [ ! -s "$CF_CONFIG" ] 
+    then
+        Println "$error 请先添加 worker\n" && exit 1
+    fi
+
+    GetCloudflareWorkers
+
+    if [ "$cf_workers_count" -gt 0 ] 
+    then
+        Println "$cf_workers_list"
+    else
+        Println "$error 没有 worker\n"
+    fi
+}
+
+ViewCloudflareWorker()
+{
+    ListCloudflareWorkers
+}
+
+EditCloudflareWorker()
+{
+    ListCloudflareWorkers
+
+    if [ "$cf_workers_count" -eq 0 ] 
+    then
+        echo -e "$error 请先添加 worker\n"
+        exit 1
+    fi
+
+    echo -e "选择 worker"
+    while read -p "(默认: 取消): " cf_workers_num
+    do
+        case "$cf_workers_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_workers_num" -gt 0 ] && [ "$cf_workers_num" -le "$cf_workers_count" ]
+                then
+                    cf_workers_index=$((cf_workers_num-1))
+                    cf_worker_name=${cf_workers_name[cf_workers_index]}
+                    cf_worker_path=${cf_workers_path[cf_workers_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "请输入 cloudflare worker 名称"
+    read -p "(默认: $cf_worker_name): " cf_worker_name_new
+    cf_worker_name_new=${cf_worker_name_new:-$cf_worker_name}
+    Println "	worker 名称: $green $cf_worker_name_new $plain\n"
+
+    Println "请输入 cloudflare worker 路径名称"
+    while read -p "(默认: $cf_worker_path): " cf_worker_path_new 
+    do
+        case $cf_worker_path in
+            "") 
+                cf_worker_path_new=$cf_worker_path
+                break
+            ;;
+            *[!0-9A-Za-z_-]*) 
+                Println "$error 路径格式错误\n"
+            ;;
+            *) 
+                if [ "$cf_worker_path_new" == "$cf_worker_path" ] 
+                then
+                    break
+                elif [ -d "$CF_WORKERS_ROOT/$cf_worker_path_new" ] 
+                then
+                    Println "$error 路径已经存在\n"
+                    continue
+                else
+                    mv "$CF_WORKERS_ROOT/$cf_worker_path" "$CF_WORKERS_ROOT/$cf_worker_path_new"
+                    break
+                fi
+            ;;
+        esac
+    done
+    Println "	worker 路径: $green $cf_worker_path_new $plain\n"
+
+    new_worker=$(
+    $JQ_FILE -n --arg name "$cf_worker_name_new" --arg path "$cf_worker_path_new" \
+        '{
+            name: $name,
+            path: $path
+        }'
+    )
+
+    jq_path='["workers",'"$cf_workers_index"']'
+    JQ replace "$CF_CONFIG" "$new_worker"
+    Println "$info worker 修改成功\n"
+}
+
+DelCloudflareWorker()
+{
+    ListCloudflareWorkers
+
+    if [ "$cf_workers_count" -eq 0 ] 
+    then
+        echo -e "$error 请先添加 worker\n"
+        exit 1
+    fi
+
+    echo -e "选择 worker"
+    while read -p "(默认: 取消): " cf_workers_num
+    do
+        case "$cf_workers_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_workers_num" -gt 0 ] && [ "$cf_workers_num" -le "$cf_workers_count" ]
+                then
+                    cf_workers_index=$((cf_workers_num-1))
+                    cf_worker_name=${cf_workers_name[cf_workers_index]}
+                    cf_worker_path=${cf_workers_path[cf_workers_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    if [ -d "$CF_WORKERS_ROOT/$cf_worker_path" ] 
+    then
+        Println "是否删除 worker 目录 $CF_WORKERS_ROOT/$cf_worker_path ? [y/N]"
+        read -p "(默认: N): " del_cf_worker_path
+        del_cf_worker_path=${del_cf_worker_path:-N}
+        if [[ $del_cf_worker_path == [Yy] ]] 
+        then
+            rm -rf "$CF_WORKERS_ROOT/${cf_worker_path:-notfound}"
+        fi
+    fi
+
+    jq_path='["workers"]'
+    JQ delete "$CF_CONFIG" "$cf_workers_index"
+    Println "$info worker: $cf_worker_name 删除成功\n"
+}
+
+InstallPython()
+{
+    Println "$info 检查依赖，耗时可能会很长..."
+    CheckRelease
+    if [ "$release" == "rpm" ] 
+    then
+        Println "$info 需要编译安装 python3, 是否继续 ? [Y/n]"
+        read -p "(默认: Y): " python_install_yn
+        python_install_yn=${python_install_yn:-Y}
+        if [[ $python_install_yn == [Yy] ]] 
+        then
+            Progress &
+            progress_pid=$!
+            trap '
+                kill $progress_pid 2> /dev/null
+            ' EXIT
+            yum groupinstall -y 'Development Tools' >/dev/null 2>&1
+            yum install -y gcc openssl-devel bzip2-devel libffi-devel >/dev/null 2>&1
+            echo -n "...50%..."
+            cd ~
+            wget --timeout=10 --tries=3 --no-check-certificate https://www.python.org/ftp/python/3.8.4/Python-3.8.4.tgz -qO Python-3.8.4.tgz
+            tar xzf Python-3.8.4.tgz >/dev/null 2>&1
+            cd Python-3.8.4
+            ./configure ––enable–optimizations >/dev/null 2>&1
+            make >/dev/null 2>&1
+            make install >/dev/null 2>&1
+            kill $progress_pid
+            trap - EXIT
+            echo -n "...100%" && echo
+        else
+            Println "已取消 ...\n"
+            exit 1
+        fi
+    fi
+}
+
+DeployCloudflareWorker()
+{
+    ListCloudflareWorkers
+
+    if [ "$cf_workers_count" -eq 0 ] 
+    then
+        echo -e "$error 请先添加 worker\n"
+        exit 1
+    fi
+
+    echo -e "选择 worker"
+    while read -p "(默认: 取消): " cf_workers_num
+    do
+        case "$cf_workers_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_workers_num" -gt 0 ] && [ "$cf_workers_num" -le "$cf_workers_count" ]
+                then
+                    cf_workers_index=$((cf_workers_num-1))
+                    cf_worker_name=${cf_workers_name[cf_workers_index]}
+                    cf_worker_path=${cf_workers_path[cf_workers_index]}
+                    cf_worker_project_name=${cf_workers_project_name[cf_workers_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    if [ ! -d "$CF_WORKERS_ROOT/$cf_worker_path" ] 
+    then
+        Println "$error worker 目录: $CF_WORKERS_ROOT/$cf_worker_path 不存在\n"
+        exit 1
+    fi
+
+    ListCloudflareUsers
+
+    if [ "$cf_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
+
+    echo -e "选择用户"
+    while read -p "(默认: 取消): " cf_users_num
+    do
+        case "$cf_users_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
+                then
+                    cf_users_index=$((cf_users_num-1))
+                    cf_user_email=${cf_users_email[cf_users_index]}
+                    cf_user_pass=${cf_users_pass[cf_users_index]}
+                    cf_user_token=${cf_users_token[cf_users_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    if [ -n "$cf_user_token" ] 
+    then
+        CF_ACCOUNT_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/accounts" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $cf_user_token" \
+            | $JQ_FILE -r '.result[0].id'
+        ) || true
+        if [ -z "$CF_ACCOUNT_ID" ] || [ "$CF_ACCOUNT_ID" == null ]
+        then
+            Println "$error 无法获取用户 ID, Token 错误 ?\n"
+            exit 1
+        fi
+        if [ "$cf_worker_path" == "stream_proxy" ] 
+        then
+            if [ -s "$IBM_CONFIG" ] 
+            then
+                GetIbmcfApps
+                if [ "$ibm_cf_apps_count" -gt 0 ] 
+                then
+                    Println "$info 是否使用 IBM CF APP 中转 [Y/n]"
+                    read -p "(默认: Y): " use_ibm_cf_app_yn
+                    use_ibm_cf_app_yn=${use_ibm_cf_app_yn:-Y}
+                    if [[ "$use_ibm_cf_app_yn" == [Yy] ]] 
+                    then
+                        ListIbmcfApps
+                        echo -e "选择 APP"
+                        while read -p "(默认: 取消): " ibm_cf_apps_num
+                        do
+                            case "$ibm_cf_apps_num" in
+                                "")
+                                    Println "已取消...\n" && exit 1
+                                ;;
+                                *[!0-9]*)
+                                    Println "$error 请输入正确的序号\n"
+                                ;;
+                                *)
+                                    if [ "$ibm_cf_apps_num" -gt 0 ] && [ "$ibm_cf_apps_num" -le "$ibm_cf_apps_count" ]
+                                    then
+                                        ibm_cf_apps_index=$((ibm_cf_apps_num-1))
+                                        ibm_cf_app_name=${ibm_cf_apps_name[ibm_cf_apps_index]}
+                                        ibm_user_email=${ibm_cf_apps_user_email[ibm_cf_apps_index]}
+                                        ibm_cf_app_routes_count=${ibm_cf_apps_routes_count[ibm_cf_apps_index]}
+                                        ibm_cf_app_route_hostname=${ibm_cf_apps_route_hostname[ibm_cf_apps_index]}
+                                        ibm_cf_app_route_port=${ibm_cf_apps_route_port[ibm_cf_apps_index]}
+                                        ibm_cf_app_route_domain=${ibm_cf_apps_route_domain[ibm_cf_apps_index]}
+                                        ibm_cf_app_route_path=${ibm_cf_apps_route_path[ibm_cf_apps_index]}
+                                        IFS="|" read -r -a ibm_cf_app_routes_hostname <<< "$ibm_cf_app_route_hostname"
+                                        IFS="|" read -r -a ibm_cf_app_routes_port <<< "$ibm_cf_app_route_port"
+                                        IFS="|" read -r -a ibm_cf_app_routes_domain <<< "$ibm_cf_app_route_domain"
+                                        IFS="|" read -r -a ibm_cf_app_routes_path <<< "${ibm_cf_app_route_path}|"
+                                        break
+                                    else
+                                        Println "$error 请输入正确的序号\n"
+                                    fi
+                                ;;
+                            esac
+                        done
+
+                        ibm_cf_apps_list=""
+                        ibm_cf_apps_link=()
+                        for((i=0;i<ibm_cf_app_routes_count;i++));
+                        do
+                            if [ -n "${ibm_cf_app_routes_path[i]}" ] 
+                            then
+                                path="/${ibm_cf_app_routes_path[i]}"
+                            else
+                                path=""
+                            fi
+                            upstream="${ibm_cf_app_routes_hostname[i]}.${ibm_cf_app_routes_domain[i]}$path"
+                            ibm_cf_apps_link+=("$upstream")
+                            ibm_cf_apps_list="$ibm_cf_apps_list $green$((i+1)).$plain\r\e[6C$upstream\n\n"
+                        done
+
+                        Println "$ibm_cf_apps_list"
+
+                        echo -e "选择链接"
+                        while read -p "(默认: 取消): " ibm_cf_apps_link_num 
+                        do
+                            case $ibm_cf_apps_link_num in
+                                "") 
+                                    Println "已取消 ...\n"
+                                    exit 1
+                                ;;
+                                *[!0-9]*) 
+                                    Println "$error 请输入正确的序号\n"
+                                ;;
+                                *) 
+                                    if [ "$ibm_cf_apps_link_num" -gt 0 ] && [ "$ibm_cf_apps_link_num" -le "$ibm_cf_app_routes_count" ] 
+                                    then
+                                        ibm_cf_apps_link_index=$((ibm_cf_apps_link_num-1))
+                                        upstream=${ibm_cf_apps_link[ibm_cf_apps_link_index]}
+                                        break
+                                    else
+                                        Println "$error 请输入正确的序号\n"
+                                    fi
+                                ;;
+                            esac
+                        done
+                    fi
+                fi
+            fi
+            if [ -z "${upstream:-}" ] 
+            then
+                Println "$info 输入源站 ip 或者 中转服务器的域名(比如 IBM CF APP 的域名)"
+                read -p "(默认: 取消): " upstream
+                [ -z "$upstream" ] && Println "已取消 ...\n" && exit 1
+            fi
+            sed -i 's/const upstream = .*/const upstream = "'"$upstream"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/index.js"
+        fi
+
+        #data=$(< "$CF_WORKERS_ROOT/$cf_worker_path/index.js")
+        #if [[ $(curl -X PUT "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts/$cf_worker_project_name" \
+        #    -H  "Authorization: Bearer $cf_user_token" \
+        #    -H "Content-Type: application/javascript" \
+        #    --data "$data" | $JQ_FILE -r '.success') == "true" ]]
+        #then
+        #    Println "$info $cf_worker_name 部署成功\n"
+        #fi
+        cd "$CF_WORKERS_ROOT/$cf_worker_path"
+        sed -i 's/account_id = .*/account_id = "'"$CF_ACCOUNT_ID"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/wrangler.toml"
+        sed -i 's/name = .*/name = "'"$cf_worker_project_name"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/wrangler.toml"
+        CF_API_TOKEN=$cf_user_token wrangler publish || Println "$error 请检查 Token 权限\n"
+        exit 0
+    else
+        Println "$error 请先添加此用户的 Token\n"
+        exit 1
+    fi
+
+    if [[ ! -x $(command -v python3) ]] 
+    then
+        Println "$info 安装 python3 ..."
+        InstallPython
+    fi
+
+    Println "$info 尝试使用账号和密码部署"
+    if [ ! -e "$CF_WORKERS_FILE" ] 
+    then
+        Println "$info 下载 ${CF_WORKERS_FILE##*/}"
+        wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/${CF_WORKERS_FILE##*/}" -qO "$CF_WORKERS_ROOT/${CF_WORKERS_FILE##*/}"
+    fi
+    IFS="=" read -r success CF_ACCOUNT_ID < <(python3 \
+        "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o account_id \
+        | $JQ_FILE -r '[.success,.result[0].account.id]|join("=")'
+    ) || true
+    if [ "${success:-false}" == "false" ] 
+    then
+        Println "$error 无法获取用户 ID, 账号或密码错误 或者 cloudflare 暂时限制登录\n"
+        exit 1
+    fi
+}
+
+ListCloudflareWorkersRoutes()
+{
+    if [ ! -s "$CF_CONFIG" ] 
+    then
+        Println "$error 请先添加用户\n" && exit 1
+    fi
+
+    GetCloudflareUsers
+
+    if [ "$cf_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
+
+    cf_users_zones_list=""
+    cf_users_zones_count=0
+    cf_users_zones_name=()
+    cf_users_zones_id=()
+    cf_users_zones_account_id=()
+    cf_users_zones_account_token=()
+    cf_users_zones_account_email=()
+    cf_users_zones_routes_count=()
+    cf_users_zones_route_id=()
+    cf_users_zones_route_script=()
+    cf_users_zones_route_pattern=()
+    for((i=0;i<cf_users_count;i++));
+    do
+        if [ -n "${cf_users_token[i]:-}" ] 
+        then
+            IFS=" " read -r zone_id zone_name account_id < <(curl -s -X GET "https://api.cloudflare.com/client/v4/zones" \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Bearer ${cf_users_token[i]}" \
+                | $JQ_FILE -r '[([.result[].id]|join("|")),([.result[].name]|join("|")),([.result[].account.id]|join("|"))]|join(" ")' 2> /dev/null
+            ) || Println "$error Token 权限错误 ?\n"
+            IFS="|" read -r -a zones_id <<< "$zone_id"
+            IFS="|" read -r -a zones_name <<< "$zone_name"
+            IFS="|" read -r -a accounts_id <<< "$account_id"
+            for((j=0;j<${#zones_id[@]};j++));
+            do
+                cf_users_zones_count=$((cf_users_zones_count+1))
+                IFS="^" read -r count id script pattern < <(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/workers/routes" \
+                    -H "Content-Type: application/json" \
+                    -H "Authorization: Bearer ${cf_users_token[i]}" \
+                    | $JQ_FILE '[(.result|length),([.result[].id]|join(" ")),([.result[].script]|join(" ")),([.result[].pattern]|join(" "))]|join("^")'
+                )
+
+                count="${count#\"}"
+                pattern=${pattern%\"}
+                cf_users_zones_routes_count+=("$count")
+                cf_users_zones_route_id+=("$id")
+                cf_users_zones_route_script+=("$script")
+                cf_users_zones_route_pattern+=("$pattern")
+
+                cf_users_zones_id+=("${zones_id[j]}")
+                cf_users_zones_name+=("${zones_name[j]}")
+                cf_users_zones_account_id+=("${accounts_id[j]}")
+                cf_users_zones_account_token+=("${cf_users_token[i]}")
+                cf_users_zones_account_email+=("${cf_users_email[i]}")
+                cf_users_zones_list="$cf_users_zones_list $green$cf_users_zones_count.$plain\r\e[6C$green${zones_name[j]}$plain  路由数: $green$count$plain\n\n"
+            done
+        fi
+    done
+
+    if [ "$cf_users_zones_count" -eq 0 ] 
+    then
+        Println "$error 没有找到域名, 请先添加源站\n"
+        exit 1
+    fi
+
+    Println "$cf_users_zones_list"
+}
+
+ConfigCloudflareWorkerRoute()
+{
+    Println "$info 搜索路由 ..."
+
+    ListCloudflareWorkersRoutes
+
+    echo -e "选择域名"
+    while read -p "(默认: 取消): " cf_zones_num
+    do
+        case $cf_zones_num in
+            "") 
+                Println "已取消 ...\n"
+                exit 1
+            ;;
+            *[!0-9]*) 
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *) 
+                if [ "$cf_zones_num" -gt 0 ] && [ "$cf_zones_num" -le "$cf_users_zones_count" ] 
+                then
+                    cf_zones_index=$((cf_zones_num-1))
+                    cf_users_zone_name=${cf_users_zones_name[cf_zones_index]}
+                    cf_users_zone_id=${cf_users_zones_id[cf_zones_index]}
+                    cf_users_zone_account_id=${cf_users_zones_account_id[cf_zones_index]}
+                    cf_users_zone_account_token=${cf_users_zones_account_token[cf_zones_index]}
+                    cf_users_zone_account_email=${cf_users_zones_account_email[cf_zones_index]}
+                    cf_users_zone_routes_count=${cf_users_zones_routes_count[cf_zones_index]}
+                    cf_users_zone_route_id=${cf_users_zones_route_id[cf_zones_index]}
+                    cf_users_zone_route_script=${cf_users_zones_route_script[cf_zones_index]}
+                    cf_users_zone_route_pattern=${cf_users_zones_route_pattern[cf_zones_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    if [ "$cf_users_zone_routes_count" -gt 0 ] 
+    then
+        IFS=" " read -r -a cf_users_zone_routes_id <<< "$cf_users_zone_route_id"
+        IFS=" " read -r -a cf_users_zone_routes_script <<< "$cf_users_zone_route_script"
+        IFS=" " read -r -a cf_users_zone_routes_pattern <<< "$cf_users_zone_route_pattern"
+
+        cf_users_zone_routes_list=""
+        for((i=0;i<cf_users_zone_routes_count;i++));
+        do
+            cf_users_zone_routes_list="$cf_users_zone_routes_list $green$((i+1)).$plain\r\e[6C$green${cf_users_zone_routes_pattern[i]}$plain => $green${cf_users_zone_routes_script[i]}$plain\n\n"
+        done
+
+        cf_users_zone_route_add_num=$((cf_users_zone_routes_count+1))
+        cf_users_zone_routes_list="$cf_users_zone_routes_list $green$cf_users_zone_route_add_num.$plain\r\e[6C$green添加路由$plain\n"
+        Println "$cf_users_zone_routes_list"
+
+        while read -p "(默认: 取消): " cf_users_zone_routes_num
+        do
+            if [ "$cf_users_zone_routes_num" == "$cf_users_zone_route_add_num" ] 
+            then
+                break
+            fi
+            case $cf_users_zone_routes_num in
+                "") 
+                    Println "已取消 ...\n"
+                    exit 1
+                ;;
+                *[!0-9]*) 
+                    Println "$error 请输入正确的序号\n"
+                ;;
+                *) 
+                    if [ "$cf_users_zone_routes_num" -gt 0 ] && [ "$cf_users_zone_routes_num" -le "$cf_users_zone_routes_count" ] 
+                    then
+                        cf_users_zone_routes_index=$((cf_users_zone_routes_num-1))
+                        cf_users_zone_route_id=${cf_users_zone_routes_id[cf_users_zone_routes_index]}
+                        cf_users_zone_route_script=${cf_users_zone_routes_script[cf_users_zone_routes_index]}
+                        cf_users_zone_route_pattern=${cf_users_zone_routes_pattern[cf_users_zone_routes_index]}
+                        Println " $green$cf_users_zone_route_pattern$plain => $green$cf_users_zone_route_script$plain\n\n ${green}1.$plain\r\e[6C更改路由\n ${green}2.$plain\e[6C删除路由\n"
+                        read -p "(默认: 取消): " cf_users_zone_route_num
+                        case $cf_users_zone_route_num in
+                            "") 
+                                Println "已取消 ...\n"
+                                exit 1
+                            ;;
+                            1) 
+                                Println "$info 输入已经存在的 worker 项目名称"
+                                read -p "(默认: 取消): " script
+                                [ -z "$script" ] && Println "已取消 ...\n" && exit 1
+                                Println "$info 输入路由"
+                                read -p "(默认: 取消): " pattern
+                                [ -z "$pattern" ] && Println "已取消 ...\n" && exit 1
+                                if [[ $(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$cf_users_zone_id/workers/routes/$cf_users_zone_route_id" \
+                                    -H "Authorization: Bearer $cf_users_zone_account_token" \
+                                    -H "Content-Type: application/json" \
+                                    --data '{"pattern":"'"$pattern"'","script":"'"$script"'"}' \
+                                    | $JQ_FILE -r '.success' ) == "true" ]]
+                                then
+                                    Println "$info 路由更改成功\n"
+                                else
+                                    Println "$error 路由更改失败\n"
+                                fi
+                            ;;
+                            2) 
+                                if [[ $(curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/$cf_users_zone_id/workers/routes/$cf_users_zone_route_id" \
+                                    -H "Authorization: Bearer $cf_users_zone_account_token" \
+                                    -H "Content-Type: application/json" \
+                                    | $JQ_FILE -r '.success' ) == "true" ]] 
+                                then
+                                    Println "$info 路由删除成功\n"
+                                else
+                                    Println "$info 路由删除成功\n"
+                                fi
+                            ;;
+                            *[!0-9]*)
+                                Println "$error 请输入正确的序号\n"
+                            ;;
+                            *) 
+                                Println "$error 请输入正确的序号\n"
+                            ;;
+                        esac
+                        exit 0
+                    else
+                        Println "$error 请输入正确的序号\n"
+                    fi
+                ;;
+            esac
+        done
+    fi
+
+    GetCloudflareWorkers
+
+    if [ "$cf_workers_count" -gt 0 ] 
+    then
+        Println "$cf_workers_list"
+    else
+        Println "$error 本地没有 worker"
+    fi
+
+    Println "$info 输入已经存在的 worker 项目名称"
+    read -p "(默认: 取消): " script
+    [ -z "$script" ] && Println "已取消 ...\n" && exit 1
+    Println "$info 输入路由"
+    read -p "(默认: 取消): " pattern
+    [ -z "$pattern" ] && Println "已取消 ...\n" && exit 1
+    if [[ $(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$cf_users_zone_id/workers/routes" \
+        -H "Authorization: Bearer $cf_users_zone_account_token" \
+        -H "Content-Type: application/json" \
+        --data '{"pattern":"'"$pattern"'","script":"'"$script"'"}' \
+        | $JQ_FILE -r '.success' ) == "true" ]]
+    then
+        Println "$info 路由添加成功\n"
+    else
+        Println "$error 路由添加失败\n"
+    fi
+}
+
+CloudflareWorkersMenu()
+{
+    Println "  cloudflare 面板 $plain${red}[v$sh_ver]$plain
+
+  ${green}1.$plain 安装 wrangler
+  ${green}2.$plain 更新 wrangler
+  ${green}3.$plain 查看 worker
+  ${green}4.$plain 添加 worker
+  ${green}5.$plain 更改 worker
+  ${green}6.$plain 部署 worker
+  ${green}7.$plain 设置 路由
+  ${green}8.$plain 删除 worker
+
+ $tip 当前: ${green}workers$plain 面板
+ $tip 输入: c 切换到 partner 面板\n\n"
+    read -p "请输入数字 [1-8]: " cloudflare_workers_num
+    case $cloudflare_workers_num in
+        c)
+            CloudflarePartnerMenu
+        ;;
+        1) InstallWrangler
+        ;;
+        2) UpdateWrangler
+        ;;
+        3) ViewCloudflareWorker
+        ;;
+        4) AddCloudflareWorker
+        ;;
+        5) EditCloudflareWorker
+        ;;
+        6) DeployCloudflareWorker
+        ;;
+        7) ConfigCloudflareWorkerRoute
+        ;;
+        8) DelCloudflareWorker
+        ;;
+        *) Println "$error 请输入正确的数字 [1-8]\n"
+        ;;
+    esac
+    exit 0
+}
+
+if [ "${0##*/}" == "ibm" ] || [ "${0##*/}" == "ibm.sh" ]
 then
     CheckShFile
+
+    [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
+
+    if [ ! -e "$JQ_FILE" ] 
+    then
+        Println "$info 检查依赖，耗时可能会很长..."
+        CheckRelease
+        InstallJq
+    fi
+
+    IbmcfMenu
+elif [ "${0##*/}" == "cf" ] || [ "${0##*/}" == "cf.sh" ]
+then
+    CheckShFile
+
+    [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
+
+    if [ ! -e "$JQ_FILE" ] 
+    then
+        Println "$info 检查依赖，耗时可能会很长..."
+        CheckRelease
+        InstallJq
+    fi
 
     if [ -d "$IPTV_ROOT" ]
     then
@@ -21035,64 +23669,32 @@ then
         fi
 
         CF_CONFIG=$CF_CONFIG_NEW
+
+        CF_WORKERS_ROOT_NEW="$IPTV_ROOT/${CF_WORKERS_ROOT##*/}"
+
+        if [ -d "$CF_WORKERS_ROOT" ] && [ ! -d "$CF_WORKERS_ROOT_NEW" ]
+        then
+            mv "$CF_WORKERS_ROOT" "$CF_WORKERS_ROOT_NEW"
+        fi
+
+        CF_WORKERS_ROOT=$CF_WORKERS_ROOT_NEW
+
+        IBM_CONFIG_NEW="$IPTV_ROOT/${IBM_CONFIG##*/}"
+
+        if [ -e "$IBM_CONFIG" ] && [ ! -e "$IBM_CONFIG_NEW" ]
+        then
+            mv "$IBM_CONFIG" "$IBM_CONFIG_NEW"
+        fi
+
+        IBM_CONFIG=$IBM_CONFIG_NEW
     fi
 
-    Println "  cloudflare partner cname 面板 $plain${red}[v$sh_ver]$plain
-
-  ${green}1.$plain 查看 子域名
-  ${green}2.$plain 添加 子域名
-  ${green}3.$plain 查看 源站
-  ${green}4.$plain 添加 源站
-  ${green}5.$plain 查看 用户
-  ${green}6.$plain 添加 用户
-  ${green}7.$plain 更改 用户
-  ${green}8.$plain 查看 CFP
-  ${green}9.$plain 添加 CFP
- ${green}10.$plain 更改 CFP
- ${green}11.$plain 删除 子域名
- ${green}12.$plain 删除 源站
- ${green}13.$plain 删除 用户
- ${green}14.$plain 删除 CFP
- ${green}15.$plain 获取最优 IP
-
- $tip 输入: cf 打开面板\n\n"
-    read -p "请输入数字 [1-15]: " cloudflare_num
-    case $cloudflare_num in
-        1) ViewCloudflareSubdomain
-        ;;
-        2) AddCloudflareSubdomain
-        ;;
-        3) ViewCloudflareZone
-        ;;
-        4) AddCloudflareZone
-        ;;
-        5) ViewCloudflareUser
-        ;;
-        6) AddCloudflareUser
-        ;;
-        7) EditCloudflareUser
-        ;;
-        8) ViewCloudflareHost
-        ;;
-        9) AddCloudflareHost
-        ;;
-        10) RegenCloudflareHost
-        ;;
-        11) DelCloudflareSubdomain
-        ;;
-        12) DelCloudflareZone
-        ;;
-        13) DelCloudflareUser
-        ;;
-        14) DelCloudflareHost
-        ;;
-        15) 
-            Println "$info 一键获取最优 IP 脚本 Mac/Linux: https://github.com/woniuzfb/cloudflare-fping\n"
-        ;;
-        *) Println "$error 请输入正确的数字 [1-15]\n"
-        ;;
-    esac
-    exit 0
+    if [ "${1:-}" == "w" ] 
+    then
+        CloudflareWorkersMenu
+    else
+        CloudflarePartnerMenu
+    fi
 elif [ "${0##*/}" == "or" ] || [ "${0##*/}" == "or.sh" ]
 then
     CheckShFile
@@ -21175,7 +23777,6 @@ then
         ;;
         11) 
             RestartNginx
-            Println "$info openresty 已重启\n"
         ;;
         12) 
             NginxCheckDomains
@@ -21289,7 +23890,6 @@ then
         ;;
         11) 
             RestartNginx
-            Println "$info Nginx 已重启\n"
         ;;
         12) 
             NginxCheckDomains
@@ -21492,12 +24092,12 @@ then
 
             Println "$info 更新 v2ray 脚本...\n"
 
-            sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1 || true)
+            sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
 
             if [ -z "$sh_new_ver" ] 
             then
                 Println "$error 无法连接到 Github ! 尝试备用链接...\n"
-                sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1 || true)
+                sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
                 [ -z "$sh_new_ver" ] && Println "$error 无法连接备用链接!\n" && exit 1
             fi
 
@@ -21680,7 +24280,7 @@ ${green}8.$plain 浏览频道
                 IFS=" " read -ra accounts <<< "$account_line"
                 for domain in "${domains[@]}"
                 do
-                    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+                    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
                     if [ -n "${ip:-}" ] 
                     then
                         for account in "${accounts[@]}"
@@ -21711,7 +24311,7 @@ ${green}8.$plain 浏览频道
                 IFS=" " read -ra accounts <<< "$account_line"
                 for domain in "${domains[@]}"
                 do
-                    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }' || true)
+                    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
                     if [ -n "${ip:-}" ] 
                     then
                         for account in "${accounts[@]}"
@@ -22027,7 +24627,7 @@ case "$cmd" in
             fi
         done < <( wget --timeout=10 --tries=3 --no-check-certificate "https://poppler.freedesktop.org/" -qO- )
 
-        jq_ver=$(curl --silent -m 10 "https://api.github.com/repos/stedolan/jq/releases/latest" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+        jq_ver=$(curl --silent -m 10 "https://api.github.com/repos/stedolan/jq/releases/latest" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') || true
         if [ -n "$jq_ver" ]
         then
             mkdir -p "$FFMPEG_MIRROR_ROOT/$jq_ver/"
@@ -22147,7 +24747,7 @@ case "$cmd" in
 
         for((i=0;i<hls_count;i++));
         do
-            echo -e "  $green$((i+1)).$plain ${chnls_channel_name[i]} ${chnls_stream_link[i]}"
+            echo -e "  $green$((i+1)).$plain\r\e[6C${chnls_channel_name[i]} ${chnls_stream_link[i]}"
             if [ -e "$LIVE_ROOT/${chnls_output_dir_name[i]}" ] 
             then
                 if ls -A "$LIVE_ROOT/${chnls_output_dir_name[i]}"/* > /dev/null 2>&1 
@@ -22422,7 +25022,7 @@ case "$cmd" in
                 headers="Referer: $stream_links_input?ar=0&as=1&volume=0\r\n"
                 stream_link_data=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
                 --header="${headers:0:-4}" \
-                "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$hinet_4gtv_chnl_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)" -qO- || true)
+                "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$hinet_4gtv_chnl_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)" -qO-) || true
                 if [ -n "$stream_link_data" ] 
                 then
                     stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
@@ -22471,7 +25071,7 @@ case "$cmd" in
                     stream_link_data=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
                     --header="${headers:0:-4}" \
                     --post-data "value=$value" \
-                    "https://api2.4gtv.tv/Channel/GetChannelUrl3" -qO- || true)
+                    "https://api2.4gtv.tv/Channel/GetChannelUrl3" -qO-) || true
                     if [ -n "$stream_link_data" ] 
                     then
                         break
@@ -23173,6 +25773,7 @@ AddVipChannel()
         esac
     done
 
+    # awk -v ORS=" " '$1 { print $0; } END { printf("\n"); }'
     Println "是否批量添加? [y/N]"
     read -p "(默认: 否): " vip_bulk_add
     vip_bulk_add=${vip_bulk_add:-N}
@@ -23181,6 +25782,7 @@ AddVipChannel()
         Println "请输入频道 ID, 同时也是目录名称和频道名称, 用空格分隔"
         read -p "(默认: 取消): " vip_channel
         IFS=" " read -r -a vip_channels <<< "$vip_channel"
+        new_channels=""
         for vip_channel in "${vip_channels[@]}"
         do
             new_channel=$(
@@ -23190,10 +25792,11 @@ AddVipChannel()
                     name: $name
                 }'
             )
-
-            jq_path='["hosts",'"$vip_hosts_index"',"channels"]'
-            JQ add "$VIP_FILE" "[$new_channel]"
+            [ -n "$new_channels" ] && new_channels="$new_channels,"
+            new_channels="$new_channels$new_channel"
         done
+        jq_path='["hosts",'"$vip_hosts_index"',"channels"]'
+        JQ add "$VIP_FILE" "[$new_channels]"
         Println "$info 批量添加成功\n"
     else
         SetVipChannelId
@@ -23365,19 +25968,24 @@ ListVipChannels()
             i_last=$i
             if [ "$vip_channels_count" -eq 1 ] 
             then
-                vip_channels_list="$vip_channels_list $green$((i+1)).$plain ${vip_channels_name[i]}\n 频道ID: ${vip_channels_id[i]}\n EPG ID: ${vip_channels_epg_id[i]:-无}\n"
+                vip_channels_list="$vip_channels_list $green$((i+1)).$plain\r\e[7C${vip_channels_name[i]}\n\e[7C频道ID: ${vip_channels_id[i]}\n\e[7CEPG ID: ${vip_channels_epg_id[i]:-无}\n"
             else
-                vip_channels_list="$vip_channels_list $green$((i+1)).$plain ${vip_channels_name[i]}"
+                vip_channels_list="$vip_channels_list $green$((i+1)).$plain\r\e[7C${vip_channels_name[i]}"
             fi
         else
             flag=0
-            vip_channels_list="$vip_channels_list\r\e[40C$green$((i+1)).$plain ${vip_channels_name[i]}\n 频道ID: ${vip_channels_id[i_last]}\r\e[40C频道ID: ${vip_channels_id[i]}\n EPG ID: ${vip_channels_epg_id[i_last]:-无}\r\e[40CEPG ID: ${vip_channels_epg_id[i]:-无}\n\n"
+            vip_channels_list="$vip_channels_list\r\e[40C$green$((i+1)).$plain\r\e[7C${vip_channels_name[i]}\n\e[7C频道ID: ${vip_channels_id[i_last]}\r\e[40C频道ID: ${vip_channels_id[i]}\n\e[7CEPG ID: ${vip_channels_epg_id[i_last]:-无}\r\e[40CEPG ID: ${vip_channels_epg_id[i]:-无}\n\n"
         fi
     done
 
+    if [ "$flag" -eq 1 ] 
+    then
+        vip_channels_list="$vip_channels_list\n 频道ID: ${vip_channels_id[i_last]}\n EPG ID: ${vip_channels_epg_id[i_last]:-无}\n\n"
+    fi
+
     if [ -n "$vip_channels_list" ] 
     then
-        Println "$vip_channels_list\n"
+        Println "$vip_channels_list"
     else
         Println "$error 请先添加频道\n" && exit 1
     fi
@@ -23544,8 +26152,18 @@ DelVipChannel()
 {
     ListVipChannels
 
+    echo -e " $green$((vip_channels_count+1)).$plain\r\e[7C全部删除\n"
+
     while read -p "请选择频道: " vip_channels_num
     do
+        if [ "$vip_channels_num" == $((vip_channels_count+1)) ] 
+        then
+            jq_path='["hosts",'"$vip_hosts_index"',"channels"]'
+            JQ replace "$VIP_FILE" "[]"
+
+            Println "$info 频道删除成功\n"
+            exit 0
+        fi
         case "$vip_channels_num" in
             "")
                 Println "已取消...\n" && exit 1
@@ -24221,9 +26839,6 @@ else
             export FFMPEG
             live_yn=${live_yn:-yes}
             proxy=${proxy:-$d_proxy}
-            user_agent=""
-            headers=""
-            cookies=""
             if [ "${stream_link:0:4}" != "http" ] 
             then
                 proxy=""
