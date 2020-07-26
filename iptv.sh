@@ -82,8 +82,9 @@
 
 set -euo pipefail
 
-sh_ver="1.26.0"
+sh_ver="1.33.0"
 sh_debug=0
+export LC_ALL=
 export LANG=en_US.UTF-8
 SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
@@ -145,77 +146,81 @@ Println()
     fi
 }
 
-[ $EUID -ne 0 ] && Println "[$error] 当前账号非ROOT(或没有ROOT权限),无法继续操作,请使用$green sudo su $plain来获取临时ROOT权限（执行后会提示输入当前账号的密码）." && exit 1
+[ $EUID -ne 0 ] && Println "$error 当前账号非ROOT(或没有ROOT权限),无法继续操作,请使用$green sudo su $plain来获取临时ROOT权限\n" && exit 1
 
 JQ()
 {
     FILE=$2
+
     if TMP_FILE=$(mktemp -q) 
     then
         chmod +r "$TMP_FILE"
     else
         printf -v TMP_FILE "${FILE}_%s" "$BASHPID"
     fi
-    trap 'rm -f $TMP_FILE' EXIT
-    (
-        flock 200
-        case $1 in
-            "add") 
-                if [ -n "${jq_path:-}" ] 
-                then
-                    $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) += $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                    jq_path=""
-                else
-                    $JQ_FILE --arg index "$3" --argjson value "$4" '.[$index] += $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                fi
-            ;;
-            "update") 
-                if [ -n "${jq_path:-}" ] 
-                then
-                    if [ "${4:-}" == "number" ] 
-                    then
-                        $JQ_FILE --argjson path "$jq_path" --arg value "$3" 'getpath($path) = ($value | tonumber)' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                    else
-                        $JQ_FILE --argjson path "$jq_path" --arg value "$3" 'getpath($path) = $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                    fi
-                    jq_path=""
-                else
-                    $JQ_FILE "$3" "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                fi
-            ;;
-            "replace") 
-                if [ -n "${jq_path:-}" ] 
-                then
-                    $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) = $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                    jq_path=""
-                else
-                    $JQ_FILE --arg index "$3" --argjson value "$4" '.[$index] = $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                fi
-            ;;
-            "delete") 
-                if [ -n "${jq_path:-}" ] 
-                then
-                    if [ -z "${4:-}" ] 
-                    then
-                        $JQ_FILE --argjson path "$jq_path" --arg index "$3" 'del(getpath($path)[$index|tonumber])' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                    else
-                        $JQ_FILE --argjson path "$jq_path" 'del(getpath($path)[] | select(.'"$3"'=='"$4"'))' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                    fi
-                    jq_path=""
-                else
-                    $JQ_FILE --arg index "$3" 'del(.[$index][] | select(.pid=='"$4"'))' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                fi
-            ;;
-        esac
 
-        if [ ! -s "$TMP_FILE" ] 
-        then
-            printf 'JQ ERROR!! action: %s, file: %s, tmp_file: %s, index: %s, other: %s' "$1" "$FILE" "$TMP_FILE" "$3" "${4:-none}" >> "$MONITOR_LOG"
-        else
-            mv "$TMP_FILE" "$FILE"
-        fi
-    ) 200< "$FILE"
+    exec {jq_lock_fd}>"$FILE.lock" || exit 1
+    flock "$jq_lock_fd"
+    trap 'rm -f $TMP_FILE; flock -u "$jq_lock_fd";' EXIT
+
+    case $1 in
+        "add") 
+            if [ -n "${jq_path:-}" ] 
+            then
+                $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) += $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                jq_path=""
+            else
+                $JQ_FILE --arg index "$3" --argjson value "$4" '.[$index] += $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+            fi
+        ;;
+        "update") 
+            if [ -n "${jq_path:-}" ] 
+            then
+                if [ "${4:-}" == "number" ] 
+                then
+                    $JQ_FILE --argjson path "$jq_path" --arg value "$3" 'getpath($path) = ($value | tonumber)' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                else
+                    $JQ_FILE --argjson path "$jq_path" --arg value "$3" 'getpath($path) = $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                fi
+                jq_path=""
+            else
+                $JQ_FILE "$3" "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+            fi
+        ;;
+        "replace") 
+            if [ -n "${jq_path:-}" ] 
+            then
+                $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) = $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                jq_path=""
+            else
+                $JQ_FILE --arg index "$3" --argjson value "$4" '.[$index] = $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+            fi
+        ;;
+        "delete") 
+            if [ -n "${jq_path:-}" ] 
+            then
+                if [ -z "${4:-}" ] 
+                then
+                    $JQ_FILE --argjson path "$jq_path" --arg index "$3" 'del(getpath($path)[$index|tonumber])' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                else
+                    $JQ_FILE --argjson path "$jq_path" 'del(getpath($path)[] | select(.'"$3"'=='"$4"'))' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                fi
+                jq_path=""
+            else
+                $JQ_FILE --arg index "$3" 'del(.[$index][] | select(.pid=='"$4"'))' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+            fi
+        ;;
+    esac
+
+    if [ ! -s "$TMP_FILE" ] 
+    then
+        printf 'JQ ERROR!! action: %s, file: %s, tmp_file: %s, index: %s, other: %s' "$1" "$FILE" "$TMP_FILE" "$3" "${4:-none}" >> "$MONITOR_LOG"
+    else
+        mv "$TMP_FILE" "$FILE"
+    fi
+
     rm -f "$TMP_FILE"
+    flock -u "$jq_lock_fd"
     trap - EXIT
 }
 
@@ -300,7 +305,7 @@ SyncFile()
                     JQ delete "${chnl_sync_files[sync_i]}" "$chnl_pid_key" "$chnl_pid"
                 fi
             else
-                jq_channel_add="[{"
+                jq_channel_new=""
                 jq_channel_edit=""
                 while IFS=',' read -ra index_arr
                 do
@@ -315,7 +320,7 @@ SyncFile()
                                 then
                                     key=${b%=*}
                                     value=${b#*=}
-                                    if [[ $value == *"http"* ]]  
+                                    if [[ $value =~ ^http ]]  
                                     then
                                         if [ -n "${kind:-}" ] 
                                         then
@@ -332,23 +337,10 @@ SyncFile()
                                             value="$value/$chnl_output_dir_name/${chnl_playlist_name}.m3u8"
                                         fi
                                     fi
-
-                                    if [ -n "$jq_channel_edit" ] 
-                                    then
-                                        jq_channel_edit="$jq_channel_edit|"
-                                    fi
-
-                                    if [[ $value == *[!0-9]* ]] 
-                                    then
-                                        jq_channel_edit="$jq_channel_edit(${jq_index}[]|select(.$chnl_pid_key==$chnl_pid)|.$key)=\"$value\""
-                                    else
-                                        jq_channel_edit="$jq_channel_edit(${jq_index}[]|select(.$chnl_pid_key==$chnl_pid)|.$key)=$value"
-                                    fi
                                 else
                                     key=${b%:*}
                                     value=${b#*:}
                                     value="chnl_$value"
-
                                     if [ "$value" == "chnl_pid" ] 
                                     then
                                         if [ -n "${new_pid:-}" ] 
@@ -357,33 +349,24 @@ SyncFile()
                                         else
                                             value=${!value}
                                         fi
-                                        value_last=$value
                                     else 
                                         value=${!value}
-                                        if [ -n "$jq_channel_edit" ] 
-                                        then
-                                            jq_channel_edit="$jq_channel_edit|"
-                                        fi
-
-                                        if [[ $value == *[!0-9]* ]] 
-                                        then
-                                            jq_channel_edit="$jq_channel_edit(${jq_index}[]|select(.$chnl_pid_key==$chnl_pid)|.$key)=\"$value\""
-                                        else
-                                            jq_channel_edit="$jq_channel_edit(${jq_index}[]|select(.$chnl_pid_key==$chnl_pid)|.$key)=$value"
-                                        fi
                                     fi
                                 fi
 
-                                if [ "$jq_channel_add" != "[{" ] 
+                                if [ -n "$jq_channel_new" ] 
                                 then
-                                    jq_channel_add="$jq_channel_add,"
+                                    jq_channel_new="$jq_channel_new,"
+                                    jq_channel_edit="$jq_channel_edit,"
                                 fi
 
                                 if [[ $value == *[!0-9]* ]] 
                                 then
-                                    jq_channel_add="$jq_channel_add\"$key\":\"$value\""
+                                    jq_channel_new="$jq_channel_new\"$key\":\"$value\""
+                                    jq_channel_edit="$jq_channel_edit$key:\"$value\""
                                 else
-                                    jq_channel_add="$jq_channel_add\"$key\":$value"
+                                    jq_channel_new="$jq_channel_new\"$key\":$value"
+                                    jq_channel_edit="$jq_channel_edit$key:$value"
                                 fi
                             ;;
                         esac
@@ -391,9 +374,10 @@ SyncFile()
                 done <<< "$chnl_sync_pairs"
                 if [ "$action" == "add" ] || [[ -z $($JQ_FILE "${jq_index}[]|select(.$chnl_pid_key==$chnl_pid)" "${chnl_sync_files[sync_i]}") ]]
                 then
-                    JQ add "${chnl_sync_files[sync_i]}" "$jq_channel_add}]"
+                    JQ add "${chnl_sync_files[sync_i]}" "[{$jq_channel_new}]"
                 else
-                    JQ update "${chnl_sync_files[sync_i]}" "$jq_channel_edit|(${jq_index}[]|select(.$chnl_pid_key==$chnl_pid)|.$chnl_pid_key)=$value_last"
+                    jq_path=""
+                    JQ update "${chnl_sync_files[sync_i]}" "${jq_index}|=map(select(.$chnl_pid_key==$chnl_pid) * {$jq_channel_edit} // .)"
                 fi
             fi
             jq_path=""
@@ -443,11 +427,15 @@ CheckRelease()
                 setenforce permissive
                 sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
             fi
+            if ! grep -q "export LC_ALL=" < "$HOME/.bashrc"
+            then
+                echo "export LC_ALL=" >> "$HOME/.bashrc"
+            fi
             if ! grep -q "export LANG=en_US.UTF-8" < "$HOME/.bashrc"
             then
                 echo "export LANG=en_US.UTF-8" >> "$HOME/.bashrc"
             fi
-            yum -y install glibc-locale-source glibc-langpack-en >/dev/null 2>&1
+            yum -y install glibc-locale-source glibc-langpack-en >/dev/null 2>&1 || true
             localedef -c -f UTF-8 -i en_US en_US.UTF-8 >/dev/null 2>&1 || true
             depends=(wget unzip vim curl crond logrotate)
             for depend in "${depends[@]}"
@@ -527,7 +515,7 @@ CheckRelease()
             then
                 locale-gen en_US.UTF-8
             fi
-            update-locale LANG=en_US.UTF-8 LANGUAGE >/dev/null 2>&1
+            update-locale LANG=en_US.UTF-8 LANGUAGE LC_ALL >/dev/null 2>&1
             if [[ ! -x $(command -v hexdump) ]] 
             then
                 if apt-get -y install bsdmainutils >/dev/null 2>&1
@@ -606,7 +594,7 @@ deb-src http://security.debian.org wheezy/updates main
             then
                 locale-gen en_US.UTF-8
             fi
-            update-locale LANG=en_US.UTF-8 LANGUAGE >/dev/null 2>&1
+            update-locale LANG=en_US.UTF-8 LANGUAGE LC_ALL >/dev/null 2>&1
             if [[ ! -x $(command -v hexdump) ]] 
             then
                 if apt-get -y install bsdmainutils >/dev/null 2>&1
@@ -796,6 +784,8 @@ Uninstall()
     if [[ $uninstall_yn == [Yy] ]]
     then
         MonitorStop
+        DisableVip
+        DisableCloudflareWorkersMonitor
         if [ -e "$NODE_ROOT/index.js" ] 
         then
             pm2 stop 0
@@ -832,7 +822,7 @@ Uninstall()
 Update()
 {
     [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装，请检查 !\n" && exit 1
-    if ls -A "/tmp/monitor.lockdir/"* > /dev/null 2>&1
+    if [ -s "$IPTV_ROOT/monitor.pid" ] || [ -s "$IPTV_ROOT/antiddos.pid" ]
     then
         Println "$info 需要先关闭监控，是否继续? [Y/n]"
         read -p "(默认: Y): " stop_monitor_yn
@@ -886,32 +876,32 @@ Update()
     InstallJq
 
     Println "$info 更新 iptv 脚本..."
+
     sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
+
     if [ -z "$sh_new_ver" ] 
     then
-        Println "$error 无法连接到 Github ! 尝试备用链接..."
+        Println "$error 无法连接到 Github ! 尝试备用链接...\n"
         sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
-        [ -z "$sh_new_ver" ] && Println "$error 无法连接备用链接!" && exit 1
+        [ -z "$sh_new_ver" ] && Println "$error 无法连接备用链接!\n" && exit 1
+        wget --no-check-certificate "$SH_LINK_BACKUP" -qO "${SH_FILE}_tmp"
+    else
+        wget --no-check-certificate "$SH_LINK" -qO "${SH_FILE}_tmp"
+    fi
+
+    if [ ! -s "${SH_FILE}_tmp" ] 
+    then
+        Println "$error 无法连接备用链接!\n"
+        exit 1
+    else
+        mv "${SH_FILE}_tmp" "$SH_FILE"
+        chmod +x "$SH_FILE"
+        Println "$info iptv 脚本更新完成\n"
     fi
 
     if [ "$sh_new_ver" != "$sh_ver" ] 
     then
         rm -f "$LOCK_FILE"
-    fi
-
-    wget --no-check-certificate "$SH_LINK" -qO "$SH_FILE" && chmod +x "$SH_FILE"
-
-    if [ ! -s "$SH_FILE" ] 
-    then
-        wget --no-check-certificate "$SH_LINK_BACKUP" -qO "$SH_FILE"
-        if [ ! -s "$SH_FILE" ] 
-        then
-            Println "$error 无法连接备用链接!\n" && exit 1
-        else
-            Println "$info iptv 脚本更新完成\n"
-        fi
-    else
-        Println "$info iptv 脚本更新完成"
     fi
 
     rm -f ${CREATOR_FILE:-notfound}
@@ -933,7 +923,7 @@ Update()
     fi
 
     ln -sf "$IPTV_ROOT"/ffmpeg-git-*/ff* /usr/local/bin/
-    Println "脚本已更新为最新版本[ $sh_new_ver ] !(输入: tv 使用)\n" && exit 0
+    Println "脚本已更新为最新版本 [ $green$sh_new_ver$plain ] ! (输入: tv 使用)\n" && exit 0
 }
 
 GetDefault()
@@ -3622,48 +3612,63 @@ PrepTerm()
 {
     unset term_child_pid
     unset term_kill_needed
-    trap 'HandleTerm 2> /dev/null' TERM
+    unset term_signal
+    trap 'HandleTerm' TERM
 }
 
 HandleTerm()
 {
     if [ -n "${term_child_pid:-}" ]
     then
-        if [ "${force_exit:-0}" -eq 1 ] 
+        if [ "${pkill:-0}" -eq 1 ] 
         then
-            kill -9 "$term_child_pid" || true
+            pkill -TERM -P "$term_child_pid" 2> /dev/null || true
+        elif [ "${force_exit:-0}" -eq 1 ] 
+        then
+            kill -9 "$term_child_pid" 2> /dev/null || true
         else
-            kill -TERM "$term_child_pid" || true
+            kill -TERM "$term_child_pid" 2> /dev/null || true
         fi
     else
-        term_kill_needed="yes"
+        term_kill_needed=1
     fi
 }
 
 WaitTerm()
 {
     term_child_pid=$!
-    if [ -n "${term_kill_needed:-}" ]
+    if [ "${term_kill_needed:-0}" -eq 1 ]
     then
-        if [ "${force_exit:-0}" -eq 1 ] 
+        if [ "${pkill:-0}" -eq 1 ] 
         then
-            kill -9 "$term_child_pid" || true
+            pkill -TERM -P "$term_child_pid" 2> /dev/null || true
+        elif [ "${force_exit:-0}" -eq 1 ] 
+        then
+            kill -9 "$term_child_pid" 2> /dev/null || true
         else
-            kill -TERM "$term_child_pid" || true
+            kill -TERM "$term_child_pid" 2> /dev/null || true
         fi
     fi
-    wait $term_child_pid || true
+    wait $term_child_pid 2> /dev/null || term_signal=1
     trap - TERM
-    wait $term_child_pid || true
+    wait $term_child_pid 2> /dev/null || true
+    if [ "${term_signal:-0}" -eq 1 ] 
+    then
+        rm -rf "${delete_on_term:-notfound}"
+        rm -rf "${pid_file:-notfound}"
+        [ "${manual_unlock:-0}" -eq 0 ] && flock -u "$lock_fd"
+        exit 1
+    fi
 }
 
 FlvStreamCreatorWithShift()
 {
     trap '' HUP INT
-    pid="$BASHPID"
+    unset pid_file
+    unset delete_on_term
+    manual_unlock=1
     force_exit=1
-    mkdir -p "/tmp/flv.lockdir"
-    echo > "/tmp/flv.lockdir/$pid"
+    pid="$BASHPID"
     if [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$pid"')' "$CHANNELS_FILE") ]] 
     then
         true &
@@ -3677,6 +3682,10 @@ FlvStreamCreatorWithShift()
     fi
     case $from in
         "AddChannel") 
+            pid_lock="$FFMPEG_LOG_ROOT/$pid.lock"
+            exec {lock_fd}>"$pid_lock" || exit 1
+            flock -n "$lock_fd" || { MonitorError "$channel_name $pid flock 失败"; exit 1; }
+
             new_channel=$(
             $JQ_FILE -n --arg pid "$pid" --arg status "off" \
                 --arg stream_link "$stream_links_input" --arg live "$live_yn" \
@@ -3746,7 +3755,7 @@ FlvStreamCreatorWithShift()
                 chnl_pid=$pid
                 action="stop"
                 SyncFile > /dev/null 2>> "$MONITOR_LOG"
-                rm -f "/tmp/flv.lockdir/$pid"
+                flock -u "$lock_fd"
             ' EXIT
 
             resolution=""
@@ -3846,26 +3855,34 @@ FlvStreamCreatorWithShift()
         ;;
         "StartChannel") 
             new_pid=$pid
-            JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'
-            |(.channels[]|select(.pid=='"$new_pid"')|.flv_status)="on"
-            |(.channels[]|select(.pid=='"$new_pid"')|.stream_link)="'"$chnl_stream_links"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.user_agent)="'"$chnl_user_agent"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.headers)="'"$chnl_headers"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.cookies)="'"$chnl_cookies"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.flv_push_link)="'"$chnl_flv_push_link"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.flv_pull_link)="'"$chnl_flv_pull_link"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.channel_time)='"$chnl_channel_time"''
+            pid_lock="$FFMPEG_LOG_ROOT/$new_pid.lock"
+            exec {lock_fd}>"$pid_lock" || exit 1
+            flock -n "$lock_fd" || { MonitorError "$chnl_channel_name $new_pid flock 失败"; exit 1; }
+
+            JQ update "$CHANNELS_FILE" '.channels|=map(select(.pid=='"$chnl_pid"') * 
+            {
+                pid: '"$new_pid"',
+                flv_status: "on",
+                stream_link: "'"$chnl_stream_links"'",
+                user_agent: "'"$chnl_user_agent"'",
+                headers: "'"$chnl_headers"'",
+                cookies: "'"$chnl_cookies"'",
+                flv_push_link: "'"$chnl_flv_push_link"'",
+                flv_pull_link: "'"$chnl_flv_pull_link"'",
+                channel_time: '"$chnl_channel_time"'
+            } // .)'
+
             action="start"
             SyncFile
 
             trap '
-                JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$new_pid)|.flv_status)=\"off\""
+                JQ update "$CHANNELS_FILE" ".channels|=map(select(.pid==$new_pid) * { flv_status: \"off\" } // .)"
                 printf -v date_now "%(%m-%d %H:%M:%S)T"
                 printf "%s\n" "$date_now $chnl_channel_name FLV 关闭" >> "$MONITOR_LOG"
                 chnl_pid=$new_pid
                 action="stop"
                 SyncFile > /dev/null 2>> "$MONITOR_LOG"
-                rm -f "/tmp/flv.lockdir/$chnl_pid"
+                flock -u "$lock_fd"
             ' EXIT
 
             resolution=""
@@ -3964,9 +3981,13 @@ FlvStreamCreatorWithShift()
             fi
         ;;
         "command") 
+            pid_lock="$FFMPEG_LOG_ROOT/$pid.lock"
+            exec {lock_fd}>"$pid_lock" || exit 1
+            flock -n "$lock_fd" || { MonitorError "$channel_name $pid flock 失败"; exit 1; }
+
             new_channel=$(
             $JQ_FILE -n --arg pid "$pid" --arg status "off" \
-                --arg stream_link "$stream_link" --arg live "$live_yn" \
+                --arg stream_link "$stream_links_input" --arg live "$live_yn" \
                 --arg proxy "$proxy" --arg user_agent "$user_agent" \
                 --arg headers "$headers" --arg cookies "$cookies" \
                 --arg output_dir_name "$output_dir_name" --arg playlist_name "$playlist_name" \
@@ -4034,7 +4055,7 @@ FlvStreamCreatorWithShift()
                 chnl_pid=$pid
                 action="stop"
                 SyncFile > /dev/null 2>> "$MONITOR_LOG"
-                rm -f "/tmp/flv.lockdir/$pid"
+                flock -u "$lock_fd"
             ' EXIT
 
             resolution=""
@@ -4138,6 +4159,8 @@ FlvStreamCreatorWithShift()
 HlsStreamCreatorPlus()
 {
     trap '' HUP INT
+    unset pid_file
+    manual_unlock=1
     force_exit=1
     pid="$BASHPID"
     if [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$pid"')' "$CHANNELS_FILE") ]] 
@@ -4154,7 +4177,11 @@ HlsStreamCreatorPlus()
     fi
     case $from in
         "AddChannel") 
-            mkdir -p "$output_dir_root"
+            delete_on_term=$output_dir_root
+            pid_lock="$FFMPEG_LOG_ROOT/$pid.lock"
+            exec {lock_fd}>"$pid_lock" || exit 1
+            flock -n "$lock_fd" || { MonitorError "$channel_name $pid flock 失败"; exit 1; }
+
             new_channel=$(
             $JQ_FILE -n --arg pid "$pid" --arg status "on" \
                 --arg stream_link "$stream_links_input" --arg live "$live_yn" \
@@ -4225,10 +4252,8 @@ HlsStreamCreatorPlus()
                 chnl_pid=$pid
                 action="stop"
                 SyncFile > /dev/null 2>> "$MONITOR_LOG"
-                until [ ! -d "$output_dir_root" ]
-                do
-                    rm -rf "$output_dir_root"
-                done
+                rm -rf "$delete_on_term"
+                flock -u "$lock_fd"
             ' EXIT
 
             resolution=""
@@ -4334,6 +4359,13 @@ HlsStreamCreatorPlus()
                 seg_dir_path="$seg_dir_name/"
             fi
 
+            if [ "${master:-0}" -eq 0 ] 
+            then
+                m3u8_list="$output_dir_root/$playlist_name.m3u8"
+            else
+                m3u8_list="$output_dir_root/${playlist_name}_master.m3u8"
+            fi
+
             if [ "$encrypt_yn" == "yes" ]
             then
                 openssl rand 16 > "$output_dir_root/$key_name.key"
@@ -4350,7 +4382,7 @@ HlsStreamCreatorPlus()
                     -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
                     -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$seg_length" \
                     -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
-                    $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_path$output_name.ts" "$output_dir_root/$playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                    $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_path$output_name.ts" "$m3u8_list" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
                     WaitTerm
                 else
                     PrepTerm
@@ -4358,7 +4390,7 @@ HlsStreamCreatorPlus()
                     -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
                     -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$seg_length" \
                     -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
-                    $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_path$output_name.ts" "$output_dir_root/$playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                    $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_path$output_name.ts" "$m3u8_list" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
                     WaitTerm
                 fi
             else
@@ -4367,7 +4399,7 @@ HlsStreamCreatorPlus()
                     PrepTerm
                     $FFMPEG $proxy_command -user_agent "$user_agent" -headers "$headers_command" -cookies "$cookies" $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
                     -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-                    -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
+                    -threads 0 -flags -global_header -f segment -segment_list "$m3u8_list" \
                     -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
                     $seg_count_command $FFMPEG_FLAGS "$output_dir_root/$seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
                     WaitTerm
@@ -4375,7 +4407,7 @@ HlsStreamCreatorPlus()
                     PrepTerm
                     $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
                     -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-                    -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
+                    -threads 0 -flags -global_header -f segment -segment_list "$m3u8_list" \
                     -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
                     $seg_count_command $FFMPEG_FLAGS "$output_dir_root/$seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
                     WaitTerm
@@ -4385,31 +4417,38 @@ HlsStreamCreatorPlus()
         "StartChannel") 
             mkdir -p "$chnl_output_dir_root"
             new_pid=$pid
-            JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'
-            |(.channels[]|select(.pid=='"$new_pid"')|.status)="on"
-            |(.channels[]|select(.pid=='"$new_pid"')|.stream_link)="'"$chnl_stream_links"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.user_agent)="'"$chnl_user_agent"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.headers)="'"$chnl_headers"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.cookies)="'"$chnl_cookies"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.playlist_name)="'"$chnl_playlist_name"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.seg_name)="'"$chnl_seg_name"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.key_name)="'"$chnl_key_name"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.key_time)='"$chnl_key_time"'
-            |(.channels[]|select(.pid=='"$new_pid"')|.channel_time)='"$chnl_channel_time"''
+            delete_on_term=$chnl_output_dir_root
+            pid_lock="$FFMPEG_LOG_ROOT/$new_pid.lock"
+            exec {lock_fd}>"$pid_lock" || exit 1
+            flock -n "$lock_fd" || { MonitorError "$chnl_channel_name $new_pid flock 失败"; exit 1; }
+
+            JQ update "$CHANNELS_FILE" '.channels|=map(select(.pid=='"$chnl_pid"') * 
+            {
+                pid: '"$new_pid"',
+                status: "on",
+                stream_link: "'"$chnl_stream_links"'",
+                user_agent: "'"$chnl_user_agent"'",
+                headers: "'"$chnl_headers"'",
+                cookies: "'"$chnl_cookies"'",
+                playlist_name: "'"$chnl_playlist_name"'",
+                seg_name: "'"$chnl_seg_name"'",
+                key_name: "'"$chnl_key_name"'",
+                key_time: '"$chnl_key_time"',
+                channel_time: '"$chnl_channel_time"'
+            } // .)'
+
             action="start"
             SyncFile
 
             trap '
-                JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$new_pid)|.status)=\"off\""
+                JQ update "$CHANNELS_FILE" ".channels|=map(select(.pid==$new_pid) * { status: \"off\" } // .)"
                 printf -v date_now "%(%m-%d %H:%M:%S)T"
                 printf "%s\n" "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
                 chnl_pid=$new_pid
                 action="stop"
                 SyncFile > /dev/null 2>> "$MONITOR_LOG"
-                until [ ! -d "$chnl_output_dir_root" ]
-                do
-                    rm -rf "$chnl_output_dir_root"
-                done
+                rm -rf "$delete_on_term"
+                flock -u "$lock_fd"
             ' EXIT
 
             resolution=""
@@ -4515,6 +4554,13 @@ HlsStreamCreatorPlus()
                 chnl_seg_dir_path="$chnl_seg_dir_name/"
             fi
 
+            if [ "${master:-0}" -eq 0 ] 
+            then
+                m3u8_list="$chnl_output_dir_root/$chnl_playlist_name.m3u8"
+            else
+                m3u8_list="$chnl_output_dir_root/${chnl_playlist_name}_master.m3u8"
+            fi
+
             if [ "$chnl_encrypt_yn" == "yes" ] 
             then
                 openssl rand 16 > "$chnl_output_dir_root/$chnl_key_name.key"
@@ -4532,7 +4578,7 @@ HlsStreamCreatorPlus()
                     -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
                     -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$chnl_seg_length" \
                     -hls_list_size $chnl_seg_count -hls_delete_threshold $chnl_seg_count -hls_key_info_file "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo" \
-                    $chnl_hls_flags_command -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_path$output_name.ts" "$chnl_output_dir_root/$chnl_playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+                    $chnl_hls_flags_command -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_path$output_name.ts" "$m3u8_list" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
                     WaitTerm
                 else
                     PrepTerm
@@ -4540,7 +4586,7 @@ HlsStreamCreatorPlus()
                     -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
                     -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$chnl_seg_length" \
                     -hls_list_size $chnl_seg_count -hls_delete_threshold $chnl_seg_count -hls_key_info_file "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo" \
-                    $chnl_hls_flags_command -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_path$output_name.ts" "$chnl_output_dir_root/$chnl_playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+                    $chnl_hls_flags_command -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_path$output_name.ts" "$m3u8_list" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
                     WaitTerm
                 fi
             else
@@ -4549,7 +4595,7 @@ HlsStreamCreatorPlus()
                     PrepTerm
                     $FFMPEG $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies" $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
                     -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
-                    -threads 0 -flags -global_header -f segment -segment_list "$chnl_output_dir_root/$chnl_playlist_name.m3u8" \
+                    -threads 0 -flags -global_header -f segment -segment_list "$m3u8_list" \
                     -segment_time "$chnl_seg_length" -segment_format mpeg_ts $chnl_live_command \
                     $chnl_seg_count_command $FFMPEG_FLAGS "$chnl_output_dir_root/$chnl_seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
                     WaitTerm
@@ -4557,7 +4603,7 @@ HlsStreamCreatorPlus()
                     PrepTerm
                     $FFMPEG $chnl_proxy_command $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
                     -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
-                    -threads 0 -flags -global_header -f segment -segment_list "$chnl_output_dir_root/$chnl_playlist_name.m3u8" \
+                    -threads 0 -flags -global_header -f segment -segment_list "$m3u8_list" \
                     -segment_time "$chnl_seg_length" -segment_format mpeg_ts $chnl_live_command \
                     $chnl_seg_count_command $FFMPEG_FLAGS "$chnl_output_dir_root/$chnl_seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
                     WaitTerm
@@ -4566,9 +4612,14 @@ HlsStreamCreatorPlus()
         ;;
         "command") 
             mkdir -p "$output_dir_root"
+            delete_on_term=$output_dir_root
+            pid_lock="$FFMPEG_LOG_ROOT/$pid.lock"
+            exec {lock_fd}>"$pid_lock" || exit 1
+            flock -n "$lock_fd" || { MonitorError "$channel_name $pid flock 失败"; exit 1; }
+
             new_channel=$(
             $JQ_FILE -n --arg pid "$pid" --arg status "on" \
-                --arg stream_link "$stream_link" --arg live "$live_yn" \
+                --arg stream_link "$stream_links_input" --arg live "$live_yn" \
                 --arg proxy "$proxy" --arg user_agent "$user_agent" \
                 --arg headers "$headers" --arg cookies "$cookies" \
                 --arg output_dir_name "$output_dir_name" --arg playlist_name "$playlist_name" \
@@ -4636,10 +4687,8 @@ HlsStreamCreatorPlus()
                 chnl_pid=$pid
                 action="stop"
                 SyncFile > /dev/null 2>> "$MONITOR_LOG"
-                until [ ! -d "$output_dir_root" ]
-                do
-                    rm -rf "$output_dir_root"
-                done
+                rm -rf "$delete_on_term"
+                flock -u "$lock_fd"
             ' EXIT
 
             resolution=""
@@ -4745,6 +4794,13 @@ HlsStreamCreatorPlus()
                 seg_dir_path="$seg_dir_name/"
             fi
 
+            if [ "${master:-0}" -eq 0 ] 
+            then
+                m3u8_list="$output_dir_root/$playlist_name.m3u8"
+            else
+                m3u8_list="$output_dir_root/${playlist_name}_master.m3u8"
+            fi
+
             if [ "$encrypt_yn" == "yes" ]
             then
                 openssl rand 16 > "$output_dir_root/$key_name.key"
@@ -4761,7 +4817,7 @@ HlsStreamCreatorPlus()
                     -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
                     -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$seg_length" \
                     -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
-                    $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_path$output_name.ts" "$output_dir_root/$playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                    $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_path$output_name.ts" "$m3u8_list" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
                     WaitTerm
                 else
                     PrepTerm
@@ -4769,7 +4825,7 @@ HlsStreamCreatorPlus()
                     -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
                     -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$seg_length" \
                     -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
-                    $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_path$output_name.ts" "$output_dir_root/$playlist_name.m3u8" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                    $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_path$output_name.ts" "$m3u8_list" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
                     WaitTerm
                 fi
             else
@@ -4778,7 +4834,7 @@ HlsStreamCreatorPlus()
                     PrepTerm
                     $FFMPEG $proxy_command -user_agent "$user_agent" -headers "$headers_command" -cookies "$cookies" $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
                     -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-                    -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
+                    -threads 0 -flags -global_header -f segment -segment_list "$m3u8_list" \
                     -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
                     $seg_count_command $FFMPEG_FLAGS "$output_dir_root/$seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
                     WaitTerm
@@ -4786,7 +4842,7 @@ HlsStreamCreatorPlus()
                     PrepTerm
                     $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
                     -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-                    -threads 0 -flags -global_header -f segment -segment_list "$output_dir_root/$playlist_name.m3u8" \
+                    -threads 0 -flags -global_header -f segment -segment_list "$m3u8_list" \
                     -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
                     $seg_count_command $FFMPEG_FLAGS "$output_dir_root/$seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
                     WaitTerm
@@ -4798,8 +4854,11 @@ HlsStreamCreatorPlus()
 
 HlsStreamCreator()
 {
-    force_exit=0
     trap '' HUP INT
+    unset pid_file
+    unset force_exit
+    pkill=1
+    manual_unlock=1
     pid="$BASHPID"
     if [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$pid"')' "$CHANNELS_FILE") ]] 
     then
@@ -4816,6 +4875,11 @@ HlsStreamCreator()
     case $from in
         "AddChannel") 
             mkdir -p "$output_dir_root"
+            delete_on_term=$output_dir_root
+            pid_lock="$FFMPEG_LOG_ROOT/$pid.lock"
+            exec {lock_fd}>"$pid_lock" || exit 1
+            flock -n "$lock_fd" || { MonitorError "$channel_name $pid flock 失败"; exit 1; }
+
             new_channel=$(
             $JQ_FILE -n --arg pid "$pid" --arg status "on" \
                 --arg stream_link "$stream_links_input" --arg live "$live_yn" \
@@ -4886,10 +4950,8 @@ HlsStreamCreator()
                 chnl_pid=$pid
                 action="stop"
                 SyncFile > /dev/null 2>> "$MONITOR_LOG"
-                until [ ! -d "$output_dir_root" ]
-                do
-                    rm -rf "$output_dir_root"
-                done
+                rm -rf "$delete_on_term"
+                flock -u "$lock_fd"
             ' EXIT
 
             if [ -n "$quality" ] 
@@ -4914,31 +4976,38 @@ HlsStreamCreator()
         "StartChannel") 
             mkdir -p "$chnl_output_dir_root"
             new_pid=$pid
-            JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.pid)='"$new_pid"'
-            |(.channels[]|select(.pid=='"$new_pid"')|.status)="on"
-            |(.channels[]|select(.pid=='"$new_pid"')|.stream_link)="'"$chnl_stream_links"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.user_agent)="'"$chnl_user_agent"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.headers)="'"$chnl_headers"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.cookies)="'"$chnl_cookies"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.playlist_name)="'"$chnl_playlist_name"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.seg_name)="'"$chnl_seg_name"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.key_name)="'"$chnl_key_name"'"
-            |(.channels[]|select(.pid=='"$new_pid"')|.key_time)='"$chnl_key_time"'
-            |(.channels[]|select(.pid=='"$new_pid"')|.channel_time)='"$chnl_channel_time"''
+            delete_on_term=$chnl_output_dir_root
+            pid_lock="$FFMPEG_LOG_ROOT/$new_pid.lock"
+            exec {lock_fd}>"$pid_lock" || exit 1
+            flock -n "$lock_fd" || { MonitorError "$chnl_channel_name $new_pid flock 失败"; exit 1; }
+
+            JQ update "$CHANNELS_FILE" '.channels|=map(select(.pid=='"$chnl_pid"') * 
+            {
+                pid: '"$new_pid"',
+                status: "on",
+                stream_link: "'"$chnl_stream_links"'",
+                user_agent: "'"$chnl_user_agent"'",
+                headers: "'"$chnl_headers"'",
+                cookies: "'"$chnl_cookies"'",
+                playlist_name: "'"$chnl_playlist_name"'",
+                seg_name: "'"$chnl_seg_name"'",
+                key_name: "'"$chnl_key_name"'",
+                key_time: '"$chnl_key_time"',
+                channel_time: '"$chnl_channel_time"'
+            } // .)'
+
             action="start"
             SyncFile
 
             trap '
-                JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$new_pid)|.status)=\"off\""
+                JQ update "$CHANNELS_FILE" ".channels|=map(select(.pid==$new_pid) * { status: \"off\" } // .)"
                 printf -v date_now "%(%m-%d %H:%M:%S)T"
                 printf "%s\n" "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
                 chnl_pid=$new_pid
                 action="stop"
                 SyncFile > /dev/null 2>> "$MONITOR_LOG"
-                until [ ! -d "$chnl_output_dir_root" ]
-                do
-                    rm -rf "$chnl_output_dir_root"
-                done
+                rm -rf "$delete_on_term"
+                flock -u "$lock_fd"
             ' EXIT
 
             if [ -n "$chnl_quality" ] 
@@ -4962,9 +5031,14 @@ HlsStreamCreator()
         ;;
         "command") 
             mkdir -p "$output_dir_root"
+            delete_on_term=$output_dir_root
+            pid_lock="$FFMPEG_LOG_ROOT/$pid.lock"
+            exec {lock_fd}>"$pid_lock" || exit 1
+            flock -n "$lock_fd" || { MonitorError "$channel_name $pid flock 失败"; exit 1; }
+
             new_channel=$(
             $JQ_FILE -n --arg pid "$pid" --arg status "on" \
-                --arg stream_link "$stream_link" --arg live "$live_yn" \
+                --arg stream_link "$stream_links_input" --arg live "$live_yn" \
                 --arg proxy "$proxy" --arg user_agent "$user_agent" \
                 --arg headers "$headers" --arg cookies "$cookies" \
                 --arg output_dir_name "$output_dir_name" --arg playlist_name "$playlist_name" \
@@ -5032,10 +5106,8 @@ HlsStreamCreator()
                 chnl_pid=$pid
                 action="stop"
                 SyncFile > /dev/null 2>> "$MONITOR_LOG"
-                until [ ! -d "$output_dir_root" ]
-                do
-                    rm -rf "$output_dir_root"
-                done
+                rm -rf "$delete_on_term"
+                flock -u "$lock_fd"
             ' EXIT
 
             if [ -n "$quality" ] 
@@ -5657,36 +5729,39 @@ EditChannelAll()
         sync_pairs=""
     fi
 
-    JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.stream_link)="'"$stream_links_input"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.live)="'"$live_yn"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.proxy)="'"$proxy"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.user_agent)="'"$user_agent"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.headers)="'"$headers"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.cookies)="'"$cookies"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.output_dir_name)="'"$output_dir_name"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.playlist_name)="'"$playlist_name"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.seg_dir_name)="'"$seg_dir_name"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.seg_name)="'"$seg_name"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.seg_length)='"$seg_length"'
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.seg_count)='"$seg_count"'
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.video_codec)="'"$video_codec"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.audio_codec)="'"$audio_codec"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.video_audio_shift)="'"$video_audio_shift"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.quality)="'"$quality"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.bitrates)="'"$bitrates"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.const)="'"$const_yn"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.encrypt)="'"$encrypt_yn"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.keyinfo_name)="'"$keyinfo_name"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.key_name)="'"$key_name"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.input_flags)="'"$input_flags"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.output_flags)="'"$output_flags"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.channel_name)="'"$channel_name"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.sync)="'"$sync_yn"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.sync_file)="'"$sync_file"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.sync_index)="'"$sync_index"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.sync_pairs)="'"$sync_pairs"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.flv_push_link)="'"$flv_push_link"'"
-    |(.channels[]|select(.pid=='"$chnl_pid"')|.flv_pull_link)="'"$flv_pull_link"'"'
+    JQ update "$CHANNELS_FILE" '.channels|=map(select(.pid=='"$chnl_pid"') * 
+    {
+        stream_link: "'"$stream_links_input"'",
+        live: "'"$live_yn"'",
+        proxy: "'"$proxy"'",
+        user_agent: "'"$user_agent"'",
+        headers: "'"$headers"'",
+        cookies: "'"$cookies"'",
+        output_dir_name: "'"$output_dir_name"'",
+        playlist_name: "'"$playlist_name"'",
+        seg_dir_name: "'"$seg_dir_name"'",
+        seg_name: "'"$seg_name"'",
+        seg_length: '"$seg_length"',
+        seg_count: '"$seg_count"',
+        video_codec: "'"$video_codec"'",
+        audio_codec: "'"$audio_codec"'",
+        video_audio_shift: "'"$video_audio_shift"'",
+        quality: "'"$quality"'",
+        bitrates: "'"$bitrates"'",
+        const: "'"$const_yn"'",
+        encrypt: "'"$encrypt_yn"'",
+        keyinfo_name: "'"$keyinfo_name"'",
+        key_name: "'"$key_name"'",
+        input_flags: "'"$input_flags"'",
+        output_flags: "'"$output_flags"'",
+        channel_name: "'"$channel_name"'",
+        sync: "'"$sync_yn"'",
+        sync_file: "'"$sync_file"'",
+        sync_index: "'"$sync_index"'",
+        sync_pairs: "'"$sync_pairs"'",
+        flv_push_link: "'"$flv_push_link"'",
+        flv_pull_link: "'"$flv_pull_link"'"
+    } // .)'
 
     Println "$info 频道 [ $channel_name ] 修改成功 !\n"
 }
@@ -5695,7 +5770,13 @@ EditForSecurity()
 {
     SetPlaylistName
     SetSegName
-    JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.playlist_name)="'"$playlist_name"'"|(.channels[]|select(.pid=='"$chnl_pid"')|.seg_name)="'"$seg_name"'"'
+
+    JQ update "$CHANNELS_FILE" '.channels|=map(select(.pid=='"$chnl_pid"') * 
+    {
+        playlist_name: "'"$playlist_name"'",
+        seg_name: "'"$seg_name"'"
+    } // .)'
+
     Println "$info 段名称、m3u8名称 修改成功 !\n"
 }
 
@@ -5901,13 +5982,13 @@ TestXtreamCodesLink()
         chnl_cmd=${chnl_stream_link%|*}
         chnl_cmd=${chnl_cmd##*|}
 
-        for xc_domain in "${xtream_codes_domains[@]}"
+        for xc_domain in ${xtream_codes_domains[@]+"${xtream_codes_domains[@]}"}
         do
             if [ "$xc_domain" == "$chnl_domain" ] 
             then
                 Println "$info 频道[ $chnl_channel_name ]检测账号中..."
                 GetXtreamCodesChnls
-                for xc_chnl_mac in "${xc_chnls_mac[@]}"
+                for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
                 do
                     if [ "$xc_chnl_mac" == "$chnl_domain/$chnl_mac" ] 
                     then
@@ -6083,7 +6164,7 @@ TestXtreamCodesLink()
     then
         chnl_domain=${BASH_REMATCH[1]}
 
-        for xc_domain in "${xtream_codes_domains[@]}"
+        for xc_domain in ${xtream_codes_domains[@]+"${xtream_codes_domains[@]}"}
         do
             if [ "$xc_domain" == "$chnl_domain" ] 
             then
@@ -6103,7 +6184,7 @@ TestXtreamCodesLink()
                 chnl_account="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}"
             fi
             GetXtreamCodesChnls
-            for xc_chnl in "${xc_chnls[@]}"
+            for xc_chnl in ${xc_chnls[@]+"${xc_chnls[@]}"}
             do
                 if [ "$xc_chnl" == "$chnl_domain/$chnl_account" ] 
                 then
@@ -6486,6 +6567,7 @@ StartChannel()
         then
             rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.log"
             rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.err"
+            rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.lock"
             if [ "$sh_debug" -eq 1 ] 
             then
                 ( FlvStreamCreatorWithShift ) > /dev/null 2>> "$MONITOR_LOG" < /dev/null &
@@ -6502,6 +6584,7 @@ StartChannel()
         fi
         rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.log"
         rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.err"
+        rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.lock"
         if [ -n "${chnl_video_audio_shift:-}" ] || { [ "$chnl_encrypt_yn" == "yes" ] && [ "$chnl_live_yn" == "yes" ]; }
         then
             if [ "$sh_debug" -eq 1 ] 
@@ -6541,52 +6624,54 @@ StopChannel()
         Println "$error FLV 频道正开启，走错片场了？\n" && exit 1
     fi
 
+    Println "$info 关闭频道, 请稍等..."
     if [ "${kind:-}" == "flv" ] 
     then
-        if kill -0 "$chnl_pid" 2> /dev/null 
+        if ! kill -0 "$chnl_pid" 2> /dev/null 
         then
-            Println "$info 关闭频道, 请稍等..."
-            if kill "$chnl_pid" 2> /dev/null
-            then
-                until [ ! -f "/tmp/flv.lockdir/$chnl_pid" ]
-                do
-                    sleep 1
-                done
-            else
-                Println "$error 频道关闭失败, 请重试 !" && exit 1
-            fi
-        else
+            MonitorError "频道[ $chnl_channel_name ] 进程 $chnl_pid 不存在"
             JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.flv_status)="off"'
             printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now $chnl_channel_name FLV 关闭" >> "$MONITOR_LOG"
             action="stop"
             SyncFile
-            rm -f "/tmp/flv.lockdir/$chnl_pid"
+            rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.lock"
+        else
+            kill "$chnl_pid" 2> /dev/null || true
+            if ! flock -E 1 -w 30 -x "$FFMPEG_LOG_ROOT/$chnl_pid.lock" rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.lock"
+            then
+                MonitorError "频道[ $chnl_channel_name ] 进程 $chnl_pid 不存在"
+                JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.flv_status)="off"'
+                printf -v date_now '%(%m-%d %H:%M:%S)T'
+                printf '%s\n' "$date_now $chnl_channel_name FLV 关闭" >> "$MONITOR_LOG"
+                action="stop"
+                SyncFile
+            fi
         fi
         chnl_flv_status="off"
     else
-        if kill -0 "$chnl_pid" 2> /dev/null 
+        if ! kill -0 "$chnl_pid" 2> /dev/null
         then
-            Println "$info 关闭频道, 请稍等..."
-            if kill "$chnl_pid" 2> /dev/null 
-            then
-                until [ ! -d "$chnl_output_dir_root" ]
-                do
-                    sleep 1
-                done
-            else
-                Println "$error 频道关闭失败, 请重试 !\n" && exit 1
-            fi
-        else
+            MonitorError "频道[ $chnl_channel_name ] 进程 $chnl_pid 不存在"
             JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"'
             printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
             action="stop"
             SyncFile
-            until [ ! -d "$chnl_output_dir_root" ]
-            do
+            rm -rf "$chnl_output_dir_root"
+            rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.lock"
+        else
+            kill "$chnl_pid" 2> /dev/null
+            if ! flock -E 1 -w 30 -x "$FFMPEG_LOG_ROOT/$chnl_pid.lock" rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.lock"
+            then
+                MonitorError "频道[ $chnl_channel_name ] 进程 $chnl_pid 不存在"
+                JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"'
+                printf -v date_now '%(%m-%d %H:%M:%S)T'
+                printf '%s\n' "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
+                action="stop"
+                SyncFile
                 rm -rf "$chnl_output_dir_root"
-            done
+            fi
         fi
         chnl_status="off"
     fi
@@ -6597,19 +6682,22 @@ StopChannelsForce()
 {
     pkill -9 -f ffmpeg 2> /dev/null || true
     pkill -f 'tv m' 2> /dev/null || true
-    [ -d "$CHANNELS_FILE.lockdir" ] && rm -rf "$CHANNELS_FILE.lockdir"
+    rm -rf "$CHANNELS_FILE.lockdir"
     GetChannelsInfo
     for((i=0;i<chnls_count;i++));
     do
         chnl_pid=${chnls_pid[i]}
         GetChannelInfoLite
-        JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"
-        |(.channels[]|select(.pid=='"$chnl_pid"')|.flv_status)="off"'
+        JQ update "$CHANNELS_FILE" '.channels|=map(select(.pid=='"$chnl_pid"') * 
+        {
+            status: "off",
+            flv_status: "off"
+        } // .)'
         chnl_sync_file=${chnl_sync_file:-$d_sync_file}
         IFS=" " read -ra chnl_sync_files <<< "$chnl_sync_file"
         for sync_file in "${chnl_sync_files[@]}"
         do
-            [ -d "$sync_file.lockdir" ] && rm -rf "$sync_file.lockdir"
+            rm -rf "$sync_file.lockdir"
         done
         action="stop"
         SyncFile > /dev/null
@@ -6698,6 +6786,7 @@ DelChannel()
         JQ delete "$CHANNELS_FILE" channels "$chnl_pid"
         rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.log"
         rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.err"
+        rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.lock"
         Println "$info 频道[ $chnl_channel_name ]删除成功 !\n"
     done
 }
@@ -6759,7 +6848,7 @@ RandSegDirName()
 
 # printf %s "$1" | jq -s -R -r @uri
 Urlencode() {
-    local LANG=C i c e=''
+    local LC_ALL='' LANG=C i c e=''
     for ((i=0;i<${#1};i++)); do
         c=${1:$i:1}
         [[ $c =~ [a-zA-Z0-9\.\~\_\-] ]] || printf -v c '%%%02x' "'$c"
@@ -6769,7 +6858,7 @@ Urlencode() {
 }
 
 UrlencodeUpper() {
-    local LANG=C i c e=''
+    local LC_ALL='' LANG=C i c e=''
     for ((i=0;i<${#1};i++)); do
         c=${1:$i:1}
         [[ $c =~ [a-zA-Z0-9\.\~\_\-] ]] || printf -v c '%%%02X' "'$c"
@@ -6912,7 +7001,7 @@ ScheduleJiushi()
         chnl_id=${chnl%%:*}
         chnl_name=${chnl#*:}
         chnl_name=${chnl_name// /-}
-        chnl_name_encode=$(Urlencode "$chnl_name")
+        chnl_name_encode=$(UrlencodeUpper "$chnl_name")
 
         printf -v today '%(%Y-%m-%d)T'
 
@@ -7243,14 +7332,11 @@ ScheduleOntvtonight()
         schedule=""
         start=0
 
-        if [ "$chnl_id" == "mtvdance" ] 
+        if [ "${chnl_id%_*}" == "us" ] 
         then
-            ct="uk/"
-        elif [ "$chnl_id" == "abcnews" ] 
-        then
-            ct="au/"
-        else
             ct=""
+        else
+            ct="${chnl_id%_*}/"
         fi
 
         while IFS= read -r line
@@ -8392,8 +8478,14 @@ ScheduleView()
             fi
         done
         chnl_name=${chnl##*:}
+        if [ "$provider" == "ontvtonight" ] 
+        then
+            chnl_id=${chnl%%@*}
+        else
+            chnl_id=${chnl%%:*}
+        fi
         chnls_count=$((chnls_count+1))
-        chnls_list="$chnls_list $green$chnls_count.$plain\r\e[6C$chnl_name [${chnl%%:*}] $using\n\n"
+        chnls_list="$chnls_list $green$chnls_count.$plain\r\e[6C$chnl_name [$chnl_id] $using\n\n"
     done
 
     chnls=("${!var}")
@@ -8543,7 +8635,7 @@ ScheduleViewCron()
     chnls_list=""
     chnls_count=0
 
-    for chnl in "${chnls[@]}"
+    for chnl in ${chnls[@]+"${chnls[@]}"}
     do
         chnl_name=${chnl##*:}
         chnls_count=$((chnls_count+1))
@@ -8565,7 +8657,7 @@ ScheduleDel()
     do
         if [ -z "$chnls_num" ] 
         then
-            Println "已取消\n" && exit 1
+            Println "已取消...\n" && exit 1
         fi
 
         if [ "$chnls_num" == $((chnls_count+1)) ] 
@@ -8658,7 +8750,7 @@ ScheduleExec()
                 fi
             fi
         done < <($JQ_FILE -r '.schedule[]|[.provider,(.chnls|sort|join("|")| if .=="" then "null" else . end),.option]|join("=")' "$CRON_FILE")
-        if [ -e "/tmp/vip.pid" ] 
+        if [ -e "$IPTV_ROOT/vip.pid" ] 
         then
             printf '%s' "" > "$VIP_USERS_ROOT/epg.update"
         fi
@@ -8703,7 +8795,7 @@ Schedule()
     then
         SCHEDULE_JSON=$d_schedule_file
     else
-        Println "$error 请先设置 schedule_file 位置！" && exit 1
+        Println "$error 请先设置 schedule_file 位置！\n" && exit 1
     fi
 
     if [ ! -s "$CRON_FILE" ] 
@@ -9150,7 +9242,7 @@ Schedule()
 
     ontvtonight_chnls=(
         "us_abc@abc@69048344@-04:00:ABC"
-        "us_abcnews@abc-news@2141@+02:00:ABC NEWS"
+        "au_abcnews@abc-news@2141@+02:00:ABC NEWS"
         "us_cbs@cbs@69048345@-04:00:CBS"
         "us_nbc@nbc@69048423@-04:00:NBC"
         "us_fox@fox@69048367@-04:00:FOX"
@@ -9159,9 +9251,13 @@ Schedule()
         "us_nickjr@nick-jr@69047681@-04:00:Nick Jr"
         "us_universalkids@universal-kids@69027178@-04:00:Universal Kids"
         "us_disneyjr@disney-junior-hdtv-east@69044944@-04:00:Disney Junior"
-        "us_mtvlive@mtv-live-hdtv@69027734@-04:00:MTV LIVE 美国"
-        "us_mtvlivehd@mtv-live-hdtv@69038784@+00:00:MTV LIVE HD 英国"
-        "us_mtvdance@mtv-dance@69036268@+02:00:MTV Dance"
+        "us_mtvhd@mtv-hdtv-east@69032459@-04:00:MTV HD 美国"
+        "us_mtvlive@mtv-live-hdtv@69027734@-04:00:MTV Live 美国"
+        "uk_mtvlivehd@mtv-live-hdtv@69038784@+01:00:MTV Live HD 英国"
+        "uk_mtvmusic@mtv-music-uk@69042501@+04:00:MTV Music 英国"
+        "uk_mtvbase@mtv-base@69036338@+01:00:MTV Base 英国"
+        "uk_mtvclassic@mtv-classic@69043201@+01:00:MTV Classic 英国"
+        "uk_mtvhits@mtv-hits-eu@69036341@+01:00:MTV Hits 英国"
         "us_comedycentral@comedy-central-east@69036536@-04:00:Comedy Central" )
 
     tvbhk_chnls=(
@@ -9416,6 +9512,15 @@ Schedule()
     fi
 
     case ${2:-} in
+        "jiushi")
+            ScheduleJiushi
+        ;;
+        "niotv")
+            ScheduleNiotv
+        ;;
+        "nowtv")
+            ScheduleNowtv
+        ;;
         "hbozw")
             ScheduleHbozw
         ;;
@@ -9495,8 +9600,14 @@ Schedule()
                 provider_chnls=("$provider_id"_chnls[@])
                 for provider_chnl in "${!provider_chnls}"
                 do
-                    chnl_id=${provider_chnl%%:*}
-                    chnl_name=${provider_chnl##*:}
+                    if [ "$provider_id" == "ontvtonight" ] 
+                    then
+                        chnl_id=${provider_chnl%%@*}
+                        chnl_name=${provider_chnl##@:}
+                    else
+                        chnl_id=${provider_chnl%%:*}
+                        chnl_name=${provider_chnl##*:}
+                    fi
                     if [ "$chnl_id" == "$2" ] 
                     then
                         found=1
@@ -9528,7 +9639,7 @@ Schedule()
             elif [ -z "${schedule:-}" ] 
             then
                 Println "$error $2 failed !"
-            elif [ -e "/tmp/vip.pid" ] 
+            elif [ -e "$IPTV_ROOT/vip.pid" ] 
             then
                 printf '%s' "" > "$VIP_USERS_ROOT/epg.update"
             fi
@@ -10053,14 +10164,8 @@ AntiDDoS()
 {
     trap '' HUP INT
     trap 'MonitorError $LINENO' ERR
-    MONITOR_PIDFILE="/tmp/monitor.lockdir/$BASHPID"
-    force_exit=1
-    trap '
-        [ -e "$MONITOR_PIDFILE" ] && rm -f "$MONITOR_PIDFILE"
-    ' EXIT
 
-    mkdir -p "/tmp/monitor.lockdir" 
-    printf '%s' "" > "$MONITOR_PIDFILE"
+    printf '%s' "$BASHPID" > "$IPTV_ROOT/antiddos.pid"
 
     ips=()
     jail_time=()
@@ -10137,9 +10242,9 @@ AntiDDoS()
                 anti_ddos_syn_flood_ips+=("$anti_ddos_syn_flood_ip")
             done < <(ss -taH|awk '{gsub(/.*:/, "", $4);gsub(/:.*/, "", $5); if ($1 == "SYN-RECV" && $5 != "'"$current_ip"'" && ('"$anti_ddos_ports_command$anti_ddos_ports_range_command"')) print $5}')
 
-            PrepMonitorTerm
+            PrepTerm
             sleep "$anti_ddos_syn_flood_delay_seconds" &
-            WaitMonitorTerm
+            WaitTerm
 
             printf -v now '%(%s)T'
             jail=$((now + anti_ddos_syn_flood_seconds))
@@ -10147,7 +10252,7 @@ AntiDDoS()
             while IFS= read -r anti_ddos_syn_flood_ip 
             do
                 to_ban=1
-                for banned_ip in "${ips[@]}"
+                for banned_ip in ${ips[@]+"${ips[@]}"}
                 do
                     if [ "$banned_ip" == "$anti_ddos_syn_flood_ip/24" ] 
                     then
@@ -10158,7 +10263,7 @@ AntiDDoS()
 
                 if [ "$to_ban" -eq 1 ] 
                 then
-                    for ip in "${anti_ddos_syn_flood_ips[@]}"
+                    for ip in ${anti_ddos_syn_flood_ips[@]+"${anti_ddos_syn_flood_ips[@]}"}
                     do
                         if [ "$ip" == "$anti_ddos_syn_flood_ip" ] 
                         then
@@ -10246,7 +10351,7 @@ AntiDDoS()
                         to_ban=1
                     fi
 
-                    for banned_ip in "${ips[@]}"
+                    for banned_ip in ${ips[@]+"${ips[@]}"}
                     do
                         if [ "$banned_ip" == "$ip" ] 
                         then
@@ -10277,7 +10382,9 @@ AntiDDoS()
             # awk -v d1="$(printf '%(%d/%b/%Y:%H:%M:%S)T' $((now-60)))" '{gsub(/^[\[\t]+/, "", $4); if ($7 ~ "'"$link"'" && $4 > d1 ) print $1;}' "$nginx_prefix"/logs/access.log | sort | uniq -c | sort -fr
         fi
 
-        sleep 10
+        PrepTerm
+        sleep 10 &
+        WaitTerm
 
         if [ -n "${ips:-}" ] 
         then
@@ -10550,19 +10657,26 @@ AntiDDoSSet()
         then
             if [ "$d_anti_ddos_syn_flood_yn" != "no" ] || [ "$d_anti_ddos_yn" != "no" ]
             then
-                JQ update "$CHANNELS_FILE" '(.default|.anti_ddos_syn_flood)="no"|(.default|.anti_ddos)="no"'
+                JQ update "$CHANNELS_FILE" '.default|=. * 
+                {
+                    anti_ddos_syn_flood: "no",
+                    anti_ddos: "no"
+                } // .'
             fi
             Println "不启动 AntiDDoS ...\n" && exit 0
         else
             anti_ddos_ports=${anti_ddos_port:-$d_anti_ddos_port}
             anti_ddos_ports=${anti_ddos_port%% *}
-            JQ update "$CHANNELS_FILE" '(.default|.anti_ddos_syn_flood)="'"${anti_ddos_syn_flood_yn:-$d_anti_ddos_syn_flood_yn}"'"
-            |(.default|.anti_ddos_syn_flood_delay_seconds)='"${anti_ddos_syn_flood_delay_seconds:-$d_anti_ddos_syn_flood_delay_seconds}"'
-            |(.default|.anti_ddos_syn_flood_seconds)='"${anti_ddos_syn_flood_seconds:-$d_anti_ddos_syn_flood_seconds}"'
-            |(.default|.anti_ddos)="'"${anti_ddos_yn:-$d_anti_ddos_yn}"'"
-            |(.default|.anti_ddos_port)="'"$anti_ddos_ports"'"
-            |(.default|.anti_ddos_seconds)='"${anti_ddos_seconds:-$d_anti_ddos_seconds}"'
-            |(.default|.anti_ddos_level)='"${anti_ddos_level:-$d_anti_ddos_level}"''
+            JQ update "$CHANNELS_FILE" '.default|=. * 
+            {
+                anti_ddos_syn_flood: "'"${anti_ddos_syn_flood_yn:-$d_anti_ddos_syn_flood_yn}"'",
+                anti_ddos_syn_flood_delay_seconds: '"${anti_ddos_syn_flood_delay_seconds:-$d_anti_ddos_syn_flood_delay_seconds}"',
+                anti_ddos_syn_flood_seconds: '"${anti_ddos_syn_flood_seconds:-$d_anti_ddos_syn_flood_seconds}"',
+                anti_ddos: "'"${anti_ddos_yn:-$d_anti_ddos_yn}"'",
+                anti_ddos_port: "'"$anti_ddos_ports"'",
+                anti_ddos_seconds: '"${anti_ddos_seconds:-$d_anti_ddos_seconds}"',
+                anti_ddos_level: '"${anti_ddos_level:-$d_anti_ddos_level}"'
+            } // .'
         fi
     else
         exit 0
@@ -10572,10 +10686,10 @@ AntiDDoSSet()
 MonitorStop()
 {
     printf -v date_now '%(%m-%d %H:%M:%S)T'
-    if ! ls -A "/tmp/monitor.lockdir/"* > /dev/null 2>&1
+
+    # deprecated
+    if ls -A "/tmp/monitor.lockdir/"* > /dev/null 2>&1
     then
-        Println "$error 监控未启动 !\n"
-    else
         for PID in "/tmp/monitor.lockdir/"*
         do
             PID=${PID##*/}
@@ -10590,13 +10704,66 @@ MonitorStop()
 
         Println "$info 关闭监控, 稍等..."
 
-        until ! ls -A "/tmp/monitor.lockdir/"* > /dev/null 2>&1 
+        until ! ls -A "/tmp/monitor.lockdir/"* > /dev/null 2>&1
         do
             sleep 1
         done
 
         rm -rf "/tmp/monitor.lockdir/"
         Println "$info 监控关闭成功 !\n"
+    fi
+
+    if [ -s "$IPTV_ROOT/monitor.pid" ]
+    then
+        PID=$(< "$IPTV_ROOT/monitor.pid")
+        if kill -0 "$PID" 2> /dev/null 
+        then
+            Println "$info 关闭 HLS/FLV 监控, 稍等..."
+            kill "$PID" 2> /dev/null
+            if flock -E 1 -w 20 -x "$IPTV_ROOT/monitor.lock" rm "$IPTV_ROOT/monitor.lock"
+            then
+                Println "$info HLS/FLV 监控 关闭成功 !\n"
+                printf '%s\n' "$date_now 关闭监控 PID $PID !" >> "$MONITOR_LOG"
+            else
+                Println "$error HLS/FLV 监控关闭超时, 请重试\n"
+                exit 1
+            fi
+        else
+            [ -e "$IPTV_ROOT/monitor.pid" ] && rm "$IPTV_ROOT/monitor.pid"
+            [ -e "$IPTV_ROOT/monitor.lock" ] && rm "$IPTV_ROOT/monitor.lock"
+            Println "$info HLS/FLV 监控 关闭成功 !\n"
+        fi
+    else
+        [ -e "$IPTV_ROOT/monitor.pid" ] && rm "$IPTV_ROOT/monitor.pid"
+        [ -e "$IPTV_ROOT/monitor.lock" ] && rm "$IPTV_ROOT/monitor.lock"
+        Println "$error HLS/FLV 监控 未开启\n"
+    fi
+
+    if [ -s "$IPTV_ROOT/antiddos.pid" ] 
+    then
+        PID=$(< "$IPTV_ROOT/antiddos.pid")
+        if kill -0 "$PID" 2> /dev/null 
+        then
+            Println "$info 关闭 antiddos, 稍等..."
+            kill "$PID" 2> /dev/null
+            if flock -E 1 -w 20 -x "$IPTV_ROOT/antiddos.lock" rm "$IPTV_ROOT/antiddos.lock"
+            then
+                Println "$info AntiDDos 监控 关闭成功 !\n"
+                printf '%s\n' "$date_now 关闭 antiddos PID $PID !" >> "$MONITOR_LOG"
+            else
+                Println "$error AntiDDos 监控关闭超时, 请重试\n"
+                exit 1
+            fi
+        else
+            [ -e "$IPTV_ROOT/antiddos.pid" ] && rm "$IPTV_ROOT/antiddos.pid"
+            [ -e "$IPTV_ROOT/antiddos.lock" ] && rm "$IPTV_ROOT/antiddos.lock"
+            Println "$info AntiDDos 监控 关闭成功 !\n"
+        fi
+    elif [ -e "$IPTV_ROOT/antiddos.lock" ]
+    then
+        [ -e "$IPTV_ROOT/antiddos.pid" ] && rm "$IPTV_ROOT/antiddos.pid"
+        [ -e "$IPTV_ROOT/antiddos.lock" ] && rm "$IPTV_ROOT/antiddos.lock"
+        Println "$error AntiDDos 监控 未开启\n"
     fi
 
     if [ -s "$IP_DENY" ] 
@@ -10705,7 +10872,7 @@ MonitorTryAccounts()
 
     if [ -n "${chnl_mac:-}" ] 
     then
-        if [ "${#macs[@]}" -gt 0 ] 
+        if [ -n "${macs:-}" ] 
         then
             if [ -z "${d_version:-}" ] 
             then
@@ -10715,7 +10882,7 @@ MonitorTryAccounts()
             for mac_address in "${macs[@]}"
             do
                 xc_chnl_found=0
-                for xc_chnl_mac in "${xc_chnls_mac[@]}"
+                for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
                 do
                     if [ "$xc_chnl_mac" == "$chnl_domain/$mac_address" ] 
                     then
@@ -11003,14 +11170,14 @@ MonitorTryAccounts()
                 fi
             done
         fi
-    elif [ "${#accounts[@]}" -gt 0 ] 
+    elif [ -n "${accounts:-}" ] 
     then
         accounts+=("$chnl_account")
 
         for account in "${accounts[@]}"
         do
             xc_chnl_found=0
-            for xc_chnl in "${xc_chnls[@]}"
+            for xc_chnl in ${xc_chnls[@]+"${xc_chnls[@]}"}
             do
                 if [ "$xc_chnl" == "$chnl_domain/$account" ] 
                 then
@@ -11236,7 +11403,7 @@ GetXtreamCodesChnls()
 {
     xc_chnls=()
     xc_chnls_mac=()
-    if [ "${#xtream_codes_domains[@]}" -gt 0 ] 
+    if [ -n "${xtream_codes_domains:-}" ] 
     then
         while IFS= read -r line 
         do
@@ -11281,7 +11448,7 @@ GetXtreamCodesChnls()
                 f_flv_push_link=${line%\",*}
                 if [ -n "${f_domain:-}" ] 
                 then
-                    for xc_domain in "${xtream_codes_domains[@]}"
+                    for xc_domain in ${xtream_codes_domains[@]+"${xtream_codes_domains[@]}"}
                     do
                         if [ "$xc_domain" == "$f_domain" ] 
                         then
@@ -11309,7 +11476,7 @@ MonitorHlsRestartSuccess()
     if [ -n "${failed_restart_nums:-}" ] 
     then
         declare -a new_array
-        for element in "${hls_failed[@]}"
+        for element in ${hls_failed[@]+"${hls_failed[@]}"}
         do
             [ "$element" != "$output_dir_name" ] && new_array+=("$element")
         done
@@ -11317,7 +11484,7 @@ MonitorHlsRestartSuccess()
         unset new_array
 
         declare -a new_array
-        for element in "${hls_recheck_time[@]}"
+        for element in ${hls_recheck_time[@]+"${hls_recheck_time[@]}"}
         do
             [ "$element" != "${hls_recheck_time[failed_i]}" ] && new_array+=("$element")
         done
@@ -11396,12 +11563,12 @@ MonitorHlsRestartChannel()
             chnl_cmd=${chnl_cmd##*|}
 
             to_try=0
-            for xc_domain in "${xtream_codes_domains[@]}"
+            for xc_domain in ${xtream_codes_domains[@]+"${xtream_codes_domains[@]}"}
             do
                 if [ "$xc_domain" == "$chnl_domain" ] 
                 then
                     to_try=1
-                    for domain in "${domains_tried[@]}"
+                    for domain in ${domains_tried[@]+"${domains_tried[@]}"}
                     do
                         if [ "$domain" == "$chnl_domain" ] 
                         then
@@ -11416,7 +11583,7 @@ MonitorHlsRestartChannel()
             xc_chnl_found=0
             if [ "$to_try" -eq 1 ] 
             then
-                for xc_chnl_mac in "${xc_chnls_mac[@]}"
+                for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
                 do
                     if [ "$xc_chnl_mac" == "$chnl_domain/$chnl_mac" ] 
                     then
@@ -11683,12 +11850,12 @@ MonitorHlsRestartChannel()
             then
                 chnl_domain=${BASH_REMATCH[1]}
 
-                for xc_domain in "${xtream_codes_domains[@]}"
+                for xc_domain in ${xtream_codes_domains[@]+"${xtream_codes_domains[@]}"}
                 do
                     if [ "$xc_domain" == "$chnl_domain" ] 
                     then
                         to_try=1
-                        for domain in "${domains_tried[@]}"
+                        for domain in ${domains_tried[@]+"${domains_tried[@]}"}
                         do
                             if [ "$domain" == "$chnl_domain" ] 
                             then
@@ -11710,7 +11877,7 @@ MonitorHlsRestartChannel()
                 else
                     chnl_account="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}"
                 fi
-                for xc_chnl in "${xc_chnls[@]}"
+                for xc_chnl in ${xc_chnls[@]+"${xc_chnls[@]}"}
                 do
                     if [ "$xc_chnl" == "$chnl_domain/$chnl_account" ] 
                     then
@@ -11860,7 +12027,7 @@ MonitorFlvRestartSuccess()
     if [ -n "${failed_restart_nums:-}" ] 
     then
         declare -a new_array
-        for element in "${flv_failed[@]}"
+        for element in ${flv_failed[@]+"${flv_failed[@]}"}
         do
             [ "$element" != "$flv_num" ] && new_array+=("$element")
         done
@@ -11868,7 +12035,7 @@ MonitorFlvRestartSuccess()
         unset new_array
 
         declare -a new_array
-        for element in "${flv_recheck_time[@]}"
+        for element in ${flv_recheck_time[@]+"${flv_recheck_time[@]}"}
         do
             [ "$element" != "${flv_recheck_time[failed_i]}" ] && new_array+=("$element")
         done
@@ -11947,12 +12114,12 @@ MonitorFlvRestartChannel()
             chnl_cmd=${chnl_cmd##*|}
 
             to_try=0
-            for xc_domain in "${xtream_codes_domains[@]}"
+            for xc_domain in ${xtream_codes_domains[@]+"${xtream_codes_domains[@]}"}
             do
                 if [ "$xc_domain" == "$chnl_domain" ] 
                 then
                     to_try=1
-                    for domain in "${domains_tried[@]}"
+                    for domain in ${domains_tried[@]+"${domains_tried[@]}"}
                     do
                         if [ "$domain" == "$chnl_domain" ] 
                         then
@@ -11967,7 +12134,7 @@ MonitorFlvRestartChannel()
             xc_chnl_found=0
             if [ "$to_try" -eq 1 ] 
             then
-                for xc_chnl_mac in "${xc_chnls_mac[@]}"
+                for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
                 do
                     if [ "$xc_chnl_mac" == "$chnl_domain/$chnl_mac" ] 
                     then
@@ -12235,12 +12402,12 @@ MonitorFlvRestartChannel()
             then
                 chnl_domain=${BASH_REMATCH[1]}
 
-                for xc_domain in "${xtream_codes_domains[@]}"
+                for xc_domain in ${xtream_codes_domains[@]+"${xtream_codes_domains[@]}"}
                 do
                     if [ "$xc_domain" == "$chnl_domain" ] 
                     then
                         to_try=1
-                        for domain in "${domains_tried[@]}"
+                        for domain in ${domains_tried[@]+"${domains_tried[@]}"}
                         do
                             if [ "$domain" == "$chnl_domain" ] 
                             then
@@ -12263,7 +12430,7 @@ MonitorFlvRestartChannel()
                 else
                     chnl_account="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}"
                 fi
-                for xc_chnl in "${xc_chnls[@]}"
+                for xc_chnl in ${xc_chnls[@]+"${xc_chnls[@]}"}
                 do
                     if [ "$xc_chnl" == "$chnl_domain/$chnl_account" ] 
                     then
@@ -12362,10 +12529,8 @@ Monitor()
 {
     trap '' HUP INT
     trap 'MonitorError $LINENO' ERR
-    MONITOR_PIDFILE="/tmp/monitor.lockdir/$BASHPID"
-    force_exit=1
-    mkdir -p "/tmp/monitor.lockdir"
-    printf '%s' "" > "$MONITOR_PIDFILE"
+
+    printf '%s' "$BASHPID" > "$IPTV_ROOT/monitor.pid"
 
     mkdir -p "$LIVE_ROOT"
     printf '%s\n' "$date_now 监控启动成功 PID $BASHPID !" >> "$MONITOR_LOG"
@@ -12383,37 +12548,43 @@ Monitor()
         printf -v now '%(%s)T'
         if [ "$recheck_period" -gt 0 ] 
         then
-            for((i=0;i<${#flv_recheck_time[@]};i++));
-            do
-                if [ "$now" -ge "${flv_recheck_time[i]}" ] 
-                then
-                    found=0
-                    for flv_num in "${flv_nums_arr[@]}"
-                    do
-                        if [ "$flv_num" == "${flv_failed[i]}" ] 
-                        then
-                            found=1
-                        fi
-                    done
-                    [ "$found" -eq 0 ] && flv_nums_arr+=("${flv_failed[i]}")
-                fi
-            done
+            if [ -n "${flv_recheck_time:-}" ] 
+            then
+                for((i=0;i<${#flv_recheck_time[@]};i++));
+                do
+                    if [ "$now" -ge "${flv_recheck_time[i]}" ] 
+                    then
+                        found=0
+                        for flv_num in ${flv_nums_arr[@]+"${flv_nums_arr[@]}"}
+                        do
+                            if [ "$flv_num" == "${flv_failed[i]}" ] 
+                            then
+                                found=1
+                            fi
+                        done
+                        [ "$found" -eq 0 ] && flv_nums_arr+=("${flv_failed[i]}")
+                    fi
+                done
+            fi
 
-            for((i=0;i<${#hls_recheck_time[@]};i++));
-            do
-                if [ "$now" -ge "${hls_recheck_time[i]}" ] 
-                then
-                    found=0
-                    for dir_name in "${monitor_dir_names_chosen[@]}"
-                    do
-                        if [ "$dir_name" == "${hls_failed[i]}" ] 
-                        then
-                            found=1
-                        fi
-                    done
-                    [ "$found" -eq 0 ] && monitor_dir_names_chosen+=("${hls_failed[i]}")
-                fi
-            done
+            if [ -n "${hls_recheck_time:-}" ] 
+            then
+                for((i=0;i<${#hls_recheck_time[@]};i++));
+                do
+                    if [ "$now" -ge "${hls_recheck_time[i]}" ] 
+                    then
+                        found=0
+                        for dir_name in ${monitor_dir_names_chosen[@]+"${monitor_dir_names_chosen[@]}"}
+                        do
+                            if [ "$dir_name" == "${hls_failed[i]}" ] 
+                            then
+                                found=1
+                            fi
+                        done
+                        [ "$found" -eq 0 ] && monitor_dir_names_chosen+=("${hls_failed[i]}")
+                    fi
+                done
+            fi
         fi
 
         if [ "$anti_leech_yn" == "yes" ] && [ "$anti_leech_restart_nums" -gt 0 ] && [ "${rand_restart_flv_done:-}" != 0 ] && [ "${rand_restart_hls_done:-}" != 0 ] 
@@ -12439,7 +12610,7 @@ Monitor()
                 skip_hour=""
             fi
 
-            if [ "${#minutes[@]}" -gt 0 ] && [ "$current_minute" -gt "$current_minute_old" ]
+            if [ -n "${minutes:-}" ] && [ "$current_minute" -gt "$current_minute_old" ]
             then
                 declare -a new_array
                 for minute in "${minutes[@]}"
@@ -12457,10 +12628,10 @@ Monitor()
                 done
                 minutes=("${new_array[@]}")
                 unset new_array
-                [ "${#minutes[@]}" -eq 0 ] && skip_hour=$current_hour
+                [ -z "${minutes:-}" ] && skip_hour=$current_hour
             fi
 
-            if [ "${#minutes[@]}" -eq 0 ] && [ "$current_minute" -lt 59 ] && [ "$current_hour" != "${skip_hour:-}" ]
+            if [ -z "${minutes:-}" ] && [ "$current_minute" -lt 59 ] && [ "$current_hour" != "${skip_hour:-}" ]
             then
                 rand_restart_flv_done=""
                 rand_restart_hls_done=""
@@ -12477,7 +12648,7 @@ Monitor()
                         if [ "$rand_minute" -gt "$current_minute" ] 
                         then
                             valid=1
-                            for minute in "${minutes[@]}"
+                            for minute in ${minutes[@]+"${minutes[@]}"}
                             do
                                 if [ "$minute" -eq "$rand_minute" ] 
                                 then
@@ -12509,12 +12680,12 @@ Monitor()
         then
             kind="flv"
             rand_found=0
-            if [ -n "${rand_restart_flv_done:-}" ] && [ "$rand_restart_flv_done" -eq 0 ] && [ "${#flv_nums_arr[@]}" -eq 0 ]
+            if [ -n "${rand_restart_flv_done:-}" ] && [ "$rand_restart_flv_done" -eq 0 ] && [ -z "${flv_nums_arr:-}" ]
             then
                 rand_restart_flv_done=1
                 rand_found=1
             fi
-            for flv_num in "${flv_nums_arr[@]}"
+            for flv_num in ${flv_nums_arr[@]+"${flv_nums_arr[@]}"}
             do
                 chnl_flv_pull_link=${monitor_flv_pull_links[$((flv_num-1))]}
                 chnl_flv_push_link=${monitor_flv_push_links[$((flv_num-1))]}
@@ -12559,7 +12730,7 @@ Monitor()
                         fi
 
                         new_array=("$flv_num")
-                        for element in "${flv_nums_arr[@]}"
+                        for element in ${flv_nums_arr[@]+"${flv_nums_arr[@]}"}
                         do
                             [ "$element" != "$flv_num" ] && new_array+=("$element")
                         done
@@ -12592,14 +12763,13 @@ Monitor()
         if ls -A $LIVE_ROOT/* > /dev/null 2>&1
         then
             exclude_command=""
-            for exclude_path in "${exclude_paths[@]}"
+            for exclude_path in ${exclude_paths[@]+"${exclude_paths[@]}"}
             do
                 exclude_command="$exclude_command -not \( -path $exclude_path -prune \)"
             done
 
             if [ -n "${hls_max_seg_size:-}" ] 
             then
-                
                 largest_file=$(find "$LIVE_ROOT" $exclude_command -type f -name "*.ts" -printf "%s %p\n" 2>> "$MONITOR_LOG" | sort -n | tail -1) || true
                 if [ -n "${largest_file:-}" ] 
                 then
@@ -12622,7 +12792,7 @@ Monitor()
             fi
         fi
 
-        if [ "${#monitor_dir_names_chosen[@]}" -gt 0 ] 
+        if [ -n "${monitor_dir_names_chosen:-}" ] 
         then
             rand_found=0
             if [ -z "${loop:-}" ] || [ "$loop" -eq 10 ]
@@ -12710,8 +12880,11 @@ Monitor()
                                 else
                                     echo -e "$new_key_name.key\n$LIVE_ROOT/$output_dir_name/$new_key_name.key\n$(openssl rand -hex 16)" > "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[i]}.keyinfo"
                                 fi
-                                JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"${chnls_pid[i]}"')|.key_name)="'"$new_key_name"'"
-                                |(.channels[]|select(.pid=='"${chnls_pid[i]}"')|.key_time)='"$now"''
+                                JQ update "$CHANNELS_FILE" '.channels|=map(select(.pid=='"${chnls_pid[i]}"') * 
+                                {
+                                    key_name: "'"$new_key_name"'",
+                                    key_time: '"$now"'
+                                } // .)'
                             else
                                 break 2
                             fi
@@ -12859,9 +13032,9 @@ Monitor()
             rand_restart_hls_done=1
         fi
 
-        PrepMonitorTerm
+        PrepTerm
         sleep 10 &
-        WaitMonitorTerm
+        WaitTerm
     done
 }
 
@@ -13131,13 +13304,16 @@ MonitorSet()
         else
             RecheckPeriod
             AntiLeech
-            JQ update "$CHANNELS_FILE" '(.default|.flv_delay_seconds)='"$flv_delay_seconds"'
-            |(.default|.flv_restart_nums)='"$flv_restart_nums"'
-            |(.default|.anti_leech)="'"$anti_leech_yn"'"
-            |(.default|.anti_leech_restart_nums)='"$anti_leech_restart_nums"'
-            |(.default|.anti_leech_restart_flv_changes)="'"$anti_leech_restart_flv_changes_yn"'"
-            |(.default|.anti_leech_restart_hls_changes)="'"$anti_leech_restart_hls_changes_yn"'"
-            |(.default|.recheck_period)='"$recheck_period"''
+            JQ update "$CHANNELS_FILE" '.default|=. * 
+            {
+                flv_delay_seconds: '"$flv_delay_seconds"',
+                flv_restart_nums: '"$flv_restart_nums"',
+                anti_leech: "'"$anti_leech_yn"'",
+                anti_leech_restart_nums: '"$anti_leech_restart_nums"',
+                anti_leech_restart_flv_changes: "'"$anti_leech_restart_flv_changes_yn"'",
+                anti_leech_restart_hls_changes: "'"$anti_leech_restart_hls_changes_yn"'",
+                recheck_period: '"$recheck_period"'
+            } // .'
             return 0
         fi
     fi
@@ -13197,7 +13373,7 @@ MonitorSet()
         fi
 
         error_no=0
-        for hls_num in "${hls_nums_arr[@]}"
+        for hls_num in ${hls_nums_arr[@]+"${hls_nums_arr[@]}"}
         do
             case "$hls_num" in
                 *"-"*)
@@ -13343,18 +13519,21 @@ MonitorSet()
     hls_delay_seconds=${hls_delay_seconds:-$d_hls_delay_seconds}
     hls_min_bitrates=${hls_min_bitrates:-$d_hls_min_bitrates}
     hls_key_period=${hls_key_period:-$d_hls_key_period}
-    JQ update "$CHANNELS_FILE" '(.default|.flv_delay_seconds)='"$flv_delay_seconds"'
-    |(.default|.flv_restart_nums)='"$flv_restart_nums"'
-    |(.default|.hls_delay_seconds)='"$hls_delay_seconds"'
-    |(.default|.hls_min_bitrates)='"$((hls_min_bitrates / 1000))"'
-    |(.default|.hls_max_seg_size)='"$hls_max_seg_size"'
-    |(.default|.hls_restart_nums)='"$hls_restart_nums"'
-    |(.default|.hls_key_period)='"$hls_key_period"'
-    |(.default|.anti_leech)="'"$anti_leech_yn"'"
-    |(.default|.anti_leech_restart_nums)='"$anti_leech_restart_nums"'
-    |(.default|.anti_leech_restart_flv_changes)="'"$anti_leech_restart_flv_changes_yn"'"
-    |(.default|.anti_leech_restart_hls_changes)="'"$anti_leech_restart_hls_changes_yn"'"
-    |(.default|.recheck_period)='"$recheck_period"''
+    JQ update "$CHANNELS_FILE" '.default|=. * 
+    {
+        flv_delay_seconds: '"$flv_delay_seconds"',
+        flv_restart_nums: '"$flv_restart_nums"',
+        hls_delay_seconds: '"$hls_delay_seconds"',
+        hls_min_bitrates: '"$((hls_min_bitrates / 1000))"',
+        hls_max_seg_size: '"$hls_max_seg_size"',
+        hls_restart_nums: '"$hls_restart_nums"',
+        hls_key_period: '"$hls_key_period"',
+        anti_leech: "'"$anti_leech_yn"'",
+        anti_leech_restart_nums: '"$anti_leech_restart_nums"',
+        anti_leech_restart_flv_changes: "'"$anti_leech_restart_flv_changes_yn"'",
+        anti_leech_restart_hls_changes: "'"$anti_leech_restart_hls_changes_yn"'",
+        recheck_period: '"$recheck_period"'
+    } // .'
 }
 
 Progress(){
@@ -13437,7 +13616,7 @@ InstallNginx()
         --with-pcre=../pcre-8.44 --with-pcre-jit --with-zlib=../zlib-1.2.11 \
         --with-openssl=../openssl-1.1.1g --with-openssl-opt=no-nextprotoneg \
         --with-http_stub_status_module --with-http_ssl_module --with-http_v2_module \
-        --with-http_realip_module --with-debug >/dev/null 2>&1
+        --with-http_realip_module --with-threads --with-debug >/dev/null 2>&1
 
     echo -n "...80%..."
 
@@ -13492,26 +13671,24 @@ UpdateNginx()
         Println "$error 无法连接到 Github ! 尝试备用链接...\n"
         sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
         [ -z "$sh_new_ver" ] && Println "$error 无法连接备用链接!\n" && exit 1
+        wget --no-check-certificate "$SH_LINK_BACKUP" -qO "${SH_FILE}_tmp"
+    else
+        wget --no-check-certificate "$SH_LINK" -qO "${SH_FILE}_tmp"
+    fi
+
+    if [ ! -s "${SH_FILE}_tmp" ] 
+    then
+        Println "$error 无法连接备用链接!\n"
+        exit 1
+    else
+        mv "${SH_FILE}_tmp" "$SH_FILE"
+        chmod +x "$SH_FILE"
+        Println "$info $nginx_name 脚本更新完成\n"
     fi
 
     if [ "$sh_new_ver" != "$sh_ver" ] 
     then
-        [ -e "$LOCK_FILE" ] && rm -f "$LOCK_FILE"
-    fi
-
-    wget --no-check-certificate "$SH_LINK" -qO "$SH_FILE" && chmod +x "$SH_FILE"
-
-    if [ ! -s "$SH_FILE" ] 
-    then
-        wget --no-check-certificate "$SH_LINK_BACKUP" -qO "$SH_FILE"
-        if [ ! -s "$SH_FILE" ] 
-        then
-            Println "$error 无法连接备用链接!\n" && exit 1
-        else
-            Println "$info $nginx_name 脚本更新完成\n"
-        fi
-    else
-        Println "$info $nginx_name 脚本更新完成\n"
+        rm -f "$LOCK_FILE"
     fi
 
     Println "是否重新编译 $nginx_name ？[y/N]"
@@ -13625,8 +13802,7 @@ ToggleNginx()
 
 RestartNginx()
 {
-    PID=$(< "$nginx_prefix/logs/nginx.pid")
-    if kill -0 "$PID" 2> /dev/null 
+    if [ -e "$nginx_prefix/logs/nginx.pid" ] && kill -0 "$(< $nginx_prefix/logs/nginx.pid)" 2> /dev/null 
     then
         $NGINX_FILE -s stop
         sleep 1
@@ -13865,7 +14041,7 @@ ListXtreamCodes()
             ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
             [ -z "$ip" ] && continue
             account="$username:$password"
-        elif [[ ! $line =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] 
+        elif [[ ! $line =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3} ]] 
         then
             if [[ $line =~ http://([^/]+)/ ]]
             then
@@ -14154,7 +14330,7 @@ ViewXtreamCodesAcc()
         for((i=0;i<accs_count;i++));
         do
             using=""
-            for xc_chnl in "${xc_chnls[@]}"
+            for xc_chnl in ${xc_chnls[@]+"${xc_chnls[@]}"}
             do
                 if [ "$xc_chnl" == "$domain/${accs[i]}" ] 
                 then
@@ -14167,7 +14343,7 @@ ViewXtreamCodesAcc()
         Println "$accs_list"
     else
         using=""
-        for xc_chnl in "${xc_chnls[@]}"
+        for xc_chnl in ${xc_chnls[@]+"${xc_chnls[@]}"}
         do
             if [ "$xc_chnl" == "$domain/${accs[i]}" ] 
             then
@@ -14336,7 +14512,7 @@ TestXtreamCodes()
         found=0
         for domain in "${domains[@]}"
         do
-            for chnl in "${chnls[@]}"
+            for chnl in ${chnls[@]+"${chnls[@]}"}
             do
                 if [ "$domain/$username/$password" == "$chnl" ] 
                 then
@@ -14449,7 +14625,7 @@ ViewXtreamCodesMac()
         for((i=0;i<macs_count;i++));
         do
             using=""
-            for xc_chnl_mac in "${xc_chnls_mac[@]}"
+            for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
             do
                 if [ "$xc_chnl_mac" == "$domain/${macs[i]}" ] 
                 then
@@ -14462,7 +14638,7 @@ ViewXtreamCodesMac()
         Println "$macs_list"
     else
         using=""
-        for xc_chnl_mac in "${xc_chnls_mac[@]}"
+        for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
         do
             if [ "$xc_chnl_mac" == "$domain/${macs[i]}" ] 
             then
@@ -14585,7 +14761,7 @@ ViewXtreamCodesChnls()
         IFS=" " read -ra accounts <<< "$account"
 
         macs=()
-        for account in "${accounts[@]}"
+        for account in ${accounts[@]+"${accounts[@]}"}
         do
             if [[ $account =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
             then
@@ -14603,7 +14779,7 @@ ViewXtreamCodesChnls()
             for((i=0;i<macs_count;i++));
             do
                 using=""
-                for xc_chnl_mac in "${xc_chnls_mac[@]}"
+                for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
                 do
                     if [ "$xc_chnl_mac" == "$domain/${macs[i]}" ] 
                     then
@@ -14627,7 +14803,7 @@ ViewXtreamCodesChnls()
                         if [ "$macs_num" -gt 0 ] && [ "$macs_num" -le "$macs_count" ]
                         then
                             mac_address=${macs[$((macs_num-1))]}
-                            for xc_chnl_mac in "${xc_chnls_mac[@]}"
+                            for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
                             do
                                 if [ "$xc_chnl_mac" == "$domain/$mac_address" ] 
                                 then
@@ -14808,6 +14984,7 @@ ViewXtreamCodesChnls()
                                 ordered_list_page=$(wget --timeout=10 --tries=3 --user-agent="$user_agent" --no-check-certificate \
                                     --header="xc_host: $xc_host_header" --header="${headers:0:-4}" \
                                     --header="Cookie: $cookies" "$ordered_list_url" -qO-)
+                                [ -z "$ordered_list_page" ] && return_err=1 && continue 3
                             fi
                             ordered_list_pages[page_index]=$ordered_list_page
                         fi
@@ -14990,19 +15167,13 @@ ViewXtreamCodesChnls()
                                 stream_links_input="$domain|$stream_link|${xc_chnls_cmd[xc_chnls_index]}|$mac_address"
                                 AddChannel
                             else
-                                Println "是否继续？[y/N]"
-                                read -p "(默认: N): " continue_yn
-                                continue_yn=${continue_yn:-N}
-                                if [[ $continue_yn == [Yy] ]] 
-                                then
-                                    continue
-                                fi
+                                continue
                             fi
                         else
                             Println "$error 频道不可用或账号权限不够"
-                            Println "是否继续？[y/N]"
-                            read -p "(默认: N): " continue_yn
-                            continue_yn=${continue_yn:-N}
+                            Println "是否继续？[Y/n]"
+                            read -p "(默认: Y): " continue_yn
+                            continue_yn=${continue_yn:-Y}
                             if [[ $continue_yn == [Yy] ]] 
                             then
                                 continue
@@ -15403,7 +15574,7 @@ NginxCheckDomains()
             if [[ $server_flag -eq 0 ]] && [[ $line == *"}"* ]] 
             then
                 server_found=0
-                if [[ ${#server_domains[@]} -gt 0 ]] 
+                if [[ -n ${server_domains:-} ]] 
                 then
                     for server_domain in "${server_domains[@]}"
                     do
@@ -15537,9 +15708,10 @@ NginxConfigCorsHost()
                 if [[ $line =~ http([^\"]+) ]] 
                 then
                     host_found=0
-                    for host in "${hosts[@]}"
+                    found_host=${BASH_REMATCH[1]}
+                    for host in ${hosts[@]+"${hosts[@]}"}
                     do
-                        if [ "$host" == "${BASH_REMATCH[1]#*//}" ] 
+                        if [ "$host" == "${found_host#*//}" ] 
                         then
                             host_found=1
                             break
@@ -15548,7 +15720,7 @@ NginxConfigCorsHost()
                     if [[ $host_found -eq 0 ]] && [[ ! $line =~ $server_ip ]]
                     then
                         cors_domains="$cors_domains
-        \"~http${BASH_REMATCH[1]}\" http${BASH_REMATCH[1]};"
+        \"~http$found_host\" http$found_host;"
                     fi
                 fi
                 continue
@@ -15908,8 +16080,6 @@ NginxDomainServerToggleNodejs()
             proxy_set_header X-Forwarded-Proto $scheme;
 
             proxy_cache_bypass 1;
-            proxy_no_cache 1;$proxy_cookie_path
-            proxy_cookie_domain localhost ${nginx_domains[nginx_domains_index]};
         }
 
         location = /channels.json {
@@ -15948,8 +16118,6 @@ NginxDomainServerToggleNodejs()
             proxy_set_header X-Forwarded-Proto $scheme;
 
             proxy_cache_bypass 1;
-            proxy_no_cache 1;$proxy_cookie_path
-            proxy_cookie_domain localhost ${nginx_domains[nginx_domains_index]};
         }
 
         location ~ \.(keyinfo|key)$ {
@@ -16049,8 +16217,6 @@ NginxDomainServerToggleNodejs()
             proxy_set_header X-Forwarded-Proto $scheme;
 
             proxy_cache_bypass 1;
-            proxy_no_cache 1;$proxy_cookie_path
-            proxy_cookie_domain localhost ${nginx_domains[nginx_domains_index]};
         }
 
         location = /channels.json {
@@ -16089,8 +16255,6 @@ NginxDomainServerToggleNodejs()
             proxy_set_header X-Forwarded-Proto $scheme;
 
             proxy_cache_bypass 1;
-            proxy_no_cache 1;$proxy_cookie_path
-            proxy_cookie_domain localhost ${nginx_domains[nginx_domains_index]};
         }
 
         location ~ \.(keyinfo|key)$ {
@@ -16616,8 +16780,6 @@ NginxConfigLocalhost()
             proxy_set_header X-Forwarded-Proto http;
 
             proxy_cache_bypass 1;
-            proxy_no_cache 1;
-            proxy_cookie_domain localhost $server_ip;
         }
 
         location = /channels.json {
@@ -16656,8 +16818,6 @@ NginxConfigLocalhost()
             proxy_set_header X-Forwarded-Proto http;
 
             proxy_cache_bypass 1;
-            proxy_no_cache 1;
-            proxy_cookie_domain localhost $server_ip;
         }
 
         location ~ \.(keyinfo|key)$ {
@@ -16723,8 +16883,11 @@ NginxConfigLocalhost()
     echo -e "$conf" > "$nginx_prefix/conf/nginx.conf"
 
     NginxConfigCorsHost
-    $NGINX_FILE -s stop 2> /dev/null || true
-    $NGINX_FILE
+    if [ "${skip_nginx_restart:-0}" -eq 0 ] 
+    then
+        $NGINX_FILE -s stop 2> /dev/null || true
+        $NGINX_FILE
+    fi
     Println "$info localhost 配置成功\n"
 }
 
@@ -17117,6 +17280,39 @@ InstallNodejs()
 NodejsInstallMongodb()
 {
     Println "$info 安装 mongodb, 请等待..."
+    limits=(
+        "root soft nofile 65535"
+        "root hard nofile 65535"
+        "root soft nproc 65535"
+        "root hard nproc 65535"
+        "* soft nofile 64000"
+        "* hard nofile 64000"
+        "mongod soft fsize unlimited"
+        "mongod hard fsize unlimited"
+        "mongod soft cpu unlimited"
+        "mongod hard cpu unlimited"
+        "mongod soft as unlimited"
+        "mongod hard as unlimited"
+        "mongod soft memlock unlimited"
+        "mongod hard memlock unlimited"
+        "mongod soft nproc 64000"
+        "mongod hard nproc 64000"
+    )
+
+    limits_append=""
+    for limit in "${limits[@]}"
+    do
+        if ! grep -q "${limit% *}" < "/etc/security/limits.conf" 
+        then
+            limits_append="$limits_append$limit\n"
+        fi
+    done
+
+    if [ -n "$limits_append" ] 
+    then
+        echo -e "$limits_append" >> "/etc/security/limits.conf"
+    fi
+
     ulimit -f unlimited
     ulimit -t unlimited
     ulimit -v unlimited
@@ -17129,7 +17325,7 @@ NodejsInstallMongodb()
         printf '%s' "
 [mongodb-org-4.2]
 name=MongoDB Repository
-baseurl=https://repo.mongodb.org/yum/redhat/\$releasever/mongodb-org/4.2/x86_64/
+baseurl=https://mirrors.aliyun.com/mongodb/yum/redhat/\$releasever/mongodb-org/4.2/x86_64/
 gpgcheck=1
 enabled=1
 gpgkey=https://www.mongodb.org/static/pgp/server-4.2.asc
@@ -17144,9 +17340,9 @@ gpgkey=https://www.mongodb.org/static/pgp/server-4.2.asc
 
         if grep -q "xenial" < "/etc/apt/sources.list"
         then
-            echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/4.2 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.2.list
+            echo "deb [ arch=amd64,arm64 ] https://mirrors.aliyun.com/mongodb/apt/ubuntu xenial/mongodb-org/4.2 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.2.list
         else
-            echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/4.2 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.2.list
+            echo "deb [ arch=amd64,arm64 ] https://mirrors.aliyun.com/mongodb/apt/ubuntu bionic/mongodb-org/4.2 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.2.list
         fi
 
         apt-get -y update >/dev/null 2>&1
@@ -17255,6 +17451,7 @@ NodejsConfig()
         case "$nginx_domains_index" in
             ""|$config_localhost_num)
                 nginx_domains_index=$config_localhost_num
+                skip_nginx_restart=1
                 NginxConfigLocalhost
                 break
             ;;
@@ -17452,10 +17649,12 @@ UpdateSelf()
         minor_ver=${d_version#*.}
         minor_ver=${minor_ver%%.*}
 
-        if [ "$major_ver" -eq 1 ] && [ "$minor_ver" -lt 25 ]
+        if [ "$major_ver" -eq 1 ] && [ "$minor_ver" -lt 33 ]
         then
             Println "$info 需要先关闭所有频道，请稍等...\n"
             StopChannelsForce
+            rm -rf "/tmp/flv.lockdir/"
+            rm -rf "/tmp/monitor.lockdir"
         fi
         Println "$info 更新中，请稍等...\n"
         printf -v update_date '%(%m-%d)T'
@@ -20370,14 +20569,32 @@ InstallOpenresty()
 
 CheckShFile()
 {
-    [ ! -e "$SH_FILE" ] && wget --no-check-certificate "$SH_LINK" -qO "$SH_FILE" && chmod +x "$SH_FILE"
     if [ ! -s "$SH_FILE" ] 
     then
-        Println "$error 无法连接到 Github ! 尝试备用链接..."
-        wget --no-check-certificate "$SH_LINK_BACKUP" -qO "$SH_FILE" && chmod +x "$SH_FILE"
-        if [ ! -s "$SH_FILE" ] 
+        sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
+
+        if [ -z "$sh_new_ver" ] 
         then
-            Println "$error 无法连接备用链接!\n" && exit 1
+            Println "$error 无法连接到 Github ! 尝试备用链接...\n"
+            sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
+            [ -z "$sh_new_ver" ] && Println "$error 无法连接备用链接!\n" && exit 1
+            wget --no-check-certificate "$SH_LINK_BACKUP" -qO "${SH_FILE}_tmp"
+        else
+            wget --no-check-certificate "$SH_LINK" -qO "${SH_FILE}_tmp"
+        fi
+
+        if [ ! -s "${SH_FILE}_tmp" ] 
+        then
+            Println "$error 无法连接备用链接!\n"
+            exit 1
+        else
+            mv "${SH_FILE}_tmp" "$SH_FILE"
+            chmod +x "$SH_FILE"
+        fi
+
+        if [ "$sh_new_ver" != "$sh_ver" ] 
+        then
+            rm -f "$LOCK_FILE"
         fi
     fi
 
@@ -20552,8 +20769,10 @@ GetCloudflareHosts()
     cf_hosts_zone_resolve_to=()
     cf_hosts_zone_user_email=()
     cf_hosts_zone_user_unique_id=()
+    cf_hosts_zone_always_use_https=()
+    cf_hosts_zone_ssl=()
     cf_hosts_zone_subdomains=()
-    while IFS="^" read -r name key zones_count zone_name zone_resolve_to zone_user_email zone_user_unique_id zone_subdomains
+    while IFS="^" read -r name key zones_count zone_name zone_resolve_to zone_user_email zone_user_unique_id zone_always_use_https zone_ssl zone_subdomains
     do
         cf_hosts_count=$((cf_hosts_count+1))
         name=${name#\"}
@@ -20565,11 +20784,13 @@ GetCloudflareHosts()
         cf_hosts_zone_user_email+=("$zone_user_email")
         zone_user_unique_id=${zone_user_unique_id%\"}
         cf_hosts_zone_user_unique_id+=("$zone_user_unique_id")
+        cf_hosts_zone_always_use_https+=("$zone_always_use_https")
+        cf_hosts_zone_ssl+=("$zone_ssl")
         zone_subdomains=${zone_subdomains%\"}
         cf_hosts_zone_subdomains+=("$zone_subdomains")
 
         cf_hosts_list="$cf_hosts_list $green$cf_hosts_count.$plain\r\e[6CCFP: $green$name$plain  host key: $green$key$plain  域名数: $green$zones_count$plain\n\n"
-    done < <($JQ_FILE '.hosts[]|[.name,.key,(.zones|length),([.zones[].name]|join("|")),([.zones[].resolve_to]|join("|")),([.zones[].user_email]|join("|")),([.zones[].user_unique_id]|join("|")),([.zones[].subdomains]|join("|"))]|join("^")' "$CF_CONFIG")
+    done < <($JQ_FILE '.hosts[]|[.name,.key,(.zones|length),([.zones[].name]|join("|")),([.zones[].resolve_to]|join("|")),([.zones[].user_email]|join("|")),([.zones[].user_unique_id]|join("|")),([.zones[].always_use_https]|join("|")),([.zones[].ssl]|join("|")),([.zones[].subdomains]|join("|"))]|join("^")' "$CF_CONFIG")
     return 0
 }
 
@@ -20602,6 +20823,73 @@ SetCloudflareZoneResolve()
     read -p "(默认: 取消): " cf_zone_resolve_to
     [ -z "$cf_zone_resolve_to" ] && Println "已取消...\n" && exit 1
     Println "  默认解析地址: $green $cf_zone_resolve_to $plain\n"
+}
+
+SetCloudflareZoneAlwaysUseHttps()
+{
+    Println "始终使用 https 访问域名 ? [y/N]"
+    echo -e "$tip 开启后客户端和 cloudflare 之间连接始终为 https\n"
+    if [ "${cf_zone_always_use_https:-}" == "on" ] 
+    then
+        always_use_https_yn="Y"
+    else
+        always_use_https_yn="N"
+    fi
+    read -p "(默认: $always_use_https_yn): " cf_zone_always_use_https_yn
+    cf_zone_always_use_https_yn=${cf_zone_always_use_https_yn:-$always_use_https_yn}
+    if [[ $cf_zone_always_use_https_yn == [Yy] ]] 
+    then
+        cf_zone_always_use_https='on'
+    else
+        cf_zone_always_use_https='off'
+    fi
+    Println "  始终使用 https: $green $cf_zone_always_use_https $plain\n"
+}
+
+SetCloudflareZoneSsl()
+{
+    Println "选择域名 $green$cf_zone_name$plain SSL 设置
+
+  ${green}1.$plain off ( 客户端 <= http => cloudflare <= http => 源站)
+  ${green}2.$plain flexible ( 客户端 <= https => cloudflare <= http => 源站)
+  ${green}3.$plain full ( 客户端 <= https => cloudflare <= https => 源站[ SSL证书/自定义证书 ])
+  ${green}4.$plain strict ( 客户端 <= https => cloudflare <= https => 源站[ CA SSL证书 ])
+    "
+    case ${cf_zone_ssl:-} in
+        "off") ssl_num=1
+        ;;
+        "flexible"|"") ssl_num=2
+        ;;
+        "full") ssl_num=3
+        ;;
+        "strict") ssl_num=4
+        ;;
+    esac
+    while read -p "(默认: $ssl_num): " cf_zone_ssl_num
+    do
+        case $cf_zone_ssl_num in
+            ""|2) 
+                cf_zone_ssl='flexible'
+                break
+            ;;
+            1) 
+                cf_zone_ssl='off'
+                break
+            ;;
+            3) 
+                cf_zone_ssl='full'
+                break
+            ;;
+            4) 
+                cf_zone_ssl='strict'
+                break
+            ;;
+            *) 
+                Println "$error 请输入正确的序号\n"
+            ;;
+        esac
+    done
+    Println "  SSL 设置: $green $cf_zone_ssl $plain\n"
 }
 
 GetCloudflareUsers()
@@ -20748,37 +21036,36 @@ AddCloudflareZone()
         fi
     done
 
-    found=0
-    for cf_host_zone_name in "${cf_host_zones_name[@]}"
+    for cf_host_zone_name in ${cf_host_zones_name[@]+"${cf_host_zones_name[@]}"}
     do
         if [ "$cf_host_zone_name" == "$cf_zone_name" ] 
         then
-            found=1
-            break
+            Println "$error 域名已经存在\n"
+            exit 1
         fi
     done
 
-    if [ "$found" -eq 1 ] 
-    then
-        Println "$error 域名已经存在\n"
-    else
-        SetCloudflareZoneResolve
+    SetCloudflareZoneResolve
+    SetCloudflareZoneAlwaysUseHttps
+    SetCloudflareZoneSsl
 
-        new_zone=$(
-        $JQ_FILE -n --arg name "$cf_zone_name" --arg resolve_to "$cf_zone_resolve_to" \
-            --arg user_email "$cf_user_email" --arg user_unique_id "$cf_user_unique_id" \
-            '{
-                name: $name,
-                resolve_to: $resolve_to,
-                user_email: $user_email,
-                user_unique_id: $user_unique_id | tonumber
-            }'
-        )
+    new_zone=$(
+    $JQ_FILE -n --arg name "$cf_zone_name" --arg resolve_to "$cf_zone_resolve_to" \
+        --arg user_email "$cf_user_email" --arg user_unique_id "$cf_user_unique_id" \
+        --arg always_use_https "$cf_zone_always_use_https" --arg ssl "$cf_zone_ssl" \
+        '{
+            name: $name,
+            resolve_to: $resolve_to,
+            user_email: $user_email,
+            user_unique_id: $user_unique_id | tonumber,
+            always_use_https: $always_use_https,
+            ssl: $ssl
+        }'
+    )
 
-        jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
-        JQ add "$CF_CONFIG" "[$new_zone]"
-        Println "$info 源站添加成功\n"
-    fi
+    jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
+    JQ add "$CF_CONFIG" "[$new_zone]"
+    Println "$info 源站添加成功\n"
 }
 
 ListCloudflareZones()
@@ -20806,11 +21093,15 @@ ListCloudflareZones()
                     cf_zone_resolve_to=${cf_hosts_zone_resolve_to[cf_hosts_index]}
                     cf_zone_user_email=${cf_hosts_zone_user_email[cf_hosts_index]}
                     cf_zone_user_unique_id=${cf_hosts_zone_user_unique_id[cf_hosts_index]}
+                    cf_zone_always_use_https=${cf_hosts_zone_always_use_https[cf_hosts_index]}
+                    cf_zone_ssl=${cf_hosts_zone_ssl[cf_hosts_index]}
                     cf_zone_subdomains=${cf_hosts_zone_subdomains[cf_hosts_index]}
                     IFS="|" read -r -a cf_zones_name <<< "$cf_zone_name"
                     IFS="|" read -r -a cf_zones_resolve_to <<< "$cf_zone_resolve_to"
                     IFS="|" read -r -a cf_zones_user_email <<< "$cf_zone_user_email"
                     IFS="|" read -r -a cf_zones_user_unique_id <<< "$cf_zone_user_unique_id"
+                    IFS="|" read -r -a cf_zones_always_use_https <<< "${cf_zone_always_use_https}|"
+                    IFS="|" read -r -a cf_zones_ssl <<< "${cf_zone_ssl}|"
                     IFS="|" read -r -a cf_zones_subdomains <<< "${cf_zone_subdomains}|"
                     break
                 else
@@ -20823,7 +21114,7 @@ ListCloudflareZones()
     cf_zones_list=""
     for((i=0;i<cf_zones_count;i++));
     do
-        cf_zones_list="$cf_zones_list $green$((i+1)).$plain\r\e[6C源站: $green${cf_zones_name[i]}$plain 用户: $green${cf_zones_user_email[i]}$plain\n\n"
+        cf_zones_list="$cf_zones_list $green$((i+1)).$plain\r\e[6C源站: $green${cf_zones_name[i]}$plain 用户: $green${cf_zones_user_email[i]}$plain\n\e[6C始终 https: $green${cf_zones_always_use_https[i]:-off}$plain  ssl: $green${cf_zones_ssl[i]:-flexible}$plain\n\n"
     done
 
     [ -z "$cf_zones_list" ] && Println "$error 请先添加源站\n" && exit 1
@@ -20904,6 +21195,8 @@ MoveCloudflareZone()
                     cf_zone_resolve_to=${cf_zones_resolve_to[cf_zones_index]}
                     cf_user_email=${cf_zones_user_email[cf_zones_index]}
                     cf_user_unique_id=${cf_zones_user_unique_id[cf_zones_index]}
+                    cf_zone_always_use_https=${cf_zones_always_use_https[cf_zones_index]}
+                    cf_zone_ssl=${cf_zones_ssl[cf_zones_index]}
                     cf_zone_subdomains=${cf_zones_subdomains[cf_zones_index]}
                     break
                 else
@@ -21046,12 +21339,14 @@ MoveCloudflareZone()
         new_zone=$(
         $JQ_FILE -n --arg name "$cf_zone_name" --arg resolve_to "$cf_zone_resolve_to" \
             --arg user_email "$cf_user_email" --arg user_unique_id "$cf_user_unique_id" \
-            --arg subdomains "$cf_zone_subdomains" \
+            --arg always_use_https "$cf_zone_always_use_https" --arg ssl "$cf_zone_ssl" --arg subdomains "$cf_zone_subdomains" \
             '{
                 name: $name,
                 resolve_to: $resolve_to,
                 user_email: $user_email,
                 user_unique_id: $user_unique_id | tonumber,
+                always_use_https: $always_use_https,
+                ssl: $ssl,
                 subdomains: $subdomains
             }'
         )
@@ -21127,9 +21422,9 @@ GetCloudflareUserInfo()
         then
             if [ "${monitor:-0}" -eq 1 ] 
             then
-                MonitorError "源站 $cf_zone_name 的用户已被 CFP 删除或未添加成功, 可以到 Cloudflare 官网手动删除源站或重新添加 !"
+                MonitorError "源站 $cf_zone_name 的用户已被 CFP 删除或未添加成功, 尝试重新添加 ..."
             fi
-            Println "$error 源站 $cf_zone_name 的用户已被 CFP 删除或未添加成功, 可以到 Cloudflare 官网手动删除源站或重新添加 !"
+            Println "$error 源站 $cf_zone_name 的用户已被 CFP 删除或未添加成功, 尝试重新添加 ..."
 
             if [ -z "${cf_user_pass:-}" ] 
             then
@@ -21210,6 +21505,8 @@ AddCloudflareSubdomain()
                     cf_zone_resolve_to=${cf_zones_resolve_to[cf_zones_index]}
                     cf_user_email=${cf_zones_user_email[cf_zones_index]}
                     cf_user_unique_id=${cf_zones_user_unique_id[cf_zones_index]}
+                    cf_zone_always_use_https=${cf_zones_always_use_https[cf_zones_index]}
+                    cf_zone_ssl=${cf_zones_ssl[cf_zones_index]}
                     cf_zone_subdomains=${cf_zones_subdomains[cf_zones_index]}
                     break
                 else
@@ -21284,12 +21581,14 @@ AddCloudflareSubdomain()
     new_zone=$(
     $JQ_FILE -n --arg name "$cf_zone_name" --arg resolve_to "$cf_zone_resolve_to" \
         --arg user_email "$cf_user_email" --arg user_unique_id "$cf_user_unique_id" \
-        --arg subdomains "$subdomains" \
+        --arg always_use_https "$cf_zone_always_use_https" --arg ssl "$cf_zone_ssl" --arg subdomains "$subdomains" \
         '{
             name: $name,
             resolve_to: $resolve_to,
             user_email: $user_email,
             user_unique_id: $user_unique_id | tonumber,
+            always_use_https: $always_use_https,
+            ssl: $ssl,
             subdomains: $subdomains
         }'
     )
@@ -22494,7 +22793,7 @@ AddIbmcfAppRoute()
     ibm_cf_app_routes_port_unique=()
     for port in "${ibm_cf_app_routes_port[@]}"
     do
-        for port_unique in "${ibm_cf_app_routes_port_unique[@]}"
+        for port_unique in ${ibm_cf_app_routes_port_unique[@]+"${ibm_cf_app_routes_port_unique[@]}"}
         do
             if [ "$port_unique" == "$port" ] 
             then
@@ -22562,7 +22861,7 @@ DelIbmAppRoute()
     do
         case $ibm_cf_app_routes_num in
             "") 
-                Println "已取消 ...\n"
+                Println "已取消...\n"
                 exit 1
             ;;
             *[!0-9]*) 
@@ -22592,7 +22891,7 @@ DelIbmAppRoute()
     for((i=0;i<ibm_cf_app_routes_count;i++));
     do
         [[ $i -eq "$ibm_cf_app_routes_index" ]] && continue
-        for port_unique in "${ibm_cf_app_routes_port_unique[@]}"
+        for port_unique in ${ibm_cf_app_routes_port_unique[@]+"${ibm_cf_app_routes_port_unique[@]}"}
         do
             if [ "$port_unique" == "${ibm_cf_app_routes_port[i]}" ] 
             then
@@ -22742,14 +23041,14 @@ AddIbmV2rayPort()
     do
         case $ibm_v2ray_port in
             "") 
-                Println "已取消 ...\n"
+                Println "已取消...\n"
                 exit 1
             ;;
            *[!0-9]*) 
                 Println "$error 请输入正确的端口\n"
             ;;
             *) 
-                for port in "${inbounds_port[@]}"
+                for port in ${inbounds_port[@]+"${inbounds_port[@]}"}
                 do
                     if [ "$port" -eq "$ibm_v2ray_port" ] 
                     then
@@ -22848,7 +23147,7 @@ EditIbmV2rayPort()
                 Println "$error 请输入正确的端口\n"
             ;;
             *) 
-                for port in "${inbounds_port[@]}"
+                for port in ${inbounds_port[@]+"${inbounds_port[@]}"}
                 do
                     if [ "$port" -eq "$ibm_v2ray_port" ] && [ "$port" -ne "$v2ray_port" ]
                     then
@@ -23121,14 +23420,14 @@ AddIbmV2rayForwardPort()
     do
         case $ibm_v2ray_forward_port in
             "") 
-                Println "已取消 ...\n"
+                Println "已取消...\n"
                 exit 1
             ;;
            *[!0-9]*) 
                 Println "$error 请输入正确的端口\n"
             ;;
             *) 
-                for port in "${inbounds_port[@]}"
+                for port in ${inbounds_port[@]+"${inbounds_port[@]}"}
                 do
                     if [ "$port" -eq "$ibm_v2ray_forward_port" ] 
                     then
@@ -23149,7 +23448,7 @@ AddIbmV2rayForwardPort()
     do
         case $ibm_v2ray_forward_target_address in
             "") 
-                Println "已取消 ...\n"
+                Println "已取消...\n"
                 exit 1
             ;;
             *) 
@@ -23248,7 +23547,7 @@ EditIbmV2rayForwardPort()
                 Println "$error 请输入正确的端口\n"
             ;;
             *) 
-                for port in "${inbounds_port[@]}"
+                for port in ${inbounds_port[@]+"${inbounds_port[@]}"}
                 do
                     if [ "$port" -eq "$ibm_v2ray_forward_port" ] && [ "$port" -ne "$forward_port" ]
                     then
@@ -23431,7 +23730,7 @@ DeployIbmV2ray()
 {
     GetIbmV2rayInbounds
     found=0
-    for port in "${inbounds_port[@]}"
+    for port in ${inbounds_port[@]+"${inbounds_port[@]}"}
     do
         if [ "$port" -eq 8080 ] 
         then
@@ -23682,7 +23981,7 @@ SetIbmcfAppCron()
         do
             case $apps_path_num in
                 "") 
-                    Println "已取消 ...\n"
+                    Println "已取消...\n"
                     exit 1
                 ;;
                 *[!0-9]*) 
@@ -23922,6 +24221,18 @@ func main() {
 UpdateSh()
 {
     Println "$info 更新脚本 ..."
+    sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
+    if [ -z "$sh_new_ver" ] 
+    then
+        Println "$error 无法连接到 Github ! 尝试备用链接..."
+        sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
+        [ -z "$sh_new_ver" ] && Println "$error 无法连接备用链接!" && exit 1
+    fi
+
+    if [ "$sh_new_ver" != "$sh_ver" ] 
+    then
+        rm -f "$LOCK_FILE"
+    fi
 
     if ! wget --timeout=10 --tries=3 --no-check-certificate "$SH_LINK" -qO "$SH_FILE" && ! wget --timeout=10 --tries=3 --no-check-certificate "$SH_LINK_BACKUP" -qO "$SH_FILE"
     then
@@ -24073,7 +24384,7 @@ UpdateCloudflareToken()
     do
         case $tokens_num in
             "") 
-                Println "已取消 ...\n"
+                Println "已取消...\n"
                 exit 1
             ;;
             *[!0-9]*)
@@ -24144,6 +24455,86 @@ DelCloudflareUser()
     Println "$info 用户删除成功\n"
 }
 
+EditCloudflareZone()
+{
+    ListCloudflareZones
+
+    echo -e "选择源站"
+    while read -p "(默认: 取消): " cf_zones_num
+    do
+        case "$cf_zones_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_zones_num" -gt 0 ] && [ "$cf_zones_num" -le "$cf_zones_count" ]
+                then
+                    cf_zones_index=$((cf_zones_num-1))
+                    cf_zone_name=${cf_zones_name[cf_zones_index]}
+                    cf_zone_resolve_to=${cf_zones_resolve_to[cf_zones_index]}
+                    cf_user_email=${cf_zones_user_email[cf_zones_index]}
+                    cf_user_unique_id=${cf_zones_user_unique_id[cf_zones_index]}
+                    cf_zone_always_use_https=${cf_zones_always_use_https[cf_zones_index]}
+                    cf_zone_ssl=${cf_zones_ssl[cf_zones_index]}
+                    cf_zone_subdomains=${cf_zones_subdomains[cf_zones_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "  选择需要修改的设置
+
+  ${green}1.$plain Always Use HTTPS
+  ${green}2.$plain SSL
+
+  "
+    while read -p "(默认: 取消): " zone_edit_num
+    do
+        case $zone_edit_num in
+            "") 
+                Println "已取消...\n"
+                exit 1
+            ;;
+            1) 
+                SetCloudflareZoneAlwaysUseHttps
+                break
+            ;;
+            2) 
+                SetCloudflareZoneSsl
+                break
+            ;;
+            *) 
+                Println "$error 请输入正确的序号\n"
+            ;;
+        esac
+    done
+
+    new_zone=$(
+    $JQ_FILE -n --arg name "$cf_zone_name" --arg resolve_to "$cf_zone_resolve_to" \
+        --arg user_email "$cf_user_email" --arg user_unique_id "$cf_user_unique_id" \
+        --arg always_use_https "${cf_zone_always_use_https:-off}" --arg ssl "${cf_zone_ssl:-flexible}" --arg subdomains "$cf_zone_subdomains" \
+        '{
+            name: $name,
+            resolve_to: $resolve_to,
+            user_email: $user_email,
+            user_unique_id: $user_unique_id | tonumber,
+            always_use_https: $always_use_https,
+            ssl: $ssl,
+            subdomains: $subdomains
+        }'
+    )
+
+    jq_path='["hosts",'"$cf_hosts_index"',"zones",'"$cf_zones_index"']'
+    JQ replace "$CF_CONFIG" "$new_zone"
+    Println "$info 源站修改成功\n"
+}
+
 CloudflarePartnerMenu()
 {
     Println "  cloudflare 面板 $plain${red}[v$sh_ver]$plain
@@ -24152,23 +24543,24 @@ CloudflarePartnerMenu()
   ${green}2.$plain 添加 子域名
   ${green}3.$plain 查看 源站
   ${green}4.$plain 添加 源站
-  ${green}5.$plain 移动 源站
-  ${green}6.$plain 查看 用户
-  ${green}7.$plain 添加 用户
-  ${green}8.$plain 更改 用户
-  ${green}9.$plain 更新 用户 Token
- ${green}10.$plain 查看 CFP
- ${green}11.$plain 添加 CFP
- ${green}12.$plain 更改 CFP
- ${green}13.$plain 删除 源站
- ${green}14.$plain 删除 用户
- ${green}15.$plain 删除 CFP
- ${green}16.$plain 获取最优 IP
- ${green}17.$plain 更新脚本
+  ${green}5.$plain 设置 源站
+  ${green}6.$plain 移动 源站
+  ${green}7.$plain 查看 用户
+  ${green}8.$plain 添加 用户
+  ${green}9.$plain 更改 用户
+ ${green}10.$plain 更新 用户 Token
+ ${green}11.$plain 查看 CFP
+ ${green}12.$plain 添加 CFP
+ ${green}13.$plain 更改 CFP
+ ${green}14.$plain 删除 源站
+ ${green}15.$plain 删除 用户
+ ${green}16.$plain 删除 CFP
+ ${green}17.$plain 获取最优 IP
+ ${green}18.$plain 更新脚本
 
- $tip 当前: ${green}partner $plain 面板
+ $tip 当前: ${green}partner$plain 面板
  $tip 输入: w 切换到 workers 面板\n\n"
-    read -p "请输入数字 [1-17]: " cloudflare_partner_num
+    read -p "请输入数字 [1-18]: " cloudflare_partner_num
     case $cloudflare_partner_num in
         w)
             CloudflareWorkersMenu
@@ -24181,34 +24573,36 @@ CloudflarePartnerMenu()
         ;;
         4) AddCloudflareZone
         ;;
-        5) MoveCloudflareZone
+        5) EditCloudflareZone
         ;;
-        6) ViewCloudflareUser
+        6) MoveCloudflareZone
         ;;
-        7) AddCloudflareUser
+        7) ViewCloudflareUser
         ;;
-        8) EditCloudflareUser
+        8) AddCloudflareUser
         ;;
-        9) UpdateCloudflareToken
+        9) EditCloudflareUser
         ;;
-        10) ViewCloudflareHost
+        10) UpdateCloudflareToken
         ;;
-        11) AddCloudflareHost
+        11) ViewCloudflareHost
         ;;
-        12) RegenCloudflareHost
+        12) AddCloudflareHost
         ;;
-        13) DelCloudflareZone
+        13) RegenCloudflareHost
         ;;
-        14) DelCloudflareUser
+        14) DelCloudflareZone
         ;;
-        15) DelCloudflareHost
+        15) DelCloudflareUser
         ;;
-        16) 
+        16) DelCloudflareHost
+        ;;
+        17) 
             Println "$info 一键获取最优 IP 脚本 Mac/Linux: \n\nhttps://github.com/woniuzfb/cloudflare-fping\n"
         ;;
-        17) UpdateSh
+        18) UpdateSh
         ;;
-        *) Println "$error 请输入正确的数字 [1-17]\n"
+        *) Println "$error 请输入正确的数字 [1-18]\n"
         ;;
     esac
     exit 0
@@ -24233,6 +24627,7 @@ InstallWrangler()
     then
         InstallNodejs
     fi
+    Println "$info 国内可能会因网络原因安装失败, 可以手动下载 wrangler 覆盖 ~/.wrangler/bin/wrangler ...\n"
     npm i @cloudflare/wrangler -g --unsafe-perm=true --allow-root
     Println "$info wrangler 安装成功\n"
 }
@@ -24280,7 +24675,7 @@ SetCloudflareWorkerPath()
     do
         case $cf_worker_path in
             "") 
-                Println "已取消 ...\n"
+                Println "已取消...\n"
                 exit 1
             ;;
             *[!0-9A-Za-z_-.@]*) 
@@ -24375,7 +24770,7 @@ AddCloudflareWorker()
                     force_add_yn=${force_add_yn:-N}
                     if [[ $force_add_yn == [Nn] ]] 
                     then
-                        Println "已取消 ...\n"
+                        Println "已取消...\n"
                         exit 1
                     fi
                 else
@@ -24502,10 +24897,32 @@ EditCloudflareWorker()
                     break
                 elif [ -d "$CF_WORKERS_ROOT/$cf_worker_path_new" ] 
                 then
-                    Println "$error 路径已经存在\n"
-                    continue
+                    Println "$error 路径已经存在, 是否仍要修改 ? [y/N]"
+                    read -p "(默认: N): " force_edit_yn
+                    force_edit_yn=${force_edit_yn:-N}
+                    if [[ $force_edit_yn == [Nn] ]] 
+                    then
+                        continue
+                    else
+                        if [ -d "$CF_WORKERS_ROOT/$cf_worker_path" ] 
+                        then
+                            Println "$error 是否删除原路径目录 ? [y/N]"
+                            read -p "(默认: N): " delete_old_path_yn
+                            delete_old_path_yn=${delete_old_path_yn:-N}
+                            if [[ $delete_old_path_yn == [Yy] ]] 
+                            then
+                                rm -rf "$CF_WORKERS_ROOT/${cf_worker_path:-notfound}"
+                            fi  
+                        fi
+                        break
+                    fi
                 else
-                    mv "$CF_WORKERS_ROOT/$cf_worker_path" "$CF_WORKERS_ROOT/$cf_worker_path_new"
+                    if [ "$cf_worker_path" == "stream_proxy" ] || [ "$cf_worker_path" == "xc_proxy" ]
+                    then
+                        cp -r "$CF_WORKERS_ROOT/$cf_worker_path" "$CF_WORKERS_ROOT/$cf_worker_path_new"
+                    else
+                        mv "$CF_WORKERS_ROOT/$cf_worker_path" "$CF_WORKERS_ROOT/$cf_worker_path_new"
+                    fi
                     break
                 fi
             ;;
@@ -24630,7 +25047,7 @@ InstallPython()
             trap - EXIT
             echo -n "...100%" && echo
         else
-            Println "已取消 ...\n"
+            Println "已取消...\n"
             exit 1
         fi
     fi
@@ -24702,6 +25119,7 @@ DeployCloudflareWorker()
                     cf_user_email=${cf_users_email[cf_users_index]}
                     cf_user_pass=${cf_users_pass[cf_users_index]}
                     cf_user_token=${cf_users_token[cf_users_index]}
+                    cf_user_key=${cf_users_key[cf_users_index]}
                     break
                 else
                     Println "$error 请输入正确的序号\n"
@@ -24710,146 +25128,180 @@ DeployCloudflareWorker()
         esac
     done
 
-    if [ -n "$cf_user_token" ] 
+    if [ -z "$cf_user_token" ] 
     then
-        CF_ACCOUNT_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/accounts" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $cf_user_token" \
-            | $JQ_FILE -r '.result[0].id'
-        ) || true
-        if [ -z "$CF_ACCOUNT_ID" ] || [ "$CF_ACCOUNT_ID" == null ]
+        Println "$info 尝试获取用户 Token ..."
+
+        if [[ ! -x $(command -v python3) ]] 
         then
-            Println "$error 无法获取用户 ID, Token 错误 ?\n"
-            exit 1
+            Println "$info 安装 python3 ..."
+            InstallPython
         fi
-        if [ "$cf_worker_path" == "stream_proxy" ] 
+
+        Println "$info 更新 ${CF_WORKERS_FILE##*/}"
+        wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/${CF_WORKERS_FILE##*/}" -qO "$CF_WORKERS_FILE"
+
+        cf_user_token=$(python3 \
+            "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o api_token
+        ) || cf_user_token=""
+        if [ -z "$cf_user_token" ] 
         then
-            if [ -s "$IBM_CONFIG" ] 
+            Println "$error 无法获取用户 ID, 账号或密码错误 或者 cloudflare 暂时限制登录\n"
+            exit 1
+        else
+            cf_users_token[cf_users_index]=$cf_user_token
+
+            new_user=$(
+            $JQ_FILE -n --arg email "$cf_user_email" --arg pass "$cf_user_pass" \
+                --arg token "$cf_user_token" --arg key "$cf_user_key" \
+                '{
+                    email: $email,
+                    pass: $pass,
+                    token: $token,
+                    key: $key
+                }'
+            )
+
+            jq_path='["users",'"$cf_users_index"']'
+            JQ replace "$CF_CONFIG" "$new_user"
+            Println "$info 获取用户 $cf_user_email Token 成功"
+        fi
+    fi
+
+    CF_ACCOUNT_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/accounts" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $cf_user_token" \
+        | $JQ_FILE -r '.result[0].id'
+    ) || true
+    if [ -z "$CF_ACCOUNT_ID" ] || [ "$CF_ACCOUNT_ID" == null ]
+    then
+        Println "$error 无法获取用户 ID, Token 错误 ?\n"
+        exit 1
+    fi
+
+    if [ "$cf_worker_path" == "stream_proxy" ] 
+    then
+        if [ -s "$IBM_CONFIG" ] 
+        then
+            GetIbmcfApps
+            if [ "$ibm_cf_apps_count" -gt 0 ] 
             then
-                GetIbmcfApps
-                if [ "$ibm_cf_apps_count" -gt 0 ] 
+                Println "$info 是否使用 IBM CF APP 中转 [Y/n]"
+                read -p "(默认: Y): " use_ibm_cf_app_yn
+                use_ibm_cf_app_yn=${use_ibm_cf_app_yn:-Y}
+                if [[ "$use_ibm_cf_app_yn" == [Yy] ]] 
                 then
-                    Println "$info 是否使用 IBM CF APP 中转 [Y/n]"
-                    read -p "(默认: Y): " use_ibm_cf_app_yn
-                    use_ibm_cf_app_yn=${use_ibm_cf_app_yn:-Y}
-                    if [[ "$use_ibm_cf_app_yn" == [Yy] ]] 
-                    then
-                        ListIbmcfApps
-                        echo -e "选择 APP"
-                        while read -p "(默认: 取消): " ibm_cf_apps_num
-                        do
-                            case "$ibm_cf_apps_num" in
-                                "")
-                                    Println "已取消...\n" && exit 1
-                                ;;
-                                *[!0-9]*)
+                    ListIbmcfApps
+                    echo -e "选择 APP"
+                    while read -p "(默认: 取消): " ibm_cf_apps_num
+                    do
+                        case "$ibm_cf_apps_num" in
+                            "")
+                                Println "已取消...\n" && exit 1
+                            ;;
+                            *[!0-9]*)
+                                Println "$error 请输入正确的序号\n"
+                            ;;
+                            *)
+                                if [ "$ibm_cf_apps_num" -gt 0 ] && [ "$ibm_cf_apps_num" -le "$ibm_cf_apps_count" ]
+                                then
+                                    ibm_cf_apps_index=$((ibm_cf_apps_num-1))
+                                    ibm_cf_app_name=${ibm_cf_apps_name[ibm_cf_apps_index]}
+                                    ibm_user_email=${ibm_cf_apps_user_email[ibm_cf_apps_index]}
+                                    ibm_cf_app_routes_count=${ibm_cf_apps_routes_count[ibm_cf_apps_index]}
+                                    ibm_cf_app_route_hostname=${ibm_cf_apps_route_hostname[ibm_cf_apps_index]}
+                                    ibm_cf_app_route_port=${ibm_cf_apps_route_port[ibm_cf_apps_index]}
+                                    ibm_cf_app_route_domain=${ibm_cf_apps_route_domain[ibm_cf_apps_index]}
+                                    ibm_cf_app_route_path=${ibm_cf_apps_route_path[ibm_cf_apps_index]}
+                                    IFS="|" read -r -a ibm_cf_app_routes_hostname <<< "$ibm_cf_app_route_hostname"
+                                    IFS="|" read -r -a ibm_cf_app_routes_port <<< "$ibm_cf_app_route_port"
+                                    IFS="|" read -r -a ibm_cf_app_routes_domain <<< "$ibm_cf_app_route_domain"
+                                    IFS="|" read -r -a ibm_cf_app_routes_path <<< "${ibm_cf_app_route_path}|"
+                                    break
+                                else
                                     Println "$error 请输入正确的序号\n"
-                                ;;
-                                *)
-                                    if [ "$ibm_cf_apps_num" -gt 0 ] && [ "$ibm_cf_apps_num" -le "$ibm_cf_apps_count" ]
-                                    then
-                                        ibm_cf_apps_index=$((ibm_cf_apps_num-1))
-                                        ibm_cf_app_name=${ibm_cf_apps_name[ibm_cf_apps_index]}
-                                        ibm_user_email=${ibm_cf_apps_user_email[ibm_cf_apps_index]}
-                                        ibm_cf_app_routes_count=${ibm_cf_apps_routes_count[ibm_cf_apps_index]}
-                                        ibm_cf_app_route_hostname=${ibm_cf_apps_route_hostname[ibm_cf_apps_index]}
-                                        ibm_cf_app_route_port=${ibm_cf_apps_route_port[ibm_cf_apps_index]}
-                                        ibm_cf_app_route_domain=${ibm_cf_apps_route_domain[ibm_cf_apps_index]}
-                                        ibm_cf_app_route_path=${ibm_cf_apps_route_path[ibm_cf_apps_index]}
-                                        IFS="|" read -r -a ibm_cf_app_routes_hostname <<< "$ibm_cf_app_route_hostname"
-                                        IFS="|" read -r -a ibm_cf_app_routes_port <<< "$ibm_cf_app_route_port"
-                                        IFS="|" read -r -a ibm_cf_app_routes_domain <<< "$ibm_cf_app_route_domain"
-                                        IFS="|" read -r -a ibm_cf_app_routes_path <<< "${ibm_cf_app_route_path}|"
-                                        break
-                                    else
-                                        Println "$error 请输入正确的序号\n"
-                                    fi
-                                ;;
-                            esac
-                        done
+                                fi
+                            ;;
+                        esac
+                    done
 
-                        ibm_cf_apps_list=""
-                        ibm_cf_apps_link=()
-                        for((i=0;i<ibm_cf_app_routes_count;i++));
-                        do
-                            if [ -n "${ibm_cf_app_routes_path[i]}" ] 
-                            then
-                                path="/${ibm_cf_app_routes_path[i]}"
-                            else
-                                path=""
-                            fi
-                            upstream="${ibm_cf_app_routes_hostname[i]}.${ibm_cf_app_routes_domain[i]}$path"
-                            ibm_cf_apps_link+=("$upstream")
-                            ibm_cf_apps_list="$ibm_cf_apps_list $green$((i+1)).$plain\r\e[6C$upstream\n\n"
-                        done
+                    ibm_cf_apps_list=""
+                    ibm_cf_apps_link=()
+                    for((i=0;i<ibm_cf_app_routes_count;i++));
+                    do
+                        if [ -n "${ibm_cf_app_routes_path[i]}" ] 
+                        then
+                            path="/${ibm_cf_app_routes_path[i]}"
+                        else
+                            path=""
+                        fi
+                        upstream="${ibm_cf_app_routes_hostname[i]}.${ibm_cf_app_routes_domain[i]}$path"
+                        ibm_cf_apps_link+=("$upstream")
+                        ibm_cf_apps_list="$ibm_cf_apps_list $green$((i+1)).$plain\r\e[6C$upstream\n\n"
+                    done
 
-                        Println "$ibm_cf_apps_list"
+                    Println "$ibm_cf_apps_list"
 
-                        echo -e "选择链接"
-                        while read -p "(默认: 取消): " ibm_cf_apps_link_num 
-                        do
-                            case $ibm_cf_apps_link_num in
-                                "") 
-                                    Println "已取消 ...\n"
-                                    exit 1
-                                ;;
-                                *[!0-9]*) 
+                    echo -e "选择链接"
+                    while read -p "(默认: 取消): " ibm_cf_apps_link_num 
+                    do
+                        case $ibm_cf_apps_link_num in
+                            "") 
+                                Println "已取消...\n"
+                                exit 1
+                            ;;
+                            *[!0-9]*) 
+                                Println "$error 请输入正确的序号\n"
+                            ;;
+                            *) 
+                                if [ "$ibm_cf_apps_link_num" -gt 0 ] && [ "$ibm_cf_apps_link_num" -le "$ibm_cf_app_routes_count" ] 
+                                then
+                                    ibm_cf_apps_link_index=$((ibm_cf_apps_link_num-1))
+                                    upstream=${ibm_cf_apps_link[ibm_cf_apps_link_index]}
+                                    break
+                                else
                                     Println "$error 请输入正确的序号\n"
-                                ;;
-                                *) 
-                                    if [ "$ibm_cf_apps_link_num" -gt 0 ] && [ "$ibm_cf_apps_link_num" -le "$ibm_cf_app_routes_count" ] 
-                                    then
-                                        ibm_cf_apps_link_index=$((ibm_cf_apps_link_num-1))
-                                        upstream=${ibm_cf_apps_link[ibm_cf_apps_link_index]}
-                                        break
-                                    else
-                                        Println "$error 请输入正确的序号\n"
-                                    fi
-                                ;;
-                            esac
-                        done
-                    fi
+                                fi
+                            ;;
+                        esac
+                    done
                 fi
             fi
-            if [ -z "${upstream:-}" ] 
-            then
-                Println "$info 输入源站 ip 或者 中转服务器的域名(比如 IBM CF APP 的域名)"
-                read -p "(默认: 取消): " upstream
-                [ -z "$upstream" ] && Println "已取消 ...\n" && exit 1
-            fi
-            sed -i 's/const upstream = .*/const upstream = "'"$upstream"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/index.js"
+        fi
+        if [ -z "${upstream:-}" ] 
+        then
+            Println "$info 输入源站 ip 或者 中转服务器的域名(比如 IBM CF APP 的域名)"
+            read -p "(默认: 取消): " upstream
+            [ -z "$upstream" ] && Println "已取消...\n" && exit 1
+        fi
+        sed -i 's/const upstream = .*/const upstream = "'"$upstream"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/index.js"
+    fi
+
+    cd "$CF_WORKERS_ROOT/$cf_worker_path"
+    sed -i 's/account_id = .*/account_id = "'"$CF_ACCOUNT_ID"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/wrangler.toml"
+    sed -i 's/name = .*/name = "'"$cf_worker_project_name"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/wrangler.toml"
+
+    if CF_API_TOKEN=$cf_user_token wrangler publish 
+    then
+        Println "$info worker 部署成功\n"
+    else
+        Println "$error 请检查 Token 权限, 尝试修复 ...\n"
+
+        if [[ ! -x $(command -v python3) ]] 
+        then
+            Println "$info 安装 python3 ..."
+            InstallPython
         fi
 
-        cd "$CF_WORKERS_ROOT/$cf_worker_path"
-        sed -i 's/account_id = .*/account_id = "'"$CF_ACCOUNT_ID"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/wrangler.toml"
-        sed -i 's/name = .*/name = "'"$cf_worker_project_name"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/wrangler.toml"
-        CF_API_TOKEN=$cf_user_token wrangler publish || Println "$error 请检查 Token 权限\n"
-        exit 0
-    else
-        Println "$error 请先添加此用户的 Token\n"
-        exit 1
-    fi
+        if [ "$sh_debug" -eq 0 ] 
+        then
+            curl -s -L "$FFMPEG_MIRROR_LINK/${CF_WORKERS_FILE##*/}" -o "$CF_WORKERS_FILE"
+        fi
 
-    if [[ ! -x $(command -v python3) ]] 
-    then
-        Println "$info 安装 python3 ..."
-        InstallPython
-    fi
-
-    Println "$info 尝试使用账号和密码部署"
-    if [ ! -e "$CF_WORKERS_FILE" ] 
-    then
-        Println "$info 下载 ${CF_WORKERS_FILE##*/}"
-        wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/${CF_WORKERS_FILE##*/}" -qO "$CF_WORKERS_FILE"
-    fi
-    IFS="=" read -r success CF_ACCOUNT_ID < <(python3 \
-        "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o account_id \
-        | $JQ_FILE -r '[.success,.result[0].account.id]|join("=")'
-    ) || true
-    if [ "${success:-false}" == "false" ] 
-    then
-        Println "$error 无法获取用户 ID, 账号或密码错误 或者 cloudflare 暂时限制登录\n"
-        exit 1
+        if [[ $(python3 "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o add_subdomain) == "ok" ]] 
+        then
+            CF_API_TOKEN=$cf_user_token wrangler publish
+        fi
     fi
 }
 
@@ -24937,7 +25389,7 @@ ConfigCloudflareWorkerRoute()
     do
         case $cf_zones_num in
             "") 
-                Println "已取消 ...\n"
+                Println "已取消...\n"
                 exit 1
             ;;
             *[!0-9]*) 
@@ -24988,7 +25440,7 @@ ConfigCloudflareWorkerRoute()
             fi
             case $cf_users_zone_routes_num in
                 "") 
-                    Println "已取消 ...\n"
+                    Println "已取消...\n"
                     exit 1
                 ;;
                 *[!0-9]*) 
@@ -25005,7 +25457,7 @@ ConfigCloudflareWorkerRoute()
                         read -p "(默认: 取消): " cf_users_zone_route_num
                         case $cf_users_zone_route_num in
                             "") 
-                                Println "已取消 ...\n"
+                                Println "已取消...\n"
                                 exit 1
                             ;;
                             1) 
@@ -25066,7 +25518,7 @@ ConfigCloudflareWorkerRoute()
     Println "$info 输入已经存在的 worker 项目名称"
     echo -e "$tip 输入的是项目名称, 不是序号\n"
     read -p "(默认: 取消): " script
-    [ -z "$script" ] && Println "已取消 ...\n" && exit 1
+    [ -z "$script" ] && Println "已取消...\n" && exit 1
     if [[ $script =~ ^[0-9]+$ ]] && [ "$script" -le "$cf_workers_count" ] && [ "$script" -gt 0 ]
     then
         cf_workers_index=$((script-1))
@@ -25080,7 +25532,7 @@ ConfigCloudflareWorkerRoute()
     fi
     Println "$info 输入路由"
     read -p "(默认: 取消): " pattern
-    [ -z "$pattern" ] && Println "已取消 ...\n" && exit 1
+    [ -z "$pattern" ] && Println "已取消...\n" && exit 1
     if [[ $(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$cf_users_zone_id/workers/routes" \
         -H "Authorization: Bearer $cf_users_zone_account_token" \
         -H "Content-Type: application/json" \
@@ -25182,12 +25634,14 @@ MonitorCloudflareWorkersMoveZone()
     new_zone=$(
     $JQ_FILE -n --arg name "$cf_zone_name" --arg resolve_to "$cf_zone_resolve_to" \
         --arg user_email "$cf_user_email" --arg user_unique_id "$cf_user_unique_id" \
-        --arg subdomains "$cf_zone_subdomains" \
+        --arg always_use_https "$cf_zone_always_use_https" --arg ssl "$cf_zone_ssl" --arg subdomains "$cf_zone_subdomains" \
         '{
             name: $name,
             resolve_to: $resolve_to,
             user_email: $user_email,
             user_unique_id: $user_unique_id | tonumber,
+            always_use_https: $always_use_https,
+            ssl: $ssl,
             subdomains: $subdomains
         }'
     )
@@ -25295,6 +25749,52 @@ MonitorCloudflareWorkersUpdateRoutes()
     do
         if [ "${zones_name[j]}" == "$cf_zone_name" ] 
         then
+            cf_zone_always_use_https=${cf_zone_always_use_https:-off}
+            zone_always_use_https=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/settings/always_use_https" \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Bearer $cf_user_token" \
+                | $JQ_FILE -r '.result.value'
+            )
+
+            if [ "$zone_always_use_https" != "$cf_zone_always_use_https" ] 
+            then
+                fail_time=0
+                until [[ $(curl -s -X PATCH "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/settings/always_use_https" \
+                    -H  "Authorization: Bearer $cf_user_token" \
+                    -H "Content-Type: application/json" \
+                    --data '{"value":"'"$cf_zone_always_use_https"'"}' | $JQ_FILE -r '.success') == "true" ]] 
+                do
+                    MonitorError "域名: $cf_zone_name always_use_https 设置失败, Token: $cf_user_token, zone id: ${zones_id[j]}, $zone_always_use_https => $cf_zone_always_use_https"
+                    Println "$error 域名: $cf_zone_name always_use_https 设置失败\n"
+                    fail_time=$((fail_time+1))
+                    [ "$fail_time" -ge 5 ] && exit 1
+                done
+                Println "$info 域名: $cf_zone_name always_use_https 设置成功\n"
+            fi
+
+            cf_zone_ssl=${cf_zone_ssl:-flexible}
+            zone_ssl=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/settings/ssl" \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Bearer $cf_user_token" \
+                | $JQ_FILE -r '.result.value'
+            )
+
+            if [ "$zone_ssl" != "$cf_zone_ssl" ] 
+            then
+                fail_time=0
+                until [[ $(curl -s -X PATCH "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/settings/ssl" \
+                    -H  "Authorization: Bearer $cf_user_token" \
+                    -H "Content-Type: application/json" \
+                    --data '{"value":"'"$cf_zone_ssl"'"}' | $JQ_FILE -r '.success') == "true" ]] 
+                do
+                    MonitorError "域名: $cf_zone_name ssl 设置失败, Token: $cf_user_token, zone id: ${zones_id[j]}, $zone_ssl => $cf_zone_ssl"
+                    Println "$error 域名: $cf_zone_name ssl 设置失败\n"
+                    fail_time=$((fail_time+1))
+                    [ "$fail_time" -ge 5 ] && exit 1
+                done
+                Println "$info 域名: $cf_zone_name ssl 设置成功\n"
+            fi
+
             IFS="^" read -r count id script pattern < <(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/workers/routes" \
                 -H "Content-Type: application/json" \
                 -H "Authorization: Bearer $cf_user_token" \
@@ -25330,45 +25830,48 @@ MonitorCloudflareWorkersUpdateRoutes()
                 done
                 if [ "$script_found" -eq 0 ] 
                 then
-                    if [[ $(curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/${accounts_id[j]}/workers/scripts/${workers_project_name[k]}" \
+                    fail_time=0
+                    until [[ $(curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/${accounts_id[j]}/workers/scripts/${workers_project_name[k]}" \
                         -H  "Authorization: Bearer $cf_user_token" \
                         -H "Content-Type: application/javascript" \
                         --data "${workers_data[k]}" | $JQ_FILE -r '.success') == "true" ]] 
-                    then
-                        Println "$info worker: ${workers_name[j]} 部署成功\n"
-                    else
+                    do
                         MonitorError "部署 worker 失败 Token: $cf_user_token, pattern: ${workers_pattern[k]}, script: ${workers_project_name[k]}"
                         Println "$error worker: ${workers_name[j]} 部署失败\n"
-                        exit 1
-                    fi
+                        fail_time=$((fail_time+1))
+                        [ "$fail_time" -ge 5 ] && exit 1
+                    done
+                    Println "$info worker: ${workers_name[j]} 部署成功\n"
                 fi
                 if [ "$pattern_found" -eq 1 ] 
                 then
-                    if [[ $(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/workers/routes/$id" \
+                    fail_time=0
+                    until [[ $(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/workers/routes/$id" \
                         -H "Authorization: Bearer $cf_user_token" \
                         -H "Content-Type: application/json" \
                         --data '{"pattern":"'"${workers_pattern[k]}"'","script":"'"${workers_project_name[k]}"'"}' \
-                        | $JQ_FILE -r '.success' ) == "true" ]]
-                    then
-                        Println "$info 路由添加成功\n"
-                    else
+                        | $JQ_FILE -r '.success' ) == "true" ]] 
+                    do
                         MonitorError "路由添加失败 Token: $cf_user_token, pattern: ${workers_pattern[k]}, script: ${workers_project_name[k]}"
                         Println "$error 路由添加失败\n"
-                        exit 1
-                    fi
+                        fail_time=$((fail_time+1))
+                        [ "$fail_time" -ge 5 ] && exit 1
+                    done
+                    Println "$info 路由修改成功\n"
                 else
-                    if [[ $(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/workers/routes" \
+                    fail_time=0
+                    until [[ $(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/workers/routes" \
                         -H "Authorization: Bearer $cf_user_token" \
                         -H "Content-Type: application/json" \
                         --data '{"pattern":"'"${workers_pattern[k]}"'","script":"'"${workers_project_name[k]}"'"}' \
-                        | $JQ_FILE -r '.success' ) == "true" ]]
-                    then
-                        Println "$info 路由添加成功\n"
-                    else
+                        | $JQ_FILE -r '.success' ) == "true" ]] 
+                    do
                         MonitorError "路由添加失败 Token: $cf_user_token, pattern: ${workers_pattern[k]}, script: ${workers_project_name[k]}"
                         Println "$error 路由添加失败\n"
-                        exit 1
-                    fi
+                        fail_time=$((fail_time+1))
+                        [ "$fail_time" -ge 5 ] && exit 1
+                    done
+                    Println "$info 路由添加成功\n"
                 fi
             done
             break
@@ -25402,54 +25905,13 @@ MonitorCloudflareWorkersDeploy()
     done
 }
 
-PrepMonitorTerm()
-{
-    unset term_child_pid
-    unset term_kill_needed
-    trap 'HandleMonitorTerm 2> /dev/null' TERM
-}
-
-HandleMonitorTerm()
-{
-    if [ -n "${term_child_pid:-}" ]
-    then
-        if [ "${force_exit:-0}" -eq 1 ] 
-        then
-            kill -9 "$term_child_pid"
-            kill -TERM "$term_child_pid"
-        fi
-    else
-        term_kill_needed="yes"
-    fi
-    [ -e "${MONITOR_PIDFILE:-notfound}" ] && rm "$MONITOR_PIDFILE"
-    [ -d "${MONITOR_ROOT:-notfound}" ] && rm -rf "$MONITOR_ROOT"
-}
-
-WaitMonitorTerm()
-{
-    term_child_pid=$!
-    if [ -n "${term_kill_needed:-}" ]
-    then
-        if [ "${force_exit:-0}" -eq 1 ] 
-        then
-            kill -9 "$term_child_pid"
-        else
-            kill -TERM "$term_child_pid"
-        fi
-    fi
-    wait $term_child_pid
-    trap - TERM
-    wait $term_child_pid
-}
-
 MonitorCloudflareWorkers()
 {
     trap '' HUP INT
     trap 'MonitorError $LINENO' ERR
-    MONITOR_PIDFILE="/tmp/cf_workers.pid"
-    force_exit=1
-    mkdir -p "/tmp" 
-    printf '%s' "$BASHPID" > "/tmp/cf_workers.pid"
+
+    printf '%s' "$BASHPID" > "$CF_WORKERS_ROOT/cf_workers.pid"
+
     printf -v date_now '%(%m-%d %H:%M:%S)T'
     printf '%s\n' "$date_now 启动 workers 监控  PID $BASHPID !" >> "$MONITOR_LOG"
 
@@ -25467,6 +25929,8 @@ MonitorCloudflareWorkers()
         printf -v now '%(%s)T'
         if [ "$now" -ge "$clear" ] 
         then
+            clear=$(date --utc -d 'tomorrow 00:00:00' +%s)
+            clear=$((clear+10))
             emails_dead=()
         fi
 
@@ -25474,7 +25938,7 @@ MonitorCloudflareWorkers()
         cf_zone_user_email=${cf_zones_user_email[zone_index]}
         cf_zone_user_pass=${cf_zones_user_pass[zone_index]}
         dead_email=0
-        for email in "${emails_dead[@]}"
+        for email in ${emails_dead[@]+"${emails_dead[@]}"}
         do
             if [ "$email" == "$cf_zone_user_email" ] 
             then
@@ -25506,7 +25970,7 @@ MonitorCloudflareWorkers()
         then
             for((i=0;i<cf_users_count;i++));
             do
-                for email in "${emails_dead[@]}"
+                for email in ${emails_dead[@]+"${emails_dead[@]}"}
                 do
                     if [ "$email" == "${cf_users_email[i]}" ] 
                     then
@@ -25548,9 +26012,8 @@ MonitorCloudflareWorkers()
                 cf_user_pass_new=${cf_users_pass[i]}
                 cf_user_token_new=${cf_users_token[i]}
 
-                for((index=0;index<${#zones_index_monitor[@]};index++));
+                for zone_index in "${zones_index_monitor[@]}"
                 do
-                    zone_index=${zones_index_monitor[index]}
                     cf_zone_name=${cf_zones_name[zone_index]}
                     cf_zone_host_name=${cf_zones_host_name[zone_index]}
                     cf_zone_host_key=${cf_zones_host_key[zone_index]}
@@ -25559,11 +26022,13 @@ MonitorCloudflareWorkers()
                     cf_zone_user_token=${cf_zones_user_token[zone_index]}
                     cf_zone_user_unique_id=${cf_zones_user_unique_id[zone_index]}
                     cf_zone_resolve_to=${cf_zones_resolve_to[zone_index]}
+                    cf_zone_always_use_https=${cf_zones_always_use_https[zone_index]}
+                    cf_zone_ssl=${cf_zones_ssl[zone_index]}
                     cf_zone_subdomains=${cf_zones_subdomains[zone_index]}
 
-                    cf_zones_user_email[zone_index]=${cf_users_email[i]}
-                    cf_zones_user_pass[zone_index]=${cf_users_pass[i]}
-                    cf_zones_user_token[zone_index]=${cf_users_token[i]}
+                    cf_zones_user_email[zone_index]=$cf_user_email_new
+                    cf_zones_user_pass[zone_index]=$cf_user_pass_new
+                    cf_zones_user_token[zone_index]=$cf_user_token_new
 
                     cf_user_unique_id=$cf_zone_user_unique_id
                     cf_host_key=$cf_zone_host_key
@@ -25595,9 +26060,8 @@ MonitorCloudflareWorkers()
                 fi
             done
         else
-            for((index=0;index<${#zones_index_monitor[@]};index++));
+            for zone_index in "${zones_index_monitor[@]}"
             do
-                zone_index=${zones_index_monitor[index]}
                 cf_zone_name=${cf_zones_name[zone_index]}
                 cf_zone_host_name=${cf_zones_host_name[zone_index]}
                 cf_zone_host_key=${cf_zones_host_key[zone_index]}
@@ -25606,6 +26070,8 @@ MonitorCloudflareWorkers()
                 cf_zone_user_token=${cf_zones_user_token[zone_index]}
                 cf_zone_user_unique_id=${cf_zones_user_unique_id[zone_index]}
                 cf_zone_resolve_to=${cf_zones_resolve_to[zone_index]}
+                cf_zone_always_use_https=${cf_zones_always_use_https[zone_index]}
+                cf_zone_ssl=${cf_zones_ssl[zone_index]}
                 cf_zone_subdomains=${cf_zones_subdomains[zone_index]}
 
                 cf_user_unique_id=$cf_zone_user_unique_id
@@ -25633,9 +26099,9 @@ MonitorCloudflareWorkers()
             done
         fi
 
-        PrepMonitorTerm
+        PrepTerm
         sleep "$cf_workers_monitor_seconds" &
-        WaitMonitorTerm
+        WaitTerm
 
         GetCloudflareUsers
     done
@@ -25643,7 +26109,13 @@ MonitorCloudflareWorkers()
 
 EnableCloudflareWorkersMonitor()
 {
+    # deprecated
     if [ -s "/tmp/cf_workers.pid" ] && kill -0 "$(< /tmp/cf_workers.pid)" 2> /dev/null
+    then
+        Println "$error workers 监控已开启\n" && exit 1
+    fi
+
+    if [ -s "$CF_WORKERS_ROOT/cf_workers.pid" ] && kill -0 "$(< $CF_WORKERS_ROOT/cf_workers.pid)" 2> /dev/null
     then
         Println "$error workers 监控已开启\n" && exit 1
     fi
@@ -25774,19 +26246,6 @@ EnableCloudflareWorkersMonitor()
                         history_index=$((history_num-1))
                         pair=${workers_monitor_stream_proxy_pairs[history_index]}
                         IFS="|" read -r -a pairs <<< "$pair"
-                        for project_name in "${workers_project_name[@]}"
-                        do
-                            for pair in "${pairs[@]}"
-                            do
-                                if [ "${pair% *}" == "$project_name" ] 
-                                then
-                                    sed -i 's/const upstream = .*/const upstream = "'"${pair#* }"'"/' "$CF_WORKERS_ROOT/stream_proxy/index.js"
-                                    worker_data=$(< "$CF_WORKERS_ROOT/stream_proxy/index.js")
-                                    workers_data+=("$worker_data")
-                                    break
-                                fi
-                            done
-                        done
                         break
                     else
                         Println "$error 请输入正确的序号\n"
@@ -25876,7 +26335,7 @@ EnableCloudflareWorkersMonitor()
                     do
                         case $ibm_cf_apps_link_num in
                             "") 
-                                Println "已取消 ...\n"
+                                Println "已取消...\n"
                                 exit 1
                             ;;
                             *[!0-9]*) 
@@ -25900,7 +26359,7 @@ EnableCloudflareWorkersMonitor()
             then
                 Println "$info 输入源站 ip 或者 中转服务器的域名(比如 IBM CF APP 的域名)"
                 read -p "(默认: 取消): " upstream
-                [ -z "$upstream" ] && Println "已取消 ...\n" && exit 1
+                [ -z "$upstream" ] && Println "已取消...\n" && exit 1
             fi
             sed -i 's/const upstream = .*/const upstream = "'"$upstream"'"/' "$CF_WORKERS_ROOT/${workers_path[i]}/index.js"
             stream_proxy_history+=("${workers_project_name[i]} $upstream")
@@ -25909,7 +26368,7 @@ EnableCloudflareWorkersMonitor()
         workers_data+=("$worker_data")
     done
 
-    if [ "${#stream_proxy_history[@]}" -gt 0 ] 
+    if [ -n "${stream_proxy_history:-}" ] 
     then
         new_historys=""
         for history in "${stream_proxy_history[@]}"
@@ -25949,6 +26408,8 @@ EnableCloudflareWorkersMonitor()
     cf_zones_host_key=()
     cf_zones_name=()
     cf_zones_resolve_to=()
+    cf_zones_always_use_https=()
+    cf_zones_ssl=()
     cf_zones_subdomains=()
     cf_zones_user_email=()
     cf_zones_user_unique_id=()
@@ -25960,11 +26421,15 @@ EnableCloudflareWorkersMonitor()
         cf_zones_count=$((cf_zones_count+cf_host_zones_count))
         cf_host_zone_name=${cf_hosts_zone_name[i]}
         cf_host_zone_resolve_to=${cf_hosts_zone_resolve_to[i]}
+        cf_host_zone_always_use_https=${cf_hosts_zone_always_use_https[i]}
+        cf_host_zone_ssl=${cf_hosts_zone_ssl[i]}
         cf_host_zone_subdomains=${cf_hosts_zone_subdomains[i]}
         cf_host_zone_user_email=${cf_hosts_zone_user_email[i]}
         cf_host_zone_user_unique_id=${cf_hosts_zone_user_unique_id[i]}
         IFS="|" read -r -a cf_host_zones_name <<< "$cf_host_zone_name"
         IFS="|" read -r -a cf_host_zones_resolve_to <<< "$cf_host_zone_resolve_to"
+        IFS="|" read -r -a cf_host_zones_always_use_https <<< "${cf_host_zone_always_use_https}|"
+        IFS="|" read -r -a cf_host_zones_ssl <<< "${cf_host_zone_ssl}|"
         IFS="|" read -r -a cf_host_zones_subdomains <<< "${cf_host_zone_subdomains}|"
         IFS="|" read -r -a cf_host_zones_user_email <<< "$cf_host_zone_user_email"
         IFS="|" read -r -a cf_host_zones_user_unique_id <<< "$cf_host_zone_user_unique_id"
@@ -25976,6 +26441,8 @@ EnableCloudflareWorkersMonitor()
             cf_zones_host_key+=("$cf_host_key")
             cf_zones_name+=("${cf_host_zones_name[j]}")
             cf_zones_resolve_to+=("${cf_host_zones_resolve_to[j]}")
+            cf_zones_always_use_https+=("${cf_host_zones_always_use_https[j]}")
+            cf_zones_ssl+=("${cf_host_zones_ssl[j]}")
             cf_zones_subdomains+=("${cf_host_zones_subdomains[j]}")
             cf_zones_user_email+=("${cf_host_zones_user_email[j]}")
             cf_zones_user_unique_id+=("${cf_host_zones_user_unique_id[j]}")
@@ -25984,7 +26451,7 @@ EnableCloudflareWorkersMonitor()
 
     if [ "$cf_zones_count" -eq 0 ] 
     then
-        Println "$error 请先源站\n" && exit 1
+        Println "$error 请先添加源站\n" && exit 1
     fi
 
     cf_zones_list=""
@@ -26060,31 +26527,31 @@ EnableCloudflareWorkersMonitor()
     GetCloudflareUsers
     cf_zones_user_token=()
     cf_zones_user_pass=()
+
     for((i=0;i<cf_zones_count;i++));
     do
         found=0
         for((j=0;j<cf_users_count;j++));
         do
-            if [ "${cf_users_email[j]}" == "${cf_zones_user_email[i]}" ] 
+            if [ "${cf_users_email[j]}" == "${cf_zones_user_email[i]}" ]
             then
                 found=1
                 cf_zones_user_pass+=("${cf_users_pass[j]}")
-                if [ -z "${cf_users_token[j]}" ] 
-                then
-                    for index in "${zones_index_monitor[@]}"
-                    do
-                        if [ "$index" == "$i" ] 
-                        then
-                            Println "$error 请先设置 ${cf_zones_user_email[i]} Token\n"
-                            exit 1
-                        fi
-                    done
-                fi
                 cf_zones_user_token+=("${cf_users_token[j]}")
                 break
             fi
         done
-        [ "$found" -eq 0 ] && Println "$error 请先添加用户 ${cf_zones_user_email[i]}\n" && exit 1
+        if [ "$found" -eq 0 ]
+        then
+            for index in "${zones_index_monitor[@]}"
+            do
+                if [ "$index" == "$i" ]
+                then
+                    Println "$error 请先添加用户 ${cf_zones_user_email[i]}\n"
+                    exit 1
+                fi
+            done
+        fi
     done
 
     Println "$info 设置检查时间间隔, 时间太短可能会被 cloudflare 限制查询 (秒)"
@@ -26138,17 +26605,25 @@ EnableCloudflareWorkersMonitor()
     fi
 
     [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$CF_WORKERS_ROOT/monitor.log"
+
+    pid_file="$IPTV_ROOT/cf_workers.pid"
+    pid_lock="$IPTV_ROOT/cf_workers.lock"
+    exec {lock_fd}>"$pid_lock" || exit 1
+    flock -n "$lock_fd" || { Println "$error 监控开启失败, 请重试 ...\n"; exit 1; }
+
     if [ "$sh_debug" -eq 1 ] 
     then
         ( MonitorCloudflareWorkers ) &
     else
         ( MonitorCloudflareWorkers ) > /dev/null 2>> "$MONITOR_LOG" &
     fi
+
     Println "$info workers 监控开启成功\n"
 }
 
 DisableCloudflareWorkersMonitor()
 {
+    # deprecated
     if [ -s "/tmp/cf_workers.pid" ] 
     then
         cf_workers_pid=$(< /tmp/cf_workers.pid)
@@ -26158,16 +26633,34 @@ DisableCloudflareWorkersMonitor()
             printf -v date_now '%(%m-%d %H:%M:%S)T'
             [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$CF_WORKERS_ROOT/monitor.log"
             printf '%s\n' "$date_now 关闭 workers 监控 PID $cf_workers_pid !" >> "$MONITOR_LOG"
-            Println "$info 关闭 workers 监控, 稍等..."
-            until [ ! -e "/tmp/cf_workers.pid" ]
-            do
-                sleep 1
-            done
             Println "$info workers 监控 关闭成功\n"
         else
             Println "$error workers 监控 未开启\n"
         fi
+    elif [ -s "$CF_WORKERS_ROOT/cf_workers.pid" ]
+    then
+        PID=$(< "$CF_WORKERS_ROOT/cf_workers.pid")
+        if kill -0 "$PID" 2> /dev/null 
+        then
+            Println "$info 关闭 workers 监控, 稍等..."
+            kill "$PID" 2> /dev/null
+            if flock -E 1 -w 20 -x "$CF_WORKERS_ROOT/cf_workers.lock" rm "$CF_WORKERS_ROOT/cf_workers.lock"
+            then
+                printf -v date_now '%(%m-%d %H:%M:%S)T'
+                printf '%s\n' "$date_now 关闭 workers 监控 PID $PID !" >> "$MONITOR_LOG"
+                Println "$info workers 监控 关闭成功 !\n"
+            else
+                Println "$error workers 监控 关闭超时, 请重试\n"
+                exit 1
+            fi
+        else
+            [ -e "$CF_WORKERS_ROOT/cf_workers.pid" ] && rm "$CF_WORKERS_ROOT/cf_workers.pid"
+            [ -e "$CF_WORKERS_ROOT/cf_workers.lock" ] && rm "$CF_WORKERS_ROOT/cf_workers.lock"
+            Println "$error workers 监控 未开启\n"
+        fi
     else
+        [ -e "$CF_WORKERS_ROOT/cf_workers.pid" ] && rm "$CF_WORKERS_ROOT/cf_workers.pid"
+        [ -e "$CF_WORKERS_ROOT/cf_workers.lock" ] && rm "$CF_WORKERS_ROOT/cf_workers.lock"
         Println "$error workers 监控 未开启\n"
     fi
 }
@@ -26677,7 +27170,7 @@ then
             InstallJq
 
             Println "$info 安装 v2ray..."
-            bash <(curl --silent -m 10 https://install.direct/go.sh) > /dev/null
+            curl --silent -m 10 https://install.direct/go.sh | bash -s -- --source jsdelivr
 
             V2rayConfigInstall
 
@@ -26695,7 +27188,7 @@ then
             Println "$info 检查依赖，耗时可能会很长..."
             CheckRelease
 
-            if ! ls -A "/tmp/monitor.lockdir/"* > /dev/null 2>&1 
+            if [ ! -s "$IPTV_ROOT/monitor.pid" ] && [ ! -s "$IPTV_ROOT/antiddos.pid" ]
             then
                 rm -f "${JQ_FILE:-notfound}"
                 Println "$info 更新 JQ...\n"
@@ -26706,7 +27199,7 @@ then
             V2rayConfigUpdate
             echo
 
-            bash <(curl --silent -m 10 https://install.direct/go.sh) > /dev/null
+            curl --silent -m 10 https://install.direct/go.sh | bash -s -- --source jsdelivr
 
             Println "$info 更新 v2ray 脚本...\n"
 
@@ -26717,26 +27210,24 @@ then
                 Println "$error 无法连接到 Github ! 尝试备用链接...\n"
                 sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
                 [ -z "$sh_new_ver" ] && Println "$error 无法连接备用链接!\n" && exit 1
+                wget --no-check-certificate "$SH_LINK_BACKUP" -qO "${SH_FILE}_tmp"
+            else
+                wget --no-check-certificate "$SH_LINK" -qO "${SH_FILE}_tmp"
+            fi
+
+            if [ ! -s "${SH_FILE}_tmp" ] 
+            then
+                Println "$error 无法连接备用链接!\n"
+                exit 1
+            else
+                mv "${SH_FILE}_tmp" "$SH_FILE"
+                chmod +x "$SH_FILE"
+                Println "$info v2ray 脚本更新完成\n"
             fi
 
             if [ "$sh_new_ver" != "$sh_ver" ] 
             then
-                [ -e "$LOCK_FILE" ] && rm -f "$LOCK_FILE"
-            fi
-
-            wget --no-check-certificate "$SH_LINK" -qO "$SH_FILE" && chmod +x "$SH_FILE"
-
-            if [ ! -s "$SH_FILE" ] 
-            then
-                wget --no-check-certificate "$SH_LINK_BACKUP" -qO "$SH_FILE"
-                if [ ! -s "$SH_FILE" ] 
-                then
-                    Println "$error 无法连接备用链接!\n" && exit 1
-                else
-                    Println "$info v2ray 脚本更新完成\n"
-                fi
-            else
-                Println "$info v2ray 脚本更新完成\n"
+                rm -f "$LOCK_FILE"
             fi
 
             Println "$info 升级完成\n"
@@ -27038,7 +27529,7 @@ then
                     fi
                 ;;
                 *) 
-                    if ls -A "/tmp/monitor.lockdir/"* > /dev/null 2>&1
+                    if [ -s "$IPTV_ROOT/monitor.pid" ] || [ -s "$IPTV_ROOT/antiddos.pid" ]
                     then
                         Println "$error 监控已经在运行 !\n" && exit 1
                     else
@@ -27070,23 +27561,36 @@ then
                         NGINX_FILE="$nginx_prefix/sbin/nginx"
                         printf -v date_now '%(%m-%d %H:%M:%S)T'
                         MonitorSet
+
+                        pid_file="$IPTV_ROOT/monitor.pid"
+                        pid_lock="$IPTV_ROOT/monitor.lock"
+                        exec {lock_fd}>"$pid_lock" || exit 1
+                        flock -n "$lock_fd" || { Println "$error 监控开启失败, 请重试 ...\n"; exit 1; }
+
                         if [ "$sh_debug" -eq 1 ] 
                         then
                             ( Monitor ) >> "$MONITOR_LOG" 2>> "$MONITOR_LOG" < /dev/null &
                         else
                             ( Monitor ) > /dev/null 2>> "$MONITOR_LOG" < /dev/null &
                         fi
+
                         Println "$info 监控启动成功 !"
-                        [ -e "$IPTV_ROOT/monitor.pid" ] && rm -f "$IPTV_ROOT/monitor.pid"
                         AntiDDoSSet
+
+                        pid_file="$IPTV_ROOT/antiddos.pid"
+                        pid_lock="$IPTV_ROOT/antiddos.lock"
+                        exec {lock_fd}>"$pid_lock" || exit 1
+                        flock -n "$lock_fd" || { Println "$error AntiDDoS 开启失败, 请重试 ...\n"; exit 1; }
+
                         if [ "$sh_debug" -eq 1 ] 
                         then
                             ( AntiDDoS ) >> "$MONITOR_LOG" 2>> "$MONITOR_LOG" < /dev/null &
                         else
                             ( AntiDDoS ) > /dev/null 2>> "$MONITOR_LOG" < /dev/null &
                         fi
+
                         Println "$info AntiDDoS 启动成功 !\n"
-                        [ -e "$IPTV_ROOT/ip.pid" ] && rm -f "$IPTV_ROOT/ip.pid"
+                        rm -f "$IPTV_ROOT/ip.pid"
                     fi
                 ;;
             esac
@@ -28912,12 +29416,9 @@ MonitorVip()
 {
     trap '' HUP INT
     trap 'MonitorError $LINENO' ERR
-    MONITOR_PIDFILE="/tmp/vip.pid"
-    MONITOR_ROOT="${vip_public_root:-notfound}/vip"
-    force_exit=1
 
-    mkdir -p "/tmp" 
-    printf '%s' "$BASHPID" > "/tmp/vip.pid"
+    printf '%s' "$BASHPID" > "$IPTV_ROOT/vip.pid"
+
     printf -v date_now '%(%m-%d %H:%M:%S)T'
     printf '%s\n' "$date_now 启动 VIP  PID $BASHPID !" >> "$MONITOR_LOG"
     printf -v now '%(%s)T'
@@ -29063,7 +29564,7 @@ MonitorVip()
                         epg_update=0
                         echo -e "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<tv>\n$epg_list</tv>" > "$VIP_USERS_ROOT/epg.xml.new"
                         mv "$VIP_USERS_ROOT/epg.xml.new" "$VIP_USERS_ROOT/epg.xml"
-                        [ -e "$VIP_USERS_ROOT/epg.update" ] && rm -f "$VIP_USERS_ROOT/epg.update"
+                        rm -f "$VIP_USERS_ROOT/epg.update"
                     fi
                 elif [ -d "$VIP_USERS_ROOT/$vip_user_license" ] 
                 then
@@ -29072,9 +29573,9 @@ MonitorVip()
             done
         fi
 
-        PrepMonitorTerm
+        PrepTerm
         sleep 60 &
-        WaitMonitorTerm
+        WaitTerm
 
         vip_users_license_old=("${vip_users_license[@]}")
         vip_hosts_channel_id_old=("${vip_hosts_channel_id[@]}")
@@ -29082,10 +29583,10 @@ MonitorVip()
         GetVipHosts
         GetVipUsers
 
-        for vip_user_license_old in "${vip_users_license_old[@]}"
+        for vip_user_license_old in ${vip_users_license_old[@]+"${vip_users_license_old[@]}"}
         do
             user_found=0
-            for vip_user_license in "${vip_users_license[@]}"
+            for vip_user_license in ${vip_users_license[@]+"${vip_users_license[@]}"}
             do
                 if [ "$vip_user_license" == "$vip_user_license_old" ] 
                 then
@@ -29095,12 +29596,12 @@ MonitorVip()
             done
             if [ "$user_found" -eq 0 ] 
             then
-                [ -d "$VIP_USERS_ROOT/$vip_user_license_old" ] && rm -rf "$VIP_USERS_ROOT/${vip_user_license_old:-notfound}"
+                rm -rf "$VIP_USERS_ROOT/${vip_user_license_old:-notfound}"
             else
-                for vip_host_channel_id_old in "${vip_hosts_channel_id_old[@]}"
+                for vip_host_channel_id_old in ${vip_hosts_channel_id_old[@]+"${vip_hosts_channel_id_old[@]}"}
                 do
                     channel_found=0
-                    for vip_host_channel_id in "${vip_hosts_channel_id[@]}"
+                    for vip_host_channel_id in ${vip_hosts_channel_id[@]+"${vip_hosts_channel_id[@]}"}
                     do
                         if [ "$vip_host_channel_id" == "$vip_host_channel_id_old" ] 
                         then
@@ -29110,7 +29611,27 @@ MonitorVip()
                     done
                     if [ "$channel_found" -eq 0 ] 
                     then
-                        [ -d "$VIP_USERS_ROOT/$vip_user_license_old/${vip_host_ip//./}$vip_host_port/$vip_host_channel_id_old" ] && rm -rf "$VIP_USERS_ROOT/$vip_user_license_old/${vip_host_ip//./}$vip_host_port/${vip_host_channel_id_old:-notfound}"
+                        IFS="|" read -r -a vip_channels_id_old <<< "$vip_host_channel_id_old"
+                        for vip_channel_id_old in "${vip_channels_id_old[@]}"
+                        do
+                            channel_found=0
+                            for vip_host_channel_id in ${vip_hosts_channel_id[@]+"${vip_hosts_channel_id[@]}"}
+                            do
+                                IFS="|" read -r -a vip_channels_id <<< "$vip_host_channel_id"
+                                for vip_channel_id in "${vip_channels_id[@]}"
+                                do
+                                    if [ "$vip_channel_id" == "$vip_channel_id_old" ] 
+                                    then
+                                        channel_found=1
+                                        break 2
+                                    fi
+                                done
+                            done
+                            if [ "$channel_found" -eq 0 ] 
+                            then
+                                rm -rf "$VIP_USERS_ROOT/$vip_user_license_old/${vip_host_ip//./}$vip_host_port/${vip_channel_id_old:-notfound}"
+                            fi
+                        done
                     fi
                 done
             fi
@@ -29121,9 +29642,20 @@ MonitorVip()
 
 EnableVip()
 {
+    # deprecated
     if [ -s "/tmp/vip.pid" ] && kill -0 "$(< /tmp/vip.pid)" 2> /dev/null
     then
         Println "$error VIP 已开启\n" && exit 1
+    fi
+
+    if [ -s "$IPTV_ROOT/vip.pid" ] && kill -0 "$(< $IPTV_ROOT/vip.pid)" 2> /dev/null
+    then
+        Println "$error VIP 已开启\n" && exit 1
+    fi
+
+    if [ ! -s "$VIP_FILE" ] 
+    then
+        Println "$error 请先添加 VIP 服务器\n" && exit 1
     fi
 
     GetVipHosts
@@ -29157,7 +29689,15 @@ EnableVip()
                 ConfigVip
             fi
             [ -n "$vip_public_root" ] && ln -sfT "$VIP_USERS_ROOT" "$vip_public_root/vip"
+
+            delete_on_term="${vip_public_root:-notfound}/vip"
+            pid_file="$IPTV_ROOT/vip.pid"
+            pid_lock="$IPTV_ROOT/vip.lock"
+            exec {lock_fd}>"$pid_lock" || exit 1
+            flock -n "$lock_fd" || { Println "$error VIP 开启失败, 请重试 ...\n"; exit 1; }
+
             ( MonitorVip ) > /dev/null 2>> "$MONITOR_LOG" &
+
             Println "$info VIP 开启成功\n"
         else
             Println "$error 请先添加用户\n" && exit 1
@@ -29169,6 +29709,7 @@ EnableVip()
 
 DisableVip()
 {
+    # deprecated
     if [ -s "/tmp/vip.pid" ] 
     then
         vip_pid=$(< /tmp/vip.pid)
@@ -29177,16 +29718,35 @@ DisableVip()
             kill "$vip_pid" 2> /dev/null
             printf -v date_now '%(%m-%d %H:%M:%S)T'
             printf '%s\n' "$date_now 关闭 VIP  PID $vip_pid !" >> "$MONITOR_LOG"
-            Println "$info 关闭 VIP, 稍等..."
-            until [ ! -e "/tmp/vip.pid" ]
-            do
-                sleep 1
-            done
             Println "$info VIP 关闭成功\n"
         else
             Println "$error VIP 未开启\n"
         fi
+        rm "/tmp/vip.pid"
+    elif [ -s "$IPTV_ROOT/vip.pid" ] 
+    then
+        PID=$(< "$IPTV_ROOT/vip.pid")
+        if kill -0 "$PID" 2> /dev/null 
+        then
+            Println "$info 关闭 VIP, 稍等..."
+            kill "$PID" 2> /dev/null
+            if flock -E 1 -w 20 -x "$IPTV_ROOT/vip.lock" rm "$IPTV_ROOT/vip.lock"
+            then
+                printf -v date_now '%(%m-%d %H:%M:%S)T'
+                printf '%s\n' "$date_now 关闭 VIP PID $PID !" >> "$MONITOR_LOG"
+                Println "$info VIP 关闭成功 !\n"
+            else
+                Println "$error VIP 关闭超时, 请重试\n"
+                exit 1
+            fi
+        else
+            [ -e "$IPTV_ROOT/vip.pid" ] && rm "$IPTV_ROOT/vip.pid"
+            [ -e "$IPTV_ROOT/vip.lock" ] && rm "$IPTV_ROOT/vip.lock"
+            Println "$error VIP 未开启\n"
+        fi
     else
+        [ -e "$IPTV_ROOT/vip.pid" ] && rm "$IPTV_ROOT/vip.pid"
+        [ -e "$IPTV_ROOT/vip.lock" ] && rm "$IPTV_ROOT/vip.lock"
         Println "$error VIP 未开启\n"
     fi
 }
@@ -29456,6 +30016,8 @@ else
             export FFMPEG
             live_yn=${live_yn:-yes}
             proxy=${proxy:-$d_proxy}
+            stream_links_input=$stream_link
+            stream_link=${stream_link%% *}
             if [ "${stream_link:0:4}" != "http" ] 
             then
                 proxy=""
