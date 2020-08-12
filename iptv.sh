@@ -82,20 +82,13 @@
 
 set -euo pipefail
 
-sh_ver="1.36.0"
+sh_ver="1.37.0"
 sh_debug=0
 export LC_ALL=
 export LANG=en_US.UTF-8
 SH_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/iptv.sh"
 SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
-IBM_FILE="/usr/local/bin/ibm"
-IBM_APPS_ROOT="$HOME/ibm_apps"
-CF_FILE="/usr/local/bin/cf"
-CF_CONFIG="$HOME/cloudflare.json"
-CF_WORKERS_ROOT="$HOME/workers"
-CF_WORKERS_FILE="$CF_WORKERS_ROOT/cloudflare_workers.py"
-IBM_CONFIG="$HOME/ibm.json"
 OR_FILE="/usr/local/bin/or"
 NX_FILE="/usr/local/bin/nx"
 V2_FILE="/usr/local/bin/v2"
@@ -103,8 +96,13 @@ V2CTL_FILE="/usr/bin/v2ray/v2ctl"
 V2_CONFIG="/etc/v2ray/config.json"
 XC_FILE="/usr/local/bin/cx"
 IPTV_ROOT="/usr/local/iptv"
-C_ROOT="$IPTV_ROOT/c"
-MD5SUM_FILE="$C_ROOT/md5sum"
+JQ_FILE="$IPTV_ROOT/jq"
+CHANNELS_FILE="$IPTV_ROOT/channels.json"
+LOCK_FILE="$IPTV_ROOT/lock"
+MONITOR_LOG="$IPTV_ROOT/monitor.log"
+LOGROTATE_CONFIG="$IPTV_ROOT/logrotate"
+CRON_FILE="$IPTV_ROOT/cron"
+XTREAM_CODES="$IPTV_ROOT/xtream_codes"
 NODE_ROOT="$IPTV_ROOT/node"
 IP_DENY="$IPTV_ROOT/ip.deny"
 IP_LOG="$IPTV_ROOT/ip.log"
@@ -112,22 +110,32 @@ FFMPEG_LOG_ROOT="$IPTV_ROOT/ffmpeg"
 FFMPEG_MIRROR_LINK="http://pngquant.com/ffmpeg"
 FFMPEG_MIRROR_ROOT="$IPTV_ROOT/ffmpeg"
 LIVE_ROOT="$IPTV_ROOT/live"
-CREATOR_LINK="https://raw.githubusercontent.com/bentasker/HLS-Stream-Creator/master/HLS-Stream-Creator.sh"
-CREATOR_LINK_BACKUP="http://hbo.epub.fun/HLS-Stream-Creator.sh"
-CREATOR_FILE="$IPTV_ROOT/HLS-Stream-Creator.sh"
-JQ_FILE="$IPTV_ROOT/jq"
-CHANNELS_FILE="$IPTV_ROOT/channels.json"
-DEFAULT_DEMOS="http://hbo.epub.fun/default.json"
-DEFAULT_CHANNELS_LINK="http://hbo.epub.fun/channels.json"
-LOCK_FILE="$IPTV_ROOT/lock"
-MONITOR_LOG="$IPTV_ROOT/monitor.log"
-LOGROTATE_CONFIG="$IPTV_ROOT/logrotate"
-CRON_FILE="$IPTV_ROOT/cron"
-XTREAM_CODES="$IPTV_ROOT/xtream_codes"
 SERVICES_FILE="$IPTV_ROOT/services.json"
 VIP_FILE="$IPTV_ROOT/vip.json"
 VIP_ROOT="$IPTV_ROOT/vip"
 VIP_USERS_ROOT="$VIP_ROOT/users"
+C_ROOT="$IPTV_ROOT/c"
+MD5SUM_FILE="$C_ROOT/md5sum"
+MD5SUM_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/scripts/md5sum.c"
+MD5SUM_LINK_BACKUP="$FFMPEG_MIRROR_LINK/md5sum.c"
+CREATOR_FILE="$IPTV_ROOT/HLS-Stream-Creator.sh"
+CREATOR_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/scripts/HLS-Stream-Creator.sh"
+CREATOR_LINK_BACKUP="$FFMPEG_MIRROR_LINK/HLS-Stream-Creator.sh"
+CF_FILE="/usr/local/bin/cf"
+CF_CONFIG="$HOME/cloudflare.json"
+CF_WORKERS_ROOT="$HOME/workers"
+CF_WORKERS_FILE="$CF_WORKERS_ROOT/cloudflare_workers.py"
+CF_WORKERS_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/scripts/cloudflare_workers.py"
+CF_WORKERS_LINK_BACKUP="$FFMPEG_MIRROR_LINK/cloudflare_workers.py"
+STREAM_PROXY_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/scripts/stream_proxy.js"
+STREAM_PROXY_LINK_BACKUP="$FFMPEG_MIRROR_LINK/stream_proxy.js"
+XTREAM_CODES_PROXY_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/scripts/xtream_codes_proxy.js"
+XTREAM_CODES_PROXY_LINK_BACKUP="$FFMPEG_MIRROR_LINK/xtream_codes_proxy.js"
+IBM_FILE="/usr/local/bin/ibm"
+IBM_APPS_ROOT="$HOME/ibm_apps"
+IBM_CONFIG="$HOME/ibm.json"
+DEFAULT_DEMOS="http://hbo.epub.fun/default.json"
+DEFAULT_CHANNELS_LINK="http://hbo.epub.fun/channels.json"
 XTREAM_CODES_LINK="http://hbo.epub.fun/xtream_codes"
 green="\033[32m"
 red="\033[31m"
@@ -1571,7 +1579,7 @@ InstallFfmpeg()
             ffmpeg_package="ffmpeg-git-i686-static.tar.xz"
         fi
         FFMPEG_PACKAGE_FILE="$IPTV_ROOT/$ffmpeg_package"
-        wget --no-check-certificate "$FFMPEG_MIRROR_LINK/builds/$ffmpeg_package" $_PROGRESS_OPT -qO "$FFMPEG_PACKAGE_FILE"
+        curl -L "$FFMPEG_MIRROR_LINK/builds/$ffmpeg_package" -o "$FFMPEG_PACKAGE_FILE"
         [ ! -e "$FFMPEG_PACKAGE_FILE" ] && Println "$error ffmpeg 下载失败 !" && exit 1
         tar -xJf "$FFMPEG_PACKAGE_FILE" -C "$IPTV_ROOT" && rm -f "${FFMPEG_PACKAGE_FILE:-notfound}"
         FFMPEG=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
@@ -1777,7 +1785,7 @@ Update()
             git_date=${line%<*}
             break
         fi
-    done < <(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/index.html")
+    done < <(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/index.html" 2> /dev/null)
 
     if [ -z "${git_date:-}" ] 
     then
@@ -1864,7 +1872,7 @@ Update()
         wget --no-check-certificate "$CREATOR_LINK_BACKUP" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
         if [ ! -s "$CREATOR_FILE" ] 
         then
-            Println "$error 无法连接备用链接!"
+            Println "$error 无法连接备用链接, 请重试 !\n"
             exit 1
         else
             Println "$info Hls Stream Creator 脚本更新完成"
@@ -2221,14 +2229,14 @@ FlvStreamCreator()
                     --arg user_agent "$user_agent" \
                     --arg headers "$headers" --arg cookies "$cookies" \
                     --arg output_dir_name "$output_dir_name" --arg playlist_name "$playlist_name" \
-                    --arg seg_dir_name "$SEGMENT_DIRECTORY" --arg seg_name "$seg_name" \
+                    --arg seg_dir_name "$seg_dir_name" --arg seg_name "$seg_name" \
                     --arg seg_length "$seg_length" --arg seg_count "$seg_count" \
-                    --arg video_codec "$VIDEO_CODEC" --arg audio_codec "$AUDIO_CODEC" \
+                    --arg video_codec "$video_codec" --arg audio_codec "$audio_codec" \
                     --arg video_audio_shift "$video_audio_shift" --arg quality "$quality" \
                     --arg bitrates "$bitrates" --arg const "$const_yn" \
                     --arg encrypt "$encrypt_yn" --arg encrypt_session "$encrypt_session_yn" \
                     --arg keyinfo_name "$keyinfo_name" --arg key_name "$key_name" \
-                    --arg input_flags "$FFMPEG_INPUT_FLAGS" --arg output_flags "$FFMPEG_FLAGS" \
+                    --arg input_flags "$input_flags" --arg output_flags "$output_flags" \
                     --arg channel_name "$channel_name" --arg sync "$sync_yn" \
                     --arg sync_file "$sync_file" --arg sync_index "$sync_index" \
                     --arg sync_pairs "$sync_pairs" --arg flv_status "on" \
@@ -2287,7 +2295,9 @@ FlvStreamCreator()
                     SyncFile > /dev/null 2>> "$MONITOR_LOG"
                 ' EXIT
 
-                resolution=""
+                quality_command=""
+                bitrates_command=""
+                resolution_command=""
 
                 if [ -z "$quality" ]
                 then
@@ -2297,7 +2307,7 @@ FlvStreamCreator()
                         if [[ $bitrates == *"-"* ]] 
                         then
                             resolution=${bitrates#*-}
-                            resolution="-vf scale=${resolution//x/:}"
+                            resolution_command="-vf scale=${resolution//x/:}"
                             bitrates=${bitrates%-*}
                             if [ -n "$const" ] 
                             then
@@ -2308,7 +2318,7 @@ FlvStreamCreator()
                         elif [[ $bitrates == *"x"* ]] 
                         then
                             resolution=$bitrates
-                            resolution="-vf scale=${resolution//x/:}"
+                            resolution_command="-vf scale=${resolution//x/:}"
                         else
                             if [ -n "$const" ] 
                             then
@@ -2324,23 +2334,23 @@ FlvStreamCreator()
                     if [[ $bitrates == *"-"* ]] 
                     then
                         resolution=${bitrates#*-}
-                        resolution="-vf scale=${resolution//x/:}"
+                        resolution_command="-vf scale=${resolution//x/:}"
                         bitrates=${bitrates%-*}
                         quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
-                        if [ "$VIDEO_CODEC" == "libx265" ]
+                        if [ "$video_codec" == "libx265" ]
                         then
-                        quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
+                            quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
                         fi
                     elif [[ $bitrates == *"x"* ]] 
                     then
                         resolution=$bitrates
-                        resolution="-vf scale=${resolution//x/:}"
+                        resolution_command="-vf scale=${resolution//x/:}"
                         quality_command="-crf $quality"
                     else
                         quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
-                        if [ "$VIDEO_CODEC" == "libx265" ]
+                        if [ "$video_codec" == "libx265" ]
                         then
-                        quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
+                            quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
                         fi
                     fi
                 else
@@ -2357,30 +2367,47 @@ FlvStreamCreator()
                     map_command=""
                 fi
 
-                if [[ $FFMPEG_FLAGS == *"-vf "* ]] && [ -n "$resolution" ]
+                if [[ $output_flags == *"-vf "* ]] && [ -n "$resolution_command" ]
                 then
-                    FFMPEG_FLAGS_A=${FFMPEG_FLAGS%-vf *}
-                    FFMPEG_FLAGS_B=${FFMPEG_FLAGS#*-vf }
-                    FFMPEG_FLAGS_C=${FFMPEG_FLAGS_B%% *}
-                    FFMPEG_FLAGS_B=${FFMPEG_FLAGS_B#* }
-                    FFMPEG_FLAGS="$FFMPEG_FLAGS_A $FFMPEG_FLAGS_B"
-                    resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
+                    output_flags_A=${output_flags%-vf *}
+                    output_flags_B=${output_flags#*-vf }
+                    output_flags_C=${output_flags_B%% *}
+                    output_flags_B=${output_flags_B#* }
+                    output_flags="$output_flags_A $output_flags_B"
+                    resolution_command="-vf $output_flags_C,${resolution_command#*-vf }"
                 fi
 
-                if [ "${stream_link:0:4}" == "http" ] 
+                args=()
+
+                if [[ $stream_link =~ ^https?:// ]] 
                 then
-                    PrepTerm
-                    $FFMPEG $proxy_command -user_agent "$user_agent" -headers "$headers_command" -cookies "$cookies" $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command \
-                    -y -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-                    $FFMPEG_FLAGS -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
-                    WaitTerm
-                else
-                    PrepTerm
-                    $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command \
-                    -y -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-                    $FFMPEG_FLAGS -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
-                    WaitTerm
+                    if [ -n "$proxy" ] 
+                    then
+                        args+=( -http_proxy "$proxy" )
+                    fi
+                    if [ -n "$user_agent" ] 
+                    then
+                        args+=( -user_agent "$user_agent" )
+                    fi
+                    if [ -n "$headers" ] 
+                    then
+                        printf -v headers_command '%b' "$headers"
+                        args+=( -headers "$headers_command" )
+                    fi
+                    if [ -n "$cookies" ] 
+                    then
+                        args+=( -cookies "$cookies" )
+                    fi
+                elif [[ $stream_link =~ ^icecast?:// ]]
+                then
+                    args+=( -user_agent "$user_agent" )
                 fi
+
+                PrepTerm
+                $FFMPEG ${args[@]+"${args[@]}"} $input_flags -i "$stream_link" $map_command \
+                -y -vcodec "$video_codec" -acodec "$audio_codec" $quality_command $bitrates_command $resolution_command \
+                $output_flags -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                WaitTerm
             } 201>"$pid_file"
         ;;
         "StartChannel") 
@@ -2413,7 +2440,9 @@ FlvStreamCreator()
                     SyncFile > /dev/null 2>> "$MONITOR_LOG"
                 ' EXIT
 
-                resolution=""
+                chnl_quality_command=""
+                chnl_bitrates_command=""
+                chnl_resolution_command=""
 
                 if [ -z "$chnl_quality" ]
                 then
@@ -2423,7 +2452,7 @@ FlvStreamCreator()
                         if [[ $chnl_bitrates == *"-"* ]] 
                         then
                             resolution=${chnl_bitrates#*-}
-                            resolution="-vf scale=${resolution//x/:}"
+                            chnl_resolution_command="-vf scale=${resolution//x/:}"
                             chnl_bitrates=${chnl_bitrates%-*}
                             if [ -n "$chnl_const" ] 
                             then
@@ -2434,7 +2463,7 @@ FlvStreamCreator()
                         elif [[ $chnl_bitrates == *"x"* ]] 
                         then
                             resolution=$chnl_bitrates
-                            resolution="-vf scale=${resolution//x/:}"
+                            chnl_resolution_command="-vf scale=${resolution//x/:}"
                         else
                             if [ -n "$chnl_const" ] 
                             then
@@ -2450,23 +2479,23 @@ FlvStreamCreator()
                     if [[ $chnl_bitrates == *"-"* ]] 
                     then
                         resolution=${chnl_bitrates#*-}
-                        resolution="-vf scale=${resolution//x/:}"
+                        chnl_resolution_command="-vf scale=${resolution//x/:}"
                         chnl_bitrates=${chnl_bitrates%-*}
                         chnl_quality_command="-crf $chnl_quality -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k"
                         if [ "$chnl_video_codec" == "libx265" ]
                         then
-                        chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
+                            chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
                         fi
                     elif [[ $chnl_bitrates == *"x"* ]] 
                     then
                         resolution=$chnl_bitrates
-                        resolution="-vf scale=${resolution//x/:}"
+                        chnl_resolution_command="-vf scale=${resolution//x/:}"
                         chnl_quality_command="-crf $chnl_quality"
                     else
                         chnl_quality_command="-crf $chnl_quality -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k"
                         if [ "$chnl_video_codec" == "libx265" ]
                         then
-                        chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
+                            chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
                         fi
                     fi
                 else
@@ -2475,38 +2504,55 @@ FlvStreamCreator()
 
                 if [ -n "${chnl_video_shift:-}" ] 
                 then
-                    map_command="-itsoffset $chnl_video_shift -i $chnl_stream_link -map 0:v -map 1:a"
+                    chnl_map_command="-itsoffset $chnl_video_shift -i $chnl_stream_link -map 0:v -map 1:a"
                 elif [ -n "${chnl_audio_shift:-}" ] 
                 then
-                    map_command="-itsoffset $chnl_audio_shift -i $chnl_stream_link -map 0:a -map 1:v"
+                    chnl_map_command="-itsoffset $chnl_audio_shift -i $chnl_stream_link -map 0:a -map 1:v"
                 else
-                    map_command=""
+                    chnl_map_command=""
                 fi
 
-                if [[ $FFMPEG_FLAGS == *"-vf "* ]] && [ -n "$resolution" ]
+                if [[ $chnl_output_flags == *"-vf "* ]] && [ -n "$chnl_resolution_command" ]
                 then
-                    FFMPEG_FLAGS_A=${FFMPEG_FLAGS%-vf *}
-                    FFMPEG_FLAGS_B=${FFMPEG_FLAGS#*-vf }
-                    FFMPEG_FLAGS_C=${FFMPEG_FLAGS_B%% *}
-                    FFMPEG_FLAGS_B=${FFMPEG_FLAGS_B#* }
-                    FFMPEG_FLAGS="$FFMPEG_FLAGS_A $FFMPEG_FLAGS_B"
-                    resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
+                    chnl_output_flags_A=${chnl_output_flags%-vf *}
+                    chnl_output_flags_B=${chnl_output_flags#*-vf }
+                    chnl_output_flags_C=${chnl_output_flags_B%% *}
+                    chnl_output_flags_B=${chnl_output_flags_B#* }
+                    chnl_output_flags="$chnl_output_flags_A $chnl_output_flags_B"
+                    chnl_resolution_command="-vf $chnl_output_flags_C,${chnl_resolution_command#*-vf }"
                 fi
 
-                if [ "${chnl_stream_link:0:4}" == "http" ] 
+                args=()
+
+                if [[ $chnl_stream_link =~ ^https?:// ]] 
                 then
-                    PrepTerm
-                    $FFMPEG $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies" $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command \
-                    -y -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
-                    $FFMPEG_FLAGS -f flv "$chnl_flv_push_link" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
-                    WaitTerm
-                else
-                    PrepTerm
-                    $FFMPEG $chnl_proxy_command $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command \
-                    -y -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
-                    $FFMPEG_FLAGS -f flv "$chnl_flv_push_link" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
-                    WaitTerm
+                    if [ -n "$chnl_proxy" ] 
+                    then
+                        args+=( -http_proxy "$chnl_proxy" )
+                    fi
+                    if [ -n "$chnl_user_agent" ] 
+                    then
+                        args+=( -user_agent "$chnl_user_agent" )
+                    fi
+                    if [ -n "$chnl_headers" ] 
+                    then
+                        printf -v chnl_headers_command '%b' "$chnl_headers"
+                        args+=( -headers "$chnl_headers_command" )
+                    fi
+                    if [ -n "$chnl_cookies" ] 
+                    then
+                        args+=( -cookies "$chnl_cookies" )
+                    fi
+                elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
+                then
+                    args+=( -user_agent "$chnl_user_agent" )
                 fi
+
+                PrepTerm
+                $FFMPEG ${args[@]+"${args[@]}"} $chnl_input_flags -i "$chnl_stream_link" $chnl_map_command \
+                -y -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $chnl_resolution_command \
+                $chnl_output_flags -f flv "$chnl_flv_push_link" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+                WaitTerm
             } 201>"$pid_file"
         ;;
     esac
@@ -2542,14 +2588,14 @@ HlsStreamCreatorPlus()
                     --arg user_agent "$user_agent" \
                     --arg headers "$headers" --arg cookies "$cookies" \
                     --arg output_dir_name "$output_dir_name" --arg playlist_name "$playlist_name" \
-                    --arg seg_dir_name "$SEGMENT_DIRECTORY" --arg seg_name "$seg_name" \
+                    --arg seg_dir_name "$seg_dir_name" --arg seg_name "$seg_name" \
                     --arg seg_length "$seg_length" --arg seg_count "$seg_count" \
-                    --arg video_codec "$VIDEO_CODEC" --arg audio_codec "$AUDIO_CODEC" \
+                    --arg video_codec "$video_codec" --arg audio_codec "$audio_codec" \
                     --arg video_audio_shift "$video_audio_shift" --arg quality "$quality" \
                     --arg bitrates "$bitrates" --arg const "$const_yn" \
                     --arg encrypt "$encrypt_yn" --arg encrypt_session "$encrypt_session_yn" \
                     --arg keyinfo_name "$keyinfo_name" --arg key_name "$key_name" \
-                    --arg input_flags "$FFMPEG_INPUT_FLAGS" --arg output_flags "$FFMPEG_FLAGS" \
+                    --arg input_flags "$input_flags" --arg output_flags "$output_flags" \
                     --arg channel_name "$channel_name" --arg sync "$sync_yn" \
                     --arg sync_file "$sync_file" --arg sync_index "$sync_index" \
                     --arg sync_pairs "$sync_pairs" --arg flv_status "off" \
@@ -2612,8 +2658,19 @@ HlsStreamCreatorPlus()
 
                 mkdir -p "$delete_on_term"
 
-                resolution=""
+                quality_command=""
+                bitrates_command=""
+                resolution_command=""
                 output_name="${seg_name}_%05d"
+
+                if [ -z "$seg_dir_name" ] 
+                then
+                    seg_dir_path=""
+                else
+                    seg_dir_path="$seg_dir_name/"
+                fi
+
+                hls_seg_filename_command="-hls_segment_filename $output_dir_root/$seg_dir_path$output_name.ts"
 
                 if [ -z "$quality" ]
                 then
@@ -2623,7 +2680,7 @@ HlsStreamCreatorPlus()
                         if [[ $bitrates == *"-"* ]] 
                         then
                             resolution=${bitrates#*-}
-                            resolution="-vf scale=${resolution//x/:}"
+                            resolution_command="-vf scale=${resolution//x/:}"
                             bitrates=${bitrates%-*}
                             if [ -n "$const" ] 
                             then
@@ -2635,7 +2692,7 @@ HlsStreamCreatorPlus()
                         elif [[ $bitrates == *"x"* ]] 
                         then
                             resolution=$bitrates
-                            resolution="-vf scale=${resolution//x/:}"
+                            resolution_command="-vf scale=${resolution//x/:}"
                         else
                             if [ -n "$const" ] 
                             then
@@ -2652,24 +2709,24 @@ HlsStreamCreatorPlus()
                     if [[ $bitrates == *"-"* ]] 
                     then
                         resolution=${bitrates#*-}
-                        resolution="-vf scale=${resolution//x/:}"
+                        resolution_command="-vf scale=${resolution//x/:}"
                         bitrates=${bitrates%-*}
                         quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
-                        if [ "$VIDEO_CODEC" == "libx265" ]
+                        if [ "$video_codec" == "libx265" ]
                         then
-                        quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
+                            quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
                         fi
                         output_name="${seg_name}_${bitrates}_%05d"
                     elif [[ $bitrates == *"x"* ]] 
                     then
                         resolution=$bitrates
-                        resolution="-vf scale=${resolution//x/:}"
+                        resolution_command="-vf scale=${resolution//x/:}"
                         quality_command="-crf $quality"
                     else
                         quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
-                        if [ "$VIDEO_CODEC" == "libx265" ]
+                        if [ "$video_codec" == "libx265" ]
                         then
-                        quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
+                            quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
                         fi
                         output_name="${seg_name}_${bitrates}_%05d"
                     fi
@@ -2687,14 +2744,14 @@ HlsStreamCreatorPlus()
                     map_command=""
                 fi
 
-                if [[ $FFMPEG_FLAGS == *"-vf "* ]] && [ -n "$resolution" ]
+                if [[ $output_flags == *"-vf "* ]] && [ -n "$resolution_command" ]
                 then
-                    FFMPEG_FLAGS_A=${FFMPEG_FLAGS%-vf *}
-                    FFMPEG_FLAGS_B=${FFMPEG_FLAGS#*-vf }
-                    FFMPEG_FLAGS_C=${FFMPEG_FLAGS_B%% *}
-                    FFMPEG_FLAGS_B=${FFMPEG_FLAGS_B#* }
-                    FFMPEG_FLAGS="$FFMPEG_FLAGS_A $FFMPEG_FLAGS_B"
-                    resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
+                    output_flags_A=${output_flags%-vf *}
+                    output_flags_B=${output_flags#*-vf }
+                    output_flags_C=${output_flags_B%% *}
+                    output_flags_B=${output_flags_B#* }
+                    output_flags="$output_flags_A $output_flags_B"
+                    resolution_command="-vf $output_flags_C,${resolution_command#*-vf }"
                 fi
 
                 if [ "$live_yn" == "yes" ] 
@@ -2708,18 +2765,37 @@ HlsStreamCreatorPlus()
                     hls_flags_command="-hls_flags periodic_rekey"
                 fi
 
-                if [ -z "$seg_dir_name" ] 
-                then
-                    seg_dir_path=""
-                else
-                    seg_dir_path="$seg_dir_name/"
-                fi
-
                 if [ "${master:-0}" -eq 0 ] 
                 then
                     m3u8_list="$output_dir_root/$playlist_name.m3u8"
                 else
                     m3u8_list="$output_dir_root/${playlist_name}_master.m3u8"
+                fi
+
+                args=()
+
+                if [[ $stream_link =~ ^https?:// ]] 
+                then
+                    if [ -n "$proxy" ] 
+                    then
+                        args+=( -http_proxy "$proxy" )
+                    fi
+                    if [ -n "$user_agent" ] 
+                    then
+                        args+=( -user_agent "$user_agent" )
+                    fi
+                    if [ -n "$headers" ] 
+                    then
+                        printf -v headers_command '%b' "$headers"
+                        args+=( -headers "$headers_command" )
+                    fi
+                    if [ -n "$cookies" ] 
+                    then
+                        args+=( -cookies "$cookies" )
+                    fi
+                elif [[ $stream_link =~ ^icecast?:// ]]
+                then
+                    args+=( -user_agent "$user_agent" )
                 fi
 
                 if [ "$encrypt_yn" == "yes" ]
@@ -2731,43 +2807,22 @@ HlsStreamCreatorPlus()
                     else
                         echo -e "$key_name.key\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
                     fi
-                    if [ "${stream_link:0:4}" == "http" ] 
-                    then
-                        PrepTerm
-                        $FFMPEG $proxy_command -user_agent "$user_agent" -headers "$headers_command" -cookies "$cookies" $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
-                        -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-                        -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$seg_length" \
-                        -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
-                        $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_path$output_name.ts" "$m3u8_list" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
-                        WaitTerm
-                    else
-                        PrepTerm
-                        $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
-                        -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-                        -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$seg_length" \
-                        -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
-                        $hls_flags_command -hls_segment_filename "$output_dir_root/$seg_dir_path$output_name.ts" "$m3u8_list" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
-                        WaitTerm
-                    fi
+
+                    PrepTerm
+                    $FFMPEG ${args[@]+"${args[@]}"} $input_flags -i "$stream_link" $map_command -y \
+                    -vcodec "$video_codec" -acodec "$audio_codec" $quality_command $bitrates_command $resolution_command \
+                    -threads 0 -flags -global_header $output_flags -f hls -hls_time "$seg_length" \
+                    -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
+                    $hls_flags_command $hls_seg_filename_command "$m3u8_list" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                    WaitTerm
                 else
-                    if [ "${stream_link:0:4}" == "http" ] 
-                    then
-                        PrepTerm
-                        $FFMPEG $proxy_command -user_agent "$user_agent" -headers "$headers_command" -cookies "$cookies" $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
-                        -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-                        -threads 0 -flags -global_header -f segment -segment_list "$m3u8_list" \
-                        -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
-                        $seg_count_command $FFMPEG_FLAGS "$output_dir_root/$seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
-                        WaitTerm
-                    else
-                        PrepTerm
-                        $FFMPEG $proxy_command $FFMPEG_INPUT_FLAGS -i "$stream_link" $map_command -y \
-                        -vcodec "$VIDEO_CODEC" -acodec "$AUDIO_CODEC" $quality_command $bitrates_command $resolution \
-                        -threads 0 -flags -global_header -f segment -segment_list "$m3u8_list" \
-                        -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
-                        $seg_count_command $FFMPEG_FLAGS "$output_dir_root/$seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
-                        WaitTerm
-                    fi
+                    PrepTerm
+                    $FFMPEG ${args[@]+"${args[@]}"} $input_flags -i "$stream_link" $map_command -y \
+                    -vcodec "$video_codec" -acodec "$audio_codec" $quality_command $bitrates_command $resolution_command \
+                    -threads 0 -flags -global_header -f segment -segment_list "$m3u8_list" \
+                    -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
+                    $seg_count_command $output_flags "$output_dir_root/$seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                    WaitTerm
                 fi
             } 201>"$pid_file"
         ;;
@@ -2807,8 +2862,19 @@ HlsStreamCreatorPlus()
 
                 mkdir -p "$delete_on_term"
 
-                resolution=""
-                output_name="${chnl_seg_name}_%05d"
+                chnl_quality_command=""
+                chnl_bitrates_command=""
+                chnl_resolution_command=""
+                chnl_output_name="${chnl_seg_name}_%05d"
+
+                if [ -z "$chnl_seg_dir_name" ] 
+                then
+                    chnl_seg_dir_path=""
+                else
+                    chnl_seg_dir_path="$chnl_seg_dir_name/"
+                fi
+
+                chnl_hls_seg_filename_command="-hls_segment_filename $chnl_output_dir_root/$chnl_seg_dir_path$chnl_output_name.ts"
 
                 if [ -z "$chnl_quality" ]
                 then
@@ -2818,7 +2884,7 @@ HlsStreamCreatorPlus()
                         if [[ $chnl_bitrates == *"-"* ]] 
                         then
                             resolution=${chnl_bitrates#*-}
-                            resolution="-vf scale=${resolution//x/:}"
+                            chnl_resolution_command="-vf scale=${resolution//x/:}"
                             chnl_bitrates=${chnl_bitrates%-*}
                             if [ -n "$chnl_const" ] 
                             then
@@ -2826,11 +2892,11 @@ HlsStreamCreatorPlus()
                             else
                                 chnl_bitrates_command="-b:v ${chnl_bitrates}k"
                             fi
-                            output_name="${chnl_seg_name}_${chnl_bitrates}_%05d"
+                            chnl_output_name="${chnl_seg_name}_${chnl_bitrates}_%05d"
                         elif [[ $chnl_bitrates == *"x"* ]] 
                         then
                             resolution=$chnl_bitrates
-                            resolution="-vf scale=${resolution//x/:}"
+                            chnl_resolution_command="-vf scale=${resolution//x/:}"
                         else
                             if [ -n "$chnl_const" ] 
                             then
@@ -2838,7 +2904,7 @@ HlsStreamCreatorPlus()
                             else
                                 chnl_bitrates_command="-b:v ${chnl_bitrates}k"
                             fi
-                            output_name="${chnl_seg_name}_${chnl_bitrates}_%05d"
+                            chnl_output_name="${chnl_seg_name}_${chnl_bitrates}_%05d"
                         fi
                     fi
                 elif [ -n "$chnl_bitrates" ] 
@@ -2847,26 +2913,26 @@ HlsStreamCreatorPlus()
                     if [[ $chnl_bitrates == *"-"* ]] 
                     then
                         resolution=${chnl_bitrates#*-}
-                        resolution="-vf scale=${resolution//x/:}"
+                        chnl_resolution_command="-vf scale=${resolution//x/:}"
                         chnl_bitrates=${chnl_bitrates%-*}
                         chnl_quality_command="-crf $chnl_quality -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k"
                         if [ "$chnl_video_codec" == "libx265" ]
                         then
-                        chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
+                            chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
                         fi
-                        output_name="${chnl_seg_name}_${chnl_bitrates}_%05d"
+                        chnl_output_name="${chnl_seg_name}_${chnl_bitrates}_%05d"
                     elif [[ $chnl_bitrates == *"x"* ]] 
                     then
                         resolution=$chnl_bitrates
-                        resolution="-vf scale=${resolution//x/:}"
+                        chnl_resolution_command="-vf scale=${resolution//x/:}"
                         chnl_quality_command="-crf $chnl_quality"
                     else
                         chnl_quality_command="-crf $chnl_quality -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k"
                         if [ "$chnl_video_codec" == "libx265" ]
                         then
-                        chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
+                            chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
                         fi
-                        output_name="${chnl_seg_name}_${chnl_bitrates}_%05d"
+                        chnl_output_name="${chnl_seg_name}_${chnl_bitrates}_%05d"
                     fi
                 else
                     chnl_quality_command="-crf $chnl_quality"
@@ -2874,12 +2940,12 @@ HlsStreamCreatorPlus()
 
                 if [ -n "${chnl_video_shift:-}" ] 
                 then
-                    map_command="-itsoffset $chnl_video_shift -i $chnl_stream_link -map 0:v -map 1:a"
+                    chnl_map_command="-itsoffset $chnl_video_shift -i $chnl_stream_link -map 0:v -map 1:a"
                 elif [ -n "${chnl_audio_shift:-}" ] 
                 then
-                    map_command="-itsoffset $chnl_audio_shift -i $chnl_stream_link -map 0:a -map 1:v"
+                    chnl_map_command="-itsoffset $chnl_audio_shift -i $chnl_stream_link -map 0:a -map 1:v"
                 else
-                    map_command=""
+                    chnl_map_command=""
                 fi
 
                 if [ -n "$chnl_live" ] 
@@ -2893,28 +2959,47 @@ HlsStreamCreatorPlus()
                     chnl_hls_flags_command="-hls_flags periodic_rekey"
                 fi
 
-                if [[ $FFMPEG_FLAGS == *"-vf "* ]] && [ -n "$resolution" ]
+                if [[ $chnl_output_flags == *"-vf "* ]] && [ -n "$chnl_resolution_command" ]
                 then
-                    FFMPEG_FLAGS_A=${FFMPEG_FLAGS%-vf *}
-                    FFMPEG_FLAGS_B=${FFMPEG_FLAGS#*-vf }
-                    FFMPEG_FLAGS_C=${FFMPEG_FLAGS_B%% *}
-                    FFMPEG_FLAGS_B=${FFMPEG_FLAGS_B#* }
-                    FFMPEG_FLAGS="$FFMPEG_FLAGS_A $FFMPEG_FLAGS_B"
-                    resolution="-vf $FFMPEG_FLAGS_C,${resolution#*-vf }"
-                fi
-
-                if [ -z "$chnl_seg_dir_name" ] 
-                then
-                    chnl_seg_dir_path=""
-                else
-                    chnl_seg_dir_path="$chnl_seg_dir_name/"
+                    chnl_output_flags_A=${chnl_output_flags%-vf *}
+                    chnl_output_flags_B=${chnl_output_flags#*-vf }
+                    chnl_output_flags_C=${chnl_output_flags_B%% *}
+                    chnl_output_flags_B=${chnl_output_flags_B#* }
+                    chnl_output_flags="$chnl_output_flags_A $chnl_output_flags_B"
+                    chnl_resolution_command="-vf $chnl_output_flags_C,${chnl_resolution_command#*-vf }"
                 fi
 
                 if [ "${master:-0}" -eq 0 ] 
                 then
-                    m3u8_list="$chnl_output_dir_root/$chnl_playlist_name.m3u8"
+                    chnl_m3u8_list="$chnl_output_dir_root/$chnl_playlist_name.m3u8"
                 else
-                    m3u8_list="$chnl_output_dir_root/${chnl_playlist_name}_master.m3u8"
+                    chnl_m3u8_list="$chnl_output_dir_root/${chnl_playlist_name}_master.m3u8"
+                fi
+
+                args=()
+
+                if [[ $chnl_stream_link =~ ^https?:// ]] 
+                then
+                    if [ -n "$chnl_proxy" ] 
+                    then
+                        args+=( -http_proxy "$chnl_proxy" )
+                    fi
+                    if [ -n "$chnl_user_agent" ] 
+                    then
+                        args+=( -user_agent "$chnl_user_agent" )
+                    fi
+                    if [ -n "$chnl_headers" ] 
+                    then
+                        printf -v chnl_headers_command '%b' "$chnl_headers"
+                        args+=( -headers "$chnl_headers_command" )
+                    fi
+                    if [ -n "$chnl_cookies" ] 
+                    then
+                        args+=( -cookies "$chnl_cookies" )
+                    fi
+                elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
+                then
+                    args+=( -user_agent "$chnl_user_agent" )
                 fi
 
                 if [ "$chnl_encrypt_yn" == "yes" ] 
@@ -2926,44 +3011,23 @@ HlsStreamCreatorPlus()
                     else
                         echo -e "$chnl_key_name.key\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
                     fi
-                    if [ "${chnl_stream_link:0:4}" == "http" ] 
-                    then
-                        # https://stackoverflow.com/questions/23235651/how-can-i-do-ansi-c-quoting-of-an-existing-bash-variable
-                        PrepTerm
-                        $FFMPEG $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies" $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
-                        -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
-                        -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$chnl_seg_length" \
-                        -hls_list_size $chnl_seg_count -hls_delete_threshold $chnl_seg_count -hls_key_info_file "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo" \
-                        $chnl_hls_flags_command -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_path$output_name.ts" "$m3u8_list" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
-                        WaitTerm
-                    else
-                        PrepTerm
-                        $FFMPEG $chnl_proxy_command $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
-                        -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
-                        -threads 0 -flags -global_header $FFMPEG_FLAGS -f hls -hls_time "$chnl_seg_length" \
-                        -hls_list_size $chnl_seg_count -hls_delete_threshold $chnl_seg_count -hls_key_info_file "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo" \
-                        $chnl_hls_flags_command -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_path$output_name.ts" "$m3u8_list" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
-                        WaitTerm
-                    fi
+
+                    # https://stackoverflow.com/questions/23235651/how-can-i-do-ansi-c-quoting-of-an-existing-bash-variable
+                    PrepTerm
+                    $FFMPEG ${args[@]+"${args[@]}"} $chnl_input_flags -i "$chnl_stream_link" $chnl_map_command -y \
+                    -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $chnl_resolution_command \
+                    -threads 0 -flags -global_header $chnl_output_flags -f hls -hls_time "$chnl_seg_length" \
+                    -hls_list_size $chnl_seg_count -hls_delete_threshold $chnl_seg_count -hls_key_info_file "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo" \
+                    $chnl_hls_flags_command $chnl_hls_seg_filename_command "$chnl_m3u8_list" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+                    WaitTerm
                 else
-                    if [ "${chnl_stream_link:0:4}" == "http" ] 
-                    then
-                        PrepTerm
-                        $FFMPEG $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies" $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
-                        -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
-                        -threads 0 -flags -global_header -f segment -segment_list "$m3u8_list" \
-                        -segment_time "$chnl_seg_length" -segment_format mpeg_ts $chnl_live_command \
-                        $chnl_seg_count_command $FFMPEG_FLAGS "$chnl_output_dir_root/$chnl_seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
-                        WaitTerm
-                    else
-                        PrepTerm
-                        $FFMPEG $chnl_proxy_command $FFMPEG_INPUT_FLAGS -i "$chnl_stream_link" $map_command -y \
-                        -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $resolution \
-                        -threads 0 -flags -global_header -f segment -segment_list "$m3u8_list" \
-                        -segment_time "$chnl_seg_length" -segment_format mpeg_ts $chnl_live_command \
-                        $chnl_seg_count_command $FFMPEG_FLAGS "$chnl_output_dir_root/$chnl_seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
-                        WaitTerm
-                    fi
+                    PrepTerm
+                    $FFMPEG ${args[@]+"${args[@]}"} $chnl_input_flags -i "$chnl_stream_link" $chnl_map_command -y \
+                    -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $chnl_resolution_command \
+                    -threads 0 -flags -global_header -f segment -segment_list "$chnl_m3u8_list" \
+                    -segment_time "$chnl_seg_length" -segment_format mpeg_ts $chnl_live_command \
+                    $chnl_seg_count_command $chnl_output_flags "$chnl_output_dir_root/$chnl_seg_dir_path$chnl_output_name.ts" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+                    WaitTerm
                 fi
             } 201>"$pid_file"
         ;;
@@ -3001,14 +3065,14 @@ HlsStreamCreator()
                     --arg user_agent "$user_agent" \
                     --arg headers "$headers" --arg cookies "$cookies" \
                     --arg output_dir_name "$output_dir_name" --arg playlist_name "$playlist_name" \
-                    --arg seg_dir_name "$SEGMENT_DIRECTORY" --arg seg_name "$seg_name" \
+                    --arg seg_dir_name "$seg_dir_name" --arg seg_name "$seg_name" \
                     --arg seg_length "$seg_length" --arg seg_count "$seg_count" \
-                    --arg video_codec "$VIDEO_CODEC" --arg audio_codec "$AUDIO_CODEC" \
+                    --arg video_codec "$video_codec" --arg audio_codec "$audio_codec" \
                     --arg video_audio_shift "$video_audio_shift" --arg quality "$quality" \
                     --arg bitrates "$bitrates" --arg const "$const_yn" \
                     --arg encrypt "$encrypt_yn" --arg encrypt_session "$encrypt_session_yn" \
                     --arg keyinfo_name "$keyinfo_name" --arg key_name "$key_name" \
-                    --arg input_flags "$FFMPEG_INPUT_FLAGS" --arg output_flags "$FFMPEG_FLAGS" \
+                    --arg input_flags "$input_flags" --arg output_flags "$output_flags" \
                     --arg channel_name "$channel_name" --arg sync "$sync_yn" \
                     --arg sync_file "$sync_file" --arg sync_index "$sync_index" \
                     --arg sync_pairs "$sync_pairs" --arg flv_status "off" \
@@ -3071,23 +3135,62 @@ HlsStreamCreator()
 
                 mkdir -p "$delete_on_term"
 
+                if [ -n "$live" ]
+                then
+                    seg_count_command="-c $seg_count"
+                else
+                    seg_count_command=""
+                fi
+
+                if [ -n "$encrypt" ] 
+                then
+                    key_name_command="-K $key_name"
+                else
+                    key_name_command=""
+                fi
+
                 if [ -n "$quality" ] 
                 then
                     quality_command="-q $quality"
+                else
+                    quality_command=""
                 fi
 
                 if [ -n "$bitrates" ] 
                 then
                     bitrates_command="-b $bitrates"
+                else
+                    bitrates_command=""
                 fi
 
-                export http_proxy="$proxy"
+                if [ -n "$seg_dir_name" ] 
+                then
+                    seg_dir_name_command="-S $seg_dir_name"
+                else
+                    seg_dir_name_command=""
+                fi
+
+                if [[ $stream_link =~ ^https?:// ]] 
+                then
+                    export FFMPEG_PROXY=$proxy
+                    export FFMPEG_USER_AGENT=$user_agent
+                    export FFMPEG_HEADERS=$headers
+                    export FFMPEG_COOKIES=$cookies
+                elif [[ $stream_link =~ ^icecast:// ]] 
+                then
+                    export FFMPEG_USER_AGENT=$user_agent
+                fi
+
+                export FFMPEG_INPUT_FLAGS=$input_flags
+                export FFMPEG_FLAGS=$output_flags
+                export AUDIO_CODEC=$audio_codec
+                export VIDEO_CODEC=$video_codec
 
                 PrepTerm
                 $CREATOR_FILE $live -i "$stream_link" -s "$seg_length" \
-                -o "$output_dir_root" $seg_count_command $bitrates_command \
+                -o "$output_dir_root" $seg_count_command $bitrates_command $seg_dir_name_command \
                 -p "$playlist_name" -t "$seg_name" $key_name_command $quality_command \
-                "$const" "$encrypt" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                $const $encrypt > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
                 WaitTerm
             } 201>"$pid_file"
         ;;
@@ -3127,23 +3230,62 @@ HlsStreamCreator()
 
                 mkdir -p "$delete_on_term"
 
+                if [ -n "$chnl_live" ]
+                then
+                    chnl_seg_count_command="-c $chnl_seg_count"
+                else
+                    chnl_seg_count_command=""
+                fi
+
+                if [ -n "$chnl_encrypt" ] 
+                then
+                    chnl_key_name_command="-K $chnl_key_name"
+                else
+                    chnl_key_name_command=""
+                fi
+
                 if [ -n "$chnl_quality" ] 
                 then
                     chnl_quality_command="-q $chnl_quality"
+                else
+                    chnl_quality_command=""
                 fi
 
                 if [ -n "$chnl_bitrates" ] 
                 then
                     chnl_bitrates_command="-b $chnl_bitrates"
+                else
+                    chnl_bitrates_command=""
                 fi
 
-                export http_proxy="$chnl_proxy"
+                if [ -n "$chnl_seg_dir_name" ] 
+                then
+                    chnl_seg_dir_name_command="-S $chnl_seg_dir_name"
+                else
+                    chnl_seg_dir_name_command=""
+                fi
+
+                if [[ $chnl_stream_link =~ ^https?:// ]] 
+                then
+                    export FFMPEG_PROXY="$chnl_proxy"
+                    export FFMPEG_USER_AGENT=$chnl_user_agent
+                    export FFMPEG_HEADERS="$chnl_headers"
+                    export FFMPEG_COOKIES="$chnl_cookies"
+                elif [[ $chnl_stream_link =~ ^icecast:// ]] 
+                then
+                    export FFMPEG_USER_AGENT=$chnl_user_agent
+                fi
+
+                export FFMPEG_INPUT_FLAGS=$chnl_input_flags
+                export FFMPEG_FLAGS=$chnl_output_flags
+                export AUDIO_CODEC=$chnl_audio_codec
+                export VIDEO_CODEC=$chnl_video_codec
 
                 PrepTerm
                 $CREATOR_FILE $chnl_live -i "$chnl_stream_link" -s "$chnl_seg_length" \
-                -o "$chnl_output_dir_root" $chnl_seg_count_command $chnl_bitrates_command \
+                -o "$chnl_output_dir_root" $chnl_seg_count_command $chnl_bitrates_command $chnl_seg_dir_name_command \
                 -p "$chnl_playlist_name" -t "$chnl_seg_name" $chnl_key_name_command $chnl_quality_command \
-                "$chnl_const" "$chnl_encrypt" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+                $chnl_const $chnl_encrypt > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
                 WaitTerm
             } 201>"$pid_file"
         ;;
@@ -3540,6 +3682,7 @@ GetChannelInfo()
         chnl_found=1
         chnl_pid=${chnl_pid#\"}
         chnl_flv_pull_link=${chnl_flv_pull_link%\"}
+
         if [ "$chnl_live_yn" == "no" ]
         then
             chnl_live=""
@@ -3548,12 +3691,13 @@ GetChannelInfo()
             chnl_live="-l"
             chnl_live_text="$green是${normal}"
         fi
+
         chnl_stream_link=${chnl_stream_links%% *}
-        if [ "${chnl_stream_link:0:4}" == "http" ] && [ -n "$chnl_proxy" ]
+
+        if [ -n "$chnl_proxy" ] && { [[ "$chnl_stream_link" =~ ^https?:// ]] || [[ ${chnl_stream_link##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]]; }
         then
             chnl_proxy_command="-http_proxy $chnl_proxy"
         else
-            chnl_proxy=""
             chnl_proxy_command=""
         fi
 
@@ -3583,13 +3727,9 @@ GetChannelInfo()
         then
             chnl_headers="$chnl_headers\r\n"
         fi
+
         chnl_output_dir_root="$LIVE_ROOT/$chnl_output_dir_name"
-        if [ -n "$chnl_live" ]
-        then
-            chnl_seg_count_command="-c $chnl_seg_count"
-        else
-            chnl_seg_count_command=""
-        fi
+
         v_or_a=${chnl_video_audio_shift%_*}
         if [ "$v_or_a" == "v" ] 
         then
@@ -3606,6 +3746,7 @@ GetChannelInfo()
             chnl_video_shift=""
             chnl_audio_shift=""
         fi
+
         if [ "$chnl_const_yn" == "no" ]
         then
             chnl_const=""
@@ -3614,6 +3755,7 @@ GetChannelInfo()
             chnl_const="-C"
             chnl_const_text=" 固定频率:是"
         fi
+
         if [ "$chnl_encrypt_yn" == "no" ]
         then
             chnl_encrypt=""
@@ -3621,12 +3763,6 @@ GetChannelInfo()
         else
             chnl_encrypt="-e"
             chnl_encrypt_text=$green"是"${normal}
-        fi
-        if [ -n "$chnl_encrypt" ] 
-        then
-            chnl_key_name_command="-K $chnl_key_name"
-        else
-            chnl_key_name_command=""
         fi
 
         if [ -z "${monitor:-}" ] 
@@ -3767,7 +3903,7 @@ GetChannelInfoLite()
             chnl_live_text="$green是${normal}"
         fi
         chnl_proxy=${chnls_proxy[i]}
-        if [ "${chnl_stream_link:0:4}" == "http" ] && [ -n "$chnl_proxy" ]
+        if [ -n "$chnl_proxy" ] && { [[ "$chnl_stream_link" =~ ^https?:// ]] || [[ ${chnl_stream_link##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]]; }
         then
             chnl_proxy_command="-http_proxy $chnl_proxy"
         else
@@ -5212,7 +5348,7 @@ AddChannel()
 
     SetLive
 
-    if [ "${stream_link:0:4}" == "http" ] || [[ $stream_link == *"|http"* ]]
+    if [[ $stream_link =~ ^https?:// ]]
     then
         SetProxy
         if [[ $stream_link =~ ^http://([^/]+) ]] 
@@ -5246,13 +5382,6 @@ AddChannel()
     fi
 
     xc_proxy=${xc_proxy:-}
-
-    if [ -n "$proxy" ] 
-    then
-        proxy_command="-http_proxy $proxy"
-    else
-        proxy_command=""
-    fi
 
     SetVideoCodec
     SetAudioCodec
@@ -5319,21 +5448,17 @@ AddChannel()
         if [ -n "$live" ] 
         then
             SetSegCount
-            seg_count_command="-c $seg_count"
         else
             seg_count=$d_seg_count
-            seg_count_command=""
         fi
         SetEncrypt
         if [ -n "$encrypt" ] 
         then
             SetKeyInfoName
             SetKeyName
-            key_name_command="-K $key_name"
         else
             keyinfo_name=$(RandStr)
             key_name=$(RandStr)
-            key_name_command=""
         fi
     fi
 
@@ -5356,9 +5481,7 @@ AddChannel()
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
     FFMPEG="$FFMPEG_ROOT/ffmpeg"
     export FFMPEG
-    AUDIO_CODEC=$audio_codec
-    VIDEO_CODEC=$video_codec
-    SEGMENT_DIRECTORY=$seg_dir_name
+
     if [[ ${input_flags:0:1} == "'" ]] 
     then
         input_flags=${input_flags%\'}
@@ -5369,11 +5492,6 @@ AddChannel()
         output_flags=${output_flags%\'}
         output_flags=${output_flags#\'}
     fi
-    export AUDIO_CODEC
-    export VIDEO_CODEC
-    export SEGMENT_DIRECTORY
-    export FFMPEG_INPUT_FLAGS=$input_flags
-    export FFMPEG_FLAGS=$output_flags
 
     [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
     from="AddChannel"
@@ -5382,8 +5500,6 @@ AddChannel()
         playlist_name seg_dir_name seg_name keyinfo_name key_name input_flags \
         output_flags channel_name sync_file sync_index sync_pairs flv_push_link \
         flv_pull_link
-
-    [ -z "${headers_command:-}" ] && printf -v headers_command '%b' "$headers"
 
     if [ -n "${kind:-}" ] 
     then
@@ -5414,8 +5530,6 @@ AddChannel()
             ( HlsStreamCreator ) > /dev/null 2> /dev/null < /dev/null &
         fi
     fi
-
-    headers_command=""
 
     Println "$info 频道添加成功 !\n"
 }
@@ -5694,7 +5808,7 @@ EditChannelAll()
 
     SetLive
 
-    if [ "${stream_link:0:4}" == "http" ] 
+    if [[ $stream_link =~ ^https?:// ]] 
     then
         SetProxy
         if [[ $stream_link =~ ^http://([^/]+) ]] 
@@ -6157,6 +6271,7 @@ TestXtreamCodesLink()
                 Println "$error 无法连接 $chnl_domain, 请重试!\n" && exit 1
             fi
             chnl_headers="Authorization: Bearer $access_token\r\n"
+            printf -v chnl_headers_command '%b' "$chnl_headers"
             profile=$(curl -s -Lm 10\
                 -H "$chnl_user_agent" \
                 ${xc_host_header[@]+"${xc_host_header[@]}"} \
@@ -6195,7 +6310,6 @@ TestXtreamCodesLink()
                     then
                         Println "$error $chnl_domain 返回错误, 请重试!\n" && exit 1
                     fi
-                    printf -v chnl_headers_command '%b' "$chnl_headers"
                 else
                     create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
                     cmd=$(curl -s -Lm 10 \
@@ -6214,7 +6328,6 @@ TestXtreamCodesLink()
                     else
                         Println "$error $chnl_domain 返回错误, 请重试!\n" && exit 1
                     fi
-                    printf -v chnl_headers_command '%b' "$chnl_headers"
                 fi
 
                 if [[ $chnl_stream_links == *" "* ]] 
@@ -6597,9 +6710,6 @@ StartChannel()
         chnl_input_flags=${chnl_input_flags//-reconnect_at_eof 1/}
     fi
 
-    chnl_quality_command=""
-    chnl_bitrates_command=""
-
     if [ -z "${kind:-}" ] && [ "$chnl_video_codec" == "copy" ] && [ "$chnl_audio_codec" == "copy" ]
     then
         chnl_quality=""
@@ -6628,9 +6738,7 @@ StartChannel()
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
     FFMPEG="$FFMPEG_ROOT/ffmpeg"
     export FFMPEG
-    AUDIO_CODEC=$chnl_audio_codec
-    VIDEO_CODEC=$chnl_video_codec
-    SEGMENT_DIRECTORY=$chnl_seg_dir_name
+
     if [[ ${chnl_input_flags:0:1} == "'" ]] 
     then
         chnl_input_flags=${chnl_input_flags%\'}
@@ -6641,11 +6749,6 @@ StartChannel()
         chnl_output_flags=${chnl_output_flags%\'}
         chnl_output_flags=${chnl_output_flags#\'}
     fi
-    export AUDIO_CODEC
-    export VIDEO_CODEC
-    export SEGMENT_DIRECTORY
-    export FFMPEG_INPUT_FLAGS=$chnl_input_flags
-    export FFMPEG_FLAGS=$chnl_output_flags
 
     [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
     from="StartChannel"
@@ -6658,15 +6761,13 @@ StartChannel()
         chnl_keyinfo_name chnl_key_name chnl_input_flags chnl_output_flags chnl_channel_name \
         chnl_sync_file chnl_sync_index chnl_sync_pairs chnl_flv_push_link chnl_flv_pull_link
 
-    [ -z "${chnl_headers_command:-}" ] && printf -v chnl_headers_command '%b' "$chnl_headers"
-
     if [ -n "${kind:-}" ] 
     then
         if [ "$chnl_status" == "on" ] 
         then
             Println "$error HLS 频道正开启, 走错片场了？\n" && exit 1
         fi
-        FFMPEG_FLAGS=${FFMPEG_FLAGS//-sc_threshold 0/}
+        chnl_output_flags=${chnl_output_flags//-sc_threshold 0/}
         if [ "$kind" == "flv" ] 
         then
             rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.log"
@@ -6706,8 +6807,6 @@ StartChannel()
             fi
         fi
     fi
-
-    chnl_headers_command=""
 
     Println "$info 频道[ $chnl_channel_name ]已开启 !\n"
 }
@@ -10597,7 +10696,7 @@ TsMenu()
             Println "$info 请输入使用的频道文件链接或本地路径: \n"
             read -p "(默认: 取消): " TS_CHANNELS_LINK_OR_FILE
             [ -z "$TS_CHANNELS_LINK_OR_FILE" ] && Println "已取消...\n" && exit 1
-            if [ "${TS_CHANNELS_LINK_OR_FILE:0:4}" == "http" ] 
+            if [[ $TS_CHANNELS_LINK_OR_FILE =~ ^https?:// ]] 
             then
                 TS_CHANNELS_LINK=$TS_CHANNELS_LINK_OR_FILE
             else
@@ -11546,6 +11645,7 @@ MonitorHlsRestartChannel()
                 fi
             fi
             chnl_headers="Authorization: Bearer $access_token\r\n"
+            printf -v chnl_headers_command '%b' "$chnl_headers"
             profile=$(curl -s -Lm 10 \
                 -H "User-Agent: $chnl_user_agent" \
                 ${xc_host_header[@]+"${xc_host_header[@]}"} \
@@ -11644,7 +11744,6 @@ MonitorHlsRestartChannel()
                             continue
                         fi
                     fi
-                    printf -v chnl_headers_command '%b' "$chnl_headers"
                 else
                     create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
                     cmd=$(curl -s -Lm 10 \
@@ -11685,7 +11784,6 @@ MonitorHlsRestartChannel()
                             continue
                         fi
                     fi
-                    printf -v chnl_headers_command '%b' "$chnl_headers"
                 fi
 
                 if [[ $chnl_stream_links == *" "* ]] 
@@ -12102,6 +12200,7 @@ MonitorFlvRestartChannel()
                 fi
             fi
             chnl_headers="Authorization: Bearer $access_token\r\n"
+            printf -v chnl_headers_command '%b' "$chnl_headers"
             profile=$(curl -s -Lm 10 \
                 -H "User-Agent: $chnl_user_agent" \
                 ${xc_host_header[@]+"${xc_host_header[@]}"} \
@@ -12200,7 +12299,6 @@ MonitorFlvRestartChannel()
                             continue
                         fi
                     fi
-                    printf -v chnl_headers_command '%b' "$chnl_headers"
                 else
                     create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
                     cmd=$(curl -s -Lm 10 \
@@ -12241,7 +12339,6 @@ MonitorFlvRestartChannel()
                             continue
                         fi
                     fi
-                    printf -v chnl_headers_command '%b' "$chnl_headers"
                 fi
 
                 if [[ $chnl_stream_links == *" "* ]] 
@@ -12484,6 +12581,7 @@ MonitorTryAccounts()
                         break
                     fi
                     chnl_headers="Authorization: Bearer $access_token\r\n"
+                    printf -v chnl_headers_command '%b' "$chnl_headers"
                     profile=$(curl -s -Lm 10 \
                         -H "User-Agent: $chnl_user_agent" \
                         ${xc_host_header[@]+"${xc_host_header[@]}"} \
@@ -12517,7 +12615,6 @@ MonitorTryAccounts()
                         then
                             continue
                         fi
-                        printf -v chnl_headers_command '%b' "$chnl_headers"
                     else
                         create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
                         cmd=$(curl -s -Lm 10 \
@@ -12536,7 +12633,6 @@ MonitorTryAccounts()
                         else
                             continue
                         fi
-                        printf -v chnl_headers_command '%b' "$chnl_headers"
                     fi
 
                     audio=0
@@ -15157,6 +15253,7 @@ ViewXtreamCodesChnls()
                 Println "$error 无法连接 $domain, 请重试!\n" && exit 1
             fi
             headers="Authorization: Bearer $access_token\r\n"
+            printf -v headers_command '%b' "$headers"
             profile=$(curl -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
                 ${xc_host_header[@]+"${xc_host_header[@]}"} \
@@ -15418,8 +15515,6 @@ ViewXtreamCodesChnls()
                             #    -H "${headers:0:-4}" \
                             #    --cookie "$cookies"
                             Println "$green${xc_chnls_name[xc_chnls_index]}:${normal} $stream_link\n"
-                            #printf -v headers_command '%b' "xc_host: ${BASH_REMATCH[2]}\r\nredirect: ${BASH_REMATCH[3]}\r\n$headers"
-                            printf -v headers_command '%b' "$headers"
                         else
                             create_link_url="$server/portal.php?type=itv&action=create_link&cmd=${xc_chnls_cmd[xc_chnls_index]}&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
 
@@ -15441,7 +15536,6 @@ ViewXtreamCodesChnls()
                             fi
                             stream_link=${stream_link// /}
                             Println "$green${xc_chnls_name[xc_chnls_index]}:${normal} $stream_link\n"
-                            printf -v headers_command '%b' "$headers"
                         fi
                         if $FFPROBE -i "$stream_link" -user_agent "$user_agent" \
                             -headers "$headers_command" \
@@ -22838,7 +22932,8 @@ AddCloudflareWorker()
                 if [ ! -d "$CF_WORKERS_ROOT/stream_proxy" ] 
                 then
                     wrangler generate "stream_proxy"
-                    wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/stream_proxy.js" -qO "$CF_WORKERS_ROOT/stream_proxy/index.js"
+                    wget --timeout=10 --tries=1 --no-check-certificate "$STREAM_PROXY_LINK" -qO "$CF_WORKERS_ROOT/stream_proxy/index.js" \
+                    || wget --timeout=10 --tries=3 --no-check-certificate "$STREAM_PROXY_LINK_BACKUP" -qO "$CF_WORKERS_ROOT/stream_proxy/index.js"
                 fi
 
                 SetCloudflareWorkerName
@@ -22850,7 +22945,8 @@ AddCloudflareWorker()
                 if [ ! -d "$CF_WORKERS_ROOT/xtream_codes_proxy" ] 
                 then
                     wrangler generate "xtream_codes_proxy"
-                    wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/xtream_codes_proxy.js" -qO "$CF_WORKERS_ROOT/xtream_codes_proxy/index.js"
+                    wget --timeout=10 --tries=1 --no-check-certificate "$XTREAM_CODES_PROXY_LINK" -qO "$CF_WORKERS_ROOT/xtream_codes_proxy/index.js" \
+                    || wget --timeout=10 --tries=3 --no-check-certificate "$XTREAM_CODES_PROXY_LINK_BACKUP" -qO "$CF_WORKERS_ROOT/xtream_codes_proxy/index.js"
                 fi
 
                 SetCloudflareWorkerName
@@ -23203,11 +23299,21 @@ DeployCloudflareWorker()
         fi
 
         Println "$info 更新 ${CF_WORKERS_FILE##*/}"
-        wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/${CF_WORKERS_FILE##*/}" -qO "$CF_WORKERS_FILE"
+        wget --timeout=10 --tries=1 --no-check-certificate "$CF_WORKERS_LINK" -qO "$CF_WORKERS_FILE" \
+        || wget --timeout=10 --tries=3 --no-check-certificate "$CF_WORKERS_LINK_BACKUP" -qO "$CF_WORKERS_FILE"
 
-        cf_user_token=$(python3 \
-            "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o api_token
-        ) || cf_user_token=""
+        for((i=0;i<3;i++));
+        do
+            if cf_user_token=$(python3 \
+                "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o api_token
+            ) 
+            then
+                break
+            else
+                sleep 10
+            fi
+        done
+
         if [ -z "$cf_user_token" ] 
         then
             Println "$error 无法获取用户 ID, 账号或密码错误 或者 cloudflare 暂时限制登录\n"
@@ -23359,13 +23465,20 @@ DeployCloudflareWorker()
 
         if [ "$sh_debug" -eq 0 ] 
         then
-            curl -s -L "$FFMPEG_MIRROR_LINK/${CF_WORKERS_FILE##*/}" -o "$CF_WORKERS_FILE"
+            curl -s -Lm 10 "$CF_WORKERS_LINK" -o "$CF_WORKERS_FILE" \
+            || curl -s -Lm 20 "$CF_WORKERS_LINK_BACKUP" -o "$CF_WORKERS_FILE"
         fi
 
-        if [[ $(python3 "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o add_subdomain) == "ok" ]] 
-        then
-            CF_API_TOKEN=$cf_user_token wrangler publish
-        fi
+        for((i=0;i<3;i++));
+        do
+            if [[ $(python3 "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o add_subdomain) == "ok" ]] 
+            then
+                CF_API_TOKEN=$cf_user_token wrangler publish
+                break
+            else
+                sleep 10
+            fi
+        done
     fi
 }
 
@@ -24016,9 +24129,18 @@ MonitorCloudflareWorkers()
 
                 if [ "$dead_email" -eq 0 ] 
                 then
-                    request_count_json=$(python3 \
-                        "$CF_WORKERS_FILE" -e "$cf_zone_user_email" -p "$cf_zone_user_pass" -o request_count
-                    )
+                    for((i=0;i<3;i++));
+                    do
+                        if request_count_json=$(python3 \
+                            "$CF_WORKERS_FILE" -e "$cf_zone_user_email" -p "$cf_zone_user_pass" -o request_count
+                        ) 
+                        then
+                            break
+                        else
+                            sleep 10
+                        fi
+                    done
+
                     IFS=" " read -r success request_count api_token < <($JQ_FILE -r '[.success,.result.totals.requestCount,.api_token]|join(" ")' <<< "$request_count_json")
 
                     if [ "$success" == "true" ] && [ -n "$request_count" ] 
@@ -24047,9 +24169,18 @@ MonitorCloudflareWorkers()
 
                         if [ -z "${cf_users_token[i]}" ] 
                         then
-                            cf_user_token=$(python3 \
-                                "$CF_WORKERS_FILE" -e "${cf_users_email[i]}" -p "${cf_users_pass[i]}" -o api_token
-                            ) || cf_user_token=""
+                            for((index=0;index<3;index++));
+                            do
+                                if cf_user_token=$(python3 \
+                                    "$CF_WORKERS_FILE" -e "${cf_users_email[i]}" -p "${cf_users_pass[i]}" -o api_token
+                                )
+                                then
+                                    break
+                                else
+                                    sleep 10
+                                fi
+                            done
+
                             if [ -n "$cf_user_token" ] 
                             then
                                 cf_users_token[i]=$cf_user_token
@@ -24108,9 +24239,18 @@ MonitorCloudflareWorkers()
                             MonitorCloudflareWorkersUpdateRoutes
                         done
 
-                        request_count_json=$(python3 \
-                            "$CF_WORKERS_FILE" -e "$cf_user_email_new" -p "$cf_user_pass_new" -o request_count
-                        )
+                        for((index=0;index<3;index++));
+                        do
+                            if request_count_json=$(python3 \
+                                "$CF_WORKERS_FILE" -e "$cf_user_email_new" -p "$cf_user_pass_new" -o request_count
+                            ) 
+                            then
+                                break
+                            else
+                                sleep 10
+                            fi
+                        done
+
                         IFS=" " read -r success request_count api_token < <($JQ_FILE -r '[.success,.result.totals.requestCount,.api_token]|join(" ")' <<< "$request_count_json")
 
                         if [ "$success" == "true" ] && [ -n "$request_count" ] 
@@ -24152,9 +24292,18 @@ MonitorCloudflareWorkers()
                             cf_user_token=${cf_zones_user_token[zone_index]}
                             MonitorCloudflareWorkersUpdateRoutes
                         else
-                            cf_user_token=$(python3 \
-                                "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o api_token
-                            ) || cf_user_token=""
+                            for((index=0;index<3;index++));
+                            do
+                                if cf_user_token=$(python3 \
+                                    "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o api_token
+                                ) 
+                                then
+                                    break
+                                else
+                                    sleep 10
+                                fi
+                            done
+
                             if [ -n "$cf_user_token" ] 
                             then
                                 cf_zones_user_token[zone_index]=$cf_user_token
@@ -24668,9 +24817,10 @@ EnableCloudflareWorkersMonitor()
     done
 
     Println "$info 更新 ${CF_WORKERS_FILE##*/} ..."
-    if [ "$sh_debug" -eq 0 ] 
+    if [ "$sh_debug" -eq 0 ] && [ ! -e "$IPTV_ROOT/VIP" ]
     then
-        curl -s -L "$FFMPEG_MIRROR_LINK/${CF_WORKERS_FILE##*/}" -o "$CF_WORKERS_FILE"
+        curl -s -Lm 10 "$CF_WORKERS_LINK" -o "$CF_WORKERS_FILE" \
+        || curl -s -Lm 20 "$CF_WORKERS_LINK_BACKUP" -o "$CF_WORKERS_FILE"
     fi
 
     [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$CF_WORKERS_ROOT/monitor.log"
@@ -28424,7 +28574,8 @@ EnableVip()
                     fi
                 fi
                 mkdir -p "$C_ROOT"
-                wget --timeout=10 --tries=3 --no-check-certificate "${FFMPEG_MIRROR_LINK%/*}/c/md5sum.c" -qO "$MD5SUM_FILE.c"
+                wget --timeout=10 --tries=1 --no-check-certificate "$MD5SUM_LINK" -qO "$MD5SUM_FILE.c" \
+                || wget --timeout=10 --tries=3 --no-check-certificate "$MD5SUM_LINK_BACKUP" -qO "$MD5SUM_FILE.c"
                 gcc -Wall -O3 -o "$MD5SUM_FILE" "$MD5SUM_FILE.c"
                 Println "$info md5sum 安装成功"
             fi
@@ -28768,6 +28919,7 @@ UpdateSelf()
             rm -rf "/tmp/monitor.lockdir"
             rm -rf "$FFMPEG_LOG_ROOT/"*.lock
         fi
+
         Println "$info 更新中, 请稍等...\n"
         printf -v update_date '%(%m-%d)T'
         cp -f "$CHANNELS_FILE" "${CHANNELS_FILE}_$update_date"
@@ -30558,12 +30710,6 @@ else
                 fi
             fi
 
-            if [ -n "$proxy" ] 
-            then
-                proxy_command="-http_proxy $proxy"
-            else
-                proxy_command=""
-            fi
             user_agent=$d_user_agent
             headers=$d_headers
             if [ -n "$headers" ] && [[ ! $headers == *"\r\n" ]]
@@ -30575,21 +30721,18 @@ else
             output_dir_root="$LIVE_ROOT/$output_dir_name"
             playlist_name=${playlist_name:-$(RandPlaylistName)}
             seg_dir_name=${seg_dir_name:-$d_seg_dir_name}
-            export SEGMENT_DIRECTORY=$seg_dir_name
             seg_name=${seg_name:-$playlist_name}
             seg_length=${seg_length:-$d_seg_length}
             seg_count=${seg_count:-$d_seg_count}
-            export AUDIO_CODEC=${audio_codec:-$d_audio_codec}
-            export VIDEO_CODEC=${video_codec:-$d_video_codec}
+            audio_codec=${audio_codec:-$d_audio_codec}
+            video_codec=${video_codec:-$d_video_codec}
 
             live_yn=${live_yn:-yes}
             if [ "$live_yn" == "yes" ] 
             then
                 live="-l"
-                seg_count_command="-c $seg_count"
             else
                 live=""
-                seg_count_command=""
             fi
 
             video_audio_shift=${video_audio_shift:-}
@@ -30607,7 +30750,7 @@ else
             quality_command=""
             bitrates_command=""
 
-            if [ -z "${kind:-}" ] && [ "$VIDEO_CODEC" == "copy" ] && [ "$AUDIO_CODEC" == "copy" ]
+            if [ -z "${kind:-}" ] && [ "$video_codec" == "copy" ] && [ "$audio_codec" == "copy" ]
             then
                 quality=""
                 bitrates=""
@@ -30668,13 +30811,6 @@ else
             key_name=${key_name:-$d_key_name}
             key_name=${key_name:-$(RandStr)}
 
-            if [ -n "$encrypt" ] 
-            then
-                key_name_command="-K $key_name"
-            else
-                key_name_command=""
-            fi
-
             if [ "${stream_link:0:4}" == "rtmp" ] || [ "${stream_link:0:1}" == "/" ]
             then
                 d_input_flags=${d_input_flags//-timeout 2000000000/}
@@ -30695,7 +30831,6 @@ else
                 input_flags=${input_flags%\'}
                 input_flags=${input_flags#\'}
             fi
-            export FFMPEG_INPUT_FLAGS=$input_flags
 
             if [ "${output_flags:-}" == "omit" ] 
             then
@@ -30709,7 +30844,6 @@ else
                 output_flags=${output_flags%\'}
                 output_flags=${output_flags#\'}
             fi
-            export FFMPEG_FLAGS=$output_flags
 
             channel_name=${channel_name:-$playlist_name}
             sync_yn=$d_sync_yn
