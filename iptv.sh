@@ -20,15 +20,14 @@
 #     -t  段名称(前缀)(默认: 跟m3u8名称相同)
 #     -a  音频编码(默认: aac) (不需要转码时输入 copy)
 #     -v  视频编码(默认: libx264) (不需要转码时输入 copy)
-#     -f  画面或声音延迟(格式如:  v_3 画面延迟3秒, a_2 声音延迟2秒
-#         使用此功能*暂时*会忽略部分参数, 画面声音不同步时使用)
-#     -q  crf视频质量(如果同时设置了输出视频比特率, 则优先使用crf视频质量)(数值0~63 越大质量越差)
-#         (默认: 不设置crf视频质量值)
+#     -f  画面或声音延迟(格式如:  v_3 画面延迟3秒, a_2 声音延迟2秒 画面声音不同步时使用)
+#     -q  crf 值(如果同时设置了输出视频比特率, 则优先使用 crf 值控制视频质量)(数值 0~63 越大质量越差), 多个 crf 用逗号分隔
+#         (默认: 不设置 crf 值)
 #     -b  输出视频的比特率(kb/s)(默认: 900-1280x720)
 #         如果已经设置crf视频质量值, 则比特率用于 -maxrate -bufsize
 #         如果没有设置crf视频质量值, 则可以继续设置是否固定码率
 #         多个比特率用逗号分隔(注意-如果设置多个比特率, 就是生成自适应码流)
-#         同时可以指定输出的分辨率(比如: -b 600-600x400,900-1280x720)
+#         同时可以指定输出的分辨率(比如: -b 800-640x360,1000-960x540,1500-1280x720)
 #         可以输入 omit 省略此选项
 #     -C  固定码率(只有在没有设置crf视频质量的情况下才有效)(默认: 否)
 #     -e  加密段(默认: 不加密)
@@ -45,7 +44,7 @@
 #         如果输入的直播源是 hls 链接, 需去除 -reconnect_at_eof 1
 #         如果输入的直播源是 rtmp 或本地链接, 需去除 -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000
 #     -n  ffmpeg 额外的 输出参数, 可以输入 omit 省略此选项
-#         (默认: -g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main)
+#         (默认: -g 50 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main)
 #
 # 举例:
 #     使用crf值控制视频质量: 
@@ -1654,7 +1653,7 @@ Install()
             --arg encrypt_session "no" \
             --arg keyinfo_name '' --arg key_name '' \
             --arg input_flags "-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -rw_timeout 10000000 -y -nostats -nostdin -hide_banner -loglevel error" \
-            --arg output_flags "-g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main" --arg sync "yes" \
+            --arg output_flags "-g 50 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main" --arg sync "yes" \
             --arg sync_file '' --arg sync_index "data:0:channels" \
             --arg sync_pairs "chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live" --arg schedule_file '' \
             --arg flv_delay_seconds 20 --arg flv_restart_nums 20 \
@@ -2336,7 +2335,7 @@ FlvStreamCreator()
                         resolution=${bitrates#*-}
                         resolution_command="-vf scale=${resolution//x/:}"
                         bitrates=${bitrates%-*}
-                        quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
+                        quality_command="-crf ${quality%%,*} -maxrate ${bitrates}k -bufsize ${bitrates}k"
                         if [ "$video_codec" == "libx265" ]
                         then
                             quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
@@ -2345,16 +2344,16 @@ FlvStreamCreator()
                     then
                         resolution=$bitrates
                         resolution_command="-vf scale=${resolution//x/:}"
-                        quality_command="-crf $quality"
+                        quality_command="-crf ${quality%%,*}"
                     else
-                        quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
+                        quality_command="-crf ${quality%%,*} -maxrate ${bitrates}k -bufsize ${bitrates}k"
                         if [ "$video_codec" == "libx265" ]
                         then
                             quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
                         fi
                     fi
                 else
-                    quality_command="-crf $quality"
+                    quality_command="-crf ${quality%%,*}"
                 fi
 
                 if [ -n "${video_shift:-}" ] 
@@ -2481,7 +2480,7 @@ FlvStreamCreator()
                         resolution=${chnl_bitrates#*-}
                         chnl_resolution_command="-vf scale=${resolution//x/:}"
                         chnl_bitrates=${chnl_bitrates%-*}
-                        chnl_quality_command="-crf $chnl_quality -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k"
+                        chnl_quality_command="-crf ${chnl_quality%%,*} -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k"
                         if [ "$chnl_video_codec" == "libx265" ]
                         then
                             chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
@@ -2490,16 +2489,16 @@ FlvStreamCreator()
                     then
                         resolution=$chnl_bitrates
                         chnl_resolution_command="-vf scale=${resolution//x/:}"
-                        chnl_quality_command="-crf $chnl_quality"
+                        chnl_quality_command="-crf ${chnl_quality%%,*}"
                     else
-                        chnl_quality_command="-crf $chnl_quality -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k"
+                        chnl_quality_command="-crf ${chnl_quality%%,*} -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k"
                         if [ "$chnl_video_codec" == "libx265" ]
                         then
                             chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
                         fi
                     fi
                 else
-                    chnl_quality_command="-crf $chnl_quality"
+                    chnl_quality_command="-crf ${chnl_quality%%,*}"
                 fi
 
                 if [ -n "${chnl_video_shift:-}" ] 
@@ -2658,11 +2657,6 @@ HlsStreamCreatorPlus()
 
                 mkdir -p "$delete_on_term"
 
-                quality_command=""
-                bitrates_command=""
-                resolution_command=""
-                output_name="${seg_name}_%05d"
-
                 if [ -z "$seg_dir_name" ] 
                 then
                     seg_dir_path=""
@@ -2670,106 +2664,203 @@ HlsStreamCreatorPlus()
                     seg_dir_path="$seg_dir_name/"
                 fi
 
-                hls_seg_filename_command="-hls_segment_filename $output_dir_root/$seg_dir_path$output_name.ts"
+                variants_command=()
+                var_stream_map=()
+
+                if [ -n "${video_shift:-}" ] 
+                then
+                    map_command+=( -itsoffset $video_shift -i "$stream_link" )
+                elif [ -n "${audio_shift:-}" ] 
+                then
+                    if [ "$audio_codec" == "copy" ] 
+                    then
+                        map_command+=( -itsoffset $audio_shift -i "$stream_link" )
+                    else
+                        map_command=()
+                    fi
+                else
+                    map_command=()
+                fi
 
                 if [ -z "$quality" ]
                 then
                     if [ -n "$bitrates" ] 
                     then
-                        bitrates=${bitrates%%,*}
-                        if [[ $bitrates == *"-"* ]] 
-                        then
-                            resolution=${bitrates#*-}
-                            resolution_command="-vf scale=${resolution//x/:}"
-                            bitrates=${bitrates%-*}
-                            if [ -n "$const" ] 
+                        IFS="," read -r -a variants <<< "$bitrates"
+
+                        hls_master_list=""
+
+                        for((i=0;i<${#variants[@]};i++));
+                        do
+                            variant=${variants[i]}
+                            if [[ $variant == *"-"* ]] 
                             then
-                                bitrates_command="-b:v ${bitrates}k -bufsize ${bitrates}k -minrate ${bitrates}k -maxrate ${bitrates}k"
-                            else
-                                bitrates_command="-b:v ${bitrates}k"
-                            fi
-                            output_name="${seg_name}_${bitrates}_%05d"
-                        elif [[ $bitrates == *"x"* ]] 
-                        then
-                            resolution=$bitrates
-                            resolution_command="-vf scale=${resolution//x/:}"
-                        else
-                            if [ -n "$const" ] 
+                                bitrates=${variant%-*}
+                                resolution=${variant#*-}
+
+                                if [ -n "$const" ] 
+                                then
+                                    variants_command+=( -b:v:$i ${bitrates}k -bufsize:v:$i ${bitrates}k -minrate:v:$i ${bitrates}k -maxrate:v:$i ${bitrates}k )
+                                else
+                                    variants_command+=( -b:v:$i ${bitrates}k )
+                                fi
+
+                                variants_command+=( -s:v:$i $resolution )
+                                hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((bitrates*1000)),RESOLUTION=$resolution\n"
+                            elif [[ $variant == *"x"* ]] 
                             then
-                                bitrates_command="-b:v ${bitrates}k -bufsize ${bitrates}k -minrate ${bitrates}k -maxrate ${bitrates}k"
+                                variants_command+=( -s:v:$i $variant )
+                                hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=$variant\n"
                             else
-                                bitrates_command="-b:v ${bitrates}k"
+                                if [ -n "$const" ] 
+                                then
+                                    variants_command+=( -b:v:$i ${variant}k -bufsize:v:$i ${variant}k -minrate:v:$i ${variant}k -maxrate:v:$i ${variant}k )
+                                else
+                                    variants_command+=( -b:v:$i ${variant}k )
+                                fi
+                                hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((variant*1000))\n"
                             fi
-                            output_name="${seg_name}_${bitrates}_%05d"
-                        fi
+                            hls_master_list="$hls_master_list${playlist_name}_$variant.m3u8\n\n"
+                            if [ -n "${video_shift:-}" ] 
+                            then
+                                variants_command+=( -map 0:v -map 1:a )
+                            elif [ -n "${audio_shift:-}" ] 
+                            then
+                                if [ "$audio_codec" == "copy" ] 
+                                then
+                                    variants_command+=( -map 1:v -map 0:a )
+                                else
+                                    variants_command+=( -map 0:v -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
+                                fi
+                            else
+                                variants_command+=( -map 0:v -map 0:a )
+                            fi
+                            var_stream_map+=( v:$i,a:$i,name:$variant )
+                        done
                     fi
-                elif [ -n "$bitrates" ] 
-                then
-                    bitrates=${bitrates%%,*}
-                    if [[ $bitrates == *"-"* ]] 
+                else
+                    IFS="," read -r -a qualities <<< "$quality"
+                    if [ -n "$bitrates" ] 
                     then
-                        resolution=${bitrates#*-}
-                        resolution_command="-vf scale=${resolution//x/:}"
-                        bitrates=${bitrates%-*}
-                        quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
-                        if [ "$video_codec" == "libx265" ]
-                        then
-                            quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
-                        fi
-                        output_name="${seg_name}_${bitrates}_%05d"
-                    elif [[ $bitrates == *"x"* ]] 
-                    then
-                        resolution=$bitrates
-                        resolution_command="-vf scale=${resolution//x/:}"
-                        quality_command="-crf $quality"
+                        IFS="," read -r -a variants <<< "$bitrates"
+
+                        hls_master_list=""
+
+                        for((i=0;i<${#variants[@]};i++));
+                        do
+                            variant=${variants[i]}
+                            if [[ $variant == *"-"* ]] 
+                            then
+                                bitrates=${variant%-*}
+                                resolution=${variant#*-}
+
+                                variants_command+=( -crf:v:$i ${qualities[i]:-${quality[0]}} -bufsize:v:$i ${bitrates}k -maxrate:v:$i ${bitrates}k )
+
+                                if [ "$video_codec" == "libx265" ]
+                                then
+                                    variants_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${bitrates}k --vbv-bufsize:v:$i ${bitrates}k )
+                                fi
+
+                                variants_command+=( -s:v:$i $resolution )
+                                hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((bitrates*1000)),RESOLUTION=$resolution\n"
+                            elif [[ $variant == *"x"* ]] 
+                            then
+                                variants_command+=( -crf:v:$i ${qualities[i]:-${quality[0]}} -s:v:$i $variant )
+                                hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=$variant\n"
+                            else
+                                variants_command+=( -crf:v:$i ${qualities[i]:-${quality[0]}} -bufsize:v:$i ${variant}k -maxrate:v:$i ${variant}k )
+
+                                if [ "$video_codec" == "libx265" ]
+                                then
+                                    variants_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${variant}k --vbv-bufsize:v:$i ${variant}k )
+                                fi
+
+                                hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((variant*1000))\n"
+                            fi
+                            hls_master_list="$hls_master_list${playlist_name}_crf_${qualities[i]:-${quality[0]}}_$variant.m3u8\n\n"
+                            if [ -n "${video_shift:-}" ] 
+                            then
+                                variants_command+=( -map 0:v -map 1:a )
+                            elif [ -n "${audio_shift:-}" ] 
+                            then
+                                if [ "$audio_codec" == "copy" ] 
+                                then
+                                    variants_command+=( -map 1:v -map 0:a )
+                                else
+                                    variants_command+=( -map 0:v -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
+                                fi
+                            else
+                                variants_command+=( -map 0:v -map 0:a )
+                            fi
+                            var_stream_map+=( v:$i,a:$i,name:crf_${qualities[i]:-${quality[0]}}_$variant )
+                        done
                     else
-                        quality_command="-crf $quality -maxrate ${bitrates}k -bufsize ${bitrates}k"
-                        if [ "$video_codec" == "libx265" ]
-                        then
-                            quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
-                        fi
-                        output_name="${seg_name}_${bitrates}_%05d"
+                        hls_master_list=""
+                        for((i=0;i<${#qualities[@]};i++));
+                        do
+                            variants_command+=( -crf:v:$i ${qualities[i]} )
+                            if [ -n "${video_shift:-}" ] 
+                            then
+                                variants_command+=( -map 0:v -map 1:a )
+                            elif [ -n "${audio_shift:-}" ] 
+                            then
+                                if [ "$audio_codec" == "copy" ] 
+                                then
+                                    variants_command+=( -map 1:v -map 0:a )
+                                else
+                                    variants_command+=( -map 0:v -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
+                                fi
+                            else
+                                variants_command+=( -map 0:v -map 0:a )
+                            fi
+                            var_stream_map+=( v:$i,a:$i,name:crf_${qualities[i]} )
+                            hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$(((22-${qualities[i]})*100000+4200000))\n"
+                            hls_master_list="$hls_master_list${playlist_name}_crf_${qualities[i]}.m3u8\n\n"
+                        done
                     fi
-                else
-                    quality_command="-crf $quality"
                 fi
 
-                if [ -n "${video_shift:-}" ] 
+                hls_flags_command=()
+                segment_flags_command=()
+
+                if [ -n "$live" ] 
                 then
-                    map_command="-itsoffset $video_shift -i $stream_link -map 0:v -map 1:a"
-                elif [ -n "${audio_shift:-}" ] 
-                then
-                    map_command="-itsoffset $audio_shift -i $stream_link -map 0:a -map 1:v"
+                    segment_flags_command+=( -segment_list_flags +live -segment_list_size $seg_count -segment_wrap $((seg_count * 2)) )
+                    hls_flags_command+=( -hls_flags periodic_rekey+delete_segments )
                 else
-                    map_command=""
+                    hls_flags_command+=( -hls_flags periodic_rekey )
                 fi
 
-                if [[ $output_flags == *"-vf "* ]] && [ -n "$resolution_command" ]
+                if [ -n "${var_stream_map:-}" ] 
                 then
-                    output_flags_A=${output_flags%-vf *}
-                    output_flags_B=${output_flags#*-vf }
-                    output_flags_C=${output_flags_B%% *}
-                    output_flags_B=${output_flags_B#* }
-                    output_flags="$output_flags_A $output_flags_B"
-                    resolution_command="-vf $output_flags_C,${resolution_command#*-vf }"
-                fi
-
-                if [ "$live_yn" == "yes" ] 
-                then
-                    live_command="-segment_list_flags +live"
-                    seg_count_command="-segment_list_size $seg_count -segment_wrap $((seg_count * 2))"
-                    hls_flags_command="-hls_flags periodic_rekey+delete_segments"
+                    var_stream_map_command=( -var_stream_map "${var_stream_map[*]}" )
+                    hls_flags_command+=( -hls_segment_filename $output_dir_root/$seg_dir_path${seg_name}_%v_%05d.ts )
                 else
-                    live_command=""
-                    seg_count_command=""
-                    hls_flags_command="-hls_flags periodic_rekey"
+                    var_stream_map_command=()
+                    hls_flags_command+=( -hls_segment_filename $output_dir_root/$seg_dir_path${seg_name}_%05d.ts )
                 fi
 
                 if [ "${master:-0}" -eq 0 ] 
                 then
-                    m3u8_list="$output_dir_root/$playlist_name.m3u8"
+                    if [ -n "${var_stream_map:-}" ] 
+                    then
+                        hls_flags_command+=( $output_dir_root/${playlist_name}_%v.m3u8 )
+                    else
+                        hls_flags_command+=( $output_dir_root/$playlist_name.m3u8 )
+                    fi
+                    if [ -n "${hls_master_list:-}" ] 
+                    then
+                        echo -e "#EXTM3U\n#EXT-X-VERSION:3\n$hls_master_list" > $output_dir_root/$playlist_name.m3u8
+                    fi
                 else
-                    m3u8_list="$output_dir_root/${playlist_name}_master.m3u8"
+                    if [[ $quality == *","* ]] || { [ -n "${variants:-}" ] && [[ ${#variants[@]} -gt 1 ]]; }
+                    then
+                        hls_flags_command+=( -master_pl_name ${playlist_name}_master.m3u8 $output_dir_root/${playlist_name}_%v.m3u8 )
+                        [ "$encrypt_yn" == "no" ] && echo -e "#EXTM3U\n#EXT-X-VERSION:3\n$hls_master_list" > $output_dir_root/${playlist_name}_master.m3u8
+                    else
+                        hls_flags_command+=( $output_dir_root/${playlist_name}_%v.m3u8 )
+                        echo -e "#EXTM3U\n#EXT-X-VERSION:3\n$hls_master_list" > $output_dir_root/${playlist_name}_master.m3u8
+                    fi
                 fi
 
                 args=()
@@ -2798,7 +2889,7 @@ HlsStreamCreatorPlus()
                     args+=( -user_agent "$user_agent" )
                 fi
 
-                if [ "$encrypt_yn" == "yes" ]
+                if [ "$encrypt_yn" == "yes" ] || [[ $quality == *","* ]] || { [ -n "${variants:-}" ] && [[ ${#variants[@]} -gt 1 ]]; }
                 then
                     openssl rand 16 > "$output_dir_root/$key_name.key"
                     if [ "$encrypt_session_yn" == "yes" ] 
@@ -2809,19 +2900,25 @@ HlsStreamCreatorPlus()
                     fi
 
                     PrepTerm
-                    $FFMPEG ${args[@]+"${args[@]}"} $input_flags -i "$stream_link" $map_command -y \
-                    -vcodec "$video_codec" -acodec "$audio_codec" $quality_command $bitrates_command $resolution_command \
-                    -threads 0 -flags -global_header $output_flags -f hls -hls_time "$seg_length" \
-                    -hls_list_size $seg_count -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
-                    $hls_flags_command $hls_seg_filename_command "$m3u8_list" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                    $FFMPEG ${args[@]+"${args[@]}"} $input_flags -i "$stream_link" ${map_command[@]+"${map_command[@]}"} -y \
+                    -vcodec "$video_codec" -acodec "$audio_codec" \
+                    -threads 0 -flags -global_header $output_flags \
+                    ${variants_command[@]+"${variants_command[@]}"} \
+                    -f hls ${var_stream_map_command[@]+"${var_stream_map_command[@]}"} \
+                    -hls_time "$seg_length" -hls_list_size $seg_count \
+                    -hls_delete_threshold $seg_count -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" \
+                    ${hls_flags_command[@]+"${hls_flags_command[@]}"} > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
                     WaitTerm
                 else
                     PrepTerm
-                    $FFMPEG ${args[@]+"${args[@]}"} $input_flags -i "$stream_link" $map_command -y \
-                    -vcodec "$video_codec" -acodec "$audio_codec" $quality_command $bitrates_command $resolution_command \
-                    -threads 0 -flags -global_header -f segment -segment_list "$m3u8_list" \
-                    -segment_time "$seg_length" -segment_format mpeg_ts $live_command \
-                    $seg_count_command $output_flags "$output_dir_root/$seg_dir_path$output_name.ts" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+                    $FFMPEG ${args[@]+"${args[@]}"} $input_flags -i "$stream_link" ${map_command[@]+"${map_command[@]}"} -y \
+                    -vcodec "$video_codec" -acodec "$audio_codec" \
+                    -threads 0 -flags -global_header $output_flags \
+                    ${variants_command[@]+"${variants_command[@]}"} \
+                    -f segment ${var_stream_map_command[@]+"${var_stream_map_command[@]}"} \
+                    -segment_time "$seg_length" -segment_format mpeg_ts \
+                    -segment_list $output_dir_root/$playlist_name.m3u8 $output_dir_root/$seg_dir_path${seg_name}_%05d.ts \
+                    ${segment_flags_command[@]+"${segment_flags_command[@]}"} > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
                     WaitTerm
                 fi
             } 201>"$pid_file"
@@ -2862,11 +2959,6 @@ HlsStreamCreatorPlus()
 
                 mkdir -p "$delete_on_term"
 
-                chnl_quality_command=""
-                chnl_bitrates_command=""
-                chnl_resolution_command=""
-                chnl_output_name="${chnl_seg_name}_%05d"
-
                 if [ -z "$chnl_seg_dir_name" ] 
                 then
                     chnl_seg_dir_path=""
@@ -2874,106 +2966,203 @@ HlsStreamCreatorPlus()
                     chnl_seg_dir_path="$chnl_seg_dir_name/"
                 fi
 
-                chnl_hls_seg_filename_command="-hls_segment_filename $chnl_output_dir_root/$chnl_seg_dir_path$chnl_output_name.ts"
+                chnl_variants_command=()
+                chnl_var_stream_map=()
+
+                if [ -n "${chnl_video_shift:-}" ] 
+                then
+                    chnl_map_command+=( -itsoffset $chnl_video_shift -i "$chnl_stream_link" )
+                elif [ -n "${chnl_audio_shift:-}" ] 
+                then
+                    if [ "$chnl_audio_codec" == "copy" ] 
+                    then
+                        chnl_map_command+=( -itsoffset $chnl_audio_shift -i "$chnl_stream_link" )
+                    else
+                        chnl_map_command=()
+                    fi
+                else
+                    chnl_map_command=()
+                fi
 
                 if [ -z "$chnl_quality" ]
                 then
                     if [ -n "$chnl_bitrates" ] 
                     then
-                        chnl_bitrates=${chnl_bitrates%%,*}
-                        if [[ $chnl_bitrates == *"-"* ]] 
-                        then
-                            resolution=${chnl_bitrates#*-}
-                            chnl_resolution_command="-vf scale=${resolution//x/:}"
-                            chnl_bitrates=${chnl_bitrates%-*}
-                            if [ -n "$chnl_const" ] 
+                        IFS="," read -r -a chnl_variants <<< "$chnl_bitrates"
+
+                        hls_master_list=""
+
+                        for((i=0;i<${#chnl_variants[@]};i++));
+                        do
+                            variant=${chnl_variants[i]}
+                            if [[ $variant == *"-"* ]] 
                             then
-                                chnl_bitrates_command="-b:v ${chnl_bitrates}k -bufsize ${chnl_bitrates}k -minrate ${chnl_bitrates}k -maxrate ${chnl_bitrates}k"
-                            else
-                                chnl_bitrates_command="-b:v ${chnl_bitrates}k"
-                            fi
-                            chnl_output_name="${chnl_seg_name}_${chnl_bitrates}_%05d"
-                        elif [[ $chnl_bitrates == *"x"* ]] 
-                        then
-                            resolution=$chnl_bitrates
-                            chnl_resolution_command="-vf scale=${resolution//x/:}"
-                        else
-                            if [ -n "$chnl_const" ] 
+                                chnl_bitrates=${variant%-*}
+                                chnl_resolution=${variant#*-}
+
+                                if [ -n "$chnl_const" ] 
+                                then
+                                    chnl_variants_command+=( -b:v:$i ${chnl_bitrates}k -bufsize:v:$i ${chnl_bitrates}k -minrate:v:$i ${chnl_bitrates}k -maxrate:v:$i ${chnl_bitrates}k )
+                                else
+                                    chnl_variants_command+=( -b:v:$i ${chnl_bitrates}k )
+                                fi
+
+                                chnl_variants_command+=( -s:v:$i $chnl_resolution )
+                                hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((chnl_bitrates*1000)),RESOLUTION=$chnl_resolution\n"
+                            elif [[ $variant == *"x"* ]] 
                             then
-                                chnl_bitrates_command="-b:v ${chnl_bitrates}k -bufsize ${chnl_bitrates}k -minrate ${chnl_bitrates}k -maxrate ${chnl_bitrates}k"
+                                chnl_variants_command+=( -s:v:$i $variant )
+                                hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=$variant\n"
                             else
-                                chnl_bitrates_command="-b:v ${chnl_bitrates}k"
+                                if [ -n "$chnl_const" ] 
+                                then
+                                    chnl_variants_command+=( -b:v:$i ${variant}k -bufsize:v:$i ${variant}k -minrate:v:$i ${variant}k -maxrate:v:$i ${variant}k )
+                                else
+                                    chnl_variants_command+=( -b:v:$i ${variant}k )
+                                fi
+                                hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((variant*1000))\n"
                             fi
-                            chnl_output_name="${chnl_seg_name}_${chnl_bitrates}_%05d"
-                        fi
-                    fi
-                elif [ -n "$chnl_bitrates" ] 
-                then
-                    chnl_bitrates=${chnl_bitrates%%,*}
-                    if [[ $chnl_bitrates == *"-"* ]] 
-                    then
-                        resolution=${chnl_bitrates#*-}
-                        chnl_resolution_command="-vf scale=${resolution//x/:}"
-                        chnl_bitrates=${chnl_bitrates%-*}
-                        chnl_quality_command="-crf $chnl_quality -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k"
-                        if [ "$chnl_video_codec" == "libx265" ]
-                        then
-                            chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
-                        fi
-                        chnl_output_name="${chnl_seg_name}_${chnl_bitrates}_%05d"
-                    elif [[ $chnl_bitrates == *"x"* ]] 
-                    then
-                        resolution=$chnl_bitrates
-                        chnl_resolution_command="-vf scale=${resolution//x/:}"
-                        chnl_quality_command="-crf $chnl_quality"
-                    else
-                        chnl_quality_command="-crf $chnl_quality -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k"
-                        if [ "$chnl_video_codec" == "libx265" ]
-                        then
-                            chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
-                        fi
-                        chnl_output_name="${chnl_seg_name}_${chnl_bitrates}_%05d"
+                            hls_master_list="$hls_master_list${chnl_playlist_name}_$variant.m3u8\n\n"
+                            if [ -n "${chnl_video_shift:-}" ] 
+                            then
+                                chnl_variants_command+=( -map 0:v -map 1:a )
+                            elif [ -n "${chnl_audio_shift:-}" ] 
+                            then
+                                if [ "$chnl_audio_codec" == "copy" ] 
+                                then
+                                    chnl_variants_command+=( -map 1:v -map 0:a )
+                                else
+                                    chnl_variants_command+=( -map 0:v -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
+                                fi
+                            else
+                                chnl_variants_command+=( -map 0:v -map 0:a )
+                            fi
+                            chnl_var_stream_map+=( v:$i,a:$i,name:$variant )
+                        done
                     fi
                 else
-                    chnl_quality_command="-crf $chnl_quality"
+                    IFS="," read -r -a chnl_qualities <<< "$chnl_quality"
+                    if [ -n "$chnl_bitrates" ] 
+                    then
+                        IFS="," read -r -a chnl_variants <<< "$chnl_bitrates"
+
+                        hls_master_list=""
+
+                        for((i=0;i<${#chnl_variants[@]};i++));
+                        do
+                            variant=${chnl_variants[i]}
+                            if [[ $variant == *"-"* ]] 
+                            then
+                                chnl_bitrates=${variant%-*}
+                                chnl_resolution=${variant#*-}
+
+                                chnl_variants_command+=( -crf:v:$i ${chnl_qualities[i]:-${chnl_quality[0]}} -bufsize:v:$i ${chnl_bitrates}k -maxrate:v:$i ${chnl_bitrates}k )
+
+                                if [ "$chnl_video_codec" == "libx265" ]
+                                then
+                                    chnl_variants_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${chnl_bitrates}k --vbv-bufsize:v:$i ${chnl_bitrates}k )
+                                fi
+
+                                chnl_variants_command+=( -s:v:$i $chnl_resolution )
+                                hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((chnl_bitrates*1000)),RESOLUTION=$chnl_resolution\n"
+                            elif [[ $variant == *"x"* ]] 
+                            then
+                                chnl_variants_command+=( -crf:v:$i ${chnl_qualities[i]:-${chnl_quality[0]}} -s:v:$i $variant )
+                                hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=$variant\n"
+                            else
+                                chnl_variants_command+=( -crf:v:$i ${chnl_qualities[i]:-${chnl_quality[0]}} -bufsize:v:$i ${variant}k -maxrate:v:$i ${variant}k )
+
+                                if [ "$chnl_video_codec" == "libx265" ]
+                                then
+                                    chnl_variants_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${variant}k --vbv-bufsize:v:$i ${variant}k )
+                                fi
+
+                                hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((variant*1000))\n"
+                            fi
+                            hls_master_list="$hls_master_list${chnl_playlist_name}_crf_${chnl_qualities[i]:-${chnl_quality[0]}}_$variant.m3u8\n\n"
+                            if [ -n "${chnl_video_shift:-}" ] 
+                            then
+                                chnl_variants_command+=( -map 0:v -map 1:a )
+                            elif [ -n "${chnl_audio_shift:-}" ] 
+                            then
+                                if [ "$chnl_audio_codec" == "copy" ] 
+                                then
+                                    chnl_variants_command+=( -map 1:v -map 0:a )
+                                else
+                                    chnl_variants_command+=( -map 0:v -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
+                                fi
+                            else
+                                chnl_variants_command+=( -map 0:v -map 0:a )
+                            fi
+                            chnl_var_stream_map+=( v:$i,a:$i,name:crf_${chnl_qualities[i]:-${chnl_quality[0]}}_$variant )
+                        done
+                    else
+                        hls_master_list=""
+                        for((i=0;i<${#chnl_qualities[@]};i++));
+                        do
+                            chnl_variants_command+=( -crf:v:$i ${chnl_qualities[i]} )
+                            if [ -n "${chnl_video_shift:-}" ] 
+                            then
+                                chnl_variants_command+=( -map 0:v -map 1:a )
+                            elif [ -n "${chnl_audio_shift:-}" ] 
+                            then
+                                if [ "$chnl_audio_codec" == "copy" ] 
+                                then
+                                    chnl_variants_command+=( -map 1:v -map 0:a )
+                                else
+                                    chnl_variants_command+=( -map 0:v -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
+                                fi
+                            else
+                                chnl_variants_command+=( -map 0:v -map 0:a )
+                            fi
+                            chnl_var_stream_map+=( v:$i,a:$i,name:crf_${chnl_qualities[i]} )
+                            hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$(((64-${chnl_qualities[i]})*30000))\n"
+                            hls_master_list="$hls_master_list${chnl_playlist_name}_crf_${chnl_qualities[i]}.m3u8\n\n"
+                        done
+                    fi
                 fi
 
-                if [ -n "${chnl_video_shift:-}" ] 
-                then
-                    chnl_map_command="-itsoffset $chnl_video_shift -i $chnl_stream_link -map 0:v -map 1:a"
-                elif [ -n "${chnl_audio_shift:-}" ] 
-                then
-                    chnl_map_command="-itsoffset $chnl_audio_shift -i $chnl_stream_link -map 0:a -map 1:v"
-                else
-                    chnl_map_command=""
-                fi
+                chnl_hls_flags_command=()
+                chnl_segment_flags_command=()
 
                 if [ -n "$chnl_live" ] 
                 then
-                    chnl_live_command="-segment_list_flags +live"
-                    chnl_seg_count_command="-segment_list_size $chnl_seg_count -segment_wrap $((chnl_seg_count * 2))"
-                    chnl_hls_flags_command="-hls_flags periodic_rekey+delete_segments"
+                    chnl_segment_flags_command+=( -segment_list_flags +live -segment_list_size $chnl_seg_count -segment_wrap $((chnl_seg_count * 2)) )
+                    chnl_hls_flags_command+=( -hls_flags periodic_rekey+delete_segments )
                 else
-                    chnl_live_command=""
-                    chnl_seg_count_command=""
-                    chnl_hls_flags_command="-hls_flags periodic_rekey"
+                    chnl_hls_flags_command+=( -hls_flags periodic_rekey )
                 fi
 
-                if [[ $chnl_output_flags == *"-vf "* ]] && [ -n "$chnl_resolution_command" ]
+                if [ -n "${chnl_var_stream_map:-}" ] 
                 then
-                    chnl_output_flags_A=${chnl_output_flags%-vf *}
-                    chnl_output_flags_B=${chnl_output_flags#*-vf }
-                    chnl_output_flags_C=${chnl_output_flags_B%% *}
-                    chnl_output_flags_B=${chnl_output_flags_B#* }
-                    chnl_output_flags="$chnl_output_flags_A $chnl_output_flags_B"
-                    chnl_resolution_command="-vf $chnl_output_flags_C,${chnl_resolution_command#*-vf }"
+                    chnl_var_stream_map_command=( -var_stream_map "${chnl_var_stream_map[*]}" )
+                    chnl_hls_flags_command+=( -hls_segment_filename $chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}_%v_%05d.ts )
+                else
+                    chnl_var_stream_map_command=()
+                    chnl_hls_flags_command+=( -hls_segment_filename $chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}_%05d.ts )
                 fi
 
                 if [ "${master:-0}" -eq 0 ] 
                 then
-                    chnl_m3u8_list="$chnl_output_dir_root/$chnl_playlist_name.m3u8"
+                    if [ -n "${chnl_var_stream_map:-}" ] 
+                    then
+                        chnl_hls_flags_command+=( $chnl_output_dir_root/${chnl_playlist_name}_%v.m3u8 )
+                    else
+                        chnl_hls_flags_command+=( $chnl_output_dir_root/$chnl_playlist_name.m3u8 )
+                    fi
+                    if [ -n "${hls_master_list:-}" ] 
+                    then
+                        echo -e "#EXTM3U\n#EXT-X-VERSION:3\n$hls_master_list" > $chnl_output_dir_root/$chnl_playlist_name.m3u8
+                    fi
                 else
-                    chnl_m3u8_list="$chnl_output_dir_root/${chnl_playlist_name}_master.m3u8"
+                    if [[ $chnl_quality == *","* ]] || { [ -n "${chnl_variants:-}" ] && [[ ${#chnl_variants[@]} -gt 1 ]]; }
+                    then
+                        chnl_hls_flags_command+=( -master_pl_name ${chnl_playlist_name}_master.m3u8 $chnl_output_dir_root/${chnl_playlist_name}_%v.m3u8 )
+                        [ "$chnl_encrypt_yn" == "no" ] && echo -e "#EXTM3U\n#EXT-X-VERSION:3\n$hls_master_list" > $chnl_output_dir_root/${chnl_playlist_name}_master.m3u8
+                    else
+                        chnl_hls_flags_command+=( $chnl_output_dir_root/${chnl_playlist_name}_%v.m3u8 )
+                        echo -e "#EXTM3U\n#EXT-X-VERSION:3\n$hls_master_list" > $chnl_output_dir_root/${chnl_playlist_name}_master.m3u8
+                    fi
                 fi
 
                 args=()
@@ -3002,7 +3191,7 @@ HlsStreamCreatorPlus()
                     args+=( -user_agent "$chnl_user_agent" )
                 fi
 
-                if [ "$chnl_encrypt_yn" == "yes" ] 
+                if [ "$chnl_encrypt_yn" == "yes" ] || [[ $chnl_quality == *","* ]] || { [ -n "${chnl_variants:-}" ] && [[ ${#chnl_variants[@]} -gt 1 ]]; }
                 then
                     openssl rand 16 > "$chnl_output_dir_root/$chnl_key_name.key"
                     if [ "$chnl_encrypt_session_yn" == "yes" ] 
@@ -3014,19 +3203,25 @@ HlsStreamCreatorPlus()
 
                     # https://stackoverflow.com/questions/23235651/how-can-i-do-ansi-c-quoting-of-an-existing-bash-variable
                     PrepTerm
-                    $FFMPEG ${args[@]+"${args[@]}"} $chnl_input_flags -i "$chnl_stream_link" $chnl_map_command -y \
-                    -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $chnl_resolution_command \
-                    -threads 0 -flags -global_header $chnl_output_flags -f hls -hls_time "$chnl_seg_length" \
-                    -hls_list_size $chnl_seg_count -hls_delete_threshold $chnl_seg_count -hls_key_info_file "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo" \
-                    $chnl_hls_flags_command $chnl_hls_seg_filename_command "$chnl_m3u8_list" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+                    $FFMPEG ${args[@]+"${args[@]}"} $chnl_input_flags -i "$chnl_stream_link" ${chnl_map_command[@]+"${chnl_map_command[@]}"} -y \
+                    -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" \
+                    -threads 0 -flags -global_header $chnl_output_flags \
+                    ${chnl_variants_command[@]+"${chnl_variants_command[@]}"} \
+                    -f hls ${chnl_var_stream_map_command[@]+"${chnl_var_stream_map_command[@]}"} \
+                    -hls_time "$chnl_seg_length" -hls_list_size $chnl_seg_count \
+                    -hls_delete_threshold $chnl_seg_count -hls_key_info_file "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo" \
+                    ${chnl_hls_flags_command[@]+"${chnl_hls_flags_command[@]}"} > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
                     WaitTerm
                 else
                     PrepTerm
-                    $FFMPEG ${args[@]+"${args[@]}"} $chnl_input_flags -i "$chnl_stream_link" $chnl_map_command -y \
-                    -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $chnl_resolution_command \
-                    -threads 0 -flags -global_header -f segment -segment_list "$chnl_m3u8_list" \
-                    -segment_time "$chnl_seg_length" -segment_format mpeg_ts $chnl_live_command \
-                    $chnl_seg_count_command $chnl_output_flags "$chnl_output_dir_root/$chnl_seg_dir_path$chnl_output_name.ts" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+                    $FFMPEG ${args[@]+"${args[@]}"} $chnl_input_flags -i "$chnl_stream_link" ${chnl_map_command[@]+"${chnl_map_command[@]}"} -y \
+                    -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" \
+                    -threads 0 -flags -global_header $chnl_output_flags \
+                    ${chnl_variants_command[@]+"${chnl_variants_command[@]}"} \
+                    -f segment ${chnl_var_stream_map_command[@]+"${chnl_var_stream_map_command[@]}"} \
+                    -segment_time "$chnl_seg_length" -segment_format mpeg_ts \
+                    -segment_list $chnl_output_dir_root/$chnl_playlist_name.m3u8 $chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}_%05d.ts \
+                    ${chnl_segment_flags_command[@]+"${chnl_segment_flags_command[@]}"} > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
                     WaitTerm
                 fi
             } 201>"$pid_file"
@@ -3151,7 +3346,7 @@ HlsStreamCreator()
 
                 if [ -n "$quality" ] 
                 then
-                    quality_command="-q $quality"
+                    quality_command="-q ${quality%%,*}"
                 else
                     quality_command=""
                 fi
@@ -3246,7 +3441,7 @@ HlsStreamCreator()
 
                 if [ -n "$chnl_quality" ] 
                 then
-                    chnl_quality_command="-q $chnl_quality"
+                    chnl_quality_command="-q ${chnl_quality%%,*}"
                 else
                     chnl_quality_command=""
                 fi
@@ -4950,7 +5145,7 @@ SetVideoAudioShift()
 
 SetQuality()
 {
-    Println "$tip 改变CRF, 数字越大越视频质量越差, 如果设置CRF则无法用比特率控制视频质量"
+    Println "$tip 改变 crf, 数字越大越视频质量越差, 如果设置 crf 则无法用比特率控制视频质量, 多个 crf 用逗号分隔"
     while true 
     do
         inquirer text_input "请输入输出视频质量[0-63]: " quality "${d_quality:-不设置}"
@@ -4984,10 +5179,10 @@ SetBitrates()
     fi
     if [ -z "${kind:-}" ] 
     then
-        echo -e "$tip 多个比特率用逗号分隔(生成自适应码流),同时可以指定输出的分辨率(比如: 600-600x400,900-1280x720)"
+        echo -e "$tip 多个比特率(kb/s)用逗号分隔(生成自适应码流),同时可以指定输出的分辨率(比如: 800-640x360,1000-960x540,1500-1280x720)"
     fi
 
-    inquirer text_input "请输入比特率(kb/s), 可以输入 omit 省略此选项: " bitrates "${d_bitrates:-不设置}"
+    inquirer text_input "请输入比特率和分辨率, 可以输入 omit 省略此选项: " bitrates "${d_bitrates:-不设置}"
 
     if [ "$bitrates" == "omit" ] || [ "$bitrates" == "不设置" ] 
     then
@@ -6319,14 +6514,14 @@ TestXtreamCodesLink()
                         --cookie "$chnl_cookies" "$create_link_url" \
                         | $JQ_FILE -r '.js.cmd') || true
 
-                    if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                    if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
                     then
-                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}/${BASH_REMATCH[6]}"
+                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
                     elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
                     then
-                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
+                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
                     else
-                        Println "$error $chnl_domain 返回错误, 请重试!\n" && exit 1
+                        Println "$error $chnl_domain 返回 cmd: ${cmd:-无} 错误, 请重试!\n" && exit 1
                     fi
                 fi
 
@@ -11753,12 +11948,12 @@ MonitorHlsRestartChannel()
                         --cookie "$chnl_cookies" "$create_link_url" \
                         | $JQ_FILE -r '.js.cmd') || true
 
-                    if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                    if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
                     then
-                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}/${BASH_REMATCH[6]}"
+                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
                     elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
                     then
-                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
+                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
                     else
                         if [ "$to_try" -eq 1 ] 
                         then
@@ -12308,12 +12503,12 @@ MonitorFlvRestartChannel()
                         --cookie "$chnl_cookies" "$create_link_url" \
                         | $JQ_FILE -r '.js.cmd') || true
 
-                    if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                    if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
                     then
-                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}/${BASH_REMATCH[6]}"
+                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
                     elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
                     then
-                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
+                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
                     else
                         if [ "$to_try" -eq 1 ] 
                         then
@@ -12624,12 +12819,12 @@ MonitorTryAccounts()
                             --cookie "$chnl_cookies" "$create_link_url" \
                             | $JQ_FILE -r '.js.cmd') || true
 
-                        if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                        if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
                         then
-                            chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}/${BASH_REMATCH[6]}"
+                            chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
                         elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
                         then
-                            chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
+                            chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
                         else
                             continue
                         fi
@@ -15531,7 +15726,7 @@ ViewXtreamCodesChnls()
                             then
                                 stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
                             else
-                                Println "$error 返回错误, 请重试"
+                                Println "$error 返回 cmd: ${cmd:-无} 错误, 请重试"
                                 continue
                             fi
                             stream_link=${stream_link// /}
@@ -28911,13 +29106,36 @@ UpdateSelf()
         minor_ver=${d_version#*.}
         minor_ver=${minor_ver%%.*}
 
-        if [ "$major_ver" -eq 1 ] && [ "$minor_ver" -lt 35 ]
+        if [ "$major_ver" -eq 1 ] 
         then
-            Println "$info 需要先关闭所有频道, 请稍等...\n"
-            StopChannelsForce
-            rm -rf "/tmp/flv.lockdir/"
-            rm -rf "/tmp/monitor.lockdir"
-            rm -rf "$FFMPEG_LOG_ROOT/"*.lock
+            if [ "$minor_ver" -lt 35 ] 
+            then
+                Println "$info 需要先关闭所有频道, 请稍等...\n"
+                StopChannelsForce
+                rm -rf "/tmp/flv.lockdir/"
+                rm -rf "/tmp/monitor.lockdir"
+                rm -rf "$FFMPEG_LOG_ROOT/"*.lock
+            fi
+            if [ "$minor_ver" -lt 37 ]
+            then
+                rm -f ${CREATOR_FILE:-notfound}
+                Println "$info 更新 Hls Stream Creator 脚本..."
+                wget --no-check-certificate "$CREATOR_LINK" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
+                if [ ! -s "$CREATOR_FILE" ] 
+                then
+                    Println "$error 无法连接到 Github ! 尝试备用链接..."
+                    wget --no-check-certificate "$CREATOR_LINK_BACKUP" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
+                    if [ ! -s "$CREATOR_FILE" ] 
+                    then
+                        Println "$error 无法连接备用链接, 请重试 !\n"
+                        exit 1
+                    else
+                        Println "$info Hls Stream Creator 脚本更新完成"
+                    fi
+                else
+                    Println "$info Hls Stream Creator 脚本更新完成"
+                fi
+            fi
         fi
 
         Println "$info 更新中, 请稍等...\n"

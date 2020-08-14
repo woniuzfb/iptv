@@ -235,10 +235,9 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 -t  段名称(前缀)(默认：跟m3u8名称相同)
 -a  音频编码(默认：aac) (不需要转码时输入 copy)
 -v  视频编码(默认：libx264) (不需要转码时输入 copy)
--f  画面或声音延迟(格式如： v_3 画面延迟3秒，a_2 声音延迟2秒
-    使用此功能*暂时*会忽略部分参数，画面声音不同步时使用)
--q  crf视频质量(如果设置了输出视频比特率，则优先使用crf视频质量)(数值0~63 越大质量越差)
-    (默认: 不设置crf视频质量值)
+-f  画面或声音延迟(格式如： v_3 画面延迟3秒，a_2 声音延迟2秒 画面声音不同步时使用)
+-q  crf 值(如果设置了输出视频比特率，则优先使用 crf 控制视频质量)(数值 0~63 越大质量越差), 多个 crf 用逗号分隔
+    (默认: 不设置 crf 值)
 -b  输出视频的比特率(kb/s)(默认：900-1280x720)
     如果已经设置crf视频质量值，则比特率用于 -maxrate -bufsize
     如果没有设置crf视频质量值，则可以继续设置是否固定码率
@@ -261,7 +260,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
     如果输入的直播源是 rtmp 或本地链接，需去除 -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000
     如果要查看详细日志 fatal 改成 error / warning / ...
 -n  ffmpeg 额外的 OUTPUT FLAGS, 可以输入 omit 省略此选项 (除非有特殊需求, 不需要转码时请省略此选项)
-    (默认：-g 25 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main)
+    (默认：-g 50 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main)
 ```
 
 ## 举例

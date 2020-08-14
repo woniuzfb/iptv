@@ -5,7 +5,7 @@ let upstream = 'livegopanel.club:8080'
 const upstream_path = '/'
 
 // Countries and regions where you wish to suspend your service.
-const blocked_region = ['US']
+const blocked_region = []
 
 // IP addresses which you wish to block from using your service.
 const blocked_ip_address = ['0.0.0.0', '127.0.0.1']
@@ -98,10 +98,12 @@ async function fetchAndApply(request) {
       const stream_link_res = await fetch(create_link_url, {
         headers: new_request_headers
       });
-      const stream_link_json = await stream_link_res.json();
-      let stream_link_cmd = stream_link_json.js.cmd;
 
-      let stream_link_url = new URL(stream_link_cmd.split(' ')[1]);
+      const stream_link_json = await stream_link_res.json();
+      let stream_link_cmd = stream_link_json.js.cmd.split(' ')[1];
+      let cmd_link = stream_link_cmd.split('/');
+
+      let stream_link_url = new URL(cmd_link[0] + '//' + cmd_link[2] + '/' + cmd_link[3] + '/' + cmd_link[4] + '/' + cmd_link[cmd_link.length - 1]);
 
       url.href = stream_link_url.href;
 
