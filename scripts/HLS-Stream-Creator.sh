@@ -40,35 +40,27 @@
 # Introduced in HLS-36 to allow tracking of issues
 HLS_SC_VERSION="1.0"
 
-arr=()
+args=()
 
-FFMPEG_PROXY=${FFMPEG_PROXY:-}
-
-if [ -n "$FFMPEG_PROXY" ] 
+if [ -n "${FFMPEG_PROXY:-}" ] 
 then
-    arr+=( -http_proxy "$FFMPEG_PROXY" )
+    args+=( -http_proxy "$FFMPEG_PROXY" )
 fi
 
-FFMPEG_USER_AGENT=${FFMPEG_USER_AGENT:-}
-
-if [ -n "$FFMPEG_USER_AGENT" ] 
+if [ -n "${FFMPEG_USER_AGENT:-}" ] 
 then
-    arr+=( -user_agent "$FFMPEG_USER_AGENT" )
+    args+=( -user_agent "$FFMPEG_USER_AGENT" )
 fi
 
-FFMPEG_HEADERS=${FFMPEG_HEADERS:-}
-
-if [ -n "$FFMPEG_HEADERS" ] 
+if [ -n "${FFMPEG_HEADERS:-}" ] 
 then
     printf -v headers_command '%b' "$FFMPEG_HEADERS"
-    arr+=( -headers "$headers_command" )
+    args+=( -headers "$headers_command" )
 fi
 
-FFMPEG_COOKIES=${FFMPEG_COOKIES:-}
-
-if [ -n "$FFMPEG_COOKIES" ] 
+if [ -n "${FFMPEG_COOKIES:-}" ] 
 then
-    arr+=( -cookies "$FFMPEG_COOKIES" )
+    args+=( -cookies "$FFMPEG_COOKIES" )
 fi
 
 # Basic config
@@ -188,7 +180,7 @@ if $TWOPASS; then
 	local LOGFILE="$OUTPUT_DIRECTORY/bitrate$br"
 	PASSVAR="-passlogfile \"$LOGFILE\" -pass 2"
 
-	$FFMPEG ${arr[@]+"${arr[@]}"} \
+	$FFMPEG ${args[@]+"${args[@]}"} \
         -i "$infile" \
 		-pass 1 \
 		-passlogfile "$LOGFILE" \
@@ -210,7 +202,7 @@ if $TWOPASS; then
 
 fi
 
-$FFMPEG ${arr[@]+"${arr[@]}"} \
+$FFMPEG ${args[@]+"${args[@]}"} \
     $FFMPEG_INPUT_FLAGS \
     -i "$infile" \
     $PASSVAR \

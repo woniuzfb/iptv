@@ -59,25 +59,29 @@
 #     tv 打开 HLS 管理面板
 #     tv f 打开 FLV 管理面板
 #     tv v 打开 VIP 面板
-#
 #     tv e 手动修改 channels.json
 #     tv m 开启监控
-#         tv m l [行数] 查看监控日志
-#         tv m s 关闭监控
-#
+#        tv m l [行数] 查看监控日志
+#        tv m s 关闭监控
 #     tv l 列出所有开启的频道
 #     tv s 节目表管理面板
-#
 #     tv 4g 管理 4gtv 频道面板
+#     tv ffmpeg 自建 ffmpeg 镜像
 #
 #     cx 打开 xtream codes 面板
+#
 #     v2 打开 v2ray 面板
+#        v2 e 手动修改 config.json
+#
 #     nx 打开 nginx 面板
+#
 #     or 打开 openresty 面板
+#
 #     cf 打开 cloudflare partner / workers 面板
-#         cf w 打开 cloudflare workers 面板
+#        cf w 打开 cloudflare workers 面板
+#
 #     ibm 打开 IBM Cloud Foundry 面板
-#         ibm v2 打开 ibm v2ray app 管理面板
+#        ibm v2 打开 ibm v2ray app 管理面板
 
 set -euo pipefail
 
@@ -90,9 +94,6 @@ SH_LINK_BACKUP="http://hbo.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
 OR_FILE="/usr/local/bin/or"
 NX_FILE="/usr/local/bin/nx"
-V2_FILE="/usr/local/bin/v2"
-V2CTL_FILE="/usr/bin/v2ray/v2ctl"
-V2_CONFIG="/etc/v2ray/config.json"
 XC_FILE="/usr/local/bin/cx"
 IPTV_ROOT="/usr/local/iptv"
 JQ_FILE="$IPTV_ROOT/jq"
@@ -106,7 +107,13 @@ NODE_ROOT="$IPTV_ROOT/node"
 IP_DENY="$IPTV_ROOT/ip.deny"
 IP_LOG="$IPTV_ROOT/ip.log"
 FFMPEG_LOG_ROOT="$IPTV_ROOT/ffmpeg"
+# create your own mirror with : tv ffmpeg
 FFMPEG_MIRROR_LINK="http://pngquant.com/ffmpeg"
+V2_FILE="/usr/local/bin/v2"
+V2_LINK="https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh"
+V2_LINK_BACKUP="$FFMPEG_MIRROR_LINK/v2ray_install-release.sh"
+V2CTL_FILE="/usr/local/bin/v2ctl"
+V2_CONFIG="/usr/local/etc/v2ray/config.json"
 FFMPEG_MIRROR_ROOT="$IPTV_ROOT/ffmpeg"
 LIVE_ROOT="$IPTV_ROOT/live"
 SERVICES_FILE="$IPTV_ROOT/services.json"
@@ -1463,32 +1470,24 @@ Spinner(){
 
 CheckShFile()
 {
-    if [ ! -s "$SH_FILE" ] 
+    if [ ! -e "$SH_FILE" ] 
     then
-        sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
-
-        if [ -z "$sh_new_ver" ] 
+        if curl -s -Lm 20 "$SH_LINK" -o "${SH_FILE}_tmp"
         then
-            Println "$error 无法连接到 Github ! 尝试备用链接...\n"
-            sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
-            [ -z "$sh_new_ver" ] && Println "$error 无法连接备用链接!\n" && exit 1
-            wget --no-check-certificate "$SH_LINK_BACKUP" -qO "${SH_FILE}_tmp"
-        else
-            wget --no-check-certificate "$SH_LINK" -qO "${SH_FILE}_tmp"
-        fi
-
-        if [ ! -s "${SH_FILE}_tmp" ] 
-        then
-            Println "$error 无法连接备用链接!\n"
-            exit 1
-        else
             mv "${SH_FILE}_tmp" "$SH_FILE"
             chmod +x "$SH_FILE"
-        fi
-
-        if [ "$sh_new_ver" != "$sh_ver" ] 
-        then
-            rm -f "$LOCK_FILE"
+            Println "$info 脚本下载完成"
+        else
+            Println "$error 无法连接到 Github ! 尝试备用链接..."
+            if curl -s -Lm 30 "$SH_LINK_BACKUP" -o "${SH_FILE}_tmp" 
+            then
+                mv "${SH_FILE}_tmp" "$SH_FILE"
+                chmod +x "$SH_FILE"
+                Println "$info 脚本下载完成"
+            else
+                Println "$error 无法连接备用链接! 脚本下载失败, 请稍后再试\n"
+                exit 1
+            fi
         fi
     fi
 
@@ -1504,28 +1503,54 @@ CheckShFile()
 
 UpdateShFile()
 {
-    Println "$info 更新脚本 ..."
-    sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
-    if [ -z "$sh_new_ver" ] 
+    sh_name=${1:-iptv}
+
+    Println "$info 更新 $sh_name 脚本..."
+
+    if curl -s -Lm 20 "$SH_LINK" -o "${SH_FILE}_tmp"
     then
+        mv "${SH_FILE}_tmp" "$SH_FILE"
+        chmod +x "$SH_FILE"
+        Println "$info $sh_name 脚本更新完成"
+        sh_new_ver=$(grep 'sh_ver="' < "$SH_FILE" |awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1)
+    else
         Println "$error 无法连接到 Github ! 尝试备用链接..."
-        sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
-        [ -z "$sh_new_ver" ] && Println "$error 无法连接备用链接!" && exit 1
+        if curl -s -Lm 30 "$SH_LINK_BACKUP" -o "${SH_FILE}_tmp" 
+        then
+            mv "${SH_FILE}_tmp" "$SH_FILE"
+            chmod +x "$SH_FILE"
+            Println "$info $sh_name 脚本更新完成"
+            sh_new_ver=$(grep 'sh_ver="' < "$SH_FILE" |awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1)
+        else
+            Println "$error 无法连接备用链接! $sh_name 脚本更新失败, 请稍后再试\n"
+        fi
     fi
 
-    if [ "$sh_new_ver" != "$sh_ver" ] 
+    if [ "${sh_new_ver:-$sh_ver}" != "$sh_ver" ] 
     then
         rm -f "$LOCK_FILE"
     fi
+}
 
-    if ! wget --timeout=10 --tries=3 --no-check-certificate "$SH_LINK" -qO "$SH_FILE" && ! wget --timeout=10 --tries=3 --no-check-certificate "$SH_LINK_BACKUP" -qO "$SH_FILE"
+UpdateCreatorFile()
+{
+    Println "$info 下载 HLS stream creator 脚本..."
+    if curl -s -Lm 20 "$CREATOR_LINK" -o "${CREATOR_FILE}_tmp"
     then
-        Println "$error 暂无法连接, 请稍后再试 !\n"
-        exit 1
+        mv "${CREATOR_FILE}_tmp" "$CREATOR_FILE"
+        chmod +x "$CREATOR_FILE"
+        Println "$info HLS stream creator 脚本更新完成"
+    else
+        Println "$error 无法连接到 Github ! 尝试备用链接..."
+        if curl -s -Lm 30 "$CREATOR_LINK_BACKUP" -o "${CREATOR_FILE}_tmp" 
+        then
+            mv "${CREATOR_FILE}_tmp" "$CREATOR_FILE"
+            chmod +x "$CREATOR_FILE"
+            Println "$info HLS stream creator 脚本更新完成"
+        else
+            Println "$error 无法连接备用链接! HLS stream creator 脚本更新失败, 请稍后再试\n"
+        fi
     fi
-
-    chmod +x "$SH_FILE"
-    Println "$info 脚本更新完成\n"
 }
 
 InstallPython()
@@ -1564,7 +1589,7 @@ InstallPython()
     fi
 }
 
-InstallFfmpeg()
+InstallFFmpeg()
 {
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
     FFMPEG="$FFMPEG_ROOT/ffmpeg"
@@ -1590,20 +1615,25 @@ InstallFfmpeg()
     fi
 }
 
-InstallJq()
+InstallJQ()
 {
     if [ ! -e "$JQ_FILE" ]
     then
         Println "$info 开始下载/安装 JQ..."
         #experimental# grep -Po '"tag_name": "jq-\K.*?(?=")'
-        jq_ver=$(curl -s -m 10 "$FFMPEG_MIRROR_LINK/jq.json" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') || true
-        if [ -n "$jq_ver" ]
+        if jq_ver=$(curl -s -m 10 "$FFMPEG_MIRROR_LINK/jq.json" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
         then
-            wget --no-check-certificate "$FFMPEG_MIRROR_LINK/$jq_ver/jq-linux$release_bit" $_PROGRESS_OPT -qO "$JQ_FILE"
+            if curl -L "$FFMPEG_MIRROR_LINK/$jq_ver/jq-linux$release_bit" -o "$JQ_FILE"
+            then
+                chmod +x "$JQ_FILE"
+                Println "$info JQ 安装完成..."
+            else
+                rm -f "$JQ_FILE"
+                Println "$error 下载 JQ 失败, 请重试 !" && exit 1
+            fi
+        else
+            Println "$error 暂时无法连接服务器, 请重试 !" && exit 1
         fi
-        [ ! -e "$JQ_FILE" ] && Println "$error 下载 JQ 失败, 请重试 !" && exit 1
-        chmod +x "$JQ_FILE"
-        Println "$info JQ 安装完成..."
     else
         Println "$info JQ 已安装..."
     fi
@@ -1616,29 +1646,20 @@ Install()
         Println "$error 目录已存在, 请先卸载..." && exit 1
     else
         CheckRelease "检查依赖, 耗时可能会很长"
-        if grep -q '\--show-progress' < <(wget --help)
-        then
-            _PROGRESS_OPT="--show-progress"
-        else
-            _PROGRESS_OPT=""
-        fi
+
+        #if grep -q '\--show-progress' < <(wget --help)
+        #then
+        #    _PROGRESS_OPT="--show-progress"
+        #else
+        #    _PROGRESS_OPT=""
+        #fi
+
         mkdir -p "$IPTV_ROOT"
-        Println "$info 下载脚本..."
-        wget --no-check-certificate "$CREATOR_LINK" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
-        if [ ! -s "$CREATOR_FILE" ] 
-        then
-            Println "$error 无法连接 Github ! 尝试备用链接..."
-            wget --no-check-certificate "$CREATOR_LINK_BACKUP" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
-            if [ ! -s "$CREATOR_FILE" ] 
-            then
-                Println "$error 无法连接备用链接!"
-                rm -rf "${IPTV_ROOT:-notfound}"
-                exit 1
-            fi
-        fi
-        Println "$info 脚本就绪..."
-        InstallFfmpeg
-        InstallJq
+
+        UpdateCreatorFile
+
+        InstallFFmpeg
+        InstallJQ
 
         default=$(
         $JQ_FILE -n --arg proxy '' --arg xc_proxy '' \
@@ -1816,69 +1837,21 @@ Update()
     fi
 
     CheckRelease lite
-    if grep -q '\--show-progress' < <(wget --help)
-    then
-        _PROGRESS_OPT="--show-progress"
-    else
-        _PROGRESS_OPT=""
-    fi
 
     if [[ ${reinstall_ffmpeg_yn:-N} == [Yy] ]] 
     then
         rm -rf "$IPTV_ROOT"/ffmpeg-git-*/
-        Spinner "更新 FFmpeg" InstallFfmpeg
+        Spinner "更新 FFmpeg" InstallFFmpeg
     fi
 
     rm -f "${JQ_FILE:-notfound}"
     Println "$info 更新 JQ..."
-    InstallJq
+    InstallJQ
 
-    Println "$info 更新 iptv 脚本..."
+    UpdateShFile
 
-    sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
-
-    if [ -z "$sh_new_ver" ] 
-    then
-        Println "$error 无法连接到 Github ! 尝试备用链接...\n"
-        sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
-        [ -z "$sh_new_ver" ] && Println "$error 无法连接备用链接!\n" && exit 1
-        wget --no-check-certificate "$SH_LINK_BACKUP" -qO "${SH_FILE}_tmp"
-    else
-        wget --no-check-certificate "$SH_LINK" -qO "${SH_FILE}_tmp"
-    fi
-
-    if [ ! -s "${SH_FILE}_tmp" ] 
-    then
-        Println "$error 无法连接备用链接!\n"
-        exit 1
-    else
-        mv "${SH_FILE}_tmp" "$SH_FILE"
-        chmod +x "$SH_FILE"
-        Println "$info iptv 脚本更新完成\n"
-    fi
-
-    if [ "$sh_new_ver" != "$sh_ver" ] 
-    then
-        rm -f "$LOCK_FILE"
-    fi
-
-    rm -f ${CREATOR_FILE:-notfound}
     Println "$info 更新 Hls Stream Creator 脚本..."
-    wget --no-check-certificate "$CREATOR_LINK" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
-    if [ ! -s "$CREATOR_FILE" ] 
-    then
-        Println "$error 无法连接到 Github ! 尝试备用链接..."
-        wget --no-check-certificate "$CREATOR_LINK_BACKUP" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
-        if [ ! -s "$CREATOR_FILE" ] 
-        then
-            Println "$error 无法连接备用链接, 请重试 !\n"
-            exit 1
-        else
-            Println "$info Hls Stream Creator 脚本更新完成"
-        fi
-    else
-        Println "$info Hls Stream Creator 脚本更新完成"
-    fi
+    UpdateCreatorFile
 
     ln -sf "$IPTV_ROOT"/ffmpeg-git-*/ff* /usr/local/bin/
     Println "脚本已更新为最新版本 [ $green$sh_new_ver${normal} ] ! (输入: tv 使用)\n" && exit 0
@@ -5284,7 +5257,7 @@ SetEncrypt()
                 then
                     if [ -z "${nginx_name:-}" ] 
                     then
-                        if [ -d "/usr/local/nginx" ] && [ -d "/usr/local/nginx" ]
+                        if [ -d "/usr/local/nginx" ] && [ -d "/usr/local/openresty" ]
                         then
                             echo
                             if [ -s "/usr/local/openresty/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/openresty/nginx/logs/nginx.pid")" 2> /dev/null
@@ -14281,7 +14254,7 @@ GetXtreamCodesDomains()
 {
     if [ ! -s "$XTREAM_CODES" ] 
     then
-        wget --timeout=10 --tries=3 --no-check-certificate $XTREAM_CODES_LINK -qO "$XTREAM_CODES"
+        curl -s -L $XTREAM_CODES_LINK -o "$XTREAM_CODES"
     fi
 
     xtream_codes_domains=()
@@ -16211,34 +16184,7 @@ UpdateNginx()
         Println "$error $nginx_name 未安装 !\n" && exit 1
     fi
 
-    Println "$info 更新 $nginx_name 脚本...\n"
-
-    sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
-
-    if [ -z "$sh_new_ver" ] 
-    then
-        Println "$error 无法连接到 Github ! 尝试备用链接...\n"
-        sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
-        [ -z "$sh_new_ver" ] && Println "$error 无法连接备用链接!\n" && exit 1
-        wget --no-check-certificate "$SH_LINK_BACKUP" -qO "${SH_FILE}_tmp"
-    else
-        wget --no-check-certificate "$SH_LINK" -qO "${SH_FILE}_tmp"
-    fi
-
-    if [ ! -s "${SH_FILE}_tmp" ] 
-    then
-        Println "$error 无法连接备用链接!\n"
-        exit 1
-    else
-        mv "${SH_FILE}_tmp" "$SH_FILE"
-        chmod +x "$SH_FILE"
-        Println "$info $nginx_name 脚本更新完成\n"
-    fi
-
-    if [ "$sh_new_ver" != "$sh_ver" ] 
-    then
-        rm -f "$LOCK_FILE"
-    fi
+    UpdateShFile "$nginx_name"
 
     Println "是否重新编译 $nginx_name ？[y/N]"
     read -p "(默认: N): " nginx_install_yn
@@ -17577,7 +17523,7 @@ NginxLogRotate()
 
     if [ -d "$nginx_prefix" ] 
     then
-        chown nobody:root $nginx_prefix/logs/*.log
+        chown $nginx_name:root $nginx_prefix/logs/*.log
         chmod 660 $nginx_prefix/logs/*.log
     fi
 
@@ -17595,7 +17541,7 @@ NginxLogRotate()
   compress
   delaycompress
   notifempty
-  create 660 nobody root
+  create 660 nginx root
   sharedscripts
   postrotate
     [ ! -f '"$nginx_prefix"'/logs/nginx.pid ] || /bin/kill -USR1 `cat '"$nginx_prefix"'/logs/nginx.pid`
@@ -17625,7 +17571,7 @@ NginxLogRotate()
   compress
   delaycompress
   notifempty
-  create 660 nobody root
+  create 660 nginx root
   sharedscripts
   postrotate
     [ ! -f '"$nginx_prefix"'/logs/nginx.pid ] || /bin/kill -USR1 `cat '"$nginx_prefix"'/logs/nginx.pid`
@@ -18634,6 +18580,32 @@ GetFreeTag()
     done
 }
 
+V2rayUpdate()
+{
+    CheckRelease "检查依赖, 耗时可能会很长"
+
+    if [ ! -s "$IPTV_ROOT/monitor.pid" ] && [ ! -s "$IPTV_ROOT/antiddos.pid" ]
+    then
+        rm -f "${JQ_FILE:-notfound}"
+        Println "$info 更新 JQ..."
+        InstallJQ
+    fi
+
+    V2rayConfigUpdate
+
+    UpdateShFile v2ray
+
+    { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_BACKUP"; } \
+    | sed "s+nobody+v2ray+g" \
+    | sed "s+ 'sha1'++g" \
+    | sed "s+ 'sha256'++g" \
+    | sed "s+ 'sha512'++g" \
+    | sed "s+https://api.github.com/repos/v2fly/v2ray-core/releases/latest+$FFMPEG_MIRROR_LINK/v2ray.json+g" \
+    | sed "s+https://github.com/v2fly/v2ray-core/releases/download+$FFMPEG_MIRROR_LINK/v2ray+g" | bash
+
+    Println "$info 升级完成\n"
+}
+
 V2rayConfigInstall()
 {
     printf -v update_date '%(%m-%d)T'
@@ -19022,7 +18994,7 @@ V2rayDeleteNginx()
 
 V2rayStatus()
 {
-    if service v2ray status > /dev/null 2>&1
+    if [[ $(systemctl is-active v2ray) == "active" ]]
     then
         Println "v2ray: $green开启${normal}\n"
     else
@@ -22990,7 +22962,7 @@ CloudflarePartnerMenu()
         17) 
             Println "$info 一键获取最优 IP 脚本 Mac/Linux: \n\nhttps://github.com/woniuzfb/cloudflare-fping\n"
         ;;
-        18) UpdateShFile
+        18) UpdateShFile cloudflare
         ;;
         *) Println "$error 请输入正确的数字 [1-18]\n"
         ;;
@@ -25983,18 +25955,23 @@ DownloadIbmV2ray()
     then
         Println "$error ibm v2ray 已存在\n"
     else
+        CheckRelease
+
         Println "$info 下载 ibm v2ray ..."
         cd ~
         rm -rf v2ray-linux-64
-        v2ray_version=$(curl -s -m 10 "https://api.github.com/repos/v2ray/v2ray-core/releases/latest" | $JQ_FILE -r '.tag_name')
-        wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/v2ray/v2ray-core/releases/download/$v2ray_version/v2ray-linux-64.zip" -qO "v2ray-linux-64.zip"
-        unzip v2ray-linux-64.zip -d v2ray-linux-64 > /dev/null
-        mkdir -p "$IBM_APPS_ROOT/ibm_v2ray"
-        mv v2ray-linux-64/v2ray "$IBM_APPS_ROOT/ibm_v2ray/"
-        mv v2ray-linux-64/v2ctl "$IBM_APPS_ROOT/ibm_v2ray/"
-        chmod 700 "$IBM_APPS_ROOT/ibm_v2ray/v2ray"
-        chmod 700 "$IBM_APPS_ROOT/ibm_v2ray/v2ctl"
-        Println "$info ibm v2ray 下载完成\n"
+        if v2ray_version=$(curl -s -L "$FFMPEG_MIRROR_LINK/v2ray.json" | $JQ_FILE -r '.tag_name') && curl -L "$FFMPEG_MIRROR_LINK/$v2ray_version/v2ray-linux-64.zip" -o "v2ray-linux-64.zip"
+        then
+            unzip v2ray-linux-64.zip -d v2ray-linux-64 > /dev/null
+            mkdir -p "$IBM_APPS_ROOT/ibm_v2ray"
+            mv v2ray-linux-64/v2ray "$IBM_APPS_ROOT/ibm_v2ray/"
+            mv v2ray-linux-64/v2ctl "$IBM_APPS_ROOT/ibm_v2ray/"
+            chmod 700 "$IBM_APPS_ROOT/ibm_v2ray/v2ray"
+            chmod 700 "$IBM_APPS_ROOT/ibm_v2ray/v2ctl"
+            Println "$info ibm v2ray 下载完成\n"
+        else
+            Println "$error 无法连接服务器, 请稍后再试\n"
+        fi
     fi
 }
 
@@ -26007,15 +25984,18 @@ UpdateIbmV2ray()
         Println "$info 更新 ibm v2ray ..."
         cd ~
         rm -rf v2ray-linux-64
-        v2ray_version=$(curl -s -m 10 "https://api.github.com/repos/v2ray/v2ray-core/releases/latest" | $JQ_FILE -r '.tag_name')
-        wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/v2ray/v2ray-core/releases/download/$v2ray_version/v2ray-linux-64.zip" -qO "v2ray-linux-64.zip"
-        unzip v2ray-linux-64.zip -d v2ray-linux-64 > /dev/null
-        mkdir -p "$IBM_APPS_ROOT/ibm_v2ray"
-        mv v2ray-linux-64/v2ray "$IBM_APPS_ROOT/ibm_v2ray/"
-        mv v2ray-linux-64/v2ctl "$IBM_APPS_ROOT/ibm_v2ray/"
-        chmod 700 "$IBM_APPS_ROOT/ibm_v2ray/v2ray"
-        chmod 700 "$IBM_APPS_ROOT/ibm_v2ray/v2ctl"
-        Println "$info ibm v2ray 更新完成\n"
+        if v2ray_version=$(curl -s -L "$FFMPEG_MIRROR_LINK/v2ray.json" | $JQ_FILE -r '.tag_name') && curl -L "$FFMPEG_MIRROR_LINK/$v2ray_version/v2ray-linux-64.zip" -o "v2ray-linux-64.zip" 
+        then
+            unzip v2ray-linux-64.zip -d v2ray-linux-64 > /dev/null
+            mkdir -p "$IBM_APPS_ROOT/ibm_v2ray"
+            mv v2ray-linux-64/v2ray "$IBM_APPS_ROOT/ibm_v2ray/"
+            mv v2ray-linux-64/v2ctl "$IBM_APPS_ROOT/ibm_v2ray/"
+            chmod 700 "$IBM_APPS_ROOT/ibm_v2ray/v2ray"
+            chmod 700 "$IBM_APPS_ROOT/ibm_v2ray/v2ctl"
+            Println "$info ibm v2ray 更新完成\n"
+        else
+            Println "$error 无法连接服务器, 请稍后再试\n"
+        fi
     fi
 }
 
@@ -27333,7 +27313,7 @@ IbmcfMenu()
         ;;
         15) DisableIbmcfAppCron
         ;;
-        16) UpdateShFile
+        16) UpdateShFile ibm
         ;;
         *) Println "$error 请输入正确的数字 [1-16]\n"
         ;;
@@ -29118,23 +29098,8 @@ UpdateSelf()
             fi
             if [ "$minor_ver" -lt 37 ]
             then
-                rm -f ${CREATOR_FILE:-notfound}
                 Println "$info 更新 Hls Stream Creator 脚本..."
-                wget --no-check-certificate "$CREATOR_LINK" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
-                if [ ! -s "$CREATOR_FILE" ] 
-                then
-                    Println "$error 无法连接到 Github ! 尝试备用链接..."
-                    wget --no-check-certificate "$CREATOR_LINK_BACKUP" -qO "$CREATOR_FILE" && chmod +x "$CREATOR_FILE"
-                    if [ ! -s "$CREATOR_FILE" ] 
-                    then
-                        Println "$error 无法连接备用链接, 请重试 !\n"
-                        exit 1
-                    else
-                        Println "$info Hls Stream Creator 脚本更新完成"
-                    fi
-                else
-                    Println "$info Hls Stream Creator 脚本更新完成"
-                fi
+                UpdateCreatorFile
             fi
         fi
 
@@ -29315,7 +29280,7 @@ then
     if [ ! -e "$JQ_FILE" ] 
     then
         CheckRelease "检查依赖, 耗时可能会很长"
-        InstallJq
+        InstallJQ
     fi
 
     if [ -d "$IPTV_ROOT" ]
@@ -29357,7 +29322,7 @@ then
     if [ ! -e "$JQ_FILE" ] 
     then
         CheckRelease "检查依赖, 耗时可能会很长"
-        InstallJq
+        InstallJQ
     fi
 
     if [ -d "$IPTV_ROOT" ]
@@ -29663,6 +29628,32 @@ then
     CheckShFile
     [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
 
+    if [ -d "/etc/v2ray/" ] 
+    then
+        systemctl disable v2ray.service --now > /dev/null 2> /dev/null || true
+        rm -rf /usr/bin/v2ray/
+        rm -f /etc/systemd/system/v2ray.service
+        rm -f /lib/systemd/system/v2ray.service
+        rm -f /etc/init.d/v2ray
+        mv /etc/v2ray/ /usr/local/etc/
+        if ! grep -q "v2ray:" < "/etc/passwd"
+        then
+            if grep -q '\--group ' < <(adduser --help)
+            then
+                adduser v2ray --system --group --no-create-home > /dev/null
+            else
+                adduser v2ray --system --no-create-home > /dev/null
+            fi
+            usermod -s /usr/sbin/nologin v2ray
+        fi
+        mkdir -p /var/log/v2ray/
+        [ ! -e "/var/log/v2ray/error.log" ] && printf '%s' "" > /var/log/v2ray/error.log
+        chown -R v2ray:v2ray /var/log/v2ray/
+        V2rayUpdate
+        systemctl enable v2ray
+        systemctl start v2ray
+    fi
+
     case $* in
         "e") 
             [ ! -e "$V2_CONFIG" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
@@ -29748,77 +29739,40 @@ then
                 fi
             fi
 
-            if grep -q '\--show-progress' < <(wget --help)
-            then
-                _PROGRESS_OPT="--show-progress"
-            else
-                _PROGRESS_OPT=""
-            fi
-
             CheckRelease "检查依赖, 耗时可能会很长"
-            InstallJq
+            InstallJQ
 
             Println "$info 安装 v2ray..."
-            curl -s -m 10 https://install.direct/go.sh | bash -s -- --source jsdelivr
+            { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_BACKUP"; } \
+            | sed "s+nobody+v2ray+g" \
+            | sed "s+ 'sha1'++g" \
+            | sed "s+ 'sha256'++g" \
+            | sed "s+ 'sha512'++g" \
+            | sed "s+https://api.github.com/repos/v2fly/v2ray-core/releases/latest+$FFMPEG_MIRROR_LINK/v2ray.json+g" \
+            | sed "s+https://github.com/v2fly/v2ray-core/releases/download+$FFMPEG_MIRROR_LINK/v2ray+g" | bash
 
             V2rayConfigInstall
 
-            service v2ray start > /dev/null 2>&1
+            if ! grep -q "v2ray:" < "/etc/passwd"
+            then
+                if grep -q '\--group ' < <(adduser --help)
+                then
+                    adduser v2ray --system --group --no-create-home > /dev/null
+                else
+                    adduser v2ray --system --no-create-home > /dev/null
+                fi
+                usermod -s /usr/sbin/nologin v2ray
+            fi
+
+            mkdir -p /var/log/v2ray/
+            [ ! -e "/var/log/v2ray/error.log" ] && printf '%s' "" > /var/log/v2ray/error.log
+            chown -R v2ray:v2ray /var/log/v2ray/
+            systemctl enable v2ray
+            systemctl start v2ray
             Println "$info v2ray 安装完成, 请配置域名...\n"
         ;;
         2) 
-            if grep -q '\--show-progress' < <(wget --help)
-            then
-                _PROGRESS_OPT="--show-progress"
-            else
-                _PROGRESS_OPT=""
-            fi
-
-            CheckRelease "检查依赖, 耗时可能会很长"
-
-            if [ ! -s "$IPTV_ROOT/monitor.pid" ] && [ ! -s "$IPTV_ROOT/antiddos.pid" ]
-            then
-                rm -f "${JQ_FILE:-notfound}"
-                Println "$info 更新 JQ...\n"
-                InstallJq
-            fi
-
-            echo
-            V2rayConfigUpdate
-            echo
-
-            curl -s -m 10 https://install.direct/go.sh | bash -s -- --source jsdelivr
-
-            Println "$info 更新 v2ray 脚本...\n"
-
-            sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
-
-            if [ -z "$sh_new_ver" ] 
-            then
-                Println "$error 无法连接到 Github ! 尝试备用链接...\n"
-                sh_new_ver=$(wget --no-check-certificate -qO- -t1 -T3 "$SH_LINK_BACKUP"|grep 'sh_ver="'|awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1) || true
-                [ -z "$sh_new_ver" ] && Println "$error 无法连接备用链接!\n" && exit 1
-                wget --no-check-certificate "$SH_LINK_BACKUP" -qO "${SH_FILE}_tmp"
-            else
-                wget --no-check-certificate "$SH_LINK" -qO "${SH_FILE}_tmp"
-            fi
-
-            if [ ! -s "${SH_FILE}_tmp" ] 
-            then
-                Println "$error 无法连接备用链接!\n"
-                exit 1
-            else
-                mv "${SH_FILE}_tmp" "$SH_FILE"
-                chmod +x "$SH_FILE"
-                Println "$info v2ray 脚本更新完成\n"
-            fi
-
-            if [ "$sh_new_ver" != "$sh_ver" ] 
-            then
-                rm -f "$LOCK_FILE"
-            fi
-
-            Println "$info 升级完成\n"
+            V2rayUpdate
         ;;
         3) 
             V2rayConfigUpdate
@@ -29900,14 +29854,14 @@ then
                 Println "$error v2ray 未安装...\n" && exit 1
             fi
 
-            if service v2ray status > /dev/null 2>&1
+            if [[ $(systemctl is-active v2ray) == "active" ]]
             then
                 Println "v2ray 正在运行, 是否关闭？[Y/n]"
                 read -p "(默认: Y): " v2ray_stop_yn
                 v2ray_stop_yn=${v2ray_stop_yn:-Y}
                 if [[ $v2ray_stop_yn == [Yy] ]] 
                 then
-                    service v2ray stop > /dev/null 2>&1
+                    systemctl stop v2ray > /dev/null 2>&1
                     Println "$info v2ray 已关闭\n"
                 else
                     Println "已取消...\n" && exit 1
@@ -29918,7 +29872,7 @@ then
                 v2ray_start_yn=${v2ray_start_yn:-Y}
                 if [[ $v2ray_start_yn == [Yy] ]] 
                 then
-                    service v2ray start > /dev/null 2>&1
+                    systemctl start v2ray > /dev/null 2>&1
                     Println "$info v2ray 已开启\n"
                 else
                     Println "已取消...\n" && exit 1
@@ -29930,7 +29884,7 @@ then
             then
                 Println "$error v2ray 未安装...\n" && exit 1
             fi
-            service v2ray restart > /dev/null 2>&1
+            systemctl restart v2ray > /dev/null 2>&1
             Println "$info v2ray 已重启\n"
         ;;
         *) Println "$error 请输入正确的数字 [1-18]\n"
@@ -30218,18 +30172,27 @@ case "$cmd" in
     ;;
     "ffmpeg") 
         [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
-        if grep -q '\--show-progress' < <(wget --help)
+
+        if [[ ! -x $(command -v curl) ]] 
         then
-            _PROGRESS_OPT="--show-progress"
-        else
-            _PROGRESS_OPT=""
+            Println "$info 检查依赖..."
+            CheckRelease > /dev/null
         fi
+
+        if [ ! -e "$JQ_FILE" ] 
+        then
+            CheckRelease "检查依赖, 耗时可能会很长"
+            InstallJQ
+        fi
+
         mkdir -p "$FFMPEG_MIRROR_ROOT/builds"
         mkdir -p "$FFMPEG_MIRROR_ROOT/releases"
+
         git_download=0
         release_download=0
         git_version_old=""
         release_version_old=""
+
         if [ -e "$FFMPEG_MIRROR_ROOT/index.html" ] 
         then
             while IFS= read -r line
@@ -30246,61 +30209,74 @@ case "$cmd" in
             done < "$FFMPEG_MIRROR_ROOT/index.html"
         fi
 
-        wget --no-check-certificate "https://www.johnvansickle.com/ffmpeg/index.html" -qO "$FFMPEG_MIRROR_ROOT/index.html_tmp"
-        mv "$FFMPEG_MIRROR_ROOT/index.html_tmp" "$FFMPEG_MIRROR_ROOT/index.html"
-        wget --no-check-certificate "https://www.johnvansickle.com/ffmpeg/style.css" -qO "$FFMPEG_MIRROR_ROOT/style.css"
+        if curl -s -L "https://www.johnvansickle.com/ffmpeg/index.html" -o "$FFMPEG_MIRROR_ROOT/index.html_tmp" 
+        then
+            mv "$FFMPEG_MIRROR_ROOT/index.html_tmp" "$FFMPEG_MIRROR_ROOT/index.html"
+            curl -s -L "https://www.johnvansickle.com/ffmpeg/style.css" -o "$FFMPEG_MIRROR_ROOT/style.css"
+        else
+            Println "$error ffmpeg 查询新版本出错, 无法连接 johnvansickle.com ?"
+        fi
 
-        while IFS= read -r line
-        do
-            if [[ $line == *"<th>"* ]] 
-            then
-                if [[ $line == *"git"* ]] 
+        if [ -e "$FFMPEG_MIRROR_ROOT/index.html" ] 
+        then
+            while IFS= read -r line
+            do
+                if [[ $line == *"<th>"* ]] 
                 then
-                    git_version_new=$line
-                    [ "$git_version_new" != "$git_version_old" ] && git_download=1
-                else
-                    release_version_new=$line
-                    [ "$release_version_new" != "$release_version_old" ] && release_download=1
-                fi
-            fi
-
-            if [[ $line == *"tar.xz"* ]]  
-            then
-                if [[ $line == *"git"* ]] && [ "$git_download" -eq 1 ]
-                then
-                    line=${line#*<td><a href=\"}
-                    git_link=${line%%\" style*}
-                    build_file_name=${git_link##*/}
-                    wget --timeout=10 --tries=3 --no-check-certificate "$git_link" $_PROGRESS_OPT -qO "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}_tmp"
-                    if [ ! -s "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}_tmp" ] 
+                    if [[ $line == *"git"* ]] 
                     then
-                        Println "$error ffmpeg 下载出错, 无法连接 github !" && exit 1
+                        git_version_new=$line
+                    else
+                        release_version_new=$line
+                        [ "$release_version_new" != "$release_version_old" ] && release_download=1
                     fi
-                    mv "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}_tmp" "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}"
-                else 
-                    if [ "$release_download" -eq 1 ] 
+                fi
+
+                if [[ $line == *"tar.xz"* ]]  
+                then
+                    if [[ $line == *"git"* ]] && [ "$git_download" -eq 1 ]
                     then
                         line=${line#*<td><a href=\"}
-                        release_link=${line%%\" style*}
-                        release_file_name=${release_link##*/}
-                        wget --timeout=10 --tries=3 --no-check-certificate "$release_link" $_PROGRESS_OPT -qO "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}_tmp"
-                        if [ ! -s "$FFMPEG_MIRROR_ROOT/builds/${release_file_name}_tmp" ] 
+                        git_link=${line%%\" style*}
+                        build_file_name=${git_link##*/}
+                        if [ "$git_version_new" != "$git_version_old" ] || [ ! -e "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}" ]
                         then
-                            Println "$error ffmpeg 下载出错, 无法连接 github !" && exit 1
+                            Println "$info 下载 ffmpeg git build ..."
+                            if curl -s -L "$git_link" -o "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}_tmp"
+                            then
+                                mv "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}_tmp" "$FFMPEG_MIRROR_ROOT/builds/${build_file_name}"
+                            else
+                                Println "$error ffmpeg git build 下载出错, 无法连接 github ?"
+                            fi
                         fi
-                        mv "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}_tmp" "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}"
+                    else 
+                        if [ "$release_download" -eq 1 ] 
+                        then
+                            line=${line#*<td><a href=\"}
+                            release_link=${line%%\" style*}
+                            release_file_name=${release_link##*/}
+                            if [ "$release_version_new" != "$release_version_old" ] || [ ! -e "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}" ]
+                            then
+                                Println "$info 下载 ffmpeg release build ..."
+                                if curl -s -L "$release_link" -o "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}_tmp"
+                                then
+                                    mv "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}_tmp" "$FFMPEG_MIRROR_ROOT/releases/${release_file_name}"
+                                else
+                                    Println "$error ffmpeg release build 下载出错, 无法连接 github ?"
+                                fi
+                            fi
+                        fi
                     fi
                 fi
-            fi
+            done < "$FFMPEG_MIRROR_ROOT/index.html"
 
-        done < "$FFMPEG_MIRROR_ROOT/index.html"
+            #Println "输入镜像网站链接(比如: $FFMPEG_MIRROR_LINK)"
+            #read -p "(默认: 取消): " FFMPEG_LINK
+            #[ -z "$FFMPEG_LINK" ] && echo "已取消..." && exit 1
+            #sed -i "s+https://johnvansickle.com/ffmpeg/\(builds\|releases\)/\(.*\).tar.xz\"+$FFMPEG_LINK/\1/\2.tar.xz\"+g" "$FFMPEG_MIRROR_ROOT/index.html"
 
-        #Println "输入镜像网站链接(比如: $FFMPEG_MIRROR_LINK)"
-        #read -p "(默认: 取消): " FFMPEG_LINK
-        #[ -z "$FFMPEG_LINK" ] && echo "已取消..." && exit 1
-        #sed -i "s+https://johnvansickle.com/ffmpeg/\(builds\|releases\)/\(.*\).tar.xz\"+$FFMPEG_LINK/\1/\2.tar.xz\"+g" "$FFMPEG_MIRROR_ROOT/index.html"
-
-        sed -i "s+https://johnvansickle.com/ffmpeg/\(builds\|releases\)/\(.*\).tar.xz\"+\1/\2.tar.xz\"+g" "$FFMPEG_MIRROR_ROOT/index.html"
+            sed -i "s+https://johnvansickle.com/ffmpeg/\(builds\|releases\)/\(.*\).tar.xz\"+\1/\2.tar.xz\"+g" "$FFMPEG_MIRROR_ROOT/index.html"
+        fi
 
         while IFS= read -r line
         do
@@ -30311,9 +30287,14 @@ case "$cmd" in
                 poppler_name="poppler-0.81.0"
                 if [ ! -e "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz" ] 
                 then
+                    Println "$info 下载 poppler ..."
                     rm -f "$FFMPEG_MIRROR_ROOT/poppler-"*.tar.xz
-                    wget --timeout=10 --tries=3 --no-check-certificate "https://poppler.freedesktop.org/$poppler_name.tar.xz" -qO "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz_tmp"
-                    mv "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz_tmp" "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz"
+                    if curl -s -L "https://poppler.freedesktop.org/$poppler_name.tar.xz" -o "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz_tmp" 
+                    then
+                        mv "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz_tmp" "$FFMPEG_MIRROR_ROOT/$poppler_name.tar.xz"
+                    else
+                        Println "$error poppler 下载出错"
+                    fi
                 fi
             elif [[ $line == *"poppler encoding data"* ]] 
             then
@@ -30321,49 +30302,128 @@ case "$cmd" in
                 poppler_data_name=${line%%.tar.gz*}
                 if [ ! -e "$FFMPEG_MIRROR_ROOT/$poppler_data_name.tar.gz" ] 
                 then
+                    Println "$info 下载 poppler-data ..."
                     rm -f "$FFMPEG_MIRROR_ROOT/poppler-data-"*.tar.gz
-                    wget --timeout=10 --tries=3 --no-check-certificate "https://poppler.freedesktop.org/$poppler_data_name.tar.gz" -qO "$FFMPEG_MIRROR_ROOT/$poppler_data_name.tar.gz_tmp"
-                    mv "$FFMPEG_MIRROR_ROOT/$poppler_data_name.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/$poppler_data_name.tar.gz"
+                    if curl -s -L "https://poppler.freedesktop.org/$poppler_data_name.tar.gz" -o "$FFMPEG_MIRROR_ROOT/$poppler_data_name.tar.gz_tmp"
+                    then
+                        mv "$FFMPEG_MIRROR_ROOT/$poppler_data_name.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/$poppler_data_name.tar.gz"
+                    else
+                        Println "$error poppler-data 下载出错"
+                    fi
                 fi
                 break
             fi
-        done < <(wget --timeout=10 --tries=3 --no-check-certificate "https://poppler.freedesktop.org/" -qO-)
+        done < <(curl -s -Lm 20 "https://poppler.freedesktop.org/")
 
-        jq_ver=$(curl -s -m 10 "https://api.github.com/repos/stedolan/jq/releases/latest" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') || true
-        if [ -n "$jq_ver" ]
+        if jq_ver=$(curl -s -Lm 20 "https://api.github.com/repos/stedolan/jq/releases/latest" | $JQ_FILE -r '.tag_name')
         then
-            mkdir -p "$FFMPEG_MIRROR_ROOT/$jq_ver/"
-            wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/stedolan/jq/releases/download/$jq_ver/jq-linux64" $_PROGRESS_OPT -qO "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64_tmp"
-            wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/stedolan/jq/releases/download/$jq_ver/jq-linux32" $_PROGRESS_OPT -qO "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp"
-            if [ ! -s "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64_tmp" ] || [ ! -s "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp" ]
+            if [ ! -e "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64" ] || [ ! -e "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32" ] 
             then
-                Println "$error jq 下载出错, 无法连接 github !" && exit 1
+                Println "$info 下载 jq ..."
+                rm -f "$FFMPEG_MIRROR_ROOT/jq-"*
+                mkdir -p "$FFMPEG_MIRROR_ROOT/$jq_ver/"
+                if curl -s -L "https://github.com/stedolan/jq/releases/download/$jq_ver/jq-linux64" -o "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64_tmp" && curl -s -L "https://github.com/stedolan/jq/releases/download/$jq_ver/jq-linux32" -o "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp"
+                then
+                    mv "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64_tmp" "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64"
+                    mv "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp" "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32"
+                else
+                    Println "$error jq 下载出错, 无法连接 github ?"
+                fi
             fi
-            mv "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64_tmp" "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64"
-            mv "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp" "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32"
+        else
+            Println "$error jq 下载出错, 无法连接 github ?"
         fi
 
-        wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/winshining/nginx-http-flv-module/archive/master.zip" -qO "$FFMPEG_MIRROR_ROOT/nginx-http-flv-module.zip_tmp"
-        mv "$FFMPEG_MIRROR_ROOT/nginx-http-flv-module.zip_tmp" "$FFMPEG_MIRROR_ROOT/nginx-http-flv-module.zip"
-        wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/eddieantonio/imgcat/archive/master.zip" -qO "$FFMPEG_MIRROR_ROOT/imgcat.zip_tmp"
-        mv "$FFMPEG_MIRROR_ROOT/imgcat.zip_tmp" "$FFMPEG_MIRROR_ROOT/imgcat.zip"
-        wget --timeout=10 --tries=3 --no-check-certificate "https://api.github.com/repos/stedolan/jq/releases/latest" -qO "$FFMPEG_MIRROR_ROOT/jq.json_tmp"
-        mv "$FFMPEG_MIRROR_ROOT/jq.json_tmp" "$FFMPEG_MIRROR_ROOT/jq.json"
+        if v2ray_ver=$(curl -s -m 30 "https://api.github.com/repos/v2ray/v2ray-core/releases/latest" | $JQ_FILE -r '.tag_name') 
+        then
+            if [ ! -e "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-64.zip" ] || [ ! -e "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-32.zip" ] 
+            then
+                Println "$info 下载 v2ray ..."
+                mkdir -p "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/"
+                if curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-64.zip" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-64.zip_tmp" \
+                && curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-32.zip" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-32.zip_tmp" \
+                && curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-64.zip.dgst" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-64.zip.dgst_tmp" \
+                && curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-32.zip.dgst" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-32.zip.dgst_tmp"
+                then
+                    mv "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-64.zip_tmp" "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-64.zip"
+                    mv "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-32.zip_tmp" "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-32.zip"
+                    mv "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-64.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-64.zip.dgst"
+                    mv "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-32.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-32.zip.dgst"
+                else
+                    Println "$error v2ray 下载出错, 无法连接 github ?"
+                fi
+            fi
+        else
+            Println "$error v2ray 下载出错, 无法连接 github ?"
+        fi
+
+        Println "$info 下载 nginx-http-flv-module ..."
+        if curl -s -L "https://github.com/winshining/nginx-http-flv-module/archive/master.zip" -o "$FFMPEG_MIRROR_ROOT/nginx-http-flv-module.zip_tmp"
+        then
+            mv "$FFMPEG_MIRROR_ROOT/nginx-http-flv-module.zip_tmp" "$FFMPEG_MIRROR_ROOT/nginx-http-flv-module.zip"
+        else
+            Println "$error nginx-http-flv-module 下载出错, 无法连接 github ?"
+        fi
+
+        Println "$info 下载 imgcat ..."
+        if curl -s -L "https://github.com/eddieantonio/imgcat/archive/master.zip" -o "$FFMPEG_MIRROR_ROOT/imgcat.zip_tmp"
+        then
+            mv "$FFMPEG_MIRROR_ROOT/imgcat.zip_tmp" "$FFMPEG_MIRROR_ROOT/imgcat.zip"
+        else
+            Println "$error imgcat 下载出错, 无法连接 github ?"
+        fi
+
+        if curl -s -L "https://api.github.com/repos/stedolan/jq/releases/latest" -o "$FFMPEG_MIRROR_ROOT/jq.json_tmp"
+        then
+            mv "$FFMPEG_MIRROR_ROOT/jq.json_tmp" "$FFMPEG_MIRROR_ROOT/jq.json"
+        else
+            Println "$error jq.json 下载出错, 无法连接 github ?"
+        fi
+
+        if curl -s -L "https://api.github.com/repos/v2ray/v2ray-core/releases/latest" -o "$FFMPEG_MIRROR_ROOT/v2ray.json_tmp"
+        then
+            mv "$FFMPEG_MIRROR_ROOT/v2ray.json_tmp" "$FFMPEG_MIRROR_ROOT/v2ray.json"
+        else
+            Println "$error v2ray.json 下载出错, 无法连接 github ?"
+        fi
 
         if [ ! -e "$FFMPEG_MIRROR_ROOT/openssl-1.1.1f-sess_set_get_cb_yield.patch" ]
         then
-            wget --timeout=10 --tries=3 --no-check-certificate "https://raw.githubusercontent.com/openresty/openresty/master/patches/openssl-1.1.1f-sess_set_get_cb_yield.patch" -qO "$FFMPEG_MIRROR_ROOT/openssl-1.1.1f-sess_set_get_cb_yield.patch"
-        fi
-        if [ ! -e "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz" ] 
-        then
-            wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/fontforge/fontforge/releases/download/20190413/fontforge-20190413.tar.gz" -qO "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz_tmp"
-            mv "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz"
+            if curl -s -L "https://raw.githubusercontent.com/openresty/openresty/master/patches/openssl-1.1.1f-sess_set_get_cb_yield.patch_tmp" -o "$FFMPEG_MIRROR_ROOT/openssl-1.1.1f-sess_set_get_cb_yield.patch_tmp"
+            then
+                mv "$FFMPEG_MIRROR_ROOT/openssl-1.1.1f-sess_set_get_cb_yield.patch_tmp" "$FFMPEG_MIRROR_ROOT/openssl-1.1.1f-sess_set_get_cb_yield.patch"
+            else
+                Println "$error openssl patch 下载出错, 无法连接 github ?"
+            fi
         fi
 
+        if [ ! -e "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz" ] 
+        then
+            if curl -s -L "https://github.com/fontforge/fontforge/releases/download/20190413/fontforge-20190413.tar.gz" -o "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz_tmp"
+            then
+                mv "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz"
+            else
+                Println "$error fontforge 下载出错, 无法连接 github ?"
+            fi
+        fi
+
+        Println "$info 下载 pdf2htmlEX ..."
         if [ ! -e "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip" ] 
         then
-            wget --timeout=10 --tries=3 --no-check-certificate "https://github.com/pdf2htmlEX/pdf2htmlEX/archive/v0.18.7-poppler-0.81.0.zip" -qO "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip_tmp"
-            mv "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip_tmp" "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip"
+            if curl -s -L "https://github.com/pdf2htmlEX/pdf2htmlEX/archive/v0.18.7-poppler-0.81.0.zip" -o "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip_tmp"
+            then
+                mv "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip_tmp" "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip"
+            else
+                Println "$error pdf2htmlEX 下载出错, 无法连接 github ?"
+            fi
+        fi
+
+        Println "$info 下载 v2ray install-release.sh ..."
+        if curl -s -L "$V2_LINK" -o "$FFMPEG_MIRROR_ROOT/v2ray_install-release.sh_tmp"
+        then
+            mv "$FFMPEG_MIRROR_ROOT/v2ray_install-release.sh_tmp" "$FFMPEG_MIRROR_ROOT/v2ray_install-release.sh"
+        else
+            Println "$error v2ray install-release.sh 下载出错, 无法连接 github ?"
         fi
         exit 0
     ;;
