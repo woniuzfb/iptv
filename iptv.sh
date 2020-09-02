@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# A [ ffmpeg / v2ray / nginx / openresty / cloudflare partner,workers / IBM CF ] Wrapper Script By MTimer
+# A [ ffmpeg / v2ray / nginx / openresty / cloudflare partner,workers / IBM CF / Armbian ] Wrapper Script By MTimer
 # Copyright (C) 2019
 # Released under BSD 3 Clause License
 #
@@ -82,6 +82,8 @@
 #
 #     ibm 打开 IBM Cloud Foundry 面板
 #        ibm v2 打开 ibm v2ray app 管理面板
+#
+#     arm 打开 Armbian 管理面板
 
 set -euo pipefail
 
@@ -95,6 +97,7 @@ SH_FILE="/usr/local/bin/tv"
 OR_FILE="/usr/local/bin/or"
 NX_FILE="/usr/local/bin/nx"
 XC_FILE="/usr/local/bin/cx"
+ARM_FILE="/usr/local/bin/arm"
 IPTV_ROOT="/usr/local/iptv"
 JQ_FILE="$IPTV_ROOT/jq"
 CHANNELS_FILE="$IPTV_ROOT/channels.json"
@@ -450,6 +453,9 @@ CheckRelease()
     elif grep -Eqi "Ubuntu" < /etc/issue
     then
         release="ubu"
+    elif grep -Eqi "Armbian" < /etc/issue
+    then
+        release="arm"
     elif [[ $(uname) == "Darwin" ]] 
     then
         release="mac"
@@ -1431,7 +1437,7 @@ Spinner(){
     IFS=" " read -a list < <(echo -e '\xe2\xa0\x8b \xe2\xa0\x99 \xe2\xa0\xb9 \xe2\xa0\xb8 \xe2\xa0\xbc \xe2\xa0\xb4 \xe2\xa0\xa6 \xe2\xa0\xa7 \xe2\xa0\x87 \xe2\xa0\x8f')
     tempfile=$(mktemp)
 
-    trap 'inquirer:cleanup' SIGINT
+    trap 'inquirer cleanup' SIGINT
 
     stty -echo && tput civis
     $FUNCTION_NAME >> "$tempfile" 2>>"$tempfile" &
@@ -1497,6 +1503,7 @@ CheckShFile()
     [ ! -e "$NX_FILE" ] && ln -s "$SH_FILE" "$NX_FILE"
     [ ! -e "$V2_FILE" ] && ln -s "$SH_FILE" "$V2_FILE"
     [ ! -e "$XC_FILE" ] && ln -s "$SH_FILE" "$XC_FILE"
+    [ ! -e "$ARM_FILE" ] && ln -s "$SH_FILE" "$ARM_FILE"
 
     return 0
 }
@@ -1617,7 +1624,28 @@ InstallFFmpeg()
 
 InstallJQ()
 {
-    if [ ! -e "$JQ_FILE" ]
+    if [[ -x $(command -v armbian-config) ]] 
+    then
+        if ! /usr/local/bin/jq -V > /dev/null 2>&1 
+        then
+            Println "$info 开始下载/安装 JQ..."
+            cd ~
+            git clone https://github.com/stedolan/jq.git > /dev/null
+            cd jq
+            apt install flex bison libtool make automake autoconf > /dev/null
+            git submodule update --init > /dev/null
+            autoreconf -fi > /dev/null
+            ./configure --with-oniguruma=builtin > /dev/null
+            make -j8 > /dev/null
+            make install > /dev/null
+        fi
+        if [ "$JQ_FILE" != "/usr/local/bin/jq" ] 
+        then
+            rm -f "$JQ_FILE"
+            ln -sf /usr/local/bin/jq "$JQ_FILE"
+        fi
+        Println "$info JQ 安装完成..."
+    elif [ ! -e "$JQ_FILE" ]
     then
         Println "$info 开始下载/安装 JQ..."
         #experimental# grep -Po '"tag_name": "jq-\K.*?(?=")'
@@ -7832,7 +7860,7 @@ Set4gtvAccEmail()
     while read -p "(默认: 随机): " _4gtv_acc_email 
     do
         [ -z "$_4gtv_acc_email" ] && _4gtv_acc_email="$(RandStr)_$(printf '%(%s)T')@gmail.com"
-        if [[ $_4gtv_acc_email =~ ^[A-Za-z0-9](([_\.\-]?[a-zA-Z0-9]+)*)@([A-Za-z0-9]+)(([\.\-]?[a-zA-Z0-9]+)*)\.([A-Za-z]{2,})$ ]] 
+        if [[ $_4gtv_acc_email =~ ^[A-Za-z0-9]([a-zA-Z0-9_\.\-]*)@([A-Za-z0-9]+)([a-zA-Z0-9\.\-]*)\.([A-Za-z]{2,})$ ]] 
         then
             break
         else
@@ -22299,7 +22327,7 @@ SetCloudflareUserEmail()
     while read -p "(默认: 随机): " cf_user_email 
     do
         [ -z "$cf_user_email" ] && cf_user_email="$(RandStr)_$(printf '%(%s)T')@gmail.com"
-        if [[ $cf_user_email =~ ^[A-Za-z0-9](([_\.\-]?[a-zA-Z0-9]+)*)@([A-Za-z0-9]+)(([\.\-]?[a-zA-Z0-9]+)*)\.([A-Za-z]{2,})$ ]] 
+        if [[ $cf_user_email =~ ^[A-Za-z0-9]([a-zA-Z0-9_\.\-]*)@([A-Za-z0-9]+)([a-zA-Z0-9\.\-]*)\.([A-Za-z]{2,})$ ]] 
         then
             break
         else
@@ -30692,17 +30720,25 @@ then
             Println "$info 设置 postfix ..."
             echo "[$smtp_address]:$smtp_port $smtp_email:$smtp_pass" > /etc/postfix/sasl_passwd
             postmap /etc/postfix/sasl_passwd
-            echo "root@$hostname $smtp_email" > /etc/postfix/generic
+            echo "$USER@$hostname $smtp_email" > /etc/postfix/generic
             postmap /etc/postfix/generic
             for option in "${options[@]}"
             do
-                if ! grep "${option%=*} = " < /etc/postfix/main.cf
+                if grep -q "${option%=*} = " < /etc/postfix/main.cf
                 then
-                    echo "${option//=/ = }" >> /etc/postfix/main.cf
-                else
                     sed -i "0,/.*${option%=*} = .*/s//${option%=*} = ${option#*=}/" /etc/postfix/main.cf
+                elif grep -q "${option%=*}=" < /etc/postfix/main.cf 
+                then
+                    sed -i "0,/.*${option%=*}=.*/s//${option%=*}=${option#*=}/" /etc/postfix/main.cf
+                else
+                    echo "${option//=/ = }" >> /etc/postfix/main.cf
                 fi
             done
+            if ! grep -q "$USER:" < /etc/aliases
+            then
+                echo "$USER: $smtp_email" >> /etc/aliases
+                newaliases
+            fi
             if [[ $(ps --no-headers -o comm 1) == "systemd" ]] 
             then
                 systemctl restart postfix
@@ -30983,7 +31019,7 @@ then
         ;;
     esac
     exit 0
-elif [ "${0##*/}" == "cx" ] 
+elif [ "${0##*/}" == "cx" ] || [ "${0##*/}" == "cx.sh" ]
 then
     [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
 
@@ -31085,6 +31121,430 @@ ${green}8.${normal} 浏览频道
             ViewXtreamCodesChnls
         ;;
         *) Println "$error 请输入正确的数字 [1-8]\n"
+        ;;
+    esac
+    exit 0
+elif [ "${0##*/}" == "arm" ] || [ "${0##*/}" == "arm.sh" ]
+then
+    if [[ ! -x $(command -v armbian-config) ]] 
+    then
+        Println "$error 不是 Armbian 系统\n"
+        exit 1
+    fi
+
+    JQ_FILE="/usr/local/bin/jq"
+
+    Println "  Armbian 管理面板 ${normal}${red}[v$sh_ver]${normal}
+
+${green}1.${normal} 更改 apt 源
+${green}2.${normal} 修复 N1 dtb
+${green}3.${normal} 安装 docker
+${green}4.${normal} 安装 dnscrypt
+${green}5.${normal} 安装 openwrt
+————————————
+${green}6.${normal} 设置 docker 镜像加速
+${green}7.${normal} 更新脚本
+
+"
+    read -p "请输入数字 [1-7]: " armbian_num
+
+    case $armbian_num in
+        1) 
+            echo
+            apt_sources_options=( '国内' '国外' )
+            inquirer list_input "选择源" apt_sources_options apt_sources
+            if [[ $apt_sources == "国内" ]]
+            then
+                sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
+                if [ -f "/etc/apt/sources.list.d/armbian.list" ]
+                then
+                    sed -i 's|http[s]*://apt.armbian.com|http://mirrors.nju.edu.cn/armbian|g' /etc/apt/sources.list.d/armbian.list
+                fi
+            else
+                sed -i 's/mirrors.ustc.edu.cn/deb.debian.org/g' /etc/apt/sources.list
+                if [ -f "/etc/apt/sources.list.d/armbian.list" ]
+                then
+                    sed -i 's|http://mirrors.nju.edu.cn/armbian|https://apt.armbian.com|g' /etc/apt/sources.list.d/armbian.list
+                fi
+            fi
+            Println "$info 源更改成功\n"
+        ;;
+        2) 
+            Println "$tip 适用于 斐讯 n1, apt upgrade 后需要重新修复"
+            yn_options=( '否' '是' )
+            inquirer list_input "是否继续" yn_options fix_n1_dtb
+            if [[ $fix_n1_dtb == "否" ]] 
+            then
+                Println "已取消 ...\n"
+            else
+                if curl -L "$FFMPEG_MIRROR_LINK/Amlogic_s905-kernel-master.zip" -o ~/Amlogic_s905-kernel-master.zip
+                then
+                    cd ~
+                    unzip Amlogic_s905-kernel-master.zip
+                    cd Amlogic_s905-kernel-master
+                    sed -i 's/interrupts = <29/interrupts = <25/' arch/arm64/boot/dts/amlogic/meson-gxl-s905d-p230.dts
+                    make defconfig
+                    make dtbs
+                    cp -f arch/arm64/boot/dts/amlogic/meson-gxl-s905d-phicomm-n1.dtb /boot/dts/amlogic/meson-gxl-s905d-phicomm-n1.dtb
+                    Println "$info 修复成功\n"
+                else
+                    Println "$error 下载 Amlogic_s905-kernel-master.zip 发生错误, 请稍后再试\n"
+                fi
+            fi
+        ;;
+        3)
+            if [[ -x $(command -v docker) ]] 
+            then
+                Println "$error docker 已经存在\n"
+                exit 1
+            fi
+            if grep -q "docker-ce" < /etc/apt/sources.list
+            then
+                sed -i '/docker-ce/d' /etc/apt/sources.list
+            fi
+            if [ ! -f "/etc/apt/sources.list.d/docker.list" ] 
+            then
+                curl -fsSL http://mirrors.aliyun.com/docker-ce/linux/debian/gpg | apt-key add -
+                echo "deb [arch=amd64] http://mirrors.aliyun.com/docker-ce/linux/debian $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+            fi
+            apt-get update
+            apt-get install docker-ce docker-ce-cli containerd.io
+            Println "$info docker 安装成功\n"
+        ;;
+        4)
+            if dnscrypt_version=$(curl -s -L "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
+            then
+                DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy)
+                dnscrypt_version_old=${DNSCRYPT_ROOT##*-}
+                if [[ $dnscrypt_version_old == "*" ]]
+                then
+                    Println "$tip 请确保已经将本机器用网线连接到主路由器的 LAN 口"
+                    yn_options=( '否' '是' )
+                    inquirer list_input "是否继续" yn_options continue_yn
+                    if [[ $continue_yn == "否" ]] 
+                    then
+                        Println "已取消 ...\n"
+                        exit 1
+                    fi
+
+                    echo
+                    inquirer text_input "请输入主路由器 ip : " eth0_gateway "取消"
+                    if [ "$eth0_gateway" == "取消" ]
+                    then
+                        Println "已取消 ...\n"
+                        exit 1
+                    fi
+
+                    Println "$tip 必须和主路由器 ip 在同一网段"
+                    inquirer text_input "设置本机静态 ip : " eth0_ip "取消"
+                    if [ "$eth0_ip" == "取消" ]
+                    then
+                        Println "已取消 ...\n"
+                        exit 1
+                    fi
+
+                    Println "$info 下载 dnscrypt proxy ..."
+                    if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp
+                    then
+                        Println "$info 设置 dnscrypt proxy ..."
+                        cd ~
+                        mv dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz
+                        tar zxf dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz
+                        mv linux-arm64 dnscrypt-$dnscrypt_version
+                        cd dnscrypt-$dnscrypt_version
+                        cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
+
+                        cp -f /etc/NetworkManager/system-connections/eth0.nmconnection ~/eth0.nmconnection-old
+                        while IFS= read -r line 
+                        do
+                            if [[ $line =~ uuid= ]] 
+                            then
+                                etho_uuid=${line#*=}
+                            elif [[ $line =~ timestamp= ]] 
+                            then
+                                eth0_timestamp=${line#*=}
+                            elif [[ $line =~ mac-address= ]]
+                            then
+                                eth0_mac=${line#*=}
+                                break
+                            fi
+                        done < "/etc/NetworkManager/system-connections/eth0.nmconnection"
+
+                        echo -e "[connection]
+id=eth0
+uuid=$etho_uuid
+type=ethernet
+autoconnect=true
+interface-name=eth0
+permissions=
+timestamp=$eth0_timestamp
+
+[ethernet]
+mac-address=$eth0_mac
+mac-address-blacklist=
+
+[ipv4]
+address1=$eth0_ip/24,$eth0_gateway
+dns=127.0.0.1;
+dns-priority=100
+dns-search=
+ignore-auto-dns=true
+method=manual
+
+[ipv6]
+addr-gen-mode=stable-privacy
+dns-search=
+method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
+
+                        sed -i "0,/.*server_names = [.*/s//server_names = ['alidns-doh','geekdns-doh']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*listen_addresses = [.*/s//listen_addresses = ['127.0.0.1:53', '$eth0_ip:53']/" dnscrypt-proxy.toml
+
+                        apt-get -y remove resolvconf > /dev/null
+
+                        systemctl stop systemd-resolved
+                        systemctl disable systemd-resolved
+                        ./dnscrypt-proxy -service install > /dev/null
+                        ./dnscrypt-proxy -service start > /dev/null
+
+                        nmcli connection reload
+                        systemctl restart NetworkManager
+
+                        Println "$info dnscrypt proxy 安装配置成功\n"
+                        # echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
+                    else
+                        Println "$error dnscrypt proxy 下载失败, 请重试\n"
+                    fi
+                elif [[ $dnscrypt_version_old != "$dnscrypt_version" ]] 
+                then
+                    if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp
+                    then
+                        cd ~/dnscrypt-$dnscrypt_version_old
+                        ./dnscrypt-proxy -service stop > /dev/null
+                        ./dnscrypt-proxy -service uninstall > /dev/null
+                        cd ~
+                        mv dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz
+                        tar zxf dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz
+                        mv linux-arm64 dnscrypt-$dnscrypt_version
+                        cd dnscrypt-$dnscrypt_version
+                        cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
+                        eth0_ip=$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)
+                        sed -i "0,/.*server_names = [.*/s//server_names = ['alidns-doh','geekdns-doh']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*listen_addresses = [.*/s//listen_addresses = ['127.0.0.1:53', '$eth0_ip:53']/" dnscrypt-proxy.toml
+                        ./dnscrypt-proxy -service install > /dev/null
+                        ./dnscrypt-proxy -service start > /dev/null
+                        Println "$info dnscrypt proxy 升级成功\n"
+                    else
+                        Println "$error dnscrypt proxy 下载失败, 请重试\n"
+                    fi
+                else
+                    Println "$error dnscrypt proxy 已经是最新\n"
+                fi
+            else
+                Println "$error 无法连接服务器, 请稍后再试\n"
+            fi
+        ;;
+        5)
+            if [[ ! -x $(command -v docker) ]] 
+            then
+                Println "$error 请先安装 docker\n"
+                exit 1
+            fi
+
+            DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy)
+            dnscrypt_version_old=${DNSCRYPT_ROOT##*-}
+            if [[ $dnscrypt_version_old == "*" ]] 
+            then
+                Println "$error 请先安装 dnscrypt proxy\n"
+                exit 1
+            fi
+
+            if grep -q "armvirt-64-19.07.3" < <(docker images)
+            then
+                Println "$error openwrt 已经存在\n"
+                exit 1
+            fi
+
+            Println "$tip openwrt 作为旁路由, 请确保已经将本机器用网线连接到主路由器的 LAN 口"
+            yn_options=( '否' '是' )
+            inquirer list_input "是否继续" yn_options continue_yn
+            if [[ $continue_yn == "否" ]] 
+            then
+                Println "已取消 ...\n"
+                exit 1
+            fi
+
+            if ! ip addr show hMACvLAN 2> /dev/null
+            then
+                Println "$tip 必须和主路由器 ip 在同一网段"
+                inquirer text_input "设置虚拟接口 hMACvLAN 静态 ip : " hMACvLAN_ip "取消"
+                if [ "$hMACvLAN_ip" == "取消" ]
+                then
+                    Println "已取消 ...\n"
+                    exit 1
+                fi
+
+                Println "$tip 必须和主路由器 ip 在同一网段"
+                inquirer text_input "设置 openwrt 静态 ip : " openwrt_ip "取消"
+                if [ "$openwrt_ip" == "取消" ]
+                then
+                    Println "已取消 ...\n"
+                    exit 1
+                fi
+
+                nmcli connection add type macvlan dev eth0 mode bridge ifname hMACvLAN autoconnect yes save yes > /dev/null
+                nmcli connection modify hMACvLAN ipv4.route-metric 50 > /dev/null
+
+                while IFS= read -r line 
+                do
+                    if [[ $line =~ uuid= ]] 
+                    then
+                        hMACvLAN_uuid=${line#*=}
+                    elif [[ $line =~ timestamp= ]] 
+                    then
+                        hMACvLAN_timestamp=${line#*=}
+                        break
+                    fi
+                done < "/etc/NetworkManager/system-connections/hMACvLAN.nmconnection"
+
+                echo -e "[connection]
+id=hMACvLAN
+uuid=$hMACvLAN_uuid
+type=macvlan
+interface-name=hMACvLAN
+permissions=
+timestamp=$hMACvLAN_timestamp
+
+[macvlan]
+mode=2
+parent=eth0
+
+[ipv4]
+address1=$hMACvLAN_ip/24,$openwrt_ip
+dns=127.0.0.1;
+dns-search=
+ignore-auto-dns=true
+method=manual
+route-metric=50
+
+[ipv6]
+addr-gen-mode=stable-privacy
+dns-search=
+method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
+            else
+                while IFS= read -r line 
+                do
+                    if [[ $line =~ ^address1=([^/]+)/24,(.+) ]] 
+                    then
+                        openwrt_ip=${BASH_REMATCH[2]}
+                        break
+                    fi
+                done < "/etc/NetworkManager/system-connections/hMACvLAN.nmconnection"
+            fi
+
+            while IFS= read -r line 
+            do
+                if [[ $line =~ ^address1=([^/]+)/24,(.+) ]]
+                then
+                    eth0_ip=${BASH_REMATCH[1]}
+                    eth0_gateway=${BASH_REMATCH[2]}
+                    break
+                fi
+            done < "/etc/NetworkManager/system-connections/eth0.nmconnection"
+
+            if [ ! -s "/etc/docker/daemon.json" ] 
+            then
+                printf '%s' "{}" > /etc/docker/daemon.json
+            fi
+
+            if ! $JQ_FILE -V > /dev/null 2>&1
+            then
+                Spinner "编译安装 JQ, 耗时可能会很长" InstallJQ
+            fi
+
+            jq_path='["dns"]'
+            JQ replace /etc/docker/daemon.json '["'"$eth0_ip"'","8.8.8.8"]'
+
+            docker network create -d macvlan \
+                --subnet=$eth0_ip/24 \
+                --gateway=$eth0_gateway \
+                -o parent=eth0 macnet
+
+            printf '%s' '#!/usr/bin/env bash
+
+interface=$1
+event=$2
+
+if [[ $event == "up" ]] && { [[ $interface == "eth0" ]] || [[ $interface == "hMACvLAN" ]]; }
+then
+  ip link set $interface promisc on
+  echo "$interface received $event" | systemd-cat -p info -t dispatch_script
+fi' > /etc/NetworkManager/dispatcher.d/promisc.sh
+
+            chmod +x /etc/NetworkManager/dispatcher.d/promisc.sh
+
+            ip link set eth0 promisc on
+            ip link set hMACvLAN promisc on
+
+            openwrt_network="
+config interface 'loopback'
+        option ifname 'lo'
+        option proto 'static'
+        option ipaddr '127.0.0.1'
+        option netmask '255.0.0.0'
+
+config interface 'wan'
+        option ifname 'eth0'
+        option proto 'static'
+        option netmask '255.255.255.0'
+        option ipaddr '$openwrt_ip'
+        option gateway '$eth0_gateway'
+        list dns '$eth0_ip'
+            "
+
+            docker run -dit \
+                --restart unless-stopped \
+                --network macnet \
+                --privileged \
+                --name openwrt \
+                openwrtorg/rootfs:armvirt-64-19.07.3 \
+                /bin/ash -c "echo -e ${openwrt_network} > /etc/config/network && /etc/init.d/network restart"
+
+            Println "$info openwrt 安装成功\n"
+        ;;
+        6)
+            if [[ ! -x $(command -v docker) ]] 
+            then
+                Println "$error 请先安装 docker\n"
+                exit 1
+            fi
+
+            if [ ! -s "/etc/docker/daemon.json" ] 
+            then
+                printf '%s' "{}" > /etc/docker/daemon.json
+            fi
+
+            Println "$tip 可以登录阿里云 (https://cr.console.aliyun.com/cn-shanghai/) 查看镜像加速器地址"
+            inquirer text_input "请输入加速器地址 : " registry_mirrors "取消"
+            if [ "$registry_mirrors" == "取消" ]
+            then
+                Println "已取消 ...\n"
+                exit 1
+            fi
+
+            if ! $JQ_FILE -V > /dev/null 2>&1
+            then
+                Spinner "编译安装 JQ, 耗时可能会很长" InstallJQ
+            fi
+
+            jq_path='["registry-mirrors"]'
+            JQ replace /etc/docker/daemon.json '["'"$registry_mirrors"'"]'
+
+            Println "$info docker 镜像加速设置成功\n"
+        ;;
+        7)
+            UpdateShFile Armbian
+        ;;
+        *) Println "$error 请输入正确的数字 [1-7]\n"
         ;;
     esac
     exit 0
@@ -31774,6 +32234,23 @@ case "$cmd" in
             Println "$error v2ray 下载出错, 无法连接 github ?"
         fi
 
+        if dnscrypt_ver=$(curl -s -m 30 "https://api.github.com/repos/DNSCrypt/dnscrypt-proxy/releases/latest" | $JQ_FILE -r '.tag_name') 
+        then
+            if [ ! -e "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_ver.tar.gz" ]
+            then
+                Println "$info 下载 dnscrypt proxy ..."
+                mkdir -p "$FFMPEG_MIRROR_ROOT/dnscrypt/"
+                if curl -s -L "https://github.com/DNSCrypt/dnscrypt-proxy/releases/download/$dnscrypt_ver/dnscrypt-proxy-linux_arm64-$dnscrypt_ver.tar.gz" -o "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_ver.tar.gz_tmp"
+                then
+                    mv "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_ver.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_ver.tar.gz"
+                else
+                    Println "$error dnscrypt 下载出错, 无法连接 github ?"
+                fi
+            fi
+        else
+            Println "$error dnscrypt 下载出错, 无法连接 github ?"
+        fi
+
         Println "$info 下载 nginx-http-flv-module ..."
         if curl -s -L "https://github.com/winshining/nginx-http-flv-module/archive/master.zip" -o "$FFMPEG_MIRROR_ROOT/nginx-http-flv-module.zip_tmp"
         then
@@ -31802,6 +32279,13 @@ case "$cmd" in
             mv "$FFMPEG_MIRROR_ROOT/v2ray.json_tmp" "$FFMPEG_MIRROR_ROOT/v2ray.json"
         else
             Println "$error v2ray.json 下载出错, 无法连接 github ?"
+        fi
+
+        if curl -s -L "https://api.github.com/repos/DNSCrypt/dnscrypt-proxy/releases/latest" -o "$FFMPEG_MIRROR_ROOT/dnscrypt.json_tmp"
+        then
+            mv "$FFMPEG_MIRROR_ROOT/dnscrypt.json_tmp" "$FFMPEG_MIRROR_ROOT/dnscrypt.json"
+        else
+            Println "$error dnscrypt.json 下载出错, 无法连接 github ?"
         fi
 
         if [ ! -e "$FFMPEG_MIRROR_ROOT/openssl-1.1.1f-sess_set_get_cb_yield.patch" ]
@@ -31841,6 +32325,14 @@ case "$cmd" in
             mv "$FFMPEG_MIRROR_ROOT/v2ray_install-release.sh_tmp" "$FFMPEG_MIRROR_ROOT/v2ray_install-release.sh"
         else
             Println "$error v2ray install-release.sh 下载出错, 无法连接 github ?"
+        fi
+
+        Println "$info 下载 Amlogic_s905-kernel-master.zip ..."
+        if curl -s -L "https://github.com/150balbes/Amlogic_s905-kernel/archive/master.zip" -o "$FFMPEG_MIRROR_ROOT/Amlogic_s905-kernel-master.zip_tmp"
+        then
+            mv "$FFMPEG_MIRROR_ROOT/Amlogic_s905-kernel-master.zip_tmp" "$FFMPEG_MIRROR_ROOT/Amlogic_s905-kernel-master.zip"
+        else
+            Println "$error Amlogic_s905-kernel-master.zip 下载出错, 无法连接 github ?"
         fi
         exit 0
     ;;

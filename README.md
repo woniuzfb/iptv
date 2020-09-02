@@ -1,4 +1,4 @@
-# 一键管理 IPTV / v2ray / Nginx / OpenResty / cloudflare partner,workers / IBM CF 脚本
+# 一键管理 IPTV / v2ray / Nginx / OpenResty / cloudflare partner,workers / IBM CF / Armbian 脚本
 
 ## A ffmpeg / v2ray / Nginx / OpenResty wrapper (... => hls <=> flv <= ...)
 
@@ -85,6 +85,21 @@ wget -q http://hbo.epub.fun/or.sh && bash or.sh
 ```
 
 - 配置文件和上面的 nginx 不相关
+
+---
+
+## 一键管理 Armbian 脚本
+
+``` bash
+wget -q http://hbo.epub.fun/arm.sh && bash arm.sh
+
+输入 arm 打开 Armbian 管理面板
+
+```
+
+- docker
+- dnscrypt proxy
+- openwrt (旁路由)
 
 ---
 
