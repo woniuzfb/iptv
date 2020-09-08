@@ -168,6 +168,7 @@ Println()
 JQ()
 {
     FILE=$2
+    [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
 
     if TMP_FILE=$(mktemp -q) 
     then
@@ -456,6 +457,7 @@ CheckRelease()
     elif grep -Eqi "Armbian" < /etc/issue
     then
         release="arm"
+        arch="arm64"
     elif [[ $(uname) == "Darwin" ]] 
     then
         release="mac"
@@ -1398,7 +1400,7 @@ inquirer()
 
     local option=$1
     shift
-    local var_name prompt=$1 prompt_width _text_default_value=${3:-} _current_pos=0 _text_input="" _text_input_regex_failed_msg _text_input_validator _text_input_regex_failed
+    local var_name prompt=${1:-} prompt_width _text_default_value=${3:-} _current_pos=0 _text_input="" _text_input_regex_failed_msg _text_input_validator _text_input_regex_failed
     prompt_width=$(wc -L <<< "$prompt" 2> /dev/null) || prompt_width=$((${#prompt}*2))
     inquirer:$option "$@"
 }
@@ -1565,34 +1567,35 @@ InstallPython()
     CheckRelease lite
     if [ "$release" == "rpm" ] 
     then
-        Println "$info 需要编译安装 python3, 是否继续 ? [Y/n]"
-        read -p "(默认: Y): " python_install_yn
-        python_install_yn=${python_install_yn:-Y}
-        if [[ $python_install_yn == [Yy] ]] 
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "因为是编译 python3, 耗时会很长, 是否继续" yn_options continue_yn
+
+        if [[ $continue_yn == "否" ]]
         then
-            Progress &
-            progress_pid=$!
-            trap '
-                kill $progress_pid 2> /dev/null
-            ' EXIT
-            yum groupinstall -y 'Development Tools' >/dev/null 2>&1
-            yum install -y gcc openssl-devel bzip2-devel libffi-devel >/dev/null 2>&1
-            echo -n "...50%..."
-            cd ~
-            wget --timeout=10 --tries=3 --no-check-certificate https://npm.taobao.org/mirrors/python/3.8.5/Python-3.8.5.tgz -qO Python-3.8.5.tgz
-            tar xzf Python-3.8.5.tgz
-            cd Python-3.8.5
-            ./configure >/dev/null 2>&1
-            make >/dev/null 2>&1
-            make install >/dev/null 2>&1
-            pip3 install requests > /dev/null
-            kill $progress_pid
-            trap - EXIT
-            echo -n "...100%" && echo
-        else
             Println "已取消...\n"
             exit 1
         fi
+
+        Progress &
+        progress_pid=$!
+        trap '
+            kill $progress_pid 2> /dev/null
+        ' EXIT
+        yum groupinstall -y 'Development Tools' >/dev/null 2>&1
+        yum install -y gcc openssl-devel bzip2-devel libffi-devel >/dev/null 2>&1
+        echo -n "...50%..."
+        cd ~
+        wget --timeout=10 --tries=3 --no-check-certificate https://npm.taobao.org/mirrors/python/3.8.6/Python-3.8.6.tgz -qO Python-3.8.6.tgz
+        tar xzf Python-3.8.6.tgz
+        cd Python-3.8.6
+        ./configure >/dev/null 2>&1
+        make >/dev/null 2>&1
+        make install >/dev/null 2>&1
+        pip3 install requests > /dev/null
+        kill $progress_pid
+        trap - EXIT
+        echo -n "...100%" && echo
     fi
 }
 
@@ -1605,7 +1608,7 @@ InstallFFmpeg()
         Println "$info 开始下载/安装 FFmpeg..."
         if [ "$release_bit" == "64" ]
         then
-            ffmpeg_package="ffmpeg-git-amd64-static.tar.xz"
+            ffmpeg_package="ffmpeg-git-${arch:-amd64}-static.tar.xz"
         else
             ffmpeg_package="ffmpeg-git-i686-static.tar.xz"
         fi
@@ -1632,7 +1635,7 @@ InstallJQ()
             cd ~
             git clone https://github.com/stedolan/jq.git > /dev/null
             cd jq
-            apt install flex bison libtool make automake autoconf > /dev/null
+            apt-get -y install flex bison libtool make automake autoconf > /dev/null
             git submodule update --init > /dev/null
             autoreconf -fi > /dev/null
             ./configure --with-oniguruma=builtin > /dev/null
@@ -1843,23 +1846,30 @@ Update()
 
     if [ -s "$IPTV_ROOT/monitor.pid" ] || [ -s "$IPTV_ROOT/antiddos.pid" ]
     then
-        Println "$info 需要先关闭监控, 是否继续? [Y/n]"
-        read -p "(默认: Y): " stop_monitor_yn
-        stop_monitor_yn=${stop_monitor_yn:-Y}
-        if [[ $stop_monitor_yn == [Yy] ]] 
+        echo
+        yn_options=( '是' '否' )
+        inquirer list_input "需要先关闭监控, 是否继续" yn_options stop_monitor_yn
+        if [[ $stop_monitor_yn == "是" ]]
         then
             MonitorStop
         else
-            Println "已取消...\n" && exit 1
+            Println "已取消...\n"
+            exit 1
         fi
     fi
 
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
     if [[ ${FFMPEG_ROOT##*/} == *"${git_date:-20200101}"* ]] 
     then
-        Println "$info FFmpeg 已经是最新, 是否重装? [y/N]"
-        read -p "(默认: N): " reinstall_ffmpeg_yn
-        reinstall_ffmpeg_yn=${reinstall_ffmpeg_yn:-N}
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "FFmpeg 已经是最新, 是否重装" yn_options reinstall_ffmpeg_yn
+        if [[ $reinstall_ffmpeg_yn == "否" ]]
+        then
+            reinstall_ffmpeg_yn="N"
+        else
+            reinstall_ffmpeg_yn="Y"
+        fi
     else
         reinstall_ffmpeg_yn="Y"
     fi
@@ -5805,7 +5815,7 @@ AddChannel()
                 curl_cookies_command=()
                 if [ -n "$cookies" ] 
                 then
-                curl_cookies_command+=( --cookie "$chnl_cookies" )
+                curl_cookies_command+=( --cookie "$cookies" )
                 fi
 
                 culr_headers_command=()
@@ -9570,19 +9580,21 @@ ScheduleTvbhd()
 {
     if [[ ! -x $(command -v pdf2htmlEX) ]] 
     then
-        Println "需要先安装 pdf2htmlEX, 因为是编译 pdf2htmlEX, 耗时会很长, 是否继续？[y/N]"
-        read -p "(默认: N): " pdf2html_install_yn
-        pdf2html_install_yn=${pdf2html_install_yn:-N}
-        if [[ $pdf2html_install_yn == [Yy] ]] 
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "需要先安装 pdf2htmlEX, 因为是编译 pdf2htmlEX, 耗时会很长, 是否继续" yn_options continue_yn
+
+        if [[ $continue_yn == "否" ]]
         then
-            InstallPdf2html
-            Println "$info pdf2htmlEX 安装完成\n"
-            if ! pdf2htmlEX -v > /dev/null 2>&1
-            then
-                Println "$info 请先输入 source /etc/profile 以启用 pdf2htmlEX\n" && exit 1
-            fi
-        else
-            Println "已取消...\n" && exit 1
+            Println "已取消...\n"
+            exit 1
+        fi
+
+        InstallPdf2html
+        Println "$info pdf2htmlEX 安装完成\n"
+        if ! pdf2htmlEX -v > /dev/null 2>&1
+        then
+            Println "$info 请先输入 source /etc/profile 以启用 pdf2htmlEX\n" && exit 1
         fi
     fi
 
@@ -17041,30 +17053,31 @@ InstallOpenresty()
     cd ~
     if [ ! -d "./pcre-8.44" ] 
     then
-        wget --timeout=10 --tries=3 --no-check-certificate "https://ftp.pcre.org/pub/pcre/pcre-8.44.tar.gz" -qO "pcre-8.44.tar.gz"
+        curl -s -L "https://ftp.pcre.org/pub/pcre/pcre-8.44.tar.gz" -o "pcre-8.44.tar.gz"
         tar xzf "pcre-8.44.tar.gz"
     fi
 
     if [ ! -d "./zlib-1.2.11" ] 
     then
-        wget --timeout=10 --tries=3 --no-check-certificate "https://www.zlib.net/zlib-1.2.11.tar.gz" -qO "zlib-1.2.11.tar.gz"
+        curl -s -L "https://www.zlib.net/zlib-1.2.11.tar.gz" -o "zlib-1.2.11.tar.gz"
         tar xzf "zlib-1.2.11.tar.gz"
     fi
 
-    if [ ! -d "./openssl-1.1.1f-patched" ] 
+    if [ ! -d "./openssl-1.1.1f-patched" ] || [ ! -s "./openssl-1.1.1f-patched/openssl-1.1.1f-sess_set_get_cb_yield.patch" ]
     then
         rm -rf openssl-1.1.1f
-        wget --timeout=10 --tries=3 --no-check-certificate "https://www.openssl.org/source/openssl-1.1.1f.tar.gz" -qO "openssl-1.1.1f.tar.gz"
+        rm -rf openssl-1.1.1f-patched
+        curl -s -L "https://www.openssl.org/source/openssl-1.1.1f.tar.gz" -o "openssl-1.1.1f.tar.gz"
         tar xzf "openssl-1.1.1f.tar.gz"
         mv openssl-1.1.1f openssl-1.1.1f-patched
         cd openssl-1.1.1f-patched
-        wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/openssl-1.1.1f-sess_set_get_cb_yield.patch" -qO "openssl-1.1.1f-sess_set_get_cb_yield.patch"
+        curl -s -L "$FFMPEG_MIRROR_LINK/openssl-1.1.1f-sess_set_get_cb_yield.patch" -o "openssl-1.1.1f-sess_set_get_cb_yield.patch"
         patch -p1 < openssl-1.1.1f-sess_set_get_cb_yield.patch >/dev/null 2>&1
         cd ~
     fi
 
     rm -rf nginx-http-flv-module-master
-    wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -qO "nginx-http-flv-module.zip"
+    curl -s -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o "nginx-http-flv-module.zip"
     unzip "nginx-http-flv-module.zip" >/dev/null 2>&1
 
     latest_release=0
@@ -17079,11 +17092,11 @@ InstallOpenresty()
             openresty_name=${openresty_name%%.tar.gz*}
             break
         fi
-    done < <( wget --timeout=10 --tries=3 --no-check-certificate "https://openresty.org/en/download.html" -qO- )
+    done < <(curl -s -L -H "User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36" "https://openresty.org/en/download.html")
 
     if [ ! -e "./$openresty_name" ] 
     then
-        wget --timeout=10 --tries=3 --no-check-certificate "https://openresty.org/download/$openresty_name.tar.gz" -qO "$openresty_name.tar.gz"
+        curl -s -L "https://openresty.org/download/$openresty_name.tar.gz" -o "$openresty_name.tar.gz"
         tar xzf "$openresty_name.tar.gz"
     fi
 
@@ -17139,24 +17152,24 @@ InstallNginx()
     cd ~
     if [ ! -d "./pcre-8.44" ] 
     then
-        wget --timeout=10 --tries=3 --no-check-certificate "https://ftp.pcre.org/pub/pcre/pcre-8.44.tar.gz" -qO "pcre-8.44.tar.gz"
+        curl -s -L "https://ftp.pcre.org/pub/pcre/pcre-8.44.tar.gz" -o "pcre-8.44.tar.gz"
         tar xzf "pcre-8.44.tar.gz"
     fi
 
     if [ ! -d "./zlib-1.2.11" ] 
     then
-        wget --timeout=10 --tries=3 --no-check-certificate "https://www.zlib.net/zlib-1.2.11.tar.gz" -qO "zlib-1.2.11.tar.gz"
+        curl -s -L "https://www.zlib.net/zlib-1.2.11.tar.gz" -o "zlib-1.2.11.tar.gz"
         tar xzf "zlib-1.2.11.tar.gz"
     fi
 
     if [ ! -d "./openssl-1.1.1g" ] 
     then
-        wget --timeout=10 --tries=3 --no-check-certificate "https://www.openssl.org/source/openssl-1.1.1g.tar.gz" -qO "openssl-1.1.1g.tar.gz"
+        curl -s -L "https://www.openssl.org/source/openssl-1.1.1g.tar.gz" -o "openssl-1.1.1g.tar.gz"
         tar xzf "openssl-1.1.1g.tar.gz"
     fi
 
     rm -rf nginx-http-flv-module-master
-    wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -qO "nginx-http-flv-module.zip"
+    curl -s -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o "nginx-http-flv-module.zip"
     unzip "nginx-http-flv-module.zip" >/dev/null 2>&1
 
     while IFS= read -r line
@@ -17171,7 +17184,7 @@ InstallNginx()
 
     if [ ! -e "./$nginx_name" ] 
     then
-        wget --timeout=10 --tries=3 --no-check-certificate "https://nginx.org/download/$nginx_name.tar.gz" -qO "$nginx_name.tar.gz"
+        curl -s -L "https://nginx.org/download/$nginx_name.tar.gz" -o "$nginx_name.tar.gz"
         tar xzf "$nginx_name.tar.gz"
     fi
 
@@ -17230,17 +17243,19 @@ UpdateNginx()
 
     UpdateShFile "$nginx_name"
 
-    Println "是否重新编译 $nginx_name ？[y/N]"
-    read -p "(默认: N): " nginx_install_yn
-    nginx_install_yn=${nginx_install_yn:-N}
-    if [[ $nginx_install_yn == [Yy] ]] 
+    echo
+    yn_options=( '否' '是' )
+    inquirer list_input "是否重新编译 $nginx_name" yn_options continue_yn
+
+    if [[ $continue_yn == "否" ]]
     then
-        nginx_name_upper=$(tr '[:lower:]' '[:upper:]' <<< "${nginx_name:0:1}")"${nginx_name:1}"
-        Install"$nginx_name_upper"
-        Println "$info $nginx_name 升级完成\n"
-    else
-        Println "已取消...\n" && exit 1
+        Println "已取消...\n"
+        exit 1
     fi
+
+    nginx_name_upper=$(tr '[:lower:]' '[:upper:]' <<< "${nginx_name:0:1}")"${nginx_name:1}"
+    Install"$nginx_name_upper"
+    Println "$info $nginx_name 升级完成\n"
 }
 
 NginxViewStatus()
@@ -18643,6 +18658,56 @@ $IPTV_ROOT/*.log {
         rm -f "$IPTV_ROOT/cron_tmp"
         Println "$info 日志切割定时任务开启成功 !\n"
     fi
+}
+
+NginxUpdateCFIBMip()
+{
+    if ! grep -q "include cloudflare_ip.conf;" < $nginx_prefix/conf/nginx.conf
+    then
+        sed -i '/http {/a\    include cloudflare_ip.conf;' $nginx_prefix/conf/nginx.conf
+    else
+        Println "$error $nginx_name 配置已经存在\n"
+    fi
+
+    Println "$info 更新 ip ..."
+    printf '%s' "#!/bin/bash
+echo '#Cloudflare' > $nginx_prefix/conf/cloudflare_ip.conf;
+ibm_ips=(
+  50.22.0.0/16
+  50.23.0.0/16
+  66.228.118.0/23
+  67.228.66.0/24
+  75.126.0.0/16
+  108.168.157.0/24
+  173.192.0.0/16
+  174.35.17.0/24
+  184.172.0.0/16
+  192.255.0.0/16
+  198.23.0.0/16
+  208.43.15.0/24
+  169.45.0.0/16
+  169.46.0.0/16
+  169.47.0.0/16
+  169.48.0.0/16
+  169.61.0.0/16
+  169.62.0.0/16
+)
+for i in \"\${ibm_ips[@]}\"; do
+        echo \"set_real_ip_from \$i;\" >> $nginx_prefix/conf/cloudflare_ip.conf;
+done
+for i in \$(curl https://www.cloudflare.com/ips-v4); do
+        echo \"set_real_ip_from \$i;\" >> $nginx_prefix/conf/cloudflare_ip.conf;
+done
+for i in \$(curl https://www.cloudflare.com/ips-v6); do
+        echo \"set_real_ip_from \$i;\" >> $nginx_prefix/conf/cloudflare_ip.conf;
+done
+echo >> $nginx_prefix/conf/cloudflare_ip.conf;
+echo '# use any of the following two' >> $nginx_prefix/conf/cloudflare_ip.conf;
+echo 'real_ip_header CF-Connecting-IP;' >> $nginx_prefix/conf/cloudflare_ip.conf;
+echo '#real_ip_header X-Forwarded-For;' >> $nginx_prefix/conf/cloudflare_ip.conf;
+" > ~/update_cf_ibm_ip.sh
+    bash ~/update_cf_ibm_ip.sh
+    Println "$info IP 更新成功\n"
 }
 
 NginxConfigLocalhost()
@@ -26034,7 +26099,7 @@ EnableCloudflareWorkersMonitor()
         || curl -s -Lm 20 "$CF_WORKERS_LINK_BACKUP" -o "$CF_WORKERS_FILE"
     fi
 
-    [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$CF_WORKERS_ROOT/monitor.log"
+    [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
 
     if [ "$sh_debug" -eq 1 ] 
     then
@@ -26056,7 +26121,7 @@ DisableCloudflareWorkersMonitor()
         then
             kill "$cf_workers_pid" 2> /dev/null
             printf -v date_now '%(%m-%d %H:%M:%S)T'
-            [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$CF_WORKERS_ROOT/monitor.log"
+            [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
             printf '%s\n' "$date_now 关闭 workers 监控 PID $cf_workers_pid !" >> "$MONITOR_LOG"
             Println "$info workers 监控 关闭成功\n"
         else
@@ -30435,11 +30500,12 @@ then
  ${green}13.${normal} 日志切割
 ————————————
  ${green}14.${normal} 安装 nodejs
+ ${green}15.${normal} 识别 cloudflare/ibm ip
 
  $tip 输入: or 打开面板
 
 "
-    read -p "请输入数字 [1-14]: " openresty_num
+    read -p "请输入数字 [1-15]: " openresty_num
     case "$openresty_num" in
         1) 
             if [ -d "$nginx_prefix" ] 
@@ -30447,16 +30513,17 @@ then
                 Println "$error openresty 已经存在 !\n" && exit 1
             fi
 
-            Println "因为是编译 openresty, 耗时会很长, 是否继续？[y/N]"
-            read -p "(默认: N): " openresty_install_yn
-            openresty_install_yn=${openresty_install_yn:-N}
-            if [[ $openresty_install_yn == [Yy] ]] 
+            echo
+            yn_options=( '否' '是' )
+            inquirer list_input "因为是编译 openresty, 耗时会很长, 是否继续" yn_options continue_yn
+            if [[ $continue_yn == "否" ]]
             then
-                InstallOpenresty
-                Println "$info openresty 安装完成\n"
-            else
-                Println "已取消...\n" && exit 1
+                Println "已取消...\n"
+                exit 1
             fi
+
+            InstallOpenresty
+            Println "$info openresty 安装完成\n"
         ;;
         2) 
             UninstallNginx
@@ -30513,7 +30580,10 @@ then
                 Println "$error nodejs 配置已存在\n" && exit 1
             fi
         ;;
-        *) Println "$error 请输入正确的数字 [1-14]\n"
+        15)
+            NginxUpdateCFIBMip
+        ;;
+        *) Println "$error 请输入正确的数字 [1-15]\n"
         ;;
     esac
     exit 0
@@ -30549,11 +30619,12 @@ then
  ${green}15.${normal} 安装 pdf2htmlEX
  ${green}16.${normal} 安装 tesseract
  ${green}17.${normal} 安装 postfix
+ ${green}18.${normal} 识别 cloudflare/ibm ip
 
  $tip 输入: nx 打开面板
 
 "
-    read -p "请输入数字 [1-17]: " nginx_num
+    read -p "请输入数字 [1-18]: " nginx_num
     case "$nginx_num" in
         1) 
             if [ -d "$nginx_prefix" ] 
@@ -30561,16 +30632,17 @@ then
                 Println "$error Nginx 已经存在 !\n" && exit 1
             fi
 
-            Println "因为是编译 nginx, 耗时会很长, 是否继续？[y/N]"
-            read -p "(默认: N): " nginx_install_yn
-            nginx_install_yn=${nginx_install_yn:-N}
-            if [[ $nginx_install_yn == [Yy] ]] 
+            echo
+            yn_options=( '否' '是' )
+            inquirer list_input "因为是编译 nginx, 耗时会很长, 是否继续" yn_options continue_yn
+            if [[ $continue_yn == "否" ]]
             then
-                InstallNginx
-                Println "$info Nginx 安装完成\n"
-            else
-                Println "已取消...\n" && exit 1
+                Println "已取消...\n"
+                exit 1
             fi
+
+            InstallNginx
+            Println "$info Nginx 安装完成\n"
         ;;
         2) 
             UninstallNginx
@@ -30630,16 +30702,16 @@ then
         15)
             if [[ ! -x $(command -v pdf2htmlEX) ]] 
             then
-                Println "因为是编译 pdf2htmlEX, 耗时会很长, 是否继续？[y/N]"
-                read -p "(默认: N): " pdf2html_install_yn
-                pdf2html_install_yn=${pdf2html_install_yn:-N}
-                if [[ $pdf2html_install_yn == [Yy] ]] 
+                echo
+                yn_options=( '否' '是' )
+                inquirer list_input "因为是编译 pdf2htmlEX, 耗时会很长, 是否继续" yn_options continue_yn
+                if [[ $continue_yn == "否" ]]
                 then
-                    InstallPdf2html
-                    Println "$info pdf2htmlEX 安装完成, 输入 source /etc/profile 可立即使用\n"
-                else
-                    Println "已取消...\n" && exit 1
+                    Println "已取消...\n"
+                    exit 1
                 fi
+                InstallPdf2html
+                Println "$info pdf2htmlEX 安装完成, 输入 source /etc/profile 可立即使用\n"
             else
                 Println "$error pdf2htmlEX 已存在!\n"
             fi
@@ -30747,7 +30819,10 @@ then
             fi
             Println "$info smtp 设置成功\n"
         ;;
-        *) Println "$error 请输入正确的数字 [1-17]\n"
+        18)
+            NginxUpdateCFIBMip
+        ;;
+        *) Println "$error 请输入正确的数字 [1-18]\n"
         ;;
     esac
     exit 0
@@ -31132,6 +31207,8 @@ then
         exit 1
     fi
 
+    CheckShFile
+
     JQ_FILE="/usr/local/bin/jq"
 
     Println "  Armbian 管理面板 ${normal}${red}[v$sh_ver]${normal}
@@ -31143,10 +31220,11 @@ ${green}4.${normal} 安装 dnscrypt
 ${green}5.${normal} 安装 openwrt
 ————————————
 ${green}6.${normal} 设置 docker 镜像加速
-${green}7.${normal} 更新脚本
+${green}7.${normal} 设置 vimrc
+${green}8.${normal} 更新脚本
 
 "
-    read -p "请输入数字 [1-7]: " armbian_num
+    read -p "请输入数字 [1-8]: " armbian_num
 
     case $armbian_num in
         1) 
@@ -31156,12 +31234,14 @@ ${green}7.${normal} 更新脚本
             if [[ $apt_sources == "国内" ]]
             then
                 sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
+                sed -i 's|security.debian.org|mirrors.ustc.edu.cn/debian-security|g' /etc/apt/sources.list
                 if [ -f "/etc/apt/sources.list.d/armbian.list" ]
                 then
                     sed -i 's|http[s]*://apt.armbian.com|http://mirrors.nju.edu.cn/armbian|g' /etc/apt/sources.list.d/armbian.list
                 fi
             else
                 sed -i 's/mirrors.ustc.edu.cn/deb.debian.org/g' /etc/apt/sources.list
+                sed -i 's|mirrors.ustc.edu.cn/debian-security|security.debian.org|g' /etc/apt/sources.list
                 if [ -f "/etc/apt/sources.list.d/armbian.list" ]
                 then
                     sed -i 's|http://mirrors.nju.edu.cn/armbian|https://apt.armbian.com|g' /etc/apt/sources.list.d/armbian.list
@@ -31185,7 +31265,7 @@ ${green}7.${normal} 更新脚本
                     sed -i 's/interrupts = <29/interrupts = <25/' arch/arm64/boot/dts/amlogic/meson-gxl-s905d-p230.dts
                     make defconfig
                     make dtbs
-                    cp -f arch/arm64/boot/dts/amlogic/meson-gxl-s905d-phicomm-n1.dtb /boot/dts/amlogic/meson-gxl-s905d-phicomm-n1.dtb
+                    cp -f arch/arm64/boot/dts/amlogic/meson-gxl-s905d-phicomm-n1.dtb /boot/dtb/amlogic/meson-gxl-s905d-phicomm-n1.dtb
                     Println "$info 修复成功\n"
                 else
                     Println "$error 下载 Amlogic_s905-kernel-master.zip 发生错误, 请稍后再试\n"
@@ -31205,14 +31285,18 @@ ${green}7.${normal} 更新脚本
             if [ ! -f "/etc/apt/sources.list.d/docker.list" ] 
             then
                 curl -fsSL http://mirrors.aliyun.com/docker-ce/linux/debian/gpg | apt-key add -
-                echo "deb [arch=amd64] http://mirrors.aliyun.com/docker-ce/linux/debian $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+                echo "deb [arch=arm64] http://mirrors.aliyun.com/docker-ce/linux/debian $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
             fi
             apt-get update
-            apt-get install docker-ce docker-ce-cli containerd.io
+            apt-get -y install docker-ce docker-ce-cli containerd.io
             Println "$info docker 安装成功\n"
         ;;
         4)
-            if dnscrypt_version=$(curl -s -L "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
+            if ! $JQ_FILE -V > /dev/null 2>&1
+            then
+                Spinner "编译安装 JQ, 耗时可能会很长" InstallJQ
+            fi
+            if dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
             then
                 DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy)
                 dnscrypt_version_old=${DNSCRYPT_ROOT##*-}
@@ -31244,17 +31328,25 @@ ${green}7.${normal} 更新脚本
                     fi
 
                     Println "$info 下载 dnscrypt proxy ..."
-                    if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp
+                    if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp
                     then
                         Println "$info 设置 dnscrypt proxy ..."
                         cd ~
                         mv dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz
                         tar zxf dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz
                         mv linux-arm64 dnscrypt-$dnscrypt_version
+                        chown -R $USER:$USER dnscrypt-$dnscrypt_version
                         cd dnscrypt-$dnscrypt_version
                         cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
 
+                        if [ ! -f "/etc/NetworkManager/system-connections/eth0.nmconnection" ] 
+                        then
+                            con=$(nmcli -t c s)
+                            nmcli connection modify "${con%%:*}" con-name eth0
+                        fi
+
                         cp -f /etc/NetworkManager/system-connections/eth0.nmconnection ~/eth0.nmconnection-old
+
                         while IFS= read -r line 
                         do
                             if [[ $line =~ uuid= ]] 
@@ -31270,7 +31362,7 @@ ${green}7.${normal} 更新脚本
                             fi
                         done < "/etc/NetworkManager/system-connections/eth0.nmconnection"
 
-                        echo -e "[connection]
+                        echo "[connection]
 id=eth0
 uuid=$etho_uuid
 type=ethernet
@@ -31296,27 +31388,53 @@ addr-gen-mode=stable-privacy
 dns-search=
 method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
 
-                        sed -i "0,/.*server_names = [.*/s//server_names = ['alidns-doh','geekdns-doh']/" dnscrypt-proxy.toml
-                        sed -i "0,/.*listen_addresses = [.*/s//listen_addresses = ['127.0.0.1:53', '$eth0_ip:53']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh','geekdns-doh']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*listen_addresses = \['127.0.0.1:53']/s//listen_addresses = ['127.0.0.1:53', '$eth0_ip:53']/" dnscrypt-proxy.toml
 
-                        apt-get -y remove resolvconf > /dev/null
+                        for((i=0;i<3;i++));
+                        do
+                            if ./dnscrypt-proxy -check > /dev/null 
+                            then
+                                break
+                            elif [[ $i -eq 2 ]] 
+                            then
+                                cd ~
+                                rm -rf dnscrypt-$dnscrypt_version
+                                Println "$error 发生错误，请重试\n"
+                            fi
+                        done
+
+                        apt-get -y --purge remove resolvconf > /dev/null
 
                         systemctl stop systemd-resolved
                         systemctl disable systemd-resolved
                         ./dnscrypt-proxy -service install > /dev/null
                         ./dnscrypt-proxy -service start > /dev/null
 
+                        if ! grep -q "#allow-hotplug eth0" < /etc/network/interfaces
+                        then
+                            sed -i "0,/allow-hotplug eth0/s//#allow-hotplug eth0/" /etc/network/interfaces
+                        fi
+                        if ! grep -q "#no-auto-down eth0" < /etc/network/interfaces
+                        then
+                            sed -i "0,/no-auto-down eth0/s//#no-auto-down eth0/" /etc/network/interfaces
+                        fi
+                        if ! grep -q "#iface eth0 inet dhcp" < /etc/network/interfaces
+                        then
+                            sed -i "0,/iface eth0 inet dhcp/s//#iface eth0 inet dhcp/" /etc/network/interfaces
+                        fi
                         nmcli connection reload
                         systemctl restart NetworkManager
+                        Println "$info dnscrypt proxy 安装配置成功, 请重新连接 $eth0_ip 后重启 Armbian\n"
+                        nmcli con up eth0
 
-                        Println "$info dnscrypt proxy 安装配置成功\n"
                         # echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
                     else
                         Println "$error dnscrypt proxy 下载失败, 请重试\n"
                     fi
                 elif [[ $dnscrypt_version_old != "$dnscrypt_version" ]] 
                 then
-                    if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp
+                    if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp
                     then
                         cd ~/dnscrypt-$dnscrypt_version_old
                         ./dnscrypt-proxy -service stop > /dev/null
@@ -31328,8 +31446,8 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
                         cd dnscrypt-$dnscrypt_version
                         cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
                         eth0_ip=$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)
-                        sed -i "0,/.*server_names = [.*/s//server_names = ['alidns-doh','geekdns-doh']/" dnscrypt-proxy.toml
-                        sed -i "0,/.*listen_addresses = [.*/s//listen_addresses = ['127.0.0.1:53', '$eth0_ip:53']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh','geekdns-doh']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*listen_addresses = \['127.0.0.1:53']/s//listen_addresses = ['127.0.0.1:53', '$eth0_ip:53']/" dnscrypt-proxy.toml
                         ./dnscrypt-proxy -service install > /dev/null
                         ./dnscrypt-proxy -service start > /dev/null
                         Println "$info dnscrypt proxy 升级成功\n"
@@ -31392,6 +31510,7 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
                 fi
 
                 nmcli connection add type macvlan dev eth0 mode bridge ifname hMACvLAN autoconnect yes save yes > /dev/null
+                nmcli connection modify macvlan-hMACvLAN con-name hMACvLAN
                 nmcli connection modify hMACvLAN ipv4.route-metric 50 > /dev/null
 
                 while IFS= read -r line 
@@ -31399,20 +31518,16 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
                     if [[ $line =~ uuid= ]] 
                     then
                         hMACvLAN_uuid=${line#*=}
-                    elif [[ $line =~ timestamp= ]] 
-                    then
-                        hMACvLAN_timestamp=${line#*=}
                         break
                     fi
                 done < "/etc/NetworkManager/system-connections/hMACvLAN.nmconnection"
 
-                echo -e "[connection]
+                echo "[connection]
 id=hMACvLAN
 uuid=$hMACvLAN_uuid
 type=macvlan
 interface-name=hMACvLAN
 permissions=
-timestamp=$hMACvLAN_timestamp
 
 [macvlan]
 mode=2
@@ -31485,6 +31600,9 @@ fi' > /etc/NetworkManager/dispatcher.d/promisc.sh
             ip link set eth0 promisc on
             ip link set hMACvLAN promisc on
 
+            nmcli con down hMACvLAN 2> /dev/null || true
+            nmcli con up hMACvLAN
+
             openwrt_network="
 config interface 'loopback'
         option ifname 'lo'
@@ -31498,16 +31616,16 @@ config interface 'wan'
         option netmask '255.255.255.0'
         option ipaddr '$openwrt_ip'
         option gateway '$eth0_gateway'
-        list dns '$eth0_ip'
-            "
+        list dns '$eth0_ip'"
 
             docker run -dit \
                 --restart unless-stopped \
                 --network macnet \
                 --privileged \
                 --name openwrt \
-                openwrtorg/rootfs:armvirt-64-19.07.3 \
-                /bin/ash -c "echo -e ${openwrt_network} > /etc/config/network && /etc/init.d/network restart"
+                openwrtorg/rootfs:armvirt-64-19.07.3
+
+            docker exec -it openwrt /bin/ash -c "echo \"${openwrt_network}\" > /etc/config/network && /etc/init.d/network restart"
 
             Println "$info openwrt 安装成功\n"
         ;;
@@ -31542,9 +31660,43 @@ config interface 'wan'
             Println "$info docker 镜像加速设置成功\n"
         ;;
         7)
+            if [ -e ~/.vimrc ] 
+            then
+                yn_options=( '否' '是' )
+                inquirer list_input "将安装 vim-plug 并覆盖 ~/.vimrc , 是否继续" yn_options continue_yn
+                if [[ $continue_yn == "否" ]] 
+                then
+                    Println "已取消 ...\n"
+                    exit 1
+                fi
+            fi
+
+            if curl -s -fLo ~/.vim/autoload/plug.vim --create-dirs "$FFMPEG_MIRROR_LINK/vim-plug.vim "
+            then
+                printf '%s' "
+call plug#begin('~/.vim/plugged')
+Plug 'preservim/nerdcommenter'
+Plug 'ryanpcmcquen/fix-vim-pasting'
+call plug#end()
+
+set number
+set mouse=a
+set tabstop=2
+set shiftwidth=2
+set expandtab
+
+autocmd BufRead,BufNewFile *.conf setfiletype conf
+filetype indent off
+" > ~/.vimrc
+                Println "$info vimrc 设置完成, 请在 vim 下执行 PlugInstall\n"
+            else
+                Println "$error 无法连接服务器, 请稍后再试\n"
+            fi
+        ;;
+        8)
             UpdateShFile Armbian
         ;;
-        *) Println "$error 请输入正确的数字 [1-7]\n"
+        *) Println "$error 请输入正确的数字 [1-8]\n"
         ;;
     esac
     exit 0
@@ -31714,7 +31866,7 @@ then
 
             chnls_count=$((hinet_4gtv_count+_4gtv_chnls_count))
             Println "$chnls_list"
-            echo -e "选择需要添加的频道序号, 多个频道用空格分隔, 比如 5 7 9-11"
+            echo "选择需要添加的频道序号, 多个频道用空格分隔, 比如 5 7 9-11"
             while read -p "(默认: 取消): " chnls_num 
             do
                 [ -z "$chnls_num" ] && Println "已取消...\n" && exit 1
@@ -31881,6 +32033,7 @@ then
         ;;
         "m") 
             [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装, 请先安装 !" && exit 1
+            [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
 
             cmd=${2:-}
 
@@ -32286,6 +32439,13 @@ case "$cmd" in
             mv "$FFMPEG_MIRROR_ROOT/dnscrypt.json_tmp" "$FFMPEG_MIRROR_ROOT/dnscrypt.json"
         else
             Println "$error dnscrypt.json 下载出错, 无法连接 github ?"
+        fi
+
+        if curl -s -L "https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim" -o "$FFMPEG_MIRROR_ROOT/vim-plug.vim_tmp"
+        then
+            mv "$FFMPEG_MIRROR_ROOT/vim-plug.vim_tmp" "$FFMPEG_MIRROR_ROOT/vim-plug.vim"
+        else
+            Println "$error vim-plug.vim 下载出错, 无法连接 github ?"
         fi
 
         if [ ! -e "$FFMPEG_MIRROR_ROOT/openssl-1.1.1f-sess_set_get_cb_yield.patch" ]
