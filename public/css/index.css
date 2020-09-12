@@ -1,3 +1,8 @@
+* {
+  margin: 0;
+  padding: 0;
+}
+
 html { 
   font-size: 62.5%;
 }
@@ -50,9 +55,10 @@ header {
   grid-row: 2;
 }
 
+/*
 .vjs-subs-caps-button {
   display: none;
-}
+}*/
 
 .sliderContainer {
   grid-column: 2 / 9;
@@ -333,12 +339,17 @@ footer span {
   header {
     text-align: left;
     padding-left: 1.6rem;
+    font-size: .8rem;
   }
   .categories .hbohd {
     display: none;
   }
   footer span {
     display: none;
+  }
+  .github-corner svg {
+    width: 40px;
+    height: 40px;
   }
 }
 

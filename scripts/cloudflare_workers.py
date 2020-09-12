@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import re
 import requests
 import argparse
 import json
@@ -72,6 +73,7 @@ class cloudflare_workers:
 
         index = email.index("@")
         sub_domain = email[:index]
+        sub_domain = re.sub("[^0-9a-zA-Z-]+", "-", sub_domain)
 
         get_data = {
             'status': 'accepted',
@@ -167,6 +169,7 @@ class cloudflare_workers:
 
         index = email.index("@")
         sub_domain = email[:index]
+        sub_domain = re.sub("[^0-9a-zA-Z-]+", "-", sub_domain)
 
         get_data = {
             'status': 'accepted',
@@ -213,6 +216,7 @@ class cloudflare_workers:
 
         index = email.index("@")
         sub_domain = email[:index]
+        sub_domain = re.sub("[^0-9a-zA-Z-]+", "-", sub_domain)
 
         get_data = {
             'status': 'accepted',

@@ -6790,42 +6790,45 @@ EditChannelMenu()
             ;;
         esac
 
+        echo
         if [ "$chnl_status" == "on" ] || [ "$chnl_flv_status" == "on" ]
         then
-            echo "是否重启此频道？[Y/n]"
-            read -p "(默认: Y): " restart_yn
-            restart_yn=${restart_yn:-Y}
-            if [[ $restart_yn == [Yy] ]] 
+            yn_options=( '是' '否' )
+            inquirer list_input "是否重启此频道" yn_options restart_yn
+
+            if [[ $restart_yn == "否" ]]
             then
-                StopChannel
-                GetChannelInfo
-                TestXtreamCodesLink
-                if [ "$to_try" -eq 1 ] 
-                then
-                    continue
-                fi
-                StartChannel
-                Println "$info 频道重启成功 !\n"
-            else
-                Println "不重启 ...\n"
+                Println "不重启...\n"
+                exit 1
             fi
+
+            StopChannel
+            GetChannelInfo
+            TestXtreamCodesLink
+            if [ "$to_try" -eq 1 ] 
+            then
+                continue
+            fi
+            StartChannel
+            Println "$info 频道重启成功 !\n"
         else
-            echo "是否启动此频道？[y/N]"
-            read -p "(默认: N): " start_yn
-            start_yn=${start_yn:-N}
-            if [[ $start_yn == [Yy] ]] 
+            yn_options=( '是' '否' )
+            inquirer list_input "是否启动此频道" yn_options start_yn
+
+            if [[ $start_yn == "否" ]]
             then
-                GetChannelInfo
-                TestXtreamCodesLink
-                if [ "$to_try" -eq 1 ] 
-                then
-                    continue
-                fi
-                StartChannel
-                Println "$info 频道启动成功 !\n"
-            else
-                Println "不启动 ...\n"
+                Println "不启动...\n"
+                exit 1
             fi
+
+            GetChannelInfo
+            TestXtreamCodesLink
+            if [ "$to_try" -eq 1 ] 
+            then
+                continue
+            fi
+            StartChannel
+            Println "$info 频道启动成功 !\n"
         fi
     done
 }
@@ -9025,6 +9028,12 @@ ScheduleHbozw()
         printf '{"%s":[]}' "hbo" > "$SCHEDULE_JSON"
     fi
 
+    hboasia_proxy=()
+    if [ -s "$IPTV_ROOT/hboasia_proxy" ] 
+    then
+        hboasia_proxy+=( -x $(< $IPTV_ROOT/hboasia_proxy) )
+    fi
+
     for chnl in "${hbozw_chnls[@]}"
     do
         chnl_id=${chnl%%:*}
@@ -9063,7 +9072,7 @@ ScheduleHbozw()
                 "time":"'"$program_time"'",
                 "sys_time":"'"$program_sys_time"'"
             }'
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "$SCHEDULE_LINK" | $JQ_FILE '.[] | [.id,.time,.sys_time,.title,.title_local] | join("^")')
+        done < <(curl ${hboasia_proxy[@]+"${hboasia_proxy[@]}"} -s -Lm 10 -H "User-Agent: $user_agent" "$SCHEDULE_LINK" | $JQ_FILE '.[] | [.id,.time,.sys_time,.title,.title_local] | join("^")')
 
         if [ -n "$schedule" ] 
         then
@@ -24739,7 +24748,7 @@ DeployCloudflareWorker()
             InstallPython
         fi
 
-        if [ "$sh_debug" -eq 0 ] 
+        if [ "$sh_debug" -eq 0 ] && [ ! -e "$IPTV_ROOT/VIP" ]
         then
             curl -s -Lm 10 "$CF_WORKERS_LINK" -o "$CF_WORKERS_FILE" \
             || curl -s -Lm 20 "$CF_WORKERS_LINK_BACKUP" -o "$CF_WORKERS_FILE"
@@ -31401,6 +31410,7 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
                                 cd ~
                                 rm -rf dnscrypt-$dnscrypt_version
                                 Println "$error 发生错误，请重试\n"
+                                exit 1
                             fi
                         done
 

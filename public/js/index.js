@@ -1,3 +1,6 @@
+/*
+** change lines 245-256,535-539
+*/
 "use strict";
 function makeStr(num) {
   let text = "";
@@ -109,7 +112,7 @@ function tsLoad() {
     let transmuxer = new muxjs.mp4.Transmuxer();
 
     const fetchedResource = await fetch(tsUrl);
-    const reader = await fetchedResource.body.getReader();
+    const reader = fetchedResource.body.getReader();
 
     sourceBuffer.addEventListener('updateend', () => {
 
@@ -141,7 +144,7 @@ function tsLoad() {
         transmuxer.push(value);
         transmuxer.flush();
         count++;
-      } else if (count < 700) {
+      } else if (count < 600) {
         chunks.push(value);
         receivedLength += value.length;
         count++;
@@ -164,9 +167,42 @@ function tsLoad() {
   });
 }
 
-function videojsLoad() {
+function videojsLoad(sourceOverlay,channel) {
   if (videoField.hasChildNodes()) {
     videojs('video').dispose();
+  }
+
+  let overlays = [],channelOverlay,channelOverlayArr = [];
+  if (channel && channel.hasOwnProperty('overlay') && channel.overlay.length > 0) {
+    channelOverlay = channel.overlay;
+    channelOverlayArr = channelOverlay.split(',');
+  }
+
+  if (sourceOverlay) {
+  sourceOverlay.forEach((sourceItem,sourceIndex) => {
+    let overlayInfo = [];
+    if (sourceItem.hasOwnProperty('force') && sourceItem.force === 1) {
+      if (sourceItem.hasOwnProperty('switch') && sourceItem.switch === 'on') {
+        overlays.push({class:'overlay'+sourceIndex.toString(),content:'',align:'center',start:'playing'});
+        overlayInfo.push(sourceItem.height,sourceItem.width,sourceItem.margin_left,sourceItem.margin_top,sourceItem.height_fullscreen,sourceItem.width_fullscreen,sourceItem.margin_left_fullscreen,sourceItem.margin_top_fullscreen);
+        overlaysInfo[sourceIndex] = overlayInfo;
+      }
+    } else if (channelOverlayArr.length > sourceIndex) {
+      let channelOverlayIndex = channelOverlayArr[sourceIndex];
+      if ((channelOverlayIndex === 'on' && sourceItem.reverse === 0) || (channelOverlayIndex === 'off' && sourceItem.reverse === 1)) {
+        overlays.push({class:'overlay'+sourceIndex.toString(),content:'',align:'center',start:'playing'});
+        overlayInfo.push(sourceItem.height,sourceItem.width,sourceItem.margin_left,sourceItem.margin_top,sourceItem.height_fullscreen,sourceItem.width_fullscreen,sourceItem.margin_left_fullscreen,sourceItem.margin_top_fullscreen);
+        overlaysInfo[sourceIndex] = overlayInfo;
+      } else if (channelOverlayIndex.indexOf(':') !== -1) {
+        let channelOverlayIndexArr = channelOverlayIndex.split(':');
+        if ((sourceItem.reverse === 0 && channelOverlayIndexArr[0] === 'on') || (sourceItem.reverse === 1 && channelOverlayIndexArr[0] === 'off')) {
+          overlays.push({class:'overlay'+sourceIndex.toString(),content:'',align:'center',start:'playing'});
+          channelOverlayIndexArr.shift();
+          overlaysInfo[sourceIndex] = channelOverlayIndexArr;
+        }
+      }
+    }
+  });
   }
 
   let contentType;
@@ -196,16 +232,50 @@ function videojsLoad() {
     textTrackSettings: false,
     controls: true,
     fluid: true,
-    responsive: true
+    responsive: true,
+    userActions: {hotkeys:true},
+    html5: {
+        hls: {
+            withCredentials: true,
+            overrideNative: true
+        }
+    }
   });
+
+  /*if (hlsVideoUrl.indexOf('cdn4.epub.fun') !== -1) {
+    hlsVideoUrl = hlsVideoUrl.replace('https://cdn4.epub.fun','http://hbo.epub.fun');
+  } else if (hlsVideoUrl.indexOf('cdn5.epub.fun') !== -1) {
+    hlsVideoUrl = hlsVideoUrl.replace('cdn5.epub.fun','stream5.epub.fun');
+  }*/
+
+  //let credentials;
+  //if (hlsVideoUrl.indexOf('mtime.info') !== -1 || hlsVideoUrl.indexOf('epub.fun') !== -1)   {
+  //  credentials = true;
+  //} else {
+    credentials = false;
+  //}
 
   player.src({
     src: hlsVideoUrl,
     type: contentType,
-    overrideNative: true
+    overrideNative: true,
+    withCredentials: credentials
   });
 
+  player.hlsQualitySelector();
+
   player.ready(function() {
+    if (overlays.length > 0) {
+      player.overlay({
+        debug: false,
+        overlays: overlays
+      });
+      for (let index = 0; index < overlays.length; index++) {
+        const info = overlaysInfo[index];
+        const overlayIndex = document.querySelector('.overlay'+index);
+        overlayIndex.setAttribute('style', 'height:' + info[0] +'%; width: ' + info[1] + '%; margin-left: ' + info[2] + '%; margin-top: ' + info[3] + '%;');
+      }
+    }
     let promise = player.play();
 
     if (promise !== undefined) {
@@ -254,7 +324,7 @@ function videojsLoad() {
       /*} else if (videojs.browser.IS_ANDROID) {
         alertInfo('不支持安卓系统！',10);*/
       } else {
-        alertInfo('频道不可用！',10);
+        alertInfo('频道不可用！直播源不定时刷新，刷新页面即可继续观看！',10);
       }
       /*
       if (programId) {
@@ -275,7 +345,7 @@ function playVideo() {
     let keyArr = Object.keys(sourcesJsonParsed);
     let index,source;
     while ((index = keyArr.pop()) !== undefined) {
-      if (sourcesJsonParsed[index].hasOwnProperty('channels') && sourcesJsonParsed[index].channels[0] && sourcesJsonParsed[index].channels[0].hasOwnProperty('url')) {
+      if (sourcesJsonParsed[index].hasOwnProperty('feature') || (sourcesJsonParsed[index].hasOwnProperty('channels') && sourcesJsonParsed[index].channels[0] && sourcesJsonParsed[index].channels[0].hasOwnProperty('url'))) {
         if (sourcesJsonParsed[index].hasOwnProperty('feature') && sourcesJsonParsed[index].feature.chnl_name) {
           featureBtn.textContent = sourcesJsonParsed[index].feature.chnl_name;
           featureBtn.dataset.source = sourcesJsonParsed[index].feature.source_name;
@@ -283,30 +353,58 @@ function playVideo() {
         } else {
           featureBtn.parentNode.removeChild(featureBtn);
         }
-        if (sourcesJsonParsed[index].hasOwnProperty('ios') && videojs.browser.IS_IOS) {
-          source = sourcesJsonParsed[index].ios;
-        } else if (sourcesJsonParsed[index].hasOwnProperty('android') && videojs.browser.IS_ANDROID) {
-          source = sourcesJsonParsed[index].android;
-        } else if (sourcesJsonParsed[index].hasOwnProperty('default')) {
-          source = sourcesJsonParsed[index].default;
-        } else {
-          source = sourcesJsonParsed[index].channels[0];
+        if (sourcesJsonParsed[index].channels[0] && sourcesJsonParsed[index].channels[0].hasOwnProperty('url')) {
+          if (sourcesJsonParsed[index].hasOwnProperty('ios') && videojs.browser.IS_IOS) {
+            source = sourcesJsonParsed[index].ios;
+          } else if (sourcesJsonParsed[index].hasOwnProperty('android') && videojs.browser.IS_ANDROID) {
+            source = sourcesJsonParsed[index].android;
+          } else if (sourcesJsonParsed[index].hasOwnProperty('default')) {
+            source = sourcesJsonParsed[index].default;
+          } else {
+            source = sourcesJsonParsed[index].channels[0];
+          }
+          hlsVideoUrl = source.url;
+          if (hlsVideoUrl.substring(13,25) === "fengshows.cn") {
+            reqData("https://api.fengshows.cn/live",'?live_type=tv&page=1&page_size=15')
+            .then(response => {
+              if (hlsVideoUrl.indexOf('pin') !== -1) {
+                hlsVideoUrl = response[0].live_url_fhd;
+              } else if (hlsVideoUrl.indexOf('pcc') !== -1) {
+                hlsVideoUrl = response[1].live_url_fhd;
+              } else {
+                hlsVideoUrl = response[2].live_url_fhd;
+              }
+              let timestamp = Math.floor(Date.now() / 1000) + 1800;
+              let txTime = timestamp.toString(16);
+              let uri = hlsVideoUrl.substring(hlsVideoUrl.indexOf('/',7),hlsVideoUrl.lastIndexOf('.'));
+              let txSecret = md5('obb9Lxyv5C' + uri + txTime);
+              hlsVideoUrl = 'http://fengshows.epub.fun' + uri + '.flv?txSecret=' + txSecret + '&txTime=' + txTime;
+              /*if (hlsVideoUrl.indexOf('?') !== -1) {
+                hlsVideoUrl = hlsVideoUrl.substring(0,hlsVideoUrl.indexOf('?')) + '?txSecret=' + txSecret + '&txTime=' + txTime;
+              } else {
+                hlsVideoUrl = hlsVideoUrl + '?txSecret=' + txSecret + '&txTime=' + txTime;
+              }*/
+              videojsLoad(sourcesJsonParsed[index].overlay,source);
+              resetSourceReg();
+            });
+          } else if (sourcesJsonParsed[index].hasOwnProperty('overlay')) {
+            videojsLoad(sourcesJsonParsed[index].overlay,source);
+            resetSourceReg();
+          } else {
+            videojsLoad();
+            resetSourceReg();
+          }
+          showSchedule(source.schedule);
         }
-        hlsVideoUrl = source.url;
-        videojsLoad();
-        if (sourcesJsonParsed[index].hasOwnProperty('overlay')) {
-          videoOverlay(sourcesJsonParsed[index].overlay,source);
-        }
-        showSchedule(source.schedule);
-        resetSourceReg();
         break;
       }
     }
   } else if (jsonChannels[sourceReg]) {
     hlsVideoUrl = jsonChannels[sourceReg][programId]['url'];
-    videojsLoad();
     if (jsonChannels[sourceReg].hasOwnProperty('overlay')) {
-      videoOverlay(jsonChannels[sourceReg].overlay,jsonChannels[sourceReg][programId]);
+      videojsLoad(jsonChannels[sourceReg].overlay,jsonChannels[sourceReg][programId]);
+    } else {
+      videojsLoad();
     }
     showSchedule(jsonChannels[sourceReg][programId].schedule);
     resetSourceReg();
@@ -318,12 +416,37 @@ function playVideo() {
     sourcesJsonParsed[sourceReg].channels.forEach(channel => {
       if (channel.chnl_id === programId) {
         hlsVideoUrl = channel.url;
-        videojsLoad();
-        if (sourcesJsonParsed[sourceReg].hasOwnProperty('overlay')) {
-          videoOverlay(sourcesJsonParsed[sourceReg].overlay,channel);
+        if (hlsVideoUrl.substring(13,25) === "fengshows.cn") {
+          reqData("https://api.fengshows.cn/live",'?live_type=tv&page=1&page_size=15')
+          .then(response => {
+            if (hlsVideoUrl.indexOf('pin') !== -1) {
+              hlsVideoUrl = response[0].live_url_fhd;
+            } else if (hlsVideoUrl.indexOf('pcc') !== -1) {
+              hlsVideoUrl = response[1].live_url_fhd;
+            } else {
+              hlsVideoUrl = response[2].live_url_fhd;
+            }
+            let timestamp = Math.floor(Date.now() / 1000) + 1800;
+            let txTime = timestamp.toString(16);
+            let uri = hlsVideoUrl.substring(hlsVideoUrl.indexOf('/',7),hlsVideoUrl.lastIndexOf('.'));
+            let txSecret = md5('obb9Lxyv5C' + uri + txTime);
+            hlsVideoUrl = 'http://fengshows.epub.fun' + uri + '.flv?txSecret=' + txSecret + '&txTime=' + txTime;
+            /*if (hlsVideoUrl.indexOf('?') !== -1) {
+              hlsVideoUrl = hlsVideoUrl.substring(0,hlsVideoUrl.indexOf('?')) + '?txSecret=' + txSecret + '&txTime=' + txTime;
+            } else {
+              hlsVideoUrl = hlsVideoUrl + '?txSecret=' + txSecret + '&txTime=' + txTime;
+            }*/
+            videojsLoad(sourcesJsonParsed[sourceReg].overlay,channel);
+            resetSourceReg();
+          });
+        } else if (sourcesJsonParsed[sourceReg].hasOwnProperty('overlay')) {
+          videojsLoad(sourcesJsonParsed[sourceReg].overlay,channel);
+          resetSourceReg();
+        } else {
+          videojsLoad();
+          resetSourceReg();
         }
         showSchedule(channel.schedule);
-        resetSourceReg();
       }
     });
   } else if (localStorage.getItem(sourceReg+'_token')) {
@@ -352,51 +475,6 @@ function playVideo() {
     deleteSchedule();
     alertInfo(sourcesJsonParsed[sourceReg].desc+'直播源未注册或登录！',5);
     updateAside();
-  }
-}
-
-function videoOverlay(sourceOverlay,channel) {
-  let overlays = [],channelOverlay,channelOverlayArr = [];
-  if (channel.hasOwnProperty('overlay') && channel.overlay.length > 0) {
-    channelOverlay = channel.overlay;
-    channelOverlayArr = channelOverlay.split(',');
-  }
-  sourceOverlay.forEach((sourceItem,sourceIndex) => {
-    let overlayInfo = [];
-    if (sourceItem.hasOwnProperty('force') && sourceItem.force === 1) {
-      if (sourceItem.hasOwnProperty('switch') && sourceItem.switch === 'on') {
-        overlays.push({class:'overlay'+sourceIndex.toString(),content:'',align:'center',start:'ready'});
-        overlayInfo.push(sourceItem.height,sourceItem.width,sourceItem.margin_left,sourceItem.margin_top,sourceItem.height_fullscreen,sourceItem.width_fullscreen,sourceItem.margin_left_fullscreen,sourceItem.margin_top_fullscreen);
-        overlaysInfo[sourceIndex] = overlayInfo;
-      }
-    } else if (channelOverlayArr.length > sourceIndex) {
-      let channelOverlayIndex = channelOverlayArr[sourceIndex];
-      if ((channelOverlayIndex === 'on' && sourceItem.reverse === 0) || (channelOverlayIndex === 'off' && sourceItem.reverse === 1)) {
-        overlays.push({class:'overlay'+sourceIndex.toString(),content:'',align:'center',start:'ready'});
-        overlayInfo.push(sourceItem.height,sourceItem.width,sourceItem.margin_left,sourceItem.margin_top,sourceItem.height_fullscreen,sourceItem.width_fullscreen,sourceItem.margin_left_fullscreen,sourceItem.margin_top_fullscreen);
-        overlaysInfo[sourceIndex] = overlayInfo;
-      } else if (channelOverlayIndex.indexOf(':') !== -1) {
-        let channelOverlayIndexArr = channelOverlayIndex.split(':');
-        if ((sourceItem.reverse === 0 && channelOverlayIndexArr[0] === 'on') || (sourceItem.reverse === 1 && channelOverlayIndexArr[0] === 'off')) {
-          overlays.push({class:'overlay'+sourceIndex.toString(),content:'',align:'center',start:'ready'});
-          channelOverlayIndexArr.shift();
-          overlaysInfo[sourceIndex] = channelOverlayIndexArr;
-        }
-      }
-    }
-  });
-
-  if (overlays.length > 0) {
-    videoField.firstChild.classList.add('vjs-16-9');
-    videojs('video').overlay({
-      debug: false,
-      overlays: overlays
-    });
-    for (let index = 0; index < overlays.length; index++) {
-      const info = overlaysInfo[index];
-      const overlayIndex = document.querySelector('.overlay'+index);
-      overlayIndex.setAttribute('style', 'height:' + info[0] +'%; width: ' + info[1] + '%; margin-left: ' + info[2] + '%; margin-top: ' + info[3] + '%;');
-    }
   }
 }
 
@@ -453,13 +531,19 @@ function timeoutPromise(ms, promise) {
 function reqData(url, data = '', method = 'GET') {
   return new Promise((resolve, reject) => {
     let config = {};
+    let credentials;
+    //if (url.indexOf('mtime.info') !== -1 || url.indexOf('epub.fun') !== -1) {
+    //  credentials = 'include';
+    //} else {
+      credentials = 'omit';
+    //}
     if (method === 'GET') {
       if (urls.indexOf(url) !== -1) {
         config = { 
           method: method, 
           mode: "cors",
           cache: "no-cache",
-          credentials: "omit",
+          credentials: credentials,
           referrer: "",
         };
       } else {
@@ -467,7 +551,7 @@ function reqData(url, data = '', method = 'GET') {
           method: method, 
           mode: "cors",
           cache: "no-cache",
-          credentials: "omit",
+          credentials: credentials,
         };
       }
       fetch(url + data, config).then(response => {
@@ -479,7 +563,7 @@ function reqData(url, data = '', method = 'GET') {
           method: method, 
           mode: "cors",
           cache: "no-cache",
-          credentials: "omit",
+          credentials: credentials,
           referrer: "",
           body: JSON.stringify(data),
         };
@@ -488,7 +572,7 @@ function reqData(url, data = '', method = 'GET') {
           method: method, 
           mode: "cors",
           cache: "no-cache",
-          credentials: "omit",
+          credentials: credentials,
           body: JSON.stringify(data),
         };
       }
@@ -603,7 +687,7 @@ function reqReg() {
     reqData(sourcesJsonParsed[sourceReg].reg_url,'?username='+acc+'&iconid=1&pwd='+md5(pwd)+'&birthday=1970-1-1&type=1&accounttype='+sourcesJsonParsed[sourceReg].acc_type_reg)
     .then(response => {
       if (response.ret !== 0) {
-        alertInfo(sourcesJsonParsed[sourceReg].desc + '直播源注册失败，请重试！用户名不能是中文！');
+        alertInfo(sourcesJsonParsed[sourceReg].desc + '直播源注册失败，请重试！用户名已存在? 不能是中文！');
       } else {
         formToggle.click();
         loginAccField.value = acc;
@@ -808,7 +892,7 @@ function getToken(source) {
       deviceno = makeStr(8)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(4)+"-"+makeStr(12);
       deviceno = deviceno + md5(deviceno).substring(7, 8);
 
-      timeoutPromise(3000,reqData(source.login_url,'?deviceno='+deviceno+'&devicetype=3&accounttype='+source.acc_type_login+'&accesstoken=(null)&account='+source.access_token.substring(32)+'&pwd='+source.access_token.substring(0, 32)+'&isforce=1&businessplatform=1'))
+      timeoutPromise(5000,reqData(source.login_url,'?deviceno='+deviceno+'&devicetype=3&accounttype='+source.acc_type_login+'&accesstoken=(null)&account='+source.access_token.substring(32)+'&pwd='+source.access_token.substring(0, 32)+'&isforce=1&businessplatform=1'))
       .then(response => {
         if (response.access_token) {
           localStorage.setItem(source.name+'_token', response.access_token);
@@ -1232,7 +1316,7 @@ function playbackOrUpcoming(e) {
       let hboLink;
       switch (channel) {
         case 'hbo':
-          hboLink = 'https://hboasia.com/HBO/zh-cn/ajax/home_schedule_upcoming_showtimes?channel=' + channel + '&feed=cn&id=' + showId;
+          hboLink = 'https://hboasia.com/HBO/zh-cn/ajax/home_schedule_upcoming_showtimes?channel=' + channel + '&feed=satellite&id=' + showId;
           break;
         case 'hbotw':
           hboLink = 'https://hboasia.com/HBO/zh-cn/ajax/home_schedule_upcoming_showtimes?channel=hbo&feed=satellite&id=' + showId;
@@ -1292,7 +1376,7 @@ function switchLink() {
 }
 
 let programId,rate,eventId,hlsVideoUrl,protocol,urls = [],sourcesJson,sourcesJsonParsed,jsonChannels = {},schedules = {},overlaysInfo = {};
-let sourceReg = 'hrtn',sourceRegDefault = 'hrtn';
+let sourceReg = 'shuliyun',sourceRegDefault = 'shuliyun';
 let localJson = 'channels.json';
 let remoteJson = 'http://hbo.epub.fun/channels.json';
 let scheduleJson = 'http://hbo.epub.fun/schedule.json';
@@ -1333,9 +1417,9 @@ const sliderField = document.querySelector('.js_slider');
 const scheduleField = document.querySelector('.slides');
 
 let liveui = true;
-if (videojs.browser.IS_ANDROID || videojs.browser.IS_IOS) {
+/*if (videojs.browser.IS_ANDROID || videojs.browser.IS_IOS) {
   liveui = false;
-}
+}*/
 
 reqData(localJson).then(response => {
   if (response.ret === 0) {
