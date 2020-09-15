@@ -965,7 +965,7 @@ inquirer()
         stty -echo
         tput civis
 
-        inquirer:print "${normal}${green}?${normal} ${bold}${prompt}${normal} ${dim}(Press <space> to select, <enter> to finalize)${normal}"
+        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}(Press <space> to select, <enter> to finalize)${normal}"
 
         for i in $(inquirer:gen_index ${#_checkbox_list[@]})
         do
@@ -1146,7 +1146,7 @@ inquirer()
         stty -echo
         tput civis
 
-        inquirer:print "${normal}${green}?${normal} ${bold}${prompt}${normal} ${dim}(使用上下箭头选择)${normal}"
+        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}(使用上下箭头选择)${normal}"
 
         for i in $(inquirer:gen_index ${#_list_options[@]})
         do
@@ -3736,27 +3736,9 @@ GetDefault()
         else
             d_video_audio_shift_text="不设置"
         fi
-        if [ "$d_const_yn" == "no" ] 
-        then
-            d_const_text="N"
-        else
-            d_const_text="Y"
-        fi
         d_encrypt_yn=${d_encrypt_yn:-no}
-        if [ "$d_encrypt_yn" == "no" ] 
-        then
-            d_encrypt_text="N"
-        else
-            d_encrypt_text="Y"
-        fi
         d_encrypt_session_yn=${d_encrypt_session_yn:-no}
         d_sync_yn=${d_sync_yn:-yes}
-        if [ "$d_sync_yn" == "no" ] 
-        then
-            d_sync_text="N"
-        else
-            d_sync_text="Y"
-        fi
         d_flv_delay_seconds=${d_flv_delay_seconds:-20}
         d_flv_restart_nums=${d_flv_restart_nums:-20}
         d_hls_delay_seconds=${d_hls_delay_seconds:-120}
@@ -3770,42 +3752,42 @@ GetDefault()
         d_anti_ddos_syn_flood_yn=${d_anti_ddos_syn_flood_yn:-no}
         if [ "$d_anti_ddos_syn_flood_yn" == "no" ] 
         then
-            d_anti_ddos_syn_flood="N"
+            d_anti_ddos_syn_flood="否"
         else
-            d_anti_ddos_syn_flood="Y"
+            d_anti_ddos_syn_flood="是"
         fi
         d_anti_ddos_syn_flood_delay_seconds=${d_anti_ddos_syn_flood_delay_seconds:-3}
         d_anti_ddos_syn_flood_seconds=${d_anti_ddos_syn_flood_seconds:-3600}
         d_anti_ddos_yn=${d_anti_ddos_yn:-no}
         if [ "$d_anti_ddos_yn" == "no" ] 
         then
-            d_anti_ddos="N"
+            d_anti_ddos="否"
         else
-            d_anti_ddos="Y"
+            d_anti_ddos="是"
         fi
         d_anti_ddos_seconds=${d_anti_ddos_seconds:-120}
         d_anti_ddos_level=${d_anti_ddos_level:-6}
         d_anti_leech_yn=${d_anti_leech_yn:-no}
         if [ "$d_anti_leech_yn" == "no" ] 
         then
-            d_anti_leech="N"
+            d_anti_leech="否"
         else
-            d_anti_leech="Y"
+            d_anti_leech="是"
         fi
         d_anti_leech_restart_nums=${d_anti_leech_restart_nums:-0}
         d_anti_leech_restart_flv_changes_yn=${d_anti_leech_restart_flv_changes_yn:-no}
         if [ "$d_anti_leech_restart_flv_changes_yn" == "no" ] 
         then
-            d_anti_leech_restart_flv_changes="N"
+            d_anti_leech_restart_flv_changes="否"
         else
-            d_anti_leech_restart_flv_changes="Y"
+            d_anti_leech_restart_flv_changes="是"
         fi
         d_anti_leech_restart_hls_changes_yn=${d_anti_leech_restart_hls_changes_yn:-no}
         if [ "$d_anti_leech_restart_hls_changes_yn" == "no" ] 
         then
-            d_anti_leech_restart_hls_changes="N"
+            d_anti_leech_restart_hls_changes="否"
         else
-            d_anti_leech_restart_hls_changes="Y"
+            d_anti_leech_restart_hls_changes="是"
         fi
         d_recheck_period=${d_recheck_period:-0}
         if [ "$d_recheck_period" -eq 0 ] 
@@ -4670,10 +4652,10 @@ SetStreamLink()
     fi
     if [ -n "${chnl_stream_links:-}" ] && [[ $chnl_stream_links == *" "* ]]
     then
-        Println "是否只是调整频道 ${green}[ $chnl_channel_name ]${normal} 直播源顺序? [y/N]"
-        read -p "(默认: N): " stream_links_sort_yn
-        stream_links_sort_yn=${stream_links_sort_yn:-N}
-        if [[ $stream_links_sort_yn == [Yy] ]] 
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "是否只是调整频道 ${green}[ $chnl_channel_name ]${normal} 直播源顺序" yn_options stream_links_sort_yn
+        if [[ $stream_links_sort_yn == "是" ]] 
         then
             IFS=" " read -ra stream_links_input <<< "$chnl_stream_links"
             stream_links_count=${#stream_links_input[@]}
@@ -4905,15 +4887,15 @@ SetStreamLink()
     then
         if [[ ! -x $(command -v openssl) ]] 
         then
-            Println "是否安装 openssl ? [Y/n]"
-            read -p "(默认: Y): " openssl_install_yn
-            openssl_install_yn=${openssl_install_yn:-Y}
-            if [[ $openssl_install_yn == [Yy] ]]
+            echo
+            yn_options=( '是' '否' )
+            inquirer list_input "是否安装 openssl" yn_options openssl_install_yn
+            if [[ $openssl_install_yn == "否" ]]
             then
-                InstallOpenssl
-            else
-                Println "已取消\n..." && exit 1
+                Println "已取消\n..."
+                exit 1
             fi
+            InstallOpenssl
         fi
         Println "$info 解析 4gtv 链接 ..."
         hinet_4gtv=(
@@ -4984,15 +4966,15 @@ SetStreamLink()
     then
         if [[ ! -x $(command -v openssl) ]] 
         then
-            Println "是否安装 openssl ? [Y/n]"
-            read -p "(默认: Y): " openssl_install_yn
-            openssl_install_yn=${openssl_install_yn:-Y}
-            if [[ $openssl_install_yn == [Yy] ]]
+            echo
+            yn_options=( '是' '否' )
+            inquirer list_input "是否安装 openssl" yn_options openssl_install_yn
+            if [[ $openssl_install_yn == "否" ]]
             then
-                InstallOpenssl
-            else
-                Println "已取消\n..." && exit 1
+                Println "已取消\n..."
+                exit 1
             fi
+            InstallOpenssl
         fi
         Println "$info 解析 4gtv 链接 ..."
         xc=1
@@ -5412,7 +5394,7 @@ SetBitrates()
 SetConst()
 {
     echo
-    if [ "$d_const_text" == "Y" ] 
+    if [ "$d_const_yn" == "yes" ] 
     then
         yn_options=( '是' '否' )
     else
@@ -5432,7 +5414,7 @@ SetConst()
 SetEncrypt()
 {
     echo
-    if [ "$d_encrypt_text" == "Y" ] 
+    if [ "$d_encrypt_yn" == "yes" ] 
     then
         yn_options=( '是' '否' )
     else
@@ -5651,7 +5633,7 @@ SetChannelName()
 SetSync()
 {
     echo
-    if [ "$d_sync_text" == "Y" ] 
+    if [ "$d_sync_yn" == "yes" ] 
     then
         yn_options=( '是' '否' )
     else
@@ -6243,16 +6225,16 @@ EditOutputDirName()
 {
     if [ "$chnl_status" == "on" ]
     then
-        Println "$error 检测到频道正在运行, 是否现在关闭？[y/N]"
-        read -p "(默认: N): " stop_channel_yn
-        stop_channel_yn=${stop_channel_yn:-n}
-        if [[ $stop_channel_yn == [Yy] ]]
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "检测到频道正在运行, 是否现在关闭" yn_options stop_channel_yn
+        if [[ $stop_channel_yn == "否" ]]
         then
-            StopChannel
-            echo && echo
-        else
-            Println "已取消...\n" && exit 1
+            Println "已取消\n..."
+            exit 1
         fi
+        StopChannel
+        echo && echo
     fi
     SetOutputDirName
     JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.output_dir_name)="'"$output_dir_name"'"'
@@ -6418,29 +6400,29 @@ EditChannelAll()
     if [ "$chnl_flv_status" == "on" ] 
     then
         kind="flv"
-        Println "$error 检测到频道正在运行, 是否现在关闭？[y/N]"
-        read -p "(默认: N): " stop_channel_yn
-        stop_channel_yn=${stop_channel_yn:-n}
-        if [[ $stop_channel_yn == [Yy] ]]
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "检测到频道正在运行, 是否现在关闭" yn_options stop_channel_yn
+        if [[ $stop_channel_yn == "否" ]]
         then
-            StopChannel
-            echo && echo
-        else
-            Println "已取消...\n" && exit 1
+            Println "已取消\n..."
+            exit 1
         fi
+        StopChannel
+        echo && echo
     elif [ "$chnl_status" == "on" ]
     then
         kind=""
-        Println "$error 检测到频道正在运行, 是否现在关闭？[y/N]"
-        read -p "(默认: N): " stop_channel_yn
-        stop_channel_yn=${stop_channel_yn:-n}
-        if [[ $stop_channel_yn == [Yy] ]]
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "检测到频道正在运行, 是否现在关闭" yn_options stop_channel_yn
+        if [[ $stop_channel_yn == "否" ]]
         then
-            StopChannel
-            echo && echo
-        else
-            Println "已取消...\n" && exit 1
+            Println "已取消\n..."
+            exit 1
         fi
+        StopChannel
+        echo && echo
     fi
 
     SetStreamLink
@@ -9040,7 +9022,7 @@ ScheduleHbozw()
         chnl_name=${chnl#*:}
         if [ "$chnl_id" == "hbo" ] 
         then
-            SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$today&channel=$chnl_id&feed=satellite"
+            SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$today&channel=hbo&feed=cn"
         elif [ "$chnl_id" == "hboasia" ] 
         then
             SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$today&channel=hbo&feed=satellite"
@@ -9049,7 +9031,7 @@ ScheduleHbozw()
             SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$today&channel=red&feed=satellite"
         elif [ "$chnl_id" == "cinemax" ] 
         then
-            SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$today&channel=$chnl_id&feed=satellite"
+            SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$today&channel=cinemax&feed=satellite"
         else
             SCHEDULE_LINK="https://hboasia.com/HBO/zh-tw/ajax/home_schedule?date=$today&channel=$chnl_id&feed=satellite"
         fi
@@ -11599,47 +11581,47 @@ TsImg()
 
 InstallImgcat()
 {
-    Println "$error 缺少 imgcat ,是否现在安装? [y/N]"
-    read -p "(默认: 取消): " imgcat_install_yn
-    imgcat_install_yn=${imgcat_install_yn:-N}
-    if [[ $imgcat_install_yn == [Yy] ]] 
+    echo
+    yn_options=( '是' '否' )
+    inquirer list_input "缺少 imgcat ,是否现在安装" yn_options imgcat_install_yn
+    if [[ $imgcat_install_yn == "否" ]]
     then
-        Progress &
-        progress_pid=$!
-        trap '
-            kill $progress_pid 2> /dev/null
-        ' EXIT
-        CheckRelease lite
-        if [ "$release" == "rpm" ] 
-        then
-            yum -y install gcc gcc-c++ make ncurses-devel autoconf >/dev/null 2>&1
-            echo -n "...50%..."
-        else
-            apt-get -y install debconf-utils libncurses5-dev autotools-dev autoconf >/dev/null 2>&1
-            echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
-            apt-get -y install software-properties-common pkg-config build-essential >/dev/null 2>&1
-            echo -n "...50%..."
-        fi
-
-        cd ~
-
-        if [ ! -e "./imgcat-master" ] 
-        then
-            wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/imgcat.zip" -qO "imgcat.zip"
-            unzip "imgcat.zip" >/dev/null 2>&1
-        fi
-
-        cd "./imgcat-master"
-        autoconf >/dev/null 2>&1
-        ./configure >/dev/null 2>&1
-        make >/dev/null 2>&1
-        make install >/dev/null 2>&1
-        kill $progress_pid
-        trap - EXIT
-        echo -n "...100%" && Println "$info imgcat 安装完成"
-    else
-        Println "已取消...\n" && exit 1
+        Println "已取消\n..."
+        exit 1
     fi
+    Progress &
+    progress_pid=$!
+    trap '
+        kill $progress_pid 2> /dev/null
+    ' EXIT
+    CheckRelease lite
+    if [ "$release" == "rpm" ] 
+    then
+        yum -y install gcc gcc-c++ make ncurses-devel autoconf >/dev/null 2>&1
+        echo -n "...50%..."
+    else
+        apt-get -y install debconf-utils libncurses5-dev autotools-dev autoconf >/dev/null 2>&1
+        echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
+        apt-get -y install software-properties-common pkg-config build-essential >/dev/null 2>&1
+        echo -n "...50%..."
+    fi
+
+    cd ~
+
+    if [ ! -e "./imgcat-master" ] 
+    then
+        wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/imgcat.zip" -qO "imgcat.zip"
+        unzip "imgcat.zip" >/dev/null 2>&1
+    fi
+
+    cd "./imgcat-master"
+    autoconf >/dev/null 2>&1
+    ./configure >/dev/null 2>&1
+    make >/dev/null 2>&1
+    make install >/dev/null 2>&1
+    kill $progress_pid
+    trap - EXIT
+    echo -n "...100%" && Println "$info imgcat 安装完成"
 }
 
 TsRegister()
@@ -11718,16 +11700,15 @@ TsRegister()
 
                         if [ "${reg_array[ret]}" -eq 0 ] 
                         then
-                            Println "$info 注册成功！"
-                            Println "$info 是否登录账号? [y/N]"
-                            read -p "(默认: N): " login_yn
-                            login_yn=${login_yn:-N}
-                            if [[ $login_yn == [Yy] ]]
+                            echo
+                            yn_options=( '否' '是' )
+                            inquirer list_input "注册成功 ,是否登录账号" yn_options login_yn
+                            if [[ $login_yn == "否" ]]
                             then
-                                TsLogin
-                            else
-                                Println "已取消...\n" && exit 1
+                                Println "已取消\n..."
+                                exit 1
                             fi
+                            TsLogin
                         else
                             Println "$error 注册失败！"
                             printf '%s\n' "${reg_array[@]}"
@@ -11757,16 +11738,15 @@ TsRegister()
 
         if [ "${reg_array[ret]}" -eq 0 ] 
         then
-            Println "$info 注册成功！"
-            Println "$info 是否登录账号? [y/N]"
-            read -p "(默认: N): " login_yn
-            login_yn=${login_yn:-N}
-            if [[ $login_yn == [Yy] ]]
+            echo
+            yn_options=( '否' '是' )
+            inquirer list_input "注册成功 ,是否登录账号" yn_options login_yn
+            if [[ $login_yn == "否" ]]
             then
-                TsLogin
-            else
-                Println "已取消...\n" && exit 1
+                Println "已取消\n..."
+                exit 1
             fi
+            TsLogin
         else
             Println "$error 发生错误"
             printf '%s\n' "${sms_array[@]}"
@@ -11826,15 +11806,15 @@ TsLogin()
     then
         Println "$error 账号错误"
         printf '%s\n' "${login_array[@]}"
-        Println "$info 是否注册账号? [y/N]"
-        read -p "(默认: N): " register_yn
-        register_yn=${register_yn:-N}
-        if [[ $register_yn == [Yy] ]]
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "是否注册账号" yn_options register_yn
+        if [[ $register_yn == "否" ]]
         then
-            TsRegister
-        else
-            Println "已取消...\n" && exit 1
+            Println "已取消\n..."
+            exit 1
         fi
+        TsRegister
     else
         while :; do
             Println "$info 输入需要转换的频道号码: "
@@ -11887,16 +11867,16 @@ TsLogin()
         stream_link=$($JQ_FILE -r --arg a "programid=$programid" '[.channels[].stream_link] | map(select(test($a)))[0]' "$CHANNELS_FILE")
         if [ "${stream_link:-}" != null ]
         then
-            Println "$info 检测到此频道原有链接, 是否替换成新的ts链接? [Y/n]"
-            read -p "(默认: Y): " change_yn
-            change_yn=${change_yn:-Y}
-            if [[ $change_yn == [Yy] ]]
+            echo
+            yn_options=( '是' '否' )
+            inquirer list_input "检测到此频道原有链接, 是否替换成新的ts链接" yn_options change_yn
+            if [[ $change_yn == "否" ]]
             then
-                JQ update "$CHANNELS_FILE" '(.channels[]|select(.stream_link=="'"$stream_link"'")|.stream_link)="'"$TS_LINK"'"'
-                Println "$info 修改成功 !\n"
-            else
-                Println "已取消...\n" && exit 1
+                Println "已取消\n..."
+                exit 1
             fi
+            JQ update "$CHANNELS_FILE" '(.channels[]|select(.stream_link=="'"$stream_link"'")|.stream_link)="'"$TS_LINK"'"'
+            Println "$info 修改成功 !\n"
         fi
     fi
 }
@@ -11906,19 +11886,18 @@ TsMenu()
     GetDefault
 
     user_agent="iPhone; CPU iPhone OS 13_6 like Mac OS X"
-
-    Println "$info 是否使用默认频道文件? 默认链接: $DEFAULT_CHANNELS_LINK [Y/n]"
-    read -p "(默认: Y): " use_default_channels_yn
-    use_default_channels_yn=${use_default_channels_yn:-Y}
-    if [[ $use_default_channels_yn == [Yy] ]]
+    echo
+    yn_options=( '是' '否' )
+    inquirer list_input "是否使用默认频道文件: $DEFAULT_CHANNELS_LINK" yn_options use_default_channels_yn
+    if [[ $use_default_channels_yn == "是" ]]
     then
         TS_CHANNELS_LINK=$DEFAULT_CHANNELS_LINK
     else
         if [ -n "$d_sync_file" ] && [[ -n $($JQ_FILE '.data[] | select(.reg_url != null)' "${d_sync_file%% *}") ]] 
         then
-            Println "$info 是否使用本地频道文件? 本地路径: ${d_sync_file%% *} [Y/n]"
-            read -p "(默认: Y): " use_local_channels_yn
-            use_local_channels_yn=${use_local_channels_yn:-Y}
+            echo
+            yn_options=( '是' '否' )
+            inquirer list_input "是否使用本地频道文件? 本地路径: ${d_sync_file%% *}" yn_options use_local_channels_yn
             if [[ $use_local_channels_yn == [Yy] ]] 
             then
                 TS_CHANNELS_FILE=${d_sync_file%% *}
@@ -12023,10 +12002,15 @@ TsMenu()
 
 AntiLeech()
 {
-    Println "是否开启防盗链? [y/N]"
-    read -p "(默认: ${d_anti_leech}): " anti_leech_yn
-    anti_leech_yn=${anti_leech_yn:-$d_anti_leech}
-    if [[ $anti_leech_yn == [Yy] ]] 
+    echo
+    if [[ $d_anti_leech == "是" ]] 
+    then
+        yn_options=( '是' '否' )
+    else
+        yn_options=( '否' '是' )
+    fi
+    inquirer list_input "是否开启防盗链" yn_options anti_leech_yn
+    if [[ $anti_leech_yn == "是" ]]
     then
         anti_leech_yn="yes"
 
@@ -12051,10 +12035,10 @@ AntiLeech()
 
         if [ "$anti_leech_restart_nums" -gt 0 ] 
         then
-            Println "是否下个小时开始随机重启？[y/N]"
-            read -p "(默认: N): " anti_leech_restart_next_hour_yn
-            anti_leech_restart_next_hour_yn=${anti_leech_restart_next_hour_yn:-N}
-            if [[ $anti_leech_restart_next_hour_yn == [Yy] ]] 
+            echo
+            yn_options=( '否' '是' )
+            inquirer list_input "是否下个小时开始随机重启" yn_options anti_leech_restart_next_hour_yn
+            if [[ $anti_leech_restart_next_hour_yn == "是" ]] 
             then
                 printf -v current_hour '%(%-H)T'
                 skip_hour=$current_hour
@@ -12064,10 +12048,15 @@ AntiLeech()
 
         if [ -n "${flv_nums:-}" ] 
         then
-            Println "是否每当重启 FLV 频道更改成随机的推流和拉流地址？[y/N]"
-            read -p "(默认: $d_anti_leech_restart_flv_changes): " anti_leech_restart_flv_changes_yn
-            anti_leech_restart_flv_changes_yn=${anti_leech_restart_flv_changes_yn:-$d_anti_leech_restart_flv_changes}
-            if [[ $anti_leech_restart_flv_changes_yn == [Yy] ]] 
+            echo
+            if [[ $d_anti_leech_restart_flv_changes == "是" ]] 
+            then
+                yn_options=( '是' '否' )
+            else
+                yn_options=( '否' '是' )
+            fi
+            inquirer list_input "是否每当重启 FLV 频道更改成随机的推流和拉流地址" yn_options anti_leech_restart_flv_changes_yn
+            if [[ $anti_leech_restart_flv_changes_yn == "是" ]] 
             then
                 anti_leech_restart_flv_changes_yn="yes"
             else
@@ -12079,19 +12068,22 @@ AntiLeech()
 
         if [ -n "$hls_nums" ] 
         then
-            Println "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 段名称, key 名称 ? [y/N]"
-            read -p "(默认: $d_anti_leech_restart_hls_changes): " anti_leech_restart_hls_changes_yn
-            anti_leech_restart_hls_changes_yn=${anti_leech_restart_hls_changes_yn:-$d_anti_leech_restart_hls_changes}
-            if [[ $anti_leech_restart_hls_changes_yn == [Yy] ]] 
+            echo
+            if [[ $d_anti_leech_restart_hls_changes == "是" ]] 
+            then
+                yn_options=( '是' '否' )
+            else
+                yn_options=( '否' '是' )
+            fi
+            inquirer list_input "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 段名称, key 名称" yn_options anti_leech_restart_hls_changes_yn
+            if [[ $anti_leech_restart_hls_changes_yn == "是" ]] 
             then
                 anti_leech_restart_hls_changes_yn="yes"
             else
                 anti_leech_restart_hls_changes_yn="no"
             fi
-
-            Println "每隔多少秒更改加密频道的 key ? "
-            read -p "(默认: $d_hls_key_period): " hls_key_period
-            hls_key_period=${hls_key_period:-$d_hls_key_period}
+            echo
+            inquirer text_input "每隔多少秒更改加密频道的 key: " hls_key_period $d_hls_key_period
             hls_key_expire_seconds=$((hls_key_period+hls_delay_seconds))
         else
             anti_leech_restart_hls_changes_yn=$d_anti_leech_restart_hls_changes_yn
@@ -12255,10 +12247,15 @@ AntiDDoSSet()
             esac
         done
 
-        Println "是否开启 SYN Flood attack 防御 ? [y/N]"
-        read -p "(默认: $d_anti_ddos_syn_flood): " anti_ddos_syn_flood_yn
-        anti_ddos_syn_flood_yn=${anti_ddos_syn_flood_yn:-$d_anti_ddos_syn_flood}
-        if [[ $anti_ddos_syn_flood_yn == [Yy] ]] 
+        echo
+        if [[ $d_anti_ddos_syn_flood == "是" ]] 
+        then
+            yn_options=( '是' '否' )
+        else
+            yn_options=( '否' '是' )
+        fi
+        inquirer list_input "是否开启 SYN Flood attack 防御" yn_options anti_ddos_syn_flood_yn
+        if [[ $anti_ddos_syn_flood_yn == "是" ]] 
         then
             anti_ddos_syn_flood_yn="yes"
             sysctl -w net.ipv4.tcp_syn_retries=6 > /dev/null
@@ -12308,10 +12305,15 @@ AntiDDoSSet()
             anti_ddos_syn_flood_yn="no"
         fi
 
-        Println "是否开启 iptv 防御 ? [y/N]"
-        read -p "(默认: $d_anti_ddos): " anti_ddos_yn
-        anti_ddos_yn=${anti_ddos_yn:-$d_anti_ddos}
-        if [[ $anti_ddos_yn == [Yy] ]] 
+        echo
+        if [[ $d_anti_ddos == "是" ]] 
+        then
+            yn_options=( '是' '否' )
+        else
+            yn_options=( '否' '是' )
+        fi
+        inquirer list_input "是否开启 iptv 防御" yn_options anti_ddos_yn
+        if [[ $anti_ddos_yn == "是" ]] 
         then
             anti_ddos_yn="yes"
 
@@ -16774,15 +16776,15 @@ ViewXtreamCodesChnls()
                             -headers "$headers_command" \
                             -cookies "$cookies" -hide_banner 
                         then
-                            Println "是否添加此频道？[y/N]"
-                            read -p "(默认: N): " add_channel_yn
-                            add_channel_yn=${add_channel_yn:-N}
-                            if [[ $add_channel_yn == [Yy] ]] 
+                            echo
+                            yn_options=( '否' '是' )
+                            inquirer list_input "是否添加此频道" yn_options add_channel_yn
+                            if [[ $add_channel_yn == "是" ]] 
                             then
-                                Println "是否推流 flv ？[y/N]"
-                                read -p "(默认: N): " add_channel_flv_yn
-                                add_channel_flv_yn=${add_channel_flv_yn:-N}
-                                if [[ $add_channel_flv_yn == [Yy] ]] 
+                                echo
+                                yn_options=( '否' '是' )
+                                inquirer list_input "是否推流 flv" yn_options add_channel_flv_yn
+                                if [[ $add_channel_flv_yn == "是" ]] 
                                 then
                                     kind="flv"
                                 fi
@@ -16794,10 +16796,9 @@ ViewXtreamCodesChnls()
                             fi
                         else
                             Println "$error 频道不可用或账号权限不够"
-                            Println "是否继续？[Y/n]"
-                            read -p "(默认: Y): " continue_yn
-                            continue_yn=${continue_yn:-Y}
-                            if [[ $continue_yn == [Yy] ]] 
+                            yn_options=( '是' '否' )
+                            inquirer list_input "是否继续" yn_options continue_yn
+                            if [[ $continue_yn == "是" ]] 
                             then
                                 continue
                             else
@@ -16940,10 +16941,10 @@ DomainInstallCert()
     fi
     if [ -e "$nginx_prefix/conf/sites_crt/$server_domain.crt" ] && [ -e "$nginx_prefix/conf/sites_crt/$server_domain.key" ]
     then
-        Println "$info 检测到证书已存在, 是否重新安装证书 ? [y/N]"
-        read -p "(默认: N): " reinstall_crt_yn
-        reinstall_crt_yn=${reinstall_crt_yn:-N}
-        if [[ $reinstall_crt_yn == [Nn] ]] 
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "检测到证书已存在, 是否重新安装证书" yn_options reinstall_crt_yn
+        if [[ $reinstall_crt_yn == "否" ]] 
         then
             return 0
         fi
@@ -17224,11 +17225,11 @@ UninstallNginx()
         Println "$error $nginx_name 未安装 !\n" && exit 1
     fi
 
-    Println "确定删除 $nginx_name 包括所有配置文件, 操作不可恢复？[y/N]"
-    read -p "(默认: N): " nginx_uninstall_yn
-    nginx_uninstall_yn=${nginx_uninstall_yn:-N}
+    echo
+    yn_options=( '否' '是' )
+    inquirer list_input "确定删除 $nginx_name 包括所有配置文件, 操作不可恢复" yn_options nginx_uninstall_yn
 
-    if [[ $nginx_uninstall_yn == [Yy] ]] 
+    if [[ $nginx_uninstall_yn == "是" ]] 
     then
         $NGINX_FILE -s stop 2> /dev/null || true
         if [ "$nginx_ctl" == "or" ] 
@@ -17324,10 +17325,10 @@ ToggleNginx()
 {
     if [ ! -s "$nginx_prefix/logs/nginx.pid" ] 
     then
-        Println "$nginx_name 未运行, 是否开启？[Y/n]"
-        read -p "(默认: Y): " nginx_start_yn
-        nginx_start_yn=${nginx_start_yn:-Y}
-        if [[ $nginx_start_yn == [Yy] ]] 
+        echo
+        yn_options=( '是' '否' )
+        inquirer list_input "$nginx_name 未运行, 是否开启" yn_options nginx_start_yn
+        if [[ $nginx_start_yn == "是" ]] 
         then
             $NGINX_FILE
             Println "$info $nginx_name 已开启\n"
@@ -17336,12 +17337,12 @@ ToggleNginx()
         fi
     else
         PID=$(< "$nginx_prefix/logs/nginx.pid")
+        echo
         if kill -0 "$PID" 2> /dev/null
         then
-            Println "$nginx_name 正在运行, 是否关闭？[Y/n]"
-            read -p "(默认: Y): " nginx_stop_yn
-            nginx_stop_yn=${nginx_stop_yn:-Y}
-            if [[ $nginx_stop_yn == [Yy] ]] 
+            yn_options=( '是' '否' )
+            inquirer list_input "$nginx_name 正在运行, 是否关闭" yn_options nginx_stop_yn
+            if [[ $nginx_stop_yn == "是" ]] 
             then
                 $NGINX_FILE -s stop
                 Println "$info $nginx_name 已关闭\n"
@@ -17349,10 +17350,9 @@ ToggleNginx()
                 Println "已取消...\n" && exit 1
             fi
         else
-            Println "$nginx_name 未运行, 是否开启？[Y/n]"
-            read -p "(默认: Y): " nginx_start_yn
-            nginx_start_yn=${nginx_start_yn:-Y}
-            if [[ $nginx_start_yn == [Yy] ]] 
+            yn_options=( '是' '否' )
+            inquirer list_input "$nginx_name 未运行, 是否开启" yn_options nginx_start_yn
+            if [[ $nginx_start_yn == "是" ]] 
             then
                 $NGINX_FILE
                 Println "$info $nginx_name 已开启\n"
@@ -17444,10 +17444,10 @@ NginxConfigServerLiveRoot()
 
 NginxConfigBlockAliyun()
 {
-    Println "是否屏蔽所有阿里云ip段 [y/N]"
-    read -p "(默认: N): " block_aliyun_yn
-    block_aliyun_yn=${block_aliyun_yn:-N}
-    if [[ $block_aliyun_yn == [Yy] ]] 
+    echo
+    yn_options=( '否' '是' )
+    inquirer list_input "是否屏蔽所有阿里云ip段" yn_options block_aliyun_yn
+    if [[ $block_aliyun_yn == "是" ]] 
     then
         Println "输入本机IP"
         echo -e "$tip 多个IP用空格分隔\n"
@@ -19156,10 +19156,11 @@ NginxAddDomain()
             case $server_num in
                 1) 
                     NginxConfigServerHttpPort
-                    Println "是否设置跳转到其它网址 ? [y/N]"
-                    read -p "(默认: N): " http_redirect_yn
-                    http_redirect_yn=${http_redirect_yn:-N}
-                    if [[ $http_redirect_yn == "Y" ]] 
+                    echo
+                    yn_options=( '否' '是' )
+                    inquirer list_input "是否设置跳转到其它网址" yn_options http_redirect_yn
+
+                    if [[ $http_redirect_yn == "是" ]] 
                     then
                         NginxAppendHttpRedirectConf
                     else
@@ -19168,17 +19169,18 @@ NginxAddDomain()
                         NginxConfigBlockAliyun
                         NginxAppendHttpConf
                     fi
+
                     NginxConfigCorsHost
                     NginxEnableDomain
                     Println "$info $server_domain 配置成功\n"
                 ;;
                 2) 
                     DomainInstallCert
+                    echo
+                    yn_options=( '是' '否' )
+                    inquirer list_input "是否设置 http 跳转 https" yn_options http_to_https_yn
 
-                    Println "是否设置 http 跳转 https ? [Y/n]"
-                    read -p "(默认: Y): " http_to_https_yn
-                    http_to_https_yn=${http_to_https_yn:-Y}
-                    if [[ $http_to_https_yn == [Yy] ]] 
+                    if [[ $http_to_https_yn == "是" ]] 
                     then
                         Println "$info 设置 $server_domain http 配置"
                         NginxConfigServerHttpPort
@@ -19186,10 +19188,11 @@ NginxAddDomain()
                     fi
 
                     NginxConfigServerHttpsPort
-                    Println "是否设置 https 跳转到其它网址 ? [y/N]"
-                    read -p "(默认: N): " https_redirect_yn
-                    https_redirect_yn=${https_redirect_yn:-N}
-                    if [[ $https_redirect_yn == [Yy] ]] 
+                    echo
+                    yn_options=( '否' '是' )
+                    inquirer list_input "是否设置 https 跳转到其它网址" yn_options https_redirect_yn
+
+                    if [[ $https_redirect_yn == "是" ]] 
                     then
                         NginxAppendHttpsRedirectConf
                     else
@@ -19204,18 +19207,18 @@ NginxAddDomain()
                 ;;
                 3) 
                     DomainInstallCert
-                    Println "http 和 https 是否使用相同的目录? [Y/n]"
-                    read -p "(默认: Y): " http_https_same_dir_yn
-                    http_https_same_dir_yn=${http_https_same_dir_yn:-Y}
+                    echo
+                    yn_options=( '是' '否' )
+                    inquirer list_input "http 和 https 是否使用相同的目录" yn_options http_https_same_dir_yn
 
-                    if [[ $http_https_same_dir_yn == [Yy] ]] 
+                    if [[ $http_https_same_dir_yn == "是" ]] 
                     then
                         NginxConfigServerHttpPort
                         NginxConfigServerHttpsPort
-                        Println "是否设置跳转到其它网址 ? [y/N]"
-                        read -p "(默认: N): " http_https_redirect_yn
-                        http_https_redirect_yn=${http_https_redirect_yn:-N}
-                        if [[ $http_https_redirect_yn == "Y" ]] 
+                        echo
+                        yn_options=( '否' '是' )
+                        inquirer list_input "是否设置跳转到其它网址" yn_options http_https_redirect_yn
+                        if [[ $http_https_redirect_yn == "是" ]] 
                         then
                             NginxAppendHttpHttpsRedirectConf
                         else
@@ -19226,19 +19229,19 @@ NginxAddDomain()
                         fi
                     else
                         NginxConfigServerHttpPort
-                        Println "是否设置 http 跳转到其它网址 ? [y/N]"
-                        read -p "(默认: N): " http_redirect_yn
-                        http_redirect_yn=${http_redirect_yn:-N}
-                        if [[ $http_redirect_yn == [Yy] ]] 
+                        echo
+                        yn_options=( '否' '是' )
+                        inquirer list_input "是否设置 http 跳转到其它网址" yn_options http_redirect_yn
+                        if [[ $http_redirect_yn == "是" ]] 
                         then
                             NginxAppendHttpRedirectConf
                             NginxConfigServerHttpsPort
 
-                            Println "是否设置 https 跳转到其它网址 ? [y/N]"
-                            read -p "(默认: N): " https_redirect_yn
-                            https_redirect_yn=${https_redirect_yn:-N}
+                            echo
+                            yn_options=( '否' '是' )
+                            inquirer list_input "是否设置 https 跳转到其它网址" yn_options https_redirect_yn
 
-                            if [[ $https_redirect_yn == [Yy] ]] 
+                            if [[ $https_redirect_yn == "是" ]] 
                             then
                                 NginxAppendHttpsRedirectConf
                             else
@@ -19257,11 +19260,12 @@ NginxAddDomain()
                             server_http_deny=$deny_aliyun
 
                             NginxConfigServerHttpsPort
-                            Println "是否设置 https 跳转到其它网址 ? [y/N]"
-                            read -p "(默认: N): " https_redirect_yn
-                            https_redirect_yn=${https_redirect_yn:-N}
 
-                            if [[ $https_redirect_yn == [Yy] ]] 
+                            echo
+                            yn_options=( '否' '是' )
+                            inquirer list_input "是否设置 https 跳转到其它网址" yn_options https_redirect_yn
+
+                            if [[ $https_redirect_yn == "是" ]] 
                             then
                                 NginxAppendHttpConf
                                 NginxAppendHttpsRedirectConf
@@ -20342,10 +20346,10 @@ V2raySetListen()
 {
     if [ "$forward_num" -eq 1 ] || [ "$forward_num" -eq 3 ]
     then
-        Println "是否对外公开 ? [y/N]"
-        read -p "(默认: N): " public_address_yn
-        public_address_yn=${public_address_yn:-N}
-        if [[ $public_address_yn == [Yy] ]]
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "是否对外公开" yn_options public_address_yn
+        if [[ $public_address_yn == "是" ]]
         then
             listen="0.0.0.0"
         else
@@ -20583,11 +20587,9 @@ V2raySetTimeout()
 
 V2raySetAllowTransparent()
 {
-    echo "转发所有 HTTP 请求, 而非只是代理请求 ? [y/N]"
-    echo -e "$tip 若配置不当, 开启此选项会导致死循环\n"
-    read -p "(默认: N): " allow_transparent_yn
-    allow_transparent_yn=${allow_transparent_yn:-N}
-    if [[ $allow_transparent_yn == [Yy] ]]
+    yn_options=( '否' '是' )
+    inquirer list_input "转发所有 HTTP 请求, 而非只是代理请求, 若配置不当, 开启此选项会导致死循环" yn_options allow_transparent_yn
+    if [[ $allow_transparent_yn == "是" ]]
     then
         allow_transparent="true"
     else
@@ -20811,15 +20813,16 @@ V2rayAddOutbound()
     V2raySetTag
     V2raySetProtocol
 
-    echo "是否是前置代理 ? [y/N]"
-    read -p "(默认: N): " forward_proxy_yn
-    forward_proxy_yn=${forward_proxy_yn:-N}
-    if [[ $forward_proxy_yn == [Yy] ]]
+    yn_options=( '否' '是' )
+    inquirer list_input "是否是前置代理" yn_options forward_proxy_yn
+
+    if [[ $forward_proxy_yn == "是" ]]
     then
-        Println "是否是 https 前置代理 ? [y/N]"
-        read -p "(默认: N): " forward_proxy_https_yn
-        forward_proxy_https_yn=${forward_proxy_https_yn:-N}
-        if [[ $forward_proxy_https_yn == [Yy] ]] 
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "是否是 https 前置代理" yn_options forward_proxy_https_yn
+
+        if [[ $forward_proxy_https_yn == "是" ]] 
         then
             V2raySetAllowInsecure
             new_outbound=$(
@@ -21251,10 +21254,11 @@ V2rayDeleteForwardAccount()
 
                 if [ -z "$accounts_list" ] 
                 then
-                    Println "此服务器没有账号, 是否删除此服务器 ? [y/N]"
-                    read -p "(默认: N): " delete_server_yn
-                    delete_server_yn=${delete_server_yn:-N}
-                    if [[ $delete_server_yn == [Yy] ]] 
+                    echo
+                    yn_options=( '否' '是' )
+                    inquirer list_input "此服务器没有账号, 是否删除此服务器" yn_options delete_server_yn
+
+                    if [[ $delete_server_yn == "是" ]] 
                     then
                         jq_path='["outbounds",'"$outbounds_index"',"settings","vnext"]'
                         JQ delete "$V2_CONFIG" "$vnext_index"
@@ -21353,10 +21357,11 @@ V2rayDeleteForwardAccount()
 
                 if [ -z "$accounts_list" ] 
                 then
-                    Println "此服务器没有账号, 是否删除此服务器 ? [y/N]"
-                    read -p "(默认: N): " delete_server_yn
-                    delete_server_yn=${delete_server_yn:-N}
-                    if [[ $delete_server_yn == [Yy] ]] 
+                    echo
+                    yn_options=( '否' '是' )
+                    inquirer list_input "此服务器没有账号, 是否删除此服务器" yn_options delete_server_yn
+
+                    if [[ $delete_server_yn == "是" ]] 
                     then
                         jq_path='["outbounds",'"$outbounds_index"',"settings","servers"]'
                         JQ delete "$V2_CONFIG" "$servers_index"
@@ -22554,17 +22559,16 @@ SetCloudflareZoneResolve()
 
 SetCloudflareZoneAlwaysUseHttps()
 {
-    Println "始终使用 https 访问域名 ? [y/N]"
-    echo -e "$tip 开启后客户端和 cloudflare 之间连接始终为 https\n"
-    if [ "${cf_zone_always_use_https:-}" == "on" ] 
+    echo
+    if [[ ${cf_zone_always_use_https:-} == "on" ]] 
     then
-        always_use_https_yn="Y"
+        yn_options=( '是' '否' )
     else
-        always_use_https_yn="N"
+        yn_options=( '否' '是' )
     fi
-    read -p "(默认: $always_use_https_yn): " cf_zone_always_use_https_yn
-    cf_zone_always_use_https_yn=${cf_zone_always_use_https_yn:-$always_use_https_yn}
-    if [[ $cf_zone_always_use_https_yn == [Yy] ]] 
+    inquirer list_input "始终使用 https 访问域名, 开启后客户端和 cloudflare 之间连接始终为 https" yn_options cf_zone_always_use_https_yn
+
+    if [[ $cf_zone_always_use_https_yn == "是" ]] 
     then
         cf_zone_always_use_https='on'
     else
@@ -23570,11 +23574,10 @@ DelCloudflareZone()
         else
             Println "$error ${msg:-超时, 请重试}\n"
         fi
-        Println "是否仍要删除此源站 ? [y/N]"
-        echo -e "$tip 只有这里和官网都删除才能重新添加此源站\n"
-        read -p "(默认: N): " del_zone_yn
-        del_zone_yn=${del_zone_yn:-N}
-        if [[ $del_zone_yn == [Yy] ]] 
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "是否仍要删除此源站, 只有这里和官网都删除才能重新添加此源站" yn_options del_zone_yn
+        if [[ $del_zone_yn == "是" ]] 
         then
             jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
             JQ delete "$CF_CONFIG" "$cf_zones_index"
@@ -23624,10 +23627,11 @@ DelCloudflareHost()
 
     if [ "$cf_zones_count" -gt 0 ] 
     then
-        Println "是否删除此 CFP 下所有的源站? [y/N]"
-        read -p "(默认: 否): " del_zones_yn
-        del_zones_yn=${del_zones_yn:-N}
-        if [[ $del_zones_yn == [Yy] ]] 
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "是否删除此 CFP 下所有的源站" yn_options del_zones_yn
+
+        if [[ $del_zones_yn == "是" ]] 
         then
             for((i=0;i<${#cf_zones_name[@]};i++));
             do
@@ -24092,11 +24096,11 @@ InstallWrangler()
 {
     if [[ -x $(command -v cargo) ]] 
     then
-        Println "$info 检测到 cargo, 使用 cargo 安装 wrangler ? [y/N]"
-        echo -e "$tip 否则使用 npm 安装\n"
-        read -p "(默认: N): " user_cargo_yn
-        user_cargo_yn=${user_cargo_yn:-N}
-        if [[ $user_cargo_yn == [Yy] ]] 
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "检测到 cargo, 是否使用 cargo 安装 wrangler, 否则使用 npm 安装" yn_options user_cargo_yn
+
+        if [[ $user_cargo_yn == "是" ]] 
         then
             cargo install wrangler
             Println "$info wrangler 安装成功\n"
@@ -24121,11 +24125,11 @@ UpdateWrangler()
     fi
     if [[ -x $(command -v cargo) ]] 
     then
-        Println "$info 检测到 cargo, 使用 cargo 更新 wrangler ? [y/N]"
-        echo -e "$tip 否则使用 npm 更新\n"
-        read -p "(默认: N): " user_cargo_yn
-        user_cargo_yn=${user_cargo_yn:-N}
-        if [[ $user_cargo_yn == [Yy] ]] 
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "检测到 cargo, 是否使用 cargo 更新 wrangler, 否则使用 npm 更新" yn_options user_cargo_yn
+
+        if [[ $user_cargo_yn == "是" ]] 
         then
             cargo install wrangler --force
             Println "$info wrangler 更新成功\n"
@@ -24247,10 +24251,11 @@ AddCloudflareWorker()
 
                 if [ -d "$CF_WORKERS_ROOT/$cf_worker_path" ] 
                 then
-                    Println "$error 路径已经存在, 是否仍要添加 ? [y/N]"
-                    read -p "(默认: N): " force_add_yn
-                    force_add_yn=${force_add_yn:-N}
-                    if [[ $force_add_yn == [Nn] ]] 
+                    echo
+                    yn_options=( '否' '是' )
+                    inquirer list_input "路径已经存在, 是否仍要添加" yn_options force_add_yn
+
+                    if [[ $force_add_yn == "否" ]] 
                     then
                         Println "已取消...\n"
                         exit 1
@@ -24379,19 +24384,21 @@ EditCloudflareWorker()
                     break
                 elif [ -d "$CF_WORKERS_ROOT/$cf_worker_path_new" ] 
                 then
-                    Println "$error 路径已经存在, 是否仍要修改 ? [y/N]"
-                    read -p "(默认: N): " force_edit_yn
-                    force_edit_yn=${force_edit_yn:-N}
-                    if [[ $force_edit_yn == [Nn] ]] 
+                    echo
+                    yn_options=( '否' '是' )
+                    inquirer list_input "路径已经存在, 是否仍要修改" yn_options force_edit_yn
+
+                    if [[ $force_edit_yn == "否" ]] 
                     then
                         continue
                     else
                         if [ -d "$CF_WORKERS_ROOT/$cf_worker_path" ] 
                         then
-                            Println "$error 是否删除原路径目录 ? [y/N]"
-                            read -p "(默认: N): " delete_old_path_yn
-                            delete_old_path_yn=${delete_old_path_yn:-N}
-                            if [[ $delete_old_path_yn == [Yy] ]] 
+                            echo
+                            yn_options=( '否' '是' )
+                            inquirer list_input "是否删除原路径目录" yn_options delete_old_path_yn
+
+                            if [[ $delete_old_path_yn == "是" ]] 
                             then
                                 rm -rf "$CF_WORKERS_ROOT/${cf_worker_path:-notfound}"
                             fi  
@@ -24484,10 +24491,11 @@ DelCloudflareWorker()
 
     if [ -d "$CF_WORKERS_ROOT/$cf_worker_path" ] 
     then
-        Println "是否删除 worker 目录 $CF_WORKERS_ROOT/$cf_worker_path ? [y/N]"
-        read -p "(默认: N): " del_cf_worker_path
-        del_cf_worker_path=${del_cf_worker_path:-N}
-        if [[ $del_cf_worker_path == [Yy] ]] 
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "是否删除 worker 目录 $CF_WORKERS_ROOT/$cf_worker_path" yn_options del_cf_worker_path
+
+        if [[ $del_cf_worker_path == "是" ]] 
         then
             rm -rf "$CF_WORKERS_ROOT/${cf_worker_path:-notfound}"
         fi
@@ -24641,10 +24649,11 @@ DeployCloudflareWorker()
             GetIbmcfApps
             if [ "$ibm_cf_apps_count" -gt 0 ] 
             then
-                Println "$info 是否使用 IBM CF APP 中转 [Y/n]"
-                read -p "(默认: Y): " use_ibm_cf_app_yn
-                use_ibm_cf_app_yn=${use_ibm_cf_app_yn:-Y}
-                if [[ "$use_ibm_cf_app_yn" == [Yy] ]] 
+                echo
+                yn_options=( '是' '否' )
+                inquirer list_input "是否使用 IBM CF APP 中转" yn_options use_ibm_cf_app_yn
+
+                if [[ "$use_ibm_cf_app_yn" == "是" ]] 
                 then
                     ListIbmcfApps
                     echo -e "选择 APP"
@@ -24984,10 +24993,11 @@ ConfigCloudflareWorkerRoute()
     if [[ $script =~ ^[0-9]+$ ]] && [ "$script" -le "$cf_workers_count" ] && [ "$script" -gt 0 ]
     then
         cf_workers_index=$((script-1))
-        Println "$info 是想要输入 ${cf_workers_project_name[cf_workers_index]} ? [Y/n]"
-        read -p "(默认: Y): " mistake_yn
-        mistake_yn=${mistake_yn:-Y}
-        if [[ $mistake_yn == [Yy] ]] 
+        echo
+        yn_options=( '是' '否' )
+        inquirer list_input "是想要输入 ${cf_workers_project_name[cf_workers_index]}" yn_options mistake_yn
+
+        if [[ $mistake_yn == "是" ]] 
         then
             script=${cf_workers_project_name[cf_workers_index]}
         fi
@@ -25777,10 +25787,11 @@ EnableCloudflareWorkersMonitor()
         then
             if [ "$ibm_cf_apps_count" -gt 0 ] 
             then
-                Println "$info 是否使用 IBM CF APP 中转 worker: ${workers_name[i]} [Y/n]"
-                read -p "(默认: Y): " use_ibm_cf_app_yn
-                use_ibm_cf_app_yn=${use_ibm_cf_app_yn:-Y}
-                if [[ "$use_ibm_cf_app_yn" == [Yy] ]] 
+                echo
+                yn_options=( '是' '否' )
+                inquirer list_input "是否使用 IBM CF APP 中转 worker: ${workers_name[i]}" yn_options use_ibm_cf_app_yn
+
+                if [[ $use_ibm_cf_app_yn == "是" ]] 
                 then
                     ListIbmcfApps
                     echo -e "选择 APP"
@@ -26986,11 +26997,11 @@ DelIbmApp()
     ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
     ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
 
-    Println "$info 是否删除 APP 绑定的路由 ? [Y/n]"
-    read -p "(默认: Y): " delete_app_routes_yn
-    delete_app_routes_yn=${delete_app_routes_yn:-Y}
+    echo
+    yn_options=( '是' '否' )
+    inquirer list_input "是否删除 APP 绑定的路由" yn_options delete_app_routes_yn
 
-    if [[ $delete_app_routes_yn == [Yy] ]] 
+    if [[ $delete_app_routes_yn == "是" ]] 
     then
         ibmcloud cf delete "$ibm_cf_app_name" -r
     else
@@ -27078,9 +27089,8 @@ DownloadIbmV2ray()
         Println "$info 下载 ibm v2ray ..."
         cd ~
         rm -rf v2ray-linux-64
-        if v2ray_version=$(curl -s -L "$FFMPEG_MIRROR_LINK/v2ray.json" | $JQ_FILE -r '.tag_name') && curl -L "$FFMPEG_MIRROR_LINK/$v2ray_version/v2ray-linux-64.zip" -o "v2ray-linux-64.zip"
+        if v2ray_version=$(curl -s -L "$FFMPEG_MIRROR_LINK/v2ray.json" | $JQ_FILE -r '.tag_name') && curl -L "$FFMPEG_MIRROR_LINK/v2ray/$v2ray_version/v2ray-linux-64.zip" -o "v2ray-linux-64.zip" && unzip v2ray-linux-64.zip -d v2ray-linux-64 > /dev/null
         then
-            unzip v2ray-linux-64.zip -d v2ray-linux-64 > /dev/null
             mkdir -p "$IBM_APPS_ROOT/ibm_v2ray"
             mv v2ray-linux-64/v2ray "$IBM_APPS_ROOT/ibm_v2ray/"
             mv v2ray-linux-64/v2ctl "$IBM_APPS_ROOT/ibm_v2ray/"
@@ -27102,9 +27112,8 @@ UpdateIbmV2ray()
         Println "$info 更新 ibm v2ray ..."
         cd ~
         rm -rf v2ray-linux-64
-        if v2ray_version=$(curl -s -L "$FFMPEG_MIRROR_LINK/v2ray.json" | $JQ_FILE -r '.tag_name') && curl -L "$FFMPEG_MIRROR_LINK/$v2ray_version/v2ray-linux-64.zip" -o "v2ray-linux-64.zip" 
+        if v2ray_version=$(curl -s -L "$FFMPEG_MIRROR_LINK/v2ray.json" | $JQ_FILE -r '.tag_name') && curl -L "$FFMPEG_MIRROR_LINK/v2ray/$v2ray_version/v2ray-linux-64.zip" -o "v2ray-linux-64.zip" && unzip v2ray-linux-64.zip -d v2ray-linux-64 > /dev/null
         then
-            unzip v2ray-linux-64.zip -d v2ray-linux-64 > /dev/null
             mkdir -p "$IBM_APPS_ROOT/ibm_v2ray"
             mv v2ray-linux-64/v2ray "$IBM_APPS_ROOT/ibm_v2ray/"
             mv v2ray-linux-64/v2ctl "$IBM_APPS_ROOT/ibm_v2ray/"
@@ -27916,7 +27925,18 @@ DeployIbmV2ray()
     ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
     ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
 
-    cd "$IBM_APPS_ROOT/ibm_v2ray/"
+    v2ray_name=$(RandStr)
+    cp -r "$IBM_APPS_ROOT/ibm_v2ray" "$IBM_APPS_ROOT/ibm_$v2ray_name"
+
+    cd "$IBM_APPS_ROOT/ibm_$v2ray_name/"
+    mv v2ray "$v2ray_name"
+    ./v2ctl config config.json > "$v2ray_name.pb"
+    tar zcf "$v2ray_name.tar.gz" "$v2ray_name" "$v2ray_name.pb"
+    rm -f config.json
+    rm -f "$v2ray_name"
+    rm -f "$v2ray_name.pb"
+    rm -f v2ctl
+
     ibmcloud cf create-app-manifest "$ibm_cf_app_name"
 
     routes=""
@@ -27944,11 +27964,14 @@ DeployIbmV2ray()
     echo -e "---
 applications:
 - name: $ibm_cf_app_name
-  command: ./v2ray -config ./config.json
+  command:
+    tar xzf $v2ray_name.tar.gz &&
+    { ./$v2ray_name -config ./$v2ray_name.pb -format=pb & } &&
+    sleep 5 &&
+    rm ./$v2ray_name.pb
   disk_quota: $disk_quota
   instances: ${instances:-1}
   memory: $memory
-$routes
   stack: $stack
   buildpacks:
     - go_buildpack
@@ -27963,6 +27986,8 @@ func main() {
 }
 ' > "main.go"
     ibmcloud cf push -f "${ibm_cf_app_name}_manifest.yml"
+    cd ..
+    rm -rf "$IBM_APPS_ROOT/ibm_$v2ray_name"
 }
 
 IbmV2rayMenu()
@@ -28472,10 +28497,11 @@ SetVipHostToken()
 
 SetVipHostStatus()
 {
-    Println "是否开启用此 VIP 服务器 [Y/n]"
-    read -p "(默认: 是): " vip_host_status
-    vip_host_status=${vip_host_status:-Y}
-    if [[ $vip_host_status == [Yy] ]] 
+    echo
+    yn_options=( '是' '否' )
+    inquirer list_input "是否开启用此 VIP 服务器" yn_options vip_host_status
+
+    if [[ $vip_host_status == "是" ]] 
     then
         vip_host_status_yn="on"
         vip_host_status_text="$green启用${normal}"
@@ -29077,10 +29103,11 @@ AddVipChannel()
     done
 
     # awk -v ORS=" " '$1 { print $0; } END { printf("\n"); }'
-    Println "是否批量添加? [y/N]"
-    read -p "(默认: 否): " vip_bulk_add
-    vip_bulk_add=${vip_bulk_add:-N}
-    if [[ $vip_bulk_add == [Yy] ]] 
+    echo
+    yn_options=( '否' '是' )
+    inquirer list_input "是否批量添加" yn_options vip_bulk_add
+
+    if [[ $vip_bulk_add == "是" ]] 
     then
         Println "请输入频道 ID, 同时也是目录名称和频道名称, 用空格分隔"
         read -p "(默认: 取消): " vip_channel
@@ -31065,13 +31092,13 @@ then
             then
                 Println "$error v2ray 未安装...\n" && exit 1
             fi
-
+            echo
             if [[ $(systemctl is-active v2ray) == "active" ]]
             then
-                Println "v2ray 正在运行, 是否关闭？[Y/n]"
-                read -p "(默认: Y): " v2ray_stop_yn
-                v2ray_stop_yn=${v2ray_stop_yn:-Y}
-                if [[ $v2ray_stop_yn == [Yy] ]] 
+                yn_options=( '是' '否' )
+                inquirer list_input "v2ray 正在运行, 是否关闭" yn_options v2ray_stop_yn
+
+                if [[ $v2ray_stop_yn == "是" ]] 
                 then
                     systemctl stop v2ray > /dev/null 2>&1
                     Println "$info v2ray 已关闭\n"
@@ -31079,10 +31106,10 @@ then
                     Println "已取消...\n" && exit 1
                 fi
             else
-                Println "v2ray 未运行, 是否开启？[Y/n]"
-                read -p "(默认: Y): " v2ray_start_yn
-                v2ray_start_yn=${v2ray_start_yn:-Y}
-                if [[ $v2ray_start_yn == [Yy] ]] 
+                yn_options=( '是' '否' )
+                inquirer list_input "v2ray 未运行, 是否开启" yn_options v2ray_start_yn
+
+                if [[ $v2ray_start_yn == "是" ]] 
                 then
                     systemctl start v2ray > /dev/null 2>&1
                     Println "$info v2ray 已开启\n"
@@ -31266,10 +31293,9 @@ ${green}8.${normal} 更新脚本
             then
                 Println "已取消 ...\n"
             else
-                if curl -L "$FFMPEG_MIRROR_LINK/Amlogic_s905-kernel-master.zip" -o ~/Amlogic_s905-kernel-master.zip
+                cd ~
+                if curl -L "$FFMPEG_MIRROR_LINK/Amlogic_s905-kernel-master.zip" -o ~/Amlogic_s905-kernel-master.zip && unzip Amlogic_s905-kernel-master.zip
                 then
-                    cd ~
-                    unzip Amlogic_s905-kernel-master.zip
                     cd Amlogic_s905-kernel-master
                     sed -i 's/interrupts = <29/interrupts = <25/' arch/arm64/boot/dts/amlogic/meson-gxl-s905d-p230.dts
                     make defconfig
@@ -31731,10 +31757,11 @@ then
 
             if [[ ! -x $(command -v openssl) ]] 
             then
-                Println "是否安装 openssl ? [Y/n]"
-                read -p "(默认: Y): " openssl_install_yn
-                openssl_install_yn=${openssl_install_yn:-Y}
-                if [[ $openssl_install_yn == [Yy] ]]
+                echo
+                yn_options=( '是' '否' )
+                inquirer list_input "是否安装 openssl" yn_options openssl_install_yn
+
+                if [[ $openssl_install_yn == "是" ]]
                 then
                     InstallOpenssl
                 else
@@ -31944,11 +31971,12 @@ then
                     hinet_4gtv_chnl_id=${hinet_4gtv[hinet_4gtv_chnl_index]%%:*}
                     hinet_4gtv_chnl_name=${hinet_4gtv[hinet_4gtv_chnl_index]#*:}
                     hinet_4gtv_chnl_name_enc=$(Urlencode "$hinet_4gtv_chnl_name")
-                    Println "$info 添加频道 [ $hinet_4gtv_chnl_name ]\n"
-                    Println "是否推流 flv ？[y/N]"
-                    read -p "(默认: N): " add_channel_flv_yn
-                    add_channel_flv_yn=${add_channel_flv_yn:-N}
-                    if [[ $add_channel_flv_yn == [Yy] ]] 
+
+                    Println "$info 添加频道 [ $hinet_4gtv_chnl_name ]\n\n"
+                    yn_options=( '否' '是' )
+                    inquirer list_input "是否推流 flv" yn_options add_channel_flv_yn
+
+                    if [[ $add_channel_flv_yn == "是" ]] 
                     then
                         kind="flv"
                     else
@@ -31977,11 +32005,10 @@ then
                     _4gtv_chnl_id=${_4gtv_chnls_id[_4gtv_chnl_index]}
                     _4gtv_chnl_name=${_4gtv_chnls_name[_4gtv_chnl_index]}
                     _4gtv_chnl_aid=${_4gtv_chnls_aid[_4gtv_chnl_index]}
-                    Println "$info 添加频道 [ $_4gtv_chnl_name ]\n"
-                    Println "是否推流 flv ？[y/N]"
-                    read -p "(默认: N): " add_channel_flv_yn
-                    add_channel_flv_yn=${add_channel_flv_yn:-N}
-                    if [[ $add_channel_flv_yn == [Yy] ]] 
+                    Println "$info 添加频道 [ $_4gtv_chnl_name ]\n\n"
+                    yn_options=( '否' '是' )
+                    inquirer list_input "是否推流 flv" yn_options add_channel_flv_yn
+                    if [[ $add_channel_flv_yn == "是" ]] 
                     then
                         kind="flv"
                     else
@@ -32123,10 +32150,11 @@ then
                             nginx_name="nginx"
                             nginx_ctl="nx"
                         else
-                            Println "没有检测到运行的 nginx, 是否使用 openresty ? [y/N]"
-                            read -p "(默认: 否): " use_openresty_yn
-                            use_openresty_yn=${use_openresty_yn:-N}
-                            if [[ $use_openresty_yn == [Yy] ]] 
+                            echo
+                            yn_options=( '否' '是' )
+                            inquirer list_input "没有检测到运行的 nginx, 是否使用 openresty" yn_options use_openresty_yn
+
+                            if [[ $use_openresty_yn == "是" ]] 
                             then
                                 nginx_prefix="/usr/local/openresty/nginx"
                                 nginx_name="openresty"
@@ -32686,9 +32714,11 @@ else
     else
         if [ ! -e "$IPTV_ROOT" ]
         then
-            echo && read -p "尚未安装,是否现在安装？[y/N] (默认: N): " install_yn
-            install_yn=${install_yn:-N}
-            if [[ $install_yn == [Yy] ]]
+            echo
+            yn_options=( '否' '是' )
+            inquirer list_input "尚未安装, 是否现在安装" yn_options install_yn
+
+            if [[ $install_yn == "是" ]]
             then
                 Install
             else
