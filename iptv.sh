@@ -19717,6 +19717,10 @@ V2rayUpdate()
 
     UpdateShFile v2ray
 
+    sed -i "s+nobody+v2ray+g" /etc/systemd/system/v2ray.service
+    sed -i "s+nobody+v2ray+g" /etc/systemd/system/v2ray@.service
+    systemctl daemon-reload
+
     { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_BACKUP"; } \
     | sed "s+nobody+v2ray+g" \
     | sed "s+ 'sha1'++g" \
@@ -20386,7 +20390,7 @@ V2raySetPort()
             *)
                 if [ "$port" -ge 1 ] && [ "$port" -le 65535 ]
                 then
-                    if ( echo -n "" >/dev/tcp/127.0.0.1/"$port" )  >/dev/null 2>&1
+                    if ( echo -n "" >/dev/tcp/127.0.0.1/"$port" ) >/dev/null 2>&1
                     then
                         Println "$error 端口已被其他程序占用！请重新输入! \n"
                     else
@@ -24555,225 +24559,267 @@ DeployCloudflareWorker()
         exit 1
     fi
 
-    echo -e "选择用户"
-    while read -p "(默认: 取消): " cf_users_num
+    cf_users_indexs=()
+    echo -e "选择用户, 多个用户用空格分隔, 比如 5 7 9-11"
+    while read -p "(默认: 取消): " cf_users_num 
     do
-        case "$cf_users_num" in
-            "")
-                Println "已取消...\n" && exit 1
-            ;;
-            *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+        [ -z "$cf_users_num" ] && Println "已取消...\n" && exit 1
+        IFS=" " read -ra cf_users_num_arr <<< "$cf_users_num"
+
+        error_no=0
+        for cf_user_num in "${cf_users_num_arr[@]}"
+        do
+            case "$cf_user_num" in
+                *"-"*)
+                    cf_user_num_start=${cf_user_num%-*}
+                    cf_user_num_end=${cf_user_num#*-}
+                    if [[ $cf_user_num_start == *[!0-9]* ]] || [[ $cf_user_num_end == *[!0-9]* ]] || \
+                    [ "$cf_user_num_start" -eq 0 ] || [ "$cf_user_num_end" -eq 0 ] || \
+                    [ "$cf_user_num_end" -gt "$cf_users_count" ] || \
+                    [ "$cf_user_num_start" -ge "$cf_user_num_end" ]
+                    then
+                        error_no=3
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                ;;
+                *)
+                    if [ "$cf_user_num" -lt 1 ] || [ "$cf_user_num" -gt "$cf_users_count" ] 
+                    then
+                        error_no=2
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error 请输入正确的数字\n"
             ;;
             *)
-                if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
-                then
-                    cf_users_index=$((cf_users_num-1))
-                    cf_user_email=${cf_users_email[cf_users_index]}
-                    cf_user_pass=${cf_users_pass[cf_users_index]}
-                    cf_user_token=${cf_users_token[cf_users_index]}
-                    cf_user_key=${cf_users_key[cf_users_index]}
-                    break
-                else
-                    Println "$error 请输入正确的序号\n"
-                fi
+                for element in "${cf_users_num_arr[@]}"
+                do
+                    if [[ $element == *"-"* ]] 
+                    then
+                        start=${element%-*}
+                        end=${element#*-}
+                        for((i=start;i<=end;i++));
+                        do
+                            cf_users_indexs+=("$((i-1))")
+                        done
+                    else
+                        cf_users_indexs+=("$((element-1))")
+                    fi
+                done
+                break
             ;;
         esac
     done
 
-    if [ -z "$cf_user_token" ] 
-    then
-        Println "$info 尝试获取用户 Token ..."
+    for cf_users_index in "${cf_users_indexs[@]}"
+    do
+        cf_user_email=${cf_users_email[cf_users_index]}
+        Println "$info 部署到 $cf_user_email\n"
 
-        if [[ ! -x $(command -v python3) ]] 
-        then
-            Println "$info 安装 python3 ..."
-            InstallPython
-        fi
-
-        Println "$info 更新 ${CF_WORKERS_FILE##*/}"
-        wget --timeout=10 --tries=1 --no-check-certificate "$CF_WORKERS_LINK" -qO "$CF_WORKERS_FILE" \
-        || wget --timeout=10 --tries=3 --no-check-certificate "$CF_WORKERS_LINK_BACKUP" -qO "$CF_WORKERS_FILE"
-
-        for((i=0;i<3;i++));
-        do
-            if cf_user_token=$(python3 \
-                "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o api_token
-            ) 
-            then
-                break
-            else
-                sleep 10
-            fi
-        done
+        cf_user_pass=${cf_users_pass[cf_users_index]}
+        cf_user_token=${cf_users_token[cf_users_index]}
+        cf_user_key=${cf_users_key[cf_users_index]}
 
         if [ -z "$cf_user_token" ] 
         then
-            Println "$error 无法获取用户 ID, 账号或密码错误 或者 cloudflare 暂时限制登录\n"
-            exit 1
-        else
-            cf_users_token[cf_users_index]=$cf_user_token
+            Println "$info 尝试获取用户 Token ..."
 
-            new_user=$(
-            $JQ_FILE -n --arg email "$cf_user_email" --arg pass "$cf_user_pass" \
-                --arg token "$cf_user_token" --arg key "$cf_user_key" \
-                '{
-                    email: $email,
-                    pass: $pass,
-                    token: $token,
-                    key: $key
-                }'
-            )
-
-            jq_path='["users",'"$cf_users_index"']'
-            JQ replace "$CF_CONFIG" "$new_user"
-            Println "$info 获取用户 $cf_user_email Token 成功"
-        fi
-    fi
-
-    CF_ACCOUNT_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/accounts" \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $cf_user_token" \
-        | $JQ_FILE -r '.result[0].id'
-    ) || true
-    if [ -z "$CF_ACCOUNT_ID" ] || [ "$CF_ACCOUNT_ID" == null ]
-    then
-        Println "$error 无法获取用户 ID, Token 错误 ?\n"
-        exit 1
-    fi
-
-    if [ "$cf_worker_path" == "stream_proxy" ] 
-    then
-        if [ -s "$IBM_CONFIG" ] 
-        then
-            GetIbmcfApps
-            if [ "$ibm_cf_apps_count" -gt 0 ] 
+            if [[ ! -x $(command -v python3) ]] 
             then
-                echo
-                yn_options=( '是' '否' )
-                inquirer list_input "是否使用 IBM CF APP 中转" yn_options use_ibm_cf_app_yn
+                Println "$info 安装 python3 ..."
+                InstallPython
+            fi
 
-                if [[ "$use_ibm_cf_app_yn" == "是" ]] 
+            Println "$info 更新 ${CF_WORKERS_FILE##*/}"
+            wget --timeout=10 --tries=1 --no-check-certificate "$CF_WORKERS_LINK" -qO "$CF_WORKERS_FILE" \
+            || wget --timeout=10 --tries=3 --no-check-certificate "$CF_WORKERS_LINK_BACKUP" -qO "$CF_WORKERS_FILE"
+
+            for((i=0;i<3;i++));
+            do
+                if cf_user_token=$(python3 \
+                    "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o api_token
+                ) 
                 then
-                    ListIbmcfApps
-                    echo -e "选择 APP"
-                    while read -p "(默认: 取消): " ibm_cf_apps_num
-                    do
-                        case "$ibm_cf_apps_num" in
-                            "")
-                                Println "已取消...\n" && exit 1
-                            ;;
-                            *[!0-9]*)
-                                Println "$error 请输入正确的序号\n"
-                            ;;
-                            *)
-                                if [ "$ibm_cf_apps_num" -gt 0 ] && [ "$ibm_cf_apps_num" -le "$ibm_cf_apps_count" ]
-                                then
-                                    ibm_cf_apps_index=$((ibm_cf_apps_num-1))
-                                    ibm_cf_app_name=${ibm_cf_apps_name[ibm_cf_apps_index]}
-                                    ibm_user_email=${ibm_cf_apps_user_email[ibm_cf_apps_index]}
-                                    ibm_cf_app_routes_count=${ibm_cf_apps_routes_count[ibm_cf_apps_index]}
-                                    ibm_cf_app_route_hostname=${ibm_cf_apps_route_hostname[ibm_cf_apps_index]}
-                                    ibm_cf_app_route_port=${ibm_cf_apps_route_port[ibm_cf_apps_index]}
-                                    ibm_cf_app_route_domain=${ibm_cf_apps_route_domain[ibm_cf_apps_index]}
-                                    ibm_cf_app_route_path=${ibm_cf_apps_route_path[ibm_cf_apps_index]}
-                                    IFS="|" read -r -a ibm_cf_app_routes_hostname <<< "$ibm_cf_app_route_hostname"
-                                    IFS="|" read -r -a ibm_cf_app_routes_port <<< "$ibm_cf_app_route_port"
-                                    IFS="|" read -r -a ibm_cf_app_routes_domain <<< "$ibm_cf_app_route_domain"
-                                    IFS="|" read -r -a ibm_cf_app_routes_path <<< "${ibm_cf_app_route_path}|"
-                                    break
-                                else
+                    break
+                else
+                    sleep 10
+                fi
+            done
+
+            if [ -z "$cf_user_token" ] 
+            then
+                Println "$error 无法获取用户 ID, 账号或密码错误 或者 cloudflare 暂时限制登录\n"
+                exit 1
+            else
+                cf_users_token[cf_users_index]=$cf_user_token
+
+                new_user=$(
+                $JQ_FILE -n --arg email "$cf_user_email" --arg pass "$cf_user_pass" \
+                    --arg token "$cf_user_token" --arg key "$cf_user_key" \
+                    '{
+                        email: $email,
+                        pass: $pass,
+                        token: $token,
+                        key: $key
+                    }'
+                )
+
+                jq_path='["users",'"$cf_users_index"']'
+                JQ replace "$CF_CONFIG" "$new_user"
+                Println "$info 获取用户 $cf_user_email Token 成功"
+            fi
+        fi
+
+        CF_ACCOUNT_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/accounts" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $cf_user_token" \
+            | $JQ_FILE -r '.result[0].id'
+        ) || true
+        if [ -z "$CF_ACCOUNT_ID" ] || [ "$CF_ACCOUNT_ID" == null ]
+        then
+            Println "$error 无法获取用户 ID, Token 错误 ?\n"
+            exit 1
+        fi
+
+        if [ "$cf_worker_path" == "stream_proxy" ] 
+        then
+            if [ -s "$IBM_CONFIG" ] 
+            then
+                GetIbmcfApps
+                if [ "$ibm_cf_apps_count" -gt 0 ] 
+                then
+                    echo
+                    yn_options=( '是' '否' )
+                    inquirer list_input "是否使用 IBM CF APP 中转" yn_options use_ibm_cf_app_yn
+
+                    if [[ "$use_ibm_cf_app_yn" == "是" ]] 
+                    then
+                        ListIbmcfApps
+                        echo -e "选择 APP"
+                        while read -p "(默认: 取消): " ibm_cf_apps_num
+                        do
+                            case "$ibm_cf_apps_num" in
+                                "")
+                                    Println "已取消...\n" && exit 1
+                                ;;
+                                *[!0-9]*)
                                     Println "$error 请输入正确的序号\n"
-                                fi
-                            ;;
-                        esac
-                    done
+                                ;;
+                                *)
+                                    if [ "$ibm_cf_apps_num" -gt 0 ] && [ "$ibm_cf_apps_num" -le "$ibm_cf_apps_count" ]
+                                    then
+                                        ibm_cf_apps_index=$((ibm_cf_apps_num-1))
+                                        ibm_cf_app_name=${ibm_cf_apps_name[ibm_cf_apps_index]}
+                                        ibm_user_email=${ibm_cf_apps_user_email[ibm_cf_apps_index]}
+                                        ibm_cf_app_routes_count=${ibm_cf_apps_routes_count[ibm_cf_apps_index]}
+                                        ibm_cf_app_route_hostname=${ibm_cf_apps_route_hostname[ibm_cf_apps_index]}
+                                        ibm_cf_app_route_port=${ibm_cf_apps_route_port[ibm_cf_apps_index]}
+                                        ibm_cf_app_route_domain=${ibm_cf_apps_route_domain[ibm_cf_apps_index]}
+                                        ibm_cf_app_route_path=${ibm_cf_apps_route_path[ibm_cf_apps_index]}
+                                        IFS="|" read -r -a ibm_cf_app_routes_hostname <<< "$ibm_cf_app_route_hostname"
+                                        IFS="|" read -r -a ibm_cf_app_routes_port <<< "$ibm_cf_app_route_port"
+                                        IFS="|" read -r -a ibm_cf_app_routes_domain <<< "$ibm_cf_app_route_domain"
+                                        IFS="|" read -r -a ibm_cf_app_routes_path <<< "${ibm_cf_app_route_path}|"
+                                        break
+                                    else
+                                        Println "$error 请输入正确的序号\n"
+                                    fi
+                                ;;
+                            esac
+                        done
 
-                    ibm_cf_apps_list=""
-                    ibm_cf_apps_link=()
-                    for((i=0;i<ibm_cf_app_routes_count;i++));
-                    do
-                        if [ -n "${ibm_cf_app_routes_path[i]}" ] 
-                        then
-                            path="/${ibm_cf_app_routes_path[i]}"
-                        else
-                            path=""
-                        fi
-                        upstream="${ibm_cf_app_routes_hostname[i]}.${ibm_cf_app_routes_domain[i]}$path"
-                        ibm_cf_apps_link+=("$upstream")
-                        ibm_cf_apps_list="$ibm_cf_apps_list $green$((i+1)).${normal}\r\033[6C$upstream\n\n"
-                    done
+                        ibm_cf_apps_list=""
+                        ibm_cf_apps_link=()
+                        for((i=0;i<ibm_cf_app_routes_count;i++));
+                        do
+                            if [ -n "${ibm_cf_app_routes_path[i]}" ] 
+                            then
+                                path="/${ibm_cf_app_routes_path[i]}"
+                            else
+                                path=""
+                            fi
+                            upstream="${ibm_cf_app_routes_hostname[i]}.${ibm_cf_app_routes_domain[i]}$path"
+                            ibm_cf_apps_link+=("$upstream")
+                            ibm_cf_apps_list="$ibm_cf_apps_list $green$((i+1)).${normal}\r\033[6C$upstream\n\n"
+                        done
 
-                    Println "$ibm_cf_apps_list"
+                        Println "$ibm_cf_apps_list"
 
-                    echo -e "选择链接"
-                    while read -p "(默认: 取消): " ibm_cf_apps_link_num 
-                    do
-                        case $ibm_cf_apps_link_num in
-                            "") 
-                                Println "已取消...\n"
-                                exit 1
-                            ;;
-                            *[!0-9]*) 
-                                Println "$error 请输入正确的序号\n"
-                            ;;
-                            *) 
-                                if [ "$ibm_cf_apps_link_num" -gt 0 ] && [ "$ibm_cf_apps_link_num" -le "$ibm_cf_app_routes_count" ] 
-                                then
-                                    ibm_cf_apps_link_index=$((ibm_cf_apps_link_num-1))
-                                    upstream=${ibm_cf_apps_link[ibm_cf_apps_link_index]}
-                                    break
-                                else
+                        echo -e "选择链接"
+                        while read -p "(默认: 取消): " ibm_cf_apps_link_num 
+                        do
+                            case $ibm_cf_apps_link_num in
+                                "") 
+                                    Println "已取消...\n"
+                                    exit 1
+                                ;;
+                                *[!0-9]*) 
                                     Println "$error 请输入正确的序号\n"
-                                fi
-                            ;;
-                        esac
-                    done
+                                ;;
+                                *) 
+                                    if [ "$ibm_cf_apps_link_num" -gt 0 ] && [ "$ibm_cf_apps_link_num" -le "$ibm_cf_app_routes_count" ] 
+                                    then
+                                        ibm_cf_apps_link_index=$((ibm_cf_apps_link_num-1))
+                                        upstream=${ibm_cf_apps_link[ibm_cf_apps_link_index]}
+                                        break
+                                    else
+                                        Println "$error 请输入正确的序号\n"
+                                    fi
+                                ;;
+                            esac
+                        done
+                    fi
                 fi
             fi
-        fi
-        if [ -z "${upstream:-}" ] 
-        then
-            Println "$info 输入源站 ip 或者 中转服务器的域名(比如 IBM CF APP 的域名)"
-            read -p "(默认: 取消): " upstream
-            [ -z "$upstream" ] && Println "已取消...\n" && exit 1
-        fi
-        sed -i 's/const upstream = .*/const upstream = "'"$upstream"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/index.js"
-    fi
-
-    cd "$CF_WORKERS_ROOT/$cf_worker_path"
-    sed -i 's/account_id = .*/account_id = "'"$CF_ACCOUNT_ID"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/wrangler.toml"
-    sed -i 's/name = .*/name = "'"$cf_worker_project_name"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/wrangler.toml"
-
-    if CF_API_TOKEN=$cf_user_token wrangler publish 
-    then
-        Println "$info worker 部署成功\n"
-    else
-        Println "$error 请检查 Token 权限, 尝试修复 ...\n"
-
-        if [[ ! -x $(command -v python3) ]] 
-        then
-            Println "$info 安装 python3 ..."
-            InstallPython
-        fi
-
-        if [ "$sh_debug" -eq 0 ] && [ ! -e "$IPTV_ROOT/VIP" ]
-        then
-            curl -s -Lm 10 "$CF_WORKERS_LINK" -o "$CF_WORKERS_FILE" \
-            || curl -s -Lm 20 "$CF_WORKERS_LINK_BACKUP" -o "$CF_WORKERS_FILE"
-        fi
-
-        for((i=0;i<3;i++));
-        do
-            if [[ $(python3 "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o add_subdomain) == "ok" ]] 
+            if [ -z "${upstream:-}" ] 
             then
-                CF_API_TOKEN=$cf_user_token wrangler publish
-                break
-            else
-                sleep 10
+                Println "$info 输入源站 ip 或者 中转服务器的域名(比如 IBM CF APP 的域名)"
+                read -p "(默认: 取消): " upstream
+                [ -z "$upstream" ] && Println "已取消...\n" && exit 1
             fi
-        done
-    fi
+            sed -i 's/const upstream = .*/const upstream = "'"$upstream"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/index.js"
+        fi
+
+        cd "$CF_WORKERS_ROOT/$cf_worker_path"
+        sed -i 's/account_id = .*/account_id = "'"$CF_ACCOUNT_ID"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/wrangler.toml"
+        sed -i 's/name = .*/name = "'"$cf_worker_project_name"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/wrangler.toml"
+
+        if CF_API_TOKEN=$cf_user_token wrangler publish 
+        then
+            Println "$info worker 部署成功\n"
+        else
+            Println "$error 请检查 Token 权限, 尝试修复 ...\n"
+
+            if [[ ! -x $(command -v python3) ]] 
+            then
+                Println "$info 安装 python3 ..."
+                InstallPython
+            fi
+
+            if [ "$sh_debug" -eq 0 ] && [ ! -e "$IPTV_ROOT/VIP" ]
+            then
+                curl -s -Lm 10 "$CF_WORKERS_LINK" -o "$CF_WORKERS_FILE" \
+                || curl -s -Lm 20 "$CF_WORKERS_LINK_BACKUP" -o "$CF_WORKERS_FILE"
+            fi
+
+            for((i=0;i<3;i++));
+            do
+                if [[ $(python3 "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o add_subdomain) == "ok" ]] 
+                then
+                    CF_API_TOKEN=$cf_user_token wrangler publish
+                    break
+                else
+                    sleep 10
+                fi
+            done
+        fi
+    done
 }
 
 ListCloudflareWorkersRoutes()
@@ -30981,17 +31027,6 @@ then
             CheckRelease "检查依赖, 耗时可能会很长"
             InstallJQ
 
-            Println "$info 安装 v2ray..."
-            { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_BACKUP"; } \
-            | sed "s+nobody+v2ray+g" \
-            | sed "s+ 'sha1'++g" \
-            | sed "s+ 'sha256'++g" \
-            | sed "s+ 'sha512'++g" \
-            | sed "s+https://api.github.com/repos/v2fly/v2ray-core/releases/latest+$FFMPEG_MIRROR_LINK/v2ray.json+g" \
-            | sed "s+https://github.com/v2fly/v2ray-core/releases/download+$FFMPEG_MIRROR_LINK/v2ray+g" | bash
-
-            V2rayConfigInstall
-
             if ! grep -q "v2ray:" < "/etc/passwd"
             then
                 if grep -q '\--group ' < <(adduser --help)
@@ -31003,15 +31038,30 @@ then
                 usermod -s /usr/sbin/nologin v2ray
             fi
 
+            Println "$info 安装 v2ray..."
+            { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_BACKUP"; } \
+            | sed "s+nobody+v2ray+g" \
+            | sed "s+ 'sha1'++g" \
+            | sed "s+ 'sha256'++g" \
+            | sed "s+ 'sha512'++g" \
+            | sed "s+https://api.github.com/repos/v2fly/v2ray-core/releases/latest+$FFMPEG_MIRROR_LINK/v2ray.json+g" \
+            | sed "s+https://github.com/v2fly/v2ray-core/releases/download+$FFMPEG_MIRROR_LINK/v2ray+g" | bash
+
+            V2rayConfigInstall
+
             mkdir -p /var/log/v2ray/
             [ ! -e "/var/log/v2ray/error.log" ] && printf '%s' "" > /var/log/v2ray/error.log
             chown -R v2ray:v2ray /var/log/v2ray/
+            sed -i "s+nobody+v2ray+g" /etc/systemd/system/v2ray.service
+            sed -i "s+nobody+v2ray+g" /etc/systemd/system/v2ray@.service
+            systemctl daemon-reload
             systemctl enable v2ray
             systemctl start v2ray
             Println "$info v2ray 安装完成, 请配置域名...\n"
         ;;
         2) 
             V2rayUpdate
+            systemctl restart v2ray
         ;;
         3) 
             V2rayConfigUpdate
@@ -31498,6 +31548,8 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
             fi
         ;;
         5)
+            docker_openwrt_ver="armvirt-64-19.07.4"
+
             if [[ ! -x $(command -v docker) ]] 
             then
                 Println "$error 请先安装 docker\n"
@@ -31512,9 +31564,33 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
                 exit 1
             fi
 
-            if grep -q "armvirt-64-19.07.3" < <(docker images)
+            if grep -q "$docker_openwrt_ver" < <(docker container ls -a)
             then
                 Println "$error openwrt 已经存在\n"
+                exit 1
+            else
+                Println "$info 安装 openwrt-$docker_openwrt_ver"
+            fi
+
+            while IFS= read -r line 
+            do
+                if [[ $line =~ ^address1=([^/]+)/24,(.+) ]]
+                then
+                    eth0_ip=${BASH_REMATCH[1]}
+                    eth0_gateway=${BASH_REMATCH[2]}
+                    break
+                fi
+            done < "/etc/NetworkManager/system-connections/eth0.nmconnection"
+
+            connected_ip=${SSH_CLIENT% *}
+            connected_ip=${connected_ip// /:}
+            armbian_ip=$(ss -taH|grep $connected_ip|awk '{print $4}')
+            armbian_ip=${armbian_ip%:*}
+
+            if [ "$armbian_ip" != "$eth0_ip" ] 
+            then
+                docker container start openwrt >/dev/null 2>&1
+                Println "$error 请连接 IP: $eth0_ip 到 Armbian\n"
                 exit 1
             fi
 
@@ -31527,7 +31603,7 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
                 exit 1
             fi
 
-            if ! ip addr show hMACvLAN 2> /dev/null
+            if ! ip addr show hMACvLAN >/dev/null 2>&1
             then
                 Println "$tip 必须和主路由器 ip 在同一网段"
                 inquirer text_input "设置虚拟接口 hMACvLAN 静态 ip : " hMACvLAN_ip "取消"
@@ -31547,7 +31623,6 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
 
                 nmcli connection add type macvlan dev eth0 mode bridge ifname hMACvLAN autoconnect yes save yes > /dev/null
                 nmcli connection modify macvlan-hMACvLAN con-name hMACvLAN
-                nmcli connection modify hMACvLAN ipv4.route-metric 50 > /dev/null
 
                 while IFS= read -r line 
                 do
@@ -31592,15 +31667,33 @@ method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
                 done < "/etc/NetworkManager/system-connections/hMACvLAN.nmconnection"
             fi
 
-            while IFS= read -r line 
-            do
-                if [[ $line =~ ^address1=([^/]+)/24,(.+) ]]
+            if docker container stop openwrt >/dev/null 2>&1
+            then
+                echo
+                yn_options=( '否' '是' )
+                inquirer list_input "是否重新设置路由器静态 IP" yn_options change_openwrt_ip_yn
+                if [[ $change_openwrt_ip_yn == "是" ]] 
                 then
-                    eth0_ip=${BASH_REMATCH[1]}
-                    eth0_gateway=${BASH_REMATCH[2]}
-                    break
+                    Println "$tip 必须和主路由器 ip 在同一网段"
+                    inquirer text_input "设置 openwrt 静态 ip : " openwrt_ip "取消"
+                    if [ "$openwrt_ip" == "取消" ]
+                    then
+                        docker container start openwrt >/dev/null
+                        Println "已取消 ...\n"
+                        exit 1
+                    fi
+                    sed -i "0,/address1=\(.*\),.*/s//address1=\1,$openwrt_ip/" /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
+                else
+                    echo
                 fi
-            done < "/etc/NetworkManager/system-connections/eth0.nmconnection"
+                Println "$info 重启 hMACvLAN ..."
+                docker_openwrt_ver_old=$(docker container inspect openwrt| jq -r '.[0].Config.Image')
+                docker rename openwrt openwrt-${docker_openwrt_ver_old#*:}
+                nmcli connection modify hMACvLAN ipv4.route-metric 150 > /dev/null
+                nmcli con down hMACvLAN > /dev/null 2>&1 || true
+                nmcli con up hMACvLAN > /dev/null
+                sleep 3
+            fi
 
             if [ ! -s "/etc/docker/daemon.json" ] 
             then
@@ -31615,10 +31708,13 @@ method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
             jq_path='["dns"]'
             JQ replace /etc/docker/daemon.json '["'"$eth0_ip"'","8.8.8.8"]'
 
-            docker network create -d macvlan \
-                --subnet=$eth0_ip/24 \
-                --gateway=$eth0_gateway \
-                -o parent=eth0 macnet
+            if ! docker network inspect macnet >/dev/null 2>&1
+            then
+                docker network create -d macvlan \
+                    --subnet=$eth0_ip/24 \
+                    --gateway=$eth0_gateway \
+                    -o parent=eth0 macnet
+            fi
 
             printf '%s' '#!/usr/bin/env bash
 
@@ -31636,9 +31732,6 @@ fi' > /etc/NetworkManager/dispatcher.d/promisc.sh
             ip link set eth0 promisc on
             ip link set hMACvLAN promisc on
 
-            nmcli con down hMACvLAN 2> /dev/null || true
-            nmcli con up hMACvLAN
-
             openwrt_network="
 config interface 'loopback'
         option ifname 'lo'
@@ -31654,14 +31747,21 @@ config interface 'wan'
         option gateway '$eth0_gateway'
         list dns '$eth0_ip'"
 
+            Println "$info 下载 $docker_openwrt_ver ..."
+            docker pull openwrtorg/rootfs:$docker_openwrt_ver
+
             docker run -dit \
                 --restart unless-stopped \
                 --network macnet \
                 --privileged \
                 --name openwrt \
-                openwrtorg/rootfs:armvirt-64-19.07.3
+                openwrtorg/rootfs:$docker_openwrt_ver
 
             docker exec -it openwrt /bin/ash -c "echo \"${openwrt_network}\" > /etc/config/network && /etc/init.d/network restart"
+
+            nmcli connection modify hMACvLAN ipv4.route-metric 50 > /dev/null
+            nmcli con down hMACvLAN > /dev/null 2>&1 || true
+            nmcli con up hMACvLAN > /dev/null
 
             Println "$info openwrt 安装成功\n"
         ;;
