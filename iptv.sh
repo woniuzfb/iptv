@@ -38,7 +38,7 @@
 #     -T  设置推流地址, 比如 rtmp://127.0.0.1/flv/xxx
 #     -L  输入拉流(播放)地址(可省略), 比如 http://domain.com/flv?app=flv&stream=xxx
 #     -m  ffmpeg 额外的 输入参数
-#         (默认: -reconnect 1 -reconnect_at_eof 1 
+#         (默认: -copy_unknown -reconnect 1 -reconnect_at_eof 1 
 #         -reconnect_streamed 1 -reconnect_delay_max 2000 
 #         -rw_timeout 10000000 -y -nostats -nostdin -hide_banner -loglevel error)
 #         如果输入的直播源是 hls 链接, 需去除 -reconnect_at_eof 1
@@ -87,7 +87,7 @@
 
 set -euo pipefail
 
-sh_ver="1.37.0"
+sh_ver="1.38.0"
 sh_debug=0
 export LC_ALL=
 export LANG=en_US.UTF-8
@@ -1522,6 +1522,10 @@ UpdateShFile()
         chmod +x "$SH_FILE"
         Println "$info $sh_name 脚本更新完成"
         sh_new_ver=$(grep 'sh_ver="' < "$SH_FILE" |awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1)
+        if [ "$sh_new_ver" != "$sh_ver" ] 
+        then
+            rm -f "$LOCK_FILE"
+        fi
     else
         Println "$error 无法连接到 Github ! 尝试备用链接..."
         if curl -s -Lm 30 "$SH_LINK_BACKUP" -o "${SH_FILE}_tmp" 
@@ -1530,14 +1534,13 @@ UpdateShFile()
             chmod +x "$SH_FILE"
             Println "$info $sh_name 脚本更新完成"
             sh_new_ver=$(grep 'sh_ver="' < "$SH_FILE" |awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1)
+            if [ "$sh_new_ver" != "$sh_ver" ] 
+            then
+                rm -f "$LOCK_FILE"
+            fi
         else
             Println "$error 无法连接备用链接! $sh_name 脚本更新失败, 请稍后再试\n"
         fi
-    fi
-
-    if [ "${sh_new_ver:-$sh_ver}" != "$sh_ver" ] 
-    then
-        rm -f "$LOCK_FILE"
     fi
 }
 
@@ -1704,7 +1707,7 @@ Install()
             --arg const "no" --arg encrypt "no" \
             --arg encrypt_session "no" \
             --arg keyinfo_name '' --arg key_name '' \
-            --arg input_flags "-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -rw_timeout 10000000 -y -nostats -nostdin -hide_banner -loglevel error" \
+            --arg input_flags "-copy_unknown -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -rw_timeout 10000000 -y -nostats -nostdin -hide_banner -loglevel error" \
             --arg output_flags "-g 50 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main" --arg sync "yes" \
             --arg sync_file '' --arg sync_index "data:0:channels" \
             --arg sync_pairs "chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live" --arg schedule_file '' \
@@ -19717,9 +19720,16 @@ V2rayUpdate()
 
     UpdateShFile v2ray
 
-    sed -i "s+nobody+v2ray+g" /etc/systemd/system/v2ray.service
-    sed -i "s+nobody+v2ray+g" /etc/systemd/system/v2ray@.service
-    systemctl daemon-reload
+    if ! grep -q "v2ray:" < "/etc/passwd"
+    then
+        if grep -q '\--group ' < <(adduser --help)
+        then
+            adduser v2ray --system --group --no-create-home > /dev/null
+        else
+            adduser v2ray --system --no-create-home > /dev/null
+        fi
+        usermod -s /usr/sbin/nologin v2ray
+    fi
 
     { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_BACKUP"; } \
     | sed "s+nobody+v2ray+g" \
@@ -19728,6 +19738,10 @@ V2rayUpdate()
     | sed "s+ 'sha512'++g" \
     | sed "s+https://api.github.com/repos/v2fly/v2ray-core/releases/latest+$FFMPEG_MIRROR_LINK/v2ray.json+g" \
     | sed "s+https://github.com/v2fly/v2ray-core/releases/download+$FFMPEG_MIRROR_LINK/v2ray+g" | bash
+
+    sed -i "s+nobody+v2ray+g" /etc/systemd/system/v2ray.service
+    sed -i "s+nobody+v2ray+g" /etc/systemd/system/v2ray@.service
+    systemctl daemon-reload
 
     Println "$info 升级完成\n"
 }
@@ -30271,7 +30285,7 @@ UpdateSelf()
         fi
     fi
     GetDefault
-    if [ "$d_version" != "$sh_ver" ] 
+    if [ "${d_version%.*}" != "${sh_ver%.*}" ] 
     then
         major_ver=${d_version%%.*}
         minor_ver=${d_version#*.}
@@ -30300,6 +30314,15 @@ UpdateSelf()
 
         GetChannelsInfo
 
+        while [[ $d_headers =~ \\\\ ]]
+        do
+            d_headers=${d_headers//\\\\/\\}
+        done
+
+        if [[ ! $d_input_flags =~ -copy_unknown ]] 
+        then
+            d_input_flags="-copy_unknown $d_input_flags"
+        fi
         d_input_flags=${d_input_flags//-timeout 2000000000/-rw_timeout 10000000}
         default=$(
         $JQ_FILE -n --arg proxy "$d_proxy" --arg xc_proxy "$d_xc_proxy" \
@@ -30386,6 +30409,15 @@ UpdateSelf()
         do
             [ -n "$new_channels" ] && new_channels="$new_channels,"
 
+            while [[ ${chnls_headers[i]} =~ \\\\ ]]
+            do
+                chnls_headers[i]=${chnls_headers[i]//\\\\/\\}
+            done
+
+            if [[ ! ${chnls_input_flags[i]} =~ -copy_unknown ]] 
+            then
+                chnls_input_flags[i]="-copy_unknown ${chnls_input_flags[i]}"
+            fi
             new_input_flags=${chnls_input_flags[i]//-timeout 2000000000/-rw_timeout 10000000}
             new_channel=$(
             $JQ_FILE -n --arg pid "${chnls_pid[i]}" --arg status "${chnls_status[i]}" \
@@ -31304,13 +31336,14 @@ ${green}2.${normal} 修复 N1 dtb
 ${green}3.${normal} 安装 docker
 ${green}4.${normal} 安装 dnscrypt
 ${green}5.${normal} 安装 openwrt
+${green}6.${normal} 安装 openwrt-v2ray
 ————————————
-${green}6.${normal} 设置 docker 镜像加速
-${green}7.${normal} 设置 vimrc
-${green}8.${normal} 更新脚本
+${green}7.${normal} 设置 docker 镜像加速
+${green}8.${normal} 设置 vimrc
+${green}9.${normal} 更新脚本
 
 "
-    read -p "请输入数字 [1-8]: " armbian_num
+    read -p "请输入数字 [1-9]: " armbian_num
 
     case $armbian_num in
         1) 
@@ -31766,6 +31799,38 @@ config interface 'wan'
             Println "$info openwrt 安装成功\n"
         ;;
         6)
+            if ! docker container inspect openwrt > /dev/null 2>&1
+            then
+                Println "$error 请先安装或运行 openwrt\n"
+                exit 1
+            fi
+
+            docker exec -it openwrt /bin/ash -c "
+            if ! opkg list-installed | grep -q v2ray
+            then
+sed -i 's_downloads.openwrt.org_mirrors.tuna.tsinghua.edu.cn/openwrt_' /etc/opkg/distfeeds.conf
+wget -O kuoruan-public.key http://openwrt.kuoruan.net/packages/public.key
+opkg-key add kuoruan-public.key
+echo \"src/gz kuoruan_packages http://openwrt.kuoruan.net/packages/releases/\$(. /etc/openwrt_release ; echo \$DISTRIB_ARCH)\" >> /etc/opkg/customfeeds.conf
+echo \"src/gz kuoruan_universal http://openwrt.kuoruan.net/packages/releases/all\" >> /etc/opkg/customfeeds.conf
+opkg update
+opkg install luci luci-base luci-compat
+opkg install kmod-tcp-bbr
+echo \"net.core.default_qdisc=fq\" >>/etc/sysctl.d/12-tcp-bbr.conf
+sysctl -p
+opkg remove dnsmasq
+opkg install v2ray-core
+opkg install luci-app-v2ray
+opkg install luci-i18n-v2ray-zh-cn
+            fi
+            "
+
+            Println "$info 重启 openwrt ..."
+            docker container restart openwrt
+
+            Println "$info openwrt-v2ray 安装成功\n"
+        ;;
+        7)
             if [[ ! -x $(command -v docker) ]] 
             then
                 Println "$error 请先安装 docker\n"
@@ -31795,7 +31860,7 @@ config interface 'wan'
 
             Println "$info docker 镜像加速设置成功\n"
         ;;
-        7)
+        8)
             if [ -e ~/.vimrc ] 
             then
                 yn_options=( '否' '是' )
@@ -31829,10 +31894,10 @@ filetype indent off
                 Println "$error 无法连接服务器, 请稍后再试\n"
             fi
         ;;
-        8)
+        9)
             UpdateShFile Armbian
         ;;
-        *) Println "$error 请输入正确的数字 [1-8]\n"
+        *) Println "$error 请输入正确的数字 [1-9]\n"
         ;;
     esac
     exit 0
