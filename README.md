@@ -1,6 +1,6 @@
-# 一键管理 IPTV / v2ray / Nginx / OpenResty / cloudflare partner,workers / IBM CF / Armbian 脚本
+# 一键管理 IPTV / v2ray / nginx / openResty / cloudflare partner,workers / ibm cf / armbian 脚本
 
-## A ffmpeg / v2ray / Nginx / OpenResty wrapper (... => hls <=> flv <= ...)
+## A ffmpeg / v2ray / nginx / openresty ... wrapper (... => hls <=> flv <= ...)
 
 ## [演示](http://mtime.info/)
 
@@ -100,6 +100,7 @@ wget -q http://hbo.epub.fun/arm.sh && bash arm.sh
 - docker
 - dnscrypt proxy
 - openwrt (旁路由)
+- openwrt-v2ray
 
 ---
 
@@ -251,6 +252,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 -a  音频编码(默认：aac) (不需要转码时输入 copy)
 -v  视频编码(默认：libx264) (不需要转码时输入 copy)
 -f  画面或声音延迟(格式如： v_3 画面延迟3秒，a_2 声音延迟2秒 画面声音不同步时使用)
+-d  dvb teletext 字幕解码成的格式,可选: text,ass (默认: 不设置)
 -q  crf 值(如果设置了输出视频比特率，则优先使用 crf 控制视频质量)(数值 0~63 越大质量越差), 多个 crf 用逗号分隔
     (默认: 不设置 crf 值)
 -b  输出视频的比特率(kb/s)(默认：900-1280x720)
@@ -270,7 +272,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 -L  输入拉流(播放)地址(可省略)，比如 http://domain.com/flv?app=flv&stream=xxx
 
 -m  ffmpeg 额外的 INPUT FLAGS
-    (默认：-reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -rw_timeout 10000000 -y -nostats -nostdin -hide_banner -loglevel fatal)
+    (默认：-copy_unknown -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -rw_timeout 10000000 -y -nostats -nostdin -hide_banner -loglevel fatal)
     如果输入的直播源是 hls 链接，需去除 -reconnect_at_eof 1
     如果输入的直播源是 rtmp 或本地链接，需去除 -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000
     如果要查看详细日志 fatal 改成 error / warning / ...
