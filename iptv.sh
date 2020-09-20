@@ -4895,7 +4895,7 @@ SetStreamLink()
             inquirer list_input "是否安装 openssl" yn_options openssl_install_yn
             if [[ $openssl_install_yn == "否" ]]
             then
-                Println "已取消\n..."
+                Println "已取消...\n"
                 exit 1
             fi
             InstallOpenssl
@@ -4974,7 +4974,7 @@ SetStreamLink()
             inquirer list_input "是否安装 openssl" yn_options openssl_install_yn
             if [[ $openssl_install_yn == "否" ]]
             then
-                Println "已取消\n..."
+                Println "已取消...\n"
                 exit 1
             fi
             InstallOpenssl
@@ -6233,7 +6233,7 @@ EditOutputDirName()
         inquirer list_input "检测到频道正在运行, 是否现在关闭" yn_options stop_channel_yn
         if [[ $stop_channel_yn == "否" ]]
         then
-            Println "已取消\n..."
+            Println "已取消...\n"
             exit 1
         fi
         StopChannel
@@ -6408,7 +6408,7 @@ EditChannelAll()
         inquirer list_input "检测到频道正在运行, 是否现在关闭" yn_options stop_channel_yn
         if [[ $stop_channel_yn == "否" ]]
         then
-            Println "已取消\n..."
+            Println "已取消...\n"
             exit 1
         fi
         StopChannel
@@ -6421,7 +6421,7 @@ EditChannelAll()
         inquirer list_input "检测到频道正在运行, 是否现在关闭" yn_options stop_channel_yn
         if [[ $stop_channel_yn == "否" ]]
         then
-            Println "已取消\n..."
+            Println "已取消...\n"
             exit 1
         fi
         StopChannel
@@ -10274,7 +10274,7 @@ ScheduleView()
     do
         case "$provider_num" in
             "")
-                Println "已取消\n" && exit 1
+                Println "已取消...\n" && exit 1
             ;;
             *[!0-9]*)
                 Println "$error 请输入正确的数字\n"
@@ -10371,7 +10371,7 @@ ScheduleAdd()
     do
         if [ -z "$chnls_num" ] 
         then
-            Println "已取消\n" && exit 1
+            Println "已取消...\n" && exit 1
         fi
 
         if [ "$chnls_num" == $((chnls_count+1)) ] 
@@ -10453,7 +10453,7 @@ ScheduleViewCron()
     do
         case "$provider_num" in
             "")
-                Println "已取消\n" && exit 1
+                Println "已取消...\n" && exit 1
             ;;
             *[!0-9]*)
                 Println "$error 请输入正确的数字\n"
@@ -10596,6 +10596,246 @@ ScheduleExec()
     else
         Println "$error 计划任务为空, 请先添加频道 !\n"
     fi
+}
+
+ScheduleBackup()
+{
+    if [ ! -s "$CRON_FILE" ] 
+    then
+        Println "$error 请先添加频道\n"
+        exit 1
+    fi
+    echo
+    inquirer text_input "输入备份名称: " backup_name "无"
+    backup_schedule=""
+    while IFS="=" read -r provider chnls option
+    do
+        if [ "$chnls" != null ] 
+        then
+            [ -n "$backup_schedule" ] && backup_schedule="$backup_schedule,"
+            backup_schedule=$backup_schedule'{
+                "provider":"'"$provider"'",
+                "chnls":"'"$chnls"'"
+            }'
+        fi
+    done < <($JQ_FILE -r '.schedule[]|[.provider,(.chnls|sort|join("|")| if .=="" then "null" else . end),.option]|join("=")' "$CRON_FILE")
+    if [ -z "$backup_schedule" ] 
+    then
+        Println "$error 请先添加频道\n"
+        exit 1
+    fi
+    new_backup=$(
+    $JQ_FILE -n --arg name "$backup_name" --argjson schedule "[$backup_schedule]" \
+        '{
+            name: $name,
+            date: now|strftime("%s")|tonumber,
+            schedule: $schedule
+        }'
+    )
+    jq_path='["schedule_backup"]'
+    JQ add "$CRON_FILE" "[$new_backup]"
+    Println "$info 任务备份成功\n"
+}
+
+ScheduleListBackup()
+{
+    schedule_backup_names=()
+    schedule_backup_dates=()
+    schedule_backup_schedules=()
+    schedule_backup_count=0
+    schedule_backup_list=""
+    while IFS="^" read -r backup_name backup_date backup_schedule
+    do
+        schedule_backup_count=$((schedule_backup_count+1))
+        schedule_backup_names+=("$backup_name")
+        schedule_backup_dates+=("$backup_date")
+        schedule_backup_schedules+=("$backup_schedule")
+        printf -v date '%(%m-%d %H:%M:%S)T' "$backup_date"
+        schedule_backup_list="$schedule_backup_list $schedule_backup_count. 备份名称: $green$backup_name${normal} 备份日期: $green$date${normal}\n\n"
+    done < <($JQ_FILE -r '(.schedule_backup| if .== null then [] else . end)[]|([.name,.date,(.schedule|to_entries|map([.value.provider,.value.chnls]|join("="))|join(","))]|join("^"))' "$CRON_FILE")
+
+    if [ "$schedule_backup_count" -eq 0 ] 
+    then
+        Println "$error 没有备份\n"
+        exit 1
+    fi
+
+    Println "$schedule_backup_list"
+}
+
+ScheduleViewBackup()
+{
+    ScheduleListBackup
+
+    while read -p "(默认: 取消): " backup_num
+    do
+        case "$backup_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的数字\n"
+            ;;
+            *)
+                if [ "$backup_num" -gt 0 ] && [ "$backup_num" -le "$schedule_backup_count" ]
+                then
+                    schedule="${schedule_backup_schedules[$((backup_num-1))]}"
+                    IFS="," read -r -a schedules <<< "$schedule"
+                    break
+                else
+                    Println "$error 请输入正确的数字\n"
+                fi
+            ;;
+        esac
+    done
+
+    schedules_list=""
+
+    for((i=0;i<${#schedules[@]};i++));
+    do
+        schedule_provider=${schedules[i]%=*}
+        for provider in "${providers[@]}"
+        do
+            if [ "${provider%:*}" == "$schedule_provider" ] 
+            then
+                schedule_provider_name="${provider#*:}"
+                break
+            fi
+        done
+        schedule_chnl=${schedules[i]#*=}
+        IFS="|" read -r -a schedule_chnls <<< "$schedule_chnl"
+        schedule_chnls_list=""
+        for schedule_chnl in "${schedule_chnls[@]}"
+        do
+            if [ "$schedule_provider" == "ontvtonight" ] 
+            then
+                schedule_chnl_id=${schedule_chnl%%@*}
+            else
+                schedule_chnl_id=${schedule_chnl%%:*}
+            fi
+            schedule_chnls_list="$schedule_chnls_list\033[6C${schedule_chnl##*:} ($schedule_chnl_id)\n"
+        done
+        schedules_list="$schedules_list $green$((i+1)).${normal}\r\033[6C$schedule_provider_name\n\n$schedule_chnls_list\n"
+    done
+
+    Println "$schedules_list"
+}
+
+ScheduleEditBackup()
+{
+    ScheduleListBackup
+
+    while read -p "(默认: 取消): " backup_num
+    do
+        case "$backup_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的数字\n"
+            ;;
+            *)
+                if [ "$backup_num" -gt 0 ] && [ "$backup_num" -le "$schedule_backup_count" ]
+                then
+                    backup_index=$((backup_num-1))
+                    backup_name_old=${schedule_backup_names[backup_index]}
+                    break
+                else
+                    Println "$error 请输入正确的数字\n"
+                fi
+            ;;
+        esac
+    done
+
+    echo
+    inquirer text_input "输入新的备份名称: " backup_name "$backup_name_old"
+
+    jq_path='["schedule_backup",'"$backup_index"',"name"]'
+    JQ update "$CRON_FILE" "$backup_name"
+    Println "$info 备份修改成功\n"
+}
+
+ScheduleDelBackup()
+{
+    ScheduleListBackup
+
+    while read -p "(默认: 取消): " backup_num
+    do
+        case "$backup_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的数字\n"
+            ;;
+            *)
+                if [ "$backup_num" -gt 0 ] && [ "$backup_num" -le "$schedule_backup_count" ]
+                then
+                    backup_index=$((backup_num-1))
+                    backup_name=${schedule_backup_names[backup_index]}
+                    break
+                else
+                    Println "$error 请输入正确的数字\n"
+                fi
+            ;;
+        esac
+    done
+
+    jq_path='["schedule_backup"]'
+    JQ delete "$CRON_FILE" "$backup_index"
+    Println "$info 备份 $backup_name 删除成功\n"
+}
+
+ScheduleRestoreBackup()
+{
+    ScheduleListBackup
+
+    while read -p "(默认: 取消): " backup_num
+    do
+        case "$backup_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的数字\n"
+            ;;
+            *)
+                if [ "$backup_num" -gt 0 ] && [ "$backup_num" -le "$schedule_backup_count" ]
+                then
+                    backup_index=$((backup_num-1))
+                    backup_name=${schedule_backup_names[backup_index]}
+                    backup_schedule="${schedule_backup_schedules[backup_index]}"
+                    IFS="," read -r -a backup_schedules <<< "$backup_schedule"
+                    break
+                else
+                    Println "$error 请输入正确的数字\n"
+                fi
+            ;;
+        esac
+    done
+
+    schedules_list=""
+    for((i=0;i<${#backup_schedules[@]};i++));
+    do
+        schedule_provider=${backup_schedules[i]%=*}
+        schedule_chnl=${backup_schedules[i]#*=}
+        IFS="|" read -r -a schedule_chnls <<< "$schedule_chnl"
+        schedule_chnls_list=""
+        for schedule_chnl in "${schedule_chnls[@]}"
+        do
+            [ -n "$schedule_chnls_list" ] && schedule_chnls_list="$schedule_chnls_list,"
+            schedule_chnls_list=$schedule_chnls_list'"'$schedule_chnl'"'
+        done
+        [ -n "$schedules_list" ] && schedules_list="$schedules_list,"
+        schedules_list=$schedules_list'{
+            "provider":"'"$schedule_provider"'",
+            "chnls":['"$schedule_chnls_list"']
+        }'
+    done
+
+    jq_path='["schedule"]'
+    JQ replace "$CRON_FILE" "[$schedules_list]"
+    Println "$info 备份 $backup_name 恢复成功\n"
 }
 
 ScheduleEnableCron()
@@ -11405,6 +11645,11 @@ Schedule()
   ${green}5.${normal} 执行任务
   ${green}6.${normal} 开启计划任务
   ${green}7.${normal} 关闭计划任务
+  ${green}8.${normal} 备份任务
+  ${green}9.${normal} 查看备份
+ ${green}10.${normal} 修改备份
+ ${green}11.${normal} 恢复备份
+ ${green}12.${normal} 删除备份
 
 "
             read -p "(默认: 取消): " cron_num
@@ -11424,6 +11669,16 @@ Schedule()
                 6) ScheduleEnableCron
                 ;;
                 7) ScheduleDisableCron
+                ;;
+                8) ScheduleBackup
+                ;;
+                9) ScheduleViewBackup
+                ;;
+                10) ScheduleEditBackup
+                ;;
+                11) ScheduleRestoreBackup
+                ;;
+                12) ScheduleDelBackup
                 ;;
                 *) Println "已取消...\n" && exit 1
                 ;;
@@ -11589,7 +11844,7 @@ InstallImgcat()
     inquirer list_input "缺少 imgcat ,是否现在安装" yn_options imgcat_install_yn
     if [[ $imgcat_install_yn == "否" ]]
     then
-        Println "已取消\n..."
+        Println "已取消...\n"
         exit 1
     fi
     Progress &
@@ -11708,7 +11963,7 @@ TsRegister()
                             inquirer list_input "注册成功 ,是否登录账号" yn_options login_yn
                             if [[ $login_yn == "否" ]]
                             then
-                                Println "已取消\n..."
+                                Println "已取消...\n"
                                 exit 1
                             fi
                             TsLogin
@@ -11746,7 +12001,7 @@ TsRegister()
             inquirer list_input "注册成功 ,是否登录账号" yn_options login_yn
             if [[ $login_yn == "否" ]]
             then
-                Println "已取消\n..."
+                Println "已取消...\n"
                 exit 1
             fi
             TsLogin
@@ -11814,7 +12069,7 @@ TsLogin()
         inquirer list_input "是否注册账号" yn_options register_yn
         if [[ $register_yn == "否" ]]
         then
-            Println "已取消\n..."
+            Println "已取消...\n"
             exit 1
         fi
         TsRegister
@@ -11875,7 +12130,7 @@ TsLogin()
             inquirer list_input "检测到此频道原有链接, 是否替换成新的ts链接" yn_options change_yn
             if [[ $change_yn == "否" ]]
             then
-                Println "已取消\n..."
+                Println "已取消...\n"
                 exit 1
             fi
             JQ update "$CHANNELS_FILE" '(.channels[]|select(.stream_link=="'"$stream_link"'")|.stream_link)="'"$TS_LINK"'"'
@@ -18674,6 +18929,12 @@ $IPTV_ROOT/*.log {
 
 NginxUpdateCFIBMip()
 {
+    if [ ! -f $nginx_prefix/conf/nginx.conf ] 
+    then
+        Println "$error 请先安装 $nginx_name\n"
+        exit 1
+    fi
+
     if ! grep -q "include cloudflare_ip.conf;" < $nginx_prefix/conf/nginx.conf
     then
         sed -i '/http {/a\    include cloudflare_ip.conf;' $nginx_prefix/conf/nginx.conf
@@ -21282,7 +21543,7 @@ V2rayDeleteForwardAccount()
                         JQ delete "$V2_CONFIG" "$vnext_index"
                         Println "$info 服务器删除成功\n"
                     else
-                        Println "已取消\n" && exit 1
+                        Println "已取消...\n" && exit 1
                     fi
                 else
                     accounts_list=$accounts_list"# $green$((accounts_count+1))${normal}\r\033[6C删除所有账号\n\n"
@@ -21385,7 +21646,7 @@ V2rayDeleteForwardAccount()
                         JQ delete "$V2_CONFIG" "$servers_index"
                         Println "$info 服务器删除成功\n"
                     else
-                        Println "已取消\n" && exit 1
+                        Println "已取消...\n" && exit 1
                     fi
                 else
                     accounts_list=$accounts_list"# $green$((accounts_count+1))${normal}\r\033[6C删除所有账号\n\n"
@@ -24567,6 +24828,8 @@ DeployCloudflareWorker()
 
     ListCloudflareUsers
 
+    echo -e " $green$((cf_users_count+1)).${normal}\r\033[6C全部"
+
     if [ "$cf_users_count" -eq 0 ] 
     then
         Println "$error 请先添加用户\n"
@@ -24574,10 +24837,20 @@ DeployCloudflareWorker()
     fi
 
     cf_users_indexs=()
-    echo -e "选择用户, 多个用户用空格分隔, 比如 5 7 9-11"
+    Println "选择用户, 多个用户用空格分隔, 比如 5 7 9-11"
     while read -p "(默认: 取消): " cf_users_num 
     do
         [ -z "$cf_users_num" ] && Println "已取消...\n" && exit 1
+
+        if [[ "$cf_users_num" == $((cf_users_count+1)) ]] 
+        then
+            for((i=0;i<cf_users_count;i++));
+            do
+                cf_users_indexs+=("$i")
+            done
+            break
+        fi
+
         IFS=" " read -ra cf_users_num_arr <<< "$cf_users_num"
 
         error_no=0
@@ -24883,7 +25156,7 @@ ListCloudflareWorkersRoutes()
                     | $JQ_FILE '[(.result|length),([.result[].id]|join(" ")),([.result[].script]|join(" ")),([.result[].pattern]|join(" "))]|join("^")'
                 )
 
-                count="${count#\"}"
+                count=${count#\"}
                 pattern=${pattern%\"}
                 cf_users_zones_routes_count+=("$count")
                 cf_users_zones_route_id+=("$id")
@@ -25332,7 +25605,7 @@ MonitorCloudflareWorkersUpdateRoutes()
                 -H "Authorization: Bearer $cf_user_token" \
                 | $JQ_FILE '[(.result|length),([.result[].id]|join(" ")),([.result[].script]|join(" ")),([.result[].pattern]|join(" "))]|join("^")'
             )
-            count="${count#\"}"
+
             pattern=${pattern%\"}
 
             IFS=" " read -r -a ids <<< "$id"
@@ -25467,6 +25740,7 @@ MonitorCloudflareWorkers()
                     clear=$(date --utc -d 'tomorrow 00:00:00' +%s)
                     clear=$((clear+10))
                     emails_dead=()
+                    start_from_begin=1
                 fi
 
                 zone_index=${zones_index_monitor[0]}
@@ -25512,22 +25786,37 @@ MonitorCloudflareWorkers()
 
                 if [ "$dead_email" -eq 1 ] 
                 then
-                    for((i=0;i<cf_users_count;i++));
+                    if [ "$start_from_begin" -eq 1 ] 
+                    then
+                        continue=0
+                    else
+                        continue=1
+                    fi
+                    for((cf_users_index=0;i<cf_users_count;cf_users_index++));
                     do
+                        if [ "$continue" -eq 1 ]
+                        then
+                            if [ "${cf_users_email[cf_users_index]}" == "$cf_zone_user_email" ]
+                            then
+                                continue=0
+                            fi
+                            continue
+                        fi
+
                         for email in ${emails_dead[@]+"${emails_dead[@]}"}
                         do
-                            if [ "$email" == "${cf_users_email[i]}" ] 
+                            if [ "$email" == "${cf_users_email[cf_users_index]}" ] 
                             then
                                 continue 2
                             fi
                         done
 
-                        if [ -z "${cf_users_token[i]}" ] 
+                        if [ -z "${cf_users_token[cf_users_index]}" ] 
                         then
                             for((index=0;index<10;index++));
                             do
                                 if cf_user_token=$(python3 \
-                                    "$CF_WORKERS_FILE" -e "${cf_users_email[i]}" -p "${cf_users_pass[i]}" -o api_token
+                                    "$CF_WORKERS_FILE" -e "${cf_users_email[cf_users_index]}" -p "${cf_users_pass[cf_users_index]}" -o api_token
                                 )
                                 then
                                     break
@@ -25538,11 +25827,11 @@ MonitorCloudflareWorkers()
 
                             if [ -n "$cf_user_token" ] 
                             then
-                                cf_users_token[i]=$cf_user_token
+                                cf_users_token[cf_users_index]=$cf_user_token
 
                                 new_user=$(
-                                $JQ_FILE -n --arg email "${cf_users_email[i]}" --arg pass "${cf_users_pass[i]}" \
-                                    --arg token "${cf_users_token[i]}" --arg key "${cf_users_key[i]}" \
+                                $JQ_FILE -n --arg email "${cf_users_email[cf_users_index]}" --arg pass "${cf_users_pass[cf_users_index]}" \
+                                    --arg token "${cf_users_token[cf_users_index]}" --arg key "${cf_users_key[cf_users_index]}" \
                                     '{
                                         email: $email,
                                         pass: $pass,
@@ -25552,18 +25841,18 @@ MonitorCloudflareWorkers()
                                 )
 
                                 jq_path='["users"]'
-                                JQ delete "$CF_CONFIG" email "\"${cf_users_email[i]}\""
+                                JQ delete "$CF_CONFIG" email "\"${cf_users_email[cf_users_index]}\""
                                 jq_path='["users"]'
                                 JQ add "$CF_CONFIG" "[$new_user]"
-                                Println "$info 用户 ${cf_users_email[i]} 修改成功\n"
+                                Println "$info 用户 ${cf_users_email[cf_users_index]} 修改成功\n"
                             else
                                 continue
                             fi
                         fi
 
-                        cf_user_email_new=${cf_users_email[i]}
-                        cf_user_pass_new=${cf_users_pass[i]}
-                        cf_user_token_new=${cf_users_token[i]}
+                        cf_user_email_new=${cf_users_email[cf_users_index]}
+                        cf_user_pass_new=${cf_users_pass[cf_users_index]}
+                        cf_user_token_new=${cf_users_token[cf_users_index]}
 
                         for zone_index in "${zones_index_monitor[@]}"
                         do
@@ -26171,6 +26460,17 @@ EnableCloudflareWorkersMonitor()
             ;;
         esac
     done
+
+    Println "$tip 如果今天(UTC时间)已经开启过可以选 否"
+    yn_options=( '是' '否' )
+    inquirer list_input "是否从第一个账号开始" yn_options start_from_begin
+
+    if [[ $start_from_begin == "是" ]] 
+    then
+        start_from_begin=1
+    else
+        start_from_begin=0
+    fi
 
     Println "$info 更新 ${CF_WORKERS_FILE##*/} ..."
     if [ "$sh_debug" -eq 0 ] && [ ! -e "$IPTV_ROOT/VIP" ]
@@ -29398,7 +29698,7 @@ GetVipStreamLink()
     token=$vip_host_token
     ss=$(printf '%s' "$st2$token$vip_user_ip$tid" | md5sum)
     ss=${ss%% *}
-    ct2=$(date +%s%3N)
+    [ -z "${ct2:-}" ] && ct2=$(date +%s%3N)
     vip_channel_id_lower=$(tr '[:upper:]' '[:lower:]' <<< "$vip_channel_id")
     cs=$(printf '%s' "$st2$ss$ct2$vip_channel_id_lower$tid_lower" | md5sum)
     cs=${cs%% *}
@@ -29697,6 +29997,7 @@ MonitorVip()
             never=$((now+86400*720))
 
             GetSchedules
+            ct2=$(date +%s%3N)
 
             while true 
             do
@@ -29706,7 +30007,6 @@ MonitorVip()
                     then
                         GetSchedules
                     fi
-                    ct2=$(date +%s%3N)
                     epg_update=1
                     for((i=0;i<vip_users_count;i++));
                     do
@@ -31930,7 +32230,7 @@ then
                 then
                     InstallOpenssl
                 else
-                    Println "已取消\n..." && exit 1
+                    Println "已取消...\n" && exit 1
                 fi
             fi
 
