@@ -4,20 +4,20 @@
 # Copyright (C) 2019
 # Released under BSD 3 Clause License
 #
-# 使用方法: tv -i [直播源] [-s 段时长(秒)] [-o 输出目录名称] [-c m3u8包含的段数目] [-b 比特率] [-p m3u8文件名称] [-C] [-l] [-P http代理]
+# 使用方法: tv -i [直播源] [-s 分片时长(秒)] [-o 输出目录名称] [-c m3u8包含的分片数] [-b 比特率] [-p m3u8文件名称] [-C] [-l] [-P http代理]
 #     -i  直播源(支持 mpegts / hls / flv / youtube ...)
 #         可以是视频路径
 #         可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔
-#     -s  段时长(秒)(默认: 6)
+#     -s  分片时长(秒)(默认: 6)
 #     -o  输出目录名称(默认: 随机名称)
 #
-#     -l  非无限时长直播, 无法设置切割段数目且无法监控(默认: 不设置)
+#     -l  非无限时长直播, 无法设置切割的分片数且无法监控(默认: 不设置)
 #     -P  ffmpeg 的 http 代理, 直播源是 http 链接时可用(默认: 不设置)
 #
 #     -p  m3u8名称(前缀)(默认: 随机)
-#     -c  m3u8里包含的段数目(默认: 5)
-#     -S  段所在子目录名称(默认: 不使用子目录)
-#     -t  段名称(前缀)(默认: 跟m3u8名称相同)
+#     -c  m3u8里包含的分片数目(默认: 5)
+#     -S  分片所在子目录名称(默认: 不使用子目录)
+#     -t  分片名称(前缀)(默认: 跟m3u8名称相同)
 #     -a  音频编码(默认: aac) (不需要转码时输入 copy)
 #     -v  视频编码(默认: libx264) (不需要转码时输入 copy)
 #     -f  画面或声音延迟(格式如:  v_3 画面延迟3秒, a_2 声音延迟2秒 画面声音不同步时使用)
@@ -31,11 +31,12 @@
 #         同时可以指定输出的分辨率(比如: -b 800-640x360,1000-960x540,1500-1280x720)
 #         可以输入 omit 省略此选项
 #     -C  固定码率(只有在没有设置crf视频质量的情况下才有效)(默认: 否)
-#     -e  加密段(默认: 不加密)
+#     -e  加密分片(默认: 不加密)
 #     -K  Key名称(默认: 随机)
 #     -z  频道名称(默认: 跟m3u8名称相同)
 #     也可以不输出 HLS, 比如 flv 推流
 #     -k  设置推流类型, 比如 -k flv
+#     -H  推流 h265(默认: 不设置)
 #     -T  设置推流地址, 比如 rtmp://127.0.0.1/flv/xxx
 #     -L  输入拉流(播放)地址(可省略), 比如 http://domain.com/flv?app=flv&stream=xxx
 #     -m  ffmpeg 额外的 输入参数
@@ -88,7 +89,7 @@
 
 set -euo pipefail
 
-sh_ver="1.39.0"
+sh_ver="1.40.0"
 sh_debug=0
 export LC_ALL=
 export LANG=en_US.UTF-8
@@ -483,9 +484,9 @@ CheckRelease()
     else
         if [ "$(uname -m | grep -c 64)" -gt 0 ]
         then
-            release_bit="64"
+            release_bit=64
         else
-            release_bit="32"
+            release_bit=32
         fi
         if [ "${1:-}" != "lite" ] 
         then
@@ -979,7 +980,7 @@ inquirer()
         stty -echo
         tput civis
 
-        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}(Press <space> to select, <enter> to finalize)${normal}"
+        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}(输入 <space> 选择, <enter> 确认)${normal}"
 
         for i in $(inquirer:gen_index ${#_checkbox_list[@]})
         do
@@ -1623,7 +1624,7 @@ InstallFFmpeg()
     if [ ! -e "$FFMPEG" ]
     then
         Println "$info 开始下载/安装 FFmpeg..."
-        if [ "$release_bit" == "64" ]
+        if [ "$release_bit" -eq 64 ]
         then
             ffmpeg_package="ffmpeg-git-${arch:-amd64}-static.tar.xz"
         else
@@ -1632,7 +1633,7 @@ InstallFFmpeg()
         FFMPEG_PACKAGE_FILE="$IPTV_ROOT/$ffmpeg_package"
         curl -L "$FFMPEG_MIRROR_LINK/builds/$ffmpeg_package" -o "$FFMPEG_PACKAGE_FILE"
         [ ! -e "$FFMPEG_PACKAGE_FILE" ] && Println "$error ffmpeg 下载失败 !" && exit 1
-        tar -xJf "$FFMPEG_PACKAGE_FILE" -C "$IPTV_ROOT" && rm -f "${FFMPEG_PACKAGE_FILE:-notfound}"
+        tar xJf "$FFMPEG_PACKAGE_FILE" -C "$IPTV_ROOT" && rm -f "${FFMPEG_PACKAGE_FILE:-notfound}"
         FFMPEG=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
         [ ! -e "$FFMPEG" ] && Println "$error ffmpeg 解压失败 !" && exit 1
         export FFMPEG
@@ -1640,6 +1641,819 @@ InstallFFmpeg()
     else
         Println "$info FFmpeg 已安装..."
     fi
+}
+
+CompileFFmpeg()
+{
+    CheckRelease "检查依赖, 耗时可能会很长"
+
+    if [ "$release" == "rpm" ] 
+    then
+        Println "$error 不支持 centos\n"
+        exit 1
+    fi
+
+    tls_options=( 'gnutls' 'openssl' )
+    inquirer list_input "选择 tls" tls_options tls_option
+
+    nproc="-j$(nproc 2> /dev/null)" || nproc=""
+
+    if ! grep -q "swapfile" /etc/fstab 
+    then
+        fallocate -l 1024M /opt/swapfile > /dev/null 2>&1 || dd if=/dev/zero of=/opt/swapfile bs=1M count=1024 > /dev/null 2>&1
+        chmod 600 /opt/swapfile
+        mkswap /opt/swapfile
+        swapon /opt/swapfile
+        echo "/opt/swapfile none swap defaults 0 0" >> /etc/fstab
+    fi
+
+    mkdir -p ~/ffmpeg_sources
+
+    apt-get -y install autoconf automake build-essential cmake zlib1g-dev \
+        libtool pkg-config texinfo frei0r-plugins-dev libopencore-amrnb-dev \
+        libopencore-amrwb-dev libtheora-dev libvo-amrwbenc-dev libxvidcore-dev \
+        libssl-dev libva-dev libvdpau-dev libxcb1-dev libxcb-shm0-dev \
+        libxcb-xfixes0-dev flex bison libharfbuzz-dev \
+        libfontconfig-dev libfreetype6-dev python3 python3-pip \
+        python3-setuptools python3-wheel ninja-build doxygen git libxext-dev \
+        libsndfile1-dev libasound2-dev graphviz
+
+    export CMAKE_PREFIX_PATH="$HOME/ffmpeg_build"
+    export PATH="$HOME/ffmpeg_build/bin:$PATH"
+    export LDFLAGS="-L$HOME/ffmpeg_build/lib"
+    # -Wl,-z,relro,-z,now
+    export DYLD_LIBRARY_PATH="$HOME/ffmpeg_build/lib"
+    export PKG_CONFIG_PATH="$HOME/ffmpeg_build/lib/pkgconfig"
+    export CFLAGS="-I$HOME/ffmpeg_build/include $LDFLAGS"
+    # -O3 -static-libgcc -fno-strict-overflow -fstack-protector-all -fPIE
+    # export CXXFLAGS="-O3 -static-libgcc -fno-strict-overflow -fstack-protector-all -fPIE"
+
+    # zlib
+    cd ~/ffmpeg_sources
+    if [ ! -d zlib-1.2.11 ] 
+    then
+        [ ! -f zlib-1.2.11.tar.gz ] && curl -L "https://www.zlib.net/zlib-1.2.11.tar.gz" -o zlib-1.2.11.tar.gz
+        tar xzf zlib-1.2.11.tar.gz
+    fi
+    cd zlib-1.2.11
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build" --static
+    make $nproc
+    make install
+
+    # CMake
+    cmake_install=1
+    if [[ -x $(command -v cmake) ]] 
+    then
+        cmake_ver=$(cmake --version | awk '{print $3}' | head -1)
+        if [[ $cmake_ver =~ ([^.]+).([^.]+).([^.]+) ]] && [[ ${BASH_REMATCH[1]} -lt 14 ]]
+        then
+            apt-get -y remove cmake
+            hash -r
+        else
+            cmake_install=0
+        fi
+    fi
+
+    if [ "$cmake_install" -eq 1 ] 
+    then
+        cd ~/ffmpeg_sources
+        if [ ! -d CMake-3.18.4 ] 
+        then
+            [ ! -f cmake-3.18.4.tar.gz ] && curl -L "https://github.com/Kitware/CMake/archive/v3.18.4.tar.gz" -o cmake-3.18.4.tar.gz
+            tar xzf cmake-3.18.4.tar.gz
+        fi
+        cd CMake-3.18.4
+        if [ -f Makefile ] 
+        then
+            make distclean || true
+        fi
+        ./bootstrap
+        make $nproc
+        make install
+    fi
+
+    # libbz2
+    cd ~/ffmpeg_sources
+    if [ ! -d bzip2-1.0.6 ] 
+    then
+        [ ! -f bzip2-1.0.6.tar.gz ] && curl -L "https://downloads.sourceforge.net/bzip2/bzip2-1.0.6.tar.gz" -o bzip2-1.0.6.tar.gz
+        tar xzf bzip2-1.0.6.tar.gz
+    fi
+    cd bzip2-1.0.6
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    make
+    make install PREFIX="$HOME/ffmpeg_build"
+    printf '%s' 'prefix=/root/ffmpeg_build
+exec_prefix=${prefix}
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: bzip2
+Description: bzip2
+Version: 1.0.6
+Requires:
+Libs: -L${libdir} -lbz2
+Cflags: -I${includedir}    
+' > "$HOME/ffmpeg_build/lib/pkgconfig/bzip2.pc"
+
+    # yasm
+    cd ~/ffmpeg_sources
+    if [ ! -d yasm-1.3.0 ] 
+    then
+        [ ! -f yasm-1.3.0.tar.gz ] && curl -L "http://www.tortall.net/projects/yasm/releases/yasm-1.3.0.tar.gz" -o yasm-1.3.0.tar.gz
+        tar xzf yasm-1.3.0.tar.gz
+    fi
+    cd yasm-1.3.0
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build"
+    make $nproc
+    make install
+
+    # nasm
+    # uname -mpi | grep -qE 'x86|i386|i686'
+    if [ "$release" != "arm" ] 
+    then
+        cd ~/ffmpeg_sources
+        if [ ! -d nasm-2.15.05 ] 
+        then
+            [ ! -f nasm-2.15.05.tar.gz ] && curl -L "https://www.nasm.us/pub/nasm/releasebuilds/2.15.05/nasm-2.15.05.tar.gz" -o nasm-2.15.05.tar.gz
+            tar xzf nasm-2.15.05.tar.gz
+        fi
+        cd nasm-2.15.05
+        if [ -f Makefile ] 
+        then
+            make distclean || true
+        fi
+        ./autogen.sh
+        ./configure --prefix="$HOME/ffmpeg_build"
+        make $nproc
+        make install
+    fi
+
+    # x264
+    cd ~/ffmpeg_sources
+    git -C x264 pull 2> /dev/null || git clone --depth 1 https://code.videolan.org/videolan/x264.git
+    cd x264
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build" --enable-static --enable-pic
+    make $nproc
+    make install
+
+    # libnuma (for x265)
+    cd ~/ffmpeg_sources
+    git -C numactl pull 2> /dev/null || git clone --depth 1 https://github.com/numactl/numactl.git
+    cd numactl
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared
+    make $nproc
+    make install
+
+    # x265
+    cd ~/ffmpeg_sources
+    rm -rf x265_git
+    git clone https://bitbucket.org/multicoreware/x265_git
+    cd x265_git/build/linux
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DENABLE_SHARED=OFF -DSTATIC_LINK_CRT=ON -DENABLE_CLI=OFF ../../source
+    make $nproc
+    sed -i 's/-lgcc_s/-lgcc_eh/g' x265.pc
+    make install
+
+    # liblzma (for libxml2, ffmpeg)
+    cd ~/ffmpeg_sources
+    if [ ! -d xz-5.2.5 ] 
+    then
+        [ ! -f xz-5.2.5.tar.xz ] && curl -L "https://downloads.sourceforge.net/lzmautils/xz-5.2.5.tar.xz" -o xz-5.2.5.tar.xz
+        tar xJf xz-5.2.5.tar.xz
+    fi
+    cd xz-5.2.5
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared --enable-static
+    make $nproc
+    make install
+
+    # libiconv (for libxml2)
+    cd ~/ffmpeg_sources
+    if [ ! -d libiconv-1.16 ] 
+    then
+        [ ! -f libiconv-1.16.tar.gz ] && curl -L "https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.16.tar.gz" -o libiconv-1.16.tar.gz
+        tar xzf libiconv-1.16.tar.gz
+    fi
+    cd libiconv-1.16
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared --enable-static
+    make $nproc
+    make install
+
+    # libxml2
+    cd ~/ffmpeg_sources
+    rm -rf libxml2
+    git clone https://github.com/GNOME/libxml2.git
+    mkdir -p libxml2/build
+    cd libxml2/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF ..
+    make $nproc
+    make install
+    printf '%s' "prefix=$HOME/ffmpeg_build
+exec_prefix=\${prefix}
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
+
+Name: libxml2
+Description: libxml2
+Version: 2.9.10
+Requires:
+Libs: -L\${libdir} -lxml2
+Cflags: -I\${includedir}
+" > "$HOME/ffmpeg_build/lib/pkgconfig/libxml-2.0.pc"
+
+    # libpng (for openjpeg)
+    cd ~/ffmpeg_sources
+    if [ ! -d libpng-1.6.37 ] 
+    then
+        [ ! -f libpng-1.6.37.tar.gz ] && curl -L "https://downloads.sourceforge.net/libpng/libpng-1.6.37.tar.gz" -o libpng-1.6.37.tar.gz
+        tar xzf libpng-1.6.37.tar.gz
+    fi
+    cd libpng-1.6.37
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build" --enable-static=yes --enable-shared=no
+    make $nproc
+    make install
+
+    # c2man (for fribidi)
+    cd ~/ffmpeg_sources
+    rm -rf c2man
+    git clone --depth 1 https://github.com/fribidi/c2man.git
+    cd c2man
+    rm -rf "$HOME/ffmpeg_sources/c2man_build"
+    rm -f "$HOME/ffmpeg_build/bin/c2man"
+    mkdir "$HOME/ffmpeg_sources/c2man_build"
+    ./Configure -dE
+    echo "binexp=$HOME/ffmpeg_build/bin" >> config.sh
+    echo "installprivlib=$HOME/ffmpeg_sources/c2man_build" >> config.sh
+    echo "mansrc=$HOME/ffmpeg_sources/c2man_build" >> config.sh
+    sh config_h.SH
+    sh flatten.SH
+    sh Makefile.SH
+    make depend
+    make
+    make install
+
+    # fribidi (for libass)
+    cd ~/ffmpeg_sources
+    if [ ! -d fribidi-1.0.10 ] 
+    then
+        [ ! -f fribidi-1.0.10.tar.gz ] && curl -L "https://github.com/fribidi/fribidi/archive/v1.0.10.tar.gz" -o fribidi-1.0.10.tar.gz
+        tar xzf fribidi-1.0.10.tar.gz
+    fi
+    cd fribidi-1.0.10
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared --enable-static
+    make $nproc
+    make install
+
+    # libass
+    cd ~/ffmpeg_sources
+    if [ ! -d libass-0.14.0 ] 
+    then
+        [ ! -f libass-0.14.0.tar.gz ] && curl -L "https://github.com/libass/libass/archive/0.14.0.tar.gz" -o libass-0.14.0.tar.gz
+        tar xzf libass-0.14.0.tar.gz
+    fi
+    cd libass-0.14.0
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared
+    make $nproc
+    make install
+
+    # zvbi
+    cd ~/ffmpeg_sources
+    if [ ! -d zvbi-0.2.35 ] 
+    then
+        [ ! -f zvbi-0.2.35.tar.bz2 ] && curl -L "https://downloads.sourceforge.net/zapping/zvbi/zvbi-0.2.35.tar.bz2" -o zvbi-0.2.35.tar.bz2
+        tar xjf zvbi-0.2.35.tar.bz2
+    fi
+    cd zvbi-0.2.35
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared --enable-static
+    make $nproc
+    make install
+
+    # sdl2
+    cd ~/ffmpeg_sources
+    rm -rf SDL2-2.0.12
+    [ ! -f SDL2-2.0.12.tar.gz ] && curl -L "https://www.libsdl.org/release/SDL2-2.0.12.tar.gz" -o SDL2-2.0.12.tar.gz
+    tar xzf SDL2-2.0.12.tar.gz
+    mkdir -p SDL2-2.0.12/build
+    cd SDL2-2.0.12/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF ..
+    make $nproc
+    make install
+
+    # lame
+    cd ~/ffmpeg_sources
+    if [ ! -d lame-3.100 ] 
+    then
+        [ ! -f lame-3.100.tar.gz ] && curl -L "https://downloads.sourceforge.net/lame/lame/lame-3.100.tar.gz" -o lame-3.100.tar.gz
+        tar xzf lame-3.100.tar.gz
+    fi
+    cd lame-3.100
+    # uname -a | grep -q 'aarch64'
+    if [ "$release" == "arm" ] 
+    then
+        lame_build_target="--build=arm-linux"
+    else
+        lame_build_target=""
+    fi
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build" --enable-nasm --disable-shared $lame_build_target
+    make $nproc
+    make install
+
+    # opus
+    cd ~/ffmpeg_sources
+    rm -rf opus
+    git -C opus pull 2> /dev/null || git clone --depth 1 https://github.com/xiph/opus.git
+    cd opus
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared
+    make $nproc
+    make install
+
+    # libvpx
+    cd ~/ffmpeg_sources
+    git -C libvpx pull 2> /dev/null || git clone --depth 1 https://chromium.googlesource.com/webm/libvpx.git
+    cd libvpx
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-examples --disable-unit-tests --enable-vp9-highbitdepth --as=yasm --enable-pic
+    make $nproc
+    make install
+
+    # soxr
+    cd ~/ffmpeg_sources
+    rm -rf soxr-0.1.3-Source
+    [ ! -f soxr-0.1.3-Source.tar.xz ] && curl -L "https://downloads.sourceforge.net/soxr/soxr-0.1.3-Source.tar.xz" -o soxr-0.1.3-Source.tar.xz
+    tar xJf soxr-0.1.3-Source.tar.xz
+    mkdir -p soxr-0.1.3-Source/build
+    cd soxr-0.1.3-Source/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF -DWITH_OPENMP=OFF -DBUILD_TESTS=OFF ..
+    make $nproc
+    make install
+
+    # vidstab
+    cd ~/ffmpeg_sources
+    rm -rf vid.stab-1.1.0
+    [ ! -f vid.stab-1.1.0.tar.gz ] && curl -L "https://github.com/georgmartius/vid.stab/archive/v1.1.0.tar.gz" -o vid.stab-1.1.0.tar.gz
+    tar xzf vid.stab-1.1.0.tar.gz
+    mkdir -p vid.stab-1.1.0/build
+    cd vid.stab-1.1.0/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF ..
+    make $nproc
+    make install
+
+    # openjpeg
+    cd ~/ffmpeg_sources
+    rm -rf openjpeg-2.3.1
+    [ ! -f openjpeg-2.3.1.tar.gz ] && curl -L "https://github.com/uclouvain/openjpeg/archive/v2.3.1.tar.gz" -o openjpeg-2.3.1.tar.gz
+    tar xzf openjpeg-2.3.1.tar.gz
+    mkdir -p openjpeg-2.3.1/build
+    cd openjpeg-2.3.1/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF ..
+    make $nproc
+    make install
+
+    # zimg
+    cd ~/ffmpeg_sources
+    git -C zimg pull 2> /dev/null || git clone --depth 1 https://github.com/sekrit-twc/zimg.git
+    cd zimg
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --enable-static  --prefix="$HOME/ffmpeg_build" --disable-shared
+    make $nproc
+    make install
+
+    # libwebp
+    cd ~/ffmpeg_sources
+    if [ ! -d libwebp-1.0.0 ] 
+    then
+        [ ! -f libwebp-1.0.0.tar.gz ] && curl -L "https://github.com/webmproject/libwebp/archive/v1.0.0.tar.gz" -o libwebp-1.0.0.tar.gz
+        tar xzf libwebp-1.0.0.tar.gz
+    fi
+    cd libwebp-1.0.0
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared
+    make $nproc
+    make install
+
+    # fdk-aac
+    cd ~/ffmpeg_sources
+    git -C fdk-aac pull 2> /dev/null || git clone --depth 1 https://github.com/mstorsjo/fdk-aac.git
+    cd fdk-aac
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared
+    make $nproc
+    make install
+
+    # libogg
+    cd ~/ffmpeg_sources
+    if [ ! -d ogg-1.3.4 ] 
+    then
+        [ ! -f ogg-1.3.4.tar.gz ] && curl -L "https://github.com/xiph/ogg/archive/v1.3.4.tar.gz" -o ogg-1.3.4.tar.gz
+        tar xzf ogg-1.3.4.tar.gz
+    fi
+    cd ogg-1.3.4
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared
+    make $nproc
+    make install
+
+    # libvorbis
+    cd ~/ffmpeg_sources
+    if [ ! -d vorbis-1.3.7 ] 
+    then
+        [ ! -f vorbis-1.3.7.tar.gz ] && curl -L "https://github.com/xiph/vorbis/archive/v1.3.7.tar.gz" -o vorbis-1.3.7.tar.gz
+        tar xzf vorbis-1.3.7.tar.gz
+    fi
+    cd vorbis-1.3.7
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared
+    make $nproc
+    make install
+
+    # speex
+    cd ~/ffmpeg_sources
+    if [ ! -d speex-Speex-1.2.0 ] 
+    then
+        [ ! -f Speex-1.2.0.tar.gz ] && curl -L "https://github.com/xiph/speex/archive/Speex-1.2.0.tar.gz" -o Speex-1.2.0.tar.gz
+        tar xzf Speex-1.2.0.tar.gz
+    fi
+    cd speex-Speex-1.2.0
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared
+    make $nproc
+    make install
+
+    # gmp
+    cd ~/ffmpeg_sources
+    if [ ! -d gmp-6.2.0 ] 
+    then
+        [ ! -f gmp-6.2.0.tar.xz ] && curl -L "https://gmplib.org/download/gmp/gmp-6.2.0.tar.xz" -o gmp-6.2.0.tar.xz
+        tar xJf gmp-6.2.0.tar.xz
+    fi
+    cd gmp-6.2.0
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared --with-pic
+    make $nproc
+    make install
+
+    tls_args=()
+    if [ "$tls_option" == "openssl" ] 
+    then
+        tls_args+=( --enable-openssl )
+        # openssl
+        cd ~/ffmpeg_sources
+        if [ ! -d openssl-OpenSSL_1_1_1h ] 
+        then
+            [ ! -f OpenSSL_1_1_1h.tar.gz ] && curl -L "https://github.com/openssl/openssl/archive/OpenSSL_1_1_1h.tar.gz" -o OpenSSL_1_1_1h.tar.gz
+            tar xzf OpenSSL_1_1_1h.tar.gz
+        fi
+        cd openssl-OpenSSL_1_1_1h
+        if [ -f Makefile ] 
+        then
+            make distclean || true
+        fi
+        ./config --prefix="$HOME/ffmpeg_build"
+        make $nproc
+        make install_sw
+    else
+        tls_args+=( --enable-gnutls )
+
+        # libtasn1
+        cd ~/ffmpeg_sources
+        if [ ! -d libtasn1-4.16.0 ] 
+        then
+            [ ! -f libtasn1-4.16.0.tar.gz ] && curl -L "https://ftp.gnu.org/gnu/libtasn1/libtasn1-4.16.0.tar.gz" -o libtasn1-4.16.0.tar.gz
+            tar xzf libtasn1-4.16.0.tar.gz
+        fi
+        cd libtasn1-4.16.0
+        if [ -f Makefile ] 
+        then
+            make distclean || true
+        fi
+        ./configure --prefix="$HOME/ffmpeg_build" --disable-shared
+        make $nproc
+        make install
+
+        # nettle
+        cd ~/ffmpeg_sources
+        if [ ! -d nettle-3.5 ] 
+        then
+            [ ! -f nettle-3.5.tar.gz ] && curl -L "https://ftp.gnu.org/gnu/nettle/nettle-3.5.tar.gz" -o nettle-3.5.tar.gz
+            tar xzf nettle-3.5.tar.gz
+        fi
+        cd nettle-3.5
+        if [ -f Makefile ] 
+        then
+            make distclean || true
+        fi
+        ./configure --prefix="$HOME/ffmpeg_build" --disable-shared --enable-pic
+        make $nproc
+        make install
+
+        # gnutls
+        cd ~/ffmpeg_sources
+        if [ ! -d gnutls-3.6.15 ] 
+        then
+            [ ! -f gnutls-3.6.15.tar.xz ] && curl -L "https://www.gnupg.org/ftp/gcrypt/gnutls/v3.6/gnutls-3.6.15.tar.xz" -o gnutls-3.6.15.tar.xz
+            tar xJf gnutls-3.6.15.tar.xz
+        fi
+        cd gnutls-3.6.15
+        if [ -f Makefile ] 
+        then
+            make distclean || true
+        fi
+        ./configure --prefix="$HOME/ffmpeg_build" --disable-shared --enable-static \
+        --with-pic --with-included-libtasn1 --with-included-unistring --without-p11-kit --disable-doc
+        make $nproc
+        make install
+    fi
+
+    # fftw
+    cd ~/ffmpeg_sources
+    rm -rf fftw-3.3.8
+    [ ! -f fftw-3.3.8.tar.gz ] && curl -L "http://www.fftw.org/fftw-3.3.8.tar.gz" -o fftw-3.3.8.tar.gz
+    tar xzf fftw-3.3.8.tar.gz
+    mkdir -p fftw-3.3.8/build
+    cd fftw-3.3.8/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF ..
+    make $nproc
+    make install
+
+    # libsamplerate
+    cd ~/ffmpeg_sources
+    rm -rf libsamplerate
+    git clone https://github.com/libsndfile/libsamplerate.git
+    mkdir -p libsamplerate/build
+    cd libsamplerate/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF ..
+    make $nproc
+    make install
+
+    # vamp-plugin-sdk
+    cd ~/ffmpeg_sources
+    git -C vamp-plugin-sdk pull 2> /dev/null || git clone https://github.com/c4dm/vamp-plugin-sdk.git
+    cd vamp-plugin-sdk
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build"
+    make $nproc
+    make install
+
+    # rubberband
+    cd ~/ffmpeg_sources
+    rm -rf rubberband-1.9
+    [ ! -f rubberband-1.9.tar.gz ] && curl -L "https://github.com/breakfastquay/rubberband/archive/v1.9.tar.gz" -o rubberband-1.9.tar.gz
+    tar xzf rubberband-1.9.tar.gz
+    cd rubberband-1.9
+    if [ ! -f CMakeLists.txt ] 
+    then
+        curl -L "https://raw.githubusercontent.com/breakfastquay/rubberband/8e09e4a2a9d54e627d5c80da89a0f4d2cdf8f65d/CMakeLists.txt" -o CMakeLists.txt
+    fi
+    mkdir build
+    cd build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" ..
+    make $nproc
+    make install
+    mkdir -p "$HOME/ffmpeg_build/include/rubberband/"
+    cp -f ../rubberband/* "$HOME/ffmpeg_build/include/rubberband/"
+    printf '%s' "prefix=$HOME/ffmpeg_build
+exec_prefix=\${prefix}
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
+
+Name: rubberband
+Version: 1.9
+Description:
+Libs: -L\${libdir} -lrubberband
+Cflags: -I\${includedir}
+" > "$HOME/ffmpeg_build/lib/pkgconfig/rubberband.pc"
+
+    # libsrt
+    cd ~/ffmpeg_sources
+    rm -rf srt-1.4.2
+    [ ! -f srt-1.4.2.tar.gz ] && curl -L "https://github.com/Haivision/srt/archive/v1.4.2.tar.gz" -o srt-1.4.2.tar.gz
+    tar xzf srt-1.4.2.tar.gz
+    mkdir -p srt-1.4.2/build
+    cd srt-1.4.2/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DENABLE_SHARED=OFF ..
+    make $nproc
+    sed -i 's/-lgcc_s/-lgcc_eh/g' srt.pc
+    make install
+
+    # libgme
+    cd ~/ffmpeg_sources
+    rm -rf game-music-emu-0.6.2
+    [ ! -f game-music-emu-0.6.2.tar.xz ] && curl -L "https://bitbucket.org/mpyne/game-music-emu/downloads/game-music-emu-0.6.2.tar.xz" -o game-music-emu-0.6.2.tar.xz
+    tar xJf game-music-emu-0.6.2.tar.xz
+    mkdir -p game-music-emu-0.6.2/build
+    cd game-music-emu-0.6.2/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF ..
+    make $nproc
+    make install
+
+    # aom
+    cd ~/ffmpeg_sources
+    rm -rf aom
+    git clone --depth 1 https://aomedia.googlesource.com/aom
+    mkdir -p aom/build
+    cd aom/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF -DENABLE_NASM=on ..
+    make $nproc
+    make install
+
+    # SVT-AV1
+    cd ~/ffmpeg_sources
+    rm -rf SVT-AV1
+    git clone https://github.com/AOMediaCodec/SVT-AV1.git
+    mkdir -p SVT-AV1/build
+    cd SVT-AV1/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DCMAKE_BUILD_TYPE=Release -DBUILD_DEC=OFF -DBUILD_SHARED_LIBS=OFF ..
+    make $nproc
+    make install
+
+    # vmaf
+    cd ~/ffmpeg_sources
+    rm -rf vmaf-1.5.3
+    [ ! -f vmaf_v1.5.3.tar.gz ] && curl -L https://github.com/Netflix/vmaf/archive/v1.5.3.tar.gz -o vmaf_v1.5.3.tar.gz
+    tar zxf vmaf_v1.5.3.tar.gz
+    cd vmaf-1.5.3
+    pip3 install meson
+    pip3 install Cython
+    pip3 install numpy
+    meson setup libvmaf/build libvmaf --buildtype=release --default-library=static --prefix="$HOME/ffmpeg_build"
+    ninja -vC libvmaf/build install
+    cp -f ~/ffmpeg_build/lib/*-linux-gnu/pkgconfig/libvmaf.pc ~/ffmpeg_build/lib/pkgconfig/
+
+    # dav1d
+    cd ~/ffmpeg_sources
+    rm -rf dav1d
+    git clone https://code.videolan.org/videolan/dav1d.git
+    cd dav1d
+    meson build --buildtype release --default-library static --prefix "$HOME/ffmpeg_build" --libdir lib
+    cd build
+    meson configure
+    ninja
+    meson test -v
+    ninja install
+
+    # graphite2
+    cd ~/ffmpeg_sources
+    rm -rf graphite
+    git clone https://github.com/silnrsi/graphite.git
+    mkdir -p graphite/build
+    cd graphite/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF ..
+    make $nproc
+    make install
+
+    # ffmpeg
+    cd ~/ffmpeg_sources
+    rm -rf ffmpeg
+    curl -L https://ffmpeg.org/releases/ffmpeg-snapshot.tar.bz2 -o ffmpeg-snapshot.tar.bz2
+    tar xjf ffmpeg-snapshot.tar.bz2
+
+    cd ffmpeg
+    curl -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch" -o Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch
+    patch -p1 < Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch
+    ./configure \
+    --prefix="$HOME/ffmpeg_build" \
+    --pkg-config-flags="--static" \
+    --extra-cflags="-fopenmp -I$HOME/ffmpeg_build/include -I$HOME/ffmpeg_build/include/libxml2" \
+    --extra-ldflags="-static -fopenmp -L$HOME/ffmpeg_build/lib" \
+    --extra-libs="-lpthread -lfftw3 -lsamplerate -lz -llzma -liconv -lm -lstdc++" \
+    --disable-debug \
+    --disable-shared \
+    --disable-indev=sndio \
+    --disable-outdev=sndio \
+    --enable-static \
+    --enable-gpl \
+    --enable-pic \
+    --enable-ffplay \
+    --enable-version3 \
+    --enable-iconv \
+    --enable-fontconfig \
+    --enable-frei0r \
+    --enable-gmp \
+    --enable-libgme \
+    --enable-gray \
+    --enable-libaom \
+    --enable-libfribidi \
+    --enable-libass \
+    --enable-libfdk-aac \
+    --enable-libfreetype \
+    --enable-libmp3lame \
+    --enable-libopencore-amrnb \
+    --enable-libopencore-amrwb \
+    --enable-libopenjpeg \
+    --enable-libsoxr \
+    --enable-libspeex \
+    --enable-libvorbis \
+    --enable-libopus \
+    --enable-libtheora \
+    --enable-libvidstab \
+    --enable-libvo-amrwbenc \
+    --enable-libvpx \
+    --enable-libwebp \
+    --enable-libx264 \
+    --enable-libx265 \
+    --enable-libsvtav1 \
+    --enable-libdav1d \
+    --enable-libxvid \
+    --enable-libzvbi \
+    --enable-libzimg \
+    --enable-nonfree \
+    --enable-librubberband \
+    --enable-libsrt \
+    --enable-libvmaf \
+    --enable-libxml2 ${tls_args[@]+"${tls_args[@]}"}
+    make $nproc
+    #make install
+    #hash -r
+    mv ffmpeg /usr/local/bin/ffmpeg_c
+    Println "$info ffmpeg 编译成功\n"
 }
 
 InstallJQ()
@@ -1656,7 +2470,8 @@ InstallJQ()
             git submodule update --init > /dev/null
             autoreconf -fi > /dev/null
             ./configure --with-oniguruma=builtin > /dev/null
-            make -j8 > /dev/null
+            nproc="-j$(nproc 2> /dev/null)" || nproc=""
+            make $nproc > /dev/null
             make install > /dev/null
         fi
         if [ "$JQ_FILE" != "/usr/local/bin/jq" ] 
@@ -2008,7 +2823,7 @@ InstallPdf2html()
     if [ ! -e "./$poppler_name" ] 
     then
         wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/$poppler_name.tar.xz" -qO "$poppler_name.tar.xz"
-        tar -xJf "$poppler_name.tar.xz" >/dev/null
+        tar xJf "$poppler_name.tar.xz" >/dev/null
     fi
 
     cd "$poppler_name/"
@@ -2058,7 +2873,7 @@ InstallPdf2html()
         source /etc/profile.d/pdf2htmlEX &>/dev/null
     else
         echo 'export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig' >> /etc/profile
-        echo 'export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH' >> /etc/profile
+        echo 'export LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH:-}' >> /etc/profile
     fi
 }
 
@@ -2276,7 +3091,7 @@ FlvStreamCreator()
                     --arg input_flags "$input_flags" --arg output_flags "$output_flags" \
                     --arg channel_name "$channel_name" --arg sync "$sync_yn" \
                     --arg sync_file "$sync_file" --arg sync_index "$sync_index" \
-                    --arg sync_pairs "$sync_pairs" --arg flv_status "on" \
+                    --arg sync_pairs "$sync_pairs" --arg flv_status "on" --arg flv_h265 "$flv_h265_yn" \
                     --arg flv_push_link "$flv_push_link" --arg flv_pull_link "$flv_pull_link" \
                     '{
                         pid: $pid | tonumber,
@@ -2315,6 +3130,7 @@ FlvStreamCreator()
                         sync_index: $sync_index,
                         sync_pairs: $sync_pairs,
                         flv_status: $flv_status,
+                        flv_h265: $flv_h265,
                         flv_push_link: $flv_push_link,
                         flv_pull_link: $flv_pull_link
                     }'
@@ -2441,9 +3257,14 @@ FlvStreamCreator()
                     args+=( -user_agent "$user_agent" )
                 fi
 
+                if [ "$flv_h265_yn" == "yes" ] 
+                then
+                    FFMPEG="/usr/local/bin/ffmpeg_c"
+                fi
+
                 PrepTerm
                 $FFMPEG ${args[@]+"${args[@]}"} -i "$stream_link" $input_flags $map_command \
-                -y -vcodec "$video_codec" -acodec "$audio_codec" $quality_command $bitrates_command $resolution_command \
+                -vcodec "$video_codec" -acodec "$audio_codec" $quality_command $bitrates_command $resolution_command \
                 $output_flags -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
                 WaitTerm
             } 201>"$pid_file"
@@ -2586,9 +3407,14 @@ FlvStreamCreator()
                     args+=( -user_agent "$chnl_user_agent" )
                 fi
 
+                if [ "$chnl_flv_h265_yn" == "yes" ] 
+                then
+                    FFMPEG="/usr/local/bin/ffmpeg_c"
+                fi
+
                 PrepTerm
                 $FFMPEG ${args[@]+"${args[@]}"} -i "$chnl_stream_link" $chnl_input_flags $chnl_map_command \
-                -y -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $chnl_resolution_command \
+                -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $chnl_resolution_command \
                 $chnl_output_flags -f flv "$chnl_flv_push_link" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
                 WaitTerm
             } 201>"$pid_file"
@@ -2636,7 +3462,7 @@ HlsStreamCreatorPlus()
                     --arg input_flags "$input_flags" --arg output_flags "$output_flags" \
                     --arg channel_name "$channel_name" --arg sync "$sync_yn" \
                     --arg sync_file "$sync_file" --arg sync_index "$sync_index" \
-                    --arg sync_pairs "$sync_pairs" --arg flv_status "off" \
+                    --arg sync_pairs "$sync_pairs" --arg flv_status "off" --arg flv_h265 "$flv_h265_yn" \
                     --arg flv_push_link '' --arg flv_pull_link '' \
                     '{
                         pid: $pid | tonumber,
@@ -2675,6 +3501,7 @@ HlsStreamCreatorPlus()
                         sync_index: $sync_index,
                         sync_pairs: $sync_pairs,
                         flv_status: $flv_status,
+                        flv_h265: $flv_h265,
                         flv_push_link: $flv_push_link,
                         flv_pull_link: $flv_pull_link
                     }'
@@ -2975,10 +3802,22 @@ HlsStreamCreatorPlus()
                     hls_flags_command=()
                     segment_flags_command=()
 
+                    hls_flags_command+=( -hls_time $seg_length -hls_list_size $seg_count )
+
+                    if [ "$seg_count" -gt 0 ] 
+                    then
+                        hls_flags_command+=( -hls_delete_threshold $seg_count )
+                    fi
+
                     if [ -n "$live" ] 
                     then
                         segment_flags_command+=( -segment_list_flags +live -segment_list_size $seg_count -segment_wrap $((seg_count * 2)) )
-                        hls_flags_command+=( -hls_flags periodic_rekey+delete_segments )
+                        if [ "$seg_count" -gt 0 ] 
+                        then
+                            hls_flags_command+=( -hls_flags periodic_rekey+delete_segments )
+                        else
+                            hls_flags_command+=( -hls_flags periodic_rekey )
+                        fi
                     else
                         hls_flags_command+=( -hls_flags periodic_rekey )
                     fi
@@ -3065,8 +3904,6 @@ HlsStreamCreatorPlus()
                         -flags -global_header $output_flags \
                         ${variants_command[@]+"${variants_command[@]}"} \
                         -f hls ${var_stream_map_command[@]+"${var_stream_map_command[@]}"} \
-                        -hls_time "$seg_length" -hls_list_size $seg_count \
-                        -hls_delete_threshold $seg_count \
                         ${hls_flags_command[@]+"${hls_flags_command[@]}"} > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
                         WaitTerm
                     else
@@ -3398,10 +4235,22 @@ HlsStreamCreatorPlus()
                     chnl_hls_flags_command=()
                     chnl_segment_flags_command=()
 
+                    chnl_hls_flags_command+=( -hls_time $chnl_seg_length -hls_list_size $chnl_seg_count )
+
+                    if [ "$chnl_seg_count" -gt 0 ] 
+                    then
+                        chnl_hls_flags_command+=( -hls_delete_threshold $chnl_seg_count )
+                    fi
+
                     if [ -n "$chnl_live" ] 
                     then
                         chnl_segment_flags_command+=( -segment_list_flags +live -segment_list_size $chnl_seg_count -segment_wrap $((chnl_seg_count * 2)) )
-                        chnl_hls_flags_command+=( -hls_flags periodic_rekey+delete_segments )
+                        if [ "$chnl_seg_count" -gt 0 ] 
+                        then
+                            chnl_hls_flags_command+=( -hls_flags periodic_rekey+delete_segments )
+                        else
+                            chnl_hls_flags_command+=( -hls_flags periodic_rekey )
+                        fi
                     else
                         chnl_hls_flags_command+=( -hls_flags periodic_rekey )
                     fi
@@ -3489,8 +4338,6 @@ HlsStreamCreatorPlus()
                         -flags -global_header $chnl_output_flags \
                         ${chnl_variants_command[@]+"${chnl_variants_command[@]}"} \
                         -f hls ${chnl_var_stream_map_command[@]+"${chnl_var_stream_map_command[@]}"} \
-                        -hls_time "$chnl_seg_length" -hls_list_size $chnl_seg_count \
-                        -hls_delete_threshold $chnl_seg_count \
                         ${chnl_hls_flags_command[@]+"${chnl_hls_flags_command[@]}"} > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
                         WaitTerm
                     else
@@ -3552,7 +4399,7 @@ HlsStreamCreator()
                     --arg input_flags "$input_flags" --arg output_flags "$output_flags" \
                     --arg channel_name "$channel_name" --arg sync "$sync_yn" \
                     --arg sync_file "$sync_file" --arg sync_index "$sync_index" \
-                    --arg sync_pairs "$sync_pairs" --arg flv_status "off" \
+                    --arg sync_pairs "$sync_pairs" --arg flv_status "off" --arg flv_h265 "$flv_h265_yn" \
                     --arg flv_push_link '' --arg flv_pull_link '' \
                     '{
                         pid: $pid | tonumber,
@@ -3591,6 +4438,7 @@ HlsStreamCreator()
                         sync_index: $sync_index,
                         sync_pairs: $sync_pairs,
                         flv_status: $flv_status,
+                        flv_h265: $flv_h265,
                         flv_push_link: $flv_push_link,
                         flv_pull_link: $flv_pull_link
                     }'
@@ -3883,122 +4731,80 @@ GetChannelsInfo()
 {
     [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
 
-    chnls_count=0
-    chnls_pid=()
-    chnls_status=()
     chnls_stream_link=()
-    chnls_stream_links=()
-    chnls_live=()
-    chnls_proxy=()
-    chnls_xc_proxy=()
-    chnls_user_agent=()
-    chnls_headers=()
-    chnls_cookies=()
-    chnls_output_dir_name=()
-    chnls_playlist_name=()
-    chnls_seg_dir_name=()
-    chnls_seg_name=()
-    chnls_seg_length=()
-    chnls_seg_count=()
-    chnls_video_codec=()
-    chnls_audio_codec=()
-    chnls_video_audio_shift=()
-    chnls_txt_format=()
-    chnls_quality=()
-    chnls_bitrates=()
-    chnls_const=()
-    chnls_encrypt=()
-    chnls_encrypt_session=()
-    chnls_keyinfo_name=()
-    chnls_key_name=()
-    chnls_key_time=()
-    chnls_input_flags=()
-    chnls_output_flags=()
-    chnls_channel_name=()
-    chnls_channel_time=()
-    chnls_sync=()
-    chnls_sync_file=()
-    chnls_sync_index=()
-    chnls_sync_pairs=()
-    chnls_flv_status=()
-    chnls_flv_push_link=()
-    chnls_flv_pull_link=()
 
-    while IFS="^" read -r m_pid m_status m_stream_link m_live m_proxy m_xc_proxy m_user_agent m_headers m_cookies \
+    IFS=$'\t' read -r chnls_count m_pid m_status m_stream_link m_live m_proxy m_xc_proxy m_user_agent m_headers m_cookies \
     m_output_dir_name m_playlist_name m_seg_dir_name m_seg_name m_seg_length m_seg_count \
     m_video_codec m_audio_codec m_video_audio_shift m_txt_format m_quality m_bitrates m_const m_encrypt \
     m_encrypt_session m_keyinfo_name m_key_name m_key_time m_input_flags m_output_flags \
     m_channel_name m_channel_time m_sync m_sync_file m_sync_index m_sync_pairs m_flv_status \
-    m_flv_push_link m_flv_pull_link
-    do
-        chnls_count=$((chnls_count+1))
-        m_pid=${m_pid#\"}
-        IFS=" " read -ra m_stream_links <<< "$m_stream_link"
-        m_live=${m_live:-yes}
-        m_user_agent=${m_user_agent:-Mozilla/5.0 (QtEmbedded; U; Linux; C)}
-        m_cookies=${m_cookies:-stb_lang=en; timezone=Europe/Amsterdam}
-        m_encrypt_session=${m_encrypt_session:-no}
-        m_keyinfo_name=${m_keyinfo_name:-$(RandStr)}
-        if [ -z "$m_key_time" ] 
-        then
-            [ -z "${now:-}" ] && printf -v now '%(%s)T'
-            m_key_time=$now
-        fi
-        if [ -z "$m_channel_time" ] 
-        then
-            [ -z "${now:-}" ] && printf -v now '%(%s)T'
-            m_channel_time=$now
-        fi
-        m_sync=${m_sync:-yes}
-        m_flv_status=${m_flv_status:-off}
-        m_flv_pull_link=${m_flv_pull_link%\"}
+    m_flv_h265 m_flv_push_link m_flv_pull_link < <($JQ_FILE -r -M '[(.channels|length),([.channels[].pid]|join("^")),([.channels[].status]|join("^")),
+    ([.channels[].stream_link]|join("^")),([.channels[].live|if .=="" // .==null then "yes" else . end]|join("^")),([.channels[].proxy]|join("^")),
+    ([.channels[].xc_proxy]|join("^")),([.channels[].user_agent|if .==null then "Mozilla/5.0 (QtEmbedded; U; Linux; C)" else . end]|join("^")),([.channels[].headers]|join("^")),
+    ([.channels[].cookies|if .==null then "stb_lang=en; timezone=Europe/Amsterdam" else . end]|join("^")),([.channels[].output_dir_name]|join("^")),([.channels[].playlist_name]|join("^")),
+    ([.channels[].seg_dir_name]|join("^")),([.channels[].seg_name]|join("^")),([.channels[].seg_length]|join("^")),
+    ([.channels[].seg_count]|join("^")),([.channels[].video_codec]|join("^")),([.channels[].audio_codec]|join("^")),
+    ([.channels[].video_audio_shift]|join("^")),([.channels[].txt_format]|join("^")),([.channels[].quality]|join("^")),
+    ([.channels[].bitrates]|join("^")),([.channels[].const]|join("^")),([.channels[].encrypt|if .=="-e" then "yes" elif .=="" // .==null then "no" else . end]|join("^")),
+    ([.channels[].encrypt_session|if .=="" // .==null then "no" else . end]|join("^")),([.channels[].keyinfo_name]|join("^")),([.channels[].key_name]|join("^")),
+    ([.channels[].key_time|if .=="" // .==null then now|strftime("%s")|tonumber else . end]|join("^")),([.channels[].input_flags]|join("^")),([.channels[].output_flags]|join("^")),
+    ([.channels[].channel_name]|join("^")),([.channels[].channel_time|if .=="" // .==null then now|strftime("%s")|tonumber else . end]|join("^")),([.channels[].sync|if .=="" // .==null then "yes" else . end]|join("^")),
+    ([.channels[].sync_file]|join("^")),([.channels[].sync_index]|join("^")),([.channels[].sync_pairs]|join("^")),
+    ([.channels[].flv_status|if .==null then "off" else . end]|join("^")),([.channels[].flv_h265|if .==null then "no" else . end]|join("^")),([.channels[].flv_push_link]|join("^")),
+    ([.channels[].flv_pull_link]|join("^"))]|@tsv' "$CHANNELS_FILE")
 
-        chnls_pid+=("$m_pid")
-        chnls_status+=("$m_status")
-        chnls_stream_link+=("${m_stream_links[0]}")
-        chnls_stream_links+=("$m_stream_link")
-        chnls_live+=("$m_live")
-        chnls_proxy+=("$m_proxy")
-        chnls_xc_proxy+=("$m_xc_proxy")
-        chnls_user_agent+=("$m_user_agent")
-        chnls_headers+=("$m_headers")
-        chnls_cookies+=("$m_cookies")
-        chnls_output_dir_name+=("$m_output_dir_name")
-        chnls_playlist_name+=("$m_playlist_name")
-        chnls_seg_dir_name+=("$m_seg_dir_name")
-        chnls_seg_name+=("$m_seg_name")
-        chnls_seg_length+=("$m_seg_length")
-        chnls_seg_count+=("$m_seg_count")
-        chnls_video_codec+=("$m_video_codec")
-        chnls_audio_codec+=("$m_audio_codec")
-        chnls_video_audio_shift+=("$m_video_audio_shift")
-        chnls_txt_format+=("$m_txt_format")
-        chnls_quality+=("$m_quality")
-        chnls_bitrates+=("$m_bitrates")
-        chnls_const+=("$m_const")
-        chnls_encrypt+=("$m_encrypt")
-        chnls_encrypt_session+=("$m_encrypt_session")
-        chnls_keyinfo_name+=("$m_keyinfo_name")
-        chnls_key_name+=("$m_key_name")
-        chnls_key_time+=("$m_key_time")
-        chnls_input_flags+=("$m_input_flags")
-        chnls_output_flags+=("$m_output_flags")
-        chnls_channel_name+=("$m_channel_name")
-        chnls_channel_time+=("$m_channel_time")
-        chnls_sync+=("$m_sync")
-        chnls_sync_file+=("$m_sync_file")
-        chnls_sync_index+=("$m_sync_index")
-        chnls_sync_pairs+=("$m_sync_pairs")
-        chnls_flv_status+=("$m_flv_status")
-        chnls_flv_push_link+=("$m_flv_push_link")
-        chnls_flv_pull_link+=("$m_flv_pull_link")
-    done < <($JQ_FILE -M '.channels[] | [.pid,.status,.stream_link,.live,.proxy,.xc_proxy,
-    .user_agent,.headers,.cookies,.output_dir_name,.playlist_name,.seg_dir_name,
-    .seg_name,.seg_length,.seg_count,.video_codec,.audio_codec,.video_audio_shift,.txt_format,
-    .quality,.bitrates,.const,.encrypt,.encrypt_session,.keyinfo_name,.key_name,
-    .key_time,.input_flags,.output_flags,.channel_name,.channel_time,.sync,.sync_file,
-    .sync_index,.sync_pairs,.flv_status,.flv_push_link,.flv_pull_link] | join("^")' "$CHANNELS_FILE")
-    return 0
+    chnls_count=${chnls_count#\"}
+    m_flv_pull_link=${m_flv_pull_link%\"}
+
+    if [ "$chnls_count" -gt 0 ] 
+    then
+        IFS="^" read -ra chnls_pid <<< "$m_pid"
+        IFS="^" read -ra chnls_status <<< "$m_status"
+        IFS="^" read -ra chnls_stream_links <<< "$m_stream_link"
+
+        chnls_stream_link=("${chnls_stream_links[@]}")
+        for((chnls_i=0;chnls_i<chnls_count;chnls_i++));
+        do
+            chnls_stream_link[chnls_i]=${chnls_stream_link[chnls_i]%% *}
+        done
+
+        IFS="^" read -ra chnls_live <<< "${m_live}^"
+        IFS="^" read -ra chnls_proxy <<< "${m_proxy}^"
+        IFS="^" read -ra chnls_xc_proxy <<< "${m_xc_proxy}^"
+        IFS="^" read -ra chnls_user_agent <<< "${m_user_agent}^"
+        IFS="^" read -ra chnls_headers <<< "${m_headers}^"
+        IFS="^" read -ra chnls_cookies <<< "${m_cookies}^"
+        IFS="^" read -ra chnls_output_dir_name <<< "${m_output_dir_name}^"
+        IFS="^" read -ra chnls_playlist_name <<< "${m_playlist_name}^"
+        IFS="^" read -ra chnls_seg_dir_name <<< "${m_seg_dir_name}^"
+        IFS="^" read -ra chnls_seg_name <<< "${m_seg_name}^"
+        IFS="^" read -ra chnls_seg_length <<< "${m_seg_length}^"
+        IFS="^" read -ra chnls_seg_count <<< "${m_seg_count}^"
+        IFS="^" read -ra chnls_video_codec <<< "${m_video_codec}^"
+        IFS="^" read -ra chnls_audio_codec <<< "${m_audio_codec}^"
+        IFS="^" read -ra chnls_video_audio_shift <<< "${m_video_audio_shift}^"
+        IFS="^" read -ra chnls_txt_format <<< "${m_txt_format}^"
+        IFS="^" read -ra chnls_quality <<< "${m_quality}^"
+        IFS="^" read -ra chnls_bitrates <<< "${m_bitrates}^"
+        IFS="^" read -ra chnls_const <<< "${m_const}^"
+        IFS="^" read -ra chnls_encrypt <<< "${m_encrypt}^"
+        IFS="^" read -ra chnls_encrypt_session <<< "${m_encrypt_session}^"
+        IFS="^" read -ra chnls_keyinfo_name <<< "${m_keyinfo_name}^"
+        IFS="^" read -ra chnls_key_name <<< "${m_key_name}^"
+        IFS="^" read -ra chnls_key_time <<< "${m_key_time}^"
+        IFS="^" read -ra chnls_input_flags <<< "${m_input_flags}^"
+        IFS="^" read -ra chnls_output_flags <<< "${m_output_flags}^"
+        IFS="^" read -ra chnls_channel_name <<< "${m_channel_name}^"
+        IFS="^" read -ra chnls_channel_time <<< "${m_channel_time}^"
+        IFS="^" read -ra chnls_sync <<< "${m_sync}^"
+        IFS="^" read -ra chnls_sync_file <<< "${m_sync_file}^"
+        IFS="^" read -ra chnls_sync_index <<< "${m_sync_index}^"
+        IFS="^" read -ra chnls_sync_pairs <<< "${m_sync_pairs}^"
+        IFS="^" read -ra chnls_flv_status <<< "${m_flv_status}^"
+        IFS="^" read -ra chnls_flv_h265 <<< "${m_flv_h265}^"
+        IFS="^" read -ra chnls_flv_push_link <<< "${m_flv_push_link}^"
+        IFS="^" read -ra chnls_flv_pull_link <<< "${m_flv_pull_link}^"
+    fi
 }
 
 ListChannels()
@@ -4027,9 +4833,9 @@ ListChannels()
 
         if [ "${chnls_const[index]}" == "no" ] 
         then
-            chnls_const_index_text=" 固定频率:否"
+            chnls_const_index_text=" 固定码率:否"
         else
-            chnls_const_index_text=" 固定频率:是"
+            chnls_const_index_text=" 固定码率:是"
         fi
 
         chnls_quality_text=""
@@ -4142,7 +4948,7 @@ GetChannelInfo()
     chnl_audio_codec chnl_video_audio_shift chnl_txt_format chnl_quality chnl_bitrates chnl_const_yn \
     chnl_encrypt_yn chnl_encrypt_session_yn chnl_keyinfo_name chnl_key_name chnl_key_time \
     chnl_input_flags chnl_output_flags chnl_channel_name chnl_channel_time chnl_sync_yn \
-    chnl_sync_file chnl_sync_index chnl_sync_pairs chnl_flv_status chnl_flv_push_link \
+    chnl_sync_file chnl_sync_index chnl_sync_pairs chnl_flv_status chnl_flv_h265_yn chnl_flv_push_link \
     chnl_flv_pull_link
     do
         chnl_found=1
@@ -4189,7 +4995,12 @@ GetChannelInfo()
             chnl_xc_proxy=""
         fi
 
-        if [ -n "$chnl_headers" ] && [[ ! $chnl_headers == *"\r\n" ]]
+        while [[ $chnl_headers =~ \\\\ ]]
+        do
+            chnl_headers=${chnl_headers//\\\\/\\}
+        done
+
+        if [ -n "$chnl_headers" ] && [[ ! $chnl_headers =~ \\r\\n$ ]]
         then
             chnl_headers="$chnl_headers\r\n"
         fi
@@ -4216,10 +5027,10 @@ GetChannelInfo()
         if [ "$chnl_const_yn" == "no" ]
         then
             chnl_const=""
-            chnl_const_text=" 固定频率:否"
+            chnl_const_text=" 固定码率:否"
         else
             chnl_const="-C"
-            chnl_const_text=" 固定频率:是"
+            chnl_const_text=" 固定码率:是"
         fi
 
         if [ "$chnl_encrypt_yn" == "no" ]
@@ -4230,6 +5041,8 @@ GetChannelInfo()
             chnl_encrypt="-e"
             chnl_encrypt_text=$green"是"${normal}
         fi
+
+        chnl_keyinfo_name=${chnl_keyinfo_name:-$(RandStr)}
 
         if [ -z "${monitor:-}" ] 
         then
@@ -4377,7 +5190,11 @@ GetChannelInfoLite()
         fi
         chnl_user_agent=${chnls_user_agent[i]}
         chnl_headers=${chnls_headers[i]}
-        if [ -n "$chnl_headers" ] && [[ ! $chnl_headers == *"\r\n" ]]
+        while [[ $chnl_headers =~ \\\\ ]]
+        do
+            chnl_headers=${chnl_headers//\\\\/\\}
+        done
+        if [ -n "$chnl_headers" ] && [[ ! $chnl_headers =~ \\r\\n$ ]]
         then
             chnl_headers="$chnl_headers\r\n"
         fi
@@ -4415,10 +5232,10 @@ GetChannelInfoLite()
         if [ "$chnl_const_yn" == "no" ]
         then
             chnl_const=""
-            chnl_const_text=" 固定频率:否"
+            chnl_const_text=" 固定码率:否"
         else
             chnl_const="-C"
-            chnl_const_text=" 固定频率:是"
+            chnl_const_text=" 固定码率:是"
         fi
         chnl_encrypt_yn=${chnls_encrypt[i]}
         if [ "$chnl_encrypt_yn" == "no" ]
@@ -4430,7 +5247,7 @@ GetChannelInfoLite()
             chnl_encrypt_text=$green"是"${normal}
         fi
         chnl_encrypt_session_yn=${chnls_encrypt_session[i]}
-        chnl_keyinfo_name=${chnls_keyinfo_name[i]}
+        chnl_keyinfo_name=${chnls_keyinfo_name[i]:-$(RandStr)}
         chnl_key_name=${chnls_key_name[i]}
         chnl_key_time=${chnls_key_time[i]}
         chnl_input_flags=${chnls_input_flags[i]}
@@ -4448,6 +5265,7 @@ GetChannelInfoLite()
         chnl_sync_index=${chnls_sync_index[i]}
         chnl_sync_pairs=${chnls_sync_pairs[i]}
         chnl_flv_status=${chnls_flv_status[i]}
+        chnl_flv_h265_yn=${chnls_flv_h265[i]}
         chnl_flv_push_link=${chnls_flv_push_link[i]}
         chnl_flv_pull_link=${chnls_flv_pull_link[i]}
 
@@ -4560,10 +5378,10 @@ ViewChannelInfo()
         printf "%s\r\033[20C$green%s${normal}\n" " m3u8名称" "$chnl_playlist_name"
         printf '%b' " m3u8位置\r\033[20C$chnl_playlist_file_text\n"
         printf '%b' " m3u8链接\r\033[20C$chnl_playlist_link_text\n"
-        printf '%b' " 段子目录\r\033[20C$chnl_seg_dir_name_text\n"
-        printf "%s\r\033[20C$green%s${normal}\n" " 段名称" "$chnl_seg_name"
-        printf '%b' " 段时长\r\033[20C$chnl_seg_length_text\n"
-        printf "%s\r\033[20C$green%s${normal}\n" " m3u8包含段数目" "$chnl_seg_count"
+        printf '%b' " 分片子目录\r\033[20C$chnl_seg_dir_name_text\n"
+        printf "%s\r\033[20C$green%s${normal}\n" " 分片名称" "$chnl_seg_name"
+        printf '%b' " 分片时长\r\033[20C$chnl_seg_length_text\n"
+        printf "%s\r\033[20C$green%s${normal}\n" " m3u8包含分片数目" "$chnl_seg_count"
         printf '%b' " 加密\r\033[20C$chnl_encrypt_text\n"
         if [ -n "$chnl_encrypt" ] 
         then
@@ -5160,7 +5978,7 @@ SetLive()
 {
     if [ -z "${kind:-}" ] 
     then
-        Println "$tip 选择 否 则无法设置切割段数目且无法监控"
+        Println "$tip 选择 否 则无法设置切割的分片数且无法监控"
     else
         Println "$tip 选择 否 则无法监控"
     fi
@@ -5224,7 +6042,11 @@ SetHeaders()
     then
         headers=""
     fi
-    if [ -n "$headers" ] && [[ ! $headers == *"\r\n" ]]
+    while [[ $headers =~ \\\\ ]]
+    do
+        headers=${headers//\\\\/\\}
+    done
+    if [ -n "$headers" ] && [[ ! $headers =~ \\r\\n$ ]]
     then
         headers="$headers\r\n"
     fi
@@ -5285,7 +6107,7 @@ SetPlaylistName()
 SetSegDirName()
 {
     Println "$tip 可以输入 omit 省略此选项"
-    inquirer text_input "请输入段所在子目录名称: " seg_dir_name "$d_seg_dir_name_text"
+    inquirer text_input "请输入分片所在子目录名称: " seg_dir_name "$d_seg_dir_name_text"
     if [ "$seg_dir_name" == "omit" ] || [ "$seg_dir_name" == "不使用" ]
     then
         seg_dir_name=""
@@ -5296,12 +6118,12 @@ SetSegName()
 {
     echo
     d_seg_name_text=${chnl_playlist_name:-$d_seg_name_text}
-    inquirer text_input "请输入段名称: " seg_name "${playlist_name:-$d_seg_name_text}"
+    inquirer text_input "请输入分片名称: " seg_name "${playlist_name:-$d_seg_name_text}"
     if [ "$seg_name" == "跟m3u8名称相同" ]
     then
         playlist_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').playlist_name' "$CHANNELS_FILE")
         seg_name=$playlist_name
-        Println "  段名称: $green $seg_name ${normal}\n"
+        Println "  分片名称: $green $seg_name ${normal}\n"
     fi
 }
 
@@ -5310,7 +6132,7 @@ SetSegLength()
     while true 
     do
         echo
-        inquirer text_input "请输入段的时长(单位: s): " seg_length "$d_seg_length"
+        inquirer text_input "请输入分片时长(单位: s): " seg_length "$d_seg_length"
         case "$seg_length" in
             "")
                 seg_length=$d_seg_length
@@ -5336,7 +6158,7 @@ SetSegCount()
     Println "$tip ffmpeg分割的数目是其2倍, 如果填0就是无限"
     while true 
     do
-        inquirer text_input "请输入m3u8文件包含的段数目: " seg_count "$d_seg_count"
+        inquirer text_input "请输入m3u8文件包含的分片数目: " seg_count "$d_seg_count"
         case "$seg_count" in
             "")
                 seg_count=$d_seg_count
@@ -5515,7 +6337,7 @@ SetEncrypt()
     else
         yn_options=( '否' '是' )
     fi
-    inquirer list_input "是否加密段: " yn_options encrypt_yn
+    inquirer list_input "是否加密分片: " yn_options encrypt_yn
     if [[ $encrypt_yn == "是" ]]
     then
         encrypt="-e"
@@ -5769,6 +6591,45 @@ SetSyncPairs()
     if [ "$sync_pairs" == "$d_sync_pairs" ] || [ "$sync_pairs" == "不设置" ]
     then
         sync_pairs=""
+    fi
+}
+
+SetFlvIsH265()
+{
+    echo
+    yn_options=( '否' '是' )
+    inquirer list_input "是否推流 h265" yn_options flv_h265_yn
+    if [[ $flv_h265_yn == "否" ]] 
+    then
+        flv_h265_yn="no"
+    else
+        flv_h265_yn="yes"
+        if [[ ! -x $(command -v ffmpeg_c) ]] 
+        then
+            echo
+            ffmpeg_c_options=( '快速安装' '编译 ffmpeg (耗时非常非常久)' )
+            inquirer list_input "选择 ffmpeg (h265版本) 安装方式" ffmpeg_c_options ffmpeg_c_option
+            if [[ $ffmpeg_c_option == "快速安装" ]] 
+            then
+                if curl -L "$FFMPEG_MIRROR_LINK/ffmpeg_c" -o /usr/local/bin/ffmpeg_c
+                then
+                    chmod +x /usr/local/bin/ffmpeg_c
+                else
+                    Println "$error 暂时无法连接服务器, 请稍后再试\n"
+                    exit 1
+                fi
+            else
+                CompileFFmpeg
+            fi
+            echo
+            yn_options=( '是' '否' )
+            inquirer list_input "请确保你的 nginx/openresty 是 2020年10月1日 后编译的, 否则需要升级并重新编译, 是否继续" yn_options continue_yn
+            if [[ $continue_yn == "否" ]] 
+            then
+                Println "已取消...\n"
+                exit 1
+            fi
+        fi
     fi
 }
 
@@ -6156,6 +7017,7 @@ AddChannel()
 
     if [ "${kind:-}" == "flv" ] 
     then
+        SetFlvIsH265
         SetFlvPushLink
         SetFlvPullLink
         output_dir_name=$(RandOutputDirName)
@@ -6172,6 +7034,7 @@ AddChannel()
         txt_format=""
     else
         SetSubtitle
+        flv_h265_yn="no"
         flv_push_link=""
         flv_pull_link=""
         SetOutputDirName
@@ -6348,28 +7211,28 @@ EditSegDirName()
 {
     SetSegDirName
     JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.seg_dir_name)="'"$seg_dir_name"'"'
-    Println "$info 段所在子目录名称修改成功 !\n"
+    Println "$info 分片所在子目录名称修改成功 !\n"
 }
 
 EditSegName()
 {
     SetSegName
     JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.seg_name)="'"$seg_name"'"'
-    Println "$info 段名称修改成功 !\n"
+    Println "$info 分片名称修改成功 !\n"
 }
 
 EditSegLength()
 {
     SetSegLength
     JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.seg_length)='"$seg_length"''
-    Println "$info 段时长修改成功 !\n"
+    Println "$info 分片时长修改成功 !\n"
 }
 
 EditSegCount()
 {
     SetSegCount
     JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.seg_count)='"$seg_count"''
-    Println "$info 段数目修改成功 !\n"
+    Println "$info 分片数目修改成功 !\n"
 }
 
 EditVideoCodec()
@@ -6424,8 +7287,12 @@ EditConst()
 EditEncrypt()
 {
     SetEncrypt
-    JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.encrypt)="'"$encrypt"'"'
-    Println "$info 是否加密修改成功 !\n"
+    JQ update "$CHANNELS_FILE" '.channels|=map(select(.pid=='"$chnl_pid"') * 
+    {
+        encrypt: "'"$encrypt_yn"'",
+        encrypt_session: "'"$encrypt_session_yn"'"
+    } // .)'
+    Println "$info 加密设置修改成功 !\n"
 }
 
 EditKeyName()
@@ -6482,6 +7349,13 @@ EditSyncPairs()
     SetSyncPairs
     JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.sync_pairs)="'"$sync_pairs"'"'
     Println "$info sync_pairs 修改成功 !\n"
+}
+
+EditFlvIsH265()
+{
+    SetFlvIsH265
+    JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.flv_h265)="'"$flv_h265_yn"'"'
+    Println "$info 是否推流 h265 修改成功 !\n"
 }
 
 EditFlvPushLink()
@@ -6622,6 +7496,7 @@ EditChannelAll()
 
     if [ "${kind:-}" == "flv" ] 
     then
+        SetFlvIsH265
         SetFlvPushLink
         SetFlvPullLink
         output_dir_name=$(RandOutputDirName)
@@ -6637,6 +7512,7 @@ EditChannelAll()
         txt_format=""
     else
         SetSubtitle
+        flv_h265_yn="no"
         flv_push_link=""
         flv_pull_link=""
         SetOutputDirName
@@ -6695,10 +7571,12 @@ EditChannelAll()
         video_codec: "'"$video_codec"'",
         audio_codec: "'"$audio_codec"'",
         video_audio_shift: "'"$video_audio_shift"'",
+        txt_format: "'"$txt_format"'",
         quality: "'"$quality"'",
         bitrates: "'"$bitrates"'",
         const: "'"$const_yn"'",
         encrypt: "'"$encrypt_yn"'",
+        encrypt_session: "'"$encrypt_session_yn"'",
         keyinfo_name: "'"$keyinfo_name"'",
         key_name: "'"$key_name"'",
         input_flags: "'"$input_flags"'",
@@ -6708,6 +7586,7 @@ EditChannelAll()
         sync_file: "'"$sync_file"'",
         sync_index: "'"$sync_index"'",
         sync_pairs: "'"$sync_pairs"'",
+        flv_h265: "'"$flv_h265_yn"'",
         flv_push_link: "'"$flv_push_link"'",
         flv_pull_link: "'"$flv_pull_link"'"
     } // .)'
@@ -6726,7 +7605,7 @@ EditForSecurity()
         seg_name: "'"$seg_name"'"
     } // .)'
 
-    Println "$info 段名称、m3u8名称 修改成功 !\n"
+    Println "$info 分片名称、m3u8名称 修改成功 !\n"
 }
 
 EditChannelMenu()
@@ -6748,10 +7627,10 @@ EditChannelMenu()
     ${green}7.${normal} 修改 cookies
     ${green}8.${normal} 修改 输出目录名称
     ${green}9.${normal} 修改 m3u8名称
-   ${green}10.${normal} 修改 段所在子目录名称
-   ${green}11.${normal} 修改 段名称
-   ${green}12.${normal} 修改 段时长
-   ${green}13.${normal} 修改 段数目
+   ${green}10.${normal} 修改 分片所在子目录名称
+   ${green}11.${normal} 修改 分片名称
+   ${green}12.${normal} 修改 分片时长
+   ${green}13.${normal} 修改 分片数目
    ${green}14.${normal} 修改 视频编码
    ${green}15.${normal} 修改 音频编码
    ${green}16.${normal} 修改 视频/音频延迟
@@ -6768,11 +7647,12 @@ EditChannelMenu()
    ${green}27.${normal} 修改 sync file
    ${green}28.${normal} 修改 sync index
    ${green}29.${normal} 修改 sync pairs
-   ${green}30.${normal} 修改 推流地址
-   ${green}31.${normal} 修改 拉流地址
-   ${green}32.${normal} 修改 全部配置
+   ${green}30.${normal} 修改 是否推流 h265
+   ${green}31.${normal} 修改 推流地址
+   ${green}32.${normal} 修改 拉流地址
+   ${green}33.${normal} 修改 全部配置
     ————— 组合[常用] —————
-   ${green}33.${normal} 修改 段名称、m3u8名称 (防盗链/DDoS)
+   ${green}34.${normal} 修改 分片名称、m3u8名称 (防盗链/DDoS)
     \n"
         read -p "(默认: 取消): " edit_channel_num
         [ -z "$edit_channel_num" ] && Println "已取消...\n" && exit 1
@@ -6865,15 +7745,18 @@ EditChannelMenu()
                 EditSyncPairs
             ;;
             30)
-                EditFlvPushLink
+                EditFlvIsH265
             ;;
             31)
-                EditFlvPullLink
+                EditFlvPushLink
             ;;
             32)
-                EditChannelAll
+                EditFlvPullLink
             ;;
             33)
+                EditChannelAll
+            ;;
+            34)
                 EditForSecurity
             ;;
             *)
@@ -7743,6 +8626,40 @@ StartChannel()
         if [ "$chnl_status" == "on" ] 
         then
             Println "$error HLS 频道正开启, 走错片场了？\n" && exit 1
+        fi
+        if [ "$chnl_flv_h265_yn" == "yes" ] 
+        then
+            if [[ ! -x $(command -v ffmpeg_c) ]]  
+            then
+                if [ -z "${monitor:-}" ] 
+                then
+                    echo
+                    ffmpeg_c_options=( '快速安装' '编译 ffmpeg (耗时非常非常久)' )
+                    inquirer list_input "选择 ffmpeg (h265版本) 安装方式" ffmpeg_c_options ffmpeg_c_option
+                    if [[ $ffmpeg_c_option == "快速安装" ]] 
+                    then
+                        if curl -L "$FFMPEG_MIRROR_LINK/ffmpeg_c" -o /usr/local/bin/ffmpeg_c
+                        then
+                            chmod +x /usr/local/bin/ffmpeg_c
+                        else
+                            Println "$error 暂时无法连接服务器, 请稍后再试\n"
+                            exit 1
+                        fi
+                    else
+                        CompileFFmpeg
+                    fi
+                    echo
+                    yn_options=( '是' '否' )
+                    inquirer list_input "请确保你的 nginx/openresty 是 2020年10月1日 后编译的, 否则需要升级并重新编译, 是否继续" yn_options continue_yn
+                    if [[ $continue_yn == "否" ]] 
+                    then
+                        Println "已取消...\n"
+                        exit 1
+                    fi
+                else
+                    chnl_flv_h265_yn="no"
+                fi
+            fi
         fi
         chnl_output_flags=${chnl_output_flags//-sc_threshold 0/}
         if [ "$kind" == "flv" ] 
@@ -12446,7 +13363,7 @@ AntiLeech()
             else
                 yn_options=( '否' '是' )
             fi
-            inquirer list_input "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 段名称, key 名称" yn_options anti_leech_restart_hls_changes_yn
+            inquirer list_input "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 分片名称, key 名称" yn_options anti_leech_restart_hls_changes_yn
             if [[ $anti_leech_restart_hls_changes_yn == "是" ]] 
             then
                 anti_leech_restart_hls_changes_yn="yes"
@@ -14806,7 +15723,7 @@ MonitorSet()
             monitor_dir_names_chosen=("${monitor_dir_names[@]}")
 
             Println "设置超时多少秒自动重启频道"
-            echo -e "$tip 必须大于 段时长*段数目\n"
+            echo -e "$tip 必须大于 分片时长*分片数目\n"
             while read -p "(默认: $d_hls_delay_seconds秒): " hls_delay_seconds
             do
                 case $hls_delay_seconds in
@@ -14880,7 +15797,7 @@ MonitorSet()
                 done
 
                 Println "设置超时多少秒自动重启频道"
-                echo -e "$tip 必须大于 段时长*段数目\n"
+                echo -e "$tip 必须大于 分片时长*分片数目\n"
                 while read -p "(默认: $d_hls_delay_seconds秒): " hls_delay_seconds
                 do
                     case $hls_delay_seconds in
@@ -14928,7 +15845,7 @@ MonitorSet()
         hls_min_bitrates=$((hls_min_bitrates * 1000))
     fi
 
-    Println "请输入允许的最大片段"
+    Println "请输入允许的最大分片"
     while read -p "(默认: ${d_hls_max_seg_size}M): " hls_max_seg_size
     do
         case $hls_max_seg_size in
@@ -17434,6 +18351,11 @@ InstallOpenresty()
     curl -s -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o "nginx-http-flv-module.zip"
     unzip "nginx-http-flv-module.zip" >/dev/null 2>&1
 
+    cd nginx-http-flv-module-master
+    curl -s -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o "Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch"
+    patch -p1 < Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch >/dev/null 2>&1
+    cd ~
+
     latest_release=0
     while IFS= read -r line
     do
@@ -17471,7 +18393,8 @@ InstallOpenresty()
 
     echo -n "...80%..."
 
-    make -j2 >/dev/null 2>&1
+    nproc="-j$(nproc 2> /dev/null)" || nproc=""
+    make $nproc >/dev/null 2>&1
     make install >/dev/null 2>&1
 
     kill $progress_pid
@@ -17526,6 +18449,11 @@ InstallNginx()
     curl -s -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o "nginx-http-flv-module.zip"
     unzip "nginx-http-flv-module.zip" >/dev/null 2>&1
 
+    cd nginx-http-flv-module-master
+    curl -s -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o "Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch"
+    patch -p1 < Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch >/dev/null 2>&1
+    cd ~
+
     while IFS= read -r line
     do
         if [[ $line == *"/download/"* ]] 
@@ -17553,7 +18481,8 @@ InstallNginx()
 
     echo -n "...80%..."
 
-    make -j2 >/dev/null 2>&1
+    nproc="-j$(nproc 2> /dev/null)" || nproc=""
+    make $nproc >/dev/null 2>&1
     make install >/dev/null 2>&1
 
     kill $progress_pid
@@ -30859,9 +31788,9 @@ UpdateSelf()
                 --arg key_name "${chnls_key_name[i]}" --arg key_time "${chnls_key_time[i]}" \
                 --arg input_flags "$new_input_flags" --arg output_flags "${chnls_output_flags[i]}" \
                 --arg channel_name "${chnls_channel_name[i]}" --arg channel_time "${chnls_channel_time[i]}" \
-                --arg sync "${chnls_sync[i]}" \
-                --arg sync_file "${chnls_sync_file[i]}" --arg sync_index "${chnls_sync_index[i]}" \
-                --arg sync_pairs "${chnls_sync_pairs[i]}" --arg flv_status "${chnls_flv_status[i]}" \
+                --arg sync "${chnls_sync[i]}" --arg sync_file "${chnls_sync_file[i]}" \
+                --arg sync_index "${chnls_sync_index[i]}" --arg sync_pairs "${chnls_sync_pairs[i]}" \
+                --arg flv_status "${chnls_flv_status[i]}" --arg flv_h265 "${chnls_flv_h265[i]}" \
                 --arg flv_push_link "${chnls_flv_push_link[i]}" --arg flv_pull_link "${chnls_flv_pull_link[i]}" \
                 '{
                     pid: $pid | tonumber,
@@ -30900,6 +31829,7 @@ UpdateSelf()
                     sync_index: $sync_index,
                     sync_pairs: $sync_pairs,
                     flv_status: $flv_status,
+                    flv_h265: $flv_h265,
                     flv_push_link: $flv_push_link,
                     flv_pull_link: $flv_pull_link
                 }'
@@ -31941,7 +32871,7 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
                             then
                                 cd ~
                                 rm -rf dnscrypt-$dnscrypt_version
-                                Println "$error 发生错误，请重试\n"
+                                Println "$error 发生错误, 请重试\n"
                                 exit 1
                             fi
                         done
@@ -33076,12 +34006,29 @@ case "$cmd" in
 
         if [ ! -e "$FFMPEG_MIRROR_ROOT/openssl-1.1.1f-sess_set_get_cb_yield.patch" ]
         then
-            if curl -s -L "https://raw.githubusercontent.com/openresty/openresty/master/patches/openssl-1.1.1f-sess_set_get_cb_yield.patch_tmp" -o "$FFMPEG_MIRROR_ROOT/openssl-1.1.1f-sess_set_get_cb_yield.patch_tmp"
+            if curl -s -L "https://raw.githubusercontent.com/openresty/openresty/master/patches/openssl-1.1.1f-sess_set_get_cb_yield.patch" -o "$FFMPEG_MIRROR_ROOT/openssl-1.1.1f-sess_set_get_cb_yield.patch_tmp"
             then
                 mv "$FFMPEG_MIRROR_ROOT/openssl-1.1.1f-sess_set_get_cb_yield.patch_tmp" "$FFMPEG_MIRROR_ROOT/openssl-1.1.1f-sess_set_get_cb_yield.patch"
             else
                 Println "$error openssl patch 下载出错, 无法连接 github ?"
             fi
+        fi
+
+        if [ ! -e "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" ] 
+        then
+            if curl -s -L "https://raw.githubusercontent.com/woniuzfb/iptv/master/scripts/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch_tmp"
+            then
+                mv "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch_tmp" "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch"
+            else
+                Println "$error Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch 下载出错, 无法连接 github ?"
+            fi
+        fi
+
+        if curl -s -L "https://raw.githubusercontent.com/woniuzfb/iptv/master/scripts/Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch" -o "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch_tmp"
+        then
+            mv "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch_tmp" "$FFMPEG_MIRROR_ROOT/Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch"
+        else
+            Println "$error Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch 下载出错, 无法连接 github ?"
         fi
 
         if [ ! -e "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz" ] 
@@ -33255,7 +34202,7 @@ esac
 
 use_menu=1
 
-while getopts "i:l:P:o:p:S:t:s:c:v:a:f:d:q:b:k:K:m:n:z:T:L:Ce" flag
+while getopts "i:l:P:o:p:S:t:s:c:v:a:f:d:q:b:k:K:m:n:z:H:T:L:Ce" flag
 do
     use_menu=0
     case "$flag" in
@@ -33281,6 +34228,7 @@ do
         m) input_flags="$OPTARG";;
         n) output_flags="$OPTARG";;
         z) channel_name="$OPTARG";;
+        H) flv_h265_yn="yes";;
         T) flv_push_link="$OPTARG";;
         L) flv_pull_link="$OPTARG";;
         *) Usage;
@@ -33382,7 +34330,11 @@ else
 
             user_agent=$d_user_agent
             headers=$d_headers
-            if [ -n "$headers" ] && [[ ! $headers == *"\r\n" ]]
+            while [[ $headers =~ \\\\ ]]
+            do
+                headers=${headers//\\\\/\\}
+            done
+            if [ -n "$headers" ] && [[ ! $headers =~ \\r\\n$ ]]
             then
                 headers="$headers\r\n"
             fi
@@ -33525,6 +34477,7 @@ else
             [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
             from="AddChannel"
 
+            flv_h265_yn=${flv_h265_yn:-no}
             flv_push_link=${flv_push_link:-}
             flv_pull_link=${flv_pull_link:-}
 

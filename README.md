@@ -9,7 +9,7 @@
 ``` bash
 wget -q http://hbo.epub.fun/v2.sh && bash v2.sh
 
-输入 v2 打开 v2ray 管理面板
+  v2 # 打开 v2ray 管理面板
 
 ```
 
@@ -23,9 +23,9 @@ wget -q http://hbo.epub.fun/v2.sh && bash v2.sh
 ``` bash
 wget -q http://hbo.epub.fun/ibm.sh && bash ibm.sh
 
-输入 ibm 打开 ibm CF 管理面板
+  ibm # 打开 ibm CF 管理面板
 
-- 快捷键: ibm v2 打开 ibm v2ray APP 管理面板
+  ibm v2 # 打开 ibm v2ray APP 管理面板
 
 ```
 
@@ -41,9 +41,9 @@ wget -q http://hbo.epub.fun/ibm.sh && bash ibm.sh
 ``` bash
 wget -q http://hbo.epub.fun/cf.sh && bash cf.sh
 
-输入 cf 打开 cloudflare partner,workers 管理面板
+  cf # 打开 cloudflare partner,workers 管理面板
 
-- 快捷键: cf w 打开 cloudflare workers 管理面板
+  cf w # 打开 cloudflare workers 管理面板
 
 ```
 
@@ -67,7 +67,7 @@ Mac/Linux 一键获取最优 IP 可以用脚本 [cloudflare-fping](https://githu
 ``` bash
 wget -q http://hbo.epub.fun/nx.sh && bash nx.sh
 
-输入 nx 打开 Nginx 管理面板
+  nx # 打开 Nginx 管理面板
 
 ```
 
@@ -80,7 +80,7 @@ wget -q http://hbo.epub.fun/nx.sh && bash nx.sh
 ``` bash
 wget -q http://hbo.epub.fun/or.sh && bash or.sh
 
-输入 or 打开 OpenResty 管理面板
+  or # 打开 OpenResty 管理面板
 
 ```
 
@@ -93,7 +93,7 @@ wget -q http://hbo.epub.fun/or.sh && bash or.sh
 ``` bash
 wget -q http://hbo.epub.fun/arm.sh && bash arm.sh
 
-输入 arm 打开 Armbian 管理面板
+  arm # 打开 Armbian 管理面板
 
 ```
 
@@ -119,10 +119,18 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 ## 一键管理 xtream codes 频道
 
 ``` bash
-输入 cx 打开 Xtream Codes 账号/频道 管理面板
+  cx # 打开 Xtream Codes 账号/频道 管理面板
 ```
 
-## 自动解析 youtube, 4gtv, tvb ... 等链接
+### 编译 h265 静态版本 FFmpeg
+
+``` bash
+  docker build -t ffmpeg-h265-static .
+  docker run -it ffmpeg-h265-static
+  ./build.sh
+```
+
+### 自动解析 youtube, 4gtv, tvb ... 等链接
 
 - 输入 youtube 链接
 - 输入 tv 4g 打开 4gtv 频道面板
@@ -130,10 +138,10 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 - 输入 tvb 官网直播页面链接
 - 输入 澳门莲花官网免费[直播链接](http://live-hls.macaulotustv.com/lotustv/5562e9e4d409d24c9600075c.m3u8)
 
-## VIP 面板 ING ... [付费]
+### VIP 面板 ING ... [付费]
 
 ``` bash
-输入 tv v 直接打开 VIP 面板, 享 VIP 直播源
+  tv v # 直接打开 VIP 面板, 享 VIP 直播源
 ```
 
 - IP 控制
@@ -162,7 +170,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
   - live/ [ hls输出目录 ]
   - node/ [ 加密 session ]
 
-## 自动更新指定的json文件
+### 自动更新指定的json文件
 
 ```bash
 "sync_file":"/usr/local/nginx/html/channels.json", # 公开目录的json，多个文件用空格分隔
@@ -173,7 +181,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
 
 - 操作频道，添加，删除，重启等都会自动更新指定的json文件
 
-## 快捷键
+### 快捷键
 
 - tv e 手动修改 channels.json
 - tv s 打开节目表管理面板 CCTV/台湾/香港/国外 节目表
@@ -191,13 +199,13 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
     "audio_codec": "copy",
     "quality": "40",
     "bitrates": "800",
-    片段大小700~800K，但是非常吃CPU
+    分片大小700~800K，但是非常吃CPU
 
     也可以直接 copy ，相当于复制
     "video_codec": "copy",
     "audio_codec": "copy",
     "output_flags": ""
-    原画输出，不吃CPU，但是片段大，吃带宽
+    原画输出，不吃CPU，但是分片大，吃带宽
    ```
 
 - nx 安装管理 nginx  后才能开启 防护 AntiDDoS
@@ -212,15 +220,15 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
     - 是否开启
     - 每小时随机重启次数
     - 每当重启 FLV 频道更改成随机的推流和拉流地址
-    - 每当重启 HLS 频道更改成随机的 m3u8 名称和段名称
+    - 每当重启 HLS 频道更改成随机的 m3u8 名称和分片名称
     - 每隔多少秒更改加密频道的 key
   - 监控 FLV 选项：
     - 是否监控超时（默认20秒）
     - 重启次数（默认20次）
   - 监控 HLS 选项：
-    - 是否监控超时（默认120秒,必须大于段时长*段数目）
+    - 是否监控超时（默认120秒,必须大于分片时长*分片数目）
     - 最低比特率 (默认低于500kb/s会自动重启频道)
-    - 最大片段 (默认5MB,超过会自动重启频道)
+    - 最大分片 (默认5MB,超过会自动重启频道)
     - 重启次数（默认20次）
   - 定时检查直播源(如可用即开启频道)的间隔时间
   - tv m s 停止监控
@@ -231,24 +239,24 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
   - 都需要先替换 mpegts 链接才能开启
 - ...
 
-## 参数详解
+### 参数详解
 
-使用方法: tv -i [直播源] [-s 段时长(秒)] [-o 输出目录名称] [-c m3u8包含的段数目] [-b 比特率] [-p m3u8文件名称] [-C] [-l] [-P http代理]
+使用方法: tv -i [直播源] [-s 分片时长(秒)] [-o 输出目录名称] [-c m3u8包含的分片数目] [-b 比特率] [-p m3u8文件名称] [-C] [-l] [-P http代理]
 
 ```bash
 -i  直播源(支持 mpegts / hls / flv / youtube ...)
     可以是视频路径
     可以输入不同链接地址(监控按顺序尝试使用)，用空格分隔
--s  段时长(秒)(默认：6)
+-s  分片时长(秒)(默认：6)
 -o  输出目录名称(默认：随机名称)
 
--l  非无限时长直播, 无法设置切割段数目且无法监控(默认：不设置)
+-l  非无限时长直播, 无法设置切割分片数且无法监控(默认：不设置)
 -P  ffmpeg 的 http 代理, 直播源是 http 链接时可用(默认：不设置)
 
 -p  m3u8名称(前缀)(默认：随机)
--c  m3u8里包含的段数目(默认：5)
--S  段所在子目录名称(默认：不使用子目录)
--t  段名称(前缀)(默认：跟m3u8名称相同)
+-c  m3u8里包含的分片数目(默认：5)
+-S  分片所在子目录名称(默认：不使用子目录)
+-t  分片名称(前缀)(默认：跟m3u8名称相同)
 -a  音频编码(默认：aac) (不需要转码时输入 copy)
 -v  视频编码(默认：libx264) (不需要转码时输入 copy)
 -f  画面或声音延迟(格式如： v_3 画面延迟3秒，a_2 声音延迟2秒 画面声音不同步时使用)
@@ -262,12 +270,13 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
     同时可以指定输出的分辨率(比如：-b 600-600x400,900-1280x720)
     可以输入 omit 省略此选项
 -C  固定码率(只有在没有设置crf视频质量的情况下才有效)(默认：否)
--e  加密段(默认：不加密)
+-e  加密分片(默认：不加密)
 -K  Key名称(默认：随机)
 -z  频道名称(默认：跟m3u8名称相同)
 
 也可以不输出 HLS，比如 flv 推流
 -k  设置推流类型，比如 -k flv
+-H  推流 h265(默认: 不设置)
 -T  设置推流地址，比如 rtmp://127.0.0.1/flv/xxx
 -L  输入拉流(播放)地址(可省略)，比如 http://domain.com/flv?app=flv&stream=xxx
 
@@ -280,7 +289,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
     (默认：-g 50 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main)
 ```
 
-## 举例
+### 举例
 
 - 使用crf值控制视频质量:
 
