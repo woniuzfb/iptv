@@ -89,7 +89,7 @@
 
 set -euo pipefail
 
-sh_ver="1.40.0"
+sh_ver="1.41.0"
 sh_debug=0
 export LC_ALL=
 export LANG=en_US.UTF-8
@@ -542,7 +542,7 @@ CheckDeps()
         fi
         yum -y install glibc-locale-source glibc-langpack-en >/dev/null 2>&1 || true
         localedef -c -f UTF-8 -i en_US en_US.UTF-8 >/dev/null 2>&1 || true
-        depends=(wget unzip vim curl crond logrotate)
+        depends=(wget unzip vim curl crond logrotate patch)
         for depend in "${depends[@]}"
         do
             if [[ ! -x $(command -v "$depend") ]] 
@@ -585,7 +585,7 @@ CheckDeps()
     else
         [ "$release" == "deb" ] && FixDeprecatedDeb
         apt-get -y update >/dev/null 2>&1
-        depends=(wget unzip vim curl cron ufw python3 logrotate)
+        depends=(wget unzip vim curl cron ufw python3 logrotate patch)
         for depend in "${depends[@]}"
         do
             if [[ ! -x $(command -v "$depend") ]] 
@@ -2532,7 +2532,8 @@ Install()
             --arg seg_name '' --arg seg_length 6 \
             --arg seg_count 5 --arg video_codec "libx264" \
             --arg audio_codec "aac" --arg video_audio_shift '' \
-            --arg txt_format '' --arg quality '' \
+            --arg txt_format '' --arg draw_text '' \
+            --arg quality '' \
             --arg bitrates "900-1280x720" --arg const "no" \
             --arg encrypt "no" --arg encrypt_session "no" \
             --arg keyinfo_name '' --arg key_name '' \
@@ -2565,6 +2566,7 @@ Install()
                 audio_codec: $audio_codec,
                 video_audio_shift: $video_audio_shift,
                 txt_format: $txt_format,
+                draw_text: $draw_text,
                 quality: $quality,
                 bitrates: $bitrates,
                 const: $const,
@@ -2732,6 +2734,10 @@ InstallYoutubeDl()
 {
     Println "$info 安装 youtube-dl...\n"
     curl -L https://yt-dl.org/downloads/latest/youtube-dl -o /usr/local/bin/youtube-dl
+    if [ ! -s /usr/local/bin/youtube-dl ] 
+    then
+        curl -L https://dl.netsyms.net/programs/youtube-dl/latest/youtube-dl -o /usr/local/bin/youtube-dl
+    fi
     chmod a+rx /usr/local/bin/youtube-dl
 }
 
@@ -3084,7 +3090,8 @@ FlvStreamCreator()
                     --arg seg_name "$seg_name" --arg seg_length "$seg_length" \
                     --arg seg_count "$seg_count" --arg video_codec "$video_codec" \
                     --arg audio_codec "$audio_codec" --arg video_audio_shift "$video_audio_shift" \
-                    --arg txt_format "$txt_format" --arg quality "$quality" \
+                    --arg txt_format "$txt_format" --arg draw_text "$draw_text" \
+                    --arg quality "$quality" \
                     --arg bitrates "$bitrates" --arg const "$const_yn" \
                     --arg encrypt "$encrypt_yn" --arg encrypt_session "$encrypt_session_yn" \
                     --arg keyinfo_name "$keyinfo_name" --arg key_name "$key_name" \
@@ -3113,6 +3120,7 @@ FlvStreamCreator()
                         audio_codec: $audio_codec,
                         video_audio_shift: $video_audio_shift,
                         txt_format: $txt_format,
+                        draw_text: $draw_text,
                         quality: $quality,
                         bitrates: $bitrates,
                         const: $const,
@@ -3120,11 +3128,11 @@ FlvStreamCreator()
                         encrypt_session: $encrypt_session,
                         keyinfo_name: $keyinfo_name,
                         key_name: $key_name,
-                        key_time: now|strftime("%s")|tonumber,
+                        key_time: now|strflocaltime("%s")|tonumber,
                         input_flags: $input_flags,
                         output_flags: $output_flags,
                         channel_name: $channel_name,
-                        channel_time: now|strftime("%s")|tonumber,
+                        channel_time: now|strflocaltime("%s")|tonumber,
                         sync: $sync,
                         sync_file: $sync_file,
                         sync_index: $sync_index,
@@ -3142,7 +3150,7 @@ FlvStreamCreator()
 
                 trap '
                     JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$pid)|.flv_status)=\"off\""
-                    printf -v date_now "%(%m-%d %H:%M:%S)T"
+                    printf -v date_now "%(%m-%d %H:%M:%S)T" -1
                     printf "%s\n" "$date_now $channel_name FLV 关闭" >> "$MONITOR_LOG"
                     chnl_pid=$pid
                     action="stop"
@@ -3221,6 +3229,17 @@ FlvStreamCreator()
                     map_command=""
                 fi
 
+                if [ -n "$draw_text" ] 
+                then
+                    if [ -n "$resolution_command" ] 
+                    then
+                        resolution_command="$resolution_command,drawtext=$draw_text"
+                    elif [ "$video_codec" != "copy" ] 
+                    then
+                        resolution_command="-vf drawtext=$draw_text"
+                    fi
+                fi
+
                 if [[ $output_flags == *"-vf "* ]] && [ -n "$resolution_command" ]
                 then
                     output_flags_A=${output_flags%-vf *}
@@ -3263,7 +3282,7 @@ FlvStreamCreator()
                 fi
 
                 PrepTerm
-                $FFMPEG ${args[@]+"${args[@]}"} -i "$stream_link" $input_flags $map_command \
+                $FFMPEG ${args[@]+"${args[@]}"} $input_flags -i "$stream_link" $map_command \
                 -vcodec "$video_codec" -acodec "$audio_codec" $quality_command $bitrates_command $resolution_command \
                 $output_flags -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
                 WaitTerm
@@ -3292,7 +3311,7 @@ FlvStreamCreator()
 
                 trap '
                     JQ update "$CHANNELS_FILE" ".channels|=map(select(.pid==$new_pid) * { flv_status: \"off\" } // .)"
-                    printf -v date_now "%(%m-%d %H:%M:%S)T"
+                    printf -v date_now "%(%m-%d %H:%M:%S)T" -1
                     printf "%s\n" "$date_now $chnl_channel_name FLV 关闭" >> "$MONITOR_LOG"
                     chnl_pid=$new_pid
                     action="stop"
@@ -3371,6 +3390,17 @@ FlvStreamCreator()
                     chnl_map_command=""
                 fi
 
+                if [ -n "$chnl_draw_text" ] 
+                then
+                    if [ -n "$chnl_resolution_command" ] 
+                    then
+                        chnl_resolution_command="$chnl_resolution_command,drawtext=$chnl_draw_text"
+                    elif [ "$chnl_video_codec" != "copy" ]
+                    then
+                        chnl_resolution_command="-vf drawtext=$chnl_draw_text"
+                    fi
+                fi
+
                 if [[ $chnl_output_flags == *"-vf "* ]] && [ -n "$chnl_resolution_command" ]
                 then
                     chnl_output_flags_A=${chnl_output_flags%-vf *}
@@ -3413,7 +3443,7 @@ FlvStreamCreator()
                 fi
 
                 PrepTerm
-                $FFMPEG ${args[@]+"${args[@]}"} -i "$chnl_stream_link" $chnl_input_flags $chnl_map_command \
+                $FFMPEG ${args[@]+"${args[@]}"} $chnl_input_flags -i "$chnl_stream_link" $chnl_map_command \
                 -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $chnl_resolution_command \
                 $chnl_output_flags -f flv "$chnl_flv_push_link" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
                 WaitTerm
@@ -3455,7 +3485,8 @@ HlsStreamCreatorPlus()
                     --arg seg_name "$seg_name" --arg seg_length "$seg_length" \
                     --arg seg_count "$seg_count" --arg video_codec "$video_codec" \
                     --arg audio_codec "$audio_codec" --arg video_audio_shift "$video_audio_shift" \
-                    --arg txt_format "$txt_format" --arg quality "$quality" \
+                    --arg txt_format "$txt_format" --arg draw_text "$draw_text" \
+                    --arg quality "$quality" \
                     --arg bitrates "$bitrates" --arg const "$const_yn" \
                     --arg encrypt "$encrypt_yn" --arg encrypt_session "$encrypt_session_yn" \
                     --arg keyinfo_name "$keyinfo_name" --arg key_name "$key_name" \
@@ -3484,6 +3515,7 @@ HlsStreamCreatorPlus()
                         audio_codec: $audio_codec,
                         video_audio_shift: $video_audio_shift,
                         txt_format: $txt_format,
+                        draw_text: $draw_text,
                         quality: $quality,
                         bitrates: $bitrates,
                         const: $const,
@@ -3491,11 +3523,11 @@ HlsStreamCreatorPlus()
                         encrypt_session: $encrypt_session,
                         keyinfo_name: $keyinfo_name,
                         key_name: $key_name,
-                        key_time: now|strftime("%s")|tonumber,
+                        key_time: now|strflocaltime("%s")|tonumber,
                         input_flags: $input_flags,
                         output_flags: $output_flags,
                         channel_name: $channel_name,
-                        channel_time: now|strftime("%s")|tonumber,
+                        channel_time: now|strflocaltime("%s")|tonumber,
                         sync: $sync,
                         sync_file: $sync_file,
                         sync_index: $sync_index,
@@ -3514,7 +3546,7 @@ HlsStreamCreatorPlus()
 
                 trap '
                     JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$pid)|.status)=\"off\""
-                    printf -v date_now "%(%m-%d %H:%M:%S)T"
+                    printf -v date_now "%(%m-%d %H:%M:%S)T" -1
                     printf "%s\n" "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
                     chnl_pid=$pid
                     action="stop"
@@ -3543,7 +3575,7 @@ HlsStreamCreatorPlus()
                         IFS=" " read -r -a stream_links_arr <<< "$stream_link"
 
                         inputs=()
-                        maps_command=()
+                        map_command=()
                         var_stream_map=()
                         var_stream_map_command=()
                         variants_command=()
@@ -3574,7 +3606,7 @@ HlsStreamCreatorPlus()
                                 inputs+=( -user_agent "$user_agent" )
                             fi
                             inputs+=( $input_flags -i ${stream_links_arr[i]} )
-                            maps_command+=( -map $i:v -map $i:a )
+                            map_command+=( -map $i:v -map $i:a )
                             stream_link_bitrate=${stream_link_qualities[i]%-*}
                             stream_link_resolution=${stream_link_qualities[i]#*-}
                             if [ -n "$const" ]
@@ -3611,7 +3643,7 @@ HlsStreamCreatorPlus()
 
                         PrepTerm
                         $FFMPEG ${inputs[@]+"${inputs[@]}"} \
-                        ${maps_command[@]+"${maps_command[@]}"} \
+                        ${map_command[@]+"${map_command[@]}"} \
                         -vcodec $video_codec -acodec $audio_codec \
                         -flags -global_header $output_flags \
                         ${variants_command[@]+"${variants_command[@]}"} \
@@ -3625,21 +3657,7 @@ HlsStreamCreatorPlus()
                 else
                     variants_command=()
                     var_stream_map=()
-
-                    if [ -n "${video_shift:-}" ] 
-                    then
-                        map_command+=( -itsoffset $video_shift -i "$stream_link" )
-                    elif [ -n "${audio_shift:-}" ] 
-                    then
-                        if [ "$audio_codec" == "copy" ] 
-                        then
-                            map_command+=( -itsoffset $audio_shift -i "$stream_link" )
-                        else
-                            map_command=()
-                        fi
-                    else
-                        map_command=()
-                    fi
+                    map_command=()
 
                     hls_master_list=""
 
@@ -3650,6 +3668,25 @@ HlsStreamCreatorPlus()
                     else
                         subtitle_list=""
                         subtitle_append=""
+                    fi
+
+                    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+                    then
+                        if [[ $output_flags =~ -vf ]] 
+                        then
+                            extra_filters=${output_flags#*-vf }
+                            extra_filters=${extra_filters%% *}
+                            output_flags=${output_flags//-vf $extra_filters/}
+                            extra_filters="$extra_filters,"
+                        elif [[ $output_flags =~ -filter:v ]] 
+                        then
+                            extra_filters=${output_flags#*-filter:v }
+                            extra_filters=${extra_filters%% *}
+                            output_flags=${output_flags//-filter:v $extra_filters/}
+                            extra_filters="$extra_filters,"
+                        else
+                            extra_filters=""
+                        fi
                     fi
 
                     if [ -z "$quality" ]
@@ -3689,24 +3726,37 @@ HlsStreamCreatorPlus()
                                     hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((variant*1000))$subtitle_append\n"
                                 fi
                                 hls_master_list="$hls_master_list${playlist_name}_$variant.m3u8$subtitle_list\n\n"
-                                if [ -n "${video_shift:-}" ] 
+                                if [[ $input_flags =~ -an ]] || [[ $output_flags =~ -an ]] 
                                 then
-                                    variants_command+=( -map 0:v:0 -map 1:a:0 )
-                                elif [ -n "${audio_shift:-}" ] 
-                                then
-                                    if [ "$audio_codec" == "copy" ] 
+                                    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
                                     then
-                                        variants_command+=( -map 1:v:0 -map 0:a:0 )
+                                        variants_command+=( -filter_complex "[0:v] ${extra_filters}drawtext=$draw_text [drawtext_video]" -map '[drawtext_video]' )
                                     else
-                                        variants_command+=( -map 0:v:0 -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
+                                        variants_command+=( -map 0:v:0 )
                                     fi
+                                    var_stream_map+=( v:$i,name:$variant )
                                 else
-                                    variants_command+=( -map 0:v:0 -map 0:a:0 )
+                                    if [ -n "${video_shift:-}" ] 
+                                    then
+                                        variants_command+=( -map 0:v:0 -map 1:a:0 )
+                                    elif [ -n "${audio_shift:-}" ] 
+                                    then
+                                        if [ "$audio_codec" == "copy" ] 
+                                        then
+                                            variants_command+=( -map 1:v:0 -map 0:a:0 )
+                                        else
+                                            variants_command+=( -map 0:v:0 -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
+                                        fi
+                                    elif [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+                                    then
+                                        variants_command+=( -filter_complex "[0:v] ${extra_filters}drawtext=$draw_text [drawtext_video]" -map '[drawtext_video]' -map 0:a:0 )
+                                    else
+                                        variants_command+=( -map 0:v:0 -map 0:a:0 )
+                                    fi
+                                    var_stream_map+=( v:$i,a:$i,name:$variant )
                                 fi
-                                var_stream_map+=( v:$i,a:$i,name:$variant )
                             done
                         else
-                            map_command=()
                             if [ -n "${video_shift:-}" ] 
                             then
                                 map_command+=( -itsoffset $video_shift -i "$stream_link" -map 0:v -map 1:a )
@@ -3758,41 +3808,69 @@ HlsStreamCreatorPlus()
                                     hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((variant*1000))$subtitle_append\n"
                                 fi
                                 hls_master_list="$hls_master_list${playlist_name}_crf_${qualities[i]:-${quality[0]}}_$variant.m3u8$subtitle_list\n\n"
-                                if [ -n "${video_shift:-}" ] 
+                                if [[ $input_flags =~ -an ]] || [[ $output_flags =~ -an ]] 
                                 then
-                                    variants_command+=( -map 0:v:0 -map 1:a:0 )
-                                elif [ -n "${audio_shift:-}" ] 
-                                then
-                                    if [ "$audio_codec" == "copy" ] 
+                                    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
                                     then
-                                        variants_command+=( -map 1:v:0 -map 0:a:0 )
+                                        variants_command+=( -filter_complex "[0:v] ${extra_filters}drawtext=$draw_text [drawtext_video]" -map '[drawtext_video]' )
                                     else
-                                        variants_command+=( -map 0:v:0 -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
+                                        variants_command+=( -map 0:v:0 )
                                     fi
+                                    var_stream_map+=( v:$i,name:crf_${qualities[i]:-${quality[0]}}_$variant )
                                 else
-                                    variants_command+=( -map 0:v:0 -map 0:a:0 )
+                                    if [ -n "${video_shift:-}" ] 
+                                    then
+                                        variants_command+=( -map 0:v:0 -map 1:a:0 )
+                                    elif [ -n "${audio_shift:-}" ] 
+                                    then
+                                        if [ "$audio_codec" == "copy" ] 
+                                        then
+                                            variants_command+=( -map 1:v:0 -map 0:a:0 )
+                                        else
+                                            variants_command+=( -map 0:v:0 -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
+                                        fi
+                                    elif [ "$video_codec" != "copy" ] && [ -n "$draw_text" ]  
+                                    then
+                                        variants_command+=( -filter_complex "[0:v] ${extra_filters}drawtext=$draw_text [drawtext_video]" -map '[drawtext_video]' -map 0:a:0 )
+                                    else
+                                        variants_command+=( -map 0:v:0 -map 0:a:0 )
+                                    fi
+                                    var_stream_map+=( v:$i,a:$i,name:crf_${qualities[i]:-${quality[0]}}_$variant )
                                 fi
-                                var_stream_map+=( v:$i,a:$i,name:crf_${qualities[i]:-${quality[0]}}_$variant )
                             done
                         else
                             for((i=0;i<${#qualities[@]};i++));
                             do
                                 variants_command+=( -crf:v:$i ${qualities[i]} )
-                                if [ -n "${video_shift:-}" ] 
+                                if [[ $input_flags =~ -an ]] || [[ $output_flags =~ -an ]] 
                                 then
-                                    variants_command+=( -map 0:v:0 -map 1:a:0 )
-                                elif [ -n "${audio_shift:-}" ] 
-                                then
-                                    if [ "$audio_codec" == "copy" ] 
+                                    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
                                     then
-                                        variants_command+=( -map 1:v:0 -map 0:a:0 )
+                                        variants_command+=( -filter_complex "[0:v] ${extra_filters}drawtext=$draw_text [drawtext_video]" -map '[drawtext_video]' )
                                     else
-                                        variants_command+=( -map 0:v:0 -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
+                                        variants_command+=( -map 0:v:0 )
                                     fi
+                                    var_stream_map+=( v:$i,name:crf_${qualities[i]} )
                                 else
-                                    variants_command+=( -map 0:v:0 -map 0:a:0 )
+                                    if [ -n "${video_shift:-}" ] 
+                                    then
+                                        variants_command+=( -map 0:v:0 -map 1:a:0 )
+                                    elif [ -n "${audio_shift:-}" ] 
+                                    then
+                                        if [ "$audio_codec" == "copy" ] 
+                                        then
+                                            variants_command+=( -map 1:v:0 -map 0:a:0 )
+                                        else
+                                            variants_command+=( -map 0:v:0 -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
+                                        fi
+                                    elif [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+                                    then
+                                        variants_command+=( -filter_complex "[0:v] ${extra_filters}drawtext=$draw_text [drawtext_video]" -map '[drawtext_video]' -map 0:a:0 )
+                                    else
+                                        variants_command+=( -map 0:v:0 -map 0:a:0 )
+                                    fi
+                                    var_stream_map+=( v:$i,a:$i,name:crf_${qualities[i]} )
                                 fi
-                                var_stream_map+=( v:$i,a:$i,name:crf_${qualities[i]} )
                                 hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$(((22-qualities[i])*100000+4200000))$subtitle_append\n"
                                 hls_master_list="$hls_master_list${playlist_name}_crf_${qualities[i]}.m3u8$subtitle_list\n\n"
                             done
@@ -3899,7 +3977,7 @@ HlsStreamCreatorPlus()
                         fi
 
                         PrepTerm
-                        $FFMPEG ${args[@]+"${args[@]}"} -i "$stream_link" $input_flags ${map_command[@]+"${map_command[@]}"} \
+                        $FFMPEG ${args[@]+"${args[@]}"} $input_flags -i "$stream_link" ${map_command[@]+"${map_command[@]}"} \
                         -vcodec "$video_codec" -acodec "$audio_codec" \
                         -flags -global_header $output_flags \
                         ${variants_command[@]+"${variants_command[@]}"} \
@@ -3908,7 +3986,7 @@ HlsStreamCreatorPlus()
                         WaitTerm
                     else
                         PrepTerm
-                        $FFMPEG ${args[@]+"${args[@]}"} -i "$stream_link" $input_flags ${map_command[@]+"${map_command[@]}"} \
+                        $FFMPEG ${args[@]+"${args[@]}"} $input_flags -i "$stream_link" ${map_command[@]+"${map_command[@]}"} \
                         -vcodec "$video_codec" -acodec "$audio_codec" \
                         -flags -global_header $output_flags \
                         ${variants_command[@]+"${variants_command[@]}"} \
@@ -3947,7 +4025,7 @@ HlsStreamCreatorPlus()
 
                 trap '
                     JQ update "$CHANNELS_FILE" ".channels|=map(select(.pid==$new_pid) * { status: \"off\" } // .)"
-                    printf -v date_now "%(%m-%d %H:%M:%S)T"
+                    printf -v date_now "%(%m-%d %H:%M:%S)T" -1
                     printf "%s\n" "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
                     chnl_pid=$new_pid
                     action="stop"
@@ -3976,7 +4054,7 @@ HlsStreamCreatorPlus()
                         IFS=" " read -r -a chnl_stream_links_arr <<< "$chnl_stream_link"
 
                         chnl_inputs=()
-                        chnl_maps_command=()
+                        chnl_map_command=()
                         chnl_var_stream_map=()
                         chnl_var_stream_map_command=()
                         chnl_variants_command=()
@@ -4007,7 +4085,7 @@ HlsStreamCreatorPlus()
                                 chnl_inputs+=( -user_agent "$chnl_user_agent" )
                             fi
                             chnl_inputs+=( $chnl_input_flags -i ${chnl_stream_links_arr[i]} )
-                            chnl_maps_command+=( -map $i:v -map $i:a )
+                            chnl_map_command+=( -map $i:v -map $i:a )
                             chnl_stream_link_bitrate=${chnl_stream_link_qualities[i]%-*}
                             chnl_stream_link_resolution=${chnl_stream_link_qualities[i]#*-}
                             if [ -n "$chnl_const" ]
@@ -4044,7 +4122,7 @@ HlsStreamCreatorPlus()
 
                         PrepTerm
                         $FFMPEG ${chnl_inputs[@]+"${chnl_inputs[@]}"} \
-                        ${chnl_maps_command[@]+"${chnl_maps_command[@]}"} \
+                        ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
                         -vcodec $chnl_video_codec -acodec $chnl_audio_codec \
                         -flags -global_header $chnl_output_flags \
                         ${chnl_variants_command[@]+"${chnl_variants_command[@]}"} \
@@ -4058,21 +4136,7 @@ HlsStreamCreatorPlus()
                 else
                     chnl_variants_command=()
                     chnl_var_stream_map=()
-
-                    if [ -n "${chnl_video_shift:-}" ] 
-                    then
-                        chnl_map_command+=( -itsoffset $chnl_video_shift -i "$chnl_stream_link" )
-                    elif [ -n "${chnl_audio_shift:-}" ] 
-                    then
-                        if [ "$chnl_audio_codec" == "copy" ] 
-                        then
-                            chnl_map_command+=( -itsoffset $chnl_audio_shift -i "$chnl_stream_link" )
-                        else
-                            chnl_map_command=()
-                        fi
-                    else
-                        chnl_map_command=()
-                    fi
+                    chnl_map_command=()
 
                     chnl_hls_master_list=""
 
@@ -4083,6 +4147,25 @@ HlsStreamCreatorPlus()
                     else
                         chnl_subtitle_list=""
                         chnl_subtitle_append=""
+                    fi
+
+                    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                    then
+                        if [[ $chnl_output_flags =~ -vf ]] 
+                        then
+                            chnl_extra_filters=${chnl_output_flags#*-vf }
+                            chnl_extra_filters=${chnl_extra_filters%% *}
+                            chnl_output_flags=${chnl_output_flags//-vf $chnl_extra_filters/}
+                            chnl_extra_filters="$chnl_extra_filters,"
+                        elif [[ $chnl_output_flags =~ -filter:v ]] 
+                        then
+                            chnl_extra_filters=${chnl_output_flags#*-filter:v }
+                            chnl_extra_filters=${chnl_extra_filters%% *}
+                            chnl_output_flags=${chnl_output_flags//-filter:v $chnl_extra_filters/}
+                            chnl_extra_filters="$chnl_extra_filters,"
+                        else
+                            chnl_extra_filters=""
+                        fi
                     fi
 
                     if [ -z "$chnl_quality" ]
@@ -4122,28 +4205,41 @@ HlsStreamCreatorPlus()
                                     chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((variant*1000))$chnl_subtitle_append\n"
                                 fi
                                 chnl_hls_master_list="$chnl_hls_master_list${chnl_playlist_name}_$variant.m3u8$chnl_subtitle_list\n\n"
-                                if [ -n "${chnl_video_shift:-}" ] 
+                                if [[ $chnl_input_flags =~ -an ]] || [[ $chnl_output_flags =~ -an ]]
                                 then
-                                    chnl_variants_command+=( -map 0:v:0 -map 1:a:0 )
-                                elif [ -n "${chnl_audio_shift:-}" ] 
-                                then
-                                    if [ "$chnl_audio_codec" == "copy" ] 
+                                    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
                                     then
-                                        chnl_variants_command+=( -map 1:v:0 -map 0:a:0 )
+                                        chnl_variants_command+=( -filter_complex "[0:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]" -map '[drawtext_video]' )
                                     else
-                                        chnl_variants_command+=( -map 0:v:0 -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
+                                        chnl_variants_command+=( -map 0:v:0 )
                                     fi
+                                    chnl_var_stream_map+=( v:$i,name:$variant )
                                 else
-                                    chnl_variants_command+=( -map 0:v:0 -map 0:a:0 )
+                                    if [ -n "${chnl_video_shift:-}" ] 
+                                    then
+                                        chnl_variants_command+=( -map 0:v:0 -map 1:a:0 )
+                                    elif [ -n "${chnl_audio_shift:-}" ] 
+                                    then
+                                        if [ "$chnl_audio_codec" == "copy" ] 
+                                        then
+                                            chnl_variants_command+=( -map 1:v:0 -map 0:a:0 )
+                                        else
+                                            chnl_variants_command+=( -map 0:v:0 -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
+                                        fi
+                                    elif [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ]
+                                    then
+                                        chnl_variants_command+=( -filter_complex "[0:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]" -map '[drawtext_video]' -map 0:a:0 )
+                                    else
+                                        chnl_variants_command+=( -map 0:v:0 -map 0:a:0 )
+                                    fi
+                                    chnl_var_stream_map+=( v:$i,a:$i,name:$variant )
                                 fi
-                                chnl_var_stream_map+=( v:$i,a:$i,name:$variant )
                             done
                         else
-                            chnl_map_command=()
                             if [ -n "${chnl_video_shift:-}" ] 
                             then
                                 chnl_map_command+=( -itsoffset $chnl_video_shift -i "$chnl_stream_link" -map 0:v -map 1:a )
-                            elif [ -n "${audio_shift:-}" ] 
+                            elif [ -n "${chnl_audio_shift:-}" ] 
                             then
                                 if [ "$chnl_audio_codec" == "copy" ] 
                                 then
@@ -4191,41 +4287,69 @@ HlsStreamCreatorPlus()
                                     chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((variant*1000))$chnl_subtitle_append\n"
                                 fi
                                 chnl_hls_master_list="$chnl_hls_master_list${chnl_playlist_name}_crf_${chnl_qualities[i]:-${chnl_quality[0]}}_$variant.m3u8$chnl_subtitle_list\n\n"
-                                if [ -n "${chnl_video_shift:-}" ] 
+                                if [[ $chnl_input_flags =~ -an ]] || [[ $chnl_output_flags =~ -an ]]
                                 then
-                                    chnl_variants_command+=( -map 0:v:0 -map 1:a:0 )
-                                elif [ -n "${chnl_audio_shift:-}" ] 
-                                then
-                                    if [ "$chnl_audio_codec" == "copy" ] 
+                                    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
                                     then
-                                        chnl_variants_command+=( -map 1:v:0 -map 0:a:0 )
+                                        chnl_variants_command+=( -filter_complex "[0:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]" -map '[drawtext_video]' )
                                     else
-                                        chnl_variants_command+=( -map 0:v:0 -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
+                                        chnl_variants_command+=( -map 0:v:0 )
                                     fi
+                                    chnl_var_stream_map+=( v:$i,name:crf_${chnl_qualities[i]:-${chnl_quality[0]}}_$variant )
                                 else
-                                    chnl_variants_command+=( -map 0:v:0 -map 0:a:0 )
+                                    if [ -n "${chnl_video_shift:-}" ] 
+                                    then
+                                        chnl_variants_command+=( -map 0:v:0 -map 1:a:0 )
+                                    elif [ -n "${chnl_audio_shift:-}" ] 
+                                    then
+                                        if [ "$chnl_audio_codec" == "copy" ] 
+                                        then
+                                            chnl_variants_command+=( -map 1:v:0 -map 0:a:0 )
+                                        else
+                                            chnl_variants_command+=( -map 0:v:0 -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
+                                        fi
+                                    elif [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                                    then
+                                        chnl_variants_command+=( -filter_complex "[0:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]" -map '[drawtext_video]' -map 0:a:0 )
+                                    else
+                                        chnl_variants_command+=( -map 0:v:0 -map 0:a:0 )
+                                    fi
+                                    chnl_var_stream_map+=( v:$i,a:$i,name:crf_${chnl_qualities[i]:-${chnl_quality[0]}}_$variant )
                                 fi
-                                chnl_var_stream_map+=( v:$i,a:$i,name:crf_${chnl_qualities[i]:-${chnl_quality[0]}}_$variant )
                             done
                         else
                             for((i=0;i<${#chnl_qualities[@]};i++));
                             do
                                 chnl_variants_command+=( -crf:v:$i ${chnl_qualities[i]} )
-                                if [ -n "${chnl_video_shift:-}" ] 
+                                if [[ $chnl_input_flags =~ -an ]] || [[ $chnl_output_flags =~ -an ]] 
                                 then
-                                    chnl_variants_command+=( -map 0:v:0 -map 1:a:0 )
-                                elif [ -n "${chnl_audio_shift:-}" ] 
-                                then
-                                    if [ "$chnl_audio_codec" == "copy" ] 
+                                    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
                                     then
-                                        chnl_variants_command+=( -map 1:v:0 -map 0:a:0 )
+                                        chnl_variants_command+=( -filter_complex "[0:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]" -map '[drawtext_video]' )
                                     else
-                                        chnl_variants_command+=( -map 0:v:0 -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
+                                        chnl_variants_command+=( -map 0:v:0 )
                                     fi
+                                    chnl_var_stream_map+=( v:$i,name:crf_${chnl_qualities[i]} )
                                 else
-                                    chnl_variants_command+=( -map 0:v:0 -map 0:a:0 )
+                                    if [ -n "${chnl_video_shift:-}" ] 
+                                    then
+                                        chnl_variants_command+=( -map 0:v:0 -map 1:a:0 )
+                                    elif [ -n "${chnl_audio_shift:-}" ] 
+                                    then
+                                        if [ "$chnl_audio_codec" == "copy" ] 
+                                        then
+                                            chnl_variants_command+=( -map 1:v:0 -map 0:a:0 )
+                                        else
+                                            chnl_variants_command+=( -map 0:v:0 -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
+                                        fi
+                                    elif [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                                    then
+                                        chnl_variants_command+=( -filter_complex "[0:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]" -map '[drawtext_video]' -map 0:a:0 )
+                                    else
+                                        chnl_variants_command+=( -map 0:v:0 -map 0:a:0 )
+                                    fi
+                                    chnl_var_stream_map+=( v:$i,a:$i,name:crf_${chnl_qualities[i]} )
                                 fi
-                                chnl_var_stream_map+=( v:$i,a:$i,name:crf_${chnl_qualities[i]} )
                                 chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$(((64-chnl_qualities[i])*30000))$chnl_subtitle_append\n"
                                 chnl_hls_master_list="$chnl_hls_master_list${chnl_playlist_name}_crf_${chnl_qualities[i]}.m3u8$chnl_subtitle_list\n\n"
                             done
@@ -4333,7 +4457,7 @@ HlsStreamCreatorPlus()
 
                         # https://stackoverflow.com/questions/23235651/how-can-i-do-ansi-c-quoting-of-an-existing-bash-variable
                         PrepTerm
-                        $FFMPEG ${args[@]+"${args[@]}"} -i "$chnl_stream_link" $chnl_input_flags ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
+                        $FFMPEG ${args[@]+"${args[@]}"} $chnl_input_flags -i "$chnl_stream_link" ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
                         -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" \
                         -flags -global_header $chnl_output_flags \
                         ${chnl_variants_command[@]+"${chnl_variants_command[@]}"} \
@@ -4342,7 +4466,7 @@ HlsStreamCreatorPlus()
                         WaitTerm
                     else
                         PrepTerm
-                        $FFMPEG ${args[@]+"${args[@]}"} -i "$chnl_stream_link" $chnl_input_flags ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
+                        $FFMPEG ${args[@]+"${args[@]}"} $chnl_input_flags -i "$chnl_stream_link" ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
                         -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" \
                         -flags -global_header $chnl_output_flags \
                         ${chnl_variants_command[@]+"${chnl_variants_command[@]}"} \
@@ -4392,7 +4516,8 @@ HlsStreamCreator()
                     --arg seg_name "$seg_name" --arg seg_length "$seg_length" \
                     --arg seg_count "$seg_count" --arg video_codec "$video_codec" \
                     --arg audio_codec "$audio_codec" --arg video_audio_shift "$video_audio_shift" \
-                    --arg txt_format "$txt_format" --arg quality "$quality" \
+                    --arg txt_format "$txt_format" --arg draw_text "$draw_text" \
+                    --arg quality "$quality" \
                     --arg bitrates "$bitrates" --arg const "$const_yn" \
                     --arg encrypt "$encrypt_yn" --arg encrypt_session "$encrypt_session_yn" \
                     --arg keyinfo_name "$keyinfo_name" --arg key_name "$key_name" \
@@ -4421,6 +4546,7 @@ HlsStreamCreator()
                         audio_codec: $audio_codec,
                         video_audio_shift: $video_audio_shift,
                         txt_format: $txt_format,
+                        draw_text: $draw_text,
                         quality: $quality,
                         bitrates: $bitrates,
                         const: $const,
@@ -4428,11 +4554,11 @@ HlsStreamCreator()
                         encrypt_session: $encrypt_session,
                         keyinfo_name: $keyinfo_name,
                         key_name: $key_name,
-                        key_time: now|strftime("%s")|tonumber,
+                        key_time: now|strflocaltime("%s")|tonumber,
                         input_flags: $input_flags,
                         output_flags: $output_flags,
                         channel_name: $channel_name,
-                        channel_time: now|strftime("%s")|tonumber,
+                        channel_time: now|strflocaltime("%s")|tonumber,
                         sync: $sync,
                         sync_file: $sync_file,
                         sync_index: $sync_index,
@@ -4451,7 +4577,7 @@ HlsStreamCreator()
 
                 trap '
                     JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$pid)|.status)=\"off\""
-                    printf -v date_now "%(%m-%d %H:%M:%S)T"
+                    printf -v date_now "%(%m-%d %H:%M:%S)T" -1
                     printf "%s\n" "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
                     chnl_pid=$pid
                     action="stop"
@@ -4546,7 +4672,7 @@ HlsStreamCreator()
 
                 trap '
                     JQ update "$CHANNELS_FILE" ".channels|=map(select(.pid==$new_pid) * { status: \"off\" } // .)"
-                    printf -v date_now "%(%m-%d %H:%M:%S)T"
+                    printf -v date_now "%(%m-%d %H:%M:%S)T" -1
                     printf "%s\n" "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
                     chnl_pid=$new_pid
                     action="stop"
@@ -4626,7 +4752,7 @@ GetDefault()
     fi
     while IFS="^" read -r d_proxy d_xc_proxy d_user_agent d_headers d_cookies d_playlist_name \
     d_seg_dir_name d_seg_name d_seg_length d_seg_count d_video_codec d_audio_codec \
-    d_video_audio_shift d_txt_format d_quality d_bitrates d_const_yn d_encrypt_yn d_encrypt_session_yn \
+    d_video_audio_shift d_txt_format d_draw_text d_quality d_bitrates d_const_yn d_encrypt_yn d_encrypt_session_yn \
     d_keyinfo_name d_key_name d_input_flags d_output_flags d_sync_yn d_sync_file \
     d_sync_index d_sync_pairs d_schedule_file d_flv_delay_seconds d_flv_restart_nums \
     d_hls_delay_seconds d_hls_min_bitrates d_hls_max_seg_size d_hls_restart_nums \
@@ -4717,7 +4843,7 @@ GetDefault()
         break
     done < <($JQ_FILE -M '.default | [.proxy,.xc_proxy,.user_agent,.headers,.cookies,.playlist_name,
     .seg_dir_name,.seg_name,.seg_length,.seg_count,.video_codec,.audio_codec,
-    .video_audio_shift,.txt_format,.quality,.bitrates,.const,.encrypt,.encrypt_session,
+    .video_audio_shift,.txt_format,.draw_text,.quality,.bitrates,.const,.encrypt,.encrypt_session,
     .keyinfo_name,.key_name,.input_flags,.output_flags,.sync,.sync_file,
     .sync_index,.sync_pairs,.schedule_file,.flv_delay_seconds,.flv_restart_nums,
     .hls_delay_seconds,.hls_min_bitrates,.hls_max_seg_size,.hls_restart_nums,
@@ -4735,7 +4861,7 @@ GetChannelsInfo()
 
     IFS=$'\t' read -r chnls_count m_pid m_status m_stream_link m_live m_proxy m_xc_proxy m_user_agent m_headers m_cookies \
     m_output_dir_name m_playlist_name m_seg_dir_name m_seg_name m_seg_length m_seg_count \
-    m_video_codec m_audio_codec m_video_audio_shift m_txt_format m_quality m_bitrates m_const m_encrypt \
+    m_video_codec m_audio_codec m_video_audio_shift m_txt_format m_draw_text m_quality m_bitrates m_const m_encrypt \
     m_encrypt_session m_keyinfo_name m_key_name m_key_time m_input_flags m_output_flags \
     m_channel_name m_channel_time m_sync m_sync_file m_sync_index m_sync_pairs m_flv_status \
     m_flv_h265 m_flv_push_link m_flv_pull_link < <($JQ_FILE -r -M '[(.channels|length),([.channels[].pid]|join("^")),([.channels[].status]|join("^")),
@@ -4744,11 +4870,11 @@ GetChannelsInfo()
     ([.channels[].cookies|if .==null then "stb_lang=en; timezone=Europe/Amsterdam" else . end]|join("^")),([.channels[].output_dir_name]|join("^")),([.channels[].playlist_name]|join("^")),
     ([.channels[].seg_dir_name]|join("^")),([.channels[].seg_name]|join("^")),([.channels[].seg_length]|join("^")),
     ([.channels[].seg_count]|join("^")),([.channels[].video_codec]|join("^")),([.channels[].audio_codec]|join("^")),
-    ([.channels[].video_audio_shift]|join("^")),([.channels[].txt_format]|join("^")),([.channels[].quality]|join("^")),
+    ([.channels[].video_audio_shift]|join("^")),([.channels[].txt_format]|join("^")),([.channels[].draw_text]|join("^")),([.channels[].quality]|join("^")),
     ([.channels[].bitrates]|join("^")),([.channels[].const]|join("^")),([.channels[].encrypt|if .=="-e" then "yes" elif .=="" // .==null then "no" else . end]|join("^")),
     ([.channels[].encrypt_session|if .=="" // .==null then "no" else . end]|join("^")),([.channels[].keyinfo_name]|join("^")),([.channels[].key_name]|join("^")),
-    ([.channels[].key_time|if .=="" // .==null then now|strftime("%s")|tonumber else . end]|join("^")),([.channels[].input_flags]|join("^")),([.channels[].output_flags]|join("^")),
-    ([.channels[].channel_name]|join("^")),([.channels[].channel_time|if .=="" // .==null then now|strftime("%s")|tonumber else . end]|join("^")),([.channels[].sync|if .=="" // .==null then "yes" else . end]|join("^")),
+    ([.channels[].key_time|if .=="" // .==null then now|strflocaltime("%s")|tonumber else . end]|join("^")),([.channels[].input_flags]|join("^")),([.channels[].output_flags]|join("^")),
+    ([.channels[].channel_name]|join("^")),([.channels[].channel_time|if .=="" // .==null then now|strflocaltime("%s")|tonumber else . end]|join("^")),([.channels[].sync|if .=="" // .==null then "yes" else . end]|join("^")),
     ([.channels[].sync_file]|join("^")),([.channels[].sync_index]|join("^")),([.channels[].sync_pairs]|join("^")),
     ([.channels[].flv_status|if .==null then "off" else . end]|join("^")),([.channels[].flv_h265|if .==null then "no" else . end]|join("^")),([.channels[].flv_push_link]|join("^")),
     ([.channels[].flv_pull_link]|join("^"))]|@tsv' "$CHANNELS_FILE")
@@ -4758,6 +4884,28 @@ GetChannelsInfo()
 
     if [ "$chnls_count" -gt 0 ] 
     then
+        if [ "$chnls_count" -eq 1 ] 
+        then
+            IFS="^" read -r m_pid m_status m_stream_link m_live m_proxy m_xc_proxy m_user_agent m_headers m_cookies \
+            m_output_dir_name m_playlist_name m_seg_dir_name m_seg_name m_seg_length m_seg_count \
+            m_video_codec m_audio_codec m_video_audio_shift m_txt_format m_draw_text m_quality m_bitrates m_const m_encrypt \
+            m_encrypt_session m_keyinfo_name m_key_name m_key_time m_input_flags m_output_flags \
+            m_channel_name m_channel_time m_sync m_sync_file m_sync_index m_sync_pairs m_flv_status \
+            m_flv_h265 m_flv_push_link m_flv_pull_link < <($JQ_FILE -r -M '.channels[0]|
+            [.pid,.status,.stream_link,(.live|if .=="" // .==null then "yes" else . end),.proxy,
+            .xc_proxy,(.user_agent|if .==null then "Mozilla/5.0 (QtEmbedded; U; Linux; C)" else . end),
+            (.headers,.cookies|if .==null then "stb_lang=en; timezone=Europe/Amsterdam" else . end),
+            .output_dir_name,.playlist_name,.seg_dir_name,.seg_name,.seg_length,.seg_count,.video_codec,
+            .audio_codec,.video_audio_shift,.txt_format,.draw_text,.quality,.bitrates,.const,
+            (.encrypt|if .=="-e" then "yes" elif .=="" // .==null then "no" else . end),
+            (.encrypt_session|if .=="" // .==null then "no" else . end),.keyinfo_name,.key_name,
+            (.key_time|if .=="" // .==null then now|strflocaltime("%s")|tonumber else . end),.input_flags,
+            .output_flags,.channel_name,(.channel_time|if .=="" // .==null then now|strflocaltime("%s")|tonumber else . end),
+            (.sync|if .=="" // .==null then "yes" else . end),.sync_file,.sync_index,.sync_pairs,
+            (.flv_status|if .==null then "off" else . end),(.flv_h265|if .==null then "no" else . end),
+            .flv_push_link,.flv_pull_link]|join("^")' "$CHANNELS_FILE")
+        fi
+
         IFS="^" read -ra chnls_pid <<< "$m_pid"
         IFS="^" read -ra chnls_status <<< "$m_status"
         IFS="^" read -ra chnls_stream_links <<< "$m_stream_link"
@@ -4784,6 +4932,7 @@ GetChannelsInfo()
         IFS="^" read -ra chnls_audio_codec <<< "${m_audio_codec}^"
         IFS="^" read -ra chnls_video_audio_shift <<< "${m_video_audio_shift}^"
         IFS="^" read -ra chnls_txt_format <<< "${m_txt_format}^"
+        IFS="^" read -ra chnls_draw_text <<< "${m_draw_text}^"
         IFS="^" read -ra chnls_quality <<< "${m_quality}^"
         IFS="^" read -ra chnls_bitrates <<< "${m_bitrates}^"
         IFS="^" read -ra chnls_const <<< "${m_const}^"
@@ -4945,7 +5094,7 @@ GetChannelInfo()
     while IFS="^" read -r chnl_pid chnl_status chnl_stream_links chnl_live_yn chnl_proxy chnl_xc_proxy \
     chnl_user_agent chnl_headers chnl_cookies chnl_output_dir_name chnl_playlist_name \
     chnl_seg_dir_name chnl_seg_name chnl_seg_length chnl_seg_count chnl_video_codec \
-    chnl_audio_codec chnl_video_audio_shift chnl_txt_format chnl_quality chnl_bitrates chnl_const_yn \
+    chnl_audio_codec chnl_video_audio_shift chnl_txt_format chnl_draw_text chnl_quality chnl_bitrates chnl_const_yn \
     chnl_encrypt_yn chnl_encrypt_session_yn chnl_keyinfo_name chnl_key_name chnl_key_time \
     chnl_input_flags chnl_output_flags chnl_channel_name chnl_channel_time chnl_sync_yn \
     chnl_sync_file chnl_sync_index chnl_sync_pairs chnl_flv_status chnl_flv_h265_yn chnl_flv_push_link \
@@ -5226,6 +5375,7 @@ GetChannelInfoLite()
             chnl_audio_shift=""
         fi
         chnl_txt_format=${chnls_txt_format[i]}
+        chnl_draw_text=${chnls_draw_text[i]}
         chnl_quality=${chnls_quality[i]}
         chnl_bitrates=${chnls_bitrates[i]}
         chnl_const_yn=${chnls_const[i]}
@@ -5766,6 +5916,15 @@ SetStreamLink()
         user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
         headers="Referer: $stream_link\r\n"
         cookies=""
+        #while IFS= read -r line 
+        #do
+        #    if [[ $line =~ tag_deviceid ]] 
+        #    then
+        #        line=${line#* }
+        #        cookies=${line%% *}
+        #        break
+        #    fi
+        #done < <(curl -s -I -H "User-Agent: $user_agent" -H "${headers:0:-4}" "$stream_link")
         chnl="${stream_link%\?*}"
         chnl=${chnl##*/}
         token_url=$(curl -s -Lm 10 \
@@ -5780,6 +5939,15 @@ SetStreamLink()
             -H "${headers:0:-4}" \
             "http://news.tvb.com/ajax_call/getVideo.php?token=$query_string" \
             | $JQ_FILE -r '.url')
+        #while IFS= read -r line 
+        #do
+        #    if [[ $line =~ hdntl= ]] 
+        #    then
+        #        line=${line#* }
+        #        cookies="$cookies${line%% *}"
+        #        break
+        #    fi
+        #done < <(curl -s -I -H "User-Agent: $user_agent" -H "${headers:0:-4}" --cookie "$cookies" "$stream_link")
     elif [[ $stream_link =~ ^https://embed.4gtv.tv/HiNet/(.+).html ]] 
     then
         if [[ ! -x $(command -v openssl) ]] 
@@ -5974,6 +6142,16 @@ SetSubtitle()
     fi
 }
 
+SetDrawtext()
+{
+    Println "$tip 比如 fontsize=25:fontfile=/usr/local/iptv/AlibabaSans-Regular.otf:fontcolor=white:box=1:boxcolor=black@0.5:x=50:y=10:text=mtime.info"
+    inquirer text_input "输入 drawtext 水印 : " draw_text "${d_draw_text:-不设置}"
+    if [ "$draw_text" == "omit" ] || [ "$draw_text" == "不设置" ]
+    then
+        draw_text=""
+    fi
+}
+
 SetLive()
 {
     if [ -z "${kind:-}" ] 
@@ -5996,6 +6174,12 @@ SetLive()
 
 SetProxy()
 {
+    if [ "${xc:-0}" -eq 1 ] && [ -n "${_4gtv_proxy:-}" ]
+    then
+        proxy=$_4gtv_proxy
+        Println "  ffmpeg 代理: $green $_4gtv_proxy ${normal}\n"
+        return 0
+    fi
     Println "$tip 可以使用脚本自带的 v2ray 管理面板添加代理, 可以输入 omit 省略此选项"
     inquirer text_input "请输入 ffmpeg 代理, 比如 http://username:passsword@127.0.0.1:5555 : " proxy "${d_proxy:-不设置}"
     if [ "$proxy" == "omit" ] || [ "$proxy" == "不设置" ]
@@ -6006,6 +6190,12 @@ SetProxy()
 
 SetXtreamCodesProxy()
 {
+    if [ "${xc:-0}" -eq 1 ] && [ -n "${xtream_codes_proxy:-}" ]
+    then
+        xc_proxy=$xtream_codes_proxy
+        Println "  xtream codes 代理: $green $xc_proxy ${normal}\n"
+        return 0
+    fi
     Println "$tip 可以使用脚本自带的 cloudflare workers 管理面板添加 xtream codes 代理 worker, 可以输入 omit 省略此选项"
     inquirer text_input "请输入 xtream codes 代理: " xc_proxy "${d_xc_proxy:-不设置}"
     if [ "$xc_proxy" == "omit" ] || [ "$xc_proxy" == "不设置" ]
@@ -6947,7 +7137,7 @@ AddChannel()
                     done
                 fi
 
-                if [[ "$stream_links" == *" "* ]] 
+                if [[ $stream_links == *" "* ]] 
                 then
                     stream_links="$stream_link_root|$stream_link_quality ${stream_links#* }"
                 else
@@ -7015,8 +7205,14 @@ AddChannel()
         fi
     fi
 
+    draw_text=""
+
     if [ "${kind:-}" == "flv" ] 
     then
+        if [ "$video_codec" != "copy" ] 
+        then
+            SetDrawtext
+        fi
         SetFlvIsH265
         SetFlvPushLink
         SetFlvPullLink
@@ -7034,6 +7230,10 @@ AddChannel()
         txt_format=""
     else
         SetSubtitle
+        if [ "$video_codec" != "copy" ] 
+        then
+            SetDrawtext
+        fi
         flv_h265_yn="no"
         flv_push_link=""
         flv_pull_link=""
@@ -7261,6 +7461,13 @@ EditSubtitle()
     SetSubtitle
     JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.txt_format)="'"$txt_format"'"'
     Println "$info dvb teletext 修改成功 !\n"
+}
+
+EditDrawtext()
+{
+    SetDrawtext
+    JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.draw_text)="'"$draw_text"'"'
+    Println "$info drawtext 水印修改成功 !\n"
 }
 
 EditQuality()
@@ -7494,8 +7701,14 @@ EditChannelAll()
         fi
     fi
 
+    draw_text=""
+
     if [ "${kind:-}" == "flv" ] 
     then
+        if [ "$video_codec" != "copy" ] 
+        then
+            SetDrawtext
+        fi
         SetFlvIsH265
         SetFlvPushLink
         SetFlvPullLink
@@ -7512,6 +7725,10 @@ EditChannelAll()
         txt_format=""
     else
         SetSubtitle
+        if [ "$video_codec" != "copy" ] 
+        then
+            SetDrawtext
+        fi
         flv_h265_yn="no"
         flv_push_link=""
         flv_pull_link=""
@@ -7572,6 +7789,7 @@ EditChannelAll()
         audio_codec: "'"$audio_codec"'",
         video_audio_shift: "'"$video_audio_shift"'",
         txt_format: "'"$txt_format"'",
+        draw_text: "'"$draw_text"'",
         quality: "'"$quality"'",
         bitrates: "'"$bitrates"'",
         const: "'"$const_yn"'",
@@ -7635,24 +7853,25 @@ EditChannelMenu()
    ${green}15.${normal} 修改 音频编码
    ${green}16.${normal} 修改 视频/音频延迟
    ${green}17.${normal} 修改 dvb teletext
-   ${green}18.${normal} 修改 crf质量值
-   ${green}19.${normal} 修改 比特率
-   ${green}20.${normal} 修改 是否固定码率
-   ${green}21.${normal} 修改 是否加密
-   ${green}22.${normal} 修改 key名称
-   ${green}23.${normal} 修改 输入参数
-   ${green}24.${normal} 修改 输出参数
-   ${green}25.${normal} 修改 频道名称
-   ${green}26.${normal} 修改 是否开启 sync
-   ${green}27.${normal} 修改 sync file
-   ${green}28.${normal} 修改 sync index
-   ${green}29.${normal} 修改 sync pairs
-   ${green}30.${normal} 修改 是否推流 h265
-   ${green}31.${normal} 修改 推流地址
-   ${green}32.${normal} 修改 拉流地址
-   ${green}33.${normal} 修改 全部配置
+   ${green}18.${normal} 修改 drawtext 水印
+   ${green}19.${normal} 修改 crf质量值
+   ${green}20.${normal} 修改 比特率
+   ${green}21.${normal} 修改 是否固定码率
+   ${green}22.${normal} 修改 是否加密
+   ${green}23.${normal} 修改 key名称
+   ${green}24.${normal} 修改 输入参数
+   ${green}25.${normal} 修改 输出参数
+   ${green}26.${normal} 修改 频道名称
+   ${green}27.${normal} 修改 是否开启 sync
+   ${green}28.${normal} 修改 sync file
+   ${green}29.${normal} 修改 sync index
+   ${green}30.${normal} 修改 sync pairs
+   ${green}31.${normal} 修改 是否推流 h265
+   ${green}32.${normal} 修改 推流地址
+   ${green}33.${normal} 修改 拉流地址
+   ${green}34.${normal} 修改 全部配置
     ————— 组合[常用] —————
-   ${green}34.${normal} 修改 分片名称、m3u8名称 (防盗链/DDoS)
+   ${green}35.${normal} 修改 分片名称、m3u8名称 (防盗链/DDoS)
     \n"
         read -p "(默认: 取消): " edit_channel_num
         [ -z "$edit_channel_num" ] && Println "已取消...\n" && exit 1
@@ -7709,54 +7928,57 @@ EditChannelMenu()
                 EditSubtitle
             ;;
             18)
-                EditQuality
+                EditDrawtext
             ;;
             19)
-                EditBitrates
+                EditQuality
             ;;
             20)
-                EditConst
+                EditBitrates
             ;;
             21)
-                EditEncrypt
+                EditConst
             ;;
             22)
-                EditKeyName
+                EditEncrypt
             ;;
             23)
-                EditInputFlags
+                EditKeyName
             ;;
             24)
-                EditOutputFlags
+                EditInputFlags
             ;;
             25)
-                EditChannelName
+                EditOutputFlags
             ;;
             26)
-                EditSync
+                EditChannelName
             ;;
             27)
-                EditSyncFile
+                EditSync
             ;;
             28)
-                EditSyncIndex
+                EditSyncFile
             ;;
             29)
-                EditSyncPairs
+                EditSyncIndex
             ;;
             30)
-                EditFlvIsH265
+                EditSyncPairs
             ;;
             31)
-                EditFlvPushLink
+                EditFlvIsH265
             ;;
             32)
-                EditFlvPullLink
+                EditFlvPushLink
             ;;
             33)
-                EditChannelAll
+                EditFlvPullLink
             ;;
             34)
+                EditChannelAll
+            ;;
+            35)
                 EditForSecurity
             ;;
             *)
@@ -8165,6 +8387,42 @@ StartChannel()
         chnl_user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
         chnl_headers="Referer: $chnl_stream_link\r\n"
         chnl_cookies=""
+        if [[ $chnl_stream_link =~ inews ]] 
+        then
+            chnl_audio_codec="aac"
+            if [ "$chnl_video_codec" == "copy" ] && [[ ! $chnl_output_flags =~ -map ]] 
+            then
+                chnl_output_flags="$chnl_output_flags -map 0:p:0"
+            fi
+            if [ "$chnl_video_codec" != "copy" ] 
+            then
+                if [[ ! $chnl_output_flags =~ -filter:v ]] && [[ ! $chnl_output_flags =~ -vf ]]
+                then
+                    chnl_output_flags="$chnl_output_flags -filter:v fps=fps=25"
+                fi
+                if [[ ! $chnl_output_flags =~ -vsync ]] 
+                then
+                    chnl_output_flags="$chnl_output_flags -vsync 0"
+                fi
+            fi
+            if [[ ! $chnl_output_flags =~ -ar ]] 
+            then
+                chnl_output_flags="$chnl_output_flags -ar 32000"
+            fi
+            if [[ ! $chnl_output_flags =~ -copyts ]] 
+            then
+                chnl_output_flags="$chnl_output_flags -copyts"
+            fi
+        fi
+        #while IFS= read -r line 
+        #do
+        #    if [[ $line =~ tag_deviceid ]] 
+        #    then
+        #        line=${line#* }
+        #        chnl_cookies=${line%% *}
+        #        break
+        #    fi
+        #done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" "$chnl_stream_link")
         chnl="${chnl_stream_link%\?*}"
         chnl=${chnl##*/}
         token_url=$(curl -s -Lm 10 -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" "http://api.news.tvb.com/news/v2.2.1/live?profile=web" | $JQ_FILE -r '.items[]|select(.path=="'"$chnl"'").video.ios[]|select(.type=="hd").url')
@@ -8175,6 +8433,15 @@ StartChannel()
             -H "${chnl_headers:0:-4}" \
             "http://news.tvb.com/ajax_call/getVideo.php?token=$query_string" \
             | $JQ_FILE -r '.url')
+        #while IFS= read -r line 
+        #do
+        #    if [[ $line =~ hdntl= ]] 
+        #    then
+        #        line=${line#* }
+        #        chnl_cookies="$chnl_cookies${line%% *}"
+        #        break
+        #    fi
+        #done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" --cookie "$chnl_cookies" "$chnl_stream_link")
     elif [[ $chnl_stream_link =~ ^https://embed.4gtv.tv/HiNet/(.+).html ]] 
     then
         Println "$info 解析 [ $chnl_channel_name ] 链接 ..."
@@ -8220,11 +8487,18 @@ StartChannel()
             channel_name_enc=$(Urlencode "$channel_name")
             if [[ $channel_name_enc == "${BASH_REMATCH[1]}" ]] 
             then
+                if [ -n "$chnl_proxy" ] 
+                then
+                    _4gtv_proxy_command=( -x "$chnl_proxy" )
+                else
+                    _4gtv_proxy_command=()
+                fi
                 xc=1
                 chnl_user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
                 chnl_headers="Referer: https://embed.4gtv.tv/HiNet/$channel_name_enc.html?ar=0&as=1&volume=0\r\n"
                 chnl_cookies=""
                 stream_link_data=$(curl -s -Lm 10 \
+                ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
                 -H "User-Agent: $chnl_user_agent" \
                 -H "${chnl_headers:0:-4}" \
                 "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)") || true
@@ -8248,6 +8522,12 @@ StartChannel()
         chnl_user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
         chnl_headers="Referer: ${chnl_stream_link%%|*}\r\n"
         chnl_cookies=""
+        if [ -n "$chnl_proxy" ] 
+        then
+            _4gtv_proxy_command=( -x "$chnl_proxy" )
+        else
+            _4gtv_proxy_command=()
+        fi
         set_id=${chnl_stream_link#*channelSet_id=}
         set_id=${set_id%%&*}
         set_id=${set_id%%|*}
@@ -8285,6 +8565,7 @@ StartChannel()
         for((try_i=0;try_i<10;try_i++));
         do
             stream_link_data=$(curl -s -Lm 10 -X POST \
+            ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
             -H "User-Agent: $chnl_user_agent" \
             -H "${chnl_headers:0:-4}" \
             --data "value=$value" \
@@ -8508,7 +8789,7 @@ StartChannel()
                 fi
             fi
 
-            if [[ "$chnl_stream_links" == *" "* ]] 
+            if [[ $chnl_stream_links == *" "* ]] 
             then
                 chnl_stream_links="$chnl_stream_link_root|$chnl_stream_link_quality ${chnl_stream_links#* }"
             else
@@ -8534,6 +8815,9 @@ StartChannel()
         chnl_input_flags=${chnl_input_flags//-reconnect_delay_max 2000/}
         lead=${chnl_input_flags%%[^[:blank:]]*}
         chnl_input_flags=${chnl_input_flags#${lead}}
+    elif [[ $chnl_stream_link == *"pngquant.com"* ]] 
+    then
+        chnl_headers="x-forwarded-for: 127.0.0.1\r\n"
     fi
 
     if [[ $chnl_stream_link == *".m3u8"* ]] 
@@ -8613,7 +8897,7 @@ StartChannel()
     [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
     from="StartChannel"
 
-    printf -v start_time '%(%s)T'
+    printf -v start_time '%(%s)T' -1
     chnl_channel_time=$start_time
 
     FilterString chnl_stream_links chnl_user_agent chnl_headers chnl_cookies \
@@ -8728,7 +9012,7 @@ StopChannel()
         then
             MonitorError "频道[ $chnl_channel_name ] 进程 $chnl_pid 不存在"
             JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.flv_status)="off"'
-            printf -v date_now '%(%m-%d %H:%M:%S)T'
+            printf -v date_now '%(%m-%d %H:%M:%S)T' -1
             printf '%s\n' "$date_now $chnl_channel_name FLV 关闭" >> "$MONITOR_LOG"
             action="stop"
             SyncFile
@@ -8739,7 +9023,7 @@ StopChannel()
             then
                 MonitorError "频道[ $chnl_channel_name ] 进程 $chnl_pid 不存在"
                 JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.flv_status)="off"'
-                printf -v date_now '%(%m-%d %H:%M:%S)T'
+                printf -v date_now '%(%m-%d %H:%M:%S)T' -1
                 printf '%s\n' "$date_now $chnl_channel_name FLV 关闭" >> "$MONITOR_LOG"
                 action="stop"
                 SyncFile
@@ -8751,7 +9035,7 @@ StopChannel()
         then
             MonitorError "频道[ $chnl_channel_name ] 进程 $chnl_pid 不存在"
             JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"'
-            printf -v date_now '%(%m-%d %H:%M:%S)T'
+            printf -v date_now '%(%m-%d %H:%M:%S)T' -1
             printf '%s\n' "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
             action="stop"
             SyncFile
@@ -8763,7 +9047,7 @@ StopChannel()
             then
                 MonitorError "频道[ $chnl_channel_name ] 进程 $chnl_pid 不存在"
                 JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.status)="off"'
-                printf -v date_now '%(%m-%d %H:%M:%S)T'
+                printf -v date_now '%(%m-%d %H:%M:%S)T' -1
                 printf '%s\n' "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
                 action="stop"
                 SyncFile
@@ -8893,7 +9177,7 @@ Set4gtvAccEmail()
     Println "输入新账号邮箱"
     while read -p "(默认: 随机): " _4gtv_acc_email 
     do
-        [ -z "$_4gtv_acc_email" ] && _4gtv_acc_email="$(RandStr)_$(printf '%(%s)T')@gmail.com"
+        [ -z "$_4gtv_acc_email" ] && _4gtv_acc_email="$(RandStr)_$(printf '%(%s)T' -1)@gmail.com"
         if [[ $_4gtv_acc_email =~ ^[A-Za-z0-9]([a-zA-Z0-9_\.\-]*)@([A-Za-z0-9]+)([a-zA-Z0-9\.\-]*)\.([A-Za-z]{2,})$ ]] 
         then
             break
@@ -9312,9 +9596,23 @@ Get4gtvAccToken()
     done
 }
 
+Use4gtvProxy()
+{
+    GetDefault
+    Println "$tip 可以使用脚本自带的 v2ray 管理面板添加代理, 可以输入 omit 省略此选项"
+    inquirer text_input "请输入 4gtv 代理, 比如 http://username:passsword@127.0.0.1:5555 : " _4gtv_proxy "${d_proxy:-不设置}"
+    if [ "$_4gtv_proxy" == "omit" ] || [ "$_4gtv_proxy" == "不设置" ]
+    then
+        _4gtv_proxy=""
+        _4gtv_proxy_command=()
+    else
+        _4gtv_proxy_command=( -x "$_4gtv_proxy" )
+    fi
+}
+
 _4gtvCron()
 {
-    _4gtv_acc_email="$(RandStr)_$(printf '%(%s)T')@gmail.com"
+    _4gtv_acc_email="$(RandStr)_$(printf '%(%s)T' -1)@gmail.com"
     _4gtv_acc_pass=$(RandStr)
     IFS=" " read -r result msg < <(curl -s -Lm 10 'https://api2.4gtv.tv/Account/Register' \
         -H "User-Agent: $user_agent" \
@@ -9492,7 +9790,7 @@ Add4gtvLink()
         then
             stream_links_uri+=("$line")
         fi
-    done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" -H "${headers:0:-4}" "$stream_links_url")
+    done < <(curl -s -Lm 10 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} -H "User-Agent: $user_agent" -H "${headers:0:-4}" "$stream_links_url")
 
     if [ -n "$stream_links_list" ] 
     then
@@ -9639,7 +9937,7 @@ Add4gtvLink()
             done
         fi
 
-        if [[ "$stream_links" == *" "* ]] 
+        if [[ $stream_links == *" "* ]] 
         then
             stream_links="$stream_link_root|$stream_link_quality ${stream_links#* }"
         else
@@ -9649,6 +9947,11 @@ Add4gtvLink()
         if [[ $stream_link =~ ^([^ ]+)\ ([^ ]+) ]] 
         then
             bitrates=$stream_link_quality
+        fi
+
+        if [ -n "${_4gtv_proxy_command:-}" ] 
+        then
+            stream_link="http://${stream_link:8}"
         fi
     fi
 }
@@ -9687,7 +9990,7 @@ Start4gtvLink()
         then
             chnl_stream_links_uri+=("$line")
         fi
-    done < <(curl -s -Lm 10 -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" "$chnl_stream_links_url")
+    done < <(curl -s -Lm 10 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" "$chnl_stream_links_url")
 
     if [ -n "$chnl_stream_links_list" ] 
     then
@@ -9835,7 +10138,16 @@ Start4gtvLink()
                     esac
                 done
             else
-                chnl_stream_links_index=$((chnl_stream_links_count-1))
+                found=0
+                for((i=0;i<chnl_stream_links_count;i++));
+                do
+                    if [ "${chnl_stream_links_resolution[i]}" == "${chnl_stream_link_quality#*-}" ]
+                    then
+                        found=1
+                        chnl_stream_links_index=$i
+                    fi
+                done
+                [ "$found" -eq 0 ] && chnl_stream_links_index=$((chnl_stream_links_count-1))
                 chnl_stream_link_quality="${chnl_stream_links_bitrate[chnl_stream_links_index]}-${chnl_stream_links_resolution[chnl_stream_links_index]}"
                 chnl_stream_link="${chnl_stream_links_url%/*}/${chnl_stream_links_uri[chnl_stream_links_index]}"
                 #chnl_stream_link=""
@@ -9854,7 +10166,7 @@ Start4gtvLink()
             fi
         fi
 
-        if [[ "$chnl_stream_links" == *" "* ]] 
+        if [[ $chnl_stream_links == *" "* ]] 
         then
             chnl_stream_links="$chnl_stream_link_root|$chnl_stream_link_quality ${chnl_stream_links#* }"
         else
@@ -9864,6 +10176,11 @@ Start4gtvLink()
         if [[ $chnl_stream_link =~ ^([^ ]+)\ ([^ ]+) ]] 
         then
             chnl_bitrates=$chnl_stream_link_quality
+        fi
+
+        if [ -n "${_4gtv_proxy_command:-}" ] 
+        then
+            chnl_stream_link="http://${chnl_stream_link:8}"
         fi
     fi
 }
@@ -9914,7 +10231,7 @@ ScheduleNiotv()
         printf '{"%s":[]}' "msxw" > "$SCHEDULE_JSON"
     fi
 
-    printf -v today '%(%Y-%m-%d)T'
+    printf -v today '%(%Y-%m-%d)T' -1
     SCHEDULE_LINK_NIOTV="http://www.niotv.com/i_index.php?cont=day"
 
     for chnl in "${niotv_chnls[@]}"
@@ -9978,6 +10295,96 @@ ScheduleNiotv()
     done
 }
 
+ScheduleIcable()
+{
+    printf -v today '%(%Y%m%d)T' -1
+    sys_time=$(date --date="today 0" +"%s")
+    yesterday=$(date --date="yesterday" +"%Y%m%d")
+
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "hkopen" > "$SCHEDULE_JSON"
+    fi
+
+    for chnl in "${icable_chnls[@]}"
+    do
+        if [[ $chnl =~ ([^:]+):([^:]+):([^:]+) ]] 
+        then
+            chnl_id=${BASH_REMATCH[1]}
+            chnl_num=${BASH_REMATCH[2]}
+            chnl_name=${BASH_REMATCH[3]}
+        fi
+
+        schedule=""
+
+        while IFS= read -r line
+        do
+            if [[ $line =~ ch_time ]] 
+            then
+                while [[ $line =~ ch_time ]] 
+                do
+                    line=${line#*ch_time }
+                    if [ "${line%%_*}" == "nm" ] 
+                    then
+                        program_time=${line#*f_eng\">}
+                        program_time=${program_time%%<*}
+                        program_title=${line#*ch_prog\">}
+                        program_title=${program_title%%<*}
+                        program_sys_time=$(date -d "$today $program_time" +%s)
+                        [ -n "$schedule" ] && schedule="$schedule,"
+                        schedule=$schedule'{
+                            "title":"'"$program_title"'",
+                            "time":"'"$program_time"'AM",
+                            "sys_time":"'"$program_sys_time"'"
+                        }'
+                    fi
+                done
+                break
+            fi
+        done < <(curl -s -Lm 20 -H "User-Agent: $user_agent" "http://epg.i-cable.com/new/ch_getcontent.php?lang=chi&ch=$chnl_num&date=$yesterday")
+
+        while IFS= read -r line
+        do
+            if [[ $line =~ ch_time ]] 
+            then
+                while [[ $line =~ ch_time ]] 
+                do
+                    line=${line#*ch_time }
+                    if [ "${line%%_*}" == "am" ] 
+                    then
+                        time_flag="AM"
+                    elif [ "${line%%_*}" == "pm" ] 
+                    then
+                        time_flag="PM"
+                    else
+                        break
+                    fi
+                    program_time=${line#*f_eng\">}
+                    program_time="${program_time%%<*}$time_flag"
+                    program_title=${line#*ch_prog\">}
+                    program_title=${program_title%%<*}
+                    program_sys_time=$(date -d "$today $program_time" +%s)
+                    [ -n "$schedule" ] && schedule="$schedule,"
+                    schedule=$schedule'{
+                        "title":"'"$program_title"'",
+                        "time":"'"$program_time"'",
+                        "sys_time":"'"$program_sys_time"'"
+                    }'
+                done
+                break
+            fi
+        done < <(curl -s -Lm 20 -H "User-Agent: $user_agent" "http://epg.i-cable.com/new/ch_getcontent.php?lang=chi&ch=$chnl_num&date=$today")
+
+        if [ -n "$schedule" ] 
+        then
+            JQ replace "$SCHEDULE_JSON" "$chnl_id" "[$schedule]"
+            Println "$info $chnl_name [$chnl_id] i-cable 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] i-cable 节目表更新失败"
+        fi
+    done
+}
+
 ScheduleJiushi()
 {
     if [ ! -s "$SCHEDULE_JSON" ] 
@@ -9992,7 +10399,7 @@ ScheduleJiushi()
         chnl_name=${chnl_name// /-}
         chnl_name_encode=$(UrlencodeUpper "$chnl_name")
 
-        printf -v today '%(%Y-%m-%d)T'
+        printf -v today '%(%Y-%m-%d)T' -1
 
         SCHEDULE_LINK="https://xn--i0yt6h0rn.tw/channel/$chnl_name_encode/index.json"
 
@@ -10042,7 +10449,7 @@ ScheduleJiushi()
 
 ScheduleHbozw()
 {
-    printf -v today '%(%Y-%m-%d)T'
+    printf -v today '%(%Y-%m-%d)T' -1
 
     if [ ! -s "$SCHEDULE_JSON" ] 
     then
@@ -10107,11 +10514,11 @@ ScheduleHbozw()
 
 ScheduleHbous()
 {
-    printf -v today '%(%Y-%m-%d)T'
+    printf -v today '%(%Y-%m-%d)T' -1
     sys_time=$(date -d $today +%s)
     min_sys_time=$((sys_time-7200))
     max_sys_time=$((sys_time+86400))
-    yesterday=$(printf '%(%Y-%m-%d)T' $((sys_time - 86400)))
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
 
     if [ ! -s "$SCHEDULE_JSON" ] 
     then
@@ -10189,11 +10596,11 @@ ScheduleHbous()
 
 ScheduleOntvtonight()
 {
-    printf -v today '%(%Y-%m-%d)T'
+    printf -v today '%(%Y-%m-%d)T' -1
     sys_time=$(date -d $today +%s)
     min_sys_time=$((sys_time-7200))
     max_sys_time=$((sys_time+86400))
-    yesterday=$(printf '%(%Y-%m-%d)T' $((sys_time - 86400)))
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
 
     if [ ! -s "$SCHEDULE_JSON" ] 
     then
@@ -10313,7 +10720,7 @@ ScheduleOntvtonight()
 
 ScheduleDisneyjr()
 {
-    printf -v today '%(%Y%m%d)T'
+    printf -v today '%(%Y%m%d)T' -1
     SCHEDULE_LINK="https://disney.com.tw/_schedule/full/$today/8/%2Fepg"
 
     if [ ! -s "$SCHEDULE_JSON" ] 
@@ -10351,7 +10758,7 @@ ScheduleDisneyjr()
 
 ScheduleFoxmovies()
 {
-    printf -v today '%(%Y-%-m-%-d)T'
+    printf -v today '%(%Y-%-m-%-d)T' -1
     SCHEDULE_LINK="https://www.fng.tw/foxmovies/program.php?go=$today"
 
     if [ ! -s "$SCHEDULE_JSON" ] 
@@ -10397,7 +10804,7 @@ ScheduleFoxmovies()
 
 ScheduleAmlh()
 {
-    printf -v today '%(%Y-%-m-%-d)T'
+    printf -v today '%(%Y-%-m-%-d)T' -1
     timestamp=$(date -d $today +%s)
 
     TODAY_SCHEDULE_LINK="http://wap.lotustv.cc/wap.php/Sub/program/d/$timestamp"
@@ -10500,6 +10907,11 @@ ScheduleAmlh()
 
     if [ -n "$schedule" ] 
     then
+        if [ "$found" -eq 0 ] 
+        then
+            found=1
+            Println "$error $chnl_name [$chnl_id] 节目表不完整"
+        fi
         JQ replace "$SCHEDULE_JSON" "$chnl_id" "[$schedule]"
         Println "$info $chnl_name [$chnl_id] 节目表更新成功"
     else
@@ -10509,10 +10921,10 @@ ScheduleAmlh()
 
 ScheduleTvbhk()
 {
-    printf -v today '%(%Y-%m-%d)T'
+    printf -v today '%(%Y-%m-%d)T' -1
     sys_time=$(date -d $today +%s)
     max_sys_time=$((sys_time+86400))
-    yesterday=$(printf '%(%Y-%m-%d)T' $((sys_time - 86400)))
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
 
     if [ ! -s "$SCHEDULE_JSON" ] 
     then
@@ -10632,9 +11044,9 @@ ScheduleTvbhd()
     cd "$IPTV_ROOT"
     pdf2htmlEX --zoom 1.3 "./tvb_hd.pdf"
 
-    printf -v today '%(%Y-%m-%d)T'
+    printf -v today '%(%Y-%m-%d)T' -1
     sys_time=$(date -d $today +%s)
-    yesterday=$(printf '%(%Y-%m-%d)T' $((sys_time - 86400)))
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
 
     weekday_program_title=()
     weekday_program_time=()
@@ -10945,7 +11357,7 @@ ScheduleTvbhd()
             break
         fi
     done < "./tvb_hd.html"
-    weekday=$(printf '%(%u)T')
+    weekday=$(printf '%(%u)T' -1)
     if [ "$weekday" -eq 1 ] 
     then
         p_title=("${sunday_program_title[@]}")
@@ -11027,7 +11439,7 @@ ScheduleTvbhd()
 
 ScheduleSingteltv()
 {
-    printf -v today '%(%Y%m%d)T'
+    printf -v today '%(%Y%m%d)T' -1
 
     if [ ! -s "$SCHEDULE_JSON" ] 
     then
@@ -11035,6 +11447,7 @@ ScheduleSingteltv()
     fi
 
     schedule_today=$(curl -s -Lm 10 -H "User-Agent: $user_agent" "http://singteltv.com.sg/epg/channel$today.html")
+    schedule_today=${schedule_today//$'\n'/}
 
     for chnl in "${singteltv_chnls[@]}"
     do
@@ -11075,7 +11488,7 @@ ScheduleSingteltv()
 
 ScheduleCntv()
 {
-    printf -v today '%(%Y%m%d)T'
+    printf -v today '%(%Y%m%d)T' -1
 
     if [ ! -s "$SCHEDULE_JSON" ] 
     then
@@ -11112,7 +11525,7 @@ ScheduleCntv()
 
 ScheduleTvbs()
 {
-    printf -v today '%(%Y-%m-%d)T'
+    printf -v today '%(%Y-%m-%d)T' -1
 
     if [ ! -s "$SCHEDULE_JSON" ] 
     then
@@ -11155,7 +11568,7 @@ ScheduleTvbs()
 
 ScheduleAstro()
 {
-    printf -v today '%(%Y-%m-%d)T'
+    printf -v today '%(%Y-%m-%d)T' -1
 
     if [ ! -s "$SCHEDULE_JSON" ] 
     then
@@ -11198,7 +11611,7 @@ ScheduleAstro()
 
 Schedule_4gtv()
 {
-    printf -v today '%(%Y-%m-%d)T'
+    printf -v today '%(%Y-%m-%d)T' -1
 
     if [ ! -s "$SCHEDULE_JSON" ] 
     then
@@ -11664,7 +12077,7 @@ ScheduleBackup()
     $JQ_FILE -n --arg name "$backup_name" --argjson schedule "[$backup_schedule]" \
         '{
             name: $name,
-            date: now|strftime("%s")|tonumber,
+            date: now|strflocaltime("%s")|tonumber,
             schedule: $schedule
         }'
     )
@@ -12329,6 +12742,110 @@ Schedule()
         "foxsports2:671:Fox 体育2"
         "foxsports3:672:Fox 体育3" )
 
+    icable_chnls=(
+        "hkopen:001:香港开电视"
+        "hkibc:002:香港国际财经台"
+        "cjzx:108:财经资讯台"
+        "xw:109:新闻台"
+        "zbxw:110:直播新闻台"
+        "cctv13:111:中央电视台新闻频道"
+        "cctv4:112:中央电视台中文国际频道"
+        "fhwszx:113:凤凰卫视资讯台"
+        "dsyzxw:114:东森亚洲新闻台"
+        "bbcworldnews:122:BBC WorldNews"
+        "foxnews:123:FOX News"
+        "cnni:124:CNNI"
+        "cnnhlnnews:125:CNN HLN News"
+        "nhkworldjapan:126:NHK World-Japan"
+        "cnbchk:127:CNBC HK"
+        "bloomberg:128:Bloomberg TV HD"
+        "zghqdsw:129:中国环球电视网"
+        "yzxw:130:亚洲新闻台"
+        "russiatoday:131:Russia Today"
+        "dw:140:DW (Deutsch)"
+        "yxdy:201:有线电影台"
+        "gyoz:202:光影欧洲"
+        "wsdy:204:卫视电影台"
+        "wsks:205:卫视卡式台"
+        "foxmovies:214:FOX Movies"
+        "foxfamily:215:FOX Family Movies"
+        "foxaction:216:FOX Action Movies"
+        "gqsryy:218:高清私人影院"
+        "jsdy:219:惊悚电影台"
+        "zhyl:301:综合娱乐台"
+        "fhwsxg:304:凤凰卫视香港台"
+        "zjpd:305:珠江频道"
+        "fox:311:FOX"
+        "foxlife:312:FOXlife"
+        "fx:313:FX"
+        "blueantentertainmet:317:Blue Ant 综合娱乐 HD"
+        "blueantextreme:318:Blue Ant 超级娱乐 HD"
+        "fashiontv:319:Fashion TV HD"
+        "tvn:320:tvN HD"
+        "nhkworldpr:322:NHK World Pr"
+        "comedycentral:324:Comedy Central 爆笑台"
+        "arirangtv:325:Arirang TV"
+        "abcaustralia:326:ABC Australia"
+        "dsyzws:331:东森亚洲卫视"
+        "wszw:332:卫视中文台"
+        "mtvchina:333:MTV China"
+        "dfwsgj:334:东方卫视国际频道"
+        "szds:335:深圳电视台"
+        "hbws:337:湖北卫视"
+        "cctv11:340:中央电视台戏曲频道"
+        "cctv1:341:中央电视台综合频道"
+        "fhwszw:376:凤凰卫视中文台"
+        "dsyzyy:502:东森亚洲幼幼台"
+        "dreamworks:510:梦工厂"
+        "ktpd:511:卡通频道"
+        "boomerang:512:Boomerang 频道"
+        "dwx:513:达文西频道"
+        "nickelodeon:514:Nickelodeon"
+        "nickasia:515:Nick Jr."
+        "babytv:516:Baby TV"
+        "cbeebies:517:CBeebies"
+        "zoomoo:518:ZooMoo"
+        "fixfoxi:519:Fix & Foxi"
+        "ybb:520:鸭宝宝"
+        "disney:530:Disney Channel"
+        "disneyjr:531:Disney Junior"
+        "gqty:601:高清体育台"
+        "sportsplus1:602:Sports Plus 1 HD"
+        "gq603:603:高清603台"
+        "sportsplus2:604:Sports Plus 2 HD"
+        "sportsplus3:605:Sports Plus 3 HD"
+        "foxsports:611:Fox Sports"
+        "foxsports2:612:Fox Sports 2"
+        "foxsports3:613:Fox Sports 3"
+        "beinsports1:614:beIN Sports 1"
+        "beinsports2:615:beIN Sports 2"
+        "beinsportsmax:616:beIN SPORTS MAX"
+        "yx18:618:有线18台"
+        "yxty:661:有线体育台"
+        "sm1:668:赛马1台"
+        "sm2:669:赛马2台"
+        "gjdlys:701:国家地理野生高清频道"
+        "gjdlgq:702:国家地理高清频道"
+        "gjdlyr:703:国家地理悠人高清频道"
+        "discoveryasia:710:Discovery Asia"
+        "discovery:711:Discovery 高清频道"
+        "tlclysh:712:旅遊生活高清频道"
+        "eve:713:EVE 高清频道"
+        "dwxq:714:动物星球高清频道"
+        "discoverykx:715:Discovery 科学高清频道"
+        "dmax:716:DMAX 高清频道"
+        "bbclifestyle:720:BBC Lifestyle 高清频道"
+        "bbcearth:721:BBC Earth"
+        "zghqdswjl:722:中国环球电视网记录频道"
+        "petclubtv:730:Pet Club TV"
+        "zeetv:851:Zee TV"
+        "zeenews:852:Zee News"
+        "zeecinema:853:Zee Cinema"
+        "zing:854:Zing"
+        "hl:901:欢乐台"
+        "rh:902:惹火台"
+    )
+
     hbozw_chnls=(
         "hbo:HBO 中文"
         "hboasia:HBO 亚洲"
@@ -12591,6 +13108,7 @@ Schedule()
         "jiushi:就是 节目表"
         "niotv:niotv 节目表"
         "nowtv:nowtv 节目表"
+        "icable:i-cable 节目表"
         "hbozw:hbo 中文 节目表"
         "hbous:hbo 美国 节目表"
         "ontvtonight:ontvtonight 节目表"
@@ -12637,6 +13155,9 @@ Schedule()
         ;;
         "nowtv")
             ScheduleNowtv
+        ;;
+        "icable")
+            ScheduleIcable
         ;;
         "hbozw")
             ScheduleHbozw
@@ -12753,8 +13274,8 @@ Schedule()
                         IFS="|" read -r -a "${provider_id}_chnls" <<< "${provider_chnl}|"
                         if [ "$provider_id" == "other" ] 
                         then
-                            chnl_id=$(tr '[:lower:]' '[:upper:]' <<< "${chnl_id:0:1}")"${chnl_id:1}"
-                            Schedule"$chnl_id" "${3:-}"
+                            chnl_id_upper=$(tr '[:lower:]' '[:upper:]' <<< "${chnl_id:0:1}")"${chnl_id:1}"
+                            Schedule"$chnl_id_upper" "${3:-}"
                         else
                             provider_id_upper=$(tr '[:lower:]' '[:upper:]' <<< "${provider_id:0:1}")"${provider_id:1}"
                             Schedule"$provider_id_upper" "${3:-}"
@@ -12902,13 +13423,17 @@ InstallImgcat()
 
     cd ~
 
-    if [ ! -e "./imgcat-master" ] 
+    if [ ! -d ./imgcat-master ] 
     then
-        wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/imgcat.zip" -qO "imgcat.zip"
-        unzip "imgcat.zip" >/dev/null 2>&1
+        wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/imgcat.zip" -qO imgcat.zip
+        unzip imgcat.zip >/dev/null 2>&1
     fi
 
-    cd "./imgcat-master"
+    cd ./imgcat-master
+    rm -rf CImg
+    wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/CImg.zip" -qO CImg.zip
+    unzip CImg.zip >/dev/null 2>&1
+    mv CImg-master CImg
     autoconf >/dev/null 2>&1
     ./configure >/dev/null 2>&1
     make >/dev/null 2>&1
@@ -12981,7 +13506,7 @@ TsRegister()
                         devicetype="yuj"
                         md5_password=$(printf '%s' "$password" | md5sum)
                         md5_password=${md5_password%% *}
-                        printf -v timestamp '%(%s)T'
+                        printf -v timestamp '%(%s)T' -1
                         timestamp=$((timestamp * 1000))
                         signature="$account|$md5_password|$deviceno|$devicetype|$timestamp"
                         signature=$(printf '%s' "$signature" | md5sum)
@@ -13077,7 +13602,7 @@ TsLogin()
         TOKEN_LINK="${ts_array[login_url]}?deviceno=$deviceno&devicetype=3&accounttype=${ts_array[acc_type_login]:-2}&accesstoken=(null)&account=$account&pwd=$md5_password&isforce=1&businessplatform=1"
         token=$(curl -s -Lm 10 -H "User-Agent: $user_agent" "$TOKEN_LINK")
     else
-        printf -v timestamp '%(%s)T'
+        printf -v timestamp '%(%s)T' -1
         timestamp=$((timestamp * 1000))
         signature="$deviceno|yuj|${ts_array[acc_type_login]}|$account|$timestamp"
         signature=$(printf '%s' "$signature" | md5sum)
@@ -13328,7 +13853,7 @@ AntiLeech()
             inquirer list_input "是否下个小时开始随机重启" yn_options anti_leech_restart_next_hour_yn
             if [[ $anti_leech_restart_next_hour_yn == "是" ]] 
             then
-                printf -v current_hour '%(%-H)T'
+                printf -v current_hour '%(%-H)T' -1
                 skip_hour=$current_hour
                 minutes=()
             fi
@@ -13717,7 +14242,7 @@ AntiDDoS()
                 then
                     new_ips=()
                     new_jail_time=()
-                    printf -v now '%(%s)T'
+                    printf -v now '%(%s)T' -1
 
                     update=0
                     for((i=0;i<${#ips[@]};i++));
@@ -13768,7 +14293,7 @@ AntiDDoS()
                     sleep "$anti_ddos_syn_flood_delay_seconds" &
                     WaitTerm
 
-                    printf -v now '%(%s)T'
+                    printf -v now '%(%s)T' -1
                     jail=$((now + anti_ddos_syn_flood_seconds))
 
                     while IFS= read -r anti_ddos_syn_flood_ip 
@@ -13793,7 +14318,7 @@ AntiDDoS()
                                     jail_time+=("$jail")
                                     printf '%s\n' "$ip:$jail" >> "$IP_DENY"
                                     ufw insert 1 deny from "$ip" to any port $anti_ddos_port > /dev/null 2>> "$IP_LOG"
-                                    printf -v date_now '%(%m-%d %H:%M:%S)T'
+                                    printf -v date_now '%(%m-%d %H:%M:%S)T' -1
                                     printf '%s\n' "$date_now $ip 已被禁" >> "$IP_LOG"
                                     ips+=("$ip")
                                     break 1
@@ -13846,7 +14371,7 @@ AntiDDoS()
                         done
                     done
 
-                    printf -v now '%(%s)T'
+                    printf -v now '%(%s)T' -1
                     jail=$((now + anti_ddos_seconds))
 
                     while IFS=' ' read -r counts ip access_file
@@ -13887,7 +14412,7 @@ AntiDDoS()
                                         jail_time+=("$jail")
                                         printf '%s\n' "$ip:$jail" >> "$IP_DENY"
                                         ufw insert 1 deny from "$ip" to any port $anti_ddos_port > /dev/null 2>> "$IP_LOG"
-                                        printf -v date_now '%(%m-%d %H:%M:%S)T'
+                                        printf -v date_now '%(%m-%d %H:%M:%S)T' -1
                                         printf '%s\n' "$date_now $ip 已被禁" >> "$IP_LOG"
                                         ips+=("$ip")
                                         break 1
@@ -13908,7 +14433,7 @@ AntiDDoS()
                 then
                     new_ips=()
                     new_jail_time=()
-                    printf -v now '%(%s)T'
+                    printf -v now '%(%s)T' -1
 
                     update=0
                     for((i=0;i<${#ips[@]};i++));
@@ -13950,7 +14475,12 @@ MonitorHlsRestartSuccess()
         do
             [ "$element" != "$output_dir_name" ] && new_array+=("$element")
         done
-        hls_failed=("${new_array[@]}")
+        if [ -z "${new_array:-}" ] 
+        then
+            hls_failed=()
+        else
+            hls_failed=("${new_array[@]}")
+        fi
         unset new_array
 
         declare -a new_array
@@ -13958,17 +14488,22 @@ MonitorHlsRestartSuccess()
         do
             [ "$element" != "${hls_recheck_time[failed_i]}" ] && new_array+=("$element")
         done
-        hls_recheck_time=("${new_array[@]}")
+        if [ -z "${new_array:-}" ] 
+        then
+            hls_recheck_time=()
+        else
+            hls_recheck_time=("${new_array[@]}")
+        fi
         unset new_array
     fi
-    printf -v date_now '%(%m-%d %H:%M:%S)T'
+    printf -v date_now '%(%m-%d %H:%M:%S)T' -1
     printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
 }
 
 MonitorHlsRestartFail()
 {
     StopChannel
-    printf -v now '%(%s)T'
+    printf -v now '%(%s)T' -1
     recheck_time=$((now+recheck_period))
 
     if [ -n "${failed_restart_nums:-}" ] 
@@ -13984,10 +14519,15 @@ MonitorHlsRestartFail()
     do
         [ "$element" != "$output_dir_name" ] && new_array+=("$element")
     done
-    monitor_dir_names_chosen=("${new_array[@]}")
+    if [ -z "${new_array:-}" ] 
+    then
+        monitor_dir_names_chosen=()
+    else
+        monitor_dir_names_chosen=("${new_array[@]}")
+    fi
     unset new_array
 
-    printf -v date_now '%(%m-%d %H:%M:%S)T'
+    printf -v date_now '%(%m-%d %H:%M:%S)T' -1
     printf '%s\n' "$date_now $chnl_channel_name 重启失败" >> "$MONITOR_LOG"
 }
 
@@ -14493,7 +15033,12 @@ MonitorFlvRestartSuccess()
         do
             [ "$element" != "$flv_num" ] && new_array+=("$element")
         done
-        flv_failed=("${new_array[@]}")
+        if [ -z "${new_array:-}" ] 
+        then
+            flv_failed=()
+        else
+            flv_failed=("${new_array[@]}")
+        fi
         unset new_array
 
         declare -a new_array
@@ -14501,17 +15046,22 @@ MonitorFlvRestartSuccess()
         do
             [ "$element" != "${flv_recheck_time[failed_i]}" ] && new_array+=("$element")
         done
-        flv_recheck_time=("${new_array[@]}")
+        if [ -z "${new_array:-}" ] 
+        then
+            flv_recheck_time=()
+        else
+            flv_recheck_time=("${new_array[@]}")
+        fi
         unset new_array
     fi
-    printf -v date_now '%(%m-%d %H:%M:%S)T'
+    printf -v date_now '%(%m-%d %H:%M:%S)T' -1
     printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
 }
 
 MonitorFlvRestartFail()
 {
     StopChannel
-    printf -v now '%(%s)T'
+    printf -v now '%(%s)T' -1
     recheck_time=$((now+recheck_period))
 
     if [ -n "${failed_restart_nums:-}" ] 
@@ -14527,10 +15077,15 @@ MonitorFlvRestartFail()
     do
         [ "$element" != "$flv_num" ] && new_array+=("$element")
     done
-    flv_nums_arr=("${new_array[@]}")
+    if [ -z "${new_array:-}" ] 
+    then
+        flv_nums_arr=()
+    else
+        flv_nums_arr=("${new_array[@]}")
+    fi
     unset new_array
 
-    printf -v date_now '%(%m-%d %H:%M:%S)T'
+    printf -v date_now '%(%m-%d %H:%M:%S)T' -1
     printf '%s\n' "$date_now $chnl_channel_name FLV 重启超过${flv_restart_nums:-20}次关闭" >> "$MONITOR_LOG"
 }
 
@@ -15228,7 +15783,7 @@ MonitorTryAccounts()
                             if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ]
                             then
                                 try_success=1
-                                printf -v date_now '%(%m-%d %H:%M:%S)T'
+                                printf -v date_now '%(%m-%d %H:%M:%S)T' -1
                                 printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
                                 break
                             fi
@@ -15298,7 +15853,7 @@ MonitorTryAccounts()
                                 if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ] && [[ $video_bitrate -ge $hls_min_bitrates ]]
                                 then
                                     try_success=1
-                                    printf -v date_now '%(%m-%d %H:%M:%S)T'
+                                    printf -v date_now '%(%m-%d %H:%M:%S)T' -1
                                     printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
                                     break
                                 fi
@@ -15435,7 +15990,7 @@ MonitorTryAccounts()
                     if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ]
                     then
                         try_success=1
-                        printf -v date_now '%(%m-%d %H:%M:%S)T'
+                        printf -v date_now '%(%m-%d %H:%M:%S)T' -1
                         printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
                         break
                     fi
@@ -15505,7 +16060,7 @@ MonitorTryAccounts()
                         if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ] && [[ $video_bitrate -ge $hls_min_bitrates ]]
                         then
                             try_success=1
-                            printf -v date_now '%(%m-%d %H:%M:%S)T'
+                            printf -v date_now '%(%m-%d %H:%M:%S)T' -1
                             printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
                             break
                         fi
@@ -15616,7 +16171,12 @@ MonitorSet()
                             new_array+=("$element")
                         fi
                     done
-                    flv_nums_arr=("${new_array[@]}")
+                    if [ -z "${new_array:-}" ] 
+                    then
+                        flv_nums_arr=()
+                    else
+                        flv_nums_arr=("${new_array[@]}")
+                    fi
                     unset new_array
 
                     Println "设置超时多少秒自动重启频道"
@@ -15788,7 +16348,12 @@ MonitorSet()
                         new_array+=("$element")
                     fi
                 done
-                hls_nums_arr=("${new_array[@]}")
+                if [ -z "${new_array:-}" ] 
+                then
+                    hls_nums_arr=()
+                else
+                    hls_nums_arr=("${new_array[@]}")
+                fi
                 unset new_array
 
                 for hls_num in "${hls_nums_arr[@]}"
@@ -15931,7 +16496,7 @@ Monitor()
             hls_recheck_time=()
             while true
             do
-                printf -v now '%(%s)T'
+                printf -v now '%(%s)T' -1
                 if [ "$recheck_period" -gt 0 ] 
                 then
                     if [ -n "${flv_recheck_time:-}" ] 
@@ -15977,7 +16542,7 @@ Monitor()
                 then
                     current_minute_old=${current_minute:-}
                     current_hour_old=${current_hour:-25}
-                    printf -v current_time '%(%H:%M)T'
+                    printf -v current_time '%(%H:%M)T' -1
                     current_hour=${current_time%:*}
                     current_minute=${current_time#*:}
 
@@ -16012,7 +16577,12 @@ Monitor()
                                 rand_restart_hls_done=0
                             fi
                         done
-                        minutes=("${new_array[@]}")
+                        if [ -z "${new_array:-}" ] 
+                        then
+                            minutes=()
+                        else
+                            minutes=("${new_array[@]}")
+                        fi
                         unset new_array
                         [ -z "${minutes:-}" ] && skip_hour=$current_hour
                     fi
@@ -16097,22 +16667,22 @@ Monitor()
                             GetChannelInfo
                             if [ -n "${flv_first_fail:-}" ] 
                             then
-                                printf -v flv_fail_time '%(%s)T'
+                                printf -v flv_fail_time '%(%s)T' -1
                                 if [ $((flv_fail_time - flv_first_fail)) -gt "$flv_delay_seconds" ] 
                                 then
                                     flv_first_fail=""
-                                    printf -v date_now '%(%m-%d %H:%M:%S)T'
+                                    printf -v date_now '%(%m-%d %H:%M:%S)T' -1
                                     printf '%s\n' "$date_now $chnl_channel_name FLV 超时重启" >> "$MONITOR_LOG"
                                     MonitorFlvRestartChannel
                                 fi
                             else
                                 if [ "$chnl_flv_status" == "off" ] 
                                 then
-                                    printf -v date_now '%(%m-%d %H:%M:%S)T'
+                                    printf -v date_now '%(%m-%d %H:%M:%S)T' -1
                                     printf '%s\n' "$date_now $chnl_channel_name FLV 恢复启动" >> "$MONITOR_LOG"
                                     MonitorFlvRestartChannel
                                 else
-                                    printf -v flv_first_fail '%(%s)T'
+                                    printf -v flv_first_fail '%(%s)T' -1
                                 fi
 
                                 new_array=("$flv_num")
@@ -16120,7 +16690,12 @@ Monitor()
                                 do
                                     [ "$element" != "$flv_num" ] && new_array+=("$element")
                                 done
-                                flv_nums_arr=("${new_array[@]}")
+                                if [ -z "${new_array:-}" ] 
+                                then
+                                    flv_nums_arr=()
+                                else
+                                    flv_nums_arr=("${new_array[@]}")
+                                fi
                                 unset new_array
                             fi
                             break 1
@@ -16130,7 +16705,7 @@ Monitor()
                             if [ -n "${rand_restart_flv_done:-}" ] && [ "$rand_restart_flv_done" -eq 0 ]
                             then
                                 rand_found=1
-                                printf -v date_now '%(%m-%d %H:%M:%S)T'
+                                printf -v date_now '%(%m-%d %H:%M:%S)T' -1
                                 printf '%s\n' "$date_now $chnl_channel_name FLV 随机重启" >> "$MONITOR_LOG"
                                 MonitorFlvRestartChannel
                             fi
@@ -16212,12 +16787,12 @@ Monitor()
 
                     for output_dir_name in "${monitor_dir_names_chosen[@]}"
                     do
-                        found=0
+                        monitor_found=0
                         for((monitor_i=0;monitor_i<chnls_count;monitor_i++));
                         do
                             if [ "${chnls_output_dir_name[monitor_i]}" == "$output_dir_name" ] 
                             then
-                                found=1
+                                monitor_found=1
 
                                 if [ "${chnls_status[monitor_i]}" == "off" ] 
                                 then
@@ -16236,7 +16811,12 @@ Monitor()
                                         do
                                             [ "$element" != "$output_dir_name" ] && new_array+=("$element")
                                         done
-                                        monitor_dir_names_chosen=("${new_array[@]}")
+                                        if [ -z "${new_array:-}" ] 
+                                        then
+                                            monitor_dir_names_chosen=()
+                                        else
+                                            monitor_dir_names_chosen=("${new_array[@]}")
+                                        fi
                                         unset new_array
                                         break 2
                                     fi
@@ -16262,9 +16842,15 @@ Monitor()
                                     then
                                         if [ "${chnls_encrypt_session[monitor_i]}" == "yes" ] 
                                         then
-                                            echo -e "/keys?key=$new_key_name&channel=$output_dir_name\n$LIVE_ROOT/$output_dir_name/$new_key_name.key\n$(openssl rand -hex 16)" > "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[monitor_i]}.keyinfo"
+                                            if ! echo -e "/keys?key=$new_key_name&channel=$output_dir_name\n$LIVE_ROOT/$output_dir_name/$new_key_name.key\n$(openssl rand -hex 16)" > "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[monitor_i]}.keyinfo"
+                                            then
+                                                break 2
+                                            fi
                                         else
-                                            echo -e "$new_key_name.key\n$LIVE_ROOT/$output_dir_name/$new_key_name.key\n$(openssl rand -hex 16)" > "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[monitor_i]}.keyinfo"
+                                            if ! echo -e "$new_key_name.key\n$LIVE_ROOT/$output_dir_name/$new_key_name.key\n$(openssl rand -hex 16)" > "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[monitor_i]}.keyinfo"
+                                            then
+                                                break 2
+                                            fi
                                         fi
                                         JQ update "$CHANNELS_FILE" '.channels|=map(select(.pid=='"${chnls_pid[monitor_i]}"') * 
                                         {
@@ -16391,14 +16977,19 @@ Monitor()
                             fi
                         done
 
-                        if [ "$found" -eq 0 ] 
+                        if [ "$monitor_found" -eq 0 ] 
                         then
                             declare -a new_array
                             for element in "${monitor_dir_names_chosen[@]}"
                             do
                                 [ "$element" != "$output_dir_name" ] && new_array+=("$element")
                             done
-                            monitor_dir_names_chosen=("${new_array[@]}")
+                            if [ -z "${new_array:-}" ] 
+                            then
+                                monitor_dir_names_chosen=()
+                            else
+                                monitor_dir_names_chosen=("${new_array[@]}")
+                            fi
                             unset new_array
                             break 1
                         elif [ -n "${rand_restart_hls_done:-}" ] && [ "$rand_restart_hls_done" -eq 0 ] 
@@ -16428,7 +17019,7 @@ Monitor()
 
 MonitorStop()
 {
-    printf -v date_now '%(%m-%d %H:%M:%S)T'
+    printf -v date_now '%(%m-%d %H:%M:%S)T' -1
 
     # deprecated
     if ls -A "/tmp/monitor.lockdir/"* > /dev/null 2>&1
@@ -16536,7 +17127,7 @@ MonitorStop()
         then
             new_ips=()
             new_jail_time=()
-            printf -v now '%(%s)T'
+            printf -v now '%(%s)T' -1
 
             update=0
             for((i=0;i<${#ips[@]};i++));
@@ -16571,7 +17162,7 @@ MonitorStop()
 
 MonitorError()
 {
-    printf -v date_now '%(%m-%d %H:%M:%S)T'
+    printf -v date_now '%(%m-%d %H:%M:%S)T' -1
     printf '%s\n' "$date_now [ERROR: $1]" >> "$MONITOR_LOG"
 }
 
@@ -18016,6 +18607,7 @@ ViewXtreamCodesChnls()
                             stream_link=${stream_link// /}
                             Println "$green${xc_chnls_name[xc_chnls_index]}:${normal} $stream_link\n"
                         fi
+
                         if $FFPROBE -i "$stream_link" -user_agent "$user_agent" \
                             -headers "$headers_command" \
                             -cookies "$cookies" -hide_banner 
@@ -18053,6 +18645,10 @@ ViewXtreamCodesChnls()
                                     if [[ $add_channel_flv_yn == "是" ]] 
                                     then
                                         kind="flv"
+                                    fi
+                                    if [ "$use_proxy_yn" == "是" ] 
+                                    then
+                                        xtream_codes_proxy=$server
                                     fi
                                     xc=1
                                     AddChannel
@@ -19431,6 +20027,7 @@ NginxDomainServerToggleNodejs()
             proxy_set_header X-Forwarded-Proto $scheme;
 
             proxy_cache_bypass 1;
+            proxy_no_cache 1;
         }
 
         location = /channels.json {
@@ -19469,6 +20066,7 @@ NginxDomainServerToggleNodejs()
             proxy_set_header X-Forwarded-Proto $scheme;
 
             proxy_cache_bypass 1;
+            proxy_no_cache 1;
         }
 
         location ~ \.(keyinfo|key)$ {
@@ -19568,6 +20166,7 @@ NginxDomainServerToggleNodejs()
             proxy_set_header X-Forwarded-Proto $scheme;
 
             proxy_cache_bypass 1;
+            proxy_no_cache 1;
         }
 
         location = /channels.json {
@@ -19606,6 +20205,7 @@ NginxDomainServerToggleNodejs()
             proxy_set_header X-Forwarded-Proto $scheme;
 
             proxy_cache_bypass 1;
+            proxy_no_cache 1;
         }
 
         location ~ \.(keyinfo|key)$ {
@@ -19657,7 +20257,7 @@ NginxDomainUpdateCrt()
     ~/.acme.sh/acme.sh --force --installcert -d "${nginx_domains[nginx_domains_index]}" --fullchainpath $nginx_prefix/conf/sites_crt/"${nginx_domains[nginx_domains_index]}".crt --keypath $nginx_prefix/conf/sites_crt/"${nginx_domains[nginx_domains_index]}".key --ecc > /dev/null
 
     $NGINX_FILE
-    Println "$info 证书更新完成..."
+    Println "$info 证书更新完成...\n"
 }
 
 NginxEditDomain()
@@ -20108,6 +20708,7 @@ NginxConfigLocalhost()
             proxy_set_header X-Forwarded-Proto http;
 
             proxy_cache_bypass 1;
+            proxy_no_cache 1;
         }
 
         location = /channels.json {
@@ -20146,6 +20747,7 @@ NginxConfigLocalhost()
             proxy_set_header X-Forwarded-Proto http;
 
             proxy_cache_bypass 1;
+            proxy_no_cache 1;
         }
 
         location ~ \.(keyinfo|key)$ {
@@ -21019,7 +21621,7 @@ V2rayUpdate()
 
 V2rayConfigInstall()
 {
-    printf -v update_date '%(%m-%d)T'
+    printf -v update_date '%(%m-%d)T' -1
     cp -f "$V2_CONFIG" "${V2_CONFIG}_$update_date"
     while IFS= read -r line 
     do
@@ -21150,7 +21752,7 @@ V2rayGetInbounds()
 
     while IFS="^" read -r map_listen map_port map_protocol map_network map_path map_tag map_timeout map_allow_transparent map_user_level
     do
-        if [ "${map_tag:0:6}" == "nginx-" ] 
+        if [ "${map_tag:0:6}" == "nginx-" ] || [ "${map_tag:0:9}" == "no-nginx-" ]
         then
             inbounds_nginx_count=$((inbounds_nginx_count+1))
             inbounds_nginx_index+=("$inbounds_count")
@@ -21267,9 +21869,6 @@ V2rayGetLevels()
     levels_bufferSize=()
     while IFS="=" read -r map_id map_handshake map_connIdle map_uplinkOnly map_downlinkOnly map_statsUserUplink map_statsUserDownlink map_bufferSize
     do
-        map_id=${map_id#\"}
-        map_bufferSize=${map_bufferSize%\"}
-
         levels_id+=("$map_id")
         levels_handshake+=("$map_handshake")
         levels_connIdle+=("$map_connIdle")
@@ -21278,7 +21877,7 @@ V2rayGetLevels()
         levels_statsUserUplink+=("$map_statsUserUplink")
         levels_statsUserDownlink+=("$map_statsUserDownlink")
         levels_bufferSize+=("$map_bufferSize")
-    done < <($JQ_FILE '.PolicyObject.levels[] | [.key,.handshake,.connIdle,.uplinkOnly,.downlinkOnly,.statsUserUplink,.statsUserDownlink,.bufferSize] | join("=")' "$V2_CONFIG")
+    done < <($JQ_FILE -r '.PolicyObject.levels | to_entries | map([.key,.value.handshake,.value.connIdle,.value.uplinkOnly,.value.downlinkOnly,.value.statsUserUplink,.value.statsUserDownlink,.value.bufferSize] | join("="))[]' "$V2_CONFIG")
     levels_count=${#levels_id[@]}
 }
 
@@ -21293,7 +21892,7 @@ V2rayListForward()
     index=0
     for((i=0;i<inbounds_count;i++));
     do
-        if [[ ${inbounds_tag[i]} == "nginx-"* ]] 
+        if [[ ${inbounds_tag[i]} == "nginx-"* ]] || [ "${map_tag:0:9}" == "no-nginx-" ]
         then
             continue
         fi
@@ -21459,8 +22058,6 @@ V2rayListNginxAccounts()
 
 V2raySetNginxTag()
 {
-    echo "输入组名"
-    read -p "(默认: 随机): " tag
     i=0
     while true 
     do
@@ -21474,23 +22071,46 @@ V2raySetNginxTag()
     Println "  组名: $green $tag ${normal}\n"
 }
 
+V2raySetNoNginxTag()
+{
+    i=0
+    while true 
+    do
+        i=$((i+1))
+        tag="no-nginx-$i"
+        if ! grep -q '"tag": "'"$tag"'"' < "$V2_CONFIG"
+        then
+            break
+        fi
+    done
+    Println "  组名: $green $tag ${normal}\n"
+}
+
 V2rayAddNginx()
 {
-    listen="127.0.0.1"
     echo
+    yn_options=( '是' '否' )
+    inquirer list_input "是否通过 nginx 连接" yn_options nginx_proxy_yn
+    if [[ $nginx_proxy_yn == "是" ]]
+    then
+        listen="127.0.0.1"
+        V2raySetNginxTag
+    else
+        listen="0.0.0.0"
+        V2raySetNoNginxTag
+    fi
+
+    Println "  监听地址: $green $listen ${normal}"
+
     V2raySetPort
     protocol="vmess"
-    V2raySetNginxTag
-    V2raySetStreamNetwork
-    if [ "$network" == "ws" ] 
-    then
-        V2raySetPath
-    fi
+    network="ws"
+    V2raySetPath
 
     new_inbound=$(
     $JQ_FILE -n --arg listen "$listen" --arg port "$port" \
         --arg protocol "$protocol" --arg network "$network" \
-        --arg path "$path" --arg tag "$tag" \
+        --arg path "$ws_path" --arg tag "$tag" \
     '{
         "listen": $listen,
         "port": $port | tonumber,
@@ -21499,10 +22119,10 @@ V2rayAddNginx()
             "clients": []
         },
         "streamSettings": {
-        "network": $network,
-        "wsSettings": {
-            "path": $path
-        }
+            "network": $network,
+            "wsSettings": {
+                "path": $path
+            }
         },
         "tag": $tag
     }')
@@ -21647,21 +22267,20 @@ V2raySetListen()
     else
         listen="0.0.0.0"
     fi
-
-    Println "  监听地址: $green $listen ${normal}\n"
+    Println "  监听地址: $green $listen ${normal}"
 }
 
 V2raySetAddress()
 {
-    echo "输入服务器地址(ip或域名)"
+    Println "输入服务器地址(ip或域名)"
     read -p "(默认: 取消): " address
     [ -z "$address" ] && Println "已取消...\n" && exit 1
-    Println "  服务器地址: $green $address ${normal}\n"
+    Println "  服务器地址: $green $address ${normal}"
 }
 
 V2raySetPort()
 {
-    echo "请输入端口"
+    Println "请输入端口"
     while read -p "(默认: 随机生成): " port
     do
         case "$port" in
@@ -21687,13 +22306,12 @@ V2raySetPort()
             ;;
         esac
     done
-
-    Println "  端口: $green $port ${normal}\n"
+    Println "  端口: $green $port ${normal}"
 }
 
 V2raySetOutboundPort()
 {
-    echo "请输入端口"
+    Println "请输入端口"
     while read -p "(默认: 取消): " port
     do
         case "$port" in
@@ -21713,12 +22331,12 @@ V2raySetOutboundPort()
             ;;
         esac
     done
-    Println "  端口: $green $port ${normal}\n"
+    Println "  端口: $green $port ${normal}"
 }
 
 V2raySetProtocol()
 {
-    echo -e "选择协议
+    Println "选择协议
 
   ${green}1.${normal} vmess
   ${green}2.${normal} http
@@ -21746,20 +22364,20 @@ V2raySetProtocol()
             ;;
         esac
     done
-
-    Println "  协议: $green $protocol ${normal}\n"
+    Println "  协议: $green $protocol ${normal}"
 }
 
 V2raySetStreamNetwork()
 {
-    echo -e "选择网络类型
+    Println "选择网络类型
 
   ${green}1.${normal} tcp
   ${green}2.${normal} kcp
   ${green}3.${normal} ws
   ${green}4.${normal} http
   ${green}5.${normal} domainsocket
-  ${green}6.${normal} quic\n"
+  ${green}6.${normal} quic
+"
     while read -p "(默认: 3): " network_num 
     do
         case $network_num in
@@ -21791,7 +22409,7 @@ V2raySetStreamNetwork()
             ;;
         esac
     done
-    Println "  网络: $green $protocol ${normal}\n"
+    Println "  网络: $green $protocol ${normal}"
 }
 
 V2raySetPath()
@@ -21800,22 +22418,22 @@ V2raySetPath()
     inquirer text_input "输入 ws 路径: " ws_path "随机"
     if [ "$ws_path" == "随机" ]
     then
-        ws_path=$(RandStr)
+        ws_path="/$(RandStr)"
     fi
+    Println "  路径: $green $ws_path ${normal}"
 }
 
 V2raySetId()
 {
-    echo "输入 id"
+    Println "输入 id"
     read -p "(默认: 随机): " id
     id=${id:-$($V2CTL_FILE uuid)}
-
-    Println "  id: $green $id ${normal}\n"
+    Println "  id: $green $id ${normal}"
 }
 
 V2raySetAlterId()
 {
-    echo -e "请输入 alterId"
+    Println "请输入 alterId"
     while read -p "(默认: 64): " alter_id
     do
         case "$alter_id" in
@@ -21836,21 +22454,20 @@ V2raySetAlterId()
             ;;
         esac
     done
-    Println "  alterId: $green $alter_id ${normal}\n"
+    Println "  alterId: $green $alter_id ${normal}"
 }
 
 V2raySetEmail()
 {
-    echo "输入邮箱"
+    Println "输入邮箱"
     read -p "(默认: 随机): " email
     email=${email:-$(RandStr)@localhost}
-
-    Println "  邮箱: $green $email ${normal}\n"
+    Println "  邮箱: $green $email ${normal}"
 }
 
 V2raySetTimeout()
 {
-    echo -e "入站数据的时间限制(秒)"
+    Println "入站数据的时间限制(秒)"
     while read -p "(默认: 60): " timeout
     do
         case "$timeout" in
@@ -21871,11 +22488,12 @@ V2raySetTimeout()
             ;;
         esac
     done
-    Println "  timeout: $green $timeout ${normal}\n"
+    Println "  timeout: $green $timeout ${normal}"
 }
 
 V2raySetAllowTransparent()
 {
+    echo
     yn_options=( '否' '是' )
     inquirer list_input "转发所有 HTTP 请求, 而非只是代理请求, 若配置不当, 开启此选项会导致死循环" yn_options allow_transparent_yn
     if [[ $allow_transparent_yn == "是" ]]
@@ -21884,7 +22502,7 @@ V2raySetAllowTransparent()
     else
         allow_transparent="false"
     fi
-    Println "  allowTransparent: $green $allow_transparent ${normal}\n"
+    Println "  allowTransparent: $green $allow_transparent ${normal}"
 }
 
 V2raySetAllowInsecure()
@@ -21953,32 +22571,28 @@ V2raySetLevel()
 
 V2raySetHttpAccount()
 {
-    echo "输入用户名"
+    Println "输入用户名"
     read -p "(默认: 随机): " user
     user=${user:-$(RandStr)}
-
     Println "  用户名: $green $user ${normal}\n"
-
     echo "输入密码"
     read -p "(默认: 随机): " pass
     pass=${pass:-$(RandStr)}
-
     Println "  密码: $green $pass ${normal}\n"
 }
 
 V2raySetTag()
 {
-    echo "输入组名"
+    Println "输入组名"
     read -p "(默认: 随机): " tag
     tag=${tag//nginx-/}
     tag=${tag:-$(GetFreeTag)}
-
-    Println "  组名: $green $tag ${normal}\n"
+    Println "  组名: $green $tag ${normal}"
 }
 
 V2raySetSecurity()
 {
-    echo -e "选择加密方式
+    Println "选择加密方式
 
   ${green}1.${normal} aes-128-gcm
   ${green}2.${normal} chacha20-poly1305
@@ -22000,11 +22614,15 @@ V2raySetSecurity()
                 security="auto"
                 break
             ;;
+            4) 
+                security="none"
+                break
+            ;;
             *) Println "$error 输入错误\n"
             ;;
         esac
     done
-    Println "  加密方式: $green $security ${normal}\n"
+    Println "  加密方式: $green $security ${normal}"
 }
 
 V2rayAddInbound()
@@ -22018,27 +22636,47 @@ V2rayAddInbound()
     if [ "$protocol" == "vmess" ] 
     then
         V2raySetStreamNetwork
-        V2raySetPath
 
-        new_inbound=$(
-        $JQ_FILE -n --arg listen "$listen" --arg port "$port" \
+        if [ "$network" == "ws" ] 
+        then
+            V2raySetPath
+            new_inbound=$(
+            $JQ_FILE -n --arg listen "$listen" --arg port "$port" \
+                --arg protocol "$protocol" --arg network "$network" \
+                --arg path "$ws_path" --arg tag "$tag" \
+            '{
+                "listen": $listen,
+                "port": $port | tonumber,
+                "protocol": $protocol,
+                "settings": {
+                    "clients": []
+                },
+                "streamSettings": {
+                    "network": $network,
+                    "wsSettings": {
+                        "path": $path
+                    }
+                },
+                "tag": $tag
+            }')
+        else
+            new_outbound=$(
+            $JQ_FILE -n --arg listen "$listen" --arg port "$port" \
             --arg protocol "$protocol" --arg network "$network" \
-            --arg path "$path" --arg tag "$tag" \
-        '{
-            "listen": $listen,
-            "port": $port | tonumber,
-            "protocol": "vmess",
-            "settings": {
-                "clients": []
-            },
-            "streamSettings": {
-            "network": $network,
-            "wsSettings": {
-                "path": $path
-            }
-            },
-            "tag": $tag
-        }')
+            --arg tag "$tag" \
+            '{
+                "listen": $listen,
+                "port": $port | tonumber,
+                "protocol": $protocol,
+                "settings": {
+                    "clients": []
+                },
+                "streamSettings": {
+                    "network": $network
+                },
+                "tag": $tag
+            }')
+        fi
     else
         V2raySetTimeout
         V2raySetAllowTransparent
@@ -22102,6 +22740,7 @@ V2rayAddOutbound()
     V2raySetTag
     V2raySetProtocol
 
+    echo
     yn_options=( '否' '是' )
     inquirer list_input "是否是前置代理" yn_options forward_proxy_yn
 
@@ -22139,6 +22778,7 @@ V2rayAddOutbound()
                 "tag": $tag
             }')
         fi
+
         while true 
         do
             new_outbound_proxy_tag=$(GetFreeTag)
@@ -22966,7 +23606,7 @@ V2rayListForwardAccount()
             then
                 Println "$error 此账户组没有账号\n" && exit 1
             else
-                Println "服务器 IP: $server_ip\n\n$accounts_list\n"
+                Println "服务器 IP: $green$server_ip${normal}\n\n$accounts_list\n"
             fi
         else
             accounts_list=""
@@ -23203,12 +23843,12 @@ V2rayDomainUpdateCrt()
     ~/.acme.sh/acme.sh --force --installcert -d "${v2ray_domains[v2ray_domains_index]}" --fullchainpath $nginx_prefix/conf/sites_crt/"${v2ray_domains[v2ray_domains_index]}".crt --keypath $nginx_prefix/conf/sites_crt/"${v2ray_domains[v2ray_domains_index]}".key --ecc > /dev/null
 
     $NGINX_FILE
-    Println "$info 证书更新完成..."
+    Println "$info 证书更新完成...\n"
 }
 
 V2rayAppendDomainConf()
 {
-printf '%s' "    server {
+    printf '%s' "    server {
         listen      $server_https_port ssl;
         server_name $server_domain;
 
@@ -23693,7 +24333,7 @@ SetCloudflareUserEmail()
     Println "请输入用户邮箱"
     while read -p "(默认: 随机): " cf_user_email 
     do
-        [ -z "$cf_user_email" ] && cf_user_email="$(RandStr)_$(printf '%(%s)T')@gmail.com"
+        [ -z "$cf_user_email" ] && cf_user_email="$(RandStr)_$(printf '%(%s)T' -1)@gmail.com"
         if [[ $cf_user_email =~ ^[A-Za-z0-9]([a-zA-Z0-9_\.\-]*)@([A-Za-z0-9]+)([a-zA-Z0-9\.\-]*)\.([A-Za-z]{2,})$ ]] 
         then
             break
@@ -25468,7 +26108,7 @@ SetCloudflareWorkerProjectName()
     do
         case $cf_worker_project_name in
             "") 
-                printf -v cf_worker_project_name '%(%s)T'
+                printf -v cf_worker_project_name '%(%s)T' -1
                 cf_worker_project_name="$(RandStr)_$cf_worker_project_name"
                 break
             ;;
@@ -25850,7 +26490,7 @@ DeployCloudflareWorker()
     do
         [ -z "$cf_users_num" ] && Println "已取消...\n" && exit 1
 
-        if [[ "$cf_users_num" == $((cf_users_count+1)) ]] 
+        if [[ $cf_users_num -eq $((cf_users_count+1)) ]] 
         then
             for((i=0;i<cf_users_count;i++));
             do
@@ -25993,7 +26633,7 @@ DeployCloudflareWorker()
                     yn_options=( '是' '否' )
                     inquirer list_input "是否使用 IBM CF APP 中转" yn_options use_ibm_cf_app_yn
 
-                    if [[ "$use_ibm_cf_app_yn" == "是" ]] 
+                    if [ "$use_ibm_cf_app_yn" == "是" ] 
                     then
                         ListIbmcfApps
                         echo -e "选择 APP"
@@ -26733,7 +27373,7 @@ MonitorCloudflareWorkers()
     {
         flock -x 204
         {
-            printf -v date_now '%(%m-%d %H:%M:%S)T'
+            printf -v date_now '%(%m-%d %H:%M:%S)T' -1
             printf '%s\n' "$date_now 启动 workers 监控  PID $BASHPID !" >> "$MONITOR_LOG"
 
             clear=$(date --utc -d 'tomorrow 00:00:00' +%s)
@@ -26747,7 +27387,7 @@ MonitorCloudflareWorkers()
 
             while true 
             do
-                printf -v now '%(%s)T'
+                printf -v now '%(%s)T' -1
                 if [ "$now" -ge "$clear" ] 
                 then
                     clear=$(date --utc -d 'tomorrow 00:00:00' +%s)
@@ -27517,7 +28157,7 @@ DisableCloudflareWorkersMonitor()
         if kill -0 "$cf_workers_pid" 2> /dev/null
         then
             kill "$cf_workers_pid" 2> /dev/null
-            printf -v date_now '%(%m-%d %H:%M:%S)T'
+            printf -v date_now '%(%m-%d %H:%M:%S)T' -1
             [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
             printf '%s\n' "$date_now 关闭 workers 监控 PID $cf_workers_pid !" >> "$MONITOR_LOG"
             Println "$info workers 监控 关闭成功\n"
@@ -27533,7 +28173,7 @@ DisableCloudflareWorkersMonitor()
             kill "$PID" 2> /dev/null
             if flock -E 1 -w 20 -x "$CF_WORKERS_ROOT/cf_workers.pid" rm -f "$CF_WORKERS_ROOT/cf_workers.pid"
             then
-                printf -v date_now '%(%m-%d %H:%M:%S)T'
+                printf -v date_now '%(%m-%d %H:%M:%S)T' -1
                 printf '%s\n' "$date_now 关闭 workers 监控 PID $PID !" >> "$MONITOR_LOG"
                 Println "$info workers 监控 关闭成功 !\n"
             else
@@ -30176,7 +30816,7 @@ SetVipUserSum()
             1) 
                 vip_user_expire_days=1
                 vip_user_sum="ssum"
-                printf -v now '%(%s)T' 
+                printf -v now '%(%s)T' -1
                 vip_user_expire=$((now+86400))
                 break
             ;;
@@ -30188,7 +30828,7 @@ SetVipUserSum()
                     case $vip_user_expire_days in
                         ""|1) 
                             vip_user_expire_days=1
-                            printf -v now '%(%s)T' 
+                            printf -v now '%(%s)T' -1
                             vip_user_expire=$((now+86400))
                             break 2
                         ;;
@@ -30198,7 +30838,7 @@ SetVipUserSum()
                         *) 
                             if [[ $vip_user_expire_days -gt 1 ]]
                             then
-                                printf -v now '%(%s)T' 
+                                printf -v now '%(%s)T' -1
                                 vip_user_expire=$((now+86400*vip_user_expire_days))
                                 break 2
                             else
@@ -30733,7 +31373,7 @@ GetVipStreamLink()
         day=$((vip_user_expire/86400))
         st2=$vip_user_expire
     else
-        printf -v now '%(%s)T'
+        printf -v now '%(%s)T' -1
         st2=$((now+86400*720))
     fi
 
@@ -31033,9 +31673,9 @@ MonitorVip()
     {
         flock -x 205
         {
-            printf -v date_now '%(%m-%d %H:%M:%S)T'
+            printf -v date_now '%(%m-%d %H:%M:%S)T' -1
             printf '%s\n' "$date_now 启动 VIP  PID $BASHPID !" >> "$MONITOR_LOG"
-            printf -v now '%(%s)T'
+            printf -v now '%(%s)T' -1
             never=$((now+86400*720))
 
             GetSchedules
@@ -31258,7 +31898,7 @@ MonitorVip()
                         done
                     fi
                 done
-                printf -v now '%(%s)T'
+                printf -v now '%(%s)T' -1
             done
         } 205>&-
     } 205<"$pid_file"
@@ -31335,7 +31975,7 @@ DisableVip()
         if kill -0 "$vip_pid" 2> /dev/null
         then
             kill "$vip_pid" 2> /dev/null
-            printf -v date_now '%(%m-%d %H:%M:%S)T'
+            printf -v date_now '%(%m-%d %H:%M:%S)T' -1
             printf '%s\n' "$date_now 关闭 VIP  PID $vip_pid !" >> "$MONITOR_LOG"
             Println "$info VIP 关闭成功\n"
         else
@@ -31351,7 +31991,7 @@ DisableVip()
             kill "$PID" 2> /dev/null
             if flock -E 1 -w 20 -x "$IPTV_ROOT/vip.pid" rm -f "$IPTV_ROOT/vip.pid"
             then
-                printf -v date_now '%(%m-%d %H:%M:%S)T'
+                printf -v date_now '%(%m-%d %H:%M:%S)T' -1
                 printf '%s\n' "$date_now 关闭 VIP PID $PID !" >> "$MONITOR_LOG"
                 Println "$info VIP 关闭成功 !\n"
             else
@@ -31375,7 +32015,7 @@ ViewVipUserChannel()
         Println "$error 请先输入授权码, 加微信 woniuzfb 或 tg @ woniuzfb\n"
     else
         GetVipUsers
-        printf -v now '%(%s)T'
+        printf -v now '%(%s)T' -1
         vip_users_list=""
         for((i=0;i<vip_users_count;i++));
         do
@@ -31659,7 +32299,7 @@ UpdateSelf()
         fi
 
         Println "$info 更新中, 请稍等...\n"
-        printf -v update_date '%(%m-%d)T'
+        printf -v update_date '%(%m-%d)T' -1
         cp -f "$CHANNELS_FILE" "${CHANNELS_FILE}_$update_date"
 
         GetChannelsInfo
@@ -31682,7 +32322,7 @@ UpdateSelf()
             --arg seg_name "$d_seg_name" --arg seg_length "$d_seg_length" \
             --arg seg_count "$d_seg_count" --arg video_codec "$d_video_codec" \
             --arg audio_codec "$d_audio_codec" --arg video_audio_shift "$d_video_audio_shift" \
-            --arg txt_format "$d_txt_format" \
+            --arg txt_format "$d_txt_format" --arg draw_text "$d_draw_text" \
             --arg quality "$d_quality" --arg bitrates "$d_bitrates" \
             --arg const "$d_const_yn" --arg encrypt "$d_encrypt_yn" \
             --arg encrypt_session "$d_encrypt_session_yn" \
@@ -31716,6 +32356,7 @@ UpdateSelf()
                 audio_codec: $audio_codec,
                 video_audio_shift: $video_audio_shift,
                 txt_format: $txt_format,
+                draw_text: $draw_text,
                 quality: $quality,
                 bitrates: $bitrates,
                 const: $const,
@@ -31782,6 +32423,7 @@ UpdateSelf()
                 --arg seg_length "${chnls_seg_length[i]}" --arg seg_count "${chnls_seg_count[i]}" \
                 --arg video_codec "${chnls_video_codec[i]}" --arg audio_codec "${chnls_audio_codec[i]}" \
                 --arg video_audio_shift "${chnls_video_audio_shift[i]}" --arg txt_format "${chnls_txt_format[i]}"\
+                --arg draw_text "${chnls_draw_text[i]}" \
                 --arg quality "${chnls_quality[i]}" --arg bitrates "${chnls_bitrates[i]}" \
                 --arg const "${chnls_const[i]}" --arg encrypt "${chnls_encrypt[i]}" \
                 --arg encrypt_session "${chnls_encrypt_session[i]}" --arg keyinfo_name "${chnls_keyinfo_name[i]}" \
@@ -31812,6 +32454,7 @@ UpdateSelf()
                     audio_codec: $audio_codec,
                     video_audio_shift: $video_audio_shift,
                     txt_format: $txt_format,
+                    draw_text: $draw_text,
                     quality: $quality,
                     bitrates: $bitrates,
                     const: $const,
@@ -32457,18 +33100,54 @@ then
         4) 
             V2rayStatus
             V2rayConfigUpdate
-            NginxCheckDomains
+            if [ ! -d "$nginx_prefix" ] 
+            then
+                Println "$error $nginx_name 未安装 ! 如需通过 $nginx_name 连接 v2ray 需输入 $nginx_ctl 安装\n"
+                yn_options=( '否' '是' )
+                inquirer list_input "是否继续" yn_options continue_yn
+                if [[ $continue_yn == "否" ]]
+                then
+                    Println "已取消...\n"
+                    exit 1
+                fi
+            else
+                NginxCheckDomains
+            fi
             V2rayListNginx
             V2rayListNginxAccounts
         ;;
         5)
             V2rayConfigUpdate
-            NginxCheckDomains
+            if [ ! -d "$nginx_prefix" ] 
+            then
+                Println "$error $nginx_name 未安装 ! 如需通过 $nginx_name 连接 v2ray 需输入 $nginx_ctl 安装\n"
+                yn_options=( '否' '是' )
+                inquirer list_input "是否继续" yn_options continue_yn
+                if [[ $continue_yn == "否" ]]
+                then
+                    Println "已取消...\n"
+                    exit 1
+                fi
+            else
+                NginxCheckDomains
+            fi
             V2rayAddNginx
         ;;
         6)
             V2rayConfigUpdate
-            NginxCheckDomains
+            if [ ! -d "$nginx_prefix" ] 
+            then
+                Println "$error $nginx_name 未安装 ! 如需通过 $nginx_name 连接 v2ray 需输入 $nginx_ctl 安装\n"
+                yn_options=( '否' '是' )
+                inquirer list_input "是否继续" yn_options continue_yn
+                if [[ $continue_yn == "否" ]]
+                then
+                    Println "已取消...\n"
+                    exit 1
+                fi
+            else
+                NginxCheckDomains
+            fi
             V2rayListNginx
             V2rayAddNginxAccount
         ;;
@@ -33328,11 +34007,13 @@ then
                     6) 
                         _4gtv_set_id=4
                         fsVALUE=""
+                        Use4gtvProxy
                         break
                     ;;
                     7) 
                         Get4gtvAccToken
                         _4gtv_set_id=1
+                        Use4gtvProxy
                         break
                     ;;
                     8) 
@@ -33383,11 +34064,22 @@ then
                 "litv-ftv10:半島電視台"
             )
 
+            GetChannelsInfo
+
             hinet_4gtv_count=${#hinet_4gtv[@]}
             hinet_4gtv_list=""
             for((i=0;i<hinet_4gtv_count;i++));
             do
-                hinet_4gtv_list="$hinet_4gtv_list $green$((i+1)).${normal}\r\033[6C${hinet_4gtv[i]#*:}\n\n"
+                hinet_4gtv_chnl_added=""
+                for chnl in ${chnls_stream_link[@]+"${chnls_stream_link[@]}"}
+                do
+                    if [[ $chnl =~ embed.4gtv.tv/HiNet ]] && [[ $chnl =~ asset_id=${hinet_4gtv[i]%:*}\& ]] 
+                    then
+                        hinet_4gtv_chnl_added=" ${green}[已添加]${normal}"
+                        break
+                    fi
+                done
+                hinet_4gtv_list="$hinet_4gtv_list $green$((i+1)).${normal}\r\033[6C${hinet_4gtv[i]#*:}$hinet_4gtv_chnl_added\n\n"
             done
 
             #headers="Referer: $chnl_stream_link\r\n"
@@ -33412,7 +34104,16 @@ then
                 _4gtv_chnls_count=${#_4gtv_chnls_id[@]}
                 for((i=0;i<_4gtv_chnls_count;i++));
                 do
-                    _4gtv_list="$_4gtv_list $green$((i+hinet_4gtv_count+1)).${normal}\r\033[6C${_4gtv_chnls_name[i]}\n\n"
+                    _4gtv_chnl_added=""
+                    for chnl in ${chnls_stream_link[@]+"${chnls_stream_link[@]}"}
+                    do
+                        if [[ $chnl =~ 4gtv.tv/channel_sub.html ]] && [[ $chnl =~ asset_id=${_4gtv_chnls_aid[i]}\& ]] 
+                        then
+                            _4gtv_chnl_added=" ${green}[已添加]${normal}"
+                            break
+                        fi
+                    done
+                    _4gtv_list="$_4gtv_list $green$((i+hinet_4gtv_count+1)).${normal}\r\033[6C${_4gtv_chnls_name[i]}$_4gtv_chnl_added\n\n"
                 done
                 chnls_list="HiNet 4gtv 频道:\n\n${hinet_4gtv_list}4gtv 官网频道:\n\n$_4gtv_list"
             else
@@ -33505,6 +34206,7 @@ then
                     stream_links="https://embed.4gtv.tv/HiNet/$hinet_4gtv_chnl_name_enc.html"
                     headers="Referer: $stream_links?ar=0&as=1&volume=0\r\n"
                     stream_link_data=$(curl -s -Lm 10 \
+                        ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
                         -H "User-Agent: $user_agent" \
                         -H "${headers:0:-4}" "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$hinet_4gtv_chnl_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)") || true
                     if [ -n "$stream_link_data" ] 
@@ -33551,6 +34253,7 @@ then
                     for((try_i=0;try_i<10;try_i++));
                     do
                         stream_link_data=$(curl -s -Lm 10 -X POST \
+                            ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
                             -H "User-Agent: $user_agent" \
                             -H "${headers:0:-4}" \
                             --data "value=$value" "https://api2.4gtv.tv/Channel/GetChannelUrl3") || true
@@ -33603,7 +34306,7 @@ then
                         count=0
                         log=""
                         last_line=""
-                        printf -v this_hour '%(%H)T'
+                        printf -v this_hour '%(%H)T' -1
                         while IFS= read -r line 
                         do
                             if [ "$count" -lt "${3:-10}" ] 
@@ -33684,7 +34387,7 @@ then
                             fi
                         fi
                         NGINX_FILE="$nginx_prefix/sbin/nginx"
-                        printf -v date_now '%(%m-%d %H:%M:%S)T'
+                        printf -v date_now '%(%m-%d %H:%M:%S)T' -1
                         MonitorSet
 
                         if [ "$sh_debug" -eq 1 ] 
@@ -33974,6 +34677,14 @@ case "$cmd" in
             mv "$FFMPEG_MIRROR_ROOT/imgcat.zip_tmp" "$FFMPEG_MIRROR_ROOT/imgcat.zip"
         else
             Println "$error imgcat 下载出错, 无法连接 github ?"
+        fi
+
+        Println "$info 下载 CImg ..."
+        if curl -s -L "https://github.com/dtschump/CImg/archive/master.zip" -o "$FFMPEG_MIRROR_ROOT/CImg.zip_tmp"
+        then
+            mv "$FFMPEG_MIRROR_ROOT/CImg.zip_tmp" "$FFMPEG_MIRROR_ROOT/CImg.zip"
+        else
+            Println "$error CImg 下载出错, 无法连接 github ?"
         fi
 
         if curl -s -L "https://api.github.com/repos/stedolan/jq/releases/latest" -o "$FFMPEG_MIRROR_ROOT/jq.json_tmp"
@@ -34368,6 +35079,7 @@ else
             fi
 
             txt_format=${txt_format:-$d_txt_format}
+            draw_text=${draw_text:-$d_draw_text}
             quality=${quality:-$d_quality}
             bitrates=${bitrates:-$d_bitrates}
             quality_command=""
