@@ -123,6 +123,8 @@ FFMPEG_MIRROR_ROOT="$IPTV_ROOT/ffmpeg"
 LIVE_ROOT="$IPTV_ROOT/live"
 SERVICES_FILE="$IPTV_ROOT/services.json"
 VIP_FILE="$IPTV_ROOT/vip.json"
+VIP_CHANNELS_LINK="$FFMPEG_MIRROR_LINK/vip_channels.json"
+VIP_CHANNELS_FILE="$IPTV_ROOT/vip_channels.json"
 VIP_ROOT="$IPTV_ROOT/vip"
 VIP_USERS_ROOT="$VIP_ROOT/users"
 C_ROOT="$IPTV_ROOT/c"
@@ -298,7 +300,7 @@ SyncFile()
                     [ "$jq_path" != "[" ] && jq_path="$jq_path,"
                     case $a in
                         '') 
-                            Println "$error sync设置错误..." && exit 1
+                            Println "$error sync设置错误...\n" && exit 1
                         ;;
                         *[!0-9]*)
                             jq_index="$jq_index.$a"
@@ -329,7 +331,7 @@ SyncFile()
                     do
                         case $b in
                             '') 
-                                Println "$error sync设置错误..." && exit 1
+                                Println "$error sync设置错误...\n" && exit 1
                             ;;
                             *) 
                                 if [[ $b == *"="* ]] 
@@ -463,7 +465,7 @@ CheckRelease()
     elif [[ $(uname) == "Darwin" ]] 
     then
         release="mac"
-        Println "$error not support yet..." && exit 1
+        Println "$error not support yet...\n" && exit 1
     else
         if grep -Eqi "(redhat|centos|Red\ Hat)" < /proc/version
         then
@@ -504,7 +506,7 @@ CheckRelease()
                     then
                         Println "$info 依赖 tput 安装成功..."
                     else
-                        Println "$error 依赖 tput 安装失败..." && exit 1
+                        Println "$error 依赖 tput 安装失败...\n" && exit 1
                     fi
                 else
                     [ "$release" == "deb" ] && FixDeprecatedDeb
@@ -513,7 +515,7 @@ CheckRelease()
                     then
                         Println "$info 依赖 tput 安装成功..."
                     else
-                        Println "$error 依赖 tput 安装失败..." && exit 1
+                        Println "$error 依赖 tput 安装失败...\n" && exit 1
                     fi
                 fi
             fi
@@ -551,7 +553,7 @@ CheckDeps()
                 then
                     Println "$info 依赖 $depend 安装成功..."
                 else
-                    Println "$error 依赖 $depend 安装失败..." && exit 1
+                    Println "$error 依赖 $depend 安装失败...\n" && exit 1
                 fi
             fi
         done
@@ -561,7 +563,7 @@ CheckDeps()
             then
                 Println "$info 依赖 dig 安装成功..."
             else
-                Println "$error 依赖 dig 安装失败..." && exit 1
+                Println "$error 依赖 dig 安装失败...\n" && exit 1
             fi
         fi
         if [[ ! -x $(command -v hexdump) ]] 
@@ -570,7 +572,7 @@ CheckDeps()
             then
                 Println "$info 依赖 hexdump 安装成功..."
             else
-                Println "$error 依赖 hexdump 安装失败..." && exit 1
+                Println "$error 依赖 hexdump 安装失败...\n" && exit 1
             fi
         fi
         if [[ ! -x $(command -v ss) ]] 
@@ -579,7 +581,7 @@ CheckDeps()
             then
                 Println "$info 依赖 ss 安装成功..."
             else
-                Println "$error 依赖 ss 安装失败..." && exit 1
+                Println "$error 依赖 ss 安装失败...\n" && exit 1
             fi
         fi
     else
@@ -594,7 +596,7 @@ CheckDeps()
                 then
                     Println "$info 依赖 $depend 安装成功..."
                 else
-                    Println "$error 依赖 $depend 安装失败..." && exit 1
+                    Println "$error 依赖 $depend 安装失败...\n" && exit 1
                 fi
             fi
         done
@@ -604,7 +606,7 @@ CheckDeps()
             then
                 Println "$info 依赖 dig 安装成功..."
             else
-                Println "$error 依赖 dig 安装失败..." && exit 1
+                Println "$error 依赖 dig 安装失败...\n" && exit 1
             fi
         fi
         if [[ ! -x $(command -v locale-gen) ]] 
@@ -613,7 +615,7 @@ CheckDeps()
             then
                 Println "$info 依赖 locales 安装成功..."
             else
-                Println "$error 依赖 locales 安装失败..." && exit 1
+                Println "$error 依赖 locales 安装失败...\n" && exit 1
             fi
         fi
         if ! grep -q 'en_US' < <(locale -a 2> /dev/null) 
@@ -627,7 +629,7 @@ CheckDeps()
             then
                 Println "$info 依赖 hexdump 安装成功..."
             else
-                Println "$error 依赖 hexdump 安装失败..." && exit 1
+                Println "$error 依赖 hexdump 安装失败...\n" && exit 1
             fi
         fi
     fi
@@ -656,7 +658,7 @@ inquirer()
             then
                 Println "$info 依赖 tput 安装成功..."
             else
-                Println "$error 依赖 tput 安装失败..." && exit 1
+                Println "$error 依赖 tput 安装失败...\n" && exit 1
             fi
         else
             [ "$release" == "deb" ] && FixDeprecatedDeb
@@ -665,7 +667,7 @@ inquirer()
             then
                 Println "$info 依赖 tput 安装成功..."
             else
-                Println "$error 依赖 tput 安装失败..." && exit 1
+                Println "$error 依赖 tput 安装失败...\n" && exit 1
             fi
         fi
     fi
@@ -1432,7 +1434,7 @@ Spinner(){
             then
                 Println "$info 依赖 tput 安装成功..."
             else
-                Println "$error 依赖 tput 安装失败..." && exit 1
+                Println "$error 依赖 tput 安装失败...\n" && exit 1
             fi
         else
             [ "$release" == "deb" ] && FixDeprecatedDeb
@@ -1441,7 +1443,7 @@ Spinner(){
             then
                 Println "$info 依赖 tput 安装成功..."
             else
-                Println "$error 依赖 tput 安装失败..." && exit 1
+                Println "$error 依赖 tput 安装失败...\n" && exit 1
             fi
         fi
     fi
@@ -1495,6 +1497,27 @@ CheckShFile()
 {
     if [ ! -e "$SH_FILE" ] 
     then
+        if [[ ! -x $(command -v curl) ]] 
+        then
+            CheckRelease lite
+            Println "$info 安装 curl ..."
+            if [ "$release" == "rpm" ] 
+            then
+                if yum -y install curl >/dev/null 2>&1
+                then
+                    Println "$info curl 安装成功..."
+                else
+                    Println "$error curl 安装失败...\n" && exit 1
+                fi
+            else
+                if apt-get -y install curl >/dev/null 2>&1
+                then
+                    Println "$info curl 安装成功..."
+                else
+                    Println "$error curl 安装失败...\n" && exit 1
+                fi
+            fi
+        fi
         if curl -s -Lm 20 "$SH_LINK" -o "${SH_FILE}_tmp"
         then
             mv "${SH_FILE}_tmp" "$SH_FILE"
@@ -2506,7 +2529,7 @@ Install()
 {
     if [ -e "$IPTV_ROOT" ]
     then
-        Println "$error 目录已存在, 请先卸载..." && exit 1
+        Println "$error 目录已存在, 请先卸载...\n" && exit 1
     else
         CheckRelease "检查依赖, 耗时可能会很长"
 
@@ -2617,7 +2640,7 @@ Install()
 
 Uninstall()
 {
-    [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+    [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
     echo
     yn_options=( '否' '是' )
     inquirer list_input "确定要 卸载此脚本以及产生的全部文件" yn_options uninstall_yn
@@ -2661,7 +2684,7 @@ Uninstall()
 
 Update()
 {
-    [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+    [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
 
     while IFS= read -r line 
     do
@@ -4855,7 +4878,7 @@ GetDefault()
 
 GetChannelsInfo()
 {
-    [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+    [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
 
     chnls_stream_link=()
 
@@ -6756,32 +6779,552 @@ SetSync()
 
 SetSyncFile()
 {
-    Println "$tip 多个文件用空格分隔"
-    inquirer text_input "设置单独的 sync_file: " sync_file "${d_sync_file:-不设置}"
-    if [ "$sync_file" == "$d_sync_file" ] || [ "$sync_file" == "不设置" ]
+    if [ "${set_default:-0}" -eq 0 ] 
     then
-        sync_file=""
+        Println "$tip 多个文件用空格分隔"
+        inquirer text_input "设置单独的 sync_file: " sync_file "${d_sync_file:-不设置}"
+        if [ "$sync_file" == "$d_sync_file" ] || [ "$sync_file" == "不设置" ]
+        then
+            sync_file=""
+        fi
+    else
+        Println "$tip 多个文件用空格分隔, 可以输入 omit 省略此选项"
+        inquirer text_input "设置默认 sync_file: " sync_file "${d_sync_file:-不设置}"
+        if [ "$sync_file" == "omit" ] || [ "$sync_file" == "不设置" ]
+        then
+            sync_file=""
+        fi
     fi
 }
 
 SetSyncIndex()
 {
-    Println "$tip 多个 sync_index 用空格分隔"
-    inquirer text_input "设置单独的 sync_index: " sync_index "${d_sync_index:-不设置}"
-    if [ "$sync_index" == "$d_sync_index" ] || [ "$sync_index" == "不设置" ]
+    if [ "${set_default:-0}" -eq 0 ] 
     then
-        sync_index=""
+        Println "$tip 多个 sync_index 用空格分隔"
+        inquirer text_input "设置单独的 sync_index: " sync_index "${d_sync_index:-不设置}"
+        if [ "$sync_index" == "$d_sync_index" ] || [ "$sync_index" == "不设置" ]
+        then
+            sync_index=""
+        fi
+    else
+        Println "$tip 多个 sync_index 用空格分隔, 可以输入 omit 省略此选项"
+        inquirer text_input "设置默认 sync_index: " sync_index "${d_sync_index:-不设置}"
+        if [ "$sync_index" == "omit" ] || [ "$sync_index" == "不设置" ]
+        then
+            sync_index=""
+        fi
     fi
 }
 
 SetSyncPairs()
 {
-    Println "$tip 多个 sync_pairs 用空格分隔"
-    inquirer text_input "设置单独的 sync_pairs: " sync_pairs "${d_sync_pairs:-不设置}"
-    if [ "$sync_pairs" == "$d_sync_pairs" ] || [ "$sync_pairs" == "不设置" ]
+    if [ "${set_default:-0}" -eq 0 ] 
     then
-        sync_pairs=""
+        Println "$tip 多个 sync_pairs 用空格分隔"
+        inquirer text_input "设置单独的 sync_pairs: " sync_pairs "${d_sync_pairs:-不设置}"
+        if [ "$sync_pairs" == "$d_sync_pairs" ] || [ "$sync_pairs" == "不设置" ]
+        then
+            sync_pairs=""
+        fi
+    else
+        Println "$tip 多个 sync_pairs 用空格分隔, 可以输入 omit 省略此选项"
+        inquirer text_input "设置默认 sync_pairs: " sync_pairs "${d_sync_pairs:-不设置}"
+        if [ "$sync_pairs" == "omit" ] || [ "$sync_pairs" == "不设置" ]
+        then
+            sync_pairs=""
+        fi
     fi
+}
+
+SetScheduleFile()
+{
+    Println "$tip 可以输入 omit 省略此选项"
+    inquirer text_input "设置节目表文件绝对路径: " schedule_file "${d_schedule_file:-不设置}"
+    if [ "$schedule_file" == "omit" ] || [ "$schedule_file" == "不设置" ]
+    then
+        schedule_file=""
+    fi
+}
+
+SetFlvDelaySeconds()
+{
+    Println "设置超时多少秒自动重启频道"
+    while read -p "(默认: $d_flv_delay_seconds 秒): " flv_delay_seconds
+    do
+        case $flv_delay_seconds in
+            "") flv_delay_seconds=$d_flv_delay_seconds && break
+            ;;
+            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            ;;
+            *) 
+                if [ "$flv_delay_seconds" -gt 0 ]
+                then
+                    break
+                else
+                    Println "$error 请输入正确的数字(大于0)\n"
+                fi
+            ;;
+        esac
+    done
+}
+
+SetFlvRestartNums()
+{
+    Println "请输入尝试重启的次数"
+    while read -p "(默认: $d_flv_restart_nums次): " flv_restart_nums
+    do
+        case $flv_restart_nums in
+            "") flv_restart_nums=$d_flv_restart_nums && break
+            ;;
+            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            ;;
+            *) 
+                if [ "$flv_restart_nums" -gt 0 ]
+                then
+                    break
+                else
+                    Println "$error 请输入正确的数字(大于0)\n"
+                fi
+            ;;
+        esac
+    done
+}
+
+SetHlsDelaySeconds()
+{
+    Println "设置超时多少秒自动重启频道"
+    echo -e "$tip 必须大于 分片时长*分片数目\n"
+    while read -p "(默认: $d_hls_delay_seconds 秒): " hls_delay_seconds
+    do
+        case $hls_delay_seconds in
+            "") hls_delay_seconds=$d_hls_delay_seconds && break
+            ;;
+            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            ;;
+            *) 
+                if [ "$hls_delay_seconds" -gt 60 ]
+                then
+                    break
+                else
+                    Println "$error 请输入正确的数字(大于60)\n"
+                fi
+            ;;
+        esac
+    done
+}
+
+SetHlsMinBitrates()
+{
+    Println "请输入最低比特率(kb/s),低于此数值会重启频道(除加密的频道)"
+    while read -p "(默认: $d_hls_min_bitrates): " hls_min_bitrates
+    do
+        case $hls_min_bitrates in
+            "") hls_min_bitrates=$d_hls_min_bitrates && break
+            ;;
+            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            ;;
+            *) 
+                if [ "$hls_min_bitrates" -gt 0 ]
+                then
+                    break
+                else
+                    Println "$error 请输入正确的数字(大于0)\n"
+                fi
+            ;;
+        esac
+    done
+}
+
+SetHlsMaxSegSize()
+{
+    Println "请输入允许的最大分片"
+    while read -p "(默认: ${d_hls_max_seg_size}M): " hls_max_seg_size
+    do
+        case $hls_max_seg_size in
+            "") hls_max_seg_size=$d_hls_max_seg_size && break
+            ;;
+            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            ;;
+            *) 
+                if [ "$hls_max_seg_size" -gt 0 ]
+                then
+                    break
+                else
+                    Println "$error 请输入正确的数字(大于0)\n"
+                fi
+            ;;
+        esac
+    done
+}
+
+SetHlsRestartNums()
+{
+    Println "请输入尝试重启的次数"
+    while read -p "(默认: $d_hls_restart_nums次): " hls_restart_nums
+    do
+        case $hls_restart_nums in
+            "") hls_restart_nums=$d_hls_restart_nums && break
+            ;;
+            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            ;;
+            *) 
+                if [ "$hls_restart_nums" -gt 0 ]
+                then
+                    break
+                else
+                    Println "$error 请输入正确的数字(大于0)\n"
+                fi
+            ;;
+        esac
+    done
+}
+
+SetHlsKeyPeriod()
+{
+    echo
+    inquirer text_input "每隔多少秒更改加密频道的 key: " hls_key_period $d_hls_key_period
+}
+
+SetAntiDDosPort()
+{
+    Println "设置封禁端口"
+    echo -e "$tip 多个端口用空格分隔 比如 22 80 443 12480-12489\n"
+    while read -p "(默认: $d_anti_ddos_port_text): " anti_ddos_ports
+    do
+        anti_ddos_ports=${anti_ddos_ports:-$d_anti_ddos_port_text}
+        if [ -z "$anti_ddos_ports" ] 
+        then
+            Println "$error 请输入正确的数字\n"
+            continue
+        fi
+
+        IFS=" " read -ra anti_ddos_ports_arr <<< "$anti_ddos_ports"
+
+        error_no=0
+        for anti_ddos_port in "${anti_ddos_ports_arr[@]}"
+        do
+            case "$anti_ddos_port" in
+                *"-"*)
+                    anti_ddos_ports_start=${anti_ddos_port%-*}
+                    anti_ddos_ports_end=${anti_ddos_port#*-}
+                    if [[ $anti_ddos_ports_start == *[!0-9]* ]] || [[ $anti_ddos_ports_end == *[!0-9]* ]] || [ "$anti_ddos_ports_start" -eq 0 ] || [ "$anti_ddos_ports_end" -eq 0 ] || [ "$anti_ddos_ports_start" -ge "$anti_ddos_ports_end" ]
+                    then
+                        error_no=3
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                ;;
+                *)
+                    if [ "$anti_ddos_port" -lt 1 ]  
+                    then
+                        error_no=2
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error 请输入正确的数字\n"
+            ;;
+            *)
+                anti_ddos_ports_command=""
+                anti_ddos_ports_range_command=""
+                for anti_ddos_port in "${anti_ddos_ports_arr[@]}"
+                do
+                    if [[ $anti_ddos_port -eq 80 ]] 
+                    then
+                        anti_ddos_port="http"
+                    elif [[ $anti_ddos_port -eq 443 ]] 
+                    then
+                        anti_ddos_port="https"
+                    elif [[ $anti_ddos_port -eq 22 ]] 
+                    then
+                        anti_ddos_port="ssh"
+                    elif [[ $anti_ddos_port == *"-"* ]] 
+                    then
+                        anti_ddos_ports_start=${anti_ddos_port%-*}
+                        anti_ddos_ports_end=${anti_ddos_port#*-}
+                        if [[ anti_ddos_ports_start -le 22 && $anti_ddos_ports_end -ge 22 ]] 
+                        then
+                            [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command="$anti_ddos_ports_command|"
+                            anti_ddos_ports_command=$anti_ddos_ports_command"ssh"
+                        elif [[ anti_ddos_ports_start -le 80 && $anti_ddos_ports_end -ge 80 ]] 
+                        then
+                            [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command="$anti_ddos_ports_command|"
+                            anti_ddos_ports_command=$anti_ddos_ports_command"http"
+                        elif [[ anti_ddos_ports_start -le 443 && $anti_ddos_ports_end -ge 443 ]] 
+                        then
+                            [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command="$anti_ddos_ports_command|"
+                            anti_ddos_ports_command=$anti_ddos_ports_command"https"
+                        fi
+                        [ -n "$anti_ddos_ports_range_command" ] && anti_ddos_ports_range_command="$anti_ddos_ports_range_command || "
+                        anti_ddos_ports_range_command=$anti_ddos_ports_range_command'($4 >= '"$anti_ddos_ports_start"' && $4 <= '"$anti_ddos_ports_end"')'
+                        continue
+                    fi
+
+                    [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command="$anti_ddos_ports_command|"
+                    anti_ddos_ports_command="$anti_ddos_ports_command$anti_ddos_port"
+                done
+
+                [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command='$4 ~ /^('"$anti_ddos_ports_command"')$/'
+                if [ -n "$anti_ddos_ports_range_command" ] 
+                then
+                    anti_ddos_ports_range_command='$4 ~ /^[0-9]+$/ && ('"$anti_ddos_ports_range_command"')'
+                    [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_range_command=' || ('"$anti_ddos_ports_range_command"')'
+                fi
+                if [[ $anti_ddos_ports == *" "* ]] || [[ $anti_ddos_ports == *"-"* ]]
+                then
+                    anti_ddos_port=${anti_ddos_ports// /,}
+                    anti_ddos_port=${anti_ddos_port//-/:}
+                    anti_ddos_port="$anti_ddos_port proto tcp"
+                else
+                    anti_ddos_port=$anti_ddos_ports
+                fi
+                break
+            ;;
+        esac
+    done
+}
+
+SetAntiDDosSynFlood()
+{
+    echo
+    if [[ $d_anti_ddos_syn_flood == "是" ]] 
+    then
+        yn_options=( '是' '否' )
+    else
+        yn_options=( '否' '是' )
+    fi
+    inquirer list_input "是否开启 SYN Flood attack 防御" yn_options anti_ddos_syn_flood_yn
+    if [[ $anti_ddos_syn_flood_yn == "是" ]] 
+    then
+        anti_ddos_syn_flood_yn="yes"
+        sysctl -w net.ipv4.tcp_syn_retries=6 > /dev/null
+        sysctl -w net.ipv4.tcp_synack_retries=2 > /dev/null
+        sysctl -w net.ipv4.tcp_syncookies=1 > /dev/null
+        sysctl -w net.ipv4.tcp_max_syn_backlog=1024 > /dev/null
+        #iptables -A INPUT -p tcp --syn -m limit --limit 1/s -j ACCEPT --limit 1/s
+
+        Println "设置判断为 SYN Flood attack 的时间 (秒)"
+        while read -p "(默认: $d_anti_ddos_syn_flood_delay_seconds 秒): " anti_ddos_syn_flood_delay_seconds
+        do
+            case $anti_ddos_syn_flood_delay_seconds in
+                "") anti_ddos_syn_flood_delay_seconds=$d_anti_ddos_syn_flood_delay_seconds && break
+                ;;
+                *[!0-9]*) Println "$error 请输入正确的数字\n"
+                ;;
+                *) 
+                    if [ "$anti_ddos_syn_flood_delay_seconds" -gt 0 ]
+                    then
+                        break
+                    else
+                        Println "$error 请输入正确的数字(大于0)\n"
+                    fi
+                ;;
+            esac
+        done
+
+        Println "设置封禁 SYN Flood attack ip 多少秒"
+        while read -p "(默认: $d_anti_ddos_syn_flood_seconds 秒): " anti_ddos_syn_flood_seconds
+        do
+            case $anti_ddos_syn_flood_seconds in
+                "") anti_ddos_syn_flood_seconds=$d_anti_ddos_syn_flood_seconds && break
+                ;;
+                *[!0-9]*) Println "$error 请输入正确的数字\n"
+                ;;
+                *) 
+                    if [ "$anti_ddos_syn_flood_seconds" -gt 0 ]
+                    then
+                        break
+                    else
+                        Println "$error 请输入正确的数字(大于0)\n"
+                    fi
+                ;;
+            esac
+        done
+    else
+        anti_ddos_syn_flood_yn="no"
+    fi
+}
+
+SetAntiDDos()
+{
+    echo
+    if [[ $d_anti_ddos == "是" ]] 
+    then
+        yn_options=( '是' '否' )
+    else
+        yn_options=( '否' '是' )
+    fi
+    inquirer list_input "是否开启 iptv 防御" yn_options anti_ddos_yn
+    if [[ $anti_ddos_yn == "是" ]] 
+    then
+        anti_ddos_yn="yes"
+
+        Println "设置封禁用户 ip 多少秒"
+        while read -p "(默认: $d_anti_ddos_seconds 秒): " anti_ddos_seconds
+        do
+            case $anti_ddos_seconds in
+                "") anti_ddos_seconds=$d_anti_ddos_seconds && break
+                ;;
+                *[!0-9]*) Println "$error 请输入正确的数字\n"
+                ;;
+                *) 
+                    if [ "$anti_ddos_seconds" -gt 0 ]
+                    then
+                        break
+                    else
+                        Println "$error 请输入正确的数字(大于0)\n"
+                    fi
+                ;;
+            esac
+        done
+
+        Println "设置封禁等级(1-9)"
+        echo -e "$tip 数值越低越严格, 也越容易误伤, 很多情况是网络问题导致重复请求并非 DDoS\n"
+        while read -p "(默认: $d_anti_ddos_level): " anti_ddos_level
+        do
+            case $anti_ddos_level in
+                "") 
+                    anti_ddos_level=$d_anti_ddos_level
+                    break
+                ;;
+                *[!0-9]*) Println "$error 请输入正确的数字\n"
+                ;;
+                *) 
+                    if [ "$anti_ddos_level" -gt 0 ] && [ "$anti_ddos_level" -lt 10 ]
+                    then
+                        break
+                    else
+                        Println "$error 请输入正确的数字(1-9)\n"
+                    fi
+                ;;
+            esac
+        done
+    else
+        anti_ddos_yn="no"
+    fi
+}
+
+SetAntiLeech()
+{
+    echo
+    if [[ $d_anti_leech == "是" ]] 
+    then
+        yn_options=( '是' '否' )
+    else
+        yn_options=( '否' '是' )
+    fi
+    inquirer list_input "是否开启防盗链" yn_options anti_leech_yn
+    if [[ $anti_leech_yn == "是" ]]
+    then
+        anti_leech_yn="yes"
+
+        Println "请输入每小时随机重启次数 (大于等于0)"
+        while read -p "(默认: $d_anti_leech_restart_nums): " anti_leech_restart_nums
+        do
+            case $anti_leech_restart_nums in
+                "") anti_leech_restart_nums=$d_anti_leech_restart_nums && break
+                ;;
+                *[!0-9]*) Println "$error 请输入正确的数字\n"
+                ;;
+                *) 
+                    if [ "$anti_leech_restart_nums" -ge 0 ]
+                    then
+                        break
+                    else
+                        Println "$error 请输入正确的数字(大于等于0)\n"
+                    fi
+                ;;
+            esac
+        done
+
+        if [ "$anti_leech_restart_nums" -gt 0 ] 
+        then
+            echo
+            yn_options=( '否' '是' )
+            inquirer list_input "是否下个小时开始随机重启" yn_options anti_leech_restart_next_hour_yn
+            if [[ $anti_leech_restart_next_hour_yn == "是" ]] 
+            then
+                printf -v current_hour '%(%-H)T' -1
+                skip_hour=$current_hour
+                minutes=()
+            fi
+        fi
+
+        if [ -n "${flv_nums:-}" ] 
+        then
+            echo
+            if [[ $d_anti_leech_restart_flv_changes == "是" ]] 
+            then
+                yn_options=( '是' '否' )
+            else
+                yn_options=( '否' '是' )
+            fi
+            inquirer list_input "是否每当重启 FLV 频道更改成随机的推流和拉流地址" yn_options anti_leech_restart_flv_changes_yn
+            if [[ $anti_leech_restart_flv_changes_yn == "是" ]] 
+            then
+                anti_leech_restart_flv_changes_yn="yes"
+            else
+                anti_leech_restart_flv_changes_yn="no"
+            fi
+        else
+            anti_leech_restart_flv_changes_yn=$d_anti_leech_restart_flv_changes_yn
+        fi
+
+        if [ -n "$hls_nums" ] 
+        then
+            echo
+            if [[ $d_anti_leech_restart_hls_changes == "是" ]] 
+            then
+                yn_options=( '是' '否' )
+            else
+                yn_options=( '否' '是' )
+            fi
+            inquirer list_input "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 分片名称, key 名称" yn_options anti_leech_restart_hls_changes_yn
+            if [[ $anti_leech_restart_hls_changes_yn == "是" ]] 
+            then
+                anti_leech_restart_hls_changes_yn="yes"
+            else
+                anti_leech_restart_hls_changes_yn="no"
+            fi
+            SetHlsKeyPeriod
+            hls_key_expire_seconds=$((hls_key_period+hls_delay_seconds))
+        else
+            anti_leech_restart_hls_changes_yn=$d_anti_leech_restart_hls_changes_yn
+        fi
+    else
+        anti_leech_yn="no"
+        anti_leech_restart_nums=$d_anti_leech_restart_nums
+        anti_leech_restart_flv_changes_yn=$d_anti_leech_restart_flv_changes_yn
+        anti_leech_restart_hls_changes_yn=$d_anti_leech_restart_hls_changes_yn
+    fi
+}
+
+SetRecheckPeriod()
+{
+    Println "设置重启频道失败后定时检查直播源(如可用即开启频道)的间隔时间(s)"
+    echo -e "$tip 输入 0 关闭检查\n"
+    while read -p "(默认: $d_recheck_period_text): " recheck_period
+    do
+        case $recheck_period in
+            "") recheck_period=$d_recheck_period && break
+            ;;
+            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            ;;
+            *) 
+                if [ "$recheck_period" -ge 0 ]
+                then
+                    break
+                else
+                    Println "$error 请输入正确的数字(大于等于0)\n"
+                fi
+            ;;
+        esac
+    done
 }
 
 SetFlvIsH265()
@@ -6866,7 +7409,7 @@ SetFlvPullLink()
 
 AddChannel()
 {
-    [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+    [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
     GetDefault
     SetStreamLink
 
@@ -7502,11 +8045,18 @@ EditEncrypt()
     Println "$info 加密设置修改成功 !\n"
 }
 
+EditKeyInfoName()
+{
+    SetKeyInfoName
+    JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.keyinfo_name)="'"$keyinfo_name"'"'
+    Println "$info keyinfo 名称修改成功 !\n"
+}
+
 EditKeyName()
 {
     SetKeyName
     JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.key_name)="'"$key_name"'"'
-    Println "$info key名称修改成功 !\n"
+    Println "$info key 名称修改成功 !\n"
 }
 
 EditInputFlags()
@@ -7823,7 +8373,7 @@ EditForSecurity()
         seg_name: "'"$seg_name"'"
     } // .)'
 
-    Println "$info 分片名称、m3u8名称 修改成功 !\n"
+    Println "$info 分片名称, m3u8名称 修改成功 !\n"
 }
 
 EditChannelMenu()
@@ -7844,7 +8394,7 @@ EditChannelMenu()
     ${green}6.${normal} 修改 headers
     ${green}7.${normal} 修改 cookies
     ${green}8.${normal} 修改 输出目录名称
-    ${green}9.${normal} 修改 m3u8名称
+    ${green}9.${normal} 修改 m3u8 名称
    ${green}10.${normal} 修改 分片所在子目录名称
    ${green}11.${normal} 修改 分片名称
    ${green}12.${normal} 修改 分片时长
@@ -7854,25 +8404,27 @@ EditChannelMenu()
    ${green}16.${normal} 修改 视频/音频延迟
    ${green}17.${normal} 修改 dvb teletext
    ${green}18.${normal} 修改 drawtext 水印
-   ${green}19.${normal} 修改 crf质量值
+   ${green}19.${normal} 修改 crf 质量值
    ${green}20.${normal} 修改 比特率
    ${green}21.${normal} 修改 是否固定码率
    ${green}22.${normal} 修改 是否加密
-   ${green}23.${normal} 修改 key名称
-   ${green}24.${normal} 修改 输入参数
-   ${green}25.${normal} 修改 输出参数
-   ${green}26.${normal} 修改 频道名称
-   ${green}27.${normal} 修改 是否开启 sync
-   ${green}28.${normal} 修改 sync file
-   ${green}29.${normal} 修改 sync index
-   ${green}30.${normal} 修改 sync pairs
-   ${green}31.${normal} 修改 是否推流 h265
-   ${green}32.${normal} 修改 推流地址
-   ${green}33.${normal} 修改 拉流地址
-   ${green}34.${normal} 修改 全部配置
+   ${green}23.${normal} 修改 keyinfo 名称
+   ${green}24.${normal} 修改 key 名称
+   ${green}25.${normal} 修改 输入参数
+   ${green}26.${normal} 修改 输出参数
+   ${green}27.${normal} 修改 频道名称
+   ${green}28.${normal} 修改 是否开启 sync
+   ${green}29.${normal} 修改 sync file
+   ${green}30.${normal} 修改 sync index
+   ${green}31.${normal} 修改 sync pairs
+   ${green}32.${normal} 修改 是否推流 h265
+   ${green}33.${normal} 修改 推流地址
+   ${green}34.${normal} 修改 拉流地址
+   ${green}35.${normal} 修改 全部配置
     ————— 组合[常用] —————
-   ${green}35.${normal} 修改 分片名称、m3u8名称 (防盗链/DDoS)
-    \n"
+   ${green}36.${normal} 修改 分片名称, m3u8名称 (防盗链/DDoS)
+
+"
         read -p "(默认: 取消): " edit_channel_num
         [ -z "$edit_channel_num" ] && Println "已取消...\n" && exit 1
         case $edit_channel_num in
@@ -7943,46 +8495,49 @@ EditChannelMenu()
                 EditEncrypt
             ;;
             23)
-                EditKeyName
+                EditKeyInfoName
             ;;
             24)
-                EditInputFlags
+                EditKeyName
             ;;
             25)
-                EditOutputFlags
+                EditInputFlags
             ;;
             26)
-                EditChannelName
+                EditOutputFlags
             ;;
             27)
-                EditSync
+                EditChannelName
             ;;
             28)
-                EditSyncFile
+                EditSync
             ;;
             29)
-                EditSyncIndex
+                EditSyncFile
             ;;
             30)
-                EditSyncPairs
+                EditSyncIndex
             ;;
             31)
-                EditFlvIsH265
+                EditSyncPairs
             ;;
             32)
-                EditFlvPushLink
+                EditFlvIsH265
             ;;
             33)
-                EditFlvPullLink
+                EditFlvPushLink
             ;;
             34)
-                EditChannelAll
+                EditFlvPullLink
             ;;
             35)
+                EditChannelAll
+            ;;
+            36)
                 EditForSecurity
             ;;
             *)
-                echo "请输入正确序号..." && exit 1
+                echo "请输入正确序号...\n" && exit 1
             ;;
         esac
 
@@ -7995,35 +8550,33 @@ EditChannelMenu()
             if [[ $restart_yn == "否" ]]
             then
                 Println "不重启...\n"
-                exit 1
+            else
+                StopChannel
+                GetChannelInfo
+                TestXtreamCodesLink
+                if [ "$to_try" -eq 1 ] 
+                then
+                    continue
+                fi
+                StartChannel
+                Println "$info 频道重启成功 !\n"
             fi
-
-            StopChannel
-            GetChannelInfo
-            TestXtreamCodesLink
-            if [ "$to_try" -eq 1 ] 
-            then
-                continue
-            fi
-            StartChannel
-            Println "$info 频道重启成功 !\n"
         else
             inquirer list_input "是否启动此频道" yn_options start_yn
 
             if [[ $start_yn == "否" ]]
             then
                 Println "不启动...\n"
-                exit 1
+            else
+                GetChannelInfo
+                TestXtreamCodesLink
+                if [ "$to_try" -eq 1 ] 
+                then
+                    continue
+                fi
+                StartChannel
+                Println "$info 频道启动成功 !\n"
             fi
-
-            GetChannelInfo
-            TestXtreamCodesLink
-            if [ "$to_try" -eq 1 ] 
-            then
-                continue
-            fi
-            StartChannel
-            Println "$info 频道启动成功 !\n"
         fi
     done
 }
@@ -8986,7 +9539,7 @@ StartChannel()
         fi
     fi
 
-    Println "$info 频道[ $chnl_channel_name ]已开启 !\n"
+    Println "$info 频道 [ $chnl_channel_name ] 已开启 !\n"
 }
 
 StopChannel()
@@ -9170,6 +9723,255 @@ DelChannel()
         rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
         Println "$info 频道[ $chnl_channel_name ]删除成功 !\n"
     done
+}
+
+EditDefault()
+{
+    jq_path='["default","'"$1"'"]'
+    if [ -n "${2:-}" ] 
+    then
+        JQ update "$CHANNELS_FILE" "$2"
+    else
+        JQ update "$CHANNELS_FILE" "${!1}"
+    fi
+    Println "$info $1 修改成功\n"
+}
+
+EditDefaultMenu()
+{
+    Println "选择修改内容
+
+    ${green}1.${normal} 默认 代理
+    ${green}2.${normal} 默认 xtream codes 代理
+    ${green}3.${normal} 默认 user agent
+    ${green}4.${normal} 默认 headers
+    ${green}5.${normal} 默认 cookies
+    ${green}6.${normal} 默认 m3u8 名称
+    ${green}7.${normal} 默认 分片目录名称
+    ${green}8.${normal} 默认 分片名称
+    ${green}9.${normal} 默认 分片时长
+   ${green}10.${normal} 默认 分片数目
+   ${green}11.${normal} 默认 视频编码
+   ${green}12.${normal} 默认 音频编码
+   ${green}13.${normal} 默认 视频/音频延迟
+   ${green}14.${normal} 默认 dvb teletext
+   ${green}15.${normal} 默认 drawtext 水印
+   ${green}16.${normal} 默认 crf 质量值
+   ${green}17.${normal} 默认 比特率
+   ${green}18.${normal} 默认 是否固定码率
+   ${green}19.${normal} 默认 是否加密
+   ${green}20.${normal} 默认 keyinfo 名称
+   ${green}21.${normal} 默认 key 名称
+   ${green}22.${normal} 默认 输入参数
+   ${green}23.${normal} 默认 输出参数
+   ${green}24.${normal} 默认 sync 开关
+   ${green}25.${normal} 默认 sync file
+   ${green}26.${normal} 默认 sync index
+   ${green}27.${normal} 默认 sync pairs
+   ${green}28.${normal} 默认 节目表文件
+   ${green}29.${normal} 默认 flv 超时时间
+   ${green}30.${normal} 默认 flv 重启次数
+   ${green}31.${normal} 默认 hls 超时时间
+   ${green}32.${normal} 默认 hls 最低比特率
+   ${green}33.${normal} 默认 hls 允许最大分片
+   ${green}34.${normal} 默认 hls 重启次数
+   ${green}35.${normal} 默认 hls key 持续时间
+   ${green}36.${normal} 默认 anti ddos 封禁端口
+   ${green}37.${normal} 默认 SYN Flood 防御
+   ${green}38.${normal} 默认 anti ddos
+   ${green}39.${normal} 默认 anti leech
+   ${green}40.${normal} 默认 重启失败后定时检查间隔时间
+
+"
+    read -p "(默认: 取消): " edit_default_num
+    [ -z "$edit_default_num" ] && Println "已取消...\n" && exit 1
+
+    GetDefault
+    set_default=1
+
+    case $edit_default_num in
+        1)
+            SetProxy
+            EditDefault proxy
+        ;;
+        2)
+            SetXtreamCodesProxy
+            EditDefault xc_proxy
+        ;;
+        3)
+            SetUserAgent
+            EditDefault user_agent
+        ;;
+        4)
+            SetHeaders
+            EditDefault headers
+        ;;
+        5)
+            SetCookies
+            EditDefault cookies
+        ;;
+        6)
+            SetPlaylistName
+            EditDefault playlist_name
+        ;;
+        7)
+            SetSegDirName
+            EditDefault seg_dir_name
+        ;;
+        8)
+            SetSegName
+            EditDefault seg_name
+        ;;
+        9)
+            SetSegLength
+            EditDefault seg_length
+        ;;
+        10)
+            SetSegCount
+            EditDefault seg_count
+        ;;
+        11)
+            SetVideoCodec
+            EditDefault video_codec
+        ;;
+        12)
+            SetAudioCodec
+            EditDefault audio_codec
+        ;;
+        13)
+            SetVideoAudioShift
+            EditDefault video_audio_shift
+        ;;
+        14)
+            SetSubtitle
+            EditDefault txt_format
+        ;;
+        15)
+            SetDrawtext
+            EditDefault draw_text
+        ;;
+        16)
+            SetQuality
+            EditDefault quality
+        ;;
+        17)
+            SetBitrates
+            EditDefault bitrates
+        ;;
+        18)
+            SetConst
+            EditDefault const "$const_yn"
+        ;;
+        19)
+            SetEncrypt
+            EditDefault encrypt "$encrypt_yn"
+            EditDefault encrypt_session "$encrypt_session_yn"
+        ;;
+        20)
+            SetKeyInfoName
+            EditDefault keyinfo_name
+        ;;
+        21)
+            SetKeyName
+            EditDefault key_name
+        ;;
+        22)
+            SetInputFlags
+            EditDefault input_flags
+        ;;
+        23)
+            SetOutputFlags
+            EditDefault output_flags
+        ;;
+        24)
+            SetSync
+            EditDefault sync "$sync_yn"
+        ;;
+        25)
+            SetSyncFile
+            EditDefault sync_file
+        ;;
+        26)
+            SetSyncIndex
+            EditDefault sync_index
+        ;;
+        27)
+            SetSyncPairs
+            EditDefault sync_pairs
+        ;;
+        28)
+            SetScheduleFile
+            EditDefault schedule_file
+        ;;
+        29)
+            SetFlvDelaySeconds
+            EditDefault flv_delay_seconds
+        ;;
+        30)
+            SetFlvRestartNums
+            EditDefault flv_restart_nums
+        ;;
+        31)
+            SetHlsDelaySeconds
+            EditDefault hls_delay_seconds
+        ;;
+        32)
+            SetHlsMinBitrates
+            EditDefault hls_min_bitrates
+        ;;
+        33)
+            SetHlsMaxSegSize
+            EditDefault hls_max_seg_size
+        ;;
+        34)
+            SetHlsRestartNums
+            EditDefault hls_restart_nums
+        ;;
+        35)
+            SetHlsKeyPeriod
+            EditDefault hls_key_period
+        ;;
+        36)
+            SetAntiDDosPort
+            EditDefault anti_ddos_port
+        ;;
+        37)
+            SetAntiDDosSynFlood
+            EditDefault anti_ddos_syn_flood "$anti_ddos_syn_flood_yn"
+            if [ "$anti_ddos_syn_flood_yn" == "yes" ] 
+            then
+                EditDefault anti_ddos_syn_flood_delay_seconds
+                EditDefault anti_ddos_syn_flood_seconds
+            fi
+        ;;
+        38)
+            SetAntiDDos
+            EditDefault anti_ddos "$anti_ddos_yn"
+            if [ "$anti_ddos_yn" == "yes" ] 
+            then
+                EditDefault anti_ddos_seconds
+                EditDefault anti_ddos_level
+            fi
+        ;;
+        39)
+            SetAntiLeech
+            EditDefault anti_leech "$anti_leech_yn"
+            if [ "$anti_leech_yn" == "yes" ] 
+            then
+                EditDefault anti_leech_restart_nums
+                EditDefault anti_leech_restart_flv_changes "$anti_leech_restart_flv_changes_yn"
+                EditDefault anti_leech_restart_hls_changes "$anti_leech_restart_hls_changes_yn"
+            fi
+        ;;
+        40)
+            SetRecheckPeriod
+            EditDefault recheck_period
+        ;;
+        *)
+            Println "请输入正确序号...\n"
+            exit 1
+        ;;
+    esac
 }
 
 Set4gtvAccEmail()
@@ -13053,6 +13855,7 @@ Schedule()
         "history2:4gtv-4gtv028:HISTORY 2 頻道"
         "smithsonian:4gtv-4gtv088:Smithsonian Channel"
         "smartzs:4gtv-4gtv076:SMART 知識頻道"
+        "techstorm:4gtv-live109:TechStorm"
         "luxe:4gtv-live121:LUXE TV Channel"
         "tv5monde:4gtv-live122:TV5MONDE STYLE HD 生活時尚"
         "gsxj:4gtv-4gtv042:公視戲劇"
@@ -13434,7 +14237,6 @@ InstallImgcat()
     wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/CImg.zip" -qO CImg.zip
     unzip CImg.zip >/dev/null 2>&1
     mv CImg-master CImg
-    autoconf >/dev/null 2>&1
     ./configure >/dev/null 2>&1
     make >/dev/null 2>&1
     make install >/dev/null 2>&1
@@ -13813,125 +14615,6 @@ TsMenu()
     done
 }
 
-AntiLeech()
-{
-    echo
-    if [[ $d_anti_leech == "是" ]] 
-    then
-        yn_options=( '是' '否' )
-    else
-        yn_options=( '否' '是' )
-    fi
-    inquirer list_input "是否开启防盗链" yn_options anti_leech_yn
-    if [[ $anti_leech_yn == "是" ]]
-    then
-        anti_leech_yn="yes"
-
-        Println "请输入每小时随机重启次数 (大于等于0)"
-        while read -p "(默认: $d_anti_leech_restart_nums): " anti_leech_restart_nums
-        do
-            case $anti_leech_restart_nums in
-                "") anti_leech_restart_nums=$d_anti_leech_restart_nums && break
-                ;;
-                *[!0-9]*) Println "$error 请输入正确的数字\n"
-                ;;
-                *) 
-                    if [ "$anti_leech_restart_nums" -ge 0 ]
-                    then
-                        break
-                    else
-                        Println "$error 请输入正确的数字(大于等于0)\n"
-                    fi
-                ;;
-            esac
-        done
-
-        if [ "$anti_leech_restart_nums" -gt 0 ] 
-        then
-            echo
-            yn_options=( '否' '是' )
-            inquirer list_input "是否下个小时开始随机重启" yn_options anti_leech_restart_next_hour_yn
-            if [[ $anti_leech_restart_next_hour_yn == "是" ]] 
-            then
-                printf -v current_hour '%(%-H)T' -1
-                skip_hour=$current_hour
-                minutes=()
-            fi
-        fi
-
-        if [ -n "${flv_nums:-}" ] 
-        then
-            echo
-            if [[ $d_anti_leech_restart_flv_changes == "是" ]] 
-            then
-                yn_options=( '是' '否' )
-            else
-                yn_options=( '否' '是' )
-            fi
-            inquirer list_input "是否每当重启 FLV 频道更改成随机的推流和拉流地址" yn_options anti_leech_restart_flv_changes_yn
-            if [[ $anti_leech_restart_flv_changes_yn == "是" ]] 
-            then
-                anti_leech_restart_flv_changes_yn="yes"
-            else
-                anti_leech_restart_flv_changes_yn="no"
-            fi
-        else
-            anti_leech_restart_flv_changes_yn=$d_anti_leech_restart_flv_changes_yn
-        fi
-
-        if [ -n "$hls_nums" ] 
-        then
-            echo
-            if [[ $d_anti_leech_restart_hls_changes == "是" ]] 
-            then
-                yn_options=( '是' '否' )
-            else
-                yn_options=( '否' '是' )
-            fi
-            inquirer list_input "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 分片名称, key 名称" yn_options anti_leech_restart_hls_changes_yn
-            if [[ $anti_leech_restart_hls_changes_yn == "是" ]] 
-            then
-                anti_leech_restart_hls_changes_yn="yes"
-            else
-                anti_leech_restart_hls_changes_yn="no"
-            fi
-            echo
-            inquirer text_input "每隔多少秒更改加密频道的 key: " hls_key_period $d_hls_key_period
-            hls_key_expire_seconds=$((hls_key_period+hls_delay_seconds))
-        else
-            anti_leech_restart_hls_changes_yn=$d_anti_leech_restart_hls_changes_yn
-        fi
-    else
-        anti_leech_yn="no"
-        anti_leech_restart_nums=$d_anti_leech_restart_nums
-        anti_leech_restart_flv_changes_yn=$d_anti_leech_restart_flv_changes_yn
-        anti_leech_restart_hls_changes_yn=$d_anti_leech_restart_hls_changes_yn
-    fi
-}
-
-RecheckPeriod()
-{
-    Println "设置重启频道失败后定时检查直播源(如可用即开启频道)的间隔时间(s)"
-    echo -e "$tip 输入 0 关闭检查\n"
-    while read -p "(默认: $d_recheck_period_text): " recheck_period
-    do
-        case $recheck_period in
-            "") recheck_period=$d_recheck_period && break
-            ;;
-            *[!0-9]*) Println "$error 请输入正确的数字\n"
-            ;;
-            *) 
-                if [ "$recheck_period" -ge 0 ]
-                then
-                    break
-                else
-                    Println "$error 请输入正确的数字(大于等于0)\n"
-                fi
-            ;;
-        esac
-    done
-}
-
 AntiDDoSSet()
 {
     if [ -x "$(command -v ufw)" ] && [ -s "$nginx_prefix/logs/access.log" ] && ls -A $LIVE_ROOT/* > /dev/null 2>&1
@@ -13960,219 +14643,11 @@ AntiDDoSSet()
 
         GetDefault
 
-        Println "设置封禁端口"
-        echo -e "$tip 多个端口用空格分隔 比如 22 80 443 12480-12489\n"
-        while read -p "(默认: $d_anti_ddos_port_text): " anti_ddos_ports
-        do
-            anti_ddos_ports=${anti_ddos_ports:-$d_anti_ddos_port_text}
-            if [ -z "$anti_ddos_ports" ] 
-            then
-                Println "$error 请输入正确的数字\n"
-                continue
-            fi
+        SetAntiDDosPort
 
-            IFS=" " read -ra anti_ddos_ports_arr <<< "$anti_ddos_ports"
+        SetAntiDDosSynFlood
 
-            error_no=0
-            for anti_ddos_port in "${anti_ddos_ports_arr[@]}"
-            do
-                case "$anti_ddos_port" in
-                    *"-"*)
-                        anti_ddos_ports_start=${anti_ddos_port%-*}
-                        anti_ddos_ports_end=${anti_ddos_port#*-}
-                        if [[ $anti_ddos_ports_start == *[!0-9]* ]] || [[ $anti_ddos_ports_end == *[!0-9]* ]] || [ "$anti_ddos_ports_start" -eq 0 ] || [ "$anti_ddos_ports_end" -eq 0 ] || [ "$anti_ddos_ports_start" -ge "$anti_ddos_ports_end" ]
-                        then
-                            error_no=3
-                        fi
-                    ;;
-                    *[!0-9]*)
-                        error_no=1
-                    ;;
-                    *)
-                        if [ "$anti_ddos_port" -lt 1 ]  
-                        then
-                            error_no=2
-                        fi
-                    ;;
-                esac
-            done
-
-            case "$error_no" in
-                1|2|3)
-                    Println "$error 请输入正确的数字\n"
-                ;;
-                *)
-                    anti_ddos_ports_command=""
-                    anti_ddos_ports_range_command=""
-                    for anti_ddos_port in "${anti_ddos_ports_arr[@]}"
-                    do
-                        if [[ $anti_ddos_port -eq 80 ]] 
-                        then
-                            anti_ddos_port="http"
-                        elif [[ $anti_ddos_port -eq 443 ]] 
-                        then
-                            anti_ddos_port="https"
-                        elif [[ $anti_ddos_port -eq 22 ]] 
-                        then
-                            anti_ddos_port="ssh"
-                        elif [[ $anti_ddos_port == *"-"* ]] 
-                        then
-                            anti_ddos_ports_start=${anti_ddos_port%-*}
-                            anti_ddos_ports_end=${anti_ddos_port#*-}
-                            if [[ anti_ddos_ports_start -le 22 && $anti_ddos_ports_end -ge 22 ]] 
-                            then
-                                [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command="$anti_ddos_ports_command|"
-                                anti_ddos_ports_command=$anti_ddos_ports_command"ssh"
-                            elif [[ anti_ddos_ports_start -le 80 && $anti_ddos_ports_end -ge 80 ]] 
-                            then
-                                [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command="$anti_ddos_ports_command|"
-                                anti_ddos_ports_command=$anti_ddos_ports_command"http"
-                            elif [[ anti_ddos_ports_start -le 443 && $anti_ddos_ports_end -ge 443 ]] 
-                            then
-                                [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command="$anti_ddos_ports_command|"
-                                anti_ddos_ports_command=$anti_ddos_ports_command"https"
-                            fi
-                            [ -n "$anti_ddos_ports_range_command" ] && anti_ddos_ports_range_command="$anti_ddos_ports_range_command || "
-                            anti_ddos_ports_range_command=$anti_ddos_ports_range_command'($4 >= '"$anti_ddos_ports_start"' && $4 <= '"$anti_ddos_ports_end"')'
-                            continue
-                        fi
-
-                        [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command="$anti_ddos_ports_command|"
-                        anti_ddos_ports_command="$anti_ddos_ports_command$anti_ddos_port"
-                    done
-
-                    [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_command='$4 ~ /^('"$anti_ddos_ports_command"')$/'
-                    if [ -n "$anti_ddos_ports_range_command" ] 
-                    then
-                        anti_ddos_ports_range_command='$4 ~ /^[0-9]+$/ && ('"$anti_ddos_ports_range_command"')'
-                        [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_range_command=' || ('"$anti_ddos_ports_range_command"')'
-                    fi
-                    if [[ $anti_ddos_ports == *" "* ]] || [[ $anti_ddos_ports == *"-"* ]]
-                    then
-                        anti_ddos_port=${anti_ddos_ports// /,}
-                        anti_ddos_port=${anti_ddos_port//-/:}
-                        anti_ddos_port="$anti_ddos_port proto tcp"
-                    else
-                        anti_ddos_port=$anti_ddos_ports
-                    fi
-                    break
-                ;;
-            esac
-        done
-
-        echo
-        if [[ $d_anti_ddos_syn_flood == "是" ]] 
-        then
-            yn_options=( '是' '否' )
-        else
-            yn_options=( '否' '是' )
-        fi
-        inquirer list_input "是否开启 SYN Flood attack 防御" yn_options anti_ddos_syn_flood_yn
-        if [[ $anti_ddos_syn_flood_yn == "是" ]] 
-        then
-            anti_ddos_syn_flood_yn="yes"
-            sysctl -w net.ipv4.tcp_syn_retries=6 > /dev/null
-            sysctl -w net.ipv4.tcp_synack_retries=2 > /dev/null
-            sysctl -w net.ipv4.tcp_syncookies=1 > /dev/null
-            sysctl -w net.ipv4.tcp_max_syn_backlog=1024 > /dev/null
-            #iptables -A INPUT -p tcp --syn -m limit --limit 1/s -j ACCEPT --limit 1/s
-
-            Println "设置判断为 SYN Flood attack 的时间 (秒)"
-            while read -p "(默认: $d_anti_ddos_syn_flood_delay_seconds 秒): " anti_ddos_syn_flood_delay_seconds
-            do
-                case $anti_ddos_syn_flood_delay_seconds in
-                    "") anti_ddos_syn_flood_delay_seconds=$d_anti_ddos_syn_flood_delay_seconds && break
-                    ;;
-                    *[!0-9]*) Println "$error 请输入正确的数字\n"
-                    ;;
-                    *) 
-                        if [ "$anti_ddos_syn_flood_delay_seconds" -gt 0 ]
-                        then
-                            break
-                        else
-                            Println "$error 请输入正确的数字(大于0)\n"
-                        fi
-                    ;;
-                esac
-            done
-
-            Println "设置封禁 SYN Flood attack ip 多少秒"
-            while read -p "(默认: $d_anti_ddos_syn_flood_seconds 秒): " anti_ddos_syn_flood_seconds
-            do
-                case $anti_ddos_syn_flood_seconds in
-                    "") anti_ddos_syn_flood_seconds=$d_anti_ddos_syn_flood_seconds && break
-                    ;;
-                    *[!0-9]*) Println "$error 请输入正确的数字\n"
-                    ;;
-                    *) 
-                        if [ "$anti_ddos_syn_flood_seconds" -gt 0 ]
-                        then
-                            break
-                        else
-                            Println "$error 请输入正确的数字(大于0)\n"
-                        fi
-                    ;;
-                esac
-            done
-        else
-            anti_ddos_syn_flood_yn="no"
-        fi
-
-        echo
-        if [[ $d_anti_ddos == "是" ]] 
-        then
-            yn_options=( '是' '否' )
-        else
-            yn_options=( '否' '是' )
-        fi
-        inquirer list_input "是否开启 iptv 防御" yn_options anti_ddos_yn
-        if [[ $anti_ddos_yn == "是" ]] 
-        then
-            anti_ddos_yn="yes"
-
-            Println "设置封禁用户 ip 多少秒"
-            while read -p "(默认: $d_anti_ddos_seconds 秒): " anti_ddos_seconds
-            do
-                case $anti_ddos_seconds in
-                    "") anti_ddos_seconds=$d_anti_ddos_seconds && break
-                    ;;
-                    *[!0-9]*) Println "$error 请输入正确的数字\n"
-                    ;;
-                    *) 
-                        if [ "$anti_ddos_seconds" -gt 0 ]
-                        then
-                            break
-                        else
-                            Println "$error 请输入正确的数字(大于0)\n"
-                        fi
-                    ;;
-                esac
-            done
-
-            Println "设置封禁等级(1-9)"
-            echo -e "$tip 数值越低越严格, 也越容易误伤, 很多情况是网络问题导致重复请求并非 DDoS\n"
-            while read -p "(默认: $d_anti_ddos_level): " anti_ddos_level
-            do
-                case $anti_ddos_level in
-                    "") 
-                        anti_ddos_level=$d_anti_ddos_level
-                        break
-                    ;;
-                    *[!0-9]*) Println "$error 请输入正确的数字\n"
-                    ;;
-                    *) 
-                        if [ "$anti_ddos_level" -gt 0 ] && [ "$anti_ddos_level" -lt 10 ]
-                        then
-                            break
-                        else
-                            Println "$error 请输入正确的数字(1-9)\n"
-                        fi
-                    ;;
-                esac
-            done
-        else
-            anti_ddos_yn="no"
-        fi
+        SetAntiDDos
 
         if [ "$anti_ddos_syn_flood_yn" == "no" ] && [ "$anti_ddos_yn" == "no" ] 
         then
@@ -16179,24 +16654,7 @@ MonitorSet()
                     fi
                     unset new_array
 
-                    Println "设置超时多少秒自动重启频道"
-                    while read -p "(默认: $d_flv_delay_seconds秒): " flv_delay_seconds
-                    do
-                        case $flv_delay_seconds in
-                            "") flv_delay_seconds=$d_flv_delay_seconds && break
-                            ;;
-                            *[!0-9]*) Println "$error 请输入正确的数字\n"
-                            ;;
-                            *) 
-                                if [ "$flv_delay_seconds" -gt 0 ]
-                                then
-                                    break
-                                else
-                                    Println "$error 请输入正确的数字(大于0)\n"
-                                fi
-                            ;;
-                        esac
-                    done
+                    SetFlvDelaySeconds
                     break
                 ;;
             esac
@@ -16204,24 +16662,7 @@ MonitorSet()
 
         if [ -n "$flv_nums" ] 
         then
-            Println "请输入尝试重启的次数"
-            while read -p "(默认: $d_flv_restart_nums次): " flv_restart_nums
-            do
-                case $flv_restart_nums in
-                    "") flv_restart_nums=$d_flv_restart_nums && break
-                    ;;
-                    *[!0-9]*) Println "$error 请输入正确的数字\n"
-                    ;;
-                    *) 
-                        if [ "$flv_restart_nums" -gt 0 ]
-                        then
-                            break
-                        else
-                            Println "$error 请输入正确的数字(大于0)\n"
-                        fi
-                    ;;
-                esac
-            done
+            SetFlvRestartNums
         fi
     fi
 
@@ -16234,8 +16675,8 @@ MonitorSet()
         then
             Println "已取消...\n" && exit 1
         else
-            RecheckPeriod
-            AntiLeech
+            SetRecheckPeriod
+            SetAntiLeech
             JQ update "$CHANNELS_FILE" '.default|=. * 
             {
                 flv_delay_seconds: '"$flv_delay_seconds"',
@@ -16282,25 +16723,7 @@ MonitorSet()
         then
             monitor_dir_names_chosen=("${monitor_dir_names[@]}")
 
-            Println "设置超时多少秒自动重启频道"
-            echo -e "$tip 必须大于 分片时长*分片数目\n"
-            while read -p "(默认: $d_hls_delay_seconds秒): " hls_delay_seconds
-            do
-                case $hls_delay_seconds in
-                    "") hls_delay_seconds=$d_hls_delay_seconds && break
-                    ;;
-                    *[!0-9]*) Println "$error 请输入正确的数字\n"
-                    ;;
-                    *) 
-                        if [ "$hls_delay_seconds" -gt 60 ]
-                        then
-                            break
-                        else
-                            Println "$error 请输入正确的数字(大于60)\n"
-                        fi
-                    ;;
-                esac
-            done
+            SetHlsDelaySeconds
             break
         fi
 
@@ -16363,7 +16786,7 @@ MonitorSet()
 
                 Println "设置超时多少秒自动重启频道"
                 echo -e "$tip 必须大于 分片时长*分片数目\n"
-                while read -p "(默认: $d_hls_delay_seconds秒): " hls_delay_seconds
+                while read -p "(默认: $d_hls_delay_seconds 秒): " hls_delay_seconds
                 do
                     case $hls_delay_seconds in
                         "") hls_delay_seconds=$d_hls_delay_seconds && break
@@ -16388,68 +16811,16 @@ MonitorSet()
 
     if [ -n "$hls_nums" ] 
     then
-        Println "请输入最低比特率(kb/s),低于此数值会重启频道(除加密的频道)"
-        while read -p "(默认: $d_hls_min_bitrates): " hls_min_bitrates
-        do
-            case $hls_min_bitrates in
-                "") hls_min_bitrates=$d_hls_min_bitrates && break
-                ;;
-                *[!0-9]*) Println "$error 请输入正确的数字\n"
-                ;;
-                *) 
-                    if [ "$hls_min_bitrates" -gt 0 ]
-                    then
-                        break
-                    else
-                        Println "$error 请输入正确的数字(大于0)\n"
-                    fi
-                ;;
-            esac
-        done
+        SetHlsMinBitrates
 
         hls_min_bitrates=$((hls_min_bitrates * 1000))
     fi
 
-    Println "请输入允许的最大分片"
-    while read -p "(默认: ${d_hls_max_seg_size}M): " hls_max_seg_size
-    do
-        case $hls_max_seg_size in
-            "") hls_max_seg_size=$d_hls_max_seg_size && break
-            ;;
-            *[!0-9]*) Println "$error 请输入正确的数字\n"
-            ;;
-            *) 
-                if [ "$hls_max_seg_size" -gt 0 ]
-                then
-                    break
-                else
-                    Println "$error 请输入正确的数字(大于0)\n"
-                fi
-            ;;
-        esac
-    done
+    SetHlsMaxSegSize
+    SetHlsRestartNums
 
-    Println "请输入尝试重启的次数"
-    while read -p "(默认: $d_hls_restart_nums次): " hls_restart_nums
-    do
-        case $hls_restart_nums in
-            "") hls_restart_nums=$d_hls_restart_nums && break
-            ;;
-            *[!0-9]*) Println "$error 请输入正确的数字\n"
-            ;;
-            *) 
-                if [ "$hls_restart_nums" -gt 0 ]
-                then
-                    break
-                else
-                    Println "$error 请输入正确的数字(大于0)\n"
-                fi
-            ;;
-        esac
-    done
-
-    RecheckPeriod
-    AntiLeech
+    SetRecheckPeriod
+    SetAntiLeech
 
     flv_delay_seconds=${flv_delay_seconds:-$d_flv_delay_seconds}
     flv_restart_nums=${flv_restart_nums:-$d_flv_restart_nums}
@@ -18592,7 +18963,7 @@ ViewXtreamCodesChnls()
                                 -H "User-Agent: $user_agent" \
                                 -H "${headers:0:-4}" \
                                 --cookie "$cookies" "$create_link_url" \
-                                | $JQ_FILE -r '.js.cmd')
+                                | $JQ_FILE -r '.js.cmd') || true
 
                             if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
                             then
@@ -19035,10 +19406,20 @@ InstallNginx()
         tar xzf "zlib-1.2.11.tar.gz"
     fi
 
-    if [ ! -d "./openssl-1.1.1g" ] 
+    while IFS= read -r line
+    do
+        if [[ $line == *"openssl-1."* ]] 
+        then
+            openssl_name=${line#*<a href=\"}
+            openssl_name=${openssl_name%%.tar.gz*}
+            break
+        fi
+    done < <(curl -s -L -H "User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36" "https://www.openssl.org/source/")
+
+    if [ ! -d "./$openssl_name" ] 
     then
-        curl -s -L "https://www.openssl.org/source/openssl-1.1.1g.tar.gz" -o "openssl-1.1.1g.tar.gz"
-        tar xzf "openssl-1.1.1g.tar.gz"
+        curl -s -L "https://www.openssl.org/source/$openssl_name.tar.gz" -o "$openssl_name.tar.gz"
+        tar xzf "$openssl_name.tar.gz"
     fi
 
     rm -rf nginx-http-flv-module-master
@@ -19071,7 +19452,7 @@ InstallNginx()
     cd "$nginx_name/"
     ./configure --add-module=../nginx-http-flv-module-master \
         --with-pcre=../pcre-8.44 --with-pcre-jit --with-zlib=../zlib-1.2.11 \
-        --with-openssl=../openssl-1.1.1g --with-openssl-opt=no-nextprotoneg \
+        --with-openssl=../$openssl_name --with-openssl-opt=no-nextprotoneg \
         --with-http_stub_status_module --with-http_ssl_module --with-http_v2_module \
         --with-http_realip_module --with-threads --with-debug >/dev/null 2>&1
 
@@ -21453,7 +21834,13 @@ NodejsConfig()
             NginxConfigServerRoot
         fi
         NginxConfigServerLiveRoot
-        NginxDomainServerToggleNodejs
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "跳过 nodejs 设置" yn_options skip_nodejs_yn
+        if [[ $skip_nodejs_yn == "否" ]]
+        then
+            NginxDomainServerToggleNodejs
+        fi
         NginxConfigSsl
     fi
 
@@ -21715,7 +22102,7 @@ V2rayConfigUpdate()
     then
         Println "$error v2ray 未安装...\n" && exit 1
     fi
-    if ! grep -q '"tag": "nginx-1"' < "$V2_CONFIG"
+    if ! grep -q '"tag": "nginx-1"' < "$V2_CONFIG" && ! grep -q '"tag": "no-nginx-1"' < "$V2_CONFIG"
     then
         if grep -q '"path": "' < "$V2_CONFIG" 
         then
@@ -21953,7 +22340,7 @@ V2rayListNginx()
 
     [ "$inbounds_nginx_count" -eq 0 ] && Println "$error 没有账号组\n" && exit 1
 
-    Println "\n=== $nginx_name 账号组数 $green $inbounds_nginx_count ${normal}"
+    Println "\n=== 账号组数 $green $inbounds_nginx_count ${normal}  nginx-$green ($nginx_name 连接) ${normal}, no-nginx-$green (公开连接) ${normal}"
 
     nginx_list=""
 
@@ -26737,7 +27124,7 @@ DeployCloudflareWorker()
                 InstallPython
             fi
 
-            if [ "$sh_debug" -eq 0 ] && [ ! -e "$IPTV_ROOT/VIP" ]
+            if [ "$sh_debug" -eq 0 ] && [ ! -f "$IPTV_ROOT/VIP" ]
             then
                 curl -s -Lm 10 "$CF_WORKERS_LINK" -o "$CF_WORKERS_FILE" \
                 || curl -s -Lm 20 "$CF_WORKERS_LINK_BACKUP" -o "$CF_WORKERS_FILE"
@@ -28130,7 +28517,7 @@ EnableCloudflareWorkersMonitor()
     fi
 
     Println "$info 更新 ${CF_WORKERS_FILE##*/} ..."
-    if [ "$sh_debug" -eq 0 ] && [ ! -e "$IPTV_ROOT/VIP" ]
+    if [ "$sh_debug" -eq 0 ] && [ ! -f "$IPTV_ROOT/VIP" ]
     then
         curl -s -Lm 10 "$CF_WORKERS_LINK" -o "$CF_WORKERS_FILE" \
         || curl -s -Lm 20 "$CF_WORKERS_LINK_BACKUP" -o "$CF_WORKERS_FILE"
@@ -31119,6 +31506,218 @@ SetVipChannelEpgId()
 
 AddVipChannel()
 {
+    echo
+    add_vip_channel_options=( '选择频道' '手动输入频道' )
+    inquirer list_input "添加方式" add_vip_channel_options add_vip_channel_option
+
+    if [[ $add_vip_channel_option == "选择频道" ]] 
+    then
+        if [ ! -f "$IPTV_ROOT/VIP" ] 
+        then
+            Println "$info 获取频道中..."
+            if ! curl -s -L "$VIP_CHANNELS_LINK" -o "${VIP_CHANNELS_FILE}_tmp"
+            then
+                if [ ! -s "$VIP_CHANNELS_FILE" ] 
+                then
+                    Println "$error 暂时无法获取频道, 请稍后再试\n"
+                    exit 1
+                fi
+                Println "$error 更新频道失败, 使用原有频道\n"
+            else
+                mv "${VIP_CHANNELS_FILE}_tmp" "$VIP_CHANNELS_FILE"
+            fi
+        fi
+
+        vip_channels_name=()
+        vip_channels_host_ip=()
+        vip_channels_host_port=()
+        vip_channels_id=()
+
+        while IFS="^" read -r m_name m_url
+        do
+            if [ -n "$m_url" ] && [[ $m_url =~ ^http://([^/]+):([^/]+)/([^/]+) ]]
+            then
+                vip_channels_name+=("$m_name")
+                vip_channels_host_ip+=("${BASH_REMATCH[1]}")
+                vip_channels_host_port+=("${BASH_REMATCH[2]}")
+                vip_channels_id+=("${BASH_REMATCH[3]}")
+            fi
+        done < <($JQ_FILE -r '.[]|[.name,.url]|join("^")' $VIP_CHANNELS_FILE)
+
+        vip_channels_list=""
+        vip_channels_count=${#vip_channels_id[@]}
+        vip_channels_epg_id=("${vip_channels_id[@]}")
+
+        flag=0
+        for((i=0;i<vip_channels_count;i++));
+        do
+            if [ "$flag" -eq 0 ] 
+            then
+                flag=1
+                i_last=$i
+                vip_channels_list="$vip_channels_list $green$((i+1)).${normal}\r\033[7C${vip_channels_name[i]}"
+            else
+                flag=0
+                vip_channels_list="$vip_channels_list\r\033[40C$green$((i+1)).${normal}\r\033[47C${vip_channels_name[i]}\n\033[7C频道ID: ${vip_channels_id[i_last]}\r\033[47C频道ID: ${vip_channels_id[i]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-无}\r\033[47CEPG ID: ${vip_channels_epg_id[i]:-无}\n\n"
+            fi
+        done
+
+        if [ "$flag" -eq 1 ] 
+        then
+            vip_channels_list="$vip_channels_list\n\033[7C频道ID: ${vip_channels_id[i_last]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-无}\n\n"
+        fi
+
+        Println "$vip_channels_list"
+
+        echo -e "$tip 多个频道用空格分隔, 比如 5 7 9-11"
+        while read -p "请选择频道: " vip_channels_num
+        do
+            [ -z "$vip_channels_num" ] && Println "已取消...\n" && exit 1
+            IFS=" " read -ra vip_channels_num_arr <<< "$vip_channels_num"
+
+            error_no=0
+            for vip_channel_num in "${vip_channels_num_arr[@]}"
+            do
+                case "$vip_channel_num" in
+                    *"-"*)
+                        vip_channel_num_start=${vip_channel_num%-*}
+                        vip_channel_num_end=${vip_channel_num#*-}
+                        if [[ $vip_channel_num_start == *[!0-9]* ]] || [[ $vip_channel_num_end == *[!0-9]* ]] || [ "$vip_channel_num_start" -eq 0 ] || [ "$vip_channel_num_end" -eq 0 ] || [ "$vip_channel_num_end" -gt "$vip_channels_count" ] || [ "$vip_channel_num_start" -ge "$vip_channel_num_end" ]
+                        then
+                            error_no=3
+                        fi
+                    ;;
+                    *[!0-9]*)
+                        error_no=1
+                    ;;
+                    *)
+                        if [ "$vip_channel_num" -lt 1 ] || [ "$vip_channel_num" -gt "$vip_channels_count" ] 
+                        then
+                            error_no=2
+                        fi
+                    ;;
+                esac
+            done
+
+            case "$error_no" in
+                1|2|3)
+                    Println "$error 请输入正确的数字或直接回车 \n"
+                ;;
+                *)
+                    declare -a new_array
+                    for element in "${vip_channels_num_arr[@]}"
+                    do
+                        if [[ $element == *"-"* ]] 
+                        then
+                            start=${element%-*}
+                            end=${element#*-}
+                            for((i=start;i<=end;i++));
+                            do
+                                new_array+=("$i")
+                            done
+                        else
+                            new_array+=("$element")
+                        fi
+                    done
+
+                    vip_channels_num_arr=("${new_array[@]}")
+                    unset new_array
+
+                    GetVipHosts
+                    skip_hosts=""
+
+                    for vip_channels_num in "${vip_channels_num_arr[@]}"
+                    do
+                        vip_channels_index=$((vip_channels_num-1))
+                        vip_channel_id=${vip_channels_id[vip_channels_index]}
+                        vip_channel_name=${vip_channels_name[vip_channels_index]}
+                        vip_channel_epg_id=${vip_channels_epg_id[vip_channels_index]}
+                        vip_channel_host_ip=${vip_channels_host_ip[vip_channels_index]}
+                        vip_channel_host_port=${vip_channels_host_port[vip_channels_index]}
+
+                        if [[ $skip_hosts =~ $vip_channel_host_ip:$vip_channel_host_port ]] 
+                        then
+                            continue
+                        fi
+
+                        found=0
+                        for((i=0;i<vip_hosts_count;i++));
+                        do
+                            if [ "${vip_hosts_ip[i]}" == "$vip_channel_host_ip" ] && [ "${vip_hosts_port[i]}" == "$vip_channel_host_port" ]
+                            then
+                                found=1
+                                break
+                            fi
+                        done
+
+                        if [ "$found" -eq 0 ] 
+                        then
+                            echo
+                            yn_options=( '是' '否' )
+                            inquirer list_input "是否添加服务器 $vip_channel_host_ip:$vip_channel_host_port" yn_options add_vip_host_yn
+                            if [[ $add_vip_host_yn == "是" ]] 
+                            then
+                                vip_host_ip=$vip_channel_host_ip
+                                vip_host_port=$vip_channel_host_port
+                                SetVipHostSeed
+                                SetVipHostToken
+                                vip_host_status_yn="on"
+
+                                if [ ! -s "$VIP_FILE" ] 
+                                then
+                                    printf '{"%s":{},"%s":[],"%s":[]}' "config" "users" "hosts" > "$VIP_FILE"
+                                fi
+
+                                new_host=$(
+                                $JQ_FILE -n --arg ip "$vip_host_ip" --arg port "$vip_host_port" \
+                                    --arg seed "$vip_host_seed" --arg token "$vip_host_token" \
+                                    --arg status "$vip_host_status_yn" \
+                                    '{
+                                        ip: $ip,
+                                        port: $port | tonumber,
+                                        seed: $seed,
+                                        token: $token,
+                                        status: $status,
+                                        channels: []
+                                    }'
+                                )
+
+                                jq_path='["hosts"]'
+                                JQ add "$VIP_FILE" "[$new_host]"
+                                Println "$info $vip_channel_host_ip:$vip_channel_host_port 服务器添加成功\n"
+                                GetVipHosts
+                                i=$((vip_hosts_count-1))
+                            else
+                                skip_hosts="$skip_hosts$vip_channel_host_ip:$vip_channel_host_port "
+                                continue
+                            fi
+                        fi
+
+                        jq_path='["hosts",'"$i"',"channels"]'
+                        JQ delete "$VIP_FILE" id \"$vip_channel_id\"
+
+                        new_channel=$(
+                        $JQ_FILE -n --arg id "$vip_channel_id" --arg name "$vip_channel_name" \
+                            --arg epg_id "$vip_channel_epg_id" \
+                            '{
+                                id: $id,
+                                name: $name,
+                                epg_id: $epg_id
+                            }'
+                        )
+
+                        jq_path='["hosts",'"$i"',"channels"]'
+                        JQ add "$VIP_FILE" "[$new_channel]"
+
+                        Println "$info $vip_channel_name 添加成功"
+                    done
+                    break
+                ;;
+            esac
+        done
+        exit
+    fi
+
     ListVipHosts
     echo -e "选择 VIP 服务器"
     while read -p "(默认: 取消): " vip_hosts_num
@@ -31338,12 +31937,7 @@ ListVipChannels()
         then
             flag=1
             i_last=$i
-            if [ "$vip_channels_count" -eq 1 ] 
-            then
-                vip_channels_list="$vip_channels_list $green$((i+1)).${normal}\r\033[7C${vip_channels_name[i]}\n\033[7C频道ID: ${vip_channels_id[i]}\n\033[7CEPG ID: ${vip_channels_epg_id[i]:-无}\n"
-            else
-                vip_channels_list="$vip_channels_list $green$((i+1)).${normal}\r\033[7C${vip_channels_name[i]}"
-            fi
+            vip_channels_list="$vip_channels_list $green$((i+1)).${normal}\r\033[7C${vip_channels_name[i]}"
         else
             flag=0
             vip_channels_list="$vip_channels_list\r\033[40C$green$((i+1)).${normal}\r\033[47C${vip_channels_name[i]}\n\033[7C频道ID: ${vip_channels_id[i_last]}\r\033[47C频道ID: ${vip_channels_id[i]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-无}\r\033[47CEPG ID: ${vip_channels_epg_id[i]:-无}\n\n"
@@ -32106,8 +32700,8 @@ VipMenuUser()
 
 VipMenu()
 {
-    [ ! -e "$IPTV_ROOT" ] && Println "$error 请先输入 tv 安装 !\n" && exit 1
-    if [ ! -e "$IPTV_ROOT/VIP" ] 
+    [ ! -d "$IPTV_ROOT" ] && Println "$error 请先输入 tv 安装 !\n" && exit 1
+    if [ ! -f "$IPTV_ROOT/VIP" ] 
     then
         VipMenuUser
         return 0
@@ -32204,10 +32798,11 @@ Menu()
   ${color}8.${normal} 重启频道
   ${color}9.${normal} 查看日志
  ${color}10.${normal} 删除频道
+ ${color}11.${normal} 修改默认
 
  $tip 当前: ${green}$title${normal} 面板
  $tip 输入: $msg\n\n"
-    read -p "请输入数字 [1-10]: " menu_num
+    read -p "请输入数字 [1-11]: " menu_num
     case "$menu_num" in
         h)
             kind=""
@@ -32242,7 +32837,9 @@ Menu()
         ;;
         10) DelChannel
         ;;
-        *) Println "$error 请输入正确的数字 [1-10]\n"
+        11) EditDefaultMenu
+        ;;
+        *) Println "$error 请输入正确的数字 [1-11]\n"
         ;;
     esac
 }
@@ -32853,6 +33450,7 @@ then
                 CheckRelease lite
                 Spinner "安装 postfix" InstallPostfix
             else
+                echo
                 yn_options=( '是' '否' )
                 inquirer list_input "postfix 已存在, 是否重新设置 smtp" yn_options config_smtp
                 if [[ $config_smtp == "否" ]]
@@ -33246,7 +33844,7 @@ then
     exit 0
 elif [ "${0##*/}" == "cx" ] || [ "${0##*/}" == "cx.sh" ]
 then
-    [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+    [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
 
     Println "  Xtream Codes 面板 ${normal}
 
@@ -33363,19 +33961,20 @@ then
 
     Println "  Armbian 管理面板 ${normal}${red}[v$sh_ver]${normal}
 
-${green}1.${normal} 更改 apt 源
-${green}2.${normal} 修复 N1 dtb
-${green}3.${normal} 安装 docker
-${green}4.${normal} 安装 dnscrypt
-${green}5.${normal} 安装 openwrt
-${green}6.${normal} 安装 openwrt-v2ray
+  ${green}1.${normal} 更改 apt 源
+  ${green}2.${normal} 修复 N1 dtb
+  ${green}3.${normal} 安装 docker
+  ${green}4.${normal} 安装 dnscrypt
+  ${green}5.${normal} 安装 openwrt
+  ${green}6.${normal} 安装 openwrt-v2ray
 ————————————
-${green}7.${normal} 设置 docker 镜像加速
-${green}8.${normal} 设置 vimrc
-${green}9.${normal} 更新脚本
+  ${green}7.${normal} 设置 docker 镜像加速
+  ${green}8.${normal} 设置 vimrc
+  ${green}9.${normal} 开关 edns0
+ ${green}10.${normal} 更新脚本
 
 "
-    read -p "请输入数字 [1-9]: " armbian_num
+    read -p "请输入数字 [1-10]: " armbian_num
 
     case $armbian_num in
         1) 
@@ -33538,8 +34137,11 @@ addr-gen-mode=stable-privacy
 dns-search=
 method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
 
-                        sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh','geekdns-doh']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
                         sed -i "0,/.*listen_addresses = \['127.0.0.1:53']/s//listen_addresses = ['127.0.0.1:53', '$eth0_ip:53']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
+                        sed -i "0,/.*fallback_resolvers =.*/s//fallback_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
 
                         for((i=0;i<3;i++));
                         do
@@ -33582,6 +34184,7 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
                         # echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
                     else
                         Println "$error dnscrypt proxy 下载失败, 请重试\n"
+                        exit 1
                     fi
                 elif [[ $dnscrypt_version_old != "$dnscrypt_version" ]] 
                 then
@@ -33597,16 +34200,26 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
                         cd dnscrypt-$dnscrypt_version
                         cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
                         eth0_ip=$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)
-                        sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh','geekdns-doh']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
                         sed -i "0,/.*listen_addresses = \['127.0.0.1:53']/s//listen_addresses = ['127.0.0.1:53', '$eth0_ip:53']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
+                        sed -i "0,/.*fallback_resolvers =.*/s//fallback_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
                         ./dnscrypt-proxy -service install > /dev/null
                         ./dnscrypt-proxy -service start > /dev/null
                         Println "$info dnscrypt proxy 升级成功\n"
                     else
                         Println "$error dnscrypt proxy 下载失败, 请重试\n"
+                        exit 1
                     fi
                 else
                     Println "$error dnscrypt proxy 已经是最新\n"
+                fi
+                if ! grep -q "options edns0" < /etc/resolv.conf
+                then
+                    echo "options edns0" >> /etc/resolv.conf
+                    systemctl restart dnscrypt-proxy
+                    chattr +i /etc/resolv.conf
                 fi
             else
                 Println "$error 无法连接服务器, 请稍后再试\n"
@@ -33631,6 +34244,22 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
 
             if grep -q "$docker_openwrt_ver" < <(docker container ls -a)
             then
+                if [ -f /etc/NetworkManager/dispatcher.d/promisc.sh ] 
+                then
+                    printf '%s' '#!/usr/bin/env bash
+
+interface=$1
+event=$2
+
+if [[ $event == "up" ]] && { [[ $interface == "eth0" ]] || [[ $interface == "hMACvLAN" ]]; }
+then
+  ip link set $interface promisc on
+  echo "$interface received $event" | systemd-cat -p info -t dispatch_script
+fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
+
+                    rm -f /etc/NetworkManager/dispatcher.d/promisc.sh
+                    chmod +x /etc/NetworkManager/dispatcher.d/90-promisc.sh
+                fi
                 Println "$error openwrt 已经存在\n"
                 exit 1
             else
@@ -33790,9 +34419,10 @@ if [[ $event == "up" ]] && { [[ $interface == "eth0" ]] || [[ $interface == "hMA
 then
   ip link set $interface promisc on
   echo "$interface received $event" | systemd-cat -p info -t dispatch_script
-fi' > /etc/NetworkManager/dispatcher.d/promisc.sh
+fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
 
-            chmod +x /etc/NetworkManager/dispatcher.d/promisc.sh
+            rm -f /etc/NetworkManager/dispatcher.d/promisc.sh
+            chmod +x /etc/NetworkManager/dispatcher.d/90-promisc.sh
 
             ip link set eth0 promisc on
             ip link set hMACvLAN promisc on
@@ -33928,9 +34558,48 @@ filetype indent off
             fi
         ;;
         9)
+            DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy)
+            dnscrypt_version=${DNSCRYPT_ROOT##*-}
+            if [[ $dnscrypt_version == "*" ]] 
+            then
+                Println "$error 请先安装 dnscrypt proxy\n"
+                exit 1
+            fi
+            echo
+            yn_options=( '否' '是' )
+            if grep -q "options edns0" < /etc/resolv.conf
+            then
+                inquirer list_input "是否关闭 edns0" yn_options toggle_edns0_yn
+
+                if [[ $toggle_edns0_yn == "是" ]]
+                then
+                    chattr -i /etc/resolv.conf
+                    sed -i '/options edns0/d' /etc/resolv.conf
+                    sed -i "0,/.*require_dnssec = .*/s//require_dnssec = false/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                    systemctl restart dnscrypt-proxy
+                    Println "$info edns0 已关闭\n"
+                else
+                    Println "已取消...\n" && exit 1
+                fi
+            else
+                inquirer list_input "是否开启 edns0" yn_options toggle_edns0_yn
+
+                if [[ $toggle_edns0_yn == "是" ]]
+                then
+                    echo "options edns0" >> /etc/resolv.conf
+                    chattr +i /etc/resolv.conf
+                    sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                    systemctl restart dnscrypt-proxy
+                    Println "$info edns0 已开启\n"
+                else
+                    Println "已取消...\n" && exit 1
+                fi
+            fi
+        ;;
+        10)
             UpdateShFile Armbian
         ;;
-        *) Println "$error 请输入正确的数字 [1-9]\n"
+        *) Println "$error 请输入正确的数字 [1-10]\n"
         ;;
     esac
     exit 0
@@ -34285,12 +34954,12 @@ then
             exit 0
         ;;
         "s") 
-            [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装, 请先安装 !" && exit 1
+            [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请先安装 !" && exit 1
             Schedule "$@"
             exit 0
         ;;
         "m") 
-            [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装, 请先安装 !" && exit 1
+            [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请先安装 !" && exit 1
             [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
 
             cmd=${2:-}
@@ -34422,17 +35091,17 @@ fi
 cmd=$*
 case "$cmd" in
     "e") 
-        [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+        [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
         vim "$CHANNELS_FILE" && exit 0
     ;;
     "ee") 
-        [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+        [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
         GetDefault
         [ -z "$d_sync_file" ] && Println "$error sync_file 未设置, 请检查 !\n" && exit 1
         vim "${d_sync_file%% *}" && exit 0
     ;;
     "d")
-        [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+        [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
         channels=""
         while IFS= read -r line 
         do
@@ -34456,7 +35125,7 @@ case "$cmd" in
         exit 0
     ;;
     "ffmpeg") 
-        [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+        [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
 
         if [[ ! -x $(command -v curl) ]] 
         then
@@ -34561,7 +35230,7 @@ case "$cmd" in
 
             #Println "输入镜像网站链接(比如: $FFMPEG_MIRROR_LINK)"
             #read -p "(默认: 取消): " FFMPEG_LINK
-            #[ -z "$FFMPEG_LINK" ] && echo "已取消..." && exit 1
+            #[ -z "$FFMPEG_LINK" ] && echo "已取消...\n" && exit 1
             #sed -i "s+https://johnvansickle.com/ffmpeg/\(builds\|releases\)/\(.*\).tar.xz\"+$FFMPEG_LINK/\1/\2.tar.xz\"+g" "$FFMPEG_MIRROR_ROOT/index.html"
 
             sed -i "s+https://johnvansickle.com/ffmpeg/\(builds\|releases\)/\(.*\).tar.xz\"+\1/\2.tar.xz\"+g" "$FFMPEG_MIRROR_ROOT/index.html"
@@ -34781,17 +35450,17 @@ case "$cmd" in
         exit 0
     ;;
     "ts") 
-        [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+        [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
         TsMenu
         exit 0
     ;;
     "f"|"flv") 
-        [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+        [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
         kind="flv"
         color="$blue"
     ;;
     "v"|"vip") 
-        [ ! -e "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+        [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
         vip=1
     ;;
     "l"|"ll") 
@@ -34960,7 +35629,7 @@ else
     then
         Usage
     else
-        if [ ! -e "$IPTV_ROOT" ]
+        if [ ! -d "$IPTV_ROOT" ]
         then
             echo
             yn_options=( '否' '是' )
