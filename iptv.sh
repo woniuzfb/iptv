@@ -620,7 +620,11 @@ CheckDeps()
         fi
         if ! grep -q 'en_US' < <(locale -a 2> /dev/null) 
         then
-            locale-gen en_US.UTF-8
+            if [ -s /etc/locale.gen ] 
+            then
+                sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
+            fi
+            locale-gen en_US.UTF-8 >/dev/null
         fi
         update-locale LANG=en_US.UTF-8 LANGUAGE LC_ALL >/dev/null 2>&1
         if [[ ! -x $(command -v hexdump) ]] 
@@ -2800,7 +2804,8 @@ InstallImageMagick()
     fi
     kill $progress_pid
     trap - EXIT
-    echo -n "...100%" && Println "$info magick 安装完成"
+    echo -n "...100%"
+    Println "\n$info magick 安装完成\n"
 }
 
 InstallPdf2html()
@@ -11302,7 +11307,7 @@ ScheduleHbozw()
                 "time":"'"$program_time"'",
                 "sys_time":"'"$program_sys_time"'"
             }'
-        done < <(curl ${hboasia_proxy[@]+"${hboasia_proxy[@]}"} -s -Lm 10 -H "User-Agent: $user_agent" "$SCHEDULE_LINK" | $JQ_FILE '.[] | [.id,.time,.sys_time,.title,.title_local] | join("^")')
+        done < <(curl ${hboasia_proxy[@]+"${hboasia_proxy[@]}"} -s -Lm 20 -H "User-Agent: $user_agent" "$SCHEDULE_LINK" | $JQ_FILE '.[] | [.id,.time,.sys_time,.title,.title_local] | join("^")')
 
         if [ -n "$schedule" ] 
         then
@@ -12447,7 +12452,7 @@ Schedule_4gtv()
             then
                 break
             fi
-        done < <(curl -s -Lm 10 "https://www.4gtv.tv/proglist/$_4gtv_id.txt" \
+        done < <(curl -s -Lm 20 "https://www.4gtv.tv/proglist/$_4gtv_id.txt" \
             -H "User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36" \
             -H "Referer: https://www.4gtv.tv/channel_sub.html?channelSet_id=1&asset_id=$_4gtv_id&channel_id=1" \
             | $JQ_FILE '.[]|[.sdate,.stime,.title]|join("=")')
@@ -13924,10 +13929,17 @@ Schedule()
         "other:其它节目表"
     )
 
+    if [ "${2:-}" == "4gtv" ] 
+    then
+        provider_id="_4gtv"
+    else
+        provider_id=${2:-}
+    fi
+
     if [ -n "${3:-}" ] 
     then
         # variable indirection
-        var=("$2"_chnls[@])
+        var=("$provider_id"_chnls[@])
         if [[ -n ${!var:-} ]] 
         then
             found=0
@@ -13938,8 +13950,8 @@ Schedule()
                 if [ "$chnl_id" == "$3" ] 
                 then
                     found=1
-                    unset "$2"_chnls
-                    IFS= read -r -a "$2"_chnls <<< "$chnl"
+                    unset "$provider_id"_chnls
+                    IFS= read -r -a "$provider_id"_chnls <<< "$chnl"
                     break
                 fi
             done
@@ -13949,7 +13961,7 @@ Schedule()
 
     user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
 
-    case ${2:-} in
+    case $provider_id in
         "jiushi")
             ScheduleJiushi
         ;;
@@ -13989,7 +14001,7 @@ Schedule()
         "astro")
             ScheduleAstro
         ;;
-        "_4gtv"|"4gtv")
+        "_4gtv")
             Schedule_4gtv
         ;;
         "other")
@@ -17704,25 +17716,8 @@ VerifyXtreamCodesMac()
         Println "$info 验证 $domain ..."
         test_mac_domain=$domain
 
-        GetDefault
-
-        if [ -n "${d_xc_proxy:-}" ] 
-        then
-            echo
-            yn_options=( '是' '否' )
-            inquirer list_input "是否使用代理 $d_xc_proxy: " yn_options use_proxy_yn
-            if [[ $use_proxy_yn == "是" ]]
-            then
-                server=${d_xc_proxy%\/}
-                xc_host_header=( -H "xc_host: $domain" )
-            else
-                server="http://$domain"
-                xc_host_header=()
-            fi
-        else
-            server="http://$domain"
-            xc_host_header=()
-        fi
+        server="http://$domain"
+        xc_host_header=()
     fi
 
     to_continue=0
@@ -34434,7 +34429,7 @@ config interface 'loopback'
         option ipaddr '127.0.0.1'
         option netmask '255.0.0.0'
 
-config interface 'wan'
+config interface 'lan'
         option ifname 'eth0'
         option proto 'static'
         option netmask '255.255.255.0'
@@ -34452,13 +34447,15 @@ config interface 'wan'
                 --name openwrt \
                 openwrtorg/rootfs:$docker_openwrt_ver
 
-            docker exec -it openwrt /bin/ash -c "echo \"${openwrt_network}\" > /etc/config/network && /etc/init.d/network restart"
+            printf -v now '%(%m-%d-%H:%M:%S)T' -1
+            docker exec -it openwrt /bin/ash -c "sed -i 's_REJECT_ACCEPT_' /etc/config/firewall && mv /etc/config/network /etc/config/network-$now && echo \"${openwrt_network}\" > /etc/config/network && /etc/init.d/network restart"
 
             nmcli connection modify hMACvLAN ipv4.route-metric 50 > /dev/null
             nmcli con down hMACvLAN > /dev/null 2>&1 || true
             nmcli con up hMACvLAN > /dev/null
 
-            Println "$info openwrt 安装成功\n"
+            Println "$info openwrt 旁路由安装成功, 地址: $openwrt_ip, 注意设置防火墙\n"
+            Println "$tip 如需将*旁路由*作为 dhcp 服务器 请将*主路由* br-lan 接口网关设置为 $openwrt_ip, 否则请关闭*旁路由* lan 口的 dhcp 功能(此种情况客户端需手动设定网关为 $openwrt_ip)\n"
         ;;
         6)
             if ! docker container inspect openwrt > /dev/null 2>&1
