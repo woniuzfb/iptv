@@ -8608,6 +8608,9 @@ TestXtreamCodesLink()
         chnl_cmd=${chnl_stream_link%|*}
         chnl_cmd=${chnl_cmd##*|}
 
+        chnl_cmd=${chnl_cmd%\_}
+        chnl_cmd="http://localhost/ch/${chnl_cmd##*/}_"
+
         for xc_domain in ${xtream_codes_domains[@]+"${xtream_codes_domains[@]}"}
         do
             if [ "$xc_domain" == "$chnl_domain" ] 
@@ -8647,49 +8650,41 @@ TestXtreamCodesLink()
                 xc_host_header=()
             fi
 
-            token=""
             access_token=""
             profile=""
             chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
             mac=$(UrlencodeUpper "$chnl_mac")
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
-            token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
-            profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
-            genres_url="$server/portal.php?type=itv&action=get_genres&JsHttpRequest=1-xml"
+            token_url="$server/portal.php?type=stb&action=handshake"
+            profile_url="$server/portal.php?type=stb&action=get_profile"
+            genres_url="$server/portal.php?type=itv&action=get_genres"
 
-            token=$(curl -s -Lm 10 \
-                -H "User-Agent: $chnl_user_agent" \
-                ${xc_host_header[@]+"${xc_host_header[@]}"} \
-                --cookie "$chnl_cookies" "$token_url" \
-                | $JQ_FILE -r '.js.token') || true
-            if [ -z "$token" ] 
-            then
-                Println "$error 无法连接 $chnl_domain, 请重试!\n" && exit 1
-            fi
             access_token=$(curl -s -Lm 10 \
                 -H "User-Agent: $chnl_user_agent" \
                 ${xc_host_header[@]+"${xc_host_header[@]}"} \
-                -H "Authorization: Bearer $token" \
                 --cookie "$chnl_cookies" "$token_url" \
                 | $JQ_FILE -r '.js.token') || true
             if [ -z "$access_token" ] 
             then
-                Println "$error 无法连接 $chnl_domain, 请重试!\n" && exit 1
-            fi
-            chnl_headers="Authorization: Bearer $access_token\r\n"
-            printf -v chnl_headers_command '%b' "$chnl_headers"
-            profile=$(curl -s -Lm 10\
-                -H "$chnl_user_agent" \
-                ${xc_host_header[@]+"${xc_host_header[@]}"} \
-                -H "${chnl_headers:0:-4}" \
-                --cookie "$chnl_cookies" "$profile_url") || true
-            if [ -z "$profile" ] 
-            then
-                Println "$error 无法连接 $chnl_domain, 请重试!\n" && exit 1
+                to_try=1
+                Println "$error $chnl_domain $chnl_mac"
+            else
+                chnl_headers="Authorization: Bearer $access_token\r\n"
+                printf -v chnl_headers_command '%b' "$chnl_headers"
+                profile=$(curl -s -Lm 10\
+                    -H "$chnl_user_agent" \
+                    ${xc_host_header[@]+"${xc_host_header[@]}"} \
+                    -H "${chnl_headers:0:-4}" \
+                    --cookie "$chnl_cookies" "$profile_url") || true
+                if [ -z "$profile" ] 
+                then
+                    to_try=1
+                    Println "$error $chnl_mac profile"
+                fi
             fi
 
-            if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
+            if [ "$to_try" -eq 1 ] || [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
             then
                 to_try=1
                 try_success=0
@@ -8710,10 +8705,10 @@ TestXtreamCodesLink()
                         --cookie "$chnl_cookies")
                     if [[ ! $chnl_stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
                     then
-                        Println "$error $chnl_domain 返回错误, 请重试!\n" && exit 1
+                        Println "$error $chnl_domain $chnl_mac $chnl_xc_proxy\n" && exit 1
                     fi
                 else
-                    create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
+                    create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
                     cmd=$(curl -s -Lm 10 \
                         -H "User-Agent: $chnl_user_agent" \
                         ${xc_host_header[@]+"${xc_host_header[@]}"} \
@@ -8728,7 +8723,7 @@ TestXtreamCodesLink()
                     then
                         chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
                     else
-                        Println "$error $chnl_domain 返回 cmd: ${cmd:-无} 错误, 请重试!\n" && exit 1
+                        Println "$error $chnl_domain 返回 cmd: ${cmd:-无} $chnl_domain $chnl_mac\n" && exit 1
                     fi
                 fi
 
@@ -11614,111 +11609,92 @@ ScheduleAmlh()
     printf -v today '%(%Y-%-m-%-d)T' -1
     timestamp=$(date -d $today +%s)
 
-    TODAY_SCHEDULE_LINK="http://wap.lotustv.cc/wap.php/Sub/program/d/$timestamp"
-    YESTERDAY_SCHEDULE_LINK="http://wap.lotustv.cc/wap.php/Sub/program/d/$((timestamp-86400))"
+    SCHEDULE_LINK="http://www.lotustv.cc/index.php/index/getdetail.html"
 
     if [ ! -s "$SCHEDULE_JSON" ] 
     then
         printf '{"%s":[]}' "amlh" > "$SCHEDULE_JSON"
     fi
 
-    found=0
     schedule=""
-    replace=""
 
-    while IFS= read -r line
-    do
-        if [[ $line == *"program_list"* ]] 
-        then
-            found=1
-        elif [ "$found" -eq 1 ] && [[ $line == *"<li>"* ]] 
-        then
-            line=${line#*<em>}
-            time=${line%%<\/em>*}
-            while [ -n "$time" ] 
-            do
-                time=${time:0:5}
-                line=${line#*<span>}
-                if [ "${flag:-0}" -gt 0 ] && [ "${time:0:1}" -eq 0 ]
+    line=$(curl -s -Lm 10 -H "User-Agent: $user_agent" --data "d=$((timestamp-86400))" "$SCHEDULE_LINK") || true
+
+    if [[ $line == *"<li>"* ]] 
+    then
+        line=${line#*<em>}
+        time=${line%%<*}
+        while [ -n "$time" ] 
+        do
+            time=${time:0:5}
+            line=${line#*<span>}
+            if [ "${flag:-0}" -gt 0 ] && [ "${time:0:1}" -eq 0 ]
+            then
+                title=${line%%<*}
+                title=${title//\\t/ }
+                title=$(printf %b "$title")
+                if [ "${title:0:4}" == "經典影院" ] 
                 then
-                    title=${line%%<\/span>*}
-                    [ -z "$replace" ] && replace="${title:4:1}"
-                    title=${title//$replace/ }
-                    if [ "${title:0:4}" == "經典影院" ] 
-                    then
-                        title=${title:5}
-                    fi
-                    sys_time=$(date -d "$today $time" +%s)
-                    [ -n "$schedule" ] && schedule="$schedule,"
-                    schedule=$schedule'{
-                        "title":"'"$title"'",
-                        "time":"'"$time"'",
-                        "sys_time":"'"$sys_time"'"
-                    }'
-                else
-                    flag=${time:0:1}
+                    title=${title:5}
                 fi
-                if [[ $line == *"<em>"* ]] 
-                then
-                    line=${line#*<em>}
-                    time=${line%%<\/em>*}
-                else
-                    break
-                fi
-            done
-            break
-        fi
-    done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "$YESTERDAY_SCHEDULE_LINK")
+                sys_time=$(date -d "$today $time" +%s)
+                [ -n "$schedule" ] && schedule="$schedule,"
+                schedule=$schedule'{
+                    "title":"'"$title"'",
+                    "time":"'"$time"'",
+                    "sys_time":"'"$sys_time"'"
+                }'
+            else
+                flag=${time:0:1}
+            fi
+            if [[ $line == *"<em>"* ]] 
+            then
+                line=${line#*<em>}
+                time=${line%%<*}
+            else
+                break
+            fi
+        done
+    fi
 
     flag=0
-    found=0
+    line=$(curl -s -Lm 10 -H "User-Agent: $user_agent" --data "d=$timestamp" "$SCHEDULE_LINK") || true
 
-    while IFS= read -r line
-    do
-        if [[ $line == *"program_list"* ]] 
-        then
-            found=1
-        elif [ "$found" -eq 1 ] && [[ $line == *"<li>"* ]] 
-        then
-            line=${line#*<em>}
-            time=${line%%<\/em>*}
-            while [ -n "$time" ] 
-            do
-                time=${time:0:5}
-                line=${line#*<span>}
-                if [ ! "$flag" -gt "${time:0:1}" ]
+    if [[ $line == *"<li>"* ]] 
+    then
+        line=${line#*<em>}
+        time=${line%%<*}
+        while [ -n "$time" ] 
+        do
+            time=${time:0:5}
+            line=${line#*<span>}
+            if [ ! "$flag" -gt "${time:0:1}" ]
+            then
+                flag=${time:0:1}
+                title=${line%%<*}
+                title=${title//\\t/ }
+                title=$(printf %b "$title")
+                if [ "${title:0:4}" == "經典影院" ] 
                 then
-                    flag=${time:0:1}
-                    title=${line%%<\/span>*}
-                    title=${title//$replace/ }
-                    if [ "${title:0:4}" == "經典影院" ] 
-                    then
-                        title=${title:5}
-                    fi
-                    sys_time=$(date -d "$today $time" +%s)
-                    [ -n "$schedule" ] && schedule="$schedule,"
-                    schedule=$schedule'{
-                        "title":"'"$title"'",
-                        "time":"'"$time"'",
-                        "sys_time":"'"$sys_time"'"
-                    }'
-                else
-                    break 2
+                    title=${title:5}
                 fi
-                line=${line#*<em>}
-                time=${line%%<\/em>*}
-            done
-            break
-        fi
-    done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "$TODAY_SCHEDULE_LINK")
+                sys_time=$(date -d "$today $time" +%s)
+                [ -n "$schedule" ] && schedule="$schedule,"
+                schedule=$schedule'{
+                    "title":"'"$title"'",
+                    "time":"'"$time"'",
+                    "sys_time":"'"$sys_time"'"
+                }'
+            else
+                break 2
+            fi
+            line=${line#*<em>}
+            time=${line%%<*}
+        done
+    fi
 
     if [ -n "$schedule" ] 
     then
-        if [ "$found" -eq 0 ] 
-        then
-            found=1
-            Println "$error $chnl_name [$chnl_id] 节目表不完整"
-        fi
         JQ replace "$SCHEDULE_JSON" "$chnl_id" "[$schedule]"
         Println "$info $chnl_name [$chnl_id] 节目表更新成功"
     else
@@ -13974,7 +13950,7 @@ Schedule()
         "icable")
             ScheduleIcable
         ;;
-        "hbozw")
+        "hbo"|"hbozw")
             ScheduleHbozw
         ;;
         "hbous")
@@ -15059,6 +15035,9 @@ MonitorHlsRestartChannel()
             chnl_cmd=${chnl_stream_link%|*}
             chnl_cmd=${chnl_cmd##*|}
 
+            chnl_cmd=${chnl_cmd%\_}
+            chnl_cmd="http://localhost/ch/${chnl_cmd##*/}_"
+
             to_try=0
             for xc_domain in ${xtream_codes_domains[@]+"${xtream_codes_domains[@]}"}
             do
@@ -15116,51 +15095,19 @@ MonitorHlsRestartChannel()
                 server="http://$chnl_domain"
                 xc_host_header=()
             fi
-            token=""
+
             access_token=""
             profile=""
             chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
             mac=$(UrlencodeUpper "$chnl_mac")
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
-            token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
-            profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
-            genres_url="$server/portal.php?type=itv&action=get_genres&JsHttpRequest=1-xml"
+            token_url="$server/portal.php?type=stb&action=handshake"
+            profile_url="$server/portal.php?type=stb&action=get_profile"
+            genres_url="$server/portal.php?type=itv&action=get_genres"
 
-            token=$(curl -s -Lm 10 -H "User-Agent: $chnl_user_agent" \
+            access_token=$(curl -s -Lm 10 -H "User-Agent: $chnl_user_agent" \
                 ${xc_host_header[@]+"${xc_host_header[@]}"} \
-                --cookie "$chnl_cookies" "$token_url" \
-                | $JQ_FILE -r '.js.token') || true
-            if [ -z "$token" ] 
-            then
-                if [ "$to_try" -eq 1 ] 
-                then
-                    domains_tried+=("$chnl_domain")
-                    try_success=0
-                    MonitorTryAccounts
-                    if [ "$try_success" -eq 1 ] 
-                    then
-                        MonitorHlsRestartSuccess
-                        break
-                    elif [[ $restart_i -eq $((restart_nums-1)) ]] 
-                    then
-                        MonitorHlsRestartFail
-                        break
-                    else
-                        continue
-                    fi
-                elif [[ $restart_i -eq $((restart_nums-1)) ]] 
-                then
-                    MonitorHlsRestartFail
-                    break
-                else
-                    continue
-                fi
-            fi
-            access_token=$(curl -s -Lm 10 \
-                -H "User-Agent: $chnl_user_agent" \
-                ${xc_host_header[@]+"${xc_host_header[@]}"} \
-                -H "Authorization: Bearer $token" \
                 --cookie "$chnl_cookies" "$token_url" \
                 | $JQ_FILE -r '.js.token') || true
             if [ -z "$access_token" ] 
@@ -15285,7 +15232,7 @@ MonitorHlsRestartChannel()
                         fi
                     fi
                 else
-                    create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
+                    create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
                     cmd=$(curl -s -Lm 10 \
                         -H "User-Agent: $chnl_user_agent" \
                         ${xc_host_header[@]+"${xc_host_header[@]}"} \
@@ -15617,6 +15564,9 @@ MonitorFlvRestartChannel()
             chnl_cmd=${chnl_stream_link%|*}
             chnl_cmd=${chnl_cmd##*|}
 
+            chnl_cmd=${chnl_cmd%\_}
+            chnl_cmd="http://localhost/ch/${chnl_cmd##*/}_"
+
             to_try=0
             for xc_domain in ${xtream_codes_domains[@]+"${xtream_codes_domains[@]}"}
             do
@@ -15675,52 +15625,19 @@ MonitorFlvRestartChannel()
                 xc_host_header=()
             fi
 
-            token=""
             access_token=""
             profile=""
             chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
             mac=$(UrlencodeUpper "$chnl_mac")
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
-            token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
-            profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
-            genres_url="$server/portal.php?type=itv&action=get_genres&JsHttpRequest=1-xml"
+            token_url="$server/portal.php?type=stb&action=handshake"
+            profile_url="$server/portal.php?type=stb&action=get_profile"
+            genres_url="$server/portal.php?type=itv&action=get_genres"
 
-            token=$(curl -s -Lm 10 \
-                -H "User-Agent: $chnl_user_agent" \
-                ${xc_host_header[@]+"${xc_host_header[@]}"} \
-                --cookie "$chnl_cookies" "$token_url" \
-                | $JQ_FILE -r '.js.token') || true
-            if [ -z "$token" ] 
-            then
-                if [ "$to_try" -eq 1 ] 
-                then
-                    domains_tried+=("$chnl_domain")
-                    try_success=0
-                    MonitorTryAccounts
-                    if [ "$try_success" -eq 1 ] 
-                    then
-                        MonitorFlvRestartSuccess
-                        break
-                    elif [[ $restart_i -eq $((restart_nums-1)) ]] 
-                    then
-                        MonitorFlvRestartFail
-                        break
-                    else
-                        continue
-                    fi
-                elif [[ $restart_i -eq $((restart_nums-1)) ]] 
-                then
-                    MonitorFlvRestartFail
-                    break
-                else
-                    continue
-                fi
-            fi
             access_token=$(curl -s -Lm 10 \
                 -H "User-Agent: $chnl_user_agent" \
                 ${xc_host_header[@]+"${xc_host_header[@]}"} \
-                -H "Authorization: Bearer $token" \
                 --cookie "$chnl_cookies" "$token_url" \
                 | $JQ_FILE -r '.js.token') || true
             if [ -z "$access_token" ] 
@@ -15845,7 +15762,7 @@ MonitorFlvRestartChannel()
                         fi
                     fi
                 else
-                    create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
+                    create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
                     cmd=$(curl -s -Lm 10 \
                         -H "User-Agent: $chnl_user_agent" \
                         ${xc_host_header[@]+"${xc_host_header[@]}"} \
@@ -16048,10 +15965,11 @@ MonitorTryAccounts()
                     new_account_line="${account_line%% *}$new_account_line"
                     account_line=${account_line#* }
                 done
-            elif [[ $account_line =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
-            then
-                macs+=("$account_line")
             else
+                if [[ $account_line =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+                then
+                    macs+=("$account_line")
+                fi
                 new_account_line=$account_line
             fi
 
@@ -16065,9 +15983,33 @@ MonitorTryAccounts()
         if [ -n "${macs:-}" ] 
         then
             GetDefault
+
+            if [ -n "${chnl_xc_proxy:-}" ] 
+            then
+                server=${chnl_xc_proxy%\/}
+                xc_host_header=( -H "xc_host: $chnl_domain" )
+            else
+                server="http://$chnl_domain"
+                xc_host_header=()
+            fi
+
+            chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
+            timezone=$(UrlencodeUpper "Europe/Amsterdam")
+            token_url="$server/portal.php?type=stb&action=handshake"
+            profile_url="$server/portal.php?type=stb&action=get_profile"
+            genres_url="$server/portal.php?type=itv&action=get_genres"
+
             macs+=("$chnl_mac")
-            for mac_address in "${macs[@]}"
+            macs_count=${#macs[@]}
+            echo
+            for((macs_i=0;macs_i<macs_count;macs_i++));
             do
+                if [ -z "${monitor:-}" ] 
+                then
+                    printf '%b' "\r$macs_i/$macs_count 检测中..."
+                fi
+                mac_address=${macs[macs_i]}
+
                 xc_chnl_found=0
                 for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
                 do
@@ -16081,45 +16023,21 @@ MonitorTryAccounts()
                 valid=0
                 if [ "$xc_chnl_found" -eq 0 ] 
                 then
-                    if [ -n "${chnl_xc_proxy:-}" ] 
-                    then
-                        server=${chnl_xc_proxy%\/}
-                        xc_host_header=( -H "xc_host: $chnl_domain" )
-                    else
-                        server="http://$chnl_domain"
-                        xc_host_header=()
-                    fi
-
-                    token=""
                     access_token=""
                     profile=""
-                    chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
                     mac=$(UrlencodeUpper "$mac_address")
-                    timezone=$(UrlencodeUpper "Europe/Amsterdam")
                     chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
-                    token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
-                    profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
-                    genres_url="$server/portal.php?type=itv&action=get_genres&JsHttpRequest=1-xml"
 
-                    token=$(curl -s -Lm 10 \
-                        -H "User-Agent: $chnl_user_agent" \
-                        ${xc_host_header[@]+"${xc_host_header[@]}"} \
-                        --cookie "$chnl_cookies" "$token_url" \
-                        | $JQ_FILE -r '.js.token') || true
-                    if [ -z "$token" ] 
-                    then
-                        break
-                    fi
                     access_token=$(curl -s -Lm 10 \
                         -H "User-Agent: $chnl_user_agent" \
                         ${xc_host_header[@]+"${xc_host_header[@]}"} \
-                        -H "Authorization: Bearer $token" \
                         --cookie "$chnl_cookies" "$token_url" \
                         | $JQ_FILE -r '.js.token') || true
                     if [ -z "$access_token" ] 
                     then
-                        break
+                        continue
                     fi
+
                     chnl_headers="Authorization: Bearer $access_token\r\n"
                     printf -v chnl_headers_command '%b' "$chnl_headers"
                     profile=$(curl -s -Lm 10 \
@@ -16127,12 +16045,7 @@ MonitorTryAccounts()
                         ${xc_host_header[@]+"${xc_host_header[@]}"} \
                         -H "${chnl_headers:0:-4}" \
                         --cookie "$chnl_cookies" "$profile_url") || true
-                    if [ -z "$profile" ] 
-                    then
-                        break
-                    fi
-
-                    if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
+                    if [ -z "$profile" ] || [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]]
                     then
                         continue
                     fi
@@ -16151,7 +16064,7 @@ MonitorTryAccounts()
                             continue
                         fi
                     else
-                        create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
+                        create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
                         cmd=$(curl -s -Lm 10 \
                             -H "User-Agent: $chnl_user_agent" \
                             ${xc_host_header[@]+"${xc_host_header[@]}"} \
@@ -16349,13 +16262,21 @@ MonitorTryAccounts()
                     fi
                 fi
             done
+            echo
         fi
     elif [ -n "${accounts:-}" ] 
     then
         accounts+=("$chnl_account")
-
-        for account in "${accounts[@]}"
+        accounts_count=${#accounts[@]}
+        echo
+        for((accounts_i=0;accounts_i<accounts_count;accounts_i++));
         do
+            if [ -z "${monitor:-}" ] 
+            then
+                printf '%b' "\r$accounts_i/$accounts_count 检测中..."
+            fi
+            account=${accounts[accounts_i]}
+
             xc_chnl_found=0
             for xc_chnl in ${xc_chnls[@]+"${xc_chnls[@]}"}
             do
@@ -16555,6 +16476,7 @@ MonitorTryAccounts()
                 fi
             fi
         done
+        echo
     fi
 }
 
@@ -17726,6 +17648,7 @@ VerifyXtreamCodesMac()
         to_continue=1
         return 0
     fi
+
     ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
     if [ -z "$ip" ] 
     then
@@ -17733,53 +17656,38 @@ VerifyXtreamCodesMac()
         skip_domain=$domain
         return 0
     fi
+
     if [ -n "${skip_mac_ip:-}" ] 
     then
         for((i=0;i<${#skip_mac_ip[@]};i++));
         do
-            if [ "${skip_mac_ip[i]}" == "$ip" ] && [[ ${skip_mac[i]} == *"${BASH_REMATCH[1]}"* ]] 
+            if [ "${skip_mac_ip[i]}" == "$ip" ] && [[ ${skip_mac_ip[i]} == *"${BASH_REMATCH[1]}"* ]] 
             then
                 to_continue=1
                 return 0
             fi
         done
     fi
+
     mac_address=${BASH_REMATCH[1]}
-    token=""
     access_token=""
     profile=""
-
     mac=$(UrlencodeUpper "$mac_address")
     timezone=$(UrlencodeUpper "Europe/Amsterdam")
-    token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
-    profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
+    token_url="$server/portal.php?type=stb&action=handshake"
+    profile_url="$server/portal.php?type=stb&action=get_profile"
 
-    token=$(curl -s -Lm 10 \
-        -H "User-Agent: Mozilla/5.0 (QtEmbedded; U; Linux; C)" \
-        ${xc_host_header[@]+"${xc_host_header[@]}"} \
-        --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" \
-        | $JQ_FILE -r '.js.token') || true
-    if [ -z "$token" ] 
-    then
-        Println "$error 无法连接 $domain"
-        stb_domain=""
-        to_continue=1
-        skip_domain=$domain
-        return 0
-    fi
     access_token=$(curl -s -Lm 10 \
         -H "User-Agent: Mozilla/5.0 (QtEmbedded; U; Linux; C)" \
         ${xc_host_header[@]+"${xc_host_header[@]}"} \
-        -H "Authorization: Bearer $token" \
         --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" \
         | $JQ_FILE -r '.js.token') || true
     if [ -z "$access_token" ] 
     then
-        Println "$error 无法连接 $domain"
-        stb_domain=""
-        to_continue=1
+        Println "$error $domain $mac_address"
         return 0
     fi
+
     profile=$(curl -s -Lm 10 \
         -H "User-Agent: Mozilla/5.0 (QtEmbedded; U; Linux; C)" \
         ${xc_host_header[@]+"${xc_host_header[@]}"} \
@@ -17787,34 +17695,13 @@ VerifyXtreamCodesMac()
         --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url") || true
     if [ -z "$profile" ] 
     then
-        Println "$error 无法连接 $domain"
-        stb_domain=""
-        to_continue=1
+        Println "$error $domain $mac_address profile"
         return 0
     fi
 
     if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
     then
         Println "$error $mac_address 地址错误!"
-        to_continue=1
-        if [ -z "${skip_mac_ip:-}" ] 
-        then
-            skip_mac_ip=()
-        fi
-        if [ -z "${skip_mac:-}" ] 
-        then
-            skip_mac=()
-        fi
-        for((i=0;i<${#skip_mac_ip[@]};i++));
-        do
-            if [ "${skip_mac_ip[i]}" == "$ip" ] 
-            then
-                skip_mac[i]="${skip_mac[i]} $ip"
-                return 0
-            fi
-        done
-        skip_mac_ip+=("$ip")
-        skip_mac+=("$mac_address")
         return 0
     else
         account=$mac_address
@@ -18489,7 +18376,7 @@ SearchXtreamCodesChnls()
         else
             if [ "$i" -gt 1 ] 
             then
-                ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=$i&JsHttpRequest=1-xml"
+                ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=$i"
                 ordered_list_page=$(curl -s -Lm 10 \
                     -H "User-Agent: $user_agent" \
                     -H "${headers:0:-4}" \
@@ -18641,7 +18528,6 @@ ViewXtreamCodesChnls()
             mac_address=${macs[0]}
         fi
 
-        token=""
         access_token=""
         profile=""
         user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
@@ -18649,6 +18535,7 @@ ViewXtreamCodesChnls()
         timezone=$(UrlencodeUpper "Europe/Amsterdam")
         GetDefault
         cookies="mac=$mac; stb_lang=en; timezone=$timezone"
+
         if [ -n "${d_xc_proxy:-}" ] 
         then
             echo
@@ -18667,31 +18554,24 @@ ViewXtreamCodesChnls()
             xc_host_header=()
             use_proxy_yn="否"
         fi
-        token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
-        profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
-        genres_url="$server/portal.php?type=itv&action=get_genres&JsHttpRequest=1-xml"
+
+        token_url="$server/portal.php?type=stb&action=handshake"
+        profile_url="$server/portal.php?type=stb&action=get_profile"
+        genres_url="$server/portal.php?type=itv&action=get_genres"
+        account_info_url="$server/portal.php?type=account_info&action=get_main_info"
 
         while true 
         do
-            token=$(curl -s -Lm 10 \
-                -H "User-Agent: $user_agent" \
-                ${xc_host_header[@]+"${xc_host_header[@]}"} \
-                --cookie "$cookies" "$token_url" \
-                | $JQ_FILE -r '.js.token') || true
-            if [ -z "$token" ] 
-            then
-                Println "$error 无法连接 $domain, 请重试!\n" && exit 1
-            fi
             access_token=$(curl -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
                 ${xc_host_header[@]+"${xc_host_header[@]}"} \
-                -H "Authorization: Bearer $token" \
                 --cookie "$cookies" "$token_url" \
                 | $JQ_FILE -r '.js.token') || true
             if [ -z "$access_token" ] 
             then
-                Println "$error 无法连接 $domain, 请重试!\n" && exit 1
+                Println "$error $domain $mac_address\n" && exit 1
             fi
+
             headers="Authorization: Bearer $access_token\r\n"
             printf -v headers_command '%b' "$headers"
             profile=$(curl -s -Lm 10 \
@@ -18701,12 +18581,22 @@ ViewXtreamCodesChnls()
                 --cookie "$cookies" "$profile_url") || true
             if [ -z "$profile" ] 
             then
-                Println "$error 无法连接 $domain, 请重试!\n" && exit 1
+                Println "$error $domain $mac_address profile\n" && exit 1
             fi
 
             if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
             then
-                Println "$error mac 地址错误!\n" && exit 1
+                Println "$error $domain $mac_address profile\n" && exit 1
+            fi
+
+            exp_date=$(curl -s -Lm 10 \
+                -H "User-Agent: $user_agent" \
+                ${xc_host_header[@]+"${xc_host_header[@]}"} \
+                -H "${headers:0:-4}" \
+                --cookie "$cookies" "$account_info_url" | $JQ_FILE -r '.js.phone') || true
+            if [ -z "$exp_date" ] 
+            then
+                Println "$error $domain $mac_address exp_date\n" && exit 1
             fi
 
             genres_list=""
@@ -18733,7 +18623,7 @@ ViewXtreamCodesChnls()
                 FFPROBE="$FFMPEG_ROOT/ffprobe"
                 while true 
                 do
-                    Println "$genres_list\n"
+                    Println "$genres_list\n\n$green账号到期时间:${normal} $exp_date\n"
 
                     if [ "${return_err:-0}" -eq 1 ] 
                     then
@@ -18770,7 +18660,7 @@ ViewXtreamCodesChnls()
                     then
                         ordered_list_page=${genres_list_pages[genres_index]}
                     else
-                        ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=1&JsHttpRequest=1-xml"
+                        ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=1"
                         ordered_list_page=$(curl -s -Lm 10 \
                             -H "User-Agent: $user_agent" \
                             ${xc_host_header[@]+"${xc_host_header[@]}"} \
@@ -18814,7 +18704,7 @@ ViewXtreamCodesChnls()
                         else
                             if [ "$page" -gt 1 ] 
                             then
-                                ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=$page&JsHttpRequest=1-xml"
+                                ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=$page"
                                 ordered_list_page=$(curl -s -Lm 10 \
                                     -H "User-Agent: $user_agent" \
                                     ${xc_host_header[@]+"${xc_host_header[@]}"} \
@@ -18836,6 +18726,8 @@ ViewXtreamCodesChnls()
                             map_id=${map_id#\"}
                             map_name=${map_name%\"}
                             map_cmd=${map_cmd#* }
+                            map_cmd=${map_cmd%\_}
+                            map_cmd="http://localhost/ch/${map_cmd##*/}_"
                             xc_chnls_id+=("$map_id")
                             xc_chnls_name+=("$map_name")
                             xc_chnls_cmd+=("$map_cmd")
@@ -18952,7 +18844,7 @@ ViewXtreamCodesChnls()
                             #    --cookie "$cookies"
                             Println "$green${xc_chnls_name[xc_chnls_index]}:${normal} $stream_link\n"
                         else
-                            create_link_url="$server/portal.php?type=itv&action=create_link&cmd=${xc_chnls_cmd[xc_chnls_index]}&series=&forced_storage=undefined&disable_ad=0&download=0&JsHttpRequest=1-xml"
+                            create_link_url="$server/portal.php?type=itv&action=create_link&cmd=${xc_chnls_cmd[xc_chnls_index]}&series=&forced_storage=undefined&disable_ad=0&download=0"
 
                             cmd=$(curl -s -Lm 10 \
                                 -H "User-Agent: $user_agent" \
@@ -19023,7 +18915,7 @@ ViewXtreamCodesChnls()
                                 continue
                             fi
                         else
-                            Println "$error 频道不可用或账号权限不够"
+                            Println "$error 频道不可用或账号权限不够\n"
                             yn_options=( '是' '否' )
                             inquirer list_input "是否继续" yn_options continue_yn
                             if [[ $continue_yn == "是" ]] 
@@ -19038,7 +18930,7 @@ ViewXtreamCodesChnls()
                     break
                 done
             else
-                Println "$error 找不到分类!\n" && exit 1
+                Println "$error $mac_address 错误, 找不到分类! 账号到期时间: $exp_date\n" && exit 1
             fi
             break
         done
@@ -19087,42 +18979,25 @@ AddXtreamCodesMac()
     add_mac_success=0
     for mac_address in "${macs[@]}"
     do
-        token=""
         access_token=""
         profile=""
         mac=$(UrlencodeUpper "$mac_address")
         timezone=$(UrlencodeUpper "Europe/Amsterdam")
-        token_url="$server/portal.php?type=stb&action=handshake&JsHttpRequest=1-xml"
-        profile_url="$server/portal.php?type=stb&action=get_profile&JsHttpRequest=1-xml"
+        token_url="$server/portal.php?type=stb&action=handshake"
+        profile_url="$server/portal.php?type=stb&action=get_profile"
 
-        token=$(curl -s -Lm 10 \
-            -H "User-Agent: Mozilla/5.0 (QtEmbedded; U; Linux; C)" \
-            ${xc_host_header[@]+"${xc_host_header[@]}"} \
-            --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" \
-            | $JQ_FILE -r '.js.token') || true
-        if [ -z "$token" ] 
-        then
-            if [ "$add_mac_success" -eq 0 ] 
-            then
-                Println "$error 无法连接 $domain, 请重试!\n" && exit 1
-            else
-                Println "$error $mac_address 遇到错误, 请重试!"
-                continue
-            fi
-        fi
         access_token=$(curl -s -Lm 10 \
             -H "User-Agent: Mozilla/5.0 (QtEmbedded; U; Linux; C)" \
             ${xc_host_header[@]+"${xc_host_header[@]}"} \
-            -H "Authorization: Bearer $token" \
             --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" \
             | $JQ_FILE -r '.js.token') || true
         if [ -z "$access_token" ] 
         then
             if [ "$add_mac_success" -eq 0 ] 
             then
-                Println "$error 无法连接 $domain, 请重试!\n" && exit 1
+                Println "$error $domain $mac_address access_token\n" && exit 1
             else
-                Println "$error $mac_address 遇到错误, 请重试!"
+                Println "$error $domain $mac_address access_token"
                 continue
             fi
         fi
@@ -19135,16 +19010,16 @@ AddXtreamCodesMac()
         then
             if [ "$add_mac_success" -eq 0 ] 
             then
-                Println "$error 无法连接 $domain, 请重试!\n" && exit 1
+                Println "$error $domain $mac_address profile\n" && exit 1
             else
-                Println "$error $mac_address 遇到错误, 请重试!"
+                Println "$error $domain $mac_address profile"
                 continue
             fi
         fi
 
         if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
         then
-            Println "$error $mac_address 地址错误!\n"
+            Println "$error $domain $mac_address 地址错误!\n"
             continue
         fi
 
@@ -19367,6 +19242,7 @@ InstallOpenresty()
 InstallNginx()
 {
     CheckRelease "检查依赖, 耗时可能会很长"
+    InstallJQ >/dev/null
     Progress &
     progress_pid=$!
     trap '
@@ -26872,7 +26748,7 @@ DeployCloudflareWorker()
     do
         [ -z "$cf_users_num" ] && Println "已取消...\n" && exit 1
 
-        if [[ $cf_users_num -eq $((cf_users_count+1)) ]] 
+        if [[ $cf_users_num -eq $((cf_users_count+1)) ]] 2> /dev/null
         then
             for((i=0;i<cf_users_count;i++));
             do
@@ -33178,6 +33054,8 @@ elif [ "${0##*/}" == "or" ] || [ "${0##*/}" == "or.sh" ]
 then
     CheckShFile
 
+    [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
+
     nginx_prefix="/usr/local/openresty/nginx"
     nginx_name="openresty"
     nginx_ctl="or"
@@ -33267,6 +33145,7 @@ then
             NginxLogRotate
         ;;
         14)
+            [ ! -d "$IPTV_ROOT" ] && Println "$error 请先输入 tv 安装 !\n" && exit 1
             if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
             then
                 InstallNodejs
@@ -33294,12 +33173,14 @@ elif [ "${0##*/}" == "nx" ] || [ "${0##*/}" == "nx.sh" ]
 then
     CheckShFile
 
+    [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
+
     nginx_prefix="/usr/local/nginx"
     nginx_name="nginx"
     nginx_ctl="nx"
     NGINX_FILE="$nginx_prefix/sbin/nginx"
 
-    Println "  Nginx 管理面板 ${normal}${red}[v$sh_ver]${normal}
+    Println "  nginx 管理面板 ${normal}${red}[v$sh_ver]${normal}
 
   ${green}1.${normal} 安装
   ${green}2.${normal} 卸载
@@ -33332,7 +33213,7 @@ then
         1) 
             if [ -d "$nginx_prefix" ] 
             then
-                Println "$error Nginx 已经存在 !\n" && exit 1
+                Println "$error nginx 已经存在 !\n" && exit 1
             fi
 
             echo
@@ -33345,7 +33226,7 @@ then
             fi
 
             InstallNginx
-            Println "$info Nginx 安装完成\n"
+            Println "$info nginx 安装完成\n"
         ;;
         2) 
             UninstallNginx
@@ -33386,6 +33267,7 @@ then
             NginxLogRotate
         ;;
         14)
+            [ ! -d "$IPTV_ROOT" ] && Println "$error 请先输入 tv 安装 !\n" && exit 1
             if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
             then
                 InstallNodejs
@@ -33845,8 +33727,8 @@ then
 
 ${green}1.${normal} 查看账号
 ${green}2.${normal} 添加账号
-${green}3.${normal} 更新账号
-${green}4.${normal} 检测账号
+${green}3.${normal} 批量检测
+${green}4.${normal} 测试账号
 ${green}5.${normal} 获取账号
 ————————————
 ${green}6.${normal} 查看 mac 地址
@@ -33866,7 +33748,9 @@ ${green}8.${normal} 浏览频道
         ;;
         3) 
             [ ! -s "$XTREAM_CODES" ] && Println "$error 没有账号 !\n" && exit 1
-            Println "$info 更新中..."
+            Println "$info 检测中..."
+            printf -v now '%(%m-%d-%H:%M:%S)T' -1
+            cp -f "$XTREAM_CODES" "${XTREAM_CODES}_$now"
             result=""
             while IFS= read -r line 
             do
@@ -33891,13 +33775,18 @@ ${green}8.${normal} 浏览频道
             echo -e "$result" > "$XTREAM_CODES"
             test_mac=1
             ListXtreamCodes
-            Println "$info 账号更新成功\n"
+            Println "$info 账号检测完成\n"
         ;;
         4) 
             TestXtreamCodes
         ;;
         5) 
             Println "$info 稍等...\n"
+            if [ -s "$XTREAM_CODES" ] 
+            then
+                printf -v now '%(%m-%d-%H:%M:%S)T' -1
+                cp -f "$XTREAM_CODES" "${XTREAM_CODES}_$now"
+            fi
             result=""
             while IFS= read -r line 
             do
@@ -34448,7 +34337,7 @@ config interface 'lan'
                 openwrtorg/rootfs:$docker_openwrt_ver
 
             printf -v now '%(%m-%d-%H:%M:%S)T' -1
-            docker exec -it openwrt /bin/ash -c "sed -i 's_REJECT_ACCEPT_' /etc/config/firewall && mv /etc/config/network /etc/config/network-$now && echo \"${openwrt_network}\" > /etc/config/network && /etc/init.d/network restart"
+            docker exec -it openwrt /bin/ash -c "sed -i 's_REJECT_ACCEPT_' /etc/config/firewall && mv /etc/config/network /etc/config/network_$now && echo \"${openwrt_network}\" > /etc/config/network && /etc/init.d/network restart"
 
             nmcli connection modify hMACvLAN ipv4.route-metric 50 > /dev/null
             nmcli con down hMACvLAN > /dev/null 2>&1 || true
