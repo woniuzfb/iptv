@@ -13,9 +13,6 @@ wget -q http://hbo.epub.fun/v2.sh && bash v2.sh
 
 ```
 
-- 多用户多账号管理
-- 代理转发账号管理
-  
 ---
 
 ## 一键管理 IBM Cloud Foundry 脚本
@@ -29,10 +26,8 @@ wget -q http://hbo.epub.fun/ibm.sh && bash ibm.sh
 
 ```
 
-- 多 用户、APP、路由 管理, 定时重启 APP
+- 多用户、APP、路由 管理, 定时重启 APP
 - 管理 v2ray APP
-  - 代理端口、账号管理
-  - 转发端口管理
 
 ---
 
@@ -70,8 +65,6 @@ wget -q http://hbo.epub.fun/nx.sh && bash nx.sh
   nx # 打开 Nginx 管理面板
 
 ```
-
-- 多域名管理
   
 ---
 
@@ -83,8 +76,6 @@ wget -q http://hbo.epub.fun/or.sh && bash or.sh
   or # 打开 OpenResty 管理面板
 
 ```
-
-- 配置文件和上面的 nginx 不相关
 
 ---
 
@@ -122,7 +113,7 @@ wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
   cx # 打开 Xtream Codes 账号/频道 管理面板
 ```
 
-### 编译 h265 静态版本 FFmpeg
+### 编译 h265 patched 静态 FFmpeg
 
 ``` bash
   docker build -t ffmpeg-h265-static .
