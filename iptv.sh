@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# A [ ffmpeg / v2ray / nginx / openresty / cloudflare partner,workers / ibm cf / armbian ] Wrapper Script By MTimer
+# A [ ffmpeg / xray / v2ray / nginx / openresty / cloudflare partner,workers / ibm cf / armbian ] Wrapper Script By MTimer
 # Copyright (C) 2019
 # Released under BSD 3 Clause License
 #
@@ -75,6 +75,9 @@
 #     v2 打开 v2ray 面板
 #        v2 e 手动修改 config.json
 #
+#     x 打开 xray 面板
+#        x e 手动修改 config.json
+#
 #     nx 打开 nginx 面板
 #
 #     or 打开 openresty 面板
@@ -119,6 +122,7 @@ V2_LINK="https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/instal
 V2_LINK_BACKUP="$FFMPEG_MIRROR_LINK/v2ray_install-release.sh"
 V2CTL_FILE="/usr/local/bin/v2ctl"
 V2_CONFIG="/usr/local/etc/v2ray/config.json"
+X_FILE="/usr/local/bin/x"
 FFMPEG_MIRROR_ROOT="$IPTV_ROOT/ffmpeg"
 LIVE_ROOT="$IPTV_ROOT/live"
 SERVICES_FILE="$IPTV_ROOT/services.json"
@@ -1604,6 +1608,7 @@ CheckShFile()
     [ ! -e "$OR_FILE" ] && ln -s "$SH_FILE" "$OR_FILE"
     [ ! -e "$NX_FILE" ] && ln -s "$SH_FILE" "$NX_FILE"
     [ ! -e "$V2_FILE" ] && ln -s "$SH_FILE" "$V2_FILE"
+    [ ! -e "$X_FILE" ] && ln -s "$SH_FILE" "$X_FILE"
     [ ! -e "$XC_FILE" ] && ln -s "$SH_FILE" "$XC_FILE"
     [ ! -e "$ARM_FILE" ] && ln -s "$SH_FILE" "$ARM_FILE"
 
@@ -19361,7 +19366,8 @@ InstallOpenresty()
         --with-http_auth_request_module --with-http_secure_link_module \
         --with-http_random_index_module --with-http_gzip_static_module \
         --with-http_sub_module --with-http_dav_module --with-http_flv_module \
-        --with-http_mp4_module --with-http_gunzip_module --with-stream --with-stream_ssl_preread_module --with-threads >/dev/null 2>&1
+        --with-http_mp4_module --with-http_gunzip_module --with-stream --with-stream_ssl_preread_module \
+        --with-stream_ssl_module --with-stream_realip_module --with-threads >/dev/null 2>&1
 
     echo -n "...80%..."
 
@@ -19461,7 +19467,7 @@ InstallNginx()
         --with-openssl=../$openssl_name --with-openssl-opt=no-nextprotoneg \
         --with-http_stub_status_module --with-http_ssl_module --with-http_v2_module \
         --with-http_realip_module --with-threads --with-stream --with-stream_ssl_preread_module \
-        --with-debug >/dev/null 2>&1
+        --with-stream_ssl_module --with-stream_realip_module --with-debug >/dev/null 2>&1
 
     echo -n "...80%..."
 
@@ -19632,18 +19638,14 @@ RestartNginx()
 
 NginxConfigServerHttpPort()
 {
-    Println "输入 http 端口"
-    echo -e "$tip 也可以输入 IP:端口 组合\n"
-    read -p "(默认: 80): " server_http_port
-    server_http_port=${server_http_port:-80}
+    echo
+    inquirer text_input "输入 http 端口: " server_http_port 80
 }
 
 NginxConfigServerHttpsPort()
 {
-    Println "输入 https 端口"
-    echo -e "$tip 也可以输入 IP:端口 组合\n"
-    read -p "(默认: 443): " server_https_port
-    server_https_port=${server_https_port:-443}
+    echo
+    inquirer text_input "输入 https 端口: " server_https_port 443
 }
 
 NginxConfigServerRoot()
@@ -19979,14 +19981,14 @@ NginxConfigCorsHost()
             then
                 hosts+=("$domain")
                 cors_domains="$cors_domains
-        \"~http://$domain\" http://$domain;
-        \"~https://$domain\" https://$domain;"
+        ~http://$domain http://$domain;
+        ~https://$domain https://$domain;"
             fi
         done
     fi
     server_ip=$(GetServerIp)
     cors_domains="$cors_domains
-        \"~http://$server_ip\" http://$server_ip;"
+        ~http://$server_ip http://$server_ip;"
     if ! grep -q "map \$http_origin \$corsHost" < "$nginx_prefix/conf/nginx.conf"
     then
         conf=""
@@ -20003,7 +20005,7 @@ NginxConfigCorsHost()
                     line="
     map \$http_origin \$corsHost {
         default *;
-        \"~http://$server_ip\" http://$server_ip;
+        ~http://$server_ip\ http://$server_ip;
     }\n\n$line"
                     found=1
                 fi
@@ -20044,7 +20046,7 @@ NginxConfigCorsHost()
                     if [[ $host_found -eq 0 ]] && [[ ! $line =~ $server_ip ]]
                     then
                         cors_domains="$cors_domains
-        \"~http$found_host\" http$found_host;"
+        ~http$found_host http$found_host;"
                     fi
                 fi
                 continue
@@ -21986,46 +21988,130 @@ GetFreeTag()
     done
 }
 
-V2rayUpdate()
+V2rayInstall()
 {
-    CheckRelease "检查依赖, 耗时可能会很长"
-
-    if [ ! -s "$IPTV_ROOT/monitor.pid" ] && [ ! -s "$IPTV_ROOT/antiddos.pid" ]
+    if [ -e "$V2_CONFIG" ] 
     then
-        rm -f "${JQ_FILE:-notfound}"
-        Println "$info 更新 JQ..."
-        InstallJQ
+        while IFS= read -r line 
+        do
+            if [[ $line == *"port"* ]] 
+            then
+                port=${line#*: }
+                port=${port%,*}
+            elif [[ $line == *"id"* ]] 
+            then
+                id=${line#*: \"}
+                id=${id%\"*}
+            elif [[ $line == *"path"* ]] 
+            then
+                path=${line#*: \"}
+                path=${path%\"*}
+                break
+            fi
+        done < "$V2_CONFIG"
+
+        if [ -n "${path:-}" ] 
+        then
+            Println "$error $v2ray_name 已安装...\n" && exit 1
+        fi
     fi
 
-    V2rayConfigUpdate
+    CheckRelease "检查依赖, 耗时可能会很长"
+    InstallJQ
 
-    UpdateShFile v2ray
-
-    if ! grep -q "v2ray:" < "/etc/passwd"
+    if ! grep -q "$v2ray_name:" < "/etc/passwd"
     then
         if grep -q '\--group ' < <(adduser --help)
         then
-            adduser v2ray --system --group --no-create-home > /dev/null
+            adduser $v2ray_name --system --group --no-create-home > /dev/null
         else
-            adduser v2ray --system --no-create-home > /dev/null
+            adduser $v2ray_name --system --no-create-home > /dev/null
         fi
-        usermod -s /usr/sbin/nologin v2ray
+        usermod -s /usr/sbin/nologin $v2ray_name
     fi
 
-    { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_BACKUP"; } \
-    | sed "s+nobody+v2ray+g" \
-    | sed "s+ 'sha1'++g" \
-    | sed "s+ 'sha256'++g" \
-    | sed "s+ 'sha512'++g" \
-    | sed "s+https://api.github.com/repos/v2fly/v2ray-core/releases/latest+$FFMPEG_MIRROR_LINK/v2ray.json+g" \
-    | sed "s+https://github.com/v2fly/v2ray-core/releases/download+$FFMPEG_MIRROR_LINK/v2ray+g" | bash
+    Println "$info 安装 $v2ray_name..."
 
-    sed -i "s+nobody+v2ray+g" /etc/systemd/system/v2ray.service
-    sed -i "s+nobody+v2ray+g" /etc/systemd/system/v2ray@.service
+    if [ "$v2ray_name" == "v2ray" ] 
+    then
+        { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_BACKUP"; } \
+        | sed "s+nobody+$v2ray_name+g" \
+        | sed "s+ 'sha1'++g" \
+        | sed "s+ 'sha256'++g" \
+        | sed "s+ 'sha512'++g" \
+        | sed "s+https://api.github.com/repos/v2fly/v2ray-core/releases/latest+$FFMPEG_MIRROR_LINK/$v2ray_name.json+g" \
+        | sed "s+https://github.com/v2fly/v2ray-core/releases/download+$FFMPEG_MIRROR_LINK/$v2ray_name+g" | bash
+
+        sed -i "s+nobody+$v2ray_name+g" "/etc/systemd/system/$v2ray_name.service"
+        sed -i "s+nobody+$v2ray_name+g" "/etc/systemd/system/$v2ray_name@.service"
+
+        mkdir -p /var/log/$v2ray_name/
+        [ ! -e "/var/log/$v2ray_name/error.log" ] && printf '%s' "" > /var/log/$v2ray_name/error.log
+        chown -R $v2ray_name:$v2ray_name /var/log/$v2ray_name/
+        chown -R $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/
+    else
+        { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_BACKUP"; } \
+        | sed "s+nobody+$v2ray_name+g" \
+        | sed "s+ 'sha1'++g" \
+        | sed "s+ 'sha256'++g" \
+        | sed "s+ 'sha512'++g" \
+        | sed "s+https://api.github.com/repos/XTLS/Xray-core/releases/latest+$FFMPEG_MIRROR_LINK/$v2ray_name.json+g" \
+        | sed "s+https://github.com/XTLS/Xray-core/releases/download+$FFMPEG_MIRROR_LINK/$v2ray_name+g" | bash
+    fi
+
+    V2rayConfigInstall
+
     systemctl daemon-reload
-    chown -R v2ray:v2ray /usr/local/share/v2ray/
+    systemctl enable $v2ray_name
+    systemctl start $v2ray_name
 
-    Println "$info 升级完成\n"
+    Println "$info $v2ray_name 安装完成\n"
+}
+
+V2rayUpdate()
+{
+    CheckRelease "检查依赖, 耗时可能会很长"
+    InstallJQ
+    V2rayConfigUpdate
+    UpdateShFile $v2ray_name
+
+    if ! grep -q "$v2ray_name:" < "/etc/passwd"
+    then
+        if grep -q '\--group ' < <(adduser --help)
+        then
+            adduser $v2ray_name --system --group --no-create-home > /dev/null
+        else
+            adduser $v2ray_name --system --no-create-home > /dev/null
+        fi
+        usermod -s /usr/sbin/nologin $v2ray_name
+    fi
+
+    if [ "$v2ray_name" == "v2ray" ] 
+    then
+        { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_BACKUP"; } \
+        | sed "s+nobody+$v2ray_name+g" \
+        | sed "s+ 'sha1'++g" \
+        | sed "s+ 'sha256'++g" \
+        | sed "s+ 'sha512'++g" \
+        | sed "s+https://api.github.com/repos/v2fly/v2ray-core/releases/latest+$FFMPEG_MIRROR_LINK/$v2ray_name.json+g" \
+        | sed "s+https://github.com/v2fly/v2ray-core/releases/download+$FFMPEG_MIRROR_LINK/$v2ray_name+g" | bash
+
+        sed -i "s+nobody+$v2ray_name+g" "/etc/systemd/system/$v2ray_name.service"
+        sed -i "s+nobody+$v2ray_name+g" "/etc/systemd/system/$v2ray_name@.service"
+
+        systemctl daemon-reload
+        chown -R $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/
+    else
+        { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_BACKUP"; } \
+        | sed "s+nobody+$v2ray_name+g" \
+        | sed "s+ 'sha1'++g" \
+        | sed "s+ 'sha256'++g" \
+        | sed "s+ 'sha512'++g" \
+        | sed "s+https://api.github.com/repos/XTLS/Xray-core/releases/latest+$FFMPEG_MIRROR_LINK/$v2ray_name.json+g" \
+        | sed "s+https://github.com/XTLS/Xray-core/releases/download+$FFMPEG_MIRROR_LINK/$v2ray_name+g" | bash
+    fi
+
+    Println "$info $v2ray_name 升级完成\n"
 }
 
 V2rayConfigInstall()
@@ -22047,10 +22133,11 @@ V2rayConfigInstall()
     done < "$V2_CONFIG"
 
     $JQ_FILE -n --arg port "${port:-$(GetFreePort)}" --arg id "${id:-$($V2CTL_FILE uuid)}" --arg path "${path:-/$(RandStr)}" \
+    --arg error "/var/log/$v2ray_name/error.log" \
 '{
   "log": {
     "access": "none",
-    "error": "/var/log/v2ray/error.log",
+    "error": $error,
     "loglevel": "error"
   },
   "inbounds": [
@@ -22113,13 +22200,13 @@ V2rayConfigUpdate()
 {
     if [ ! -e "$V2_CONFIG" ] 
     then
-        Println "$error v2ray 未安装...\n" && exit 1
+        Println "$error $v2ray_name 未安装...\n" && exit 1
     elif [ ! -s "$V2_CONFIG" ] 
     then
         printf '%s' '{
   "log": {
     "access": "none",
-    "error": "/var/log/v2ray/error.log",
+    "error": "/var/log/'"$v2ray_name"'/error.log",
     "loglevel": "error"
   },
   "inbounds": [],
@@ -22149,17 +22236,17 @@ V2rayConfigUpdate()
             done < "$V2_CONFIG"
         fi
         V2rayConfigInstall
-        Println "$info v2ray 配置文件已更新\n"
+        Println "$info $v2ray_name 配置文件已更新\n"
     fi
 }
 
 V2rayStatus()
 {
-    if [[ $(systemctl is-active v2ray) == "active" ]]
+    if [[ $(systemctl is-active $v2ray_name) == "active" ]]
     then
-        Println "v2ray: $green开启${normal}\n"
+        Println "$v2ray_name: $green开启${normal}\n"
     else
-        Println "v2ray: $red关闭${normal}\n"
+        Println "$v2ray_name: $red关闭${normal}\n"
     fi
 }
 
@@ -22331,7 +22418,12 @@ V2raySetOutboundNetwork()
 V2raySetSecurity()
 {
     echo
-    security_options=( 'none' 'tls' )
+    if [ "$v2ray_name" == "xray" ] && [ "$protocol" == "vless" ] 
+    then
+        security_options=( 'none' 'tls' 'xtls' )
+    else
+        security_options=( 'none' 'tls' )
+    fi
     inquirer list_input "选择传输加密" security_options security
 }
 
@@ -22374,7 +22466,7 @@ V2raySetAlpn()
 
 V2raySetDisableSystemRoot()
 {
-    Println "$tip 不禁用时只会使用操作系统自带的 CA 证书进行 TLS 握手"
+    Println "$tip 不禁用时只会使用操作系统自带的 CA 证书进行 $tls_name 握手"
     yn_options=( '否' '是' )
     inquirer list_input "是否禁用操作系统自带的 CA 证书" yn_options disable_system_root
     if [ "$disable_system_root" == "否" ] 
@@ -22388,12 +22480,12 @@ V2raySetDisableSystemRoot()
 V2raySetCertificates()
 {
     echo
-    usage_options=( 'TLS 认证和加密' '验证远端 TLS 的证书' '签发其它证书' )
+    usage_options=( "$tls_name 认证和加密" "验证远端 $tls_name 的证书" "签发其它证书" )
     inquirer list_input "选择证书用途" usage_options usage
-    if [ "$usage" == "TLS 认证和加密" ] 
+    if [ "$usage" == "$tls_name 认证和加密" ] 
     then
         usage="encipherment"
-    elif [ "$usage" == "验证远端 TLS 的证书" ] 
+    elif [ "$usage" == "验证远端 $tls_name 的证书" ] 
     then
         usage="verify"
     else
@@ -22401,20 +22493,118 @@ V2raySetCertificates()
     fi
 
     echo
-    add_crt_options=( '新建证书' '输入证书地址' )
-    inquirer list_input "选择添加证书方式" add_crt_options add_crt_option
-    if [ "$add_crt_option" == "输入证书地址" ] 
+    if [ "$v2ray_name" == "xray" ] 
     then
+        add_crt_options=( '选择现有证书/请求新 CA 证书' '输入证书地址' )
+    else
+        add_crt_options=( '自签名证书' '选择现有证书/请求新 CA 证书' '输入证书地址' )
+    fi
+    inquirer list_input "选择添加证书方式" add_crt_options add_crt_option
+
+    if [ "$add_crt_option" == "自签名证书" ] 
+    then
+        if [ "$usage" == "encipherment" ] 
+        then
+            echo
+            yn_options=( '是' '否' )
+            inquirer list_input "是否是 CA 证书" yn_options ca_yn
+            if [ "$ca_yn" == "是" ] 
+            then
+                crt=$($V2CTL_FILE cert -ca)
+            else
+                crt=$($V2CTL_FILE cert)
+            fi
+        else
+            crt=$($V2CTL_FILE cert -ca)
+        fi
+        certificate=$($JQ_FILE "{\"usage\":\"$usage\"} * ." <<< "$crt")
+    elif [ "$add_crt_option" == "选择现有证书/请求新 CA 证书" ] 
+    then
+        if ls -A /usr/local/share/$v2ray_name/*.crt > /dev/null 2>&1 
+        then
+            crt_options=()
+            for f in /usr/local/share/$v2ray_name/*.crt
+            do
+                domain=${f##*/}
+                domain=${domain%.*}
+                crt_options+=("$domain")
+            done
+            crt_options+=("添加域名")
+            echo
+            inquirer list_input "选择证书" crt_options crt_option
+        else
+            crt_option="添加域名"
+        fi
+        if [ "$crt_option" == "添加域名" ] 
+        then
+            Println "$tip 请求新 CA 证书, 请确保没有程序占用 80 端口"
+            inquirer text_input "输入域名: " domain "取消"
+            if [ "$domain" == "取消" ] 
+            then
+                Println "已取消...\n"
+                exit 1
+            fi
+            if [ ! -s "/usr/local/share/$v2ray_name/$domain.crt" ] 
+            then
+                if [ -s "/usr/local/nginx/conf/sites_crt/$domain.crt" ] 
+                then
+                    cp -f "/usr/local/nginx/conf/sites_crt/$domain.crt" "/usr/local/share/$v2ray_name/$domain.crt"
+                    cp -f "/usr/local/nginx/conf/sites_crt/$domain.key" "/usr/local/share/$v2ray_name/$domain.key"
+                elif [ -s "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" ] 
+                then
+                    cp -f "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" "/usr/local/share/$v2ray_name/$domain.crt"
+                    cp -f "/usr/local/openresty/nginx/conf/sites_crt/$domain.key" "/usr/local/share/$v2ray_name/$domain.key"
+                else
+                    Println "$info 安装证书..."
+
+                    if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
+                    then
+                        CheckRelease lite
+                        if [ "$release" == "rpm" ] 
+                        then
+                            yum -y install socat > /dev/null
+                        else
+                            apt-get -y install socat > /dev/null
+                        fi
+                        bash <(curl -s -m 20 https://get.acme.sh) > /dev/null
+                    fi
+
+                    ~/.acme.sh/acme.sh --force --issue -d "$domain" --standalone -k ec-256 > /dev/null
+                    ~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "/usr/local/share/$v2ray_name/$domain.crt" --keypath "/usr/local/share/$v2ray_name/$domain.key" --ecc > /dev/null
+
+                    Println "$info 证书安装完成..."
+                fi
+            fi
+            chown $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/*
+            certificate=$(
+            $JQ_FILE -n --arg usage "$usage" --arg certificateFile "/usr/local/share/$v2ray_name/$domain.crt" \
+                --arg keyFile "/usr/local/share/$v2ray_name/$domain.key" \
+            '{
+                "usage": $usage,
+                "certificateFile": $certificateFile,
+                "keyFile": $keyFile
+            }')
+        else
+            certificate=$(
+            $JQ_FILE -n --arg usage "$usage" --arg certificateFile "/usr/local/share/$v2ray_name/$crt_option.crt" \
+                --arg keyFile "/usr/local/share/$v2ray_name/$crt_option.key" \
+            '{
+                "usage": $usage,
+                "certificateFile": $certificateFile,
+                "keyFile": $keyFile
+            }')
+        fi
+    else
         Println "$tip 如使用 OpenSSL 生成, 后缀名为 .crt, 文件必须存在"
         inquirer text_input "输入证书文件路径: " certificate_file
         if [ -s "$certificate_file" ] 
         then
-            cp -f "$certificate_file" /usr/local/share/v2ray/
-            certificate_file="/usr/local/share/v2ray/${certificate_file##*/}"
-            chown v2ray:v2ray /usr/local/share/v2ray/*
-            Println "$info 已复制证书到 $certificate_file 并赋予 v2ray:v2ray 权限"
+            cp -f "$certificate_file" /usr/local/share/$v2ray_name/
+            certificate_file="/usr/local/share/$v2ray_name/${certificate_file##*/}"
+            chown $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/*
+            Println "$info 已复制证书到 $certificate_file 并赋予 $v2ray_name:$v2ray_name 权限"
         else
-            Println "$error 证书不存在, 请稍后手动添加证书并赋予 v2ray 权限(chown v2ray:v2ray $certificate_file)"
+            Println "$error 证书不存在, 请稍后手动添加证书并赋予 $v2ray_name 权限(chown $v2ray_name:$v2ray_name $certificate_file)"
         fi
 
         if [ "$usage" == "verify" ] 
@@ -22438,12 +22628,12 @@ V2raySetCertificates()
         inquirer text_input "输入证书密钥路径: " key_file
         if [ -s "$key_file" ] 
         then
-            cp -f "$key_file" /usr/local/share/v2ray/
-            key_file="/usr/local/share/v2ray/${key_file##*/}"
-            chown v2ray:v2ray /usr/local/share/v2ray/*
-            Println "$info 已复制密钥到 $key_file 并赋予 v2ray:v2ray 权限"
+            cp -f "$key_file" /usr/local/share/$v2ray_name/
+            key_file="/usr/local/share/$v2ray_name/${key_file##*/}"
+            chown $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/*
+            Println "$info 已复制密钥到 $key_file 并赋予 $v2ray_name:$v2ray_name 权限"
         else
-            Println "$error 密钥不存在, 请稍后手动添加密钥并赋予 v2ray 权限(chown v2ray:v2ray $key_file)"
+            Println "$error 密钥不存在, 请稍后手动添加密钥并赋予 $v2ray_name 权限(chown $v2ray_name:$v2ray_name $key_file)"
         fi
 
         certificate=$(
@@ -22454,106 +22644,6 @@ V2raySetCertificates()
             "certificateFile": $certificateFile,
             "keyFile": $keyFile
         }')
-
-        return 0
-    fi
-
-    echo
-    sign_options=( '自签名证书' '选择现有/请求证书' )
-    inquirer list_input "选择签名类型" sign_options sign
-
-    if [ "$sign" == "自签名证书" ] 
-    then
-        if [ "$usage" == "encipherment" ] 
-        then
-            echo
-            yn_options=( '是' '否' )
-            inquirer list_input "是否是 CA 证书" yn_options ca_yn
-            if [ "$ca_yn" == "是" ] 
-            then
-                crt=$($V2CTL_FILE cert -ca)
-            else
-                crt=$($V2CTL_FILE cert)
-            fi
-        else
-            crt=$($V2CTL_FILE cert -ca)
-        fi
-        certificate=$($JQ_FILE "{\"usage\":\"$usage\"} * ." <<< "$crt")
-    else
-        if ls -A /usr/local/share/v2ray/*.crt > /dev/null 2>&1 
-        then
-            crt_options=()
-            for f in /usr/local/share/v2ray/*.crt
-            do
-                domain=${f##*/}
-                domain=${domain%.*}
-                crt_options+=("$domain")
-            done
-            crt_options+=("添加域名")
-            echo
-            inquirer list_input "选择证书" crt_options crt_option
-        else
-            crt_option="添加域名"
-        fi
-        if [ "$crt_option" == "添加域名" ] 
-        then
-            Println "$tip 请确保没有程序占用 80 端口"
-            inquirer text_input "输入域名: " domain "取消"
-            if [ "$domain" == "取消" ] 
-            then
-                Println "已取消...\n"
-                exit 1
-            fi
-            if [ ! -s "/usr/local/share/v2ray/$domain.crt" ] 
-            then
-                if [ -s "/usr/local/nginx/conf/sites_crt/$domain.crt" ] 
-                then
-                    cp -f "/usr/local/nginx/conf/sites_crt/$domain.crt" "/usr/local/share/v2ray/$domain.crt"
-                    cp -f "/usr/local/nginx/conf/sites_crt/$domain.key" "/usr/local/share/v2ray/$domain.key"
-                elif [ -s "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" ] 
-                then
-                    cp -f "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" "/usr/local/share/v2ray/$domain.crt"
-                    cp -f "/usr/local/openresty/nginx/conf/sites_crt/$domain.key" "/usr/local/share/v2ray/$domain.key"
-                else
-                    Println "$info 安装证书..."
-
-                    if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
-                    then
-                        CheckRelease lite
-                        if [ "$release" == "rpm" ] 
-                        then
-                            yum -y install socat > /dev/null
-                        else
-                            apt-get -y install socat > /dev/null
-                        fi
-                        bash <(curl -s -m 20 https://get.acme.sh) > /dev/null
-                    fi
-
-                    ~/.acme.sh/acme.sh --force --issue -d "$domain" --standalone -k ec-256 > /dev/null
-                    ~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "/usr/local/share/v2ray/$domain.crt" --keypath "/usr/local/share/v2ray/$domain.key" --ecc > /dev/null
-
-                    Println "$info 证书安装完成..."
-                fi
-            fi
-            chown v2ray:v2ray /usr/local/share/v2ray/*
-            certificate=$(
-            $JQ_FILE -n --arg usage "$usage" --arg certificateFile "/usr/local/share/v2ray/$domain.crt" \
-                --arg keyFile "/usr/local/share/v2ray/$domain.key" \
-            '{
-                "usage": $usage,
-                "certificateFile": $certificateFile,
-                "keyFile": $keyFile
-            }')
-        else
-            certificate=$(
-            $JQ_FILE -n --arg usage "$usage" --arg certificateFile "/usr/local/share/v2ray/$crt_option.crt" \
-                --arg keyFile "/usr/local/share/v2ray/$crt_option.key" \
-            '{
-                "usage": $usage,
-                "certificateFile": $certificateFile,
-                "keyFile": $keyFile
-            }')
-        fi
     fi
 }
 
@@ -22612,6 +22702,13 @@ V2raySetId()
         id=$($V2CTL_FILE uuid)
         Println "  id: $green $id ${normal}"
     fi
+}
+
+V2raySetFlow()
+{
+    echo
+    flow_options=( 'xtls-rprx-direct' 'xtls-rprx-direct-udp443' 'xtls-rprx-origin' )
+    inquirer list_input "选择模式" flow_options flow
 }
 
 V2raySetAlterId()
@@ -22778,7 +22875,7 @@ V2raySetNginxTag()
 
 V2raySetAcceptProxyProtocol()
 {
-    Println "$tip PROXY 协议专用于传递请求的真实来源 IP 和端口"
+    Println "$tip PROXY 协议专用于传递请求的真实来源 IP 和端口, 如果前端 nginx 发送 PROXY Protocol 必须选是"
     accept_proxy_protocol_options=( '否' '是' )
     inquirer list_input "是否接收 PROXY 协议" accept_proxy_protocol_options accept_proxy_protocol
     if [[ $accept_proxy_protocol == "是" ]] 
@@ -22820,7 +22917,7 @@ V2raySetQuicKey()
 
 V2raySetDsPath()
 {
-    Println "$tip 在运行 V2Ray 之前, 这个文件必须不存在"
+    Println "$tip 在运行 $v2ray_name 之前, 这个文件必须不存在"
     inquirer text_input "输入 domainsocket 文件路径: " ds_path "取消"
     if [ "$ds_path" == "取消" ]
     then
@@ -23199,13 +23296,13 @@ V2raySetFallbacks()
         while true 
         do
             Println "$tip 请输入单个"
-            inquirer text_input "输入尝试匹配 TLS ALPN 协商结果: " v2ray_fallback_alpn "不设置"
+            inquirer text_input "输入尝试匹配 $tls_name ALPN 协商结果: " v2ray_fallback_alpn "不设置"
             if [ "$v2ray_fallback_alpn" == "不设置" ] 
             then
                 v2ray_fallback_alpn=""
             elif [ "$v2ray_fallback_alpn" == "h2" ] && [[ ! $alpn =~ h2 ]]
             then
-                Println "$error 协议回落存在 h2 时, TLS 需设置 h2 http/1.1\n"
+                Println "$error 协议回落存在 h2 时, $tls_name 需设置 h2 http/1.1\n"
                 exit 1
             fi
             Println "$tip 非空则必须以 / 开头, 不支持 h2c"
@@ -23215,7 +23312,7 @@ V2raySetFallbacks()
                 v2ray_fallback_path=""
             fi
             Println "$tip 格式为 addr:port 或 /dev/shm/domain.socket, 若填写域名, 也将直接发起 TCP 连接(而不走内置的 DNS)"
-            inquirer text_input "输入 TLS 解密后 TCP 流量的去向: " v2ray_fallback_dest
+            inquirer text_input "输入 $tls_name 解密后 TCP 流量的去向: " v2ray_fallback_dest
             if [ -z "$v2ray_fallback_dest" ] 
             then
                 Println "$error 已取消...\n"
@@ -23251,6 +23348,7 @@ V2raySetFallbacks()
                     "xver": '"$v2ray_fallback_proxy_protocol"'
                 }'
             fi
+            echo
             yn_options=( '否' '是' )
             inquirer list_input "是否继续配置新的协议回落" yn_options v2ray_fallbacks_yn
             if [ "$v2ray_fallbacks_yn" == "否" ] 
@@ -23318,7 +23416,7 @@ V2rayAddInbound()
 
     echo
     yn_options=( '否' '是' )
-    inquirer list_input "是否通过 nginx 连接" yn_options nginx_proxy_yn
+    inquirer list_input "是否通过此脚本配置的 nginx 连接" yn_options nginx_proxy_yn
 
     if [[ $nginx_proxy_yn == "是" ]]
     then
@@ -23380,11 +23478,9 @@ V2rayAddInbound()
             '. * 
             {
                 "allocate": {
-                    "tlsSettings": {
-                        "strategy": $strategy,
-                        "refresh": $refresh | tonumber,
-                        "concurrency": $concurrency | tonumber
-                    }
+                    "strategy": $strategy,
+                    "refresh": $refresh | tonumber,
+                    "concurrency": $concurrency | tonumber
                 }
             }' <<< "$new_inbound")
         fi
@@ -23438,6 +23534,70 @@ V2rayAddInbound()
             '{
                 "streamSettings": {
                     "tlsSettings": {
+                        "certificates": $certificates
+                    }
+                }
+            }')
+            JQs merge new_inbound "$merge"
+            if [ "$disable_system_root" == "true" ] 
+            then
+                echo
+                yn_options=( '否' '是' )
+                inquirer list_input "是否继续添加证书" yn_options continue_yn
+                if [ "$continue_yn" == "否" ] 
+                then
+                    break
+                fi
+            fi
+        done
+    elif [ "$security" == "xtls" ] 
+    then
+        V2raySetServerName
+        if [ -n "$server_name" ] 
+        then
+            new_inbound=$(
+            $JQ_FILE --arg serverName "$server_name" \
+            '. * 
+            {
+                "streamSettings": {
+                    "xtlsSettings": {
+                        "serverName": $serverName
+                    }
+                }
+            }' <<< "$new_inbound")
+        fi
+        V2raySetAlpn
+        V2raySetDisableSystemRoot
+        new_inbound=$(
+        $JQ_FILE --argjson alpn "[$alpn]" --arg disableSystemRoot "$disable_system_root" \
+        '. * 
+        {
+            "streamSettings": {
+                "xtlsSettings": {
+                    "alpn": $alpn,
+                    "disableSystemRoot": $disableSystemRoot | test("true"),
+                }
+            }
+        }' <<< "$new_inbound")
+        while true 
+        do
+            if [ "$disable_system_root" == "false" ] 
+            then
+                echo
+                yn_options=( '否' '是' )
+                inquirer list_input "是否继续添加证书" yn_options continue_yn
+                if [ "$continue_yn" == "否" ] 
+                then
+                    break
+                fi
+            fi
+            Println "$info 设置证书"
+            V2raySetCertificates
+            merge=$(
+            $JQ_FILE -n --argjson certificates "[$certificate]" \
+            '{
+                "streamSettings": {
+                    "xtlsSettings": {
                         "certificates": $certificates
                     }
                 }
@@ -23509,7 +23669,7 @@ V2rayAddInbound()
                 }
             }' <<< "$new_inbound")
         fi
-        if [ "$security" == "tls" ] && [ "$network" == "tcp" ] && [[ $alpn == *"http/1.1"* ]]
+        if { [ "$security" == "tls" ] || [ "$security" == "xtls" ]; } && [ "$network" == "tcp" ] && [[ $alpn == *"http/1.1"* ]]
         then
             V2raySetFallbacks
             if [ -n "$v2ray_fallbacks" ] 
@@ -23800,14 +23960,14 @@ V2rayGetInbounds()
     ([.inbounds[]|.settings.password|. + "^"]|join("") + "`"),
     ([.inbounds[]|.streamSettings.network|. + "^"]|join("") + "`"),
     ([.inbounds[]|.streamSettings.security // "none"|. + "^"]|join("") + "`"),
-    ([.inbounds[]|.streamSettings.tlsSettings.serverName|. + "^"]|join("") + "`"),
-    ([.inbounds[]|.streamSettings.tlsSettings.alpn // []|join("|")|. + "^"]|join("") + "`"),
-    ([.inbounds[]|.streamSettings.tlsSettings.certificates // []|[.[].usage|. + "|"]|join("")|. + "^"]|join("") + "`"),
-    ([.inbounds[]|.streamSettings.tlsSettings.certificates // []|[.[].certificateFile|. + "|"]|join("")|. + "^"]|join("") + "`"),
-    ([.inbounds[]|.streamSettings.tlsSettings.certificates // []|[.[].keyFile|. + "|"]|join("")|. + "^"]|join("") + "`"),
-    ([.inbounds[]|.streamSettings.tlsSettings.certificates // []|[.[].certificate // []|join(" ")]|join("|")|. + "^"]|join("") + "`"),
-    ([.inbounds[]|.streamSettings.tlsSettings.certificates // []|[.[].key // []|join(" ")]|join("|")|. + "^"]|join("") + "`"),
-    ([.inbounds[]|.streamSettings.tlsSettings.disableSystemRoot // false|tostring|. + "^"]|join("") + "`"),
+    ([.inbounds[]|.streamSettings.tlsSettings.serverName // .streamSettings.xtlsSettings.serverName|. + "^"]|join("") + "`"),
+    ([.inbounds[]|.streamSettings.tlsSettings.alpn // .streamSettings.xtlsSettings.alpn // []|join("|")|. + "^"]|join("") + "`"),
+    ([.inbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].usage|. + "|"]|join("")|. + "^"]|join("") + "`"),
+    ([.inbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].certificateFile|. + "|"]|join("")|. + "^"]|join("") + "`"),
+    ([.inbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].keyFile|. + "|"]|join("")|. + "^"]|join("") + "`"),
+    ([.inbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].certificate // []|join(" ")]|join("|")|. + "^"]|join("") + "`"),
+    ([.inbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].key // []|join(" ")]|join("|")|. + "^"]|join("") + "`"),
+    ([.inbounds[]|.streamSettings.tlsSettings.disableSystemRoot // .streamSettings.xtlsSettings.disableSystemRoot // false|tostring|. + "^"]|join("") + "`"),
     ([.inbounds[]|.streamSettings.httpSettings.host // []|join("|")|. + "^"]|join("") + "`"),
     ([.inbounds[]|.streamSettings.wsSettings.path // .streamSettings.httpSettings.path|. + "^"]|join("") + "`"),
     ([.inbounds[]|.streamSettings.tcpSettings.acceptProxyProtocol // .streamSettings.wsSettings.acceptProxyProtocol // false|tostring|. + "^"]|join("") + "`"),
@@ -24044,9 +24204,9 @@ V2rayListInbounds()
         fi
         if [ "${inbounds_stream_security[inbounds_index]}" == "none" ] 
         then
-            stream_settings_list="${stream_settings_list}TLS 加密: $red否${normal}\n\033[6C"
+            stream_settings_list="${stream_settings_list}$tls_name 加密: $red否${normal}\n\033[6C"
         else
-            stream_settings_list="${stream_settings_list}TLS 加密: $green是${normal}\n\033[6C"
+            stream_settings_list="${stream_settings_list}$tls_name 加密: $green是${normal}\n\033[6C"
             if [ -n "${inbounds_stream_tls_server_name[inbounds_index]}" ] 
             then
                 stream_settings_list="${stream_settings_list}指定证书域名: $green${inbounds_stream_tls_server_name[inbounds_index]}${normal}\n\033[6C"
@@ -24061,9 +24221,9 @@ V2rayListInbounds()
             fi
             if [ -n "${inbounds_stream_tls_alpn[inbounds_index]}" ] 
             then
-                stream_settings_list="${stream_settings_list}TLS 握手 ALPN: $green${inbounds_stream_tls_alpn[inbounds_index]}${normal}\n\033[6C"
+                stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: $green${inbounds_stream_tls_alpn[inbounds_index]//|/,}${normal}\n\033[6C"
             else
-                stream_settings_list="${stream_settings_list}TLS 握手 ALPN: ${green}h2,http/1.1${normal}\n\033[6C"
+                stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: ${green}h2,http/1.1${normal}\n\033[6C"
             fi
             if [ -n "${inbounds_stream_tls_certificates_usage[inbounds_index]}" ] 
             then
@@ -24076,10 +24236,10 @@ V2rayListInbounds()
                 do
                     if [ "${usages[certificate_i]}" == "encipherment" ] 
                     then
-                        certificate_usage="TLS 认证和加密"
+                        certificate_usage="$tls_name 认证和加密"
                     elif [ "${usages[certificate_i]}" == "verify" ] 
                     then
-                        certificate_usage="验证远端 TLS"
+                        certificate_usage="验证远端 $tls_name"
                     else
                         certificate_usage="签发其它证书"
                     fi
@@ -24310,14 +24470,28 @@ V2rayAddInboundAccount()
         V2raySetLevel
         V2raySetEmail
         jq_path='["inbounds",'"$inbounds_index"',"settings","clients"]'
-        new_account=$(
-        $JQ_FILE -n --arg id "$id" --arg level "$level" \
-            --arg email "$email" \
-        '{
-            "id": $id,
-            "level": $level | tonumber,
-            "email": $email
-        }')
+        if [ "$v2ray_name" == "xray" ] 
+        then
+            V2raySetFlow
+            new_account=$(
+            $JQ_FILE -n --arg id "$id" --arg flow "$flow" \
+                --arg level "$level" --arg email "$email" \
+            '{
+                "id": $id,
+                "flow": $flow,
+                "level": $level | tonumber,
+                "email": $email
+            }')
+        else
+            new_account=$(
+            $JQ_FILE -n --arg id "$id" --arg level "$level" \
+                --arg email "$email" \
+            '{
+                "id": $id,
+                "level": $level | tonumber,
+                "email": $email
+            }')
+        fi
     elif [ "${inbounds_protocol[inbounds_index]}" == "http" ] || [ "${inbounds_protocol[inbounds_index]}" == "socks" ]
     then
         V2raySetHttpAccount
@@ -24379,7 +24553,7 @@ V2rayListInboundAccounts()
     accounts_alter_id=()
     accounts_email=()
     accounts_list=""
-    while IFS="^" read -r map_id map_level map_alter_id map_email map_user map_pass
+    while IFS="^" read -r map_id map_flow map_level map_alter_id map_email map_user map_pass
     do
         accounts_count=$((accounts_count+1))
         accounts_id+=("$map_id")
@@ -24397,11 +24571,16 @@ V2rayListInboundAccounts()
             accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}Trojan${normal} 密码: $green$map_pass${normal} 邮箱: $green$map_email${normal} 等级: $green$map_level${normal}\n\n"
         elif [ "${inbounds_protocol[inbounds_index]}" == "vless" ] 
         then
-            accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} 邮箱: $green$map_email${normal}\n\n"
+            if [ "$v2ray_name" == "xray" ] 
+            then
+                accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 模式: $green$map_flow${normal} 等级: $green$map_level${normal} 邮箱: $green$map_email${normal}\n\n"
+            else
+                accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} 邮箱: $green$map_email${normal}\n\n"
+            fi
         else
             accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}VMESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} alterId: $green$map_alter_id${normal} 邮箱: $green$map_email${normal}\n\n"
         fi
-    done < <($JQ_FILE -r '.inbounds['"$inbounds_index"'].settings | (.clients // .accounts)[] | [.id,.level,.alterId,.email,.user,(.pass // .password)] | join("^")' "$V2_CONFIG")
+    done < <($JQ_FILE -r '.inbounds['"$inbounds_index"'].settings | (.clients // .accounts)[] | [.id,.flow,.level,.alterId,.email,.user,(.pass // .password)] | join("^")' "$V2_CONFIG")
 
     if [ "${inbounds_tag[inbounds_index]:0:6}" == "nginx-" ] 
     then
@@ -24898,6 +25077,73 @@ V2rayAddOutbound()
                     fi
                 fi
             done
+        elif [ "$security" == "xtls" ] 
+        then
+            V2raySetServerName
+            if [ -n "$server_name" ] 
+            then
+                new_outbound=$(
+                $JQ_FILE --arg serverName "$server_name" \
+                '. * 
+                {
+                    "streamSettings": {
+                        "xtlsSettings": {
+                            "serverName": $serverName
+                        }
+                    }
+                }' <<< "$new_outbound")
+            fi
+            V2raySetAllowInsecure
+            V2raySetAlpn
+            V2raySetDisableSystemRoot
+            new_outbound=$(
+            $JQ_FILE --arg allowInsecure "$allow_insecure" \
+            --argjson alpn "[$alpn]" --arg disableSystemRoot "$disable_system_root" \
+            '. * 
+            {
+                "streamSettings": {
+                    "xtlsSettings": {
+                        "allowInsecure": $allowInsecure | test("true"),
+                        "alpn": $alpn,
+                        "disableSystemRoot": $disableSystemRoot | test("true"),
+                    }
+                }
+            }' <<< "$new_outbound")
+            while true 
+            do
+                if [ "$disable_system_root" == "false" ] 
+                then
+                    echo
+                    yn_options=( '否' '是' )
+                    inquirer list_input "是否继续添加证书" yn_options continue_yn
+                    if [ "$continue_yn" == "否" ] 
+                    then
+                        break
+                    fi
+                fi
+                Println "$info 设置证书"
+                V2raySetCertificates
+                merge=$(
+                $JQ_FILE -n --argjson certificates "[$certificate]" \
+                '{
+                    "streamSettings": {
+                        "xtlsSettings": {
+                            "certificates": $certificates
+                        }
+                    }
+                }')
+                JQs merge new_outbound "$merge"
+                if [ "$disable_system_root" == "true" ] 
+                then
+                    echo
+                    yn_options=( '否' '是' )
+                    inquirer list_input "是否继续添加证书" yn_options continue_yn
+                    if [ "$continue_yn" == "否" ] 
+                    then
+                        break
+                    fi
+                fi
+            done
         fi
     fi
 
@@ -24932,15 +25178,15 @@ V2rayGetOutbounds()
     ([.outbounds[]|.settings.servers[0].password|. + "^"]|join("") + "`"),
     ([.outbounds[]|.streamSettings.network|. + "^"]|join("") + "`"),
     ([.outbounds[]|.streamSettings.security // "none"|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.serverName|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.allowInsecure // false|tostring|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.alpn // []|join("|")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.certificates // []|[.[].usage|. + "|"]|join("")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.certificates // []|[.[].certificateFile|. + "|"]|join("")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.certificates // []|[.[].keyFile|. + "|"]|join("")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.certificates // []|[.[].certificate // []|join(" ")]|join("|")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.certificates // []|[.[].key // []|join(" ")]|join("|")|. + "^"]|join("") + "`"),
-    ([.outbounds[]|.streamSettings.tlsSettings.disableSystemRoot // false|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.serverName // .streamSettings.xtlsSettings.serverName|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.allowInsecure // .streamSettings.xtlsSettings.allowInsecure // false|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.alpn // .streamSettings.xtlsSettings.alpn // []|join("|")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].usage|. + "|"]|join("")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].certificateFile|. + "|"]|join("")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].keyFile|. + "|"]|join("")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].certificate // []|join(" ")]|join("|")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].key // []|join(" ")]|join("|")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.disableSystemRoot // .streamSettings.xtlsSettings.disableSystemRoot // false|tostring|. + "^"]|join("") + "`"),
     ([.outbounds[]|.streamSettings.httpSettings.host // []|join("|")|. + "^"]|join("") + "`"),
     ([.outbounds[]|.streamSettings.wsSettings.path // .streamSettings.httpSettings.path|. + "^"]|join("") + "`"),
     ([.outbounds[]|.streamSettings.wsSettings.headers // {}|to_entries|map("\(.key)=\(.value)")|join("|")|. + "^"]|join("") + "`"),
@@ -25079,9 +25325,9 @@ V2rayListOutbounds()
             then
                 if [ "${outbounds_stream_security[outbounds_index]}" == "none" ] 
                 then
-                    stream_settings_list="${stream_settings_list}TLS 加密: $red否${normal}\n\033[6C"
+                    stream_settings_list="${stream_settings_list}$tls_name 加密: $red否${normal}\n\033[6C"
                 else
-                    stream_settings_list="${stream_settings_list}TLS 加密: $green是${normal}\n\033[6C"
+                    stream_settings_list="${stream_settings_list}$tls_name 加密: $green是${normal}\n\033[6C"
                     if [ -n "${outbounds_stream_tls_server_name[outbounds_index]}" ] 
                     then
                         stream_settings_list="${stream_settings_list}指定证书域名: $green${outbounds_stream_tls_server_name[outbounds_index]}${normal}\n\033[6C"
@@ -25102,9 +25348,9 @@ V2rayListOutbounds()
                     fi
                     if [ -n "${outbounds_stream_tls_alpn[outbounds_index]}" ] 
                     then
-                        stream_settings_list="${stream_settings_list}TLS 握手 ALPN: $green${outbounds_stream_tls_alpn[outbounds_index]}${normal}\n\033[6C"
+                        stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: $green${outbounds_stream_tls_alpn[outbounds_index]//|/,}${normal}\n\033[6C"
                     else
-                        stream_settings_list="${stream_settings_list}TLS 握手 ALPN: ${green}h2,http/1.1${normal}\n\033[6C"
+                        stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: ${green}h2,http/1.1${normal}\n\033[6C"
                     fi
                     if [ -n "${outbounds_stream_tls_certificates_usage[outbounds_index]}" ] 
                     then
@@ -25117,10 +25363,10 @@ V2rayListOutbounds()
                         do
                             if [ "${usages[certificate_i]}" == "encipherment" ] 
                             then
-                                certificate_usage="TLS 认证和加密"
+                                certificate_usage="$tls_name 认证和加密"
                             elif [ "${usages[certificate_i]}" == "verify" ] 
                             then
-                                certificate_usage="验证远端 TLS"
+                                certificate_usage="验证远端 $tls_name"
                             else
                                 certificate_usage="签发其它证书"
                             fi
@@ -25303,13 +25549,27 @@ V2rayAddOutboundAccount()
         V2raySetId
         V2raySetLevel
         jq_path='["outbounds",'"$outbounds_index"',"settings","vnext",0,"users"]'
-        new_account=$(
-        $JQ_FILE -n --arg id "$id" --arg level "$level" \
-        '{
-            "id": $id,
-            "encryption": "none",
-            "level": $level | tonumber
-        }')
+        if [ "$v2ray_name" == "xray" ] 
+        then
+            V2raySetFlow
+            new_account=$(
+            $JQ_FILE -n --arg id "$id" --arg flow "$flow" \
+                --arg level "$level" \
+            '{
+                "id": $id,
+                "flow": $flow,
+                "encryption": "none",
+                "level": $level | tonumber
+            }')
+        else
+            new_account=$(
+            $JQ_FILE -n --arg id "$id" --arg level "$level" \
+            '{
+                "id": $id,
+                "encryption": "none",
+                "level": $level | tonumber
+            }')
+        fi
     elif [ "${outbounds_protocol[outbounds_index]}" == "http" ] 
     then
         V2raySetHttpAccount
@@ -25377,7 +25637,7 @@ V2rayListOutboundAccounts()
 
     accounts_count=0
     accounts_list=""
-    while IFS="^" read -r map_id map_level map_alter_id map_security map_user map_pass map_address map_port map_email
+    while IFS="^" read -r map_id map_flow map_level map_alter_id map_security map_user map_pass map_address map_port map_email
     do
         accounts_count=$((accounts_count+1))
         if [ "${outbounds_protocol[outbounds_index]}" == "http" ] 
@@ -25391,11 +25651,16 @@ V2rayListOutboundAccounts()
             accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}Trojan${normal} 服务器地址: $green$map_address${normal} 服务器端口: $green$map_port${normal}\n\033[6C密码: $green$map_pass${normal} 邮箱: $green$map_email${normal} 等级: $green$map_level${normal}\n\n"
         elif [ "${outbounds_protocol[outbounds_index]}" == "vless" ] 
         then
-            accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} 加密方式: $green$map_security${normal}\n\n"
+            if [ "$v2ray_name" == "xray" ] 
+            then
+                accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 模式: $green$map_flow${normal} 等级: $green$map_level${normal} 加密方式: $green$map_security${normal}\n\n"
+            else
+                accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} 加密方式: $green$map_security${normal}\n\n"
+            fi
         else
             accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}VMESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} alterId: $green$map_alter_id${normal} 加密方式: $green$map_security${normal}\n\n"
         fi
-    done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings | (.vnext // .servers)[0].users[] | [.id,.level,.alterId,.security,.user,(.pass // .password),.address,.port,.email] | join("^")' "$V2_CONFIG")
+    done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings | (.vnext // .servers)[0].users[] | [.id,.flow,.level,.alterId,.security,.user,(.pass // .password),.address,.port,.email] | join("^")' "$V2_CONFIG")
 
     if [ -n "$accounts_list" ] 
     then
@@ -26402,7 +26667,7 @@ V2raySetDns()
         then
             dns_server_domain=""
         fi
-        Println "$tip 当配置此项时, V2Ray DNS 会对返回的 IP 的进行校验, 只返回包含列表中的地址, 多个 IP 范围用空格分隔, 格式和路由配置中相同"
+        Println "$tip 当配置此项时, $v2ray_name DNS 会对返回的 IP 的进行校验, 只返回包含列表中的地址, 多个 IP 范围用空格分隔, 格式和路由配置中相同"
         inquirer text_input "输入 IP 范围: " dns_server_expect_ips "不设置"
         if [ "$dns_server_expect_ips" == "不设置" ] 
         then
@@ -26884,7 +27149,7 @@ V2rayListDomain()
                     else
                         v2ray_port_status="$red关闭${normal}"
                     fi
-                    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_servers_count.${normal}\r\033[6Chttps 端口: $green$https_ports${normal}, v2ray 端口: $v2ray_port_status\n\n"
+                    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_servers_count.${normal}\r\033[6Chttps 端口: $green$https_ports${normal}, $v2ray_name 端口: $v2ray_port_status\n\n"
                 fi
             fi
         fi
@@ -27175,9 +27440,9 @@ V2rayDomainServerAddV2rayPort()
     ln -sf "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf" "$nginx_prefix/conf/sites_enabled/${v2ray_domains[v2ray_domains_index]}.conf"
     if [ -n "${v2ray_domain_servers_v2ray_port[v2ray_domain_server_index]}" ] 
     then
-        Println "$info v2ray 端口修改成功\n"
+        Println "$info $v2ray_name 端口修改成功\n"
     else
-        Println "$info v2ray 端口添加成功\n"
+        Println "$info $v2ray_name 端口添加成功\n"
     fi
 }
 
@@ -27248,7 +27513,7 @@ V2rayDomainServerRemoveV2rayPort()
     unset last_line
     echo -e "$conf" > "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
     ln -sf "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf" "$nginx_prefix/conf/sites_enabled/${v2ray_domains[v2ray_domains_index]}.conf"
-    Println "$info v2ray 端口关闭成功\n"
+    Println "$info $v2ray_name 端口关闭成功\n"
 }
 
 V2rayConfigDomain()
@@ -27331,14 +27596,14 @@ V2rayConfigDomain()
         Println "选择操作
 
   ${green}1.${normal} 修改 https 端口
-  ${green}2.${normal} 修改 v2ray 端口
-  ${green}3.${normal} 关闭 v2ray 端口
+  ${green}2.${normal} 修改 $v2ray_name 端口
+  ${green}3.${normal} 关闭 $v2ray_name 端口
     \n"
     else
         Println "选择操作
 
   ${green}1.${normal} 修改 https 端口
-  ${green}2.${normal} 开启 v2ray 端口
+  ${green}2.${normal} 开启 $v2ray_name 端口
     \n"
     fi
 
@@ -35799,7 +36064,9 @@ then
     UpdateSelf
 fi
 
-if [ "${0##*/}" == "ibm" ] || [ "${0##*/}" == "ibm.sh" ]
+self=${0##*/}
+
+if [ "$self" == "ibm" ] || [ "$self" == "ibm.sh" ]
 then
     CheckShFile
 
@@ -35842,7 +36109,7 @@ then
         IbmcfMenu
     fi
     exit 0
-elif [ "${0##*/}" == "cf" ] || [ "${0##*/}" == "cf.sh" ]
+elif [ "$self" == "cf" ] || [ "$self" == "cf.sh" ]
 then
     CheckShFile
 
@@ -35892,7 +36159,7 @@ then
         CloudflarePartnerMenu
     fi
     exit 0
-elif [ "${0##*/}" == "or" ] || [ "${0##*/}" == "or.sh" ]
+elif [ "$self" == "or" ] || [ "$self" == "or.sh" ]
 then
     CheckShFile
 
@@ -36011,7 +36278,7 @@ then
         ;;
     esac
     exit 0
-elif [ "${0##*/}" == "nx" ] || [ "${0##*/}" == "nx.sh" ]
+elif [ "$self" == "nx" ] || [ "$self" == "nx.sh" ]
 then
     CheckShFile
 
@@ -36254,12 +36521,25 @@ then
         ;;
     esac
     exit 0
-elif [ "${0##*/}" == "v2" ] || [ "${0##*/}" == "v2.sh" ] 
+elif [ "$self" == "v2" ] || [ "$self" == "v2.sh" ] || [ "$self" == "x" ] || [ "$self" == "x.sh" ]
 then
     CheckShFile
     [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
+    v2ray_sh="v2"
+    v2ray_name="v2ray"
+    tls_name="TLS"
 
-    if [ -d "/etc/v2ray/" ] 
+    if [ "$self" == "x" ] || [ "$self" == "x.sh" ] 
+    then
+        v2ray_sh="x"
+        v2ray_name="xray"
+        tls_name="XTLS"
+        V2_FILE="/usr/local/bin/x"
+        V2_LINK="https://raw.githubusercontent.com/XTLS/Xray-install/main/install-release.sh"
+        V2_LINK_BACKUP="$FFMPEG_MIRROR_LINK/xray_install-release.sh"
+        V2CTL_FILE="/usr/local/bin/xray"
+        V2_CONFIG="/usr/local/etc/xray/config.json"
+    elif [ -d "/etc/v2ray/" ] 
     then
         systemctl disable v2ray.service --now > /dev/null 2> /dev/null || true
         rm -rf /usr/bin/v2ray/
@@ -36312,7 +36592,7 @@ then
     fi
     NGINX_FILE="$nginx_prefix/sbin/nginx"
 
-    Println "  v2ray 管理面板 ${normal}${red}[v$sh_ver]${normal}
+    Println "  $v2ray_name 管理面板 ${normal}${red}[v$sh_ver]${normal}
 
   ${green}1.${normal} 安装
   ${green}2.${normal} 升级
@@ -36350,72 +36630,12 @@ then
  ${green}25.${normal} 开关
  ${green}26.${normal} 重启
 
- $tip 输入: v2 打开面板
+ $tip 输入: $v2ray_sh 打开面板
 "
     read -p "请输入数字 [1-26]: " v2ray_num
     case $v2ray_num in
         1) 
-            if [ -e "$V2_CONFIG" ] 
-            then
-                while IFS= read -r line 
-                do
-                    if [[ $line == *"port"* ]] 
-                    then
-                        port=${line#*: }
-                        port=${port%,*}
-                    elif [[ $line == *"id"* ]] 
-                    then
-                        id=${line#*: \"}
-                        id=${id%\"*}
-                    elif [[ $line == *"path"* ]] 
-                    then
-                        path=${line#*: \"}
-                        path=${path%\"*}
-                        break
-                    fi
-                done < "$V2_CONFIG"
-
-                if [ -n "${path:-}" ] 
-                then
-                    Println "$error v2ray 已安装...\n" && exit 1
-                fi
-            fi
-
-            CheckRelease "检查依赖, 耗时可能会很长"
-            InstallJQ
-
-            if ! grep -q "v2ray:" < "/etc/passwd"
-            then
-                if grep -q '\--group ' < <(adduser --help)
-                then
-                    adduser v2ray --system --group --no-create-home > /dev/null
-                else
-                    adduser v2ray --system --no-create-home > /dev/null
-                fi
-                usermod -s /usr/sbin/nologin v2ray
-            fi
-
-            Println "$info 安装 v2ray..."
-            { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_BACKUP"; } \
-            | sed "s+nobody+v2ray+g" \
-            | sed "s+ 'sha1'++g" \
-            | sed "s+ 'sha256'++g" \
-            | sed "s+ 'sha512'++g" \
-            | sed "s+https://api.github.com/repos/v2fly/v2ray-core/releases/latest+$FFMPEG_MIRROR_LINK/v2ray.json+g" \
-            | sed "s+https://github.com/v2fly/v2ray-core/releases/download+$FFMPEG_MIRROR_LINK/v2ray+g" | bash
-
-            V2rayConfigInstall
-
-            mkdir -p /var/log/v2ray/
-            [ ! -e "/var/log/v2ray/error.log" ] && printf '%s' "" > /var/log/v2ray/error.log
-            chown -R v2ray:v2ray /var/log/v2ray/
-            chown -R v2ray:v2ray /usr/local/share/v2ray/
-            sed -i "s+nobody+v2ray+g" /etc/systemd/system/v2ray.service
-            sed -i "s+nobody+v2ray+g" /etc/systemd/system/v2ray@.service
-            systemctl daemon-reload
-            systemctl enable v2ray
-            systemctl start v2ray
-            Println "$info v2ray 安装完成, 请配置域名...\n"
+            V2rayInstall
         ;;
         2) 
             V2rayUpdate
@@ -36513,28 +36733,28 @@ then
         25) 
             if [ ! -e "$V2_CONFIG" ] 
             then
-                Println "$error v2ray 未安装...\n" && exit 1
+                Println "$error $v2ray_name 未安装...\n" && exit 1
             fi
             echo
             yn_options=( '是' '否' )
-            if [[ $(systemctl is-active v2ray) == "active" ]]
+            if [[ $(systemctl is-active $v2ray_name) == "active" ]]
             then
-                inquirer list_input "v2ray 正在运行, 是否关闭" yn_options v2ray_stop_yn
+                inquirer list_input "$v2ray_name 正在运行, 是否关闭" yn_options v2ray_stop_yn
 
                 if [[ $v2ray_stop_yn == "是" ]] 
                 then
-                    systemctl stop v2ray > /dev/null 2>&1
-                    Println "$info v2ray 已关闭\n"
+                    systemctl stop $v2ray_name > /dev/null 2>&1
+                    Println "$info $v2ray_name 已关闭\n"
                 else
                     Println "已取消...\n" && exit 1
                 fi
             else
-                inquirer list_input "v2ray 未运行, 是否开启" yn_options v2ray_start_yn
+                inquirer list_input "$v2ray_name 未运行, 是否开启" yn_options v2ray_start_yn
 
                 if [[ $v2ray_start_yn == "是" ]] 
                 then
-                    systemctl start v2ray > /dev/null 2>&1
-                    Println "$info v2ray 已开启\n"
+                    systemctl start $v2ray_name > /dev/null 2>&1
+                    Println "$info $v2ray_name 已开启\n"
                 else
                     Println "已取消...\n" && exit 1
                 fi
@@ -36543,16 +36763,16 @@ then
         26) 
             if [ ! -e "$V2_CONFIG" ] 
             then
-                Println "$error v2ray 未安装...\n" && exit 1
+                Println "$error $v2ray_name 未安装...\n" && exit 1
             fi
-            systemctl restart v2ray > /dev/null 2>&1
-            Println "$info v2ray 已重启\n"
+            systemctl restart $v2ray_name > /dev/null 2>&1
+            Println "$info $v2ray_name 已重启\n"
         ;;
         *) Println "$error 请输入正确的数字 [1-26]\n"
         ;;
     esac
     exit 0
-elif [ "${0##*/}" == "cx" ] || [ "${0##*/}" == "cx.sh" ]
+elif [ "$self" == "cx" ] || [ "$self" == "cx.sh" ]
 then
     [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
 
@@ -36664,7 +36884,7 @@ ${green}8.${normal} 浏览频道
         ;;
     esac
     exit 0
-elif [ "${0##*/}" == "arm" ] || [ "${0##*/}" == "arm.sh" ]
+elif [ "$self" == "arm" ] || [ "$self" == "arm.sh" ]
 then
     if [[ ! -x $(command -v armbian-config) ]] 
     then
@@ -38047,6 +38267,29 @@ then
                 Println "$error v2ray 下载出错, 无法连接 github ?"
             fi
 
+            if xray_ver=$(curl -s -m 30 "https://api.github.com/repos/XTLS/Xray-core/releases/latest" | $JQ_FILE -r '.tag_name') 
+            then
+                if [ ! -e "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-64.zip" ] || [ ! -e "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-32.zip" ] 
+                then
+                    Println "$info 下载 xray ..."
+                    mkdir -p "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/"
+                    if curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-64.zip" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-64.zip_tmp" \
+                    && curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-32.zip" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-32.zip_tmp" \
+                    && curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-64.zip.dgst" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-64.zip.dgst_tmp" \
+                    && curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-32.zip.dgst" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-32.zip.dgst_tmp"
+                    then
+                        mv "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-64.zip_tmp" "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-64.zip"
+                        mv "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-32.zip_tmp" "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-32.zip"
+                        mv "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-64.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-64.zip.dgst"
+                        mv "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-32.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-32.zip.dgst"
+                    else
+                        Println "$error xray 下载出错, 无法连接 github ?"
+                    fi
+                fi
+            else
+                Println "$error xray 下载出错, 无法连接 github ?"
+            fi
+
             if dnscrypt_ver=$(curl -s -m 30 "https://api.github.com/repos/DNSCrypt/dnscrypt-proxy/releases/latest" | $JQ_FILE -r '.tag_name') 
             then
                 if [ ! -e "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_ver.tar.gz" ]
@@ -38100,6 +38343,13 @@ then
                 mv "$FFMPEG_MIRROR_ROOT/v2ray.json_tmp" "$FFMPEG_MIRROR_ROOT/v2ray.json"
             else
                 Println "$error v2ray.json 下载出错, 无法连接 github ?"
+            fi
+
+            if curl -s -L "https://api.github.com/repos/XTLS/Xray-core/releases/latest" -o "$FFMPEG_MIRROR_ROOT/xray.json_tmp"
+            then
+                mv "$FFMPEG_MIRROR_ROOT/xray.json_tmp" "$FFMPEG_MIRROR_ROOT/xray.json"
+            else
+                Println "$error xray.json 下载出错, 无法连接 github ?"
             fi
 
             if curl -s -L "https://api.github.com/repos/DNSCrypt/dnscrypt-proxy/releases/latest" -o "$FFMPEG_MIRROR_ROOT/dnscrypt.json_tmp"

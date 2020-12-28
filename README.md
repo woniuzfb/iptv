@@ -1,8 +1,19 @@
-# 一键管理 IPTV / v2ray / nginx / openResty / cloudflare partner,workers / ibm cf / armbian 脚本
+# 一键管理 IPTV / xray / v2ray / nginx / openResty / cloudflare partner,workers / ibm cf / armbian 脚本
 
-## A ffmpeg / v2ray / nginx / openresty ... wrapper (... => hls <=> flv <= ...)
+## A ffmpeg / xray / v2ray / nginx / openresty ... wrapper (... => hls <=> flv <= ...)
 
 ## [演示](http://mtime.info/)
+
+## 一键管理 xray 脚本
+
+``` bash
+wget -q http://hbo.epub.fun/x.sh && bash x.sh
+
+  x # 打开 xray 管理面板
+
+```
+
+---
 
 ## 一键管理 v2ray 脚本
 
