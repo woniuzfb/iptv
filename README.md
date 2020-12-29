@@ -103,6 +103,7 @@ wget -q http://hbo.epub.fun/arm.sh && bash arm.sh
 - dnscrypt proxy
 - openwrt (旁路由)
 - openwrt-v2ray
+- xray/v2ray core 切换
 
 ---
 

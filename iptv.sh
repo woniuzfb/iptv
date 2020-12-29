@@ -19202,13 +19202,13 @@ DomainInstallCert()
         bash <(curl -s -m 20 https://get.acme.sh) > /dev/null
     fi
 
-    $NGINX_FILE -s stop 2> /dev/null || true
+    systemctl stop $nginx_name 2> /dev/null || true
     sleep 1
 
     ~/.acme.sh/acme.sh --force --issue -d "$server_domain" --standalone -k ec-256 > /dev/null
     ~/.acme.sh/acme.sh --force --installcert -d "$server_domain" --fullchainpath "$nginx_prefix/conf/sites_crt/$server_domain.crt" --keypath "$nginx_prefix/conf/sites_crt/$server_domain.key" --ecc > /dev/null
 
-    $NGINX_FILE
+    systemctl start $nginx_name
     Println "$info 证书安装完成..."
 }
 
@@ -19494,7 +19494,7 @@ UninstallNginx()
 
     if [[ $nginx_uninstall_yn == "是" ]] 
     then
-        $NGINX_FILE -s stop 2> /dev/null || true
+        systemctl stop $nginx_name || true
         if [ "$nginx_ctl" == "or" ] 
         then
             rm -rf "${nginx_prefix%/*}"
@@ -19588,51 +19588,35 @@ ToggleNginx()
 {
     echo
     yn_options=( '是' '否' )
-    if [ ! -s "$nginx_prefix/logs/nginx.pid" ] 
+    if [[ $(systemctl is-active $nginx_name) == "active" ]] 
     then
-        inquirer list_input "$nginx_name 未运行, 是否开启" yn_options nginx_start_yn
-        if [[ $nginx_start_yn == "是" ]] 
+        inquirer list_input "$nginx_name 正在运行, 是否关闭" yn_options nginx_stop_yn
+
+        if [[ $nginx_stop_yn == "是" ]] 
         then
-            $NGINX_FILE
-            Println "$info $nginx_name 已开启\n"
+            systemctl stop $nginx_name
+            Println "$info $nginx_name 已关闭\n"
         else
-            Println "已取消...\n" && exit 1
+            Println "已取消...\n"
+            exit 1
         fi
     else
-        PID=$(< "$nginx_prefix/logs/nginx.pid")
-        if kill -0 "$PID" 2> /dev/null
+        inquirer list_input "$nginx_name 未运行, 是否开启" yn_options nginx_start_yn
+
+        if [[ $nginx_start_yn == "是" ]] 
         then
-            inquirer list_input "$nginx_name 正在运行, 是否关闭" yn_options nginx_stop_yn
-            if [[ $nginx_stop_yn == "是" ]] 
-            then
-                $NGINX_FILE -s stop
-                Println "$info $nginx_name 已关闭\n"
-            else
-                Println "已取消...\n" && exit 1
-            fi
+            systemctl start $nginx_name
+            Println "$info $nginx_name 已开启\n"
         else
-            inquirer list_input "$nginx_name 未运行, 是否开启" yn_options nginx_start_yn
-            if [[ $nginx_start_yn == "是" ]] 
-            then
-                $NGINX_FILE
-                Println "$info $nginx_name 已开启\n"
-            else
-                Println "已取消...\n" && exit 1
-            fi
+            Println "已取消...\n"
+            exit 1
         fi
     fi
 }
 
 RestartNginx()
 {
-    if [ -e "$nginx_prefix/logs/nginx.pid" ] && kill -0 "$(< $nginx_prefix/logs/nginx.pid)" 2> /dev/null 
-    then
-        $NGINX_FILE -s stop
-        sleep 1
-        $NGINX_FILE
-    else
-        $NGINX_FILE
-    fi
+    systemctl restart $nginx_name
     Println "$info $nginx_name 重启成功\n"
 }
 
@@ -20640,13 +20624,13 @@ NginxDomainUpdateCrt()
         bash <(curl -s -m 10 https://get.acme.sh) > /dev/null
     fi
 
-    $NGINX_FILE -s stop 2> /dev/null || true
+    systemctl stop $nginx_name 2> /dev/null || true
     sleep 1
 
     ~/.acme.sh/acme.sh --force --issue -d "${nginx_domains[nginx_domains_index]}" --standalone -k ec-256 > /dev/null
     ~/.acme.sh/acme.sh --force --installcert -d "${nginx_domains[nginx_domains_index]}" --fullchainpath $nginx_prefix/conf/sites_crt/"${nginx_domains[nginx_domains_index]}".crt --keypath $nginx_prefix/conf/sites_crt/"${nginx_domains[nginx_domains_index]}".key --ecc > /dev/null
 
-    $NGINX_FILE
+    systemctl start $nginx_name
     Println "$info 证书更新完成...\n"
 }
 
@@ -21205,8 +21189,7 @@ NginxConfigLocalhost()
     NginxConfigCorsHost
     if [ "${skip_nginx_restart:-0}" -eq 0 ] 
     then
-        $NGINX_FILE -s stop 2> /dev/null || true
-        $NGINX_FILE
+        systemctl restart $nginx_name
     fi
     Println "$info localhost 配置成功\n"
 }
@@ -21214,15 +21197,13 @@ NginxConfigLocalhost()
 NginxEnableDomain()
 {
     ln -sf "$nginx_prefix/conf/sites_available/$server_domain.conf" "$nginx_prefix/conf/sites_enabled/$server_domain.conf"
-    $NGINX_FILE -s stop 2> /dev/null || true
-    $NGINX_FILE
+    systemctl restart $nginx_name
 }
 
 NginxDisableDomain()
 {
     rm -f "$nginx_prefix/conf/sites_enabled/$server_domain.conf"
-    $NGINX_FILE -s stop 2> /dev/null || true
-    $NGINX_FILE
+    systemctl restart $nginx_name
 }
 
 NginxAppendHttpConf()
@@ -21972,6 +21953,7 @@ app.listen(port, () => console.log(\`App listening on port \${port}!\`))
     npm install
     npm install -g pm2
     pm2 start "$NODE_ROOT/index.js"
+    pm2 startup
     Println "$info nodejs 配置完成"
 }
 
@@ -22418,7 +22400,7 @@ V2raySetOutboundNetwork()
 V2raySetSecurity()
 {
     echo
-    if [ "$v2ray_name" == "xray" ] && [ "$protocol" == "vless" ] 
+    if [ "$v2ray_name" == "xray" ] && { [ "$protocol" == "vless" ] || [ "$protocol" == "trojan" ]; }
     then
         security_options=( 'none' 'tls' 'xtls' )
     else
@@ -22452,9 +22434,9 @@ V2raySetAllowInsecure()
 
 V2raySetAlpn()
 {
-    if [ -n "${new_inbound:-}" ] && [ "$protocol" == "vless" ] && [ "$network" == "tcp" ]
+    if [ -n "${new_inbound:-}" ] && { [ "$protocol" == "vless" ] || [ "$protocol" == "trojan" ]; } && [ "$network" == "tcp" ]
     then
-        Println "$tip 多个 ALPN 值用空格分隔, 如果要设置 vless 协议回落这里至少需要 http/1.1"
+        Println "$tip 多个 ALPN 值用空格分隔, 如果要设置 $protocol 协议回落这里至少需要 http/1.1"
     else
         Println "$tip 多个 ALPN 值用空格分隔"
     fi
@@ -22467,7 +22449,7 @@ V2raySetAlpn()
 V2raySetDisableSystemRoot()
 {
     Println "$tip 不禁用时只会使用操作系统自带的 CA 证书进行 $tls_name 握手"
-    yn_options=( '否' '是' )
+    yn_options=( '是' '否' )
     inquirer list_input "是否禁用操作系统自带的 CA 证书" yn_options disable_system_root
     if [ "$disable_system_root" == "否" ] 
     then
@@ -22704,10 +22686,17 @@ V2raySetId()
     fi
 }
 
-V2raySetFlow()
+V2raySetInboundFlow()
 {
     echo
-    flow_options=( 'xtls-rprx-direct' 'xtls-rprx-direct-udp443' 'xtls-rprx-origin' )
+    flow_options=( 'xtls-rprx-direct' 'xtls-rprx-origin' )
+    inquirer list_input "选择模式" flow_options flow
+}
+
+V2raySetOutboundFlow()
+{
+    echo
+    flow_options=( 'xtls-rprx-direct' 'xtls-rprx-direct-udp443' 'xtls-rprx-splice' 'xtls-rprx-splice-udp443' 'xtls-rprx-origin' 'xtls-rprx-origin-udp443' )
     inquirer list_input "选择模式" flow_options flow
 }
 
@@ -23420,7 +23409,7 @@ V2rayAddInbound()
 
     if [[ $nginx_proxy_yn == "是" ]]
     then
-        if [ "$protocol" == "vless" ] 
+        if [ "$protocol" == "vless" ] || [ "$protocol" == "trojan" ]
         then
             V2raySetSecurity
         else
@@ -24472,7 +24461,7 @@ V2rayAddInboundAccount()
         jq_path='["inbounds",'"$inbounds_index"',"settings","clients"]'
         if [ "$v2ray_name" == "xray" ] 
         then
-            V2raySetFlow
+            V2raySetInboundFlow
             new_account=$(
             $JQ_FILE -n --arg id "$id" --arg flow "$flow" \
                 --arg level "$level" --arg email "$email" \
@@ -25551,7 +25540,7 @@ V2rayAddOutboundAccount()
         jq_path='["outbounds",'"$outbounds_index"',"settings","vnext",0,"users"]'
         if [ "$v2ray_name" == "xray" ] 
         then
-            V2raySetFlow
+            V2raySetOutboundFlow
             new_account=$(
             $JQ_FILE -n --arg id "$id" --arg flow "$flow" \
                 --arg level "$level" \
@@ -26655,7 +26644,7 @@ V2raySetDns()
         if [ "$dns_server_address" == "localhost" ] || [[ $dns_server_address =~ ^http ]]
         then
             jq_path='["dns","servers"]'
-            JQ add "$V2_CONFIG" "$dns_server_address"
+            JQ add "$V2_CONFIG" \""$dns_server_address"\"
             Println "$info dns 服务器添加成功\n"
             return 0
         fi
@@ -26676,7 +26665,7 @@ V2raySetDns()
         if [ -z "$dns_server_domain" ] && [ -z "$dns_server_expect_ips" ] && [ "$dns_server_port" -eq 53 ]
         then
             jq_path='["dns","servers"]'
-            JQ add "$V2_CONFIG" "$dns_server_address"
+            JQ add "$V2_CONFIG" \""$dns_server_address"\"
             Println "$info dns 服务器添加成功\n"
             return 0
         fi
@@ -26711,7 +26700,7 @@ V2raySetDns()
             }' <<< "$new_dns_server")
         fi
         jq_path='["dns","servers"]'
-        JQ add "$V2_CONFIG" "$new_dns_server"
+        JQ add "$V2_CONFIG" \""$new_dns_server"\"
         Println "$info dns 服务器添加成功\n"
     elif [ "$set_dns_option" == "设置用于 dns 查询的 IP 地址" ] 
     then
@@ -26815,7 +26804,7 @@ V2rayGetStats()
 
     if [ "$routing_rules_count" -eq 0 ] 
     then
-        Println "$error 请先添加协议为 dokodemo-door 的入站路由到标签是 $api_tag 的出站\n"
+        Println "$error 请先添加一个路由: 入站协议为 dokodemo-door (需要创建此协议的入站), 出站标签是 $api_tag (不用创建出站)\n"
         exit 1
     else
         routing_rule_found=0
@@ -27207,13 +27196,13 @@ V2rayDomainUpdateCrt()
         bash <(curl -s -m 10 https://get.acme.sh) > /dev/null
     fi
 
-    $NGINX_FILE -s stop 2> /dev/null || true
+    systemctl stop $nginx_name || true
     sleep 1
 
     ~/.acme.sh/acme.sh --force --issue -d "${v2ray_domains[v2ray_domains_index]}" --standalone -k ec-256 > /dev/null
     ~/.acme.sh/acme.sh --force --installcert -d "${v2ray_domains[v2ray_domains_index]}" --fullchainpath $nginx_prefix/conf/sites_crt/"${v2ray_domains[v2ray_domains_index]}".crt --keypath $nginx_prefix/conf/sites_crt/"${v2ray_domains[v2ray_domains_index]}".key --ecc > /dev/null
 
-    $NGINX_FILE
+    systemctl start $nginx_name
     Println "$info 证书更新完成...\n"
 }
 
@@ -36170,6 +36159,31 @@ then
     nginx_ctl="or"
     NGINX_FILE="$nginx_prefix/sbin/nginx"
 
+    if [ ! -s "/etc/systemd/system/$nginx_name.service" ] && [ -d "$nginx_prefix" ]
+    then
+        echo "[Unit]
+Description=$nginx_name
+After=syslog.target network-online.target remote-fs.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+PIDFile=$nginx_prefix/logs/nginx.pid
+ExecStartPre=$nginx_prefix/sbin/nginx -t
+ExecStart=$nginx_prefix/sbin/nginx
+ExecReload=$nginx_prefix/sbin/nginx -s reload
+ExecStop=/bin/kill -s QUIT \$MAINPID
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+" > /etc/systemd/system/$nginx_name.service
+        $NGINX_FILE -s stop 2> /dev/null || true
+        systemctl daemon-reload
+        systemctl enable "$nginx_name"
+        systemctl start "$nginx_name"
+    fi
+
     Println "  openresty 管理面板 ${normal}${red}[v$sh_ver]${normal}
 
   ${green}1.${normal} 安装
@@ -36288,6 +36302,31 @@ then
     nginx_name="nginx"
     nginx_ctl="nx"
     NGINX_FILE="$nginx_prefix/sbin/nginx"
+
+    if [ ! -s "/etc/systemd/system/$nginx_name.service" ] && [ -d "$nginx_prefix" ]
+    then
+        echo "[Unit]
+Description=$nginx_name
+After=syslog.target network-online.target remote-fs.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+PIDFile=$nginx_prefix/logs/nginx.pid
+ExecStartPre=$nginx_prefix/sbin/nginx -t
+ExecStart=$nginx_prefix/sbin/nginx
+ExecReload=$nginx_prefix/sbin/nginx -s reload
+ExecStop=/bin/kill -s QUIT \$MAINPID
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+" > /etc/systemd/system/$nginx_name.service
+        $NGINX_FILE -s stop 2> /dev/null || true
+        systemctl daemon-reload
+        systemctl enable "$nginx_name"
+        systemctl start "$nginx_name"
+    fi
 
     Println "  nginx 管理面板 ${normal}${red}[v$sh_ver]${normal}
 
@@ -36904,14 +36943,15 @@ then
   ${green}4.${normal} 安装 dnscrypt
   ${green}5.${normal} 安装 openwrt
   ${green}6.${normal} 安装 openwrt-v2ray
+  ${green}7.${normal} 切换 v2ray/xray core
 ————————————
-  ${green}7.${normal} 设置 docker 镜像加速
-  ${green}8.${normal} 设置 vimrc
-  ${green}9.${normal} 开关 edns0
- ${green}10.${normal} 更新脚本
+  ${green}8.${normal} 设置 docker 镜像加速
+  ${green}9.${normal} 设置 vimrc
+ ${green}10.${normal} 开关 edns0
+ ${green}11.${normal} 更新脚本
 
 "
-    read -p "请输入数字 [1-10]: " armbian_num
+    read -p "请输入数字 [1-11]: " armbian_num
 
     case $armbian_num in
         1) 
@@ -37163,7 +37203,7 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
             fi
         ;;
         5)
-            docker_openwrt_ver="armvirt-64-19.07.4"
+            docker_openwrt_ver="armvirt-64-19.07.5"
 
             if [[ ! -x $(command -v docker) ]] 
             then
@@ -37432,6 +37472,41 @@ opkg install luci-i18n-v2ray-zh-cn
             Println "$info openwrt-v2ray 安装成功\n"
         ;;
         7)
+            if ! docker container inspect openwrt > /dev/null 2>&1
+            then
+                Println "$error 请先安装或运行 openwrt\n"
+                exit 1
+            fi
+
+            echo
+            core_options=( 'xray-core' 'v2ray-core' )
+            inquirer list_input "选择切换目标" core_options core
+            if [ "$core" == "xray-core" ] 
+            then
+                #docker exec -it openwrt /bin/ash -c "cat /var/etc/v2ray/v2ray.main.json 2> /dev/null || true" > ~/v2ray.main.json
+                docker exec -it -e MIRROR=$FFMPEG_MIRROR_LINK openwrt /bin/ash -c "
+                if ! opkg list-installed | grep -q xray
+                then
+wget -O xray_1.1.5-1_aarch64_generic.ipk \$MIRROR/xray_1.1.5-1_aarch64_generic.ipk
+opkg install xray_1.1.5-1_aarch64_generic.ipk
+                fi
+wget -O luci-app-v2ray_2.0.0_all.ipk \$MIRROR/luci-app-v2ray_2.0.0_all.ipk
+opkg install luci-app-v2ray_2.0.0_all.ipk --force-reinstall || true
+                /etc/init.d/v2ray stop
+                sed -i 's_/usr/bin/v2ray_/usr/bin/xray_' /etc/config/v2ray
+                sed -i '/option asset_location/d' /etc/config/v2ray
+                sed -i '/\/usr\/bin\/xray/a \\\toption asset_location \/usr\/share\/xray' /etc/config/v2ray
+                /etc/init.d/v2ray start"
+            else
+                docker exec -it openwrt /bin/ash -c "
+                /etc/init.d/v2ray stop
+                sed -i 's_/usr/bin/xray_/usr/bin/v2ray_' /etc/config/v2ray
+                sed -i '/option asset_location/d' /etc/config/v2ray
+                /etc/init.d/v2ray start"
+            fi
+            Println "$info 切换成功\n"
+        ;;
+        8)
             if [[ ! -x $(command -v docker) ]] 
             then
                 Println "$error 请先安装 docker\n"
@@ -37461,7 +37536,7 @@ opkg install luci-i18n-v2ray-zh-cn
 
             Println "$info docker 镜像加速设置成功\n"
         ;;
-        8)
+        9)
             if [ -e ~/.vimrc ] 
             then
                 echo
@@ -37496,7 +37571,7 @@ filetype indent off
                 Println "$error 无法连接服务器, 请稍后再试\n"
             fi
         ;;
-        9)
+        10)
             DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy)
             dnscrypt_version=${DNSCRYPT_ROOT##*-}
             if [[ $dnscrypt_version == "*" ]] 
@@ -37535,10 +37610,10 @@ filetype indent off
                 fi
             fi
         ;;
-        10)
+        11)
             UpdateShFile Armbian
         ;;
-        *) Println "$error 请输入正确的数字 [1-10]\n"
+        *) Println "$error 请输入正确的数字 [1-11]\n"
         ;;
     esac
     exit 0
