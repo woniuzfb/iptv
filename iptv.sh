@@ -19989,7 +19989,7 @@ NginxConfigCorsHost()
                     line="
     map \$http_origin \$corsHost {
         default *;
-        ~http://$server_ip\ http://$server_ip;
+        ~http://$server_ip http://$server_ip;
     }\n\n$line"
                     found=1
                 fi
@@ -20376,13 +20376,6 @@ NginxDomainServerToggleNodejs()
         location = / {
             proxy_redirect off;
             proxy_pass http://nodejs;
-            proxy_read_timeout 10s;
-            proxy_send_timeout 10s;
-
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
 
             proxy_cache_bypass 1;
             proxy_no_cache 1;$proxy_cookie_path
@@ -20392,13 +20385,6 @@ NginxDomainServerToggleNodejs()
         location = /channels {
             proxy_redirect off;
             proxy_pass http://nodejs;
-            proxy_read_timeout 10s;
-            proxy_send_timeout 10s;
-
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
 
             proxy_cache_bypass 1;
             proxy_no_cache 1;
@@ -20411,13 +20397,6 @@ NginxDomainServerToggleNodejs()
         location = /remote {
             proxy_redirect off;
             proxy_pass http://nodejs;
-            proxy_read_timeout 10s;
-            proxy_send_timeout 10s;
-
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
 
             proxy_cache_bypass 1;
             proxy_no_cache 1;$proxy_cookie_path
@@ -20431,13 +20410,6 @@ NginxDomainServerToggleNodejs()
         location = /keys {
             proxy_redirect off;
             proxy_pass http://nodejs;
-            proxy_read_timeout 10s;
-            proxy_send_timeout 10s;
-
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
 
             proxy_cache_bypass 1;
             proxy_no_cache 1;
@@ -20515,13 +20487,6 @@ NginxDomainServerToggleNodejs()
                 line="        location = / {
             proxy_redirect off;
             proxy_pass http://nodejs;
-            proxy_read_timeout 10s;
-            proxy_send_timeout 10s;
-
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
 
             proxy_cache_bypass 1;
             proxy_no_cache 1;$proxy_cookie_path
@@ -20531,13 +20496,6 @@ NginxDomainServerToggleNodejs()
         location = /channels {
             proxy_redirect off;
             proxy_pass http://nodejs;
-            proxy_read_timeout 10s;
-            proxy_send_timeout 10s;
-
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
 
             proxy_cache_bypass 1;
             proxy_no_cache 1;
@@ -20550,13 +20508,6 @@ NginxDomainServerToggleNodejs()
         location = /remote {
             proxy_redirect off;
             proxy_pass http://nodejs;
-            proxy_read_timeout 10s;
-            proxy_send_timeout 10s;
-
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
 
             proxy_cache_bypass 1;
             proxy_no_cache 1;$proxy_cookie_path
@@ -20570,13 +20521,6 @@ NginxDomainServerToggleNodejs()
         location = /keys {
             proxy_redirect off;
             proxy_pass http://nodejs;
-            proxy_read_timeout 10s;
-            proxy_send_timeout 10s;
-
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
 
             proxy_cache_bypass 1;
             proxy_no_cache 1;
@@ -21057,13 +21001,6 @@ NginxConfigLocalhost()
                 line="        location = / {
             proxy_redirect off;
             proxy_pass http://nodejs;
-            proxy_read_timeout 10s;
-            proxy_send_timeout 10s;
-
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto http;
 
             proxy_cache_bypass 1;
             proxy_no_cache 1;
@@ -21073,13 +21010,6 @@ NginxConfigLocalhost()
         location = /channels {
             proxy_redirect off;
             proxy_pass http://nodejs;
-            proxy_read_timeout 10s;
-            proxy_send_timeout 10s;
-
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto http;
 
             proxy_cache_bypass 1;
             proxy_no_cache 1;
@@ -21092,13 +21022,6 @@ NginxConfigLocalhost()
         location = /remote {
             proxy_redirect off;
             proxy_pass http://nodejs;
-            proxy_read_timeout 10s;
-            proxy_send_timeout 10s;
-
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto http;
 
             proxy_cache_bypass 1;
             proxy_no_cache 1;
@@ -21112,13 +21035,6 @@ NginxConfigLocalhost()
         location = /keys {
             proxy_redirect off;
             proxy_pass http://nodejs;
-            proxy_read_timeout 10s;
-            proxy_send_timeout 10s;
-
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto http;
 
             proxy_cache_bypass 1;
             proxy_no_cache 1;
@@ -22449,7 +22365,12 @@ V2raySetAlpn()
 V2raySetDisableSystemRoot()
 {
     Println "$tip 不禁用时只会使用操作系统自带的 CA 证书进行 $tls_name 握手"
-    yn_options=( '是' '否' )
+    if [ -n "${new_inbound:-}" ] 
+    then
+        yn_options=( '是' '否' )
+    else
+        yn_options=( '否' '是' )
+    fi
     inquirer list_input "是否禁用操作系统自带的 CA 证书" yn_options disable_system_root
     if [ "$disable_system_root" == "否" ] 
     then
@@ -22475,17 +22396,54 @@ V2raySetCertificates()
     fi
 
     echo
-    if [ "$v2ray_name" == "xray" ] 
-    then
-        add_crt_options=( '选择现有证书/请求新 CA 证书' '输入证书地址' )
-    else
-        add_crt_options=( '自签名证书' '选择现有证书/请求新 CA 证书' '输入证书地址' )
-    fi
+    add_crt_options=( '自签名证书' '选择现有证书/请求新 CA 证书' '输入证书地址' )
     inquirer list_input "选择添加证书方式" add_crt_options add_crt_option
 
     if [ "$add_crt_option" == "自签名证书" ] 
     then
-        if [ "$usage" == "encipherment" ] 
+        if [ "$v2ray_name" == "xray" ] 
+        then
+            if [[ ! -x $(command -v openssl) ]] 
+            then
+                echo
+                yn_options=( '是' '否' )
+                inquirer list_input "是否安装 openssl" yn_options openssl_install_yn
+                if [[ $openssl_install_yn == "否" ]]
+                then
+                    Println "已取消...\n"
+                    exit 1
+                fi
+                InstallOpenssl
+            fi
+            cd ~
+            openssl genrsa -out null.key 2048 2> /dev/null
+            openssl req \
+                -subj "/C=US/ST=NULL/L=NULL/O=NULL/OU=NULL/CN=${server_name:-NULL}/emailAddress=NULL@${server_name:-example.com}" \
+                -new -key null.key -out null.csr  2> /dev/null || true
+            openssl x509 -req -days 3650 -in null.csr -signkey null.key -out null.crt  2> /dev/null
+            local IFS=$'\n'
+            crt_lines=()
+            for line in $(< null.crt)
+            do
+                crt_lines+=("$line")
+            done
+            printf -v certificate ',"%s"' "${crt_lines[@]}"
+            certificate=${certificate:1}
+            key_lines=()
+            for line in $(< null.key)
+            do
+                key_lines+=("$line")
+            done
+            printf -v key ',"%s"' "${key_lines[@]}"
+            key=${key:1}
+            crt=$(
+            $JQ_FILE -n --argjson certificate "[$certificate]" --argjson key "[$key]" \
+            '{
+                "certificate": $certificate,
+                "key": $key
+            }')
+            rm -f null.csr null.key null.crt
+        elif [ "$usage" == "encipherment" ] 
         then
             echo
             yn_options=( '是' '否' )
@@ -23140,7 +23098,7 @@ V2raySetSniffingEnabled()
 
 V2raySetSniffingDestOverride()
 {
-    echo
+    Println "$tip 客户端已经设置过的流量类型这里可以不设置"
     dest_override_options=( 'tls' 'http' 'http,tls' )
     inquirer list_input "指定流量类型" dest_override_options dest_override
     if [[ $dest_override == "http,tls" ]] 
@@ -24497,14 +24455,28 @@ V2rayAddInboundAccount()
         V2raySetLevel
         V2raySetEmail
         jq_path='["inbounds",'"$inbounds_index"',"settings","clients"]'
-        new_account=$(
-        $JQ_FILE -n --arg password "$password" --arg email "$email" \
-            --arg level "$level" \
-        '{
-            "password": $password,
-            "email": $email,
-            "level": $level | tonumber
-        }')
+        if [ "$v2ray_name" == "xray" ] 
+        then
+            V2raySetInboundFlow
+            new_account=$(
+            $JQ_FILE -n --arg password "$password" --arg flow "$flow" \
+                --arg email "$email" --arg level "$level" \
+            '{
+                "password": $password,
+                "flow": $flow,
+                "email": $email,
+                "level": $level | tonumber
+            }')
+        else
+            new_account=$(
+            $JQ_FILE -n --arg password "$password" --arg email "$email" \
+                --arg level "$level" \
+            '{
+                "password": $password,
+                "email": $email,
+                "level": $level | tonumber
+            }')
+        fi
     elif [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] 
     then
         Println "$error shadowsocks 协议不支持多账号\n"
@@ -25586,14 +25558,28 @@ V2rayAddOutboundAccount()
         V2raySetLevel
         V2raySetEmail
         jq_path='["outbounds",'"$outbounds_index"',"settings","clients"]'
-        new_account=$(
-        $JQ_FILE -n --arg password "$password" --arg level "$level" \
-        --arg email "$email" \
-        '{
-            "password": $password,
-            "email": $email,
-            "level": $level | tonumber
-        }')
+        if [ "$v2ray_name" == "xray" ] 
+        then
+            V2raySetOutboundFlow
+            new_account=$(
+            $JQ_FILE -n --arg password "$password" --arg flow "$flow" \
+            --arg level "$level" --arg email "$email" \
+            '{
+                "password": $password,
+                "flow": $flow,
+                "email": $email,
+                "level": $level | tonumber
+            }')
+        else
+            new_account=$(
+            $JQ_FILE -n --arg password "$password" --arg level "$level" \
+            --arg email "$email" \
+            '{
+                "password": $password,
+                "email": $email,
+                "level": $level | tonumber
+            }')
+        fi
     elif [ "${outbounds_protocol[outbounds_index]}" == "shadowsocks" ] 
     then
         Println "$error shadowsocks 协议不支持多账号\n"
@@ -26078,7 +26064,7 @@ V2raySetRouting()
         routing_domain_strategy_options=( 'AsIs' 'IPIfNonMatch' 'IPOnDemand' )
         inquirer list_input "域名解析策略" routing_domain_strategy_options routing_domain_strategy
         jq_path='["routing","domainStrategy"]'
-        JQ replace "$V2_CONFIG" "$routing_domain_strategy"
+        JQ replace "$V2_CONFIG" \""$routing_domain_strategy"\"
         Println "$info 域名解析策略设置成功\n"
     elif [ "$set_routing_option" == "删除路由规则" ] 
     then
@@ -26630,7 +26616,7 @@ V2raySetDns()
             exit 1
         fi
         jq_path='["dns","hosts","'"$hosts_domain"'"]'
-        JQ replace "$V2_CONFIG" "$hosts_address"
+        JQ replace "$V2_CONFIG" \""$hosts_address"\"
         Println "$info 静态 IP 添加成功\n"
     elif [ "$set_dns_option" == "添加 dns 服务器" ] 
     then
@@ -26712,7 +26698,7 @@ V2raySetDns()
             exit 1
         fi
         jq_path='["dns","clientIp"]'
-        JQ replace "$V2_CONFIG" "$dns_client_ip"
+        JQ replace "$V2_CONFIG" \""$dns_client_ip"\"
         Println "$info IP 地址设置成功\n"
     elif [ "$set_dns_option" == "设置 dns 标签" ] 
     then
@@ -26724,7 +26710,7 @@ V2raySetDns()
             exit 1
         fi
         jq_path='["dns","tag"]'
-        JQ replace "$V2_CONFIG" "$dns_tag"
+        JQ replace "$V2_CONFIG" \""$dns_tag"\"
         Println "$info dns 标签设置成功\n"
     elif [ "$set_dns_option" == "删除静态 IP" ] 
     then
@@ -35624,7 +35610,7 @@ VerifyVipLicense()
         do
             jq_path='["users"]'
             JQ delete "$VIP_FILE" ip "$license_ip"
-        done < <($JQ_FILE -r '.[].ip' <<< "$vip_user")
+        done < <($JQ_FILE -r '.ip' <<< "$vip_user")
 
         jq_path='["users"]'
         JQ add "$VIP_FILE" "$vip_user"
@@ -36940,18 +36926,19 @@ then
   ${green}1.${normal} 更改 apt 源
   ${green}2.${normal} 修复 N1 dtb
   ${green}3.${normal} 安装 docker
-  ${green}4.${normal} 安装 dnscrypt
-  ${green}5.${normal} 安装 openwrt
+  ${green}4.${normal} 安装/升级 dnscrypt
+  ${green}5.${normal} 安装/升降级 openwrt
   ${green}6.${normal} 安装 openwrt-v2ray
-  ${green}7.${normal} 切换 v2ray/xray core
+  ${green}7.${normal} 切换 openwrt 语言
+  ${green}8.${normal} 切换 v2ray/xray core
 ————————————
-  ${green}8.${normal} 设置 docker 镜像加速
-  ${green}9.${normal} 设置 vimrc
- ${green}10.${normal} 开关 edns0
- ${green}11.${normal} 更新脚本
+  ${green}9.${normal} 设置 docker 镜像加速
+ ${green}10.${normal} 设置 vimrc
+ ${green}11.${normal} 开关 edns0
+ ${green}12.${normal} 更新脚本
 
 "
-    read -p "请输入数字 [1-11]: " armbian_num
+    read -p "请输入数字 [1-12]: " armbian_num
 
     case $armbian_num in
         1) 
@@ -37203,8 +37190,6 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
             fi
         ;;
         5)
-            docker_openwrt_ver="armvirt-64-19.07.5"
-
             if [[ ! -x $(command -v docker) ]] 
             then
                 Println "$error 请先安装 docker\n"
@@ -37218,6 +37203,15 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
                 Println "$error 请先安装 dnscrypt proxy\n"
                 exit 1
             fi
+
+            if [[ $(systemctl is-active docker.service) == "inactive" ]] 
+            then
+                systemctl start docker
+            fi
+
+            echo
+            docker_openwrt_options=( 'armvirt-64-19.07.5' 'armvirt-64-19.07.4' )
+            inquirer list_input "选择版本: " docker_openwrt_options docker_openwrt_ver
 
             if grep -q "$docker_openwrt_ver" < <(docker container ls -a)
             then
@@ -37237,10 +37231,16 @@ fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
                     rm -f /etc/NetworkManager/dispatcher.d/promisc.sh
                     chmod +x /etc/NetworkManager/dispatcher.d/90-promisc.sh
                 fi
-                Println "$error openwrt 已经存在\n"
-                exit 1
+                if grep -q "$docker_openwrt_ver" < <(docker container ls -f name=openwrt) 
+                then
+                    Println "$error 此版本 openwrt 已经在运行\n"
+                    exit 1
+                fi
+                Println "$info 切换到版本 openwrt-$docker_openwrt_ver"
+                action="switch"
             else
                 Println "$info 安装 openwrt-$docker_openwrt_ver"
+                action="install"
             fi
 
             while IFS= read -r line 
@@ -37265,7 +37265,8 @@ fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
                 exit 1
             fi
 
-            Println "$tip openwrt 作为旁路由, 请确保已经将本机器用网线连接到主路由器的 LAN 口"
+            Println "$tip openwrt 作为旁路由, 请确保已经将本机器用网线连接到主路由器的 LAN 口, 并且当前连接使用的网关是主路由的地址(可能需要手动设定)"
+            Println "$tip 如果是升级, 注意备份原 openwrt 配置(系统 - 备份/还原)"
             yn_options=( '否' '是' )
             inquirer list_input "是否继续" yn_options continue_yn
             if [[ $continue_yn == "否" ]] 
@@ -37338,8 +37339,9 @@ method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
                 done < "/etc/NetworkManager/system-connections/hMACvLAN.nmconnection"
             fi
 
-            if docker container stop openwrt >/dev/null 2>&1
+            if [ -n "$(docker container ls -f name=openwrt -q)" ] 
             then
+                docker container stop openwrt >/dev/null 2>&1 || stopped=1
                 echo
                 yn_options=( '否' '是' )
                 inquirer list_input "是否重新设置路由器静态 IP" yn_options change_openwrt_ip_yn
@@ -37349,13 +37351,11 @@ method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
                     inquirer text_input "设置 openwrt 静态 ip : " openwrt_ip "取消"
                     if [ "$openwrt_ip" == "取消" ]
                     then
-                        docker container start openwrt >/dev/null
+                        [[ "${stopped:-0}" -eq 0 ]] && docker container start openwrt >/dev/null
                         Println "已取消 ...\n"
                         exit 1
                     fi
                     sed -i "0,/address1=\(.*\),.*/s//address1=\1,$openwrt_ip/" /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
-                else
-                    echo
                 fi
                 Println "$info 重启 hMACvLAN ..."
                 docker_openwrt_ver_old=$(docker container inspect openwrt| jq -r '.[0].Config.Image')
@@ -37364,6 +37364,8 @@ method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
                 nmcli con down hMACvLAN > /dev/null 2>&1 || true
                 nmcli con up hMACvLAN > /dev/null
                 sleep 3
+                Println "$info 网络中断, 请退出并重新连接 armbian 后继续 ...\n"
+                exit 1
             fi
 
             if [ ! -s "/etc/docker/daemon.json" ] 
@@ -37387,7 +37389,9 @@ method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
                     -o parent=eth0 macnet
             fi
 
-            printf '%s' '#!/usr/bin/env bash
+            if [ ! -s /etc/NetworkManager/dispatcher.d/90-promisc.sh ] 
+            then
+                printf '%s' '#!/usr/bin/env bash
 
 interface=$1
 event=$2
@@ -37398,13 +37402,22 @@ then
   echo "$interface received $event" | systemd-cat -p info -t dispatch_script
 fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
 
-            rm -f /etc/NetworkManager/dispatcher.d/promisc.sh
-            chmod +x /etc/NetworkManager/dispatcher.d/90-promisc.sh
+                rm -f /etc/NetworkManager/dispatcher.d/promisc.sh
+                chmod +x /etc/NetworkManager/dispatcher.d/90-promisc.sh
+            fi
 
             ip link set eth0 promisc on
             ip link set hMACvLAN promisc on
 
-            openwrt_network="
+            if [ "$action" == "switch" ] 
+            then
+                docker rename openwrt-$docker_openwrt_ver openwrt
+                docker container start openwrt >/dev/null
+            else
+                Println "$info 下载 $docker_openwrt_ver ..."
+                docker pull openwrtorg/rootfs:$docker_openwrt_ver
+
+                openwrt_network="
 config interface 'loopback'
         option ifname 'lo'
         option proto 'static'
@@ -37419,25 +37432,23 @@ config interface 'lan'
         option gateway '$eth0_gateway'
         list dns '$eth0_ip'"
 
-            Println "$info 下载 $docker_openwrt_ver ..."
-            docker pull openwrtorg/rootfs:$docker_openwrt_ver
+                docker run -dit \
+                    --restart unless-stopped \
+                    --network macnet \
+                    --privileged \
+                    --name openwrt \
+                    openwrtorg/rootfs:$docker_openwrt_ver
 
-            docker run -dit \
-                --restart unless-stopped \
-                --network macnet \
-                --privileged \
-                --name openwrt \
-                openwrtorg/rootfs:$docker_openwrt_ver
+                printf -v now '%(%m-%d-%H:%M:%S)T' -1
+                docker exec -it openwrt /bin/ash -c "sed -i 's_REJECT_ACCEPT_' /etc/config/firewall && mv /etc/config/network /etc/config/network_$now && echo \"${openwrt_network}\" > /etc/config/network && /etc/init.d/network restart"
+            fi
 
-            printf -v now '%(%m-%d-%H:%M:%S)T' -1
-            docker exec -it openwrt /bin/ash -c "sed -i 's_REJECT_ACCEPT_' /etc/config/firewall && mv /etc/config/network /etc/config/network_$now && echo \"${openwrt_network}\" > /etc/config/network && /etc/init.d/network restart"
+            Println "$info openwrt 旁路由安装成功, 地址: $openwrt_ip, 注意设置防火墙\n"
+            Println "$tip 如需将*旁路由*作为 dhcp 服务器 请将*主路由* br-lan 接口网关设置为 $openwrt_ip, 否则请关闭*旁路由* lan 口的 dhcp 功能(此种情况客户端需手动设定网关为 $openwrt_ip)\n"
 
             nmcli connection modify hMACvLAN ipv4.route-metric 50 > /dev/null
             nmcli con down hMACvLAN > /dev/null 2>&1 || true
             nmcli con up hMACvLAN > /dev/null
-
-            Println "$info openwrt 旁路由安装成功, 地址: $openwrt_ip, 注意设置防火墙\n"
-            Println "$tip 如需将*旁路由*作为 dhcp 服务器 请将*主路由* br-lan 接口网关设置为 $openwrt_ip, 否则请关闭*旁路由* lan 口的 dhcp 功能(此种情况客户端需手动设定网关为 $openwrt_ip)\n"
         ;;
         6)
             if ! docker container inspect openwrt > /dev/null 2>&1
@@ -37449,20 +37460,26 @@ config interface 'lan'
             docker exec -it openwrt /bin/ash -c "
             if ! opkg list-installed | grep -q v2ray
             then
-sed -i 's_downloads.openwrt.org_mirrors.tuna.tsinghua.edu.cn/openwrt_' /etc/opkg/distfeeds.conf
-wget -O kuoruan-public.key http://openwrt.kuoruan.net/packages/public.key
-opkg-key add kuoruan-public.key
-echo \"src/gz kuoruan_packages http://openwrt.kuoruan.net/packages/releases/\$(. /etc/openwrt_release ; echo \$DISTRIB_ARCH)\" >> /etc/opkg/customfeeds.conf
-echo \"src/gz kuoruan_universal http://openwrt.kuoruan.net/packages/releases/all\" >> /etc/opkg/customfeeds.conf
-opkg update
-opkg install luci luci-base luci-compat
-opkg install kmod-tcp-bbr
-echo \"net.core.default_qdisc=fq\" >>/etc/sysctl.d/12-tcp-bbr.conf
-sysctl -p
-opkg remove dnsmasq
-opkg install v2ray-core
-opkg install luci-app-v2ray
-opkg install luci-i18n-v2ray-zh-cn
+                sed -i 's_downloads.openwrt.org_mirrors.tuna.tsinghua.edu.cn/openwrt_' /etc/opkg/distfeeds.conf
+                if ! grep -q kuoruan < /etc/opkg/customfeeds.conf
+                then
+                    wget -O kuoruan-public.key $FFMPEG_MIRROR_LINK/openwrt-v2ray/packages/public.key
+                    opkg-key add kuoruan-public.key
+                    echo \"src/gz kuoruan_packages $FFMPEG_MIRROR_LINK/openwrt-v2ray/packages/releases/\$(. /etc/openwrt_release ; echo \$DISTRIB_ARCH)\" >> /etc/opkg/customfeeds.conf
+                    echo \"src/gz kuoruan_universal $FFMPEG_MIRROR_LINK/openwrt-v2ray/packages/releases/all\" >> /etc/opkg/customfeeds.conf
+                fi
+                opkg update
+                opkg install luci luci-base luci-compat
+                opkg install kmod-tcp-bbr
+                if ! test -e /etc/sysctl.d/12-tcp-bbr.conf || ! grep -q default_qdisc < /etc/sysctl.d/12-tcp-bbr.conf
+                then
+                    echo \"net.core.default_qdisc=fq\" >> /etc/sysctl.d/12-tcp-bbr.conf
+                    sysctl -p
+                fi
+                opkg remove dnsmasq
+                opkg install v2ray-core
+                opkg install luci-app-v2ray
+                opkg install luci-i18n-v2ray-zh-cn
             fi
             "
 
@@ -37479,19 +37496,61 @@ opkg install luci-i18n-v2ray-zh-cn
             fi
 
             echo
+            lang_options=( '简体中文' '繁体中文' '英文' )
+            inquirer list_input "选择界面语言" lang_options lang
+
+            if [ "$lang" == "简体中文" ] 
+            then
+                lang="zh-cn"
+            elif [ "$lang" == "繁体中文" ] 
+            then
+                lang="zh-tw"
+            else
+                lang="en"
+            fi
+
+            docker exec -it openwrt /bin/ash -c "
+            if ! opkg list-installed | grep -q luci-i18n-base-$lang
+            then
+                sed -i 's_downloads.openwrt.org_mirrors.tuna.tsinghua.edu.cn/openwrt_' /etc/opkg/distfeeds.conf
+                opkg update
+                opkg install luci-i18n-base-$lang
+            fi
+            sed -i '/option lang/c \\\toption lang $lang' /etc/config/luci
+            "
+
+            Println "$info 界面语言切换成功\n"
+        ;;
+        8)
+            if ! docker container inspect openwrt > /dev/null 2>&1
+            then
+                Println "$error 请先安装或运行 openwrt\n"
+                exit 1
+            fi
+
+            echo
             core_options=( 'xray-core' 'v2ray-core' )
             inquirer list_input "选择切换目标" core_options core
             if [ "$core" == "xray-core" ] 
             then
                 #docker exec -it openwrt /bin/ash -c "cat /var/etc/v2ray/v2ray.main.json 2> /dev/null || true" > ~/v2ray.main.json
-                docker exec -it -e MIRROR=$FFMPEG_MIRROR_LINK openwrt /bin/ash -c "
-                if ! opkg list-installed | grep -q xray
+                echo
+                xray_options=( '1.2.0' '1.1.5' )
+                inquirer list_input "选择 xray 版本" xray_options xray_ver
+                docker exec -it openwrt /bin/ash -c "
+                if ! opkg list-installed | grep -q 'xray - $xray_ver-1'
                 then
-wget -O xray_1.1.5-1_aarch64_generic.ipk \$MIRROR/xray_1.1.5-1_aarch64_generic.ipk
-opkg install xray_1.1.5-1_aarch64_generic.ipk
+                    if opkg print-architecture | grep -q aarch64_cortex
+                    then
+                        wget -O xray_${xray_ver}-1_aarch64_cortex-a53.ipk $FFMPEG_MIRROR_LINK/xray_${xray_ver}-1_aarch64_cortex-a53.ipk
+                        opkg install xray_${xray_ver}-1_aarch64_cortex-a53.ipk --force-reinstall || true
+                    else
+                        wget -O xray_${xray_ver}-1_aarch64_generic.ipk $FFMPEG_MIRROR_LINK/xray_${xray_ver}-1_aarch64_generic.ipk
+                        opkg install xray_${xray_ver}-1_aarch64_generic.ipk --force-reinstall || true
+                    fi
                 fi
-wget -O luci-app-v2ray_2.0.0_all.ipk \$MIRROR/luci-app-v2ray_2.0.0_all.ipk
-opkg install luci-app-v2ray_2.0.0_all.ipk --force-reinstall || true
+                wget -O luci-app-v2ray_2.0.0_all.ipk $FFMPEG_MIRROR_LINK/luci-app-v2ray_2.0.0_all.ipk
+                opkg install luci-app-v2ray_2.0.0_all.ipk --force-reinstall || true
                 /etc/init.d/v2ray stop
                 sed -i 's_/usr/bin/v2ray_/usr/bin/xray_' /etc/config/v2ray
                 sed -i '/option asset_location/d' /etc/config/v2ray
@@ -37506,7 +37565,7 @@ opkg install luci-app-v2ray_2.0.0_all.ipk --force-reinstall || true
             fi
             Println "$info 切换成功\n"
         ;;
-        8)
+        9)
             if [[ ! -x $(command -v docker) ]] 
             then
                 Println "$error 请先安装 docker\n"
@@ -37536,7 +37595,7 @@ opkg install luci-app-v2ray_2.0.0_all.ipk --force-reinstall || true
 
             Println "$info docker 镜像加速设置成功\n"
         ;;
-        9)
+        10)
             if [ -e ~/.vimrc ] 
             then
                 echo
@@ -37571,7 +37630,7 @@ filetype indent off
                 Println "$error 无法连接服务器, 请稍后再试\n"
             fi
         ;;
-        10)
+        11)
             DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy)
             dnscrypt_version=${DNSCRYPT_ROOT##*-}
             if [[ $dnscrypt_version == "*" ]] 
@@ -37610,10 +37669,10 @@ filetype indent off
                 fi
             fi
         ;;
-        11)
+        12)
             UpdateShFile Armbian
         ;;
-        *) Println "$error 请输入正确的数字 [1-11]\n"
+        *) Println "$error 请输入正确的数字 [1-12]\n"
         ;;
     esac
     exit 0
