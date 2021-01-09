@@ -26,6 +26,25 @@ wget -q http://hbo.epub.fun/v2.sh && bash v2.sh
 
 ---
 
+## 一键管理 Armbian 脚本
+
+``` bash
+wget -q http://hbo.epub.fun/arm.sh && bash arm.sh
+
+  arm # 打开 Armbian 管理面板
+
+```
+
+- docker
+- dnscrypt proxy
+- openwrt (旁路由)
+- openwrt-v2ray
+- xray/v2ray core 切换
+- 一键配置透明代理(直连国内, 代理国外), 配置文件保存/切换
+- NAT类型检测
+
+---
+
 ## 一键管理 IBM Cloud Foundry 脚本
 
 ``` bash
@@ -35,10 +54,9 @@ wget -q http://hbo.epub.fun/ibm.sh && bash ibm.sh
 
   ibm v2 # 打开 ibm v2ray APP 管理面板
 
-```
+  ibm x  # 打开 ibm xray  APP 管理面板
 
-- 多用户、APP、路由 管理, 定时重启 APP
-- 管理 v2ray APP
+```
 
 ---
 
@@ -87,23 +105,6 @@ wget -q http://hbo.epub.fun/or.sh && bash or.sh
   or # 打开 OpenResty 管理面板
 
 ```
-
----
-
-## 一键管理 Armbian 脚本
-
-``` bash
-wget -q http://hbo.epub.fun/arm.sh && bash arm.sh
-
-  arm # 打开 Armbian 管理面板
-
-```
-
-- docker
-- dnscrypt proxy
-- openwrt (旁路由)
-- openwrt-v2ray
-- xray/v2ray core 切换
 
 ---
 

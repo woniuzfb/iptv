@@ -87,6 +87,7 @@
 #
 #     ibm 打开 IBM Cloud Foundry 面板
 #        ibm v2 打开 ibm v2ray app 管理面板
+#        ibm x  打开 ibm xray app 管理面板
 #
 #     arm 打开 Armbian 管理面板
 
@@ -19225,7 +19226,7 @@ PrettyConfig()
         last_line="$line#"
         [ -n "$new_conf" ] && new_conf="$new_conf\n"
         new_conf="$new_conf$line"
-    done < <(echo -e "$conf")
+    done < <(echo -e "${conf//\\b/\\\\b}")
     unset last_line
     conf=$new_conf
 }
@@ -19537,18 +19538,7 @@ NginxViewStatus()
     then
         Println "$error $nginx_name 未安装 !\n"
     else
-        if [ ! -s "$nginx_prefix/logs/nginx.pid" ] 
-        then
-            Println "$nginx_name 状态: $red关闭${normal}\n"
-        else
-            PID=$(< "$nginx_prefix/logs/nginx.pid")
-            if kill -0 "$PID" 2> /dev/null
-            then
-                Println "$nginx_name 状态: $green开启${normal}\n"
-            else
-                Println "$nginx_name 状态: $red开启${normal}\n"
-            fi
-        fi
+        systemctl status nginx.service
     fi
 }
 
@@ -19866,17 +19856,6 @@ NginxCheckDomains()
             fi
         fi
 
-        if [[ $server_found -eq 1 ]] && [[ $line == *"ssl_certificate"* ]] 
-        then
-            CERT_FILE=${line%;*}
-            CERT_FILE=${CERT_FILE##* }
-            new_crt_name="$server_names.${CERT_FILE##*.}"
-            [ -e "$CERT_FILE" ] && mv "$CERT_FILE" "$nginx_prefix/conf/sites_crt/$new_crt_name"
-            line=${line%;*}
-            line=${line% *}
-            line="$line $nginx_prefix/conf/sites_crt/$new_crt_name;"
-        fi
-
         if [[ $server_found -eq 1 ]] 
         then
             [ -n "$server_conf" ] && server_conf="$server_conf\n"
@@ -19919,9 +19898,9 @@ NginxCheckDomains()
     done < "$nginx_prefix/conf/nginx.conf"
     if [[ $rtmp_found -eq 1 ]] 
     then
-        echo -e "$conf" > "$nginx_prefix/conf/nginx.conf"
+        echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/nginx.conf"
     else
-        echo -e "$conf
+        echo -e "${conf//\\b/\\\\b}
 
 rtmp_auto_push on;
 rtmp_auto_push_reconnect 1s;
@@ -19997,7 +19976,7 @@ NginxConfigCorsHost()
             [ -n "$conf" ] && conf="$conf\n"
             conf="$conf$line"
         done < "$nginx_prefix/conf/nginx.conf"
-        echo -e "$conf" > "$nginx_prefix/conf/nginx.conf"
+        echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/nginx.conf"
     else
         conf=""
         found=0
@@ -20038,7 +20017,7 @@ NginxConfigCorsHost()
             [ -n "$conf" ] && conf="$conf\n"
             conf="$conf$line"
         done < "$nginx_prefix/conf/nginx.conf"
-        echo -e "$conf" > "$nginx_prefix/conf/nginx.conf"
+        echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/nginx.conf"
     fi
     if ! grep -q "$nginx_name:" < "/etc/passwd"
     then
@@ -20088,7 +20067,7 @@ $line"
         conf="$conf$line"
     done < "$nginx_prefix/conf/nginx.conf"
     PrettyConfig
-    echo -e "$conf" > "$nginx_prefix/conf/nginx.conf"
+    echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/nginx.conf"
 }
 
 NginxListDomains()
@@ -20317,7 +20296,7 @@ NginxDomainServerToggleFlv()
         conf="$conf$line"
     done < "$nginx_prefix/conf/sites_available/${nginx_domains[nginx_domains_index]}.conf"
     unset last_line
-    echo -e "$conf" > "$nginx_prefix/conf/sites_available/${nginx_domains[nginx_domains_index]}.conf"
+    echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/sites_available/${nginx_domains[nginx_domains_index]}.conf"
     Println "$info flv 配置修改成功\n"
 }
 
@@ -20549,7 +20528,7 @@ NginxDomainServerToggleNodejs()
         conf="$conf$line"
     done < "$nginx_prefix/conf/sites_available/${nginx_domains[nginx_domains_index]}.conf"
     unset last_line
-    echo -e "$conf" > "$nginx_prefix/conf/sites_available/${nginx_domains[nginx_domains_index]}.conf"
+    echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/sites_available/${nginx_domains[nginx_domains_index]}.conf"
     Println "$info nodejs 配置修改成功, 请确保已经安装 nodejs\n"
 }
 
@@ -21100,7 +21079,7 @@ NginxConfigLocalhost()
     done < "$nginx_prefix/conf/nginx.conf"
 
     PrettyConfig
-    echo -e "$conf" > "$nginx_prefix/conf/nginx.conf"
+    echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/nginx.conf"
 
     NginxConfigCorsHost
     if [ "${skip_nginx_restart:-0}" -eq 0 ] 
@@ -21493,7 +21472,7 @@ NginxConfigSameSiteNone()
             [ -n "$conf" ] && conf="$conf\n"
             conf="$conf$line"
         done < "$nginx_prefix/conf/nginx.conf"
-        echo -e "$conf" > "$nginx_prefix/conf/nginx.conf"
+        echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/nginx.conf"
     fi
 }
 
@@ -21536,7 +21515,7 @@ NginxConfigUpstream()
         [ -n "$conf" ] && conf="$conf\n"
         conf="$conf$line"
     done < "$nginx_prefix/conf/nginx.conf"
-    echo -e "$conf" > "$nginx_prefix/conf/nginx.conf"
+    echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/nginx.conf"
 }
 
 InstallNodejs()
@@ -22396,53 +22375,14 @@ V2raySetCertificates()
     fi
 
     echo
-    add_crt_options=( '自签名证书' '选择现有证书/请求新 CA 证书' '输入证书地址' )
+    add_crt_options=( '自签名 / CA证书' '选择现有证书/请求真实域名证书' '输入证书地址' )
     inquirer list_input "选择添加证书方式" add_crt_options add_crt_option
 
-    if [ "$add_crt_option" == "自签名证书" ] 
+    if [ "$add_crt_option" == "自签名 / CA证书" ] 
     then
         if [ "$v2ray_name" == "xray" ] 
         then
-            if [[ ! -x $(command -v openssl) ]] 
-            then
-                echo
-                yn_options=( '是' '否' )
-                inquirer list_input "是否安装 openssl" yn_options openssl_install_yn
-                if [[ $openssl_install_yn == "否" ]]
-                then
-                    Println "已取消...\n"
-                    exit 1
-                fi
-                InstallOpenssl
-            fi
-            cd ~
-            openssl genrsa -out null.key 2048 2> /dev/null
-            openssl req \
-                -subj "/C=US/ST=NULL/L=NULL/O=NULL/OU=NULL/CN=${server_name:-NULL}/emailAddress=NULL@${server_name:-example.com}" \
-                -new -key null.key -out null.csr  2> /dev/null || true
-            openssl x509 -req -days 3650 -in null.csr -signkey null.key -out null.crt  2> /dev/null
-            local IFS=$'\n'
-            crt_lines=()
-            for line in $(< null.crt)
-            do
-                crt_lines+=("$line")
-            done
-            printf -v certificate ',"%s"' "${crt_lines[@]}"
-            certificate=${certificate:1}
-            key_lines=()
-            for line in $(< null.key)
-            do
-                key_lines+=("$line")
-            done
-            printf -v key ',"%s"' "${key_lines[@]}"
-            key=${key:1}
-            crt=$(
-            $JQ_FILE -n --argjson certificate "[$certificate]" --argjson key "[$key]" \
-            '{
-                "certificate": $certificate,
-                "key": $key
-            }')
-            rm -f null.csr null.key null.crt
+            crt=$($V2CTL_FILE tls cert)
         elif [ "$usage" == "encipherment" ] 
         then
             echo
@@ -22458,7 +22398,7 @@ V2raySetCertificates()
             crt=$($V2CTL_FILE cert -ca)
         fi
         certificate=$($JQ_FILE "{\"usage\":\"$usage\"} * ." <<< "$crt")
-    elif [ "$add_crt_option" == "选择现有证书/请求新 CA 证书" ] 
+    elif [ "$add_crt_option" == "选择现有证书/请求真实域名证书" ] 
     then
         if ls -A /usr/local/share/$v2ray_name/*.crt > /dev/null 2>&1 
         then
@@ -23361,24 +23301,31 @@ V2rayAddInbound()
         dest_override=""
     fi
 
-    echo
-    yn_options=( '否' '是' )
-    inquirer list_input "是否通过此脚本配置的 nginx 连接" yn_options nginx_proxy_yn
-
-    if [[ $nginx_proxy_yn == "是" ]]
+    if [ "$self" == "ibm" ] || [ "$self" == "ibm.sh" ] 
     then
-        if [ "$protocol" == "vless" ] || [ "$protocol" == "trojan" ]
-        then
-            V2raySetSecurity
-        else
-            security="none"
-        fi
-        V2raySetNginxTag
-        listen="127.0.0.1"
-    else
         V2raySetSecurity
         V2raySetTag
         V2raySetListen
+    else
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "是否通过此脚本配置的 nginx 连接" yn_options nginx_proxy_yn
+
+        if [[ $nginx_proxy_yn == "是" ]]
+        then
+            if [ "$protocol" == "vless" ] || [ "$protocol" == "trojan" ]
+            then
+                V2raySetSecurity
+            else
+                security="none"
+            fi
+            V2raySetNginxTag
+            listen="127.0.0.1"
+        else
+            V2raySetSecurity
+            V2raySetTag
+            V2raySetListen
+        fi
     fi
 
     if [ "$network" == "domainsocket" ] 
@@ -26636,6 +26583,12 @@ V2raySetDns()
         fi
         echo
         inquirer text_input "输入服务器端口: " dns_server_port 53
+        Println "$tip 用于 DNS 查询时通知 DNS 服务器, 客户端所在的地理位置"
+        inquirer text_input "输入通知 DNS 的 IP 地址: " dns_server_client_ip "不设置"
+        if [ "$dns_server_client_ip" == "不设置" ] 
+        then
+            dns_server_client_ip=""
+        fi
         Println "$tip 优先使用此服务器进行查询, 多个域名用空格分隔, 格式和路由配置中相同"
         inquirer text_input "输入域名: " dns_server_domain "不设置"
         if [ "$dns_server_domain" == "不设置" ] 
@@ -26648,7 +26601,7 @@ V2raySetDns()
         then
             dns_server_expect_ips=""
         fi
-        if [ -z "$dns_server_domain" ] && [ -z "$dns_server_expect_ips" ] && [ "$dns_server_port" -eq 53 ]
+        if [ -z "$dns_server_client_ip" ] && [ -z "$dns_server_domain" ] && [ -z "$dns_server_expect_ips" ] && [ "$dns_server_port" -eq 53 ]
         then
             jq_path='["dns","servers"]'
             JQ add "$V2_CONFIG" \""$dns_server_address"\"
@@ -26661,6 +26614,15 @@ V2raySetDns()
             "address": $address,
             "port": $port | tonumber
         }')
+        if [ -n "$dns_server_client_ip" ] 
+        then
+            new_dns_server=$(
+            $JQ_FILE --arg clientIp "$dns_server_client_ip" \
+            '. * 
+            {
+                "clientIp": $clientIp
+            }' <<< "$new_dns_server")
+        fi
         if [ -n "$dns_server_domain" ] 
         then
             IFS=" " read -r -a domains <<< "$dns_server_domain"
@@ -27411,7 +27373,7 @@ V2rayDomainServerAddV2rayPort()
         fi
     done < "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
     PrettyConfig
-    echo -e "$conf" > "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
+    echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
     ln -sf "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf" "$nginx_prefix/conf/sites_enabled/${v2ray_domains[v2ray_domains_index]}.conf"
     if [ -n "${v2ray_domain_servers_v2ray_port[v2ray_domain_server_index]}" ] 
     then
@@ -27486,7 +27448,7 @@ V2rayDomainServerRemoveV2rayPort()
         conf="$conf$line"
     done < "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
     unset last_line
-    echo -e "$conf" > "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
+    echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
     ln -sf "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf" "$nginx_prefix/conf/sites_enabled/${v2ray_domains[v2ray_domains_index]}.conf"
     Println "$info $v2ray_name 端口关闭成功\n"
 }
@@ -32436,25 +32398,66 @@ DelIbmAppRoute()
     fi
 }
 
+UpdateIbmV2rayConfig()
+{
+    if [ ! -d "$IBM_APPS_ROOT/ibm_$v2ray_name" ] 
+    then
+        Println "$error $v2ray_name 未安装...\n"
+        exit 1
+    elif [ ! -s "$V2_CONFIG" ] 
+    then
+        printf '%s' '{
+  "log": {
+    "access": "none",
+    "error": "none",
+    "loglevel": "none"
+  },
+  "inbounds": [],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "tag": "direct"
+    },
+    {
+      "protocol": "blackhole",
+      "tag": "block"
+    }
+  ]
+}' > "$V2_CONFIG"
+    fi
+}
+
 DownloadIbmV2ray()
 {
-    if [ -d "$IBM_APPS_ROOT/ibm_v2ray" ] 
+    if [ -d "$IBM_APPS_ROOT/ibm_$v2ray_name" ] 
     then
-        Println "$error ibm v2ray 已存在\n"
+        Println "$error ibm $v2ray_name 已存在\n"
     else
-        CheckRelease
+        CheckRelease "检查依赖, 耗时可能会很长"
+        InstallJQ
 
-        Println "$info 下载 ibm v2ray ..."
+        Println "$info 下载 ibm $v2ray_name ..."
         cd ~
-        rm -rf v2ray-linux-64
-        if v2ray_version=$(curl -s -L "$FFMPEG_MIRROR_LINK/v2ray.json" | $JQ_FILE -r '.tag_name') && curl -L "$FFMPEG_MIRROR_LINK/v2ray/$v2ray_version/v2ray-linux-64.zip" -o "v2ray-linux-64.zip" && unzip v2ray-linux-64.zip -d v2ray-linux-64 > /dev/null
+        rm -rf $v2ray_package_name-linux-64
+        if v2ray_version=$(curl -s -L "$FFMPEG_MIRROR_LINK/$v2ray_name.json" | $JQ_FILE -r '.tag_name') && curl -L "$FFMPEG_MIRROR_LINK/$v2ray_name/$v2ray_version/$v2ray_package_name-linux-64.zip" -o "$v2ray_package_name-linux-64.zip" && unzip "$v2ray_package_name-linux-64.zip" -d "$v2ray_package_name-linux-64" > /dev/null
         then
-            mkdir -p "$IBM_APPS_ROOT/ibm_v2ray"
-            mv v2ray-linux-64/v2ray "$IBM_APPS_ROOT/ibm_v2ray/"
-            mv v2ray-linux-64/v2ctl "$IBM_APPS_ROOT/ibm_v2ray/"
-            chmod 700 "$IBM_APPS_ROOT/ibm_v2ray/v2ray"
-            chmod 700 "$IBM_APPS_ROOT/ibm_v2ray/v2ctl"
-            Println "$info ibm v2ray 下载完成\n"
+            mkdir -p "$IBM_APPS_ROOT/ibm_$v2ray_name"
+            mv $v2ray_package_name-linux-64/$v2ray_name "$IBM_APPS_ROOT/ibm_$v2ray_name/"
+            if [ "$v2ray_name" == "xray" ] 
+            then
+                rm -rf v2ray-linux-64
+                if v2ray_version=$(curl -s -L "$FFMPEG_MIRROR_LINK/v2ray.json" | $JQ_FILE -r '.tag_name') && curl -L "$FFMPEG_MIRROR_LINK/v2ray/$v2ray_version/v2ray-linux-64.zip" -o "v2ray-linux-64.zip" && unzip "v2ray-linux-64.zip" -d "v2ray-linux-64" > /dev/null 
+                then
+                    mv v2ray-linux-64/v2ctl $v2ray_package_name-linux-64/
+                else
+                    Println "$error 无法连接服务器, 请稍后再试\n"
+                    exit 1
+                fi
+            fi
+            mv $v2ray_package_name-linux-64/v2ctl "$IBM_APPS_ROOT/ibm_$v2ray_name/"
+            chmod 700 "$IBM_APPS_ROOT/ibm_$v2ray_name/$v2ray_name"
+            chmod 700 "$IBM_APPS_ROOT/ibm_$v2ray_name/v2ctl"
+            Println "$info ibm $v2ray_name 下载完成\n"
         else
             Println "$error 无法连接服务器, 请稍后再试\n"
         fi
@@ -32463,20 +32466,31 @@ DownloadIbmV2ray()
 
 UpdateIbmV2ray()
 {
-    if [ ! -d "$IBM_APPS_ROOT/ibm_v2ray" ] 
+    if [ ! -d "$IBM_APPS_ROOT/ibm_$v2ray_name" ] 
     then
-        Println "$error ibm v2ray 未安装\n"
+        Println "$error ibm $v2ray_name 未安装\n"
     else
-        Println "$info 更新 ibm v2ray ..."
+        Println "$info 更新 ibm $v2ray_name ..."
         cd ~
-        rm -rf v2ray-linux-64
-        if v2ray_version=$(curl -s -L "$FFMPEG_MIRROR_LINK/v2ray.json" | $JQ_FILE -r '.tag_name') && curl -L "$FFMPEG_MIRROR_LINK/v2ray/$v2ray_version/v2ray-linux-64.zip" -o "v2ray-linux-64.zip" && unzip v2ray-linux-64.zip -d v2ray-linux-64 > /dev/null
+        rm -rf $v2ray_package_name-linux-64
+        if v2ray_version=$(curl -s -L "$FFMPEG_MIRROR_LINK/$v2ray_name.json" | $JQ_FILE -r '.tag_name') && curl -L "$FFMPEG_MIRROR_LINK/$v2ray_name/$v2ray_version/$v2ray_package_name-linux-64.zip" -o "$v2ray_package_name-linux-64.zip" && unzip $v2ray_package_name-linux-64.zip -d $v2ray_package_name-linux-64 > /dev/null
         then
-            mkdir -p "$IBM_APPS_ROOT/ibm_v2ray"
-            mv v2ray-linux-64/v2ray "$IBM_APPS_ROOT/ibm_v2ray/"
-            mv v2ray-linux-64/v2ctl "$IBM_APPS_ROOT/ibm_v2ray/"
-            chmod 700 "$IBM_APPS_ROOT/ibm_v2ray/v2ray"
-            chmod 700 "$IBM_APPS_ROOT/ibm_v2ray/v2ctl"
+            mkdir -p "$IBM_APPS_ROOT/ibm_$v2ray_name"
+            mv $v2ray_package_name-linux-64/$v2ray_name "$IBM_APPS_ROOT/ibm_$v2ray_name/"
+            if [ "$v2ray_name" == "xray" ] 
+            then
+                rm -rf v2ray-linux-64
+                if v2ray_version=$(curl -s -L "$FFMPEG_MIRROR_LINK/v2ray.json" | $JQ_FILE -r '.tag_name') && curl -L "$FFMPEG_MIRROR_LINK/v2ray/$v2ray_version/v2ray-linux-64.zip" -o "v2ray-linux-64.zip" && unzip "v2ray-linux-64.zip" -d "v2ray-linux-64" > /dev/null 
+                then
+                    mv v2ray-linux-64/v2ctl $v2ray_package_name-linux-64/
+                else
+                    Println "$error 无法连接服务器, 请稍后再试\n"
+                    exit 1
+                fi
+            fi
+            mv $v2ray_package_name-linux-64/v2ctl "$IBM_APPS_ROOT/ibm_$v2ray_name/"
+            chmod 700 "$IBM_APPS_ROOT/ibm_$v2ray_name/$v2ray_name"
+            chmod 700 "$IBM_APPS_ROOT/ibm_$v2ray_name/v2ctl"
             Println "$info ibm v2ray 更新完成\n"
         else
             Println "$error 无法连接服务器, 请稍后再试\n"
@@ -32484,777 +32498,10 @@ UpdateIbmV2ray()
     fi
 }
 
-GetIbmV2rayInbounds()
-{
-    [ ! -d "$IBM_APPS_ROOT/ibm_v2ray" ] && Println "$error 请先下载 v2ray app\n" && exit 1
-    inbounds_count=0
-    inbounds_v2ray_count=0
-    inbounds_v2ray_index=()
-    inbounds_v2ray_accounts=()
-    inbounds_port=()
-    inbounds_protocol=()
-    inbounds_stream_network=()
-    inbounds_forward_count=0
-    inbounds_forward_index=()
-    inbounds_forward_target_network=()
-    inbounds_forward_target_address=()
-    inbounds_forward_target_port=()
-    inbounds_tag=()
-    inbounds_forward_list=""
-    inbounds_v2ray_list=""
-
-    while IFS="^" read -r map_port map_protocol map_stream_network map_target_network map_target_address map_target_port map_tag map_accounts
-    do
-        if [ -n "$map_tag" ] 
-        then
-            map_tag_list="  标签: $green$map_tag${normal}"
-        else
-            map_tag_list=""
-        fi
-        if [ "$map_protocol" == "dokodemo-door" ] 
-        then
-            inbounds_forward_count=$((inbounds_forward_count+1))
-            inbounds_forward_index+=("$inbounds_count")
-            inbounds_forward_list="$inbounds_forward_list $inbounds_forward_count.\r\033[6C端口: $green$map_port${normal}$map_tag_list\n\033[6C源站地址: $green$map_target_address${normal}  源站端口: $green$map_target_port${normal}\n\n"
-        else
-            inbounds_v2ray_count=$((inbounds_v2ray_count+1))
-            inbounds_v2ray_index+=("$inbounds_count")
-            inbounds_v2ray_list="$inbounds_v2ray_list $inbounds_v2ray_count.\r\033[6C端口: $green$map_port${normal}$map_tag_list\n\n"
-        fi
-
-        inbounds_count=$((inbounds_count+1))
-        inbounds_port+=("$map_port")
-        inbounds_protocol+=("$map_protocol")
-        inbounds_stream_network+=("$map_stream_network")
-        inbounds_forward_target_network+=("$map_target_network")
-        inbounds_forward_target_address+=("$map_target_address")
-        inbounds_forward_target_port+=("$map_target_port")
-        inbounds_tag+=("$map_tag")
-        inbounds_v2ray_accounts+=("$map_accounts")
-    done < <($JQ_FILE -r '.inbounds[]|[.port,.protocol,.streamSettings.network,.settings.network,.settings.address,.settings.port,.tag,([(.settings.clients| if .== null then [] else . end)[].id]|join(" "))]|join("^")' "$IBM_APPS_ROOT/ibm_v2ray/config.json")
-    return 0
-}
-
-ListIbmV2rayPorts()
-{
-    GetIbmV2rayInbounds
-    if [ "$inbounds_v2ray_count" -eq 0 ] 
-    then
-        Println "$error 没有 v2ray 端口\n"
-    else
-        Println "$inbounds_v2ray_list"
-    fi
-}
-
-ViewIbmV2rayPort()
-{
-    ListIbmV2rayPorts
-}
-
-AddIbmV2rayPort()
-{
-    GetIbmV2rayInbounds
-
-    if [ "$inbounds_v2ray_count" -gt 0 ] 
-    then
-        Println "v2ray 端口列表:\n\n$inbounds_v2ray_list"
-    fi
-
-    Println "$info 输入新的 v2ray 端口"
-    echo -e "$tip 需添加 ibm app 路由才能访问此端口\n"
-
-    while read -p "(默认: 取消): " ibm_v2ray_port
-    do
-        case $ibm_v2ray_port in
-            "") 
-                Println "已取消...\n"
-                exit 1
-            ;;
-           *[!0-9]*) 
-                Println "$error 请输入正确的端口\n"
-            ;;
-            *) 
-                for port in ${inbounds_port[@]+"${inbounds_port[@]}"}
-                do
-                    if [ "$port" -eq "$ibm_v2ray_port" ] 
-                    then
-                        Println "$error 端口已经存在\n"
-                        continue 2
-                    fi
-                done
-                break
-            ;;
-        esac
-    done
-
-    Println "$info 输入新的 v2ray 标签"
-    read -p "(默认: 不设置): " ibm_v2ray_tag
-
-    new_inbound=$(
-    $JQ_FILE -n --arg port "$ibm_v2ray_port" --arg tag "$ibm_v2ray_tag" \
-        '{
-            "tag": $tag,
-            "port": $port | tonumber,
-            "protocol": "vmess",
-            "settings": {
-                "clients": []
-            },
-            "streamSettings": {
-                "network": "ws"
-            }
-        }'
-    )
-
-    jq_path='["inbounds"]'
-    JQ add "$IBM_APPS_ROOT/ibm_v2ray/config.json" "$new_inbound"
-    Println "$info v2ray 端口 $ibm_v2ray_port 添加成功\n"
-}
-
-EditIbmV2rayPort()
-{
-    ListIbmV2rayPorts
-
-    if [ "$inbounds_v2ray_count" -eq 0 ] 
-    then
-        exit 1
-    fi
-
-    echo -e "选择 v2ray 端口"
-    while read -p "(默认: 取消): " inbounds_v2ray_num
-    do
-        case "$inbounds_v2ray_num" in
-            "")
-                Println "已取消...\n" && exit 1
-            ;;
-            *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
-            ;;
-            *)
-                if [ "$inbounds_v2ray_num" -gt 0 ] && [ "$inbounds_v2ray_num" -le "$inbounds_v2ray_count" ]
-                then
-                    v2ray_index=${inbounds_v2ray_index[$((inbounds_v2ray_num-1))]}
-                    v2ray_port=${inbounds_port[v2ray_index]}
-                    v2ray_tag=${inbounds_tag[v2ray_index]}
-                    v2ray_account=${inbounds_v2ray_accounts[v2ray_index]}
-                    IFS=" " read -r -a v2ray_accounts <<< "$v2ray_account"
-
-                    v2ray_accounts_list=""
-                    for id in "${v2ray_accounts[@]}"
-                    do
-                        [ -n "$v2ray_accounts_list" ] && v2ray_accounts_list="$v2ray_accounts_list,"
-                        v2ray_account=$(
-                        $JQ_FILE -n --arg id "$v2ray_account" \
-                            '{
-                                "id": $id,
-                                "alterId": 64
-                            }'
-                        )
-                        v2ray_accounts_list="$v2ray_accounts_list$v2ray_account"
-                    done
-                    break
-                else
-                    Println "$error 请输入正确的序号\n"
-                fi
-            ;;
-        esac
-    done
-
-    Println "$info 输入新的 v2ray 端口"
-    echo -e "$tip 需添加 ibm app 路由才能访问此端口\n"
-
-    while read -p "(默认: $v2ray_port): " ibm_v2ray_port
-    do
-        case $ibm_v2ray_port in
-            "") 
-                ibm_v2ray_port=$v2ray_port
-                break
-            ;;
-           *[!0-9]*) 
-                Println "$error 请输入正确的端口\n"
-            ;;
-            *) 
-                for port in ${inbounds_port[@]+"${inbounds_port[@]}"}
-                do
-                    if [ "$port" -eq "$ibm_v2ray_port" ] && [ "$port" -ne "$v2ray_port" ]
-                    then
-                        Println "$error 端口已经存在\n"
-                        continue 2
-                    fi
-                done
-                break
-            ;;
-        esac
-    done
-
-    Println "$info 输入新的 v2ray 标签"
-    read -p "(默认: ${v2ray_tag:-不设置}): " ibm_v2ray_tag
-    ibm_v2ray_tag=${ibm_v2ray_tag:-$v2ray_tag}
-
-    new_inbound=$(
-    $JQ_FILE -n --arg port "$ibm_v2ray_port" --arg tag "$ibm_v2ray_tag" \
-        --argjson clients "[$v2ray_accounts_list]" \
-        '{
-            "tag": $tag,
-            "port": $port | tonumber,
-            "protocol": "vmess",
-            "settings": {
-                "clients": $clients
-            },
-            "streamSettings": {
-                "network": "ws"
-            }
-        }'
-    )
-
-    jq_path='["inbounds",'"$v2ray_index"']'
-    JQ replace "$IBM_APPS_ROOT/ibm_v2ray/config.json" "$new_inbound"
-    Println "$info v2ray 端口更改成功\n"
-}
-
-AddIbmV2rayAcc()
-{
-    ListIbmV2rayPorts
-
-    if [ "$inbounds_v2ray_count" -eq 0 ] 
-    then
-        Println "$error 请先添加 v2ray 端口\n"
-        exit 1
-    fi
-
-    echo -e "选择 v2ray 端口"
-    while read -p "(默认: 取消): " inbounds_v2ray_num
-    do
-        case "$inbounds_v2ray_num" in
-            "")
-                Println "已取消...\n" && exit 1
-            ;;
-            *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
-            ;;
-            *)
-                if [ "$inbounds_v2ray_num" -gt 0 ] && [ "$inbounds_v2ray_num" -le "$inbounds_v2ray_count" ]
-                then
-                    v2ray_index=${inbounds_v2ray_index[$((inbounds_v2ray_num-1))]}
-                    v2ray_port=${inbounds_port[v2ray_index]}
-                    break
-                else
-                    Println "$error 请输入正确的序号\n"
-                fi
-            ;;
-        esac
-    done
-
-    Println "$info 输入账号 id"
-    read -p "(默认: 随机): " ibm_v2ray_acc_id
-    [ -z "$ibm_v2ray_acc_id" ] && ibm_v2ray_acc_id=$(< /proc/sys/kernel/random/uuid)
-    new_acc=$(
-    $JQ_FILE -n --arg id "$ibm_v2ray_acc_id" \
-        '{
-            "id": $id,
-            "alterId": 64
-        }'
-    )
-    jq_path='["inbounds",'"$v2ray_index"',"settings","clients"]'
-    JQ add "$IBM_APPS_ROOT/ibm_v2ray/config.json" "$new_acc"
-    Println "$info v2ray 账号 $ibm_v2ray_acc_id 添加成功\n"
-}
-
-ViewIbmV2rayAcc()
-{
-    ListIbmV2rayPorts
-
-    if [ "$inbounds_v2ray_count" -eq 0 ] 
-    then
-        exit 1
-    fi
-
-    echo -e "选择 v2ray 端口"
-    while read -p "(默认: 取消): " inbounds_v2ray_num
-    do
-        case "$inbounds_v2ray_num" in
-            "")
-                Println "已取消...\n" && exit 1
-            ;;
-            *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
-            ;;
-            *)
-                if [ "$inbounds_v2ray_num" -gt 0 ] && [ "$inbounds_v2ray_num" -le "$inbounds_v2ray_count" ]
-                then
-                    v2ray_index=${inbounds_v2ray_index[$((inbounds_v2ray_num-1))]}
-                    v2ray_port=${inbounds_port[v2ray_index]}
-                    v2ray_tag=${inbounds_tag[v2ray_index]}
-                    v2ray_account=${inbounds_v2ray_accounts[v2ray_index]}
-                    IFS=" " read -r -a v2ray_accounts <<< "$v2ray_account"
-
-                    v2ray_accounts_list=""
-                    for((i=0;i<${#v2ray_accounts[@]};i++));
-                    do
-                        v2ray_accounts_list="$v2ray_accounts_list $((i+1)). $green${v2ray_accounts[i]}${normal}\n\n"
-                    done
-                    break
-                else
-                    Println "$error 请输入正确的序号\n"
-                fi
-            ;;
-        esac
-    done
-
-    if [ -n "$v2ray_accounts_list" ] 
-    then
-        if [ -n "$v2ray_tag" ] 
-        then
-            v2ray_tag_list="  标签: $green$v2ray_tag${normal}"
-        else
-            v2ray_tag_list=""
-        fi
-        Println " 端口: $green$v2ray_port${normal}$v2ray_tag_list\n\n$v2ray_accounts_list"
-    else
-        Println "$error 没有 v2ray 账号\n"
-    fi
-}
-
-ListIbmV2rayAcc()
-{
-    ListIbmV2rayPorts
-
-    if [ "$inbounds_v2ray_count" -eq 0 ] 
-    then
-        exit 1
-    fi
-
-    echo -e "选择 v2ray 端口"
-    while read -p "(默认: 取消): " inbounds_v2ray_num
-    do
-        case "$inbounds_v2ray_num" in
-            "")
-                Println "已取消...\n" && exit 1
-            ;;
-            *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
-            ;;
-            *)
-                if [ "$inbounds_v2ray_num" -gt 0 ] && [ "$inbounds_v2ray_num" -le "$inbounds_v2ray_count" ]
-                then
-                    v2ray_index=${inbounds_v2ray_index[$((inbounds_v2ray_num-1))]}
-                    v2ray_port=${inbounds_port[v2ray_index]}
-                    v2ray_tag=${inbounds_tag[v2ray_index]}
-                    v2ray_account=${inbounds_v2ray_accounts[v2ray_index]}
-                    IFS=" " read -r -a v2ray_accounts <<< "$v2ray_account"
-
-                    v2ray_accounts_count=${#v2ray_accounts[@]}
-                    v2ray_accounts_list=""
-                    for((i=0;i<v2ray_accounts_count;i++));
-                    do
-                        v2ray_accounts_list="$v2ray_accounts_list $((i+1)). $green${v2ray_accounts[i]}${normal}\n\n"
-                    done
-                    break
-                else
-                    Println "$error 请输入正确的序号\n"
-                fi
-            ;;
-        esac
-    done
-
-    if [ -n "$v2ray_accounts_list" ] 
-    then
-        if [ -n "$v2ray_tag" ] 
-        then
-            v2ray_tag_list="  标签: $green$v2ray_tag${normal}"
-        else
-            v2ray_tag_list=""
-        fi
-        Println " 端口: $green$v2ray_port${normal}$v2ray_tag_list\n\n$v2ray_accounts_list"
-    else
-        Println "$error 没有 v2ray 账号\n"
-        exit 1
-    fi
-}
-
-EditIbmV2rayAcc()
-{
-    ListIbmV2rayAcc
-
-    echo -e "选择 v2ray 账号"
-    while read -p "(默认: 取消): " v2ray_accounts_num
-    do
-        case "$v2ray_accounts_num" in
-            "")
-                Println "已取消...\n" && exit 1
-            ;;
-            *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
-            ;;
-            *)
-                if [ "$v2ray_accounts_num" -gt 0 ] && [ "$v2ray_accounts_num" -le "$v2ray_accounts_count" ]
-                then
-                    v2ray_accounts_index=$((v2ray_accounts_num-1))
-                    v2ray_account=${v2ray_accounts[v2ray_accounts_index]}
-                    break
-                else
-                    Println "$error 请输入正确的序号\n"
-                fi
-            ;;
-        esac
-    done
-
-    Println "$info 输入账号 id"
-    read -p "(默认: $v2ray_account): " ibm_v2ray_acc_id
-    ibm_v2ray_acc_id=${ibm_v2ray_acc_id:-$v2ray_account}
-    new_acc=$(
-    $JQ_FILE -n --arg id "$ibm_v2ray_acc_id" \
-        '{
-            "id": $id,
-            "alterId": 64
-        }'
-    )
-    jq_path='["inbounds",'"$v2ray_index"',"settings","clients",'"$v2ray_accounts_index"']'
-    JQ replace "$IBM_APPS_ROOT/ibm_v2ray/config.json" "$new_acc"
-    Println "$info v2ray 账号更改成功\n"
-}
-
-ListIbmV2rayForwardPorts()
-{
-    GetIbmV2rayInbounds
-
-    if [ "$inbounds_forward_count" -eq 0 ] 
-    then
-        Println "$error 没有 v2ray 转发端口\n"
-    else
-        Println "$inbounds_forward_list"
-    fi
-}
-
-ViewIbmV2rayForwardPort()
-{
-    ListIbmV2rayForwardPorts
-}
-
-AddIbmV2rayForwardPort()
-{
-    GetIbmV2rayInbounds
-
-    if [ "$inbounds_forward_count" -gt 0 ] 
-    then
-        Println "v2ray 转发端口列表:\n\n$inbounds_forward_list"
-    fi
-
-    Println "$info 输入新的 v2ray 转发端口"
-    echo -e "$tip 需添加 ibm app 路由才能访问此端口\n"
-
-    while read -p "(默认: 取消): " ibm_v2ray_forward_port
-    do
-        case $ibm_v2ray_forward_port in
-            "") 
-                Println "已取消...\n"
-                exit 1
-            ;;
-           *[!0-9]*) 
-                Println "$error 请输入正确的端口\n"
-            ;;
-            *) 
-                for port in ${inbounds_port[@]+"${inbounds_port[@]}"}
-                do
-                    if [ "$port" -eq "$ibm_v2ray_forward_port" ] 
-                    then
-                        Println "$error 端口已经存在\n"
-                        continue 2
-                    fi
-                done
-                break
-            ;;
-        esac
-    done
-
-    Println "$info 输入新的 v2ray 标签"
-    read -p "(默认: 不设置): " ibm_v2ray_forward_tag
-
-    Println "$info 输入转发目标地址(ip或域名)"
-    while read -p "(默认: 取消): " ibm_v2ray_forward_target_address
-    do
-        case $ibm_v2ray_forward_target_address in
-            "") 
-                Println "已取消...\n"
-                exit 1
-            ;;
-            *) 
-                if [[ $ibm_v2ray_forward_target_address =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || [[ $ibm_v2ray_forward_target_address =~ ^([a-zA-Z0-9](([a-zA-Z0-9-]){0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]]
-                then
-                    break
-                else
-                    Println "$error 转发目标地址格式错误\n"
-                fi
-            ;;
-        esac
-    done
-
-    Println "$info 输入转发目标地址端口"
-    while read -p "(默认: 80): " ibm_v2ray_forward_target_port
-    do
-        case $ibm_v2ray_forward_target_port in
-            "") 
-                ibm_v2ray_forward_target_port=80
-                break
-            ;;
-           *[!0-9]*) 
-                Println "$error 请输入正确的端口\n"
-            ;;
-            *) 
-                break
-            ;;
-        esac
-    done
-
-    new_inbound=$(
-    $JQ_FILE -n --arg port "$ibm_v2ray_forward_port" --arg tag "$ibm_v2ray_forward_tag" \
-        --arg target_address "$ibm_v2ray_forward_target_address" --arg target_port "$ibm_v2ray_forward_target_port" \
-        '{
-            "tag": $tag,
-            "port": $port | tonumber,
-            "protocol": "dokodemo-door",
-            "settings": {
-                "address": $target_address,
-                "port": $target_port | tonumber,
-                "network": "tcp"
-            }
-        }'
-    )
-    jq_path='["inbounds"]'
-    JQ add "$IBM_APPS_ROOT/ibm_v2ray/config.json" "$new_inbound"
-    Println "$info v2ray 转发端口 $ibm_v2ray_forward_port 添加成功\n"
-}
-
-EditIbmV2rayForwardPort()
-{
-    ListIbmV2rayForwardPorts
-
-    if [ "$inbounds_forward_count" -eq 0 ] 
-    then
-        exit 1
-    fi
-
-    echo -e "选择 v2ray 转发端口"
-    while read -p "(默认: 取消): " inbounds_forward_num
-    do
-        case "$inbounds_forward_num" in
-            "")
-                Println "已取消...\n" && exit 1
-            ;;
-            *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
-            ;;
-            *)
-                if [ "$inbounds_forward_num" -gt 0 ] && [ "$inbounds_forward_num" -le "$inbounds_forward_count" ]
-                then
-                    forward_index=${inbounds_forward_index[$((inbounds_forward_num-1))]}
-                    forward_port=${inbounds_port[forward_index]}
-                    forward_tag=${inbounds_tag[forward_index]}
-                    forward_target_address=${inbounds_forward_target_address[forward_index]}
-                    forward_target_port=${inbounds_forward_target_port[forward_index]}
-                    break
-                else
-                    Println "$error 请输入正确的序号\n"
-                fi
-            ;;
-        esac
-    done
-
-    Println "$info 输入新的 v2ray 转发端口"
-    echo -e "$tip 需添加 ibm app 路由才能访问此端口\n"
-
-    while read -p "(默认: $forward_port): " ibm_v2ray_forward_port
-    do
-        case $ibm_v2ray_forward_port in
-            "") 
-                ibm_v2ray_forward_port=$forward_port
-                break
-            ;;
-           *[!0-9]*) 
-                Println "$error 请输入正确的端口\n"
-            ;;
-            *) 
-                for port in ${inbounds_port[@]+"${inbounds_port[@]}"}
-                do
-                    if [ "$port" -eq "$ibm_v2ray_forward_port" ] && [ "$port" -ne "$forward_port" ]
-                    then
-                        Println "$error 端口已经存在\n"
-                        continue 2
-                    fi
-                done
-                break
-            ;;
-        esac
-    done
-
-    Println "$info 输入新的 v2ray 标签"
-    read -p "(默认: ${forward_tag:-不设置}): " ibm_v2ray_forward_tag
-    ibm_v2ray_forward_tag=${ibm_v2ray_forward_tag:-$forward_tag}
-
-    Println "$info 输入转发目标地址(ip或域名)"
-    while read -p "(默认: $forward_target_address): " ibm_v2ray_forward_target_address
-    do
-        case $ibm_v2ray_forward_target_address in
-            "") 
-                ibm_v2ray_forward_target_address=$forward_target_address
-                break
-            ;;
-            *) 
-                if [[ $ibm_v2ray_forward_target_address =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || [[ $ibm_v2ray_forward_target_address =~ ^([a-zA-Z0-9](([a-zA-Z0-9-]){0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]]
-                then
-                    break
-                else
-                    Println "$error 转发目标地址格式错误\n"
-                fi
-            ;;
-        esac
-    done
-
-    Println "$info 输入转发目标地址端口"
-    while read -p "(默认: $forward_target_port): " ibm_v2ray_forward_target_port
-    do
-        case $ibm_v2ray_forward_target_port in
-            "") 
-                ibm_v2ray_forward_target_port=$forward_target_port
-                break
-            ;;
-           *[!0-9]*) 
-                Println "$error 请输入正确的端口\n"
-            ;;
-            *) 
-                break
-            ;;
-        esac
-    done
-
-    new_inbound=$(
-    $JQ_FILE -n --arg port "$ibm_v2ray_forward_port" --arg tag "$ibm_v2ray_forward_tag" \
-        --arg target_address "$ibm_v2ray_forward_target_address" --arg target_port "$ibm_v2ray_forward_target_port" \
-        '{
-            "tag": $tag,
-            "port": $port | tonumber,
-            "protocol": "dokodemo-door",
-            "settings": {
-                "address": $target_address,
-                "port": $target_port | tonumber,
-                "network": "tcp"
-            }
-        }'
-    )
-
-    jq_path='["inbounds",'"$forward_index"']'
-    JQ replace "$IBM_APPS_ROOT/ibm_v2ray/config.json" "$new_inbound"
-    Println "$info 转发端口更改成功\n"
-}
-
-DelIbmV2rayPort()
-{
-    ListIbmV2rayPorts
-
-    if [ "$inbounds_v2ray_count" -eq 0 ] 
-    then
-        exit 1
-    fi
-
-    echo -e "选择 v2ray 端口"
-    while read -p "(默认: 取消): " inbounds_v2ray_num
-    do
-        case "$inbounds_v2ray_num" in
-            "")
-                Println "已取消...\n" && exit 1
-            ;;
-            *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
-            ;;
-            *)
-                if [ "$inbounds_v2ray_num" -gt 0 ] && [ "$inbounds_v2ray_num" -le "$inbounds_v2ray_count" ]
-                then
-                    v2ray_index=${inbounds_v2ray_index[$((inbounds_v2ray_num-1))]}
-                    v2ray_port=${inbounds_port[v2ray_index]}
-                    break
-                else
-                    Println "$error 请输入正确的序号\n"
-                fi
-            ;;
-        esac
-    done
-
-    jq_path='["inbounds"]'
-    JQ delete "$IBM_APPS_ROOT/ibm_v2ray/config.json" "$v2ray_index"
-    Println "$info 端口 $v2ray_port 删除成功\n"
-}
-
-DelIbmV2rayAcc()
-{
-    ListIbmV2rayAcc
-
-    echo -e "选择 v2ray 账号"
-    while read -p "(默认: 取消): " v2ray_accounts_num
-    do
-        case "$v2ray_accounts_num" in
-            "")
-                Println "已取消...\n" && exit 1
-            ;;
-            *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
-            ;;
-            *)
-                if [ "$v2ray_accounts_num" -gt 0 ] && [ "$v2ray_accounts_num" -le "$v2ray_accounts_count" ]
-                then
-                    v2ray_accounts_index=$((v2ray_accounts_num-1))
-                    v2ray_account=${v2ray_accounts[v2ray_accounts_index]}
-                    break
-                else
-                    Println "$error 请输入正确的序号\n"
-                fi
-            ;;
-        esac
-    done
-
-    jq_path='["inbounds",'"$v2ray_index"',"settings","clients"]'
-    JQ delete "$IBM_APPS_ROOT/ibm_v2ray/config.json" "$v2ray_accounts_index"
-    Println "$info 账号 $v2ray_account 删除成功\n"
-}
-
-DelIbmV2rayForwardPort()
-{
-    ListIbmV2rayForwardPorts
-
-    if [ "$inbounds_forward_count" -eq 0 ] 
-    then
-        exit 1
-    fi
-
-    echo -e "选择 v2ray 转发端口"
-    while read -p "(默认: 取消): " inbounds_forward_num
-    do
-        case "$inbounds_forward_num" in
-            "")
-                Println "已取消...\n" && exit 1
-            ;;
-            *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
-            ;;
-            *)
-                if [ "$inbounds_forward_num" -gt 0 ] && [ "$inbounds_forward_num" -le "$inbounds_forward_count" ]
-                then
-                    forward_index=${inbounds_forward_index[$((inbounds_forward_num-1))]}
-                    forward_port=${inbounds_port[forward_index]}
-                    break
-                else
-                    Println "$error 请输入正确的序号\n"
-                fi
-            ;;
-        esac
-    done
-
-    jq_path='["inbounds"]'
-    JQ delete "$IBM_APPS_ROOT/ibm_v2ray/config.json" "$forward_index"
-    Println "$info 转发端口 $forward_port 删除成功\n"
-}
-
 DeployIbmV2ray()
 {
-    GetIbmV2rayInbounds
+    V2rayGetInbounds
+
     found=0
     for port in ${inbounds_port[@]+"${inbounds_port[@]}"}
     do
@@ -33271,7 +32518,7 @@ DeployIbmV2ray()
         exit 1
     fi
 
-    if [ ! -e "$IBM_APPS_ROOT/ibm_v2ray/v2ray" ] || [ ! -e "$IBM_APPS_ROOT/ibm_v2ray/v2ctl" ]
+    if [ ! -e "$IBM_APPS_ROOT/ibm_$v2ray_name/$v2ray_name" ] || [ ! -e "$IBM_APPS_ROOT/ibm_$v2ray_name/v2ctl" ]
     then
         Println "$error 请先更新 IBM V2ray APP\n"
         exit 1
@@ -33283,16 +32530,17 @@ DeployIbmV2ray()
     ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
     ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
 
-    v2ray_name=$(RandStr)
-    cp -r "$IBM_APPS_ROOT/ibm_v2ray" "$IBM_APPS_ROOT/ibm_$v2ray_name"
+    v2ray_rand_name=$(RandStr)
+    cp -r "$IBM_APPS_ROOT/ibm_$v2ray_name" "$IBM_APPS_ROOT/ibm_$v2ray_rand_name"
 
-    cd "$IBM_APPS_ROOT/ibm_$v2ray_name/"
-    mv v2ray "$v2ray_name"
-    ./v2ctl config config.json > "$v2ray_name.pb"
-    tar zcf "$v2ray_name.tar.gz" "$v2ray_name" "$v2ray_name.pb"
+    cd "$IBM_APPS_ROOT/ibm_$v2ray_rand_name/"
+
+    mv $v2ray_name "$v2ray_rand_name"
+    ./v2ctl config config.json > "$v2ray_rand_name.pb"
+    tar zcf "$v2ray_rand_name.tar.gz" "$v2ray_rand_name" "$v2ray_rand_name.pb"
     rm -f config.json
-    rm -f "$v2ray_name"
-    rm -f "$v2ray_name.pb"
+    rm -f "$v2ray_rand_name"
+    rm -f "$v2ray_rand_name.pb"
     rm -f v2ctl
 
     ibmcloud cf create-app-manifest "$ibm_cf_app_name"
@@ -33323,11 +32571,11 @@ DeployIbmV2ray()
 applications:
 - name: $ibm_cf_app_name
   command:
-    tar xzf $v2ray_name.tar.gz &&
-    { ./$v2ray_name -config ./$v2ray_name.pb -format=pb & } &&
+    tar xzf $v2ray_rand_name.tar.gz &&
+    { ./$v2ray_rand_name -config ./$v2ray_rand_name.pb -format=pb & } &&
     sleep 5 &&
-    rm ./$v2ray_name.pb &&
-    rm ./$v2ray_name
+    rm ./$v2ray_rand_name.pb &&
+    rm ./$v2ray_rand_name
   disk_quota: $disk_quota
   instances: ${instances:-1}
   memory: $memory
@@ -33346,82 +32594,142 @@ func main() {
 ' > "main.go"
     ibmcloud cf push -f "${ibm_cf_app_name}_manifest.yml"
     cd ..
-    rm -rf "$IBM_APPS_ROOT/ibm_$v2ray_name"
+    rm -rf "$IBM_APPS_ROOT/ibm_$v2ray_rand_name"
 }
 
 IbmV2rayMenu()
 {
-    if [ -d "$IBM_APPS_ROOT/ibm_v2ray" ] && [ ! -s "$IBM_APPS_ROOT/ibm_v2ray/config.json" ]
-    then
-        $JQ_FILE -n \
-'{
-  "log": {
-    "access": "none",
-    "error": "error.log",
-    "loglevel": "error"
-  },
-  "inbounds": [],
-  "outbounds": [
-    {
-      "protocol": "freedom",
-      "settings": {}
-    }
-  ]
-}' > "$IBM_APPS_ROOT/ibm_v2ray/config.json"
-    fi
+    [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
 
-    Println " IBM v2ray APP 面板 ${normal}${red}[v$sh_ver]${normal}
+    Println " IBM $v2ray_package_name APP 面板 ${normal}${red}[v$sh_ver]${normal}
 
-  ${green}1.${normal} 下载 v2ray APP
-  ${green}2.${normal} 更新 v2ray APP
-  ${green}3.${normal} 部署 v2ray APP
-  ${green}4.${normal} 查看 v2ray 端口
-  ${green}5.${normal} 添加 v2ray 端口
-  ${green}6.${normal} 更改 v2ray 端口
-  ${green}7.${normal} 查看 v2ray 账号
-  ${green}8.${normal} 添加 v2ray 账号
-  ${green}9.${normal} 更改 v2ray 账号
- ${green}10.${normal} 查看 v2ray 转发端口
- ${green}11.${normal} 添加 v2ray 转发端口
- ${green}12.${normal} 更改 v2ray 转发端口
- ${green}13.${normal} 删除 v2ray 端口
- ${green}14.${normal} 删除 v2ray 账号
- ${green}15.${normal} 删除 v2ray 转发端口
+  ${green}1.${normal} 下载 $v2ray_package_name APP
+  ${green}2.${normal} 更新 $v2ray_package_name APP
+  ${green}3.${normal} 部署 $v2ray_package_name APP
+————————————
+  ${green}4.${normal} 查看入站
+  ${green}5.${normal} 添加入站
+  ${green}6.${normal} 添加入站账号
+————————————
+  ${green}7.${normal} 查看出站
+  ${green}8.${normal} 添加出站
+  ${green}9.${normal} 添加出站账号
+————————————
+ ${green}10.${normal} 查看DNS
+ ${green}11.${normal} 设置DNS
+————————————
+ ${green}12.${normal} 查看路由
+ ${green}13.${normal} 设置路由
+————————————
+ ${green}14.${normal} 查看策略
+ ${green}15.${normal} 设置策略
+————————————
+ ${green}16.${normal} 查看流量
+ ${green}17.${normal} 重置流量
+————————————
+ ${green}18.${normal} 查看反向代理
+ ${green}19.${normal} 设置反向代理
+————————————
+ ${green}20.${normal} 删除入站
+ ${green}21.${normal} 删除入站账号
+ ${green}22.${normal} 删除出站
+ ${green}23.${normal} 删除出站账号
 
     "
     read -p "(默认: 取消): " ibm_v2ray_num
     case $ibm_v2ray_num in
-        1) DownloadIbmV2ray
+        1) 
+            DownloadIbmV2ray
         ;;
-        2) UpdateIbmV2ray
+        2) 
+            UpdateIbmV2ray
         ;;
-        3) DeployIbmV2ray
+        3) 
+            UpdateIbmV2rayConfig
+            DeployIbmV2ray
         ;;
-        4) ViewIbmV2rayPort
+        4) 
+            UpdateIbmV2rayConfig
+            V2rayListInboundAccounts
+            V2rayListInboundAccountLink
         ;;
-        5) AddIbmV2rayPort
+        5) 
+            UpdateIbmV2rayConfig
+            V2rayAddInbound
         ;;
-        6) EditIbmV2rayPort
+        6) 
+            UpdateIbmV2rayConfig
+            V2rayAddInboundAccount
         ;;
-        7) ViewIbmV2rayAcc
+        7) 
+            UpdateIbmV2rayConfig
+            V2rayListOutboundAccounts
         ;;
-        8) AddIbmV2rayAcc
+        8) 
+            UpdateIbmV2rayConfig
+            V2rayAddOutbound
         ;;
-        9) EditIbmV2rayAcc
+        9) 
+            UpdateIbmV2rayConfig
+            V2rayAddOutboundAccount
         ;;
-        10) ViewIbmV2rayForwardPort
+        10) 
+            UpdateIbmV2rayConfig
+            V2rayListDns
         ;;
-        11) AddIbmV2rayForwardPort
+        11) 
+            UpdateIbmV2rayConfig
+            V2raySetDns
         ;;
-        12) EditIbmV2rayForwardPort
+        12) 
+            UpdateIbmV2rayConfig
+            V2rayListRouting
         ;;
-        13) DelIbmV2rayPort
+        13) 
+            UpdateIbmV2rayConfig
+            V2raySetRouting
         ;;
-        14) DelIbmV2rayAcc
+        14) 
+            UpdateIbmV2rayConfig
+            V2rayListPolicy
         ;;
-        15) DelIbmV2rayForwardPort
+        15) 
+            UpdateIbmV2rayConfig
+            V2raySetPolicy
         ;;
-        *) Println "$error 请输入正确的数字 [1-15]\n"
+        16) 
+            UpdateIbmV2rayConfig
+            V2rayListStats
+        ;;
+        17) 
+            UpdateIbmV2rayConfig
+            V2rayResetStats
+        ;;
+        18) 
+            UpdateIbmV2rayConfig
+            V2rayListReverse
+        ;;
+        19) 
+            UpdateIbmV2rayConfig
+            V2raySetReverse
+        ;;
+        20) 
+            UpdateIbmV2rayConfig
+            V2rayDeleteInbound
+        ;;
+        21) 
+            UpdateIbmV2rayConfig
+            V2rayDeleteInboundAccount
+        ;;
+        22) 
+            UpdateIbmV2rayConfig
+            V2rayDeleteOutbound
+        ;;
+        23) 
+            UpdateIbmV2rayConfig
+            V2rayDeleteOutboundAccount
+        ;;
+        *) Println "$error 请输入正确的数字 [1-23]\n"
         ;;
     esac
 }
@@ -33799,10 +33107,11 @@ IbmcfMenu()
  ${green}10.${normal} 删除 APP
  ${green}11.${normal} 删除 APP 路由
  ${green}12.${normal} 设置 v2ray APP
- ${green}13.${normal} 设置 APP 定时重启
- ${green}14.${normal} 开启 APP 定时重启
- ${green}15.${normal} 关闭 APP 定时重启
- ${green}16.${normal} 更新脚本
+ ${green}13.${normal} 设置 Xray  APP
+ ${green}14.${normal} 设置 APP 定时重启
+ ${green}15.${normal} 开启 APP 定时重启
+ ${green}16.${normal} 关闭 APP 定时重启
+ ${green}17.${normal} 更新脚本
 
  $tip 输入: ibm 打开面板\n\n"
     read -p "(默认: 取消): " ibm_cf_num
@@ -33829,17 +33138,31 @@ IbmcfMenu()
         ;;
         11) DelIbmAppRoute
         ;;
-        12) IbmV2rayMenu
+        12) 
+            v2ray_name="v2ray"
+            v2ray_package_name="v2ray"
+            tls_name="TLS"
+            V2CTL_FILE="$IBM_APPS_ROOT/ibm_v2ray/v2ctl"
+            V2_CONFIG="$IBM_APPS_ROOT/ibm_v2ray/config.json"
+            IbmV2rayMenu
         ;;
-        13) SetIbmcfAppCron
+        13) 
+            v2ray_name="xray"
+            v2ray_package_name="Xray"
+            tls_name="XTLS"
+            V2CTL_FILE="$IBM_APPS_ROOT/ibm_xray/xray"
+            V2_CONFIG="$IBM_APPS_ROOT/ibm_xray/config.json"
+            IbmV2rayMenu
         ;;
-        14) EnableIbmcfAppCron
+        14) SetIbmcfAppCron
         ;;
-        15) DisableIbmcfAppCron
+        15) EnableIbmcfAppCron
         ;;
-        16) UpdateShFile ibm
+        16) DisableIbmcfAppCron
         ;;
-        *) Println "$error 请输入正确的数字 [1-16]\n"
+        17) UpdateShFile ibm
+        ;;
+        *) Println "$error 请输入正确的数字 [1-17]\n"
         ;;
     esac
 }
@@ -36076,6 +35399,19 @@ then
 
     if [ "${1:-}" == "v2" ] 
     then
+        v2ray_name="v2ray"
+        v2ray_package_name="v2ray"
+        tls_name="TLS"
+        V2CTL_FILE="$IBM_APPS_ROOT/ibm_v2ray/v2ctl"
+        V2_CONFIG="$IBM_APPS_ROOT/ibm_v2ray/config.json"
+        IbmV2rayMenu
+    elif [ "${1:-}" == "x" ] 
+    then
+        v2ray_name="xray"
+        v2ray_package_name="Xray"
+        tls_name="XTLS"
+        V2CTL_FILE="$IBM_APPS_ROOT/ibm_xray/xray"
+        V2_CONFIG="$IBM_APPS_ROOT/ibm_xray/config.json"
         IbmV2rayMenu
     elif [ "${1:-}" == "cron" ] 
     then
@@ -36157,6 +35493,7 @@ Type=forking
 PIDFile=$nginx_prefix/logs/nginx.pid
 ExecStartPre=$nginx_prefix/sbin/nginx -t
 ExecStart=$nginx_prefix/sbin/nginx
+ExecStartPost=/bin/sleep 0.1
 ExecReload=$nginx_prefix/sbin/nginx -s reload
 ExecStop=/bin/kill -s QUIT \$MAINPID
 PrivateTmp=true
@@ -36301,6 +35638,7 @@ Type=forking
 PIDFile=$nginx_prefix/logs/nginx.pid
 ExecStartPre=$nginx_prefix/sbin/nginx -t
 ExecStart=$nginx_prefix/sbin/nginx
+ExecStartPost=/bin/sleep 0.1
 ExecReload=$nginx_prefix/sbin/nginx -s reload
 ExecStop=/bin/kill -s QUIT \$MAINPID
 PrivateTmp=true
@@ -36664,7 +36002,7 @@ then
         ;;
         2) 
             V2rayUpdate
-            systemctl restart v2ray
+            systemctl restart $v2ray_name
         ;;
         3) 
             V2rayConfigUpdate
@@ -36931,14 +36269,16 @@ then
   ${green}6.${normal} 安装 openwrt-v2ray
   ${green}7.${normal} 切换 openwrt 语言
   ${green}8.${normal} 切换 v2ray/xray core
+  ${green}9.${normal} 切换 配置文件
 ————————————
-  ${green}9.${normal} 设置 docker 镜像加速
- ${green}10.${normal} 设置 vimrc
- ${green}11.${normal} 开关 edns0
- ${green}12.${normal} 更新脚本
+ ${green}10.${normal} 设置 docker 镜像加速
+ ${green}11.${normal} 设置 vimrc
+ ${green}12.${normal} 开关 edns0
+ ${green}13.${normal} NAT 类型测试
+ ${green}14.${normal} 更新脚本
 
 "
-    read -p "请输入数字 [1-12]: " armbian_num
+    read -p "请输入数字 [1-14]: " armbian_num
 
     case $armbian_num in
         1) 
@@ -37152,6 +36492,18 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
                     fi
                 elif [[ $dnscrypt_version_old != "$dnscrypt_version" ]] 
                 then
+                    if [[ -x $(command -v docker) ]] && [[ -n $(docker container ls -f name=openwrt -q) ]]
+                    then
+                        Println "$tip 如果已经安装并运行旁路由 openwrt-v2ray, 建议先关闭旁路由 openwrt-v2ray"
+                        yn_options=( '否' '是' )
+                        inquirer list_input "是否继续" yn_options continue_yn
+                        if [[ $continue_yn == "否" ]] 
+                        then
+                            Println "已取消 ...\n"
+                            exit 1
+                        fi
+                    fi
+
                     if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp
                     then
                         cd ~/dnscrypt-$dnscrypt_version_old
@@ -37339,7 +36691,7 @@ method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
                 done < "/etc/NetworkManager/system-connections/hMACvLAN.nmconnection"
             fi
 
-            if [ -n "$(docker container ls -f name=openwrt -q)" ] 
+            if [[ -n $(docker container ls -f name=openwrt -q) ]] 
             then
                 docker container stop openwrt >/dev/null 2>&1 || stopped=1
                 echo
@@ -37533,9 +36885,8 @@ config interface 'lan'
             inquirer list_input "选择切换目标" core_options core
             if [ "$core" == "xray-core" ] 
             then
-                #docker exec -it openwrt /bin/ash -c "cat /var/etc/v2ray/v2ray.main.json 2> /dev/null || true" > ~/v2ray.main.json
                 echo
-                xray_options=( '1.2.0' '1.1.5' )
+                xray_options=( '1.2.1' '1.2.0' '1.1.5' )
                 inquirer list_input "选择 xray 版本" xray_options xray_ver
                 docker exec -it openwrt /bin/ash -c "
                 if ! opkg list-installed | grep -q 'xray - $xray_ver-1'
@@ -37566,6 +36917,112 @@ config interface 'lan'
             Println "$info 切换成功\n"
         ;;
         9)
+            if [[ ! -x $(command -v docker) ]] || [[ -z $(docker container ls -f name=openwrt -q) ]]
+            then
+                Println "$error 请先安装并运行 openwrt ...\n"
+                exit 1
+            fi
+
+            echo
+            inquirer text_input "输入当前配置保存名称: " config_name "不设置"
+            if [ "$config_name" == "不设置" ] 
+            then
+                config_name=""
+            else
+                config_name="-$config_name"
+            fi
+
+            mkdir -p "$HOME/openwrt_saved/openwrt-v2ray"
+
+            printf -v timestamp '%(%s)T' -1
+
+            if ! docker cp openwrt:/etc/config/v2ray "$HOME/openwrt_saved/openwrt-v2ray/config-$timestamp$config_name" 2> /dev/null
+            then
+                Println "$error 请先安装 openwrt-v2ray\n"
+                exit 1
+            fi
+
+            docker exec -it openwrt /bin/ash -c "
+            cat /var/etc/v2ray/v2ray.main.json 2> /dev/null || true
+            " > "$HOME/openwrt_saved/openwrt-v2ray/main-$timestamp$config_name"
+
+            Println "$tip 所有配置文件都是透明代理, 直连国内, 代理国外, 需要自行修改出站连接后使用"
+            config_file_options=( 'v2ray-1' 'xray-1' '复原配置' )
+            inquirer list_input "选择配置文件: " config_file_options config_file
+            if [ "$config_file" == "复原配置" ] 
+            then
+                if ! ls -A $HOME/openwrt_saved/openwrt-v2ray/config-* > /dev/null 2>&1
+                then
+                    Println "$error 没有保存的配置\n"
+                    exit 1
+                fi
+
+                configs_list=""
+                configs_count=0
+                configs_time=()
+                configs_name=()
+                for file in "$HOME/openwrt_saved/openwrt-v2ray/config-"*
+                do
+                    if [[ ${file##*/} =~ ^config-(.+)-(.+)$ ]] 
+                    then
+                        config_time=${BASH_REMATCH[1]}
+                        config_name="${BASH_REMATCH[2]}"
+                    elif [[ ${file##*/} =~ ^config-(.+)$ ]] 
+                    then
+                        config_time=${BASH_REMATCH[1]}
+                        config_name=""
+                    fi
+                    configs_time+=("$config_time")
+                    configs_name+=("-$config_name")
+                    configs_count=$((configs_count+1))
+                    printf -v config_date '%(%Y-%m-%d %H:%M:%S)T' "$config_time"
+                    configs_list="$configs_list$configs_count.\r\033[6C名称: ${green}${config_name:-无}${normal} 日期: ${green}$config_date${normal}\n\n"
+                done
+
+                Println "$configs_list"
+
+                echo "选择配置"
+                while read -p "(默认: 取消): " config_num
+                do
+                    case "$config_num" in
+                        "")
+                            Println "已取消...\n" && exit 1
+                        ;;
+                        *[!0-9]*)
+                            Println "$error 请输入正确的序号\n"
+                        ;;
+                        *)
+                            if [ "$config_num" -gt 0 ] && [ "$config_num" -le $configs_count ]
+                            then
+                                configs_index=$((config_num-1))
+                                config_time=${configs_time[configs_index]}
+                                config_name=${configs_name[configs_index]}
+                                break
+                            else
+                                Println "$error 请输入正确的序号\n"
+                            fi
+                        ;;
+                    esac
+                done
+
+                docker cp "$HOME/openwrt_saved/openwrt-v2ray/config-$config_time$config_name" openwrt:/etc/config/v2ray
+                Println "$info 配置复原成功\n"
+            else
+                docker exec -it -e V2RAY_CONFIG_NAME="$config_file" -e MIRROR="$FFMPEG_MIRROR_LINK" openwrt /bin/ash -c '
+                /etc/init.d/v2ray stop 2> /dev/null || true
+                wget -O /etc/config/v2ray $MIRROR/v2ray-configs/$V2RAY_CONFIG_NAME
+                for ip in $(nslookup dns.alidns.com | grep -v "127.0.0.11" | grep -oE "[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?")
+                do
+                    if ! grep -q "$ip" < /etc/v2ray/directlist.txt
+                    then
+                        echo "$ip" >> /etc/v2ray/directlist.txt
+                    fi
+                done
+                '
+                Println "$info 配置切换成功\n"
+            fi
+        ;;
+        10)
             if [[ ! -x $(command -v docker) ]] 
             then
                 Println "$error 请先安装 docker\n"
@@ -37595,7 +37052,7 @@ config interface 'lan'
 
             Println "$info docker 镜像加速设置成功\n"
         ;;
-        10)
+        11)
             if [ -e ~/.vimrc ] 
             then
                 echo
@@ -37630,7 +37087,7 @@ filetype indent off
                 Println "$error 无法连接服务器, 请稍后再试\n"
             fi
         ;;
-        11)
+        12)
             DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy)
             dnscrypt_version=${DNSCRYPT_ROOT##*-}
             if [[ $dnscrypt_version == "*" ]] 
@@ -37669,10 +37126,28 @@ filetype indent off
                 fi
             fi
         ;;
-        12)
+        13)
+            if [[ ! -x $(command -v pystun) ]] 
+            then
+                Println "$tip 请确保已经修改了合适的 apt 源"
+                yn_options=( '否' '是' )
+                inquirer list_input "是否继续" yn_options continue_yn
+                if [[ $continue_yn == "否" ]] 
+                then
+                    Println "已取消 ...\n"
+                    exit 1
+                fi
+                apt-get update
+                apt-get -y install python python-pip python-setuptools python-wheel
+                pip install pystun
+            fi
+            Println "$tip 建议关闭远端服务器防火墙, 检测中...\n"
+            pystun
+        ;;
+        14)
             UpdateShFile Armbian
         ;;
-        *) Println "$error 请输入正确的数字 [1-12]\n"
+        *) Println "$error 请输入正确的数字 [1-14]\n"
         ;;
     esac
     exit 0
