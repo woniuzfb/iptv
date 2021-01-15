@@ -7,7 +7,7 @@
 ## 一键管理 xray 脚本
 
 ``` bash
-wget -q http://hbo.epub.fun/x.sh && bash x.sh
+wget -q https://woniuzfb.github.io/iptv/x.sh && bash x.sh
 
   x # 打开 xray 管理面板
 
@@ -18,7 +18,7 @@ wget -q http://hbo.epub.fun/x.sh && bash x.sh
 ## 一键管理 v2ray 脚本
 
 ``` bash
-wget -q http://hbo.epub.fun/v2.sh && bash v2.sh
+wget -q https://woniuzfb.github.io/iptv/v2.sh && bash v2.sh
 
   v2 # 打开 v2ray 管理面板
 
@@ -29,7 +29,7 @@ wget -q http://hbo.epub.fun/v2.sh && bash v2.sh
 ## 一键管理 Armbian 脚本
 
 ``` bash
-wget -q http://hbo.epub.fun/arm.sh && bash arm.sh
+wget -q https://woniuzfb.github.io/iptv/arm.sh && bash arm.sh
 
   arm # 打开 Armbian 管理面板
 
@@ -48,7 +48,7 @@ wget -q http://hbo.epub.fun/arm.sh && bash arm.sh
 ## 一键管理 IBM Cloud Foundry 脚本
 
 ``` bash
-wget -q http://hbo.epub.fun/ibm.sh && bash ibm.sh
+wget -q https://woniuzfb.github.io/iptv/ibm.sh && bash ibm.sh
 
   ibm # 打开 ibm CF 管理面板
 
@@ -63,7 +63,7 @@ wget -q http://hbo.epub.fun/ibm.sh && bash ibm.sh
 ## 一键管理 cloudflare partner,workers 脚本
 
 ``` bash
-wget -q http://hbo.epub.fun/cf.sh && bash cf.sh
+wget -q https://woniuzfb.github.io/iptv/cf.sh && bash cf.sh
 
   cf # 打开 cloudflare partner,workers 管理面板
 
@@ -89,7 +89,7 @@ Mac/Linux 一键获取最优 IP 可以用脚本 [cloudflare-fping](https://githu
 ## 一键管理 nginx 脚本
 
 ``` bash
-wget -q http://hbo.epub.fun/nx.sh && bash nx.sh
+wget -q https://woniuzfb.github.io/iptv/nx.sh && bash nx.sh
 
   nx # 打开 Nginx 管理面板
 
@@ -100,7 +100,7 @@ wget -q http://hbo.epub.fun/nx.sh && bash nx.sh
 ## 一键管理 OpenResty 脚本
 
 ``` bash
-wget -q http://hbo.epub.fun/or.sh && bash or.sh
+wget -q https://woniuzfb.github.io/iptv/or.sh && bash or.sh
 
   or # 打开 OpenResty 管理面板
 
@@ -111,7 +111,7 @@ wget -q http://hbo.epub.fun/or.sh && bash or.sh
 ## 一键管理 IPTV 脚本 - A ffmpeg wrapper
 
 ``` bash
-wget -q http://hbo.epub.fun/iptv.sh && bash iptv.sh
+wget -q https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 
 始终用最新的脚本，升级方式
   - 通过 tv 面板（推荐）
