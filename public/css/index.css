@@ -36,7 +36,7 @@ input {
 }
 
 body {
-  width: 95%;
+  width: 90%;
   margin: 0 auto;
   font: 1.6rem/1.2 'PingFangSC','helvetica neue','hiragino sans gb','arial','microsoft yahei ui','microsoft yahei','simsun','sans-serif';
   display: grid;
@@ -53,6 +53,8 @@ header {
 .videoContainer {
   grid-column: 2 / 9;
   grid-row: 2;
+  width: 100%;
+  z-index: 1000;
 }
 
 /*

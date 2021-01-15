@@ -1,6 +1,3 @@
-/*
-** change lines 245-256,535-539
-*/
 "use strict";
 function makeStr(num) {
   let text = "";
@@ -168,10 +165,6 @@ function tsLoad() {
 }
 
 function videojsLoad(sourceOverlay,channel) {
-  if (videoField.hasChildNodes()) {
-    videojs('video').dispose();
-  }
-
   let overlays = [],channelOverlay,channelOverlayArr = [];
   if (channel && channel.hasOwnProperty('overlay') && channel.overlay.length > 0) {
     channelOverlay = channel.overlay;
@@ -179,39 +172,105 @@ function videojsLoad(sourceOverlay,channel) {
   }
 
   if (sourceOverlay) {
-  sourceOverlay.forEach((sourceItem,sourceIndex) => {
-    let overlayInfo = [];
-    if (sourceItem.hasOwnProperty('force') && sourceItem.force === 1) {
-      if (sourceItem.hasOwnProperty('switch') && sourceItem.switch === 'on') {
-        overlays.push({class:'overlay'+sourceIndex.toString(),content:'',align:'center',start:'playing'});
-        overlayInfo.push(sourceItem.height,sourceItem.width,sourceItem.margin_left,sourceItem.margin_top,sourceItem.height_fullscreen,sourceItem.width_fullscreen,sourceItem.margin_left_fullscreen,sourceItem.margin_top_fullscreen);
-        overlaysInfo[sourceIndex] = overlayInfo;
-      }
-    } else if (channelOverlayArr.length > sourceIndex) {
-      let channelOverlayIndex = channelOverlayArr[sourceIndex];
-      if ((channelOverlayIndex === 'on' && sourceItem.reverse === 0) || (channelOverlayIndex === 'off' && sourceItem.reverse === 1)) {
-        overlays.push({class:'overlay'+sourceIndex.toString(),content:'',align:'center',start:'playing'});
-        overlayInfo.push(sourceItem.height,sourceItem.width,sourceItem.margin_left,sourceItem.margin_top,sourceItem.height_fullscreen,sourceItem.width_fullscreen,sourceItem.margin_left_fullscreen,sourceItem.margin_top_fullscreen);
-        overlaysInfo[sourceIndex] = overlayInfo;
-      } else if (channelOverlayIndex.indexOf(':') !== -1) {
-        let channelOverlayIndexArr = channelOverlayIndex.split(':');
-        if ((sourceItem.reverse === 0 && channelOverlayIndexArr[0] === 'on') || (sourceItem.reverse === 1 && channelOverlayIndexArr[0] === 'off')) {
+    sourceOverlay.forEach((sourceItem,sourceIndex) => {
+      let overlayInfo = [];
+      if (sourceItem.hasOwnProperty('force') && sourceItem.force === 1) {
+        if (sourceItem.hasOwnProperty('switch') && sourceItem.switch === 'on') {
           overlays.push({class:'overlay'+sourceIndex.toString(),content:'',align:'center',start:'playing'});
-          channelOverlayIndexArr.shift();
-          overlaysInfo[sourceIndex] = channelOverlayIndexArr;
+          overlayInfo.push(sourceItem.height,sourceItem.width,sourceItem.margin_left,sourceItem.margin_top,sourceItem.height_fullscreen,sourceItem.width_fullscreen,sourceItem.margin_left_fullscreen,sourceItem.margin_top_fullscreen);
+          overlaysInfo[sourceIndex] = overlayInfo;
+        }
+      } else if (channelOverlayArr.length > sourceIndex) {
+        let channelOverlayIndex = channelOverlayArr[sourceIndex];
+        if ((channelOverlayIndex === 'on' && sourceItem.reverse === 0) || (channelOverlayIndex === 'off' && sourceItem.reverse === 1)) {
+          overlays.push({class:'overlay'+sourceIndex.toString(),content:'',align:'center',start:'playing'});
+          overlayInfo.push(sourceItem.height,sourceItem.width,sourceItem.margin_left,sourceItem.margin_top,sourceItem.height_fullscreen,sourceItem.width_fullscreen,sourceItem.margin_left_fullscreen,sourceItem.margin_top_fullscreen);
+          overlaysInfo[sourceIndex] = overlayInfo;
+        } else if (channelOverlayIndex.indexOf(':') !== -1) {
+          let channelOverlayIndexArr = channelOverlayIndex.split(':');
+          if ((sourceItem.reverse === 0 && channelOverlayIndexArr[0] === 'on') || (sourceItem.reverse === 1 && channelOverlayIndexArr[0] === 'off')) {
+            overlays.push({class:'overlay'+sourceIndex.toString(),content:'',align:'center',start:'playing'});
+            channelOverlayIndexArr.shift();
+            overlaysInfo[sourceIndex] = channelOverlayIndexArr;
+          }
         }
       }
-    }
-  });
+    });
   }
 
-  let contentType;
-  if (hlsVideoUrl.indexOf('.m3u8') !== -1) {
-    contentType = 'application/vnd.apple.mpegurl';
-  } else if (hlsVideoUrl.indexOf('blob:') !== -1) {
-    contentType = 'video/mp4';
+  let contentType,techOrder,pictureInPictureToggle,credentials = false,playerOptions,player;
+
+  if (hlsVideoUrl.indexOf('cdn4.epub.fun') !== -1) {
+    hlsVideoUrl = hlsVideoUrl.replace('https://cdn4.epub.fun','http://hbo.epub.fun');
+  } else if (hlsVideoUrl.indexOf('cdn5.epub.fun') !== -1) {
+    hlsVideoUrl = hlsVideoUrl.replace('cdn5.epub.fun','stream5.epub.fun');
+  }
+
+  if (hlsVideoUrl.indexOf('epub.fun') !== -1)   {
+    credentials = true;
+  }
+
+  if (isH265) {
+    techOrder = ['html5','hlsh265'];
+    contentType = 'video/x-hls-h265';
+    //techOrder = ['html5','flvh265'];
+    //contentType = 'video/x-flv-h265';
+    pictureInPictureToggle = false;
   } else {
-    contentType = 'video/x-flv';
+    techOrder = ['html5','flvjs'];
+    pictureInPictureToggle = true;
+    if (hlsVideoUrl.indexOf('.m3u8') !== -1) {
+      contentType = 'application/vnd.apple.mpegurl';
+    } else if (hlsVideoUrl.indexOf('blob:') !== -1) {
+      contentType = 'video/mp4';
+    } else {
+      contentType = 'video/x-flv';
+    }
+  }
+
+  playerOptions = {
+    techOrder: techOrder,
+    liveui: liveui,
+    autoplay: true,
+    preload: 'auto',
+    playsinline: true,
+    textTrackSettings: false,
+    controls: true,
+    fluid: true,
+    responsive: true,
+    userActions: {hotkeys:true},
+    html5: {
+      vhs: {
+        withCredentials: credentials,
+        overrideNative: true
+      },
+      nativeVideoTracks: false,
+      nativeAudioTracks: false
+    },
+    flvjs: {
+      mediaDataSource: {
+        isLive: true,
+        cors: true,
+        withCredentials: credentials,
+      }
+    },
+    sources: [
+      {
+        src: hlsVideoUrl,
+        type: contentType
+      }
+    ]
+    //controlBar: {
+    //  pictureInPictureToggle:pictureInPictureToggle
+    //}
+  };
+
+  if (videoField.hasChildNodes()) {
+    if (overlaysLoop) {
+      cancelAnimationFrame(overlaysLoop);
+      overlaysImg = undefined;
+    }
+    videojs('video').dispose();
   }
 
   const video = document.createElement('video');
@@ -224,119 +283,159 @@ function videojsLoad(sourceOverlay,channel) {
   video.appendChild(noVideojs);
   videoField.appendChild(video);
 
-  const player = videojs('video',{
-    liveui: liveui,
-    autoplay: 'true',
-    preload: 'auto',
-    playsinline: true,
-    textTrackSettings: false,
-    controls: true,
-    fluid: true,
-    responsive: true,
-    userActions: {hotkeys:true},
-    html5: {
-        hls: {
-            withCredentials: true,
-            overrideNative: true
-        }
-    }
-  });
+  videojs('video',playerOptions,function() {
+    player = this;
 
-  /*if (hlsVideoUrl.indexOf('cdn4.epub.fun') !== -1) {
-    hlsVideoUrl = hlsVideoUrl.replace('https://cdn4.epub.fun','http://hbo.epub.fun');
-  } else if (hlsVideoUrl.indexOf('cdn5.epub.fun') !== -1) {
-    hlsVideoUrl = hlsVideoUrl.replace('cdn5.epub.fun','stream5.epub.fun');
-  }*/
+    player.hlsQualitySelector({
+      displayCurrentQuality: false,
+    });
 
-  //let credentials;
-  //if (hlsVideoUrl.indexOf('mtime.info') !== -1 || hlsVideoUrl.indexOf('epub.fun') !== -1)   {
-  //  credentials = true;
-  //} else {
-    credentials = false;
-  //}
-
-  player.src({
-    src: hlsVideoUrl,
-    type: contentType,
-    overrideNative: true,
-    withCredentials: credentials
-  });
-
-  player.hlsQualitySelector();
-
-  player.ready(function() {
-    if (overlays.length > 0) {
-      player.overlay({
-        debug: false,
-        overlays: overlays
+    player.ready(function() {
+      const CloseButton = videojs.getComponent('CloseButton');
+      videojs.registerComponent('CloseButton', CloseButton);
+      player.addChild('CloseButton');
+      player.getChild('CloseButton').on('close', function() {
+        this.player().dispose();
+        deleteSchedule();
       });
-      for (let index = 0; index < overlays.length; index++) {
-        const info = overlaysInfo[index];
-        const overlayIndex = document.querySelector('.overlay'+index);
-        overlayIndex.setAttribute('style', 'height:' + info[0] +'%; width: ' + info[1] + '%; margin-left: ' + info[2] + '%; margin-top: ' + info[3] + '%;');
+
+      if (overlays.length > 0) {
+        this.overlay({
+          debug: false,
+          overlays: overlays
+        });
+        for (let index = 0; index < overlays.length; index++) {
+          const info = overlaysInfo[index];
+          const overlayIndex = document.querySelector('.overlay'+index);
+          overlayIndex.setAttribute('style', 'height:' + info[0] +'%; width: ' + info[1] + '%; margin-left: ' + info[2] + '%; margin-top: ' + info[3] + '%;');
+        }
       }
-    }
-    let promise = player.play();
 
-    if (promise !== undefined) {
-      promise.then(function() {
-        // Autoplay started!
-      }).catch(function() {
-        // Autoplay was prevented.
-      });
-    }
-  });
+      let promise = this.play();
 
-  player.on('error', function(e) {
-    let time = this.currentTime();
-    if (this.error().code === 2) {
-      alertInfo('频道发生错误！',10);
-      this.error(null).pause().load().currentTime(time).play();
-    } else if (this.error().code === 4) {
-      if (hlsVideoUrl.indexOf('playtype=lookback') !== -1) {
-        if (rate === 'org') {
-          rate = 'hd';
-          playBack(sourceReg);
-        } else if (rate === 'hd') {
-          rate = 'ld';
-          playBack(sourceReg);
-        } else if (rate === 'ld') {
-          rate = 'sd';
-          playBack(sourceReg);
+      if (promise !== undefined) {
+        promise.then(function() {
+          // Autoplay started!
+        }).catch(function() {
+          // Autoplay was prevented.
+        });
+      }
+    });
+
+    function everyOverlay() {
+      let last = new Date().getTime();
+      (function loop () {
+        const now = new Date().getTime(),
+              delta = now - last,
+              canvas = document.createElement('canvas');
+        let width = player.currentWidth() * window.devicePixelRatio;
+        let height = player.currentHeight() * window.devicePixelRatio;
+        let videoWidth,videoHeight;
+        let videoWidthRes = player.videoWidth();
+        let videoHeightRes = player.videoHeight();
+        if (width > height && width / height !== 1.6) {
+          videoHeight = height;
+          videoWidth = videoHeight * videoWidthRes / videoHeightRes;
         } else {
-          alertInfo('录像还未准备好！',10);
+          videoWidth = width;
+          videoHeight = videoWidth * videoHeightRes / videoWidthRes;
         }
-      } else if (hlsVideoUrl.indexOf('playtype=live') !== -1) {
-        if (rate === 'org') {
-          rate = 'hd';
-          playVideo();
-        } else if (rate === 'hd') {
-          rate = 'ld';
-          playVideo();
-        } else if (rate === 'ld') {
-          rate = 'sd';
-          playVideo();
+
+        if (delta >= 5000) {
+          for (let index = 0; index < overlays.length; index++) {
+            const info = overlaysInfo[index];
+            canvas.width = Math.floor(videoWidth * info[1] / 100 / window.devicePixelRatio);
+            canvas.height = Math.floor(videoHeight * info[0] / 100 / window.devicePixelRatio);
+            let ctx = canvas.getContext('2d');
+            const screenshotTarget = document.querySelector('video');
+            let sy;
+            if (info[3] < 0) {
+              sy = player.videoHeight() * (player.currentHeight() / 2 - player.currentWidth() / 100 * Math.abs(info[3])) / player.currentHeight();
+            } else if(info[3] > 0) {
+              sy = player.videoHeight() * (player.currentHeight() / 2 + player.currentWidth() / 100 * Math.abs(info[3])) / player.currentHeight();
+            } else {
+              sy = player.videoHeight() / 2;
+            }
+            ctx.drawImage(screenshotTarget, (info[2] + 50) * videoWidthRes / 100, sy, videoWidthRes * info[1] / 100, videoHeightRes * info[0] / 100, 0, 0, canvas.width, canvas.height);
+            if (!overlaysImg) {
+              overlaysImg = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            } else {
+              const img1 = overlaysImg;
+              const img2 = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const diffCanvas = document.createElement('canvas');
+              const diffCtx = diffCanvas.getContext('2d');
+              const diff = diffCtx.createImageData(canvas.width, canvas.height);
+              const difference = pixelmatch(img1.data, img2.data, diff.data, canvas.width, canvas.height, {threshold: 0.1});
+              if (difference > (canvas.width * canvas.height / 10 * 5)) {
+                const overlayEle = document.querySelector('.overlay' + index);
+                overlayEle.classList.toggle('hidden',true);
+              }
+              overlaysImg = img2;
+            }
+          }
+          last = now;
+        }
+        overlaysLoop = requestAnimationFrame(loop);
+      })();
+    }
+
+    player.on('loadeddata', function(e) {
+      if (overlays.length > 0) {
+        everyOverlay();
+      }
+    });
+
+    player.on('error', function(e) {
+      let time = this.currentTime();
+      if (this.error().code === 2) {
+        alertInfo('频道发生错误！',10);
+        this.error(null).pause().load().currentTime(time).play();
+      } else if (this.error().code === 4) {
+        if (hlsVideoUrl.indexOf('playtype=lookback') !== -1) {
+          if (rate === 'org') {
+            rate = 'hd';
+            playBack(sourceReg);
+          } else if (rate === 'hd') {
+            rate = 'ld';
+            playBack(sourceReg);
+          } else if (rate === 'ld') {
+            rate = 'sd';
+            playBack(sourceReg);
+          } else {
+            alertInfo('录像还未准备好！',10);
+          }
+        } else if (hlsVideoUrl.indexOf('playtype=live') !== -1) {
+          if (rate === 'org') {
+            rate = 'hd';
+            playVideo();
+          } else if (rate === 'hd') {
+            rate = 'ld';
+            playVideo();
+          } else if (rate === 'ld') {
+            rate = 'sd';
+            playVideo();
+          } else {
+            alertInfo('频道不可用！',10);
+          }
+        } else if (hlsVideoUrl.indexOf('flv?app=') !== -1 && videojs.browser.IS_IOS) {
+          alertInfo('此频道不支持 ios 系统！',10);
+        /*} else if (videojs.browser.IS_ANDROID) {
+          alertInfo('不支持安卓系统！',10);*/
         } else {
-          alertInfo('频道不可用！',10);
+          alertInfo('频道不可用！直播源不定时刷新，刷新页面即可继续观看！',10);
         }
-      } else if (hlsVideoUrl.indexOf('flv?app=') !== -1 && videojs.browser.IS_IOS) {
-        alertInfo('此频道不支持 ios 系统！',10);
-      /*} else if (videojs.browser.IS_ANDROID) {
-        alertInfo('不支持安卓系统！',10);*/
+        /*
+        if (programId) {
+          localStorage.removeItem(sourceReg+'_acc');
+          localStorage.removeItem(sourceReg+'_pwd');
+          localStorage.removeItem(sourceReg+'_token');
+          localStorage.removeItem(sourceReg+'_verify_code');
+        }
+        */
       } else {
-        alertInfo('频道不可用！直播源不定时刷新，刷新页面即可继续观看！',10);
+        alertInfo('无法连接直播源！',10);
       }
-      /*
-      if (programId) {
-        localStorage.removeItem(sourceReg+'_acc');
-        localStorage.removeItem(sourceReg+'_pwd');
-        localStorage.removeItem(sourceReg+'_token');
-        localStorage.removeItem(sourceReg+'_verify_code');
-      }
-      */
-    } else {
-      alertInfo('无法连接直播源！',10);
-    }
+    });
   });
 }
 
@@ -363,9 +462,14 @@ function playVideo() {
           } else {
             source = sourcesJsonParsed[index].channels[0];
           }
+          if (source.hasOwnProperty('is_h265') && source.is_h265 === 'yes') {
+            isH265 = true;
+          } else {
+            isH265 = false;
+          }
           hlsVideoUrl = source.url;
           if (hlsVideoUrl.substring(13,25) === "fengshows.cn") {
-            reqData("https://api.fengshows.cn/live",'?live_type=tv&page=1&page_size=15')
+            reqData("http://api-fengshows.epub.fun/live",'?live_type=tv&page=1&page_size=15')
             .then(response => {
               if (hlsVideoUrl.indexOf('pin') !== -1) {
                 hlsVideoUrl = response[0].live_url_fhd;
@@ -400,6 +504,11 @@ function playVideo() {
       }
     }
   } else if (jsonChannels[sourceReg]) {
+    if (jsonChannels[sourceReg][programId].hasOwnProperty('is_h265') && jsonChannels[sourceReg][programId].is_h265 === 'yes') {
+      isH265 = true;
+    } else {
+      isH265 = false;
+    }
     hlsVideoUrl = jsonChannels[sourceReg][programId]['url'];
     if (jsonChannels[sourceReg].hasOwnProperty('overlay')) {
       videojsLoad(jsonChannels[sourceReg].overlay,jsonChannels[sourceReg][programId]);
@@ -415,9 +524,14 @@ function playVideo() {
   } else if (!sourcesJsonParsed[sourceReg].hasOwnProperty('play_url')) {
     sourcesJsonParsed[sourceReg].channels.forEach(channel => {
       if (channel.chnl_id === programId) {
+        if (channel.hasOwnProperty('is_h265') && channel.is_h265 === 'yes') {
+          isH265 = true;
+        } else {
+          isH265 = false;
+        }
         hlsVideoUrl = channel.url;
         if (hlsVideoUrl.substring(13,25) === "fengshows.cn") {
-          reqData("https://api.fengshows.cn/live",'?live_type=tv&page=1&page_size=15')
+          reqData("http://api-fengshows.epub.fun/live",'?live_type=tv&page=1&page_size=15')
           .then(response => {
             if (hlsVideoUrl.indexOf('pin') !== -1) {
               hlsVideoUrl = response[0].live_url_fhd;
@@ -531,12 +645,10 @@ function timeoutPromise(ms, promise) {
 function reqData(url, data = '', method = 'GET') {
   return new Promise((resolve, reject) => {
     let config = {};
-    let credentials;
-    //if (url.indexOf('mtime.info') !== -1 || url.indexOf('epub.fun') !== -1) {
-    //  credentials = 'include';
-    //} else {
-      credentials = 'omit';
-    //}
+    let credentials = 'omit';
+    if (url.indexOf('epub.fun') !== -1) {
+      credentials = 'include';
+    }
     if (method === 'GET') {
       if (urls.indexOf(url) !== -1) {
         config = { 
@@ -853,7 +965,7 @@ function appendList(channel,appendSourceName,sourceLane) {
 }
 
 function reqJson(json) {
-  timeoutPromise(5000,reqData(json))
+  timeoutPromise(20000,reqData(json))
   .then(response => {
     if (response.ret === 0) {
       response.data.forEach((source) => {
@@ -872,6 +984,9 @@ function reqJson(json) {
               }
               if (channel.hasOwnProperty('schedule')) {
                 jsonChannels[source.name][channel.chnl_id]['schedule'] = channel.schedule;
+              }
+              if (channel.hasOwnProperty('is_h265')) {
+                jsonChannels[source.name][channel.chnl_id]['isH265'] = channel.is_h265;
               }
               newChannel.chnl_name = channel.chnl_name;
               newChannel.chnl_id = channel.chnl_id;
@@ -1375,12 +1490,12 @@ function switchLink() {
   }
 }
 
-let programId,rate,eventId,hlsVideoUrl,protocol,urls = [],sourcesJson,sourcesJsonParsed,jsonChannels = {},schedules = {},overlaysInfo = {};
+let programId,rate,eventId,hlsVideoUrl,protocol,overlaysLoop,overlaysImg,urls = [],sourcesJson,sourcesJsonParsed,jsonChannels = {},schedules = {},overlaysInfo = {};
 let sourceReg = 'shuliyun',sourceRegDefault = 'shuliyun';
-let localJson = 'channels.json';
+let localJson = 'channels.json',isH265 = false;
 let remoteJson = 'http://hbo.epub.fun/channels.json';
 let scheduleJson = 'http://hbo.epub.fun/schedule.json';
-const videoField = document.querySelector('.videoContainer');
+const videoField = document.querySelector('.videoField');
 const sourcesField = document.querySelector('.sources');
 const fieldsetLoginForm = document.querySelector('.loginForm fieldset');
 const loginForm = document.querySelector('.loginForm');
@@ -1415,6 +1530,7 @@ const alertField = document.querySelector('.alert');
 const upComingField = document.querySelector('.upComing');
 const sliderField = document.querySelector('.js_slider');
 const scheduleField = document.querySelector('.slides');
+const img = document.getElementById('my-screenshot');
 
 let liveui = true;
 /*if (videojs.browser.IS_ANDROID || videojs.browser.IS_IOS) {
@@ -1527,3 +1643,8 @@ window.addEventListener("orientationchange", setOverlayFullscreen);
 if (localStorage.getItem('dark') === '1'){
   switchBtn.click();
 }
+
+const controller = new ScrollMagic.Controller();
+const scene = new ScrollMagic.Scene({offset: 50})
+                  .setPin(".videoField")
+                  .addTo(controller);

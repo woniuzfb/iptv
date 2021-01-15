@@ -11,60 +11,60 @@ class cloudflare_workers:
     def __init__( self ):
         self.verbose = True
         self.s = requests.Session()
-        self.atok = ''
 
     def log_in( self, email, password ):
 
-        r = self.s.get('https://www.cloudflare.com/', )
+        self.s.headers = {
+            'Referer': 'https://www.cloudflare.com/',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.141 Safari/537.36',
+        }
+        r = self.s.get('https://dash.cloudflare.com/', )
 
         new_headers = {
-            'Referer': 'https://www.cloudflare.com/',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36',
+            'Referer': 'https://dash.cloudflare.com/',
+            'x-cross-site-security': 'dash',
         }
         self.s.headers = { **self.s.headers, **new_headers }
-        r = self.s.get('https://dash.cloudflare.com/login', )
-        security_token = self.find_between_r( r.text, '"security_token":"', '"}};</script>' )
+        r = self.s.get('https://dash.cloudflare.com/api/v4/system/bootstrap', )
+
+        new_headers = {
+            'Cache-Control': 'no-cache',
+            'Content-Type': 'application/json; charset=UTF-8',
+            'Pragma': 'no-cache',
+        }
+        self.s.headers = { **self.s.headers, **new_headers }
 
         post_data = {
             'email': email,
             'password': password,
-            'security_token': security_token,
+            'remember_me': False,
         }
+        r = self.s.post('https://dash.cloudflare.com/api/v4/login', data=json.dumps(post_data), )
+
+        self.s.cookies['dsh'] = r.cookies['dsh']
+        self.s.cookies['vses2'] = r.cookies['vses2']
+
+        r = self.s.get('https://dash.cloudflare.com/api/v4/system/bootstrap', )
+
+        data = json.loads( r.text )
         new_headers = {
-            'Referer': 'https://dash.cloudflare.com/',
-            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-ATOK': data['result']['data']['atok'],
         }
         self.s.headers = { **self.s.headers, **new_headers }
-        r = self.s.post('https://dash.cloudflare.com/login', data=post_data)
-        self.atok = self.find_between_r( r.text, 'window.bootstrap = {"atok":"', '","locale":"' )
-        self.cookie = r.cookies['vses2']
 
     def add_api_token( self ):
 
-        c = {
-            'vses2': self.cookie
-        }
-        r = self.s.get('https://dash.cloudflare.com/api/v4/user', cookies=c)
+        r = self.s.get('https://dash.cloudflare.com/api/v4/user', )
         data = json.loads( r.text )
         api_user = data['result']['id']
         policy = {'name': 'workers and zones', 'policies': [{'effect': 'allow', 'resources': {'com.cloudflare.api.account.*': '*'}, 'permission_groups': [{'id': 'f7f0eda5697f475c90846e879bab8666'}, {'id': 'e086da7e2179491d91ee5f35b3ca210a'}, {'id': 'c1fde68c7bcc44588cbb6ddbc16d6480'}]}, {'effect': 'allow', 'resources': {'com.cloudflare.api.user.' + api_user: '*'}, 'permission_groups': [{'id': '8acbe5bb0d54464ab867149d7f7cf8ac'}]}, {'effect': 'allow', 'resources': {'com.cloudflare.api.account.zone.*': '*'}, 'permission_groups': [{'id': '28f4b596e7d643029c524985477ae49a'}, {'id': 'e6d2666161e84845a636613608cee8d5'}, {'id': '3030687196b94b638145a3953da2b699'}]}]}
-        r = self.s.post('https://dash.cloudflare.com/api/v4/user/tokens', data=json.dumps(policy), cookies=c)
+        r = self.s.post('https://dash.cloudflare.com/api/v4/user/tokens', data=json.dumps(policy), )
         data = json.loads( r.text )
         return data['result']['value']
 
     def get_request_count( self, email ):
 
-        new_headers = {
-            'Content-Type': 'application/json; charset=UTF-8',
-            'Pragma': 'no-cache',
-            'Cache-Control': 'no-cache',
-            'X-ATOK': self.atok,
-        }
-        self.s.headers = { **self.s.headers, **new_headers }
-        c = {
-            'vses2': self.cookie
-        }
-        r = self.s.get('https://dash.cloudflare.com/api/v4/user/tokens', cookies=c)
+        r = self.s.get('https://dash.cloudflare.com/api/v4/user/tokens', )
         data = json.loads( r.text )
         token_count = data['result_info']['total_count']
         api_token = ''
@@ -78,7 +78,7 @@ class cloudflare_workers:
         get_data = {
             'status': 'accepted',
         }
-        r = self.s.get('https://dash.cloudflare.com/api/v4/memberships', params=get_data, cookies=c)
+        r = self.s.get('https://dash.cloudflare.com/api/v4/memberships', params=get_data, )
         data = json.loads( r.text )
         success = data['success']
         if not success:
@@ -87,11 +87,11 @@ class cloudflare_workers:
 
         account_id = data['result'][0]['account']['id']
 
-        r = self.s.get('https://dash.cloudflare.com/api/v4/accounts/' + account_id +'/workers/subdomain', cookies=c)
+        r = self.s.get('https://dash.cloudflare.com/api/v4/accounts/' + account_id +'/workers/subdomain', )
         data = json.loads( r.text )
         success = data['success']
         if not success:
-            r = self.s.get('https://dash.cloudflare.com/api/v4/accounts/' + account_id +'/workers/settings', cookies=c)
+            r = self.s.get('https://dash.cloudflare.com/api/v4/accounts/' + account_id +'/workers/settings', )
             data = json.loads( r.text )
 
             new_headers = {
@@ -101,7 +101,7 @@ class cloudflare_workers:
             put_data = {
                 'subdomain': sub_domain + datetime.now(tz=timezone.utc).strftime('%Y%m%d'),
             }
-            r = self.s.put('https://dash.cloudflare.com/api/v4/accounts/' + account_id +'/workers/subdomain', data=json.dumps(put_data), cookies=c)
+            r = self.s.put('https://dash.cloudflare.com/api/v4/accounts/' + account_id +'/workers/subdomain', data=json.dumps(put_data), )
             data = json.loads( r.text )
 
         get_data = {
@@ -110,7 +110,7 @@ class cloudflare_workers:
             'metrics': 'requestCount',
             'since': datetime.now(tz=timezone.utc).strftime('%Y-%m-%d') + 'T00:00:00.000Z',
         }
-        r = self.s.get('https://dash.cloudflare.com/api/v4/accounts/' + account_id + '/workers/analytics/summary', params=get_data, cookies=c)
+        r = self.s.get('https://dash.cloudflare.com/api/v4/accounts/' + account_id + '/workers/analytics/summary', params=get_data, )
         data = json.loads( r.text )
         new_info = {
             'api_token': api_token,
@@ -123,48 +123,18 @@ class cloudflare_workers:
         get_data = {
             'status': 'accepted',
         }
-        new_headers = {
-            'Content-Type': 'application/json; charset=UTF-8',
-            'Pragma': 'no-cache',
-            'Cache-Control': 'no-cache',
-            'X-ATOK': self.atok,
-        }
-        self.s.headers = { **self.s.headers, **new_headers }
-        c = {
-            'vses2': self.cookie
-        }
-        r = self.s.get('https://dash.cloudflare.com/api/v4/memberships', params=get_data, cookies=c)
+        r = self.s.get('https://dash.cloudflare.com/api/v4/memberships', params=get_data, )
         data = json.loads( r.text )
         print ( json.dumps(data) )
 
     def email_verification( self ):
 
-        new_headers = {
-            'Content-Type': 'application/json; charset=UTF-8',
-            'Pragma': 'no-cache',
-            'Cache-Control': 'no-cache',
-            'X-ATOK': self.atok,
-        }
-        self.s.headers = { **self.s.headers, **new_headers }
-        c = {
-            'vses2': self.cookie
-        }
-        r = self.s.delete('https://dash.cloudflare.com/api/v4/user/email-verification', cookies=c)
+        r = self.s.delete('https://dash.cloudflare.com/api/v4/user/email-verification', )
         data = json.loads( r.text )
         print ( json.dumps(data) )
 
     def get_api_token( self, email ):
 
-        c = {
-            'vses2': self.cookie
-        }
-        new_headers = {
-            'Content-Type': 'application/json; charset=UTF-8',
-            'Pragma': 'no-cache',
-            'Cache-Control': 'no-cache',
-            'X-ATOK': self.atok,
-        }
-        self.s.headers = { **self.s.headers, **new_headers }
         api_token = self.add_api_token()
 
         index = email.index("@")
@@ -174,7 +144,7 @@ class cloudflare_workers:
         get_data = {
             'status': 'accepted',
         }
-        r = self.s.get('https://dash.cloudflare.com/api/v4/memberships', params=get_data, cookies=c)
+        r = self.s.get('https://dash.cloudflare.com/api/v4/memberships', params=get_data, )
         data = json.loads( r.text )
         success = data['success']
         if not success:
@@ -182,11 +152,11 @@ class cloudflare_workers:
 
         account_id = data['result'][0]['account']['id']
 
-        r = self.s.get('https://dash.cloudflare.com/api/v4/accounts/' + account_id +'/workers/subdomain', cookies=c)
+        r = self.s.get('https://dash.cloudflare.com/api/v4/accounts/' + account_id +'/workers/subdomain', )
         data = json.loads( r.text )
         success = data['success']
         if not success:
-            r = self.s.get('https://dash.cloudflare.com/api/v4/accounts/' + account_id +'/workers/settings', cookies=c)
+            r = self.s.get('https://dash.cloudflare.com/api/v4/accounts/' + account_id +'/workers/settings', )
             data = json.loads( r.text )
 
             new_headers = {
@@ -196,23 +166,12 @@ class cloudflare_workers:
             put_data = {
                 'subdomain': sub_domain + datetime.now(tz=timezone.utc).strftime('%Y%m%d'),
             }
-            r = self.s.put('https://dash.cloudflare.com/api/v4/accounts/' + account_id +'/workers/subdomain', data=json.dumps(put_data), cookies=c)
+            r = self.s.put('https://dash.cloudflare.com/api/v4/accounts/' + account_id +'/workers/subdomain', data=json.dumps(put_data), )
             data = json.loads( r.text )
 
         print ( api_token )
 
     def add_subdomain( self, email ):
-
-        c = {
-            'vses2': self.cookie
-        }
-        new_headers = {
-            'Content-Type': 'application/json; charset=UTF-8',
-            'Pragma': 'no-cache',
-            'Cache-Control': 'no-cache',
-            'X-ATOK': self.atok,
-        }
-        self.s.headers = { **self.s.headers, **new_headers }
 
         index = email.index("@")
         sub_domain = email[:index]
@@ -221,7 +180,7 @@ class cloudflare_workers:
         get_data = {
             'status': 'accepted',
         }
-        r = self.s.get('https://dash.cloudflare.com/api/v4/memberships', params=get_data, cookies=c)
+        r = self.s.get('https://dash.cloudflare.com/api/v4/memberships', params=get_data, )
         data = json.loads( r.text )
         success = data['success']
         if not success:
@@ -229,11 +188,11 @@ class cloudflare_workers:
 
         account_id = data['result'][0]['account']['id']
 
-        r = self.s.get('https://dash.cloudflare.com/api/v4/accounts/' + account_id +'/workers/subdomain', cookies=c)
+        r = self.s.get('https://dash.cloudflare.com/api/v4/accounts/' + account_id +'/workers/subdomain', )
         data = json.loads( r.text )
         success = data['success']
         if not success:
-            r = self.s.get('https://dash.cloudflare.com/api/v4/accounts/' + account_id +'/workers/settings', cookies=c)
+            r = self.s.get('https://dash.cloudflare.com/api/v4/accounts/' + account_id +'/workers/settings', )
             data = json.loads( r.text )
 
             new_headers = {
@@ -243,11 +202,11 @@ class cloudflare_workers:
             put_data = {
                 'subdomain': sub_domain + datetime.now(tz=timezone.utc).strftime('%Y%m%d'),
             }
-            r = self.s.put('https://dash.cloudflare.com/api/v4/accounts/' + account_id +'/workers/subdomain', data=json.dumps(put_data), cookies=c)
+            r = self.s.put('https://dash.cloudflare.com/api/v4/accounts/' + account_id +'/workers/subdomain', data=json.dumps(put_data), )
             data = json.loads( r.text )
             success = data['success']
             if not success:
-                print ( 'error' )
+                print ( json.dumps(data) )
             else:
                 print ( 'ok' )
         else:
