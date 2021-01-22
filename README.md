@@ -1,8 +1,21 @@
-# 一键管理 IPTV / xray / v2ray / nginx / openResty / cloudflare partner,workers / ibm cf / armbian 脚本
+# 目录
 
-## A ffmpeg / xray / v2ray / nginx / openresty ... wrapper (... => hls <=> flv <= ...)
-
-## [演示](http://mtime.info/)
+- [一键管理 xray 脚本](#一键管理-xray-脚本)
+- [一键管理 v2ray 脚本](#一键管理-v2ray-脚本)
+- [一键管理 Armbian 脚本](#一键管理-armbian-脚本)
+- [一键管理 IBM Cloud Foundry 脚本](#一键管理-ibm-cloud-foundry-脚本)
+- [一键管理 cloudflare partner,workers 脚本](#一键管理-cloudflare-partnerworkers-脚本)
+- [一键管理 nginx 脚本](#一键管理-nginx-脚本)
+- [一键管理 OpenResty 脚本](#一键管理-openresty-脚本)
+- [一键管理 FFmpeg 脚本](#一键管理-ffmpeg-脚本)
+  - [演示](#演示)
+  - [一键管理 xtream codes 频道](#一键管理-xtream-codes-频道)
+  - [编译 h265 patched 静态 FFmpeg](#编译-h265-patched-静态-ffmpeg)
+  - [自动解析链接](#自动解析链接)
+  - [VIP 面板](#vip-面板)
+  - [快捷键](#快捷键)
+  - [参数详解](#参数详解)
+  - [举例](#举例)
 
 ## 一键管理 xray 脚本
 
@@ -108,7 +121,9 @@ wget -q https://woniuzfb.github.io/iptv/or.sh && bash or.sh
 
 ---
 
-## 一键管理 IPTV 脚本 - A ffmpeg wrapper
+## 一键管理 FFmpeg 脚本
+
+### [演示](http://mtime.info/)
 
 ``` bash
 wget -q https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
@@ -120,7 +135,7 @@ wget -q https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 
 ```
 
-## 一键管理 xtream codes 频道
+### 一键管理 xtream codes 频道
 
 ``` bash
   cx # 打开 Xtream Codes 账号/频道 管理面板
@@ -134,15 +149,15 @@ wget -q https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
   ./build.sh
 ```
 
-### 自动解析 youtube, 4gtv, tvb ... 等链接
+### 自动解析链接
 
-- 输入 youtube 链接
-- 输入 tv 4g 打开 4gtv 频道面板
-- 输入凤凰秀(fengshows.cn)直播链接
-- 输入 tvb 官网直播页面链接
-- 输入 澳门莲花官网免费[直播链接](http://live-hls.macaulotustv.com/lotustv/5562e9e4d409d24c9600075c.m3u8)
+- youtube
+- 4gtv `~# tv 4gtv`
+- fengshows
+- tvb
+- lotus macau
 
-### VIP 面板 ING ... [付费]
+### VIP 面板
 
 ``` bash
   tv v # 直接打开 VIP 面板, 享 VIP 直播源
@@ -150,7 +165,6 @@ wget -q https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 
 - IP 控制
 - 自带 m3u, epg
-- 出售资源
 
 ---
 
@@ -174,7 +188,7 @@ wget -q https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
   - live/ [ hls输出目录 ]
   - node/ [ 加密 session ]
 
-### 自动更新指定的json文件
+- 自动更新指定的json文件
 
 ```bash
 "sync_file":"/usr/local/nginx/html/channels.json", # 公开目录的json，多个文件用空格分隔
@@ -182,8 +196,6 @@ wget -q https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 "sync_pairs":"chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live,schedule:output_dir_name", # 值映射用:号，如果直接赋值用=号（公开的live根目录会自动补上完整的m3u8地址）
 "schedule_file":"/usr/local/nginx/html/schedule.json" # 使用命令 tv s 自建节目表
 ```
-
-- 操作频道，添加，删除，重启等都会自动更新指定的json文件
 
 ### 快捷键
 
@@ -241,7 +253,6 @@ wget -q https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 - tv l 列出所有开启的 flv 和 hls 频道
 - tv d 请求演示频道 ( 3个凤凰台,1个hbo中文频道 )，添加到 channels.json
   - 都需要先替换 mpegts 链接才能开启
-- ...
 
 ### 参数详解
 

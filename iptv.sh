@@ -361,11 +361,11 @@ SyncFile()
     if [ "$chnl_sync_yn" == "yes" ] && [ -n "$chnl_sync_file" ] && [ -n "$chnl_sync_index" ] && [ -n "$chnl_sync_pairs" ]
     then
         IFS=" " read -ra chnl_sync_files <<< "$chnl_sync_file"
-        IFS=" " read -ra chnl_sync_indexs <<< "$chnl_sync_index"
+        IFS=" " read -ra chnl_sync_indices <<< "$chnl_sync_index"
         chnl_pid_key=${chnl_sync_pairs%%:pid*}
         chnl_pid_key=${chnl_pid_key##*,}
         sync_count=${#chnl_sync_files[@]}
-        [ "${#chnl_sync_indexs[@]}" -lt "$sync_count" ] && sync_count=${#chnl_sync_indexs[@]}
+        [ "${#chnl_sync_indices[@]}" -lt "$sync_count" ] && sync_count=${#chnl_sync_indices[@]}
 
         for((sync_i=0;sync_i<sync_count;sync_i++));
         do
@@ -402,7 +402,7 @@ SyncFile()
                         ;;
                     esac
                 done
-            done <<< "${chnl_sync_indexs[sync_i]}"
+            done <<< "${chnl_sync_indices[sync_i]}"
 
             jq_path="$jq_path]"
 
@@ -1048,8 +1048,8 @@ inquirer()
     inquirer:on_checkbox_input_ascii() {
         local key=$1
         case $key in
-            "w" ) inquirer:on_checkbox_input_down;;
-            "s" ) inquirer:on_checkbox_input_up;;
+            "w" ) inquirer:on_checkbox_input_up;;
+            "s" ) inquirer:on_checkbox_input_down;;
         esac
     }
 
@@ -2837,9 +2837,6 @@ Update()
     InstallJQ
 
     UpdateShFile
-
-    Println "$info 更新 Hls Stream Creator 脚本..."
-    UpdateCreatorFile
 
     ln -sf "$IPTV_ROOT"/ffmpeg-git-*/ff* /usr/local/bin/
     Println "脚本已更新为最新版本 [ $green$sh_new_ver${normal} ] ! (输入: tv 使用)\n" && exit 0
@@ -6023,41 +6020,50 @@ SetStreamLink()
     elif [[ $stream_link == *"news.tvb.com"* ]] 
     then
         xc=1
+        if [ "${stream_link:0:5}" == "http:" ] 
+        then
+            stream_link="https${stream_link:4}"
+        fi
         user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
         headers="Referer: $stream_link\r\n"
         cookies=""
-        #while IFS= read -r line 
-        #do
-        #    if [[ $line =~ tag_deviceid ]] 
-        #    then
-        #        line=${line#* }
-        #        cookies=${line%% *}
-        #        break
-        #    fi
-        #done < <(curl -s -I -H "User-Agent: $user_agent" -H "${headers:0:-4}" "$stream_link")
+        while IFS= read -r line 
+        do
+            if [[ $line =~ tag_deviceid= ]] 
+            then
+                line=${line#* }
+                cookies=${line%% *}
+            elif [[ $line =~ country_code= ]] 
+            then
+                line=${line#* }
+                cookies="$cookies ${line%% *}"
+                break
+            fi
+        done < <(curl -s -I -H "User-Agent: $user_agent" -H "${headers:0:-4}" -c - "$stream_link")
         chnl="${stream_link%\?*}"
         chnl=${chnl##*/}
         token_url=$(curl -s -Lm 10 \
             -H "User-Agent: $user_agent" \
             -H "${headers:0:-4}" \
-            "http://api.news.tvb.com/news/v2.2.1/live?profile=web" \
+            "https://api.news.tvb.com/news/v2.2.1/live?profile=web" \
             | $JQ_FILE -r '.items[]|select(.path=="'"$chnl"'").video.ios[]|select(.type=="hd").url')
         query_string="$token_url&feed&client_ip=$(GetServerIp)"
         query_string=$(UrlencodeUpper "$query_string")
         stream_link=$(curl -s -Lm 10 \
             -H "User-Agent: $user_agent" \
             -H "${headers:0:-4}" \
-            "http://news.tvb.com/ajax_call/getVideo.php?token=$query_string" \
+            --cookie "$cookies" \
+            "https://news.tvb.com/ajax_call/getVideo.php?token=$query_string" \
             | $JQ_FILE -r '.url')
-        #while IFS= read -r line 
-        #do
-        #    if [[ $line =~ hdntl= ]] 
-        #    then
-        #        line=${line#* }
-        #        cookies="$cookies${line%% *}"
-        #        break
-        #    fi
-        #done < <(curl -s -I -H "User-Agent: $user_agent" -H "${headers:0:-4}" --cookie "$cookies" "$stream_link")
+        while IFS= read -r line 
+        do
+            if [[ $line =~ hdntl= ]] 
+            then
+                line=${line#* }
+                cookies="$cookies ${line%% *}"
+                break
+            fi
+        done < <(curl -s -I -H "User-Agent: $user_agent" -H "${headers:0:-4}" --cookie "$cookies" "$stream_link")
     elif [[ $stream_link =~ ^https://embed.4gtv.tv/HiNet/(.+).html ]] 
     then
         if [[ ! -x $(command -v openssl) ]] 
@@ -6212,7 +6218,7 @@ SetStreamLink()
         stream_link_data=$($JQ_FILE -r '.Data' <<< "$stream_link_data")
         if [ "$stream_link_data" == null ] 
         then
-            Println "$error 此服务器 ip 不支持!\n" && exit 1
+            Println "$error 此服务器 ip 不支持或频道不可用!\n" && exit 1
         else
             stream_links_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
                 | $JQ_FILE -r '.flstURLs[0]')
@@ -9040,6 +9046,10 @@ StartChannel()
         chnl_stream_link="$chnl_stream_link?txSecret=$tx_secret&txTime=$tx_time"
     elif [[ $chnl_stream_link == *"news.tvb.com"* ]] 
     then
+        if [ "${chnl_stream_link:0:5}" == "http:" ] 
+        then
+            chnl_stream_link="https${chnl_stream_link:4}"
+        fi
         chnl_user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
         chnl_headers="Referer: $chnl_stream_link\r\n"
         chnl_cookies=""
@@ -9070,34 +9080,39 @@ StartChannel()
                 chnl_output_flags="$chnl_output_flags -copyts"
             fi
         fi
-        #while IFS= read -r line 
-        #do
-        #    if [[ $line =~ tag_deviceid ]] 
-        #    then
-        #        line=${line#* }
-        #        chnl_cookies=${line%% *}
-        #        break
-        #    fi
-        #done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" "$chnl_stream_link")
+        while IFS= read -r line 
+        do
+            if [[ $line =~ tag_deviceid= ]] 
+            then
+                line=${line#* }
+                chnl_cookies=${line%% *}
+            elif [[ $line =~ country_code= ]] 
+            then
+                line=${line#* }
+                chnl_cookies="$chnl_cookies ${line%% *}"
+                break
+            fi
+        done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" -c - "$chnl_stream_link")
         chnl="${chnl_stream_link%\?*}"
         chnl=${chnl##*/}
-        token_url=$(curl -s -Lm 10 -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" "http://api.news.tvb.com/news/v2.2.1/live?profile=web" | $JQ_FILE -r '.items[]|select(.path=="'"$chnl"'").video.ios[]|select(.type=="hd").url')
+        token_url=$(curl -s -Lm 10 -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" "https://api.news.tvb.com/news/v2.2.1/live?profile=web" | $JQ_FILE -r '.items[]|select(.path=="'"$chnl"'").video.ios[]|select(.type=="hd").url')
         query_string="$token_url&feed&client_ip=$(GetServerIp)"
         query_string=$(UrlencodeUpper "$query_string")
         chnl_stream_link=$(curl -s -Lm 10 \
             -H "User-Agent: $chnl_user_agent" \
             -H "${chnl_headers:0:-4}" \
-            "http://news.tvb.com/ajax_call/getVideo.php?token=$query_string" \
+            --cookie "$chnl_cookies" \
+            "https://news.tvb.com/ajax_call/getVideo.php?token=$query_string" \
             | $JQ_FILE -r '.url')
-        #while IFS= read -r line 
-        #do
-        #    if [[ $line =~ hdntl= ]] 
-        #    then
-        #        line=${line#* }
-        #        chnl_cookies="$chnl_cookies${line%% *}"
-        #        break
-        #    fi
-        #done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" --cookie "$chnl_cookies" "$chnl_stream_link")
+        while IFS= read -r line 
+        do
+            if [[ $line =~ hdntl= ]] 
+            then
+                line=${line#* }
+                chnl_cookies="$chnl_cookies ${line%% *}"
+                break
+            fi
+        done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" --cookie "$chnl_cookies" "$chnl_stream_link")
     elif [[ $chnl_stream_link =~ ^https://embed.4gtv.tv/HiNet/(.+).html ]] 
     then
         Println "$info 解析 [ $chnl_channel_name ] 链接 ..."
@@ -9241,7 +9256,7 @@ StartChannel()
                 Start4gtvLink
             elif [ -z "${monitor:-}" ] 
             then
-                Println "$error 此服务器 ip 不支持!\n" && exit 1
+                Println "$error 此服务器 ip 不支持或频道不可用!\n" && exit 1
             fi
         elif [ -z "${monitor:-}" ] 
         then
@@ -13462,7 +13477,7 @@ Schedule()
         "dmax:DMAX頻道"
         "hitshd:HITS"
         "fx:FX"
-        "tvbs:TVBS"
+        "tvbshd:TVBS"
         "tvbshl:TVBS歡樂"
         "tvbsjc:TVBS精采台"
         "tvbxh:TVB星河頻道"
@@ -13627,7 +13642,7 @@ Schedule()
         "amc:682:AMC 台湾"
         "animaxhd:772:ANIMAX HD"
         "wakawakajapan:765:Wakawaka Japan"
-        "tvbs:20:TVBS"
+        "tvbshd:20:TVBS"
         "tvbshl:32:TVBS 欢乐"
         "tvbsjc:774:TVBS 精采"
         "cinemaworld:559:Cinema World"
@@ -13942,6 +13957,7 @@ Schedule()
         "dwx:4gtv-4gtv018:達文西頻道"
         "eltvshyy:litv-longturn20:ELTV生活英語台"
         "nickjr:4gtv-4gtv032:Nick Jr. 兒童頻道"
+        "nickelodeon:4gtv-live105:Nickelodeon"
         "lhkt:litv-longturn01:龍華卡通台"
         "jtkt:4gtv-4gtv044:靖天卡通台"
         "jykt:4gtv-4gtv057:靖洋卡通Nice Bingo"
@@ -14049,6 +14065,8 @@ Schedule()
         "gh1:4gtv-4gtv084:國會頻道1"
         "gh2:4gtv-4gtv085:國會頻道2"
         "petclubtv:4gtv-live110:Pet Club TV"
+        "tvbshd:4gtv-4gtv073:TVBS"
+        "hitshd:4gtv-live620:HITS"
     )
 
     other_chnls=(
@@ -23062,13 +23080,29 @@ V2raySetSniffingEnabled()
 V2raySetSniffingDestOverride()
 {
     Println "$tip 客户端已经设置过的流量类型这里可以不设置"
-    dest_override_options=( 'tls' 'http' 'http,tls' )
-    inquirer list_input "指定流量类型" dest_override_options dest_override
-    if [[ $dest_override == "http,tls" ]] 
+    dest_override_options=( 'tls' 'http' )
+    set +u
+    inquirer checkbox_input "指定流量类型: " dest_override_options dest_override_selected
+    set -u
+    dest_override=""
+    if [ -n "${dest_override_selected:-}" ] 
     then
-        dest_override='"http","tls"'
+        printf -v dest_override ',"%s"' "${dest_override_selected[@]}"
+        dest_override=${dest_override:1}
+    fi
+}
+
+V2raySetSniffingDomainsExcluded()
+{
+    Println "$tip 多个域名用空格分隔"
+    inquirer text_input "输入排除流量探测的域名: " domains_excluded "不设置"
+    if [ "$domains_excluded" == "不设置" ] 
+    then
+        domains_excluded=""
     else
-        dest_override='"'$dest_override'"'
+        IFS=" " read -r -a domains <<< "$domains_excluded"
+        printf -v domains_excluded ',"%s"' "${domains[@]}"
+        domains_excluded=${domains_excluded:1}
     fi
 }
 
@@ -23197,26 +23231,32 @@ V2raySetFallbacks()
     inquirer list_input "是否配置协议回落" yn_options v2ray_fallbacks_yn
     if [ "$v2ray_fallbacks_yn" == "是" ] 
     then
-        if [ "$v2ray_name" == "xray" ] && [ "$protocol" == "vless" ]
+        if [ "$v2ray_name" == "xray" ] 
         then
-            v2ray_fallbacks='{
-                "name": "",
-                "alpn": "",
-                "path": "",
-                "dest": 80,
-                "xver": 0
-            }'
+            v2ray_fallbacks=$(
+            $JQ_FILE -n --arg name "" --arg alpn "" \
+            --arg path "" --arg dest 80 --arg xver 0 \
+            '[{
+                "name": $name,
+                "alpn": $alpn,
+                "path": $path,
+                "dest": $dest | tonumber,
+                "xver": $xver | tonumber
+            }]')
         else
-            v2ray_fallbacks='{
-                "alpn": "",
-                "path": "",
-                "dest": 80,
-                "xver": 0
-            }'
+            v2ray_fallbacks=$(
+            $JQ_FILE -n --arg alpn "" --arg path "" \
+            --arg dest 80 --arg xver 0 \
+            '[{
+                "alpn": $alpn,
+                "path": $path,
+                "dest": $dest | tonumber,
+                "xver": $xver | tonumber
+            }]')
         fi
         while true 
         do
-            if [ "$v2ray_name" == "xray" ] && [ "$protocol" == "vless" ]
+            if [ "$v2ray_name" == "xray" ] 
             then
                 echo
                 inquirer text_input "输入 SNI 分流匹配值: " v2ray_fallback_name "不设置"
@@ -23224,6 +23264,8 @@ V2raySetFallbacks()
                 then
                     v2ray_fallback_name=""
                 fi
+            else
+                v2ray_fallback_name=""
             fi
             Println "$tip 请输入单个"
             inquirer text_input "输入尝试匹配 $tls_name ALPN 协商结果: " v2ray_fallback_alpn "不设置"
@@ -23262,41 +23304,47 @@ V2raySetFallbacks()
             fi
             if [[ $v2ray_fallback_dest =~ ^[0-9]+$ ]] 
             then
-                v2ray_fallbacks=$v2ray_fallbacks',
-                {
-                    "alpn": "'"$v2ray_fallback_alpn"'",
-                    "path": "'"$v2ray_fallback_path"'",
-                    "dest": '"$v2ray_fallback_dest"',
-                    "xver": '"$v2ray_fallback_proxy_protocol"'
-                }'
+                v2ray_fallback=$(
+                $JQ_FILE -n --arg alpn "$v2ray_fallback_alpn" --arg path "$v2ray_fallback_path" \
+                --arg dest "$v2ray_fallback_dest" --arg xver "$v2ray_fallback_proxy_protocol" \
+                '{
+                    "alpn": $alpn,
+                    "path": $path,
+                    "dest": $dest | tonumber,
+                    "xver": $xver | tonumber
+                }')
             else
-                v2ray_fallbacks=$v2ray_fallbacks',
-                {
-                    "alpn": "'"$v2ray_fallback_alpn"'",
-                    "path": "'"$v2ray_fallback_path"'",
-                    "dest": "'"$v2ray_fallback_dest"'",
-                    "xver": '"$v2ray_fallback_proxy_protocol"'
-                }'
+                v2ray_fallback=$(
+                $JQ_FILE -n --arg alpn "$v2ray_fallback_alpn" --arg path "$v2ray_fallback_path" \
+                --arg dest "$v2ray_fallback_dest" --arg xver "$v2ray_fallback_proxy_protocol" \
+                '{
+                    "alpn": $alpn,
+                    "path": $path,
+                    "dest": $dest,
+                    "xver": $xver | tonumber
+                }')
             fi
             if [ -n "${v2ray_fallback_name:-}" ] 
             then
-                v2ray_fallbacks=$(
+                v2ray_fallback=$(
                 $JQ_FILE --arg name "$v2ray_fallback_name" \
-                '. * 
-                {
+                '{
                     "name": $name
-                }' <<< "$v2ray_fallbacks")
+                } * .' <<< "$v2ray_fallback")
             fi
+            v2ray_fallbacks=$(
+            $JQ_FILE --arg name "$v2ray_fallback_name" --argjson fallback "[$v2ray_fallback]" \
+            '. + $fallback' <<< "$v2ray_fallbacks")
             echo
             yn_options=( '否' '是' )
-            inquirer list_input "是否继续配置新的协议回落" yn_options v2ray_fallbacks_yn
+            inquirer list_input "回落添加成功, 是否继续添加新的回落" yn_options v2ray_fallbacks_yn
             if [ "$v2ray_fallbacks_yn" == "否" ] 
             then
                 break
             fi
         done
     else
-        v2ray_fallbacks=""
+        v2ray_fallbacks="[]"
     fi
 }
 
@@ -23351,6 +23399,11 @@ V2rayAddInbound()
         V2raySetSniffingDestOverride
     else
         dest_override=""
+    fi
+
+    if [ "$v2ray_name" == "xray" ] && [ -n "$dest_override" ] 
+    then
+        V2raySetSniffingDomainsExcluded
     fi
 
     if [ "$self" == "ibm" ] || [ "$self" == "ibm.sh" ] 
@@ -23410,6 +23463,18 @@ V2rayAddInbound()
         },
         "tag": $tag
     }')
+
+    if [ "$v2ray_name" == "xray" ] && [ -n "${domains_excluded:-}" ] 
+    then
+        new_inbound=$(
+        $JQ_FILE --argjson domainsExcluded "[$domains_excluded]" \
+        '. * 
+        {
+            "sniffing": {
+                "domainsExcluded": $domainsExcluded
+            }
+        }' <<< "$new_inbound")
+    fi
 
     if [[ ! "$port" =~ ^[0-9]+$ ]] 
     then
@@ -23618,10 +23683,10 @@ V2rayAddInbound()
         if { [ "$security" == "tls" ] || [ "$security" == "xtls" ]; } && [ "$network" == "tcp" ] && [[ $alpn == *"http/1.1"* ]]
         then
             V2raySetFallbacks
-            if [ -n "$v2ray_fallbacks" ] 
+            if [ "$v2ray_fallbacks" != "[]" ] 
             then
                 new_inbound=$(
-                $JQ_FILE --argjson fallbacks "[$v2ray_fallbacks]" \
+                $JQ_FILE --argjson fallbacks "$v2ray_fallbacks" \
                 '. * 
                 {
                     "settings": {
@@ -23678,25 +23743,40 @@ V2rayAddInbound()
         fi
     elif [ "$protocol" == "shadowsocks" ] 
     then
-        V2raySetEmail
-        V2raySetMethod
-        V2raySetPassword
-        V2raySetLevel
-        V2raySetSettingsNetwork
-        new_inbound=$(
-        $JQ_FILE --arg email "$email" --arg method "$method" \
-        --arg password "$password" --arg level "$level" \
-        --arg network "$settings_network" \
-        '. * 
-        {
-            "settings": {
-                "email": $email,
-                "method": $method,
-                "password": $password,
-                "level": $level | tonumber,
-                "network": $network
-            }
-        }' <<< "$new_inbound")
+        if [ "$v2ray_name" == "xray" ] && [[ $($V2CTL_FILE version | head -1 | cut -d' ' -f2) =~ ([^.]+).([^.]+).([^.]+) ]] && \
+        [ "${BASH_REMATCH[1]}" -ge 1 ] && [ "${BASH_REMATCH[2]}" -ge 2 ] && [ "${BASH_REMATCH[3]}" -ge 3 ]
+        then
+            V2raySetSettingsNetwork
+            new_inbound=$(
+            $JQ_FILE --arg network "$settings_network" \
+            '. * 
+            {
+                "settings": {
+                    "clients": [],
+                    "network": $network
+                }
+            }' <<< "$new_inbound")
+        else
+            V2raySetEmail
+            V2raySetMethod
+            V2raySetPassword
+            V2raySetLevel
+            V2raySetSettingsNetwork
+            new_inbound=$(
+            $JQ_FILE --arg email "$email" --arg method "$method" \
+            --arg password "$password" --arg level "$level" \
+            --arg network "$settings_network" \
+            '. * 
+            {
+                "settings": {
+                    "email": $email,
+                    "method": $method,
+                    "password": $password,
+                    "level": $level | tonumber,
+                    "network": $network
+                }
+            }' <<< "$new_inbound")
+        fi
     elif [ "$protocol" == "dokodemo-door" ] 
     then
         echo
@@ -23881,8 +23961,8 @@ V2rayGetInbounds()
     map_stream_path map_stream_accept_proxy_protocol map_stream_ws_headers map_stream_header_type \
     map_stream_header_request map_stream_header_response map_stream_quic_security map_stream_quic_key \
     map_stream_ds_abstract map_stream_ds_padding map_stream_tproxy map_sniffing_enabled \
-    map_sniffing_dest_override map_allocate_strategy map_allocate_refresh map_allocate_concurrency \
-    map_tag < <($JQ_FILE -r '[
+    map_sniffing_dest_override map_sniffing_domains_excluded map_allocate_strategy map_allocate_refresh \
+    map_allocate_concurrency map_tag < <($JQ_FILE -r '[
     ([.inbounds[]|.listen|if . == "" // . == null then "0.0.0.0" else . end|. + "^"]|join("") + "`"),
     ([.inbounds[]|.port|tostring|. + "^"]|join("") + "`"),
     ([.inbounds[]|.protocol|. + "^"]|join("") + "`"),
@@ -23935,6 +24015,7 @@ V2rayGetInbounds()
     ([.inbounds[]|.streamSettings.sockopt.tproxy // "off"|. + "^"]|join("") + "`"),
     ([.inbounds[]|.sniffing.enabled // false|tostring|. + "^"]|join("") + "`"),
     ([.inbounds[]|.sniffing.destOverride // []|join("|")|. + "^"]|join("") + "`"),
+    ([.inbounds[]|.sniffing.domainsExcluded // []|join("|")|. + "^"]|join("") + "`"),
     ([.inbounds[]|.allocate.strategy // "always"|. + "^"]|join("") + "`"),
     ([.inbounds[]|.allocate.refresh // 5|tostring|. + "^"]|join("") + "`"),
     ([.inbounds[]|.allocate.concurrency // 3|tostring|. + "^"]|join("") + "`"),
@@ -24000,6 +24081,7 @@ V2rayGetInbounds()
     IFS="^" read -r -a inbounds_stream_tproxy <<< "${map_stream_tproxy:-$if_null}"
     IFS="^" read -r -a inbounds_sniffing_enabled <<< "${map_sniffing_enabled:-$if_null}"
     IFS="^" read -r -a inbounds_sniffing_dest_override <<< "${map_sniffing_dest_override:-$if_null}"
+    IFS="^" read -r -a inbounds_sniffing_domains_excluded <<< "${map_sniffing_domains_excluded:-$if_null}"
     IFS="^" read -r -a inbounds_allocate_strategy <<< "${map_allocate_strategy:-$if_null}"
     IFS="^" read -r -a inbounds_allocate_refresh <<< "${map_allocate_refresh:-$if_null}"
     IFS="^" read -r -a inbounds_allocate_concurrency <<< "${map_allocate_concurrency:-$if_null}"
@@ -24073,6 +24155,16 @@ V2rayListInbounds()
         if [ "${inbounds_sniffing_enabled[inbounds_index]}" == "true" ] 
         then
             protocol_settings_list="$protocol_settings_list流量探测: $green开启${normal} 指定流量类型: $green${inbounds_sniffing_dest_override[inbounds_index]//|/,}${normal}\n\033[6C"
+            if [ -n "${inbounds_sniffing_domains_excluded[inbounds_index]}" ] 
+            then
+                IFS="|" read -r -a domains <<< "${inbounds_sniffing_domains_excluded[inbounds_index]}"
+                domains_list=""
+                for domain in "${domains[@]}"
+                do
+                    domains_list="$domains_list$green$domain${normal}\n\033[6C"
+                done
+                protocol_settings_list="$protocol_settings_list排除域名:\n\033[6C$domains_list"
+            fi
         fi
         if [ "${inbounds_allocate_strategy[inbounds_index]}" == "random" ] 
         then
@@ -24127,7 +24219,11 @@ V2rayListInbounds()
             fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] 
         then
-            protocol_settings_list="$protocol_settings_list可接收的网络协议类型: $green${inbounds_settings_network[inbounds_index]}${normal}\n\033[6C加密方式: $green${inbounds_settings_method[inbounds_index]}${normal}\n\033[6C"
+            protocol_settings_list="$protocol_settings_list可接收的网络协议类型: $green${inbounds_settings_network[inbounds_index]}${normal}\n\033[6C"
+            if [ -n "${inbounds_settings_method[inbounds_index]}" ] 
+            then
+                protocol_settings_list="$protocol_settings_list加密方式: $green${inbounds_settings_method[inbounds_index]}${normal}\n\033[6C"
+            fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "dokodemo-door" ] 
         then
             protocol_settings_list="$protocol_settings_list可接收的网络协议类型: $green${inbounds_settings_network[inbounds_index]}${normal}\n\033[6C入站数据时间限制: $green${inbounds_settings_timeout[inbounds_index]}${normal}\n\033[6C"
@@ -24224,7 +24320,7 @@ V2rayListInbounds()
             fi
             if [ -n "${inbounds_stream_ws_headers[inbounds_index]}" ] 
             then
-                IFS="|" read -r headers <<< "${inbounds_stream_ws_headers[inbounds_index]}"
+                IFS="|" read -r -a headers <<< "${inbounds_stream_ws_headers[inbounds_index]}"
                 headers_list=""
                 for header in "${headers[@]}"
                 do
@@ -24478,8 +24574,38 @@ V2rayAddInboundAccount()
         fi
     elif [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] 
     then
-        Println "$error shadowsocks 协议不支持多账号\n"
-        exit 1
+        if [ "$v2ray_name" == "xray" ] 
+        then
+            if [[ $($V2CTL_FILE version | head -1 | cut -d' ' -f2) =~ ([^.]+).([^.]+).([^.]+) ]] && \
+            [ "${BASH_REMATCH[1]}" -ge 1 ] && [ "${BASH_REMATCH[2]}" -ge 2 ] && [ "${BASH_REMATCH[3]}" -ge 3 ]
+            then
+                if [ -n "${inbounds_settings_email[inbounds_index]}" ] 
+                then
+                    Println "$error 请重新添加 shadowsocks 协议入站\n"
+                    exit 1
+                fi
+                V2raySetEmail
+                V2raySetMethod
+                V2raySetPassword
+                V2raySetLevel
+                jq_path='["inbounds",'"$inbounds_index"',"settings","clients"]'
+                new_account=$(
+                $JQ_FILE -n --arg email "$email" --arg method "$method" \
+                    --arg password "$password" --arg level "$level" \
+                '{
+                    "email": $email,
+                    "method": $method,
+                    "password": $password,
+                    "level": $level | tonumber
+                }')
+            else
+                Println "$error 请更新 xray\n"
+                exit 1
+            fi
+        else
+            Println "$error shadowsocks 协议不支持多账号\n"
+            exit 1
+        fi
     elif [ "${inbounds_protocol[inbounds_index]}" == "dokodemo-door" ] 
     then
         Println "$error 无法添加账号到任意门协议\n"
@@ -24501,7 +24627,7 @@ V2rayListInboundAccounts()
         exit 1
     fi
 
-    if [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] 
+    if [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] && [ -n "${inbounds_settings_email[inbounds_index]}" ]
     then
         Println "邮箱: $green${inbounds_settings_email[inbounds_index]}${normal}\n密码: $green${inbounds_settings_password[inbounds_index]}${normal}\n等级: $green${inbounds_settings_user_level[inbounds_index]}${normal}\n"
         return 0
@@ -24513,7 +24639,7 @@ V2rayListInboundAccounts()
     accounts_alter_id=()
     accounts_email=()
     accounts_list=""
-    while IFS="^" read -r map_id map_flow map_level map_alter_id map_email map_user map_pass
+    while IFS="^" read -r map_id map_flow map_level map_alter_id map_email map_user map_pass map_method
     do
         accounts_count=$((accounts_count+1))
         accounts_id+=("$map_id")
@@ -24537,10 +24663,13 @@ V2rayListInboundAccounts()
             else
                 accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} 邮箱: $green$map_email${normal}\n\n"
             fi
+        elif [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] 
+        then
+            accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}Shadowsocks${normal} 邮箱: $green$map_email${normal} 加密方式: $green$map_method${normal} 密码: $green$map_pass${normal} 等级: $green$map_level${normal}\n\n"
         else
             accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}VMESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} alterId: $green$map_alter_id${normal} 邮箱: $green$map_email${normal}\n\n"
         fi
-    done < <($JQ_FILE -r '.inbounds['"$inbounds_index"'].settings | (.clients // .accounts)[] | [.id,.flow,.level,.alterId,.email,.user,(.pass // .password)] | join("^")' "$V2_CONFIG")
+    done < <($JQ_FILE -r '.inbounds['"$inbounds_index"'].settings | (.clients // .accounts)[] | [.id,.flow,.level,.alterId,.email,.user,(.pass // .password),.method] | join("^")' "$V2_CONFIG")
 
     if [ "${inbounds_tag[inbounds_index]:0:6}" == "nginx-" ] 
     then
@@ -25354,7 +25483,7 @@ V2rayListOutbounds()
                 stream_settings_list="$stream_settings_list路径: $green${outbounds_stream_path[outbounds_index]}${normal}\n\033[6C"
                 if [ -n "${outbounds_stream_ws_headers[outbounds_index]}" ] 
                 then
-                    IFS="|" read -r headers <<< "${outbounds_stream_ws_headers[outbounds_index]}"
+                    IFS="|" read -r -a headers <<< "${outbounds_stream_ws_headers[outbounds_index]}"
                     headers_list=""
                     for header in "${headers[@]}"
                     do
@@ -25961,15 +26090,11 @@ V2raySetRouting()
         Println "$tip 可多选, 必须开启入站代理中的流量探测选项"
         routing_rule_protocols=( 'http' 'tls' 'bittorrent' )
         set +u
-        inquirer checkbox_input "选择匹配的协议: " routing_rule_protocols routing_rule_protocols_indexes
+        inquirer checkbox_input "选择匹配的协议: " routing_rule_protocols routing_rule_protocols_selected
         set -u
-        if [ -n "${routing_rule_protocols_indexes:-}" ] 
+        if [ -n "${routing_rule_protocols_selected:-}" ] 
         then
-            routing_rule_protocol=""
-            for routing_rule_protocols_index in "${routing_rule_protocols_indexes[@]}"
-            do
-                routing_rule_protocol="$routing_rule_protocol,${routing_rule_protocols[routing_rule_protocols_index]}"
-            done
+            printf -v routing_rule_protocol ',"%s"' "${routing_rule_protocols_selected[@]}"
             routing_rule_protocol=${routing_rule_protocol:1}
             new_routing_rule=$(
             $JQ_FILE --argjson protocol "[$routing_rule_protocol]" \
@@ -29840,7 +29965,7 @@ DeployCloudflareWorker()
         exit 1
     fi
 
-    cf_users_indexs=()
+    cf_users_indices=()
     Println "选择用户, 多个用户用空格分隔, 比如 5 7 9-11"
     while read -p "(默认: 取消): " cf_users_num 
     do
@@ -29850,7 +29975,7 @@ DeployCloudflareWorker()
         then
             for((i=0;i<cf_users_count;i++));
             do
-                cf_users_indexs+=("$i")
+                cf_users_indices+=("$i")
             done
             break
         fi
@@ -29897,10 +30022,10 @@ DeployCloudflareWorker()
                         end=${element#*-}
                         for((i=start;i<=end;i++));
                         do
-                            cf_users_indexs+=("$((i-1))")
+                            cf_users_indices+=("$((i-1))")
                         done
                     else
-                        cf_users_indexs+=("$((element-1))")
+                        cf_users_indices+=("$((element-1))")
                     fi
                 done
                 break
@@ -29908,7 +30033,7 @@ DeployCloudflareWorker()
         esac
     done
 
-    for cf_users_index in "${cf_users_indexs[@]}"
+    for cf_users_index in "${cf_users_indices[@]}"
     do
         cf_user_email=${cf_users_email[cf_users_index]}
         Println "$info 部署到 $cf_user_email\n"
@@ -36864,7 +36989,7 @@ config interface 'lan'
             docker exec -it openwrt /bin/ash -c "
             if ! opkg list-installed | grep -q v2ray
             then
-                sed -i 's_downloads.openwrt.org_mirrors.tuna.tsinghua.edu.cn/openwrt_' /etc/opkg/distfeeds.conf
+                sed -i 's_downloads.openwrt.org_${FFMPEG_MIRROR_LINK#*\/\/}/openwrt_' /etc/opkg/distfeeds.conf
                 if ! grep -q kuoruan < /etc/opkg/customfeeds.conf
                 then
                     wget -O kuoruan-public.key $FFMPEG_MIRROR_LINK/openwrt-v2ray/packages/public.key
@@ -36873,6 +36998,7 @@ config interface 'lan'
                     echo \"src/gz kuoruan_universal $FFMPEG_MIRROR_LINK/openwrt-v2ray/packages/releases/all\" >> /etc/opkg/customfeeds.conf
                 fi
                 opkg update
+                opkg install zoneinfo-asia
                 opkg install luci luci-base luci-compat
                 opkg install kmod-tcp-bbr
                 if ! test -e /etc/sysctl.d/12-tcp-bbr.conf || ! grep -q default_qdisc < /etc/sysctl.d/12-tcp-bbr.conf
@@ -36916,7 +37042,7 @@ config interface 'lan'
             docker exec -it openwrt /bin/ash -c "
             if ! opkg list-installed | grep -q luci-i18n-base-$lang
             then
-                sed -i 's_downloads.openwrt.org_mirrors.tuna.tsinghua.edu.cn/openwrt_' /etc/opkg/distfeeds.conf
+                sed -i 's_downloads.openwrt.org_${FFMPEG_MIRROR_LINK#*\/\/}/openwrt_' /etc/opkg/distfeeds.conf
                 opkg update
                 opkg install luci-i18n-base-$lang
             fi
@@ -36938,7 +37064,7 @@ config interface 'lan'
             if [ "$core" == "xray-core" ] 
             then
                 echo
-                xray_options=( '最新' '1.2.2' '1.2.1' '1.2.0' '1.1.5' )
+                xray_options=( '最新' '1.2.3' '1.2.2' '1.2.1' '1.2.0' '1.1.5' )
                 inquirer list_input "选择 xray 版本" xray_options xray_ver
                 if [ "$xray_ver" == "最新" ] && ! xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/openwrt-xray.json" | $JQ_FILE -r '.tag_name')
                 then
@@ -36946,6 +37072,10 @@ config interface 'lan'
                     exit 1
                 else
                     xray_ver=${xray_ver#*v}
+                    if [[ ! $xray_ver =~ - ]] 
+                    then
+                        xray_ver="${xray_ver}-1"
+                    fi
                 fi
                 if ! luci_app_xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/luci-app-xray.json" | $JQ_FILE -r '.tag_name')
                 then
@@ -36959,11 +37089,11 @@ config interface 'lan'
                 then
                     if opkg print-architecture | grep -q aarch64_cortex
                     then
-                        wget -O xray_${xray_ver}-1_aarch64_cortex-a53.ipk $FFMPEG_MIRROR_LINK/xray_${xray_ver}-1_aarch64_cortex-a53.ipk
-                        opkg install xray_${xray_ver}-1_aarch64_cortex-a53.ipk --force-reinstall || true
+                        wget -O xray_${xray_ver}_aarch64_cortex-a53.ipk $FFMPEG_MIRROR_LINK/xray_${xray_ver}_aarch64_cortex-a53.ipk
+                        opkg install xray_${xray_ver}_aarch64_cortex-a53.ipk --force-reinstall || true
                     else
-                        wget -O xray_${xray_ver}-1_aarch64_generic.ipk $FFMPEG_MIRROR_LINK/xray_${xray_ver}-1_aarch64_generic.ipk
-                        opkg install xray_${xray_ver}-1_aarch64_generic.ipk --force-reinstall || true
+                        wget -O xray_${xray_ver}_aarch64_generic.ipk $FFMPEG_MIRROR_LINK/xray_${xray_ver}_aarch64_generic.ipk
+                        opkg install xray_${xray_ver}_aarch64_generic.ipk --force-reinstall || true
                     fi
                 fi
                 wget -O luci-app-v2ray_${luci_app_xray_ver}_all.ipk $FFMPEG_MIRROR_LINK/luci-app-v2ray_${luci_app_xray_ver}_all.ipk
@@ -37556,7 +37686,7 @@ then
                     stream_link_data=$($JQ_FILE -r '.Data' <<< "$stream_link_data")
                     if [ "$stream_link_data" == null ] 
                     then
-                        Println "$error 此服务器 ip 不支持此频道!\n"
+                        Println "$error 此服务器 ip 不支持或频道不可用!\n"
                     else
                         stream_link=$stream_links
                         stream_links_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
@@ -37925,7 +38055,7 @@ then
             then
                 if [ ! -e "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-64.zip" ] || [ ! -e "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-32.zip" ] 
                 then
-                    Println "$info 下载 v2ray ..."
+                    Println "$info 下载 v2ray $v2ray_ver ..."
                     mkdir -p "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/"
                     if curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-64.zip" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-64.zip_tmp" \
                     && curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-32.zip" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-32.zip_tmp" \
@@ -37937,18 +38067,18 @@ then
                         mv "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-64.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-64.zip.dgst"
                         mv "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-32.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-32.zip.dgst"
                     else
-                        Println "$error v2ray 下载出错, 无法连接 github ?"
+                        Println "$error v2ray $v2ray_ver 下载出错, 无法连接 github ?"
                     fi
                 fi
             else
-                Println "$error v2ray 下载出错, 无法连接 github ?"
+                Println "$error v2ray $v2ray_ver 下载出错, 无法连接 github ?"
             fi
 
             if xray_ver=$(curl -s -m 30 "https://api.github.com/repos/XTLS/Xray-core/releases/latest" | $JQ_FILE -r '.tag_name') 
             then
                 if [ ! -e "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-64.zip" ] || [ ! -e "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-32.zip" ] 
                 then
-                    Println "$info 下载 xray ..."
+                    Println "$info 下载 xray $xray_ver ..."
                     mkdir -p "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/"
                     if curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-64.zip" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-64.zip_tmp" \
                     && curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-32.zip" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-32.zip_tmp" \
@@ -37960,27 +38090,34 @@ then
                         mv "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-64.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-64.zip.dgst"
                         mv "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-32.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-32.zip.dgst"
                     else
-                        Println "$error xray 下载出错, 无法连接 github ?"
+                        Println "$error xray $xray_ver 下载出错, 无法连接 github ?"
                     fi
                 fi
             else
-                Println "$error xray 下载出错, 无法连接 github ?"
+                Println "$error xray $xray_ver 下载出错, 无法连接 github ?"
             fi
 
             if xray_ver=$(curl -s -m 30 "https://api.github.com/repos/woniuzfb/openwrt-xray/releases/latest" | $JQ_FILE -r '.tag_name') 
             then
                 xray_ver=${xray_ver#*v}
+                if [[ ! $xray_ver =~ - ]] 
+                then
+                    xray_package_ver="${xray_ver}-1"
+                else
+                    xray_package_ver="$xray_ver"
+                    xray_ver=${xray_ver%-*}
+                fi
                 xray_archs=( 'aarch64_generic' 'aarch64_cortex-a53' )
                 for arch in "${xray_archs[@]}"
                 do
-                    if [ ! -e "$FFMPEG_MIRROR_ROOT/xray_$xray_ver-1_$arch.ipk" ] 
+                    if [ ! -e "$FFMPEG_MIRROR_ROOT/xray_${xray_package_ver}_$arch.ipk" ] 
                     then
-                        Println "$info 下载 xray_$xray_ver-1_$arch.ipk ..."
-                        if curl -s -L "https://github.com/woniuzfb/openwrt-xray/releases/download/v$xray_ver/xray_$xray_ver-1_$arch.ipk" -o "$FFMPEG_MIRROR_ROOT/xray_$xray_ver-1_$arch.ipk_tmp"
+                        Println "$info 下载 xray_${xray_package_ver}_$arch.ipk ..."
+                        if curl -s -L "https://github.com/woniuzfb/openwrt-xray/releases/download/v$xray_ver/xray_${xray_package_ver}_$arch.ipk" -o "$FFMPEG_MIRROR_ROOT/xray_${xray_package_ver}_$arch.ipk_tmp"
                         then
-                            mv "$FFMPEG_MIRROR_ROOT/xray_$xray_ver-1_$arch.ipk_tmp" "$FFMPEG_MIRROR_ROOT/xray_$xray_ver-1_$arch.ipk"
+                            mv "$FFMPEG_MIRROR_ROOT/xray_${xray_package_ver}_$arch.ipk_tmp" "$FFMPEG_MIRROR_ROOT/xray_${xray_package_ver}_$arch.ipk"
                         else
-                            Println "$error xray_$xray_ver-1_$arch.ipk 下载出错, 无法连接 github ?"
+                            Println "$error xray_${xray_package_ver}_$arch.ipk 下载出错, 无法连接 github ?"
                         fi
                     fi
                 done
