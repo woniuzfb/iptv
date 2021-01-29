@@ -1,4 +1,6 @@
-# 目录
+#
+
+## 目录
 
 - [一键管理 xray 脚本](#一键管理-xray-脚本)
 - [一键管理 v2ray 脚本](#一键管理-v2ray-脚本)
@@ -9,10 +11,10 @@
 - [一键管理 OpenResty 脚本](#一键管理-openresty-脚本)
 - [一键管理 FFmpeg 脚本](#一键管理-ffmpeg-脚本)
   - [演示](#演示)
-  - [一键管理 xtream codes 频道](#一键管理-xtream-codes-频道)
   - [编译 h265 patched 静态 FFmpeg](#编译-h265-patched-静态-ffmpeg)
-  - [自动解析链接](#自动解析链接)
-  - [VIP 面板](#vip-面板)
+  - [自动解析直播源](#自动解析直播源)
+  - [xtream codes 频道](#xtream-codes-频道)
+  - [VIP 频道](#vip-频道)
   - [快捷键](#快捷键)
   - [参数详解](#参数详解)
   - [举例](#举例)
@@ -20,9 +22,9 @@
 ## 一键管理 xray 脚本
 
 ``` bash
-wget -q https://woniuzfb.github.io/iptv/x.sh && bash x.sh
+wget -q https://git.io/xray.sh && bash xray.sh
 
-  x # 打开 xray 管理面板
+x # 打开 xray 管理面板
 
 ```
 
@@ -31,9 +33,10 @@ wget -q https://woniuzfb.github.io/iptv/x.sh && bash x.sh
 ## 一键管理 v2ray 脚本
 
 ``` bash
-wget -q https://woniuzfb.github.io/iptv/v2.sh && bash v2.sh
+wget -q https://git.io/V2.sh && bash V2.sh
+# git.io/V2.sh（大写的 V）
 
-  v2 # 打开 v2ray 管理面板
+v2 # 打开 v2ray 管理面板
 
 ```
 
@@ -42,9 +45,9 @@ wget -q https://woniuzfb.github.io/iptv/v2.sh && bash v2.sh
 ## 一键管理 Armbian 脚本
 
 ``` bash
-wget -q https://woniuzfb.github.io/iptv/arm.sh && bash arm.sh
+wget -q https://git.io/arm.sh && bash arm.sh
 
-  arm # 打开 Armbian 管理面板
+arm # 打开 Armbian 管理面板
 
 ```
 
@@ -61,13 +64,13 @@ wget -q https://woniuzfb.github.io/iptv/arm.sh && bash arm.sh
 ## 一键管理 IBM Cloud Foundry 脚本
 
 ``` bash
-wget -q https://woniuzfb.github.io/iptv/ibm.sh && bash ibm.sh
+wget -q https://git.io/ibm.sh && bash ibm.sh
 
-  ibm # 打开 ibm CF 管理面板
+ibm # 打开 ibm CF 管理面板
 
-  ibm v2 # 打开 ibm v2ray APP 管理面板
+ibm v2 # 打开 ibm v2ray APP 管理面板
 
-  ibm x  # 打开 ibm xray  APP 管理面板
+ibm x  # 打开 ibm xray  APP 管理面板
 
 ```
 
@@ -76,11 +79,11 @@ wget -q https://woniuzfb.github.io/iptv/ibm.sh && bash ibm.sh
 ## 一键管理 cloudflare partner,workers 脚本
 
 ``` bash
-wget -q https://woniuzfb.github.io/iptv/cf.sh && bash cf.sh
+wget -q https://git.io/cf.sh && bash cf.sh
 
-  cf # 打开 cloudflare partner,workers 管理面板
+cf # 打开 cloudflare partner,workers 管理面板
 
-  cf w # 打开 cloudflare workers 管理面板
+cf w # 打开 cloudflare workers 管理面板
 
 ```
 
@@ -102,9 +105,9 @@ Mac/Linux 一键获取最优 IP 可以用脚本 [cloudflare-fping](https://githu
 ## 一键管理 nginx 脚本
 
 ``` bash
-wget -q https://woniuzfb.github.io/iptv/nx.sh && bash nx.sh
+wget -q https://git.io/nx.sh && bash nx.sh
 
-  nx # 打开 Nginx 管理面板
+nx # 打开 Nginx 管理面板
 
 ```
   
@@ -113,9 +116,9 @@ wget -q https://woniuzfb.github.io/iptv/nx.sh && bash nx.sh
 ## 一键管理 OpenResty 脚本
 
 ``` bash
-wget -q https://woniuzfb.github.io/iptv/or.sh && bash or.sh
+wget -q https://git.io/or.sh && bash or.sh
 
-  or # 打开 OpenResty 管理面板
+or # 打开 OpenResty 管理面板
 
 ```
 
@@ -123,44 +126,54 @@ wget -q https://woniuzfb.github.io/iptv/or.sh && bash or.sh
 
 ## 一键管理 FFmpeg 脚本
 
-### [演示](http://mtime.info/)
+### [演示](https://mtime.info/)
 
 ``` bash
-wget -q https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
+wget -q https://git.io/iptv.sh && bash iptv.sh
+
+tv # 打开 iptv 管理面板
 
 始终用最新的脚本，升级方式
-  - 通过 tv 面板（推荐）
-  或
-  - 用这里的 iptv.sh 覆盖 /usr/local/bin/tv ，删除主目录 /usr/local/iptv 下的 lock 文件
 
-```
+- 管理面板（推荐）
+或
+- 用这里的 iptv.sh 覆盖 /usr/local/bin/tv ，删除主目录 /usr/local/iptv 下的 lock 文件
 
-### 一键管理 xtream codes 频道
-
-``` bash
-  cx # 打开 Xtream Codes 账号/频道 管理面板
 ```
 
 ### 编译 h265 patched 静态 FFmpeg
 
 ``` bash
-  docker build -t ffmpeg-h265-static .
-  docker run -it ffmpeg-h265-static
-  ./build.sh
+docker build -t ffmpeg-h265-static .
+docker run -it ffmpeg-h265-static
+./build.sh
 ```
 
-### 自动解析链接
-
-- youtube
-- 4gtv `~# tv 4gtv`
-- fengshows
-- tvb
-- lotus macau
-
-### VIP 面板
+### 自动解析直播源
 
 ``` bash
-  tv v # 直接打开 VIP 面板, 享 VIP 直播源
+tv 4g # 打开 4gtv 频道管理面板
+```
+
+``` bash
+tv d # 添加演示频道
+```
+
+- tvb
+- fengshows
+- lotus macau
+- youtube
+
+### xtream codes 频道
+
+``` bash
+cx # 打开 Xtream Codes 账号/频道 管理面板
+```
+
+### VIP 频道
+
+``` bash
+tv v # 直接打开 VIP 频道面板
 ```
 
 - IP 控制
@@ -251,8 +264,6 @@ wget -q https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
   - tv m l 查看监控日志
   - 在 leech 直播源的时候必须打开监控选项，以应对输出低比特率/直播源服务器频繁重启/音轨丢失/等问题
 - tv l 列出所有开启的 flv 和 hls 频道
-- tv d 请求演示频道 ( 3个凤凰台,1个hbo中文频道 )，添加到 channels.json
-  - 都需要先替换 mpegts 链接才能开启
 
 ### 参数详解
 

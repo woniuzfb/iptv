@@ -67,10 +67,11 @@
 #        tv m s 关闭监控
 #     tv l 列出所有开启的频道
 #     tv s 节目表管理面板
-#     tv 4g 管理 4gtv 频道面板
+#     tv 4g 打开 4gtv 频道管理面板
+#     tv d 添加演示频道
 #     tv ffmpeg 自建 ffmpeg 镜像
 #
-#     cx 打开 xtream codes 面板
+#     cx 打开 xtream codes 账号/频道管理面板
 #
 #     v2 打开 v2ray 面板
 #        v2 e 手动修改 config.json
@@ -155,6 +156,8 @@ IBM_CONFIG="$HOME/ibm.json"
 DEFAULT_DEMOS="http://tv.epub.fun/default.json"
 DEFAULT_CHANNELS_LINK="http://tv.epub.fun/channels.json"
 XTREAM_CODES_LINK="http://tv.epub.fun/xtream_codes"
+USER_AGENT_BROWSER="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36"
+USER_AGENT_TV="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
 green="\033[32m"
 red="\033[31m"
 blue="\033[34m"
@@ -309,6 +312,14 @@ JQs()
                                 else
                                     $val2
                                 end
+                            elif ($type3 == "null") then
+                                if (.[$key2] | type == "object") then
+                                    flat([.[$key2],{}];b;d;c)
+                                elif (.[$key2]) then
+                                    (.[$key2] | tostring) + c
+                                else
+                                    ""
+                                end
                             else
                                 flat($val;b;c;d) as $val2 | 
                                 if (.[$key2]) then
@@ -316,6 +327,12 @@ JQs()
                                 else
                                     ($val2 // "" | tostring)
                                 end
+                            end
+                        elif ($type2 == "boolean") then
+                            if (.[$key2]) then
+                                .[$key2] + c + ($val | tostring)
+                            else
+                                ($val | tostring)
                             end
                         else
                             if (.[$key2]) then
@@ -1305,7 +1322,7 @@ inquirer()
         if [[ $_current_pos -gt 0 ]]
         then
             local current=${_text_input:$_current_pos:1} current_width
-            current_width=$(wc -L <<< "$current" 2> /dev/null) || current_width=${#current}
+            current_width=$(inquirer:display_length "$current")
 
             tput cub $current_width
             _current_pos=$((_current_pos-1))
@@ -1321,7 +1338,7 @@ inquirer()
         elif [[ $_current_pos -lt ${#_text_input} ]]
         then
             local next=${_text_input:$((_current_pos+1)):1} next_width
-            next_width=$(wc -L <<< "$next" 2> /dev/null) || next_width=${#next}
+            next_width=$(inquirer:display_length "$next")
 
             tput cuf $next_width
             _current_pos=$((_current_pos+1))
@@ -1367,17 +1384,12 @@ inquirer()
 
     inquirer:on_text_input_ascii() {
         inquirer:remove_regex_failed
-        local c=${1:-}
-
-        if [ -z "$c" ]
-        then
-            c=' '
-        fi
+        local c=${1:- }
 
         local rest=${_text_input:$_current_pos} rest_width
         local current=${_text_input:$_current_pos:1} current_width
-        rest_width=$(wc -L <<< "$rest" 2> /dev/null) || rest_width=${#rest}
-        current_width=$(wc -L <<< "$current" 2> /dev/null) || current_width=${#current}
+        rest_width=$(inquirer:display_length "$rest")
+        current_width=$(inquirer:display_length "$current")
 
         _text_input="${_text_input:0:$_current_pos}$c$rest"
         _current_pos=$((_current_pos+1))
@@ -1394,14 +1406,43 @@ inquirer()
         tput cnorm
     }
 
+    inquirer:display_length() {
+        local display_length=0 byte_len
+        local oLC_ALL=${LC_ALL:-} oLANG=${LANG:-} LC_ALL=${LC_ALL:-} LANG=${LANG:-}
+
+        while IFS="" read -rsn1 char
+        do
+            case "$char" in
+                '')
+                ;;
+                *[$'\x80'-$'\xFF']*) 
+                    LC_ALL='' LANG=C
+                    byte_len=${#char}
+                    LC_ALL=$oLC_ALL LANG=$oLANG
+                    if [[ $byte_len -eq 2 ]] 
+                    then
+                        display_length=$((display_length+1))
+                    else
+                        display_length=$((display_length+2))
+                    fi
+                ;;
+                *) 
+                    display_length=$((display_length+1))
+                ;;
+            esac
+        done <<< "$1"
+
+        echo "$display_length"
+    }
+
     inquirer:on_text_input_not_ascii() {
         inquirer:remove_regex_failed
         local c=$1
 
         local rest="${_text_input:$_current_pos}" rest_width
         local current=${_text_input:$_current_pos:1} current_width
-        rest_width=$(wc -L <<< "$rest" 2> /dev/null) || rest_width=${#rest}
-        current_width=$(wc -L <<< "$current" 2> /dev/null) || current_width=${#current}
+        rest_width=$(inquirer:display_length "$rest")
+        current_width=$(inquirer:display_length "$current")
 
         _text_input="${_text_input:0:$_current_pos}$c$rest"
         _current_pos=$((_current_pos+1))
@@ -1424,15 +1465,15 @@ inquirer()
         then
             local start rest rest_width del del_width next next_width offset
             local current=${_text_input:$_current_pos:1} current_width
-            current_width=$(wc -L <<< "$current" 2> /dev/null) || current_width=${#current}
+            current_width=$(inquirer:display_length "$current")
 
             tput civis
             if [ $_current_pos -eq 0 ] 
             then
                 rest=${_text_input:$((_current_pos+1))}
                 next=${_text_input:$((_current_pos+1)):1}
-                rest_width=$(wc -L <<< "$rest" 2> /dev/null) || rest_width=${#rest}
-                next_width=$(wc -L <<< "$next" 2> /dev/null) || next_width=${#next}
+                rest_width=$(inquirer:display_length "$rest")
+                next_width=$(inquirer:display_length "$next")
                 offset=$((current_width-1))
                 [[ $offset -gt 0 ]] && tput cub $offset
                 printf '%s' "$rest"
@@ -1444,8 +1485,8 @@ inquirer()
                 rest=${_text_input:$_current_pos}
                 start=${_text_input:0:$((_current_pos-1))}
                 del=${_text_input:$((_current_pos-1)):1}
-                rest_width=$(wc -L <<< "$rest" 2> /dev/null) || rest_width=${#rest}
-                del_width=$(wc -L <<< "$del" 2> /dev/null) || del_width=${#del}
+                rest_width=$(inquirer:display_length "$rest")
+                del_width=$(inquirer:display_length "$del")
                 _current_pos=$((_current_pos-1))
                 if [[ $current_width -gt 1 ]] 
                 then
@@ -1509,7 +1550,7 @@ inquirer()
     local option=$1
     shift
     local var_name prompt=${1:-} prompt_width _text_default_value=${3:-} _current_pos=0 _text_input="" _text_input_regex_failed_msg _text_input_validator _text_input_regex_failed
-    prompt_width=$(wc -L <<< "$prompt" 2> /dev/null) || prompt_width=$((${#prompt}*2))
+    prompt_width=$(inquirer:display_length "$prompt")
     inquirer:$option "$@"
 }
 
@@ -2641,7 +2682,7 @@ Install()
 
         default=$(
         $JQ_FILE -n --arg proxy '' --arg xc_proxy '' \
-            --arg user_agent 'Mozilla/5.0 (QtEmbedded; U; Linux; C)' \
+            --arg user_agent "$USER_AGENT_TV" \
             --arg headers '' --arg cookies 'stb_lang=en; timezone=Europe/Amsterdam' \
             --arg playlist_name '' --arg seg_dir_name '' \
             --arg seg_name '' --arg seg_length 6 \
@@ -4877,7 +4918,7 @@ GetDefault()
     d_anti_leech_restart_hls_changes_yn d_recheck_period d_version
     do
         d_proxy=${d_proxy#\"}
-        d_user_agent=${d_user_agent:-Mozilla/5.0 (QtEmbedded; U; Linux; C)}
+        d_user_agent=${d_user_agent:-$USER_AGENT_TV}
         d_cookies=${d_cookies:-stb_lang=en; timezone=Europe/Amsterdam}
         d_playlist_name_text=${d_playlist_name:-随机名称}
         d_seg_dir_name_text=${d_seg_dir_name:-不使用}
@@ -5014,7 +5055,7 @@ GetChannelsInfo()
     IFS="^" read -ra chnls_live <<< "${m_live:-${if_null//^/yes^}}"
     IFS="^" read -ra chnls_proxy <<< "${m_proxy:-$if_null}"
     IFS="^" read -ra chnls_xc_proxy <<< "${m_xc_proxy:-$if_null}"
-    IFS="^" read -ra chnls_user_agent <<< "${m_user_agent:-${if_null//^/Mozilla/5.0 (QtEmbedded; U; Linux; C)^}}"
+    IFS="^" read -ra chnls_user_agent <<< "${m_user_agent:-${if_null//^/$USER_AGENT_TV^}}"
     IFS="^" read -ra chnls_headers <<< "${m_headers:-$if_null}"
     IFS="^" read -ra chnls_cookies <<< "${m_cookies:-${if_null//^/stb_lang=en; timezone=Europe/Amsterdam^}}"
     IFS="^" read -ra chnls_output_dir_name <<< "$m_output_dir_name"
@@ -5858,10 +5899,16 @@ SetStreamLink()
             return 0
         fi
     fi
-    Println "请输入直播源( mpegts / hls / flv / youtube ...)"
-    echo -e "$tip 可以是视频路径, 可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔\n"
-    read -p "(默认: 取消): " stream_links
-    [ -z "$stream_links" ] && Println "已取消...\n" && exit 1
+
+    Println "$tip 可以是视频路径, 可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔"
+    inquirer text_input "请输入直播源( mpegts / hls / flv / youtube ...): " stream_links "取消"
+
+    if [ "$stream_links" == "取消" ] 
+    then
+        Println "已取消...\n"
+        exit 1
+    fi
+
     IFS=" " read -ra stream_links_input <<< "$stream_links"
 
     if [[ $stream_links == *"https://www.youtube.com"* ]] || [[ $stream_links == *"https://youtube.com"* ]] 
@@ -5869,6 +5916,10 @@ SetStreamLink()
         if [[ ! -x $(command -v youtube-dl) ]] 
         then
             InstallYoutubeDl
+        elif [ "${youtube_dl_updated:-0}" -eq 0 ] 
+        then
+            youtube-dl -U > /dev/null
+            youtube_dl_updated=1
         fi
         if [[ ! -x $(command -v python) ]] 
         then
@@ -6024,7 +6075,7 @@ SetStreamLink()
         then
             stream_link="https${stream_link:4}"
         fi
-        user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+        user_agent="$USER_AGENT_BROWSER"
         headers="Referer: $stream_link\r\n"
         cookies=""
         while IFS= read -r line 
@@ -6123,7 +6174,7 @@ SetStreamLink()
             if [[ $channel_name_enc == "$stream_link_uri_name" ]] 
             then
                 xc=1
-                user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+                user_agent="$USER_AGENT_BROWSER"
                 headers="Referer: https://embed.4gtv.tv/HiNet/$channel_name_enc.html?ar=0&as=1&volume=0\r\n"
                 cookies=""
                 stream_link_data=$(curl -s -Lm 10 \
@@ -6159,7 +6210,7 @@ SetStreamLink()
         fi
         Println "$info 解析 4gtv 链接 ..."
         xc=1
-        user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+        user_agent="$USER_AGENT_BROWSER"
         headers="Referer: ${stream_link%%|*}\r\n"
         cookies=""
         set_id=${chnl_stream_link#*channelSet_id=}
@@ -6987,7 +7038,7 @@ SetFlvRestartNums()
 SetHlsDelaySeconds()
 {
     Println "设置超时多少秒自动重启频道"
-    echo -e "$tip 必须大于 分片时长*分片数目\n"
+    echo -e "$tip 必须大于 分片时长*分片数目"
     while read -p "(默认: $d_hls_delay_seconds 秒): " hls_delay_seconds
     do
         case $hls_delay_seconds in
@@ -7400,7 +7451,7 @@ SetAntiLeech()
 SetRecheckPeriod()
 {
     Println "设置重启频道失败后定时检查直播源(如可用即开启频道)的间隔时间(s)"
-    echo -e "$tip 输入 0 关闭检查\n"
+    echo -e "$tip 输入 0 关闭检查"
     while read -p "(默认: $d_recheck_period_text): " recheck_period
     do
         case $recheck_period in
@@ -7543,7 +7594,7 @@ AddChannel()
         fi
         if [[ $stream_link == http://*.macaulotustv.com/* ]] 
         then
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.61 Safari/537.36"
+            user_agent="$USER_AGENT_BROWSER"
             headers="Origin: http://www.lotustv.cc\r\nReferer: http://www.lotustv.cc/index.php/index/live.html\r\n"
             cookies=""
         else
@@ -8312,7 +8363,7 @@ EditChannelAll()
         fi
         if [[ $stream_link == http://*.macaulotustv.com/* ]] 
         then
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.61 Safari/537.36"
+            user_agent="$USER_AGENT_BROWSER"
             headers="Origin: http://www.lotustv.cc\r\nReferer: http://www.lotustv.cc/index.php/index/live.html\r\n"
             cookies=""
         else
@@ -8761,7 +8812,7 @@ TestXtreamCodesLink()
 
             access_token=""
             profile=""
-            chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
+            chnl_user_agent="$USER_AGENT_TV"
             mac=$(UrlencodeUpper "$chnl_mac")
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
@@ -8995,13 +9046,17 @@ StartChannel()
 {
     if [ "${chnl_stream_link:0:23}" == "https://www.youtube.com" ] || [ "${chnl_stream_link:0:19}" == "https://youtube.com" ] 
     then
-        chnl_user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+        chnl_user_agent="$USER_AGENT_BROWSER"
         chnl_headers=""
         chnl_cookies=""
 
         if [[ ! -x $(command -v youtube-dl) ]] 
         then
             InstallYoutubeDl
+        elif [ "${youtube_dl_updated:-0}" -eq 0 ] 
+        then
+            youtube-dl -U > /dev/null
+            youtube_dl_updated=1
         fi
 
         Println "$info 解析 youtube 链接..."
@@ -9050,7 +9105,7 @@ StartChannel()
         then
             chnl_stream_link="https${chnl_stream_link:4}"
         fi
-        chnl_user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+        chnl_user_agent="$USER_AGENT_BROWSER"
         chnl_headers="Referer: $chnl_stream_link\r\n"
         chnl_cookies=""
         if [[ $chnl_stream_link =~ inews ]] 
@@ -9165,7 +9220,7 @@ StartChannel()
                     _4gtv_proxy_command=()
                 fi
                 xc=1
-                chnl_user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+                chnl_user_agent="$USER_AGENT_BROWSER"
                 chnl_headers="Referer: https://embed.4gtv.tv/HiNet/$channel_name_enc.html?ar=0&as=1&volume=0\r\n"
                 chnl_cookies=""
                 stream_link_data=$(curl -s -Lm 10 \
@@ -9190,7 +9245,7 @@ StartChannel()
     elif [[ $chnl_stream_link == *"4gtv.tv/"* ]] 
     then
         Println "$info 解析 [ $chnl_channel_name ] 链接 ..."
-        chnl_user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+        chnl_user_agent="$USER_AGENT_BROWSER"
         chnl_headers="Referer: ${chnl_stream_link%%|*}\r\n"
         chnl_cookies=""
         if [ -n "$chnl_proxy" ] 
@@ -9474,7 +9529,7 @@ StartChannel()
         fi
     elif [[ $chnl_stream_link == http://*.macaulotustv.com/* ]] 
     then
-        chnl_user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.61 Safari/537.36"
+        chnl_user_agent="$USER_AGENT_BROWSER"
         chnl_headers="Origin: http://www.lotustv.cc\r\nReferer: http://www.lotustv.cc/index.php/index/live.html\r\n"
         chnl_cookies=""
     elif [ "${chnl_stream_link:0:4}" == "rtmp" ] || [ "${chnl_stream_link:0:1}" == "/" ]
@@ -12612,7 +12667,7 @@ Schedule_4gtv()
                 break
             fi
         done < <(curl -s -Lm 20 "https://www.4gtv.tv/proglist/$_4gtv_id.txt" \
-            -H "User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36" \
+            -H "User-Agent: $USER_AGENT_BROWSER" \
             -H "Referer: https://www.4gtv.tv/channel_sub.html?channelSet_id=1&asset_id=$_4gtv_id&channel_id=1" \
             | $JQ_FILE '.[]|[.sdate,.stime,.title]|join("=")')
 
@@ -13934,7 +13989,10 @@ Schedule()
         "tvbsyz:5:TVBS 亚洲"
     )
 
-    astro_chnls=( "iqiyi:355:astro 爱奇艺" )
+    astro_chnls=( 
+        "iqiyi:355:astro 爱奇艺"
+        "my_tvbclassic:425:TVB 经典台"
+    )
 
     _4gtv_chnls=(
         "minshidiyi:4gtv-4gtv003:民視第一台"
@@ -14067,6 +14125,8 @@ Schedule()
         "petclubtv:4gtv-live110:Pet Club TV"
         "tvbshd:4gtv-4gtv073:TVBS"
         "hitshd:4gtv-live620:HITS"
+        "sbnqqcj:4gtv-4gtv060:sbn 全球财经台"
+        "tvbshl:4gtv-4gtv068:TVBS 欢乐台"
     )
 
     other_chnls=(
@@ -14122,7 +14182,7 @@ Schedule()
         fi
     fi
 
-    user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+    user_agent="$USER_AGENT_BROWSER"
 
     case $provider_id in
         "jiushi")
@@ -15285,7 +15345,7 @@ MonitorHlsRestartChannel()
 
             access_token=""
             profile=""
-            chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
+            chnl_user_agent="$USER_AGENT_TV"
             mac=$(UrlencodeUpper "$chnl_mac")
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
@@ -15814,7 +15874,7 @@ MonitorFlvRestartChannel()
 
             access_token=""
             profile=""
-            chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
+            chnl_user_agent="$USER_AGENT_TV"
             mac=$(UrlencodeUpper "$chnl_mac")
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
@@ -16180,7 +16240,7 @@ MonitorTryAccounts()
                 xc_host_header=()
             fi
 
-            chnl_user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
+            chnl_user_agent="$USER_AGENT_TV"
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
             token_url="$server/portal.php?type=stb&action=handshake"
             profile_url="$server/portal.php?type=stb&action=get_profile"
@@ -16906,7 +16966,7 @@ MonitorSet()
                 done
 
                 Println "设置超时多少秒自动重启频道"
-                echo -e "$tip 必须大于 分片时长*分片数目\n"
+                echo -e "$tip 必须大于 分片时长*分片数目"
                 while read -p "(默认: $d_hls_delay_seconds 秒): " hls_delay_seconds
                 do
                     case $hls_delay_seconds in
@@ -17865,7 +17925,7 @@ VerifyXtreamCodesMac()
     profile_url="$server/portal.php?type=stb&action=get_profile"
 
     access_token=$(curl -s -Lm 10 \
-        -H "User-Agent: Mozilla/5.0 (QtEmbedded; U; Linux; C)" \
+        -H "User-Agent: $USER_AGENT_TV" \
         ${xc_host_header[@]+"${xc_host_header[@]}"} \
         --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" \
         | $JQ_FILE -r '.js.token') || true
@@ -17876,7 +17936,7 @@ VerifyXtreamCodesMac()
     fi
 
     profile=$(curl -s -Lm 10 \
-        -H "User-Agent: Mozilla/5.0 (QtEmbedded; U; Linux; C)" \
+        -H "User-Agent: $USER_AGENT_TV" \
         ${xc_host_header[@]+"${xc_host_header[@]}"} \
         -H "Authorization: Bearer $access_token" \
         --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url") || true
@@ -18717,7 +18777,7 @@ ViewXtreamCodesChnls()
 
         access_token=""
         profile=""
-        user_agent="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
+        user_agent="$USER_AGENT_TV"
         mac=$(UrlencodeUpper "$mac_address")
         timezone=$(UrlencodeUpper "Europe/Amsterdam")
         GetDefault
@@ -19174,7 +19234,7 @@ AddXtreamCodesMac()
         profile_url="$server/portal.php?type=stb&action=get_profile"
 
         access_token=$(curl -s -Lm 10 \
-            -H "User-Agent: Mozilla/5.0 (QtEmbedded; U; Linux; C)" \
+            -H "User-Agent: $USER_AGENT_TV" \
             ${xc_host_header[@]+"${xc_host_header[@]}"} \
             --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" \
             | $JQ_FILE -r '.js.token') || true
@@ -19189,7 +19249,7 @@ AddXtreamCodesMac()
             fi
         fi
         profile=$(curl -s -Lm 10 \
-            -H "User-Agent: Mozilla/5.0 (QtEmbedded; U; Linux; C)" \
+            -H "User-Agent: $USER_AGENT_TV" \
             ${xc_host_header[@]+"${xc_host_header[@]}"} \
             -H "Authorization: Bearer $access_token" \
             --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url") || true
@@ -19392,7 +19452,7 @@ InstallOpenresty()
             openresty_name=${openresty_name%%.tar.gz*}
             break
         fi
-    done < <(curl -s -L -H "User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36" "https://openresty.org/en/download.html")
+    done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" "https://openresty.org/en/download.html")
 
     if [ ! -e "./$openresty_name" ] 
     then
@@ -19473,7 +19533,7 @@ InstallNginx()
             openssl_name=${openssl_name%%.tar.gz*}
             break
         fi
-    done < <(curl -s -L -H "User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36" "https://www.openssl.org/source/")
+    done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" "https://www.openssl.org/source/")
 
     if [ ! -d "./$openssl_name" ] 
     then
@@ -19498,7 +19558,7 @@ InstallNginx()
             nginx_name=${nginx_name%%.tar.gz*}
             break
         fi
-    done < <(curl -s -Lm 10 -H "User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36" "https://nginx.org/en/download.html")
+    done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://nginx.org/en/download.html")
 
     if [ ! -e "./$nginx_name" ] 
     then
@@ -19766,7 +19826,7 @@ NginxConfigBlockAliyun()
             then
                 break
             fi
-        done < <(curl -s -Lm 10 -H "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36" https://ipinfo.io/AS45102)
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" https://ipinfo.io/AS45102)
         deny_aliyun="$deny_aliyun
                 allow all;"
         deny_aliyun="$deny_aliyun
@@ -20096,8 +20156,8 @@ NginxConfigSsl()
             if [[ $first_char != "#" ]] 
             then
                 line="
-    ssl_session_cache           shared:SSL:10m;
-    ssl_session_timeout         10m;
+    ssl_session_cache           shared:SSL:20m;
+    ssl_session_timeout         2h;
     ssl_prefer_server_ciphers   on;
     ssl_protocols               TLSv1.2 TLSv1.3;
     ssl_ciphers                 HIGH:!aNULL:!MD5;
@@ -21826,7 +21886,7 @@ const app = express();
 const port = $nodejs_port;
 
 app.set('trust proxy', 1);
-app.use(session({name: '$(RandStr)', resave: false, saveUninitialized: true, secret: '$(RandStr)', store: store, cookie: { domain: 'localhost', maxAge: 60 * 60 * 1000, httpOnly: true }}));
+app.use(session({name: '$(RandStr)', resave: false, saveUninitialized: true, secret: '$(RandStr)', store: store, cookie: { domain: 'localhost', maxAge: 60 * 60 * 2000, httpOnly: true }}));
 
 app.get('/', function(req, res){
     sessionData = req.session || {};
@@ -22458,7 +22518,7 @@ V2raySetCertificates()
         fi
         if [ "$crt_option" == "添加域名" ] 
         then
-            Println "$tip 请求新 CA 证书, 请确保没有程序占用 80 端口"
+            Println "$tip 如果证书不存在需请求新 CA 证书, 请确保没有程序占用 80 端口"
             inquirer text_input "输入域名: " domain "取消"
             if [ "$domain" == "取消" ] 
             then
@@ -22566,6 +22626,7 @@ V2raySetCertificates()
             "keyFile": $keyFile
         }')
     fi
+    Println "$info 证书添加成功"
 }
 
 V2raySetTproxy()
@@ -22944,7 +23005,7 @@ V2raySetHeaderType()
                 break
             fi
 
-            Println "$tip 多个值用|分隔"
+            Println "$tip 多个值用 | 分隔"
             inquirer text_input "输入自定义 HTTP 请求头 $header_name 的值: " header_value "不设置"
             if [ "$header_value" == "不设置" ] 
             then
@@ -22960,17 +23021,18 @@ V2raySetHeaderType()
                 $JQ_FILE --arg key "$header_name" --argjson value "[$header_value]" \
                 '. * 
                 {
-                    $key: $value
+                    ($key): $value
                 }' <<< "$http_request_headers")
             else
                 http_request_headers=$(
                 $JQ_FILE --arg key "$header_name" --arg value "$header_value" \
                 '. * 
                 {
-                    $key: $value
+                    ($key): $value
                 }' <<< "$http_request_headers")
             fi
 
+            echo
             yn_options=( '否' '是' )
             inquirer list_input "是否继续添加" yn_options continue_yn
             if [ "$continue_yn" == "否" ] 
@@ -23024,17 +23086,18 @@ V2raySetHeaderType()
                 $JQ_FILE --arg key "$header_name" --argjson value "[$header_value]" \
                 '. * 
                 {
-                    $key: $value
+                    ($key): $value
                 }' <<< "$http_response_headers")
             else
                 http_response_headers=$(
                 $JQ_FILE --arg key "$header_name" --arg value "$header_value" \
                 '. * 
                 {
-                    $key: $value
+                    ($key): $value
                 }' <<< "$http_response_headers")
             fi
 
+            echo
             yn_options=( '否' '是' )
             inquirer list_input "是否继续添加" yn_options continue_yn
             if [ "$continue_yn" == "否" ] 
@@ -23258,7 +23321,7 @@ V2raySetFallbacks()
         do
             if [ "$v2ray_name" == "xray" ] 
             then
-                echo
+                Println "$tip 一般不用设置"
                 inquirer text_input "输入 SNI 分流匹配值: " v2ray_fallback_name "不设置"
                 if [ "$v2ray_fallback_name" == "不设置" ] 
                 then
@@ -23267,7 +23330,7 @@ V2raySetFallbacks()
             else
                 v2ray_fallback_name=""
             fi
-            Println "$tip 请输入单个"
+            Println "$tip 请输入单个, 比如 http/1.1 或 h2"
             inquirer text_input "输入尝试匹配 $tls_name ALPN 协商结果: " v2ray_fallback_alpn "不设置"
             if [ "$v2ray_fallback_alpn" == "不设置" ] 
             then
@@ -23822,7 +23885,7 @@ V2rayAddInbound()
                 {
                     "settings": {
                         "address": $address,
-                        "port": $port,
+                        "port": $port | tonumber,
                         "network": $network,
                         "timeout": $timeout | tonumber,
                         "followRedirect": $followRedirect | test("true"),
@@ -24233,9 +24296,9 @@ V2rayListInbounds()
             fi
             if [ "${inbounds_settings_follow_redirect[inbounds_index]}" == "false" ] 
             then
-                protocol_settings_list="$protocol_settings_list转发防火墙: $red否${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list转发防火墙: $red否${normal}\n\033[6C目标地址: $green${inbounds_settings_address[inbounds_index]}${normal} 目标端口: $green${inbounds_settings_port[inbounds_index]}${normal}\n\033[6C"
             else
-                protocol_settings_list="$protocol_settings_list转发防火墙: $green是${normal} 目标地址: $green${inbounds_settings_address[inbounds_index]}${normal} 目标端口: $green${inbounds_settings_port[inbounds_index]}${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list转发防火墙: $green是${normal}\n\033[6C"
             fi
         fi
         if [ "${inbounds_stream_network[inbounds_index]}" == "http" ] 
@@ -24367,7 +24430,7 @@ V2rayListInbounds()
                                     fi
                                     for header_value in "${header_values[@]}"
                                     do
-                                        header_request_list="$header_request_list  $header_value\n\033[8C"
+                                        header_request_list="$header_request_list  ${green}$header_value${normal}\n\033[8C"
                                     done
                                 done
                             fi
@@ -25524,7 +25587,7 @@ V2rayListOutbounds()
                                         fi
                                         for header_value in "${header_values[@]}"
                                         do
-                                            header_request_list="$header_request_list  $header_value\n\033[8C"
+                                            header_request_list="$header_request_list  ${green}$header_value${normal}\n\033[8C"
                                         done
                                     done
                                 fi
@@ -32619,19 +32682,17 @@ DownloadIbmV2ray()
         if v2ray_version=$(curl -s -L "$FFMPEG_MIRROR_LINK/$v2ray_name.json" | $JQ_FILE -r '.tag_name') && curl -L "$FFMPEG_MIRROR_LINK/$v2ray_name/$v2ray_version/$v2ray_package_name-linux-64.zip" -o "$v2ray_package_name-linux-64.zip" && unzip "$v2ray_package_name-linux-64.zip" -d "$v2ray_package_name-linux-64" > /dev/null
         then
             mkdir -p "$IBM_APPS_ROOT/ibm_$v2ray_name"
-            mv $v2ray_package_name-linux-64/$v2ray_name "$IBM_APPS_ROOT/ibm_$v2ray_name/"
+            mv ${v2ray_package_name}-linux-64/$v2ray_name "$IBM_APPS_ROOT/ibm_$v2ray_name/"
             if [ "$v2ray_name" == "xray" ] 
             then
-                rm -rf v2ray-linux-64
-                if v2ray_version=$(curl -s -L "$FFMPEG_MIRROR_LINK/v2ray.json" | $JQ_FILE -r '.tag_name') && curl -L "$FFMPEG_MIRROR_LINK/v2ray/$v2ray_version/v2ray-linux-64.zip" -o "v2ray-linux-64.zip" && unzip "v2ray-linux-64.zip" -d "v2ray-linux-64" > /dev/null 
+                if ! curl -L "$FFMPEG_MIRROR_LINK/xray/v2ctl" -o "$IBM_APPS_ROOT/ibm_$v2ray_name/v2ctl"
                 then
-                    mv v2ray-linux-64/v2ctl $v2ray_package_name-linux-64/
-                else
                     Println "$error 无法连接服务器, 请稍后再试\n"
                     exit 1
                 fi
+            else
+                mv $v2ray_package_name-linux-64/v2ctl "$IBM_APPS_ROOT/ibm_$v2ray_name/"
             fi
-            mv $v2ray_package_name-linux-64/v2ctl "$IBM_APPS_ROOT/ibm_$v2ray_name/"
             chmod 700 "$IBM_APPS_ROOT/ibm_$v2ray_name/$v2ray_name"
             chmod 700 "$IBM_APPS_ROOT/ibm_$v2ray_name/v2ctl"
             Println "$info ibm $v2ray_name 下载完成\n"
@@ -32656,16 +32717,14 @@ UpdateIbmV2ray()
             mv $v2ray_package_name-linux-64/$v2ray_name "$IBM_APPS_ROOT/ibm_$v2ray_name/"
             if [ "$v2ray_name" == "xray" ] 
             then
-                rm -rf v2ray-linux-64
-                if v2ray_version=$(curl -s -L "$FFMPEG_MIRROR_LINK/v2ray.json" | $JQ_FILE -r '.tag_name') && curl -L "$FFMPEG_MIRROR_LINK/v2ray/$v2ray_version/v2ray-linux-64.zip" -o "v2ray-linux-64.zip" && unzip "v2ray-linux-64.zip" -d "v2ray-linux-64" > /dev/null 
+                if ! curl -L "$FFMPEG_MIRROR_LINK/xray/v2ctl" -o "$IBM_APPS_ROOT/ibm_$v2ray_name/v2ctl"
                 then
-                    mv v2ray-linux-64/v2ctl $v2ray_package_name-linux-64/
-                else
                     Println "$error 无法连接服务器, 请稍后再试\n"
                     exit 1
                 fi
+            else
+                mv $v2ray_package_name-linux-64/v2ctl "$IBM_APPS_ROOT/ibm_$v2ray_name/"
             fi
-            mv $v2ray_package_name-linux-64/v2ctl "$IBM_APPS_ROOT/ibm_$v2ray_name/"
             chmod 700 "$IBM_APPS_ROOT/ibm_$v2ray_name/$v2ray_name"
             chmod 700 "$IBM_APPS_ROOT/ibm_$v2ray_name/v2ctl"
             Println "$info ibm v2ray 更新完成\n"
@@ -32713,9 +32772,15 @@ DeployIbmV2ray()
     cd "$IBM_APPS_ROOT/ibm_$v2ray_rand_name/"
 
     mv $v2ray_name "$v2ray_rand_name"
-    ./v2ctl config config.json > "$v2ray_rand_name.pb"
+    if [ "$v2ray_name" == "xray" ] 
+    then
+        ./v2ctl convert config.json > "$v2ray_rand_name.pb"
+    else
+        ./v2ctl config config.json > "$v2ray_rand_name.pb"
+    fi
     tar zcf "$v2ray_rand_name.tar.gz" "$v2ray_rand_name" "$v2ray_rand_name.pb"
     rm -f config.json
+    rm -f config.json.lock
     rm -f "$v2ray_rand_name"
     rm -f "$v2ray_rand_name.pb"
     rm -f v2ctl
@@ -33194,18 +33259,24 @@ IbmcfAppCronExec()
         ibmcloud login -u "${apps_user_email[i]}" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
         ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
 
-        if [ "${apps_path[i]}" == "ibm_v2ray" ] 
+        if [ "${apps_path[i]}" == "ibm_v2ray" ] || [ "${apps_path[i]}" == "ibm_xray" ]
         then
-            v2ray_name=$(RandStr)
-            cp -r "$IBM_APPS_ROOT/ibm_v2ray" "$IBM_APPS_ROOT/ibm_$v2ray_name"
+            v2ray_rand_name=$(RandStr)
+            cp -r "$IBM_APPS_ROOT/${apps_path[i]}" "$IBM_APPS_ROOT/ibm_$v2ray_rand_name"
 
-            cd "$IBM_APPS_ROOT/ibm_$v2ray_name/"
-            mv v2ray "$v2ray_name"
-            ./v2ctl config config.json > "$v2ray_name.pb"
-            tar zcf "$v2ray_name.tar.gz" "$v2ray_name" "$v2ray_name.pb"
+            cd "$IBM_APPS_ROOT/ibm_$v2ray_rand_name/"
+            mv "${apps_path[i]#*_}" "$v2ray_rand_name"
+            if [ "${apps_path[i]}" == "ibm_xray" ] 
+            then
+                ./v2ctl convert config.json > "$v2ray_rand_name.pb"
+            else
+                ./v2ctl config config.json > "$v2ray_rand_name.pb"
+            fi
+            tar zcf "$v2ray_rand_name.tar.gz" "$v2ray_rand_name" "$v2ray_rand_name.pb"
             rm -f config.json
-            rm -f "$v2ray_name"
-            rm -f "$v2ray_name.pb"
+            rm -f config.json.lock
+            rm -f "$v2ray_rand_name"
+            rm -f "$v2ray_rand_name.pb"
             rm -f v2ctl
 
             ibmcloud cf create-app-manifest "${apps_name[i]}"
@@ -33236,11 +33307,11 @@ IbmcfAppCronExec()
 applications:
 - name: ${apps_name[i]}
   command:
-    tar xzf $v2ray_name.tar.gz &&
-    { ./$v2ray_name -config ./$v2ray_name.pb -format=pb & } &&
+    tar xzf $v2ray_rand_name.tar.gz &&
+    { ./$v2ray_rand_name -config ./$v2ray_rand_name.pb -format=pb & } &&
     sleep 5 &&
-    rm ./$v2ray_name.pb &&
-    rm ./$v2ray_name
+    rm ./$v2ray_rand_name.pb &&
+    rm ./$v2ray_rand_name
   disk_quota: $disk_quota
   instances: ${instances:-1}
   memory: $memory
@@ -33259,7 +33330,7 @@ func main() {
 ' > "main.go"
             ibmcloud cf push -f "${apps_name[i]}_manifest.yml"
             cd ..
-            rm -rf "$IBM_APPS_ROOT/ibm_$v2ray_name"
+            rm -rf "$IBM_APPS_ROOT/ibm_$v2ray_rand_name"
         else
             cd "$IBM_APPS_ROOT/${apps_path[i]}/"
             ibmcloud cf create-app-manifest "${apps_name[i]}"
@@ -36061,7 +36132,7 @@ WantedBy=multi-user.target
         ;;
     esac
     exit 0
-elif [ "$self" == "v2" ] || [ "$self" == "v2.sh" ] || [ "$self" == "x" ] || [ "$self" == "x.sh" ]
+elif [ "$self" == "v2" ] || [ "$self" == "v2.sh" ] || [ "$self" == "V2.sh" ] || [ "$self" == "x" ] || [ "$self" == "x.sh" ] || [ "$self" == "xray.sh" ]
 then
     CheckShFile
     [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
@@ -36069,7 +36140,7 @@ then
     v2ray_name="v2ray"
     tls_name="TLS"
 
-    if [ "$self" == "x" ] || [ "$self" == "x.sh" ] 
+    if [ "$self" == "x" ] || [ "$self" == "x.sh" ] || [ "$self" == "xray.sh" ]
     then
         v2ray_sh="x"
         v2ray_name="xray"
@@ -37360,7 +37431,7 @@ then
                 Println "$error 请先安装脚本 !\n" && exit 1
             fi
 
-            user_agent="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+            user_agent="$USER_AGENT_BROWSER"
 
             if [ "${2:-}" == "-" ] 
             then
@@ -37724,6 +37795,34 @@ then
             done < <(curl -s -L "https://www.singtel.com/personal/products-services/tv/tv-programme-guide" 2> /dev/null)
             exit 0
         ;;
+        "astro")
+            Println "$info 检测 astro ..."
+
+            IFS=$'`\t' read -r m_id m_title m_description m_is_hd m_language < <(
+            JQs flat "$(curl -s -Lm 20 -H 'User-Agent: '"$USER_AGENT_BROWSER"'' https://contenthub-api.eco.astro.com.my/channel/all.json)" '^' '|' '^' '
+            [.id,.title,.description,.isHd,.language]|@tsv' '.[0].response')
+
+            IFS="|" read -ra chnls_id <<< "$m_id"
+            IFS="|" read -ra chnls_title <<< "$m_title"
+            IFS="|" read -ra chnls_description <<< "$m_description"
+            IFS="|" read -ra chnls_is_hd <<< "$m_is_hd"
+            IFS="|" read -ra chnls_language <<< "$m_language"
+
+            chnls_list=""
+            for((i=0;i<${#chnls_id[@]};i++));
+            do
+                if [ "${chnls_is_hd[i]}" == "true" ] 
+                then
+                    is_hd="${green}是${normal}"
+                else
+                    is_hd="${red}否${normal}"
+                fi
+                chnls_list="$chnls_list ${green}$((i+1)).${normal}\r\033[6C频道ID: ${green}${chnls_id[i]}${normal} 频道名称: ${green}${chnls_title[i]}${normal}\n\r\033[6C高清: ${green}$is_hd${normal} 语言: ${green}${chnls_language[i]}${normal}\n\r\033[6C${chnls_description[i]}\n\n"
+            done
+
+            Println "$chnls_list"
+            exit 0
+        ;;
         "m") 
             [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请先安装 !" && exit 1
             [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
@@ -37877,8 +37976,16 @@ then
                     line=${line//$pid/$rand_pid}
                 fi
                 channels="$channels$line"
-            done < <(curl -s -Lm 10 "$DEFAULT_DEMOS")
+            done < <(curl -s -Lm 20 "$DEFAULT_DEMOS")
             [ -z "$channels" ] && Println "$error 暂时无法连接服务器, 请稍后再试...\n" && exit 1
+            IFS="|" read -r -a channels_name < <(JQs flat "$channels" '^' '|' '^' '.channel_name')
+            echo
+            channels_name+=("全部")
+            inquirer list_input "选择添加的频道" channels_name channel_name
+            if [ "$channel_name" != "全部" ] 
+            then
+                channels=$($JQ_FILE '[.[]|select(.channel_name=="'"$channel_name"'")]' <<< "$channels")
+            fi
             JQ add "$CHANNELS_FILE" channels "$channels"
             Println "$info 频道添加成功 !\n"
             exit 0
