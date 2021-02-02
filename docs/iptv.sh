@@ -11446,22 +11446,11 @@ ScheduleHbozw()
     for chnl in "${hbozw_chnls[@]}"
     do
         chnl_id=${chnl%%:*}
-        chnl_name=${chnl#*:}
-        if [ "$chnl_id" == "hbo" ] 
-        then
-            SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$today&channel=hbo&feed=cn"
-        elif [ "$chnl_id" == "hboasia" ] 
-        then
-            SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$today&channel=hbo&feed=satellite"
-        elif [ "$chnl_id" == "hbored" ] 
-        then
-            SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$today&channel=red&feed=satellite"
-        elif [ "$chnl_id" == "cinemax" ] 
-        then
-            SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$today&channel=cinemax&feed=satellite"
-        else
-            SCHEDULE_LINK="https://hboasia.com/HBO/zh-tw/ajax/home_schedule?date=$today&channel=$chnl_id&feed=satellite"
-        fi
+        chnl_feed=${chnl#*:}
+        chnl_name=${chnl_feed#*:}
+        chnl_feed=${chnl_feed%:*}
+
+        SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$today&channel=${chnl_id//$chnl_feed/}&feed=$chnl_feed"
 
         schedule=""
         while IFS="^" read -r program_id program_time program_sys_time program_title program_title_local
@@ -12892,11 +12881,11 @@ ScheduleAdd()
                         end=${chnl_num#*-}
                         for((i=start;i<=end;i++));
                         do
-                            chnl="${chnls[$((i-1))]}"
+                            chnl="${chnls[i-1]}"
                             ScheduleAddChannel
                         done
                     else
-                        chnl="${chnls[$((chnl_num-1))]}"
+                        chnl="${chnls[chnl_num-1]}"
                         ScheduleAddChannel
                     fi
                 done
@@ -12931,8 +12920,8 @@ ScheduleViewCron()
             *)
                 if [ "$provider_num" -gt 0 ] && [ "$provider_num" -le "$cron_providers_count" ]
                 then
-                    provider="${cron_providers[$((provider_num-1))]}"
-                    IFS="|" read -r -a chnls <<< "${cron_chnls[$((provider_num-1))]}|"
+                    provider="${cron_providers[provider_num-1]}"
+                    IFS="|" read -r -a chnls <<< "${cron_chnls[provider_num-1]}|"
                     break
                 else
                     Println "$error 请输入正确的数字\n"
@@ -13014,11 +13003,11 @@ ScheduleDel()
                         end=${chnl_num#*-}
                         for((i=start;i<=end;i++));
                         do
-                            chnl="${chnls[$((i-1))]}"
+                            chnl="${chnls[i-1]}"
                             ScheduleDelChannel
                         done
                     else
-                        chnl="${chnls[$((chnl_num-1))]}"
+                        chnl="${chnls[chnl_num-1]}"
                         ScheduleDelChannel
                     fi
                 done
@@ -13149,7 +13138,7 @@ ScheduleViewBackup()
             *)
                 if [ "$backup_num" -gt 0 ] && [ "$backup_num" -le "$schedule_backup_count" ]
                 then
-                    schedule="${schedule_backup_schedules[$((backup_num-1))]}"
+                    schedule="${schedule_backup_schedules[backup_num-1]}"
                     IFS="," read -r -a schedules <<< "$schedule"
                     break
                 else
@@ -13353,10 +13342,6 @@ Schedule()
     fi
 
     jiushi_chnls=( 
-#        "hbogq:HBO HD"
-#        "hbohits:HBO Hits"
-#        "hbosignature:HBO Signature"
-#        "hbofamily:HBO Family"
 #        "foxmovies:FOX MOVIES"
 #        "disney:Disney"
         "minshi:民視"
@@ -13549,6 +13534,11 @@ Schedule()
         "ettodayzh:ETtoday綜合台" )
 
     niotv_chnls=( 
+        "hbohd:629:HBO HD 亚洲"
+        "hits:501:HBO 强档巨献 亚洲"
+        "signature:503:HBO 原创巨献 亚洲"
+        "family:502:HBO 温馨家庭 亚洲"
+        "cinemax:49:CINEMAX 亚洲"
         "msxw:45:民视新闻"
         "tsxw:637:台视新闻"
         "slxw:38:三立新闻"
@@ -13558,10 +13548,6 @@ Schedule()
         "minshidiyi:638:民视第一台"
         "minshitaiwan:742:民视台湾台"
         "mtvlivetw:751:MTV Live 台湾"
-        "hbogq:629:HBO HD"
-        "hbohits:501:HBO 强档"
-        "hbosignature:503:HBO 原创"
-        "hbofamily:502:HBO 家庭"
         "foxmovies:47:Fox 电影"
         "foxfamily:540:Fox 家庭电影"
         "foxaction:543:FOX 警匪"
@@ -13660,7 +13646,6 @@ Schedule()
         "elevensports2:770:ELEVEN 体育2"
         "lifetime:199:Lifetime"
         "foxcrime:543:FOX CRIME"
-        "cinemax:49:Cinemax"
         "hlwdy:52:好莱坞电影"
         "animax:84:ANIMAX"
         "mtvtw:69:MTV 台湾"
@@ -13704,11 +13689,11 @@ Schedule()
         "warner:688:Warner TV" )
 
     nowtv_chnls=( 
-        "hbohits:111:HBO 强档"
-        "hbofamily:112:HBO 家庭"
-        "cinemax:113:Cinemax"
-        "hbosignature:114:HBO 原创"
-        "hbogq:115:HBO HD"
+        "hbohd:115:HBO HD 亚洲"
+        "hits:111:HBO 强档巨献 亚洲"
+        "signature:114:HBO 原创巨献 亚洲"
+        "family:112:HBO 温馨家庭 亚洲"
+        "cinemax:113:CINEMAX 亚洲"
         "foxmovies:117:Fox 电影"
         "foxfamily:120:Fox 家庭电影"
         "foxaction:118:Fox 警匪"
@@ -13868,14 +13853,16 @@ Schedule()
     )
 
     hbozw_chnls=(
-        "hbo:HBO 中文"
-        "hboasia:HBO 亚洲"
-        "hbored:HBO RED 亚洲"
-        "cinemax"
-        "hbohd:HBO HD 台湾"
-        "hits:HBO 强档巨献 台湾"
-        "signature:HBO 原创巨献 台湾"
-        "family:HBO 温馨家庭 台湾" )
+        "hbo:satellite:HBO 亚洲"
+        "hbohd:satellite:HBO HD 亚洲"
+        "hits:satellite:HBO 强档巨献 亚洲"
+        "signature:satellite:HBO 原创巨献 亚洲"
+        "family:satellite:HBO 温馨家庭 亚洲"
+        "hbored:satellite:HBO RED 亚洲"
+        "cinemax:satellite:CINEMAX 亚洲"
+        "hbocn:cn:HBO 中国"
+        "hbotw:tw:HBO 台湾"
+    )
 
     hbous_chnls=(
         "us_hbo:HBO:EAST:HBO East"
@@ -17195,8 +17182,8 @@ Monitor()
                     fi
                     for flv_num in ${flv_nums_arr[@]+"${flv_nums_arr[@]}"}
                     do
-                        chnl_flv_pull_link=${monitor_flv_pull_links[$((flv_num-1))]}
-                        chnl_flv_push_link=${monitor_flv_push_links[$((flv_num-1))]}
+                        chnl_flv_pull_link=${monitor_flv_pull_links[flv_num-1]}
+                        chnl_flv_push_link=${monitor_flv_push_links[flv_num-1]}
 
                         audio=0
                         video=0
@@ -18217,7 +18204,7 @@ ViewXtreamCodesAcc()
             *) 
                 if [ "$server_num" -gt 0 ] && [ "$server_num" -le "$ips_acc_count" ]
                 then
-                    ips_index=${ips_acc[$((server_num-1))]}
+                    ips_index=${ips_acc[server_num-1]}
                     break
                 else
                     Println "$error 请输入正确的序号\n"
@@ -18250,7 +18237,7 @@ ViewXtreamCodesAcc()
                 *) 
                     if [ "$domains_num" -gt 0 ] && [ "$domains_num" -le "$domains_count" ]
                     then
-                        domain=${domains[$((domains_num-1))]}
+                        domain=${domains[domains_num-1]}
                         break
                     else
                         Println "$error 请输入正确的序号\n"
@@ -18322,7 +18309,7 @@ TestXtreamCodes()
             *) 
                 if [ "$server_num" -gt 0 ] && [ "$server_num" -le "$ips_acc_count" ]
                 then
-                    ips_index=${ips_acc[$((server_num-1))]}
+                    ips_index=${ips_acc[server_num-1]}
                     break
                 else
                     Println "$error 请输入正确的序号\n"
@@ -18512,7 +18499,7 @@ ViewXtreamCodesMac()
             *) 
                 if [ "$server_num" -gt 0 ] && [ "$server_num" -le "$ips_mac_count" ]
                 then
-                    ips_index=${ips_mac[$((server_num-1))]}
+                    ips_index=${ips_mac[server_num-1]}
                     break
                 else
                     Println "$error 请输入正确的序号\n"
@@ -18545,7 +18532,7 @@ ViewXtreamCodesMac()
                 *) 
                     if [ "$domains_num" -gt 0 ] && [ "$domains_num" -le "$domains_count" ]
                     then
-                        domain=${domains[$((domains_num-1))]}
+                        domain=${domains[domains_num-1]}
                         break
                     else
                         Println "$error 请输入正确的序号\n"
@@ -18667,7 +18654,7 @@ ViewXtreamCodesChnls()
                 *) 
                     if [ "$server_num" -gt 0 ] && [ "$server_num" -le "$ips_mac_count" ]
                     then
-                        ips_index=${ips_mac[$((server_num-1))]}
+                        ips_index=${ips_mac[server_num-1]}
                         break
                     else
                         Println "$error 请输入正确的序号\n"
@@ -18690,17 +18677,17 @@ ViewXtreamCodesChnls()
             Println "$domains_list"
 
             Println "请选择域名"
-            while read -p "(默认: 取消): " domains_num
+            while read -p "(默认: 回到上级): " domains_num
             do
                 case $domains_num in
-                    "") Println "已取消...\n" && exit 1
+                    "") continue 2
                     ;;
                     *[!0-9]*) Println "$error 请输入正确的数字\n"
                     ;;
                     *) 
                         if [ "$domains_num" -gt 0 ] && [ "$domains_num" -le "$domains_count" ]
                         then
-                            domain=${domains[$((domains_num-1))]}
+                            domain=${domains[domains_num-1]}
                             break
                         else
                             Println "$error 请输入正确的序号\n"
@@ -18745,17 +18732,17 @@ ViewXtreamCodesChnls()
             Println "$macs_list"
 
             Println "请选择 mac"
-            while read -p "(默认: 取消): " macs_num
+            while read -p "(默认: 回到上级): " macs_num
             do
                 case $macs_num in
-                    "") Println "已取消...\n" && exit 1
+                    "") continue 2
                     ;;
                     *[!0-9]*) Println "$error 请输入正确的数字\n"
                     ;;
                     *) 
                         if [ "$macs_num" -gt 0 ] && [ "$macs_num" -le "$macs_count" ]
                         then
-                            mac_address=${macs[$((macs_num-1))]}
+                            mac_address=${macs[macs_num-1]}
                             for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
                             do
                                 if [ "$xc_chnl_mac" == "$domain/$mac_address" ] 
@@ -18775,13 +18762,10 @@ ViewXtreamCodesChnls()
             mac_address=${macs[0]}
         fi
 
-        access_token=""
-        profile=""
         user_agent="$USER_AGENT_TV"
-        mac=$(UrlencodeUpper "$mac_address")
         timezone=$(UrlencodeUpper "Europe/Amsterdam")
+        mac_addresses_failed=()
         GetDefault
-        cookies="mac=$mac; stb_lang=en; timezone=$timezone"
 
         if [ -n "${d_xc_proxy:-}" ] 
         then
@@ -18809,31 +18793,118 @@ ViewXtreamCodesChnls()
 
         while true 
         do
+            mac=$(UrlencodeUpper "$mac_address")
+            cookies="mac=$mac; stb_lang=en; timezone=$timezone"
+
             access_token=$(curl -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
                 ${xc_host_header[@]+"${xc_host_header[@]}"} \
                 --cookie "$cookies" "$token_url" \
                 | $JQ_FILE -r '.js.token') || true
+
             if [ -z "$access_token" ] 
             then
-                Println "$error $domain $mac_address\n" && exit 1
+                Println "$error $domain $mac_address access\n"
+
+                mac_addresses_failed+=("$mac_address")
+
+                for mac in "${macs[@]}"
+                do
+                    if [ "$mac_address" != "$mac" ] 
+                    then
+                        for mac_address_failed in "${mac_addresses_failed[@]}"
+                        do
+                            if [ "$mac_address_failed" == "$mac" ] 
+                            then
+                                continue 2
+                            fi
+                        done
+                        for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
+                        do
+                            if [ "$xc_chnl_mac" == "$domain/$mac" ] 
+                            then
+                                continue 2
+                            fi
+                        done
+                        Println "$info 测试 $mac\n"
+                        mac_address=$mac
+                        continue 2
+                    fi
+                done
+                exit 1
             fi
 
             headers="Authorization: Bearer $access_token\r\n"
             printf -v headers_command '%b' "$headers"
+
             profile=$(curl -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
                 ${xc_host_header[@]+"${xc_host_header[@]}"} \
                 -H "${headers:0:-4}" \
                 --cookie "$cookies" "$profile_url") || true
+
             if [ -z "$profile" ] 
             then
-                Println "$error $domain $mac_address profile\n" && exit 1
+                Println "$error $domain $mac_address profile\n"
+
+                mac_addresses_failed+=("$mac_address")
+
+                for mac in "${macs[@]}"
+                do
+                    if [ "$mac_address" != "$mac" ] 
+                    then
+                        for mac_address_failed in "${mac_addresses_failed[@]}"
+                        do
+                            if [ "$mac_address_failed" == "$mac" ] 
+                            then
+                                continue 2
+                            fi
+                        done
+                        for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
+                        do
+                            if [ "$xc_chnl_mac" == "$domain/$mac" ] 
+                            then
+                                continue 2
+                            fi
+                        done
+                        Println "$info 测试 $mac\n"
+                        mac_address=$mac
+                        continue 2
+                    fi
+                done
+                exit 1
             fi
 
             if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
             then
-                Println "$error $domain $mac_address profile\n" && exit 1
+                Println "$error $domain $mac_address profile id\n"
+
+                mac_addresses_failed+=("$mac_address")
+
+                for mac in "${macs[@]}"
+                do
+                    if [ "$mac_address" != "$mac" ] 
+                    then
+                        for mac_address_failed in "${mac_addresses_failed[@]}"
+                        do
+                            if [ "$mac_address_failed" == "$mac" ] 
+                            then
+                                continue 2
+                            fi
+                        done
+                        for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
+                        do
+                            if [ "$xc_chnl_mac" == "$domain/$mac" ] 
+                            then
+                                continue 2
+                            fi
+                        done
+                        Println "$info 测试 $mac\n"
+                        mac_address=$mac
+                        continue 2
+                    fi
+                done
+                exit 1
             fi
 
             exp_date=$(curl -s -Lm 10 \
@@ -18841,9 +18912,37 @@ ViewXtreamCodesChnls()
                 ${xc_host_header[@]+"${xc_host_header[@]}"} \
                 -H "${headers:0:-4}" \
                 --cookie "$cookies" "$account_info_url" | $JQ_FILE -r '.js.phone') || true
+
             if [ -z "$exp_date" ] 
             then
-                Println "$error $domain $mac_address exp_date\n" && exit 1
+                Println "$error $domain $mac_address exp_date\n"
+
+                mac_addresses_failed+=("$mac_address")
+
+                for mac in "${macs[@]}"
+                do
+                    if [ "$mac_address" != "$mac" ] 
+                    then
+                        for mac_address_failed in "${mac_addresses_failed[@]}"
+                        do
+                            if [ "$mac_address_failed" == "$mac" ] 
+                            then
+                                continue 2
+                            fi
+                        done
+                        for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
+                        do
+                            if [ "$xc_chnl_mac" == "$domain/$mac" ] 
+                            then
+                                continue 2
+                            fi
+                        done
+                        Println "$info 测试 $mac\n"
+                        mac_address=$mac
+                        continue 2
+                    fi
+                done
+                exit 1
             fi
 
             genres_list=""
@@ -18878,7 +18977,7 @@ ViewXtreamCodesChnls()
                         Println "$error 返回错误, 请重试"
                     fi
 
-                    Println "$tip 输入 a 返回上级页面\n"
+                    Println "$tip 输入 a 返回上级页面, 输入 b 使用下个 mac 地址\n"
                     while read -p "输入分类序号(默认: 取消): " genres_num 
                     do
                         case "$genres_num" in
@@ -18887,6 +18986,35 @@ ViewXtreamCodesChnls()
                             ;;
                             a)
                                 continue 4
+                            ;;
+                            b)
+                                mac_addresses_failed+=("$mac_address")
+
+                                for mac in "${macs[@]}"
+                                do
+                                    if [ "$mac_address" != "$mac" ] 
+                                    then
+                                        for mac_address_failed in "${mac_addresses_failed[@]}"
+                                        do
+                                            if [ "$mac_address_failed" == "$mac" ] 
+                                            then
+                                                continue 2
+                                            fi
+                                        done
+                                        for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
+                                        do
+                                            if [ "$xc_chnl_mac" == "$domain/$mac" ] 
+                                            then
+                                                continue 2
+                                            fi
+                                        done
+                                        Println "$info 测试 $mac\n"
+                                        mac_address=$mac
+                                        continue 4
+                                    fi
+                                done
+                                Println "$error 没有剩余 mac 地址\n"
+                                exit 1
                             ;;
                             *[!0-9]*)
                                 Println "$error 请输入正确的序号\n"
@@ -19177,7 +19305,34 @@ ViewXtreamCodesChnls()
                     break
                 done
             else
-                Println "$error $mac_address 错误, 找不到分类! 账号到期时间: $exp_date\n" && exit 1
+                Println "$error $mac_address 错误, 找不到分类! 账号到期时间: $exp_date\n"
+
+                mac_addresses_failed+=("$mac_address")
+
+                for mac in "${macs[@]}"
+                do
+                    if [ "$mac_address" != "$mac" ] 
+                    then
+                        for mac_address_failed in "${mac_addresses_failed[@]}"
+                        do
+                            if [ "$mac_address_failed" == "$mac" ] 
+                            then
+                                continue 2
+                            fi
+                        done
+                        for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
+                        do
+                            if [ "$xc_chnl_mac" == "$domain/$mac" ] 
+                            then
+                                continue 2
+                            fi
+                        done
+                        Println "$info 测试 $mac\n"
+                        mac_address=$mac
+                        continue 2
+                    fi
+                done
+                exit 1
             fi
             break
         done
@@ -28922,7 +29077,7 @@ ViewCloudflareSubdomain()
     cf_subdomains_list=""
     for((i=0;i<${#cf_hosted_cnames[@]};i++));
     do
-        cf_subdomains_list="$cf_subdomains_list $green$((i+1)).${normal}\r\033[6CCNAME: $green${cf_hosted_cnames[i]}${normal} => $green${cf_resolve_tos[i]}${normal}\n\033[6C解析地址: $green${cf_forward_tos[i]}${normal}\n\n"
+        cf_subdomains_list="$cf_subdomains_list $green$((i+1)).${normal}\r\033[6CCNAME: $green${cf_hosted_cnames[i]}${normal} => $green${cf_forward_tos[i]}${normal}\n\033[6C解析地址: $green${cf_resolve_tos[i]}${normal}\n\n"
     done
 
     if [ -z "$cf_subdomains_list" ] 
@@ -28959,7 +29114,7 @@ ViewCloudflareSubdomain()
             cf_subdomains_list=""
             for((i=0;i<${#cf_hosted_cnames[@]};i++));
             do
-                cf_subdomains_list="$cf_subdomains_list $green$((i+1)).${normal}\r\033[6CCNAME: $green${cf_hosted_cnames[i]}${normal} => $green${cf_resolve_tos[i]}${normal}\n\033[6C解析地址: $green${cf_forward_tos[i]}${normal}\n\n"
+                cf_subdomains_list="$cf_subdomains_list $green$((i+1)).${normal}\r\033[6CCNAME: $green${cf_hosted_cnames[i]}${normal} => $green${cf_forward_tos[i]}${normal}\n\033[6C解析地址: $green${cf_resolve_tos[i]}${normal}\n\n"
             done
 
             if [ "$cf_zone_ssl_status" == "ready" ] 
@@ -34751,7 +34906,7 @@ ProcessVipLists()
                     then
                         stop=$(date -d 'tomorrow 00:00:00' "+%Y%m%d%H%M%S")
                     else
-                        printf -v stop '%(%Y%m%d%H%M%S)T' "${sys_times[$((n+1))]}"
+                        printf -v stop '%(%Y%m%d%H%M%S)T' "${sys_times[n+1]}"
                     fi
                     epg_list="$epg_list<programme start=\"$start +0800\" stop=\"$stop +0800\" channel=\"$program_id\">\n<title lang=\"zh\">${titles[n]}</title>\n</programme>\n"
                 done
@@ -37135,7 +37290,7 @@ config interface 'lan'
             if [ "$core" == "xray-core" ] 
             then
                 echo
-                xray_options=( '最新' '1.2.3' '1.2.2' '1.2.1' '1.2.0' '1.1.5' )
+                xray_options=( '最新' '1.2.4' '1.2.3' )
                 inquirer list_input "选择 xray 版本" xray_options xray_ver
                 if [ "$xray_ver" == "最新" ] && ! xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/openwrt-xray.json" | $JQ_FILE -r '.tag_name')
                 then

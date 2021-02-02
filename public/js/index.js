@@ -1430,17 +1430,14 @@ function playbackOrUpcoming(e) {
       let channel = e.target.dataset.channel;
       let hboLink;
       switch (channel) {
-        case 'hbo':
-          hboLink = 'https://hboasia.com/HBO/zh-cn/ajax/home_schedule_upcoming_showtimes?channel=' + channel + '&feed=satellite&id=' + showId;
+        case 'hbocn':
+          hboLink = 'https://hboasia.com/HBO/zh-cn/ajax/home_schedule_upcoming_showtimes?channel=hbo&feed=cn&id=' + showId;
           break;
         case 'hbotw':
-          hboLink = 'https://hboasia.com/HBO/zh-cn/ajax/home_schedule_upcoming_showtimes?channel=hbo&feed=satellite&id=' + showId;
-          break;
-        case 'hbored':
-          hboLink = 'https://hboasia.com/HBO/zh-cn/ajax/home_schedule_upcoming_showtimes?channel=red&feed=satellite&id=' + showId;
+          hboLink = 'https://hboasia.com/HBO/zh-cn/ajax/home_schedule_upcoming_showtimes?channel=hbo&feed=tw&id=' + showId;
           break;
         default:
-          hboLink = 'https://hboasia.com/HBO/zh-tw/ajax/home_schedule_upcoming_showtimes?channel=' + channel + '&feed=satellite&id=' + showId;
+          hboLink = 'https://hboasia.com/HBO/zh-cn/ajax/home_schedule_upcoming_showtimes?channel=' + channel + '&feed=satellite&id=' + showId;
           break;
       }
       //alertInfo('正在查询官网请稍等...');
@@ -1530,7 +1527,6 @@ const alertField = document.querySelector('.alert');
 const upComingField = document.querySelector('.upComing');
 const sliderField = document.querySelector('.js_slider');
 const scheduleField = document.querySelector('.slides');
-const img = document.getElementById('my-screenshot');
 
 let liveui = true;
 /*if (videojs.browser.IS_ANDROID || videojs.browser.IS_IOS) {
