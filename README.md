@@ -4,11 +4,11 @@
 
 - [一键管理 xray 脚本](#一键管理-xray-脚本)
 - [一键管理 v2ray 脚本](#一键管理-v2ray-脚本)
-- [一键管理 Armbian 脚本](#一键管理-armbian-脚本)
-- [一键管理 IBM Cloud Foundry 脚本](#一键管理-ibm-cloud-foundry-脚本)
+- [一键管理 armbian 脚本](#一键管理-armbian-脚本)
+- [一键管理 ibm cloud foundry 脚本](#一键管理-ibm-cloud-foundry-脚本)
 - [一键管理 cloudflare partner,workers 脚本](#一键管理-cloudflare-partnerworkers-脚本)
 - [一键管理 nginx 脚本](#一键管理-nginx-脚本)
-- [一键管理 OpenResty 脚本](#一键管理-openresty-脚本)
+- [一键管理 openresty 脚本](#一键管理-openresty-脚本)
 - [一键管理 FFmpeg 脚本](#一键管理-ffmpeg-脚本)
   - [演示](#演示)
   - [编译 h265 patched 静态 FFmpeg](#编译-h265-patched-静态-ffmpeg)
@@ -42,7 +42,7 @@ v2 # 打开 v2ray 管理面板
 
 ---
 
-## 一键管理 Armbian 脚本
+## 一键管理 armbian 脚本
 
 ``` bash
 wget -q https://git.io/arm.sh && bash arm.sh
@@ -61,7 +61,7 @@ arm # 打开 Armbian 管理面板
 
 ---
 
-## 一键管理 IBM Cloud Foundry 脚本
+## 一键管理 ibm cloud foundry 脚本
 
 ``` bash
 wget -q https://git.io/ibm.sh && bash ibm.sh
@@ -94,11 +94,11 @@ Mac/Linux 一键获取最优 IP 可以用脚本 [cloudflare-fping](https://githu
 - 开启 workers 监控
   - 可以在超过请求数( 默认 100000 )时自动上传 worker 到其他账号并移动域名 CNAME 记录
   - 准备工作
-    - 所有账号必须是邮箱验证完成的
-    - 在 partner 面板添加源站 CNAME 记录, 所有源站必须在同一 cloudflare 账号
-    - 一个 CNAME 对应一个 worker, 否则会出错
-    - 如果没有添加 Token (workers 和 zone 编辑权限) 脚本会尝试添加
-    - 可以设置中转 IBM CF
+    - 脚本添加用户
+    - [ 可省略 ] 需要 Token (API 令牌): workers 和 zone 编辑权限 或 使用 Global API Key (官网添加或查看)
+    - 脚本添加源站 CNAME 记录(一个 CNAME 对应一个 worker), 所有域名必须在同一 cloudflare 账号
+    - 如果是新账号需要登录官网完成验证邮箱并点击 workers 设置站点域名
+  - 可以设置中转 IBM CF
 
 ---
 
@@ -113,7 +113,7 @@ nx # 打开 Nginx 管理面板
   
 ---
 
-## 一键管理 OpenResty 脚本
+## 一键管理 openresty 脚本
 
 ``` bash
 wget -q https://git.io/or.sh && bash or.sh
@@ -163,6 +163,7 @@ tv d # 添加演示频道
 - fengshows
 - lotus macau
 - youtube
+- hbo asia
 
 ### xtream codes 频道
 
@@ -195,7 +196,6 @@ tv v # 直接打开 VIP 频道面板
   - 输入 tv f 打开 FLV 推流管理面板
 - 主目录在 /usr/local/iptv
   - channels.json [ 默认值和频道列表 ]
-  - HLS-Stream-Creator 本尊
   - FFmpeg-git*-static
   - jq
   - live/ [ hls输出目录 ]

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# A [ ffmpeg / xray / v2ray / nginx / openresty / cloudflare partner,workers / ibm cf / armbian ] Wrapper Script By MTimer
+# A [ FFmpeg / xray / v2ray / nginx / openresty / cloudflare partner,workers / ibm cf / armbian ] Wrapper Script By MTimer
 # Copyright (C) 2019
 # Released under BSD 3 Clause License
 #
@@ -12,7 +12,7 @@
 #     -o  输出目录名称(默认: 随机名称)
 #
 #     -l  非无限时长直播, 无法设置切割的分片数且无法监控(默认: 不设置)
-#     -P  ffmpeg 的 http 代理, 直播源是 http 链接时可用(默认: 不设置)
+#     -P  FFmpeg 的 http 代理, 直播源是 http 链接时可用(默认: 不设置)
 #
 #     -p  m3u8名称(前缀)(默认: 随机)
 #     -c  m3u8里包含的分片数目(默认: 5)
@@ -39,13 +39,13 @@
 #     -H  推流 h265(默认: 不设置)
 #     -T  设置推流地址, 比如 rtmp://127.0.0.1/flv/xxx
 #     -L  输入拉流(播放)地址(可省略), 比如 http://domain.com/flv?app=flv&stream=xxx
-#     -m  ffmpeg 额外的 输入参数
+#     -m  FFmpeg 额外的 输入参数
 #         (默认: -copy_unknown -reconnect 1 -reconnect_at_eof 1 
 #         -reconnect_streamed 1 -reconnect_delay_max 2000 
 #         -rw_timeout 10000000 -y -nostats -nostdin -hide_banner -loglevel error)
 #         如果输入的直播源是 hls 链接, 需去除 -reconnect_at_eof 1
 #         如果输入的直播源是 rtmp 或本地链接, 需去除 -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000
-#     -n  ffmpeg 额外的 输出参数, 可以输入 omit 省略此选项
+#     -n  FFmpeg 额外的 输出参数, 可以输入 omit 省略此选项
 #         (默认: -g 50 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main)
 #
 # 举例:
@@ -69,7 +69,8 @@
 #     tv s 节目表管理面板
 #     tv 4g 打开 4gtv 频道管理面板
 #     tv d 添加演示频道
-#     tv ffmpeg 自建 ffmpeg 镜像
+#     tv FFmpeg 自建 FFmpeg 镜像
+#     tv debug 1/0 开启/关闭 调试
 #
 #     cx 打开 xtream codes 账号/频道管理面板
 #
@@ -94,7 +95,7 @@
 
 set -euo pipefail
 
-sh_ver="1.50.0"
+sh_ver="1.60.6"
 sh_debug=0
 export LC_ALL=
 export LANG=en_US.UTF-8
@@ -113,6 +114,7 @@ MONITOR_LOG="$IPTV_ROOT/monitor.log"
 LOGROTATE_CONFIG="$IPTV_ROOT/logrotate"
 CRON_FILE="$IPTV_ROOT/cron"
 XTREAM_CODES="$IPTV_ROOT/xtream_codes"
+XTREAM_CODES_EXAM="$IPTV_ROOT/xtream_codes_exam"
 NODE_ROOT="$IPTV_ROOT/node"
 IP_DENY="$IPTV_ROOT/ip.deny"
 IP_LOG="$IPTV_ROOT/ip.log"
@@ -1693,7 +1695,7 @@ UpdateShFile()
         chmod +x "$SH_FILE"
         Println "$info $sh_name 脚本更新完成"
         sh_new_ver=$(grep 'sh_ver="' < "$SH_FILE" |awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1)
-        if [ "$sh_new_ver" != "$sh_ver" ] 
+        if [ "${sh_new_ver%.*}" != "${sh_ver%.*}" ] 
         then
             rm -f "$LOCK_FILE"
         fi
@@ -1705,7 +1707,7 @@ UpdateShFile()
             chmod +x "$SH_FILE"
             Println "$info $sh_name 脚本更新完成"
             sh_new_ver=$(grep 'sh_ver="' < "$SH_FILE" |awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1)
-            if [ "$sh_new_ver" != "$sh_ver" ] 
+            if [ "${sh_new_ver%.*}" != "${sh_ver%.*}" ] 
             then
                 rm -f "$LOCK_FILE"
             fi
@@ -2636,7 +2638,7 @@ InstallJQ()
             ln -sf /usr/local/bin/jq "$JQ_FILE"
         fi
         Println "$info JQ 安装完成..."
-    elif [ ! -e "$JQ_FILE" ]
+    elif [ ! -e "$JQ_FILE" ] || ! $JQ_FILE -V > /dev/null 2>&1 
     then
         Println "$info 开始下载/安装 JQ..."
         #experimental# grep -Po '"tag_name": "jq-\K.*?(?=")'
@@ -2674,8 +2676,6 @@ Install()
         #fi
 
         mkdir -p "$IPTV_ROOT"
-
-        UpdateCreatorFile
 
         InstallFFmpeg
         InstallJQ
@@ -2873,9 +2873,7 @@ Update()
         Spinner "更新 FFmpeg" InstallFFmpeg
     fi
 
-    rm -f "${JQ_FILE:-notfound}"
-    Println "$info 更新 JQ..."
-    InstallJQ
+    InstallJQ > /dev/null
 
     UpdateShFile
 
@@ -3049,9 +3047,39 @@ InstallPostfix()
 
 FilterString()
 {
+    global_options=()
+    global_flags=( 
+        cpuflags y n filter_threads stats stats_period progress debug_ts qphist benchmark 
+        benchmark_all timelimit dump hex filter_complex filter_complex_threads lavfi
+        filter_complex_script sdp_file abort_on max_error_rate xerror auto_conversion_filters
+        nostats nostdin hide_banner loglevel
+    )
+
     for var in "${@}"
     do
-        read -r ${var?} <<< "${!var//[\^\`]/-}"
+        var_new=${!var//[\^\`]/-}
+        if [ "$var" == "input_flags" ] || [ "$var" == "output_flags" ] || [ "$var" == "chnl_input_flags" ] || [ "$var" == "chnl_output_flags" ]
+        then
+            var_parse=$var_new
+            if [ -n "$var_parse" ] 
+            then
+                for global_flag in "${global_flags[@]}"
+                do
+                    if [[ $var_parse =~ (.*)"-$global_flag"$ ]] 
+                    then
+                        global_options+=("-$global_flag")
+                        var_parse="${BASH_REMATCH[1]}"
+                    elif [[ $var_parse =~ (.*)"-$global_flag "([^ -]*)(.*) ]] 
+                    then
+                        global_options+=("-$global_flag")
+                        [ -n "${BASH_REMATCH[2]}" ] && global_options+=("${BASH_REMATCH[2]}")
+                        var_parse="${BASH_REMATCH[1]}${BASH_REMATCH[3]}"
+                    fi
+                done
+            fi
+            read -r ${var}_command <<< "$var_parse"
+        fi
+        read -r ${var?} <<< "$var_new"
     done
 }
 
@@ -3313,135 +3341,389 @@ FlvStreamCreator()
                     SyncFile > /dev/null 2>> "$MONITOR_LOG"
                 ' EXIT
 
-                quality_command=""
-                bitrates_command=""
-                resolution_command=""
+    variants_input_command=()
+    variants_output_command=()
+    map_command=()
+    flv_command=( -f flv "$flv_push_link" )
+    headers_command=""
+    [ -n "$headers" ] && printf -v headers_command '%b' "$headers"
 
-                if [ -z "$quality" ]
+    if [ "$flv_h265_yn" == "yes" ] 
+    then
+        FFMPEG="/usr/local/bin/ffmpeg_c"
+    fi
+
+    if [ "${stream_link_qualities_count:-0}" -gt 1 ] || [ "${stream_link_audio_count:-0}" -gt 0 ] || [ "${stream_link_subtitles_count:-0}" -gt 0 ]
+    then
+        if [ "$origin_hls_url" -eq 1 ] 
+        then
+            if [[ $stream_link =~ ^https?:// ]] 
+            then
+                [ -n "$proxy" ] && variants_input_command+=( -http_proxy "$proxy" )
+                [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+                [ -n "$headers_command" ] && variants_input_command+=( -headers "$headers_command" )
+                [ -n "$cookies" ] && variants_input_command+=( -cookies "$cookies" )
+            elif [[ $stream_link =~ ^icecast?:// ]] 
+            then
+                [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+            fi
+            variants_input_command+=( $input_flags_command -i "$stream_link" )
+        fi
+
+        for((i=0;i<stream_link_qualities_count;i++));
+        do
+            stream_links_index=${stream_link_video_indices[i]}
+            if [ "$origin_hls_url" -eq 0 ] 
+            then
+                if [[ ${stream_links_url[stream_links_index]} =~ ^https?:// ]] 
                 then
-                    if [ -n "$bitrates" ] 
-                    then
-                        bitrates=${bitrates%%,*}
-                        if [[ $bitrates == *"-"* ]] 
-                        then
-                            resolution=${bitrates#*-}
-                            resolution_command="-vf scale=${resolution//x/:}"
-                            bitrates=${bitrates%-*}
-                            if [ -n "$const" ] 
-                            then
-                                bitrates_command="-b:v ${bitrates}k -bufsize ${bitrates}k -minrate ${bitrates}k -maxrate ${bitrates}k"
-                            else
-                                bitrates_command="-b:v ${bitrates}k"
-                            fi
-                        elif [[ $bitrates == *"x"* ]] 
-                        then
-                            resolution=$bitrates
-                            resolution_command="-vf scale=${resolution//x/:}"
-                        else
-                            if [ -n "$const" ] 
-                            then
-                                bitrates_command="-b:v ${bitrates}k -bufsize ${bitrates}k -minrate ${bitrates}k -maxrate ${bitrates}k"
-                            else
-                                bitrates_command="-b:v ${bitrates}k"
-                            fi
-                        fi
-                    fi
-                elif [ -n "$bitrates" ] 
+                    [ -n "$proxy" ] && variants_input_command+=( -http_proxy "$proxy" )
+                    [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+                    [ -n "$headers_command" ] && variants_input_command+=( -headers "$headers_command" )
+                    [ -n "$cookies" ] && variants_input_command+=( -cookies "$cookies" )
+                elif [[ ${stream_links_url[stream_links_index]} =~ ^icecast?:// ]] 
                 then
-                    bitrates=${bitrates%%,*}
-                    if [[ $bitrates == *"-"* ]] 
+                    [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+                fi
+                variants_input_command+=( $input_flags_command -i "${stream_links_url[stream_links_index]}" )
+                map_command+=( -map $i:v )
+            else
+                map_command+=( -map 0:v:$stream_links_index )
+            fi
+
+            if [ "$video_codec" != "copy" ] 
+            then
+                variant_bitrate=${stream_link_qualities[i]%-*}
+                variant_resolution=${stream_link_qualities[i]#*-}
+                if [ -n "$const" ]
+                then
+                    variants_output_command+=( -b:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k )
+                else
+                    variants_output_command+=( -b:v:$i ${variant_bitrate}k )
+                fi
+                variants_output_command+=( -s:v:$i $variant_resolution )
+            fi
+        done
+
+        variants_output_command+=( -c:v "$video_codec" -c:a "$audio_codec" $output_flags_command )
+
+        if [ -n "${stream_audio_url:-}" ] 
+        then
+            if [ "${stream_link_audio_count:-0}" -gt 0 ] 
+            then
+                for((i=0;i<stream_link_audio_count;i++));
+                do
+                    stream_link_audio_index=${stream_link_audio_indices[i]}
+                    if [ "$origin_hls_url" -eq 0 ] 
                     then
-                        resolution=${bitrates#*-}
-                        resolution_command="-vf scale=${resolution//x/:}"
-                        bitrates=${bitrates%-*}
-                        quality_command="-crf ${quality%%,*} -maxrate ${bitrates}k -bufsize ${bitrates}k"
-                        if [ "$video_codec" == "libx265" ]
+                        if [[ ${stream_audio_url[stream_link_audio_index]} =~ ^https?:// ]] 
                         then
-                            quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
+                            [ -n "$proxy" ] && variants_input_command+=( -http_proxy "$proxy" )
+                            [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+                            [ -n "$headers_command" ] && variants_input_command+=( -headers "$headers_command" )
+                            [ -n "$cookies" ] && variants_input_command+=( -cookies "$cookies" )
+                        elif [[ ${stream_audio_url[stream_link_audio_index]} =~ ^icecast?:// ]] 
+                        then
+                            [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
                         fi
-                    elif [[ $bitrates == *"x"* ]] 
-                    then
-                        resolution=$bitrates
-                        resolution_command="-vf scale=${resolution//x/:}"
-                        quality_command="-crf ${quality%%,*}"
+                        variants_input_command+=( $input_flags_command -i "${stream_audio_url[stream_link_audio_index]}" )
+                        map_command+=( -map $((i+stream_link_qualities_count)):a )
                     else
-                        quality_command="-crf ${quality%%,*} -maxrate ${bitrates}k -bufsize ${bitrates}k"
-                        if [ "$video_codec" == "libx265" ]
-                        then
-                            quality_command="$quality_command -x265-params --vbv-maxrate ${bitrates}k --vbv-bufsize ${bitrates}k"
-                        fi
+                        map_command+=( -map 0:a:$stream_link_audio_index )
                     fi
+                done
+            fi
+        else
+            for((i=0;i<stream_link_qualities_count;i++));
+            do
+                if [ "$origin_hls_url" -eq 0 ] 
+                then
+                    map_command+=( -map $i:a )
                 else
-                    quality_command="-crf ${quality%%,*}"
+                    map_command+=( -map 0:a:$i )
                 fi
+            done
+        fi
 
-                if [ -n "${video_shift:-}" ] 
-                then
-                    map_command="-itsoffset $video_shift -i $stream_link -map 0:v -map 1:a"
-                elif [ -n "${audio_shift:-}" ] 
-                then
-                    map_command="-itsoffset $audio_shift -i $stream_link -map 0:a -map 1:v"
-                else
-                    map_command=""
-                fi
+        PrepTerm
+        $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+        ${variants_input_command[@]+"${variants_input_command[@]}"} \
+        ${variants_output_command[@]+"${variants_output_command[@]}"} \
+        ${map_command[@]+"${map_command[@]}"} \
+        -flags -global_header \
+        ${flv_command[@]+"${flv_command[@]}"} > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+        WaitTerm
+        exit 0
+    fi
 
-                if [ -n "$draw_text" ] 
-                then
-                    if [ -n "$resolution_command" ] 
-                    then
-                        resolution_command="$resolution_command,drawtext=$draw_text"
-                    elif [ "$video_codec" != "copy" ] 
-                    then
-                        resolution_command="-vf drawtext=$draw_text"
-                    fi
-                fi
+    filter_complex=""
+    input_command=()
 
-                if [[ $output_flags == *"-vf "* ]] && [ -n "$resolution_command" ]
-                then
-                    output_flags_A=${output_flags%-vf *}
-                    output_flags_B=${output_flags#*-vf }
-                    output_flags_C=${output_flags_B%% *}
-                    output_flags_B=${output_flags_B#* }
-                    output_flags="$output_flags_A $output_flags_B"
-                    resolution_command="-vf $output_flags_C,${resolution_command#*-vf }"
-                fi
+    if [ "${stream_link_qualities_count:-0}" -eq 1 ] 
+    then
+        stream_links_index=${stream_link_video_indices[0]}
+        stream_link=${stream_links_url[stream_links_index]}
+    fi
 
-                args=()
+    if [[ $stream_link =~ ^https?:// ]] 
+    then
+        [ -n "$proxy" ] && input_command+=( -http_proxy "$proxy" )
+        [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
+        [ -n "$headers_command" ] && input_command+=( -headers "$headers_command" )
+        [ -n "$cookies" ] && input_command+=( -cookies "$cookies" )
+    elif [[ $stream_link =~ ^icecast?:// ]] 
+    then
+        [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
+    fi
 
+    input_command+=( $input_flags_command -i $stream_link )
+
+    video_shift_index=0
+    audio_shift_index=0
+    if ! [[ $input_flags =~ -an ]] && ! [[ $output_flags =~ -an ]] 
+    then
+        if [ -n "${video_shift:-}" ] 
+        then
+            video_shift_index=1
+            if [[ $stream_link =~ ^https?:// ]] 
+            then
+                [ -n "$proxy" ] && input_command+=( -http_proxy "$proxy" )
+                [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
+                [ -n "$headers_command" ] && input_command+=( -headers "$headers_command" )
+                [ -n "$cookies" ] && input_command+=( -cookies "$cookies" )
+            elif [[ $stream_link =~ ^icecast?:// ]] 
+            then
+                [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
+            fi
+            input_command+=( $input_flags_command -itsoffset $video_shift -i $stream_link )
+        elif [ -n "${audio_shift:-}" ] 
+        then
+            if [ "$audio_codec" == "copy" ] 
+            then
+                audio_shift_index=1
                 if [[ $stream_link =~ ^https?:// ]] 
                 then
-                    if [ -n "$proxy" ] 
-                    then
-                        args+=( -http_proxy "$proxy" )
-                    fi
-                    if [ -n "$user_agent" ] 
-                    then
-                        args+=( -user_agent "$user_agent" )
-                    fi
-                    if [ -n "$headers" ] 
-                    then
-                        printf -v headers_command '%b' "$headers"
-                        args+=( -headers "$headers_command" )
-                    fi
-                    if [ -n "$cookies" ] 
-                    then
-                        args+=( -cookies "$cookies" )
-                    fi
-                elif [[ $stream_link =~ ^icecast?:// ]]
+                    [ -n "$proxy" ] && input_command+=( -http_proxy "$proxy" )
+                    [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
+                    [ -n "$headers_command" ] && input_command+=( -headers "$headers_command" )
+                    [ -n "$cookies" ] && input_command+=( -cookies "$cookies" )
+                elif [[ $stream_link =~ ^icecast?:// ]] 
                 then
-                    args+=( -user_agent "$user_agent" )
+                    [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
+                fi
+                input_command+=( $input_flags_command -itsoffset $audio_shift -i $stream_link )
+            else
+                input_command+=( -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" )
+            fi
+        fi
+    fi
+
+    if [ -z "$quality" ]
+    then
+        if [ -n "$bitrates" ] 
+        then
+            IFS="," read -r -a variants <<< "$bitrates"
+
+            for((i=0;i<${#variants[@]};i++));
+            do
+                variant=${variants[i]}
+
+                if [[ $variant =~ - ]] 
+                then
+                    bitrates=${variant%-*}
+                    resolution=${variant#*-}
+
+                    if [ -n "$const" ] 
+                    then
+                        variants_output_command+=( -b:v:$i ${bitrates}k -bufsize:v:$i ${bitrates}k -minrate:v:$i ${bitrates}k -maxrate:v:$i ${bitrates}k )
+                    else
+                        variants_output_command+=( -b:v:$i ${bitrates}k )
+                    fi
+
+                    variants_output_command+=( -s:v:$i $resolution )
+                elif [[ $variant == *"x"* ]] 
+                then
+                    variants_output_command+=( -s:v:$i $variant )
+                else
+                    if [ -n "$const" ] 
+                    then
+                        variants_output_command+=( -b:v:$i ${variant}k -bufsize:v:$i ${variant}k -minrate:v:$i ${variant}k -maxrate:v:$i ${variant}k )
+                    else
+                        variants_output_command+=( -b:v:$i ${variant}k )
+                    fi
                 fi
 
-                if [ "$flv_h265_yn" == "yes" ] 
+                if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
                 then
-                    FFMPEG="/usr/local/bin/ffmpeg_c"
+                    [ -n "$filter_complex" ] && filter_complex="$filter_complex;"
+                    filter_complex="${filter_complex}[$video_shift_index:v] ${extra_filters}drawtext=$draw_text [drawtext_video_$i]"
                 fi
 
-                PrepTerm
-                $FFMPEG ${args[@]+"${args[@]}"} $input_flags -i "$stream_link" $map_command \
-                -vcodec "$video_codec" -acodec "$audio_codec" $quality_command $bitrates_command $resolution_command \
-                $output_flags -f flv "$flv_push_link" > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
-                WaitTerm
+                if [[ $input_flags =~ -an ]] || [[ $output_flags =~ -an ]] 
+                then
+                    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+                    then
+                        map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        map_command+=( -map $video_shift_index:v )
+                    fi
+                else
+                    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+                    then
+                        map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        map_command+=( -map $video_shift_index:v )
+                    fi
+
+                    if [ -n "${audio_shift:-}" ] && [ "$audio_codec" != "copy" ] 
+                    then
+                        map_command+=( -map '[delayed_audio]' )
+                    else
+                        map_command+=( -map $audio_shift_index:a )
+                    fi
+                fi
+            done
+        else
+            if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+            then
+                filter_complex="${filter_complex}[$video_shift_index:v] ${extra_filters}drawtext=$draw_text [drawtext_video]"
+            fi
+
+            if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+            then
+                map_command+=( -map '[drawtext_video]' )
+            else
+                map_command+=( -map $video_shift_index:v )
+            fi
+
+            if ! [[ $input_flags =~ -an ]] && ! [[ $output_flags =~ -an ]]
+            then
+                if [ -n "${audio_shift:-}" ] && [ "$audio_codec" != "copy" ] 
+                then
+                    map_command+=( -map '[delayed_audio]' )
+                else
+                    map_command+=( -map $audio_shift_index:a )
+                fi
+            fi
+        fi
+    else
+        IFS="," read -r -a qualities <<< "$quality"
+        if [ -n "$bitrates" ] 
+        then
+            IFS="," read -r -a variants <<< "$bitrates"
+
+            for((i=0;i<${#variants[@]};i++));
+            do
+                variant=${variants[i]}
+
+                if [[ $variant =~ - ]] 
+                then
+                    bitrates=${variant%-*}
+                    resolution=${variant#*-}
+
+                    variants_output_command+=( -crf:v:$i ${qualities[i]:-${quality[0]}} -bufsize:v:$i ${bitrates}k -maxrate:v:$i ${bitrates}k )
+
+                    if [ "$video_codec" == "libx265" ]
+                    then
+                        variants_output_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${bitrates}k --vbv-bufsize:v:$i ${bitrates}k )
+                    fi
+
+                    variants_output_command+=( -s:v:$i $resolution )
+                elif [[ $variant == *"x"* ]] 
+                then
+                    variants_output_command+=( -crf:v:$i ${qualities[i]:-${quality[0]}} -s:v:$i $variant )
+                else
+                    variants_output_command+=( -crf:v:$i ${qualities[i]:-${quality[0]}} -bufsize:v:$i ${variant}k -maxrate:v:$i ${variant}k )
+
+                    if [ "$video_codec" == "libx265" ]
+                    then
+                        variants_output_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${variant}k --vbv-bufsize:v:$i ${variant}k )
+                    fi
+                fi
+
+                if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+                then
+                    [ -n "$filter_complex" ] && filter_complex="$filter_complex;"
+                    filter_complex="${filter_complex}[$video_shift_index:v] ${extra_filters}drawtext=$draw_text [drawtext_video_$i]"
+                fi
+
+                if [[ $input_flags =~ -an ]] || [[ $output_flags =~ -an ]] 
+                then
+                    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+                    then
+                        map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        map_command+=( -map $video_shift_index:v )
+                    fi
+                else
+                    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+                    then
+                        map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        map_command+=( -map $video_shift_index:v )
+                    fi
+
+                    if [ -n "${audio_shift:-}" ] && [ "$audio_codec" != "copy" ]
+                    then
+                        map_command+=( -map '[delayed_audio]' )
+                    else
+                        map_command+=( -map $audio_shift_index:a )
+                    fi
+                fi
+            done
+        else
+            for((i=0;i<${#qualities[@]};i++));
+            do
+                variants_output_command+=( -crf:v:$i ${qualities[i]} )
+
+                if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+                then
+                    [ -n "$filter_complex" ] && filter_complex="$filter_complex;"
+                    filter_complex="${filter_complex}[$video_shift_index:v] ${extra_filters}drawtext=$draw_text [drawtext_video_$i]"
+                fi
+
+                if [[ $input_flags =~ -an ]] || [[ $output_flags =~ -an ]] 
+                then
+                    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+                    then
+                        map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        map_command+=( -map $video_shift_index:v )
+                    fi
+                else
+                    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+                    then
+                        map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        map_command+=( -map $video_shift_index:v )
+                    fi
+
+                    if [ -n "${audio_shift:-}" ] && [ "$audio_codec" != "copy" ]
+                    then
+                        map_command+=( -map '[delayed_audio]' )
+                    else
+                        map_command+=( -map $audio_shift_index:a )
+                    fi
+                fi
+            done
+        fi
+    fi
+
+    variants_output_command+=( -c:v "$video_codec" -c:a "$audio_codec" $output_flags_command )
+
+    if [ -n "$filter_complex" ] 
+    then
+        input_command+=( -filter_complex "$filter_complex" )
+    fi
+
+    PrepTerm
+    $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+    ${input_command[@]+"${input_command[@]}"} \
+    ${variants_output_command[@]+"${variants_output_command[@]}"} \
+    ${map_command[@]+"${map_command[@]}"} \
+    -flags -global_header \
+    ${flv_command[@]+"${flv_command[@]}"} > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+    WaitTerm
             } 201>"$pid_file"
         ;;
         "StartChannel") 
@@ -3474,135 +3756,395 @@ FlvStreamCreator()
                     SyncFile > /dev/null 2>> "$MONITOR_LOG"
                 ' EXIT
 
-                chnl_quality_command=""
-                chnl_bitrates_command=""
-                chnl_resolution_command=""
+    chnl_variants_input_command=()
+    chnl_variants_output_command=()
+    chnl_map_command=()
+    chnl_flv_command=( -f flv "$chnl_flv_push_link" )
+    chnl_headers_command=""
+    [ -n "$chnl_headers" ] && printf -v chnl_headers_command '%b' "$chnl_headers"
 
-                if [ -z "$chnl_quality" ]
+    if [ "$chnl_flv_h265_yn" == "yes" ] 
+    then
+        FFMPEG="/usr/local/bin/ffmpeg_c"
+    fi
+
+    if [ "${chnl_stream_link_qualities_count:-0}" -gt 1 ] || [ -n "${chnl_stream_link_audio_indices:-}" ]
+    then
+        if [ "$chnl_origin_hls_url" -eq 1 ] 
+        then
+            if [[ $chnl_stream_link =~ ^https?:// ]] 
+            then
+                [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
+                [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+                [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
+                [ -n "$chnl_cookies" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies" )
+            elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
+            then
+                [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+            fi
+            chnl_variants_input_command+=( $chnl_input_flags_command -i "$chnl_stream_link" )
+        fi
+
+        for((i=0;i<chnl_stream_link_qualities_count;i++));
+        do
+            chnl_stream_links_index=${chnl_stream_link_video_indices[i]}
+            if [ "$chnl_origin_hls_url" -eq 0 ] 
+            then
+                if [[ ${chnl_stream_links_url[chnl_stream_links_index]} =~ ^https?:// ]] 
                 then
-                    if [ -n "$chnl_bitrates" ] 
-                    then
-                        chnl_bitrates=${chnl_bitrates%%,*}
-                        if [[ $chnl_bitrates == *"-"* ]] 
-                        then
-                            resolution=${chnl_bitrates#*-}
-                            chnl_resolution_command="-vf scale=${resolution//x/:}"
-                            chnl_bitrates=${chnl_bitrates%-*}
-                            if [ -n "$chnl_const" ] 
-                            then
-                                chnl_bitrates_command="-b:v ${chnl_bitrates}k -bufsize ${chnl_bitrates}k -minrate ${chnl_bitrates}k -maxrate ${chnl_bitrates}k"
-                            else
-                                chnl_bitrates_command="-b:v ${chnl_bitrates}k"
-                            fi
-                        elif [[ $chnl_bitrates == *"x"* ]] 
-                        then
-                            resolution=$chnl_bitrates
-                            chnl_resolution_command="-vf scale=${resolution//x/:}"
-                        else
-                            if [ -n "$chnl_const" ] 
-                            then
-                                chnl_bitrates_command="-b:v ${chnl_bitrates}k -bufsize ${chnl_bitrates}k -minrate ${chnl_bitrates}k -maxrate ${chnl_bitrates}k"
-                            else
-                                chnl_bitrates_command="-b:v ${chnl_bitrates}k"
-                            fi
-                        fi
-                    fi
-                elif [ -n "$chnl_bitrates" ] 
+                    [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
+                    [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+                    [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
+                    [ -n "$chnl_cookies" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies" )
+                elif [[ ${chnl_stream_links_url[chnl_stream_links_index]} =~ ^icecast?:// ]] 
                 then
-                    chnl_bitrates=${chnl_bitrates%%,*}
-                    if [[ $chnl_bitrates == *"-"* ]] 
+                    [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+                fi
+                chnl_variants_input_command+=( $chnl_input_flags_command -i "${chnl_stream_links_url[chnl_stream_links_index]}" )
+                chnl_map_command+=( -map $i:v )
+            else
+                chnl_map_command+=( -map 0:v:$chnl_stream_links_index )
+            fi
+
+            if [ "$chnl_video_codec" != "copy" ] 
+            then
+                chnl_variant_bitrate=${chnl_stream_link_qualities[i]%-*}
+                chnl_variant_resolution=${chnl_stream_link_qualities[i]#*-}
+                if [ -n "$chnl_const" ]
+                then
+                    chnl_variants_output_command+=( -b:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k )
+                else
+                    chnl_variants_output_command+=( -b:v:$i ${chnl_variant_bitrate}k )
+                fi
+                chnl_variants_output_command+=( -s:v:$i $chnl_variant_resolution )
+            fi
+        done
+
+        chnl_variants_output_command+=( -c:v "$chnl_video_codec" -c:a "$chnl_audio_codec" $chnl_output_flags_command )
+
+        if [ -n "${chnl_stream_audio_url:-}" ] 
+        then
+            if [ -n "${chnl_stream_link_audio_indices:-}" ] 
+            then
+                for((i=0;i<${#chnl_stream_link_audio_indices[@]};i++));
+                do
+                    chnl_stream_link_audio_index=${chnl_stream_link_audio_indices[i]}
+                    if [ "$chnl_origin_hls_url" -eq 0 ] 
                     then
-                        resolution=${chnl_bitrates#*-}
-                        chnl_resolution_command="-vf scale=${resolution//x/:}"
-                        chnl_bitrates=${chnl_bitrates%-*}
-                        chnl_quality_command="-crf ${chnl_quality%%,*} -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k"
-                        if [ "$chnl_video_codec" == "libx265" ]
+                        if [[ ${chnl_stream_audio_url[chnl_stream_link_audio_index]} =~ ^https?:// ]] 
                         then
-                            chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
+                            [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
+                            [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+                            [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
+                            [ -n "$chnl_cookies" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies" )
+                        elif [[ ${chnl_stream_audio_url[chnl_stream_link_audio_index]} =~ ^icecast?:// ]] 
+                        then
+                            [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
                         fi
-                    elif [[ $chnl_bitrates == *"x"* ]] 
-                    then
-                        resolution=$chnl_bitrates
-                        chnl_resolution_command="-vf scale=${resolution//x/:}"
-                        chnl_quality_command="-crf ${chnl_quality%%,*}"
+                        chnl_variants_input_command+=( $chnl_input_flags_command -i "${chnl_stream_audio_url[chnl_stream_link_audio_index]}" )
+                        chnl_map_command+=( -map $((i+chnl_stream_link_qualities_count)):a )
                     else
-                        chnl_quality_command="-crf ${chnl_quality%%,*} -maxrate ${chnl_bitrates}k -bufsize ${chnl_bitrates}k"
-                        if [ "$chnl_video_codec" == "libx265" ]
-                        then
-                            chnl_quality_command="$chnl_quality_command -x265-params --vbv-maxrate ${chnl_bitrates}k --vbv-bufsize ${chnl_bitrates}k"
-                        fi
+                        chnl_map_command+=( -map 0:a:$chnl_stream_link_audio_index )
                     fi
+                done
+            fi
+        else
+            for((i=0;i<chnl_stream_link_qualities_count;i++));
+            do
+                if [ "$chnl_origin_hls_url" -eq 0 ] 
+                then
+                    chnl_map_command+=( -map $i:a )
                 else
-                    chnl_quality_command="-crf ${chnl_quality%%,*}"
+                    chnl_map_command+=( -map 0:a:$i )
                 fi
+            done
+        fi
 
-                if [ -n "${chnl_video_shift:-}" ] 
-                then
-                    chnl_map_command="-itsoffset $chnl_video_shift -i $chnl_stream_link -map 0:v -map 1:a"
-                elif [ -n "${chnl_audio_shift:-}" ] 
-                then
-                    chnl_map_command="-itsoffset $chnl_audio_shift -i $chnl_stream_link -map 0:a -map 1:v"
-                else
-                    chnl_map_command=""
-                fi
+        PrepTerm
+        $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+        ${chnl_variants_input_command[@]+"${chnl_variants_input_command[@]}"} \
+        ${chnl_variants_output_command[@]+"${chnl_variants_output_command[@]}"} \
+        ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
+        -flags -global_header \
+        ${chnl_flv_command[@]+"${chnl_flv_command[@]}"} > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+        WaitTerm
+        exit 0
+    fi
 
-                if [ -n "$chnl_draw_text" ] 
-                then
-                    if [ -n "$chnl_resolution_command" ] 
-                    then
-                        chnl_resolution_command="$chnl_resolution_command,drawtext=$chnl_draw_text"
-                    elif [ "$chnl_video_codec" != "copy" ]
-                    then
-                        chnl_resolution_command="-vf drawtext=$chnl_draw_text"
-                    fi
-                fi
+    chnl_filter_complex=""
+    chnl_input_command=()
 
-                if [[ $chnl_output_flags == *"-vf "* ]] && [ -n "$chnl_resolution_command" ]
-                then
-                    chnl_output_flags_A=${chnl_output_flags%-vf *}
-                    chnl_output_flags_B=${chnl_output_flags#*-vf }
-                    chnl_output_flags_C=${chnl_output_flags_B%% *}
-                    chnl_output_flags_B=${chnl_output_flags_B#* }
-                    chnl_output_flags="$chnl_output_flags_A $chnl_output_flags_B"
-                    chnl_resolution_command="-vf $chnl_output_flags_C,${chnl_resolution_command#*-vf }"
-                fi
+    if [ "${chnl_stream_link_qualities_count:-0}" -eq 1 ] 
+    then
+        chnl_stream_links_index=${chnl_stream_link_video_indices[0]}
+        chnl_stream_link=${chnl_stream_links_url[chnl_stream_links_index]}
+    fi
 
-                args=()
+    if [[ $chnl_stream_link =~ ^https?:// ]] 
+    then
+        [ -n "$chnl_proxy" ] && chnl_input_command+=( -http_proxy "$chnl_proxy" )
+        [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
+        [ -n "$chnl_headers_command" ] && chnl_input_command+=( -headers "$chnl_headers_command" )
+        [ -n "$chnl_cookies" ] && chnl_input_command+=( -cookies "$chnl_cookies" )
+    elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
+    then
+        [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
+    fi
 
+    chnl_input_command+=( $chnl_input_flags_command -i $chnl_stream_link )
+
+    chnl_video_shift_index=0
+    chnl_audio_shift_index=0
+    if ! [[ $chnl_input_flags =~ -an ]] && ! [[ $chnl_output_flags =~ -an ]] 
+    then
+        if [ -n "${chnl_video_shift:-}" ] 
+        then
+            chnl_video_shift_index=1
+            if [[ $chnl_stream_link =~ ^https?:// ]] 
+            then
+                [ -n "$chnl_proxy" ] && chnl_input_command+=( -http_proxy "$chnl_proxy" )
+                [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
+                [ -n "$chnl_headers_command" ] && chnl_input_command+=( -headers "$chnl_headers_command" )
+                [ -n "$chnl_cookies" ] && chnl_input_command+=( -cookies "$chnl_cookies" )
+            elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
+            then
+                [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
+            fi
+            chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_video_shift -i $chnl_stream_link )
+        elif [ -n "${audio_shift:-}" ] 
+        then
+            if [ "$chnl_audio_codec" == "copy" ] 
+            then
+                chnl_audio_shift_index=1
                 if [[ $chnl_stream_link =~ ^https?:// ]] 
                 then
-                    if [ -n "$chnl_proxy" ] 
-                    then
-                        args+=( -http_proxy "$chnl_proxy" )
-                    fi
-                    if [ -n "$chnl_user_agent" ] 
-                    then
-                        args+=( -user_agent "$chnl_user_agent" )
-                    fi
-                    if [ -n "$chnl_headers" ] 
-                    then
-                        printf -v chnl_headers_command '%b' "$chnl_headers"
-                        args+=( -headers "$chnl_headers_command" )
-                    fi
-                    if [ -n "$chnl_cookies" ] 
-                    then
-                        args+=( -cookies "$chnl_cookies" )
-                    fi
+                    [ -n "$chnl_proxy" ] && chnl_input_command+=( -http_proxy "$chnl_proxy" )
+                    [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
+                    [ -n "$chnl_headers_command" ] && chnl_input_command+=( -headers "$chnl_headers_command" )
+                    [ -n "$chnl_cookies" ] && chnl_input_command+=( -cookies "$chnl_cookies" )
                 elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
                 then
-                    args+=( -user_agent "$chnl_user_agent" )
+                    [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
                 fi
+                chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_audio_shift -i $chnl_stream_link )
+            else
+                chnl_input_command+=( -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" )
+            fi
+        fi
+    fi
 
-                if [ "$chnl_flv_h265_yn" == "yes" ] 
+    if [ "$chnl_video_codec" == "copy" ] && [ "$chnl_audio_codec" == "copy" ]
+    then
+        chnl_quality=""
+        chnl_bitrates=""
+    fi
+
+    if [ -z "$chnl_quality" ]
+    then
+        if [ -n "$chnl_bitrates" ] 
+        then
+            IFS="," read -r -a chnl_variants <<< "$chnl_bitrates"
+
+            for((i=0;i<${#chnl_variants[@]};i++));
+            do
+                chnl_variant=${chnl_variants[i]}
+
+                if [[ $chnl_variant =~ - ]] 
                 then
-                    FFMPEG="/usr/local/bin/ffmpeg_c"
+                    chnl_bitrates=${chnl_variant%-*}
+                    chnl_resolution=${chnl_variant#*-}
+
+                    if [ -n "$chnl_const" ] 
+                    then
+                        chnl_variants_output_command+=( -b:v:$i ${chnl_bitrates}k -bufsize:v:$i ${chnl_bitrates}k -minrate:v:$i ${chnl_bitrates}k -maxrate:v:$i ${chnl_bitrates}k )
+                    else
+                        chnl_variants_output_command+=( -b:v:$i ${chnl_bitrates}k )
+                    fi
+
+                    chnl_variants_output_command+=( -s:v:$i $chnl_resolution )
+                elif [[ $chnl_variant == *"x"* ]] 
+                then
+                    chnl_variants_output_command+=( -s:v:$i $chnl_variant )
+                else
+                    if [ -n "$chnl_const" ] 
+                    then
+                        chnl_variants_output_command+=( -b:v:$i ${chnl_variant}k -bufsize:v:$i ${chnl_variant}k -minrate:v:$i ${chnl_variant}k -maxrate:v:$i ${chnl_variant}k )
+                    else
+                        chnl_variants_output_command+=( -b:v:$i ${chnl_variant}k )
+                    fi
                 fi
 
-                PrepTerm
-                $FFMPEG ${args[@]+"${args[@]}"} $chnl_input_flags -i "$chnl_stream_link" $chnl_map_command \
-                -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" $chnl_quality_command $chnl_bitrates_command $chnl_resolution_command \
-                $chnl_output_flags -f flv "$chnl_flv_push_link" > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
-                WaitTerm
+                if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                then
+                    [ -n "$chnl_filter_complex" ] && chnl_filter_complex="$chnl_filter_complex;"
+                    chnl_filter_complex="${chnl_filter_complex}[$chnl_video_shift_index:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video_$i]"
+                fi
+
+                if [[ $chnl_input_flags =~ -an ]] || [[ $chnl_output_flags =~ -an ]] 
+                then
+                    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                    then
+                        chnl_map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        chnl_map_command+=( -map $chnl_video_shift_index:v )
+                    fi
+                else
+                    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                    then
+                        chnl_map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        chnl_map_command+=( -map $chnl_video_shift_index:v )
+                    fi
+
+                    if [ -n "${chnl_audio_shift:-}" ] && [ "$chnl_audio_codec" != "copy" ] 
+                    then
+                        chnl_map_command+=( -map '[delayed_audio]' )
+                    else
+                        chnl_map_command+=( -map $chnl_audio_shift_index:a )
+                    fi
+                fi
+            done
+        else
+            if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+            then
+                chnl_filter_complex="${chnl_filter_complex}[$chnl_video_shift_index:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]"
+            fi
+
+            if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+            then
+                chnl_map_command+=( -map '[drawtext_video]' )
+            else
+                chnl_map_command+=( -map $chnl_video_shift_index:v )
+            fi
+
+            if ! [[ $chnl_input_flags =~ -an ]] && ! [[ $chnl_output_flags =~ -an ]]
+            then
+                if [ -n "${chnl_audio_shift:-}" ] && [ "$chnl_audio_codec" != "copy" ] 
+                then
+                    chnl_map_command+=( -map '[delayed_audio]' )
+                else
+                    chnl_map_command+=( -map $chnl_audio_shift_index:a )
+                fi
+            fi
+        fi
+    else
+        IFS="," read -r -a chnl_qualities <<< "$chnl_quality"
+        if [ -n "$bitrates" ] 
+        then
+            IFS="," read -r -a chnl_variants <<< "$chnl_bitrates"
+
+            for((i=0;i<${#chnl_variants[@]};i++));
+            do
+                chnl_variant=${chnl_variants[i]}
+
+                if [[ $chnl_variant =~ - ]] 
+                then
+                    chnl_bitrates=${chnl_variant%-*}
+                    chnl_resolution=${chnl_variant#*-}
+
+                    chnl_variants_output_command+=( -crf:v:$i ${chnl_qualities[i]:-${chnl_quality[0]}} -bufsize:v:$i ${chnl_bitrates}k -maxrate:v:$i ${chnl_bitrates}k )
+
+                    if [ "$chnl_video_codec" == "libx265" ]
+                    then
+                        chnl_variants_output_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${chnl_bitrates}k --vbv-bufsize:v:$i ${chnl_bitrates}k )
+                    fi
+
+                    chnl_variants_output_command+=( -s:v:$i $chnl_resolution )
+                elif [[ $chnl_variant == *"x"* ]] 
+                then
+                    chnl_variants_output_command+=( -crf:v:$i ${chnl_qualities[i]:-${chnl_quality[0]}} -s:v:$i $chnl_variant )
+                else
+                    chnl_variants_output_command+=( -crf:v:$i ${chnl_qualities[i]:-${chnl_quality[0]}} -bufsize:v:$i ${chnl_variant}k -maxrate:v:$i ${chnl_variant}k )
+
+                    if [ "$chnl_video_codec" == "libx265" ]
+                    then
+                        chnl_variants_output_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${chnl_variant}k --vbv-bufsize:v:$i ${chnl_variant}k )
+                    fi
+                fi
+
+                if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                then
+                    [ -n "$chnl_filter_complex" ] && chnl_filter_complex="$chnl_filter_complex;"
+                    chnl_filter_complex="${chnl_filter_complex}[$chnl_video_shift_index:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video_$i]"
+                fi
+
+                if [[ $chnl_input_flags =~ -an ]] || [[ $chnl_output_flags =~ -an ]] 
+                then
+                    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                    then
+                        chnl_map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        chnl_map_command+=( -map $chnl_video_shift_index:v )
+                    fi
+                else
+                    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                    then
+                        chnl_map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        chnl_map_command+=( -map $chnl_video_shift_index:v )
+                    fi
+
+                    if [ -n "${chnl_audio_shift:-}" ] && [ "$chnl_audio_codec" != "copy" ]
+                    then
+                        chnl_map_command+=( -map '[delayed_audio]' )
+                    else
+                        chnl_map_command+=( -map $chnl_audio_shift_index:a )
+                    fi
+                fi
+            done
+        else
+            for((i=0;i<${#chnl_qualities[@]};i++));
+            do
+                chnl_variants_output_command+=( -crf:v:$i ${chnl_qualities[i]} )
+
+                if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                then
+                    [ -n "$chnl_filter_complex" ] && chnl_filter_complex="$chnl_filter_complex;"
+                    chnl_filter_complex="${chnl_filter_complex}[$chnl_video_shift_index:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video_$i]"
+                fi
+
+                if [[ $chnl_input_flags =~ -an ]] || [[ $chnl_output_flags =~ -an ]] 
+                then
+                    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                    then
+                        chnl_map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        chnl_map_command+=( -map $chnl_video_shift_index:v )
+                    fi
+                else
+                    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                    then
+                        chnl_map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        chnl_map_command+=( -map $chnl_video_shift_index:v )
+                    fi
+
+                    if [ -n "${chnl_audio_shift:-}" ] && [ "$chnl_audio_codec" != "copy" ]
+                    then
+                        chnl_map_command+=( -map '[delayed_audio]' )
+                    else
+                        chnl_map_command+=( -map $chnl_audio_shift_index:a )
+                    fi
+                fi
+            done
+        fi
+    fi
+
+    chnl_variants_output_command+=( -c:v "$chnl_video_codec" -c:a "$chnl_audio_codec" $chnl_output_flags_command )
+
+    if [ -n "$chnl_filter_complex" ] 
+    then
+        chnl_input_command+=( -filter_complex "$chnl_filter_complex" )
+    fi
+
+    PrepTerm
+    $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+    ${chnl_input_command[@]+"${chnl_input_command[@]}"} \
+    ${chnl_variants_output_command[@]+"${chnl_variants_output_command[@]}"} \
+    ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
+    -flags -global_header \
+    ${chnl_flv_command[@]+"${chnl_flv_command[@]}"} > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+    WaitTerm
             } 201>"$pid_file"
         ;;
     esac
@@ -3695,464 +4237,625 @@ HlsStreamCreatorPlus()
                     }'
                 )
 
-                JQ add "$CHANNELS_FILE" channels "[$new_channel]"
+    JQ add "$CHANNELS_FILE" channels "[$new_channel]"
 
-                action="add"
-                SyncFile
+    action="add"
+    SyncFile
 
-                trap '
-                    JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$pid)|.status)=\"off\""
-                    printf -v date_now "%(%m-%d %H:%M:%S)T" -1
-                    printf "%s\n" "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
-                    chnl_pid=$pid
-                    action="stop"
-                    SyncFile > /dev/null 2>> "$MONITOR_LOG"
-                    rm -rf "$delete_on_term"
-                ' EXIT
+    trap '
+        JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$pid)|.status)=\"off\""
+        printf -v date_now "%(%m-%d %H:%M:%S)T" -1
+        printf "%s\n" "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
+        chnl_pid=$pid
+        action="stop"
+        SyncFile > /dev/null 2>> "$MONITOR_LOG"
+        rm -rf "$delete_on_term"
+    ' EXIT
 
-                mkdir -p "$delete_on_term"
+    mkdir -p "$delete_on_term"
 
-                if [ -z "$seg_dir_name" ] 
+    variants_input_command=()
+    variants_output_command=()
+    map_command=()
+    var_stream_map_command=()
+    hls_command=( -hls_time "$seg_length" -hls_list_size "$seg_count" )
+    # segment_command=()
+    hls_master_list="#EXTM3U\n#EXT-X-VERSION:7\n"
+    var_stream_map=""
+    headers_command=""
+    [ -n "$headers" ] && printf -v headers_command '%b' "$headers"
+
+    if [ "$seg_count" -gt 0 ] 
+    then
+        hls_command+=( -hls_delete_threshold $seg_count )
+    fi
+
+    if [ -n "$live" ] 
+    then
+        # segment_command+=( -segment_list_flags +live -segment_list_size $seg_count -segment_wrap $((seg_count * 2)) )
+
+        if [ "$seg_count" -gt 0 ] 
+        then
+            hls_command+=( -hls_flags periodic_rekey+delete_segments )
+        else
+            hls_command+=( -hls_flags periodic_rekey )
+        fi
+    else
+        hls_command+=( -hls_flags periodic_rekey )
+    fi
+
+    seg_dir_path=""
+    if [ -n "$seg_dir_name" ] 
+    then
+        seg_dir_path="$seg_dir_name/"
+    fi
+
+    if [ -n "${stream_link_cdn:-}" ] 
+    then
+        stream_link=$stream_link_cdn
+    fi
+
+    if [ "${stream_link_qualities_count:-0}" -gt 1 ] || [ "${stream_link_audio_count:-0}" -gt 0 ] || [ "${stream_link_subtitles_count:-0}" -gt 0 ]
+    then
+        if [ "$origin_hls_url" -eq 1 ] 
+        then
+            if [[ $stream_link =~ ^https?:// ]] 
+            then
+                [ -n "$proxy" ] && variants_input_command+=( -http_proxy "$proxy" )
+                [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+                [ -n "$headers_command" ] && variants_input_command+=( -headers "$headers_command" )
+                [ -n "$cookies" ] && variants_input_command+=( -cookies "$cookies" )
+            elif [[ $stream_link =~ ^icecast?:// ]] 
+            then
+                [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+            fi
+            variants_input_command+=( $input_flags_command -i "$stream_link" )
+        fi
+
+        for((i=0;i<stream_link_qualities_count;i++));
+        do
+            var_stream_map="$var_stream_map v:$i"
+
+            stream_links_index=${stream_link_video_indices[i]}
+
+            hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=${stream_links_bitrate[stream_links_index]},AVERAGE-BANDWIDTH=${stream_links_bitrate[stream_links_index]},RESOLUTION=${stream_links_resolution[stream_links_index]}"
+
+            if [ -n "${stream_links_audio[stream_links_index]}" ] 
+            then
+                if [ "${stream_link_audio_count:-0}" -gt 0 ] 
                 then
-                    seg_dir_path=""
+                    for stream_link_audio_index in "${stream_link_audio_indices[@]}"
+                    do
+                        if [ "${stream_audio_group_id[stream_link_audio_index]}" == "${stream_links_audio[stream_links_index]}" ] 
+                        then
+                            hls_master_list="$hls_master_list,AUDIO=\"${stream_links_audio[stream_links_index]}\""
+                            var_stream_map="$var_stream_map,agroup:${stream_links_audio[stream_links_index]}"
+                            break
+                        fi
+                    done
+                fi
+            else
+                var_stream_map="$var_stream_map,a:$i"
+            fi
+
+            if [ -n "${stream_links_subtitles[stream_links_index]}" ] && [ "${stream_link_subtitles_count:-0}" -gt 0 ]
+            then
+                for stream_link_subtitles_index in "${stream_link_subtitles_indices[@]}"
+                do
+                    if [ "${stream_subtitles_group_id[stream_link_subtitles_index]}" == "${stream_links_subtitles[stream_links_index]}" ] 
+                    then
+                        hls_master_list="$hls_master_list,SUBTITLES=\"${stream_links_subtitles[stream_links_index]}\""
+                        var_stream_map="$var_stream_map,sgroup:${stream_links_subtitles[stream_links_index]}"
+                        break
+                    fi
+                done
+            fi
+
+            hls_master_list="$hls_master_list\n${playlist_name}_${stream_links_resolution[stream_links_index]}.m3u8\n\n"
+            var_stream_map="$var_stream_map,name:${stream_links_resolution[stream_links_index]}"
+
+            if [ "$origin_hls_url" -eq 0 ] 
+            then
+                if [[ ${stream_links_url[stream_links_index]} =~ ^https?:// ]] 
+                then
+                    [ -n "$proxy" ] && variants_input_command+=( -http_proxy "$proxy" )
+                    [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+                    [ -n "$headers_command" ] && variants_input_command+=( -headers "$headers_command" )
+                    [ -n "$cookies" ] && variants_input_command+=( -cookies "$cookies" )
+                elif [[ ${stream_links_url[stream_links_index]} =~ ^icecast?:// ]] 
+                then
+                    [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+                fi
+                variants_input_command+=( $input_flags_command -i "${stream_links_url[stream_links_index]}" )
+                map_command+=( -map $i:v )
+            else
+                map_command+=( -map 0:v:$stream_links_index )
+            fi
+
+            if [ "$video_codec" != "copy" ] 
+            then
+                if [[ ${stream_link_qualities[i]} =~ - ]] 
+                then
+                    variant_bitrate=${stream_link_qualities[i]%-*}
+                    variant_resolution=${stream_link_qualities[i]#*-}
+
+                    if [ -n "$const" ]
+                    then
+                        variants_output_command+=( -b:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k )
+                    else
+                        variants_output_command+=( -b:v:$i ${variant_bitrate}k )
+                    fi
+
+                    variants_output_command+=( -s:v:$i $variant_resolution )
+                elif [[ ${stream_link_qualities[i]} =~ x ]] 
+                then
+                    variants_output_command+=( -s:v:$i ${stream_link_qualities[i]} )
                 else
-                    seg_dir_path="$seg_dir_name/"
+                    if [ -n "$const" ]
+                    then
+                        variants_output_command+=( -b:v:$i ${stream_link_qualities[i]}k -bufsize:v:$i ${stream_link_qualities[i]}k -minrate:v:$i ${stream_link_qualities[i]}k -maxrate:v:$i ${stream_link_qualities[i]}k )
+                    else
+                        variants_output_command+=( -b:v:$i ${stream_link_qualities[i]}k )
+                    fi
+                fi
+            fi
+        done
+
+        variants_output_command+=( -c:v "$video_codec" -c:a "$audio_codec" )
+
+        if [ -n "${stream_audio_url:-}" ] 
+        then
+            if [ "${stream_link_audio_count:-0}" -gt 0 ] 
+            then
+                for((i=0;i<stream_link_audio_count;i++));
+                do
+                    stream_link_audio_index=${stream_link_audio_indices[i]}
+
+                    hls_master_list="$hls_master_list#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"${stream_audio_group_id[stream_link_audio_index]}\",NAME=\"${stream_audio_name[stream_link_audio_index]}\",DEFAULT=\"${stream_audio_default[stream_link_audio_index]}\",AUTOSELECT=YES,LANGUAGE=\"${stream_audio_language[stream_link_audio_index]}\",URI=\"${playlist_name}_${stream_audio_name[stream_link_audio_index]}.m3u8\"\n"
+                    var_stream_map="$var_stream_map a:$i,agroup:${stream_audio_group_id[stream_link_audio_index]},default:${stream_audio_default[stream_link_audio_index]},language:${stream_audio_language[stream_link_audio_index]},name:${stream_audio_name[stream_link_audio_index]}"
+
+                    if [ "$origin_hls_url" -eq 0 ] 
+                    then
+                        if [[ ${stream_audio_url[stream_link_audio_index]} =~ ^https?:// ]] 
+                        then
+                            [ -n "$proxy" ] && variants_input_command+=( -http_proxy "$proxy" )
+                            [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+                            [ -n "$headers_command" ] && variants_input_command+=( -headers "$headers_command" )
+                            [ -n "$cookies" ] && variants_input_command+=( -cookies "$cookies" )
+                        elif [[ ${stream_audio_url[stream_link_audio_index]} =~ ^icecast?:// ]] 
+                        then
+                            [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+                        fi
+                        variants_input_command+=( $input_flags_command -i "${stream_audio_url[stream_link_audio_index]}" )
+                        map_command+=( -map $((i+stream_link_qualities_count)):a )
+                    else
+                        map_command+=( -map 0:a:$stream_link_audio_index )
+                    fi
+                done
+            fi
+        else
+            for((i=0;i<stream_link_qualities_count;i++));
+            do
+                if [ "$origin_hls_url" -eq 0 ] 
+                then
+                    map_command+=( -map $i:a )
+                else
+                    map_command+=( -map 0:a:$i )
+                fi
+            done
+        fi
+
+        if [ "${stream_link_subtitles_count:-0}" -gt 0 ] 
+        then
+            for((i=0;i<stream_link_subtitles_count;i++));
+            do
+                stream_link_subtitles_index=${stream_link_subtitles_indices[i]}
+
+                if [[ ${stream_subtitles_url[stream_link_subtitles_index]} =~ $hboasia_host/(.+)$ ]] 
+                then
+                    hls_master_list="$hls_master_list#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"${stream_subtitles_group_id[stream_link_subtitles_index]}\",NAME=\"${stream_subtitles_name[stream_link_subtitles_index]}\",DEFAULT=\"${stream_subtitles_default[stream_link_subtitles_index]}\",AUTOSELECT=YES,LANGUAGE=\"${stream_subtitles_language[stream_link_subtitles_index]}\",URI=\"https://hboasia.epub.fun/${BASH_REMATCH[1]%%\?*}\"\n"
+                    continue
                 fi
 
-                if [[ $stream_link =~ ^([^ ]+)\ ([^ ]+) ]]
+                hls_master_list="$hls_master_list#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"${stream_subtitles_group_id[stream_link_subtitles_index]}\",NAME=\"${stream_subtitles_name[stream_link_subtitles_index]}\",DEFAULT=\"${stream_subtitles_default[stream_link_subtitles_index]}\",AUTOSELECT=YES,LANGUAGE=\"${stream_subtitles_language[stream_link_subtitles_index]}\",URI=\"${stream_subtitles_group_id[stream_link_subtitles_index]}_${stream_subtitles_name[stream_link_subtitles_index]}_vtt.m3u8\"\n"
+                var_stream_map="$var_stream_map s:$i,sgroup:${stream_subtitles_group_id[stream_link_subtitles_index]},default:${stream_subtitles_default[stream_link_subtitles_index]},language:${stream_subtitles_language[stream_link_subtitles_index]},name:${stream_subtitles_name[stream_link_subtitles_index]}"
+
+                if [ "$origin_hls_url" -eq 0 ] 
                 then
-                    stream_link_0=${stream_link%% *}
-
-                    if [[ ${stream_links%% *} =~ \|([^|]+)$ ]] 
+                    if [[ ${stream_subtitles_url[stream_link_subtitles_index]} =~ ^https?:// ]] 
                     then
-                        stream_link_quality=${BASH_REMATCH[1]}
-
-                        IFS="," read -r -a stream_link_qualities <<< "$stream_link_quality"
-                        IFS=" " read -r -a stream_links_arr <<< "$stream_link"
-
-                        inputs=()
-                        map_command=()
-                        var_stream_map=()
-                        var_stream_map_command=()
-                        variants_command=()
-
-                        for((i=0;i<${#stream_link_qualities[@]};i++));
-                        do
-                            if [[ $stream_link_0 =~ ^https?:// ]] 
-                            then
-                                if [ -n "$proxy" ] 
-                                then
-                                    inputs+=( -http_proxy "$proxy" )
-                                fi
-                                if [ -n "$user_agent" ] 
-                                then
-                                    inputs+=( -user_agent "$user_agent" )
-                                fi
-                                if [ -n "$headers" ] 
-                                then
-                                    printf -v headers_command '%b' "$headers"
-                                    inputs+=( -headers "$headers_command" )
-                                fi
-                                if [ -n "$cookies" ] 
-                                then
-                                    inputs+=( -cookies "$cookies" )
-                                fi
-                            elif [[ $stream_link_0 =~ ^icecast?:// ]]
-                            then
-                                inputs+=( -user_agent "$user_agent" )
-                            fi
-                            inputs+=( $input_flags -i ${stream_links_arr[i]} )
-                            map_command+=( -map $i:v -map $i:a )
-                            stream_link_bitrate=${stream_link_qualities[i]%-*}
-                            stream_link_resolution=${stream_link_qualities[i]#*-}
-                            if [ -n "$const" ]
-                            then
-                                variants_command+=( -b:v:$i ${stream_link_bitrate}k -bufsize:v:$i ${stream_link_bitrate}k -minrate:v:$i ${stream_link_bitrate}k -maxrate:v:$i ${stream_link_bitrate}k )
-                            else
-                                variants_command+=( -b:v:$i ${stream_link_bitrate}k )
-                            fi
-                            var_stream_map+=( v:$i,a:$i,name:${stream_link_qualities[i]} )
-                        done
-
-                        var_stream_map_command=( -var_stream_map "${var_stream_map[*]}" )
-
-                        if [ "$encrypt_yn" == "yes" ] 
-                        then
-                            openssl rand 16 > "$output_dir_root/$key_name.key"
-                            if [ "$encrypt_session_yn" == "yes" ] 
-                            then
-                                echo -e "/keys?key=$key_name&channel=$output_dir_name\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
-                            else
-                                echo -e "$key_name.key\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
-                            fi
-                            var_stream_map_command+=( -hls_key_info_file $output_dir_root/$keyinfo_name.keyinfo )
-                        fi
-
-                        hls_flags_command=()
-
-                        if [ -n "$live" ] 
-                        then
-                            hls_flags_command+=( -hls_flags periodic_rekey+delete_segments )
-                        else
-                            hls_flags_command+=( -hls_flags periodic_rekey )
-                        fi
-
-                        PrepTerm
-                        $FFMPEG ${inputs[@]+"${inputs[@]}"} \
-                        ${map_command[@]+"${map_command[@]}"} \
-                        -vcodec $video_codec -acodec $audio_codec \
-                        -flags -global_header $output_flags \
-                        ${variants_command[@]+"${variants_command[@]}"} \
-                        -f hls ${var_stream_map_command[@]+"${var_stream_map_command[@]}"} \
-                        -hls_time "$seg_length" -hls_list_size $seg_count -hls_delete_threshold $seg_count \
-                        -hls_segment_filename $output_dir_root/$seg_dir_path${seg_name}_%v_%05d.ts \
-                        ${hls_flags_command[@]+"${hls_flags_command[@]}"} \
-                        -master_pl_name ${playlist_name}_master.m3u8 $output_dir_root/${playlist_name}_%v.m3u8 > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
-                        WaitTerm
+                        [ -n "$proxy" ] && variants_input_command+=( -http_proxy "$proxy" )
+                        [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+                        [ -n "$headers_command" ] && variants_input_command+=( -headers "$headers_command" )
+                        [ -n "$cookies" ] && variants_input_command+=( -cookies "$cookies" )
+                    elif [[ ${stream_subtitles_url[stream_link_subtitles_index]} =~ ^icecast?:// ]] 
+                    then
+                        [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
                     fi
+                    variants_input_command+=( $input_flags_command -i "${stream_subtitles_url[stream_link_subtitles_index]}" )
+                    map_command+=( -map $((i+stream_link_qualities_count+stream_link_audio_count)):s )
                 else
-                    variants_command=()
-                    var_stream_map=()
-                    map_command=()
+                    map_command+=( -map 0:s:${stream_link_subtitles_index}? )
+                fi
+            done
 
-                    hls_master_list=""
+            variants_output_command+=( -c:s webvtt )
+        fi
 
-                    if [ -n "$txt_format" ] 
+        variants_output_command+=( $output_flags_command )
+        var_stream_map_command+=( -var_stream_map "$var_stream_map" )
+
+        if [ "$encrypt_yn" == "yes" ] 
+        then
+            openssl rand 16 > "$output_dir_root/$key_name.key"
+            if [ "$encrypt_session_yn" == "yes" ] 
+            then
+                echo -e "/keys?key=$key_name&channel=$output_dir_name\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
+            else
+                echo -e "$key_name.key\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
+            fi
+            hls_command+=( -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" )
+        fi
+
+        echo -e "$hls_master_list" > "$output_dir_root/${playlist_name}_master.m3u8"
+        hls_command+=( -hls_segment_filename "$output_dir_root/$seg_dir_path${seg_name}"_%v_%05d.ts )
+        hls_command+=( "$output_dir_root/${playlist_name}_%v.m3u8" )
+
+        PrepTerm
+        $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+        ${variants_input_command[@]+"${variants_input_command[@]}"} \
+        ${variants_output_command[@]+"${variants_output_command[@]}"} \
+        ${map_command[@]+"${map_command[@]}"} \
+        -flags -global_header \
+        -f hls ${var_stream_map_command[@]+"${var_stream_map_command[@]}"} \
+        ${hls_command[@]+"${hls_command[@]}"} > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+        WaitTerm
+        exit 0
+    fi
+
+    input_command=()
+    filter_complex=""
+
+    if [ "${stream_link_qualities_count:-0}" -eq 1 ] 
+    then
+        stream_links_index=${stream_link_video_indices[0]}
+        stream_link=${stream_links_url[stream_links_index]}
+    fi
+
+    if [[ $stream_link =~ ^https?:// ]] 
+    then
+        [ -n "$proxy" ] && input_command+=( -http_proxy "$proxy" )
+        [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
+        [ -n "$headers_command" ] && input_command+=( -headers "$headers_command" )
+        [ -n "$cookies" ] && input_command+=( -cookies "$cookies" )
+    elif [[ $stream_link =~ ^icecast?:// ]] 
+    then
+        [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
+    fi
+
+    input_command+=( $input_flags_command -i $stream_link )
+
+    video_shift_index=0
+    audio_shift_index=0
+    if ! [[ $input_flags =~ -an ]] && ! [[ $output_flags =~ -an ]] 
+    then
+        if [ -n "${video_shift:-}" ] 
+        then
+            video_shift_index=1
+            if [[ $stream_link =~ ^https?:// ]] 
+            then
+                [ -n "$proxy" ] && input_command+=( -http_proxy "$proxy" )
+                [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
+                [ -n "$headers_command" ] && input_command+=( -headers "$headers_command" )
+                [ -n "$cookies" ] && input_command+=( -cookies "$cookies" )
+            elif [[ $stream_link =~ ^icecast?:// ]] 
+            then
+                [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
+            fi
+            input_command+=( $input_flags_command -itsoffset $video_shift -i $stream_link )
+        elif [ -n "${audio_shift:-}" ] 
+        then
+            if [ "$audio_codec" == "copy" ] 
+            then
+                audio_shift_index=1
+                if [[ $stream_link =~ ^https?:// ]] 
+                then
+                    [ -n "$proxy" ] && input_command+=( -http_proxy "$proxy" )
+                    [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
+                    [ -n "$headers_command" ] && input_command+=( -headers "$headers_command" )
+                    [ -n "$cookies" ] && input_command+=( -cookies "$cookies" )
+                elif [[ $stream_link =~ ^icecast?:// ]] 
+                then
+                    [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
+                fi
+                input_command+=( $input_flags_command -itsoffset $audio_shift -i $stream_link )
+            else
+                input_command+=( -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" )
+            fi
+        fi
+    fi
+
+    if [ -z "$quality" ]
+    then
+        if [ -n "$bitrates" ] 
+        then
+            IFS="," read -r -a variants <<< "$bitrates"
+
+            for((i=0;i<${#variants[@]};i++));
+            do
+                variant=${variants[i]}
+
+                if [[ $variant =~ - ]] 
+                then
+                    bitrates=${variant%-*}
+                    resolution=${variant#*-}
+
+                    if [ -n "$const" ] 
                     then
-                        subtitle_list='\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="sub",DEFAULT=YES,AUTOSELECT=YES,FORCED=NO,LANGUAGE="eng",URI="'"$playlist_name"'_vtt.m3u8"'
-                        subtitle_append=',SUBTITLES="subs"'
+                        variants_output_command+=( -b:v:$i ${bitrates}k -bufsize:v:$i ${bitrates}k -minrate:v:$i ${bitrates}k -maxrate:v:$i ${bitrates}k )
                     else
-                        subtitle_list=""
-                        subtitle_append=""
+                        variants_output_command+=( -b:v:$i ${bitrates}k )
                     fi
 
+                    variants_output_command+=( -s:v:$i $resolution )
+                    hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((bitrates*1000)),RESOLUTION=$resolution$subtitle_append\n"
+                elif [[ $variant =~ x ]] 
+                then
+                    variants_output_command+=( -s:v:$i $variant )
+                    hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=$variant$subtitle_append\n"
+                else
+                    if [ -n "$const" ] 
+                    then
+                        variants_output_command+=( -b:v:$i ${variant}k -bufsize:v:$i ${variant}k -minrate:v:$i ${variant}k -maxrate:v:$i ${variant}k )
+                    else
+                        variants_output_command+=( -b:v:$i ${variant}k )
+                    fi
+                    hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((variant*1000))$subtitle_append\n"
+                fi
+
+                hls_master_list="$hls_master_list${playlist_name}_$variant.m3u8\n\n"
+
+                if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+                then
+                    [ -n "$filter_complex" ] && filter_complex="$filter_complex;"
+                    filter_complex="${filter_complex}[$video_shift_index:v] ${extra_filters}drawtext=$draw_text [drawtext_video_$i]"
+                fi
+
+                if [[ $input_flags =~ -an ]] || [[ $output_flags =~ -an ]] 
+                then
                     if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
                     then
-                        if [[ $output_flags =~ -vf ]] 
-                        then
-                            extra_filters=${output_flags#*-vf }
-                            extra_filters=${extra_filters%% *}
-                            output_flags=${output_flags//-vf $extra_filters/}
-                            extra_filters="$extra_filters,"
-                        elif [[ $output_flags =~ -filter:v ]] 
-                        then
-                            extra_filters=${output_flags#*-filter:v }
-                            extra_filters=${extra_filters%% *}
-                            output_flags=${output_flags//-filter:v $extra_filters/}
-                            extra_filters="$extra_filters,"
-                        else
-                            extra_filters=""
-                        fi
-                    fi
-
-                    if [ -z "$quality" ]
-                    then
-                        if [ -n "$bitrates" ] 
-                        then
-                            IFS="," read -r -a variants <<< "$bitrates"
-
-                            for((i=0;i<${#variants[@]};i++));
-                            do
-                                variant=${variants[i]}
-                                if [[ $variant == *"-"* ]] 
-                                then
-                                    bitrates=${variant%-*}
-                                    resolution=${variant#*-}
-
-                                    if [ -n "$const" ] 
-                                    then
-                                        variants_command+=( -b:v:$i ${bitrates}k -bufsize:v:$i ${bitrates}k -minrate:v:$i ${bitrates}k -maxrate:v:$i ${bitrates}k )
-                                    else
-                                        variants_command+=( -b:v:$i ${bitrates}k )
-                                    fi
-
-                                    variants_command+=( -s:v:$i $resolution )
-                                    hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((bitrates*1000)),RESOLUTION=$resolution$subtitle_append\n"
-                                elif [[ $variant == *"x"* ]] 
-                                then
-                                    variants_command+=( -s:v:$i $variant )
-                                    hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=$variant$subtitle_append\n"
-                                else
-                                    if [ -n "$const" ] 
-                                    then
-                                        variants_command+=( -b:v:$i ${variant}k -bufsize:v:$i ${variant}k -minrate:v:$i ${variant}k -maxrate:v:$i ${variant}k )
-                                    else
-                                        variants_command+=( -b:v:$i ${variant}k )
-                                    fi
-                                    hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((variant*1000))$subtitle_append\n"
-                                fi
-                                hls_master_list="$hls_master_list${playlist_name}_$variant.m3u8$subtitle_list\n\n"
-                                if [[ $input_flags =~ -an ]] || [[ $output_flags =~ -an ]] 
-                                then
-                                    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
-                                    then
-                                        variants_command+=( -filter_complex "[0:v] ${extra_filters}drawtext=$draw_text [drawtext_video]" -map '[drawtext_video]' )
-                                    else
-                                        variants_command+=( -map 0:v:0 )
-                                    fi
-                                    var_stream_map+=( v:$i,name:$variant )
-                                else
-                                    if [ -n "${video_shift:-}" ] 
-                                    then
-                                        variants_command+=( -map 0:v:0 -map 1:a:0 )
-                                    elif [ -n "${audio_shift:-}" ] 
-                                    then
-                                        if [ "$audio_codec" == "copy" ] 
-                                        then
-                                            variants_command+=( -map 1:v:0 -map 0:a:0 )
-                                        else
-                                            variants_command+=( -map 0:v:0 -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
-                                        fi
-                                    elif [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
-                                    then
-                                        variants_command+=( -filter_complex "[0:v] ${extra_filters}drawtext=$draw_text [drawtext_video]" -map '[drawtext_video]' -map 0:a:0 )
-                                    else
-                                        variants_command+=( -map 0:v:0 -map 0:a:0 )
-                                    fi
-                                    var_stream_map+=( v:$i,a:$i,name:$variant )
-                                fi
-                            done
-                        else
-                            if [ -n "${video_shift:-}" ] 
-                            then
-                                map_command+=( -itsoffset $video_shift -i "$stream_link" -map 0:v -map 1:a )
-                            elif [ -n "${audio_shift:-}" ] 
-                            then
-                                if [ "$audio_codec" == "copy" ] 
-                                then
-                                    map_command+=( -itsoffset $audio_shift -i "$stream_link" -map 0:a -map 1:v )
-                                else
-                                    map_command+=( -map 0:v -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
-                                fi
-                            fi
-                        fi
+                        map_command+=( -map "[drawtext_video_$i]" )
                     else
-                        IFS="," read -r -a qualities <<< "$quality"
-                        if [ -n "$bitrates" ] 
-                        then
-                            IFS="," read -r -a variants <<< "$bitrates"
-
-                            for((i=0;i<${#variants[@]};i++));
-                            do
-                                variant=${variants[i]}
-                                if [[ $variant == *"-"* ]] 
-                                then
-                                    bitrates=${variant%-*}
-                                    resolution=${variant#*-}
-
-                                    variants_command+=( -crf:v:$i ${qualities[i]:-${quality[0]}} -bufsize:v:$i ${bitrates}k -maxrate:v:$i ${bitrates}k )
-
-                                    if [ "$video_codec" == "libx265" ]
-                                    then
-                                        variants_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${bitrates}k --vbv-bufsize:v:$i ${bitrates}k )
-                                    fi
-
-                                    variants_command+=( -s:v:$i $resolution )
-                                    hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((bitrates*1000)),RESOLUTION=$resolution$subtitle_append\n"
-                                elif [[ $variant == *"x"* ]] 
-                                then
-                                    variants_command+=( -crf:v:$i ${qualities[i]:-${quality[0]}} -s:v:$i $variant )
-                                    hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=$variant$subtitle_append\n"
-                                else
-                                    variants_command+=( -crf:v:$i ${qualities[i]:-${quality[0]}} -bufsize:v:$i ${variant}k -maxrate:v:$i ${variant}k )
-
-                                    if [ "$video_codec" == "libx265" ]
-                                    then
-                                        variants_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${variant}k --vbv-bufsize:v:$i ${variant}k )
-                                    fi
-
-                                    hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((variant*1000))$subtitle_append\n"
-                                fi
-                                hls_master_list="$hls_master_list${playlist_name}_crf_${qualities[i]:-${quality[0]}}_$variant.m3u8$subtitle_list\n\n"
-                                if [[ $input_flags =~ -an ]] || [[ $output_flags =~ -an ]] 
-                                then
-                                    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
-                                    then
-                                        variants_command+=( -filter_complex "[0:v] ${extra_filters}drawtext=$draw_text [drawtext_video]" -map '[drawtext_video]' )
-                                    else
-                                        variants_command+=( -map 0:v:0 )
-                                    fi
-                                    var_stream_map+=( v:$i,name:crf_${qualities[i]:-${quality[0]}}_$variant )
-                                else
-                                    if [ -n "${video_shift:-}" ] 
-                                    then
-                                        variants_command+=( -map 0:v:0 -map 1:a:0 )
-                                    elif [ -n "${audio_shift:-}" ] 
-                                    then
-                                        if [ "$audio_codec" == "copy" ] 
-                                        then
-                                            variants_command+=( -map 1:v:0 -map 0:a:0 )
-                                        else
-                                            variants_command+=( -map 0:v:0 -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
-                                        fi
-                                    elif [ "$video_codec" != "copy" ] && [ -n "$draw_text" ]  
-                                    then
-                                        variants_command+=( -filter_complex "[0:v] ${extra_filters}drawtext=$draw_text [drawtext_video]" -map '[drawtext_video]' -map 0:a:0 )
-                                    else
-                                        variants_command+=( -map 0:v:0 -map 0:a:0 )
-                                    fi
-                                    var_stream_map+=( v:$i,a:$i,name:crf_${qualities[i]:-${quality[0]}}_$variant )
-                                fi
-                            done
-                        else
-                            for((i=0;i<${#qualities[@]};i++));
-                            do
-                                variants_command+=( -crf:v:$i ${qualities[i]} )
-                                if [[ $input_flags =~ -an ]] || [[ $output_flags =~ -an ]] 
-                                then
-                                    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
-                                    then
-                                        variants_command+=( -filter_complex "[0:v] ${extra_filters}drawtext=$draw_text [drawtext_video]" -map '[drawtext_video]' )
-                                    else
-                                        variants_command+=( -map 0:v:0 )
-                                    fi
-                                    var_stream_map+=( v:$i,name:crf_${qualities[i]} )
-                                else
-                                    if [ -n "${video_shift:-}" ] 
-                                    then
-                                        variants_command+=( -map 0:v:0 -map 1:a:0 )
-                                    elif [ -n "${audio_shift:-}" ] 
-                                    then
-                                        if [ "$audio_codec" == "copy" ] 
-                                        then
-                                            variants_command+=( -map 1:v:0 -map 0:a:0 )
-                                        else
-                                            variants_command+=( -map 0:v:0 -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
-                                        fi
-                                    elif [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
-                                    then
-                                        variants_command+=( -filter_complex "[0:v] ${extra_filters}drawtext=$draw_text [drawtext_video]" -map '[drawtext_video]' -map 0:a:0 )
-                                    else
-                                        variants_command+=( -map 0:v:0 -map 0:a:0 )
-                                    fi
-                                    var_stream_map+=( v:$i,a:$i,name:crf_${qualities[i]} )
-                                fi
-                                hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$(((22-qualities[i])*100000+4200000))$subtitle_append\n"
-                                hls_master_list="$hls_master_list${playlist_name}_crf_${qualities[i]}.m3u8$subtitle_list\n\n"
-                            done
-                        fi
+                        map_command+=( -map $video_shift_index:v )
                     fi
 
-                    hls_flags_command=()
-                    segment_flags_command=()
-
-                    hls_flags_command+=( -hls_time $seg_length -hls_list_size $seg_count )
-
-                    if [ "$seg_count" -gt 0 ] 
+                    var_stream_map="$var_stream_map v:$i,name:$variant"
+                else
+                    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
                     then
-                        hls_flags_command+=( -hls_delete_threshold $seg_count )
-                    fi
-
-                    if [ -n "$live" ] 
-                    then
-                        segment_flags_command+=( -segment_list_flags +live -segment_list_size $seg_count -segment_wrap $((seg_count * 2)) )
-                        if [ "$seg_count" -gt 0 ] 
-                        then
-                            hls_flags_command+=( -hls_flags periodic_rekey+delete_segments )
-                        else
-                            hls_flags_command+=( -hls_flags periodic_rekey )
-                        fi
+                        map_command+=( -map "[drawtext_video_$i]" )
                     else
-                        hls_flags_command+=( -hls_flags periodic_rekey )
+                        map_command+=( -map $video_shift_index:v )
                     fi
 
-                    if [ -n "${var_stream_map:-}" ] 
+                    if [ -n "${audio_shift:-}" ] && [ "$audio_codec" != "copy" ] 
                     then
-                        var_stream_map_command=( -var_stream_map "${var_stream_map[*]}" )
-                        hls_flags_command+=( -hls_segment_filename $output_dir_root/$seg_dir_path${seg_name}_%v_%05d.ts )
+                        map_command+=( -map '[delayed_audio]' )
                     else
-                        var_stream_map_command=()
-                        hls_flags_command+=( -hls_segment_filename $output_dir_root/$seg_dir_path${seg_name}_%05d.ts )
+                        map_command+=( -map $audio_shift_index:a )
                     fi
 
-                    if [ "${master:-0}" -eq 0 ] 
-                    then
-                        if [ -n "${var_stream_map:-}" ] 
-                        then
-                            hls_flags_command+=( $output_dir_root/${playlist_name}_%v.m3u8 )
-                        else
-                            hls_flags_command+=( $output_dir_root/$playlist_name.m3u8 )
-                        fi
-                        if [ -n "$hls_master_list" ] 
-                        then
-                            echo -e "#EXTM3U\n#EXT-X-VERSION:3\n$hls_master_list" > $output_dir_root/$playlist_name.m3u8
-                        fi
-                    else
-                        if [[ $quality == *","* ]] || { [ -n "${variants:-}" ] && [[ ${#variants[@]} -gt 1 ]]; }
-                        then
-                            hls_flags_command+=( -master_pl_name ${playlist_name}_master.m3u8 $output_dir_root/${playlist_name}_%v.m3u8 )
-                            [ "$encrypt_yn" == "no" ] && echo -e "#EXTM3U\n#EXT-X-VERSION:3\n$hls_master_list" > $output_dir_root/${playlist_name}_master.m3u8
-                        elif [ -n "$hls_master_list" ] 
-                        then
-                            hls_flags_command+=( $output_dir_root/${playlist_name}_%v.m3u8 )
-                            echo -e "#EXTM3U\n#EXT-X-VERSION:3\n$hls_master_list" > $output_dir_root/${playlist_name}_master.m3u8
-                        else
-                            hls_flags_command+=( $output_dir_root/$playlist_name.m3u8 )
-                            echo -e "#EXTM3U\n#EXT-X-VERSION:3$subtitle_list\n#EXT-X-STREAM-INF:BANDWIDTH=500000$subtitle_append\n$playlist_name.m3u8" > $output_dir_root/${playlist_name}_master.m3u8
-                        fi
-                    fi
-
-                    args=()
-
-                    if [[ $stream_link =~ ^https?:// ]] 
-                    then
-                        if [ -n "$proxy" ] 
-                        then
-                            args+=( -http_proxy "$proxy" )
-                        fi
-                        if [ -n "$user_agent" ] 
-                        then
-                            args+=( -user_agent "$user_agent" )
-                        fi
-                        if [ -n "$headers" ] 
-                        then
-                            printf -v headers_command '%b' "$headers"
-                            args+=( -headers "$headers_command" )
-                        fi
-                        if [ -n "$cookies" ] 
-                        then
-                            args+=( -cookies "$cookies" )
-                        fi
-                    elif [[ $stream_link =~ ^icecast?:// ]]
-                    then
-                        args+=( -user_agent "$user_agent" )
-                    fi
-
-                    if [ "$encrypt_yn" == "yes" ] || [[ $quality == *","* ]] || { [ -n "${variants:-}" ] && [[ ${#variants[@]} -gt 1 ]]; } || [ -n "$txt_format" ]
-                    then
-                        if [ "$encrypt_yn" == "yes" ] 
-                        then
-                            openssl rand 16 > "$output_dir_root/$key_name.key"
-                            if [ "$encrypt_session_yn" == "yes" ] 
-                            then
-                                echo -e "/keys?key=$key_name&channel=$output_dir_name\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
-                            else
-                                echo -e "$key_name.key\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
-                            fi
-                            var_stream_map_command+=( -hls_key_info_file $output_dir_root/$keyinfo_name.keyinfo )
-                        fi
-
-                        PrepTerm
-                        $FFMPEG ${args[@]+"${args[@]}"} $input_flags -i "$stream_link" ${map_command[@]+"${map_command[@]}"} \
-                        -vcodec "$video_codec" -acodec "$audio_codec" \
-                        -flags -global_header $output_flags \
-                        ${variants_command[@]+"${variants_command[@]}"} \
-                        -f hls ${var_stream_map_command[@]+"${var_stream_map_command[@]}"} \
-                        ${hls_flags_command[@]+"${hls_flags_command[@]}"} > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
-                        WaitTerm
-                    else
-                        PrepTerm
-                        $FFMPEG ${args[@]+"${args[@]}"} $input_flags -i "$stream_link" ${map_command[@]+"${map_command[@]}"} \
-                        -vcodec "$video_codec" -acodec "$audio_codec" \
-                        -flags -global_header $output_flags \
-                        ${variants_command[@]+"${variants_command[@]}"} \
-                        -f segment ${var_stream_map_command[@]+"${var_stream_map_command[@]}"} \
-                        -segment_time "$seg_length" -segment_format mpeg_ts \
-                        -segment_list $output_dir_root/$playlist_name.m3u8 $output_dir_root/$seg_dir_path${seg_name}_%05d.ts \
-                        ${segment_flags_command[@]+"${segment_flags_command[@]}"} > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
-                        WaitTerm
-                    fi
+                    var_stream_map="$var_stream_map v:$i,a:$i,name:$variant"
                 fi
+            done
+        else
+            if [ -n "$subtitle_append" ] 
+            then
+                hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000$subtitle_append\n${playlist_name}_vtt.m3u8\n\n"
+            fi
+
+            if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+            then
+                filter_complex="${filter_complex}[$video_shift_index:v] ${extra_filters}drawtext=$draw_text [drawtext_video]"
+                map_command+=( -map '[drawtext_video]' )
+            else
+                map_command+=( -map $video_shift_index:v )
+            fi
+
+            if ! [[ $input_flags =~ -an ]] && ! [[ $output_flags =~ -an ]]
+            then
+                if [ -n "${audio_shift:-}" ] && [ "$audio_codec" != "copy" ] 
+                then
+                    map_command+=( -map '[delayed_audio]' )
+                else
+                    map_command+=( -map $audio_shift_index:a )
+                fi
+            fi
+        fi
+    else
+        IFS="," read -r -a qualities <<< "$quality"
+        if [ -n "$bitrates" ] 
+        then
+            IFS="," read -r -a variants <<< "$bitrates"
+
+            for((i=0;i<${#variants[@]};i++));
+            do
+                variant=${variants[i]}
+
+                if [[ $variant =~ - ]] 
+                then
+                    bitrates=${variant%-*}
+                    resolution=${variant#*-}
+
+                    variants_output_command+=( -crf:v:$i ${qualities[i]:-${quality[0]}} -bufsize:v:$i ${bitrates}k -maxrate:v:$i ${bitrates}k )
+
+                    if [ "$video_codec" == "libx265" ]
+                    then
+                        variants_output_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${bitrates}k --vbv-bufsize:v:$i ${bitrates}k )
+                    fi
+
+                    variants_output_command+=( -s:v:$i $resolution )
+                    hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((bitrates*1000)),RESOLUTION=$resolution$subtitle_append\n"
+                elif [[ $variant =~ x ]] 
+                then
+                    variants_output_command+=( -crf:v:$i ${qualities[i]:-${quality[0]}} -s:v:$i $variant )
+                    hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=$variant$subtitle_append\n"
+                else
+                    variants_output_command+=( -crf:v:$i ${qualities[i]:-${quality[0]}} -bufsize:v:$i ${variant}k -maxrate:v:$i ${variant}k )
+
+                    if [ "$video_codec" == "libx265" ]
+                    then
+                        variants_output_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${variant}k --vbv-bufsize:v:$i ${variant}k )
+                    fi
+
+                    hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((variant*1000))$subtitle_append\n"
+                fi
+
+                hls_master_list="$hls_master_list${playlist_name}_crf_${qualities[i]:-${quality[0]}}_$variant.m3u8\n\n"
+
+                if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+                then
+                    [ -n "$filter_complex" ] && filter_complex="$filter_complex;"
+                    filter_complex="${filter_complex}[$video_shift_index:v] ${extra_filters}drawtext=$draw_text [drawtext_video_$i]"
+                fi
+
+                if [[ $input_flags =~ -an ]] || [[ $output_flags =~ -an ]] 
+                then
+                    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+                    then
+                        map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        map_command+=( -map $video_shift_index:v )
+                    fi
+
+                    var_stream_map="$var_stream_map v:$i,name:crf_${qualities[i]:-${quality[0]}}_$variant"
+                else
+                    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+                    then
+                        map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        map_command+=( -map $video_shift_index:v )
+                    fi
+
+                    if [ -n "${audio_shift:-}" ] && [ "$audio_codec" != "copy" ]
+                    then
+                        map_command+=( -map '[delayed_audio]' )
+                    else
+                        map_command+=( -map $audio_shift_index:a )
+                    fi
+
+                    var_stream_map="$var_stream_map v:$i,a:$i,name:crf_${qualities[i]:-${quality[0]}}_$variant"
+                fi
+            done
+        else
+            for((i=0;i<${#qualities[@]};i++));
+            do
+                variants_output_command+=( -crf:v:$i ${qualities[i]} )
+
+                if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+                then
+                    [ -n "$filter_complex" ] && filter_complex="$filter_complex;"
+                    filter_complex="${filter_complex}[$video_shift_index:v] ${extra_filters}drawtext=$draw_text [drawtext_video_$i]"
+                fi
+
+                if [[ $input_flags =~ -an ]] || [[ $output_flags =~ -an ]] 
+                then
+                    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+                    then
+                        map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        map_command+=( -map $video_shift_index:v )
+                    fi
+
+                    var_stream_map="$var_stream_map v:$i,name:crf_${qualities[i]}"
+                else
+                    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+                    then
+                        map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        map_command+=( -map $video_shift_index:v )
+                    fi
+
+                    if [ -n "${audio_shift:-}" ] && [ "$audio_codec" != "copy" ]
+                    then
+                        map_command+=( -map '[delayed_audio]' )
+                    else
+                        map_command+=( -map $audio_shift_index:a )
+                    fi
+
+                    var_stream_map="$var_stream_map v:$i,a:$i,name:crf_${qualities[i]}"
+                fi
+
+                hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$(((22-qualities[i])*100000+4200000))$subtitle_append\n"
+                hls_master_list="$hls_master_list${playlist_name}_crf_${qualities[i]}.m3u8\n\n"
+            done
+        fi
+    fi
+
+    variants_output_command+=( -c:v "$video_codec" -c:a "$audio_codec" )
+
+    if [ -n "$subtitle_append" ] 
+    then
+        variants_output_command+=( -c:s webvtt )
+    fi
+
+    variants_output_command+=( $output_flags_command )
+
+    if [ -n "$filter_complex" ] 
+    then
+        input_command+=( -filter_complex "$filter_complex" )
+    fi
+
+    if [ -n "$var_stream_map" ] 
+    then
+        var_stream_map_command+=( -var_stream_map "$var_stream_map" )
+    fi
+
+    if [ "$encrypt_yn" == "yes" ] 
+    then
+        openssl rand 16 > "$output_dir_root/$key_name.key"
+        if [ "$encrypt_session_yn" == "yes" ] 
+        then
+            echo -e "/keys?key=$key_name&channel=$output_dir_name\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
+        else
+            echo -e "$key_name.key\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
+        fi
+        hls_command+=( -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" )
+    fi
+
+    if [ "$master" -eq 0 ] 
+    then
+        hls_command+=( -hls_segment_filename "$output_dir_root/$seg_dir_path${seg_name}_%05d.ts" )
+        hls_command+=( "$output_dir_root/$playlist_name.m3u8" )
+    else
+        echo -e "$hls_master_list" > "$output_dir_root/${playlist_name}_master.m3u8"
+        hls_command+=( -hls_segment_filename "$output_dir_root/$seg_dir_path${seg_name}_%v_%05d.ts" )
+        hls_command+=( "$output_dir_root/${playlist_name}_%v.m3u8" )
+    fi
+
+    PrepTerm
+    $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+    ${input_command[@]+"${input_command[@]}"} \
+    ${variants_output_command[@]+"${variants_output_command[@]}"} \
+    ${map_command[@]+"${map_command[@]}"} \
+    -flags -global_header \
+    -f hls ${var_stream_map_command[@]+"${var_stream_map_command[@]}"} \
+    ${hls_command[@]+"${hls_command[@]}"} > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+    WaitTerm
+
+    # seg
+    # PrepTerm
+    # $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+    # ${input_command[@]+"${input_command[@]}"} \
+    # ${variants_output_command[@]+"${variants_output_command[@]}"} \
+    # ${map_command[@]+"${map_command[@]}"} \
+    # -flags -global_header \
+    # -f segment ${var_stream_map_command[@]+"${var_stream_map_command[@]}"} \
+    # -segment_time "$seg_length" -segment_format mpeg_ts \
+    # -segment_list $output_dir_root/$playlist_name.m3u8 $output_dir_root/$seg_dir_path${seg_name}_%05d.ts \
+    # ${segment_command[@]+"${segment_command[@]}"} > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+    # WaitTerm
             } 201>"$pid_file"
         ;;
         "StartChannel") 
@@ -4189,450 +4892,611 @@ HlsStreamCreatorPlus()
                     rm -rf "$delete_on_term"
                 ' EXIT
 
-                mkdir -p "$delete_on_term"
+    mkdir -p "$delete_on_term"
 
-                if [ -z "$chnl_seg_dir_name" ] 
+    chnl_variants_input_command=()
+    chnl_variants_output_command=()
+    chnl_map_command=()
+    chnl_var_stream_map_command=()
+    chnl_hls_command=( -hls_time "$chnl_seg_length" -hls_list_size "$chnl_seg_count" )
+    # chnl_segment_command=()
+    chnl_hls_master_list="#EXTM3U\n#EXT-X-VERSION:7\n"
+    chnl_var_stream_map=""
+    chnl_headers_command=""
+    [ -n "$chnl_headers" ] && printf -v chnl_headers_command '%b' "$chnl_headers"
+
+    if [ "$chnl_seg_count" -gt 0 ] 
+    then
+        chnl_hls_command+=( -hls_delete_threshold $chnl_seg_count )
+    fi
+
+    if [ -n "$chnl_live" ] 
+    then
+        # chnl_segment_command+=( -segment_list_flags +live -segment_list_size $chnl_seg_count -segment_wrap $((chnl_seg_count * 2)) )
+
+        if [ "$chnl_seg_count" -gt 0 ] 
+        then
+            chnl_hls_command+=( -hls_flags periodic_rekey+delete_segments )
+        else
+            chnl_hls_command+=( -hls_flags periodic_rekey )
+        fi
+    else
+        chnl_hls_command+=( -hls_flags periodic_rekey )
+    fi
+
+    chnl_seg_dir_path=""
+    if [ -n "$chnl_seg_dir_name" ] 
+    then
+        chnl_seg_dir_path="$chnl_seg_dir_name/"
+    fi
+
+    if [ -n "${chnl_stream_link_cdn:-}" ] 
+    then
+        chnl_stream_link=$chnl_stream_link_cdn
+    fi
+
+    if [ "${chnl_stream_link_qualities_count:-0}" -gt 1 ] || [ "${chnl_stream_link_audio_count:-0}" -gt 0 ] || [ "${chnl_stream_link_subtitles_count:-0}" -gt 0 ]
+    then
+        if [ "$chnl_origin_hls_url" -eq 1 ] 
+        then
+            if [[ $chnl_stream_link =~ ^https?:// ]] 
+            then
+                [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
+                [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+                [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
+                [ -n "$chnl_cookies" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies" )
+            elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
+            then
+                [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+            fi
+            chnl_variants_input_command+=( $chnl_input_flags_command -i "$chnl_stream_link" )
+        fi
+
+        for((i=0;i<chnl_stream_link_qualities_count;i++));
+        do
+            chnl_var_stream_map="$chnl_var_stream_map v:$i"
+
+            chnl_stream_links_index=${chnl_stream_link_video_indices[i]}
+
+            chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=${chnl_stream_links_bitrate[chnl_stream_links_index]},AVERAGE-BANDWIDTH=${chnl_stream_links_bitrate[chnl_stream_links_index]},RESOLUTION=${chnl_stream_links_resolution[chnl_stream_links_index]}"
+
+            if [ -n "${chnl_stream_links_audio[chnl_stream_links_index]}" ] 
+            then
+                if [ "${chnl_stream_link_audio_count:-0}" -gt 0 ] 
                 then
-                    chnl_seg_dir_path=""
+                    for chnl_stream_link_audio_index in "${chnl_stream_link_audio_indices[@]}"
+                    do
+                        if [ "${chnl_stream_audio_group_id[chnl_stream_link_audio_index]}" == "${chnl_stream_links_audio[chnl_stream_links_index]}" ] 
+                        then
+                            chnl_hls_master_list="$chnl_hls_master_list,AUDIO=\"${chnl_stream_links_audio[chnl_stream_links_index]}\""
+                            chnl_var_stream_map="$chnl_var_stream_map,agroup:${chnl_stream_links_audio[chnl_stream_links_index]}"
+                            break
+                        fi
+                    done
+                fi
+            else
+                chnl_var_stream_map="$chnl_var_stream_map,a:$i"
+            fi
+
+            if [ -n "${chnl_stream_links_subtitles[chnl_stream_links_index]}" ] && [ "${chnl_stream_link_subtitles_count:-0}" -gt 0 ]
+            then
+                for chnl_stream_link_subtitles_index in "${chnl_stream_link_subtitles_indices[@]}"
+                do
+                    if [ "${chnl_stream_subtitles_group_id[chnl_stream_link_subtitles_index]}" == "${chnl_stream_links_subtitles[chnl_stream_links_index]}" ] 
+                    then
+                        chnl_hls_master_list="$chnl_hls_master_list,SUBTITLES=\"${chnl_stream_links_subtitles[chnl_stream_links_index]}\""
+                        chnl_var_stream_map="$chnl_var_stream_map,sgroup:${chnl_stream_links_subtitles[chnl_stream_links_index]}"
+                        break
+                    fi
+                done
+            fi
+
+            chnl_hls_master_list="$chnl_hls_master_list\n${chnl_playlist_name}_${chnl_stream_links_resolution[chnl_stream_links_index]}.m3u8\n\n"
+            chnl_var_stream_map="$chnl_var_stream_map,name:${chnl_stream_links_resolution[chnl_stream_links_index]}"
+
+            if [ "$chnl_origin_hls_url" -eq 0 ] 
+            then
+                if [[ ${chnl_stream_links_url[chnl_stream_links_index]} =~ ^https?:// ]] 
+                then
+                    [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
+                    [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+                    [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
+                    [ -n "$chnl_cookies" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies" )
+                elif [[ ${chnl_stream_links_url[chnl_stream_links_index]} =~ ^icecast?:// ]] 
+                then
+                    [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+                fi
+                chnl_variants_input_command+=( $chnl_input_flags_command -i "${chnl_stream_links_url[chnl_stream_links_index]}" )
+                chnl_map_command+=( -map $i:v )
+            else
+                chnl_map_command+=( -map 0:v:$chnl_stream_links_index )
+            fi
+
+            if [ "$chnl_video_codec" != "copy" ] 
+            then
+                if [[ ${chnl_stream_link_qualities[i]} =~ - ]] 
+                then
+                    chnl_variant_bitrate=${chnl_stream_link_qualities[i]%-*}
+                    chnl_variant_resolution=${chnl_stream_link_qualities[i]#*-}
+
+                    if [ -n "$chnl_const" ]
+                    then
+                        chnl_variants_output_command+=( -b:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k )
+                    else
+                        chnl_variants_output_command+=( -b:v:$i ${chnl_variant_bitrate}k )
+                    fi
+
+                    chnl_variants_output_command+=( -s:v:$i $chnl_variant_resolution )
+                elif [[ ${chnl_stream_link_qualities[i]} =~ x ]] 
+                then
+                    chnl_variants_output_command+=( -s:v:$i ${chnl_stream_link_qualities[i]} )
                 else
-                    chnl_seg_dir_path="$chnl_seg_dir_name/"
+                    if [ -n "$chnl_const" ]
+                    then
+                        chnl_variants_output_command+=( -b:v:$i ${chnl_stream_link_qualities[i]}k -bufsize:v:$i ${chnl_stream_link_qualities[i]}k -minrate:v:$i ${chnl_stream_link_qualities[i]}k -maxrate:v:$i ${chnl_stream_link_qualities[i]}k )
+                    else
+                        chnl_variants_output_command+=( -b:v:$i ${chnl_stream_link_qualities[i]}k )
+                    fi
+                fi
+            fi
+        done
+
+        chnl_variants_output_command+=( -c:v "$chnl_video_codec" -c:a "$chnl_audio_codec" )
+
+        if [ -n "${chnl_stream_audio_url:-}" ] 
+        then
+            if [ "${chnl_stream_link_audio_count:-0}" -gt 0 ] 
+            then
+                for((i=0;i<chnl_stream_link_audio_count;i++));
+                do
+                    chnl_stream_link_audio_index=${chnl_stream_link_audio_indices[i]}
+
+                    chnl_hls_master_list="$chnl_hls_master_list#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"${chnl_stream_audio_group_id[chnl_stream_link_audio_index]}\",NAME=\"${chnl_stream_audio_name[chnl_stream_link_audio_index]}\",DEFAULT=\"${chnl_stream_audio_default[chnl_stream_link_audio_index]}\",AUTOSELECT=YES,LANGUAGE=\"${chnl_stream_audio_language[chnl_stream_link_audio_index]}\",URI=\"${chnl_playlist_name}_${chnl_stream_audio_name[chnl_stream_link_audio_index]}.m3u8\"\n"
+                    chnl_var_stream_map="$chnl_var_stream_map a:$i,agroup:${chnl_stream_audio_group_id[chnl_stream_link_audio_index]},default:${chnl_stream_audio_default[chnl_stream_link_audio_index]},language:${chnl_stream_audio_language[chnl_stream_link_audio_index]},name:${chnl_stream_audio_name[chnl_stream_link_audio_index]}"
+
+                    if [ "$chnl_origin_hls_url" -eq 0 ] 
+                    then
+                        if [[ ${chnl_stream_links_url[chnl_stream_links_index]} =~ ^https?:// ]] 
+                        then
+                            [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
+                            [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+                            [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
+                            [ -n "$chnl_cookies" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies" )
+                        elif [[ ${chnl_stream_links_url[chnl_stream_links_index]} =~ ^icecast?:// ]] 
+                        then
+                            [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+                        fi
+                        chnl_variants_input_command+=( $chnl_input_flags_command -i "${chnl_stream_audio_url[chnl_stream_link_audio_index]}" )
+                        chnl_map_command+=( -map $((i+chnl_stream_link_qualities_count)):a )
+                    else
+                        chnl_map_command+=( -map 0:a:$chnl_stream_link_audio_index )
+                    fi
+                done
+            fi
+        else
+            for((i=0;i<chnl_stream_link_qualities_count;i++));
+            do
+                if [ "$chnl_origin_hls_url" -eq 0 ] 
+                then
+                    chnl_map_command+=( -map $i:a )
+                else
+                    chnl_map_command+=( -map 0:a:$i )
+                fi
+            done
+        fi
+
+        if [ "${chnl_stream_link_subtitles_count:-0}" -gt 0 ] 
+        then
+            for((i=0;i<chnl_stream_link_subtitles_count;i++));
+            do
+                chnl_stream_link_subtitles_index=${chnl_stream_link_subtitles_indices[i]}
+
+                if [[ ${chnl_stream_subtitles_url[chnl_stream_link_subtitles_index]} =~ $hboasia_host/(.+)$ ]] 
+                then
+                    chnl_hls_master_list="$chnl_hls_master_list#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"${chnl_stream_subtitles_group_id[chnl_stream_link_subtitles_index]}\",NAME=\"${chnl_stream_subtitles_name[chnl_stream_link_subtitles_index]}\",DEFAULT=\"${chnl_stream_subtitles_default[chnl_stream_link_subtitles_index]}\",AUTOSELECT=YES,LANGUAGE=\"${chnl_stream_subtitles_language[chnl_stream_link_subtitles_index]}\",URI=\"https://hboasia.epub.fun/${BASH_REMATCH[1]%%\?*}\"\n"
+                    continue
                 fi
 
-                if [[ $chnl_stream_link =~ ^([^ ]+)\ ([^ ]+) ]] 
+                chnl_hls_master_list="$chnl_hls_master_list#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"${chnl_stream_subtitles_group_id[chnl_stream_link_subtitles_index]}\",NAME=\"${chnl_stream_subtitles_name[chnl_stream_link_subtitles_index]}\",DEFAULT=\"${chnl_stream_subtitles_default[chnl_stream_link_subtitles_index]}\",AUTOSELECT=YES,LANGUAGE=\"${chnl_stream_subtitles_language[chnl_stream_link_subtitles_index]}\",URI=\"${chnl_stream_subtitles_group_id[chnl_stream_link_subtitles_index]}_${chnl_stream_subtitles_name[chnl_stream_link_subtitles_index]}_vtt.m3u8\"\n"
+                chnl_var_stream_map="$chnl_var_stream_map s:$i,sgroup:${chnl_stream_subtitles_group_id[chnl_stream_link_subtitles_index]},default:${chnl_stream_subtitles_default[chnl_stream_link_subtitles_index]},language:${chnl_stream_subtitles_language[chnl_stream_link_subtitles_index]},name:${chnl_stream_subtitles_name[chnl_stream_link_subtitles_index]}"
+
+                if [ "$chnl_origin_hls_url" -eq 0 ] 
                 then
-                    chnl_stream_link_0=${chnl_stream_link%% *}
-
-                    if [[ ${chnl_stream_links%% *} =~ \|([^|]+)$ ]] 
+                    if [[ ${chnl_stream_links_url[chnl_stream_links_index]} =~ ^https?:// ]] 
                     then
-                        chnl_stream_link_quality=${BASH_REMATCH[1]}
-
-                        IFS="," read -r -a chnl_stream_link_qualities <<< "$chnl_stream_link_quality"
-                        IFS=" " read -r -a chnl_stream_links_arr <<< "$chnl_stream_link"
-
-                        chnl_inputs=()
-                        chnl_map_command=()
-                        chnl_var_stream_map=()
-                        chnl_var_stream_map_command=()
-                        chnl_variants_command=()
-
-                        for((i=0;i<${#chnl_stream_link_qualities[@]};i++));
-                        do
-                            if [[ $chnl_stream_link_0 =~ ^https?:// ]] 
-                            then
-                                if [ -n "$chnl_proxy" ] 
-                                then
-                                    chnl_inputs+=( -http_proxy "$chnl_proxy" )
-                                fi
-                                if [ -n "$chnl_user_agent" ] 
-                                then
-                                    chnl_inputs+=( -user_agent "$chnl_user_agent" )
-                                fi
-                                if [ -n "$chnl_headers" ] 
-                                then
-                                    printf -v chnl_headers_command '%b' "$chnl_headers"
-                                    chnl_inputs+=( -headers "$chnl_headers_command" )
-                                fi
-                                if [ -n "$chnl_cookies" ] 
-                                then
-                                    chnl_inputs+=( -cookies "$chnl_cookies" )
-                                fi
-                            elif [[ $chnl_stream_link_0 =~ ^icecast?:// ]]
-                            then
-                                chnl_inputs+=( -user_agent "$chnl_user_agent" )
-                            fi
-                            chnl_inputs+=( $chnl_input_flags -i ${chnl_stream_links_arr[i]} )
-                            chnl_map_command+=( -map $i:v -map $i:a )
-                            chnl_stream_link_bitrate=${chnl_stream_link_qualities[i]%-*}
-                            chnl_stream_link_resolution=${chnl_stream_link_qualities[i]#*-}
-                            if [ -n "$chnl_const" ]
-                            then
-                                chnl_variants_command+=( -b:v:$i ${chnl_stream_link_bitrate}k -bufsize:v:$i ${chnl_stream_link_bitrate}k -minrate:v:$i ${chnl_stream_link_bitrate}k -maxrate:v:$i ${chnl_stream_link_bitrate}k )
-                            else
-                                chnl_variants_command+=( -b:v:$i ${chnl_stream_link_bitrate}k )
-                            fi
-                            chnl_var_stream_map+=( v:$i,a:$i,name:${chnl_stream_link_qualities[i]} )
-                        done
-
-                        chnl_var_stream_map_command=( -var_stream_map "${chnl_var_stream_map[*]}" )
-
-                        if [ "$chnl_encrypt_yn" == "yes" ] 
-                        then
-                            openssl rand 16 > "$chnl_output_dir_root/$chnl_key_name.key"
-                            if [ "$chnl_encrypt_session_yn" == "yes" ] 
-                            then
-                                echo -e "/keys?key=$chnl_key_name&channel=$chnl_output_dir_name\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
-                            else
-                                echo -e "$chnl_key_name.key\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
-                            fi
-                            chnl_var_stream_map_command+=( -hls_key_info_file $chnl_output_dir_root/$chnl_keyinfo_name.keyinfo )
-                        fi
-
-                        chnl_hls_flags_command=()
-
-                        if [ -n "$chnl_live" ] 
-                        then
-                            chnl_hls_flags_command+=( -hls_flags periodic_rekey+delete_segments )
-                        else
-                            chnl_hls_flags_command+=( -hls_flags periodic_rekey )
-                        fi
-
-                        PrepTerm
-                        $FFMPEG ${chnl_inputs[@]+"${chnl_inputs[@]}"} \
-                        ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
-                        -vcodec $chnl_video_codec -acodec $chnl_audio_codec \
-                        -flags -global_header $chnl_output_flags \
-                        ${chnl_variants_command[@]+"${chnl_variants_command[@]}"} \
-                        -f hls ${chnl_var_stream_map_command[@]+"${chnl_var_stream_map_command[@]}"} \
-                        -hls_time "$chnl_seg_length" -hls_list_size $chnl_seg_count -hls_delete_threshold $chnl_seg_count \
-                        -hls_segment_filename $chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}_%v_%05d.ts \
-                        ${chnl_hls_flags_command[@]+"${chnl_hls_flags_command[@]}"} \
-                        -master_pl_name ${chnl_playlist_name}_master.m3u8 $chnl_output_dir_root/${chnl_playlist_name}_%v.m3u8 > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
-                        WaitTerm
+                        [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
+                        [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+                        [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
+                        [ -n "$chnl_cookies" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies" )
+                    elif [[ ${chnl_stream_links_url[chnl_stream_links_index]} =~ ^icecast?:// ]] 
+                    then
+                        [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
                     fi
+                    chnl_variants_input_command+=( $chnl_input_flags_command -i "${chnl_stream_subtitles_url[chnl_stream_link_subtitles_index]}" )
+                    chnl_map_command+=( -map $((i+chnl_stream_link_qualities_count+chnl_stream_link_audio_count)):s )
                 else
-                    chnl_variants_command=()
-                    chnl_var_stream_map=()
-                    chnl_map_command=()
+                    chnl_map_command+=( -map 0:s:${chnl_stream_link_subtitles_index}? )
+                fi
+            done
 
-                    chnl_hls_master_list=""
+            chnl_variants_output_command+=( -c:s webvtt )
+        fi
 
-                    if [ -n "$chnl_txt_format" ] 
+        chnl_variants_output_command+=( $chnl_output_flags_command )
+        chnl_var_stream_map_command+=( -var_stream_map "$chnl_var_stream_map" )
+
+        if [ "$chnl_encrypt_yn" == "yes" ] 
+        then
+            openssl rand 16 > "$chnl_output_dir_root/$chnl_key_name.key"
+            if [ "$chnl_encrypt_session_yn" == "yes" ] 
+            then
+                echo -e "/keys?key=$chnl_key_name&channel=$chnl_output_dir_name\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
+            else
+                echo -e "$chnl_key_name.key\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
+            fi
+            chnl_hls_command+=( -hls_key_info_file "$chnl_output_dir_root/$chnl_keyinfo_name".keyinfo )
+        fi
+
+        echo -e "$chnl_hls_master_list" > "$chnl_output_dir_root/${chnl_playlist_name}_master.m3u8"
+        chnl_hls_command+=( -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}"_%v_%05d.ts )
+        chnl_hls_command+=( "$chnl_output_dir_root/${chnl_playlist_name}_%v.m3u8" )
+
+        PrepTerm
+        $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+        ${chnl_variants_input_command[@]+"${chnl_variants_input_command[@]}"} \
+        ${chnl_variants_output_command[@]+"${chnl_variants_output_command[@]}"} \
+        ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
+        -flags -global_header \
+        -f hls ${chnl_var_stream_map_command[@]+"${chnl_var_stream_map_command[@]}"} \
+        ${chnl_hls_command[@]+"${chnl_hls_command[@]}"} > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+        WaitTerm
+        exit 0
+    fi
+
+    chnl_input_command=()
+    chnl_filter_complex=""
+
+    if [ "${chnl_stream_link_qualities_count:-0}" -eq 1 ] 
+    then
+        chnl_stream_links_index=${chnl_stream_link_video_indices[0]}
+        chnl_stream_link=${chnl_stream_links_url[chnl_stream_links_index]}
+    fi
+
+    if [[ $chnl_stream_link =~ ^https?:// ]] 
+    then
+        [ -n "$chnl_proxy" ] && chnl_input_command+=( -http_proxy "$chnl_proxy" )
+        [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
+        [ -n "$chnl_headers_command" ] && chnl_input_command+=( -headers "$chnl_headers_command" )
+        [ -n "$chnl_cookies" ] && chnl_input_command+=( -cookies "$chnl_cookies" )
+    elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
+    then
+        [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
+    fi
+
+    chnl_input_command+=( $chnl_input_flags_command -i $chnl_stream_link )
+
+    chnl_video_shift_index=0
+    chnl_audio_shift_index=0
+    if ! [[ $chnl_input_flags =~ -an ]] && ! [[ $chnl_output_flags =~ -an ]] 
+    then
+        if [ -n "${chnl_video_shift:-}" ] 
+        then
+            chnl_video_shift_index=1
+            if [[ $chnl_stream_link =~ ^https?:// ]] 
+            then
+                [ -n "$chnl_proxy" ] && chnl_input_command+=( -http_proxy "$chnl_proxy" )
+                [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
+                [ -n "$chnl_headers_command" ] && chnl_input_command+=( -headers "$chnl_headers_command" )
+                [ -n "$chnl_cookies" ] && chnl_input_command+=( -cookies "$chnl_cookies" )
+            elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
+            then
+                [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
+            fi
+            chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_video_shift -i $chnl_stream_link )
+        elif [ -n "${audio_shift:-}" ] 
+        then
+            if [ "$chnl_audio_codec" == "copy" ] 
+            then
+                chnl_audio_shift_index=1
+                if [[ $chnl_stream_link =~ ^https?:// ]] 
+                then
+                    [ -n "$chnl_proxy" ] && chnl_input_command+=( -http_proxy "$chnl_proxy" )
+                    [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
+                    [ -n "$chnl_headers_command" ] && chnl_input_command+=( -headers "$chnl_headers_command" )
+                    [ -n "$chnl_cookies" ] && chnl_input_command+=( -cookies "$chnl_cookies" )
+                elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
+                then
+                    [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
+                fi
+                chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_audio_shift -i $chnl_stream_link )
+            else
+                chnl_input_command+=( -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" )
+            fi
+        fi
+    fi
+
+    if [ -z "$chnl_quality" ]
+    then
+        if [ -n "$chnl_bitrates" ] 
+        then
+            IFS="," read -r -a chnl_variants <<< "$chnl_bitrates"
+
+            for((i=0;i<${#chnl_variants[@]};i++));
+            do
+                chnl_variant=${chnl_variants[i]}
+
+                if [[ $chnl_variant =~ - ]] 
+                then
+                    chnl_bitrates=${chnl_variant%-*}
+                    chnl_resolution=${chnl_variant#*-}
+
+                    if [ -n "$chnl_const" ] 
                     then
-                        chnl_subtitle_list='\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subs",NAME="sub",DEFAULT=YES,AUTOSELECT=YES,FORCED=NO,LANGUAGE="eng",URI="'"$chnl_playlist_name"'_vtt.m3u8"'
-                        chnl_subtitle_append=',SUBTITLES="subs"'
+                        chnl_variants_output_command+=( -b:v:$i ${chnl_bitrates}k -bufsize:v:$i ${chnl_bitrates}k -minrate:v:$i ${chnl_bitrates}k -maxrate:v:$i ${chnl_bitrates}k )
                     else
-                        chnl_subtitle_list=""
-                        chnl_subtitle_append=""
+                        chnl_variants_output_command+=( -b:v:$i ${chnl_bitrates}k )
                     fi
 
+                    chnl_variants_output_command+=( -s:v:$i $chnl_resolution )
+                    chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((chnl_bitrates*1000)),RESOLUTION=$chnl_resolution$chnl_subtitle_append\n"
+                elif [[ $chnl_variant == *"x"* ]] 
+                then
+                    chnl_variants_output_command+=( -s:v:$i $chnl_variant )
+                    chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=$chnl_variant$chnl_subtitle_append\n"
+                else
+                    if [ -n "$chnl_const" ] 
+                    then
+                        chnl_variants_output_command+=( -b:v:$i ${chnl_variant}k -bufsize:v:$i ${chnl_variant}k -minrate:v:$i ${chnl_variant}k -maxrate:v:$i ${chnl_variant}k )
+                    else
+                        chnl_variants_output_command+=( -b:v:$i ${chnl_variant}k )
+                    fi
+                    chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((chnl_variant*1000))$chnl_subtitle_append\n"
+                fi
+
+                chnl_hls_master_list="$chnl_hls_master_list${chnl_playlist_name}_$chnl_variant.m3u8\n\n"
+
+                if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                then
+                    [ -n "$chnl_filter_complex" ] && chnl_filter_complex="$chnl_filter_complex;"
+                    chnl_filter_complex="${chnl_filter_complex}[$chnl_video_shift_index:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video_$i]"
+                fi
+
+                if [[ $chnl_input_flags =~ -an ]] || [[ $chnl_output_flags =~ -an ]] 
+                then
                     if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
                     then
-                        if [[ $chnl_output_flags =~ -vf ]] 
-                        then
-                            chnl_extra_filters=${chnl_output_flags#*-vf }
-                            chnl_extra_filters=${chnl_extra_filters%% *}
-                            chnl_output_flags=${chnl_output_flags//-vf $chnl_extra_filters/}
-                            chnl_extra_filters="$chnl_extra_filters,"
-                        elif [[ $chnl_output_flags =~ -filter:v ]] 
-                        then
-                            chnl_extra_filters=${chnl_output_flags#*-filter:v }
-                            chnl_extra_filters=${chnl_extra_filters%% *}
-                            chnl_output_flags=${chnl_output_flags//-filter:v $chnl_extra_filters/}
-                            chnl_extra_filters="$chnl_extra_filters,"
-                        else
-                            chnl_extra_filters=""
-                        fi
-                    fi
-
-                    if [ -z "$chnl_quality" ]
-                    then
-                        if [ -n "$chnl_bitrates" ] 
-                        then
-                            IFS="," read -r -a chnl_variants <<< "$chnl_bitrates"
-
-                            for((i=0;i<${#chnl_variants[@]};i++));
-                            do
-                                variant=${chnl_variants[i]}
-                                if [[ $variant == *"-"* ]] 
-                                then
-                                    chnl_bitrates=${variant%-*}
-                                    chnl_resolution=${variant#*-}
-
-                                    if [ -n "$chnl_const" ] 
-                                    then
-                                        chnl_variants_command+=( -b:v:$i ${chnl_bitrates}k -bufsize:v:$i ${chnl_bitrates}k -minrate:v:$i ${chnl_bitrates}k -maxrate:v:$i ${chnl_bitrates}k )
-                                    else
-                                        chnl_variants_command+=( -b:v:$i ${chnl_bitrates}k )
-                                    fi
-
-                                    chnl_variants_command+=( -s:v:$i $chnl_resolution )
-                                    chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((chnl_bitrates*1000)),RESOLUTION=$chnl_resolution$chnl_subtitle_append\n"
-                                elif [[ $variant == *"x"* ]] 
-                                then
-                                    chnl_variants_command+=( -s:v:$i $variant )
-                                    chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=$variant$chnl_subtitle_append\n"
-                                else
-                                    if [ -n "$chnl_const" ] 
-                                    then
-                                        chnl_variants_command+=( -b:v:$i ${variant}k -bufsize:v:$i ${variant}k -minrate:v:$i ${variant}k -maxrate:v:$i ${variant}k )
-                                    else
-                                        chnl_variants_command+=( -b:v:$i ${variant}k )
-                                    fi
-                                    chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((variant*1000))$chnl_subtitle_append\n"
-                                fi
-                                chnl_hls_master_list="$chnl_hls_master_list${chnl_playlist_name}_$variant.m3u8$chnl_subtitle_list\n\n"
-                                if [[ $chnl_input_flags =~ -an ]] || [[ $chnl_output_flags =~ -an ]]
-                                then
-                                    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
-                                    then
-                                        chnl_variants_command+=( -filter_complex "[0:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]" -map '[drawtext_video]' )
-                                    else
-                                        chnl_variants_command+=( -map 0:v:0 )
-                                    fi
-                                    chnl_var_stream_map+=( v:$i,name:$variant )
-                                else
-                                    if [ -n "${chnl_video_shift:-}" ] 
-                                    then
-                                        chnl_variants_command+=( -map 0:v:0 -map 1:a:0 )
-                                    elif [ -n "${chnl_audio_shift:-}" ] 
-                                    then
-                                        if [ "$chnl_audio_codec" == "copy" ] 
-                                        then
-                                            chnl_variants_command+=( -map 1:v:0 -map 0:a:0 )
-                                        else
-                                            chnl_variants_command+=( -map 0:v:0 -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
-                                        fi
-                                    elif [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ]
-                                    then
-                                        chnl_variants_command+=( -filter_complex "[0:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]" -map '[drawtext_video]' -map 0:a:0 )
-                                    else
-                                        chnl_variants_command+=( -map 0:v:0 -map 0:a:0 )
-                                    fi
-                                    chnl_var_stream_map+=( v:$i,a:$i,name:$variant )
-                                fi
-                            done
-                        else
-                            if [ -n "${chnl_video_shift:-}" ] 
-                            then
-                                chnl_map_command+=( -itsoffset $chnl_video_shift -i "$chnl_stream_link" -map 0:v -map 1:a )
-                            elif [ -n "${chnl_audio_shift:-}" ] 
-                            then
-                                if [ "$chnl_audio_codec" == "copy" ] 
-                                then
-                                    chnl_map_command+=( -itsoffset $chnl_audio_shift -i "$chnl_stream_link" -map 0:a -map 1:v )
-                                else
-                                    chnl_map_command+=( -map 0:v -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
-                                fi
-                            fi
-                        fi
+                        chnl_map_command+=( -map "[drawtext_video_$i]" )
                     else
-                        IFS="," read -r -a chnl_qualities <<< "$chnl_quality"
-                        if [ -n "$chnl_bitrates" ] 
-                        then
-                            IFS="," read -r -a chnl_variants <<< "$chnl_bitrates"
-
-                            for((i=0;i<${#chnl_variants[@]};i++));
-                            do
-                                variant=${chnl_variants[i]}
-                                if [[ $variant == *"-"* ]] 
-                                then
-                                    chnl_bitrates=${variant%-*}
-                                    chnl_resolution=${variant#*-}
-
-                                    chnl_variants_command+=( -crf:v:$i ${chnl_qualities[i]:-${chnl_quality[0]}} -bufsize:v:$i ${chnl_bitrates}k -maxrate:v:$i ${chnl_bitrates}k )
-
-                                    if [ "$chnl_video_codec" == "libx265" ]
-                                    then
-                                        chnl_variants_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${chnl_bitrates}k --vbv-bufsize:v:$i ${chnl_bitrates}k )
-                                    fi
-
-                                    chnl_variants_command+=( -s:v:$i $chnl_resolution )
-                                    chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((chnl_bitrates*1000)),RESOLUTION=$chnl_resolution$chnl_subtitle_append\n"
-                                elif [[ $variant == *"x"* ]] 
-                                then
-                                    chnl_variants_command+=( -crf:v:$i ${chnl_qualities[i]:-${chnl_quality[0]}} -s:v:$i $variant )
-                                    chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=$variant$chnl_subtitle_append\n"
-                                else
-                                    chnl_variants_command+=( -crf:v:$i ${chnl_qualities[i]:-${chnl_quality[0]}} -bufsize:v:$i ${variant}k -maxrate:v:$i ${variant}k )
-
-                                    if [ "$chnl_video_codec" == "libx265" ]
-                                    then
-                                        chnl_variants_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${variant}k --vbv-bufsize:v:$i ${variant}k )
-                                    fi
-
-                                    chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((variant*1000))$chnl_subtitle_append\n"
-                                fi
-                                chnl_hls_master_list="$chnl_hls_master_list${chnl_playlist_name}_crf_${chnl_qualities[i]:-${chnl_quality[0]}}_$variant.m3u8$chnl_subtitle_list\n\n"
-                                if [[ $chnl_input_flags =~ -an ]] || [[ $chnl_output_flags =~ -an ]]
-                                then
-                                    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
-                                    then
-                                        chnl_variants_command+=( -filter_complex "[0:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]" -map '[drawtext_video]' )
-                                    else
-                                        chnl_variants_command+=( -map 0:v:0 )
-                                    fi
-                                    chnl_var_stream_map+=( v:$i,name:crf_${chnl_qualities[i]:-${chnl_quality[0]}}_$variant )
-                                else
-                                    if [ -n "${chnl_video_shift:-}" ] 
-                                    then
-                                        chnl_variants_command+=( -map 0:v:0 -map 1:a:0 )
-                                    elif [ -n "${chnl_audio_shift:-}" ] 
-                                    then
-                                        if [ "$chnl_audio_codec" == "copy" ] 
-                                        then
-                                            chnl_variants_command+=( -map 1:v:0 -map 0:a:0 )
-                                        else
-                                            chnl_variants_command+=( -map 0:v:0 -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
-                                        fi
-                                    elif [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
-                                    then
-                                        chnl_variants_command+=( -filter_complex "[0:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]" -map '[drawtext_video]' -map 0:a:0 )
-                                    else
-                                        chnl_variants_command+=( -map 0:v:0 -map 0:a:0 )
-                                    fi
-                                    chnl_var_stream_map+=( v:$i,a:$i,name:crf_${chnl_qualities[i]:-${chnl_quality[0]}}_$variant )
-                                fi
-                            done
-                        else
-                            for((i=0;i<${#chnl_qualities[@]};i++));
-                            do
-                                chnl_variants_command+=( -crf:v:$i ${chnl_qualities[i]} )
-                                if [[ $chnl_input_flags =~ -an ]] || [[ $chnl_output_flags =~ -an ]] 
-                                then
-                                    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
-                                    then
-                                        chnl_variants_command+=( -filter_complex "[0:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]" -map '[drawtext_video]' )
-                                    else
-                                        chnl_variants_command+=( -map 0:v:0 )
-                                    fi
-                                    chnl_var_stream_map+=( v:$i,name:crf_${chnl_qualities[i]} )
-                                else
-                                    if [ -n "${chnl_video_shift:-}" ] 
-                                    then
-                                        chnl_variants_command+=( -map 0:v:0 -map 1:a:0 )
-                                    elif [ -n "${chnl_audio_shift:-}" ] 
-                                    then
-                                        if [ "$chnl_audio_codec" == "copy" ] 
-                                        then
-                                            chnl_variants_command+=( -map 1:v:0 -map 0:a:0 )
-                                        else
-                                            chnl_variants_command+=( -map 0:v:0 -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" -map '[delayed_audio]' )
-                                        fi
-                                    elif [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
-                                    then
-                                        chnl_variants_command+=( -filter_complex "[0:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]" -map '[drawtext_video]' -map 0:a:0 )
-                                    else
-                                        chnl_variants_command+=( -map 0:v:0 -map 0:a:0 )
-                                    fi
-                                    chnl_var_stream_map+=( v:$i,a:$i,name:crf_${chnl_qualities[i]} )
-                                fi
-                                chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$(((64-chnl_qualities[i])*30000))$chnl_subtitle_append\n"
-                                chnl_hls_master_list="$chnl_hls_master_list${chnl_playlist_name}_crf_${chnl_qualities[i]}.m3u8$chnl_subtitle_list\n\n"
-                            done
-                        fi
+                        chnl_map_command+=( -map $chnl_video_shift_index:v )
                     fi
 
-                    chnl_hls_flags_command=()
-                    chnl_segment_flags_command=()
-
-                    chnl_hls_flags_command+=( -hls_time $chnl_seg_length -hls_list_size $chnl_seg_count )
-
-                    if [ "$chnl_seg_count" -gt 0 ] 
+                    chnl_var_stream_map="$chnl_var_stream_map v:$i,name:$chnl_variant"
+                else
+                    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
                     then
-                        chnl_hls_flags_command+=( -hls_delete_threshold $chnl_seg_count )
-                    fi
-
-                    if [ -n "$chnl_live" ] 
-                    then
-                        chnl_segment_flags_command+=( -segment_list_flags +live -segment_list_size $chnl_seg_count -segment_wrap $((chnl_seg_count * 2)) )
-                        if [ "$chnl_seg_count" -gt 0 ] 
-                        then
-                            chnl_hls_flags_command+=( -hls_flags periodic_rekey+delete_segments )
-                        else
-                            chnl_hls_flags_command+=( -hls_flags periodic_rekey )
-                        fi
+                        chnl_map_command+=( -map "[drawtext_video_$i]" )
                     else
-                        chnl_hls_flags_command+=( -hls_flags periodic_rekey )
+                        chnl_map_command+=( -map $chnl_video_shift_index:v )
                     fi
 
-                    if [ -n "${chnl_var_stream_map:-}" ] 
+                    if [ -n "${chnl_audio_shift:-}" ] && [ "$chnl_audio_codec" != "copy" ] 
                     then
-                        chnl_var_stream_map_command=( -var_stream_map "${chnl_var_stream_map[*]}" )
-                        chnl_hls_flags_command+=( -hls_segment_filename $chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}_%v_%05d.ts )
+                        chnl_map_command+=( -map '[delayed_audio]' )
                     else
-                        chnl_var_stream_map_command=()
-                        chnl_hls_flags_command+=( -hls_segment_filename $chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}_%05d.ts )
+                        chnl_map_command+=( -map $chnl_audio_shift_index:a )
                     fi
 
-                    if [ "${master:-0}" -eq 0 ] 
-                    then
-                        if [ -n "${chnl_var_stream_map:-}" ] 
-                        then
-                            chnl_hls_flags_command+=( $chnl_output_dir_root/${chnl_playlist_name}_%v.m3u8 )
-                        else
-                            chnl_hls_flags_command+=( $chnl_output_dir_root/$chnl_playlist_name.m3u8 )
-                        fi
-                        if [ -n "${chnl_hls_master_list:-}" ] 
-                        then
-                            echo -e "#EXTM3U\n#EXT-X-VERSION:3\n$chnl_hls_master_list" > $chnl_output_dir_root/$chnl_playlist_name.m3u8
-                        fi
-                    else
-                        if [[ $chnl_quality == *","* ]] || { [ -n "${chnl_variants:-}" ] && [[ ${#chnl_variants[@]} -gt 1 ]]; }
-                        then
-                            chnl_hls_flags_command+=( -master_pl_name ${chnl_playlist_name}_master.m3u8 $chnl_output_dir_root/${chnl_playlist_name}_%v.m3u8 )
-                            [ "$chnl_encrypt_yn" == "no" ] && echo -e "#EXTM3U\n#EXT-X-VERSION:3\n$chnl_hls_master_list" > $chnl_output_dir_root/${chnl_playlist_name}_master.m3u8
-                        elif [ -n "$chnl_hls_master_list" ] 
-                        then
-                            chnl_hls_flags_command+=( $chnl_output_dir_root/${chnl_playlist_name}_%v.m3u8 )
-                            echo -e "#EXTM3U\n#EXT-X-VERSION:3\n$chnl_hls_master_list" > $chnl_output_dir_root/${chnl_playlist_name}_master.m3u8
-                        else
-                            chnl_hls_flags_command+=( $chnl_output_dir_root/$chnl_playlist_name.m3u8 )
-                            echo -e "#EXTM3U\n#EXT-X-VERSION:3$chnl_subtitle_list\n#EXT-X-STREAM-INF:BANDWIDTH=500000$chnl_subtitle_append\n$chnl_playlist_name.m3u8" > $chnl_output_dir_root/${chnl_playlist_name}_master.m3u8
-                        fi
-                    fi
-
-                    args=()
-
-                    if [[ $chnl_stream_link =~ ^https?:// ]] 
-                    then
-                        if [ -n "$chnl_proxy" ] 
-                        then
-                            args+=( -http_proxy "$chnl_proxy" )
-                        fi
-                        if [ -n "$chnl_user_agent" ] 
-                        then
-                            args+=( -user_agent "$chnl_user_agent" )
-                        fi
-                        if [ -n "$chnl_headers" ] 
-                        then
-                            printf -v chnl_headers_command '%b' "$chnl_headers"
-                            args+=( -headers "$chnl_headers_command" )
-                        fi
-                        if [ -n "$chnl_cookies" ] 
-                        then
-                            args+=( -cookies "$chnl_cookies" )
-                        fi
-                    elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
-                    then
-                        args+=( -user_agent "$chnl_user_agent" )
-                    fi
-
-                    if [ "$chnl_encrypt_yn" == "yes" ] || [[ $chnl_quality == *","* ]] || { [ -n "${chnl_variants:-}" ] && [[ ${#chnl_variants[@]} -gt 1 ]]; } || [ -n "$chnl_txt_format" ]
-                    then
-                        if [ "$chnl_encrypt_yn" == "yes" ] 
-                        then
-                            openssl rand 16 > "$chnl_output_dir_root/$chnl_key_name.key"
-                            if [ "$chnl_encrypt_session_yn" == "yes" ] 
-                            then
-                                echo -e "/keys?key=$chnl_key_name&channel=$chnl_output_dir_name\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
-                            else
-                                echo -e "$chnl_key_name.key\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
-                            fi
-                            chnl_var_stream_map_command+=( -hls_key_info_file $chnl_output_dir_root/$chnl_keyinfo_name.keyinfo )
-                        fi
-
-                        # https://stackoverflow.com/questions/23235651/how-can-i-do-ansi-c-quoting-of-an-existing-bash-variable
-                        PrepTerm
-                        $FFMPEG ${args[@]+"${args[@]}"} $chnl_input_flags -i "$chnl_stream_link" ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
-                        -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" \
-                        -flags -global_header $chnl_output_flags \
-                        ${chnl_variants_command[@]+"${chnl_variants_command[@]}"} \
-                        -f hls ${chnl_var_stream_map_command[@]+"${chnl_var_stream_map_command[@]}"} \
-                        ${chnl_hls_flags_command[@]+"${chnl_hls_flags_command[@]}"} > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
-                        WaitTerm
-                    else
-                        PrepTerm
-                        $FFMPEG ${args[@]+"${args[@]}"} $chnl_input_flags -i "$chnl_stream_link" ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
-                        -vcodec "$chnl_video_codec" -acodec "$chnl_audio_codec" \
-                        -flags -global_header $chnl_output_flags \
-                        ${chnl_variants_command[@]+"${chnl_variants_command[@]}"} \
-                        -f segment ${chnl_var_stream_map_command[@]+"${chnl_var_stream_map_command[@]}"} \
-                        -segment_time "$chnl_seg_length" -segment_format mpeg_ts \
-                        -segment_list $chnl_output_dir_root/$chnl_playlist_name.m3u8 $chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}_%05d.ts \
-                        ${chnl_segment_flags_command[@]+"${chnl_segment_flags_command[@]}"} > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
-                        WaitTerm
-                    fi
+                    chnl_var_stream_map="$chnl_var_stream_map v:$i,a:$i,name:$chnl_variant"
                 fi
+            done
+        else
+            if [ -n "$chnl_subtitle_append" ] 
+            then
+                chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000$chnl_subtitle_append\n${chnl_playlist_name}_vtt.m3u8\n\n"
+            fi
+
+            if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+            then
+                chnl_filter_complex="${chnl_filter_complex}[$chnl_video_shift_index:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]"
+                chnl_map_command+=( -map '[drawtext_video]' )
+            else
+                chnl_map_command+=( -map $chnl_video_shift_index:v )
+            fi
+
+            if ! [[ $chnl_input_flags =~ -an ]] && ! [[ $chnl_output_flags =~ -an ]]
+            then
+                if [ -n "${chnl_audio_shift:-}" ] && [ "$chnl_audio_codec" != "copy" ] 
+                then
+                    chnl_map_command+=( -map '[delayed_audio]' )
+                else
+                    chnl_map_command+=( -map $chnl_audio_shift_index:a )
+                fi
+            fi
+        fi
+    else
+        IFS="," read -r -a chnl_qualities <<< "$chnl_quality"
+        if [ -n "$bitrates" ] 
+        then
+            IFS="," read -r -a chnl_variants <<< "$chnl_bitrates"
+
+            for((i=0;i<${#chnl_variants[@]};i++));
+            do
+                chnl_variant=${chnl_variants[i]}
+
+                if [[ $chnl_variant =~ - ]] 
+                then
+                    chnl_bitrates=${chnl_variant%-*}
+                    chnl_resolution=${chnl_variant#*-}
+
+                    chnl_variants_output_command+=( -crf:v:$i ${chnl_qualities[i]:-${chnl_quality[0]}} -bufsize:v:$i ${chnl_bitrates}k -maxrate:v:$i ${chnl_bitrates}k )
+
+                    if [ "$chnl_video_codec" == "libx265" ]
+                    then
+                        chnl_variants_output_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${chnl_bitrates}k --vbv-bufsize:v:$i ${chnl_bitrates}k )
+                    fi
+
+                    chnl_variants_output_command+=( -s:v:$i $chnl_resolution )
+                    chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((chnl_bitrates*1000)),RESOLUTION=$chnl_resolution$chnl_subtitle_append\n"
+                elif [[ $chnl_variant == *"x"* ]] 
+                then
+                    chnl_variants_output_command+=( -crf:v:$i ${chnl_qualities[i]:-${chnl_quality[0]}} -s:v:$i $chnl_variant )
+                    chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=$chnl_variant$chnl_subtitle_append\n"
+                else
+                    chnl_variants_output_command+=( -crf:v:$i ${chnl_qualities[i]:-${chnl_quality[0]}} -bufsize:v:$i ${chnl_variant}k -maxrate:v:$i ${chnl_variant}k )
+
+                    if [ "$chnl_video_codec" == "libx265" ]
+                    then
+                        chnl_variants_output_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${chnl_variant}k --vbv-bufsize:v:$i ${chnl_variant}k )
+                    fi
+
+                    chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((chnl_variant*1000))$chnl_subtitle_append\n"
+                fi
+
+                chnl_hls_master_list="$chnl_hls_master_list${chnl_playlist_name}_crf_${chnl_qualities[i]:-${chnl_quality[0]}}_$chnl_variant.m3u8\n\n"
+
+                if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                then
+                    [ -n "$chnl_filter_complex" ] && chnl_filter_complex="$chnl_filter_complex;"
+                    chnl_filter_complex="${chnl_filter_complex}[$chnl_video_shift_index:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video_$i]"
+                fi
+
+                if [[ $chnl_input_flags =~ -an ]] || [[ $chnl_output_flags =~ -an ]] 
+                then
+                    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                    then
+                        chnl_map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        chnl_map_command+=( -map $chnl_video_shift_index:v )
+                    fi
+
+                    chnl_var_stream_map="$chnl_var_stream_map v:$i,name:crf_${chnl_qualities[i]:-${chnl_quality[0]}}_$chnl_variant"
+                else
+                    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                    then
+                        chnl_map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        chnl_map_command+=( -map $chnl_video_shift_index:v )
+                    fi
+
+                    if [ -n "${chnl_audio_shift:-}" ] && [ "$chnl_audio_codec" != "copy" ]
+                    then
+                        chnl_map_command+=( -map '[delayed_audio]' )
+                    else
+                        chnl_map_command+=( -map $chnl_audio_shift_index:a )
+                    fi
+
+                    chnl_var_stream_map="$chnl_var_stream_map v:$i,a:$i,name:crf_${chnl_qualities[i]:-${chnl_quality[0]}}_$chnl_variant"
+                fi
+            done
+        else
+            for((i=0;i<${#chnl_qualities[@]};i++));
+            do
+                chnl_variants_output_command+=( -crf:v:$i ${chnl_qualities[i]} )
+
+                if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                then
+                    [ -n "$chnl_filter_complex" ] && chnl_filter_complex="$chnl_filter_complex;"
+                    chnl_filter_complex="${chnl_filter_complex}[$chnl_video_shift_index:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video_$i]"
+                fi
+
+                if [[ $chnl_input_flags =~ -an ]] || [[ $chnl_output_flags =~ -an ]] 
+                then
+                    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                    then
+                        chnl_map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        chnl_map_command+=( -map $chnl_video_shift_index:v )
+                    fi
+
+                    chnl_var_stream_map="$chnl_var_stream_map v:$i,name:crf_${chnl_qualities[i]}"
+                else
+                    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+                    then
+                        chnl_map_command+=( -map "[drawtext_video_$i]" )
+                    else
+                        chnl_map_command+=( -map $chnl_video_shift_index:v )
+                    fi
+
+                    if [ -n "${chnl_audio_shift:-}" ] && [ "$chnl_audio_codec" != "copy" ]
+                    then
+                        chnl_map_command+=( -map '[delayed_audio]' )
+                    else
+                        chnl_map_command+=( -map $chnl_audio_shift_index:a )
+                    fi
+
+                    chnl_var_stream_map="$chnl_var_stream_map v:$i,a:$i,name:crf_${chnl_qualities[i]}"
+                fi
+
+                chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$(((22-chnl_qualities[i])*100000+4200000))$chnl_subtitle_append\n"
+                chnl_hls_master_list="$chnl_hls_master_list${chnl_playlist_name}_crf_${chnl_qualities[i]}.m3u8\n\n"
+            done
+        fi
+    fi
+
+    chnl_variants_output_command+=( -c:v "$chnl_video_codec" -c:a "$chnl_audio_codec" )
+
+    if [ -n "$chnl_subtitle_append" ] 
+    then
+        chnl_variants_output_command+=( -c:s webvtt )
+    fi
+
+    chnl_variants_output_command+=( $chnl_output_flags_command )
+
+    if [ -n "$chnl_filter_complex" ] 
+    then
+        chnl_input_command+=( -filter_complex "$chnl_filter_complex" )
+    fi
+
+    if [ -n "$chnl_var_stream_map" ] 
+    then
+        chnl_var_stream_map_command=( -var_stream_map "$chnl_var_stream_map" )
+    fi
+
+    if [ "$chnl_encrypt_yn" == "yes" ] 
+    then
+        openssl rand 16 > "$chnl_output_dir_root/$chnl_key_name.key"
+        if [ "$chnl_encrypt_session_yn" == "yes" ] 
+        then
+            echo -e "/keys?key=$chnl_key_name&channel=$chnl_output_dir_name\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
+        else
+            echo -e "$chnl_key_name.key\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
+        fi
+        chnl_hls_command+=( -hls_key_info_file "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo" )
+    fi
+
+    if [ "$master" -eq 0 ] 
+    then
+        chnl_hls_command+=( -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}_%05d.ts" )
+        chnl_hls_command+=( "$chnl_output_dir_root/$chnl_playlist_name.m3u8" )
+    else
+        echo -e "$chnl_hls_master_list" > "$chnl_output_dir_root/${chnl_playlist_name}_master.m3u8"
+        chnl_hls_command+=( -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}_%v_%05d.ts" )
+        chnl_hls_command+=( "$chnl_output_dir_root/${chnl_playlist_name}_%v.m3u8" )
+    fi
+
+    # https://stackoverflow.com/questions/23235651/how-can-i-do-ansi-c-quoting-of-an-existing-bash-variable
+    PrepTerm
+    $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+    ${chnl_input_command[@]+"${chnl_input_command[@]}"} \
+    ${chnl_variants_output_command[@]+"${chnl_variants_output_command[@]}"} \
+    ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
+    -flags -global_header \
+    -f hls ${chnl_var_stream_map_command[@]+"${chnl_var_stream_map_command[@]}"} \
+    ${chnl_hls_command[@]+"${chnl_hls_command[@]}"} > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+    WaitTerm
+
+    # seg
+    # PrepTerm
+    # $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+    # ${chnl_input_command[@]+"${chnl_input_command[@]}"} \
+    # ${variants_output_command[@]+"${variants_output_command[@]}"} \
+    # ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
+    # -flags -global_header $chnl_output_flags \
+    # -f segment ${chnl_var_stream_map_command[@]+"${chnl_var_stream_map_command[@]}"} \
+    # -segment_time "$chnl_seg_length" -segment_format mpeg_ts \
+    # -segment_list $chnl_output_dir_root/$chnl_playlist_name.m3u8 $chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}_%05d.ts \
+    # ${chnl_segment_command[@]+"${chnl_segment_command[@]}"} > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+    # WaitTerm
             } 201>"$pid_file"
         ;;
     esac
@@ -5143,7 +6007,7 @@ ListChannels()
         then
             while IFS= read -r chnls_br
             do
-                if [[ $chnls_br == *"-"* ]]
+                if [[ $chnls_br =~ - ]]
                 then
                     chnls_br_a=${chnls_br%-*}
                     chnls_br_b=" 分辨率: ${chnls_br#*-}"
@@ -5192,7 +6056,7 @@ ListChannels()
             else
                 chnls_status_text=$red"关闭"${normal}
             fi
-            chnls_list=$chnls_list"# $green$((index+1))${normal}\r\033[6C进程ID: $green${chnls_pid[index]}${normal} 状态: $chnls_status_text 频道名称: $green${chnls_channel_name[index]} $chnls_proxy_text${normal}\n\033[6C编码: $green${chnls_video_codec[index]}:${chnls_audio_codec[index]}${normal} 延迟: $green$chnls_video_audio_shift_text${normal} 视频质量: $green$chnls_video_quality_text${normal}\n\033[6C源: ${chnls_stream_link[index]}\n\033[6Cm3u8位置: $chnls_playlist_file_text\n\n"
+            chnls_list=$chnls_list"# $green$((index+1))${normal}\r\033[6C进程ID: $green${chnls_pid[index]}${normal} 状态: $chnls_status_text 频道名称: $green${chnls_channel_name[index]} $chnls_proxy_text${normal}\n\033[6C编码: $green${chnls_video_codec[index]}:${chnls_audio_codec[index]}${normal} 延迟: $green$chnls_video_audio_shift_text${normal} 视频质量: $green$chnls_video_quality_text${normal}\n\033[6C源: ${chnls_stream_link[index]}\n\033[6C位置: $chnls_playlist_file_text\n\n"
         elif [ "$kind" == "flv" ] 
         then
             if [ "${chnls_flv_status[index]}" == "on" ] 
@@ -5238,7 +6102,6 @@ GetChannelInfo()
         select_json='{ "output_dir_name": "'"$output_dir_name"'" }'
     fi
 
-    chnl_found=0
     while IFS="^" read -r chnl_pid chnl_status chnl_stream_links chnl_live_yn chnl_proxy chnl_xc_proxy \
     chnl_user_agent chnl_headers chnl_cookies chnl_output_dir_name chnl_playlist_name \
     chnl_seg_dir_name chnl_seg_name chnl_seg_length chnl_seg_count chnl_video_codec \
@@ -5248,7 +6111,6 @@ GetChannelInfo()
     chnl_sync_file chnl_sync_index chnl_sync_pairs chnl_flv_status chnl_flv_h265_yn chnl_flv_push_link \
     chnl_flv_pull_link
     do
-        chnl_found=1
         chnl_pid=${chnl_pid#\"}
         chnl_flv_pull_link=${chnl_flv_pull_link%\"}
 
@@ -5270,26 +6132,19 @@ GetChannelInfo()
             chnl_proxy_command=""
         fi
 
-        if [ -n "$chnl_xc_proxy" ] && [[ $chnl_stream_link =~ ^([^|]+)|http ]]
+        chnl_xc_proxy_ori=$chnl_xc_proxy
+        chnl_xc_proxy=""
+        if [ -n "$chnl_xc_proxy_ori" ] && [[ $chnl_stream_link =~ ^([^|]+)|http ]]
         then
-            [ -z "${xtream_codes_domains:-}" ] && GetXtreamCodesDomains
-
-            found=0
+            GetXtreamCodesDomains
             for xc_domain in "${xtream_codes_domains[@]}"
             do
                 if [ "$xc_domain" == "${BASH_REMATCH[1]}" ] 
                 then
-                    found=1
+                    chnl_xc_proxy=$chnl_xc_proxy_ori
                     break
                 fi
             done
-
-            if [ "$found" -eq 0 ] 
-            then
-                chnl_xc_proxy=""
-            fi
-        else
-            chnl_xc_proxy=""
         fi
 
         while [[ $chnl_headers =~ \\\\ ]]
@@ -5373,7 +6228,7 @@ GetChannelInfo()
             then
                 while IFS= read -r chnl_br
                 do
-                    if [[ $chnl_br == *"-"* ]]
+                    if [[ $chnl_br =~ - ]]
                     then
                         chnl_br_a=${chnl_br%-*}
                         chnl_br_b=" 分辨率: ${chnl_br#*-}"
@@ -5443,7 +6298,7 @@ GetChannelInfo()
         break
     done < <($JQ_FILE -M --arg select_index "$select_index" --argjson select_json "$select_json" '.channels[] | select(.[$select_index] == $select_json[$select_index]) | join("^")' "$CHANNELS_FILE")
 
-    if [ "$chnl_found" -eq 0 ] && [ -z "${monitor:-}" ]
+    if [ -z "$chnl_pid" ] && [ -z "${monitor:-}" ]
     then
         Println "$error 频道发生变化, 请重试 !\n" && exit 1
     fi
@@ -5593,7 +6448,7 @@ GetChannelInfoLite()
             then
                 while IFS= read -r chnl_br
                 do
-                    if [[ $chnl_br == *"-"* ]]
+                    if [[ $chnl_br =~ - ]]
                     then
                         chnl_br_a=${chnl_br%-*}
                         chnl_br_b=" 分辨率: ${chnl_br#*-}"
@@ -5725,10 +6580,11 @@ ViewChannelInfo()
 
 InputChannelsIndex()
 {
-    echo -e "请输入频道的序号 "
-    echo -e "$tip 多个序号用空格分隔 比如: 5 7 9-11 \n"
-    while read -p "(默认: 取消): " chnls_index_input
+    echo -e "$tip 多个序号用空格分隔 比如: 5 7 9-11\n"
+    while read -p "请输入频道的序号(默认: 取消): " chnls_index_input
     do
+        [ -z "$chnls_index_input" ] && Println "已取消...\n" && exit 1
+
         chnls_pid_chosen=()
 
         if [ -n "${menu_num:-}" ] 
@@ -5737,65 +6593,55 @@ InputChannelsIndex()
             then
                 if [[ $chnls_index_input == $((chnls_count+1)) ]] 
                 then
-                    found_chnls_off=0
                     for((i=0;i<chnls_count;i++));
                     do
                         if [[ -z ${kind:-} ]] && [[ ${chnls_status[i]} == "off" ]]
                         then
                             chnls_pid_chosen+=("${chnls_pid[i]}")
-                            found_chnls_off=1
                         elif [[ ${kind:-} == "flv" ]] && [[ ${chnls_flv_status[i]} == "off" ]]
                         then
                             chnls_pid_chosen+=("${chnls_pid[i]}")
-                            found_chnls_off=1
                         fi
                     done
-                    [[ $found_chnls_off -eq 0 ]] && Println "$error 没有找到关闭的频道\n" && exit 1
+                    [ -z "${chnls_pid_chosen:-}" ] && Println "$error 没有找到关闭的频道\n" && exit 1
                     break
                 elif [[ $chnls_index_input == $((chnls_count+2)) ]] 
                 then
-                    found_chnls_on=0
                     for((i=0;i<chnls_count;i++));
                     do
                         if [[ -z ${kind:-} ]] && [[ ${chnls_status[i]} == "on" ]]
                         then
                             chnls_pid_chosen+=("${chnls_pid[i]}")
-                            found_chnls_on=1
                         elif [[ ${kind:-} == "flv" ]] && [[ ${chnls_flv_status[i]} == "on" ]]
                         then
                             chnls_pid_chosen+=("${chnls_pid[i]}")
-                            found_chnls_on=1
                         fi
                     done
-                    [[ $found_chnls_on -eq 0 ]] && Println "$error 没有找到开启的频道\n" && exit 1
+                    [ -z "${chnls_pid_chosen:-}" ] && Println "$error 没有找到开启的频道\n" && exit 1
                     break
                 fi
             elif [[ $menu_num -eq 8 ]] && [[ $chnls_index_input == $((chnls_count+1)) ]]
             then
-                found_chnls_on=0
                 for((i=0;i<chnls_count;i++));
                 do
                     if [[ -z ${kind:-} ]] && [[ ${chnls_status[i]} == "on" ]]
                     then
                         chnls_pid_chosen+=("${chnls_pid[i]}")
-                        found_chnls_on=1
                     elif [[ ${kind:-} == "flv" ]] && [[ ${chnls_flv_status[i]} == "on" ]]
                     then
                         chnls_pid_chosen+=("${chnls_pid[i]}")
-                        found_chnls_on=1
                     fi
                 done
-                [[ $found_chnls_on -eq 0 ]] && Println "$error 没有找到开启的频道\n" && exit 1
+                [ -z "${chnls_pid_chosen:-}" ] && Println "$error 没有找到开启的频道\n" && exit 1
                 break
             fi
         fi
 
         IFS=" " read -ra chnls_index <<< "$chnls_index_input"
-        [ -z "$chnls_index_input" ] && Println "已取消...\n" && exit 1
 
         for chnl_index in "${chnls_index[@]}"
         do
-            if [[ $chnl_index == *"-"* ]] 
+            if [[ $chnl_index =~ - ]] 
             then
                 chnl_index_start=${chnl_index%-*}
                 chnl_index_end=${chnl_index#*-}
@@ -5932,7 +6778,7 @@ SetStreamLink()
             then
                 Println "$info 查询 $green$link${normal} 视频信息..."
 
-                found=0
+                youtube_found=0
                 count=0
                 codes=()
                 format_list=""
@@ -5940,8 +6786,8 @@ SetStreamLink()
                 do
                     if [[ $line == "format code"* ]] 
                     then
-                        found=1
-                    elif [[ $found -eq 1 ]] 
+                        youtube_found=1
+                    elif [[ $youtube_found -eq 1 ]] 
                     then
                         count=$((count+1))
                         code=${line%% *}
@@ -6186,7 +7032,8 @@ SetStreamLink()
                     stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
                     hexkey=$(echo -n "VxzAfiseH0AbLShkQOPwdsssw5KyLeuv" | hexdump -v -e '/1 "%02x"')
                     hexiv=$(echo -n "${stream_link_data:0:16}" | hexdump -v -e '/1 "%02x"')
-                    stream_links_url=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+                    stream_link_url=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+                    stream_link_url_path=${stream_link_url%/*}
                     Add4gtvLink
                 else
                     Println "$error 无法连接 4gtv !\n" && exit 1
@@ -6213,7 +7060,7 @@ SetStreamLink()
         user_agent="$USER_AGENT_BROWSER"
         headers="Referer: ${stream_link%%|*}\r\n"
         cookies=""
-        set_id=${chnl_stream_link#*channelSet_id=}
+        set_id=${stream_link#*channelSet_id=}
         set_id=${set_id%%&*}
         set_id=${set_id%%|*}
         fsVALUE=""
@@ -6269,12 +7116,19 @@ SetStreamLink()
         stream_link_data=$($JQ_FILE -r '.Data' <<< "$stream_link_data")
         if [ "$stream_link_data" == null ] 
         then
-            Println "$error 此服务器 ip 不支持或频道不可用!\n" && exit 1
+            Println "$error 此服务器 ip 不支持或频道不可用!\n"
         else
-            stream_links_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
+            stream_link_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
                 | $JQ_FILE -r '.flstURLs[0]')
+            stream_link_url_path=${stream_link_url%/*}
             Add4gtvLink
         fi
+    elif [[ $stream_link == http://*.macaulotustv.com/* ]] 
+    then
+        xc=1
+        user_agent="$USER_AGENT_BROWSER"
+        headers="Origin: http://www.lotustv.cc\r\nReferer: http://www.lotustv.cc/index.php/index/live.html\r\n"
+        cookies=""
     fi
 
     Println "  直播源: $green $stream_link ${normal}\n"
@@ -6303,7 +7157,6 @@ SetSubtitle()
         echo
         txt_format_options=( 'text' 'ass' )
         inquirer list_input "选择字幕转码成的格式" txt_format_options txt_format
-        master=1
     else
         txt_format=""
     fi
@@ -6550,12 +7403,6 @@ SetAudioCodec()
 
 SetVideoAudioShift()
 {
-    if [[ ${stream_link:-} =~ ([^ ]+)\ ([^ ]+) ]] 
-    then
-        video_audio_shift=""
-        Println "  延迟: $green 不设置 ${normal}\n"
-        return 0
-    fi
     if [ "$d_video_audio_shift_text" == "不设置" ] 
     then
         video_audio_shift_options=( "$d_video_audio_shift_text" '设置 画面延迟' '设置 声音延迟' )
@@ -7187,7 +8034,7 @@ SetAntiDDosPort()
                     elif [[ $anti_ddos_port -eq 22 ]] 
                     then
                         anti_ddos_port="ssh"
-                    elif [[ $anti_ddos_port == *"-"* ]] 
+                    elif [[ $anti_ddos_port =~ - ]] 
                     then
                         anti_ddos_ports_start=${anti_ddos_port%-*}
                         anti_ddos_ports_end=${anti_ddos_port#*-}
@@ -7219,7 +8066,7 @@ SetAntiDDosPort()
                     anti_ddos_ports_range_command='$4 ~ /^[0-9]+$/ && ('"$anti_ddos_ports_range_command"')'
                     [ -n "$anti_ddos_ports_command" ] && anti_ddos_ports_range_command=' || ('"$anti_ddos_ports_range_command"')'
                 fi
-                if [[ $anti_ddos_ports == *" "* ]] || [[ $anti_ddos_ports == *"-"* ]]
+                if [[ $anti_ddos_ports == *" "* ]] || [[ $anti_ddos_ports =~ - ]]
                 then
                     anti_ddos_port=${anti_ddos_ports// /,}
                     anti_ddos_port=${anti_ddos_port//-/:}
@@ -7554,20 +8401,23 @@ SetFlvPullLink()
 AddChannel()
 {
     [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+
+    origin_hls_url=0
+
     GetDefault
+
     SetStreamLink
 
+    is_local=0
     if [ "${stream_link:0:1}" == "/" ] 
     then
         is_local=1
-    else
-        is_local=0
     fi
 
-    if [[ $stream_link == *".m3u8"* ]] 
+    if [[ $stream_link =~ \.m3u8 ]] 
     then
         is_hls=1
-    elif [[ $stream_link == *".flv"* ]] || [[ $stream_link == *".ts"* ]]
+    elif [[ $stream_link =~ \.flv ]] || [[ $stream_link =~ \.ts ]]
     then
         is_hls=0
     else
@@ -7576,46 +8426,66 @@ AddChannel()
 
     SetLive
 
-    if [[ $stream_link =~ ^https?:// ]]
+    if [ "${xc:-0}" -eq 0 ] && ! [[ $stream_link =~ ^https?:// ]]
     then
-        SetProxy
-        if [[ $stream_link =~ ^http://([^/]+) ]] 
-        then
-            [ -z "${xtream_codes_domains:-}" ] && GetXtreamCodesDomains
-
-            for xc_domain in "${xtream_codes_domains[@]}"
-            do
-                if [ "$xc_domain" == "${BASH_REMATCH[1]}" ] 
-                then
-                    SetXtreamCodesProxy
-                    break
-                fi
-            done
-        fi
-        if [[ $stream_link == http://*.macaulotustv.com/* ]] 
-        then
-            user_agent="$USER_AGENT_BROWSER"
-            headers="Origin: http://www.lotustv.cc\r\nReferer: http://www.lotustv.cc/index.php/index/live.html\r\n"
-            cookies=""
-        else
-            SetUserAgent
-            SetHeaders
-            SetCookies
-        fi
-    else
-        proxy=""
         user_agent=""
         headers=""
         cookies=""
+        proxy=""
+    else
+        SetProxy
+        SetUserAgent
+        SetHeaders
+        SetCookies
     fi
 
-    if [ "$is_hls" -eq 1 ] && [[ ! $stream_link =~ ([^ ]+)\ ([^ ]+) ]]
+    xc_proxy=${xc_proxy:-}
+    if [[ $stream_link =~ ^http://([^/]+) ]] 
+    then
+        GetXtreamCodesDomains
+
+        for xc_domain in "${xtream_codes_domains[@]}"
+        do
+            if [ "$xc_domain" == "${BASH_REMATCH[1]}" ] 
+            then
+                SetXtreamCodesProxy
+                break
+            fi
+        done
+    fi
+
+    use_cdn=0
+    hboasia_host="hbogoasia.com:8443"
+    hboasia_cdn_host="dai3fd1oh325y.cloudfront.net"
+
+    if [ "${xc:-0}" -eq 0 ] && [ "$is_hls" -eq 1 ] 
     then
         echo
         yn_options=( '否' '是' )
-        inquirer list_input "是否分析 m3u8 列表: " yn_options inspect_m3u8
-        if [[ $inspect_m3u8 == "是" ]]
+        inquirer list_input "是否分析 m3u8 列表: " yn_options yn_option
+        if [ "$yn_option" == "是" ]
         then
+            stream_link_url=${stream_link%%|*}
+            stream_link_url_path=${stream_link_url%/*}
+
+            stream_link_url_path_cdn=$stream_link_url_path
+            if [[ $stream_link_url_path =~ $hboasia_host/(.+)$ ]] 
+            then
+                if [ "$use_cdn" -eq 1 ] 
+                then
+                    stream_link_url_path_cdn="https://$hboasia_cdn_host/${BASH_REMATCH[1]}"
+                fi
+                #headers="range: \r\n"
+                if [[ ! $output_flags =~ -seekable ]] 
+                then
+                    output_flags="$output_flags -seekable 0"
+                fi
+                if [[ ! $output_flags =~ -vsync ]] 
+                then
+                    output_flags="$output_flags -vsync 0"
+                fi
+            fi
+
             if [ "${stream_link:0:1}" == "/" ] 
             then
                 m3u8_content=$(< "${stream_link%%|*}")
@@ -7632,33 +8502,105 @@ AddChannel()
                 curl_cookies_command+=( --cookie "$cookies" )
                 fi
 
-                culr_headers_command=()
+                curl_headers_command=()
                 if [ -n "$user_agent" ] 
                 then
-                culr_headers_command+=( -H "User-Agent: $user_agent" )
+                curl_headers_command+=( -H "User-Agent: $user_agent" )
                 fi
 
                 if [ -n "$headers" ] 
                 then
-                culr_headers_command+=( -H "$headers" )
+                curl_headers_command+=( -H "$headers" )
                 fi
 
-                m3u8_content=$(curl -s -Lm 10 ${curl_proxy_command[@]+"${curl_proxy_command[@]}"} ${curl_cookies_command[@]+"${curl_cookies_command[@]}"} ${culr_headers_command[@]+"${culr_headers_command[@]}"} "${stream_link%%|*}")
+                m3u8_content=$(curl -s -Lm 20 ${curl_proxy_command[@]+"${curl_proxy_command[@]}"} ${curl_cookies_command[@]+"${curl_cookies_command[@]}"} ${curl_headers_command[@]+"${curl_headers_command[@]}"} "$stream_link_url")
             fi
 
+            stream_audio_group_id=()
+            stream_audio_name=()
+            stream_audio_default=()
+            stream_audio_language=()
+            stream_audio_url=()
+            stream_subtitles_group_id=()
+            stream_subtitles_name=()
+            stream_subtitles_default=()
+            stream_subtitles_language=()
+            stream_subtitles_url=()
             stream_links_bitrate=()
             stream_links_resolution=()
-            stream_links_uri=()
+            stream_links_url=()
+            stream_links_audio=()
+            stream_links_subtitles=()
             stream_links_list=""
             stream_links_count=0
 
             while IFS= read -r line 
             do
-                if [[ $line =~ RESOLUTION=([^ ]+) ]] 
+                if [[ $line =~ TYPE=AUDIO ]] 
+                then
+                    IFS="," read -r -a stream_audio <<< "${line#*:}"
+                    stream_audio_keys=(${stream_audio[*]%%=*})
+                    stream_audio_values=(${stream_audio[*]#*=})
+                    for((i=0;i<${#stream_audio_keys[@]};i++));
+                    do
+                        if [ "${stream_audio_keys[i]}" == "GROUP-ID" ] 
+                        then
+                            stream_audio_group_id+=("${stream_audio_values[i]//\"/}")
+                        elif [ "${stream_audio_keys[i]}" == "NAME" ] 
+                        then
+                            stream_audio_name+=("${stream_audio_values[i]//\"/}")
+                        elif [ "${stream_audio_keys[i]}" == "DEFAULT" ] 
+                        then
+                            stream_audio_default+=("${stream_audio_values[i]}")
+                        elif [ "${stream_audio_keys[i]}" == "LANGUAGE" ] 
+                        then
+                            stream_audio_language+=("${stream_audio_values[i]//\"/}")
+                        elif [ "${stream_audio_keys[i]}" == "URI" ] 
+                        then
+                            stream_audio_uri=${stream_audio_values[i]//\"/}
+                            if [[ $stream_audio_uri =~ ^https?:// ]] 
+                            then
+                                stream_audio_url+=("$stream_audio_uri")
+                            else
+                                stream_audio_url+=("$stream_link_url_path_cdn/$stream_audio_uri")
+                            fi
+                        fi
+                    done
+                elif [[ $line =~ TYPE=SUBTITLES ]] 
+                then
+                    IFS="," read -r -a stream_subtitles <<< "${line#*:}"
+                    stream_subtitles_keys=(${stream_subtitles[*]%%=*})
+                    stream_subtitles_values=(${stream_subtitles[*]#*=})
+                    for((i=0;i<${#stream_subtitles_keys[@]};i++));
+                    do
+                        if [ "${stream_subtitles_keys[i]}" == "GROUP-ID" ] 
+                        then
+                            stream_subtitles_group_id+=("${stream_subtitles_values[i]//\"/}")
+                        elif [ "${stream_subtitles_keys[i]}" == "NAME" ] 
+                        then
+                            stream_subtitles_name+=("${stream_subtitles_values[i]//\"/}")
+                        elif [ "${stream_subtitles_keys[i]}" == "DEFAULT" ] 
+                        then
+                            stream_subtitles_default+=("${stream_subtitles_values[i]}")
+                        elif [ "${stream_subtitles_keys[i]}" == "LANGUAGE" ] 
+                        then
+                            stream_subtitles_language+=("${stream_subtitles_values[i]//\"/}")
+                        elif [ "${stream_subtitles_keys[i]}" == "URI" ] 
+                        then
+                            stream_subtitles_uri=${stream_subtitles_values[i]//\"/}
+                            if [[ $stream_subtitles_uri =~ ^https?:// ]] 
+                            then
+                                stream_subtitles_url+=("$stream_subtitles_uri")
+                            else
+                                stream_subtitles_url+=("$stream_link_url_path_cdn/$stream_subtitles_uri")
+                            fi
+                        fi
+                    done
+                elif [[ $line =~ RESOLUTION=([^ ]+) ]] 
                 then
                     stream_link_resolution=${BASH_REMATCH[1]%%,*}
                     stream_links_resolution+=("$stream_link_resolution")
-                    if [[ $line =~ BANDWIDTH=([^,]+) ]] 
+                    if [[ $line =~ BANDWIDTH=([^ ]+) ]] 
                     then
                         stream_link_bitrate=${BASH_REMATCH[1]%%,*}
                         stream_link_bitrate=$((stream_link_bitrate/1000))
@@ -7672,81 +8614,108 @@ AddChannel()
                     else
                         stream_link_bitrate_text=""
                     fi
+                    if [[ $line =~ AUDIO=([^ ]+) ]] 
+                    then
+                        stream_link_audio=${BASH_REMATCH[1]%%,*}
+                        stream_link_audio=${stream_link_audio#\"}
+                        stream_link_audio=${stream_link_audio%\"}
+                    else
+                        stream_link_audio=""
+                    fi
+                    stream_links_audio+=("$stream_link_audio")
+                    if [[ $line =~ SUBTITLES=([^ ]+) ]] 
+                    then
+                        stream_link_subtitles=${BASH_REMATCH[1]%%,*}
+                        stream_link_subtitles=${stream_link_subtitles#\"}
+                        stream_link_subtitles=${stream_link_subtitles%\"}
+                    else
+                        stream_link_subtitles=""
+                    fi
+                    stream_links_subtitles+=("$stream_link_subtitles")
                     stream_links_count=$((stream_links_count+1))
-                    stream_links_list="$stream_links_list $green$stream_links_count.${normal}\r\033[6C$stream_link_resolution$stream_link_bitrate_text\n\n"
-                elif [[ $line =~ m3u8 ]] 
+                    stream_links_list="$stream_links_list $green$stream_links_count.${normal}\r\033[6C$stream_link_resolution$stream_link_bitrate_text $stream_link_audio $stream_link_subtitles\n\n"
+                elif [[ $line =~ \.m3u8 ]] 
                 then
-                    stream_links_uri+=("$line")
+                    if [[ $line =~ ^https?:// ]] 
+                    then
+                        stream_links_url+=("$line")
+                    else
+                        stream_links_url+=("$stream_link_url_path_cdn/$line")
+                    fi
                 fi
             done <<< "$m3u8_content"
 
             if [ -n "$stream_links_list" ] 
             then
-                stream_link_root=${stream_link%%|*}
-                stream_link_base=${stream_link%/*}
+                if [ "$use_cdn" -eq 1 ] && [[ $stream_link_url =~ $hboasia_host/(.+)$ ]] 
+                then
+                    stream_link_cdn="https://$hboasia_cdn_host/${BASH_REMATCH[1]}?${stream_links_url[0]#*\?}"
+                fi
+
                 choose=1
 
                 if [[ $stream_link =~ \|([^|]+)$ ]] 
                 then
                     choose=0
                     stream_link_quality=${BASH_REMATCH[1]}
+                    stream_audio_group_id_allow=()
+                    stream_audio_name_allow=()
+                    stream_subtitles_group_id_allow=()
+                    stream_subtitles_name_allow=()
 
                     IFS="," read -r -a stream_link_qualities <<< "$stream_link_quality"
-                    stream_link=""
+                    stream_link_qualities_count=${#stream_link_qualities[@]}
 
-                    for((i=0;i<${#stream_link_qualities[@]};i++));
+                    if [[ $stream_link =~ \|ag:([^|]+) ]] 
+                    then
+                        stream_audio_group_id_allow_list=${BASH_REMATCH[1]}
+                        IFS="," read -ra stream_audio_group_id_allow <<< "$stream_audio_group_id_allow_list"
+                    fi
+
+                    if [[ $stream_link =~ \|a:([^|]+) ]] 
+                    then
+                        stream_audio_name_allow_list=${BASH_REMATCH[1]}
+                        IFS="," read -ra stream_audio_name_allow <<< "$stream_audio_name_allow_list"
+                    fi
+
+                    if [[ $stream_link =~ \|sg:([^|]+) ]] 
+                    then
+                        stream_subtitles_group_id_allow_list=${BASH_REMATCH[1]}
+                        IFS="," read -ra stream_subtitles_group_id_allow <<< "$stream_subtitles_group_id_allow_list"
+                    fi
+
+                    if [[ $stream_link =~ \|s:([^|]+) ]] 
+                    then
+                        stream_subtitles_name_allow_list=${BASH_REMATCH[1]}
+                        IFS="," read -ra stream_subtitles_name_allow <<< "$stream_subtitles_name_allow_list"
+                    fi
+
+                    stream_link_video_indices=()
+
+                    for((i=0;i<stream_link_qualities_count;i++));
                     do
-                        found=0
                         for((j=0;j<stream_links_count;j++));
                         do
-                            if { [[ ${stream_link_qualities[i]} != *"-"* ]] || [ "${stream_links_bitrate[j]}" == "${stream_link_qualities[i]%-*}" ]; } && [ "${stream_links_resolution[j]}" == "${stream_link_qualities[i]#*-}" ]
+                            if { ! [[ ${stream_link_qualities[i]} =~ - ]] || [ "${stream_links_bitrate[j]}" == "${stream_link_qualities[i]%-*}" ]; } && [ "${stream_links_resolution[j]}" == "${stream_link_qualities[i]#*-}" ]
                             then
-                                found=1
                                 stream_link_qualities[i]="${stream_links_bitrate[j]}-${stream_links_resolution[j]}"
-                                [ -n "$stream_link" ] && stream_link="$stream_link "
-                                if [[ ${stream_links_uri[j]} =~ ^https?:// ]] 
-                                then
-                                    stream_link="$stream_link${stream_links_uri[j]}"
-                                else
-                                    stream_link="$stream_link$stream_link_base/${stream_links_uri[j]}"
-                                fi
-                                break
+                                stream_link_video_indices+=("$j")
+                                continue 2
                             fi
                         done
-                        if [ "$found" -eq 0 ] 
-                        then
-                            Println "$error ${stream_link_qualities[i]} 不存在 !"
-                            unset 'stream_link_qualities[i]'
-                        fi
-                    done
-
-                    if [ "${#stream_link_qualities[@]}" -gt 1 ] 
-                    then
-                        kind=""
-                    fi
-
-                    if [ -n "$stream_link" ] 
-                    then
-                        printf -v stream_link_quality ',%s' "${stream_link_qualities[@]}"
-                        stream_link_quality=${stream_link_quality:1}
-                    else
+                        Println "$error ${stream_link_qualities[i]} 不存在 !"
                         choose=1
-                    fi
+                        Println "$error 请重新选择 $channel_name 分辨率"
+                        break
+                    done
                 fi
 
                 if [ "$choose" -eq 1 ]
                 then
-                    if [ -z "${kind:-}" ] 
-                    then
-                        stream_links_select_all=$((stream_links_count+1))
-                        stream_links_list="$stream_links_list $green$stream_links_select_all.${normal}\r\033[6C全部"
-                        Println "$stream_links_list\n"
-                        echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
-                    else
-                        stream_links_select_all=""
-                        Println "$stream_links_list\n"
-                        echo "选择分辨率"
-                    fi
+                    stream_links_select_all=$((stream_links_count+1))
+                    stream_links_list="$stream_links_list $green$stream_links_select_all.${normal}\r\033[6C全部\n"
+                    Println "$stream_links_list"
+                    echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
 
                     while read -p "(默认: $stream_links_count): " stream_links_num 
                     do
@@ -7754,20 +8723,16 @@ AddChannel()
 
                         if [ "$stream_links_num" == "$stream_links_select_all" ] 
                         then
-                            stream_link=""
-                            stream_link_quality=""
+                            stream_link_qualities=()
+                            stream_link_video_indices=()
                             for((i=0;i<stream_links_count;i++));
                             do
-                                [ -n "$stream_link_quality" ] && stream_link_quality="$stream_link_quality,"
-                                stream_link_quality="$stream_link_quality${stream_links_bitrate[i]}-${stream_links_resolution[i]}"
-                                [ -n "$stream_link" ] && stream_link="$stream_link "
-                                if [[ ${stream_links_uri[i]} =~ ^https?:// ]] 
-                                then
-                                    stream_link="$stream_link${stream_links_uri[i]}"
-                                else
-                                    stream_link="$stream_link$stream_link_base/${stream_links_uri[i]}"
-                                fi
+                                stream_link_qualities+=("${stream_links_bitrate[i]}-${stream_links_resolution[i]}")
+                                stream_link_video_indices+=("$i")
                             done
+                            stream_link_qualities_count=$stream_links_count
+                            printf -v stream_link_quality ',%s' "${stream_link_qualities[@]}"
+                            stream_link_quality=${stream_link_quality:1}
                             break
                         fi
 
@@ -7802,59 +8767,374 @@ AddChannel()
                                 Println "$error 请输入正确的序号\n"
                             ;;
                             *)
-                                stream_link=""
-                                stream_link_quality=""
-                                if [ "${#stream_links_num_arr[@]}" -gt 1 ] || [[ ${stream_links_num_arr[0]} == *"-"* ]]
-                                then
-                                    kind=""
-                                fi
+                                stream_link_qualities=()
+                                stream_link_video_indices=()
+
                                 for stream_link_num in "${stream_links_num_arr[@]}"
                                 do
-                                    if [[ $stream_link_num == *"-"* ]] 
+                                    if [[ $stream_link_num =~ - ]] 
                                     then
                                         start=${stream_link_num%-*}
                                         end=${stream_link_num#*-}
-                                        for((i=start;i<=end;i++));
+                                        for((i=start-1;i<end;i++));
                                         do
-                                            [ -n "$stream_link_quality" ] && stream_link_quality="$stream_link_quality,"
-                                            stream_link_quality="$stream_link_quality${stream_links_bitrate[i]}-${stream_links_resolution[i]}"
-                                            [ -n "$stream_link" ] && stream_link="$stream_link "
-                                            if [[ ${stream_links_uri[i]} =~ ^https?:// ]] 
-                                            then
-                                                stream_link="$stream_link${stream_links_uri[i]}"
-                                            else
-                                                stream_link="$stream_link$stream_link_base/${stream_links_uri[i]}"
-                                            fi
+                                            stream_link_qualities+=("${stream_links_bitrate[i]}-${stream_links_resolution[i]}")
+                                            stream_link_video_indices+=("$i")
                                         done
                                     else
-                                        stream_links_index=$((stream_link_num-1))
-                                        [ -n "$stream_link_quality" ] && stream_link_quality="$stream_link_quality,"
-                                        stream_link_quality="$stream_link_quality${stream_links_bitrate[stream_links_index]}-${stream_links_resolution[stream_links_index]}"
-                                        [ -n "$stream_link" ] && stream_link="$stream_link "
-                                        if [[ ${stream_links_uri[stream_links_index]} =~ ^https?:// ]] 
-                                        then
-                                            stream_link="$stream_link${stream_links_uri[stream_links_index]}"
-                                        else
-                                            stream_link="$stream_link$stream_link_base/${stream_links_uri[stream_links_index]}"
-                                        fi
+                                        stream_link_qualities+=("${stream_links_bitrate[stream_link_num-1]}-${stream_links_resolution[stream_link_num-1]}")
+                                        stream_link_video_indices+=("$((stream_link_num-1))")
                                     fi
                                 done
+                                stream_link_qualities_count=${#stream_link_qualities[@]}
+                                printf -v stream_link_quality ',%s' "${stream_link_qualities[@]}"
+                                stream_link_quality=${stream_link_quality:1}
                                 break
                             ;;
                         esac
                     done
+                else
+                    printf -v stream_link_quality ',%s' "${stream_link_qualities[@]}"
+                    stream_link_quality=${stream_link_quality:1}
+                fi
+
+                if [ -n "${stream_audio_name:-}" ] 
+                then
+                    stream_link_audio_indices=()
+                    choose=1
+                    if [ -n "${stream_audio_group_id_allow:-}" ] 
+                    then
+                        choose=0
+                        if [ "${stream_audio_group_id_allow[0]}" == "none" ] 
+                        then
+                            stream_link_url="${stream_link_url}|ag:none"
+                            stream_link_audio_count=0
+                        else
+                            for((i=0;i<${#stream_audio_group_id_allow[@]};i++));
+                            do
+                                for((j=0;j<${#stream_audio_group_id[@]};j++));
+                                do
+                                    if [ "${stream_audio_group_id_allow[i]}" == "${stream_audio_group_id[j]}" ] && [ "${stream_audio_name_allow[i]}" == "${stream_audio_name[j]}" ]
+                                    then
+                                        stream_link_audio_indices+=("$j")
+                                        continue 2
+                                    fi
+                                done
+                                choose=1
+                                Println "$error 请重新选择音轨\n"
+                                break
+                            done
+                        fi
+                    fi
+
+                    if [ "$choose" -eq 1 ] 
+                    then
+                        stream_audio_count=${#stream_audio_name[@]}
+                        stream_audio_list=""
+                        stream_audio_num_default=1
+
+                        for((i=0;i<stream_audio_count;i++));
+                        do
+                            if [ "${stream_audio_default[i]}" == "YES" ] 
+                            then
+                                stream_audio_num_default=$((i+1))
+                            fi
+                            stream_audio_list="$stream_audio_list $green$((i+1)).${normal}\r\033[6C音轨组: $green${stream_audio_group_id[i]}${normal} 名称: $green${stream_audio_name[i]}${normal} 语言: $green${stream_audio_language[i]}${normal}\n\n"
+                        done
+
+                        stream_audio_unselect_all=$((stream_audio_count+1))
+                        stream_audio_list="$stream_audio_list $green$stream_audio_unselect_all.${normal}\r\033[6C不启用\n\n"
+
+                        stream_audio_select_all=$((stream_audio_count+2))
+                        stream_audio_list="$stream_audio_list $green$stream_audio_select_all.${normal}\r\033[6C全部启用"
+                        Println "$stream_audio_list\n"
+                        echo "选择启用音轨 (多个音轨用空格分隔 比如: 1 2 4-5)"
+                        stream_audio_num_default=$stream_audio_select_all
+
+                        while read -p "(默认: $stream_audio_num_default): " stream_audio_num 
+                        do
+                            stream_audio_num=${stream_audio_num:-$stream_audio_num_default}
+
+                            if [ "$stream_audio_num" == "$stream_audio_unselect_all" ] 
+                            then
+                                unset 'stream_audio_group_id'
+                                unset 'stream_audio_name'
+                                break
+                            fi
+
+                            if [ "$stream_audio_num" == "$stream_audio_select_all" ] 
+                            then
+                                stream_link_audio_indices=()
+                                for((i=0;i<stream_audio_count;i++));
+                                do
+                                    stream_link_audio_indices+=("$i")
+                                done
+                                break
+                            fi
+
+                            IFS=" " read -ra stream_audio_num_arr <<< "$stream_audio_num"
+
+                            error_no=0
+                            for stream_audio_num in "${stream_audio_num_arr[@]}"
+                            do
+                                case "$stream_audio_num" in
+                                    *"-"*)
+                                        stream_audio_num_start=${stream_audio_num%-*}
+                                        stream_audio_num_end=${stream_audio_num#*-}
+                                        if [[ $stream_audio_num_start == *[!0-9]* ]] || [[ $stream_audio_num_end == *[!0-9]* ]] || [ "$stream_audio_num_start" -eq 0 ] || [ "$stream_audio_num_end" -eq 0 ] || [ "$stream_audio_num_end" -gt "$stream_audio_count" ] || [ "$stream_audio_num_start" -ge "$stream_audio_num_end" ]
+                                        then
+                                            error_no=3
+                                        fi
+                                    ;;
+                                    *[!0-9]*)
+                                        error_no=1
+                                    ;;
+                                    *)
+                                        if [ "$stream_audio_num" -lt 1 ] || [ "$stream_audio_num" -gt "$stream_audio_count" ] 
+                                        then
+                                            error_no=2
+                                        fi
+                                    ;;
+                                esac
+                            done
+
+                            case "$error_no" in
+                                1|2|3)
+                                    Println "$error 请输入正确的序号\n"
+                                ;;
+                                *)
+                                    stream_link_audio_indices=()
+                                    for((i=0;i<stream_audio_count;i++));
+                                    do
+                                        i_num=$((i+1))
+                                        for stream_audio_num in "${stream_audio_num_arr[@]}"
+                                        do
+                                            if [[ $stream_audio_num =~ - ]] 
+                                            then
+                                                if [ "$i_num" -ge "${stream_audio_num%-*}" ] && [ "$i_num" -le "${stream_audio_num#*-}" ]
+                                                then
+                                                    stream_link_audio_indices+=("$i")
+                                                    continue 2
+                                                fi
+                                            elif [ "$i_num" -eq "$stream_audio_num" ] 
+                                            then
+                                                stream_link_audio_indices+=("$i")
+                                                continue 2
+                                            fi
+                                        done
+                                        unset 'stream_audio_group_id[i]'
+                                        unset 'stream_audio_name[i]'
+                                    done
+                                    break
+                                ;;
+                            esac
+                        done
+
+                        if [ -n "${stream_audio_name[*]:-}" ] 
+                        then
+                            printf -v stream_audio_group_id_allow_list ',%s' "${stream_audio_group_id[@]}"
+                            stream_audio_group_id_allow_list=${stream_audio_group_id_allow_list:1}
+                            printf -v stream_audio_name_allow_list ',%s' "${stream_audio_name[@]}"
+                            stream_audio_name_allow_list=${stream_audio_name_allow_list:1}
+                            stream_link_url="$stream_link_url|ag:$stream_audio_group_id_allow_list|a:$stream_audio_name_allow_list"
+                            stream_link_audio_count=${#stream_audio_name[@]}
+                        else
+                            stream_link_audio_count=0
+                            stream_link_url="${stream_link_url}|ag:none"
+                        fi
+                    elif [ -n "${stream_link_audio_indices:-}" ] 
+                    then
+                        stream_link_url="$stream_link_url|ag:$stream_audio_group_id_allow_list|a:$stream_audio_name_allow_list"
+                        stream_link_audio_count=${#stream_link_audio_indices[@]}
+                    fi
+                else
+                    stream_link_audio_count=0
+                fi
+
+                if [ -n "${stream_subtitles_name:-}" ] 
+                then
+                    stream_link_subtitles_indices=()
+                    choose=1
+                    if [ -n "${stream_subtitles_group_id_allow:-}" ] 
+                    then
+                        choose=0
+                        if [ "${stream_subtitles_group_id_allow[0]}" == "none" ] 
+                        then
+                            stream_link_url="${stream_link_url}|sg:none"
+                            stream_link_subtitles_count=0
+                        else
+                            for((i=0;i<${#stream_subtitles_group_id_allow[@]};i++));
+                            do
+                                for((j=0;j<${#stream_subtitles_group_id[@]};j++));
+                                do
+                                    if [ "${stream_subtitles_group_id_allow[i]}" == "${stream_subtitles_group_id[j]}" ] && [ "${stream_subtitles_name_allow[i]}" == "${stream_subtitles_name[j]}" ]
+                                    then
+                                        stream_link_subtitles_indices+=("$j")
+                                        continue 2
+                                    fi
+                                done
+                                choose=1
+                                Println "$error 请重新选择字幕\n"
+                                break
+                            done
+                        fi
+                    fi
+
+                    if [ "$choose" -eq 1 ] 
+                    then
+                        stream_subtitles_count=${#stream_subtitles_name[@]}
+                        stream_subtitles_list=""
+                        stream_subtitles_num_default=1
+
+                        for((i=0;i<stream_subtitles_count;i++));
+                        do
+                            if [ "${stream_subtitles_default[i]}" == "YES" ] 
+                            then
+                                stream_subtitles_num_default=$((i+1))
+                            fi
+                            stream_subtitles_list="$stream_subtitles_list $green$((i+1)).${normal}\r\033[6C字幕组: $green${stream_subtitles_group_id[i]}${normal} 名称: $green${stream_subtitles_name[i]}${normal} 语言: $green${stream_subtitles_language[i]}${normal}\n\n"
+                        done
+
+                        stream_subtitles_unselect_all=$((stream_subtitles_count+1))
+                        stream_subtitles_list="$stream_subtitles_list $green$stream_subtitles_unselect_all.${normal}\r\033[6C不启用\n\n"
+
+                        stream_subtitles_select_all=$((stream_subtitles_count+2))
+                        stream_subtitles_list="$stream_subtitles_list $green$stream_subtitles_select_all.${normal}\r\033[6C全部启用"
+                        Println "$stream_subtitles_list\n"
+                        echo "选择字幕 (多个字幕用空格分隔 比如: 1 2 4-5)"
+                        stream_subtitles_num_default=$stream_subtitles_select_all
+
+                        while read -p "(默认: $stream_subtitles_num_default): " stream_subtitles_num 
+                        do
+                            stream_subtitles_num=${stream_subtitles_num:-$stream_subtitles_num_default}
+
+                            if [ "$stream_subtitles_num" == "$stream_subtitles_unselect_all" ] 
+                            then
+                                unset 'stream_subtitles_group_id'
+                                unset 'stream_subtitles_name'
+                                break
+                            fi
+
+                            if [ "$stream_subtitles_num" == "$stream_subtitles_select_all" ] 
+                            then
+                                stream_link_subtitles_indices=()
+                                for((i=0;i<stream_subtitles_count;i++));
+                                do
+                                    stream_link_subtitles_indices+=("$i")
+                                done
+                                break
+                            fi
+
+                            IFS=" " read -ra stream_subtitles_num_arr <<< "$stream_subtitles_num"
+
+                            error_no=0
+                            for stream_subtitles_num in "${stream_subtitles_num_arr[@]}"
+                            do
+                                case "$stream_subtitles_num" in
+                                    *"-"*)
+                                        stream_subtitles_num_start=${stream_subtitles_num%-*}
+                                        stream_subtitles_num_end=${stream_subtitles_num#*-}
+                                        if [[ $stream_subtitles_num_start == *[!0-9]* ]] || [[ $stream_subtitles_num_end == *[!0-9]* ]] || [ "$stream_subtitles_num_start" -eq 0 ] || [ "$stream_subtitles_num_end" -eq 0 ] || [ "$stream_subtitles_num_end" -gt "$stream_subtitles_count" ] || [ "$stream_subtitles_num_start" -ge "$stream_subtitles_num_end" ]
+                                        then
+                                            error_no=3
+                                        fi
+                                    ;;
+                                    *[!0-9]*)
+                                        error_no=1
+                                    ;;
+                                    *)
+                                        if [ "$stream_subtitles_num" -lt 1 ] || [ "$stream_subtitles_num" -gt "$stream_subtitles_count" ] 
+                                        then
+                                            error_no=2
+                                        fi
+                                    ;;
+                                esac
+                            done
+
+                            case "$error_no" in
+                                1|2|3)
+                                    Println "$error 请输入正确的序号\n"
+                                ;;
+                                *)
+                                    stream_link_subtitles_indices=()
+                                    for((i=0;i<stream_subtitles_count;i++));
+                                    do
+                                        i_num=$((i+1))
+                                        for stream_subtitles_num in "${stream_subtitles_num_arr[@]}"
+                                        do
+                                            if [[ $stream_subtitles_num =~ - ]] 
+                                            then
+                                                if [ "$i_num" -ge "${stream_subtitles_num%-*}" ] && [ "$i_num" -le "${stream_subtitles_num#*-}" ]
+                                                then
+                                                    stream_link_subtitles_indices+=("$i")
+                                                    continue 2
+                                                fi
+                                            elif [ "$i_num" -eq "$stream_subtitles_num" ] 
+                                            then
+                                                stream_link_subtitles_indices+=("$i")
+                                                continue 2
+                                            fi
+                                        done
+                                        unset 'stream_subtitles_group_id[i]'
+                                        unset 'stream_subtitles_name[i]'
+                                    done
+                                    break
+                                ;;
+                            esac
+                        done
+
+                        if [ -n "${stream_subtitles_name[*]:-}" ] 
+                        then
+                            printf -v stream_subtitles_group_id_allow_list ',%s' "${stream_subtitles_group_id[@]}"
+                            stream_subtitles_group_id_allow_list=${stream_subtitles_group_id_allow_list:1}
+                            printf -v stream_subtitles_name_allow_list ',%s' "${stream_subtitles_name[@]}"
+                            stream_subtitles_name_allow_list=${stream_subtitles_name_allow_list:1}
+                            stream_link_url="$stream_link_url|sg:$stream_subtitles_group_id_allow_list|s:$stream_subtitles_name_allow_list"
+                            stream_link_subtitles_count=${#stream_subtitles_name[@]}
+                        else
+                            stream_link_subtitles_count=0
+                            stream_link_url="${stream_link_url}|sg:none"
+                        fi
+                    elif [ -n "${stream_link_subtitles_indices:-}" ] 
+                    then
+                        stream_link_url="$stream_link_url|sg:$stream_subtitles_group_id_allow_list|s:$stream_subtitles_name_allow_list"
+                        stream_link_subtitles_count=${#stream_link_subtitles_indices[@]}
+                    fi
+                else
+                    stream_link_subtitles_count=0
+                fi
+
+                if [[ $stream_link =~ \|origin\| ]] 
+                then
+                    origin_hls_url=1
+                    stream_link=${stream_link_url%%|*}
+                    stream_link_url="$stream_link_url|origin"
+                elif [[ $stream_link =~ \|parse\| ]] 
+                then
+                    origin_hls_url=0
+                    stream_link=${stream_link_url%%|*}
+                    stream_link_url="$stream_link_url|parse"
+                else
+                    yn_options=( '是' '否' )
+                    Println "$tip 如果选 是 只修改 map 参数, FFmpeg 输入的将是原链接而非解析链接"
+                    inquirer list_input "是否是需要鉴权的直播源" yn_options yn_option
+                    if [ "$yn_option" == "是" ] 
+                    then
+                        origin_hls_url=1
+                        stream_link=${stream_link_url%%|*}
+                        stream_link_url="$stream_link_url|origin"
+                    else
+                        origin_hls_url=0
+                        stream_link=${stream_link_url%%|*}
+                        stream_link_url="$stream_link_url|parse"
+                    fi
                 fi
 
                 if [[ $stream_links == *" "* ]] 
                 then
-                    stream_links="$stream_link_root|$stream_link_quality ${stream_links#* }"
+                    stream_links="$stream_link_url|$stream_link_quality ${stream_links#* }"
                 else
-                    stream_links="$stream_link_root|$stream_link_quality"
-                fi
-
-                if [[ $stream_link =~ ^([^ ]+)\ ([^ ]+) ]] 
-                then
-                    bitrates=$stream_link_quality
+                    stream_links="$stream_link_url|$stream_link_quality"
                 fi
             else
                 Println "$error 没有可选分辨率"
@@ -7862,55 +9142,29 @@ AddChannel()
         fi
     fi
 
-    xc_proxy=${xc_proxy:-}
+    if [ "$use_cdn" -eq 1 ] 
+    then
+        hboasia_host=$hboasia_cdn_host
+    fi
 
     SetVideoCodec
     SetAudioCodec
     SetVideoAudioShift
 
-    quality_command=""
-    bitrates_command=""
+    quality=""
+    bitrates=""
+    const=""
+    const_yn="no"
 
-    if [ -z "${kind:-}" ] && [ "$video_codec" == "copy" ]
+    if [ "$video_codec" != "copy" ] && [ "${stream_link_qualities_count:-0}" -le 1 ] 
     then
-        quality=""
-        bitrates=""
-        const=""
-        const_yn="no"
-        if [[ $stream_link =~ ([^ ]+)\ ([^ ]+) ]] 
-        then
-            master=1
-        else
-            master=0
-        fi
-    else
-        if [[ $stream_link =~ ([^ ]+)\ ([^ ]+) ]] 
-        then
-            quality=""
-        else
-            SetQuality
-            SetBitrates
-        fi
+        SetQuality
+        SetBitrates
+    fi
 
-        if [ -n "$bitrates" ] 
-        then
-            if [[ $bitrates != *"-"* ]] && [[ $bitrates == *"x"* ]]
-            then
-                master=0
-            else
-                master=1
-            fi
-        else
-            master=0
-        fi
-
-        if [ -z "$quality" ] && [ -n "$bitrates" ] 
-        then
-            SetConst
-        else
-            const=""
-            const_yn="no"
-        fi
+    if [ -z "$quality" ] && [ -n "$bitrates" ] 
+    then
+        SetConst
     fi
 
     draw_text=""
@@ -7967,20 +9221,37 @@ AddChannel()
         fi
     fi
 
+    subtitle_append=""
+    if [ -n "$txt_format" ]
+    then
+        subtitle_append=',SUBTITLES="subs"'
+    fi
+
+    master=0
+    if [ "${stream_link_qualities_count:-0}" -gt 0 ] 
+    then
+        if [[ $bitrates =~ , ]] || [[ $quality =~ , ]] || [ "${stream_link_qualities_count:-0}" -gt 1 ] || [ "${stream_link_audio_count:-0}" -gt 0 ] || [ "${stream_link_subtitles_count:-0}" -gt 0 ] 
+        then
+            master=1
+        fi
+    elif [[ $bitrates =~ , ]] || [[ $quality =~ , ]] || [ -n "$subtitle_append" ]
+    then
+        master=1
+    fi
+
     SetInputFlags
     SetOutputFlags
     SetChannelName
     SetSync
 
+    sync_file=""
+    sync_index=""
+    sync_pairs=""
     if [ "$sync_yn" == "yes" ]
     then
         SetSyncFile
         SetSyncIndex
         SetSyncPairs
-    else
-        sync_file=""
-        sync_index=""
-        sync_pairs=""
     fi
 
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
@@ -8001,6 +9272,20 @@ AddChannel()
     [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
     from="AddChannel"
 
+    extra_filters=""
+    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+    then
+        filters=( vf filter:v )
+        for filter in "${filters[@]}"
+        do
+            if [[ $output_flags =~ (.*)"-$filter "([^ ]+)(.*) ]] 
+            then
+                extra_filters="${BASH_REMATCH[2]},"
+                output_flags="${BASH_REMATCH[1]} ${BASH_REMATCH[3]}"
+            fi
+        done
+    fi
+
     FilterString stream_links user_agent headers cookies output_dir_name \
         playlist_name seg_dir_name seg_name keyinfo_name key_name input_flags \
         output_flags channel_name sync_file sync_index sync_pairs flv_push_link \
@@ -8012,29 +9297,31 @@ AddChannel()
         then
             if [ "$sh_debug" -eq 1 ] 
             then
-                ( FlvStreamCreator ) > /dev/null 2>> "$MONITOR_LOG" < /dev/null &
+                ( FlvStreamCreator ) 
             else
                 ( FlvStreamCreator ) > /dev/null 2> /dev/null < /dev/null &
             fi
         else
             Println "$error 暂不支持输出 $kind ...\n" && exit 1
         fi
-    elif [ -n "${video_audio_shift:-}" ] || { [ "$encrypt_yn" == "yes" ] && [ "$live_yn" == "yes" ]; } || [[ $stream_link =~ ([^ ]+)\ ([^ ]+) ]] || [ -n "$txt_format" ]
-    then
-        if [ "$sh_debug" -eq 1 ] 
-        then
-            ( HlsStreamCreatorPlus ) > /dev/null 2>> "$MONITOR_LOG" < /dev/null &
-        else
-            ( HlsStreamCreatorPlus ) > /dev/null 2> /dev/null < /dev/null &
-        fi
     else
         if [ "$sh_debug" -eq 1 ] 
         then
-            ( HlsStreamCreator ) > /dev/null 2>> "$MONITOR_LOG" < /dev/null &
+            ( HlsStreamCreatorPlus ) 
         else
-            ( HlsStreamCreator ) > /dev/null 2> /dev/null < /dev/null &
+            ( HlsStreamCreatorPlus ) > /dev/null 2> /dev/null < /dev/null &
         fi
     fi
+
+    stream_audio_url=()
+    stream_subtitles_url=()
+    stream_link_qualities_count=0
+    stream_link_audio_count=0
+    stream_link_subtitles_count=0
+    xc=0
+    xc_proxy=""
+    stream_link_quality=""
+    stream_link_cdn=""
 
     Println "$info 频道添加成功 !\n"
 }
@@ -8326,17 +9613,16 @@ EditChannelAll()
 
     SetStreamLink
 
+    is_local=0
     if [ "${stream_link:0:1}" == "/" ] 
     then
         is_local=1
-    else
-        is_local=0
     fi
 
-    if [[ $stream_link == *".m3u8"* ]] 
+    if [[ $stream_link =~ \.m3u8 ]] 
     then
         is_hls=1
-    elif [[ $stream_link == *".flv"* ]] || [[ $stream_link == *".ts"* ]]
+    elif [[ $stream_link =~ \.flv ]] || [[ $stream_link =~ \.ts ]]
     then
         is_hls=0
     else
@@ -8345,75 +9631,52 @@ EditChannelAll()
 
     SetLive
 
-    if [[ $stream_link =~ ^https?:// ]] 
+    if [ "${xc:-0}" -eq 0 ] && ! [[ $stream_link =~ ^https?:// ]]
     then
-        SetProxy
-        if [[ $stream_link =~ ^http://([^/]+) ]] 
-        then
-            [ -z "${xtream_codes_domains:-}" ] && GetXtreamCodesDomains
-
-            for xc_domain in "${xtream_codes_domains[@]}"
-            do
-                if [ "$xc_domain" == "${BASH_REMATCH[1]}" ] 
-                then
-                    SetXtreamCodesProxy
-                    break
-                fi
-            done
-        fi
-        if [[ $stream_link == http://*.macaulotustv.com/* ]] 
-        then
-            user_agent="$USER_AGENT_BROWSER"
-            headers="Origin: http://www.lotustv.cc\r\nReferer: http://www.lotustv.cc/index.php/index/live.html\r\n"
-            cookies=""
-        else
-            SetUserAgent
-            SetHeaders
-            SetCookies
-        fi
-    else
-        proxy=""
         user_agent=""
         headers=""
         cookies=""
+        proxy=""
+    else
+        SetProxy
+        SetUserAgent
+        SetHeaders
+        SetCookies
     fi
 
     xc_proxy=${xc_proxy:-}
-
-    SetOutputDirName
-    SetPlaylistName
-    SetSegDirName
-    SetSegName
-    SetSegLength
-
-    if [ -n "$live" ] 
+    if [[ $stream_link =~ ^http://([^/]+) ]] 
     then
-        SetSegCount
-    else
-        seg_count=$d_seg_count
+        GetXtreamCodesDomains
+
+        for xc_domain in "${xtream_codes_domains[@]}"
+        do
+            if [ "$xc_domain" == "${BASH_REMATCH[1]}" ] 
+            then
+                SetXtreamCodesProxy
+                break
+            fi
+        done
     fi
 
     SetVideoCodec
     SetAudioCodec
     SetVideoAudioShift
 
-    if [ -z "${kind:-}" ] && [ "$video_codec" == "copy" ]
+    quality=""
+    bitrates=""
+    const=""
+    const_yn="no"
+
+    if [ "$video_codec" != "copy" ] 
     then
-        quality=""
-        bitrates=""
-        const=""
-        const_yn="no"
-    else
         SetQuality
         SetBitrates
+    fi
 
-        if [ -z "$quality" ] && [ -n "$bitrates" ] 
-        then
-            SetConst
-        else
-            const=""
-            const_yn="no"
-        fi
+    if [ -z "$quality" ] && [ -n "$bitrates" ] 
+    then
+        SetConst
     fi
 
     draw_text=""
@@ -8474,15 +9737,14 @@ EditChannelAll()
     SetChannelName
     SetSync
 
+    sync_file=""
+    sync_index=""
+    sync_pairs=""
     if [ "$sync_yn" == "yes" ]
     then
         SetSyncFile
         SetSyncIndex
         SetSyncPairs
-    else
-        sync_file=""
-        sync_index=""
-        sync_pairs=""
     fi
 
     JQ update "$CHANNELS_FILE" '.channels|=map(select(.pid=='"$chnl_pid"') * 
@@ -8748,10 +10010,7 @@ EditChannelMenu()
 
 TestXtreamCodesLink()
 {
-    if [ -z "${xtream_codes_domains:-}" ] 
-    then
-        GetXtreamCodesDomains
-    fi
+    GetXtreamCodesDomains
 
     if [ -z "${FFPROBE:-}" ] 
     then
@@ -9044,6 +10303,11 @@ ToggleChannel()
 
 StartChannel()
 {
+    chnl_origin_hls_url=0
+    chnl_use_cdn=0
+    hboasia_host="hbogoasia.com:8443"
+    hboasia_cdn_host="dai3fd1oh325y.cloudfront.net"
+
     if [ "${chnl_stream_link:0:23}" == "https://www.youtube.com" ] || [ "${chnl_stream_link:0:19}" == "https://youtube.com" ] 
     then
         chnl_user_agent="$USER_AGENT_BROWSER"
@@ -9219,7 +10483,6 @@ StartChannel()
                 else
                     _4gtv_proxy_command=()
                 fi
-                xc=1
                 chnl_user_agent="$USER_AGENT_BROWSER"
                 chnl_headers="Referer: https://embed.4gtv.tv/HiNet/$channel_name_enc.html?ar=0&as=1&volume=0\r\n"
                 chnl_cookies=""
@@ -9233,7 +10496,8 @@ StartChannel()
                     stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
                     hexkey=$(echo -n "VxzAfiseH0AbLShkQOPwdsssw5KyLeuv" | hexdump -v -e '/1 "%02x"')
                     hexiv=$(echo -n "${stream_link_data:0:16}" | hexdump -v -e '/1 "%02x"')
-                    chnl_stream_links_url=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+                    chnl_stream_link_url=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+                    chnl_stream_link_url_path=${chnl_stream_link_url%/*}
                     Start4gtvLink
                 elif [ -z "${monitor:-}" ]
                 then
@@ -9306,12 +10570,13 @@ StartChannel()
             stream_link_data=$($JQ_FILE -r '.Data' <<< "$stream_link_data")
             if [ "$stream_link_data" != null ] 
             then
-                chnl_stream_links_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
+                chnl_stream_link_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
                     | $JQ_FILE -r '.flstURLs[0]')
+                chnl_stream_link_url_path=${chnl_stream_link_url%/*}
                 Start4gtvLink
             elif [ -z "${monitor:-}" ] 
             then
-                Println "$error 此服务器 ip 不支持或频道不可用!\n" && exit 1
+                Println "$error 此服务器 ip 不支持或频道不可用!\n"
             fi
         elif [ -z "${monitor:-}" ] 
         then
@@ -9319,19 +10584,112 @@ StartChannel()
         fi
     elif [[ ${chnl_stream_link##*|} =~ ([0-9]+)-([0-9]+)x([0-9]+) ]] 
     then
+        chnl_stream_link_url=${chnl_stream_link%%|*}
+        chnl_stream_link_url_path=${chnl_stream_link_url%/*}
+
+        chnl_stream_link_url_path_cdn=$chnl_stream_link_url_path
+        if [[ $chnl_stream_link_url_path =~ $hboasia_host/(.+)$ ]] 
+        then
+            if [ "$chnl_use_cdn" -eq 1 ] 
+            then
+                chnl_stream_link_url_path_cdn="https://$hboasia_cdn_host/${BASH_REMATCH[1]}"
+            fi
+            #chnl_headers="range: \r\n"
+            if [[ ! $chnl_output_flags =~ -seekable ]] 
+            then
+                chnl_output_flags="$chnl_output_flags -seekable 0"
+            fi
+            if [[ ! $chnl_output_flags =~ -vsync ]] 
+            then
+                chnl_output_flags="$chnl_output_flags -vsync 0"
+            fi
+        fi
+
+        chnl_stream_audio_group_id=()
+        chnl_stream_audio_name=()
+        chnl_stream_audio_default=()
+        chnl_stream_audio_language=()
+        chnl_stream_audio_url=()
+        chnl_stream_subtitles_group_id=()
+        chnl_stream_subtitles_name=()
+        chnl_stream_subtitles_default=()
+        chnl_stream_subtitles_language=()
+        chnl_stream_subtitles_url=()
         chnl_stream_links_bitrate=()
         chnl_stream_links_resolution=()
-        chnl_stream_links_uri=()
+        chnl_stream_links_url=()
+        chnl_stream_links_audio=()
+        chnl_stream_links_subtitles=()
         chnl_stream_links_list=""
         chnl_stream_links_count=0
 
         while IFS= read -r line 
         do
-            if [[ $line =~ RESOLUTION=([^ ]+) ]] 
+            if [[ $line =~ TYPE=AUDIO ]] 
+            then
+                IFS="," read -r -a chnl_stream_audio <<< "${line#*:}"
+                chnl_stream_audio_keys=(${chnl_stream_audio[*]%%=*})
+                chnl_stream_audio_values=(${chnl_stream_audio[*]#*=})
+                for((i=0;i<${#chnl_stream_audio_keys[@]};i++));
+                do
+                    if [ "${chnl_stream_audio_keys[i]}" == "GROUP-ID" ] 
+                    then
+                        chnl_stream_audio_group_id+=("${chnl_stream_audio_values[i]//\"/}")
+                    elif [ "${chnl_stream_audio_keys[i]}" == "NAME" ] 
+                    then
+                        chnl_stream_audio_name+=("${chnl_stream_audio_values[i]//\"/}")
+                    elif [ "${chnl_stream_audio_keys[i]}" == "DEFAULT" ] 
+                    then
+                        chnl_stream_audio_default+=("${chnl_stream_audio_values[i]}")
+                    elif [ "${chnl_stream_audio_keys[i]}" == "LANGUAGE" ] 
+                    then
+                        chnl_stream_audio_language+=("${chnl_stream_audio_values[i]//\"/}")
+                    elif [ "${chnl_stream_audio_keys[i]}" == "URI" ] 
+                    then
+                        chnl_stream_audio_uri=${chnl_stream_audio_values[i]//\"/}
+                        if [[ $chnl_stream_audio_uri =~ ^https?:// ]] 
+                        then
+                            chnl_stream_audio_url+=("$chnl_stream_audio_uri")
+                        else
+                            chnl_stream_audio_url+=("$chnl_stream_link_url_path_cdn/$chnl_stream_audio_uri")
+                        fi
+                    fi
+                done
+            elif [[ $line =~ TYPE=SUBTITLES ]] 
+            then
+                IFS="," read -r -a chnl_stream_subtitles <<< "${line#*:}"
+                chnl_stream_subtitles_keys=(${chnl_stream_subtitles[*]%%=*})
+                chnl_stream_subtitles_values=(${chnl_stream_subtitles[*]#*=})
+                for((i=0;i<${#chnl_stream_subtitles_keys[@]};i++));
+                do
+                    if [ "${chnl_stream_subtitles_keys[i]}" == "GROUP-ID" ] 
+                    then
+                        chnl_stream_subtitles_group_id+=("${chnl_stream_subtitles_values[i]//\"/}")
+                    elif [ "${chnl_stream_subtitles_keys[i]}" == "NAME" ] 
+                    then
+                        chnl_stream_subtitles_name+=("${chnl_stream_subtitles_values[i]//\"/}")
+                    elif [ "${chnl_stream_subtitles_keys[i]}" == "DEFAULT" ] 
+                    then
+                        chnl_stream_subtitles_default+=("${chnl_stream_subtitles_values[i]}")
+                    elif [ "${chnl_stream_subtitles_keys[i]}" == "LANGUAGE" ] 
+                    then
+                        chnl_stream_subtitles_language+=("${chnl_stream_subtitles_values[i]//\"/}")
+                    elif [ "${chnl_stream_subtitles_keys[i]}" == "URI" ] 
+                    then
+                        chnl_stream_subtitles_uri=${chnl_stream_subtitles_values[i]//\"/}
+                        if [[ $chnl_stream_subtitles_uri =~ ^https?:// ]] 
+                        then
+                            chnl_stream_subtitles_url+=("$chnl_stream_subtitles_uri")
+                        else
+                            chnl_stream_subtitles_url+=("$chnl_stream_link_url_path_cdn/$chnl_stream_subtitles_uri")
+                        fi
+                    fi
+                done
+            elif [[ $line =~ RESOLUTION=([^ ]+) ]] 
             then
                 chnl_stream_link_resolution=${BASH_REMATCH[1]%%,*}
                 chnl_stream_links_resolution+=("$chnl_stream_link_resolution")
-                if [[ $line =~ BANDWIDTH=([^,]+) ]] 
+                if [[ $line =~ BANDWIDTH=([^ ]+) ]] 
                 then
                     chnl_stream_link_bitrate=${BASH_REMATCH[1]%%,*}
                     chnl_stream_link_bitrate=$((chnl_stream_link_bitrate/1000))
@@ -9345,78 +10703,109 @@ StartChannel()
                 else
                     chnl_stream_link_bitrate_text=""
                 fi
+                if [[ $line =~ AUDIO=([^ ]+) ]] 
+                then
+                    chnl_stream_link_audio=${BASH_REMATCH[1]%%,*}
+                    chnl_stream_link_audio=${chnl_stream_link_audio#\"}
+                    chnl_stream_link_audio=${chnl_stream_link_audio%\"}
+                else
+                    chnl_stream_link_audio=""
+                fi
+                chnl_stream_links_audio+=("$chnl_stream_link_audio")
+                if [[ $line =~ SUBTITLES=([^ ]+) ]] 
+                then
+                    chnl_stream_link_subtitles=${BASH_REMATCH[1]%%,*}
+                    chnl_stream_link_subtitles=${chnl_stream_link_subtitles#\"}
+                    chnl_stream_link_subtitles=${chnl_stream_link_subtitles%\"}
+                else
+                    chnl_stream_link_subtitles=""
+                fi
+                chnl_stream_links_subtitles+=("$chnl_stream_link_subtitles")
                 chnl_stream_links_count=$((chnl_stream_links_count+1))
-                chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_count.${normal}\r\033[6C$chnl_stream_link_resolution$chnl_stream_link_bitrate_text\n\n"
-            elif [[ $line =~ m3u8 ]] 
+                chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_count.${normal}\r\033[6C$chnl_stream_link_resolution$chnl_stream_link_bitrate_text $chnl_stream_link_audio $chnl_stream_link_subtitles\n\n"
+            elif [[ $line =~ \.m3u8 ]] 
             then
-                chnl_stream_links_uri+=("$line")
+                if [[ $line =~ ^https?:// ]] 
+                then
+                    chnl_stream_links_url+=("$line")
+                else
+                    chnl_stream_links_url+=("$chnl_stream_link_url_path_cdn/$line")
+                fi
             fi
-        done < <(curl -s -Lm 10 -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" "${chnl_stream_link%%|*}")
+        done < <(curl -s -Lm 20 -H "User-Agent: $chnl_user_agent" "$chnl_stream_link_url")
 
         if [ -n "$chnl_stream_links_list" ] 
         then
-            chnl_stream_link_root=${chnl_stream_link%%|*}
-            choose=1
+            if [ "$chnl_use_cdn" -eq 1 ] && [[ $chnl_stream_link_url =~ $hboasia_host/(.+)$ ]] 
+            then
+                chnl_stream_link_cdn="https://$hboasia_cdn_host/${BASH_REMATCH[1]}?${chnl_stream_links_url[0]#*\?}"
+            fi
 
+            choose=1
             if [[ $chnl_stream_link =~ \|([^|]+)$ ]] 
             then
                 choose=0
                 chnl_stream_link_quality=${BASH_REMATCH[1]}
+                chnl_stream_audio_group_id_allow=()
+                chnl_stream_audio_name_allow=()
+                chnl_stream_subtitles_group_id_allow=()
+                chnl_stream_subtitles_name_allow=()
 
                 IFS="," read -r -a chnl_stream_link_qualities <<< "$chnl_stream_link_quality"
-                chnl_stream_link=""
+                chnl_stream_link_qualities_count=${#chnl_stream_link_qualities[@]}
 
-                for((i=0;i<${#chnl_stream_link_qualities[@]};i++));
+                if [[ $chnl_stream_link =~ \|ag:([^|]+) ]] 
+                then
+                    chnl_stream_audio_group_id_allow_list=${BASH_REMATCH[1]}
+                    IFS="," read -ra chnl_stream_audio_group_id_allow <<< "$chnl_stream_audio_group_id_allow_list"
+                fi
+
+                if [[ $chnl_stream_link =~ \|a:([^|]+) ]] 
+                then
+                    chnl_stream_audio_name_allow_list=${BASH_REMATCH[1]}
+                    IFS="," read -ra chnl_stream_audio_name_allow <<< "$chnl_stream_audio_name_allow_list"
+                fi
+
+                if [[ $chnl_stream_link =~ \|sg:([^|]+) ]] 
+                then
+                    chnl_stream_subtitles_group_id_allow_list=${BASH_REMATCH[1]}
+                    IFS="," read -ra chnl_stream_subtitles_group_id_allow <<< "$chnl_stream_subtitles_group_id_allow_list"
+                fi
+
+                if [[ $chnl_stream_link =~ \|s:([^|]+) ]] 
+                then
+                    chnl_stream_subtitles_name_allow_list=${BASH_REMATCH[1]}
+                    IFS="," read -ra chnl_stream_subtitles_name_allow <<< "$chnl_stream_subtitles_name_allow_list"
+                fi
+
+                chnl_stream_link_video_indices=()
+
+                for((i=0;i<chnl_stream_link_qualities_count;i++));
                 do
-                    found=0
                     for((j=0;j<chnl_stream_links_count;j++));
                     do
-                        if { [[ ${chnl_stream_link_qualities[i]} != *"-"* ]] || [ "${chnl_stream_links_bitrate[j]}" == "${chnl_stream_link_qualities[i]%-*}" ]; } && [ "${chnl_stream_links_resolution[j]}" == "${chnl_stream_link_qualities[i]#*-}" ]
+                        if { ! [[ ${chnl_stream_link_qualities[i]} =~ - ]] || [ "${chnl_stream_links_bitrate[j]}" == "${chnl_stream_link_qualities[i]%-*}" ] || [ -n "${monitor:-}" ]; } && [ "${chnl_stream_links_resolution[j]}" == "${chnl_stream_link_qualities[i]#*-}" ]
                         then
-                            found=1
                             chnl_stream_link_qualities[i]="${chnl_stream_links_bitrate[j]}-${chnl_stream_links_resolution[j]}"
-                            [ -n "$chnl_stream_link" ] && chnl_stream_link="$chnl_stream_link "
-                            chnl_stream_link="$chnl_stream_link${chnl_stream_links_url%/*}/${chnl_stream_links_uri[j]}"
-                            break
+                            chnl_stream_link_video_indices+=("$j")
+                            continue 2
                         fi
                     done
-                    if [ "$found" -eq 0 ] 
-                    then
-                        Println "$error ${chnl_stream_link_qualities[i]} 不存在 !"
-                        unset 'chnl_stream_link_qualities[i]'
-                    fi
-                done
-
-                if [ "${#chnl_stream_link_qualities[@]}" -gt 1 ] 
-                then
-                    kind=""
-                fi
-
-                if [ -n "$chnl_stream_link" ] 
-                then
-                    printf -v chnl_stream_link_quality ',%s' "${chnl_stream_link_qualities[@]}"
-                    chnl_stream_link_quality=${chnl_stream_link_quality:1}
-                else
+                    Println "$error ${chnl_stream_link_qualities[i]} 不存在 !"
                     choose=1
                     Println "$error 请重新选择 $chnl_channel_name 分辨率"
-                fi
+                    break
+                done
             fi
 
             if [ "$choose" -eq 1 ]
             then
                 if [ -z "${monitor:-}" ] 
                 then
-                    if [ -z "${kind:-}" ] 
-                    then
-                        chnl_stream_links_select_all=$((chnl_stream_links_count+1))
-                        chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_select_all.${normal}\r\033[6C全部"
-                        Println "$chnl_stream_links_list"
-                        echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
-                    else
-                        chnl_stream_links_select_all=""
-                        Println "$chnl_stream_links_list"
-                        echo "选择分辨率"
-                    fi
+                    chnl_stream_links_select_all=$((chnl_stream_links_count+1))
+                    chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_select_all.${normal}\r\033[6C全部\n"
+                    Println "$chnl_stream_links_list"
+                    echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
 
                     while read -p "(默认: $chnl_stream_links_count): " chnl_stream_links_num 
                     do
@@ -9424,15 +10813,16 @@ StartChannel()
 
                         if [ "$chnl_stream_links_num" == "$chnl_stream_links_select_all" ] 
                         then
-                            chnl_stream_link=""
-                            chnl_stream_link_quality=""
+                            chnl_stream_link_qualities=()
+                            chnl_stream_link_video_indices=()
                             for((i=0;i<chnl_stream_links_count;i++));
                             do
-                                [ -n "$chnl_stream_link_quality" ] && chnl_stream_link_quality="$chnl_stream_link_quality,"
-                                chnl_stream_link_quality="$chnl_stream_link_quality${chnl_stream_links_bitrate[i]}-${chnl_stream_links_resolution[i]}"
-                                [ -n "$chnl_stream_link" ] && chnl_stream_link="$chnl_stream_link "
-                                chnl_stream_link="$chnl_stream_link${chnl_stream_links_url%/*}/${chnl_stream_links_uri[i]}"
+                                chnl_stream_link_qualities+=("${chnl_stream_links_bitrate[i]}-${chnl_stream_links_resolution[i]}")
+                                chnl_stream_link_video_indices+=("$i")
                             done
+                            chnl_stream_link_qualities_count=$chnl_stream_links_count
+                            printf -v chnl_stream_link_quality ',%s' "${chnl_stream_link_qualities[@]}"
+                            chnl_stream_link_quality=${chnl_stream_link_quality:1}
                             break
                         fi
 
@@ -9467,64 +10857,389 @@ StartChannel()
                                 Println "$error 请输入正确的序号\n"
                             ;;
                             *)
-                                chnl_stream_link=""
-                                chnl_stream_link_quality=""
-                                if [ "${#chnl_stream_links_num_arr[@]}" -gt 1 ] || [[ ${chnl_stream_links_num_arr[0]} == *"-"* ]]
-                                then
-                                    kind=""
-                                fi
+                                chnl_stream_link_qualities=()
+                                chnl_stream_link_video_indices=()
                                 for chnl_stream_link_num in "${chnl_stream_links_num_arr[@]}"
                                 do
-                                    if [[ $chnl_stream_link_num == *"-"* ]] 
+                                    if [[ $chnl_stream_link_num =~ - ]] 
                                     then
                                         start=${chnl_stream_link_num%-*}
                                         end=${chnl_stream_link_num#*-}
-                                        for((i=start;i<=end;i++));
+                                        for((i=start-1;i<end;i++));
                                         do
-                                            [ -n "$chnl_stream_link_quality" ] && chnl_stream_link_quality="$chnl_stream_link_quality,"
-                                            chnl_stream_link_quality="$chnl_stream_link_quality${chnl_stream_links_bitrate[i]}-${chnl_stream_links_resolution[i]}"
-                                            [ -n "$chnl_stream_link" ] && chnl_stream_link="$chnl_stream_link "
-                                            chnl_stream_link="$chnl_stream_link${chnl_stream_links_url%/*}/${chnl_stream_links_uri[i]}"
+                                            chnl_stream_link_qualities+=("${chnl_stream_links_bitrate[i]}-${chnl_stream_links_resolution[i]}")
+                                            chnl_stream_link_video_indices+=("$i")
                                         done
                                     else
                                         chnl_stream_links_index=$((chnl_stream_link_num-1))
-                                        [ -n "$chnl_stream_link_quality" ] && chnl_stream_link_quality="$chnl_stream_link_quality,"
-                                        chnl_stream_link_quality="$chnl_stream_link_quality${chnl_stream_links_bitrate[chnl_stream_links_index]}-${chnl_stream_links_resolution[chnl_stream_links_index]}"
-                                        [ -n "$chnl_stream_link" ] && chnl_stream_link="$chnl_stream_link "
-                                        chnl_stream_link="$chnl_stream_link${chnl_stream_links_url%/*}/${chnl_stream_links_uri[chnl_stream_links_index]}"
+                                        chnl_stream_link_qualities+=("${chnl_stream_links_bitrate[chnl_stream_links_index]}-${chnl_stream_links_resolution[chnl_stream_links_index]}")
+                                        chnl_stream_link_video_indices+=("$chnl_stream_links_index")
                                     fi
                                 done
+                                chnl_stream_link_qualities_count=${#chnl_stream_link_qualities[@]}
+                                printf -v chnl_stream_link_quality ',%s' "${chnl_stream_link_qualities[@]}"
+                                chnl_stream_link_quality=${chnl_stream_link_quality:1}
                                 break
                             ;;
                         esac
                     done
                 else
-                    chnl_stream_link=""
-                    chnl_stream_link_quality=""
-                    if [ "$chnl_stream_links_count" -gt 1 ] 
+                    chnl_stream_link_qualities=("$((chnl_stream_links_count-1))")
+                    chnl_stream_link_quality="${chnl_stream_links_bitrate[chnl_stream_links_count-1]}-${chnl_stream_links_resolution[chnl_stream_links_count-1]}"
+                    chnl_stream_link_qualities_count=1
+                fi
+            else
+                printf -v chnl_stream_link_quality ',%s' "${chnl_stream_link_qualities[@]}"
+                chnl_stream_link_quality=${chnl_stream_link_quality:1}
+            fi
+
+            if [ -n "${chnl_stream_audio_name:-}" ] 
+            then
+                chnl_stream_link_audio_indices=()
+                choose=1
+                if [ -n "${chnl_stream_audio_group_id_allow:-}" ] 
+                then
+                    choose=0
+                    if [ "${chnl_stream_audio_group_id_allow[0]}" == "none" ] 
                     then
-                        kind=""
+                        chnl_stream_link_url="${chnl_stream_link_url}|ag:none"
+                        chnl_stream_link_audio_count=0
+                    else
+                        for((i=0;i<${#chnl_stream_audio_group_id_allow[@]};i++));
+                        do
+                            for((j=0;j<${#chnl_stream_audio_group_id[@]};j++));
+                            do
+                                if [ "${chnl_stream_audio_group_id_allow[i]}" == "${chnl_stream_audio_group_id[j]}" ] && [ "${chnl_stream_audio_name_allow[i]}" == "${chnl_stream_audio_name[j]}" ]
+                                then
+                                    chnl_stream_link_audio_indices+=("$j")
+                                    continue 2
+                                fi
+                            done
+                            if [ -n "${monitor:-}" ] 
+                            then
+                                MonitorError "$chnl_channel_name 请重新选择音轨"
+                                return 0
+                            fi
+                            choose=1
+                            Println "$error 请重新选择音轨\n"
+                            break
+                        done
                     fi
-                    for((i=0;i<chnl_stream_links_count;i++));
+                fi
+
+                if [ "$choose" -eq 1 ] 
+                then
+                    chnl_stream_audio_count=${#chnl_stream_audio_name[@]}
+                    chnl_stream_audio_list=""
+                    chnl_stream_audio_num_default=1
+
+                    for((i=0;i<chnl_stream_audio_count;i++));
                     do
-                        [ -n "$chnl_stream_link_quality" ] && chnl_stream_link_quality="$chnl_stream_link_quality,"
-                        chnl_stream_link_quality="$chnl_stream_link_quality${chnl_stream_links_bitrate[i]}-${chnl_stream_links_resolution[i]}"
-                        [ -n "$chnl_stream_link" ] && chnl_stream_link="$chnl_stream_link "
-                        chnl_stream_link="$chnl_stream_link${chnl_stream_links_url%/*}/${chnl_stream_links_uri[i]}"
+                        if [ "${chnl_stream_audio_default[i]}" == "YES" ] 
+                        then
+                            chnl_stream_audio_num_default=$((i+1))
+                        fi
+                        chnl_stream_audio_list="$chnl_stream_audio_list $green$((i+1)).${normal}\r\033[6C音轨组: $green${chnl_stream_audio_group_id[i]}${normal} 名称: $green${chnl_stream_audio_name[i]}${normal} 语言: $green${chnl_stream_audio_language[i]}${normal}\n\n"
                     done
+
+                    chnl_stream_audio_unselect_all=$((chnl_stream_audio_count+1))
+                    chnl_stream_audio_list="$chnl_stream_audio_list $green$chnl_stream_audio_unselect_all.${normal}\r\033[6C不启用\n\n"
+
+                    chnl_stream_audio_select_all=$((chnl_stream_audio_count+2))
+                    chnl_stream_audio_list="$chnl_stream_audio_list $green$chnl_stream_audio_select_all.${normal}\r\033[6C全部启用"
+                    Println "$chnl_stream_audio_list\n"
+                    echo "选择启用音轨 (多个音轨用空格分隔 比如: 1 2 4-5)"
+                    chnl_stream_audio_num_default=$chnl_stream_audio_select_all
+
+                    while read -p "(默认: $chnl_stream_audio_num_default): " chnl_stream_audio_num 
+                    do
+                        chnl_stream_audio_num=${chnl_stream_audio_num:-$chnl_stream_audio_num_default}
+
+                        if [ "$chnl_stream_audio_num" == "$chnl_stream_audio_unselect_all" ] 
+                        then
+                            unset 'chnl_stream_audio_group_id'
+                            unset 'chnl_stream_audio_name'
+                            break
+                        fi
+
+                        if [ "$chnl_stream_audio_num" == "$chnl_stream_audio_select_all" ] 
+                        then
+                            chnl_stream_link_audio_indices=()
+                            for((i=0;i<chnl_stream_audio_count;i++));
+                            do
+                                chnl_stream_link_audio_indices+=("$i")
+                            done
+                            break
+                        fi
+
+                        IFS=" " read -ra chnl_stream_audio_num_arr <<< "$chnl_stream_audio_num"
+
+                        error_no=0
+                        for chnl_stream_audio_num in "${chnl_stream_audio_num_arr[@]}"
+                        do
+                            case "$chnl_stream_audio_num" in
+                                *"-"*)
+                                    chnl_stream_audio_num_start=${chnl_stream_audio_num%-*}
+                                    chnl_stream_audio_num_end=${chnl_stream_audio_num#*-}
+                                    if [[ $chnl_stream_audio_num_start == *[!0-9]* ]] || [[ $chnl_stream_audio_num_end == *[!0-9]* ]] || [ "$chnl_stream_audio_num_start" -eq 0 ] || [ "$chnl_stream_audio_num_end" -eq 0 ] || [ "$chnl_stream_audio_num_end" -gt "$chnl_stream_audio_count" ] || [ "$chnl_stream_audio_num_start" -ge "$chnl_stream_audio_num_end" ]
+                                    then
+                                        error_no=3
+                                    fi
+                                ;;
+                                *[!0-9]*)
+                                    error_no=1
+                                ;;
+                                *)
+                                    if [ "$chnl_stream_audio_num" -lt 1 ] || [ "$chnl_stream_audio_num" -gt "$chnl_stream_audio_count" ] 
+                                    then
+                                        error_no=2
+                                    fi
+                                ;;
+                            esac
+                        done
+
+                        case "$error_no" in
+                            1|2|3)
+                                Println "$error 请输入正确的序号\n"
+                            ;;
+                            *)
+                                chnl_stream_link_audio_indices=()
+                                for((i=0;i<chnl_stream_audio_count;i++));
+                                do
+                                    i_num=$((i+1))
+                                    for chnl_stream_audio_num in "${chnl_stream_audio_num_arr[@]}"
+                                    do
+                                        if [[ $chnl_stream_audio_num =~ - ]] 
+                                        then
+                                            if [ "$i_num" -ge "${chnl_stream_audio_num%-*}" ] && [ "$i_num" -le "${chnl_stream_audio_num#*-}" ]
+                                            then
+                                                chnl_stream_link_audio_indices+=("$i")
+                                                continue 2
+                                            fi
+                                        elif [ "$i_num" -eq "$chnl_stream_audio_num" ] 
+                                        then
+                                            chnl_stream_link_audio_indices+=("$i")
+                                            continue 2
+                                        fi
+                                    done
+                                    unset 'chnl_stream_audio_group_id[i]'
+                                    unset 'chnl_stream_audio_name[i]'
+                                done
+                                break
+                            ;;
+                        esac
+                    done
+
+                    if [ -n "${chnl_stream_audio_name[*]:-}" ] 
+                    then
+                        printf -v chnl_stream_audio_group_id_allow_list ',%s' "${chnl_stream_audio_group_id[@]}"
+                        chnl_stream_audio_group_id_allow_list=${chnl_stream_audio_group_id_allow_list:1}
+                        printf -v chnl_stream_audio_name_allow_list ',%s' "${chnl_stream_audio_name[@]}"
+                        chnl_stream_audio_name_allow_list=${chnl_stream_audio_name_allow_list:1}
+                        chnl_stream_link_url="$chnl_stream_link_url|ag:$chnl_stream_audio_group_id_allow_list|a:$chnl_stream_audio_name_allow_list"
+                        chnl_stream_link_audio_count=${#chnl_stream_audio_name[@]}
+                    else
+                        chnl_stream_link_audio_count=0
+                        chnl_stream_link_url="${chnl_stream_link_url}|ag:none"
+                    fi
+                elif [ -n "${chnl_stream_link_audio_indices:-}" ] 
+                then
+                    chnl_stream_link_audio_count=${#chnl_stream_link_audio_indices[@]}
+                    chnl_stream_link_url="${chnl_stream_link_url}|ag:$chnl_stream_audio_group_id_allow_list|a:$chnl_stream_audio_name_allow_list"
+                fi
+            else
+                chnl_stream_link_audio_count=0
+            fi
+
+            if [ -n "${chnl_stream_subtitles_name:-}" ] 
+            then
+                chnl_stream_link_subtitles_indices=()
+                choose=1
+                if [ -n "${chnl_stream_subtitles_group_id_allow:-}" ] 
+                then
+                    choose=0
+                    if [ "${chnl_stream_subtitles_group_id_allow[0]}" == "none" ] 
+                    then
+                        chnl_stream_link_url="${chnl_stream_link_url}|sg:none"
+                        chnl_stream_link_subtitles_count=0
+                    else
+                        for((i=0;i<${#chnl_stream_subtitles_group_id_allow[@]};i++));
+                        do
+                            for((j=0;j<${#chnl_stream_subtitles_group_id[@]};j++));
+                            do
+                                if [ "${chnl_stream_subtitles_group_id_allow[i]}" == "${chnl_stream_subtitles_group_id[j]}" ] && [ "${chnl_stream_subtitles_name_allow[i]}" == "${chnl_stream_subtitles_name[j]}" ]
+                                then
+                                    chnl_stream_link_subtitles_indices+=("$j")
+                                    continue 2
+                                fi
+                            done
+                            if [ -n "${monitor:-}" ] 
+                            then
+                                MonitorError "$chnl_channel_name 请重新选择字幕"
+                                return 0
+                            fi
+                            choose=1
+                            Println "$error 请重新选择字幕\n"
+                            break
+                        done
+                    fi
+                fi
+
+                if [ "$choose" -eq 1 ] 
+                then
+                    chnl_stream_subtitles_count=${#chnl_stream_subtitles_name[@]}
+                    chnl_stream_subtitles_list=""
+                    chnl_stream_subtitles_num_default=1
+
+                    for((i=0;i<chnl_stream_subtitles_count;i++));
+                    do
+                        if [ "${chnl_stream_subtitles_default[i]}" == "YES" ] 
+                        then
+                            chnl_stream_subtitles_num_default=$((i+1))
+                        fi
+                        chnl_stream_subtitles_list="$chnl_stream_subtitles_list $green$((i+1)).${normal}\r\033[6C字幕组: $green${chnl_stream_subtitles_group_id[i]}${normal} 名称: $green${chnl_stream_subtitles_name[i]}${normal} 语言: $green${chnl_stream_subtitles_language[i]}${normal}\n\n"
+                    done
+
+                    chnl_stream_subtitles_unselect_all=$((chnl_stream_subtitles_count+1))
+                    chnl_stream_subtitles_list="$chnl_stream_subtitles_list $green$chnl_stream_subtitles_unselect_all.${normal}\r\033[6C不启用\n\n"
+
+                    chnl_stream_subtitles_select_all=$((chnl_stream_subtitles_count+2))
+                    chnl_stream_subtitles_list="$chnl_stream_subtitles_list $green$chnl_stream_subtitles_select_all.${normal}\r\033[6C全部启用"
+                    Println "$chnl_stream_subtitles_list\n"
+                    echo "选择字幕 (多个字幕用空格分隔 比如: 1 2 4-5)"
+                    chnl_stream_subtitles_num_default=$chnl_stream_subtitles_select_all
+
+                    while read -p "(默认: $chnl_stream_subtitles_num_default): " chnl_stream_subtitles_num 
+                    do
+                        chnl_stream_subtitles_num=${chnl_stream_subtitles_num:-$chnl_stream_subtitles_num_default}
+
+                        if [ "$chnl_stream_subtitles_num" == "$chnl_stream_subtitles_unselect_all" ] 
+                        then
+                            unset 'chnl_stream_subtitles_group_id'
+                            unset 'chnl_stream_subtitles_name'
+                            break
+                        fi
+
+                        if [ "$chnl_stream_subtitles_num" == "$chnl_stream_subtitles_select_all" ] 
+                        then
+                            chnl_stream_link_subtitles_indices=()
+                            for((i=0;i<chnl_stream_subtitles_count;i++));
+                            do
+                                chnl_stream_link_subtitles_indices+=("$i")
+                            done
+                            break
+                        fi
+
+                        IFS=" " read -ra chnl_stream_subtitles_num_arr <<< "$chnl_stream_subtitles_num"
+
+                        error_no=0
+                        for chnl_stream_subtitles_num in "${chnl_stream_subtitles_num_arr[@]}"
+                        do
+                            case "$chnl_stream_subtitles_num" in
+                                *"-"*)
+                                    chnl_stream_subtitles_num_start=${chnl_stream_subtitles_num%-*}
+                                    chnl_stream_subtitles_num_end=${chnl_stream_subtitles_num#*-}
+                                    if [[ $chnl_stream_subtitles_num_start == *[!0-9]* ]] || [[ $chnl_stream_subtitles_num_end == *[!0-9]* ]] || [ "$chnl_stream_subtitles_num_start" -eq 0 ] || [ "$chnl_stream_subtitles_num_end" -eq 0 ] || [ "$chnl_stream_subtitles_num_end" -gt "$chnl_stream_subtitles_count" ] || [ "$chnl_stream_subtitles_num_start" -ge "$chnl_stream_subtitles_num_end" ]
+                                    then
+                                        error_no=3
+                                    fi
+                                ;;
+                                *[!0-9]*)
+                                    error_no=1
+                                ;;
+                                *)
+                                    if [ "$chnl_stream_subtitles_num" -lt 1 ] || [ "$chnl_stream_subtitles_num" -gt "$chnl_stream_subtitles_count" ] 
+                                    then
+                                        error_no=2
+                                    fi
+                                ;;
+                            esac
+                        done
+
+                        case "$error_no" in
+                            1|2|3)
+                                Println "$error 请输入正确的序号\n"
+                            ;;
+                            *)
+                                chnl_stream_link_subtitles_indices=()
+                                for((i=0;i<chnl_stream_subtitles_count;i++));
+                                do
+                                    i_num=$((i+1))
+                                    for chnl_stream_subtitles_num in "${chnl_stream_subtitles_num_arr[@]}"
+                                    do
+                                        if [[ $chnl_stream_subtitles_num =~ - ]] 
+                                        then
+                                            if [ "$i_num" -ge "${chnl_stream_subtitles_num%-*}" ] && [ "$i_num" -le "${chnl_stream_subtitles_num#*-}" ]
+                                            then
+                                                chnl_stream_link_subtitles_indices+=("$i")
+                                                continue 2
+                                            fi
+                                        elif [ "$i_num" -eq "$chnl_stream_subtitles_num" ] 
+                                        then
+                                            chnl_stream_link_subtitles_indices+=("$i")
+                                            continue 2
+                                        fi
+                                    done
+                                    unset 'chnl_stream_subtitles_group_id[i]'
+                                    unset 'chnl_stream_subtitles_name[i]'
+                                done
+                                break
+                            ;;
+                        esac
+                    done
+
+                    if [ -n "${chnl_stream_subtitles_name[*]:-}" ] 
+                    then
+                        printf -v chnl_stream_subtitles_group_id_allow_list ',%s' "${chnl_stream_subtitles_group_id[@]}"
+                        chnl_stream_subtitles_group_id_allow_list=${chnl_stream_subtitles_group_id_allow_list:1}
+                        printf -v chnl_stream_subtitles_name_allow_list ',%s' "${chnl_stream_subtitles_name[@]}"
+                        chnl_stream_subtitles_name_allow_list=${chnl_stream_subtitles_name_allow_list:1}
+                        chnl_stream_link_url="$chnl_stream_link_url|sg:$chnl_stream_subtitles_group_id_allow_list|s:$chnl_stream_subtitles_name_allow_list"
+                        chnl_stream_link_subtitles_count=${#chnl_stream_subtitles_name[@]}
+                    else
+                        chnl_stream_link_subtitles_count=0
+                        chnl_stream_link_url="${chnl_stream_link_url}|sg:none"
+                    fi
+                elif [ -n "${chnl_stream_link_subtitles_indices:-}" ] 
+                then
+                    chnl_stream_link_subtitles_count=${#chnl_stream_link_subtitles_indices[@]}
+                    chnl_stream_link_url="${chnl_stream_link_url}|sg:$chnl_stream_subtitles_group_id_allow_list|s:$chnl_stream_subtitles_name_allow_list"
+                fi
+            else
+                chnl_stream_link_subtitles_count=0
+            fi
+
+            if [[ $chnl_stream_link =~ \|parse\| ]] 
+            then
+                chnl_origin_hls_url=0
+                chnl_stream_link=${chnl_stream_link_url%%|*}
+                chnl_stream_link_url="$chnl_stream_link_url|parse"
+            elif [[ $chnl_stream_link =~ \|origin\| ]] || [ -n "${monitor:-}" ]
+            then
+                chnl_origin_hls_url=1
+                chnl_stream_link=${chnl_stream_link_url%%|*}
+                chnl_stream_link_url="${chnl_stream_link_url}|origin"
+            else
+                yn_options=( '是' '否' )
+                Println "$tip 如果选 是 只修改 map 参数, FFmpeg 输入的将是原链接而非解析链接"
+                inquirer list_input "是否是需要鉴权的直播源" yn_options yn_option
+                if [ "$yn_option" == "是" ] 
+                then
+                    chnl_origin_hls_url=1
+                    chnl_stream_link=${chnl_stream_link_url%%|*}
+                    chnl_stream_link_url="$chnl_stream_link_url|origin"
+                else
+                    chnl_origin_hls_url=0
+                    chnl_stream_link=${chnl_stream_link_url%%|*}
+                    chnl_stream_link_url="$chnl_stream_link_url|parse"
                 fi
             fi
 
             if [[ $chnl_stream_links == *" "* ]] 
             then
-                chnl_stream_links="$chnl_stream_link_root|$chnl_stream_link_quality ${chnl_stream_links#* }"
+                chnl_stream_links="$chnl_stream_link_url|$chnl_stream_link_quality ${chnl_stream_links#* }"
             else
-                chnl_stream_links="$chnl_stream_link_root|$chnl_stream_link_quality"
-            fi
-
-            if [[ $chnl_stream_link =~ ^([^ ]+)\ ([^ ]+) ]] 
-            then
-                chnl_bitrates=$chnl_stream_link_quality
+                chnl_stream_links="$chnl_stream_link_url|$chnl_stream_link_quality"
             fi
         fi
     elif [[ $chnl_stream_link == http://*.macaulotustv.com/* ]] 
@@ -9546,39 +11261,39 @@ StartChannel()
         chnl_headers="x-forwarded-for: 127.0.0.1\r\n"
     fi
 
+    if [ "$chnl_use_cdn" -eq 1 ] 
+    then
+        hboasia_host=$hboasia_cdn_host
+    fi
+
     if [[ $chnl_stream_link == *".m3u8"* ]] 
     then
         chnl_input_flags=${chnl_input_flags//-reconnect_at_eof 1/}
     fi
 
-    if [ -z "${kind:-}" ] && [ "$chnl_video_codec" == "copy" ]
+    chnl_subtitle_append=""
+    if [ -n "$chnl_txt_format" ]
+    then
+        chnl_subtitle_append=',SUBTITLES="subs"'
+    fi
+
+    master=0
+    if [ "${chnl_stream_link_qualities_count:-0}" -gt 0 ] 
+    then
+        if [[ $chnl_bitrates =~ , ]] || [[ $chnl_quality =~ , ]] || [ "${chnl_stream_link_qualities_count:-0}" -gt 1 ] || [ "${chnl_stream_link_audio_count:-0}" -gt 0 ] || [ "${chnl_stream_link_subtitles_count:-0}" -gt 0 ] 
+        then
+            master=1
+        fi
+    elif [[ $chnl_bitrates =~ , ]] || [[ $chnl_quality =~ , ]] || [ -n "$chnl_subtitle_append" ]
+    then
+        master=1
+    fi
+
+    if [ "$chnl_video_codec" == "copy" ]
     then
         chnl_quality=""
         chnl_bitrates=""
         chnl_const=""
-        if [[ $chnl_stream_link =~ ([^ ]+)\ ([^ ]+) ]]
-        then
-            master=1
-        else
-            master=0
-        fi
-    else
-        if [ -n "$chnl_quality" ] 
-        then
-            chnl_const=""
-        fi
-
-        if [ -n "$chnl_bitrates" ] 
-        then
-            if [[ $chnl_bitrates != *"-"* ]] && [[ $chnl_bitrates == *"x"* ]]
-            then
-                master=0
-            else
-                master=1
-            fi
-        else
-            master=0
-        fi
     fi
 
     if [ -n "${chnl_txt_format:-}" ] && [ -z "${kind:-}" ]
@@ -9596,7 +11311,6 @@ StartChannel()
                 chnl_input_flags="-txt_format $chnl_txt_format $chnl_input_flags"
             fi
         fi
-        master=1
     else
         chnl_txt_format=""
         chnl_input_flags=${chnl_input_flags//-txt_format bitmap/}
@@ -9625,6 +11339,20 @@ StartChannel()
 
     printf -v start_time '%(%s)T' -1
     chnl_channel_time=$start_time
+
+    chnl_extra_filters=""
+    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+    then
+        filters=( vf filter:v )
+        for filter in "${filters[@]}"
+        do
+            if [[ $chnl_output_flags =~ (.*)"-$filter "([^ ]+)(.*) ]] 
+            then
+                chnl_extra_filters="${BASH_REMATCH[2]},"
+                chnl_output_flags="${BASH_REMATCH[1]} ${BASH_REMATCH[3]}"
+            fi
+        done
+    fi
 
     FilterString chnl_stream_links chnl_user_agent chnl_headers chnl_cookies \
         chnl_output_dir_name chnl_playlist_name chnl_seg_dir_name chnl_seg_name \
@@ -9679,7 +11407,7 @@ StartChannel()
             rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
             if [ "$sh_debug" -eq 1 ] 
             then
-                ( FlvStreamCreator ) > /dev/null 2>> "$MONITOR_LOG" < /dev/null &
+                ( FlvStreamCreator ) 
             else
                 ( FlvStreamCreator ) > /dev/null 2> /dev/null < /dev/null &
             fi
@@ -9694,23 +11422,23 @@ StartChannel()
         rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.log"
         rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.err"
         rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
-        if [ -n "${chnl_video_audio_shift:-}" ] || { [ "$chnl_encrypt_yn" == "yes" ] && [ "$chnl_live_yn" == "yes" ]; } || [[ $chnl_stream_link =~ ([^ ]+)\ ([^ ]+) ]] || [ -n "$chnl_txt_format" ]
+        if [ "$sh_debug" -eq 1 ] 
         then
-            if [ "$sh_debug" -eq 1 ] 
-            then
-                ( HlsStreamCreatorPlus ) > /dev/null 2>> "$MONITOR_LOG" < /dev/null &
-            else
-                ( HlsStreamCreatorPlus ) > /dev/null 2> /dev/null < /dev/null &
-            fi
+            ( HlsStreamCreatorPlus )
         else
-            if [ "$sh_debug" -eq 1 ] 
-            then
-                ( HlsStreamCreator ) > /dev/null 2>> "$MONITOR_LOG" < /dev/null &
-            else
-                ( HlsStreamCreator ) > /dev/null 2> /dev/null < /dev/null &
-            fi
+            ( HlsStreamCreatorPlus ) > /dev/null 2> /dev/null < /dev/null &
         fi
     fi
+
+    chnl_stream_audio_url=()
+    chnl_stream_subtitles_url=()
+    chnl_stream_link_qualities_count=0
+    chnl_stream_link_audio_count=0
+    chnl_stream_link_subtitles_count=0
+    xc=0
+    chnl_xc_proxy=""
+    chnl_stream_link_quality=""
+    chnl_stream_link_cdn=""
 
     Println "$info 频道 [ $chnl_channel_name ] 已开启 !\n"
 }
@@ -10733,9 +12461,19 @@ Disable4gtvCron()
 
 Add4gtvLink()
 {
+    if [[ $stream_link_url =~ \.m3u8$ ]] 
+    then
+        Println "$error 你的 IP 可能已被禁\n"
+        if [ -n "${monitor:-}" ] 
+        then
+            return 0
+        fi
+        exit 1
+    fi
+
     stream_links_bitrate=()
     stream_links_resolution=()
-    stream_links_uri=()
+    stream_links_url=()
     stream_links_list=""
     stream_links_count=0
 
@@ -10745,7 +12483,7 @@ Add4gtvLink()
         then
             stream_link_resolution=${BASH_REMATCH[1]%%,*}
             stream_links_resolution+=("$stream_link_resolution")
-            if [[ $line =~ BANDWIDTH=([^,]+) ]] 
+            if [[ $line =~ BANDWIDTH=([^ ]+) ]] 
             then
                 stream_link_bitrate=${BASH_REMATCH[1]%%,*}
                 stream_link_bitrate=$((stream_link_bitrate/1000))
@@ -10763,9 +12501,9 @@ Add4gtvLink()
             stream_links_list="$stream_links_list $green$stream_links_count.${normal}\r\033[6C$stream_link_resolution$stream_link_bitrate_text\n\n"
         elif [[ $line =~ m3u8 ]] 
         then
-            stream_links_uri+=("$line")
+            stream_links_url+=("$stream_link_url_path/$line")
         fi
-    done < <(curl -s -Lm 10 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} -H "User-Agent: $user_agent" -H "${headers:0:-4}" "$stream_links_url")
+    done < <(curl -s -Lm 20 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} -H "User-Agent: $user_agent" -H "${headers:0:-4}" "$stream_link_url")
 
     if [ -n "$stream_links_list" ] 
     then
@@ -10778,57 +12516,40 @@ Add4gtvLink()
             stream_link_quality=${BASH_REMATCH[1]}
 
             IFS="," read -r -a stream_link_qualities <<< "$stream_link_quality"
-            stream_link=""
+            stream_link_qualities_count=${#stream_link_qualities[@]}
 
-            for((i=0;i<${#stream_link_qualities[@]};i++));
+            stream_link_video_indices=()
+
+            for((i=0;i<stream_link_qualities_count;i++));
             do
-                found=0
                 for((j=0;j<stream_links_count;j++));
                 do
-                    if { [[ ${stream_link_qualities[i]} != *"-"* ]] || [ "${stream_links_bitrate[j]}" == "${stream_link_qualities[i]%-*}" ]; } && [ "${stream_links_resolution[j]}" == "${stream_link_qualities[i]#*-}" ]
+                    if { ! [[ ${stream_link_qualities[i]} =~ - ]] || [ "${stream_links_bitrate[j]}" == "${stream_link_qualities[i]%-*}" ]; } && [ "${stream_links_resolution[j]}" == "${stream_link_qualities[i]#*-}" ]
                     then
-                        found=1
                         stream_link_qualities[i]="${stream_links_bitrate[j]}-${stream_links_resolution[j]}"
-                        [ -n "$stream_link" ] && stream_link="$stream_link "
-                        stream_link="$stream_link${stream_links_url%/*}/${stream_links_uri[j]}"
-                        break
+                        stream_link_video_indices+=("$j")
+                        continue 2
                     fi
                 done
-                if [ "$found" -eq 0 ] 
-                then
-                    Println "$error ${stream_link_qualities[i]} 不存在 !"
-                    unset 'stream_link_qualities[i]'
-                fi
-            done
-
-            if [ "${#stream_link_qualities[@]}" -gt 1 ] 
-            then
-                kind=""
-            fi
-
-            if [ -n "$stream_link" ] 
-            then
-                printf -v stream_link_quality ',%s' "${stream_link_qualities[@]}"
-                stream_link_quality=${stream_link_quality:1}
-            else
+                Println "$error ${stream_link_qualities[i]} 不存在 !"
                 choose=1
-                Println "$error 请重新选择分辨率"
-            fi
+                Println "$error 请重新选择 $channel_name 分辨率"
+            done
         fi
 
         if [ "$choose" -eq 1 ] 
         then
-            #if [ -z "${kind:-}" ] 
-            #then
-            #    stream_links_select_all=$((stream_links_count+1))
-            #    stream_links_list="$stream_links_list $green$stream_links_select_all.${normal}\r\033[6C全部"
-            #    Println "$stream_links_list"
-            #    echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
-            #else
+            if [ -z "${kind:-}" ] 
+            then
+                stream_links_select_all=$((stream_links_count+1))
+                stream_links_list="$stream_links_list $green$stream_links_select_all.${normal}\r\033[6C全部\n"
+                Println "$stream_links_list"
+                echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
+            else
                 stream_links_select_all=""
                 Println "$stream_links_list"
                 echo "选择分辨率"
-            #fi
+            fi
 
             while read -p "(默认: $stream_links_count): " stream_links_num 
             do
@@ -10836,15 +12557,16 @@ Add4gtvLink()
 
                 if [ "$stream_links_num" == "$stream_links_select_all" ] 
                 then
-                    stream_link=""
-                    stream_link_quality=""
+                    stream_link_qualities=()
+                    stream_link_video_indices=()
                     for((i=0;i<stream_links_count;i++));
                     do
-                        [ -n "$stream_link_quality" ] && stream_link_quality="$stream_link_quality,"
-                        stream_link_quality="$stream_link_quality${stream_links_bitrate[i]}-${stream_links_resolution[i]}"
-                        [ -n "$stream_link" ] && stream_link="$stream_link "
-                        stream_link="$stream_link${stream_links_url%/*}/${stream_links_uri[i]}"
+                        stream_link_qualities+=("${stream_links_bitrate[i]}-${stream_links_resolution[i]}")
+                        stream_link_video_indices+=("$i")
                     done
+                    stream_link_qualities_count=$stream_links_count
+                    printf -v stream_link_quality ',%s' "${stream_link_qualities[@]}"
+                    stream_link_quality=${stream_link_quality:1}
                     break
                 fi
 
@@ -10879,37 +12601,36 @@ Add4gtvLink()
                         Println "$error 请输入正确的序号\n"
                     ;;
                     *)
-                        stream_link=""
-                        stream_link_quality=""
-                        if [ "${#stream_links_num_arr[@]}" -gt 1 ] || [[ ${stream_links_num_arr[0]} == *"-"* ]]
-                        then
-                            kind=""
-                        fi
+                        stream_link_qualities=()
+                        stream_link_video_indices=()
+
                         for stream_link_num in "${stream_links_num_arr[@]}"
                         do
-                            if [[ $stream_link_num == *"-"* ]] 
+                            if [[ $stream_link_num =~ - ]] 
                             then
                                 start=${stream_link_num%-*}
                                 end=${stream_link_num#*-}
-                                for((i=start;i<=end;i++));
+                                for((i=start-1;i<end;i++));
                                 do
-                                    [ -n "$stream_link_quality" ] && stream_link_quality="$stream_link_quality,"
-                                    stream_link_quality="$stream_link_quality${stream_links_bitrate[i]}-${stream_links_resolution[i]}"
-                                    [ -n "$stream_link" ] && stream_link="$stream_link "
-                                    stream_link="$stream_link${stream_links_url%/*}/${stream_links_uri[i]}"
+                                    stream_link_qualities+=("${stream_links_bitrate[i]}-${stream_links_resolution[i]}")
+                                    stream_link_video_indices+=("$i")
                                 done
                             else
                                 stream_links_index=$((stream_link_num-1))
-                                [ -n "$stream_link_quality" ] && stream_link_quality="$stream_link_quality,"
-                                stream_link_quality="$stream_link_quality${stream_links_bitrate[stream_links_index]}-${stream_links_resolution[stream_links_index]}"
-                                [ -n "$stream_link" ] && stream_link="$stream_link "
-                                stream_link="$stream_link${stream_links_url%/*}/${stream_links_uri[stream_links_index]}"
+                                stream_link_qualities+=("${stream_links_bitrate[stream_links_index]}-${stream_links_resolution[stream_links_index]}")
+                                stream_link_video_indices+=("$stream_links_index")
                             fi
                         done
+                        stream_link_qualities_count=${#stream_link_qualities[@]}
+                        printf -v stream_link_quality ',%s' "${stream_link_qualities[@]}"
+                        stream_link_quality=${stream_link_quality:1}
                         break
                     ;;
                 esac
             done
+        else
+            printf -v stream_link_quality ',%s' "${stream_link_qualities[@]}"
+            stream_link_quality=${stream_link_quality:1}
         fi
 
         if [[ $stream_links == *" "* ]] 
@@ -10919,23 +12640,30 @@ Add4gtvLink()
             stream_links="$stream_link_root|$stream_link_quality"
         fi
 
-        if [[ $stream_link =~ ^([^ ]+)\ ([^ ]+) ]] 
-        then
-            bitrates=$stream_link_quality
-        fi
-
         if [ -n "${_4gtv_proxy_command:-}" ] 
         then
             stream_link="http://${stream_link:8}"
         fi
+    else
+        Println "$error 频道 [$channel_name] 不可用\n"
     fi
 }
 
 Start4gtvLink()
 {
+    if [[ $chnl_stream_link_url =~ \.m3u8$ ]] 
+    then
+        Println "$error 你的 IP 可能已被禁\n"
+        if [ -n "${monitor:-}" ] 
+        then
+            return 0
+        fi
+        exit 1
+    fi
+
     chnl_stream_links_bitrate=()
     chnl_stream_links_resolution=()
-    chnl_stream_links_uri=()
+    chnl_stream_links_url=()
     chnl_stream_links_list=""
     chnl_stream_links_count=0
 
@@ -10945,7 +12673,7 @@ Start4gtvLink()
         then
             chnl_stream_link_resolution=${BASH_REMATCH[1]%%,*}
             chnl_stream_links_resolution+=("$chnl_stream_link_resolution")
-            if [[ $line =~ BANDWIDTH=([^,]+) ]] 
+            if [[ $line =~ BANDWIDTH=([^ ]+) ]] 
             then
                 chnl_stream_link_bitrate=${BASH_REMATCH[1]%%,*}
                 chnl_stream_link_bitrate=$((chnl_stream_link_bitrate/1000))
@@ -10963,9 +12691,9 @@ Start4gtvLink()
             chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_count.${normal}\r\033[6C$chnl_stream_link_resolution$chnl_stream_link_bitrate_text\n\n"
         elif [[ $line =~ m3u8 ]] 
         then
-            chnl_stream_links_uri+=("$line")
+            chnl_stream_links_url+=("$chnl_stream_link_url_path/$line")
         fi
-    done < <(curl -s -Lm 10 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" "$chnl_stream_links_url")
+    done < <(curl -s -Lm 20 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" "$chnl_stream_link_url")
 
     if [ -n "$chnl_stream_links_list" ] 
     then
@@ -10978,59 +12706,54 @@ Start4gtvLink()
             chnl_stream_link_quality=${BASH_REMATCH[1]}
 
             IFS="," read -r -a chnl_stream_link_qualities <<< "$chnl_stream_link_quality"
-            chnl_stream_link=""
+            chnl_stream_link_qualities_count=${#chnl_stream_link_qualities[@]}
 
-            for((i=0;i<${#chnl_stream_link_qualities[@]};i++));
+            chnl_stream_link_video_indices=()
+
+            for((i=0;i<chnl_stream_link_qualities_count;i++));
             do
-                found=0
                 for((j=0;j<chnl_stream_links_count;j++));
                 do
-                    if { [[ ${chnl_stream_link_qualities[i]} != *"-"* ]] || [ "${chnl_stream_links_bitrate[j]}" == "${chnl_stream_link_qualities[i]%-*}" ]; } && [ "${chnl_stream_links_resolution[j]}" == "${chnl_stream_link_qualities[i]#*-}" ]
+                    if { [ "${auto_select_yn:-}" == "是" ] || ! [[ ${chnl_stream_link_qualities[i]} =~ - ]] || [ "${chnl_stream_links_bitrate[j]}" == "${chnl_stream_link_qualities[i]%-*}" ] || [ -n "${monitor:-}" ]; } && [ "${chnl_stream_links_resolution[j]}" == "${chnl_stream_link_qualities[i]#*-}" ]
                     then
-                        found=1
                         chnl_stream_link_qualities[i]="${chnl_stream_links_bitrate[j]}-${chnl_stream_links_resolution[j]}"
-                        [ -n "$chnl_stream_link" ] && chnl_stream_link="$chnl_stream_link "
-                        chnl_stream_link="$chnl_stream_link${chnl_stream_links_url%/*}/${chnl_stream_links_uri[j]}"
-                        break
+                        chnl_stream_link_video_indices+=("$j")
+                        continue 2
                     fi
                 done
-                if [ "$found" -eq 0 ] 
+                Println "$error ${chnl_stream_link_qualities[i]} 不存在 !"
+                if [ -z "${auto_select_yn:-}" ] 
                 then
-                    Println "$error ${chnl_stream_link_qualities[i]} 不存在 !"
-                    unset 'chnl_stream_link_qualities[i]'
+                    echo
+                    auto_select_options=( '是' '否' )
+                    inquirer list_input "是否按分辨率自动选择" auto_select_options auto_select_yn
+                    if [ "$auto_select_yn" == "是" ] 
+                    then
+                        i=$((i-1))
+                        continue
+                    fi
                 fi
-            done
-
-            if [ "${#chnl_stream_link_qualities[@]}" -gt 1 ] 
-            then
-                kind=""
-            fi
-
-            if [ -n "$chnl_stream_link" ] 
-            then
-                printf -v chnl_stream_link_quality ',%s' "${chnl_stream_link_qualities[@]}"
-                chnl_stream_link_quality=${chnl_stream_link_quality:1}
-            else
                 choose=1
                 Println "$error 请重新选择 $chnl_channel_name 分辨率"
-            fi
+                break
+            done
         fi
 
         if [ "$choose" -eq 1 ] 
         then
             if [ -z "${monitor:-}" ] 
             then
-                #if [ -z "${kind:-}" ] 
-                #then
-                #    chnl_stream_links_select_all=$((chnl_stream_links_count+1))
-                #    chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_select_all.${normal}\r\033[6C全部"
-                #    Println "$chnl_stream_links_list"
-                #    echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
-                #else
+                if [ -z "${kind:-}" ] 
+                then
+                    chnl_stream_links_select_all=$((chnl_stream_links_count+1))
+                    chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_select_all.${normal}\r\033[6C全部\n"
+                    Println "$chnl_stream_links_list"
+                    echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
+                else
                     chnl_stream_links_select_all=""
                     Println "$chnl_stream_links_list"
                     echo "选择分辨率"
-                #fi
+                fi
 
                 while read -p "(默认: $chnl_stream_links_count): " chnl_stream_links_num 
                 do
@@ -11038,15 +12761,16 @@ Start4gtvLink()
 
                     if [ "$chnl_stream_links_num" == "$chnl_stream_links_select_all" ] 
                     then
-                        chnl_stream_link=""
-                        chnl_stream_link_quality=""
+                        chnl_stream_link_qualities=()
+                        chnl_stream_link_video_indices=()
                         for((i=0;i<chnl_stream_links_count;i++));
                         do
-                            [ -n "$chnl_stream_link_quality" ] && chnl_stream_link_quality="$chnl_stream_link_quality,"
-                            chnl_stream_link_quality="$chnl_stream_link_quality${chnl_stream_links_bitrate[i]}-${chnl_stream_links_resolution[i]}"
-                            [ -n "$chnl_stream_link" ] && chnl_stream_link="$chnl_stream_link "
-                            chnl_stream_link="$chnl_stream_link${chnl_stream_links_url%/*}/${chnl_stream_links_uri[i]}"
+                            chnl_stream_link_qualities+=("${chnl_stream_links_bitrate[i]}-${chnl_stream_links_resolution[i]}")
+                            chnl_stream_link_video_indices+=("$i")
                         done
+                        chnl_stream_link_qualities_count=$chnl_stream_links_count
+                        printf -v chnl_stream_link_quality ',%s' "${chnl_stream_link_qualities[@]}"
+                        chnl_stream_link_quality=${chnl_stream_link_quality:1}
                         break
                     fi
 
@@ -11081,64 +12805,41 @@ Start4gtvLink()
                             Println "$error 请输入正确的序号\n"
                         ;;
                         *)
-                            chnl_stream_link=""
-                            chnl_stream_link_quality=""
-                            if [ "${#chnl_stream_links_num_arr[@]}" -gt 1 ] || [[ ${chnl_stream_links_num_arr[0]} == *"-"* ]]
-                            then
-                                kind=""
-                            fi
+                            chnl_stream_link_qualities=()
+                            chnl_stream_link_video_indices=()
+
                             for chnl_stream_link_num in "${chnl_stream_links_num_arr[@]}"
                             do
-                                if [[ $chnl_stream_link_num == *"-"* ]] 
+                                if [[ $chnl_stream_link_num =~ - ]] 
                                 then
                                     start=${chnl_stream_link_num%-*}
                                     end=${chnl_stream_link_num#*-}
-                                    for((i=start;i<=end;i++));
+                                    for((i=start-1;i<end;i++));
                                     do
-                                        [ -n "$chnl_stream_link_quality" ] && chnl_stream_link_quality="$chnl_stream_link_quality,"
-                                        chnl_stream_link_quality="$chnl_stream_link_quality${chnl_stream_links_bitrate[i]}-${chnl_stream_links_resolution[i]}"
-                                        [ -n "$chnl_stream_link" ] && chnl_stream_link="$chnl_stream_link "
-                                        chnl_stream_link="$chnl_stream_link${chnl_stream_links_url%/*}/${chnl_stream_links_uri[i]}"
+                                        chnl_stream_link_qualities+=("${chnl_stream_links_bitrate[i]}-${chnl_stream_links_resolution[i]}")
+                                        chnl_stream_link_video_indices+=("$i")
                                     done
                                 else
                                     chnl_stream_links_index=$((chnl_stream_link_num-1))
-                                    [ -n "$chnl_stream_link_quality" ] && chnl_stream_link_quality="$chnl_stream_link_quality,"
-                                    chnl_stream_link_quality="$chnl_stream_link_quality${chnl_stream_links_bitrate[chnl_stream_links_index]}-${chnl_stream_links_resolution[chnl_stream_links_index]}"
-                                    [ -n "$chnl_stream_link" ] && chnl_stream_link="$chnl_stream_link "
-                                    chnl_stream_link="$chnl_stream_link${chnl_stream_links_url%/*}/${chnl_stream_links_uri[chnl_stream_links_index]}"
+                                    chnl_stream_link_qualities+=("${chnl_stream_links_bitrate[chnl_stream_links_index]}-${chnl_stream_links_resolution[chnl_stream_links_index]}")
+                                    chnl_stream_link_video_indices+=("$chnl_stream_links_index")
                                 fi
                             done
+                            chnl_stream_link_qualities_count=${#chnl_stream_link_qualities[@]}
+                            printf -v chnl_stream_link_quality ',%s' "${chnl_stream_link_qualities[@]}"
+                            chnl_stream_link_quality=${chnl_stream_link_quality:1}
                             break
                         ;;
                     esac
                 done
             else
-                found=0
-                for((i=0;i<chnl_stream_links_count;i++));
-                do
-                    if [ "${chnl_stream_links_resolution[i]}" == "${chnl_stream_link_quality#*-}" ]
-                    then
-                        found=1
-                        chnl_stream_links_index=$i
-                    fi
-                done
-                [ "$found" -eq 0 ] && chnl_stream_links_index=$((chnl_stream_links_count-1))
-                chnl_stream_link_quality="${chnl_stream_links_bitrate[chnl_stream_links_index]}-${chnl_stream_links_resolution[chnl_stream_links_index]}"
-                chnl_stream_link="${chnl_stream_links_url%/*}/${chnl_stream_links_uri[chnl_stream_links_index]}"
-                #chnl_stream_link=""
-                #chnl_stream_link_quality=""
-                #if [ "$chnl_stream_links_count" -gt 1 ] 
-                #then
-                #    kind=""
-                #fi
-                #for((i=0;i<chnl_stream_links_count;i++));
-                #do
-                #    [ -n "$chnl_stream_link_quality" ] && chnl_stream_link_quality="$chnl_stream_link_quality,"
-                #    chnl_stream_link_quality="$chnl_stream_link_quality${chnl_stream_links_bitrate[i]}-${chnl_stream_links_resolution[i]}"
-                #    [ -n "$chnl_stream_link" ] && chnl_stream_link="$chnl_stream_link "
-                #    chnl_stream_link="$chnl_stream_link${chnl_stream_links_url%/*}/${chnl_stream_links_uri[i]}"
-                #done
+                chnl_stream_link_qualities=("$((chnl_stream_links_count-1))")
+                chnl_stream_link_quality="${chnl_stream_links_bitrate[chnl_stream_links_count-1]}-${chnl_stream_links_resolution[chnl_stream_links_count-1]}"
+                chnl_stream_link_qualities_count=1
             fi
+        else
+            printf -v chnl_stream_link_quality ',%s' "${chnl_stream_link_qualities[@]}"
+            chnl_stream_link_quality=${chnl_stream_link_quality:1}
         fi
 
         if [[ $chnl_stream_links == *" "* ]] 
@@ -11148,15 +12849,12 @@ Start4gtvLink()
             chnl_stream_links="$chnl_stream_link_root|$chnl_stream_link_quality"
         fi
 
-        if [[ $chnl_stream_link =~ ^([^ ]+)\ ([^ ]+) ]] 
-        then
-            chnl_bitrates=$chnl_stream_link_quality
-        fi
-
         if [ -n "${_4gtv_proxy_command:-}" ] 
         then
             chnl_stream_link="http://${chnl_stream_link:8}"
         fi
+    else
+        Println "$error 频道 [$chnl_channel_name] 不可用\n"
     fi
 }
 
@@ -12824,7 +14522,7 @@ ScheduleAdd()
     ScheduleView
     echo -e " $green$((chnls_count+1)).${normal}\r\033[6C全部"
 
-    Println "$tip (多个频道用空格分隔 比如: 5 7 9-11)\n"
+    Println "$tip (多个频道用空格分隔 比如: 5 7 9-11)"
 
     while read -p "(默认: 取消): " chnls_num
     do
@@ -12875,13 +14573,13 @@ ScheduleAdd()
             *)
                 for chnl_num in "${chnls_num_arr[@]}"
                 do
-                    if [[ $chnl_num == *"-"* ]] 
+                    if [[ $chnl_num =~ - ]] 
                     then
                         start=${chnl_num%-*}
                         end=${chnl_num#*-}
-                        for((i=start;i<=end;i++));
+                        for((i=start-1;i<end;i++));
                         do
-                            chnl="${chnls[i-1]}"
+                            chnl="${chnls[i]}"
                             ScheduleAddChannel
                         done
                     else
@@ -12949,7 +14647,7 @@ ScheduleDel()
 
     echo -e " $green$((chnls_count+1)).${normal}\r\033[6C全部"
 
-    Println "$tip (多个频道用空格分隔 比如: 5 7 9-11)\n"
+    Println "$tip (多个频道用空格分隔 比如: 5 7 9-11)"
 
     while read -p "选择删除的频道(默认: 取消): " chnls_num
     do
@@ -12997,13 +14695,13 @@ ScheduleDel()
             *)
                 for chnl_num in "${chnls_num_arr[@]}"
                 do
-                    if [[ $chnl_num == *"-"* ]] 
+                    if [[ $chnl_num =~ - ]] 
                     then
                         start=${chnl_num%-*}
                         end=${chnl_num#*-}
-                        for((i=start;i<=end;i++));
+                        for((i=start-1;i<end;i++));
                         do
-                            chnl="${chnls[i-1]}"
+                            chnl="${chnls[i]}"
                             ScheduleDelChannel
                         done
                     else
@@ -13858,7 +15556,7 @@ Schedule()
         "hits:satellite:HBO 强档巨献 亚洲"
         "signature:satellite:HBO 原创巨献 亚洲"
         "family:satellite:HBO 温馨家庭 亚洲"
-        "hbored:satellite:HBO RED 亚洲"
+        "red:satellite:HBO RED 亚洲"
         "cinemax:satellite:CINEMAX 亚洲"
         "hbocn:cn:HBO 中国"
         "hbotw:tw:HBO 台湾"
@@ -14011,7 +15709,6 @@ Schedule()
         "ifundm3:litv-ftv12:i-Fun動漫台3"
         "babyfirst:litv-longturn02:Baby First"
         "momoqz:4gtv-4gtv107:MOMO親子台"
-        "boomerang:4gtv-live202:Boomerang"
         "cnkt:4gtv-live205:CN卡通"
         "dsgw1:4gtv-live047:東森購物一台"
         "dsxw:litv-ftv14:東森新聞台"
@@ -14114,6 +15811,8 @@ Schedule()
         "hitshd:4gtv-live620:HITS"
         "sbnqqcj:4gtv-4gtv060:sbn 全球财经台"
         "tvbshl:4gtv-4gtv068:TVBS 欢乐台"
+        "liveabc:4gtv-live030:LiveABC 互動英語頻道"
+        "arirang:4gtv-live202:阿里郎頻道"
     )
 
     other_chnls=(
@@ -14142,6 +15841,9 @@ Schedule()
     if [ "${2:-}" == "4gtv" ] 
     then
         provider_id="_4gtv"
+    elif [ "${2:-}" == "hbo" ] 
+    then
+        provider_id="hbozw"
     else
         provider_id=${2:-}
     fi
@@ -14152,20 +15854,20 @@ Schedule()
         var=("$provider_id"_chnls[@])
         if [[ -n ${!var:-} ]] 
         then
-            found=0
+            provider_found=0
             for chnl in "${!var}"
             do
                 chnl_id=${chnl%%@*}
                 chnl_id=${chnl_id%%:*}
                 if [ "$chnl_id" == "$3" ] 
                 then
-                    found=1
+                    provider_found=1
                     unset "$provider_id"_chnls
                     IFS= read -r -a "$provider_id"_chnls <<< "$chnl"
                     break
                 fi
             done
-            [ "$found" -eq 0 ] && Println "$error 没有找到频道\n" && exit 1
+            [ "$provider_found" -eq 0 ] && Println "$error 没有找到频道\n" && exit 1
         fi
     fi
 
@@ -14280,8 +15982,8 @@ Schedule()
             do
                 provider_id=${provider%%:*}
                 provider_name=${provider#*:}
-                found=0
                 provider_chnls=("$provider_id"_chnls[@])
+                schedule=""
                 for provider_chnl in "${!provider_chnls}"
                 do
                     if [ "$provider_id" == "ontvtonight" ] 
@@ -14294,7 +15996,6 @@ Schedule()
                     fi
                     if [ "$chnl_id" == "$2" ] 
                     then
-                        found=1
                         unset "${provider_id}_chnls"
                         IFS="|" read -r -a "${provider_id}_chnls" <<< "${provider_chnl}|"
                         if [ "$provider_id" == "other" ] 
@@ -14309,24 +16010,17 @@ Schedule()
                     fi
                 done
 
-                if [ "$found" -eq 0 ] || [ -z "${schedule:-}" ] 
+                if [ -z "${schedule:-}" ] 
                 then
-                    Println "$provider_name 没有找到: $2"
+                    Println "$error $provider_name 没有找到: $2"
                 else
+                    if [ -e "$IPTV_ROOT/vip.pid" ] 
+                    then
+                        printf '%s' "" > "$VIP_USERS_ROOT/epg.update"
+                    fi
                     break
                 fi
             done
-
-            if [ "$found" -eq 0 ] 
-            then
-                Println "$error no support yet ~"
-            elif [ -z "${schedule:-}" ] 
-            then
-                Println "$error $2 failed !"
-            elif [ -e "$IPTV_ROOT/vip.pid" ] 
-            then
-                printf '%s' "" > "$VIP_USERS_ROOT/epg.update"
-            fi
         ;;
     esac
 }
@@ -14914,7 +16608,7 @@ AntiDDoS()
             ips=()
             jail_time=()
 
-            if [[ $d_anti_ddos_port == *","* ]] || [[ $d_anti_ddos_port == *"-"* ]] 
+            if [[ $d_anti_ddos_port == *","* ]] || [[ $d_anti_ddos_port =~ - ]] 
             then
                 d_anti_ddos_port="$d_anti_ddos_port proto tcp"
             fi
@@ -16802,7 +18496,7 @@ MonitorSet()
                     declare -a new_array
                     for element in "${flv_nums_arr[@]}"
                     do
-                        if [[ $element == *"-"* ]] 
+                        if [[ $element =~ - ]] 
                         then
                             start=${element%-*}
                             end=${element#*-}
@@ -16927,7 +18621,7 @@ MonitorSet()
                 declare -a new_array
                 for element in "${hls_nums_arr[@]}"
                 do
-                    if [[ $element == *"-"* ]] 
+                    if [[ $element =~ - ]] 
                     then
                         start=${element%-*}
                         end=${element#*-}
@@ -17044,15 +18738,14 @@ Monitor()
                         do
                             if [ "$now" -ge "${flv_recheck_time[i]}" ] 
                             then
-                                found=0
                                 for flv_num in ${flv_nums_arr[@]+"${flv_nums_arr[@]}"}
                                 do
                                     if [ "$flv_num" == "${flv_failed[i]}" ] 
                                     then
-                                        found=1
+                                        continue 2
                                     fi
                                 done
-                                [ "$found" -eq 0 ] && flv_nums_arr+=("${flv_failed[i]}")
+                                flv_nums_arr+=("${flv_failed[i]}")
                             fi
                         done
                     fi
@@ -17063,15 +18756,14 @@ Monitor()
                         do
                             if [ "$now" -ge "${hls_recheck_time[i]}" ] 
                             then
-                                found=0
                                 for dir_name in ${monitor_dir_names_chosen[@]+"${monitor_dir_names_chosen[@]}"}
                                 do
                                     if [ "$dir_name" == "${hls_failed[i]}" ] 
                                     then
-                                        found=1
+                                        continue 2
                                     fi
                                 done
-                                [ "$found" -eq 0 ] && monitor_dir_names_chosen+=("${hls_failed[i]}")
+                                monitor_dir_names_chosen+=("${hls_failed[i]}")
                             fi
                         done
                     fi
@@ -17644,7 +19336,7 @@ MonitorStop()
         ips=()
         jail_time=()
         GetDefault
-        if [[ $d_anti_ddos_port == *","* ]] || [[ $d_anti_ddos_port == *"-"* ]] 
+        if [[ $d_anti_ddos_port == *","* ]] || [[ $d_anti_ddos_port =~ - ]] 
         then
             d_anti_ddos_port="$d_anti_ddos_port proto tcp"
         fi
@@ -17707,23 +19399,14 @@ MonitorError()
 
 GetXtreamCodesDomains()
 {
+    [ -n "${xtream_codes_domains:-}" ] && return 0
+
     if [ ! -s "$XTREAM_CODES" ] 
     then
         curl -s -L $XTREAM_CODES_LINK -o "$XTREAM_CODES"
     fi
 
-    xtream_codes_domains=()
-
-    while IFS= read -r line 
-    do
-        line=${line#* }
-        line=${line%% *}
-        IFS="|" read -ra xc_domains <<< "$line"
-        for xc_domain in "${xc_domains[@]}"
-        do
-            xtream_codes_domains+=("$xc_domain")
-        done
-    done < "$XTREAM_CODES"
+    IFS="," read -ra xtream_codes_domains <<< $(awk -v ORS=, '$1 { gsub(/\|/, ",", $2); print $2 }' "$XTREAM_CODES")
 }
 
 GetXtreamCodesChnls()
@@ -17732,69 +19415,42 @@ GetXtreamCodesChnls()
     xc_chnls_mac=()
     if [ -n "${xtream_codes_domains:-}" ] 
     then
-        while IFS= read -r line 
-        do
-            if [[ $line == *\"status\":* ]] 
-            then
-                line=${line#*: \"}
-                f_status=${line%\",*}
-            elif [[ $line == *\"stream_link\":* ]]
-            then
-                line=${line#*: \"}
-                line=${line%\",*}
-                line=${line%% *}
-                if [[ ${line##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+        GetChannelsInfo
+        if [ "$chnls_count" -gt 0 ] 
+        then
+            for((xc_i=0;xc_i<chnls_count;xc_i++));
+            do
+                if { [ "${chnls_status[xc_i]}" == "on" ] && [ "${chnls_output_dir_name[xc_i]}" != "${chnl_output_dir_name:-}" ]; } || { [ "${chnls_flv_status[xc_i]}" == "on" ] && [ "${chnls_flv_push_link[xc_i]}" != "${chnl_flv_push_link:-}" ]; } 
                 then
-                    f_mac=${line##*|}
-                    f_domain=${line%%|*}
-                elif [[ $line == http://*/*/*/* ]] 
-                then
-                    line=${line#*http://}
-                    f_domain=${line%%/*}
-                    line=${line#*/}
-                    f_username=${line%%/*}
-                    if [ "$f_username" == "live" ] 
+                    if [[ ${chnls_stream_link[xc_i]##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
                     then
-                        line=${line#*/}
-                        f_username=${line%%/*}
-                    fi
-                    line=${line#*/}
-                    f_password=${line%%/*}
-                fi
-            elif [[ $line == *\"output_dir_name\":* ]] 
-            then
-                line=${line#*: \"}
-                f_dir_name=${line%\",*}
-            elif [[ $line == *\"flv_status\":* ]] 
-            then
-                line=${line#*: \"}
-                f_flv_status=${line%\",*}
-            elif [[ $line == *\"flv_push_link\":* ]] 
-            then
-                line=${line#*: \"}
-                f_flv_push_link=${line%\",*}
-                if [ -n "${f_domain:-}" ] 
-                then
-                    for xc_domain in ${xtream_codes_domains[@]+"${xtream_codes_domains[@]}"}
-                    do
-                        if [ "$xc_domain" == "$f_domain" ] 
-                        then
-                            if { [ "$f_status" == "on" ] && [ "$f_dir_name" != "${chnl_output_dir_name:-}" ]; } || { [ "$f_flv_status" == "on" ] && [ "$f_flv_push_link" != "${chnl_flv_push_link:-}" ]; }
+                        f_domain=${chnls_stream_link%%|*}
+                        for xc_domain in "${xtream_codes_domains[@]}"
+                        do
+                            if [ "$f_domain" == "$xc_domain" ] 
                             then
-                                if [ -n "${f_mac:-}" ] 
-                                then
-                                    xc_chnls_mac+=("$f_domain/$f_mac")
-                                else
-                                    xc_chnls+=("$f_domain/$f_username:$f_password")
-                                fi
+                                xc_chnls_mac+=("${BASH_REMATCH[0]}")
+                                break
                             fi
+                        done
+                    elif [[ ${chnls_stream_link[xc_i]} =~ ^http://([^/]+)/([^/]+)/([^/]+)/ ]]
+                    then
+                        if [ "${BASH_REMATCH[2]}" != "live" ] || [[ ${chnls_stream_link[xc_i]} =~ ^http://([^/]+)/live/([^/]+)/([^/]+)/ ]]
+                        then
+                            f_domain=${BASH_REMATCH[1]}
+                            for xc_domain in "${xtream_codes_domains[@]}"
+                            do
+                                if [ "$f_domain" == "$xc_domain" ] 
+                                then
+                                    xc_chnls+=("$f_domain/${BASH_REMATCH[2]}:${BASH_REMATCH[3]}")
+                                    break
+                                fi
+                            done
                         fi
-                    done
+                    fi
                 fi
-                f_domain=""
-                f_mac=""
-            fi
-        done < "$CHANNELS_FILE"
+            done
+        fi
     fi
 }
 
@@ -17835,38 +19491,18 @@ AddXtreamCodesAccount()
     fi
 
     [ -z "${ip:-}" ] && Println "$error 无法解析域名 !\n" && exit 1
-    printf '%s\n' "$ip $domain $username:$password" >> "$XTREAM_CODES"
-
-    if [ -e "$CHANNELS_FILE" ] 
-    then
-        while IFS= read -r line 
-        do
-            if [[ $line == *\"stream_link\":* ]] && [[ $line == *http://*/*/*/* ]]
-            then
-                line=${line#*: \"http://}
-                chnl_domain=${line%%/*}
-                if [ "$chnl_domain" == "$domain" ] 
-                then
-                    line=${line#*/}
-                    username=${line%%/*}
-                    if [ "$username" == "live" ] 
-                    then
-                        line=${line#*/}
-                        username=${line%%/*}
-                    fi
-                    line=${line#*/}
-                    password=${line%%/*}
-                    printf '%s\n' "$ip $chnl_domain $username:$password" >> "$XTREAM_CODES"
-                fi
-            fi
-        done < "$CHANNELS_FILE"
-    fi
+    printf '%s\n' "$ip $domain $username:$password" >> "$XTREAM_CODES_EXAM"
 
     Println "$info 账号添加成功 !\n"
 }
 
 VerifyXtreamCodesMac()
 {
+    trap '
+        printf "%s" "" > "$XTREAM_CODES_EXAM"
+        exit
+    ' SIGINT
+
     if [ "${test_mac_domain:-}" != "$domain" ] 
     then
         Println "$info 验证 $domain ..."
@@ -17903,7 +19539,6 @@ VerifyXtreamCodesMac()
         done
     fi
 
-    mac_address=${BASH_REMATCH[1]}
     access_token=""
     profile=""
     mac=$(UrlencodeUpper "$mac_address")
@@ -17945,45 +19580,83 @@ VerifyXtreamCodesMac()
 ListXtreamCodes()
 {
     [ ! -s "$XTREAM_CODES" ] && Println "$error 没有账号 !\n" && exit 1
+
     ips=()
     new_domains=()
     new_accounts=()
-    while IFS= read -r line 
-    do
-        if [[ $line == *"username="* ]] 
-        then
-            domain=${line#*http://}
-            domain=${domain%%/*}
-            username=${line#*username=}
-            username=${username%%&*}
-            password=${line#*password=}
-            password=${password%%&*}
-            ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
-            [ -z "$ip" ] && continue
-            account="$username:$password"
-        elif [[ $line =~ http://([^/]+)/([^/]+)/([^/]+)/ ]] 
-        then
-            if [ "${BASH_REMATCH[2]}" == "live" ] 
+    verify=${verify:-0}
+
+    if [ "$verify" -eq 0 ] 
+    then
+        IFS=" " read -r m_ip m_domains m_accounts < <(awk '$1 {a=a $1",";b=b $2",";$1=$2="";c=c substr($0,3)","} END {print a,b,c}' "$XTREAM_CODES")
+        IFS="," read -r -a ips <<< "$m_ip"
+        IFS="," read -r -a new_domains <<< "$m_domains"
+        IFS="," read -r -a new_accounts <<< "$m_accounts"
+    fi
+
+    if [ -s "$XTREAM_CODES_EXAM" ] 
+    then
+        while IFS= read -r line 
+        do
+            if [[ $line =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3} ]] 
             then
-                if [[ $line =~ http://([^/]+)/live/([^/]+)/([^/]+)/ ]] 
+                if [[ $line =~ ([^ ]+)\ ([^ ]+)\ ([^ ]+) ]] 
                 then
-                    domain=${BASH_REMATCH[1]}
-                    username=${BASH_REMATCH[2]}
-                    password=${BASH_REMATCH[3]}
+                    if [ "$verify" -eq 1 ] 
+                    then
+                        ip=${BASH_REMATCH[1]}
+                        domain=${BASH_REMATCH[2]}
+                        mac_address=${BASH_REMATCH[3]}
+                        if [[ $mac_address =~ (([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})) ]] 
+                        then
+                            VerifyXtreamCodesMac 2> /dev/null
+                            if [ "$to_continue" -eq 1 ] 
+                            then
+                                continue
+                            fi
+                        else
+                            account=$mac_address
+                        fi
+                    else
+                        ip=${BASH_REMATCH[1]}
+                        domain=${BASH_REMATCH[2]}
+                        account=${BASH_REMATCH[3]}
+                    fi
                 else
                     continue
                 fi
-            else
-                domain=${BASH_REMATCH[1]}
-                username=${BASH_REMATCH[2]}
-                password=${BASH_REMATCH[3]}
-            fi
-            ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
-            [ -z "$ip" ] && continue
-            account="$username:$password"
-        elif [[ ! $line =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3} ]] 
-        then
-            if [[ $line =~ http://([^/]+)/ ]]
+            elif [[ $line == *"username="* ]] 
+            then
+                domain=${line#*http://}
+                domain=${domain%%/*}
+                username=${line#*username=}
+                username=${username%%&*}
+                password=${line#*password=}
+                password=${password%%&*}
+                ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
+                [ -z "$ip" ] && continue
+                account="$username:$password"
+            elif [[ $line =~ http://([^/]+)/([^/]+)/([^/]+)/ ]] 
+            then
+                if [ "${BASH_REMATCH[2]}" == "live" ] 
+                then
+                    if [[ $line =~ http://([^/]+)/live/([^/]+)/([^/]+)/ ]] 
+                    then
+                        domain=${BASH_REMATCH[1]}
+                        username=${BASH_REMATCH[2]}
+                        password=${BASH_REMATCH[3]}
+                    else
+                        continue
+                    fi
+                else
+                    domain=${BASH_REMATCH[1]}
+                    username=${BASH_REMATCH[2]}
+                    password=${BASH_REMATCH[3]}
+                fi
+                ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
+                [ -z "$ip" ] && continue
+                account="$username:$password"
+            elif [[ $line =~ http://([^/]+)/ ]] 
             then
                 stb_domain=${BASH_REMATCH[1]}
 
@@ -17991,11 +19664,17 @@ ListXtreamCodes()
                 then
                     continue
                 fi
-            fi
 
-            if [ -n "${stb_domain:-}" ] && [[ $line =~ (([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})) ]]
+                mac_address=${BASH_REMATCH[1]}
+                VerifyXtreamCodesMac 2> /dev/null
+                if [ "$to_continue" -eq 1 ] 
+                then
+                    continue
+                fi
+            elif [ -n "${stb_domain:-}" ] && [[ $line =~ (([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})) ]] 
             then
                 domain=$stb_domain
+                mac_address=${BASH_REMATCH[1]}
                 VerifyXtreamCodesMac 2> /dev/null
                 if [ "$to_continue" -eq 1 ] 
                 then
@@ -18004,135 +19683,50 @@ ListXtreamCodes()
             else
                 continue
             fi
-        elif [ "${test_mac:-0}" -eq 1 ] && [[ $line =~ (([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})) ]] 
-        then
-            domain=${line#* }
-            domain=${domain%% *}
-            VerifyXtreamCodesMac 2> /dev/null
-            if [ "$to_continue" -eq 1 ] 
-            then
-                continue
-            fi
-        else
-            ip=${line%% *}
-            tmp_line=${line#* }
-            domain_line=${tmp_line%% *}
-            account_line=${tmp_line#* }
-            IFS="|" read -ra domains <<< "$domain_line"
-            IFS=" " read -ra accounts <<< "$account_line"
 
-            found=0
             for((i=0;i<${#ips[@]};i++));
             do
-                IFS='|' read -ra ips_index_arr <<< "${ips[i]}"
-                for ips_index_ip in "${ips_index_arr[@]}"
-                do
-                    if [ "$ips_index_ip" == "$ip" ] 
-                    then
-                        found=1
-                        for domain in "${domains[@]}"
-                        do
-                            if [[ ${new_domains[i]} != *"$domain"* ]] 
-                            then
-                                new_domains[i]="${new_domains[i]}|$domain"
-                            fi
-                        done
-
-                        for account in "${accounts[@]}"
-                        do
-                            if [[ ${new_accounts[i]} != *"$account"* ]] 
-                            then
-                                new_accounts[i]="${new_accounts[i]} $account"
-                            fi
-                        done
-                        break
-                    fi
-                done
-
-                if [ "$found" -eq 0 ] 
+                if [[ ${ips[i]} == *"$ip"* ]] 
                 then
-                    for domain in "${domains[@]}"
-                    do
-                        if [[ ${new_domains[i]} == *"$domain"* ]] 
-                        then
-                            found=1
-                            ips[i]="${ips[i]}|$ip"
+                    if ! [[ ${new_domains[i]} == *"$domain"* ]] 
+                    then
+                        new_domains[i]="${new_domains[i]}|$domain"
+                    fi
 
-                            for account in "${accounts[@]}"
-                            do
-                                if [[ ${new_accounts[i]} != *"$account"* ]] 
-                                then
-                                    new_accounts[i]="${new_accounts[i]} $account"
-                                fi
-                            done
-                            break
-                        fi
-                    done
+                    if ! [[ ${new_accounts[i]} == *"$account"* ]] 
+                    then
+                        new_accounts[i]="${new_accounts[i]} $account"
+                    fi
+                    continue 2
                 fi
             done
 
-            if [ "$found" -eq 0 ] 
-            then
-                ips+=("$ip")
-                new_domains+=("$domain_line")
-                new_accounts+=("$account_line")
-            fi
-            continue
-        fi
-
-        found=0
-        for((i=0;i<${#ips[@]};i++));
-        do
-            if [ "${ips[i]}" == "$ip" ] 
-            then
-                found=1
-                if [[ ${new_domains[i]} != *"$domain"* ]] 
-                then
-                    new_domains[i]="${new_domains[i]}|$domain"
-                fi
-
-                if [[ ${new_accounts[i]} != *"$account"* ]] 
-                then
-                    new_accounts[i]="${new_accounts[i]} $account"
-                fi
-                break
-            fi
-        done
-
-        if [ "$found" -eq 0 ] 
-        then
             for((i=0;i<${#new_domains[@]};i++));
             do
                 if [[ ${new_domains[i]} == *"$domain"* ]] 
                 then
-                    found=1
-
-                    if [[ ${ips[i]} != *"$ip"* ]] 
+                    if ! [[ ${ips[i]} == *"$ip"* ]] 
                     then
                         ips[i]="${ips[i]}|$ip"
                     fi
 
-                    if [[ ${new_accounts[i]} != *"$account"* ]] 
+                    if ! [[ ${new_accounts[i]} == *"$account"* ]] 
                     then
                         new_accounts[i]="${new_accounts[i]} $account"
                     fi
-                    break
+                    continue 2
                 fi
             done
-        fi
 
-        if [ "$found" -eq 0 ] 
-        then
             ips+=("$ip")
             new_domains+=("$domain")
             new_accounts+=("$account")
-        fi
-    done < <(awk '{gsub(/<[^>]*>/,""); print }' "$XTREAM_CODES")
+        done < <(awk '$1=$1' "$XTREAM_CODES_EXAM")
+    fi
 
-    ips_count=${#ips[@]}
-
-    if [ "$ips_count" -gt 0 ] 
+    if [ -n "${ips:-}" ] 
     then
+        ips_count=${#ips[@]}
         print_list=""
         xtream_codes_list=""
         ips_acc_count=0
@@ -18177,7 +19771,12 @@ ListXtreamCodes()
             fi
         done
 
-        printf '%b' "$print_list" > "$XTREAM_CODES"
+        if [ -s "$XTREAM_CODES_EXAM" ] 
+        then
+            printf '%b' "$print_list" > "$XTREAM_CODES"
+            printf '%s' "" > "$XTREAM_CODES_EXAM"
+        fi
+
         if [ "${1:-}" == "mac" ] && [ "$ips_mac_count" -eq 0 ]
         then
             Println "$error 请先添加 mac 地址！\n" && exit 1
@@ -18339,11 +19938,13 @@ TestXtreamCodes()
 
     chnls=()
 
-    Println "输入 ffmpeg 代理, 比如 http://username:passsword@127.0.0.1:5555"
-    read -p "(默认: 不设置): " proxy
+    Println "比如 http://username:passsword@127.0.0.1:5555"
+    inquirer text_input "输入 ffmpeg 代理: " proxy "不设置"
 
-    if [ -n "$proxy" ] 
+    if [ "$proxy" == "不设置" ] 
     then
+        proxy_command=""
+    else
         proxy_command="-http_proxy $proxy"
         Println "代理服务器如果有正在使用的账号需要排除, 输入代理服务器的 channels.json 链接或本地路径"
         read -p "(默认: 无): " proxy_channels_json
@@ -18389,45 +19990,27 @@ TestXtreamCodes()
                 fi
             done <<< "$proxy_channels"
         fi
-    else
-        proxy_command=""
     fi
 
     if [ -e "$CHANNELS_FILE" ] 
     then
-        while IFS= read -r line 
-        do
-            if [[ $line == *\"status\":* ]] 
-            then
-                line=${line#*: \"}
-                status=${line%\",*}
-            elif [[ $line == *\"stream_link\":* ]] && [[ $line == *http://*/*/*/* ]]
-            then
-                line=${line#*: \"http://}
-                chnl_domain=${line%%/*}
-                line=${line#*/}
-                chnl_username=${line%%/*}
-                if [ "$chnl_username" == "live" ] 
+        GetChannelsInfo
+        if [ "$chnls_count" -gt 0 ] 
+        then
+            for((xc_i=0;xc_i<chnls_count;xc_i++));
+            do
+                if [ "${chnls_status[xc_i]}" == "on" ] || [ "${chnls_flv_status[xc_i]}" == "on" ]
                 then
-                    line=${line#*/}
-                    chnl_username=${line%%/*}
-                fi
-                line=${line#*/}
-                chnl_password=${line%%/*}
-            elif [[ $line == *\"flv_status\":* ]] 
-            then
-                line=${line#*: \"}
-                flv_status=${line%\",*}
-                if [ -n "${chnl_domain:-}" ] 
-                then
-                    if [ "$status" == "on" ] || [ "$flv_status" == "on" ]
+                    if [[ ${chnls_stream_link[xc_i]} =~ ^http://([^/]+)/([^/]+)/([^/]+)/ ]]
                     then
-                        chnls+=("$chnl_domain/$chnl_username/$chnl_password")
+                        if [ "${BASH_REMATCH[2]}" != "live" ] || [[ ${chnls_stream_link[xc_i]} =~ ^http://([^/]+)/live/([^/]+)/([^/]+)/ ]]
+                        then
+                            chnls+=("${BASH_REMATCH[1]}/${BASH_REMATCH[2]}:${BASH_REMATCH[3]}")
+                        fi
                     fi
                 fi
-                chnl_domain=""
-            fi
-        done < "$CHANNELS_FILE"
+            done
+        fi
     fi
 
     IFS="|" read -ra domains <<< "${new_domains[ips_index]}"
@@ -18448,38 +20031,29 @@ TestXtreamCodes()
         account=${account#*:}
         password=${account%%:*}
 
-        found=0
         for domain in "${domains[@]}"
         do
             for chnl in ${chnls[@]+"${chnls[@]}"}
             do
                 if [ "$domain/$username/$password" == "$chnl" ] 
                 then
-                    found=1
-                    break 2
+                    # https://f-hauri.ch/vrac/diffU8test.sh
+                    printf "$green%s${normal}\r\033[12C%-21s%-21s\n" "[使用中]" "$username" "$password"
+                    continue 2
                 fi
             done
-        done
 
-        # https://f-hauri.ch/vrac/diffU8test.sh
-        if [ "$found" -eq 1 ] 
-        then
-            printf "$green%s${normal}\r\033[12C%-21s%-21s\n" "[使用中]" "$username" "$password"
-        else
-            for domain in "${domains[@]}"
-            do
-                # curl --output /dev/null -m 3 -s --fail -r 0-0
-                if $FFPROBE $proxy_command -i "http://$domain/$username/$password/$channel_id" -rw_timeout 5000000 -show_streams -select_streams a -loglevel quiet > /dev/null
-                then
-                    printf "$green%s${normal}\r\033[12C%-21s%-21s$green%s${normal}\n%s\n\n" "[成功]" "$username" "$password" "$domain" "http://$domain/$username/$password/$channel_id"
-                elif $FFPROBE $proxy_command -i "http://$domain/live/$username/$password/$channel_id.ts" -rw_timeout 5000000 -show_streams -select_streams a -loglevel quiet > /dev/null 
-                then
-                    printf "$green%s${normal}\r\033[12C%-21s%-21s$green%s${normal}\n%s\n\n" "[成功]" "$username" "$password" "$domain" "http://$domain/live/$username/$password/$channel_id.ts"
-                else
-                    printf "$red%s${normal}\r\033[12C%-21s%-21s$red%s${normal}\n%s" "[失败]" "$username" "$password" "$domain"
-                fi
-            done
-        fi
+            # curl --output /dev/null -m 3 -s --fail -r 0-0
+            if $FFPROBE $proxy_command -i "http://$domain/$username/$password/$channel_id" -rw_timeout 5000000 -show_streams -select_streams a -loglevel quiet > /dev/null
+            then
+                printf "$green%s${normal}\r\033[12C%-21s%-21s$green%s${normal}\n%s\n\n" "[成功]" "$username" "$password" "$domain" "http://$domain/$username/$password/$channel_id"
+            elif $FFPROBE $proxy_command -i "http://$domain/live/$username/$password/$channel_id.ts" -rw_timeout 5000000 -show_streams -select_streams a -loglevel quiet > /dev/null 
+            then
+                printf "$green%s${normal}\r\033[12C%-21s%-21s$green%s${normal}\n%s\n\n" "[成功]" "$username" "$password" "$domain" "http://$domain/live/$username/$password/$channel_id.ts"
+            else
+                printf "$red%s${normal}\r\033[12C%-21s%-21s$red%s${normal}\n%s" "[失败]" "$username" "$password" "$domain"
+            fi
+        done
     done
     echo
 }
@@ -18680,7 +20254,7 @@ ViewXtreamCodesChnls()
             while read -p "(默认: 回到上级): " domains_num
             do
                 case $domains_num in
-                    "") continue 2
+                    ""|a) continue 2
                     ;;
                     *[!0-9]*) Println "$error 请输入正确的数字\n"
                     ;;
@@ -18735,7 +20309,7 @@ ViewXtreamCodesChnls()
             while read -p "(默认: 回到上级): " macs_num
             do
                 case $macs_num in
-                    "") continue 2
+                    ""|a) continue 2
                     ;;
                     *[!0-9]*) Println "$error 请输入正确的数字\n"
                     ;;
@@ -19426,18 +21000,22 @@ AddXtreamCodesMac()
         fi
 
         add_mac_success=1
-        printf '%s\n' "$ip $domain $mac_address" >> "$XTREAM_CODES"
+        printf '%s\n' "$ip $domain $mac_address" >> "$XTREAM_CODES_EXAM"
     done
 }
 
 DomainInstallCert()
 {
-    if [ -e "/usr/local/nginx/conf/sites_crt/$server_domain.crt" ] && [ -d "/usr/local/openresty/nginx/conf/sites_crt" ] && [ ! -e "/usr/local/openresty/nginx/conf/sites_crt/$server_domain.crt" ]
+    if [ -e "/usr/local/nginx/conf/sites_crt/$server_domain.crt" ] && [ -d /usr/local/openresty/nginx/conf ] && [ ! -e "/usr/local/openresty/nginx/conf/sites_crt/$server_domain.crt" ]
     then
+        mkdir -p /usr/local/openresty/nginx/conf/sites_crt
         ln "/usr/local/nginx/conf/sites_crt/$server_domain.crt" "/usr/local/openresty/nginx/conf/sites_crt/$server_domain.crt"
-    elif [ -e "/usr/local/openresty/nginx/conf/sites_crt/$server_domain.crt" ] && [ -d "/usr/local/nginx/conf/sites_crt" ] && [ ! -e "/usr/local/nginx/conf/sites_crt/$server_domain.crt" ] 
+        ln "/usr/local/nginx/conf/sites_crt/$server_domain.key" "/usr/local/openresty/nginx/conf/sites_crt/$server_domain.key"
+    elif [ -e "/usr/local/openresty/nginx/conf/sites_crt/$server_domain.crt" ] && [ -d /usr/local/nginx/conf ] && [ ! -e "/usr/local/nginx/conf/sites_crt/$server_domain.crt" ] 
     then
+        mkdir -p /usr/local/nginx/conf/sites_crt
         ln "/usr/local/openresty/nginx/conf/sites_crt/$server_domain.crt" "/usr/local/nginx/conf/sites_crt/$server_domain.crt"
+        ln "/usr/local/openresty/nginx/conf/sites_crt/$server_domain.key" "/usr/local/nginx/conf/sites_crt/$server_domain.key"
     fi
     if [ -e "$nginx_prefix/conf/sites_crt/$server_domain.crt" ] && [ -e "$nginx_prefix/conf/sites_crt/$server_domain.key" ]
     then
@@ -19617,7 +21195,13 @@ InstallOpenresty()
 
     echo -n "...60%..."
 
-    cd "$openresty_name/"
+    cd "$openresty_name/bundle/ngx_lua-"*
+
+    curl -s -L "$FFMPEG_MIRROR_LINK/fix_ngx_lua_resp_get_headers_key_whitespace.patch" -o "fix_ngx_lua_resp_get_headers_key_whitespace.patch"
+    patch -p1 < fix_ngx_lua_resp_get_headers_key_whitespace.patch >/dev/null 2>&1
+
+    cd ../..
+
     ./configure --add-module=../nginx-http-flv-module-master \
         --with-pcre=../pcre-8.44 --with-pcre-jit \
         --with-zlib=../zlib-1.2.11 --with-openssl=../openssl-1.1.1f-patched \
@@ -19633,13 +21217,28 @@ InstallOpenresty()
 
     echo -n "...80%..."
 
-    nproc="-j$(nproc 2> /dev/null)" || nproc=""
+    nproc="-j$(nproc 2> /dev/null)" || nproc="-j1"
     make $nproc >/dev/null 2>&1
     make install >/dev/null 2>&1
 
     kill $progress_pid
     trap - EXIT
     echo -n "...100%" && echo
+
+    if ! grep -q "$nginx_name:" < "/etc/passwd"
+    then
+        if grep -q '\--group ' < <(adduser --help)
+        then
+            adduser "$nginx_name" --system --group --no-create-home > /dev/null
+        else
+            adduser "$nginx_name" --system --no-create-home > /dev/null
+        fi
+        usermod -s /usr/sbin/nologin "$nginx_name"
+    fi
+
+    sed -i "s/#user  nobody;/user $nginx_name $nginx_name;/" "$nginx_prefix/conf/nginx.conf"
+    sed -i "s/worker_processes .*/worker_processes  ${nproc:2};/" "$nginx_prefix/conf/nginx.conf"
+    sed -i "s/worker_connections  1024;/worker_connections  51200;/" "$nginx_prefix/conf/nginx.conf"
 }
 
 InstallNginx()
@@ -19733,7 +21332,7 @@ InstallNginx()
 
     echo -n "...80%..."
 
-    nproc="-j$(nproc 2> /dev/null)" || nproc=""
+    nproc="-j$(nproc 2> /dev/null)" || nproc="-j1"
     make $nproc >/dev/null 2>&1
     make install >/dev/null 2>&1
 
@@ -19741,6 +21340,21 @@ InstallNginx()
     trap - EXIT
     ln -sf /usr/local/nginx/sbin/nginx /usr/local/bin/
     echo -n "...100%" && echo
+
+    if ! grep -q "$nginx_name:" < "/etc/passwd"
+    then
+        if grep -q '\--group ' < <(adduser --help)
+        then
+            adduser "$nginx_name" --system --group --no-create-home > /dev/null
+        else
+            adduser "$nginx_name" --system --no-create-home > /dev/null
+        fi
+        usermod -s /usr/sbin/nologin "$nginx_name"
+    fi
+
+    sed -i "s/#user  nobody;/user $nginx_name $nginx_name;/" "$nginx_prefix/conf/nginx.conf"
+    sed -i "s/worker_processes .*/worker_processes  ${nproc:2};/" "$nginx_prefix/conf/nginx.conf"
+    sed -i "s/worker_connections  1024;/worker_connections  51200;/" "$nginx_prefix/conf/nginx.conf"
 }
 
 UninstallNginx()
@@ -19799,7 +21413,7 @@ NginxViewStatus()
     then
         Println "$error $nginx_name 未安装 !\n"
     else
-        systemctl status nginx.service
+        systemctl status $nginx_name.service
     fi
 }
 
@@ -20290,7 +21904,7 @@ NginxConfigCorsHost()
         fi
         usermod -s /usr/sbin/nologin "$nginx_name"
     fi
-    sed -i "s/#user  nobody/user $nginx_name $nginx_name/" "$nginx_prefix/conf/nginx.conf"
+    sed -i "s/#user  nobody;/user $nginx_name $nginx_name;/" "$nginx_prefix/conf/nginx.conf"
 }
 
 NginxConfigSsl()
@@ -21530,9 +23144,8 @@ NginxAddDomain()
     NginxListDomains
     NginxConfigSsl
 
-    Println "输入指向本机的IP或域名"
-    echo -e "$tip 多个域名用空格分隔\n"
-    read -p "(默认: 取消): " domains
+    Println "$tip 多个域名用空格分隔"
+    read -p "输入指向本机的IP或域名: " domains
 
     if [ -n "$domains" ] 
     then
@@ -22128,29 +23741,15 @@ GetFreeTag()
 
 V2rayInstall()
 {
-    if [ -e "$V2_CONFIG" ] 
+    if [ -s "$V2_CONFIG" ] 
     then
-        while IFS= read -r line 
-        do
-            if [[ $line == *"port"* ]] 
-            then
-                port=${line#*: }
-                port=${port%,*}
-            elif [[ $line == *"id"* ]] 
-            then
-                id=${line#*: \"}
-                id=${id%\"*}
-            elif [[ $line == *"path"* ]] 
-            then
-                path=${line#*: \"}
-                path=${path%\"*}
-                break
-            fi
-        done < "$V2_CONFIG"
-
-        if [ -n "${path:-}" ] 
+        Println "$error $v2ray_name 已存在...\n"
+        yn_options=( '否' '是' )
+        inquirer list_input "是否覆盖原安装" yn_options yn_option
+        if [ "$yn_option" == "否" ] 
         then
-            Println "$error $v2ray_name 已安装...\n" && exit 1
+            Println "已取消...\n"
+            exit 1
         fi
     fi
 
@@ -22179,14 +23778,6 @@ V2rayInstall()
         | sed "s+ 'sha512'++g" \
         | sed "s+https://api.github.com/repos/v2fly/v2ray-core/releases/latest+$FFMPEG_MIRROR_LINK/$v2ray_name.json+g" \
         | sed "s+https://github.com/v2fly/v2ray-core/releases/download+$FFMPEG_MIRROR_LINK/$v2ray_name+g" | bash
-
-        sed -i "s+nobody+$v2ray_name+g" "/etc/systemd/system/$v2ray_name.service"
-        sed -i "s+nobody+$v2ray_name+g" "/etc/systemd/system/$v2ray_name@.service"
-
-        mkdir -p /var/log/$v2ray_name/
-        [ ! -e "/var/log/$v2ray_name/error.log" ] && printf '%s' "" > /var/log/$v2ray_name/error.log
-        chown -R $v2ray_name:$v2ray_name /var/log/$v2ray_name/
-        chown -R $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/
     else
         { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_BACKUP"; } \
         | sed "s+nobody+$v2ray_name+g" \
@@ -22197,7 +23788,15 @@ V2rayInstall()
         | sed "s+https://github.com/XTLS/Xray-core/releases/download+$FFMPEG_MIRROR_LINK/$v2ray_name+g" | bash
     fi
 
-    V2rayConfigInstall
+    sed -i "s+nobody+$v2ray_name+g" "/etc/systemd/system/$v2ray_name.service"
+    sed -i "s+nobody+$v2ray_name+g" "/etc/systemd/system/$v2ray_name@.service"
+
+    mkdir -p /var/log/$v2ray_name/
+    [ ! -e "/var/log/$v2ray_name/error.log" ] && printf '%s' "" > /var/log/$v2ray_name/error.log
+    chown -R $v2ray_name:$v2ray_name /var/log/$v2ray_name/
+    chown -R $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/
+
+    V2rayConfigUpdate
 
     systemctl daemon-reload
     systemctl enable $v2ray_name
@@ -22233,12 +23832,6 @@ V2rayUpdate()
         | sed "s+ 'sha512'++g" \
         | sed "s+https://api.github.com/repos/v2fly/v2ray-core/releases/latest+$FFMPEG_MIRROR_LINK/$v2ray_name.json+g" \
         | sed "s+https://github.com/v2fly/v2ray-core/releases/download+$FFMPEG_MIRROR_LINK/$v2ray_name+g" | bash
-
-        sed -i "s+nobody+$v2ray_name+g" "/etc/systemd/system/$v2ray_name.service"
-        sed -i "s+nobody+$v2ray_name+g" "/etc/systemd/system/$v2ray_name@.service"
-
-        systemctl daemon-reload
-        chown -R $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/
     else
         { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_BACKUP"; } \
         | sed "s+nobody+$v2ray_name+g" \
@@ -22248,6 +23841,18 @@ V2rayUpdate()
         | sed "s+https://api.github.com/repos/XTLS/Xray-core/releases/latest+$FFMPEG_MIRROR_LINK/$v2ray_name.json+g" \
         | sed "s+https://github.com/XTLS/Xray-core/releases/download+$FFMPEG_MIRROR_LINK/$v2ray_name+g" | bash
     fi
+
+    sed -i "s+nobody+$v2ray_name+g" "/etc/systemd/system/$v2ray_name.service"
+    sed -i "s+nobody+$v2ray_name+g" "/etc/systemd/system/$v2ray_name@.service"
+
+    systemctl daemon-reload
+
+    mkdir -p /var/log/$v2ray_name/
+    [ ! -e "/var/log/$v2ray_name/error.log" ] && printf '%s' "" > /var/log/$v2ray_name/error.log
+    chown -R $v2ray_name:$v2ray_name /var/log/$v2ray_name/
+    chown -R $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/
+
+    systemctl restart $v2ray_name
 
     Println "$info $v2ray_name 升级完成\n"
 }
@@ -28031,9 +29636,9 @@ AddCloudflareHost()
 SetCloudflareUserEmail()
 {
     Println "请输入用户邮箱"
-    while read -p "(默认: 随机): " cf_user_email 
+    while read -p "(默认: 取消): " cf_user_email 
     do
-        [ -z "$cf_user_email" ] && cf_user_email="$(RandStr)_$(printf '%(%s)T' -1)@gmail.com"
+        [ -z "$cf_user_email" ] && Println "已取消...\n" && exit 1
         if [[ $cf_user_email =~ ^[A-Za-z0-9]([a-zA-Z0-9_\.\-]*)@([A-Za-z0-9]+)([a-zA-Z0-9\.\-]*)\.([A-Za-z]{2,})$ ]] 
         then
             break
@@ -28062,10 +29667,12 @@ SetCloudflareUserPass()
 
 SetCloudflareUserToken()
 {
-    Println "请输入用户 Token"
-    read -p "(默认: 不设置): " cf_user_token
-    if [ -n "$cf_user_token" ] 
+    Println "$tip 需要 workers 和 zone(区域) 编辑权限, 以及 zone(区域) 的 Analytics 读取权限"
+    inquirer text_input "请输入用户 Token: " cf_user_token "不设置"
+    if [ "$cf_user_token" == "不设置" ] 
     then
+        cf_user_token=""
+    else
         if [[ $(curl -s -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
             -H "Authorization: Bearer $cf_user_token" \
             -H "Content-Type:application/json" | $JQ_FILE -r '.success') == "false" ]]
@@ -28074,48 +29681,16 @@ SetCloudflareUserToken()
             exit 1
         fi
     fi
-    Println "  用户 Token: $green ${cf_user_token:-不设置} ${normal}\n"
 }
 
 SetCloudflareUserKey()
 {
-    Println "请输入用户 Global API KEY"
-    echo -e "$tip 一般不需要设置\n"
-    read -p "(默认: 不设置): " cf_user_key
-    Println "  用户 Key: $green ${cf_user_key:-不设置} ${normal}\n"
-}
-
-AddCloudflareUser()
-{
-    SetCloudflareUserEmail
-    SetCloudflareUserPass
-    SetCloudflareUserToken
-    SetCloudflareUserKey
-
-    if [ ! -s "$CF_CONFIG" ] 
+    echo
+    inquirer text_input "请输入用户 Global API KEY: " cf_user_api_key "不设置"
+    if [ "$cf_user_api_key" == "不设置" ] 
     then
-        printf '{"%s":[],"%s":[]}' "users" "hosts" > "$CF_CONFIG"
+        cf_user_api_key=""
     fi
-
-    new_user=$(
-    $JQ_FILE -n --arg email "$cf_user_email" --arg pass "$cf_user_pass" \
-        --arg token "$cf_user_token" --arg key "$cf_user_key" \
-        '{
-            email: $email,
-            pass: $pass,
-            token: $token,
-            key: $key
-        }'
-    )
-
-    jq_path='["users"]'
-    JQ add "$CF_CONFIG" "$new_user"
-    Println "$info 用户添加成功\n"
-}
-
-ViewCloudflareUser()
-{
-    ListCloudflareUsers
 }
 
 GetCloudflareHosts()
@@ -28178,7 +29753,7 @@ ViewCloudflareHost()
 
 SetCloudflareZoneResolve()
 {
-    Println "请输入子域名经 cloudflare 中转后默认解析到的地址, 比如 resolve-to-cloudflare.example.com"
+    Println "请输入 CNAME 经 cloudflare 中转后默认解析到的地址, 比如 resolve-to-cloudflare.example.com"
     echo -e "$tip 此地址应指向源站\n"
     read -p "(默认: 取消): " cf_zone_resolve_to
     [ -z "$cf_zone_resolve_to" ] && Println "已取消...\n" && exit 1
@@ -28258,7 +29833,7 @@ GetCloudflareUsers()
     cf_users_email=()
     cf_users_pass=()
     cf_users_token=()
-    cf_users_key=()
+    cf_users_api_key=()
     while IFS="^" read -r email pass token key
     do
         cf_users_count=$((cf_users_count+1))
@@ -28267,7 +29842,7 @@ GetCloudflareUsers()
         cf_users_pass+=("$pass")
         cf_users_token+=("$token")
         key=${key%\"}
-        cf_users_key+=("$key")
+        cf_users_api_key+=("$key")
 
         cf_users_list="$cf_users_list $green$cf_users_count.${normal}\r\033[6C邮箱: $green$email${normal}  密码: $green$pass${normal}\n\033[6CToken: $green${token:-无}${normal}\n\033[6CKey: $green${key:-无}${normal}\n\n"
     done < <($JQ_FILE '.users[]|[.email,.pass,.token,.key]|join("^")' "$CF_CONFIG")
@@ -28289,6 +29864,135 @@ ListCloudflareUsers()
     else
         Println "$error 没有用户\n"
     fi
+}
+
+AddCloudflareUser()
+{
+    SetCloudflareUserEmail
+    SetCloudflareUserPass
+    SetCloudflareUserToken
+    SetCloudflareUserKey
+
+    if [ ! -s "$CF_CONFIG" ] 
+    then
+        printf '{"%s":[],"%s":[]}' "users" "hosts" > "$CF_CONFIG"
+    fi
+
+    new_user=$(
+    $JQ_FILE -n --arg email "$cf_user_email" --arg pass "$cf_user_pass" \
+        --arg token "$cf_user_token" --arg key "$cf_user_api_key" \
+        '{
+            email: $email,
+            pass: $pass,
+            token: $token,
+            key: $key
+        }'
+    )
+
+    jq_path='["users"]'
+    JQ add "$CF_CONFIG" "$new_user"
+    Println "$info 用户添加成功\n"
+}
+
+ViewCloudflareUser()
+{
+    ListCloudflareUsers
+
+    echo -e "选择用户"
+    while read -p "(默认: 取消): " cf_users_num
+    do
+        case "$cf_users_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
+                then
+                    cf_users_index=$((cf_users_num-1))
+                    cf_user_email=${cf_users_email[cf_users_index]}
+                    cf_user_pass=${cf_users_pass[cf_users_index]}
+                    cf_user_token=${cf_users_token[cf_users_index]}
+                    cf_user_api_key=${cf_users_api_key[cf_users_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    if [ -n "$cf_user_api_key" ] 
+    then
+        curl_header_auth_email="X-Auth-Email: $cf_user_email"
+        curl_header_auth_key="X-Auth-Key: $cf_user_api_key"
+        curl_header_auth_token=""
+    else
+        curl_header_auth_email=""
+        curl_header_auth_key=""
+        curl_header_auth_token="Authorization: Bearer $cf_user_token"
+    fi
+
+    IFS=$'`\t' read -r success error_message CF_ACCOUNT_ID < <(
+    JQs flat "$(curl -s -X GET -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
+    -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/accounts)" '^' '|' '^' \
+    '[.success + "`",(.errors|if . == "" then {} else . end).message + "`",(.result|if . == "" then {} else . end).id + "`"]|@tsv')
+
+    if [ "$success" == "false" ] 
+    then
+        Println "$error 获取账号 ID 失败: ${error_message//^/, }\n"
+        exit 1
+    fi
+
+    end_epoch=$(date --utc -d 'tomorrow 00:00:00' +%s)
+    start_epoch=$(date --utc -d 'today 00:00:00' +%s)
+    start_date=$(date --utc --date="@$start_epoch" +'%Y-%m-%dT%H:%m:%SZ')
+    end_date=$(date --utc --date="@$end_epoch" +'%Y-%m-%dT%H:%m:%SZ')
+
+    PAYLOAD='{ "query":
+    "query {
+        viewer {
+        accounts(filter: { accountTag: $accountTag }) {
+        workersInvocationsAdaptive(
+            filter: {
+            datetime_geq: $datetimeStart,
+            datetime_leq: $datetimeEnd
+            }
+            limit: 100
+        ) {
+            sum {
+                requests
+                subrequests
+                errors
+            }
+            }
+        }
+        }
+    }",'
+
+    PAYLOAD="$PAYLOAD
+
+    \"variables\": {
+        \"accountTag\": \"$CF_ACCOUNT_ID\",
+        \"datetimeStart\": \"$start_date\",
+        \"datetimeEnd\": \"$end_date\"
+    }
+    }"
+
+    IFS=$'`\t' read -r cf_workers_requests error_message < <(
+    JQs flat "$(curl -s -X POST -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
+    --data "$(echo $PAYLOAD)" -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/graphql)" '^' '|' '^' \
+    '[((.data|if . == "" then {} else . end).viewer.accounts.workersInvocationsAdaptive|if . == "" then {} else . end).sum.requests + "`",(.errors|if . == "" then {} else . end).message + "`"]|@tsv')
+
+    if [ -z "$cf_workers_requests" ] 
+    then
+        Println "$error 获取 workers 访问数失败: ${error_message//^/, }\n"
+        exit 1
+    fi
+
+    Println "$info workers 访问总数: $cf_workers_requests\n"
 }
 
 AddCloudflareZone()
@@ -28625,149 +30329,157 @@ MoveCloudflareZone()
         esac
     done
 
-    found=0
     for cf_host_zone_name in "${cf_host_zones_name[@]}"
     do
         if [ "$cf_host_zone_name" == "$cf_zone_name" ] 
         then
-            found=1
-            break
+            Println "$error 域名已经存在\n"
+            return 0
         fi
     done
 
-    if [ "$found" -eq 1 ] 
-    then
-        Println "$error 域名已经存在\n"
-    else
-        GetCloudflareUsers
+    GetCloudflareUsers
 
-        Println "$cf_users_list"
+    Println "$cf_users_list"
 
-        echo -e "选择移动到的用户"
-        while read -p "(默认: 取消): " cf_users_num
-        do
-            case "$cf_users_num" in
-                "")
-                    Println "已取消...\n" && exit 1
-                ;;
-                *[!0-9]*)
-                    Println "$error 请输入正确的序号\n"
-                ;;
-                *)
-                    if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
-                    then
-                        cf_users_index=$((cf_users_num-1))
-                        cf_user_email=${cf_users_email[cf_users_index]}
-                        cf_user_pass=${cf_users_pass[cf_users_index]}
-                        break
-                    else
-                        Println "$error 请输入正确的序号\n"
-                    fi
-                ;;
-            esac
-        done
-
-        Println "$info 移动中 ..."
-        cf_user_key=""
-        until [ -n "$cf_user_key" ] 
-        do
-            random_number=$(od -An -N6 -t u8 < /dev/urandom)
-            cf_user_unique_id=${random_number: -12}
-            IFS="^" read -r result cf_user_key msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
-                -d 'act=user_create' \
-                -d "host_key=$cf_host_key" \
-                -d "cloudflare_email=$cf_user_email" \
-                -d "cloudflare_pass=$cf_user_pass" \
-                -d "unique_id=$cf_user_unique_id" \
-                | $JQ_FILE '[.result,.response.user_key,.msg]|join("^")'
-            ) || true
-
-            result=${result#\"}
-            msg=${msg%\"}
-            if [ "$result" == "error" ] 
-            then
-                Println "$error $msg"
-                if [[ $msg == *"assword"* ]] 
+    echo -e "选择移动到的用户"
+    while read -p "(默认: 取消): " cf_users_num
+    do
+        case "$cf_users_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
                 then
-                    Println "$error 请检查密码是否正确\n"
-                    exit 1
+                    cf_users_index=$((cf_users_num-1))
+                    cf_user_email=${cf_users_email[cf_users_index]}
+                    cf_user_pass=${cf_users_pass[cf_users_index]}
+                    cf_user_api_key=${cf_users_api_key[cf_users_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
                 fi
-            fi
-        done
+            ;;
+        esac
+    done
 
-        new_zone=$(
-        $JQ_FILE -n --arg name "$cf_zone_name" --arg resolve_to "$cf_zone_resolve_to" \
-            --arg user_email "$cf_user_email" --arg user_unique_id "$cf_user_unique_id" \
-            --arg always_use_https "$cf_zone_always_use_https" --arg ssl "$cf_zone_ssl" --arg subdomains "$cf_zone_subdomains" \
-            '{
-                name: $name,
-                resolve_to: $resolve_to,
-                user_email: $user_email,
-                user_unique_id: $user_unique_id | tonumber,
-                always_use_https: $always_use_https,
-                ssl: $ssl,
-                subdomains: $subdomains
-            }'
-        )
-
-        jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
-        JQ add "$CF_CONFIG" "$new_zone"
-
-        subdomains=""
-
-        for((i=0;i<${#cf_hosted_cnames[@]};i++));
-        do
-            if [[ ${cf_hosted_cnames[i]} =~ ^([^.]+).([^.]+)$ ]] 
-            then
-                continue
-            fi
-            cf_hosted_cname=${cf_hosted_cnames[i]}
-            cf_hosted_cname=${cf_hosted_cname%.*}
-            cf_hosted_cname_prefix=${cf_hosted_cname%.*}
-            [ -n "$subdomains" ] && subdomains="$subdomains,"
-            subdomains="$subdomains$cf_hosted_cname_prefix:${cf_resolve_tos[i]}"
-        done
-
-        GetCloudflareUserInfo
-
-        IFS="^" read -r result cf_zone_resolving_to cf_zone_hosted_cnames cf_zone_forward_tos msg < <(curl -s -Lm 20 https://api.cloudflare.com/host-gw.html \
-            -d 'act=zone_set' \
+    Println "$info 移动中 ..."
+    cf_user_key=""
+    until [ -n "$cf_user_key" ] 
+    do
+        random_number=$(od -An -N6 -t u8 < /dev/urandom)
+        cf_user_unique_id=${random_number: -12}
+        IFS="^" read -r result cf_user_key cf_user_api_key msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
+            -d 'act=user_create' \
             -d "host_key=$cf_host_key" \
-            -d "user_key=$cf_user_key" \
-            -d "zone_name=$cf_zone_name" \
-            -d "resolve_to=$cf_zone_resolve_to" \
-            -d "subdomains=$subdomains" \
-            | $JQ_FILE '[.result,.response.resolving_to,([(.response.hosted_cnames| if .== null then {} else . end)|to_entries[]
-            |([.key,.value]|join("="))]
-            |join("|")),([(.response.forward_tos| if .== null then {} else . end)|to_entries[]
-            |([.key,.value]|join("="))]
-            |join("|")),.msg]|join("^")'
+            -d "cloudflare_email=$cf_user_email" \
+            -d "cloudflare_pass=$cf_user_pass" \
+            -d "unique_id=$cf_user_unique_id" \
+            | $JQ_FILE '[.result,.response.user_key,.response.user_api_key,.msg]|join("^")'
         ) || true
 
         result=${result#\"}
         msg=${msg%\"}
-
-        if [ -z "$result" ] || [ "$result" == "error" ]
+        if [ "$result" == "error" ] 
         then
-            Println "$error ${msg:-连接超时, 请查看是否已经完成}\n" && exit 1
+            Println "$error $msg"
+            if [[ $msg == *"assword"* ]] 
+            then
+                Println "$error 请检查密码是否正确\n"
+                exit 1
+            fi
+        elif [ -z "${cf_users_api_key[cf_users_index]}" ] 
+        then
+            jq_path='["users",'"$cf_users_index"',"key"]'
+            JQ update "$CF_CONFIG" "$cf_user_api_key"
+            Println "$info 用户 $cf_user_email API Key 添加成功\n"
         fi
+    done
 
-        Println "$info 源站移动成功\n"
+    new_zone=$(
+    $JQ_FILE -n --arg name "$cf_zone_name" --arg resolve_to "$cf_zone_resolve_to" \
+        --arg user_email "$cf_user_email" --arg user_unique_id "$cf_user_unique_id" \
+        --arg always_use_https "$cf_zone_always_use_https" --arg ssl "$cf_zone_ssl" --arg subdomains "$cf_zone_subdomains" \
+        '{
+            name: $name,
+            resolve_to: $resolve_to,
+            user_email: $user_email,
+            user_unique_id: $user_unique_id | tonumber,
+            always_use_https: $always_use_https,
+            ssl: $ssl,
+            subdomains: $subdomains
+        }'
+    )
+
+    jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
+    JQ add "$CF_CONFIG" "$new_zone"
+
+    subdomains=""
+
+    for((i=0;i<${#cf_hosted_cnames[@]};i++));
+    do
+        if [[ ${cf_hosted_cnames[i]} =~ ^([^.]+).([^.]+)$ ]] 
+        then
+            continue
+        fi
+        cf_hosted_cname=${cf_hosted_cnames[i]}
+        cf_hosted_cname=${cf_hosted_cname%.*}
+        cf_hosted_cname_prefix=${cf_hosted_cname%.*}
+        [ -n "$subdomains" ] && subdomains="$subdomains,"
+        subdomains="$subdomains$cf_hosted_cname_prefix:${cf_resolve_tos[i]}"
+    done
+
+    GetCloudflareUserInfo
+
+    IFS="^" read -r result cf_zone_resolving_to cf_zone_hosted_cnames cf_zone_forward_tos msg < <(curl -s -Lm 20 https://api.cloudflare.com/host-gw.html \
+        -d 'act=zone_set' \
+        -d "host_key=$cf_host_key" \
+        -d "user_key=$cf_user_key" \
+        -d "zone_name=$cf_zone_name" \
+        -d "resolve_to=$cf_zone_resolve_to" \
+        -d "subdomains=$subdomains" \
+        | $JQ_FILE '[.result,.response.resolving_to,([(.response.hosted_cnames| if .== null then {} else . end)|to_entries[]
+        |([.key,.value]|join("="))]
+        |join("|")),([(.response.forward_tos| if .== null then {} else . end)|to_entries[]
+        |([.key,.value]|join("="))]
+        |join("|")),.msg]|join("^")'
+    ) || true
+
+    result=${result#\"}
+    msg=${msg%\"}
+
+    if [ -z "$result" ] || [ "$result" == "error" ]
+    then
+        Println "$error ${msg:-连接超时, 请查看是否已经完成}\n" && exit 1
     fi
+
+    Println "$info 源站移动成功\n"
 }
 
 GetCloudflareUserInfo()
 {
     cf_user_key=""
     add_subdomains=0
+    unset cf_users_i
     until [ -n "$cf_user_key" ] 
     do
-        IFS="^" read -r result cf_user_key msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
+        IFS="^" read -r result cf_user_key cf_user_api_key msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
             -d 'act=user_lookup' \
             -d "host_key=$cf_host_key" \
             -d "unique_id=$cf_user_unique_id" \
-            | $JQ_FILE '[.result,.response.user_key,.msg]|join("^")'
+            | $JQ_FILE '[.result,.response.user_key,.response.user_api_key,.msg]|join("^")'
         ) || true
+
+        if [ -n "$cf_user_api_key" ] && [ -n "${cf_users_i:-}" ] && [ -z "${cf_users_api_key[cf_users_i]}" ]
+        then
+            jq_path='["users",'"$cf_users_i"',"key"]'
+            JQ update "$CF_CONFIG" "$cf_user_api_key"
+            Println "$info 用户 ${cf_users_email[cf_users_i]} API Key 添加成功\n"
+        fi
 
         result=${result#\"}
         msg=${msg%\"}
@@ -28788,14 +30500,20 @@ GetCloudflareUserInfo()
             if [ -z "${cf_user_pass:-}" ] 
             then
                 GetCloudflareUsers
-                for((i=0;i<cf_users_count;i++));
+                for((cf_users_i=0;cf_users_i<cf_users_count;cf_users_i++));
                 do
-                    if [ "${cf_users_email[i]}" == "$cf_user_email" ] 
+                    if [ "${cf_users_email[cf_users_i]}" == "$cf_user_email" ] 
                     then
-                        cf_user_pass=${cf_users_pass[i]}
+                        cf_user_pass=${cf_users_pass[cf_users_i]}
                         break
                     fi
                 done
+            fi
+
+            if [ -z "${cf_user_pass:-}" ] 
+            then
+                Println "$error 请先添加账号 $cf_user_email\n"
+                exit 1
             fi
 
             IFS="^" read -r result err_code msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
@@ -28903,24 +30621,20 @@ AddCloudflareSubdomain()
         then
             continue
         fi
-        found=0
+
         for cf_zone_subdomain_prefix in "${cf_zone_subdomains_prefix[@]}"
         do
             if [ "$cf_zone_subdomain_prefix.$cf_zone_name" == "${cf_hosted_cnames[i]}" ] 
             then
-                found=1
-                break
+                continue 2
             fi
         done
 
-        if [ "$found" -eq 0 ] 
-        then
-            cf_hosted_cname=${cf_hosted_cnames[i]}
-            cf_hosted_cname=${cf_hosted_cname%.*}
-            cf_hosted_cname_prefix=${cf_hosted_cname%.*}
-            cf_zone_subdomains_prefix+=("$cf_hosted_cname_prefix")
-            cf_zone_subdomains_resolve_to+=("${cf_resolve_tos[i]}")
-        fi
+        cf_hosted_cname=${cf_hosted_cnames[i]}
+        cf_hosted_cname=${cf_hosted_cname%.*}
+        cf_hosted_cname_prefix=${cf_hosted_cname%.*}
+        cf_zone_subdomains_prefix+=("$cf_hosted_cname_prefix")
+        cf_zone_subdomains_resolve_to+=("${cf_resolve_tos[i]}")
     done
 
     subdomains=""
@@ -28999,27 +30713,26 @@ AddCloudflareSubdomain()
         done
     done
 
+    msg=""
+
     if [ "$cf_zone_resolving_to" != "$cf_zone_name" ] 
     then
-        found=0
+        zone_found=0
         for cf_resolve_to in "${cf_resolve_tos[@]}"
         do
             if [ "$cf_resolve_to" == "$cf_zone_name" ] 
             then
-                found=1
+                zone_found=1
                 break
             fi
         done
-        if [ "$found" -eq 0 ] && [[ ${cf_forward_tos[0]} =~ ([^.]+).([^.]+).([^.]+)$ ]] 
+        if [ "$zone_found" -eq 0 ] && [[ ${cf_forward_tos[0]} =~ ([^.]+).([^.]+).([^.]+)$ ]] 
         then
             cf_zone_name_resolve_to="$cf_zone_name.${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
             msg="请添加域名 $green$cf_zone_name${normal} CNAME 记录到 $green$cf_zone_name_resolve_to${normal}\n\n"
-        else
-            msg=""
         fi
-    else
-        msg=""
     fi
+
     for((i=0;i<${#cf_hosted_cnames[@]};i++));
     do
         for cf_zone_subdomain_prefix in "${cf_zone_subdomains_prefix[@]}"
@@ -29323,7 +31036,7 @@ EditCloudflareUser()
                     cf_user_email=${cf_users_email[cf_users_index]}
                     cf_user_pass=${cf_users_pass[cf_users_index]}
                     cf_user_token=${cf_users_token[cf_users_index]}
-                    cf_user_key=${cf_users_key[cf_users_index]}
+                    cf_user_api_key=${cf_users_api_key[cf_users_index]}
                     break
                 else
                     Println "$error 请输入正确的序号\n"
@@ -29348,13 +31061,13 @@ EditCloudflareUser()
     Println "  用户 Token: $green ${cf_user_token_new:-不设置} ${normal}\n"
 
     Println "请输入用户 Key"
-    read -p "(默认: ${cf_user_key:-不设置}): " cf_user_key_new
-    cf_user_key_new=${cf_user_key_new:-$cf_user_key}
-    Println "  用户 Token: $green ${cf_user_key_new:-不设置} ${normal}\n"
+    read -p "(默认: ${cf_user_api_key:-不设置}): " cf_user_api_key_new
+    cf_user_api_key_new=${cf_user_api_key_new:-$cf_user_api_key}
+    Println "  用户 Token: $green ${cf_user_api_key_new:-不设置} ${normal}\n"
 
     new_user=$(
     $JQ_FILE -n --arg email "$cf_user_email_new" --arg pass "$cf_user_pass_new" \
-        --arg token "$cf_user_token_new" --arg key "$cf_user_key_new" \
+        --arg token "$cf_user_token_new" --arg key "$cf_user_api_key_new" \
         '{
             email: $email,
             pass: $pass,
@@ -29418,7 +31131,7 @@ RegenCloudflareHost()
     Println "$info $cf_host_name host key 修改成功"
 }
 
-UpdateCloudflareToken()
+ViewCloudflareToken()
 {
     ListCloudflareUsers
 
@@ -29444,7 +31157,7 @@ UpdateCloudflareToken()
                     cf_users_index=$((cf_users_num-1))
                     cf_user_email=${cf_users_email[cf_users_index]}
                     cf_user_pass=${cf_users_pass[cf_users_index]}
-                    cf_user_key=${cf_users_key[cf_users_index]}
+                    cf_user_api_key=${cf_users_api_key[cf_users_index]}
                     break
                 else
                     Println "$error 请输入正确的序号\n"
@@ -29453,7 +31166,7 @@ UpdateCloudflareToken()
         esac
     done
 
-    if [ -z "$cf_user_key" ] 
+    if [ -z "$cf_user_api_key" ] 
     then
         Println "$error 此用户没有 Global API Key, 请手动添加\n"
         exit 1
@@ -29462,7 +31175,7 @@ UpdateCloudflareToken()
     IFS="#" read -r success token < <(curl -s \
         -X GET "https://api.cloudflare.com/client/v4/user/tokens?page=1&per_page=50&direction=desc" \
         -H "X-Auth-Email:$cf_user_email" \
-        -H "X-Auth-Key:$cf_user_key" \
+        -H "X-Auth-Key:$cf_user_api_key" \
         -H "Content-Type: application/json" \
         | $JQ_FILE '[.success,(.result|to_entries|map([.value.id,.value.name,.value.status,([.value.policies[].permission_groups[].name]|join(", "))]|join("|"))|join("^"))]|join("#")' 2> /dev/null
     ) || true
@@ -29472,7 +31185,7 @@ UpdateCloudflareToken()
 
     if [ "$success" != "true" ] 
     then
-        Println "$error 获取 Token 错误, 用户 Token 必须是 Global API Key 才可以获取\n"
+        Println "$error 获取 Token 错误, 必须是 Global API Key 才可以获取用户 Token \n"
         exit 1
     fi
 
@@ -29489,6 +31202,68 @@ UpdateCloudflareToken()
     done
 
     Println "$tokens_list"
+}
+
+AddCloudflareToken()
+{
+    ViewCloudflareToken
+
+    echo -e "选择 Token"
+
+    while read -p "(默认: 取消): " tokens_num
+    do
+        case $tokens_num in
+            "") 
+                Println "已取消...\n"
+                exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *) 
+                if [ "$tokens_num" -gt 0 ] && [ "$tokens_num" -le "$tokens_count" ] 
+                then
+                    tokens_index=$((tokens_num-1))
+                    token_id=${tokens_id[tokens_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    echo
+    yn_options=( '否' '是' )
+    inquirer list_input "需要更新此 Token 后才能添加到脚本, 是否继续" yn_options yn_option
+    if [ "$yn_option" == "否" ] 
+    then
+        Println "已取消...\n"
+        exit 1
+    fi
+
+    Println "$info 更新 Token"
+    cf_user_token_new=$(curl -s -X PUT https://api.cloudflare.com/client/v4/user/tokens/$token_id/value \
+        -H "X-Auth-Email:$cf_user_email" \
+        -H "X-Auth-Key:$cf_user_api_key" \
+        -H "Content-Type: application/json" \
+        --data '{}' | $JQ_FILE -r '.result'
+    ) || true
+
+    if [ -z "$cf_user_token_new" ] || [ "$cf_user_token_new" == null ]
+    then
+        Println "$error 更新 Token 失败\n"
+    else
+        Println "$info Token 更新成功: $cf_user_token_new"
+        jq_path='["users",'"$cf_users_index"',"token"]'
+        JQ update "$CF_CONFIG" "$cf_user_token_new"
+        Println "$info 用户 Token 添加成功\n"
+    fi
+}
+
+UpdateCloudflareToken()
+{
+    ViewCloudflareToken
 
     echo -e "选择 Token"
 
@@ -29518,7 +31293,7 @@ UpdateCloudflareToken()
     Println "$info 更新 Token"
     cf_user_token_new=$(curl -s -X PUT https://api.cloudflare.com/client/v4/user/tokens/$token_id/value \
         -H "X-Auth-Email:$cf_user_email" \
-        -H "X-Auth-Key:$cf_user_key" \
+        -H "X-Auth-Key:$cf_user_api_key" \
         -H "Content-Type: application/json" \
         --data '{}' | $JQ_FILE -r '.result'
     ) || true
@@ -29651,8 +31426,8 @@ CloudflarePartnerMenu()
 {
     Println "  cloudflare 面板 ${normal}${red}[v$sh_ver]${normal}
 
-  ${green}1.${normal} 查看 子域名
-  ${green}2.${normal} 添加 子域名
+  ${green}1.${normal} 查看 源站 CNAME
+  ${green}2.${normal} 添加 源站 CNAME
   ${green}3.${normal} 查看 源站
   ${green}4.${normal} 添加 源站
   ${green}5.${normal} 设置 源站
@@ -29660,19 +31435,21 @@ CloudflarePartnerMenu()
   ${green}7.${normal} 查看 用户
   ${green}8.${normal} 添加 用户
   ${green}9.${normal} 更改 用户
- ${green}10.${normal} 更新 用户 Token
- ${green}11.${normal} 查看 CFP
- ${green}12.${normal} 添加 CFP
- ${green}13.${normal} 更改 CFP
- ${green}14.${normal} 删除 源站
- ${green}15.${normal} 删除 用户
- ${green}16.${normal} 删除 CFP
- ${green}17.${normal} 获取最优 IP
- ${green}18.${normal} 更新脚本
+ ${green}10.${normal} 查看 用户 Token
+ ${green}11.${normal} 添加 用户 Token
+ ${green}12.${normal} 更新 用户 Token
+ ${green}13.${normal} 查看 CFP
+ ${green}14.${normal} 添加 CFP
+ ${green}15.${normal} 更改 CFP
+ ${green}16.${normal} 删除 源站
+ ${green}17.${normal} 删除 用户
+ ${green}18.${normal} 删除 CFP
+ ${green}19.${normal} 获取最优 IP
+ ${green}20.${normal} 更新脚本
 
  $tip 当前: ${green}partner${normal} 面板
  $tip 输入: w 切换到 workers 面板\n\n"
-    read -p "请输入数字 [1-18]: " cloudflare_partner_num
+    read -p "请输入数字 [1-20]: " cloudflare_partner_num
     case $cloudflare_partner_num in
         w)
             CloudflareWorkersMenu
@@ -29695,26 +31472,30 @@ CloudflarePartnerMenu()
         ;;
         9) EditCloudflareUser
         ;;
-        10) UpdateCloudflareToken
+        10) ViewCloudflareToken
         ;;
-        11) ViewCloudflareHost
+        11) AddCloudflareToken
         ;;
-        12) AddCloudflareHost
+        12) UpdateCloudflareToken
         ;;
-        13) RegenCloudflareHost
+        13) ViewCloudflareHost
         ;;
-        14) DelCloudflareZone
+        14) AddCloudflareHost
         ;;
-        15) DelCloudflareUser
+        15) RegenCloudflareHost
         ;;
-        16) DelCloudflareHost
+        16) DelCloudflareZone
         ;;
-        17) 
+        17) DelCloudflareUser
+        ;;
+        18) DelCloudflareHost
+        ;;
+        19) 
             Println "$info 一键获取最优 IP 脚本 Mac/Linux: \n\nhttps://github.com/woniuzfb/cloudflare-fping\n"
         ;;
-        18) UpdateShFile cloudflare
+        20) UpdateShFile cloudflare
         ;;
-        *) Println "$error 请输入正确的数字 [1-18]\n"
+        *) Println "$error 请输入正确的数字 [1-20]\n"
         ;;
     esac
 }
@@ -30234,13 +32015,13 @@ DeployCloudflareWorker()
             *)
                 for element in "${cf_users_num_arr[@]}"
                 do
-                    if [[ $element == *"-"* ]] 
+                    if [[ $element =~ - ]] 
                     then
                         start=${element%-*}
                         end=${element#*-}
-                        for((i=start;i<=end;i++));
+                        for((i=start-1;i<end;i++));
                         do
-                            cf_users_indices+=("$((i-1))")
+                            cf_users_indices+=("$i")
                         done
                     else
                         cf_users_indices+=("$((element-1))")
@@ -30258,10 +32039,26 @@ DeployCloudflareWorker()
 
         cf_user_pass=${cf_users_pass[cf_users_index]}
         cf_user_token=${cf_users_token[cf_users_index]}
-        cf_user_key=${cf_users_key[cf_users_index]}
+        cf_user_api_key=${cf_users_api_key[cf_users_index]}
 
-        if [ -z "$cf_user_token" ] 
+        if [ -n "$cf_user_api_key" ] 
         then
+            curl_header_auth_email="X-Auth-Email: $cf_user_email"
+            curl_header_auth_key="X-Auth-Key: $cf_user_api_key"
+            curl_header_auth_token=""
+        else
+            curl_header_auth_email=""
+            curl_header_auth_key=""
+            curl_header_auth_token="Authorization: Bearer $cf_user_token"
+        fi
+
+        if [ -z "$cf_user_token" ] && [ -z "$cf_user_api_key" ]
+        then
+            if [ "$cf_use_api" -eq 1 ] 
+            then
+                Println "$error 请添加账号 $cf_user_email Token 或 Key\n"
+                exit 1
+            fi
             Println "$info 尝试获取用户 Token ..."
 
             if [[ ! -x $(command -v python3) ]] 
@@ -30295,7 +32092,7 @@ DeployCloudflareWorker()
 
                 new_user=$(
                 $JQ_FILE -n --arg email "$cf_user_email" --arg pass "$cf_user_pass" \
-                    --arg token "$cf_user_token" --arg key "$cf_user_key" \
+                    --arg token "$cf_user_token" --arg key "$cf_user_api_key" \
                     '{
                         email: $email,
                         pass: $pass,
@@ -30312,7 +32109,9 @@ DeployCloudflareWorker()
 
         CF_ACCOUNT_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/accounts" \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $cf_user_token" \
+            -H ''"$curl_header_auth_email"'' \
+            -H ''"$curl_header_auth_key"'' \
+            -H ''"$curl_header_auth_token"'' \
             | $JQ_FILE -r '.result[0].id'
         ) || true
         if [ -z "$CF_ACCOUNT_ID" ] || [ "$CF_ACCOUNT_ID" == null ]
@@ -30323,7 +32122,7 @@ DeployCloudflareWorker()
 
         if [ "$cf_worker_path" == "stream_proxy" ] 
         then
-            if [ -s "$IBM_CONFIG" ] 
+            if [ -s "$IBM_CONFIG" ] && [ -z "${upstream:-}" ]
             then
                 GetIbmcfApps
                 if [ "$ibm_cf_apps_count" -gt 0 ] 
@@ -30427,6 +32226,10 @@ DeployCloudflareWorker()
         if CF_API_TOKEN=$cf_user_token wrangler publish 
         then
             Println "$info worker 部署成功\n"
+        elif [ "$cf_use_api" -eq 1 ] 
+        then
+            Println "$error 请检查 Token 权限\n"
+            exit 1
         else
             Println "$error 请检查 Token 权限, 尝试修复 ...\n"
 
@@ -30477,6 +32280,7 @@ ListCloudflareWorkersRoutes()
     cf_users_zones_id=()
     cf_users_zones_account_id=()
     cf_users_zones_account_token=()
+    cf_users_zones_account_api_key=()
     cf_users_zones_account_email=()
     cf_users_zones_routes_count=()
     cf_users_zones_route_id=()
@@ -30484,40 +32288,56 @@ ListCloudflareWorkersRoutes()
     cf_users_zones_route_pattern=()
     for((i=0;i<cf_users_count;i++));
     do
-        if [ -n "${cf_users_token[i]:-}" ] 
+        if [ -n "${cf_users_api_key[i]:-}" ] 
         then
-            IFS=" " read -r zone_id zone_name account_id < <(curl -s -X GET "https://api.cloudflare.com/client/v4/zones" \
-                -H "Content-Type: application/json" \
-                -H "Authorization: Bearer ${cf_users_token[i]}" \
-                | $JQ_FILE -r '[([.result[].id]|join("|")),([.result[].name]|join("|")),([.result[].account.id]|join("|"))]|join(" ")' 2> /dev/null
-            ) || Println "$error Token 权限错误 ?"
-            IFS="|" read -r -a zones_id <<< "$zone_id"
-            IFS="|" read -r -a zones_name <<< "$zone_name"
-            IFS="|" read -r -a accounts_id <<< "$account_id"
-            for((j=0;j<${#zones_id[@]};j++));
-            do
-                cf_users_zones_count=$((cf_users_zones_count+1))
-                IFS="^" read -r count id script pattern < <(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/workers/routes" \
-                    -H "Content-Type: application/json" \
-                    -H "Authorization: Bearer ${cf_users_token[i]}" \
-                    | $JQ_FILE '[(.result|length),([.result[].id]|join(" ")),([.result[].script]|join(" ")),([.result[].pattern]|join(" "))]|join("^")'
-                )
-
-                count=${count#\"}
-                pattern=${pattern%\"}
-                cf_users_zones_routes_count+=("$count")
-                cf_users_zones_route_id+=("$id")
-                cf_users_zones_route_script+=("$script")
-                cf_users_zones_route_pattern+=("$pattern")
-
-                cf_users_zones_id+=("${zones_id[j]}")
-                cf_users_zones_name+=("${zones_name[j]}")
-                cf_users_zones_account_id+=("${accounts_id[j]}")
-                cf_users_zones_account_token+=("${cf_users_token[i]}")
-                cf_users_zones_account_email+=("${cf_users_email[i]}")
-                cf_users_zones_list="$cf_users_zones_list $cf_users_zones_count.\r\033[6C$green${zones_name[j]}${normal}  路由数: $green$count${normal}\n\n"
-            done
+            curl_header_auth_email="X-Auth-Email: ${cf_users_email[i]}"
+            curl_header_auth_key="X-Auth-Key: ${cf_users_api_key[i]}"
+            curl_header_auth_token=""
+        elif [ -n "${cf_users_token[i]:-}" ] 
+        then
+            curl_header_auth_email=""
+            curl_header_auth_key=""
+            curl_header_auth_token="Authorization: Bearer ${cf_users_token[i]}"
+        else
+            continue
         fi
+
+        IFS=" " read -r zone_id zone_name account_id < <(curl -s -X GET "https://api.cloudflare.com/client/v4/zones" \
+            -H "Content-Type: application/json" \
+            -H ''"$curl_header_auth_email"'' \
+            -H ''"$curl_header_auth_key"'' \
+            -H ''"$curl_header_auth_token"'' \
+            | $JQ_FILE -r '[([.result[].id]|join("|")),([.result[].name]|join("|")),([.result[].account.id]|join("|"))]|join(" ")' 2> /dev/null
+        ) || Println "$error Token 权限错误 ?"
+        IFS="|" read -r -a zones_id <<< "$zone_id"
+        IFS="|" read -r -a zones_name <<< "$zone_name"
+        IFS="|" read -r -a accounts_id <<< "$account_id"
+        for((j=0;j<${#zones_id[@]};j++));
+        do
+            cf_users_zones_count=$((cf_users_zones_count+1))
+            IFS="^" read -r count id script pattern < <(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/workers/routes" \
+                -H "Content-Type: application/json" \
+                -H ''"$curl_header_auth_email"'' \
+                -H ''"$curl_header_auth_key"'' \
+                -H ''"$curl_header_auth_token"'' \
+                | $JQ_FILE '[(.result|length),([.result[].id]|join(" ")),([.result[].script]|join(" ")),([.result[].pattern]|join(" "))]|join("^")'
+            )
+
+            count=${count#\"}
+            pattern=${pattern%\"}
+            cf_users_zones_routes_count+=("$count")
+            cf_users_zones_route_id+=("$id")
+            cf_users_zones_route_script+=("$script")
+            cf_users_zones_route_pattern+=("$pattern")
+
+            cf_users_zones_id+=("${zones_id[j]}")
+            cf_users_zones_name+=("${zones_name[j]}")
+            cf_users_zones_account_id+=("${accounts_id[j]}")
+            cf_users_zones_account_token+=("${cf_users_token[i]}")
+            cf_users_zones_account_api_key+=("${cf_users_api_key[i]}")
+            cf_users_zones_account_email+=("${cf_users_email[i]}")
+            cf_users_zones_list="$cf_users_zones_list $cf_users_zones_count.\r\033[6C$green${zones_name[j]}${normal}  路由数: $green$count${normal}\n\n"
+        done
     done
 
     if [ "$cf_users_zones_count" -eq 0 ] 
@@ -30554,11 +32374,26 @@ ConfigCloudflareWorkerRoute()
                     cf_users_zone_id=${cf_users_zones_id[cf_zones_index]}
                     cf_users_zone_account_id=${cf_users_zones_account_id[cf_zones_index]}
                     cf_users_zone_account_token=${cf_users_zones_account_token[cf_zones_index]}
+                    cf_users_zone_account_api_key=${cf_users_zones_account_api_key[cf_zones_index]}
                     cf_users_zone_account_email=${cf_users_zones_account_email[cf_zones_index]}
                     cf_users_zone_routes_count=${cf_users_zones_routes_count[cf_zones_index]}
                     cf_users_zone_route_id=${cf_users_zones_route_id[cf_zones_index]}
                     cf_users_zone_route_script=${cf_users_zones_route_script[cf_zones_index]}
                     cf_users_zone_route_pattern=${cf_users_zones_route_pattern[cf_zones_index]}
+                    if [ -n "$cf_users_zone_account_api_key" ] 
+                    then
+                        curl_header_auth_email="X-Auth-Email: $cf_users_zone_account_email"
+                        curl_header_auth_key="X-Auth-Key: $cf_users_zone_account_api_key"
+                        curl_header_auth_token=""
+                    elif [ -n "$cf_users_zone_account_token" ] 
+                    then
+                        curl_header_auth_email=""
+                        curl_header_auth_key=""
+                        curl_header_auth_token="Authorization: Bearer $cf_users_zone_account_token"
+                    else
+                        Println "$error 请添加账号 $cf_users_zone_account_email Token 或 Key\n"
+                        exit 1
+                    fi
                     break
                 else
                     Println "$error 请输入正确的序号\n"
@@ -30616,11 +32451,13 @@ ConfigCloudflareWorkerRoute()
                                 echo -e "$tip 输入的是项目名称, 不是序号\n"
                                 read -p "(默认: $cf_users_zone_route_script): " script
                                 script=${script:-$cf_users_zone_route_script}
-                                Println "$info 输入路由"
+                                Println "$info 输入路由, 比如 abc.domain.com/*"
                                 read -p "(默认: $cf_users_zone_route_pattern): " pattern
                                 pattern=${pattern:-$cf_users_zone_route_pattern}
                                 if [[ $(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$cf_users_zone_id/workers/routes/$cf_users_zone_route_id" \
-                                    -H "Authorization: Bearer $cf_users_zone_account_token" \
+                                    -H ''"$curl_header_auth_email"'' \
+                                    -H ''"$curl_header_auth_key"'' \
+                                    -H ''"$curl_header_auth_token"'' \
                                     -H "Content-Type: application/json" \
                                     --data '{"pattern":"'"$pattern"'","script":"'"$script"'"}' \
                                     | $JQ_FILE -r '.success' ) == "true" ]]
@@ -30632,7 +32469,9 @@ ConfigCloudflareWorkerRoute()
                             ;;
                             2) 
                                 if [[ $(curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/$cf_users_zone_id/workers/routes/$cf_users_zone_route_id" \
-                                    -H "Authorization: Bearer $cf_users_zone_account_token" \
+                                    -H ''"$curl_header_auth_email"'' \
+                                    -H ''"$curl_header_auth_key"'' \
+                                    -H ''"$curl_header_auth_token"'' \
                                     -H "Content-Type: application/json" \
                                     | $JQ_FILE -r '.success' ) == "true" ]] 
                                 then
@@ -30682,11 +32521,13 @@ ConfigCloudflareWorkerRoute()
             script=${cf_workers_project_name[cf_workers_index]}
         fi
     fi
-    Println "$info 输入路由"
+    Println "$info 输入路由,比如 abc.domain.com/*"
     read -p "(默认: 取消): " pattern
     [ -z "$pattern" ] && Println "已取消...\n" && exit 1
     if [[ $(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$cf_users_zone_id/workers/routes" \
-        -H "Authorization: Bearer $cf_users_zone_account_token" \
+        -H ''"$curl_header_auth_email"'' \
+        -H ''"$curl_header_auth_key"'' \
+        -H ''"$curl_header_auth_token"'' \
         -H "Content-Type: application/json" \
         --data '{"pattern":"'"$pattern"'","script":"'"$script"'"}' \
         | $JQ_FILE -r '.success' ) == "true" ]]
@@ -30736,13 +32577,13 @@ MonitorCloudflareWorkersMoveZone()
     do
         random_number=$(od -An -N6 -t u8 < /dev/urandom)
         cf_user_unique_id=${random_number: -12}
-        IFS="^" read -r result cf_user_key msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
+        IFS="^" read -r result cf_user_key cf_user_api_key msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
             -d 'act=user_create' \
             -d "host_key=$cf_host_key" \
             -d "cloudflare_email=$cf_user_email_new" \
             -d "cloudflare_pass=$cf_user_pass_new" \
             -d "unique_id=$cf_user_unique_id" \
-            | $JQ_FILE '[.result,.response.user_key,.msg]|join("^")'
+            | $JQ_FILE '[.result,.response.user_key,.response.user_api_key,.msg]|join("^")'
         ) || true
 
         result=${result#\"}
@@ -30756,6 +32597,12 @@ MonitorCloudflareWorkersMoveZone()
                 MonitorError "move zone 移动中 请检查密码是否正确, $msg"
                 exit 1
             fi
+        elif [ -z "$cf_user_api_key_new" ] 
+        then
+            jq_path='["users",'"$cf_users_index"',"key"]'
+            JQ update "$CF_CONFIG" "$cf_user_api_key"
+            Println "$info 用户 $cf_user_email_new API Key 添加成功\n"
+            cf_user_api_key_new=$cf_user_api_key
         fi
     done
 
@@ -30889,7 +32736,9 @@ MonitorCloudflareWorkersUpdateRoutes()
 
     IFS=" " read -r zone_id zone_name account_id < <(curl -s -X GET "https://api.cloudflare.com/client/v4/zones" \
         -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $cf_user_token" \
+        -H ''"$curl_header_auth_email"'' \
+        -H ''"$curl_header_auth_key"'' \
+        -H ''"$curl_header_auth_token"'' \
         | $JQ_FILE -r '[([.result[].id]|join("|")),([.result[].name]|join("|")),([.result[].account.id]|join("|"))]|join(" ")' 2> /dev/null
     ) || Println "$error Token 权限错误 ?"
 
@@ -30904,7 +32753,9 @@ MonitorCloudflareWorkersUpdateRoutes()
             cf_zone_always_use_https=${cf_zone_always_use_https:-off}
             zone_always_use_https=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/settings/always_use_https" \
                 -H "Content-Type: application/json" \
-                -H "Authorization: Bearer $cf_user_token" \
+                -H ''"$curl_header_auth_email"'' \
+                -H ''"$curl_header_auth_key"'' \
+                -H ''"$curl_header_auth_token"'' \
                 | $JQ_FILE -r '.result.value'
             )
 
@@ -30912,7 +32763,9 @@ MonitorCloudflareWorkersUpdateRoutes()
             then
                 fail_time=0
                 until [[ $(curl -s -X PATCH "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/settings/always_use_https" \
-                    -H  "Authorization: Bearer $cf_user_token" \
+                    -H ''"$curl_header_auth_email"'' \
+                    -H ''"$curl_header_auth_key"'' \
+                    -H ''"$curl_header_auth_token"'' \
                     -H "Content-Type: application/json" \
                     --data '{"value":"'"$cf_zone_always_use_https"'"}' | $JQ_FILE -r '.success') == "true" ]] 
                 do
@@ -30927,7 +32780,9 @@ MonitorCloudflareWorkersUpdateRoutes()
             cf_zone_ssl=${cf_zone_ssl:-flexible}
             zone_ssl=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/settings/ssl" \
                 -H "Content-Type: application/json" \
-                -H "Authorization: Bearer $cf_user_token" \
+                -H ''"$curl_header_auth_email"'' \
+                -H ''"$curl_header_auth_key"'' \
+                -H ''"$curl_header_auth_token"'' \
                 | $JQ_FILE -r '.result.value'
             )
 
@@ -30935,7 +32790,9 @@ MonitorCloudflareWorkersUpdateRoutes()
             then
                 fail_time=0
                 until [[ $(curl -s -X PATCH "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/settings/ssl" \
-                    -H  "Authorization: Bearer $cf_user_token" \
+                    -H ''"$curl_header_auth_email"'' \
+                    -H ''"$curl_header_auth_key"'' \
+                    -H ''"$curl_header_auth_token"'' \
                     -H "Content-Type: application/json" \
                     --data '{"value":"'"$cf_zone_ssl"'"}' | $JQ_FILE -r '.success') == "true" ]] 
                 do
@@ -30949,7 +32806,9 @@ MonitorCloudflareWorkersUpdateRoutes()
 
             IFS="^" read -r count id script pattern < <(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/workers/routes" \
                 -H "Content-Type: application/json" \
-                -H "Authorization: Bearer $cf_user_token" \
+                -H ''"$curl_header_auth_email"'' \
+                -H ''"$curl_header_auth_key"'' \
+                -H ''"$curl_header_auth_token"'' \
                 | $JQ_FILE '[(.result|length),([.result[].id]|join(" ")),([.result[].script]|join(" ")),([.result[].pattern]|join(" "))]|join("^")'
             )
 
@@ -30989,7 +32848,9 @@ MonitorCloudflareWorkersUpdateRoutes()
                 then
                     fail_time=0
                     until [[ $(curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/${accounts_id[j]}/workers/scripts/${workers_project_name[k]}" \
-                        -H  "Authorization: Bearer $cf_user_token" \
+                        -H ''"$curl_header_auth_email"'' \
+                        -H ''"$curl_header_auth_key"'' \
+                        -H ''"$curl_header_auth_token"'' \
                         -H "Content-Type: application/javascript" \
                         --data "${workers_data[k]}" | $JQ_FILE -r '.success') == "true" ]] 
                     do
@@ -31004,7 +32865,9 @@ MonitorCloudflareWorkersUpdateRoutes()
                 then
                     fail_time=0
                     until [[ $(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/workers/routes/$id" \
-                        -H "Authorization: Bearer $cf_user_token" \
+                        -H ''"$curl_header_auth_email"'' \
+                        -H ''"$curl_header_auth_key"'' \
+                        -H ''"$curl_header_auth_token"'' \
                         -H "Content-Type: application/json" \
                         --data '{"pattern":"'"${workers_pattern[k]}"'","script":"'"${workers_project_name[k]}"'"}' \
                         | $JQ_FILE -r '.success' ) == "true" ]] 
@@ -31018,7 +32881,9 @@ MonitorCloudflareWorkersUpdateRoutes()
                 else
                     fail_time=0
                     until [[ $(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/workers/routes" \
-                        -H "Authorization: Bearer $cf_user_token" \
+                        -H ''"$curl_header_auth_email"'' \
+                        -H ''"$curl_header_auth_key"'' \
+                        -H ''"$curl_header_auth_token"'' \
                         -H "Content-Type: application/json" \
                         --data '{"pattern":"'"${workers_pattern[k]}"'","script":"'"${workers_project_name[k]}"'"}' \
                         | $JQ_FILE -r '.success' ) == "true" ]] 
@@ -31040,7 +32905,9 @@ MonitorCloudflareWorkersDeploy()
 {
     CF_ACCOUNT_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/accounts" \
         -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $cf_user_token" \
+        -H ''"$curl_header_auth_email"'' \
+        -H ''"$curl_header_auth_key"'' \
+        -H ''"$curl_header_auth_token"'' \
         | $JQ_FILE -r '.result[0].id'
     ) || true
     if [ -z "$CF_ACCOUNT_ID" ] || [ "$CF_ACCOUNT_ID" == null ]
@@ -31053,13 +32920,89 @@ MonitorCloudflareWorkersDeploy()
     for((j=0;j<workers_count;j++));
     do
         if [[ $(curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts/${workers_project_name[j]}" \
-            -H  "Authorization: Bearer $cf_user_token" \
+            -H ''"$curl_header_auth_email"'' \
+            -H ''"$curl_header_auth_key"'' \
+            -H ''"$curl_header_auth_token"'' \
             -H "Content-Type: application/javascript" \
             --data "${workers_data[j]}" | $JQ_FILE -r '.success') == "true" ]]
         then
             Println "$info ${workers_name[j]} 部署成功\n"
         fi
     done
+}
+
+MonitorCloudflareWorkersGetRequests()
+{
+    local cf_user_email=$1 cf_user_token=$2 cf_user_api_key=$3
+    if [ -n "$cf_user_api_key" ] 
+    then
+        curl_header_auth_email="X-Auth-Email: $cf_user_email"
+        curl_header_auth_key="X-Auth-Key: $cf_user_api_key"
+        curl_header_auth_token=""
+    else
+        curl_header_auth_email=""
+        curl_header_auth_key=""
+        curl_header_auth_token="Authorization: Bearer $cf_user_token"
+    fi
+
+    IFS=$'`\t' read -r success error_message CF_ACCOUNT_ID < <(
+    JQs flat "$(curl -s -X GET -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
+    -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/accounts)" '^' '|' '^' \
+    '[.success + "`",(.errors|if . == "" then {} else . end).message + "`",(.result|if . == "" then {} else . end).id + "`"]|@tsv')
+
+    if [ "$success" == "false" ] 
+    then
+        request_count="获取账号 ID 失败: ${error_message//^/, }"
+        return 0
+    fi
+
+    end_epoch=$(date --utc -d 'tomorrow 00:00:00' +%s)
+    start_epoch=$(date --utc -d 'today 00:00:00' +%s)
+    start_date=$(date --utc --date="@$start_epoch" +'%Y-%m-%dT%H:%m:%SZ')
+    end_date=$(date --utc --date="@$end_epoch" +'%Y-%m-%dT%H:%m:%SZ')
+
+    PAYLOAD='{ "query":
+    "query {
+        viewer {
+        accounts(filter: { accountTag: $accountTag }) {
+        workersInvocationsAdaptive(
+            filter: {
+            datetime_geq: $datetimeStart,
+            datetime_leq: $datetimeEnd
+            }
+            limit: 100
+        ) {
+            sum {
+                requests
+                subrequests
+                errors
+            }
+            }
+        }
+        }
+    }",'
+
+    PAYLOAD="$PAYLOAD
+
+    \"variables\": {
+        \"accountTag\": \"$CF_ACCOUNT_ID\",
+        \"datetimeStart\": \"$start_date\",
+        \"datetimeEnd\": \"$end_date\"
+    }
+    }"
+
+    IFS=$'`\t' read -r cf_workers_requests error_message < <(
+    JQs flat "$(curl -s -X POST -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
+    --data "$(echo $PAYLOAD)" -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/graphql)" '^' '|' '^' \
+    '[((.data|if . == "" then {} else . end).viewer.accounts.workersInvocationsAdaptive|if . == "" then {} else . end).sum.requests + "`",(.errors|if . == "" then {} else . end).message + "`"]|@tsv')
+
+    if [ -z "$cf_workers_requests" ] 
+    then
+        request_count="获取 workers 访问数失败: ${error_message//^/, }"
+        return 0
+    fi
+
+    request_count=$cf_workers_requests
 }
 
 MonitorCloudflareWorkers()
@@ -31075,8 +33018,7 @@ MonitorCloudflareWorkers()
             printf -v date_now '%(%m-%d %H:%M:%S)T' -1
             printf '%s\n' "$date_now 启动 workers 监控  PID $BASHPID !" >> "$MONITOR_LOG"
 
-            clear=$(date --utc -d 'tomorrow 00:00:00' +%s)
-            clear=$((clear+10))
+            clear=$(date --utc -d 'tomorrow 00:00:10' +%s)
             emails_dead=()
 
             if [ "$sh_debug" -eq 0 ] 
@@ -31089,8 +33031,7 @@ MonitorCloudflareWorkers()
                 printf -v now '%(%s)T' -1
                 if [ "$now" -ge "$clear" ] 
                 then
-                    clear=$(date --utc -d 'tomorrow 00:00:00' +%s)
-                    clear=$((clear+10))
+                    clear=$(date --utc -d 'tomorrow 00:00:10' +%s)
                     emails_dead=()
                     start_from_begin=1
                 fi
@@ -31098,6 +33039,20 @@ MonitorCloudflareWorkers()
                 zone_index=${zones_index_monitor[0]}
                 cf_zone_user_email=${cf_zones_user_email[zone_index]}
                 cf_zone_user_pass=${cf_zones_user_pass[zone_index]}
+                cf_zone_user_token=${cf_zones_user_token[zone_index]}
+                cf_zone_user_api_key=${cf_zones_user_api_key[zone_index]}
+
+                if [ -n "$cf_zone_user_api_key" ] 
+                then
+                    curl_header_auth_email="X-Auth-Email: $cf_zone_user_email"
+                    curl_header_auth_key="X-Auth-Key: $cf_zone_user_api_key"
+                    curl_header_auth_token=""
+                else
+                    curl_header_auth_email=""
+                    curl_header_auth_key=""
+                    curl_header_auth_token="Authorization: Bearer $cf_zone_user_token"
+                fi
+
                 dead_email=0
                 for email in ${emails_dead[@]+"${emails_dead[@]}"}
                 do
@@ -31112,7 +33067,22 @@ MonitorCloudflareWorkers()
                 then
                     for((i=0;i<20;i++));
                     do
-                        if request_count_json=$(python3 \
+                        if [ "$cf_use_api" -eq 1 ] 
+                        then
+                            MonitorCloudflareWorkersGetRequests "$cf_zone_user_email" "$cf_zone_user_token" "$cf_zone_user_api_key"
+                            if [ -z "$request_count" ] || [[ $request_count == *[!0-9]* ]]
+                            then
+                                MonitorError "request_count : ${request_count:-无}"
+                                sleep 10
+                            else
+                                if [ "$request_count" -gt "$cf_workers_monitor_request_counts" ] 
+                                then
+                                    dead_email=1
+                                    emails_dead+=("$cf_zone_user_email")
+                                fi
+                                break
+                            fi
+                        elif request_count_json=$(python3 \
                             "$CF_WORKERS_FILE" -e "$cf_zone_user_email" -p "$cf_zone_user_pass" -o request_count
                         ) 
                         then
@@ -31163,7 +33133,7 @@ MonitorCloudflareWorkers()
                             fi
                         done
 
-                        if [ -z "${cf_users_token[cf_users_index]}" ] 
+                        if [ "$cf_use_api" -eq 0 ] && [ -z "${cf_users_token[cf_users_index]}" ] && [ -z "${cf_users_api_key[cf_users_index]}" ] 
                         then
                             for((index=0;index<10;index++));
                             do
@@ -31183,7 +33153,7 @@ MonitorCloudflareWorkers()
 
                                 new_user=$(
                                 $JQ_FILE -n --arg email "${cf_users_email[cf_users_index]}" --arg pass "${cf_users_pass[cf_users_index]}" \
-                                    --arg token "${cf_users_token[cf_users_index]}" --arg key "${cf_users_key[cf_users_index]}" \
+                                    --arg token "${cf_users_token[cf_users_index]}" --arg key "${cf_users_api_key[cf_users_index]}" \
                                     '{
                                         email: $email,
                                         pass: $pass,
@@ -31205,6 +33175,7 @@ MonitorCloudflareWorkers()
                         cf_user_email_new=${cf_users_email[cf_users_index]}
                         cf_user_pass_new=${cf_users_pass[cf_users_index]}
                         cf_user_token_new=${cf_users_token[cf_users_index]}
+                        cf_user_api_key_new=${cf_users_api_key[cf_users_index]}
 
                         for zone_index in "${zones_index_monitor[@]}"
                         do
@@ -31232,12 +33203,38 @@ MonitorCloudflareWorkers()
                             cf_user_token=$cf_zone_user_token
 
                             MonitorCloudflareWorkersMoveZone
+
+                            cf_zones_user_api_key[zone_index]=$cf_user_api_key_new
+                            cf_zone_user_api_key=${cf_zones_user_api_key[zone_index]}
+                            cf_user_api_key=$cf_zone_user_api_key
+
+                            curl_header_auth_email="X-Auth-Email: $cf_user_email_new"
+                            curl_header_auth_key="X-Auth-Key: $cf_user_api_key"
+                            curl_header_auth_token=""
+
                             MonitorCloudflareWorkersUpdateRoutes
                         done
 
                         for((index=0;index<20;index++));
                         do
-                            if request_count_json=$(python3 \
+                            if [ "$cf_use_api" -eq 1 ] 
+                            then
+                                MonitorCloudflareWorkersGetRequests "$cf_user_email_new" "$cf_user_token_new" "$cf_user_api_key_new"
+                                if [ -z "$request_count" ] || [[ $request_count == *[!0-9]* ]]
+                                then
+                                    MonitorError "request_count 2 : ${request_count:-无}"
+                                    sleep 10
+                                else
+                                    if [ "$request_count" -gt "$cf_workers_monitor_request_counts" ] 
+                                    then
+                                        emails_dead+=("$cf_user_email_new")
+                                        break
+                                    else
+                                        dead_email=0
+                                        break 2
+                                    fi
+                                fi
+                            elif request_count_json=$(python3 \
                                 "$CF_WORKERS_FILE" -e "$cf_user_email_new" -p "$cf_user_pass_new" -o request_count
                             ) 
                             then
@@ -31271,6 +33268,7 @@ MonitorCloudflareWorkers()
                         cf_zone_user_email=${cf_zones_user_email[zone_index]}
                         cf_zone_user_pass=${cf_zones_user_pass[zone_index]}
                         cf_zone_user_token=${cf_zones_user_token[zone_index]}
+                        cf_zone_user_api_key=${cf_zones_user_api_key[zone_index]}
                         cf_zone_user_unique_id=${cf_zones_user_unique_id[zone_index]}
                         cf_zone_resolve_to=${cf_zones_resolve_to[zone_index]}
                         cf_zone_always_use_https=${cf_zones_always_use_https[zone_index]}
@@ -31282,10 +33280,10 @@ MonitorCloudflareWorkers()
                         cf_user_email=$cf_zone_user_email
                         cf_user_pass=$cf_zone_user_pass
                         cf_user_token=$cf_zone_user_token
+                        cf_user_api_key=$cf_zone_user_api_key
 
-                        if [ -n "${cf_zones_user_token[zone_index]}" ] 
+                        if [ -n "$cf_user_token" ] || [ -n "$cf_user_api_key" ]
                         then
-                            cf_user_token=${cf_zones_user_token[zone_index]}
                             MonitorCloudflareWorkersUpdateRoutes
                         else
                             for((index=0;index<20;index++));
@@ -31342,12 +33340,6 @@ EnableCloudflareWorkersMonitor()
         exit 1
     fi
 
-    if [[ ! -x $(command -v python3) ]] 
-    then
-        Println "$info 安装 python3 ..."
-        InstallPython
-    fi
-
     workers_name=()
     workers_path=()
     workers_project_name=()
@@ -31391,7 +33383,7 @@ EnableCloudflareWorkersMonitor()
             *)
                 for element in "${workers_num_arr[@]}"
                 do
-                    if [[ $element == *"-"* ]] 
+                    if [[ $element =~ - ]] 
                     then
                         start=${element%-*}
                         end=${element#*-}
@@ -31589,6 +33581,13 @@ EnableCloudflareWorkersMonitor()
 
     if [ -n "${stream_proxy_history:-}" ] 
     then
+        if [ -n "${pairs:-}" ] 
+        then
+            for pair in "${pairs[@]}"
+            do
+                stream_proxy_history+=("$pair")
+            done
+        fi
         new_historys=""
         for history in "${stream_proxy_history[@]}"
         do
@@ -31722,18 +33721,16 @@ EnableCloudflareWorkersMonitor()
                 declare -a new_array
                 for element in "${zones_num_arr[@]}"
                 do
-                    if [[ $element == *"-"* ]] 
+                    if [[ $element =~ - ]] 
                     then
                         start=${element%-*}
                         end=${element#*-}
-                        for((i=start;i<=end;i++));
+                        for((i=start-1;i<end;i++));
                         do
-                            index=$((i-1))
-                            new_array+=("$index")
+                            new_array+=("$i")
                         done
                     else
-                        index=$((element-1))
-                        new_array+=("$index")
+                        new_array+=("$((element-1))")
                     fi
                 done
                 zones_index_monitor=("${new_array[@]}")
@@ -31743,49 +33740,75 @@ EnableCloudflareWorkersMonitor()
         esac
     done
 
+    Println "$tip 模拟登录官网暂时有问题, 只能选 是"
+    yn_options=( '是' )
+    inquirer list_input "使用 api 获取 workers 请求数" yn_options yn_option
+    if [ "$yn_option" == "是" ] 
+    then
+        cf_use_api=1
+        cf_workers_monitor_seconds_default=900
+    else
+        cf_use_api=0
+        cf_workers_monitor_seconds_default=1800
+    fi
+
     GetCloudflareUsers
     cf_zones_user_token=()
     cf_zones_user_pass=()
+    cf_zones_user_api_key=()
 
     for((i=0;i<cf_zones_count;i++));
     do
-        found=0
         for((j=0;j<cf_users_count;j++));
         do
             if [ "${cf_users_email[j]}" == "${cf_zones_user_email[i]}" ]
             then
-                found=1
                 cf_zones_user_pass+=("${cf_users_pass[j]}")
+                if [ -z "${cf_users_token[j]}" ] && [ -z "${cf_users_api_key[j]}" ] && [ "$cf_use_api" -eq 1 ]
+                then
+                    cf_host_key=${cf_zones_host_key[i]}
+                    cf_user_unique_id=${cf_zones_user_unique_id[i]}
+                    cf_zone_name=${cf_zones_name[i]}
+                    cf_user_email=${cf_zones_user_email[i]}
+                    cf_user_pass=${cf_users_pass[j]}
+                    cf_zone_resolve_to=${cf_zones_resolve_to[i]}
+                    cf_zone_subdomains=${cf_zones_subdomains[i]}
+                    GetCloudflareUserInfo
+                    GetCloudflareUsers
+                    if [ -z "${cf_users_api_key[j]}" ] 
+                    then
+                        Println "$error 请先添加 ${cf_users_email[j]} Token 或 Key\n"
+                        exit 1
+                    fi
+                fi
                 cf_zones_user_token+=("${cf_users_token[j]}")
-                break
+                cf_zones_user_api_key+=("${cf_users_api_key[j]}")
+                continue 2
             fi
         done
-        if [ "$found" -eq 0 ]
-        then
-            for index in "${zones_index_monitor[@]}"
-            do
-                if [ "$index" == "$i" ]
-                then
-                    Println "$error 请先添加用户 ${cf_zones_user_email[i]}\n"
-                    exit 1
-                fi
-            done
-        fi
+        for index in "${zones_index_monitor[@]}"
+        do
+            if [ "$index" == "$i" ]
+            then
+                Println "$error 请先添加用户 ${cf_zones_user_email[i]}\n"
+                exit 1
+            fi
+        done
     done
 
     Println "$info 设置检查时间间隔, 时间太短可能会被 cloudflare 限制查询 (秒)"
-    while read -p "(默认: 1800): " cf_workers_monitor_seconds
+    while read -p "(默认: $cf_workers_monitor_seconds_default): " cf_workers_monitor_seconds
     do
         case $cf_workers_monitor_seconds in
             "") 
-                cf_workers_monitor_seconds=1800
+                cf_workers_monitor_seconds=$cf_workers_monitor_seconds_default
                 break
             ;;
             *[!0-9]*) 
                 Println "$error 请输入正确的数字\n"
             ;;
             *) 
-                if [ "$cf_workers_monitor_seconds" -ge 600 ] 
+                if [ "$cf_workers_monitor_seconds" -ge $((cf_workers_monitor_seconds_default/3)) ] 
                 then
                     break
                 else
@@ -31828,18 +33851,26 @@ EnableCloudflareWorkersMonitor()
         start_from_begin=0
     fi
 
-    Println "$info 更新 ${CF_WORKERS_FILE##*/} ..."
-    if [ "$sh_debug" -eq 0 ] && [ ! -f "$IPTV_ROOT/VIP" ]
+    if [ "$cf_use_api" -eq 0 ] 
     then
-        curl -s -Lm 10 "$CF_WORKERS_LINK" -o "$CF_WORKERS_FILE" \
-        || curl -s -Lm 20 "$CF_WORKERS_LINK_BACKUP" -o "$CF_WORKERS_FILE"
+        if [[ ! -x $(command -v python3) ]] 
+        then
+            Println "$info 安装 python3 ..."
+            InstallPython
+        fi
+        Println "$info 更新 ${CF_WORKERS_FILE##*/} ..."
+        if [ "$sh_debug" -eq 0 ] && [ ! -f "$IPTV_ROOT/VIP" ]
+        then
+            curl -s -Lm 10 "$CF_WORKERS_LINK" -o "$CF_WORKERS_FILE" \
+            || curl -s -Lm 20 "$CF_WORKERS_LINK_BACKUP" -o "$CF_WORKERS_FILE"
+        fi  
     fi
 
     [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
 
     if [ "$sh_debug" -eq 1 ] 
     then
-        ( MonitorCloudflareWorkers ) &
+        ( MonitorCloudflareWorkers ) 
     else
         ( MonitorCloudflareWorkers ) > /dev/null 2>> "$MONITOR_LOG" &
     fi
@@ -32613,9 +34644,12 @@ SetIbmcfAppRouteHostname()
 
 SetIbmcfAppRoutePath()
 {
-    Println "请输入 http 路由 path"
-    read -p "(默认: 不设置): " ibm_cf_app_route_path
-    Println "  路由 path: $green ${ibm_cf_app_route_path:-不设置} ${normal}\n"
+    echo
+    inquirer text_input "请输入 http 路由 path: " ibm_cf_app_route_path "不设置"
+    if [ "$ibm_cf_app_route_path" == "不设置" ] 
+    then
+        ibm_cf_app_route_path=""
+    fi
 }
 
 SetIbmcfAppRoutePort()
@@ -32893,17 +34927,17 @@ DeployIbmV2ray()
 {
     V2rayGetInbounds
 
-    found=0
+    port_found=0
     for port in ${inbounds_port[@]+"${inbounds_port[@]}"}
     do
         if [ "$port" -eq 8080 ] 
         then
-            found=1
+            port_found=1
             break
         fi
     done
 
-    if [ "$found" -eq 0 ] 
+    if [ "$port_found" -eq 0 ] 
     then
         Println "$error 请先添加 8080 端口\n"
         exit 1
@@ -33178,7 +35212,7 @@ SetIbmcfAppCron()
             *)
                 for element in "${apps_num_arr[@]}"
                 do
-                    if [[ $element == *"-"* ]] 
+                    if [[ $element =~ - ]] 
                     then
                         start=${element%-*}
                         end=${element#*-}
@@ -33389,76 +35423,65 @@ IbmcfAppCronExec()
     GetIbmUsers
     for((i=0;i<${#apps_name[@]};i++));
     do
-        found=0
         for((j=0;j<ibm_users_count;j++));
         do
             if [ "${ibm_users_email[j]}" == "${apps_user_email[i]}" ] 
             then
-                found=1
                 ibm_user_pass=${ibm_users_pass[j]}
                 ibm_user_region=${ibm_users_region[j]}
                 ibm_user_resource_group=${ibm_users_resource_group[j]}
                 ibm_user_org=${ibm_users_org[j]}
                 ibm_user_space=${ibm_users_space[j]}
-                break
-            fi
-        done
 
-        if [ "$found" -eq 0 ] 
-        then
-            Println "$error 没有找到用户 ${apps_user_email[i]}"
-            continue
-        fi
+                Println "$info 登录账号: ${apps_user_email[i]} [ $ibm_user_region ]"
+                ibmcloud login -u "${apps_user_email[i]}" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
+                ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
 
-        Println "$info 登录账号: ${apps_user_email[i]} [ $ibm_user_region ]"
-        ibmcloud login -u "${apps_user_email[i]}" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
-        ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
-
-        if [ "${apps_path[i]}" == "ibm_v2ray" ] || [ "${apps_path[i]}" == "ibm_xray" ]
-        then
-            v2ray_rand_name=$(RandStr)
-            cp -r "$IBM_APPS_ROOT/${apps_path[i]}" "$IBM_APPS_ROOT/ibm_$v2ray_rand_name"
-
-            cd "$IBM_APPS_ROOT/ibm_$v2ray_rand_name/"
-            mv "${apps_path[i]#*_}" "$v2ray_rand_name"
-            if [ "${apps_path[i]}" == "ibm_xray" ] 
-            then
-                ./v2ctl convert config.json > "$v2ray_rand_name.pb"
-            else
-                ./v2ctl config config.json > "$v2ray_rand_name.pb"
-            fi
-            tar zcf "$v2ray_rand_name.tar.gz" "$v2ray_rand_name" "$v2ray_rand_name.pb"
-            rm -f config.json
-            rm -f config.json.lock
-            rm -f "$v2ray_rand_name"
-            rm -f "$v2ray_rand_name.pb"
-            rm -f v2ctl
-
-            ibmcloud cf create-app-manifest "${apps_name[i]}"
-
-            routes=""
-            while read -r line 
-            do
-                if [[ $line =~ disk_quota: ]] 
+                if [ "${apps_path[i]}" == "ibm_v2ray" ] || [ "${apps_path[i]}" == "ibm_xray" ]
                 then
-                    disk_quota=${line##* }
-                elif [[ $line =~ instances: ]] 
-                then
-                    instances=${line##* }
-                elif [[ $line =~ memory: ]] 
-                then
-                    memory=${line##* }
-                elif [[ $line =~ routes: ]] || [[ $line =~ route: ]]
-                then
-                    [ -n "$routes" ] && routes="$routes\n"
-                    routes="$routes$line"
-                elif [[ $line =~ stack: ]] 
-                then
-                    stack=${line##* }
-                fi
-            done < "${apps_name[i]}_manifest.yml"
+                    v2ray_rand_name=$(RandStr)
+                    cp -r "$IBM_APPS_ROOT/${apps_path[i]}" "$IBM_APPS_ROOT/ibm_$v2ray_rand_name"
 
-            echo -e "---
+                    cd "$IBM_APPS_ROOT/ibm_$v2ray_rand_name/"
+                    mv "${apps_path[i]#*_}" "$v2ray_rand_name"
+                    if [ "${apps_path[i]}" == "ibm_xray" ] 
+                    then
+                        ./v2ctl convert config.json > "$v2ray_rand_name.pb"
+                    else
+                        ./v2ctl config config.json > "$v2ray_rand_name.pb"
+                    fi
+                    tar zcf "$v2ray_rand_name.tar.gz" "$v2ray_rand_name" "$v2ray_rand_name.pb"
+                    rm -f config.json
+                    rm -f config.json.lock
+                    rm -f "$v2ray_rand_name"
+                    rm -f "$v2ray_rand_name.pb"
+                    rm -f v2ctl
+
+                    ibmcloud cf create-app-manifest "${apps_name[i]}"
+
+                    routes=""
+                    while read -r line 
+                    do
+                        if [[ $line =~ disk_quota: ]] 
+                        then
+                            disk_quota=${line##* }
+                        elif [[ $line =~ instances: ]] 
+                        then
+                            instances=${line##* }
+                        elif [[ $line =~ memory: ]] 
+                        then
+                            memory=${line##* }
+                        elif [[ $line =~ routes: ]] || [[ $line =~ route: ]]
+                        then
+                            [ -n "$routes" ] && routes="$routes\n"
+                            routes="$routes$line"
+                        elif [[ $line =~ stack: ]] 
+                        then
+                            stack=${line##* }
+                        fi
+                    done < "${apps_name[i]}_manifest.yml"
+
+                    echo -e "---
 applications:
 - name: ${apps_name[i]}
   command:
@@ -33477,20 +35500,24 @@ applications:
     GOPACKAGENAME: goapp
 " > "${apps_name[i]}_manifest.yml"
 
-            printf '%s' 'package main
+                    printf '%s' 'package main
 
 func main() {
 
 }
 ' > "main.go"
-            ibmcloud cf push -f "${apps_name[i]}_manifest.yml"
-            cd ..
-            rm -rf "$IBM_APPS_ROOT/ibm_$v2ray_rand_name"
-        else
-            cd "$IBM_APPS_ROOT/${apps_path[i]}/"
-            ibmcloud cf create-app-manifest "${apps_name[i]}"
-            ibmcloud cf push -f "${apps_name[i]}_manifest.yml"
-        fi
+                    ibmcloud cf push -f "${apps_name[i]}_manifest.yml"
+                    cd ..
+                    rm -rf "$IBM_APPS_ROOT/ibm_$v2ray_rand_name"
+                else
+                    cd "$IBM_APPS_ROOT/${apps_path[i]}/"
+                    ibmcloud cf create-app-manifest "${apps_name[i]}"
+                    ibmcloud cf push -f "${apps_name[i]}_manifest.yml"
+                fi
+                continue 2
+            fi
+        done
+        Println "$error APP ${apps_name[i]} 没有找到用户 ${apps_user_email[i]}"
     done
 }
 
@@ -33596,9 +35623,12 @@ SetVipHostSeed()
 
 SetVipHostToken()
 {
-    Println "请输入 VIP 频道所在服务器的 token"
-    read -p "(默认: 不设置): " vip_host_token
-    Println "  VIP 服务器 token: $green ${vip_host_token:-不设置} ${normal}\n"
+    echo
+    inquirer text_input "请输入 VIP 频道所在服务器的 token: " vip_host_token "不设置"
+    if [ "$vip_host_token" == "不设置" ] 
+    then
+        vip_host_token=""
+    fi
 }
 
 SetVipHostStatus()
@@ -34176,9 +36206,12 @@ SetVipChannelName()
 
 SetVipChannelEpgId()
 {
-    Println "请输入频道 epg id"
-    read -p "(默认: 不设置): " vip_channel_epg_id
-    Println "  VIP 频道 epg: $green ${vip_channel_epg_id:-不设置} ${normal}\n"
+    echo
+    inquirer text_input "请输入频道 epg id: " vip_channel_epg_id "不设置"
+    if [ "$vip_channel_epg_id" == "不设置" ] 
+    then
+        vip_channel_epg_id=""
+    fi
 }
 
 AddVipChannel()
@@ -34284,7 +36317,7 @@ AddVipChannel()
                     declare -a new_array
                     for element in "${vip_channels_num_arr[@]}"
                     do
-                        if [[ $element == *"-"* ]] 
+                        if [[ $element =~ - ]] 
                         then
                             start=${element%-*}
                             end=${element#*-}
@@ -34317,17 +36350,17 @@ AddVipChannel()
                             continue
                         fi
 
-                        found=0
+                        vip_host_found=0
                         for((i=0;i<vip_hosts_count;i++));
                         do
                             if [ "${vip_hosts_ip[i]}" == "$vip_channel_host_ip" ] && [ "${vip_hosts_port[i]}" == "$vip_channel_host_port" ]
                             then
-                                found=1
+                                vip_host_found=1
                                 break
                             fi
                         done
 
-                        if [ "$found" -eq 0 ] 
+                        if [ "$vip_host_found" -eq 0 ] 
                         then
                             echo
                             yn_options=( '是' '否' )
@@ -34507,7 +36540,7 @@ EditVipChannel()
                 declare -a new_array
                 for element in "${vip_channels_num_arr[@]}"
                 do
-                    if [[ $element == *"-"* ]] 
+                    if [[ $element =~ - ]] 
                     then
                         start=${element%-*}
                         end=${element#*-}
@@ -34721,7 +36754,7 @@ ViewVipChannel()
                 declare -a new_array
                 for element in "${vip_channels_num_arr[@]}"
                 do
-                    if [[ $element == *"-"* ]] 
+                    if [[ $element =~ - ]] 
                     then
                         start=${element%-*}
                         end=${element#*-}
@@ -34862,10 +36895,13 @@ ConfigVipPublicRoot()
 
 ConfigVipPublicHost()
 {
-    Println "请输入公开目录的 域名 或者 IP 网址, 比如 http://localhost"
-    read -p "(默认: 不设置): " vip_public_host
+    Println "$tip 比如 http://localhost"
+    inquirer text_input "请输入公开目录的 域名 或者 IP 网址: " vip_public_host "不设置"
+    if [ "$vip_public_host" == "不设置" ] 
+    then
+        vip_public_host=""
+    fi
     JQ update "$VIP_FILE" '(.config|.public_host)="'"$vip_public_host"'"'
-    Println "  公开目录 域名 或者 IP: $green ${vip_public_host:-不设置} ${normal}\n"
 }
 
 ConfigVip()
@@ -34951,16 +36987,14 @@ MonitorVip()
 
             GetSchedules
             ct2=$(date +%s%3N)
-            clear=$(date --utc -d 'tomorrow 00:00:00' +%s)
-            clear=$((clear+10))
+            clear=$(date --utc -d 'tomorrow 00:00:10' +%s)
 
             while true 
             do
                 if [ "$now" -ge "$clear" ] 
                 then
                     ct2=$(date +%s%3N)
-                    clear=$(date --utc -d 'tomorrow 00:00:00' +%s)
-                    clear=$((clear+10))
+                    clear=$(date --utc -d 'tomorrow 00:00:10' +%s)
                 fi
                 if [ "$vip_hosts_count" -gt 0 ] && [ "$vip_users_count" -gt 0 ]
                 then
@@ -35118,36 +37152,22 @@ MonitorVip()
 
                 for vip_user_license_old in ${vip_users_license_old[@]+"${vip_users_license_old[@]}"}
                 do
-                    user_found=0
                     for vip_user_license in ${vip_users_license[@]+"${vip_users_license[@]}"}
                     do
                         if [ "$vip_user_license" == "$vip_user_license_old" ] 
                         then
-                            user_found=1
-                            break
-                        fi
-                    done
-                    if [ "$user_found" -eq 0 ] 
-                    then
-                        rm -rf "$VIP_USERS_ROOT/${vip_user_license_old:-notfound}"
-                    else
-                        for vip_host_channel_id_old in ${vip_hosts_channel_id_old[@]+"${vip_hosts_channel_id_old[@]}"}
-                        do
-                            channel_found=0
-                            for vip_host_channel_id in ${vip_hosts_channel_id[@]+"${vip_hosts_channel_id[@]}"}
+                            for vip_host_channel_id_old in ${vip_hosts_channel_id_old[@]+"${vip_hosts_channel_id_old[@]}"}
                             do
-                                if [ "$vip_host_channel_id" == "$vip_host_channel_id_old" ] 
-                                then
-                                    channel_found=1
-                                    break
-                                fi
-                            done
-                            if [ "$channel_found" -eq 0 ] 
-                            then
+                                for vip_host_channel_id in ${vip_hosts_channel_id[@]+"${vip_hosts_channel_id[@]}"}
+                                do
+                                    if [ "$vip_host_channel_id" == "$vip_host_channel_id_old" ] 
+                                    then
+                                        break 4
+                                    fi
+                                done
                                 IFS="|" read -r -a vip_channels_id_old <<< "$vip_host_channel_id_old"
                                 for vip_channel_id_old in "${vip_channels_id_old[@]}"
                                 do
-                                    channel_found=0
                                     for vip_host_channel_id in ${vip_hosts_channel_id[@]+"${vip_hosts_channel_id[@]}"}
                                     do
                                         IFS="|" read -r -a vip_channels_id <<< "$vip_host_channel_id"
@@ -35155,19 +37175,17 @@ MonitorVip()
                                         do
                                             if [ "$vip_channel_id" == "$vip_channel_id_old" ] 
                                             then
-                                                channel_found=1
-                                                break 2
+                                                break 6
                                             fi
                                         done
                                     done
-                                    if [ "$channel_found" -eq 0 ] 
-                                    then
-                                        rm -rf "$VIP_USERS_ROOT/$vip_user_license_old/${vip_host_ip//./}$vip_host_port/${vip_channel_id_old:-notfound}"
-                                    fi
+                                    rm -rf "$VIP_USERS_ROOT/$vip_user_license_old/${vip_host_ip//./}$vip_host_port/${vip_channel_id_old:-notfound}"
                                 done
-                            fi
-                        done
-                    fi
+                            done
+                            break 2
+                        fi
+                    done
+                    rm -rf "$VIP_USERS_ROOT/${vip_user_license_old:-notfound}"
                 done
                 printf -v now '%(%s)T' -1
             done
@@ -35565,11 +37583,11 @@ UpdateSelf()
                 rm -rf "/tmp/monitor.lockdir"
                 rm -rf "$FFMPEG_LOG_ROOT/"*.lock
             fi
-            if [ "$minor_ver" -lt 37 ]
-            then
-                Println "$info 更新 Hls Stream Creator 脚本..."
-                UpdateCreatorFile
-            fi
+            #if [ "$minor_ver" -lt 37 ]
+            #then
+                #Println "$info 更新 Hls Stream Creator 脚本..."
+                #UpdateCreatorFile
+            #fi
         fi
 
         Println "$info 更新中, 请稍等...\n"
@@ -35865,6 +37883,8 @@ then
         fi
         CF_WORKERS_FILE=$CF_WORKERS_FILE_NEW
     fi
+
+    cf_use_api=1
 
     if [ "${1:-}" == "w" ] 
     then
@@ -36567,33 +38587,48 @@ ${green}8.${normal} 浏览频道
         ;;
         3) 
             [ ! -s "$XTREAM_CODES" ] && Println "$error 没有账号 !\n" && exit 1
+
+            echo
+            yn_options=( '否' '是' )
+            inquirer list_input "耗时可能很长, 是否继续" yn_options yn_option
+            if [ "$yn_option" == "否" ] 
+            then
+                Println "已取消...\n"
+                exit 1
+            fi
+
             Println "$info 检测中..."
             printf -v now '%(%m-%d-%H:%M:%S)T' -1
+
             cp -f "$XTREAM_CODES" "${XTREAM_CODES}_$now"
+
+            IFS=" " read -r m_ip m_domains m_accounts < <(awk '$1 {a=a $1",";b=b $2",";$1=$2="";c=c substr($0,3)","} END {print a,b,c}' "$XTREAM_CODES")
+            IFS="," read -r -a new_domains <<< "$m_domains"
+            IFS="," read -r -a new_accounts <<< "$m_accounts"
+
             result=""
-            while IFS= read -r line 
+
+            for((i=0;i<${#new_domains[@]};i++));
             do
-                line=${line#* }
-                domain_line=${line%% *}
-                account_line=${line#* }
-                IFS="|" read -ra domains <<< "$domain_line"
-                IFS=" " read -ra accounts <<< "$account_line"
+                IFS="|" read -r -a domains <<< "${new_domains[i]}"
+                IFS=" " read -r -a accounts <<< "${new_accounts[i]}"
                 for domain in "${domains[@]}"
                 do
-                    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
-                    if [ -n "${ip:-}" ] 
-                    then
-                        for account in "${accounts[@]}"
-                        do
-                            [ -n "$result" ] && result="$result\n"
-                            result="$result$ip $domain $account"
-                        done
-                    fi
+                    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || continue
+                    for account in "${accounts[@]}"
+                    do
+                        [ -n "$result" ] && result="$result\n"
+                        result="$result$ip $domain $account"
+                    done
                 done
-            done < "$XTREAM_CODES"
-            echo -e "$result" > "$XTREAM_CODES"
-            test_mac=1
+            done
+
+            echo -e "$result" > "$XTREAM_CODES_EXAM"
+
+            verify=1
+
             ListXtreamCodes
+
             Println "$info 账号检测完成\n"
         ;;
         4) 
@@ -36601,35 +38636,40 @@ ${green}8.${normal} 浏览频道
         ;;
         5) 
             Println "$info 稍等...\n"
+
             if [ -s "$XTREAM_CODES" ] 
             then
                 printf -v now '%(%m-%d-%H:%M:%S)T' -1
                 cp -f "$XTREAM_CODES" "${XTREAM_CODES}_$now"
             fi
+
+            IFS=" " read -r m_ip m_domains m_accounts < <(curl -s -Lm 20 $XTREAM_CODES_LINK|awk '$1 {a=a $1",";b=b $2",";$1=$2="";c=c substr($0,3)","} END {print a,b,c}')
+            IFS="," read -r -a new_domains <<< "$m_domains"
+            IFS="," read -r -a new_accounts <<< "$m_accounts"
+
             result=""
-            while IFS= read -r line 
+
+            for((i=0;i<${#new_domains[@]};i++));
             do
-                line=${line#* }
-                domain_line=${line%% *}
-                account_line=${line#* }
-                IFS="|" read -ra domains <<< "$domain_line"
-                IFS=" " read -ra accounts <<< "$account_line"
+                IFS="|" read -r -a domains <<< "${new_domains[i]}"
+                IFS=" " read -r -a accounts <<< "${new_accounts[i]}"
                 for domain in "${domains[@]}"
                 do
-                    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
-                    if [ -n "${ip:-}" ] 
-                    then
-                        for account in "${accounts[@]}"
-                        do
-                            [ -n "$result" ] && result="$result\n"
-                            result="$result$ip $domain $account"
-                        done
-                    fi
+                    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || continue
+                    for account in "${accounts[@]}"
+                    do
+                        [ -n "$result" ] && result="$result\n"
+                        result="$result$ip $domain $account"
+                    done
                 done
-            done < <(curl -s -Lm 20 $XTREAM_CODES_LINK)
+            done
+
             [ -z "$result" ] && Println "$error 暂时无法连接, 请稍后再试...\n" && exit 1
-            echo -e "$result" >> "$XTREAM_CODES"
+
+            echo -e "$result" >> "$XTREAM_CODES_EXAM"
+
             ListXtreamCodes
+
             Println "$info 账号添加成功\n"
         ;;
         6) 
@@ -36965,7 +39005,7 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
             fi
 
             echo
-            docker_openwrt_options=( 'armvirt-64-19.07.5' 'armvirt-64-19.07.4' )
+            docker_openwrt_options=( 'armvirt-64-19.07.6' 'armvirt-64-19.07.5' 'armvirt-64-19.07.4' )
             inquirer list_input "选择版本: " docker_openwrt_options docker_openwrt_ver
 
             if grep -q "$docker_openwrt_ver" < <(docker container ls -a)
@@ -37119,7 +39159,7 @@ method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
                 nmcli con down hMACvLAN > /dev/null 2>&1 || true
                 nmcli con up hMACvLAN > /dev/null
                 sleep 3
-                Println "$info 网络中断, 请退出并重新连接 armbian 后继续 ...\n"
+                Println "$info 网络马上会中断, 请退出并等待 30秒 后重新连接 armbian 后重复当前步骤 ...\n"
                 exit 1
             fi
 
@@ -37723,9 +39763,6 @@ then
                 hinet_4gtv_list="$hinet_4gtv_list $green$((i+1)).${normal}\r\033[6C${hinet_4gtv[i]#*:}$hinet_4gtv_chnl_added\n\n"
             done
 
-            #headers="Referer: $chnl_stream_link\r\n"
-
-            xc=1
             cookies=""
 
             Println "$info 获取频道 ..."
@@ -37805,7 +39842,7 @@ then
                         declare -a new_array
                         for element in "${chnls_num_arr[@]}"
                         do
-                            if [[ $element == *"-"* ]] 
+                            if [[ $element =~ - ]] 
                             then
                                 start=${element%-*}
                                 end=${element#*-}
@@ -37826,6 +39863,7 @@ then
 
             for chnl_num in "${chnls_num_arr[@]}"
             do
+                xc=1
                 yn_options=( '否' '是' )
                 if [ "$chnl_num" -le "$hinet_4gtv_count" ] 
                 then
@@ -37856,7 +39894,8 @@ then
                         hexkey=$(echo -n "VxzAfiseH0AbLShkQOPwdsssw5KyLeuv" | hexdump -v -e '/1 "%02x"')
                         hexiv=$(echo -n "${stream_link_data:0:16}" | hexdump -v -e '/1 "%02x"')
                         stream_link=$stream_links
-                        stream_links_url=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+                        stream_link_url=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+                        stream_link_url_path=${stream_link_url%/*}
                         Add4gtvLink
                     else
                         Println "$error 无法连接 4gtv !\n" && exit 1
@@ -37915,8 +39954,9 @@ then
                         Println "$error 此服务器 ip 不支持或频道不可用!\n"
                     else
                         stream_link=$stream_links
-                        stream_links_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
+                        stream_link_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
                             | $JQ_FILE -r '.flstURLs[0]')
+                        stream_link_url_path=${stream_link_url%/*}
                         Add4gtvLink
                         AddChannel
                     fi
@@ -37955,7 +39995,7 @@ then
 
             IFS=$'`\t' read -r m_id m_title m_description m_is_hd m_language < <(
             JQs flat "$(curl -s -Lm 20 -H 'User-Agent: '"$USER_AGENT_BROWSER"'' https://contenthub-api.eco.astro.com.my/channel/all.json)" '^' '|' '^' '
-            [.id,.title,.description,.isHd,.language]|@tsv' '.[0].response')
+            [.id + "`",.title + "`",.description + "`",.isHd + "`",.language + "`"]|@tsv' '.[0].response')
 
             IFS="|" read -ra chnls_id <<< "$m_id"
             IFS="|" read -ra chnls_title <<< "$m_title"
@@ -38081,7 +40121,7 @@ then
 
                         if [ "$sh_debug" -eq 1 ] 
                         then
-                            ( Monitor ) >> "$MONITOR_LOG" 2>> "$MONITOR_LOG" < /dev/null &
+                            ( Monitor ) 
                         else
                             ( Monitor ) > /dev/null 2>> "$MONITOR_LOG" < /dev/null &
                         fi
@@ -38091,7 +40131,7 @@ then
 
                         if [ "$sh_debug" -eq 1 ] 
                         then
-                            ( AntiDDoS ) >> "$MONITOR_LOG" 2>> "$MONITOR_LOG" < /dev/null &
+                            ( AntiDDoS ) 
                         else
                             ( AntiDDoS ) > /dev/null 2>> "$MONITOR_LOG" < /dev/null &
                         fi
@@ -38526,6 +40566,13 @@ then
                 Println "$error Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch 下载出错, 无法连接 github ?"
             fi
 
+            if curl -s -L "https://raw.githubusercontent.com/woniuzfb/iptv/master/scripts/fix_ngx_lua_resp_get_headers_key_whitespace.patch" -o "$FFMPEG_MIRROR_ROOT/fix_ngx_lua_resp_get_headers_key_whitespace.patch_tmp"
+            then
+                mv "$FFMPEG_MIRROR_ROOT/fix_ngx_lua_resp_get_headers_key_whitespace.patch_tmp" "$FFMPEG_MIRROR_ROOT/fix_ngx_lua_resp_get_headers_key_whitespace.patch"
+            else
+                Println "$error fix_ngx_lua_resp_get_headers_key_whitespace.patch 下载出错, 无法连接 github ?"
+            fi
+
             if [ ! -e "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz" ] 
             then
                 if curl -s -L "https://github.com/fontforge/fontforge/releases/download/20190413/fontforge-20190413.tar.gz" -o "$FFMPEG_MIRROR_ROOT/fontforge-20190413.tar.gz_tmp"
@@ -38659,22 +40706,18 @@ then
             then
                 for output_dir_root in "$LIVE_ROOT"/*
                 do
-                    found=0
                     output_dir_name=${output_dir_root#*$LIVE_ROOT/}
                     for((i=0;i<hls_count;i++));
                     do
                         if [ "$output_dir_name" == "${chnls_output_dir_name[i]}" ] 
                         then
-                            found=1
+                            continue 2
                         fi
                     done
-                    if [ "$found" -eq 0 ] 
+                    Println "$error 未知目录 $output_dir_name\n"
+                    if ls -A "$output_dir_root"/* > /dev/null 2>&1 
                     then
-                        Println "$error 未知目录 $output_dir_name\n"
-                        if ls -A "$output_dir_root"/* > /dev/null 2>&1 
-                        then
-                            ls "$output_dir_root"/* -lght
-                        fi
+                        ls "$output_dir_root"/* -lght
                     fi
                 done
             fi
@@ -38684,6 +40727,10 @@ then
                 Println "$error 没有开启的频道 !\n" && exit 1
             fi
 
+            exit 0
+        ;;
+        "debug")
+            sed -i "0,/sh_debug=.*/s//sh_debug=${2:-1}/" "$SH_FILE"
             exit 0
         ;;
         *)
@@ -38783,30 +40830,23 @@ else
                     then
                         GetXtreamCodesDomains
 
-                        found=0
+                        xc_proxy=""
                         for xc_domain in "${xtream_codes_domains[@]}"
                         do
                             if [ "$xc_domain" == "${BASH_REMATCH[1]}" ] 
                             then
-                                found=1
+                                echo
+                                yn_options=( '是' '否' )
+                                inquirer list_input "是否使用 xtream codes 代理 $d_xc_proxy: " yn_options use_proxy_yn
+                                if [[ $use_proxy_yn == "是" ]]
+                                then
+                                    xc_proxy=$d_xc_proxy
+                                else
+                                    xc_proxy=""
+                                fi
                                 break
                             fi
                         done
-
-                        if [ "$found" -eq 0 ] 
-                        then
-                            xc_proxy=""
-                        else
-                            echo
-                            yn_options=( '是' '否' )
-                            inquirer list_input "是否使用 xtream codes 代理 $d_xc_proxy: " yn_options use_proxy_yn
-                            if [[ $use_proxy_yn == "是" ]]
-                            then
-                                xc_proxy=$d_xc_proxy
-                            else
-                                xc_proxy=""
-                            fi
-                        fi
                     else
                         xc_proxy=""
                     fi
@@ -38835,6 +40875,16 @@ else
             seg_count=${seg_count:-$d_seg_count}
             audio_codec=${audio_codec:-$d_audio_codec}
             video_codec=${video_codec:-$d_video_codec}
+            origin_hls_url=0
+            hboasia_host="hbogoasia.com:8443"
+
+            if [ -n "${const:-}" ] 
+            then
+                const_yn="yes"
+            else
+                const_yn=$d_const_yn
+                const=""
+            fi
 
             live_yn=${live_yn:-yes}
             if [ "$live_yn" == "yes" ] 
@@ -38858,48 +40908,17 @@ else
             draw_text=${draw_text:-$d_draw_text}
             quality=${quality:-$d_quality}
             bitrates=${bitrates:-$d_bitrates}
-            quality_command=""
-            bitrates_command=""
 
-            if [ -z "${kind:-}" ] && [ "$video_codec" == "copy" ]
+            subtitle_append=""
+            if [ -n "$txt_format" ]
             then
-                quality=""
-                bitrates=""
-                const=""
-                const_yn="no"
-                master=0
-            else
-                if [ -z "${const:-}" ]  
-                then
-                    if [ "$d_const_yn" == "yes" ] 
-                    then
-                        const="-C"
-                        const_yn="yes"
-                    else
-                        const=""
-                        const_yn="no"
-                    fi
-                else
-                    const_yn="yes"
-                fi
+                subtitle_append=',SUBTITLES="subs"'
+            fi
 
-                if [ -n "$quality" ] 
-                then
-                    const=""
-                    const_yn="no"
-                fi
-
-                if [ -n "$bitrates" ] 
-                then
-                    if [[ $bitrates != *"-"* ]] && [[ $bitrates == *"x"* ]]
-                    then
-                        master=0
-                    else
-                        master=1
-                    fi
-                else
-                    master=0
-                fi
+            master=0
+            if [[ $bitrates =~ , ]] || [[ $quality =~ , ]] || [ -n "$subtitle_append" ]
+            then
+                master=1
             fi
 
             if [ -z "${encrypt:-}" ]  
@@ -38969,6 +40988,20 @@ else
             flv_push_link=${flv_push_link:-}
             flv_pull_link=${flv_pull_link:-}
 
+            extra_filters=""
+            if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+            then
+                filters=( vf filter:v )
+                for filter in "${filters[@]}"
+                do
+                    if [[ $output_flags =~ (.*)"-$filter "([^ ]+)(.*) ]] 
+                    then
+                        extra_filters="${BASH_REMATCH[2]},"
+                        output_flags="${BASH_REMATCH[1]} ${BASH_REMATCH[3]}"
+                    fi
+                done
+            fi
+
             FilterString stream_link user_agent headers cookies output_dir_name \
                 playlist_name seg_dir_name seg_name keyinfo_name key_name input_flags \
                 output_flags channel_name sync_file sync_index sync_pairs flv_push_link \
@@ -38984,7 +41017,7 @@ else
                     else
                         if [ "$sh_debug" -eq 1 ] 
                         then
-                            ( FlvStreamCreator ) > /dev/null 2>> "$MONITOR_LOG" < /dev/null &
+                            ( FlvStreamCreator ) 
                         else
                             ( FlvStreamCreator ) > /dev/null 2> /dev/null < /dev/null &
                         fi
@@ -38992,20 +41025,12 @@ else
                 else
                     Println "$error 暂不支持输出 $kind ...\n" && exit 1
                 fi
-            elif [ -n "${video_audio_shift:-}" ] || { [ "$encrypt_yn" == "yes" ] && [ "$live_yn" == "yes" ]; } || [[ $stream_link =~ ([^ ]+)\ ([^ ]+) ]] || [ -n "$txt_format" ]
-            then
-                if [ "$sh_debug" -eq 1 ] 
-                then
-                    ( HlsStreamCreatorPlus ) > /dev/null 2>> "$MONITOR_LOG" < /dev/null &
-                else
-                    ( HlsStreamCreatorPlus ) > /dev/null 2> /dev/null < /dev/null &
-                fi
             else
                 if [ "$sh_debug" -eq 1 ] 
                 then
-                    ( HlsStreamCreator ) > /dev/null 2>> "$MONITOR_LOG" < /dev/null &
+                    ( HlsStreamCreatorPlus ) 
                 else
-                    ( HlsStreamCreator ) > /dev/null 2> /dev/null < /dev/null &
+                    ( HlsStreamCreatorPlus ) > /dev/null 2> /dev/null < /dev/null &
                 fi
             fi
 
