@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# A [ FFmpeg / xray / v2ray / nginx / openresty / cloudflare partner,workers / ibm cf / armbian ] Wrapper Script By MTimer
-# Copyright (C) 2019
+# A [ FFmpeg / nginx / openresty / xray / v2ray / cloudflare partner,workers / ibm cf / armbian ] Wrapper Script By MTimer
+# Copyright (C) 2019-2021
 # Released under BSD 3 Clause License
 #
 # 使用方法: tv -i [直播源] [-s 分片时长(秒)] [-o 输出目录名称] [-c m3u8包含的分片数] [-b 比特率] [-p m3u8文件名称] [-C] [-l] [-P http代理]
@@ -95,7 +95,7 @@
 
 set -euo pipefail
 
-sh_ver="1.60.6"
+sh_ver="1.80.0"
 sh_debug=0
 export LC_ALL=
 export LANG=en_US.UTF-8
@@ -266,6 +266,41 @@ JQ()
 JQs()
 {
     case $1 in
+        "get") 
+            read -r $3 < <($JQ_FILE -c --argjson path "$jq_path" 'getpath($path)' <<< "${!2}")
+            jq_path=""
+        ;;
+        "add") 
+            if [ "${4:-}" == "pre" ] 
+            then
+                read -r $2 < <($JQ_FILE -c --argjson path "${jq_path:-[]}" --argjson value "$3" 'getpath($path) |= [$value] + .' <<< "${!2}")
+            else
+                read -r $2 < <($JQ_FILE -c --argjson path "${jq_path:-[]}" --argjson value "$3" 'getpath($path) += [$value]' <<< "${!2}")
+            fi
+            jq_path=""
+        ;;
+        "update") 
+            if [ "${4:-}" == "number" ] 
+            then
+                read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" --arg value "$3" 'getpath($path) = ($value | tonumber)' <<< "${!2}")
+            else
+                read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" --arg value "$3" 'getpath($path) = $value' <<< "${!2}")
+            fi
+            jq_path=""
+        ;;
+        "replace") 
+            read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" --argjson value "$3" 'getpath($path) = $value' <<< "${!2}")
+            jq_path=""
+        ;;
+        "delete") 
+            if [ -z "${3:-}" ] 
+            then
+                read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" 'del(getpath($path))' <<< "${!2}")
+            else
+                read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" --arg index "$3" 'del(getpath($path)[$index|tonumber])' <<< "${!2}")
+            fi
+            jq_path=""
+        ;;
         "merge")
             read -r $2 < <($JQ_FILE -c -s '
             def merge(a;b):
@@ -288,68 +323,60 @@ JQs()
             else
                 jq_input="$2"
             fi
-            $JQ_FILE --arg d1 "$3" --arg d2 "$4" --arg d3 "$5" -r -s '
-            def flat(a;b;c;d):
+
+            $JQ_FILE --arg strict "${strict:-0}" --arg d1 "$5" --arg d2 "${6:-$5}" --arg d3 "${7:-$5}" --arg d4 "${8:-$5}" --arg d5 "${9:-$5}" --arg d6 "${10:-$5}" -r -c -s '
+            def flat(a;b;c;d;e;f;g):
                 (a[0]| type) as $type | if ($type == "object") then
-                    reduce a[] as $item ({};
-                    reduce (reduce ($item | keys_unsorted[]) as $key ([];
-                        if (contains([$key]) == false) then
-                            . + [$key]
-                        else
-                            .
-                        end
-                    ))[] as $key2 (.;
-                    $item[$key2] as $val | ($val | type) as $type2 | .[$key2] = 
+                    ([a[] | keys_unsorted[]] | unique) as $keys | reduce a[] as $item ({};
+                    reduce(if $strict == "0" then $keys[] else ($item | keys_unsorted[]) end) as $key (.;
+                    $item[$key] as $val | ($val | type) as $type2 | (.[$key] | type) as $type3 | .[$key] = 
                         if ($type2 == "object") then
-                            if (.[$key2]) then
-                                flat([.[$key2],$val];c;b;d)
+                            if ($type3 == "object" and .[$key] != {}) then
+                                flat([.[$key],$val];c;d;e;f;g;b)
                             else
-                                flat([$val];c;b;d)
+                                flat([$val];c;d;e;f;g;b)
                             end
                         elif ($type2 == "array") then
-                            ($val[0] | type) as $type3 | if ($type3 == "object") then
-                                flat($val;c;b;d) as $val2 | 
-                                if (.[$key2]) then
-                                    flat([(.[$key2] | if . == "" then {} else . end),$val2];b;d;c)
+                            flat($val;b;c;d;e;f;g) as $val2 | 
+                            if ($val2 | type == "object") then
+                                if ($type3 == "object" and .[$key] != {}) then
+                                    flat([.[$key],$val2];c;d;e;f;g;b)
                                 else
                                     $val2
                                 end
-                            elif ($type3 == "null") then
-                                if (.[$key2] | type == "object") then
-                                    flat([.[$key2],{}];b;d;c)
-                                elif (.[$key2]) then
-                                    (.[$key2] | tostring) + c
-                                else
-                                    ""
-                                end
                             else
-                                flat($val;b;c;d) as $val2 | 
-                                if (.[$key2]) then
-                                    .[$key2] + c + ($val2 // "" | tostring)
+                                if ($type3 == "object") then
+                                    .[$key]
+                                elif (.[$key]) then
+                                    .[$key] + c + $val2
                                 else
-                                    ($val2 // "" | tostring)
+                                    $val2
                                 end
                             end
-                        elif ($type2 == "boolean") then
-                            if (.[$key2]) then
-                                .[$key2] + c + ($val | tostring)
+                        elif ($type2 == "null") then
+                            if ($type3 == "object") then
+                                .[$key]
+                            elif (.[$key]) then
+                                .[$key] + c
                             else
-                                ($val | tostring)
+                                {}
                             end
                         else
-                            if (.[$key2]) then
-                                .[$key2] + c + ($val // "" | tostring)
+                            if (.[$key]) then
+                                .[$key] + c + ($val | tostring)
                             else
-                                ($val // "" | tostring)
+                                ($val | tostring)
                             end
                         end
                     ))
                 elif ($type == "array") then
-                    flat([flat(a[];b;c;d)];b;c;d)
+                    flat([flat(a[];b;c;d;e;f;g)];b;c;d;e;f;g)
                 else
                     a|join(b)
                 end;
-            '"${7:-.}"'|flat(.;$d1;$d2;$d3)|'"$6"'' <<< "$jq_input"
+            flat('"${3:-.}"';$d1;$d2;$d3;$d4;$d5;$d6)|'"$4"'' <<< "$jq_input"
+
+            strict=0
         ;;
     esac
 }
@@ -1747,7 +1774,7 @@ InstallPython()
         yn_options=( '否' '是' )
         inquirer list_input "因为是编译 python3, 耗时会很长, 是否继续" yn_options continue_yn
 
-        if [[ $continue_yn == "否" ]]
+        if [ "$continue_yn" == "否" ]
         then
             Println "已取消...\n"
             exit 1
@@ -1762,9 +1789,9 @@ InstallPython()
         yum install -y gcc openssl-devel bzip2-devel libffi-devel >/dev/null 2>&1
         echo -n "...50%..."
         cd ~
-        wget --timeout=10 --tries=3 --no-check-certificate https://npm.taobao.org/mirrors/python/3.8.7/Python-3.8.7.tgz -qO Python-3.8.7.tgz
-        tar xzf Python-3.8.7.tgz
-        cd Python-3.8.7
+        wget --timeout=10 --tries=3 --no-check-certificate https://npm.taobao.org/mirrors/python/3.8.8/Python-3.8.8.tgz -qO Python-3.8.8.tgz
+        tar xzf Python-3.8.8.tgz
+        cd Python-3.8.8
         ./configure >/dev/null 2>&1
         make >/dev/null 2>&1
         make install >/dev/null 2>&1
@@ -1773,6 +1800,31 @@ InstallPython()
         trap - EXIT
         echo -n "...100%" && echo
     fi
+}
+
+InstallCrossplane()
+{
+    if [[ ! -x $(command -v python3) ]] 
+    then
+        Println "$info 安装 python3 ..."
+        InstallPython
+    fi
+
+    if [[ ! -x $(command -v pip3) ]] 
+    then
+        Println "$info 安装 pip3 ..."
+        Progress &
+        progress_pid=$!
+        trap '
+            kill $progress_pid 2> /dev/null
+        ' EXIT
+        apt-get -y install python3-pip >/dev/null 2>&1
+        kill $progress_pid
+        trap - EXIT
+        echo -n "...100%" && echo
+    fi
+
+    pip3 install crossplane
 }
 
 InstallFFmpeg()
@@ -3057,7 +3109,8 @@ FilterString()
 
     for var in "${@}"
     do
-        var_new=${!var//[\^\`]/-}
+        #var_new=${!var//[\^\`]/-}
+        var_new=${!var}
         if [ "$var" == "input_flags" ] || [ "$var" == "output_flags" ] || [ "$var" == "chnl_input_flags" ] || [ "$var" == "chnl_output_flags" ]
         then
             var_parse=$var_new
@@ -3189,6 +3242,11 @@ GetFreePort() {
             break
         fi
     done
+}
+
+GetRandomMac()
+{
+    echo $RANDOM|md5sum|sed 's/../&:/g'|cut -c 1-17
 }
 
 PrepTerm()
@@ -5770,7 +5828,8 @@ GetDefault()
     then
         return 0
     fi
-    while IFS="^" read -r d_proxy d_xc_proxy d_user_agent d_headers d_cookies d_playlist_name \
+
+    IFS=$'\001\t' read -r d_proxy d_xc_proxy d_user_agent d_headers d_cookies d_playlist_name \
     d_seg_dir_name d_seg_name d_seg_length d_seg_count d_video_codec d_audio_codec \
     d_video_audio_shift d_txt_format d_draw_text d_quality d_bitrates d_const_yn d_encrypt_yn d_encrypt_session_yn \
     d_keyinfo_name d_key_name d_input_flags d_output_flags d_sync_yn d_sync_file \
@@ -5779,110 +5838,119 @@ GetDefault()
     d_hls_key_period d_anti_ddos_port d_anti_ddos_syn_flood_yn d_anti_ddos_syn_flood_delay_seconds \
     d_anti_ddos_syn_flood_seconds d_anti_ddos_yn d_anti_ddos_seconds d_anti_ddos_level \
     d_anti_leech_yn d_anti_leech_restart_nums d_anti_leech_restart_flv_changes_yn \
-    d_anti_leech_restart_hls_changes_yn d_recheck_period d_version
-    do
-        d_proxy=${d_proxy#\"}
-        d_user_agent=${d_user_agent:-$USER_AGENT_TV}
-        d_cookies=${d_cookies:-stb_lang=en; timezone=Europe/Amsterdam}
-        d_playlist_name_text=${d_playlist_name:-随机名称}
-        d_seg_dir_name_text=${d_seg_dir_name:-不使用}
-        d_seg_name_text=${d_seg_name:-跟m3u8名称相同}
-        v_or_a=${d_video_audio_shift%_*}
-        if [ "$v_or_a" == "v" ] 
-        then
-            d_video_shift=${d_video_audio_shift#*_}
-            d_video_audio_shift_text="画面延迟 $d_video_shift 秒"
-        elif [ "$v_or_a" == "a" ] 
-        then
-            d_audio_shift=${d_video_audio_shift#*_}
-            d_video_audio_shift_text="声音延迟 $d_audio_shift 秒"
+    d_anti_leech_restart_hls_changes_yn d_recheck_period d_version < <($JQ_FILE -c -r '
+    .default as $default | 
+    reduce ({proxy,xc_proxy,user_agent,headers,cookies,playlist_name,seg_dir_name,seg_name,seg_length,
+    seg_count,video_codec,audio_codec,video_audio_shift,txt_format,draw_text,quality,bitrates,const,
+    encrypt,encrypt_session,keyinfo_name,key_name,input_flags,output_flags,sync,sync_file,sync_index,
+    sync_pairs,schedule_file,flv_delay_seconds,flv_restart_nums,hls_delay_seconds,hls_min_bitrates,
+    hls_max_seg_size,hls_restart_nums,hls_key_period,anti_ddos_port,anti_ddos_syn_flood,
+    anti_ddos_syn_flood_delay_seconds,anti_ddos_syn_flood_seconds,anti_ddos,anti_ddos_seconds,
+    anti_ddos_level,anti_leech,anti_leech_restart_nums,anti_leech_restart_flv_changes,
+    anti_leech_restart_hls_changes,recheck_period,version}|keys_unsorted[]) as $key ([];
+        $default[$key] as $val | if $val then
+            . + [($val | tostring) + "\u0001"]
         else
-            d_video_audio_shift_text="不设置"
-        fi
-        d_encrypt_yn=${d_encrypt_yn:-no}
-        d_encrypt_session_yn=${d_encrypt_session_yn:-no}
-        d_sync_yn=${d_sync_yn:-yes}
-        d_flv_delay_seconds=${d_flv_delay_seconds:-20}
-        d_flv_restart_nums=${d_flv_restart_nums:-20}
-        d_hls_delay_seconds=${d_hls_delay_seconds:-120}
-        d_hls_min_bitrates=${d_hls_min_bitrates:-500}
-        d_hls_max_seg_size=${d_hls_max_seg_size:-5}
-        d_hls_restart_nums=${d_hls_restart_nums:-20}
-        d_hls_key_period=${d_hls_key_period:-30}
-        d_anti_ddos_port=${d_anti_ddos_port:-80}
-        d_anti_ddos_port_text=${d_anti_ddos_port//,/ }
-        d_anti_ddos_port_text=${d_anti_ddos_port_text//:/-}
-        d_anti_ddos_syn_flood_yn=${d_anti_ddos_syn_flood_yn:-no}
-        if [ "$d_anti_ddos_syn_flood_yn" == "no" ] 
-        then
-            d_anti_ddos_syn_flood="否"
-        else
-            d_anti_ddos_syn_flood="是"
-        fi
-        d_anti_ddos_syn_flood_delay_seconds=${d_anti_ddos_syn_flood_delay_seconds:-3}
-        d_anti_ddos_syn_flood_seconds=${d_anti_ddos_syn_flood_seconds:-3600}
-        d_anti_ddos_yn=${d_anti_ddos_yn:-no}
-        if [ "$d_anti_ddos_yn" == "no" ] 
-        then
-            d_anti_ddos="否"
-        else
-            d_anti_ddos="是"
-        fi
-        d_anti_ddos_seconds=${d_anti_ddos_seconds:-120}
-        d_anti_ddos_level=${d_anti_ddos_level:-6}
-        d_anti_leech_yn=${d_anti_leech_yn:-no}
-        if [ "$d_anti_leech_yn" == "no" ] 
-        then
-            d_anti_leech="否"
-        else
-            d_anti_leech="是"
-        fi
-        d_anti_leech_restart_nums=${d_anti_leech_restart_nums:-0}
-        d_anti_leech_restart_flv_changes_yn=${d_anti_leech_restart_flv_changes_yn:-no}
-        if [ "$d_anti_leech_restart_flv_changes_yn" == "no" ] 
-        then
-            d_anti_leech_restart_flv_changes="否"
-        else
-            d_anti_leech_restart_flv_changes="是"
-        fi
-        d_anti_leech_restart_hls_changes_yn=${d_anti_leech_restart_hls_changes_yn:-no}
-        if [ "$d_anti_leech_restart_hls_changes_yn" == "no" ] 
-        then
-            d_anti_leech_restart_hls_changes="否"
-        else
-            d_anti_leech_restart_hls_changes="是"
-        fi
-        d_recheck_period=${d_recheck_period:-0}
-        if [ "$d_recheck_period" -eq 0 ] 
-        then
-            d_recheck_period_text="不设置"
-        else
-            d_recheck_period_text=$d_recheck_period
-        fi
-        d_version=${d_version%\"}
-        break
-    done < <($JQ_FILE -M '.default | [.proxy,.xc_proxy,.user_agent,.headers,.cookies,.playlist_name,
-    .seg_dir_name,.seg_name,.seg_length,.seg_count,.video_codec,.audio_codec,
-    .video_audio_shift,.txt_format,.draw_text,.quality,.bitrates,.const,.encrypt,.encrypt_session,
-    .keyinfo_name,.key_name,.input_flags,.output_flags,.sync,.sync_file,
-    .sync_index,.sync_pairs,.schedule_file,.flv_delay_seconds,.flv_restart_nums,
-    .hls_delay_seconds,.hls_min_bitrates,.hls_max_seg_size,.hls_restart_nums,
-    .hls_key_period,.anti_ddos_port,.anti_ddos_syn_flood,.anti_ddos_syn_flood_delay_seconds,
-    .anti_ddos_syn_flood_seconds,.anti_ddos,.anti_ddos_seconds,.anti_ddos_level,
-    .anti_leech,.anti_leech_restart_nums,.anti_leech_restart_flv_changes,.anti_leech_restart_hls_changes,
-    .recheck_period,.version] | join("^")' "$CHANNELS_FILE")
+            . + ["\u0001"]
+        end
+    )|@tsv' "$CHANNELS_FILE")
+
+    if [ -z "$d_version" ]
+    then
+        return 0
+    fi
+
+    d_proxy=${d_proxy#\"}
+    d_user_agent=${d_user_agent:-$USER_AGENT_TV}
+    d_cookies=${d_cookies:-stb_lang=en; timezone=Europe/Amsterdam}
+    d_playlist_name_text=${d_playlist_name:-随机名称}
+    d_seg_dir_name_text=${d_seg_dir_name:-不使用}
+    d_seg_name_text=${d_seg_name:-跟m3u8名称相同}
+    v_or_a=${d_video_audio_shift%_*}
+    if [ "$v_or_a" == "v" ] 
+    then
+        d_video_shift=${d_video_audio_shift#*_}
+        d_video_audio_shift_text="画面延迟 $d_video_shift 秒"
+    elif [ "$v_or_a" == "a" ] 
+    then
+        d_audio_shift=${d_video_audio_shift#*_}
+        d_video_audio_shift_text="声音延迟 $d_audio_shift 秒"
+    else
+        d_video_audio_shift_text="不设置"
+    fi
+    d_encrypt_yn=${d_encrypt_yn:-no}
+    d_encrypt_session_yn=${d_encrypt_session_yn:-no}
+    d_sync_yn=${d_sync_yn:-yes}
+    d_flv_delay_seconds=${d_flv_delay_seconds:-20}
+    d_flv_restart_nums=${d_flv_restart_nums:-20}
+    d_hls_delay_seconds=${d_hls_delay_seconds:-120}
+    d_hls_min_bitrates=${d_hls_min_bitrates:-500}
+    d_hls_max_seg_size=${d_hls_max_seg_size:-5}
+    d_hls_restart_nums=${d_hls_restart_nums:-20}
+    d_hls_key_period=${d_hls_key_period:-30}
+    d_anti_ddos_port=${d_anti_ddos_port:-80}
+    d_anti_ddos_port_text=${d_anti_ddos_port//,/ }
+    d_anti_ddos_port_text=${d_anti_ddos_port_text//:/-}
+    d_anti_ddos_syn_flood_yn=${d_anti_ddos_syn_flood_yn:-no}
+    if [ "$d_anti_ddos_syn_flood_yn" == "no" ] 
+    then
+        d_anti_ddos_syn_flood="否"
+    else
+        d_anti_ddos_syn_flood="是"
+    fi
+    d_anti_ddos_syn_flood_delay_seconds=${d_anti_ddos_syn_flood_delay_seconds:-3}
+    d_anti_ddos_syn_flood_seconds=${d_anti_ddos_syn_flood_seconds:-3600}
+    d_anti_ddos_yn=${d_anti_ddos_yn:-no}
+    if [ "$d_anti_ddos_yn" == "no" ] 
+    then
+        d_anti_ddos="否"
+    else
+        d_anti_ddos="是"
+    fi
+    d_anti_ddos_seconds=${d_anti_ddos_seconds:-120}
+    d_anti_ddos_level=${d_anti_ddos_level:-6}
+    d_anti_leech_yn=${d_anti_leech_yn:-no}
+    if [ "$d_anti_leech_yn" == "no" ] 
+    then
+        d_anti_leech="否"
+    else
+        d_anti_leech="是"
+    fi
+    d_anti_leech_restart_nums=${d_anti_leech_restart_nums:-0}
+    d_anti_leech_restart_flv_changes_yn=${d_anti_leech_restart_flv_changes_yn:-no}
+    if [ "$d_anti_leech_restart_flv_changes_yn" == "no" ] 
+    then
+        d_anti_leech_restart_flv_changes="否"
+    else
+        d_anti_leech_restart_flv_changes="是"
+    fi
+    d_anti_leech_restart_hls_changes_yn=${d_anti_leech_restart_hls_changes_yn:-no}
+    if [ "$d_anti_leech_restart_hls_changes_yn" == "no" ] 
+    then
+        d_anti_leech_restart_hls_changes="否"
+    else
+        d_anti_leech_restart_hls_changes="是"
+    fi
+    d_recheck_period=${d_recheck_period:-0}
+    if [ "$d_recheck_period" -eq 0 ] 
+    then
+        d_recheck_period_text="不设置"
+    else
+        d_recheck_period_text=$d_recheck_period
+    fi
+    d_version=${d_version%\"}
 }
 
 GetChannelsInfo()
 {
     [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
 
-    IFS=$'`\t' read -r m_pid m_status m_stream_link m_live m_proxy m_xc_proxy m_user_agent m_headers m_cookies \
+    IFS=$'\002\t' read -r m_pid m_status m_stream_link m_live m_proxy m_xc_proxy m_user_agent m_headers m_cookies \
     m_output_dir_name m_playlist_name m_seg_dir_name m_seg_name m_seg_length m_seg_count \
     m_video_codec m_audio_codec m_video_audio_shift m_txt_format m_draw_text m_quality m_bitrates m_const m_encrypt \
     m_encrypt_session m_keyinfo_name m_key_name m_key_time m_input_flags m_output_flags \
     m_channel_name m_channel_time m_sync m_sync_file m_sync_index m_sync_pairs m_flv_status \
-    m_flv_h265 m_flv_push_link m_flv_pull_link < <(JQs flat "$CHANNELS_FILE" '^' '|' '^' '
+    m_flv_h265 m_flv_push_link m_flv_pull_link < <(JQs flat "$CHANNELS_FILE" '' '
     (.channels | if . == "" then {} else . end) as $channels |
     reduce ({pid,status,stream_link,live,proxy,xc_proxy,user_agent,headers,cookies,output_dir_name,
     playlist_name,seg_dir_name,seg_name,seg_length,seg_count,video_codec,audio_codec,video_audio_shift,
@@ -5890,11 +5958,11 @@ GetChannelsInfo()
     input_flags,output_flags,channel_name,channel_time,sync,sync_file,sync_index,sync_pairs,flv_status,
     flv_h265,flv_push_link,flv_pull_link}|keys_unsorted[]) as $key ([];
         $channels[$key] as $val | if $val then
-            . + [$val + "^`"]
+            . + [$val + "\u0001\u0002"]
         else
-            . + ["`"]
+            . + ["\u0002"]
         end
-    )|@tsv')
+    )|@tsv' $'\001')
 
     if [ -z "$m_pid" ] 
     then
@@ -5902,69 +5970,66 @@ GetChannelsInfo()
         return 0
     fi
 
-    IFS="^" read -ra chnls_pid <<< "$m_pid"
-    IFS="^" read -ra chnls_status <<< "$m_status"
-    IFS="^" read -ra chnls_stream_links <<< "$m_stream_link"
+    IFS=$'\001' read -ra chnls_pid <<< "$m_pid"
+    IFS=$'\001' read -ra chnls_status <<< "$m_status"
+    IFS=$'\001' read -ra chnls_stream_links <<< "$m_stream_link"
 
-    chnls_stream_link=("${chnls_stream_links[@]}")
     chnls_count=${#chnls_pid[@]}
-    if_null=""
+    chnls_stream_link=("${chnls_stream_links[@]%% *}")
+    if_null_off=${m_status//on/off}
+    if_null_empty=${if_null_off//off/}
+    if_null_yes=${if_null_off//off/yes}
+    if_null_no=${if_null_off//off/no}
 
-    for((chnls_i=0;chnls_i<chnls_count;chnls_i++));
-    do
-        chnls_stream_link[chnls_i]=${chnls_stream_link[chnls_i]%% *}
-        if_null="$if_null^"
-    done
-
-    IFS="^" read -ra chnls_live <<< "${m_live:-${if_null//^/yes^}}"
-    IFS="^" read -ra chnls_proxy <<< "${m_proxy:-$if_null}"
-    IFS="^" read -ra chnls_xc_proxy <<< "${m_xc_proxy:-$if_null}"
-    IFS="^" read -ra chnls_user_agent <<< "${m_user_agent:-${if_null//^/$USER_AGENT_TV^}}"
-    IFS="^" read -ra chnls_headers <<< "${m_headers:-$if_null}"
-    IFS="^" read -ra chnls_cookies <<< "${m_cookies:-${if_null//^/stb_lang=en; timezone=Europe/Amsterdam^}}"
-    IFS="^" read -ra chnls_output_dir_name <<< "$m_output_dir_name"
-    IFS="^" read -ra chnls_playlist_name <<< "$m_playlist_name"
-    IFS="^" read -ra chnls_seg_dir_name <<< "$m_seg_dir_name"
-    IFS="^" read -ra chnls_seg_name <<< "$m_seg_name"
-    IFS="^" read -ra chnls_seg_length <<< "$m_seg_length"
-    IFS="^" read -ra chnls_seg_count <<< "$m_seg_count"
-    IFS="^" read -ra chnls_video_codec <<< "$m_video_codec"
-    IFS="^" read -ra chnls_audio_codec <<< "$m_audio_codec"
-    IFS="^" read -ra chnls_video_audio_shift <<< "${m_video_audio_shift:-$if_null}"
-    IFS="^" read -ra chnls_txt_format <<< "${m_txt_format:-$if_null}"
-    IFS="^" read -ra chnls_draw_text <<< "${m_draw_text:-$if_null}"
-    IFS="^" read -ra chnls_quality <<< "$m_quality"
-    IFS="^" read -ra chnls_bitrates <<< "$m_bitrates"
-    IFS="^" read -ra chnls_const <<< "${m_const:-${if_null//^/no^}}"
-    m_encrypt=${m_encrypt:-${if_null//^/no^}}
+    IFS=$'\001' read -ra chnls_live <<< "${m_live:-$if_null_yes}"
+    IFS=$'\001' read -ra chnls_proxy <<< "${m_proxy:-$if_null_empty}"
+    IFS=$'\001' read -ra chnls_xc_proxy <<< "${m_xc_proxy:-$if_null_empty}"
+    IFS=$'\001' read -ra chnls_user_agent <<< "${m_user_agent:-${if_null_off//off/$USER_AGENT_TV}}"
+    IFS=$'\001' read -ra chnls_headers <<< "${m_headers:-$if_null_empty}"
+    IFS=$'\001' read -ra chnls_cookies <<< "${m_cookies:-${if_null_off//off/stb_lang=en; timezone=Europe/Amsterdam}}"
+    IFS=$'\001' read -ra chnls_output_dir_name <<< "$m_output_dir_name"
+    IFS=$'\001' read -ra chnls_playlist_name <<< "$m_playlist_name"
+    IFS=$'\001' read -ra chnls_seg_dir_name <<< "$m_seg_dir_name"
+    IFS=$'\001' read -ra chnls_seg_name <<< "$m_seg_name"
+    IFS=$'\001' read -ra chnls_seg_length <<< "$m_seg_length"
+    IFS=$'\001' read -ra chnls_seg_count <<< "$m_seg_count"
+    IFS=$'\001' read -ra chnls_video_codec <<< "$m_video_codec"
+    IFS=$'\001' read -ra chnls_audio_codec <<< "$m_audio_codec"
+    IFS=$'\001' read -ra chnls_video_audio_shift <<< "${m_video_audio_shift:-$if_null_empty}"
+    IFS=$'\001' read -ra chnls_txt_format <<< "${m_txt_format:-$if_null_empty}"
+    IFS=$'\001' read -ra chnls_draw_text <<< "${m_draw_text:-$if_null_empty}"
+    IFS=$'\001' read -ra chnls_quality <<< "$m_quality"
+    IFS=$'\001' read -ra chnls_bitrates <<< "$m_bitrates"
+    IFS=$'\001' read -ra chnls_const <<< "${m_const:-$if_null_no}"
+    m_encrypt=${m_encrypt:-$if_null_no}
     m_encrypt=${m_encrypt//-e/yes}
-    IFS="^" read -ra chnls_encrypt <<< "${m_encrypt:-${if_null//^/no^}}"
-    IFS="^" read -ra chnls_encrypt_session <<< "${m_encrypt_session:-${if_null//^/no^}}"
-    IFS="^" read -ra chnls_keyinfo_name <<< "${m_keyinfo_name:-${if_null//^/keyinfo^}}"
-    IFS="^" read -ra chnls_key_name <<< "${m_key_name:-${if_null//^/keyname^}}"
+    IFS=$'\001' read -ra chnls_encrypt <<< "${m_encrypt:-$if_null_no}"
+    IFS=$'\001' read -ra chnls_encrypt_session <<< "${m_encrypt_session:-$if_null_no}"
+    IFS=$'\001' read -ra chnls_keyinfo_name <<< "${m_keyinfo_name:-${if_null_off//off/keyinfo}}"
+    IFS=$'\001' read -ra chnls_key_name <<< "${m_key_name:-${if_null_off//off/keyname}}"
     if [ -z "$m_key_time" ] 
     then
         printf -v now '%(%s)T' -1
-        m_key_time=${if_null//^/${now}^}
+        m_key_time=${if_null_off//off/${now}}
     fi
-    IFS="^" read -ra chnls_key_time <<< "$m_key_time"
-    IFS="^" read -ra chnls_input_flags <<< "$m_input_flags"
-    IFS="^" read -ra chnls_output_flags <<< "$m_output_flags"
-    IFS="^" read -ra chnls_channel_name <<< "${m_channel_name:-${if_null//^/channel_name^}}"
+    IFS=$'\001' read -ra chnls_key_time <<< "$m_key_time"
+    IFS=$'\001' read -ra chnls_input_flags <<< "$m_input_flags"
+    IFS=$'\001' read -ra chnls_output_flags <<< "$m_output_flags"
+    IFS=$'\001' read -ra chnls_channel_name <<< "${m_channel_name:-${if_null_off//off/channel_name}}"
     if [ -z "$m_channel_time" ] 
     then
         printf -v now '%(%s)T' -1
-        m_channel_time=${if_null//^/${now}^}
+        m_channel_time=${if_null_off//off/${now}}
     fi
-    IFS="^" read -ra chnls_channel_time <<< "$m_channel_time"
-    IFS="^" read -ra chnls_sync <<< "${m_sync:-${if_null//^/yes^}}"
-    IFS="^" read -ra chnls_sync_file <<< "${m_sync_file:-$if_null}"
-    IFS="^" read -ra chnls_sync_index <<< "${m_sync_index:-$if_null}"
-    IFS="^" read -ra chnls_sync_pairs <<< "${m_sync_pairs:-$if_null}"
-    IFS="^" read -ra chnls_flv_status <<< "${m_flv_status:-${if_null//^/off^}}"
-    IFS="^" read -ra chnls_flv_h265 <<< "${m_flv_h265:-${if_null//^/no^}}"
-    IFS="^" read -ra chnls_flv_push_link <<< "${m_flv_push_link:-$if_null}"
-    IFS="^" read -ra chnls_flv_pull_link <<< "${m_flv_pull_link:-$if_null}"
+    IFS=$'\001' read -ra chnls_channel_time <<< "$m_channel_time"
+    IFS=$'\001' read -ra chnls_sync <<< "${m_sync:-$if_null_yes}"
+    IFS=$'\001' read -ra chnls_sync_file <<< "${m_sync_file:-$if_null_empty}"
+    IFS=$'\001' read -ra chnls_sync_index <<< "${m_sync_index:-$if_null_empty}"
+    IFS=$'\001' read -ra chnls_sync_pairs <<< "${m_sync_pairs:-$if_null_empty}"
+    IFS=$'\001' read -ra chnls_flv_status <<< "${m_flv_status:-$if_null_off}"
+    IFS=$'\001' read -ra chnls_flv_h265 <<< "${m_flv_h265:-$if_null_no}"
+    IFS=$'\001' read -ra chnls_flv_push_link <<< "${m_flv_push_link:-$if_null_empty}"
+    IFS=$'\001' read -ra chnls_flv_pull_link <<< "${m_flv_pull_link:-$if_null_empty}"
 }
 
 ListChannels()
@@ -6065,7 +6130,7 @@ ListChannels()
             else
                 chnls_flv_status_text=$red"关闭"${normal}
             fi
-            chnls_list=$chnls_list"# $green$((index+1))${normal}\r\033[6C进程ID: $green${chnls_pid[index]}${normal} 状态: $chnls_flv_status_text 频道名称: $green${chnls_channel_name[index]} $chnls_proxy_text${normal}\n\033[6C编码: $green${chnls_video_codec[index]}:${chnls_audio_codec[index]}${normal} 延迟: $green$chnls_video_audio_shift_text${normal} 视频质量: $green$chnls_video_quality_text${normal}\n\033[6Cflv推流地址: ${chnls_flv_push_link[index]:-无}\n\033[6Cflv拉流地址: ${chnls_flv_pull_link[index]:-无}\n\n"
+            chnls_list=$chnls_list"# $green$((index+1))${normal}\r\033[6C进程ID: $green${chnls_pid[index]}${normal} 状态: $chnls_flv_status_text 频道名称: $green${chnls_channel_name[index]} $chnls_proxy_text${normal}\n\033[6C编码: $green${chnls_video_codec[index]}:${chnls_audio_codec[index]}${normal} 延迟: $green$chnls_video_audio_shift_text${normal} 视频质量: $green$chnls_video_quality_text${normal}\n\033[6C源: ${chnls_stream_link[index]}\n\033[6Cflv推流地址: ${chnls_flv_push_link[index]:-无}\n\033[6Cflv拉流地址: ${chnls_flv_pull_link[index]:-无}\n\n"
         fi
     done
 
@@ -6102,205 +6167,216 @@ GetChannelInfo()
         select_json='{ "output_dir_name": "'"$output_dir_name"'" }'
     fi
 
-    while IFS="^" read -r chnl_pid chnl_status chnl_stream_links chnl_live_yn chnl_proxy chnl_xc_proxy \
+    IFS=$'\001\t' read -r chnl_pid chnl_status chnl_stream_links chnl_live_yn chnl_proxy chnl_xc_proxy \
     chnl_user_agent chnl_headers chnl_cookies chnl_output_dir_name chnl_playlist_name \
     chnl_seg_dir_name chnl_seg_name chnl_seg_length chnl_seg_count chnl_video_codec \
     chnl_audio_codec chnl_video_audio_shift chnl_txt_format chnl_draw_text chnl_quality chnl_bitrates chnl_const_yn \
     chnl_encrypt_yn chnl_encrypt_session_yn chnl_keyinfo_name chnl_key_name chnl_key_time \
     chnl_input_flags chnl_output_flags chnl_channel_name chnl_channel_time chnl_sync_yn \
     chnl_sync_file chnl_sync_index chnl_sync_pairs chnl_flv_status chnl_flv_h265_yn chnl_flv_push_link \
-    chnl_flv_pull_link
-    do
-        chnl_pid=${chnl_pid#\"}
-        chnl_flv_pull_link=${chnl_flv_pull_link%\"}
-
-        if [ "$chnl_live_yn" == "no" ]
-        then
-            chnl_live=""
-            chnl_live_text="$red否${normal}"
+    chnl_flv_pull_link < <($JQ_FILE -c -r --arg select_index "$select_index" --argjson select_json "$select_json" '
+    .channels[] | select(.[$select_index] == $select_json[$select_index]) as $channel | 
+    reduce ({pid,status,stream_link,live,proxy,xc_proxy,user_agent,headers,cookies,output_dir_name,
+    playlist_name,seg_dir_name,seg_name,seg_length,seg_count,video_codec,audio_codec,video_audio_shift,
+    txt_format,draw_text,quality,bitrates,const,encrypt,encrypt_session,keyinfo_name,key_name,key_time,
+    input_flags,output_flags,channel_name,channel_time,sync,sync_file,sync_index,sync_pairs,flv_status,
+    flv_h265,flv_push_link,flv_pull_link}|keys_unsorted[]) as $key ([];
+        $channel[$key] as $val | if $val then
+            . + [($val | tostring) + "\u0001"]
         else
-            chnl_live="-l"
-            chnl_live_text="$green是${normal}"
-        fi
-
-        chnl_stream_link=${chnl_stream_links%% *}
-
-        if [ -n "$chnl_proxy" ] && { [[ "$chnl_stream_link" =~ ^https?:// ]] || [[ ${chnl_stream_link##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]]; }
-        then
-            chnl_proxy_command="-http_proxy $chnl_proxy"
-        else
-            chnl_proxy_command=""
-        fi
-
-        chnl_xc_proxy_ori=$chnl_xc_proxy
-        chnl_xc_proxy=""
-        if [ -n "$chnl_xc_proxy_ori" ] && [[ $chnl_stream_link =~ ^([^|]+)|http ]]
-        then
-            GetXtreamCodesDomains
-            for xc_domain in "${xtream_codes_domains[@]}"
-            do
-                if [ "$xc_domain" == "${BASH_REMATCH[1]}" ] 
-                then
-                    chnl_xc_proxy=$chnl_xc_proxy_ori
-                    break
-                fi
-            done
-        fi
-
-        while [[ $chnl_headers =~ \\\\ ]]
-        do
-            chnl_headers=${chnl_headers//\\\\/\\}
-        done
-
-        if [ -n "$chnl_headers" ] && [[ ! $chnl_headers =~ \\r\\n$ ]]
-        then
-            chnl_headers="$chnl_headers\r\n"
-        fi
-
-        chnl_output_dir_root="$LIVE_ROOT/$chnl_output_dir_name"
-
-        v_or_a=${chnl_video_audio_shift%_*}
-        if [ "$v_or_a" == "v" ] 
-        then
-            chnl_video_shift=${chnl_video_audio_shift#*_}
-            chnl_audio_shift=""
-            chnl_video_audio_shift_text="$green画面延迟 $chnl_video_shift 秒${normal}"
-        elif [ "$v_or_a" == "a" ] 
-        then
-            chnl_video_shift=""
-            chnl_audio_shift=${chnl_video_audio_shift#*_}
-            chnl_video_audio_shift_text="$green声音延迟 $chnl_audio_shift 秒${normal}"
-        else
-            chnl_video_audio_shift_text="$green不设置${normal}"
-            chnl_video_shift=""
-            chnl_audio_shift=""
-        fi
-
-        if [ "$chnl_const_yn" == "no" ]
-        then
-            chnl_const=""
-            chnl_const_text=" 固定码率:否"
-        else
-            chnl_const="-C"
-            chnl_const_text=" 固定码率:是"
-        fi
-
-        if [ "$chnl_encrypt_yn" == "no" ]
-        then
-            chnl_encrypt=""
-            chnl_encrypt_text=$red"否"${normal}
-        else
-            chnl_encrypt="-e"
-            chnl_encrypt_text=$green"是"${normal}
-        fi
-
-        chnl_keyinfo_name=${chnl_keyinfo_name:-$(RandStr)}
-
-        if [ -z "${monitor:-}" ] 
-        then
-            if [ "$chnl_sync_yn" == "no" ]
-            then
-                chnl_sync_text="$red禁用${normal}"
-            else
-                chnl_sync_text="$green启用${normal}"
-            fi
-            if [ "$chnl_status" == "on" ]
-            then
-                chnl_status_text=$green"开启"${normal}
-            else
-                chnl_status_text=$red"关闭"${normal}
-            fi
-
-            chnl_seg_dir_name_text=${chnl_seg_dir_name:-不使用}
-            if [ -n "$chnl_seg_dir_name" ] 
-            then
-                chnl_seg_dir_name_text="$green$chnl_seg_dir_name${normal}"
-            else
-                chnl_seg_dir_name_text="$red不使用${normal}"
-            fi
-            chnl_seg_length_text="$green$chnl_seg_length s${normal}"
-
-            chnl_crf_text=""
-            chnl_nocrf_text=""
-            chnl_playlist_file_text=""
-
-            if [ -n "$chnl_bitrates" ] 
-            then
-                while IFS= read -r chnl_br
-                do
-                    if [[ $chnl_br =~ - ]]
-                    then
-                        chnl_br_a=${chnl_br%-*}
-                        chnl_br_b=" 分辨率: ${chnl_br#*-}"
-                        chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br_a}k -bufsize ${chnl_br_a}k${chnl_br_b} ] "
-                        chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br_a}k${chnl_br_b}${chnl_const_text} ] "
-                        chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br_a.m3u8${normal} "
-                    elif [[ $chnl_br == *"x"* ]] 
-                    then
-                        chnl_crf_text="${chnl_crf_text}[ 分辨率: $chnl_br ] "
-                        chnl_nocrf_text="${chnl_nocrf_text}[ 分辨率: $chnl_br${chnl_const_text} ] "
-                        chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}.m3u8${normal} "
-                    else
-                        chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br}k -bufsize ${chnl_br}k ] "
-                        chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br}k${chnl_const_text} ] "
-                        chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br.m3u8${normal} "
-                    fi
-                done <<< ${chnl_bitrates//,/$'\n'}
-            else
-                chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}.m3u8${normal} "
-            fi
-
-            if [ "$chnl_sync_yn" == "yes" ]
-            then
-                sync_file=${chnl_sync_file:-$d_sync_file}
-                sync_index=${chnl_sync_index:-$d_sync_index}
-                sync_pairs=${chnl_sync_pairs:-$d_sync_pairs}
-                if [ -n "$sync_file" ] && [ -n "$sync_index" ] && [ -n "$sync_pairs" ] && [[ $sync_pairs == *"=http"* ]]
-                then
-                    chnl_playlist_link=${sync_pairs#*=http}
-                    chnl_playlist_link=${chnl_playlist_link%%,*}
-                    chnl_playlist_link="http$chnl_playlist_link/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
-                    chnl_playlist_link_text="$green$chnl_playlist_link${normal}"
-                else
-                    chnl_playlist_link_text="$red请先设置 sync${normal}"
-                fi
-            else
-                chnl_playlist_link_text="$red请先启用 sync${normal}"
-            fi
-
-            if [ -n "$chnl_quality" ] 
-            then
-                chnl_video_quality_text="${green}crf值$chnl_quality ${chnl_crf_text:-不设置}${normal}"
-            else
-                chnl_video_quality_text="$green比特率值 ${chnl_nocrf_text:-不设置}${normal}"
-            fi
-
-            if [ "$chnl_flv_status" == "on" ]
-            then
-                chnl_flv_status_text=$green"开启"${normal}
-            else
-                chnl_flv_status_text=$red"关闭"${normal}
-            fi
-
-            if [ -z "${kind:-}" ] && [ "$chnl_video_codec" == "copy" ]  
-            then
-                chnl_video_quality_text="$green原画${normal}"
-                chnl_playlist_link=${chnl_playlist_link:-}
-                chnl_playlist_link=${chnl_playlist_link//_master.m3u8/.m3u8}
-                chnl_playlist_link_text=${chnl_playlist_link_text//_master.m3u8/.m3u8}
-            elif [ -z "$chnl_bitrates" ] 
-            then
-                chnl_playlist_link=${chnl_playlist_link:-}
-                chnl_playlist_link=${chnl_playlist_link//_master.m3u8/.m3u8}
-                chnl_playlist_link_text=${chnl_playlist_link_text//_master.m3u8/.m3u8}
-            fi
-        fi
-        break
-    done < <($JQ_FILE -M --arg select_index "$select_index" --argjson select_json "$select_json" '.channels[] | select(.[$select_index] == $select_json[$select_index]) | join("^")' "$CHANNELS_FILE")
+            . + ["\u0001"]
+        end
+    )|@tsv' "$CHANNELS_FILE")
 
     if [ -z "$chnl_pid" ] && [ -z "${monitor:-}" ]
     then
-        Println "$error 频道发生变化, 请重试 !\n" && exit 1
+        Println "$error 频道发生变化, 请重试 !\n"
+        exit 1
+    fi
+
+    chnl_pid=${chnl_pid#\"}
+    chnl_flv_pull_link=${chnl_flv_pull_link%\"}
+
+    if [ "$chnl_live_yn" == "no" ]
+    then
+        chnl_live=""
+        chnl_live_text="$red否${normal}"
+    else
+        chnl_live="-l"
+        chnl_live_text="$green是${normal}"
+    fi
+
+    chnl_stream_link=${chnl_stream_links%% *}
+
+    if [ -n "$chnl_proxy" ] && { [[ "$chnl_stream_link" =~ ^https?:// ]] || [[ ${chnl_stream_link##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]]; }
+    then
+        chnl_proxy_command="-http_proxy $chnl_proxy"
+    else
+        chnl_proxy_command=""
+    fi
+
+    chnl_xc_proxy_ori=$chnl_xc_proxy
+    chnl_xc_proxy=""
+    if [ -n "$chnl_xc_proxy_ori" ] && [[ $chnl_stream_link =~ ^([^|]+)|http ]]
+    then
+        GetXtreamCodesDomains
+        for xc_domain in "${xtream_codes_domains[@]}"
+        do
+            if [ "$xc_domain" == "${BASH_REMATCH[1]}" ] 
+            then
+                chnl_xc_proxy=$chnl_xc_proxy_ori
+                break
+            fi
+        done
+    fi
+
+    while [[ $chnl_headers =~ \\\\ ]]
+    do
+        chnl_headers=${chnl_headers//\\\\/\\}
+    done
+
+    if [ -n "$chnl_headers" ] && [[ ! $chnl_headers =~ \\r\\n$ ]]
+    then
+        chnl_headers="$chnl_headers\r\n"
+    fi
+
+    chnl_output_dir_root="$LIVE_ROOT/$chnl_output_dir_name"
+
+    v_or_a=${chnl_video_audio_shift%_*}
+    if [ "$v_or_a" == "v" ] 
+    then
+        chnl_video_shift=${chnl_video_audio_shift#*_}
+        chnl_audio_shift=""
+        chnl_video_audio_shift_text="$green画面延迟 $chnl_video_shift 秒${normal}"
+    elif [ "$v_or_a" == "a" ] 
+    then
+        chnl_video_shift=""
+        chnl_audio_shift=${chnl_video_audio_shift#*_}
+        chnl_video_audio_shift_text="$green声音延迟 $chnl_audio_shift 秒${normal}"
+    else
+        chnl_video_audio_shift_text="$green不设置${normal}"
+        chnl_video_shift=""
+        chnl_audio_shift=""
+    fi
+
+    if [ "$chnl_const_yn" == "no" ]
+    then
+        chnl_const=""
+        chnl_const_text=" 固定码率:否"
+    else
+        chnl_const="-C"
+        chnl_const_text=" 固定码率:是"
+    fi
+
+    if [ "$chnl_encrypt_yn" == "no" ]
+    then
+        chnl_encrypt=""
+        chnl_encrypt_text=$red"否"${normal}
+    else
+        chnl_encrypt="-e"
+        chnl_encrypt_text=$green"是"${normal}
+    fi
+
+    chnl_keyinfo_name=${chnl_keyinfo_name:-$(RandStr)}
+
+    if [ -z "${monitor:-}" ] 
+    then
+        if [ "$chnl_sync_yn" == "no" ]
+        then
+            chnl_sync_text="$red禁用${normal}"
+        else
+            chnl_sync_text="$green启用${normal}"
+        fi
+        if [ "$chnl_status" == "on" ]
+        then
+            chnl_status_text=$green"开启"${normal}
+        else
+            chnl_status_text=$red"关闭"${normal}
+        fi
+
+        chnl_seg_dir_name_text=${chnl_seg_dir_name:-不使用}
+        if [ -n "$chnl_seg_dir_name" ] 
+        then
+            chnl_seg_dir_name_text="$green$chnl_seg_dir_name${normal}"
+        else
+            chnl_seg_dir_name_text="$red不使用${normal}"
+        fi
+        chnl_seg_length_text="$green$chnl_seg_length s${normal}"
+
+        chnl_crf_text=""
+        chnl_nocrf_text=""
+        chnl_playlist_file_text=""
+
+        if [ -n "$chnl_bitrates" ] 
+        then
+            while IFS= read -r chnl_br
+            do
+                if [[ $chnl_br =~ - ]]
+                then
+                    chnl_br_a=${chnl_br%-*}
+                    chnl_br_b=" 分辨率: ${chnl_br#*-}"
+                    chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br_a}k -bufsize ${chnl_br_a}k${chnl_br_b} ] "
+                    chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br_a}k${chnl_br_b}${chnl_const_text} ] "
+                    chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br_a.m3u8${normal} "
+                elif [[ $chnl_br == *"x"* ]] 
+                then
+                    chnl_crf_text="${chnl_crf_text}[ 分辨率: $chnl_br ] "
+                    chnl_nocrf_text="${chnl_nocrf_text}[ 分辨率: $chnl_br${chnl_const_text} ] "
+                    chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}.m3u8${normal} "
+                else
+                    chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br}k -bufsize ${chnl_br}k ] "
+                    chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br}k${chnl_const_text} ] "
+                    chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br.m3u8${normal} "
+                fi
+            done <<< ${chnl_bitrates//,/$'\n'}
+        else
+            chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}.m3u8${normal} "
+        fi
+
+        if [ "$chnl_sync_yn" == "yes" ]
+        then
+            sync_file=${chnl_sync_file:-$d_sync_file}
+            sync_index=${chnl_sync_index:-$d_sync_index}
+            sync_pairs=${chnl_sync_pairs:-$d_sync_pairs}
+            if [ -n "$sync_file" ] && [ -n "$sync_index" ] && [ -n "$sync_pairs" ] && [[ $sync_pairs == *"=http"* ]]
+            then
+                chnl_playlist_link=${sync_pairs#*=http}
+                chnl_playlist_link=${chnl_playlist_link%%,*}
+                chnl_playlist_link="http$chnl_playlist_link/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
+                chnl_playlist_link_text="$green$chnl_playlist_link${normal}"
+            else
+                chnl_playlist_link_text="$red请先设置 sync${normal}"
+            fi
+        else
+            chnl_playlist_link_text="$red请先启用 sync${normal}"
+        fi
+
+        if [ -n "$chnl_quality" ] 
+        then
+            chnl_video_quality_text="${green}crf值$chnl_quality ${chnl_crf_text:-不设置}${normal}"
+        else
+            chnl_video_quality_text="$green比特率值 ${chnl_nocrf_text:-不设置}${normal}"
+        fi
+
+        if [ "$chnl_flv_status" == "on" ]
+        then
+            chnl_flv_status_text=$green"开启"${normal}
+        else
+            chnl_flv_status_text=$red"关闭"${normal}
+        fi
+
+        if [ -z "${kind:-}" ] && [ "$chnl_video_codec" == "copy" ]  
+        then
+            chnl_video_quality_text="$green原画${normal}"
+            chnl_playlist_link=${chnl_playlist_link:-}
+            chnl_playlist_link=${chnl_playlist_link//_master.m3u8/.m3u8}
+            chnl_playlist_link_text=${chnl_playlist_link_text//_master.m3u8/.m3u8}
+        elif [ -z "$chnl_bitrates" ] 
+        then
+            chnl_playlist_link=${chnl_playlist_link:-}
+            chnl_playlist_link=${chnl_playlist_link//_master.m3u8/.m3u8}
+            chnl_playlist_link_text=${chnl_playlist_link_text//_master.m3u8/.m3u8}
+        fi
     fi
 }
 
@@ -7587,14 +7663,14 @@ SetEncrypt()
                         nginx_name="nginx"
                         nginx_ctl="nx"
                         NGINX_FILE="$nginx_prefix/sbin/nginx"
-                        InstallNginx
+                        NginxInstall
                     elif [[ $nginx_openresty_selected == "openresty" ]] 
                     then
                         nginx_prefix="/usr/local/openresty/nginx"
                         nginx_name="openresty"
                         nginx_ctl="or"
                         NGINX_FILE="$nginx_prefix/sbin/nginx"
-                        InstallOpenresty
+                        OpenrestyInstall
                     else
                         encrypt_session_yn="no"
                         encrypt_session_text="否"
@@ -7645,7 +7721,7 @@ SetEncrypt()
                         inquirer list_input "需安装配置 nodejs, 是否继续: " yn_options encrypt_session_text
                         if [[ $encrypt_session_text == "是" ]] 
                         then
-                            InstallNodejs
+                            NodejsInstall
                             if [[ -x $(command -v node) ]] && [[ -x $(command -v npm) ]] 
                             then
                                 if [ ! -e "$NODE_ROOT/index.js" ] 
@@ -11259,6 +11335,14 @@ StartChannel()
     elif [[ $chnl_stream_link == *"pngquant.com"* ]] 
     then
         chnl_headers="x-forwarded-for: 127.0.0.1\r\n"
+        if [[ ! $chnl_output_flags =~ -vsync ]] 
+        then
+            chnl_output_flags="$chnl_output_flags -vsync 0"
+        fi
+        if [[ ! $chnl_output_flags =~ -copyts ]] 
+        then
+            chnl_output_flags="$chnl_output_flags -copyts"
+        fi
     fi
 
     if [ "$chnl_use_cdn" -eq 1 ] 
@@ -11946,17 +12030,22 @@ GetServiceAccs()
     if [ ! -s "$SERVICES_FILE" ] 
     then
         printf '{"%s":{"%s":[]}}' "$service_name" "accounts" > "$SERVICES_FILE"
-    elif [[ $($JQ_FILE -r --arg service_name "$service_name" '.[$service_name]' "$SERVICES_FILE") == null ]] 
-    then
-        jq_path='["'$service_name'","accounts"]'
-        JQ replace "$SERVICES_FILE" "[]"
     fi
     case $service_name in
         "4gtv") 
-            IFS="^" read -r _4gtv_acc_email _4gtv_acc_pass _4gtv_acc_token < <($JQ_FILE -r --arg service_name "$service_name" '[([.[$service_name].accounts[].email]|join("|")),([.[$service_name].accounts[].password]|join("|")),([.[$service_name].accounts[].token]|join("|"))]|join("^")' "$SERVICES_FILE")
-            IFS="|" read -r -a _4gtv_accs_email <<< "$_4gtv_acc_email"
-            IFS="|" read -r -a _4gtv_accs_pass <<< "$_4gtv_acc_pass"
-            IFS="|" read -r -a _4gtv_accs_token <<< "${_4gtv_acc_token}|"
+            IFS=$'\002\t' read -r _4gtv_acc_email _4gtv_acc_pass _4gtv_acc_token < <(JQs flat "$SERVICES_FILE" '' '
+            ."'"$service_name"'".accounts as $accounts |
+            reduce ({email,password,token}|keys_unsorted[]) as $key ([];
+            $accounts[$key] as $val | if $val then
+                . + [$val + "\u0001\u0002"]
+            else
+                . + ["\u0002"]
+            end
+            )|@tsv' $'\001')
+
+            IFS=$'\001' read -r -a _4gtv_accs_email <<< "$_4gtv_acc_email"
+            IFS=$'\001' read -r -a _4gtv_accs_pass <<< "$_4gtv_acc_pass"
+            IFS=$'\001' read -r -a _4gtv_accs_token <<< "$_4gtv_acc_token"
         ;;
         *) 
         ;;
@@ -19424,12 +19513,12 @@ GetXtreamCodesChnls()
                 then
                     if [[ ${chnls_stream_link[xc_i]##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
                     then
-                        f_domain=${chnls_stream_link%%|*}
+                        f_domain=${chnls_stream_link[xc_i]%%|*}
                         for xc_domain in "${xtream_codes_domains[@]}"
                         do
                             if [ "$f_domain" == "$xc_domain" ] 
                             then
-                                xc_chnls_mac+=("${BASH_REMATCH[0]}")
+                                xc_chnls_mac+=("$f_domain/${BASH_REMATCH[0]}")
                                 break
                             fi
                         done
@@ -21052,25 +21141,7 @@ DomainInstallCert()
     Println "$info 证书安装完成..."
 }
 
-PrettyConfig()
-{
-    last_line=""
-    new_conf=""
-    while IFS= read -r line 
-    do
-        if [ "$last_line" == "#" ] && [ "$line" == "" ]
-        then
-            continue
-        fi
-        last_line="$line#"
-        [ -n "$new_conf" ] && new_conf="$new_conf\n"
-        new_conf="$new_conf$line"
-    done < <(echo -e "${conf//\\b/\\\\b}")
-    unset last_line
-    conf=$new_conf
-}
-
-InstallOpenresty()
+OpenrestyInstall()
 {
     CheckRelease "检查依赖, 耗时可能会很长"
     Progress &
@@ -21181,21 +21252,21 @@ InstallOpenresty()
             latest_release=1
         elif [ "$latest_release" -eq 1 ] && [[ $line == *"<a "* ]]
         then
-            openresty_name=${line#*/download/}
-            openresty_name=${openresty_name%%.tar.gz*}
+            openresty_package_name=${line#*/download/}
+            openresty_package_name=${openresty_package_name%%.tar.gz*}
             break
         fi
     done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" "https://openresty.org/en/download.html")
 
-    if [ ! -e "./$openresty_name" ] 
+    if [ ! -d "./$openresty_package_name" ] 
     then
-        curl -s -L "https://openresty.org/download/$openresty_name.tar.gz" -o "$openresty_name.tar.gz"
-        tar xzf "$openresty_name.tar.gz"
+        curl -s -L "https://openresty.org/download/$openresty_package_name.tar.gz" -o "$openresty_package_name.tar.gz"
+        tar xzf "$openresty_package_name.tar.gz"
     fi
 
     echo -n "...60%..."
 
-    cd "$openresty_name/bundle/ngx_lua-"*
+    cd "$openresty_package_name/bundle/ngx_lua-"*
 
     curl -s -L "$FFMPEG_MIRROR_LINK/fix_ngx_lua_resp_get_headers_key_whitespace.patch" -o "fix_ngx_lua_resp_get_headers_key_whitespace.patch"
     patch -p1 < fix_ngx_lua_resp_get_headers_key_whitespace.patch >/dev/null 2>&1
@@ -21239,9 +21310,20 @@ InstallOpenresty()
     sed -i "s/#user  nobody;/user $nginx_name $nginx_name;/" "$nginx_prefix/conf/nginx.conf"
     sed -i "s/worker_processes .*/worker_processes  ${nproc:2};/" "$nginx_prefix/conf/nginx.conf"
     sed -i "s/worker_connections  1024;/worker_connections  51200;/" "$nginx_prefix/conf/nginx.conf"
+
+    mkdir -p "$nginx_prefix/conf/sites_crt/"
+    mkdir -p "$nginx_prefix/conf/sites_available/"
+    mkdir -p "$nginx_prefix/conf/sites_enabled/"
+    mkdir -p "$nginx_prefix/html/localhost/"
+
+    if [[ ! -x $(command -v crossplane) ]] 
+    then
+        Println "$info 安装 crossplane ..."
+        InstallCrossplane
+    fi
 }
 
-InstallNginx()
+NginxInstall()
 {
     CheckRelease "检查依赖, 耗时可能会很长"
     InstallJQ >/dev/null
@@ -21308,21 +21390,21 @@ InstallNginx()
     do
         if [[ $line == *"/download/"* ]] 
         then
-            nginx_name=${line#*/download/}
-            nginx_name=${nginx_name%%.tar.gz*}
+            nginx_package_name=${line#*/download/}
+            nginx_package_name=${nginx_package_name%%.tar.gz*}
             break
         fi
     done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://nginx.org/en/download.html")
 
-    if [ ! -e "./$nginx_name" ] 
+    if [ ! -d "./$nginx_package_name" ] 
     then
-        curl -s -L "https://nginx.org/download/$nginx_name.tar.gz" -o "$nginx_name.tar.gz"
-        tar xzf "$nginx_name.tar.gz"
+        curl -s -L "https://nginx.org/download/$nginx_package_name.tar.gz" -o "$nginx_package_name.tar.gz"
+        tar xzf "$nginx_package_name.tar.gz"
     fi
 
     echo -n "...60%..."
 
-    cd "$nginx_name/"
+    cd "$nginx_package_name/"
     ./configure --add-module=../nginx-http-flv-module-master \
         --with-pcre=../pcre-8.44 --with-pcre-jit --with-zlib=../zlib-1.2.11 \
         --with-openssl=../$openssl_name --with-openssl-opt=no-nextprotoneg \
@@ -21355,13 +21437,25 @@ InstallNginx()
     sed -i "s/#user  nobody;/user $nginx_name $nginx_name;/" "$nginx_prefix/conf/nginx.conf"
     sed -i "s/worker_processes .*/worker_processes  ${nproc:2};/" "$nginx_prefix/conf/nginx.conf"
     sed -i "s/worker_connections  1024;/worker_connections  51200;/" "$nginx_prefix/conf/nginx.conf"
+
+    mkdir -p "$nginx_prefix/conf/sites_crt/"
+    mkdir -p "$nginx_prefix/conf/sites_available/"
+    mkdir -p "$nginx_prefix/conf/sites_enabled/"
+    mkdir -p "$nginx_prefix/html/localhost/"
+
+    if [[ ! -x $(command -v crossplane) ]] 
+    then
+        Println "$info 安装 crossplane ..."
+        InstallCrossplane
+    fi
 }
 
-UninstallNginx()
+NginxUninstall()
 {
     if [ ! -d "$nginx_prefix" ] 
     then
-        Println "$error $nginx_name 未安装 !\n" && exit 1
+        Println "$error $nginx_name 未安装 !\n"
+        exit 1
     fi
 
     echo
@@ -21383,11 +21477,12 @@ UninstallNginx()
     fi
 }
 
-UpdateNginx()
+NginxUpdate()
 {
     if [ ! -d "$nginx_prefix" ] 
     then
-        Println "$error $nginx_name 未安装 !\n" && exit 1
+        Println "$error $nginx_name 未安装 !\n"
+        exit 1
     fi
 
     UpdateShFile "$nginx_name"
@@ -21403,7 +21498,7 @@ UpdateNginx()
     fi
 
     nginx_name_upper=$(tr '[:lower:]' '[:upper:]' <<< "${nginx_name:0:1}")"${nginx_name:1}"
-    Install"$nginx_name_upper"
+    "$nginx_name_upper"Install
     Println "$info $nginx_name 升级完成\n"
 }
 
@@ -21417,39 +21512,7 @@ NginxViewStatus()
     fi
 }
 
-NginxViewDomain()
-{
-    NginxCheckDomains
-    NginxListDomains
-
-    [ "$nginx_domains_count" -eq 0 ] && Println "$error 没有域名\n" && exit 1
-
-    echo "输入序号"
-    while read -p "(默认: 取消): " nginx_domains_index
-    do
-        case "$nginx_domains_index" in
-            "")
-                Println "已取消...\n" && exit 1
-            ;;
-            *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
-            ;;
-            *)
-                if [ "$nginx_domains_index" -gt 0 ] && [ "$nginx_domains_index" -le "$nginx_domains_count" ]
-                then
-                    nginx_domains_index=$((nginx_domains_index-1))
-                    break
-                else
-                    Println "$error 请输入正确的序号\n"
-                fi
-            ;;
-        esac
-    done
-
-    NginxListDomain
-}
-
-ToggleNginx()
+NginxToggle()
 {
     echo
     yn_options=( '是' '否' )
@@ -21479,10 +21542,2253 @@ ToggleNginx()
     fi
 }
 
-RestartNginx()
+NginxRestart()
 {
     systemctl restart $nginx_name
     Println "$info $nginx_name 重启成功\n"
+}
+
+NginxParseConfig()
+{
+    if [[ ! -x $(command -v crossplane) ]] 
+    then
+        Println "$info 安装 crossplane ..."
+        InstallCrossplane
+    fi
+
+    if TMP_FILE=$(mktemp -q)
+    then
+        chmod +r "$TMP_FILE"
+    else
+        exit $?
+    fi
+
+    trap '
+        rm -f "$TMP_FILE"
+    ' EXIT
+
+    if [ -z "${1:-}" ] 
+    then
+        parse_file="$nginx_prefix/conf/nginx.conf"
+        parse_in=$(< $parse_file)
+        parse_domain=0
+    else
+        parse_file="$nginx_prefix/conf/sites_available/$1.conf"
+        parse_in="http {$(< $parse_file)}"
+        parse_domain=1
+    fi
+
+    echo "$parse_in" > "$TMP_FILE"
+
+    parse_out=$(crossplane parse "$TMP_FILE" --single-file)
+
+    rm -f "$TMP_FILE"
+
+    jq_path='["config",0,"file"]'
+    JQs update parse_out "$parse_file"
+
+    delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+}
+
+NginxGetConfig()
+{
+    strict=1
+    IFS=$'\007\t' read -r status error_message level_1_directive level_1_args \
+    level_2_directive level_2_args level_3_directive level_3_args \
+    level_4_directive level_4_args level_5_directive level_5_args < <(
+    JQs flat "$parse_out" '' \
+    '(.config.parsed|if . == "" then {} else . end) as $level_1 |
+    ($level_1.block|if . == "" then {} else . end) as $level_2 |
+    ($level_2.block|if . == "" then {} else . end) as $level_3 |
+    ($level_3.block|if . == "" then {} else . end) as $level_4 |
+    ($level_4.block|if . == "" then {} else . end) as $level_5 |
+    [.status + "\u0007",
+    (.errors|if . == "" then {} else . end).error + "\u0007",
+    ($level_1.directive|if . != null then (. + $d2) else . end) + "\u0007",
+    ($level_1.args|if . != null then (. + $d2) else . end) + "\u0007",
+    ($level_2.directive|if . != null then (. + $d3) else . end) + "\u0007",
+    ($level_2.args|if . != null then (. + $d3) else . end) + "\u0007",
+    ($level_3.directive|if . != null then (. + $d4) else . end) + "\u0007",
+    ($level_3.args|if . != null then (. + $d4) else . end) + "\u0007",
+    ($level_4.directive|if . != null then (. + $d5) else . end) + "\u0007",
+    ($level_4.args|if . != null then (. + $d5) else . end) + "\u0007",
+    ($level_5.directive|if . != null then (. + $d6) else . end) + "\u0007",
+    ($level_5.args|if . != null then (. + $d6) else . end) + "\u0007"
+    ]|@tsv' ${delimiters[@]+"${delimiters[@]}"})
+
+    if [ "$status" == "failed" ] 
+    then
+        Println "$error ${error_message//$'\002'/$'\n'}\n"
+        exit 1
+    fi
+
+    level_1_directive_count=0
+    level_2_directive_count=0
+    level_3_directive_count=0
+    level_4_directive_count=0
+    level_5_directive_count=0
+
+    if [ -z "$level_1_directive" ]
+    then
+        return 0
+    fi
+
+    # level 1 - stream,http...
+    # level 2 - map,upstream,server...
+    # level 3 - location...
+    # level 4 - proxy_pass,root,index...
+    # level 5 - return...
+    level_1_block_directives=( events stream http rtmp )
+    level_2_block_directives=( map upstream server )
+    level_3_block_directives=( location application "if" )
+    level_4_block_directives=( location "if" )
+
+    IFS="${delimiters[1]}" read -r -a level_1_directive_arr <<< "$level_1_directive"
+    IFS="${delimiters[1]}" read -r -a level_1_args_arr <<< "$level_1_args"
+
+    level_1_directive_count=${#level_1_directive_arr[@]}
+
+    if [ -z "$level_2_directive" ]
+    then
+        return 0
+    fi
+
+    IFS="${delimiters[2]}" read -r -a level_2_directive_arr <<< "$level_2_directive"
+    IFS="${delimiters[2]}" read -r -a level_2_args_arr <<< "$level_2_args"
+
+    level_2_directive_count=${#level_2_directive_arr[@]}
+
+    if [ -z "$level_3_directive" ]
+    then
+        return 0
+    fi
+
+    IFS="${delimiters[3]}" read -r -a level_3_directive_arr <<< "$level_3_directive"
+    IFS="${delimiters[3]}" read -r -a level_3_args_arr <<< "$level_3_args"
+
+    level_3_directive_count=${#level_3_directive_arr[@]}
+
+    if [ -z "$level_4_directive" ]
+    then
+        return 0
+    fi
+
+    IFS="${delimiters[4]}" read -r -a level_4_directive_arr <<< "$level_4_directive"
+    IFS="${delimiters[4]}" read -r -a level_4_args_arr <<< "$level_4_args"
+
+    level_4_directive_count=${#level_4_directive_arr[@]}
+
+    if [ -z "$level_5_directive" ]
+    then
+        return 0
+    fi
+
+    IFS="${delimiters[5]}" read -r -a level_5_directive_arr <<< "$level_5_directive"
+    IFS="${delimiters[5]}" read -r -a level_5_args_arr <<< "$level_5_args"
+
+    level_5_directive_count=${#level_5_directive_arr[@]}
+}
+
+NginxListDomains()
+{
+    if [ ! -d "$nginx_prefix" ] 
+    then
+        Println "$error $nginx_name 未安装 ! 输入 $nginx_ctl 安装 $nginx_name\n"
+        exit 1
+    fi
+
+    nginx_domains_list=""
+    nginx_domains_count=0
+    nginx_domains=()
+    nginx_domains_status=()
+
+    if ls -A "$nginx_prefix/conf/sites_available/"* > /dev/null 2>&1
+    then
+        for f in "$nginx_prefix/conf/sites_available/"*
+        do
+            nginx_domains_count=$((nginx_domains_count+1))
+            domain=${f##*/}
+            domain=${domain%.conf}
+            if [ -e "$nginx_prefix/conf/sites_enabled/$domain.conf" ] 
+            then
+                domain_status=1
+                domain_status_text="$green [开启] ${normal}"
+            else
+                domain_status=0
+                domain_status_text="$red [关闭] ${normal}"
+            fi
+            nginx_domains_list="$nginx_domains_list $green$nginx_domains_count.${normal}\r\033[6C$domain $domain_status_text\n\n"
+            nginx_domains+=("$domain")
+            nginx_domains_status+=("$domain_status")
+        done
+    fi
+
+    if [ "$nginx_domains_count" -gt 0 ] 
+    then
+        Println "$green域名列表:${normal}\n\n$nginx_domains_list"
+    fi
+}
+
+NginxSelectDomain()
+{
+    echo "选择域名"
+    while read -p "(默认: 取消): " nginx_domains_index
+    do
+        case "$nginx_domains_index" in
+            "")
+                Println "已取消...\n"
+                exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$nginx_domains_index" -gt 0 ] && [ "$nginx_domains_index" -le "$nginx_domains_count" ]
+                then
+                    nginx_domains_index=$((nginx_domains_index-1))
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+}
+
+NginxListDomain()
+{
+    NginxListDomains
+
+    if [ "$nginx_domains_count" -eq 0 ] 
+    then
+        Println "$error 没有域名\n"
+        exit 1
+    fi
+
+    NginxSelectDomain
+    NginxParseConfig ${nginx_domains[nginx_domains_index]}
+    NginxGetConfig
+
+    if [ "$level_3_directive_count" -eq 0 ] 
+    then
+        Println "$error 请先添加 ${nginx_domains[nginx_domains_index]} 配置\n"
+        exit 1
+    fi
+
+    nginx_domain_list=""
+    nginx_domain_server_count=0
+
+    for((level_1_index=0;level_1_index<level_1_directive_count;level_1_index++));
+    do
+        level_2_directive_d1=${level_2_directive_arr[level_1_index]}
+        level_3_directive_d1=${level_3_directive_arr[level_1_index]}
+        level_3_args_d1=${level_3_args_arr[level_1_index]}
+        level_4_directive_d1=${level_4_directive_arr[level_1_index]:-}
+        level_4_args_d1=${level_4_args_arr[level_1_index]:-}
+        IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
+        IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+        IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+        IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
+        IFS="${delimiters[3]}" read -r -a level_4_args_d1_arr <<< "$level_4_args_d1${delimiters[3]}"
+
+        d2_index=0
+        for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
+        do
+            if [ "${level_2_directive_d1_arr[level_2_index]}" == "server" ] 
+            then
+                level_3_directive_d2=${level_3_directive_d1_arr[d2_index]}
+                level_3_args_d2=${level_3_args_d1_arr[d2_index]}
+                level_4_directive_d2=${level_4_directive_d1_arr[d2_index]:-}
+                level_4_args_d2=${level_4_args_d1_arr[d2_index]:-}
+
+                IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
+                IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+                IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
+                IFS="${delimiters[2]}" read -r -a level_4_args_d2_arr <<< "$level_4_args_d2${delimiters[2]}"
+
+                nginx_domain_server_count=$((nginx_domain_server_count+1))
+                nginx_domain_listen=""
+                nginx_domain_server_name=""
+                nginx_domain_flv_status="${red}未配置${normal}"
+                nginx_domain_nodejs_status="${red}未配置${normal}"
+                skip_find_nodejs=0
+
+                d3_index=0
+                for((level_3_index=0;level_3_index<${#level_3_directive_d2_arr[@]};level_3_index++));
+                do
+                    level_3_directive=${level_3_directive_d2_arr[level_3_index]}
+                    level_3_args=${level_3_args_d2_arr[level_3_index]}
+
+                    if [ "$level_3_directive" == "listen" ] 
+                    then
+                        [ -n "$nginx_domain_listen" ] && nginx_domain_listen="$nginx_domain_listen, "
+                        nginx_domain_listen="$nginx_domain_listen${level_3_args//${delimiters[0]}/ }"
+                    elif [ "$level_3_directive" == "server_name" ] 
+                    then
+                        [ -n "$nginx_domain_server_name" ] && nginx_domain_server_name="$nginx_domain_server_name, "
+                        nginx_domain_server_name="$nginx_domain_server_name${level_3_args//${delimiters[0]}/ }"
+                    elif [ "$level_3_directive" == "location" ] 
+                    then
+                        if [ "${level_3_args}" == "=${delimiters[0]}/flv" ] 
+                        then
+                            nginx_domain_flv_status="${green}已配置${normal}"
+                        elif [ "${level_3_args}" == "=${delimiters[0]}/" ] && [ "$skip_find_nodejs" -eq 0 ]
+                        then
+                            level_4_directive_d3=${level_4_directive_d2_arr[d3_index]}
+                            level_4_args_d3=${level_4_args_d2_arr[d3_index]}
+                            IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
+                            IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3${delimiters[1]}"
+                            for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
+                            do
+                                if [ "${level_4_directive_d3_arr[level_4_index]}" == "proxy_pass" ] && [[ "${level_4_args_d3_arr[level_4_index]}" =~ ^http://nodejs ]]
+                                then
+                                    nginx_domain_nodejs_status="${green}已配置${normal}"
+                                    skip_find_nodejs=1
+                                    break
+                                fi
+                            done
+                        fi
+                    fi
+                    if NginxIsBlockDirective 3 "$level_3_directive"
+                    then
+                        d3_index=$((d3_index+1))
+                    fi
+                done
+
+                nginx_domain_list="$nginx_domain_list $nginx_domain_server_count.\r\033[6C域名: ${green}${nginx_domain_server_name:-未设置}${normal}\n\033[6C端口: ${green}${nginx_domain_listen:-未设置}${normal}\n\033[6Cflv: $nginx_domain_flv_status\n\033[6Cnodejs: $nginx_domain_nodejs_status\n\n"
+            fi
+            if NginxIsBlockDirective 2 "${level_2_directive_d1_arr[level_2_index]}"
+            then
+                d2_index=$((d2_index+1))
+            fi
+        done
+    done
+
+    if [ "$nginx_domain_server_count" -eq 0 ] 
+    then
+        Println "$error 请先添加 ${nginx_domains[nginx_domains_index]} 配置\n"
+        exit 1
+    fi
+
+    Println "域名 $green${nginx_domains[nginx_domains_index]}${normal} 配置:\n\n$nginx_domain_list"
+}
+
+NginxSelectDomainServer()
+{
+    echo "输入序号"
+    while read -p "(默认: 取消): " nginx_domain_server_num
+    do
+        case "$nginx_domain_server_num" in
+            "")
+                Println "已取消...\n"
+                exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$nginx_domain_server_num" -gt 0 ] && [ "$nginx_domain_server_num" -le "$nginx_domain_server_count" ]
+                then
+                    nginx_domain_server_index=$((nginx_domain_server_num-1))
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+}
+
+NginxConfigDomain()
+{
+    NginxListDomain
+
+    NginxSelectDomainServer
+
+    echo
+    domain_server_options=( "修改指令" "添加 flv 设置" "添加 nodejs 设置" )
+    inquirer list_input_index "选择操作" domain_server_options domain_server_option_index
+
+    if [ "$domain_server_option_index" -eq 0 ] 
+    then
+        d1_index=0
+        d2_index=$nginx_domains_index
+        NginxConfigDirective level_2
+    elif [ "$domain_server_option_index" -eq 1 ] 
+    then
+        updated=0
+        NginxAddFlv
+        if [ "$updated" -eq 1 ] 
+        then
+            NginxBuildConf parse_out
+        fi
+        Println "$info flv 配置添加成功\n"
+    else
+        updated=0
+        NginxAddNodejs
+        if [ "$updated" -eq 1 ] 
+        then
+            NginxBuildConf parse_out
+        fi
+        Println "$info nodejs 配置添加成功\n"
+    fi
+}
+
+NginxListLocalhost()
+{
+    NginxCheckLocalhost
+}
+
+NginxSelectLocalhostServer()
+{
+    echo "输入序号"
+    while read -p "(默认: 取消): " nginx_localhost_server_num
+    do
+        case "$nginx_localhost_server_num" in
+            "")
+                Println "已取消...\n"
+                exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$nginx_localhost_server_num" -gt 0 ] && [ "$nginx_localhost_server_num" -le "$nginx_localhost_server_count" ]
+                then
+                    nginx_localhost_server_index=$((nginx_localhost_server_num-1))
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+}
+
+NginxIsBlockDirective()
+{
+    local level=("level_${1}_block_directives"[@])
+    local block_directives=("${!level}")
+    for block_directive in "${block_directives[@]}"
+    do
+        if [ "$block_directive" == "$2" ] 
+        then
+            return 0
+        fi
+    done
+    return 1
+}
+
+NginxInputArgs()
+{
+    new_args=""
+    while true 
+    do
+        [ -n "$new_args" ] && new_args="$new_args,"
+        Println "$tip 空字符输入 \"\""
+        inquirer text_input "输入单个指令值: " args "不设置"
+        if [ "$args" == "不设置" ] 
+        then
+            args=""
+            break
+        elif [ "$args" == \"\" ] 
+        then
+            new_args="$new_args$args"
+        else
+            new_args="$new_args\"$args\""
+        fi
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "继续添加" yn_options yn_option
+        if [ "$yn_option" == "否" ] 
+        then
+            break
+        fi
+    done
+}
+
+NginxAddDirective()
+{
+    case $1 in
+        1) 
+            new_directive=""
+            for((i=0;i<${#directives[@]};i++));
+            do
+                if [ "${check_directives[i]:-1}" -eq 1 ] 
+                then
+                    for((d1_i=0;d1_i<level_1_directive_count;d1_i++));
+                    do
+                        if [ "${level_1_directive_arr[d1_i]}" == "${directives[i]}" ] 
+                        then
+                            if [ -n "${check_args[i]:-}" ] 
+                            then
+                                jq_path='["config",0,"parsed",'"$d1_i"',"args"]'
+                                JQs get parse_out args
+                                if [ "$args" == "${check_args[i]}" ] 
+                                then
+                                    continue 2
+                                fi
+                            else
+                                continue 2
+                            fi
+                        fi
+                    done
+                fi
+
+                jq_path='["config",0,"parsed"]'
+                new_directive="directive_${directives_val[i]:-${directives[i]}}"
+                JQs add parse_out "${!new_directive}"
+            done
+            if [ -n "$new_directive" ] 
+            then
+                NginxGetConfig
+                updated=1
+            fi
+        ;;
+        2) 
+            d2_path=()
+            new_directive=""
+            level_1_i=0
+            for((d1_i=0;d1_i<level_1_directive_count;d1_i++));
+            do
+                if [ "${level_1_directive_arr[d1_i]}" == "${check_path[0]}" ] 
+                then
+                    if [ -n "${level_2_directive_arr[level_1_i]:-}" ] 
+                    then
+                        level_2_directive_d1=${level_2_directive_arr[level_1_i]}
+                        add_count=1
+                    else
+                        level_2_directive_d1=""
+                        add_count=0
+                    fi
+                    IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
+                    level_2_directive_d1_arr_count=${#level_2_directive_d1_arr[@]}
+
+                    for((i=0;i<${#directives[@]};i++));
+                    do
+                        if [ "${check_directives[i]:-1}" -eq 1 ] 
+                        then
+                            for((d2_i=0;d2_i<level_2_directive_d1_arr_count;d2_i++));
+                            do
+                                if [ "${level_2_directive_d1_arr[d2_i]}" == "${directives[i]}" ] 
+                                then
+                                    if [ -n "${check_args[i]:-}" ] 
+                                    then
+                                        jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"args"]'
+                                        JQs get parse_out args
+                                        if [ "$args" == "${check_args[i]}" ] 
+                                        then
+                                            d2_path+=("$d2_i")
+                                            continue 2
+                                        fi
+                                    else
+                                        d2_path+=("$d2_i")
+                                        continue 2
+                                    fi
+                                fi
+                            done
+                        fi
+
+                        d2_path+=("$((level_2_directive_d1_arr_count-1+add_count))")
+                        add_count=$((add_count+1))
+                        jq_path='["config",0,"parsed",'"$d1_i"',"block"]'
+                        new_directive="directive_${directives_val[i]:-${directives[i]}}"
+                        JQs add parse_out "${!new_directive}"
+                    done
+                    break
+                fi
+                if NginxIsBlockDirective 1 "${level_1_directive_arr[d1_i]}"
+                then
+                    level_1_i=$((level_1_i+1))
+                fi
+            done
+            if [ -n "$new_directive" ] 
+            then
+                NginxGetConfig
+                updated=1
+            fi
+        ;;
+        3) 
+            d3_path=()
+            new_directive=""
+            level_1_i=0
+            for((d1_i=0;d1_i<level_1_directive_count;d1_i++));
+            do
+                if [ "${level_1_directive_arr[d1_i]}" == "${check_path[0]}" ] && [ -n "${level_2_directive_arr[level_1_i]}" ]
+                then
+                    level_2_directive_d1=${level_2_directive_arr[level_1_i]}
+                    IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
+                    level_3_directive_d1=${level_3_directive_arr[level_1_i]:-}
+                    IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+
+                    level_2_i=0
+                    for((d2_i=0;d2_i<${#level_2_directive_d1_arr[@]};d2_i++));
+                    do
+                        if [ "${level_2_directive_d1_arr[d2_i]}" == "${check_path[1]}" ] 
+                        then
+                            if [ -n "${level_3_directive_d1_arr[level_2_i]:-}" ] 
+                            then
+                                level_3_directive_d2=${level_3_directive_d1_arr[level_2_i]}
+                                add_count=1
+                            else
+                                level_3_directive_d2=""
+                                add_count=0
+                            fi
+                            IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
+                            level_3_directive_d2_arr_count=${#level_3_directive_d2_arr[@]}
+
+                            for((i=0;i<${#directives[@]};i++));
+                            do
+                                if [ -n "${d2_path[i]:-}" ] && [ "${d2_path[i]}" -ne "$d2_i" ]
+                                then
+                                    continue 2
+                                fi
+                                if [ "${check_directives[i]:-1}" -eq 1 ] 
+                                then
+                                    for((d3_i=0;d3_i<level_3_directive_d2_arr_count;d3_i++));
+                                    do
+                                        if [ "${level_3_directive_d2_arr[d3_i]}" == "${directives[i]}" ] 
+                                        then
+                                            if [ -n "${check_args[i]:-}" ] 
+                                            then
+                                                jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"block",'"$d3_i"',"args"]'
+                                                JQs get parse_out args
+                                                if [ "$args" == "${check_args[i]}" ] 
+                                                then
+                                                    d3_path+=("$d3_i")
+                                                    continue 2
+                                                fi
+                                            else
+                                                d3_path+=("$d3_i")
+                                                continue 2
+                                            fi
+                                        fi
+                                    done
+                                fi
+
+                                d3_path+=("$((level_3_directive_d2_arr_count-1+add_count))")
+                                add_count=$((add_count+1))
+                                jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"block"]'
+                                new_directive="directive_${directives_val[i]:-${directives[i]}}"
+                                JQs add parse_out "${!new_directive}"
+                            done
+                            break
+                        fi
+                        if NginxIsBlockDirective 2 "${level_2_directive_d1_arr[d2_i]}"
+                        then
+                            level_2_i=$((level_2_i+1))
+                        fi
+                    done
+                    break
+                fi
+                if NginxIsBlockDirective 1 "${level_1_directive_arr[d1_i]}"
+                then
+                    level_1_i=$((level_1_i+1))
+                fi
+            done
+            if [ -n "$new_directive" ] 
+            then
+                NginxGetConfig
+                updated=1
+            fi
+        ;;
+        4) 
+            d4_path=()
+            new_directive=""
+            level_1_i=0
+            for((d1_i=0;d1_i<level_1_directive_count;d1_i++));
+            do
+                if [ "${level_1_directive_arr[d1_i]}" == "${check_path[0]}" ] && [ -n "${level_3_directive_arr[level_1_i]}" ]
+                then
+                    level_2_directive_d1=${level_2_directive_arr[level_1_i]}
+                    IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
+                    level_3_directive_d1=${level_3_directive_arr[level_1_i]}
+                    IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+                    level_4_directive_d1=${level_4_directive_arr[level_1_i]:-}
+                    IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
+
+                    level_2_i=0
+                    for((d2_i=0;d2_i<${#level_2_directive_d1_arr[@]};d2_i++));
+                    do
+                        if [ "${level_2_directive_d1_arr[d2_i]}" == "${check_path[1]}" ] && [ -n "${level_3_directive_d1_arr[level_2_i]}" ]
+                        then
+                            level_3_directive_d2=${level_3_directive_d1_arr[level_2_i]}
+                            IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
+                            level_4_directive_d2=${level_4_directive_d1_arr[level_2_i]:-}
+                            IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
+
+                            level_3_i=0
+                            for((d3_i=0;d3_i<${#level_3_directive_d2_arr[@]};d3_i++));
+                            do
+                                if [ "${level_3_directive_d2_arr[d3_i]}" == "${check_path[2]}" ] 
+                                then
+                                    if [ -n "${level_4_directive_d2_arr[level_3_i]:-}" ] 
+                                    then
+                                        level_4_directive_d3=${level_4_directive_d2_arr[level_3_i]}
+                                        add_count=1
+                                    else
+                                        level_4_directive_d3=""
+                                        add_count=0
+                                    fi
+                                    IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
+                                    level_4_directive_d3_arr_count=${#level_4_directive_d3_arr[@]}
+
+                                    for((i=0;i<${#directives[@]};i++));
+                                    do
+                                        if [ -n "${d2_path[i]:-}" ] && [ "${d2_path[i]}" -ne "$d2_i" ]
+                                        then
+                                            continue 3
+                                        fi
+                                        if [ -n "${d3_path[i]:-}" ] && [ "${d3_path[i]}" -ne "$d3_i" ]
+                                        then
+                                            continue 2
+                                        fi
+                                        if [ "${check_directives[i]:-1}" -eq 1 ] 
+                                        then
+                                            for((d4_i=0;d4_i<level_4_directive_d3_arr_count;d4_i++));
+                                            do
+                                                if [ "${level_4_directive_d3_arr[d4_i]}" == "${directives[i]}" ] 
+                                                then
+                                                    if [ -n "${check_args[i]:-}" ] 
+                                                    then
+                                                        jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"block",'"$d3_i"',"block",'"$d4_i"',"args"]'
+                                                        JQs get parse_out args
+                                                        if [ "$args" == "${check_args[i]}" ] 
+                                                        then
+                                                            continue 2
+                                                        fi
+                                                    else
+                                                        continue 2
+                                                    fi
+                                                fi
+                                            done
+                                        fi
+
+                                        d4_path+=("$((level_4_directive_d3_arr_count-1+add_count))")
+                                        add_count=$((add_count+1))
+                                        jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"block",'"$d3_i"',"block"]'
+                                        new_directive="directive_${directives_val[i]:-${directives[i]}}"
+                                        JQs add parse_out "${!new_directive}"
+                                    done
+                                    break
+                                fi
+                                if NginxIsBlockDirective 3 "${level_3_directive_d2_arr[d3_i]}"
+                                then
+                                    level_3_i=$((level_3_i+1))
+                                fi
+                            done
+                            break
+                        fi
+                        if NginxIsBlockDirective 2 "${level_2_directive_d1_arr[d2_i]}"
+                        then
+                            level_2_i=$((level_2_i+1))
+                        fi
+                    done
+                    break
+                fi
+                if NginxIsBlockDirective 1 "${level_1_directive_arr[d1_i]}"
+                then
+                    level_1_i=$((level_1_i+1))
+                fi
+            done
+            if [ -n "$new_directive" ] 
+            then
+                NginxGetConfig
+                updated=1
+            fi
+        ;;
+        5) 
+            new_directive=""
+            level_1_i=0
+            for((d1_i=0;d1_i<level_1_directive_count;d1_i++));
+            do
+                if [ "${level_1_directive_arr[d1_i]}" == "${check_path[0]}" ] && [ -n "${level_4_directive_arr[level_1_i]}" ]
+                then
+                    level_2_directive_d1=${level_2_directive_arr[level_1_i]}
+                    IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
+                    level_3_directive_d1=${level_3_directive_arr[level_1_i]}
+                    IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+                    level_4_directive_d1=${level_4_directive_arr[level_1_i]}
+                    IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
+                    level_5_directive_d1=${level_5_directive_arr[level_1_i]:-}
+                    IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "$level_5_directive_d1${delimiters[4]}"
+
+                    level_2_i=0
+                    for((d2_i=0;d2_i<${#level_2_directive_d1_arr[@]};d2_i++));
+                    do
+                        if [ "${level_2_directive_d1_arr[d2_i]}" == "${check_path[1]}" ] && [ -n "${level_4_directive_d1_arr[level_2_i]}" ]
+                        then
+                            level_3_directive_d2=${level_3_directive_d1_arr[level_2_i]}
+                            IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
+                            level_4_directive_d2=${level_4_directive_d1_arr[level_2_i]}
+                            IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
+                            level_5_directive_d2=${level_5_directive_d1_arr[level_2_i]:-}
+                            IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "$level_5_directive_d2${delimiters[3]}"
+
+                            level_3_i=0
+                            for((d3_i=0;d3_i<${#level_3_directive_d2_arr[@]};d3_i++));
+                            do
+                                if [ "${level_3_directive_d2_arr[d3_i]}" == "${check_path[2]}" ] && [ -n "${level_4_directive_d1_arr[level_3_i]}" ]
+                                then
+                                    level_4_directive_d3=${level_4_directive_d2_arr[level_3_i]}
+                                    IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
+                                    level_5_directive_d3=${level_5_directive_d2_arr[level_3_i]:-}
+                                    IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "$level_5_directive_d3${delimiters[2]}"
+
+                                    level_4_i=0
+                                    for((d4_i=0;d4_i<${#level_4_directive_d3_arr[@]};d4_i++));
+                                    do
+                                        if [ "${level_4_directive_d3_arr[d4_i]}" == "${check_path[3]}" ] 
+                                        then
+                                            level_5_directive_d4=${level_5_directive_d3_arr[level_4_i]:-}
+                                            IFS="${delimiters[1]}" read -r -a level_5_directive_d4_arr <<< "$level_5_directive_d4${delimiters[1]}"
+                                            for((i=0;i<${#directives[@]};i++));
+                                            do
+                                                if [ -n "${d2_path[i]:-}" ] && [ "${d2_path[i]}" -ne "$d2_i" ]
+                                                then
+                                                    continue 4
+                                                fi
+                                                if [ -n "${d3_path[i]:-}" ] && [ "${d3_path[i]}" -ne "$d3_i" ]
+                                                then
+                                                    continue 3
+                                                fi
+                                                if [ -n "${d4_path[i]:-}" ] && [ "${d4_path[i]}" -ne "$d4_i" ]
+                                                then
+                                                    continue 2
+                                                fi
+                                                if [ "${check_directives[i]:-1}" -eq 1 ] 
+                                                then
+                                                    for((d5_i=0;d5_i<${#level_5_directive_d4_arr[@]};d5_i++));
+                                                    do
+                                                        if [ "${level_5_directive_d4_arr[d5_i]}" == "${directives[i]}" ] 
+                                                        then
+                                                            if [ -n "${check_args[i]:-}" ] 
+                                                            then
+                                                                jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"block",'"$d3_i"',"block",'"$d4_i"',"block",'"$d5_i"',"args"]'
+                                                                JQs get parse_out args
+                                                                if [ "$args" == "${check_args[i]}" ] 
+                                                                then
+                                                                    continue 2
+                                                                fi
+                                                            else
+                                                                continue 2
+                                                            fi
+                                                        fi
+                                                    done
+                                                fi
+
+                                                jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"block",'"$d3_i"',"block",'"$d4_i"',"block"]'
+                                                new_directive="directive_${directives_val[i]:-${directives[i]}}"
+                                                JQs add parse_out "${!new_directive}"
+                                            done
+                                            break
+                                        fi
+                                        if NginxIsBlockDirective 4 "${level_4_directive_d3_arr[d3_i]}"
+                                        then
+                                            level_4_i=$((level_4_i+1))
+                                        fi
+                                    done
+                                    break
+                                fi
+                                if NginxIsBlockDirective 3 "${level_3_directive_d2_arr[d3_i]}"
+                                then
+                                    level_3_i=$((level_3_i+1))
+                                fi
+                            done
+                            break
+                        fi
+                        if NginxIsBlockDirective 2 "${level_2_directive_d1_arr[d2_i]}"
+                        then
+                            level_2_i=$((level_2_i+1))
+                        fi
+                    done
+                    break
+                fi
+                if NginxIsBlockDirective 1 "${level_1_directive_arr[d1_i]}"
+                then
+                    level_1_i=$((level_1_i+1))
+                fi
+            done
+            if [ -n "$new_directive" ] 
+            then
+                NginxGetConfig
+                updated=1
+            fi
+        ;;
+        level_1|level_2|level_3|level_4|level_5) 
+            level_id=${1#*_}
+
+            zh=( "" "一" "二" "三" "四" "五" )
+
+            Println "$tip 空字符输入 \"\""
+            inquirer text_input "输入${zh[level_id]}级指令: " new_directive "取消"
+
+            if [ "$new_directive" == "取消" ] 
+            then
+                return 0
+            fi
+
+            if [ "$new_directive" == \"\" ] 
+            then
+                new_directive=""
+            fi
+
+            NginxInputArgs
+
+            if [ "$level_id" -ne 5 ] && NginxIsBlockDirective "$level_id" "$new_directive" 
+            then
+                directive=$(
+                    $JQ_FILE -n --arg directive "$new_directive" --argjson args "[$new_args]" \
+                    '{
+                        "directive": $directive,
+                        "args": $args,
+                        "block":[]
+                    }'
+                )
+            else
+                directive=$(
+                    $JQ_FILE -n --arg directive "$new_directive" --argjson args "[$new_args]" \
+                    '{
+                        "directive": $directive,
+                        "args": $args
+                    }'
+                )
+            fi
+
+            jq_path='"config",0,"parsed"'
+
+            for((i=1;i<level_id;i++));
+            do
+                index_name="level_${i}_index"
+                jq_path="$jq_path,${!index_name},\"block\""
+            done
+
+            jq_path="[$jq_path]"
+            JQs add parse_out "$directive"
+
+            NginxBuildConf parse_out
+            NginxGetConfig
+
+            Println "$info 指令 $new_directive 添加成功\n"
+        ;;
+    esac
+}
+
+NginxAddHttp()
+{
+    directive_http='
+    {"directive":"http","args":[],"block":[
+        {"directive":"include","args":["mime.types"]},
+        {"directive":"default_type","args":["application/octet-stream"]},
+        {"directive":"sendfile","args":["on"]},
+        {"directive":"keepalive_timeout","args":["65"]},
+        {"directive":"server","args":[],"block":[
+            {"directive":"listen","args":["80"]},
+            {"directive":"server_name","args":["localhost"]},
+            {"directive":"access_log","args":["logs/localhost-access.log"]},
+            {"directive":"error_log","args":["logs/localhost-error.log"]},
+            {"directive":"location","args":["/"],"block":[
+                {"directive":"root","args":["html/localhost"]},
+                {"directive":"index","args":["index.html","index.htm"]}
+            ]},
+            {"directive":"error_page","args":["500","502","503","504","/50x.html"]},
+            {"directive":"location","args":["/50x.html"],"block":[
+                {"directive":"root","args":["html/localhost"]}
+            ]}
+        ]}
+    ]}'
+    directives=( http )
+    directives_val=()
+    check_directives=()
+    check_args=()
+
+    NginxAddDirective 1
+}
+
+NginxAddRtmp()
+{
+    directive_rtmp_auto_push='{"directive":"rtmp_auto_push","args":["on"]}'
+    directive_rtmp_auto_push_reconnect='{"directive":"rtmp_auto_push_reconnect","args":["1s"]}'
+    directive_rtmp_socket_dir='{"directive":"rtmp_socket_dir","args":["/tmp"]}'
+    directive_rtmp='
+    {"directive":"rtmp","args":[],"block":[
+        {"directive":"out_queue","args":["4096"]},
+        {"directive":"out_cork","args":["8"]},
+        {"directive":"max_streams","args":["128"]},
+        {"directive":"timeout","args":["15s"]},
+        {"directive":"drop_idle_publisher","args":["10s"]},
+        {"directive":"log_interval","args":["120s"]},
+        {"directive":"log_size","args":["1m"]},
+        {"directive":"server","args":[],"block":[
+            {"directive":"listen","args":["1935"]},
+            {"directive":"server_name","args":["localhost"]},
+            {"directive":"access_log","args":["logs/flv.log"]},
+            {"directive":"application","args":["flv"],"block":[
+                {"directive":"live","args":["on"]},
+                {"directive":"gop_cache","args":["on"]}
+            ]}
+        ]}
+    ]}'
+
+    directives=( rtmp_auto_push rtmp_auto_push_reconnect rtmp_socket_dir rtmp )
+    directives_val=()
+    check_directives=()
+    check_args=()
+
+    NginxAddDirective 1
+}
+
+NginxAddSitesEnabled()
+{
+    directive_include='{"directive":"include","args":["sites_enabled/*.conf"]}'
+    directives=( include )
+    directives_val=()
+    check_directives=()
+    check_args=( '["sites_enabled/*.conf"]' )
+    check_path=( http )
+
+    NginxAddDirective 2
+}
+
+NginxAddSsl()
+{
+    directive_ssl_session_cache='{"directive":"ssl_session_cache","args":["shared:SSL:20m"]}'
+    directive_ssl_session_timeout='{"directive":"ssl_session_timeout","args":["2h"]}'
+    directive_ssl_prefer_server_ciphers='{"directive":"ssl_prefer_server_ciphers","args":["on"]}'
+    directive_ssl_protocols='{"directive":"ssl_protocols","args":["TLSv1.2","TLSv1.3"]}'
+    directive_ssl_ciphers='{"directive":"ssl_ciphers","args":["HIGH:!aNULL:!MD5"]}'
+    directive_ssl_stapling='{"directive":"ssl_stapling","args":["on"]}'
+    directive_ssl_stapling_verify='{"directive":"ssl_stapling_verify","args":["on"]}'
+    directive_resolver='{"directive":"resolver","args":["8.8.8.8"]}'
+
+    directives=( ssl_session_cache ssl_session_timeout ssl_prefer_server_ciphers ssl_protocols 
+        ssl_ciphers ssl_stapling ssl_stapling_verify resolver )
+    directives_val=()
+    check_directives=()
+    check_args=()
+    check_path=( http )
+
+    NginxAddDirective 2
+}
+
+NginxAddLocalhost()
+{
+    directive_server='
+    {"directive":"server","args":[],"block":[
+        {"directive":"listen","args":["80"]},
+        {"directive":"server_name","args":["localhost"]},
+        {"directive":"access_log","args":["logs/localhost-access.log"]},
+        {"directive":"error_log","args":["logs/localhost-error.log"]},
+        {"directive":"location","args":["/"],"block":[
+            {"directive":"root","args":["html/localhost"]},
+            {"directive":"index","args":["index.html","index.htm"]}
+        ]},
+        {"directive":"error_page","args":["500","502","503","504","/50x.html"]},
+        {"directive":"location","args":["/50x.html"],"block":[
+            {"directive":"root","args":["html/localhost"]}
+        ]}
+    ]}'
+
+    directives=( server )
+    directives_val=()
+    check_directives=()
+    check_args=()
+    check_path=( http )
+
+    NginxAddDirective 2
+}
+
+NginxAddNodejs()
+{
+    server_ip=${server_ip:-$(GetServerIp)}
+
+    directive_location_1='
+    {"directive":"location","args":["=","/"],"block":[
+        {"directive":"proxy_redirect","args":["off"]},
+        {"directive":"proxy_pass","args":["http://nodejs"]},
+        {"directive":"proxy_cache_bypass","args":["1"]},
+        {"directive":"proxy_no_cache","args":["1"]},
+        {"directive":"proxy_cookie_path","args":["/","/$samesite_none"]},
+        {"directive":"proxy_cookie_domain","args":["localhost","'"$server_ip"'"]}
+    ]}'
+
+    directive_location_2='
+    {"directive":"location","args":["=","/channels"],"block":[
+        {"directive":"proxy_redirect","args":["off"]},
+        {"directive":"proxy_pass","args":["http://nodejs"]},
+        {"directive":"proxy_cache_bypass","args":["1"]},
+        {"directive":"proxy_no_cache","args":["1"]}
+    ]}'
+
+    directive_location_3='
+    {"directive":"location","args":["=","/channels.json"],"block":[
+        {"directive":"return","args":["302","/channels"]}
+    ]}'
+
+    directive_location_4='
+    {"directive":"location","args":["=","/remote"],"block":[
+        {"directive":"proxy_redirect","args":["off"]},
+        {"directive":"proxy_pass","args":["http://nodejs"]},
+        {"directive":"proxy_cache_bypass","args":["1"]},
+        {"directive":"proxy_no_cache","args":["1"]},
+        {"directive":"proxy_cookie_path","args":["/","/$samesite_none"]},
+        {"directive":"proxy_cookie_domain","args":["localhost","'"$server_ip"'"]}
+    ]}'
+
+    directive_location_5='
+    {"directive":"location","args":["=","/remote.json"],"block":[
+        {"directive":"return","args":["302","/remote"]}
+    ]}'
+
+    directive_location_6='
+    {"directive":"location","args":["=","/keys"],"block":[
+        {"directive":"proxy_redirect","args":["off"]},
+        {"directive":"proxy_pass","args":["http://nodejs"]},
+        {"directive":"proxy_cache_bypass","args":["1"]},
+        {"directive":"proxy_no_cache","args":["1"]}
+    ]}'
+
+    directive_location_7='
+    {"directive":"location","args":["~","\\.(keyinfo|key)$"],"block":[
+        {"directive":"return","args":["403"]}
+    ]}'
+
+    directive_add_header_1='{"directive":"add_header","args":["Access-Control-Allow-Origin","$cors_host"]}'
+    directive_add_header_2='{"directive":"add_header","args":["Vary","Origin"]}'
+    directive_add_header_3='{"directive":"add_header","args":["X-Frame-Options","SAMEORIGIN"]}'
+    directive_add_header_4='{"directive":"add_header","args":["Access-Control-Allow-Credentials","true"]}'
+    directive_add_header_5='{"directive":"add_header","args":["Cache-Control","no-cache"]}'
+
+    directive_location_8='
+    {"directive":"location","args":["/flv"],"block":[
+        {"directive":"flv_live","args":["on"]},
+        {"directive":"chunked_transfer_encoding","args":["on"]}
+    ]}'
+
+    directives=( location location location location location location location 
+        add_header add_header add_header add_header add_header location )
+    directives_val=( location_1 location_2 location_3 location_4 location_5 location_6 location_7 
+        add_header_1 add_header_2 add_header_3 add_header_4 add_header_5 location_8 )
+
+    check_directives=()
+    check_args=( '["=","/"]' '["=","/channels"]' '["=","/channels.json"]' '["=","/remote"]' 
+        '["=","/remote.json"]' '["=","/keys"]' '["~","\\.(keyinfo|key)$"]' '["Access-Control-Allow-Origin","$cors_host"]' 
+        '["Vary","Origin"]' '["X-Frame-Options","SAMEORIGIN"]' '["Access-Control-Allow-Credentials","true"]' 
+        '["Cache-Control","no-cache"]' '["/flv"]' )
+    check_path=( http server )
+
+    d2_path=( "${nginx_domain_server_index:-$nginx_localhost_server_index}" )
+    for((i=0;i<${#directives[@]};i++));
+    do
+        d2_path[i]=${d2_path[0]}
+    done
+
+    NginxAddDirective 3
+}
+
+NginxAddCorsHost()
+{
+    Println "$info 配置 cors..."
+
+    cors_domains=()
+
+    if ls -A "$nginx_prefix/conf/sites_available/"* > /dev/null 2>&1
+    then
+        for f in "$nginx_prefix/conf/sites_available/"*
+        do
+            domain=${f##*/}
+            domain=${domain%.conf}
+            if [[ $domain =~ ^([a-zA-Z0-9](([a-zA-Z0-9-]){0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]] 
+            then
+                cors_domains+=("$domain")
+                cors_domains="$cors_domains
+        ~http://$domain http://$domain;
+        ~https://$domain https://$domain;"
+            fi
+        done
+    fi
+
+    if [ -n "${cors_domains:-}" ] 
+    then
+        directive_map='{"directive":"map","args":["$http_origin","$cors_host"],"block":[]}'
+        directives=( map )
+        directives_val=()
+
+        check_directives=()
+        check_args=( '["$http_origin","$cors_host"]' )
+        check_path=( http )
+
+        NginxAddDirective 2
+
+        server_ip=$(GetServerIp)
+
+        directive_default='{"directive":"default","args":["*"]}'
+
+        read -r directive_server_ip_http < <(
+            $JQ_FILE -c -n --arg directive "~http://$server_ip" --argjson args "[\"~http://$server_ip\"]" \
+            '{
+                "directive":$directive,
+                "args":$args
+            }'
+        )
+
+        read -r directive_server_ip_https < <(
+            $JQ_FILE -c -n --arg directive "~https://$server_ip" --argjson args "[\"~https://$server_ip\"]" \
+            '{
+                "directive":$directive,
+                "args":$args
+            }'
+        )
+
+        directives=( default "~http://$server_ip" "~https://$server_ip" )
+        directives_val=( default directive_server_ip_http directive_server_ip_https )
+
+        for((cors_i=0;cors_i<${#cors_domains[@]};cors_i++));
+        do
+            read -r directive_cors_domain_${cors_i}_http < <(
+                $JQ_FILE -c -n --arg directive "~http://${cors_domains[cors_i]}" --argjson args "[\"~http://${cors_domains[cors_i]}\"]" \
+                '{
+                    "directive":$directive,
+                    "args":$args
+                }'
+            )
+            read -r directive_cors_domain_${cors_i}_https < <(
+                $JQ_FILE -c -n --arg directive "~https://${cors_domains[cors_i]}" --argjson args "[\"~https://${cors_domains[cors_i]}\"]" \
+                '{
+                    "directive":$directive,
+                    "args":$args
+                }'
+            )
+            directives+=( "~http://${cors_domains[cors_i]}" "~https://${cors_domains[cors_i]}" )
+            directives_val+=( directive_cors_domain_${cors_i}_http directive_cors_domain_${cors_i}_https )
+        done
+
+        check_directives=()
+        check_args=()
+        check_path=( http map )
+
+        for((i=0;i<${#directives[@]};i++));
+        do
+            d2_path[i]=${d2_path[0]}
+        done
+
+        NginxAddDirective 3
+    fi
+
+    if ! grep -q "$nginx_name:" < "/etc/passwd"
+    then
+        if grep -q '\--group ' < <(adduser --help)
+        then
+            adduser "$nginx_name" --system --group --no-create-home > /dev/null
+        else
+            adduser "$nginx_name" --system --no-create-home > /dev/null
+        fi
+        usermod -s /usr/sbin/nologin "$nginx_name"
+    fi
+
+    sed -i "s/#user  nobody;/user $nginx_name $nginx_name;/" "$nginx_prefix/conf/nginx.conf"
+}
+
+NginxAddUpstreamNodejs()
+{
+    directive_upstream='{"directive":"upstream","args":["nodejs"],"block":[]}'
+
+    directives=( upstream )
+    directives_val=()
+    check_directives=()
+    check_args=( '["nodejs"]' )
+    check_path=( http )
+
+    NginxAddDirective 2
+
+    directive_server='{"directive":"server","args":["127.0.0.1:'"$nodejs_port"'"]}'
+
+    directives=( server )
+    directives_val=()
+    check_directives=()
+    check_args=()
+    check_path=( http upstream )
+
+    NginxAddDirective 3
+}
+
+NginxAddFlv()
+{
+    d2_path=( "${nginx_domain_server_index:-nginx_localhost_server_index}" )
+
+    directive_location='{"directive":"location","args":["/flv"],"block":[]}'
+
+    directives=( location )
+    directives_val=()
+    check_directives=()
+    check_args=( '["/flv"]' )
+    check_path=( http server )
+
+    NginxAddDirective 3
+
+    directive_flv_live='{"directive":"flv_live","args":["on"]}'
+    directive_chunked_transfer_encoding='{"directive":"chunked_transfer_encoding","args":["on"]}'
+
+    directives=( flv_live chunked_transfer_encoding )
+    directives_val=()
+    check_directives=()
+    check_args=()
+    check_path=( http server location )
+    d3_path[1]=${d3_path[0]}
+
+    NginxAddDirective 4
+}
+
+NginxAddSameSiteNone()
+{
+    directive_map='{"directive":"map","args":["$http_user_agent","$samesite_none"],"block":[]}'
+
+    directives=( map )
+    directives_val=()
+    check_directives=()
+    check_args=( '["$http_user_agent","$samesite_none"]' )
+    check_path=( http )
+
+    NginxAddDirective 2
+
+    directive_default='{"directive":"default","args":["; Secure"]}'
+    directive_chrome='{"directive":"~Chrom[^ \\/]+\\/8[\\d][\\.\\d]*","args":["; Secure; SameSite=None"]}'
+
+    directives=( default '~Chrom[^ \\/]+\\/8[\\d][\\.\\d]*' )
+    directives_val=( default chrome )
+    check_directives=()
+    check_args=( '["; Secure"]' )
+    check_path=( http map )
+
+    NginxAddDirective 3
+}
+
+NginxBuildConf()
+{
+    if TMP_FILE=$(mktemp -q)
+    then
+        chmod +r "$TMP_FILE"
+    else
+        exit $?
+    fi
+
+    trap '
+        rm -f "$TMP_FILE"
+    ' EXIT
+
+    if [ "$parse_domain" -eq 1 ] 
+    then
+        parse_out_domain=${!1}
+        jq_path='["config",0,"parsed",0,"block"]'
+        JQs get parse_out_domain domain_conf
+        jq_path='["config",0,"parsed"]'
+        JQs replace parse_out_domain "$domain_conf"
+        echo "$parse_out_domain" > "$TMP_FILE"
+    else
+        echo "${!1}" > "$TMP_FILE"
+    fi
+
+    crossplane build -f --no-headers "$TMP_FILE"
+
+    rm -f "$TMP_FILE"
+}
+
+NginxCheckLocalhost()
+{
+    if [ ! -d "$nginx_prefix" ] 
+    then
+        Println "$error $nginx_name 未安装 !\n"
+        exit 1
+    fi
+
+    mkdir -p "$nginx_prefix/conf/sites_crt/"
+    mkdir -p "$nginx_prefix/conf/sites_available/"
+    mkdir -p "$nginx_prefix/conf/sites_enabled/"
+
+    NginxParseConfig
+    NginxGetConfig
+
+    updated=0
+
+    NginxAddHttp
+
+    NginxAddRtmp
+
+    NginxAddSitesEnabled
+
+    NginxAddSsl
+
+    level_1_i=0
+    server_offset=0
+    for((d1_i=0;d1_i<level_1_directive_count;d1_i++));
+    do
+        if [ "${level_1_directive_arr[d1_i]}" == "http" ] && [ -n "${level_2_directive_arr[level_1_i]}" ]
+        then
+            level_2_directive_d1=${level_2_directive_arr[level_1_i]}
+            level_2_args_d1=${level_2_args_arr[level_1_i]}
+            IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
+            IFS="${delimiters[1]}" read -r -a level_2_args_d1_arr <<< "$level_2_args_d1${delimiters[1]}"
+            level_3_directive_d1=${level_3_directive_arr[level_1_i]:-}
+            level_3_args_d1=${level_3_args_arr[level_1_i]:-}
+            IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+            IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+
+            level_2_i=0
+            for((d2_i=0;d2_i<${#level_2_directive_d1_arr[@]};d2_i++));
+            do
+                if [ "${level_2_directive_d1_arr[d2_i]}" == "server" ] && [ -n "${level_3_directive_d1_arr[level_2_i]:-}" ]
+                then
+                    level_3_directive_d2=${level_3_directive_d1_arr[level_2_i]}
+                    level_3_args_d2=${level_3_args_d1_arr[level_2_i]}
+                    IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
+                    IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+
+                    for((d3_i=0;d3_i<${#level_3_directive_d2_arr[@]};d3_i++));
+                    do
+                        if [ "${level_3_directive_d2_arr[d3_i]}" == "server_name" ] 
+                        then
+                            if [ "${level_3_args_d2_arr[d3_i]}" == "localhost" ] 
+                            then
+                                continue 2
+                            fi
+                            updated=1
+                            IFS="${delimiters[0]}" read -r -a domains <<< "${level_3_args_d2_arr[d3_i]}${delimiters[0]}"
+                            new_conf='{"status":"ok","errors":[],"config":[]}'
+                            localhost_found=0
+                            for((l=0;l<${#domains[@]};l++));
+                            do
+                                if [ "${domains[l]}" == "localhost" ] 
+                                then
+                                    localhost_found=1
+                                    continue
+                                fi
+                                jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"']'
+                                JQs get parse_out new_server
+                                jq_path='["block",'"$d3_i"',"args"]'
+                                JQs replace new_server '["'${domains[l]}'"]'
+                                jq_path='["config"]'
+                                JQs add new_conf '{"file":"'"$nginx_prefix/conf/sites_available/${domains[l]}.conf"'","status":"ok","errors":[],"parsed":['"$new_server"']}'
+                                ln -sf "$nginx_prefix/conf/sites_available/${domains[l]}.conf" "$nginx_prefix/conf/sites_enabled/"
+                            done
+                            NginxBuildConf new_conf
+                            if [ "$localhost_found" -eq 0 ] 
+                            then
+                                jq_path='["config",0,"parsed",'"$d1_i"',"block"]'
+                                JQs delete parse_out "$((j-server_offset))"
+                                server_offset=$((server_offset+1))
+                            else
+                                jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"block",'"$d3_i"',"args"]'
+                                JQs replace parse_out '["localhost"]'
+                            fi
+                        elif [ "${level_3_directive_d2_arr[d3_i]}" == "add_header" ] && [ "${level_3_args_d2_arr[d3_i]}" == 'Access-Control-Allow-Origin'"${delimiters[0]}"'$corsHost' ]
+                        then
+                            updated=1
+                            jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"block",'"$d3_i"',"args"]'
+                            JQs replace parse_out '["Access-Control-Allow-Origin","$cors_host"]'
+                        fi
+                    done
+                elif [ "${level_2_directive_d1_arr[d2_i]}" == "map" ] && [ "${level_2_args_d1_arr[d2_i]}" == '$http_origin'"${delimiters[0]}"'$corsHost' ]
+                then
+                    updated=1
+                    jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"args"]'
+                    JQs replace parse_out '["$http_origin","$cors_host"]'
+                fi
+                if NginxIsBlockDirective 2 "${level_2_directive_d1_arr[d2_i]}"
+                then
+                    level_2_i=$((level_2_i+1))
+                fi
+            done
+            break
+        fi
+        if NginxIsBlockDirective 1 "${level_1_directive_arr[d1_i]}"
+        then
+            level_1_i=$((level_1_i+1))
+        fi
+    done
+
+    if [ "$server_offset" -gt 0 ] 
+    then
+        NginxGetConfig
+    fi
+
+    NginxAddLocalhost
+
+    if [ "$updated" -eq 1 ] 
+    then
+        NginxBuildConf parse_out
+
+        if ls -A "$nginx_prefix/conf/sites_available/"* > /dev/null 2>&1 
+        then
+            for f in "$nginx_prefix/conf/sites_available/"*
+            do
+                sed -i 's/$corsHost/$cors_host/g' "$f"
+            done
+        fi
+
+        sed -i 's/$corsHost/$cors_host/g' "$nginx_prefix/conf/nginx.conf"
+    fi
+}
+
+NginxConfigDirective()
+{
+    case $1 in
+        level_1) 
+            while true 
+            do
+                level_1_options=()
+                level_1_is_block_directive=()
+
+                d1_index=0
+                d1_indices=()
+
+                for((level_1_index=0;level_1_index<level_1_directive_count;level_1_index++));
+                do
+                    level_1_option=${level_1_directive_arr[level_1_index]:-\"\"}
+
+                    if NginxIsBlockDirective 1 "$level_1_option" 
+                    then
+                        d1_indices[level_1_index]="$d1_index"
+                        d1_index=$((d1_index+1))
+                        level_1_is_block_directive+=(1)
+                    else
+                        level_1_is_block_directive+=(0)
+                    fi
+
+                    if [ -n "${level_1_args_arr[level_1_index]}" ] || [ "${level_1_is_block_directive[level_1_index]}" -eq 0 ]
+                    then
+                        IFS="${delimiters[0]}" read -r -a args <<< "${level_1_args_arr[level_1_index]}${delimiters[0]}"
+                        for arg in "${args[@]}"
+                        do
+                            level_1_option="$level_1_option ${arg:-\"\"}"
+                        done
+                    fi
+
+                    if [ "${level_1_is_block_directive[level_1_index]}" -eq 1 ]
+                    then
+                        level_1_option="$level_1_option {...}"
+                    fi
+
+                    level_1_options+=("$level_1_option")
+                done
+
+                level_1_options+=("添加指令" "取消")
+                level_1_options_count=${#level_1_options[@]}
+
+                while true 
+                do
+                    echo
+                    inquirer list_input_index "选择指令" level_1_options level_1_index
+
+                    if [ "$level_1_index" -eq "$((level_1_options_count-1))" ] 
+                    then
+                        Println "已取消...\n"
+                        break
+                    elif [ "$level_1_index" -eq "$((level_1_options_count-2))" ] 
+                    then
+                        NginxAddDirective level_1
+                        continue 2
+                    else
+                        level_1_actions=()
+
+                        if [ "${level_1_is_block_directive[level_1_index]}" -eq 1 ] 
+                        then
+                            level_1_actions+=("修改二级指令")
+                        fi
+
+                        if [ -n "${level_1_args_arr[level_1_index]}" ] || [ "${level_1_is_block_directive[level_1_index]}" -eq 0 ] 
+                        then
+                            level_1_actions+=("修改指令")
+                        fi
+
+                        level_1_actions+=("删除指令" "返回选择")
+
+                        echo
+                        inquirer list_input "选择操作" level_1_actions level_1_action
+
+                        if [ "$level_1_action" == "修改二级指令" ] 
+                        then
+                            d1_index=${d1_indices[level_1_index]}
+                            from_level_1=1
+                            NginxConfigDirective level_2
+                            unset from_level_1
+                        elif [ "$level_1_action" == "修改指令" ]
+                        then
+                            NginxInputArgs
+                            jq_path='["config",0,"parsed",'"$level_1_index"',"args"]'
+                            JQs replace parse_out "[$new_args]"
+                            NginxBuildConf parse_out
+                            NginxGetConfig
+                            Println "$info ${level_1_directive_arr[level_1_index]} 指令修改成功\n"
+                            continue 2
+                        elif [ "$level_1_action" == "删除指令" ] 
+                        then
+                            echo
+                            yn_options=( '否' '是' )
+                            inquirer list_input "确认删除, 此操作不可恢复" yn_options yn_option
+                            if [ "$yn_option" == "是" ] 
+                            then
+                                jq_path='["config",0,"parsed"]'
+                                JQs delete parse_out "$level_1_index"
+                                NginxBuildConf parse_out
+                                NginxGetConfig
+                                Println "$info 已删除指令 ${level_1_directive_arr[level_1_index]}\n"
+                                continue 2
+                            fi
+                        fi
+                    fi
+                done
+                break
+            done
+        ;;
+        level_2) 
+            while true 
+            do
+                level_2_options=()
+                level_2_is_block_directive=()
+
+                d2_index=0
+                d2_indices=()
+
+                if [ "$level_2_directive_count" -gt 0 ] && [ -n "${level_2_directive_arr[d1_index]:-}" ]
+                then
+                    level_2_directive_d1=${level_2_directive_arr[d1_index]}
+                    level_2_args_d1=${level_2_args_arr[d1_index]}
+
+                    IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "${level_2_directive_d1}${delimiters[1]}"
+                    IFS="${delimiters[1]}" read -r -a level_2_args_d1_arr <<< "${level_2_args_d1}${delimiters[1]}"
+
+                    for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
+                    do
+                        level_2_option=${level_2_directive_d1_arr[level_2_index]:-\"\"}
+
+                        if NginxIsBlockDirective 2 "$level_2_option" 
+                        then
+                            d2_indices[level_2_index]="$d2_index"
+                            d2_index=$((d2_index+1))
+                            level_2_is_block_directive+=(1)
+                        else
+                            level_2_is_block_directive+=(0)
+                        fi
+
+                        if [ -n "${level_2_args_d1_arr[level_2_index]}" ] || [ "${level_2_is_block_directive[level_2_index]}" -eq 0 ]
+                        then
+                            IFS="${delimiters[0]}" read -r -a args <<< "${level_2_args_d1_arr[level_2_index]}${delimiters[0]}"
+                            for arg in "${args[@]}"
+                            do
+                                level_2_option="$level_2_option ${arg:-\"\"}"
+                            done
+                        fi
+
+                        if [ "${level_2_is_block_directive[level_2_index]}" -eq 1 ]
+                        then
+                            level_2_option="$level_2_option {...}"
+                        fi
+
+                        level_2_options+=("$level_2_option")
+                    done
+                fi
+
+                level_2_options+=("添加指令")
+
+                if [ "${from_level_1:-0}" -eq 1 ] 
+                then
+                    level_2_options+=("返回一级指令")
+                else
+                    level_2_options+=("取消")
+                fi
+
+                level_2_options_count=${#level_2_options[@]}
+
+                while true 
+                do
+                    echo
+                    inquirer list_input_index "选择指令" level_2_options level_2_index
+
+                    if [ "$level_2_index" -eq "$((level_2_options_count-1))" ] 
+                    then
+                        if [ "${from_level_1:-0}" -eq 0 ] 
+                        then
+                            Println "已取消...\n"
+                        fi
+                        break
+                    elif [ "$level_2_index" -eq "$((level_2_options_count-2))" ] 
+                    then
+                        NginxAddDirective level_2
+                        continue 2
+                    else
+                        level_2_actions=()
+
+                        if [ "${level_2_is_block_directive[level_2_index]}" -eq 1 ] 
+                        then
+                            level_2_actions+=("修改三级指令")
+                        fi
+
+                        if [ -n "${level_2_args_d1_arr[level_2_index]}" ] || [ "${level_2_is_block_directive[level_2_index]}" -eq 0 ] 
+                        then
+                            level_2_actions+=("修改指令")
+                        fi
+
+                        level_2_actions+=("删除指令" "返回选择")
+
+                        echo
+                        inquirer list_input "选择操作" level_2_actions level_2_action
+
+                        if [ "$level_2_action" == "修改三级指令" ] 
+                        then
+                            d1_offset=0
+                            for((check_i=0;check_i<d1_index;check_i++));
+                            do
+                                level_2_directive_check=${level_2_directive_arr[check_i]}
+                                IFS="${delimiters[1]}" read -r -a level_2_directive_check_arr <<< "${level_2_directive_check}${delimiters[1]}"
+                                for directive in "${level_2_directive_check_arr[@]}"
+                                do
+                                    if NginxIsBlockDirective 2 "$directive"
+                                    then
+                                        continue 2
+                                    fi
+                                done
+                                d1_offset=$((d1_offset+1))
+                            done
+                            d2_index=${d2_indices[level_2_index]}
+                            from_level_2=1
+                            NginxConfigDirective level_3
+                            unset from_level_2
+                        elif [ "$level_2_action" == "修改指令" ]
+                        then
+                            NginxInputArgs
+                            jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"args"]'
+                            JQs replace parse_out "[$new_args]"
+                            NginxBuildConf parse_out
+                            NginxGetConfig
+                            Println "$info ${level_2_directive_d1_arr[level_2_index]} 指令修改成功\n"
+                            continue 2
+                        elif [ "$level_2_action" == "删除指令" ] 
+                        then
+                            echo
+                            yn_options=( '否' '是' )
+                            inquirer list_input "确认删除, 此操作不可恢复" yn_options yn_option
+                            if [ "$yn_option" == "是" ] 
+                            then
+                                jq_path='["config",0,"parsed",'"$level_1_index"',"block"]'
+                                JQs delete parse_out "$level_2_index"
+                                NginxBuildConf parse_out
+                                NginxGetConfig
+                                Println "$info 已删除指令 ${level_2_directive_d1_arr[level_2_index]}\n"
+                                continue 2
+                            fi
+                        fi
+                    fi
+                done
+                break
+            done
+        ;;
+        level_3) 
+            while true 
+            do
+                level_3_options=()
+                level_3_is_block_directive=()
+
+                d3_index=0
+                d3_indices=()
+
+                if [ "$level_3_directive_count" -gt 0 ] 
+                then
+                    level_3_directive_d1=${level_3_directive_arr[d1_index-d1_offset]}
+                    level_3_args_d1=${level_3_args_arr[d1_index-d1_offset]}
+
+                    IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}${delimiters[2]}"
+                    IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "${level_3_args_d1}${delimiters[2]}"
+
+                    if [ -n "${level_3_directive_d1_arr[d2_index]:-}" ] 
+                    then
+                        level_3_directive_d2=${level_3_directive_d1_arr[d2_index]}
+                        level_3_args_d2=${level_3_args_d1_arr[d2_index]}
+
+                        IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "${level_3_directive_d2}${delimiters[1]}"
+                        IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "${level_3_args_d2}${delimiters[1]}"
+
+                        for((level_3_index=0;level_3_index<${#level_3_directive_d2_arr[@]};level_3_index++));
+                        do
+                            level_3_option=${level_3_directive_d2_arr[level_3_index]:-\"\"}
+
+                            if NginxIsBlockDirective 3 "$level_3_option" 
+                            then
+                                d3_indices[level_3_index]="$d3_index"
+                                d3_index=$((d3_index+1))
+                                level_3_is_block_directive+=(1)
+                            else
+                                level_3_is_block_directive+=(0)
+                            fi
+
+                            if [ -n "${level_3_args_d2_arr[level_3_index]}" ] || [ "${level_3_is_block_directive[level_3_index]}" -eq 0 ]
+                            then
+                                IFS="${delimiters[0]}" read -r -a args <<< "${level_3_args_d2_arr[level_3_index]}${delimiters[0]}"
+                                for arg in "${args[@]}"
+                                do
+                                    level_3_option="$level_3_option ${arg:-\"\"}"
+                                done
+                            fi
+
+                            if [ "${level_3_is_block_directive[level_3_index]}" -eq 1 ]
+                            then
+                                level_3_option="$level_3_option {...}"
+                            fi
+
+                            level_3_options+=("$level_3_option")
+                        done
+                    fi
+                fi
+
+                level_3_options+=("添加指令")
+
+                if [ "${from_level_2:-0}" -eq 1 ] 
+                then
+                    level_3_options+=("返回二级指令")
+                else
+                    level_3_options+=("取消")
+                fi
+
+                level_3_options_count=${#level_3_options[@]}
+
+                while true 
+                do
+                    echo
+                    inquirer list_input_index "选择指令" level_3_options level_3_index
+
+                    if [ "$level_3_index" -eq "$((level_3_options_count-1))" ] 
+                    then
+                        if [ "${from_level_2:-0}" -eq 0 ] 
+                        then
+                            Println "已取消...\n"
+                        fi
+                        break
+                    elif [ "$level_3_index" -eq "$((level_3_options_count-2))" ] 
+                    then
+                        NginxAddDirective level_3
+                        continue 2
+                    else
+                        level_3_actions=()
+
+                        if [ "${level_3_is_block_directive[level_3_index]}" -eq 1 ] 
+                        then
+                            level_3_actions+=("修改四级指令")
+                        fi
+
+                        if [ -n "${level_3_args_d2_arr[level_3_index]}" ] || [ "${level_3_is_block_directive[level_3_index]}" -eq 0 ] 
+                        then
+                            level_3_actions+=("修改指令")
+                        fi
+
+                        level_3_actions+=("删除指令" "返回选择")
+
+                        echo
+                        inquirer list_input "选择操作" level_3_actions level_3_action
+
+                        if [ "$level_3_action" == "修改四级指令" ] 
+                        then
+                            for((check_i=0;check_i<d1_index-d1_offset;check_i++));
+                            do
+                                level_3_directive_d1=${level_3_directive_arr[check_i]}
+                                IFS="${delimiters[2]}" read -r -a level_3_directive_d1_check <<< "${level_3_directive_d1}${delimiters[2]}"
+                                for level_3_directive_d2 in "${level_3_directive_d1_check[@]}"
+                                do
+                                    IFS="${delimiters[1]}" read -r -a level_3_directive_d2_check <<< "${level_3_directive_d2}${delimiters[1]}"
+                                    for directive in "${level_3_directive_d2_check[@]}"
+                                    do
+                                        if NginxIsBlockDirective 3 "$directive"
+                                        then
+                                            continue 3
+                                        fi
+                                    done
+                                done
+                                d1_offset=$((d1_offset+1))
+                            done
+                            d2_offset=0
+                            for((check_i=0;check_i<d2_index;check_i++));
+                            do
+                                level_3_directive_d1=${level_3_directive_d1_arr[check_i]}
+                                IFS="${delimiters[2]}" read -r -a level_3_directive_d1_check <<< "${level_3_directive_d1}${delimiters[2]}"
+                                for level_3_directive_d2 in "${level_3_directive_d1_check[@]}"
+                                do
+                                    IFS="${delimiters[1]}" read -r -a level_3_directive_d2_check <<< "${level_3_directive_d2}${delimiters[1]}"
+                                    for directive in "${level_3_directive_d2_check[@]}"
+                                    do
+                                        if NginxIsBlockDirective 3 "$directive"
+                                        then
+                                            continue 3
+                                        fi
+                                    done
+                                done
+                                d2_offset=$((d2_offset+1))
+                            done
+                            d3_index=${d3_indices[level_3_index]}
+                            from_level_3=1
+                            NginxConfigDirective level_4
+                            unset from_level_3
+                        elif [ "$level_3_action" == "修改指令" ]
+                        then
+                            NginxInputArgs
+                            jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"args"]'
+                            JQs replace parse_out "[$new_args]"
+                            NginxBuildConf parse_out
+                            NginxGetConfig
+                            Println "$info ${level_3_directive_d2_arr[level_3_index]} 指令修改成功\n"
+                            continue 2
+                        elif [ "$level_3_action" == "删除指令" ] 
+                        then
+                            echo
+                            yn_options=( '否' '是' )
+                            inquirer list_input "确认删除, 此操作不可恢复" yn_options yn_option
+                            if [ "$yn_option" == "是" ] 
+                            then
+                                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block"]'
+                                JQs delete parse_out "$level_3_index"
+                                NginxBuildConf parse_out
+                                NginxGetConfig
+                                Println "$info 已删除指令 ${level_3_directive_d2_arr[level_3_index]}\n"
+                                continue 2
+                            fi
+                        fi
+                    fi
+                done
+                break
+            done
+        ;;
+        level_4) 
+            while true 
+            do
+                level_4_options=()
+                level_4_is_block_directive=()
+
+                d4_index=0
+                d4_indices=()
+
+                if [ "$level_4_directive_count" -gt 0 ] 
+                then
+                    level_4_directive_d1=${level_4_directive_arr[d1_index-d1_offset]}
+                    level_4_args_d1=${level_4_args_arr[d1_index-d1_offset]}
+
+                    IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}${delimiters[3]}"
+                    IFS="${delimiters[3]}" read -r -a level_4_args_d1_arr <<< "${level_4_args_d1}${delimiters[3]}"
+
+                    level_4_directive_d2=${level_4_directive_d1_arr[d2_index-d2_offset]}
+                    level_4_args_d2=${level_4_args_d1_arr[d2_index-d2_offset]}
+
+                    IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}${delimiters[2]}"
+                    IFS="${delimiters[2]}" read -r -a level_4_args_d2_arr <<< "${level_4_args_d2}${delimiters[2]}"
+
+                    if [ -n "${level_4_directive_d2_arr[d3_index]:-}" ]
+                    then
+                        level_4_directive_d3=${level_4_directive_d2_arr[d3_index]}
+                        level_4_args_d3=${level_4_args_d2_arr[d3_index]}
+
+                        IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "${level_4_directive_d3}${delimiters[1]}"
+                        IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "${level_4_args_d3}${delimiters[1]}"
+
+                        for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
+                        do
+                            level_4_option=${level_4_directive_d3_arr[level_4_index]:-\"\"}
+
+                            if NginxIsBlockDirective 4 "$level_4_option"
+                            then
+                                d4_indices[level_4_index]="$d4_index"
+                                d4_index=$((d4_index+1))
+                                level_4_is_block_directive+=(1)
+                            else
+                                level_4_is_block_directive+=(0)
+                            fi
+
+                            if [ -n "${level_4_args_d3_arr[level_4_index]}" ] || [ "${level_4_is_block_directive[level_4_index]}" -eq 0 ]
+                            then
+                                IFS="${delimiters[0]}" read -r -a args <<< "${level_4_args_d3_arr[level_4_index]}${delimiters[0]}"
+                                for arg in "${args[@]}"
+                                do
+                                    level_4_option="$level_4_option ${arg:-\"\"}"
+                                done
+                            fi
+
+                            if [ "${level_4_is_block_directive[level_4_index]}" -eq 1 ]
+                            then
+                                level_4_option="$level_4_option {...}"
+                            fi
+
+                            level_4_options+=("$level_4_option")
+                        done
+                    fi
+                fi
+
+                level_4_options+=("添加指令")
+
+                if [ "${from_level_3:-0}" -eq 1 ] 
+                then
+                    level_4_options+=("返回三级指令")
+                else
+                    level_4_options+=("取消")
+                fi
+
+                level_4_options_count=${#level_4_options[@]}
+
+                while true 
+                do
+                    echo
+                    inquirer list_input_index "选择指令" level_4_options level_4_index
+
+                    if [ "$level_4_index" -eq "$((level_4_options_count-1))" ] 
+                    then
+                        if [ "${from_level_3:-0}" -eq 0 ] 
+                        then
+                            Println "已取消...\n"
+                        fi
+                        break
+                    elif [ "$level_4_index" -eq "$((level_4_options_count-2))" ] 
+                    then
+                        NginxAddDirective level_4
+                        continue 2
+                    else
+                        level_4_actions=()
+
+                        if [ "${level_4_is_block_directive[level_4_index]}" -eq 1 ] 
+                        then
+                            level_4_actions+=("修改五级指令")
+                        fi
+
+                        if [ -n "${level_4_args_d3_arr[level_4_index]}" ] || [ "${level_4_is_block_directive[level_4_index]}" -eq 0 ] 
+                        then
+                            level_4_actions+=("修改指令")
+                        fi
+
+                        level_4_actions+=("删除指令" "返回选择")
+
+                        echo
+                        inquirer list_input "选择操作" level_4_actions level_4_action
+
+                        if [ "$level_4_action" == "修改五级指令" ] 
+                        then
+                            for((check_i=0;check_i<d1_index-d1_offset;check_i++));
+                            do
+                                level_4_directive_d1=${level_4_directive_arr[check_i]}
+                                IFS="${delimiters[3]}" read -r -a level_4_directive_d1_check <<< "${level_4_directive_d1}${delimiters[3]}"
+                                for level_4_directive_d2 in "${level_4_directive_d1_check[@]}"
+                                do
+                                    IFS="${delimiters[2]}" read -r -a level_4_directive_d2_check <<< "${level_4_directive_d2}${delimiters[2]}"
+                                    for level_4_directive_d3 in "${level_4_directive_d2_check[@]}"
+                                    do
+                                        IFS="${delimiters[1]}" read -r -a level_4_directive_d3_check <<< "${level_4_directive_d3}${delimiters[1]}"
+                                        for directive in "${level_4_directive_d3_check[@]}"
+                                        do
+                                            if NginxIsBlockDirective 4 "$directive"
+                                            then
+                                                continue 4
+                                            fi
+                                        done
+                                    done
+                                done
+                                d1_offset=$((d1_offset+1))
+                            done
+                            for((check_i=0;check_i<d2_index-d2_offset;check_i++));
+                            do
+                                level_4_directive_d1=${level_4_directive_d1_arr[check_i]}
+                                IFS="${delimiters[3]}" read -r -a level_4_directive_d1_check <<< "${level_4_directive_d1}${delimiters[3]}"
+                                for level_4_directive_d2 in "${level_4_directive_d1_check[@]}"
+                                do
+                                    IFS="${delimiters[2]}" read -r -a level_4_directive_d2_check <<< "${level_4_directive_d2}${delimiters[2]}"
+                                    for level_4_directive_d3 in "${level_4_directive_d2_check[@]}"
+                                    do
+                                        IFS="${delimiters[1]}" read -r -a level_4_directive_d3_check <<< "${level_4_directive_d3}${delimiters[1]}"
+                                        for directive in "${level_4_directive_d3_check[@]}"
+                                        do
+                                            if NginxIsBlockDirective 4 "$directive"
+                                            then
+                                                continue 4
+                                            fi
+                                        done
+                                    done
+                                done
+                                d2_offset=$((d2_offset+1))
+                            done
+                            d3_offset=0
+                            for((check_i=0;check_i<d3_index;check_i++));
+                            do
+                                level_4_directive_d1=${level_4_directive_d2_arr[check_i]}
+                                IFS="${delimiters[3]}" read -r -a level_4_directive_d1_check <<< "${level_4_directive_d1}${delimiters[3]}"
+                                for level_4_directive_d2 in "${level_4_directive_d1_check[@]}"
+                                do
+                                    IFS="${delimiters[2]}" read -r -a level_4_directive_d2_check <<< "${level_4_directive_d2}${delimiters[2]}"
+                                    for level_4_directive_d3 in "${level_4_directive_d2_check[@]}"
+                                    do
+                                        IFS="${delimiters[1]}" read -r -a level_4_directive_d3_check <<< "${level_4_directive_d3}${delimiters[1]}"
+                                        for directive in "${level_4_directive_d3_check[@]}"
+                                        do
+                                            if NginxIsBlockDirective 4 "$directive"
+                                            then
+                                                continue 4
+                                            fi
+                                        done
+                                    done
+                                done
+                                d3_offset=$((d3_offset+1))
+                            done
+                            d4_index=${d4_indices[level_4_index]}
+                            from_level_4=1
+                            NginxConfigDirective level_5
+                            unset from_level_4
+                        elif [ "$level_4_action" == "修改指令" ]
+                        then
+                            NginxInputArgs
+                            jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block",'"$level_4_index"',"args"]'
+                            JQs replace parse_out "[$new_args]"
+                            NginxBuildConf parse_out
+                            NginxGetConfig
+                            Println "$info ${level_4_directive_d3_arr[level_4_index]} 指令修改成功\n"
+                            continue 2
+                        elif [ "$level_4_action" == "删除指令" ] 
+                        then
+                            echo
+                            yn_options=( '否' '是' )
+                            inquirer list_input "确认删除, 此操作不可恢复" yn_options yn_option
+                            if [ "$yn_option" == "是" ] 
+                            then
+                                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block"]'
+                                JQs delete parse_out "$level_4_index"
+                                NginxBuildConf parse_out
+                                NginxGetConfig
+                                Println "$info 已删除指令 ${level_4_directive_d3_arr[level_4_index]}\n"
+                                continue 2
+                            fi
+                        fi
+                    fi
+                done
+                break
+            done
+        ;;
+        level_5) 
+            while true 
+            do
+                level_5_options=()
+
+                if [ "$level_5_directive_count" -gt 0 ] 
+                then
+                    level_5_directive_d1=${level_5_directive_arr[d1_index-d1_offset]}
+                    level_5_args_d1=${level_5_args_arr[d1_index-d1_offset]}
+
+                    IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}${delimiters[4]}"
+                    IFS="${delimiters[4]}" read -r -a level_5_args_d1_arr <<< "${level_5_args_d1}${delimiters[4]}"
+
+                    level_5_directive_d2=${level_5_directive_d1_arr[d2_index-d2_offset]}
+                    level_5_args_d2=${level_5_args_arr[d2_index-d2_offset]}
+
+                    IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}${delimiters[3]}"
+                    IFS="${delimiters[3]}" read -r -a level_5_args_d2_arr <<< "${level_5_args_d2}${delimiters[3]}"
+
+                    level_5_directive_d3=${level_5_directive_d2_arr[d3_index-d3_offset]}
+                    level_5_args_d3=${level_5_args_d2_arr[d3_index-d3_offset]}
+
+                    IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}${delimiters[2]}"
+                    IFS="${delimiters[2]}" read -r -a level_5_args_d3_arr <<< "${level_5_args_d3}${delimiters[2]}"
+
+                    if [ -n "${level_5_directive_d3_arr[d4_index]:-}" ]
+                    then
+                        level_5_directive_d4=${level_5_directive_d3_arr[d4_index]}
+                        level_5_args_d4=${level_5_args_d3_arr[d4_index]}
+
+                        IFS="${delimiters[1]}" read -r -a level_5_directive_d4_arr <<< "${level_5_directive_d4}${delimiters[1]}"
+                        IFS="${delimiters[1]}" read -r -a level_5_args_d4_arr <<< "${level_5_args_d4}${delimiters[1]}"
+
+                        for((level_5_index=0;level_5_index<${#level_5_directive_d4_arr[@]};level_5_index++));
+                        do
+                            level_5_option=${level_5_directive_d4_arr[level_5_index]:-\"\"}
+
+                            if [ -n "${level_5_args_d4_arr[level_5_index]}" ] 
+                            then
+                                IFS="${delimiters[0]}" read -r -a args <<< "${level_5_args_d4_arr[level_5_index]}${delimiters[0]}"
+                                for arg in "${args[@]}"
+                                do
+                                    level_5_option="$level_5_option ${arg:-\"\"}"
+                                done
+                            fi
+
+                            level_5_options+=("$level_5_option")
+                        done
+                    fi
+                fi
+
+                level_5_options+=("添加指令")
+
+                if [ "${from_level_4:-0}" -eq 1 ] 
+                then
+                    level_5_options+=("返回四级指令")
+                else
+                    level_5_options+=("取消")
+                fi
+
+                level_5_options_count=${#level_5_options[@]}
+
+                while true 
+                do
+                    echo
+                    inquirer list_input_index "选择指令" level_5_options level_5_index
+
+                    if [ "$level_5_index" -eq "$((level_5_options_count-1))" ] 
+                    then
+                        if [ "${from_level_4:-0}" -eq 0 ] 
+                        then
+                            Println "已取消...\n"
+                        fi
+                        break
+                    elif [ "$level_5_index" -eq "$((level_5_options_count-2))" ] 
+                    then
+                        NginxAddDirective level_5
+                        continue 2
+                    else
+                        level_5_actions=()
+
+                        if [ -n "${level_5_args_d4_arr[level_5_index]}" ] 
+                        then
+                            level_5_actions+=("修改指令")
+                        fi
+
+                        level_5_actions+=("删除指令" "返回选择")
+
+                        echo
+                        inquirer list_input "选择操作" level_5_actions level_5_action
+
+                        if [ "$level_5_action" == "修改指令" ]
+                        then
+                            NginxInputArgs
+                            jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block",'"$level_4_index"',"args",'"$level_5_index"',"args"]'
+                            JQs replace parse_out "[$new_args]"
+                            NginxBuildConf parse_out
+                            NginxGetConfig
+                            Println "$info ${level_5_directive_d4_arr[level_5_index]} 指令修改成功\n"
+                            continue 2
+                        elif [ "$level_5_action" == "删除指令" ] 
+                        then
+                            echo
+                            yn_options=( '否' '是' )
+                            inquirer list_input "确认删除, 此操作不可恢复" yn_options yn_option
+                            if [ "$yn_option" == "是" ] 
+                            then
+                                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block",'"$level_4_index"',"block"]'
+                                JQs delete parse_out "$level_5_index"
+                                NginxBuildConf parse_out
+                                NginxGetConfig
+                                Println "$info 已删除指令 ${level_5_directive_d4_arr[level_5_index]}\n"
+                                continue 2
+                            fi
+                        fi
+                    fi
+                done
+                break
+            done
+        ;;
+    esac
+}
+
+NginxConfigLocalhost()
+{
+    NginxCheckLocalhost
+
+    NginxConfigDirective level_1
 }
 
 NginxConfigServerHttpPort()
@@ -21605,808 +23911,6 @@ NginxConfigBlockAliyun()
     fi
 }
 
-NginxCheckDomains()
-{
-    if [ ! -d "$nginx_prefix" ] 
-    then
-        Println "$error $nginx_name 未安装 ! 输入 $nginx_ctl 安装 $nginx_name\n" && exit 1
-    fi
-    [ ! -d "$nginx_prefix/conf/sites_crt" ] && mkdir -p "$nginx_prefix/conf/sites_crt/"
-    [ ! -d "$nginx_prefix/conf/sites_available" ] && mkdir -p "$nginx_prefix/conf/sites_available/"
-    [ ! -d "$nginx_prefix/conf/sites_enabled" ] && mkdir -p "$nginx_prefix/conf/sites_enabled/"
-    conf=""
-    server_conf=""
-    server_found=0
-    server_flag=0
-    server_localhost=0
-    server_localhost_found=0
-    server_domains=()
-    http_found=0
-    http_flag=0
-    sites_found=0
-    rtmp_found=0
-    while IFS= read -r line 
-    do
-        lead=${line%%[^[:blank:]]*}
-        first_char=${line#${lead}}
-        first_char=${first_char:0:1}
-
-        if [[ $line == *"rtmp {"* ]] && [[ $first_char != "#" ]]
-        then
-            rtmp_found=1
-        fi
-
-        if [[ $line == *"http {"* ]] && [[ $first_char != "#" ]]
-        then
-            http_found=1
-        fi
-
-        if [[ $http_found -eq 1 ]] && [[ $line == *"{"* ]] 
-        then
-            http_flag=$((http_flag+1))
-        fi
-
-        if [[ $http_found -eq 1 ]] && [[ $line == *"sites_enabled/*.conf"* ]] 
-        then
-            sites_found=1
-        fi
-
-        if [[ $http_found -eq 1 ]] && [[ $line == *"}"* ]] 
-        then
-            http_flag=$((http_flag-1))
-            if [[ $http_flag -eq 0 ]] 
-            then
-                if [[ $sites_found -eq 0 ]] 
-                then
-                    line="    include sites_enabled/*.conf;\n$line"
-                fi
-                if [[ $server_localhost_found -eq 0 ]] 
-                then
-                    line="
-    server {
-        listen       80;
-        server_name  localhost;
-
-        access_log logs/access.log;
-
-        location /flv {
-            flv_live on;
-            chunked_transfer_encoding  on;
-        }
-
-        location / {
-            root   html;
-            index  index.html index.htm;
-        }
-
-        error_page   500 502 503 504  /50x.html;
-        location = /50x.html {
-            root   html;
-        }
-    }\n\n$line"
-                fi
-                http_found=0
-            fi
-        fi
-
-        if [[ $http_found -eq 1 ]] && [[ $line == *"server {"* ]] && [[ $first_char != "#" ]]
-        then
-            server_conf=""
-            server_found=1
-            server_localhost=0
-            server_domains=()
-        fi
-
-        if [[ $server_found -eq 1 ]] && [[ $line == *"{"* ]] 
-        then
-            server_flag=$((server_flag+1))
-        fi
-
-        if [[ $server_found -eq 1 ]] && [[ $line == *"}"* ]] 
-        then
-            server_flag=$((server_flag-1))
-        fi
-
-        if [[ $server_found -eq 1 ]] && [[ $line == *"server_name "* ]] 
-        then
-            server_names=${line#*server_name }
-            server_names=${server_names%;*}
-            lead=${server_names%%[^[:blank:]]*}
-            server_names=${server_names#${lead}}
-            IFS=" " read -ra server_names_array <<< "$server_names"
-            for server_name in "${server_names_array[@]}"
-            do
-                if [[ $server_name == "localhost" ]]
-                then
-                    server_localhost=1
-                    server_localhost_found=1
-                else
-                    server_domains+=("$server_name")
-                fi
-            done
-
-            if [[ $server_localhost -eq 1 ]] 
-            then
-                line="${line%%server_name*}server_name localhost;"
-            fi
-        fi
-
-        if [[ $server_found -eq 1 ]] 
-        then
-            [ -n "$server_conf" ] && server_conf="$server_conf\n"
-            server_conf="$server_conf$line"
-            if [[ $server_flag -eq 0 ]] && [[ $line == *"}"* ]] 
-            then
-                server_found=0
-                if [[ -n ${server_domains:-} ]] 
-                then
-                    for server_domain in "${server_domains[@]}"
-                    do
-                        server_domain_conf=""
-                        while IFS= read -r server_domain_line 
-                        do
-                            if [[ $server_domain_line == *"server_name "* ]] 
-                            then
-                                server_domain_line="${server_domain_line%%server_name*}server_name $server_domain;"
-                            fi
-                            [ -n "$server_domain_conf" ] && server_domain_conf="$server_domain_conf\n"
-                            server_domain_conf="$server_domain_conf$server_domain_line"
-                        done < <(echo -e "$server_conf")
-                        echo -e "$server_domain_conf\n" >> "$nginx_prefix/conf/sites_available/$server_domain.conf"
-                        ln -sf "$nginx_prefix/conf/sites_available/$server_domain.conf" "$nginx_prefix/conf/sites_enabled/"
-                    done
-                fi
-                if [[ $server_localhost -eq 0 ]] && [[ ${#server_domains[@]} -gt 0 ]]
-                then
-                    continue
-                else
-                    line=$server_conf
-                fi
-            fi
-        fi
-
-        if [[ $server_found -eq 0 ]] 
-        then
-            [ -n "$conf" ] && conf="$conf\n"
-            conf="$conf$line"
-        fi
-    done < "$nginx_prefix/conf/nginx.conf"
-    if [[ $rtmp_found -eq 1 ]] 
-    then
-        echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/nginx.conf"
-    else
-        echo -e "${conf//\\b/\\\\b}
-
-rtmp_auto_push on;
-rtmp_auto_push_reconnect 1s;
-rtmp_socket_dir /tmp;
-
-rtmp {
-    out_queue   4096;
-    out_cork    8;
-    max_streams   128;
-    timeout   15s;
-    drop_idle_publisher   10s;
-    log_interval    120s;
-    log_size    1m;
-
-    server {
-        listen 1935;
-        server_name 127.0.0.1;
-        access_log  logs/flv.log;
-
-        application flv {
-            live on;
-            gop_cache on;
-        }
-    }
-}" > "$nginx_prefix/conf/nginx.conf"
-    fi
-}
-
-NginxConfigCorsHost()
-{
-    Println "$info 配置 cors..."
-    hosts=()
-    cors_domains=""
-    if ls -A "$nginx_prefix/conf/sites_available/"* > /dev/null 2>&1
-    then
-        for f in "$nginx_prefix/conf/sites_available/"*
-        do
-            domain=${f##*/}
-            domain=${domain%.conf}
-            if [[ $domain =~ ^([a-zA-Z0-9](([a-zA-Z0-9-]){0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]] 
-            then
-                hosts+=("$domain")
-                cors_domains="$cors_domains
-        ~http://$domain http://$domain;
-        ~https://$domain https://$domain;"
-            fi
-        done
-    fi
-    server_ip=$(GetServerIp)
-    cors_domains="$cors_domains
-        ~http://$server_ip http://$server_ip;"
-    if ! grep -q "map \$http_origin \$corsHost" < "$nginx_prefix/conf/nginx.conf"
-    then
-        conf=""
-        found=0
-        while IFS= read -r line 
-        do
-            if [ "$found" -eq 0 ] && [[ $line == *"server {"* ]]
-            then
-                lead=${line%%[^[:blank:]]*}
-                first_char=${line#${lead}}
-                first_char=${first_char:0:1}
-                if [[ $first_char != "#" ]] 
-                then
-                    line="
-    map \$http_origin \$corsHost {
-        default *;
-        ~http://$server_ip http://$server_ip;
-    }\n\n$line"
-                    found=1
-                fi
-            fi
-            [ -n "$conf" ] && conf="$conf\n"
-            conf="$conf$line"
-        done < "$nginx_prefix/conf/nginx.conf"
-        echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/nginx.conf"
-    else
-        conf=""
-        found=0
-        while IFS= read -r line 
-        do
-            if [ "$found" -eq 0 ] && [[ $line == *"map \$http_origin \$corsHost"* ]]
-            then
-                found=1
-                continue
-            fi
-            if [ "$found" -eq 1 ] && [[ $line == *"}"* ]] 
-            then
-                line="    map \$http_origin \$corsHost {\n        default *;$cors_domains\n    }"
-                found=0
-            fi
-            if [ "$found" -eq 1 ] 
-            then
-                if [[ $line =~ http([^\"]+) ]] 
-                then
-                    host_found=0
-                    found_host=${BASH_REMATCH[1]}
-                    for host in ${hosts[@]+"${hosts[@]}"}
-                    do
-                        if [ "$host" == "${found_host#*//}" ] 
-                        then
-                            host_found=1
-                            break
-                        fi
-                    done
-                    if [[ $host_found -eq 0 ]] && [[ ! $line =~ $server_ip ]]
-                    then
-                        cors_domains="$cors_domains
-        ~http$found_host http$found_host;"
-                    fi
-                fi
-                continue
-            fi
-            [ -n "$conf" ] && conf="$conf\n"
-            conf="$conf$line"
-        done < "$nginx_prefix/conf/nginx.conf"
-        echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/nginx.conf"
-    fi
-    if ! grep -q "$nginx_name:" < "/etc/passwd"
-    then
-        if grep -q '\--group ' < <(adduser --help)
-        then
-            adduser "$nginx_name" --system --group --no-create-home > /dev/null
-        else
-            adduser "$nginx_name" --system --no-create-home > /dev/null
-        fi
-        usermod -s /usr/sbin/nologin "$nginx_name"
-    fi
-    sed -i "s/#user  nobody;/user $nginx_name $nginx_name;/" "$nginx_prefix/conf/nginx.conf"
-}
-
-NginxConfigSsl()
-{
-    conf=""
-    found=0
-    while IFS= read -r line 
-    do
-        if [ "$found" -eq 0 ] && { [[ $line == *"ssl_session_cache "* ]] || [[ $line == *"ssl_session_timeout "* ]] || [[ $line == *"ssl_prefer_server_ciphers "* ]] || [[ $line == *"ssl_protocols "* ]] || [[ $line == *"ssl_ciphers "* ]] || [[ $line == *"ssl_stapling "* ]] || [[ $line == *"ssl_stapling_verify "* ]] || [[ $line == *"resolver "* ]]; }
-        then
-            continue
-        fi
-        if [ "$found" -eq 0 ] && [[ $line == *"server {"* ]]
-        then
-            lead=${line%%[^[:blank:]]*}
-            first_char=${line#${lead}}
-            first_char=${first_char:0:1}
-            if [[ $first_char != "#" ]] 
-            then
-                line="
-    ssl_session_cache           shared:SSL:20m;
-    ssl_session_timeout         2h;
-    ssl_prefer_server_ciphers   on;
-    ssl_protocols               TLSv1.2 TLSv1.3;
-    ssl_ciphers                 HIGH:!aNULL:!MD5;
-    ssl_stapling on;
-    ssl_stapling_verify on;
-    resolver 8.8.8.8;
-
-$line"
-                found=1
-            fi
-        fi
-        [ -n "$conf" ] && conf="$conf\n"
-        conf="$conf$line"
-    done < "$nginx_prefix/conf/nginx.conf"
-    PrettyConfig
-    echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/nginx.conf"
-}
-
-NginxListDomains()
-{
-    nginx_domains_list=""
-    nginx_domains_count=0
-    nginx_domains=()
-    nginx_domains_status=()
-    if ls -A "$nginx_prefix/conf/sites_available/"* > /dev/null 2>&1
-    then
-        for f in "$nginx_prefix/conf/sites_available/"*
-        do
-            nginx_domains_count=$((nginx_domains_count+1))
-            domain=${f##*/}
-            domain=${domain%.conf}
-            if [ -e "$nginx_prefix/conf/sites_enabled/$domain.conf" ] 
-            then
-                domain_status=1
-                domain_status_text="$green [开启] ${normal}"
-            else
-                domain_status=0
-                domain_status_text="$red [关闭] ${normal}"
-            fi
-            nginx_domains_list="$nginx_domains_list $green$nginx_domains_count.${normal}\r\033[6C$domain $domain_status_text\n\n"
-            nginx_domains+=("$domain")
-            nginx_domains_status+=("$domain_status")
-        done
-    fi
-    [ -n "$nginx_domains_list" ] && Println "$green域名列表:${normal}\n\n$nginx_domains_list"
-    return 0
-}
-
-NginxListDomain()
-{
-    nginx_domain_list=""
-    nginx_domain_server_found=0
-    nginx_domain_server_flag=0
-    nginx_domain_servers_count=0
-    nginx_domain_servers_https_port=()
-    nginx_domain_servers_http_port=()
-    nginx_domain_servers_root=()
-    while IFS= read -r line 
-    do
-        if [[ $line == *"server {"* ]] 
-        then
-            nginx_domain_server_found=1
-            https_ports=""
-            http_ports=""
-            nodejs_found=0
-            flv_found=0
-            root=""
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"{"* ]] 
-        then
-            nginx_domain_server_flag=$((nginx_domain_server_flag+1))
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"}"* ]] 
-        then
-            nginx_domain_server_flag=$((nginx_domain_server_flag-1))
-            if [[ $nginx_domain_server_flag -eq 0 ]] 
-            then
-                nginx_domain_server_found=0
-                nginx_domain_servers_count=$((nginx_domain_servers_count+1))
-                nginx_domain_servers_https_port+=("$https_ports")
-                nginx_domain_servers_http_port+=("$http_ports")
-                nginx_domain_servers_root+=("$root")
-                if [[ $flv_found -eq 1 ]] 
-                then
-                    flv_status="$green已配置${normal}"
-                else
-                    flv_status="$red未配置${normal}"
-                fi
-                if [[ $nodejs_found -eq 1 ]] 
-                then
-                    nodejs_status="$green已配置${normal}"
-                else
-                    nodejs_status="$red未配置${normal}"
-                fi
-                nginx_domain_list=$nginx_domain_list" $green$nginx_domain_servers_count.${normal} https 端口: $green${https_ports:-无}${normal}, http 端口: $green${http_ports:-无}${normal}, flv: $flv_status, nodejs: $nodejs_status\n\n"
-            fi
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *" ssl;"* ]]
-        then
-            https_port=${line#*listen}
-            https_port=${https_port// ssl;/}
-            lead=${https_port%%[^[:blank:]]*}
-            https_port=${https_port#${lead}}
-            https_ports="$https_ports$https_port "
-        elif [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"listen "* ]] 
-        then
-            http_port=${line#*listen}
-            http_port=${http_port%;*}
-            lead=${http_port%%[^[:blank:]]*}
-            http_port=${http_port#${lead}}
-            [ -n "$http_ports" ] && http_ports="$http_ports "
-            http_ports="$http_ports$http_port"
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"location /flv "* ]]
-        then
-            flv_found=1
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"root "* ]]
-        then
-            root=${line#*root}
-            root=${root%;*}
-            lead=${root%%[^[:blank:]]*}
-            root=${root#${lead}}
-            if [[ ${root:0:1} != "/" ]] 
-            then
-                root="$nginx_prefix/$root"
-            fi
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"proxy_pass http://nodejs"* ]]
-        then
-            nodejs_found=1
-        fi
-    done < "$nginx_prefix/conf/sites_available/${nginx_domains[nginx_domains_index]}.conf"
-
-    if [ "${action:-}" == "edit" ] 
-    then
-        nginx_domain_update_crt_number=$((nginx_domain_servers_count+1))
-        nginx_domain_add_server_number=$((nginx_domain_servers_count+2))
-        nginx_domain_edit_server_number=$((nginx_domain_servers_count+3))
-        nginx_domain_delete_server_number=$((nginx_domain_servers_count+4))
-        nginx_domain_list="$nginx_domain_list $green$nginx_domain_update_crt_number.${normal} 更新证书\n\n"
-        nginx_domain_list="$nginx_domain_list $green$nginx_domain_add_server_number.${normal} 添加配置\n\n"
-        nginx_domain_list="$nginx_domain_list $green$nginx_domain_edit_server_number.${normal} 修改配置\n\n"
-        nginx_domain_list="$nginx_domain_list $green$nginx_domain_delete_server_number.${normal} 删除配置\n\n"
-    fi
-
-    Println "域名 $green${nginx_domains[nginx_domains_index]}${normal} 配置:\n\n$nginx_domain_list"
-}
-
-NginxDomainServerToggleFlv()
-{
-    nginx_domain_server_found=0
-    nginx_domain_server_flag=0
-    conf=""
-    while IFS= read -r line 
-    do
-        if [[ $line == *"server {"* ]] 
-        then
-            nginx_domain_server_found=1
-            https_ports=""
-            http_ports=""
-            flv_flag=0
-            flv_found=0
-            flv_add=0
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"{"* ]] 
-        then
-            nginx_domain_server_flag=$((nginx_domain_server_flag+1))
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"}"* ]] 
-        then
-            nginx_domain_server_flag=$((nginx_domain_server_flag-1))
-            if [[ $nginx_domain_server_flag -eq 0 ]] 
-            then
-                nginx_domain_server_found=0
-                if [[ $flv_add -eq 0 ]] && [[ $flv_found -eq 0 ]] && [[ $https_ports == "${nginx_domain_servers_https_port[nginx_domain_server_index]}" ]] && [[ $http_ports == "${nginx_domain_servers_http_port[nginx_domain_server_index]}" ]] 
-                then
-                    line="
-        location /flv {
-            flv_live on;
-            chunked_transfer_encoding  on;
-        }\n$line"
-                fi
-            fi
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *" ssl;"* ]]
-        then
-            https_port=${line#*listen}
-            https_port=${https_port// ssl;/}
-            lead=${https_port%%[^[:blank:]]*}
-            https_port=${https_port#${lead}}
-            https_ports="$https_ports$https_port "
-        elif [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"listen "* ]] 
-        then
-            http_port=${line#*listen}
-            http_port=${http_port%;*}
-            lead=${http_port%%[^[:blank:]]*}
-            http_port=${http_port#${lead}}
-            [ -n "$http_ports" ] && http_ports="$http_ports "
-            http_ports="$http_ports$http_port"
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"location /flv "* ]] && [[ $https_ports == "${nginx_domain_servers_https_port[nginx_domain_server_index]}" ]] && [[ $http_ports == "${nginx_domain_servers_http_port[nginx_domain_server_index]}" ]] 
-        then
-            flv_flag=1
-            flv_found=1
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $flv_flag -eq 1 ]] 
-        then
-            if [[ $line == *"}"* ]] 
-            then
-                flv_flag=0
-            fi
-            continue
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $flv_add -eq 0 ]] && [[ $line == *"location "* ]] && [[ $line != *"location /flv "* ]] && [[ $flv_found -eq 0 ]] && [[ $https_ports == "${nginx_domain_servers_https_port[nginx_domain_server_index]}" ]] && [[ $http_ports == "${nginx_domain_servers_http_port[nginx_domain_server_index]}" ]] 
-        then
-            flv_add=1
-            line="        location /flv {
-            flv_live on;
-            chunked_transfer_encoding  on;
-        }\n\n$line"
-        fi
-
-        if [ "${last_line:-}" == "#" ] && [ "$line" == "" ]
-        then
-            continue
-        fi
-        last_line="$line#"
-        [ -n "$conf" ] && conf="$conf\n"
-        conf="$conf$line"
-    done < "$nginx_prefix/conf/sites_available/${nginx_domains[nginx_domains_index]}.conf"
-    unset last_line
-    echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/sites_available/${nginx_domains[nginx_domains_index]}.conf"
-    Println "$info flv 配置修改成功\n"
-}
-
-NginxDomainServerToggleNodejs()
-{
-    nginx_domain_server_found=0
-    nginx_domain_server_flag=0
-    conf=""
-    while IFS= read -r line 
-    do
-        if [[ $line == *"server {"* ]] 
-        then
-            nginx_domain_server_found=1
-            https_ports=""
-            http_ports=""
-            nodejs_flag=0
-            nodejs_found=0
-            location_found=0
-            add_header_found=0
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"{"* ]] 
-        then
-            nginx_domain_server_flag=$((nginx_domain_server_flag+1))
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"}"* ]] 
-        then
-            nginx_domain_server_flag=$((nginx_domain_server_flag-1))
-            if [[ $nginx_domain_server_flag -eq 0 ]] 
-            then
-                nginx_domain_server_found=0
-                if [[ $location_found -eq 0 ]] && [[ $https_ports == "${nginx_domain_servers_https_port[nginx_domain_server_index]}" ]] && [[ $http_ports == "${nginx_domain_servers_http_port[nginx_domain_server_index]}" ]]
-                then
-                    line="
-        location / {
-            root   ${server_root#*$nginx_prefix/};
-            index  index.html index.htm;
-        }\n$line"
-                    if [[ $nodejs_found -eq 0 ]]
-                    then
-                        if [ -n "$https_ports" ] && [ -n "$http_ports" ]
-                        then
-                            scheme="\$scheme"
-                            proxy_cookie_path=""
-                        elif [ -n "$https_ports" ] 
-                        then
-                            scheme="https"
-                            proxy_cookie_path="\n            proxy_cookie_path / /\$samesite_none;"
-                        else
-                            scheme="http"
-                            proxy_cookie_path=""
-                        fi
-
-                        line="
-        location = / {
-            proxy_redirect off;
-            proxy_pass http://nodejs;
-
-            proxy_cache_bypass 1;
-            proxy_no_cache 1;$proxy_cookie_path
-            proxy_cookie_domain localhost ${nginx_domains[nginx_domains_index]};
-        }
-
-        location = /channels {
-            proxy_redirect off;
-            proxy_pass http://nodejs;
-
-            proxy_cache_bypass 1;
-            proxy_no_cache 1;
-        }
-
-        location = /channels.json {
-            return 302 /channels;
-        }
-
-        location = /remote {
-            proxy_redirect off;
-            proxy_pass http://nodejs;
-
-            proxy_cache_bypass 1;
-            proxy_no_cache 1;$proxy_cookie_path
-            proxy_cookie_domain localhost ${nginx_domains[nginx_domains_index]};
-        }
-
-        location = /remote.json {
-            return 302 /remote;
-        }
-
-        location = /keys {
-            proxy_redirect off;
-            proxy_pass http://nodejs;
-
-            proxy_cache_bypass 1;
-            proxy_no_cache 1;
-        }
-
-        location ~ \.(keyinfo|key)$ {
-            return 403;
-        }\n$line"
-                    fi
-                fi
-            fi
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *" ssl;"* ]]
-        then
-            https_port=${line#*listen}
-            https_port=${https_port// ssl;/}
-            lead=${https_port%%[^[:blank:]]*}
-            https_port=${https_port#${lead}}
-            https_ports="$https_ports$https_port "
-        elif [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"listen "* ]] 
-        then
-            http_port=${line#*listen}
-            http_port=${http_port%;*}
-            lead=${http_port%%[^[:blank:]]*}
-            http_port=${http_port#${lead}}
-            [ -n "$http_ports" ] && http_ports="$http_ports "
-            http_ports="$http_ports$http_port"
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"add_header "* ]] 
-        then
-            add_header_found=1
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"location = / {"* ]] && [[ $https_ports == "${nginx_domain_servers_https_port[nginx_domain_server_index]}" ]] && [[ $http_ports == "${nginx_domain_servers_http_port[nginx_domain_server_index]}" ]] 
-        then
-            nodejs_flag=1
-            nodejs_found=1
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $nodejs_flag -eq 1 ]] 
-        then
-            if [[ $line == *"}"* ]] 
-            then
-                nodejs_flag=0
-            fi
-            [[ ${enable_nodejs:-0} -eq 1 ]] || continue
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && { [[ $line == *"location = /channels "* ]] || [[ $line == *"location = /channels.json "* ]] || [[ $line == *"location = /remote "* ]] || [[ $line == *"location = /remote.json "* ]] || [[ $line == *"location = /keys "* ]] || [[ $line == *"location ~ \.(keyinfo|key)"* ]]; }
-        then
-            nodejs_flag=1
-            [[ ${enable_nodejs:-0} -eq 1 ]] || continue
-        fi
-
-        if [[ $nginx_domain_server_found -eq 1 ]] && [[ $line == *"location / "* ]]
-        then
-            location_found=1
-            if [[ $nodejs_found -eq 0 ]] && [[ $https_ports == "${nginx_domain_servers_https_port[nginx_domain_server_index]}" ]] && [[ $http_ports == "${nginx_domain_servers_http_port[nginx_domain_server_index]}" ]]
-            then
-                if [ -n "$https_ports" ] && [ -n "$http_ports" ]
-                then
-                    scheme="\$scheme"
-                    proxy_cookie_path=""
-                elif [ -n "$https_ports" ] 
-                then
-                    scheme="https"
-                    proxy_cookie_path="\n            proxy_cookie_path / /\$samesite_none;"
-                else
-                    scheme="http"
-                    proxy_cookie_path=""
-                fi
-
-                line="        location = / {
-            proxy_redirect off;
-            proxy_pass http://nodejs;
-
-            proxy_cache_bypass 1;
-            proxy_no_cache 1;$proxy_cookie_path
-            proxy_cookie_domain localhost ${nginx_domains[nginx_domains_index]};
-        }
-
-        location = /channels {
-            proxy_redirect off;
-            proxy_pass http://nodejs;
-
-            proxy_cache_bypass 1;
-            proxy_no_cache 1;
-        }
-
-        location = /channels.json {
-            return 302 /channels;
-        }
-
-        location = /remote {
-            proxy_redirect off;
-            proxy_pass http://nodejs;
-
-            proxy_cache_bypass 1;
-            proxy_no_cache 1;$proxy_cookie_path
-            proxy_cookie_domain localhost ${nginx_domains[nginx_domains_index]};
-        }
-
-        location = /remote.json {
-            return 302 /remote;
-        }
-
-        location = /keys {
-            proxy_redirect off;
-            proxy_pass http://nodejs;
-
-            proxy_cache_bypass 1;
-            proxy_no_cache 1;
-        }
-
-        location ~ \.(keyinfo|key)$ {
-            return 403;
-        }\n\n$line"
-                if [[ $add_header_found -eq 0 ]] 
-                then
-                    line="        add_header Access-Control-Allow-Origin \$corsHost;
-        add_header Vary Origin;
-        add_header X-Frame-Options SAMEORIGIN;
-        add_header Access-Control-Allow-Credentials true;
-        add_header Cache-Control no-cache;\n\n$line"
-                fi
-            fi
-        fi
-
-        if [ "${last_line:-}" == "#" ] && [ "$line" == "" ]
-        then
-            continue
-        fi
-        last_line="$line#"
-        [ -n "$conf" ] && conf="$conf\n"
-        conf="$conf$line"
-    done < "$nginx_prefix/conf/sites_available/${nginx_domains[nginx_domains_index]}.conf"
-    unset last_line
-    echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/sites_available/${nginx_domains[nginx_domains_index]}.conf"
-    Println "$info nodejs 配置修改成功, 请确保已经安装 nodejs\n"
-}
-
 NginxDomainUpdateCrt()
 {
     Println "$info 更新证书..."
@@ -22430,117 +23934,6 @@ NginxDomainUpdateCrt()
 
     systemctl start $nginx_name
     Println "$info 证书更新完成...\n"
-}
-
-NginxEditDomain()
-{
-    NginxListDomains
-
-    [ "$nginx_domains_count" -eq 0 ] && Println "$error 没有域名\n" && exit 1
-
-    echo "输入序号"
-    while read -p "(默认: 取消): " nginx_domains_index
-    do
-        case "$nginx_domains_index" in
-            "")
-                Println "已取消...\n" && exit 1
-            ;;
-            *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
-            ;;
-            *)
-                if [ "$nginx_domains_index" -gt 0 ] && [ "$nginx_domains_index" -le "$nginx_domains_count" ]
-                then
-                    nginx_domains_index=$((nginx_domains_index-1))
-                    break
-                else
-                    Println "$error 请输入正确的序号\n"
-                fi
-            ;;
-        esac
-    done
-
-    action="edit"
-
-    NginxListDomain
-
-    echo "输入序号"
-    while read -p "(默认: 取消): " nginx_domain_server_num
-    do
-        case "$nginx_domain_server_num" in
-            "")
-                Println "已取消...\n" && exit 1
-            ;;
-            $nginx_domain_update_crt_number)
-                NginxDomainUpdateCrt
-                exit 0
-            ;;
-            $nginx_domain_add_server_number)
-                NginxDomainAddServer
-                exit 0
-            ;;
-            $nginx_domain_edit_server_number)
-                NginxDomainEditServer
-                exit 0
-            ;;
-            $nginx_domain_delete_server_number)
-                NginxDomainDeleteServer
-                exit 0
-            ;;
-            *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
-            ;;
-            *)
-                if [ "$nginx_domain_server_num" -gt 0 ] && [ "$nginx_domain_server_num" -le "$nginx_domain_servers_count" ]
-                then
-                    nginx_domain_server_index=$((nginx_domain_server_num-1))
-                    break
-                else
-                    Println "$error 请输入正确的序号\n"
-                fi
-            ;;
-        esac
-    done
-
-    Println "选择操作
-
-  ${green}1.${normal} 开关 flv 设置
-  ${green}2.${normal} 开关 nodejs 设置
-  ${green}3.${normal} 修改 http 端口
-  ${green}4.${normal} 修改 https 端口
-    \n"
-    while read -p "(默认: 取消): " nginx_domain_server_action_num 
-    do
-        case $nginx_domain_server_action_num in
-            "") 
-                Println "已取消...\n" && exit 1
-            ;;
-            1) 
-                NginxDomainServerToggleFlv
-                break
-            ;;
-            2) 
-                server_root=${nginx_domain_servers_root[nginx_domain_server_index]}
-                if [ -z "$server_root" ] 
-                then
-                    NginxConfigServerRoot
-                    NginxConfigServerLiveRoot
-                fi
-                NginxDomainServerToggleNodejs
-                break
-            ;;
-            3) 
-                NginxDomainServerEditHttpPorts
-                break
-            ;;
-            4) 
-                NginxDomainServerEditHttpsPorts
-                break
-            ;;
-            *) Println "$error 输入错误\n"
-            ;;
-        esac
-    done
 }
 
 NginxToggleDomain()
@@ -22767,203 +24160,6 @@ echo '#real_ip_header X-Forwarded-For;' >> $nginx_prefix/conf/cloudflare_ip.conf
     Println "$info IP 更新成功\n"
 }
 
-NginxConfigLocalhost()
-{
-    NginxCheckDomains
-    NginxConfigSsl
-
-    NginxConfigServerHttpPort
-    NginxConfigServerRoot
-    NginxConfigServerLiveRoot
-    NginxConfigBlockAliyun
-
-    conf=""
-
-    server_conf=""
-    server_found=0
-    server_flag=0
-    block_aliyun_done=0
-
-    while IFS= read -r line 
-    do
-        new_line=""
-
-        if [[ $line == *"server {"* ]] 
-        then
-            lead=${line%%[^[:blank:]]*}
-            first_char=${line#${lead}}
-            first_char=${first_char:0:1}
-            if [[ $first_char != "#" ]] 
-            then
-                server_conf=""
-                server_conf_new=""
-                server_found=1
-                localhost_found=0
-                location_found=0
-                skip_location=0
-            fi
-        fi
-
-        if [[ $server_found -eq 1 ]] && [[ $line == *"{"* ]] 
-        then
-            server_flag=$((server_flag+1))
-        fi
-
-        if [[ $server_found -eq 1 ]] && [[ $line == *"}"* ]] 
-        then
-            server_flag=$((server_flag-1))
-        fi
-
-        if [[ $server_found -eq 1 ]] && [[ $line == *"listen "* ]] 
-        then
-            new_line="${line%%listen*}listen $server_http_port;"
-        fi
-
-        if [[ $server_found -eq 1 ]] && [[ $line == *" localhost;"* ]] 
-        then
-            localhost_found=1
-        fi
-
-        if [[ $server_found -eq 1 ]] && [[ $localhost_found -eq 1 ]] && [[ ${enable_nodejs:-0} -eq 1 ]] && [[ $location_found -eq 0 ]] && { [[ $line == *"location = / "* ]] || [[ $line == *"location = /channels "* ]] || [[ $line == *"location = /channels.json "* ]] || [[ $line == *"location = /remote "* ]] || [[ $line == *"location = /remote.json "* ]] || [[ $line == *"location = /keys "* ]] || [[ $line == *"location ~ \.(keyinfo|key)"* ]] || [[ $line == *"location /flv "* ]] || [[ $skip_location -eq 1 ]]; }
-        then
-            if [[ $line == *"location = / "* ]] || [[ $line == *"location = /channels "* ]] || [[ $line == *"location = /channels.json "* ]] || [[ $line == *"location = /remote "* ]] || [[ $line == *"location = /remote.json "* ]] || [[ $line == *"location = /keys "* ]] || [[ $line == *"location ~ \.(keyinfo|key)"* ]] || [[ $line == *"location /flv "* ]]
-            then
-                skip_location=1
-            elif [[ $line == *"}"* ]] 
-            then
-                skip_location=0
-            fi
-            continue
-        fi
-
-        if [[ $server_found -eq 1 ]] && [[ $localhost_found -eq 1 ]] && [[ $line == *"add_header "* ]]
-        then
-            continue
-        fi
-
-        if [[ $server_found -eq 1 ]] && [[ $location_found -eq 1 ]] && [[ $line == *"}"* ]]
-        then
-            location_found=0
-        fi
-
-        if [[ $server_found -eq 1 ]] && [[ $localhost_found -eq 1 ]] && [[ $location_found -eq 0 ]] && [[ $line == *"location "* ]] && [[ $line == *" / "* ]] 
-        then
-            if [[ ${enable_nodejs:-0} -eq 1 ]] 
-            then
-                enable_nodejs=0
-                server_ip=${server_ip:-$(GetServerIp)}
-                line="        location = / {
-            proxy_redirect off;
-            proxy_pass http://nodejs;
-
-            proxy_cache_bypass 1;
-            proxy_no_cache 1;
-            proxy_cookie_domain localhost $server_ip;
-        }
-
-        location = /channels {
-            proxy_redirect off;
-            proxy_pass http://nodejs;
-
-            proxy_cache_bypass 1;
-            proxy_no_cache 1;
-        }
-
-        location = /channels.json {
-            return 302 /channels;
-        }
-
-        location = /remote {
-            proxy_redirect off;
-            proxy_pass http://nodejs;
-
-            proxy_cache_bypass 1;
-            proxy_no_cache 1;
-            proxy_cookie_domain localhost $server_ip;
-        }
-
-        location = /remote.json {
-            return 302 /remote;
-        }
-
-        location = /keys {
-            proxy_redirect off;
-            proxy_pass http://nodejs;
-
-            proxy_cache_bypass 1;
-            proxy_no_cache 1;
-        }
-
-        location ~ \.(keyinfo|key)$ {
-            return 403;
-        }\n\n$line"
-            fi
-            line="        add_header Access-Control-Allow-Origin \$corsHost;
-        add_header Vary Origin;
-        add_header X-Frame-Options SAMEORIGIN;
-        add_header Access-Control-Allow-Credentials true;
-        add_header Cache-Control no-cache;
-
-        location /flv {
-            flv_live on;
-            chunked_transfer_encoding  on;
-        }\n\n$line"
-            location_found=1
-        fi
-
-        if [[ $server_found -eq 1 ]] && [[ $location_found -eq 1 ]] && [[ $block_aliyun_done -eq 0 ]] && [[ $line == *"{"* ]]
-        then
-            line="$line${deny_aliyun:-}"
-            block_aliyun_done=1
-        fi
-
-        if [[ $server_found -eq 1 ]] && [[ $location_found -eq 1 ]] && [[ $line == *"root "* ]]
-        then
-            line="${line%%root*}root   ${server_root#*$nginx_prefix/};"
-        fi
-
-        if [[ $server_found -eq 1 ]] 
-        then
-            [ -n "$server_conf" ] && server_conf="$server_conf\n"
-            server_conf="$server_conf$line"
-            [ -n "$server_conf_new" ] && server_conf_new="$server_conf_new\n"
-            if [ -n "$new_line" ] 
-            then
-                server_conf_new="$server_conf_new$new_line"
-            else
-                server_conf_new="$server_conf_new$line"
-            fi
-            if [[ $server_flag -eq 0 ]] && [[ $line == *"}"* ]] 
-            then
-                server_found=0
-
-                if [[ $localhost_found -eq 1 ]]
-                then
-                    line=$server_conf_new
-                else
-                    line=$server_conf
-                fi
-            fi
-        fi
-
-        if [[ $server_found -eq 0 ]] 
-        then
-            [ -n "$conf" ] && conf="$conf\n"
-            conf="$conf$line"
-        fi
-    done < "$nginx_prefix/conf/nginx.conf"
-
-    PrettyConfig
-    echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/nginx.conf"
-
-    NginxConfigCorsHost
-    if [ "${skip_nginx_restart:-0}" -eq 0 ] 
-    then
-        systemctl restart $nginx_name
-    fi
-    Println "$info localhost 配置成功\n"
-}
-
 NginxEnableDomain()
 {
     ln -sf "$nginx_prefix/conf/sites_available/$server_domain.conf" "$nginx_prefix/conf/sites_enabled/$server_domain.conf"
@@ -22984,7 +24180,7 @@ NginxAppendHttpConf()
 
         access_log logs/access.log;
 
-        add_header Access-Control-Allow-Origin \$corsHost;
+        add_header Access-Control-Allow-Origin \$cors_host;
         add_header Vary Origin;
         add_header X-Frame-Options SAMEORIGIN;
         add_header Access-Control-Allow-Credentials true;
@@ -23047,7 +24243,7 @@ NginxAppendHttpsConf()
         ssl_certificate      $nginx_prefix/conf/sites_crt/$server_domain.crt;
         ssl_certificate_key  $nginx_prefix/conf/sites_crt/$server_domain.key;
 
-        add_header Access-Control-Allow-Origin \$corsHost;
+        add_header Access-Control-Allow-Origin \$cors_host;
         add_header Vary Origin;
         add_header X-Frame-Options SAMEORIGIN;
         add_header Access-Control-Allow-Credentials true;
@@ -23123,7 +24319,7 @@ NginxAppendHttpHttpsConf()
         ssl_certificate      $nginx_prefix/conf/sites_crt/$server_domain.crt;
         ssl_certificate_key  $nginx_prefix/conf/sites_crt/$server_domain.key;
 
-        add_header Access-Control-Allow-Origin \$corsHost;
+        add_header Access-Control-Allow-Origin \$cors_host;
         add_header Vary Origin;
         add_header X-Frame-Options SAMEORIGIN;
         add_header Access-Control-Allow-Credentials true;
@@ -23140,9 +24336,7 @@ NginxAppendHttpHttpsConf()
 
 NginxAddDomain()
 {
-    NginxCheckDomains
     NginxListDomains
-    NginxConfigSsl
 
     Println "$tip 多个域名用空格分隔"
     read -p "输入指向本机的IP或域名: " domains
@@ -23184,11 +24378,10 @@ NginxAddDomain()
                     else
                         NginxConfigServerRoot
                         NginxConfigServerLiveRoot
-                        NginxConfigBlockAliyun
                         NginxAppendHttpConf
                     fi
 
-                    NginxConfigCorsHost
+                    NginxAddCorsHost
                     NginxEnableDomain
                     Println "$info $server_domain 配置成功\n"
                 ;;
@@ -23216,10 +24409,9 @@ NginxAddDomain()
                     else
                         NginxConfigServerRoot
                         NginxConfigServerLiveRoot
-                        NginxConfigBlockAliyun
                         NginxAppendHttpsConf
                     fi
-                    NginxConfigCorsHost
+                    NginxAddCorsHost
                     NginxEnableDomain
                     Println "$info $server_domain 配置成功\n"
                 ;;
@@ -23242,7 +24434,6 @@ NginxAddDomain()
                         else
                             NginxConfigServerRoot
                             NginxConfigServerLiveRoot
-                            NginxConfigBlockAliyun
                             NginxAppendHttpHttpsConf
                         fi
                     else
@@ -23264,13 +24455,11 @@ NginxAddDomain()
                             else
                                 NginxConfigServerRoot
                                 NginxConfigServerLiveRoot
-                                NginxConfigBlockAliyun
                                 NginxAppendHttpsConf
                             fi
                         else
                             NginxConfigServerRoot
                             NginxConfigServerLiveRoot
-                            NginxConfigBlockAliyun
 
                             server_http_root=$server_root
                             server_http_live_root=$server_live_root
@@ -23291,7 +24480,6 @@ NginxAddDomain()
                                 deny_aliyun=""
                                 NginxConfigServerRoot
                                 NginxConfigServerLiveRoot
-                                NginxConfigBlockAliyun
 
                                 server_https_root=$server_root
                                 server_https_live_root=$server_live_root
@@ -23307,7 +24495,7 @@ NginxAddDomain()
                             fi
                         fi
                     fi
-                    NginxConfigCorsHost
+                    NginxAddCorsHost
                     NginxEnableDomain
                     Println "$info $server_domain 配置成功\n"
                 ;;
@@ -23320,79 +24508,7 @@ NginxAddDomain()
     fi
 }
 
-NginxConfigSameSiteNone()
-{
-    if ! grep -q "map \$http_user_agent \$samesite_none" < "$nginx_prefix/conf/nginx.conf"
-    then
-        conf=""
-        found=0
-        while IFS= read -r line 
-        do
-            if [ "$found" -eq 0 ] && [[ $line == *"server "* ]]
-            then
-                lead=${line%%[^[:blank:]]*}
-                first_char=${line#${lead}}
-                first_char=${first_char:0:1}
-                if [[ $first_char != "#" ]] 
-                then
-                    line="
-    map \$http_user_agent \$samesite_none {
-        default \"; Secure\";
-        \"~Chrom[^ \/]+\/8[\d][\.\d]*\" \"; Secure; SameSite=None\";
-    }\n\n$line"
-                    found=1
-                fi
-            fi
-            [ -n "$conf" ] && conf="$conf\n"
-            conf="$conf$line"
-        done < "$nginx_prefix/conf/nginx.conf"
-        echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/nginx.conf"
-    fi
-}
-
-NginxConfigUpstream()
-{
-    conf=""
-    upstream_found=0
-    server_found=0
-    while IFS= read -r line 
-    do
-        if [[ $line == *"upstream nodejs "* ]] 
-        then
-            upstream_found=2
-        fi
-        if [[ $upstream_found -eq 2 ]]
-        then
-            if [[ $line == *"server 127.0.0.1:"* ]] 
-            then
-                line="${line%server *}server 127.0.0.1:$nodejs_port;"
-            elif [[ $line == *"}"* ]] 
-            then
-                upstream_found=1
-            fi
-        fi
-        if [[ $upstream_found -eq 0 ]] && [[ $server_found -eq 0 ]] && [[ $line == *"server "* ]]
-        then
-            lead=${line%%[^[:blank:]]*}
-            first_char=${line#${lead}}
-            first_char=${first_char:0:1}
-            if [[ $first_char != "#" ]] 
-            then
-                line="
-    upstream nodejs {
-        #ip_hash;
-        server 127.0.0.1:$nodejs_port;
-    }\n\n$line"
-                server_found=1
-            fi
-        fi
-        [ -n "$conf" ] && conf="$conf\n"
-        conf="$conf$line"
-    done < "$nginx_prefix/conf/nginx.conf"
-    echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/nginx.conf"
-}
-
-InstallNodejs()
+NodejsInstall()
 {
     CheckRelease "检查依赖, 耗时可能会很长"
     Progress &
@@ -23539,87 +24655,44 @@ InstallGit()
 
 NodejsConfig()
 {
-    enable_nodejs=1
-    NginxCheckDomains
-    NginxListDomains
-    [ "$nginx_domains_count" -eq 0 ] && Println "$green域名列表:${normal}\n\n无\n\n"
-    config_localhost_num=$((nginx_domains_count+1))
-    add_new_domain_num=$((nginx_domains_count+2))
-    echo -e " $green$config_localhost_num.${normal}\r\033[6C使用本地 IP\n\n $green$add_new_domain_num.${normal}\r\033[6C添加域名\n\n"
+    nodejs_options=( '域名' '本地' )
+    echo
+    inquirer list_input "选择使用 nodejs 的对象" nodejs_options nodejs_option
 
-    echo "输入序号"
-    while read -p "(默认: $config_localhost_num): " nginx_domains_index
-    do
-        case "$nginx_domains_index" in
-            ""|$config_localhost_num)
-                nginx_domains_index=$config_localhost_num
-                skip_nginx_restart=1
-                NginxConfigLocalhost
-                break
-            ;;
-            $add_new_domain_num)
-                NginxAddDomain
-                break
-            ;;
-            *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
-            ;;
-            *)
-                if [ "$nginx_domains_index" -gt 0 ] && [ "$nginx_domains_index" -le "$add_new_domain_num" ]
-                then
-                    nginx_domains_index=$((nginx_domains_index-1))
-                    break
-                else
-                    Println "$error 请输入正确的序号\n"
-                fi
-            ;;
-        esac
-    done
-
-    if [[ $nginx_domains_index -lt $nginx_domains_count ]] 
+    if [ "$nodejs_option" == "域名" ] 
     then
         NginxListDomain
-
-        echo "输入序号"
-        while read -p "(默认: 取消): " nginx_domain_server_num
-        do
-            case "$nginx_domain_server_num" in
-                "")
-                    Println "已取消...\n" && exit 1
-                ;;
-                *[!0-9]*)
-                    Println "$error 请输入正确的序号\n"
-                ;;
-                *)
-                    if [ "$nginx_domain_server_num" -gt 0 ] && [ "$nginx_domain_server_num" -le "$nginx_domain_servers_count" ]
-                    then
-                        nginx_domain_server_index=$((nginx_domain_server_num-1))
-                        break
-                    else
-                        Println "$error 请输入正确的序号\n"
-                    fi
-                ;;
-            esac
-        done
-        server_root=${nginx_domain_servers_root[nginx_domain_server_index]}
-        if [ -z "$server_root" ] 
-        then
-            NginxConfigServerRoot
-        fi
-        NginxConfigServerLiveRoot
-        echo
-        yn_options=( '否' '是' )
-        inquirer list_input "跳过 nodejs 设置" yn_options skip_nodejs_yn
-        if [[ $skip_nodejs_yn == "否" ]]
-        then
-            NginxDomainServerToggleNodejs
-        fi
-        NginxConfigSsl
+        NginxSelectDomainServer
+    else
+        NginxListLocalhost
+        NginxSelectLocalhostServer
+        NginxAddFlv
     fi
 
-    NginxConfigSameSiteNone
+    updated=0
+    NginxAddNodejs
+
+    if [ "$updated" -eq 1 ] 
+    then
+        NginxBuildConf parse_out
+        Println "$info nodejs 配置添加成功"
+    fi
+
+    if [ "$nodejs_option" == "域名" ] 
+    then
+        NginxCheckLocalhost
+    fi
+
+    updated=0
+    NginxAddSameSiteNone
+
     nodejs_port=$(GetFreePort)
-    NginxConfigUpstream
+    NginxAddUpstreamNodejs
+
+    if [ "$updated" -eq 1 ] 
+    then
+        NginxBuildConf parse_out
+    fi
 
     username=$(RandStr)
     password=$(RandStr)
@@ -23809,7 +24882,6 @@ V2rayUpdate()
 {
     CheckRelease "检查依赖, 耗时可能会很长"
     InstallJQ
-    V2rayConfigUpdate
     UpdateShFile $v2ray_name
 
     if ! grep -q "$v2ray_name:" < "/etc/passwd"
@@ -23845,126 +24917,28 @@ V2rayUpdate()
     sed -i "s+nobody+$v2ray_name+g" "/etc/systemd/system/$v2ray_name.service"
     sed -i "s+nobody+$v2ray_name+g" "/etc/systemd/system/$v2ray_name@.service"
 
-    systemctl daemon-reload
-
     mkdir -p /var/log/$v2ray_name/
     [ ! -e "/var/log/$v2ray_name/error.log" ] && printf '%s' "" > /var/log/$v2ray_name/error.log
     chown -R $v2ray_name:$v2ray_name /var/log/$v2ray_name/
     chown -R $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/
 
+    V2rayConfigUpdate
+
+    systemctl daemon-reload
     systemctl restart $v2ray_name
 
     Println "$info $v2ray_name 升级完成\n"
-}
-
-V2rayConfigInstall()
-{
-    printf -v update_date '%(%m-%d)T' -1
-    cp -f "$V2_CONFIG" "${V2_CONFIG}_$update_date"
-    while IFS= read -r line 
-    do
-        if [[ $line == *"port"* ]] 
-        then
-            port=${line#*: }
-            port=${port%,*}
-        elif [[ $line == *"id"* ]] 
-        then
-            id=${line#*: \"}
-            id=${id%\"*}
-            break
-        fi
-    done < "$V2_CONFIG"
-
-    $JQ_FILE -n --arg port "${port:-$(GetFreePort)}" --arg id "${id:-$($V2CTL_FILE uuid)}" --arg path "${path:-/$(RandStr)}" \
-    --arg error "/var/log/$v2ray_name/error.log" \
-'{
-  "log": {
-    "access": "none",
-    "error": $error,
-    "loglevel": "error"
-  },
-  "inbounds": [
-    {
-      "listen": "127.0.0.1",
-      "port": $port | tonumber,
-      "protocol": "vmess",
-      "settings": {
-        "clients": [
-          {
-            "id": $id,
-            "level": 0,
-            "alterId": 64,
-            "email": "name@localhost"
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "ws",
-        "wsSettings": {
-          "path": $path
-        }
-      },
-      "tag": "nginx-1"
-    }
-  ],
-  "outbounds": [
-    {
-      "protocol": "freedom",
-      "tag": "direct"
-    },
-    {
-      "protocol": "blackhole",
-      "tag": "block"
-    }
-  ],
-  "routing": {
-    "rules": []
-  },
-  "policy": {
-    "levels": {
-      "0": {
-        "handshake": 4,
-        "connIdle": 300,
-        "uplinkOnly": 2,
-        "downlinkOnly": 5,
-        "statsUserUplink": true,
-        "statsUserDownlink": true
-      }
-    },
-    "system": {
-      "statsInboundUplink": true,
-      "statsInboundDownlink": true
-    }
-  }
-}' > "$V2_CONFIG"
 }
 
 V2rayConfigUpdate()
 {
     if [ ! -e "$V2_CONFIG" ] 
     then
-        Println "$error $v2ray_name 未安装...\n" && exit 1
-    elif [ ! -s "$V2_CONFIG" ] 
-    then
-        printf '%s' '{
-  "log": {
-    "access": "none",
-    "error": "/var/log/'"$v2ray_name"'/error.log",
-    "loglevel": "error"
-  },
-  "inbounds": [],
-  "outbounds": [
-    {
-      "protocol": "freedom",
-      "tag": "direct"
-    },
-    {
-      "protocol": "blackhole",
-      "tag": "block"
-    }
-  ]}' > "$V2_CONFIG"
+        Println "$error $v2ray_name 未安装...\n"
+        exit 1
     fi
-    if ! $JQ_FILE '.' "$V2_CONFIG" > /dev/null 2>&1
+
+    if ! outbounds=$($JQ_FILE '.outbounds' "$V2_CONFIG" 2> /dev/null) || [ "$outbounds" == "null" ]
     then
         if grep -q '"path": "' < "$V2_CONFIG" 
         then
@@ -23978,7 +24952,86 @@ V2rayConfigUpdate()
                 fi
             done < "$V2_CONFIG"
         fi
-        V2rayConfigInstall
+
+        printf -v update_date '%(%m-%d)T' -1
+        cp -f "$V2_CONFIG" "${V2_CONFIG}_$update_date"
+        while IFS= read -r line 
+        do
+            if [[ $line == *"port"* ]] 
+            then
+                port=${line#*: }
+                port=${port%,*}
+            elif [[ $line == *"id"* ]] 
+            then
+                id=${line#*: \"}
+                id=${id%\"*}
+                break
+            fi
+        done < "$V2_CONFIG"
+
+        $JQ_FILE -n --arg port "${port:-$(GetFreePort)}" --arg id "${id:-$($V2CTL_FILE uuid)}" --arg path "${path:-/$(RandStr)}" \
+        --arg error "/var/log/$v2ray_name/error.log" \
+        '{
+            "log": {
+                "access": "none",
+                "error": $error,
+                "loglevel": "error"
+            },
+            "inbounds": [
+                {
+                    "listen": "127.0.0.1",
+                    "port": $port | tonumber,
+                    "protocol": "vmess",
+                    "settings": {
+                        "clients": [
+                            {
+                                "id": $id,
+                                "level": 0,
+                                "alterId": 64,
+                                "email": "name@localhost"
+                            }
+                        ]
+                    },
+                    "streamSettings": {
+                        "network": "ws",
+                        "wsSettings": {
+                            "path": $path
+                        }
+                    },
+                    "tag": "nginx-1"
+                }
+            ],
+            "outbounds": [
+                {
+                    "protocol": "freedom",
+                    "tag": "direct"
+                },
+                {
+                    "protocol": "blackhole",
+                    "tag": "block"
+                }
+            ],
+            "policy": {
+                "levels": {
+                    "0": {
+                        "handshake": 4,
+                        "connIdle": 300,
+                        "uplinkOnly": 2,
+                        "downlinkOnly": 5,
+                        "statsUserUplink": false,
+                        "statsUserDownlink": false,
+                        "bufferSize": 512
+                    }
+                },
+                "system": {
+                    "statsInboundUplink": false,
+                    "statsInboundDownlink": false,
+                    "statsOutboundUplink": false,
+                    "statsOutboundDownlink": false
+                }
+            }
+        }' > "$V2_CONFIG"
+
         Println "$info $v2ray_name 配置文件已更新\n"
     fi
 }
@@ -25785,7 +26838,7 @@ V2rayGetInbounds()
     map_stream_header_request map_stream_header_response map_stream_quic_security map_stream_quic_key \
     map_stream_ds_abstract map_stream_ds_padding map_stream_tproxy map_sniffing_enabled \
     map_sniffing_dest_override map_sniffing_domains_excluded map_allocate_strategy map_allocate_refresh \
-    map_allocate_concurrency map_tag < <($JQ_FILE -r '[
+    map_allocate_concurrency map_tag < <($JQ_FILE -c -r '[
     ([.inbounds[]|.listen|if . == "" // . == null then "0.0.0.0" else . end|. + "^"]|join("") + "`"),
     ([.inbounds[]|.port|tostring|. + "^"]|join("") + "`"),
     ([.inbounds[]|.protocol|. + "^"]|join("") + "`"),
@@ -27075,7 +28128,7 @@ V2rayGetOutbounds()
     map_stream_tls_certificates_certificate map_stream_tls_certificates_key \
     map_stream_tls_disable_system_root map_stream_http_host map_stream_path map_stream_ws_headers \
     map_stream_header_type map_stream_header_request map_stream_header_response map_stream_quic_security \
-    map_stream_quic_key map_proxy_tag map_mux_enabled map_mux_concurrency map_tag < <($JQ_FILE -r '[
+    map_stream_quic_key map_proxy_tag map_mux_enabled map_mux_concurrency map_tag < <($JQ_FILE -c -r '[
     ([.outbounds[]|.sendThrough|if . == "" // . == null then "0.0.0.0" else . end|. + "^"]|join("") + "`"),
     ([.outbounds[]|.protocol|. + "^"]|join("") + "`"),
     ([.outbounds[]|.settings.userLevel // .settings.servers[0].level // ""|tostring|. + "^"]|join("") + "`"),
@@ -29185,10 +30238,9 @@ V2rayAddDomain()
 {
     if [ ! -d "$nginx_prefix" ] 
     then
-        Println "$error $nginx_name 未安装 ! 输入 $nginx_ctl 安装 $nginx_name\n" && exit 1
+        Println "$error $nginx_name 未安装 ! 输入 $nginx_ctl 安装 $nginx_name\n"
+        exit 1
     fi
-
-    NginxConfigSsl
 
     Println "输入指向本机的域名"
     echo -e "$tip 多个域名用空格分隔\n"
@@ -29231,7 +30283,7 @@ V2rayAddDomain()
         DomainInstallCert
         V2rayAppendDomainConf
         NginxEnableDomain
-        NginxConfigCorsHost
+        NginxAddCorsHost
         Println "$info 域名 $server_domain 添加完成...\n"
     else
         Println "已取消...\n" && exit 1
@@ -29372,7 +30424,7 @@ V2rayDomainServerAddV2rayPort()
             conf="$conf$line"
         fi
     done < "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
-    PrettyConfig
+
     echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
     ln -sf "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf" "$nginx_prefix/conf/sites_enabled/${v2ray_domains[v2ray_domains_index]}.conf"
     if [ -n "${v2ray_domain_servers_v2ray_port[v2ray_domain_server_index]}" ] 
@@ -29457,7 +30509,8 @@ V2rayConfigDomain()
 {
     if [ ! -d "$nginx_prefix" ] 
     then
-        Println "$error $nginx_name 未安装! 输入 $nginx_ctl 安装 $nginx_name\n" && exit 1
+        Println "$error $nginx_name 未安装! 输入 $nginx_ctl 安装 $nginx_name\n"
+        exit 1
     fi
 
     V2rayListDomains
@@ -29571,6 +30624,53 @@ V2rayConfigDomain()
             ;;
         esac
     done
+}
+
+TrojanInstall()
+{
+    if [ -s "$TR_CONFIG" ] 
+    then
+        Println "$error $trojan_name 已存在...\n"
+        yn_options=( '否' '是' )
+        inquirer list_input "是否覆盖原安装" yn_options yn_option
+        if [ "$yn_option" == "否" ] 
+        then
+            Println "已取消...\n"
+            exit 1
+        fi
+    fi
+
+    CheckRelease "检查依赖, 耗时可能会很长"
+    InstallJQ
+
+    if ! grep -q "$trojan_name:" < "/etc/passwd"
+    then
+        if grep -q '\--group ' < <(adduser --help)
+        then
+            adduser $trojan_name --system --group --no-create-home > /dev/null
+        else
+            adduser $trojan_name --system --no-create-home > /dev/null
+        fi
+        usermod -s /usr/sbin/nologin $trojan_name
+    fi
+
+    Println "$info 安装 $trojan_name..."
+
+    { curl -s -m 10 "$TR_LINK" || curl -s -m 30 "$TR_LINK_BACKUP"; } \
+    | sed "s+nobody+$trojan_name+g" \
+    | sed "s+ 'sha1'++g" \
+    | sed "s+ 'sha256'++g" \
+    | sed "s+ 'sha512'++g" \
+    | sed "s+https://api.github.com/repos/p4gefau1t/trojan-go/releases/latest+$FFMPEG_MIRROR_LINK/$trojan_name.json+g" \
+    | sed "s+https://github.com/p4gefau1t/trojan-go/releases/download+$FFMPEG_MIRROR_LINK/$trojan_name+g" | bash
+
+    TrojanConfigInstall
+
+    systemctl daemon-reload
+    systemctl enable $trojan_name
+    systemctl start $trojan_name
+
+    Println "$info $trojan_name 安装完成\n"
 }
 
 SetCloudflareHostKey()
@@ -29935,14 +31035,17 @@ ViewCloudflareUser()
         curl_header_auth_token="Authorization: Bearer $cf_user_token"
     fi
 
-    IFS=$'`\t' read -r success error_message CF_ACCOUNT_ID < <(
+    IFS=$'\002\t' read -r success error_message CF_ACCOUNT_ID < <(
     JQs flat "$(curl -s -X GET -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
-    -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/accounts)" '^' '|' '^' \
-    '[.success + "`",(.errors|if . == "" then {} else . end).message + "`",(.result|if . == "" then {} else . end).id + "`"]|@tsv')
+    -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/accounts)" '' \
+    '[.success + "\u0002",
+    (.errors|if . == "" then {} else . end).message + "\u0002",
+    (.result|if . == "" then {} else . end).id + "\u0002"]
+    |@tsv' $'\001')
 
     if [ "$success" == "false" ] 
     then
-        Println "$error 获取账号 ID 失败: ${error_message//^/, }\n"
+        Println "$error 获取账号 ID 失败: ${error_message//$'\001'/, }\n"
         exit 1
     fi
 
@@ -29981,14 +31084,15 @@ ViewCloudflareUser()
     }
     }"
 
-    IFS=$'`\t' read -r cf_workers_requests error_message < <(
+    IFS=$'\002\t' read -r cf_workers_requests error_message < <(
     JQs flat "$(curl -s -X POST -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
-    --data "$(echo $PAYLOAD)" -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/graphql)" '^' '|' '^' \
-    '[((.data|if . == "" then {} else . end).viewer.accounts.workersInvocationsAdaptive|if . == "" then {} else . end).sum.requests + "`",(.errors|if . == "" then {} else . end).message + "`"]|@tsv')
+    --data "$(echo $PAYLOAD)" -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/graphql)" '' \
+    '[((.data|if . == "" then {} else . end).viewer.accounts.workersInvocationsAdaptive|if . == "" then {} else . end).sum.requests + "\u0002",
+    (.errors|if . == "" then {} else . end).message + "\u0002"]|@tsv' $'\001')
 
     if [ -z "$cf_workers_requests" ] 
     then
-        Println "$error 获取 workers 访问数失败: ${error_message//^/, }\n"
+        Println "$error 获取 workers 访问数失败: ${error_message//$'\001'/, }\n"
         exit 1
     fi
 
@@ -31517,7 +32621,7 @@ InstallWrangler()
     fi
     if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
     then
-        InstallNodejs
+        NodejsInstall
     fi
     Println "$info 国内可能会因网络原因安装失败, 可以手动下载 wrangler 覆盖 ~/.wrangler/bin/wrangler ...\n"
     npm i @cloudflare/wrangler -g --unsafe-perm=true --allow-root
@@ -31546,7 +32650,7 @@ UpdateWrangler()
     fi
     if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
     then
-        InstallNodejs
+        NodejsInstall
     fi
     npm uninstall -g @cloudflare/wrangler && npm install -g @cloudflare/wrangler --unsafe-perm=true --allow-root
     Println "$info wrangler 更新成功\n"
@@ -32945,14 +34049,16 @@ MonitorCloudflareWorkersGetRequests()
         curl_header_auth_token="Authorization: Bearer $cf_user_token"
     fi
 
-    IFS=$'`\t' read -r success error_message CF_ACCOUNT_ID < <(
+    IFS=$'\002\t' read -r success error_message CF_ACCOUNT_ID < <(
     JQs flat "$(curl -s -X GET -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
-    -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/accounts)" '^' '|' '^' \
-    '[.success + "`",(.errors|if . == "" then {} else . end).message + "`",(.result|if . == "" then {} else . end).id + "`"]|@tsv')
+    -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/accounts)" '' \
+    '[.success + "\u0002",
+    (.errors|if . == "" then {} else . end).message + "\u0002",
+    (.result|if . == "" then {} else . end).id + "\u0002"]|@tsv' $'\001')
 
     if [ "$success" == "false" ] 
     then
-        request_count="获取账号 ID 失败: ${error_message//^/, }"
+        request_count="获取账号 ID 失败: ${error_message//$'\001'/, }"
         return 0
     fi
 
@@ -32991,14 +34097,15 @@ MonitorCloudflareWorkersGetRequests()
     }
     }"
 
-    IFS=$'`\t' read -r cf_workers_requests error_message < <(
+    IFS=$'\002\t' read -r cf_workers_requests error_message < <(
     JQs flat "$(curl -s -X POST -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
-    --data "$(echo $PAYLOAD)" -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/graphql)" '^' '|' '^' \
-    '[((.data|if . == "" then {} else . end).viewer.accounts.workersInvocationsAdaptive|if . == "" then {} else . end).sum.requests + "`",(.errors|if . == "" then {} else . end).message + "`"]|@tsv')
+    --data "$(echo $PAYLOAD)" -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/graphql)" '' \
+    '[((.data|if . == "" then {} else . end).viewer.accounts.workersInvocationsAdaptive|if . == "" then {} else . end).sum.requests + "\u0002",
+    (.errors|if . == "" then {} else . end).message + "\u0002"]|@tsv' $'\001')
 
     if [ -z "$cf_workers_requests" ] 
     then
-        request_count="获取 workers 访问数失败: ${error_message//^/, }"
+        request_count="获取 workers 访问数失败: ${error_message//$'\001'/, }"
         return 0
     fi
 
@@ -37551,7 +38658,7 @@ Usage()
 
 UpdateSelf()
 {
-    if [ ! -e "$JQ_FILE" ] || [ ! -s "$CREATOR_FILE" ]
+    if [ ! -e "$JQ_FILE" ] 
     then
         echo
         yn_options=( '是' '否' )
@@ -37972,27 +39079,25 @@ WantedBy=multi-user.target
                 exit 1
             fi
 
-            InstallOpenresty
+            OpenrestyInstall
             Println "$info openresty 安装完成\n"
         ;;
         2) 
-            UninstallNginx
+            NginxUninstall
         ;;
         3) 
-            UpdateNginx
+            NginxUpdate
         ;;
         4) 
-            NginxViewDomain
+            NginxListDomain
         ;;
         5) 
             NginxAddDomain
         ;;
         6) 
-            NginxCheckDomains
-            NginxEditDomain
+            NginxConfigDomain
         ;;
         7) 
-            NginxCheckDomains
             NginxToggleDomain
         ;;
         8) 
@@ -38001,13 +39106,12 @@ WantedBy=multi-user.target
         9) 
             NginxViewStatus
         ;;
-        10) ToggleNginx
+        10) NginxToggle
         ;;
         11) 
-            RestartNginx
+            NginxRestart
         ;;
         12) 
-            NginxCheckDomains
             NginxDeleteDomain
         ;;
         13) 
@@ -38017,7 +39121,7 @@ WantedBy=multi-user.target
             [ ! -d "$IPTV_ROOT" ] && Println "$error 请先输入 tv 安装 !\n" && exit 1
             if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
             then
-                InstallNodejs
+                NodejsInstall
             fi
             if [ ! -e "$NODE_ROOT/index.js" ] 
             then
@@ -38120,27 +39224,25 @@ WantedBy=multi-user.target
                 exit 1
             fi
 
-            InstallNginx
+            NginxInstall
             Println "$info nginx 安装完成\n"
         ;;
         2) 
-            UninstallNginx
+            NginxUninstall
         ;;
         3) 
-            UpdateNginx
+            NginxUpdate
         ;;
         4) 
-            NginxViewDomain
+            NginxListDomain
         ;;
         5) 
             NginxAddDomain
         ;;
         6) 
-            NginxCheckDomains
-            NginxEditDomain
+            NginxConfigDomain
         ;;
         7) 
-            NginxCheckDomains
             NginxToggleDomain
         ;;
         8) 
@@ -38149,13 +39251,12 @@ WantedBy=multi-user.target
         9) 
             NginxViewStatus
         ;;
-        10) ToggleNginx
+        10) NginxToggle
         ;;
         11) 
-            RestartNginx
+            NginxRestart
         ;;
         12) 
-            NginxCheckDomains
             NginxDeleteDomain
         ;;
         13) 
@@ -38165,7 +39266,7 @@ WantedBy=multi-user.target
             [ ! -d "$IPTV_ROOT" ] && Println "$error 请先输入 tv 安装 !\n" && exit 1
             if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
             then
-                InstallNodejs
+                NodejsInstall
             fi
             if [ ! -e "$NODE_ROOT/index.js" ] 
             then
@@ -38428,8 +39529,9 @@ then
             systemctl restart $v2ray_name
         ;;
         3) 
+            Println "$error not ready...\n"
+            exit 1
             V2rayConfigUpdate
-            NginxCheckDomains
             V2rayConfigDomain
         ;;
         4) 
@@ -38706,10 +39808,12 @@ then
 
   ${green}1.${normal} 更改 apt 源
   ${green}2.${normal} 修复 N1 dtb
+————————————
   ${green}3.${normal} 安装 docker
   ${green}4.${normal} 安装/升级 dnscrypt
   ${green}5.${normal} 安装/升降级 openwrt
   ${green}6.${normal} 安装 openwrt-v2ray
+————————————
   ${green}7.${normal} 切换 openwrt 语言
   ${green}8.${normal} 切换 v2ray/xray core
   ${green}9.${normal} 切换 配置文件
@@ -38754,18 +39858,22 @@ then
             then
                 Println "已取消 ...\n"
             else
-                cd ~
-                if curl -L "$FFMPEG_MIRROR_LINK/Amlogic_s905-kernel-master.zip" -o ~/Amlogic_s905-kernel-master.zip && unzip Amlogic_s905-kernel-master.zip
+                if [ ! -d ~/Amlogic_s905-kernel-master ] 
                 then
-                    cd Amlogic_s905-kernel-master
-                    sed -i 's/interrupts = <29/interrupts = <25/' arch/arm64/boot/dts/amlogic/meson-gxl-s905d-p230.dts
-                    make defconfig
-                    make dtbs
-                    cp -f arch/arm64/boot/dts/amlogic/meson-gxl-s905d-phicomm-n1.dtb /boot/dtb/amlogic/meson-gxl-s905d-phicomm-n1.dtb
-                    Println "$info 修复成功\n"
-                else
-                    Println "$error 下载 Amlogic_s905-kernel-master.zip 发生错误, 请稍后再试\n"
+                    if curl -L "$FFMPEG_MIRROR_LINK/Amlogic_s905-kernel-master.zip" -o ~/Amlogic_s905-kernel-master.zip 
+                    then
+                        unzip Amlogic_s905-kernel-master.zip
+                    else
+                        Println "$error 下载 Amlogic_s905-kernel-master.zip 发生错误, 请稍后再试\n"
+                    fi
                 fi
+
+                cd ~/Amlogic_s905-kernel-master
+                sed -i 's/interrupts = <29/interrupts = <25/' arch/arm64/boot/dts/amlogic/meson-gxl-s905d-p230.dts
+                make defconfig
+                make dtbs
+                cp -f arch/arm64/boot/dts/amlogic/meson-gxl-s905d-phicomm-n1.dtb /boot/dtb/amlogic/meson-gxl-s905d-phicomm-n1.dtb
+                Println "$info 修复成功\n"
             fi
         ;;
         3)
@@ -38835,13 +39943,13 @@ then
                         cd dnscrypt-$dnscrypt_version
                         cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
 
-                        if [ ! -f "/etc/NetworkManager/system-connections/eth0.nmconnection" ] 
+                        if [ ! -f "/etc/NetworkManager/system-connections/armbian.nmconnection" ] 
                         then
-                            con=$(nmcli -t c s)
-                            nmcli connection modify "${con%%:*}" con-name eth0
+                            con=$(nmcli -t c s | grep eth0 | head -1)
+                            nmcli connection modify "${con%%:*}" con-name armbian
                         fi
 
-                        cp -f /etc/NetworkManager/system-connections/eth0.nmconnection ~/eth0.nmconnection-old
+                        cp -f /etc/NetworkManager/system-connections/armbian.nmconnection ~/armbian.nmconnection-old
 
                         while IFS= read -r line 
                         do
@@ -38856,19 +39964,19 @@ then
                                 eth0_mac=${line#*=}
                                 break
                             fi
-                        done < "/etc/NetworkManager/system-connections/eth0.nmconnection"
+                        done < "/etc/NetworkManager/system-connections/armbian.nmconnection"
 
                         echo "[connection]
-id=eth0
+id=armbian
 uuid=$etho_uuid
 type=ethernet
 autoconnect=true
 interface-name=eth0
 permissions=
-timestamp=$eth0_timestamp
+timestamp=${eth0_timestamp:-$(date +%s)}
 
 [ethernet]
-mac-address=$eth0_mac
+mac-address=${eth0_mac:-$(GetRandomMac)}
 mac-address-blacklist=
 
 [ipv4]
@@ -38882,7 +39990,7 @@ method=manual
 [ipv6]
 addr-gen-mode=stable-privacy
 dns-search=
-method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
+method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
 
                         sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
                         sed -i "0,/.*listen_addresses = \['127.0.0.1:53']/s//listen_addresses = ['127.0.0.1:53', '$eth0_ip:53']/" dnscrypt-proxy.toml
@@ -38923,10 +40031,11 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
                         then
                             sed -i "0,/iface eth0 inet dhcp/s//#iface eth0 inet dhcp/" /etc/network/interfaces
                         fi
+
                         nmcli connection reload
                         systemctl restart NetworkManager
-                        Println "$info dnscrypt proxy 安装配置成功, 请重新连接 $eth0_ip 后重启 Armbian\n"
-                        nmcli con up eth0
+                        Println "$info dnscrypt proxy 安装配置成功, 请重启 Armbian 后连接 IP: $eth0_ip\n"
+                        nmcli con up armbian
 
                         # echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
                     else
@@ -38935,7 +40044,7 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
                     fi
                 elif [[ $dnscrypt_version_old != "$dnscrypt_version" ]] 
                 then
-                    if [[ -x $(command -v docker) ]] && [[ -n $(docker container ls -f name=openwrt -q) ]]
+                    if [[ -x $(command -v docker) ]] && [[ -n $(docker container ls -a -f name=openwrt$ -q) ]]
                     then
                         Println "$tip 如果已经安装并运行旁路由 openwrt-v2ray, 建议先关闭旁路由 openwrt-v2ray"
                         yn_options=( '否' '是' )
@@ -39005,10 +40114,21 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
             fi
 
             echo
-            docker_openwrt_options=( 'armvirt-64-19.07.6' 'armvirt-64-19.07.5' 'armvirt-64-19.07.4' )
-            inquirer list_input "选择版本: " docker_openwrt_options docker_openwrt_ver
+            openwrt_options=( '19.07.7' '19.07.6' '19.07.5' '19.07.4' '手动输入' )
+            inquirer list_input "选择版本: " openwrt_options openwrt_ver
 
-            if grep -q "$docker_openwrt_ver" < <(docker container ls -a)
+            if [ "$openwrt_ver" == "手动输入" ] 
+            then
+                echo
+                inquirer text_input "输入版本号: " openwrt_ver "取消"
+                if [ "$openwrt_ver" == "取消" ] 
+                then
+                    Println "已取消...\n"
+                    exit 1
+                fi
+            fi
+
+            if grep -q "armvirt-64-$openwrt_ver" < <(docker container ls -a)
             then
                 if [ -f /etc/NetworkManager/dispatcher.d/promisc.sh ] 
                 then
@@ -39017,7 +40137,7 @@ method=ignore" > /etc/NetworkManager/system-connections/eth0.nmconnection
 interface=$1
 event=$2
 
-if [[ $event == "up" ]] && { [[ $interface == "eth0" ]] || [[ $interface == "hMACvLAN" ]]; }
+if [[ $event == "up" ]] && [[ $interface == "eth0" ]] 
 then
   ip link set $interface promisc on
   echo "$interface received $event" | systemd-cat -p info -t dispatch_script
@@ -39026,16 +40146,23 @@ fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
                     rm -f /etc/NetworkManager/dispatcher.d/promisc.sh
                     chmod +x /etc/NetworkManager/dispatcher.d/90-promisc.sh
                 fi
-                if grep -q "$docker_openwrt_ver" < <(docker container ls -f name=openwrt) 
+                if grep -q "armvirt-64-$openwrt_ver" < <(docker container ls -f name=openwrt) 
                 then
                     Println "$error 此版本 openwrt 已经在运行\n"
                     exit 1
                 fi
-                Println "$info 切换到版本 openwrt-$docker_openwrt_ver"
+                Println "$info 切换到版本 openwrt-armvirt-64-$openwrt_ver"
                 action="switch"
             else
-                Println "$info 安装 openwrt-$docker_openwrt_ver"
+                Println "$info 安装 openwrt-armvirt-64-$openwrt_ver"
                 action="install"
+            fi
+
+            if [ ! -f "/etc/NetworkManager/system-connections/armbian.nmconnection" ] 
+            then
+                con=$(nmcli -t c s | grep eth0 | head -1)
+                nmcli connection modify "${con%%:*}" con-name armbian
+                nmcli connection reload
             fi
 
             while IFS= read -r line 
@@ -39046,7 +40173,7 @@ fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
                     eth0_gateway=${BASH_REMATCH[2]}
                     break
                 fi
-            done < "/etc/NetworkManager/system-connections/eth0.nmconnection"
+            done < "/etc/NetworkManager/system-connections/armbian.nmconnection"
 
             connected_ip=${SSH_CLIENT% *}
             connected_ip=${connected_ip// /:}
@@ -39123,6 +40250,7 @@ route-metric=50
 addr-gen-mode=stable-privacy
 dns-search=
 method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
+                nmcli connection reload
             else
                 while IFS= read -r line 
                 do
@@ -39132,35 +40260,102 @@ method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
                         break
                     fi
                 done < "/etc/NetworkManager/system-connections/hMACvLAN.nmconnection"
+
+                if [ -z "${openwrt_ip:-}" ] 
+                then
+                    Println "$tip 必须和主路由器 ip 在同一网段"
+                    inquirer text_input "设置虚拟接口 hMACvLAN 静态 ip : " hMACvLAN_ip "取消"
+                    if [ "$hMACvLAN_ip" == "取消" ]
+                    then
+                        Println "已取消 ...\n"
+                        exit 1
+                    fi
+
+                    Println "$tip 必须和主路由器 ip 在同一网段"
+                    inquirer text_input "设置 openwrt 静态 ip : " openwrt_ip "取消"
+                    if [ "$openwrt_ip" == "取消" ]
+                    then
+                        Println "已取消 ...\n"
+                        exit 1
+                    fi
+
+                    while IFS= read -r line 
+                    do
+                        if [[ $line =~ uuid= ]] 
+                        then
+                            hMACvLAN_uuid=${line#*=}
+                        elif [[ $line =~ timestamp= ]] 
+                        then
+                            hMACvLAN_timestamp=${line#*=}
+                            break
+                        fi
+                    done < "/etc/NetworkManager/system-connections/hMACvLAN.nmconnection"
+
+                    echo "[connection]
+id=hMACvLAN
+uuid=$hMACvLAN_uuid
+type=macvlan
+interface-name=hMACvLAN
+permissions=
+timestamp=${hMACvLAN_timestamp:-$(date +%s)}
+
+[macvlan]
+mode=2
+parent=eth0
+
+[ipv4]
+address1=$hMACvLAN_ip/24,$openwrt_ip
+dns=127.0.0.1;
+dns-search=
+ignore-auto-dns=true
+method=manual
+route-metric=150
+
+[ipv6]
+addr-gen-mode=stable-privacy
+dns-search=
+method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
+                    nmcli connection reload
+                fi
             fi
 
-            if [[ -n $(docker container ls -f name=openwrt -q) ]] 
+            if [[ -n $(docker container ls -a -f name=openwrt$ -q) ]] 
             then
-                docker container stop openwrt >/dev/null 2>&1 || stopped=1
                 echo
                 yn_options=( '否' '是' )
-                inquirer list_input "是否重新设置路由器静态 IP" yn_options change_openwrt_ip_yn
+                inquirer list_input "是否重新设置 openwrt 静态 IP" yn_options change_openwrt_ip_yn
                 if [[ $change_openwrt_ip_yn == "是" ]] 
                 then
                     Println "$tip 必须和主路由器 ip 在同一网段"
                     inquirer text_input "设置 openwrt 静态 ip : " openwrt_ip "取消"
                     if [ "$openwrt_ip" == "取消" ]
                     then
-                        [[ "${stopped:-0}" -eq 0 ]] && docker container start openwrt >/dev/null
+                        if [[ -z $(docker container ls -f name=openwrt$ -q) ]] 
+                        then
+                            docker container start openwrt >/dev/null 2>&1 || true
+                        fi
                         Println "已取消 ...\n"
                         exit 1
                     fi
                     sed -i "0,/address1=\(.*\),.*/s//address1=\1,$openwrt_ip/" /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
+                    nmcli connection reload
                 fi
                 Println "$info 重启 hMACvLAN ..."
-                docker_openwrt_ver_old=$(docker container inspect openwrt| jq -r '.[0].Config.Image')
-                docker rename openwrt openwrt-${docker_openwrt_ver_old#*:}
                 nmcli connection modify hMACvLAN ipv4.route-metric 150 > /dev/null
                 nmcli con down hMACvLAN > /dev/null 2>&1 || true
                 nmcli con up hMACvLAN > /dev/null
                 sleep 3
-                Println "$info 网络马上会中断, 请退出并等待 30秒 后重新连接 armbian 后重复当前步骤 ...\n"
-                exit 1
+                openwrt_ver_old=$(docker inspect --format='{{.Config.Image}}' openwrt)
+                openwrt_ver_old=${openwrt_ver_old#*:}
+                if [[ -n $(docker container ls -f name=openwrt$ -q) ]] 
+                then
+                    docker rename openwrt openwrt-$openwrt_ver_old
+                    docker container stop openwrt-$openwrt_ver_old >/dev/null 2>&1
+                    Println "$info 网络马上会中断, 请退出并等待 30秒 后重新连接 armbian 后重复当前步骤 ...\n"
+                    exit 1
+                else
+                    docker rename openwrt openwrt-$openwrt_ver_old
+                fi
             fi
 
             if [ ! -s "/etc/docker/daemon.json" ] 
@@ -39191,7 +40386,7 @@ method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
 interface=$1
 event=$2
 
-if [[ $event == "up" ]] && { [[ $interface == "eth0" ]] || [[ $interface == "hMACvLAN" ]]; }
+if [[ $event == "up" ]] && [[ $interface == "eth0" ]] 
 then
   ip link set $interface promisc on
   echo "$interface received $event" | systemd-cat -p info -t dispatch_script
@@ -39202,15 +40397,14 @@ fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
             fi
 
             ip link set eth0 promisc on
-            ip link set hMACvLAN promisc on
 
             if [ "$action" == "switch" ] 
             then
-                docker rename openwrt-$docker_openwrt_ver openwrt
+                docker rename openwrt-armvirt-64-$openwrt_ver openwrt
                 docker container start openwrt >/dev/null
             else
-                Println "$info 下载 $docker_openwrt_ver ..."
-                docker pull openwrtorg/rootfs:$docker_openwrt_ver
+                Println "$info 下载 armvirt-64-$openwrt_ver ..."
+                docker import $FFMPEG_MIRROR_LINK/openwrt/releases/$openwrt_ver/targets/armvirt/64/openwrt-$openwrt_ver-armvirt-64-default-rootfs.tar.gz openwrtorg/rootfs:armvirt-64-$openwrt_ver
 
                 openwrt_network="
 config interface 'loopback'
@@ -39227,26 +40421,37 @@ config interface 'lan'
         option gateway '$eth0_gateway'
         list dns '$eth0_ip'"
 
-                docker run -dit \
+                docker run -d \
                     --restart unless-stopped \
                     --network macnet \
                     --privileged \
                     --name openwrt \
-                    openwrtorg/rootfs:$docker_openwrt_ver
+                    openwrtorg/rootfs:armvirt-64-$openwrt_ver /sbin/init
 
-                printf -v now '%(%m-%d-%H:%M:%S)T' -1
-                docker exec -it openwrt /bin/ash -c "sed -i 's_REJECT_ACCEPT_' /etc/config/firewall && mv /etc/config/network /etc/config/network_$now && echo \"${openwrt_network}\" > /etc/config/network && /etc/init.d/network restart"
+                Println "$info openwrt 启动中..."
+                until [[ $(docker inspect --format='{{.State.Status}}' openwrt) == "running" ]]
+                do
+                    sleep 1
+                done
+
+                docker exec -it openwrt /bin/ash -c "
+                sed -i 's_REJECT_ACCEPT_' /etc/config/firewall
+                sed -i '/option syn_flood/d' /etc/config/firewall
+                sed -i '/config forwarding/,+2d' /etc/config/firewall
+                echo \"${openwrt_network}\" > /etc/config/network
+                /etc/init.d/network restart
+                "
             fi
 
-            Println "$info openwrt 旁路由安装成功, 地址: $openwrt_ip, 注意设置防火墙\n"
-            Println "$tip 如需将*旁路由*作为 dhcp 服务器 请将*主路由* br-lan 接口网关设置为 $openwrt_ip, 否则请关闭*旁路由* lan 口的 dhcp 功能(此种情况客户端需手动设定网关为 $openwrt_ip)\n"
+            Println "$info openwrt ${green}旁路由${normal} 安装成功, 地址: $openwrt_ip, 是 ${red}主路由${normal} 负责(拨号)联网\n"
+            Println "$tip 如需将 ${green}旁路由${normal} 作为 dhcp 服务器 请将 ${red}主路由${normal} br-lan 接口网关设置为 $openwrt_ip, 否则请关闭 ${green}旁路由${normal} lan 口的 dhcp 功能(此种情况客户端需手动设定网关为 $openwrt_ip)\n"
 
             nmcli connection modify hMACvLAN ipv4.route-metric 50 > /dev/null
             nmcli con down hMACvLAN > /dev/null 2>&1 || true
             nmcli con up hMACvLAN > /dev/null
         ;;
         6)
-            if ! docker container inspect openwrt > /dev/null 2>&1
+            if ! docker inspect openwrt > /dev/null 2>&1
             then
                 Println "$error 请先安装或运行 openwrt\n"
                 exit 1
@@ -39285,7 +40490,7 @@ config interface 'lan'
             Println "$info openwrt-v2ray 安装成功\n"
         ;;
         7)
-            if ! docker container inspect openwrt > /dev/null 2>&1
+            if ! docker inspect openwrt > /dev/null 2>&1
             then
                 Println "$error 请先安装或运行 openwrt\n"
                 exit 1
@@ -39318,19 +40523,19 @@ config interface 'lan'
             Println "$info 界面语言切换成功\n"
         ;;
         8)
-            if ! docker container inspect openwrt > /dev/null 2>&1
+            if ! docker inspect openwrt > /dev/null 2>&1
             then
                 Println "$error 请先安装或运行 openwrt\n"
                 exit 1
             fi
 
-            echo
+            Println "$tip 请确保已经安装过 openwrt-v2ray"
             core_options=( 'xray-core' 'v2ray-core' )
             inquirer list_input "选择切换目标" core_options core
             if [ "$core" == "xray-core" ] 
             then
                 echo
-                xray_options=( '最新' '1.2.4' '1.2.3' )
+                xray_options=( '最新' '1.3.0' '1.2.4' '1.2.3' )
                 inquirer list_input "选择 xray 版本" xray_options xray_ver
                 if [ "$xray_ver" == "最新" ] && ! xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/openwrt-xray.json" | $JQ_FILE -r '.tag_name')
                 then
@@ -39381,7 +40586,7 @@ config interface 'lan'
             Println "$info 切换成功\n"
         ;;
         9)
-            if [[ ! -x $(command -v docker) ]] || [[ -z $(docker container ls -f name=openwrt -q) ]]
+            if [[ ! -x $(command -v docker) ]] || [[ -z $(docker container ls -a -f name=openwrt$ -q) ]]
             then
                 Println "$error 请先安装并运行 openwrt ...\n"
                 exit 1
@@ -39405,6 +40610,9 @@ config interface 'lan'
                 Println "$error 请先安装 openwrt-v2ray\n"
                 exit 1
             fi
+
+            docker cp openwrt:/etc/v2ray/directlist.txt "$HOME/openwrt_saved/openwrt-v2ray/directlist-$timestamp$config_name"
+            docker cp openwrt:/etc/v2ray/proxylist.txt "$HOME/openwrt_saved/openwrt-v2ray/proxylist-$timestamp$config_name"
 
             docker exec -it openwrt /bin/ash -c "
             cat /var/etc/v2ray/v2ray.main.json 2> /dev/null || true
@@ -39430,14 +40638,14 @@ config interface 'lan'
                     if [[ ${file##*/} =~ ^config-(.+)-(.+)$ ]] 
                     then
                         config_time=${BASH_REMATCH[1]}
-                        config_name="${BASH_REMATCH[2]}"
+                        config_name="-${BASH_REMATCH[2]}"
                     elif [[ ${file##*/} =~ ^config-(.+)$ ]] 
                     then
                         config_time=${BASH_REMATCH[1]}
                         config_name=""
                     fi
                     configs_time+=("$config_time")
-                    configs_name+=("-$config_name")
+                    configs_name+=("$config_name")
                     configs_count=$((configs_count+1))
                     printf -v config_date '%(%Y-%m-%d %H:%M:%S)T' "$config_time"
                     configs_list="$configs_list $configs_count.\r\033[6C名称: ${green}${config_name:-无}${normal} 日期: ${green}$config_date${normal}\n\n"
@@ -39470,6 +40678,8 @@ config interface 'lan'
                 done
 
                 docker cp "$HOME/openwrt_saved/openwrt-v2ray/config-$config_time$config_name" openwrt:/etc/config/v2ray
+                docker cp "$HOME/openwrt_saved/openwrt-v2ray/directlist-$config_time$config_name" openwrt:/etc/v2ray/directlist.txt
+                docker cp "$HOME/openwrt_saved/openwrt-v2ray/proxylist-$config_time$config_name" openwrt:/etc/v2ray/proxylist.txt
                 Println "$info 配置复原成功\n"
             else
                 docker exec -it -e V2RAY_CONFIG_NAME="$config_file" -e MIRROR="$FFMPEG_MIRROR_LINK" openwrt /bin/ash -c '
@@ -39871,10 +41081,8 @@ then
                     hinet_4gtv_chnl_id=${hinet_4gtv[hinet_4gtv_chnl_index]%%:*}
                     hinet_4gtv_chnl_name=${hinet_4gtv[hinet_4gtv_chnl_index]#*:}
                     hinet_4gtv_chnl_name_enc=$(Urlencode "$hinet_4gtv_chnl_name")
-
                     Println "$info 添加频道 [ $hinet_4gtv_chnl_name ]\n\n"
                     inquirer list_input "是否推流 flv" yn_options add_channel_flv_yn
-
                     if [[ $add_channel_flv_yn == "是" ]] 
                     then
                         kind="flv"
@@ -39993,15 +41201,21 @@ then
         "astro")
             Println "$info 检测 astro ..."
 
-            IFS=$'`\t' read -r m_id m_title m_description m_is_hd m_language < <(
-            JQs flat "$(curl -s -Lm 20 -H 'User-Agent: '"$USER_AGENT_BROWSER"'' https://contenthub-api.eco.astro.com.my/channel/all.json)" '^' '|' '^' '
-            [.id + "`",.title + "`",.description + "`",.isHd + "`",.language + "`"]|@tsv' '.[0].response')
+            IFS=$'\002\t' read -r m_id m_title m_description m_is_hd m_language < <(
+            JQs flat "$(curl -s -Lm 20 -H 'User-Agent: '"$USER_AGENT_BROWSER"'' https://contenthub-api.eco.astro.com.my/channel/all.json)" '.[0].response' '
+            . as $response | reduce ({id,title,description,isHd,language}|keys_unsorted[]) as $key ([];
+                $response[$key] as $val | if $val then
+                    . + [$val + "\u0001\u0002"]
+                else
+                    . + ["\u0002"]
+                end
+            )|@tsv' $'\001')
 
-            IFS="|" read -ra chnls_id <<< "$m_id"
-            IFS="|" read -ra chnls_title <<< "$m_title"
-            IFS="|" read -ra chnls_description <<< "$m_description"
-            IFS="|" read -ra chnls_is_hd <<< "$m_is_hd"
-            IFS="|" read -ra chnls_language <<< "$m_language"
+            IFS=$'\001' read -ra chnls_id <<< "$m_id"
+            IFS=$'\001' read -ra chnls_title <<< "$m_title"
+            IFS=$'\001' read -ra chnls_description <<< "$m_description"
+            IFS=$'\001' read -ra chnls_is_hd <<< "$m_is_hd"
+            IFS=$'\001' read -ra chnls_language <<< "$m_language"
 
             chnls_list=""
             for((i=0;i<${#chnls_id[@]};i++));
@@ -40173,7 +41387,7 @@ then
                 channels="$channels$line"
             done < <(curl -s -Lm 20 "$DEFAULT_DEMOS")
             [ -z "$channels" ] && Println "$error 暂时无法连接服务器, 请稍后再试...\n" && exit 1
-            IFS="|" read -r -a channels_name < <(JQs flat "$channels" '^' '|' '^' '.channel_name')
+            IFS=$'\001' read -r -a channels_name < <(JQs flat "$channels" '' '.channel_name' $'\001')
             echo
             channels_name+=("全部")
             inquirer list_input "选择添加的频道" channels_name channel_name

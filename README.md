@@ -2,13 +2,13 @@
 
 ## 目录
 
+- [一键管理 nginx 脚本](#一键管理-nginx-脚本)
+- [一键管理 openresty 脚本](#一键管理-openresty-脚本)
 - [一键管理 xray 脚本](#一键管理-xray-脚本)
 - [一键管理 v2ray 脚本](#一键管理-v2ray-脚本)
 - [一键管理 armbian 脚本](#一键管理-armbian-脚本)
 - [一键管理 ibm cloud foundry 脚本](#一键管理-ibm-cloud-foundry-脚本)
 - [一键管理 cloudflare partner,workers 脚本](#一键管理-cloudflare-partnerworkers-脚本)
-- [一键管理 nginx 脚本](#一键管理-nginx-脚本)
-- [一键管理 openresty 脚本](#一键管理-openresty-脚本)
 - [一键管理 FFmpeg 脚本](#一键管理-ffmpeg-脚本)
   - [演示](#演示)
   - [编译 h265 patched 静态 FFmpeg](#编译-h265-patched-静态-ffmpeg)
@@ -18,6 +18,31 @@
   - [快捷键](#快捷键)
   - [参数详解](#参数详解)
   - [举例](#举例)
+
+## 一键管理 nginx 脚本
+
+``` bash
+wget -q https://git.io/nx.sh && bash nx.sh
+
+nx # 打开 Nginx 管理面板
+
+```
+
+- 使用官方 crossplane 解析配置
+- 支持修改最多五级指令
+
+---
+
+## 一键管理 openresty 脚本
+
+``` bash
+wget -q https://git.io/or.sh && bash or.sh
+
+or # 打开 OpenResty 管理面板
+
+```
+
+---
 
 ## 一键管理 xray 脚本
 
@@ -99,28 +124,6 @@ Mac/Linux 一键获取最优 IP 可以用脚本 [cloudflare-fping](https://githu
     - 脚本添加源站 CNAME 记录(一个 CNAME 对应一个 worker), 所有域名必须在同一 cloudflare 账号
     - 如果是新账号需要登录官网完成验证邮箱并点击 workers 设置站点域名
   - 可以设置中转 IBM CF
-
----
-
-## 一键管理 nginx 脚本
-
-``` bash
-wget -q https://git.io/nx.sh && bash nx.sh
-
-nx # 打开 Nginx 管理面板
-
-```
-  
----
-
-## 一键管理 openresty 脚本
-
-``` bash
-wget -q https://git.io/or.sh && bash or.sh
-
-or # 打开 OpenResty 管理面板
-
-```
 
 ---
 
