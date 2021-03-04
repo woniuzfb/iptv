@@ -87,13 +87,6 @@ inquirer()
         true;
     }
 
-    inquirer:on_keypress_ws() {
-        case "$3" in
-        'w') $1;;
-        's') $2;;
-        esac
-    }
-
     inquirer:on_keypress() {
         local OLD_IFS=$IFS
         local key
@@ -103,13 +96,7 @@ inquirer()
         local on_enter=${4:-inquirer:on_default}
         local on_left=${5:-inquirer:on_default}
         local on_right=${6:-inquirer:on_default}
-        local on_ascii
-        if [ "$option" == "list_input" ] 
-        then
-            on_ascii="inquirer:on_keypress_ws $on_up $on_down"
-        else
-            on_ascii=${7:-inquirer:on_default}
-        fi
+        local on_ascii=${7:-inquirer:on_default}
         local on_backspace=${8:-inquirer:on_default}
         local on_not_ascii=${9:-inquirer:on_default}
         _break_keypress=false
@@ -168,9 +155,11 @@ inquirer()
 
     inquirer:select_indices() {
         local var=("$1"[@])
-        local _select_list <<< "${!var}"
+        local _select_list
+        read -r -a _select_list <<< "${!var}"
         var=("$2"[@])
-        local _select_indices <<< "${!var}"
+        local _select_indices
+        read -r -a _select_indices <<< "${!var}"
         local _select_var_name=$3
         declare -a new_array
         for i in $(inquirer:gen_index ${#_select_indices[@]})
@@ -316,12 +305,11 @@ inquirer()
         fi
     }
 
-    # for vim movements
     inquirer:on_checkbox_input_ascii() {
         local key=$1
         case $key in
-            "j" ) inquirer:on_checkbox_input_down;;
-            "k" ) inquirer:on_checkbox_input_up;;
+            "w" ) inquirer:on_checkbox_input_up;;
+            "s" ) inquirer:on_checkbox_input_down;;
         esac
     }
 
@@ -336,14 +324,14 @@ inquirer()
         stty -echo
         tput civis
 
-        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}(输入 <space> 选择, <enter> 确认)${normal}"
+        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}(按 <space> 选择, <enter> 确认)${normal}"
 
         for i in $(inquirer:gen_index ${#_checkbox_list[@]})
         do
             _checkbox_selected[i]=false
         done
 
-        if [ -n "$3" ]
+        if [ -n "${3:-}" ]
         then
             var=("$3"[@])
             _selected_indices=("${!var}")
@@ -493,6 +481,15 @@ inquirer()
         IFS=$OLD_IFS
     }
 
+    inquirer:on_list_input_input_ascii()
+    {
+        local key=$1
+        case $key in
+            "w" ) inquirer:on_list_input_up;;
+            "s" ) inquirer:on_list_input_down;;
+        esac
+    }
+
     inquirer:remove_list_instructions() {
         if [ "$_first_keystroke" = true ]
         then
@@ -536,7 +533,7 @@ inquirer()
             tput cuu1
         done
 
-        inquirer:on_keypress inquirer:on_list_input_up inquirer:on_list_input_down inquirer:on_list_input_enter_space inquirer:on_list_input_enter_space
+        inquirer:on_keypress inquirer:on_list_input_up inquirer:on_list_input_down inquirer:on_list_input_enter_space inquirer:on_list_input_enter_space inquirer:on_default inquirer:on_default inquirer:on_list_input_input_ascii
     }
 
     inquirer:list_input() {
@@ -568,7 +565,7 @@ inquirer()
         if [[ $_current_pos -gt 0 ]]
         then
             local current=${_text_input:$_current_pos:1} current_width
-            current_width=$(wc -L <<< "$current" 2> /dev/null) || current_width=${#current}
+            current_width=$(inquirer:display_length "$current")
 
             tput cub $current_width
             _current_pos=$((_current_pos-1))
@@ -584,7 +581,7 @@ inquirer()
         elif [[ $_current_pos -lt ${#_text_input} ]]
         then
             local next=${_text_input:$((_current_pos+1)):1} next_width
-            next_width=$(wc -L <<< "$next" 2> /dev/null) || next_width=${#next}
+            next_width=$(inquirer:display_length "$next")
 
             tput cuf $next_width
             _current_pos=$((_current_pos+1))
@@ -630,17 +627,12 @@ inquirer()
 
     inquirer:on_text_input_ascii() {
         inquirer:remove_regex_failed
-        local c=${1:-}
-
-        if [ -z "$c" ]
-        then
-            c=' '
-        fi
+        local c=${1:- }
 
         local rest=${_text_input:$_current_pos} rest_width
         local current=${_text_input:$_current_pos:1} current_width
-        rest_width=$(wc -L <<< "$rest" 2> /dev/null) || rest_width=${#rest}
-        current_width=$(wc -L <<< "$current" 2> /dev/null) || current_width=${#current}
+        rest_width=$(inquirer:display_length "$rest")
+        current_width=$(inquirer:display_length "$current")
 
         _text_input="${_text_input:0:$_current_pos}$c$rest"
         _current_pos=$((_current_pos+1))
@@ -657,14 +649,43 @@ inquirer()
         tput cnorm
     }
 
+    inquirer:display_length() {
+        local display_length=0 byte_len
+        local oLC_ALL=${LC_ALL:-} oLANG=${LANG:-} LC_ALL=${LC_ALL:-} LANG=${LANG:-}
+
+        while IFS="" read -rsn1 char
+        do
+            case "$char" in
+                '')
+                ;;
+                *[$'\x80'-$'\xFF']*) 
+                    LC_ALL='' LANG=C
+                    byte_len=${#char}
+                    LC_ALL=$oLC_ALL LANG=$oLANG
+                    if [[ $byte_len -eq 2 ]] 
+                    then
+                        display_length=$((display_length+1))
+                    else
+                        display_length=$((display_length+2))
+                    fi
+                ;;
+                *) 
+                    display_length=$((display_length+1))
+                ;;
+            esac
+        done <<< "$1"
+
+        echo "$display_length"
+    }
+
     inquirer:on_text_input_not_ascii() {
         inquirer:remove_regex_failed
         local c=$1
 
         local rest="${_text_input:$_current_pos}" rest_width
         local current=${_text_input:$_current_pos:1} current_width
-        rest_width=$(wc -L <<< "$rest" 2> /dev/null) || rest_width=${#rest}
-        current_width=$(wc -L <<< "$current" 2> /dev/null) || current_width=${#current}
+        rest_width=$(inquirer:display_length "$rest")
+        current_width=$(inquirer:display_length "$current")
 
         _text_input="${_text_input:0:$_current_pos}$c$rest"
         _current_pos=$((_current_pos+1))
@@ -687,15 +708,15 @@ inquirer()
         then
             local start rest rest_width del del_width next next_width offset
             local current=${_text_input:$_current_pos:1} current_width
-            current_width=$(wc -L <<< "$current" 2> /dev/null) || current_width=${#current}
+            current_width=$(inquirer:display_length "$current")
 
             tput civis
             if [ $_current_pos -eq 0 ] 
             then
                 rest=${_text_input:$((_current_pos+1))}
                 next=${_text_input:$((_current_pos+1)):1}
-                rest_width=$(wc -L <<< "$rest" 2> /dev/null) || rest_width=${#rest}
-                next_width=$(wc -L <<< "$next" 2> /dev/null) || next_width=${#next}
+                rest_width=$(inquirer:display_length "$rest")
+                next_width=$(inquirer:display_length "$next")
                 offset=$((current_width-1))
                 [[ $offset -gt 0 ]] && tput cub $offset
                 printf '%s' "$rest"
@@ -707,8 +728,8 @@ inquirer()
                 rest=${_text_input:$_current_pos}
                 start=${_text_input:0:$((_current_pos-1))}
                 del=${_text_input:$((_current_pos-1)):1}
-                rest_width=$(wc -L <<< "$rest" 2> /dev/null) || rest_width=${#rest}
-                del_width=$(wc -L <<< "$del" 2> /dev/null) || del_width=${#del}
+                rest_width=$(inquirer:display_length "$rest")
+                del_width=$(inquirer:display_length "$del")
                 _current_pos=$((_current_pos-1))
                 if [[ $current_width -gt 1 ]] 
                 then
@@ -772,7 +793,7 @@ inquirer()
     local option=$1
     shift
     local var_name prompt=${1:-} prompt_width _text_default_value=${3:-} _current_pos=0 _text_input="" _text_input_regex_failed_msg _text_input_validator _text_input_regex_failed
-    prompt_width=$(wc -L <<< "$prompt" 2> /dev/null) || prompt_width=$((${#prompt}*2))
+    prompt_width=$(inquirer:display_length "$prompt")
     inquirer:$option "$@"
 }
 

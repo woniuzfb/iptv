@@ -95,7 +95,7 @@
 
 set -euo pipefail
 
-sh_ver="1.80.0"
+sh_ver="1.80.1"
 sh_debug=0
 export LC_ALL=
 export LANG=en_US.UTF-8
@@ -324,46 +324,60 @@ JQs()
                 jq_input="$2"
             fi
 
-            $JQ_FILE --arg strict "${strict:-0}" --arg d1 "$5" --arg d2 "${6:-$5}" --arg d3 "${7:-$5}" --arg d4 "${8:-$5}" --arg d5 "${9:-$5}" --arg d6 "${10:-$5}" -r -c -s '
+            $JQ_FILE --arg d1 "$5" --arg d2 "${6:-$5}" --arg d3 "${7:-$5}" --arg d4 "${8:-$5}" --arg d5 "${9:-$5}" --arg d6 "${10:-$5}" -r -c -s '
             def flat(a;b;c;d;e;f;g):
                 (a[0]| type) as $type | if ($type == "object") then
                     ([a[] | keys_unsorted[]] | unique) as $keys | reduce a[] as $item ({};
-                    reduce(if $strict == "0" then $keys[] else ($item | keys_unsorted[]) end) as $key (.;
-                    $item[$key] as $val | ($val | type) as $type2 | (.[$key] | type) as $type3 | .[$key] = 
-                        if ($type2 == "object") then
-                            if ($type3 == "object" and .[$key] != {}) then
-                                flat([.[$key],$val];c;d;e;f;g;b)
-                            else
-                                flat([$val];c;d;e;f;g;b)
-                            end
-                        elif ($type2 == "array") then
-                            flat($val;b;c;d;e;f;g) as $val2 | 
-                            if ($val2 | type == "object") then
-                                if ($type3 == "object" and .[$key] != {}) then
-                                    flat([.[$key],$val2];c;d;e;f;g;b)
+                    reduce($keys[]) as $key (.;
+                    $item[$key] as $val | ($val | type) as $type | (.[$key]) as $val2 | ($val2 | type) as $type2 | .[$key] = 
+                        if ($type == "object") then
+                            if ($type2 == "object") then
+                                flat([$val2,$val];c;d;e;f;g;b)
+                            elif ($val2) then
+                                if ($val == {}) then
+                                    $val2 + c
                                 else
-                                    $val2
+                                    (reduce($val2 | split(c)[]) as $item2 ([]; 
+                                        . + [{}]
+                                    )| if .== [] then [{}] else . end) as $x |
+                                    flat($x + [$val];b;c;d;e;f;g)
                                 end
+                            elif ($val == {}) then
+                                ""
                             else
-                                if ($type3 == "object") then
-                                    .[$key]
-                                elif (.[$key]) then
-                                    .[$key] + c + $val2
-                                else
-                                    $val2
-                                end
+                                flat([$val];b;c;d;e;f;g)
                             end
-                        elif ($type2 == "null") then
-                            if ($type3 == "object") then
-                                .[$key]
-                            elif (.[$key]) then
-                                .[$key] + c
+                        elif ($type == "array") then
+                            flat($val;b;c;d;e;f;g) as $val3 | 
+                            if ($type2 == "object") then
+                                flat([$val2,($val3|if .== "" then {} else . end)];c;d;e;f;g;b)
+                            elif ($val2) then
+                                if ($val3 == {}) then
+                                    $val2 + c
+                                elif ($val3 | type == "object") then
+                                    (reduce($val2 | split(c)[]) as $item2 ([]; 
+                                        . + [{}]
+                                    )| if .== [] then [{}] else . end) as $x |
+                                    flat($x + [$val3];c;d;e;f;g;b)
+                                else
+                                    $val2 + c + $val3
+                                end
+                            elif ($val3 == {}) then
+                                ""
                             else
-                                {}
+                                $val3
+                            end
+                        elif ($type == "null") then
+                            if ($type2 == "object") then
+                                flat([$val2,{}];c;d;e;f;g;b)
+                            elif ($val2) then
+                                $val2 + c
+                            else
+                                ""
                             end
                         else
-                            if (.[$key]) then
-                                .[$key] + c + ($val | tostring)
+                            if ($val2) then
+                                $val2 + c + ($val | tostring)
                             else
                                 ($val | tostring)
                             end
@@ -375,8 +389,144 @@ JQs()
                     a|join(b)
                 end;
             flat('"${3:-.}"';$d1;$d2;$d3;$d4;$d5;$d6)|'"$4"'' <<< "$jq_input"
+        ;;
+        "flat_c")
+            if [[ $2 =~ ^/ ]] 
+            then
+                jq_input=$(< $2)
+            else
+                jq_input="$2"
+            fi
 
-            strict=0
+            $JQ_FILE --arg d1 "$5" --arg d2 "${6:-$5}" --arg d3 "${7:-$5}" --arg d4 "${8:-$5}" --arg d5 "${9:-$5}" --arg d6 "${10:-$5}" -r -c -s '
+            def flat(a;x;b;c;d;e;f;g):
+                a as $a | (a[0]| type) as $type | if ($type == "object") then
+                    ([a[] | keys_unsorted[]] | unique) as $keys | 
+
+                    (reduce a[] as $item ({};
+                        reduce($keys[]) as $key (.; ($item[$key]) as $val | ($val | type) as $type | (.[$key]) as $val2 | .[$key] = 
+                            if ($val and $val != [] and $val != {}) then
+                                if ($val2 and ($val2|.[-1:]) == [""]) then
+                                    $val2
+                                else
+                                    ($val2 // []) + [""]
+                                end
+                            else
+                                if ($val2) then
+                                    if ($val2|.[-1:] == [""]) then
+                                        $val2
+                                    else
+                                        $val2 + [{}]
+                                    end
+                                else
+                                    [{}]
+                                end
+                            end
+                        )
+                    )) as $blank | (reduce($keys[]) as $key ({};
+                        .[$key] = ($blank[$key] | .[:-1])
+                    )) as $blank |
+
+                    reduce a[] as $item ({};
+                    reduce($keys[]) as $key (.;
+                    $blank[$key] as $x | $item[$key] as $val | ($val | type) as $type | (.[$key]) as $val2 |($val2 | type) as $type2 | 
+                    .[$key] = 
+                        if ($type == "object") then
+                            if ($val2) then
+                                if ($type2 == "object") then
+                                    if (x == [""]) then
+                                        flat([$val2,$val];$x + [1];c;d;e;f;g;b)
+                                    else
+                                        flat([$val2,flat([$val];x;b;c;d;e;f;g)];x;c;d;e;f;g;b)
+                                    end
+                                elif ($val == {}) then
+                                    $val2 + c
+                                else
+                                    if (x|.[-1:] == [1]) then
+                                        flat(($x + (x | .[:-1]) + [$val]);$x + x;c;d;e;f;g;b)
+                                    else
+                                        flat(($x + [$val]);[];c;d;e;f;g;b)
+                                    end
+                                end
+                            else
+                                if ($val == {}) then
+                                    ""
+                                elif (x == [""]) then
+                                    $val
+                                else
+                                    flat([$val];[];b;c;d;e;f;g)
+                                end
+                            end
+                        elif ($type == "array") then
+                            if ($val[0] | type == "object") then
+                                if ($val2) then
+                                    if ($type2 == "object") then
+                                        $val2
+                                    else
+                                        ($a|index($item)) as $index | 
+                                        if ($a|length - $index == 1) then
+                                            flat(($x + [flat($val;$x;b;c;d;e;f;g)]);[];c;d;e;f;g;b)
+                                        else
+                                            flat(reduce($a|.[$index:]|.[]) as $obj ($x;
+                                                if ($obj[$key] and $obj[$key] != []) then
+                                                    . + [flat($obj[$key];[];b;c;d;e;f;g)]
+                                                else
+                                                    . + [{}]
+                                                end
+                                            );[""];c;d;e;f;g;b)
+                                        end
+                                    end
+                                else
+                                    ($a|index($item)) as $index | 
+                                    if ($a|length - $index == 1) then
+                                        flat($val;$x;b;c;d;e;f;g)
+                                    else
+                                        flat(reduce($a|.[$index:]|.[]) as $obj ([];
+                                            if ($obj[$key] and $obj[$key] != []) then
+                                                . + [flat($obj[$key];[];b;c;d;e;f;g)]
+                                            else
+                                                . + [{}]
+                                            end
+                                        );[""];c;d;e;f;g;b)
+                                    end
+                                end
+                            else
+                                if ($val2) then
+                                    if ($type2 == "object") then
+                                        $val2
+                                    else
+                                        $val2 + c + flat($val;$x;b;c;d;e;f;g)
+                                    end
+                                else
+                                    flat($val;$x;b;c;d;e;f;g)
+                                end
+                            end
+                        elif ($type == "null") then
+                            if ($type2 == "object") then
+                                if (x != [""] and (x|.[-1:] != [1])) then
+                                    $val2
+                                else
+                                    flat([$val2,{}];x;c;d;e;f;g;b)
+                                end
+                            elif ($val2) then
+                                $val2 + c
+                            else
+                                ""
+                            end
+                        else
+                            if ($val2) then
+                                $val2 + c + ($val | tostring)
+                            else
+                                ($val | tostring)
+                            end
+                        end
+                    ))
+                elif ($type == "array") then
+                    flat([flat(a[];x;b;c;d;e;f;g)];x;b;c;d;e;f;g)
+                else
+                    a|join(b)
+                end;
+            flat('"${3:-.}"';[];$d1;$d2;$d3;$d4;$d5;$d6)|'"$4"'' <<< "$jq_input"
         ;;
     esac
 }
@@ -891,7 +1041,7 @@ inquirer()
             case "$key" in
                 $'\x1b')
                     read -rsn1 key
-                    if [[ "$key" == "[" ]]
+                    if [[ $key == "[" ]]
                     then
                         read -rsn1 key
                         case "$key" in
@@ -3969,7 +4119,7 @@ FlvStreamCreator()
                 [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
             fi
             chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_video_shift -i $chnl_stream_link )
-        elif [ -n "${audio_shift:-}" ] 
+        elif [ -n "${chnl_audio_shift:-}" ] 
         then
             if [ "$chnl_audio_codec" == "copy" ] 
             then
@@ -5251,7 +5401,7 @@ HlsStreamCreatorPlus()
                 [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
             fi
             chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_video_shift -i $chnl_stream_link )
-        elif [ -n "${audio_shift:-}" ] 
+        elif [ -n "${chnl_audio_shift:-}" ] 
         then
             if [ "$chnl_audio_codec" == "copy" ] 
             then
@@ -5945,6 +6095,7 @@ GetChannelsInfo()
 {
     [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
 
+    delimiters=( $'\001' )
     IFS=$'\002\t' read -r m_pid m_status m_stream_link m_live m_proxy m_xc_proxy m_user_agent m_headers m_cookies \
     m_output_dir_name m_playlist_name m_seg_dir_name m_seg_name m_seg_length m_seg_count \
     m_video_codec m_audio_codec m_video_audio_shift m_txt_format m_draw_text m_quality m_bitrates m_const m_encrypt \
@@ -5962,7 +6113,7 @@ GetChannelsInfo()
         else
             . + ["\u0002"]
         end
-    )|@tsv' $'\001')
+    )|@tsv' "${delimiters[@]}")
 
     if [ -z "$m_pid" ] 
     then
@@ -6208,7 +6359,7 @@ GetChannelInfo()
 
     chnl_stream_link=${chnl_stream_links%% *}
 
-    if [ -n "$chnl_proxy" ] && { [[ "$chnl_stream_link" =~ ^https?:// ]] || [[ ${chnl_stream_link##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]]; }
+    if [ -n "$chnl_proxy" ] && { [[ $chnl_stream_link =~ ^https?:// ]] || [[ ${chnl_stream_link##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]]; }
     then
         chnl_proxy_command="-http_proxy $chnl_proxy"
     else
@@ -6410,7 +6561,7 @@ GetChannelInfoLite()
             chnl_live_text="$green是${normal}"
         fi
         chnl_proxy=${chnls_proxy[i]}
-        if [ -n "$chnl_proxy" ] && { [[ "$chnl_stream_link" =~ ^https?:// ]] || [[ ${chnl_stream_link##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]]; }
+        if [ -n "$chnl_proxy" ] && { [[ $chnl_stream_link =~ ^https?:// ]] || [[ ${chnl_stream_link##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]]; }
         then
             chnl_proxy_command="-http_proxy $chnl_proxy"
         else
@@ -7145,7 +7296,7 @@ SetStreamLink()
             GetServiceAccs 4gtv
             for((i=0;i<${#_4gtv_accs_token[@]};i++));
             do
-                if [ -n "${_4gtv_accs_token[i]}" ] 
+                if [ -n "${_4gtv_accs_token[i]:-}" ] 
                 then
                     fsVALUE=${_4gtv_accs_token[i]}
                     break
@@ -10603,7 +10754,7 @@ StartChannel()
             GetServiceAccs 4gtv
             for((i=0;i<${#_4gtv_accs_token[@]};i++));
             do
-                if [ -n "${_4gtv_accs_token[i]}" ] 
+                if [ -n "${_4gtv_accs_token[i]:-}" ] 
                 then
                     fsVALUE=${_4gtv_accs_token[i]}
                     break
@@ -12033,6 +12184,7 @@ GetServiceAccs()
     fi
     case $service_name in
         "4gtv") 
+            delimiters=( $'\001' )
             IFS=$'\002\t' read -r _4gtv_acc_email _4gtv_acc_pass _4gtv_acc_token < <(JQs flat "$SERVICES_FILE" '' '
             ."'"$service_name"'".accounts as $accounts |
             reduce ({email,password,token}|keys_unsorted[]) as $key ([];
@@ -12041,7 +12193,7 @@ GetServiceAccs()
             else
                 . + ["\u0002"]
             end
-            )|@tsv' $'\001')
+            )|@tsv' "${delimiters[@]}")
 
             IFS=$'\001' read -r -a _4gtv_accs_email <<< "$_4gtv_acc_email"
             IFS=$'\001' read -r -a _4gtv_accs_pass <<< "$_4gtv_acc_pass"
@@ -12059,7 +12211,7 @@ List4gtvAccs()
     _4gtv_accs_list=""
     for((i=0;i<_4gtv_accs_count;i++));
     do
-        if [ -n "${_4gtv_accs_token[i]}" ]
+        if [ -n "${_4gtv_accs_token[i]:-}" ]
         then
             is_login="$green [ 已登录 ] ${normal}"
         else
@@ -12235,7 +12387,7 @@ View4gtvAcc()
                 if [ "$_4gtv_accs_num" -gt 0 ] && [ "$_4gtv_accs_num" -le "$_4gtv_accs_count" ]
                 then
                     _4gtv_accs_index=$((_4gtv_accs_num-1))
-                    fsVALUE=${_4gtv_accs_token[_4gtv_accs_index]}
+                    fsVALUE=${_4gtv_accs_token[_4gtv_accs_index]:-}
                     if [ -z "$fsVALUE" ] 
                     then
                         Println "$error 请先登录此账号\n"
@@ -12373,7 +12525,7 @@ Get4gtvAccToken()
                 if [ "$_4gtv_accs_num" -gt 0 ] && [ "$_4gtv_accs_num" -le "$_4gtv_accs_count" ]
                 then
                     _4gtv_accs_index=$((_4gtv_accs_num-1))
-                    fsVALUE=${_4gtv_accs_token[_4gtv_accs_index]}
+                    fsVALUE=${_4gtv_accs_token[_4gtv_accs_index]:-}
                     if [ -z "$fsVALUE" ] 
                     then
                         Println "$error 请先登录此账号\n"
@@ -21584,19 +21736,19 @@ NginxParseConfig()
 
     rm -f "$TMP_FILE"
 
+    trap - EXIT
+
     jq_path='["config",0,"file"]'
     JQs update parse_out "$parse_file"
-
-    delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
 }
 
 NginxGetConfig()
 {
-    strict=1
+    delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
     IFS=$'\007\t' read -r status error_message level_1_directive level_1_args \
     level_2_directive level_2_args level_3_directive level_3_args \
     level_4_directive level_4_args level_5_directive level_5_args < <(
-    JQs flat "$parse_out" '' \
+    JQs flat_c "$parse_out" '' \
     '(.config.parsed|if . == "" then {} else . end) as $level_1 |
     ($level_1.block|if . == "" then {} else . end) as $level_2 |
     ($level_2.block|if . == "" then {} else . end) as $level_3 |
@@ -21614,7 +21766,7 @@ NginxGetConfig()
     ($level_4.args|if . != null then (. + $d5) else . end) + "\u0007",
     ($level_5.directive|if . != null then (. + $d6) else . end) + "\u0007",
     ($level_5.args|if . != null then (. + $d6) else . end) + "\u0007"
-    ]|@tsv' ${delimiters[@]+"${delimiters[@]}"})
+    ]|@tsv' "${delimiters[@]}")
 
     if [ "$status" == "failed" ] 
     then
@@ -21622,31 +21774,27 @@ NginxGetConfig()
         exit 1
     fi
 
-    level_1_directive_count=0
-    level_2_directive_count=0
-    level_3_directive_count=0
-    level_4_directive_count=0
-    level_5_directive_count=0
+    # level 1 - stream,http...
+    # level 2 - map,upstream,server...
+    # level 3 - location...
+    # level 4 - proxy_pass,root,index...
+    # level 5 - return...
+
+    level_1_count=0
+    level_2_d1_count=0
+    level_3_d1_count=0
+    level_4_d1_count=0
+    level_5_d1_count=0
 
     if [ -z "$level_1_directive" ]
     then
         return 0
     fi
 
-    # level 1 - stream,http...
-    # level 2 - map,upstream,server...
-    # level 3 - location...
-    # level 4 - proxy_pass,root,index...
-    # level 5 - return...
-    level_1_block_directives=( events stream http rtmp )
-    level_2_block_directives=( map upstream server )
-    level_3_block_directives=( location application "if" )
-    level_4_block_directives=( location "if" )
-
     IFS="${delimiters[1]}" read -r -a level_1_directive_arr <<< "$level_1_directive"
     IFS="${delimiters[1]}" read -r -a level_1_args_arr <<< "$level_1_args"
 
-    level_1_directive_count=${#level_1_directive_arr[@]}
+    level_1_count=${#level_1_directive_arr[@]}
 
     if [ -z "$level_2_directive" ]
     then
@@ -21656,7 +21804,7 @@ NginxGetConfig()
     IFS="${delimiters[2]}" read -r -a level_2_directive_arr <<< "$level_2_directive"
     IFS="${delimiters[2]}" read -r -a level_2_args_arr <<< "$level_2_args"
 
-    level_2_directive_count=${#level_2_directive_arr[@]}
+    level_2_d1_count=${#level_2_directive_arr[@]}
 
     if [ -z "$level_3_directive" ]
     then
@@ -21666,7 +21814,7 @@ NginxGetConfig()
     IFS="${delimiters[3]}" read -r -a level_3_directive_arr <<< "$level_3_directive"
     IFS="${delimiters[3]}" read -r -a level_3_args_arr <<< "$level_3_args"
 
-    level_3_directive_count=${#level_3_directive_arr[@]}
+    level_3_d1_count=${#level_3_directive_arr[@]}
 
     if [ -z "$level_4_directive" ]
     then
@@ -21676,7 +21824,7 @@ NginxGetConfig()
     IFS="${delimiters[4]}" read -r -a level_4_directive_arr <<< "$level_4_directive"
     IFS="${delimiters[4]}" read -r -a level_4_args_arr <<< "$level_4_args"
 
-    level_4_directive_count=${#level_4_directive_arr[@]}
+    level_4_d1_count=${#level_4_directive_arr[@]}
 
     if [ -z "$level_5_directive" ]
     then
@@ -21686,7 +21834,7 @@ NginxGetConfig()
     IFS="${delimiters[5]}" read -r -a level_5_directive_arr <<< "$level_5_directive"
     IFS="${delimiters[5]}" read -r -a level_5_args_arr <<< "$level_5_args"
 
-    level_5_directive_count=${#level_5_directive_arr[@]}
+    level_5_d1_count=${#level_5_directive_arr[@]}
 }
 
 NginxListDomains()
@@ -21757,6 +21905,8 @@ NginxSelectDomain()
 
 NginxListDomain()
 {
+    level_1_add_indices=( 0 )
+
     NginxListDomains
 
     if [ "$nginx_domains_count" -eq 0 ] 
@@ -21769,7 +21919,7 @@ NginxListDomain()
     NginxParseConfig ${nginx_domains[nginx_domains_index]}
     NginxGetConfig
 
-    if [ "$level_3_directive_count" -eq 0 ] 
+    if [ "$level_3_d1_count" -eq 0 ] 
     then
         Println "$error 请先添加 ${nginx_domains[nginx_domains_index]} 配置\n"
         exit 1
@@ -21777,91 +21927,121 @@ NginxListDomain()
 
     nginx_domain_list=""
     nginx_domain_server_count=0
+    nginx_domain_server_indices=()
+    nginx_domain_server_root=()
 
-    for((level_1_index=0;level_1_index<level_1_directive_count;level_1_index++));
-    do
-        level_2_directive_d1=${level_2_directive_arr[level_1_index]}
-        level_3_directive_d1=${level_3_directive_arr[level_1_index]}
-        level_3_args_d1=${level_3_args_arr[level_1_index]}
-        level_4_directive_d1=${level_4_directive_arr[level_1_index]:-}
-        level_4_args_d1=${level_4_args_arr[level_1_index]:-}
-        IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
-        IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
-        IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+    level_1_index=0
+
+    level_2_directive_d1=${level_2_directive_arr[level_1_index]}
+    level_3_directive_d1=${level_3_directive_arr[level_1_index]}
+    level_3_args_d1=${level_3_args_arr[level_1_index]}
+
+    IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
+    IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+    IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+
+    if [ "$level_4_d1_count" -gt 0 ] 
+    then
+        level_4_directive_d1=${level_4_directive_arr[level_1_index]}
+        level_4_args_d1=${level_4_args_arr[level_1_index]}
         IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
         IFS="${delimiters[3]}" read -r -a level_4_args_d1_arr <<< "$level_4_args_d1${delimiters[3]}"
+    fi
 
-        d2_index=0
-        for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
-        do
-            if [ "${level_2_directive_d1_arr[level_2_index]}" == "server" ] 
+    for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
+    do
+        if [ "${level_2_directive_d1_arr[level_2_index]}" == "server" ] 
+        then
+            level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
+            level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
+
+            IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
+            IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+
+            if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ]
             then
-                level_3_directive_d2=${level_3_directive_d1_arr[d2_index]}
-                level_3_args_d2=${level_3_args_d1_arr[d2_index]}
-                level_4_directive_d2=${level_4_directive_d1_arr[d2_index]:-}
-                level_4_args_d2=${level_4_args_d1_arr[d2_index]:-}
-
-                IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
-                IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+                level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
+                level_4_args_d2=${level_4_args_d1_arr[level_2_index]}
                 IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
                 IFS="${delimiters[2]}" read -r -a level_4_args_d2_arr <<< "$level_4_args_d2${delimiters[2]}"
+            fi
 
-                nginx_domain_server_count=$((nginx_domain_server_count+1))
-                nginx_domain_listen=""
-                nginx_domain_server_name=""
-                nginx_domain_flv_status="${red}未配置${normal}"
-                nginx_domain_nodejs_status="${red}未配置${normal}"
-                skip_find_nodejs=0
+            nginx_domain_server_count=$((nginx_domain_server_count+1))
+            nginx_domain_server_indices+=("$level_2_index")
+            nginx_domain_listen=""
+            nginx_domain_server_name=""
+            nginx_domain_flv_status="${red}未配置${normal}"
+            nginx_domain_nodejs_status="${red}未配置${normal}"
+            skip_find_nodejs=0
+            server_root=""
 
-                d3_index=0
-                for((level_3_index=0;level_3_index<${#level_3_directive_d2_arr[@]};level_3_index++));
-                do
-                    level_3_directive=${level_3_directive_d2_arr[level_3_index]}
-                    level_3_args=${level_3_args_d2_arr[level_3_index]}
+            for((level_3_index=0;level_3_index<${#level_3_directive_d2_arr[@]};level_3_index++));
+            do
+                level_3_directive=${level_3_directive_d2_arr[level_3_index]}
+                level_3_args=${level_3_args_d2_arr[level_3_index]}
 
-                    if [ "$level_3_directive" == "listen" ] 
+                if [ "$level_3_directive" == "listen" ] 
+                then
+                    [ -n "$nginx_domain_listen" ] && nginx_domain_listen="$nginx_domain_listen, "
+                    nginx_domain_listen="$nginx_domain_listen${level_3_args//${delimiters[0]}/ }"
+                elif [ "$level_3_directive" == "server_name" ] 
+                then
+                    [ -n "$nginx_domain_server_name" ] && nginx_domain_server_name="$nginx_domain_server_name, "
+                    nginx_domain_server_name="$nginx_domain_server_name${level_3_args//${delimiters[0]}/ }"
+                elif [ "$level_3_directive" == "location" ] 
+                then
+                    if [ "${level_3_args}" == "/flv" ] 
                     then
-                        [ -n "$nginx_domain_listen" ] && nginx_domain_listen="$nginx_domain_listen, "
-                        nginx_domain_listen="$nginx_domain_listen${level_3_args//${delimiters[0]}/ }"
-                    elif [ "$level_3_directive" == "server_name" ] 
+                        nginx_domain_flv_status="${green}已配置${normal}"
+                    elif [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
                     then
-                        [ -n "$nginx_domain_server_name" ] && nginx_domain_server_name="$nginx_domain_server_name, "
-                        nginx_domain_server_name="$nginx_domain_server_name${level_3_args//${delimiters[0]}/ }"
-                    elif [ "$level_3_directive" == "location" ] 
-                    then
-                        if [ "${level_3_args}" == "=${delimiters[0]}/flv" ] 
+                        level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
+                        level_4_args_d3=${level_4_args_d2_arr[level_3_index]}
+                        IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
+                        IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3${delimiters[1]}"
+
+                        if [ "${level_3_args}" == "=${delimiters[0]}/" ] && [ "$skip_find_nodejs" -eq 0 ] 
                         then
-                            nginx_domain_flv_status="${green}已配置${normal}"
-                        elif [ "${level_3_args}" == "=${delimiters[0]}/" ] && [ "$skip_find_nodejs" -eq 0 ]
-                        then
-                            level_4_directive_d3=${level_4_directive_d2_arr[d3_index]}
-                            level_4_args_d3=${level_4_args_d2_arr[d3_index]}
-                            IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
-                            IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3${delimiters[1]}"
                             for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
                             do
-                                if [ "${level_4_directive_d3_arr[level_4_index]}" == "proxy_pass" ] && [[ "${level_4_args_d3_arr[level_4_index]}" =~ ^http://nodejs ]]
+                                if [ "${level_4_directive_d3_arr[level_4_index]}" == "proxy_pass" ] && [[ ${level_4_args_d3_arr[level_4_index]} =~ ^http://nodejs ]]
                                 then
                                     nginx_domain_nodejs_status="${green}已配置${normal}"
                                     skip_find_nodejs=1
                                     break
                                 fi
                             done
+                        elif [ "${level_3_args}" == "/" ] 
+                        then
+                            for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
+                            do
+                                if [ "${level_4_directive_d3_arr[level_4_index]}" == "root" ] 
+                                then
+                                    if [ "${level_4_args_d3_arr[level_4_index]:0:1}" == "/" ] 
+                                    then
+                                        server_root=${level_4_args_d3_arr[level_4_index]}
+                                    else
+                                        server_root="$nginx_prefix/${level_4_args_d3_arr[level_4_index]}"
+                                    fi
+                                    break
+                                fi
+                            done
                         fi
                     fi
-                    if NginxIsBlockDirective 3 "$level_3_directive"
+                elif [ "$level_3_directive" == "root" ] 
+                then
+                    if [ "${level_3_args_d2_arr[level_3_index]:0:1}" == "/" ] 
                     then
-                        d3_index=$((d3_index+1))
+                        server_root=${level_3_args_d2_arr[level_3_index]}
+                    else
+                        server_root="$nginx_prefix/${level_3_args_d2_arr[level_3_index]}"
                     fi
-                done
+                fi
+            done
 
-                nginx_domain_list="$nginx_domain_list $nginx_domain_server_count.\r\033[6C域名: ${green}${nginx_domain_server_name:-未设置}${normal}\n\033[6C端口: ${green}${nginx_domain_listen:-未设置}${normal}\n\033[6Cflv: $nginx_domain_flv_status\n\033[6Cnodejs: $nginx_domain_nodejs_status\n\n"
-            fi
-            if NginxIsBlockDirective 2 "${level_2_directive_d1_arr[level_2_index]}"
-            then
-                d2_index=$((d2_index+1))
-            fi
-        done
+            nginx_domain_server_root+=("$server_root")
+            nginx_domain_list="$nginx_domain_list $nginx_domain_server_count.\r\033[6C域名: ${green}${nginx_domain_server_name:-未设置}${normal}\n\033[6C端口: ${green}${nginx_domain_listen:-未设置}${normal}\n\033[6Cflv: $nginx_domain_flv_status\n\033[6Cnodejs: $nginx_domain_nodejs_status\n\n"
+        fi
     done
 
     if [ "$nginx_domain_server_count" -eq 0 ] 
@@ -21890,6 +22070,8 @@ NginxSelectDomainServer()
                 if [ "$nginx_domain_server_num" -gt 0 ] && [ "$nginx_domain_server_num" -le "$nginx_domain_server_count" ]
                 then
                     nginx_domain_server_index=$((nginx_domain_server_num-1))
+                    level_2_add_indices=( "${nginx_domain_server_indices[nginx_domain_server_index]}" )
+                    server_root=${nginx_domain_server_root[nginx_domain_server_index]}
                     break
                 else
                     Println "$error 请输入正确的序号\n"
@@ -21911,8 +22093,6 @@ NginxConfigDomain()
 
     if [ "$domain_server_option_index" -eq 0 ] 
     then
-        d1_index=0
-        d2_index=$nginx_domains_index
         NginxConfigDirective level_2
     elif [ "$domain_server_option_index" -eq 1 ] 
     then
@@ -21937,6 +22117,140 @@ NginxConfigDomain()
 NginxListLocalhost()
 {
     NginxCheckLocalhost
+
+    nginx_localhost_list=""
+    nginx_localhost_server_count=0
+    nginx_localhost_server_indices=()
+    nginx_localhost_server_root=()
+
+    for((level_1_index=0;level_1_index<level_1_count;level_1_index++));
+    do
+        if [ "${level_1_directive_arr[level_1_index]}" == "http" ] 
+        then
+            if [ -z "${level_3_directive_arr[level_1_index]}" ] 
+            then
+                break
+            fi
+
+            level_1_add_indices=( "$level_1_index" )
+
+            level_2_directive_d1=${level_2_directive_arr[level_1_index]}
+            level_3_directive_d1=${level_3_directive_arr[level_1_index]}
+            level_3_args_d1=${level_3_args_arr[level_1_index]}
+
+            IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
+            IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+            IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+
+            if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ]
+            then
+                level_4_directive_d1=${level_4_directive_arr[level_1_index]}
+                level_4_args_d1=${level_4_args_arr[level_1_index]}
+                IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
+                IFS="${delimiters[3]}" read -r -a level_4_args_d1_arr <<< "$level_4_args_d1${delimiters[3]}"
+            fi
+
+            for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
+            do
+                if [ "${level_2_directive_d1_arr[level_2_index]}" == "server" ] 
+                then
+                    level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
+                    level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
+
+                    IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
+                    IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+
+                    if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ]
+                    then
+                        level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
+                        level_4_args_d2=${level_4_args_d1_arr[level_2_index]}
+                        IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
+                        IFS="${delimiters[2]}" read -r -a level_4_args_d2_arr <<< "$level_4_args_d2${delimiters[2]}"
+                    fi
+
+                    nginx_localhost_server_count=$((nginx_localhost_server_count+1))
+                    nginx_localhost_server_indices+=("$level_2_index")
+                    nginx_localhost_listen=""
+                    nginx_localhost_flv_status="${red}未配置${normal}"
+                    nginx_localhost_nodejs_status="${red}未配置${normal}"
+                    skip_find_nodejs=0
+                    server_root=""
+
+                    for((level_3_index=0;level_3_index<${#level_3_directive_d2_arr[@]};level_3_index++));
+                    do
+                        level_3_directive=${level_3_directive_d2_arr[level_3_index]}
+                        level_3_args=${level_3_args_d2_arr[level_3_index]}
+
+                        if [ "$level_3_directive" == "listen" ] 
+                        then
+                            [ -n "$nginx_localhost_listen" ] && nginx_localhost_listen="$nginx_localhost_listen, "
+                            nginx_localhost_listen="$nginx_localhost_listen${level_3_args//${delimiters[0]}/ }"
+                        elif [ "$level_3_directive" == "location" ] 
+                        then
+                            if [ "${level_3_args}" == "/flv" ] 
+                            then
+                                nginx_localhost_flv_status="${green}已配置${normal}"
+                            elif [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d2_arr[level_3_index]}" ] 
+                            then
+                                level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
+                                level_4_args_d3=${level_4_args_d2_arr[level_3_index]}
+                                IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
+                                IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3${delimiters[1]}"
+
+                                if [ "${level_3_args}" == "=${delimiters[0]}/" ] && [ "$skip_find_nodejs" -eq 0 ] 
+                                then
+                                    for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
+                                    do
+                                        if [ "${level_4_directive_d3_arr[level_4_index]}" == "proxy_pass" ] && [[ ${level_4_args_d3_arr[level_4_index]} =~ ^http://nodejs ]]
+                                        then
+                                            nginx_localhost_nodejs_status="${green}已配置${normal}"
+                                            skip_find_nodejs=1
+                                            break
+                                        fi
+                                    done
+                                elif [ "${level_3_args}" == "/" ] 
+                                then
+                                    for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
+                                    do
+                                        if [ "${level_4_directive_d3_arr[level_4_index]}" == "root" ] 
+                                        then
+                                            if [ "${level_4_args_d3_arr[level_4_index]:0:1}" == "/" ] 
+                                            then
+                                                server_root=${level_4_args_d3_arr[level_4_index]}
+                                            else
+                                                server_root="$nginx_prefix/${level_4_args_d3_arr[level_4_index]}"
+                                            fi
+                                            break
+                                        fi
+                                    done
+                                fi
+                            fi
+                        elif [ "$level_3_directive" == "root" ] 
+                        then
+                            if [ "${level_3_args_d2_arr[level_3_index]:0:1}" == "/" ] 
+                            then
+                                server_root=${level_3_args_d2_arr[level_3_index]}
+                            else
+                                server_root="$nginx_prefix/${level_3_args_d2_arr[level_3_index]}"
+                            fi
+                        fi
+                    done
+
+                    nginx_localhost_server_root+=("$server_root")
+                    nginx_localhost_list="$nginx_localhost_list $nginx_localhost_server_count.\r\033[6C端口: ${green}${nginx_localhost_listen:-未设置}${normal}\n\033[6Cflv: $nginx_localhost_flv_status\n\033[6Cnodejs: $nginx_localhost_nodejs_status\n\n"
+                fi
+            done
+            break
+        fi
+    done
+
+    if [ "$nginx_localhost_server_count" -eq 0 ] 
+    then
+        Println "$error 请先添加本地配置\n"
+        exit 1
+    fi
+
+    Println "本地配置:\n\n$nginx_localhost_list"
 }
 
 NginxSelectLocalhostServer()
@@ -21956,6 +22270,8 @@ NginxSelectLocalhostServer()
                 if [ "$nginx_localhost_server_num" -gt 0 ] && [ "$nginx_localhost_server_num" -le "$nginx_localhost_server_count" ]
                 then
                     nginx_localhost_server_index=$((nginx_localhost_server_num-1))
+                    level_2_add_indices=( "${nginx_localhost_server_indices[nginx_localhost_server_index]}" )
+                    server_root=${nginx_localhost_server_root[nginx_localhost_server_index]}
                     break
                 else
                     Println "$error 请输入正确的序号\n"
@@ -21985,13 +22301,13 @@ NginxInputArgs()
     while true 
     do
         [ -n "$new_args" ] && new_args="$new_args,"
-        Println "$tip 空字符输入 \"\""
+        Println "$tip 如果有空字符需包在 \"\" 中"
         inquirer text_input "输入单个指令值: " args "不设置"
         if [ "$args" == "不设置" ] 
         then
             args=""
             break
-        elif [ "$args" == \"\" ] 
+        elif [[ $args =~ ^\"(.*)\"$ ]] 
         then
             new_args="$new_args$args"
         else
@@ -21999,7 +22315,7 @@ NginxInputArgs()
         fi
         echo
         yn_options=( '否' '是' )
-        inquirer list_input "继续添加" yn_options yn_option
+        inquirer list_input "继续添加指令值" yn_options yn_option
         if [ "$yn_option" == "否" ] 
         then
             break
@@ -22011,34 +22327,43 @@ NginxAddDirective()
 {
     case $1 in
         1) 
+            local level_1_index
             new_directive=""
-            for((i=0;i<${#directives[@]};i++));
+            add_count=0
+            level_1_add_indices=()
+
+            for((directive_i=0;directive_i<${#directives[@]};directive_i++));
             do
-                if [ "${check_directives[i]:-1}" -eq 1 ] 
+                if [ "${check_directives[directive_i]:-1}" -eq 1 ] 
                 then
-                    for((d1_i=0;d1_i<level_1_directive_count;d1_i++));
+                    for((level_1_index=0;level_1_index<level_1_count;level_1_index++));
                     do
-                        if [ "${level_1_directive_arr[d1_i]}" == "${directives[i]}" ] 
+                        if [ "${level_1_directive_arr[level_1_index]}" == "${directives[directive_i]}" ] 
                         then
-                            if [ -n "${check_args[i]:-}" ] 
+                            if [ -n "${check_args[directive_i]:-}" ] 
                             then
-                                jq_path='["config",0,"parsed",'"$d1_i"',"args"]'
+                                jq_path='["config",0,"parsed",'"$level_1_index"',"args"]'
                                 JQs get parse_out args
-                                if [ "$args" == "${check_args[i]}" ] 
+                                if [ "$args" == "${check_args[directive_i]}" ] 
                                 then
+                                    level_1_add_indices+=("$level_1_index")
                                     continue 2
                                 fi
                             else
+                                level_1_add_indices+=("$level_1_index")
                                 continue 2
                             fi
                         fi
                     done
                 fi
 
+                level_1_add_indices+=("$((level_1_count+add_count))")
+                add_count=$((add_count+1))
                 jq_path='["config",0,"parsed"]'
-                new_directive="directive_${directives_val[i]:-${directives[i]}}"
+                new_directive="directive_${directives_val[directive_i]:-${directives[directive_i]}}"
                 JQs add parse_out "${!new_directive}"
             done
+
             if [ -n "$new_directive" ] 
             then
                 NginxGetConfig
@@ -22046,62 +22371,55 @@ NginxAddDirective()
             fi
         ;;
         2) 
-            d2_path=()
+            local level_1_index level_2_index
             new_directive=""
-            level_1_i=0
-            for((d1_i=0;d1_i<level_1_directive_count;d1_i++));
+            add_count=0
+            level_2_add_indices=()
+
+            for((directive_i=0;directive_i<${#directives[@]};directive_i++));
             do
-                if [ "${level_1_directive_arr[d1_i]}" == "${check_path[0]}" ] 
+                level_1_index=${level_1_add_indices[directive_i]:-${level_1_add_indices[0]}}
+
+                level_2_directive_d1=${level_2_directive_arr[level_1_index]}
+
+                level_2_directive_d1_arr_count=0
+
+                if [ -n "$level_2_directive_d1" ] 
                 then
-                    if [ -n "${level_2_directive_arr[level_1_i]:-}" ] 
-                    then
-                        level_2_directive_d1=${level_2_directive_arr[level_1_i]}
-                        add_count=1
-                    else
-                        level_2_directive_d1=""
-                        add_count=0
-                    fi
                     IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
                     level_2_directive_d1_arr_count=${#level_2_directive_d1_arr[@]}
-
-                    for((i=0;i<${#directives[@]};i++));
-                    do
-                        if [ "${check_directives[i]:-1}" -eq 1 ] 
-                        then
-                            for((d2_i=0;d2_i<level_2_directive_d1_arr_count;d2_i++));
-                            do
-                                if [ "${level_2_directive_d1_arr[d2_i]}" == "${directives[i]}" ] 
-                                then
-                                    if [ -n "${check_args[i]:-}" ] 
-                                    then
-                                        jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"args"]'
-                                        JQs get parse_out args
-                                        if [ "$args" == "${check_args[i]}" ] 
-                                        then
-                                            d2_path+=("$d2_i")
-                                            continue 2
-                                        fi
-                                    else
-                                        d2_path+=("$d2_i")
-                                        continue 2
-                                    fi
-                                fi
-                            done
-                        fi
-
-                        d2_path+=("$((level_2_directive_d1_arr_count-1+add_count))")
-                        add_count=$((add_count+1))
-                        jq_path='["config",0,"parsed",'"$d1_i"',"block"]'
-                        new_directive="directive_${directives_val[i]:-${directives[i]}}"
-                        JQs add parse_out "${!new_directive}"
-                    done
-                    break
                 fi
-                if NginxIsBlockDirective 1 "${level_1_directive_arr[d1_i]}"
+
+                if [ "${check_directives[directive_i]:-1}" -eq 1 ] 
                 then
-                    level_1_i=$((level_1_i+1))
+                    for((level_2_index=0;level_2_index<level_2_directive_d1_arr_count;level_2_index++));
+                    do
+                        if [ "${level_2_directive_d1_arr[level_2_index]}" == "${directives[directive_i]}" ] 
+                        then
+                            if [ -n "${check_args[directive_i]:-}" ] 
+                            then
+                                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"args"]'
+                                JQs get parse_out args
+                                if [ "$args" == "${check_args[directive_i]}" ] 
+                                then
+                                    level_2_add_indices+=("$level_2_index")
+                                    continue 2
+                                fi
+                            else
+                                level_2_add_indices+=("$level_2_index")
+                                continue 2
+                            fi
+                        fi
+                    done
                 fi
+
+                level_2_add_indices+=("$((level_2_directive_d1_arr_count+add_count))")
+                add_count=$((add_count+1))
+                jq_path='["config",0,"parsed",'"$level_1_index"',"block"]'
+                new_directive="directive_${directives_val[directive_i]:-${directives[directive_i]}}"
+                JQs add parse_out "${!new_directive}"
             done
+
             if [ -n "$new_directive" ] 
             then
                 NginxGetConfig
@@ -22109,83 +22427,59 @@ NginxAddDirective()
             fi
         ;;
         3) 
-            d3_path=()
+            local level_1_index level_2_index level_3_index
             new_directive=""
-            level_1_i=0
-            for((d1_i=0;d1_i<level_1_directive_count;d1_i++));
+            add_count=0
+            level_3_add_indices=()
+
+            for((directive_i=0;directive_i<${#directives[@]};directive_i++));
             do
-                if [ "${level_1_directive_arr[d1_i]}" == "${check_path[0]}" ] && [ -n "${level_2_directive_arr[level_1_i]}" ]
+                level_1_index=${level_1_add_indices[directive_i]:-${level_1_add_indices[0]}}
+                level_2_index=${level_2_add_indices[directive_i]:-${level_2_add_indices[0]}}
+
+                level_3_directive_d1=${level_3_directive_arr[level_1_index]}
+                IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+
+                level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
+
+                level_3_directive_d2_arr_count=0
+
+                if [ -n "$level_3_directive_d2" ] 
                 then
-                    level_2_directive_d1=${level_2_directive_arr[level_1_i]}
-                    IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
-                    level_3_directive_d1=${level_3_directive_arr[level_1_i]:-}
-                    IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+                    IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
+                    level_3_directive_d2_arr_count=${#level_3_directive_d2_arr[@]}
+                fi
 
-                    level_2_i=0
-                    for((d2_i=0;d2_i<${#level_2_directive_d1_arr[@]};d2_i++));
+                if [ "${check_directives[directive_i]:-1}" -eq 1 ] 
+                then
+                    for((level_3_index=0;level_3_index<level_3_directive_d2_arr_count;level_3_index++));
                     do
-                        if [ "${level_2_directive_d1_arr[d2_i]}" == "${check_path[1]}" ] 
+                        if [ "${level_3_directive_d2_arr[level_3_index]}" == "${directives[directive_i]}" ] 
                         then
-                            if [ -n "${level_3_directive_d1_arr[level_2_i]:-}" ] 
+                            if [ -n "${check_args[directive_i]:-}" ] 
                             then
-                                level_3_directive_d2=${level_3_directive_d1_arr[level_2_i]}
-                                add_count=1
-                            else
-                                level_3_directive_d2=""
-                                add_count=0
-                            fi
-                            IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
-                            level_3_directive_d2_arr_count=${#level_3_directive_d2_arr[@]}
-
-                            for((i=0;i<${#directives[@]};i++));
-                            do
-                                if [ -n "${d2_path[i]:-}" ] && [ "${d2_path[i]}" -ne "$d2_i" ]
+                                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"args"]'
+                                JQs get parse_out args
+                                if [ "$args" == "${check_args[directive_i]}" ] 
                                 then
+                                    level_3_add_indices+=("$level_3_index")
                                     continue 2
                                 fi
-                                if [ "${check_directives[i]:-1}" -eq 1 ] 
-                                then
-                                    for((d3_i=0;d3_i<level_3_directive_d2_arr_count;d3_i++));
-                                    do
-                                        if [ "${level_3_directive_d2_arr[d3_i]}" == "${directives[i]}" ] 
-                                        then
-                                            if [ -n "${check_args[i]:-}" ] 
-                                            then
-                                                jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"block",'"$d3_i"',"args"]'
-                                                JQs get parse_out args
-                                                if [ "$args" == "${check_args[i]}" ] 
-                                                then
-                                                    d3_path+=("$d3_i")
-                                                    continue 2
-                                                fi
-                                            else
-                                                d3_path+=("$d3_i")
-                                                continue 2
-                                            fi
-                                        fi
-                                    done
-                                fi
-
-                                d3_path+=("$((level_3_directive_d2_arr_count-1+add_count))")
-                                add_count=$((add_count+1))
-                                jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"block"]'
-                                new_directive="directive_${directives_val[i]:-${directives[i]}}"
-                                JQs add parse_out "${!new_directive}"
-                            done
-                            break
-                        fi
-                        if NginxIsBlockDirective 2 "${level_2_directive_d1_arr[d2_i]}"
-                        then
-                            level_2_i=$((level_2_i+1))
+                            else
+                                level_3_add_indices+=("$level_3_index")
+                                continue 2
+                            fi
                         fi
                     done
-                    break
                 fi
-                if NginxIsBlockDirective 1 "${level_1_directive_arr[d1_i]}"
-                then
-                    level_1_i=$((level_1_i+1))
-                fi
+
+                level_3_add_indices+=("$((level_3_directive_d2_arr_count+add_count))")
+                add_count=$((add_count+1))
+                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block"]'
+                new_directive="directive_${directives_val[directive_i]:-${directives[directive_i]}}"
+                JQs add parse_out "${!new_directive}"
             done
+
             if [ -n "$new_directive" ] 
             then
                 NginxGetConfig
@@ -22193,104 +22487,63 @@ NginxAddDirective()
             fi
         ;;
         4) 
-            d4_path=()
+            local level_1_index level_2_index level_3_index level_4_index
             new_directive=""
-            level_1_i=0
-            for((d1_i=0;d1_i<level_1_directive_count;d1_i++));
+            add_count=0
+            level_4_add_indices=()
+
+            for((directive_i=0;directive_i<${#directives[@]};directive_i++));
             do
-                if [ "${level_1_directive_arr[d1_i]}" == "${check_path[0]}" ] && [ -n "${level_3_directive_arr[level_1_i]}" ]
+                level_1_index=${level_1_add_indices[directive_i]:-${level_1_add_indices[0]}}
+                level_2_index=${level_2_add_indices[directive_i]:-${level_2_add_indices[0]}}
+                level_3_index=${level_3_add_indices[directive_i]:-${level_3_add_indices[0]}}
+
+                level_4_directive_d1=${level_4_directive_arr[level_1_index]}
+                IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
+
+                level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
+                IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
+
+                level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
+
+                level_4_directive_d3_arr_count=0
+
+                if [ -n "$level_4_directive_d3" ] 
                 then
-                    level_2_directive_d1=${level_2_directive_arr[level_1_i]}
-                    IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
-                    level_3_directive_d1=${level_3_directive_arr[level_1_i]}
-                    IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
-                    level_4_directive_d1=${level_4_directive_arr[level_1_i]:-}
-                    IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
+                    IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
+                    level_4_directive_d3_arr_count=${#level_4_directive_d3_arr[@]}
+                fi
 
-                    level_2_i=0
-                    for((d2_i=0;d2_i<${#level_2_directive_d1_arr[@]};d2_i++));
+                if [ "${check_directives[directive_i]:-1}" -eq 1 ] 
+                then
+                    for((level_4_index=0;level_4_index<level_4_directive_d3_arr_count;level_4_index++));
                     do
-                        if [ "${level_2_directive_d1_arr[d2_i]}" == "${check_path[1]}" ] && [ -n "${level_3_directive_d1_arr[level_2_i]}" ]
+                        if [ "${level_4_directive_d3_arr[level_4_index]}" == "${directives[directive_i]}" ] 
                         then
-                            level_3_directive_d2=${level_3_directive_d1_arr[level_2_i]}
-                            IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
-                            level_4_directive_d2=${level_4_directive_d1_arr[level_2_i]:-}
-                            IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
-
-                            level_3_i=0
-                            for((d3_i=0;d3_i<${#level_3_directive_d2_arr[@]};d3_i++));
-                            do
-                                if [ "${level_3_directive_d2_arr[d3_i]}" == "${check_path[2]}" ] 
+                            if [ -n "${check_args[directive_i]:-}" ] 
+                            then
+                                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block",'"$level_4_index"',"args"]'
+                                JQs get parse_out args
+                                if [ "$args" == "${check_args[directive_i]}" ] 
                                 then
-                                    if [ -n "${level_4_directive_d2_arr[level_3_i]:-}" ] 
-                                    then
-                                        level_4_directive_d3=${level_4_directive_d2_arr[level_3_i]}
-                                        add_count=1
-                                    else
-                                        level_4_directive_d3=""
-                                        add_count=0
-                                    fi
-                                    IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
-                                    level_4_directive_d3_arr_count=${#level_4_directive_d3_arr[@]}
-
-                                    for((i=0;i<${#directives[@]};i++));
-                                    do
-                                        if [ -n "${d2_path[i]:-}" ] && [ "${d2_path[i]}" -ne "$d2_i" ]
-                                        then
-                                            continue 3
-                                        fi
-                                        if [ -n "${d3_path[i]:-}" ] && [ "${d3_path[i]}" -ne "$d3_i" ]
-                                        then
-                                            continue 2
-                                        fi
-                                        if [ "${check_directives[i]:-1}" -eq 1 ] 
-                                        then
-                                            for((d4_i=0;d4_i<level_4_directive_d3_arr_count;d4_i++));
-                                            do
-                                                if [ "${level_4_directive_d3_arr[d4_i]}" == "${directives[i]}" ] 
-                                                then
-                                                    if [ -n "${check_args[i]:-}" ] 
-                                                    then
-                                                        jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"block",'"$d3_i"',"block",'"$d4_i"',"args"]'
-                                                        JQs get parse_out args
-                                                        if [ "$args" == "${check_args[i]}" ] 
-                                                        then
-                                                            continue 2
-                                                        fi
-                                                    else
-                                                        continue 2
-                                                    fi
-                                                fi
-                                            done
-                                        fi
-
-                                        d4_path+=("$((level_4_directive_d3_arr_count-1+add_count))")
-                                        add_count=$((add_count+1))
-                                        jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"block",'"$d3_i"',"block"]'
-                                        new_directive="directive_${directives_val[i]:-${directives[i]}}"
-                                        JQs add parse_out "${!new_directive}"
-                                    done
-                                    break
+                                    level_4_add_indices+=("$level_4_index")
+                                    continue 2
                                 fi
-                                if NginxIsBlockDirective 3 "${level_3_directive_d2_arr[d3_i]}"
-                                then
-                                    level_3_i=$((level_3_i+1))
-                                fi
-                            done
-                            break
-                        fi
-                        if NginxIsBlockDirective 2 "${level_2_directive_d1_arr[d2_i]}"
-                        then
-                            level_2_i=$((level_2_i+1))
+                            else
+                                level_4_add_indices+=("$level_4_index")
+                                continue 2
+                            fi
                         fi
                     done
-                    break
                 fi
-                if NginxIsBlockDirective 1 "${level_1_directive_arr[d1_i]}"
-                then
-                    level_1_i=$((level_1_i+1))
-                fi
+
+                level_4_add_indices+=("$((level_4_directive_d3_arr_count+add_count))")
+                add_count=$((add_count+1))
+                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block"]'
+                new_directive="directive_${directives_val[directive_i]:-${directives[directive_i]}}"
+                JQs add parse_out "${!new_directive}"
             done
+
             if [ -n "$new_directive" ] 
             then
                 NginxGetConfig
@@ -22298,117 +22551,67 @@ NginxAddDirective()
             fi
         ;;
         5) 
+            local level_1_index level_2_index level_3_index level_4_index level_5_index
             new_directive=""
-            level_1_i=0
-            for((d1_i=0;d1_i<level_1_directive_count;d1_i++));
+            add_count=0
+            level_5_add_indices=()
+
+            for((directive_i=0;directive_i<${#directives[@]};directive_i++));
             do
-                if [ "${level_1_directive_arr[d1_i]}" == "${check_path[0]}" ] && [ -n "${level_4_directive_arr[level_1_i]}" ]
+                level_1_index=${level_1_add_indices[directive_i]:-${level_1_add_indices[0]}}
+                level_2_index=${level_2_add_indices[directive_i]:-${level_2_add_indices[0]}}
+                level_3_index=${level_3_add_indices[directive_i]:-${level_3_add_indices[0]}}
+                level_4_index=${level_4_add_indices[directive_i]:-${level_4_add_indices[0]}}
+
+                level_5_directive_d1=${level_5_directive_arr[level_1_index]}
+                IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "$level_5_directive_d1${delimiters[4]}"
+
+                level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
+                IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "$level_5_directive_d2${delimiters[3]}"
+
+                level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
+                IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "$level_5_directive_d3${delimiters[2]}"
+
+                level_5_directive_d4=${level_5_directive_d3_arr[level_4_index]}
+
+                level_5_directive_d4_arr_count=0
+
+                if [ -n "$level_5_directive_d4" ] 
                 then
-                    level_2_directive_d1=${level_2_directive_arr[level_1_i]}
-                    IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
-                    level_3_directive_d1=${level_3_directive_arr[level_1_i]}
-                    IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
-                    level_4_directive_d1=${level_4_directive_arr[level_1_i]}
-                    IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
-                    level_5_directive_d1=${level_5_directive_arr[level_1_i]:-}
-                    IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "$level_5_directive_d1${delimiters[4]}"
+                    IFS="${delimiters[1]}" read -r -a level_5_directive_d4_arr <<< "$level_5_directive_d4${delimiters[1]}"
+                    level_5_directive_d4_arr_count=${#level_5_directive_d4_arr[@]}
+                fi
 
-                    level_2_i=0
-                    for((d2_i=0;d2_i<${#level_2_directive_d1_arr[@]};d2_i++));
+                if [ "${check_directives[directive_i]:-1}" -eq 1 ] 
+                then
+                    for((level_5_index=0;level_5_index<level_5_directive_d4_arr_count;level_5_index++));
                     do
-                        if [ "${level_2_directive_d1_arr[d2_i]}" == "${check_path[1]}" ] && [ -n "${level_4_directive_d1_arr[level_2_i]}" ]
+                        if [ "${level_5_directive_d4_arr_count[level_5_index]}" == "${directives[directive_i]}" ] 
                         then
-                            level_3_directive_d2=${level_3_directive_d1_arr[level_2_i]}
-                            IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
-                            level_4_directive_d2=${level_4_directive_d1_arr[level_2_i]}
-                            IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
-                            level_5_directive_d2=${level_5_directive_d1_arr[level_2_i]:-}
-                            IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "$level_5_directive_d2${delimiters[3]}"
-
-                            level_3_i=0
-                            for((d3_i=0;d3_i<${#level_3_directive_d2_arr[@]};d3_i++));
-                            do
-                                if [ "${level_3_directive_d2_arr[d3_i]}" == "${check_path[2]}" ] && [ -n "${level_4_directive_d1_arr[level_3_i]}" ]
+                            if [ -n "${check_args[directive_i]:-}" ] 
+                            then
+                                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block",'"$level_4_index"',"block",'"$level_5_index"',"args"]'
+                                JQs get parse_out args
+                                if [ "$args" == "${check_args[directive_i]}" ] 
                                 then
-                                    level_4_directive_d3=${level_4_directive_d2_arr[level_3_i]}
-                                    IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
-                                    level_5_directive_d3=${level_5_directive_d2_arr[level_3_i]:-}
-                                    IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "$level_5_directive_d3${delimiters[2]}"
-
-                                    level_4_i=0
-                                    for((d4_i=0;d4_i<${#level_4_directive_d3_arr[@]};d4_i++));
-                                    do
-                                        if [ "${level_4_directive_d3_arr[d4_i]}" == "${check_path[3]}" ] 
-                                        then
-                                            level_5_directive_d4=${level_5_directive_d3_arr[level_4_i]:-}
-                                            IFS="${delimiters[1]}" read -r -a level_5_directive_d4_arr <<< "$level_5_directive_d4${delimiters[1]}"
-                                            for((i=0;i<${#directives[@]};i++));
-                                            do
-                                                if [ -n "${d2_path[i]:-}" ] && [ "${d2_path[i]}" -ne "$d2_i" ]
-                                                then
-                                                    continue 4
-                                                fi
-                                                if [ -n "${d3_path[i]:-}" ] && [ "${d3_path[i]}" -ne "$d3_i" ]
-                                                then
-                                                    continue 3
-                                                fi
-                                                if [ -n "${d4_path[i]:-}" ] && [ "${d4_path[i]}" -ne "$d4_i" ]
-                                                then
-                                                    continue 2
-                                                fi
-                                                if [ "${check_directives[i]:-1}" -eq 1 ] 
-                                                then
-                                                    for((d5_i=0;d5_i<${#level_5_directive_d4_arr[@]};d5_i++));
-                                                    do
-                                                        if [ "${level_5_directive_d4_arr[d5_i]}" == "${directives[i]}" ] 
-                                                        then
-                                                            if [ -n "${check_args[i]:-}" ] 
-                                                            then
-                                                                jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"block",'"$d3_i"',"block",'"$d4_i"',"block",'"$d5_i"',"args"]'
-                                                                JQs get parse_out args
-                                                                if [ "$args" == "${check_args[i]}" ] 
-                                                                then
-                                                                    continue 2
-                                                                fi
-                                                            else
-                                                                continue 2
-                                                            fi
-                                                        fi
-                                                    done
-                                                fi
-
-                                                jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"block",'"$d3_i"',"block",'"$d4_i"',"block"]'
-                                                new_directive="directive_${directives_val[i]:-${directives[i]}}"
-                                                JQs add parse_out "${!new_directive}"
-                                            done
-                                            break
-                                        fi
-                                        if NginxIsBlockDirective 4 "${level_4_directive_d3_arr[d3_i]}"
-                                        then
-                                            level_4_i=$((level_4_i+1))
-                                        fi
-                                    done
-                                    break
+                                    level_5_add_indices+=("$level_5_index")
+                                    continue 2
                                 fi
-                                if NginxIsBlockDirective 3 "${level_3_directive_d2_arr[d3_i]}"
-                                then
-                                    level_3_i=$((level_3_i+1))
-                                fi
-                            done
-                            break
-                        fi
-                        if NginxIsBlockDirective 2 "${level_2_directive_d1_arr[d2_i]}"
-                        then
-                            level_2_i=$((level_2_i+1))
+                            else
+                                level_5_add_indices+=("$level_5_index")
+                                continue 2
+                            fi
                         fi
                     done
-                    break
                 fi
-                if NginxIsBlockDirective 1 "${level_1_directive_arr[d1_i]}"
-                then
-                    level_1_i=$((level_1_i+1))
-                fi
+
+                level_5_add_indices+=("$((level_5_directive_d4_arr_count+add_count))")
+                add_count=$((add_count+1))
+                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block",'"$level_4_index"',"block"]'
+                new_directive="directive_${directives_val[directive_i]:-${directives[directive_i]}}"
+                JQs add parse_out "${!new_directive}"
             done
+
             if [ -n "$new_directive" ] 
             then
                 NginxGetConfig
@@ -22420,7 +22623,7 @@ NginxAddDirective()
 
             zh=( "" "一" "二" "三" "四" "五" )
 
-            Println "$tip 空字符输入 \"\""
+            Println "$tip 如果有空字符需包在 \"\" 中"
             inquirer text_input "输入${zh[level_id]}级指令: " new_directive "取消"
 
             if [ "$new_directive" == "取消" ] 
@@ -22428,14 +22631,28 @@ NginxAddDirective()
                 return 0
             fi
 
-            if [ "$new_directive" == \"\" ] 
+            if [[ $new_directive =~ ^\"(.*)\"$ ]] 
             then
-                new_directive=""
+                new_directive=${BASH_REMATCH[1]}
             fi
 
             NginxInputArgs
 
-            if [ "$level_id" -ne 5 ] && NginxIsBlockDirective "$level_id" "$new_directive" 
+            is_block_directive=0
+
+            if [ "$level_id" -ne 5 ] 
+            then
+                Println "$tip 如果需要添加下级指令请选择 是"
+                yn_options=( '否' '是' )
+                inquirer list_input "是否是 块 指令" yn_options yn_option
+
+                if [ "$yn_option" == "是" ] 
+                then
+                    is_block_directive=1
+                fi
+            fi
+
+            if [ "$is_block_directive" -eq 1 ]
             then
                 directive=$(
                     $JQ_FILE -n --arg directive "$new_directive" --argjson args "[$new_args]" \
@@ -22457,9 +22674,9 @@ NginxAddDirective()
 
             jq_path='"config",0,"parsed"'
 
-            for((i=1;i<level_id;i++));
+            for((level_i=1;level_i<level_id;level_i++));
             do
-                index_name="level_${i}_index"
+                index_name="level_${level_i}_index"
                 jq_path="$jq_path,${!index_name},\"block\""
             done
 
@@ -22472,6 +22689,17 @@ NginxAddDirective()
             Println "$info 指令 $new_directive 添加成功\n"
         ;;
     esac
+}
+
+NginxAddUser()
+{
+    directive_user='{"directive":"user","args":["'"$nginx_name"'","'"$nginx_name"'"]}'
+    directives=( user )
+    directives_val=()
+    check_directives=()
+    check_args=()
+
+    NginxAddDirective 1
 }
 
 NginxAddHttp()
@@ -22497,6 +22725,7 @@ NginxAddHttp()
             ]}
         ]}
     ]}'
+
     directives=( http )
     directives_val=()
     check_directives=()
@@ -22545,7 +22774,6 @@ NginxAddSitesEnabled()
     directives_val=()
     check_directives=()
     check_args=( '["sites_enabled/*.conf"]' )
-    check_path=( http )
 
     NginxAddDirective 2
 }
@@ -22566,7 +22794,6 @@ NginxAddSsl()
     directives_val=()
     check_directives=()
     check_args=()
-    check_path=( http )
 
     NginxAddDirective 2
 }
@@ -22593,7 +22820,6 @@ NginxAddLocalhost()
     directives_val=()
     check_directives=()
     check_args=()
-    check_path=( http )
 
     NginxAddDirective 2
 }
@@ -22659,29 +22885,16 @@ NginxAddNodejs()
     directive_add_header_4='{"directive":"add_header","args":["Access-Control-Allow-Credentials","true"]}'
     directive_add_header_5='{"directive":"add_header","args":["Cache-Control","no-cache"]}'
 
-    directive_location_8='
-    {"directive":"location","args":["/flv"],"block":[
-        {"directive":"flv_live","args":["on"]},
-        {"directive":"chunked_transfer_encoding","args":["on"]}
-    ]}'
-
     directives=( location location location location location location location 
         add_header add_header add_header add_header add_header location )
     directives_val=( location_1 location_2 location_3 location_4 location_5 location_6 location_7 
-        add_header_1 add_header_2 add_header_3 add_header_4 add_header_5 location_8 )
+        add_header_1 add_header_2 add_header_3 add_header_4 add_header_5 )
 
     check_directives=()
     check_args=( '["=","/"]' '["=","/channels"]' '["=","/channels.json"]' '["=","/remote"]' 
         '["=","/remote.json"]' '["=","/keys"]' '["~","\\.(keyinfo|key)$"]' '["Access-Control-Allow-Origin","$cors_host"]' 
         '["Vary","Origin"]' '["X-Frame-Options","SAMEORIGIN"]' '["Access-Control-Allow-Credentials","true"]' 
-        '["Cache-Control","no-cache"]' '["/flv"]' )
-    check_path=( http server )
-
-    d2_path=( "${nginx_domain_server_index:-$nginx_localhost_server_index}" )
-    for((i=0;i<${#directives[@]};i++));
-    do
-        d2_path[i]=${d2_path[0]}
-    done
+        '["Cache-Control","no-cache"]' )
 
     NginxAddDirective 3
 }
@@ -22701,48 +22914,44 @@ NginxAddCorsHost()
             if [[ $domain =~ ^([a-zA-Z0-9](([a-zA-Z0-9-]){0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]] 
             then
                 cors_domains+=("$domain")
-                cors_domains="$cors_domains
-        ~http://$domain http://$domain;
-        ~https://$domain https://$domain;"
             fi
         done
     fi
 
-    if [ -n "${cors_domains:-}" ] 
+    directive_map='{"directive":"map","args":["$http_origin","$cors_host"],"block":[]}'
+    directives=( map )
+    directives_val=()
+
+    check_directives=()
+    check_args=( '["$http_origin","$cors_host"]' )
+
+    NginxAddDirective 2
+
+    server_ip=$(GetServerIp)
+
+    directive_default='{"directive":"default","args":["*"]}'
+
+    read -r directive_server_ip_http < <(
+        $JQ_FILE -c -n --arg directive "~http://$server_ip" --argjson args "[\"~http://$server_ip\"]" \
+        '{
+            "directive":$directive,
+            "args":$args
+        }'
+    )
+
+    read -r directive_server_ip_https < <(
+        $JQ_FILE -c -n --arg directive "~https://$server_ip" --argjson args "[\"~https://$server_ip\"]" \
+        '{
+            "directive":$directive,
+            "args":$args
+        }'
+    )
+
+    directives=( default "~http://$server_ip" "~https://$server_ip" )
+    directives_val=( default server_ip_http server_ip_https )
+
+    if [ -n "${cors_domains:-}" ]
     then
-        directive_map='{"directive":"map","args":["$http_origin","$cors_host"],"block":[]}'
-        directives=( map )
-        directives_val=()
-
-        check_directives=()
-        check_args=( '["$http_origin","$cors_host"]' )
-        check_path=( http )
-
-        NginxAddDirective 2
-
-        server_ip=$(GetServerIp)
-
-        directive_default='{"directive":"default","args":["*"]}'
-
-        read -r directive_server_ip_http < <(
-            $JQ_FILE -c -n --arg directive "~http://$server_ip" --argjson args "[\"~http://$server_ip\"]" \
-            '{
-                "directive":$directive,
-                "args":$args
-            }'
-        )
-
-        read -r directive_server_ip_https < <(
-            $JQ_FILE -c -n --arg directive "~https://$server_ip" --argjson args "[\"~https://$server_ip\"]" \
-            '{
-                "directive":$directive,
-                "args":$args
-            }'
-        )
-
-        directives=( default "~http://$server_ip" "~https://$server_ip" )
-        directives_val=( default directive_server_ip_http directive_server_ip_https )
-
         for((cors_i=0;cors_i<${#cors_domains[@]};cors_i++));
         do
             read -r directive_cors_domain_${cors_i}_http < <(
@@ -22760,20 +22969,14 @@ NginxAddCorsHost()
                 }'
             )
             directives+=( "~http://${cors_domains[cors_i]}" "~https://${cors_domains[cors_i]}" )
-            directives_val+=( directive_cors_domain_${cors_i}_http directive_cors_domain_${cors_i}_https )
+            directives_val+=( cors_domain_${cors_i}_http cors_domain_${cors_i}_https )
         done
-
-        check_directives=()
-        check_args=()
-        check_path=( http map )
-
-        for((i=0;i<${#directives[@]};i++));
-        do
-            d2_path[i]=${d2_path[0]}
-        done
-
-        NginxAddDirective 3
     fi
+
+    check_directives=()
+    check_args=()
+
+    NginxAddDirective 3
 
     if ! grep -q "$nginx_name:" < "/etc/passwd"
     then
@@ -22797,7 +23000,6 @@ NginxAddUpstreamNodejs()
     directives_val=()
     check_directives=()
     check_args=( '["nodejs"]' )
-    check_path=( http )
 
     NginxAddDirective 2
 
@@ -22807,22 +23009,18 @@ NginxAddUpstreamNodejs()
     directives_val=()
     check_directives=()
     check_args=()
-    check_path=( http upstream )
 
     NginxAddDirective 3
 }
 
 NginxAddFlv()
 {
-    d2_path=( "${nginx_domain_server_index:-nginx_localhost_server_index}" )
-
     directive_location='{"directive":"location","args":["/flv"],"block":[]}'
 
     directives=( location )
     directives_val=()
     check_directives=()
     check_args=( '["/flv"]' )
-    check_path=( http server )
 
     NginxAddDirective 3
 
@@ -22833,8 +23031,6 @@ NginxAddFlv()
     directives_val=()
     check_directives=()
     check_args=()
-    check_path=( http server location )
-    d3_path[1]=${d3_path[0]}
 
     NginxAddDirective 4
 }
@@ -22847,7 +23043,6 @@ NginxAddSameSiteNone()
     directives_val=()
     check_directives=()
     check_args=( '["$http_user_agent","$samesite_none"]' )
-    check_path=( http )
 
     NginxAddDirective 2
 
@@ -22858,7 +23053,6 @@ NginxAddSameSiteNone()
     directives_val=( default chrome )
     check_directives=()
     check_args=( '["; Secure"]' )
-    check_path=( http map )
 
     NginxAddDirective 3
 }
@@ -22891,6 +23085,8 @@ NginxBuildConf()
     crossplane build -f --no-headers "$TMP_FILE"
 
     rm -f "$TMP_FILE"
+
+    trap - EXIT
 }
 
 NginxCheckLocalhost()
@@ -22910,101 +23106,104 @@ NginxCheckLocalhost()
 
     updated=0
 
-    NginxAddHttp
+    NginxAddUser
 
-    NginxAddRtmp
+    NginxAddHttp
 
     NginxAddSitesEnabled
 
     NginxAddSsl
 
-    level_1_i=0
     server_offset=0
-    for((d1_i=0;d1_i<level_1_directive_count;d1_i++));
-    do
-        if [ "${level_1_directive_arr[d1_i]}" == "http" ] && [ -n "${level_2_directive_arr[level_1_i]}" ]
-        then
-            level_2_directive_d1=${level_2_directive_arr[level_1_i]}
-            level_2_args_d1=${level_2_args_arr[level_1_i]}
-            IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
-            IFS="${delimiters[1]}" read -r -a level_2_args_d1_arr <<< "$level_2_args_d1${delimiters[1]}"
-            level_3_directive_d1=${level_3_directive_arr[level_1_i]:-}
-            level_3_args_d1=${level_3_args_arr[level_1_i]:-}
-            IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
-            IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
 
-            level_2_i=0
-            for((d2_i=0;d2_i<${#level_2_directive_d1_arr[@]};d2_i++));
-            do
-                if [ "${level_2_directive_d1_arr[d2_i]}" == "server" ] && [ -n "${level_3_directive_d1_arr[level_2_i]:-}" ]
+    if [ "$level_2_d1_count" -gt 0 ] 
+    then
+        for((level_1_index=0;level_1_index<level_1_count;level_1_index++));
+        do
+            if [ "${level_1_directive_arr[level_1_index]}" == "http" ] 
+            then
+                if [ -z "${level_2_directive_arr[level_1_index]}" ] 
                 then
-                    level_3_directive_d2=${level_3_directive_d1_arr[level_2_i]}
-                    level_3_args_d2=${level_3_args_d1_arr[level_2_i]}
-                    IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
-                    IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+                    break
+                fi
 
-                    for((d3_i=0;d3_i<${#level_3_directive_d2_arr[@]};d3_i++));
-                    do
-                        if [ "${level_3_directive_d2_arr[d3_i]}" == "server_name" ] 
-                        then
-                            if [ "${level_3_args_d2_arr[d3_i]}" == "localhost" ] 
+                level_2_directive_d1=${level_2_directive_arr[level_1_index]}
+                level_2_args_d1=${level_2_args_arr[level_1_index]}
+                IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
+                IFS="${delimiters[1]}" read -r -a level_2_args_d1_arr <<< "$level_2_args_d1${delimiters[1]}"
+
+                if [ "$level_3_d1_count" -gt 0 ] && [ -n "${level_3_directive_arr[level_1_index]}" ]
+                then
+                    level_3_directive_d1=${level_3_directive_arr[level_1_index]}
+                    level_3_args_d1=${level_3_args_arr[level_1_index]}
+                    IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+                    IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+                fi
+
+                for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
+                do
+                    if [ "${level_2_directive_d1_arr[level_2_index]}" == "server" ] && [ "$level_3_d1_count" -gt 0 ] && [ -n "${level_3_directive_arr[level_1_index]}" ] && [ -n "${level_3_directive_d1_arr[level_2_index]}" ]
+                    then
+                        level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
+                        level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
+                        IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
+                        IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+
+                        for((level_3_index=0;level_3_index<${#level_3_directive_d2_arr[@]};level_3_index++));
+                        do
+                            if [ "${level_3_directive_d2_arr[level_3_index]}" == "server_name" ] 
                             then
-                                continue 2
-                            fi
-                            updated=1
-                            IFS="${delimiters[0]}" read -r -a domains <<< "${level_3_args_d2_arr[d3_i]}${delimiters[0]}"
-                            new_conf='{"status":"ok","errors":[],"config":[]}'
-                            localhost_found=0
-                            for((l=0;l<${#domains[@]};l++));
-                            do
-                                if [ "${domains[l]}" == "localhost" ] 
+                                if [ "${level_3_args_d2_arr[level_3_index]}" == "localhost" ] 
                                 then
-                                    localhost_found=1
-                                    continue
+                                    continue 2
                                 fi
-                                jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"']'
-                                JQs get parse_out new_server
-                                jq_path='["block",'"$d3_i"',"args"]'
-                                JQs replace new_server '["'${domains[l]}'"]'
-                                jq_path='["config"]'
-                                JQs add new_conf '{"file":"'"$nginx_prefix/conf/sites_available/${domains[l]}.conf"'","status":"ok","errors":[],"parsed":['"$new_server"']}'
-                                ln -sf "$nginx_prefix/conf/sites_available/${domains[l]}.conf" "$nginx_prefix/conf/sites_enabled/"
-                            done
-                            NginxBuildConf new_conf
-                            if [ "$localhost_found" -eq 0 ] 
+                                updated=1
+                                IFS="${delimiters[0]}" read -r -a domains <<< "${level_3_args_d2_arr[level_3_index]}${delimiters[0]}"
+                                new_conf='{"status":"ok","errors":[],"config":[]}'
+                                localhost_found=0
+                                for((l=0;l<${#domains[@]};l++));
+                                do
+                                    if [ "${domains[l]}" == "localhost" ] 
+                                    then
+                                        localhost_found=1
+                                        continue
+                                    fi
+                                    jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"']'
+                                    JQs get parse_out new_server
+                                    jq_path='["block",'"$level_3_index"',"args"]'
+                                    JQs replace new_server '["'${domains[l]}'"]'
+                                    jq_path='["config"]'
+                                    JQs add new_conf '{"file":"'"$nginx_prefix/conf/sites_available/${domains[l]}.conf"'","status":"ok","errors":[],"parsed":['"$new_server"']}'
+                                    ln -sf "$nginx_prefix/conf/sites_available/${domains[l]}.conf" "$nginx_prefix/conf/sites_enabled/"
+                                done
+                                NginxBuildConf new_conf
+                                if [ "$localhost_found" -eq 0 ] 
+                                then
+                                    jq_path='["config",0,"parsed",'"$level_1_index"',"block"]'
+                                    JQs delete parse_out "$((j-server_offset))"
+                                    server_offset=$((server_offset+1))
+                                else
+                                    jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"args"]'
+                                    JQs replace parse_out '["localhost"]'
+                                fi
+                            elif [ "${level_3_directive_d2_arr[level_3_index]}" == "add_header" ] && [ "${level_3_args_d2_arr[level_3_index]}" == 'Access-Control-Allow-Origin'"${delimiters[0]}"'$corsHost' ]
                             then
-                                jq_path='["config",0,"parsed",'"$d1_i"',"block"]'
-                                JQs delete parse_out "$((j-server_offset))"
-                                server_offset=$((server_offset+1))
-                            else
-                                jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"block",'"$d3_i"',"args"]'
-                                JQs replace parse_out '["localhost"]'
+                                updated=1
+                                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"args"]'
+                                JQs replace parse_out '["Access-Control-Allow-Origin","$cors_host"]'
                             fi
-                        elif [ "${level_3_directive_d2_arr[d3_i]}" == "add_header" ] && [ "${level_3_args_d2_arr[d3_i]}" == 'Access-Control-Allow-Origin'"${delimiters[0]}"'$corsHost' ]
-                        then
-                            updated=1
-                            jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"block",'"$d3_i"',"args"]'
-                            JQs replace parse_out '["Access-Control-Allow-Origin","$cors_host"]'
-                        fi
-                    done
-                elif [ "${level_2_directive_d1_arr[d2_i]}" == "map" ] && [ "${level_2_args_d1_arr[d2_i]}" == '$http_origin'"${delimiters[0]}"'$corsHost' ]
-                then
-                    updated=1
-                    jq_path='["config",0,"parsed",'"$d1_i"',"block",'"$d2_i"',"args"]'
-                    JQs replace parse_out '["$http_origin","$cors_host"]'
-                fi
-                if NginxIsBlockDirective 2 "${level_2_directive_d1_arr[d2_i]}"
-                then
-                    level_2_i=$((level_2_i+1))
-                fi
-            done
-            break
-        fi
-        if NginxIsBlockDirective 1 "${level_1_directive_arr[d1_i]}"
-        then
-            level_1_i=$((level_1_i+1))
-        fi
-    done
+                        done
+                    elif [ "${level_2_directive_d1_arr[level_2_index]}" == "map" ] && [ "${level_2_args_d1_arr[level_2_index]}" == '$http_origin'"${delimiters[0]}"'$corsHost' ]
+                    then
+                        updated=1
+                        jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"args"]'
+                        JQs replace parse_out '["$http_origin","$cors_host"]'
+                    fi
+                done
+                break
+            fi
+        done
+    fi
 
     if [ "$server_offset" -gt 0 ] 
     then
@@ -23012,6 +23211,8 @@ NginxCheckLocalhost()
     fi
 
     NginxAddLocalhost
+
+    NginxAddRtmp
 
     if [ "$updated" -eq 1 ] 
     then
@@ -23036,34 +23237,25 @@ NginxConfigDirective()
             while true 
             do
                 level_1_options=()
-                level_1_is_block_directive=()
 
-                d1_index=0
-                d1_indices=()
-
-                for((level_1_index=0;level_1_index<level_1_directive_count;level_1_index++));
+                for((level_1_index=0;level_1_index<level_1_count;level_1_index++));
                 do
                     level_1_option=${level_1_directive_arr[level_1_index]:-\"\"}
 
-                    if NginxIsBlockDirective 1 "$level_1_option" 
-                    then
-                        d1_indices[level_1_index]="$d1_index"
-                        d1_index=$((d1_index+1))
-                        level_1_is_block_directive+=(1)
-                    else
-                        level_1_is_block_directive+=(0)
-                    fi
-
-                    if [ -n "${level_1_args_arr[level_1_index]}" ] || [ "${level_1_is_block_directive[level_1_index]}" -eq 0 ]
+                    if [ -n "${level_1_args_arr[level_1_index]}" ] 
                     then
                         IFS="${delimiters[0]}" read -r -a args <<< "${level_1_args_arr[level_1_index]}${delimiters[0]}"
                         for arg in "${args[@]}"
                         do
+                            if [[ $arg == *" "* ]] 
+                            then
+                                arg="\"$arg\""
+                            fi
                             level_1_option="$level_1_option ${arg:-\"\"}"
                         done
                     fi
 
-                    if [ "${level_1_is_block_directive[level_1_index]}" -eq 1 ]
+                    if [ "$level_2_d1_count" -gt 0 ] && [ -n "${level_2_directive_arr[level_1_index]}" ]
                     then
                         level_1_option="$level_1_option {...}"
                     fi
@@ -23088,26 +23280,13 @@ NginxConfigDirective()
                         NginxAddDirective level_1
                         continue 2
                     else
-                        level_1_actions=()
-
-                        if [ "${level_1_is_block_directive[level_1_index]}" -eq 1 ] 
-                        then
-                            level_1_actions+=("修改二级指令")
-                        fi
-
-                        if [ -n "${level_1_args_arr[level_1_index]}" ] || [ "${level_1_is_block_directive[level_1_index]}" -eq 0 ] 
-                        then
-                            level_1_actions+=("修改指令")
-                        fi
-
-                        level_1_actions+=("删除指令" "返回选择")
+                        level_1_actions=("修改二级指令" "修改指令" "删除指令" "返回选择")
 
                         echo
                         inquirer list_input "选择操作" level_1_actions level_1_action
 
                         if [ "$level_1_action" == "修改二级指令" ] 
                         then
-                            d1_index=${d1_indices[level_1_index]}
                             from_level_1=1
                             NginxConfigDirective level_2
                             unset from_level_1
@@ -23144,42 +23323,39 @@ NginxConfigDirective()
             while true 
             do
                 level_2_options=()
-                level_2_is_block_directive=()
 
-                d2_index=0
-                d2_indices=()
-
-                if [ "$level_2_directive_count" -gt 0 ] && [ -n "${level_2_directive_arr[d1_index]:-}" ]
+                if [ "$level_2_d1_count" -gt 0 ] 
                 then
-                    level_2_directive_d1=${level_2_directive_arr[d1_index]}
-                    level_2_args_d1=${level_2_args_arr[d1_index]}
+                    level_2_directive_d1=${level_2_directive_arr[level_1_index]}
+                    level_2_args_d1=${level_2_args_arr[level_1_index]}
 
                     IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "${level_2_directive_d1}${delimiters[1]}"
                     IFS="${delimiters[1]}" read -r -a level_2_args_d1_arr <<< "${level_2_args_d1}${delimiters[1]}"
+
+                    if [ "$level_3_d1_count" -gt 0 ] && [ -n "${level_3_directive_arr[level_1_index]}" ]
+                    then
+                        level_3_directive_d1=${level_3_directive_arr[level_1_index]}
+                        IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}${delimiters[2]}"
+                    fi
 
                     for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
                     do
                         level_2_option=${level_2_directive_d1_arr[level_2_index]:-\"\"}
 
-                        if NginxIsBlockDirective 2 "$level_2_option" 
-                        then
-                            d2_indices[level_2_index]="$d2_index"
-                            d2_index=$((d2_index+1))
-                            level_2_is_block_directive+=(1)
-                        else
-                            level_2_is_block_directive+=(0)
-                        fi
-
-                        if [ -n "${level_2_args_d1_arr[level_2_index]}" ] || [ "${level_2_is_block_directive[level_2_index]}" -eq 0 ]
+                        if [ -n "${level_2_args_d1_arr[level_2_index]}" ] 
                         then
                             IFS="${delimiters[0]}" read -r -a args <<< "${level_2_args_d1_arr[level_2_index]}${delimiters[0]}"
                             for arg in "${args[@]}"
                             do
+                                if [[ $arg == *" "* ]] 
+                                then
+                                    arg="\"$arg\""
+                                fi
                                 level_2_option="$level_2_option ${arg:-\"\"}"
                             done
                         fi
 
-                        if [ "${level_2_is_block_directive[level_2_index]}" -eq 1 ]
+                        if [ "$level_3_d1_count" -gt 0 ] && [ -n "${level_3_directive_arr[level_1_index]}" ] && [ -n "${level_3_directive_d1_arr[level_2_index]}" ]
                         then
                             level_2_option="$level_2_option {...}"
                         fi
@@ -23216,40 +23392,13 @@ NginxConfigDirective()
                         NginxAddDirective level_2
                         continue 2
                     else
-                        level_2_actions=()
-
-                        if [ "${level_2_is_block_directive[level_2_index]}" -eq 1 ] 
-                        then
-                            level_2_actions+=("修改三级指令")
-                        fi
-
-                        if [ -n "${level_2_args_d1_arr[level_2_index]}" ] || [ "${level_2_is_block_directive[level_2_index]}" -eq 0 ] 
-                        then
-                            level_2_actions+=("修改指令")
-                        fi
-
-                        level_2_actions+=("删除指令" "返回选择")
+                        level_2_actions=("修改三级指令" "修改指令" "删除指令" "返回选择")
 
                         echo
                         inquirer list_input "选择操作" level_2_actions level_2_action
 
                         if [ "$level_2_action" == "修改三级指令" ] 
                         then
-                            d1_offset=0
-                            for((check_i=0;check_i<d1_index;check_i++));
-                            do
-                                level_2_directive_check=${level_2_directive_arr[check_i]}
-                                IFS="${delimiters[1]}" read -r -a level_2_directive_check_arr <<< "${level_2_directive_check}${delimiters[1]}"
-                                for directive in "${level_2_directive_check_arr[@]}"
-                                do
-                                    if NginxIsBlockDirective 2 "$directive"
-                                    then
-                                        continue 2
-                                    fi
-                                done
-                                d1_offset=$((d1_offset+1))
-                            done
-                            d2_index=${d2_indices[level_2_index]}
                             from_level_2=1
                             NginxConfigDirective level_3
                             unset from_level_2
@@ -23286,50 +23435,52 @@ NginxConfigDirective()
             while true 
             do
                 level_3_options=()
-                level_3_is_block_directive=()
 
-                d3_index=0
-                d3_indices=()
-
-                if [ "$level_3_directive_count" -gt 0 ] 
+                if [ "$level_3_d1_count" -gt 0 ] 
                 then
-                    level_3_directive_d1=${level_3_directive_arr[d1_index-d1_offset]}
-                    level_3_args_d1=${level_3_args_arr[d1_index-d1_offset]}
+                    level_3_directive_d1=${level_3_directive_arr[level_1_index]}
+                    level_3_args_d1=${level_3_args_arr[level_1_index]}
 
                     IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "${level_3_directive_d1}${delimiters[2]}"
                     IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "${level_3_args_d1}${delimiters[2]}"
 
-                    if [ -n "${level_3_directive_d1_arr[d2_index]:-}" ] 
+                    if [ -n "${level_3_directive_d1_arr[level_2_index]}" ] 
                     then
-                        level_3_directive_d2=${level_3_directive_d1_arr[d2_index]}
-                        level_3_args_d2=${level_3_args_d1_arr[d2_index]}
+                        level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
+                        level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
 
                         IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "${level_3_directive_d2}${delimiters[1]}"
                         IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "${level_3_args_d2}${delimiters[1]}"
+
+                        if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ]
+                        then
+                            level_4_directive_d1=${level_4_directive_arr[level_1_index]}
+                            IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}${delimiters[3]}"
+                            if [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ]
+                            then
+                                level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
+                                IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}${delimiters[2]}"
+                            fi
+                        fi
 
                         for((level_3_index=0;level_3_index<${#level_3_directive_d2_arr[@]};level_3_index++));
                         do
                             level_3_option=${level_3_directive_d2_arr[level_3_index]:-\"\"}
 
-                            if NginxIsBlockDirective 3 "$level_3_option" 
-                            then
-                                d3_indices[level_3_index]="$d3_index"
-                                d3_index=$((d3_index+1))
-                                level_3_is_block_directive+=(1)
-                            else
-                                level_3_is_block_directive+=(0)
-                            fi
-
-                            if [ -n "${level_3_args_d2_arr[level_3_index]}" ] || [ "${level_3_is_block_directive[level_3_index]}" -eq 0 ]
+                            if [ -n "${level_3_args_d2_arr[level_3_index]}" ] 
                             then
                                 IFS="${delimiters[0]}" read -r -a args <<< "${level_3_args_d2_arr[level_3_index]}${delimiters[0]}"
                                 for arg in "${args[@]}"
                                 do
+                                    if [[ $arg == *" "* ]] 
+                                    then
+                                        arg="\"$arg\""
+                                    fi
                                     level_3_option="$level_3_option ${arg:-\"\"}"
                                 done
                             fi
 
-                            if [ "${level_3_is_block_directive[level_3_index]}" -eq 1 ]
+                            if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
                             then
                                 level_3_option="$level_3_option {...}"
                             fi
@@ -23367,61 +23518,13 @@ NginxConfigDirective()
                         NginxAddDirective level_3
                         continue 2
                     else
-                        level_3_actions=()
-
-                        if [ "${level_3_is_block_directive[level_3_index]}" -eq 1 ] 
-                        then
-                            level_3_actions+=("修改四级指令")
-                        fi
-
-                        if [ -n "${level_3_args_d2_arr[level_3_index]}" ] || [ "${level_3_is_block_directive[level_3_index]}" -eq 0 ] 
-                        then
-                            level_3_actions+=("修改指令")
-                        fi
-
-                        level_3_actions+=("删除指令" "返回选择")
+                        level_3_actions=("修改四级指令" "修改指令" "删除指令" "返回选择")
 
                         echo
                         inquirer list_input "选择操作" level_3_actions level_3_action
 
                         if [ "$level_3_action" == "修改四级指令" ] 
                         then
-                            for((check_i=0;check_i<d1_index-d1_offset;check_i++));
-                            do
-                                level_3_directive_d1=${level_3_directive_arr[check_i]}
-                                IFS="${delimiters[2]}" read -r -a level_3_directive_d1_check <<< "${level_3_directive_d1}${delimiters[2]}"
-                                for level_3_directive_d2 in "${level_3_directive_d1_check[@]}"
-                                do
-                                    IFS="${delimiters[1]}" read -r -a level_3_directive_d2_check <<< "${level_3_directive_d2}${delimiters[1]}"
-                                    for directive in "${level_3_directive_d2_check[@]}"
-                                    do
-                                        if NginxIsBlockDirective 3 "$directive"
-                                        then
-                                            continue 3
-                                        fi
-                                    done
-                                done
-                                d1_offset=$((d1_offset+1))
-                            done
-                            d2_offset=0
-                            for((check_i=0;check_i<d2_index;check_i++));
-                            do
-                                level_3_directive_d1=${level_3_directive_d1_arr[check_i]}
-                                IFS="${delimiters[2]}" read -r -a level_3_directive_d1_check <<< "${level_3_directive_d1}${delimiters[2]}"
-                                for level_3_directive_d2 in "${level_3_directive_d1_check[@]}"
-                                do
-                                    IFS="${delimiters[1]}" read -r -a level_3_directive_d2_check <<< "${level_3_directive_d2}${delimiters[1]}"
-                                    for directive in "${level_3_directive_d2_check[@]}"
-                                    do
-                                        if NginxIsBlockDirective 3 "$directive"
-                                        then
-                                            continue 3
-                                        fi
-                                    done
-                                done
-                                d2_offset=$((d2_offset+1))
-                            done
-                            d3_index=${d3_indices[level_3_index]}
                             from_level_3=1
                             NginxConfigDirective level_4
                             unset from_level_3
@@ -23458,56 +23561,63 @@ NginxConfigDirective()
             while true 
             do
                 level_4_options=()
-                level_4_is_block_directive=()
 
-                d4_index=0
-                d4_indices=()
-
-                if [ "$level_4_directive_count" -gt 0 ] 
+                if [ "$level_4_d1_count" -gt 0 ] 
                 then
-                    level_4_directive_d1=${level_4_directive_arr[d1_index-d1_offset]}
-                    level_4_args_d1=${level_4_args_arr[d1_index-d1_offset]}
+                    level_4_directive_d1=${level_4_directive_arr[level_1_index]}
+                    level_4_args_d1=${level_4_args_arr[level_1_index]}
 
                     IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}${delimiters[3]}"
                     IFS="${delimiters[3]}" read -r -a level_4_args_d1_arr <<< "${level_4_args_d1}${delimiters[3]}"
 
-                    level_4_directive_d2=${level_4_directive_d1_arr[d2_index-d2_offset]}
-                    level_4_args_d2=${level_4_args_d1_arr[d2_index-d2_offset]}
+                    level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
+                    level_4_args_d2=${level_4_args_d1_arr[level_2_index]}
 
                     IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}${delimiters[2]}"
                     IFS="${delimiters[2]}" read -r -a level_4_args_d2_arr <<< "${level_4_args_d2}${delimiters[2]}"
 
-                    if [ -n "${level_4_directive_d2_arr[d3_index]:-}" ]
+                    if [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
                     then
-                        level_4_directive_d3=${level_4_directive_d2_arr[d3_index]}
-                        level_4_args_d3=${level_4_args_d2_arr[d3_index]}
+                        level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
+                        level_4_args_d3=${level_4_args_d2_arr[level_3_index]}
 
                         IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "${level_4_directive_d3}${delimiters[1]}"
                         IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "${level_4_args_d3}${delimiters[1]}"
+
+                        if [ "$level_5_d1_count" -gt 0 ] && [ -n "${level_5_directive_arr[level_1_index]}" ]
+                        then
+                            level_5_directive_d1=${level_5_directive_arr[level_1_index]}
+                            IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}${delimiters[4]}"
+                            if [ -n "${level_5_directive_d1_arr[level_2_index]}" ] 
+                            then
+                                level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
+                                IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}${delimiters[3]}"
+                                if [ -n "${level_5_directive_d2_arr[level_3_index]}" ] 
+                                then
+                                    level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
+                                    IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}${delimiters[2]}"
+                                fi
+                            fi
+                        fi
 
                         for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
                         do
                             level_4_option=${level_4_directive_d3_arr[level_4_index]:-\"\"}
 
-                            if NginxIsBlockDirective 4 "$level_4_option"
-                            then
-                                d4_indices[level_4_index]="$d4_index"
-                                d4_index=$((d4_index+1))
-                                level_4_is_block_directive+=(1)
-                            else
-                                level_4_is_block_directive+=(0)
-                            fi
-
-                            if [ -n "${level_4_args_d3_arr[level_4_index]}" ] || [ "${level_4_is_block_directive[level_4_index]}" -eq 0 ]
+                            if [ -n "${level_4_args_d3_arr[level_4_index]}" ] 
                             then
                                 IFS="${delimiters[0]}" read -r -a args <<< "${level_4_args_d3_arr[level_4_index]}${delimiters[0]}"
                                 for arg in "${args[@]}"
                                 do
+                                    if [[ $arg == *" "* ]] 
+                                    then
+                                        arg="\"$arg\""
+                                    fi
                                     level_4_option="$level_4_option ${arg:-\"\"}"
                                 done
                             fi
 
-                            if [ "${level_4_is_block_directive[level_4_index]}" -eq 1 ]
+                            if [ "$level_5_d1_count" -gt 0 ] && [ -n "${level_5_directive_arr[level_1_index]}" ] && [ -n "${level_5_directive_d1_arr[level_2_index]}" ] && [ -n "${level_5_directive_d2_arr[level_3_index]}" ] && [ -n "${level_5_directive_d3_arr[level_4_index]}" ]
                             then
                                 level_4_option="$level_4_option {...}"
                             fi
@@ -23545,90 +23655,13 @@ NginxConfigDirective()
                         NginxAddDirective level_4
                         continue 2
                     else
-                        level_4_actions=()
-
-                        if [ "${level_4_is_block_directive[level_4_index]}" -eq 1 ] 
-                        then
-                            level_4_actions+=("修改五级指令")
-                        fi
-
-                        if [ -n "${level_4_args_d3_arr[level_4_index]}" ] || [ "${level_4_is_block_directive[level_4_index]}" -eq 0 ] 
-                        then
-                            level_4_actions+=("修改指令")
-                        fi
-
-                        level_4_actions+=("删除指令" "返回选择")
+                        level_4_actions=("修改五级指令" "修改指令" "删除指令" "返回选择")
 
                         echo
                         inquirer list_input "选择操作" level_4_actions level_4_action
 
                         if [ "$level_4_action" == "修改五级指令" ] 
                         then
-                            for((check_i=0;check_i<d1_index-d1_offset;check_i++));
-                            do
-                                level_4_directive_d1=${level_4_directive_arr[check_i]}
-                                IFS="${delimiters[3]}" read -r -a level_4_directive_d1_check <<< "${level_4_directive_d1}${delimiters[3]}"
-                                for level_4_directive_d2 in "${level_4_directive_d1_check[@]}"
-                                do
-                                    IFS="${delimiters[2]}" read -r -a level_4_directive_d2_check <<< "${level_4_directive_d2}${delimiters[2]}"
-                                    for level_4_directive_d3 in "${level_4_directive_d2_check[@]}"
-                                    do
-                                        IFS="${delimiters[1]}" read -r -a level_4_directive_d3_check <<< "${level_4_directive_d3}${delimiters[1]}"
-                                        for directive in "${level_4_directive_d3_check[@]}"
-                                        do
-                                            if NginxIsBlockDirective 4 "$directive"
-                                            then
-                                                continue 4
-                                            fi
-                                        done
-                                    done
-                                done
-                                d1_offset=$((d1_offset+1))
-                            done
-                            for((check_i=0;check_i<d2_index-d2_offset;check_i++));
-                            do
-                                level_4_directive_d1=${level_4_directive_d1_arr[check_i]}
-                                IFS="${delimiters[3]}" read -r -a level_4_directive_d1_check <<< "${level_4_directive_d1}${delimiters[3]}"
-                                for level_4_directive_d2 in "${level_4_directive_d1_check[@]}"
-                                do
-                                    IFS="${delimiters[2]}" read -r -a level_4_directive_d2_check <<< "${level_4_directive_d2}${delimiters[2]}"
-                                    for level_4_directive_d3 in "${level_4_directive_d2_check[@]}"
-                                    do
-                                        IFS="${delimiters[1]}" read -r -a level_4_directive_d3_check <<< "${level_4_directive_d3}${delimiters[1]}"
-                                        for directive in "${level_4_directive_d3_check[@]}"
-                                        do
-                                            if NginxIsBlockDirective 4 "$directive"
-                                            then
-                                                continue 4
-                                            fi
-                                        done
-                                    done
-                                done
-                                d2_offset=$((d2_offset+1))
-                            done
-                            d3_offset=0
-                            for((check_i=0;check_i<d3_index;check_i++));
-                            do
-                                level_4_directive_d1=${level_4_directive_d2_arr[check_i]}
-                                IFS="${delimiters[3]}" read -r -a level_4_directive_d1_check <<< "${level_4_directive_d1}${delimiters[3]}"
-                                for level_4_directive_d2 in "${level_4_directive_d1_check[@]}"
-                                do
-                                    IFS="${delimiters[2]}" read -r -a level_4_directive_d2_check <<< "${level_4_directive_d2}${delimiters[2]}"
-                                    for level_4_directive_d3 in "${level_4_directive_d2_check[@]}"
-                                    do
-                                        IFS="${delimiters[1]}" read -r -a level_4_directive_d3_check <<< "${level_4_directive_d3}${delimiters[1]}"
-                                        for directive in "${level_4_directive_d3_check[@]}"
-                                        do
-                                            if NginxIsBlockDirective 4 "$directive"
-                                            then
-                                                continue 4
-                                            fi
-                                        done
-                                    done
-                                done
-                                d3_offset=$((d3_offset+1))
-                            done
-                            d4_index=${d4_indices[level_4_index]}
                             from_level_4=1
                             NginxConfigDirective level_5
                             unset from_level_4
@@ -23666,30 +23699,30 @@ NginxConfigDirective()
             do
                 level_5_options=()
 
-                if [ "$level_5_directive_count" -gt 0 ] 
+                if [ "$level_5_d1_count" -gt 0 ] 
                 then
-                    level_5_directive_d1=${level_5_directive_arr[d1_index-d1_offset]}
-                    level_5_args_d1=${level_5_args_arr[d1_index-d1_offset]}
+                    level_5_directive_d1=${level_5_directive_arr[level_1_index]}
+                    level_5_args_d1=${level_5_args_arr[level_1_index]}
 
                     IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}${delimiters[4]}"
                     IFS="${delimiters[4]}" read -r -a level_5_args_d1_arr <<< "${level_5_args_d1}${delimiters[4]}"
 
-                    level_5_directive_d2=${level_5_directive_d1_arr[d2_index-d2_offset]}
-                    level_5_args_d2=${level_5_args_arr[d2_index-d2_offset]}
+                    level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
+                    level_5_args_d2=${level_5_args_arr[level_2_index]}
 
                     IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}${delimiters[3]}"
                     IFS="${delimiters[3]}" read -r -a level_5_args_d2_arr <<< "${level_5_args_d2}${delimiters[3]}"
 
-                    level_5_directive_d3=${level_5_directive_d2_arr[d3_index-d3_offset]}
-                    level_5_args_d3=${level_5_args_d2_arr[d3_index-d3_offset]}
+                    level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
+                    level_5_args_d3=${level_5_args_d2_arr[level_3_index]}
 
                     IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}${delimiters[2]}"
                     IFS="${delimiters[2]}" read -r -a level_5_args_d3_arr <<< "${level_5_args_d3}${delimiters[2]}"
 
-                    if [ -n "${level_5_directive_d3_arr[d4_index]:-}" ]
+                    if [ -n "${level_5_directive_d3_arr[level_4_index]}" ]
                     then
-                        level_5_directive_d4=${level_5_directive_d3_arr[d4_index]}
-                        level_5_args_d4=${level_5_args_d3_arr[d4_index]}
+                        level_5_directive_d4=${level_5_directive_d3_arr[level_4_index]}
+                        level_5_args_d4=${level_5_args_d3_arr[level_4_index]}
 
                         IFS="${delimiters[1]}" read -r -a level_5_directive_d4_arr <<< "${level_5_directive_d4}${delimiters[1]}"
                         IFS="${delimiters[1]}" read -r -a level_5_args_d4_arr <<< "${level_5_args_d4}${delimiters[1]}"
@@ -23703,6 +23736,10 @@ NginxConfigDirective()
                                 IFS="${delimiters[0]}" read -r -a args <<< "${level_5_args_d4_arr[level_5_index]}${delimiters[0]}"
                                 for arg in "${args[@]}"
                                 do
+                                    if [[ $arg == *" "* ]] 
+                                    then
+                                        arg="\"$arg\""
+                                    fi
                                     level_5_option="$level_5_option ${arg:-\"\"}"
                                 done
                             fi
@@ -23740,14 +23777,7 @@ NginxConfigDirective()
                         NginxAddDirective level_5
                         continue 2
                     else
-                        level_5_actions=()
-
-                        if [ -n "${level_5_args_d4_arr[level_5_index]}" ] 
-                        then
-                            level_5_actions+=("修改指令")
-                        fi
-
-                        level_5_actions+=("删除指令" "返回选择")
+                        level_5_actions=("修改指令" "删除指令" "返回选择")
 
                         echo
                         inquirer list_input "选择操作" level_5_actions level_5_action
@@ -23923,7 +23953,7 @@ NginxDomainUpdateCrt()
         else
             apt-get -y install socat > /dev/null
         fi
-        bash <(curl -s -m 10 https://get.acme.sh) > /dev/null
+        bash <(curl -s -m 20 https://get.acme.sh) > /dev/null
     fi
 
     systemctl stop $nginx_name 2> /dev/null || true
@@ -24343,6 +24373,9 @@ NginxAddDomain()
 
     if [ -n "$domains" ] 
     then
+        NginxCheckLocalhost
+        NginxAddHttp
+
         IFS=" " read -ra new_domains <<< "$domains"
         for server_domain in "${new_domains[@]}"
         do
@@ -24381,7 +24414,10 @@ NginxAddDomain()
                         NginxAppendHttpConf
                     fi
 
+                    updated=0
                     NginxAddCorsHost
+                    [ "$updated" -eq 1 ] && NginxBuildConf parse_out
+
                     NginxEnableDomain
                     Println "$info $server_domain 配置成功\n"
                 ;;
@@ -24411,7 +24447,11 @@ NginxAddDomain()
                         NginxConfigServerLiveRoot
                         NginxAppendHttpsConf
                     fi
+
+                    updated=0
                     NginxAddCorsHost
+                    [ "$updated" -eq 1 ] && NginxBuildConf parse_out
+
                     NginxEnableDomain
                     Println "$info $server_domain 配置成功\n"
                 ;;
@@ -24495,7 +24535,11 @@ NginxAddDomain()
                             fi
                         fi
                     fi
+
+                    updated=0
                     NginxAddCorsHost
+                    [ "$updated" -eq 1 ] && NginxBuildConf parse_out
+
                     NginxEnableDomain
                     Println "$info $server_domain 配置成功\n"
                 ;;
@@ -24629,6 +24673,7 @@ gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
             systemctl daemon-reload
             systemctl start mongod > /dev/null 2>&1
         fi
+        systemctl enable mongod
     else
         service mongod start
     fi
@@ -24666,10 +24711,14 @@ NodejsConfig()
     else
         NginxListLocalhost
         NginxSelectLocalhostServer
-        NginxAddFlv
     fi
 
+    NginxConfigServerLiveRoot
+
     updated=0
+
+    NginxAddFlv
+
     NginxAddNodejs
 
     if [ "$updated" -eq 1 ] 
@@ -24681,12 +24730,17 @@ NodejsConfig()
     if [ "$nodejs_option" == "域名" ] 
     then
         NginxCheckLocalhost
+        NginxAddHttp
     fi
 
     updated=0
+
+    NginxAddCorsHost
+
     NginxAddSameSiteNone
 
     nodejs_port=$(GetFreePort)
+
     NginxAddUpstreamNodejs
 
     if [ "$updated" -eq 1 ] 
@@ -27549,7 +27603,7 @@ V2rayListInboundAccounts()
 
     if [ "${inbounds_tag[inbounds_index]:0:6}" == "nginx-" ] 
     then
-        V2rayListDomainsInbound
+        V2rayListInboundDomains
     fi
 
     if [ -n "$accounts_list" ] 
@@ -30001,9 +30055,9 @@ V2rayListDomains()
         for f in "$nginx_prefix/conf/sites_available/"*
         do
             domain=${f##*/}
+            domain=${domain%.conf}
             [[ $domain =~ ^([a-zA-Z0-9](([a-zA-Z0-9-]){0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]] || continue
             v2ray_domains_count=$((v2ray_domains_count+1))
-            domain=${domain%.conf}
             v2ray_domains+=("$domain")
             if [ -e "$nginx_prefix/conf/sites_enabled/$domain.conf" ] && grep -q "proxy_pass http://127.0.0.1:" < "$nginx_prefix/conf/sites_enabled/$domain.conf" 
             then
@@ -30019,7 +30073,7 @@ V2rayListDomains()
     Println "$green域名列表:${normal}\n\n${v2ray_domains_list:-无\n\n} $green$v2ray_add_domain_num.${normal}\r\033[6C添加域名\n\n"
 }
 
-V2rayListDomainsInbound()
+V2rayListInboundDomains()
 {
     v2ray_domains_inbound_list=""
     v2ray_domains_inbound_count=0
@@ -30194,7 +30248,7 @@ V2rayDomainUpdateCrt()
         else
             apt-get -y install socat > /dev/null
         fi
-        bash <(curl -s -m 10 https://get.acme.sh) > /dev/null
+        bash <(curl -s -m 20 https://get.acme.sh) > /dev/null
     fi
 
     systemctl stop $nginx_name || true
@@ -30283,7 +30337,11 @@ V2rayAddDomain()
         DomainInstallCert
         V2rayAppendDomainConf
         NginxEnableDomain
+        NginxCheckLocalhost
+        NginxAddHttp
+        updated=0
         NginxAddCorsHost
+        [ "$updated" -eq 1 ] && NginxBuildConf parse_out
         Println "$info 域名 $server_domain 添加完成...\n"
     else
         Println "已取消...\n" && exit 1
@@ -31035,13 +31093,14 @@ ViewCloudflareUser()
         curl_header_auth_token="Authorization: Bearer $cf_user_token"
     fi
 
+    delimiters=( $'\001' )
     IFS=$'\002\t' read -r success error_message CF_ACCOUNT_ID < <(
     JQs flat "$(curl -s -X GET -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
     -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/accounts)" '' \
     '[.success + "\u0002",
     (.errors|if . == "" then {} else . end).message + "\u0002",
     (.result|if . == "" then {} else . end).id + "\u0002"]
-    |@tsv' $'\001')
+    |@tsv' "${delimiters[@]}")
 
     if [ "$success" == "false" ] 
     then
@@ -31084,11 +31143,12 @@ ViewCloudflareUser()
     }
     }"
 
+    delimiters=( $'\001' )
     IFS=$'\002\t' read -r cf_workers_requests error_message < <(
     JQs flat "$(curl -s -X POST -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
     --data "$(echo $PAYLOAD)" -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/graphql)" '' \
     '[((.data|if . == "" then {} else . end).viewer.accounts.workersInvocationsAdaptive|if . == "" then {} else . end).sum.requests + "\u0002",
-    (.errors|if . == "" then {} else . end).message + "\u0002"]|@tsv' $'\001')
+    (.errors|if . == "" then {} else . end).message + "\u0002"]|@tsv' "{delimiters[@]}")
 
     if [ -z "$cf_workers_requests" ] 
     then
@@ -34049,12 +34109,13 @@ MonitorCloudflareWorkersGetRequests()
         curl_header_auth_token="Authorization: Bearer $cf_user_token"
     fi
 
+    delimiters=( $'\001' )
     IFS=$'\002\t' read -r success error_message CF_ACCOUNT_ID < <(
     JQs flat "$(curl -s -X GET -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
     -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/accounts)" '' \
     '[.success + "\u0002",
     (.errors|if . == "" then {} else . end).message + "\u0002",
-    (.result|if . == "" then {} else . end).id + "\u0002"]|@tsv' $'\001')
+    (.result|if . == "" then {} else . end).id + "\u0002"]|@tsv' "${delimiters[@]}")
 
     if [ "$success" == "false" ] 
     then
@@ -34097,11 +34158,12 @@ MonitorCloudflareWorkersGetRequests()
     }
     }"
 
+    delimiters=( $'\001' )
     IFS=$'\002\t' read -r cf_workers_requests error_message < <(
     JQs flat "$(curl -s -X POST -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
     --data "$(echo $PAYLOAD)" -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/graphql)" '' \
     '[((.data|if . == "" then {} else . end).viewer.accounts.workersInvocationsAdaptive|if . == "" then {} else . end).sum.requests + "\u0002",
-    (.errors|if . == "" then {} else . end).message + "\u0002"]|@tsv' $'\001')
+    (.errors|if . == "" then {} else . end).message + "\u0002"]|@tsv' "${delimiters[@]}")
 
     if [ -z "$cf_workers_requests" ] 
     then
@@ -34853,7 +34915,7 @@ EnableCloudflareWorkersMonitor()
     if [ "$yn_option" == "是" ] 
     then
         cf_use_api=1
-        cf_workers_monitor_seconds_default=900
+        cf_workers_monitor_seconds_default=1200
     else
         cf_use_api=0
         cf_workers_monitor_seconds_default=1800
@@ -36023,7 +36085,7 @@ UpdateIbmV2ray()
             fi
             chmod 700 "$IBM_APPS_ROOT/ibm_$v2ray_name/$v2ray_name"
             chmod 700 "$IBM_APPS_ROOT/ibm_$v2ray_name/v2ctl"
-            Println "$info ibm v2ray 更新完成\n"
+            Println "$info ibm $v2ray_name 更新完成\n"
         else
             Println "$error 无法连接服务器, 请稍后再试\n"
         fi
@@ -36052,7 +36114,7 @@ DeployIbmV2ray()
 
     if [ ! -e "$IBM_APPS_ROOT/ibm_$v2ray_name/$v2ray_name" ] || [ ! -e "$IBM_APPS_ROOT/ibm_$v2ray_name/v2ctl" ]
     then
-        Println "$error 请先更新 IBM V2ray APP\n"
+        Println "$error 请先更新 IBM $v2ray_name APP\n"
         exit 1
     fi
 
@@ -39047,22 +39109,23 @@ WantedBy=multi-user.target
   ${green}5.${normal} 添加域名
   ${green}6.${normal} 修改域名
   ${green}7.${normal} 开关域名
-  ${green}8.${normal} 修改本地
+  ${green}8.${normal} 查看本地
+  ${green}9.${normal} 修改本地
 ————————————
-  ${green}9.${normal} 状态
- ${green}10.${normal} 开关
- ${green}11.${normal} 重启
+ ${green}10.${normal} 状态
+ ${green}11.${normal} 开关
+ ${green}12.${normal} 重启
 ————————————
- ${green}12.${normal} 删除域名
- ${green}13.${normal} 日志切割
+ ${green}13.${normal} 删除域名
+ ${green}14.${normal} 日志切割
 ————————————
- ${green}14.${normal} 安装 nodejs
- ${green}15.${normal} 识别 cloudflare/ibm ip
+ ${green}15.${normal} 安装 nodejs
+ ${green}16.${normal} 识别 cloudflare/ibm ip
 
  $tip 输入: or 打开面板
 
 "
-    read -p "请输入数字 [1-15]: " openresty_num
+    read -p "请输入数字 [1-16]: " openresty_num
     case "$openresty_num" in
         1) 
             if [ -d "$nginx_prefix" ] 
@@ -39101,23 +39164,26 @@ WantedBy=multi-user.target
             NginxToggleDomain
         ;;
         8) 
-            NginxConfigLocalhost
+            NginxListLocalhost
         ;;
         9) 
+            NginxConfigLocalhost
+        ;;
+        10) 
             NginxViewStatus
         ;;
-        10) NginxToggle
-        ;;
-        11) 
-            NginxRestart
+        11) NginxToggle
         ;;
         12) 
-            NginxDeleteDomain
+            NginxRestart
         ;;
         13) 
+            NginxDeleteDomain
+        ;;
+        14) 
             NginxLogRotate
         ;;
-        14)
+        15)
             [ ! -d "$IPTV_ROOT" ] && Println "$error 请先输入 tv 安装 !\n" && exit 1
             if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
             then
@@ -39135,10 +39201,10 @@ WantedBy=multi-user.target
                 Println "$error nodejs 配置已存在\n" && exit 1
             fi
         ;;
-        15)
+        16)
             NginxUpdateCFIBMip
         ;;
-        *) Println "$error 请输入正确的数字 [1-15]\n"
+        *) Println "$error 请输入正确的数字 [1-16]\n"
         ;;
     esac
     exit 0
@@ -39189,25 +39255,26 @@ WantedBy=multi-user.target
   ${green}5.${normal} 添加域名
   ${green}6.${normal} 修改域名
   ${green}7.${normal} 开关域名
-  ${green}8.${normal} 修改本地
+  ${green}8.${normal} 查看本地
+  ${green}9.${normal} 修改本地
 ————————————
-  ${green}9.${normal} 状态
- ${green}10.${normal} 开关
- ${green}11.${normal} 重启
+ ${green}10.${normal} 状态
+ ${green}11.${normal} 开关
+ ${green}12.${normal} 重启
 ————————————
- ${green}12.${normal} 删除域名
- ${green}13.${normal} 日志切割
+ ${green}13.${normal} 删除域名
+ ${green}14.${normal} 日志切割
 ————————————
- ${green}14.${normal} 安装 nodejs
- ${green}15.${normal} 安装 pdf2htmlEX
- ${green}16.${normal} 安装 tesseract
- ${green}17.${normal} 安装 postfix
- ${green}18.${normal} 识别 cloudflare/ibm ip
+ ${green}15.${normal} 安装 nodejs
+ ${green}16.${normal} 安装 pdf2htmlEX
+ ${green}17.${normal} 安装 tesseract
+ ${green}18.${normal} 安装 postfix
+ ${green}19.${normal} 识别 cloudflare/ibm ip
 
  $tip 输入: nx 打开面板
 
 "
-    read -p "请输入数字 [1-18]: " nginx_num
+    read -p "请输入数字 [1-19]: " nginx_num
     case "$nginx_num" in
         1) 
             if [ -d "$nginx_prefix" ] 
@@ -39246,23 +39313,26 @@ WantedBy=multi-user.target
             NginxToggleDomain
         ;;
         8) 
-            NginxConfigLocalhost
+            NginxListLocalhost
         ;;
         9) 
+            NginxConfigLocalhost
+        ;;
+        10) 
             NginxViewStatus
         ;;
-        10) NginxToggle
-        ;;
-        11) 
-            NginxRestart
+        11) NginxToggle
         ;;
         12) 
-            NginxDeleteDomain
+            NginxRestart
         ;;
         13) 
+            NginxDeleteDomain
+        ;;
+        14) 
             NginxLogRotate
         ;;
-        14)
+        15)
             [ ! -d "$IPTV_ROOT" ] && Println "$error 请先输入 tv 安装 !\n" && exit 1
             if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
             then
@@ -39280,7 +39350,7 @@ WantedBy=multi-user.target
                 Println "$error nodejs 配置已存在\n" && exit 1
             fi
         ;;
-        15)
+        16)
             if [[ ! -x $(command -v pdf2htmlEX) ]] 
             then
                 echo
@@ -39297,7 +39367,7 @@ WantedBy=multi-user.target
                 Println "$error pdf2htmlEX 已存在!\n"
             fi
         ;;
-        16)
+        17)
             if [[ ! -x $(command -v tesseract) ]] 
             then
                 CheckRelease "检查依赖, 耗时可能会很长"
@@ -39317,7 +39387,7 @@ WantedBy=multi-user.target
                 Println "$error tesseract 已存在!\n"
             fi
         ;;
-        17)
+        18)
             if [[ ! -x $(command -v postfix) ]] 
             then
                 CheckRelease lite
@@ -39401,10 +39471,10 @@ WantedBy=multi-user.target
             fi
             Println "$info smtp 设置成功\n"
         ;;
-        18)
+        19)
             NginxUpdateCFIBMip
         ;;
-        *) Println "$error 请输入正确的数字 [1-18]\n"
+        *) Println "$error 请输入正确的数字 [1-19]\n"
         ;;
     esac
     exit 0
@@ -39865,6 +39935,7 @@ then
                         unzip Amlogic_s905-kernel-master.zip
                     else
                         Println "$error 下载 Amlogic_s905-kernel-master.zip 发生错误, 请稍后再试\n"
+                        exit 1
                     fi
                 fi
 
@@ -40535,7 +40606,7 @@ config interface 'lan'
             if [ "$core" == "xray-core" ] 
             then
                 echo
-                xray_options=( '最新' '1.3.0' '1.2.4' '1.2.3' )
+                xray_options=( '最新' '1.3.1' '1.3.0' '1.2.4' '1.2.3' )
                 inquirer list_input "选择 xray 版本" xray_options xray_ver
                 if [ "$xray_ver" == "最新" ] && ! xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/openwrt-xray.json" | $JQ_FILE -r '.tag_name')
                 then
@@ -41201,6 +41272,7 @@ then
         "astro")
             Println "$info 检测 astro ..."
 
+            delimiters=( $'\001' )
             IFS=$'\002\t' read -r m_id m_title m_description m_is_hd m_language < <(
             JQs flat "$(curl -s -Lm 20 -H 'User-Agent: '"$USER_AGENT_BROWSER"'' https://contenthub-api.eco.astro.com.my/channel/all.json)" '.[0].response' '
             . as $response | reduce ({id,title,description,isHd,language}|keys_unsorted[]) as $key ([];
@@ -41209,7 +41281,7 @@ then
                 else
                     . + ["\u0002"]
                 end
-            )|@tsv' $'\001')
+            )|@tsv' "${delimiters[@]}")
 
             IFS=$'\001' read -ra chnls_id <<< "$m_id"
             IFS=$'\001' read -ra chnls_title <<< "$m_title"
@@ -41387,7 +41459,8 @@ then
                 channels="$channels$line"
             done < <(curl -s -Lm 20 "$DEFAULT_DEMOS")
             [ -z "$channels" ] && Println "$error 暂时无法连接服务器, 请稍后再试...\n" && exit 1
-            IFS=$'\001' read -r -a channels_name < <(JQs flat "$channels" '' '.channel_name' $'\001')
+            delimiters=( $'\001' )
+            IFS=$'\001' read -r -a channels_name < <(JQs flat "$channels" '' '.channel_name' "${delimiters[@]}")
             echo
             channels_name+=("全部")
             inquirer list_input "选择添加的频道" channels_name channel_name
