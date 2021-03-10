@@ -33288,7 +33288,7 @@ DeployCloudflareWorker()
         then
             if [ -s "$IBM_CONFIG" ] && [ -z "${upstream:-}" ]
             then
-                GetIbmcfApps
+                IbmGetCfApps
                 if [ "$ibm_cf_apps_count" -gt 0 ] 
                 then
                     echo
@@ -33297,7 +33297,7 @@ DeployCloudflareWorker()
 
                     if [ "$use_ibm_cf_app_yn" == "是" ] 
                     then
-                        ListIbmcfApps
+                        IbmListCfApps
                         echo -e "选择 APP"
                         while read -p "(默认: 取消): " ibm_cf_apps_num
                         do
@@ -34578,7 +34578,7 @@ EnableCloudflareWorkersMonitor()
     ibm_cf_apps_count=0
     if [ -s "$IBM_CONFIG" ] 
     then
-        GetIbmcfApps
+        IbmGetCfApps
     fi
     workers_data=()
     stream_proxy_history=()
@@ -34655,7 +34655,7 @@ EnableCloudflareWorkersMonitor()
 
                 if [[ $use_ibm_cf_app_yn == "是" ]] 
                 then
-                    ListIbmcfApps
+                    IbmListCfApps
                     echo -e "选择 APP"
                     while read -p "(默认: 取消): " ibm_cf_apps_num
                     do
@@ -35136,7 +35136,7 @@ CloudflareWorkersMenu()
     esac
 }
 
-InstallIbmcfCli()
+IbmInstallCfCli()
 {
     if [[ -x $(command -v ibmcloud) ]] 
     then
@@ -35148,7 +35148,7 @@ InstallIbmcfCli()
     ibmcloud cf install
 }
 
-UpdateIbmcfCli()
+IbmUpdateCfCli()
 {
     if [[ ! -x $(command -v ibmcloud) ]] 
     then
@@ -35156,11 +35156,11 @@ UpdateIbmcfCli()
         exit 1
     fi
     Println "$info 更新 IBM CF CLI ..."
-    ibmcloud update
+    ibmcloud update -f
     ibmcloud cf install -f
 }
 
-GetIbmUsers()
+IbmGetUsers()
 {
     ibm_users_list=""
     ibm_users_count=0
@@ -35187,7 +35187,7 @@ GetIbmUsers()
     return 0
 }
 
-GetIbmcfApps()
+IbmGetCfApps()
 {
     ibm_cf_apps_list=""
     ibm_cf_apps_count=0
@@ -35216,14 +35216,14 @@ GetIbmcfApps()
     return 0
 }
 
-ListIbmUsers()
+IbmListUsers()
 {
     if [ ! -s "$IBM_CONFIG" ] 
     then
         Println "$error 请先添加用户\n" && exit 1
     fi
 
-    GetIbmUsers
+    IbmGetUsers
 
     if [ "$ibm_users_count" -gt 0 ] 
     then
@@ -35233,14 +35233,9 @@ ListIbmUsers()
     fi
 }
 
-ViewIbmUser()
+IbmLoginUser()
 {
-    ListIbmUsers
-}
-
-LoginIbmUser()
-{
-    ListIbmUsers
+    IbmListUsers
 
     if [ "$ibm_users_count" -eq 0 ] 
     then
@@ -35281,9 +35276,9 @@ LoginIbmUser()
     ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
 }
 
-UpdateIbmcfApp()
+IbmUpdateCfApp()
 {
-    ListIbmcfApps
+    IbmListCfApps
 
     echo -e "选择 APP"
     while read -p "(默认: 取消): " ibm_cf_apps_num
@@ -35318,7 +35313,7 @@ UpdateIbmcfApp()
         esac
     done
 
-    GetIbmUsers
+    IbmGetUsers
 
     for((i=0;i<ibm_users_count;i++));
     do
@@ -35344,7 +35339,7 @@ UpdateIbmcfApp()
     ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
 }
 
-SetIbmUserEmail()
+IbmSetUserEmail()
 {
     Println "请输入用户邮箱"
     read -p "(默认: 取消): " ibm_user_email
@@ -35357,7 +35352,7 @@ SetIbmUserEmail()
     Println "  用户邮箱: $green $ibm_user_email ${normal}\n"
 }
 
-SetIbmUserPass()
+IbmSetUserPass()
 {
     Println "请输入用户密码"
     read -p "(默认: 取消): " ibm_user_pass
@@ -35365,7 +35360,7 @@ SetIbmUserPass()
     Println "  用户密码: $green $ibm_user_pass ${normal}\n"
 }
 
-SetIbmUserRegion()
+IbmSetUserRegion()
 {
     ibmcloud regions
     Println "请输入账号所在区域名称"
@@ -35374,7 +35369,7 @@ SetIbmUserRegion()
     Println "  区域: $green $ibm_user_region ${normal}\n"
 }
 
-SetIbmUserResourceGroup()
+IbmSetUserResourceGroup()
 {
     ibmcloud resource groups
     Println "请输入资源组名称"
@@ -35383,7 +35378,7 @@ SetIbmUserResourceGroup()
     Println "  资源组: $green $ibm_user_resource_group ${normal}\n"
 }
 
-SetIbmUserOrg()
+IbmSetUserOrg()
 {
     ibmcloud account orgs
     Println "请输入组织名称"
@@ -35392,7 +35387,7 @@ SetIbmUserOrg()
     Println "  组织: $green $ibm_user_org ${normal}\n"
 }
 
-SetIbmUserSpace()
+IbmSetUserSpace()
 {
     ibmcloud account spaces
     Println "请输入空间名称"
@@ -35401,7 +35396,7 @@ SetIbmUserSpace()
     Println "  空间: $green $ibm_user_space ${normal}\n"
 }
 
-GetIbmApi()
+IbmGetApi()
 {
     while IFS= read -r line 
     do
@@ -35419,34 +35414,34 @@ GetIbmApi()
     fi
 }
 
-AddIbmUser()
+IbmAddUser()
 {
     if [ ! -s "$IBM_CONFIG" ] 
     then
         printf '{"%s":[],"%s":{"%s":[]}}' "users" "cf" "apps" > "$IBM_CONFIG"
     fi
 
-    SetIbmUserEmail
-    SetIbmUserPass
+    IbmSetUserEmail
+    IbmSetUserPass
 
-    GetIbmApi
+    IbmGetApi
 
     ibmcloud api "$ibm_api"
 
-    SetIbmUserRegion
+    IbmSetUserRegion
 
     Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
     ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region"
 
-    SetIbmUserResourceGroup
+    IbmSetUserResourceGroup
 
     ibmcloud target -g "$ibm_user_resource_group"
 
-    SetIbmUserOrg
+    IbmSetUserOrg
 
     ibmcloud target -o "$ibm_user_org"
 
-    SetIbmUserSpace
+    IbmSetUserSpace
 
     ibmcloud target -s "$ibm_user_space"
 
@@ -35469,9 +35464,9 @@ AddIbmUser()
     Println "$info 用户添加成功\n"
 }
 
-EditIbmUser()
+IbmEditUser()
 {
-    ListIbmUsers
+    IbmListUsers
 
     if [ "$ibm_users_count" -eq 0 ] 
     then
@@ -35501,27 +35496,27 @@ EditIbmUser()
         esac
     done
 
-    SetIbmUserEmail
-    SetIbmUserPass
+    IbmSetUserEmail
+    IbmSetUserPass
 
-    GetIbmApi
+    IbmGetApi
 
     ibmcloud api "$ibm_api"
 
-    SetIbmUserRegion
+    IbmSetUserRegion
 
     Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
     ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region"
 
-    SetIbmUserResourceGroup
+    IbmSetUserResourceGroup
 
     ibmcloud target -g "$ibm_user_resource_group"
 
-    SetIbmUserOrg
+    IbmSetUserOrg
 
     ibmcloud target -o "$ibm_user_org"
 
-    SetIbmUserSpace
+    IbmSetUserSpace
 
     ibmcloud target -s "$ibm_user_space"
 
@@ -35544,7 +35539,7 @@ EditIbmUser()
     Println "$info 用户修改成功\n"
 }
 
-SetIbmcfAppName()
+IbmSetCfAppName()
 {
     Println "请输入 APP 名称\n$tip 确保已经在官网建立此 CF APP, 也可以用命令 ibmcloud dev create 新建\n"
     read -p "(默认: 取消): " ibm_cf_app_name
@@ -35557,13 +35552,13 @@ SetIbmcfAppName()
     Println "  APP: $green $ibm_cf_app_name ${normal}\n"
 }
 
-AddIbmcfApp()
+IbmAddCfApp()
 {
-    LoginIbmUser
+    IbmLoginUser
 
     ibmcloud cf apps
 
-    SetIbmcfAppName
+    IbmSetCfAppName
 
     Println "$info 查询路由 ..."
 
@@ -35663,14 +35658,14 @@ AddIbmcfApp()
     Println "$info APP 添加成功\n"
 }
 
-ListIbmcfApps()
+IbmListCfApps()
 {
     if [ ! -s "$IBM_CONFIG" ] 
     then
         Println "$error 请先添加 APP\n" && exit 1
     fi
 
-    GetIbmcfApps
+    IbmGetCfApps
 
     if [ "$ibm_cf_apps_count" -gt 0 ] 
     then
@@ -35681,9 +35676,9 @@ ListIbmcfApps()
     fi
 }
 
-ViewIbmcfApp()
+IbmListCfApp()
 {
-    ListIbmcfApps
+    IbmListCfApps
 
     echo -e "选择 APP"
     while read -p "(默认: 取消): " ibm_cf_apps_num
@@ -35718,7 +35713,7 @@ ViewIbmcfApp()
         esac
     done
 
-    GetIbmUsers
+    IbmGetUsers
 
     for((i=0;i<ibm_users_count;i++));
     do
@@ -35748,7 +35743,7 @@ ViewIbmcfApp()
     Println "APP: $green$ibm_cf_app_name${normal}\n\n区域: $green$ibm_user_region${normal}\n\n用户: $green$ibm_user_email${normal}\n\n资源组: $green$ibm_user_resource_group${normal}\n\n组织：$green$ibm_user_org${normal}\n\n空间：$green$ibm_user_space${normal}\n\n路由:\n\n${ibm_cf_app_routes_list:-无}\n"
 }
 
-SetIbmcfAppRouteDomain()
+IbmSetCfAppRouteDomain()
 {
     IFS="|" read -r domain < <(ibmcloud cf curl "/v2/domains" -q \
         | $JQ_FILE -r '[.resources[].entity.name]|join("|")')
@@ -35803,7 +35798,7 @@ SetIbmcfAppRouteDomain()
     Println "  路由域名: $green $ibm_cf_app_route_domain ${normal}\n"
 }
 
-SetIbmcfAppRouteHostname()
+IbmSetCfAppRouteHostname()
 {
     Println "请输入 http 路由 hostname (子域名名称)"
     read -p "(默认: 取消): " ibm_cf_app_route_hostname
@@ -35811,7 +35806,7 @@ SetIbmcfAppRouteHostname()
     Println "  路由 hostname: $green $ibm_cf_app_route_hostname ${normal}\n"
 }
 
-SetIbmcfAppRoutePath()
+IbmSetCfAppRoutePath()
 {
     echo
     inquirer text_input "请输入 http 路由 path: " ibm_cf_app_route_path "不设置"
@@ -35821,7 +35816,7 @@ SetIbmcfAppRoutePath()
     fi
 }
 
-SetIbmcfAppRoutePort()
+IbmSetCfAppRoutePort()
 {
     Println "请输入路由指向的 APP 端口"
     while read -p "(默认: 取消): " ibm_cf_app_route_port 
@@ -35843,17 +35838,17 @@ SetIbmcfAppRoutePort()
     Println "  路由端口: $green $ibm_cf_app_route_port ${normal}\n"
 }
 
-AddIbmcfAppRoute()
+IbmAddCfAppRoute()
 {
-    ViewIbmcfApp
+    IbmListCfApp
 
     Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
     ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
     ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
 
-    SetIbmcfAppRouteDomain
-    SetIbmcfAppRouteHostname
-    SetIbmcfAppRoutePath
+    IbmSetCfAppRouteDomain
+    IbmSetCfAppRouteHostname
+    IbmSetCfAppRoutePath
 
     for((i=0;i<ibm_cf_app_routes_count;i++));
     do
@@ -35864,7 +35859,7 @@ AddIbmcfAppRoute()
         fi
     done
 
-    SetIbmcfAppRoutePort
+    IbmSetCfAppRoutePort
 
     ibmcloud cf create-route "$ibm_user_space" "$ibm_cf_app_route_domain" --hostname "$ibm_cf_app_route_hostname" --path "$ibm_cf_app_route_path"
     ibm_cf_app_route_guid=$(ibmcloud cf curl "/v2/routes?q=host:$ibm_cf_app_route_hostname" -q | $JQ_FILE -r '.resources[0].metadata.guid')
@@ -35907,9 +35902,42 @@ AddIbmcfAppRoute()
     Println "$info 路由添加成功"
 }
 
-DelIbmApp()
+IbmDelUser()
 {
-    ViewIbmcfApp
+    IbmListUsers
+
+    echo -e "选择用户"
+    while read -p "(默认: 取消): " ibm_users_num
+    do
+        case "$ibm_users_num" in
+            "")
+                Println "已取消...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$ibm_users_num" -gt 0 ] && [ "$ibm_users_num" -le "$ibm_users_count" ]
+                then
+                    ibm_users_index=$((ibm_users_num-1))
+                    ibm_user_email=${ibm_users_email[ibm_users_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+
+    jq_path='["users"]'
+    JQ delete "$IBM_CONFIG" "$ibm_users_index"
+
+    Println "$info 用户 $ibm_user_email 删除成功"
+}
+
+IbmDelApp()
+{
+    IbmListCfApp
 
     Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
     ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
@@ -35929,12 +35957,12 @@ DelIbmApp()
     jq_path='["cf","apps"]'
     JQ delete "$IBM_CONFIG" "$ibm_cf_apps_index"
 
-    Println "$info APP 删除成功"
+    Println "$info APP $ibm_cf_app_name 删除成功"
 }
 
-DelIbmAppRoute()
+IbmDelAppRoute()
 {
-    ViewIbmcfApp
+    IbmListCfApp
 
     echo -e "选择需要删除的路由"
     while read -p "(默认: 取消): " ibm_cf_app_routes_num
@@ -35996,7 +36024,7 @@ DelIbmAppRoute()
     fi
 }
 
-UpdateIbmV2rayConfig()
+IbmUpdateV2rayConfig()
 {
     if [ ! -d "$IBM_APPS_ROOT/ibm_$v2ray_name" ] 
     then
@@ -36025,7 +36053,7 @@ UpdateIbmV2rayConfig()
     fi
 }
 
-DownloadIbmV2ray()
+IbmDownloadV2ray()
 {
     if [ -d "$IBM_APPS_ROOT/ibm_$v2ray_name" ] 
     then
@@ -36060,7 +36088,7 @@ DownloadIbmV2ray()
     fi
 }
 
-UpdateIbmV2ray()
+IbmUpdateV2ray()
 {
     if [ ! -d "$IBM_APPS_ROOT/ibm_$v2ray_name" ] 
     then
@@ -36092,7 +36120,7 @@ UpdateIbmV2ray()
     fi
 }
 
-DeployIbmV2ray()
+IbmDeployV2ray()
 {
     V2rayGetInbounds
 
@@ -36118,7 +36146,7 @@ DeployIbmV2ray()
         exit 1
     fi
 
-    ViewIbmcfApp
+    IbmListCfApp
 
     Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
     ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
@@ -36239,94 +36267,94 @@ IbmV2rayMenu()
     read -p "(默认: 取消): " ibm_v2ray_num
     case $ibm_v2ray_num in
         1) 
-            DownloadIbmV2ray
+            IbmDownloadV2ray
         ;;
         2) 
-            UpdateIbmV2ray
+            IbmUpdateV2ray
         ;;
         3) 
-            UpdateIbmV2rayConfig
-            DeployIbmV2ray
+            IbmUpdateV2rayConfig
+            IbmDeployV2ray
         ;;
         4) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2rayListInboundAccounts
             V2rayListInboundAccountLink
         ;;
         5) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2rayAddInbound
         ;;
         6) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2rayAddInboundAccount
         ;;
         7) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2rayListOutboundAccounts
         ;;
         8) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2rayAddOutbound
         ;;
         9) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2rayAddOutboundAccount
         ;;
         10) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2rayListDns
         ;;
         11) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2raySetDns
         ;;
         12) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2rayListRouting
         ;;
         13) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2raySetRouting
         ;;
         14) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2rayListPolicy
         ;;
         15) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2raySetPolicy
         ;;
         16) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2rayListStats
         ;;
         17) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2rayResetStats
         ;;
         18) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2rayListReverse
         ;;
         19) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2raySetReverse
         ;;
         20) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2rayDeleteInbound
         ;;
         21) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2rayDeleteInboundAccount
         ;;
         22) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2rayDeleteOutbound
         ;;
         23) 
-            UpdateIbmV2rayConfig
+            IbmUpdateV2rayConfig
             V2rayDeleteOutboundAccount
         ;;
         *) Println "$error 请输入正确的数字 [1-23]\n"
@@ -36334,9 +36362,9 @@ IbmV2rayMenu()
     esac
 }
 
-SetIbmcfAppCron()
+IbmSetCfAppCron()
 {
-    ListIbmcfApps
+    IbmListCfApps
 
     echo -e "选择 APP"
     echo -e "$tip 多个 APP 用空格分隔, 比如 5 7 9-11\n"
@@ -36544,7 +36572,7 @@ SetIbmcfAppCron()
     Println "$info 定时重启任务设置成功\n"
 }
 
-EnableIbmcfAppCron()
+IbmEnableCfAppCron()
 {
     if crontab -l | grep -q "/usr/local/bin/ibm cron" 2> /dev/null
     then
@@ -36565,7 +36593,7 @@ EnableIbmcfAppCron()
     fi
 }
 
-DisableIbmcfAppCron()
+IbmDisableCfAppCron()
 {
     if crontab -l | grep -q "/usr/local/bin/ibm cron" 2> /dev/null
     then
@@ -36579,17 +36607,22 @@ DisableIbmcfAppCron()
     fi
 }
 
-IbmcfAppCronExec()
+IbmCfAppCronExec()
 {
     IFS="^" read -r app_name user_email path < <($JQ_FILE '.cf.cron|[([.job[].app]|join(" ")),([.job[].user_email]|join(" ")),([.job[].path]|join(" "))]|join("^")' "$IBM_CONFIG")
     app_name=${app_name#\"}
     path=${path%\"}
+
     [ -z "$app_name" ] && Println "$error 请先设置定时重启任务\n" && exit 1
+
+    IbmUpdateCfCli
+
     IFS=" " read -r -a apps_name <<< "$app_name"
     IFS=" " read -r -a apps_user_email <<< "$user_email"
     IFS=" " read -r -a apps_path <<< "$path"
 
-    GetIbmUsers
+    IbmGetUsers
+
     for((i=0;i<${#apps_name[@]};i++));
     do
         for((j=0;j<ibm_users_count;j++));
@@ -36690,7 +36723,42 @@ func main() {
     done
 }
 
-IbmcfMenu()
+IbmUninstallCfCli()
+{
+    if [[ ! -x $(command -v ibmcloud) ]] 
+    then
+        Println "$error IBM CF CLI 未安装\n"
+        exit 1
+    fi
+
+    echo
+    yn_options=( '否' '是' )
+    inquirer list_input "确定删除 IBM CF CLI" yn_options yn_option
+
+    if [ "$yn_options" == "否" ] 
+    then
+        Println "已取消...\n"
+        exit 1
+    fi
+
+    EXIT_STATUS=0
+
+    rm -Rf /usr/local/ibmcloud || EXIT_STATUS=$?
+
+    rm -f /usr/local/bin/ibmcloud || EXIT_STATUS=$?
+    rm -f /usr/local/bin/bluemix || EXIT_STATUS=$?
+    rm -f /usr/local/bin/bx || EXIT_STATUS=$?
+    rm -f /usr/local/bin/ibmcloud-analytics || true
+
+    if [ $EXIT_STATUS -eq 0 ]
+    then
+        Println "$info 删除成功\n"
+    else
+        Println "$error 发生错误\n"
+    fi
+}
+
+IbmCfMenu()
 {
     Println "  IBM CF 面板 ${normal}${red}[v$sh_ver]${normal}
 
@@ -36703,41 +36771,45 @@ IbmcfMenu()
   ${green}7.${normal} 查看 APP
   ${green}8.${normal} 添加 APP
   ${green}9.${normal} 添加 APP 路由
- ${green}10.${normal} 删除 APP
- ${green}11.${normal} 删除 APP 路由
- ${green}12.${normal} 设置 v2ray APP
- ${green}13.${normal} 设置 Xray  APP
- ${green}14.${normal} 设置 APP 定时重启
- ${green}15.${normal} 开启 APP 定时重启
- ${green}16.${normal} 关闭 APP 定时重启
- ${green}17.${normal} 更新脚本
+ ${green}10.${normal} 删除 用户
+ ${green}11.${normal} 删除 APP
+ ${green}12.${normal} 删除 APP 路由
+ ${green}13.${normal} 设置 v2ray APP
+ ${green}14.${normal} 设置 Xray  APP
+ ${green}15.${normal} 设置 APP 定时重启
+ ${green}16.${normal} 开启 APP 定时重启
+ ${green}17.${normal} 关闭 APP 定时重启
+ ${green}18.${normal} 删除 IBM CF CLI
+ ${green}19.${normal} 更新脚本
 
  $tip 输入: ibm 打开面板\n\n"
     read -p "(默认: 取消): " ibm_cf_num
     case $ibm_cf_num in
-        1) InstallIbmcfCli
+        1) IbmInstallCfCli
         ;;
-        2) UpdateIbmcfCli
+        2) IbmUpdateCfCli
         ;;
-        3) ViewIbmUser
+        3) IbmListUsers
         ;;
-        4) LoginIbmUser
+        4) IbmLoginUser
         ;;
-        5) AddIbmUser
+        5) IbmAddUser
         ;;
-        6) EditIbmUser
+        6) IbmEditUser
         ;;
-        7) ViewIbmcfApp
+        7) IbmListCfApp
         ;;
-        8) AddIbmcfApp
+        8) IbmAddCfApp
         ;;
-        9) AddIbmcfAppRoute
+        9) IbmAddCfAppRoute
         ;;
-        10) DelIbmApp
+        10) IbmDelUser
         ;;
-        11) DelIbmAppRoute
+        11) IbmDelApp
         ;;
-        12) 
+        12) IbmDelAppRoute
+        ;;
+        13) 
             v2ray_name="v2ray"
             v2ray_package_name="v2ray"
             tls_name="TLS"
@@ -36745,7 +36817,7 @@ IbmcfMenu()
             V2_CONFIG="$IBM_APPS_ROOT/ibm_v2ray/config.json"
             IbmV2rayMenu
         ;;
-        13) 
+        14) 
             v2ray_name="xray"
             v2ray_package_name="Xray"
             tls_name="XTLS"
@@ -36753,15 +36825,17 @@ IbmcfMenu()
             V2_CONFIG="$IBM_APPS_ROOT/ibm_xray/config.json"
             IbmV2rayMenu
         ;;
-        14) SetIbmcfAppCron
+        15) IbmSetCfAppCron
         ;;
-        15) EnableIbmcfAppCron
+        16) IbmEnableCfAppCron
         ;;
-        16) DisableIbmcfAppCron
+        17) IbmDisableCfAppCron
         ;;
-        17) UpdateShFile ibm
+        18) IbmUninstallCfCli
         ;;
-        *) Println "$error 请输入正确的数字 [1-17]\n"
+        19) UpdateShFile ibm
+        ;;
+        *) Println "$error 请输入正确的数字 [1-19]\n"
         ;;
     esac
 }
@@ -39005,9 +39079,9 @@ then
         IbmV2rayMenu
     elif [ "${1:-}" == "cron" ] 
     then
-        IbmcfAppCronExec
+        IbmCfAppCronExec
     else
-        IbmcfMenu
+        IbmCfMenu
     fi
     exit 0
 elif [ "$self" == "cf" ] || [ "$self" == "cf.sh" ]
