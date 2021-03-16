@@ -4,7 +4,7 @@
 # Copyright (C) 2019-2021
 # Released under BSD 3 Clause License
 #
-# 使用方法: tv -i [直播源] [-s 分片时长(秒)] [-o 输出目录名称] [-c m3u8包含的分片数] [-b 比特率] [-p m3u8文件名称] [-C] [-l] [-P http代理]
+# $i18n_usage: tv -i [直播源] [-s 分片时长(秒)] [-o 输出目录名称] [-c m3u8包含的分片数] [-b 比特率] [-p m3u8文件名称] [-C] [-l] [-P http代理]
 #     -i  直播源(支持 mpegts / hls / flv / youtube ...)
 #         可以是视频路径
 #         可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔
@@ -94,10 +94,12 @@
 #     arm 打开 Armbian 管理面板
 #
 #     pve 打开 Proxmox VE 管理面板
+#
+#     tv c en/ru/de/zh-cn $i18n_change_update_language
 
 set -euo pipefail
 
-sh_ver="1.80.2"
+sh_ver="1.80.3"
 sh_debug=0
 export LC_ALL=
 export LANG=en_US.UTF-8
@@ -168,9 +170,6 @@ red="\033[31m"
 blue="\033[34m"
 normal="\033[0m"
 dim_underlined="\033[37;4;2m"
-info="${green}[信息]${normal}"
-error="${red}[错误]${normal}"
-tip="${green}[注意]${normal}"
 
 Println()
 {
@@ -179,6 +178,33 @@ Println()
         printf '%b' "\n$1\n"
     fi
 }
+
+i18nSelect()
+{
+    sh_lang=${1:-zh-cn}
+    Println "${green}[Tip]${normal} You can always use command ${green}tv c en/ru/de/zh-cn ${normal} to change/update language !"
+    Println "Downloading ${green}$sh_lang${normal} language file...\n"
+    if wget --timeout=15 --tries=3 --no-check-certificate $FFMPEG_MIRROR_LINK/i18n_table-$sh_lang.sh -qO /usr/local/bin/tv-i18n_tmp
+    then
+        mv /usr/local/bin/tv-i18n_tmp /usr/local/bin/tv-i18n
+        Println "${green}Success!${normal}\n"
+    else
+        Println "${red}Error! Try again later!${normal}\n"
+        exit 1
+    fi
+}
+
+if [ ! -s /usr/local/bin/tv-i18n ] 
+then
+    i18nSelect zh-cn
+fi
+
+. /usr/local/bin/tv-i18n
+i18n_table
+
+info="${green}[$i18n_info]${normal}"
+error="${red}[$i18n_error]${normal}"
+tip="${green}[$i18n_tip]${normal}"
 
 [ $EUID -ne 0 ] && Println "$error 当前账号非ROOT(或没有ROOT权限),无法继续操作,请使用$green sudo su ${normal}来获取临时ROOT权限\n" && exit 1
 
@@ -38866,7 +38892,7 @@ Usage()
     while IFS= read -r line && [ "$line" ] ;do
         [ "${line:1:1}" = " " ] && usage="$usage${line:2}\n"
     done < "$0"
-    Println "$usage\n"
+    eval "printf \"\n%b\n\" \"$usage\""
     exit
 }
 
@@ -42255,6 +42281,18 @@ then
                 Println "$error v2ray install-release.sh 下载出错, 无法连接 github ?"
             fi
 
+            lang_options=( zh-cn en )
+
+            for lang in "${lang_options[@]}"
+            do
+                if curl -s -L "https://raw.githubusercontent.com/woniuzfb/iptv/master/i18n/i18n_table-$lang.sh" -o "$FFMPEG_MIRROR_ROOT/i18n_table-$lang.sh_tmp"
+                then
+                    mv "$FFMPEG_MIRROR_ROOT/i18n_table-$lang.sh_tmp" "$FFMPEG_MIRROR_ROOT/i18n_table-$lang.sh"
+                else
+                    Println "$error i18n_table-$lang.sh 下载出错, 无法连接 github ?"
+                fi
+            done
+
             exit 0
         ;;
         "ts") 
@@ -42384,6 +42422,10 @@ then
         ;;
         "debug")
             sed -i "0,/sh_debug=.*/s//sh_debug=${2:-1}/" "$SH_FILE"
+            exit 0
+        ;;
+        "c")
+            i18nSelect "${2:-}"
             exit 0
         ;;
         *)

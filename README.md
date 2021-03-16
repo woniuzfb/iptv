@@ -1,5 +1,9 @@
 #
 
+``` bash
+tv c en/zh-cn ... # change/update language
+```
+
 ## 目录
 
 - [一键管理 nginx 脚本](#一键管理-nginx-脚本)
