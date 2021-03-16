@@ -7,6 +7,7 @@
 - [一键管理 xray 脚本](#一键管理-xray-脚本)
 - [一键管理 v2ray 脚本](#一键管理-v2ray-脚本)
 - [一键管理 armbian 脚本](#一键管理-armbian-脚本)
+- [一键管理 proxmox ve 脚本](#一键管理-proxmox-ve-脚本)
 - [一键管理 ibm cloud foundry 脚本](#一键管理-ibm-cloud-foundry-脚本)
 - [一键管理 cloudflare partner,workers 脚本](#一键管理-cloudflare-partnerworkers-脚本)
 - [一键管理 FFmpeg 脚本](#一键管理-ffmpeg-脚本)
@@ -83,6 +84,19 @@ arm # 打开 Armbian 管理面板
 - xray/v2ray core 切换
 - 一键配置透明代理(直连国内, 代理国外), 配置文件保存/切换
 - NAT类型检测
+
+---
+
+## 一键管理 proxmox ve 脚本
+
+``` bash
+wget -q https://git.io/pve.sh && bash pve.sh
+
+pve # 打开 Proxmox VE 管理面板
+
+```
+
+- nbfc
 
 ---
 

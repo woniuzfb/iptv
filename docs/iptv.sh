@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# A [ FFmpeg / nginx / openresty / xray / v2ray / cloudflare partner,workers / ibm cf / armbian ] Wrapper Script By MTimer
+# A [ FFmpeg / nginx / openresty / xray / v2ray / cloudflare partner,workers / ibm cf / armbian / proxmox ] Wrapper Script By MTimer
 # Copyright (C) 2019-2021
 # Released under BSD 3 Clause License
 #
@@ -59,18 +59,18 @@
 #
 # 快捷键:
 #     tv 打开 HLS 管理面板
-#     tv f 打开 FLV 管理面板
-#     tv v 打开 VIP 面板
-#     tv e 手动修改 channels.json
-#     tv m 开启监控
-#        tv m l [行数] 查看监控日志
-#        tv m s 关闭监控
-#     tv l 列出所有开启的频道
-#     tv s 节目表管理面板
-#     tv 4g 打开 4gtv 频道管理面板
-#     tv d 添加演示频道
-#     tv FFmpeg 自建 FFmpeg 镜像
-#     tv debug 1/0 开启/关闭 调试
+#         tv l 列出所有开启的频道
+#         tv d 添加演示频道
+#         tv e 手动修改 channels.json
+#       tv f 打开 FLV 管理面板
+#       tv v 打开 VIP 面板
+#       tv m 开启监控
+#         tv m l [行数] 查看监控日志
+#         tv m s 关闭监控
+#       tv s 节目表管理面板
+#       tv 4g 打开 4gtv 频道管理面板
+#       tv FFmpeg 自建 FFmpeg 镜像
+#       tv debug 1/0 开启/关闭 调试
 #
 #     cx 打开 xtream codes 账号/频道管理面板
 #
@@ -92,10 +92,12 @@
 #        ibm x  打开 ibm xray app 管理面板
 #
 #     arm 打开 Armbian 管理面板
+#
+#     pve 打开 Proxmox VE 管理面板
 
 set -euo pipefail
 
-sh_ver="1.80.1"
+sh_ver="1.80.2"
 sh_debug=0
 export LC_ALL=
 export LANG=en_US.UTF-8
@@ -106,6 +108,7 @@ OR_FILE="/usr/local/bin/or"
 NX_FILE="/usr/local/bin/nx"
 XC_FILE="/usr/local/bin/cx"
 ARM_FILE="/usr/local/bin/arm"
+PVE_FILE="/usr/local/bin/pve"
 IPTV_ROOT="/usr/local/iptv"
 JQ_FILE="$IPTV_ROOT/jq"
 CHANNELS_FILE="$IPTV_ROOT/channels.json"
@@ -1856,6 +1859,7 @@ CheckShFile()
     [ ! -e "$X_FILE" ] && ln -s "$SH_FILE" "$X_FILE"
     [ ! -e "$XC_FILE" ] && ln -s "$SH_FILE" "$XC_FILE"
     [ ! -e "$ARM_FILE" ] && ln -s "$SH_FILE" "$ARM_FILE"
+    [ ! -e "$PVE_FILE" ] && ln -s "$SH_FILE" "$PVE_FILE"
 
     return 0
 }
@@ -2982,7 +2986,7 @@ Uninstall()
     if [[ $uninstall_yn == "是" ]]
     then
         MonitorStop
-        DisableVip
+        VipDisable
         DisableCloudflareWorkersMonitor
         if [ -e "$NODE_ROOT/index.js" ] 
         then
@@ -19855,9 +19859,8 @@ ListXtreamCodes()
                             then
                                 continue
                             fi
-                        else
-                            account=$mac_address
                         fi
+                        account=$mac_address
                     else
                         ip=${BASH_REMATCH[1]}
                         domain=${BASH_REMATCH[2]}
@@ -19894,6 +19897,7 @@ ListXtreamCodes()
                     username=${BASH_REMATCH[2]}
                     password=${BASH_REMATCH[3]}
                 fi
+
                 ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
                 [ -z "$ip" ] && continue
                 account="$username:$password"
@@ -19906,12 +19910,16 @@ ListXtreamCodes()
                     continue
                 fi
 
+                domain=$stb_domain
                 mac_address=${BASH_REMATCH[1]}
                 VerifyXtreamCodesMac 2> /dev/null
+
                 if [ "$to_continue" -eq 1 ] 
                 then
                     continue
                 fi
+
+                account=$mac_address
             elif [ -n "${stb_domain:-}" ] && [[ $line =~ (([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})) ]] 
             then
                 domain=$stb_domain
@@ -19921,6 +19929,7 @@ ListXtreamCodes()
                 then
                     continue
                 fi
+                account=$mac_address
             else
                 continue
             fi
@@ -21495,7 +21504,7 @@ NginxInstall()
         systemctl restart cron >/dev/null 2>&1
         apt-get -y install debconf-utils >/dev/null 2>&1
         echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
-        apt-get -y install software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext build-essential >/dev/null 2>&1
+        apt-get -y install software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip build-essential gettext >/dev/null 2>&1
     fi
 
     echo -n "...40%..."
@@ -36735,7 +36744,7 @@ IbmUninstallCfCli()
     yn_options=( '否' '是' )
     inquirer list_input "确定删除 IBM CF CLI" yn_options yn_option
 
-    if [ "$yn_options" == "否" ] 
+    if [ "$yn_option" == "否" ] 
     then
         Println "已取消...\n"
         exit 1
@@ -36840,7 +36849,7 @@ IbmCfMenu()
     esac
 }
 
-SetVipHostIp()
+VipSetHostIp()
 {
     Println "请输入 VIP 频道所在服务器 IP/域名"
     read -p "(默认: 取消): " vip_host_ip
@@ -36848,7 +36857,7 @@ SetVipHostIp()
     Println "  VIP 服务器 IP/域名: $green $vip_host_ip ${normal}\n"
 }
 
-SetVipHostPort()
+VipSetHostPort()
 {
     Println "请输入 VIP 频道所在服务器端口"
     read -p "(默认: 取消): " vip_host_port
@@ -36856,7 +36865,7 @@ SetVipHostPort()
     Println "  VIP 服务器端口: $green $vip_host_port ${normal}\n"
 }
 
-SetVipHostSeed()
+VipSetHostSeed()
 {
     Println "请输入 VIP 频道所在服务器的 seed"
     read -p "(默认: 取消): " vip_host_seed
@@ -36864,7 +36873,7 @@ SetVipHostSeed()
     Println "  VIP 服务器 seed: $green $vip_host_seed ${normal}\n"
 }
 
-SetVipHostToken()
+VipSetHostToken()
 {
     echo
     inquirer text_input "请输入 VIP 频道所在服务器的 token: " vip_host_token "不设置"
@@ -36874,7 +36883,7 @@ SetVipHostToken()
     fi
 }
 
-SetVipHostStatus()
+VipSetHostStatus()
 {
     echo
     yn_options=( '是' '否' )
@@ -36891,13 +36900,13 @@ SetVipHostStatus()
     Println "  VIP 服务器状态: $vip_host_status_text\n"
 }
 
-AddVipHost()
+VipAddHost()
 {
-    SetVipHostIp
-    SetVipHostPort
-    SetVipHostSeed
-    SetVipHostToken
-    SetVipHostStatus
+    VipSetHostIp
+    VipSetHostPort
+    VipSetHostSeed
+    VipSetHostToken
+    VipSetHostStatus
 
     if [ ! -s "$VIP_FILE" ] 
     then
@@ -36923,9 +36932,9 @@ AddVipHost()
     Println "$info VIP 服务器添加成功\n"
 }
 
-EditVipHost()
+VipEditHost()
 {
-    ListVipHosts
+    VipListHosts
     echo -e "选择 VIP 服务器"
     while read -p "(默认: 取消): " vip_hosts_num
     do
@@ -36974,35 +36983,35 @@ EditVipHost()
     case $edit_vip_host_num in
         1) 
             Println "原 IP/域名: $red$vip_host_ip${normal}"
-            SetVipHostIp
+            VipSetHostIp
             jq_path='["hosts",'"$vip_hosts_index"',"ip"]'
             JQ update "$VIP_FILE" "$vip_host_ip"
             Println "$info IP/域名 修改成功\n"
         ;;
         2) 
             Println "原端口: $red$vip_host_port${normal}"
-            SetVipHostPort
+            VipSetHostPort
             jq_path='["hosts",'"$vip_hosts_index"',"port"]'
             JQ update "$VIP_FILE" "$vip_host_port" number
             Println "$info 端口 修改成功\n"
         ;;
         3) 
             Println "原 seed: $red$vip_host_seed${normal}"
-            SetVipHostSeed
+            VipSetHostSeed
             jq_path='["hosts",'"$vip_hosts_index"',"seed"]'
             JQ update "$VIP_FILE" "$vip_host_seed"
             Println "$info seed 修改成功\n"
         ;;
         4) 
             Println "原 token: $red$vip_host_token${normal}"
-            SetVipHostToken
+            VipSetHostToken
             jq_path='["hosts",'"$vip_hosts_index"',"token"]'
             JQ update "$VIP_FILE" "$vip_host_token"
             Println "$info token 修改成功\n"
         ;;
         5) 
             Println "原状态: $vip_host_status_text"
-            SetVipHostStatus
+            VipSetHostStatus
             jq_path='["hosts",'"$vip_hosts_index"',"status"]'
             JQ update "$VIP_FILE" "$vip_host_status_yn"
             Println "$info 状态修改成功\n"
@@ -37012,7 +37021,7 @@ EditVipHost()
     esac
 }
 
-GetVipHosts()
+VipGetHosts()
 {
     vip_hosts_list=""
     vip_hosts_count=0
@@ -37050,14 +37059,14 @@ GetVipHosts()
     return 0
 }
 
-ListVipHosts()
+VipListHosts()
 {
     if [ ! -s "$VIP_FILE" ] 
     then
         Println "$error 请先添加 VIP 服务器\n" && exit 1
     fi
 
-    GetVipHosts
+    VipGetHosts
 
     if [ "$vip_hosts_count" -gt 0 ] 
     then
@@ -37069,12 +37078,12 @@ ListVipHosts()
 
 ViewVipHost()
 {
-    ListVipChannels
+    VipListChannels
 }
 
-DelVipHost()
+VipDelHost()
 {
-    ListVipHosts
+    VipListHosts
     echo -e "选择 VIP 服务器"
     while read -p "(默认: 取消): " vip_hosts_num
     do
@@ -37105,7 +37114,7 @@ DelVipHost()
     Println "服务器 ${green}[ $vip_host_ip ]${normal} 删除成功\n"
 }
 
-SetVipUserIp()
+VipSetUserIp()
 {
     Println "请输入用户的 IP"
     read -p "(默认: 本机 IP): " vip_user_ip
@@ -37117,7 +37126,7 @@ SetVipUserIp()
     Println "  用户 IP: $green $vip_user_ip ${normal}\n"
 }
 
-SetVipUserLicense()
+VipSetUserLicense()
 {
     Println "请输入用户的授权码"
     read -p "(默认: 自动生成): " vip_user_license
@@ -37137,7 +37146,7 @@ SetVipUserLicense()
     Println "  用户 license: $green $vip_user_license ${normal}\n"
 }
 
-SetVipUserSum()
+VipSetUserSum()
 {
     Println "选择验证类型
 
@@ -37198,7 +37207,7 @@ SetVipUserSum()
     Println "  验证类型: $green $vip_user_sum ${normal}\n  到期天数: $green ${vip_user_expire_days:-无} ${normal}\n"
 }
 
-SetVipUserName()
+VipSetUserName()
 {
     Println "请输入用户名称(可以是中文)"
     read -p "(默认: 随机): " vip_user_name
@@ -37216,17 +37225,17 @@ SetVipUserName()
     Println "  用户名称: $green $vip_user_name ${normal}\n"
 }
 
-AddVipUser()
+VipAddUser()
 {
     if [ ! -s "$VIP_FILE" ] 
     then
         printf '{"%s":{},"%s":[],"%s":[]}' "config" "users" "hosts" > "$VIP_FILE"
     fi
 
-    SetVipUserIp
-    SetVipUserLicense
-    SetVipUserSum
-    SetVipUserName
+    VipSetUserIp
+    VipSetUserLicense
+    VipSetUserSum
+    VipSetUserName
 
     new_user=$(
     $JQ_FILE -n --arg ip "$vip_user_ip" --arg license "$vip_user_license" \
@@ -37247,9 +37256,9 @@ AddVipUser()
     Println "$info 添加成功\n"
 }
 
-EditVipUser()
+VipEditUser()
 {
-    ListVipUsers
+    VipListUsers
 
     while read -p "请选择用户: " vip_users_num
     do
@@ -37297,28 +37306,28 @@ EditVipUser()
     case $edit_vip_user_num in
         1) 
             Println "原用户名: $red$vip_user_name${normal}"
-            SetVipUserName
+            VipSetUserName
             jq_path='["users",'"$vip_users_index"',"name"]'
             JQ update "$VIP_FILE" "$vip_user_name"
             Println "$info 用户名修改成功\n"
         ;;
         2) 
             Println "原 IP: $red$vip_user_ip${normal}"
-            SetVipUserIp
+            VipSetUserIp
             jq_path='["users",'"$vip_users_index"',"ip"]'
             JQ update "$VIP_FILE" "$vip_user_ip"
             Println "$info IP 修改成功\n"
         ;;
         3) 
             Println "原授权码: $red$vip_user_license${normal}"
-            SetVipUserLicense
+            VipSetUserLicense
             jq_path='["users",'"$vip_users_index"',"license"]'
             JQ update "$VIP_FILE" "$vip_user_license"
             Println "$info 授权码修改成功\n"
         ;;
         4) 
             Println "原验证类型: $red$vip_user_sum${normal}\n原到期日: $red$vip_user_expire_text${normal}"
-            SetVipUserSum
+            VipSetUserSum
             jq_path='["users",'"$vip_users_index"',"sum"]'
             JQ update "$VIP_FILE" "$vip_user_sum"
             jq_path='["users",'"$vip_users_index"',"expire"]'
@@ -37330,9 +37339,9 @@ EditVipUser()
     esac
 }
 
-GetVipUsers()
+VipGetUsers()
 {
-    GetVipConfig
+    VipGetConfig
     vip_users_list=""
     vip_users_count=0
     vip_users_ip=()
@@ -37367,14 +37376,14 @@ GetVipUsers()
     return 0
 }
 
-ListVipUsers()
+VipListUsers()
 {
     if [ ! -s "$VIP_FILE" ] 
     then
         Println "$error 请先添加 VIP 服务器\n" && exit 1
     fi
 
-    GetVipUsers
+    VipGetUsers
 
     if [ "$vip_users_count" -gt 0 ] 
     then
@@ -37384,14 +37393,14 @@ ListVipUsers()
     fi
 }
 
-ViewVipUser()
+VipListUser()
 {
-    ListVipUsers
+    VipListUsers
 }
 
-DelVipUser()
+VipDelUser()
 {
-    ListVipUsers
+    VipListUsers
 
     while read -p "请选择用户: " vip_users_num
     do
@@ -37426,7 +37435,7 @@ DelVipUser()
     Println "$tip 同一用户2分钟内不能使用不同的授权码\n"
 }
 
-SetVipChannelId()
+VipSetChannelId()
 {
     Println "请输入频道 ID, 同时也是目录名称"
     read -p "(默认: 取消): " vip_channel_id
@@ -37439,7 +37448,7 @@ SetVipChannelId()
     fi
 }
 
-SetVipChannelName()
+VipSetChannelName()
 {
     Println "请输入频道名称(可以是中文)"
     read -p "(默认: 取消): " vip_channel_name
@@ -37447,7 +37456,7 @@ SetVipChannelName()
     Println "  VIP 频道名称: $green $vip_channel_name ${normal}\n"
 }
 
-SetVipChannelEpgId()
+VipSetChannelEpgId()
 {
     echo
     inquirer text_input "请输入频道 epg id: " vip_channel_epg_id "不设置"
@@ -37457,7 +37466,7 @@ SetVipChannelEpgId()
     fi
 }
 
-AddVipChannel()
+VipSetChannel()
 {
     echo
     add_vip_channel_options=( '选择频道' '手动输入频道' )
@@ -37576,7 +37585,7 @@ AddVipChannel()
                     vip_channels_num_arr=("${new_array[@]}")
                     unset new_array
 
-                    GetVipHosts
+                    VipGetHosts
                     skip_hosts=""
 
                     for vip_channels_num in "${vip_channels_num_arr[@]}"
@@ -37612,8 +37621,8 @@ AddVipChannel()
                             then
                                 vip_host_ip=$vip_channel_host_ip
                                 vip_host_port=$vip_channel_host_port
-                                SetVipHostSeed
-                                SetVipHostToken
+                                VipSetHostSeed
+                                VipSetHostToken
                                 vip_host_status_yn="on"
 
                                 if [ ! -s "$VIP_FILE" ] 
@@ -37638,7 +37647,7 @@ AddVipChannel()
                                 jq_path='["hosts"]'
                                 JQ add "$VIP_FILE" "$new_host"
                                 Println "$info $vip_channel_host_ip:$vip_channel_host_port 服务器添加成功\n"
-                                GetVipHosts
+                                VipGetHosts
                                 i=$((vip_hosts_count-1))
                             else
                                 skip_hosts="$skip_hosts$vip_channel_host_ip:$vip_channel_host_port "
@@ -37671,7 +37680,7 @@ AddVipChannel()
         exit
     fi
 
-    ListVipHosts
+    VipListHosts
     echo -e "选择 VIP 服务器"
     while read -p "(默认: 取消): " vip_hosts_num
     do
@@ -37723,9 +37732,9 @@ AddVipChannel()
         JQ add "$VIP_FILE" "$new_channels"
         Println "$info 批量添加成功\n"
     else
-        SetVipChannelId
-        SetVipChannelName
-        SetVipChannelEpgId
+        VipSetChannelId
+        VipSetChannelName
+        VipSetChannelEpgId
         new_channel=$(
         $JQ_FILE -n --arg id "$vip_channel_id" --arg name "$vip_channel_name" \
             --arg epg_id "$vip_channel_epg_id" \
@@ -37742,9 +37751,9 @@ AddVipChannel()
     fi
 }
 
-EditVipChannel()
+VipEditChannel()
 {
-    ListVipChannels
+    VipListChannels
     echo -e "$tip 多个频道用空格分隔, 比如 5 7 9-11"
     while read -p "请选择频道: " vip_channels_num
     do
@@ -37817,21 +37826,21 @@ EditVipChannel()
                     case $edit_vip_channel_num in
                         1) 
                             Println "原频道 ID: $red$vip_channel_id${normal}"
-                            SetVipChannelId
+                            VipSetChannelId
                             jq_path='["hosts",'"$vip_hosts_index"',"channels",'"$vip_channels_index"',"id"]'
                             JQ update "$VIP_FILE" "$vip_channel_id"
                             Println "$info 频道 ID 修改成功\n"
                         ;;
                         2) 
                             Println "原频道名称: $red$vip_channel_name${normal}"
-                            SetVipChannelName
+                            VipSetChannelName
                             jq_path='["hosts",'"$vip_hosts_index"',"channels",'"$vip_channels_index"',"name"]'
                             JQ update "$VIP_FILE" "$vip_channel_name"
                             Println "$info 频道名称修改成功\n"
                         ;;
                         3) 
                             Println "原频道 epg: $red${vip_channel_epg_id:-无}${normal}"
-                            SetVipChannelEpgId
+                            VipSetChannelEpgId
                             jq_path='["hosts",'"$vip_hosts_index"',"channels",'"$vip_channels_index"',"epg_id"]'
                             JQ update "$VIP_FILE" "$vip_channel_epg_id"
                             Println "$info 频道 epg 修改成功\n"
@@ -37846,9 +37855,9 @@ EditVipChannel()
     done
 }
 
-ListVipChannels()
+VipListChannels()
 {
-    ListVipHosts
+    VipListHosts
     while read -p "选择 VIP 服务器: " vip_hosts_num
     do
         case "$vip_hosts_num" in
@@ -37910,7 +37919,7 @@ ListVipChannels()
     fi
 }
 
-GetVipStreamLink()
+VipGetStreamLink()
 {
     seed=$vip_host_seed
     tid=$vip_user_license
@@ -37955,9 +37964,9 @@ GetVipStreamLink()
     esac
 }
 
-ViewVipChannel()
+VipViewChannel()
 {
-    ListVipChannels
+    VipListChannels
 
     echo -e "$tip 多个频道用空格分隔, 比如 5 7 9-11"
     while read -p "请选择频道: " vip_channels_num
@@ -38016,7 +38025,7 @@ ViewVipChannel()
         esac
     done
 
-    ListVipUsers
+    VipListUsers
 
     while read -p "请选择用户: " vip_users_num
     do
@@ -38046,7 +38055,7 @@ ViewVipChannel()
 
     if [ -z "${vip_public_host:-}" ] 
     then
-        ConfigVip
+        VipConfig
     fi
 
     for vip_channels_num in "${vip_channels_num_arr[@]}"
@@ -38056,7 +38065,7 @@ ViewVipChannel()
         vip_channel_name=${vip_channels_name[vip_channels_index]}
         vip_channel_epg_id=${vip_channels_epg_id[vip_channels_index]}
 
-        GetVipStreamLink
+        VipGetStreamLink
 
         if [ -n "${vip_public_host:-}" ] 
         then
@@ -38067,9 +38076,9 @@ ViewVipChannel()
     done
 }
 
-DelVipChannel()
+VipDelChannel()
 {
-    ListVipChannels
+    VipListChannels
 
     echo -e " $green$((vip_channels_count+1)).${normal}\r\033[7C全部删除\n"
 
@@ -38110,7 +38119,7 @@ DelVipChannel()
     Println "频道 ${green}[ $vip_channel_name ]${normal} 删除成功\n"
 }
 
-GetVipConfig()
+VipGetConfig()
 {
     while IFS=" " read -r key value
     do
@@ -38124,7 +38133,7 @@ GetVipConfig()
     return 0
 }
 
-ConfigVipPublicRoot()
+VipSetPublicRoot()
 {
     Println "请输入公开目录, 比如 /usr/local/nginx/html 或 /usr/local/openresty/nginx/html"
     read -p "(默认: 不公开): " vip_public_root
@@ -38136,7 +38145,7 @@ ConfigVipPublicRoot()
     Println "  VIP 公开目录: $green ${vip_public_root:-无} ${normal}\n"
 }
 
-ConfigVipPublicHost()
+VipSetPublicHost()
 {
     Println "$tip 比如 http://localhost"
     inquirer text_input "请输入公开目录的 域名 或者 IP 网址: " vip_public_host "不设置"
@@ -38147,16 +38156,16 @@ ConfigVipPublicHost()
     JQ update "$VIP_FILE" '(.config|.public_host)="'"$vip_public_host"'"'
 }
 
-ConfigVip()
+VipConfig()
 {
-    ConfigVipPublicRoot
+    VipSetPublicRoot
     if [ -n "$vip_public_root" ] 
     then
-        ConfigVipPublicHost
+        VipSetPublicHost
     fi
 }
 
-ProcessVipLists()
+VipProcessLists()
 {
     [ ! -d "$VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/${vip_channels_id[k]}" ] && mkdir -p "$VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/${vip_channels_id[k]}"
     printf '#EXTM3U\n#EXT-X-STREAM-INF:PROGRAM-ID=%s,BANDWIDTH=1500002\n%s' \
@@ -38195,7 +38204,7 @@ ProcessVipLists()
     fi
 }
 
-GetSchedules()
+VipGetSchedules()
 {
     GetDefault
     if [ -n "$d_schedule_file" ] && [ -s "$d_schedule_file" ]
@@ -38212,7 +38221,7 @@ GetSchedules()
     fi
 }
 
-MonitorVip()
+VipMonitor()
 {
     trap '' HUP INT
     trap 'MonitorError $LINENO' ERR
@@ -38228,7 +38237,7 @@ MonitorVip()
             printf -v now '%(%s)T' -1
             never=$((now+86400*720))
 
-            GetSchedules
+            VipGetSchedules
             ct2=$(date +%s%3N)
             clear=$(date --utc -d 'tomorrow 00:00:10' +%s)
 
@@ -38243,7 +38252,7 @@ MonitorVip()
                 then
                     if [ -e "$VIP_USERS_ROOT/epg.update" ] 
                     then
-                        GetSchedules
+                        VipGetSchedules
                     fi
                     epg_update=1
                     for((i=0;i<vip_users_count;i++));
@@ -38330,7 +38339,7 @@ MonitorVip()
                                             do
                                                 program_id=$((program_id+1))
                                                 stream_link="http://$vip_host_ip:$vip_host_port/${vip_channels_id[k]}/playlist.m3u8?tid=$tid&ssum=${vip_channels_ssum[k]}&st2=$st2&ss=$ss&ct2=$ct2&cs=${vip_channels_cs[k]}"
-                                                ProcessVipLists
+                                                VipProcessLists
                                             done
                                         ;;
                                         "tsum") 
@@ -38345,7 +38354,7 @@ MonitorVip()
                                             do
                                                 program_id=$((program_id+1))
                                                 stream_link="http://$vip_host_ip:$vip_host_port/${vip_channels_id[k]}/playlist.m3u8?tid=$tid&ct=$ct&tsum=${vip_channels_tsum[k]}&st2=$st2&ss=$ss&ct2=$ct2&cs=${vip_channels_cs[k]}"
-                                                ProcessVipLists
+                                                VipProcessLists
                                             done
                                         ;;
                                         "isum") 
@@ -38359,7 +38368,7 @@ MonitorVip()
                                             do
                                                 program_id=$((program_id+1))
                                                 stream_link="http://$vip_host_ip:$vip_host_port/${vip_channels_id[k]}/playlist.m3u8?tid=$tid&isum=${vip_channels_isum[k]}&st2=$st2&ss=$ss&ct2=$ct2&cs=${vip_channels_cs[k]}"
-                                                ProcessVipLists
+                                                VipProcessLists
                                             done
                                         ;;
                                     esac
@@ -38390,8 +38399,8 @@ MonitorVip()
                 vip_users_license_old=("${vip_users_license[@]}")
                 vip_hosts_channel_id_old=("${vip_hosts_channel_id[@]}")
 
-                GetVipHosts
-                GetVipUsers
+                VipGetHosts
+                VipGetUsers
 
                 for vip_user_license_old in ${vip_users_license_old[@]+"${vip_users_license_old[@]}"}
                 do
@@ -38436,7 +38445,7 @@ MonitorVip()
     } 205<"$pid_file"
 }
 
-EnableVip()
+VipEnable()
 {
     # deprecated
     if [ -s "/tmp/vip.pid" ] && kill -0 "$(< /tmp/vip.pid)" 2> /dev/null
@@ -38454,11 +38463,11 @@ EnableVip()
         Println "$error 请先添加 VIP 服务器\n" && exit 1
     fi
 
-    GetVipHosts
+    VipGetHosts
 
     if [ "$vip_hosts_count" -gt 0 ] 
     then
-        GetVipUsers
+        VipGetUsers
 
         if [ "$vip_users_count" -gt 0 ] 
         then
@@ -38483,11 +38492,11 @@ EnableVip()
             fi
             if [ -z "${vip_public_root:-}" ] 
             then
-                ConfigVip
+                VipConfig
             fi
             [ -n "$vip_public_root" ] && ln -sfT "$VIP_USERS_ROOT" "$vip_public_root/vip"
 
-            ( MonitorVip ) > /dev/null 2>> "$MONITOR_LOG" &
+            ( VipMonitor ) > /dev/null 2>> "$MONITOR_LOG" &
 
             Println "$info VIP 开启成功\n"
         else
@@ -38498,7 +38507,7 @@ EnableVip()
     fi
 }
 
-DisableVip()
+VipDisable()
 {
     # deprecated
     if [ -s "/tmp/vip.pid" ] 
@@ -38540,13 +38549,13 @@ DisableVip()
     fi
 }
 
-ViewVipUserChannel()
+VipListUserChannel()
 {
     if [ ! -s "$VIP_FILE" ] 
     then
         Println "$error 请先输入授权码, 加微信 woniuzfb 或 tg @ woniuzfb\n"
     else
-        GetVipUsers
+        VipGetUsers
         printf -v now '%(%s)T' -1
         vip_users_list=""
         for((i=0;i<vip_users_count;i++));
@@ -38580,7 +38589,7 @@ ViewVipUserChannel()
     fi
 }
 
-VerifyVipLicense()
+VipVerifyLicense()
 {
     Println "请输入授权码"
     read -p "(默认: 取消): " vip_user_license
@@ -38607,7 +38616,7 @@ VerifyVipLicense()
     fi
 }
 
-VipMenuUser()
+VipUserMenu()
 {
     Println "  VIP 面板
 
@@ -38627,9 +38636,9 @@ VipMenuUser()
             color=$blue
             Menu
         ;;
-        1) ViewVipUserChannel
+        1) VipListUserChannel
         ;;
-        2) VerifyVipLicense
+        2) VipVerifyLicense
         ;;
         *) Println "$error 请输入正确的数字 [1-2]\n"
         ;;
@@ -38641,7 +38650,7 @@ VipMenu()
     [ ! -d "$IPTV_ROOT" ] && Println "$error 请先输入 tv 安装 !\n" && exit 1
     if [ ! -f "$IPTV_ROOT/VIP" ] 
     then
-        VipMenuUser
+        VipUserMenu
         return 0
     fi
     Println "  VIP 面板
@@ -38674,37 +38683,106 @@ VipMenu()
             color=$blue
             Menu
         ;;
-        1) ViewVipUser
+        1) VipListUser
         ;;
-        2) AddVipUser
+        2) VipAddUser
         ;;
-        3) EditVipUser
+        3) VipEditUser
         ;;
-        4) ViewVipChannel
+        4) VipViewChannel
         ;;
-        5) AddVipChannel
+        5) VipSetChannel
         ;;
-        6) EditVipChannel
+        6) VipEditChannel
         ;;
         7) ViewVipHost
         ;;
-        8) AddVipHost
+        8) VipAddHost
         ;;
-        9) EditVipHost
+        9) VipEditHost
         ;;
-        10) DelVipUser
+        10) VipDelUser
         ;;
-        11) DelVipChannel
+        11) VipDelChannel
         ;;
-        12) DelVipHost
+        12) VipDelHost
         ;;
-        13) EnableVip
+        13) VipEnable
         ;;
-        14) DisableVip
+        14) VipDisable
         ;;
         *) Println "$error 请输入正确的数字 [1-14]\n"
         ;;
     esac
+}
+
+AptSetSources()
+{
+    echo
+    apt_sources_options=( '国内' '国外' )
+    inquirer list_input "选择源" apt_sources_options apt_sources
+    if [[ $apt_sources == "国内" ]]
+    then
+        sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
+        sed -i 's/ftp.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
+        sed -i 's|security.debian.org|mirrors.ustc.edu.cn/debian-security|g' /etc/apt/sources.list
+        if [ -f "/etc/apt/sources.list.d/armbian.list" ]
+        then
+            sed -i 's|http[s]*://apt.armbian.com|http://mirrors.nju.edu.cn/armbian|g' /etc/apt/sources.list.d/armbian.list
+        fi
+    else
+        sed -i 's/mirrors.ustc.edu.cn/deb.debian.org/g' /etc/apt/sources.list
+        sed -i 's|mirrors.ustc.edu.cn/debian-security|security.debian.org|g' /etc/apt/sources.list
+        if [ -f "/etc/apt/sources.list.d/armbian.list" ]
+        then
+            sed -i 's|http://mirrors.nju.edu.cn/armbian|https://apt.armbian.com|g' /etc/apt/sources.list.d/armbian.list
+        fi
+    fi
+    Println "$info 源更改成功\n"
+}
+
+VimConfig()
+{
+    if [[ ! -x $(command -v vim) ]] 
+    then
+        Println "$info 安装 vim ..."
+        apt-get update
+        apt-get -y install vim
+    fi
+
+    if [ -e ~/.vimrc ] 
+    then
+        echo
+        yn_options=( '否' '是' )
+        inquirer list_input "将安装 vim-plug 并覆盖 ~/.vimrc , 是否继续" yn_options continue_yn
+        if [[ $continue_yn == "否" ]] 
+        then
+            Println "已取消 ...\n"
+            exit 1
+        fi
+    fi
+
+    if curl -s -fLo ~/.vim/autoload/plug.vim --create-dirs "$FFMPEG_MIRROR_LINK/vim-plug.vim"
+    then
+        printf '%s' "
+call plug#begin('~/.vim/plugged')
+Plug 'preservim/nerdcommenter'
+Plug 'ryanpcmcquen/fix-vim-pasting'
+call plug#end()
+
+set number
+set mouse=a
+set tabstop=2
+set shiftwidth=2
+set expandtab
+
+autocmd BufRead,BufNewFile *.conf setfiletype conf
+filetype indent off
+" > ~/.vimrc
+        Println "$info vimrc 设置完成, 请在 vim 下执行 PlugInstall\n"
+    else
+        Println "$error 无法连接服务器, 请稍后再试\n"
+    fi
 }
 
 Menu()
@@ -39973,26 +40051,7 @@ then
 
     case $armbian_num in
         1) 
-            echo
-            apt_sources_options=( '国内' '国外' )
-            inquirer list_input "选择源" apt_sources_options apt_sources
-            if [[ $apt_sources == "国内" ]]
-            then
-                sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
-                sed -i 's|security.debian.org|mirrors.ustc.edu.cn/debian-security|g' /etc/apt/sources.list
-                if [ -f "/etc/apt/sources.list.d/armbian.list" ]
-                then
-                    sed -i 's|http[s]*://apt.armbian.com|http://mirrors.nju.edu.cn/armbian|g' /etc/apt/sources.list.d/armbian.list
-                fi
-            else
-                sed -i 's/mirrors.ustc.edu.cn/deb.debian.org/g' /etc/apt/sources.list
-                sed -i 's|mirrors.ustc.edu.cn/debian-security|security.debian.org|g' /etc/apt/sources.list
-                if [ -f "/etc/apt/sources.list.d/armbian.list" ]
-                then
-                    sed -i 's|http://mirrors.nju.edu.cn/armbian|https://apt.armbian.com|g' /etc/apt/sources.list.d/armbian.list
-                fi
-            fi
-            Println "$info 源更改成功\n"
+            AptSetSources
         ;;
         2) 
             Println "$tip 适用于 斐讯 n1, apt upgrade 后需要重新修复"
@@ -40680,7 +40739,7 @@ config interface 'lan'
             if [ "$core" == "xray-core" ] 
             then
                 echo
-                xray_options=( '最新' '1.3.1' '1.3.0' '1.2.4' '1.2.3' )
+                xray_options=( '最新' '1.4.0' '1.3.1' '1.3.0' '1.2.4' '1.2.3' )
                 inquirer list_input "选择 xray 版本" xray_options xray_ver
                 if [ "$xray_ver" == "最新" ] && ! xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/openwrt-xray.json" | $JQ_FILE -r '.tag_name')
                 then
@@ -40872,39 +40931,7 @@ config interface 'lan'
             Println "$info docker 镜像加速设置成功\n"
         ;;
         11)
-            if [ -e ~/.vimrc ] 
-            then
-                echo
-                yn_options=( '否' '是' )
-                inquirer list_input "将安装 vim-plug 并覆盖 ~/.vimrc , 是否继续" yn_options continue_yn
-                if [[ $continue_yn == "否" ]] 
-                then
-                    Println "已取消 ...\n"
-                    exit 1
-                fi
-            fi
-
-            if curl -s -fLo ~/.vim/autoload/plug.vim --create-dirs "$FFMPEG_MIRROR_LINK/vim-plug.vim"
-            then
-                printf '%s' "
-call plug#begin('~/.vim/plugged')
-Plug 'preservim/nerdcommenter'
-Plug 'ryanpcmcquen/fix-vim-pasting'
-call plug#end()
-
-set number
-set mouse=a
-set tabstop=2
-set shiftwidth=2
-set expandtab
-
-autocmd BufRead,BufNewFile *.conf setfiletype conf
-filetype indent off
-" > ~/.vimrc
-                Println "$info vimrc 设置完成, 请在 vim 下执行 PlugInstall\n"
-            else
-                Println "$error 无法连接服务器, 请稍后再试\n"
-            fi
+            VimConfig
         ;;
         12)
             DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy)
@@ -40969,6 +40996,271 @@ filetype indent off
         *) Println "$error 请输入正确的数字 [1-14]\n"
         ;;
     esac
+    exit 0
+elif [ "$self" == "pve" ] || [ "$self" == "pve.sh" ]
+then
+    if [[ ! -x $(command -v pveum) ]] 
+    then
+        Println "$error 不是 Proxmox 系统\n"
+        exit 1
+    fi
+
+    CheckShFile
+
+    JQ_FILE="/usr/local/bin/jq"
+
+    Println "  Proxmox VE 管理面板 ${normal}${red}[v$sh_ver]${normal}
+
+  ${green}1.${normal} 设置 apt 源
+  ${green}2.${normal} 设置 vimrc
+  ${green}3.${normal} 设置 显示器
+————————————
+  ${green}4.${normal} 查看 温度 / 风扇
+  ${green}5.${normal} 设置 风扇
+————————————
+  ${green}6.${normal} 更新脚本
+
+"
+    read -p "请输入数字 [1-6]: " pve_num
+
+    case $pve_num in
+        1) 
+            echo
+            apt_options=( '切换 非订阅源/订阅 源' '切换 debian 国内/国外 源' )
+            inquirer list_input_index "选择操作" apt_options apt_option_index
+
+            . /etc/os-release
+
+            if [ "$apt_option_index" -eq 0 ] 
+            then
+                echo
+                pve_sources_options=( '非订阅源' '订阅源' )
+                inquirer list_input "选择 PVE 源" pve_sources_options pve_sources_option
+
+                if [ "$pve_sources_option" == "非订阅源" ] 
+                then
+                    if [ -f /etc/apt/sources.list.d/pve-no-subscription.list ] 
+                    then
+                        sed -i "s_#deb http://download.proxmox.com/debian/pve $VERSION_CODENAME pve-no-subscription_deb http://download.proxmox.com/debian/pve $VERSION_CODENAME pve-no-subscription_" /etc/apt/sources.list.d/pve-no-subscription.list
+                    elif grep -q "pve-no-subscription" < /etc/apt/sources.list 
+                    then
+                        sed -i "s_#deb http://download.proxmox.com/debian/pve $VERSION_CODENAME pve-no-subscription_deb http://download.proxmox.com/debian/pve $VERSION_CODENAME pve-no-subscription_" /etc/apt/sources.list
+                    else
+                        echo "deb http://download.proxmox.com/debian/pve $VERSION_CODENAME pve-no-subscription" > /etc/apt/sources.list.d/pve-no-subscription.list
+                    fi
+                else
+                    if [ -f /etc/apt/sources.list.d/pve-enterprise.list ] 
+                    then
+                        sed -i "s_#deb https://enterprise.proxmox.com/debian/pve $VERSION_CODENAME pve-enterprise_deb https://enterprise.proxmox.com/debian/pve $VERSION_CODENAME pve-enterprise_" /etc/apt/sources.list.d/pve-enterprise.list
+                    elif grep -q "pve-enterprise" < /etc/apt/sources.list 
+                    then
+                        sed -i "s_#deb https://enterprise.proxmox.com/debian/pve $VERSION_CODENAME pve-enterprise_deb https://enterprise.proxmox.com/debian/pve $VERSION_CODENAME pve-enterprise_" /etc/apt/sources.list
+                    else
+                        echo "deb https://enterprise.proxmox.com/debian/pve $VERSION_CODENAME pve-enterprise" > /etc/apt/sources.list.d/pve-enterprise.list
+                    fi
+                fi
+
+                Println "$info 切换成功\n"
+                exit 0
+            fi
+
+            AptSetSources
+        ;;
+        2) 
+            VimConfig
+        ;;
+        3) 
+            echo
+            monitor_options=( '关闭显示器' '取消关闭显示器' )
+            inquirer list_input "选择操作" monitor_options monitor_option
+
+            if [ "$monitor_option" == "关闭显示器" ] 
+            then
+                echo
+                inquirer text_input "输入多少秒后关闭显示器" console_blank_secs 120
+
+                sed -i 's_GRUB_CMDLINE_LINUX=""_GRUB_CMDLINE_LINUX="consoleblank='"$console_blank_secs"'"_' /etc/default/grub
+            else
+                sed -i '0,/GRUB_CMDLINE_LINUX=.*/s//GRUB_CMDLINE_LINUX=""/' /etc/default/grub
+            fi
+
+            update-grub
+
+            Println "$info 设置成功\n"
+        ;;
+        4) 
+            if [[ ! -x $(command -v sensors) ]] 
+            then
+                Println "$info 安装 lm-sensors..."
+                apt-get update
+                apt-get -y install lm-sensors
+            fi
+
+            sensors
+
+            if [ -d /opt/nbfc/ ] 
+            then
+                cd /opt/nbfc
+                mono nbfc.exe status --all
+            fi
+        ;;
+        5)
+            if [[ ! -x $(command -v mono) ]] 
+            then
+                echo
+                yn_options=( '否' '是' )
+                inquirer list_input "需要安装 mono, 耗时会很长, 是否继续" yn_options yn_option
+
+                if [ "$yn_option" == "否" ] 
+                then
+                    Println "已取消...\n"
+                    exit 1
+                fi
+
+                . /etc/os-release
+
+                apt-get update
+                apt-get -y install apt-transport-https dirmngr gnupg ca-certificates
+                apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF
+                echo "deb https://download.mono-project.com/repo/debian stable-$VERSION_CODENAME main" | tee /etc/apt/sources.list.d/mono-official-stable.list
+                apt-get update
+                apt-get -y install mono-complete git
+            fi
+
+            if [ ! -d /opt/nbfc/ ] 
+            then
+                Println "$info 安装 nbfc..."
+
+                if [[ ! -x $(command -v git) ]] 
+                then
+                    Println "$info 安装 git..."
+                    apt-get update
+                    apt-get -y install git
+                fi
+
+                git clone https://github.com/hirschmann/nbfc.git /tmp/nbfc
+                cd /tmp/nbfc
+                ./build.sh
+
+                mkdir /opt/nbfc
+                cp -r /tmp/nbfc/Linux/bin/Release/* /opt/nbfc/
+                cp /tmp/nbfc/Linux/{nbfc.service,nbfc-sleep.service} /etc/systemd/system/
+                systemctl enable nbfc --now || true
+            fi
+
+            echo
+            nbfc_options=( '查看状态' '风扇切换为手动控制' '设置风扇转速' '搜索配置' '应用配置' )
+            inquirer list_input "选择操作" nbfc_options nbfc_option
+
+            cd /opt/nbfc
+
+            if [ "$nbfc_option" == "查看状态" ] 
+            then
+                mono nbfc.exe status --all
+            elif [ "$nbfc_option" == "风扇切换为手动控制" ]
+            then
+                echo
+                inquirer text_input "输入寄存器地址, 比如 0x93: " register_address "取消"
+
+                if [ "$register_address" == "取消" ] 
+                then
+                    Println "已取消...\n"
+                    exit 1
+                fi
+
+                echo
+                inquirer text_input "输入值, 比如 0x14: " register_value "取消"
+
+                if [ "$register_address" == "取消" ] 
+                then
+                    Println "已取消...\n"
+                    exit 1
+                fi
+
+                mono ec-probe.exe write $register_address $register_value
+
+                if [ -f /opt/nbfc/nbfcservice.sh ] 
+                then
+                    sed -i '/mono \/opt\/nbfc\/ec-probe.exe write /d' /opt/nbfc/nbfcservice.sh
+                    sed -i '/start/a \\t    mono \/opt\/nbfc\/ec-probe.exe write '"$register_address"' '"$register_value"'' /opt/nbfc/nbfcservice.sh
+                fi
+
+                Println "$tip 不一定写入成功, 请自行检查\n"
+            elif [ "$nbfc_option" == "设置风扇转速" ] 
+            then
+                Println "$tip 请确保风扇处于手动控制状态"
+                echo
+                fan_options=( '输入寄存器值' '输入配置百分比' )
+                inquirer list_input "选择控制方式" fan_options fan_option
+
+                if [ "$fan_option" == "输入寄存器值" ] 
+                then
+                    echo
+                    inquirer text_input "输入寄存器地址, 比如 0x94: " register_address "取消"
+
+                    if [ "$register_address" == "取消" ] 
+                    then
+                        Println "已取消...\n"
+                        exit 1
+                    fi
+
+                    echo
+                    inquirer text_input "输入值, 比如 0x99: " register_value "取消"
+
+                    if [ "$register_address" == "取消" ] 
+                    then
+                        Println "已取消...\n"
+                        exit 1
+                    fi
+
+                    mono ec-probe.exe write $register_address $register_value
+
+                    Println "$tip 不一定写入成功, 请自行检查\n"
+                else
+                    Println "$tip 请确保已经正确应用配置文件"
+                    echo
+                    inquirer text_input "输入风扇序号(从 0 开始): " fan_index 0
+
+                    echo
+                    inquirer text_input "输入转速百分比: " fan_speed "取消"
+
+                    if [ "$fan_speed" == "取消" ] 
+                    then
+                        Println "已取消...\n"
+                        exit 1
+                    fi
+
+                    mono nbfc.exe set -f $fan_index -s $fan_speed
+
+                    Println "$tip 操作成功\n"
+                fi
+            elif [ "$nbfc_option" == "搜索配置" ] 
+            then
+                mono nbfc.exe config -r
+            elif [ "$nbfc_option" == "应用配置" ]
+            then
+                echo
+                inquirer text_input "输入配置名称, 比如: Acer Aspire 5745G" config_name "取消"
+
+                if [ "$config_name" == "取消" ] 
+                then
+                    Println "已取消...\n"
+                    exit 1
+                fi
+
+                mono nbfc.exe config --apply "$config_name"
+                mono nbfc.exe start
+
+                Println "$info 配置已生效\n"
+            fi
+        ;;
+        6) 
+            UpdateShFile PVE
+        ;;
+        *) Println "$error 请输入正确的数字 [1-6]\n"
+        ;;
+    esac
+
     exit 0
 fi
 
@@ -41788,7 +42080,7 @@ then
                 Println "$error openwrt-xray 下载出错, 无法连接 github ?"
             fi
 
-            IFS=" " read -r luci_app_xray_ver i18n_name < <(curl -s -m 30 "https://api.github.com/repos/woniuzfb/luci-app-xray/releases/latest" | $JQ_FILE -r '[.tag_name,.assets[1].name]|join(" ")')
+            IFS=" " read -r luci_app_xray_ver xray_i18n_name < <(curl -s -m 30 "https://api.github.com/repos/woniuzfb/luci-app-xray/releases/latest" | $JQ_FILE -r '[.tag_name,.assets[1].name]|join(" ")')
             if [ -n "${luci_app_xray_ver:-}" ]
             then
                 luci_app_xray_ver=${luci_app_xray_ver#*v}
@@ -41799,12 +42091,12 @@ then
                 else
                     Println "$error luci-app-v2ray_${luci_app_xray_ver}_all.ipk 下载出错, 无法连接 github ?"
                 fi
-                Println "$info 下载 $i18n_name ..."
-                if curl -s -L "https://github.com/woniuzfb/luci-app-xray/releases/download/v$luci_app_xray_ver/$i18n_name" -o "$FFMPEG_MIRROR_ROOT/${i18n_name}_tmp"
+                Println "$info 下载 $xray_i18n_name ..."
+                if curl -s -L "https://github.com/woniuzfb/luci-app-xray/releases/download/v$luci_app_xray_ver/$xray_i18n_name" -o "$FFMPEG_MIRROR_ROOT/${xray_i18n_name}_tmp"
                 then
-                    mv "$FFMPEG_MIRROR_ROOT/${i18n_name}_tmp" "$FFMPEG_MIRROR_ROOT/luci-i18n-v2ray-zh-cn_${luci_app_xray_ver}_all.ipk"
+                    mv "$FFMPEG_MIRROR_ROOT/${xray_i18n_name}_tmp" "$FFMPEG_MIRROR_ROOT/luci-i18n-v2ray-zh-cn_${luci_app_xray_ver}_all.ipk"
                 else
-                    Println "$error $i18n_name 下载出错, 无法连接 github ?"
+                    Println "$error $xray_i18n_name 下载出错, 无法连接 github ?"
                 fi
             else
                 Println "$error luci-app-xray 下载出错, 无法连接 github ?"
