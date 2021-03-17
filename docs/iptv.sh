@@ -99,7 +99,7 @@
 
 set -euo pipefail
 
-sh_ver="1.80.3"
+sh_ver="1.80.4"
 sh_debug=0
 export LC_ALL=
 export LANG=en_US.UTF-8
@@ -3108,6 +3108,8 @@ Update()
     InstallJQ > /dev/null
 
     UpdateShFile
+
+    i18nSelect "$sh_lang" > /dev/null
 
     ln -sf "$IPTV_ROOT"/ffmpeg-git-*/ff* /usr/local/bin/
     Println "脚本已更新为最新版本 [ $green$sh_new_ver${normal} ] ! (输入: tv 使用)\n" && exit 0
@@ -21113,7 +21115,7 @@ ViewXtreamCodesChnls()
                                         ViewChannelInfo
                                         change_options=( '添加' '替换' )
                                         echo
-                                        inquirer list_input "选择修改频道 [ $chnl_channel_name ] 直播源" change_options change_option
+                                        inquirer list_input "如何修改频道 [ $chnl_channel_name ]" change_options change_option
                                         if [[ $change_option == "添加" ]] 
                                         then
                                             JQ update "$CHANNELS_FILE" '(.channels[]|select(.pid=='"$chnl_pid"')|.stream_link)="'"$chnl_stream_links $stream_links"'"'
@@ -38811,6 +38813,77 @@ filetype indent off
     fi
 }
 
+PveGetVMs()
+{
+    pve_vm_count=0
+
+    IFS=" " read -r m_id m_name m_status m_mem m_boot_disk m_pid < <(qm list | awk '$1 {a=a $1",";b=b $2",";c=c $3",";d=d $4",";e=e $5",";f=f $6","} END {print a,b,c,d,e,f}')
+
+    if [ -n "${m_id#*,}" ] 
+    then
+        IFS="," read -r -a pve_vm_ids <<< "${m_id#*,}"
+        IFS="," read -r -a pve_vm_name <<< "${m_name#*,}"
+        IFS="," read -r -a pve_vm_status <<< "${m_status#*,}"
+        IFS="," read -r -a pve_vm_mem <<< "${m_mem#*,}"
+        IFS="," read -r -a pve_vm_boot_disk <<< "${m_boot_disk#*,}"
+        IFS="," read -r -a pve_vm_pid <<< "${m_pid#*,}"
+
+        pve_vm_count=${#pve_vm_ids[@]}
+    fi
+}
+
+PveListVMs()
+{
+    PveGetVMs
+
+    if [ "$pve_vm_count" -eq 0 ] 
+    then
+        Println "$error 没有虚拟机\n"
+        return 0
+    fi
+
+    pve_vm_list=""
+
+    for((i=0;i<pve_vm_count;i++));
+    do
+        pve_vm_list="$pve_vm_list ${green}$((i+1)).${normal}\r\033[6CID: ${green}${pve_vm_ids[i]}${normal} 名称: ${green}${pve_vm_name[i]}${normal}\n\r\033[6C状态: ${green}${pve_vm_status[i]}${normal} 内存: ${green}${pve_vm_mem[i]} MB${normal}\n\r\033[6C启动盘: ${green}${pve_vm_boot_disk[i]} GB${normal} pid: ${green}${pve_vm_pid[i]}${normal}\n\n"
+    done
+
+    Println "$pve_vm_list"
+}
+
+PveSelectVM()
+{
+    echo "选择 VM"
+    while read -p "(默认: 取消): " pve_vm_index
+    do
+        case "$pve_vm_index" in
+            "")
+                Println "已取消...\n"
+                exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error 请输入正确的序号\n"
+            ;;
+            *)
+                if [ "$pve_vm_index" -gt 0 ] && [ "$pve_vm_index" -le "$pve_vm_count" ]
+                then
+                    pve_vm_index=$((pve_vm_index-1))
+                    vm_id=${pve_vm_ids[pve_vm_index]}
+                    vm_name=${pve_vm_name[pve_vm_index]}
+                    vm_status=${pve_vm_status[pve_vm_index]}
+                    vm_mem=${pve_vm_mem[pve_vm_index]}
+                    vm_boot_disk=${pve_vm_boot_disk[pve_vm_index]}
+                    vm_pid=${pve_vm_pid[pve_vm_index]}
+                    break
+                else
+                    Println "$error 请输入正确的序号\n"
+                fi
+            ;;
+        esac
+    done
+}
+
 Menu()
 {
     color=${color:-$green}
@@ -40869,16 +40942,18 @@ config interface 'lan'
                     then
                         config_time=${BASH_REMATCH[1]}
                         config_name="-${BASH_REMATCH[2]}"
+                        config_name_list=${BASH_REMATCH[2]}
                     elif [[ ${file##*/} =~ ^config-(.+)$ ]] 
                     then
                         config_time=${BASH_REMATCH[1]}
                         config_name=""
+                        config_name_list=""
                     fi
                     configs_time+=("$config_time")
                     configs_name+=("$config_name")
                     configs_count=$((configs_count+1))
                     printf -v config_date '%(%Y-%m-%d %H:%M:%S)T' "$config_time"
-                    configs_list="$configs_list $configs_count.\r\033[6C名称: ${green}${config_name:-无}${normal} 日期: ${green}$config_date${normal}\n\n"
+                    configs_list="$configs_list $configs_count.\r\033[6C名称: ${green}${config_name_list:-无}${normal} 日期: ${green}$config_date${normal}\n\n"
                 done
 
                 Println "$configs_list"
@@ -40910,12 +40985,12 @@ config interface 'lan'
                 docker cp "$HOME/openwrt_saved/openwrt-v2ray/config-$config_time$config_name" openwrt:/etc/config/v2ray
                 docker cp "$HOME/openwrt_saved/openwrt-v2ray/directlist-$config_time$config_name" openwrt:/etc/v2ray/directlist.txt
                 docker cp "$HOME/openwrt_saved/openwrt-v2ray/proxylist-$config_time$config_name" openwrt:/etc/v2ray/proxylist.txt
-                Println "$info 配置复原成功\n"
+                Println "$info 配置恢复成功\n"
             else
                 docker exec -it -e V2RAY_CONFIG_NAME="$config_file" -e MIRROR="$FFMPEG_MIRROR_LINK" openwrt /bin/ash -c '
                 /etc/init.d/v2ray stop 2> /dev/null || true
                 wget -O /etc/config/v2ray $MIRROR/v2ray-configs/$V2RAY_CONFIG_NAME
-                for ip in $(nslookup dns.alidns.com | grep -v "127.0.0.11" | grep -oE "[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?")
+                for ip in $(nslookup dns.alidns.com | grep -v "127.0.0.1" | grep -v "127.0.0.11" | grep -oE "[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?")
                 do
                     if ! grep -q "$ip" < /etc/v2ray/directlist.txt
                     then
@@ -41043,11 +41118,19 @@ then
 ————————————
   ${green}4.${normal} 查看 温度 / 风扇
   ${green}5.${normal} 设置 风扇
+  ${green}6.${normal} 安装 升级 dnscrypt
+  ${green}7.${normal} 安装 qemu-guest-agent
+  ${green}8.${normal} 安装 openwrt-v2ray
 ————————————
-  ${green}6.${normal} 更新脚本
+  ${green}9.${normal} 切换 openwrt 语言
+ ${green}10.${normal} 切换 v2ray/xray core
+ ${green}11.${normal} 切换 配置文件
+————————————
+ ${green}12.${normal} 开关 edns0
+ ${green}13.${normal} 更新脚本
 
 "
-    read -p "请输入数字 [1-6]: " pve_num
+    read -p "请输入数字 [1-13]: " pve_num
 
     case $pve_num in
         1) 
@@ -41281,12 +41364,393 @@ then
             fi
         ;;
         6) 
+            CheckRelease lite
+            InstallJQ
+
+            if dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
+            then
+                DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy)
+                dnscrypt_version_old=${DNSCRYPT_ROOT##*-}
+
+                echo
+                inquirer text_input "输入本机静态 ip : " proxmox_ip "取消"
+                if [ "$proxmox_ip" == "取消" ]
+                then
+                    Println "已取消 ...\n"
+                    exit 1
+                fi
+
+                if [[ $dnscrypt_version_old == "*" ]]
+                then
+                    Println "$info 下载 dnscrypt proxy ..."
+                    if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz_tmp
+                    then
+                        Println "$info 设置 dnscrypt proxy ..."
+                        cd ~
+                        mv dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz
+                        tar zxf dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz
+                        mv linux-x86_64 dnscrypt-$dnscrypt_version
+                        chown -R $USER:$USER dnscrypt-$dnscrypt_version
+                        cd dnscrypt-$dnscrypt_version
+                        cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
+
+                        sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*listen_addresses = \['127.0.0.1:53']/s//listen_addresses = ['127.0.0.1:53', '$proxmox_ip:53']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
+                        sed -i "0,/.*fallback_resolvers =.*/s//fallback_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
+
+                        for((i=0;i<3;i++));
+                        do
+                            if ./dnscrypt-proxy -check > /dev/null 
+                            then
+                                break
+                            elif [[ $i -eq 2 ]] 
+                            then
+                                cd ~
+                                rm -rf dnscrypt-$dnscrypt_version
+                                Println "$error 发生错误, 请重试\n"
+                                exit 1
+                            fi
+                        done
+
+                        apt-get -y --purge remove resolvconf > /dev/null
+
+                        systemctl stop systemd-resolved
+                        systemctl disable systemd-resolved
+                        ./dnscrypt-proxy -service install > /dev/null
+                        ./dnscrypt-proxy -service start > /dev/null
+
+                        Println "$info dnscrypt proxy 安装配置成功\n"
+
+                        # echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
+                    else
+                        Println "$error dnscrypt proxy 下载失败, 请重试\n"
+                        exit 1
+                    fi
+                elif [[ $dnscrypt_version_old != "$dnscrypt_version" ]] 
+                then
+                    if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz_tmp
+                    then
+                        cd ~/dnscrypt-$dnscrypt_version_old
+                        ./dnscrypt-proxy -service stop > /dev/null
+                        ./dnscrypt-proxy -service uninstall > /dev/null
+                        cd ~
+                        mv dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz
+                        tar zxf dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz
+                        mv linux-x86_64 dnscrypt-$dnscrypt_version
+                        cd dnscrypt-$dnscrypt_version
+                        cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
+                        sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*listen_addresses = \['127.0.0.1:53']/s//listen_addresses = ['127.0.0.1:53', '$proxmox_ip:53']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
+                        sed -i "0,/.*fallback_resolvers =.*/s//fallback_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
+                        ./dnscrypt-proxy -service install > /dev/null
+                        ./dnscrypt-proxy -service start > /dev/null
+                        Println "$info dnscrypt proxy 升级成功\n"
+                    else
+                        Println "$error dnscrypt proxy 下载失败, 请重试\n"
+                        exit 1
+                    fi
+                else
+                    Println "$error dnscrypt proxy 已经是最新\n"
+                fi
+                if ! grep -q "options edns0" < /etc/resolv.conf
+                then
+                    echo "options edns0" >> /etc/resolv.conf
+                    systemctl restart dnscrypt-proxy
+                fi
+            else
+                Println "$error 无法连接服务器, 请稍后再试\n"
+            fi
+        ;;
+        7)
+            PveListVMs
+
+            PveSelectVM
+
+            if [ "$vm_status" != "running" ] 
+            then
+                Println "$error 请先启动虚拟机 $vm_name\n"
+                exit 1
+            fi
+
+            qm set $vm_id --agent 1
+
+            Println "$info 请在虚拟机内执行 opkg update; opkg install qemu-ga 后关闭虚拟机几秒后再打开\n"
+        ;;
+        8)
+            CheckRelease lite
+            InstallJQ
+
+            Println "$tip 请确保已经安装 qemu-guest-agent\n"
+
+            PveListVMs
+
+            PveSelectVM
+
+            if [ "$vm_status" != "running" ] 
+            then
+                Println "$error 请先启动虚拟机 $vm_name\n"
+                exit 1
+            fi
+
+            echo
+            qm guest exec $vm_id wget "$FFMPEG_MIRROR_LINK/pve/snippets/openwrt-v2ray-install.sh" -- "-O" "/root/openwrt-v2ray-install.sh" | $JQ_FILE -r '."err-data" // ."out-data"'
+
+            Println "$info 安装 openwrt-v2ray, 请稍等 ..."
+
+            echo
+            qm guest exec $vm_id --timeout 0 ash "/root/openwrt-v2ray-install.sh" | $JQ_FILE -r '."err-data" // ."out-data"'
+
+            echo
+        ;;
+        9)
+            CheckRelease lite
+            InstallJQ
+
+            Println "$tip 请确保已经安装 qemu-guest-agent\n"
+
+            PveListVMs
+
+            PveSelectVM
+
+            echo
+            lang_options=( '简体中文' '繁体中文' '英文' )
+            inquirer list_input "选择界面语言" lang_options lang
+
+            if [ "$lang" == "简体中文" ] 
+            then
+                lang="zh-cn"
+            elif [ "$lang" == "繁体中文" ] 
+            then
+                lang="zh-tw"
+            else
+                lang="en"
+            fi
+
+            Println "$info 设置 openwrt 语言, 请稍等 ..."
+
+            echo
+            qm guest exec $vm_id wget "$FFMPEG_MIRROR_LINK/pve/snippets/openwrt-language-install.sh" -- "-O" "/root/openwrt-language-install.sh" | $JQ_FILE -r '."err-data" // ."out-data"'
+
+            echo
+            qm guest exec $vm_id --timeout 0 ash "/root/openwrt-language-install.sh" "$lang" | $JQ_FILE -r '."err-data" // ."out-data"'
+
+            Println "$info 界面语言切换成功\n"
+        ;;
+        10)
+            CheckRelease lite
+            InstallJQ
+
+            Println "$tip 请确保已经安装 qemu-guest-agent\n"
+
+            PveListVMs
+
+            PveSelectVM
+
+            Println "$tip 请确保已经安装过 openwrt-v2ray"
+            core_options=( 'xray-core' 'v2ray-core' )
+            inquirer list_input "选择切换目标" core_options core
+            if [ "$core" == "xray-core" ] 
+            then
+                echo
+                xray_options=( '最新' '1.4.0' '1.3.1' '1.3.0' '1.2.4' '1.2.3' )
+                inquirer list_input "选择 xray 版本" xray_options xray_ver
+                if [ "$xray_ver" == "最新" ] && ! xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/openwrt-xray.json" | $JQ_FILE -r '.tag_name')
+                then
+                    Println "$error 无法连接服务器, 请稍后再试\n"
+                    exit 1
+                else
+                    xray_ver=${xray_ver#*v}
+                    if [[ ! $xray_ver =~ - ]] 
+                    then
+                        xray_ver="${xray_ver}-1"
+                    fi
+                fi
+                if ! luci_app_xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/luci-app-xray.json" | $JQ_FILE -r '.tag_name')
+                then
+                    Println "$error 无法连接服务器, 请稍后再试\n"
+                    exit 1
+                else
+                    luci_app_xray_ver=${luci_app_xray_ver#*v}
+                fi
+
+                Println "$info 切换 openwrt-xray, 请稍等 ..."
+
+                echo
+                qm guest exec $vm_id wget "$FFMPEG_MIRROR_LINK/pve/snippets/openwrt-xray-install.sh" -- "-O" "/root/openwrt-xray-install.sh" | $JQ_FILE -r '."err-data" // ."out-data"'
+
+                echo
+                qm guest exec $vm_id --timeout 0 ash "/root/openwrt-xray-install.sh" "$xray_ver" "$luci_app_xray_ver" | $JQ_FILE -r '."err-data" // ."out-data"'
+            else
+                Println "$info 切换 openwrt-v2ray, 请稍等 ..."
+
+                echo
+                qm guest exec $vm_id /etc/init.d/v2ray "stop" | $JQ_FILE -r '."err-data" // ."out-data"'
+
+                echo
+                qm guest exec $vm_id sed -- "-i" "s_/usr/bin/xray_/usr/bin/v2ray_" "/etc/config/v2ray" | $JQ_FILE -r '."err-data" // ."out-data"'
+
+                echo
+                qm guest exec $vm_id sed -- "-i" "/option asset_location/d" "/etc/config/v2ray" | $JQ_FILE -r '."err-data" // ."out-data"'
+
+                echo
+                qm guest exec $vm_id /etc/init.d/v2ray "start" | $JQ_FILE -r '."err-data" // ."out-data"'
+            fi
+
+            Println "$info 切换成功\n"
+        ;;
+        11)
+            CheckRelease lite
+            InstallJQ
+
+            Println "$tip 请确保已经安装 qemu-guest-agent\n"
+
+            PveListVMs
+
+            PveSelectVM
+
+            Println "$tip 请确保已经安装过 openwrt-v2ray"
+            inquirer text_input "输入当前配置保存名称: " config_name "不设置"
+            if [ "$config_name" == "不设置" ] 
+            then
+                config_name=""
+            else
+                config_name="-$config_name"
+            fi
+
+            Println "$tip 备份 openwrt-v2ray, 请稍等 ..."
+            qm guest exec $vm_id wget "$FFMPEG_MIRROR_LINK/pve/snippets/openwrt-config-install.sh" -- "-O" "/root/openwrt-config-install.sh" | $JQ_FILE -r '."err-data" // ."out-data"'
+
+            if [ $(qm guest exec $vm_id ash "/root/openwrt-config-install.sh" | $JQ_FILE -r '."err-data" // ."out-data"') == "no" ]
+            then
+                Println "$error 请先安装 openwrt-v2ray\n"
+                exit 1
+            fi
+
+            printf -v timestamp '%(%s)T' -1
+
+            echo
+            qm guest exec $vm_id ash "/root/openwrt-config-install.sh" -- "save" "$timestamp" "$config_name" > /dev/null
+
+            Println "$tip 所有配置文件都是透明代理, 直连国内, 代理国外, 需要自行修改出站连接后使用"
+            config_file_options=( 'v2ray-1' 'xray-1' '复原配置' )
+            inquirer list_input "选择配置文件: " config_file_options config_file
+            if [ "$config_file" == "复原配置" ] 
+            then
+                echo
+                files=($(qm guest exec $vm_id ash "/root/openwrt-config-install.sh" -- "list" | $JQ_FILE -r '."err-data" // ."out-data"'))
+
+                if [ "${files[0]}" == "no" ] 
+                then
+                    Println "$error 没有保存的配置\n"
+                    exit 1
+                fi
+
+                configs_list=""
+                configs_count=0
+                configs_time=()
+                configs_name=()
+                for file in "${files[@]}"
+                do
+                    if [[ ${file##*/} =~ ^config-(.+)-(.+)$ ]] 
+                    then
+                        config_time=${BASH_REMATCH[1]}
+                        config_name="-${BASH_REMATCH[2]}"
+                        config_name_list=${BASH_REMATCH[2]}
+                    elif [[ ${file##*/} =~ ^config-(.+)$ ]] 
+                    then
+                        config_time=${BASH_REMATCH[1]}
+                        config_name=""
+                        config_name_list=""
+                    fi
+                    configs_time+=("$config_time")
+                    configs_name+=("$config_name")
+                    configs_count=$((configs_count+1))
+                    printf -v config_date '%(%Y-%m-%d %H:%M:%S)T' "$config_time"
+                    configs_list="$configs_list $configs_count.\r\033[6C名称: ${green}${config_name_list:-无}${normal} 日期: ${green}$config_date${normal}\n\n"
+                done
+
+                Println "$configs_list"
+
+                echo "选择配置"
+                while read -p "(默认: 取消): " config_num
+                do
+                    case "$config_num" in
+                        "")
+                            Println "已取消...\n" && exit 1
+                        ;;
+                        *[!0-9]*)
+                            Println "$error 请输入正确的序号\n"
+                        ;;
+                        *)
+                            if [ "$config_num" -gt 0 ] && [ "$config_num" -le $configs_count ]
+                            then
+                                configs_index=$((config_num-1))
+                                config_time=${configs_time[configs_index]}
+                                config_name=${configs_name[configs_index]}
+                                break
+                            else
+                                Println "$error 请输入正确的序号\n"
+                            fi
+                        ;;
+                    esac
+                done
+
+                echo
+                qm guest exec $vm_id ash "/root/openwrt-config-install.sh" -- "restore" "$config_time" "$config_name" | $JQ_FILE -r '."err-data" // ."out-data"'
+                Println "$info 配置恢复成功\n"
+            else
+                Println "$info 切换配置中, 请稍等 ..."
+                qm guest exec $vm_id ash "/root/openwrt-config-install.sh" -- "switch" "$config_file" | $JQ_FILE -r '."err-data" // ."out-data"'
+                Println "$info 配置切换成功\n"
+            fi
+        ;;
+        12)
+            DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy)
+            dnscrypt_version=${DNSCRYPT_ROOT##*-}
+            if [[ $dnscrypt_version == "*" ]] 
+            then
+                Println "$error 请先安装 dnscrypt proxy\n"
+                exit 1
+            fi
+            echo
+            yn_options=( '否' '是' )
+            if grep -q "options edns0" < /etc/resolv.conf
+            then
+                inquirer list_input "是否关闭 edns0" yn_options toggle_edns0_yn
+
+                if [[ $toggle_edns0_yn == "是" ]]
+                then
+                    sed -i '/options edns0/d' /etc/resolv.conf
+                    sed -i "0,/.*require_dnssec = .*/s//require_dnssec = false/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                    systemctl restart dnscrypt-proxy
+                    Println "$info edns0 已关闭\n"
+                else
+                    Println "已取消...\n" && exit 1
+                fi
+            else
+                inquirer list_input "是否开启 edns0" yn_options toggle_edns0_yn
+
+                if [[ $toggle_edns0_yn == "是" ]]
+                then
+                    echo "options edns0" >> /etc/resolv.conf
+                    sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                    systemctl restart dnscrypt-proxy
+                    Println "$info edns0 已开启\n"
+                else
+                    Println "已取消...\n" && exit 1
+                fi
+            fi
+        ;;
+        13) 
             UpdateShFile PVE
         ;;
-        *) Println "$error 请输入正确的数字 [1-6]\n"
+        *) Println "$error 请输入正确的数字 [1-13]\n"
         ;;
     esac
-
     exit 0
 fi
 
@@ -42088,7 +42552,7 @@ then
                     xray_package_ver="$xray_ver"
                     xray_ver=${xray_ver%-*}
                 fi
-                xray_archs=( 'aarch64_generic' 'aarch64_cortex-a53' )
+                xray_archs=( 'x86_64' 'aarch64_generic' 'aarch64_cortex-a53' )
                 for arch in "${xray_archs[@]}"
                 do
                     if [ ! -e "$FFMPEG_MIRROR_ROOT/xray_${xray_package_ver}_$arch.ipk" ] 
@@ -42132,13 +42596,24 @@ then
             then
                 if [ ! -e "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_ver.tar.gz" ]
                 then
-                    Println "$info 下载 dnscrypt proxy ..."
+                    Println "$info 下载 dnscrypt proxy arm64 ..."
                     mkdir -p "$FFMPEG_MIRROR_ROOT/dnscrypt/"
                     if curl -s -L "https://github.com/DNSCrypt/dnscrypt-proxy/releases/download/$dnscrypt_ver/dnscrypt-proxy-linux_arm64-$dnscrypt_ver.tar.gz" -o "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_ver.tar.gz_tmp"
                     then
                         mv "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_ver.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_ver.tar.gz"
                     else
-                        Println "$error dnscrypt 下载出错, 无法连接 github ?"
+                        Println "$error dnscrypt arm64 下载出错, 无法连接 github ?"
+                    fi
+                fi
+                if [ ! -e "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_x86_64-$dnscrypt_ver.tar.gz" ]
+                then
+                    Println "$info 下载 dnscrypt proxy x86_64 ..."
+                    mkdir -p "$FFMPEG_MIRROR_ROOT/dnscrypt/"
+                    if curl -s -L "https://github.com/DNSCrypt/dnscrypt-proxy/releases/download/$dnscrypt_ver/dnscrypt-proxy-linux_x86_64-$dnscrypt_ver.tar.gz" -o "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_x86_64-$dnscrypt_ver.tar.gz_tmp"
+                    then
+                        mv "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_x86_64-$dnscrypt_ver.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_x86_64-$dnscrypt_ver.tar.gz"
+                    else
+                        Println "$error dnscrypt x86_64 下载出错, 无法连接 github ?"
                     fi
                 fi
             else
@@ -42285,6 +42760,7 @@ then
 
             for lang in "${lang_options[@]}"
             do
+                Println "$info 下载 $lang 语言文件 ..."
                 if curl -s -L "https://raw.githubusercontent.com/woniuzfb/iptv/master/i18n/i18n_table-$lang.sh" -o "$FFMPEG_MIRROR_ROOT/i18n_table-$lang.sh_tmp"
                 then
                     mv "$FFMPEG_MIRROR_ROOT/i18n_table-$lang.sh_tmp" "$FFMPEG_MIRROR_ROOT/i18n_table-$lang.sh"

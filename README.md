@@ -101,6 +101,10 @@ pve # 打开 Proxmox VE 管理面板
 ```
 
 - nbfc
+- dnscrypt proxy
+- openwrt-v2ray
+- xray/v2ray core 切换
+- 一键配置透明代理(直连国内, 代理国外), 配置文件保存/切换
 
 ---
 
