@@ -199,6 +199,53 @@ then
     i18nSelect zh-cn
 fi
 
+CheckReleaseLite()
+{
+    release=""
+    if grep -Eqi "(Red Hat|CentOS|Fedora|Amazon)" < /etc/issue
+    then
+        release="rpm"
+    elif grep -Eqi "Debian" < /etc/issue
+    then
+        release="deb"
+    elif grep -Eqi "Ubuntu" < /etc/issue
+    then
+        release="ubu"
+    elif grep -Eqi "Armbian" < /etc/issue
+    then
+        release="arm"
+        arch="arm64"
+    elif [[ $(uname) == "Darwin" ]] 
+    then
+        release="mac"
+        Println "$error not support yet...\n" && exit 1
+    else
+        if grep -Eqi "(redhat|centos|Red\ Hat)" < /proc/version
+        then
+            release="rpm"
+        elif grep -Eqi "debian" < /proc/version
+        then
+            release="deb"
+        elif grep -Eqi "ubuntu" < /proc/version
+        then
+            release="ubu"
+        fi
+    fi
+}
+
+if [[ ! -x $(command -v gettext) ]] 
+then
+    Println "Installing ${green}gettext${normal} ...\n"
+    CheckReleaseLite
+    if [ "$release" == "rpm" ] 
+    then
+        yum -y install gettext >/dev/null
+    else
+        apt-get -y update >/dev/null
+        apt-get -y install gettext >/dev/null
+    fi
+fi
+
 . /usr/local/bin/tv-i18n
 i18n_table
 
@@ -805,37 +852,35 @@ CheckRelease()
         else
             release_bit=32
         fi
-        if [ "${1:-}" != "lite" ] 
+
+        if [[ ! -x $(command -v tput) ]] 
         then
-            if [[ ! -x $(command -v tput) ]] 
+            Println "$info 安装依赖 tput ..."
+            if [ "$release" == "rpm" ] 
             then
-                Println "$info 安装依赖 tput ..."
-                if [ "$release" == "rpm" ] 
+                if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
                 then
-                    if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
-                    then
-                        setenforce permissive
-                        sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
-                    fi
-                    if yum -y install ncurses >/dev/null 2>&1
-                    then
-                        Println "$info 依赖 tput 安装成功..."
-                    else
-                        Println "$error 依赖 tput 安装失败...\n" && exit 1
-                    fi
+                    setenforce permissive
+                    sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+                fi
+                if yum -y install ncurses >/dev/null 2>&1
+                then
+                    Println "$info 依赖 tput 安装成功..."
                 else
-                    [ "$release" == "deb" ] && FixDeprecatedDeb
-                    apt-get -y update >/dev/null 2>&1
-                    if apt-get -y install ncurses-bin >/dev/null 2>&1
-                    then
-                        Println "$info 依赖 tput 安装成功..."
-                    else
-                        Println "$error 依赖 tput 安装失败...\n" && exit 1
-                    fi
+                    Println "$error 依赖 tput 安装失败...\n" && exit 1
+                fi
+            else
+                [ "$release" == "deb" ] && FixDeprecatedDeb
+                apt-get -y update >/dev/null 2>&1
+                if apt-get -y install ncurses-bin >/dev/null 2>&1
+                then
+                    Println "$info 依赖 tput 安装成功..."
+                else
+                    Println "$error 依赖 tput 安装失败...\n" && exit 1
                 fi
             fi
-            Spinner "${1:-检查依赖}" CheckDeps
         fi
+        Spinner "${1:-检查依赖}" CheckDeps
     fi
 }
 
@@ -1839,7 +1884,7 @@ CheckShFile()
     then
         if [[ ! -x $(command -v curl) ]] 
         then
-            CheckRelease lite
+            CheckReleaseLite
             Println "$info 安装 curl ..."
             if [ "$release" == "rpm" ] 
             then
@@ -1922,6 +1967,8 @@ UpdateShFile()
             Println "$error 无法连接备用链接! $sh_name 脚本更新失败, 请稍后再试\n"
         fi
     fi
+
+    i18nSelect "${sh_lang:-}" > /dev/null
 }
 
 UpdateCreatorFile()
@@ -1947,7 +1994,7 @@ UpdateCreatorFile()
 
 InstallPython()
 {
-    CheckRelease lite
+    CheckReleaseLite
     if [ "$release" == "rpm" ] 
     then
         echo
@@ -3097,7 +3144,7 @@ Update()
         reinstall_ffmpeg_yn="Y"
     fi
 
-    CheckRelease lite
+    CheckReleaseLite
 
     if [[ ${reinstall_ffmpeg_yn:-N} == [Yy] ]] 
     then
@@ -3108,8 +3155,6 @@ Update()
     InstallJQ > /dev/null
 
     UpdateShFile
-
-    i18nSelect "$sh_lang" > /dev/null
 
     ln -sf "$IPTV_ROOT"/ffmpeg-git-*/ff* /usr/local/bin/
     Println "脚本已更新为最新版本 [ $green$sh_new_ver${normal} ] ! (输入: tv 使用)\n" && exit 0
@@ -3133,7 +3178,7 @@ InstallOpenssl()
     trap '
         kill $progress_pid 2> /dev/null
     ' EXIT
-    CheckRelease lite
+    CheckReleaseLite
     if [ "$release" == "rpm" ] 
     then
         yum -y install openssl openssl-devel >/dev/null 2>&1
@@ -3153,7 +3198,7 @@ InstallImageMagick()
         kill $progress_pid 2> /dev/null
     ' EXIT
     rm -f "$IPTV_ROOT/magick"
-    [ -z "${release:-}" ] && CheckRelease lite
+    [ -z "${release:-}" ] && CheckReleaseLite
     if [ "$release" == "rpm" ] 
     then
         yum -y install ImageMagick >/dev/null 2>&1
@@ -3168,7 +3213,7 @@ InstallImageMagick()
 
 InstallPdf2html()
 {
-    CheckRelease lite
+    CheckReleaseLite
     Progress &
     progress_pid=$!
     trap '
@@ -16401,7 +16446,7 @@ InstallImgcat()
     trap '
         kill $progress_pid 2> /dev/null
     ' EXIT
-    [ -z "${release:-}" ] && CheckRelease lite
+    [ -z "${release:-}" ] && CheckReleaseLite
     if [ "$release" == "rpm" ] 
     then
         yum -y install gcc gcc-c++ make ncurses-devel autoconf >/dev/null 2>&1
@@ -21310,7 +21355,7 @@ DomainInstallCert()
 
     if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
     then
-        CheckRelease lite
+        CheckReleaseLite
         if [ "$release" == "rpm" ] 
         then
             yum -y install socat > /dev/null
@@ -23983,7 +24028,7 @@ NginxDomainUpdateCrt()
     Println "$info 更新证书..."
     if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
     then
-        CheckRelease lite
+        CheckReleaseLite
         if [ "$release" == "rpm" ] 
         then
             yum -y install socat > /dev/null
@@ -24660,7 +24705,7 @@ NodejsInstallMongodb()
     ulimit -m unlimited
     ulimit -u 32000
 
-    CheckRelease lite
+    CheckReleaseLite
     if [ "$release" == "rpm" ] 
     then
         printf '%s' "
@@ -24720,7 +24765,7 @@ gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
 
 InstallGit()
 {
-    CheckRelease lite
+    CheckReleaseLite
     if [ "$release" == "rpm" ] 
     then
         yum -y install git > /dev/null
@@ -25444,7 +25489,7 @@ V2raySetCertificates()
 
                     if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
                     then
-                        CheckRelease lite
+                        CheckReleaseLite
                         if [ "$release" == "rpm" ] 
                         then
                             yum -y install socat > /dev/null
@@ -27692,7 +27737,7 @@ V2rayListInboundAccountLink()
             Println "已取消...\n"
             exit 1
         fi
-        CheckRelease lite
+        CheckReleaseLite
         if [ ! -e "/usr/local/bin/imgcat" ] 
         then
             InstallImgcat
@@ -30278,7 +30323,7 @@ V2rayDomainUpdateCrt()
     Println "$info 更新证书..."
     if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
     then
-        CheckRelease lite
+        CheckReleaseLite
         if [ "$release" == "rpm" ] 
         then
             yum -y install socat > /dev/null
@@ -38504,7 +38549,7 @@ VipEnable()
                 Println "$info 安装 md5sum..."
                 if [[ ! -x $(command -v gcc) ]] 
                 then
-                    CheckRelease lite
+                    CheckReleaseLite
                     if [ "$release" == "rpm" ] 
                     then
                         yum -y install gcc gcc-c++ >/dev/null 2>&1
@@ -38839,7 +38884,7 @@ PveListVMs()
     if [ "$pve_vm_count" -eq 0 ] 
     then
         Println "$error 没有虚拟机\n"
-        return 0
+        exit 1
     fi
 
     pve_vm_list=""
@@ -39641,7 +39686,7 @@ WantedBy=multi-user.target
         18)
             if [[ ! -x $(command -v postfix) ]] 
             then
-                CheckRelease lite
+                CheckReleaseLite
                 Spinner "安装 postfix" InstallPostfix
             else
                 echo
@@ -40861,14 +40906,8 @@ config interface 'lan'
                 docker exec -it openwrt /bin/ash -c "
                 if ! opkg list-installed | grep -q 'xray - $xray_ver-1'
                 then
-                    if opkg print-architecture | grep -q aarch64_cortex
-                    then
-                        wget -O xray_${xray_ver}_aarch64_cortex-a53.ipk $FFMPEG_MIRROR_LINK/xray_${xray_ver}_aarch64_cortex-a53.ipk
-                        opkg install xray_${xray_ver}_aarch64_cortex-a53.ipk --force-reinstall || true
-                    else
-                        wget -O xray_${xray_ver}_aarch64_generic.ipk $FFMPEG_MIRROR_LINK/xray_${xray_ver}_aarch64_generic.ipk
-                        opkg install xray_${xray_ver}_aarch64_generic.ipk --force-reinstall || true
-                    fi
+                    wget -O xray_${xray_ver}_aarch64_generic.ipk $FFMPEG_MIRROR_LINK/xray_${xray_ver}_aarch64_generic.ipk
+                    opkg install xray_${xray_ver}_aarch64_generic.ipk --force-reinstall || true
                 fi
                 wget -O luci-app-v2ray_${luci_app_xray_ver}_all.ipk $FFMPEG_MIRROR_LINK/luci-app-v2ray_${luci_app_xray_ver}_all.ipk
                 opkg install luci-app-v2ray_${luci_app_xray_ver}_all.ipk --force-reinstall || true
@@ -41364,7 +41403,7 @@ then
             fi
         ;;
         6) 
-            CheckRelease lite
+            CheckReleaseLite
             InstallJQ
 
             if dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
@@ -41481,7 +41520,7 @@ then
             Println "$info 请在虚拟机内执行 opkg update; opkg install qemu-ga 后关闭虚拟机几秒后再打开\n"
         ;;
         8)
-            CheckRelease lite
+            CheckReleaseLite
             InstallJQ
 
             Println "$tip 请确保已经安装 qemu-guest-agent\n"
@@ -41507,7 +41546,7 @@ then
             echo
         ;;
         9)
-            CheckRelease lite
+            CheckReleaseLite
             InstallJQ
 
             Println "$tip 请确保已经安装 qemu-guest-agent\n"
@@ -41541,7 +41580,7 @@ then
             Println "$info 界面语言切换成功\n"
         ;;
         10)
-            CheckRelease lite
+            CheckReleaseLite
             InstallJQ
 
             Println "$tip 请确保已经安装 qemu-guest-agent\n"
@@ -41603,7 +41642,7 @@ then
             Println "$info 切换成功\n"
         ;;
         11)
-            CheckRelease lite
+            CheckReleaseLite
             InstallJQ
 
             Println "$tip 请确保已经安装 qemu-guest-agent\n"
@@ -42550,9 +42589,8 @@ then
                     xray_package_ver="${xray_ver}-1"
                 else
                     xray_package_ver="$xray_ver"
-                    xray_ver=${xray_ver%-*}
                 fi
-                xray_archs=( 'x86_64' 'aarch64_generic' 'aarch64_cortex-a53' )
+                xray_archs=( 'x86_64' 'aarch64_generic' )
                 for arch in "${xray_archs[@]}"
                 do
                     if [ ! -e "$FFMPEG_MIRROR_ROOT/xray_${xray_package_ver}_$arch.ipk" ] 
