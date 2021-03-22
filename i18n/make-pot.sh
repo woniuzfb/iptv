@@ -76,7 +76,7 @@ XSRC=../docs/$PACKAGE_NAME
 
 PACKAGE_VERSION=$(grep 'sh_ver="' < $XSRC |awk -F "=" '{print $NF}'|$GSED 's/\"//g'|head -1)
 PACKAGE_TITLE="Locale $PACKAGE_PO_LANGUAGE For $PACKAGE_NAME v$PACKAGE_VERSION - ONE Click Script"
-PACKAGE_COPYRIGHT="BSD 3 Clause License"
+PACKAGE_COPYRIGHT="GPL Version 3 License"
 PACKAGE_FIRST_POT_AUTHOR="MTimer https://github.com/woniuzfb/iptv"
 PACKAGE_POT_CREATION_TZ="UTC"
 PACKAGE_CHARSET="$OENC"
@@ -114,6 +114,7 @@ scan_source_file() # $1-filepath $2-potfile...-xgettext-options
   $GSED -i '
   {
     s~SOME DESCRIPTIVE TITLE~'"$PACKAGE_TITLE"'~
+    s~Locale .*$~'"$PACKAGE_TITLE"'~
     s~YEAR THE PACKAGE.*$~'"$PACKAGE_COPYRIGHT"'~
     s~FIRST AUTHOR.*$~'"$PACKAGE_FIRST_POT_AUTHOR"'~
     s~Language: ~&'"$PACKAGE_PO_LANGUAGE"'~

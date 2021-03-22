@@ -1,7 +1,7 @@
 #!/bin/bash
 # FFmpeg / nginx / openresty / xray / v2ray / cloudflare partner,workers / ibm cf / armbian / proxmox Wrapper Script By MTimer
 # Copyright (C) 2019-2021
-# Released under BSD 3 Clause License
+# Released under GPL Version 3 License
 
 set -euo pipefail
 
@@ -13,6 +13,7 @@ export LANG=en_US.UTF-8
 SH_LINK="https://woniuzfb.github.io/iptv/iptv.sh"
 SH_LINK_BACKUP="http://tv.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
+i18n_FILE="/usr/local/bin/tv-i18n"
 OR_FILE="/usr/local/bin/or"
 NX_FILE="/usr/local/bin/nx"
 XC_FILE="/usr/local/bin/cx"
@@ -107,9 +108,11 @@ ReleaseCheck()
         elif grep -Eqi "Ubuntu" < "$release_file" 
         then
             release="ubu"
+            break
         elif grep -Eqi "Debian" < "$release_file" 
         then
             release="deb"
+            break
         fi
     done
 
@@ -117,6 +120,13 @@ ReleaseCheck()
     then
         Println "$error not support yet...\n"
         exit 1
+    fi
+
+    if [ "$(uname -m | grep -c 64)" -gt 0 ]
+    then
+        release_bit=64
+    else
+        release_bit=32
     fi
 }
 
@@ -249,7 +259,7 @@ i18nInstall()
 
     if [ "$sh_locale" == "zh_CN" ] 
     then
-        echo -e "sh_locale=$sh_locale\nexport LANG=zh_CN.UTF-8" > /usr/local/bin/tv-i18n
+        echo -e "sh_locale=$sh_locale\nexport LANG=zh_CN.UTF-8" > "$i18n_FILE"
         Println "`eval_gettext \"\\\${green}成功!\\\${normal}\"`\n"
         return 0
     fi
@@ -261,7 +271,7 @@ i18nInstall()
     if wget --timeout=15 --tries=3 --no-check-certificate $FFMPEG_MIRROR_LINK/locale/po/iptv.sh-$sh_locale.mo -qO $TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/iptv.mo
     then
         trap - EXIT
-        echo -e "sh_locale=$sh_locale\nexport LANG=en_US.UTF-8" > /usr/local/bin/tv-i18n
+        echo -e "sh_locale=$sh_locale\nexport LANG=en_US.UTF-8" > "$i18n_FILE"
         Println "`eval_gettext \"\\\${green}成功!\\\${normal}\"`\n"
     else
         Println "`eval_gettext \"\\\${red}失败! 请稍后再试!\\\${normal}\"`\n"
@@ -276,22 +286,6 @@ export TEXTDOMAIN TEXTDOMAINDIR
 
 DepInstall gettext
 
-# Find a way to echo strings without interpreting backslash.
-if test "X`(echo '\t') 2>/dev/null`" = 'X\t'; then
-  echo='echo'
-else
-  if test "X`(printf '%s\n' '\t') 2>/dev/null`" = 'X\t'; then
-    echo='printf %s\n'
-  else
-    echo_func () {
-      cat <<EOT
-$*
-EOT
-    }
-    echo='echo_func'
-  fi
-fi
-
 # eval_gettext MSGID
 # looks up the translation of MSGID and substitutes shell variables in the
 # result.
@@ -301,9 +295,10 @@ eval_gettext () {
 
 [ $EUID -ne 0 ] && Println "`eval_gettext \"\\\${red}[ERROR]\\\${normal} MUST BE ROOT, TRY\\\${green} sudo su \\\${normal}\"`\n" && exit 1
 
-if [ -s /usr/local/bin/tv-i18n ] 
+if [ -s "$i18n_FILE" ] 
 then
-    . /usr/local/bin/tv-i18n
+    # shellcheck source=/dev/null
+    . "$i18n_FILE"
 fi
 
 info=$(eval_gettext "\${green}[信息]\${normal}")
@@ -313,7 +308,7 @@ tip=$(eval_gettext "\${green}[注意]\${normal}")
 if [ -z "${sh_locale:-}" ] 
 then
     sh_locale="zh_CN"
-    echo -e "sh_locale=$sh_locale\nexport LANG=zh_CN.UTF-8" > /usr/local/bin/tv-i18n
+    echo -e "sh_locale=$sh_locale\nexport LANG=zh_CN.UTF-8" > "$i18n_FILE"
 elif [ "$sh_locale" != "zh_CN" ] && [ ! -s "$TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/iptv.mo" ] 
 then
     i18nInstall "$sh_locale"
@@ -322,13 +317,6 @@ fi
 DepsCheck()
 {
     ReleaseCheck
-
-    if [ "$(uname -m | grep -c 64)" -gt 0 ]
-    then
-        release_bit=64
-    else
-        release_bit=32
-    fi
 
     DepInstall tput
 
@@ -21259,13 +21247,7 @@ DomainInstallCert()
 
     if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
     then
-        ReleaseCheck
-        if [ "$release" == "rpm" ] 
-        then
-            yum -y install socat > /dev/null
-        else
-            apt-get -y install socat > /dev/null
-        fi
+        DepInstall socat
         bash <(curl -s -m 20 https://get.acme.sh) > /dev/null
     fi
 
@@ -23932,13 +23914,7 @@ NginxDomainUpdateCrt()
     Println "$info 更新证书..."
     if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
     then
-        ReleaseCheck
-        if [ "$release" == "rpm" ] 
-        then
-            yum -y install socat > /dev/null
-        else
-            apt-get -y install socat > /dev/null
-        fi
+        DepInstall socat
         bash <(curl -s -m 20 https://get.acme.sh) > /dev/null
     fi
 
@@ -25393,13 +25369,7 @@ V2raySetCertificates()
 
                     if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
                     then
-                        ReleaseCheck
-                        if [ "$release" == "rpm" ] 
-                        then
-                            yum -y install socat > /dev/null
-                        else
-                            apt-get -y install socat > /dev/null
-                        fi
+                        DepInstall socat
                         bash <(curl -s -m 20 https://get.acme.sh) > /dev/null
                     fi
 
@@ -27653,13 +27623,7 @@ V2rayListInboundAccountLink()
         fi
         if [[ ! -x $(command -v qrencode) ]] 
         then
-            Println "$info 安装 qrencode ..."
-            if [ "$release" == "rpm" ] 
-            then
-                yum -y install qrencode >/dev/null 2>&1
-            else
-                apt-get -y install qrencode >/dev/null 2>&1
-            fi
+            DepInstall qrencode
         fi
         qrencode -s 1 -o "$HOME/vmess_link.png" "vmess://$vmess_link"
         /usr/local/bin/imgcat --half-height "$HOME/vmess_link.png"
@@ -30227,13 +30191,7 @@ V2rayDomainUpdateCrt()
     Println "$info 更新证书..."
     if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
     then
-        ReleaseCheck
-        if [ "$release" == "rpm" ] 
-        then
-            yum -y install socat > /dev/null
-        else
-            apt-get -y install socat > /dev/null
-        fi
+        DepInstall socat
         bash <(curl -s -m 20 https://get.acme.sh) > /dev/null
     fi
 
@@ -42786,17 +42744,17 @@ then
                 Println "$error v2ray install-release.sh 下载出错, 无法连接 github ?"
             fi
 
-            locale_options=( zh_CN en )
+            locale_options=( en )
             mkdir -p "$FFMPEG_MIRROR_ROOT/locale/po/"
 
             for locale in "${locale_options[@]}"
             do
                 Println "$info 下载 $locale 语言文件 ..."
-                if curl -s -L "https://raw.githubusercontent.com/woniuzfb/iptv/master/i18n/po/$locale.mo" -o "$FFMPEG_MIRROR_ROOT/locale/po/$locale.mo_tmp"
+                if curl -s -L "https://raw.githubusercontent.com/woniuzfb/iptv/master/i18n/po/iptv.sh-$locale.mo" -o "$FFMPEG_MIRROR_ROOT/locale/po/iptv.sh-$locale.mo_tmp"
                 then
-                    mv "$FFMPEG_MIRROR_ROOT/locale/po/$locale.mo_tmp" "$FFMPEG_MIRROR_ROOT/locale/po/$locale.mo"
+                    mv "$FFMPEG_MIRROR_ROOT/locale/po/iptv.sh-$locale.mo_tmp" "$FFMPEG_MIRROR_ROOT/locale/po/iptv.sh-$locale.mo"
                 else
-                    Println "$error $locale.mo 下载出错, 无法连接 github ?"
+                    Println "$error iptv.sh-$locale.mo 下载出错, 无法连接 github ?"
                 fi
             done
 
