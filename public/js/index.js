@@ -201,7 +201,7 @@ function videojsLoad(sourceOverlay,channel) {
   let contentType,techOrder,pictureInPictureToggle,credentials = false,playerOptions,player;
 
   if (hlsVideoUrl.indexOf('cdn4.epub.fun') !== -1) {
-    hlsVideoUrl = hlsVideoUrl.replace('https://cdn4.epub.fun','http://hbo.epub.fun');
+    hlsVideoUrl = hlsVideoUrl.replace('https://cdn4.epub.fun','http://tv.epub.fun');
   } else if (hlsVideoUrl.indexOf('cdn5.epub.fun') !== -1) {
     hlsVideoUrl = hlsVideoUrl.replace('cdn5.epub.fun','stream5.epub.fun');
   }
@@ -1490,8 +1490,8 @@ function switchLink() {
 let programId,rate,eventId,hlsVideoUrl,protocol,overlaysLoop,overlaysImg,urls = [],sourcesJson,sourcesJsonParsed,jsonChannels = {},schedules = {},overlaysInfo = {};
 let sourceReg = 'shuliyun',sourceRegDefault = 'shuliyun';
 let localJson = 'channels.json',isH265 = false;
-let remoteJson = 'http://hbo.epub.fun/channels.json';
-let scheduleJson = 'http://hbo.epub.fun/schedule.json';
+let remoteJson = 'http://tv.epub.fun/channels.json';
+let scheduleJson = 'http://tv.epub.fun/schedule.json';
 const videoField = document.querySelector('.videoField');
 const sourcesField = document.querySelector('.sources');
 const fieldsetLoginForm = document.querySelector('.loginForm fieldset');
@@ -1641,6 +1641,6 @@ if (localStorage.getItem('dark') === '1'){
 }
 
 const controller = new ScrollMagic.Controller();
-const scene = new ScrollMagic.Scene({offset: 50})
-                  .setPin(".videoField")
+const scene = new ScrollMagic.Scene({triggerElement: '.videoContainer', triggerHook: 'onLeave'})
+                  .setPin('.videoField')
                   .addTo(controller);

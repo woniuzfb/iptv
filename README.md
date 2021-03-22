@@ -1,7 +1,7 @@
 #
 
 ``` bash
-tv c en/zh-cn ... # change/update language
+tv c <en|zh_CN|...> # change/update language
 ```
 
 ## 目录

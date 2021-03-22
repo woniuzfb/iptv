@@ -1,106 +1,13 @@
 #!/bin/bash
-#
-# A [ FFmpeg / nginx / openresty / xray / v2ray / cloudflare partner,workers / ibm cf / armbian / proxmox ] Wrapper Script By MTimer
+# FFmpeg / nginx / openresty / xray / v2ray / cloudflare partner,workers / ibm cf / armbian / proxmox Wrapper Script By MTimer
 # Copyright (C) 2019-2021
 # Released under BSD 3 Clause License
-#
-# $i18n_usage: tv -i [直播源] [-s 分片时长(秒)] [-o 输出目录名称] [-c m3u8包含的分片数] [-b 比特率] [-p m3u8文件名称] [-C] [-l] [-P http代理]
-#     -i  直播源(支持 mpegts / hls / flv / youtube ...)
-#         可以是视频路径
-#         可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔
-#     -s  分片时长(秒)(默认: 6)
-#     -o  输出目录名称(默认: 随机名称)
-#
-#     -l  非无限时长直播, 无法设置切割的分片数且无法监控(默认: 不设置)
-#     -P  FFmpeg 的 http 代理, 直播源是 http 链接时可用(默认: 不设置)
-#
-#     -p  m3u8名称(前缀)(默认: 随机)
-#     -c  m3u8里包含的分片数目(默认: 5)
-#     -S  分片所在子目录名称(默认: 不使用子目录)
-#     -t  分片名称(前缀)(默认: 跟m3u8名称相同)
-#     -a  音频编码(默认: aac) (不需要转码时输入 copy)
-#     -v  视频编码(默认: libx264) (不需要转码时输入 copy)
-#     -f  画面或声音延迟(格式如:  v_3 画面延迟3秒, a_2 声音延迟2秒 画面声音不同步时使用)
-#     -d  dvb teletext 字幕解码成的格式,可选: text,ass (默认: 不设置)
-#     -q  crf 值(如果同时设置了输出视频比特率, 则优先使用 crf 值控制视频质量)(数值 0~63 越大质量越差), 多个 crf 用逗号分隔
-#         (默认: 不设置 crf 值)
-#     -b  输出视频的比特率(kb/s)(默认: 900-1280x720)
-#         如果已经设置crf视频质量值, 则比特率用于 -maxrate -bufsize
-#         如果没有设置crf视频质量值, 则可以继续设置是否固定码率
-#         多个比特率用逗号分隔(注意-如果设置多个比特率, 就是生成自适应码流)
-#         同时可以指定输出的分辨率(比如: -b 800-640x360,1000-960x540,1500-1280x720)
-#         可以输入 omit 省略此选项
-#     -C  固定码率(只有在没有设置crf视频质量的情况下才有效)(默认: 否)
-#     -e  加密分片(默认: 不加密)
-#     -K  Key名称(默认: 随机)
-#     -z  频道名称(默认: 跟m3u8名称相同)
-#     也可以不输出 HLS, 比如 flv 推流
-#     -k  设置推流类型, 比如 -k flv
-#     -H  推流 h265(默认: 不设置)
-#     -T  设置推流地址, 比如 rtmp://127.0.0.1/flv/xxx
-#     -L  输入拉流(播放)地址(可省略), 比如 http://domain.com/flv?app=flv&stream=xxx
-#     -m  FFmpeg 额外的 输入参数
-#         (默认: -copy_unknown -reconnect 1 -reconnect_at_eof 1 
-#         -reconnect_streamed 1 -reconnect_delay_max 2000 
-#         -rw_timeout 10000000 -y -nostats -nostdin -hide_banner -loglevel error)
-#         如果输入的直播源是 hls 链接, 需去除 -reconnect_at_eof 1
-#         如果输入的直播源是 rtmp 或本地链接, 需去除 -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000
-#     -n  FFmpeg 额外的 输出参数, 可以输入 omit 省略此选项
-#         (默认: -g 50 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main)
-#
-# 举例:
-#     使用crf值控制视频质量: 
-#         tv -i http://xxx.com/xxx.ts -s 6 -o hbo1 -p hbo1 -q 15 -b 1500-1280x720 -z 'hbo直播1'
-#     使用比特率控制视频质量[默认]: 
-#         tv -i http://xxx.com/xxx.ts -s 6 -o hbo2 -p hbo2 -b 900-1280x720 -z 'hbo直播2'
-#     不需要转码的设置: -a copy -v copy -n omit
-#     不输出 HLS, 推流 flv :
-#         tv -i http://xxx/xxx.ts -a aac -v libx264 -b 3000 -k flv -T rtmp://127.0.0.1/flv/xxx
-#
-# 快捷键:
-#     tv 打开 HLS 管理面板
-#         tv l 列出所有开启的频道
-#         tv d 添加演示频道
-#         tv e 手动修改 channels.json
-#       tv f 打开 FLV 管理面板
-#       tv v 打开 VIP 面板
-#       tv m 开启监控
-#         tv m l [行数] 查看监控日志
-#         tv m s 关闭监控
-#       tv s 节目表管理面板
-#       tv 4g 打开 4gtv 频道管理面板
-#       tv FFmpeg 自建 FFmpeg 镜像
-#       tv debug 1/0 开启/关闭 调试
-#
-#     cx 打开 xtream codes 账号/频道管理面板
-#
-#     v2 打开 v2ray 面板
-#        v2 e 手动修改 config.json
-#
-#     x 打开 xray 面板
-#        x e 手动修改 config.json
-#
-#     nx 打开 nginx 面板
-#
-#     or 打开 openresty 面板
-#
-#     cf 打开 cloudflare partner / workers 面板
-#        cf w 打开 cloudflare workers 面板
-#
-#     ibm 打开 IBM Cloud Foundry 面板
-#        ibm v2 打开 ibm v2ray app 管理面板
-#        ibm x  打开 ibm xray app 管理面板
-#
-#     arm 打开 Armbian 管理面板
-#
-#     pve 打开 Proxmox VE 管理面板
-#
-#     tv c en/ru/de/zh-cn $i18n_change_update_language
 
 set -euo pipefail
 
-sh_ver="1.80.4"
+sh_ver="1.80.5"
 sh_debug=0
+export LANGUAGE=
 export LC_ALL=
 export LANG=en_US.UTF-8
 SH_LINK="https://woniuzfb.github.io/iptv/iptv.sh"
@@ -179,712 +86,256 @@ Println()
     fi
 }
 
-i18nSelect()
+ReleaseCheck()
 {
-    sh_lang=${1:-zh-cn}
-    Println "${green}[Tip]${normal} You can always use command ${green}tv c en/ru/de/zh-cn ${normal} to change/update language !"
-    Println "Downloading ${green}$sh_lang${normal} language file...\n"
-    if wget --timeout=15 --tries=3 --no-check-certificate $FFMPEG_MIRROR_LINK/i18n_table-$sh_lang.sh -qO /usr/local/bin/tv-i18n_tmp
+    [ -n "${release:-}" ] && return 0
+
+    release_files=( /etc/issue /etc/os-release /proc/version )
+    release=""
+
+    for release_file in "${release_files[@]}"
+    do
+        if [ ! -s "$release_file" ] 
+        then
+            continue
+        fi
+
+        if grep -Eqi "Red Hat|redhat|CentOS|Fedora|Amazon" < "$release_file" 
+        then
+            release="rpm"
+            break
+        elif grep -Eqi "Ubuntu" < "$release_file" 
+        then
+            release="ubu"
+        elif grep -Eqi "Debian" < "$release_file" 
+        then
+            release="deb"
+        fi
+    done
+
+    if [ -z "$release" ] 
     then
-        mv /usr/local/bin/tv-i18n_tmp /usr/local/bin/tv-i18n
-        Println "${green}Success!${normal}\n"
-    else
-        Println "${red}Error! Try again later!${normal}\n"
+        Println "$error not support yet...\n"
         exit 1
     fi
 }
 
-if [ ! -s /usr/local/bin/tv-i18n ] 
-then
-    i18nSelect zh-cn
-fi
-
-CheckReleaseLite()
+DebFixSources()
 {
-    release=""
-    if grep -Eqi "(Red Hat|CentOS|Fedora|Amazon)" < /etc/issue
+    if [ "${deb_fix:-1}" -eq 1 ] 
     then
-        release="rpm"
-    elif grep -Eqi "Debian" < /etc/issue
-    then
-        release="deb"
-    elif grep -Eqi "Ubuntu" < /etc/issue
-    then
-        release="ubu"
-    elif grep -Eqi "Armbian" < /etc/issue
-    then
-        release="arm"
-        arch="arm64"
-    elif [[ $(uname) == "Darwin" ]] 
-    then
-        release="mac"
-        Println "$error not support yet...\n" && exit 1
-    else
-        if grep -Eqi "(redhat|centos|Red\ Hat)" < /proc/version
+        if [ -f /etc/apt/sources.list.d/sources-aliyun-0.list ] 
         then
-            release="rpm"
-        elif grep -Eqi "debian" < /proc/version
-        then
-            release="deb"
-        elif grep -Eqi "ubuntu" < /proc/version
-        then
-            release="ubu"
-        fi
-    fi
-}
-
-if [[ ! -x $(command -v gettext) ]] 
-then
-    Println "Installing ${green}gettext${normal} ...\n"
-    CheckReleaseLite
-    if [ "$release" == "rpm" ] 
-    then
-        yum -y install gettext >/dev/null
-    else
-        apt-get -y update >/dev/null
-        apt-get -y install gettext >/dev/null
-    fi
-fi
-
-. /usr/local/bin/tv-i18n
-i18n_table
-
-info="${green}[$i18n_info]${normal}"
-error="${red}[$i18n_error]${normal}"
-tip="${green}[$i18n_tip]${normal}"
-
-[ $EUID -ne 0 ] && Println "$error 当前账号非ROOT(或没有ROOT权限),无法继续操作,请使用$green sudo su ${normal}来获取临时ROOT权限\n" && exit 1
-
-JQ()
-{
-    FILE=$2
-    [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
-
-    if TMP_FILE=$(mktemp -q) 
-    then
-        chmod +r "$TMP_FILE"
-    else
-        printf -v TMP_FILE "${FILE}_%s" "$BASHPID"
-    fi
-
-    trap 'rm -f $TMP_FILE"' EXIT
-
-    {
-        flock -x 200 || { MonitorError "$FILE JQ fd 200 失败"; exit 1; }
-        case $1 in
-            "add") 
-                if [ -n "${jq_path:-}" ] 
-                then
-                    if [ "${4:-}" == "pre" ] 
-                    then
-                        $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) |= [$value] + .' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                    else
-                        $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) += [$value]' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                    fi
-                    jq_path=""
-                else
-                    $JQ_FILE --arg index "$3" --argjson value "$4" '.[$index] += $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                fi
-            ;;
-            "update") 
-                if [ -n "${jq_path:-}" ] 
-                then
-                    if [ "${4:-}" == "number" ] 
-                    then
-                        $JQ_FILE --argjson path "$jq_path" --arg value "$3" 'getpath($path) = ($value | tonumber)' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                    else
-                        $JQ_FILE --argjson path "$jq_path" --arg value "$3" 'getpath($path) = $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                    fi
-                    jq_path=""
-                else
-                    $JQ_FILE "$3" "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                fi
-            ;;
-            "replace") 
-                if [ -n "${jq_path:-}" ] 
-                then
-                    $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) = $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                    jq_path=""
-                else
-                    $JQ_FILE --arg index "$3" --argjson value "$4" '.[$index] = $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                fi
-            ;;
-            "delete") 
-                if [ -n "${jq_path:-}" ] 
-                then
-                    if [ -z "${3:-}" ] 
-                    then
-                        $JQ_FILE --argjson path "$jq_path" 'del(getpath($path))' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                    elif [ -z "${4:-}" ] 
-                    then
-                        $JQ_FILE --argjson path "$jq_path" --arg index "$3" 'del(getpath($path)[$index|tonumber])' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                    else
-                        $JQ_FILE --argjson path "$jq_path" 'del(getpath($path)[] | select(.'"$3"'=='"$4"'))' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                    fi
-                    jq_path=""
-                else
-                    $JQ_FILE --arg index "$3" 'del(.[$index][] | select(.pid=='"$4"'))' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
-                fi
-            ;;
-        esac
-
-        if [ ! -s "$TMP_FILE" ] 
-        then
-            printf 'JQ ERROR!! action: %s, file: %s, tmp_file: %s, index: %s, other: %s' "$1" "$FILE" "$TMP_FILE" "$3" "${4:-none}" >> "$MONITOR_LOG"
-        else
-            mv "$TMP_FILE" "$FILE"
-        fi
-    } 200>"$FILE.lock"
-
-    trap - EXIT
-}
-
-JQs()
-{
-    case $1 in
-        "get") 
-            read -r $3 < <($JQ_FILE -c --argjson path "$jq_path" 'getpath($path)' <<< "${!2}")
-            jq_path=""
-        ;;
-        "add") 
-            if [ "${4:-}" == "pre" ] 
-            then
-                read -r $2 < <($JQ_FILE -c --argjson path "${jq_path:-[]}" --argjson value "$3" 'getpath($path) |= [$value] + .' <<< "${!2}")
-            else
-                read -r $2 < <($JQ_FILE -c --argjson path "${jq_path:-[]}" --argjson value "$3" 'getpath($path) += [$value]' <<< "${!2}")
-            fi
-            jq_path=""
-        ;;
-        "update") 
-            if [ "${4:-}" == "number" ] 
-            then
-                read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" --arg value "$3" 'getpath($path) = ($value | tonumber)' <<< "${!2}")
-            else
-                read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" --arg value "$3" 'getpath($path) = $value' <<< "${!2}")
-            fi
-            jq_path=""
-        ;;
-        "replace") 
-            read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" --argjson value "$3" 'getpath($path) = $value' <<< "${!2}")
-            jq_path=""
-        ;;
-        "delete") 
-            if [ -z "${3:-}" ] 
-            then
-                read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" 'del(getpath($path))' <<< "${!2}")
-            else
-                read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" --arg index "$3" 'del(getpath($path)[$index|tonumber])' <<< "${!2}")
-            fi
-            jq_path=""
-        ;;
-        "merge")
-            read -r $2 < <($JQ_FILE -c -s '
-            def merge(a;b):
-                reduce b[] as $item (a;
-                reduce ($item | keys_unsorted[]) as $key (.;
-                $item[$key] as $val | ($val | type) as $type | .[$key] = if ($type == "object") then
-                    merge({}; [if .[$key] == null then {} else .[$key] end, $val])
-                elif ($type == "array") then
-                    (.[$key] + $val | unique)
-                else
-                    $val
-                end)
-                );
-            merge({}; .)' <<< "${!2} $3")
-        ;;
-        "flat")
-            if [[ $2 =~ ^/ ]] 
-            then
-                jq_input=$(< $2)
-            else
-                jq_input="$2"
-            fi
-
-            $JQ_FILE --arg d1 "$5" --arg d2 "${6:-$5}" --arg d3 "${7:-$5}" --arg d4 "${8:-$5}" --arg d5 "${9:-$5}" --arg d6 "${10:-$5}" -r -c -s '
-            def flat(a;b;c;d;e;f;g):
-                (a[0]| type) as $type | if ($type == "object") then
-                    ([a[] | keys_unsorted[]] | unique) as $keys | reduce a[] as $item ({};
-                    reduce($keys[]) as $key (.;
-                    $item[$key] as $val | ($val | type) as $type | (.[$key]) as $val2 | ($val2 | type) as $type2 | .[$key] = 
-                        if ($type == "object") then
-                            if ($type2 == "object") then
-                                flat([$val2,$val];c;d;e;f;g;b)
-                            elif ($val2) then
-                                if ($val == {}) then
-                                    $val2 + c
-                                else
-                                    (reduce($val2 | split(c)[]) as $item2 ([]; 
-                                        . + [{}]
-                                    )| if .== [] then [{}] else . end) as $x |
-                                    flat($x + [$val];b;c;d;e;f;g)
-                                end
-                            elif ($val == {}) then
-                                ""
-                            else
-                                flat([$val];b;c;d;e;f;g)
-                            end
-                        elif ($type == "array") then
-                            flat($val;b;c;d;e;f;g) as $val3 | 
-                            if ($type2 == "object") then
-                                flat([$val2,($val3|if .== "" then {} else . end)];c;d;e;f;g;b)
-                            elif ($val2) then
-                                if ($val3 == {}) then
-                                    $val2 + c
-                                elif ($val3 | type == "object") then
-                                    (reduce($val2 | split(c)[]) as $item2 ([]; 
-                                        . + [{}]
-                                    )| if .== [] then [{}] else . end) as $x |
-                                    flat($x + [$val3];c;d;e;f;g;b)
-                                else
-                                    $val2 + c + $val3
-                                end
-                            elif ($val3 == {}) then
-                                ""
-                            else
-                                $val3
-                            end
-                        elif ($type == "null") then
-                            if ($type2 == "object") then
-                                flat([$val2,{}];c;d;e;f;g;b)
-                            elif ($val2) then
-                                $val2 + c
-                            else
-                                ""
-                            end
-                        else
-                            if ($val2) then
-                                $val2 + c + ($val | tostring)
-                            else
-                                ($val | tostring)
-                            end
-                        end
-                    ))
-                elif ($type == "array") then
-                    flat([flat(a[];b;c;d;e;f;g)];b;c;d;e;f;g)
-                else
-                    a|join(b)
-                end;
-            flat('"${3:-.}"';$d1;$d2;$d3;$d4;$d5;$d6)|'"$4"'' <<< "$jq_input"
-        ;;
-        "flat_c")
-            if [[ $2 =~ ^/ ]] 
-            then
-                jq_input=$(< $2)
-            else
-                jq_input="$2"
-            fi
-
-            $JQ_FILE --arg d1 "$5" --arg d2 "${6:-$5}" --arg d3 "${7:-$5}" --arg d4 "${8:-$5}" --arg d5 "${9:-$5}" --arg d6 "${10:-$5}" -r -c -s '
-            def flat(a;x;b;c;d;e;f;g):
-                a as $a | (a[0]| type) as $type | if ($type == "object") then
-                    ([a[] | keys_unsorted[]] | unique) as $keys | 
-
-                    (reduce a[] as $item ({};
-                        reduce($keys[]) as $key (.; ($item[$key]) as $val | ($val | type) as $type | (.[$key]) as $val2 | .[$key] = 
-                            if ($val and $val != [] and $val != {}) then
-                                if ($val2 and ($val2|.[-1:]) == [""]) then
-                                    $val2
-                                else
-                                    ($val2 // []) + [""]
-                                end
-                            else
-                                if ($val2) then
-                                    if ($val2|.[-1:] == [""]) then
-                                        $val2
-                                    else
-                                        $val2 + [{}]
-                                    end
-                                else
-                                    [{}]
-                                end
-                            end
-                        )
-                    )) as $blank | (reduce($keys[]) as $key ({};
-                        .[$key] = ($blank[$key] | .[:-1])
-                    )) as $blank |
-
-                    reduce a[] as $item ({};
-                    reduce($keys[]) as $key (.;
-                    $blank[$key] as $x | $item[$key] as $val | ($val | type) as $type | (.[$key]) as $val2 |($val2 | type) as $type2 | 
-                    .[$key] = 
-                        if ($type == "object") then
-                            if ($val2) then
-                                if ($type2 == "object") then
-                                    if (x == [""]) then
-                                        flat([$val2,$val];$x + [1];c;d;e;f;g;b)
-                                    else
-                                        flat([$val2,flat([$val];x;b;c;d;e;f;g)];x;c;d;e;f;g;b)
-                                    end
-                                elif ($val == {}) then
-                                    $val2 + c
-                                else
-                                    if (x|.[-1:] == [1]) then
-                                        flat(($x + (x | .[:-1]) + [$val]);$x + x;c;d;e;f;g;b)
-                                    else
-                                        flat(($x + [$val]);[];c;d;e;f;g;b)
-                                    end
-                                end
-                            else
-                                if ($val == {}) then
-                                    ""
-                                elif (x == [""]) then
-                                    $val
-                                else
-                                    flat([$val];[];b;c;d;e;f;g)
-                                end
-                            end
-                        elif ($type == "array") then
-                            if ($val[0] | type == "object") then
-                                if ($val2) then
-                                    if ($type2 == "object") then
-                                        $val2
-                                    else
-                                        ($a|index($item)) as $index | 
-                                        if ($a|length - $index == 1) then
-                                            flat(($x + [flat($val;$x;b;c;d;e;f;g)]);[];c;d;e;f;g;b)
-                                        else
-                                            flat(reduce($a|.[$index:]|.[]) as $obj ($x;
-                                                if ($obj[$key] and $obj[$key] != []) then
-                                                    . + [flat($obj[$key];[];b;c;d;e;f;g)]
-                                                else
-                                                    . + [{}]
-                                                end
-                                            );[""];c;d;e;f;g;b)
-                                        end
-                                    end
-                                else
-                                    ($a|index($item)) as $index | 
-                                    if ($a|length - $index == 1) then
-                                        flat($val;$x;b;c;d;e;f;g)
-                                    else
-                                        flat(reduce($a|.[$index:]|.[]) as $obj ([];
-                                            if ($obj[$key] and $obj[$key] != []) then
-                                                . + [flat($obj[$key];[];b;c;d;e;f;g)]
-                                            else
-                                                . + [{}]
-                                            end
-                                        );[""];c;d;e;f;g;b)
-                                    end
-                                end
-                            else
-                                if ($val2) then
-                                    if ($type2 == "object") then
-                                        $val2
-                                    else
-                                        $val2 + c + flat($val;$x;b;c;d;e;f;g)
-                                    end
-                                else
-                                    flat($val;$x;b;c;d;e;f;g)
-                                end
-                            end
-                        elif ($type == "null") then
-                            if ($type2 == "object") then
-                                if (x != [""] and (x|.[-1:] != [1])) then
-                                    $val2
-                                else
-                                    flat([$val2,{}];x;c;d;e;f;g;b)
-                                end
-                            elif ($val2) then
-                                $val2 + c
-                            else
-                                ""
-                            end
-                        else
-                            if ($val2) then
-                                $val2 + c + ($val | tostring)
-                            else
-                                ($val | tostring)
-                            end
-                        end
-                    ))
-                elif ($type == "array") then
-                    flat([flat(a[];x;b;c;d;e;f;g)];x;b;c;d;e;f;g)
-                else
-                    a|join(b)
-                end;
-            flat('"${3:-.}"';[];$d1;$d2;$d3;$d4;$d5;$d6)|'"$4"'' <<< "$jq_input"
-        ;;
-    esac
-}
-
-SyncFile()
-{
-    case $action in
-        "skip")
-            action=""
-            return
-        ;;      
-        "start"|"stop")
-            GetDefault
-        ;;
-        "add")
-            chnl_pid=$pid
-            GetChannelInfo
-        ;;
-        *)
-            Println "$error $action ???" && exit 1
-        ;;
-    esac
-
-    chnl_sync_file=${chnl_sync_file:-$d_sync_file}
-    chnl_sync_index=${chnl_sync_index:-$d_sync_index}
-    chnl_sync_pairs=${chnl_sync_pairs:-$d_sync_pairs}
-
-    if [ "$chnl_sync_yn" == "yes" ] && [ -n "$chnl_sync_file" ] && [ -n "$chnl_sync_index" ] && [ -n "$chnl_sync_pairs" ]
-    then
-        IFS=" " read -ra chnl_sync_files <<< "$chnl_sync_file"
-        IFS=" " read -ra chnl_sync_indices <<< "$chnl_sync_index"
-        chnl_pid_key=${chnl_sync_pairs%%:pid*}
-        chnl_pid_key=${chnl_pid_key##*,}
-        sync_count=${#chnl_sync_files[@]}
-        [ "${#chnl_sync_indices[@]}" -lt "$sync_count" ] && sync_count=${#chnl_sync_indices[@]}
-
-        for((sync_i=0;sync_i<sync_count;sync_i++));
-        do
-            if [ ! -s "${chnl_sync_files[sync_i]}" ] 
-            then
-                $JQ_FILE -n --arg name "$(RandStr)" \
-                '{
-                    "ret": 0,
-                    "data": [
-                        {
-                            "name": $name
-                        }
-                    ]
-                }' > "${chnl_sync_files[sync_i]}"
-            fi
-            jq_index=""
-            jq_path="["
-            while IFS=':' read -ra index_arr
-            do
-                for a in "${index_arr[@]}"
-                do
-                    [ "$jq_path" != "[" ] && jq_path="$jq_path,"
-                    case $a in
-                        '') 
-                            Println "$error sync设置错误...\n" && exit 1
-                        ;;
-                        *[!0-9]*)
-                            jq_index="$jq_index.$a"
-                            jq_path="$jq_path\"$a\""
-                        ;;
-                        *) 
-                            jq_index="${jq_index}[$a]"
-                            jq_path="${jq_path}$a"
-                        ;;
-                    esac
-                done
-            done <<< "${chnl_sync_indices[sync_i]}"
-
-            jq_path="$jq_path]"
-
-            if [ "$action" == "stop" ]
-            then
-                if [[ -n $($JQ_FILE "${jq_index}[]|select(.$chnl_pid_key==$chnl_pid)" "${chnl_sync_files[sync_i]}") ]] 
-                then
-                    JQ delete "${chnl_sync_files[sync_i]}" "$chnl_pid_key" "$chnl_pid"
-                fi
-            else
-                jq_channel_new=""
-                jq_channel_edit=""
-                while IFS=',' read -ra index_arr
-                do
-                    for b in "${index_arr[@]}"
-                    do
-                        case $b in
-                            '') 
-                                Println "$error sync设置错误...\n" && exit 1
-                            ;;
-                            *) 
-                                if [[ $b == *"="* ]] 
-                                then
-                                    key=${b%=*}
-                                    value=${b#*=}
-                                    if [[ $value =~ ^http ]]  
-                                    then
-                                        if [ -n "${kind:-}" ] 
-                                        then
-                                            if [ "$kind" == "flv" ] 
-                                            then
-                                                value=$chnl_flv_pull_link
-                                            else
-                                                value=""
-                                            fi
-                                        elif [ -z "${master:-}" ] || [ "$master" -eq 1 ]
-                                        then
-                                            value="$value/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
-                                        else
-                                            value="$value/$chnl_output_dir_name/${chnl_playlist_name}.m3u8"
-                                        fi
-                                    fi
-                                else
-                                    key=${b%:*}
-                                    value=${b#*:}
-                                    value="chnl_$value"
-                                    if [ "$value" == "chnl_pid" ] 
-                                    then
-                                        if [ -n "${new_pid:-}" ] 
-                                        then
-                                            value=$new_pid
-                                        else
-                                            value=${!value}
-                                        fi
-                                    else 
-                                        value=${!value}
-                                    fi
-                                fi
-
-                                if [ -n "$jq_channel_new" ] 
-                                then
-                                    jq_channel_new="$jq_channel_new,"
-                                    jq_channel_edit="$jq_channel_edit,"
-                                fi
-
-                                if [[ $value == *[!0-9]* ]] 
-                                then
-                                    jq_channel_new="$jq_channel_new\"$key\":\"$value\""
-                                    jq_channel_edit="$jq_channel_edit$key:\"$value\""
-                                else
-                                    jq_channel_new="$jq_channel_new\"$key\":$value"
-                                    jq_channel_edit="$jq_channel_edit$key:$value"
-                                fi
-                            ;;
-                        esac
-                    done
-                done <<< "$chnl_sync_pairs"
-                if [ "$action" == "add" ] || [[ -z $($JQ_FILE "${jq_index}[]|select(.$chnl_pid_key==$chnl_pid)" "${chnl_sync_files[sync_i]}") ]]
-                then
-                    JQ add "${chnl_sync_files[sync_i]}" "{$jq_channel_new}"
-                else
-                    jq_path=""
-                    JQ update "${chnl_sync_files[sync_i]}" "${jq_index}|=map(select(.$chnl_pid_key==$chnl_pid) * {$jq_channel_edit} // .)"
-                fi
-            fi
-            jq_path=""
-        done
-
-        Println "$info 频道[ $chnl_channel_name ] sync 执行成功..."
-    fi
-    action=""
-}
-
-FixDeprecatedDeb()
-{
-    if [ "${fix_deb:-1}" -eq 1 ] 
-    then
-        if [ -e "/etc/apt/sources.list.d/sources-aliyun-0.list" ] 
-        then
-            deb_list=$(< "/etc/apt/sources.list.d/sources-aliyun-0.list")
-            rm -f "/etc/apt/sources.list.d/sources-aliyun-0.list"
+            deb_list=$(< /etc/apt/sources.list.d/sources-aliyun-0.list)
+            rm -f /etc/apt/sources.list.d/sources-aliyun-0.list
             rm -rf /var/lib/apt/lists/*
         else
-            deb_list=$(< "/etc/apt/sources.list")
+            deb_list=$(< /etc/apt/sources.list)
         fi
 
         if grep -q "jessie" <<< "$deb_list"
         then
-            deb_list="
+            printf '%s' "
 deb http://archive.debian.org/debian/ jessie main
 deb-src http://archive.debian.org/debian/ jessie main
 
 deb http://security.debian.org jessie/updates main
 deb-src http://security.debian.org jessie/updates main
-"
-            printf '%s' "$deb_list" > "/etc/apt/sources.list"
+" > "/etc/apt/sources.list"
             apt-get clean >/dev/null 2>&1
         elif grep -q "wheezy" <<< "$deb_list" 
         then
-            deb_list="
+            printf '%s' "
 deb http://archive.debian.org/debian/ wheezy main
 deb-src http://archive.debian.org/debian/ wheezy main
 
 deb http://security.debian.org wheezy/updates main
 deb-src http://security.debian.org wheezy/updates main
-"
-            printf '%s' "$deb_list" > "/etc/apt/sources.list"
+" > "/etc/apt/sources.list"
             apt-get clean >/dev/null 2>&1
         fi
-        fix_deb=0
+
+        deb_fix=0
     fi
 }
 
-CheckRelease()
+AptUpdate()
 {
-    release=""
-    if grep -Eqi "(Red Hat|CentOS|Fedora|Amazon)" < /etc/issue
+    if [ "${apt_updated:-0}" -eq 0 ] 
     then
-        release="rpm"
-    elif grep -Eqi "Debian" < /etc/issue
-    then
-        release="deb"
-    elif grep -Eqi "Ubuntu" < /etc/issue
-    then
-        release="ubu"
-    elif grep -Eqi "Armbian" < /etc/issue
-    then
-        release="arm"
-        arch="arm64"
-    elif [[ $(uname) == "Darwin" ]] 
-    then
-        release="mac"
-        Println "$error not support yet...\n" && exit 1
-    else
-        if grep -Eqi "(redhat|centos|Red\ Hat)" < /proc/version
-        then
-            release="rpm"
-        elif grep -Eqi "debian" < /proc/version
-        then
-            release="deb"
-        elif grep -Eqi "ubuntu" < /proc/version
-        then
-            release="ubu"
-        fi
+        apt-get -y update >/dev/null
+        apt_updated=1
     fi
+}
 
-    if [ -z "$release" ] 
+DepInstall()
+{
+    dependency=$1
+
+    [[ -x $(command -v $dependency) ]] && return 0
+
+    ReleaseCheck
+
+    if [ "$dependency" == "gettext" ] || [ "$dependency" == "wget" ]
     then
-        Println "系统不支持!"
-        exit 1
-    else
-        if [ "$(uname -m | grep -c 64)" -gt 0 ]
-        then
-            release_bit=64
-        else
-            release_bit=32
-        fi
+        Println "${green}[INFO]${normal} Installing $dependency, it takes awhile..."
 
-        if [[ ! -x $(command -v tput) ]] 
+        if [ "$release" == "rpm" ] 
         then
-            Println "$info 安装依赖 tput ..."
-            if [ "$release" == "rpm" ] 
+            if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
             then
-                if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
-                then
-                    setenforce permissive
-                    sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
-                fi
-                if yum -y install ncurses >/dev/null 2>&1
-                then
-                    Println "$info 依赖 tput 安装成功..."
-                else
-                    Println "$error 依赖 tput 安装失败...\n" && exit 1
-                fi
+                setenforce permissive
+                sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+            fi
+            if yum -y install $dependency >/dev/null 2>&1
+            then
+                Println "${green}[INFO]${normal} $dependency installation succeed..."
             else
-                [ "$release" == "deb" ] && FixDeprecatedDeb
-                apt-get -y update >/dev/null 2>&1
-                if apt-get -y install ncurses-bin >/dev/null 2>&1
-                then
-                    Println "$info 依赖 tput 安装成功..."
-                else
-                    Println "$error 依赖 tput 安装失败...\n" && exit 1
-                fi
+                Println "${green}[ERROR]${normal} $dependency installation failed...\n"
+                exit 1
+            fi
+        else
+            [ "$release" == "deb" ] && DebFixSources
+            AptUpdate
+            if apt-get -y install $dependency >/dev/null 2>&1
+            then
+                Println "${green}[INFO]${normal} $dependency installation succeed..."
+            else
+                Println "${green}[ERROR]${normal} $dependency installation failed...\n"
+                exit 1
             fi
         fi
-        Spinner "${1:-检查依赖}" CheckDeps
+
+        return 0
+    fi
+
+    Println "`eval_gettext \"\\\$info 安装 \\\$dependency, 请稍等...\"`"
+
+    if [ "$release" == "rpm" ] 
+    then
+        if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
+        then
+            setenforce permissive
+            sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+        fi
+        if yum -y install $dependency >/dev/null 2>&1
+        then
+            Println "`eval_gettext \"\\\$info \\\$dependency 安装成功\"`"
+        else
+            Println "`eval_gettext \"\\\$error \\\$dependency 安装失败\"`\n"
+            exit 1
+        fi
+    else
+        [ "$release" == "deb" ] && DebFixSources
+        AptUpdate
+        if apt-get -y install $1 >/dev/null 2>&1
+        then
+            Println "`eval_gettext \"\\\$info \\\$dependency 安装成功\"`"
+        else
+            Println "`eval_gettext \"\\\$error \\\$dependency 安装失败\"`\n"
+            exit 1
+        fi
     fi
 }
 
-CheckDeps()
+i18nInstall()
+{
+    local sh_locale=${1:-zh_CN}
+
+    Println "$info You can always use command ${green}tv c <en|ru|de|zh_CN...>${normal} to change/update language!"
+    Println "Downloading ${green}$sh_locale${normal} language file...\n"
+
+    DepInstall wget
+
+    if [ "$sh_locale" == "zh_CN" ] 
+    then
+        echo -e "sh_locale=$sh_locale\nexport LANG=zh_CN.UTF-8" > /usr/local/bin/tv-i18n
+        Println "`eval_gettext \"\\\${green}成功!\\\${normal}\"`\n"
+        return 0
+    fi
+
+    trap '
+        rm -f "$TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/iptv.mo"
+    ' EXIT
+
+    if wget --timeout=15 --tries=3 --no-check-certificate $FFMPEG_MIRROR_LINK/locale/po/iptv.sh-$sh_locale.mo -qO $TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/iptv.mo
+    then
+        trap - EXIT
+        echo -e "sh_locale=$sh_locale\nexport LANG=en_US.UTF-8" > /usr/local/bin/tv-i18n
+        Println "`eval_gettext \"\\\${green}成功!\\\${normal}\"`\n"
+    else
+        Println "`eval_gettext \"\\\${red}失败! 请稍后再试!\\\${normal}\"`\n"
+        exit 1
+    fi
+}
+
+TEXTDOMAIN=iptv
+TEXTDOMAINDIR=/usr/share/locale
+
+export TEXTDOMAIN TEXTDOMAINDIR
+
+DepInstall gettext
+
+# Find a way to echo strings without interpreting backslash.
+if test "X`(echo '\t') 2>/dev/null`" = 'X\t'; then
+  echo='echo'
+else
+  if test "X`(printf '%s\n' '\t') 2>/dev/null`" = 'X\t'; then
+    echo='printf %s\n'
+  else
+    echo_func () {
+      cat <<EOT
+$*
+EOT
+    }
+    echo='echo_func'
+  fi
+fi
+
+# eval_gettext MSGID
+# looks up the translation of MSGID and substitutes shell variables in the
+# result.
+eval_gettext () {
+  gettext "$1" | (export PATH `envsubst --variables "$1"`; envsubst "$1")
+}
+
+[ $EUID -ne 0 ] && Println "`eval_gettext \"\\\${red}[ERROR]\\\${normal} MUST BE ROOT, TRY\\\${green} sudo su \\\${normal}\"`\n" && exit 1
+
+if [ -s /usr/local/bin/tv-i18n ] 
+then
+    . /usr/local/bin/tv-i18n
+fi
+
+info=$(eval_gettext "\${green}[信息]\${normal}")
+error=$(eval_gettext "\${red}[错误]\${normal}")
+tip=$(eval_gettext "\${green}[注意]\${normal}")
+
+if [ -z "${sh_locale:-}" ] 
+then
+    sh_locale="zh_CN"
+    echo -e "sh_locale=$sh_locale\nexport LANG=zh_CN.UTF-8" > /usr/local/bin/tv-i18n
+elif [ "$sh_locale" != "zh_CN" ] && [ ! -s "$TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/iptv.mo" ] 
+then
+    i18nInstall "$sh_locale"
+fi
+
+DepsCheck()
+{
+    ReleaseCheck
+
+    if [ "$(uname -m | grep -c 64)" -gt 0 ]
+    then
+        release_bit=64
+    else
+        release_bit=32
+    fi
+
+    DepInstall tput
+
+    Spinner "$(gettext '检查依赖, 耗时可能会很长')" DepsInstall
+}
+
+DepsInstall()
 {
     if [ "$release" == "rpm" ] 
     then
@@ -893,14 +344,6 @@ CheckDeps()
         then
             setenforce permissive
             sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
-        fi
-        if ! grep -q "export LC_ALL=" < "$HOME/.bashrc"
-        then
-            echo "export LC_ALL=" >> "$HOME/.bashrc"
-        fi
-        if ! grep -q "export LANG=en_US.UTF-8" < "$HOME/.bashrc"
-        then
-            echo "export LANG=en_US.UTF-8" >> "$HOME/.bashrc"
         fi
         yum -y install glibc-locale-source glibc-langpack-en >/dev/null 2>&1 || true
         localedef -c -f UTF-8 -i en_US en_US.UTF-8 >/dev/null 2>&1 || true
@@ -911,42 +354,45 @@ CheckDeps()
             then
                 if yum -y install "$depend" >/dev/null 2>&1
                 then
-                    Println "$info 依赖 $depend 安装成功..."
+                    Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
                 else
-                    Println "$error 依赖 $depend 安装失败...\n" && exit 1
+                    Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n" && exit 1
                 fi
             fi
         done
         if [[ ! -x $(command -v dig) ]] 
         then
+            depend=dig
             if yum -y install bind-utils >/dev/null 2>&1
             then
-                Println "$info 依赖 dig 安装成功..."
+                Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
             else
-                Println "$error 依赖 dig 安装失败...\n" && exit 1
+                Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n" && exit 1
             fi
         fi
         if [[ ! -x $(command -v hexdump) ]] 
         then
+            depend=hexdump
             if yum -y install util-linux >/dev/null 2>&1
             then
-                Println "$info 依赖 hexdump 安装成功..."
+                Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
             else
-                Println "$error 依赖 hexdump 安装失败...\n" && exit 1
+                Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n" && exit 1
             fi
         fi
         if [[ ! -x $(command -v ss) ]] 
         then
+            depend=ss
             if yum -y install iproute >/dev/null 2>&1
             then
-                Println "$info 依赖 ss 安装成功..."
+                Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
             else
-                Println "$error 依赖 ss 安装失败...\n" && exit 1
+                Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n" && exit 1
             fi
         fi
     else
-        [ "$release" == "deb" ] && FixDeprecatedDeb
-        apt-get -y update >/dev/null 2>&1
+        [ "$release" == "deb" ] && DebFixSources
+        AptUpdate
         depends=(wget unzip vim curl cron ufw python3 logrotate patch)
         for depend in "${depends[@]}"
         do
@@ -954,28 +400,30 @@ CheckDeps()
             then
                 if apt-get -y install "$depend" >/dev/null 2>&1
                 then
-                    Println "$info 依赖 $depend 安装成功..."
+                    Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
                 else
-                    Println "$error 依赖 $depend 安装失败...\n" && exit 1
+                    Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n" && exit 1
                 fi
             fi
         done
         if [[ ! -x $(command -v dig) ]] 
         then
+            depend=dig
             if apt-get -y install dnsutils >/dev/null 2>&1
             then
-                Println "$info 依赖 dig 安装成功..."
+                Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
             else
-                Println "$error 依赖 dig 安装失败...\n" && exit 1
+                Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n" && exit 1
             fi
         fi
         if [[ ! -x $(command -v locale-gen) ]] 
         then
+            depend=locales
             if apt-get -y install locales >/dev/null 2>&1
             then
-                Println "$info 依赖 locales 安装成功..."
+                Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
             else
-                Println "$error 依赖 locales 安装失败...\n" && exit 1
+                Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n" && exit 1
             fi
         fi
         if ! grep -q 'en_US' < <(locale -a 2> /dev/null) 
@@ -989,24 +437,15 @@ CheckDeps()
         update-locale LANG=en_US.UTF-8 LANGUAGE LC_ALL >/dev/null 2>&1
         if [[ ! -x $(command -v hexdump) ]] 
         then
+            depend=hexdump
             if apt-get -y install bsdmainutils >/dev/null 2>&1
             then
-                Println "$info 依赖 hexdump 安装成功..."
+                Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
             else
-                Println "$error 依赖 hexdump 安装失败...\n" && exit 1
+                Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n" && exit 1
             fi
         fi
     fi
-}
-
-Progress()
-{
-    echo -ne "\n$info 安装中, 请等待..."
-    while true
-    do
-        echo -n "."
-        sleep 5
-    done
 }
 
 # based on https://raw.githubusercontent.com/tanhauhau/Inquirer.sh/master/dist/inquirer.sh
@@ -1014,26 +453,7 @@ inquirer()
 {
     if [[ ! -x $(command -v tput) ]] 
     then
-        [ -z "${release:-}" ] && CheckRelease
-        Println "$info 安装依赖 tput ..."
-        if [ "$release" == "rpm" ] 
-        then
-            if yum -y install ncurses >/dev/null 2>&1
-            then
-                Println "$info 依赖 tput 安装成功..."
-            else
-                Println "$error 依赖 tput 安装失败...\n" && exit 1
-            fi
-        else
-            [ "$release" == "deb" ] && FixDeprecatedDeb
-            apt-get -y update >/dev/null 2>&1
-            if apt-get -y install ncurses-bin >/dev/null 2>&1
-            then
-                Println "$info 依赖 tput 安装成功..."
-            else
-                Println "$error 依赖 tput 安装失败...\n" && exit 1
-            fi
-        fi
+        DepsCheck
     fi
     local arrow checked unchecked red green blue cyan bold normal dim
     arrow=$(echo -e '\xe2\x9d\xaf')
@@ -1334,7 +754,7 @@ inquirer()
         stty -echo
         tput civis
 
-        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}(按 <space> 选择, <enter> 确认)${normal}"
+        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}$(gettext '(按 <space> 选择, <enter> 确认)')${normal}"
 
         for i in $(inquirer:gen_index ${#_checkbox_list[@]})
         do
@@ -1524,7 +944,7 @@ inquirer()
         stty -echo
         tput civis
 
-        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}(使用上下箭头选择)${normal}"
+        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}$(gettext '(使用上下箭头选择)')${normal}"
 
         for i in $(inquirer:gen_index ${#_list_options[@]})
         do
@@ -1811,26 +1231,7 @@ inquirer()
 Spinner(){
     if [[ ! -x $(command -v tput) ]] 
     then
-        [ -z "${release:-}" ] && CheckRelease
-        Println "$info 安装依赖 tput ..."
-        if [ "$release" == "rpm" ] 
-        then
-            if yum -y install ncurses >/dev/null 2>&1
-            then
-                Println "$info 依赖 tput 安装成功..."
-            else
-                Println "$error 依赖 tput 安装失败...\n" && exit 1
-            fi
-        else
-            [ "$release" == "deb" ] && FixDeprecatedDeb
-            apt-get -y update >/dev/null 2>&1
-            if apt-get -y install ncurses-bin >/dev/null 2>&1
-            then
-                Println "$info 依赖 tput 安装成功..."
-            else
-                Println "$error 依赖 tput 安装失败...\n" && exit 1
-            fi
-        fi
+        DepsCheck
     fi
     local i=1 delay=0.05 FUNCTION_NAME="$2" VARIABLE_NAME="${3:-}" list tempfile
     local green cyan normal
@@ -1882,27 +1283,7 @@ CheckShFile()
 {
     if [ ! -e "$SH_FILE" ] 
     then
-        if [[ ! -x $(command -v curl) ]] 
-        then
-            CheckReleaseLite
-            Println "$info 安装 curl ..."
-            if [ "$release" == "rpm" ] 
-            then
-                if yum -y install curl >/dev/null 2>&1
-                then
-                    Println "$info curl 安装成功..."
-                else
-                    Println "$error curl 安装失败...\n" && exit 1
-                fi
-            else
-                if apt-get -y install curl >/dev/null 2>&1
-                then
-                    Println "$info curl 安装成功..."
-                else
-                    Println "$error curl 安装失败...\n" && exit 1
-                fi
-            fi
-        fi
+        DepInstall curl
         if curl -s -Lm 20 "$SH_LINK" -o "${SH_FILE}_tmp"
         then
             mv "${SH_FILE}_tmp" "$SH_FILE"
@@ -1968,7 +1349,7 @@ UpdateShFile()
         fi
     fi
 
-    i18nSelect "${sh_lang:-}" > /dev/null
+    [ "$sh_locale" != "zh_CN" ] && i18nInstall "$sh_locale" > /dev/null
 }
 
 UpdateCreatorFile()
@@ -1992,9 +1373,19 @@ UpdateCreatorFile()
     fi
 }
 
+Progress()
+{
+    echo -ne "\n$info 安装中, 请等待..."
+    while true
+    do
+        echo -n "."
+        sleep 5
+    done
+}
+
 InstallPython()
 {
-    CheckReleaseLite
+    ReleaseCheck
     if [ "$release" == "rpm" ] 
     then
         echo
@@ -2082,7 +1473,7 @@ InstallFFmpeg()
 
 CompileFFmpeg()
 {
-    CheckRelease "检查依赖, 耗时可能会很长"
+    DepsCheck
 
     if [ "$release" == "rpm" ] 
     then
@@ -2945,7 +2336,7 @@ Install()
     then
         Println "$error 目录已存在, 请先卸载...\n" && exit 1
     else
-        CheckRelease "检查依赖, 耗时可能会很长"
+        DepsCheck
 
         #if grep -q '\--show-progress' < <(wget --help)
         #then
@@ -3144,7 +2535,7 @@ Update()
         reinstall_ffmpeg_yn="Y"
     fi
 
-    CheckReleaseLite
+    ReleaseCheck
 
     if [[ ${reinstall_ffmpeg_yn:-N} == [Yy] ]] 
     then
@@ -3178,7 +2569,7 @@ InstallOpenssl()
     trap '
         kill $progress_pid 2> /dev/null
     ' EXIT
-    CheckReleaseLite
+    ReleaseCheck
     if [ "$release" == "rpm" ] 
     then
         yum -y install openssl openssl-devel >/dev/null 2>&1
@@ -3198,7 +2589,7 @@ InstallImageMagick()
         kill $progress_pid 2> /dev/null
     ' EXIT
     rm -f "$IPTV_ROOT/magick"
-    [ -z "${release:-}" ] && CheckReleaseLite
+    ReleaseCheck
     if [ "$release" == "rpm" ] 
     then
         yum -y install ImageMagick >/dev/null 2>&1
@@ -3213,7 +2604,7 @@ InstallImageMagick()
 
 InstallPdf2html()
 {
-    CheckReleaseLite
+    ReleaseCheck
     Progress &
     progress_pid=$!
     trap '
@@ -3525,6 +2916,519 @@ WaitTerm()
         rm -rf "${delete_on_term:-notfound}"
         exit 1
     fi
+}
+
+JQ()
+{
+    FILE=$2
+    [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
+
+    if TMP_FILE=$(mktemp -q) 
+    then
+        chmod +r "$TMP_FILE"
+    else
+        printf -v TMP_FILE "${FILE}_%s" "$BASHPID"
+    fi
+
+    trap 'rm -f $TMP_FILE"' EXIT
+
+    {
+        flock -x 200 || { MonitorError "$FILE JQ fd 200 失败"; exit 1; }
+        case $1 in
+            "add") 
+                if [ -n "${jq_path:-}" ] 
+                then
+                    if [ "${4:-}" == "pre" ] 
+                    then
+                        $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) |= [$value] + .' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                    else
+                        $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) += [$value]' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                    fi
+                    jq_path=""
+                else
+                    $JQ_FILE --arg index "$3" --argjson value "$4" '.[$index] += $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                fi
+            ;;
+            "update") 
+                if [ -n "${jq_path:-}" ] 
+                then
+                    if [ "${4:-}" == "number" ] 
+                    then
+                        $JQ_FILE --argjson path "$jq_path" --arg value "$3" 'getpath($path) = ($value | tonumber)' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                    else
+                        $JQ_FILE --argjson path "$jq_path" --arg value "$3" 'getpath($path) = $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                    fi
+                    jq_path=""
+                else
+                    $JQ_FILE "$3" "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                fi
+            ;;
+            "replace") 
+                if [ -n "${jq_path:-}" ] 
+                then
+                    $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) = $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                    jq_path=""
+                else
+                    $JQ_FILE --arg index "$3" --argjson value "$4" '.[$index] = $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                fi
+            ;;
+            "delete") 
+                if [ -n "${jq_path:-}" ] 
+                then
+                    if [ -z "${3:-}" ] 
+                    then
+                        $JQ_FILE --argjson path "$jq_path" 'del(getpath($path))' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                    elif [ -z "${4:-}" ] 
+                    then
+                        $JQ_FILE --argjson path "$jq_path" --arg index "$3" 'del(getpath($path)[$index|tonumber])' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                    else
+                        $JQ_FILE --argjson path "$jq_path" 'del(getpath($path)[] | select(.'"$3"'=='"$4"'))' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                    fi
+                    jq_path=""
+                else
+                    $JQ_FILE --arg index "$3" 'del(.[$index][] | select(.pid=='"$4"'))' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                fi
+            ;;
+        esac
+
+        if [ ! -s "$TMP_FILE" ] 
+        then
+            printf 'JQ ERROR!! action: %s, file: %s, tmp_file: %s, index: %s, other: %s' "$1" "$FILE" "$TMP_FILE" "$3" "${4:-none}" >> "$MONITOR_LOG"
+        else
+            mv "$TMP_FILE" "$FILE"
+        fi
+    } 200>"$FILE.lock"
+
+    trap - EXIT
+}
+
+JQs()
+{
+    case $1 in
+        "get") 
+            read -r $3 < <($JQ_FILE -c --argjson path "$jq_path" 'getpath($path)' <<< "${!2}")
+            jq_path=""
+        ;;
+        "add") 
+            if [ "${4:-}" == "pre" ] 
+            then
+                read -r $2 < <($JQ_FILE -c --argjson path "${jq_path:-[]}" --argjson value "$3" 'getpath($path) |= [$value] + .' <<< "${!2}")
+            else
+                read -r $2 < <($JQ_FILE -c --argjson path "${jq_path:-[]}" --argjson value "$3" 'getpath($path) += [$value]' <<< "${!2}")
+            fi
+            jq_path=""
+        ;;
+        "update") 
+            if [ "${4:-}" == "number" ] 
+            then
+                read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" --arg value "$3" 'getpath($path) = ($value | tonumber)' <<< "${!2}")
+            else
+                read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" --arg value "$3" 'getpath($path) = $value' <<< "${!2}")
+            fi
+            jq_path=""
+        ;;
+        "replace") 
+            read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" --argjson value "$3" 'getpath($path) = $value' <<< "${!2}")
+            jq_path=""
+        ;;
+        "delete") 
+            if [ -z "${3:-}" ] 
+            then
+                read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" 'del(getpath($path))' <<< "${!2}")
+            else
+                read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" --arg index "$3" 'del(getpath($path)[$index|tonumber])' <<< "${!2}")
+            fi
+            jq_path=""
+        ;;
+        "merge")
+            read -r $2 < <($JQ_FILE -c -s '
+            def merge(a;b):
+                reduce b[] as $item (a;
+                reduce ($item | keys_unsorted[]) as $key (.;
+                $item[$key] as $val | ($val | type) as $type | .[$key] = if ($type == "object") then
+                    merge({}; [if .[$key] == null then {} else .[$key] end, $val])
+                elif ($type == "array") then
+                    (.[$key] + $val | unique)
+                else
+                    $val
+                end)
+                );
+            merge({}; .)' <<< "${!2} $3")
+        ;;
+        "flat")
+            if [[ $2 =~ ^/ ]] 
+            then
+                jq_input=$(< $2)
+            else
+                jq_input="$2"
+            fi
+
+            $JQ_FILE --arg d1 "$5" --arg d2 "${6:-$5}" --arg d3 "${7:-$5}" --arg d4 "${8:-$5}" --arg d5 "${9:-$5}" --arg d6 "${10:-$5}" -r -c -s '
+            def flat(a;b;c;d;e;f;g):
+                (a[0]| type) as $type | if ($type == "object") then
+                    ([a[] | keys_unsorted[]] | unique) as $keys | reduce a[] as $item ({};
+                    reduce($keys[]) as $key (.;
+                    $item[$key] as $val | ($val | type) as $type | (.[$key]) as $val2 | ($val2 | type) as $type2 | .[$key] = 
+                        if ($type == "object") then
+                            if ($type2 == "object") then
+                                flat([$val2,$val];c;d;e;f;g;b)
+                            elif ($val2) then
+                                if ($val == {}) then
+                                    $val2 + c
+                                else
+                                    (reduce($val2 | split(c)[]) as $item2 ([]; 
+                                        . + [{}]
+                                    )| if .== [] then [{}] else . end) as $x |
+                                    flat($x + [$val];b;c;d;e;f;g)
+                                end
+                            elif ($val == {}) then
+                                ""
+                            else
+                                flat([$val];b;c;d;e;f;g)
+                            end
+                        elif ($type == "array") then
+                            flat($val;b;c;d;e;f;g) as $val3 | 
+                            if ($type2 == "object") then
+                                flat([$val2,($val3|if .== "" then {} else . end)];c;d;e;f;g;b)
+                            elif ($val2) then
+                                if ($val3 == {}) then
+                                    $val2 + c
+                                elif ($val3 | type == "object") then
+                                    (reduce($val2 | split(c)[]) as $item2 ([]; 
+                                        . + [{}]
+                                    )| if .== [] then [{}] else . end) as $x |
+                                    flat($x + [$val3];c;d;e;f;g;b)
+                                else
+                                    $val2 + c + $val3
+                                end
+                            elif ($val3 == {}) then
+                                ""
+                            else
+                                $val3
+                            end
+                        elif ($type == "null") then
+                            if ($type2 == "object") then
+                                flat([$val2,{}];c;d;e;f;g;b)
+                            elif ($val2) then
+                                $val2 + c
+                            else
+                                ""
+                            end
+                        else
+                            if ($val2) then
+                                $val2 + c + ($val | tostring)
+                            else
+                                ($val | tostring)
+                            end
+                        end
+                    ))
+                elif ($type == "array") then
+                    flat([flat(a[];b;c;d;e;f;g)];b;c;d;e;f;g)
+                else
+                    a|join(b)
+                end;
+            flat('"${3:-.}"';$d1;$d2;$d3;$d4;$d5;$d6)|'"$4"'' <<< "$jq_input"
+        ;;
+        "flat_c")
+            if [[ $2 =~ ^/ ]] 
+            then
+                jq_input=$(< $2)
+            else
+                jq_input="$2"
+            fi
+
+            $JQ_FILE --arg d1 "$5" --arg d2 "${6:-$5}" --arg d3 "${7:-$5}" --arg d4 "${8:-$5}" --arg d5 "${9:-$5}" --arg d6 "${10:-$5}" -r -c -s '
+            def flat(a;x;b;c;d;e;f;g):
+                a as $a | (a[0]| type) as $type | if ($type == "object") then
+                    ([a[] | keys_unsorted[]] | unique) as $keys | 
+
+                    (reduce a[] as $item ({};
+                        reduce($keys[]) as $key (.; ($item[$key]) as $val | ($val | type) as $type | (.[$key]) as $val2 | .[$key] = 
+                            if ($val and $val != [] and $val != {}) then
+                                if ($val2 and ($val2|.[-1:]) == [""]) then
+                                    $val2
+                                else
+                                    ($val2 // []) + [""]
+                                end
+                            else
+                                if ($val2) then
+                                    if ($val2|.[-1:] == [""]) then
+                                        $val2
+                                    else
+                                        $val2 + [{}]
+                                    end
+                                else
+                                    [{}]
+                                end
+                            end
+                        )
+                    )) as $blank | (reduce($keys[]) as $key ({};
+                        .[$key] = ($blank[$key] | .[:-1])
+                    )) as $blank |
+
+                    reduce a[] as $item ({};
+                    reduce($keys[]) as $key (.;
+                    $blank[$key] as $x | $item[$key] as $val | ($val | type) as $type | (.[$key]) as $val2 |($val2 | type) as $type2 | 
+                    .[$key] = 
+                        if ($type == "object") then
+                            if ($val2) then
+                                if ($type2 == "object") then
+                                    if (x == [""]) then
+                                        flat([$val2,$val];$x + [1];c;d;e;f;g;b)
+                                    else
+                                        flat([$val2,flat([$val];x;b;c;d;e;f;g)];x;c;d;e;f;g;b)
+                                    end
+                                elif ($val == {}) then
+                                    $val2 + c
+                                else
+                                    if (x|.[-1:] == [1]) then
+                                        flat(($x + (x | .[:-1]) + [$val]);$x + x;c;d;e;f;g;b)
+                                    else
+                                        flat(($x + [$val]);[];c;d;e;f;g;b)
+                                    end
+                                end
+                            else
+                                if ($val == {}) then
+                                    ""
+                                elif (x == [""]) then
+                                    $val
+                                else
+                                    flat([$val];[];b;c;d;e;f;g)
+                                end
+                            end
+                        elif ($type == "array") then
+                            if ($val[0] | type == "object") then
+                                if ($val2) then
+                                    if ($type2 == "object") then
+                                        $val2
+                                    else
+                                        ($a|index($item)) as $index | 
+                                        if ($a|length - $index == 1) then
+                                            flat(($x + [flat($val;$x;b;c;d;e;f;g)]);[];c;d;e;f;g;b)
+                                        else
+                                            flat(reduce($a|.[$index:]|.[]) as $obj ($x;
+                                                if ($obj[$key] and $obj[$key] != []) then
+                                                    . + [flat($obj[$key];[];b;c;d;e;f;g)]
+                                                else
+                                                    . + [{}]
+                                                end
+                                            );[""];c;d;e;f;g;b)
+                                        end
+                                    end
+                                else
+                                    ($a|index($item)) as $index | 
+                                    if ($a|length - $index == 1) then
+                                        flat($val;$x;b;c;d;e;f;g)
+                                    else
+                                        flat(reduce($a|.[$index:]|.[]) as $obj ([];
+                                            if ($obj[$key] and $obj[$key] != []) then
+                                                . + [flat($obj[$key];[];b;c;d;e;f;g)]
+                                            else
+                                                . + [{}]
+                                            end
+                                        );[""];c;d;e;f;g;b)
+                                    end
+                                end
+                            else
+                                if ($val2) then
+                                    if ($type2 == "object") then
+                                        $val2
+                                    else
+                                        $val2 + c + flat($val;$x;b;c;d;e;f;g)
+                                    end
+                                else
+                                    flat($val;$x;b;c;d;e;f;g)
+                                end
+                            end
+                        elif ($type == "null") then
+                            if ($type2 == "object") then
+                                if (x != [""] and (x|.[-1:] != [1])) then
+                                    $val2
+                                else
+                                    flat([$val2,{}];x;c;d;e;f;g;b)
+                                end
+                            elif ($val2) then
+                                $val2 + c
+                            else
+                                ""
+                            end
+                        else
+                            if ($val2) then
+                                $val2 + c + ($val | tostring)
+                            else
+                                ($val | tostring)
+                            end
+                        end
+                    ))
+                elif ($type == "array") then
+                    flat([flat(a[];x;b;c;d;e;f;g)];x;b;c;d;e;f;g)
+                else
+                    a|join(b)
+                end;
+            flat('"${3:-.}"';[];$d1;$d2;$d3;$d4;$d5;$d6)|'"$4"'' <<< "$jq_input"
+        ;;
+    esac
+}
+
+SyncFile()
+{
+    case $action in
+        "skip")
+            action=""
+            return
+        ;;      
+        "start"|"stop")
+            GetDefault
+        ;;
+        "add")
+            chnl_pid=$pid
+            GetChannelInfo
+        ;;
+        *)
+            Println "$error $action ???" && exit 1
+        ;;
+    esac
+
+    chnl_sync_file=${chnl_sync_file:-$d_sync_file}
+    chnl_sync_index=${chnl_sync_index:-$d_sync_index}
+    chnl_sync_pairs=${chnl_sync_pairs:-$d_sync_pairs}
+
+    if [ "$chnl_sync_yn" == "yes" ] && [ -n "$chnl_sync_file" ] && [ -n "$chnl_sync_index" ] && [ -n "$chnl_sync_pairs" ]
+    then
+        IFS=" " read -ra chnl_sync_files <<< "$chnl_sync_file"
+        IFS=" " read -ra chnl_sync_indices <<< "$chnl_sync_index"
+        chnl_pid_key=${chnl_sync_pairs%%:pid*}
+        chnl_pid_key=${chnl_pid_key##*,}
+        sync_count=${#chnl_sync_files[@]}
+        [ "${#chnl_sync_indices[@]}" -lt "$sync_count" ] && sync_count=${#chnl_sync_indices[@]}
+
+        for((sync_i=0;sync_i<sync_count;sync_i++));
+        do
+            if [ ! -s "${chnl_sync_files[sync_i]}" ] 
+            then
+                $JQ_FILE -n --arg name "$(RandStr)" \
+                '{
+                    "ret": 0,
+                    "data": [
+                        {
+                            "name": $name
+                        }
+                    ]
+                }' > "${chnl_sync_files[sync_i]}"
+            fi
+            jq_index=""
+            jq_path="["
+            while IFS=':' read -ra index_arr
+            do
+                for a in "${index_arr[@]}"
+                do
+                    [ "$jq_path" != "[" ] && jq_path="$jq_path,"
+                    case $a in
+                        '') 
+                            Println "$error sync设置错误...\n" && exit 1
+                        ;;
+                        *[!0-9]*)
+                            jq_index="$jq_index.$a"
+                            jq_path="$jq_path\"$a\""
+                        ;;
+                        *) 
+                            jq_index="${jq_index}[$a]"
+                            jq_path="${jq_path}$a"
+                        ;;
+                    esac
+                done
+            done <<< "${chnl_sync_indices[sync_i]}"
+
+            jq_path="$jq_path]"
+
+            if [ "$action" == "stop" ]
+            then
+                if [[ -n $($JQ_FILE "${jq_index}[]|select(.$chnl_pid_key==$chnl_pid)" "${chnl_sync_files[sync_i]}") ]] 
+                then
+                    JQ delete "${chnl_sync_files[sync_i]}" "$chnl_pid_key" "$chnl_pid"
+                fi
+            else
+                jq_channel_new=""
+                jq_channel_edit=""
+                while IFS=',' read -ra index_arr
+                do
+                    for b in "${index_arr[@]}"
+                    do
+                        case $b in
+                            '') 
+                                Println "$error sync设置错误...\n" && exit 1
+                            ;;
+                            *) 
+                                if [[ $b == *"="* ]] 
+                                then
+                                    key=${b%=*}
+                                    value=${b#*=}
+                                    if [[ $value =~ ^http ]]  
+                                    then
+                                        if [ -n "${kind:-}" ] 
+                                        then
+                                            if [ "$kind" == "flv" ] 
+                                            then
+                                                value=$chnl_flv_pull_link
+                                            else
+                                                value=""
+                                            fi
+                                        elif [ -z "${master:-}" ] || [ "$master" -eq 1 ]
+                                        then
+                                            value="$value/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
+                                        else
+                                            value="$value/$chnl_output_dir_name/${chnl_playlist_name}.m3u8"
+                                        fi
+                                    fi
+                                else
+                                    key=${b%:*}
+                                    value=${b#*:}
+                                    value="chnl_$value"
+                                    if [ "$value" == "chnl_pid" ] 
+                                    then
+                                        if [ -n "${new_pid:-}" ] 
+                                        then
+                                            value=$new_pid
+                                        else
+                                            value=${!value}
+                                        fi
+                                    else 
+                                        value=${!value}
+                                    fi
+                                fi
+
+                                if [ -n "$jq_channel_new" ] 
+                                then
+                                    jq_channel_new="$jq_channel_new,"
+                                    jq_channel_edit="$jq_channel_edit,"
+                                fi
+
+                                if [[ $value == *[!0-9]* ]] 
+                                then
+                                    jq_channel_new="$jq_channel_new\"$key\":\"$value\""
+                                    jq_channel_edit="$jq_channel_edit$key:\"$value\""
+                                else
+                                    jq_channel_new="$jq_channel_new\"$key\":$value"
+                                    jq_channel_edit="$jq_channel_edit$key:$value"
+                                fi
+                            ;;
+                        esac
+                    done
+                done <<< "$chnl_sync_pairs"
+                if [ "$action" == "add" ] || [[ -z $($JQ_FILE "${jq_index}[]|select(.$chnl_pid_key==$chnl_pid)" "${chnl_sync_files[sync_i]}") ]]
+                then
+                    JQ add "${chnl_sync_files[sync_i]}" "{$jq_channel_new}"
+                else
+                    jq_path=""
+                    JQ update "${chnl_sync_files[sync_i]}" "${jq_index}|=map(select(.$chnl_pid_key==$chnl_pid) * {$jq_channel_edit} // .)"
+                fi
+            fi
+            jq_path=""
+        done
+
+        Println "$info 频道[ $chnl_channel_name ] sync 执行成功..."
+    fi
+    action=""
 }
 
 FlvStreamCreator()
@@ -16446,7 +16350,7 @@ InstallImgcat()
     trap '
         kill $progress_pid 2> /dev/null
     ' EXIT
-    [ -z "${release:-}" ] && CheckReleaseLite
+    ReleaseCheck
     if [ "$release" == "rpm" ] 
     then
         yum -y install gcc gcc-c++ make ncurses-devel autoconf >/dev/null 2>&1
@@ -21355,7 +21259,7 @@ DomainInstallCert()
 
     if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
     then
-        CheckReleaseLite
+        ReleaseCheck
         if [ "$release" == "rpm" ] 
         then
             yum -y install socat > /dev/null
@@ -21377,7 +21281,7 @@ DomainInstallCert()
 
 OpenrestyInstall()
 {
-    CheckRelease "检查依赖, 耗时可能会很长"
+    DepsCheck
     Progress &
     progress_pid=$!
     trap '
@@ -21559,7 +21463,7 @@ OpenrestyInstall()
 
 NginxInstall()
 {
-    CheckRelease "检查依赖, 耗时可能会很长"
+    DepsCheck
     InstallJQ >/dev/null
     Progress &
     progress_pid=$!
@@ -21742,7 +21646,7 @@ NginxViewStatus()
     then
         Println "$error $nginx_name 未安装 !\n"
     else
-        systemctl status $nginx_name.service
+        systemctl status $nginx_name.service --no-pager
     fi
 }
 
@@ -24028,7 +23932,7 @@ NginxDomainUpdateCrt()
     Println "$info 更新证书..."
     if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
     then
-        CheckReleaseLite
+        ReleaseCheck
         if [ "$release" == "rpm" ] 
         then
             yum -y install socat > /dev/null
@@ -24636,7 +24540,7 @@ NginxAddDomain()
 
 NodejsInstall()
 {
-    CheckRelease "检查依赖, 耗时可能会很长"
+    DepsCheck
     Progress &
     progress_pid=$!
     trap '
@@ -24705,7 +24609,7 @@ NodejsInstallMongodb()
     ulimit -m unlimited
     ulimit -u 32000
 
-    CheckReleaseLite
+    ReleaseCheck
     if [ "$release" == "rpm" ] 
     then
         printf '%s' "
@@ -24744,7 +24648,7 @@ gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
             fi
         fi
 
-        apt-get -y update >/dev/null 2>&1
+        AptUpdate
         apt-get install -y mongodb-org >/dev/null 2>&1
     fi
 
@@ -24765,14 +24669,14 @@ gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
 
 InstallGit()
 {
-    CheckReleaseLite
+    ReleaseCheck
     if [ "$release" == "rpm" ] 
     then
         yum -y install git > /dev/null
     elif [ "$release" == "ubu" ] 
     then
         add-apt-repository ppa:git-core/ppa -y > /dev/null 
-        apt-get -y update
+        AptUpdate
         apt-get -y install git > /dev/null
     else
         apt-get -y install git > /dev/null
@@ -24962,7 +24866,7 @@ V2rayInstall()
         fi
     fi
 
-    CheckRelease "检查依赖, 耗时可能会很长"
+    DepsCheck
     InstallJQ
 
     if ! grep -q "$v2ray_name:" < "/etc/passwd"
@@ -25016,7 +24920,7 @@ V2rayInstall()
 
 V2rayUpdate()
 {
-    CheckRelease "检查依赖, 耗时可能会很长"
+    DepsCheck
     InstallJQ
     UpdateShFile $v2ray_name
 
@@ -25174,7 +25078,7 @@ V2rayConfigUpdate()
 
 V2rayStatus()
 {
-    systemctl status $v2ray_name
+    systemctl status $v2ray_name --no-pager
 }
 
 V2raySetListen()
@@ -25489,7 +25393,7 @@ V2raySetCertificates()
 
                     if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
                     then
-                        CheckReleaseLite
+                        ReleaseCheck
                         if [ "$release" == "rpm" ] 
                         then
                             yum -y install socat > /dev/null
@@ -27737,7 +27641,7 @@ V2rayListInboundAccountLink()
             Println "已取消...\n"
             exit 1
         fi
-        CheckReleaseLite
+        ReleaseCheck
         if [ ! -e "/usr/local/bin/imgcat" ] 
         then
             InstallImgcat
@@ -30323,7 +30227,7 @@ V2rayDomainUpdateCrt()
     Println "$info 更新证书..."
     if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
     then
-        CheckReleaseLite
+        ReleaseCheck
         if [ "$release" == "rpm" ] 
         then
             yum -y install socat > /dev/null
@@ -30780,7 +30684,7 @@ TrojanInstall()
         fi
     fi
 
-    CheckRelease "检查依赖, 耗时可能会很长"
+    DepsCheck
     InstallJQ
 
     if ! grep -q "$trojan_name:" < "/etc/passwd"
@@ -36141,7 +36045,7 @@ IbmDownloadV2ray()
     then
         Println "$error ibm $v2ray_name 已存在\n"
     else
-        CheckRelease "检查依赖, 耗时可能会很长"
+        DepsCheck
         InstallJQ
 
         Println "$info 下载 ibm $v2ray_name ..."
@@ -38549,7 +38453,7 @@ VipEnable()
                 Println "$info 安装 md5sum..."
                 if [[ ! -x $(command -v gcc) ]] 
                 then
-                    CheckReleaseLite
+                    ReleaseCheck
                     if [ "$release" == "rpm" ] 
                     then
                         yum -y install gcc gcc-c++ >/dev/null 2>&1
@@ -39006,11 +38910,99 @@ Menu()
 
 Usage()
 {
-    usage=""
-    while IFS= read -r line && [ "$line" ] ;do
-        [ "${line:1:1}" = " " ] && usage="$usage${line:2}\n"
-    done < "$0"
-    eval "printf \"\n%b\n\" \"$usage\""
+    Println " `gettext \"使用方法: tv -i [直播源] [-s 分片时长(秒)] [-o 输出目录名称] [-c m3u8包含的分片数] [-b 比特率] [-p m3u8文件名称] [-C] [-l] [-P http代理]\"`
+    `gettext \" -i  直播源(支持 mpegts / hls / flv / youtube ...)\"`
+         `gettext \"可以是视频路径\"`
+         `gettext \"可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔\"`
+    `gettext \" -s  分片时长(秒)(默认: 6)\"`
+    `gettext \" -o  输出目录名称(默认: 随机名称)\"`
+
+    `gettext \" -l  非无限时长直播, 无法设置切割的分片数且无法监控(默认: 不设置)\"`
+    `gettext \" -P  FFmpeg 的 http 代理, 直播源是 http 链接时可用(默认: 不设置)\"`
+
+    `gettext \" -p  m3u8名称(前缀)(默认: 随机)\"`
+    `gettext \" -c  m3u8里包含的分片数目(默认: 5)\"`
+    `gettext \" -S  分片所在子目录名称(默认: 不使用子目录)\"`
+    `gettext \" -t  分片名称(前缀)(默认: 跟m3u8名称相同)\"`
+    `gettext \" -a  音频编码(默认: aac) (不需要转码时输入 copy)\"`
+    `gettext \" -v  视频编码(默认: libx264) (不需要转码时输入 copy)\"`
+    `gettext \" -f  画面或声音延迟(格式如:  v_3 画面延迟3秒, a_2 声音延迟2秒 画面声音不同步时使用)\"`
+    `gettext \" -d  dvb teletext 字幕解码成的格式,可选: text,ass (默认: 不设置)\"`
+    `gettext \" -q  crf 值(如果同时设置了输出视频比特率, 则优先使用 crf 值控制视频质量)(数值 0~63 越大质量越差), 多个 crf 用逗号分隔\"`
+         `gettext \"(默认: 不设置 crf 值)\"`
+    `gettext \" -b  输出视频的比特率(kb/s)(默认: 900-1280x720)\"`
+         `gettext \"如果已经设置crf视频质量值, 则比特率用于 -maxrate -bufsize\"`
+         `gettext \"如果没有设置crf视频质量值, 则可以继续设置是否固定码率\"`
+         `gettext \"多个比特率用逗号分隔(注意-如果设置多个比特率, 就是生成自适应码流)\"`
+         `gettext \"同时可以指定输出的分辨率(比如: -b 800-640x360,1000-960x540,1500-1280x720)\"`
+         `gettext \"可以输入 omit 省略此选项\"`
+    `gettext \" -C  固定码率(只有在没有设置crf视频质量的情况下才有效)(默认: 否)\"`
+    `gettext \" -e  加密分片(默认: 不加密)\"`
+    `gettext \" -K  Key名称(默认: 随机)\"`
+    `gettext \" -z  频道名称(默认: 跟m3u8名称相同)\"`
+     `gettext \"也可以不输出 HLS, 比如 flv 推流\"`
+    `gettext \" -k  设置推流类型, 比如 -k flv\"`
+    `gettext \" -H  推流 h265(默认: 不设置)\"`
+    `gettext \" -T  设置推流地址, 比如 rtmp://127.0.0.1/flv/xxx\"`
+    `gettext \" -L  输入拉流(播放)地址(可省略), 比如 http://domain.com/flv?app=flv&stream=xxx\"`
+    `gettext \" -m  FFmpeg 额外的 输入参数\"`
+         (`gettext \"默认:\"` -copy_unknown -reconnect 1 -reconnect_at_eof 1 
+         -reconnect_streamed 1 -reconnect_delay_max 2000 
+         -rw_timeout 10000000 -y -nostats -nostdin -hide_banner -loglevel error)
+         `gettext \"如果输入的直播源是 hls 链接, 需去除 -reconnect_at_eof 1\"`
+         `gettext \"如果输入的直播源是 rtmp 或本地链接, 需去除 -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000\"`
+    `gettext \" -n  FFmpeg 额外的 输出参数, 可以输入 omit 省略此选项\"`
+         (`gettext \"默认:\"` -g 50 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main)
+
+ `gettext \"举例:\"`
+     `gettext \"使用crf值控制视频质量:\"` 
+         `gettext \"tv -i http://xxx.com/xxx.ts -s 6 -o hbo1 -p hbo1 -q 15 -b 1500-1280x720 -z 'hbo直播1'\"`
+     `gettext \"使用比特率控制视频质量[默认]:\"` 
+         `gettext \"tv -i http://xxx.com/xxx.ts -s 6 -o hbo2 -p hbo2 -b 900-1280x720 -z 'hbo直播2'\"`
+     `gettext \"不需要转码的设置:\"` -a copy -v copy -n omit
+     `gettext \"不输出 HLS, 推流 flv:\"`
+         tv -i http://xxx/xxx.ts -a aac -v libx264 -b 3000 -k flv -T rtmp://127.0.0.1/flv/xxx
+
+ `gettext \"快捷键:\"`
+     `gettext \"tv 打开 HLS 管理面板\"`
+         `gettext \"tv l 列出所有开启的频道\"`
+         `gettext \"tv d 添加演示频道\"`
+         `gettext \"tv e 手动修改 channels.json\"`
+       `gettext \"tv f 打开 FLV 管理面板\"`
+       `gettext \"tv v 打开 VIP 面板\"`
+       `gettext \"tv m 开启监控\"`
+         `gettext \"tv m l [行数] 查看监控日志\"`
+         `gettext \"tv m s 关闭监控\"`
+       `gettext \"tv s 节目表管理面板\"`
+       `gettext \"tv 4g 打开 4gtv 频道管理面板\"`
+       `gettext \"tv FFmpeg 自建 FFmpeg 镜像\"`
+       `gettext \"tv debug 1/0 开启/关闭 调试\"`
+
+     `gettext \"cx 打开 xtream codes 账号/频道管理面板\"`
+
+     `gettext \"v2 打开 v2ray 面板\"`
+        `gettext \"v2 e 手动修改 config.json\"`
+
+     `gettext \"x 打开 xray 面板\"`
+        `gettext \"x e 手动修改 config.json\"`
+
+     `gettext \"nx 打开 nginx 面板\"`
+
+     `gettext \"or 打开 openresty 面板\"`
+
+     `gettext \"cf 打开 cloudflare partner / workers 面板\"`
+        `gettext \"cf w 打开 cloudflare workers 面板\"`
+
+     `gettext \"ibm 打开 IBM Cloud Foundry 面板\"`
+        `gettext \"ibm v2 打开 ibm v2ray app 管理面板\"`
+        `gettext \"ibm x  打开 ibm xray app 管理面板\"`
+
+     `gettext \"arm 打开 Armbian 管理面板\"`
+
+     `gettext \"pve 打开 Proxmox VE 管理面板\"`
+
+     `gettext \"tv c <en|ru|de|zh_CN|...> 切换/更新 语言\"`
+    "
     exit
 }
 
@@ -39258,7 +39250,7 @@ then
 
     if [ ! -e "$JQ_FILE" ] 
     then
-        CheckRelease "检查依赖, 耗时可能会很长"
+        DepsCheck
         InstallJQ
     fi
 
@@ -39314,7 +39306,7 @@ then
 
     if [ ! -e "$JQ_FILE" ] 
     then
-        CheckRelease "检查依赖, 耗时可能会很长"
+        DepsCheck
         InstallJQ
     fi
 
@@ -39666,12 +39658,12 @@ WantedBy=multi-user.target
         17)
             if [[ ! -x $(command -v tesseract) ]] 
             then
-                CheckRelease "检查依赖, 耗时可能会很长"
+                DepsCheck
                 echo
                 if [ "$release" == "ubu" ] 
                 then
                     add-apt-repository ppa:alex-p/tesseract-ocr -y
-                    apt-get -y update
+                    AptUpdate
                     apt-get -y install tesseract
                 elif [ "$release" == "deb" ] 
                 then
@@ -39686,7 +39678,7 @@ WantedBy=multi-user.target
         18)
             if [[ ! -x $(command -v postfix) ]] 
             then
-                CheckReleaseLite
+                ReleaseCheck
                 Spinner "安装 postfix" InstallPostfix
             else
                 echo
@@ -40788,6 +40780,8 @@ config interface 'lan'
                 sed -i '/config forwarding/,+2d' /etc/config/firewall
                 echo \"${openwrt_network}\" > /etc/config/network
                 /etc/init.d/network restart
+                sed -i '/option ra_management/a \\\tlist dhcp_option 6,$eth0_ip' /etc/config/dhcp
+                /etc/init.d/dnsmasq restart
                 "
             fi
 
@@ -41403,7 +41397,7 @@ then
             fi
         ;;
         6) 
-            CheckReleaseLite
+            ReleaseCheck
             InstallJQ
 
             if dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
@@ -41520,7 +41514,7 @@ then
             Println "$info 请在虚拟机内执行 opkg update; opkg install qemu-ga 后关闭虚拟机几秒后再打开\n"
         ;;
         8)
-            CheckReleaseLite
+            ReleaseCheck
             InstallJQ
 
             Println "$tip 请确保已经安装 qemu-guest-agent\n"
@@ -41546,7 +41540,7 @@ then
             echo
         ;;
         9)
-            CheckReleaseLite
+            ReleaseCheck
             InstallJQ
 
             Println "$tip 请确保已经安装 qemu-guest-agent\n"
@@ -41580,7 +41574,7 @@ then
             Println "$info 界面语言切换成功\n"
         ;;
         10)
-            CheckReleaseLite
+            ReleaseCheck
             InstallJQ
 
             Println "$tip 请确保已经安装 qemu-guest-agent\n"
@@ -41642,7 +41636,7 @@ then
             Println "$info 切换成功\n"
         ;;
         11)
-            CheckReleaseLite
+            ReleaseCheck
             InstallJQ
 
             Println "$tip 请确保已经安装 qemu-guest-agent\n"
@@ -42370,15 +42364,13 @@ then
         "ffmpeg") 
             [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
 
-            if [[ ! -x $(command -v curl) ]] 
+            if [[ ! -x $(command -v curl) ]] || [ ! -e "$JQ_FILE" ]
             then
-                Println "$info 检查依赖..."
-                CheckRelease > /dev/null
+                DepsCheck
             fi
 
             if [ ! -e "$JQ_FILE" ] 
             then
-                CheckRelease "检查依赖, 耗时可能会很长"
                 InstallJQ
             fi
 
@@ -42794,16 +42786,17 @@ then
                 Println "$error v2ray install-release.sh 下载出错, 无法连接 github ?"
             fi
 
-            lang_options=( zh-cn en )
+            locale_options=( zh_CN en )
+            mkdir -p "$FFMPEG_MIRROR_ROOT/locale/po/"
 
-            for lang in "${lang_options[@]}"
+            for locale in "${locale_options[@]}"
             do
-                Println "$info 下载 $lang 语言文件 ..."
-                if curl -s -L "https://raw.githubusercontent.com/woniuzfb/iptv/master/i18n/i18n_table-$lang.sh" -o "$FFMPEG_MIRROR_ROOT/i18n_table-$lang.sh_tmp"
+                Println "$info 下载 $locale 语言文件 ..."
+                if curl -s -L "https://raw.githubusercontent.com/woniuzfb/iptv/master/i18n/po/$locale.mo" -o "$FFMPEG_MIRROR_ROOT/locale/po/$locale.mo_tmp"
                 then
-                    mv "$FFMPEG_MIRROR_ROOT/i18n_table-$lang.sh_tmp" "$FFMPEG_MIRROR_ROOT/i18n_table-$lang.sh"
+                    mv "$FFMPEG_MIRROR_ROOT/locale/po/$locale.mo_tmp" "$FFMPEG_MIRROR_ROOT/locale/po/$locale.mo"
                 else
-                    Println "$error i18n_table-$lang.sh 下载出错, 无法连接 github ?"
+                    Println "$error $locale.mo 下载出错, 无法连接 github ?"
                 fi
             done
 
@@ -42939,7 +42932,27 @@ then
             exit 0
         ;;
         "c")
-            i18nSelect "${2:-}"
+            to_locale=${2:-}
+            new_locale=""
+
+            if [ -n "$to_locale" ] 
+            then
+                new_locale=${to_locale%.*}
+
+                if [[ $new_locale =~ ^(.+)[-|_](.+)$ ]] 
+                then
+                    new_locale=$(tr '[:upper:]' '[:lower:]' <<< "${BASH_REMATCH[1]}")_$(tr '[:lower:]' '[:upper:]' <<< "${BASH_REMATCH[2]}")
+                else
+                    new_locale=$(tr '[:upper:]' '[:lower:]' <<< "$new_locale")
+                fi
+
+                if [[ $to_locale =~ \. ]] 
+                then
+                    new_locale="$new_locale.${to_locale#*.}"
+                fi
+            fi
+
+            i18nInstall "$new_locale"
             exit 0
         ;;
         *)
