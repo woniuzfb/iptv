@@ -53,8 +53,6 @@ MD5SUM_FILE="$C_ROOT/md5sum"
 MD5SUM_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/scripts/md5sum.c"
 MD5SUM_LINK_BACKUP="$FFMPEG_MIRROR_LINK/md5sum.c"
 CREATOR_FILE="$IPTV_ROOT/HLS-Stream-Creator.sh"
-CREATOR_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/scripts/HLS-Stream-Creator.sh"
-CREATOR_LINK_BACKUP="$FFMPEG_MIRROR_LINK/HLS-Stream-Creator.sh"
 CF_FILE="/usr/local/bin/cf"
 CF_CONFIG="$HOME/cloudflare.json"
 CF_WORKERS_ROOT="$HOME/workers"
@@ -78,6 +76,8 @@ red="\033[31m"
 blue="\033[34m"
 normal="\033[0m"
 dim_underlined="\033[37;4;2m"
+indent_6="\r\033[6C"
+indent_20="\r\033[20C"
 
 Println()
 {
@@ -118,7 +118,7 @@ ReleaseCheck()
 
     if [ -z "$release" ] 
     then
-        Println "$error not support yet...\n"
+        Println "${red}[ERROR]${normal} not support yet...\n"
         exit 1
     fi
 
@@ -259,7 +259,7 @@ i18nInstall()
 
     if [ "$sh_locale" == "zh_CN" ] 
     then
-        echo -e "sh_locale=$sh_locale\nexport LANG=zh_CN.UTF-8" > "$i18n_FILE"
+        echo -e "sh_locale=$sh_locale\nexport LANG=zh_CN.UTF-8\nlocale_fix=0" > "$i18n_FILE"
         Println "`eval_gettext \"\\\${green}成功!\\\${normal}\"`\n"
         return 0
     fi
@@ -271,12 +271,140 @@ i18nInstall()
     if wget --timeout=15 --tries=3 --no-check-certificate $FFMPEG_MIRROR_LINK/locale/po/iptv.sh-$sh_locale.mo -qO $TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/iptv.mo
     then
         trap - EXIT
-        echo -e "sh_locale=$sh_locale\nexport LANG=en_US.UTF-8" > "$i18n_FILE"
+        echo -e "sh_locale=$sh_locale\nexport LANG=en_US.UTF-8\nlocale_fix=0" > "$i18n_FILE"
         Println "`eval_gettext \"\\\${green}成功!\\\${normal}\"`\n"
     else
         Println "`eval_gettext \"\\\${red}失败! 请稍后再试!\\\${normal}\"`\n"
         exit 1
     fi
+}
+
+i18nGetMsg()
+{
+    case ${1:-} in
+        "") 
+            i18n_yes=$(gettext "是")
+            i18n_no=$(gettext "否")
+            i18n_cancel=$(gettext "取消")
+            i18n_canceled=$(gettext "已取消")
+            i18n_default_cancel=$(gettext "(默认: 取消): ")
+            i18n_input_correct_no=$(gettext "请输入正确的序号")
+            i18n_input_correct_number=$(gettext "请输入正确的数字")
+            info="${green}`gettext \"[信息]\"`${normal}"
+            error="${red}`gettext \"[错误]\"`${normal}"
+            tip="${green}`gettext \"[注意]\"`${normal}"
+            yn_options=( "$i18n_yes" "$i18n_no" )
+            ny_options=( "$i18n_no" "$i18n_yes" )
+        ;;
+        list_channels) 
+            i18n_video_shift=${i18n_video_shift:-$(gettext "画面延迟")}
+            i18n_audio_shift=${i18n_audio_shift:-$(gettext "声音延迟")}
+            i18n_seconds=${i18n_seconds:-$(gettext "秒")}
+            i18n_not_set=${i18n_not_set:-$(gettext "不设置")}
+            i18n_const_no=${i18n_const_no:-$(gettext " 固定码率:否")}
+            i18n_const_yes=${i18n_const_yes:-$(gettext " 固定码率:是")}
+            i18n_resolution=${i18n_resolution:-$(gettext "分辨率")}
+            i18n_bitrates=${i18n_bitrates:-$(gettext "比特率")}
+            i18n_original=${i18n_original:-$(gettext "原画")}
+            i18n_proxy=${i18n_proxy:-$(gettext "代理")}
+            i18n_enabled=${i18n_enabled:-$(gettext "开启")}
+            i18n_disabled=${i18n_disabled:-$(gettext "关闭")}
+            i18n_pid=${i18n_pid:-$(gettext "进程ID")}
+            i18n_status=${i18n_status:-$(gettext "状态")}
+            i18n_channel_name=${i18n_channel_name:-$(gettext "频道名称")}
+            i18n_codec=${i18n_codec:-$(gettext "编码")}
+            i18n_video_audio_shift=${i18n_video_audio_shift:-$(gettext "延迟")}
+            i18n_video_quality=${i18n_video_quality:-$(gettext "视频质量")}
+            i18n_stream_link=${i18n_stream_link:-$(gettext "源")}
+            i18n_playlist_file=${i18n_playlist_file:-$(gettext "m3u8路径")}
+            i18n_flv_push_link=${i18n_flv_push_link:-$(gettext "推流地址")}
+            i18n_flv_pull_link=${i18n_flv_pull_link:-$(gettext "拉流地址")}
+        ;;
+        get_channel)
+            i18n_channel_try_again=${i18n_channel_try_again:-$(gettext "频道发生变化, 请重试 !")}
+            i18n_video_shift=${i18n_video_shift:-$(gettext "画面延迟")}
+            i18n_audio_shift=${i18n_audio_shift:-$(gettext "声音延迟")}
+            i18n_seconds=${i18n_seconds:-$(gettext "秒")}
+            i18n_not_set=${i18n_not_set:-$(gettext "不设置")}
+            i18n_const_no=${i18n_const_no:-$(gettext " 固定码率:否")}
+            i18n_const_yes=${i18n_const_yes:-$(gettext " 固定码率:是")}
+            i18n_resolution=${i18n_resolution:-$(gettext "分辨率")}
+            i18n_bitrates=${i18n_bitrates:-$(gettext "比特率")}
+            i18n_original=${i18n_original:-$(gettext "原画")}
+            i18n_enabled=${i18n_enabled:-$(gettext "开启")}
+            i18n_disabled=${i18n_disabled:-$(gettext "关闭")}
+            i18n_sync_not_set=${i18n_sync_not_set:-$(gettext "请先设置 sync")}
+            i18n_sync_not_enabled=${i18n_sync_not_enabled:-$(gettext "请先开启 sync")}
+        ;;
+        list_channel)
+            i18n_playlist_name=${i18n_playlist_name:-$(gettext "m3u8名称")}
+            i18n_playlist_link=${i18n_playlist_link:-$(gettext "m3u8链接")}
+            i18n_seg_dir_name=${i18n_seg_dir_name:-$(gettext "分片子目录")}
+            i18n_seg_name=${i18n_seg_name:-$(gettext "分片名称")}
+            i18n_seg_length=${i18n_seg_length:-$(gettext "分片时长")}
+            i18n_seg_count=${i18n_seg_count:-$(gettext "分片数")}
+            i18n_encrypt=${i18n_encrypt:-$(gettext "加密")}
+            i18n_keyinfo_name=${i18n_keyinfo_name:-$(gettext "keyinfo名称")}
+            i18n_key_name=${i18n_key_name:-$(gettext "key名称")}
+            i18n_live=${i18n_live:-$(gettext "直播")}
+            i18n_xtream_codes_proxy=${i18n_xtream_codes_proxy:-$(gettext "xtream codes 代理")}
+            i18n_user_agent=${i18n_user_agent:-$(gettext "user agent")}
+            i18n_headers=${i18n_headers:-$(gettext "headers")}
+            i18n_cookies=${i18n_cookies:-$(gettext "cookies")}
+            i18n_video_codec=${i18n_video_codec:-$(gettext "视频编码")}
+            i18n_audio_codec=${i18n_audio_codec:-$(gettext "音频编码")}
+            i18n_delay=${i18n_delay:-$(gettext "延迟")}
+            i18n_input_flags=${i18n_input_flags:-$(gettext "输入参数")}
+            i18n_output_flags=${i18n_output_flags:-$(gettext "输出参数")}
+            i18n_none=${i18n_none:-$(gettext "无")}
+        ;;
+        *) 
+        ;;
+    esac
+}
+
+LocaleFix()
+{
+    ReleaseCheck
+
+    Println "${green}[INFO]${normal} Installing language (locale) support, it takes awhile..."
+
+    if [ "$release" == "rpm" ] 
+    then
+        if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
+        then
+            setenforce permissive
+            sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+        fi
+        yum -y install glibc-common glibc-locale-source glibc-all-langpacks glibc-langpack-en glibc-langpacks-zh langpacks-zh_CN >/dev/null 2>&1 || true
+    else
+        [ "$release" == "deb" ] && DebFixSources
+        AptUpdate
+        if [[ ! -x $(command -v locale-gen) ]] 
+        then
+            if ! apt-get -y install locales >/dev/null 2>&1
+            then
+                Println "${red}[ERROR]${normal} locales installation failed\n" && exit 1
+            fi
+        fi
+        if [ -s /etc/locale.gen ] 
+        then
+            sed -i "s/# $1.UTF-8 UTF-8/$1.UTF-8 UTF-8/" /etc/locale.gen
+        fi
+        locale-gen $1.UTF-8 >/dev/null
+    fi
+
+    if ! grep -q "$1" < <(locale -a 2> /dev/null) 
+    then
+        Println "${red}[ERROR]${normal} locales installation failed\n" && exit 1
+    fi
+}
+
+# eval_gettext MSGID
+# looks up the translation of MSGID and substitutes shell variables in the
+# result.
+eval_gettext () {
+  gettext "$1" | (export PATH `envsubst --variables "$1"`; envsubst "$1")
 }
 
 TEXTDOMAIN=iptv
@@ -286,13 +414,6 @@ export TEXTDOMAIN TEXTDOMAINDIR
 
 DepInstall gettext
 
-# eval_gettext MSGID
-# looks up the translation of MSGID and substitutes shell variables in the
-# result.
-eval_gettext () {
-  gettext "$1" | (export PATH `envsubst --variables "$1"`; envsubst "$1")
-}
-
 [ $EUID -ne 0 ] && Println "`eval_gettext \"\\\${red}[ERROR]\\\${normal} MUST BE ROOT, TRY\\\${green} sudo su \\\${normal}\"`\n" && exit 1
 
 if [ -s "$i18n_FILE" ] 
@@ -301,18 +422,40 @@ then
     . "$i18n_FILE"
 fi
 
-info=$(eval_gettext "\${green}[信息]\${normal}")
-error=$(eval_gettext "\${red}[错误]\${normal}")
-tip=$(eval_gettext "\${green}[注意]\${normal}")
-
 if [ -z "${sh_locale:-}" ] 
 then
     sh_locale="zh_CN"
-    echo -e "sh_locale=$sh_locale\nexport LANG=zh_CN.UTF-8" > "$i18n_FILE"
-elif [ "$sh_locale" != "zh_CN" ] && [ ! -s "$TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/iptv.mo" ] 
+
+    if [ "${locale_fix:-1}" -eq 1 ] && ! grep -q 'zh_CN' < <(locale -a 2> /dev/null) 
+    then
+        LocaleFix zh_CN
+    fi
+
+    echo -e "sh_locale=$sh_locale\nexport LANG=zh_CN.UTF-8\nlocale_fix=0" > "$i18n_FILE"
+elif [ "$sh_locale" == "zh_CN" ] 
 then
-    i18nInstall "$sh_locale"
+    if [ "${locale_fix:-1}" -eq 1 ] 
+    then
+        if ! grep -q 'zh_CN' < <(locale -a 2> /dev/null) 
+        then
+            LocaleFix zh_CN
+        fi
+        echo -e "sh_locale=$sh_locale\nexport LANG=zh_CN.UTF-8\nlocale_fix=0" > "$i18n_FILE"
+    fi
+else
+    if [ "${locale_fix:-1}" -eq 1 ] && [ "$sh_locale" == "en" ] && ! grep -q 'en_US' < <(locale -a 2> /dev/null) 
+    then
+        LocaleFix en_US
+        echo -e "sh_locale=$sh_locale\nexport LANG=en_US.UTF-8\nlocale_fix=0" > "$i18n_FILE"
+    fi
+
+    if [ ! -s "$TEXTDOMAINDIR/$sh_locale/LC_MESSAGES/iptv.mo" ] 
+    then
+        i18nInstall "$sh_locale"
+    fi
 fi
+
+i18nGetMsg
 
 DepsCheck()
 {
@@ -320,21 +463,18 @@ DepsCheck()
 
     DepInstall tput
 
-    Spinner "$(gettext '检查依赖, 耗时可能会很长')" DepsInstall
+    Spinner "`gettext \"检查依赖, 耗时可能会很长\"`" DepsInstall
 }
 
 DepsInstall()
 {
     if [ "$release" == "rpm" ] 
     then
-        #yum -y update >/dev/null 2>&1
         if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
         then
             setenforce permissive
             sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
         fi
-        yum -y install glibc-locale-source glibc-langpack-en >/dev/null 2>&1 || true
-        localedef -c -f UTF-8 -i en_US en_US.UTF-8 >/dev/null 2>&1 || true
         depends=(wget unzip vim curl crond logrotate patch)
         for depend in "${depends[@]}"
         do
@@ -404,25 +544,6 @@ DepsInstall()
                 Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n" && exit 1
             fi
         fi
-        if [[ ! -x $(command -v locale-gen) ]] 
-        then
-            depend=locales
-            if apt-get -y install locales >/dev/null 2>&1
-            then
-                Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
-            else
-                Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n" && exit 1
-            fi
-        fi
-        if ! grep -q 'en_US' < <(locale -a 2> /dev/null) 
-        then
-            if [ -s /etc/locale.gen ] 
-            then
-                sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
-            fi
-            locale-gen en_US.UTF-8 >/dev/null
-        fi
-        update-locale LANG=en_US.UTF-8 LANGUAGE LC_ALL >/dev/null 2>&1
         if [[ ! -x $(command -v hexdump) ]] 
         then
             depend=hexdump
@@ -742,7 +863,7 @@ inquirer()
         stty -echo
         tput civis
 
-        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}$(gettext '(按 <space> 选择, <enter> 确认)')${normal}"
+        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}`gettext \"(按 <space> 选择, <enter> 确认)\"`${normal}"
 
         for i in $(inquirer:gen_index ${#_checkbox_list[@]})
         do
@@ -932,7 +1053,7 @@ inquirer()
         stty -echo
         tput civis
 
-        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}$(gettext '(使用上下箭头选择)')${normal}"
+        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}`gettext \"(使用上下箭头选择)\"`${normal}"
 
         for i in $(inquirer:gen_index ${#_list_options[@]})
         do
@@ -1191,7 +1312,7 @@ inquirer()
         else
             _text_default_tip=""
         fi
-        _text_input_regex_failed_msg=${4:-"输入验证错误"}
+        _text_input_regex_failed_msg=${4:-$(gettext "输入验证错误")}
         _text_input_validator=${5:-inquirer:text_input_default_validator}
         _text_input_regex_failed=false
 
@@ -1267,7 +1388,7 @@ Spinner(){
     wait $pid
 }
 
-CheckShFile()
+ShFileCheck()
 {
     if [ ! -e "$SH_FILE" ] 
     then
@@ -1276,16 +1397,16 @@ CheckShFile()
         then
             mv "${SH_FILE}_tmp" "$SH_FILE"
             chmod +x "$SH_FILE"
-            Println "$info 脚本下载完成"
+            Println "`eval_gettext \"\\\$info 脚本下载完成\"`"
         else
-            Println "$error 无法连接到 Github ! 尝试备用链接..."
+            Println "`eval_gettext \"\\\$error 无法连接到 Github ! 尝试备用链接...\"`"
             if curl -s -Lm 30 "$SH_LINK_BACKUP" -o "${SH_FILE}_tmp" 
             then
                 mv "${SH_FILE}_tmp" "$SH_FILE"
                 chmod +x "$SH_FILE"
-                Println "$info 脚本下载完成"
+                Println "`eval_gettext \"\\\$info 脚本下载完成\"`"
             else
-                Println "$error 无法连接备用链接! 脚本下载失败, 请稍后再试\n"
+                Println "`eval_gettext \"\\\$error 无法连接备用链接! 脚本下载失败, 请稍后再试\"`\n"
                 exit 1
             fi
         fi
@@ -1304,66 +1425,47 @@ CheckShFile()
     return 0
 }
 
-UpdateShFile()
+ShFileUpdate()
 {
     sh_name=${1:-iptv}
 
-    Println "$info 更新 $sh_name 脚本..."
+    Println "`eval_gettext \"\\\$info 更新 \\\$sh_name 脚本...\"`"
 
     if curl -s -Lm 20 "$SH_LINK" -o "${SH_FILE}_tmp"
     then
         mv "${SH_FILE}_tmp" "$SH_FILE"
         chmod +x "$SH_FILE"
-        Println "$info $sh_name 脚本更新完成"
+        Println "`eval_gettext \"\\\$info \\\$sh_name 脚本更新完成\"`"
         sh_new_ver=$(grep 'sh_ver="' < "$SH_FILE" |awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1)
         if [ "${sh_new_ver%.*}" != "${sh_ver%.*}" ] 
         then
             rm -f "$LOCK_FILE"
         fi
     else
-        Println "$error 无法连接到 Github ! 尝试备用链接..."
+        Println "`eval_gettext \"\\\$error 无法连接到 Github ! 尝试备用链接...\"`"
         if curl -s -Lm 30 "$SH_LINK_BACKUP" -o "${SH_FILE}_tmp" 
         then
             mv "${SH_FILE}_tmp" "$SH_FILE"
             chmod +x "$SH_FILE"
-            Println "$info $sh_name 脚本更新完成"
+            Println "`eval_gettext \"\\\$info \\\$sh_name 脚本更新完成\"`"
             sh_new_ver=$(grep 'sh_ver="' < "$SH_FILE" |awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1)
             if [ "${sh_new_ver%.*}" != "${sh_ver%.*}" ] 
             then
                 rm -f "$LOCK_FILE"
             fi
         else
-            Println "$error 无法连接备用链接! $sh_name 脚本更新失败, 请稍后再试\n"
+            Println "`eval_gettext \"\\\$error 无法连接备用链接! \\\$sh_name 脚本更新失败, 请稍后再试\"`\n"
         fi
     fi
 
     [ "$sh_locale" != "zh_CN" ] && i18nInstall "$sh_locale" > /dev/null
-}
 
-UpdateCreatorFile()
-{
-    Println "$info 下载 HLS stream creator 脚本..."
-    if curl -s -Lm 20 "$CREATOR_LINK" -o "${CREATOR_FILE}_tmp"
-    then
-        mv "${CREATOR_FILE}_tmp" "$CREATOR_FILE"
-        chmod +x "$CREATOR_FILE"
-        Println "$info HLS stream creator 脚本更新完成"
-    else
-        Println "$error 无法连接到 Github ! 尝试备用链接..."
-        if curl -s -Lm 30 "$CREATOR_LINK_BACKUP" -o "${CREATOR_FILE}_tmp" 
-        then
-            mv "${CREATOR_FILE}_tmp" "$CREATOR_FILE"
-            chmod +x "$CREATOR_FILE"
-            Println "$info HLS stream creator 脚本更新完成"
-        else
-            Println "$error 无法连接备用链接! HLS stream creator 脚本更新失败, 请稍后再试\n"
-        fi
-    fi
+    return 0
 }
 
 Progress()
 {
-    echo -ne "\n$info 安装中, 请等待..."
+    echo -ne "\n`eval_gettext \"\\\$info 安装中, 请等待...\"`"
     while true
     do
         echo -n "."
@@ -1371,20 +1473,40 @@ Progress()
     done
 }
 
-InstallPython()
+AskIfContinue()
+{
+    if [ "$1" == "y" ] 
+    then
+        ask_options=("${yn_options[@]}")
+    else
+        ask_options=("${ny_options[@]}")
+    fi
+
+    inquirer list_input "$2" ask_options yn_option
+
+    if [ "$yn_option" == "$i18n_no" ]
+    then
+        Println "$i18n_canceled...\n"
+        exit 1
+    fi
+}
+
+ExitOnCancel()
+{
+    if [ "${!1}" == "$i18n_cancel" ] 
+    then
+        Println "$i18n_canceled...\n"
+        exit 1
+    fi
+}
+
+PythonInstall()
 {
     ReleaseCheck
     if [ "$release" == "rpm" ] 
     then
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "因为是编译 python3, 耗时会很长, 是否继续" yn_options continue_yn
-
-        if [ "$continue_yn" == "否" ]
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        AskIfContinue n "`gettext \"因为是编译 python3, 耗时会很长, 是否继续\"`"
 
         Progress &
         progress_pid=$!
@@ -1408,17 +1530,17 @@ InstallPython()
     fi
 }
 
-InstallCrossplane()
+CrossplaneInstall()
 {
     if [[ ! -x $(command -v python3) ]] 
     then
-        Println "$info 安装 python3 ..."
-        InstallPython
+        Println "`eval_gettext \"\\\$info 安装 python3 ...\"`"
+        PythonInstall
     fi
 
     if [[ ! -x $(command -v pip3) ]] 
     then
-        Println "$info 安装 pip3 ..."
+        Println "`eval_gettext \"\\\$info 安装 pip3 ...\"`"
         Progress &
         progress_pid=$!
         trap '
@@ -1433,13 +1555,13 @@ InstallCrossplane()
     pip3 install crossplane
 }
 
-InstallFFmpeg()
+FFmpegInstall()
 {
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
     FFMPEG="$FFMPEG_ROOT/ffmpeg"
     if [ ! -e "$FFMPEG" ]
     then
-        Println "$info 开始下载/安装 FFmpeg..."
+        Println "`eval_gettext \"\\\$info 开始下载/安装 FFmpeg...\"`"
         if [ "$release_bit" -eq 64 ]
         then
             ffmpeg_package="ffmpeg-git-${arch:-amd64}-static.tar.xz"
@@ -1448,29 +1570,29 @@ InstallFFmpeg()
         fi
         FFMPEG_PACKAGE_FILE="$IPTV_ROOT/$ffmpeg_package"
         curl -L "$FFMPEG_MIRROR_LINK/builds/$ffmpeg_package" -o "$FFMPEG_PACKAGE_FILE"
-        [ ! -e "$FFMPEG_PACKAGE_FILE" ] && Println "$error ffmpeg 下载失败 !" && exit 1
+        [ ! -e "$FFMPEG_PACKAGE_FILE" ] && Println "`eval_gettext \"\\\$error FFmpeg 下载失败 !\"`" && exit 1
         tar xJf "$FFMPEG_PACKAGE_FILE" -C "$IPTV_ROOT" && rm -f "${FFMPEG_PACKAGE_FILE:-notfound}"
         FFMPEG=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-        [ ! -e "$FFMPEG" ] && Println "$error ffmpeg 解压失败 !" && exit 1
+        [ ! -e "$FFMPEG" ] && Println "`eval_gettext \"\\\$error FFmpeg 解压失败 !\"`" && exit 1
         export FFMPEG
-        Println "$info FFmpeg 安装成功..."
+        Println "`eval_gettext \"\\\$info FFmpeg 安装成功\"`"
     else
-        Println "$info FFmpeg 已安装..."
+        Println "`eval_gettext \"\\\$info FFmpeg 已安装\"`"
     fi
 }
 
-CompileFFmpeg()
+FFmpegCompile()
 {
     DepsCheck
 
     if [ "$release" == "rpm" ] 
     then
-        Println "$error 不支持 centos\n"
+        Println "`eval_gettext \"\\\$error 不支持 centos\"`\n"
         exit 1
     fi
 
     tls_options=( 'gnutls' 'openssl' )
-    inquirer list_input "选择 tls" tls_options tls_option
+    inquirer list_input "`gettext \"选择 tls\"`" tls_options tls_option
 
     nproc="-j$(nproc 2> /dev/null)" || nproc=""
 
@@ -2269,16 +2391,16 @@ Cflags: -I\${includedir}
     #make install
     #hash -r
     mv ffmpeg /usr/local/bin/ffmpeg_c
-    Println "$info ffmpeg 编译成功\n"
+    Println "`eval_gettext \"\\\$info FFmpeg 编译成功\"`\n"
 }
 
-InstallJQ()
+JQInstall()
 {
     if [[ -x $(command -v armbian-config) ]] 
     then
         if ! /usr/local/bin/jq -V > /dev/null 2>&1 
         then
-            Println "$info 开始下载/安装 JQ..."
+            Println "`eval_gettext \"\\\$info 开始下载/安装 JQ...\"`"
             cd ~
             git clone https://github.com/stedolan/jq.git > /dev/null
             cd jq
@@ -2295,26 +2417,26 @@ InstallJQ()
             rm -f "$JQ_FILE"
             ln -sf /usr/local/bin/jq "$JQ_FILE"
         fi
-        Println "$info JQ 安装完成..."
+        Println "`eval_gettext \"\\\$info JQ 安装完成\"`"
     elif [ ! -e "$JQ_FILE" ] || ! $JQ_FILE -V > /dev/null 2>&1 
     then
-        Println "$info 开始下载/安装 JQ..."
+        Println "`eval_gettext \"\\\$info 开始下载/安装 JQ...\"`"
         #experimental# grep -Po '"tag_name": "jq-\K.*?(?=")'
         if jq_ver=$(curl -s -m 10 "$FFMPEG_MIRROR_LINK/jq.json" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
         then
             if curl -L "$FFMPEG_MIRROR_LINK/$jq_ver/jq-linux$release_bit" -o "$JQ_FILE"
             then
                 chmod +x "$JQ_FILE"
-                Println "$info JQ 安装完成..."
+                Println "`eval_gettext \"\\\$info JQ 安装完成\"`"
             else
                 rm -f "$JQ_FILE"
-                Println "$error 下载 JQ 失败, 请重试 !" && exit 1
+                Println "`eval_gettext \"\\\$error 下载 JQ 失败, 请重试 !\"`" && exit 1
             fi
         else
-            Println "$error 暂时无法连接服务器, 请重试 !" && exit 1
+            Println "`eval_gettext \"\\\$error 暂时无法连接服务器, 请稍后再试 !\"`" && exit 1
         fi
     else
-        Println "$info JQ 已安装..."
+        Println "`eval_gettext \"\\\$info JQ 已安装\"`"
     fi
 }
 
@@ -2322,7 +2444,7 @@ Install()
 {
     if [ -e "$IPTV_ROOT" ]
     then
-        Println "$error 目录已存在, 请先卸载...\n" && exit 1
+        Println "`eval_gettext \"\\\$error 目录已存在, 请先卸载...\"`\n" && exit 1
     else
         DepsCheck
 
@@ -2335,8 +2457,8 @@ Install()
 
         mkdir -p "$IPTV_ROOT"
 
-        InstallFFmpeg
-        InstallJQ
+        FFmpegInstall
+        JQInstall
 
         default=$(
         $JQ_FILE -n --arg proxy '' --arg xc_proxy '' \
@@ -2425,57 +2547,54 @@ Install()
         }' > "$CHANNELS_FILE"
 
         ln -sf "$IPTV_ROOT"/ffmpeg-git-*/ff* /usr/local/bin/
-        Println "$info 安装完成...\n"
+        Println "`eval_gettext \"\\\$info 安装完成\"`\n"
     fi
 }
 
 Uninstall()
 {
-    [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+    [ ! -d "$IPTV_ROOT" ] && Println "`eval_gettext \"\\\$error 尚未安装, 请检查 !\"`\n" && exit 1
+
     echo
-    yn_options=( '否' '是' )
-    inquirer list_input "确定要 卸载此脚本以及产生的全部文件" yn_options uninstall_yn
-    if [[ $uninstall_yn == "是" ]]
+    AskIfContinue n "`gettext \"确定要 卸载此脚本以及产生的全部文件\"`"
+
+    MonitorStop
+    VipDisable
+    CloudflareDisableWorkersMonitor
+    if [ -e "$NODE_ROOT/index.js" ] 
     then
-        MonitorStop
-        VipDisable
-        DisableCloudflareWorkersMonitor
-        if [ -e "$NODE_ROOT/index.js" ] 
-        then
-            pm2 stop 0 2> /dev/null || true
-        fi
-        if crontab -l | grep -q "$LOGROTATE_CONFIG" 2> /dev/null
-        then
-            crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
-            sed -i "/${LOGROTATE_CONFIG//\//\\/}/d" "$IPTV_ROOT/cron_tmp"
-            crontab "$IPTV_ROOT/cron_tmp" > /dev/null
-            rm -f "$IPTV_ROOT/cron_tmp"
-            Println "$info 已停止 logrotate\n"
-        fi
-        while IFS= read -r chnl_pid
-        do
-            GetChannelInfo
-            if [ "$chnl_flv_status" == "on" ] 
-            then
-                kind="flv"
-                StopChannel
-            elif [ "$chnl_status" == "on" ]
-            then
-                kind=""
-                StopChannel
-            fi
-        done < <($JQ_FILE '.channels[].pid' $CHANNELS_FILE)
-        StopChannelsForce 2> /dev/null || true
-        rm -rf "${IPTV_ROOT:-notfound}"
-        Println "$info 卸载完成 !\n"
-    else
-        Println "$info 卸载已取消...\n"
+        pm2 stop 0 2> /dev/null || true
     fi
+    if crontab -l | grep -q "$LOGROTATE_CONFIG" 2> /dev/null
+    then
+        crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
+        sed -i "/${LOGROTATE_CONFIG//\//\\/}/d" "$IPTV_ROOT/cron_tmp"
+        crontab "$IPTV_ROOT/cron_tmp" > /dev/null
+        rm -f "$IPTV_ROOT/cron_tmp"
+        Println "$info 已停止 logrotate\n"
+    fi
+    i18nGetMsg get_channel
+    while IFS= read -r chnl_pid
+    do
+        GetChannel
+        if [ "$chnl_flv_status" == "on" ] 
+        then
+            kind="flv"
+            StopChannel
+        elif [ "$chnl_status" == "on" ]
+        then
+            kind=""
+            StopChannel
+        fi
+    done < <($JQ_FILE '.channels[].pid' $CHANNELS_FILE)
+    StopChannelsForce 2> /dev/null || true
+    rm -rf "${IPTV_ROOT:-notfound}"
+    Println "`eval_gettext \"\\\$info 卸载完成 !\"`\n"
 }
 
 Update()
 {
-    [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+    [ ! -d "$IPTV_ROOT" ] && Println "`eval_gettext \"\\\$error 尚未安装, 请检查 !\"`\n" && exit 1
 
     while IFS= read -r line 
     do
@@ -2489,31 +2608,24 @@ Update()
 
     if [ -z "${git_date:-}" ] 
     then
-        Println "$error 暂时无法连接服务器, 请稍后再试 !\n"
+        Println "`eval_gettext \"\\\$error 暂时无法连接服务器, 请稍后再试 !\"`\n"
         exit 1
     fi
 
     if [ -s "$IPTV_ROOT/monitor.pid" ] || [ -s "$IPTV_ROOT/antiddos.pid" ]
     then
         echo
-        yn_options=( '是' '否' )
-        inquirer list_input "需要先关闭监控, 是否继续" yn_options stop_monitor_yn
-        if [[ $stop_monitor_yn == "是" ]]
-        then
-            MonitorStop
-        else
-            Println "已取消...\n"
-            exit 1
-        fi
+        AskIfContinue y "`gettext \"需要先关闭监控, 是否继续\"`"
+        MonitorStop
     fi
 
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
     if [[ ${FFMPEG_ROOT##*/} == *"${git_date:-20200101}"* ]] 
     then
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "FFmpeg 已经是最新, 是否重装" yn_options reinstall_ffmpeg_yn
-        if [[ $reinstall_ffmpeg_yn == "否" ]]
+        yn_options=( "$i18n_no" "$i18n_yes" )
+        inquirer list_input "`gettext \"FFmpeg 已经是最新, 是否重装\"`" yn_options reinstall_ffmpeg_yn
+        if [[ $reinstall_ffmpeg_yn == "$i18n_no" ]]
         then
             reinstall_ffmpeg_yn="N"
         else
@@ -2528,20 +2640,20 @@ Update()
     if [[ ${reinstall_ffmpeg_yn:-N} == [Yy] ]] 
     then
         rm -rf "$IPTV_ROOT"/ffmpeg-git-*/
-        Spinner "更新 FFmpeg" InstallFFmpeg
+        Spinner "`gettext \"更新 FFmpeg\"`" FFmpegInstall
     fi
 
-    InstallJQ > /dev/null
+    JQInstall > /dev/null
 
-    UpdateShFile
+    ShFileUpdate
 
     ln -sf "$IPTV_ROOT"/ffmpeg-git-*/ff* /usr/local/bin/
-    Println "脚本已更新为最新版本 [ $green$sh_new_ver${normal} ] ! (输入: tv 使用)\n" && exit 0
+    Println "`eval_gettext \"脚本已更新为最新版本 [ \\\${green}\\\$sh_new_ver\\\${normal} ] ! (输入: tv 使用)\"`\n" && exit 0
 }
 
-InstallYoutubeDl()
+YoutubeDlInstall()
 {
-    Println "$info 安装 youtube-dl...\n"
+    Println "`eval_gettext \"\\\$info 安装 youtube-dl...\"`\n"
     curl -L https://yt-dl.org/downloads/latest/youtube-dl -o /usr/local/bin/youtube-dl
     if [ ! -s /usr/local/bin/youtube-dl ] 
     then
@@ -2550,7 +2662,7 @@ InstallYoutubeDl()
     chmod a+rx /usr/local/bin/youtube-dl
 }
 
-InstallOpenssl()
+OpensslInstall()
 {
     Progress &
     progress_pid=$!
@@ -2566,10 +2678,10 @@ InstallOpenssl()
     fi
     kill $progress_pid
     trap - EXIT
-    echo -n "...100%" && Println "$info openssl 安装完成"
+    echo -n "...100%" && Println "`eval_gettext \"\\\$info openssl 安装完成\"`"
 }
 
-InstallImageMagick()
+ImageMagickInstall()
 {
     Progress &
     progress_pid=$!
@@ -2587,10 +2699,10 @@ InstallImageMagick()
     kill $progress_pid
     trap - EXIT
     echo -n "...100%"
-    Println "\n$info magick 安装完成\n"
+    Println "\n`eval_gettext \"\\\$info magick 安装完成\"`\n"
 }
 
-InstallPdf2html()
+Pdf2htmlInstall()
 {
     ReleaseCheck
     Progress &
@@ -2693,7 +2805,7 @@ InstallPdf2html()
     fi
 }
 
-InstallPostfix()
+PostfixInstall()
 {
     if [ "$release" == "rpm" ] 
     then
@@ -2921,7 +3033,7 @@ JQ()
     trap 'rm -f $TMP_FILE"' EXIT
 
     {
-        flock -x 200 || { MonitorError "$FILE JQ fd 200 失败"; exit 1; }
+        flock -x 200 || { MonitorError "`eval_gettext \"\\\$FILE JQ fd 200 失败\"`"; exit 1; }
         case $1 in
             "add") 
                 if [ -n "${jq_path:-}" ] 
@@ -3270,7 +3382,7 @@ SyncFile()
         ;;
         "add")
             chnl_pid=$pid
-            GetChannelInfo
+            GetChannel
         ;;
         *)
             Println "$error $action ???" && exit 1
@@ -3313,7 +3425,7 @@ SyncFile()
                     [ "$jq_path" != "[" ] && jq_path="$jq_path,"
                     case $a in
                         '') 
-                            Println "$error sync设置错误...\n" && exit 1
+                            Println "`eval_gettext \"\\\$error sync设置错误...\"`\n" && exit 1
                         ;;
                         *[!0-9]*)
                             jq_index="$jq_index.$a"
@@ -3344,7 +3456,7 @@ SyncFile()
                     do
                         case $b in
                             '') 
-                                Println "$error sync设置错误...\n" && exit 1
+                                Println "`eval_gettext \"\\\$error sync设置错误...\"`\n" && exit 1
                             ;;
                             *) 
                                 if [[ $b == *"="* ]] 
@@ -3414,7 +3526,7 @@ SyncFile()
             jq_path=""
         done
 
-        Println "$info 频道[ $chnl_channel_name ] sync 执行成功..."
+        Println "`eval_gettext \"\\\$info 频道[ \\\$chnl_channel_name ] sync 执行成功...\"`"
     fi
     action=""
 }
@@ -5982,20 +6094,20 @@ GetDefault()
     d_proxy=${d_proxy#\"}
     d_user_agent=${d_user_agent:-$USER_AGENT_TV}
     d_cookies=${d_cookies:-stb_lang=en; timezone=Europe/Amsterdam}
-    d_playlist_name_text=${d_playlist_name:-随机名称}
-    d_seg_dir_name_text=${d_seg_dir_name:-不使用}
-    d_seg_name_text=${d_seg_name:-跟m3u8名称相同}
+    d_playlist_name_text=${d_playlist_name:-$(gettext "随机名称")}
+    d_seg_dir_name_text=${d_seg_dir_name:-$(gettext "不设置")}
+    d_seg_name_text=${d_seg_name:-$(gettext "跟m3u8名称相同")}
     v_or_a=${d_video_audio_shift%_*}
     if [ "$v_or_a" == "v" ] 
     then
         d_video_shift=${d_video_audio_shift#*_}
-        d_video_audio_shift_text="画面延迟 $d_video_shift 秒"
+        d_video_audio_shift_text=$(eval_gettext "画面延迟 \$d_video_shift 秒")
     elif [ "$v_or_a" == "a" ] 
     then
         d_audio_shift=${d_video_audio_shift#*_}
-        d_video_audio_shift_text="声音延迟 $d_audio_shift 秒"
+        d_video_audio_shift_text=$(eval_gettext "声音延迟 \$d_audio_shift 秒")
     else
-        d_video_audio_shift_text="不设置"
+        d_video_audio_shift_text=$(gettext "不设置")
     fi
     d_encrypt_yn=${d_encrypt_yn:-no}
     d_encrypt_session_yn=${d_encrypt_session_yn:-no}
@@ -6010,59 +6122,29 @@ GetDefault()
     d_anti_ddos_port=${d_anti_ddos_port:-80}
     d_anti_ddos_port_text=${d_anti_ddos_port//,/ }
     d_anti_ddos_port_text=${d_anti_ddos_port_text//:/-}
-    d_anti_ddos_syn_flood_yn=${d_anti_ddos_syn_flood_yn:-no}
-    if [ "$d_anti_ddos_syn_flood_yn" == "no" ] 
-    then
-        d_anti_ddos_syn_flood="否"
-    else
-        d_anti_ddos_syn_flood="是"
-    fi
+    [ "${d_anti_ddos_syn_flood_yn:-}" != "yes" ] && d_anti_ddos_syn_flood_yn="no"
     d_anti_ddos_syn_flood_delay_seconds=${d_anti_ddos_syn_flood_delay_seconds:-3}
     d_anti_ddos_syn_flood_seconds=${d_anti_ddos_syn_flood_seconds:-3600}
-    d_anti_ddos_yn=${d_anti_ddos_yn:-no}
-    if [ "$d_anti_ddos_yn" == "no" ] 
-    then
-        d_anti_ddos="否"
-    else
-        d_anti_ddos="是"
-    fi
+    [ "${d_anti_ddos_yn:-}" != "yes" ] && d_anti_ddos_yn="no"
     d_anti_ddos_seconds=${d_anti_ddos_seconds:-120}
     d_anti_ddos_level=${d_anti_ddos_level:-6}
-    d_anti_leech_yn=${d_anti_leech_yn:-no}
-    if [ "$d_anti_leech_yn" == "no" ] 
-    then
-        d_anti_leech="否"
-    else
-        d_anti_leech="是"
-    fi
+    [ "${d_anti_leech_yn:-}" != "yes" ] && d_anti_leech_yn="no"
     d_anti_leech_restart_nums=${d_anti_leech_restart_nums:-0}
-    d_anti_leech_restart_flv_changes_yn=${d_anti_leech_restart_flv_changes_yn:-no}
-    if [ "$d_anti_leech_restart_flv_changes_yn" == "no" ] 
-    then
-        d_anti_leech_restart_flv_changes="否"
-    else
-        d_anti_leech_restart_flv_changes="是"
-    fi
-    d_anti_leech_restart_hls_changes_yn=${d_anti_leech_restart_hls_changes_yn:-no}
-    if [ "$d_anti_leech_restart_hls_changes_yn" == "no" ] 
-    then
-        d_anti_leech_restart_hls_changes="否"
-    else
-        d_anti_leech_restart_hls_changes="是"
-    fi
+    [ "${d_anti_leech_restart_flv_changes_yn:-}" != "yes" ] && d_anti_leech_restart_flv_changes_yn="no"
+    [ "${d_anti_leech_restart_hls_changes_yn:-}" != "yes" ] && d_anti_leech_restart_hls_changes_yn="no"
     d_recheck_period=${d_recheck_period:-0}
     if [ "$d_recheck_period" -eq 0 ] 
     then
-        d_recheck_period_text="不设置"
+        d_recheck_period_text=$(gettext "不设置")
     else
         d_recheck_period_text=$d_recheck_period
     fi
     d_version=${d_version%\"}
 }
 
-GetChannelsInfo()
+GetChannels()
 {
-    [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+    [ ! -d "$IPTV_ROOT" ] && Println "`eval_gettext \"\\\$error 尚未安装, 请检查 !\"`\n" && exit 1
 
     delimiters=( $'\001' )
     IFS=$'\002\t' read -r m_pid m_status m_stream_link m_live m_proxy m_xc_proxy m_user_agent m_headers m_cookies \
@@ -6154,11 +6236,15 @@ GetChannelsInfo()
 
 ListChannels()
 {
-    GetChannelsInfo
+    GetChannels
+
     if [ "$chnls_count" -eq 0 ]
     then
-        Println "$error 没有发现频道, 请检查 !\n" && exit 1
+        Println "`eval_gettext \"\\\$error 没有发现频道, 请检查 !\"`\n" && exit 1
     fi
+
+    i18nGetMsg list_channels
+
     chnls_list=""
     for((index=0;index<chnls_count;index++))
     do
@@ -6168,20 +6254,20 @@ ListChannels()
         if [ "$v_or_a" == "v" ] 
         then
             chnls_video_shift=${chnls_video_audio_shift[index]#*_}
-            chnls_video_audio_shift_text="画面延迟 $chnls_video_shift 秒"
+            chnls_video_audio_shift_text="$i18n_video_shift $chnls_video_shift($i18n_seconds)"
         elif [ "$v_or_a" == "a" ] 
         then
             chnls_audio_shift=${chnls_video_audio_shift[index]#*_}
-            chnls_video_audio_shift_text="声音延迟 $chnls_audio_shift 秒"
+            chnls_video_audio_shift_text="$i18n_audio_shift $chnls_audio_shift($i18n_seconds)"
         else
-            chnls_video_audio_shift_text="不设置"
+            chnls_video_audio_shift_text=$i18n_not_set
         fi
 
         if [ "${chnls_const[index]}" == "no" ] 
         then
-            chnls_const_index_text=" 固定码率:否"
+            chnls_const_index_text=$i18n_const_no
         else
-            chnls_const_index_text=" 固定码率:是"
+            chnls_const_index_text=$i18n_const_yes
         fi
 
         chnls_quality_text=""
@@ -6195,18 +6281,18 @@ ListChannels()
                 if [[ $chnls_br =~ - ]]
                 then
                     chnls_br_a=${chnls_br%-*}
-                    chnls_br_b=" 分辨率: ${chnls_br#*-}"
+                    chnls_br_b=" $i18n_resolution: ${chnls_br#*-}"
                     chnls_quality_text="${chnls_quality_text}[ -maxrate ${chnls_br_a}k -bufsize ${chnls_br_a}k${chnls_br_b} ] "
-                    chnls_bitrates_text="${chnls_bitrates_text}[ 比特率 ${chnls_br_a}k${chnls_br_b}${chnls_const_index_text} ] "
+                    chnls_bitrates_text="${chnls_bitrates_text}[ $i18n_bitrates ${chnls_br_a}k${chnls_br_b}${chnls_const_index_text} ] "
                     chnls_playlist_file_text="$chnls_playlist_file_text$chnls_output_dir_root/${chnls_playlist_name[index]}_$chnls_br_a.m3u8 "
                 elif [[ $chnls_br == *"x"* ]] 
                 then
-                    chnls_quality_text="${chnls_quality_text}[ 分辨率: $chnls_br ] "
-                    chnls_bitrates_text="${chnls_bitrates_text}[ 分辨率: $chnls_br${chnls_const_index_text} ] "
+                    chnls_quality_text="${chnls_quality_text}[ $i18n_resolution: $chnls_br ] "
+                    chnls_bitrates_text="${chnls_bitrates_text}[ $i18n_resolution: $chnls_br${chnls_const_index_text} ] "
                     chnls_playlist_file_text="$chnls_playlist_file_text$chnls_output_dir_root/${chnls_playlist_name[index]}.m3u8 "
                 else
                     chnls_quality_text="${chnls_quality_text}[ -maxrate ${chnls_br}k -bufsize ${chnls_br}k ] "
-                    chnls_bitrates_text="${chnls_bitrates_text}[ 比特率 ${chnls_br}k${chnls_const_index_text} ] "
+                    chnls_bitrates_text="${chnls_bitrates_text}[ $i18n_bitrates ${chnls_br}k${chnls_const_index_text} ] "
                     chnls_playlist_file_text="$chnls_playlist_file_text$chnls_output_dir_root/${chnls_playlist_name[index]}_$chnls_br.m3u8 "
                 fi
             done <<< ${chnls_bitrates[index]//,/$'\n'}
@@ -6216,19 +6302,19 @@ ListChannels()
 
         if [ -n "${chnls_quality[index]}" ] 
         then
-            chnls_video_quality_text="crf值${chnls_quality[index]} ${chnls_quality_text:-不设置}"
+            chnls_video_quality_text="crf ${chnls_quality[index]} ${chnls_quality_text:-$i18n_not_set}"
         else
-            chnls_video_quality_text="比特率值 ${chnls_bitrates_text:-不设置}"
+            chnls_video_quality_text="$i18n_bitrates ${chnls_bitrates_text:-$i18n_not_set}"
         fi
 
         if [ -z "${kind:-}" ] && [ "${chnls_video_codec[index]}" == "copy" ] && [ "${chnls_audio_codec[index]}" == "copy" ]  
         then
-            chnls_video_quality_text="原画"
+            chnls_video_quality_text=$i18n_original
         fi
 
         if [ -n "${chnls_proxy[index]}" ] 
         then
-            chnls_proxy_text="[代理]"
+            chnls_proxy_text="[$i18n_proxy]"
         else
             chnls_proxy_text=""
         fi
@@ -6237,20 +6323,20 @@ ListChannels()
         then
             if [ "${chnls_status[index]}" == "on" ]
             then
-                chnls_status_text=$green"开启"${normal}
+                chnls_status_text="${green}$i18n_enabled${normal}"
             else
-                chnls_status_text=$red"关闭"${normal}
+                chnls_status_text="${red}$i18n_disabled${normal}"
             fi
-            chnls_list=$chnls_list"# $green$((index+1))${normal}\r\033[6C进程ID: $green${chnls_pid[index]}${normal} 状态: $chnls_status_text 频道名称: $green${chnls_channel_name[index]} $chnls_proxy_text${normal}\n\033[6C编码: $green${chnls_video_codec[index]}:${chnls_audio_codec[index]}${normal} 延迟: $green$chnls_video_audio_shift_text${normal} 视频质量: $green$chnls_video_quality_text${normal}\n\033[6C源: ${chnls_stream_link[index]}\n\033[6C位置: $chnls_playlist_file_text\n\n"
+            chnls_list=$chnls_list"# $green$((index+1))${normal}${indent_6}$i18n_pid: $green${chnls_pid[index]}${normal} $i18n_status: $chnls_status_text $i18n_channel_name: $green${chnls_channel_name[index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: $green${chnls_video_codec[index]}:${chnls_audio_codec[index]}${normal} $i18n_video_audio_shift: $green$chnls_video_audio_shift_text${normal} $i18n_video_quality: $green$chnls_video_quality_text${normal}\n${indent_6}$i18n_stream_link: ${chnls_stream_link[index]}\n${indent_6}$i18n_playlist_file: $chnls_playlist_file_text\n\n"
         elif [ "$kind" == "flv" ] 
         then
             if [ "${chnls_flv_status[index]}" == "on" ] 
             then
-                chnls_flv_status_text=$green"开启"${normal}
+                chnls_flv_status_text="${green}$i18n_enabled${normal}"
             else
-                chnls_flv_status_text=$red"关闭"${normal}
+                chnls_flv_status_text="${red}$i18n_disabled${normal}"
             fi
-            chnls_list=$chnls_list"# $green$((index+1))${normal}\r\033[6C进程ID: $green${chnls_pid[index]}${normal} 状态: $chnls_flv_status_text 频道名称: $green${chnls_channel_name[index]} $chnls_proxy_text${normal}\n\033[6C编码: $green${chnls_video_codec[index]}:${chnls_audio_codec[index]}${normal} 延迟: $green$chnls_video_audio_shift_text${normal} 视频质量: $green$chnls_video_quality_text${normal}\n\033[6C源: ${chnls_stream_link[index]}\n\033[6Cflv推流地址: ${chnls_flv_push_link[index]:-无}\n\033[6Cflv拉流地址: ${chnls_flv_pull_link[index]:-无}\n\n"
+            chnls_list=$chnls_list"# $green$((index+1))${normal}${indent_6}$i18n_pid: $green${chnls_pid[index]}${normal} $i18n_status: $chnls_flv_status_text $i18n_channel_name: $green${chnls_channel_name[index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: $green${chnls_video_codec[index]}:${chnls_audio_codec[index]}${normal} $i18n_video_audio_shift: $green$chnls_video_audio_shift_text${normal} $i18n_video_quality: $green$chnls_video_quality_text${normal}\n${indent_6}$i18n_stream_link: ${chnls_stream_link[index]}\n${indent_6}flv$i18n_flv_push_link: ${chnls_flv_push_link[index]:-无}\n${indent_6}$i18n_flv_pull_link: ${chnls_flv_pull_link[index]:-无}\n\n"
         fi
     done
 
@@ -6258,19 +6344,19 @@ ListChannels()
     then
         if [ "$menu_num" -eq 7 ] 
         then
-            chnls_list=$chnls_list"# $green$((chnls_count+1))${normal}\r\033[6C开启所有关闭的频道\n\n"
-            chnls_list=$chnls_list"# $green$((chnls_count+2))${normal}\r\033[6C关闭所有开启的频道\n\n"
+            chnls_list=$chnls_list"# $green$((chnls_count+1))${normal}${indent_6}`gettext \"开启所有关闭的频道\"`\n\n"
+            chnls_list=$chnls_list"# $green$((chnls_count+2))${normal}${indent_6}`gettext \"关闭所有开启的频道\"`\n\n"
         elif [ "$menu_num" -eq 8 ] 
         then
-            chnls_list=$chnls_list"# $green$((chnls_count+1))${normal}\r\033[6C重启所有开启的频道\n\n"
+            chnls_list=$chnls_list"# $green$((chnls_count+1))${normal}${indent_6}`gettext \"重启所有开启的频道\"`\n\n"
         fi
     fi
 
-    Println "=== 频道总数 $green $chnls_count ${normal}"
+    Println "=== `gettext \"频道总数\"` $green $chnls_count ${normal}"
     Println "$chnls_list"
 }
 
-GetChannelInfo()
+GetChannel()
 {
     GetDefault
 
@@ -6310,7 +6396,7 @@ GetChannelInfo()
 
     if [ -z "$chnl_pid" ] && [ -z "${monitor:-}" ]
     then
-        Println "$error 频道发生变化, 请重试 !\n"
+        Println "$error $i18n_channel_try_again\n"
         exit 1
     fi
 
@@ -6320,10 +6406,10 @@ GetChannelInfo()
     if [ "$chnl_live_yn" == "no" ]
     then
         chnl_live=""
-        chnl_live_text="$red否${normal}"
+        chnl_live_text="${red}$i18n_no${normal}"
     else
         chnl_live="-l"
-        chnl_live_text="$green是${normal}"
+        chnl_live_text="${green}$i18n_yes${normal}"
     fi
 
     chnl_stream_link=${chnl_stream_links%% *}
@@ -6339,7 +6425,7 @@ GetChannelInfo()
     chnl_xc_proxy=""
     if [ -n "$chnl_xc_proxy_ori" ] && [[ $chnl_stream_link =~ ^([^|]+)|http ]]
     then
-        GetXtreamCodesDomains
+        XtreamCodesGetDomains
         for xc_domain in "${xtream_codes_domains[@]}"
         do
             if [ "$xc_domain" == "${BASH_REMATCH[1]}" ] 
@@ -6367,14 +6453,14 @@ GetChannelInfo()
     then
         chnl_video_shift=${chnl_video_audio_shift#*_}
         chnl_audio_shift=""
-        chnl_video_audio_shift_text="$green画面延迟 $chnl_video_shift 秒${normal}"
+        chnl_video_audio_shift_text="${green}$i18n_video_shift $chnl_video_shift($i18n_seconds)${normal}"
     elif [ "$v_or_a" == "a" ] 
     then
         chnl_video_shift=""
         chnl_audio_shift=${chnl_video_audio_shift#*_}
-        chnl_video_audio_shift_text="$green声音延迟 $chnl_audio_shift 秒${normal}"
+        chnl_video_audio_shift_text="${green}$i18n_audio_shift $chnl_audio_shift($i18n_seconds)${normal}"
     else
-        chnl_video_audio_shift_text="$green不设置${normal}"
+        chnl_video_audio_shift_text="${green}$i18n_not_set${normal}"
         chnl_video_shift=""
         chnl_audio_shift=""
     fi
@@ -6382,19 +6468,19 @@ GetChannelInfo()
     if [ "$chnl_const_yn" == "no" ]
     then
         chnl_const=""
-        chnl_const_text=" 固定码率:否"
+        chnl_const_text=$i18n_const_no
     else
         chnl_const="-C"
-        chnl_const_text=" 固定码率:是"
+        chnl_const_text=$i18n_const_yes
     fi
 
     if [ "$chnl_encrypt_yn" == "no" ]
     then
         chnl_encrypt=""
-        chnl_encrypt_text=$red"否"${normal}
+        chnl_encrypt_text="${red}$i18n_no${normal}"
     else
         chnl_encrypt="-e"
-        chnl_encrypt_text=$green"是"${normal}
+        chnl_encrypt_text="${green}$i18n_yes${normal}"
     fi
 
     chnl_keyinfo_name=${chnl_keyinfo_name:-$(RandStr)}
@@ -6403,25 +6489,26 @@ GetChannelInfo()
     then
         if [ "$chnl_sync_yn" == "no" ]
         then
-            chnl_sync_text="$red禁用${normal}"
+            chnl_sync_text="${red}$i18n_disabled${normal}"
         else
-            chnl_sync_text="$green启用${normal}"
-        fi
-        if [ "$chnl_status" == "on" ]
-        then
-            chnl_status_text=$green"开启"${normal}
-        else
-            chnl_status_text=$red"关闭"${normal}
+            chnl_sync_text="${green}$i18n_enabled${normal}"
         fi
 
-        chnl_seg_dir_name_text=${chnl_seg_dir_name:-不使用}
+        if [ "$chnl_status" == "on" ]
+        then
+            chnl_status_text="${green}$i18n_enabled${normal}"
+        else
+            chnl_status_text="${red}$i18n_disabled${normal}"
+        fi
+
+        chnl_seg_dir_name_text=${chnl_seg_dir_name:-$i18n_not_set}
         if [ -n "$chnl_seg_dir_name" ] 
         then
-            chnl_seg_dir_name_text="$green$chnl_seg_dir_name${normal}"
+            chnl_seg_dir_name_text="${green}$chnl_seg_dir_name${normal}"
         else
-            chnl_seg_dir_name_text="$red不使用${normal}"
+            chnl_seg_dir_name_text="${red}$i18n_not_set${normal}"
         fi
-        chnl_seg_length_text="$green$chnl_seg_length s${normal}"
+        chnl_seg_length_text="${green}$chnl_seg_length($i18n_seconds)${normal}"
 
         chnl_crf_text=""
         chnl_nocrf_text=""
@@ -6434,18 +6521,18 @@ GetChannelInfo()
                 if [[ $chnl_br =~ - ]]
                 then
                     chnl_br_a=${chnl_br%-*}
-                    chnl_br_b=" 分辨率: ${chnl_br#*-}"
+                    chnl_br_b=" $i18n_resolution: ${chnl_br#*-}"
                     chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br_a}k -bufsize ${chnl_br_a}k${chnl_br_b} ] "
-                    chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br_a}k${chnl_br_b}${chnl_const_text} ] "
+                    chnl_nocrf_text="${chnl_nocrf_text}[ $i18n_bitrates ${chnl_br_a}k${chnl_br_b}${chnl_const_text} ] "
                     chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br_a.m3u8${normal} "
                 elif [[ $chnl_br == *"x"* ]] 
                 then
-                    chnl_crf_text="${chnl_crf_text}[ 分辨率: $chnl_br ] "
-                    chnl_nocrf_text="${chnl_nocrf_text}[ 分辨率: $chnl_br${chnl_const_text} ] "
+                    chnl_crf_text="${chnl_crf_text}[ $i18n_resolution: $chnl_br ] "
+                    chnl_nocrf_text="${chnl_nocrf_text}[ $i18n_resolution: $chnl_br${chnl_const_text} ] "
                     chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}.m3u8${normal} "
                 else
                     chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br}k -bufsize ${chnl_br}k ] "
-                    chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br}k${chnl_const_text} ] "
+                    chnl_nocrf_text="${chnl_nocrf_text}[ $i18n_bitrates ${chnl_br}k${chnl_const_text} ] "
                     chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br.m3u8${normal} "
                 fi
             done <<< ${chnl_bitrates//,/$'\n'}
@@ -6463,31 +6550,31 @@ GetChannelInfo()
                 chnl_playlist_link=${sync_pairs#*=http}
                 chnl_playlist_link=${chnl_playlist_link%%,*}
                 chnl_playlist_link="http$chnl_playlist_link/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
-                chnl_playlist_link_text="$green$chnl_playlist_link${normal}"
+                chnl_playlist_link_text="${green}$chnl_playlist_link${normal}"
             else
-                chnl_playlist_link_text="$red请先设置 sync${normal}"
+                chnl_playlist_link_text="${red}$i18n_sync_not_set${normal}"
             fi
         else
-            chnl_playlist_link_text="$red请先启用 sync${normal}"
+            chnl_playlist_link_text="${red}$i18n_sync_not_enabled${normal}"
         fi
 
         if [ -n "$chnl_quality" ] 
         then
-            chnl_video_quality_text="${green}crf值$chnl_quality ${chnl_crf_text:-不设置}${normal}"
+            chnl_video_quality_text="${green}crf $chnl_quality ${chnl_crf_text:-$i18n_not_set}${normal}"
         else
-            chnl_video_quality_text="$green比特率值 ${chnl_nocrf_text:-不设置}${normal}"
+            chnl_video_quality_text="${green}$i18n_bitrates ${chnl_nocrf_text:-$i18n_not_set}${normal}"
         fi
 
         if [ "$chnl_flv_status" == "on" ]
         then
-            chnl_flv_status_text=$green"开启"${normal}
+            chnl_flv_status_text="${green}$i18n_enabled${normal}"
         else
-            chnl_flv_status_text=$red"关闭"${normal}
+            chnl_flv_status_text="${red}$i18n_disabled${normal}"
         fi
 
         if [ -z "${kind:-}" ] && [ "$chnl_video_codec" == "copy" ]  
         then
-            chnl_video_quality_text="$green原画${normal}"
+            chnl_video_quality_text="${green}$i18n_original${normal}"
             chnl_playlist_link=${chnl_playlist_link:-}
             chnl_playlist_link=${chnl_playlist_link//_master.m3u8/.m3u8}
             chnl_playlist_link_text=${chnl_playlist_link_text//_master.m3u8/.m3u8}
@@ -6500,286 +6587,66 @@ GetChannelInfo()
     fi
 }
 
-GetChannelInfoLite()
-{
-    GetDefault
-
-    for((i=0;i<chnls_count;i++));
-    do
-        if [ -n "${monitor:-}" ] 
-        then
-            if { [ "${kind:-}" == "flv" ] && [ "${chnls_flv_push_link[i]}" != "$chnl_flv_push_link" ]; } || { [ -z "${kind:-}" ] && [ "${chnls_output_dir_name[i]}" != "$output_dir_name" ]; }
-            then
-                continue
-            fi
-        elif [ "${chnls_pid[i]}" != "$chnl_pid" ] 
-        then
-            continue
-        fi
-        chnl_pid=${chnls_pid[i]}
-        chnl_status=${chnls_status[i]}
-        chnl_stream_links=${chnls_stream_link[i]}
-        chnl_stream_link=${chnl_stream_links%% *}
-        chnl_live_yn=${chnls_live[i]}
-        if [ "$chnl_live_yn" == "no" ]
-        then
-            chnl_live=""
-            chnl_live_text="$red否${normal}"
-        else
-            chnl_live="-l"
-            chnl_live_text="$green是${normal}"
-        fi
-        chnl_proxy=${chnls_proxy[i]}
-        if [ -n "$chnl_proxy" ] && { [[ $chnl_stream_link =~ ^https?:// ]] || [[ ${chnl_stream_link##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]]; }
-        then
-            chnl_proxy_command="-http_proxy $chnl_proxy"
-        else
-            chnl_proxy_command=""
-        fi
-        chnl_user_agent=${chnls_user_agent[i]}
-        chnl_headers=${chnls_headers[i]}
-        while [[ $chnl_headers =~ \\\\ ]]
-        do
-            chnl_headers=${chnl_headers//\\\\/\\}
-        done
-        if [ -n "$chnl_headers" ] && [[ ! $chnl_headers =~ \\r\\n$ ]]
-        then
-            chnl_headers="$chnl_headers\r\n"
-        fi
-        chnl_cookies=${chnls_cookies[i]}
-        chnl_output_dir_name=${chnls_output_dir_name[i]}
-        chnl_output_dir_root="$LIVE_ROOT/$chnl_output_dir_name"
-        chnl_playlist_name=${chnls_playlist_name[i]}
-        chnl_seg_dir_name=${chnls_seg_dir_name[i]}
-        chnl_seg_name=${chnls_seg_name[i]}
-        chnl_seg_length=${chnls_seg_length[i]}
-        chnl_seg_count=${chnls_seg_count[i]}
-        chnl_video_codec=${chnls_video_codec[i]}
-        chnl_audio_codec=${chnls_audio_codec[i]}
-        chnl_video_audio_shift=${chnls_video_audio_shift[i]}
-        v_or_a=${chnl_video_audio_shift%_*}
-        if [ "$v_or_a" == "v" ] 
-        then
-            chnl_video_shift=${chnl_video_audio_shift#*_}
-            chnl_audio_shift=""
-            chnl_video_audio_shift_text="$green画面延迟 $chnl_video_shift 秒${normal}"
-        elif [ "$v_or_a" == "a" ] 
-        then
-            chnl_video_shift=""
-            chnl_audio_shift=${chnl_video_audio_shift#*_}
-            chnl_video_audio_shift_text="$green声音延迟 $chnl_audio_shift 秒${normal}"
-        else
-            chnl_video_audio_shift_text="$green不设置${normal}"
-            chnl_video_shift=""
-            chnl_audio_shift=""
-        fi
-        chnl_txt_format=${chnls_txt_format[i]}
-        chnl_draw_text=${chnls_draw_text[i]}
-        chnl_quality=${chnls_quality[i]}
-        chnl_bitrates=${chnls_bitrates[i]}
-        chnl_const_yn=${chnls_const[i]}
-        if [ "$chnl_const_yn" == "no" ]
-        then
-            chnl_const=""
-            chnl_const_text=" 固定码率:否"
-        else
-            chnl_const="-C"
-            chnl_const_text=" 固定码率:是"
-        fi
-        chnl_encrypt_yn=${chnls_encrypt[i]}
-        if [ "$chnl_encrypt_yn" == "no" ]
-        then
-            chnl_encrypt=""
-            chnl_encrypt_text=$red"否"${normal}
-        else
-            chnl_encrypt="-e"
-            chnl_encrypt_text=$green"是"${normal}
-        fi
-        chnl_encrypt_session_yn=${chnls_encrypt_session[i]}
-        chnl_keyinfo_name=${chnls_keyinfo_name[i]:-$(RandStr)}
-        chnl_key_name=${chnls_key_name[i]}
-        chnl_key_time=${chnls_key_time[i]}
-        chnl_input_flags=${chnls_input_flags[i]}
-        chnl_output_flags=${chnls_output_flags[i]}
-        chnl_channel_name=${chnls_channel_name[i]}
-        chnl_channel_time=${chnls_channel_time[i]}
-        chnl_sync_yn=${chnls_sync[i]}
-        if [ "$chnl_sync_yn" == "no" ]
-        then
-            chnl_sync_text="$red禁用${normal}"
-        else
-            chnl_sync_text="$green启用${normal}"
-        fi
-        chnl_sync_file=${chnls_sync_file[i]}
-        chnl_sync_index=${chnls_sync_index[i]}
-        chnl_sync_pairs=${chnls_sync_pairs[i]}
-        chnl_flv_status=${chnls_flv_status[i]}
-        chnl_flv_h265_yn=${chnls_flv_h265[i]}
-        chnl_flv_push_link=${chnls_flv_push_link[i]}
-        chnl_flv_pull_link=${chnls_flv_pull_link[i]}
-
-        if [ -z "${monitor:-}" ] 
-        then
-            if [ "$chnl_status" == "on" ]
-            then
-                chnl_status_text=$green"开启"${normal}
-            else
-                chnl_status_text=$red"关闭"${normal}
-            fi
-
-            chnl_seg_dir_name_text=${chnl_seg_dir_name:-不使用}
-            if [ -n "$chnl_seg_dir_name" ] 
-            then
-                chnl_seg_dir_name_text="$green$chnl_seg_dir_name${normal}"
-            else
-                chnl_seg_dir_name_text="$red不使用${normal}"
-            fi
-            chnl_seg_length_text="$green$chnl_seg_length s${normal}"
-
-            chnl_crf_text=""
-            chnl_nocrf_text=""
-            chnl_playlist_file_text=""
-
-            if [ -n "$chnl_bitrates" ] 
-            then
-                while IFS= read -r chnl_br
-                do
-                    if [[ $chnl_br =~ - ]]
-                    then
-                        chnl_br_a=${chnl_br%-*}
-                        chnl_br_b=" 分辨率: ${chnl_br#*-}"
-                        chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br_a}k -bufsize ${chnl_br_a}k${chnl_br_b} ] "
-                        chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br_a}k${chnl_br_b}${chnl_const_text} ] "
-                        chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br_a.m3u8${normal} "
-                    elif [[ $chnl_br == *"x"* ]] 
-                    then
-                        chnl_crf_text="${chnl_crf_text}[ 分辨率: $chnl_br ] "
-                        chnl_nocrf_text="${chnl_nocrf_text}[ 分辨率: $chnl_br${chnl_const_text} ] "
-                        chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}.m3u8${normal} "
-                    else
-                        chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br}k -bufsize ${chnl_br}k ] "
-                        chnl_nocrf_text="${chnl_nocrf_text}[ 比特率 ${chnl_br}k${chnl_const_text} ] "
-                        chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br.m3u8${normal} "
-                    fi
-                done <<< ${chnl_bitrates//,/$'\n'}
-            else
-                chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}.m3u8${normal} "
-            fi
-
-            if [ "$chnl_sync_yn" == "yes" ]
-            then
-                sync_file=${chnl_sync_file:-$d_sync_file}
-                sync_index=${chnl_sync_index:-$d_sync_index}
-                sync_pairs=${chnl_sync_pairs:-$d_sync_pairs}
-                if [ -n "$sync_file" ] && [ -n "$sync_index" ] && [ -n "$sync_pairs" ] && [[ $sync_pairs == *"=http"* ]]
-                then
-                    chnl_playlist_link=${sync_pairs#*=http}
-                    chnl_playlist_link=${chnl_playlist_link%%,*}
-                    chnl_playlist_link="http$chnl_playlist_link/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
-                    chnl_playlist_link_text="$green$chnl_playlist_link${normal}"
-                else
-                    chnl_playlist_link_text="$red请先设置 sync${normal}"
-                fi
-            else
-                chnl_playlist_link_text="$red请先启用 sync${normal}"
-            fi
-
-            if [ -n "$chnl_quality" ] 
-            then
-                chnl_video_quality_text="${green}crf值$chnl_quality ${chnl_crf_text:-不设置}${normal}"
-            else
-                chnl_video_quality_text="$green比特率值 ${chnl_nocrf_text:-不设置}${normal}"
-            fi
-
-            if [ "$chnl_flv_status" == "on" ]
-            then
-                chnl_flv_status_text=$green"开启"${normal}
-            else
-                chnl_flv_status_text=$red"关闭"${normal}
-            fi
-
-            if [ -z "${kind:-}" ] && [ "$chnl_video_codec" == "copy" ]  
-            then
-                chnl_video_quality_text="$green原画${normal}"
-                chnl_playlist_link=${chnl_playlist_link:-}
-                chnl_playlist_link=${chnl_playlist_link//_master.m3u8/.m3u8}
-                chnl_playlist_link_text=${chnl_playlist_link_text//_master.m3u8/.m3u8}
-            elif [ -z "$chnl_bitrates" ] 
-            then
-                chnl_playlist_link=${chnl_playlist_link:-}
-                chnl_playlist_link=${chnl_playlist_link//_master.m3u8/.m3u8}
-                chnl_playlist_link_text=${chnl_playlist_link_text//_master.m3u8/.m3u8}
-            fi
-        fi
-        break
-    done
-}
-
-ViewChannelInfo()
+ListChannel()
 {
     Println "==================================================="
-    Println " 频道 [$chnl_channel_name] 的配置信息: \n"
-    printf "%s\r\033[20C$green%s${normal}\n" " 进程ID" "$chnl_pid"
+    Println " `eval_gettext \"频道 [\\\$chnl_channel_name] 的配置信息\"`: \n"
+    printf "%s${indent_20}${green}%s${normal}\n" " $i18n_pid" "$chnl_pid"
 
     if [ -z "${kind:-}" ] 
     then
-        printf '%b' " 状态\r\033[20C$chnl_status_text\n"
-        printf "%s\r\033[20C$green%s${normal}\n" " m3u8名称" "$chnl_playlist_name"
-        printf '%b' " m3u8位置\r\033[20C$chnl_playlist_file_text\n"
-        printf '%b' " m3u8链接\r\033[20C$chnl_playlist_link_text\n"
-        printf '%b' " 分片子目录\r\033[20C$chnl_seg_dir_name_text\n"
-        printf "%s\r\033[20C$green%s${normal}\n" " 分片名称" "$chnl_seg_name"
-        printf '%b' " 分片时长\r\033[20C$chnl_seg_length_text\n"
-        printf "%s\r\033[20C$green%s${normal}\n" " m3u8包含分片数目" "$chnl_seg_count"
-        printf '%b' " 加密\r\033[20C$chnl_encrypt_text\n"
+        printf ' %b' "$i18n_status${indent_20}$chnl_status_text\n"
+        printf " %s${indent_20}${green}%s${normal}\n" "$i18n_playlist_name" "$chnl_playlist_name"
+        printf ' %b' "$i18n_playlist_file${indent_20}$chnl_playlist_file_text\n"
+        printf ' %b' "$i18n_playlist_link${indent_20}$chnl_playlist_link_text\n"
+        printf ' %b' "$i18n_seg_dir_name${indent_20}$chnl_seg_dir_name_text\n"
+        printf " %s${indent_20}${green}%s${normal}\n" "$i18n_seg_name" "$chnl_seg_name"
+        printf ' %b' "$i18n_seg_length${indent_20}$chnl_seg_length_text\n"
+        printf " %s${indent_20}${green}%s${normal}\n" "$i18n_seg_count" "$chnl_seg_count"
+        printf ' %b' "$i18n_encrypt${indent_20}$chnl_encrypt_text\n"
         if [ -n "$chnl_encrypt" ] 
         then
-            printf "%s\r\033[20C$green%s${normal}\n" " keyinfo名称" "$chnl_keyinfo_name"
-            printf "%s\r\033[20C$green%s${normal}\n" " key名称" "$chnl_key_name"
+            printf " %s${indent_20}${green}%s${normal}\n" "$i18n_keyinfo_name" "$chnl_keyinfo_name"
+            printf " %s${indent_20}${green}%s${normal}\n" "$i18n_key_name" "$chnl_key_name"
         fi
     elif [ "$kind" == "flv" ] 
     then
-        printf '%b' " 状态\r\033[20C$chnl_flv_status_text\n"
-        printf "%s\r\033[20C$green%s${normal}\n" " 推流地址" "${chnl_flv_push_link:-无}"
-        printf "%s\r\033[20C$green%s${normal}\n" " 拉流地址" "${chnl_flv_pull_link:-无}"
+        printf ' %b' "$i18n_status${indent_20}$chnl_flv_status_text\n"
+        printf " %s${indent_20}${green}%s${normal}\n" "$i18n_flv_push_link" "${chnl_flv_push_link:-$i18n_none}"
+        printf " %s${indent_20}${green}%s${normal}\n" "$i18n_flv_pull_link" "${chnl_flv_pull_link:-$i18n_none}"
     fi
 
-    printf "%s\r\033[20C$green%s${normal}\n" " 直播源" "${chnl_stream_links// /, }"
-    printf '%b' " 无限时长直播\r\033[20C$chnl_live_text\n"
-    printf "%s\r\033[20C$green%s${normal}\n" " 代理" "${chnl_proxy:-无}"
-    printf "%s\r\033[20C$green%s${normal}\n" " xtream codes 代理" "${chnl_xc_proxy:-无}"
-    printf "%s\r\033[20C$green%s${normal}\n" " user agent" "${chnl_user_agent:-无}"
-    printf "%s\r\033[20C$green%s${normal}\n" " headers" "${chnl_headers:-无}"
-    printf "%s\r\033[20C$green%s${normal}\n" " cookies" "${chnl_cookies:-无}"
-    printf "%s\r\033[20C$green%s${normal}\n" " 视频编码" "$chnl_video_codec"
-    printf "%s\r\033[20C$green%s${normal}\n" " 音频编码" "$chnl_audio_codec"
-    printf '%b' " 视频质量\r\033[20C$chnl_video_quality_text\n"
-    printf '%b' " 延迟\r\033[20C$chnl_video_audio_shift_text\n"
+    printf " %s${indent_20}$green%s${normal}\n" "$i18n_stream_link" "${chnl_stream_links// /, }"
+    printf ' %b' "$i18n_live${indent_20}$chnl_live_text\n"
+    printf " %s${indent_20}$green%s${normal}\n" "$i18n_proxy" "${chnl_proxy:-$i18n_none}"
+    printf " %s${indent_20}$green%s${normal}\n" "$i18n_xtream_codes_proxy" "${chnl_xc_proxy:-$i18n_none}"
+    printf " %s${indent_20}$green%s${normal}\n" "$i18n_user_agent" "${chnl_user_agent:-$i18n_none}"
+    printf " %s${indent_20}$green%s${normal}\n" "$i18n_headers" "${chnl_headers:-$i18n_none}"
+    printf " %s${indent_20}$green%s${normal}\n" "$i18n_cookies" "${chnl_cookies:-$i18n_none}"
+    printf " %s${indent_20}$green%s${normal}\n" "$i18n_video_codec" "$chnl_video_codec"
+    printf " %s${indent_20}$green%s${normal}\n" "$i18n_audio_codec" "$chnl_audio_codec"
+    printf ' %b' "$i18n_video_quality${indent_20}$chnl_video_quality_text\n"
+    printf ' %b' "$i18n_delay${indent_20}$chnl_video_audio_shift_text\n"
 
-    printf "%s\r\033[20C$green%s${normal}\n" " 输入参数" "${chnl_input_flags:-不设置}"
-    printf "%s\r\033[20C$green%s${normal}\n" " 输出参数" "${chnl_output_flags:-不设置}"
-    printf '%b' " sync\r\033[20C$chnl_sync_text\n"
-    if [ -n "$chnl_sync_file" ] 
-    then
-        printf "%s\r\033[20C$green%s${normal}\n" " sync_file" "${chnl_sync_file// /, }"
-    fi
-    if [ -n "$chnl_sync_index" ] 
-    then
-        printf "%s\r\033[20C$green%s${normal}\n" " sync_index" "${chnl_sync_index// /, }"
-    fi
-    if [ -n "$chnl_sync_pairs" ] 
-    then
-        printf "%s\r\033[20C$green%s${normal}\n" " sync_pairs" "${chnl_sync_pairs// /, }"
-    fi
+    printf " %s${indent_20}$green%s${normal}\n" "$i18n_input_flags" "${chnl_input_flags:-$i18n_not_set}"
+    printf " %s${indent_20}$green%s${normal}\n" "$i18n_output_flags" "${chnl_output_flags:-$i18n_not_set}"
+    printf ' %b' "sync${indent_20}$chnl_sync_text\n"
+
+    [ -n "$chnl_sync_file" ] && printf " %s${indent_20}$green%s${normal}\n" "sync_file" "${chnl_sync_file// /, }"
+
+    [ -n "$chnl_sync_index" ] && printf " %s${indent_20}$green%s${normal}\n" "sync_index" "${chnl_sync_index// /, }"
+
+    [ -n "$chnl_sync_pairs" ] && printf " %s${indent_20}$green%s${normal}\n" "sync_pairs" "${chnl_sync_pairs// /, }"
+
     echo
 }
 
 InputChannelsIndex()
 {
-    echo -e "$tip 多个序号用空格分隔 比如: 5 7 9-11\n"
-    while read -p "请输入频道的序号(默认: 取消): " chnls_index_input
+    echo -e "`eval_gettext \"\\\$tip 多个序号用空格分隔 比如: 5 7 9-11\"`\n"
+    while read -p "`gettext \"请输入频道的序号(默认: 取消): \"`" chnls_index_input
     do
-        [ -z "$chnls_index_input" ] && Println "已取消...\n" && exit 1
+        [ -z "$chnls_index_input" ] && Println "$i18n_canceled...\n" && exit 1
 
         chnls_pid_chosen=()
 
@@ -6799,7 +6666,7 @@ InputChannelsIndex()
                             chnls_pid_chosen+=("${chnls_pid[i]}")
                         fi
                     done
-                    [ -z "${chnls_pid_chosen:-}" ] && Println "$error 没有找到关闭的频道\n" && exit 1
+                    [ -z "${chnls_pid_chosen:-}" ] && Println "`eval_gettext \"\\\$error 没有找到关闭的频道\"`\n" && exit 1
                     break
                 elif [[ $chnls_index_input == $((chnls_count+2)) ]] 
                 then
@@ -6813,7 +6680,7 @@ InputChannelsIndex()
                             chnls_pid_chosen+=("${chnls_pid[i]}")
                         fi
                     done
-                    [ -z "${chnls_pid_chosen:-}" ] && Println "$error 没有找到开启的频道\n" && exit 1
+                    [ -z "${chnls_pid_chosen:-}" ] && Println "`eval_gettext \"\\\$error 没有找到开启的频道\"`\n" && exit 1
                     break
                 fi
             elif [[ $menu_num -eq 8 ]] && [[ $chnls_index_input == $((chnls_count+1)) ]]
@@ -6828,7 +6695,7 @@ InputChannelsIndex()
                         chnls_pid_chosen+=("${chnls_pid[i]}")
                     fi
                 done
-                [ -z "${chnls_pid_chosen:-}" ] && Println "$error 没有找到开启的频道\n" && exit 1
+                [ -z "${chnls_pid_chosen:-}" ] && Println "`eval_gettext \"\\\$error 没有找到开启的频道\"`\n" && exit 1
                 break
             fi
         fi
@@ -6844,7 +6711,7 @@ InputChannelsIndex()
 
                 if [[ $chnl_index_start == *[!0-9]* ]] || [[ $chnl_index_end == *[!0-9]* ]] 
                 then
-                    Println "$error 多选输入错误！\n"
+                    Println "`eval_gettext \"\\\$error 多选输入错误!\"`\n"
                     continue 2
                 elif [[ $chnl_index_start -gt 0 ]] && [[ $chnl_index_end -le $chnls_count ]] && [[ $chnl_index_end -gt $chnl_index_start ]] 
                 then
@@ -6854,29 +6721,31 @@ InputChannelsIndex()
                         chnls_pid_chosen+=("${chnls_pid[i]}")
                     done
                 else
-                    Println "$error 多选输入错误！\n"
+                    Println "`eval_gettext \"\\\$error 多选输入错误!\"`\n"
                     continue 2
                 fi
             elif [[ $chnl_index == *[!0-9]* ]] || [[ $chnl_index -eq 0 ]] || [[ $chnl_index -gt $chnls_count ]] 
             then
-                Println "$error 请输入正确的序号！\n"
+                Println "$i18n_input_correct_no\n"
                 continue 2
             else
                 ((chnl_index--))
                 chnls_pid_chosen+=("${chnls_pid[chnl_index]}")
             fi
         done
+        i18nGetMsg get_channel
         break
     done
 }
 
-ViewChannelMenu(){
+ViewChannel(){
     ListChannels
     InputChannelsIndex
+    i18nGetMsg list_channel
     for chnl_pid in "${chnls_pid_chosen[@]}"
     do
-        GetChannelInfo
-        ViewChannelInfo
+        GetChannel
+        ListChannel
     done
 }
 
@@ -6890,16 +6759,15 @@ SetStreamLink()
     if [ -n "${chnl_stream_links:-}" ] && [[ $chnl_stream_links == *" "* ]]
     then
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "是否只是调整频道 [ $chnl_channel_name ] 直播源顺序" yn_options stream_links_sort_yn
-        if [[ $stream_links_sort_yn == "是" ]] 
+        inquirer list_input "是否只是调整频道 [ $chnl_channel_name ] 直播源顺序" ny_options stream_links_sort_yn
+        if [[ $stream_links_sort_yn == "$i18n_yes" ]] 
         then
             IFS=" " read -ra stream_links_input <<< "$chnl_stream_links"
             stream_links_count=${#stream_links_input[@]}
             stream_links_list=""
             for((i=0;i<stream_links_count;i++));
             do
-                stream_links_list="$stream_links_list $green$((i+1)).${normal}\r\033[6C${stream_links_input[i]}\n\n"
+                stream_links_list="$stream_links_list $green$((i+1)).${normal}${indent_6}${stream_links_input[i]}\n\n"
             done
             re=""
             for((i=stream_links_count;i>0;i--));
@@ -6943,13 +6811,8 @@ SetStreamLink()
     fi
 
     Println "$tip 可以是视频路径, 可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔"
-    inquirer text_input "请输入直播源( mpegts / hls / flv / youtube ...): " stream_links "取消"
-
-    if [ "$stream_links" == "取消" ] 
-    then
-        Println "已取消...\n"
-        exit 1
-    fi
+    inquirer text_input "请输入直播源( mpegts / hls / flv / youtube ...): " stream_links "$i18n_cancel"
+    ExitOnCancel stream_links
 
     IFS=" " read -ra stream_links_input <<< "$stream_links"
 
@@ -6957,7 +6820,7 @@ SetStreamLink()
     then
         if [[ ! -x $(command -v youtube-dl) ]] 
         then
-            InstallYoutubeDl
+            YoutubeDlInstall
         elif [ "${youtube_dl_updated:-0}" -eq 0 ] 
         then
             youtube-dl -U > /dev/null
@@ -7022,7 +6885,7 @@ SetStreamLink()
                 if [ -n "$format_list" ] 
                 then
                     Println "$format_list"
-                    echo "输入序号"
+                    echo "`gettext \"输入序号\"`"
                     while read -p "(默认: $count): " format_num
                     do
                         case "$format_num" in
@@ -7031,7 +6894,7 @@ SetStreamLink()
                                 break
                             ;;
                             *[!0-9]*)
-                                Println "$error 请输入正确的数字\n"
+                                Println "$error $i18n_input_correct_number\n"
                             ;;
                             *)
                                 if [ "$format_num" -ge 1 ] && [ "$format_num" -le $count ]
@@ -7039,7 +6902,7 @@ SetStreamLink()
                                     code=${codes[format_num-1]}
                                     break
                                 else
-                                    Println "$error 请输入正确的数字\n"
+                                    Println "$error $i18n_input_correct_number\n"
                                 fi
                             ;;
                         esac
@@ -7132,7 +6995,7 @@ SetStreamLink()
                 cookies="$cookies ${line%% *}"
                 break
             fi
-        done < <(curl -s -I -H "User-Agent: $user_agent" -H "${headers:0:-4}" -c - "$stream_link")
+        done < <(curl -s -I -H "User-Agent: $user_agent" -H "${headers:0:-4}" -c - "$stream_link" 2> /dev/null)
         chnl="${stream_link%\?*}"
         chnl=${chnl##*/}
         token_url=$(curl -s -Lm 10 \
@@ -7156,20 +7019,14 @@ SetStreamLink()
                 cookies="$cookies ${line%% *}"
                 break
             fi
-        done < <(curl -s -I -H "User-Agent: $user_agent" -H "${headers:0:-4}" --cookie "$cookies" "$stream_link")
+        done < <(curl -s -I -H "User-Agent: $user_agent" -H "${headers:0:-4}" --cookie "$cookies" "$stream_link" 2> /dev/null)
     elif [[ $stream_link =~ ^https://embed.4gtv.tv/HiNet/(.+).html ]] 
     then
         if [[ ! -x $(command -v openssl) ]] 
         then
             echo
-            yn_options=( '是' '否' )
-            inquirer list_input "是否安装 openssl" yn_options openssl_install_yn
-            if [[ $openssl_install_yn == "否" ]]
-            then
-                Println "已取消...\n"
-                exit 1
-            fi
-            InstallOpenssl
+            AskIfContinue y "`gettext \"是否安装 openssl\"`"
+            OpensslInstall
         fi
         Println "$info 解析 4gtv 链接 ..."
         hinet_4gtv=(
@@ -7242,14 +7099,8 @@ SetStreamLink()
         if [[ ! -x $(command -v openssl) ]] 
         then
             echo
-            yn_options=( '是' '否' )
-            inquirer list_input "是否安装 openssl" yn_options openssl_install_yn
-            if [[ $openssl_install_yn == "否" ]]
-            then
-                Println "已取消...\n"
-                exit 1
-            fi
-            InstallOpenssl
+            AskIfContinue y "`gettext \"是否安装 openssl\"`"
+            OpensslInstall
         fi
         Println "$info 解析 4gtv 链接 ..."
         xc=1
@@ -7333,9 +7184,8 @@ SetStreamLink()
 SetIsHls()
 {
     Println "$tip 如果直播链接重定向至 .m3u8 地址, 请选择 是"
-    yn_options=( '否' '是' )
-    inquirer list_input "是否是 HLS 链接" yn_options is_hls
-    if [[ $is_hls == "是" ]]
+    inquirer list_input "是否是 HLS 链接" ny_options is_hls
+    if [[ $is_hls == "$i18n_yes" ]]
     then
         is_hls=1
     else
@@ -7346,9 +7196,8 @@ SetIsHls()
 SetSubtitle()
 {
     echo
-    yn_options=( '否' '是' )
-    inquirer list_input "输入源是否有 DVB teletext 需要转换为 WebVTT 字幕" yn_options txt_format
-    if [[ $txt_format == "是" ]]
+    inquirer list_input "输入源是否有 DVB teletext 需要转换为 WebVTT 字幕" ny_options txt_format
+    if [[ $txt_format == "$i18n_yes" ]]
     then
         echo
         txt_format_options=( 'text' 'ass' )
@@ -7376,9 +7225,8 @@ SetLive()
     else
         Println "$tip 选择 否 则无法监控"
     fi
-    yn_options=( '是' '否' )
     inquirer list_input "是否是无限时长直播源" yn_options live_yn
-    if [[ $live_yn == "是" ]]
+    if [[ $live_yn == "$i18n_yes" ]]
     then
         live="-l"
         live_yn="yes"
@@ -7493,7 +7341,7 @@ SetOutputDirName()
         then
             break
         else
-            Println "$error 目录已存在！\n"
+            Println "$error 目录已存在!\n"
         fi
     done
     output_dir_root="$LIVE_ROOT/$output_dir_name"
@@ -7514,7 +7362,7 @@ SetSegDirName()
 {
     Println "$tip 可以输入 omit 省略此选项"
     inquirer text_input "请输入分片所在子目录名称: " seg_dir_name "$d_seg_dir_name_text"
-    if [ "$seg_dir_name" == "omit" ] || [ "$seg_dir_name" == "不使用" ]
+    if [ "$seg_dir_name" == "omit" ] || [ "$seg_dir_name" == "不设置" ]
     then
         seg_dir_name=""
     fi
@@ -7545,14 +7393,14 @@ SetSegLength()
                 break
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的数字(大于0)"
+                Println "$error $i18n_input_correct_number [>0]"
             ;;
             *)
                 if [ "$seg_length" -ge 1 ]
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字(大于0)"
+                    Println "$error $i18n_input_correct_number [>0]"
                 fi
             ;;
         esac
@@ -7571,14 +7419,14 @@ SetSegCount()
                 break
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的数字(大于等于0) \n"
+                Println "$error $i18n_input_correct_number [>=0]\n"
             ;;
             *)
                 if [ "$seg_count" -ge 0 ]
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字(大于等于0)\n"
+                    Println "$error $i18n_input_correct_number [>=0]\n"
                 fi
             ;;
         esac
@@ -7673,14 +7521,14 @@ SetQuality()
                 break
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的数字(大于等于0,小于等于63)或直接回车\n"
+                Println "$error $i18n_input_correct_number [0-63]\n"
             ;;
             *)
                 if [ "$quality" -ge 0 ] && [ "$quality" -le 63 ]
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字(大于等于0,小于等于63)或直接回车\n"
+                    Println "$error $i18n_input_correct_number [0-63]\n"
                 fi
             ;;
         esac
@@ -7713,12 +7561,12 @@ SetConst()
     echo
     if [ "$d_const_yn" == "yes" ] 
     then
-        yn_options=( '是' '否' )
+        inquirer list_input "是否使用固定码率: " yn_options const_yn
     else
-        yn_options=( '否' '是' )
+        inquirer list_input "是否使用固定码率: " ny_options const_yn
     fi
-    inquirer list_input "是否使用固定码率: " yn_options const_yn
-    if [[ $const_yn == "是" ]]
+
+    if [[ $const_yn == "$i18n_yes" ]]
     then
         const="-C"
         const_yn="yes"
@@ -7733,12 +7581,12 @@ SetEncrypt()
     echo
     if [ "$d_encrypt_yn" == "yes" ] 
     then
-        yn_options=( '是' '否' )
+        inquirer list_input "是否加密分片: " yn_options encrypt_yn
     else
-        yn_options=( '否' '是' )
+        inquirer list_input "是否加密分片: " ny_options encrypt_yn
     fi
-    inquirer list_input "是否加密分片: " yn_options encrypt_yn
-    if [[ $encrypt_yn == "是" ]]
+
+    if [[ $encrypt_yn == "$i18n_yes" ]]
     then
         encrypt="-e"
         encrypt_yn="yes"
@@ -7746,11 +7594,10 @@ SetEncrypt()
         if [[ ! -x $(command -v openssl) ]]
         then
             echo
-            yn_options=( '是' '否' )
             inquirer list_input "是否安装 openssl: " yn_options install_openssl_yn
-            if [[ $install_openssl_yn == "是" ]]
+            if [[ $install_openssl_yn == "$i18n_yes" ]]
             then
-                InstallOpenssl
+                OpensslInstall
             else
                 encrypt=""
                 encrypt_yn="no"
@@ -7760,14 +7607,15 @@ SetEncrypt()
         if [[ -x $(command -v openssl) ]] 
         then
             Println "$tip 加密后只能通过网页浏览"
+
             if [ "$d_encrypt_session_yn" == "no" ] 
             then
-                yn_options=( '否' '是' )
+                inquirer list_input "是否加密 session: " ny_options encrypt_session_text
             else
-                yn_options=( '是' '否' )
+                inquirer list_input "是否加密 session: " yn_options encrypt_session_text
             fi
-            inquirer list_input "是否加密 session: " yn_options encrypt_session_text
-            if [[ $encrypt_session_text == "是" ]]
+
+            if [[ $encrypt_session_text == "$i18n_yes" ]]
             then
                 encrypt_session_yn="yes"
 
@@ -7793,7 +7641,7 @@ SetEncrypt()
                         OpenrestyInstall
                     else
                         encrypt_session_yn="no"
-                        encrypt_session_text="否"
+                        encrypt_session_text="$i18n_no"
                     fi
                 fi
 
@@ -7837,9 +7685,8 @@ SetEncrypt()
                     if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]]
                     then
                         echo
-                        yn_options=( '是' '否' )
                         inquirer list_input "需安装配置 nodejs, 是否继续: " yn_options encrypt_session_text
-                        if [[ $encrypt_session_text == "是" ]] 
+                        if [[ $encrypt_session_text == "$i18n_yes" ]] 
                         then
                             NodejsInstall
                             if [[ -x $(command -v node) ]] && [[ -x $(command -v npm) ]] 
@@ -7850,7 +7697,7 @@ SetEncrypt()
                                 fi
                             else
                                 encrypt_session_yn="no"
-                                encrypt_session_text="否"
+                                encrypt_session_text="$i18n_no"
                                 Println "$error nodejs 安装发生错误"
                                 Println "  加密 session: $green $encrypt_session_text ${normal}"
                             fi
@@ -7951,12 +7798,12 @@ SetSync()
     echo
     if [ "$d_sync_yn" == "yes" ] 
     then
-        yn_options=( '是' '否' )
+        inquirer list_input "是否启用 sync: " yn_options sync_yn
     else
-        yn_options=( '否' '是' )
+        inquirer list_input "是否启用 sync: " ny_options sync_yn
     fi
-    inquirer list_input "是否启用 sync: " yn_options sync_yn
-    if [[ $sync_yn == "是" ]]
+
+    if [[ $sync_yn == "$i18n_yes" ]]
     then
         sync_yn="yes"
     else
@@ -8042,14 +7889,14 @@ SetFlvDelaySeconds()
         case $flv_delay_seconds in
             "") flv_delay_seconds=$d_flv_delay_seconds && break
             ;;
-            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            *[!0-9]*) Println "$error $i18n_input_correct_number\n"
             ;;
             *) 
                 if [ "$flv_delay_seconds" -gt 0 ]
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字(大于0)\n"
+                    Println "$error $i18n_input_correct_number [>0]\n"
                 fi
             ;;
         esac
@@ -8064,14 +7911,14 @@ SetFlvRestartNums()
         case $flv_restart_nums in
             "") flv_restart_nums=$d_flv_restart_nums && break
             ;;
-            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            *[!0-9]*) Println "$error $i18n_input_correct_number\n"
             ;;
             *) 
                 if [ "$flv_restart_nums" -gt 0 ]
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字(大于0)\n"
+                    Println "$error $i18n_input_correct_number [>0]\n"
                 fi
             ;;
         esac
@@ -8087,14 +7934,14 @@ SetHlsDelaySeconds()
         case $hls_delay_seconds in
             "") hls_delay_seconds=$d_hls_delay_seconds && break
             ;;
-            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            *[!0-9]*) Println "$error $i18n_input_correct_number\n"
             ;;
             *) 
                 if [ "$hls_delay_seconds" -gt 60 ]
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字(大于60)\n"
+                    Println "$error $i18n_input_correct_number [>60]\n"
                 fi
             ;;
         esac
@@ -8109,14 +7956,14 @@ SetHlsMinBitrates()
         case $hls_min_bitrates in
             "") hls_min_bitrates=$d_hls_min_bitrates && break
             ;;
-            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            *[!0-9]*) Println "$error $i18n_input_correct_number\n"
             ;;
             *) 
                 if [ "$hls_min_bitrates" -gt 0 ]
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字(大于0)\n"
+                    Println "$error $i18n_input_correct_number [>0]\n"
                 fi
             ;;
         esac
@@ -8131,14 +7978,14 @@ SetHlsMaxSegSize()
         case $hls_max_seg_size in
             "") hls_max_seg_size=$d_hls_max_seg_size && break
             ;;
-            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            *[!0-9]*) Println "$error $i18n_input_correct_number\n"
             ;;
             *) 
                 if [ "$hls_max_seg_size" -gt 0 ]
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字(大于0)\n"
+                    Println "$error $i18n_input_correct_number [>0]\n"
                 fi
             ;;
         esac
@@ -8153,14 +8000,14 @@ SetHlsRestartNums()
         case $hls_restart_nums in
             "") hls_restart_nums=$d_hls_restart_nums && break
             ;;
-            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            *[!0-9]*) Println "$error $i18n_input_correct_number\n"
             ;;
             *) 
                 if [ "$hls_restart_nums" -gt 0 ]
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字(大于0)\n"
+                    Println "$error $i18n_input_correct_number [>0]\n"
                 fi
             ;;
         esac
@@ -8182,7 +8029,7 @@ SetAntiDDosPort()
         anti_ddos_ports=${anti_ddos_ports:-$d_anti_ddos_port_text}
         if [ -z "$anti_ddos_ports" ] 
         then
-            Println "$error 请输入正确的数字\n"
+            Println "$error $i18n_input_correct_number\n"
             continue
         fi
 
@@ -8214,7 +8061,7 @@ SetAntiDDosPort()
 
         case "$error_no" in
             1|2|3)
-                Println "$error 请输入正确的数字\n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *)
                 anti_ddos_ports_command=""
@@ -8279,14 +8126,14 @@ SetAntiDDosPort()
 SetAntiDDosSynFlood()
 {
     echo
-    if [[ $d_anti_ddos_syn_flood == "是" ]] 
+    if [ "$d_anti_ddos_syn_flood_yn" == "yes" ] 
     then
-        yn_options=( '是' '否' )
+        inquirer list_input "是否开启 SYN Flood attack 防御" yn_options anti_ddos_syn_flood_yn
     else
-        yn_options=( '否' '是' )
+        inquirer list_input "是否开启 SYN Flood attack 防御" ny_options anti_ddos_syn_flood_yn
     fi
-    inquirer list_input "是否开启 SYN Flood attack 防御" yn_options anti_ddos_syn_flood_yn
-    if [[ $anti_ddos_syn_flood_yn == "是" ]] 
+
+    if [[ $anti_ddos_syn_flood_yn == "$i18n_yes" ]] 
     then
         anti_ddos_syn_flood_yn="yes"
         sysctl -w net.ipv4.tcp_syn_retries=6 > /dev/null
@@ -8301,14 +8148,14 @@ SetAntiDDosSynFlood()
             case $anti_ddos_syn_flood_delay_seconds in
                 "") anti_ddos_syn_flood_delay_seconds=$d_anti_ddos_syn_flood_delay_seconds && break
                 ;;
-                *[!0-9]*) Println "$error 请输入正确的数字\n"
+                *[!0-9]*) Println "$error $i18n_input_correct_number\n"
                 ;;
                 *) 
                     if [ "$anti_ddos_syn_flood_delay_seconds" -gt 0 ]
                     then
                         break
                     else
-                        Println "$error 请输入正确的数字(大于0)\n"
+                        Println "$error $i18n_input_correct_number [>0]\n"
                     fi
                 ;;
             esac
@@ -8320,14 +8167,14 @@ SetAntiDDosSynFlood()
             case $anti_ddos_syn_flood_seconds in
                 "") anti_ddos_syn_flood_seconds=$d_anti_ddos_syn_flood_seconds && break
                 ;;
-                *[!0-9]*) Println "$error 请输入正确的数字\n"
+                *[!0-9]*) Println "$error $i18n_input_correct_number\n"
                 ;;
                 *) 
                     if [ "$anti_ddos_syn_flood_seconds" -gt 0 ]
                     then
                         break
                     else
-                        Println "$error 请输入正确的数字(大于0)\n"
+                        Println "$error $i18n_input_correct_number  [>0]\n"
                     fi
                 ;;
             esac
@@ -8340,14 +8187,14 @@ SetAntiDDosSynFlood()
 SetAntiDDos()
 {
     echo
-    if [[ $d_anti_ddos == "是" ]] 
+    if [ "$d_anti_ddos_yn" == "yes" ] 
     then
-        yn_options=( '是' '否' )
+        inquirer list_input "是否开启 iptv 防御" yn_options anti_ddos_yn
     else
-        yn_options=( '否' '是' )
+        inquirer list_input "是否开启 iptv 防御" ny_options anti_ddos_yn
     fi
-    inquirer list_input "是否开启 iptv 防御" yn_options anti_ddos_yn
-    if [[ $anti_ddos_yn == "是" ]] 
+
+    if [[ $anti_ddos_yn == "$i18n_yes" ]] 
     then
         anti_ddos_yn="yes"
 
@@ -8357,14 +8204,14 @@ SetAntiDDos()
             case $anti_ddos_seconds in
                 "") anti_ddos_seconds=$d_anti_ddos_seconds && break
                 ;;
-                *[!0-9]*) Println "$error 请输入正确的数字\n"
+                *[!0-9]*) Println "$error $i18n_input_correct_number\n"
                 ;;
                 *) 
                     if [ "$anti_ddos_seconds" -gt 0 ]
                     then
                         break
                     else
-                        Println "$error 请输入正确的数字(大于0)\n"
+                        Println "$error $i18n_input_correct_number  [>0]\n"
                     fi
                 ;;
             esac
@@ -8379,14 +8226,14 @@ SetAntiDDos()
                     anti_ddos_level=$d_anti_ddos_level
                     break
                 ;;
-                *[!0-9]*) Println "$error 请输入正确的数字\n"
+                *[!0-9]*) Println "$error $i18n_input_correct_number\n"
                 ;;
                 *) 
                     if [ "$anti_ddos_level" -gt 0 ] && [ "$anti_ddos_level" -lt 10 ]
                     then
                         break
                     else
-                        Println "$error 请输入正确的数字(1-9)\n"
+                        Println "$error $i18n_input_correct_number [1-9]\n"
                     fi
                 ;;
             esac
@@ -8399,14 +8246,14 @@ SetAntiDDos()
 SetAntiLeech()
 {
     echo
-    if [[ $d_anti_leech == "是" ]] 
+    if [ "$d_anti_leech_yn" == "yes" ] 
     then
-        yn_options=( '是' '否' )
+        inquirer list_input "是否开启防盗链" yn_options anti_leech_yn
     else
-        yn_options=( '否' '是' )
+        inquirer list_input "是否开启防盗链" ny_options anti_leech_yn
     fi
-    inquirer list_input "是否开启防盗链" yn_options anti_leech_yn
-    if [[ $anti_leech_yn == "是" ]]
+
+    if [[ $anti_leech_yn == "$i18n_yes" ]]
     then
         anti_leech_yn="yes"
 
@@ -8416,14 +8263,14 @@ SetAntiLeech()
             case $anti_leech_restart_nums in
                 "") anti_leech_restart_nums=$d_anti_leech_restart_nums && break
                 ;;
-                *[!0-9]*) Println "$error 请输入正确的数字\n"
+                *[!0-9]*) Println "$error $i18n_input_correct_number\n"
                 ;;
                 *) 
                     if [ "$anti_leech_restart_nums" -ge 0 ]
                     then
                         break
                     else
-                        Println "$error 请输入正确的数字(大于等于0)\n"
+                        Println "$error $i18n_input_correct_number [>=0]\n"
                     fi
                 ;;
             esac
@@ -8432,9 +8279,8 @@ SetAntiLeech()
         if [ "$anti_leech_restart_nums" -gt 0 ] 
         then
             echo
-            yn_options=( '否' '是' )
-            inquirer list_input "是否下个小时开始随机重启" yn_options anti_leech_restart_next_hour_yn
-            if [[ $anti_leech_restart_next_hour_yn == "是" ]] 
+            inquirer list_input "是否下个小时开始随机重启" ny_options anti_leech_restart_next_hour_yn
+            if [ "$anti_leech_restart_next_hour_yn" == "$i18n_yes" ] 
             then
                 printf -v current_hour '%(%-H)T' -1
                 skip_hour=$current_hour
@@ -8445,14 +8291,14 @@ SetAntiLeech()
         if [ -n "${flv_nums:-}" ] 
         then
             echo
-            if [[ $d_anti_leech_restart_flv_changes == "是" ]] 
+            if [ "$d_anti_leech_restart_flv_changes_yn" == "yes" ] 
             then
-                yn_options=( '是' '否' )
+                inquirer list_input "是否每当重启 FLV 频道更改成随机的推流和拉流地址" yn_options anti_leech_restart_flv_changes_yn
             else
-                yn_options=( '否' '是' )
+                inquirer list_input "是否每当重启 FLV 频道更改成随机的推流和拉流地址" ny_options anti_leech_restart_flv_changes_yn
             fi
-            inquirer list_input "是否每当重启 FLV 频道更改成随机的推流和拉流地址" yn_options anti_leech_restart_flv_changes_yn
-            if [[ $anti_leech_restart_flv_changes_yn == "是" ]] 
+
+            if [[ $anti_leech_restart_flv_changes_yn == "$i18n_yes" ]] 
             then
                 anti_leech_restart_flv_changes_yn="yes"
             else
@@ -8465,14 +8311,14 @@ SetAntiLeech()
         if [ -n "$hls_nums" ] 
         then
             echo
-            if [[ $d_anti_leech_restart_hls_changes == "是" ]] 
+            if [ "$d_anti_leech_restart_hls_changes_yn" == "yes" ] 
             then
-                yn_options=( '是' '否' )
+                inquirer list_input "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 分片名称, key 名称" yn_options anti_leech_restart_hls_changes_yn
             else
-                yn_options=( '否' '是' )
+                inquirer list_input "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 分片名称, key 名称" ny_options anti_leech_restart_hls_changes_yn
             fi
-            inquirer list_input "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 分片名称, key 名称" yn_options anti_leech_restart_hls_changes_yn
-            if [[ $anti_leech_restart_hls_changes_yn == "是" ]] 
+
+            if [[ $anti_leech_restart_hls_changes_yn == "$i18n_yes" ]] 
             then
                 anti_leech_restart_hls_changes_yn="yes"
             else
@@ -8500,14 +8346,14 @@ SetRecheckPeriod()
         case $recheck_period in
             "") recheck_period=$d_recheck_period && break
             ;;
-            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            *[!0-9]*) Println "$error $i18n_input_correct_number\n"
             ;;
             *) 
                 if [ "$recheck_period" -ge 0 ]
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字(大于等于0)\n"
+                    Println "$error $i18n_input_correct_number [>=0]\n"
                 fi
             ;;
         esac
@@ -8517,9 +8363,8 @@ SetRecheckPeriod()
 SetFlvIsH265()
 {
     echo
-    yn_options=( '否' '是' )
-    inquirer list_input "是否推流 h265" yn_options flv_h265_yn
-    if [[ $flv_h265_yn == "否" ]] 
+    inquirer list_input "是否推流 h265" ny_options flv_h265_yn
+    if [[ $flv_h265_yn == "$i18n_no" ]] 
     then
         flv_h265_yn="no"
     else
@@ -8535,19 +8380,11 @@ SetFlvIsH265()
                 then
                     chmod +x /usr/local/bin/ffmpeg_c
                 else
-                    Println "$error 暂时无法连接服务器, 请稍后再试\n"
+                    Println "$error 暂时无法连接服务器, 请稍后再试 !\n"
                     exit 1
                 fi
             else
-                CompileFFmpeg
-            fi
-            echo
-            yn_options=( '是' '否' )
-            inquirer list_input "请确保你的 nginx/openresty 是 2020年10月1日 后编译的, 否则需要升级并重新编译, 是否继续" yn_options continue_yn
-            if [[ $continue_yn == "否" ]] 
-            then
-                Println "已取消...\n"
-                exit 1
+                FFmpegCompile
             fi
         fi
     fi
@@ -8572,7 +8409,7 @@ SetFlvPushLink()
         then
             break
         else
-            Println "$error 推流地址已存在！请重新输入\n"
+            Println "$error 推流地址已存在!请重新输入\n"
         fi
     done
 }
@@ -8638,7 +8475,7 @@ AddChannel()
     xc_proxy=${xc_proxy:-}
     if [[ $stream_link =~ ^http://([^/]+) ]] 
     then
-        GetXtreamCodesDomains
+        XtreamCodesGetDomains
 
         for xc_domain in "${xtream_codes_domains[@]}"
         do
@@ -8657,9 +8494,8 @@ AddChannel()
     if [ "${xc:-0}" -eq 0 ] && [ "$is_hls" -eq 1 ] 
     then
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "是否分析 m3u8 列表: " yn_options yn_option
-        if [ "$yn_option" == "是" ]
+        inquirer list_input "是否分析 m3u8 列表: " ny_options yn_option
+        if [ "$yn_option" == "$i18n_yes" ]
         then
             stream_link_url=${stream_link%%|*}
             stream_link_url_path=${stream_link_url%/*}
@@ -8829,7 +8665,7 @@ AddChannel()
                     fi
                     stream_links_subtitles+=("$stream_link_subtitles")
                     stream_links_count=$((stream_links_count+1))
-                    stream_links_list="$stream_links_list $green$stream_links_count.${normal}\r\033[6C$stream_link_resolution$stream_link_bitrate_text $stream_link_audio $stream_link_subtitles\n\n"
+                    stream_links_list="$stream_links_list $green$stream_links_count.${normal}${indent_6}$stream_link_resolution$stream_link_bitrate_text $stream_link_audio $stream_link_subtitles\n\n"
                 elif [[ $line =~ \.m3u8 ]] 
                 then
                     if [[ $line =~ ^https?:// ]] 
@@ -8909,7 +8745,7 @@ AddChannel()
                 if [ "$choose" -eq 1 ]
                 then
                     stream_links_select_all=$((stream_links_count+1))
-                    stream_links_list="$stream_links_list $green$stream_links_select_all.${normal}\r\033[6C全部\n"
+                    stream_links_list="$stream_links_list $green$stream_links_select_all.${normal}${indent_6}全部\n"
                     Println "$stream_links_list"
                     echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
 
@@ -8960,7 +8796,7 @@ AddChannel()
 
                         case "$error_no" in
                             1|2|3)
-                                Println "$error 请输入正确的序号\n"
+                                Println "$error $i18n_input_correct_no\n"
                             ;;
                             *)
                                 stream_link_qualities=()
@@ -9035,14 +8871,14 @@ AddChannel()
                             then
                                 stream_audio_num_default=$((i+1))
                             fi
-                            stream_audio_list="$stream_audio_list $green$((i+1)).${normal}\r\033[6C音轨组: $green${stream_audio_group_id[i]}${normal} 名称: $green${stream_audio_name[i]}${normal} 语言: $green${stream_audio_language[i]}${normal}\n\n"
+                            stream_audio_list="$stream_audio_list $green$((i+1)).${normal}${indent_6}音轨组: $green${stream_audio_group_id[i]}${normal} 名称: $green${stream_audio_name[i]}${normal} 语言: $green${stream_audio_language[i]}${normal}\n\n"
                         done
 
                         stream_audio_unselect_all=$((stream_audio_count+1))
-                        stream_audio_list="$stream_audio_list $green$stream_audio_unselect_all.${normal}\r\033[6C不启用\n\n"
+                        stream_audio_list="$stream_audio_list $green$stream_audio_unselect_all.${normal}${indent_6}不启用\n\n"
 
                         stream_audio_select_all=$((stream_audio_count+2))
-                        stream_audio_list="$stream_audio_list $green$stream_audio_select_all.${normal}\r\033[6C全部启用"
+                        stream_audio_list="$stream_audio_list $green$stream_audio_select_all.${normal}${indent_6}全部启用"
                         Println "$stream_audio_list\n"
                         echo "选择启用音轨 (多个音轨用空格分隔 比如: 1 2 4-5)"
                         stream_audio_num_default=$stream_audio_select_all
@@ -9096,7 +8932,7 @@ AddChannel()
 
                             case "$error_no" in
                                 1|2|3)
-                                    Println "$error 请输入正确的序号\n"
+                                    Println "$error $i18n_input_correct_no\n"
                                 ;;
                                 *)
                                     stream_link_audio_indices=()
@@ -9188,14 +9024,14 @@ AddChannel()
                             then
                                 stream_subtitles_num_default=$((i+1))
                             fi
-                            stream_subtitles_list="$stream_subtitles_list $green$((i+1)).${normal}\r\033[6C字幕组: $green${stream_subtitles_group_id[i]}${normal} 名称: $green${stream_subtitles_name[i]}${normal} 语言: $green${stream_subtitles_language[i]}${normal}\n\n"
+                            stream_subtitles_list="$stream_subtitles_list $green$((i+1)).${normal}${indent_6}字幕组: $green${stream_subtitles_group_id[i]}${normal} 名称: $green${stream_subtitles_name[i]}${normal} 语言: $green${stream_subtitles_language[i]}${normal}\n\n"
                         done
 
                         stream_subtitles_unselect_all=$((stream_subtitles_count+1))
-                        stream_subtitles_list="$stream_subtitles_list $green$stream_subtitles_unselect_all.${normal}\r\033[6C不启用\n\n"
+                        stream_subtitles_list="$stream_subtitles_list $green$stream_subtitles_unselect_all.${normal}${indent_6}不启用\n\n"
 
                         stream_subtitles_select_all=$((stream_subtitles_count+2))
-                        stream_subtitles_list="$stream_subtitles_list $green$stream_subtitles_select_all.${normal}\r\033[6C全部启用"
+                        stream_subtitles_list="$stream_subtitles_list $green$stream_subtitles_select_all.${normal}${indent_6}全部启用"
                         Println "$stream_subtitles_list\n"
                         echo "选择字幕 (多个字幕用空格分隔 比如: 1 2 4-5)"
                         stream_subtitles_num_default=$stream_subtitles_select_all
@@ -9249,7 +9085,7 @@ AddChannel()
 
                             case "$error_no" in
                                 1|2|3)
-                                    Println "$error 请输入正确的序号\n"
+                                    Println "$error $i18n_input_correct_no\n"
                                 ;;
                                 *)
                                     stream_link_subtitles_indices=()
@@ -9311,10 +9147,9 @@ AddChannel()
                     stream_link=${stream_link_url%%|*}
                     stream_link_url="$stream_link_url|parse"
                 else
-                    yn_options=( '是' '否' )
                     Println "$tip 如果选 是 只修改 map 参数, FFmpeg 输入的将是原链接而非解析链接"
                     inquirer list_input "是否是需要鉴权的直播源" yn_options yn_option
-                    if [ "$yn_option" == "是" ] 
+                    if [ "$yn_option" == "$i18n_yes" ] 
                     then
                         origin_hls_url=1
                         stream_link=${stream_link_url%%|*}
@@ -9576,13 +9411,7 @@ EditOutputDirName()
     if [ "$chnl_status" == "on" ]
     then
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "检测到频道正在运行, 是否现在关闭" yn_options stop_channel_yn
-        if [[ $stop_channel_yn == "否" ]]
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        AskIfContinue n "`gettext \"检测到频道正在运行, 是否现在关闭\"`"
         StopChannel
         echo && echo
     fi
@@ -9783,26 +9612,14 @@ EditChannelAll()
     then
         kind="flv"
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "检测到频道正在运行, 是否现在关闭" yn_options stop_channel_yn
-        if [[ $stop_channel_yn == "否" ]]
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        AskIfContinue n "`gettext \"检测到频道正在运行, 是否现在关闭\"`"
         StopChannel
         echo && echo
     elif [ "$chnl_status" == "on" ]
     then
         kind=""
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "检测到频道正在运行, 是否现在关闭" yn_options stop_channel_yn
-        if [[ $stop_channel_yn == "否" ]]
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        AskIfContinue n "`gettext \"检测到频道正在运行, 是否现在关闭\"`"
         StopChannel
         echo && echo
     fi
@@ -9843,7 +9660,7 @@ EditChannelAll()
     xc_proxy=${xc_proxy:-}
     if [[ $stream_link =~ ^http://([^/]+) ]] 
     then
-        GetXtreamCodesDomains
+        XtreamCodesGetDomains
 
         for xc_domain in "${xtream_codes_domains[@]}"
         do
@@ -10003,10 +9820,11 @@ EditChannelMenu()
 {
     ListChannels
     InputChannelsIndex
+    i18nGetMsg list_channel
     for chnl_pid in "${chnls_pid_chosen[@]}"
     do
-        GetChannelInfo
-        ViewChannelInfo
+        GetChannel
+        ListChannel
         Println "选择修改内容
 
     ${green}1.${normal} 修改 直播源
@@ -10048,8 +9866,8 @@ EditChannelMenu()
    ${green}36.${normal} 修改 分片名称, m3u8名称 (防盗链/DDoS)
 
 "
-        read -p "(默认: 取消): " edit_channel_num
-        [ -z "$edit_channel_num" ] && Println "已取消...\n" && exit 1
+        read -p "$i18n_default_cancel" edit_channel_num
+        [ -z "$edit_channel_num" ] && Println "$i18n_canceled...\n" && exit 1
         case $edit_channel_num in
             1)
                 EditStreamLink
@@ -10160,23 +9978,22 @@ EditChannelMenu()
                 EditForSecurity
             ;;
             *)
-                echo "请输入正确序号...\n" && exit 1
+                echo "$i18n_input_correct_no...\n" && exit 1
             ;;
         esac
 
         echo
-        yn_options=( '是' '否' )
         if [ "$chnl_status" == "on" ] || [ "$chnl_flv_status" == "on" ]
         then
             inquirer list_input "是否重启此频道" yn_options restart_yn
 
-            if [[ $restart_yn == "否" ]]
+            if [[ $restart_yn == "$i18n_no" ]]
             then
                 Println "不重启...\n"
             else
                 StopChannel
-                GetChannelInfo
-                TestXtreamCodesLink
+                GetChannel
+                CheckIfXtreamCodes
                 if [ "$to_try" -eq 1 ] 
                 then
                     continue
@@ -10187,12 +10004,12 @@ EditChannelMenu()
         else
             inquirer list_input "是否启动此频道" yn_options start_yn
 
-            if [[ $start_yn == "否" ]]
+            if [[ $start_yn == "$i18n_no" ]]
             then
                 Println "不启动...\n"
             else
-                GetChannelInfo
-                TestXtreamCodesLink
+                GetChannel
+                CheckIfXtreamCodes
                 if [ "$to_try" -eq 1 ] 
                 then
                     continue
@@ -10204,9 +10021,9 @@ EditChannelMenu()
     done
 }
 
-TestXtreamCodesLink()
+CheckIfXtreamCodes()
 {
-    GetXtreamCodesDomains
+    XtreamCodesGetDomains
 
     if [ -z "${FFPROBE:-}" ] 
     then
@@ -10231,7 +10048,7 @@ TestXtreamCodesLink()
             if [ "$xc_domain" == "$chnl_domain" ] 
             then
                 Println "$info 频道[ $chnl_channel_name ]检测账号中..."
-                GetXtreamCodesChnls
+                XtreamCodesGetChnls
                 for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
                 do
                     if [ "$xc_chnl_mac" == "$chnl_domain/$chnl_mac" ] 
@@ -10408,7 +10225,7 @@ TestXtreamCodesLink()
             else
                 chnl_account="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}"
             fi
-            GetXtreamCodesChnls
+            XtreamCodesGetChnls
             for xc_chnl in ${xc_chnls[@]+"${xc_chnls[@]}"}
             do
                 if [ "$xc_chnl" == "$chnl_domain/$chnl_account" ] 
@@ -10468,7 +10285,7 @@ ToggleChannel()
     InputChannelsIndex
     for chnl_pid in "${chnls_pid_chosen[@]}"
     do
-        GetChannelInfo
+        GetChannel
 
         if [ "${kind:-}" == "flv" ] 
         then
@@ -10476,7 +10293,7 @@ ToggleChannel()
             then
                 StopChannel
             else
-                TestXtreamCodesLink
+                CheckIfXtreamCodes
                 if [ "$to_try" -eq 1 ] 
                 then
                     continue
@@ -10487,7 +10304,7 @@ ToggleChannel()
         then
             StopChannel
         else
-            TestXtreamCodesLink
+            CheckIfXtreamCodes
             if [ "$to_try" -eq 1 ] 
             then
                 continue
@@ -10512,7 +10329,7 @@ StartChannel()
 
         if [[ ! -x $(command -v youtube-dl) ]] 
         then
-            InstallYoutubeDl
+            YoutubeDlInstall
         elif [ "${youtube_dl_updated:-0}" -eq 0 ] 
         then
             youtube-dl -U > /dev/null
@@ -10607,7 +10424,7 @@ StartChannel()
                 chnl_cookies="$chnl_cookies ${line%% *}"
                 break
             fi
-        done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" -c - "$chnl_stream_link")
+        done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" -c - "$chnl_stream_link" 2> /dev/null)
         chnl="${chnl_stream_link%\?*}"
         chnl=${chnl##*/}
         token_url=$(curl -s -Lm 10 -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" "https://api.news.tvb.com/news/v2.2.1/live?profile=web" | $JQ_FILE -r '.items[]|select(.path=="'"$chnl"'").video.ios[]|select(.type=="hd").url')
@@ -10627,7 +10444,7 @@ StartChannel()
                 chnl_cookies="$chnl_cookies ${line%% *}"
                 break
             fi
-        done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" --cookie "$chnl_cookies" "$chnl_stream_link")
+        done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" --cookie "$chnl_cookies" "$chnl_stream_link" 2> /dev/null)
     elif [[ $chnl_stream_link =~ ^https://embed.4gtv.tv/HiNet/(.+).html ]] 
     then
         Println "$info 解析 [ $chnl_channel_name ] 链接 ..."
@@ -10918,7 +10735,7 @@ StartChannel()
                 fi
                 chnl_stream_links_subtitles+=("$chnl_stream_link_subtitles")
                 chnl_stream_links_count=$((chnl_stream_links_count+1))
-                chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_count.${normal}\r\033[6C$chnl_stream_link_resolution$chnl_stream_link_bitrate_text $chnl_stream_link_audio $chnl_stream_link_subtitles\n\n"
+                chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_count.${normal}${indent_6}$chnl_stream_link_resolution$chnl_stream_link_bitrate_text $chnl_stream_link_audio $chnl_stream_link_subtitles\n\n"
             elif [[ $line =~ \.m3u8 ]] 
             then
                 if [[ $line =~ ^https?:// ]] 
@@ -10999,7 +10816,7 @@ StartChannel()
                 if [ -z "${monitor:-}" ] 
                 then
                     chnl_stream_links_select_all=$((chnl_stream_links_count+1))
-                    chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_select_all.${normal}\r\033[6C全部\n"
+                    chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_select_all.${normal}${indent_6}全部\n"
                     Println "$chnl_stream_links_list"
                     echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
 
@@ -11050,7 +10867,7 @@ StartChannel()
 
                         case "$error_no" in
                             1|2|3)
-                                Println "$error 请输入正确的序号\n"
+                                Println "$error $i18n_input_correct_no\n"
                             ;;
                             *)
                                 chnl_stream_link_qualities=()
@@ -11135,14 +10952,14 @@ StartChannel()
                         then
                             chnl_stream_audio_num_default=$((i+1))
                         fi
-                        chnl_stream_audio_list="$chnl_stream_audio_list $green$((i+1)).${normal}\r\033[6C音轨组: $green${chnl_stream_audio_group_id[i]}${normal} 名称: $green${chnl_stream_audio_name[i]}${normal} 语言: $green${chnl_stream_audio_language[i]}${normal}\n\n"
+                        chnl_stream_audio_list="$chnl_stream_audio_list $green$((i+1)).${normal}${indent_6}音轨组: $green${chnl_stream_audio_group_id[i]}${normal} 名称: $green${chnl_stream_audio_name[i]}${normal} 语言: $green${chnl_stream_audio_language[i]}${normal}\n\n"
                     done
 
                     chnl_stream_audio_unselect_all=$((chnl_stream_audio_count+1))
-                    chnl_stream_audio_list="$chnl_stream_audio_list $green$chnl_stream_audio_unselect_all.${normal}\r\033[6C不启用\n\n"
+                    chnl_stream_audio_list="$chnl_stream_audio_list $green$chnl_stream_audio_unselect_all.${normal}${indent_6}不启用\n\n"
 
                     chnl_stream_audio_select_all=$((chnl_stream_audio_count+2))
-                    chnl_stream_audio_list="$chnl_stream_audio_list $green$chnl_stream_audio_select_all.${normal}\r\033[6C全部启用"
+                    chnl_stream_audio_list="$chnl_stream_audio_list $green$chnl_stream_audio_select_all.${normal}${indent_6}全部启用"
                     Println "$chnl_stream_audio_list\n"
                     echo "选择启用音轨 (多个音轨用空格分隔 比如: 1 2 4-5)"
                     chnl_stream_audio_num_default=$chnl_stream_audio_select_all
@@ -11196,7 +11013,7 @@ StartChannel()
 
                         case "$error_no" in
                             1|2|3)
-                                Println "$error 请输入正确的序号\n"
+                                Println "$error $i18n_input_correct_no\n"
                             ;;
                             *)
                                 chnl_stream_link_audio_indices=()
@@ -11293,14 +11110,14 @@ StartChannel()
                         then
                             chnl_stream_subtitles_num_default=$((i+1))
                         fi
-                        chnl_stream_subtitles_list="$chnl_stream_subtitles_list $green$((i+1)).${normal}\r\033[6C字幕组: $green${chnl_stream_subtitles_group_id[i]}${normal} 名称: $green${chnl_stream_subtitles_name[i]}${normal} 语言: $green${chnl_stream_subtitles_language[i]}${normal}\n\n"
+                        chnl_stream_subtitles_list="$chnl_stream_subtitles_list $green$((i+1)).${normal}${indent_6}字幕组: $green${chnl_stream_subtitles_group_id[i]}${normal} 名称: $green${chnl_stream_subtitles_name[i]}${normal} 语言: $green${chnl_stream_subtitles_language[i]}${normal}\n\n"
                     done
 
                     chnl_stream_subtitles_unselect_all=$((chnl_stream_subtitles_count+1))
-                    chnl_stream_subtitles_list="$chnl_stream_subtitles_list $green$chnl_stream_subtitles_unselect_all.${normal}\r\033[6C不启用\n\n"
+                    chnl_stream_subtitles_list="$chnl_stream_subtitles_list $green$chnl_stream_subtitles_unselect_all.${normal}${indent_6}不启用\n\n"
 
                     chnl_stream_subtitles_select_all=$((chnl_stream_subtitles_count+2))
-                    chnl_stream_subtitles_list="$chnl_stream_subtitles_list $green$chnl_stream_subtitles_select_all.${normal}\r\033[6C全部启用"
+                    chnl_stream_subtitles_list="$chnl_stream_subtitles_list $green$chnl_stream_subtitles_select_all.${normal}${indent_6}全部启用"
                     Println "$chnl_stream_subtitles_list\n"
                     echo "选择字幕 (多个字幕用空格分隔 比如: 1 2 4-5)"
                     chnl_stream_subtitles_num_default=$chnl_stream_subtitles_select_all
@@ -11354,7 +11171,7 @@ StartChannel()
 
                         case "$error_no" in
                             1|2|3)
-                                Println "$error 请输入正确的序号\n"
+                                Println "$error $i18n_input_correct_no\n"
                             ;;
                             *)
                                 chnl_stream_link_subtitles_indices=()
@@ -11416,10 +11233,9 @@ StartChannel()
                 chnl_stream_link=${chnl_stream_link_url%%|*}
                 chnl_stream_link_url="${chnl_stream_link_url}|origin"
             else
-                yn_options=( '是' '否' )
                 Println "$tip 如果选 是 只修改 map 参数, FFmpeg 输入的将是原链接而非解析链接"
                 inquirer list_input "是否是需要鉴权的直播源" yn_options yn_option
-                if [ "$yn_option" == "是" ] 
+                if [ "$yn_option" == "$i18n_yes" ] 
                 then
                     chnl_origin_hls_url=1
                     chnl_stream_link=${chnl_stream_link_url%%|*}
@@ -11584,19 +11400,11 @@ StartChannel()
                         then
                             chmod +x /usr/local/bin/ffmpeg_c
                         else
-                            Println "$error 暂时无法连接服务器, 请稍后再试\n"
+                            Println "$error 暂时无法连接服务器, 请稍后再试 !\n"
                             exit 1
                         fi
                     else
-                        CompileFFmpeg
-                    fi
-                    echo
-                    yn_options=( '是' '否' )
-                    inquirer list_input "请确保你的 nginx/openresty 是 2020年10月1日 后编译的, 否则需要升级并重新编译, 是否继续" yn_options continue_yn
-                    if [[ $continue_yn == "否" ]] 
-                    then
-                        Println "已取消...\n"
-                        exit 1
+                        FFmpegCompile
                     fi
                 else
                     chnl_flv_h265_yn="no"
@@ -11722,27 +11530,33 @@ StopChannelsForce()
     pkill -9 -f ffmpeg 2> /dev/null || true
     pkill -f 'tv m' 2> /dev/null || true
     rm -rf "$CHANNELS_FILE.lockdir"
-    GetChannelsInfo
+
+    GetChannels
+    GetDefault
+
     for((i=0;i<chnls_count;i++));
     do
-        chnl_pid=${chnls_pid[i]}
-        GetChannelInfoLite
-        JQ update "$CHANNELS_FILE" '.channels|=map(select(.pid=='"$chnl_pid"') * 
+        JQ update "$CHANNELS_FILE" '.channels|=map(select(.pid=='"${chnls_pid[i]}"') * 
         {
             status: "off",
             flv_status: "off"
         } // .)'
+
+        chnl_sync_file=${chnls_sync_file[i]}
         chnl_sync_file=${chnl_sync_file:-$d_sync_file}
         IFS=" " read -ra chnl_sync_files <<< "$chnl_sync_file"
+
         for sync_file in ${chnl_sync_files[@]+"${chnl_sync_files[@]}"}
         do
             rm -rf "$sync_file.lockdir"
         done
+
         action="stop"
         SyncFile > /dev/null
-        if [ "${chnl_live_yn}" == "yes" ] 
+
+        if [ "${chnls_live[i]}" == "yes" ] 
         then
-            rm -rf "$chnl_output_dir_root"
+            rm -rf "${chnls_output_dir_root[i]}"
         fi
     done
     Println "$info 全部频道已关闭 !\n"
@@ -11754,7 +11568,7 @@ RestartChannel()
     InputChannelsIndex
     for chnl_pid in "${chnls_pid_chosen[@]}"
     do
-        GetChannelInfo
+        GetChannel
         if [ "${kind:-}" == "flv" ] 
         then
             if [ "$chnl_flv_status" == "on" ] 
@@ -11767,7 +11581,7 @@ RestartChannel()
             action="skip"
             StopChannel
         fi
-        TestXtreamCodesLink
+        CheckIfXtreamCodes
         if [ "$to_try" -eq 1 ] 
         then
             continue
@@ -11781,10 +11595,11 @@ ViewChannelLog()
 {
     ListChannels
     InputChannelsIndex
+    i18nGetMsg list_channel
     for chnl_pid in "${chnls_pid_chosen[@]}"
     do
-        GetChannelInfo
-        ViewChannelInfo
+        GetChannel
+        ListChannel
 
         Println "${green}输出日志:${normal}\n"
         if [ -s "$FFMPEG_LOG_ROOT/$chnl_pid.log" ] 
@@ -11811,7 +11626,7 @@ DelChannel()
     InputChannelsIndex
     for chnl_pid in "${chnls_pid_chosen[@]}"
     do
-        GetChannelInfo
+        GetChannel
         if [ "${kind:-}" == "flv" ] 
         then
             if [ "$chnl_flv_status" == "on" ] 
@@ -11888,8 +11703,8 @@ EditDefaultMenu()
    ${green}40.${normal} 默认 重启失败后定时检查间隔时间
 
 "
-    read -p "(默认: 取消): " edit_default_num
-    [ -z "$edit_default_num" ] && Println "已取消...\n" && exit 1
+    read -p "$i18n_default_cancel" edit_default_num
+    [ -z "$edit_default_num" ] && Println "$i18n_canceled...\n" && exit 1
 
     GetDefault
     set_default=1
@@ -12073,7 +11888,7 @@ EditDefaultMenu()
             EditDefault recheck_period
         ;;
         *)
-            Println "请输入正确序号...\n"
+            Println "$i18n_input_correct_no...\n"
             exit 1
         ;;
     esac
@@ -12186,7 +12001,7 @@ List4gtvAccs()
         else
             is_login=""
         fi
-        _4gtv_accs_list="$_4gtv_accs_list $green$((i+1)).${normal}\r\033[6C邮箱: $green${_4gtv_accs_email[i]}${normal}$is_login\n\033[6C密码: $green${_4gtv_accs_pass[i]}${normal}\n\n"
+        _4gtv_accs_list="$_4gtv_accs_list $green$((i+1)).${normal}${indent_6}邮箱: $green${_4gtv_accs_email[i]}${normal}$is_login\n${indent_6}密码: $green${_4gtv_accs_pass[i]}${normal}\n\n"
     done
     if [ -n "$_4gtv_accs_list" ] 
     then
@@ -12206,17 +12021,17 @@ Login4gtvAcc()
     List4gtvAccs
 
     _4gtv_input_acc_num=$((_4gtv_accs_count+1))
-    echo -e " $green$_4gtv_input_acc_num.${normal}\r\033[6C手动输入\n"
+    echo -e " $green$_4gtv_input_acc_num.${normal}${indent_6}手动输入\n"
 
     echo -e "选择账号"
-    while read -p "(默认: 取消): " _4gtv_accs_num
+    while read -p "$i18n_default_cancel" _4gtv_accs_num
     do
         case "$_4gtv_accs_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             $_4gtv_input_acc_num)
                 _4gtv_accs_index=$((_4gtv_accs_num-1))
@@ -12242,7 +12057,7 @@ Login4gtvAcc()
                     _4gtv_acc_pass=${_4gtv_accs_pass[_4gtv_accs_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -12253,7 +12068,7 @@ Login4gtvAcc()
     if [[ ! -x $(command -v convert) ]] 
     then
         Println "$info 安装 ImageMagick"
-        InstallImageMagick
+        ImageMagickInstall
     fi
 
     while true 
@@ -12269,7 +12084,7 @@ Login4gtvAcc()
             [ -z "$validatecode" ] && continue
         else
             Println "$info 尝试修复 magick ..."
-            InstallImageMagick
+            ImageMagickInstall
             rm -f "${IMG_FILE:-notfound}"
             Println "$error 连接发生错误, 请重试\n"
             exit 1
@@ -12333,7 +12148,7 @@ Login4gtvAcc()
     fi
 }
 
-View4gtvAcc()
+List4gtvAcc()
 {
     List4gtvAccs
 
@@ -12343,14 +12158,14 @@ View4gtvAcc()
     fi
 
     echo -e "选择账号"
-    while read -p "(默认: 取消): " _4gtv_accs_num
+    while read -p "$i18n_default_cancel" _4gtv_accs_num
     do
         case "$_4gtv_accs_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$_4gtv_accs_num" -gt 0 ] && [ "$_4gtv_accs_num" -le "$_4gtv_accs_count" ]
@@ -12385,7 +12200,7 @@ View4gtvAcc()
                     fi
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -12402,14 +12217,14 @@ Edit4gtvAcc()
     fi
 
     echo -e "选择账号"
-    while read -p "(默认: 取消): " _4gtv_accs_num
+    while read -p "$i18n_default_cancel" _4gtv_accs_num
     do
         case "$_4gtv_accs_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$_4gtv_accs_num" -gt 0 ] && [ "$_4gtv_accs_num" -le "$_4gtv_accs_count" ]
@@ -12429,7 +12244,7 @@ Edit4gtvAcc()
                     Println "$info 账号修改成功\n"
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -12446,14 +12261,14 @@ Del4gtvAcc()
     fi
 
     echo -e "选择账号"
-    while read -p "(默认: 取消): " _4gtv_accs_num
+    while read -p "$i18n_default_cancel" _4gtv_accs_num
     do
         case "$_4gtv_accs_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$_4gtv_accs_num" -gt 0 ] && [ "$_4gtv_accs_num" -le "$_4gtv_accs_count" ]
@@ -12464,7 +12279,7 @@ Del4gtvAcc()
                     Println "$info 账号删除成功\n"
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -12481,14 +12296,14 @@ Get4gtvAccToken()
     fi
 
     echo -e "选择账号"
-    while read -p "(默认: 取消): " _4gtv_accs_num
+    while read -p "$i18n_default_cancel" _4gtv_accs_num
     do
         case "$_4gtv_accs_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$_4gtv_accs_num" -gt 0 ] && [ "$_4gtv_accs_num" -le "$_4gtv_accs_count" ]
@@ -12502,7 +12317,7 @@ Get4gtvAccToken()
                     fi
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -12562,7 +12377,7 @@ _4gtvCron()
     if [[ ! -x $(command -v convert) ]] 
     then
         Println "$info 安装 ImageMagick"
-        InstallImageMagick
+        ImageMagickInstall
     fi
 
     for((i=0;i<5;i++));
@@ -12578,7 +12393,7 @@ _4gtvCron()
             [ -z "$validatecode" ] && continue
         else
             Println "$info 尝试修复 magick ..."
-            InstallImageMagick
+            ImageMagickInstall
             rm -f "${IMG_FILE:-notfound}"
         fi
 
@@ -12708,7 +12523,7 @@ Add4gtvLink()
                 stream_link_bitrate_text=""
             fi
             stream_links_count=$((stream_links_count+1))
-            stream_links_list="$stream_links_list $green$stream_links_count.${normal}\r\033[6C$stream_link_resolution$stream_link_bitrate_text\n\n"
+            stream_links_list="$stream_links_list $green$stream_links_count.${normal}${indent_6}$stream_link_resolution$stream_link_bitrate_text\n\n"
         elif [[ $line =~ m3u8 ]] 
         then
             stream_links_url+=("$stream_link_url_path/$line")
@@ -12752,7 +12567,7 @@ Add4gtvLink()
             if [ -z "${kind:-}" ] 
             then
                 stream_links_select_all=$((stream_links_count+1))
-                stream_links_list="$stream_links_list $green$stream_links_select_all.${normal}\r\033[6C全部\n"
+                stream_links_list="$stream_links_list $green$stream_links_select_all.${normal}${indent_6}全部\n"
                 Println "$stream_links_list"
                 echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
             else
@@ -12808,7 +12623,7 @@ Add4gtvLink()
 
                 case "$error_no" in
                     1|2|3)
-                        Println "$error 请输入正确的序号\n"
+                        Println "$error $i18n_input_correct_no\n"
                     ;;
                     *)
                         stream_link_qualities=()
@@ -12898,7 +12713,7 @@ Start4gtvLink()
                 chnl_stream_link_bitrate_text=""
             fi
             chnl_stream_links_count=$((chnl_stream_links_count+1))
-            chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_count.${normal}\r\033[6C$chnl_stream_link_resolution$chnl_stream_link_bitrate_text\n\n"
+            chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_count.${normal}${indent_6}$chnl_stream_link_resolution$chnl_stream_link_bitrate_text\n\n"
         elif [[ $line =~ m3u8 ]] 
         then
             chnl_stream_links_url+=("$chnl_stream_link_url_path/$line")
@@ -12924,7 +12739,7 @@ Start4gtvLink()
             do
                 for((j=0;j<chnl_stream_links_count;j++));
                 do
-                    if { [ "${auto_select_yn:-}" == "是" ] || ! [[ ${chnl_stream_link_qualities[i]} =~ - ]] || [ "${chnl_stream_links_bitrate[j]}" == "${chnl_stream_link_qualities[i]%-*}" ] || [ -n "${monitor:-}" ]; } && [ "${chnl_stream_links_resolution[j]}" == "${chnl_stream_link_qualities[i]#*-}" ]
+                    if { [ "${auto_select_yn:-}" == "$i18n_yes" ] || ! [[ ${chnl_stream_link_qualities[i]} =~ - ]] || [ "${chnl_stream_links_bitrate[j]}" == "${chnl_stream_link_qualities[i]%-*}" ] || [ -n "${monitor:-}" ]; } && [ "${chnl_stream_links_resolution[j]}" == "${chnl_stream_link_qualities[i]#*-}" ]
                     then
                         chnl_stream_link_qualities[i]="${chnl_stream_links_bitrate[j]}-${chnl_stream_links_resolution[j]}"
                         chnl_stream_link_video_indices+=("$j")
@@ -12935,9 +12750,8 @@ Start4gtvLink()
                 if [ -z "${auto_select_yn:-}" ] 
                 then
                     echo
-                    auto_select_options=( '是' '否' )
-                    inquirer list_input "是否按分辨率自动选择" auto_select_options auto_select_yn
-                    if [ "$auto_select_yn" == "是" ] 
+                    inquirer list_input "是否按分辨率自动选择" yn_options auto_select_yn
+                    if [ "$auto_select_yn" == "$i18n_yes" ] 
                     then
                         i=$((i-1))
                         continue
@@ -12956,7 +12770,7 @@ Start4gtvLink()
                 if [ -z "${kind:-}" ] 
                 then
                     chnl_stream_links_select_all=$((chnl_stream_links_count+1))
-                    chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_select_all.${normal}\r\033[6C全部\n"
+                    chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_select_all.${normal}${indent_6}全部\n"
                     Println "$chnl_stream_links_list"
                     echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
                 else
@@ -13012,7 +12826,7 @@ Start4gtvLink()
 
                     case "$error_no" in
                         1|2|3)
-                            Println "$error 请输入正确的序号\n"
+                            Println "$error $i18n_input_correct_no\n"
                         ;;
                         *)
                             chnl_stream_link_qualities=()
@@ -13230,7 +13044,7 @@ ScheduleIcable()
                 done
                 break
             fi
-        done < <(curl -s -Lm 20 -H "User-Agent: $user_agent" "http://epg.i-cable.com/new/ch_getcontent.php?lang=chi&ch=$chnl_num&date=$yesterday")
+        done < <(curl -s -Lm 20 -H "User-Agent: $user_agent" "http://epg.i-cable.com/new/ch_getcontent.php?lang=chi&ch=$chnl_num&date=$yesterday" 2> /dev/null)
 
         while IFS= read -r line
         do
@@ -13262,7 +13076,7 @@ ScheduleIcable()
                 done
                 break
             fi
-        done < <(curl -s -Lm 20 -H "User-Agent: $user_agent" "http://epg.i-cable.com/new/ch_getcontent.php?lang=chi&ch=$chnl_num&date=$today")
+        done < <(curl -s -Lm 20 -H "User-Agent: $user_agent" "http://epg.i-cable.com/new/ch_getcontent.php?lang=chi&ch=$chnl_num&date=$today" 2> /dev/null)
 
         if [ -n "$schedule" ] 
         then
@@ -13541,7 +13355,7 @@ ScheduleOntvtonight()
             then
                 break
             fi
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "https://www.ontvtonight.com/${ct}guide/listings/channel/$chnl_no/$chnl_name.html?dt=$yesterday")
+        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "https://www.ontvtonight.com/${ct}guide/listings/channel/$chnl_no/$chnl_name.html?dt=$yesterday" 2> /dev/null)
 
         while IFS= read -r line
         do
@@ -13584,7 +13398,7 @@ ScheduleOntvtonight()
             then
                 break
             fi
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "https://www.ontvtonight.com/${ct}guide/listings/channel/$chnl_no/$chnl_name.html?dt=$today")
+        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "https://www.ontvtonight.com/${ct}guide/listings/channel/$chnl_no/$chnl_name.html?dt=$today" 2> /dev/null)
 
         if [ -n "$schedule" ] 
         then
@@ -13831,7 +13645,7 @@ ScheduleTvbhk()
                 done
                 break
             fi
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "https://programme.tvb.com/ajax.php?action=channellist&code=$chnl_code&date=$yesterday")
+        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "https://programme.tvb.com/ajax.php?action=channellist&code=$chnl_code&date=$yesterday" 2> /dev/null)
 
         while IFS= read -r line
         do
@@ -13865,7 +13679,7 @@ ScheduleTvbhk()
                 done
                 break
             fi
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "https://programme.tvb.com/ajax.php?action=channellist&code=$chnl_code&date=$today")
+        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "https://programme.tvb.com/ajax.php?action=channellist&code=$chnl_code&date=$today" 2> /dev/null)
 
         if [ -n "$schedule" ] 
         then
@@ -13882,16 +13696,9 @@ ScheduleTvbhd()
     if [[ ! -x $(command -v pdf2htmlEX) ]] 
     then
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "需要先安装 pdf2htmlEX, 因为是编译 pdf2htmlEX, 耗时会很长, 是否继续" yn_options continue_yn
+        AskIfContinue n "`gettext \"需要先安装 pdf2htmlEX, 因为是编译 pdf2htmlEX, 耗时会很长, 是否继续\"`"
 
-        if [[ $continue_yn == "否" ]]
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
-
-        InstallPdf2html
+        Pdf2htmlInstall
         Println "$info pdf2htmlEX 安装完成\n"
         if ! pdf2htmlEX -v > /dev/null 2>&1
         then
@@ -14617,7 +14424,7 @@ GetCronChnls()
 
             cron_providers+=("$cron_provider")
             cron_chnls+=("${line#*|}")
-            cron_providers_list="$cron_providers_list $green$cron_providers_count.${normal}\r\033[6C$cron_provider_name\n\n"
+            cron_providers_list="$cron_providers_list $green$cron_providers_count.${normal}${indent_6}$cron_provider_name\n\n"
         fi
     done < <($JQ_FILE -r '.schedule[]|[.provider,.chnls[]]|join("|")' "$CRON_FILE")
 }
@@ -14632,19 +14439,19 @@ ScheduleView()
     for provider in "${providers[@]}"
     do
         providers_count=$((providers_count+1))
-        providers_list="$providers_list $green$providers_count.${normal}\r\033[6C${provider#*:} [${provider%%:*}]\n\n"
+        providers_list="$providers_list $green$providers_count.${normal}${indent_6}${provider#*:} [${provider%%:*}]\n\n"
     done
 
     Println "节目表来源\n\n$providers_list"
 
-    while read -p "(默认: 取消): " provider_num
+    while read -p "$i18n_default_cancel" provider_num
     do
         case "$provider_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的数字\n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *)
                 if [ "$provider_num" -gt 0 ] && [ "$provider_num" -le "$providers_count" ]
@@ -14652,7 +14459,7 @@ ScheduleView()
                     provider="${providers[$((provider_num-1))]%:*}"
                     break
                 else
-                    Println "$error 请输入正确的数字\n"
+                    Println "$error $i18n_input_correct_number\n"
                 fi
             ;;
         esac
@@ -14691,7 +14498,7 @@ ScheduleView()
             chnl_id=${chnl%%:*}
         fi
         chnls_count=$((chnls_count+1))
-        chnls_list="$chnls_list $green$chnls_count.${normal}\r\033[6C$chnl_name [$chnl_id] $using\n\n"
+        chnls_list="$chnls_list $green$chnls_count.${normal}${indent_6}$chnl_name [$chnl_id] $using\n\n"
     done
 
     chnls=("${!var}")
@@ -14730,15 +14537,15 @@ ScheduleAddChannel()
 ScheduleAdd()
 {
     ScheduleView
-    echo -e " $green$((chnls_count+1)).${normal}\r\033[6C全部"
+    echo -e " $green$((chnls_count+1)).${normal}${indent_6}全部"
 
     Println "$tip (多个频道用空格分隔 比如: 5 7 9-11)"
 
-    while read -p "(默认: 取消): " chnls_num
+    while read -p "$i18n_default_cancel" chnls_num
     do
         if [ -z "$chnls_num" ] 
         then
-            Println "已取消...\n" && exit 1
+            Println "$i18n_canceled...\n" && exit 1
         fi
 
         if [ "$chnls_num" == $((chnls_count+1)) ] 
@@ -14778,7 +14585,7 @@ ScheduleAdd()
 
         case "$error_no" in
             1|2|3)
-                Println "$error 请输入正确的数字\n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *)
                 for chnl_num in "${chnls_num_arr[@]}"
@@ -14816,14 +14623,14 @@ ScheduleViewCron()
 
     Println "计划任务节目表\n\n$cron_providers_list"
 
-    while read -p "(默认: 取消): " provider_num
+    while read -p "$i18n_default_cancel" provider_num
     do
         case "$provider_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的数字\n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *)
                 if [ "$provider_num" -gt 0 ] && [ "$provider_num" -le "$cron_providers_count" ]
@@ -14832,7 +14639,7 @@ ScheduleViewCron()
                     IFS="|" read -r -a chnls <<< "${cron_chnls[provider_num-1]}|"
                     break
                 else
-                    Println "$error 请输入正确的数字\n"
+                    Println "$error $i18n_input_correct_number\n"
                 fi
             ;;
         esac
@@ -14845,7 +14652,7 @@ ScheduleViewCron()
     do
         chnl_name=${chnl##*:}
         chnls_count=$((chnls_count+1))
-        chnls_list="$chnls_list $green$chnls_count.${normal}\r\033[6C$chnl_name\n\n"
+        chnls_list="$chnls_list $green$chnls_count.${normal}${indent_6}$chnl_name\n\n"
     done
 
     Println "计划任务频道\n\n$chnls_list"
@@ -14855,7 +14662,7 @@ ScheduleDel()
 {
     ScheduleViewCron
 
-    echo -e " $green$((chnls_count+1)).${normal}\r\033[6C全部"
+    echo -e " $green$((chnls_count+1)).${normal}${indent_6}全部"
 
     Println "$tip (多个频道用空格分隔 比如: 5 7 9-11)"
 
@@ -14863,7 +14670,7 @@ ScheduleDel()
     do
         if [ -z "$chnls_num" ] 
         then
-            Println "已取消...\n" && exit 1
+            Println "$i18n_canceled...\n" && exit 1
         fi
 
         if [ "$chnls_num" == $((chnls_count+1)) ] 
@@ -14900,7 +14707,7 @@ ScheduleDel()
 
         case "$error_no" in
             1|2|3)
-                Println "$error 请输入正确的数字\n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *)
                 for chnl_num in "${chnls_num_arr[@]}"
@@ -15034,14 +14841,14 @@ ScheduleViewBackup()
 {
     ScheduleListBackup
 
-    while read -p "(默认: 取消): " backup_num
+    while read -p "$i18n_default_cancel" backup_num
     do
         case "$backup_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的数字\n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *)
                 if [ "$backup_num" -gt 0 ] && [ "$backup_num" -le "$schedule_backup_count" ]
@@ -15050,7 +14857,7 @@ ScheduleViewBackup()
                     IFS="," read -r -a schedules <<< "$schedule"
                     break
                 else
-                    Println "$error 请输入正确的数字\n"
+                    Println "$error $i18n_input_correct_number\n"
                 fi
             ;;
         esac
@@ -15080,9 +14887,9 @@ ScheduleViewBackup()
             else
                 schedule_chnl_id=${schedule_chnl%%:*}
             fi
-            schedule_chnls_list="$schedule_chnls_list\033[6C${schedule_chnl##*:} ($schedule_chnl_id)\n"
+            schedule_chnls_list="$schedule_chnls_list${indent_6}${schedule_chnl##*:} ($schedule_chnl_id)\n"
         done
-        schedules_list="$schedules_list $green$((i+1)).${normal}\r\033[6C$schedule_provider_name\n\n$schedule_chnls_list\n"
+        schedules_list="$schedules_list $green$((i+1)).${normal}${indent_6}$schedule_provider_name\n\n$schedule_chnls_list\n"
     done
 
     Println "$schedules_list"
@@ -15092,14 +14899,14 @@ ScheduleEditBackup()
 {
     ScheduleListBackup
 
-    while read -p "(默认: 取消): " backup_num
+    while read -p "$i18n_default_cancel" backup_num
     do
         case "$backup_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的数字\n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *)
                 if [ "$backup_num" -gt 0 ] && [ "$backup_num" -le "$schedule_backup_count" ]
@@ -15108,7 +14915,7 @@ ScheduleEditBackup()
                     backup_name_old=${schedule_backup_names[backup_index]}
                     break
                 else
-                    Println "$error 请输入正确的数字\n"
+                    Println "$error $i18n_input_correct_number\n"
                 fi
             ;;
         esac
@@ -15126,14 +14933,14 @@ ScheduleDelBackup()
 {
     ScheduleListBackup
 
-    while read -p "(默认: 取消): " backup_num
+    while read -p "$i18n_default_cancel" backup_num
     do
         case "$backup_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的数字\n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *)
                 if [ "$backup_num" -gt 0 ] && [ "$backup_num" -le "$schedule_backup_count" ]
@@ -15142,7 +14949,7 @@ ScheduleDelBackup()
                     backup_name=${schedule_backup_names[backup_index]}
                     break
                 else
-                    Println "$error 请输入正确的数字\n"
+                    Println "$error $i18n_input_correct_number\n"
                 fi
             ;;
         esac
@@ -15157,14 +14964,14 @@ ScheduleRestoreBackup()
 {
     ScheduleListBackup
 
-    while read -p "(默认: 取消): " backup_num
+    while read -p "$i18n_default_cancel" backup_num
     do
         case "$backup_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的数字\n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *)
                 if [ "$backup_num" -gt 0 ] && [ "$backup_num" -le "$schedule_backup_count" ]
@@ -15175,7 +14982,7 @@ ScheduleRestoreBackup()
                     IFS="," read -r -a backup_schedules <<< "$backup_schedule"
                     break
                 else
-                    Println "$error 请输入正确的数字\n"
+                    Println "$error $i18n_input_correct_number\n"
                 fi
             ;;
         esac
@@ -15241,7 +15048,7 @@ Schedule()
     then
         SCHEDULE_JSON=$d_schedule_file
     else
-        Println "$error 请先设置 schedule_file 位置！\n" && exit 1
+        Println "$error 请先设置 schedule_file 位置!\n" && exit 1
     fi
 
     if [ ! -s "$CRON_FILE" ] 
@@ -16146,8 +15953,8 @@ Schedule()
  ${green}12.${normal} 删除备份
 
 "
-            read -p "(默认: 取消): " cron_num
-            [ -z "$cron_num" ] && Println "已取消...\n" && exit 1
+            read -p "$i18n_default_cancel" cron_num
+            [ -z "$cron_num" ] && Println "$i18n_canceled...\n" && exit 1
 
             case $cron_num in
                 1) ScheduleView
@@ -16174,7 +15981,7 @@ Schedule()
                 ;;
                 12) ScheduleDelBackup
                 ;;
-                *) Println "已取消...\n" && exit 1
+                *) Println "$i18n_canceled...\n" && exit 1
                 ;;
             esac
         ;;
@@ -16240,7 +16047,7 @@ TsIsUnique()
     not_unique=$(curl -s -Lm 10 -H "User-Agent: $user_agent" "${ts_array[unique_url]}?accounttype=${ts_array[acc_type_reg]}&username=$account" | $JQ_FILE '.ret')
     if [ "$not_unique" != 0 ] 
     then
-        Println "$error 用户名已存在,请重新输入！"
+        Println "$error 用户名已存在,请重新输入!"
     fi
 }
 
@@ -16326,13 +16133,8 @@ TsImg()
 InstallImgcat()
 {
     echo
-    yn_options=( '是' '否' )
-    inquirer list_input "缺少 imgcat ,是否现在安装" yn_options imgcat_install_yn
-    if [[ $imgcat_install_yn == "否" ]]
-    then
-        Println "已取消...\n"
-        exit 1
-    fi
+    AskIfContinue y "`gettext \"缺少 imgcat ,是否现在安装\"`"
+
     Progress &
     progress_pid=$!
     trap '
@@ -16381,8 +16183,8 @@ TsRegister()
     while [ "$not_unique" != 0 ] 
     do
         Println "$info 输入账号: "
-        read -p "(默认: 取消): " account
-        [ -z "$account" ] && Println "已取消...\n" && exit 1
+        read -p "$i18n_default_cancel" account
+        [ -z "$account" ] && Println "$i18n_canceled...\n" && exit 1
         if [ -z "${ts_array[unique_url]:-}" ] 
         then
             not_unique=0
@@ -16392,8 +16194,8 @@ TsRegister()
     done
 
     Println "$info 输入密码: "
-    read -p "(默认: 取消): " password
-    [ -z "$password" ] && Println "已取消...\n" && exit 1
+    read -p "$i18n_default_cancel" password
+    [ -z "$password" ] && Println "$i18n_canceled...\n" && exit 1
 
     if [ -n "${ts_array[img_url]:-}" ] 
     then
@@ -16413,10 +16215,10 @@ TsRegister()
 
                 if [ "${sms_array[ret]}" -eq 0 ] 
                 then
-                    Println "$info 短信已发送！"
+                    Println "$info 短信已发送!"
                     Println "$info 输入短信验证码: "
-                    read -p "(默认: 取消): " smscode
-                    [ -z "$smscode" ] && Println "已取消...\n" && exit 1
+                    read -p "$i18n_default_cancel" smscode
+                    [ -z "$smscode" ] && Println "$i18n_canceled...\n" && exit 1
 
                     declare -A verify_array
                     while IFS="=" read -r key value
@@ -16448,16 +16250,10 @@ TsRegister()
                         if [ "${reg_array[ret]}" -eq 0 ] 
                         then
                             echo
-                            yn_options=( '否' '是' )
-                            inquirer list_input "注册成功 ,是否登录账号" yn_options login_yn
-                            if [[ $login_yn == "否" ]]
-                            then
-                                Println "已取消...\n"
-                                exit 1
-                            fi
+                            AskIfContinue n "`gettext \"注册成功 ,是否登录账号\"`"
                             TsLogin
                         else
-                            Println "$error 注册失败！"
+                            Println "$error 注册失败!"
                             printf '%s\n' "${reg_array[@]}"
                         fi
                     fi
@@ -16465,9 +16261,9 @@ TsRegister()
                 else
                     if [ -z "${ts_array[unique_url]:-}" ] 
                     then
-                        Println "$error 验证码或其它错误！请重新尝试！"
+                        Println "$error 验证码或其它错误!请重新尝试!"
                     else
-                        Println "$error 验证码错误！"
+                        Println "$error 验证码错误!"
                     fi
                     #printf '%s\n' "${sms_array[@]}"
                     refresh_img=1
@@ -16486,13 +16282,7 @@ TsRegister()
         if [ "${reg_array[ret]}" -eq 0 ] 
         then
             echo
-            yn_options=( '否' '是' )
-            inquirer list_input "注册成功 ,是否登录账号" yn_options login_yn
-            if [[ $login_yn == "否" ]]
-            then
-                Println "已取消...\n"
-                exit 1
-            fi
+            AskIfContinue n "`gettext \"注册成功 ,是否登录账号\"`"
             TsLogin
         else
             Println "$error 发生错误"
@@ -16506,15 +16296,15 @@ TsLogin()
     if [ -z "${account:-}" ] 
     then
         Println "$info 输入账号: "
-        read -p "(默认: 取消): " account
-        [ -z "$account" ] && Println "已取消...\n" && exit 1
+        read -p "$i18n_default_cancel" account
+        [ -z "$account" ] && Println "$i18n_canceled...\n" && exit 1
     fi
 
     if [ -z "${password:-}" ] 
     then
         Println "$info 输入密码: "
-        read -p "(默认: 取消): " password
-        [ -z "$password" ] && Println "已取消...\n" && exit 1
+        read -p "$i18n_default_cancel" password
+        [ -z "$password" ] && Println "$i18n_canceled...\n" && exit 1
     fi
 
     deviceno=$(< /proc/sys/kernel/random/uuid)
@@ -16554,20 +16344,14 @@ TsLogin()
         Println "$error 账号错误"
         printf '%s\n' "${login_array[@]}"
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "是否注册账号" yn_options register_yn
-        if [[ $register_yn == "否" ]]
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        AskIfContinue n "`gettext \"是否注册账号\"`"
         TsRegister
     else
         while :; do
             Println "$info 输入需要转换的频道号码: "
-            read -p "(默认: 取消): " programid
-            [ -z "$programid" ] && Println "已取消...\n" && exit 1
-            [[ $programid =~ ^[0-9]{10}$ ]] || { Println "$error频道号码错误！"; continue; }
+            read -p "$i18n_default_cancel" programid
+            [ -z "$programid" ] && Println "$i18n_canceled...\n" && exit 1
+            [[ $programid =~ ^[0-9]{10}$ ]] || { Println "$error频道号码错误!"; continue; }
             break
         done
 
@@ -16615,13 +16399,8 @@ TsLogin()
         if [ "${stream_link:-}" != null ]
         then
             echo
-            yn_options=( '是' '否' )
-            inquirer list_input "检测到此频道原有链接, 是否替换成新的ts链接" yn_options change_yn
-            if [[ $change_yn == "否" ]]
-            then
-                Println "已取消...\n"
-                exit 1
-            fi
+            AskIfContinue y "`gettext \"检测到此频道原有链接, 是否替换成新的ts链接\"`"
+
             JQ update "$CHANNELS_FILE" '(.channels[]|select(.stream_link=="'"$stream_link"'")|.stream_link)="'"$TS_LINK"'"'
             Println "$info 修改成功 !\n"
         fi
@@ -16634,16 +16413,14 @@ TsMenu()
 
     user_agent="iPhone; CPU iPhone OS 13_6 like Mac OS X"
     echo
-    yn_options=( '是' '否' )
     inquirer list_input "是否使用默认频道文件: $DEFAULT_CHANNELS_LINK" yn_options use_default_channels_yn
-    if [[ $use_default_channels_yn == "是" ]]
+    if [[ $use_default_channels_yn == "$i18n_yes" ]]
     then
         TS_CHANNELS_LINK=$DEFAULT_CHANNELS_LINK
     else
         if [ -n "$d_sync_file" ] && [[ -n $($JQ_FILE '.data[] | select(.reg_url != null)' "${d_sync_file%% *}") ]] 
         then
             echo
-            yn_options=( '是' '否' )
             inquirer list_input "是否使用本地频道文件? 本地路径: ${d_sync_file%% *}" yn_options use_local_channels_yn
             if [[ $use_local_channels_yn == [Yy] ]] 
             then
@@ -16653,13 +16430,13 @@ TsMenu()
         if [ -z "${TS_CHANNELS_FILE:-}" ]
         then
             Println "$info 请输入使用的频道文件链接或本地路径: \n"
-            read -p "(默认: 取消): " TS_CHANNELS_LINK_OR_FILE
-            [ -z "$TS_CHANNELS_LINK_OR_FILE" ] && Println "已取消...\n" && exit 1
+            read -p "$i18n_default_cancel" TS_CHANNELS_LINK_OR_FILE
+            [ -z "$TS_CHANNELS_LINK_OR_FILE" ] && Println "$i18n_canceled...\n" && exit 1
             if [[ $TS_CHANNELS_LINK_OR_FILE =~ ^https?:// ]] 
             then
                 TS_CHANNELS_LINK=$TS_CHANNELS_LINK_OR_FILE
             else
-                [ ! -e "$TS_CHANNELS_LINK_OR_FILE" ] && Println "文件不存在, 已取消...\n" && exit 1
+                [ ! -e "$TS_CHANNELS_LINK_OR_FILE" ] && Println "文件不存在, $i18n_canceled...\n" && exit 1
                 TS_CHANNELS_FILE=$TS_CHANNELS_LINK_OR_FILE
             fi
         fi
@@ -16688,13 +16465,13 @@ TsMenu()
         desc=${ts_channels_desc[i]//\"/}
         desc=${desc//\'/}
         desc=${desc//\\/\'}
-        echo -e "$green$((i+1)).${normal}\r\033[6C$desc"
+        echo -e "$green$((i+1)).${normal}${indent_6}$desc"
     done
 
     while :; do
-        echo && read -p "(默认: 取消): " channel_id
-        [ -z "$channel_id" ] && Println "已取消...\n" && exit 1
-        [[ $channel_id =~ ^[0-9]+$ ]] || { Println "$error请输入序号！"; continue; }
+        echo && read -p "$i18n_default_cancel" channel_id
+        [ -z "$channel_id" ] && Println "$i18n_canceled...\n" && exit 1
+        [[ $channel_id =~ ^[0-9]+$ ]] || { Println "$error `gettext \"输入序号\"`!"; continue; }
         if ((channel_id >= 1 && channel_id <= count)); then
             ((channel_id--))
             declare -A ts_array
@@ -16708,7 +16485,7 @@ TsMenu()
                 Println "$info 部分服务器无法连接此直播源, 但可以将ip写入 /etc/hosts 来连接, 请选择线路
   ${green}1.${normal} 电信
   ${green}2.${normal} 联通"
-                read -p "(默认: 取消): " jxtvnet_lane
+                read -p "$i18n_default_cancel" jxtvnet_lane
                 case $jxtvnet_lane in
                     1) 
                         printf '%s\n' "59.63.205.33 access.jxtvnet.tv" >> "/etc/hosts"
@@ -16720,7 +16497,7 @@ TsMenu()
                         printf '%s\n' "110.52.240.146 stream.slave.jxtvnet.tv" >> "/etc/hosts"
                         printf '%s\n' "110.52.240.146 slave.jxtvnet.tv" >> "/etc/hosts"
                     ;;
-                    *) Println "已取消...\n" && exit 1
+                    *) Println "$i18n_canceled...\n" && exit 1
                     ;;
                 esac
             fi
@@ -16736,7 +16513,7 @@ TsMenu()
             fi
             break
         else
-            Println "$error序号错误, 请重新输入！"
+            Println "$error序号错误, 请重新输入!"
         fi
     done
 }
@@ -17134,7 +16911,7 @@ MonitorHlsRestartFail()
 
 MonitorHlsRestartChannel()
 {
-    GetXtreamCodesChnls
+    XtreamCodesGetChnls
     domains_tried=()
     hls_restart_nums=${hls_restart_nums:-20}
     unset failed_restart_nums
@@ -17502,7 +17279,7 @@ MonitorHlsRestartChannel()
 
         StartChannel
         sleep $((15+chnl_seg_length))
-        GetChannelInfo
+        GetChannel
 
         if ls -A "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts > /dev/null 2>&1 
         then
@@ -17663,7 +17440,7 @@ MonitorFlvRestartFail()
 
 MonitorFlvRestartChannel()
 {
-    GetXtreamCodesChnls
+    XtreamCodesGetChnls
     domains_tried=()
     flv_restart_nums=${flv_restart_nums:-20}
     unset failed_restart_nums
@@ -18031,7 +17808,7 @@ MonitorFlvRestartChannel()
         fi
         StartChannel
         sleep 15
-        GetChannelInfo
+        GetChannel
 
         if [ "$chnl_flv_status" == "on" ] 
         then
@@ -18301,7 +18078,7 @@ MonitorTryAccounts()
                         if [ "${kind:-}" == "flv" ] 
                         then
                             sleep 15
-                            GetChannelInfo
+                            GetChannel
                             audio=0
                             video=0
                             while IFS= read -r line 
@@ -18327,7 +18104,7 @@ MonitorTryAccounts()
                             fi
                         else
                             sleep $((15+chnl_seg_length))
-                            GetChannelInfo
+                            GetChannel
                             if ls -A "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts > /dev/null 2>&1 
                             then
                                 if [ "$chnl_encrypt_yn" == "yes" ] 
@@ -18516,7 +18293,7 @@ MonitorTryAccounts()
                 if [ "${kind:-}" == "flv" ] 
                 then
                     sleep 15
-                    GetChannelInfo
+                    GetChannel
                     audio=0
                     video=0
                     while IFS= read -r line 
@@ -18542,7 +18319,7 @@ MonitorTryAccounts()
                     fi
                 else
                     sleep $((15+chnl_seg_length))
-                    GetChannelInfo
+                    GetChannel
                     if ls -A "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts > /dev/null 2>&1 
                     then
                         if [ "$chnl_encrypt_yn" == "yes" ] 
@@ -18626,7 +18403,8 @@ MonitorSet()
     monitor_flv_push_links=()
     monitor_flv_pull_links=()
     monitor_dir_names_chosen=()
-    GetChannelsInfo
+
+    GetChannels
     for((i=0;i<chnls_count;i++));
     do
         if [ "${chnls_flv_status[i]}" == "on" ] && [ "${chnls_live[i]}" == "yes" ]
@@ -18648,12 +18426,12 @@ MonitorSet()
         for((i=0;i<flv_count;i++));
         do
             flv_pull_link=${monitor_flv_pull_links[i]}
-            result=$result"  $green$((i+1)).${normal}\r\033[6C${monitor_channel_names[i]}\n\033[6C源: ${monitor_stream_links[i]}\n\033[6Cpull: ${flv_pull_link:-无}\n\n"
+            result=$result"  $green$((i+1)).${normal}${indent_6}${monitor_channel_names[i]}\n${indent_6}源: ${monitor_stream_links[i]}\n${indent_6}pull: ${flv_pull_link:-无}\n\n"
         done
 
         Println "$result"
-        Println "  $green$((flv_count+1)).${normal}\r\033[6C全部"
-        Println "  $green$((flv_count+2)).${normal}\r\033[6C不设置\n"
+        Println "  $green$((flv_count+1)).${normal}${indent_6}全部"
+        Println "  $green$((flv_count+2)).${normal}${indent_6}不设置\n"
         while read -p "(默认: 不设置): " flv_nums
         do
             if [ -z "$flv_nums" ] || [ "$flv_nums" == $((flv_count+2)) ] 
@@ -18700,7 +18478,7 @@ MonitorSet()
 
             case "$error_no" in
                 1|2|3)
-                    Println "$error 请输入正确的数字或直接回车 \n"
+                    Println "$error $i18n_input_correct_number\n"
                 ;;
                 *)
                     declare -a new_array
@@ -18742,10 +18520,10 @@ MonitorSet()
     then
         if [ "$flv_count" -eq 0 ] 
         then
-            Println "$error 没有开启的频道！\n" && exit 1
+            Println "$error 没有开启的频道!\n" && exit 1
         elif [ -z "${flv_delay_seconds:-}" ] 
         then
-            Println "已取消...\n" && exit 1
+            Println "$i18n_canceled...\n" && exit 1
         else
             SetRecheckPeriod
             SetAntiLeech
@@ -18774,13 +18552,13 @@ MonitorSet()
         then
             monitor_count=$((monitor_count + 1))
             monitor_dir_names+=("${chnls_output_dir_name[i]}")
-            result=$result"  $green$monitor_count.${normal}\r\033[6C${chnls_channel_name[i]}\n\n"
+            result=$result"  $green$monitor_count.${normal}${indent_6}${chnls_channel_name[i]}\n\n"
         fi
     done
 
     Println "$result"
-    Println "  $green$((monitor_count+1)).${normal}\r\033[6C全部"
-    Println "  $green$((monitor_count+2)).${normal}\r\033[6C不设置\n"
+    Println "  $green$((monitor_count+1)).${normal}${indent_6}全部"
+    Println "  $green$((monitor_count+2)).${normal}${indent_6}不设置\n"
 
     while read -p "(默认: 不设置): " hls_nums
     do
@@ -18825,7 +18603,7 @@ MonitorSet()
 
         case "$error_no" in
             1|2|3)
-                Println "$error 请输入正确的数字或直接回车 \n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *)
                 declare -a new_array
@@ -18863,14 +18641,14 @@ MonitorSet()
                     case $hls_delay_seconds in
                         "") hls_delay_seconds=$d_hls_delay_seconds && break
                         ;;
-                        *[!0-9]*) Println "$error 请输入正确的数字\n"
+                        *[!0-9]*) Println "$error $i18n_input_correct_number\n"
                         ;;
                         *) 
                             if [ "$hls_delay_seconds" -gt 60 ]
                             then
                                 break
                             else
-                                Println "$error 请输入正确的数字(大于60)\n"
+                                Println "$error $i18n_input_correct_number [>60]\n"
                             fi
                         ;;
                     esac
@@ -18931,7 +18709,7 @@ Monitor()
 
             FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
             FFPROBE="$FFMPEG_ROOT/ffprobe"
-            GetXtreamCodesDomains
+            XtreamCodesGetDomains
             monitor=1
             flv_failed=()
             flv_recheck_time=()
@@ -19105,7 +18883,7 @@ Monitor()
 
                         if [ "$audio" -eq 0 ] || [ "$video" -eq 0 ]
                         then
-                            GetChannelInfo
+                            GetChannel
                             if [ -n "${flv_first_fail:-}" ] 
                             then
                                 printf -v flv_fail_time '%(%s)T' -1
@@ -19181,7 +18959,7 @@ Monitor()
                             output_dir_name=${output_dir_name%%/*}
                             if [ "$largest_file_size" -gt $(( hls_max_seg_size * 1000000)) ]
                             then
-                                GetChannelInfo
+                                GetChannel
                                 if [ -n "$chnl_live" ] 
                                 then
                                     printf '%s\n' "$chnl_channel_name 文件过大重启" >> "$MONITOR_LOG"
@@ -19211,7 +18989,7 @@ Monitor()
                         do
                             if [ "$dir_name" == "$output_dir_name" ] 
                             then
-                                GetChannelInfo
+                                GetChannel
                                 if [ -n "$chnl_live" ] 
                                 then
                                     printf '%s\n' "$chnl_channel_name 超时重启" >> "$MONITOR_LOG"
@@ -19224,7 +19002,7 @@ Monitor()
                         done
                     done < <(find "$LIVE_ROOT" -type f -name "*.ts" $exclude_command \! -newermt "-$hls_delay_seconds seconds" 2> /dev/null)
 
-                    GetChannelsInfo
+                    GetChannels
 
                     for output_dir_name in "${monitor_dir_names_chosen[@]}"
                     do
@@ -19244,7 +19022,7 @@ Monitor()
                                         sleep 5
                                     fi
                                     chnl_status=""
-                                    GetChannelInfo
+                                    GetChannel
                                     if [ -z "$chnl_status" ] 
                                     then
                                         declare -a new_array
@@ -19406,7 +19184,7 @@ Monitor()
                                             fi
                                             if [ "$fail_count" -gt 3 ] 
                                             then
-                                                GetChannelInfo
+                                                GetChannel
                                                 printf '%s\n' "$chnl_channel_name 比特率过低重启" >> "$MONITOR_LOG"
                                                 MonitorHlsRestartChannel
                                                 break 2
@@ -19436,7 +19214,7 @@ Monitor()
                         elif [ -n "${rand_restart_hls_done:-}" ] && [ "$rand_restart_hls_done" -eq 0 ] 
                         then
                             rand_found=1
-                            GetChannelInfo
+                            GetChannel
                             printf '%s\n' "$chnl_channel_name HLS 随机重启" >> "$MONITOR_LOG"
                             MonitorHlsRestartChannel
                         fi
@@ -19607,7 +19385,7 @@ MonitorError()
     printf '%s\n' "$date_now [ERROR: $1]" >> "$MONITOR_LOG"
 }
 
-GetXtreamCodesDomains()
+XtreamCodesGetDomains()
 {
     [ -n "${xtream_codes_domains:-}" ] && return 0
 
@@ -19619,13 +19397,13 @@ GetXtreamCodesDomains()
     IFS="," read -ra xtream_codes_domains <<< $(awk -v ORS=, '$1 { gsub(/\|/, ",", $2); print $2 }' "$XTREAM_CODES")
 }
 
-GetXtreamCodesChnls()
+XtreamCodesGetChnls()
 {
     xc_chnls=()
     xc_chnls_mac=()
     if [ -n "${xtream_codes_domains:-}" ] 
     then
-        GetChannelsInfo
+        GetChannels
         if [ "$chnls_count" -gt 0 ] 
         then
             for((xc_i=0;xc_i<chnls_count;xc_i++));
@@ -19664,10 +19442,10 @@ GetXtreamCodesChnls()
     fi
 }
 
-AddXtreamCodesAccount()
+XtreamCodesAddAccount()
 {
     echo && read -p "请输入账号(需包含服务器地址): " xtream_codes_input
-    [ -z "$xtream_codes_input" ] && Println "已取消...\n" && exit 1
+    [ -z "$xtream_codes_input" ] && Println "$i18n_canceled...\n" && exit 1
 
     if [[ $xtream_codes_input == *"username="* ]] 
     then
@@ -19787,7 +19565,7 @@ VerifyXtreamCodesMac()
     fi
 }
 
-ListXtreamCodes()
+XtreamCodesList()
 {
     [ ! -s "$XTREAM_CODES" ] && Println "$error 没有账号 !\n" && exit 1
 
@@ -19968,7 +19746,7 @@ ListXtreamCodes()
                 elif [[ ! $account =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
                 then
                     accs_num=$((accs_num+1))
-                    accounts_list="$accounts_list${account%:*}\r\033[20C${account#*:}\n"
+                    accounts_list="$accounts_list${account%:*}${indent_20}${account#*:}\n"
                 fi
             done
             if [ -n "$accounts_list" ] 
@@ -19994,26 +19772,26 @@ ListXtreamCodes()
 
         if [ "${1:-}" == "mac" ] && [ "$ips_mac_count" -eq 0 ]
         then
-            Println "$error 请先添加 mac 地址！\n" && exit 1
+            Println "$error 请先添加 mac 地址!\n" && exit 1
         else
             Println "$xtream_codes_list"
         fi
     else
-        Println "$error 没有账号！\n" && exit 1
+        Println "$error 没有账号!\n" && exit 1
     fi
 }
 
-ViewXtreamCodesAcc()
+XtreamCodesListAcc()
 {
-    ListXtreamCodes
+    XtreamCodesList
 
     Println "请输入服务器的序号"
-    while read -p "(默认: 取消): " server_num
+    while read -p "$i18n_default_cancel" server_num
     do
         case $server_num in
-            "") Println "已取消...\n" && exit 1
+            "") Println "$i18n_canceled...\n" && exit 1
             ;;
-            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            *[!0-9]*) Println "$error $i18n_input_correct_number\n"
             ;;
             *) 
                 if [ "$server_num" -gt 0 ] && [ "$server_num" -le "$ips_acc_count" ]
@@ -20021,7 +19799,7 @@ ViewXtreamCodesAcc()
                     ips_index=${ips_acc[server_num-1]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -20036,17 +19814,17 @@ ViewXtreamCodesAcc()
         domains_count=${#domains[@]}
         for((i=0;i<domains_count;i++));
         do
-            domains_list="$domains_list $green$((i+1)).${normal}\r\033[6C${domains[i]}\n\n"
+            domains_list="$domains_list $green$((i+1)).${normal}${indent_6}${domains[i]}\n\n"
         done
         Println "$domains_list"
 
         Println "请选择域名"
-        while read -p "(默认: 取消): " domains_num
+        while read -p "$i18n_default_cancel" domains_num
         do
             case $domains_num in
-                "") Println "已取消...\n" && exit 1
+                "") Println "$i18n_canceled...\n" && exit 1
                 ;;
-                *[!0-9]*) Println "$error 请输入正确的数字\n"
+                *[!0-9]*) Println "$error $i18n_input_correct_number\n"
                 ;;
                 *) 
                     if [ "$domains_num" -gt 0 ] && [ "$domains_num" -le "$domains_count" ]
@@ -20054,7 +19832,7 @@ ViewXtreamCodesAcc()
                         domain=${domains[domains_num-1]}
                         break
                     else
-                        Println "$error 请输入正确的序号\n"
+                        Println "$error $i18n_input_correct_no\n"
                     fi
                 ;;
             esac
@@ -20073,8 +19851,8 @@ ViewXtreamCodesAcc()
         fi
     done
 
-    GetXtreamCodesDomains
-    GetXtreamCodesChnls
+    XtreamCodesGetDomains
+    XtreamCodesGetChnls
 
     accs_count=${#accs[@]}
     if [ "$accs_count" -gt 1 ] 
@@ -20091,7 +19869,7 @@ ViewXtreamCodesAcc()
                     break
                 fi
             done
-            accs_list="$accs_list $green$((i+1)).${normal}\r\033[6C${accs[i]%:*}\r\033[20C${accs[i]#*:} $using\n\n"
+            accs_list="$accs_list $green$((i+1)).${normal}${indent_6}${accs[i]%:*}${indent_20}${accs[i]#*:} $using\n\n"
         done
         Println "$accs_list"
     else
@@ -20104,21 +19882,21 @@ ViewXtreamCodesAcc()
                 break
             fi
         done
-        Println "账号: \n\n${green}1.${normal} ${accs[0]%:*}\r\033[20C${accs[0]#*:} $using\n"
+        Println "账号: \n\n${green}1.${normal} ${accs[0]%:*}${indent_20}${accs[0]#*:} $using\n"
     fi
 }
 
-TestXtreamCodes()
+XtreamCodesTestAcc()
 {
-    ListXtreamCodes
+    XtreamCodesList
 
     Println "请输入服务器的序号"
-    while read -p "(默认: 取消): " server_num
+    while read -p "$i18n_default_cancel" server_num
     do
         case $server_num in
-            "") Println "已取消...\n" && exit 1
+            "") Println "$i18n_canceled...\n" && exit 1
             ;;
-            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            *[!0-9]*) Println "$error $i18n_input_correct_number\n"
             ;;
             *) 
                 if [ "$server_num" -gt 0 ] && [ "$server_num" -le "$ips_acc_count" ]
@@ -20126,19 +19904,19 @@ TestXtreamCodes()
                     ips_index=${ips_acc[server_num-1]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
     done
 
     Println "请输入测试的频道ID"
-    while read -p "(默认: 取消): " channel_id
+    while read -p "$i18n_default_cancel" channel_id
     do
         case $channel_id in
-            "") Println "已取消...\n" && exit 1
+            "") Println "$i18n_canceled...\n" && exit 1
             ;;
-            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            *[!0-9]*) Println "$error $i18n_input_correct_number\n"
             ;;
             *) 
                 if [ "$channel_id" -gt 0 ]
@@ -20209,7 +19987,7 @@ TestXtreamCodes()
 
     if [ -e "$CHANNELS_FILE" ] 
     then
-        GetChannelsInfo
+        GetChannels
         if [ "$chnls_count" -gt 0 ] 
         then
             for((xc_i=0;xc_i<chnls_count;xc_i++));
@@ -20273,17 +20051,17 @@ TestXtreamCodes()
     echo
 }
 
-ViewXtreamCodesMac()
+XtreamCodesListMac()
 {
-    ListXtreamCodes mac
+    XtreamCodesList mac
 
     Println "请输入服务器的序号"
-    while read -p "(默认: 取消): " server_num
+    while read -p "$i18n_default_cancel" server_num
     do
         case $server_num in
-            "") Println "已取消...\n" && exit 1
+            "") Println "$i18n_canceled...\n" && exit 1
             ;;
-            *[!0-9]*) Println "$error 请输入正确的数字\n"
+            *[!0-9]*) Println "$error $i18n_input_correct_number\n"
             ;;
             *) 
                 if [ "$server_num" -gt 0 ] && [ "$server_num" -le "$ips_mac_count" ]
@@ -20291,7 +20069,7 @@ ViewXtreamCodesMac()
                     ips_index=${ips_mac[server_num-1]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -20306,17 +20084,17 @@ ViewXtreamCodesMac()
         domains_count=${#domains[@]}
         for((i=0;i<domains_count;i++));
         do
-            domains_list="$domains_list $green$((i+1)).${normal}\r\033[6C${domains[i]}\n\n"
+            domains_list="$domains_list $green$((i+1)).${normal}${indent_6}${domains[i]}\n\n"
         done
         Println "$domains_list"
 
         Println "请选择域名"
-        while read -p "(默认: 取消): " domains_num
+        while read -p "$i18n_default_cancel" domains_num
         do
             case $domains_num in
-                "") Println "已取消...\n" && exit 1
+                "") Println "$i18n_canceled...\n" && exit 1
                 ;;
-                *[!0-9]*) Println "$error 请输入正确的数字\n"
+                *[!0-9]*) Println "$error $i18n_input_correct_number\n"
                 ;;
                 *) 
                     if [ "$domains_num" -gt 0 ] && [ "$domains_num" -le "$domains_count" ]
@@ -20324,7 +20102,7 @@ ViewXtreamCodesMac()
                         domain=${domains[domains_num-1]}
                         break
                     else
-                        Println "$error 请输入正确的序号\n"
+                        Println "$error $i18n_input_correct_no\n"
                     fi
                 ;;
             esac
@@ -20343,8 +20121,8 @@ ViewXtreamCodesMac()
         fi
     done
 
-    GetXtreamCodesDomains
-    GetXtreamCodesChnls
+    XtreamCodesGetDomains
+    XtreamCodesGetChnls
 
     macs_count=${#macs[@]}
     if [ "$macs_count" -gt 1 ] 
@@ -20361,7 +20139,7 @@ ViewXtreamCodesMac()
                     break
                 fi
             done
-            macs_list="$macs_list $green$((i+1)).${normal}\r\033[6C${macs[i]} $using\n\n"
+            macs_list="$macs_list $green$((i+1)).${normal}${indent_6}${macs[i]} $using\n\n"
         done
         Println "$macs_list"
     else
@@ -20374,7 +20152,7 @@ ViewXtreamCodesMac()
                 break
             fi
         done
-        Println "mac 地址: \n\n$green$((i+1)).${normal}\r\033[6C${macs[0]} $using\n"
+        Println "mac 地址: \n\n$green$((i+1)).${normal}${indent_6}${macs[0]} $using\n"
     fi
 }
 
@@ -20421,7 +20199,7 @@ SearchXtreamCodesChnls()
     done
 }
 
-ViewXtreamCodesChnls()
+XtreamCodesListChnls()
 {
     while true 
     do
@@ -20429,16 +20207,16 @@ ViewXtreamCodesChnls()
         then
             Println "$xtream_codes_list"
         else
-            ListXtreamCodes mac
+            XtreamCodesList mac
         fi
 
         Println "请输入服务器的序号"
-        while read -p "(默认: 取消): " server_num
+        while read -p "$i18n_default_cancel" server_num
         do
             case $server_num in
-                "") Println "已取消...\n" && exit 1
+                "") Println "$i18n_canceled...\n" && exit 1
                 ;;
-                *[!0-9]*) Println "$error 请输入正确的数字\n"
+                *[!0-9]*) Println "$error $i18n_input_correct_number\n"
                 ;;
                 *) 
                     if [ "$server_num" -gt 0 ] && [ "$server_num" -le "$ips_mac_count" ]
@@ -20446,7 +20224,7 @@ ViewXtreamCodesChnls()
                         ips_index=${ips_mac[server_num-1]}
                         break
                     else
-                        Println "$error 请输入正确的序号\n"
+                        Println "$error $i18n_input_correct_no\n"
                     fi
                 ;;
             esac
@@ -20461,7 +20239,7 @@ ViewXtreamCodesChnls()
             domains_count=${#domains[@]}
             for((i=0;i<domains_count;i++));
             do
-                domains_list="$domains_list $green$((i+1)).${normal}\r\033[6C${domains[i]}\n\n"
+                domains_list="$domains_list $green$((i+1)).${normal}${indent_6}${domains[i]}\n\n"
             done
             Println "$domains_list"
 
@@ -20471,7 +20249,7 @@ ViewXtreamCodesChnls()
                 case $domains_num in
                     ""|a) continue 2
                     ;;
-                    *[!0-9]*) Println "$error 请输入正确的数字\n"
+                    *[!0-9]*) Println "$error $i18n_input_correct_number\n"
                     ;;
                     *) 
                         if [ "$domains_num" -gt 0 ] && [ "$domains_num" -le "$domains_count" ]
@@ -20479,7 +20257,7 @@ ViewXtreamCodesChnls()
                             domain=${domains[domains_num-1]}
                             break
                         else
-                            Println "$error 请输入正确的序号\n"
+                            Println "$error $i18n_input_correct_no\n"
                         fi
                     ;;
                 esac
@@ -20498,8 +20276,8 @@ ViewXtreamCodesChnls()
             fi
         done
 
-        GetXtreamCodesDomains
-        GetXtreamCodesChnls
+        XtreamCodesGetDomains
+        XtreamCodesGetChnls
 
         macs_count=${#macs[@]}
         if [ "$macs_count" -gt 1 ] 
@@ -20516,7 +20294,7 @@ ViewXtreamCodesChnls()
                         break
                     fi
                 done
-                macs_list="$macs_list $green$((i+1)).${normal}\r\033[6C${macs[i]} $using\n\n"
+                macs_list="$macs_list $green$((i+1)).${normal}${indent_6}${macs[i]} $using\n\n"
             done
             Println "$macs_list"
 
@@ -20526,7 +20304,7 @@ ViewXtreamCodesChnls()
                 case $macs_num in
                     ""|a) continue 2
                     ;;
-                    *[!0-9]*) Println "$error 请输入正确的数字\n"
+                    *[!0-9]*) Println "$error $i18n_input_correct_number\n"
                     ;;
                     *) 
                         if [ "$macs_num" -gt 0 ] && [ "$macs_num" -le "$macs_count" ]
@@ -20542,7 +20320,7 @@ ViewXtreamCodesChnls()
                             done
                             break
                         else
-                            Println "$error 请输入正确的序号\n"
+                            Println "$error $i18n_input_correct_no\n"
                         fi
                     ;;
                 esac
@@ -20559,9 +20337,8 @@ ViewXtreamCodesChnls()
         if [ -n "${d_xc_proxy:-}" ] 
         then
             echo
-            yn_options=( '是' '否' )
             inquirer list_input "是否使用代理 $d_xc_proxy: " yn_options use_proxy_yn
-            if [[ $use_proxy_yn == "是" ]]
+            if [[ $use_proxy_yn == "$i18n_yes" ]]
             then
                 server=${d_xc_proxy%\/}
                 xc_host_header=( -H "xc_host: $domain" )
@@ -20572,7 +20349,7 @@ ViewXtreamCodesChnls()
         else
             server="http://$domain"
             xc_host_header=()
-            use_proxy_yn="否"
+            use_proxy_yn="$i18n_no"
         fi
 
         token_url="$server/portal.php?type=stb&action=handshake"
@@ -20743,7 +20520,7 @@ ViewXtreamCodesChnls()
                 map_title=${map_title%\"}
                 genres_count=$((genres_count+1))
                 genres_id+=("$map_id")
-                genres_list="$genres_list $green$genres_count.${normal}\r\033[6C$map_title\n\n"
+                genres_list="$genres_list $green$genres_count.${normal}${indent_6}$map_title\n\n"
             done < <(curl -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
                 ${xc_host_header[@]+"${xc_host_header[@]}"} \
@@ -20771,7 +20548,7 @@ ViewXtreamCodesChnls()
                     do
                         case "$genres_num" in
                             "")
-                                Println "已取消...\n" && exit
+                                Println "$i18n_canceled...\n" && exit
                             ;;
                             a)
                                 continue 4
@@ -20806,7 +20583,7 @@ ViewXtreamCodesChnls()
                                 exit 1
                             ;;
                             *[!0-9]*)
-                                Println "$error 请输入正确的序号\n"
+                                Println "$error $i18n_input_correct_no\n"
                             ;;
                             *)
                                 if [ "$genres_num" -gt 0 ] && [ "$genres_num" -le "$genres_count" ]
@@ -20814,7 +20591,7 @@ ViewXtreamCodesChnls()
                                     genres_index=$((genres_num-1))
                                     break
                                 else
-                                    Println "$error 请输入正确的序号\n"
+                                    Println "$error $i18n_input_correct_no\n"
                                 fi
                             ;;
                         esac
@@ -20971,7 +20748,7 @@ ViewXtreamCodesChnls()
                                     fi
                                 ;;
                                 ""|*[!0-9]*)
-                                    Println "$error 请输入正确的序号\n"
+                                    Println "$error $i18n_input_correct_no\n"
                                 ;;
                                 *)
                                     if [ "$xc_chnls_num" -gt 0 ] && [ "$xc_chnls_num" -le "$xc_chnls_count" ]
@@ -20979,13 +20756,13 @@ ViewXtreamCodesChnls()
                                         xc_chnls_index=$((xc_chnls_num-1))
                                         break
                                     else
-                                        Println "$error 请输入正确的序号\n"
+                                        Println "$error $i18n_input_correct_no\n"
                                     fi
                                 ;;
                             esac
                         done
 
-                        if [ "$use_proxy_yn" == "是" ] 
+                        if [ "$use_proxy_yn" == "$i18n_yes" ] 
                         then
                             server=${d_xc_proxy%\/}
                             stream_link=$(curl -k -s -o /dev/null -w '%{redirect_url}' "$server" \
@@ -21035,21 +20812,21 @@ ViewXtreamCodesChnls()
                             -cookies "$cookies" -hide_banner 
                         then
                             echo
-                            yn_options=( '否' '是' )
-                            inquirer list_input "是否添加此频道" yn_options add_channel_yn
-                            if [[ $add_channel_yn == "是" ]] 
+                            inquirer list_input "是否添加此频道" ny_options add_channel_yn
+                            if [[ $add_channel_yn == "$i18n_yes" ]] 
                             then
                                 stream_links="$domain|$stream_link|${xc_chnls_cmd[xc_chnls_index]}|$mac_address"
                                 echo
                                 inquirer list_input "是否 添加/替换 现有频道直播源" yn_options append_channel_yn
-                                if [[ $append_channel_yn == "是" ]] 
+                                if [[ $append_channel_yn == "$i18n_yes" ]] 
                                 then
                                     ListChannels
                                     InputChannelsIndex
+                                    i18nGetMsg list_channel
                                     for chnl_pid in "${chnls_pid_chosen[@]}"
                                     do
-                                        GetChannelInfo
-                                        ViewChannelInfo
+                                        GetChannel
+                                        ListChannel
                                         change_options=( '添加' '替换' )
                                         echo
                                         inquirer list_input "如何修改频道 [ $chnl_channel_name ]" change_options change_option
@@ -21064,11 +20841,11 @@ ViewXtreamCodesChnls()
                                 else
                                     echo
                                     inquirer list_input "是否推流 flv" yn_options add_channel_flv_yn
-                                    if [[ $add_channel_flv_yn == "是" ]] 
+                                    if [[ $add_channel_flv_yn == "$i18n_yes" ]] 
                                     then
                                         kind="flv"
                                     fi
-                                    if [ "$use_proxy_yn" == "是" ] 
+                                    if [ "$use_proxy_yn" == "$i18n_yes" ] 
                                     then
                                         xtream_codes_proxy=$server
                                     fi
@@ -21080,13 +20857,12 @@ ViewXtreamCodesChnls()
                             fi
                         else
                             Println "$error 频道不可用或账号权限不够\n"
-                            yn_options=( '是' '否' )
                             inquirer list_input "是否继续" yn_options continue_yn
-                            if [[ $continue_yn == "是" ]] 
+                            if [[ $continue_yn == "$i18n_yes" ]] 
                             then
                                 continue
                             else
-                                Println "已取消...\n"
+                                Println "$i18n_canceled...\n"
                             fi
                         fi
                         break
@@ -21129,10 +20905,10 @@ ViewXtreamCodesChnls()
     done
 }
 
-AddXtreamCodesMac()
+XtreamCodesAddMac()
 {
     echo && read -p "请输入服务器地址: " server
-    [ -z "$server" ] && Println "已取消...\n" && exit 1
+    [ -z "$server" ] && Println "$i18n_canceled...\n" && exit 1
 
     domain=${server#*http://}
     domain=${domain%%/*}
@@ -21141,7 +20917,7 @@ AddXtreamCodesMac()
     [ -z "${ip:-}" ] && Println "$error 无法解析域名 !\n" && exit 1
 
     echo && read -p "请输入 mac 地址(多个地址空格分隔): " mac_address
-    [ -z "$mac_address" ] && Println "已取消...\n" && exit 1
+    [ -z "$mac_address" ] && Println "$i18n_canceled...\n" && exit 1
 
     IFS=" " read -ra macs <<< "$mac_address"
 
@@ -21150,9 +20926,8 @@ AddXtreamCodesMac()
     if [ -n "${d_xc_proxy:-}" ] 
     then
         echo
-        yn_options=( '是' '否' )
         inquirer list_input "是否使用代理 $d_xc_proxy 验证: " yn_options use_proxy_yn
-        if [[ $use_proxy_yn == "是" ]]
+        if [[ $use_proxy_yn == "$i18n_yes" ]]
         then
             server=${d_xc_proxy%\/}
             xc_host_header=( -H "xc_host: $domain" )
@@ -21235,9 +21010,8 @@ DomainInstallCert()
     if [ -e "$nginx_prefix/conf/sites_crt/$server_domain.crt" ] && [ -e "$nginx_prefix/conf/sites_crt/$server_domain.key" ]
     then
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "检测到证书已存在, 是否重新安装证书" yn_options reinstall_crt_yn
-        if [[ $reinstall_crt_yn == "否" ]] 
+        inquirer list_input "检测到证书已存在, 是否重新安装证书" ny_options reinstall_crt_yn
+        if [[ $reinstall_crt_yn == "$i18n_no" ]] 
         then
             return 0
         fi
@@ -21376,7 +21150,7 @@ OpenrestyInstall()
             openresty_package_name=${openresty_package_name%%.tar.gz*}
             break
         fi
-    done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" "https://openresty.org/en/download.html")
+    done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" "https://openresty.org/en/download.html" 2> /dev/null)
 
     if [ ! -d "./$openresty_package_name" ] 
     then
@@ -21439,14 +21213,14 @@ OpenrestyInstall()
     if [[ ! -x $(command -v crossplane) ]] 
     then
         Println "$info 安装 crossplane ..."
-        InstallCrossplane
+        CrossplaneInstall
     fi
 }
 
 NginxInstall()
 {
     DepsCheck
-    InstallJQ >/dev/null
+    JQInstall >/dev/null
     Progress &
     progress_pid=$!
     trap '
@@ -21489,7 +21263,7 @@ NginxInstall()
             openssl_name=${openssl_name%%.tar.gz*}
             break
         fi
-    done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" "https://www.openssl.org/source/")
+    done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" "https://www.openssl.org/source/" 2> /dev/null)
 
     if [ ! -d "./$openssl_name" ] 
     then
@@ -21514,7 +21288,7 @@ NginxInstall()
             nginx_package_name=${nginx_package_name%%.tar.gz*}
             break
         fi
-    done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://nginx.org/en/download.html")
+    done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://nginx.org/en/download.html" 2> /dev/null)
 
     if [ ! -d "./$nginx_package_name" ] 
     then
@@ -21566,7 +21340,7 @@ NginxInstall()
     if [[ ! -x $(command -v crossplane) ]] 
     then
         Println "$info 安装 crossplane ..."
-        InstallCrossplane
+        CrossplaneInstall
     fi
 }
 
@@ -21579,22 +21353,16 @@ NginxUninstall()
     fi
 
     echo
-    yn_options=( '否' '是' )
-    inquirer list_input "确定删除 $nginx_name 包括所有配置文件, 操作不可恢复" yn_options nginx_uninstall_yn
+    AskIfContinue n "`eval_gettext \"确定删除 \\\$nginx_name 包括所有配置文件, 操作不可恢复\"`"
 
-    if [[ $nginx_uninstall_yn == "是" ]] 
+    systemctl stop $nginx_name || true
+    if [ "$nginx_ctl" == "or" ] 
     then
-        systemctl stop $nginx_name || true
-        if [ "$nginx_ctl" == "or" ] 
-        then
-            rm -rf "${nginx_prefix%/*}"
-        else
-            rm -rf "$nginx_prefix"
-        fi
-        Println "$info $nginx_name 卸载完成\n"
+        rm -rf "${nginx_prefix%/*}"
     else
-        Println "已取消...\n" && exit 1
+        rm -rf "$nginx_prefix"
     fi
+    Println "$info $nginx_name 卸载完成\n"
 }
 
 NginxUpdate()
@@ -21605,17 +21373,10 @@ NginxUpdate()
         exit 1
     fi
 
-    UpdateShFile "$nginx_name"
+    ShFileUpdate "$nginx_name"
 
     echo
-    yn_options=( '否' '是' )
-    inquirer list_input "是否重新编译 $nginx_name" yn_options continue_yn
-
-    if [[ $continue_yn == "否" ]]
-    then
-        Println "已取消...\n"
-        exit 1
-    fi
+    AskIfContinue n "`eval_gettext \"是否重新编译 \\\$nginx_name\"`"
 
     nginx_name_upper=$(tr '[:lower:]' '[:upper:]' <<< "${nginx_name:0:1}")"${nginx_name:1}"
     "$nginx_name_upper"Install
@@ -21635,30 +21396,17 @@ NginxViewStatus()
 NginxToggle()
 {
     echo
-    yn_options=( '是' '否' )
     if [[ $(systemctl is-active $nginx_name) == "active" ]] 
     then
-        inquirer list_input "$nginx_name 正在运行, 是否关闭" yn_options nginx_stop_yn
+        AskIfContinue y "`eval_gettext \"\\\$nginx_name 正在运行, 是否关闭\"`"
 
-        if [[ $nginx_stop_yn == "是" ]] 
-        then
-            systemctl stop $nginx_name
-            Println "$info $nginx_name 已关闭\n"
-        else
-            Println "已取消...\n"
-            exit 1
-        fi
+        systemctl stop $nginx_name
+        Println "$info $nginx_name 已关闭\n"
     else
-        inquirer list_input "$nginx_name 未运行, 是否开启" yn_options nginx_start_yn
+        AskIfContinue y "`eval_gettext \"\\\$nginx_name 未运行, 是否开启\"`"
 
-        if [[ $nginx_start_yn == "是" ]] 
-        then
-            systemctl start $nginx_name
-            Println "$info $nginx_name 已开启\n"
-        else
-            Println "已取消...\n"
-            exit 1
-        fi
+        systemctl start $nginx_name
+        Println "$info $nginx_name 已开启\n"
     fi
 }
 
@@ -21673,7 +21421,7 @@ NginxParseConfig()
     if [[ ! -x $(command -v crossplane) ]] 
     then
         Println "$info 安装 crossplane ..."
-        InstallCrossplane
+        CrossplaneInstall
     fi
 
     if TMP_FILE=$(mktemp -q)
@@ -21833,7 +21581,7 @@ NginxListDomains()
                 domain_status=0
                 domain_status_text="$red [关闭] ${normal}"
             fi
-            nginx_domains_list="$nginx_domains_list $green$nginx_domains_count.${normal}\r\033[6C$domain $domain_status_text\n\n"
+            nginx_domains_list="$nginx_domains_list $green$nginx_domains_count.${normal}${indent_6}$domain $domain_status_text\n\n"
             nginx_domains+=("$domain")
             nginx_domains_status+=("$domain_status")
         done
@@ -21848,15 +21596,15 @@ NginxListDomains()
 NginxSelectDomain()
 {
     echo "选择域名"
-    while read -p "(默认: 取消): " nginx_domains_index
+    while read -p "$i18n_default_cancel" nginx_domains_index
     do
         case "$nginx_domains_index" in
             "")
-                Println "已取消...\n"
+                Println "$i18n_canceled...\n"
                 exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$nginx_domains_index" -gt 0 ] && [ "$nginx_domains_index" -le "$nginx_domains_count" ]
@@ -21864,7 +21612,7 @@ NginxSelectDomain()
                     nginx_domains_index=$((nginx_domains_index-1))
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -22008,7 +21756,7 @@ NginxListDomain()
             done
 
             nginx_domain_server_root+=("$server_root")
-            nginx_domain_list="$nginx_domain_list $nginx_domain_server_count.\r\033[6C域名: ${green}${nginx_domain_server_name:-未设置}${normal}\n\033[6C端口: ${green}${nginx_domain_listen:-未设置}${normal}\n\033[6Cflv: $nginx_domain_flv_status\n\033[6Cnodejs: $nginx_domain_nodejs_status\n\n"
+            nginx_domain_list="$nginx_domain_list $nginx_domain_server_count.${indent_6}域名: ${green}${nginx_domain_server_name:-未设置}${normal}\n${indent_6}端口: ${green}${nginx_domain_listen:-未设置}${normal}\n${indent_6}flv: $nginx_domain_flv_status\n${indent_6}nodejs: $nginx_domain_nodejs_status\n\n"
         fi
     done
 
@@ -22023,16 +21771,16 @@ NginxListDomain()
 
 NginxSelectDomainServer()
 {
-    echo "输入序号"
-    while read -p "(默认: 取消): " nginx_domain_server_num
+    echo "`gettext \"输入序号\"`"
+    while read -p "$i18n_default_cancel" nginx_domain_server_num
     do
         case "$nginx_domain_server_num" in
             "")
-                Println "已取消...\n"
+                Println "$i18n_canceled...\n"
                 exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$nginx_domain_server_num" -gt 0 ] && [ "$nginx_domain_server_num" -le "$nginx_domain_server_count" ]
@@ -22042,7 +21790,7 @@ NginxSelectDomainServer()
                     server_root=${nginx_domain_server_root[nginx_domain_server_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -22205,7 +21953,7 @@ NginxListLocalhost()
                     done
 
                     nginx_localhost_server_root+=("$server_root")
-                    nginx_localhost_list="$nginx_localhost_list $nginx_localhost_server_count.\r\033[6C端口: ${green}${nginx_localhost_listen:-未设置}${normal}\n\033[6Cflv: $nginx_localhost_flv_status\n\033[6Cnodejs: $nginx_localhost_nodejs_status\n\n"
+                    nginx_localhost_list="$nginx_localhost_list $nginx_localhost_server_count.${indent_6}端口: ${green}${nginx_localhost_listen:-未设置}${normal}\n${indent_6}flv: $nginx_localhost_flv_status\n${indent_6}nodejs: $nginx_localhost_nodejs_status\n\n"
                 fi
             done
             break
@@ -22223,16 +21971,16 @@ NginxListLocalhost()
 
 NginxSelectLocalhostServer()
 {
-    echo "输入序号"
-    while read -p "(默认: 取消): " nginx_localhost_server_num
+    echo "`gettext \"输入序号\"`"
+    while read -p "$i18n_default_cancel" nginx_localhost_server_num
     do
         case "$nginx_localhost_server_num" in
             "")
-                Println "已取消...\n"
+                Println "$i18n_canceled...\n"
                 exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$nginx_localhost_server_num" -gt 0 ] && [ "$nginx_localhost_server_num" -le "$nginx_localhost_server_count" ]
@@ -22242,7 +21990,7 @@ NginxSelectLocalhostServer()
                     server_root=${nginx_localhost_server_root[nginx_localhost_server_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -22282,9 +22030,8 @@ NginxInputArgs()
             new_args="$new_args\"$args\""
         fi
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "继续添加指令值" yn_options yn_option
-        if [ "$yn_option" == "否" ] 
+        inquirer list_input "继续添加指令值" ny_options yn_option
+        if [ "$yn_option" == "$i18n_no" ] 
         then
             break
         fi
@@ -22592,9 +22339,9 @@ NginxAddDirective()
             zh=( "" "一" "二" "三" "四" "五" )
 
             Println "$tip 如果有空字符需包在 \"\" 中"
-            inquirer text_input "输入${zh[level_id]}级指令: " new_directive "取消"
+            inquirer text_input "输入${zh[level_id]}级指令: " new_directive "$i18n_cancel"
 
-            if [ "$new_directive" == "取消" ] 
+            if [ "$new_directive" == "$i18n_cancel" ] 
             then
                 return 0
             fi
@@ -22611,10 +22358,9 @@ NginxAddDirective()
             if [ "$level_id" -ne 5 ] 
             then
                 Println "$tip 如果需要添加下级指令请选择 是"
-                yn_options=( '否' '是' )
-                inquirer list_input "是否是 块 指令" yn_options yn_option
+                inquirer list_input "是否是 块 指令" ny_options yn_option
 
-                if [ "$yn_option" == "是" ] 
+                if [ "$yn_option" == "$i18n_yes" ] 
                 then
                     is_block_directive=1
                 fi
@@ -23231,7 +22977,7 @@ NginxConfigDirective()
                     level_1_options+=("$level_1_option")
                 done
 
-                level_1_options+=("添加指令" "取消")
+                level_1_options+=("添加指令" "$i18n_cancel")
                 level_1_options_count=${#level_1_options[@]}
 
                 while true 
@@ -23241,7 +22987,7 @@ NginxConfigDirective()
 
                     if [ "$level_1_index" -eq "$((level_1_options_count-1))" ] 
                     then
-                        Println "已取消...\n"
+                        Println "$i18n_canceled...\n"
                         break
                     elif [ "$level_1_index" -eq "$((level_1_options_count-2))" ] 
                     then
@@ -23270,9 +23016,8 @@ NginxConfigDirective()
                         elif [ "$level_1_action" == "删除指令" ] 
                         then
                             echo
-                            yn_options=( '否' '是' )
-                            inquirer list_input "确认删除, 此操作不可恢复" yn_options yn_option
-                            if [ "$yn_option" == "是" ] 
+                            inquirer list_input "确认删除, 此操作不可恢复" ny_options yn_option
+                            if [ "$yn_option" == "$i18n_yes" ] 
                             then
                                 jq_path='["config",0,"parsed"]'
                                 JQs delete parse_out "$level_1_index"
@@ -23338,7 +23083,7 @@ NginxConfigDirective()
                 then
                     level_2_options+=("返回一级指令")
                 else
-                    level_2_options+=("取消")
+                    level_2_options+=("$i18n_cancel")
                 fi
 
                 level_2_options_count=${#level_2_options[@]}
@@ -23352,7 +23097,7 @@ NginxConfigDirective()
                     then
                         if [ "${from_level_1:-0}" -eq 0 ] 
                         then
-                            Println "已取消...\n"
+                            Println "$i18n_canceled...\n"
                         fi
                         break
                     elif [ "$level_2_index" -eq "$((level_2_options_count-2))" ] 
@@ -23382,9 +23127,8 @@ NginxConfigDirective()
                         elif [ "$level_2_action" == "删除指令" ] 
                         then
                             echo
-                            yn_options=( '否' '是' )
-                            inquirer list_input "确认删除, 此操作不可恢复" yn_options yn_option
-                            if [ "$yn_option" == "是" ] 
+                            inquirer list_input "确认删除, 此操作不可恢复" ny_options yn_option
+                            if [ "$yn_option" == "$i18n_yes" ] 
                             then
                                 jq_path='["config",0,"parsed",'"$level_1_index"',"block"]'
                                 JQs delete parse_out "$level_2_index"
@@ -23464,7 +23208,7 @@ NginxConfigDirective()
                 then
                     level_3_options+=("返回二级指令")
                 else
-                    level_3_options+=("取消")
+                    level_3_options+=("$i18n_cancel")
                 fi
 
                 level_3_options_count=${#level_3_options[@]}
@@ -23478,7 +23222,7 @@ NginxConfigDirective()
                     then
                         if [ "${from_level_2:-0}" -eq 0 ] 
                         then
-                            Println "已取消...\n"
+                            Println "$i18n_canceled...\n"
                         fi
                         break
                     elif [ "$level_3_index" -eq "$((level_3_options_count-2))" ] 
@@ -23508,9 +23252,8 @@ NginxConfigDirective()
                         elif [ "$level_3_action" == "删除指令" ] 
                         then
                             echo
-                            yn_options=( '否' '是' )
-                            inquirer list_input "确认删除, 此操作不可恢复" yn_options yn_option
-                            if [ "$yn_option" == "是" ] 
+                            inquirer list_input "确认删除, 此操作不可恢复" ny_options yn_option
+                            if [ "$yn_option" == "$i18n_yes" ] 
                             then
                                 jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block"]'
                                 JQs delete parse_out "$level_3_index"
@@ -23601,7 +23344,7 @@ NginxConfigDirective()
                 then
                     level_4_options+=("返回三级指令")
                 else
-                    level_4_options+=("取消")
+                    level_4_options+=("$i18n_cancel")
                 fi
 
                 level_4_options_count=${#level_4_options[@]}
@@ -23615,7 +23358,7 @@ NginxConfigDirective()
                     then
                         if [ "${from_level_3:-0}" -eq 0 ] 
                         then
-                            Println "已取消...\n"
+                            Println "$i18n_canceled...\n"
                         fi
                         break
                     elif [ "$level_4_index" -eq "$((level_4_options_count-2))" ] 
@@ -23645,9 +23388,8 @@ NginxConfigDirective()
                         elif [ "$level_4_action" == "删除指令" ] 
                         then
                             echo
-                            yn_options=( '否' '是' )
-                            inquirer list_input "确认删除, 此操作不可恢复" yn_options yn_option
-                            if [ "$yn_option" == "是" ] 
+                            inquirer list_input "确认删除, 此操作不可恢复" ny_options yn_option
+                            if [ "$yn_option" == "$i18n_yes" ] 
                             then
                                 jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block"]'
                                 JQs delete parse_out "$level_4_index"
@@ -23723,7 +23465,7 @@ NginxConfigDirective()
                 then
                     level_5_options+=("返回四级指令")
                 else
-                    level_5_options+=("取消")
+                    level_5_options+=("$i18n_cancel")
                 fi
 
                 level_5_options_count=${#level_5_options[@]}
@@ -23737,7 +23479,7 @@ NginxConfigDirective()
                     then
                         if [ "${from_level_4:-0}" -eq 0 ] 
                         then
-                            Println "已取消...\n"
+                            Println "$i18n_canceled...\n"
                         fi
                         break
                     elif [ "$level_5_index" -eq "$((level_5_options_count-2))" ] 
@@ -23762,9 +23504,8 @@ NginxConfigDirective()
                         elif [ "$level_5_action" == "删除指令" ] 
                         then
                             echo
-                            yn_options=( '否' '是' )
-                            inquirer list_input "确认删除, 此操作不可恢复" yn_options yn_option
-                            if [ "$yn_option" == "是" ] 
+                            inquirer list_input "确认删除, 此操作不可恢复" ny_options yn_option
+                            if [ "$yn_option" == "$i18n_yes" ] 
                             then
                                 jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block",'"$level_4_index"',"block"]'
                                 JQs delete parse_out "$level_5_index"
@@ -23854,9 +23595,8 @@ NginxConfigServerLiveRoot()
 NginxConfigBlockAliyun()
 {
     echo
-    yn_options=( '否' '是' )
-    inquirer list_input "是否屏蔽所有阿里云ip段" yn_options block_aliyun_yn
-    if [[ $block_aliyun_yn == "是" ]] 
+    inquirer list_input "是否屏蔽所有阿里云ip段" ny_options block_aliyun_yn
+    if [[ $block_aliyun_yn == "$i18n_yes" ]] 
     then
         Println "输入本机IP"
         echo -e "$tip 多个IP用空格分隔\n"
@@ -23934,15 +23674,15 @@ NginxToggleDomain()
 
     [ "$nginx_domains_count" -eq 0 ] && Println "$error 没有域名\n" && exit 1
 
-    echo "输入序号"
-    while read -p "(默认: 取消): " nginx_domains_index
+    echo "`gettext \"输入序号\"`"
+    while read -p "$i18n_default_cancel" nginx_domains_index
     do
         case "$nginx_domains_index" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$nginx_domains_index" -gt 0 ] && [ "$nginx_domains_index" -le "$nginx_domains_count" ]
@@ -23950,7 +23690,7 @@ NginxToggleDomain()
                     nginx_domains_index=$((nginx_domains_index-1))
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -23973,15 +23713,15 @@ NginxDeleteDomain()
 
     [ "$nginx_domains_count" -eq 0 ] && Println "$error 没有域名\n" && exit 1
 
-    echo "输入序号"
-    while read -p "(默认: 取消): " nginx_domains_index
+    echo "`gettext \"输入序号\"`"
+    while read -p "$i18n_default_cancel" nginx_domains_index
     do
         case "$nginx_domains_index" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$nginx_domains_index" -gt 0 ] && [ "$nginx_domains_index" -le "$nginx_domains_count" ]
@@ -23989,7 +23729,7 @@ NginxDeleteDomain()
                     nginx_domains_index=$((nginx_domains_index-1))
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -24357,17 +24097,16 @@ NginxAddDomain()
   ${green}2.${normal} http => https
   ${green}3.${normal} http +  https
  \n"
-                read -p "请输入数字 [1-3]: " server_num
+                read -p "`gettext \"输入序号\"` [1-3]: " server_num
             fi
 
             case $server_num in
                 1) 
                     NginxConfigServerHttpPort
                     echo
-                    yn_options=( '否' '是' )
-                    inquirer list_input "是否设置跳转到其它网址" yn_options http_redirect_yn
+                    inquirer list_input "是否设置跳转到其它网址" ny_options http_redirect_yn
 
-                    if [[ $http_redirect_yn == "是" ]] 
+                    if [[ $http_redirect_yn == "$i18n_yes" ]] 
                     then
                         NginxAppendHttpRedirectConf
                     else
@@ -24386,10 +24125,9 @@ NginxAddDomain()
                 2) 
                     DomainInstallCert
                     echo
-                    yn_options=( '是' '否' )
                     inquirer list_input "是否设置 http 跳转 https" yn_options http_to_https_yn
 
-                    if [[ $http_to_https_yn == "是" ]] 
+                    if [[ $http_to_https_yn == "$i18n_yes" ]] 
                     then
                         Println "$info 设置 $server_domain http 配置"
                         NginxConfigServerHttpPort
@@ -24398,10 +24136,9 @@ NginxAddDomain()
 
                     NginxConfigServerHttpsPort
                     echo
-                    yn_options=( '否' '是' )
-                    inquirer list_input "是否设置 https 跳转到其它网址" yn_options https_redirect_yn
+                    inquirer list_input "是否设置 https 跳转到其它网址" ny_options https_redirect_yn
 
-                    if [[ $https_redirect_yn == "是" ]] 
+                    if [[ $https_redirect_yn == "$i18n_yes" ]] 
                     then
                         NginxAppendHttpsRedirectConf
                     else
@@ -24420,17 +24157,15 @@ NginxAddDomain()
                 3) 
                     DomainInstallCert
                     echo
-                    yn_options=( '是' '否' )
                     inquirer list_input "http 和 https 是否使用相同的目录" yn_options http_https_same_dir_yn
 
-                    if [[ $http_https_same_dir_yn == "是" ]] 
+                    if [[ $http_https_same_dir_yn == "$i18n_yes" ]] 
                     then
                         NginxConfigServerHttpPort
                         NginxConfigServerHttpsPort
                         echo
-                        yn_options=( '否' '是' )
-                        inquirer list_input "是否设置跳转到其它网址" yn_options http_https_redirect_yn
-                        if [[ $http_https_redirect_yn == "是" ]] 
+                        inquirer list_input "是否设置跳转到其它网址" ny_options http_https_redirect_yn
+                        if [[ $http_https_redirect_yn == "$i18n_yes" ]] 
                         then
                             NginxAppendHttpHttpsRedirectConf
                         else
@@ -24441,9 +24176,8 @@ NginxAddDomain()
                     else
                         NginxConfigServerHttpPort
                         echo
-                        yn_options=( '否' '是' )
-                        inquirer list_input "是否设置 http 跳转到其它网址" yn_options http_redirect_yn
-                        if [[ $http_redirect_yn == "是" ]] 
+                        inquirer list_input "是否设置 http 跳转到其它网址" ny_options http_redirect_yn
+                        if [[ $http_redirect_yn == "$i18n_yes" ]] 
                         then
                             NginxAppendHttpRedirectConf
                             NginxConfigServerHttpsPort
@@ -24451,7 +24185,7 @@ NginxAddDomain()
                             echo
                             inquirer list_input "是否设置 https 跳转到其它网址" yn_options https_redirect_yn
 
-                            if [[ $https_redirect_yn == "是" ]] 
+                            if [[ $https_redirect_yn == "$i18n_yes" ]] 
                             then
                                 NginxAppendHttpsRedirectConf
                             else
@@ -24472,7 +24206,7 @@ NginxAddDomain()
                             echo
                             inquirer list_input "是否设置 https 跳转到其它网址" yn_options https_redirect_yn
 
-                            if [[ $https_redirect_yn == "是" ]] 
+                            if [[ $https_redirect_yn == "$i18n_yes" ]] 
                             then
                                 NginxAppendHttpConf
                                 NginxAppendHttpsRedirectConf
@@ -24505,12 +24239,12 @@ NginxAddDomain()
                     NginxEnableDomain
                     Println "$info $server_domain 配置成功\n"
                 ;;
-                *) Println "已取消...\n" && exit 1
+                *) Println "$i18n_canceled...\n" && exit 1
                 ;;
             esac
         done
     else
-        Println "已取消...\n" && exit 1
+        Println "$i18n_canceled...\n" && exit 1
     fi
 }
 
@@ -24833,17 +24567,11 @@ V2rayInstall()
     if [ -s "$V2_CONFIG" ] 
     then
         Println "$error $v2ray_name 已存在...\n"
-        yn_options=( '否' '是' )
-        inquirer list_input "是否覆盖原安装" yn_options yn_option
-        if [ "$yn_option" == "否" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        AskIfContinue n "`gettext \"是否覆盖原安装\"`"
     fi
 
     DepsCheck
-    InstallJQ
+    JQInstall
 
     if ! grep -q "$v2ray_name:" < "/etc/passwd"
     then
@@ -24897,8 +24625,8 @@ V2rayInstall()
 V2rayUpdate()
 {
     DepsCheck
-    InstallJQ
-    UpdateShFile $v2ray_name
+    JQInstall
+    ShFileUpdate $v2ray_name
 
     if ! grep -q "$v2ray_name:" < "/etc/passwd"
     then
@@ -25066,9 +24794,8 @@ V2raySetListen()
 V2raySetFollowRedirect()
 {
     Println "$tip 如果选 是, 安全起见需要你自己设置透明代理的防火墙 详见: https://www.v2fly.org/config/protocols/dokodemo.html"
-    yn_options=( '否' '是' )
-    inquirer list_input "识别出由 iptables 转发而来的数据, 并转发到相应的目标地址" yn_options follow_redirect
-    if [ "$follow_redirect" == "否" ] 
+    inquirer list_input "识别出由 iptables 转发而来的数据, 并转发到相应的目标地址" ny_options follow_redirect
+    if [ "$follow_redirect" == "$i18n_no" ] 
     then
         follow_redirect="false"
     else
@@ -25079,12 +24806,8 @@ V2raySetFollowRedirect()
 V2raySetAddress()
 {
     echo
-    inquirer text_input "输入目标服务器地址(ip或域名): " address "取消"
-    if [ "$address" == "取消" ] 
-    then
-        Println "已取消...\n"
-        exit 1
-    fi
+    inquirer text_input "输入目标服务器地址(ip或域名): " address "$i18n_cancel"
+    ExitOnCancel address
 }
 
 V2raySetDnsAddress()
@@ -25120,12 +24843,12 @@ V2raySetLocalPort()
                 then
                     if ( echo -n "" >/dev/tcp/127.0.0.1/"$port" ) >/dev/null 2>&1
                     then
-                        Println "$error 端口已被其他程序占用！请重新输入! \n"
+                        Println "$error 端口已被其他程序占用!请重新输入! \n"
                     else
                         break
                     fi
                 else
-                    Println "$error 请输入正确的数字！(1-65535) \n"
+                    Println "$error $i18n_input_correct_number [1-65535]\n"
                 fi
             ;;
         esac
@@ -25136,21 +24859,21 @@ V2raySetLocalPort()
 V2raySetAddressPort()
 {
     Println "请输入端口"
-    while read -p "(默认: 取消): " address_port
+    while read -p "$i18n_default_cancel" address_port
     do
         case "$address_port" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的数字！\n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *)
                 if [ "$address_port" -gt 0 ] && [ "$address_port" -le 65535 ]
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字！\n"
+                    Println "$error $i18n_input_correct_number\n"
                 fi
             ;;
         esac
@@ -25247,9 +24970,8 @@ V2raySetServerName()
 V2raySetAllowInsecure()
 {
     Println "$tip 在自定义证书的情况开可以选 否"
-    allowInsecure_options=( '是' '否' )
-    inquirer list_input "是否检测证书有效性" allowInsecure_options allow_insecure
-    if [[ $allow_insecure == "是" ]]
+    inquirer list_input "是否检测证书有效性" yn_options allow_insecure
+    if [[ $allow_insecure == "$i18n_yes" ]]
     then
         allow_insecure="false"
     else
@@ -25276,12 +24998,12 @@ V2raySetDisableSystemRoot()
     Println "$tip 不禁用时只会使用操作系统自带的 CA 证书进行 $tls_name 握手"
     if [ -n "${new_inbound:-}" ] 
     then
-        yn_options=( '是' '否' )
+        inquirer list_input "是否禁用操作系统自带的 CA 证书" yn_options disable_system_root
     else
-        yn_options=( '否' '是' )
+        inquirer list_input "是否禁用操作系统自带的 CA 证书" ny_options disable_system_root
     fi
-    inquirer list_input "是否禁用操作系统自带的 CA 证书" yn_options disable_system_root
-    if [ "$disable_system_root" == "否" ] 
+
+    if [ "$disable_system_root" == "$i18n_no" ] 
     then
         disable_system_root="false"
     else
@@ -25316,9 +25038,8 @@ V2raySetCertificates()
         elif [ "$usage" == "encipherment" ] 
         then
             echo
-            yn_options=( '是' '否' )
             inquirer list_input "是否是 CA 证书" yn_options ca_yn
-            if [ "$ca_yn" == "是" ] 
+            if [ "$ca_yn" == "$i18n_yes" ] 
             then
                 crt=$($V2CTL_FILE cert -ca)
             else
@@ -25348,12 +25069,8 @@ V2raySetCertificates()
         if [ "$crt_option" == "添加域名" ] 
         then
             Println "$tip 如果证书不存在需请求新 CA 证书, 请确保没有程序占用 80 端口"
-            inquirer text_input "输入域名: " domain "取消"
-            if [ "$domain" == "取消" ] 
-            then
-                Println "已取消...\n"
-                exit 1
-            fi
+            inquirer text_input "输入域名: " domain "$i18n_cancel"
+            ExitOnCancel domain
             if [ ! -s "/usr/local/share/$v2ray_name/$domain.crt" ] 
             then
                 if [ -s "/usr/local/nginx/conf/sites_crt/$domain.crt" ] 
@@ -25414,9 +25131,8 @@ V2raySetCertificates()
         if [ "$usage" == "verify" ] 
         then
             echo
-            yn_options=( '否' '是' )
-            inquirer list_input "是否继续添加证书密钥" yn_options continue_yn
-            if [ "$continue_yn" == "否" ] 
+            inquirer list_input "是否继续添加证书密钥" ny_options continue_yn
+            if [ "$continue_yn" == "$i18n_no" ] 
             then
                 certificate=$(
                 $JQ_FILE -n --arg usage "$usage" --arg certificateFile "$certificate_file" \
@@ -25489,9 +25205,8 @@ V2raySetHeaders()
         fi
         [ -n "$headers" ] && headers="$headers, "
         headers="$headers\"$header_name\":\"$header_value\""
-        yn_options=( '否' '是' )
-        inquirer list_input "是否继续添加" yn_options continue_yn
-        if [ "$continue_yn" == "否" ] 
+        inquirer list_input "是否继续添加" ny_options continue_yn
+        if [ "$continue_yn" == "$i18n_no" ] 
         then
             break
         fi
@@ -25534,14 +25249,14 @@ V2raySetAlterId()
                 break
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的数字(0-65535) \n"
+                Println "$error $i18n_input_correct_number [0-65535]\n"
             ;;
             *)
                 if [ "$alter_id" -ge 0 ] && [ "$alter_id" -le 65535 ]
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字(0-65535)\n"
+                    Println "$error $i18n_input_correct_number [0-65535]\n"
                 fi
             ;;
         esac
@@ -25582,14 +25297,14 @@ V2raySetTimeout()
                 break
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的数字(大于0) \n"
+                Println "$error $i18n_input_correct_number [>0]\n"
             ;;
             *)
                 if [ "$timeout" -gt 0 ]
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字(大于0)\n"
+                    Println "$error $i18n_input_correct_number [>0]\n"
                 fi
             ;;
         esac
@@ -25600,9 +25315,8 @@ V2raySetTimeout()
 V2raySetAllowTransparent()
 {
     echo
-    yn_options=( '否' '是' )
-    inquirer list_input "转发所有 HTTP 请求, 而非只是代理请求, 若配置不当, 开启此选项会导致死循环" yn_options allow_transparent_yn
-    if [[ $allow_transparent_yn == "是" ]]
+    inquirer list_input "转发所有 HTTP 请求, 而非只是代理请求, 若配置不当, 开启此选项会导致死循环" ny_options allow_transparent_yn
+    if [[ $allow_transparent_yn == "$i18n_yes" ]]
     then
         allow_transparent="true"
     else
@@ -25624,7 +25338,7 @@ V2raySetLevel()
                 break
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$level" -gt 0 ] && [ "$level" -le $((policy_levels_count+1)) ]
@@ -25632,7 +25346,7 @@ V2raySetLevel()
                     level=$((level-1))
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -25688,9 +25402,8 @@ V2raySetNginxTag()
 V2raySetAcceptProxyProtocol()
 {
     Println "$tip PROXY 协议专用于传递请求的真实来源 IP 和端口, 如果前端 nginx 发送 PROXY Protocol 必须选是"
-    accept_proxy_protocol_options=( '否' '是' )
-    inquirer list_input "是否接收 PROXY 协议" accept_proxy_protocol_options accept_proxy_protocol
-    if [[ $accept_proxy_protocol == "是" ]] 
+    inquirer list_input "是否接收 PROXY 协议" ny_options accept_proxy_protocol
+    if [[ $accept_proxy_protocol == "$i18n_yes" ]] 
     then
         accept_proxy_protocol="true"
     else
@@ -25730,21 +25443,16 @@ V2raySetQuicKey()
 V2raySetDsPath()
 {
     Println "$tip 在运行 $v2ray_name 之前, 这个文件必须不存在"
-    inquirer text_input "输入 domainsocket 文件路径: " ds_path "取消"
-    if [ "$ds_path" == "取消" ]
-    then
-        Println "已取消...\n"
-        exit 1
-    fi
+    inquirer text_input "输入 domainsocket 文件路径: " ds_path "$i18n_cancel"
+    ExitOnCancel ds_path
     Println "  domainsocket 文件路径: $green $ds_path ${normal}"
 }
 
 V2raySetDsAbstract()
 {
     echo
-    yn_options=( '否' '是' )
-    inquirer list_input "是否为 abstract domain socket" yn_options ds_abstract
-    if [[ $ds_abstract == "否" ]] 
+    inquirer list_input "是否为 abstract domain socket" ny_options ds_abstract
+    if [[ $ds_abstract == "$i18n_no" ]] 
     then
         ds_abstract="false"
     else
@@ -25755,9 +25463,8 @@ V2raySetDsAbstract()
 V2raySetDsPadding()
 {
     echo
-    yn_options=( '否' '是' )
-    inquirer list_input "abstract domain socket 是否带 padding" yn_options ds_padding
-    if [[ $ds_padding == "否" ]] 
+    inquirer list_input "abstract domain socket 是否带 padding" ny_options ds_padding
+    if [[ $ds_padding == "$i18n_no" ]] 
     then
         ds_padding="false"
     else
@@ -25780,10 +25487,9 @@ V2raySetDetourDefault()
 
 V2raySetDisableInsecureEncryption()
 {
-    yn_options=( '是' '否' )
     Println "$tip 当客户端使用 none / aes-128-cfb 加密方式时, 服务器会主动断开连接"
     inquirer list_input "是否禁止客户端使用不安全的加密方式" yn_options disable_insecure_encryption
-    if [[ $disable_insecure_encryption == "是" ]] 
+    if [[ $disable_insecure_encryption == "$i18n_yes" ]] 
     then
         disable_insecure_encryption="true"
     else
@@ -25856,9 +25562,8 @@ V2raySetHeaderType()
             fi
 
             echo
-            yn_options=( '否' '是' )
-            inquirer list_input "是否继续添加" yn_options continue_yn
-            if [ "$continue_yn" == "否" ] 
+            inquirer list_input "是否继续添加" ny_options continue_yn
+            if [ "$continue_yn" == "$i18n_no" ] 
             then
                 break
             fi
@@ -25921,9 +25626,8 @@ V2raySetHeaderType()
             fi
 
             echo
-            yn_options=( '否' '是' )
-            inquirer list_input "是否继续添加" yn_options continue_yn
-            if [ "$continue_yn" == "否" ] 
+            inquirer list_input "是否继续添加" ny_options continue_yn
+            if [ "$continue_yn" == "$i18n_no" ] 
             then
                 break
             fi
@@ -25953,9 +25657,8 @@ V2raySetHost()
 V2raySetSniffingEnabled()
 {
     echo
-    yn_options=( '否' '是' )
-    inquirer list_input "是否开启流量探测" yn_options sniffing_enabled
-    if [[ $sniffing_enabled == "否" ]] 
+    inquirer list_input "是否开启流量探测" ny_options sniffing_enabled
+    if [[ $sniffing_enabled == "$i18n_no" ]] 
     then
         sniffing_enabled="false"
     else
@@ -26010,14 +25713,14 @@ SetV2rayAllocateRefresh()
                 break
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的数字(大于1) \n"
+                Println "$error $i18n_input_correct_number [>1]\n"
             ;;
             *)
                 if [ "$allocate_refresh" -ge 2 ]
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字(大于1)\n"
+                    Println "$error $i18n_input_correct_number [>1]\n"
                 fi
             ;;
         esac
@@ -26036,14 +25739,14 @@ SetV2rayAllocateConcurrency()
                 break
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的数字(大于0) \n"
+                Println "$error $i18n_input_correct_number [>0]\n"
             ;;
             *)
                 if [ "$allocate_concurrency" -ge 1 ]
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字(大于0)\n"
+                    Println "$error $i18n_input_correct_number [>0]\n"
                 fi
             ;;
         esac
@@ -26070,9 +25773,8 @@ V2raySetProxy()
 V2raySetMuxEnabled()
 {
     Println "$info Mux 功能是在一条 TCP 连接上分发多个 TCP 连接的数据, 是为了减少 TCP 的握手延迟而设计, 而非提高连接的吞吐量"
-    yn_options=( '否' '是' )
-    inquirer list_input "是否启用 Mux 转发请求" yn_options mux_enabled
-    if [ "$mux_enabled" == "否" ] 
+    inquirer list_input "是否启用 Mux 转发请求" ny_options mux_enabled
+    if [ "$mux_enabled" == "$i18n_no" ] 
     then
         mux_enabled="false"
     else
@@ -26113,9 +25815,8 @@ V2raySetFreedomRedirect()
 V2raySetFallbacks()
 {
     echo
-    yn_options=( '否' '是' )
-    inquirer list_input "是否配置协议回落" yn_options v2ray_fallbacks_yn
-    if [ "$v2ray_fallbacks_yn" == "是" ] 
+    inquirer list_input "是否配置协议回落" ny_options v2ray_fallbacks_yn
+    if [ "$v2ray_fallbacks_yn" == "$i18n_yes" ] 
     then
         if [ "$v2ray_name" == "xray" ] 
         then
@@ -26173,7 +25874,7 @@ V2raySetFallbacks()
             inquirer text_input "输入 $tls_name 解密后 TCP 流量的去向: " v2ray_fallback_dest
             if [ -z "$v2ray_fallback_dest" ] 
             then
-                Println "$error 已取消...\n"
+                Println "$error $i18n_canceled...\n"
                 exit 1
             fi
             Println "$tip 如果配置 nginx 的 PROXY protocol 记得设置 set_real_ip_from"
@@ -26222,9 +25923,8 @@ V2raySetFallbacks()
             $JQ_FILE --arg name "$v2ray_fallback_name" --argjson fallback "[$v2ray_fallback]" \
             '. + $fallback' <<< "$v2ray_fallbacks")
             echo
-            yn_options=( '否' '是' )
-            inquirer list_input "回落添加成功, 是否继续添加新的回落" yn_options v2ray_fallbacks_yn
-            if [ "$v2ray_fallbacks_yn" == "否" ] 
+            inquirer list_input "回落添加成功, 是否继续添加新的回落" ny_options v2ray_fallbacks_yn
+            if [ "$v2ray_fallbacks_yn" == "$i18n_no" ] 
             then
                 break
             fi
@@ -26250,9 +25950,8 @@ V2raySetAuth()
 V2raySetUdp()
 {
     echo
-    yn_options=( '否' '是' )
-    inquirer list_input "是否支持 udp" yn_options udp_yn
-    if [ "$udp_yn" == "否" ] 
+    inquirer list_input "是否支持 udp" ny_options udp_yn
+    if [ "$udp_yn" == "$i18n_no" ] 
     then
         udp="false"
     else
@@ -26299,10 +25998,9 @@ V2rayAddInbound()
         V2raySetListen
     else
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "是否通过此脚本配置的 nginx 连接" yn_options nginx_proxy_yn
+        inquirer list_input "是否通过此脚本配置的 nginx 连接" ny_options nginx_proxy_yn
 
-        if [[ $nginx_proxy_yn == "是" ]]
+        if [[ $nginx_proxy_yn == "$i18n_yes" ]]
         then
             if [ "$protocol" == "vless" ] || [ "$protocol" == "trojan" ]
             then
@@ -26417,9 +26115,8 @@ V2rayAddInbound()
             if [ "$disable_system_root" == "false" ] 
             then
                 echo
-                yn_options=( '否' '是' )
-                inquirer list_input "是否继续添加证书" yn_options continue_yn
-                if [ "$continue_yn" == "否" ] 
+                inquirer list_input "是否继续添加证书" ny_options continue_yn
+                if [ "$continue_yn" == "$i18n_no" ] 
                 then
                     break
                 fi
@@ -26439,9 +26136,8 @@ V2rayAddInbound()
             if [ "$disable_system_root" == "true" ] 
             then
                 echo
-                yn_options=( '否' '是' )
-                inquirer list_input "是否继续添加证书" yn_options continue_yn
-                if [ "$continue_yn" == "否" ] 
+                inquirer list_input "是否继续添加证书" ny_options continue_yn
+                if [ "$continue_yn" == "$i18n_no" ] 
                 then
                     break
                 fi
@@ -26481,9 +26177,8 @@ V2rayAddInbound()
             if [ "$disable_system_root" == "false" ] 
             then
                 echo
-                yn_options=( '否' '是' )
-                inquirer list_input "是否继续添加证书" yn_options continue_yn
-                if [ "$continue_yn" == "否" ] 
+                inquirer list_input "是否继续添加证书" ny_options continue_yn
+                if [ "$continue_yn" == "$i18n_no" ] 
                 then
                     break
                 fi
@@ -26503,9 +26198,8 @@ V2rayAddInbound()
             if [ "$disable_system_root" == "true" ] 
             then
                 echo
-                yn_options=( '否' '是' )
-                inquirer list_input "是否继续添加证书" yn_options continue_yn
-                if [ "$continue_yn" == "否" ] 
+                inquirer list_input "是否继续添加证书" ny_options continue_yn
+                if [ "$continue_yn" == "$i18n_no" ] 
                 then
                     break
                 fi
@@ -26666,9 +26360,8 @@ V2rayAddInbound()
     elif [ "$protocol" == "dokodemo-door" ] 
     then
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "是否用于 api 查询" yn_options yn_option
-        if [ "$yn_option" == "是" ] 
+        inquirer list_input "是否用于 api 查询" ny_options yn_option
+        if [ "$yn_option" == "$i18n_yes" ] 
         then
             new_inbound=$(
             $JQ_FILE \
@@ -27034,128 +26727,128 @@ V2rayListInbounds()
         fi
         if [ "${inbounds_stream_network[inbounds_index]}" != "domainsocket" ] 
         then
-            protocol_settings_list="监听地址: $green${inbounds_listen[inbounds_index]}${normal} 监听端口: $green${inbounds_port[inbounds_index]}${normal}\n\033[6C传输协议: $green${inbounds_protocol[inbounds_index]}${normal}\n\033[6C"
+            protocol_settings_list="监听地址: $green${inbounds_listen[inbounds_index]}${normal} 监听端口: $green${inbounds_port[inbounds_index]}${normal}\n${indent_6}传输协议: $green${inbounds_protocol[inbounds_index]}${normal}\n${indent_6}"
         else
-            protocol_settings_list="传输协议: $green${inbounds_protocol[inbounds_index]}${normal}\n\033[6C"
+            protocol_settings_list="传输协议: $green${inbounds_protocol[inbounds_index]}${normal}\n${indent_6}"
         fi
         if [ "${inbounds_sniffing_enabled[inbounds_index]}" == "true" ] 
         then
-            protocol_settings_list="$protocol_settings_list流量探测: $green开启${normal} 指定流量类型: $green${inbounds_sniffing_dest_override[inbounds_index]//|/,}${normal}\n\033[6C"
+            protocol_settings_list="$protocol_settings_list流量探测: $green开启${normal} 指定流量类型: $green${inbounds_sniffing_dest_override[inbounds_index]//|/,}${normal}\n${indent_6}"
             if [ -n "${inbounds_sniffing_domains_excluded[inbounds_index]}" ] 
             then
                 IFS="|" read -r -a domains <<< "${inbounds_sniffing_domains_excluded[inbounds_index]}"
                 domains_list=""
                 for domain in "${domains[@]}"
                 do
-                    domains_list="$domains_list$green$domain${normal}\n\033[6C"
+                    domains_list="$domains_list$green$domain${normal}\n${indent_6}"
                 done
-                protocol_settings_list="$protocol_settings_list排除域名:\n\033[6C$domains_list"
+                protocol_settings_list="$protocol_settings_list排除域名:\n${indent_6}$domains_list"
             fi
         fi
         if [ "${inbounds_allocate_strategy[inbounds_index]}" == "random" ] 
         then
-            protocol_settings_list="$protocol_settings_list随机端口: $green开启${normal} 刷新间隔: $green${inbounds_allocate_refresh[inbounds_index]} 分钟${normal} 随机端口数量: $green${inbounds_allocate_concurrency[inbounds_index]}${normal}\n\033[6C"
+            protocol_settings_list="$protocol_settings_list随机端口: $green开启${normal} 刷新间隔: $green${inbounds_allocate_refresh[inbounds_index]} 分钟${normal} 随机端口数量: $green${inbounds_allocate_concurrency[inbounds_index]}${normal}\n${indent_6}"
         fi
         if [ "${inbounds_protocol[inbounds_index]}" == "vmess" ] 
         then
             if [ "${inbounds_settings_disable_insecure_encryption[inbounds_index]}" == "false" ] 
             then
-                protocol_settings_list="$protocol_settings_list禁止不安全加密: $red否${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list禁止不安全加密: $red否${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list禁止不安全加密: $green是${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list禁止不安全加密: $green是${normal}\n${indent_6}"
             fi
             if [ -n "${inbounds_settings_detour_to[inbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list指定的另一个入站: $green${inbounds_settings_detour_to[inbounds_index]}${normal} 默认等级: $green${inbounds_settings_default_level[inbounds_index]}${normal} 默认 alterId: $green${inbounds_setttings_default_alter_id[inbounds_index]}${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list指定的另一个入站: $green${inbounds_settings_detour_to[inbounds_index]}${normal} 默认等级: $green${inbounds_settings_default_level[inbounds_index]}${normal} 默认 alterId: $green${inbounds_setttings_default_alter_id[inbounds_index]}${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "vless" ] 
         then
             if [ "${inbounds_settings_decryption[inbounds_index]}" == "none" ] 
             then
-                protocol_settings_list="$protocol_settings_list解密协议: $red否${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list解密协议: $red否${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list解密协议: $green${inbounds_settings_decryption[inbounds_index]}${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list解密协议: $green${inbounds_settings_decryption[inbounds_index]}${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "http" ] 
         then
-            protocol_settings_list="$protocol_settings_list入站数据时间限制: $green${inbounds_settings_timeout[inbounds_index]}${normal}\n\033[6C"
+            protocol_settings_list="$protocol_settings_list入站数据时间限制: $green${inbounds_settings_timeout[inbounds_index]}${normal}\n${indent_6}"
             if [ -n "${inbounds_settings_user_level[inbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list连接使用等级: $green${inbounds_settings_user_level[inbounds_index]}${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list连接使用等级: $green${inbounds_settings_user_level[inbounds_index]}${normal}\n${indent_6}"
             fi
             if [ "${inbounds_settings_allow_transparent[inbounds_index]}" == "false" ] 
             then
-                protocol_settings_list="$protocol_settings_list转发所有请求: $red否${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list转发所有请求: $red否${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list转发所有请求: $green是${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list转发所有请求: $green是${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "socks" ] 
         then
             if [ "${inbounds_settings_auth[inbounds_index]}" == "noauth" ] 
             then
-                protocol_settings_list="$protocol_settings_list认证方式: $green匿名${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list认证方式: $green匿名${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list认证方式: $green用户密码${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list认证方式: $green用户密码${normal}\n${indent_6}"
             fi
             if [ "${inbounds_settings_udp[inbounds_index]}" == "false" ] 
             then
-                protocol_settings_list="$protocol_settings_list支持 UDP 协议: $red否${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list支持 UDP 协议: $red否${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list支持 UDP 协议: $green是${normal}\n\033[6C本机 IP 地址: $green${inbounds_settings_ip[inbounds_index]}${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list支持 UDP 协议: $green是${normal}\n${indent_6}本机 IP 地址: $green${inbounds_settings_ip[inbounds_index]}${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] 
         then
-            protocol_settings_list="$protocol_settings_list可接收的网络协议类型: $green${inbounds_settings_network[inbounds_index]}${normal}\n\033[6C"
+            protocol_settings_list="$protocol_settings_list可接收的网络协议类型: $green${inbounds_settings_network[inbounds_index]}${normal}\n${indent_6}"
             if [ -n "${inbounds_settings_method[inbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list加密方式: $green${inbounds_settings_method[inbounds_index]}${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list加密方式: $green${inbounds_settings_method[inbounds_index]}${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "dokodemo-door" ] 
         then
-            protocol_settings_list="$protocol_settings_list可接收的网络协议类型: $green${inbounds_settings_network[inbounds_index]}${normal}\n\033[6C入站数据时间限制: $green${inbounds_settings_timeout[inbounds_index]}${normal}\n\033[6C"
+            protocol_settings_list="$protocol_settings_list可接收的网络协议类型: $green${inbounds_settings_network[inbounds_index]}${normal}\n${indent_6}入站数据时间限制: $green${inbounds_settings_timeout[inbounds_index]}${normal}\n${indent_6}"
             if [ -n "${inbounds_settings_user_level[inbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list连接使用等级: $green${inbounds_settings_user_level[inbounds_index]}${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list连接使用等级: $green${inbounds_settings_user_level[inbounds_index]}${normal}\n${indent_6}"
             fi
             if [ "${inbounds_settings_follow_redirect[inbounds_index]}" == "false" ] 
             then
-                protocol_settings_list="$protocol_settings_list转发防火墙: $red否${normal}\n\033[6C目标地址: $green${inbounds_settings_address[inbounds_index]}${normal} 目标端口: $green${inbounds_settings_port[inbounds_index]}${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list转发防火墙: $red否${normal}\n${indent_6}目标地址: $green${inbounds_settings_address[inbounds_index]}${normal} 目标端口: $green${inbounds_settings_port[inbounds_index]}${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list转发防火墙: $green是${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list转发防火墙: $green是${normal}\n${indent_6}"
             fi
         fi
         if [ "${inbounds_stream_network[inbounds_index]}" == "http" ] 
         then
-            stream_settings_list="传输方式: ${green}http/2${normal}\n\033[6C"
+            stream_settings_list="传输方式: ${green}http/2${normal}\n${indent_6}"
         else
-            stream_settings_list="传输方式: $green${inbounds_stream_network[inbounds_index]}${normal}\n\033[6C"
+            stream_settings_list="传输方式: $green${inbounds_stream_network[inbounds_index]}${normal}\n${indent_6}"
         fi
         if [ "${inbounds_stream_security[inbounds_index]}" == "none" ] 
         then
-            stream_settings_list="${stream_settings_list}$tls_name 加密: $red否${normal}\n\033[6C"
+            stream_settings_list="${stream_settings_list}$tls_name 加密: $red否${normal}\n${indent_6}"
         else
-            stream_settings_list="${stream_settings_list}$tls_name 加密: $green是${normal}\n\033[6C"
+            stream_settings_list="${stream_settings_list}$tls_name 加密: $green是${normal}\n${indent_6}"
             if [ -n "${inbounds_stream_tls_server_name[inbounds_index]}" ] 
             then
-                stream_settings_list="${stream_settings_list}指定证书域名: $green${inbounds_stream_tls_server_name[inbounds_index]}${normal}\n\033[6C"
+                stream_settings_list="${stream_settings_list}指定证书域名: $green${inbounds_stream_tls_server_name[inbounds_index]}${normal}\n${indent_6}"
             else
-                stream_settings_list="${stream_settings_list}指定证书域名: $red否${normal}\n\033[6C"
+                stream_settings_list="${stream_settings_list}指定证书域名: $red否${normal}\n${indent_6}"
             fi
             if [ "${inbounds_stream_tls_disable_system_root[inbounds_index]}" == "false" ] 
             then
-                stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: $red否${normal}\n\033[6C"
+                stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: $red否${normal}\n${indent_6}"
             else
-                stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: $green是${normal}\n\033[6C"
+                stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: $green是${normal}\n${indent_6}"
             fi
             if [ -n "${inbounds_stream_tls_alpn[inbounds_index]}" ] 
             then
-                stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: $green${inbounds_stream_tls_alpn[inbounds_index]//|/,}${normal}\n\033[6C"
+                stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: $green${inbounds_stream_tls_alpn[inbounds_index]//|/,}${normal}\n${indent_6}"
             else
-                stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: ${green}h2,http/1.1${normal}\n\033[6C"
+                stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: ${green}h2,http/1.1${normal}\n${indent_6}"
             fi
             if [ -n "${inbounds_stream_tls_certificates_usage[inbounds_index]}" ] 
             then
-                certificates_list="$green证书:${normal}\n\033[6C"
+                certificates_list="$green证书:${normal}\n${indent_6}"
                 IFS="|" read -r -a usages <<< "${inbounds_stream_tls_certificates_usage[inbounds_index]}"
                 IFS="|" read -r -a certificate_files <<< "${inbounds_stream_tls_certificates_certificate_file[inbounds_index]}"
                 IFS="|" read -r -a key_files <<< "${inbounds_stream_tls_certificates_key_file[inbounds_index]}"
@@ -27173,36 +26866,36 @@ V2rayListInbounds()
                     fi
                     if [ -n "${certificates:-}" ] && [ -n "${certificates[certificate_i]}" ] 
                     then
-                        certificates_list="$certificates_list$((certificate_i+1)). 用途: $green$certificate_usage [自签名]${normal}\n\033[6C"
+                        certificates_list="$certificates_list$((certificate_i+1)). 用途: $green$certificate_usage [自签名]${normal}\n${indent_6}"
                     else
-                        certificates_list="$certificates_list$((certificate_i+1)). 用途: $green$certificate_usage${normal}\n\033[6C"
+                        certificates_list="$certificates_list$((certificate_i+1)). 用途: $green$certificate_usage${normal}\n${indent_6}"
                     fi
                     if [ -n "${certificate_files[certificate_i]}" ] 
                     then
-                        certificates_list="$certificates_list证书路径: $green${certificate_files[certificate_i]}${normal}\n\033[6C"
+                        certificates_list="$certificates_list证书路径: $green${certificate_files[certificate_i]}${normal}\n${indent_6}"
                     fi
                     if [ -n "${key_files[certificate_i]}" ] 
                     then
-                        certificates_list="$certificates_list密钥路径: $green${key_files[certificate_i]}${normal}\n\033[6C"
+                        certificates_list="$certificates_list密钥路径: $green${key_files[certificate_i]}${normal}\n${indent_6}"
                     fi
                 done
-                stream_settings_list="$stream_settings_list\n\033[6C$certificates_list\n\033[6C"
+                stream_settings_list="$stream_settings_list\n${indent_6}$certificates_list\n${indent_6}"
             fi
         fi
         if [ "${inbounds_stream_tproxy[inbounds_index]}" == "off" ] 
         then
-            stream_settings_list="$stream_settings_list透明代理: $red否${normal}\n\033[6C"
+            stream_settings_list="$stream_settings_list透明代理: $red否${normal}\n${indent_6}"
         else
-            stream_settings_list="$stream_settings_list透明代理: $green${inbounds_stream_tproxy[inbounds_index]}${normal}\n\033[6C"
+            stream_settings_list="$stream_settings_list透明代理: $green${inbounds_stream_tproxy[inbounds_index]}${normal}\n${indent_6}"
         fi
         if [ "${inbounds_stream_network[inbounds_index]}" == "ws" ] 
         then
-            stream_settings_list="$stream_settings_list路径: $green${inbounds_stream_path[inbounds_index]}${normal}\n\033[6C"
+            stream_settings_list="$stream_settings_list路径: $green${inbounds_stream_path[inbounds_index]}${normal}\n${indent_6}"
             if [ "${inbounds_stream_accept_proxy_protocol[inbounds_index]}" == "false" ] 
             then
-                stream_settings_list="$stream_settings_list接收 PROXY 协议: $red否${normal}\n\033[6C"
+                stream_settings_list="$stream_settings_list接收 PROXY 协议: $red否${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list接收 PROXY 协议: $green是${normal}\n\033[6C"
+                stream_settings_list="$stream_settings_list接收 PROXY 协议: $green是${normal}\n${indent_6}"
             fi
             if [ -n "${inbounds_stream_ws_headers[inbounds_index]}" ] 
             then
@@ -27210,23 +26903,23 @@ V2rayListInbounds()
                 headers_list=""
                 for header in "${headers[@]}"
                 do
-                    headers_list="$headers_list$green${header%%=*}${normal}: $green${header#*=}${normal}\n\033[6C"
+                    headers_list="$headers_list$green${header%%=*}${normal}: $green${header#*=}${normal}\n${indent_6}"
                 done
-                [ -n "$headers_list" ] && stream_settings_list="$stream_settings_list自定义 HTTP 头:\n\033[6C$headers_list"
+                [ -n "$headers_list" ] && stream_settings_list="$stream_settings_list自定义 HTTP 头:\n${indent_6}$headers_list"
             fi
         elif [ "${inbounds_stream_network[inbounds_index]}" == "tcp" ] 
         then
             if [ "${inbounds_stream_accept_proxy_protocol[inbounds_index]}" == "false" ] 
             then
-                stream_settings_list="$stream_settings_list接收 PROXY 协议: $red否${normal}\n\033[6C"
+                stream_settings_list="$stream_settings_list接收 PROXY 协议: $red否${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list接收 PROXY 协议: $green是${normal}\n\033[6C"
+                stream_settings_list="$stream_settings_list接收 PROXY 协议: $green是${normal}\n${indent_6}"
             fi
             if [ "${inbounds_stream_header_type[inbounds_index]}" == "none" ] 
             then
-                stream_settings_list="$stream_settings_list数据包头部伪装: $red否${normal}\n\033[6C"
+                stream_settings_list="$stream_settings_list数据包头部伪装: $red否${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list数据包头部伪装: $green${inbounds_stream_header_type[inbounds_index]}${normal}\n\033[6C"
+                stream_settings_list="$stream_settings_list数据包头部伪装: $green${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
                 if [ -n "${inbounds_stream_header_request[inbounds_index]}" ] 
                 then
                     IFS="|" read -r -a header_request <<< "${inbounds_stream_header_request[inbounds_index]}"
@@ -27258,46 +26951,46 @@ V2rayListInbounds()
                                 done
                             fi
                         else
-                            header_request_list="$header_request_list$green$request_key${normal}: $green${request_value//~/, }${normal}\n\033[6C"
+                            header_request_list="$header_request_list$green$request_key${normal}: $green${request_value//~/, }${normal}\n${indent_6}"
                         fi
                     done
-                    [ -n "$header_request_list" ] && stream_settings_list="$stream_settings_list自定义 HTTP 头:\n\033[6C$header_request_list"
+                    [ -n "$header_request_list" ] && stream_settings_list="$stream_settings_list自定义 HTTP 头:\n${indent_6}$header_request_list"
                 fi
             fi
         elif [ "${inbounds_stream_network[inbounds_index]}" == "kcp" ] 
         then
             if [ "${inbounds_stream_header_type[inbounds_index]}" == "none" ] 
             then
-                stream_settings_list="$stream_settings_list数据包头部伪装: $red否${normal}\n\033[6C"
+                stream_settings_list="$stream_settings_list数据包头部伪装: $red否${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list数据包头部伪装: $green${inbounds_stream_header_type[inbounds_index]}${normal}\n\033[6C"
+                stream_settings_list="$stream_settings_list数据包头部伪装: $green${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_stream_network[inbounds_index]}" == "http" ] 
         then
-            stream_settings_list="$stream_settings_list路径: $green${inbounds_stream_path[inbounds_index]}${normal}\n\033[6C"
+            stream_settings_list="$stream_settings_list路径: $green${inbounds_stream_path[inbounds_index]}${normal}\n${indent_6}"
             if [ -n "${inbounds_stream_http_host[inbounds_index]}" ] 
             then
-                stream_settings_list="$stream_settings_list通信域名: $green${inbounds_stream_http_host[inbounds_index]//|/, }${normal}\n\033[6C"
+                stream_settings_list="$stream_settings_list通信域名: $green${inbounds_stream_http_host[inbounds_index]//|/, }${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_stream_network[inbounds_index]}" == "quic" ] 
         then
             if [ "${inbounds_stream_quic_security[inbounds_index]}" == "none" ] 
             then
-                stream_settings_list="$stream_settings_list数据包加密方式: $green不加密${normal} 密钥: $green${inbounds_stream_quic_key[inbounds_index]}${normal}\n\033[6C"
+                stream_settings_list="$stream_settings_list数据包加密方式: $green不加密${normal} 密钥: $green${inbounds_stream_quic_key[inbounds_index]}${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list数据包加密方式: $green${inbounds_stream_quic_security[inbounds_index]}${normal} 密钥: $green${inbounds_stream_quic_key[inbounds_index]}${normal}\n\033[6C"
+                stream_settings_list="$stream_settings_list数据包加密方式: $green${inbounds_stream_quic_security[inbounds_index]}${normal} 密钥: $green${inbounds_stream_quic_key[inbounds_index]}${normal}\n${indent_6}"
             fi
             if [ "${inbounds_stream_header_type[inbounds_index]}" == "none" ] 
             then
-                stream_settings_list="$stream_settings_list数据包头部伪装: $red否${normal}\n\033[6C"
+                stream_settings_list="$stream_settings_list数据包头部伪装: $red否${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list数据包头部伪装: $green${inbounds_stream_header_type[inbounds_index]}${normal}\n\033[6C"
+                stream_settings_list="$stream_settings_list数据包头部伪装: $green${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_stream_network[inbounds_index]}" == "domainsocket" ] 
         then
-            stream_settings_list="$stream_settings_list文件路径: $green${inbounds_stream_path[inbounds_index]}${normal} abstract: $green${inbounds_stream_ds_abstract[inbounds_index]}${normal} padding: $green${inbounds_stream_ds_padding[inbounds_index]}${normal}\n\033[6C"
+            stream_settings_list="$stream_settings_list文件路径: $green${inbounds_stream_path[inbounds_index]}${normal} abstract: $green${inbounds_stream_ds_abstract[inbounds_index]}${normal} padding: $green${inbounds_stream_ds_padding[inbounds_index]}${normal}\n${indent_6}"
         fi
-        inbounds_list=$inbounds_list"# $green$((i+1))${normal}\r\033[6C标签: $green${inbounds_tag[inbounds_index]:-无}${normal}\n\033[6C$protocol_settings_list$stream_settings_list\n\n"
+        inbounds_list=$inbounds_list"# $green$((i+1))${normal}${indent_6}标签: $green${inbounds_tag[inbounds_index]:-无}${normal}\n${indent_6}$protocol_settings_list$stream_settings_list\n\n"
     done
 
     Println "$inbounds_list\n"
@@ -27306,14 +26999,14 @@ V2rayListInbounds()
 V2raySelectInbound()
 {
     echo "选择入站"
-    while read -p "(默认: 取消): " inbound_num
+    while read -p "$i18n_default_cancel" inbound_num
     do
         case "$inbound_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$inbound_num" -gt 0 ] && [ "$inbound_num" -le $count ]
@@ -27330,7 +27023,7 @@ V2raySelectInbound()
                     fi
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -27340,14 +27033,14 @@ V2raySelectInbound()
 V2raySelectAccount()
 {
     echo "选择账号"
-    while read -p "(默认: 取消): " account_num
+    while read -p "$i18n_default_cancel" account_num
     do
         case "$account_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$account_num" -gt 0 ] && [ "$account_num" -le $accounts_count ]
@@ -27355,7 +27048,7 @@ V2raySelectAccount()
                     accounts_index=$((account_num-1))
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -27534,26 +27227,26 @@ V2rayListInboundAccounts()
         accounts_email+=("$map_email")
         if [ "${inbounds_protocol[inbounds_index]}" == "http" ] 
         then
-            accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}HTTP${normal} 用户名: $green$map_user${normal} 密码: $green$map_pass${normal}\n\n"
+            accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}HTTP${normal} 用户名: $green$map_user${normal} 密码: $green$map_pass${normal}\n\n"
         elif [ "${inbounds_protocol[inbounds_index]}" == "socks" ] 
         then
-            accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}Socks${normal} 用户名: $green$map_user${normal} 密码: $green$map_pass${normal} 等级: $green$map_level${normal}\n\n"
+            accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}Socks${normal} 用户名: $green$map_user${normal} 密码: $green$map_pass${normal} 等级: $green$map_level${normal}\n\n"
         elif [ "${inbounds_protocol[inbounds_index]}" == "trojan" ] 
         then
-            accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}Trojan${normal} 密码: $green$map_pass${normal} 邮箱: $green$map_email${normal} 等级: $green$map_level${normal}\n\n"
+            accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}Trojan${normal} 密码: $green$map_pass${normal} 邮箱: $green$map_email${normal} 等级: $green$map_level${normal}\n\n"
         elif [ "${inbounds_protocol[inbounds_index]}" == "vless" ] 
         then
             if [ "$v2ray_name" == "xray" ] 
             then
-                accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 模式: $green$map_flow${normal} 等级: $green$map_level${normal} 邮箱: $green$map_email${normal}\n\n"
+                accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 模式: $green$map_flow${normal} 等级: $green$map_level${normal} 邮箱: $green$map_email${normal}\n\n"
             else
-                accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} 邮箱: $green$map_email${normal}\n\n"
+                accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} 邮箱: $green$map_email${normal}\n\n"
             fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] 
         then
-            accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}Shadowsocks${normal} 邮箱: $green$map_email${normal} 加密方式: $green$map_method${normal} 密码: $green$map_pass${normal} 等级: $green$map_level${normal}\n\n"
+            accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}Shadowsocks${normal} 邮箱: $green$map_email${normal} 加密方式: $green$map_method${normal} 密码: $green$map_pass${normal} 等级: $green$map_level${normal}\n\n"
         else
-            accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}VMESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} alterId: $green$map_alter_id${normal} 邮箱: $green$map_email${normal}\n\n"
+            accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}VMESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} alterId: $green$map_alter_id${normal} 邮箱: $green$map_email${normal}\n\n"
         fi
     done < <($JQ_FILE -r '.inbounds['"$inbounds_index"'].settings | (.clients // .accounts)[] | [.id,.flow,.level,.alterId,.email,.user,(.pass // .password),.method] | join("^")' "$V2_CONFIG")
 
@@ -27604,13 +27297,7 @@ V2rayListInboundAccountLink()
         }' | base64 -w 0)
         Println "分享链接: ${green}vmess://$vmess_link${normal}\n"
         echo
-        yn_options=( '是' '否' )
-        inquirer list_input "打印二维码" yn_options continue_yn
-        if [ "$continue_yn" == "否" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        AskIfContinue y "`gettext \"打印二维码\"`"
         ReleaseCheck
         if [ ! -e "/usr/local/bin/imgcat" ] 
         then
@@ -27619,7 +27306,7 @@ V2rayListInboundAccountLink()
         if [[ ! -x $(command -v convert) ]] 
         then
             Println "$info 安装 ImageMagick"
-            InstallImageMagick
+            ImageMagickInstall
         fi
         if [[ ! -x $(command -v qrencode) ]] 
         then
@@ -27640,16 +27327,16 @@ V2rayDeleteInboundAccount()
         exit 1
     fi
 
-    echo -e "# $green$((accounts_count+1))${normal}\r\033[6C删除所有账号\n\n"
-    echo "输入序号"
-    while read -p "(默认: 取消): " accounts_index
+    echo -e "# $green$((accounts_count+1))${normal}${indent_6}删除所有账号\n\n"
+    echo "`gettext \"输入序号\"`"
+    while read -p "$i18n_default_cancel" accounts_index
     do
         case "$accounts_index" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$accounts_index" -gt 0 ] && [ "$accounts_index" -le $((accounts_count+1)) ]
@@ -27657,7 +27344,7 @@ V2rayDeleteInboundAccount()
                     accounts_index=$((accounts_index-1))
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -28016,9 +27703,8 @@ V2rayAddOutbound()
                 if [ "$disable_system_root" == "false" ] 
                 then
                     echo
-                    yn_options=( '否' '是' )
-                    inquirer list_input "是否继续添加证书" yn_options continue_yn
-                    if [ "$continue_yn" == "否" ] 
+                    inquirer list_input "是否继续添加证书" ny_options continue_yn
+                    if [ "$continue_yn" == "$i18n_no" ] 
                     then
                         break
                     fi
@@ -28038,9 +27724,8 @@ V2rayAddOutbound()
                 if [ "$disable_system_root" == "true" ] 
                 then
                     echo
-                    yn_options=( '否' '是' )
-                    inquirer list_input "是否继续添加证书" yn_options continue_yn
-                    if [ "$continue_yn" == "否" ] 
+                    inquirer list_input "是否继续添加证书" ny_options continue_yn
+                    if [ "$continue_yn" == "$i18n_no" ] 
                     then
                         break
                     fi
@@ -28083,9 +27768,8 @@ V2rayAddOutbound()
                 if [ "$disable_system_root" == "false" ] 
                 then
                     echo
-                    yn_options=( '否' '是' )
-                    inquirer list_input "是否继续添加证书" yn_options continue_yn
-                    if [ "$continue_yn" == "否" ] 
+                    inquirer list_input "是否继续添加证书" ny_options continue_yn
+                    if [ "$continue_yn" == "$i18n_no" ] 
                     then
                         break
                     fi
@@ -28105,9 +27789,8 @@ V2rayAddOutbound()
                 if [ "$disable_system_root" == "true" ] 
                 then
                     echo
-                    yn_options=( '否' '是' )
-                    inquirer list_input "是否继续添加证书" yn_options continue_yn
-                    if [ "$continue_yn" == "否" ] 
+                    inquirer list_input "是否继续添加证书" ny_options continue_yn
+                    if [ "$continue_yn" == "$i18n_no" ] 
                     then
                         break
                     fi
@@ -28240,90 +27923,90 @@ V2rayListOutbounds()
 
     for((outbounds_index=0;outbounds_index<outbounds_count;outbounds_index++));
     do
-        protocol_settings_list="传输协议: $green${outbounds_protocol[outbounds_index]}${normal}\n\033[6C"
+        protocol_settings_list="传输协议: $green${outbounds_protocol[outbounds_index]}${normal}\n${indent_6}"
         if [ "${outbounds_send_through[outbounds_index]}" != "0.0.0.0" ] 
         then
-            protocol_settings_list="$protocol_settings_list发送数据的 IP 地址: $green${outbounds_send_through[outbounds_index]}${normal}\n\033[6C"
+            protocol_settings_list="$protocol_settings_list发送数据的 IP 地址: $green${outbounds_send_through[outbounds_index]}${normal}\n${indent_6}"
         fi
         if [ -n "${outbounds_settings_address[outbounds_index]}" ] 
         then
-            protocol_settings_list="$protocol_settings_list目标地址: $green${outbounds_settings_address[outbounds_index]}${normal} 目标端口: $green${outbounds_settings_port[outbounds_index]}${normal}\n\033[6C"
+            protocol_settings_list="$protocol_settings_list目标地址: $green${outbounds_settings_address[outbounds_index]}${normal} 目标端口: $green${outbounds_settings_port[outbounds_index]}${normal}\n${indent_6}"
         fi
         if [ "${outbounds_protocol[outbounds_index]}" == "blackhole" ] 
         then
             if [ "${outbounds_settings_response_type[outbounds_index]}" == "none" ] 
             then
-                protocol_settings_list="$protocol_settings_list黑洞的响应方式: $green直接关闭${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list黑洞的响应方式: $green直接关闭${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list黑洞的响应方式: $green返回403并关闭${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list黑洞的响应方式: $green返回403并关闭${normal}\n${indent_6}"
             fi
         elif [ "${outbounds_protocol[outbounds_index]}" == "dns" ] 
         then
-            protocol_settings_list="${protocol_settings_list}传输层协议: $green${outbounds_settings_network[outbounds_index]:-不变}${normal} 服务器地址: $green${outbounds_settings_address[outbounds_index]:-不变}${normal} 服务器端口: $green${outbounds_settings_port[outbounds_index]:-不变}${normal}\n\033[6C"
+            protocol_settings_list="${protocol_settings_list}传输层协议: $green${outbounds_settings_network[outbounds_index]:-不变}${normal} 服务器地址: $green${outbounds_settings_address[outbounds_index]:-不变}${normal} 服务器端口: $green${outbounds_settings_port[outbounds_index]:-不变}${normal}\n${indent_6}"
         elif [ "${outbounds_protocol[outbounds_index]}" == "freedom" ] 
         then
             if [ -n "${outbounds_settings_domain_strategy[outbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list域名策略: $green${outbounds_settings_domain_strategy[outbounds_index]}${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list域名策略: $green${outbounds_settings_domain_strategy[outbounds_index]}${normal}\n${indent_6}"
             fi
             if [ -n "${outbounds_settings_redirect[outbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list发送到指定地址: $green${outbounds_settings_redirect[outbounds_index]}${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list发送到指定地址: $green${outbounds_settings_redirect[outbounds_index]}${normal}\n${indent_6}"
             fi
             if [ -n "${outbounds_settings_user_level[outbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list使用用户等级: $green${outbounds_settings_user_level[outbounds_index]}${normal}\n\033[6C"
+                protocol_settings_list="$protocol_settings_list使用用户等级: $green${outbounds_settings_user_level[outbounds_index]}${normal}\n${indent_6}"
             fi
         elif [ "${outbounds_protocol[outbounds_index]}" == "shadowsocks" ] 
         then
-            protocol_settings_list="$protocol_settings_list加密方式: $green${outbounds_settings_method[outbounds_index]}${normal}\n\033[6C"
+            protocol_settings_list="$protocol_settings_list加密方式: $green${outbounds_settings_method[outbounds_index]}${normal}\n${indent_6}"
         fi
         if [ -n "${outbounds_proxy_tag[outbounds_index]}" ] 
         then
-            stream_settings_list="指定的出站代理标签: ${outbounds_proxy_tag[outbounds_index]}\n\033[6C"
+            stream_settings_list="指定的出站代理标签: ${outbounds_proxy_tag[outbounds_index]}\n${indent_6}"
         else
             stream_settings_list=""
             if [ "${outbounds_stream_network[outbounds_index]}" == "http" ] 
             then
-                stream_settings_list="传输方式: ${green}http/2${normal}\n\033[6C"
+                stream_settings_list="传输方式: ${green}http/2${normal}\n${indent_6}"
             elif [ -n "${outbounds_stream_network[outbounds_index]}" ]  
             then
-                stream_settings_list="传输方式: $green${outbounds_stream_network[outbounds_index]}${normal}\n\033[6C"
+                stream_settings_list="传输方式: $green${outbounds_stream_network[outbounds_index]}${normal}\n${indent_6}"
             fi
             if [ "${outbounds_protocol[outbounds_index]}" != "blackhole" ] && [ "${outbounds_protocol[outbounds_index]}" != "dns" ] && [ "${outbounds_protocol[outbounds_index]}" != "freedom" ]
             then
                 if [ "${outbounds_stream_security[outbounds_index]}" == "none" ] 
                 then
-                    stream_settings_list="${stream_settings_list}$tls_name 加密: $red否${normal}\n\033[6C"
+                    stream_settings_list="${stream_settings_list}$tls_name 加密: $red否${normal}\n${indent_6}"
                 else
-                    stream_settings_list="${stream_settings_list}$tls_name 加密: $green是${normal}\n\033[6C"
+                    stream_settings_list="${stream_settings_list}$tls_name 加密: $green是${normal}\n${indent_6}"
                     if [ -n "${outbounds_stream_tls_server_name[outbounds_index]}" ] 
                     then
-                        stream_settings_list="${stream_settings_list}指定证书域名: $green${outbounds_stream_tls_server_name[outbounds_index]}${normal}\n\033[6C"
+                        stream_settings_list="${stream_settings_list}指定证书域名: $green${outbounds_stream_tls_server_name[outbounds_index]}${normal}\n${indent_6}"
                     else
-                        stream_settings_list="${stream_settings_list}指定证书域名: $red否${normal}\n\033[6C"
+                        stream_settings_list="${stream_settings_list}指定证书域名: $red否${normal}\n${indent_6}"
                     fi
                     if [ "${outbounds_stream_tls_allow_insecure[outbounds_index]}" == "false" ] 
                     then
-                        stream_settings_list="${stream_settings_list}允许不安全连接: $red否${normal}\n\033[6C"
+                        stream_settings_list="${stream_settings_list}允许不安全连接: $red否${normal}\n${indent_6}"
                     else
-                        stream_settings_list="${stream_settings_list}允许不安全连接: $green是${normal}\n\033[6C"
+                        stream_settings_list="${stream_settings_list}允许不安全连接: $green是${normal}\n${indent_6}"
                     fi
                     if [ "${outbounds_stream_tls_disable_system_root[outbounds_index]}" == "false" ] 
                     then
-                        stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: $red否${normal}\n\033[6C"
+                        stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: $red否${normal}\n${indent_6}"
                     else
-                        stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: $green是${normal}\n\033[6C"
+                        stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: $green是${normal}\n${indent_6}"
                     fi
                     if [ -n "${outbounds_stream_tls_alpn[outbounds_index]}" ] 
                     then
-                        stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: $green${outbounds_stream_tls_alpn[outbounds_index]//|/,}${normal}\n\033[6C"
+                        stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: $green${outbounds_stream_tls_alpn[outbounds_index]//|/,}${normal}\n${indent_6}"
                     else
-                        stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: ${green}h2,http/1.1${normal}\n\033[6C"
+                        stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: ${green}h2,http/1.1${normal}\n${indent_6}"
                     fi
                     if [ -n "${outbounds_stream_tls_certificates_usage[outbounds_index]}" ] 
                     then
-                        certificates_list="$green证书:${normal}\n\033[6C"
+                        certificates_list="$green证书:${normal}\n${indent_6}"
                         IFS="|" read -r -a usages <<< "${outbounds_stream_tls_certificates_usage[outbounds_index]}"
                         IFS="|" read -r -a certificate_files <<< "${outbounds_stream_tls_certificates_certificate_file[outbounds_index]}"
                         IFS="|" read -r -a key_files <<< "${outbounds_stream_tls_certificates_key_file[outbounds_index]}"
@@ -28341,43 +28024,43 @@ V2rayListOutbounds()
                             fi
                             if [ -n "${certificates:-}" ] && [ -n "${certificates[certificate_i]}" ] 
                             then
-                                certificates_list="$certificates_list$((certificate_i+1)). 用途: $green$certificate_usage [自签名]${normal}\n\033[6C"
+                                certificates_list="$certificates_list$((certificate_i+1)). 用途: $green$certificate_usage [自签名]${normal}\n${indent_6}"
                             else
-                                certificates_list="$certificates_list$((certificate_i+1)). 用途: $green$certificate_usage${normal}\n\033[6C"
+                                certificates_list="$certificates_list$((certificate_i+1)). 用途: $green$certificate_usage${normal}\n${indent_6}"
                             fi
                             if [ -n "${certificate_files[certificate_i]}" ] 
                             then
-                                certificates_list="$certificates_list证书路径: $green${certificate_files[certificate_i]}${normal}\n\033[6C"
+                                certificates_list="$certificates_list证书路径: $green${certificate_files[certificate_i]}${normal}\n${indent_6}"
                             fi
                             if [ -n "${key_files[certificate_i]}" ] 
                             then
-                                certificates_list="$certificates_list密钥路径: $green${key_files[certificate_i]}${normal}\n\033[6C"
+                                certificates_list="$certificates_list密钥路径: $green${key_files[certificate_i]}${normal}\n${indent_6}"
                             fi
                         done
-                        stream_settings_list="$stream_settings_list\n\033[6C$certificates_list\n\033[6C"
+                        stream_settings_list="$stream_settings_list\n${indent_6}$certificates_list\n${indent_6}"
                     fi
                 fi
             fi
             if [ "${outbounds_stream_network[outbounds_index]}" == "ws" ] 
             then
-                stream_settings_list="$stream_settings_list路径: $green${outbounds_stream_path[outbounds_index]}${normal}\n\033[6C"
+                stream_settings_list="$stream_settings_list路径: $green${outbounds_stream_path[outbounds_index]}${normal}\n${indent_6}"
                 if [ -n "${outbounds_stream_ws_headers[outbounds_index]}" ] 
                 then
                     IFS="|" read -r -a headers <<< "${outbounds_stream_ws_headers[outbounds_index]}"
                     headers_list=""
                     for header in "${headers[@]}"
                     do
-                        headers_list="$headers_list$green${header%%=*}${normal}: $green${header#*=}${normal}\n\033[6C"
+                        headers_list="$headers_list$green${header%%=*}${normal}: $green${header#*=}${normal}\n${indent_6}"
                     done
-                    [ -n "$headers_list" ] && stream_settings_list="$stream_settings_list自定义 HTTP 头:\n\033[6C$headers_list"
+                    [ -n "$headers_list" ] && stream_settings_list="$stream_settings_list自定义 HTTP 头:\n${indent_6}$headers_list"
                 fi
             elif [ "${outbounds_stream_network[outbounds_index]}" == "tcp" ] 
             then
                 if [ "${outbounds_stream_header_type[outbounds_index]}" == "none" ] 
                 then
-                    stream_settings_list="$stream_settings_list数据包头部: $red不伪装${normal}\n\033[6C"
+                    stream_settings_list="$stream_settings_list数据包头部: $red不伪装${normal}\n${indent_6}"
                 else
-                    stream_settings_list="$stream_settings_list数据包头部: ${green}http 伪装${normal}\n\033[6C"
+                    stream_settings_list="$stream_settings_list数据包头部: ${green}http 伪装${normal}\n${indent_6}"
                     if [ -n "${outbounds_stream_header_request[outbounds_index]}" ] 
                     then
                         IFS="|" read -r -a header_request <<< "${outbounds_stream_header_request[outbounds_index]}"
@@ -28409,50 +28092,50 @@ V2rayListOutbounds()
                                     done
                                 fi
                             else
-                                header_request_list="$header_request_list$green$request_key${normal}: $green${request_value//~/, }${normal}\n\033[6C"
+                                header_request_list="$header_request_list$green$request_key${normal}: $green${request_value//~/, }${normal}\n${indent_6}"
                             fi
                         done
-                        [ -n "$header_request_list" ] && stream_settings_list="$stream_settings_list自定义 HTTP 头:\n\033[6C$header_request_list"
+                        [ -n "$header_request_list" ] && stream_settings_list="$stream_settings_list自定义 HTTP 头:\n${indent_6}$header_request_list"
                     fi
                 fi
             elif [ "${outbounds_stream_network[outbounds_index]}" == "kcp" ] 
             then
                 if [ "${outbounds_stream_header_type[outbounds_index]}" == "none" ] 
                 then
-                    stream_settings_list="$stream_settings_list数据包头部: $red不伪装${normal}\n\033[6C"
+                    stream_settings_list="$stream_settings_list数据包头部: $red不伪装${normal}\n${indent_6}"
                 else
-                    stream_settings_list="$stream_settings_list数据包头部: ${green}http 伪装${normal}\n\033[6C"
+                    stream_settings_list="$stream_settings_list数据包头部: ${green}http 伪装${normal}\n${indent_6}"
                 fi
             elif [ "${outbounds_stream_network[outbounds_index]}" == "http" ] 
             then
-                stream_settings_list="$stream_settings_list路径: $green${outbounds_stream_path[outbounds_index]}${normal}\n\033[6C"
+                stream_settings_list="$stream_settings_list路径: $green${outbounds_stream_path[outbounds_index]}${normal}\n${indent_6}"
                 if [ -n "${outbounds_stream_http_host[outbounds_index]}" ] 
                 then
-                    stream_settings_list="$stream_settings_list通信域名: $green${outbounds_stream_http_host[outbounds_index]//|/, }${normal}\n\033[6C"
+                    stream_settings_list="$stream_settings_list通信域名: $green${outbounds_stream_http_host[outbounds_index]//|/, }${normal}\n${indent_6}"
                 fi
             elif [ "${outbounds_stream_network[outbounds_index]}" == "quic" ] 
             then
                 if [ "${outbounds_stream_quic_security[outbounds_index]}" == "none" ] 
                 then
-                    stream_settings_list="$stream_settings_list数据包加密方式: $red不加密${normal} 密钥: $green${outbounds_stream_quic_key[outbounds_index]}${normal}\n\033[6C"
+                    stream_settings_list="$stream_settings_list数据包加密方式: $red不加密${normal} 密钥: $green${outbounds_stream_quic_key[outbounds_index]}${normal}\n${indent_6}"
                 else
-                    stream_settings_list="$stream_settings_list数据包加密方式: $green${outbounds_stream_quic_security[outbounds_index]}${normal} 密钥: $green${outbounds_stream_quic_key[outbounds_index]}${normal}\n\033[6C"
+                    stream_settings_list="$stream_settings_list数据包加密方式: $green${outbounds_stream_quic_security[outbounds_index]}${normal} 密钥: $green${outbounds_stream_quic_key[outbounds_index]}${normal}\n${indent_6}"
                 fi
                 if [ "${outbounds_stream_header_type[outbounds_index]}" == "none" ] 
                 then
-                    stream_settings_list="$stream_settings_list数据包头部: $red不伪装${normal}\n\033[6C"
+                    stream_settings_list="$stream_settings_list数据包头部: $red不伪装${normal}\n${indent_6}"
                 else
-                    stream_settings_list="$stream_settings_list数据包头部: ${green}http 伪装${normal}\n\033[6C"
+                    stream_settings_list="$stream_settings_list数据包头部: ${green}http 伪装${normal}\n${indent_6}"
                 fi
             fi
         fi
         if [ "${outbounds_mux_enabled[outbounds_index]}" == "true" ] 
         then
-            mux_settings_list="$green已开启 Mux${normal} 最大并发连接数: $green${outbounds_mux_concurrency[outbounds_index]}${normal}\n\033[6C"
+            mux_settings_list="$green已开启 Mux${normal} 最大并发连接数: $green${outbounds_mux_concurrency[outbounds_index]}${normal}\n${indent_6}"
         else
             mux_settings_list=""
         fi
-        outbounds_list=$outbounds_list"# $green$((outbounds_index+1))${normal}\r\033[6C标签: $green${outbounds_tag[outbounds_index]:-无}${normal}\n\033[6C$protocol_settings_list$stream_settings_list$mux_settings_list\n\n"
+        outbounds_list=$outbounds_list"# $green$((outbounds_index+1))${normal}${indent_6}标签: $green${outbounds_tag[outbounds_index]:-无}${normal}\n${indent_6}$protocol_settings_list$stream_settings_list$mux_settings_list\n\n"
     done
 
     Println "$outbounds_list\n"
@@ -28461,14 +28144,14 @@ V2rayListOutbounds()
 V2raySelectOutbound()
 {
     echo -e "选择出站"
-    while read -p "(默认: 取消): " outbound_num
+    while read -p "$i18n_default_cancel" outbound_num
     do
         case "$outbound_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$outbound_num" -gt 0 ] && [ "$outbound_num" -le $outbounds_count ]
@@ -28476,7 +28159,7 @@ V2raySelectOutbound()
                     outbounds_index=$((outbound_num-1))
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -28625,23 +28308,23 @@ V2rayListOutboundAccounts()
         accounts_count=$((accounts_count+1))
         if [ "${outbounds_protocol[outbounds_index]}" == "http" ] 
         then
-            accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}HTTP${normal} 用户名: $green$map_user${normal} 密码: $green$map_pass${normal}\n\n"
+            accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}HTTP${normal} 用户名: $green$map_user${normal} 密码: $green$map_pass${normal}\n\n"
         elif [ "${outbounds_protocol[outbounds_index]}" == "socks" ] 
         then
-            accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}Socks${normal} 用户名: $green$map_user${normal} 密码: $green$map_pass${normal} 等级: $green$map_level${normal}\n\n"
+            accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}Socks${normal} 用户名: $green$map_user${normal} 密码: $green$map_pass${normal} 等级: $green$map_level${normal}\n\n"
         elif [ "${outbounds_protocol[outbounds_index]}" == "trojan" ] 
         then
-            accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}Trojan${normal} 服务器地址: $green$map_address${normal} 服务器端口: $green$map_port${normal}\n\033[6C密码: $green$map_pass${normal} 邮箱: $green$map_email${normal} 等级: $green$map_level${normal}\n\n"
+            accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}Trojan${normal} 服务器地址: $green$map_address${normal} 服务器端口: $green$map_port${normal}\n${indent_6}密码: $green$map_pass${normal} 邮箱: $green$map_email${normal} 等级: $green$map_level${normal}\n\n"
         elif [ "${outbounds_protocol[outbounds_index]}" == "vless" ] 
         then
             if [ "$v2ray_name" == "xray" ] 
             then
-                accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 模式: $green$map_flow${normal} 等级: $green$map_level${normal} 加密方式: $green$map_security${normal}\n\n"
+                accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 模式: $green$map_flow${normal} 等级: $green$map_level${normal} 加密方式: $green$map_security${normal}\n\n"
             else
-                accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} 加密方式: $green$map_security${normal}\n\n"
+                accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} 加密方式: $green$map_security${normal}\n\n"
             fi
         else
-            accounts_list=$accounts_list"# $green$accounts_count${normal}\r\033[6C传输协议: ${green}VMESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} alterId: $green$map_alter_id${normal} 加密方式: $green$map_security${normal}\n\n"
+            accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}VMESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} alterId: $green$map_alter_id${normal} 加密方式: $green$map_security${normal}\n\n"
         fi
     done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings | (.vnext // .servers)[0].users[] | [.id,.flow,.level,.alterId,.security,.user,(.pass // .password),.address,.port,.email] | join("^")' "$V2_CONFIG")
 
@@ -28665,16 +28348,16 @@ V2rayDeleteOutboundAccount()
         exit 1
     fi
 
-    echo -e "# $green$((accounts_count+1))${normal}\r\033[6C删除所有账号\n\n"
-    echo "输入序号"
-    while read -p "(默认: 取消): " accounts_index
+    echo -e "# $green$((accounts_count+1))${normal}${indent_6}删除所有账号\n\n"
+    echo "`gettext \"输入序号\"`"
+    while read -p "$i18n_default_cancel" accounts_index
     do
         case "$accounts_index" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$accounts_index" -gt 0 ] && [ "$accounts_index" -le $((accounts_count+1)) ]
@@ -28682,7 +28365,7 @@ V2rayDeleteOutboundAccount()
                     accounts_index=$((accounts_index-1))
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -29033,12 +28716,8 @@ V2raySetRouting()
     elif [ "$set_routing_option" == "添加负载均衡器" ] 
     then
         Println "$tip 用于匹配路由规则"
-        inquirer text_input "输入负载均衡器标签: " routing_balancer_tag "取消"
-        if [ "$routing_balancer_tag" == "不设置" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        inquirer text_input "输入负载均衡器标签: " routing_balancer_tag "$i18n_cancel"
+        ExitOnCancel routing_balancer_tag
         new_routing_balancer=$(
         $JQ_FILE --arg tag "$routing_balancer_tag" \
         '. * 
@@ -29075,12 +28754,8 @@ V2raySetRouting()
         V2rayListRouting
         [ "$routing_rules_count" -eq 0 ] && exit 1
         echo
-        inquirer text_input "输入路由规则序号: " routing_rule_num "取消"
-        if [ "$routing_rule_num" == "取消" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        inquirer text_input "输入路由规则序号: " routing_rule_num "$i18n_cancel"
+        ExitOnCancel routing_rule_num
         routing_rule_index=$((routing_rule_num-1))
         jq_path='["routing","rules"]'
         JQ delete "$V2_CONFIG" "$routing_rule_index"
@@ -29089,12 +28764,8 @@ V2raySetRouting()
         V2rayListRouting
         [ "$routing_balancers_count" -eq 0 ] && exit 1
         echo
-        inquirer text_input "输入负载均衡器序号: " routing_balancer_num "取消"
-        if [ "$routing_balancer_num" == "取消" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        inquirer text_input "输入负载均衡器序号: " routing_balancer_num "$i18n_cancel"
+        ExitOnCancel routing_balancer_num
         routing_balancer_index=$((routing_balancer_num-1))
         jq_path='["routing","balancers"]'
         JQ delete "$V2_CONFIG" "$routing_balancer_index"
@@ -29182,17 +28853,17 @@ V2rayListPolicy()
     do
         if [ "${policy_levels_stats_user_uplink[i]}" == "true" ] 
         then
-            policy_levels_stats_user_uplink_list="上行流量统计: $green是${normal}\n\033[6C"
+            policy_levels_stats_user_uplink_list="上行流量统计: $green是${normal}\n${indent_6}"
         else
-            policy_levels_stats_user_uplink_list="上行流量统计: $red否${normal}\n\033[6C"
+            policy_levels_stats_user_uplink_list="上行流量统计: $red否${normal}\n${indent_6}"
         fi
         if [ "${policy_levels_stats_user_downlink[i]}" == "true" ] 
         then
-            policy_levels_stats_user_downlink_list="下行流量统计: $green是${normal}\n\033[6C"
+            policy_levels_stats_user_downlink_list="下行流量统计: $green是${normal}\n${indent_6}"
         else
-            policy_levels_stats_user_downlink_list="下行流量统计: $red否${normal}\n\033[6C"
+            policy_levels_stats_user_downlink_list="下行流量统计: $red否${normal}\n${indent_6}"
         fi
-        levels_list="$levels_list# $green$((i+1))${normal}\r\033[6C等级: $green${policy_levels_id[i]}${normal}\n\033[6C握手时间限制: $green${policy_levels_handshake[i]}${normal} 秒\n\033[6C连接空闲的时间限制: $green${policy_levels_conn_idle[i]}${normal} 秒\n\033[6C出站代理时间限制: $green${policy_levels_uplink_only[i]}${normal} 秒\n\033[6C入站代理时间限制: $green${policy_levels_downlink_only[i]}${normal} 秒\n\033[6C缓存大小: $green${policy_levels_buffer_size[i]}${normal} kB\n\033[6C$policy_levels_stats_user_uplink_list$policy_levels_stats_user_downlink_list\n\n"
+        levels_list="$levels_list# $green$((i+1))${normal}${indent_6}等级: $green${policy_levels_id[i]}${normal}\n${indent_6}握手时间限制: $green${policy_levels_handshake[i]}${normal} 秒\n${indent_6}连接空闲的时间限制: $green${policy_levels_conn_idle[i]}${normal} 秒\n${indent_6}出站代理时间限制: $green${policy_levels_uplink_only[i]}${normal} 秒\n${indent_6}入站代理时间限制: $green${policy_levels_downlink_only[i]}${normal} 秒\n${indent_6}缓存大小: $green${policy_levels_buffer_size[i]}${normal} kB\n${indent_6}$policy_levels_stats_user_uplink_list$policy_levels_stats_user_downlink_list\n\n"
     done
 
     if [ "$policy_system_stats_inbound_uplink" == "false" ] 
@@ -29435,19 +29106,11 @@ V2raySetReverse()
     if [ "$set_reverse_option" == "添加 bridge" ] 
     then
         echo
-        inquirer text_input "输入标签: " reverse_bridge_tag "取消"
-        if [ "$reverse_bridge_tag" == "取消" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        inquirer text_input "输入标签: " reverse_bridge_tag "$i18n_cancel"
+        ExitOnCancel reverse_bridge_tag
         echo
-        inquirer text_input "输入域名: " reverse_bridge_domain "取消"
-        if [ "$reverse_bridge_domain" == "取消" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        inquirer text_input "输入域名: " reverse_bridge_domain "$i18n_cancel"
+        ExitOnCancel reverse_bridge_domain
         new_reverse_bridge=(
         $JQ_FILE -n --arg tag "reverse_bridge_tag" --arg domain "$reverse_bridge_domain" \
         '{
@@ -29460,19 +29123,11 @@ V2raySetReverse()
     elif [ "$set_reverse_option" == "添加 portal" ] 
     then
         echo
-        inquirer text_input "输入标签: " reverse_portal_tag "取消"
-        if [ "$reverse_portal_tag" == "取消" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        inquirer text_input "输入标签: " reverse_portal_tag "$i18n_cancel"
+        ExitOnCancel reverse_portal_tag
         echo
-        inquirer text_input "输入域名: " reverse_portal_domain "取消"
-        if [ "$reverse_portal_domain" == "取消" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        inquirer text_input "输入域名: " reverse_portal_domain "$i18n_cancel"
+        ExitOnCancel reverse_portal_domain
         new_reverse_portal=(
         $JQ_FILE -n --arg tag "reverse_portal_tag" --arg domain "$reverse_portal_domain" \
         '{
@@ -29486,12 +29141,8 @@ V2raySetReverse()
     then
         V2rayListReverse
         [ "$reverse_bridges_count" -eq 0 ] && exit 1
-        inquirer text_input "输入 bridge 序号: " reverse_bridge_num "取消"
-        if [ "$reverse_bridge_num" == "取消" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        inquirer text_input "输入 bridge 序号: " reverse_bridge_num "$i18n_cancel"
+        ExitOnCancel reverse_bridge_num
         reverse_bridge_index=$((reverse_bridge_num-1))
         jq_path='["reverse","bridges"]'
         JQ delete "$V2_CONFIG" "$reverse_bridge_index"
@@ -29499,12 +29150,8 @@ V2raySetReverse()
     else
         V2rayListReverse
         [ "$reverse_portals_count" -eq 0 ] && exit 1
-        inquirer text_input "输入 portal 序号: " reverse_portal_num "取消"
-        if [ "$reverse_portal_num" == "取消" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        inquirer text_input "输入 portal 序号: " reverse_portal_num "$i18n_cancel"
+        ExitOnCancel reverse_portal_num
         reverse_portal_index=$((reverse_portal_num-1))
         jq_path='["reverse","portals"]'
         JQ delete "$V2_CONFIG" "$reverse_portal_index"
@@ -29555,10 +29202,10 @@ V2rayListDns()
     then
         dns_hosts_list="静态 IP 列表: $red无${normal}\n"
     else
-        dns_hosts_list="静态 IP 列表: \n\033[6C"
+        dns_hosts_list="静态 IP 列表: \n${indent_6}"
         for((dns_hosts_i=0;dns_hosts_i<dns_hosts_count;dns_hosts_i++));
         do
-            dns_hosts_list="$dns_hosts_list$((dns_hosts_i+1)). 域名: $green${dns_hosts_domain[dns_hosts_i]}${normal} 地址: $green${dns_hosts_address[dns_hosts_i]}${normal}\n\033[6C"
+            dns_hosts_list="$dns_hosts_list$((dns_hosts_i+1)). 域名: $green${dns_hosts_domain[dns_hosts_i]}${normal} 地址: $green${dns_hosts_address[dns_hosts_i]}${normal}\n${indent_6}"
         done
     fi
     if [ "$dns_servers_count" -eq 0 ] 
@@ -29572,19 +29219,19 @@ V2rayListDns()
             then
                 if [ -z "${BASH_REMATCH[3]}" ] 
                 then
-                    dns_server_domain_list="使用的域名: $red未设置${normal}\n\033[6C"
+                    dns_server_domain_list="使用的域名: $red未设置${normal}\n${indent_6}"
                 else
-                    dns_server_domain_list="使用的域名: $green${BASH_REMATCH[3]}${normal}\n\033[6C"
+                    dns_server_domain_list="使用的域名: $green${BASH_REMATCH[3]}${normal}\n${indent_6}"
                 fi
                 if [ -z "${BASH_REMATCH[4]}" ] 
                 then
-                    dns_server_expect_ips_list="IP 范围: $red未设置${normal}\n\033[6C"
+                    dns_server_expect_ips_list="IP 范围: $red未设置${normal}\n${indent_6}"
                 else
-                    dns_server_expect_ips_list="IP 范围: $green${BASH_REMATCH[4]}${normal}\n\033[6C"
+                    dns_server_expect_ips_list="IP 范围: $green${BASH_REMATCH[4]}${normal}\n${indent_6}"
                 fi
-                dns_servers_list="$dns_servers_list$((dns_servers_i+1)).\r\033[6C服务器地址: $green${BASH_REMATCH[1]}${normal} 端口: $green${BASH_REMATCH[2]:-53}${normal}\n\033[6C$dns_server_domain_list$dns_server_expect_ips_list"
+                dns_servers_list="$dns_servers_list$((dns_servers_i+1)).${indent_6}服务器地址: $green${BASH_REMATCH[1]}${normal} 端口: $green${BASH_REMATCH[2]:-53}${normal}\n${indent_6}$dns_server_domain_list$dns_server_expect_ips_list"
             else
-                dns_servers_list="$dns_servers_list$((dns_servers_i+1)).\r\033[6C服务器地址: $green${dns_servers[dns_servers_i]}${normal} 端口: ${green}53${normal}\n\033[6C"
+                dns_servers_list="$dns_servers_list$((dns_servers_i+1)).${indent_6}服务器地址: $green${dns_servers[dns_servers_i]}${normal} 端口: ${green}53${normal}\n${indent_6}"
             fi
         done
     fi
@@ -29606,31 +29253,19 @@ V2raySetDns()
     if [ "$set_dns_option" == "添加静态 IP" ] 
     then
         Println "$tip 格式如 v2ray.com, regexp:xxx, domain:xxx, keyword:xxx, geosite:cn"
-        inquirer text_input "输入域名" hosts_domain "取消"
-        if [ "$hosts_domain" == "取消" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        inquirer text_input "输入域名" hosts_domain "$i18n_cancel"
+        ExitOnCancel hosts_domain
         Println "$tip 格式如 127.0.0.1, v2ray.com, regexp:xxx, domain:xxx, keyword:xxx, geosite:cn"
-        inquirer text_input "输入地址" hosts_address "取消"
-        if [ "$hosts_address" == "取消" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        inquirer text_input "输入地址" hosts_address "$i18n_cancel"
+        ExitOnCancel hosts_address
         jq_path='["dns","hosts","'"$hosts_domain"'"]'
         JQ replace "$V2_CONFIG" \""$hosts_address"\"
         Println "$info 静态 IP 添加成功\n"
     elif [ "$set_dns_option" == "添加 dns 服务器" ] 
     then
         Println "$tip 格式如: localhost, 8.8.8.8, https://host:port/dns-query, https+local://host:port/dns-query"
-        inquirer text_input "输入服务器地址: " dns_server_address "取消"
-        if [ "$dns_server_address" == "取消" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        inquirer text_input "输入服务器地址: " dns_server_address "$i18n_cancel"
+        ExitOnCancel dns_server_address
         if [ "$dns_server_address" == "localhost" ] || [[ $dns_server_address =~ ^http ]]
         then
             jq_path='["dns","servers"]'
@@ -29710,24 +29345,16 @@ V2raySetDns()
     elif [ "$set_dns_option" == "设置用于 dns 查询的 IP 地址" ] 
     then
         Println "$tip 用于 DNS 查询时通知服务器客户端的所在位置, 不能是私有地址"
-        inquirer text_input "输入 IP 地址: " dns_client_ip "取消"
-        if [ "$dns_client_ip" == "取消" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        inquirer text_input "输入 IP 地址: " dns_client_ip "$i18n_cancel"
+        ExitOnCancel dns_client_ip
         jq_path='["dns","clientIp"]'
         JQ replace "$V2_CONFIG" \""$dns_client_ip"\"
         Println "$info IP 地址设置成功\n"
     elif [ "$set_dns_option" == "设置 dns 标签" ] 
     then
         Println "$tip 可在路由使用 inboundTag 进行匹配"
-        inquirer text_input "输入 dns 标签: " dns_tag "取消"
-        if [ "$dns_tag" == "取消" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        inquirer text_input "输入 dns 标签: " dns_tag "$i18n_cancel"
+        ExitOnCancel dns_tag
         jq_path='["dns","tag"]'
         JQ replace "$V2_CONFIG" \""$dns_tag"\"
         Println "$info dns 标签设置成功\n"
@@ -29736,12 +29363,8 @@ V2raySetDns()
         V2rayListDns
         [ "$dns_hosts_count" -eq 0 ] && exit 1
         echo
-        inquirer text_input "输入静态 IP 序号: " dns_host_num "取消"
-        if [ "$dns_host_num" == "取消" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        inquirer text_input "输入静态 IP 序号: " dns_host_num "$i18n_cancel"
+        ExitOnCancel dns_host_num
         dns_host_index=$((dns_host_num-1))
         jq_path='["dns","hosts","'"${dns_hosts_domain[dns_host_index]}"'"]'
         JQ delete "$V2_CONFIG"
@@ -29750,12 +29373,8 @@ V2raySetDns()
         V2rayListDns
         [ "$dns_servers_count" -eq 0 ] && exit 1
         echo
-        inquirer text_input "输入 dns 服务器序号: " dns_server_num "取消"
-        if [ "$dns_server_num" == "取消" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        inquirer text_input "输入 dns 服务器序号: " dns_server_num "$i18n_cancel"
+        ExitOnCancel dns_server_num
         dns_server_index=$((dns_server_num-1))
         jq_path='["dns","servers"]'
         JQ delete "$V2_CONFIG" "$dns_server_index"
@@ -29921,9 +29540,8 @@ V2rayListStats()
     Println "$stats_list"
 
     echo
-    yn_options=( '否' '是' )
-    inquirer list_input "查看特定用户的流量" yn_options continue_yn
-    if [ "$continue_yn" == "否" ] 
+    inquirer list_input "查看特定用户的流量" ny_options continue_yn
+    if [ "$continue_yn" == "$i18n_no" ] 
     then
         echo
     else
@@ -29984,13 +29602,7 @@ V2rayListStats()
 V2rayResetStats()
 {
     V2rayGetStats
-    yn_options=( '否' '是' )
-    inquirer list_input "将重置所有的流量统计" yn_options continue_yn
-    if [ "$continue_yn" == "否" ] 
-    then
-        Println "已取消...\n"
-        exit 1
-    fi
+    AskIfContinue n "`gettext \"将重置所有的流量统计\"`"
     $V2CTL_FILE api --server=$api_inbound_listen:$api_inbound_port StatsService.QueryStats 'pattern: "" reset: true'
 }
 
@@ -30016,11 +29628,11 @@ V2rayListDomains()
             else
                 v2ray_domain_status_text="v2ray: $red关闭${normal}"
             fi
-            v2ray_domains_list="$v2ray_domains_list $green$v2ray_domains_count.${normal}\r\033[6C$domain    $v2ray_domain_status_text\n\n"
+            v2ray_domains_list="$v2ray_domains_list $green$v2ray_domains_count.${normal}${indent_6}$domain    $v2ray_domain_status_text\n\n"
         done
     fi
     v2ray_add_domain_num=$((v2ray_domains_count+1))
-    Println "$green域名列表:${normal}\n\n${v2ray_domains_list:-无\n\n} $green$v2ray_add_domain_num.${normal}\r\033[6C添加域名\n\n"
+    Println "$green域名列表:${normal}\n\n${v2ray_domains_list:-无\n\n} $green$v2ray_add_domain_num.${normal}${indent_6}添加域名\n\n"
 }
 
 V2rayListInboundDomains()
@@ -30071,7 +29683,7 @@ V2rayListInboundDomains()
                                 v2ray_domains_inbound_count=$((v2ray_domains_inbound_count+1))
                                 v2ray_domains_inbound+=("$domain")
                                 v2ray_domains_inbound_https_port+=("$server_ports")
-                                v2ray_domains_inbound_list=$v2ray_domains_inbound_list"$green$v2ray_domains_inbound_count.${normal}\r\033[6C域名: $green$domain${normal}, nginx 端口: $green$server_ports${normal} nginx 路径: $green${inbounds_stream_path[inbounds_index]}${normal} 状态: $v2ray_status_text\n\n"
+                                v2ray_domains_inbound_list=$v2ray_domains_inbound_list"$green$v2ray_domains_inbound_count.${normal}${indent_6}域名: $green$domain${normal}, nginx 端口: $green$server_ports${normal} nginx 路径: $green${inbounds_stream_path[inbounds_index]}${normal} 状态: $v2ray_status_text\n\n"
                             fi
                         fi
                     fi
@@ -30143,7 +29755,7 @@ V2rayListDomain()
                     else
                         v2ray_port_status="$red关闭${normal}"
                     fi
-                    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_servers_count.${normal}\r\033[6Chttps 端口: $green$https_ports${normal}, $v2ray_name 端口: $v2ray_port_status\n\n"
+                    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_servers_count.${normal}${indent_6}https 端口: $green$https_ports${normal}, $v2ray_name 端口: $v2ray_port_status\n\n"
                 fi
             fi
         fi
@@ -30178,10 +29790,10 @@ V2rayListDomain()
     v2ray_domain_add_server_number=$((v2ray_domain_servers_count+2))
     v2ray_domain_edit_server_number=$((v2ray_domain_servers_count+3))
     v2ray_domain_delete_server_number=$((v2ray_domain_servers_count+4))
-    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_update_crt_number.${normal}\r\033[6C更新证书\n\n"
-    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_add_server_number.${normal}\r\033[6C添加配置\n\n"
-    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_edit_server_number.${normal}\r\033[6C修改配置\n\n"
-    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_delete_server_number.${normal}\r\033[6C删除配置\n\n"
+    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_update_crt_number.${normal}${indent_6}更新证书\n\n"
+    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_add_server_number.${normal}${indent_6}添加配置\n\n"
+    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_edit_server_number.${normal}${indent_6}修改配置\n\n"
+    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_delete_server_number.${normal}${indent_6}删除配置\n\n"
 
     Println "域名 $green${v2ray_domains[v2ray_domains_index]}${normal} 配置:\n\n$v2ray_domain_list"
 }
@@ -30242,7 +29854,7 @@ V2rayAddDomain()
 
     Println "输入指向本机的域名"
     echo -e "$tip 多个域名用空格分隔\n"
-    read -p "(默认: 取消): " server_domain
+    read -p "$i18n_default_cancel" server_domain
 
     if [ -n "$server_domain" ] 
     then
@@ -30288,7 +29900,7 @@ V2rayAddDomain()
         [ "$updated" -eq 1 ] && NginxBuildConf parse_out
         Println "$info 域名 $server_domain 添加完成...\n"
     else
-        Println "已取消...\n" && exit 1
+        Println "$i18n_canceled...\n" && exit 1
     fi
 }
 
@@ -30517,19 +30129,19 @@ V2rayConfigDomain()
 
     V2rayListDomains
 
-    echo "输入序号"
-    while read -p "(默认: 取消): " v2ray_domains_index
+    echo "`gettext \"输入序号\"`"
+    while read -p "$i18n_default_cancel" v2ray_domains_index
     do
         case "$v2ray_domains_index" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             $v2ray_add_domain_num)
                 V2rayAddDomain
                 exit
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$v2ray_domains_index" -gt 0 ] && [ "$v2ray_domains_index" -lt "$v2ray_add_domain_num" ]
@@ -30537,7 +30149,7 @@ V2rayConfigDomain()
                     v2ray_domains_index=$((v2ray_domains_index-1))
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -30545,12 +30157,12 @@ V2rayConfigDomain()
 
     V2rayListDomain
 
-    echo "输入序号"
-    while read -p "(默认: 取消): " v2ray_domain_server_num
+    echo "`gettext \"输入序号\"`"
+    while read -p "$i18n_default_cancel" v2ray_domain_server_num
     do
         case "$v2ray_domain_server_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             $v2ray_domain_update_crt_number)
                 V2rayDomainUpdateCrt
@@ -30569,7 +30181,7 @@ V2rayConfigDomain()
                 exit 0
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$v2ray_domain_server_num" -gt 0 ] && [ "$v2ray_domain_server_num" -le "$v2ray_domain_servers_count" ]
@@ -30577,7 +30189,7 @@ V2rayConfigDomain()
                     v2ray_domain_server_index=$((v2ray_domain_server_num-1))
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -30599,11 +30211,11 @@ V2rayConfigDomain()
     \n"
     fi
 
-    while read -p "(默认: 取消): " v2ray_domain_server_action_num 
+    while read -p "$i18n_default_cancel" v2ray_domain_server_action_num 
     do
         case $v2ray_domain_server_action_num in
             "") 
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             1) 
                 V2rayDomainServerEditHttpsPort
@@ -30633,17 +30245,11 @@ TrojanInstall()
     if [ -s "$TR_CONFIG" ] 
     then
         Println "$error $trojan_name 已存在...\n"
-        yn_options=( '否' '是' )
-        inquirer list_input "是否覆盖原安装" yn_options yn_option
-        if [ "$yn_option" == "否" ] 
-        then
-            Println "已取消...\n"
-            exit 1
-        fi
+        AskIfContinue n "`gettext \"是否覆盖原安装\"`"
     fi
 
     DepsCheck
-    InstallJQ
+    JQInstall
 
     if ! grep -q "$trojan_name:" < "/etc/passwd"
     then
@@ -30675,11 +30281,11 @@ TrojanInstall()
     Println "$info $trojan_name 安装完成\n"
 }
 
-SetCloudflareHostKey()
+CloudflareSetHostKey()
 {
     Println "请输入 CFP host key"
-    read -p "(默认: 取消): " cf_host_key
-    [ -z "$cf_host_key" ] && Println "已取消...\n" && exit 1
+    read -p "$i18n_default_cancel" cf_host_key
+    [ -z "$cf_host_key" ] && Println "$i18n_canceled...\n" && exit 1
     Println "$info 稍等..."
     IFS=" " read -r result msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
         -d 'act=zone_list' \
@@ -30702,18 +30308,18 @@ SetCloudflareHostKey()
     Println "  CFP: $green $cf_host_key ${normal}\n"
 }
 
-SetCloudflareHostName()
+CloudflareSetHostName()
 {
     Println "请输入 CFP 邮箱或名称, 便于区分 host key"
-    read -p "(默认: 取消): " cf_host_name
-    [ -z "$cf_host_name" ] && Println "已取消...\n" && exit 1
+    read -p "$i18n_default_cancel" cf_host_name
+    [ -z "$cf_host_name" ] && Println "$i18n_canceled...\n" && exit 1
     Println "  CFP 邮箱或名称: $green $cf_host_name ${normal}\n"
 }
 
-AddCloudflareHost()
+CloudflareAddHost()
 {
-    SetCloudflareHostKey
-    SetCloudflareHostName
+    CloudflareSetHostKey
+    CloudflareSetHostName
 
     if [ ! -s "$CF_CONFIG" ] 
     then
@@ -30735,12 +30341,12 @@ AddCloudflareHost()
     Println "$info CFP 添加成功\n"
 }
 
-SetCloudflareUserEmail()
+CloudflareSetUserEmail()
 {
     Println "请输入用户邮箱"
-    while read -p "(默认: 取消): " cf_user_email 
+    while read -p "$i18n_default_cancel" cf_user_email 
     do
-        [ -z "$cf_user_email" ] && Println "已取消...\n" && exit 1
+        [ -z "$cf_user_email" ] && Println "$i18n_canceled...\n" && exit 1
         if [[ $cf_user_email =~ ^[A-Za-z0-9]([a-zA-Z0-9_\.\-]*)@([A-Za-z0-9]+)([a-zA-Z0-9\.\-]*)\.([A-Za-z]{2,})$ ]] 
         then
             break
@@ -30751,7 +30357,7 @@ SetCloudflareUserEmail()
     Println "  用户邮箱: $green $cf_user_email ${normal}\n"
 }
 
-SetCloudflareUserPass()
+CloudflareSetUserPass()
 {
     Println "输入用户密码"
     while read -p "(默认: 随机): " cf_user_pass 
@@ -30767,7 +30373,7 @@ SetCloudflareUserPass()
     Println "  用户密码: $green $cf_user_pass ${normal}\n"
 }
 
-SetCloudflareUserToken()
+CloudflareSetUserToken()
 {
     Println "$tip 需要 workers 和 zone(区域) 编辑权限, 以及 zone(区域) 的 Analytics 读取权限"
     inquirer text_input "请输入用户 Token: " cf_user_token "不设置"
@@ -30785,7 +30391,7 @@ SetCloudflareUserToken()
     fi
 }
 
-SetCloudflareUserKey()
+CloudflareSetUserKey()
 {
     echo
     inquirer text_input "请输入用户 Global API KEY: " cf_user_api_key "不设置"
@@ -30795,7 +30401,7 @@ SetCloudflareUserKey()
     fi
 }
 
-GetCloudflareHosts()
+CloudflareGetHosts()
 {
     cf_hosts_list=""
     cf_hosts_count=0
@@ -30826,19 +30432,19 @@ GetCloudflareHosts()
         zone_subdomains=${zone_subdomains%\"}
         cf_hosts_zone_subdomains+=("$zone_subdomains")
 
-        cf_hosts_list="$cf_hosts_list $green$cf_hosts_count.${normal}\r\033[6CCFP: $green$name${normal}  host key: $green$key${normal}  域名数: $green$zones_count${normal}\n\n"
+        cf_hosts_list="$cf_hosts_list $green$cf_hosts_count.${normal}${indent_6}CFP: $green$name${normal}  host key: $green$key${normal}  域名数: $green$zones_count${normal}\n\n"
     done < <($JQ_FILE '.hosts[]|[.name,.key,(.zones|length),([.zones[].name]|join("|")),([.zones[].resolve_to]|join("|")),([.zones[].user_email]|join("|")),([.zones[].user_unique_id]|join("|")),([.zones[].always_use_https]|join("|")),([.zones[].ssl]|join("|")),([.zones[].subdomains]|join("|"))]|join("^")' "$CF_CONFIG")
     return 0
 }
 
-ListCloudflareHosts()
+CloudflareListHosts()
 {
     if [ ! -s "$CF_CONFIG" ] 
     then
         Println "$error 请先添加 CFP\n" && exit 1
     fi
 
-    GetCloudflareHosts
+    CloudflareGetHosts
 
     if [ "$cf_hosts_count" -gt 0 ] 
     then
@@ -30848,32 +30454,31 @@ ListCloudflareHosts()
     fi
 }
 
-ViewCloudflareHost()
+CloudflareListHost()
 {
-    ListCloudflareHosts
+    CloudflareListHosts
 }
 
-SetCloudflareZoneResolve()
+CloudflareSetZoneResolve()
 {
     Println "请输入 CNAME 经 cloudflare 中转后默认解析到的地址, 比如 resolve-to-cloudflare.example.com"
     echo -e "$tip 此地址应指向源站\n"
-    read -p "(默认: 取消): " cf_zone_resolve_to
-    [ -z "$cf_zone_resolve_to" ] && Println "已取消...\n" && exit 1
+    read -p "$i18n_default_cancel" cf_zone_resolve_to
+    [ -z "$cf_zone_resolve_to" ] && Println "$i18n_canceled...\n" && exit 1
     Println "  默认解析地址: $green $cf_zone_resolve_to ${normal}\n"
 }
 
-SetCloudflareZoneAlwaysUseHttps()
+CloudflareSetZoneAlwaysUseHttps()
 {
     echo
     if [[ ${cf_zone_always_use_https:-} == "on" ]] 
     then
-        yn_options=( '是' '否' )
+        inquirer list_input "始终使用 https 访问域名, 开启后客户端和 cloudflare 之间连接始终为 https" yn_options cf_zone_always_use_https_yn
     else
-        yn_options=( '否' '是' )
+        inquirer list_input "始终使用 https 访问域名, 开启后客户端和 cloudflare 之间连接始终为 https" ny_options cf_zone_always_use_https_yn
     fi
-    inquirer list_input "始终使用 https 访问域名, 开启后客户端和 cloudflare 之间连接始终为 https" yn_options cf_zone_always_use_https_yn
 
-    if [[ $cf_zone_always_use_https_yn == "是" ]] 
+    if [[ $cf_zone_always_use_https_yn == "$i18n_yes" ]] 
     then
         cf_zone_always_use_https='on'
     else
@@ -30882,7 +30487,7 @@ SetCloudflareZoneAlwaysUseHttps()
     Println "  始终使用 https: $green $cf_zone_always_use_https ${normal}\n"
 }
 
-SetCloudflareZoneSsl()
+CloudflareSetZoneSsl()
 {
     Println "选择域名 $green$cf_zone_name${normal} SSL 设置
 
@@ -30921,14 +30526,14 @@ SetCloudflareZoneSsl()
                 break
             ;;
             *) 
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
         esac
     done
     Println "  SSL 设置: $green $cf_zone_ssl ${normal}\n"
 }
 
-GetCloudflareUsers()
+CloudflareGetUsers()
 {
     cf_users_list=""
     cf_users_count=0
@@ -30946,19 +30551,19 @@ GetCloudflareUsers()
         key=${key%\"}
         cf_users_api_key+=("$key")
 
-        cf_users_list="$cf_users_list $green$cf_users_count.${normal}\r\033[6C邮箱: $green$email${normal}  密码: $green$pass${normal}\n\033[6CToken: $green${token:-无}${normal}\n\033[6CKey: $green${key:-无}${normal}\n\n"
+        cf_users_list="$cf_users_list $green$cf_users_count.${normal}${indent_6}邮箱: $green$email${normal}  密码: $green$pass${normal}\n${indent_6}Token: $green${token:-无}${normal}\n${indent_6}Key: $green${key:-无}${normal}\n\n"
     done < <($JQ_FILE '.users[]|[.email,.pass,.token,.key]|join("^")' "$CF_CONFIG")
     return 0
 }
 
-ListCloudflareUsers()
+CloudflareListUsers()
 {
     if [ ! -s "$CF_CONFIG" ] 
     then
         Println "$error 请先添加用户\n" && exit 1
     fi
 
-    GetCloudflareUsers
+    CloudflareGetUsers
 
     if [ "$cf_users_count" -gt 0 ] 
     then
@@ -30968,12 +30573,12 @@ ListCloudflareUsers()
     fi
 }
 
-AddCloudflareUser()
+CloudflareAddUser()
 {
-    SetCloudflareUserEmail
-    SetCloudflareUserPass
-    SetCloudflareUserToken
-    SetCloudflareUserKey
+    CloudflareSetUserEmail
+    CloudflareSetUserPass
+    CloudflareSetUserToken
+    CloudflareSetUserKey
 
     if [ ! -s "$CF_CONFIG" ] 
     then
@@ -30996,19 +30601,19 @@ AddCloudflareUser()
     Println "$info 用户添加成功\n"
 }
 
-ViewCloudflareUser()
+CloudflareListUser()
 {
-    ListCloudflareUsers
+    CloudflareListUsers
 
     echo -e "选择用户"
-    while read -p "(默认: 取消): " cf_users_num
+    while read -p "$i18n_default_cancel" cf_users_num
     do
         case "$cf_users_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
@@ -31020,7 +30625,7 @@ ViewCloudflareUser()
                     cf_user_api_key=${cf_users_api_key[cf_users_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -31103,9 +30708,9 @@ ViewCloudflareUser()
     Println "$info workers 访问总数: $cf_workers_requests\n"
 }
 
-AddCloudflareZone()
+CloudflareAddZone()
 {
-    GetCloudflareUsers
+    CloudflareGetUsers
 
     if [ "$cf_users_count" -eq 0 ] 
     then
@@ -31113,17 +30718,17 @@ AddCloudflareZone()
         exit 1
     fi
 
-    ListCloudflareHosts
+    CloudflareListHosts
 
     echo -e "选择 CFP"
-    while read -p "(默认: 取消): " cf_hosts_num
+    while read -p "$i18n_default_cancel" cf_hosts_num
     do
         case "$cf_hosts_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_hosts_num" -gt 0 ] && [ "$cf_hosts_num" -le "$cf_hosts_count" ]
@@ -31135,7 +30740,7 @@ AddCloudflareZone()
                     IFS="|" read -r -a cf_host_zones_name <<< "$cf_host_zone_name"
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -31144,14 +30749,14 @@ AddCloudflareZone()
     Println "$cf_users_list"
 
     echo -e "选择用户"
-    while read -p "(默认: 取消): " cf_users_num
+    while read -p "$i18n_default_cancel" cf_users_num
     do
         case "$cf_users_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
@@ -31161,7 +30766,7 @@ AddCloudflareZone()
                     cf_user_pass=${cf_users_pass[cf_users_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -31192,11 +30797,11 @@ AddCloudflareZone()
 
     Println "请输入根域名"
     echo -e "$tip 如果域名已经由 cloudflare 解析, 请先到官方 cloudflare 面板中删除\n"
-    while read -p "(默认: 取消): " cf_zone_name
+    while read -p "$i18n_default_cancel" cf_zone_name
     do
         if [ -z "$cf_zone_name" ] 
         then
-            Println "已取消...\n"
+            Println "$i18n_canceled...\n"
             exit 1
         elif [[ $cf_zone_name =~ ^([a-zA-Z0-9][\-a-zA-Z0-9]*\.)+[\-a-zA-Z0-9]{2,20}$ ]] 
         then
@@ -31216,9 +30821,9 @@ AddCloudflareZone()
         fi
     done
 
-    SetCloudflareZoneResolve
-    SetCloudflareZoneAlwaysUseHttps
-    SetCloudflareZoneSsl
+    CloudflareSetZoneResolve
+    CloudflareSetZoneAlwaysUseHttps
+    CloudflareSetZoneSsl
 
     new_zone=$(
     $JQ_FILE -n --arg name "$cf_zone_name" --arg resolve_to "$cf_zone_resolve_to" \
@@ -31239,19 +30844,19 @@ AddCloudflareZone()
     Println "$info 源站添加成功\n"
 }
 
-ListCloudflareZones()
+CloudflareListZones()
 {
-    ListCloudflareHosts
+    CloudflareListHosts
 
     echo -e "选择 CFP"
-    while read -p "(默认: 取消): " cf_hosts_num
+    while read -p "$i18n_default_cancel" cf_hosts_num
     do
         case "$cf_hosts_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_hosts_num" -gt 0 ] && [ "$cf_hosts_num" -le "$cf_hosts_count" ]
@@ -31276,7 +30881,7 @@ ListCloudflareZones()
                     IFS="|" read -r -a cf_zones_subdomains <<< "${cf_zone_subdomains}|"
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -31285,7 +30890,7 @@ ListCloudflareZones()
     cf_zones_list=""
     for((i=0;i<cf_zones_count;i++));
     do
-        cf_zones_list="$cf_zones_list $green$((i+1)).${normal}\r\033[6C源站: $green${cf_zones_name[i]}${normal} 用户: $green${cf_zones_user_email[i]}${normal}\n\033[6C始终 https: $green${cf_zones_always_use_https[i]:-off}${normal}  ssl: $green${cf_zones_ssl[i]:-flexible}${normal}\n\n"
+        cf_zones_list="$cf_zones_list $green$((i+1)).${normal}${indent_6}源站: $green${cf_zones_name[i]}${normal} 用户: $green${cf_zones_user_email[i]}${normal}\n${indent_6}始终 https: $green${cf_zones_always_use_https[i]:-off}${normal}  ssl: $green${cf_zones_ssl[i]:-flexible}${normal}\n\n"
     done
 
     [ -z "$cf_zones_list" ] && Println "$error 请先添加源站\n" && exit 1
@@ -31293,12 +30898,12 @@ ListCloudflareZones()
     Println "$cf_zones_list"
 }
 
-ViewCloudflareZone()
+CloudflareListZone()
 {
-    ListCloudflareZones
+    CloudflareListZones
 }
 
-GetCloudflareZoneInfo()
+CloudflareGetZone()
 {
     IFS="^" read -r result cf_zone_hosted_cnames cf_zone_forward_tos cf_zone_ssl_status cf_zone_ssl_meta_tag msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
         -d 'act=zone_lookup' \
@@ -31344,19 +30949,19 @@ GetCloudflareZoneInfo()
     done
 }
 
-MoveCloudflareZone()
+CloudflareMoveZone()
 {
-    ListCloudflareZones
+    CloudflareListZones
 
     echo -e "选择源站"
-    while read -p "(默认: 取消): " cf_zones_num
+    while read -p "$i18n_default_cancel" cf_zones_num
     do
         case "$cf_zones_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_zones_num" -gt 0 ] && [ "$cf_zones_num" -le "$cf_zones_count" ]
@@ -31371,15 +30976,15 @@ MoveCloudflareZone()
                     cf_zone_subdomains=${cf_zones_subdomains[cf_zones_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
     done
 
-    GetCloudflareUserInfo
+    CloudflareGetUser
 
-    GetCloudflareZoneInfo
+    CloudflareGetZone
 
     Println "$info 删除源站 ..."
 
@@ -31409,17 +31014,17 @@ MoveCloudflareZone()
         Println "$info $cf_zone_name 删除成功"
     fi
 
-    ListCloudflareHosts
+    CloudflareListHosts
 
     echo -e "选择移动到的 CFP"
-    while read -p "(默认: 取消): " cf_hosts_num
+    while read -p "$i18n_default_cancel" cf_hosts_num
     do
         case "$cf_hosts_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_hosts_num" -gt 0 ] && [ "$cf_hosts_num" -le "$cf_hosts_count" ]
@@ -31431,7 +31036,7 @@ MoveCloudflareZone()
                     IFS="|" read -r -a cf_host_zones_name <<< "$cf_host_zone_name"
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -31446,19 +31051,19 @@ MoveCloudflareZone()
         fi
     done
 
-    GetCloudflareUsers
+    CloudflareGetUsers
 
     Println "$cf_users_list"
 
     echo -e "选择移动到的用户"
-    while read -p "(默认: 取消): " cf_users_num
+    while read -p "$i18n_default_cancel" cf_users_num
     do
         case "$cf_users_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
@@ -31469,7 +31074,7 @@ MoveCloudflareZone()
                     cf_user_api_key=${cf_users_api_key[cf_users_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -31541,7 +31146,7 @@ MoveCloudflareZone()
         subdomains="$subdomains$cf_hosted_cname_prefix:${cf_resolve_tos[i]}"
     done
 
-    GetCloudflareUserInfo
+    CloudflareGetUser
 
     IFS="^" read -r result cf_zone_resolving_to cf_zone_hosted_cnames cf_zone_forward_tos msg < <(curl -s -Lm 20 https://api.cloudflare.com/host-gw.html \
         -d 'act=zone_set' \
@@ -31568,7 +31173,7 @@ MoveCloudflareZone()
     Println "$info 源站移动成功\n"
 }
 
-GetCloudflareUserInfo()
+CloudflareGetUser()
 {
     cf_user_key=""
     add_subdomains=0
@@ -31607,7 +31212,7 @@ GetCloudflareUserInfo()
 
             if [ -z "${cf_user_pass:-}" ] 
             then
-                GetCloudflareUsers
+                CloudflareGetUsers
                 for((cf_users_i=0;cf_users_i<cf_users_count;cf_users_i++));
                 do
                     if [ "${cf_users_email[cf_users_i]}" == "$cf_user_email" ] 
@@ -31668,19 +31273,19 @@ GetCloudflareUserInfo()
     done
 }
 
-AddCloudflareSubdomain()
+CloudflareAddSubdomain()
 {
-    ListCloudflareZones
+    CloudflareListZones
 
     echo -e "选择源站"
-    while read -p "(默认: 取消): " cf_zones_num
+    while read -p "$i18n_default_cancel" cf_zones_num
     do
         case "$cf_zones_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_zones_num" -gt 0 ] && [ "$cf_zones_num" -le "$cf_zones_count" ]
@@ -31695,7 +31300,7 @@ AddCloudflareSubdomain()
                     cf_zone_subdomains=${cf_zones_subdomains[cf_zones_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -31705,11 +31310,11 @@ AddCloudflareSubdomain()
 
     #[ -z "$cf_user_pass" ] && Println "$error 用户 $cf_user_email 不存在\n" && exit 1
 
-    GetCloudflareUserInfo
+    CloudflareGetUser
 
     Println "请输入子域名前缀, 比如 www, 多个前缀用空格分隔"
-    read -p "(默认: 取消): " cf_zone_subdomains_prefix_input
-    [ -z "$cf_zone_subdomains_prefix_input" ] && Println "已取消...\n" && exit 1
+    read -p "$i18n_default_cancel" cf_zone_subdomains_prefix_input
+    [ -z "$cf_zone_subdomains_prefix_input" ] && Println "$i18n_canceled...\n" && exit 1
     Println "  子域名: $green $cf_zone_subdomains_prefix_input ${normal}\n"
 
     IFS=" " read -r -a cf_zone_subdomains_prefix <<< "$cf_zone_subdomains_prefix_input"
@@ -31722,7 +31327,7 @@ AddCloudflareSubdomain()
         cf_zone_subdomains_resolve_to+=("$cf_zone_subdomain_resolve_to")
     done
 
-    GetCloudflareZoneInfo
+    CloudflareGetZone
     for((i=0;i<${#cf_hosted_cnames[@]};i++));
     do
         if [[ ${cf_hosted_cnames[i]} =~ ^([^.]+).([^.]+)$ ]] 
@@ -31857,19 +31462,19 @@ AddCloudflareSubdomain()
     Println "$info 子域名添加成功\n"
 }
 
-ViewCloudflareSubdomain()
+CloudflareListSubdomain()
 {
-    ListCloudflareZones
+    CloudflareListZones
 
     echo -e "选择源站"
-    while read -p "(默认: 取消): " cf_zones_num
+    while read -p "$i18n_default_cancel" cf_zones_num
     do
         case "$cf_zones_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_zones_num" -gt 0 ] && [ "$cf_zones_num" -le "$cf_zones_count" ]
@@ -31882,7 +31487,7 @@ ViewCloudflareSubdomain()
                     cf_zone_subdomains=${cf_zones_subdomains[cf_zones_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -31892,13 +31497,13 @@ ViewCloudflareSubdomain()
 
     #[ -z "$cf_user_pass" ] && Println "$error 用户 $cf_user_email 不存在\n" && exit 1
 
-    GetCloudflareUserInfo
-    GetCloudflareZoneInfo
+    CloudflareGetUser
+    CloudflareGetZone
 
     cf_subdomains_list=""
     for((i=0;i<${#cf_hosted_cnames[@]};i++));
     do
-        cf_subdomains_list="$cf_subdomains_list $green$((i+1)).${normal}\r\033[6CCNAME: $green${cf_hosted_cnames[i]}${normal} => $green${cf_forward_tos[i]}${normal}\n\033[6C解析地址: $green${cf_resolve_tos[i]}${normal}\n\n"
+        cf_subdomains_list="$cf_subdomains_list $green$((i+1)).${normal}${indent_6}CNAME: $green${cf_hosted_cnames[i]}${normal} => $green${cf_forward_tos[i]}${normal}\n${indent_6}解析地址: $green${cf_resolve_tos[i]}${normal}\n\n"
     done
 
     if [ -z "$cf_subdomains_list" ] 
@@ -31930,12 +31535,12 @@ ViewCloudflareSubdomain()
                 Println "$error ${msg:-连接超时, 请查看是否已经完成}\n"
             fi
 
-            GetCloudflareZoneInfo
+            CloudflareGetZone
 
             cf_subdomains_list=""
             for((i=0;i<${#cf_hosted_cnames[@]};i++));
             do
-                cf_subdomains_list="$cf_subdomains_list $green$((i+1)).${normal}\r\033[6CCNAME: $green${cf_hosted_cnames[i]}${normal} => $green${cf_forward_tos[i]}${normal}\n\033[6C解析地址: $green${cf_resolve_tos[i]}${normal}\n\n"
+                cf_subdomains_list="$cf_subdomains_list $green$((i+1)).${normal}${indent_6}CNAME: $green${cf_hosted_cnames[i]}${normal} => $green${cf_forward_tos[i]}${normal}\n${indent_6}解析地址: $green${cf_resolve_tos[i]}${normal}\n\n"
             done
 
             if [ "$cf_zone_ssl_status" == "ready" ] 
@@ -31971,19 +31576,19 @@ ViewCloudflareSubdomain()
     Println "${cf_subdomains_list}$ssl_status$ssl_meta_tag"
 }
 
-DelCloudflareZone()
+CloudflareDelZone()
 {
-    ListCloudflareZones
+    CloudflareListZones
 
     echo -e "选择源站"
-    while read -p "(默认: 取消): " cf_zones_num
+    while read -p "$i18n_default_cancel" cf_zones_num
     do
         case "$cf_zones_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_zones_num" -gt 0 ] && [ "$cf_zones_num" -le "$cf_zones_count" ]
@@ -31996,13 +31601,13 @@ DelCloudflareZone()
                     cf_zone_subdomains=${cf_zones_subdomains[cf_zones_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
     done
 
-    GetCloudflareUserInfo
+    CloudflareGetUser
     Println "$info 稍等..."
     IFS="^" read -r result err_code msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
         -d 'act=zone_delete' \
@@ -32024,16 +31629,11 @@ DelCloudflareZone()
             Println "$error ${msg:-超时, 请重试}\n"
         fi
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "是否仍要删除此源站, 只有这里和官网都删除才能重新添加此源站" yn_options del_zone_yn
-        if [[ $del_zone_yn == "是" ]] 
-        then
-            jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
-            JQ delete "$CF_CONFIG" "$cf_zones_index"
-            Println "$info $cf_zone_name 删除成功\n"
-        else
-            Println "已取消...\n"
-        fi
+        AskIfContinue n "`gettext \"是否仍要删除此源站, 只有这里和官网都删除才能重新添加此源站\"`"
+
+        jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
+        JQ delete "$CF_CONFIG" "$cf_zones_index"
+        Println "$info $cf_zone_name 删除成功\n"
     else
         jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
         JQ delete "$CF_CONFIG" "$cf_zones_index"
@@ -32041,19 +31641,19 @@ DelCloudflareZone()
     fi
 }
 
-DelCloudflareHost()
+CloudflareDelHost()
 {
-    ListCloudflareHosts
+    CloudflareListHosts
 
     echo -e "选择 CFP"
-    while read -p "(默认: 取消): " cf_hosts_num
+    while read -p "$i18n_default_cancel" cf_hosts_num
     do
         case "$cf_hosts_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_hosts_num" -gt 0 ] && [ "$cf_hosts_num" -le "$cf_hosts_count" ]
@@ -32068,7 +31668,7 @@ DelCloudflareHost()
                     IFS="|" read -r -a cf_zones_user_unique_id <<< "$cf_zone_user_unique_id"
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -32077,49 +31677,42 @@ DelCloudflareHost()
     if [ "$cf_zones_count" -gt 0 ] 
     then
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "是否删除此 CFP 下所有的源站" yn_options del_zones_yn
+        AskIfContinue n "`gettext \"是否删除此 CFP 下所有的源站\"`"
 
-        if [[ $del_zones_yn == "是" ]] 
-        then
-            for((i=0;i<${#cf_zones_name[@]};i++));
-            do
-                cf_zone_name=${cf_zones_name[i]}
-                cf_user_unique_id=${cf_zones_user_unique_id[i]}
+        for((i=0;i<${#cf_zones_name[@]};i++));
+        do
+            cf_zone_name=${cf_zones_name[i]}
+            cf_user_unique_id=${cf_zones_user_unique_id[i]}
 
-                GetCloudflareUserInfo
+            CloudflareGetUser
 
-                IFS="^" read -r result msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
-                    -d 'act=zone_delete' \
-                    -d "host_key=$cf_host_key" \
-                    -d "user_key=$cf_user_key" \
-                    -d "zone_name=$cf_zone_name" \
-                    | $JQ_FILE '[.result,.msg]|join("^")'
-                ) || true
+            IFS="^" read -r result msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
+                -d 'act=zone_delete' \
+                -d "host_key=$cf_host_key" \
+                -d "user_key=$cf_user_key" \
+                -d "zone_name=$cf_zone_name" \
+                | $JQ_FILE '[.result,.msg]|join("^")'
+            ) || true
 
-                result=${result#\"}
-                msg=${msg%\"}
+            result=${result#\"}
+            msg=${msg%\"}
 
-                if [ -z "$result" ] || [ "$result" == "error" ]
-                then
-                    Println "$error 删除 $cf_zone_name 发送错误: ${msg:-超时, 请重试}\n" && exit 1
-                fi
+            if [ -z "$result" ] || [ "$result" == "error" ]
+            then
+                Println "$error 删除 $cf_zone_name 发送错误: ${msg:-超时, 请重试}\n" && exit 1
+            fi
 
-                jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
-                JQ delete "$CF_CONFIG" "$i"
+            jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
+            JQ delete "$CF_CONFIG" "$i"
 
-                Println "$info $cf_zone_name 删除成功\n"
-            done
-        else
-            Println "已取消...\n"
-            exit 1
-        fi
+            Println "$info $cf_zone_name 删除成功\n"
+        done
     fi
 }
 
-EditCloudflareUser()
+CloudflareEditUser()
 {
-    ListCloudflareUsers
+    CloudflareListUsers
 
     if [ "$cf_users_count" -eq 0 ] 
     then
@@ -32128,14 +31721,14 @@ EditCloudflareUser()
     fi
 
     echo -e "选择用户"
-    while read -p "(默认: 取消): " cf_users_num
+    while read -p "$i18n_default_cancel" cf_users_num
     do
         case "$cf_users_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
@@ -32147,7 +31740,7 @@ EditCloudflareUser()
                     cf_user_api_key=${cf_users_api_key[cf_users_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -32189,20 +31782,20 @@ EditCloudflareUser()
     Println "$info 用户修改成功\n"
 }
 
-RegenCloudflareHost()
+CloudflareRegenHost()
 {
-    ListCloudflareHosts
+    CloudflareListHosts
 
     echo "选择 CFP"
     echo -e "$tip 请勿更改公开的 CFP !\n"
-    while read -p "(默认: 取消): " cf_hosts_num
+    while read -p "$i18n_default_cancel" cf_hosts_num
     do
         case "$cf_hosts_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_hosts_num" -gt 0 ] && [ "$cf_hosts_num" -le "$cf_hosts_count" ]
@@ -32212,7 +31805,7 @@ RegenCloudflareHost()
                     cf_host_key=${cf_hosts_key[cf_hosts_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -32239,9 +31832,9 @@ RegenCloudflareHost()
     Println "$info $cf_host_name host key 修改成功"
 }
 
-ViewCloudflareToken()
+CloudflareListToken()
 {
-    ListCloudflareUsers
+    CloudflareListUsers
 
     if [ "$cf_users_count" -eq 0 ] 
     then
@@ -32250,14 +31843,14 @@ ViewCloudflareToken()
     fi
 
     echo -e "选择用户"
-    while read -p "(默认: 取消): " cf_users_num
+    while read -p "$i18n_default_cancel" cf_users_num
     do
         case "$cf_users_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
@@ -32268,7 +31861,7 @@ ViewCloudflareToken()
                     cf_user_api_key=${cf_users_api_key[cf_users_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -32306,27 +31899,27 @@ ViewCloudflareToken()
     do
         IFS="|" read -r token_id token_name token_status token_permission <<< "${tokens[i]}"
         tokens_id+=("$token_id")
-        tokens_list="$tokens_list $green$((i+1)).${normal}\r\033[6C名称: $green$token_name${normal}  状态: $green$token_status${normal}\n\033[6C权限: $green${token_permission:-无}${normal}\n\n"
+        tokens_list="$tokens_list $green$((i+1)).${normal}${indent_6}名称: $green$token_name${normal}  状态: $green$token_status${normal}\n${indent_6}权限: $green${token_permission:-无}${normal}\n\n"
     done
 
     Println "$tokens_list"
 }
 
-AddCloudflareToken()
+CloudflareAddToken()
 {
-    ViewCloudflareToken
+    CloudflareListToken
 
     echo -e "选择 Token"
 
-    while read -p "(默认: 取消): " tokens_num
+    while read -p "$i18n_default_cancel" tokens_num
     do
         case $tokens_num in
             "") 
-                Println "已取消...\n"
+                Println "$i18n_canceled...\n"
                 exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *) 
                 if [ "$tokens_num" -gt 0 ] && [ "$tokens_num" -le "$tokens_count" ] 
@@ -32335,20 +31928,14 @@ AddCloudflareToken()
                     token_id=${tokens_id[tokens_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
     done
 
     echo
-    yn_options=( '否' '是' )
-    inquirer list_input "需要更新此 Token 后才能添加到脚本, 是否继续" yn_options yn_option
-    if [ "$yn_option" == "否" ] 
-    then
-        Println "已取消...\n"
-        exit 1
-    fi
+    AskIfContinue n "`gettext \"需要更新此 Token 后才能添加到脚本, 是否继续\"`"
 
     Println "$info 更新 Token"
     cf_user_token_new=$(curl -s -X PUT https://api.cloudflare.com/client/v4/user/tokens/$token_id/value \
@@ -32369,21 +31956,21 @@ AddCloudflareToken()
     fi
 }
 
-UpdateCloudflareToken()
+CloudflareUpdateToken()
 {
-    ViewCloudflareToken
+    CloudflareListToken
 
     echo -e "选择 Token"
 
-    while read -p "(默认: 取消): " tokens_num
+    while read -p "$i18n_default_cancel" tokens_num
     do
         case $tokens_num in
             "") 
-                Println "已取消...\n"
+                Println "$i18n_canceled...\n"
                 exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *) 
                 if [ "$tokens_num" -gt 0 ] && [ "$tokens_num" -le "$tokens_count" ] 
@@ -32392,7 +31979,7 @@ UpdateCloudflareToken()
                     token_id=${tokens_id[tokens_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -32413,9 +32000,9 @@ UpdateCloudflareToken()
     fi
 }
 
-DelCloudflareUser()
+CloudflareDelUser()
 {
-    ListCloudflareUsers
+    CloudflareListUsers
 
     if [ "$cf_users_count" -eq 0 ] 
     then
@@ -32424,14 +32011,14 @@ DelCloudflareUser()
     fi
 
     echo -e "选择用户"
-    while read -p "(默认: 取消): " cf_users_num
+    while read -p "$i18n_default_cancel" cf_users_num
     do
         case "$cf_users_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
@@ -32439,7 +32026,7 @@ DelCloudflareUser()
                     cf_users_index=$((cf_users_num-1))
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -32450,19 +32037,19 @@ DelCloudflareUser()
     Println "$info 用户删除成功\n"
 }
 
-EditCloudflareZone()
+CloudflareEditZone()
 {
-    ListCloudflareZones
+    CloudflareListZones
 
     echo -e "选择源站"
-    while read -p "(默认: 取消): " cf_zones_num
+    while read -p "$i18n_default_cancel" cf_zones_num
     do
         case "$cf_zones_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_zones_num" -gt 0 ] && [ "$cf_zones_num" -le "$cf_zones_count" ]
@@ -32477,7 +32064,7 @@ EditCloudflareZone()
                     cf_zone_subdomains=${cf_zones_subdomains[cf_zones_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -32489,23 +32076,23 @@ EditCloudflareZone()
   ${green}2.${normal} SSL
 
   "
-    while read -p "(默认: 取消): " zone_edit_num
+    while read -p "$i18n_default_cancel" zone_edit_num
     do
         case $zone_edit_num in
             "") 
-                Println "已取消...\n"
+                Println "$i18n_canceled...\n"
                 exit 1
             ;;
             1) 
-                SetCloudflareZoneAlwaysUseHttps
+                CloudflareSetZoneAlwaysUseHttps
                 break
             ;;
             2) 
-                SetCloudflareZoneSsl
+                CloudflareSetZoneSsl
                 break
             ;;
             *) 
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
         esac
     done
@@ -32557,66 +32144,65 @@ CloudflarePartnerMenu()
 
  $tip 当前: ${green}partner${normal} 面板
  $tip 输入: w 切换到 workers 面板\n\n"
-    read -p "请输入数字 [1-20]: " cloudflare_partner_num
+    read -p "`gettext \"输入序号\"` [1-20]: " cloudflare_partner_num
     case $cloudflare_partner_num in
         w)
             CloudflareWorkersMenu
         ;;
-        1) ViewCloudflareSubdomain
+        1) CloudflareListSubdomain
         ;;
-        2) AddCloudflareSubdomain
+        2) CloudflareAddSubdomain
         ;;
-        3) ViewCloudflareZone
+        3) CloudflareListZone
         ;;
-        4) AddCloudflareZone
+        4) CloudflareAddZone
         ;;
-        5) EditCloudflareZone
+        5) CloudflareEditZone
         ;;
-        6) MoveCloudflareZone
+        6) CloudflareMoveZone
         ;;
-        7) ViewCloudflareUser
+        7) CloudflareListUser
         ;;
-        8) AddCloudflareUser
+        8) CloudflareAddUser
         ;;
-        9) EditCloudflareUser
+        9) CloudflareEditUser
         ;;
-        10) ViewCloudflareToken
+        10) CloudflareListToken
         ;;
-        11) AddCloudflareToken
+        11) CloudflareAddToken
         ;;
-        12) UpdateCloudflareToken
+        12) CloudflareUpdateToken
         ;;
-        13) ViewCloudflareHost
+        13) CloudflareListHost
         ;;
-        14) AddCloudflareHost
+        14) CloudflareAddHost
         ;;
-        15) RegenCloudflareHost
+        15) CloudflareRegenHost
         ;;
-        16) DelCloudflareZone
+        16) CloudflareDelZone
         ;;
-        17) DelCloudflareUser
+        17) CloudflareDelUser
         ;;
-        18) DelCloudflareHost
+        18) CloudflareDelHost
         ;;
         19) 
             Println "$info 一键获取最优 IP 脚本 Mac/Linux: \n\nhttps://github.com/woniuzfb/cloudflare-fping\n"
         ;;
-        20) UpdateShFile cloudflare
+        20) ShFileUpdate cloudflare
         ;;
-        *) Println "$error 请输入正确的数字 [1-20]\n"
+        *) Println "$error $i18n_input_correct_number [1-20]\n"
         ;;
     esac
 }
 
-InstallWrangler()
+WranglerInstall()
 {
     if [[ -x $(command -v cargo) ]] 
     then
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "检测到 cargo, 是否使用 cargo 安装 wrangler, 否则使用 npm 安装" yn_options user_cargo_yn
+        inquirer list_input "检测到 cargo, 是否使用 cargo 安装 wrangler, 否则使用 npm 安装" ny_options user_cargo_yn
 
-        if [[ $user_cargo_yn == "是" ]] 
+        if [[ $user_cargo_yn == "$i18n_yes" ]] 
         then
             cargo install wrangler
             Println "$info wrangler 安装成功\n"
@@ -32632,7 +32218,7 @@ InstallWrangler()
     Println "$info wrangler 安装成功\n"
 }
 
-UpdateWrangler()
+WranglerUpdate()
 {
     if [[ ! -x $(command -v wrangler) ]] 
     then
@@ -32642,10 +32228,9 @@ UpdateWrangler()
     if [[ -x $(command -v cargo) ]] 
     then
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "检测到 cargo, 是否使用 cargo 更新 wrangler, 否则使用 npm 更新" yn_options user_cargo_yn
+        inquirer list_input "检测到 cargo, 是否使用 cargo 更新 wrangler, 否则使用 npm 更新" ny_options user_cargo_yn
 
-        if [[ $user_cargo_yn == "是" ]] 
+        if [[ $user_cargo_yn == "$i18n_yes" ]] 
         then
             cargo install wrangler --force
             Println "$info wrangler 更新成功\n"
@@ -32660,22 +32245,22 @@ UpdateWrangler()
     Println "$info wrangler 更新成功\n"
 }
 
-SetCloudflareWorkerName()
+CloudflareSetWorkerName()
 {
     Println "请输入 cloudflare worker 名称"
-    read -p "(默认: 取消): " cf_worker_name
-    [ -z "$cf_worker_name" ] && Println "已取消...\n" && exit 1
+    read -p "$i18n_default_cancel" cf_worker_name
+    [ -z "$cf_worker_name" ] && Println "$i18n_canceled...\n" && exit 1
     Println "  worker 名称: $green $cf_worker_name ${normal}\n"
 }
 
-SetCloudflareWorkerPath()
+CloudflareSetWorkerPath()
 {
     Println "请输入 cloudflare worker 路径名称"
-    while read -p "(默认: 取消): " cf_worker_path 
+    while read -p "$i18n_default_cancel" cf_worker_path 
     do
         case $cf_worker_path in
             "") 
-                Println "已取消...\n"
+                Println "$i18n_canceled...\n"
                 exit 1
             ;;
             *[!0-9A-Za-z_-.@]*) 
@@ -32689,7 +32274,7 @@ SetCloudflareWorkerPath()
     Println "  worker 路径: $green $cf_worker_path ${normal}\n"
 }
 
-SetCloudflareWorkerProjectName()
+CloudflareSetWorkerProjectName()
 {
     Println "请输入 cloudflare worker 项目名称"
     while read -p "(默认: 随机): " cf_worker_project_name 
@@ -32714,7 +32299,7 @@ SetCloudflareWorkerProjectName()
     Println "  worker 项目名称: $green $cf_worker_project_name ${normal}\n"
 }
 
-AddCloudflareWorker()
+CloudflareAddWorker()
 {
     if [ ! -s "$CF_CONFIG" ] 
     then
@@ -32741,9 +32326,9 @@ AddCloudflareWorker()
                     || wget --timeout=10 --tries=3 --no-check-certificate "$STREAM_PROXY_LINK_BACKUP" -qO "$CF_WORKERS_ROOT/stream_proxy/index.js"
                 fi
 
-                SetCloudflareWorkerName
+                CloudflareSetWorkerName
                 cf_worker_path="stream_proxy"
-                SetCloudflareWorkerProjectName
+                CloudflareSetWorkerProjectName
                 break
             ;;
             2) 
@@ -32754,35 +32339,28 @@ AddCloudflareWorker()
                     || wget --timeout=10 --tries=3 --no-check-certificate "$XTREAM_CODES_PROXY_LINK_BACKUP" -qO "$CF_WORKERS_ROOT/xtream_codes_proxy/index.js"
                 fi
 
-                SetCloudflareWorkerName
+                CloudflareSetWorkerName
                 cf_worker_path="xtream_codes_proxy"
-                SetCloudflareWorkerProjectName
+                CloudflareSetWorkerProjectName
                 break
             ;;
             3) 
-                ListCloudflareWorkers
-                SetCloudflareWorkerName
-                SetCloudflareWorkerPath
-                SetCloudflareWorkerProjectName
+                CloudflareListWorkers
+                CloudflareSetWorkerName
+                CloudflareSetWorkerPath
+                CloudflareSetWorkerProjectName
 
                 if [ -d "$CF_WORKERS_ROOT/$cf_worker_path" ] 
                 then
                     echo
-                    yn_options=( '否' '是' )
-                    inquirer list_input "路径已经存在, 是否仍要添加" yn_options force_add_yn
-
-                    if [[ $force_add_yn == "否" ]] 
-                    then
-                        Println "已取消...\n"
-                        exit 1
-                    fi
+                    AskIfContinue n "`gettext \"路径已经存在, 是否仍要添加\"`"
                 else
                     wrangler generate "$cf_worker_path"
                 fi
                 break
             ;;
             *) 
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
         esac
     done
@@ -32800,7 +32378,7 @@ AddCloudflareWorker()
     Println "$info worker: $cf_worker_name 添加成功\n"
 }
 
-GetCloudflareWorkers()
+CloudflareGetWorkers()
 {
     cf_workers_list=""
     cf_workers_count=0
@@ -32816,19 +32394,19 @@ GetCloudflareWorkers()
         project_name=${project_name%\"}
         cf_workers_project_name+=("$project_name")
 
-        cf_workers_list="$cf_workers_list $green$cf_workers_count.${normal}\r\033[6C名称: $green$name${normal}  路径: $green$path${normal}\n\033[6C项目名称: $green$project_name${normal}\n\n"
+        cf_workers_list="$cf_workers_list $green$cf_workers_count.${normal}${indent_6}名称: $green$name${normal}  路径: $green$path${normal}\n${indent_6}项目名称: $green$project_name${normal}\n\n"
     done < <($JQ_FILE '(.workers| if .== null then [] else . end)[]|[.name,.path,.project_name]|join(" ")' "$CF_CONFIG")
     return 0
 }
 
-ListCloudflareWorkers()
+CloudflareListWorkers()
 {
     if [ ! -s "$CF_CONFIG" ] 
     then
         Println "$error 请先添加 worker\n" && exit 1
     fi
 
-    GetCloudflareWorkers
+    CloudflareGetWorkers
 
     if [ "$cf_workers_count" -gt 0 ] 
     then
@@ -32838,14 +32416,14 @@ ListCloudflareWorkers()
     fi
 }
 
-ViewCloudflareWorker()
+CloudflareListWorker()
 {
-    ListCloudflareWorkers
+    CloudflareListWorkers
 }
 
-EditCloudflareWorker()
+CloudflareEditWorker()
 {
-    ListCloudflareWorkers
+    CloudflareListWorkers
 
     if [ "$cf_workers_count" -eq 0 ] 
     then
@@ -32854,14 +32432,14 @@ EditCloudflareWorker()
     fi
 
     echo -e "选择 worker"
-    while read -p "(默认: 取消): " cf_workers_num
+    while read -p "$i18n_default_cancel" cf_workers_num
     do
         case "$cf_workers_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_workers_num" -gt 0 ] && [ "$cf_workers_num" -le "$cf_workers_count" ]
@@ -32872,7 +32450,7 @@ EditCloudflareWorker()
                     cf_worker_project_name=${cf_workers_project_name[cf_workers_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -32901,10 +32479,9 @@ EditCloudflareWorker()
                 elif [ -d "$CF_WORKERS_ROOT/$cf_worker_path_new" ] 
                 then
                     echo
-                    yn_options=( '否' '是' )
-                    inquirer list_input "路径已经存在, 是否仍要修改" yn_options force_edit_yn
+                    inquirer list_input "路径已经存在, 是否仍要修改" ny_options force_edit_yn
 
-                    if [[ $force_edit_yn == "否" ]] 
+                    if [[ $force_edit_yn == "$i18n_no" ]] 
                     then
                         continue
                     else
@@ -32913,7 +32490,7 @@ EditCloudflareWorker()
                             echo
                             inquirer list_input "是否删除原路径目录" yn_options delete_old_path_yn
 
-                            if [[ $delete_old_path_yn == "是" ]] 
+                            if [[ $delete_old_path_yn == "$i18n_yes" ]] 
                             then
                                 rm -rf "$CF_WORKERS_ROOT/${cf_worker_path:-notfound}"
                             fi  
@@ -32970,9 +32547,9 @@ EditCloudflareWorker()
     Println "$info worker 修改成功\n"
 }
 
-DelCloudflareWorker()
+CloudflareDelWorker()
 {
-    ListCloudflareWorkers
+    CloudflareListWorkers
 
     if [ "$cf_workers_count" -eq 0 ] 
     then
@@ -32981,14 +32558,14 @@ DelCloudflareWorker()
     fi
 
     echo -e "选择 worker"
-    while read -p "(默认: 取消): " cf_workers_num
+    while read -p "$i18n_default_cancel" cf_workers_num
     do
         case "$cf_workers_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_workers_num" -gt 0 ] && [ "$cf_workers_num" -le "$cf_workers_count" ]
@@ -32998,7 +32575,7 @@ DelCloudflareWorker()
                     cf_worker_path=${cf_workers_path[cf_workers_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -33007,10 +32584,9 @@ DelCloudflareWorker()
     if [ -d "$CF_WORKERS_ROOT/$cf_worker_path" ] 
     then
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "是否删除 worker 目录 $CF_WORKERS_ROOT/$cf_worker_path" yn_options del_cf_worker_path
+        inquirer list_input "是否删除 worker 目录 $CF_WORKERS_ROOT/$cf_worker_path" ny_options del_cf_worker_path
 
-        if [[ $del_cf_worker_path == "是" ]] 
+        if [[ $del_cf_worker_path == "$i18n_yes" ]] 
         then
             rm -rf "$CF_WORKERS_ROOT/${cf_worker_path:-notfound}"
         fi
@@ -33021,9 +32597,9 @@ DelCloudflareWorker()
     Println "$info worker: $cf_worker_name 删除成功\n"
 }
 
-DeployCloudflareWorker()
+CloudflareDeployWorker()
 {
-    ListCloudflareWorkers
+    CloudflareListWorkers
 
     if [ "$cf_workers_count" -eq 0 ] 
     then
@@ -33032,14 +32608,14 @@ DeployCloudflareWorker()
     fi
 
     echo -e "选择 worker"
-    while read -p "(默认: 取消): " cf_workers_num
+    while read -p "$i18n_default_cancel" cf_workers_num
     do
         case "$cf_workers_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$cf_workers_num" -gt 0 ] && [ "$cf_workers_num" -le "$cf_workers_count" ]
@@ -33050,7 +32626,7 @@ DeployCloudflareWorker()
                     cf_worker_project_name=${cf_workers_project_name[cf_workers_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -33062,9 +32638,9 @@ DeployCloudflareWorker()
         exit 1
     fi
 
-    ListCloudflareUsers
+    CloudflareListUsers
 
-    echo -e " $green$((cf_users_count+1)).${normal}\r\033[6C全部"
+    echo -e " $green$((cf_users_count+1)).${normal}${indent_6}全部"
 
     if [ "$cf_users_count" -eq 0 ] 
     then
@@ -33074,9 +32650,9 @@ DeployCloudflareWorker()
 
     cf_users_indices=()
     Println "选择用户, 多个用户用空格分隔, 比如 5 7 9-11"
-    while read -p "(默认: 取消): " cf_users_num 
+    while read -p "$i18n_default_cancel" cf_users_num 
     do
-        [ -z "$cf_users_num" ] && Println "已取消...\n" && exit 1
+        [ -z "$cf_users_num" ] && Println "$i18n_canceled...\n" && exit 1
 
         if [[ $cf_users_num -eq $((cf_users_count+1)) ]] 2> /dev/null
         then
@@ -33118,7 +32694,7 @@ DeployCloudflareWorker()
 
         case "$error_no" in
             1|2|3)
-                Println "$error 请输入正确的数字\n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *)
                 for element in "${cf_users_num_arr[@]}"
@@ -33172,7 +32748,7 @@ DeployCloudflareWorker()
             if [[ ! -x $(command -v python3) ]] 
             then
                 Println "$info 安装 python3 ..."
-                InstallPython
+                PythonInstall
             fi
 
             Println "$info 更新 ${CF_WORKERS_FILE##*/}"
@@ -33236,21 +32812,20 @@ DeployCloudflareWorker()
                 if [ "$ibm_cf_apps_count" -gt 0 ] 
                 then
                     echo
-                    yn_options=( '是' '否' )
                     inquirer list_input "是否使用 IBM CF APP 中转" yn_options use_ibm_cf_app_yn
 
-                    if [ "$use_ibm_cf_app_yn" == "是" ] 
+                    if [ "$use_ibm_cf_app_yn" == "$i18n_yes" ] 
                     then
                         IbmListCfApps
                         echo -e "选择 APP"
-                        while read -p "(默认: 取消): " ibm_cf_apps_num
+                        while read -p "$i18n_default_cancel" ibm_cf_apps_num
                         do
                             case "$ibm_cf_apps_num" in
                                 "")
-                                    Println "已取消...\n" && exit 1
+                                    Println "$i18n_canceled...\n" && exit 1
                                 ;;
                                 *[!0-9]*)
-                                    Println "$error 请输入正确的序号\n"
+                                    Println "$error $i18n_input_correct_no\n"
                                 ;;
                                 *)
                                     if [ "$ibm_cf_apps_num" -gt 0 ] && [ "$ibm_cf_apps_num" -le "$ibm_cf_apps_count" ]
@@ -33269,7 +32844,7 @@ DeployCloudflareWorker()
                                         IFS="|" read -r -a ibm_cf_app_routes_path <<< "${ibm_cf_app_route_path}|"
                                         break
                                     else
-                                        Println "$error 请输入正确的序号\n"
+                                        Println "$error $i18n_input_correct_no\n"
                                     fi
                                 ;;
                             esac
@@ -33287,21 +32862,21 @@ DeployCloudflareWorker()
                             fi
                             upstream="${ibm_cf_app_routes_hostname[i]}.${ibm_cf_app_routes_domain[i]}$path"
                             ibm_cf_apps_link+=("$upstream")
-                            ibm_cf_apps_list="$ibm_cf_apps_list $green$((i+1)).${normal}\r\033[6C$upstream\n\n"
+                            ibm_cf_apps_list="$ibm_cf_apps_list $green$((i+1)).${normal}${indent_6}$upstream\n\n"
                         done
 
                         Println "$ibm_cf_apps_list"
 
                         echo -e "选择链接"
-                        while read -p "(默认: 取消): " ibm_cf_apps_link_num 
+                        while read -p "$i18n_default_cancel" ibm_cf_apps_link_num 
                         do
                             case $ibm_cf_apps_link_num in
                                 "") 
-                                    Println "已取消...\n"
+                                    Println "$i18n_canceled...\n"
                                     exit 1
                                 ;;
                                 *[!0-9]*) 
-                                    Println "$error 请输入正确的序号\n"
+                                    Println "$error $i18n_input_correct_no\n"
                                 ;;
                                 *) 
                                     if [ "$ibm_cf_apps_link_num" -gt 0 ] && [ "$ibm_cf_apps_link_num" -le "$ibm_cf_app_routes_count" ] 
@@ -33310,7 +32885,7 @@ DeployCloudflareWorker()
                                         upstream=${ibm_cf_apps_link[ibm_cf_apps_link_index]}
                                         break
                                     else
-                                        Println "$error 请输入正确的序号\n"
+                                        Println "$error $i18n_input_correct_no\n"
                                     fi
                                 ;;
                             esac
@@ -33321,8 +32896,8 @@ DeployCloudflareWorker()
             if [ -z "${upstream:-}" ] 
             then
                 Println "$info 输入源站 ip 或者 中转服务器的域名(比如 IBM CF APP 的域名)"
-                read -p "(默认: 取消): " upstream
-                [ -z "$upstream" ] && Println "已取消...\n" && exit 1
+                read -p "$i18n_default_cancel" upstream
+                [ -z "$upstream" ] && Println "$i18n_canceled...\n" && exit 1
             fi
             sed -i 's/const upstream = .*/const upstream = "'"$upstream"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/index.js"
         fi
@@ -33344,7 +32919,7 @@ DeployCloudflareWorker()
             if [[ ! -x $(command -v python3) ]] 
             then
                 Println "$info 安装 python3 ..."
-                InstallPython
+                PythonInstall
             fi
 
             if [ "$sh_debug" -eq 0 ] && [ ! -f "$IPTV_ROOT/VIP" ]
@@ -33367,14 +32942,14 @@ DeployCloudflareWorker()
     done
 }
 
-ListCloudflareWorkersRoutes()
+CloudflareListWorkersRoutes()
 {
     if [ ! -s "$CF_CONFIG" ] 
     then
         Println "$error 请先添加用户\n" && exit 1
     fi
 
-    GetCloudflareUsers
+    CloudflareGetUsers
 
     if [ "$cf_users_count" -eq 0 ] 
     then
@@ -33444,7 +33019,7 @@ ListCloudflareWorkersRoutes()
             cf_users_zones_account_token+=("${cf_users_token[i]}")
             cf_users_zones_account_api_key+=("${cf_users_api_key[i]}")
             cf_users_zones_account_email+=("${cf_users_email[i]}")
-            cf_users_zones_list="$cf_users_zones_list $cf_users_zones_count.\r\033[6C$green${zones_name[j]}${normal}  路由数: $green$count${normal}\n\n"
+            cf_users_zones_list="$cf_users_zones_list $cf_users_zones_count.${indent_6}$green${zones_name[j]}${normal}  路由数: $green$count${normal}\n\n"
         done
     done
 
@@ -33457,22 +33032,22 @@ ListCloudflareWorkersRoutes()
     Println "$cf_users_zones_list"
 }
 
-ConfigCloudflareWorkerRoute()
+CloudflareConfigWorkerRoute()
 {
     Println "$info 搜索路由 ..."
 
-    ListCloudflareWorkersRoutes
+    CloudflareListWorkersRoutes
 
     echo -e "选择域名"
-    while read -p "(默认: 取消): " cf_zones_num
+    while read -p "$i18n_default_cancel" cf_zones_num
     do
         case $cf_zones_num in
             "") 
-                Println "已取消...\n"
+                Println "$i18n_canceled...\n"
                 exit 1
             ;;
             *[!0-9]*) 
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *) 
                 if [ "$cf_zones_num" -gt 0 ] && [ "$cf_zones_num" -le "$cf_users_zones_count" ] 
@@ -33504,7 +33079,7 @@ ConfigCloudflareWorkerRoute()
                     fi
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -33519,14 +33094,14 @@ ConfigCloudflareWorkerRoute()
         cf_users_zone_routes_list=""
         for((i=0;i<cf_users_zone_routes_count;i++));
         do
-            cf_users_zone_routes_list="$cf_users_zone_routes_list $((i+1)).\r\033[6C$green${cf_users_zone_routes_pattern[i]}${normal} => $green${cf_users_zone_routes_script[i]}${normal}\n\n"
+            cf_users_zone_routes_list="$cf_users_zone_routes_list $((i+1)).${indent_6}$green${cf_users_zone_routes_pattern[i]}${normal} => $green${cf_users_zone_routes_script[i]}${normal}\n\n"
         done
 
         cf_users_zone_route_add_num=$((cf_users_zone_routes_count+1))
-        cf_users_zone_routes_list="$cf_users_zone_routes_list $cf_users_zone_route_add_num.\r\033[6C$green添加路由${normal}\n"
+        cf_users_zone_routes_list="$cf_users_zone_routes_list $cf_users_zone_route_add_num.${indent_6}$green添加路由${normal}\n"
         Println "$cf_users_zone_routes_list"
 
-        while read -p "(默认: 取消): " cf_users_zone_routes_num
+        while read -p "$i18n_default_cancel" cf_users_zone_routes_num
         do
             if [ "$cf_users_zone_routes_num" == "$cf_users_zone_route_add_num" ] 
             then
@@ -33534,11 +33109,11 @@ ConfigCloudflareWorkerRoute()
             fi
             case $cf_users_zone_routes_num in
                 "") 
-                    Println "已取消...\n"
+                    Println "$i18n_canceled...\n"
                     exit 1
                 ;;
                 *[!0-9]*) 
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 ;;
                 *) 
                     if [ "$cf_users_zone_routes_num" -gt 0 ] && [ "$cf_users_zone_routes_num" -le "$cf_users_zone_routes_count" ] 
@@ -33547,11 +33122,11 @@ ConfigCloudflareWorkerRoute()
                         cf_users_zone_route_id=${cf_users_zone_routes_id[cf_users_zone_routes_index]}
                         cf_users_zone_route_script=${cf_users_zone_routes_script[cf_users_zone_routes_index]}
                         cf_users_zone_route_pattern=${cf_users_zone_routes_pattern[cf_users_zone_routes_index]}
-                        Println " $green$cf_users_zone_route_pattern${normal} => $green$cf_users_zone_route_script${normal}\n\n ${green}1.${normal}\r\033[6C更改路由\n ${green}2.${normal}\r\033[6C删除路由\n"
-                        read -p "(默认: 取消): " cf_users_zone_route_num
+                        Println " $green$cf_users_zone_route_pattern${normal} => $green$cf_users_zone_route_script${normal}\n\n ${green}1.${normal}${indent_6}更改路由\n ${green}2.${normal}${indent_6}删除路由\n"
+                        read -p "$i18n_default_cancel" cf_users_zone_route_num
                         case $cf_users_zone_route_num in
                             "") 
-                                Println "已取消...\n"
+                                Println "$i18n_canceled...\n"
                                 exit 1
                             ;;
                             1) 
@@ -33589,22 +33164,22 @@ ConfigCloudflareWorkerRoute()
                                 fi
                             ;;
                             *[!0-9]*)
-                                Println "$error 请输入正确的序号\n"
+                                Println "$error $i18n_input_correct_no\n"
                             ;;
                             *) 
-                                Println "$error 请输入正确的序号\n"
+                                Println "$error $i18n_input_correct_no\n"
                             ;;
                         esac
                         exit 0
                     else
-                        Println "$error 请输入正确的序号\n"
+                        Println "$error $i18n_input_correct_no\n"
                     fi
                 ;;
             esac
         done
     fi
 
-    GetCloudflareWorkers
+    CloudflareGetWorkers
 
     if [ "$cf_workers_count" -gt 0 ] 
     then
@@ -33615,23 +33190,22 @@ ConfigCloudflareWorkerRoute()
 
     Println "$info 输入已经存在的 worker 项目名称"
     echo -e "$tip 输入的是项目名称, 不是序号\n"
-    read -p "(默认: 取消): " script
-    [ -z "$script" ] && Println "已取消...\n" && exit 1
+    read -p "$i18n_default_cancel" script
+    [ -z "$script" ] && Println "$i18n_canceled...\n" && exit 1
     if [[ $script =~ ^[0-9]+$ ]] && [ "$script" -le "$cf_workers_count" ] && [ "$script" -gt 0 ]
     then
         cf_workers_index=$((script-1))
         echo
-        yn_options=( '是' '否' )
         inquirer list_input "是想要输入 ${cf_workers_project_name[cf_workers_index]}" yn_options mistake_yn
 
-        if [[ $mistake_yn == "是" ]] 
+        if [[ $mistake_yn == "$i18n_yes" ]] 
         then
             script=${cf_workers_project_name[cf_workers_index]}
         fi
     fi
     Println "$info 输入路由,比如 abc.domain.com/*"
-    read -p "(默认: 取消): " pattern
-    [ -z "$pattern" ] && Println "已取消...\n" && exit 1
+    read -p "$i18n_default_cancel" pattern
+    [ -z "$pattern" ] && Println "$i18n_canceled...\n" && exit 1
     if [[ $(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$cf_users_zone_id/workers/routes" \
         -H ''"$curl_header_auth_email"'' \
         -H ''"$curl_header_auth_key"'' \
@@ -33646,9 +33220,9 @@ ConfigCloudflareWorkerRoute()
     fi
 }
 
-MonitorCloudflareWorkersMoveZone()
+CloudflareWorkersMonitorMoveZone()
 {
-    GetCloudflareUserInfo
+    CloudflareGetUser
 
     Println "$info 删除源站 ..."
 
@@ -33722,8 +33296,8 @@ MonitorCloudflareWorkersMoveZone()
 
     if [ -z "$cf_zone_subdomains" ] 
     then
-        GetCloudflareUserInfo
-        GetCloudflareZoneInfo
+        CloudflareGetUser
+        CloudflareGetZone
         for((i=0;i<${#cf_hosted_cnames[@]};i++));
         do
             if [[ ${cf_hosted_cnames[i]} =~ ^([^.]+).([^.]+)$ ]] 
@@ -33756,7 +33330,7 @@ MonitorCloudflareWorkersMoveZone()
     jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
     JQ add "$CF_CONFIG" "$new_zone"
 
-    GetCloudflareUserInfo
+    CloudflareGetUser
 
     IFS="^" read -r result cf_zone_resolving_to cf_zone_hosted_cnames cf_zone_forward_tos msg < <(curl -s -Lm 20 https://api.cloudflare.com/host-gw.html \
         -d 'act=zone_set' \
@@ -33784,7 +33358,7 @@ MonitorCloudflareWorkersMoveZone()
     Println "$info 源站移动成功\n"
 }
 
-MonitorCloudflareWorkersUpdateRoutes()
+CloudflareWorkersMonitorUpdateRoutes()
 {
     zone_cnames=()
     zone_resolves=()
@@ -33804,8 +33378,8 @@ MonitorCloudflareWorkersUpdateRoutes()
             fi
         done
     else
-        GetCloudflareUserInfo
-        GetCloudflareZoneInfo
+        CloudflareGetUser
+        CloudflareGetZone
         for((j=0;j<${#cf_hosted_cnames[@]};j++));
         do
             if [[ ${cf_resolve_tos[j]} =~ ^([^.]+).([^.]+).workers.dev$ ]] 
@@ -33929,7 +33503,7 @@ MonitorCloudflareWorkersUpdateRoutes()
             for((k=0;k<workers_count;k++));
             do
                 pattern_found=0
-                if [[ $update_workers_data_yn == "是" ]] 
+                if [[ $update_workers_data_yn == "$i18n_yes" ]] 
                 then
                     script_found=0
                 else
@@ -34009,7 +33583,7 @@ MonitorCloudflareWorkersUpdateRoutes()
     done
 }
 
-MonitorCloudflareWorkersDeploy()
+CloudflareWorkersMonitorDeploy()
 {
     CF_ACCOUNT_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/accounts" \
         -H "Content-Type: application/json" \
@@ -34039,7 +33613,7 @@ MonitorCloudflareWorkersDeploy()
     done
 }
 
-MonitorCloudflareWorkersGetRequests()
+CloudflareWorkersMonitorGetRequests()
 {
     local cf_user_email=$1 cf_user_token=$2 cf_user_api_key=$3
     if [ -n "$cf_user_api_key" ] 
@@ -34118,7 +33692,7 @@ MonitorCloudflareWorkersGetRequests()
     request_count=$cf_workers_requests
 }
 
-MonitorCloudflareWorkers()
+CloudflareWorkersMonitor()
 {
     trap '' HUP INT
     trap 'MonitorError $LINENO' ERR
@@ -34182,7 +33756,7 @@ MonitorCloudflareWorkers()
                     do
                         if [ "$cf_use_api" -eq 1 ] 
                         then
-                            MonitorCloudflareWorkersGetRequests "$cf_zone_user_email" "$cf_zone_user_token" "$cf_zone_user_api_key"
+                            CloudflareWorkersMonitorGetRequests "$cf_zone_user_email" "$cf_zone_user_token" "$cf_zone_user_api_key"
                             if [ -z "$request_count" ] || [[ $request_count == *[!0-9]* ]]
                             then
                                 MonitorError "request_count : ${request_count:-无}"
@@ -34315,7 +33889,7 @@ MonitorCloudflareWorkers()
                             cf_user_pass=$cf_zone_user_pass
                             cf_user_token=$cf_zone_user_token
 
-                            MonitorCloudflareWorkersMoveZone
+                            CloudflareWorkersMonitorMoveZone
 
                             cf_zones_user_api_key[zone_index]=$cf_user_api_key_new
                             cf_zone_user_api_key=${cf_zones_user_api_key[zone_index]}
@@ -34325,14 +33899,14 @@ MonitorCloudflareWorkers()
                             curl_header_auth_key="X-Auth-Key: $cf_user_api_key"
                             curl_header_auth_token=""
 
-                            MonitorCloudflareWorkersUpdateRoutes
+                            CloudflareWorkersMonitorUpdateRoutes
                         done
 
                         for((index=0;index<20;index++));
                         do
                             if [ "$cf_use_api" -eq 1 ] 
                             then
-                                MonitorCloudflareWorkersGetRequests "$cf_user_email_new" "$cf_user_token_new" "$cf_user_api_key_new"
+                                CloudflareWorkersMonitorGetRequests "$cf_user_email_new" "$cf_user_token_new" "$cf_user_api_key_new"
                                 if [ -z "$request_count" ] || [[ $request_count == *[!0-9]* ]]
                                 then
                                     MonitorError "request_count 2 : ${request_count:-无}"
@@ -34397,7 +33971,7 @@ MonitorCloudflareWorkers()
 
                         if [ -n "$cf_user_token" ] || [ -n "$cf_user_api_key" ]
                         then
-                            MonitorCloudflareWorkersUpdateRoutes
+                            CloudflareWorkersMonitorUpdateRoutes
                         else
                             for((index=0;index<20;index++));
                             do
@@ -34408,7 +33982,7 @@ MonitorCloudflareWorkers()
                                     if [ -n "$cf_user_token" ] 
                                     then
                                         cf_zones_user_token[zone_index]=$cf_user_token
-                                        MonitorCloudflareWorkersUpdateRoutes
+                                        CloudflareWorkersMonitorUpdateRoutes
                                         break
                                     else
                                         MonitorError "无法获取 $cf_zone_user_email Token"
@@ -34426,13 +34000,13 @@ MonitorCloudflareWorkers()
                 sleep "$cf_workers_monitor_seconds" &
                 WaitTerm
 
-                GetCloudflareUsers
+                CloudflareGetUsers
             done
         } 204>&-
     } 204<"$pid_file"
 }
 
-EnableCloudflareWorkersMonitor()
+CloudflareEnableWorkersMonitor()
 {
     # deprecated
     if [ -s "/tmp/cf_workers.pid" ] && kill -0 "$(< /tmp/cf_workers.pid)" 2> /dev/null
@@ -34445,7 +34019,7 @@ EnableCloudflareWorkersMonitor()
         Println "$error workers 监控已开启\n" && exit 1
     fi
 
-    ListCloudflareWorkers
+    CloudflareListWorkers
 
     if [ "$cf_workers_count" -eq 0 ] 
     then
@@ -34457,9 +34031,9 @@ EnableCloudflareWorkersMonitor()
     workers_path=()
     workers_project_name=()
     echo -e "选择 worker, 多个 worker 用空格分隔, 比如 5 7 9-11"
-    while read -p "(默认: 取消): " workers_num 
+    while read -p "$i18n_default_cancel" workers_num 
     do
-        [ -z "$workers_num" ] && Println "已取消...\n" && exit 1
+        [ -z "$workers_num" ] && Println "$i18n_canceled...\n" && exit 1
         IFS=" " read -ra workers_num_arr <<< "$workers_num"
 
         error_no=0
@@ -34491,7 +34065,7 @@ EnableCloudflareWorkersMonitor()
 
         case "$error_no" in
             1|2|3)
-                Println "$error 请输入正确的数字\n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *)
                 for element in "${workers_num_arr[@]}"
@@ -34557,7 +34131,7 @@ EnableCloudflareWorkersMonitor()
                     break
                 ;;
                 *[!0-9]*) 
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 ;;
                 *) 
                     if [ "$history_num" -gt 0 ] && [ "$history_num" -le "$workers_monitor_stream_proxy_count" ] 
@@ -34567,7 +34141,7 @@ EnableCloudflareWorkersMonitor()
                         IFS="|" read -r -a pairs <<< "$pair"
                         break
                     else
-                        Println "$error 请输入正确的序号\n"
+                        Println "$error $i18n_input_correct_no\n"
                     fi
                 ;;
             esac
@@ -34594,21 +34168,20 @@ EnableCloudflareWorkersMonitor()
             if [ "$ibm_cf_apps_count" -gt 0 ] 
             then
                 echo
-                yn_options=( '是' '否' )
                 inquirer list_input "是否使用 IBM CF APP 中转 worker: ${workers_name[i]}" yn_options use_ibm_cf_app_yn
 
-                if [[ $use_ibm_cf_app_yn == "是" ]] 
+                if [[ $use_ibm_cf_app_yn == "$i18n_yes" ]] 
                 then
                     IbmListCfApps
                     echo -e "选择 APP"
-                    while read -p "(默认: 取消): " ibm_cf_apps_num
+                    while read -p "$i18n_default_cancel" ibm_cf_apps_num
                     do
                         case "$ibm_cf_apps_num" in
                             "")
-                                Println "已取消...\n" && exit 1
+                                Println "$i18n_canceled...\n" && exit 1
                             ;;
                             *[!0-9]*)
-                                Println "$error 请输入正确的序号\n"
+                                Println "$error $i18n_input_correct_no\n"
                             ;;
                             *)
                                 if [ "$ibm_cf_apps_num" -gt 0 ] && [ "$ibm_cf_apps_num" -le "$ibm_cf_apps_count" ]
@@ -34627,7 +34200,7 @@ EnableCloudflareWorkersMonitor()
                                     IFS="|" read -r -a ibm_cf_app_routes_path <<< "${ibm_cf_app_route_path}|"
                                     break
                                 else
-                                    Println "$error 请输入正确的序号\n"
+                                    Println "$error $i18n_input_correct_no\n"
                                 fi
                             ;;
                         esac
@@ -34645,21 +34218,21 @@ EnableCloudflareWorkersMonitor()
                         fi
                         upstream="${ibm_cf_app_routes_hostname[j]}.${ibm_cf_app_routes_domain[j]}$path"
                         ibm_cf_apps_link+=("$upstream")
-                        ibm_cf_apps_list="$ibm_cf_apps_list $green$((j+1)).${normal}\r\033[6C$upstream\n\n"
+                        ibm_cf_apps_list="$ibm_cf_apps_list $green$((j+1)).${normal}${indent_6}$upstream\n\n"
                     done
 
                     Println "$ibm_cf_apps_list"
 
                     echo -e "选择链接"
-                    while read -p "(默认: 取消): " ibm_cf_apps_link_num 
+                    while read -p "$i18n_default_cancel" ibm_cf_apps_link_num 
                     do
                         case $ibm_cf_apps_link_num in
                             "") 
-                                Println "已取消...\n"
+                                Println "$i18n_canceled...\n"
                                 exit 1
                             ;;
                             *[!0-9]*) 
-                                Println "$error 请输入正确的序号\n"
+                                Println "$error $i18n_input_correct_no\n"
                             ;;
                             *) 
                                 if [ "$ibm_cf_apps_link_num" -gt 0 ] && [ "$ibm_cf_apps_link_num" -le "$ibm_cf_app_routes_count" ] 
@@ -34668,7 +34241,7 @@ EnableCloudflareWorkersMonitor()
                                     upstream=${ibm_cf_apps_link[ibm_cf_apps_link_index]}
                                     break
                                 else
-                                    Println "$error 请输入正确的序号\n"
+                                    Println "$error $i18n_input_correct_no\n"
                                 fi
                             ;;
                         esac
@@ -34678,8 +34251,8 @@ EnableCloudflareWorkersMonitor()
             if [ -z "${upstream:-}" ] 
             then
                 Println "$info 输入源站 ip 或者 中转服务器的域名(比如 IBM CF APP 的域名)"
-                read -p "(默认: 取消): " upstream
-                [ -z "$upstream" ] && Println "已取消...\n" && exit 1
+                read -p "$i18n_default_cancel" upstream
+                [ -z "$upstream" ] && Println "$i18n_canceled...\n" && exit 1
             fi
             sed -i 's/const upstream = .*/const upstream = "'"$upstream"'"/' "$CF_WORKERS_ROOT/${workers_path[i]}/index.js"
             stream_proxy_history+=("${workers_project_name[i]} $upstream")
@@ -34689,8 +34262,7 @@ EnableCloudflareWorkersMonitor()
     done
 
     echo
-    yn_options=( '否' '是' )
-    inquirer list_input "是否更新远端 worker" yn_options update_workers_data_yn
+    inquirer list_input "是否更新远端 worker" ny_options update_workers_data_yn
 
     if [ -n "${stream_proxy_history:-}" ] 
     then
@@ -34726,7 +34298,7 @@ EnableCloudflareWorkersMonitor()
         JQ add "$CF_CONFIG" "$new_workers_monitor_history"
     fi
 
-    GetCloudflareHosts
+    CloudflareGetHosts
 
     if [ "$cf_hosts_count" -eq 0 ] 
     then
@@ -34788,15 +34360,15 @@ EnableCloudflareWorkersMonitor()
     cf_zones_list=""
     for((i=0;i<cf_zones_count;i++));
     do
-        cf_zones_list="$cf_zones_list $green$((i+1)).${normal}\r\033[6C源站: $green${cf_zones_name[i]}${normal} 用户: $green${cf_zones_user_email[i]}${normal}\n\n"
+        cf_zones_list="$cf_zones_list $green$((i+1)).${normal}${indent_6}源站: $green${cf_zones_name[i]}${normal} 用户: $green${cf_zones_user_email[i]}${normal}\n\n"
     done
 
     Println "$cf_zones_list"
 
     echo -e "选择源站, 多个源站用空格分隔, 比如 5 7 9-11"
-    while read -p "(默认: 取消): " zones_num 
+    while read -p "$i18n_default_cancel" zones_num 
     do
-        [ -z "$zones_num" ] && Println "已取消...\n" && exit 1
+        [ -z "$zones_num" ] && Println "$i18n_canceled...\n" && exit 1
         IFS=" " read -ra zones_num_arr <<< "$zones_num"
 
         error_no=0
@@ -34828,7 +34400,7 @@ EnableCloudflareWorkersMonitor()
 
         case "$error_no" in
             1|2|3)
-                Println "$error 请输入正确的数字\n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *)
                 declare -a new_array
@@ -34856,7 +34428,7 @@ EnableCloudflareWorkersMonitor()
     Println "$tip 模拟登录官网暂时有问题, 只能选 是"
     yn_options=( '是' )
     inquirer list_input "使用 api 获取 workers 请求数" yn_options yn_option
-    if [ "$yn_option" == "是" ] 
+    if [ "$yn_option" == "$i18n_yes" ] 
     then
         cf_use_api=1
         cf_workers_monitor_seconds_default=1200
@@ -34865,7 +34437,7 @@ EnableCloudflareWorkersMonitor()
         cf_workers_monitor_seconds_default=1800
     fi
 
-    GetCloudflareUsers
+    CloudflareGetUsers
     cf_zones_user_token=()
     cf_zones_user_pass=()
     cf_zones_user_api_key=()
@@ -34886,8 +34458,8 @@ EnableCloudflareWorkersMonitor()
                     cf_user_pass=${cf_users_pass[j]}
                     cf_zone_resolve_to=${cf_zones_resolve_to[i]}
                     cf_zone_subdomains=${cf_zones_subdomains[i]}
-                    GetCloudflareUserInfo
-                    GetCloudflareUsers
+                    CloudflareGetUser
+                    CloudflareGetUsers
                     if [ -z "${cf_users_api_key[j]}" ] 
                     then
                         Println "$error 请先添加 ${cf_users_email[j]} Token 或 Key\n"
@@ -34918,7 +34490,7 @@ EnableCloudflareWorkersMonitor()
                 break
             ;;
             *[!0-9]*) 
-                Println "$error 请输入正确的数字\n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *) 
                 if [ "$cf_workers_monitor_seconds" -ge $((cf_workers_monitor_seconds_default/3)) ] 
@@ -34940,24 +34512,23 @@ EnableCloudflareWorkersMonitor()
                 break
             ;;
             *[!0-9]*) 
-                Println "$error 请输入正确的数字\n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *) 
                 if [ "$cf_workers_monitor_request_counts" -ge 0 ] 
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字\n"
+                    Println "$error $i18n_input_correct_number\n"
                 fi
             ;;
         esac
     done
 
     Println "$tip 如果今天(UTC时间)已经开启过可以选 否"
-    yn_options=( '是' '否' )
     inquirer list_input "是否从第一个账号开始" yn_options start_from_begin
 
-    if [[ $start_from_begin == "是" ]] 
+    if [[ $start_from_begin == "$i18n_yes" ]] 
     then
         start_from_begin=1
     else
@@ -34969,7 +34540,7 @@ EnableCloudflareWorkersMonitor()
         if [[ ! -x $(command -v python3) ]] 
         then
             Println "$info 安装 python3 ..."
-            InstallPython
+            PythonInstall
         fi
         Println "$info 更新 ${CF_WORKERS_FILE##*/} ..."
         if [ "$sh_debug" -eq 0 ] && [ ! -f "$IPTV_ROOT/VIP" ]
@@ -34983,15 +34554,15 @@ EnableCloudflareWorkersMonitor()
 
     if [ "$sh_debug" -eq 1 ] 
     then
-        ( MonitorCloudflareWorkers ) 
+        ( CloudflareWorkersMonitor ) 
     else
-        ( MonitorCloudflareWorkers ) > /dev/null 2>> "$MONITOR_LOG" &
+        ( CloudflareWorkersMonitor ) > /dev/null 2>> "$MONITOR_LOG" &
     fi
 
     Println "$info workers 监控开启成功\n"
 }
 
-DisableCloudflareWorkersMonitor()
+CloudflareDisableWorkersMonitor()
 {
     # deprecated
     if [ -s "/tmp/cf_workers.pid" ] 
@@ -35050,32 +34621,32 @@ CloudflareWorkersMenu()
 
  $tip 当前: ${green}workers${normal} 面板
  $tip 输入: c 切换到 partner 面板\n\n"
-    read -p "请输入数字 [1-10]: " cloudflare_workers_num
+    read -p "`gettext \"输入序号\"` [1-10]: " cloudflare_workers_num
     case $cloudflare_workers_num in
         c)
             CloudflarePartnerMenu
         ;;
-        1) InstallWrangler
+        1) WranglerInstall
         ;;
-        2) UpdateWrangler
+        2) WranglerUpdate
         ;;
-        3) ViewCloudflareWorker
+        3) CloudflareListWorker
         ;;
-        4) AddCloudflareWorker
+        4) CloudflareAddWorker
         ;;
-        5) EditCloudflareWorker
+        5) CloudflareEditWorker
         ;;
-        6) DeployCloudflareWorker
+        6) CloudflareDeployWorker
         ;;
-        7) ConfigCloudflareWorkerRoute
+        7) CloudflareConfigWorkerRoute
         ;;
-        8) EnableCloudflareWorkersMonitor
+        8) CloudflareEnableWorkersMonitor
         ;;
-        9) DisableCloudflareWorkersMonitor
+        9) CloudflareDisableWorkersMonitor
         ;;
-        10) DelCloudflareWorker
+        10) CloudflareDelWorker
         ;;
-        *) Println "$error 请输入正确的数字 [1-10]\n"
+        *) Println "$error $i18n_input_correct_number [1-10]\n"
         ;;
     esac
 }
@@ -35126,7 +34697,7 @@ IbmGetUsers()
         space=${space%\"}
         ibm_users_space+=("$space")
 
-        ibm_users_list="$ibm_users_list $green$ibm_users_count.${normal}\r\033[6C地区: $green$region${normal}  资源组: $green$resource_group${normal}\n\033[6C邮箱: $green$email${normal}  密码: $green$pass${normal}\n\033[6C组织: $green$org${normal}  空间: $green$space${normal}\n\n"
+        ibm_users_list="$ibm_users_list $green$ibm_users_count.${normal}${indent_6}地区: $green$region${normal}  资源组: $green$resource_group${normal}\n${indent_6}邮箱: $green$email${normal}  密码: $green$pass${normal}\n${indent_6}组织: $green$org${normal}  空间: $green$space${normal}\n\n"
     done < <($JQ_FILE '.users[]|[.email,.pass,.region,.resource_group,.org,.space]|join(" ")' "$IBM_CONFIG")
     return 0
 }
@@ -35155,7 +34726,7 @@ IbmGetCfApps()
         route_path=${route_path%\"}
         ibm_cf_apps_route_path+=("$route_path")
 
-        ibm_cf_apps_list="$ibm_cf_apps_list $green$ibm_cf_apps_count.${normal}\r\033[6CAPP: $green$name${normal}  用户: $green$user_email${normal}  路由数: $green$routes_count${normal}\n\n"
+        ibm_cf_apps_list="$ibm_cf_apps_list $green$ibm_cf_apps_count.${normal}${indent_6}APP: $green$name${normal}  用户: $green$user_email${normal}  路由数: $green$routes_count${normal}\n\n"
     done < <($JQ_FILE '.cf.apps[]|[.name,.user_email,(.routes|length),([.routes[].hostname]|join("|")),([.routes[].port]|join("|")),([.routes[].domain]|join("|")),([.routes[].path]|join("|"))]|join("^")' "$IBM_CONFIG")
     return 0
 }
@@ -35188,14 +34759,14 @@ IbmLoginUser()
     fi
 
     echo -e "选择用户"
-    while read -p "(默认: 取消): " ibm_users_num
+    while read -p "$i18n_default_cancel" ibm_users_num
     do
         case "$ibm_users_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$ibm_users_num" -gt 0 ] && [ "$ibm_users_num" -le "$ibm_users_count" ]
@@ -35209,7 +34780,7 @@ IbmLoginUser()
                     ibm_user_space=${ibm_users_space[ibm_users_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -35225,14 +34796,14 @@ IbmUpdateCfApp()
     IbmListCfApps
 
     echo -e "选择 APP"
-    while read -p "(默认: 取消): " ibm_cf_apps_num
+    while read -p "$i18n_default_cancel" ibm_cf_apps_num
     do
         case "$ibm_cf_apps_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$ibm_cf_apps_num" -gt 0 ] && [ "$ibm_cf_apps_num" -le "$ibm_cf_apps_count" ]
@@ -35251,7 +34822,7 @@ IbmUpdateCfApp()
                     IFS="|" read -r -a ibm_cf_app_routes_path <<< "${ibm_cf_app_route_path}|"
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -35286,8 +34857,8 @@ IbmUpdateCfApp()
 IbmSetUserEmail()
 {
     Println "请输入用户邮箱"
-    read -p "(默认: 取消): " ibm_user_email
-    [ -z "$ibm_user_email" ] && Println "已取消...\n" && exit 1
+    read -p "$i18n_default_cancel" ibm_user_email
+    [ -z "$ibm_user_email" ] && Println "$i18n_canceled...\n" && exit 1
     if [[ -n $($JQ_FILE '.users[]|select(.email=="'"$ibm_user_email"'")' "$IBM_CONFIG") ]] 
     then
         Println "$error 用户已经存在\n"
@@ -35299,8 +34870,8 @@ IbmSetUserEmail()
 IbmSetUserPass()
 {
     Println "请输入用户密码"
-    read -p "(默认: 取消): " ibm_user_pass
-    [ -z "$ibm_user_pass" ] && Println "已取消...\n" && exit 1
+    read -p "$i18n_default_cancel" ibm_user_pass
+    [ -z "$ibm_user_pass" ] && Println "$i18n_canceled...\n" && exit 1
     Println "  用户密码: $green $ibm_user_pass ${normal}\n"
 }
 
@@ -35419,14 +34990,14 @@ IbmEditUser()
     fi
 
     echo -e "选择用户"
-    while read -p "(默认: 取消): " ibm_users_num
+    while read -p "$i18n_default_cancel" ibm_users_num
     do
         case "$ibm_users_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$ibm_users_num" -gt 0 ] && [ "$ibm_users_num" -le "$ibm_users_count" ]
@@ -35434,7 +35005,7 @@ IbmEditUser()
                     ibm_users_index=$((ibm_users_num-1))
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -35486,8 +35057,8 @@ IbmEditUser()
 IbmSetCfAppName()
 {
     Println "请输入 APP 名称\n$tip 确保已经在官网建立此 CF APP, 也可以用命令 ibmcloud dev create 新建\n"
-    read -p "(默认: 取消): " ibm_cf_app_name
-    [ -z "$ibm_cf_app_name" ] && Println "已取消...\n" && exit 1
+    read -p "$i18n_default_cancel" ibm_cf_app_name
+    [ -z "$ibm_cf_app_name" ] && Println "$i18n_canceled...\n" && exit 1
     if [[ -n $($JQ_FILE '.cf.apps[]|select(.user_email=="'"$ibm_user_email"'" and .name=="'"$ibm_cf_app_name"'")' "$IBM_CONFIG") ]] 
     then
         Println "$error 此 APP 已存在\n"
@@ -35625,14 +35196,14 @@ IbmListCfApp()
     IbmListCfApps
 
     echo -e "选择 APP"
-    while read -p "(默认: 取消): " ibm_cf_apps_num
+    while read -p "$i18n_default_cancel" ibm_cf_apps_num
     do
         case "$ibm_cf_apps_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$ibm_cf_apps_num" -gt 0 ] && [ "$ibm_cf_apps_num" -le "$ibm_cf_apps_count" ]
@@ -35651,7 +35222,7 @@ IbmListCfApp()
                     IFS="|" read -r -a ibm_cf_app_routes_path <<< "${ibm_cf_app_route_path}|"
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -35681,7 +35252,7 @@ IbmListCfApp()
     ibm_cf_app_routes_list=""
     for((i=0;i<ibm_cf_app_routes_count;i++));
     do
-        ibm_cf_app_routes_list="$ibm_cf_app_routes_list $green$((i+1)).${normal}\r\033[6CHost: $green${ibm_cf_app_routes_hostname[i]}${normal}  端口: $green${ibm_cf_app_routes_port[i]}${normal}\n\033[6C域名: $green${ibm_cf_app_routes_domain[i]}${normal}  路径: $green${ibm_cf_app_routes_path[i]:-无}${normal}\n\n"
+        ibm_cf_app_routes_list="$ibm_cf_app_routes_list $green$((i+1)).${normal}${indent_6}Host: $green${ibm_cf_app_routes_hostname[i]}${normal}  端口: $green${ibm_cf_app_routes_port[i]}${normal}\n${indent_6}域名: $green${ibm_cf_app_routes_domain[i]}${normal}  路径: $green${ibm_cf_app_routes_path[i]:-无}${normal}\n\n"
     done
 
     Println "APP: $green$ibm_cf_app_name${normal}\n\n区域: $green$ibm_user_region${normal}\n\n用户: $green$ibm_user_email${normal}\n\n资源组: $green$ibm_user_resource_group${normal}\n\n组织：$green$ibm_user_org${normal}\n\n空间：$green$ibm_user_space${normal}\n\n路由:\n\n${ibm_cf_app_routes_list:-无}\n"
@@ -35724,7 +35295,7 @@ IbmSetCfAppRouteDomain()
                 break
             ;;
             *[!0-9]*) 
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *) 
                 if [ "$domains_num" -gt 0 ] && [ "$domains_num" -le "$domains_count" ]
@@ -35733,7 +35304,7 @@ IbmSetCfAppRouteDomain()
                     ibm_cf_app_route_domain=${domains[domains_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -35745,8 +35316,8 @@ IbmSetCfAppRouteDomain()
 IbmSetCfAppRouteHostname()
 {
     Println "请输入 http 路由 hostname (子域名名称)"
-    read -p "(默认: 取消): " ibm_cf_app_route_hostname
-    [ -z "$ibm_cf_app_route_hostname" ] && Println "已取消...\n" && exit 1
+    read -p "$i18n_default_cancel" ibm_cf_app_route_hostname
+    [ -z "$ibm_cf_app_route_hostname" ] && Println "$i18n_canceled...\n" && exit 1
     Println "  路由 hostname: $green $ibm_cf_app_route_hostname ${normal}\n"
 }
 
@@ -35763,11 +35334,11 @@ IbmSetCfAppRoutePath()
 IbmSetCfAppRoutePort()
 {
     Println "请输入路由指向的 APP 端口"
-    while read -p "(默认: 取消): " ibm_cf_app_route_port 
+    while read -p "$i18n_default_cancel" ibm_cf_app_route_port 
     do
         case $ibm_cf_app_route_port in
             "") 
-                Println "已取消...\n"
+                Println "$i18n_canceled...\n"
                 exit 1
             ;;
             *[!0-9]*) 
@@ -35851,14 +35422,14 @@ IbmDelUser()
     IbmListUsers
 
     echo -e "选择用户"
-    while read -p "(默认: 取消): " ibm_users_num
+    while read -p "$i18n_default_cancel" ibm_users_num
     do
         case "$ibm_users_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$ibm_users_num" -gt 0 ] && [ "$ibm_users_num" -le "$ibm_users_count" ]
@@ -35867,7 +35438,7 @@ IbmDelUser()
                     ibm_user_email=${ibm_users_email[ibm_users_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -35888,10 +35459,9 @@ IbmDelApp()
     ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
 
     echo
-    yn_options=( '是' '否' )
     inquirer list_input "是否删除 APP 绑定的路由" yn_options delete_app_routes_yn
 
-    if [[ $delete_app_routes_yn == "是" ]] 
+    if [[ $delete_app_routes_yn == "$i18n_yes" ]] 
     then
         ibmcloud cf delete "$ibm_cf_app_name" -r
     else
@@ -35909,11 +35479,11 @@ IbmDelAppRoute()
     IbmListCfApp
 
     echo -e "选择需要删除的路由"
-    while read -p "(默认: 取消): " ibm_cf_app_routes_num
+    while read -p "$i18n_default_cancel" ibm_cf_app_routes_num
     do
         case $ibm_cf_app_routes_num in
             "") 
-                Println "已取消...\n"
+                Println "$i18n_canceled...\n"
                 exit 1
             ;;
             *[!0-9]*) 
@@ -35929,7 +35499,7 @@ IbmDelAppRoute()
                     ibm_cf_app_route_path=${ibm_cf_app_routes_path[ibm_cf_app_routes_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -36004,7 +35574,7 @@ IbmDownloadV2ray()
         Println "$error ibm $v2ray_name 已存在\n"
     else
         DepsCheck
-        InstallJQ
+        JQInstall
 
         Println "$info 下载 ibm $v2ray_name ..."
         cd ~
@@ -36208,7 +35778,7 @@ IbmV2rayMenu()
  ${green}23.${normal} 删除出站账号
 
     "
-    read -p "(默认: 取消): " ibm_v2ray_num
+    read -p "$i18n_default_cancel" ibm_v2ray_num
     case $ibm_v2ray_num in
         1) 
             IbmDownloadV2ray
@@ -36301,7 +35871,7 @@ IbmV2rayMenu()
             IbmUpdateV2rayConfig
             V2rayDeleteOutboundAccount
         ;;
-        *) Println "$error 请输入正确的数字 [1-23]\n"
+        *) Println "$error $i18n_input_correct_number [1-23]\n"
         ;;
     esac
 }
@@ -36314,9 +35884,9 @@ IbmSetCfAppCron()
     echo -e "$tip 多个 APP 用空格分隔, 比如 5 7 9-11\n"
     apps_name=()
     apps_user_email=()
-    while read -p "(默认: 取消): " apps_num
+    while read -p "$i18n_default_cancel" apps_num
     do
-        [ -z "$apps_num" ] && Println "已取消...\n" && exit 1
+        [ -z "$apps_num" ] && Println "$i18n_canceled...\n" && exit 1
         IFS=" " read -ra apps_num_arr <<< "$apps_num"
 
         error_no=0
@@ -36348,7 +35918,7 @@ IbmSetCfAppCron()
 
         case "$error_no" in
             1|2|3)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 for element in "${apps_num_arr[@]}"
@@ -36384,7 +35954,7 @@ IbmSetCfAppCron()
         ibm_cf_apps_path_count=$((ibm_cf_apps_path_count+1))
         app_path=${path##*/}
         ibm_cf_apps_path+=("$app_path")
-        ibm_cf_apps_path_list="$ibm_cf_apps_path_list $ibm_cf_apps_path_count.\r\033[6C$green$app_path${normal}\n\n"
+        ibm_cf_apps_path_list="$ibm_cf_apps_path_list $ibm_cf_apps_path_count.${indent_6}$green$app_path${normal}\n\n"
     done
 
     if [ "$ibm_cf_apps_path_count" -eq 0 ] 
@@ -36399,15 +35969,15 @@ IbmSetCfAppCron()
     do
         Println "$ibm_cf_apps_path_list"
         echo -e "$info 选择 APP: $green${apps_name[i]}${normal} 本地目录"
-        while read -p "(默认: 取消): " apps_path_num 
+        while read -p "$i18n_default_cancel" apps_path_num 
         do
             case $apps_path_num in
                 "") 
-                    Println "已取消...\n"
+                    Println "$i18n_canceled...\n"
                     exit 1
                 ;;
                 *[!0-9]*) 
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 ;;
                 *) 
                     if [ "$apps_path_num" -gt 0 ] && [ "$apps_path_num" -le "$ibm_cf_apps_path_count" ] 
@@ -36416,7 +35986,7 @@ IbmSetCfAppCron()
                         apps_path+=("${ibm_cf_apps_path[ibm_cf_apps_path_index]}")
                         break
                     else
-                        Println "$error 请输入正确的序号\n"
+                        Println "$error $i18n_input_correct_no\n"
                     fi
                 ;;
             esac
@@ -36444,14 +36014,14 @@ IbmSetCfAppCron()
                 break
             ;;
             *[!0-9]*) 
-                Println "$error 请输入正确的数字\n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *) 
                 if [ "$cron_days" -gt 0 ] 
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字\n"
+                    Println "$error $i18n_input_correct_number\n"
                 fi
             ;;
         esac
@@ -36466,14 +36036,14 @@ IbmSetCfAppCron()
                 break
             ;;
             *[!0-9]*) 
-                Println "$error 请输入正确的数字\n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *) 
                 if [ "$cron_hour" -ge 0 ] && [ "$cron_hour" -le 23 ]
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字\n"
+                    Println "$error $i18n_input_correct_number\n"
                 fi
             ;;
         esac
@@ -36488,14 +36058,14 @@ IbmSetCfAppCron()
                 break
             ;;
             *[!0-9]*) 
-                Println "$error 请输入正确的数字\n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *) 
                 if [ "$cron_min" -gt 0 ] && [ "$cron_hour" -le 59 ]
                 then
                     break
                 else
-                    Println "$error 请输入正确的数字\n"
+                    Println "$error $i18n_input_correct_number\n"
                 fi
             ;;
         esac
@@ -36676,14 +36246,7 @@ IbmUninstallCfCli()
     fi
 
     echo
-    yn_options=( '否' '是' )
-    inquirer list_input "确定删除 IBM CF CLI" yn_options yn_option
-
-    if [ "$yn_option" == "否" ] 
-    then
-        Println "已取消...\n"
-        exit 1
-    fi
+    AskIfContinue n "`gettext \"确定删除 IBM CF CLI\"`"
 
     EXIT_STATUS=0
 
@@ -36727,7 +36290,7 @@ IbmCfMenu()
  ${green}19.${normal} 更新脚本
 
  $tip 输入: ibm 打开面板\n\n"
-    read -p "(默认: 取消): " ibm_cf_num
+    read -p "$i18n_default_cancel" ibm_cf_num
     case $ibm_cf_num in
         1) IbmInstallCfCli
         ;;
@@ -36777,9 +36340,9 @@ IbmCfMenu()
         ;;
         18) IbmUninstallCfCli
         ;;
-        19) UpdateShFile ibm
+        19) ShFileUpdate ibm
         ;;
-        *) Println "$error 请输入正确的数字 [1-19]\n"
+        *) Println "$error $i18n_input_correct_number [1-19]\n"
         ;;
     esac
 }
@@ -36787,24 +36350,24 @@ IbmCfMenu()
 VipSetHostIp()
 {
     Println "请输入 VIP 频道所在服务器 IP/域名"
-    read -p "(默认: 取消): " vip_host_ip
-    [ -z "$vip_host_ip" ] && Println "已取消...\n" && exit 1
+    read -p "$i18n_default_cancel" vip_host_ip
+    [ -z "$vip_host_ip" ] && Println "$i18n_canceled...\n" && exit 1
     Println "  VIP 服务器 IP/域名: $green $vip_host_ip ${normal}\n"
 }
 
 VipSetHostPort()
 {
     Println "请输入 VIP 频道所在服务器端口"
-    read -p "(默认: 取消): " vip_host_port
-    [ -z "$vip_host_port" ] && Println "已取消...\n" && exit 1
+    read -p "$i18n_default_cancel" vip_host_port
+    [ -z "$vip_host_port" ] && Println "$i18n_canceled...\n" && exit 1
     Println "  VIP 服务器端口: $green $vip_host_port ${normal}\n"
 }
 
 VipSetHostSeed()
 {
     Println "请输入 VIP 频道所在服务器的 seed"
-    read -p "(默认: 取消): " vip_host_seed
-    [ -z "$vip_host_seed" ] && Println "已取消...\n" && exit 1
+    read -p "$i18n_default_cancel" vip_host_seed
+    [ -z "$vip_host_seed" ] && Println "$i18n_canceled...\n" && exit 1
     Println "  VIP 服务器 seed: $green $vip_host_seed ${normal}\n"
 }
 
@@ -36821,10 +36384,9 @@ VipSetHostToken()
 VipSetHostStatus()
 {
     echo
-    yn_options=( '是' '否' )
     inquirer list_input "是否开启用此 VIP 服务器" yn_options vip_host_status
 
-    if [[ $vip_host_status == "是" ]] 
+    if [[ $vip_host_status == "$i18n_yes" ]] 
     then
         vip_host_status_yn="on"
         vip_host_status_text="$green启用${normal}"
@@ -36871,14 +36433,14 @@ VipEditHost()
 {
     VipListHosts
     echo -e "选择 VIP 服务器"
-    while read -p "(默认: 取消): " vip_hosts_num
+    while read -p "$i18n_default_cancel" vip_hosts_num
     do
         case "$vip_hosts_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$vip_hosts_num" -gt 0 ] && [ "$vip_hosts_num" -le "$vip_hosts_count" ]
@@ -36897,7 +36459,7 @@ VipEditHost()
                     fi
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -36913,7 +36475,7 @@ VipEditHost()
     ${green}5.${normal} 修改 状态
 
 "
-    read -p "(默认: 取消): " edit_vip_host_num
+    read -p "$i18n_default_cancel" edit_vip_host_num
 
     case $edit_vip_host_num in
         1) 
@@ -36951,7 +36513,7 @@ VipEditHost()
             JQ update "$VIP_FILE" "$vip_host_status_yn"
             Println "$info 状态修改成功\n"
         ;;
-        *) Println "已取消...\n" && exit 1
+        *) Println "$i18n_canceled...\n" && exit 1
         ;;
     esac
 }
@@ -36989,7 +36551,7 @@ VipGetHosts()
         vip_hosts_channel_name+=("$channels_name")
         channels_epg_id=${channels_epg_id%\"}
         vip_hosts_channel_epg_id+=("$channels_epg_id")
-        vip_hosts_list="$vip_hosts_list $green$vip_hosts_count.${normal}\r\033[6C服务器: $green$ip${normal}  端口: $green$port${normal}  频道数: $green$channels_count${normal}$status_text\n\033[6Cseed: $green$seed${normal}  token: $green${token:-无}${normal}\n\n"
+        vip_hosts_list="$vip_hosts_list $green$vip_hosts_count.${normal}${indent_6}服务器: $green$ip${normal}  端口: $green$port${normal}  频道数: $green$channels_count${normal}$status_text\n${indent_6}seed: $green$seed${normal}  token: $green${token:-无}${normal}\n\n"
     done < <($JQ_FILE '.hosts[]|[.ip,.port,.seed,.token,.status,(.channels|length),([.channels[].id]|join("|")),([.channels[].name]|join("|")),([.channels[].epg_id]|join("|"))]|join("^")' "$VIP_FILE")
     return 0
 }
@@ -37011,23 +36573,18 @@ VipListHosts()
     fi
 }
 
-ViewVipHost()
-{
-    VipListChannels
-}
-
 VipDelHost()
 {
     VipListHosts
     echo -e "选择 VIP 服务器"
-    while read -p "(默认: 取消): " vip_hosts_num
+    while read -p "$i18n_default_cancel" vip_hosts_num
     do
         case "$vip_hosts_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$vip_hosts_num" -gt 0 ] && [ "$vip_hosts_num" -le "$vip_hosts_count" ]
@@ -37037,7 +36594,7 @@ VipDelHost()
                     vip_host_port=${vip_hosts_port[vip_hosts_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -37199,10 +36756,10 @@ VipEditUser()
     do
         case "$vip_users_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$vip_users_num" -gt 0 ] && [ "$vip_users_num" -le "$vip_users_count" ]
@@ -37221,7 +36778,7 @@ VipEditUser()
                     vip_user_name=${vip_users_name[vip_users_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -37236,7 +36793,7 @@ VipEditUser()
     ${green}4.${normal} 修改 验证类型/到期日
 
 "
-    read -p "(默认: 取消): " edit_vip_user_num
+    read -p "$i18n_default_cancel" edit_vip_user_num
 
     case $edit_vip_user_num in
         1) 
@@ -37269,7 +36826,7 @@ VipEditUser()
             JQ update "$VIP_FILE" "$vip_user_expire" number
             Println "$info 验证类型/到期日修改成功\n"
         ;;
-        *) Println "已取消...\n" && exit 1
+        *) Println "$i18n_canceled...\n" && exit 1
         ;;
     esac
 }
@@ -37306,7 +36863,7 @@ VipGetUsers()
         else
             m3u_link="${FFMPEG_MIRROR_LINK%/*}/vip/$license/playlist.m3u"
         fi
-        vip_users_list="$vip_users_list $green$vip_users_count.${normal}\r\033[6C用户名: $green$name${normal}  ip: $green$ip${normal}  到期日: $green$expire_text${normal}\n\033[6C授权码: $green$license${normal}  认证方式: $green$sum${normal}\n\033[6Cm3u 播放链接: $green$m3u_link${normal}\n\n"
+        vip_users_list="$vip_users_list $green$vip_users_count.${normal}${indent_6}用户名: $green$name${normal}  ip: $green$ip${normal}  到期日: $green$expire_text${normal}\n${indent_6}授权码: $green$license${normal}  认证方式: $green$sum${normal}\n${indent_6}m3u 播放链接: $green$m3u_link${normal}\n\n"
     done < <($JQ_FILE '.users[]|[.ip,.license,.sum,.expire,.name]|join(":")' "$VIP_FILE")
     return 0
 }
@@ -37341,10 +36898,10 @@ VipDelUser()
     do
         case "$vip_users_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$vip_users_num" -gt 0 ] && [ "$vip_users_num" -le "$vip_users_count" ]
@@ -37357,7 +36914,7 @@ VipDelUser()
                     vip_user_name=${vip_users_name[vip_users_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -37373,9 +36930,9 @@ VipDelUser()
 VipSetChannelId()
 {
     Println "请输入频道 ID, 同时也是目录名称"
-    read -p "(默认: 取消): " vip_channel_id
+    read -p "$i18n_default_cancel" vip_channel_id
 
-    [ -z "$vip_channel_id" ] && Println "已取消...\n" && exit 1
+    [ -z "$vip_channel_id" ] && Println "$i18n_canceled...\n" && exit 1
 
     if [[ -n $($JQ_FILE --arg vip_host_ip "$vip_host_ip" --arg vip_channel_id "$vip_channel_id" '.hosts[] | select(.ip==$vip_host_ip).channels[] | select(.id==$vip_channel_id)' "$VIP_FILE") ]] 
     then
@@ -37386,8 +36943,8 @@ VipSetChannelId()
 VipSetChannelName()
 {
     Println "请输入频道名称(可以是中文)"
-    read -p "(默认: 取消): " vip_channel_name
-    [ -z "$vip_channel_name" ] && Println "已取消...\n" && exit 1
+    read -p "$i18n_default_cancel" vip_channel_name
+    [ -z "$vip_channel_name" ] && Println "$i18n_canceled...\n" && exit 1
     Println "  VIP 频道名称: $green $vip_channel_name ${normal}\n"
 }
 
@@ -37469,7 +37026,7 @@ VipSetChannel()
         echo -e "$tip 多个频道用空格分隔, 比如 5 7 9-11"
         while read -p "请选择频道: " vip_channels_num
         do
-            [ -z "$vip_channels_num" ] && Println "已取消...\n" && exit 1
+            [ -z "$vip_channels_num" ] && Println "$i18n_canceled...\n" && exit 1
             IFS=" " read -ra vip_channels_num_arr <<< "$vip_channels_num"
 
             error_no=0
@@ -37498,7 +37055,7 @@ VipSetChannel()
 
             case "$error_no" in
                 1|2|3)
-                    Println "$error 请输入正确的数字或直接回车 \n"
+                    Println "$error $i18n_input_correct_number\n"
                 ;;
                 *)
                     declare -a new_array
@@ -37550,9 +37107,8 @@ VipSetChannel()
                         if [ "$vip_host_found" -eq 0 ] 
                         then
                             echo
-                            yn_options=( '是' '否' )
                             inquirer list_input "是否添加服务器 $vip_channel_host_ip:$vip_channel_host_port" yn_options add_vip_host_yn
-                            if [[ $add_vip_host_yn == "是" ]] 
+                            if [[ $add_vip_host_yn == "$i18n_yes" ]] 
                             then
                                 vip_host_ip=$vip_channel_host_ip
                                 vip_host_port=$vip_channel_host_port
@@ -37617,14 +37173,14 @@ VipSetChannel()
 
     VipListHosts
     echo -e "选择 VIP 服务器"
-    while read -p "(默认: 取消): " vip_hosts_num
+    while read -p "$i18n_default_cancel" vip_hosts_num
     do
         case "$vip_hosts_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$vip_hosts_num" -gt 0 ] && [ "$vip_hosts_num" -le "$vip_hosts_count" ]
@@ -37634,7 +37190,7 @@ VipSetChannel()
                     vip_host_port=${vip_hosts_port[vip_hosts_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -37642,13 +37198,12 @@ VipSetChannel()
 
     # awk -v ORS=" " '$1 { print $0; } END { printf("\n"); }'
     echo
-    yn_options=( '否' '是' )
-    inquirer list_input "是否批量添加" yn_options vip_bulk_add
+    inquirer list_input "是否批量添加" ny_options vip_bulk_add
 
-    if [[ $vip_bulk_add == "是" ]] 
+    if [[ $vip_bulk_add == "$i18n_yes" ]] 
     then
         Println "请输入频道 ID, 同时也是目录名称和频道名称, 用空格分隔"
-        read -p "(默认: 取消): " vip_channel
+        read -p "$i18n_default_cancel" vip_channel
         IFS=" " read -r -a vip_channels <<< "$vip_channel"
         new_channels=""
         for vip_channel in "${vip_channels[@]}"
@@ -37692,7 +37247,7 @@ VipEditChannel()
     echo -e "$tip 多个频道用空格分隔, 比如 5 7 9-11"
     while read -p "请选择频道: " vip_channels_num
     do
-        [ -z "$vip_channels_num" ] && Println "已取消...\n" && exit 1
+        [ -z "$vip_channels_num" ] && Println "$i18n_canceled...\n" && exit 1
         IFS=" " read -ra vip_channels_num_arr <<< "$vip_channels_num"
 
         error_no=0
@@ -37721,7 +37276,7 @@ VipEditChannel()
 
         case "$error_no" in
             1|2|3)
-                Println "$error 请输入正确的数字或直接回车 \n"
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *)
                 declare -a new_array
@@ -37756,7 +37311,7 @@ VipEditChannel()
     ${green}3.${normal} 修改频道 epg
 
 "
-                    read -p "(默认: 取消): " edit_vip_channel_num
+                    read -p "$i18n_default_cancel" edit_vip_channel_num
 
                     case $edit_vip_channel_num in
                         1) 
@@ -37780,7 +37335,7 @@ VipEditChannel()
                             JQ update "$VIP_FILE" "$vip_channel_epg_id"
                             Println "$info 频道 epg 修改成功\n"
                         ;;
-                        *) Println "已取消...\n" && exit 1
+                        *) Println "$i18n_canceled...\n" && exit 1
                         ;;
                     esac
                 done
@@ -37797,10 +37352,10 @@ VipListChannels()
     do
         case "$vip_hosts_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$vip_hosts_num" -gt 0 ] && [ "$vip_hosts_num" -le "$vip_hosts_count" ]
@@ -37818,7 +37373,7 @@ VipListChannels()
                     IFS="|" read -r -a vip_channels_epg_id <<< "${vip_channel_epg_id}|"
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -37899,14 +37454,14 @@ VipGetStreamLink()
     esac
 }
 
-VipViewChannel()
+VipListChannel()
 {
     VipListChannels
 
     echo -e "$tip 多个频道用空格分隔, 比如 5 7 9-11"
     while read -p "请选择频道: " vip_channels_num
     do
-        [ -z "$vip_channels_num" ] && Println "已取消...\n" && exit 1
+        [ -z "$vip_channels_num" ] && Println "$i18n_canceled...\n" && exit 1
         IFS=" " read -ra vip_channels_num_arr <<< "$vip_channels_num"
 
         error_no=0
@@ -37935,7 +37490,7 @@ VipViewChannel()
 
         case "$error_no" in
             1|2|3)
-                Println "$error 请输入正确的序号 \n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 declare -a new_array
@@ -37966,10 +37521,10 @@ VipViewChannel()
     do
         case "$vip_users_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$vip_users_num" -gt 0 ] && [ "$vip_users_num" -le "$vip_users_count" ]
@@ -37982,7 +37537,7 @@ VipViewChannel()
                     vip_user_name=${vip_users_name[vip_users_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -38029,10 +37584,10 @@ VipDelChannel()
         fi
         case "$vip_channels_num" in
             "")
-                Println "已取消...\n" && exit 1
+                Println "$i18n_canceled...\n" && exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$vip_channels_num" -gt 0 ] && [ "$vip_channels_num" -le "$vip_channels_count" ]
@@ -38042,7 +37597,7 @@ VipDelChannel()
                     vip_channel_name=${vip_channels_name[vip_channels_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -38508,7 +38063,7 @@ VipListUserChannel()
             fi
             if [ "$now" -lt "$vip_user_expire" ] || [ "$vip_user_expire" -eq 0 ]
             then
-                vip_users_list="$vip_users_list $green$((i+1)).${normal}\r\033[6C用户名: $green$vip_user_name${normal}  ip: $green$vip_user_ip${normal}  到期日: $green$expire_text${normal}\n\033[6C授权码: $green$vip_user_license${normal}\n\033[6Cm3u 播放链接: $green${FFMPEG_MIRROR_LINK%/*}/vip/$vip_user_license/playlist.m3u${normal}\n\n"
+                vip_users_list="$vip_users_list $green$((i+1)).${normal}${indent_6}用户名: $green$vip_user_name${normal}  ip: $green$vip_user_ip${normal}  到期日: $green$expire_text${normal}\n${indent_6}授权码: $green$vip_user_license${normal}\n${indent_6}m3u 播放链接: $green${FFMPEG_MIRROR_LINK%/*}/vip/$vip_user_license/playlist.m3u${normal}\n\n"
             fi
         done
 
@@ -38527,8 +38082,8 @@ VipListUserChannel()
 VipVerifyLicense()
 {
     Println "请输入授权码"
-    read -p "(默认: 取消): " vip_user_license
-    [ -z "$vip_user_license" ] && Println "已取消...\n" && exit 1
+    read -p "$i18n_default_cancel" vip_user_license
+    [ -z "$vip_user_license" ] && Println "$i18n_canceled...\n" && exit 1
 
     if vip_user=$(wget --timeout=10 --tries=3 --no-check-certificate "${FFMPEG_MIRROR_LINK%/*}/vip/$vip_user_license/license.json" -qO- 2> /dev/null)
     then
@@ -38553,13 +38108,13 @@ VipVerifyLicense()
 
 VipUserMenu()
 {
-    Println "  VIP 面板
+    Println "  `gettext \"VIP 面板\"`
 
-  ${red}1.${normal} 查看 VIP 频道
-  ${red}2.${normal} 输入 VIP 授权码
+  ${red}1.${normal} `gettext \"查看 VIP 频道\"`
+  ${red}2.${normal} `gettext \"输入 VIP 授权码\"`
 
- $tip 输入: h 切换到 HLS 面板, f 切换到 FLV 面板\n\n"
-    read -p "请输入数字 [1-2]: " vip_menu_num
+ `eval_gettext \"\\\$tip 输入: h 切换到 HLS 面板, f 切换到 FLV 面板\"`\n\n"
+    read -p "`gettext \"输入序号\"` [1-2]: " vip_menu_num
     case "$vip_menu_num" in
         h)
             kind=""
@@ -38575,38 +38130,38 @@ VipUserMenu()
         ;;
         2) VipVerifyLicense
         ;;
-        *) Println "$error 请输入正确的数字 [1-2]\n"
+        *) Println "$error $i18n_input_correct_number [1-2]\n"
         ;;
     esac
 }
 
 VipMenu()
 {
-    [ ! -d "$IPTV_ROOT" ] && Println "$error 请先输入 tv 安装 !\n" && exit 1
+    [ ! -d "$IPTV_ROOT" ] && Println "`eval_gettext \"\\\$error 请先输入 tv 安装 !\"`\n" && exit 1
     if [ ! -f "$IPTV_ROOT/VIP" ] 
     then
         VipUserMenu
         return 0
     fi
-    Println "  VIP 面板
+    Println "  `gettext \"VIP 面板\"`
 
-  ${red}1.${normal} 查看 VIP 用户
-  ${red}2.${normal} 添加 VIP 用户
-  ${red}3.${normal} 设置 VIP 用户
-  ${red}4.${normal} 查看 VIP 频道
-  ${red}5.${normal} 添加 VIP 频道
-  ${red}6.${normal} 设置 VIP 频道
-  ${red}7.${normal} 查看 VIP 服务器
-  ${red}8.${normal} 添加 VIP 服务器
-  ${red}9.${normal} 设置 VIP 服务器
- ${red}10.${normal} 删除 VIP 用户
- ${red}11.${normal} 删除 VIP 频道
- ${red}12.${normal} 删除 VIP 服务器
- ${red}13.${normal} 开启 VIP
- ${red}14.${normal} 关闭 VIP
+  ${red}1.${normal} `gettext \"查看 VIP 用户\"`
+  ${red}2.${normal} `gettext \"添加 VIP 用户\"`
+  ${red}3.${normal} `gettext \"设置 VIP 用户\"`
+  ${red}4.${normal} `gettext \"查看 VIP 频道\"`
+  ${red}5.${normal} `gettext \"添加 VIP 频道\"`
+  ${red}6.${normal} `gettext \"设置 VIP 频道\"`
+  ${red}7.${normal} `gettext \"查看 VIP 服务器\"`
+  ${red}8.${normal} `gettext \"添加 VIP 服务器\"`
+  ${red}9.${normal} `gettext \"设置 VIP 服务器\"`
+ ${red}10.${normal} `gettext \"删除 VIP 用户\"`
+ ${red}11.${normal} `gettext \"删除 VIP 频道\"`
+ ${red}12.${normal} `gettext \"删除 VIP 服务器\"`
+ ${red}13.${normal} `gettext \"开启 VIP\"`
+ ${red}14.${normal} `gettext \"关闭 VIP\"`
 
- $tip 输入: h 切换到 HLS 面板, f 切换到 FLV 面板\n\n"
-    read -p "请输入数字 [1-14]: " vip_menu_num
+ `eval_gettext \"\\\$tip 输入: h 切换到 HLS 面板, f 切换到 FLV 面板\"`\n\n"
+    read -p "`gettext \"输入序号\"` [1-14]: " vip_menu_num
     case "$vip_menu_num" in
         h)
             kind=""
@@ -38624,13 +38179,13 @@ VipMenu()
         ;;
         3) VipEditUser
         ;;
-        4) VipViewChannel
+        4) VipListChannel
         ;;
         5) VipSetChannel
         ;;
         6) VipEditChannel
         ;;
-        7) ViewVipHost
+        7) VipListHosts
         ;;
         8) VipAddHost
         ;;
@@ -38646,7 +38201,7 @@ VipMenu()
         ;;
         14) VipDisable
         ;;
-        *) Println "$error 请输入正确的数字 [1-14]\n"
+        *) Println "$error $i18n_input_correct_number [1-14]\n"
         ;;
     esac
 }
@@ -38688,13 +38243,7 @@ VimConfig()
     if [ -e ~/.vimrc ] 
     then
         echo
-        yn_options=( '否' '是' )
-        inquirer list_input "将安装 vim-plug 并覆盖 ~/.vimrc , 是否继续" yn_options continue_yn
-        if [[ $continue_yn == "否" ]] 
-        then
-            Println "已取消 ...\n"
-            exit 1
-        fi
+        AskIfContinue n "`gettext \"将安装 vim-plug 并覆盖 ~/.vimrc , 是否继续\"`"
     fi
 
     if curl -s -fLo ~/.vim/autoload/plug.vim --create-dirs "$FFMPEG_MIRROR_LINK/vim-plug.vim"
@@ -38753,7 +38302,7 @@ PveListVMs()
 
     for((i=0;i<pve_vm_count;i++));
     do
-        pve_vm_list="$pve_vm_list ${green}$((i+1)).${normal}\r\033[6CID: ${green}${pve_vm_ids[i]}${normal} 名称: ${green}${pve_vm_name[i]}${normal}\n\r\033[6C状态: ${green}${pve_vm_status[i]}${normal} 内存: ${green}${pve_vm_mem[i]} MB${normal}\n\r\033[6C启动盘: ${green}${pve_vm_boot_disk[i]} GB${normal} pid: ${green}${pve_vm_pid[i]}${normal}\n\n"
+        pve_vm_list="$pve_vm_list ${green}$((i+1)).${normal}${indent_6}ID: ${green}${pve_vm_ids[i]}${normal} 名称: ${green}${pve_vm_name[i]}${normal}\n${indent_6}状态: ${green}${pve_vm_status[i]}${normal} 内存: ${green}${pve_vm_mem[i]} MB${normal}\n${indent_6}启动盘: ${green}${pve_vm_boot_disk[i]} GB${normal} pid: ${green}${pve_vm_pid[i]}${normal}\n\n"
     done
 
     Println "$pve_vm_list"
@@ -38762,15 +38311,15 @@ PveListVMs()
 PveSelectVM()
 {
     echo "选择 VM"
-    while read -p "(默认: 取消): " pve_vm_index
+    while read -p "$i18n_default_cancel" pve_vm_index
     do
         case "$pve_vm_index" in
             "")
-                Println "已取消...\n"
+                Println "$i18n_canceled...\n"
                 exit 1
             ;;
             *[!0-9]*)
-                Println "$error 请输入正确的序号\n"
+                Println "$error $i18n_input_correct_no\n"
             ;;
             *)
                 if [ "$pve_vm_index" -gt 0 ] && [ "$pve_vm_index" -le "$pve_vm_count" ]
@@ -38784,7 +38333,7 @@ PveSelectVM()
                     vm_pid=${pve_vm_pid[pve_vm_index]}
                     break
                 else
-                    Println "$error 请输入正确的序号\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
             ;;
         esac
@@ -38798,33 +38347,33 @@ Menu()
     if [ -z "${kind:-}" ] 
     then
         title="HLS"
-        msg="f 切换到 FLV 面板, v 切换到 VIP 面板"
+        msg=$(gettext "输入: f 切换到 FLV 面板, v 切换到 VIP 面板")
     elif [ "$kind" == "flv" ] 
     then
         title="FLV"
-        msg="h 切换到 HLS 面板, v 切换到 VIP 面板"
+        msg=$(gettext "输入: h 切换到 HLS 面板, v 切换到 VIP 面板")
     fi
 
     Println "  ${dim_underlined}MTimer | http://hbo.epub.fun${normal}
 
-  IPTV 一键管理脚本 ${red}[v$sh_ver]${normal}
+  `gettext \"IPTV 一键管理脚本\"` ${red}[v$sh_ver]${normal}
 
-  ${color}1.${normal} 安装
-  ${color}2.${normal} 卸载
-  ${color}3.${normal} 升级脚本
+  ${color}1.${normal} `gettext \"安装\"`
+  ${color}2.${normal} `gettext \"卸载\"`
+  ${color}3.${normal} `gettext \"升级\"`
 ————————————
-  ${color}4.${normal} 查看频道
-  ${color}5.${normal} 添加频道
-  ${color}6.${normal} 修改频道
-  ${color}7.${normal} 开关频道
-  ${color}8.${normal} 重启频道
-  ${color}9.${normal} 查看日志
- ${color}10.${normal} 删除频道
- ${color}11.${normal} 修改默认
+  ${color}4.${normal} `gettext \"查看频道\"`
+  ${color}5.${normal} `gettext \"添加频道\"`
+  ${color}6.${normal} `gettext \"修改频道\"`
+  ${color}7.${normal} `gettext \"开关频道\"`
+  ${color}8.${normal} `gettext \"重启频道\"`
+  ${color}9.${normal} `gettext \"查看日志\"`
+ ${color}10.${normal} `gettext \"删除频道\"`
+ ${color}11.${normal} `gettext \"修改默认\"`
 
- $tip 当前: ${green}$title${normal} 面板
- $tip 输入: $msg\n\n"
-    read -p "请输入数字 [1-11]: " menu_num
+ `eval_gettext \"\\\$tip 当前: \\\${green}\\\$title\\\${normal} 面板\"`
+ $tip $msg\n\n"
+    read -p "`gettext \"输入序号\"` [1-11]: " menu_num
     case "$menu_num" in
         h)
             kind=""
@@ -38845,7 +38394,7 @@ Menu()
         ;;
         3) Update
         ;;
-        4) ViewChannelMenu
+        4) ViewChannel
         ;;
         5) AddChannel
         ;;
@@ -38861,7 +38410,7 @@ Menu()
         ;;
         11) EditDefaultMenu
         ;;
-        *) Println "$error 请输入正确的数字 [1-11]\n"
+        *) Println "$error $i18n_input_correct_number [1-11]\n"
         ;;
     esac
 }
@@ -38969,17 +38518,11 @@ UpdateSelf()
     if [ ! -e "$JQ_FILE" ] 
     then
         echo
-        yn_options=( '是' '否' )
-        inquirer list_input "检测到安装未完成, 是否卸载重装: " yn_options reinstall_yn
-        if [[ $reinstall_yn == "是" ]]
-        then
-            Uninstall
-            Install
-            exit 0
-        else
-            Println "已取消...\n"
-            exit 1
-        fi
+        AskIfContinue y "`gettext \"检测到安装未完成, 是否卸载重装\"`"
+
+        Uninstall
+        Install
+        exit 0
     fi
     GetDefault
     if [ "${d_version%.*}" != "${sh_ver%.*}" ] 
@@ -38998,18 +38541,13 @@ UpdateSelf()
                 rm -rf "/tmp/monitor.lockdir"
                 rm -rf "$FFMPEG_LOG_ROOT/"*.lock
             fi
-            #if [ "$minor_ver" -lt 37 ]
-            #then
-                #Println "$info 更新 Hls Stream Creator 脚本..."
-                #UpdateCreatorFile
-            #fi
         fi
 
         Println "$info 更新中, 请稍等...\n"
         printf -v update_date '%(%m-%d-%H:%M:%S)T' -1
         cp -f "$CHANNELS_FILE" "${CHANNELS_FILE}_$update_date"
 
-        GetChannelsInfo
+        GetChannels
 
         while [[ $d_headers =~ \\\\ ]]
         do
@@ -39202,14 +38740,14 @@ self=${0##*/}
 
 if [ "$self" == "ibm" ] || [ "$self" == "ibm.sh" ]
 then
-    CheckShFile
+    ShFileCheck
 
     [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
 
     if [ ! -e "$JQ_FILE" ] 
     then
         DepsCheck
-        InstallJQ
+        JQInstall
     fi
 
     if [ -d "$IPTV_ROOT" ]
@@ -39258,14 +38796,14 @@ then
     exit 0
 elif [ "$self" == "cf" ] || [ "$self" == "cf.sh" ]
 then
-    CheckShFile
+    ShFileCheck
 
     [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
 
     if [ ! -e "$JQ_FILE" ] 
     then
         DepsCheck
-        InstallJQ
+        JQInstall
     fi
 
     if [ -d "$IPTV_ROOT" ]
@@ -39310,7 +38848,7 @@ then
     exit 0
 elif [ "$self" == "or" ] || [ "$self" == "or.sh" ]
 then
-    CheckShFile
+    ShFileCheck
 
     [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
 
@@ -39371,7 +38909,7 @@ WantedBy=multi-user.target
  $tip 输入: or 打开面板
 
 "
-    read -p "请输入数字 [1-16]: " openresty_num
+    read -p "`gettext \"输入序号\"` [1-16]: " openresty_num
     case "$openresty_num" in
         1) 
             if [ -d "$nginx_prefix" ] 
@@ -39380,13 +38918,7 @@ WantedBy=multi-user.target
             fi
 
             echo
-            yn_options=( '否' '是' )
-            inquirer list_input "因为是编译 openresty, 耗时会很长, 是否继续" yn_options continue_yn
-            if [[ $continue_yn == "否" ]]
-            then
-                Println "已取消...\n"
-                exit 1
-            fi
+            AskIfContinue n "`gettext \"因为是编译 openresty, 耗时会很长, 是否继续\"`"
 
             OpenrestyInstall
             Println "$info openresty 安装完成\n"
@@ -39450,13 +38982,13 @@ WantedBy=multi-user.target
         16)
             NginxUpdateCFIBMip
         ;;
-        *) Println "$error 请输入正确的数字 [1-16]\n"
+        *) Println "$error $i18n_input_correct_number [1-16]\n"
         ;;
     esac
     exit 0
 elif [ "$self" == "nx" ] || [ "$self" == "nx.sh" ]
 then
-    CheckShFile
+    ShFileCheck
 
     [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
 
@@ -39520,7 +39052,7 @@ WantedBy=multi-user.target
  $tip 输入: nx 打开面板
 
 "
-    read -p "请输入数字 [1-19]: " nginx_num
+    read -p "`gettext \"输入序号\"` [1-19]: " nginx_num
     case "$nginx_num" in
         1) 
             if [ -d "$nginx_prefix" ] 
@@ -39529,13 +39061,7 @@ WantedBy=multi-user.target
             fi
 
             echo
-            yn_options=( '否' '是' )
-            inquirer list_input "因为是编译 nginx, 耗时会很长, 是否继续" yn_options continue_yn
-            if [[ $continue_yn == "否" ]]
-            then
-                Println "已取消...\n"
-                exit 1
-            fi
+            AskIfContinue n "`gettext \"因为是编译 nginx, 耗时会很长, 是否继续\"`"
 
             NginxInstall
             Println "$info nginx 安装完成\n"
@@ -39600,14 +39126,8 @@ WantedBy=multi-user.target
             if [[ ! -x $(command -v pdf2htmlEX) ]] 
             then
                 echo
-                yn_options=( '否' '是' )
-                inquirer list_input "因为是编译 pdf2htmlEX, 耗时会很长, 是否继续" yn_options continue_yn
-                if [[ $continue_yn == "否" ]]
-                then
-                    Println "已取消...\n"
-                    exit 1
-                fi
-                InstallPdf2html
+                AskIfContinue n "`gettext \"因为是编译 pdf2htmlEX, 耗时会很长, 是否继续\"`"
+                Pdf2htmlInstall
                 Println "$info pdf2htmlEX 安装完成, 输入 source /etc/profile 可立即使用\n"
             else
                 Println "$error pdf2htmlEX 已存在!\n"
@@ -39637,45 +39157,23 @@ WantedBy=multi-user.target
             if [[ ! -x $(command -v postfix) ]] 
             then
                 ReleaseCheck
-                Spinner "安装 postfix" InstallPostfix
+                Spinner "安装 postfix" PostfixInstall
             else
                 echo
-                yn_options=( '是' '否' )
-                inquirer list_input "postfix 已存在, 是否重新设置 smtp" yn_options config_smtp
-                if [[ $config_smtp == "否" ]]
-                then
-                    Println "已取消 ...\n"
-                    exit 1
-                fi
+                AskIfContinue y "`gettext \"postfix 已存在, 是否重新设置 smtp\"`"
             fi
             echo
-            inquirer text_input "请输入 smtp 地址 (比如 hwsmtp.exmail.qq.com) : " smtp_address "取消"
-            if [ "$smtp_address" == "取消" ]
-            then
-                Println "已取消 ...\n"
-                exit 1
-            fi
+            inquirer text_input "请输入 smtp 地址 (比如 hwsmtp.exmail.qq.com) : " smtp_address "$i18n_cancel"
+            ExitOnCancel smtp_address
             echo
-            inquirer text_input "请输入 smtp 端口 (比如 465) : " smtp_port "取消"
-            if [ "$smtp_port" == "取消" ]
-            then
-                Println "已取消 ...\n"
-                exit 1
-            fi
+            inquirer text_input "请输入 smtp 端口 (比如 465) : " smtp_port "$i18n_cancel"
+            ExitOnCancel smtp_port
             echo
-            inquirer text_input "请输入 smtp 邮箱 : " smtp_email "取消"
-            if [ "$smtp_email" == "取消" ]
-            then
-                Println "已取消 ...\n"
-                exit 1
-            fi
+            inquirer text_input "请输入 smtp 邮箱 : " smtp_email "$i18n_cancel"
+            ExitOnCancel smtp_email
             echo
-            inquirer text_input "请输入 smtp 密码 : " smtp_pass "取消"
-            if [ "$smtp_pass" == "取消" ]
-            then
-                Println "已取消 ...\n"
-                exit 1
-            fi
+            inquirer text_input "请输入 smtp 密码 : " smtp_pass "$i18n_cancel"
+            ExitOnCancel smtp_pass
             hostname=$(hostname -f)
             sed -i "0,/.*myhostname = .*/s//myhostname = $hostname/" /etc/postfix/main.cf
             sed -i "0,/.*relayhost = .*/s//relayhost = [$smtp_address]:$smtp_port/" /etc/postfix/main.cf
@@ -39720,13 +39218,13 @@ WantedBy=multi-user.target
         19)
             NginxUpdateCFIBMip
         ;;
-        *) Println "$error 请输入正确的数字 [1-19]\n"
+        *) Println "$error $i18n_input_correct_number [1-19]\n"
         ;;
     esac
     exit 0
 elif [ "$self" == "v2" ] || [ "$self" == "v2.sh" ] || [ "$self" == "V2.sh" ] || [ "$self" == "x" ] || [ "$self" == "x.sh" ] || [ "$self" == "xray.sh" ]
 then
-    CheckShFile
+    ShFileCheck
     [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
     v2ray_sh="v2"
     v2ray_name="v2ray"
@@ -39835,7 +39333,7 @@ then
 
  $tip 输入: $v2ray_sh 打开面板
 "
-    read -p "请输入数字 [1-26]: " v2ray_num
+    read -p "`gettext \"输入序号\"` [1-26]: " v2ray_num
     case $v2ray_num in
         1) 
             V2rayInstall
@@ -39940,28 +39438,17 @@ then
                 Println "$error $v2ray_name 未安装...\n" && exit 1
             fi
             echo
-            yn_options=( '是' '否' )
             if [[ $(systemctl is-active $v2ray_name) == "active" ]]
             then
-                inquirer list_input "$v2ray_name 正在运行, 是否关闭" yn_options v2ray_stop_yn
+                AskIfContinue y "`eval_gettext \"\\\$v2ray_name 正在运行, 是否关闭\"`"
 
-                if [[ $v2ray_stop_yn == "是" ]] 
-                then
-                    systemctl stop $v2ray_name > /dev/null 2>&1
-                    Println "$info $v2ray_name 已关闭\n"
-                else
-                    Println "已取消...\n" && exit 1
-                fi
+                systemctl stop $v2ray_name > /dev/null 2>&1
+                Println "$info $v2ray_name 已关闭\n"
             else
-                inquirer list_input "$v2ray_name 未运行, 是否开启" yn_options v2ray_start_yn
+                AskIfContinue y "`eval_gettext \"\\\$v2ray_name 未运行, 是否开启\"`"
 
-                if [[ $v2ray_start_yn == "是" ]] 
-                then
-                    systemctl start $v2ray_name > /dev/null 2>&1
-                    Println "$info $v2ray_name 已开启\n"
-                else
-                    Println "已取消...\n" && exit 1
-                fi
+                systemctl start $v2ray_name > /dev/null 2>&1
+                Println "$info $v2ray_name 已开启\n"
             fi
         ;;
         26) 
@@ -39972,7 +39459,7 @@ then
             systemctl restart $v2ray_name > /dev/null 2>&1
             Println "$info $v2ray_name 已重启\n"
         ;;
-        *) Println "$error 请输入正确的数字 [1-26]\n"
+        *) Println "$error $i18n_input_correct_number [1-26]\n"
         ;;
     esac
     exit 0
@@ -39993,27 +39480,21 @@ ${green}7.${normal} 添加 mac 地址
 ${green}8.${normal} 浏览频道
 
 "
-    read -p "请输入数字 [1-8]: " xtream_codes_num
+    read -p "`gettext \"输入序号\"` [1-8]: " xtream_codes_num
 
     case $xtream_codes_num in
         1) 
-            ViewXtreamCodesAcc
+            XtreamCodesListAcc
         ;;
         2) 
-            AddXtreamCodesAccount
-            ListXtreamCodes
+            XtreamCodesAddAccount
+            XtreamCodesList
         ;;
         3) 
             [ ! -s "$XTREAM_CODES" ] && Println "$error 没有账号 !\n" && exit 1
 
             echo
-            yn_options=( '否' '是' )
-            inquirer list_input "耗时可能很长, 是否继续" yn_options yn_option
-            if [ "$yn_option" == "否" ] 
-            then
-                Println "已取消...\n"
-                exit 1
-            fi
+            AskIfContinue n "`gettext \"耗时可能很长, 是否继续\"`"
 
             Println "$info 检测中..."
             printf -v now '%(%m-%d-%H:%M:%S)T' -1
@@ -40045,12 +39526,12 @@ ${green}8.${normal} 浏览频道
 
             verify=1
 
-            ListXtreamCodes
+            XtreamCodesList
 
             Println "$info 账号检测完成\n"
         ;;
         4) 
-            TestXtreamCodes
+            XtreamCodesTestAcc
         ;;
         5) 
             Println "$info 稍等...\n"
@@ -40086,25 +39567,25 @@ ${green}8.${normal} 浏览频道
 
             echo -e "$result" >> "$XTREAM_CODES_EXAM"
 
-            ListXtreamCodes
+            XtreamCodesList
 
             Println "$info 账号添加成功\n"
         ;;
         6) 
-            ViewXtreamCodesMac
+            XtreamCodesListMac
         ;;
         7) 
-            AddXtreamCodesMac
+            XtreamCodesAddMac
             if [ "$add_mac_success" -eq 1 ] 
             then
-                ListXtreamCodes mac
+                XtreamCodesList mac
                 Println "$info mac 添加成功!\n"
             fi
         ;;
         8) 
-            ViewXtreamCodesChnls
+            XtreamCodesListChnls
         ;;
-        *) Println "$error 请输入正确的数字 [1-8]\n"
+        *) Println "$error $i18n_input_correct_number [1-8]\n"
         ;;
     esac
     exit 0
@@ -40116,7 +39597,7 @@ then
         exit 1
     fi
 
-    CheckShFile
+    ShFileCheck
 
     JQ_FILE="/usr/local/bin/jq"
 
@@ -40141,38 +39622,33 @@ then
  ${green}14.${normal} 更新脚本
 
 "
-    read -p "请输入数字 [1-14]: " armbian_num
+    read -p "`gettext \"输入序号\"` [1-14]: " armbian_num
 
     case $armbian_num in
         1) 
             AptSetSources
         ;;
         2) 
-            Println "$tip 适用于 斐讯 n1, apt upgrade 后需要重新修复"
-            yn_options=( '否' '是' )
-            inquirer list_input "是否继续" yn_options fix_n1_dtb
-            if [[ $fix_n1_dtb == "否" ]] 
-            then
-                Println "已取消 ...\n"
-            else
-                if [ ! -d ~/Amlogic_s905-kernel-master ] 
-                then
-                    if curl -L "$FFMPEG_MIRROR_LINK/Amlogic_s905-kernel-master.zip" -o ~/Amlogic_s905-kernel-master.zip 
-                    then
-                        unzip Amlogic_s905-kernel-master.zip
-                    else
-                        Println "$error 下载 Amlogic_s905-kernel-master.zip 发生错误, 请稍后再试\n"
-                        exit 1
-                    fi
-                fi
+            echo
+            AskIfContinue n "`gettext \"适用于 斐讯 n1, apt upgrade 后需要重新修复, 是否继续\"`"
 
-                cd ~/Amlogic_s905-kernel-master
-                sed -i 's/interrupts = <29/interrupts = <25/' arch/arm64/boot/dts/amlogic/meson-gxl-s905d-p230.dts
-                make defconfig
-                make dtbs
-                cp -f arch/arm64/boot/dts/amlogic/meson-gxl-s905d-phicomm-n1.dtb /boot/dtb/amlogic/meson-gxl-s905d-phicomm-n1.dtb
-                Println "$info 修复成功\n"
+            if [ ! -d ~/Amlogic_s905-kernel-master ] 
+            then
+                if curl -L "$FFMPEG_MIRROR_LINK/Amlogic_s905-kernel-master.zip" -o ~/Amlogic_s905-kernel-master.zip 
+                then
+                    unzip Amlogic_s905-kernel-master.zip
+                else
+                    Println "$error 下载 Amlogic_s905-kernel-master.zip 发生错误, 请稍后再试\n"
+                    exit 1
+                fi
             fi
+
+            cd ~/Amlogic_s905-kernel-master
+            sed -i 's/interrupts = <29/interrupts = <25/' arch/arm64/boot/dts/amlogic/meson-gxl-s905d-p230.dts
+            make defconfig
+            make dtbs
+            cp -f arch/arm64/boot/dts/amlogic/meson-gxl-s905d-phicomm-n1.dtb /boot/dtb/amlogic/meson-gxl-s905d-phicomm-n1.dtb
+            Println "$info 修复成功\n"
         ;;
         3)
             if [[ -x $(command -v docker) ]] 
@@ -40196,7 +39672,7 @@ then
         4)
             if ! $JQ_FILE -V > /dev/null 2>&1
             then
-                Spinner "编译安装 JQ, 耗时可能会很长" InstallJQ
+                Spinner "编译安装 JQ, 耗时可能会很长" JQInstall
             fi
             if dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
             then
@@ -40205,29 +39681,15 @@ then
                 if [[ $dnscrypt_version_old == "*" ]]
                 then
                     Println "$tip 请确保已经将本机器用网线连接到主路由器的 LAN 口"
-                    yn_options=( '否' '是' )
-                    inquirer list_input "是否继续" yn_options continue_yn
-                    if [[ $continue_yn == "否" ]] 
-                    then
-                        Println "已取消 ...\n"
-                        exit 1
-                    fi
+                    AskIfContinue n "`gettext \"是否继续\"`"
 
                     echo
-                    inquirer text_input "请输入主路由器 ip : " eth0_gateway "取消"
-                    if [ "$eth0_gateway" == "取消" ]
-                    then
-                        Println "已取消 ...\n"
-                        exit 1
-                    fi
+                    inquirer text_input "请输入主路由器 ip : " eth0_gateway "$i18n_cancel"
+                    ExitOnCancel eth0_gateway
 
                     Println "$tip 必须和主路由器 ip 在同一网段"
-                    inquirer text_input "设置本机静态 ip : " eth0_ip "取消"
-                    if [ "$eth0_ip" == "取消" ]
-                    then
-                        Println "已取消 ...\n"
-                        exit 1
-                    fi
+                    inquirer text_input "设置本机静态 ip : " eth0_ip "$i18n_cancel"
+                    ExitOnCancel eth0_ip
 
                     Println "$info 下载 dnscrypt proxy ..."
                     if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp
@@ -40345,13 +39807,7 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
                     if [[ -x $(command -v docker) ]] && [[ -n $(docker container ls -a -f name=openwrt$ -q) ]]
                     then
                         Println "$tip 如果已经安装并运行旁路由 openwrt-v2ray, 建议先关闭旁路由 openwrt-v2ray"
-                        yn_options=( '否' '是' )
-                        inquirer list_input "是否继续" yn_options continue_yn
-                        if [[ $continue_yn == "否" ]] 
-                        then
-                            Println "已取消 ...\n"
-                            exit 1
-                        fi
+                        AskIfContinue n "`gettext \"是否继续\"`"
                     fi
 
                     if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp
@@ -40418,12 +39874,8 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
             if [ "$openwrt_ver" == "手动输入" ] 
             then
                 echo
-                inquirer text_input "输入版本号: " openwrt_ver "取消"
-                if [ "$openwrt_ver" == "取消" ] 
-                then
-                    Println "已取消...\n"
-                    exit 1
-                fi
+                inquirer text_input "输入版本号: " openwrt_ver "$i18n_cancel"
+                ExitOnCancel openwrt_ver
             fi
 
             if grep -q "armvirt-64-$openwrt_ver" < <(docker container ls -a)
@@ -40487,31 +39939,17 @@ fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
 
             Println "$tip openwrt 作为旁路由, 请确保已经将本机器用网线连接到主路由器的 LAN 口, 并且当前连接使用的网关是主路由的地址(可能需要手动设定)"
             Println "$tip 如果是升级, 注意备份原 openwrt 配置(系统 - 备份/还原)"
-            yn_options=( '否' '是' )
-            inquirer list_input "是否继续" yn_options continue_yn
-            if [[ $continue_yn == "否" ]] 
-            then
-                Println "已取消 ...\n"
-                exit 1
-            fi
+            AskIfContinue n "`gettext \"是否继续\"`"
 
             if ! ip addr show hMACvLAN >/dev/null 2>&1
             then
                 Println "$tip 必须和主路由器 ip 在同一网段"
-                inquirer text_input "设置虚拟接口 hMACvLAN 静态 ip : " hMACvLAN_ip "取消"
-                if [ "$hMACvLAN_ip" == "取消" ]
-                then
-                    Println "已取消 ...\n"
-                    exit 1
-                fi
+                inquirer text_input "设置虚拟接口 hMACvLAN 静态 ip : " hMACvLAN_ip "$i18n_cancel"
+                ExitOnCancel hMACvLAN_ip
 
                 Println "$tip 必须和主路由器 ip 在同一网段"
-                inquirer text_input "设置 openwrt 静态 ip : " openwrt_ip "取消"
-                if [ "$openwrt_ip" == "取消" ]
-                then
-                    Println "已取消 ...\n"
-                    exit 1
-                fi
+                inquirer text_input "设置 openwrt 静态 ip : " openwrt_ip "$i18n_cancel"
+                ExitOnCancel openwrt_ip
 
                 nmcli connection add type macvlan dev eth0 mode bridge ifname hMACvLAN autoconnect yes save yes > /dev/null
                 nmcli connection modify macvlan-hMACvLAN con-name hMACvLAN
@@ -40562,20 +40000,12 @@ method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
                 if [ -z "${openwrt_ip:-}" ] 
                 then
                     Println "$tip 必须和主路由器 ip 在同一网段"
-                    inquirer text_input "设置虚拟接口 hMACvLAN 静态 ip : " hMACvLAN_ip "取消"
-                    if [ "$hMACvLAN_ip" == "取消" ]
-                    then
-                        Println "已取消 ...\n"
-                        exit 1
-                    fi
+                    inquirer text_input "设置虚拟接口 hMACvLAN 静态 ip : " hMACvLAN_ip "$i18n_cancel"
+                    ExitOnCancel hMACvLAN_ip
 
                     Println "$tip 必须和主路由器 ip 在同一网段"
-                    inquirer text_input "设置 openwrt 静态 ip : " openwrt_ip "取消"
-                    if [ "$openwrt_ip" == "取消" ]
-                    then
-                        Println "已取消 ...\n"
-                        exit 1
-                    fi
+                    inquirer text_input "设置 openwrt 静态 ip : " openwrt_ip "$i18n_cancel"
+                    ExitOnCancel openwrt_ip
 
                     while IFS= read -r line 
                     do
@@ -40620,19 +40050,18 @@ method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
             if [[ -n $(docker container ls -a -f name=openwrt$ -q) ]] 
             then
                 echo
-                yn_options=( '否' '是' )
-                inquirer list_input "是否重新设置 openwrt 静态 IP" yn_options change_openwrt_ip_yn
-                if [[ $change_openwrt_ip_yn == "是" ]] 
+                inquirer list_input "是否重新设置 openwrt 静态 IP" ny_options change_openwrt_ip_yn
+                if [[ $change_openwrt_ip_yn == "$i18n_yes" ]] 
                 then
                     Println "$tip 必须和主路由器 ip 在同一网段"
-                    inquirer text_input "设置 openwrt 静态 ip : " openwrt_ip "取消"
-                    if [ "$openwrt_ip" == "取消" ]
+                    inquirer text_input "设置 openwrt 静态 ip : " openwrt_ip "$i18n_cancel"
+                    if [ "$openwrt_ip" == "$i18n_cancel" ]
                     then
                         if [[ -z $(docker container ls -f name=openwrt$ -q) ]] 
                         then
                             docker container start openwrt >/dev/null 2>&1 || true
                         fi
-                        Println "已取消 ...\n"
+                        Println "$i18n_canceled...\n"
                         exit 1
                     fi
                     sed -i "0,/address1=\(.*\),.*/s//address1=\1,$openwrt_ip/" /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
@@ -40663,7 +40092,7 @@ method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
 
             if ! $JQ_FILE -V > /dev/null 2>&1
             then
-                Spinner "编译安装 JQ, 耗时可能会很长" InstallJQ
+                Spinner "编译安装 JQ, 耗时可能会很长" JQInstall
             fi
 
             jq_path='["dns"]'
@@ -40944,20 +40373,20 @@ config interface 'lan'
                     configs_name+=("$config_name")
                     configs_count=$((configs_count+1))
                     printf -v config_date '%(%Y-%m-%d %H:%M:%S)T' "$config_time"
-                    configs_list="$configs_list $configs_count.\r\033[6C名称: ${green}${config_name_list:-无}${normal} 日期: ${green}$config_date${normal}\n\n"
+                    configs_list="$configs_list $configs_count.${indent_6}名称: ${green}${config_name_list:-无}${normal} 日期: ${green}$config_date${normal}\n\n"
                 done
 
                 Println "$configs_list"
 
                 echo "选择配置"
-                while read -p "(默认: 取消): " config_num
+                while read -p "$i18n_default_cancel" config_num
                 do
                     case "$config_num" in
                         "")
-                            Println "已取消...\n" && exit 1
+                            Println "$i18n_canceled...\n" && exit 1
                         ;;
                         *[!0-9]*)
-                            Println "$error 请输入正确的序号\n"
+                            Println "$error $i18n_input_correct_no\n"
                         ;;
                         *)
                             if [ "$config_num" -gt 0 ] && [ "$config_num" -le $configs_count ]
@@ -40967,7 +40396,7 @@ config interface 'lan'
                                 config_name=${configs_name[configs_index]}
                                 break
                             else
-                                Println "$error 请输入正确的序号\n"
+                                Println "$error $i18n_input_correct_no\n"
                             fi
                         ;;
                     esac
@@ -41005,16 +40434,12 @@ config interface 'lan'
             fi
 
             Println "$tip 可以登录阿里云 (https://cr.console.aliyun.com/cn-shanghai/) 查看镜像加速器地址"
-            inquirer text_input "请输入加速器地址 : " registry_mirrors "取消"
-            if [ "$registry_mirrors" == "取消" ]
-            then
-                Println "已取消 ...\n"
-                exit 1
-            fi
+            inquirer text_input "请输入加速器地址 : " registry_mirrors "$i18n_cancel"
+            ExitOnCancel registry_mirrors
 
             if ! $JQ_FILE -V > /dev/null 2>&1
             then
-                Spinner "编译安装 JQ, 耗时可能会很长" InstallJQ
+                Spinner "编译安装 JQ, 耗时可能会很长" JQInstall
             fi
 
             jq_path='["registry-mirrors"]'
@@ -41034,47 +40459,30 @@ config interface 'lan'
                 exit 1
             fi
             echo
-            yn_options=( '否' '是' )
             if grep -q "options edns0" < /etc/resolv.conf
             then
-                inquirer list_input "是否关闭 edns0" yn_options toggle_edns0_yn
+                AskIfContinue n "`gettext \"是否关闭 edns0\"`"
 
-                if [[ $toggle_edns0_yn == "是" ]]
-                then
-                    chattr -i /etc/resolv.conf
-                    sed -i '/options edns0/d' /etc/resolv.conf
-                    sed -i "0,/.*require_dnssec = .*/s//require_dnssec = false/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
-                    systemctl restart dnscrypt-proxy
-                    Println "$info edns0 已关闭\n"
-                else
-                    Println "已取消...\n" && exit 1
-                fi
+                chattr -i /etc/resolv.conf
+                sed -i '/options edns0/d' /etc/resolv.conf
+                sed -i "0,/.*require_dnssec = .*/s//require_dnssec = false/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                systemctl restart dnscrypt-proxy
+                Println "$info edns0 已关闭\n"
             else
-                inquirer list_input "是否开启 edns0" yn_options toggle_edns0_yn
+                AskIfContinue n "`gettext \"是否开启 edns0\"`"
 
-                if [[ $toggle_edns0_yn == "是" ]]
-                then
-                    echo "options edns0" >> /etc/resolv.conf
-                    chattr +i /etc/resolv.conf
-                    sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
-                    systemctl restart dnscrypt-proxy
-                    Println "$info edns0 已开启\n"
-                else
-                    Println "已取消...\n" && exit 1
-                fi
+                echo "options edns0" >> /etc/resolv.conf
+                chattr +i /etc/resolv.conf
+                sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                systemctl restart dnscrypt-proxy
+                Println "$info edns0 已开启\n"
             fi
         ;;
         13)
             if [[ ! -x $(command -v pystun) ]] 
             then
                 Println "$tip 请确保已经修改了合适的 apt 源"
-                yn_options=( '否' '是' )
-                inquirer list_input "是否继续" yn_options continue_yn
-                if [[ $continue_yn == "否" ]] 
-                then
-                    Println "已取消 ...\n"
-                    exit 1
-                fi
+                AskIfContinue n "`gettext \"是否继续\"`"
                 apt-get update
                 apt-get -y install python python-pip python-setuptools python-wheel
                 pip install pystun
@@ -41083,9 +40491,9 @@ config interface 'lan'
             pystun
         ;;
         14)
-            UpdateShFile Armbian
+            ShFileUpdate Armbian
         ;;
-        *) Println "$error 请输入正确的数字 [1-14]\n"
+        *) Println "$error $i18n_input_correct_number [1-14]\n"
         ;;
     esac
     exit 0
@@ -41097,7 +40505,7 @@ then
         exit 1
     fi
 
-    CheckShFile
+    ShFileCheck
 
     JQ_FILE="/usr/local/bin/jq"
 
@@ -41121,7 +40529,7 @@ then
  ${green}13.${normal} 更新脚本
 
 "
-    read -p "请输入数字 [1-13]: " pve_num
+    read -p "`gettext \"输入序号\"` [1-13]: " pve_num
 
     case $pve_num in
         1) 
@@ -41208,14 +40616,7 @@ then
             if [[ ! -x $(command -v mono) ]] 
             then
                 echo
-                yn_options=( '否' '是' )
-                inquirer list_input "需要安装 mono, 耗时会很长, 是否继续" yn_options yn_option
-
-                if [ "$yn_option" == "否" ] 
-                then
-                    Println "已取消...\n"
-                    exit 1
-                fi
+                AskIfContinue n "`gettext \"需要安装 mono, 耗时会很长, 是否继续\"`"
 
                 . /etc/os-release
 
@@ -41260,22 +40661,12 @@ then
             elif [ "$nbfc_option" == "风扇切换为手动控制" ]
             then
                 echo
-                inquirer text_input "输入寄存器地址, 比如 0x93: " register_address "取消"
-
-                if [ "$register_address" == "取消" ] 
-                then
-                    Println "已取消...\n"
-                    exit 1
-                fi
+                inquirer text_input "输入寄存器地址, 比如 0x93: " register_address "$i18n_cancel"
+                ExitOnCancel register_address
 
                 echo
-                inquirer text_input "输入值, 比如 0x14: " register_value "取消"
-
-                if [ "$register_address" == "取消" ] 
-                then
-                    Println "已取消...\n"
-                    exit 1
-                fi
+                inquirer text_input "输入值, 比如 0x14: " register_value "$i18n_cancel"
+                ExitOnCancel register_value
 
                 mono ec-probe.exe write $register_address $register_value
 
@@ -41296,22 +40687,12 @@ then
                 if [ "$fan_option" == "输入寄存器值" ] 
                 then
                     echo
-                    inquirer text_input "输入寄存器地址, 比如 0x94: " register_address "取消"
-
-                    if [ "$register_address" == "取消" ] 
-                    then
-                        Println "已取消...\n"
-                        exit 1
-                    fi
+                    inquirer text_input "输入寄存器地址, 比如 0x94: " register_address "$i18n_cancel"
+                    ExitOnCancel register_address
 
                     echo
-                    inquirer text_input "输入值, 比如 0x99: " register_value "取消"
-
-                    if [ "$register_address" == "取消" ] 
-                    then
-                        Println "已取消...\n"
-                        exit 1
-                    fi
+                    inquirer text_input "输入值, 比如 0x99: " register_value "$i18n_cancel"
+                    ExitOnCancel register_value
 
                     mono ec-probe.exe write $register_address $register_value
 
@@ -41322,13 +40703,8 @@ then
                     inquirer text_input "输入风扇序号(从 0 开始): " fan_index 0
 
                     echo
-                    inquirer text_input "输入转速百分比: " fan_speed "取消"
-
-                    if [ "$fan_speed" == "取消" ] 
-                    then
-                        Println "已取消...\n"
-                        exit 1
-                    fi
+                    inquirer text_input "输入转速百分比: " fan_speed "$i18n_cancel"
+                    ExitOnCancel fan_speed
 
                     mono nbfc.exe set -f $fan_index -s $fan_speed
 
@@ -41340,13 +40716,8 @@ then
             elif [ "$nbfc_option" == "应用配置" ]
             then
                 echo
-                inquirer text_input "输入配置名称, 比如: Acer Aspire 5745G" config_name "取消"
-
-                if [ "$config_name" == "取消" ] 
-                then
-                    Println "已取消...\n"
-                    exit 1
-                fi
+                inquirer text_input "输入配置名称, 比如: Acer Aspire 5745G" config_name "$i18n_cancel"
+                ExitOnCancel config_name
 
                 mono nbfc.exe config --apply "$config_name"
                 mono nbfc.exe start
@@ -41356,7 +40727,7 @@ then
         ;;
         6) 
             ReleaseCheck
-            InstallJQ
+            JQInstall
 
             if dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
             then
@@ -41364,12 +40735,8 @@ then
                 dnscrypt_version_old=${DNSCRYPT_ROOT##*-}
 
                 echo
-                inquirer text_input "输入本机静态 ip : " proxmox_ip "取消"
-                if [ "$proxmox_ip" == "取消" ]
-                then
-                    Println "已取消 ...\n"
-                    exit 1
-                fi
+                inquirer text_input "输入本机静态 ip : " proxmox_ip "$i18n_cancel"
+                ExitOnCancel proxmox_ip
 
                 if [[ $dnscrypt_version_old == "*" ]]
                 then
@@ -41473,7 +40840,7 @@ then
         ;;
         8)
             ReleaseCheck
-            InstallJQ
+            JQInstall
 
             Println "$tip 请确保已经安装 qemu-guest-agent\n"
 
@@ -41499,7 +40866,7 @@ then
         ;;
         9)
             ReleaseCheck
-            InstallJQ
+            JQInstall
 
             Println "$tip 请确保已经安装 qemu-guest-agent\n"
 
@@ -41533,7 +40900,7 @@ then
         ;;
         10)
             ReleaseCheck
-            InstallJQ
+            JQInstall
 
             Println "$tip 请确保已经安装 qemu-guest-agent\n"
 
@@ -41595,7 +40962,7 @@ then
         ;;
         11)
             ReleaseCheck
-            InstallJQ
+            JQInstall
 
             Println "$tip 请确保已经安装 qemu-guest-agent\n"
 
@@ -41661,20 +41028,20 @@ then
                     configs_name+=("$config_name")
                     configs_count=$((configs_count+1))
                     printf -v config_date '%(%Y-%m-%d %H:%M:%S)T' "$config_time"
-                    configs_list="$configs_list $configs_count.\r\033[6C名称: ${green}${config_name_list:-无}${normal} 日期: ${green}$config_date${normal}\n\n"
+                    configs_list="$configs_list $configs_count.${indent_6}名称: ${green}${config_name_list:-无}${normal} 日期: ${green}$config_date${normal}\n\n"
                 done
 
                 Println "$configs_list"
 
                 echo "选择配置"
-                while read -p "(默认: 取消): " config_num
+                while read -p "$i18n_default_cancel" config_num
                 do
                     case "$config_num" in
                         "")
-                            Println "已取消...\n" && exit 1
+                            Println "$i18n_canceled...\n" && exit 1
                         ;;
                         *[!0-9]*)
-                            Println "$error 请输入正确的序号\n"
+                            Println "$error $i18n_input_correct_no\n"
                         ;;
                         *)
                             if [ "$config_num" -gt 0 ] && [ "$config_num" -le $configs_count ]
@@ -41684,7 +41051,7 @@ then
                                 config_name=${configs_name[configs_index]}
                                 break
                             else
-                                Println "$error 请输入正确的序号\n"
+                                Println "$error $i18n_input_correct_no\n"
                             fi
                         ;;
                     esac
@@ -41708,38 +41075,27 @@ then
                 exit 1
             fi
             echo
-            yn_options=( '否' '是' )
             if grep -q "options edns0" < /etc/resolv.conf
             then
-                inquirer list_input "是否关闭 edns0" yn_options toggle_edns0_yn
+                AskIfContinue n "`gettext \"是否关闭 edns0\"`"
 
-                if [[ $toggle_edns0_yn == "是" ]]
-                then
-                    sed -i '/options edns0/d' /etc/resolv.conf
-                    sed -i "0,/.*require_dnssec = .*/s//require_dnssec = false/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
-                    systemctl restart dnscrypt-proxy
-                    Println "$info edns0 已关闭\n"
-                else
-                    Println "已取消...\n" && exit 1
-                fi
+                sed -i '/options edns0/d' /etc/resolv.conf
+                sed -i "0,/.*require_dnssec = .*/s//require_dnssec = false/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                systemctl restart dnscrypt-proxy
+                Println "$info edns0 已关闭\n"
             else
-                inquirer list_input "是否开启 edns0" yn_options toggle_edns0_yn
+                AskIfContinue n "`gettext \"是否开启 edns0\"`"
 
-                if [[ $toggle_edns0_yn == "是" ]]
-                then
-                    echo "options edns0" >> /etc/resolv.conf
-                    sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
-                    systemctl restart dnscrypt-proxy
-                    Println "$info edns0 已开启\n"
-                else
-                    Println "已取消...\n" && exit 1
-                fi
+                echo "options edns0" >> /etc/resolv.conf
+                sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                systemctl restart dnscrypt-proxy
+                Println "$info edns0 已开启\n"
             fi
         ;;
         13) 
-            UpdateShFile PVE
+            ShFileUpdate PVE
         ;;
-        *) Println "$error 请输入正确的数字 [1-13]\n"
+        *) Println "$error $i18n_input_correct_number [1-13]\n"
         ;;
     esac
     exit 0
@@ -41765,15 +41121,8 @@ then
             if [[ ! -x $(command -v openssl) ]] 
             then
                 echo
-                yn_options=( '是' '否' )
-                inquirer list_input "是否安装 openssl" yn_options openssl_install_yn
-
-                if [[ $openssl_install_yn == "是" ]]
-                then
-                    InstallOpenssl
-                else
-                    Println "已取消...\n" && exit 1
-                fi
+                AskIfContinue y "`gettext \"是否安装 openssl\"`"
+                OpensslInstall
             fi
 
             Println "  4gtv 面板
@@ -41802,7 +41151,7 @@ then
                         exit 0
                     ;;
                     3) 
-                        View4gtvAcc
+                        List4gtvAcc
                         exit 0
                     ;;
                     4) 
@@ -41833,7 +41182,7 @@ then
                         Disable4gtvCron
                         exit 0
                     ;;
-                    *) Println "$error 请输入正确的数字 [1-9]\n"
+                    *) Println "$error $i18n_input_correct_number [1-9]\n"
                     ;;
                 esac
             done
@@ -41873,7 +41222,7 @@ then
                 "litv-ftv10:半島電視台"
             )
 
-            GetChannelsInfo
+            GetChannels
 
             hinet_4gtv_count=${#hinet_4gtv[@]}
             hinet_4gtv_list=""
@@ -41888,7 +41237,7 @@ then
                         break
                     fi
                 done
-                hinet_4gtv_list="$hinet_4gtv_list $green$((i+1)).${normal}\r\033[6C${hinet_4gtv[i]#*:}$hinet_4gtv_chnl_added\n\n"
+                hinet_4gtv_list="$hinet_4gtv_list $green$((i+1)).${normal}${indent_6}${hinet_4gtv[i]#*:}$hinet_4gtv_chnl_added\n\n"
             done
 
             cookies=""
@@ -41919,7 +41268,7 @@ then
                             break
                         fi
                     done
-                    _4gtv_list="$_4gtv_list $green$((i+hinet_4gtv_count+1)).${normal}\r\033[6C${_4gtv_chnls_name[i]}$_4gtv_chnl_added\n\n"
+                    _4gtv_list="$_4gtv_list $green$((i+hinet_4gtv_count+1)).${normal}${indent_6}${_4gtv_chnls_name[i]}$_4gtv_chnl_added\n\n"
                 done
                 chnls_list="HiNet 4gtv 频道:\n\n${hinet_4gtv_list}4gtv 官网频道:\n\n$_4gtv_list"
             else
@@ -41930,9 +41279,9 @@ then
             chnls_count=$((hinet_4gtv_count+_4gtv_chnls_count))
             Println "$chnls_list"
             echo "选择需要添加的频道序号, 多个频道用空格分隔, 比如 5 7 9-11"
-            while read -p "(默认: 取消): " chnls_num 
+            while read -p "$i18n_default_cancel" chnls_num 
             do
-                [ -z "$chnls_num" ] && Println "已取消...\n" && exit 1
+                [ -z "$chnls_num" ] && Println "$i18n_canceled...\n" && exit 1
                 IFS=" " read -ra chnls_num_arr <<< "$chnls_num"
 
                 error_no=0
@@ -41964,7 +41313,7 @@ then
 
                 case "$error_no" in
                     1|2|3)
-                        Println "$error 请输入正确的数字\n"
+                        Println "$error $i18n_input_correct_number\n"
                     ;;
                     *)
                         declare -a new_array
@@ -41992,7 +41341,6 @@ then
             for chnl_num in "${chnls_num_arr[@]}"
             do
                 xc=1
-                yn_options=( '否' '是' )
                 if [ "$chnl_num" -le "$hinet_4gtv_count" ] 
                 then
                     hinet_4gtv_chnl_index=$((chnl_num-1))
@@ -42000,8 +41348,8 @@ then
                     hinet_4gtv_chnl_name=${hinet_4gtv[hinet_4gtv_chnl_index]#*:}
                     hinet_4gtv_chnl_name_enc=$(Urlencode "$hinet_4gtv_chnl_name")
                     Println "$info 添加频道 [ $hinet_4gtv_chnl_name ]\n\n"
-                    inquirer list_input "是否推流 flv" yn_options add_channel_flv_yn
-                    if [[ $add_channel_flv_yn == "是" ]] 
+                    inquirer list_input "是否推流 flv" ny_options add_channel_flv_yn
+                    if [[ $add_channel_flv_yn == "$i18n_yes" ]] 
                     then
                         kind="flv"
                     else
@@ -42033,8 +41381,8 @@ then
                     _4gtv_chnl_name=${_4gtv_chnls_name[_4gtv_chnl_index]}
                     _4gtv_chnl_aid=${_4gtv_chnls_aid[_4gtv_chnl_index]}
                     Println "$info 添加频道 [ $_4gtv_chnl_name ]\n\n"
-                    inquirer list_input "是否推流 flv" yn_options add_channel_flv_yn
-                    if [[ $add_channel_flv_yn == "是" ]] 
+                    inquirer list_input "是否推流 flv" ny_options add_channel_flv_yn
+                    if [[ $add_channel_flv_yn == "$i18n_yes" ]] 
                     then
                         kind="flv"
                     else
@@ -42145,7 +41493,7 @@ then
                 else
                     is_hd="${red}否${normal}"
                 fi
-                chnls_list="$chnls_list ${green}$((i+1)).${normal}\r\033[6C频道ID: ${green}${chnls_id[i]}${normal} 频道名称: ${green}${chnls_title[i]}${normal}\n\r\033[6C高清: ${green}$is_hd${normal} 语言: ${green}${chnls_language[i]}${normal}\n\r\033[6C${chnls_description[i]}\n\n"
+                chnls_list="$chnls_list ${green}$((i+1)).${normal}${indent_6}频道ID: ${green}${chnls_id[i]}${normal} 频道名称: ${green}${chnls_title[i]}${normal}\n${indent_6}高清: ${green}$is_hd${normal} 语言: ${green}${chnls_language[i]}${normal}\n${indent_6}${chnls_description[i]}\n\n"
             done
 
             Println "$chnls_list"
@@ -42234,10 +41582,9 @@ then
                             nginx_ctl="nx"
                         else
                             echo
-                            yn_options=( '否' '是' )
-                            inquirer list_input "没有检测到运行的 nginx, 是否使用 openresty" yn_options use_openresty_yn
+                            inquirer list_input "没有检测到运行的 nginx, 是否使用 openresty" ny_options use_openresty_yn
 
-                            if [[ $use_openresty_yn == "是" ]] 
+                            if [[ $use_openresty_yn == "$i18n_yes" ]] 
                             then
                                 nginx_prefix="/usr/local/openresty/nginx"
                                 nginx_name="openresty"
@@ -42248,9 +41595,12 @@ then
                                 nginx_ctl="nx"
                             fi
                         fi
+
                         NGINX_FILE="$nginx_prefix/sbin/nginx"
                         printf -v date_now '%(%m-%d %H:%M:%S)T' -1
                         MonitorSet
+
+                        i18nGetMsg get_channel
 
                         if [ "$sh_debug" -eq 1 ] 
                         then
@@ -42305,7 +41655,7 @@ then
                 fi
                 channels="$channels$line"
             done < <(curl -s -Lm 20 "$DEFAULT_DEMOS")
-            [ -z "$channels" ] && Println "$error 暂时无法连接服务器, 请稍后再试...\n" && exit 1
+            [ -z "$channels" ] && Println "$error 暂时无法连接服务器, 请稍后再试 !\n" && exit 1
             delimiters=( $'\001' )
             IFS=$'\001' read -r -a channels_name < <(JQs flat "$channels" '' '.channel_name' "${delimiters[@]}")
             echo
@@ -42329,7 +41679,7 @@ then
 
             if [ ! -e "$JQ_FILE" ] 
             then
-                InstallJQ
+                JQInstall
             fi
 
             mkdir -p "$FFMPEG_MIRROR_ROOT/builds"
@@ -42422,8 +41772,8 @@ then
                 done < "$FFMPEG_MIRROR_ROOT/index.html"
 
                 #Println "输入镜像网站链接(比如: $FFMPEG_MIRROR_LINK)"
-                #read -p "(默认: 取消): " FFMPEG_LINK
-                #[ -z "$FFMPEG_LINK" ] && echo "已取消...\n" && exit 1
+                #read -p "$i18n_default_cancel" FFMPEG_LINK
+                #[ -z "$FFMPEG_LINK" ] && echo "$i18n_canceled...\n" && exit 1
                 #sed -i "s+https://johnvansickle.com/ffmpeg/\(builds\|releases\)/\(.*\).tar.xz\"+$FFMPEG_LINK/\1/\2.tar.xz\"+g" "$FFMPEG_MIRROR_ROOT/index.html"
 
                 sed -i "s+https://johnvansickle.com/ffmpeg/\(builds\|releases\)/\(.*\).tar.xz\"+\1/\2.tar.xz\"+g" "$FFMPEG_MIRROR_ROOT/index.html"
@@ -42464,7 +41814,7 @@ then
                     fi
                     break
                 fi
-            done < <(curl -s -Lm 20 "https://poppler.freedesktop.org/")
+            done < <(curl -s -Lm 20 "https://poppler.freedesktop.org/" 2> /dev/null)
 
             if jq_ver=$(curl -s -Lm 20 "https://api.github.com/repos/stedolan/jq/releases/latest" | $JQ_FILE -r '.tag_name')
             then
@@ -42804,7 +42154,7 @@ then
                 for((i=0;i<flv_count;i++));
                 do
                     chnl_flv_pull_link=${chnls_flv_pull_link[i]}
-                    result=$result"  $green$((i+1)).${normal}\r\033[6C$green${chnls_channel_name[i]}${normal}\n\033[6C源: ${chnls_stream_link[i]}\n\033[6Cpull: ${chnl_flv_pull_link:-无}\n\n"
+                    result=$result"  $green$((i+1)).${normal}${indent_6}$green${chnls_channel_name[i]}${normal}\n${indent_6}源: ${chnls_stream_link[i]}\n${indent_6}pull: ${chnl_flv_pull_link:-无}\n\n"
                 done
                 Println "$result"
             fi
@@ -42835,7 +42185,7 @@ then
                 result=""
                 for((i=0;i<hls_count;i++));
                 do
-                    result=$result"  $green$((i+1)).${normal}\r\033[6C$green${chnls_channel_name[i]}${normal}\n\033[6C源: ${chnls_stream_link[i]}\n\n"
+                    result=$result"  $green$((i+1)).${normal}${indent_6}$green${chnls_channel_name[i]}${normal}\n${indent_6}源: ${chnls_stream_link[i]}\n\n"
                 done
                 Println "$result"
             fi
@@ -42844,7 +42194,7 @@ then
 
             for((i=0;i<hls_count;i++));
             do
-                echo -e "  $green$((i+1)).${normal}\r\033[6C${chnls_channel_name[i]} ${chnls_stream_link[i]}"
+                echo -e "  $green$((i+1)).${normal}${indent_6}${chnls_channel_name[i]} ${chnls_stream_link[i]}"
                 if [ -e "$LIVE_ROOT/${chnls_output_dir_name[i]}" ] 
                 then
                     if ls -A "$LIVE_ROOT/${chnls_output_dir_name[i]}"/* > /dev/null 2>&1 
@@ -42920,7 +42270,7 @@ fi
 
 if [ -z "$*" ]
 then
-    CheckShFile
+    ShFileCheck
     if [ "${vip:-0}" -eq 1 ] 
     then
         VipMenu
@@ -42966,15 +42316,8 @@ else
         if [ ! -d "$IPTV_ROOT" ]
         then
             echo
-            yn_options=( '否' '是' )
-            inquirer list_input "尚未安装, 是否现在安装" yn_options install_yn
-
-            if [[ $install_yn == "是" ]]
-            then
-                Install
-            else
-                Println "已取消...\n" && exit 1
-            fi
+            AskIfContinue n "`gettext \"尚未安装, 是否现在安装\"`"
+            Install
         else
             FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
             FFMPEG="$FFMPEG_ROOT/ffmpeg"
@@ -42989,9 +42332,8 @@ else
                 if [[ $stream_link =~ ^https?:// ]] && [ -n "$d_proxy" ] 
                 then
                     echo
-                    yn_options=( '是' '否' )
-                    inquirer list_input "是否使用代理 $d_proxy: " yn_options use_proxy_yn
-                    if [[ $use_proxy_yn == "是" ]]
+                    inquirer list_input "`eval_gettext \"是否使用代理 \\\$d_proxy: \"`" yn_options use_proxy_yn
+                    if [[ $use_proxy_yn == "$i18n_yes" ]]
                     then
                         proxy=$d_proxy
                     else
@@ -43008,7 +42350,7 @@ else
                 then
                     if [[ $stream_link =~ ^http://([^/]+) ]] 
                     then
-                        GetXtreamCodesDomains
+                        XtreamCodesGetDomains
 
                         xc_proxy=""
                         for xc_domain in "${xtream_codes_domains[@]}"
@@ -43016,9 +42358,8 @@ else
                             if [ "$xc_domain" == "${BASH_REMATCH[1]}" ] 
                             then
                                 echo
-                                yn_options=( '是' '否' )
-                                inquirer list_input "是否使用 xtream codes 代理 $d_xc_proxy: " yn_options use_proxy_yn
-                                if [[ $use_proxy_yn == "是" ]]
+                                inquirer list_input "`eval_gettext \"是否使用 xtream codes 代理 \\\$d_xc_proxy: \"`" yn_options use_proxy_yn
+                                if [[ $use_proxy_yn == "$i18n_yes" ]]
                                 then
                                     xc_proxy=$d_xc_proxy
                                 else
@@ -43193,7 +42534,7 @@ else
                 then
                     if [ -z "${flv_push_link:-}" ] 
                     then
-                        Println "$error 未设置推流地址...\n" && exit 1
+                        Println "`eval_gettext \"\\\$error 未设置推流地址...\"`\n" && exit 1
                     else
                         if [ "$sh_debug" -eq 1 ] 
                         then
@@ -43203,7 +42544,7 @@ else
                         fi
                     fi
                 else
-                    Println "$error 暂不支持输出 $kind ...\n" && exit 1
+                    Println "`eval_gettext \"\\\$error 暂不支持输出 \$kind ...\"`\n" && exit 1
                 fi
             else
                 if [ "$sh_debug" -eq 1 ] 
@@ -43214,7 +42555,7 @@ else
                 fi
             fi
 
-            Println "$info 添加频道成功\n"
+            Println "`eval_gettext \"\\\$info 添加频道成功\"`\n"
         fi
     fi
 fi
