@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-sh_ver="1.80.5"
+sh_ver="1.80.6"
 sh_debug=0
 export LANGUAGE=
 export LC_ALL=
@@ -1359,7 +1359,7 @@ Spinner(){
 
     echo
     tput sc
-    printf "%s %s" "${list[i]}" "$green$1${normal}"
+    printf "%s %s" "${list[i]}" "${green}$1${normal}"
     tput el
     tput rc
 
@@ -1477,12 +1477,10 @@ AskIfContinue()
 {
     if [ "$1" == "y" ] 
     then
-        ask_options=("${yn_options[@]}")
+        inquirer list_input "$2" yn_options yn_option
     else
-        ask_options=("${ny_options[@]}")
+        inquirer list_input "$2" ny_options yn_option
     fi
-
-    inquirer list_input "$2" ask_options yn_option
 
     if [ "$yn_option" == "$i18n_no" ]
     then
@@ -1688,18 +1686,18 @@ FFmpegCompile()
     fi
     make
     make install PREFIX="$HOME/ffmpeg_build"
-    printf '%s' 'prefix=/root/ffmpeg_build
-exec_prefix=${prefix}
-libdir=${prefix}/lib
-includedir=${prefix}/include
+    echo "prefix=$HOME/ffmpeg_build
+exec_prefix=\${prefix}
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
 
 Name: bzip2
 Description: bzip2
 Version: 1.0.6
 Requires:
-Libs: -L${libdir} -lbz2
-Cflags: -I${includedir}    
-' > "$HOME/ffmpeg_build/lib/pkgconfig/bzip2.pc"
+Libs: -L\${libdir} -lbz2
+Cflags: -I\${includedir}
+" > "$HOME/ffmpeg_build/lib/pkgconfig/bzip2.pc"
 
     # yasm
     cd ~/ffmpeg_sources
@@ -3624,7 +3622,7 @@ FlvStreamCreator()
                 trap '
                     JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$pid)|.flv_status)=\"off\""
                     printf -v date_now "%(%m-%d %H:%M:%S)T" -1
-                    printf "%s\n" "$date_now $channel_name FLV 关闭" >> "$MONITOR_LOG"
+                    printf "%s\n" "`eval_gettext \"\\\$date_now \\\$channel_name FLV 关闭\"`" >> "$MONITOR_LOG"
                     chnl_pid=$pid
                     action="stop"
                     SyncFile > /dev/null 2>> "$MONITOR_LOG"
@@ -4039,7 +4037,7 @@ FlvStreamCreator()
                 trap '
                     JQ update "$CHANNELS_FILE" ".channels|=map(select(.pid==$new_pid) * { flv_status: \"off\" } // .)"
                     printf -v date_now "%(%m-%d %H:%M:%S)T" -1
-                    printf "%s\n" "$date_now $chnl_channel_name FLV 关闭" >> "$MONITOR_LOG"
+                    printf "%s\n" "`eval_gettext \"\\\$date_now \\\$chnl_channel_name FLV 关闭\"`" >> "$MONITOR_LOG"
                     chnl_pid=$new_pid
                     action="stop"
                     SyncFile > /dev/null 2>> "$MONITOR_LOG"
@@ -4534,7 +4532,7 @@ HlsStreamCreatorPlus()
     trap '
         JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$pid)|.status)=\"off\""
         printf -v date_now "%(%m-%d %H:%M:%S)T" -1
-        printf "%s\n" "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
+        printf "%s\n" "`eval_gettext \"\\\$date_now \\\$channel_name HLS 关闭\"`" >> "$MONITOR_LOG"
         chnl_pid=$pid
         action="stop"
         SyncFile > /dev/null 2>> "$MONITOR_LOG"
@@ -5174,7 +5172,7 @@ HlsStreamCreatorPlus()
                 trap '
                     JQ update "$CHANNELS_FILE" ".channels|=map(select(.pid==$new_pid) * { status: \"off\" } // .)"
                     printf -v date_now "%(%m-%d %H:%M:%S)T" -1
-                    printf "%s\n" "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
+                    printf "%s\n" "`eval_gettext \"\\\$date_now \\\$chnl_channel_name HLS 关闭\"`" >> "$MONITOR_LOG"
                     chnl_pid=$new_pid
                     action="stop"
                     SyncFile > /dev/null 2>> "$MONITOR_LOG"
@@ -5887,7 +5885,7 @@ HlsStreamCreator()
                 trap '
                     JQ update "$CHANNELS_FILE" "(.channels[]|select(.pid==$pid)|.status)=\"off\""
                     printf -v date_now "%(%m-%d %H:%M:%S)T" -1
-                    printf "%s\n" "$date_now $channel_name HLS 关闭" >> "$MONITOR_LOG"
+                    printf "%s\n" "`eval_gettext \"\\\$date_now \\\$channel_name HLS 关闭\"`" >> "$MONITOR_LOG"
                     chnl_pid=$pid
                     action="stop"
                     SyncFile > /dev/null 2>> "$MONITOR_LOG"
@@ -5982,7 +5980,7 @@ HlsStreamCreator()
                 trap '
                     JQ update "$CHANNELS_FILE" ".channels|=map(select(.pid==$new_pid) * { status: \"off\" } // .)"
                     printf -v date_now "%(%m-%d %H:%M:%S)T" -1
-                    printf "%s\n" "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
+                    printf "%s\n" "`eval_gettext \"\\\$date_now \\\$chnl_channel_name HLS 关闭\"`" >> "$MONITOR_LOG"
                     chnl_pid=$new_pid
                     action="stop"
                     SyncFile > /dev/null 2>> "$MONITOR_LOG"
@@ -6327,7 +6325,7 @@ ListChannels()
             else
                 chnls_status_text="${red}$i18n_disabled${normal}"
             fi
-            chnls_list=$chnls_list"# $green$((index+1))${normal}${indent_6}$i18n_pid: $green${chnls_pid[index]}${normal} $i18n_status: $chnls_status_text $i18n_channel_name: $green${chnls_channel_name[index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: $green${chnls_video_codec[index]}:${chnls_audio_codec[index]}${normal} $i18n_video_audio_shift: $green$chnls_video_audio_shift_text${normal} $i18n_video_quality: $green$chnls_video_quality_text${normal}\n${indent_6}$i18n_stream_link: ${chnls_stream_link[index]}\n${indent_6}$i18n_playlist_file: $chnls_playlist_file_text\n\n"
+            chnls_list=$chnls_list"# ${green}$((index+1))${normal}${indent_6}$i18n_pid: ${green}${chnls_pid[index]}${normal} $i18n_status: $chnls_status_text $i18n_channel_name: ${green}${chnls_channel_name[index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: ${green}${chnls_video_codec[index]}:${chnls_audio_codec[index]}${normal} $i18n_video_audio_shift: ${green}$chnls_video_audio_shift_text${normal} $i18n_video_quality: ${green}$chnls_video_quality_text${normal}\n${indent_6}$i18n_stream_link: ${chnls_stream_link[index]}\n${indent_6}$i18n_playlist_file: $chnls_playlist_file_text\n\n"
         elif [ "$kind" == "flv" ] 
         then
             if [ "${chnls_flv_status[index]}" == "on" ] 
@@ -6336,7 +6334,7 @@ ListChannels()
             else
                 chnls_flv_status_text="${red}$i18n_disabled${normal}"
             fi
-            chnls_list=$chnls_list"# $green$((index+1))${normal}${indent_6}$i18n_pid: $green${chnls_pid[index]}${normal} $i18n_status: $chnls_flv_status_text $i18n_channel_name: $green${chnls_channel_name[index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: $green${chnls_video_codec[index]}:${chnls_audio_codec[index]}${normal} $i18n_video_audio_shift: $green$chnls_video_audio_shift_text${normal} $i18n_video_quality: $green$chnls_video_quality_text${normal}\n${indent_6}$i18n_stream_link: ${chnls_stream_link[index]}\n${indent_6}flv$i18n_flv_push_link: ${chnls_flv_push_link[index]:-无}\n${indent_6}$i18n_flv_pull_link: ${chnls_flv_pull_link[index]:-无}\n\n"
+            chnls_list=$chnls_list"# ${green}$((index+1))${normal}${indent_6}$i18n_pid: ${green}${chnls_pid[index]}${normal} $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${green}${chnls_channel_name[index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: ${green}${chnls_video_codec[index]}:${chnls_audio_codec[index]}${normal} $i18n_video_audio_shift: ${green}$chnls_video_audio_shift_text${normal} $i18n_video_quality: ${green}$chnls_video_quality_text${normal}\n${indent_6}$i18n_stream_link: ${chnls_stream_link[index]}\n${indent_6}flv$i18n_flv_push_link: ${chnls_flv_push_link[index]:-无}\n${indent_6}$i18n_flv_pull_link: ${chnls_flv_pull_link[index]:-无}\n\n"
         fi
     done
 
@@ -6344,15 +6342,15 @@ ListChannels()
     then
         if [ "$menu_num" -eq 7 ] 
         then
-            chnls_list=$chnls_list"# $green$((chnls_count+1))${normal}${indent_6}`gettext \"开启所有关闭的频道\"`\n\n"
-            chnls_list=$chnls_list"# $green$((chnls_count+2))${normal}${indent_6}`gettext \"关闭所有开启的频道\"`\n\n"
+            chnls_list=$chnls_list"# ${green}$((chnls_count+1))${normal}${indent_6}`gettext \"开启所有关闭的频道\"`\n\n"
+            chnls_list=$chnls_list"# ${green}$((chnls_count+2))${normal}${indent_6}`gettext \"关闭所有开启的频道\"`\n\n"
         elif [ "$menu_num" -eq 8 ] 
         then
-            chnls_list=$chnls_list"# $green$((chnls_count+1))${normal}${indent_6}`gettext \"重启所有开启的频道\"`\n\n"
+            chnls_list=$chnls_list"# ${green}$((chnls_count+1))${normal}${indent_6}`gettext \"重启所有开启的频道\"`\n\n"
         fi
     fi
 
-    Println "=== `gettext \"频道总数\"` $green $chnls_count ${normal}"
+    Println "=== `gettext \"频道总数\"` ${green} $chnls_count ${normal}"
     Println "$chnls_list"
 }
 
@@ -6524,20 +6522,20 @@ GetChannel()
                     chnl_br_b=" $i18n_resolution: ${chnl_br#*-}"
                     chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br_a}k -bufsize ${chnl_br_a}k${chnl_br_b} ] "
                     chnl_nocrf_text="${chnl_nocrf_text}[ $i18n_bitrates ${chnl_br_a}k${chnl_br_b}${chnl_const_text} ] "
-                    chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br_a.m3u8${normal} "
+                    chnl_playlist_file_text="$chnl_playlist_file_text${green}$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br_a.m3u8${normal} "
                 elif [[ $chnl_br == *"x"* ]] 
                 then
                     chnl_crf_text="${chnl_crf_text}[ $i18n_resolution: $chnl_br ] "
                     chnl_nocrf_text="${chnl_nocrf_text}[ $i18n_resolution: $chnl_br${chnl_const_text} ] "
-                    chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}.m3u8${normal} "
+                    chnl_playlist_file_text="$chnl_playlist_file_text${green}$chnl_output_dir_root/${chnl_playlist_name}.m3u8${normal} "
                 else
                     chnl_crf_text="${chnl_crf_text}[ -maxrate ${chnl_br}k -bufsize ${chnl_br}k ] "
                     chnl_nocrf_text="${chnl_nocrf_text}[ $i18n_bitrates ${chnl_br}k${chnl_const_text} ] "
-                    chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br.m3u8${normal} "
+                    chnl_playlist_file_text="$chnl_playlist_file_text${green}$chnl_output_dir_root/${chnl_playlist_name}_$chnl_br.m3u8${normal} "
                 fi
             done <<< ${chnl_bitrates//,/$'\n'}
         else
-            chnl_playlist_file_text="$chnl_playlist_file_text$green$chnl_output_dir_root/${chnl_playlist_name}.m3u8${normal} "
+            chnl_playlist_file_text="$chnl_playlist_file_text${green}$chnl_output_dir_root/${chnl_playlist_name}.m3u8${normal} "
         fi
 
         if [ "$chnl_sync_yn" == "yes" ]
@@ -6616,27 +6614,27 @@ ListChannel()
         printf " %s${indent_20}${green}%s${normal}\n" "$i18n_flv_pull_link" "${chnl_flv_pull_link:-$i18n_none}"
     fi
 
-    printf " %s${indent_20}$green%s${normal}\n" "$i18n_stream_link" "${chnl_stream_links// /, }"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_stream_link" "${chnl_stream_links// /, }"
     printf ' %b' "$i18n_live${indent_20}$chnl_live_text\n"
-    printf " %s${indent_20}$green%s${normal}\n" "$i18n_proxy" "${chnl_proxy:-$i18n_none}"
-    printf " %s${indent_20}$green%s${normal}\n" "$i18n_xtream_codes_proxy" "${chnl_xc_proxy:-$i18n_none}"
-    printf " %s${indent_20}$green%s${normal}\n" "$i18n_user_agent" "${chnl_user_agent:-$i18n_none}"
-    printf " %s${indent_20}$green%s${normal}\n" "$i18n_headers" "${chnl_headers:-$i18n_none}"
-    printf " %s${indent_20}$green%s${normal}\n" "$i18n_cookies" "${chnl_cookies:-$i18n_none}"
-    printf " %s${indent_20}$green%s${normal}\n" "$i18n_video_codec" "$chnl_video_codec"
-    printf " %s${indent_20}$green%s${normal}\n" "$i18n_audio_codec" "$chnl_audio_codec"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_proxy" "${chnl_proxy:-$i18n_none}"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_xtream_codes_proxy" "${chnl_xc_proxy:-$i18n_none}"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_user_agent" "${chnl_user_agent:-$i18n_none}"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_headers" "${chnl_headers:-$i18n_none}"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_cookies" "${chnl_cookies:-$i18n_none}"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_video_codec" "$chnl_video_codec"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_audio_codec" "$chnl_audio_codec"
     printf ' %b' "$i18n_video_quality${indent_20}$chnl_video_quality_text\n"
     printf ' %b' "$i18n_delay${indent_20}$chnl_video_audio_shift_text\n"
 
-    printf " %s${indent_20}$green%s${normal}\n" "$i18n_input_flags" "${chnl_input_flags:-$i18n_not_set}"
-    printf " %s${indent_20}$green%s${normal}\n" "$i18n_output_flags" "${chnl_output_flags:-$i18n_not_set}"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_input_flags" "${chnl_input_flags:-$i18n_not_set}"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_output_flags" "${chnl_output_flags:-$i18n_not_set}"
     printf ' %b' "sync${indent_20}$chnl_sync_text\n"
 
-    [ -n "$chnl_sync_file" ] && printf " %s${indent_20}$green%s${normal}\n" "sync_file" "${chnl_sync_file// /, }"
+    [ -n "$chnl_sync_file" ] && printf " %s${indent_20}${green}%s${normal}\n" "sync_file" "${chnl_sync_file// /, }"
 
-    [ -n "$chnl_sync_index" ] && printf " %s${indent_20}$green%s${normal}\n" "sync_index" "${chnl_sync_index// /, }"
+    [ -n "$chnl_sync_index" ] && printf " %s${indent_20}${green}%s${normal}\n" "sync_index" "${chnl_sync_index// /, }"
 
-    [ -n "$chnl_sync_pairs" ] && printf " %s${indent_20}$green%s${normal}\n" "sync_pairs" "${chnl_sync_pairs// /, }"
+    [ -n "$chnl_sync_pairs" ] && printf " %s${indent_20}${green}%s${normal}\n" "sync_pairs" "${chnl_sync_pairs// /, }"
 
     echo
 }
@@ -6753,21 +6751,21 @@ SetStreamLink()
 {
     if [ "${xc:-0}" -eq 1 ] 
     then
-        Println "  直播源: $green $stream_link ${normal}\n"
+        Println "  `gettext \"直播源:\"` ${green} $stream_link ${normal}\n"
         return 0
     fi
     if [ -n "${chnl_stream_links:-}" ] && [[ $chnl_stream_links == *" "* ]]
     then
         echo
-        inquirer list_input "是否只是调整频道 [ $chnl_channel_name ] 直播源顺序" ny_options stream_links_sort_yn
-        if [[ $stream_links_sort_yn == "$i18n_yes" ]] 
+        inquirer list_input "`eval_gettext \"是否只是调整频道 [ \\\$chnl_channel_name ] 直播源顺序\"`" ny_options ny_option
+        if [ "$ny_option" == "$i18n_yes" ] 
         then
             IFS=" " read -ra stream_links_input <<< "$chnl_stream_links"
             stream_links_count=${#stream_links_input[@]}
             stream_links_list=""
             for((i=0;i<stream_links_count;i++));
             do
-                stream_links_list="$stream_links_list $green$((i+1)).${normal}${indent_6}${stream_links_input[i]}\n\n"
+                stream_links_list="$stream_links_list ${green}$((i+1)).${normal}${indent_6}${stream_links_input[i]}\n\n"
             done
             re=""
             for((i=stream_links_count;i>0;i--));
@@ -6776,8 +6774,8 @@ SetStreamLink()
                 re="$re$i"
             done
             Println "$stream_links_list"
-            echo -e "输入新的次序"
-            while read -p "(比如 $re ): " orders_input
+            echo -e "`gettext \"输入新的次序\"`"
+            while read -p "(`gettext \"比如\"` $re ): " orders_input
             do
                 IFS=" " read -ra orders <<< "$orders_input"
                 if [ "${#orders[@]}" -eq "$stream_links_count" ] 
@@ -6787,7 +6785,7 @@ SetStreamLink()
                     do
                         if [[ $order == *[!0-9]* ]] || [ "$order" -lt 1 ] || [ "$order" -gt "$stream_links_count" ] || [ "$order" -eq "$flag" ] 
                         then
-                            Println "$error 输入错误\n"
+                            Println "`eval_gettext \"\\\$error 输入错误\"`\n"
                             continue 2
                         else
                             flag=$order
@@ -6803,15 +6801,15 @@ SetStreamLink()
                     done
                     break
                 else
-                    Println "$error 输入错误\n"
+                    Println "`eval_gettext \"\\\$error 输入错误\"`\n"
                 fi
             done
             return 0
         fi
     fi
 
-    Println "$tip 可以是视频路径, 可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔"
-    inquirer text_input "请输入直播源( mpegts / hls / flv / youtube ...): " stream_links "$i18n_cancel"
+    Println "`eval_gettext \"\\\$tip 可以是视频路径, 可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔\"`"
+    inquirer text_input "`gettext \"请输入直播源( mpegts / hls / flv / youtube ...): \"`" stream_links "$i18n_cancel"
     ExitOnCancel stream_links
 
     IFS=" " read -ra stream_links_input <<< "$stream_links"
@@ -6835,7 +6833,7 @@ SetStreamLink()
             link="${stream_links_input[i]}"
             if { [ "${link:0:23}" == "https://www.youtube.com" ] || [ "${link:0:19}" == "https://youtube.com" ]; } && [[ $link != *".m3u8"* ]] && [[ $link != *"|"* ]]
             then
-                Println "$info 查询 $green$link${normal} 视频信息..."
+                Println "`eval_gettext \"$info 查询 \\\${green}\\\$link\\\${normal} 视频信息...\"`"
 
                 youtube_found=0
                 count=0
@@ -6851,12 +6849,12 @@ SetStreamLink()
                         count=$((count+1))
                         code=${line%% *}
                         codes+=("$code")
-                        code="code: $green$code${normal}, "
+                        code="code: ${green}$code${normal}, "
                         line=${line#* }
                         lead=${line%%[^[:blank:]]*}
                         line=${line#${lead}}
                         extension=${line%% *}
-                        extension="格式: $green$extension${normal}, "
+                        extension="格式: ${green}$extension${normal}, "
                         line=${line#* }
                         lead=${line%%[^[:blank:]]*}
                         line=${line#${lead}}
@@ -6876,10 +6874,10 @@ SetStreamLink()
                             line=${line// $bitrate/}
                             trail=${line##*[^[:blank:]]}
                             line=${line%${trail}}
-                            resolution="分辨率: $green$resolution${normal}, $green${line##* }${normal}, "
+                            resolution="分辨率: ${green}$resolution${normal}, ${green}${line##* }${normal}, "
                             note="其它: $line$note"
                         fi
-                        format_list=$format_list"$green$count.${normal} $resolution$code$extension$note\n\n"
+                        format_list=$format_list"${green}$count.${normal} $resolution$code$extension$note\n\n"
                     fi
                 done < <(youtube-dl --list-formats "$link")
                 if [ -n "$format_list" ] 
@@ -6909,12 +6907,12 @@ SetStreamLink()
                     done
                     stream_links_input[i]="${stream_links_input[i]}|$code"
                 else
-                    Println "$error 无法解析链接 $link\n" && exit 1
+                    Println "`eval_gettext \"\\\$error 无法解析链接 \\\$link\"`\n" && exit 1
                 fi
             fi
         done
 
-        Println "$info 解析 youtube 链接..."
+        Println "`eval_gettext \"\\\$info 解析 youtube 链接...\"`"
         stream_link=${stream_links_input[0]}
         code=${stream_link#*|}
         stream_link=${stream_link%|*}
@@ -7028,7 +7026,7 @@ SetStreamLink()
             AskIfContinue y "`gettext \"是否安装 openssl\"`"
             OpensslInstall
         fi
-        Println "$info 解析 4gtv 链接 ..."
+        Println "`eval_gettext \"\\\$info 解析 4gtv 链接 ...\"`"
         hinet_4gtv=(
             "litv-longturn14:寰宇新聞台"
             "4gtv-4gtv052:華視新聞資訊台"
@@ -7089,7 +7087,7 @@ SetStreamLink()
                     stream_link_url_path=${stream_link_url%/*}
                     Add4gtvLink
                 else
-                    Println "$error 无法连接 4gtv !\n" && exit 1
+                    Println "`eval_gettext \"\\\$error 无法连接 4gtv !\"`\n" && exit 1
                 fi
                 break
             fi
@@ -7102,7 +7100,7 @@ SetStreamLink()
             AskIfContinue y "`gettext \"是否安装 openssl\"`"
             OpensslInstall
         fi
-        Println "$info 解析 4gtv 链接 ..."
+        Println "`eval_gettext \"\\\$info 解析 4gtv 链接 ...\"`"
         xc=1
         user_agent="$USER_AGENT_BROWSER"
         headers="Referer: ${stream_link%%|*}\r\n"
@@ -7157,13 +7155,13 @@ SetStreamLink()
 
         if [ -z "$stream_link_data" ] 
         then
-            Println "$error 无法连接 4gtv !\n" && exit 1
+            Println "`eval_gettext \"\\\$error 无法连接 4gtv !\"`\n" && exit 1
         fi
 
         stream_link_data=$($JQ_FILE -r '.Data' <<< "$stream_link_data")
         if [ "$stream_link_data" == null ] 
         then
-            Println "$error 此服务器 ip 不支持或频道不可用!\n"
+            Println "`eval_gettext \"\\\$error 此服务器 ip 不支持或频道不可用!\"`\n"
         else
             stream_link_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
                 | $JQ_FILE -r '.flstURLs[0]')
@@ -7178,7 +7176,7 @@ SetStreamLink()
         cookies=""
     fi
 
-    Println "  直播源: $green $stream_link ${normal}\n"
+    Println "  `gettext \"直播源:\"` ${green} $stream_link ${normal}\n"
 }
 
 SetIsHls()
@@ -7241,7 +7239,7 @@ SetProxy()
     if [ "${xc:-0}" -eq 1 ] && [ -n "${_4gtv_proxy:-}" ]
     then
         proxy=$_4gtv_proxy
-        Println "  ffmpeg 代理: $green $_4gtv_proxy ${normal}\n"
+        Println "  ffmpeg 代理: ${green} $_4gtv_proxy ${normal}\n"
         return 0
     fi
     Println "$tip 可以使用脚本自带的 v2ray 管理面板添加代理, 可以输入 omit 省略此选项"
@@ -7257,7 +7255,7 @@ SetXtreamCodesProxy()
     if [ "${xc:-0}" -eq 1 ] && [ -n "${xtream_codes_proxy:-}" ]
     then
         xc_proxy=$xtream_codes_proxy
-        Println "  xtream codes 代理: $green $xc_proxy ${normal}\n"
+        Println "  xtream codes 代理: ${green} $xc_proxy ${normal}\n"
         return 0
     fi
     Println "$tip 可以使用脚本自带的 cloudflare workers 管理面板添加 xtream codes 代理 worker, 可以输入 omit 省略此选项"
@@ -7272,7 +7270,7 @@ SetUserAgent()
 {
     if [ "${xc:-0}" -eq 1 ] 
     then
-        Println "  ffmpeg UA: $green ${user_agent:-不设置} ${normal}\n"
+        Println "  ffmpeg UA: ${green} ${user_agent:-不设置} ${normal}\n"
         return 0
     fi
     Println "$tip 可以输入 omit 省略此选项"
@@ -7287,7 +7285,7 @@ SetHeaders()
 {
     if [ "${xc:-0}" -eq 1 ] 
     then
-        Println "  ffmpeg headers: $green ${headers:-不设置} ${normal}\n"
+        Println "  ffmpeg headers: ${green} ${headers:-不设置} ${normal}\n"
         return 0
     fi
     Println "$tip 多个 header 用 \\\r\\\n 分隔, 可以输入 omit 省略此选项"
@@ -7310,7 +7308,7 @@ SetCookies()
 {
     if [ "${xc:-0}" -eq 1 ] 
     then
-        Println "  ffmpeg cookies: $green ${cookies:-不设置} ${normal}\n"
+        Println "  ffmpeg cookies: ${green} ${cookies:-不设置} ${normal}\n"
         return 0
     fi
     Println "$tip 多个 cookies 用 ; 分隔, 可以输入 omit 省略此选项"
@@ -7333,7 +7331,7 @@ SetOutputDirName()
                 output_dir_name=$(RandOutputDirName)
                 if [[ -z $($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'")' "$CHANNELS_FILE") ]] 
                 then
-                    Println "  目录名称: $green $output_dir_name ${normal}\n"
+                    Println "  目录名称: ${green} $output_dir_name ${normal}\n"
                     break 2
                 fi
             done
@@ -7354,7 +7352,7 @@ SetPlaylistName()
     if [ "$playlist_name" == "随机名称" ]
     then
         playlist_name=${d_playlist_name:-$(RandPlaylistName)}
-        Println "  m3u8 名称: $green $playlist_name ${normal}\n"
+        Println "  m3u8 名称: ${green} $playlist_name ${normal}\n"
     fi
 }
 
@@ -7377,7 +7375,7 @@ SetSegName()
     then
         playlist_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').playlist_name' "$CHANNELS_FILE")
         seg_name=$playlist_name
-        Println "  分片名称: $green $seg_name ${normal}\n"
+        Println "  分片名称: ${green} $seg_name ${normal}\n"
     fi
 }
 
@@ -7506,7 +7504,7 @@ SetVideoAudioShift()
         esac
     done
 
-    Println "  延迟: $green $video_audio_shift_text ${normal}\n"
+    Println "  延迟: ${green} $video_audio_shift_text ${normal}\n"
 }
 
 SetQuality()
@@ -7699,7 +7697,7 @@ SetEncrypt()
                                 encrypt_session_yn="no"
                                 encrypt_session_text="$i18n_no"
                                 Println "$error nodejs 安装发生错误"
-                                Println "  加密 session: $green $encrypt_session_text ${normal}"
+                                Println "  加密 session: ${green} $encrypt_session_text ${normal}"
                             fi
                         else
                             encrypt_session_yn="no"
@@ -7727,7 +7725,7 @@ SetKeyInfoName()
     if [ "$keyinfo_name" == "随机" ]
     then
         keyinfo_name=$(RandStr)
-        Println "  keyinfo 名称: $green $keyinfo_name ${normal}\n"
+        Println "  keyinfo 名称: ${green} $keyinfo_name ${normal}\n"
     fi
 }
 
@@ -7738,7 +7736,7 @@ SetKeyName()
     if [ "$key_name" == "随机" ]
     then
         key_name=$(RandStr)
-        Println "  key 名称: $green $key_name ${normal}\n"
+        Println "  key 名称: ${green} $key_name ${normal}\n"
     fi
 }
 
@@ -7789,7 +7787,7 @@ SetChannelName()
     then
         playlist_name=$($JQ_FILE -r '.channels[]|select(.pid=='"$chnl_pid"').playlist_name' "$CHANNELS_FILE")
         channel_name=$playlist_name
-        Println "  频道名称: $green $channel_name ${normal}\n"
+        Println "  频道名称: ${green} $channel_name ${normal}\n"
     fi
 }
 
@@ -8403,7 +8401,7 @@ SetFlvPushLink()
             do
                 flv_push_link=$(RandStr)
             done
-            Println "  推流地址: $green $flv_push_link ${normal}\n"
+            Println "  推流地址: ${green} $flv_push_link ${normal}\n"
             break
         elif [[ -z $($JQ_FILE '.channels[] | select(.flv_push_link=="'"$flv_push_link"'")' "$CHANNELS_FILE") ]]
         then
@@ -8665,7 +8663,7 @@ AddChannel()
                     fi
                     stream_links_subtitles+=("$stream_link_subtitles")
                     stream_links_count=$((stream_links_count+1))
-                    stream_links_list="$stream_links_list $green$stream_links_count.${normal}${indent_6}$stream_link_resolution$stream_link_bitrate_text $stream_link_audio $stream_link_subtitles\n\n"
+                    stream_links_list="$stream_links_list ${green}$stream_links_count.${normal}${indent_6}$stream_link_resolution$stream_link_bitrate_text $stream_link_audio $stream_link_subtitles\n\n"
                 elif [[ $line =~ \.m3u8 ]] 
                 then
                     if [[ $line =~ ^https?:// ]] 
@@ -8745,7 +8743,7 @@ AddChannel()
                 if [ "$choose" -eq 1 ]
                 then
                     stream_links_select_all=$((stream_links_count+1))
-                    stream_links_list="$stream_links_list $green$stream_links_select_all.${normal}${indent_6}全部\n"
+                    stream_links_list="$stream_links_list ${green}$stream_links_select_all.${normal}${indent_6}全部\n"
                     Println "$stream_links_list"
                     echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
 
@@ -8871,14 +8869,14 @@ AddChannel()
                             then
                                 stream_audio_num_default=$((i+1))
                             fi
-                            stream_audio_list="$stream_audio_list $green$((i+1)).${normal}${indent_6}音轨组: $green${stream_audio_group_id[i]}${normal} 名称: $green${stream_audio_name[i]}${normal} 语言: $green${stream_audio_language[i]}${normal}\n\n"
+                            stream_audio_list="$stream_audio_list ${green}$((i+1)).${normal}${indent_6}音轨组: ${green}${stream_audio_group_id[i]}${normal} 名称: ${green}${stream_audio_name[i]}${normal} 语言: ${green}${stream_audio_language[i]}${normal}\n\n"
                         done
 
                         stream_audio_unselect_all=$((stream_audio_count+1))
-                        stream_audio_list="$stream_audio_list $green$stream_audio_unselect_all.${normal}${indent_6}不启用\n\n"
+                        stream_audio_list="$stream_audio_list ${green}$stream_audio_unselect_all.${normal}${indent_6}不启用\n\n"
 
                         stream_audio_select_all=$((stream_audio_count+2))
-                        stream_audio_list="$stream_audio_list $green$stream_audio_select_all.${normal}${indent_6}全部启用"
+                        stream_audio_list="$stream_audio_list ${green}$stream_audio_select_all.${normal}${indent_6}全部启用"
                         Println "$stream_audio_list\n"
                         echo "选择启用音轨 (多个音轨用空格分隔 比如: 1 2 4-5)"
                         stream_audio_num_default=$stream_audio_select_all
@@ -9024,14 +9022,14 @@ AddChannel()
                             then
                                 stream_subtitles_num_default=$((i+1))
                             fi
-                            stream_subtitles_list="$stream_subtitles_list $green$((i+1)).${normal}${indent_6}字幕组: $green${stream_subtitles_group_id[i]}${normal} 名称: $green${stream_subtitles_name[i]}${normal} 语言: $green${stream_subtitles_language[i]}${normal}\n\n"
+                            stream_subtitles_list="$stream_subtitles_list ${green}$((i+1)).${normal}${indent_6}字幕组: ${green}${stream_subtitles_group_id[i]}${normal} 名称: ${green}${stream_subtitles_name[i]}${normal} 语言: ${green}${stream_subtitles_language[i]}${normal}\n\n"
                         done
 
                         stream_subtitles_unselect_all=$((stream_subtitles_count+1))
-                        stream_subtitles_list="$stream_subtitles_list $green$stream_subtitles_unselect_all.${normal}${indent_6}不启用\n\n"
+                        stream_subtitles_list="$stream_subtitles_list ${green}$stream_subtitles_unselect_all.${normal}${indent_6}不启用\n\n"
 
                         stream_subtitles_select_all=$((stream_subtitles_count+2))
-                        stream_subtitles_list="$stream_subtitles_list $green$stream_subtitles_select_all.${normal}${indent_6}全部启用"
+                        stream_subtitles_list="$stream_subtitles_list ${green}$stream_subtitles_select_all.${normal}${indent_6}全部启用"
                         Println "$stream_subtitles_list\n"
                         echo "选择字幕 (多个字幕用空格分隔 比如: 1 2 4-5)"
                         stream_subtitles_num_default=$stream_subtitles_select_all
@@ -10735,7 +10733,7 @@ StartChannel()
                 fi
                 chnl_stream_links_subtitles+=("$chnl_stream_link_subtitles")
                 chnl_stream_links_count=$((chnl_stream_links_count+1))
-                chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_count.${normal}${indent_6}$chnl_stream_link_resolution$chnl_stream_link_bitrate_text $chnl_stream_link_audio $chnl_stream_link_subtitles\n\n"
+                chnl_stream_links_list="$chnl_stream_links_list ${green}$chnl_stream_links_count.${normal}${indent_6}$chnl_stream_link_resolution$chnl_stream_link_bitrate_text $chnl_stream_link_audio $chnl_stream_link_subtitles\n\n"
             elif [[ $line =~ \.m3u8 ]] 
             then
                 if [[ $line =~ ^https?:// ]] 
@@ -10816,7 +10814,7 @@ StartChannel()
                 if [ -z "${monitor:-}" ] 
                 then
                     chnl_stream_links_select_all=$((chnl_stream_links_count+1))
-                    chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_select_all.${normal}${indent_6}全部\n"
+                    chnl_stream_links_list="$chnl_stream_links_list ${green}$chnl_stream_links_select_all.${normal}${indent_6}全部\n"
                     Println "$chnl_stream_links_list"
                     echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
 
@@ -10952,14 +10950,14 @@ StartChannel()
                         then
                             chnl_stream_audio_num_default=$((i+1))
                         fi
-                        chnl_stream_audio_list="$chnl_stream_audio_list $green$((i+1)).${normal}${indent_6}音轨组: $green${chnl_stream_audio_group_id[i]}${normal} 名称: $green${chnl_stream_audio_name[i]}${normal} 语言: $green${chnl_stream_audio_language[i]}${normal}\n\n"
+                        chnl_stream_audio_list="$chnl_stream_audio_list ${green}$((i+1)).${normal}${indent_6}音轨组: ${green}${chnl_stream_audio_group_id[i]}${normal} 名称: ${green}${chnl_stream_audio_name[i]}${normal} 语言: ${green}${chnl_stream_audio_language[i]}${normal}\n\n"
                     done
 
                     chnl_stream_audio_unselect_all=$((chnl_stream_audio_count+1))
-                    chnl_stream_audio_list="$chnl_stream_audio_list $green$chnl_stream_audio_unselect_all.${normal}${indent_6}不启用\n\n"
+                    chnl_stream_audio_list="$chnl_stream_audio_list ${green}$chnl_stream_audio_unselect_all.${normal}${indent_6}不启用\n\n"
 
                     chnl_stream_audio_select_all=$((chnl_stream_audio_count+2))
-                    chnl_stream_audio_list="$chnl_stream_audio_list $green$chnl_stream_audio_select_all.${normal}${indent_6}全部启用"
+                    chnl_stream_audio_list="$chnl_stream_audio_list ${green}$chnl_stream_audio_select_all.${normal}${indent_6}全部启用"
                     Println "$chnl_stream_audio_list\n"
                     echo "选择启用音轨 (多个音轨用空格分隔 比如: 1 2 4-5)"
                     chnl_stream_audio_num_default=$chnl_stream_audio_select_all
@@ -11110,14 +11108,14 @@ StartChannel()
                         then
                             chnl_stream_subtitles_num_default=$((i+1))
                         fi
-                        chnl_stream_subtitles_list="$chnl_stream_subtitles_list $green$((i+1)).${normal}${indent_6}字幕组: $green${chnl_stream_subtitles_group_id[i]}${normal} 名称: $green${chnl_stream_subtitles_name[i]}${normal} 语言: $green${chnl_stream_subtitles_language[i]}${normal}\n\n"
+                        chnl_stream_subtitles_list="$chnl_stream_subtitles_list ${green}$((i+1)).${normal}${indent_6}字幕组: ${green}${chnl_stream_subtitles_group_id[i]}${normal} 名称: ${green}${chnl_stream_subtitles_name[i]}${normal} 语言: ${green}${chnl_stream_subtitles_language[i]}${normal}\n\n"
                     done
 
                     chnl_stream_subtitles_unselect_all=$((chnl_stream_subtitles_count+1))
-                    chnl_stream_subtitles_list="$chnl_stream_subtitles_list $green$chnl_stream_subtitles_unselect_all.${normal}${indent_6}不启用\n\n"
+                    chnl_stream_subtitles_list="$chnl_stream_subtitles_list ${green}$chnl_stream_subtitles_unselect_all.${normal}${indent_6}不启用\n\n"
 
                     chnl_stream_subtitles_select_all=$((chnl_stream_subtitles_count+2))
-                    chnl_stream_subtitles_list="$chnl_stream_subtitles_list $green$chnl_stream_subtitles_select_all.${normal}${indent_6}全部启用"
+                    chnl_stream_subtitles_list="$chnl_stream_subtitles_list ${green}$chnl_stream_subtitles_select_all.${normal}${indent_6}全部启用"
                     Println "$chnl_stream_subtitles_list\n"
                     echo "选择字幕 (多个字幕用空格分隔 比如: 1 2 4-5)"
                     chnl_stream_subtitles_num_default=$chnl_stream_subtitles_select_all
@@ -11907,7 +11905,7 @@ Set4gtvAccEmail()
             Println "$error 邮箱格式错误, 请重新输入\n"
         fi
     done
-    Println "  4gtv 账号邮箱: $green $_4gtv_acc_email ${normal}\n"
+    Println "  4gtv 账号邮箱: ${green} $_4gtv_acc_email ${normal}\n"
 }
 
 Set4gtvAccPass()
@@ -11923,7 +11921,7 @@ Set4gtvAccPass()
             Println "$error 账号密码格式错误, 请重新输入\n"
         fi
     done
-    Println "  4gtv 账号密码: $green $_4gtv_acc_pass ${normal}\n"
+    Println "  4gtv 账号密码: ${green} $_4gtv_acc_pass ${normal}\n"
 }
 
 Reg4gtvAcc()
@@ -11997,11 +11995,11 @@ List4gtvAccs()
     do
         if [ -n "${_4gtv_accs_token[i]:-}" ]
         then
-            is_login="$green [ 已登录 ] ${normal}"
+            is_login="${green} [ 已登录 ] ${normal}"
         else
             is_login=""
         fi
-        _4gtv_accs_list="$_4gtv_accs_list $green$((i+1)).${normal}${indent_6}邮箱: $green${_4gtv_accs_email[i]}${normal}$is_login\n${indent_6}密码: $green${_4gtv_accs_pass[i]}${normal}\n\n"
+        _4gtv_accs_list="$_4gtv_accs_list ${green}$((i+1)).${normal}${indent_6}邮箱: ${green}${_4gtv_accs_email[i]}${normal}$is_login\n${indent_6}密码: ${green}${_4gtv_accs_pass[i]}${normal}\n\n"
     done
     if [ -n "$_4gtv_accs_list" ] 
     then
@@ -12015,13 +12013,13 @@ Login4gtvAcc()
 {
     if [ ! -e "/usr/local/bin/imgcat" ] 
     then
-        InstallImgcat
+        ImgcatInstall
     fi
 
     List4gtvAccs
 
     _4gtv_input_acc_num=$((_4gtv_accs_count+1))
-    echo -e " $green$_4gtv_input_acc_num.${normal}${indent_6}手动输入\n"
+    echo -e " ${green}$_4gtv_input_acc_num.${normal}${indent_6}手动输入\n"
 
     echo -e "选择账号"
     while read -p "$i18n_default_cancel" _4gtv_accs_num
@@ -12523,7 +12521,7 @@ Add4gtvLink()
                 stream_link_bitrate_text=""
             fi
             stream_links_count=$((stream_links_count+1))
-            stream_links_list="$stream_links_list $green$stream_links_count.${normal}${indent_6}$stream_link_resolution$stream_link_bitrate_text\n\n"
+            stream_links_list="$stream_links_list ${green}$stream_links_count.${normal}${indent_6}$stream_link_resolution$stream_link_bitrate_text\n\n"
         elif [[ $line =~ m3u8 ]] 
         then
             stream_links_url+=("$stream_link_url_path/$line")
@@ -12567,7 +12565,7 @@ Add4gtvLink()
             if [ -z "${kind:-}" ] 
             then
                 stream_links_select_all=$((stream_links_count+1))
-                stream_links_list="$stream_links_list $green$stream_links_select_all.${normal}${indent_6}全部\n"
+                stream_links_list="$stream_links_list ${green}$stream_links_select_all.${normal}${indent_6}全部\n"
                 Println "$stream_links_list"
                 echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
             else
@@ -12713,7 +12711,7 @@ Start4gtvLink()
                 chnl_stream_link_bitrate_text=""
             fi
             chnl_stream_links_count=$((chnl_stream_links_count+1))
-            chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_count.${normal}${indent_6}$chnl_stream_link_resolution$chnl_stream_link_bitrate_text\n\n"
+            chnl_stream_links_list="$chnl_stream_links_list ${green}$chnl_stream_links_count.${normal}${indent_6}$chnl_stream_link_resolution$chnl_stream_link_bitrate_text\n\n"
         elif [[ $line =~ m3u8 ]] 
         then
             chnl_stream_links_url+=("$chnl_stream_link_url_path/$line")
@@ -12770,7 +12768,7 @@ Start4gtvLink()
                 if [ -z "${kind:-}" ] 
                 then
                     chnl_stream_links_select_all=$((chnl_stream_links_count+1))
-                    chnl_stream_links_list="$chnl_stream_links_list $green$chnl_stream_links_select_all.${normal}${indent_6}全部\n"
+                    chnl_stream_links_list="$chnl_stream_links_list ${green}$chnl_stream_links_select_all.${normal}${indent_6}全部\n"
                     Println "$chnl_stream_links_list"
                     echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
                 else
@@ -13036,7 +13034,7 @@ ScheduleIcable()
                         program_sys_time=$(date -d "$today $program_time" +%s)
                         [ -n "$schedule" ] && schedule="$schedule,"
                         schedule=$schedule'{
-                            "title":"'"$program_title"'",
+                            "title":"'"${program_title//\"/}"'",
                             "time":"'"$program_time"'AM",
                             "sys_time":"'"$program_sys_time"'"
                         }'
@@ -13069,7 +13067,7 @@ ScheduleIcable()
                     program_sys_time=$(date -d "$today $program_time" +%s)
                     [ -n "$schedule" ] && schedule="$schedule,"
                     schedule=$schedule'{
-                        "title":"'"$program_title"'",
+                        "title":"'"${program_title//\"/}"'",
                         "time":"'"$program_time"'",
                         "sys_time":"'"$program_sys_time"'"
                     }'
@@ -14424,7 +14422,7 @@ GetCronChnls()
 
             cron_providers+=("$cron_provider")
             cron_chnls+=("${line#*|}")
-            cron_providers_list="$cron_providers_list $green$cron_providers_count.${normal}${indent_6}$cron_provider_name\n\n"
+            cron_providers_list="$cron_providers_list ${green}$cron_providers_count.${normal}${indent_6}$cron_provider_name\n\n"
         fi
     done < <($JQ_FILE -r '.schedule[]|[.provider,.chnls[]]|join("|")' "$CRON_FILE")
 }
@@ -14439,7 +14437,7 @@ ScheduleView()
     for provider in "${providers[@]}"
     do
         providers_count=$((providers_count+1))
-        providers_list="$providers_list $green$providers_count.${normal}${indent_6}${provider#*:} [${provider%%:*}]\n\n"
+        providers_list="$providers_list ${green}$providers_count.${normal}${indent_6}${provider#*:} [${provider%%:*}]\n\n"
     done
 
     Println "节目表来源\n\n$providers_list"
@@ -14498,7 +14496,7 @@ ScheduleView()
             chnl_id=${chnl%%:*}
         fi
         chnls_count=$((chnls_count+1))
-        chnls_list="$chnls_list $green$chnls_count.${normal}${indent_6}$chnl_name [$chnl_id] $using\n\n"
+        chnls_list="$chnls_list ${green}$chnls_count.${normal}${indent_6}$chnl_name [$chnl_id] $using\n\n"
     done
 
     chnls=("${!var}")
@@ -14537,7 +14535,7 @@ ScheduleAddChannel()
 ScheduleAdd()
 {
     ScheduleView
-    echo -e " $green$((chnls_count+1)).${normal}${indent_6}全部"
+    echo -e " ${green}$((chnls_count+1)).${normal}${indent_6}全部"
 
     Println "$tip (多个频道用空格分隔 比如: 5 7 9-11)"
 
@@ -14652,7 +14650,7 @@ ScheduleViewCron()
     do
         chnl_name=${chnl##*:}
         chnls_count=$((chnls_count+1))
-        chnls_list="$chnls_list $green$chnls_count.${normal}${indent_6}$chnl_name\n\n"
+        chnls_list="$chnls_list ${green}$chnls_count.${normal}${indent_6}$chnl_name\n\n"
     done
 
     Println "计划任务频道\n\n$chnls_list"
@@ -14662,7 +14660,7 @@ ScheduleDel()
 {
     ScheduleViewCron
 
-    echo -e " $green$((chnls_count+1)).${normal}${indent_6}全部"
+    echo -e " ${green}$((chnls_count+1)).${normal}${indent_6}全部"
 
     Println "$tip (多个频道用空格分隔 比如: 5 7 9-11)"
 
@@ -14825,7 +14823,7 @@ ScheduleListBackup()
         schedule_backup_dates+=("$backup_date")
         schedule_backup_schedules+=("$backup_schedule")
         printf -v date '%(%m-%d %H:%M:%S)T' "$backup_date"
-        schedule_backup_list="$schedule_backup_list $schedule_backup_count. 备份名称: $green$backup_name${normal} 备份日期: $green$date${normal}\n\n"
+        schedule_backup_list="$schedule_backup_list $schedule_backup_count. 备份名称: ${green}$backup_name${normal} 备份日期: ${green}$date${normal}\n\n"
     done < <($JQ_FILE -r '(.schedule_backup| if .== null then [] else . end)[]|([.name,.date,(.schedule|to_entries|map([.value.provider,.value.chnls]|join("="))|join(","))]|join("^"))' "$CRON_FILE")
 
     if [ "$schedule_backup_count" -eq 0 ] 
@@ -14889,7 +14887,7 @@ ScheduleViewBackup()
             fi
             schedule_chnls_list="$schedule_chnls_list${indent_6}${schedule_chnl##*:} ($schedule_chnl_id)\n"
         done
-        schedules_list="$schedules_list $green$((i+1)).${normal}${indent_6}$schedule_provider_name\n\n$schedule_chnls_list\n"
+        schedules_list="$schedules_list ${green}$((i+1)).${normal}${indent_6}$schedule_provider_name\n\n$schedule_chnls_list\n"
     done
 
     Println "$schedules_list"
@@ -16130,7 +16128,7 @@ TsImg()
     fi
 }
 
-InstallImgcat()
+ImgcatInstall()
 {
     echo
     AskIfContinue y "`gettext \"缺少 imgcat ,是否现在安装\"`"
@@ -16177,7 +16175,7 @@ TsRegister()
 {
     if [ ! -e "/usr/local/bin/imgcat" ] &&  [ -n "${ts_array[img_url]:-}" ]
     then
-        InstallImgcat
+        ImgcatInstall
     fi
     not_unique=1
     while [ "$not_unique" != 0 ] 
@@ -16465,7 +16463,7 @@ TsMenu()
         desc=${ts_channels_desc[i]//\"/}
         desc=${desc//\'/}
         desc=${desc//\\/\'}
-        echo -e "$green$((i+1)).${normal}${indent_6}$desc"
+        echo -e "${green}$((i+1)).${normal}${indent_6}$desc"
     done
 
     while :; do
@@ -18426,12 +18424,12 @@ MonitorSet()
         for((i=0;i<flv_count;i++));
         do
             flv_pull_link=${monitor_flv_pull_links[i]}
-            result=$result"  $green$((i+1)).${normal}${indent_6}${monitor_channel_names[i]}\n${indent_6}源: ${monitor_stream_links[i]}\n${indent_6}pull: ${flv_pull_link:-无}\n\n"
+            result=$result"  ${green}$((i+1)).${normal}${indent_6}${monitor_channel_names[i]}\n${indent_6}源: ${monitor_stream_links[i]}\n${indent_6}pull: ${flv_pull_link:-无}\n\n"
         done
 
         Println "$result"
-        Println "  $green$((flv_count+1)).${normal}${indent_6}全部"
-        Println "  $green$((flv_count+2)).${normal}${indent_6}不设置\n"
+        Println "  ${green}$((flv_count+1)).${normal}${indent_6}全部"
+        Println "  ${green}$((flv_count+2)).${normal}${indent_6}不设置\n"
         while read -p "(默认: 不设置): " flv_nums
         do
             if [ -z "$flv_nums" ] || [ "$flv_nums" == $((flv_count+2)) ] 
@@ -18552,13 +18550,13 @@ MonitorSet()
         then
             monitor_count=$((monitor_count + 1))
             monitor_dir_names+=("${chnls_output_dir_name[i]}")
-            result=$result"  $green$monitor_count.${normal}${indent_6}${chnls_channel_name[i]}\n\n"
+            result=$result"  ${green}$monitor_count.${normal}${indent_6}${chnls_channel_name[i]}\n\n"
         fi
     done
 
     Println "$result"
-    Println "  $green$((monitor_count+1)).${normal}${indent_6}全部"
-    Println "  $green$((monitor_count+2)).${normal}${indent_6}不设置\n"
+    Println "  ${green}$((monitor_count+1)).${normal}${indent_6}全部"
+    Println "  ${green}$((monitor_count+2)).${normal}${indent_6}不设置\n"
 
     while read -p "(默认: 不设置): " hls_nums
     do
@@ -19466,7 +19464,7 @@ XtreamCodesAddAccount()
                 username=${BASH_REMATCH[2]}
                 password=${BASH_REMATCH[3]}
             else
-                Println "$error 输入错误 !\n" && exit 1
+                Println "$error 输入错误\n" && exit 1
             fi
         else
             domain=${BASH_REMATCH[1]}
@@ -19475,7 +19473,7 @@ XtreamCodesAddAccount()
         fi
         ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
     else
-        Println "$error 输入错误 !\n" && exit 1
+        Println "$error 输入错误\n" && exit 1
     fi
 
     [ -z "${ip:-}" ] && Println "$error 无法解析域名 !\n" && exit 1
@@ -19486,47 +19484,39 @@ XtreamCodesAddAccount()
 
 VerifyXtreamCodesMac()
 {
-    trap '
-        printf "%s" "" > "$XTREAM_CODES_EXAM"
-        exit
-    ' SIGINT
+    to_continue=0
 
     if [ "${test_mac_domain:-}" != "$domain" ] 
     then
-        Println "$info 验证 $domain ..."
         test_mac_domain=$domain
 
+        if [ "${skip_ip_check:-0}" -eq 0 ] 
+        then
+            ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
+        fi
+
+        if [ "$verify_mac" -eq 0 ] 
+        then
+            return 0
+        fi
+
+        Println "$info 验证 $domain ..."
+
         server="http://$domain"
-        xc_host_header=()
     fi
 
-    to_continue=0
-    if [ "${skip_domain:-}" == "$domain" ] 
-    then
-        to_continue=1
-        return 0
-    fi
-
-    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
     if [ -z "$ip" ] 
     then
         to_continue=1
-        skip_domain=$domain
         return 0
     fi
 
-    if [ -n "${skip_mac_ip:-}" ] 
+    if [ "$verify_mac" -eq 0 ] 
     then
-        for((i=0;i<${#skip_mac_ip[@]};i++));
-        do
-            if [ "${skip_mac_ip[i]}" == "$ip" ] && [[ ${skip_mac_ip[i]} == *"${BASH_REMATCH[1]}"* ]] 
-            then
-                to_continue=1
-                return 0
-            fi
-        done
+        return 0
     fi
 
+    mac_address=$account
     access_token=""
     profile=""
     mac=$(UrlencodeUpper "$mac_address")
@@ -19536,29 +19526,32 @@ VerifyXtreamCodesMac()
 
     access_token=$(curl -s -Lm 10 \
         -H "User-Agent: $USER_AGENT_TV" \
-        ${xc_host_header[@]+"${xc_host_header[@]}"} \
         --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" \
         | $JQ_FILE -r '.js.token') || true
+
     if [ -z "$access_token" ] 
     then
         Println "$error $domain $mac_address"
+        to_continue=1
         return 0
     fi
 
     profile=$(curl -s -Lm 10 \
         -H "User-Agent: $USER_AGENT_TV" \
-        ${xc_host_header[@]+"${xc_host_header[@]}"} \
         -H "Authorization: Bearer $access_token" \
         --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url") || true
+
     if [ -z "$profile" ] 
     then
         Println "$error $domain $mac_address profile"
+        to_continue=1
         return 0
     fi
 
     if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
     then
-        Println "$error $mac_address 地址错误!"
+        Println "$error $mac_address profile id"
+        to_continue=1
         return 0
     else
         account=$mac_address
@@ -19567,14 +19560,21 @@ VerifyXtreamCodesMac()
 
 XtreamCodesList()
 {
-    [ ! -s "$XTREAM_CODES" ] && Println "$error 没有账号 !\n" && exit 1
+    if [ -s "$XTREAM_CODES_EXAM" ] && [ ! -f "$XTREAM_CODES" ]
+    then
+        printf '%s' "" > "$XTREAM_CODES"
+    elif [ ! -s "$XTREAM_CODES" ] 
+    then
+        Println "$error 没有账号 !\n"
+        exit 1
+    fi
 
     ips=()
     new_domains=()
     new_accounts=()
-    verify=${verify:-0}
+    verify_mac=${verify_mac:-0}
 
-    if [ "$verify" -eq 0 ] 
+    if [ "$verify_mac" -eq 0 ] 
     then
         IFS=" " read -r m_ip m_domains m_accounts < <(awk '$1 {a=a $1",";b=b $2",";$1=$2="";c=c substr($0,3)","} END {print a,b,c}' "$XTREAM_CODES")
         IFS="," read -r -a ips <<< "$m_ip"
@@ -19590,59 +19590,59 @@ XtreamCodesList()
             then
                 if [[ $line =~ ([^ ]+)\ ([^ ]+)\ ([^ ]+) ]] 
                 then
-                    if [ "$verify" -eq 1 ] 
+                    skip_ip_check=1
+                    ip=${BASH_REMATCH[1]}
+                    domain=${BASH_REMATCH[2]}
+                    account=${BASH_REMATCH[3]}
+
+                    if [[ $account =~ (([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})) ]] 
                     then
-                        ip=${BASH_REMATCH[1]}
-                        domain=${BASH_REMATCH[2]}
-                        mac_address=${BASH_REMATCH[3]}
-                        if [[ $mac_address =~ (([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})) ]] 
+                        VerifyXtreamCodesMac 2> /dev/null
+                        if [ "$to_continue" -eq 1 ] 
                         then
-                            VerifyXtreamCodesMac 2> /dev/null
-                            if [ "$to_continue" -eq 1 ] 
-                            then
-                                continue
-                            fi
+                            skip_ip_check=0
+                            continue
                         fi
-                        account=$mac_address
-                    else
-                        ip=${BASH_REMATCH[1]}
-                        domain=${BASH_REMATCH[2]}
-                        account=${BASH_REMATCH[3]}
                     fi
+
+                    skip_ip_check=0
                 else
                     continue
                 fi
             elif [[ $line == *"username="* ]] 
             then
                 domain=${line#*http://}
+                if [ "${test_mac_domain:-}" != "$domain" ] 
+                then
+                    test_mac_domain=$domain
+                    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
+                fi
+                [ -z "$ip" ] && continue
                 domain=${domain%%/*}
                 username=${line#*username=}
                 username=${username%%&*}
                 password=${line#*password=}
                 password=${password%%&*}
-                ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
-                [ -z "$ip" ] && continue
                 account="$username:$password"
             elif [[ $line =~ http://([^/]+)/([^/]+)/([^/]+)/ ]] 
             then
                 if [ "${BASH_REMATCH[2]}" == "live" ] 
                 then
-                    if [[ $line =~ http://([^/]+)/live/([^/]+)/([^/]+)/ ]] 
+                    if ! [[ $line =~ http://([^/]+)/live/([^/]+)/([^/]+)/ ]] 
                     then
-                        domain=${BASH_REMATCH[1]}
-                        username=${BASH_REMATCH[2]}
-                        password=${BASH_REMATCH[3]}
-                    else
                         continue
                     fi
-                else
-                    domain=${BASH_REMATCH[1]}
-                    username=${BASH_REMATCH[2]}
-                    password=${BASH_REMATCH[3]}
                 fi
 
-                ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
+                domain=${BASH_REMATCH[1]}
+                if [ "${test_mac_domain:-}" != "$domain" ] 
+                then
+                    test_mac_domain=$domain
+                    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
+                fi
                 [ -z "$ip" ] && continue
+                username=${BASH_REMATCH[2]}
+                password=${BASH_REMATCH[3]}
                 account="$username:$password"
             elif [[ $line =~ http://([^/]+)/ ]] 
             then
@@ -19654,25 +19654,25 @@ XtreamCodesList()
                 fi
 
                 domain=$stb_domain
-                mac_address=${BASH_REMATCH[1]}
+                account=${BASH_REMATCH[1]}
+
                 VerifyXtreamCodesMac 2> /dev/null
 
                 if [ "$to_continue" -eq 1 ] 
                 then
                     continue
                 fi
-
-                account=$mac_address
             elif [ -n "${stb_domain:-}" ] && [[ $line =~ (([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})) ]] 
             then
                 domain=$stb_domain
-                mac_address=${BASH_REMATCH[1]}
+                account=${BASH_REMATCH[1]}
+
                 VerifyXtreamCodesMac 2> /dev/null
+
                 if [ "$to_continue" -eq 1 ] 
                 then
                     continue
                 fi
-                account=$mac_address
             else
                 continue
             fi
@@ -19755,11 +19755,11 @@ XtreamCodesList()
                 then
                     ips_mac+=("$i")
                     ips_mac_count=$((ips_mac_count+1))
-                    xtream_codes_list="$xtream_codes_list $green$ips_mac_count.${normal} IP: $green${ips[i]//|/, }${normal} 域名: $green${new_domains[i]//|/, }${normal} mac 地址个数: $green$macs_num${normal}\n\n"
+                    xtream_codes_list="$xtream_codes_list ${green}$ips_mac_count.${normal} IP: ${green}${ips[i]//|/, }${normal} 域名: ${green}${new_domains[i]//|/, }${normal} mac 地址个数: ${green}$macs_num${normal}\n\n"
                 else
                     ips_acc+=("$i")
                     ips_acc_count=$((ips_acc_count+1))
-                    xtream_codes_list="$xtream_codes_list $green$ips_acc_count.${normal} IP: $green${ips[i]//|/, }${normal} 域名: $green${new_domains[i]//|/, }${normal} 账号个数: $green$accs_num${normal}\n\n"
+                    xtream_codes_list="$xtream_codes_list ${green}$ips_acc_count.${normal} IP: ${green}${ips[i]//|/, }${normal} 域名: ${green}${new_domains[i]//|/, }${normal} 账号个数: ${green}$accs_num${normal}\n\n"
                 fi
             fi
         done
@@ -19814,7 +19814,7 @@ XtreamCodesListAcc()
         domains_count=${#domains[@]}
         for((i=0;i<domains_count;i++));
         do
-            domains_list="$domains_list $green$((i+1)).${normal}${indent_6}${domains[i]}\n\n"
+            domains_list="$domains_list ${green}$((i+1)).${normal}${indent_6}${domains[i]}\n\n"
         done
         Println "$domains_list"
 
@@ -19869,7 +19869,7 @@ XtreamCodesListAcc()
                     break
                 fi
             done
-            accs_list="$accs_list $green$((i+1)).${normal}${indent_6}${accs[i]%:*}${indent_20}${accs[i]#*:} $using\n\n"
+            accs_list="$accs_list ${green}$((i+1)).${normal}${indent_6}${accs[i]%:*}${indent_20}${accs[i]#*:} $using\n\n"
         done
         Println "$accs_list"
     else
@@ -20008,8 +20008,8 @@ XtreamCodesTestAcc()
 
     IFS="|" read -ra domains <<< "${new_domains[ips_index]}"
     IFS=" " read -ra accounts <<< "${new_accounts[ips_index]}"
-    Println "IP: $green${ips[ips_index]}${normal} 域名: $green${new_domains[ips_index]//|/ }${normal}"
-    Println "$green账号:${normal}"
+    Println "IP: ${green}${ips[ips_index]}${normal} 域名: ${green}${new_domains[ips_index]//|/ }${normal}"
+    Println "${green}账号:${normal}"
 
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
     FFPROBE="$FFMPEG_ROOT/ffprobe"
@@ -20031,7 +20031,7 @@ XtreamCodesTestAcc()
                 if [ "$domain/$username/$password" == "$chnl" ] 
                 then
                     # https://f-hauri.ch/vrac/diffU8test.sh
-                    printf "$green%s${normal}\r\033[12C%-21s%-21s\n" "[使用中]" "$username" "$password"
+                    printf "${green}%s${normal}\r\033[12C%-21s%-21s\n" "[使用中]" "$username" "$password"
                     continue 2
                 fi
             done
@@ -20039,12 +20039,12 @@ XtreamCodesTestAcc()
             # curl --output /dev/null -m 3 -s --fail -r 0-0
             if $FFPROBE $proxy_command -i "http://$domain/$username/$password/$channel_id" -rw_timeout 5000000 -show_streams -select_streams a -loglevel quiet > /dev/null
             then
-                printf "$green%s${normal}\r\033[12C%-21s%-21s$green%s${normal}\n%s\n\n" "[成功]" "$username" "$password" "$domain" "http://$domain/$username/$password/$channel_id"
+                printf "${green}%s${normal}\r\033[12C%-21s%-21s${green}%s${normal}\n%s\n\n" "[成功]" "$username" "$password" "$domain" "http://$domain/$username/$password/$channel_id"
             elif $FFPROBE $proxy_command -i "http://$domain/live/$username/$password/$channel_id.ts" -rw_timeout 5000000 -show_streams -select_streams a -loglevel quiet > /dev/null 
             then
-                printf "$green%s${normal}\r\033[12C%-21s%-21s$green%s${normal}\n%s\n\n" "[成功]" "$username" "$password" "$domain" "http://$domain/live/$username/$password/$channel_id.ts"
+                printf "${green}%s${normal}\r\033[12C%-21s%-21s${green}%s${normal}\n%s\n\n" "[成功]" "$username" "$password" "$domain" "http://$domain/live/$username/$password/$channel_id.ts"
             else
-                printf "$red%s${normal}\r\033[12C%-21s%-21s$red%s${normal}\n%s" "[失败]" "$username" "$password" "$domain"
+                printf "${red}%s${normal}\r\033[12C%-21s%-21s${red}%s${normal}\n%s" "[失败]" "$username" "$password" "$domain"
             fi
         done
     done
@@ -20084,7 +20084,7 @@ XtreamCodesListMac()
         domains_count=${#domains[@]}
         for((i=0;i<domains_count;i++));
         do
-            domains_list="$domains_list $green$((i+1)).${normal}${indent_6}${domains[i]}\n\n"
+            domains_list="$domains_list ${green}$((i+1)).${normal}${indent_6}${domains[i]}\n\n"
         done
         Println "$domains_list"
 
@@ -20139,7 +20139,7 @@ XtreamCodesListMac()
                     break
                 fi
             done
-            macs_list="$macs_list $green$((i+1)).${normal}${indent_6}${macs[i]} $using\n\n"
+            macs_list="$macs_list ${green}$((i+1)).${normal}${indent_6}${macs[i]} $using\n\n"
         done
         Println "$macs_list"
     else
@@ -20152,7 +20152,7 @@ XtreamCodesListMac()
                 break
             fi
         done
-        Println "mac 地址: \n\n$green$((i+1)).${normal}${indent_6}${macs[0]} $using\n"
+        Println "mac 地址: \n\n${green}$((i+1)).${normal}${indent_6}${macs[0]} $using\n"
     fi
 }
 
@@ -20193,7 +20193,7 @@ SearchXtreamCodesChnls()
             name_lower=$(tr '[:upper:]' '[:lower:]' <<< "$name")
             if [[ $name_lower == *"$search_phrase"* ]] 
             then
-                search_result="$search_result页数: $green$i${normal} 频道名称: $green$name${normal}\n\n"
+                search_result="$search_result页数: ${green}$i${normal} 频道名称: ${green}$name${normal}\n\n"
             fi
         done < <($JQ_FILE '.js.data[].name' <<< "$ordered_list_page")
     done
@@ -20239,7 +20239,7 @@ XtreamCodesListChnls()
             domains_count=${#domains[@]}
             for((i=0;i<domains_count;i++));
             do
-                domains_list="$domains_list $green$((i+1)).${normal}${indent_6}${domains[i]}\n\n"
+                domains_list="$domains_list ${green}$((i+1)).${normal}${indent_6}${domains[i]}\n\n"
             done
             Println "$domains_list"
 
@@ -20294,7 +20294,7 @@ XtreamCodesListChnls()
                         break
                     fi
                 done
-                macs_list="$macs_list $green$((i+1)).${normal}${indent_6}${macs[i]} $using\n\n"
+                macs_list="$macs_list ${green}$((i+1)).${normal}${indent_6}${macs[i]} $using\n\n"
             done
             Println "$macs_list"
 
@@ -20520,7 +20520,7 @@ XtreamCodesListChnls()
                 map_title=${map_title%\"}
                 genres_count=$((genres_count+1))
                 genres_id+=("$map_id")
-                genres_list="$genres_list $green$genres_count.${normal}${indent_6}$map_title\n\n"
+                genres_list="$genres_list ${green}$genres_count.${normal}${indent_6}$map_title\n\n"
             done < <(curl -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
                 ${xc_host_header[@]+"${xc_host_header[@]}"} \
@@ -20535,7 +20535,7 @@ XtreamCodesListChnls()
                 FFPROBE="$FFMPEG_ROOT/ffprobe"
                 while true 
                 do
-                    Println "$genres_list\n\n$green账号到期时间:${normal} $exp_date\n"
+                    Println "$genres_list\n\n${green}账号到期时间:${normal} $exp_date\n"
 
                     if [ "${return_err:-0}" -eq 1 ] 
                     then
@@ -20672,7 +20672,7 @@ XtreamCodesListChnls()
                             xc_chnls_id+=("$map_id")
                             xc_chnls_name+=("$map_name")
                             xc_chnls_cmd+=("$map_cmd")
-                            xc_chnls_list="$xc_chnls_list# $green$xc_chnls_count${normal} $map_name\n\n"
+                            xc_chnls_list="$xc_chnls_list# ${green}$xc_chnls_count${normal} $map_name\n\n"
                         done < <($JQ_FILE '.js.data[] | [.id,.cmd,.name] | join("^")' <<< "$ordered_list_page")
 
                         Println "$xc_chnls_list"
@@ -20783,7 +20783,7 @@ XtreamCodesListChnls()
                             #    -H "User-Agent: $user_agent" \
                             #    -H "${headers:0:-4}" \
                             #    --cookie "$cookies"
-                            Println "$green${xc_chnls_name[xc_chnls_index]}:${normal} $stream_link\n"
+                            Println "${green}${xc_chnls_name[xc_chnls_index]}:${normal} $stream_link\n"
                         else
                             create_link_url="$server/portal.php?type=itv&action=create_link&cmd=${xc_chnls_cmd[xc_chnls_index]}&series=&forced_storage=undefined&disable_ad=0&download=0"
 
@@ -20804,7 +20804,7 @@ XtreamCodesListChnls()
                                 continue
                             fi
                             stream_link=${stream_link// /}
-                            Println "$green${xc_chnls_name[xc_chnls_index]}:${normal} $stream_link\n"
+                            Println "${green}${xc_chnls_name[xc_chnls_index]}:${normal} $stream_link\n"
                         fi
 
                         if $FFPROBE -i "$stream_link" -user_agent "$user_agent" \
@@ -20994,45 +20994,37 @@ XtreamCodesAddMac()
     done
 }
 
-DomainInstallCert()
+NginxDomainInstallCert()
 {
-    if [ -e "/usr/local/nginx/conf/sites_crt/$server_domain.crt" ] && [ -d /usr/local/openresty/nginx/conf ] && [ ! -e "/usr/local/openresty/nginx/conf/sites_crt/$server_domain.crt" ]
+    local domain=$1
+
+    if [ -e "/usr/local/nginx/conf/sites_crt/$domain.crt" ] && [ -d /usr/local/openresty/nginx/conf ] && [ ! -e "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" ]
     then
         mkdir -p /usr/local/openresty/nginx/conf/sites_crt
-        ln "/usr/local/nginx/conf/sites_crt/$server_domain.crt" "/usr/local/openresty/nginx/conf/sites_crt/$server_domain.crt"
-        ln "/usr/local/nginx/conf/sites_crt/$server_domain.key" "/usr/local/openresty/nginx/conf/sites_crt/$server_domain.key"
-    elif [ -e "/usr/local/openresty/nginx/conf/sites_crt/$server_domain.crt" ] && [ -d /usr/local/nginx/conf ] && [ ! -e "/usr/local/nginx/conf/sites_crt/$server_domain.crt" ] 
+        ln "/usr/local/nginx/conf/sites_crt/$domain.crt" "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt"
+        ln "/usr/local/nginx/conf/sites_crt/$domain.key" "/usr/local/openresty/nginx/conf/sites_crt/$domain.key"
+    elif [ -e "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" ] && [ -d /usr/local/nginx/conf ] && [ ! -e "/usr/local/nginx/conf/sites_crt/$domain.crt" ] 
     then
         mkdir -p /usr/local/nginx/conf/sites_crt
-        ln "/usr/local/openresty/nginx/conf/sites_crt/$server_domain.crt" "/usr/local/nginx/conf/sites_crt/$server_domain.crt"
-        ln "/usr/local/openresty/nginx/conf/sites_crt/$server_domain.key" "/usr/local/nginx/conf/sites_crt/$server_domain.key"
+        ln "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" "/usr/local/nginx/conf/sites_crt/$domain.crt"
+        ln "/usr/local/openresty/nginx/conf/sites_crt/$domain.key" "/usr/local/nginx/conf/sites_crt/$domain.key"
     fi
-    if [ -e "$nginx_prefix/conf/sites_crt/$server_domain.crt" ] && [ -e "$nginx_prefix/conf/sites_crt/$server_domain.key" ]
+
+    if [ -e "$nginx_prefix/conf/sites_crt/$domain.crt" ] && [ -e "$nginx_prefix/conf/sites_crt/$domain.key" ]
     then
         echo
         inquirer list_input "检测到证书已存在, 是否重新安装证书" ny_options reinstall_crt_yn
-        if [[ $reinstall_crt_yn == "$i18n_no" ]] 
+        if [ "$reinstall_crt_yn" == "$i18n_no" ] 
         then
             return 0
         fi
     fi
 
-    Println "$info 安装证书..."
+    Println "$info 安装 $domain 证书..."
 
-    if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
-    then
-        DepInstall socat
-        bash <(curl -s -m 20 https://get.acme.sh) > /dev/null
-    fi
+    NginxDomainUpdateCrt "$domain" 1
 
-    systemctl stop $nginx_name 2> /dev/null || true
-    sleep 1
-
-    ~/.acme.sh/acme.sh --force --issue -d "$server_domain" --standalone -k ec-256 > /dev/null
-    ~/.acme.sh/acme.sh --force --installcert -d "$server_domain" --fullchainpath "$nginx_prefix/conf/sites_crt/$server_domain.crt" --keypath "$nginx_prefix/conf/sites_crt/$server_domain.key" --ecc > /dev/null
-
-    systemctl start $nginx_name
-    Println "$info 证书安装完成..."
+    Println "$info $domain 证书安装成功"
 }
 
 OpenrestyInstall()
@@ -21356,12 +21348,14 @@ NginxUninstall()
     AskIfContinue n "`eval_gettext \"确定删除 \\\$nginx_name 包括所有配置文件, 操作不可恢复\"`"
 
     systemctl stop $nginx_name || true
+
     if [ "$nginx_ctl" == "or" ] 
     then
         rm -rf "${nginx_prefix%/*}"
     else
         rm -rf "$nginx_prefix"
     fi
+
     Println "$info $nginx_name 卸载完成\n"
 }
 
@@ -21576,12 +21570,12 @@ NginxListDomains()
             if [ -e "$nginx_prefix/conf/sites_enabled/$domain.conf" ] 
             then
                 domain_status=1
-                domain_status_text="$green [开启] ${normal}"
+                domain_status_text="${green} [开启] ${normal}"
             else
                 domain_status=0
-                domain_status_text="$red [关闭] ${normal}"
+                domain_status_text="${red} [关闭] ${normal}"
             fi
-            nginx_domains_list="$nginx_domains_list $green$nginx_domains_count.${normal}${indent_6}$domain $domain_status_text\n\n"
+            nginx_domains_list="$nginx_domains_list ${green}$nginx_domains_count.${normal}${indent_6}$domain $domain_status_text\n\n"
             nginx_domains+=("$domain")
             nginx_domains_status+=("$domain_status")
         done
@@ -21589,7 +21583,7 @@ NginxListDomains()
 
     if [ "$nginx_domains_count" -gt 0 ] 
     then
-        Println "$green域名列表:${normal}\n\n$nginx_domains_list"
+        Println "${green}域名列表:${normal}\n\n$nginx_domains_list"
     fi
 }
 
@@ -21641,10 +21635,11 @@ NginxListDomain()
         exit 1
     fi
 
-    nginx_domain_list=""
-    nginx_domain_server_count=0
-    nginx_domain_server_indices=()
-    nginx_domain_server_root=()
+    nginx_domain_servers_list=""
+    nginx_domain_servers_count=0
+    nginx_domain_servers_indices=()
+    nginx_domain_servers_name=()
+    nginx_domain_servers_root=()
 
     level_1_index=0
 
@@ -21682,12 +21677,12 @@ NginxListDomain()
                 IFS="${delimiters[2]}" read -r -a level_4_args_d2_arr <<< "$level_4_args_d2${delimiters[2]}"
             fi
 
-            nginx_domain_server_count=$((nginx_domain_server_count+1))
-            nginx_domain_server_indices+=("$level_2_index")
-            nginx_domain_listen=""
-            nginx_domain_server_name=""
-            nginx_domain_flv_status="${red}未配置${normal}"
-            nginx_domain_nodejs_status="${red}未配置${normal}"
+            nginx_domain_servers_count=$((nginx_domain_servers_count+1))
+            nginx_domain_servers_indices+=("$level_2_index")
+            nginx_domain_server_listen_list=""
+            nginx_domain_server_name_list=""
+            nginx_domain_server_flv_status="${red}未配置${normal}"
+            nginx_domain_server_nodejs_status="${red}未配置${normal}"
             skip_find_nodejs=0
             server_root=""
 
@@ -21698,17 +21693,17 @@ NginxListDomain()
 
                 if [ "$level_3_directive" == "listen" ] 
                 then
-                    [ -n "$nginx_domain_listen" ] && nginx_domain_listen="$nginx_domain_listen, "
-                    nginx_domain_listen="$nginx_domain_listen${level_3_args//${delimiters[0]}/ }"
+                    [ -n "$nginx_domain_server_listen_list" ] && nginx_domain_server_listen_list="$nginx_domain_server_listen_list, "
+                    nginx_domain_server_listen_list="$nginx_domain_server_listen_list${level_3_args//${delimiters[0]}/ }"
                 elif [ "$level_3_directive" == "server_name" ] 
                 then
-                    [ -n "$nginx_domain_server_name" ] && nginx_domain_server_name="$nginx_domain_server_name, "
-                    nginx_domain_server_name="$nginx_domain_server_name${level_3_args//${delimiters[0]}/ }"
+                    [ -n "$nginx_domain_server_name_list" ] && nginx_domain_server_name_list="$nginx_domain_server_name_list, "
+                    nginx_domain_server_name_list="$nginx_domain_server_name_list${level_3_args//${delimiters[0]}/ }"
                 elif [ "$level_3_directive" == "location" ] 
                 then
                     if [ "${level_3_args}" == "/flv" ] 
                     then
-                        nginx_domain_flv_status="${green}已配置${normal}"
+                        nginx_domain_server_flv_status="${green}已配置${normal}"
                     elif [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
                     then
                         level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
@@ -21720,10 +21715,13 @@ NginxListDomain()
                         then
                             for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
                             do
-                                if [ "${level_4_directive_d3_arr[level_4_index]}" == "proxy_pass" ] && [[ ${level_4_args_d3_arr[level_4_index]} =~ ^http://nodejs ]]
+                                if [ "${level_4_directive_d3_arr[level_4_index]}" == "proxy_pass" ] 
                                 then
-                                    nginx_domain_nodejs_status="${green}已配置${normal}"
-                                    skip_find_nodejs=1
+                                    if [[ ${level_4_args_d3_arr[level_4_index]} =~ ^http://nodejs ]] 
+                                    then
+                                        nginx_domain_server_nodejs_status="${green}已配置${normal}"
+                                        skip_find_nodejs=1
+                                    fi
                                     break
                                 fi
                             done
@@ -21755,26 +21753,27 @@ NginxListDomain()
                 fi
             done
 
-            nginx_domain_server_root+=("$server_root")
-            nginx_domain_list="$nginx_domain_list $nginx_domain_server_count.${indent_6}域名: ${green}${nginx_domain_server_name:-未设置}${normal}\n${indent_6}端口: ${green}${nginx_domain_listen:-未设置}${normal}\n${indent_6}flv: $nginx_domain_flv_status\n${indent_6}nodejs: $nginx_domain_nodejs_status\n\n"
+            nginx_domain_servers_name+=("${nginx_domain_server_name_list//, /,}")
+            nginx_domain_servers_root+=("$server_root")
+            nginx_domain_servers_list="$nginx_domain_servers_list $nginx_domain_servers_count.${indent_6}域名: ${green}${nginx_domain_server_name_list:-未设置}${normal}\n${indent_6}端口: ${green}${nginx_domain_server_listen_list:-未设置}${normal}\n${indent_6}flv: $nginx_domain_server_flv_status\n${indent_6}nodejs: $nginx_domain_server_nodejs_status\n\n"
         fi
     done
 
-    if [ "$nginx_domain_server_count" -eq 0 ] 
+    if [ "$nginx_domain_servers_count" -eq 0 ] 
     then
         Println "$error 请先添加 ${nginx_domains[nginx_domains_index]} 配置\n"
         exit 1
     fi
 
-    Println "域名 $green${nginx_domains[nginx_domains_index]}${normal} 配置:\n\n$nginx_domain_list"
+    Println "域名 ${green}${nginx_domains[nginx_domains_index]}${normal} 配置:\n\n$nginx_domain_servers_list"
 }
 
 NginxSelectDomainServer()
 {
     echo "`gettext \"输入序号\"`"
-    while read -p "$i18n_default_cancel" nginx_domain_server_num
+    while read -p "$i18n_default_cancel" nginx_domain_servers_num
     do
-        case "$nginx_domain_server_num" in
+        case "$nginx_domain_servers_num" in
             "")
                 Println "$i18n_canceled...\n"
                 exit 1
@@ -21783,11 +21782,11 @@ NginxSelectDomainServer()
                 Println "$error $i18n_input_correct_no\n"
             ;;
             *)
-                if [ "$nginx_domain_server_num" -gt 0 ] && [ "$nginx_domain_server_num" -le "$nginx_domain_server_count" ]
+                if [ "$nginx_domain_servers_num" -gt 0 ] && [ "$nginx_domain_servers_num" -le "$nginx_domain_servers_count" ]
                 then
-                    nginx_domain_server_index=$((nginx_domain_server_num-1))
-                    level_2_add_indices=( "${nginx_domain_server_indices[nginx_domain_server_index]}" )
-                    server_root=${nginx_domain_server_root[nginx_domain_server_index]}
+                    nginx_domain_servers_index=$((nginx_domain_servers_num-1))
+                    level_2_add_indices=( "${nginx_domain_servers_indices[nginx_domain_servers_index]}" )
+                    server_root=${nginx_domain_servers_root[nginx_domain_servers_index]}
                     break
                 else
                     Println "$error $i18n_input_correct_no\n"
@@ -21804,13 +21803,16 @@ NginxConfigDomain()
     NginxSelectDomainServer
 
     echo
-    domain_server_options=( "修改指令" "添加 flv 设置" "添加 nodejs 设置" )
-    inquirer list_input_index "选择操作" domain_server_options domain_server_option_index
+    domain_server_options=( '修改指令' '更新证书' '添加 flv 设置' '添加 nodejs 设置' )
+    inquirer list_input_index "选择操作" domain_server_options domain_server_options_index
 
-    if [ "$domain_server_option_index" -eq 0 ] 
+    if [ "$domain_server_options_index" -eq 0 ] 
     then
         NginxConfigDirective level_2
-    elif [ "$domain_server_option_index" -eq 1 ] 
+    elif [ "$domain_server_options_index" -eq 1 ] 
+    then
+        NginxDomainServerUpdateCrt
+    elif [ "$domain_server_options_index" -eq 2 ] 
     then
         updated=0
         NginxAddFlv
@@ -21917,10 +21919,13 @@ NginxListLocalhost()
                                 then
                                     for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
                                     do
-                                        if [ "${level_4_directive_d3_arr[level_4_index]}" == "proxy_pass" ] && [[ ${level_4_args_d3_arr[level_4_index]} =~ ^http://nodejs ]]
+                                        if [ "${level_4_directive_d3_arr[level_4_index]}" == "proxy_pass" ] 
                                         then
-                                            nginx_localhost_nodejs_status="${green}已配置${normal}"
-                                            skip_find_nodejs=1
+                                            if [[ ${level_4_args_d3_arr[level_4_index]} =~ ^http://nodejs ]] 
+                                            then
+                                                nginx_localhost_nodejs_status="${green}已配置${normal}"
+                                                skip_find_nodejs=1
+                                            fi
                                             break
                                         fi
                                     done
@@ -23037,7 +23042,7 @@ NginxConfigDirective()
             do
                 level_2_options=()
 
-                if [ "$level_2_d1_count" -gt 0 ] 
+                if [ "$level_2_d1_count" -gt 0 ] && [ -n "${level_2_directive_arr[level_1_index]}" ]
                 then
                     level_2_directive_d1=${level_2_directive_arr[level_1_index]}
                     level_2_args_d1=${level_2_args_arr[level_1_index]}
@@ -23148,7 +23153,7 @@ NginxConfigDirective()
             do
                 level_3_options=()
 
-                if [ "$level_3_d1_count" -gt 0 ] 
+                if [ "$level_3_d1_count" -gt 0 ] && [ -n "${level_3_directive_arr[level_1_index]}" ]
                 then
                     level_3_directive_d1=${level_3_directive_arr[level_1_index]}
                     level_3_args_d1=${level_3_args_arr[level_1_index]}
@@ -23273,7 +23278,7 @@ NginxConfigDirective()
             do
                 level_4_options=()
 
-                if [ "$level_4_d1_count" -gt 0 ] 
+                if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ]
                 then
                     level_4_directive_d1=${level_4_directive_arr[level_1_index]}
                     level_4_args_d1=${level_4_args_arr[level_1_index]}
@@ -23281,60 +23286,63 @@ NginxConfigDirective()
                     IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "${level_4_directive_d1}${delimiters[3]}"
                     IFS="${delimiters[3]}" read -r -a level_4_args_d1_arr <<< "${level_4_args_d1}${delimiters[3]}"
 
-                    level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
-                    level_4_args_d2=${level_4_args_d1_arr[level_2_index]}
-
-                    IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}${delimiters[2]}"
-                    IFS="${delimiters[2]}" read -r -a level_4_args_d2_arr <<< "${level_4_args_d2}${delimiters[2]}"
-
-                    if [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
+                    if [ -n "${level_4_directive_d1_arr[level_2_index]}" ] 
                     then
-                        level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
-                        level_4_args_d3=${level_4_args_d2_arr[level_3_index]}
+                        level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
+                        level_4_args_d2=${level_4_args_d1_arr[level_2_index]}
 
-                        IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "${level_4_directive_d3}${delimiters[1]}"
-                        IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "${level_4_args_d3}${delimiters[1]}"
+                        IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "${level_4_directive_d2}${delimiters[2]}"
+                        IFS="${delimiters[2]}" read -r -a level_4_args_d2_arr <<< "${level_4_args_d2}${delimiters[2]}"
 
-                        if [ "$level_5_d1_count" -gt 0 ] && [ -n "${level_5_directive_arr[level_1_index]}" ]
+                        if [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
                         then
-                            level_5_directive_d1=${level_5_directive_arr[level_1_index]}
-                            IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}${delimiters[4]}"
-                            if [ -n "${level_5_directive_d1_arr[level_2_index]}" ] 
+                            level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
+                            level_4_args_d3=${level_4_args_d2_arr[level_3_index]}
+
+                            IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "${level_4_directive_d3}${delimiters[1]}"
+                            IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "${level_4_args_d3}${delimiters[1]}"
+
+                            if [ "$level_5_d1_count" -gt 0 ] && [ -n "${level_5_directive_arr[level_1_index]}" ]
                             then
-                                level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
-                                IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}${delimiters[3]}"
-                                if [ -n "${level_5_directive_d2_arr[level_3_index]}" ] 
+                                level_5_directive_d1=${level_5_directive_arr[level_1_index]}
+                                IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}${delimiters[4]}"
+                                if [ -n "${level_5_directive_d1_arr[level_2_index]}" ] 
                                 then
-                                    level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
-                                    IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}${delimiters[2]}"
+                                    level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
+                                    IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}${delimiters[3]}"
+                                    if [ -n "${level_5_directive_d2_arr[level_3_index]}" ] 
+                                    then
+                                        level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
+                                        IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}${delimiters[2]}"
+                                    fi
                                 fi
                             fi
+
+                            for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
+                            do
+                                level_4_option=${level_4_directive_d3_arr[level_4_index]:-\"\"}
+
+                                if [ -n "${level_4_args_d3_arr[level_4_index]}" ] 
+                                then
+                                    IFS="${delimiters[0]}" read -r -a args <<< "${level_4_args_d3_arr[level_4_index]}${delimiters[0]}"
+                                    for arg in "${args[@]}"
+                                    do
+                                        if [[ $arg == *" "* ]] 
+                                        then
+                                            arg="\"$arg\""
+                                        fi
+                                        level_4_option="$level_4_option ${arg:-\"\"}"
+                                    done
+                                fi
+
+                                if [ "$level_5_d1_count" -gt 0 ] && [ -n "${level_5_directive_arr[level_1_index]}" ] && [ -n "${level_5_directive_d1_arr[level_2_index]}" ] && [ -n "${level_5_directive_d2_arr[level_3_index]}" ] && [ -n "${level_5_directive_d3_arr[level_4_index]}" ]
+                                then
+                                    level_4_option="$level_4_option {...}"
+                                fi
+
+                                level_4_options+=("$level_4_option")
+                            done
                         fi
-
-                        for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
-                        do
-                            level_4_option=${level_4_directive_d3_arr[level_4_index]:-\"\"}
-
-                            if [ -n "${level_4_args_d3_arr[level_4_index]}" ] 
-                            then
-                                IFS="${delimiters[0]}" read -r -a args <<< "${level_4_args_d3_arr[level_4_index]}${delimiters[0]}"
-                                for arg in "${args[@]}"
-                                do
-                                    if [[ $arg == *" "* ]] 
-                                    then
-                                        arg="\"$arg\""
-                                    fi
-                                    level_4_option="$level_4_option ${arg:-\"\"}"
-                                done
-                            fi
-
-                            if [ "$level_5_d1_count" -gt 0 ] && [ -n "${level_5_directive_arr[level_1_index]}" ] && [ -n "${level_5_directive_d1_arr[level_2_index]}" ] && [ -n "${level_5_directive_d2_arr[level_3_index]}" ] && [ -n "${level_5_directive_d3_arr[level_4_index]}" ]
-                            then
-                                level_4_option="$level_4_option {...}"
-                            fi
-
-                            level_4_options+=("$level_4_option")
-                        done
                     fi
                 fi
 
@@ -23409,7 +23417,7 @@ NginxConfigDirective()
             do
                 level_5_options=()
 
-                if [ "$level_5_d1_count" -gt 0 ] 
+                if [ "$level_5_d1_count" -gt 0 ] && [ -n "${level_5_directive_arr[level_1_index]}" ]
                 then
                     level_5_directive_d1=${level_5_directive_arr[level_1_index]}
                     level_5_args_d1=${level_5_args_arr[level_1_index]}
@@ -23417,45 +23425,51 @@ NginxConfigDirective()
                     IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "${level_5_directive_d1}${delimiters[4]}"
                     IFS="${delimiters[4]}" read -r -a level_5_args_d1_arr <<< "${level_5_args_d1}${delimiters[4]}"
 
-                    level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
-                    level_5_args_d2=${level_5_args_arr[level_2_index]}
-
-                    IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}${delimiters[3]}"
-                    IFS="${delimiters[3]}" read -r -a level_5_args_d2_arr <<< "${level_5_args_d2}${delimiters[3]}"
-
-                    level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
-                    level_5_args_d3=${level_5_args_d2_arr[level_3_index]}
-
-                    IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}${delimiters[2]}"
-                    IFS="${delimiters[2]}" read -r -a level_5_args_d3_arr <<< "${level_5_args_d3}${delimiters[2]}"
-
-                    if [ -n "${level_5_directive_d3_arr[level_4_index]}" ]
+                    if [ -n "${level_5_directive_d1_arr[level_2_index]}" ] 
                     then
-                        level_5_directive_d4=${level_5_directive_d3_arr[level_4_index]}
-                        level_5_args_d4=${level_5_args_d3_arr[level_4_index]}
+                        level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
+                        level_5_args_d2=${level_5_args_d1_arr[level_2_index]}
 
-                        IFS="${delimiters[1]}" read -r -a level_5_directive_d4_arr <<< "${level_5_directive_d4}${delimiters[1]}"
-                        IFS="${delimiters[1]}" read -r -a level_5_args_d4_arr <<< "${level_5_args_d4}${delimiters[1]}"
+                        IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "${level_5_directive_d2}${delimiters[3]}"
+                        IFS="${delimiters[3]}" read -r -a level_5_args_d2_arr <<< "${level_5_args_d2}${delimiters[3]}"
 
-                        for((level_5_index=0;level_5_index<${#level_5_directive_d4_arr[@]};level_5_index++));
-                        do
-                            level_5_option=${level_5_directive_d4_arr[level_5_index]:-\"\"}
+                        if [ -n "${level_5_directive_d2_arr[level_3_index]}" ] 
+                        then
+                            level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
+                            level_5_args_d3=${level_5_args_d2_arr[level_3_index]}
 
-                            if [ -n "${level_5_args_d4_arr[level_5_index]}" ] 
+                            IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "${level_5_directive_d3}${delimiters[2]}"
+                            IFS="${delimiters[2]}" read -r -a level_5_args_d3_arr <<< "${level_5_args_d3}${delimiters[2]}"
+
+                            if [ -n "${level_5_directive_d3_arr[level_4_index]}" ]
                             then
-                                IFS="${delimiters[0]}" read -r -a args <<< "${level_5_args_d4_arr[level_5_index]}${delimiters[0]}"
-                                for arg in "${args[@]}"
+                                level_5_directive_d4=${level_5_directive_d3_arr[level_4_index]}
+                                level_5_args_d4=${level_5_args_d3_arr[level_4_index]}
+
+                                IFS="${delimiters[1]}" read -r -a level_5_directive_d4_arr <<< "${level_5_directive_d4}${delimiters[1]}"
+                                IFS="${delimiters[1]}" read -r -a level_5_args_d4_arr <<< "${level_5_args_d4}${delimiters[1]}"
+
+                                for((level_5_index=0;level_5_index<${#level_5_directive_d4_arr[@]};level_5_index++));
                                 do
-                                    if [[ $arg == *" "* ]] 
+                                    level_5_option=${level_5_directive_d4_arr[level_5_index]:-\"\"}
+
+                                    if [ -n "${level_5_args_d4_arr[level_5_index]}" ] 
                                     then
-                                        arg="\"$arg\""
+                                        IFS="${delimiters[0]}" read -r -a args <<< "${level_5_args_d4_arr[level_5_index]}${delimiters[0]}"
+                                        for arg in "${args[@]}"
+                                        do
+                                            if [[ $arg == *" "* ]] 
+                                            then
+                                                arg="\"$arg\""
+                                            fi
+                                            level_5_option="$level_5_option ${arg:-\"\"}"
+                                        done
                                     fi
-                                    level_5_option="$level_5_option ${arg:-\"\"}"
+
+                                    level_5_options+=("$level_5_option")
                                 done
                             fi
-
-                            level_5_options+=("$level_5_option")
-                        done
+                        fi
                     fi
                 fi
 
@@ -23495,7 +23509,7 @@ NginxConfigDirective()
                         if [ "$level_5_action" == "修改指令" ]
                         then
                             NginxInputArgs
-                            jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block",'"$level_4_index"',"args",'"$level_5_index"',"args"]'
+                            jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block",'"$level_4_index"',"block",'"$level_5_index"',"args"]'
                             JQs replace parse_out "[$new_args]"
                             NginxBuildConf parse_out
                             NginxGetConfig
@@ -23651,21 +23665,77 @@ NginxConfigBlockAliyun()
 
 NginxDomainUpdateCrt()
 {
-    Println "$info 更新证书..."
-    if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
+    local domain=$1 quiet=${2:-0}
+
+    [ "$quiet" -eq 0 ] && Println "$info 更新 $domain 证书..."
+
+    if [ ! -f "$HOME/.acme.sh/acme.sh" ] 
     then
         DepInstall socat
         bash <(curl -s -m 20 https://get.acme.sh) > /dev/null
     fi
 
-    systemctl stop $nginx_name 2> /dev/null || true
-    sleep 1
+    if [ -f /etc/systemd/system/mmproxy-acme.service ] && [[ $(systemctl is-active mmproxy-acme) == "active" ]]
+    then
+        if [ -z "${tls_port:-}" ] 
+        then
+            tls_port=$(grep ^ExecStart= < /etc/systemd/system/mmproxy-acme.service)
+            if [[ $tls_port =~ -4\ 127.0.0.1:([^ ]+) ]] 
+            then
+                tls_port=${BASH_REMATCH[1]}
+            else
+                tls_port=${tls_port#*-4 }
+                tls_port=${tls_port#*:}
+                tls_port=${tls_port%% *}
+            fi
+        fi
 
-    ~/.acme.sh/acme.sh --force --issue -d "${nginx_domains[nginx_domains_index]}" --standalone -k ec-256 > /dev/null
-    ~/.acme.sh/acme.sh --force --installcert -d "${nginx_domains[nginx_domains_index]}" --fullchainpath $nginx_prefix/conf/sites_crt/"${nginx_domains[nginx_domains_index]}".crt --keypath $nginx_prefix/conf/sites_crt/"${nginx_domains[nginx_domains_index]}".key --ecc > /dev/null
+        ~/.acme.sh/acme.sh --force --issue --alpn --tlsport "$tls_port" -d "$domain" --standalone -k ec-256 > /dev/null
+        ~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "$nginx_prefix/conf/sites_crt/$domain.crt" --keypath "$nginx_prefix/conf/sites_crt/$domain.key" --ecc > /dev/null
+    else
+        stopped=0
 
-    systemctl start $nginx_name
-    Println "$info 证书更新完成...\n"
+        if [[ $(systemctl is-active $nginx_name) == "active" ]]
+        then
+            systemctl stop $nginx_name
+            stopped=1
+        fi
+
+        sleep 1
+
+        ~/.acme.sh/acme.sh --force --issue -d "$domain" --standalone -k ec-256 > /dev/null
+        ~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "$nginx_prefix/conf/sites_crt/$domain.crt" --keypath "$nginx_prefix/conf/sites_crt/$domain.key" --ecc > /dev/null
+
+        [ "$stopped" -eq 1 ] && systemctl start $nginx_name
+    fi
+
+    [ "$quiet" -eq 0 ] && Println "$info $domain 证书更新成功\n"
+
+    return 0
+}
+
+NginxDomainServerUpdateCrt()
+{
+    nginx_domain_server_name=${nginx_domain_servers_name[nginx_domain_servers_index]}
+
+    if [[ $nginx_domain_server_name =~ , ]] 
+    then
+        IFS="," read -r -a domains <<< "$nginx_domain_server_name"
+
+        echo
+        set +u
+        inquirer checkbox_input "选择域名: " domains domains_selected
+        set -u
+
+        for domain in "${domains_selected[@]}"
+        do
+            NginxDomainUpdateCrt "$domain"
+        done
+
+        return 0
+    fi
+
+    NginxDomainUpdateCrt "$nginx_domain_server_name"
 }
 
 NginxToggleDomain()
@@ -23852,6 +23922,7 @@ NginxUpdateCFIBMip()
     fi
 
     Println "$info 更新 ip ..."
+
     printf '%s' "#!/bin/bash
 echo '#Cloudflare' > $nginx_prefix/conf/cloudflare_ip.conf;
 ibm_ips=(
@@ -23888,7 +23959,9 @@ echo '# use any of the following two' >> $nginx_prefix/conf/cloudflare_ip.conf;
 echo 'real_ip_header CF-Connecting-IP;' >> $nginx_prefix/conf/cloudflare_ip.conf;
 echo '#real_ip_header X-Forwarded-For;' >> $nginx_prefix/conf/cloudflare_ip.conf;
 " > ~/update_cf_ibm_ip.sh
+
     bash ~/update_cf_ibm_ip.sh
+
     Println "$info IP 更新成功\n"
 }
 
@@ -24123,7 +24196,7 @@ NginxAddDomain()
                     Println "$info $server_domain 配置成功\n"
                 ;;
                 2) 
-                    DomainInstallCert
+                    NginxDomainInstallCert "$server_domain"
                     echo
                     inquirer list_input "是否设置 http 跳转 https" yn_options http_to_https_yn
 
@@ -24155,7 +24228,7 @@ NginxAddDomain()
                     Println "$info $server_domain 配置成功\n"
                 ;;
                 3) 
-                    DomainInstallCert
+                    NginxDomainInstallCert "$server_domain"
                     echo
                     inquirer list_input "http 和 https 是否使用相同的目录" yn_options http_https_same_dir_yn
 
@@ -24377,7 +24450,7 @@ gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
     Println "$info mongodb 安装成功"
 }
 
-InstallGit()
+GitInstall()
 {
     ReleaseCheck
     if [ "$release" == "rpm" ] 
@@ -24538,7 +24611,7 @@ app.listen(port, () => console.log(\`App listening on port \${port}!\`))
 
     if [[ ! -x $(command -v git) ]] 
     then
-        Spinner "安装 git" InstallGit
+        Spinner "安装 git" GitInstall
     fi
 
     cd "$NODE_ROOT"
@@ -24835,7 +24908,7 @@ V2raySetLocalPort()
                 then
                     break
                 else
-                    Println "$error 输入错误 \n"
+                    Println "$error 输入错误\n"
                 fi
             ;;
             *)
@@ -24853,7 +24926,7 @@ V2raySetLocalPort()
             ;;
         esac
     done
-    Println "  端口: $green $port ${normal}"
+    Println "  端口: ${green} $port ${normal}"
 }
 
 V2raySetAddressPort()
@@ -24878,7 +24951,7 @@ V2raySetAddressPort()
             ;;
         esac
     done
-    Println "  端口: $green $address_port ${normal}"
+    Println "  端口: ${green} $address_port ${normal}"
 }
 
 V2raySetDnsPort()
@@ -25011,6 +25084,38 @@ V2raySetDisableSystemRoot()
     fi
 }
 
+V2raySetCertificateFile()
+{
+    Println "$tip 如使用 OpenSSL 生成, 后缀名为 .crt, 文件必须存在"
+    inquirer text_input "输入证书文件路径: " certificate_file
+
+    if [ -s "$certificate_file" ] 
+    then
+        cp -f "$certificate_file" /usr/local/share/$v2ray_name/
+        certificate_file="/usr/local/share/$v2ray_name/${certificate_file##*/}"
+        chown $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/*
+        Println "$info 已复制证书到 $certificate_file 并赋予 $v2ray_name:$v2ray_name 权限"
+    else
+        Println "$error 证书不存在, 请稍后手动添加证书并赋予 $v2ray_name 权限(chown $v2ray_name:$v2ray_name $certificate_file)"
+    fi
+}
+
+V2raySetKeyFile()
+{
+    Println "$tip 如使用 OpenSSL 生成, 后缀名为 .key, 密钥必须存在"
+    inquirer text_input "输入证书密钥路径: " key_file
+
+    if [ -s "$key_file" ] 
+    then
+        cp -f "$key_file" /usr/local/share/$v2ray_name/
+        key_file="/usr/local/share/$v2ray_name/${key_file##*/}"
+        chown $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/*
+        Println "$info 已复制密钥到 $key_file 并赋予 $v2ray_name:$v2ray_name 权限"
+    else
+        Println "$error 密钥不存在, 请稍后手动添加密钥并赋予 $v2ray_name 权限(chown $v2ray_name:$v2ray_name $key_file)"
+    fi
+}
+
 V2raySetCertificates()
 {
     echo
@@ -25084,16 +25189,9 @@ V2raySetCertificates()
                 else
                     Println "$info 安装证书..."
 
-                    if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
-                    then
-                        DepInstall socat
-                        bash <(curl -s -m 20 https://get.acme.sh) > /dev/null
-                    fi
+                    V2rayDomainUpdateCrt "$domain" 1
 
-                    ~/.acme.sh/acme.sh --force --issue -d "$domain" --standalone -k ec-256 > /dev/null
-                    ~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "/usr/local/share/$v2ray_name/$domain.crt" --keypath "/usr/local/share/$v2ray_name/$domain.key" --ecc > /dev/null
-
-                    Println "$info 证书安装完成..."
+                    Println "$info 证书安装成功"
                 fi
             fi
             chown $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/*
@@ -25116,17 +25214,7 @@ V2raySetCertificates()
             }')
         fi
     else
-        Println "$tip 如使用 OpenSSL 生成, 后缀名为 .crt, 文件必须存在"
-        inquirer text_input "输入证书文件路径: " certificate_file
-        if [ -s "$certificate_file" ] 
-        then
-            cp -f "$certificate_file" /usr/local/share/$v2ray_name/
-            certificate_file="/usr/local/share/$v2ray_name/${certificate_file##*/}"
-            chown $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/*
-            Println "$info 已复制证书到 $certificate_file 并赋予 $v2ray_name:$v2ray_name 权限"
-        else
-            Println "$error 证书不存在, 请稍后手动添加证书并赋予 $v2ray_name 权限(chown $v2ray_name:$v2ray_name $certificate_file)"
-        fi
+        V2raySetCertificateFile
 
         if [ "$usage" == "verify" ] 
         then
@@ -25144,17 +25232,7 @@ V2raySetCertificates()
             fi
         fi
 
-        Println "$tip 如使用 OpenSSL 生成, 后缀名为 .key, 密钥必须存在"
-        inquirer text_input "输入证书密钥路径: " key_file
-        if [ -s "$key_file" ] 
-        then
-            cp -f "$key_file" /usr/local/share/$v2ray_name/
-            key_file="/usr/local/share/$v2ray_name/${key_file##*/}"
-            chown $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/*
-            Println "$info 已复制密钥到 $key_file 并赋予 $v2ray_name:$v2ray_name 权限"
-        else
-            Println "$error 密钥不存在, 请稍后手动添加密钥并赋予 $v2ray_name 权限(chown $v2ray_name:$v2ray_name $key_file)"
-        fi
+        V2raySetKeyFile
 
         certificate=$(
         $JQ_FILE -n --arg usage "$usage" --arg certificateFile "$certificate_file" \
@@ -25182,7 +25260,7 @@ V2raySetPath()
     if [ "$path" == "随机" ]
     then
         path="/$(RandStr)"
-        Println "  路径: $green $path ${normal}"
+        Println "  路径: ${green} $path ${normal}"
     fi
 }
 
@@ -25220,7 +25298,7 @@ V2raySetId()
     if [ "$id" == "随机" ] 
     then
         id=$($V2CTL_FILE uuid)
-        Println "  id: $green $id ${normal}"
+        Println "  id: ${green} $id ${normal}"
     fi
 }
 
@@ -25261,7 +25339,7 @@ V2raySetAlterId()
             ;;
         esac
     done
-    Println "  alterId: $green $alter_id ${normal}"
+    Println "  alterId: ${green} $alter_id ${normal}"
 }
 
 V2raySetEmail()
@@ -25271,7 +25349,7 @@ V2raySetEmail()
     if [ "$email" == "随机" ] 
     then
         email="$(RandStr)@localhost"
-        Println "  邮箱: $green $email ${normal}"
+        Println "  邮箱: ${green} $email ${normal}"
     fi
 }
 
@@ -25282,7 +25360,7 @@ V2raySetPassword()
     if [ "$password" == "随机" ] 
     then
         password=$(RandStr)
-        Println "  密码: $green $password ${normal}"
+        Println "  密码: ${green} $password ${normal}"
     fi
 }
 
@@ -25309,7 +25387,7 @@ V2raySetTimeout()
             ;;
         esac
     done
-    Println "  时间限制: $green $timeout ${normal}"
+    Println "  时间限制: ${green} $timeout ${normal}"
 }
 
 V2raySetAllowTransparent()
@@ -25322,7 +25400,7 @@ V2raySetAllowTransparent()
     else
         allow_transparent="false"
     fi
-    Println "  allowTransparent: $green $allow_transparent ${normal}"
+    Println "  allowTransparent: ${green} $allow_transparent ${normal}"
 }
 
 V2raySetLevel()
@@ -25351,7 +25429,7 @@ V2raySetLevel()
             ;;
         esac
     done
-    Println "  等级: $green $level ${normal}\n"
+    Println "  等级: ${green} $level ${normal}\n"
 }
 
 V2raySetHttpAccount()
@@ -25361,14 +25439,14 @@ V2raySetHttpAccount()
     if [ "$user" == "随机" ] 
     then
         user=$(RandStr)
-        Println "  用户名: $green $user ${normal}"
+        Println "  用户名: ${green} $user ${normal}"
     fi
     echo
     inquirer text_input "输入密码: " pass "随机"
     if [ "$pass" == "随机" ] 
     then
         pass=$(RandStr)
-        Println "  密码: $green $pass ${normal}"
+        Println "  密码: ${green} $pass ${normal}"
     fi
 }
 
@@ -25380,7 +25458,7 @@ V2raySetTag()
     then
         tag=$(GetFreeTag)
         tag=${tag//nginx-/}
-        Println "  标签: $green $tag ${normal}"
+        Println "  标签: ${green} $tag ${normal}"
     fi
 }
 
@@ -25396,7 +25474,7 @@ V2raySetNginxTag()
             break
         fi
     done
-    Println "  标签: $green $tag ${normal}\n"
+    Println "  标签: ${green} $tag ${normal}\n"
 }
 
 V2raySetAcceptProxyProtocol()
@@ -25445,7 +25523,7 @@ V2raySetDsPath()
     Println "$tip 在运行 $v2ray_name 之前, 这个文件必须不存在"
     inquirer text_input "输入 domainsocket 文件路径: " ds_path "$i18n_cancel"
     ExitOnCancel ds_path
-    Println "  domainsocket 文件路径: $green $ds_path ${normal}"
+    Println "  domainsocket 文件路径: ${green} $ds_path ${normal}"
 }
 
 V2raySetDsAbstract()
@@ -25476,7 +25554,7 @@ V2raySetDetourTo()
 {
     Println "$tip 指定的入站协议必须是 VMess"
     inquirer text_input "使用另一个入站的出站(输入指定的另一个入站的标签): " detour_to "不设置"
-    Println "  指定的另一个入站: $green $detour_to ${normal}"
+    Println "  指定的另一个入站: ${green} $detour_to ${normal}"
 }
 
 V2raySetDetourDefault()
@@ -25725,7 +25803,7 @@ SetV2rayAllocateRefresh()
             ;;
         esac
     done
-    Println "  刷新间隔: $green $allocate_refresh ${normal}"
+    Println "  刷新间隔: ${green} $allocate_refresh ${normal}"
 }
 
 SetV2rayAllocateConcurrency()
@@ -25751,7 +25829,7 @@ SetV2rayAllocateConcurrency()
             ;;
         esac
     done
-    Println "  随机端口数量: $green $allocate_concurrency ${normal}"
+    Println "  随机端口数量: ${green} $allocate_concurrency ${normal}"
 }
 
 V2raySetSendThrough()
@@ -26688,38 +26766,53 @@ V2rayListInbounds()
 {
     V2rayGetInbounds
 
+    list_inbounds_options=( '全部入站' '本地 nginx 入站' "直连 $v2ray_name 入站" )
+
     if [ "${1:-}" == "nginx" ] 
     then
-        list_inbounds_option="本地 nginx 入站"
+        list_inbounds_options_index=1
         count=$inbounds_nginx_count
+    elif [ "${1:-}" == "direct" ] 
+    then
+        list_inbounds_options_index=2
+        count=$((inbounds_count-inbounds_nginx_count))
     else
         echo
-        list_inbounds_options=( '全部入站' '本地 nginx 入站' '其它入站' )
-        inquirer list_input "选择显示的范围" list_inbounds_options list_inbounds_option
+        inquirer list_input_index "选择显示的范围" list_inbounds_options list_inbounds_options_index
 
-        if [ "$list_inbounds_option" == "全部入站" ] 
+        if [ "$list_inbounds_options_index" -eq 0 ] 
         then
             count=$inbounds_count
-        elif [ "$list_inbounds_option" == "其它入站" ] 
+        elif [ "$list_inbounds_options_index" -eq 1 ] 
         then
-            count=$((inbounds_count-inbounds_nginx_count))
-        else
             count=$inbounds_nginx_count
+        else
+            count=$((inbounds_count-inbounds_nginx_count))
         fi
     fi
 
-    [ "$count" -eq 0 ] && Println "$error 没有入站\n" && exit 1
+    if [ "$count" -eq 0 ] 
+    then
+        if [ "$list_inbounds_options_index" -eq 0 ] 
+        then
+            Println "$error 请先添加入站\n"
+        else
+            Println "$error 请先添加 ${list_inbounds_options[list_inbounds_options_index]}\n"
+        fi
 
-    Println "\n=== $list_inbounds_option数 $green $count ${normal}"
+        exit 1
+    fi
+
+    Println "\n=== ${list_inbounds_options[list_inbounds_options_index]}数 ${green} $count ${normal}"
 
     inbounds_list=""
 
     for((i=0;i<count;i++));
     do
-        if [ "$list_inbounds_option" == "全部入站" ] 
+        if [ "$list_inbounds_options_index" -eq 0 ] 
         then
             inbounds_index=$i
-        elif [ "$list_inbounds_option" == "本地 nginx 入站" ] 
+        elif [ "$list_inbounds_options_index" -eq 1 ] 
         then
             inbounds_index=${inbounds_nginx_index[i]}
         else
@@ -26727,128 +26820,128 @@ V2rayListInbounds()
         fi
         if [ "${inbounds_stream_network[inbounds_index]}" != "domainsocket" ] 
         then
-            protocol_settings_list="监听地址: $green${inbounds_listen[inbounds_index]}${normal} 监听端口: $green${inbounds_port[inbounds_index]}${normal}\n${indent_6}传输协议: $green${inbounds_protocol[inbounds_index]}${normal}\n${indent_6}"
+            protocol_settings_list="监听地址: ${green}${inbounds_listen[inbounds_index]}${normal} 监听端口: ${green}${inbounds_port[inbounds_index]}${normal}\n${indent_6}传输协议: ${green}${inbounds_protocol[inbounds_index]}${normal}\n${indent_6}"
         else
-            protocol_settings_list="传输协议: $green${inbounds_protocol[inbounds_index]}${normal}\n${indent_6}"
+            protocol_settings_list="传输协议: ${green}${inbounds_protocol[inbounds_index]}${normal}\n${indent_6}"
         fi
         if [ "${inbounds_sniffing_enabled[inbounds_index]}" == "true" ] 
         then
-            protocol_settings_list="$protocol_settings_list流量探测: $green开启${normal} 指定流量类型: $green${inbounds_sniffing_dest_override[inbounds_index]//|/,}${normal}\n${indent_6}"
+            protocol_settings_list="$protocol_settings_list流量探测: ${green}开启${normal} 指定流量类型: ${green}${inbounds_sniffing_dest_override[inbounds_index]//|/,}${normal}\n${indent_6}"
             if [ -n "${inbounds_sniffing_domains_excluded[inbounds_index]}" ] 
             then
                 IFS="|" read -r -a domains <<< "${inbounds_sniffing_domains_excluded[inbounds_index]}"
                 domains_list=""
                 for domain in "${domains[@]}"
                 do
-                    domains_list="$domains_list$green$domain${normal}\n${indent_6}"
+                    domains_list="$domains_list${green}$domain${normal}\n${indent_6}"
                 done
                 protocol_settings_list="$protocol_settings_list排除域名:\n${indent_6}$domains_list"
             fi
         fi
         if [ "${inbounds_allocate_strategy[inbounds_index]}" == "random" ] 
         then
-            protocol_settings_list="$protocol_settings_list随机端口: $green开启${normal} 刷新间隔: $green${inbounds_allocate_refresh[inbounds_index]} 分钟${normal} 随机端口数量: $green${inbounds_allocate_concurrency[inbounds_index]}${normal}\n${indent_6}"
+            protocol_settings_list="$protocol_settings_list随机端口: ${green}开启${normal} 刷新间隔: ${green}${inbounds_allocate_refresh[inbounds_index]} 分钟${normal} 随机端口数量: ${green}${inbounds_allocate_concurrency[inbounds_index]}${normal}\n${indent_6}"
         fi
         if [ "${inbounds_protocol[inbounds_index]}" == "vmess" ] 
         then
             if [ "${inbounds_settings_disable_insecure_encryption[inbounds_index]}" == "false" ] 
             then
-                protocol_settings_list="$protocol_settings_list禁止不安全加密: $red否${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list禁止不安全加密: ${red}否${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list禁止不安全加密: $green是${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list禁止不安全加密: ${green}是${normal}\n${indent_6}"
             fi
             if [ -n "${inbounds_settings_detour_to[inbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list指定的另一个入站: $green${inbounds_settings_detour_to[inbounds_index]}${normal} 默认等级: $green${inbounds_settings_default_level[inbounds_index]}${normal} 默认 alterId: $green${inbounds_setttings_default_alter_id[inbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list指定的另一个入站: ${green}${inbounds_settings_detour_to[inbounds_index]}${normal} 默认等级: ${green}${inbounds_settings_default_level[inbounds_index]}${normal} 默认 alterId: ${green}${inbounds_setttings_default_alter_id[inbounds_index]}${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "vless" ] 
         then
             if [ "${inbounds_settings_decryption[inbounds_index]}" == "none" ] 
             then
-                protocol_settings_list="$protocol_settings_list解密协议: $red否${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list解密协议: ${red}否${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list解密协议: $green${inbounds_settings_decryption[inbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list解密协议: ${green}${inbounds_settings_decryption[inbounds_index]}${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "http" ] 
         then
-            protocol_settings_list="$protocol_settings_list入站数据时间限制: $green${inbounds_settings_timeout[inbounds_index]}${normal}\n${indent_6}"
+            protocol_settings_list="$protocol_settings_list入站数据时间限制: ${green}${inbounds_settings_timeout[inbounds_index]}${normal}\n${indent_6}"
             if [ -n "${inbounds_settings_user_level[inbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list连接使用等级: $green${inbounds_settings_user_level[inbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list连接使用等级: ${green}${inbounds_settings_user_level[inbounds_index]}${normal}\n${indent_6}"
             fi
             if [ "${inbounds_settings_allow_transparent[inbounds_index]}" == "false" ] 
             then
-                protocol_settings_list="$protocol_settings_list转发所有请求: $red否${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list转发所有请求: ${red}否${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list转发所有请求: $green是${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list转发所有请求: ${green}是${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "socks" ] 
         then
             if [ "${inbounds_settings_auth[inbounds_index]}" == "noauth" ] 
             then
-                protocol_settings_list="$protocol_settings_list认证方式: $green匿名${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list认证方式: ${green}匿名${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list认证方式: $green用户密码${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list认证方式: ${green}用户密码${normal}\n${indent_6}"
             fi
             if [ "${inbounds_settings_udp[inbounds_index]}" == "false" ] 
             then
-                protocol_settings_list="$protocol_settings_list支持 UDP 协议: $red否${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list支持 UDP 协议: ${red}否${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list支持 UDP 协议: $green是${normal}\n${indent_6}本机 IP 地址: $green${inbounds_settings_ip[inbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list支持 UDP 协议: ${green}是${normal}\n${indent_6}本机 IP 地址: ${green}${inbounds_settings_ip[inbounds_index]}${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] 
         then
-            protocol_settings_list="$protocol_settings_list可接收的网络协议类型: $green${inbounds_settings_network[inbounds_index]}${normal}\n${indent_6}"
+            protocol_settings_list="$protocol_settings_list可接收的网络协议类型: ${green}${inbounds_settings_network[inbounds_index]}${normal}\n${indent_6}"
             if [ -n "${inbounds_settings_method[inbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list加密方式: $green${inbounds_settings_method[inbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list加密方式: ${green}${inbounds_settings_method[inbounds_index]}${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "dokodemo-door" ] 
         then
-            protocol_settings_list="$protocol_settings_list可接收的网络协议类型: $green${inbounds_settings_network[inbounds_index]}${normal}\n${indent_6}入站数据时间限制: $green${inbounds_settings_timeout[inbounds_index]}${normal}\n${indent_6}"
+            protocol_settings_list="$protocol_settings_list可接收的网络协议类型: ${green}${inbounds_settings_network[inbounds_index]}${normal}\n${indent_6}入站数据时间限制: ${green}${inbounds_settings_timeout[inbounds_index]}${normal}\n${indent_6}"
             if [ -n "${inbounds_settings_user_level[inbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list连接使用等级: $green${inbounds_settings_user_level[inbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list连接使用等级: ${green}${inbounds_settings_user_level[inbounds_index]}${normal}\n${indent_6}"
             fi
             if [ "${inbounds_settings_follow_redirect[inbounds_index]}" == "false" ] 
             then
-                protocol_settings_list="$protocol_settings_list转发防火墙: $red否${normal}\n${indent_6}目标地址: $green${inbounds_settings_address[inbounds_index]}${normal} 目标端口: $green${inbounds_settings_port[inbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list转发防火墙: ${red}否${normal}\n${indent_6}目标地址: ${green}${inbounds_settings_address[inbounds_index]}${normal} 目标端口: ${green}${inbounds_settings_port[inbounds_index]}${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list转发防火墙: $green是${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list转发防火墙: ${green}是${normal}\n${indent_6}"
             fi
         fi
         if [ "${inbounds_stream_network[inbounds_index]}" == "http" ] 
         then
             stream_settings_list="传输方式: ${green}http/2${normal}\n${indent_6}"
         else
-            stream_settings_list="传输方式: $green${inbounds_stream_network[inbounds_index]}${normal}\n${indent_6}"
+            stream_settings_list="传输方式: ${green}${inbounds_stream_network[inbounds_index]}${normal}\n${indent_6}"
         fi
         if [ "${inbounds_stream_security[inbounds_index]}" == "none" ] 
         then
-            stream_settings_list="${stream_settings_list}$tls_name 加密: $red否${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}$tls_name 加密: ${red}否${normal}\n${indent_6}"
         else
-            stream_settings_list="${stream_settings_list}$tls_name 加密: $green是${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}$tls_name 加密: ${green}是${normal}\n${indent_6}"
             if [ -n "${inbounds_stream_tls_server_name[inbounds_index]}" ] 
             then
-                stream_settings_list="${stream_settings_list}指定证书域名: $green${inbounds_stream_tls_server_name[inbounds_index]}${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}指定证书域名: ${green}${inbounds_stream_tls_server_name[inbounds_index]}${normal}\n${indent_6}"
             else
-                stream_settings_list="${stream_settings_list}指定证书域名: $red否${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}指定证书域名: ${red}否${normal}\n${indent_6}"
             fi
             if [ "${inbounds_stream_tls_disable_system_root[inbounds_index]}" == "false" ] 
             then
-                stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: $red否${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: ${red}否${normal}\n${indent_6}"
             else
-                stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: $green是${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: ${green}是${normal}\n${indent_6}"
             fi
             if [ -n "${inbounds_stream_tls_alpn[inbounds_index]}" ] 
             then
-                stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: $green${inbounds_stream_tls_alpn[inbounds_index]//|/,}${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: ${green}${inbounds_stream_tls_alpn[inbounds_index]//|/,}${normal}\n${indent_6}"
             else
                 stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: ${green}h2,http/1.1${normal}\n${indent_6}"
             fi
             if [ -n "${inbounds_stream_tls_certificates_usage[inbounds_index]}" ] 
             then
-                certificates_list="$green证书:${normal}\n${indent_6}"
+                certificates_list="${green}证书:${normal}\n${indent_6}"
                 IFS="|" read -r -a usages <<< "${inbounds_stream_tls_certificates_usage[inbounds_index]}"
                 IFS="|" read -r -a certificate_files <<< "${inbounds_stream_tls_certificates_certificate_file[inbounds_index]}"
                 IFS="|" read -r -a key_files <<< "${inbounds_stream_tls_certificates_key_file[inbounds_index]}"
@@ -26866,17 +26959,17 @@ V2rayListInbounds()
                     fi
                     if [ -n "${certificates:-}" ] && [ -n "${certificates[certificate_i]}" ] 
                     then
-                        certificates_list="$certificates_list$((certificate_i+1)). 用途: $green$certificate_usage [自签名]${normal}\n${indent_6}"
+                        certificates_list="$certificates_list$((certificate_i+1)). 用途: ${green}$certificate_usage [自签名]${normal}\n${indent_6}"
                     else
-                        certificates_list="$certificates_list$((certificate_i+1)). 用途: $green$certificate_usage${normal}\n${indent_6}"
+                        certificates_list="$certificates_list$((certificate_i+1)). 用途: ${green}$certificate_usage${normal}\n${indent_6}"
                     fi
                     if [ -n "${certificate_files[certificate_i]}" ] 
                     then
-                        certificates_list="$certificates_list证书路径: $green${certificate_files[certificate_i]}${normal}\n${indent_6}"
+                        certificates_list="$certificates_list证书路径: ${green}${certificate_files[certificate_i]}${normal}\n${indent_6}"
                     fi
                     if [ -n "${key_files[certificate_i]}" ] 
                     then
-                        certificates_list="$certificates_list密钥路径: $green${key_files[certificate_i]}${normal}\n${indent_6}"
+                        certificates_list="$certificates_list密钥路径: ${green}${key_files[certificate_i]}${normal}\n${indent_6}"
                     fi
                 done
                 stream_settings_list="$stream_settings_list\n${indent_6}$certificates_list\n${indent_6}"
@@ -26884,18 +26977,18 @@ V2rayListInbounds()
         fi
         if [ "${inbounds_stream_tproxy[inbounds_index]}" == "off" ] 
         then
-            stream_settings_list="$stream_settings_list透明代理: $red否${normal}\n${indent_6}"
+            stream_settings_list="$stream_settings_list透明代理: ${red}否${normal}\n${indent_6}"
         else
-            stream_settings_list="$stream_settings_list透明代理: $green${inbounds_stream_tproxy[inbounds_index]}${normal}\n${indent_6}"
+            stream_settings_list="$stream_settings_list透明代理: ${green}${inbounds_stream_tproxy[inbounds_index]}${normal}\n${indent_6}"
         fi
         if [ "${inbounds_stream_network[inbounds_index]}" == "ws" ] 
         then
-            stream_settings_list="$stream_settings_list路径: $green${inbounds_stream_path[inbounds_index]}${normal}\n${indent_6}"
+            stream_settings_list="$stream_settings_list路径: ${green}${inbounds_stream_path[inbounds_index]}${normal}\n${indent_6}"
             if [ "${inbounds_stream_accept_proxy_protocol[inbounds_index]}" == "false" ] 
             then
-                stream_settings_list="$stream_settings_list接收 PROXY 协议: $red否${normal}\n${indent_6}"
+                stream_settings_list="$stream_settings_list接收 PROXY 协议: ${red}否${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list接收 PROXY 协议: $green是${normal}\n${indent_6}"
+                stream_settings_list="$stream_settings_list接收 PROXY 协议: ${green}是${normal}\n${indent_6}"
             fi
             if [ -n "${inbounds_stream_ws_headers[inbounds_index]}" ] 
             then
@@ -26903,7 +26996,7 @@ V2rayListInbounds()
                 headers_list=""
                 for header in "${headers[@]}"
                 do
-                    headers_list="$headers_list$green${header%%=*}${normal}: $green${header#*=}${normal}\n${indent_6}"
+                    headers_list="$headers_list${green}${header%%=*}${normal}: ${green}${header#*=}${normal}\n${indent_6}"
                 done
                 [ -n "$headers_list" ] && stream_settings_list="$stream_settings_list自定义 HTTP 头:\n${indent_6}$headers_list"
             fi
@@ -26911,15 +27004,15 @@ V2rayListInbounds()
         then
             if [ "${inbounds_stream_accept_proxy_protocol[inbounds_index]}" == "false" ] 
             then
-                stream_settings_list="$stream_settings_list接收 PROXY 协议: $red否${normal}\n${indent_6}"
+                stream_settings_list="$stream_settings_list接收 PROXY 协议: ${red}否${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list接收 PROXY 协议: $green是${normal}\n${indent_6}"
+                stream_settings_list="$stream_settings_list接收 PROXY 协议: ${green}是${normal}\n${indent_6}"
             fi
             if [ "${inbounds_stream_header_type[inbounds_index]}" == "none" ] 
             then
-                stream_settings_list="$stream_settings_list数据包头部伪装: $red否${normal}\n${indent_6}"
+                stream_settings_list="$stream_settings_list数据包头部伪装: ${red}否${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list数据包头部伪装: $green${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
+                stream_settings_list="$stream_settings_list数据包头部伪装: ${green}${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
                 if [ -n "${inbounds_stream_header_request[inbounds_index]}" ] 
                 then
                     IFS="|" read -r -a header_request <<< "${inbounds_stream_header_request[inbounds_index]}"
@@ -26951,7 +27044,7 @@ V2rayListInbounds()
                                 done
                             fi
                         else
-                            header_request_list="$header_request_list$green$request_key${normal}: $green${request_value//~/, }${normal}\n${indent_6}"
+                            header_request_list="$header_request_list${green}$request_key${normal}: ${green}${request_value//~/, }${normal}\n${indent_6}"
                         fi
                     done
                     [ -n "$header_request_list" ] && stream_settings_list="$stream_settings_list自定义 HTTP 头:\n${indent_6}$header_request_list"
@@ -26961,36 +27054,36 @@ V2rayListInbounds()
         then
             if [ "${inbounds_stream_header_type[inbounds_index]}" == "none" ] 
             then
-                stream_settings_list="$stream_settings_list数据包头部伪装: $red否${normal}\n${indent_6}"
+                stream_settings_list="$stream_settings_list数据包头部伪装: ${red}否${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list数据包头部伪装: $green${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
+                stream_settings_list="$stream_settings_list数据包头部伪装: ${green}${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_stream_network[inbounds_index]}" == "http" ] 
         then
-            stream_settings_list="$stream_settings_list路径: $green${inbounds_stream_path[inbounds_index]}${normal}\n${indent_6}"
+            stream_settings_list="$stream_settings_list路径: ${green}${inbounds_stream_path[inbounds_index]}${normal}\n${indent_6}"
             if [ -n "${inbounds_stream_http_host[inbounds_index]}" ] 
             then
-                stream_settings_list="$stream_settings_list通信域名: $green${inbounds_stream_http_host[inbounds_index]//|/, }${normal}\n${indent_6}"
+                stream_settings_list="$stream_settings_list通信域名: ${green}${inbounds_stream_http_host[inbounds_index]//|/, }${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_stream_network[inbounds_index]}" == "quic" ] 
         then
             if [ "${inbounds_stream_quic_security[inbounds_index]}" == "none" ] 
             then
-                stream_settings_list="$stream_settings_list数据包加密方式: $green不加密${normal} 密钥: $green${inbounds_stream_quic_key[inbounds_index]}${normal}\n${indent_6}"
+                stream_settings_list="$stream_settings_list数据包加密方式: ${green}不加密${normal} 密钥: ${green}${inbounds_stream_quic_key[inbounds_index]}${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list数据包加密方式: $green${inbounds_stream_quic_security[inbounds_index]}${normal} 密钥: $green${inbounds_stream_quic_key[inbounds_index]}${normal}\n${indent_6}"
+                stream_settings_list="$stream_settings_list数据包加密方式: ${green}${inbounds_stream_quic_security[inbounds_index]}${normal} 密钥: ${green}${inbounds_stream_quic_key[inbounds_index]}${normal}\n${indent_6}"
             fi
             if [ "${inbounds_stream_header_type[inbounds_index]}" == "none" ] 
             then
-                stream_settings_list="$stream_settings_list数据包头部伪装: $red否${normal}\n${indent_6}"
+                stream_settings_list="$stream_settings_list数据包头部伪装: ${red}否${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list数据包头部伪装: $green${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
+                stream_settings_list="$stream_settings_list数据包头部伪装: ${green}${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_stream_network[inbounds_index]}" == "domainsocket" ] 
         then
-            stream_settings_list="$stream_settings_list文件路径: $green${inbounds_stream_path[inbounds_index]}${normal} abstract: $green${inbounds_stream_ds_abstract[inbounds_index]}${normal} padding: $green${inbounds_stream_ds_padding[inbounds_index]}${normal}\n${indent_6}"
+            stream_settings_list="$stream_settings_list文件路径: ${green}${inbounds_stream_path[inbounds_index]}${normal} abstract: ${green}${inbounds_stream_ds_abstract[inbounds_index]}${normal} padding: ${green}${inbounds_stream_ds_padding[inbounds_index]}${normal}\n${indent_6}"
         fi
-        inbounds_list=$inbounds_list"# $green$((i+1))${normal}${indent_6}标签: $green${inbounds_tag[inbounds_index]:-无}${normal}\n${indent_6}$protocol_settings_list$stream_settings_list\n\n"
+        inbounds_list=$inbounds_list"# ${green}$((i+1))${normal}${indent_6}标签: ${green}${inbounds_tag[inbounds_index]:-无}${normal}\n${indent_6}$protocol_settings_list$stream_settings_list\n\n"
     done
 
     Println "$inbounds_list\n"
@@ -27012,10 +27105,10 @@ V2raySelectInbound()
                 if [ "$inbound_num" -gt 0 ] && [ "$inbound_num" -le $count ]
                 then
                     inbound_num=$((inbound_num-1))
-                    if [ "$list_inbounds_option" == "全部入站" ] 
+                    if [ "$list_inbounds_options_index" -eq 0 ] 
                     then
                         inbounds_index=$inbound_num
-                    elif [ "$list_inbounds_option" == "本地 nginx 入站" ] 
+                    elif [ "$list_inbounds_options_index" -eq 1 ] 
                     then
                         inbounds_index=${inbounds_nginx_index[inbound_num]}
                     else
@@ -27208,7 +27301,7 @@ V2rayListInboundAccounts()
 
     if [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] && [ -n "${inbounds_settings_email[inbounds_index]}" ]
     then
-        Println "邮箱: $green${inbounds_settings_email[inbounds_index]}${normal}\n密码: $green${inbounds_settings_password[inbounds_index]}${normal}\n等级: $green${inbounds_settings_user_level[inbounds_index]}${normal}\n"
+        Println "邮箱: ${green}${inbounds_settings_email[inbounds_index]}${normal}\n密码: ${green}${inbounds_settings_password[inbounds_index]}${normal}\n等级: ${green}${inbounds_settings_user_level[inbounds_index]}${normal}\n"
         return 0
     fi
 
@@ -27227,26 +27320,26 @@ V2rayListInboundAccounts()
         accounts_email+=("$map_email")
         if [ "${inbounds_protocol[inbounds_index]}" == "http" ] 
         then
-            accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}HTTP${normal} 用户名: $green$map_user${normal} 密码: $green$map_pass${normal}\n\n"
+            accounts_list=$accounts_list"# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}HTTP${normal} 用户名: ${green}$map_user${normal} 密码: ${green}$map_pass${normal}\n\n"
         elif [ "${inbounds_protocol[inbounds_index]}" == "socks" ] 
         then
-            accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}Socks${normal} 用户名: $green$map_user${normal} 密码: $green$map_pass${normal} 等级: $green$map_level${normal}\n\n"
+            accounts_list=$accounts_list"# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}Socks${normal} 用户名: ${green}$map_user${normal} 密码: ${green}$map_pass${normal} 等级: ${green}$map_level${normal}\n\n"
         elif [ "${inbounds_protocol[inbounds_index]}" == "trojan" ] 
         then
-            accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}Trojan${normal} 密码: $green$map_pass${normal} 邮箱: $green$map_email${normal} 等级: $green$map_level${normal}\n\n"
+            accounts_list=$accounts_list"# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}Trojan${normal} 密码: ${green}$map_pass${normal} 邮箱: ${green}$map_email${normal} 等级: ${green}$map_level${normal}\n\n"
         elif [ "${inbounds_protocol[inbounds_index]}" == "vless" ] 
         then
             if [ "$v2ray_name" == "xray" ] 
             then
-                accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 模式: $green$map_flow${normal} 等级: $green$map_level${normal} 邮箱: $green$map_email${normal}\n\n"
+                accounts_list=$accounts_list"# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}VLESS${normal} ID: ${green}$map_id${normal} 模式: ${green}$map_flow${normal} 等级: ${green}$map_level${normal} 邮箱: ${green}$map_email${normal}\n\n"
             else
-                accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} 邮箱: $green$map_email${normal}\n\n"
+                accounts_list=$accounts_list"# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}VLESS${normal} ID: ${green}$map_id${normal} 等级: ${green}$map_level${normal} 邮箱: ${green}$map_email${normal}\n\n"
             fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] 
         then
-            accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}Shadowsocks${normal} 邮箱: $green$map_email${normal} 加密方式: $green$map_method${normal} 密码: $green$map_pass${normal} 等级: $green$map_level${normal}\n\n"
+            accounts_list=$accounts_list"# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}Shadowsocks${normal} 邮箱: ${green}$map_email${normal} 加密方式: ${green}$map_method${normal} 密码: ${green}$map_pass${normal} 等级: ${green}$map_level${normal}\n\n"
         else
-            accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}VMESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} alterId: $green$map_alter_id${normal} 邮箱: $green$map_email${normal}\n\n"
+            accounts_list=$accounts_list"# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}VMESS${normal} ID: ${green}$map_id${normal} 等级: ${green}$map_level${normal} alterId: ${green}$map_alter_id${normal} 邮箱: ${green}$map_email${normal}\n\n"
         fi
     done < <($JQ_FILE -r '.inbounds['"$inbounds_index"'].settings | (.clients // .accounts)[] | [.id,.flow,.level,.alterId,.email,.user,(.pass // .password),.method] | join("^")' "$V2_CONFIG")
 
@@ -27257,8 +27350,7 @@ V2rayListInboundAccounts()
 
     if [ -n "$accounts_list" ] 
     then
-        echo "可用账号:"
-        Println "$accounts_list\n"
+        Println "可用账号:\n\n$accounts_list\n"
     else
         Println "$error 此入站没有账号\n"
         exit 1
@@ -27301,7 +27393,7 @@ V2rayListInboundAccountLink()
         ReleaseCheck
         if [ ! -e "/usr/local/bin/imgcat" ] 
         then
-            InstallImgcat
+            ImgcatInstall
         fi
         if [[ ! -x $(command -v convert) ]] 
         then
@@ -27327,7 +27419,7 @@ V2rayDeleteInboundAccount()
         exit 1
     fi
 
-    echo -e "# $green$((accounts_count+1))${normal}${indent_6}删除所有账号\n\n"
+    echo -e "# ${green}$((accounts_count+1))${normal}${indent_6}删除所有账号\n\n"
     echo "`gettext \"输入序号\"`"
     while read -p "$i18n_default_cancel" accounts_index
     do
@@ -27545,7 +27637,7 @@ V2rayAddOutbound()
             '. * 
             {
                 "settings": {
-                    "redirect": $redirect
+                    "redirect": ${red}irect
                 }
             }' <<< "$new_outbound")
         fi
@@ -27917,49 +28009,49 @@ V2rayListOutbounds()
 
     [ "$outbounds_count" -eq 0 ] && Println "$error 没有出站\n" && exit 1
 
-    Println "\n=== 出站数 $green $outbounds_count ${normal}"
+    Println "\n=== 出站数 ${green} $outbounds_count ${normal}"
 
     outbounds_list=""
 
     for((outbounds_index=0;outbounds_index<outbounds_count;outbounds_index++));
     do
-        protocol_settings_list="传输协议: $green${outbounds_protocol[outbounds_index]}${normal}\n${indent_6}"
+        protocol_settings_list="传输协议: ${green}${outbounds_protocol[outbounds_index]}${normal}\n${indent_6}"
         if [ "${outbounds_send_through[outbounds_index]}" != "0.0.0.0" ] 
         then
-            protocol_settings_list="$protocol_settings_list发送数据的 IP 地址: $green${outbounds_send_through[outbounds_index]}${normal}\n${indent_6}"
+            protocol_settings_list="$protocol_settings_list发送数据的 IP 地址: ${green}${outbounds_send_through[outbounds_index]}${normal}\n${indent_6}"
         fi
         if [ -n "${outbounds_settings_address[outbounds_index]}" ] 
         then
-            protocol_settings_list="$protocol_settings_list目标地址: $green${outbounds_settings_address[outbounds_index]}${normal} 目标端口: $green${outbounds_settings_port[outbounds_index]}${normal}\n${indent_6}"
+            protocol_settings_list="$protocol_settings_list目标地址: ${green}${outbounds_settings_address[outbounds_index]}${normal} 目标端口: ${green}${outbounds_settings_port[outbounds_index]}${normal}\n${indent_6}"
         fi
         if [ "${outbounds_protocol[outbounds_index]}" == "blackhole" ] 
         then
             if [ "${outbounds_settings_response_type[outbounds_index]}" == "none" ] 
             then
-                protocol_settings_list="$protocol_settings_list黑洞的响应方式: $green直接关闭${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list黑洞的响应方式: ${green}直接关闭${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list黑洞的响应方式: $green返回403并关闭${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list黑洞的响应方式: ${green}返回403并关闭${normal}\n${indent_6}"
             fi
         elif [ "${outbounds_protocol[outbounds_index]}" == "dns" ] 
         then
-            protocol_settings_list="${protocol_settings_list}传输层协议: $green${outbounds_settings_network[outbounds_index]:-不变}${normal} 服务器地址: $green${outbounds_settings_address[outbounds_index]:-不变}${normal} 服务器端口: $green${outbounds_settings_port[outbounds_index]:-不变}${normal}\n${indent_6}"
+            protocol_settings_list="${protocol_settings_list}传输层协议: ${green}${outbounds_settings_network[outbounds_index]:-不变}${normal} 服务器地址: ${green}${outbounds_settings_address[outbounds_index]:-不变}${normal} 服务器端口: ${green}${outbounds_settings_port[outbounds_index]:-不变}${normal}\n${indent_6}"
         elif [ "${outbounds_protocol[outbounds_index]}" == "freedom" ] 
         then
             if [ -n "${outbounds_settings_domain_strategy[outbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list域名策略: $green${outbounds_settings_domain_strategy[outbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list域名策略: ${green}${outbounds_settings_domain_strategy[outbounds_index]}${normal}\n${indent_6}"
             fi
             if [ -n "${outbounds_settings_redirect[outbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list发送到指定地址: $green${outbounds_settings_redirect[outbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list发送到指定地址: ${green}${outbounds_settings_redirect[outbounds_index]}${normal}\n${indent_6}"
             fi
             if [ -n "${outbounds_settings_user_level[outbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list使用用户等级: $green${outbounds_settings_user_level[outbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="$protocol_settings_list使用用户等级: ${green}${outbounds_settings_user_level[outbounds_index]}${normal}\n${indent_6}"
             fi
         elif [ "${outbounds_protocol[outbounds_index]}" == "shadowsocks" ] 
         then
-            protocol_settings_list="$protocol_settings_list加密方式: $green${outbounds_settings_method[outbounds_index]}${normal}\n${indent_6}"
+            protocol_settings_list="$protocol_settings_list加密方式: ${green}${outbounds_settings_method[outbounds_index]}${normal}\n${indent_6}"
         fi
         if [ -n "${outbounds_proxy_tag[outbounds_index]}" ] 
         then
@@ -27971,42 +28063,42 @@ V2rayListOutbounds()
                 stream_settings_list="传输方式: ${green}http/2${normal}\n${indent_6}"
             elif [ -n "${outbounds_stream_network[outbounds_index]}" ]  
             then
-                stream_settings_list="传输方式: $green${outbounds_stream_network[outbounds_index]}${normal}\n${indent_6}"
+                stream_settings_list="传输方式: ${green}${outbounds_stream_network[outbounds_index]}${normal}\n${indent_6}"
             fi
             if [ "${outbounds_protocol[outbounds_index]}" != "blackhole" ] && [ "${outbounds_protocol[outbounds_index]}" != "dns" ] && [ "${outbounds_protocol[outbounds_index]}" != "freedom" ]
             then
                 if [ "${outbounds_stream_security[outbounds_index]}" == "none" ] 
                 then
-                    stream_settings_list="${stream_settings_list}$tls_name 加密: $red否${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}$tls_name 加密: ${red}否${normal}\n${indent_6}"
                 else
-                    stream_settings_list="${stream_settings_list}$tls_name 加密: $green是${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}$tls_name 加密: ${green}是${normal}\n${indent_6}"
                     if [ -n "${outbounds_stream_tls_server_name[outbounds_index]}" ] 
                     then
-                        stream_settings_list="${stream_settings_list}指定证书域名: $green${outbounds_stream_tls_server_name[outbounds_index]}${normal}\n${indent_6}"
+                        stream_settings_list="${stream_settings_list}指定证书域名: ${green}${outbounds_stream_tls_server_name[outbounds_index]}${normal}\n${indent_6}"
                     else
-                        stream_settings_list="${stream_settings_list}指定证书域名: $red否${normal}\n${indent_6}"
+                        stream_settings_list="${stream_settings_list}指定证书域名: ${red}否${normal}\n${indent_6}"
                     fi
                     if [ "${outbounds_stream_tls_allow_insecure[outbounds_index]}" == "false" ] 
                     then
-                        stream_settings_list="${stream_settings_list}允许不安全连接: $red否${normal}\n${indent_6}"
+                        stream_settings_list="${stream_settings_list}允许不安全连接: ${red}否${normal}\n${indent_6}"
                     else
-                        stream_settings_list="${stream_settings_list}允许不安全连接: $green是${normal}\n${indent_6}"
+                        stream_settings_list="${stream_settings_list}允许不安全连接: ${green}是${normal}\n${indent_6}"
                     fi
                     if [ "${outbounds_stream_tls_disable_system_root[outbounds_index]}" == "false" ] 
                     then
-                        stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: $red否${normal}\n${indent_6}"
+                        stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: ${red}否${normal}\n${indent_6}"
                     else
-                        stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: $green是${normal}\n${indent_6}"
+                        stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: ${green}是${normal}\n${indent_6}"
                     fi
                     if [ -n "${outbounds_stream_tls_alpn[outbounds_index]}" ] 
                     then
-                        stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: $green${outbounds_stream_tls_alpn[outbounds_index]//|/,}${normal}\n${indent_6}"
+                        stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: ${green}${outbounds_stream_tls_alpn[outbounds_index]//|/,}${normal}\n${indent_6}"
                     else
                         stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: ${green}h2,http/1.1${normal}\n${indent_6}"
                     fi
                     if [ -n "${outbounds_stream_tls_certificates_usage[outbounds_index]}" ] 
                     then
-                        certificates_list="$green证书:${normal}\n${indent_6}"
+                        certificates_list="${green}证书:${normal}\n${indent_6}"
                         IFS="|" read -r -a usages <<< "${outbounds_stream_tls_certificates_usage[outbounds_index]}"
                         IFS="|" read -r -a certificate_files <<< "${outbounds_stream_tls_certificates_certificate_file[outbounds_index]}"
                         IFS="|" read -r -a key_files <<< "${outbounds_stream_tls_certificates_key_file[outbounds_index]}"
@@ -28024,17 +28116,17 @@ V2rayListOutbounds()
                             fi
                             if [ -n "${certificates:-}" ] && [ -n "${certificates[certificate_i]}" ] 
                             then
-                                certificates_list="$certificates_list$((certificate_i+1)). 用途: $green$certificate_usage [自签名]${normal}\n${indent_6}"
+                                certificates_list="$certificates_list$((certificate_i+1)). 用途: ${green}$certificate_usage [自签名]${normal}\n${indent_6}"
                             else
-                                certificates_list="$certificates_list$((certificate_i+1)). 用途: $green$certificate_usage${normal}\n${indent_6}"
+                                certificates_list="$certificates_list$((certificate_i+1)). 用途: ${green}$certificate_usage${normal}\n${indent_6}"
                             fi
                             if [ -n "${certificate_files[certificate_i]}" ] 
                             then
-                                certificates_list="$certificates_list证书路径: $green${certificate_files[certificate_i]}${normal}\n${indent_6}"
+                                certificates_list="$certificates_list证书路径: ${green}${certificate_files[certificate_i]}${normal}\n${indent_6}"
                             fi
                             if [ -n "${key_files[certificate_i]}" ] 
                             then
-                                certificates_list="$certificates_list密钥路径: $green${key_files[certificate_i]}${normal}\n${indent_6}"
+                                certificates_list="$certificates_list密钥路径: ${green}${key_files[certificate_i]}${normal}\n${indent_6}"
                             fi
                         done
                         stream_settings_list="$stream_settings_list\n${indent_6}$certificates_list\n${indent_6}"
@@ -28043,14 +28135,14 @@ V2rayListOutbounds()
             fi
             if [ "${outbounds_stream_network[outbounds_index]}" == "ws" ] 
             then
-                stream_settings_list="$stream_settings_list路径: $green${outbounds_stream_path[outbounds_index]}${normal}\n${indent_6}"
+                stream_settings_list="$stream_settings_list路径: ${green}${outbounds_stream_path[outbounds_index]}${normal}\n${indent_6}"
                 if [ -n "${outbounds_stream_ws_headers[outbounds_index]}" ] 
                 then
                     IFS="|" read -r -a headers <<< "${outbounds_stream_ws_headers[outbounds_index]}"
                     headers_list=""
                     for header in "${headers[@]}"
                     do
-                        headers_list="$headers_list$green${header%%=*}${normal}: $green${header#*=}${normal}\n${indent_6}"
+                        headers_list="$headers_list${green}${header%%=*}${normal}: ${green}${header#*=}${normal}\n${indent_6}"
                     done
                     [ -n "$headers_list" ] && stream_settings_list="$stream_settings_list自定义 HTTP 头:\n${indent_6}$headers_list"
                 fi
@@ -28058,7 +28150,7 @@ V2rayListOutbounds()
             then
                 if [ "${outbounds_stream_header_type[outbounds_index]}" == "none" ] 
                 then
-                    stream_settings_list="$stream_settings_list数据包头部: $red不伪装${normal}\n${indent_6}"
+                    stream_settings_list="$stream_settings_list数据包头部: ${red}不伪装${normal}\n${indent_6}"
                 else
                     stream_settings_list="$stream_settings_list数据包头部: ${green}http 伪装${normal}\n${indent_6}"
                     if [ -n "${outbounds_stream_header_request[outbounds_index]}" ] 
@@ -28092,7 +28184,7 @@ V2rayListOutbounds()
                                     done
                                 fi
                             else
-                                header_request_list="$header_request_list$green$request_key${normal}: $green${request_value//~/, }${normal}\n${indent_6}"
+                                header_request_list="$header_request_list${green}$request_key${normal}: ${green}${request_value//~/, }${normal}\n${indent_6}"
                             fi
                         done
                         [ -n "$header_request_list" ] && stream_settings_list="$stream_settings_list自定义 HTTP 头:\n${indent_6}$header_request_list"
@@ -28102,28 +28194,28 @@ V2rayListOutbounds()
             then
                 if [ "${outbounds_stream_header_type[outbounds_index]}" == "none" ] 
                 then
-                    stream_settings_list="$stream_settings_list数据包头部: $red不伪装${normal}\n${indent_6}"
+                    stream_settings_list="$stream_settings_list数据包头部: ${red}不伪装${normal}\n${indent_6}"
                 else
                     stream_settings_list="$stream_settings_list数据包头部: ${green}http 伪装${normal}\n${indent_6}"
                 fi
             elif [ "${outbounds_stream_network[outbounds_index]}" == "http" ] 
             then
-                stream_settings_list="$stream_settings_list路径: $green${outbounds_stream_path[outbounds_index]}${normal}\n${indent_6}"
+                stream_settings_list="$stream_settings_list路径: ${green}${outbounds_stream_path[outbounds_index]}${normal}\n${indent_6}"
                 if [ -n "${outbounds_stream_http_host[outbounds_index]}" ] 
                 then
-                    stream_settings_list="$stream_settings_list通信域名: $green${outbounds_stream_http_host[outbounds_index]//|/, }${normal}\n${indent_6}"
+                    stream_settings_list="$stream_settings_list通信域名: ${green}${outbounds_stream_http_host[outbounds_index]//|/, }${normal}\n${indent_6}"
                 fi
             elif [ "${outbounds_stream_network[outbounds_index]}" == "quic" ] 
             then
                 if [ "${outbounds_stream_quic_security[outbounds_index]}" == "none" ] 
                 then
-                    stream_settings_list="$stream_settings_list数据包加密方式: $red不加密${normal} 密钥: $green${outbounds_stream_quic_key[outbounds_index]}${normal}\n${indent_6}"
+                    stream_settings_list="$stream_settings_list数据包加密方式: ${red}不加密${normal} 密钥: ${green}${outbounds_stream_quic_key[outbounds_index]}${normal}\n${indent_6}"
                 else
-                    stream_settings_list="$stream_settings_list数据包加密方式: $green${outbounds_stream_quic_security[outbounds_index]}${normal} 密钥: $green${outbounds_stream_quic_key[outbounds_index]}${normal}\n${indent_6}"
+                    stream_settings_list="$stream_settings_list数据包加密方式: ${green}${outbounds_stream_quic_security[outbounds_index]}${normal} 密钥: ${green}${outbounds_stream_quic_key[outbounds_index]}${normal}\n${indent_6}"
                 fi
                 if [ "${outbounds_stream_header_type[outbounds_index]}" == "none" ] 
                 then
-                    stream_settings_list="$stream_settings_list数据包头部: $red不伪装${normal}\n${indent_6}"
+                    stream_settings_list="$stream_settings_list数据包头部: ${red}不伪装${normal}\n${indent_6}"
                 else
                     stream_settings_list="$stream_settings_list数据包头部: ${green}http 伪装${normal}\n${indent_6}"
                 fi
@@ -28131,11 +28223,11 @@ V2rayListOutbounds()
         fi
         if [ "${outbounds_mux_enabled[outbounds_index]}" == "true" ] 
         then
-            mux_settings_list="$green已开启 Mux${normal} 最大并发连接数: $green${outbounds_mux_concurrency[outbounds_index]}${normal}\n${indent_6}"
+            mux_settings_list="${green}已开启 Mux${normal} 最大并发连接数: ${green}${outbounds_mux_concurrency[outbounds_index]}${normal}\n${indent_6}"
         else
             mux_settings_list=""
         fi
-        outbounds_list=$outbounds_list"# $green$((outbounds_index+1))${normal}${indent_6}标签: $green${outbounds_tag[outbounds_index]:-无}${normal}\n${indent_6}$protocol_settings_list$stream_settings_list$mux_settings_list\n\n"
+        outbounds_list=$outbounds_list"# ${green}$((outbounds_index+1))${normal}${indent_6}标签: ${green}${outbounds_tag[outbounds_index]:-无}${normal}\n${indent_6}$protocol_settings_list$stream_settings_list$mux_settings_list\n\n"
     done
 
     Println "$outbounds_list\n"
@@ -28297,7 +28389,7 @@ V2rayListOutboundAccounts()
 
     if [ "${outbounds_protocol[outbounds_index]}" == "shadowsocks" ] 
     then
-        Println "邮箱: $green${outbounds_settings_email[outbounds_index]}${normal}\n密码: $green${outbounds_settings_password[outbounds_index]}${normal}\n等级: $green${outbounds_settings_user_level[outbounds_index]}${normal}\n"
+        Println "邮箱: ${green}${outbounds_settings_email[outbounds_index]}${normal}\n密码: ${green}${outbounds_settings_password[outbounds_index]}${normal}\n等级: ${green}${outbounds_settings_user_level[outbounds_index]}${normal}\n"
         return 0
     fi
 
@@ -28308,30 +28400,29 @@ V2rayListOutboundAccounts()
         accounts_count=$((accounts_count+1))
         if [ "${outbounds_protocol[outbounds_index]}" == "http" ] 
         then
-            accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}HTTP${normal} 用户名: $green$map_user${normal} 密码: $green$map_pass${normal}\n\n"
+            accounts_list=$accounts_list"# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}HTTP${normal} 用户名: ${green}$map_user${normal} 密码: ${green}$map_pass${normal}\n\n"
         elif [ "${outbounds_protocol[outbounds_index]}" == "socks" ] 
         then
-            accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}Socks${normal} 用户名: $green$map_user${normal} 密码: $green$map_pass${normal} 等级: $green$map_level${normal}\n\n"
+            accounts_list=$accounts_list"# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}Socks${normal} 用户名: ${green}$map_user${normal} 密码: ${green}$map_pass${normal} 等级: ${green}$map_level${normal}\n\n"
         elif [ "${outbounds_protocol[outbounds_index]}" == "trojan" ] 
         then
-            accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}Trojan${normal} 服务器地址: $green$map_address${normal} 服务器端口: $green$map_port${normal}\n${indent_6}密码: $green$map_pass${normal} 邮箱: $green$map_email${normal} 等级: $green$map_level${normal}\n\n"
+            accounts_list=$accounts_list"# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}Trojan${normal} 服务器地址: ${green}$map_address${normal} 服务器端口: ${green}$map_port${normal}\n${indent_6}密码: ${green}$map_pass${normal} 邮箱: ${green}$map_email${normal} 等级: ${green}$map_level${normal}\n\n"
         elif [ "${outbounds_protocol[outbounds_index]}" == "vless" ] 
         then
             if [ "$v2ray_name" == "xray" ] 
             then
-                accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 模式: $green$map_flow${normal} 等级: $green$map_level${normal} 加密方式: $green$map_security${normal}\n\n"
+                accounts_list=$accounts_list"# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}VLESS${normal} ID: ${green}$map_id${normal} 模式: ${green}$map_flow${normal} 等级: ${green}$map_level${normal} 加密方式: ${green}$map_security${normal}\n\n"
             else
-                accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}VLESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} 加密方式: $green$map_security${normal}\n\n"
+                accounts_list=$accounts_list"# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}VLESS${normal} ID: ${green}$map_id${normal} 等级: ${green}$map_level${normal} 加密方式: ${green}$map_security${normal}\n\n"
             fi
         else
-            accounts_list=$accounts_list"# $green$accounts_count${normal}${indent_6}传输协议: ${green}VMESS${normal} ID: $green$map_id${normal} 等级: $green$map_level${normal} alterId: $green$map_alter_id${normal} 加密方式: $green$map_security${normal}\n\n"
+            accounts_list=$accounts_list"# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}VMESS${normal} ID: ${green}$map_id${normal} 等级: ${green}$map_level${normal} alterId: ${green}$map_alter_id${normal} 加密方式: ${green}$map_security${normal}\n\n"
         fi
     done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings | (.vnext // .servers)[0].users[] | [.id,.flow,.level,.alterId,.security,.user,(.pass // .password),.address,.port,.email] | join("^")' "$V2_CONFIG")
 
     if [ -n "$accounts_list" ] 
     then
-        echo "可用账号:"
-        Println "$accounts_list\n"
+        Println "可用账号:\n\n$accounts_list\n"
     else
         Println "$error 此出站没有账号\n"
         exit 1
@@ -28348,7 +28439,7 @@ V2rayDeleteOutboundAccount()
         exit 1
     fi
 
-    echo -e "# $green$((accounts_count+1))${normal}${indent_6}删除所有账号\n\n"
+    echo -e "# ${green}$((accounts_count+1))${normal}${indent_6}删除所有账号\n\n"
     echo "`gettext \"输入序号\"`"
     while read -p "$i18n_default_cancel" accounts_index
     do
@@ -28447,74 +28538,74 @@ V2rayListRouting()
     V2rayGetRouting
     if [ "$routing_rules_count" -eq 0 ] 
     then
-        routing_rules_list="路由规则列表: $red无${normal}\n\n"
+        routing_rules_list="路由规则列表: ${red}无${normal}\n\n"
     else
         routing_rules_list="路由规则列表: \n"
         for((routing_rules_i=0;routing_rules_i<routing_rules_count;routing_rules_i++));
         do
-            routing_rules_list="$routing_rules_list\n$((routing_rules_i+1)). 类型: $green${routing_rules_type[routing_rules_i]}${normal}\n"
+            routing_rules_list="$routing_rules_list\n$((routing_rules_i+1)). 类型: ${green}${routing_rules_type[routing_rules_i]}${normal}\n"
             if [ -n "${routing_rules_protocol[routing_rules_i]}" ] 
             then
-                routing_rules_list="$routing_rules_list匹配入站协议: $green${routing_rules_protocol[routing_rules_i]}${normal}\n"
+                routing_rules_list="$routing_rules_list匹配入站协议: ${green}${routing_rules_protocol[routing_rules_i]}${normal}\n"
             fi
             if [ -n "${routing_rules_inbound_tag[routing_rules_i]}" ] 
             then
-                routing_rules_list="$routing_rules_list匹配入站标签: $green${routing_rules_inbound_tag[routing_rules_i]}${normal}\n"
+                routing_rules_list="$routing_rules_list匹配入站标签: ${green}${routing_rules_inbound_tag[routing_rules_i]}${normal}\n"
             fi
             if [ -n "${routing_rules_outbound_tag[routing_rules_i]}" ] 
             then
-                routing_rules_list="$routing_rules_list匹配出站标签: $green${routing_rules_outbound_tag[routing_rules_i]}${normal}\n"
+                routing_rules_list="$routing_rules_list匹配出站标签: ${green}${routing_rules_outbound_tag[routing_rules_i]}${normal}\n"
             fi
             if [ -n "${routing_rules_balancer_tag[routing_rules_i]}" ] 
             then
-                routing_rules_list="$routing_rules_list匹配负载均衡器标签: $green${routing_rules_balancer_tag[routing_rules_i]}${normal}\n"
+                routing_rules_list="$routing_rules_list匹配负载均衡器标签: ${green}${routing_rules_balancer_tag[routing_rules_i]}${normal}\n"
             fi
-            routing_rules_list="$routing_rules_list匹配连接方式: $green${routing_rules_network[routing_rules_i]:-tcp,udp}${normal}\n"
+            routing_rules_list="$routing_rules_list匹配连接方式: ${green}${routing_rules_network[routing_rules_i]:-tcp,udp}${normal}\n"
             if [ -n "${routing_rules_domain[routing_rules_i]}" ] 
             then
-                routing_rules_list="$routing_rules_list匹配域名: $green${routing_rules_domain[routing_rules_i]}${normal}\n"
+                routing_rules_list="$routing_rules_list匹配域名: ${green}${routing_rules_domain[routing_rules_i]}${normal}\n"
             fi
             if [ -n "${routing_rules_source[routing_rules_i]}" ] 
             then
-                routing_rules_list="$routing_rules_list匹配来源 IP: $green${routing_rules_source[routing_rules_i]}${normal}\n"
+                routing_rules_list="$routing_rules_list匹配来源 IP: ${green}${routing_rules_source[routing_rules_i]}${normal}\n"
             fi
             if [ -n "${routing_rules_source_port[routing_rules_i]}" ] 
             then
-                routing_rules_list="$routing_rules_list匹配来源端口: $green${routing_rules_source_port[routing_rules_i]}${normal}\n"
+                routing_rules_list="$routing_rules_list匹配来源端口: ${green}${routing_rules_source_port[routing_rules_i]}${normal}\n"
             fi
             if [ -n "${routing_rules_ip[routing_rules_i]}" ] 
             then
-                routing_rules_list="$routing_rules_list匹配目标 IP: $green${routing_rules_ip[routing_rules_i]}${normal}\n"
+                routing_rules_list="$routing_rules_list匹配目标 IP: ${green}${routing_rules_ip[routing_rules_i]}${normal}\n"
             fi
             if [ -n "${routing_rules_port[routing_rules_i]}" ] 
             then
-                routing_rules_list="$routing_rules_list匹配目标端口: $green${routing_rules_port[routing_rules_i]}${normal}\n"
+                routing_rules_list="$routing_rules_list匹配目标端口: ${green}${routing_rules_port[routing_rules_i]}${normal}\n"
             fi
             if [ -n "${routing_rules_user[routing_rules_i]}" ] 
             then
-                routing_rules_list="$routing_rules_list匹配用户邮箱: $green${routing_rules_user[routing_rules_i]}${normal}\n"
+                routing_rules_list="$routing_rules_list匹配用户邮箱: ${green}${routing_rules_user[routing_rules_i]}${normal}\n"
             fi
             if [ -n "${routing_rules_attrs[routing_rules_i]}" ] 
             then
-                routing_rules_list="${routing_rules_list}starlark 脚本: $green${routing_rules_attrs[routing_rules_i]}${normal}\n"
+                routing_rules_list="${routing_rules_list}starlark 脚本: ${green}${routing_rules_attrs[routing_rules_i]}${normal}\n"
             fi
         done
     fi
     if [ "$routing_balancers_count" -eq 0 ] 
     then
-        routing_balancers_list="负载均衡器列表: $red无${normal}\n"
+        routing_balancers_list="负载均衡器列表: ${red}无${normal}\n"
     else
         routing_balancers_list="负载均衡器列表: \n\n"
         for((routing_balancers_i=0;routing_balancers_i<routing_balancers_count;routing_balancers_i++));
         do
-            routing_balancers_list="$routing_balancers_list$((routing_balancers_i+1)). 负载均衡器标签: $green${routing_balancers_tag[routing_balancers_i]}${normal}\n"
+            routing_balancers_list="$routing_balancers_list$((routing_balancers_i+1)). 负载均衡器标签: ${green}${routing_balancers_tag[routing_balancers_i]}${normal}\n"
             if [ -n "${routing_balancers_selector[routing_balancers_i]}" ] 
             then
-                routing_balancers_list="$routing_balancers_list匹配出站标签字符串: $green${routing_balancers_selector[routing_balancers_i]//|/,}${normal}\n"
+                routing_balancers_list="$routing_balancers_list匹配出站标签字符串: ${green}${routing_balancers_selector[routing_balancers_i]//|/,}${normal}\n"
             fi
         done
     fi
-    routing_list="域名解析策略: $green${routing_domain_strategy:-AsIs}${normal}\n\n$routing_rules_list\n$routing_balancers_list"
+    routing_list="域名解析策略: ${green}${routing_domain_strategy:-AsIs}${normal}\n\n$routing_rules_list\n$routing_balancers_list"
     Println "$routing_list\n"
 }
 
@@ -28848,50 +28939,50 @@ V2rayListPolicy()
         V2rayGetPolicy
     fi
 
-    levels_list="=== 用户等级数 $green $policy_levels_count ${normal}\n\n"
+    levels_list="=== 用户等级数 ${green} $policy_levels_count ${normal}\n\n"
     for((i=0;i<policy_levels_count;i++));
     do
         if [ "${policy_levels_stats_user_uplink[i]}" == "true" ] 
         then
-            policy_levels_stats_user_uplink_list="上行流量统计: $green是${normal}\n${indent_6}"
+            policy_levels_stats_user_uplink_list="上行流量统计: ${green}是${normal}\n${indent_6}"
         else
-            policy_levels_stats_user_uplink_list="上行流量统计: $red否${normal}\n${indent_6}"
+            policy_levels_stats_user_uplink_list="上行流量统计: ${red}否${normal}\n${indent_6}"
         fi
         if [ "${policy_levels_stats_user_downlink[i]}" == "true" ] 
         then
-            policy_levels_stats_user_downlink_list="下行流量统计: $green是${normal}\n${indent_6}"
+            policy_levels_stats_user_downlink_list="下行流量统计: ${green}是${normal}\n${indent_6}"
         else
-            policy_levels_stats_user_downlink_list="下行流量统计: $red否${normal}\n${indent_6}"
+            policy_levels_stats_user_downlink_list="下行流量统计: ${red}否${normal}\n${indent_6}"
         fi
-        levels_list="$levels_list# $green$((i+1))${normal}${indent_6}等级: $green${policy_levels_id[i]}${normal}\n${indent_6}握手时间限制: $green${policy_levels_handshake[i]}${normal} 秒\n${indent_6}连接空闲的时间限制: $green${policy_levels_conn_idle[i]}${normal} 秒\n${indent_6}出站代理时间限制: $green${policy_levels_uplink_only[i]}${normal} 秒\n${indent_6}入站代理时间限制: $green${policy_levels_downlink_only[i]}${normal} 秒\n${indent_6}缓存大小: $green${policy_levels_buffer_size[i]}${normal} kB\n${indent_6}$policy_levels_stats_user_uplink_list$policy_levels_stats_user_downlink_list\n\n"
+        levels_list="$levels_list# ${green}$((i+1))${normal}${indent_6}等级: ${green}${policy_levels_id[i]}${normal}\n${indent_6}握手时间限制: ${green}${policy_levels_handshake[i]}${normal} 秒\n${indent_6}连接空闲的时间限制: ${green}${policy_levels_conn_idle[i]}${normal} 秒\n${indent_6}出站代理时间限制: ${green}${policy_levels_uplink_only[i]}${normal} 秒\n${indent_6}入站代理时间限制: ${green}${policy_levels_downlink_only[i]}${normal} 秒\n${indent_6}缓存大小: ${green}${policy_levels_buffer_size[i]}${normal} kB\n${indent_6}$policy_levels_stats_user_uplink_list$policy_levels_stats_user_downlink_list\n\n"
     done
 
     if [ "$policy_system_stats_inbound_uplink" == "false" ] 
     then
-        system_list="入站上行流量统计: $red否${normal}\n\n"
+        system_list="入站上行流量统计: ${red}否${normal}\n\n"
     else
-        system_list="入站上行流量统计: $green是${normal}\n\n"
+        system_list="入站上行流量统计: ${green}是${normal}\n\n"
     fi
 
     if [ "$policy_system_stats_inbound_downlink" == "false" ] 
     then
-        system_list="$system_list入站下行流量统计: $red否${normal}\n\n"
+        system_list="$system_list入站下行流量统计: ${red}否${normal}\n\n"
     else
-        system_list="$system_list入站下行流量统计: $green是${normal}\n\n"
+        system_list="$system_list入站下行流量统计: ${green}是${normal}\n\n"
     fi
 
     if [ "$policy_system_stats_outbound_uplink" == "false" ] 
     then
-        system_list="$system_list出站上行流量统计: $red否${normal}\n\n"
+        system_list="$system_list出站上行流量统计: ${red}否${normal}\n\n"
     else
-        system_list="$system_list出站上行流量统计: $green是${normal}\n\n"
+        system_list="$system_list出站上行流量统计: ${green}是${normal}\n\n"
     fi
 
     if [ "$policy_system_stats_outbound_downlink" == "false" ] 
     then
-        system_list="$system_list出站下行流量统计: $red否${normal}\n\n"
+        system_list="$system_list出站下行流量统计: ${red}否${normal}\n\n"
     else
-        system_list="$system_list出站下行流量统计: $green是${normal}\n\n"
+        system_list="$system_list出站下行流量统计: ${green}是${normal}\n\n"
     fi
 
     policy_list="$levels_list$system_list"
@@ -28928,7 +29019,7 @@ V2raySetPolicy()
                     break
                 fi
             done
-            Println "$info 用户等级: $green$policy_level_id${normal}"
+            Println "$info 用户等级: ${green}$policy_level_id${normal}"
         elif [[ ! $policy_level_id =~ ^[0-9]+$ ]] 
         then
             Println "$error 必须是数字\n"
@@ -29073,23 +29164,23 @@ V2rayListReverse()
 
     if [ "$reverse_bridges_count" -eq 0 ] 
     then
-        reverse_bridges_list="bridge 列表: $red无${normal}\n\n"
+        reverse_bridges_list="bridge 列表: ${red}无${normal}\n\n"
     else
         reverse_bridges_list="bridge 列表:\n\n"
         for((reverse_bridges_i=0;reverse_bridges_i<reverse_bridges_count;reverse_bridges_i++));
         do
-            reverse_bridges_list="$reverse_bridges_list$((reverse_bridges_i+1)). 标签: $green${reverse_bridges_tag[reverse_bridges_i]}${normal} 域名: $green${reverse_bridges_domain[reverse_bridges_i]}${normal}\n"
+            reverse_bridges_list="$reverse_bridges_list$((reverse_bridges_i+1)). 标签: ${green}${reverse_bridges_tag[reverse_bridges_i]}${normal} 域名: ${green}${reverse_bridges_domain[reverse_bridges_i]}${normal}\n"
         done
     fi
 
     if [ "$reverse_portals_count" -eq 0 ] 
     then
-        reverse_portals_list="portal 列表: $red无${normal}\n\n"
+        reverse_portals_list="portal 列表: ${red}无${normal}\n\n"
     else
         reverse_portals_list="portal 列表:\n\n"
         for((reverse_portals_i=0;reverse_portals_i<reverse_portals_count;reverse_portals_i++));
         do
-            reverse_portals_list="$reverse_portals_list$((reverse_portals_i+1)). 标签: $green${reverse_portals_tag[reverse_portals_i]}${normal} 域名: $green${reverse_portals_domain[reverse_portals_i]}${normal}\n"
+            reverse_portals_list="$reverse_portals_list$((reverse_portals_i+1)). 标签: ${green}${reverse_portals_tag[reverse_portals_i]}${normal} 域名: ${green}${reverse_portals_domain[reverse_portals_i]}${normal}\n"
         done
     fi
 
@@ -29200,17 +29291,17 @@ V2rayListDns()
     V2rayGetDns
     if [ "$dns_hosts_count" -eq 0 ] 
     then
-        dns_hosts_list="静态 IP 列表: $red无${normal}\n"
+        dns_hosts_list="静态 IP 列表: ${red}无${normal}\n"
     else
         dns_hosts_list="静态 IP 列表: \n${indent_6}"
         for((dns_hosts_i=0;dns_hosts_i<dns_hosts_count;dns_hosts_i++));
         do
-            dns_hosts_list="$dns_hosts_list$((dns_hosts_i+1)). 域名: $green${dns_hosts_domain[dns_hosts_i]}${normal} 地址: $green${dns_hosts_address[dns_hosts_i]}${normal}\n${indent_6}"
+            dns_hosts_list="$dns_hosts_list$((dns_hosts_i+1)). 域名: ${green}${dns_hosts_domain[dns_hosts_i]}${normal} 地址: ${green}${dns_hosts_address[dns_hosts_i]}${normal}\n${indent_6}"
         done
     fi
     if [ "$dns_servers_count" -eq 0 ] 
     then
-        dns_servers_list="DNS 服务器列表: $red无${normal}\n"
+        dns_servers_list="DNS 服务器列表: ${red}无${normal}\n"
     else
         dns_servers_list="DNS 服务器列表: \n\n"
         for((dns_servers_i=0;dns_servers_i<dns_servers_count;dns_servers_i++));
@@ -29219,27 +29310,27 @@ V2rayListDns()
             then
                 if [ -z "${BASH_REMATCH[3]}" ] 
                 then
-                    dns_server_domain_list="使用的域名: $red未设置${normal}\n${indent_6}"
+                    dns_server_domain_list="使用的域名: ${red}未设置${normal}\n${indent_6}"
                 else
-                    dns_server_domain_list="使用的域名: $green${BASH_REMATCH[3]}${normal}\n${indent_6}"
+                    dns_server_domain_list="使用的域名: ${green}${BASH_REMATCH[3]}${normal}\n${indent_6}"
                 fi
                 if [ -z "${BASH_REMATCH[4]}" ] 
                 then
-                    dns_server_expect_ips_list="IP 范围: $red未设置${normal}\n${indent_6}"
+                    dns_server_expect_ips_list="IP 范围: ${red}未设置${normal}\n${indent_6}"
                 else
-                    dns_server_expect_ips_list="IP 范围: $green${BASH_REMATCH[4]}${normal}\n${indent_6}"
+                    dns_server_expect_ips_list="IP 范围: ${green}${BASH_REMATCH[4]}${normal}\n${indent_6}"
                 fi
-                dns_servers_list="$dns_servers_list$((dns_servers_i+1)).${indent_6}服务器地址: $green${BASH_REMATCH[1]}${normal} 端口: $green${BASH_REMATCH[2]:-53}${normal}\n${indent_6}$dns_server_domain_list$dns_server_expect_ips_list"
+                dns_servers_list="$dns_servers_list$((dns_servers_i+1)).${indent_6}服务器地址: ${green}${BASH_REMATCH[1]}${normal} 端口: ${green}${BASH_REMATCH[2]:-53}${normal}\n${indent_6}$dns_server_domain_list$dns_server_expect_ips_list"
             else
-                dns_servers_list="$dns_servers_list$((dns_servers_i+1)).${indent_6}服务器地址: $green${dns_servers[dns_servers_i]}${normal} 端口: ${green}53${normal}\n${indent_6}"
+                dns_servers_list="$dns_servers_list$((dns_servers_i+1)).${indent_6}服务器地址: ${green}${dns_servers[dns_servers_i]}${normal} 端口: ${green}53${normal}\n${indent_6}"
             fi
         done
     fi
     if [ -z "$dns_client_ip" ] 
     then
-        dns_list="用于 dns 查询 IP: $red${dns_client_ip:-未设置}${normal}\n"
+        dns_list="用于 dns 查询 IP: ${red}${dns_client_ip:-未设置}${normal}\n"
     else
-        dns_list="用于 dns 查询 IP: $green${dns_client_ip:-未设置}${normal}\n"
+        dns_list="用于 dns 查询 IP: ${green}${dns_client_ip:-未设置}${normal}\n"
     fi
     dns_list="$dns_list\n$dns_hosts_list\n$dns_servers_list"
     Println "$dns_list\n"
@@ -29501,18 +29592,18 @@ V2rayListStats()
 
     for((i=0;i<inbounds_count;i++));
     do
-        stats_list="$stats_list入站标签: $green${inbounds_tag[i]}${normal} "
+        stats_list="$stats_list入站标签: ${green}${inbounds_tag[i]}${normal} "
         if [ "$policy_system_stats_inbound_uplink" == "true" ] 
         then
-            stats_list="$stats_list上行流量: $green$(V2rayGetTraffic inbound ${inbounds_tag[i]} uplink)${normal} "
+            stats_list="$stats_list上行流量: ${green}$(V2rayGetTraffic inbound ${inbounds_tag[i]} uplink)${normal} "
         else
-            stats_list="$stats_list上行流量: $red关闭${normal} "
+            stats_list="$stats_list上行流量: ${red}关闭${normal} "
         fi
         if [ "$policy_system_stats_inbound_downlink" == "true" ] 
         then
-            stats_list="$stats_list下行流量: $green$(V2rayGetTraffic inbound ${inbounds_tag[i]} downlink)${normal}\n\n"
+            stats_list="$stats_list下行流量: ${green}$(V2rayGetTraffic inbound ${inbounds_tag[i]} downlink)${normal}\n\n"
         else
-            stats_list="$stats_list下行流量: $red关闭${normal}\n\n"
+            stats_list="$stats_list下行流量: ${red}关闭${normal}\n\n"
         fi
     done
 
@@ -29521,18 +29612,18 @@ V2rayListStats()
     do
         if [ -n "${outbounds_tag[i]}" ] 
         then
-            stats_list="$stats_list出站标签: $green${outbounds_tag[i]}${normal} "
+            stats_list="$stats_list出站标签: ${green}${outbounds_tag[i]}${normal} "
             if [ "$policy_system_stats_outbound_uplink" == "true" ] 
             then
-                stats_list="$stats_list上行流量: $green$(V2rayGetTraffic outbound ${outbounds_tag[i]} uplink)${normal} "
+                stats_list="$stats_list上行流量: ${green}$(V2rayGetTraffic outbound ${outbounds_tag[i]} uplink)${normal} "
             else
-                stats_list="$stats_list上行流量: $red关闭${normal} "
+                stats_list="$stats_list上行流量: ${red}关闭${normal} "
             fi
             if [ "$policy_system_stats_outbound_downlink" == "true" ] 
             then
-                stats_list="$stats_list下行流量: $green$(V2rayGetTraffic outbound ${outbounds_tag[i]} downlink)${normal}\n\n"
+                stats_list="$stats_list下行流量: ${green}$(V2rayGetTraffic outbound ${outbounds_tag[i]} downlink)${normal}\n\n"
             else
-                stats_list="$stats_list下行流量: $red关闭${normal}\n\n"
+                stats_list="$stats_list下行流量: ${red}关闭${normal}\n\n"
             fi
         fi
     done
@@ -29559,15 +29650,15 @@ V2rayListStats()
                 then
                     if [ "${policy_levels_stats_user_uplink[i]}" == "false" ] 
                     then
-                        Println "上行流量: $red关闭${normal}"
+                        Println "上行流量: ${red}关闭${normal}"
                     else
-                        Println "上行流量: $green$(V2rayGetTraffic user ${inbounds_settings_email[inbounds_index]} uplink)${normal}"
+                        Println "上行流量: ${green}$(V2rayGetTraffic user ${inbounds_settings_email[inbounds_index]} uplink)${normal}"
                     fi
                     if [ "${policy_levels_stats_user_downlink[i]}" == "false" ] 
                     then
-                        Println "下行流量: $red关闭${normal}\n"
+                        Println "下行流量: ${red}关闭${normal}\n"
                     else
-                        Println "下行流量: $green$(V2rayGetTraffic user ${inbounds_settings_email[inbounds_index]} downlink)${normal}\n"
+                        Println "下行流量: ${green}$(V2rayGetTraffic user ${inbounds_settings_email[inbounds_index]} downlink)${normal}\n"
                     fi
                     break
                 fi
@@ -29583,15 +29674,15 @@ V2rayListStats()
             then
                 if [ "${policy_levels_stats_user_uplink[i]}" == "false" ] 
                 then
-                    Println "上行流量: $red关闭${normal}"
+                    Println "上行流量: ${red}关闭${normal}"
                 else
-                    Println "上行流量: $green$(V2rayGetTraffic user ${accounts_email[accounts_index]} uplink)${normal}"
+                    Println "上行流量: ${green}$(V2rayGetTraffic user ${accounts_email[accounts_index]} uplink)${normal}"
                 fi
                 if [ "${policy_levels_stats_user_downlink[i]}" == "false" ] 
                 then
-                    Println "下行流量: $red关闭${normal}\n"
+                    Println "下行流量: ${red}关闭${normal}\n"
                 else
-                    Println "下行流量: $green$(V2rayGetTraffic user ${accounts_email[accounts_index]} downlink)${normal}\n"
+                    Println "下行流量: ${green}$(V2rayGetTraffic user ${accounts_email[accounts_index]} downlink)${normal}\n"
                 fi
                 break
             fi
@@ -29604,35 +29695,6 @@ V2rayResetStats()
     V2rayGetStats
     AskIfContinue n "`gettext \"将重置所有的流量统计\"`"
     $V2CTL_FILE api --server=$api_inbound_listen:$api_inbound_port StatsService.QueryStats 'pattern: "" reset: true'
-}
-
-V2rayListDomains()
-{
-    v2ray_domains_list=""
-    v2ray_domains_count=0
-    v2ray_domains=()
-
-    if ls -A "$nginx_prefix/conf/sites_available/"* > /dev/null 2>&1
-    then
-        for f in "$nginx_prefix/conf/sites_available/"*
-        do
-            domain=${f##*/}
-            domain=${domain%.conf}
-            [[ $domain =~ ^([a-zA-Z0-9](([a-zA-Z0-9-]){0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]] || continue
-            v2ray_domains_count=$((v2ray_domains_count+1))
-            v2ray_domains+=("$domain")
-            if [ -e "$nginx_prefix/conf/sites_enabled/$domain.conf" ] && grep -q "proxy_pass http://127.0.0.1:" < "$nginx_prefix/conf/sites_enabled/$domain.conf" 
-            then
-                v2ray_domain_status_text="v2ray: $green开启${normal}"
-                v2ray_domains_on+=("$domain")
-            else
-                v2ray_domain_status_text="v2ray: $red关闭${normal}"
-            fi
-            v2ray_domains_list="$v2ray_domains_list $green$v2ray_domains_count.${normal}${indent_6}$domain    $v2ray_domain_status_text\n\n"
-        done
-    fi
-    v2ray_add_domain_num=$((v2ray_domains_count+1))
-    Println "$green域名列表:${normal}\n\n${v2ray_domains_list:-无\n\n} $green$v2ray_add_domain_num.${normal}${indent_6}添加域名\n\n"
 }
 
 V2rayListInboundDomains()
@@ -29650,9 +29712,9 @@ V2rayListInboundDomains()
             domain=${domain%.conf}
             if [ -e "$nginx_prefix/conf/sites_enabled/$domain.conf" ] 
             then
-                v2ray_status_text="$green开启${normal}"
+                v2ray_status_text="${green}开启${normal}"
             else
-                v2ray_status_text="$red关闭${normal}"
+                v2ray_status_text="${red}关闭${normal}"
             fi
             if [[ $domain =~ ^([a-zA-Z0-9](([a-zA-Z0-9-]){0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]] || grep -q "proxy_pass http://127.0.0.1:${inbounds_port[inbounds_index]}" < "$nginx_prefix/conf/sites_available/$domain.conf" 
             then
@@ -29683,7 +29745,7 @@ V2rayListInboundDomains()
                                 v2ray_domains_inbound_count=$((v2ray_domains_inbound_count+1))
                                 v2ray_domains_inbound+=("$domain")
                                 v2ray_domains_inbound_https_port+=("$server_ports")
-                                v2ray_domains_inbound_list=$v2ray_domains_inbound_list"$green$v2ray_domains_inbound_count.${normal}${indent_6}域名: $green$domain${normal}, nginx 端口: $green$server_ports${normal} nginx 路径: $green${inbounds_stream_path[inbounds_index]}${normal} 状态: $v2ray_status_text\n\n"
+                                v2ray_domains_inbound_list=$v2ray_domains_inbound_list"${green}$v2ray_domains_inbound_count.${normal}${indent_6}域名: ${green}$domain${normal} nginx 端口: ${green}$server_ports${normal} nginx 路径: ${green}${inbounds_stream_path[inbounds_index]}${normal} 状态: $v2ray_status_text\n\n"
                             fi
                         fi
                     fi
@@ -29694,8 +29756,8 @@ V2rayListInboundDomains()
                         line=${line% ssl;*}
                         lead=${line%%[^[:blank:]]*}
                         line=${line#${lead}}
-                        [ -n "$server_ports" ] && server_ports="$server_ports "
-                        server_ports="$server_ports$line"
+                        [ -n "$server_ports" ] && server_ports="$server_ports, "
+                        server_ports="$server_ports${line:0:-1}"
                     fi
 
                     if [[ $server_found -eq 1 ]] && [[ $line == *"proxy_pass http://127.0.0.1:${inbounds_port[inbounds_index]}"* ]]
@@ -29708,203 +29770,173 @@ V2rayListInboundDomains()
             fi
         done
     fi
-    Println "绑定的$green域名列表:${normal}\n\n${v2ray_domains_inbound_list:-无\n\n}\n\n"
-}
-
-V2rayListDomain()
-{
-    v2ray_domain_list=""
-    v2ray_domain_server_found=0
-    v2ray_domain_server_flag=0
-    v2ray_domain_servers_count=0
-    v2ray_domain_servers_https_port=()
-    v2ray_domain_servers_v2ray_path=()
-    v2ray_domain_servers_v2ray_port=()
-    while IFS= read -r line 
-    do
-        if [[ $line == *"server {"* ]] 
-        then
-            v2ray_domain_server_found=1
-            https_ports=""
-            v2ray_path=""
-            v2ray_port=""
-            v2ray_path_status=0
-        fi
-
-        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"{"* ]] 
-        then
-            v2ray_domain_server_flag=$((v2ray_domain_server_flag+1))
-        fi
-
-        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"}"* ]] 
-        then
-            v2ray_domain_server_flag=$((v2ray_domain_server_flag-1))
-            if [[ $v2ray_domain_server_flag -eq 0 ]] 
-            then
-                v2ray_domain_server_found=0
-                if [ -n "$https_ports" ] 
-                then
-                    v2ray_domain_servers_count=$((v2ray_domain_servers_count+1))
-                    v2ray_domain_servers_https_port+=("$https_ports")
-                    [ -z "$v2ray_port" ] && v2ray_path=""
-                    v2ray_domain_servers_v2ray_path+=("$v2ray_path")
-                    v2ray_domain_servers_v2ray_port+=("$v2ray_port")
-                    if [ -n "$v2ray_port" ] 
-                    then
-                        v2ray_port_status="$green$v2ray_port${normal}"
-                    else
-                        v2ray_port_status="$red关闭${normal}"
-                    fi
-                    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_servers_count.${normal}${indent_6}https 端口: $green$https_ports${normal}, $v2ray_name 端口: $v2ray_port_status\n\n"
-                fi
-            fi
-        fi
-
-        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *" ssl;"* ]]
-        then
-            https_port=${line#*listen}
-            https_port=${https_port// ssl;/}
-            lead=${https_port%%[^[:blank:]]*}
-            https_port=${https_port#${lead}}
-            [ -n "$https_ports" ] && https_ports="$https_ports "
-            https_ports="$https_ports$https_port"
-        fi
-
-        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"location "* ]] && [[ $v2ray_path_status -eq 0 ]]
-        then
-            v2ray_path=${line#*location }
-            lead=${v2ray_path%%[^[:blank:]]*}
-            v2ray_path=${v2ray_path#${lead}}
-            v2ray_path=${v2ray_path%% *}
-        fi
-
-        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"proxy_pass http://127.0.0.1:"* ]]
-        then
-            v2ray_port=${line##*:}
-            v2ray_port=${v2ray_port%;*}
-            v2ray_path_status=1
-        fi
-    done < "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
-
-    v2ray_domain_update_crt_number=$((v2ray_domain_servers_count+1))
-    v2ray_domain_add_server_number=$((v2ray_domain_servers_count+2))
-    v2ray_domain_edit_server_number=$((v2ray_domain_servers_count+3))
-    v2ray_domain_delete_server_number=$((v2ray_domain_servers_count+4))
-    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_update_crt_number.${normal}${indent_6}更新证书\n\n"
-    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_add_server_number.${normal}${indent_6}添加配置\n\n"
-    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_edit_server_number.${normal}${indent_6}修改配置\n\n"
-    v2ray_domain_list="$v2ray_domain_list $green$v2ray_domain_delete_server_number.${normal}${indent_6}删除配置\n\n"
-
-    Println "域名 $green${v2ray_domains[v2ray_domains_index]}${normal} 配置:\n\n$v2ray_domain_list"
+    Println "绑定的${green}域名列表:${normal}\n\n${v2ray_domains_inbound_list:-无}\n"
 }
 
 V2rayDomainUpdateCrt()
 {
-    Println "$info 更新证书..."
-    if [ ! -e "$HOME/.acme.sh/acme.sh" ] 
+    local domain=$1 quiet=${2:-0}
+
+    [ "$quiet" -eq 0 ] && Println "$info 更新 $domain 证书..."
+
+    if [ ! -f "$HOME/.acme.sh/acme.sh" ] 
     then
         DepInstall socat
         bash <(curl -s -m 20 https://get.acme.sh) > /dev/null
     fi
 
-    systemctl stop $nginx_name || true
-    sleep 1
-
-    ~/.acme.sh/acme.sh --force --issue -d "${v2ray_domains[v2ray_domains_index]}" --standalone -k ec-256 > /dev/null
-    ~/.acme.sh/acme.sh --force --installcert -d "${v2ray_domains[v2ray_domains_index]}" --fullchainpath $nginx_prefix/conf/sites_crt/"${v2ray_domains[v2ray_domains_index]}".crt --keypath $nginx_prefix/conf/sites_crt/"${v2ray_domains[v2ray_domains_index]}".key --ecc > /dev/null
-
-    systemctl start $nginx_name
-    Println "$info 证书更新完成...\n"
-}
-
-V2rayAppendDomainConf()
-{
-    printf '%s' "    server {
-        listen      $server_https_port ssl;
-        server_name $server_domain;
-
-        access_log off;
-
-        ssl_certificate      $nginx_prefix/conf/sites_crt/$server_domain.crt;
-        ssl_certificate_key  $nginx_prefix/conf/sites_crt/$server_domain.key;
-
-        location $nginx_stream_path {
-            proxy_redirect off;
-            proxy_pass $nginx_proxy_pass;
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade \$http_upgrade;
-            proxy_set_header Connection upgrade;
-            proxy_set_header Host \$host;
-            # Show real IP in v2ray access.log
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        }
-    }
-
-" >> "$nginx_prefix/conf/sites_available/$server_domain.conf"
-}
-
-V2rayAddDomain()
-{
-    if [ ! -d "$nginx_prefix" ] 
+    if [ -f /etc/systemd/system/mmproxy-acme.service ] && [[ $(systemctl is-active mmproxy-acme) == "active" ]]
     then
-        Println "$error $nginx_name 未安装 ! 输入 $nginx_ctl 安装 $nginx_name\n"
-        exit 1
-    fi
-
-    Println "输入指向本机的域名"
-    echo -e "$tip 多个域名用空格分隔\n"
-    read -p "$i18n_default_cancel" server_domain
-
-    if [ -n "$server_domain" ] 
-    then
-        if [[ $server_domain =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || [[ ! $server_domain =~ ^([a-zA-Z0-9](([a-zA-Z0-9-]){0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]] 
+        if [ -z "${tls_port:-}" ] 
         then
-            Println "$error 域名格式错误\n" && exit 1
-        elif [ -e "$nginx_prefix/conf/sites_available/$server_domain.conf" ] 
-        then
-            Println "$error $server_domain 已存在\n" && exit 1
-        fi
-
-        NginxConfigServerHttpsPort
-        V2rayListInbounds nginx
-        V2raySelectInbound
-
-        if [ "${inbounds_stream_network[inbounds_index]}" == "domainsocket" ] 
-        then
-            Println "$error 不能使用此入站\n"
-            exit 1
-        fi
-
-        if [ -z "${inbounds_stream_path[inbounds_index]}" ] 
-        then
-            echo
-            inquirer text_input "输入客户端连接 nginx 的路径(比如 /xxx ): " nginx_stream_path "随机"
-            if [ "$nginx_stream_path" == "随机" ] 
+            tls_port=$(grep ^ExecStart= < /etc/systemd/system/mmproxy-acme.service)
+            if [[ $tls_port =~ -4\ 127.0.0.1:([^ ]+) ]] 
             then
-                nginx_stream_path="/$(RandStr)"
+                tls_port=${BASH_REMATCH[1]}
+            else
+                tls_port=${tls_port#*-4 }
+                tls_port=${tls_port#*:}
+                tls_port=${tls_port%% *}
             fi
-            nginx_proxy_pass="http://127.0.0.1:${inbounds_port[inbounds_index]}/"
-        else
-            nginx_stream_path=${inbounds_stream_path[inbounds_index]}
-            nginx_proxy_pass="http://127.0.0.1:${inbounds_port[inbounds_index]}"
         fi
 
-        DomainInstallCert
-        V2rayAppendDomainConf
-        NginxEnableDomain
-        NginxCheckLocalhost
-        NginxAddHttp
-        updated=0
-        NginxAddCorsHost
-        [ "$updated" -eq 1 ] && NginxBuildConf parse_out
-        Println "$info 域名 $server_domain 添加完成...\n"
+        ~/.acme.sh/acme.sh --force --issue --alpn --tlsport "$tls_port" -d "$domain" --standalone -k ec-256 > /dev/null
+        ~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "/usr/local/share/$v2ray_name/$domain.crt" --keypath "/usr/local/share/$v2ray_name/$domain.key" --ecc > /dev/null
     else
-        Println "$i18n_canceled...\n" && exit 1
+        stopped=0
+
+        if [ -d "$nginx_prefix" ] 
+        then
+            if [[ $(systemctl is-active $nginx_name) == "active" ]]
+            then
+                systemctl stop $nginx_name
+                stopped=1
+            fi
+
+            sleep 1
+        fi
+
+        ~/.acme.sh/acme.sh --force --issue -d "$domain" --standalone -k ec-256 > /dev/null
+        ~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "/usr/local/share/$v2ray_name/$domain.crt" --keypath "/usr/local/share/$v2ray_name/$domain.key" --ecc > /dev/null
+
+        [ "$stopped" -eq 1 ] && systemctl start $nginx_name
     fi
+
+    [ "$quiet" -eq 0 ] && Println "$info $domain 证书更新成功\n"
+
+    return 0
 }
 
-V2rayDomainServerAddV2rayPort()
+V2rayNginxListDomains()
+{
+    v2ray_nginx_domains_list=""
+    v2ray_nginx_domains_count=0
+    v2ray_nginx_domains=()
+
+    if ls -A "$nginx_prefix/conf/sites_available/"* > /dev/null 2>&1
+    then
+        for f in "$nginx_prefix/conf/sites_available/"*
+        do
+            domain=${f##*/}
+            domain=${domain%.conf}
+            v2ray_nginx_domains_count=$((v2ray_nginx_domains_count+1))
+            v2ray_nginx_domains+=("$domain")
+            if [ -e "$nginx_prefix/conf/sites_enabled/$domain.conf" ] 
+            then
+                v2ray_nginx_domain_status_text="${green} [开启] ${normal}"
+            else
+                v2ray_nginx_domain_status_text="${red} [关闭] ${normal}"
+            fi
+            v2ray_nginx_domains_list="$v2ray_nginx_domains_list ${green}$v2ray_nginx_domains_count.${normal}${indent_6}$domain $v2ray_nginx_domain_status_text\n\n"
+        done
+    fi
+
+    Println "${green}域名列表:${normal}\n\n${v2ray_nginx_domains_list:-无}\n\n"
+}
+
+V2rayNginxSelectDomain()
+{
+    echo "`gettext \"输入序号\"`"
+    while read -p "$i18n_default_cancel" v2ray_nginx_domains_index
+    do
+        case "$v2ray_nginx_domains_index" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$v2ray_nginx_domains_index" -gt 0 ] && [ "$v2ray_nginx_domains_index" -le "$v2ray_nginx_domains_count" ]
+                then
+                    v2ray_nginx_domains_index=$((v2ray_nginx_domains_index-1))
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+}
+
+V2rayNginxSelectDomainServer()
+{
+    echo "`gettext \"输入序号\"`"
+    while read -p "$i18n_default_cancel" v2ray_nginx_domain_servers_num
+    do
+        case "$v2ray_nginx_domain_servers_num" in
+            "")
+                Println "$i18n_canceled...\n"
+                exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$v2ray_nginx_domain_servers_num" -gt 0 ] && [ "$v2ray_nginx_domain_servers_num" -le "$v2ray_nginx_domain_servers_count" ]
+                then
+                    v2ray_nginx_domain_servers_index=$((v2ray_nginx_domain_servers_num-1))
+                    level_2_add_indices=( "${v2ray_nginx_domain_servers_indices[v2ray_nginx_domain_servers_index]}" )
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+}
+
+V2rayNginxDomainServerUpdateCrt()
+{
+    v2ray_nginx_domain_server_name=${v2ray_nginx_domain_servers_name[v2ray_nginx_domain_servers_index]}
+
+    if [[ $v2ray_nginx_domain_server_name =~ , ]] 
+    then
+        IFS="," read -r -a domains <<< "$v2ray_nginx_domain_server_name"
+
+        echo
+        set +u
+        inquirer checkbox_input "选择域名: " domains domains_selected
+        set -u
+
+        for domain in "${domains_selected[@]}"
+        do
+            NginxDomainUpdateCrt "$domain"
+            cp -f "$nginx_prefix/conf/sites_crt/$domain.crt" "/usr/local/share/$v2ray_name/$domain.crt"
+            cp -f "$nginx_prefix/conf/sites_crt/$domain.key" "/usr/local/share/$v2ray_name/$domain.key"
+            chown $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/*
+        done
+
+        return 0
+    fi
+
+    NginxDomainUpdateCrt "$v2ray_nginx_domain_server_name"
+    cp -f "$nginx_prefix/conf/sites_crt/$v2ray_nginx_domain_server_name.crt" "/usr/local/share/$v2ray_name/$v2ray_nginx_domain_server_name.crt"
+    cp -f "$nginx_prefix/conf/sites_crt/$v2ray_nginx_domain_server_name.key" "/usr/local/share/$v2ray_name/$v2ray_nginx_domain_server_name.key"
+    chown $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/*
+}
+
+V2rayNginxDomainServerAddProxy()
 {
     V2rayListInbounds nginx
     V2raySelectInbound
@@ -29917,327 +29949,480 @@ V2rayDomainServerAddV2rayPort()
 
     if [ -z "${inbounds_stream_path[inbounds_index]}" ] 
     then
-        echo
-        inquirer text_input "输入客户端连接 nginx 的路径(比如 /xxx ): " nginx_stream_path "随机"
-        if [ "$nginx_stream_path" == "随机" ] 
-        then
-            nginx_stream_path="/$(RandStr)"
-        fi
-        nginx_proxy_pass="http://127.0.0.1:${inbounds_port[inbounds_index]}/"
-    else
-        nginx_stream_path=${inbounds_stream_path[inbounds_index]}
-        nginx_proxy_pass="http://127.0.0.1:${inbounds_port[inbounds_index]}"
+        Println "$error 此入站没有路径\n"
+        exit 1
     fi
 
-    v2ray_domain_server_found=0
-    v2ray_domain_server_flag=0
-    conf=""
-    index=0
-    while IFS= read -r line 
-    do
-        line_edit=""
-        line_add=""
-        if [[ $line == *"server {"* ]] 
-        then
-            v2ray_domain_server_found=1
-            v2ray_port_found=0
-            https_ports=""
-            v2ray_port=""
-            server_conf=""
-            server_conf_edit=""
-            server_conf_add=""
-        fi
+    proxy_path=${inbounds_stream_path[inbounds_index]}
+    proxy_port=${inbounds_port[inbounds_index]}
 
-        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"{"* ]] 
-        then
-            v2ray_domain_server_flag=$((v2ray_domain_server_flag+1))
-        fi
-
-        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"}"* ]] 
-        then
-            v2ray_domain_server_flag=$((v2ray_domain_server_flag-1))
-            if [[ $v2ray_domain_server_flag -eq 0 ]] 
-            then
-                v2ray_domain_server_found=0
-                if [ -n "$https_ports" ] 
-                then
-                    if [[ $index -eq $v2ray_domain_server_index ]] 
-                    then
-                        if [ "$v2ray_port_found" -eq 1 ] 
-                        then
-                            line="$server_conf_edit\n$line"
-                        else
-                            line="$server_conf_add\n$line"
-                        fi
-                    else
-                        line="$server_conf\n$line"
-                    fi
-                    index=$((index+1))
-                else
-                    line="$server_conf\n$line"
-                fi
-            fi
-        fi
-
-        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *" ssl;"* ]]
-        then
-            https_port=${line#*listen}
-            https_port=${https_port// ssl;/}
-            lead=${https_port%%[^[:blank:]]*}
-            https_port=${https_port#${lead}}
-            https_ports="$https_ports$https_port "
-        fi
-
-        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"ssl_certificate_key "* ]]
-        then
-            line_add="$line\n
-        location $nginx_stream_path {
-            proxy_redirect off;
-            proxy_pass $nginx_proxy_pass;
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade \$http_upgrade;
-            proxy_set_header Connection upgrade;
-            proxy_set_header Host \$host;
-            # Show real IP in v2ray access.log
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        }"
-        fi
-
-        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"proxy_pass http://127.0.0.1:"* ]]
-        then
-            v2ray_port_found=1
-            v2ray_port=${line##*:}
-            v2ray_port=${v2ray_port%;*}
-            line_edit="${line%%proxy_pass*}proxy_pass http://127.0.0.1:${inbounds_port[inbounds_index]};"
-        fi
-
-        if [[ $v2ray_domain_server_found -eq 1 ]] 
-        then
-            [ -n "$server_conf" ] && server_conf="$server_conf\n"
-            server_conf="$server_conf$line"
-            [ -n "$server_conf_edit" ] && server_conf_edit="$server_conf_edit\n"
-            if [ -n "$line_edit" ] 
-            then
-                server_conf_edit="$server_conf_edit$line_edit"
-            else
-                server_conf_edit="$server_conf_edit$line"
-            fi
-            [ -n "$server_conf_add" ] && server_conf_add="$server_conf_add\n"
-            if [ -n "$line_add" ] 
-            then
-                server_conf_add="$server_conf_add$line_add"
-            else
-                server_conf_add="$server_conf_add$line"
-            fi
-        fi
-
-        if [[ $v2ray_domain_server_found -eq 0 ]] 
-        then
-            [ -n "$conf" ] && conf="$conf\n"
-            conf="$conf$line"
-        fi
-    done < "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
-
-    echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
-    ln -sf "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf" "$nginx_prefix/conf/sites_enabled/${v2ray_domains[v2ray_domains_index]}.conf"
-    if [ -n "${v2ray_domain_servers_v2ray_port[v2ray_domain_server_index]}" ] 
+    if [ "${inbounds_stream_network[inbounds_index]}" == "ws" ] 
     then
-        Println "$info $v2ray_name 端口修改成功\n"
+        new_proxy='
+        {"directive":"location","args":["=","'"$proxy_path"'"],"block":[
+            {"directive":"proxy_redirect","args":["off"]},
+            {"directive":"proxy_pass","args":["http://127.0.0.1:'"$proxy_port"'"]},
+            {"directive":"proxy_http_version","args":["1.1"]},
+            {"directive":"proxy_set_header","args":["Upgrade","$http_upgrade"]},
+            {"directive":"proxy_set_header","args":["Connection","upgrade"]}
+        ]}'
     else
-        Println "$info $v2ray_name 端口添加成功\n"
+        new_proxy='
+        {"directive":"location","args":["=","'"$proxy_path"'"],"block":[
+            {"directive":"proxy_redirect","args":["off"]},
+            {"directive":"proxy_pass","args":["http://127.0.0.1:'"$proxy_port"'"]},
+            {"directive":"proxy_http_version","args":["1.1"]}
+        ]}'
     fi
+
+    jq_path='["config",0,"parsed",0,"block",'"$v2ray_nginx_domain_servers_index"',"block"]'
+    JQs add parse_out "$new_proxy"
+
+    NginxBuildConf parse_out
+
+    Println "$info 代理添加成功\n"
 }
 
-V2rayDomainServerRemoveV2rayPort()
+V2rayNginxSelectDomainServerProxy()
 {
-    v2ray_domain_server_found=0
-    v2ray_domain_server_flag=0
-    conf=""
-    index=0
-    while IFS= read -r line 
+    echo "`gettext \"输入序号\"`"
+    while read -p "$i18n_default_cancel" v2ray_nginx_domain_server_proxies_num
     do
-        if [[ $line == *"server {"* ]] 
-        then
-            v2ray_domain_server_found=1
-            v2ray_block_found=0
-            https_ports=""
-        fi
-
-        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"{"* ]] 
-        then
-            v2ray_domain_server_flag=$((v2ray_domain_server_flag+1))
-        fi
-
-        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"}"* ]] 
-        then
-            v2ray_domain_server_flag=$((v2ray_domain_server_flag-1))
-            if [[ $v2ray_domain_server_flag -eq 0 ]] 
-            then
-                v2ray_domain_server_found=0
-                if [ -n "$https_ports" ] 
+        case "$v2ray_nginx_domain_server_proxies_num" in
+            "")
+                Println "$i18n_canceled...\n"
+                exit 1
+            ;;
+            $v2ray_nginx_domain_server_update_crt_number)
+                V2rayNginxDomainServerUpdateCrt
+                exit 0
+            ;;
+            $v2ray_nginx_domain_server_add_proxy_number)
+                V2rayNginxDomainServerAddProxy
+                exit 0
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$v2ray_nginx_domain_server_proxies_num" -gt 0 ] && [ "$v2ray_nginx_domain_server_proxies_num" -le "$v2ray_nginx_domain_server_proxies_count" ]
                 then
-                    index=$((index+1))
+                    v2ray_nginx_domain_server_proxies_index=$((v2ray_nginx_domain_server_proxies_num-1))
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
                 fi
-            fi
-        fi
+            ;;
+        esac
+    done
+}
 
-        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *" ssl;"* ]]
-        then
-            https_port=${line#*listen}
-            https_port=${https_port// ssl;/}
-            lead=${https_port%%[^[:blank:]]*}
-            https_port=${https_port#${lead}}
-            https_ports="$https_ports$https_port "
-        fi
+V2rayNginxListDomain()
+{
+    if [ "$v2ray_nginx_domains_count" -eq 0 ] 
+    then
+        Println "$error 请先使用 $nginx_name 管理面板添加域名\n"
+        exit 1
+    fi
 
-        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $line == *"location ${v2ray_domain_servers_v2ray_path[v2ray_domain_server_index]} "* ]] && [ -n "$https_ports" ] && [[ $index -eq $v2ray_domain_server_index ]]
-        then
-            v2ray_block_found=1
-        fi
+    level_1_add_indices=( 0 )
 
-        if [[ $v2ray_domain_server_found -eq 1 ]] && [[ $v2ray_block_found -eq 1 ]] 
+    V2rayNginxSelectDomain
+    NginxParseConfig ${v2ray_nginx_domains[v2ray_nginx_domains_index]}
+    NginxGetConfig
+
+    if [ "$level_3_d1_count" -eq 0 ] 
+    then
+        Println "$error 请先添加 ${v2ray_nginx_domains[v2ray_nginx_domains_index]} 配置\n"
+        exit 1
+    fi
+
+    v2ray_nginx_domain_servers_list=""
+    v2ray_nginx_domain_servers_count=0
+    v2ray_nginx_domain_servers_indices=()
+    v2ray_nginx_domain_servers_name=()
+    v2ray_nginx_domain_servers_proxy=()
+
+    level_1_index=0
+
+    level_2_directive_d1=${level_2_directive_arr[level_1_index]}
+    level_3_directive_d1=${level_3_directive_arr[level_1_index]}
+    level_3_args_d1=${level_3_args_arr[level_1_index]}
+
+    IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
+    IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+    IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+
+    if [ "$level_4_d1_count" -gt 0 ] 
+    then
+        level_4_directive_d1=${level_4_directive_arr[level_1_index]}
+        level_4_args_d1=${level_4_args_arr[level_1_index]}
+        IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
+        IFS="${delimiters[3]}" read -r -a level_4_args_d1_arr <<< "$level_4_args_d1${delimiters[3]}"
+    fi
+
+    for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
+    do
+        if [ "${level_2_directive_d1_arr[level_2_index]}" == "server" ] 
         then
-            if [[ $line == *"}"* ]] 
+            level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
+            level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
+
+            IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
+            IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+
+            if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ]
             then
-                v2ray_block_found=0
+                level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
+                level_4_args_d2=${level_4_args_d1_arr[level_2_index]}
+                IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
+                IFS="${delimiters[2]}" read -r -a level_4_args_d2_arr <<< "$level_4_args_d2${delimiters[2]}"
             fi
-            continue
-        fi
 
-        if [ "${last_line:-}" == "#" ] && [ "$line" == "" ]
-        then
-            continue
+            v2ray_nginx_domain_servers_count=$((v2ray_nginx_domain_servers_count+1))
+            v2ray_nginx_domain_servers_indices+=("$level_2_index")
+            v2ray_nginx_domain_server_listen_list=""
+            v2ray_nginx_domain_server_name_list=""
+            v2ray_nginx_domain_server_proxies=""
+            v2ray_nginx_domain_server_proxies_list=""
+
+            for((level_3_index=0;level_3_index<${#level_3_directive_d2_arr[@]};level_3_index++));
+            do
+                level_3_directive=${level_3_directive_d2_arr[level_3_index]}
+                level_3_args=${level_3_args_d2_arr[level_3_index]}
+
+                if [ "$level_3_directive" == "listen" ] 
+                then
+                    [ -n "$v2ray_nginx_domain_server_listen_list" ] && v2ray_nginx_domain_server_listen_list="$v2ray_nginx_domain_server_listen_list, "
+                    v2ray_nginx_domain_server_listen_list="$v2ray_nginx_domain_server_listen_list${level_3_args//${delimiters[0]}/ }"
+                elif [ "$level_3_directive" == "server_name" ] 
+                then
+                    [ -n "$v2ray_nginx_domain_server_name_list" ] && v2ray_nginx_domain_server_name_list="$v2ray_nginx_domain_server_name_list, "
+                    v2ray_nginx_domain_server_name_list="$v2ray_nginx_domain_server_name_list${level_3_args//${delimiters[0]}/, }"
+                elif [ "$level_3_directive" == "location" ] 
+                then
+                    if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
+                    then
+                        level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
+                        level_4_args_d3=${level_4_args_d2_arr[level_3_index]}
+                        IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
+                        IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3${delimiters[1]}"
+
+                        if [[ ${level_3_args} =~ ^=${delimiters[0]}(.+) ]] 
+                        then
+                            v2ray_nginx_domain_server_proxy_path=${BASH_REMATCH[1]}
+                            for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
+                            do
+                                if [ "${level_4_directive_d3_arr[level_4_index]}" == "proxy_pass" ] 
+                                then
+                                    if [[ ${level_4_args_d3_arr[level_4_index]} =~ ^http://127.0.0.1:(.+) ]] 
+                                    then
+                                        v2ray_nginx_domain_server_proxies="$v2ray_nginx_domain_server_proxies$level_3_index|$level_4_index|${BASH_REMATCH[1]}|$v2ray_nginx_domain_server_proxy_path "
+                                        v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list${indent_6}路径: ${green}$v2ray_nginx_domain_server_proxy_path${normal} => $v2ray_name 端口: ${green}${BASH_REMATCH[1]}${normal}\n"
+                                    fi
+                                    break
+                                fi
+                            done
+                        fi
+                    fi
+                fi
+            done
+
+            if [ -z "$v2ray_nginx_domain_server_proxies_list" ] 
+            then
+                v2ray_nginx_domain_server_proxies_list="${red}未配置${normal}"
+            fi
+
+            v2ray_nginx_domain_servers_name+=("${v2ray_nginx_domain_server_name_list//, /,}")
+            v2ray_nginx_domain_servers_proxy+=("$v2ray_nginx_domain_server_proxies")
+
+            v2ray_nginx_domain_servers_list="$v2ray_nginx_domain_servers_list $v2ray_nginx_domain_servers_count.${indent_6}域名: ${green}${v2ray_nginx_domain_server_name_list:-未设置}${normal}\n${indent_6}端口: ${green}${v2ray_nginx_domain_server_listen_list:-未设置}${normal}\n${indent_6}代理: $v2ray_nginx_domain_server_proxies_list\n\n"
         fi
-        last_line="$line#"
-        [ -n "$conf" ] && conf="$conf\n"
-        conf="$conf$line"
-    done < "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
-    unset last_line
-    echo -e "${conf//\\b/\\\\b}" > "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf"
-    ln -sf "$nginx_prefix/conf/sites_available/${v2ray_domains[v2ray_domains_index]}.conf" "$nginx_prefix/conf/sites_enabled/${v2ray_domains[v2ray_domains_index]}.conf"
-    Println "$info $v2ray_name 端口关闭成功\n"
+    done
+
+    Println "域名 ${green}${v2ray_nginx_domains[v2ray_nginx_domains_index]}${normal} 配置:\n\n$v2ray_nginx_domain_servers_list"
 }
 
 V2rayConfigDomain()
 {
-    if [ ! -d "$nginx_prefix" ] 
+    if [ -d "$nginx_prefix" ] 
     then
-        Println "$error $nginx_name 未安装! 输入 $nginx_ctl 安装 $nginx_name\n"
+        echo
+        v2ray_config_domain_options=( "$v2ray_name" nginx openresty )
+        inquirer list_input "选择修改的配置" v2ray_config_domain_options v2ray_config_domain_option
+
+        if [ "$v2ray_config_domain_option" != "$v2ray_name" ] 
+        then
+            if [ ! -d "/usr/local/$v2ray_config_domain_option" ] 
+            then
+                Println "$error 请先安装 $v2ray_config_domain_option\n"
+                exit 1
+            fi
+
+            if [ "$v2ray_config_domain_option" == "nginx" ] 
+            then
+                nginx_prefix="/usr/local/nginx"
+                nginx_name="nginx"
+                nginx_ctl="nx"
+            else
+                nginx_prefix="/usr/local/openresty/nginx"
+                nginx_name="openresty"
+                nginx_ctl="or"
+            fi
+
+            NGINX_FILE="$nginx_prefix/sbin/nginx"
+
+            V2rayNginxListDomains
+            V2rayNginxListDomain
+
+            V2rayNginxSelectDomainServer
+
+            v2ray_nginx_domain_server_proxies_list=""
+            v2ray_nginx_domain_server_proxies_count=0
+
+            v2ray_nginx_domain_server_proxy=${v2ray_nginx_domain_servers_proxy[v2ray_nginx_domain_servers_index]}
+
+            if [ -n "$v2ray_nginx_domain_server_proxy" ] 
+            then
+                v2ray_nginx_domain_server_location_indices=()
+                v2ray_nginx_domain_server_proxy_indices=()
+                v2ray_nginx_domain_server_proxies_port=()
+                v2ray_nginx_domain_server_proxies_path=()
+                v2ray_nginx_domain_server_proxies_list=""
+
+                IFS=" " read -r -a v2ray_nginx_domain_server_proxies <<< "$v2ray_nginx_domain_server_proxy"
+
+                for((i=0;i<${#v2ray_nginx_domain_server_proxies[@]};i++));
+                do
+                    if [[ ${v2ray_nginx_domain_server_proxies[i]} =~ ^([^|]+)\|([^|]+)\|([^|]+)\|(.+)$ ]] 
+                    then
+                        v2ray_nginx_domain_server_location_indices+=("${BASH_REMATCH[1]}")
+                        v2ray_nginx_domain_server_proxy_indices+=("${BASH_REMATCH[2]}")
+                        v2ray_nginx_domain_server_proxies_port+=("${BASH_REMATCH[3]}")
+                        v2ray_nginx_domain_server_proxies_path+=("${BASH_REMATCH[4]}")
+                        v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list $((i+1)).${indent_6}路径: ${green}${BASH_REMATCH[4]}${normal} => 端口: ${green}${BASH_REMATCH[3]}${normal}\n\n"
+                    fi
+                done
+
+                v2ray_nginx_domain_server_proxies_count=${#v2ray_nginx_domain_server_proxies_path[@]}
+            fi
+
+            v2ray_nginx_domain_server_update_crt_number=$((v2ray_nginx_domain_server_proxies_count+1))
+            v2ray_nginx_domain_server_add_proxy_number=$((v2ray_nginx_domain_server_proxies_count+2))
+            v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list $v2ray_nginx_domain_server_update_crt_number.${indent_6}${green}更新证书${normal}\n\n"
+            v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list $v2ray_nginx_domain_server_add_proxy_number.${indent_6}${green}添加代理${normal}\n"
+
+            Println "代理配置:\n\n$v2ray_nginx_domain_server_proxies_list"
+
+            V2rayNginxSelectDomainServerProxy
+
+            v2ray_nginx_domain_server_location_index=${v2ray_nginx_domain_server_location_indices[v2ray_nginx_domain_server_proxies_index]}
+            v2ray_nginx_domain_server_proxy_index=${v2ray_nginx_domain_server_proxy_indices[v2ray_nginx_domain_server_proxies_index]}
+            v2ray_nginx_domain_server_proxy_port=${v2ray_nginx_domain_server_proxies_port[v2ray_nginx_domain_server_proxies_index]}
+            v2ray_nginx_domain_server_proxy_path=${v2ray_nginx_domain_server_proxies_path[v2ray_nginx_domain_server_proxies_index]}
+
+            echo
+            v2ray_nginx_domain_server_proxy_options=( '修改代理路径' '修改代理端口' '删除此代理' )
+            inquirer list_input_index "选择操作" v2ray_nginx_domain_server_proxy_options v2ray_nginx_domain_server_proxy_options_index
+
+            if [ "$v2ray_nginx_domain_server_proxy_options_index" -eq 0 ] 
+            then
+                echo
+                inquirer text_input "输入新的代理路径: " new_path "$v2ray_nginx_domain_server_proxy_path"
+                jq_path='["config",0,"parsed",0,"block",'"$v2ray_nginx_domain_servers_index"',"block",'"$v2ray_nginx_domain_server_location_index"',"args"]'
+                JQs replace parse_out "$new_path"
+            elif [ "$v2ray_nginx_domain_server_proxy_options_index" -eq 1 ] 
+            then
+                echo
+                new_proxy_port_options=( '输入新的代理端口' '浏览并选择端口' )
+                inquirer list_input_index "选择操作" new_proxy_port_options new_proxy_port_options_index
+
+                if [ "$new_proxy_port_options" -eq 0 ] 
+                then
+                    echo
+                    inquirer text_input "输入新的代理端口: " new_proxy_port "$v2ray_nginx_domain_server_proxy_port"
+                else
+                    V2rayListInbounds nginx
+                    V2raySelectInbound
+
+                    if [ "${inbounds_stream_network[inbounds_index]}" == "domainsocket" ] 
+                    then
+                        Println "$error 选择错误\n"
+                        exit 1
+                    fi
+
+                    new_proxy_port=${inbounds_port[inbounds_index]}
+                fi
+
+                jq_path='["config",0,"parsed",0,"block",'"$v2ray_nginx_domain_servers_index"',"block",'"$v2ray_nginx_domain_server_location_index"',"block",'"$v2ray_nginx_domain_server_proxy_index"',"args"]'
+                JQs replace parse_out "$new_proxy_port"
+            else
+                jq_path='["config",0,"parsed",0,"block",'"$v2ray_nginx_domain_servers_index"',"block"]'
+                JQs delete parse_out "$v2ray_nginx_domain_server_location_index"
+            fi
+
+            NginxBuildConf parse_out
+
+            Println "$info 操作成功\n"
+            exit 0
+        fi
+    fi
+
+    V2rayListInbounds direct
+
+    V2raySelectInbound
+
+    if [ -z "${inbounds_stream_tls_certificates_usage[inbounds_index]}" ] 
+    then
+        Println "$error 没有证书\n"
         exit 1
     fi
 
-    V2rayListDomains
+    certificates_list="${green}证书:${normal}\n${indent_6}"
+    certificates_indices=()
 
-    echo "`gettext \"输入序号\"`"
-    while read -p "$i18n_default_cancel" v2ray_domains_index
+    IFS="|" read -r -a usages <<< "${inbounds_stream_tls_certificates_usage[inbounds_index]}"
+    IFS="|" read -r -a certificate_files <<< "${inbounds_stream_tls_certificates_certificate_file[inbounds_index]}"
+    IFS="|" read -r -a key_files <<< "${inbounds_stream_tls_certificates_key_file[inbounds_index]}"
+    IFS="|" read -r -a certificates <<< "${inbounds_stream_tls_certificates_certificate[inbounds_index]}"
+
+    for((certificate_i=0;certificate_i<${#usages[@]};certificate_i++));
     do
-        case "$v2ray_domains_index" in
-            "")
-                Println "$i18n_canceled...\n" && exit 1
-            ;;
-            $v2ray_add_domain_num)
-                V2rayAddDomain
-                exit
-            ;;
-            *[!0-9]*)
-                Println "$error $i18n_input_correct_no\n"
-            ;;
-            *)
-                if [ "$v2ray_domains_index" -gt 0 ] && [ "$v2ray_domains_index" -lt "$v2ray_add_domain_num" ]
-                then
-                    v2ray_domains_index=$((v2ray_domains_index-1))
-                    break
-                else
-                    Println "$error $i18n_input_correct_no\n"
-                fi
-            ;;
-        esac
+        if [ -z "${certificate_files[certificate_i]}" ] || [ -z "${key_files[certificate_i]}" ]
+        then
+            continue
+        fi
+
+        certificates_indices+=("$certificate_i")
+
+        if [ "${usages[certificate_i]}" == "encipherment" ] 
+        then
+            certificate_usage="$tls_name 认证和加密"
+        elif [ "${usages[certificate_i]}" == "verify" ] 
+        then
+            certificate_usage="验证远端 $tls_name"
+        else
+            certificate_usage="签发其它证书"
+        fi
+
+        if [ -n "${certificates:-}" ] && [ -n "${certificates[certificate_i]}" ] 
+        then
+            certificates_list="$certificates_list${#certificates_indices[@]}.${indent_6}用途: ${green}$certificate_usage [自签名]${normal}\n"
+        else
+            certificates_list="$certificates_list${#certificates_indices[@]}.${indent_6}用途: ${green}$certificate_usage${normal}\n"
+        fi
+
+        certificates_list="${certificates_list}${indent_6}证书路径: ${green}${certificate_files[certificate_i]}${normal}\n"
+
+        certificates_list="${certificates_list}${indent_6}密钥路径: ${green}${key_files[certificate_i]}${normal}\n\n"
     done
 
-    V2rayListDomain
-
-    echo "`gettext \"输入序号\"`"
-    while read -p "$i18n_default_cancel" v2ray_domain_server_num
-    do
-        case "$v2ray_domain_server_num" in
-            "")
-                Println "$i18n_canceled...\n" && exit 1
-            ;;
-            $v2ray_domain_update_crt_number)
-                V2rayDomainUpdateCrt
-                exit 0
-            ;;
-            $v2ray_domain_add_server_number)
-                V2rayDomainAddServer
-                exit 0
-            ;;
-            $v2ray_domain_edit_server_number)
-                V2rayDomainEditServer
-                exit 0
-            ;;
-            $v2ray_domain_delete_server_number)
-                V2rayDomainDeleteServer
-                exit 0
-            ;;
-            *[!0-9]*)
-                Println "$error $i18n_input_correct_no\n"
-            ;;
-            *)
-                if [ "$v2ray_domain_server_num" -gt 0 ] && [ "$v2ray_domain_server_num" -le "$v2ray_domain_servers_count" ]
-                then
-                    v2ray_domain_server_index=$((v2ray_domain_server_num-1))
-                    break
-                else
-                    Println "$error $i18n_input_correct_no\n"
-                fi
-            ;;
-        esac
-    done
-
-    if [ -n "${v2ray_domain_servers_v2ray_port[v2ray_domain_server_index]}" ] 
+    if [ -z "$certificates_list" ] 
     then
-        Println "选择操作
-
-  ${green}1.${normal} 修改 https 端口
-  ${green}2.${normal} 修改 $v2ray_name 端口
-  ${green}3.${normal} 关闭 $v2ray_name 端口
-    \n"
-    else
-        Println "选择操作
-
-  ${green}1.${normal} 修改 https 端口
-  ${green}2.${normal} 开启 $v2ray_name 端口
-    \n"
+        Println "$error 没有可管理证书\n"
+        exit 1
     fi
 
-    while read -p "$i18n_default_cancel" v2ray_domain_server_action_num 
+    Println "$certificates_list"
+
+    certificates_count=${#certificates_indices[@]}
+
+    echo "选择证书"
+    while read -p "$i18n_default_cancel" certificates_num
     do
-        case $v2ray_domain_server_action_num in
-            "") 
+        case "$certificates_num" in
+            "")
                 Println "$i18n_canceled...\n" && exit 1
             ;;
-            1) 
-                V2rayDomainServerEditHttpsPort
-                break
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
             ;;
-            2) 
-                V2rayDomainServerAddV2rayPort
-                break
-            ;;
-            3) 
-                if [ -n "${v2ray_domain_servers_v2ray_port[v2ray_domain_server_index]}" ] 
+            *)
+                if [ "$certificates_num" -gt 0 ] && [ "$certificates_num" -le $certificates_count ]
                 then
-                    V2rayDomainServerRemoveV2rayPort
+                    certificates_index=${certificates_indices[certificates_num-1]}
                     break
                 else
-                    Println "$error 输入错误\n"
+                    Println "$error $i18n_input_correct_no\n"
                 fi
-            ;;
-            *) Println "$error 输入错误\n"
             ;;
         esac
     done
+
+    certificate_file=${certificate_files[certificates_index]}
+    tls_settings_name=$(tr '[:upper:]' '[:lower:]' <<< "$tls_name")"Settings"
+
+    echo
+    certificates_options=( '更新证书' '修改证书路径' '修改密钥路径' )
+    inquirer list_input_index "选择操作" certificates_options certificates_options_index
+
+    if [ "$certificates_options_index" -eq 0 ] 
+    then
+        if [ -n "${certificates:-}" ] && [ -n "${certificates[certificates_index]}" ] 
+        then
+            if [ "$v2ray_name" == "xray" ] 
+            then
+                crt=$($V2CTL_FILE tls cert)
+            elif [ "$usage" == "encipherment" ] 
+            then
+                echo
+                inquirer list_input "是否是 CA 证书" yn_options ca_yn
+                if [ "$ca_yn" == "$i18n_yes" ] 
+                then
+                    crt=$($V2CTL_FILE cert -ca)
+                else
+                    crt=$($V2CTL_FILE cert)
+                fi
+            else
+                crt=$($V2CTL_FILE cert -ca)
+            fi
+
+            certificate=$($JQ_FILE "{\"usage\":\"${usages[certificates_index]}\"} * ." <<< "$crt")
+
+            jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"',"keyFile"]'
+            JQ replace "$V2_CONFIG" "$certificate"
+
+            Println "$info 证书更新成功\n"
+        else
+            if [ -n "${inbounds_stream_tls_server_name[inbounds_index]}" ] 
+            then
+                certificate_name=${inbounds_stream_tls_server_name[inbounds_index]}
+            else
+                certificate_name=${certificate_file##*/}
+                certificate_name=${certificate_name%.*}
+            fi
+
+            echo
+            inquirer text_input "请输入证书域名: " certificate_domain "$certificate_name"
+
+            Println "$info 更新 $certificate_domain 证书..."
+
+            V2rayDomainUpdateCrt "$certificate_domain" 1
+
+            jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"',"certificateFile"]'
+            JQ update "$V2_CONFIG" "/usr/local/share/$v2ray_name/$certificate_domain.crt"
+
+            jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"',"keyFile"]'
+            JQ update "$V2_CONFIG" "/usr/local/share/$v2ray_name/$certificate_domain.key"
+
+            Println "$info $certificate_domain 证书更新成功\n"
+        fi
+    elif [ "$certificates_options_index" -eq 1 ] 
+    then
+        V2raySetCertificateFile
+
+        jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"',"certificateFile"]'
+        JQ update "$V2_CONFIG" "$certificate_file"
+
+        Println "$info 证书路径修改成功\n"
+    else
+        V2raySetKeyFile
+
+        jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"',"keyFile"]'
+        JQ update "$V2_CONFIG" "$key_file"
+
+        Println "$info 密钥路径修改成功\n"
+    fi
 }
 
 TrojanInstall()
@@ -30278,7 +30463,7 @@ TrojanInstall()
     systemctl enable $trojan_name
     systemctl start $trojan_name
 
-    Println "$info $trojan_name 安装完成\n"
+    Println "$info $trojan_name 安装成功\n"
 }
 
 CloudflareSetHostKey()
@@ -30305,7 +30490,7 @@ CloudflareSetHostKey()
         Println "$error ${msg:-超时, 请重试}\n" && exit 1
     fi
 
-    Println "  CFP: $green $cf_host_key ${normal}\n"
+    Println "  CFP: ${green} $cf_host_key ${normal}\n"
 }
 
 CloudflareSetHostName()
@@ -30313,7 +30498,7 @@ CloudflareSetHostName()
     Println "请输入 CFP 邮箱或名称, 便于区分 host key"
     read -p "$i18n_default_cancel" cf_host_name
     [ -z "$cf_host_name" ] && Println "$i18n_canceled...\n" && exit 1
-    Println "  CFP 邮箱或名称: $green $cf_host_name ${normal}\n"
+    Println "  CFP 邮箱或名称: ${green} $cf_host_name ${normal}\n"
 }
 
 CloudflareAddHost()
@@ -30354,7 +30539,7 @@ CloudflareSetUserEmail()
             Println "$error 邮箱格式错误, 请重新输入\n"
         fi
     done
-    Println "  用户邮箱: $green $cf_user_email ${normal}\n"
+    Println "  用户邮箱: ${green} $cf_user_email ${normal}\n"
 }
 
 CloudflareSetUserPass()
@@ -30370,7 +30555,7 @@ CloudflareSetUserPass()
             Println "$error 账号密码至少 8 位\n"
         fi
     done
-    Println "  用户密码: $green $cf_user_pass ${normal}\n"
+    Println "  用户密码: ${green} $cf_user_pass ${normal}\n"
 }
 
 CloudflareSetUserToken()
@@ -30432,7 +30617,7 @@ CloudflareGetHosts()
         zone_subdomains=${zone_subdomains%\"}
         cf_hosts_zone_subdomains+=("$zone_subdomains")
 
-        cf_hosts_list="$cf_hosts_list $green$cf_hosts_count.${normal}${indent_6}CFP: $green$name${normal}  host key: $green$key${normal}  域名数: $green$zones_count${normal}\n\n"
+        cf_hosts_list="$cf_hosts_list ${green}$cf_hosts_count.${normal}${indent_6}CFP: ${green}$name${normal}  host key: ${green}$key${normal}  域名数: ${green}$zones_count${normal}\n\n"
     done < <($JQ_FILE '.hosts[]|[.name,.key,(.zones|length),([.zones[].name]|join("|")),([.zones[].resolve_to]|join("|")),([.zones[].user_email]|join("|")),([.zones[].user_unique_id]|join("|")),([.zones[].always_use_https]|join("|")),([.zones[].ssl]|join("|")),([.zones[].subdomains]|join("|"))]|join("^")' "$CF_CONFIG")
     return 0
 }
@@ -30465,7 +30650,7 @@ CloudflareSetZoneResolve()
     echo -e "$tip 此地址应指向源站\n"
     read -p "$i18n_default_cancel" cf_zone_resolve_to
     [ -z "$cf_zone_resolve_to" ] && Println "$i18n_canceled...\n" && exit 1
-    Println "  默认解析地址: $green $cf_zone_resolve_to ${normal}\n"
+    Println "  默认解析地址: ${green} $cf_zone_resolve_to ${normal}\n"
 }
 
 CloudflareSetZoneAlwaysUseHttps()
@@ -30484,12 +30669,12 @@ CloudflareSetZoneAlwaysUseHttps()
     else
         cf_zone_always_use_https='off'
     fi
-    Println "  始终使用 https: $green $cf_zone_always_use_https ${normal}\n"
+    Println "  始终使用 https: ${green} $cf_zone_always_use_https ${normal}\n"
 }
 
 CloudflareSetZoneSsl()
 {
-    Println "选择域名 $green$cf_zone_name${normal} SSL 设置
+    Println "选择域名 ${green}$cf_zone_name${normal} SSL 设置
 
   ${green}1.${normal} off ( 客户端 <= http => cloudflare <= http => 源站)
   ${green}2.${normal} flexible ( 客户端 <= https => cloudflare <= http => 源站)
@@ -30530,7 +30715,7 @@ CloudflareSetZoneSsl()
             ;;
         esac
     done
-    Println "  SSL 设置: $green $cf_zone_ssl ${normal}\n"
+    Println "  SSL 设置: ${green} $cf_zone_ssl ${normal}\n"
 }
 
 CloudflareGetUsers()
@@ -30551,7 +30736,7 @@ CloudflareGetUsers()
         key=${key%\"}
         cf_users_api_key+=("$key")
 
-        cf_users_list="$cf_users_list $green$cf_users_count.${normal}${indent_6}邮箱: $green$email${normal}  密码: $green$pass${normal}\n${indent_6}Token: $green${token:-无}${normal}\n${indent_6}Key: $green${key:-无}${normal}\n\n"
+        cf_users_list="$cf_users_list ${green}$cf_users_count.${normal}${indent_6}邮箱: ${green}$email${normal}  密码: ${green}$pass${normal}\n${indent_6}Token: ${green}${token:-无}${normal}\n${indent_6}Key: ${green}${key:-无}${normal}\n\n"
     done < <($JQ_FILE '.users[]|[.email,.pass,.token,.key]|join("^")' "$CF_CONFIG")
     return 0
 }
@@ -30805,7 +30990,7 @@ CloudflareAddZone()
             exit 1
         elif [[ $cf_zone_name =~ ^([a-zA-Z0-9][\-a-zA-Z0-9]*\.)+[\-a-zA-Z0-9]{2,20}$ ]] 
         then
-            Println "  域名: $green $cf_zone_name ${normal}\n"
+            Println "  域名: ${green} $cf_zone_name ${normal}\n"
             break
         else
             Println "$error 输入错误, 请输入根域名, 不能是二级域名"
@@ -30890,7 +31075,7 @@ CloudflareListZones()
     cf_zones_list=""
     for((i=0;i<cf_zones_count;i++));
     do
-        cf_zones_list="$cf_zones_list $green$((i+1)).${normal}${indent_6}源站: $green${cf_zones_name[i]}${normal} 用户: $green${cf_zones_user_email[i]}${normal}\n${indent_6}始终 https: $green${cf_zones_always_use_https[i]:-off}${normal}  ssl: $green${cf_zones_ssl[i]:-flexible}${normal}\n\n"
+        cf_zones_list="$cf_zones_list ${green}$((i+1)).${normal}${indent_6}源站: ${green}${cf_zones_name[i]}${normal} 用户: ${green}${cf_zones_user_email[i]}${normal}\n${indent_6}始终 https: ${green}${cf_zones_always_use_https[i]:-off}${normal}  ssl: ${green}${cf_zones_ssl[i]:-flexible}${normal}\n\n"
     done
 
     [ -z "$cf_zones_list" ] && Println "$error 请先添加源站\n" && exit 1
@@ -31315,7 +31500,7 @@ CloudflareAddSubdomain()
     Println "请输入子域名前缀, 比如 www, 多个前缀用空格分隔"
     read -p "$i18n_default_cancel" cf_zone_subdomains_prefix_input
     [ -z "$cf_zone_subdomains_prefix_input" ] && Println "$i18n_canceled...\n" && exit 1
-    Println "  子域名: $green $cf_zone_subdomains_prefix_input ${normal}\n"
+    Println "  子域名: ${green} $cf_zone_subdomains_prefix_input ${normal}\n"
 
     IFS=" " read -r -a cf_zone_subdomains_prefix <<< "$cf_zone_subdomains_prefix_input"
     cf_zone_subdomains_resolve_to=()
@@ -31442,7 +31627,7 @@ CloudflareAddSubdomain()
         if [ "$zone_found" -eq 0 ] && [[ ${cf_forward_tos[0]} =~ ([^.]+).([^.]+).([^.]+)$ ]] 
         then
             cf_zone_name_resolve_to="$cf_zone_name.${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
-            msg="请添加域名 $green$cf_zone_name${normal} CNAME 记录到 $green$cf_zone_name_resolve_to${normal}\n\n"
+            msg="请添加域名 ${green}$cf_zone_name${normal} CNAME 记录到 ${green}$cf_zone_name_resolve_to${normal}\n\n"
         fi
     fi
 
@@ -31452,7 +31637,7 @@ CloudflareAddSubdomain()
         do
             if [ "$cf_zone_subdomain_prefix.$cf_zone_name" == "${cf_hosted_cnames[i]}" ] 
             then
-                msg="$msg请添加域名 $green${cf_hosted_cnames[i]}${normal} CNAME 记录到 $green${cf_forward_tos[i]}${normal}\n\n"
+                msg="$msg请添加域名 ${green}${cf_hosted_cnames[i]}${normal} CNAME 记录到 ${green}${cf_forward_tos[i]}${normal}\n\n"
                 break
             fi
         done
@@ -31503,7 +31688,7 @@ CloudflareListSubdomain()
     cf_subdomains_list=""
     for((i=0;i<${#cf_hosted_cnames[@]};i++));
     do
-        cf_subdomains_list="$cf_subdomains_list $green$((i+1)).${normal}${indent_6}CNAME: $green${cf_hosted_cnames[i]}${normal} => $green${cf_forward_tos[i]}${normal}\n${indent_6}解析地址: $green${cf_resolve_tos[i]}${normal}\n\n"
+        cf_subdomains_list="$cf_subdomains_list ${green}$((i+1)).${normal}${indent_6}CNAME: ${green}${cf_hosted_cnames[i]}${normal} => ${green}${cf_forward_tos[i]}${normal}\n${indent_6}解析地址: ${green}${cf_resolve_tos[i]}${normal}\n\n"
     done
 
     if [ -z "$cf_subdomains_list" ] 
@@ -31540,18 +31725,18 @@ CloudflareListSubdomain()
             cf_subdomains_list=""
             for((i=0;i<${#cf_hosted_cnames[@]};i++));
             do
-                cf_subdomains_list="$cf_subdomains_list $green$((i+1)).${normal}${indent_6}CNAME: $green${cf_hosted_cnames[i]}${normal} => $green${cf_forward_tos[i]}${normal}\n${indent_6}解析地址: $green${cf_resolve_tos[i]}${normal}\n\n"
+                cf_subdomains_list="$cf_subdomains_list ${green}$((i+1)).${normal}${indent_6}CNAME: ${green}${cf_hosted_cnames[i]}${normal} => ${green}${cf_forward_tos[i]}${normal}\n${indent_6}解析地址: ${green}${cf_resolve_tos[i]}${normal}\n\n"
             done
 
             if [ "$cf_zone_ssl_status" == "ready" ] 
             then
-                ssl_status="SSL 状态: $green激活${normal}\n"
+                ssl_status="SSL 状态: ${green}激活${normal}\n"
                 ssl_meta_tag=""
             else
-                ssl_status="SSL 状态: $red无${normal}\n"
+                ssl_status="SSL 状态: ${red}无${normal}\n"
                 if [ -n "$cf_zone_ssl_meta_tag" ]
                 then
-                    ssl_meta_tag="\n请在子域名页面 HEAD 处添加 $green$cf_zone_ssl_meta_tag${normal} 以激活 ssl\n"
+                    ssl_meta_tag="\n请在子域名页面 HEAD 处添加 ${green}$cf_zone_ssl_meta_tag${normal} 以激活 ssl\n"
                 else
                     ssl_meta_tag=""
                 fi
@@ -31561,13 +31746,13 @@ CloudflareListSubdomain()
         fi
     elif [ "$cf_zone_ssl_status" == "ready" ] 
     then
-        ssl_status="SSL 状态: $green激活${normal}\n"
+        ssl_status="SSL 状态: ${green}激活${normal}\n"
         ssl_meta_tag=""
     else
-        ssl_status="SSL 状态: $red无${normal}\n"
+        ssl_status="SSL 状态: ${red}无${normal}\n"
         if [ -n "$cf_zone_ssl_meta_tag" ]
         then
-            ssl_meta_tag="\n请在子域名页面 HEAD 处添加 $green$cf_zone_ssl_meta_tag${normal} 以激活 ssl\n"
+            ssl_meta_tag="\n请在子域名页面 HEAD 处添加 ${green}$cf_zone_ssl_meta_tag${normal} 以激活 ssl\n"
         else
             ssl_meta_tag=""
         fi
@@ -31749,22 +31934,22 @@ CloudflareEditUser()
     Println "请输入用户邮箱"
     read -p "(默认: $cf_user_email): " cf_user_email_new
     cf_user_email_new=${cf_user_email_new:-$cf_user_email}
-    Println "  用户邮箱: $green $cf_user_email_new ${normal}\n"
+    Println "  用户邮箱: ${green} $cf_user_email_new ${normal}\n"
 
     Println "请输入用户密码"
     read -p "(默认: $cf_user_pass): " cf_user_pass_new
     cf_user_pass_new=${cf_user_pass_new:-$cf_user_pass}
-    Println "  用户密码: $green $cf_user_pass_new ${normal}\n"
+    Println "  用户密码: ${green} $cf_user_pass_new ${normal}\n"
 
     Println "请输入用户 Token"
     read -p "(默认: ${cf_user_token:-不设置}): " cf_user_token_new
     cf_user_token_new=${cf_user_token_new:-$cf_user_token}
-    Println "  用户 Token: $green ${cf_user_token_new:-不设置} ${normal}\n"
+    Println "  用户 Token: ${green} ${cf_user_token_new:-不设置} ${normal}\n"
 
     Println "请输入用户 Key"
     read -p "(默认: ${cf_user_api_key:-不设置}): " cf_user_api_key_new
     cf_user_api_key_new=${cf_user_api_key_new:-$cf_user_api_key}
-    Println "  用户 Token: $green ${cf_user_api_key_new:-不设置} ${normal}\n"
+    Println "  用户 Token: ${green} ${cf_user_api_key_new:-不设置} ${normal}\n"
 
     new_user=$(
     $JQ_FILE -n --arg email "$cf_user_email_new" --arg pass "$cf_user_pass_new" \
@@ -31899,7 +32084,7 @@ CloudflareListToken()
     do
         IFS="|" read -r token_id token_name token_status token_permission <<< "${tokens[i]}"
         tokens_id+=("$token_id")
-        tokens_list="$tokens_list $green$((i+1)).${normal}${indent_6}名称: $green$token_name${normal}  状态: $green$token_status${normal}\n${indent_6}权限: $green${token_permission:-无}${normal}\n\n"
+        tokens_list="$tokens_list ${green}$((i+1)).${normal}${indent_6}名称: ${green}$token_name${normal}  状态: ${green}$token_status${normal}\n${indent_6}权限: ${green}${token_permission:-无}${normal}\n\n"
     done
 
     Println "$tokens_list"
@@ -32250,7 +32435,7 @@ CloudflareSetWorkerName()
     Println "请输入 cloudflare worker 名称"
     read -p "$i18n_default_cancel" cf_worker_name
     [ -z "$cf_worker_name" ] && Println "$i18n_canceled...\n" && exit 1
-    Println "  worker 名称: $green $cf_worker_name ${normal}\n"
+    Println "  worker 名称: ${green} $cf_worker_name ${normal}\n"
 }
 
 CloudflareSetWorkerPath()
@@ -32271,7 +32456,7 @@ CloudflareSetWorkerPath()
             ;;
         esac
     done
-    Println "  worker 路径: $green $cf_worker_path ${normal}\n"
+    Println "  worker 路径: ${green} $cf_worker_path ${normal}\n"
 }
 
 CloudflareSetWorkerProjectName()
@@ -32296,7 +32481,7 @@ CloudflareSetWorkerProjectName()
             ;;
         esac
     done
-    Println "  worker 项目名称: $green $cf_worker_project_name ${normal}\n"
+    Println "  worker 项目名称: ${green} $cf_worker_project_name ${normal}\n"
 }
 
 CloudflareAddWorker()
@@ -32394,7 +32579,7 @@ CloudflareGetWorkers()
         project_name=${project_name%\"}
         cf_workers_project_name+=("$project_name")
 
-        cf_workers_list="$cf_workers_list $green$cf_workers_count.${normal}${indent_6}名称: $green$name${normal}  路径: $green$path${normal}\n${indent_6}项目名称: $green$project_name${normal}\n\n"
+        cf_workers_list="$cf_workers_list ${green}$cf_workers_count.${normal}${indent_6}名称: ${green}$name${normal}  路径: ${green}$path${normal}\n${indent_6}项目名称: ${green}$project_name${normal}\n\n"
     done < <($JQ_FILE '(.workers| if .== null then [] else . end)[]|[.name,.path,.project_name]|join(" ")' "$CF_CONFIG")
     return 0
 }
@@ -32459,7 +32644,7 @@ CloudflareEditWorker()
     Println "请输入 cloudflare worker 名称"
     read -p "(默认: $cf_worker_name): " cf_worker_name_new
     cf_worker_name_new=${cf_worker_name_new:-$cf_worker_name}
-    Println "  worker 名称: $green $cf_worker_name_new ${normal}\n"
+    Println "  worker 名称: ${green} $cf_worker_name_new ${normal}\n"
 
     Println "请输入 cloudflare worker 路径名称"
     while read -p "(默认: $cf_worker_path): " cf_worker_path_new 
@@ -32509,7 +32694,7 @@ CloudflareEditWorker()
             ;;
         esac
     done
-    Println "  worker 路径: $green $cf_worker_path_new ${normal}\n"
+    Println "  worker 路径: ${green} $cf_worker_path_new ${normal}\n"
 
     Println "请输入 cloudflare worker 项目名称"
     while read -p "(默认: $cf_worker_project_name): " cf_worker_project_name_new
@@ -32530,7 +32715,7 @@ CloudflareEditWorker()
             ;;
         esac
     done
-    Println "  worker 项目名称: $green $cf_worker_project_name_new ${normal}\n"
+    Println "  worker 项目名称: ${green} $cf_worker_project_name_new ${normal}\n"
 
     new_worker=$(
     $JQ_FILE -n --arg name "$cf_worker_name_new" --arg path "$cf_worker_path_new" \
@@ -32640,7 +32825,7 @@ CloudflareDeployWorker()
 
     CloudflareListUsers
 
-    echo -e " $green$((cf_users_count+1)).${normal}${indent_6}全部"
+    echo -e " ${green}$((cf_users_count+1)).${normal}${indent_6}全部"
 
     if [ "$cf_users_count" -eq 0 ] 
     then
@@ -32862,7 +33047,7 @@ CloudflareDeployWorker()
                             fi
                             upstream="${ibm_cf_app_routes_hostname[i]}.${ibm_cf_app_routes_domain[i]}$path"
                             ibm_cf_apps_link+=("$upstream")
-                            ibm_cf_apps_list="$ibm_cf_apps_list $green$((i+1)).${normal}${indent_6}$upstream\n\n"
+                            ibm_cf_apps_list="$ibm_cf_apps_list ${green}$((i+1)).${normal}${indent_6}$upstream\n\n"
                         done
 
                         Println "$ibm_cf_apps_list"
@@ -33019,7 +33204,7 @@ CloudflareListWorkersRoutes()
             cf_users_zones_account_token+=("${cf_users_token[i]}")
             cf_users_zones_account_api_key+=("${cf_users_api_key[i]}")
             cf_users_zones_account_email+=("${cf_users_email[i]}")
-            cf_users_zones_list="$cf_users_zones_list $cf_users_zones_count.${indent_6}$green${zones_name[j]}${normal}  路由数: $green$count${normal}\n\n"
+            cf_users_zones_list="$cf_users_zones_list $cf_users_zones_count.${indent_6}${green}${zones_name[j]}${normal}  路由数: ${green}$count${normal}\n\n"
         done
     done
 
@@ -33094,11 +33279,11 @@ CloudflareConfigWorkerRoute()
         cf_users_zone_routes_list=""
         for((i=0;i<cf_users_zone_routes_count;i++));
         do
-            cf_users_zone_routes_list="$cf_users_zone_routes_list $((i+1)).${indent_6}$green${cf_users_zone_routes_pattern[i]}${normal} => $green${cf_users_zone_routes_script[i]}${normal}\n\n"
+            cf_users_zone_routes_list="$cf_users_zone_routes_list $((i+1)).${indent_6}${green}${cf_users_zone_routes_pattern[i]}${normal} => ${green}${cf_users_zone_routes_script[i]}${normal}\n\n"
         done
 
         cf_users_zone_route_add_num=$((cf_users_zone_routes_count+1))
-        cf_users_zone_routes_list="$cf_users_zone_routes_list $cf_users_zone_route_add_num.${indent_6}$green添加路由${normal}\n"
+        cf_users_zone_routes_list="$cf_users_zone_routes_list $cf_users_zone_route_add_num.${indent_6}${green}添加路由${normal}\n"
         Println "$cf_users_zone_routes_list"
 
         while read -p "$i18n_default_cancel" cf_users_zone_routes_num
@@ -33122,7 +33307,7 @@ CloudflareConfigWorkerRoute()
                         cf_users_zone_route_id=${cf_users_zone_routes_id[cf_users_zone_routes_index]}
                         cf_users_zone_route_script=${cf_users_zone_routes_script[cf_users_zone_routes_index]}
                         cf_users_zone_route_pattern=${cf_users_zone_routes_pattern[cf_users_zone_routes_index]}
-                        Println " $green$cf_users_zone_route_pattern${normal} => $green$cf_users_zone_route_script${normal}\n\n ${green}1.${normal}${indent_6}更改路由\n ${green}2.${normal}${indent_6}删除路由\n"
+                        Println " ${green}$cf_users_zone_route_pattern${normal} => ${green}$cf_users_zone_route_script${normal}\n\n ${green}1.${normal}${indent_6}更改路由\n ${green}2.${normal}${indent_6}删除路由\n"
                         read -p "$i18n_default_cancel" cf_users_zone_route_num
                         case $cf_users_zone_route_num in
                             "") 
@@ -34117,7 +34302,7 @@ CloudflareEnableWorkersMonitor()
             history_pair=${history_pair// / => }
             workers_monitor_stream_proxy_pairs_list=${history_pair//|/$'\n' }
             printf -v date '%(%m-%d %H:%M:%S)T' "$history_date"
-            workers_monitor_stream_proxy_list="$workers_monitor_stream_proxy_list $workers_monitor_stream_proxy_count. $green$date${normal}\n $workers_monitor_stream_proxy_pairs_list\n\n"
+            workers_monitor_stream_proxy_list="$workers_monitor_stream_proxy_list $workers_monitor_stream_proxy_count. ${green}$date${normal}\n $workers_monitor_stream_proxy_pairs_list\n\n"
         fi
     done < <($JQ_FILE '(.workers_monitor.stream_proxy| if .== null then [] else . end)[]|([.date,(.pairs|to_entries|map([.value.project_name,.value.upstream]|join(" "))|join("|"))]|join("^"))' "$CF_CONFIG")
 
@@ -34218,7 +34403,7 @@ CloudflareEnableWorkersMonitor()
                         fi
                         upstream="${ibm_cf_app_routes_hostname[j]}.${ibm_cf_app_routes_domain[j]}$path"
                         ibm_cf_apps_link+=("$upstream")
-                        ibm_cf_apps_list="$ibm_cf_apps_list $green$((j+1)).${normal}${indent_6}$upstream\n\n"
+                        ibm_cf_apps_list="$ibm_cf_apps_list ${green}$((j+1)).${normal}${indent_6}$upstream\n\n"
                     done
 
                     Println "$ibm_cf_apps_list"
@@ -34360,7 +34545,7 @@ CloudflareEnableWorkersMonitor()
     cf_zones_list=""
     for((i=0;i<cf_zones_count;i++));
     do
-        cf_zones_list="$cf_zones_list $green$((i+1)).${normal}${indent_6}源站: $green${cf_zones_name[i]}${normal} 用户: $green${cf_zones_user_email[i]}${normal}\n\n"
+        cf_zones_list="$cf_zones_list ${green}$((i+1)).${normal}${indent_6}源站: ${green}${cf_zones_name[i]}${normal} 用户: ${green}${cf_zones_user_email[i]}${normal}\n\n"
     done
 
     Println "$cf_zones_list"
@@ -34697,7 +34882,7 @@ IbmGetUsers()
         space=${space%\"}
         ibm_users_space+=("$space")
 
-        ibm_users_list="$ibm_users_list $green$ibm_users_count.${normal}${indent_6}地区: $green$region${normal}  资源组: $green$resource_group${normal}\n${indent_6}邮箱: $green$email${normal}  密码: $green$pass${normal}\n${indent_6}组织: $green$org${normal}  空间: $green$space${normal}\n\n"
+        ibm_users_list="$ibm_users_list ${green}$ibm_users_count.${normal}${indent_6}地区: ${green}$region${normal}  资源组: ${green}$resource_group${normal}\n${indent_6}邮箱: ${green}$email${normal}  密码: ${green}$pass${normal}\n${indent_6}组织: ${green}$org${normal}  空间: ${green}$space${normal}\n\n"
     done < <($JQ_FILE '.users[]|[.email,.pass,.region,.resource_group,.org,.space]|join(" ")' "$IBM_CONFIG")
     return 0
 }
@@ -34726,7 +34911,7 @@ IbmGetCfApps()
         route_path=${route_path%\"}
         ibm_cf_apps_route_path+=("$route_path")
 
-        ibm_cf_apps_list="$ibm_cf_apps_list $green$ibm_cf_apps_count.${normal}${indent_6}APP: $green$name${normal}  用户: $green$user_email${normal}  路由数: $green$routes_count${normal}\n\n"
+        ibm_cf_apps_list="$ibm_cf_apps_list ${green}$ibm_cf_apps_count.${normal}${indent_6}APP: ${green}$name${normal}  用户: ${green}$user_email${normal}  路由数: ${green}$routes_count${normal}\n\n"
     done < <($JQ_FILE '.cf.apps[]|[.name,.user_email,(.routes|length),([.routes[].hostname]|join("|")),([.routes[].port]|join("|")),([.routes[].domain]|join("|")),([.routes[].path]|join("|"))]|join("^")' "$IBM_CONFIG")
     return 0
 }
@@ -34864,7 +35049,7 @@ IbmSetUserEmail()
         Println "$error 用户已经存在\n"
         exit 1
     fi
-    Println "  用户邮箱: $green $ibm_user_email ${normal}\n"
+    Println "  用户邮箱: ${green} $ibm_user_email ${normal}\n"
 }
 
 IbmSetUserPass()
@@ -34872,7 +35057,7 @@ IbmSetUserPass()
     Println "请输入用户密码"
     read -p "$i18n_default_cancel" ibm_user_pass
     [ -z "$ibm_user_pass" ] && Println "$i18n_canceled...\n" && exit 1
-    Println "  用户密码: $green $ibm_user_pass ${normal}\n"
+    Println "  用户密码: ${green} $ibm_user_pass ${normal}\n"
 }
 
 IbmSetUserRegion()
@@ -34881,7 +35066,7 @@ IbmSetUserRegion()
     Println "请输入账号所在区域名称"
     read -p "(默认: us-south): " ibm_user_region
     ibm_user_region=${ibm_user_region:-us-south}
-    Println "  区域: $green $ibm_user_region ${normal}\n"
+    Println "  区域: ${green} $ibm_user_region ${normal}\n"
 }
 
 IbmSetUserResourceGroup()
@@ -34890,7 +35075,7 @@ IbmSetUserResourceGroup()
     Println "请输入资源组名称"
     read -p "(默认: Default): " ibm_user_resource_group
     ibm_user_resource_group=${ibm_user_resource_group:-Default}
-    Println "  资源组: $green $ibm_user_resource_group ${normal}\n"
+    Println "  资源组: ${green} $ibm_user_resource_group ${normal}\n"
 }
 
 IbmSetUserOrg()
@@ -34899,7 +35084,7 @@ IbmSetUserOrg()
     Println "请输入组织名称"
     read -p "(默认: $ibm_user_email): " ibm_user_org
     ibm_user_org=${ibm_user_org:-$ibm_user_email}
-    Println "  组织: $green $ibm_user_org ${normal}\n"
+    Println "  组织: ${green} $ibm_user_org ${normal}\n"
 }
 
 IbmSetUserSpace()
@@ -34908,7 +35093,7 @@ IbmSetUserSpace()
     Println "请输入空间名称"
     read -p "(默认: dev): " ibm_user_space
     ibm_user_space=${ibm_user_space:-dev}
-    Println "  空间: $green $ibm_user_space ${normal}\n"
+    Println "  空间: ${green} $ibm_user_space ${normal}\n"
 }
 
 IbmGetApi()
@@ -35064,7 +35249,7 @@ IbmSetCfAppName()
         Println "$error 此 APP 已存在\n"
         exit 1
     fi
-    Println "  APP: $green $ibm_cf_app_name ${normal}\n"
+    Println "  APP: ${green} $ibm_cf_app_name ${normal}\n"
 }
 
 IbmAddCfApp()
@@ -35252,10 +35437,10 @@ IbmListCfApp()
     ibm_cf_app_routes_list=""
     for((i=0;i<ibm_cf_app_routes_count;i++));
     do
-        ibm_cf_app_routes_list="$ibm_cf_app_routes_list $green$((i+1)).${normal}${indent_6}Host: $green${ibm_cf_app_routes_hostname[i]}${normal}  端口: $green${ibm_cf_app_routes_port[i]}${normal}\n${indent_6}域名: $green${ibm_cf_app_routes_domain[i]}${normal}  路径: $green${ibm_cf_app_routes_path[i]:-无}${normal}\n\n"
+        ibm_cf_app_routes_list="$ibm_cf_app_routes_list ${green}$((i+1)).${normal}${indent_6}Host: ${green}${ibm_cf_app_routes_hostname[i]}${normal}  端口: ${green}${ibm_cf_app_routes_port[i]}${normal}\n${indent_6}域名: ${green}${ibm_cf_app_routes_domain[i]}${normal}  路径: ${green}${ibm_cf_app_routes_path[i]:-无}${normal}\n\n"
     done
 
-    Println "APP: $green$ibm_cf_app_name${normal}\n\n区域: $green$ibm_user_region${normal}\n\n用户: $green$ibm_user_email${normal}\n\n资源组: $green$ibm_user_resource_group${normal}\n\n组织：$green$ibm_user_org${normal}\n\n空间：$green$ibm_user_space${normal}\n\n路由:\n\n${ibm_cf_app_routes_list:-无}\n"
+    Println "APP: ${green}$ibm_cf_app_name${normal}\n\n区域: ${green}$ibm_user_region${normal}\n\n用户: ${green}$ibm_user_email${normal}\n\n资源组: ${green}$ibm_user_resource_group${normal}\n\n组织：${green}$ibm_user_org${normal}\n\n空间：${green}$ibm_user_space${normal}\n\n路由:\n\n${ibm_cf_app_routes_list:-无}\n"
 }
 
 IbmSetCfAppRouteDomain()
@@ -35279,7 +35464,7 @@ IbmSetCfAppRouteDomain()
         then
             default_domain_num=$domains_count
         fi
-        domains_list="$domains_list $green$domains_count.${normal} ${domains[i]}\n\n"
+        domains_list="$domains_list ${green}$domains_count.${normal} ${domains[i]}\n\n"
     done
 
     default_domain_num=${default_domain_num:-1}
@@ -35310,7 +35495,7 @@ IbmSetCfAppRouteDomain()
         esac
     done
 
-    Println "  路由域名: $green $ibm_cf_app_route_domain ${normal}\n"
+    Println "  路由域名: ${green} $ibm_cf_app_route_domain ${normal}\n"
 }
 
 IbmSetCfAppRouteHostname()
@@ -35318,7 +35503,7 @@ IbmSetCfAppRouteHostname()
     Println "请输入 http 路由 hostname (子域名名称)"
     read -p "$i18n_default_cancel" ibm_cf_app_route_hostname
     [ -z "$ibm_cf_app_route_hostname" ] && Println "$i18n_canceled...\n" && exit 1
-    Println "  路由 hostname: $green $ibm_cf_app_route_hostname ${normal}\n"
+    Println "  路由 hostname: ${green} $ibm_cf_app_route_hostname ${normal}\n"
 }
 
 IbmSetCfAppRoutePath()
@@ -35350,7 +35535,7 @@ IbmSetCfAppRoutePort()
         esac
     done
 
-    Println "  路由端口: $green $ibm_cf_app_route_port ${normal}\n"
+    Println "  路由端口: ${green} $ibm_cf_app_route_port ${normal}\n"
 }
 
 IbmAddCfAppRoute()
@@ -35954,7 +36139,7 @@ IbmSetCfAppCron()
         ibm_cf_apps_path_count=$((ibm_cf_apps_path_count+1))
         app_path=${path##*/}
         ibm_cf_apps_path+=("$app_path")
-        ibm_cf_apps_path_list="$ibm_cf_apps_path_list $ibm_cf_apps_path_count.${indent_6}$green$app_path${normal}\n\n"
+        ibm_cf_apps_path_list="$ibm_cf_apps_path_list $ibm_cf_apps_path_count.${indent_6}${green}$app_path${normal}\n\n"
     done
 
     if [ "$ibm_cf_apps_path_count" -eq 0 ] 
@@ -35968,7 +36153,7 @@ IbmSetCfAppCron()
     for((i=0;i<${#apps_name[@]};i++));
     do
         Println "$ibm_cf_apps_path_list"
-        echo -e "$info 选择 APP: $green${apps_name[i]}${normal} 本地目录"
+        echo -e "$info 选择 APP: ${green}${apps_name[i]}${normal} 本地目录"
         while read -p "$i18n_default_cancel" apps_path_num 
         do
             case $apps_path_num in
@@ -36352,7 +36537,7 @@ VipSetHostIp()
     Println "请输入 VIP 频道所在服务器 IP/域名"
     read -p "$i18n_default_cancel" vip_host_ip
     [ -z "$vip_host_ip" ] && Println "$i18n_canceled...\n" && exit 1
-    Println "  VIP 服务器 IP/域名: $green $vip_host_ip ${normal}\n"
+    Println "  VIP 服务器 IP/域名: ${green} $vip_host_ip ${normal}\n"
 }
 
 VipSetHostPort()
@@ -36360,7 +36545,7 @@ VipSetHostPort()
     Println "请输入 VIP 频道所在服务器端口"
     read -p "$i18n_default_cancel" vip_host_port
     [ -z "$vip_host_port" ] && Println "$i18n_canceled...\n" && exit 1
-    Println "  VIP 服务器端口: $green $vip_host_port ${normal}\n"
+    Println "  VIP 服务器端口: ${green} $vip_host_port ${normal}\n"
 }
 
 VipSetHostSeed()
@@ -36368,7 +36553,7 @@ VipSetHostSeed()
     Println "请输入 VIP 频道所在服务器的 seed"
     read -p "$i18n_default_cancel" vip_host_seed
     [ -z "$vip_host_seed" ] && Println "$i18n_canceled...\n" && exit 1
-    Println "  VIP 服务器 seed: $green $vip_host_seed ${normal}\n"
+    Println "  VIP 服务器 seed: ${green} $vip_host_seed ${normal}\n"
 }
 
 VipSetHostToken()
@@ -36389,10 +36574,10 @@ VipSetHostStatus()
     if [[ $vip_host_status == "$i18n_yes" ]] 
     then
         vip_host_status_yn="on"
-        vip_host_status_text="$green启用${normal}"
+        vip_host_status_text="${green}启用${normal}"
     else
         vip_host_status_yn="off"
-        vip_host_status_text="$red禁用${normal}"
+        vip_host_status_text="${red}禁用${normal}"
     fi
     Println "  VIP 服务器状态: $vip_host_status_text\n"
 }
@@ -36453,9 +36638,9 @@ VipEditHost()
                     vip_host_status_yn=${vip_hosts_status_yn[vip_hosts_index]}
                     if [ "$vip_host_status_yn" == "yes" ] 
                     then
-                        vip_host_status_text="$green启用${normal}"
+                        vip_host_status_text="${green}启用${normal}"
                     else
-                        vip_host_status_text="$red禁用${normal}"
+                        vip_host_status_text="${red}禁用${normal}"
                     fi
                     break
                 else
@@ -36479,28 +36664,28 @@ VipEditHost()
 
     case $edit_vip_host_num in
         1) 
-            Println "原 IP/域名: $red$vip_host_ip${normal}"
+            Println "原 IP/域名: ${red}$vip_host_ip${normal}"
             VipSetHostIp
             jq_path='["hosts",'"$vip_hosts_index"',"ip"]'
             JQ update "$VIP_FILE" "$vip_host_ip"
             Println "$info IP/域名 修改成功\n"
         ;;
         2) 
-            Println "原端口: $red$vip_host_port${normal}"
+            Println "原端口: ${red}$vip_host_port${normal}"
             VipSetHostPort
             jq_path='["hosts",'"$vip_hosts_index"',"port"]'
             JQ update "$VIP_FILE" "$vip_host_port" number
             Println "$info 端口 修改成功\n"
         ;;
         3) 
-            Println "原 seed: $red$vip_host_seed${normal}"
+            Println "原 seed: ${red}$vip_host_seed${normal}"
             VipSetHostSeed
             jq_path='["hosts",'"$vip_hosts_index"',"seed"]'
             JQ update "$VIP_FILE" "$vip_host_seed"
             Println "$info seed 修改成功\n"
         ;;
         4) 
-            Println "原 token: $red$vip_host_token${normal}"
+            Println "原 token: ${red}$vip_host_token${normal}"
             VipSetHostToken
             jq_path='["hosts",'"$vip_hosts_index"',"token"]'
             JQ update "$VIP_FILE" "$vip_host_token"
@@ -36542,16 +36727,16 @@ VipGetHosts()
         vip_hosts_status_yn+=("$status_yn")
         if [ "$status_yn" == "on" ] 
         then
-            status_text="$green [启用] ${normal}"
+            status_text="${green} [启用] ${normal}"
         else
-            status_text="$red [禁用] ${normal}"
+            status_text="${red} [禁用] ${normal}"
         fi
         vip_hosts_channel_count+=("$channels_count")
         vip_hosts_channel_id+=("$channels_id")
         vip_hosts_channel_name+=("$channels_name")
         channels_epg_id=${channels_epg_id%\"}
         vip_hosts_channel_epg_id+=("$channels_epg_id")
-        vip_hosts_list="$vip_hosts_list $green$vip_hosts_count.${normal}${indent_6}服务器: $green$ip${normal}  端口: $green$port${normal}  频道数: $green$channels_count${normal}$status_text\n${indent_6}seed: $green$seed${normal}  token: $green${token:-无}${normal}\n\n"
+        vip_hosts_list="$vip_hosts_list ${green}$vip_hosts_count.${normal}${indent_6}服务器: ${green}$ip${normal}  端口: ${green}$port${normal}  频道数: ${green}$channels_count${normal}$status_text\n${indent_6}seed: ${green}$seed${normal}  token: ${green}${token:-无}${normal}\n\n"
     done < <($JQ_FILE '.hosts[]|[.ip,.port,.seed,.token,.status,(.channels|length),([.channels[].id]|join("|")),([.channels[].name]|join("|")),([.channels[].epg_id]|join("|"))]|join("^")' "$VIP_FILE")
     return 0
 }
@@ -36615,7 +36800,7 @@ VipSetUserIp()
     then
         Println "$error 此 IP 已存在\n" && exit 1
     fi
-    Println "  用户 IP: $green $vip_user_ip ${normal}\n"
+    Println "  用户 IP: ${green} $vip_user_ip ${normal}\n"
 }
 
 VipSetUserLicense()
@@ -36635,7 +36820,7 @@ VipSetUserLicense()
     then
         Println "$error 此授权码已存在\n" && exit 1
     fi
-    Println "  用户 license: $green $vip_user_license ${normal}\n"
+    Println "  用户 license: ${green} $vip_user_license ${normal}\n"
 }
 
 VipSetUserSum()
@@ -36696,7 +36881,7 @@ VipSetUserSum()
             ;;
         esac
     done
-    Println "  验证类型: $green $vip_user_sum ${normal}\n  到期天数: $green ${vip_user_expire_days:-无} ${normal}\n"
+    Println "  验证类型: ${green} $vip_user_sum ${normal}\n  到期天数: ${green} ${vip_user_expire_days:-无} ${normal}\n"
 }
 
 VipSetUserName()
@@ -36714,7 +36899,7 @@ VipSetUserName()
     then
         Println "$error 此用户名已存在\n" && exit 1
     fi
-    Println "  用户名称: $green $vip_user_name ${normal}\n"
+    Println "  用户名称: ${green} $vip_user_name ${normal}\n"
 }
 
 VipAddUser()
@@ -36797,28 +36982,28 @@ VipEditUser()
 
     case $edit_vip_user_num in
         1) 
-            Println "原用户名: $red$vip_user_name${normal}"
+            Println "原用户名: ${red}$vip_user_name${normal}"
             VipSetUserName
             jq_path='["users",'"$vip_users_index"',"name"]'
             JQ update "$VIP_FILE" "$vip_user_name"
             Println "$info 用户名修改成功\n"
         ;;
         2) 
-            Println "原 IP: $red$vip_user_ip${normal}"
+            Println "原 IP: ${red}$vip_user_ip${normal}"
             VipSetUserIp
             jq_path='["users",'"$vip_users_index"',"ip"]'
             JQ update "$VIP_FILE" "$vip_user_ip"
             Println "$info IP 修改成功\n"
         ;;
         3) 
-            Println "原授权码: $red$vip_user_license${normal}"
+            Println "原授权码: ${red}$vip_user_license${normal}"
             VipSetUserLicense
             jq_path='["users",'"$vip_users_index"',"license"]'
             JQ update "$VIP_FILE" "$vip_user_license"
             Println "$info 授权码修改成功\n"
         ;;
         4) 
-            Println "原验证类型: $red$vip_user_sum${normal}\n原到期日: $red$vip_user_expire_text${normal}"
+            Println "原验证类型: ${red}$vip_user_sum${normal}\n原到期日: ${red}$vip_user_expire_text${normal}"
             VipSetUserSum
             jq_path='["users",'"$vip_users_index"',"sum"]'
             JQ update "$VIP_FILE" "$vip_user_sum"
@@ -36863,7 +37048,7 @@ VipGetUsers()
         else
             m3u_link="${FFMPEG_MIRROR_LINK%/*}/vip/$license/playlist.m3u"
         fi
-        vip_users_list="$vip_users_list $green$vip_users_count.${normal}${indent_6}用户名: $green$name${normal}  ip: $green$ip${normal}  到期日: $green$expire_text${normal}\n${indent_6}授权码: $green$license${normal}  认证方式: $green$sum${normal}\n${indent_6}m3u 播放链接: $green$m3u_link${normal}\n\n"
+        vip_users_list="$vip_users_list ${green}$vip_users_count.${normal}${indent_6}用户名: ${green}$name${normal}  ip: ${green}$ip${normal}  到期日: ${green}$expire_text${normal}\n${indent_6}授权码: ${green}$license${normal}  认证方式: ${green}$sum${normal}\n${indent_6}m3u 播放链接: ${green}$m3u_link${normal}\n\n"
     done < <($JQ_FILE '.users[]|[.ip,.license,.sum,.expire,.name]|join(":")' "$VIP_FILE")
     return 0
 }
@@ -36945,7 +37130,7 @@ VipSetChannelName()
     Println "请输入频道名称(可以是中文)"
     read -p "$i18n_default_cancel" vip_channel_name
     [ -z "$vip_channel_name" ] && Println "$i18n_canceled...\n" && exit 1
-    Println "  VIP 频道名称: $green $vip_channel_name ${normal}\n"
+    Println "  VIP 频道名称: ${green} $vip_channel_name ${normal}\n"
 }
 
 VipSetChannelEpgId()
@@ -37009,10 +37194,10 @@ VipSetChannel()
             then
                 flag=1
                 i_last=$i
-                vip_channels_list="$vip_channels_list $green$((i+1)).${normal}\r\033[7C${vip_channels_name[i]}"
+                vip_channels_list="$vip_channels_list ${green}$((i+1)).${normal}\r\033[7C${vip_channels_name[i]}"
             else
                 flag=0
-                vip_channels_list="$vip_channels_list\r\033[40C$green$((i+1)).${normal}\r\033[47C${vip_channels_name[i]}\n\033[7C频道ID: ${vip_channels_id[i_last]}\r\033[47C频道ID: ${vip_channels_id[i]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-无}\r\033[47CEPG ID: ${vip_channels_epg_id[i]:-无}\n\n"
+                vip_channels_list="$vip_channels_list\r\033[40C${green}$((i+1)).${normal}\r\033[47C${vip_channels_name[i]}\n\033[7C频道ID: ${vip_channels_id[i_last]}\r\033[47C频道ID: ${vip_channels_id[i]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-无}\r\033[47CEPG ID: ${vip_channels_epg_id[i]:-无}\n\n"
             fi
         done
 
@@ -37315,21 +37500,21 @@ VipEditChannel()
 
                     case $edit_vip_channel_num in
                         1) 
-                            Println "原频道 ID: $red$vip_channel_id${normal}"
+                            Println "原频道 ID: ${red}$vip_channel_id${normal}"
                             VipSetChannelId
                             jq_path='["hosts",'"$vip_hosts_index"',"channels",'"$vip_channels_index"',"id"]'
                             JQ update "$VIP_FILE" "$vip_channel_id"
                             Println "$info 频道 ID 修改成功\n"
                         ;;
                         2) 
-                            Println "原频道名称: $red$vip_channel_name${normal}"
+                            Println "原频道名称: ${red}$vip_channel_name${normal}"
                             VipSetChannelName
                             jq_path='["hosts",'"$vip_hosts_index"',"channels",'"$vip_channels_index"',"name"]'
                             JQ update "$VIP_FILE" "$vip_channel_name"
                             Println "$info 频道名称修改成功\n"
                         ;;
                         3) 
-                            Println "原频道 epg: $red${vip_channel_epg_id:-无}${normal}"
+                            Println "原频道 epg: ${red}${vip_channel_epg_id:-无}${normal}"
                             VipSetChannelEpgId
                             jq_path='["hosts",'"$vip_hosts_index"',"channels",'"$vip_channels_index"',"epg_id"]'
                             JQ update "$VIP_FILE" "$vip_channel_epg_id"
@@ -37389,10 +37574,10 @@ VipListChannels()
         then
             flag=1
             i_last=$i
-            vip_channels_list="$vip_channels_list $green$((i+1)).${normal}\r\033[7C${vip_channels_name[i]}"
+            vip_channels_list="$vip_channels_list ${green}$((i+1)).${normal}\r\033[7C${vip_channels_name[i]}"
         else
             flag=0
-            vip_channels_list="$vip_channels_list\r\033[40C$green$((i+1)).${normal}\r\033[47C${vip_channels_name[i]}\n\033[7C频道ID: ${vip_channels_id[i_last]}\r\033[47C频道ID: ${vip_channels_id[i]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-无}\r\033[47CEPG ID: ${vip_channels_epg_id[i]:-无}\n\n"
+            vip_channels_list="$vip_channels_list\r\033[40C${green}$((i+1)).${normal}\r\033[47C${vip_channels_name[i]}\n\033[7C频道ID: ${vip_channels_id[i_last]}\r\033[47C频道ID: ${vip_channels_id[i]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-无}\r\033[47CEPG ID: ${vip_channels_epg_id[i]:-无}\n\n"
         fi
     done
 
@@ -37570,7 +37755,7 @@ VipDelChannel()
 {
     VipListChannels
 
-    echo -e " $green$((vip_channels_count+1)).${normal}\r\033[7C全部删除\n"
+    echo -e " ${green}$((vip_channels_count+1)).${normal}\r\033[7C全部删除\n"
 
     while read -p "请选择频道: " vip_channels_num
     do
@@ -37632,7 +37817,7 @@ VipSetPublicRoot()
         vip_public_root=${vip_public_root%\/}
     fi
     JQ update "$VIP_FILE" '(.config|.public_root)="'"$vip_public_root"'"'
-    Println "  VIP 公开目录: $green ${vip_public_root:-无} ${normal}\n"
+    Println "  VIP 公开目录: ${green} ${vip_public_root:-无} ${normal}\n"
 }
 
 VipSetPublicHost()
@@ -38063,7 +38248,7 @@ VipListUserChannel()
             fi
             if [ "$now" -lt "$vip_user_expire" ] || [ "$vip_user_expire" -eq 0 ]
             then
-                vip_users_list="$vip_users_list $green$((i+1)).${normal}${indent_6}用户名: $green$vip_user_name${normal}  ip: $green$vip_user_ip${normal}  到期日: $green$expire_text${normal}\n${indent_6}授权码: $green$vip_user_license${normal}\n${indent_6}m3u 播放链接: $green${FFMPEG_MIRROR_LINK%/*}/vip/$vip_user_license/playlist.m3u${normal}\n\n"
+                vip_users_list="$vip_users_list ${green}$((i+1)).${normal}${indent_6}用户名: ${green}$vip_user_name${normal}  ip: ${green}$vip_user_ip${normal}  到期日: ${green}$expire_text${normal}\n${indent_6}授权码: ${green}$vip_user_license${normal}\n${indent_6}m3u 播放链接: ${green}${FFMPEG_MIRROR_LINK%/*}/vip/$vip_user_license/playlist.m3u${normal}\n\n"
             fi
         done
 
@@ -38118,7 +38303,7 @@ VipUserMenu()
     case "$vip_menu_num" in
         h)
             kind=""
-            color=$green
+            color=${green}
             Menu
         ;;
         f)
@@ -38165,7 +38350,7 @@ VipMenu()
     case "$vip_menu_num" in
         h)
             kind=""
-            color=$green
+            color=${green}
             Menu
         ;;
         f)
@@ -38342,7 +38527,7 @@ PveSelectVM()
 
 Menu()
 {
-    color=${color:-$green}
+    color=${color:-${green}}
 
     if [ -z "${kind:-}" ] 
     then
@@ -38377,7 +38562,7 @@ Menu()
     case "$menu_num" in
         h)
             kind=""
-            color=$green
+            color=${green}
             Menu
         ;;
         f)
@@ -39046,13 +39231,14 @@ WantedBy=multi-user.target
  ${green}15.${normal} 安装 nodejs
  ${green}16.${normal} 安装 pdf2htmlEX
  ${green}17.${normal} 安装 tesseract
- ${green}18.${normal} 安装 postfix
- ${green}19.${normal} 识别 cloudflare/ibm ip
+ ${green}18.${normal} 配置 postfix
+ ${green}19.${normal} 配置 mmproxy
+ ${green}20.${normal} 识别 cloudflare/ibm ip
 
  $tip 输入: nx 打开面板
 
 "
-    read -p "`gettext \"输入序号\"` [1-19]: " nginx_num
+    read -p "`gettext \"输入序号\"` [1-20]: " nginx_num
     case "$nginx_num" in
         1) 
             if [ -d "$nginx_prefix" ] 
@@ -39216,9 +39402,125 @@ WantedBy=multi-user.target
             Println "$info smtp 设置成功\n"
         ;;
         19)
+            if [ ! -d ~/mmproxy ] 
+            then
+                if [[ ! -x $(command -v git) ]] 
+                then
+                    Spinner "安装 git" GitInstall
+                fi
+                trap '
+                    rm -rf ~/mmproxy
+                ' EXIT
+                cd ~
+                git clone  https://github.com/cloudflare/mmproxy
+                cd mmproxy
+                git clone https://github.com/sustrik/libmill.git
+                git clone https://github.com/seccomp/libseccomp.git
+
+                make CC=clang
+                echo -en "0.0.0.0/0\n::/0\n" > allowed-networks.txt
+                trap - EXIT
+            fi
+
+            echo
+            mmproxy_opotions=( '用于 acme.sh' '用于 ssh' '手动配置' )
+            inquirer list_input_index "选择操作" mmproxy_opotions mmproxy_opotions_index
+
+            if [ "$mmproxy_opotions_index" -eq 0 ] 
+            then
+                mmproxy_name="acme"
+            elif [ "$mmproxy_opotions_index" -eq 0 ] 
+            then
+                mmproxy_name="ssh"
+            else
+                echo
+                inquirer text_input "输入 mmproxy 配置名称(英文)" mmproxy_name "$i18n_cancel"
+                ExitOnCancel mmproxy_name
+
+                if [ "$mmproxy_name" == "acme" ] || [ "$mmproxy_name" == "ssh" ]
+                then
+                    Println "$error 保留名称, 请重新输入\n"
+                    exit 1
+                elif [ -f /etc/systemd/system/mmproxy-$mmproxy_name.service ] 
+                then
+                    Println "$error 名称已经存在\n"
+                    exit 1
+                fi
+            fi
+
+            echo
+            inquirer text_input "输入 mmproxy 监听端口: " mmproxy_listen_port "随机"
+
+            if [ "$mmproxy_listen_port" == "随机" ] 
+            then
+                mmproxy_listen_port=$(GetFreePort)
+            fi
+
+            echo
+            inquirer text_input "输入前端(比如 nginx) SNI 分流 ipv4 端口: " mmproxy_target_v4_port "$i18n_cancel"
+            ExitOnCancel mmproxy_target_v4_port
+
+            echo
+            inquirer text_input "输入前端(比如 nginx) SNI 分流 ipv6 端口: " mmproxy_target_v6_port "$i18n_cancel"
+            ExitOnCancel mmproxy_target_v6_port
+
+            echo "[Unit]
+Description=mmproxy-$mmproxy_name
+After=syslog.target network-online.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+ExecStart=$HOME/mmproxy/mmproxy --allowed-networks $HOME/mmproxy/allowed-networks.txt -l 127.0.0.1:$mmproxy_listen_port -4 127.0.0.1:$mmproxy_target_v4_port -6 [::1]:$mmproxy_target_v6_port
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target" > "/etc/systemd/system/mmproxy-$mmproxy_name.service"
+
+            if ! grep -q 'iif lo lookup 100' < <(ip rule list)
+            then
+                ip -4 rule add from 127.0.0.1/8 iif lo table 100
+                ip -6 rule add from ::1/128 iif lo table 100
+
+                ip route add local 0.0.0.0/0 dev lo table 100
+                ip -6 route add local ::/0 dev lo table 100
+            fi
+
+            systemctl enable "mmproxy-$mmproxy_name"
+            systemctl start "mmproxy-$mmproxy_name"
+
+            if [ ! -f ~/ip.sh ] 
+            then
+                echo "#!/bin/bash
+ip -4 rule add from 127.0.0.1/8 iif lo table 100
+ip -6 rule add from ::1/128 iif lo table 100
+ip route add local 0.0.0.0/0 dev lo table 100
+ip -6 route add local ::/0 dev lo table 100" > ~/ip.sh
+                chmod +x ~/ip.sh
+            fi
+
+            if [ ! -f /etc/rc.local ]
+            then
+                echo "#!/bin/bash
+$HOME/ip.sh" > /etc/rc.local
+            elif ! grep -q "$HOME/ip.sh" < /etc/rc.local
+            then
+                echo "$HOME/ip.sh" >> /etc/rc.local
+            fi
+
+            chmod +x /etc/rc.local
+
+            if [[ $(systemctl is-active rc-local) == "inactive" ]] 
+            then
+                systemctl enbale rc-local
+                systemctl start rc-local
+            fi
+
+            Println "$info mmproxy-$mmproxy_name 设置成功\n"
+        ;;
+        20)
             NginxUpdateCFIBMip
         ;;
-        *) Println "$error $i18n_input_correct_number [1-19]\n"
+        *) Println "$error $i18n_input_correct_number [1-20]\n"
         ;;
     esac
     exit 0
@@ -39343,8 +39645,6 @@ then
             systemctl restart $v2ray_name
         ;;
         3) 
-            Println "$error not ready...\n"
-            exit 1
             V2rayConfigUpdate
             V2rayConfigDomain
         ;;
@@ -39524,7 +39824,7 @@ ${green}8.${normal} 浏览频道
 
             echo -e "$result" > "$XTREAM_CODES_EXAM"
 
-            verify=1
+            verify_mac=1
 
             XtreamCodesList
 
@@ -39547,9 +39847,11 @@ ${green}8.${normal} 浏览频道
             IFS="," read -r -a new_accounts <<< "$m_accounts"
 
             result=""
+            new_domains_count=${#new_domains[@]}
 
-            for((i=0;i<${#new_domains[@]};i++));
+            for((i=0;i<new_domains_count;i++));
             do
+                printf '%b' "\r$((i*100/new_domains_count))%"
                 IFS="|" read -r -a domains <<< "${new_domains[i]}"
                 IFS=" " read -r -a accounts <<< "${new_accounts[i]}"
                 for domain in "${domains[@]}"
@@ -39566,6 +39868,14 @@ ${green}8.${normal} 浏览频道
             [ -z "$result" ] && Println "$error 暂时无法连接, 请稍后再试...\n" && exit 1
 
             echo -e "$result" >> "$XTREAM_CODES_EXAM"
+
+            echo && echo
+            inquirer list_input_index "验证 mac" ny_options ny_options_index
+
+            if [ "$ny_options_index" -eq 1 ] 
+            then
+                verify_mac=1
+            fi
 
             XtreamCodesList
 
@@ -40167,7 +40477,7 @@ config interface 'lan'
                 sed -i '/config forwarding/,+2d' /etc/config/firewall
                 echo \"${openwrt_network}\" > /etc/config/network
                 /etc/init.d/network restart
-                sed -i '/option ra_management/a \\\tlist dhcp_option 6,$eth0_ip' /etc/config/dhcp
+                sed -i '/option ra_management/a \\\tlist dhcp_option 6,$openwrt_ip' /etc/config/dhcp
                 /etc/init.d/dnsmasq restart
                 "
             fi
@@ -40264,7 +40574,7 @@ config interface 'lan'
             if [ "$core" == "xray-core" ] 
             then
                 echo
-                xray_options=( '最新' '1.4.0' '1.3.1' '1.3.0' '1.2.4' '1.2.3' )
+                xray_options=( '最新' '1.4.2' '1.4.0' '1.3.1' '1.3.0' '1.2.4' '1.2.3' )
                 inquirer list_input "选择 xray 版本" xray_options xray_ver
                 if [ "$xray_ver" == "最新" ] && ! xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/openwrt-xray.json" | $JQ_FILE -r '.tag_name')
                 then
@@ -40535,11 +40845,11 @@ then
         1) 
             echo
             apt_options=( '切换 非订阅源/订阅 源' '切换 debian 国内/国外 源' )
-            inquirer list_input_index "选择操作" apt_options apt_option_index
+            inquirer list_input_index "选择操作" apt_options apt_options_index
 
             . /etc/os-release
 
-            if [ "$apt_option_index" -eq 0 ] 
+            if [ "$apt_options_index" -eq 0 ] 
             then
                 echo
                 pve_sources_options=( '非订阅源' '订阅源' )
@@ -40914,7 +41224,7 @@ then
             if [ "$core" == "xray-core" ] 
             then
                 echo
-                xray_options=( '最新' '1.4.0' '1.3.1' '1.3.0' '1.2.4' '1.2.3' )
+                xray_options=( '最新' '1.4.2' '1.4.0' '1.3.1' '1.3.0' '1.2.4' '1.2.3' )
                 inquirer list_input "选择 xray 版本" xray_options xray_ver
                 if [ "$xray_ver" == "最新" ] && ! xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/openwrt-xray.json" | $JQ_FILE -r '.tag_name')
                 then
@@ -41237,7 +41547,7 @@ then
                         break
                     fi
                 done
-                hinet_4gtv_list="$hinet_4gtv_list $green$((i+1)).${normal}${indent_6}${hinet_4gtv[i]#*:}$hinet_4gtv_chnl_added\n\n"
+                hinet_4gtv_list="$hinet_4gtv_list ${green}$((i+1)).${normal}${indent_6}${hinet_4gtv[i]#*:}$hinet_4gtv_chnl_added\n\n"
             done
 
             cookies=""
@@ -41268,7 +41578,7 @@ then
                             break
                         fi
                     done
-                    _4gtv_list="$_4gtv_list $green$((i+hinet_4gtv_count+1)).${normal}${indent_6}${_4gtv_chnls_name[i]}$_4gtv_chnl_added\n\n"
+                    _4gtv_list="$_4gtv_list ${green}$((i+hinet_4gtv_count+1)).${normal}${indent_6}${_4gtv_chnls_name[i]}$_4gtv_chnl_added\n\n"
                 done
                 chnls_list="HiNet 4gtv 频道:\n\n${hinet_4gtv_list}4gtv 官网频道:\n\n$_4gtv_list"
             else
@@ -41553,7 +41863,7 @@ then
                             fi
                         done < <(awk '{a[i++]=$0} END {for (j=i-1; j>=0;) print a[j--] }' "$MONITOR_LOG")
                         Println "$log"
-                        [ -n "${found_line:-}" ] && Println "$green${found_line#* }${normal}"
+                        [ -n "${found_line:-}" ] && Println "${green}${found_line#* }${normal}"
                     fi
                     if [ -s "$IP_LOG" ] 
                     then
@@ -42154,7 +42464,7 @@ then
                 for((i=0;i<flv_count;i++));
                 do
                     chnl_flv_pull_link=${chnls_flv_pull_link[i]}
-                    result=$result"  $green$((i+1)).${normal}${indent_6}$green${chnls_channel_name[i]}${normal}\n${indent_6}源: ${chnls_stream_link[i]}\n${indent_6}pull: ${chnl_flv_pull_link:-无}\n\n"
+                    result=$result"  ${green}$((i+1)).${normal}${indent_6}${green}${chnls_channel_name[i]}${normal}\n${indent_6}源: ${chnls_stream_link[i]}\n${indent_6}pull: ${chnl_flv_pull_link:-无}\n\n"
                 done
                 Println "$result"
             fi
@@ -42185,7 +42495,7 @@ then
                 result=""
                 for((i=0;i<hls_count;i++));
                 do
-                    result=$result"  $green$((i+1)).${normal}${indent_6}$green${chnls_channel_name[i]}${normal}\n${indent_6}源: ${chnls_stream_link[i]}\n\n"
+                    result=$result"  ${green}$((i+1)).${normal}${indent_6}${green}${chnls_channel_name[i]}${normal}\n${indent_6}源: ${chnls_stream_link[i]}\n\n"
                 done
                 Println "$result"
             fi
@@ -42194,7 +42504,7 @@ then
 
             for((i=0;i<hls_count;i++));
             do
-                echo -e "  $green$((i+1)).${normal}${indent_6}${chnls_channel_name[i]} ${chnls_stream_link[i]}"
+                echo -e "  ${green}$((i+1)).${normal}${indent_6}${chnls_channel_name[i]} ${chnls_stream_link[i]}"
                 if [ -e "$LIVE_ROOT/${chnls_output_dir_name[i]}" ] 
                 then
                     if ls -A "$LIVE_ROOT/${chnls_output_dir_name[i]}"/* > /dev/null 2>&1 
