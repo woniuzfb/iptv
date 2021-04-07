@@ -79,7 +79,7 @@ msgid "[ERROR]"
 msgstr ""
 
 #: ../docs/iptv.sh:295
-msgid "[TIP]"
+msgid "[NOTE]"
 msgstr ""
 
 #: ../docs/iptv.sh:300 ../docs/iptv.sh:325

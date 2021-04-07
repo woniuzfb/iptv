@@ -9,7 +9,7 @@ const UPSTREAM_DOMAIN = ""
 const UPSTREAM_HTTPS = false
 
 // The endpoint you want the (CORS) reverse proxy to be on
-const PROXY_ENDPOINT = "/"
+const PROXY_ENDPOINT = "/proxy/"
 
 // Countries and regions you wish to block from using your service
 const BLOCK_REGIONS = []
@@ -30,11 +30,15 @@ const BLOCK_ORIGINS = []
 const ALLOW_ORIGINS = []
 
 // Upstream domains
-const ALLOW_UPSTREAMS = []
+const ALLOW_UPSTREAMS = ["api.fengshows.cn", "dis.fengshows.cn", "tlive.fengshows.cn", "hlive.fengshows.cn", "qlive.fengshows.cn"]
+
+// Choose fengshows CDN: tlive, hlive, qlive
+const FENGSHOWS_CDN = "tlive"
 
 // delete request headers, such as "Origin", "Referer", "Cookie", "CF-IPCountry", "CF-Connecting-IP", 
 // "CF-Request-ID", "X-Real-IP", "X-Forwarded-For", "CF-Ray", "CF-Visitor", "X-Forwarded-Proto"
-const DELETE_REQUEST_HEADERS = []
+const DELETE_REQUEST_HEADERS = ["Origin", "Referer", "Cookie", "CF-IPCountry", "CF-Connecting-IP",
+"CF-Request-ID", "X-Real-IP", "X-Forwarded-For", "CF-Ray", "CF-Visitor", "X-Forwarded-Proto"]
 
 // set request header Origin to upstream
 const SET_HEADER_ORIGIN = false
@@ -76,7 +80,7 @@ async function handleRequest(request) {
   let upstream = requestURL.pathname.substr(endpoint.length) + requestURL.search
 
   if (UPSTREAM_DOMAIN) {
-    upstream = (UPSTREAM_HTTPS ? "https://" : "http://") + UPSTREAM_DOMAIN + '/' +upstream
+    upstream = (UPSTREAM_HTTPS ? "https://" : "http://") + UPSTREAM_DOMAIN + '/' + upstream
   }
   else if (upstream.substr(0,6) === "http:/") {
     upstream = "http://" + upstream.substr(6)
@@ -86,6 +90,11 @@ async function handleRequest(request) {
   }
   else {
     return BLOCK_URL_RESPONSE
+  }
+
+  // for fengshows
+  if (!upstream.startsWith("https://api.")) {
+    upstream = "http://" + FENGSHOWS_CDN + upstream.substr(upstream.indexOf("."))
   }
 
   let upstreamURL

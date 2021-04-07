@@ -169,6 +169,7 @@ tv # 打开 iptv 管理面板
 ### 编译 h265 patched 静态 FFmpeg
 
 ``` bash
+cd scripts
 docker build -t ffmpeg-h265-static .
 docker run -it ffmpeg-h265-static
 ./build.sh

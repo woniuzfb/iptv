@@ -469,7 +469,7 @@ function playVideo() {
           }
           hlsVideoUrl = source.url;
           if (hlsVideoUrl.substring(13,25) === "fengshows.cn") {
-            reqData("http://api-fengshows.epub.fun/live",'?live_type=tv&page=1&page_size=15')
+            reqData("http://fengshows.epub.fun/proxy/https://api.fengshows.cn/live", '?live_type=tv&page=1&page_size=15')
             .then(response => {
               if (hlsVideoUrl.indexOf('pin') !== -1) {
                 hlsVideoUrl = response[0].live_url_fhd;
@@ -482,7 +482,7 @@ function playVideo() {
               let txTime = timestamp.toString(16);
               let uri = hlsVideoUrl.substring(hlsVideoUrl.indexOf('/',7),hlsVideoUrl.lastIndexOf('.'));
               let txSecret = md5('obb9Lxyv5C' + uri + txTime);
-              hlsVideoUrl = 'http://fengshows.epub.fun' + uri + '.flv?txSecret=' + txSecret + '&txTime=' + txTime;
+              hlsVideoUrl = 'http://fengshows.epub.fun/proxy/' + hlsVideoUrl + '?txSecret=' + txSecret + '&txTime=' + txTime;
               /*if (hlsVideoUrl.indexOf('?') !== -1) {
                 hlsVideoUrl = hlsVideoUrl.substring(0,hlsVideoUrl.indexOf('?')) + '?txSecret=' + txSecret + '&txTime=' + txTime;
               } else {
@@ -531,7 +531,7 @@ function playVideo() {
         }
         hlsVideoUrl = channel.url;
         if (hlsVideoUrl.substring(13,25) === "fengshows.cn") {
-          reqData("http://api-fengshows.epub.fun/live",'?live_type=tv&page=1&page_size=15')
+          reqData("http://fengshows.epub.fun/proxy/https://api.fengshows.cn/live", '?live_type=tv&page=1&page_size=15')
           .then(response => {
             if (hlsVideoUrl.indexOf('pin') !== -1) {
               hlsVideoUrl = response[0].live_url_fhd;
@@ -544,7 +544,7 @@ function playVideo() {
             let txTime = timestamp.toString(16);
             let uri = hlsVideoUrl.substring(hlsVideoUrl.indexOf('/',7),hlsVideoUrl.lastIndexOf('.'));
             let txSecret = md5('obb9Lxyv5C' + uri + txTime);
-            hlsVideoUrl = 'http://fengshows.epub.fun' + uri + '.flv?txSecret=' + txSecret + '&txTime=' + txTime;
+            hlsVideoUrl = 'http://fengshows.epub.fun/proxy/' + hlsVideoUrl + '?txSecret=' + txSecret + '&txTime=' + txTime;
             /*if (hlsVideoUrl.indexOf('?') !== -1) {
               hlsVideoUrl = hlsVideoUrl.substring(0,hlsVideoUrl.indexOf('?')) + '?txSecret=' + txSecret + '&txTime=' + txTime;
             } else {

@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-sh_ver="1.80.6"
+sh_ver="1.80.7"
 sh_debug=0
 export LANGUAGE=
 export LC_ALL=
@@ -644,7 +644,7 @@ inquirer()
             case "$key" in
                 $'\x1b')
                     read -rsn1 key
-                    if [[ $key == "[" ]]
+                    if [ "$key" == "[" ]
                     then
                         read -rsn1 key
                         case "$key" in
@@ -656,11 +656,11 @@ inquirer()
                     fi
                 ;;
                 $'\x20') $on_space;;
-                $'\x7f') $on_backspace $key;;
-                '') $on_enter $key;;
-                *[$'\x80'-$'\xFF']*) $on_not_ascii $key;;
+                $'\x7f') $on_backspace "$key";;
+                '') $on_enter "$key";;
+                *[$'\x80'-$'\xFF']*) $on_not_ascii "$key";;
                 # [^ -~]
-                *) $on_ascii $key;;
+                *) $on_ascii "$key";;
             esac
             if [ "$_break_keypress" = true ]
             then
@@ -846,7 +846,7 @@ inquirer()
 
     inquirer:on_checkbox_input_ascii() {
         local key=$1
-        case $key in
+        case "$key" in
             "w" ) inquirer:on_checkbox_input_up;;
             "s" ) inquirer:on_checkbox_input_down;;
         esac
@@ -1023,7 +1023,7 @@ inquirer()
     inquirer:on_list_input_input_ascii()
     {
         local key=$1
-        case $key in
+        case "$key" in
             "w" ) inquirer:on_list_input_up;;
             "s" ) inquirer:on_list_input_down;;
         esac
@@ -1500,56 +1500,57 @@ ExitOnCancel()
 
 PythonInstall()
 {
+    if [[ -x $(command -v python3) ]] && [[ -x $(command -v pip3) ]] 
+    then
+        return 0
+    fi
+
     ReleaseCheck
+
+    Println "`eval_gettext \"\\\$info 安装 python3 ...\"`"
+
+    trap '
+        kill $progress_pid 2> /dev/null
+    ' EXIT
+
+    Progress &
+    progress_pid=$!
+
     if [ "$release" == "rpm" ] 
     then
-        echo
-        AskIfContinue n "`gettext \"因为是编译 python3, 耗时会很长, 是否继续\"`"
-
-        Progress &
-        progress_pid=$!
-        trap '
-            kill $progress_pid 2> /dev/null
-        ' EXIT
-        yum groupinstall -y 'Development Tools' >/dev/null 2>&1
-        yum install -y gcc openssl-devel bzip2-devel libffi-devel >/dev/null 2>&1
-        echo -n "...50%..."
-        cd ~
-        wget --timeout=10 --tries=3 --no-check-certificate https://npm.taobao.org/mirrors/python/3.8.8/Python-3.8.8.tgz -qO Python-3.8.8.tgz
-        tar xzf Python-3.8.8.tgz
-        cd Python-3.8.8
-        ./configure >/dev/null 2>&1
-        make >/dev/null 2>&1
-        make install >/dev/null 2>&1
-        pip3 install requests > /dev/null
-        kill $progress_pid
-        trap - EXIT
-        echo -n "...100%" && echo
+        if ! yum -y install python3 python3-pip > /dev/null 2>&1
+        then
+            yum groupinstall -y 'Development Tools' >/dev/null 2>&1
+            yum install -y gcc openssl-devel bzip2-devel libffi-devel >/dev/null 2>&1
+            echo -n "...50%..."
+            cd ~
+            wget --timeout=10 --tries=3 --no-check-certificate https://www.python.org/ftp/python/3.8.9/Python-3.8.9.tgz -qO Python-3.8.9.tgz
+            tar xzf Python-3.8.9.tgz
+            cd Python-3.8.9
+            ./configure >/dev/null 2>&1
+            make >/dev/null 2>&1
+            make install >/dev/null 2>&1
+            pip3 install requests > /dev/null
+        fi
+    else
+        apt-get -y install python3 python3-pip >/dev/null 2>&1
     fi
+
+    kill $progress_pid
+    trap - EXIT
+    echo -n "...100%" && echo
 }
 
 CrossplaneInstall()
 {
-    if [[ ! -x $(command -v python3) ]] 
+    if [[ -x $(command -v crossplane) ]] 
     then
-        Println "`eval_gettext \"\\\$info 安装 python3 ...\"`"
-        PythonInstall
+        return 0
     fi
 
-    if [[ ! -x $(command -v pip3) ]] 
-    then
-        Println "`eval_gettext \"\\\$info 安装 pip3 ...\"`"
-        Progress &
-        progress_pid=$!
-        trap '
-            kill $progress_pid 2> /dev/null
-        ' EXIT
-        apt-get -y install python3-pip >/dev/null 2>&1
-        kill $progress_pid
-        trap - EXIT
-        echo -n "...100%" && echo
-    fi
+    Println "$info 安装 crossplane ..."
 
+    PythonInstall
     pip3 install crossplane
 }
 
@@ -2621,8 +2622,7 @@ Update()
     if [[ ${FFMPEG_ROOT##*/} == *"${git_date:-20200101}"* ]] 
     then
         echo
-        yn_options=( "$i18n_no" "$i18n_yes" )
-        inquirer list_input "`gettext \"FFmpeg 已经是最新, 是否重装\"`" yn_options reinstall_ffmpeg_yn
+        inquirer list_input "`gettext \"FFmpeg 已经是最新, 是否重装\"`" ny_options reinstall_ffmpeg_yn
         if [[ $reinstall_ffmpeg_yn == "$i18n_no" ]]
         then
             reinstall_ffmpeg_yn="N"
@@ -3163,7 +3163,7 @@ JQs()
 
             $JQ_FILE --arg d1 "$5" --arg d2 "${6:-$5}" --arg d3 "${7:-$5}" --arg d4 "${8:-$5}" --arg d5 "${9:-$5}" --arg d6 "${10:-$5}" -r -c -s '
             def flat(a;b;c;d;e;f;g):
-                (a[0]| type) as $type | if ($type == "object") then
+                a as $a | (a[0]| type) as $type | if ($type == "object") then
                     ([a[] | keys_unsorted[]] | unique) as $keys | reduce a[] as $item ({};
                     reduce($keys[]) as $key (.;
                     $item[$key] as $val | ($val | type) as $type | (.[$key]) as $val2 | ($val2 | type) as $type2 | .[$key] = 
@@ -3222,6 +3222,8 @@ JQs()
                     ))
                 elif ($type == "array") then
                     flat([flat(a[];b;c;d;e;f;g)];b;c;d;e;f;g)
+                elif ($a == [""]) then
+                    "\"\""
                 else
                     a|join(b)
                 end;
@@ -3360,6 +3362,8 @@ JQs()
                     ))
                 elif ($type == "array") then
                     flat([flat(a[];x;b;c;d;e;f;g)];x;b;c;d;e;f;g)
+                elif ($a == [""]) then
+                    "\"\""
                 else
                     a|join(b)
                 end;
@@ -10073,28 +10077,28 @@ CheckIfXtreamCodes()
 
             if [ -n "${chnl_xc_proxy:-}" ] 
             then
-                server=${chnl_xc_proxy%\/}
-                xc_host_header=( -H "xc_host: $chnl_domain" )
+                server="${chnl_xc_proxy%\/}/http://$chnl_domain"
             else
                 server="http://$chnl_domain"
-                xc_host_header=()
             fi
 
             access_token=""
             profile=""
+            exp_date=""
             chnl_user_agent="$USER_AGENT_TV"
             mac=$(UrlencodeUpper "$chnl_mac")
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
             token_url="$server/portal.php?type=stb&action=handshake"
             profile_url="$server/portal.php?type=stb&action=get_profile"
+            account_info_url="$server/portal.php?type=account_info&action=get_main_info"
             genres_url="$server/portal.php?type=itv&action=get_genres"
 
             access_token=$(curl -s -Lm 10 \
                 -H "User-Agent: $chnl_user_agent" \
-                ${xc_host_header[@]+"${xc_host_header[@]}"} \
                 --cookie "$chnl_cookies" "$token_url" \
-                | $JQ_FILE -r '.js.token') || true
+                | $JQ_FILE -r '.js.token' 2> /dev/null) || true
+
             if [ -z "$access_token" ] 
             then
                 to_try=1
@@ -10102,19 +10106,30 @@ CheckIfXtreamCodes()
             else
                 chnl_headers="Authorization: Bearer $access_token\r\n"
                 printf -v chnl_headers_command '%b' "$chnl_headers"
+
                 profile=$(curl -s -Lm 10\
                     -H "$chnl_user_agent" \
-                    ${xc_host_header[@]+"${xc_host_header[@]}"} \
                     -H "${chnl_headers:0:-4}" \
-                    --cookie "$chnl_cookies" "$profile_url") || true
-                if [ -z "$profile" ] 
+                    --cookie "$chnl_cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
+
+                exp_date=$(curl -s -Lm 10 \
+                    -H "User-Agent: $chnl_user_agent" \
+                    -H "${chnl_headers:0:-4}" \
+                    --cookie "$chnl_cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
+
+                if [ -z "$exp_date" ] 
                 then
                     to_try=1
-                    Println "$error $chnl_mac profile"
+                    if [ -z "$profile" ] 
+                    then
+                        Println "$error $chnl_mac profile"
+                    else
+                        Println "$error $chnl_mac exp_date"
+                    fi
                 fi
             fi
 
-            if [ "$to_try" -eq 1 ] || [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
+            if [ "$to_try" -eq 1 ] 
             then
                 to_try=1
                 try_success=0
@@ -10127,21 +10142,29 @@ CheckIfXtreamCodes()
                 if [ -n "$chnl_xc_proxy" ] 
                 then
                     server=${chnl_xc_proxy%\/}
-                    chnl_stream_link=$(curl -k -s -o /dev/null -w '%{redirect_url}' "$server" \
-                        ${xc_host_header[@]+"${xc_host_header[@]}"} \
+                    IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(curl -sL "$server/?cmd=$chnl_cmd&check=1" \
                         -H "User-Agent: $chnl_user_agent" \
                         -H "${chnl_headers:0:-4}" \
-                        -H "cmd: $chnl_cmd" \
-                        --cookie "$chnl_cookies")
+                        --cookie "$chnl_cookies" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
                     if [[ ! $chnl_stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
                     then
-                        Println "$error $chnl_domain $chnl_mac $chnl_xc_proxy\n" && exit 1
+                        Println "$error $chnl_domain $chnl_mac $chnl_xc_proxy $chnl_stream_link\n" && exit 1
+                    fi
+                    access_token=$new_access_token
+                    chnl_cookies=$new_cookies
+                    if [[ ${BASH_REMATCH[1]} =~ [a-z] ]] 
+                    then
+                        chnl_stream_link="$server/?cmd=$chnl_cmd"
+                        chnl_headers=""
+                        chnl_headers_command=""
+                    else
+                        chnl_headers="Authorization: Bearer $access_token\r\n"
+                        printf -v chnl_headers_command '%b' "$chnl_headers"
                     fi
                 else
                     create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
                     cmd=$(curl -s -Lm 10 \
                         -H "User-Agent: $chnl_user_agent" \
-                        ${xc_host_header[@]+"${xc_host_header[@]}"} \
                         -H "${chnl_headers:0:-4}" \
                         --cookie "$chnl_cookies" "$create_link_url" \
                         | $JQ_FILE -r '.js.cmd') || true
@@ -11968,7 +11991,7 @@ GetServiceAccs()
         "4gtv") 
             delimiters=( $'\001' )
             IFS=$'\002\t' read -r _4gtv_acc_email _4gtv_acc_pass _4gtv_acc_token < <(JQs flat "$SERVICES_FILE" '' '
-            ."'"$service_name"'".accounts as $accounts |
+            (."'"$service_name"'".accounts | if (.|type == "string") then {} else . end) as $accounts |
             reduce ({email,password,token}|keys_unsorted[]) as $key ([];
             $accounts[$key] as $val | if $val then
                 . + [$val + "\u0001\u0002"]
@@ -16131,7 +16154,7 @@ TsImg()
 ImgcatInstall()
 {
     echo
-    AskIfContinue y "`gettext \"缺少 imgcat ,是否现在安装\"`"
+    AskIfContinue y "`gettext \"缺少 imgcat, 是否现在安装\"`"
 
     Progress &
     progress_pid=$!
@@ -17002,27 +17025,27 @@ MonitorHlsRestartChannel()
 
             if [ -n "${chnl_xc_proxy:-}" ] 
             then
-                server=${chnl_xc_proxy%\/}
-                xc_host_header=( -H "xc_host: $chnl_domain" )
+                server="${chnl_xc_proxy%\/}/http://$chnl_domain"
             else
                 server="http://$chnl_domain"
-                xc_host_header=()
             fi
 
             access_token=""
             profile=""
+            exp_date=""
             chnl_user_agent="$USER_AGENT_TV"
             mac=$(UrlencodeUpper "$chnl_mac")
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
             token_url="$server/portal.php?type=stb&action=handshake"
             profile_url="$server/portal.php?type=stb&action=get_profile"
+            account_info_url="$server/portal.php?type=account_info&action=get_main_info"
             genres_url="$server/portal.php?type=itv&action=get_genres"
 
             access_token=$(curl -s -Lm 10 -H "User-Agent: $chnl_user_agent" \
-                ${xc_host_header[@]+"${xc_host_header[@]}"} \
                 --cookie "$chnl_cookies" "$token_url" \
-                | $JQ_FILE -r '.js.token') || true
+                | $JQ_FILE -r '.js.token' 2> /dev/null) || true
+
             if [ -z "$access_token" ] 
             then
                 if [ "$to_try" -eq 1 ] 
@@ -17049,14 +17072,20 @@ MonitorHlsRestartChannel()
                     continue
                 fi
             fi
+
             chnl_headers="Authorization: Bearer $access_token\r\n"
             printf -v chnl_headers_command '%b' "$chnl_headers"
             profile=$(curl -s -Lm 10 \
                 -H "User-Agent: $chnl_user_agent" \
-                ${xc_host_header[@]+"${xc_host_header[@]}"} \
                 -H "${chnl_headers:0:-4}" \
-                --cookie "$chnl_cookies" "$profile_url") || true
-            if [ -z "$profile" ] 
+                --cookie "$chnl_cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
+
+            exp_date=$(curl -s -Lm 10 \
+                -H "User-Agent: $chnl_user_agent" \
+                -H "${chnl_headers:0:-4}" \
+                --cookie "$chnl_cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
+
+            if [ -z "$exp_date" ] 
             then
                 if [ "$to_try" -eq 1 ] 
                 then
@@ -17083,17 +17112,31 @@ MonitorHlsRestartChannel()
                 fi
             fi
 
-            if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
+            if [ -n "$chnl_xc_proxy" ] 
             then
-                if [ "$to_try" -eq 1 ] 
+                server=${chnl_xc_proxy%\/}
+                IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(curl -sL "$server/?cmd=$chnl_cmd&check=1" \
+                    -H "User-Agent: $chnl_user_agent" \
+                    -H "${chnl_headers:0:-4}" \
+                    --cookie "$chnl_cookies" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
+                if [[ ! $chnl_stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
                 then
-                    domains_tried+=("$chnl_domain")
-                    try_success=0
-                    MonitorTryAccounts
-                    if [ "$try_success" -eq 1 ] 
+                    if [ "$to_try" -eq 1 ] 
                     then
-                        MonitorHlsRestartSuccess
-                        break
+                        domains_tried+=("$chnl_domain")
+                        try_success=0
+                        MonitorTryAccounts
+                        if [ "$try_success" -eq 1 ] 
+                        then
+                            MonitorHlsRestartSuccess
+                            break
+                        elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                        then
+                            MonitorHlsRestartFail
+                            break
+                        else
+                            continue
+                        fi
                     elif [[ $restart_i -eq $((restart_nums-1)) ]] 
                     then
                         MonitorHlsRestartFail
@@ -17101,41 +17144,42 @@ MonitorHlsRestartChannel()
                     else
                         continue
                     fi
-                elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                fi
+                access_token=$new_access_token
+                chnl_cookies=$new_cookies
+                if [[ ${BASH_REMATCH[1]} =~ [a-z] ]] 
                 then
-                    MonitorHlsRestartFail
-                    break
+                    chnl_stream_link="$server/?cmd=$chnl_cmd"
+                    chnl_headers=""
+                    chnl_headers_command=""
                 else
-                    continue
+                    chnl_headers="Authorization: Bearer $access_token\r\n"
+                    printf -v chnl_headers_command '%b' "$chnl_headers"
                 fi
             else
-                if [ -n "$chnl_xc_proxy" ] 
+                create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
+                cmd=$(curl -s -Lm 10 \
+                    -H "User-Agent: $chnl_user_agent" \
+                    -H "${chnl_headers:0:-4}" \
+                    --cookie "$chnl_cookies" "$create_link_url" \
+                    | $JQ_FILE -r '.js.cmd') || true
+
+                if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
                 then
-                    server=${chnl_xc_proxy%\/}
-                    chnl_stream_link=$(curl -k -s -o /dev/null -w '%{redirect_url}' "$server" \
-                        ${xc_host_header[@]+"${xc_host_header[@]}"} \
-                        -H "User-Agent: $chnl_user_agent" \
-                        -H "${chnl_headers:0:-4}" \
-                        -H "cmd: $chnl_cmd" \
-                        --cookie "$chnl_cookies")
-                    if [[ ! $chnl_stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
+                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                then
+                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                else
+                    if [ "$to_try" -eq 1 ] 
                     then
-                        if [ "$to_try" -eq 1 ] 
+                        domains_tried+=("$chnl_domain")
+                        try_success=0
+                        MonitorTryAccounts
+                        if [ "$try_success" -eq 1 ] 
                         then
-                            domains_tried+=("$chnl_domain")
-                            try_success=0
-                            MonitorTryAccounts
-                            if [ "$try_success" -eq 1 ] 
-                            then
-                                MonitorHlsRestartSuccess
-                                break
-                            elif [[ $restart_i -eq $((restart_nums-1)) ]] 
-                            then
-                                MonitorHlsRestartFail
-                                break
-                            else
-                                continue
-                            fi
+                            MonitorHlsRestartSuccess
+                            break
                         elif [[ $restart_i -eq $((restart_nums-1)) ]] 
                         then
                             MonitorHlsRestartFail
@@ -17143,55 +17187,21 @@ MonitorHlsRestartChannel()
                         else
                             continue
                         fi
-                    fi
-                else
-                    create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
-                    cmd=$(curl -s -Lm 10 \
-                        -H "User-Agent: $chnl_user_agent" \
-                        ${xc_host_header[@]+"${xc_host_header[@]}"} \
-                        -H "${chnl_headers:0:-4}" \
-                        --cookie "$chnl_cookies" "$create_link_url" \
-                        | $JQ_FILE -r '.js.cmd') || true
-
-                    if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
+                    elif [[ $restart_i -eq $((restart_nums-1)) ]] 
                     then
-                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
-                    elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
-                    then
-                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                        MonitorHlsRestartFail
+                        break
                     else
-                        if [ "$to_try" -eq 1 ] 
-                        then
-                            domains_tried+=("$chnl_domain")
-                            try_success=0
-                            MonitorTryAccounts
-                            if [ "$try_success" -eq 1 ] 
-                            then
-                                MonitorHlsRestartSuccess
-                                break
-                            elif [[ $restart_i -eq $((restart_nums-1)) ]] 
-                            then
-                                MonitorHlsRestartFail
-                                break
-                            else
-                                continue
-                            fi
-                        elif [[ $restart_i -eq $((restart_nums-1)) ]] 
-                        then
-                            MonitorHlsRestartFail
-                            break
-                        else
-                            continue
-                        fi
+                        continue
                     fi
                 fi
+            fi
 
-                if [[ $chnl_stream_links == *" "* ]] 
-                then
-                    chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac ${chnl_stream_links#* }"
-                else
-                    chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac"
-                fi
+            if [[ $chnl_stream_links == *" "* ]] 
+            then
+                chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac ${chnl_stream_links#* }"
+            else
+                chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac"
             fi
         else
             to_try=0
@@ -17531,28 +17541,28 @@ MonitorFlvRestartChannel()
 
             if [ -n "${chnl_xc_proxy:-}" ] 
             then
-                server=${chnl_xc_proxy%\/}
-                xc_host_header=( -H "xc_host: $chnl_domain" )
+                server="${chnl_xc_proxy%\/}/http://$chnl_domain"
             else
                 server="http://$chnl_domain"
-                xc_host_header=()
             fi
 
             access_token=""
             profile=""
+            exp_date=""
             chnl_user_agent="$USER_AGENT_TV"
             mac=$(UrlencodeUpper "$chnl_mac")
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
             token_url="$server/portal.php?type=stb&action=handshake"
             profile_url="$server/portal.php?type=stb&action=get_profile"
+            account_info_url="$server/portal.php?type=account_info&action=get_main_info"
             genres_url="$server/portal.php?type=itv&action=get_genres"
 
             access_token=$(curl -s -Lm 10 \
                 -H "User-Agent: $chnl_user_agent" \
-                ${xc_host_header[@]+"${xc_host_header[@]}"} \
                 --cookie "$chnl_cookies" "$token_url" \
-                | $JQ_FILE -r '.js.token') || true
+                | $JQ_FILE -r '.js.token' 2> /dev/null) || true
+
             if [ -z "$access_token" ] 
             then
                 if [ "$to_try" -eq 1 ] 
@@ -17579,14 +17589,21 @@ MonitorFlvRestartChannel()
                     continue
                 fi
             fi
+
             chnl_headers="Authorization: Bearer $access_token\r\n"
             printf -v chnl_headers_command '%b' "$chnl_headers"
+
             profile=$(curl -s -Lm 10 \
                 -H "User-Agent: $chnl_user_agent" \
-                ${xc_host_header[@]+"${xc_host_header[@]}"} \
                 -H "${chnl_headers:0:-4}" \
-                --cookie "$chnl_cookies" "$profile_url") || true
-            if [ -z "$profile" ] 
+                --cookie "$chnl_cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
+
+            exp_date=$(curl -s -Lm 10 \
+                -H "User-Agent: $chnl_user_agent" \
+                -H "${chnl_headers:0:-4}" \
+                --cookie "$chnl_cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
+
+            if [ -z "$exp_date" ] 
             then
                 if [ "$to_try" -eq 1 ] 
                 then
@@ -17613,17 +17630,31 @@ MonitorFlvRestartChannel()
                 fi
             fi
 
-            if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
+            if [ -n "$chnl_xc_proxy" ] 
             then
-                if [ "$to_try" -eq 1 ] 
+                server=${chnl_xc_proxy%\/}
+                IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(curl -sL "$server/?cmd=$chnl_cmd&check=1" \
+                    -H "User-Agent: $chnl_user_agent" \
+                    -H "${chnl_headers:0:-4}" \
+                    --cookie "$chnl_cookies" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
+                if [[ ! $chnl_stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
                 then
-                    domains_tried+=("$chnl_domain")
-                    try_success=0
-                    MonitorTryAccounts
-                    if [ "$try_success" -eq 1 ] 
+                    if [ "$to_try" -eq 1 ] 
                     then
-                        MonitorFlvRestartSuccess
-                        break
+                        domains_tried+=("$chnl_domain")
+                        try_success=0
+                        MonitorTryAccounts
+                        if [ "$try_success" -eq 1 ] 
+                        then
+                            MonitorFlvRestartSuccess
+                            break
+                        elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                        then
+                            MonitorFlvRestartFail
+                            break
+                        else
+                            continue
+                        fi
                     elif [[ $restart_i -eq $((restart_nums-1)) ]] 
                     then
                         MonitorFlvRestartFail
@@ -17631,41 +17662,42 @@ MonitorFlvRestartChannel()
                     else
                         continue
                     fi
-                elif [[ $restart_i -eq $((restart_nums-1)) ]] 
+                fi
+                access_token=$new_access_token
+                chnl_cookies=$new_cookies
+                if [[ ${BASH_REMATCH[1]} =~ [a-z] ]] 
                 then
-                    MonitorFlvRestartFail
-                    break
+                    chnl_stream_link="$server/?cmd=$chnl_cmd"
+                    chnl_headers=""
+                    chnl_headers_command=""
                 else
-                    continue
+                    chnl_headers="Authorization: Bearer $access_token\r\n"
+                    printf -v chnl_headers_command '%b' "$chnl_headers"
                 fi
             else
-                if [ -n "$chnl_xc_proxy" ] 
+                create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
+                cmd=$(curl -s -Lm 10 \
+                    -H "User-Agent: $chnl_user_agent" \
+                    -H "${chnl_headers:0:-4}" \
+                    --cookie "$chnl_cookies" "$create_link_url" \
+                    | $JQ_FILE -r '.js.cmd') || true
+
+                if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
                 then
-                    server=${chnl_xc_proxy%\/}
-                    chnl_stream_link=$(curl -k -s -o /dev/null -w '%{redirect_url}' "$server" \
-                        ${xc_host_header[@]+"${xc_host_header[@]}"} \
-                        -H "User-Agent: $chnl_user_agent" \
-                        -H "${chnl_headers:0:-4}" \
-                        -H "cmd: $chnl_cmd" \
-                        --cookie "$chnl_cookies")
-                    if [[ ! $chnl_stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
+                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
+                then
+                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                else
+                    if [ "$to_try" -eq 1 ] 
                     then
-                        if [ "$to_try" -eq 1 ] 
+                        domains_tried+=("$chnl_domain")
+                        try_success=0
+                        MonitorTryAccounts
+                        if [ "$try_success" -eq 1 ] 
                         then
-                            domains_tried+=("$chnl_domain")
-                            try_success=0
-                            MonitorTryAccounts
-                            if [ "$try_success" -eq 1 ] 
-                            then
-                                MonitorFlvRestartSuccess
-                                break
-                            elif [[ $restart_i -eq $((restart_nums-1)) ]] 
-                            then
-                                MonitorFlvRestartFail
-                                break
-                            else
-                                continue
-                            fi
+                            MonitorFlvRestartSuccess
+                            break
                         elif [[ $restart_i -eq $((restart_nums-1)) ]] 
                         then
                             MonitorFlvRestartFail
@@ -17673,55 +17705,21 @@ MonitorFlvRestartChannel()
                         else
                             continue
                         fi
-                    fi
-                else
-                    create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
-                    cmd=$(curl -s -Lm 10 \
-                        -H "User-Agent: $chnl_user_agent" \
-                        ${xc_host_header[@]+"${xc_host_header[@]}"} \
-                        -H "${chnl_headers:0:-4}" \
-                        --cookie "$chnl_cookies" "$create_link_url" \
-                        | $JQ_FILE -r '.js.cmd') || true
-
-                    if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
+                    elif [[ $restart_i -eq $((restart_nums-1)) ]] 
                     then
-                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
-                    elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
-                    then
-                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                        MonitorFlvRestartFail
+                        break
                     else
-                        if [ "$to_try" -eq 1 ] 
-                        then
-                            domains_tried+=("$chnl_domain")
-                            try_success=0
-                            MonitorTryAccounts
-                            if [ "$try_success" -eq 1 ] 
-                            then
-                                MonitorFlvRestartSuccess
-                                break
-                            elif [[ $restart_i -eq $((restart_nums-1)) ]] 
-                            then
-                                MonitorFlvRestartFail
-                                break
-                            else
-                                continue
-                            fi
-                        elif [[ $restart_i -eq $((restart_nums-1)) ]] 
-                        then
-                            MonitorFlvRestartFail
-                            break
-                        else
-                            continue
-                        fi
+                        continue
                     fi
                 fi
+            fi
 
-                if [[ $chnl_stream_links == *" "* ]] 
-                then
-                    chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac ${chnl_stream_links#* }"
-                else
-                    chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac"
-                fi
+            if [[ $chnl_stream_links == *" "* ]] 
+            then
+                chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac ${chnl_stream_links#* }"
+            else
+                chnl_stream_links="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac"
             fi
         else
             to_try=0
@@ -17899,17 +17897,16 @@ MonitorTryAccounts()
 
             if [ -n "${chnl_xc_proxy:-}" ] 
             then
-                server=${chnl_xc_proxy%\/}
-                xc_host_header=( -H "xc_host: $chnl_domain" )
+                server="${chnl_xc_proxy%\/}/http://$chnl_domain"
             else
                 server="http://$chnl_domain"
-                xc_host_header=()
             fi
 
             chnl_user_agent="$USER_AGENT_TV"
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
             token_url="$server/portal.php?type=stb&action=handshake"
             profile_url="$server/portal.php?type=stb&action=get_profile"
+            account_info_url="$server/portal.php?type=account_info&action=get_main_info"
             genres_url="$server/portal.php?type=itv&action=get_genres"
 
             macs+=("$chnl_mac")
@@ -17938,14 +17935,14 @@ MonitorTryAccounts()
                 then
                     access_token=""
                     profile=""
+                    exp_date=""
                     mac=$(UrlencodeUpper "$mac_address")
                     chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
 
                     access_token=$(curl -s -Lm 10 \
                         -H "User-Agent: $chnl_user_agent" \
-                        ${xc_host_header[@]+"${xc_host_header[@]}"} \
                         --cookie "$chnl_cookies" "$token_url" \
-                        | $JQ_FILE -r '.js.token') || true
+                        | $JQ_FILE -r '.js.token' 2> /dev/null) || true
                     if [ -z "$access_token" ] 
                     then
                         continue
@@ -17953,12 +17950,18 @@ MonitorTryAccounts()
 
                     chnl_headers="Authorization: Bearer $access_token\r\n"
                     printf -v chnl_headers_command '%b' "$chnl_headers"
+
                     profile=$(curl -s -Lm 10 \
                         -H "User-Agent: $chnl_user_agent" \
-                        ${xc_host_header[@]+"${xc_host_header[@]}"} \
                         -H "${chnl_headers:0:-4}" \
-                        --cookie "$chnl_cookies" "$profile_url") || true
-                    if [ -z "$profile" ] || [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]]
+                        --cookie "$chnl_cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
+
+                    exp_date=$(curl -s -Lm 10 \
+                        -H "User-Agent: $chnl_user_agent" \
+                        -H "${chnl_headers:0:-4}" \
+                        --cookie "$chnl_cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
+
+                    if [ -z "$exp_date" ] 
                     then
                         continue
                     fi
@@ -17966,21 +17969,29 @@ MonitorTryAccounts()
                     if [ -n "$chnl_xc_proxy" ] 
                     then
                         server=${chnl_xc_proxy%\/}
-                        chnl_stream_link=$(curl -k -s -o /dev/null -w '%{redirect_url}' "$server" \
-                            ${xc_host_header[@]+"${xc_host_header[@]}"} \
+                        IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(curl -sL "$server/?cmd=$chnl_cmd&check=1" \
                             -H "User-Agent: $chnl_user_agent" \
                             -H "${chnl_headers:0:-4}" \
-                            -H "cmd: $chnl_cmd" \
-                            --cookie "$chnl_cookies")
+                            --cookie "$chnl_cookies" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
                         if [[ ! $chnl_stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
                         then
                             continue
+                        fi
+                        access_token=$new_access_token
+                        chnl_cookies=$new_cookies
+                        if [[ ${BASH_REMATCH[1]} =~ [a-z] ]] 
+                        then
+                            chnl_stream_link="$server/?cmd=$chnl_cmd"
+                            chnl_headers=""
+                            chnl_headers_command=""
+                        else
+                            chnl_headers="Authorization: Bearer $access_token\r\n"
+                            printf -v chnl_headers_command '%b' "$chnl_headers"
                         fi
                     else
                         create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
                         cmd=$(curl -s -Lm 10 \
                             -H "User-Agent: $chnl_user_agent" \
-                            ${xc_host_header[@]+"${xc_host_header[@]}"} \
                             -H "${chnl_headers:0:-4}" \
                             --cookie "$chnl_cookies" "$create_link_url" \
                             | $JQ_FILE -r '.js.cmd') || true
@@ -19503,6 +19514,10 @@ VerifyXtreamCodesMac()
         Println "$info 验证 $domain ..."
 
         server="http://$domain"
+        token_url="$server/portal.php?type=stb&action=handshake"
+        profile_url="$server/portal.php?type=stb&action=get_profile"
+        account_info_url="$server/portal.php?type=account_info&action=get_main_info"
+        [ -z "${timezone:-}" ] && timezone=$(UrlencodeUpper "Europe/Amsterdam")
     fi
 
     if [ -z "$ip" ] 
@@ -19519,15 +19534,13 @@ VerifyXtreamCodesMac()
     mac_address=$account
     access_token=""
     profile=""
+    exp_date=""
     mac=$(UrlencodeUpper "$mac_address")
-    timezone=$(UrlencodeUpper "Europe/Amsterdam")
-    token_url="$server/portal.php?type=stb&action=handshake"
-    profile_url="$server/portal.php?type=stb&action=get_profile"
 
     access_token=$(curl -s -Lm 10 \
         -H "User-Agent: $USER_AGENT_TV" \
         --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" \
-        | $JQ_FILE -r '.js.token') || true
+        | $JQ_FILE -r '.js.token' 2> /dev/null) || true
 
     if [ -z "$access_token" ] 
     then
@@ -19539,23 +19552,26 @@ VerifyXtreamCodesMac()
     profile=$(curl -s -Lm 10 \
         -H "User-Agent: $USER_AGENT_TV" \
         -H "Authorization: Bearer $access_token" \
-        --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url") || true
+        --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
 
-    if [ -z "$profile" ] 
+    exp_date=$(curl -s -Lm 10 \
+        -H "User-Agent: $USER_AGENT_TV" \
+        -H "Authorization: Bearer $access_token" \
+        --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
+
+    if [ -z "$exp_date" ] 
     then
-        Println "$error $domain $mac_address profile"
+        if [ -z "$profile" ] 
+        then
+            Println "$error $domain $mac_address profile"
+        else
+            Println "$error $domain $mac_address exp_date"
+        fi
         to_continue=1
         return 0
     fi
 
-    if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
-    then
-        Println "$error $mac_address profile id"
-        to_continue=1
-        return 0
-    else
-        account=$mac_address
-    fi
+    account=$mac_address
 }
 
 XtreamCodesList()
@@ -20181,7 +20197,7 @@ SearchXtreamCodesChnls()
                 ordered_list_page=$(curl -s -Lm 10 \
                     -H "User-Agent: $user_agent" \
                     -H "${headers:0:-4}" \
-                    --cookie "$cookies" "$ordered_list_url")
+                    --cookie "$cookies" "$ordered_list_url" | $JQ_FILE -r -c '.' 2> /dev/null) || ordered_list_page=""
             fi
             ordered_list_pages[page_index]=$ordered_list_page
         fi
@@ -20340,15 +20356,12 @@ XtreamCodesListChnls()
             inquirer list_input "是否使用代理 $d_xc_proxy: " yn_options use_proxy_yn
             if [[ $use_proxy_yn == "$i18n_yes" ]]
             then
-                server=${d_xc_proxy%\/}
-                xc_host_header=( -H "xc_host: $domain" )
+                server="${d_xc_proxy%\/}/http://$domain"
             else
                 server="http://$domain"
-                xc_host_header=()
             fi
         else
             server="http://$domain"
-            xc_host_header=()
             use_proxy_yn="$i18n_no"
         fi
 
@@ -20364,9 +20377,8 @@ XtreamCodesListChnls()
 
             access_token=$(curl -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
-                ${xc_host_header[@]+"${xc_host_header[@]}"} \
                 --cookie "$cookies" "$token_url" \
-                | $JQ_FILE -r '.js.token') || true
+                | $JQ_FILE -r '.js.token' 2> /dev/null) || true
 
             if [ -z "$access_token" ] 
             then
@@ -20405,83 +20417,22 @@ XtreamCodesListChnls()
 
             profile=$(curl -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
-                ${xc_host_header[@]+"${xc_host_header[@]}"} \
                 -H "${headers:0:-4}" \
-                --cookie "$cookies" "$profile_url") || true
-
-            if [ -z "$profile" ] 
-            then
-                Println "$error $domain $mac_address profile\n"
-
-                mac_addresses_failed+=("$mac_address")
-
-                for mac in "${macs[@]}"
-                do
-                    if [ "$mac_address" != "$mac" ] 
-                    then
-                        for mac_address_failed in "${mac_addresses_failed[@]}"
-                        do
-                            if [ "$mac_address_failed" == "$mac" ] 
-                            then
-                                continue 2
-                            fi
-                        done
-                        for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
-                        do
-                            if [ "$xc_chnl_mac" == "$domain/$mac" ] 
-                            then
-                                continue 2
-                            fi
-                        done
-                        Println "$info 测试 $mac\n"
-                        mac_address=$mac
-                        continue 2
-                    fi
-                done
-                exit 1
-            fi
-
-            if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
-            then
-                Println "$error $domain $mac_address profile id\n"
-
-                mac_addresses_failed+=("$mac_address")
-
-                for mac in "${macs[@]}"
-                do
-                    if [ "$mac_address" != "$mac" ] 
-                    then
-                        for mac_address_failed in "${mac_addresses_failed[@]}"
-                        do
-                            if [ "$mac_address_failed" == "$mac" ] 
-                            then
-                                continue 2
-                            fi
-                        done
-                        for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
-                        do
-                            if [ "$xc_chnl_mac" == "$domain/$mac" ] 
-                            then
-                                continue 2
-                            fi
-                        done
-                        Println "$info 测试 $mac\n"
-                        mac_address=$mac
-                        continue 2
-                    fi
-                done
-                exit 1
-            fi
+                --cookie "$cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
 
             exp_date=$(curl -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
-                ${xc_host_header[@]+"${xc_host_header[@]}"} \
                 -H "${headers:0:-4}" \
-                --cookie "$cookies" "$account_info_url" | $JQ_FILE -r '.js.phone') || true
+                --cookie "$cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
 
             if [ -z "$exp_date" ] 
             then
-                Println "$error $domain $mac_address exp_date\n"
+                if [ -z "$profile" ] 
+                then
+                    Println "$error $domain $mac_address profile\n"
+                else
+                    Println "$error $domain $mac_address exp_date\n"
+                fi
 
                 mac_addresses_failed+=("$mac_address")
 
@@ -20523,7 +20474,6 @@ XtreamCodesListChnls()
                 genres_list="$genres_list ${green}$genres_count.${normal}${indent_6}$map_title\n\n"
             done < <(curl -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
-                ${xc_host_header[@]+"${xc_host_header[@]}"} \
                 -H "${headers:0:-4}" \
                 --cookie "$cookies" "$genres_url" \
                 | $JQ_FILE '.js[] | [.id,.title] | join("=")')
@@ -20604,9 +20554,8 @@ XtreamCodesListChnls()
                         ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=1"
                         ordered_list_page=$(curl -s -Lm 10 \
                             -H "User-Agent: $user_agent" \
-                            ${xc_host_header[@]+"${xc_host_header[@]}"} \
                             -H "${headers:0:-4}" \
-                            --cookie "$cookies" "$ordered_list_url")
+                            --cookie "$cookies" "$ordered_list_url" | $JQ_FILE -r -c '.' 2> /dev/null) || ordered_list_page=""
                         [ -z "$ordered_list_page" ] && return_err=1 && continue 2
                         genres_list_pages[genres_index]="$ordered_list_page"
                     fi
@@ -20648,9 +20597,8 @@ XtreamCodesListChnls()
                                 ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=$page"
                                 ordered_list_page=$(curl -s -Lm 10 \
                                     -H "User-Agent: $user_agent" \
-                                    ${xc_host_header[@]+"${xc_host_header[@]}"} \
                                     -H "${headers:0:-4}" \
-                                    --cookie "$cookies" "$ordered_list_url")
+                                    --cookie "$cookies" "$ordered_list_url" | $JQ_FILE -r -c '.' 2> /dev/null) || ordered_list_page=""
                                 [ -z "$ordered_list_page" ] && return_err=1 && continue 3
                             fi
                             ordered_list_pages[page_index]=$ordered_list_page
@@ -20764,27 +20712,11 @@ XtreamCodesListChnls()
 
                         if [ "$use_proxy_yn" == "$i18n_yes" ] 
                         then
-                            server=${d_xc_proxy%\/}
-                            stream_link=$(curl -k -s -o /dev/null -w '%{redirect_url}' "$server" \
-                                ${xc_host_header[@]+"${xc_host_header[@]}"} \
-                                -H "User-Agent: $user_agent" \
-                                -H "${headers:0:-4}" \
-                                -H "cmd: ${xc_chnls_cmd[xc_chnls_index]}" \
-                                --cookie "$cookies")
-                            if [[ ! $stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
-                            then
-                                Println "$error curl -k -s -o /dev/null -w '%{redirect_url}' '$server' -H 'xc_host: $domain' -H 'User-Agent: $user_agent' -H '${headers:0:-4}' -H 'cmd: ${xc_chnls_cmd[xc_chnls_index]}' --cookie '$cookies'"
-                                Println "$error 返回错误[ stream_link: ${stream_link:-无} ], 请重试"
-                                continue
-                            fi
-                            #curl -k -L -o - "$stream_link" \
-                            #    -H "xc_host: ${BASH_REMATCH[2]}" \
-                            #    -H "redirect: ${BASH_REMATCH[3]}" \
-                            #    -H "User-Agent: $user_agent" \
-                            #    -H "${headers:0:-4}" \
-                            #    --cookie "$cookies"
+                            ffprobe_headers="Cookie: $cookies\r\n"
+                            stream_link="$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}"
                             Println "${green}${xc_chnls_name[xc_chnls_index]}:${normal} $stream_link\n"
                         else
+                            ffprobe_headers="Authorization: Bearer $access_token\r\nCookie: $cookies\r\n"
                             create_link_url="$server/portal.php?type=itv&action=create_link&cmd=${xc_chnls_cmd[xc_chnls_index]}&series=&forced_storage=undefined&disable_ad=0&download=0"
 
                             cmd=$(curl -s -Lm 10 \
@@ -20807,14 +20739,52 @@ XtreamCodesListChnls()
                             Println "${green}${xc_chnls_name[xc_chnls_index]}:${normal} $stream_link\n"
                         fi
 
-                        if $FFPROBE -i "$stream_link" -user_agent "$user_agent" \
-                            -headers "$headers_command" \
-                            -cookies "$cookies" -hide_banner 
+                        EXIT_STATUS=0
+
+                        printf -v ffprobe_headers_command '%b' "$ffprobe_headers"
+
+                        $FFPROBE -i "$stream_link" -user_agent "$user_agent" \
+                            -headers "$ffprobe_headers_command" -hide_banner || EXIT_STATUS=$?
+
+                        if [ "$EXIT_STATUS" -ne 0 ] && [ "$use_proxy_yn" == "$i18n_yes" ]
+                        then
+                            Println "$info 尝试直连 ..."
+                            # curl -k -s -o /dev/null -w '%{redirect_url}'
+                            IFS=" " read -r stream_link new_access_token new_cookies < <(curl -sL "$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}&check=1" \
+                                -H "User-Agent: $user_agent" \
+                                --cookie "$cookies" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
+                            if [[ ! $stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
+                            then
+                                Println "$error curl -sL '$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}&check=1' -H 'User-Agent: $user_agent' -H '${headers:0:-4}' --cookie '$cookies'"
+                                Println "$error 返回错误[ stream_link: ${stream_link:-无} ], 请重试"
+                                continue
+                            fi
+                            access_token=$new_access_token
+                            cookies=$new_cookies
+                            ffprobe_headers="Authorization: Bearer $access_token\r\nCookie: $cookies\r\n"
+                            printf -v ffprobe_headers_command '%b' "$ffprobe_headers"
+                            EXIT_STATUS=0
+                            $FFPROBE -i "$stream_link" -user_agent "$user_agent" \
+                                -headers "$ffprobe_headers_command" -hide_banner || EXIT_STATUS=$?
+                        fi
+
+                        if [ "$EXIT_STATUS" -eq 0 ]
                         then
                             echo
                             inquirer list_input "是否添加此频道" ny_options add_channel_yn
                             if [[ $add_channel_yn == "$i18n_yes" ]] 
                             then
+                                if [ "$use_proxy_yn" == "$i18n_yes" ] 
+                                then
+                                    if [[ $stream_link =~ cmd= ]] 
+                                    then
+                                        headers=""
+                                        headers_command=""
+                                    else
+                                        headers="Authorization: Bearer $access_token\r\n"
+                                        printf -v headers_command '%b' "$headers"
+                                    fi
+                                fi
                                 stream_links="$domain|$stream_link|${xc_chnls_cmd[xc_chnls_index]}|$mac_address"
                                 echo
                                 inquirer list_input "是否 添加/替换 现有频道直播源" yn_options append_channel_yn
@@ -20929,16 +20899,18 @@ XtreamCodesAddMac()
         inquirer list_input "是否使用代理 $d_xc_proxy 验证: " yn_options use_proxy_yn
         if [[ $use_proxy_yn == "$i18n_yes" ]]
         then
-            server=${d_xc_proxy%\/}
-            xc_host_header=( -H "xc_host: $domain" )
+            server="${d_xc_proxy%\/}/http://$domain"
         else
             server="http://$domain"
-            xc_host_header=()
         fi
     else
         server="http://$domain"
-        xc_host_header=()
     fi
+
+    timezone=$(UrlencodeUpper "Europe/Amsterdam")
+    token_url="$server/portal.php?type=stb&action=handshake"
+    profile_url="$server/portal.php?type=stb&action=get_profile"
+    account_info_url="$server/portal.php?type=account_info&action=get_main_info"
 
     Println "$info 验证中..."
 
@@ -20946,17 +20918,14 @@ XtreamCodesAddMac()
     for mac_address in "${macs[@]}"
     do
         access_token=""
-        profile=""
+        exp_date=""
         mac=$(UrlencodeUpper "$mac_address")
-        timezone=$(UrlencodeUpper "Europe/Amsterdam")
-        token_url="$server/portal.php?type=stb&action=handshake"
-        profile_url="$server/portal.php?type=stb&action=get_profile"
 
         access_token=$(curl -s -Lm 10 \
             -H "User-Agent: $USER_AGENT_TV" \
-            ${xc_host_header[@]+"${xc_host_header[@]}"} \
             --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" \
-            | $JQ_FILE -r '.js.token') || true
+            | $JQ_FILE -r '.js.token' 2> /dev/null) || true
+
         if [ -z "$access_token" ] 
         then
             if [ "$add_mac_success" -eq 0 ] 
@@ -20967,26 +20936,26 @@ XtreamCodesAddMac()
                 continue
             fi
         fi
+
         profile=$(curl -s -Lm 10 \
             -H "User-Agent: $USER_AGENT_TV" \
-            ${xc_host_header[@]+"${xc_host_header[@]}"} \
             -H "Authorization: Bearer $access_token" \
-            --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url") || true
-        if [ -z "$profile" ] 
+            --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
+
+        exp_date=$(curl -s -Lm 10 \
+            -H "User-Agent: $USER_AGENT_TV" \
+            -H "Authorization: Bearer $access_token" \
+            --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
+
+        if [ -z "$exp_date" ] 
         then
             if [ "$add_mac_success" -eq 0 ] 
             then
-                Println "$error $domain $mac_address profile\n" && exit 1
+                Println "$error $domain $mac_address exp_date\n" && exit 1
             else
-                Println "$error $domain $mac_address profile"
+                Println "$error $domain $mac_address exp_date"
                 continue
             fi
-        fi
-
-        if [[ $($JQ_FILE -r '.js.id' <<< "$profile") == null ]] 
-        then
-            Println "$error $domain $mac_address 地址错误!\n"
-            continue
         fi
 
         add_mac_success=1
@@ -21202,11 +21171,7 @@ OpenrestyInstall()
     mkdir -p "$nginx_prefix/conf/sites_enabled/"
     mkdir -p "$nginx_prefix/html/localhost/"
 
-    if [[ ! -x $(command -v crossplane) ]] 
-    then
-        Println "$info 安装 crossplane ..."
-        CrossplaneInstall
-    fi
+    CrossplaneInstall
 }
 
 NginxInstall()
@@ -21329,11 +21294,7 @@ NginxInstall()
     mkdir -p "$nginx_prefix/conf/sites_enabled/"
     mkdir -p "$nginx_prefix/html/localhost/"
 
-    if [[ ! -x $(command -v crossplane) ]] 
-    then
-        Println "$info 安装 crossplane ..."
-        CrossplaneInstall
-    fi
+    CrossplaneInstall
 }
 
 NginxUninstall()
@@ -21406,17 +21367,17 @@ NginxToggle()
 
 NginxRestart()
 {
-    systemctl restart $nginx_name
-    Println "$info $nginx_name 重启成功\n"
+    if systemctl restart $nginx_name 
+    then
+        Println "$info $nginx_name 重启成功\n"
+    else
+        Println "$error $nginx_name 重启失败, 请检查配置\n"
+    fi
 }
 
 NginxParseConfig()
 {
-    if [[ ! -x $(command -v crossplane) ]] 
-    then
-        Println "$info 安装 crossplane ..."
-        CrossplaneInstall
-    fi
+    CrossplaneInstall
 
     if TMP_FILE=$(mktemp -q)
     then
@@ -21459,11 +21420,11 @@ NginxGetConfig()
     level_2_directive level_2_args level_3_directive level_3_args \
     level_4_directive level_4_args level_5_directive level_5_args < <(
     JQs flat_c "$parse_out" '' \
-    '(.config.parsed|if . == "" then {} else . end) as $level_1 |
-    ($level_1.block|if . == "" then {} else . end) as $level_2 |
-    ($level_2.block|if . == "" then {} else . end) as $level_3 |
-    ($level_3.block|if . == "" then {} else . end) as $level_4 |
-    ($level_4.block|if . == "" then {} else . end) as $level_5 |
+    '(.config.parsed|if (.|type == "string") then {} else . end) as $level_1 |
+    ($level_1.block|if (.|type == "string") then {} else . end) as $level_2 |
+    ($level_2.block|if (.|type == "string") then {} else . end) as $level_3 |
+    ($level_3.block|if (.|type == "string") then {} else . end) as $level_4 |
+    ($level_4.block|if (.|type == "string") then {} else . end) as $level_5 |
     [.status + "\u0007",
     (.errors|if . == "" then {} else . end).error + "\u0007",
     ($level_1.directive|if . != null then (. + $d2) else . end) + "\u0007",
@@ -21698,7 +21659,7 @@ NginxListDomain()
                 elif [ "$level_3_directive" == "server_name" ] 
                 then
                     [ -n "$nginx_domain_server_name_list" ] && nginx_domain_server_name_list="$nginx_domain_server_name_list, "
-                    nginx_domain_server_name_list="$nginx_domain_server_name_list${level_3_args//${delimiters[0]}/ }"
+                    nginx_domain_server_name_list="$nginx_domain_server_name_list${level_3_args//${delimiters[0]}/, }"
                 elif [ "$level_3_directive" == "location" ] 
                 then
                     if [ "${level_3_args}" == "/flv" ] 
@@ -22021,19 +21982,26 @@ NginxInputArgs()
     new_args=""
     while true 
     do
-        [ -n "$new_args" ] && new_args="$new_args,"
-        Println "$tip 如果有空字符需包在 \"\" 中"
-        inquirer text_input "输入单个指令值: " args "不设置"
-        if [ "$args" == "不设置" ] 
+        Println "$tip 空字符用 '' 表示"
+        inquirer text_input "输入单个指令值: " arg "不设置"
+
+        if [ "$arg" == "不设置" ] 
         then
-            args=""
             break
-        elif [[ $args =~ ^\"(.*)\"$ ]] 
-        then
-            new_args="$new_args$args"
-        else
-            new_args="$new_args\"$args\""
         fi
+
+        [ -n "$new_args" ] && new_args="$new_args,"
+
+        if [ "$arg" == "''" ] 
+        then
+            arg=""
+        else
+            arg=${arg//\\/\\\\}
+            arg=${arg//\"/\\\"}
+        fi
+
+        new_args="$new_args\"$arg\""
+
         echo
         inquirer list_input "继续添加指令值" ny_options yn_option
         if [ "$yn_option" == "$i18n_no" ] 
@@ -22343,7 +22311,7 @@ NginxAddDirective()
 
             zh=( "" "一" "二" "三" "四" "五" )
 
-            Println "$tip 如果有空字符需包在 \"\" 中"
+            Println "$tip 空字符用 '' 表示"
             inquirer text_input "输入${zh[level_id]}级指令: " new_directive "$i18n_cancel"
 
             if [ "$new_directive" == "$i18n_cancel" ] 
@@ -22351,9 +22319,9 @@ NginxAddDirective()
                 return 0
             fi
 
-            if [[ $new_directive =~ ^\"(.*)\"$ ]] 
+            if [ "$new_directive" == "''" ] 
             then
-                new_directive=${BASH_REMATCH[1]}
+                new_directive=""
             fi
 
             NginxInputArgs
@@ -22959,20 +22927,18 @@ NginxConfigDirective()
 
                 for((level_1_index=0;level_1_index<level_1_count;level_1_index++));
                 do
-                    level_1_option=${level_1_directive_arr[level_1_index]:-\"\"}
+                    level_1_option="${level_1_directive_arr[level_1_index]:-''}"
 
                     if [ -n "${level_1_args_arr[level_1_index]}" ] 
                     then
                         IFS="${delimiters[0]}" read -r -a args <<< "${level_1_args_arr[level_1_index]}${delimiters[0]}"
                         for arg in "${args[@]}"
                         do
-                            if [[ $arg == *" "* ]] 
-                            then
-                                arg="\"$arg\""
-                            fi
-                            level_1_option="$level_1_option ${arg:-\"\"}"
+                            level_1_option="$level_1_option ${arg:-''}"
                         done
                     fi
+
+                    level_1_option=${level_1_option//\\\\/\\}
 
                     if [ "$level_2_d1_count" -gt 0 ] && [ -n "${level_2_directive_arr[level_1_index]}" ]
                     then
@@ -23058,20 +23024,18 @@ NginxConfigDirective()
 
                     for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
                     do
-                        level_2_option=${level_2_directive_d1_arr[level_2_index]:-\"\"}
+                        level_2_option="${level_2_directive_d1_arr[level_2_index]:-''}"
 
                         if [ -n "${level_2_args_d1_arr[level_2_index]}" ] 
                         then
                             IFS="${delimiters[0]}" read -r -a args <<< "${level_2_args_d1_arr[level_2_index]}${delimiters[0]}"
                             for arg in "${args[@]}"
                             do
-                                if [[ $arg == *" "* ]] 
-                                then
-                                    arg="\"$arg\""
-                                fi
-                                level_2_option="$level_2_option ${arg:-\"\"}"
+                                level_2_option="$level_2_option ${arg:-''}"
                             done
                         fi
+
+                        level_2_option=${level_2_option//\\\\/\\}
 
                         if [ "$level_3_d1_count" -gt 0 ] && [ -n "${level_3_directive_arr[level_1_index]}" ] && [ -n "${level_3_directive_d1_arr[level_2_index]}" ]
                         then
@@ -23182,20 +23146,18 @@ NginxConfigDirective()
 
                         for((level_3_index=0;level_3_index<${#level_3_directive_d2_arr[@]};level_3_index++));
                         do
-                            level_3_option=${level_3_directive_d2_arr[level_3_index]:-\"\"}
+                            level_3_option="${level_3_directive_d2_arr[level_3_index]:-''}"
 
                             if [ -n "${level_3_args_d2_arr[level_3_index]}" ] 
                             then
                                 IFS="${delimiters[0]}" read -r -a args <<< "${level_3_args_d2_arr[level_3_index]}${delimiters[0]}"
                                 for arg in "${args[@]}"
                                 do
-                                    if [[ $arg == *" "* ]] 
-                                    then
-                                        arg="\"$arg\""
-                                    fi
-                                    level_3_option="$level_3_option ${arg:-\"\"}"
+                                    level_3_option="$level_3_option ${arg:-''}"
                                 done
                             fi
+
+                            level_3_option=${level_3_option//\\\\/\\}
 
                             if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
                             then
@@ -23320,20 +23282,18 @@ NginxConfigDirective()
 
                             for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
                             do
-                                level_4_option=${level_4_directive_d3_arr[level_4_index]:-\"\"}
+                                level_4_option="${level_4_directive_d3_arr[level_4_index]:-''}"
 
                                 if [ -n "${level_4_args_d3_arr[level_4_index]}" ] 
                                 then
                                     IFS="${delimiters[0]}" read -r -a args <<< "${level_4_args_d3_arr[level_4_index]}${delimiters[0]}"
                                     for arg in "${args[@]}"
                                     do
-                                        if [[ $arg == *" "* ]] 
-                                        then
-                                            arg="\"$arg\""
-                                        fi
-                                        level_4_option="$level_4_option ${arg:-\"\"}"
+                                        level_4_option="$level_4_option ${arg:-''}"
                                     done
                                 fi
+
+                                level_4_option=${level_4_option//\\\\/\\}
 
                                 if [ "$level_5_d1_count" -gt 0 ] && [ -n "${level_5_directive_arr[level_1_index]}" ] && [ -n "${level_5_directive_d1_arr[level_2_index]}" ] && [ -n "${level_5_directive_d2_arr[level_3_index]}" ] && [ -n "${level_5_directive_d3_arr[level_4_index]}" ]
                                 then
@@ -23451,22 +23411,18 @@ NginxConfigDirective()
 
                                 for((level_5_index=0;level_5_index<${#level_5_directive_d4_arr[@]};level_5_index++));
                                 do
-                                    level_5_option=${level_5_directive_d4_arr[level_5_index]:-\"\"}
+                                    level_5_option="${level_5_directive_d4_arr[level_5_index]:-''}"
 
                                     if [ -n "${level_5_args_d4_arr[level_5_index]}" ] 
                                     then
                                         IFS="${delimiters[0]}" read -r -a args <<< "${level_5_args_d4_arr[level_5_index]}${delimiters[0]}"
                                         for arg in "${args[@]}"
                                         do
-                                            if [[ $arg == *" "* ]] 
-                                            then
-                                                arg="\"$arg\""
-                                            fi
-                                            level_5_option="$level_5_option ${arg:-\"\"}"
+                                            level_5_option="$level_5_option ${arg:-''}"
                                         done
                                     fi
 
-                                    level_5_options+=("$level_5_option")
+                                    level_5_options+=("${level_5_option//\\\\/\\}")
                                 done
                             fi
                         fi
@@ -23968,13 +23924,13 @@ echo '#real_ip_header X-Forwarded-For;' >> $nginx_prefix/conf/cloudflare_ip.conf
 NginxEnableDomain()
 {
     ln -sf "$nginx_prefix/conf/sites_available/$server_domain.conf" "$nginx_prefix/conf/sites_enabled/$server_domain.conf"
-    systemctl restart $nginx_name
+    NginxRestart
 }
 
 NginxDisableDomain()
 {
     rm -f "$nginx_prefix/conf/sites_enabled/$server_domain.conf"
-    systemctl restart $nginx_name
+    NginxRestart
 }
 
 NginxAppendHttpConf()
@@ -28993,7 +28949,7 @@ V2rayListPolicy()
 V2raySetPolicy()
 {
     V2rayListPolicy
-    yn_options=( '开启' '关闭' )
+    switch_options=( '开启' '关闭' )
     echo
     set_policy_options=( '添加策略等级' '开关入站上行流量统计' '开关入站下行流量统计' '开关出站上行流量统计' '开关出站下行流量统计' '删除策略等级' )
     inquirer list_input "选择操作" set_policy_options set_policy_option
@@ -29051,7 +29007,7 @@ V2raySetPolicy()
         echo
         inquirer text_input "每个连接的缓存大小: " policy_level_buffer_size 512
         echo
-        inquirer list_input "当前等级的所有用户的上行流量统计" yn_options policy_level_stats_user_uplink
+        inquirer list_input "当前等级的所有用户的上行流量统计" switch_options policy_level_stats_user_uplink
         if [ "$policy_level_stats_user_uplink" == "开启" ] 
         then
             policy_level_stats_user_uplink="true"
@@ -29059,7 +29015,7 @@ V2raySetPolicy()
             policy_level_stats_user_uplink="false"
         fi
         echo
-        inquirer list_input "当前等级的所有用户的上行流量统计" yn_options policy_level_stats_user_downlink
+        inquirer list_input "当前等级的所有用户的上行流量统计" switch_options policy_level_stats_user_downlink
         if [ "$policy_level_stats_user_downlink" == "开启" ] 
         then
             policy_level_stats_user_downlink="true"
@@ -29085,7 +29041,7 @@ V2raySetPolicy()
         Println "$info 策略等级添加成功\n"
     elif [ "$set_policy_option" == "开关入站上行流量统计" ] 
     then
-        inquirer list_input "所有入站代理的上行流量统计" yn_options policy_system_stats_inbound_uplink
+        inquirer list_input "所有入站代理的上行流量统计" switch_options policy_system_stats_inbound_uplink
         if [ "$policy_system_stats_inbound_uplink" == "开启" ] 
         then
             policy_system_stats_inbound_uplink="true"
@@ -29096,7 +29052,7 @@ V2raySetPolicy()
         Println "$info 入站上行流量统计设置成功\n"
     elif [ "$set_policy_option" == "开关入站下行流量统计" ] 
     then
-        inquirer list_input "所有入站代理的下行流量统计" yn_options policy_system_stats_inbound_downlink
+        inquirer list_input "所有入站代理的下行流量统计" switch_options policy_system_stats_inbound_downlink
         if [ "$policy_system_stats_inbound_downlink" == "开启" ] 
         then
             policy_system_stats_inbound_downlink="true"
@@ -29107,7 +29063,7 @@ V2raySetPolicy()
         Println "$info 入站下行流量统计设置成功\n"
     elif [ "$set_policy_option" == "开关出站上行流量统计" ] 
     then
-        inquirer list_input "所有出站代理的上行流量统计" yn_options policy_system_stats_outbound_uplink
+        inquirer list_input "所有出站代理的上行流量统计" switch_options policy_system_stats_outbound_uplink
         if [ "$policy_system_stats_outbound_uplink" == "开启" ] 
         then
             policy_system_stats_outbound_uplink="true"
@@ -29117,7 +29073,7 @@ V2raySetPolicy()
         JQ update "$V2_CONFIG" '.policy.system.statsOutboundUplink='"$policy_system_stats_outbound_uplink"''
         Println "$info 出站上行流量统计设置成功\n"
     else
-        inquirer list_input "所有出站代理的下行流量统计" yn_options policy_system_stats_outbound_downlink
+        inquirer list_input "所有出站代理的下行流量统计" switch_options policy_system_stats_outbound_downlink
         if [ "$policy_system_stats_outbound_downlink" == "开启" ] 
         then
             policy_system_stats_outbound_downlink="true"
@@ -30832,8 +30788,8 @@ CloudflareListUser()
     JQs flat "$(curl -s -X GET -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
     -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/accounts)" '' \
     '[.success + "\u0002",
-    (.errors|if . == "" then {} else . end).message + "\u0002",
-    (.result|if . == "" then {} else . end).id + "\u0002"]
+    (.errors|if (.|type == "string") then {} else . end).message + "\u0002",
+    (.result|if (.|type == "string") then {} else . end).id + "\u0002"]
     |@tsv' "${delimiters[@]}")
 
     if [ "$success" == "false" ] 
@@ -30881,8 +30837,8 @@ CloudflareListUser()
     IFS=$'\002\t' read -r cf_workers_requests error_message < <(
     JQs flat "$(curl -s -X POST -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
     --data "$(echo $PAYLOAD)" -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/graphql)" '' \
-    '[((.data|if . == "" then {} else . end).viewer.accounts.workersInvocationsAdaptive|if . == "" then {} else . end).sum.requests + "\u0002",
-    (.errors|if . == "" then {} else . end).message + "\u0002"]|@tsv' "{delimiters[@]}")
+    '[((.data|if (.|type == "string") then {} else . end).viewer.accounts.workersInvocationsAdaptive|if (.|type == "string") then {} else . end).sum.requests + "\u0002",
+    (.errors|if (.|type == "string") then {} else . end).message + "\u0002"]|@tsv' "{delimiters[@]}")
 
     if [ -z "$cf_workers_requests" ] 
     then
@@ -32928,13 +32884,10 @@ CloudflareDeployWorker()
                 Println "$error 请添加账号 $cf_user_email Token 或 Key\n"
                 exit 1
             fi
+
             Println "$info 尝试获取用户 Token ..."
 
-            if [[ ! -x $(command -v python3) ]] 
-            then
-                Println "$info 安装 python3 ..."
-                PythonInstall
-            fi
+            PythonInstall
 
             Println "$info 更新 ${CF_WORKERS_FILE##*/}"
             wget --timeout=10 --tries=1 --no-check-certificate "$CF_WORKERS_LINK" -qO "$CF_WORKERS_FILE" \
@@ -32983,6 +32936,7 @@ CloudflareDeployWorker()
             -H ''"$curl_header_auth_token"'' \
             | $JQ_FILE -r '.result[0].id'
         ) || true
+
         if [ -z "$CF_ACCOUNT_ID" ] || [ "$CF_ACCOUNT_ID" == null ]
         then
             Println "$error 无法获取用户 ID, Token 错误 ?\n"
@@ -33084,6 +33038,8 @@ CloudflareDeployWorker()
                 read -p "$i18n_default_cancel" upstream
                 [ -z "$upstream" ] && Println "$i18n_canceled...\n" && exit 1
             fi
+            sed -i 's/const UPSTREAM_DOMAIN = .*/const UPSTREAM_DOMAIN = "'"$upstream"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/index.js"
+            # deprecated
             sed -i 's/const upstream = .*/const upstream = "'"$upstream"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/index.js"
         fi
 
@@ -33101,11 +33057,7 @@ CloudflareDeployWorker()
         else
             Println "$error 请检查 Token 权限, 尝试修复 ...\n"
 
-            if [[ ! -x $(command -v python3) ]] 
-            then
-                Println "$info 安装 python3 ..."
-                PythonInstall
-            fi
+            PythonInstall
 
             if [ "$sh_debug" -eq 0 ] && [ ! -f "$IPTV_ROOT/VIP" ]
             then
@@ -33777,6 +33729,7 @@ CloudflareWorkersMonitorDeploy()
         -H ''"$curl_header_auth_token"'' \
         | $JQ_FILE -r '.result[0].id'
     ) || true
+
     if [ -z "$CF_ACCOUNT_ID" ] || [ "$CF_ACCOUNT_ID" == null ]
     then
         MonitorError "无法获取用户 ID, Token 错误 ? $cf_user_token"
@@ -33817,8 +33770,8 @@ CloudflareWorkersMonitorGetRequests()
     JQs flat "$(curl -s -X GET -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
     -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/accounts)" '' \
     '[.success + "\u0002",
-    (.errors|if . == "" then {} else . end).message + "\u0002",
-    (.result|if . == "" then {} else . end).id + "\u0002"]|@tsv' "${delimiters[@]}")
+    (.errors|if (.|type == "string") then {} else . end).message + "\u0002",
+    (.result|if (.|type == "string") then {} else . end).id + "\u0002"]|@tsv' "${delimiters[@]}")
 
     if [ "$success" == "false" ] 
     then
@@ -33865,8 +33818,8 @@ CloudflareWorkersMonitorGetRequests()
     IFS=$'\002\t' read -r cf_workers_requests error_message < <(
     JQs flat "$(curl -s -X POST -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
     --data "$(echo $PAYLOAD)" -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/graphql)" '' \
-    '[((.data|if . == "" then {} else . end).viewer.accounts.workersInvocationsAdaptive|if . == "" then {} else . end).sum.requests + "\u0002",
-    (.errors|if . == "" then {} else . end).message + "\u0002"]|@tsv' "${delimiters[@]}")
+    '[((.data|if (.|type == "string") then {} else . end).viewer.accounts.workersInvocationsAdaptive|if (.|type == "string") then {} else . end).sum.requests + "\u0002",
+    (.errors|if (.|type == "string") then {} else . end).message + "\u0002"]|@tsv' "${delimiters[@]}")
 
     if [ -z "$cf_workers_requests" ] 
     then
@@ -34341,6 +34294,8 @@ CloudflareEnableWorkersMonitor()
             do
                 if [ "${pair% *}" == "${workers_project_name[i]}" ]
                 then
+                    sed -i 's/const UPSTREAM_DOMAIN = .*/const UPSTREAM_DOMAIN = "'"${pair#* }"'"/' "$CF_WORKERS_ROOT/stream_proxy/index.js"
+                    # deprecated
                     sed -i 's/const upstream = .*/const upstream = "'"${pair#* }"'"/' "$CF_WORKERS_ROOT/stream_proxy/index.js"
                     worker_data=$(< "$CF_WORKERS_ROOT/stream_proxy/index.js")
                     workers_data+=("$worker_data")
@@ -34439,6 +34394,8 @@ CloudflareEnableWorkersMonitor()
                 read -p "$i18n_default_cancel" upstream
                 [ -z "$upstream" ] && Println "$i18n_canceled...\n" && exit 1
             fi
+            sed -i 's/const UPSTREAM_DOMAIN = .*/const UPSTREAM_DOMAIN = "'"$upstream"'"/' "$CF_WORKERS_ROOT/${workers_path[i]}/index.js"
+            # deprecated
             sed -i 's/const upstream = .*/const upstream = "'"$upstream"'"/' "$CF_WORKERS_ROOT/${workers_path[i]}/index.js"
             stream_proxy_history+=("${workers_project_name[i]} $upstream")
         fi
@@ -34610,17 +34567,16 @@ CloudflareEnableWorkersMonitor()
         esac
     done
 
-    Println "$tip 模拟登录官网暂时有问题, 只能选 是"
-    yn_options=( '是' )
-    inquirer list_input "使用 api 获取 workers 请求数" yn_options yn_option
-    if [ "$yn_option" == "$i18n_yes" ] 
-    then
+    #Println "$tip 模拟登录官网暂时有问题, 只能选 是"
+    #inquirer list_input "使用 api 获取 workers 请求数" yn_options yn_option
+    #if [ "$yn_option" == "$i18n_yes" ] 
+    #then
         cf_use_api=1
         cf_workers_monitor_seconds_default=1200
-    else
-        cf_use_api=0
-        cf_workers_monitor_seconds_default=1800
-    fi
+    #else
+    #    cf_use_api=0
+    #    cf_workers_monitor_seconds_default=1800
+    #fi
 
     CloudflareGetUsers
     cf_zones_user_token=()
@@ -34722,11 +34678,8 @@ CloudflareEnableWorkersMonitor()
 
     if [ "$cf_use_api" -eq 0 ] 
     then
-        if [[ ! -x $(command -v python3) ]] 
-        then
-            Println "$info 安装 python3 ..."
-            PythonInstall
-        fi
+        PythonInstall
+
         Println "$info 更新 ${CF_WORKERS_FILE##*/} ..."
         if [ "$sh_debug" -eq 0 ] && [ ! -f "$IPTV_ROOT/VIP" ]
         then

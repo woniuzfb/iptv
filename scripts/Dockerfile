@@ -41,7 +41,7 @@ RUN sed -i 's/archive.ubuntu.com/mirrors.ustc.edu.cn/g' /etc/apt/sources.list \
   curl \
   graphviz && rm -rf /var/lib/apt/lists/*
 
-COPY scripts/build.sh /root/ffmpeg_sources/
+COPY build.sh /root/ffmpeg_sources/
 
 VOLUME /root/ffmpeg_sources/
 WORKDIR /root/ffmpeg_sources/

@@ -105,7 +105,7 @@ inquirer()
             case "$key" in
                 $'\x1b')
                     read -rsn1 key
-                    if [[ "$key" == "[" ]]
+                    if [ "$key" == "[" ]
                     then
                         read -rsn1 key
                         case "$key" in
@@ -117,11 +117,11 @@ inquirer()
                     fi
                 ;;
                 $'\x20') $on_space;;
-                $'\x7f') $on_backspace $key;;
-                '') $on_enter $key;;
-                *[$'\x80'-$'\xFF']*) $on_not_ascii $key;;
+                $'\x7f') $on_backspace "$key";;
+                '') $on_enter "$key";;
+                *[$'\x80'-$'\xFF']*) $on_not_ascii "$key";;
                 # [^ -~]
-                *) $on_ascii $key;;
+                *) $on_ascii "$key";;
             esac
             if [ "$_break_keypress" = true ]
             then
@@ -307,7 +307,7 @@ inquirer()
 
     inquirer:on_checkbox_input_ascii() {
         local key=$1
-        case $key in
+        case "$key" in
             "w" ) inquirer:on_checkbox_input_up;;
             "s" ) inquirer:on_checkbox_input_down;;
         esac
@@ -484,7 +484,7 @@ inquirer()
     inquirer:on_list_input_input_ascii()
     {
         local key=$1
-        case $key in
+        case "$key" in
             "w" ) inquirer:on_list_input_up;;
             "s" ) inquirer:on_list_input_down;;
         esac
@@ -874,18 +874,18 @@ CompileFFmpeg()
     fi
     make
     make install PREFIX="$HOME/ffmpeg_build"
-    printf '%s' 'prefix=/root/ffmpeg_build
-exec_prefix=${prefix}
-libdir=${prefix}/lib
-includedir=${prefix}/include
+    echo "prefix=$HOME/ffmpeg_build
+exec_prefix=\${prefix}
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
 
 Name: bzip2
 Description: bzip2
 Version: 1.0.6
 Requires:
-Libs: -L${libdir} -lbz2
-Cflags: -I${includedir}    
-' > "$HOME/ffmpeg_build/lib/pkgconfig/bzip2.pc"
+Libs: -L\${libdir} -lbz2
+Cflags: -I\${includedir}
+" > "$HOME/ffmpeg_build/lib/pkgconfig/bzip2.pc"
 
     # yasm
     cd ~/ffmpeg_sources
