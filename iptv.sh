@@ -121,13 +121,6 @@ ReleaseCheck()
         Println "${red}[ERROR]${normal} not support yet...\n"
         exit 1
     fi
-
-    if [ "$(uname -m | grep -c 64)" -gt 0 ]
-    then
-        release_bit=64
-    else
-        release_bit=32
-    fi
 }
 
 DebFixSources()
@@ -1561,11 +1554,15 @@ FFmpegInstall()
     if [ ! -e "$FFMPEG" ]
     then
         Println "`eval_gettext \"\\\$info 开始下载/安装 FFmpeg...\"`"
-        if [ "$release_bit" -eq 64 ]
+        [ -z "${arch:-}" ] && arch=$(uname -m)
+        if [ "$arch" == "aarch64" ]
         then
-            ffmpeg_package="ffmpeg-git-${arch:-amd64}-static.tar.xz"
+            ffmpeg_package="ffmpeg-git-arm64-static.tar.xz"
+        elif grep -q 64 <<< "$arch"
+        then
+            ffmpeg_package="ffmpeg-git-amd64-static.tar.xz"
         else
-            ffmpeg_package="ffmpeg-git-i686-static.tar.xz"
+            ffmpeg_package="ffmpeg-git-$arch-static.tar.xz"
         fi
         FFMPEG_PACKAGE_FILE="$IPTV_ROOT/$ffmpeg_package"
         curl -L "$FFMPEG_MIRROR_LINK/builds/$ffmpeg_package" -o "$FFMPEG_PACKAGE_FILE"
@@ -2423,7 +2420,14 @@ JQInstall()
         #experimental# grep -Po '"tag_name": "jq-\K.*?(?=")'
         if jq_ver=$(curl -s -m 10 "$FFMPEG_MIRROR_LINK/jq.json" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
         then
-            if curl -L "$FFMPEG_MIRROR_LINK/$jq_ver/jq-linux$release_bit" -o "$JQ_FILE"
+            [ -z "${arch:-}" ] && arch=$(uname -m)
+            if grep -q 64 <<< "$arch" 
+            then
+                jq_package="jq-linux64"
+            else
+                jq_package="jq-linux32"
+            fi
+            if curl -L "$FFMPEG_MIRROR_LINK/$jq_ver/$jq_package" -o "$JQ_FILE"
             then
                 chmod +x "$JQ_FILE"
                 Println "`eval_gettext \"\\\$info JQ 安装完成\"`"
@@ -12930,7 +12934,7 @@ ScheduleNowtv()
                 "time":"'"$program_time"'",
                 "sys_time":"'"$program_sys_time"'"
             }'
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" --cookie "LANG=zh" "$SCHEDULE_LINK_NOWTV" | $JQ_FILE '.[0][] | [.startTime,.start,.name] | join("=")')
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" --cookie "LANG=zh" "$SCHEDULE_LINK_NOWTV" | $JQ_FILE '.[0][] | [.startTime,.start,.name] | join("=")')
 
         if [ -n "$schedule" ] 
         then
@@ -13005,8 +13009,7 @@ ScheduleNiotv()
                     "sys_time":"'"$sys_time"'"
                 }'
             fi
-        done < <(curl ${niotv_proxy[@]+"${niotv_proxy[@]}"} -s -Lm 10 -H "User-Agent: $user_agent" -X POST --data "act=select&day=$today&sch_id=$niotv_id" "$SCHEDULE_LINK_NIOTV")
-        #curl -d "day=$today&sch_id=$niotv_id" -X POST "$SCHEDULE_LINK_NIOTV" || true
+        done < <(curl ${niotv_proxy[@]+"${niotv_proxy[@]}"} -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" -X POST --data "act=select&sch_id=$niotv_id&day=$today" "$SCHEDULE_LINK_NIOTV")
 
         if [ "$empty" -eq 1 ] 
         then
@@ -13065,7 +13068,7 @@ ScheduleIcable()
                 done
                 break
             fi
-        done < <(curl -s -Lm 20 -H "User-Agent: $user_agent" "http://epg.i-cable.com/new/ch_getcontent.php?lang=chi&ch=$chnl_num&date=$yesterday" 2> /dev/null)
+        done < <(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "http://epg.i-cable.com/new/ch_getcontent.php?lang=chi&ch=$chnl_num&date=$yesterday" 2> /dev/null)
 
         while IFS= read -r line
         do
@@ -13097,7 +13100,7 @@ ScheduleIcable()
                 done
                 break
             fi
-        done < <(curl -s -Lm 20 -H "User-Agent: $user_agent" "http://epg.i-cable.com/new/ch_getcontent.php?lang=chi&ch=$chnl_num&date=$today" 2> /dev/null)
+        done < <(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "http://epg.i-cable.com/new/ch_getcontent.php?lang=chi&ch=$chnl_num&date=$today" 2> /dev/null)
 
         if [ -n "$schedule" ] 
         then
@@ -13140,7 +13143,7 @@ ScheduleJiushi()
                 "time":"'"$program_time"'",
                 "sys_time":"'"$program_sys_time"'"
             }'
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "$SCHEDULE_LINK" | $JQ_FILE '.list[] | select(.key=="'"$today"'").values[] | [.time,.name] | join("=")')
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "$SCHEDULE_LINK" | $JQ_FILE '.list[] | select(.key=="'"$today"'").values[] | [.time,.name] | join("=")')
 
         if [ -z "$schedule" ]
         then
@@ -13157,7 +13160,7 @@ ScheduleJiushi()
                     "time":"'"$program_time"'",
                     "sys_time":"'"$program_sys_time"'"
                 }'
-            done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "$SCHEDULE_LINK" | $JQ_FILE '.list[] | select(.key=="'"$today"'").values[] | [.time,.name] | join("=")')
+            done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "$SCHEDULE_LINK" | $JQ_FILE '.list[] | select(.key=="'"$today"'").values[] | [.time,.name] | join("=")')
 
             if [ -z "$schedule" ] 
             then
@@ -13213,7 +13216,7 @@ ScheduleHbozw()
                 "time":"'"$program_time"'",
                 "sys_time":"'"$program_sys_time"'"
             }'
-        done < <(curl ${hboasia_proxy[@]+"${hboasia_proxy[@]}"} -s -Lm 20 -H "User-Agent: $user_agent" "$SCHEDULE_LINK" | $JQ_FILE '.[] | [.id,.time,.sys_time,.title,.title_local] | join("^")')
+        done < <(curl ${hboasia_proxy[@]+"${hboasia_proxy[@]}"} -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "$SCHEDULE_LINK" | $JQ_FILE '.[] | [.id,.time,.sys_time,.title,.title_local] | join("^")')
 
         if [ -n "$schedule" ] 
         then
@@ -13276,7 +13279,7 @@ ScheduleHbous()
                     "sys_time":"'"$program_sys_time"'"
                 }'
             fi
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "https://proxy-v4.cms.hbo.com/v1/schedule?date=$yesterday" | $JQ_FILE --arg channelName "$hbous_name" --arg channelZone "$chnl_zone" '.channels | to_entries | map(select(.value.channelName==$channelName and .value.channelZone==$channelZone))[].value.programAirings | to_entries | map("\(.value.airing.playDate)=\(.value.program.title)")[]')
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://proxy-v4.cms.hbo.com/v1/schedule?date=$yesterday" | $JQ_FILE --arg channelName "$hbous_name" --arg channelZone "$chnl_zone" '.channels | to_entries | map(select(.value.channelName==$channelName and .value.channelZone==$channelZone))[].value.programAirings | to_entries | map("\(.value.airing.playDate)=\(.value.program.title)")[]')
 
         min_sys_time=${program_sys_time:-$sys_time}
 
@@ -13295,7 +13298,7 @@ ScheduleHbous()
                     "sys_time":"'"$program_sys_time"'"
                 }'
             fi
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "https://proxy-v4.cms.hbo.com/v1/schedule?date=$today" | $JQ_FILE --arg channelName "$hbous_name" --arg channelZone "$chnl_zone" '.channels | to_entries | map(select(.value.channelName==$channelName and .value.channelZone==$channelZone))[].value.programAirings | to_entries | map("\(.value.airing.playDate)=\(.value.program.title)")[]')
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://proxy-v4.cms.hbo.com/v1/schedule?date=$today" | $JQ_FILE --arg channelName "$hbous_name" --arg channelZone "$chnl_zone" '.channels | to_entries | map(select(.value.channelName==$channelName and .value.channelZone==$channelZone))[].value.programAirings | to_entries | map("\(.value.airing.playDate)=\(.value.program.title)")[]')
 
         if [ -n "$schedule" ] 
         then
@@ -13376,7 +13379,7 @@ ScheduleOntvtonight()
             then
                 break
             fi
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "https://www.ontvtonight.com/${ct}guide/listings/channel/$chnl_no/$chnl_name.html?dt=$yesterday" 2> /dev/null)
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://www.ontvtonight.com/${ct}guide/listings/channel/$chnl_no/$chnl_name.html?dt=$yesterday" 2> /dev/null)
 
         while IFS= read -r line
         do
@@ -13419,7 +13422,7 @@ ScheduleOntvtonight()
             then
                 break
             fi
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "https://www.ontvtonight.com/${ct}guide/listings/channel/$chnl_no/$chnl_name.html?dt=$today" 2> /dev/null)
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://www.ontvtonight.com/${ct}guide/listings/channel/$chnl_no/$chnl_name.html?dt=$today" 2> /dev/null)
 
         if [ -n "$schedule" ] 
         then
@@ -13458,7 +13461,7 @@ ScheduleDisneyjr()
             "time":"'"$program_time"'",
             "sys_time":"'"$program_sys_time"'"
         }'
-    done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "$SCHEDULE_LINK" | $JQ_FILE '.schedule | to_entries | map(.value.schedule_items[]) | to_entries | map("show_title: \(.value.show_title), time: \(.value.time), iso8601_utc_time: \(.value.iso8601_utc_time)")[]')
+    done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "$SCHEDULE_LINK" | $JQ_FILE '.schedule | to_entries | map(.value.schedule_items[]) | to_entries | map("show_title: \(.value.show_title), time: \(.value.time), iso8601_utc_time: \(.value.iso8601_utc_time)")[]')
 
     if [ -n "$schedule" ] 
     then
@@ -13504,7 +13507,7 @@ ScheduleFoxmovies()
                 time=${line#* }
             fi
         fi
-    done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "$SCHEDULE_LINK")
+    done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "$SCHEDULE_LINK")
 
     if [ -n "$schedule" ] 
     then
@@ -13529,7 +13532,7 @@ ScheduleAmlh()
 
     schedule=""
 
-    line=$(curl -s -Lm 10 -H "User-Agent: $user_agent" --data "d=$((timestamp-86400))" "$SCHEDULE_LINK") || true
+    line=$(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" --data "d=$((timestamp-86400))" "$SCHEDULE_LINK") || true
 
     if [[ $line == *"<li>"* ]] 
     then
@@ -13569,7 +13572,7 @@ ScheduleAmlh()
     fi
 
     flag=0
-    line=$(curl -s -Lm 10 -H "User-Agent: $user_agent" --data "d=$timestamp" "$SCHEDULE_LINK") || true
+    line=$(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" --data "d=$timestamp" "$SCHEDULE_LINK") || true
 
     if [[ $line == *"<li>"* ]] 
     then
@@ -13666,7 +13669,7 @@ ScheduleTvbhk()
                 done
                 break
             fi
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "https://programme.tvb.com/ajax.php?action=channellist&code=$chnl_code&date=$yesterday" 2> /dev/null)
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://programme.tvb.com/ajax.php?action=channellist&code=$chnl_code&date=$yesterday" 2> /dev/null)
 
         while IFS= read -r line
         do
@@ -13700,7 +13703,7 @@ ScheduleTvbhk()
                 done
                 break
             fi
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "https://programme.tvb.com/ajax.php?action=channellist&code=$chnl_code&date=$today" 2> /dev/null)
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://programme.tvb.com/ajax.php?action=channellist&code=$chnl_code&date=$today" 2> /dev/null)
 
         if [ -n "$schedule" ] 
         then
@@ -14257,7 +14260,7 @@ ScheduleCntv()
                 "time":"'"$program_time"'",
                 "sys_time":"'"$program_sys_time"'"
             }'
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "http://api.cntv.cn/epg/getEpgInfoByChannelNew?c=$chnl_id&serviceId=tvcctv&d=$today" | $JQ_FILE '.data.'"$chnl_id"'.list[]|[.startTime,.showTime,.title]|join("=")')
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "http://api.cntv.cn/epg/getEpgInfoByChannelNew?c=$chnl_id&serviceId=tvcctv&d=$today" | $JQ_FILE '.data.'"$chnl_id"'.list[]|[.startTime,.showTime,.title]|join("=")')
 
         if [ -n "$schedule" ] 
         then
@@ -14300,7 +14303,7 @@ ScheduleTvbs()
                 "time":"'"$program_time"'",
                 "sys_time":"'"$program_sys_time"'"
             }'
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "https://tvbsapp.tvbs.com.tw/pg_api/pg_list/$chnl_order/$today/1/$lang" | $JQ_FILE '.data|to_entries|map(select(.value.date=="'"$today"'"))|.[].value.data|to_entries|map("\(.value.pg_hour)=\(.value.pg_name)")|.[]')
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://tvbsapp.tvbs.com.tw/pg_api/pg_list/$chnl_order/$today/1/$lang" | $JQ_FILE '.data|to_entries|map(select(.value.date=="'"$today"'"))|.[].value.data|to_entries|map("\(.value.pg_hour)=\(.value.pg_name)")|.[]')
 
         if [ -n "$schedule" ] 
         then
@@ -14343,7 +14346,7 @@ ScheduleAstro()
                 "time":"'"$program_time"'",
                 "sys_time":"'"$program_sys_time"'"
             }'
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "https://contenthub-api.eco.astro.com.my/channel/$astro_id.json" | $JQ_FILE '.response.schedule["'"$today"'"][]|[.datetime,.title]|join("=")')
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://contenthub-api.eco.astro.com.my/channel/$astro_id.json" | $JQ_FILE '.response.schedule["'"$today"'"][]|[.datetime,.title]|join("=")')
 
         if [ -n "$schedule" ] 
         then
@@ -15908,8 +15911,6 @@ Schedule()
             [ "$provider_found" -eq 0 ] && Println "$error 没有找到频道\n" && exit 1
         fi
     fi
-
-    user_agent="$USER_AGENT_BROWSER"
 
     case $provider_id in
         "jiushi")
@@ -39186,12 +39187,13 @@ WantedBy=multi-user.target
  ${green}17.${normal} 安装 tesseract
  ${green}18.${normal} 配置 postfix
  ${green}19.${normal} 配置 mmproxy
- ${green}20.${normal} 识别 cloudflare/ibm ip
+ ${green}20.${normal} 配置 dnscrypt proxy
+ ${green}21.${normal} 识别 cloudflare/ibm ip
 
  $tip 输入: nx 打开面板
 
 "
-    read -p "`gettext \"输入序号\"` [1-20]: " nginx_num
+    read -p "`gettext \"输入序号\"` [1-21]: " nginx_num
     case "$nginx_num" in
         1) 
             if [ -d "$nginx_prefix" ] 
@@ -39471,9 +39473,169 @@ $HOME/ip.sh" > /etc/rc.local
             Println "$info mmproxy-$mmproxy_name 设置成功\n"
         ;;
         20)
+            DepInstall curl
+
+            DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
+            dnscrypt_version_old=${DNSCRYPT_ROOT##*-}
+
+            echo
+            dnscrypt_options=( '安装/升级 dnscrypt proxy' '开关 edns0' '开关 ipv6 查询' )
+            inquirer list_input_index "选择操作" dnscrypt_options dnscrypt_options_index
+
+            if [ "$dnscrypt_options_index" -eq 1 ] 
+            then
+                if [[ $dnscrypt_version_old == "*" ]] 
+                then
+                    Println "$error 请先安装 dnscrypt proxy\n"
+                    exit 1
+                fi
+                echo
+                if grep -q "options edns0" < /etc/resolv.conf
+                then
+                    AskIfContinue n "`gettext \"是否关闭 edns0\"`"
+
+                    sed -i '/options edns0/d' /etc/resolv.conf
+                    sed -i "0,/.*require_dnssec = .*/s//require_dnssec = false/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                    systemctl restart dnscrypt-proxy
+                    Println "$info edns0 已关闭\n"
+                else
+                    AskIfContinue n "`gettext \"是否开启 edns0\"`"
+
+                    echo "options edns0" >> /etc/resolv.conf
+                    sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                    systemctl restart dnscrypt-proxy
+                    Println "$info edns0 已开启\n"
+                fi
+                exit 0
+            elif [ "$dnscrypt_options_index" -eq 2 ] 
+            then
+                if [[ $dnscrypt_version_old == "*" ]] 
+                then
+                    Println "$error 请先安装 dnscrypt proxy\n"
+                    exit 1
+                fi
+                echo
+                switch_options=( '开启' '关闭' )
+                inquirer list_input_index "选择操作" switch_options switch_options_index
+                if [ "$switch_options_index" -eq 0 ] 
+                then
+                    sed -i "0,/.*block_ipv6 = .*/s//block_ipv6 = false/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                    systemctl restart dnscrypt-proxy
+                    Println "$info ipv6 查询已开启\n"
+                else
+                    sed -i "0,/.*block_ipv6 = .*/s//block_ipv6 = true/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                    systemctl restart dnscrypt-proxy
+                    Println "$info ipv6 查询已关闭\n"
+                fi
+                exit 0
+            fi
+
+            arch=$(uname -m)
+
+            if dnscrypt_version=$(curl -s -Lm 20 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') 
+            then
+                echo
+                inquirer list_input "本机是否在国内" ny_options ny_option
+
+                if [[ $dnscrypt_version_old == "*" ]]
+                then
+                    Println "$info 下载 dnscrypt proxy ..."
+                    if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz_tmp
+                    then
+                        Println "$info 设置 dnscrypt proxy ..."
+                        cd ~
+                        mv dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz
+                        tar zxf dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz
+                        mv linux-$arch dnscrypt-$dnscrypt_version
+                        chown -R $USER:$USER dnscrypt-$dnscrypt_version
+                        cd dnscrypt-$dnscrypt_version
+                        cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
+
+                        if [ "$ny_option" == "$i18n_yes" ] 
+                        then
+                            sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
+                            sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
+                            sed -i "0,/.*fallback_resolvers =.*/s//fallback_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
+                            sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
+                        else
+                            sed -i "0,/.*server_names = \[.*/s//server_names = ['google', 'cloudflare']/" dnscrypt-proxy.toml
+                        fi
+
+                        for((i=0;i<3;i++));
+                        do
+                            if ./dnscrypt-proxy -check > /dev/null 
+                            then
+                                break
+                            elif [[ $i -eq 2 ]] 
+                            then
+                                cd ~
+                                rm -rf dnscrypt-$dnscrypt_version
+                                Println "$error 发生错误, 请重试\n"
+                                exit 1
+                            fi
+                        done
+
+                        if [ -d /etc/resolvconf ] 
+                        then
+                            apt-get -y --purge remove resolvconf > /dev/null 2>&1 || true
+                        fi
+
+                        if [ -f /etc/resolv.conf ] 
+                        then
+                            printf -v now '%(%m-%d-%H:%M:%S)T' -1
+                            cp -f /etc/resolv.conf /etc/resolv.conf-$now
+                        fi
+
+                        echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
+
+                        systemctl stop systemd-resolved > /dev/null 2>&1 || true
+                        systemctl disable systemd-resolved > /dev/null 2>&1 || true
+                        ./dnscrypt-proxy -service install > /dev/null
+                        ./dnscrypt-proxy -service start > /dev/null
+
+                        Println "$info dnscrypt proxy 安装配置成功\n"
+                    else
+                        Println "$error dnscrypt proxy 下载失败, 请重试\n"
+                        exit 1
+                    fi
+                elif [[ $dnscrypt_version_old != "$dnscrypt_version" ]] 
+                then
+                    if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz_tmp
+                    then
+                        cd ~/dnscrypt-$dnscrypt_version_old
+                        ./dnscrypt-proxy -service stop > /dev/null
+                        ./dnscrypt-proxy -service uninstall > /dev/null
+                        cd ~
+                        mv dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz
+                        tar zxf dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz
+                        mv linux-$arch dnscrypt-$dnscrypt_version
+                        cd dnscrypt-$dnscrypt_version
+                        cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
+                        if [ "$ny_option" == "$i18n_yes" ] 
+                        then
+                            sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
+                            sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
+                            sed -i "0,/.*fallback_resolvers =.*/s//fallback_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
+                            sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
+                        fi
+                        ./dnscrypt-proxy -service install > /dev/null
+                        ./dnscrypt-proxy -service start > /dev/null
+                        Println "$info dnscrypt proxy 升级成功\n"
+                    else
+                        Println "$error dnscrypt proxy 下载失败, 请重试\n"
+                        exit 1
+                    fi
+                else
+                    Println "$error dnscrypt proxy 已经是最新\n"
+                fi
+            else
+                Println "$error 无法连接服务器, 请稍后再试\n"
+            fi
+        ;;
+        21)
             NginxUpdateCFIBMip
         ;;
-        *) Println "$error $i18n_input_correct_number [1-20]\n"
+        *) Println "$error $i18n_input_correct_number [1-21]\n"
         ;;
     esac
     exit 0
@@ -39881,11 +40043,12 @@ then
  ${green}10.${normal} 设置 docker 镜像加速
  ${green}11.${normal} 设置 vimrc
  ${green}12.${normal} 开关 edns0
- ${green}13.${normal} NAT 类型测试
- ${green}14.${normal} 更新脚本
+ ${green}13.${normal} 开关 ipv6 查询
+ ${green}14.${normal} NAT 类型测试
+ ${green}15.${normal} 更新脚本
 
 "
-    read -p "`gettext \"输入序号\"` [1-14]: " armbian_num
+    read -p "`gettext \"输入序号\"` [1-15]: " armbian_num
 
     case $armbian_num in
         1) 
@@ -39939,7 +40102,7 @@ then
             fi
             if dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
             then
-                DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy)
+                DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
                 dnscrypt_version_old=${DNSCRYPT_ROOT##*-}
                 if [[ $dnscrypt_version_old == "*" ]]
                 then
@@ -40117,7 +40280,7 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
                 exit 1
             fi
 
-            DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy)
+            DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
             dnscrypt_version_old=${DNSCRYPT_ROOT##*-}
             if [[ $dnscrypt_version_old == "*" ]] 
             then
@@ -40714,7 +40877,7 @@ config interface 'lan'
             VimConfig
         ;;
         12)
-            DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy)
+            DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
             dnscrypt_version=${DNSCRYPT_ROOT##*-}
             if [[ $dnscrypt_version == "*" ]] 
             then
@@ -40742,6 +40905,28 @@ config interface 'lan'
             fi
         ;;
         13)
+            DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
+            dnscrypt_version=${DNSCRYPT_ROOT##*-}
+            if [[ $dnscrypt_version == "*" ]] 
+            then
+                Println "$error 请先安装 dnscrypt proxy\n"
+                exit 1
+            fi
+            echo
+            switch_options=( '开启' '关闭' )
+            inquirer list_input_index "选择操作" switch_options switch_options_index
+            if [ "$switch_options_index" -eq 0 ] 
+            then
+                sed -i "0,/.*block_ipv6 = .*/s//block_ipv6 = false/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                systemctl restart dnscrypt-proxy
+                Println "$info ipv6 查询已开启\n"
+            else
+                sed -i "0,/.*block_ipv6 = .*/s//block_ipv6 = true/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                systemctl restart dnscrypt-proxy
+                Println "$info ipv6 查询已关闭\n"
+            fi
+        ;;
+        14)
             if [[ ! -x $(command -v pystun) ]] 
             then
                 Println "$tip 请确保已经修改了合适的 apt 源"
@@ -40753,10 +40938,10 @@ config interface 'lan'
             Println "$tip 建议关闭远端服务器防火墙, 检测中...\n"
             pystun
         ;;
-        14)
+        15)
             ShFileUpdate Armbian
         ;;
-        *) Println "$error $i18n_input_correct_number [1-14]\n"
+        *) Println "$error $i18n_input_correct_number [1-15]\n"
         ;;
     esac
     exit 0
@@ -40789,10 +40974,11 @@ then
  ${green}11.${normal} 切换 配置文件
 ————————————
  ${green}12.${normal} 开关 edns0
- ${green}13.${normal} 更新脚本
+ ${green}13.${normal} 开关 ipv6 查询
+ ${green}14.${normal} 更新脚本
 
 "
-    read -p "`gettext \"输入序号\"` [1-13]: " pve_num
+    read -p "`gettext \"输入序号\"` [1-14]: " pve_num
 
     case $pve_num in
         1) 
@@ -40994,7 +41180,7 @@ then
 
             if dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
             then
-                DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy)
+                DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
                 dnscrypt_version_old=${DNSCRYPT_ROOT##*-}
 
                 echo
@@ -41330,7 +41516,7 @@ then
             fi
         ;;
         12)
-            DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy)
+            DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
             dnscrypt_version=${DNSCRYPT_ROOT##*-}
             if [[ $dnscrypt_version == "*" ]] 
             then
@@ -41355,10 +41541,32 @@ then
                 Println "$info edns0 已开启\n"
             fi
         ;;
-        13) 
+        13)
+            DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
+            dnscrypt_version=${DNSCRYPT_ROOT##*-}
+            if [[ $dnscrypt_version == "*" ]] 
+            then
+                Println "$error 请先安装 dnscrypt proxy\n"
+                exit 1
+            fi
+            echo
+            switch_options=( '开启' '关闭' )
+            inquirer list_input_index "选择操作" switch_options switch_options_index
+            if [ "$switch_options_index" -eq 0 ] 
+            then
+                sed -i "0,/.*block_ipv6 = .*/s//block_ipv6 = false/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                systemctl restart dnscrypt-proxy
+                Println "$info ipv6 查询已开启\n"
+            else
+                sed -i "0,/.*block_ipv6 = .*/s//block_ipv6 = true/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                systemctl restart dnscrypt-proxy
+                Println "$info ipv6 查询已关闭\n"
+            fi
+        ;;
+        14) 
             ShFileUpdate PVE
         ;;
-        *) Println "$error $i18n_input_correct_number [1-13]\n"
+        *) Println "$error $i18n_input_correct_number [1-14]\n"
         ;;
     esac
     exit 0
@@ -42195,28 +42403,22 @@ then
 
             if dnscrypt_ver=$(curl -s -m 30 "https://api.github.com/repos/DNSCrypt/dnscrypt-proxy/releases/latest" | $JQ_FILE -r '.tag_name') 
             then
-                if [ ! -e "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_ver.tar.gz" ]
-                then
-                    Println "$info 下载 dnscrypt proxy arm64 ..."
-                    mkdir -p "$FFMPEG_MIRROR_ROOT/dnscrypt/"
-                    if curl -s -L "https://github.com/DNSCrypt/dnscrypt-proxy/releases/download/$dnscrypt_ver/dnscrypt-proxy-linux_arm64-$dnscrypt_ver.tar.gz" -o "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_ver.tar.gz_tmp"
+                archs=( arm64 x86_64 )
+
+                for arch in "${archs[@]}"
+                do
+                    if [ ! -e "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_$arch-$dnscrypt_ver.tar.gz" ]
                     then
-                        mv "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_ver.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_ver.tar.gz"
-                    else
-                        Println "$error dnscrypt arm64 下载出错, 无法连接 github ?"
+                        Println "$info 下载 dnscrypt proxy $arch ..."
+                        mkdir -p "$FFMPEG_MIRROR_ROOT/dnscrypt/"
+                        if curl -s -L "https://github.com/DNSCrypt/dnscrypt-proxy/releases/download/$dnscrypt_ver/dnscrypt-proxy-linux_$arch-$dnscrypt_ver.tar.gz" -o "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_$arch-$dnscrypt_ver.tar.gz_tmp"
+                        then
+                            mv "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_$arch-$dnscrypt_ver.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_$arch-$dnscrypt_ver.tar.gz"
+                        else
+                            Println "$error dnscrypt $arch 下载出错, 无法连接 github ?"
+                        fi
                     fi
-                fi
-                if [ ! -e "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_x86_64-$dnscrypt_ver.tar.gz" ]
-                then
-                    Println "$info 下载 dnscrypt proxy x86_64 ..."
-                    mkdir -p "$FFMPEG_MIRROR_ROOT/dnscrypt/"
-                    if curl -s -L "https://github.com/DNSCrypt/dnscrypt-proxy/releases/download/$dnscrypt_ver/dnscrypt-proxy-linux_x86_64-$dnscrypt_ver.tar.gz" -o "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_x86_64-$dnscrypt_ver.tar.gz_tmp"
-                    then
-                        mv "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_x86_64-$dnscrypt_ver.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/dnscrypt/dnscrypt-proxy-linux_x86_64-$dnscrypt_ver.tar.gz"
-                    else
-                        Println "$error dnscrypt x86_64 下载出错, 无法连接 github ?"
-                    fi
-                fi
+                done
             else
                 Println "$error dnscrypt 下载出错, 无法连接 github ?"
             fi
