@@ -29808,7 +29808,7 @@ V2rayNginxListDomains()
         done
     fi
 
-    Println "${green}域名列表:${normal}\n\n${v2ray_nginx_domains_list:-无}\n\n"
+    Println "${green}域名列表:${normal}\n\n${v2ray_nginx_domains_list:-无}"
 }
 
 V2rayNginxSelectDomain()
@@ -32441,6 +32441,103 @@ CloudflareSetWorkerProjectName()
     Println "  worker 项目名称: ${green} $cf_worker_project_name ${normal}\n"
 }
 
+CloudflareSetWorkerUpstream()
+{
+    if [ -s "$IBM_CONFIG" ] && [ -z "${cf_worker_upstream:-}" ]
+    then
+        IbmGetCfApps
+        if [ "$ibm_cf_apps_count" -gt 0 ] 
+        then
+            echo
+            inquirer list_input "worker: $cf_worker_name 是否指向 IBM CF APP" yn_options use_ibm_cf_app_yn
+
+            if [ "$use_ibm_cf_app_yn" == "$i18n_yes" ] 
+            then
+                IbmListCfApps
+                echo -e "选择 APP"
+                while read -p "$i18n_default_cancel" ibm_cf_apps_num
+                do
+                    case "$ibm_cf_apps_num" in
+                        "")
+                            Println "$i18n_canceled...\n" && exit 1
+                        ;;
+                        *[!0-9]*)
+                            Println "$error $i18n_input_correct_no\n"
+                        ;;
+                        *)
+                            if [ "$ibm_cf_apps_num" -gt 0 ] && [ "$ibm_cf_apps_num" -le "$ibm_cf_apps_count" ]
+                            then
+                                ibm_cf_apps_index=$((ibm_cf_apps_num-1))
+                                ibm_cf_app_name=${ibm_cf_apps_name[ibm_cf_apps_index]}
+                                ibm_user_email=${ibm_cf_apps_user_email[ibm_cf_apps_index]}
+                                ibm_cf_app_routes_count=${ibm_cf_apps_routes_count[ibm_cf_apps_index]}
+                                ibm_cf_app_route_hostname=${ibm_cf_apps_route_hostname[ibm_cf_apps_index]}
+                                ibm_cf_app_route_port=${ibm_cf_apps_route_port[ibm_cf_apps_index]}
+                                ibm_cf_app_route_domain=${ibm_cf_apps_route_domain[ibm_cf_apps_index]}
+                                ibm_cf_app_route_path=${ibm_cf_apps_route_path[ibm_cf_apps_index]}
+                                IFS="|" read -r -a ibm_cf_app_routes_hostname <<< "$ibm_cf_app_route_hostname"
+                                IFS="|" read -r -a ibm_cf_app_routes_port <<< "$ibm_cf_app_route_port"
+                                IFS="|" read -r -a ibm_cf_app_routes_domain <<< "$ibm_cf_app_route_domain"
+                                IFS="|" read -r -a ibm_cf_app_routes_path <<< "${ibm_cf_app_route_path}|"
+                                break
+                            else
+                                Println "$error $i18n_input_correct_no\n"
+                            fi
+                        ;;
+                    esac
+                done
+
+                ibm_cf_apps_list=""
+                ibm_cf_apps_link=()
+                for((i=0;i<ibm_cf_app_routes_count;i++));
+                do
+                    if [ -n "${ibm_cf_app_routes_path[i]}" ] 
+                    then
+                        path="/${ibm_cf_app_routes_path[i]}"
+                    else
+                        path=""
+                    fi
+                    upstream="${ibm_cf_app_routes_hostname[i]}.${ibm_cf_app_routes_domain[i]}$path"
+                    ibm_cf_apps_link+=("$upstream")
+                    ibm_cf_apps_list="$ibm_cf_apps_list ${green}$((i+1)).${normal}${indent_6}源站: ${green}$upstream${normal} 端口: ${green}${ibm_cf_app_routes_port[i]}${normal}\n\n"
+                done
+
+                Println "$ibm_cf_apps_list"
+
+                echo -e "选择源站"
+                while read -p "$i18n_default_cancel" ibm_cf_apps_link_num 
+                do
+                    case $ibm_cf_apps_link_num in
+                        "") 
+                            Println "$i18n_canceled...\n"
+                            exit 1
+                        ;;
+                        *[!0-9]*) 
+                            Println "$error $i18n_input_correct_no\n"
+                        ;;
+                        *) 
+                            if [ "$ibm_cf_apps_link_num" -gt 0 ] && [ "$ibm_cf_apps_link_num" -le "$ibm_cf_app_routes_count" ] 
+                            then
+                                ibm_cf_apps_link_index=$((ibm_cf_apps_link_num-1))
+                                cf_worker_upstream=${ibm_cf_apps_link[ibm_cf_apps_link_index]}
+                                break
+                            else
+                                Println "$error $i18n_input_correct_no\n"
+                            fi
+                        ;;
+                    esac
+                done
+            fi
+        fi
+    fi
+    if [ -z "${cf_worker_upstream:-}" ] 
+    then
+        Println "$tip 比如: youdomain.com/path"
+        inquirer text_input "输入 worker: $cf_worker_name 源站地址: " cf_worker_upstream "$i18n_cancel"
+        ExitOnCancel
+    fi
+}
+
 CloudflareAddWorker()
 {
     if [ ! -s "$CF_CONFIG" ] 
@@ -32452,7 +32549,7 @@ CloudflareAddWorker()
     cd "$CF_WORKERS_ROOT"
 
     Println "
-  ${green}1.${normal} stream proxy ( 适用于 IBM CF 中转加速 )
+  ${green}1.${normal} stream proxy (反向代理)
   ${green}2.${normal} xtream codes proxy
   ${green}3.${normal} 自定义 worker
 
@@ -32471,6 +32568,7 @@ CloudflareAddWorker()
                 CloudflareSetWorkerName
                 cf_worker_path="stream_proxy"
                 CloudflareSetWorkerProjectName
+                CloudflareSetWorkerUpstream
                 break
             ;;
             2) 
@@ -32515,6 +32613,17 @@ CloudflareAddWorker()
             project_name: $project_name
         }'
     )
+
+    if [ -n "${cf_worker_upstream:-}" ] 
+    then
+        merge=$(
+        $JQ_FILE -n --arg upstream "$cf_worker_upstream" \
+        '{
+            upstream: $upstream
+        }')
+        JQs merge new_worker "$merge"
+    fi
+
     jq_path='["workers"]'
     JQ add "$CF_CONFIG" "$new_worker"
     Println "$info worker: $cf_worker_name 添加成功\n"
@@ -32522,23 +32631,35 @@ CloudflareAddWorker()
 
 CloudflareGetWorkers()
 {
-    cf_workers_list=""
-    cf_workers_count=0
-    cf_workers_name=()
-    cf_workers_path=()
-    cf_workers_project_name=()
-    while IFS=" " read -r name path project_name
-    do
-        cf_workers_count=$((cf_workers_count+1))
-        name=${name#\"}
-        cf_workers_name+=("$name")
-        cf_workers_path+=("$path")
-        project_name=${project_name%\"}
-        cf_workers_project_name+=("$project_name")
+    delimiters=( $'\001' )
+    IFS=$'\002\t' read -r name path project_name upstream < <(JQs flat "$CF_CONFIG" '.[0].workers' '
+    (. // {}| if . == "" then {} else . end) as $workers |
+    reduce ({name,path,project_name,upstream}|keys_unsorted[]) as $key ([];
+    $workers[$key] as $val | if $val then
+        . + [$val + "\u0001\u0002"]
+    else
+        . + ["\u0002"]
+    end
+    )|@tsv' "${delimiters[@]}")
 
-        cf_workers_list="$cf_workers_list ${green}$cf_workers_count.${normal}${indent_6}名称: ${green}$name${normal}  路径: ${green}$path${normal}\n${indent_6}项目名称: ${green}$project_name${normal}\n\n"
-    done < <($JQ_FILE '(.workers| if .== null then [] else . end)[]|[.name,.path,.project_name]|join(" ")' "$CF_CONFIG")
-    return 0
+    if [ -z "$name" ] 
+    then
+        cf_workers_count=0
+        return 0
+    fi
+
+    IFS=$'\001' read -r -a cf_workers_name <<< "$name"
+    IFS=$'\001' read -r -a cf_workers_path <<< "$path"
+    IFS=$'\001' read -r -a cf_workers_project_name <<< "$project_name"
+
+    if [ -z "$upstream" ] 
+    then
+        cf_workers_upstream=("${cf_workers_name[@]//*/}")
+    else
+        IFS=$'\001' read -r -a cf_workers_upstream <<< "$upstream"
+    fi
+
+    cf_workers_count=${#cf_workers_name[@]}
 }
 
 CloudflareListWorkers()
@@ -32552,6 +32673,19 @@ CloudflareListWorkers()
 
     if [ "$cf_workers_count" -gt 0 ] 
     then
+        cf_workers_list=""
+
+        for((i=0;i<cf_workers_count;i++));
+        do
+            if [ "${cf_workers_path[i]}" == "stream_proxy" ] 
+            then
+                cf_worker_upstream_list=" 源站: ${green}${cf_workers_upstream[i]:-无}${normal}"
+            else
+                cf_worker_upstream_list=""
+            fi
+            cf_workers_list="$cf_workers_list ${green}$((i+1)).${normal}${indent_6}名称: ${green}${cf_workers_name[i]}${normal}  路径: ${green}${cf_workers_path[i]}${normal}\n${indent_6}项目名称: ${green}${cf_workers_project_name[i]}${normal}$cf_worker_upstream_list\n\n"
+        done
+
         Println "$cf_workers_list"
     else
         Println "$error 没有 worker\n"
@@ -32569,11 +32703,11 @@ CloudflareEditWorker()
 
     if [ "$cf_workers_count" -eq 0 ] 
     then
-        echo -e "$error 请先添加 worker\n"
+        Println "$error 请先添加 worker\n"
         exit 1
     fi
 
-    echo -e "选择 worker"
+    echo "选择 worker"
     while read -p "$i18n_default_cancel" cf_workers_num
     do
         case "$cf_workers_num" in
@@ -32588,8 +32722,6 @@ CloudflareEditWorker()
                 then
                     cf_workers_index=$((cf_workers_num-1))
                     cf_worker_name=${cf_workers_name[cf_workers_index]}
-                    cf_worker_path=${cf_workers_path[cf_workers_index]}
-                    cf_worker_project_name=${cf_workers_project_name[cf_workers_index]}
                     break
                 else
                     Println "$error $i18n_input_correct_no\n"
@@ -32598,94 +32730,84 @@ CloudflareEditWorker()
         esac
     done
 
-    Println "请输入 cloudflare worker 名称"
-    read -p "(默认: $cf_worker_name): " cf_worker_name_new
-    cf_worker_name_new=${cf_worker_name_new:-$cf_worker_name}
-    Println "  worker 名称: ${green} $cf_worker_name_new ${normal}\n"
+    echo
+    edit_worker_options=( '修改 worker 名称' '修改 worker 路径' '修改 worker 项目名称')
 
-    Println "请输入 cloudflare worker 路径名称"
-    while read -p "(默认: $cf_worker_path): " cf_worker_path_new 
-    do
-        case $cf_worker_path_new in
-            "") 
-                cf_worker_path_new=$cf_worker_path
-                break
-            ;;
-            *[!0-9A-Za-z_-]*) 
-                Println "$error 路径格式错误\n"
-            ;;
-            *) 
-                if [ "$cf_worker_path_new" == "$cf_worker_path" ] 
-                then
-                    break
-                elif [ -d "$CF_WORKERS_ROOT/$cf_worker_path_new" ] 
-                then
-                    echo
-                    inquirer list_input "路径已经存在, 是否仍要修改" ny_options force_edit_yn
+    if [ "${cf_workers_path[cf_workers_index]}" == "stream_proxy" ] 
+    then
+        edit_worker_options+=("修改 worker 源站")
+    fi
 
-                    if [[ $force_edit_yn == "$i18n_no" ]] 
+    inquirer list_input_index "选择操作" edit_worker_options edit_worker_options_index
+
+    if [ "$edit_worker_options_index" -eq 0 ] 
+    then
+        CloudflareSetWorkerName
+        jq_path='["workers",'"$cf_workers_index"',"name"]'
+        JQ update "$CF_CONFIG" "$cf_worker_name"
+    elif [ "$edit_worker_options_index" -eq 1 ] 
+    then
+        Println "请输入 cloudflare worker 路径名称"
+        while read -p "$i18n_default_cancel" cf_worker_path
+        do
+            case $cf_worker_path in
+                "") 
+                    Println "$i18n_canceled...\n" && exit 1
+                ;;
+                *[!0-9A-Za-z_-]*) 
+                    Println "$error 路径格式错误\n"
+                ;;
+                *) 
+                    if [ "$cf_worker_path" == "${cf_workers_path[cf_workers_index]}" ] 
                     then
-                        continue
-                    else
-                        if [ -d "$CF_WORKERS_ROOT/$cf_worker_path" ] 
+                        break
+                    elif [ -d "$CF_WORKERS_ROOT/$cf_worker_path" ] 
+                    then
+                        echo
+                        inquirer list_input "路径已经存在, 是否仍要修改" ny_options force_edit_yn
+
+                        if [[ $force_edit_yn == "$i18n_no" ]] 
+                        then
+                            continue
+                        fi
+
+                        if [ -d "$CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]:-notfound}" ] 
                         then
                             echo
                             inquirer list_input "是否删除原路径目录" yn_options delete_old_path_yn
 
                             if [[ $delete_old_path_yn == "$i18n_yes" ]] 
                             then
-                                rm -rf "$CF_WORKERS_ROOT/${cf_worker_path:-notfound}"
+                                rm -rf "$CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]:-notfound}"
                             fi  
                         fi
-                        break
-                    fi
-                else
-                    if [ "$cf_worker_path" == "stream_proxy" ] || [ "$cf_worker_path" == "xc_proxy" ]
-                    then
-                        cp -r "$CF_WORKERS_ROOT/$cf_worker_path" "$CF_WORKERS_ROOT/$cf_worker_path_new"
                     else
-                        mv "$CF_WORKERS_ROOT/$cf_worker_path" "$CF_WORKERS_ROOT/$cf_worker_path_new"
+                        if [ "${cf_workers_path[cf_workers_index]}" == "stream_proxy" ] || [ "${cf_workers_path[cf_workers_index]}" == "xc_proxy" ]
+                        then
+                            cp -r "$CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]}" "$CF_WORKERS_ROOT/$cf_worker_path"
+                        elif [ -n "${cf_workers_path[cf_workers_index]}" ] 
+                        then
+                            mv "$CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]}" "$CF_WORKERS_ROOT/$cf_worker_path"
+                        fi
                     fi
                     break
-                fi
-            ;;
-        esac
-    done
-    Println "  worker 路径: ${green} $cf_worker_path_new ${normal}\n"
+                ;;
+            esac
+        done
+        Println "  worker 路径: ${green} $cf_worker_path ${normal}\n"
+        jq_path='["workers",'"$cf_workers_index"',"path"]'
+        JQ update "$CF_CONFIG" "$cf_worker_path"
+    elif [ "$edit_worker_options_index" -eq 2 ] 
+    then
+        CloudflareSetWorkerProjectName
+        jq_path='["workers",'"$cf_workers_index"',"project_name"]'
+        JQ update "$CF_CONFIG" "$cf_worker_project_name"
+    else
+        CloudflareSetWorkerUpstream
+        jq_path='["workers",'"$cf_workers_index"',"upstream"]'
+        JQ update "$CF_CONFIG" "$cf_worker_upstream"
+    fi
 
-    Println "请输入 cloudflare worker 项目名称"
-    while read -p "(默认: $cf_worker_project_name): " cf_worker_project_name_new
-    do
-        case $cf_worker_project_name_new in
-            "") 
-                cf_worker_project_name_new=$cf_worker_project_name
-                break
-            ;;
-            *) 
-                if [[ $cf_worker_project_name_new =~ ^[A-Za-z0-9](([a-zA-Z0-9\_\-]{0,61})[A-Za-z0-9])?$ ]] 
-                then
-                    cf_worker_project_name_new=$(tr '[:upper:]' '[:lower:]' <<< "$cf_worker_project_name_new")
-                    break
-                else
-                    Println "$error 项目名称格式错误\n"
-                fi
-            ;;
-        esac
-    done
-    Println "  worker 项目名称: ${green} $cf_worker_project_name_new ${normal}\n"
-
-    new_worker=$(
-    $JQ_FILE -n --arg name "$cf_worker_name_new" --arg path "$cf_worker_path_new" \
-        --arg project_name "$cf_worker_project_name_new" \
-        '{
-            name: $name,
-            path: $path,
-            project_name: $project_name
-        }'
-    )
-
-    jq_path='["workers",'"$cf_workers_index"']'
-    JQ replace "$CF_CONFIG" "$new_worker"
     Println "$info worker 修改成功\n"
 }
 
@@ -32695,11 +32817,11 @@ CloudflareDelWorker()
 
     if [ "$cf_workers_count" -eq 0 ] 
     then
-        echo -e "$error 请先添加 worker\n"
+        Println "$error 请先添加 worker\n"
         exit 1
     fi
 
-    echo -e "选择 worker"
+    echo "选择 worker"
     while read -p "$i18n_default_cancel" cf_workers_num
     do
         case "$cf_workers_num" in
@@ -32745,40 +32867,87 @@ CloudflareDeployWorker()
 
     if [ "$cf_workers_count" -eq 0 ] 
     then
-        echo -e "$error 请先添加 worker\n"
+        Println "$error 请先添加 worker\n"
         exit 1
     fi
 
-    echo -e "选择 worker"
+    echo -e " ${green}$((cf_workers_count+1)).${normal}${indent_6}全部"
+
+    Println "选择 worker, 多个 worker 用空格分隔, 比如 5 7 9-11"
     while read -p "$i18n_default_cancel" cf_workers_num
     do
-        case "$cf_workers_num" in
-            "")
-                Println "$i18n_canceled...\n" && exit 1
-            ;;
-            *[!0-9]*)
-                Println "$error $i18n_input_correct_no\n"
+        [ -z "$cf_workers_num" ] && Println "$i18n_canceled...\n" && exit 1
+
+        if [[ $cf_workers_num -eq $((cf_workers_count+1)) ]]
+        then
+            for((i=0;i<cf_workers_count;i++));
+            do
+                cf_workers_indices+=("$i")
+            done
+            break
+        fi
+
+        IFS=" " read -ra cf_workers_num_arr <<< "$cf_workers_num"
+
+        error_no=0
+        for cf_worker_num in "${cf_workers_num_arr[@]}"
+        do
+            case "$cf_worker_num" in
+                *"-"*)
+                    cf_worker_num_start=${cf_worker_num%-*}
+                    cf_worker_num_end=${cf_worker_num#*-}
+                    if [[ $cf_worker_num_start == *[!0-9]* ]] || [[ $cf_worker_num_end == *[!0-9]* ]] || \
+                    [ "$cf_worker_num_start" -eq 0 ] || [ "$cf_worker_num_end" -eq 0 ] || \
+                    [ "$cf_worker_num_end" -gt "$cf_workers_count" ] || \
+                    [ "$cf_worker_num_start" -ge "$cf_worker_num_end" ]
+                    then
+                        error_no=3
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                ;;
+                *)
+                    if [ "$cf_worker_num" -lt 1 ] || [ "$cf_worker_num" -gt "$cf_workers_count" ] 
+                    then
+                        error_no=2
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_number\n"
             ;;
             *)
-                if [ "$cf_workers_num" -gt 0 ] && [ "$cf_workers_num" -le "$cf_workers_count" ]
-                then
-                    cf_workers_index=$((cf_workers_num-1))
-                    cf_worker_name=${cf_workers_name[cf_workers_index]}
-                    cf_worker_path=${cf_workers_path[cf_workers_index]}
-                    cf_worker_project_name=${cf_workers_project_name[cf_workers_index]}
-                    break
-                else
-                    Println "$error $i18n_input_correct_no\n"
-                fi
+                for element in "${cf_workers_num_arr[@]}"
+                do
+                    if [[ $element =~ - ]] 
+                    then
+                        start=${element%-*}
+                        end=${element#*-}
+                        for((i=start-1;i<end;i++));
+                        do
+                            cf_workers_indices+=("$i")
+                        done
+                    else
+                        cf_workers_indices+=("$((element-1))")
+                    fi
+                done
+                break
             ;;
         esac
     done
 
-    if [ ! -d "$CF_WORKERS_ROOT/$cf_worker_path" ] 
-    then
-        Println "$error worker 目录: $CF_WORKERS_ROOT/$cf_worker_path 不存在\n"
-        exit 1
-    fi
+    for cf_workers_index in "${cf_workers_indices[@]}"
+    do
+        if [ ! -d "$CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]}" ] 
+        then
+            Println "$error worker ${cf_workers_name[cf_workers_index]} 目录: $CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]} 不存在\n"
+            exit 1
+        fi
+    done
 
     CloudflareListUsers
 
@@ -32796,7 +32965,7 @@ CloudflareDeployWorker()
     do
         [ -z "$cf_users_num" ] && Println "$i18n_canceled...\n" && exit 1
 
-        if [[ $cf_users_num -eq $((cf_users_count+1)) ]] 2> /dev/null
+        if [[ $cf_users_num -eq $((cf_users_count+1)) ]]
         then
             for((i=0;i<cf_users_count;i++));
             do
@@ -32858,225 +33027,140 @@ CloudflareDeployWorker()
         esac
     done
 
-    for cf_users_index in "${cf_users_indices[@]}"
+    for cf_workers_index in "${cf_workers_indices[@]}"
     do
-        cf_user_email=${cf_users_email[cf_users_index]}
-        Println "$info 部署到 $cf_user_email\n"
+        cf_worker_name=${cf_workers_name[cf_workers_index]}
+        cf_worker_path=${cf_workers_path[cf_workers_index]}
+        cf_worker_project_name=${cf_workers_project_name[cf_workers_index]}
+        cf_worker_upstream=${cf_workers_upstream[cf_workers_index]}
 
-        cf_user_pass=${cf_users_pass[cf_users_index]}
-        cf_user_token=${cf_users_token[cf_users_index]}
-        cf_user_api_key=${cf_users_api_key[cf_users_index]}
+        for cf_users_index in "${cf_users_indices[@]}"
+        do
+            cf_user_email=${cf_users_email[cf_users_index]}
+            Println "$info 部署到 $cf_user_email"
 
-        if [ -n "$cf_user_api_key" ] 
-        then
-            curl_header_auth_email="X-Auth-Email: $cf_user_email"
-            curl_header_auth_key="X-Auth-Key: $cf_user_api_key"
-            curl_header_auth_token=""
-        else
-            curl_header_auth_email=""
-            curl_header_auth_key=""
-            curl_header_auth_token="Authorization: Bearer $cf_user_token"
-        fi
+            cf_user_pass=${cf_users_pass[cf_users_index]}
+            cf_user_token=${cf_users_token[cf_users_index]}
+            cf_user_api_key=${cf_users_api_key[cf_users_index]}
 
-        if [ -z "$cf_user_token" ] && [ -z "$cf_user_api_key" ]
-        then
-            if [ "$cf_use_api" -eq 1 ] 
+            if [ -n "$cf_user_api_key" ] 
             then
-                Println "$error 请添加账号 $cf_user_email Token 或 Key\n"
-                exit 1
-            fi
-
-            Println "$info 尝试获取用户 Token ..."
-
-            PythonInstall
-
-            Println "$info 更新 ${CF_WORKERS_FILE##*/}"
-            wget --timeout=10 --tries=1 --no-check-certificate "$CF_WORKERS_LINK" -qO "$CF_WORKERS_FILE" \
-            || wget --timeout=10 --tries=3 --no-check-certificate "$CF_WORKERS_LINK_BACKUP" -qO "$CF_WORKERS_FILE"
-
-            for((i=0;i<3;i++));
-            do
-                if cf_user_token=$(python3 \
-                    "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o api_token
-                ) 
-                then
-                    break
-                else
-                    sleep 10
-                fi
-            done
-
-            if [ -z "$cf_user_token" ] 
-            then
-                Println "$error 无法获取用户 ID, 账号或密码错误 或者 cloudflare 暂时限制登录\n"
-                exit 1
+                curl_header_auth_email="X-Auth-Email: $cf_user_email"
+                curl_header_auth_key="X-Auth-Key: $cf_user_api_key"
+                curl_header_auth_token=""
             else
-                cf_users_token[cf_users_index]=$cf_user_token
-
-                new_user=$(
-                $JQ_FILE -n --arg email "$cf_user_email" --arg pass "$cf_user_pass" \
-                    --arg token "$cf_user_token" --arg key "$cf_user_api_key" \
-                    '{
-                        email: $email,
-                        pass: $pass,
-                        token: $token,
-                        key: $key
-                    }'
-                )
-
-                jq_path='["users",'"$cf_users_index"']'
-                JQ replace "$CF_CONFIG" "$new_user"
-                Println "$info 获取用户 $cf_user_email Token 成功"
+                curl_header_auth_email=""
+                curl_header_auth_key=""
+                curl_header_auth_token="Authorization: Bearer $cf_user_token"
             fi
-        fi
 
-        CF_ACCOUNT_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/accounts" \
-            -H "Content-Type: application/json" \
-            -H ''"$curl_header_auth_email"'' \
-            -H ''"$curl_header_auth_key"'' \
-            -H ''"$curl_header_auth_token"'' \
-            | $JQ_FILE -r '.result[0].id'
-        ) || true
-
-        if [ -z "$CF_ACCOUNT_ID" ] || [ "$CF_ACCOUNT_ID" == null ]
-        then
-            Println "$error 无法获取用户 ID, Token 错误 ?\n"
-            exit 1
-        fi
-
-        if [ "$cf_worker_path" == "stream_proxy" ] 
-        then
-            if [ -s "$IBM_CONFIG" ] && [ -z "${upstream:-}" ]
+            if [ -z "$cf_user_token" ] && [ -z "$cf_user_api_key" ]
             then
-                IbmGetCfApps
-                if [ "$ibm_cf_apps_count" -gt 0 ] 
+                if [ "$cf_use_api" -eq 1 ] 
                 then
-                    echo
-                    inquirer list_input "是否使用 IBM CF APP 中转" yn_options use_ibm_cf_app_yn
+                    Println "$error 请添加账号 $cf_user_email Token 或 Key\n"
+                    exit 1
+                fi
 
-                    if [ "$use_ibm_cf_app_yn" == "$i18n_yes" ] 
+                Println "$info 尝试获取用户 Token ..."
+
+                PythonInstall
+
+                Println "$info 更新 ${CF_WORKERS_FILE##*/}"
+                wget --timeout=10 --tries=1 --no-check-certificate "$CF_WORKERS_LINK" -qO "$CF_WORKERS_FILE" \
+                || wget --timeout=10 --tries=3 --no-check-certificate "$CF_WORKERS_LINK_BACKUP" -qO "$CF_WORKERS_FILE"
+
+                for((i=0;i<3;i++));
+                do
+                    if cf_user_token=$(python3 \
+                        "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o api_token
+                    ) 
                     then
-                        IbmListCfApps
-                        echo -e "选择 APP"
-                        while read -p "$i18n_default_cancel" ibm_cf_apps_num
-                        do
-                            case "$ibm_cf_apps_num" in
-                                "")
-                                    Println "$i18n_canceled...\n" && exit 1
-                                ;;
-                                *[!0-9]*)
-                                    Println "$error $i18n_input_correct_no\n"
-                                ;;
-                                *)
-                                    if [ "$ibm_cf_apps_num" -gt 0 ] && [ "$ibm_cf_apps_num" -le "$ibm_cf_apps_count" ]
-                                    then
-                                        ibm_cf_apps_index=$((ibm_cf_apps_num-1))
-                                        ibm_cf_app_name=${ibm_cf_apps_name[ibm_cf_apps_index]}
-                                        ibm_user_email=${ibm_cf_apps_user_email[ibm_cf_apps_index]}
-                                        ibm_cf_app_routes_count=${ibm_cf_apps_routes_count[ibm_cf_apps_index]}
-                                        ibm_cf_app_route_hostname=${ibm_cf_apps_route_hostname[ibm_cf_apps_index]}
-                                        ibm_cf_app_route_port=${ibm_cf_apps_route_port[ibm_cf_apps_index]}
-                                        ibm_cf_app_route_domain=${ibm_cf_apps_route_domain[ibm_cf_apps_index]}
-                                        ibm_cf_app_route_path=${ibm_cf_apps_route_path[ibm_cf_apps_index]}
-                                        IFS="|" read -r -a ibm_cf_app_routes_hostname <<< "$ibm_cf_app_route_hostname"
-                                        IFS="|" read -r -a ibm_cf_app_routes_port <<< "$ibm_cf_app_route_port"
-                                        IFS="|" read -r -a ibm_cf_app_routes_domain <<< "$ibm_cf_app_route_domain"
-                                        IFS="|" read -r -a ibm_cf_app_routes_path <<< "${ibm_cf_app_route_path}|"
-                                        break
-                                    else
-                                        Println "$error $i18n_input_correct_no\n"
-                                    fi
-                                ;;
-                            esac
-                        done
-
-                        ibm_cf_apps_list=""
-                        ibm_cf_apps_link=()
-                        for((i=0;i<ibm_cf_app_routes_count;i++));
-                        do
-                            if [ -n "${ibm_cf_app_routes_path[i]}" ] 
-                            then
-                                path="/${ibm_cf_app_routes_path[i]}"
-                            else
-                                path=""
-                            fi
-                            upstream="${ibm_cf_app_routes_hostname[i]}.${ibm_cf_app_routes_domain[i]}$path"
-                            ibm_cf_apps_link+=("$upstream")
-                            ibm_cf_apps_list="$ibm_cf_apps_list ${green}$((i+1)).${normal}${indent_6}$upstream\n\n"
-                        done
-
-                        Println "$ibm_cf_apps_list"
-
-                        echo -e "选择链接"
-                        while read -p "$i18n_default_cancel" ibm_cf_apps_link_num 
-                        do
-                            case $ibm_cf_apps_link_num in
-                                "") 
-                                    Println "$i18n_canceled...\n"
-                                    exit 1
-                                ;;
-                                *[!0-9]*) 
-                                    Println "$error $i18n_input_correct_no\n"
-                                ;;
-                                *) 
-                                    if [ "$ibm_cf_apps_link_num" -gt 0 ] && [ "$ibm_cf_apps_link_num" -le "$ibm_cf_app_routes_count" ] 
-                                    then
-                                        ibm_cf_apps_link_index=$((ibm_cf_apps_link_num-1))
-                                        upstream=${ibm_cf_apps_link[ibm_cf_apps_link_index]}
-                                        break
-                                    else
-                                        Println "$error $i18n_input_correct_no\n"
-                                    fi
-                                ;;
-                            esac
-                        done
+                        break
+                    else
+                        sleep 10
                     fi
-                fi
-            fi
-            if [ -z "${upstream:-}" ] 
-            then
-                Println "$info 输入源站 ip 或者 中转服务器的域名(比如 IBM CF APP 的域名)"
-                read -p "$i18n_default_cancel" upstream
-                [ -z "$upstream" ] && Println "$i18n_canceled...\n" && exit 1
-            fi
-            sed -i 's/const UPSTREAM_DOMAIN = .*/const UPSTREAM_DOMAIN = "'"$upstream"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/index.js"
-            # deprecated
-            sed -i 's/const upstream = .*/const upstream = "'"$upstream"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/index.js"
-        fi
+                done
 
-        cd "$CF_WORKERS_ROOT/$cf_worker_path"
-        sed -i 's/account_id = .*/account_id = "'"$CF_ACCOUNT_ID"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/wrangler.toml"
-        sed -i 's/name = .*/name = "'"$cf_worker_project_name"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/wrangler.toml"
-
-        if CF_API_TOKEN=$cf_user_token wrangler publish 
-        then
-            Println "$info worker 部署成功\n"
-        elif [ "$cf_use_api" -eq 1 ] 
-        then
-            Println "$error 请检查 Token 权限\n"
-            exit 1
-        else
-            Println "$error 请检查 Token 权限, 尝试修复 ...\n"
-
-            PythonInstall
-
-            if [ "$sh_debug" -eq 0 ] && [ ! -f "$IPTV_ROOT/VIP" ]
-            then
-                curl -s -Lm 10 "$CF_WORKERS_LINK" -o "$CF_WORKERS_FILE" \
-                || curl -s -Lm 20 "$CF_WORKERS_LINK_BACKUP" -o "$CF_WORKERS_FILE"
-            fi
-
-            for((i=0;i<3;i++));
-            do
-                if [[ $(python3 "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o add_subdomain) == "ok" ]] 
+                if [ -z "$cf_user_token" ] 
                 then
-                    CF_API_TOKEN=$cf_user_token wrangler publish
-                    break
+                    Println "$error 无法获取用户 ID, 账号或密码错误 或者 cloudflare 暂时限制登录\n"
+                    exit 1
                 else
-                    sleep 10
+                    cf_users_token[cf_users_index]=$cf_user_token
+
+                    new_user=$(
+                    $JQ_FILE -n --arg email "$cf_user_email" --arg pass "$cf_user_pass" \
+                        --arg token "$cf_user_token" --arg key "$cf_user_api_key" \
+                        '{
+                            email: $email,
+                            pass: $pass,
+                            token: $token,
+                            key: $key
+                        }'
+                    )
+
+                    jq_path='["users",'"$cf_users_index"']'
+                    JQ replace "$CF_CONFIG" "$new_user"
+                    Println "$info 获取用户 $cf_user_email Token 成功"
                 fi
-            done
-        fi
+            fi
+
+            CF_ACCOUNT_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/accounts" \
+                -H "Content-Type: application/json" \
+                -H ''"$curl_header_auth_email"'' \
+                -H ''"$curl_header_auth_key"'' \
+                -H ''"$curl_header_auth_token"'' \
+                | $JQ_FILE -r '.result[0].id'
+            ) || true
+
+            if [ -z "$CF_ACCOUNT_ID" ] || [ "$CF_ACCOUNT_ID" == null ]
+            then
+                Println "$error 无法获取用户 ID, Token 错误 ?\n"
+                exit 1
+            fi
+
+            if [ "$cf_worker_path" == "stream_proxy" ] 
+            then
+                CloudflareSetWorkerUpstream
+                sed -i 's/const UPSTREAM_DOMAIN = .*/const UPSTREAM_DOMAIN = "'"$cf_worker_upstream"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/index.js"
+                # deprecated
+                sed -i 's/const upstream = .*/const upstream = "'"$cf_worker_upstream"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/index.js"
+            fi
+
+            cd "$CF_WORKERS_ROOT/$cf_worker_path"
+            sed -i 's/account_id = .*/account_id = "'"$CF_ACCOUNT_ID"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/wrangler.toml"
+            sed -i 's/name = .*/name = "'"$cf_worker_project_name"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/wrangler.toml"
+
+            if CF_API_TOKEN=$cf_user_token wrangler publish 
+            then
+                Println "$info worker: $cf_worker_name 部署成功\n"
+            elif [ "$cf_use_api" -eq 1 ] 
+            then
+                Println "$error 请检查 worker: $cf_worker_name Token 权限\n"
+            else
+                Println "$error 请检查 worker: $cf_worker_name Token 权限, 尝试修复 ...\n"
+
+                PythonInstall
+
+                if [ "$sh_debug" -eq 0 ] && [ ! -f "$IPTV_ROOT/VIP" ]
+                then
+                    curl -s -Lm 10 "$CF_WORKERS_LINK" -o "$CF_WORKERS_FILE" \
+                    || curl -s -Lm 20 "$CF_WORKERS_LINK_BACKUP" -o "$CF_WORKERS_FILE"
+                fi
+
+                for((i=0;i<3;i++));
+                do
+                    if [[ $(python3 "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o add_subdomain) == "ok" ]] 
+                    then
+                        CF_API_TOKEN=$cf_user_token wrangler publish
+                        continue 2
+                    else
+                        sleep 10
+                    fi
+                done
+            fi
+        done
     done
 }
 
@@ -33317,14 +33401,7 @@ CloudflareConfigWorkerRoute()
         done
     fi
 
-    CloudflareGetWorkers
-
-    if [ "$cf_workers_count" -gt 0 ] 
-    then
-        Println "$cf_workers_list"
-    else
-        Println "$error 本地没有 worker"
-    fi
+    CloudflareListWorkers
 
     Println "$info 输入已经存在的 worker 项目名称"
     echo -e "$tip 输入的是项目名称, 不是序号\n"
@@ -34162,14 +34239,15 @@ CloudflareEnableWorkersMonitor()
 
     if [ "$cf_workers_count" -eq 0 ] 
     then
-        echo -e "$error 请先添加 worker\n"
+        Println "$error 请先添加 worker\n"
         exit 1
     fi
 
     workers_name=()
     workers_path=()
     workers_project_name=()
-    echo -e "选择 worker, 多个 worker 用空格分隔, 比如 5 7 9-11"
+    workers_upstream=()
+    echo "选择 worker, 多个 worker 用空格分隔, 比如 5 7 9-11"
     while read -p "$i18n_default_cancel" workers_num 
     do
         [ -z "$workers_num" ] && Println "$i18n_canceled...\n" && exit 1
@@ -34219,12 +34297,14 @@ CloudflareEnableWorkersMonitor()
                             workers_name+=("${cf_workers_name[cf_workers_index]}")
                             workers_path+=("${cf_workers_path[cf_workers_index]}")
                             workers_project_name+=("${cf_workers_project_name[cf_workers_index]}")
+                            workers_upstream+=("${cf_workers_upstream[cf_workers_index]}")
                         done
                     else
                         cf_workers_index=$((element-1))
                         workers_name+=("${cf_workers_name[cf_workers_index]}")
                         workers_path+=("${cf_workers_path[cf_workers_index]}")
                         workers_project_name+=("${cf_workers_project_name[cf_workers_index]}")
+                        workers_upstream+=("${cf_workers_upstream[cf_workers_index]}")
                     fi
                 done
                 break
@@ -34232,11 +34312,6 @@ CloudflareEnableWorkersMonitor()
         esac
     done
 
-    ibm_cf_apps_count=0
-    if [ -s "$IBM_CONFIG" ] 
-    then
-        IbmGetCfApps
-    fi
     workers_data=()
     stream_proxy_history=()
     workers_count=${#workers_name[@]}
@@ -34306,99 +34381,13 @@ CloudflareEnableWorkersMonitor()
         fi
         if [ "${workers_path[i]}" == "stream_proxy" ]
         then
-            if [ "$ibm_cf_apps_count" -gt 0 ] 
-            then
-                echo
-                inquirer list_input "是否使用 IBM CF APP 中转 worker: ${workers_name[i]}" yn_options use_ibm_cf_app_yn
-
-                if [[ $use_ibm_cf_app_yn == "$i18n_yes" ]] 
-                then
-                    IbmListCfApps
-                    echo -e "选择 APP"
-                    while read -p "$i18n_default_cancel" ibm_cf_apps_num
-                    do
-                        case "$ibm_cf_apps_num" in
-                            "")
-                                Println "$i18n_canceled...\n" && exit 1
-                            ;;
-                            *[!0-9]*)
-                                Println "$error $i18n_input_correct_no\n"
-                            ;;
-                            *)
-                                if [ "$ibm_cf_apps_num" -gt 0 ] && [ "$ibm_cf_apps_num" -le "$ibm_cf_apps_count" ]
-                                then
-                                    ibm_cf_apps_index=$((ibm_cf_apps_num-1))
-                                    ibm_cf_app_name=${ibm_cf_apps_name[ibm_cf_apps_index]}
-                                    ibm_user_email=${ibm_cf_apps_user_email[ibm_cf_apps_index]}
-                                    ibm_cf_app_routes_count=${ibm_cf_apps_routes_count[ibm_cf_apps_index]}
-                                    ibm_cf_app_route_hostname=${ibm_cf_apps_route_hostname[ibm_cf_apps_index]}
-                                    ibm_cf_app_route_port=${ibm_cf_apps_route_port[ibm_cf_apps_index]}
-                                    ibm_cf_app_route_domain=${ibm_cf_apps_route_domain[ibm_cf_apps_index]}
-                                    ibm_cf_app_route_path=${ibm_cf_apps_route_path[ibm_cf_apps_index]}
-                                    IFS="|" read -r -a ibm_cf_app_routes_hostname <<< "$ibm_cf_app_route_hostname"
-                                    IFS="|" read -r -a ibm_cf_app_routes_port <<< "$ibm_cf_app_route_port"
-                                    IFS="|" read -r -a ibm_cf_app_routes_domain <<< "$ibm_cf_app_route_domain"
-                                    IFS="|" read -r -a ibm_cf_app_routes_path <<< "${ibm_cf_app_route_path}|"
-                                    break
-                                else
-                                    Println "$error $i18n_input_correct_no\n"
-                                fi
-                            ;;
-                        esac
-                    done
-
-                    ibm_cf_apps_list=""
-                    ibm_cf_apps_link=()
-                    for((j=0;j<ibm_cf_app_routes_count;j++));
-                    do
-                        if [ -n "${ibm_cf_app_routes_path[j]}" ] 
-                        then
-                            path="/${ibm_cf_app_routes_path[j]}"
-                        else
-                            path=""
-                        fi
-                        upstream="${ibm_cf_app_routes_hostname[j]}.${ibm_cf_app_routes_domain[j]}$path"
-                        ibm_cf_apps_link+=("$upstream")
-                        ibm_cf_apps_list="$ibm_cf_apps_list ${green}$((j+1)).${normal}${indent_6}$upstream\n\n"
-                    done
-
-                    Println "$ibm_cf_apps_list"
-
-                    echo -e "选择链接"
-                    while read -p "$i18n_default_cancel" ibm_cf_apps_link_num 
-                    do
-                        case $ibm_cf_apps_link_num in
-                            "") 
-                                Println "$i18n_canceled...\n"
-                                exit 1
-                            ;;
-                            *[!0-9]*) 
-                                Println "$error $i18n_input_correct_no\n"
-                            ;;
-                            *) 
-                                if [ "$ibm_cf_apps_link_num" -gt 0 ] && [ "$ibm_cf_apps_link_num" -le "$ibm_cf_app_routes_count" ] 
-                                then
-                                    ibm_cf_apps_link_index=$((ibm_cf_apps_link_num-1))
-                                    upstream=${ibm_cf_apps_link[ibm_cf_apps_link_index]}
-                                    break
-                                else
-                                    Println "$error $i18n_input_correct_no\n"
-                                fi
-                            ;;
-                        esac
-                    done
-                fi
-            fi
-            if [ -z "${upstream:-}" ] 
-            then
-                Println "$info 输入源站 ip 或者 中转服务器的域名(比如 IBM CF APP 的域名)"
-                read -p "$i18n_default_cancel" upstream
-                [ -z "$upstream" ] && Println "$i18n_canceled...\n" && exit 1
-            fi
-            sed -i 's/const UPSTREAM_DOMAIN = .*/const UPSTREAM_DOMAIN = "'"$upstream"'"/' "$CF_WORKERS_ROOT/${workers_path[i]}/index.js"
+            cf_worker_name=${workers_name[i]}
+            cf_worker_upstream=${workers_upstream[i]}
+            CloudflareSetWorkerUpstream
+            sed -i 's/const UPSTREAM_DOMAIN = .*/const UPSTREAM_DOMAIN = "'"$cf_worker_upstream"'"/' "$CF_WORKERS_ROOT/${workers_path[i]}/index.js"
             # deprecated
-            sed -i 's/const upstream = .*/const upstream = "'"$upstream"'"/' "$CF_WORKERS_ROOT/${workers_path[i]}/index.js"
-            stream_proxy_history+=("${workers_project_name[i]} $upstream")
+            sed -i 's/const upstream = .*/const upstream = "'"$cf_worker_upstream"'"/' "$CF_WORKERS_ROOT/${workers_path[i]}/index.js"
+            stream_proxy_history+=("${workers_project_name[i]} $cf_worker_upstream")
         fi
         worker_data=$(< "$CF_WORKERS_ROOT/${workers_path[i]}/index.js")
         workers_data+=("$worker_data")
@@ -35124,11 +35113,11 @@ IbmEditUser()
 
     if [ "$ibm_users_count" -eq 0 ] 
     then
-        echo -e "$error 请先添加用户\n"
+        Println "$error 请先添加用户\n"
         exit 1
     fi
 
-    echo -e "选择用户"
+    echo "选择用户"
     while read -p "$i18n_default_cancel" ibm_users_num
     do
         case "$ibm_users_num" in
@@ -39592,6 +39581,11 @@ $HOME/ip.sh" > /etc/rc.local
                         systemctl disable systemd-resolved > /dev/null 2>&1 || true
                         ./dnscrypt-proxy -service install > /dev/null
                         ./dnscrypt-proxy -service start > /dev/null
+
+                        if [[ $(systemctl is-active postfix) == "active" ]] 
+                        then
+                            systemctl restart postfix
+                        fi
 
                         Println "$info dnscrypt proxy 安装配置成功\n"
                     else
