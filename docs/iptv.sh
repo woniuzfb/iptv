@@ -3382,12 +3382,13 @@ SyncFile()
         "skip")
             action=""
             return
-        ;;      
+        ;;
         "start"|"stop")
             GetDefault
         ;;
         "add")
             chnl_pid=$pid
+            i18nGetMsg get_channel
             GetChannel
         ;;
         *)
@@ -6598,6 +6599,7 @@ ListChannel()
     Println "==================================================="
     Println " `eval_gettext \"频道 [\\\$chnl_channel_name] 的配置信息\"`: \n"
     printf "%s${indent_20}${green}%s${normal}\n" " $i18n_pid" "$chnl_pid"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_stream_link" "${chnl_stream_links// /, }"
 
     if [ -z "${kind:-}" ] 
     then
@@ -6622,7 +6624,6 @@ ListChannel()
         printf " %s${indent_20}${green}%s${normal}\n" "$i18n_flv_pull_link" "${chnl_flv_pull_link:-$i18n_none}"
     fi
 
-    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_stream_link" "${chnl_stream_links// /, }"
     printf ' %b' "$i18n_live${indent_20}$chnl_live_text\n"
     printf " %s${indent_20}${green}%s${normal}\n" "$i18n_proxy" "${chnl_proxy:-$i18n_none}"
     printf " %s${indent_20}${green}%s${normal}\n" "$i18n_xtream_codes_proxy" "${chnl_xc_proxy:-$i18n_none}"
@@ -6739,9 +6740,10 @@ InputChannelsIndex()
                 chnls_pid_chosen+=("${chnls_pid[chnl_index]}")
             fi
         done
-        i18nGetMsg get_channel
         break
     done
+
+    i18nGetMsg get_channel
 }
 
 ViewChannel(){
@@ -13574,38 +13576,34 @@ ScheduleAmlh()
     flag=0
     line=$(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" --data "d=$timestamp" "$SCHEDULE_LINK") || true
 
-    if [[ $line == *"<li>"* ]] 
-    then
+    while [[ $line == *"<li>"* ]] 
+    do
         line=${line#*<em>}
         time=${line%%<*}
-        while [ -n "$time" ] 
-        do
-            time=${time:0:5}
-            line=${line#*<span>}
-            if [ ! "$flag" -gt "${time:0:1}" ]
-            then
-                flag=${time:0:1}
-                title=${line%%<*}
-                title=${title//\\t/ }
-                title=$(printf %b "$title")
-                if [ "${title:0:4}" == "經典影院" ] 
-                then
-                    title=${title:5}
-                fi
-                sys_time=$(date -d "$today $time" +%s)
-                [ -n "$schedule" ] && schedule="$schedule,"
-                schedule=$schedule'{
-                    "title":"'"$title"'",
-                    "time":"'"$time"'",
-                    "sys_time":"'"$sys_time"'"
-                }'
-            else
-                break 2
-            fi
-            line=${line#*<em>}
-            time=${line%%<*}
-        done
-    fi
+        time=${time:0:5}
+        line=${line#*<span>}
+
+        if [ "$flag" -gt "${time:0:1}" ]
+        then
+            break 2
+        fi
+
+        flag=${time:0:1}
+        title=${line%%<*}
+        title=${title//\\t/ }
+        title=$(printf %b "$title")
+        if [ "${title:0:4}" == "經典影院" ] 
+        then
+            title=${title:5}
+        fi
+        sys_time=$(date -d "$today $time" +%s)
+        [ -n "$schedule" ] && schedule="$schedule,"
+        schedule=$schedule'{
+            "title":"'"$title"'",
+            "time":"'"$time"'",
+            "sys_time":"'"$sys_time"'"
+        }'
+    done
 
     if [ -n "$schedule" ] 
     then
@@ -20788,7 +20786,7 @@ XtreamCodesListChnls()
                                 fi
                                 stream_links="$domain|$stream_link|${xc_chnls_cmd[xc_chnls_index]}|$mac_address"
                                 echo
-                                inquirer list_input "是否 添加/替换 现有频道直播源" yn_options append_channel_yn
+                                inquirer list_input "是否 添加/替换 现有频道直播源" ny_options append_channel_yn
                                 if [[ $append_channel_yn == "$i18n_yes" ]] 
                                 then
                                     ListChannels
@@ -20811,7 +20809,7 @@ XtreamCodesListChnls()
                                     done
                                 else
                                     echo
-                                    inquirer list_input "是否推流 flv" yn_options add_channel_flv_yn
+                                    inquirer list_input "是否推流 flv" ny_options add_channel_flv_yn
                                     if [[ $add_channel_flv_yn == "$i18n_yes" ]] 
                                     then
                                         kind="flv"
@@ -30747,6 +30745,12 @@ CloudflareListUser()
 {
     CloudflareListUsers
 
+    if [ "$cf_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
+
     echo -e "选择用户"
     while read -p "$i18n_default_cancel" cf_users_num
     do
@@ -30852,14 +30856,6 @@ CloudflareListUser()
 
 CloudflareAddZone()
 {
-    CloudflareGetUsers
-
-    if [ "$cf_users_count" -eq 0 ] 
-    then
-        Println "$error 请先添加用户\n"
-        exit 1
-    fi
-
     CloudflareListHosts
 
     echo -e "选择 CFP"
@@ -30888,7 +30884,13 @@ CloudflareAddZone()
         esac
     done
 
-    Println "$cf_users_list"
+    CloudflareListUsers
+
+    if [ "$cf_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
 
     echo -e "选择用户"
     while read -p "$i18n_default_cancel" cf_users_num
@@ -31193,9 +31195,13 @@ CloudflareMoveZone()
         fi
     done
 
-    CloudflareGetUsers
+    CloudflareListUsers
 
-    Println "$cf_users_list"
+    if [ "$cf_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
 
     echo -e "选择移动到的用户"
     while read -p "$i18n_default_cancel" cf_users_num
@@ -32951,13 +32957,13 @@ CloudflareDeployWorker()
 
     CloudflareListUsers
 
-    echo -e " ${green}$((cf_users_count+1)).${normal}${indent_6}全部"
-
     if [ "$cf_users_count" -eq 0 ] 
     then
         Println "$error 请先添加用户\n"
         exit 1
     fi
+
+    echo -e " ${green}$((cf_users_count+1)).${normal}${indent_6}全部"
 
     cf_users_indices=()
     Println "选择用户, 多个用户用空格分隔, 比如 5 7 9-11"
@@ -36399,22 +36405,22 @@ IbmCfMenu()
 
   ${green}1.${normal} 安装 IBM CF CLI
   ${green}2.${normal} 更新 IBM CF CLI
-  ${green}3.${normal} 查看 用户
-  ${green}4.${normal} 登录 用户
-  ${green}5.${normal} 添加 用户
-  ${green}6.${normal} 更改 用户
-  ${green}7.${normal} 查看 APP
-  ${green}8.${normal} 添加 APP
-  ${green}9.${normal} 添加 APP 路由
- ${green}10.${normal} 删除 用户
- ${green}11.${normal} 删除 APP
- ${green}12.${normal} 删除 APP 路由
- ${green}13.${normal} 设置 v2ray APP
- ${green}14.${normal} 设置 Xray  APP
- ${green}15.${normal} 设置 APP 定时重启
- ${green}16.${normal} 开启 APP 定时重启
- ${green}17.${normal} 关闭 APP 定时重启
- ${green}18.${normal} 删除 IBM CF CLI
+  ${green}3.${normal} 删除 IBM CF CLI
+  ${green}4.${normal} 查看 用户
+  ${green}5.${normal} 登录 用户
+  ${green}6.${normal} 添加 用户
+  ${green}7.${normal} 更改 用户
+  ${green}8.${normal} 查看 APP
+  ${green}9.${normal} 添加 APP
+ ${green}10.${normal} 添加 APP 路由
+ ${green}11.${normal} 删除 用户
+ ${green}12.${normal} 删除 APP
+ ${green}13.${normal} 删除 APP 路由
+ ${green}14.${normal} 设置 v2ray APP
+ ${green}15.${normal} 设置 Xray  APP
+ ${green}16.${normal} 设置 APP 定时重启
+ ${green}17.${normal} 开启 APP 定时重启
+ ${green}18.${normal} 关闭 APP 定时重启
  ${green}19.${normal} 更新脚本
 
  $tip 输入: ibm 打开面板\n\n"
@@ -36424,27 +36430,29 @@ IbmCfMenu()
         ;;
         2) IbmUpdateCfCli
         ;;
-        3) IbmListUsers
+        3) IbmUninstallCfCli
         ;;
-        4) IbmLoginUser
+        4) IbmListUsers
         ;;
-        5) IbmAddUser
+        5) IbmLoginUser
         ;;
-        6) IbmEditUser
+        6) IbmAddUser
         ;;
-        7) IbmListCfApp
+        7) IbmEditUser
         ;;
-        8) IbmAddCfApp
+        8) IbmListCfApp
         ;;
-        9) IbmAddCfAppRoute
+        9) IbmAddCfApp
         ;;
-        10) IbmDelUser
+        10) IbmAddCfAppRoute
         ;;
-        11) IbmDelApp
+        11) IbmDelUser
         ;;
-        12) IbmDelAppRoute
+        12) IbmDelApp
         ;;
-        13) 
+        13) IbmDelAppRoute
+        ;;
+        14) 
             v2ray_name="v2ray"
             v2ray_package_name="v2ray"
             tls_name="TLS"
@@ -36452,7 +36460,7 @@ IbmCfMenu()
             V2_CONFIG="$IBM_APPS_ROOT/ibm_v2ray/config.json"
             IbmV2rayMenu
         ;;
-        14) 
+        15) 
             v2ray_name="xray"
             v2ray_package_name="Xray"
             tls_name="XTLS"
@@ -36460,13 +36468,11 @@ IbmCfMenu()
             V2_CONFIG="$IBM_APPS_ROOT/ibm_xray/config.json"
             IbmV2rayMenu
         ;;
-        15) IbmSetCfAppCron
+        16) IbmSetCfAppCron
         ;;
-        16) IbmEnableCfAppCron
+        17) IbmEnableCfAppCron
         ;;
-        17) IbmDisableCfAppCron
-        ;;
-        18) IbmUninstallCfCli
+        18) IbmDisableCfAppCron
         ;;
         19) ShFileUpdate ibm
         ;;
@@ -40212,12 +40218,18 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
                             sed -i "0,/iface eth0 inet dhcp/s//#iface eth0 inet dhcp/" /etc/network/interfaces
                         fi
 
+                        if [ -f /etc/resolv.conf ] 
+                        then
+                            printf -v now '%(%m-%d-%H:%M:%S)T' -1
+                            cp -f /etc/resolv.conf /etc/resolv.conf-$now
+                        fi
+
+                        echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
+
                         nmcli connection reload
                         systemctl restart NetworkManager
                         Println "$info dnscrypt proxy 安装配置成功, 请重启 Armbian 后连接 IP: $eth0_ip\n"
                         nmcli con up armbian
-
-                        # echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
                     else
                         Println "$error dnscrypt proxy 下载失败, 请重试\n"
                         exit 1
@@ -40587,8 +40599,6 @@ config interface 'lan'
                 sed -i '/config forwarding/,+2d' /etc/config/firewall
                 echo \"${openwrt_network}\" > /etc/config/network
                 /etc/init.d/network restart
-                sed -i '/option ra_management/a \\\tlist dhcp_option 6,$openwrt_ip' /etc/config/dhcp
-                /etc/init.d/dnsmasq restart
                 "
             fi
 
@@ -40618,9 +40628,8 @@ config interface 'lan'
                     echo \"src/gz kuoruan_universal $FFMPEG_MIRROR_LINK/openwrt-v2ray/packages/releases/all\" >> /etc/opkg/customfeeds.conf
                 fi
                 opkg update
-                opkg install zoneinfo-asia
+                opkg install zoneinfo-asia kmod-tcp-bbr libustream-openssl
                 opkg install luci luci-base luci-compat
-                opkg install kmod-tcp-bbr
                 if ! test -e /etc/sysctl.d/12-tcp-bbr.conf || ! grep -q default_qdisc < /etc/sysctl.d/12-tcp-bbr.conf
                 then
                     echo \"net.core.default_qdisc=fq\" >> /etc/sysctl.d/12-tcp-bbr.conf
@@ -40830,7 +40839,7 @@ config interface 'lan'
                 docker exec -it -e V2RAY_CONFIG_NAME="$config_file" -e MIRROR="$FFMPEG_MIRROR_LINK" openwrt /bin/ash -c '
                 /etc/init.d/v2ray stop 2> /dev/null || true
                 wget -O /etc/config/v2ray $MIRROR/v2ray-configs/$V2RAY_CONFIG_NAME
-                for ip in $(nslookup dns.alidns.com | grep -v "127.0.0.1" | grep -v "127.0.0.11" | grep -oE "[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?")
+                for ip in $(resolveip dns.alidns.com)
                 do
                     if ! grep -q "$ip" < /etc/v2ray/directlist.txt
                     then
@@ -41222,9 +41231,15 @@ then
                         ./dnscrypt-proxy -service install > /dev/null
                         ./dnscrypt-proxy -service start > /dev/null
 
-                        Println "$info dnscrypt proxy 安装配置成功\n"
+                        if [ -f /etc/resolv.conf ] 
+                        then
+                            printf -v now '%(%m-%d-%H:%M:%S)T' -1
+                            cp -f /etc/resolv.conf /etc/resolv.conf-$now
+                        fi
 
-                        # echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
+                        echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
+
+                        Println "$info dnscrypt proxy 安装配置成功\n"
                     else
                         Println "$error dnscrypt proxy 下载失败, 请重试\n"
                         exit 1
@@ -42134,7 +42149,7 @@ then
             Println "$info 频道添加成功 !\n"
             exit 0
         ;;
-        "ffmpeg") 
+        "ffmpeg"|"FFmpeg") 
             [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
 
             if [[ ! -x $(command -v curl) ]] || [ ! -e "$JQ_FILE" ]
@@ -42378,7 +42393,7 @@ then
             then
                 luci_app_xray_ver=${luci_app_xray_ver#*v}
                 Println "$info 下载 luci-app-v2ray_${luci_app_xray_ver}_all.ipk ..."
-                if curl -s -L "https://github.com/woniuzfb/luci-app-xray/releases/download/v$luci_app_xray_ver/luci-app-v2ray_${luci_app_xray_ver}_all.ipk" -o "$FFMPEG_MIRROR_ROOT/luci-app-v2ray_${luci_app_xray_ver}_all.ipk_tmp"
+                if curl -s -L "https://github.com/woniuzfb/luci-app-xray/releases/download/v$luci_app_xray_ver/luci-app-v2ray_${luci_app_xray_ver%-*}_all.ipk" -o "$FFMPEG_MIRROR_ROOT/luci-app-v2ray_${luci_app_xray_ver}_all.ipk_tmp"
                 then
                     mv "$FFMPEG_MIRROR_ROOT/luci-app-v2ray_${luci_app_xray_ver}_all.ipk_tmp" "$FFMPEG_MIRROR_ROOT/luci-app-v2ray_${luci_app_xray_ver}_all.ipk"
                 else
