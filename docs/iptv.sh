@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-sh_ver="1.80.7"
+sh_ver="1.80.8"
 sh_debug=0
 export LANGUAGE=
 export LC_ALL=
@@ -81,10 +81,7 @@ indent_20="\r\033[20C"
 
 Println()
 {
-    if [ -z "${monitor:-}" ] 
-    then
-        printf '%b' "\n$1\n"
-    fi
+    printf '%b' "\n$1\n"
 }
 
 ReleaseCheck()
@@ -3042,13 +3039,13 @@ JQ()
                 then
                     if [ "${4:-}" == "pre" ] 
                     then
-                        $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) |= [$value] + .' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                        $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) |= [$value] + .' "$FILE" > "$TMP_FILE"
                     else
-                        $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) += [$value]' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                        $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) += [$value]' "$FILE" > "$TMP_FILE"
                     fi
                     jq_path=""
                 else
-                    $JQ_FILE --arg index "$3" --argjson value "$4" '.[$index] += $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                    $JQ_FILE --arg index "$3" --argjson value "$4" '.[$index] += $value' "$FILE" > "$TMP_FILE"
                 fi
             ;;
             "update") 
@@ -3056,22 +3053,22 @@ JQ()
                 then
                     if [ "${4:-}" == "number" ] 
                     then
-                        $JQ_FILE --argjson path "$jq_path" --arg value "$3" 'getpath($path) = ($value | tonumber)' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                        $JQ_FILE --argjson path "$jq_path" --arg value "$3" 'getpath($path) = ($value | tonumber)' "$FILE" > "$TMP_FILE"
                     else
-                        $JQ_FILE --argjson path "$jq_path" --arg value "$3" 'getpath($path) = $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                        $JQ_FILE --argjson path "$jq_path" --arg value "$3" 'getpath($path) = $value' "$FILE" > "$TMP_FILE"
                     fi
                     jq_path=""
                 else
-                    $JQ_FILE "$3" "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                    $JQ_FILE "$3" "$FILE" > "$TMP_FILE"
                 fi
             ;;
             "replace") 
                 if [ -n "${jq_path:-}" ] 
                 then
-                    $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) = $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                    $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) = $value' "$FILE" > "$TMP_FILE"
                     jq_path=""
                 else
-                    $JQ_FILE --arg index "$3" --argjson value "$4" '.[$index] = $value' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                    $JQ_FILE --arg index "$3" --argjson value "$4" '.[$index] = $value' "$FILE" > "$TMP_FILE"
                 fi
             ;;
             "delete") 
@@ -3079,16 +3076,16 @@ JQ()
                 then
                     if [ -z "${3:-}" ] 
                     then
-                        $JQ_FILE --argjson path "$jq_path" 'del(getpath($path))' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                        $JQ_FILE --argjson path "$jq_path" 'del(getpath($path))' "$FILE" > "$TMP_FILE"
                     elif [ -z "${4:-}" ] 
                     then
-                        $JQ_FILE --argjson path "$jq_path" --arg index "$3" 'del(getpath($path)[$index|tonumber])' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                        $JQ_FILE --argjson path "$jq_path" --arg index "$3" 'del(getpath($path)[$index|tonumber])' "$FILE" > "$TMP_FILE"
                     else
-                        $JQ_FILE --argjson path "$jq_path" 'del(getpath($path)[] | select(.'"$3"'=='"$4"'))' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                        $JQ_FILE --argjson path "$jq_path" 'del(getpath($path)[] | select(.'"$3"'=='"$4"'))' "$FILE" > "$TMP_FILE"
                     fi
                     jq_path=""
                 else
-                    $JQ_FILE --arg index "$3" 'del(.[$index][] | select(.pid=='"$4"'))' "$FILE" > "$TMP_FILE" 2>> "$MONITOR_LOG"
+                    $JQ_FILE --arg index "$3" 'del(.[$index][] | select(.pid=='"$4"'))' "$FILE" > "$TMP_FILE"
                 fi
             ;;
         esac
@@ -3634,7 +3631,7 @@ FlvStreamCreator()
                     printf "%s\n" "`eval_gettext \"\\\$date_now \\\$channel_name FLV 关闭\"`" >> "$MONITOR_LOG"
                     chnl_pid=$pid
                     action="stop"
-                    SyncFile > /dev/null 2>> "$MONITOR_LOG"
+                    SyncFile
                 ' EXIT
 
     variants_input_command=()
@@ -4049,7 +4046,7 @@ FlvStreamCreator()
                     printf "%s\n" "`eval_gettext \"\\\$date_now \\\$chnl_channel_name FLV 关闭\"`" >> "$MONITOR_LOG"
                     chnl_pid=$new_pid
                     action="stop"
-                    SyncFile > /dev/null 2>> "$MONITOR_LOG"
+                    SyncFile
                 ' EXIT
 
     chnl_variants_input_command=()
@@ -4544,7 +4541,7 @@ HlsStreamCreatorPlus()
         printf "%s\n" "`eval_gettext \"\\\$date_now \\\$channel_name HLS 关闭\"`" >> "$MONITOR_LOG"
         chnl_pid=$pid
         action="stop"
-        SyncFile > /dev/null 2>> "$MONITOR_LOG"
+        SyncFile
         rm -rf "$delete_on_term"
     ' EXIT
 
@@ -5184,7 +5181,7 @@ HlsStreamCreatorPlus()
                     printf "%s\n" "`eval_gettext \"\\\$date_now \\\$chnl_channel_name HLS 关闭\"`" >> "$MONITOR_LOG"
                     chnl_pid=$new_pid
                     action="stop"
-                    SyncFile > /dev/null 2>> "$MONITOR_LOG"
+                    SyncFile
                     rm -rf "$delete_on_term"
                 ' EXIT
 
@@ -5897,7 +5894,7 @@ HlsStreamCreator()
                     printf "%s\n" "`eval_gettext \"\\\$date_now \\\$channel_name HLS 关闭\"`" >> "$MONITOR_LOG"
                     chnl_pid=$pid
                     action="stop"
-                    SyncFile > /dev/null 2>> "$MONITOR_LOG"
+                    SyncFile
                     rm -rf "$delete_on_term"
                 ' EXIT
 
@@ -5992,7 +5989,7 @@ HlsStreamCreator()
                     printf "%s\n" "`eval_gettext \"\\\$date_now \\\$chnl_channel_name HLS 关闭\"`" >> "$MONITOR_LOG"
                     chnl_pid=$new_pid
                     action="stop"
-                    SyncFile > /dev/null 2>> "$MONITOR_LOG"
+                    SyncFile
                     rm -rf "$delete_on_term"
                 ' EXIT
 
@@ -16012,7 +16009,7 @@ Schedule()
                 then
                     Println "错误: ${line#* }"
                 fi
-            done < <(ScheduleExec 2>> "$MONITOR_LOG")
+            done < <(ScheduleExec)
         ;;
         *)
             for provider in "${providers[@]}"
@@ -20651,7 +20648,7 @@ XtreamCodesListChnls()
                                 then
                                     Println "$error 搜索内容不能为空\n"
                                 else
-                                    SearchXtreamCodesChnls 2>> "$MONITOR_LOG"
+                                    SearchXtreamCodesChnls
                                 fi
 
                                 if [ -n "$search_result" ] 
@@ -21792,6 +21789,113 @@ NginxConfigDomain()
     fi
 }
 
+NginxGetStream()
+{
+    nginx_stream_server_name_list=""
+    nginx_stream_protocol_list=""
+    nginx_stream_alpn_protocols_list=""
+    nginx_stream_upstream_list=""
+    nginx_stream_server_name_count=0
+    nginx_stream_protocol_count=0
+    nginx_stream_alpn_protocols_count=0
+    nginx_stream_upstream_count=0
+    nginx_stream_server_name=()
+    nginx_stream_protocol=()
+    nginx_stream_alpn_protocols=()
+    nginx_stream_upstream=()
+    nginx_stream_upstream_indices=()
+
+    for((level_1_index=0;level_1_index<level_1_count;level_1_index++));
+    do
+        if [ "${level_1_directive_arr[level_1_index]}" == "stream" ] 
+        then
+            if [ -z "${level_3_directive_arr[level_1_index]}" ] 
+            then
+                break
+            fi
+
+            level_1_add_indices=( "$level_1_index" )
+
+            level_2_directive_d1=${level_2_directive_arr[level_1_index]}
+            level_2_args_d1=${level_2_args_arr[level_1_index]}
+            level_3_directive_d1=${level_3_directive_arr[level_1_index]}
+            level_3_args_d1=${level_3_args_arr[level_1_index]}
+
+            IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
+            IFS="${delimiters[1]}" read -r -a level_2_args_d1_arr <<< "$level_2_args_d1${delimiters[1]}"
+            IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+            IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+
+            for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
+            do
+                if [ -n "${level_3_directive_d1_arr[level_2_index]}" ]
+                then
+                    level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
+                    level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
+
+                    IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
+                    IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+
+                    if [ "${level_2_directive_d1_arr[level_2_index]}" == "map" ] 
+                    then
+                        if [ "${level_2_args_d1_arr[level_2_index]}" == "\$ssl_preread_server_name${delimiters[0]}\$upstream" ] 
+                        then
+                            for((server_name_i=0;server_name_i<${#level_3_directive_d2_arr[@]};server_name_i++));
+                            do
+                                nginx_stream_server_name_list="$nginx_stream_server_name_list $((server_name_i+1)).${indent_6}${green}${level_3_directive_d2_arr[server_name_i]}${normal} => ${green}${level_3_args_d2_arr[server_name_i]}${normal}\n"
+                                nginx_stream_server_name+=("${level_3_directive_d2_arr[server_name_i]} => ${level_3_args_d2_arr[server_name_i]}")
+                            done
+                        elif [ "${level_2_args_d1_arr[level_2_index]}" == "\$ssl_preread_protocol${delimiters[0]}\$ssl_proxy" ] 
+                        then
+                            for((protocol_i=0;protocol_i<${#level_3_directive_d2_arr[@]};protocol_i++));
+                            do
+                                nginx_stream_protocol_list="$nginx_stream_protocol_list $((protocol_i+1)).${indent_6}${green}${level_3_directive_d2_arr[protocol_i]:-''}${normal} => ${green}${level_3_args_d2_arr[protocol_i]}${normal}\n"
+                                nginx_stream_protocol+=("${level_3_directive_d2_arr[protocol_i]:-''} => ${level_3_args_d2_arr[protocol_i]}")
+                            done
+                        elif [ "${level_2_args_d1_arr[level_2_index]}" == "\$ssl_preread_alpn_protocols${delimiters[0]}\$proxy_pass" ] 
+                        then
+                            for((alpn_protocols_i=0;alpn_protocols_i<${#level_3_directive_d2_arr[@]};alpn_protocols_i++));
+                            do
+                                nginx_stream_alpn_protocols_list="$nginx_stream_alpn_protocols_list $((alpn_protocols_i+1)).${indent_6}${green}${level_3_directive_d2_arr[alpn_protocols_i]}${normal} => ${green}${level_3_args_d2_arr[alpn_protocols_i]}${normal}\n"
+                                nginx_stream_alpn_protocols+=("${level_3_directive_d2_arr[alpn_protocols_i]} => ${level_3_args_d2_arr[alpn_protocols_i]}")
+                            done
+                        fi
+                    elif [ "${level_2_directive_d1_arr[level_2_index]}" == "upstream" ] 
+                    then
+                        nginx_stream_upstream_indices+=("$level_2_index")
+                        nginx_stream_upstream_count=$((nginx_stream_upstream_count+1))
+                        nginx_stream_upstream_list="$nginx_stream_upstream_list $nginx_stream_upstream_count.${indent_6}${green}${level_2_args_d1_arr[level_2_index]}${normal} => ${green}${level_3_args_d2_arr[0]}${normal}\n"
+                        nginx_stream_upstream+=("${level_2_args_d1_arr[level_2_index]} => ${level_3_args_d2_arr[0]}")
+                    fi
+                fi
+            done
+            break
+        fi
+    done
+
+    if [ -n "${nginx_stream_server_name:-}" ] 
+    then
+        nginx_stream_server_name_count=${#nginx_stream_server_name[@]}
+    fi
+
+    if [ -n "${nginx_stream_protocol:-}" ] 
+    then
+        nginx_stream_protocol_count=${#nginx_stream_protocol[@]}
+    fi
+
+    if [ -n "${nginx_stream_alpn_protocols:-}" ] 
+    then
+        nginx_stream_alpn_protocols_count=${#nginx_stream_alpn_protocols[@]}
+    fi
+}
+
+NginxListStream()
+{
+    NginxGetStream
+
+    Println "分流配置:\n\n SNI 域名分流:\n\n${nginx_stream_server_name_list:- 无}\n\n SSL 协议分流(\$ssl_proxy):\n\n${nginx_stream_protocol_list:- 无}\n\n ALPN 协议分流:\n\n${nginx_stream_alpn_protocols_list:- 无}\n\n 分流后端(\$upstream):\n\n${nginx_stream_upstream_list:- 无}\n\n"
+}
+
 NginxListLocalhost()
 {
     NginxCheckLocalhost
@@ -22381,6 +22485,39 @@ NginxAddUser()
 {
     directive_user='{"directive":"user","args":["'"$nginx_name"'","'"$nginx_name"'"]}'
     directives=( user )
+    directives_val=()
+    check_directives=()
+    check_args=()
+
+    NginxAddDirective 1
+}
+
+NginxAddStream()
+{
+    directive_stream='
+    {"directive":"stream","args":[],"block":[
+        {"directive":"map","args":["$ssl_preread_server_name","$upstream"],"block":[
+            {"directive":"default","args":["localhost"]}
+        ]},
+        {"directive":"map","args":["$ssl_preread_protocol","$ssl_proxy"],"block":[
+            {"directive":"default","args":["$upstream"]}
+        ]},
+        {"directive":"map","args":["$ssl_preread_alpn_protocols","$proxy_pass"],"block":[
+            {"directive":"default","args":["$ssl_proxy"]}
+        ]},
+        {"directive":"upstream","args":["localhost"],"block":[
+            {"directive":"server","args":["'"${upstream_localhost_server:-127.0.0.1:8884}"'"]}
+        ]},
+        {"directive":"server","args":[],"block":[
+            {"directive":"listen","args":["443","reuseport"]},
+            {"directive":"listen","args":["[::]:443","reuseport"]},
+            {"directive":"proxy_pass","args":["$proxy_pass"]},
+            {"directive":"proxy_protocol","args":["on"]},
+            {"directive":"ssl_preread","args":["on"]}
+        ]}
+    ]}'
+
+    directives=( stream )
     directives_val=()
     check_directives=()
     check_args=()
@@ -23494,9 +23631,325 @@ NginxConfigDirective()
 
 NginxConfigLocalhost()
 {
-    NginxCheckLocalhost
+    echo
+    config_localhost_options=( '修改指令' '添加 flv 设置' '添加 nodejs 设置' '添加 SNI 域名分流' '添加 SSL 协议分流' '添加 ALPN 协议分流' '添加分流后端' '删除 SNI 域名分流' '删除 SSL 协议分流' '删除 ALPN 协议分流' '删除分流后端' )
+    inquirer list_input_index "选择操作" config_localhost_options config_localhost_options_index
 
-    NginxConfigDirective level_1
+    if [ "$config_localhost_options_index" -eq 0 ] 
+    then
+        NginxCheckLocalhost
+        NginxConfigDirective level_1
+    elif [ "$config_localhost_options_index" -eq 1 ] 
+    then
+        NginxListLocalhost
+        NginxSelectLocalhostServer
+        updated=0
+        NginxAddFlv
+        if [ "$updated" -eq 1 ] 
+        then
+            NginxBuildConf parse_out
+        fi
+        Println "$info flv 配置添加成功\n"
+    elif [ "$config_localhost_options_index" -eq 2 ] 
+    then
+        if [ ! -s "$NODE_ROOT/index.js" ] 
+        then
+            Println "$error 请先安装 nodejs\n"
+            exit 1
+        fi
+        NginxListLocalhost
+        NginxSelectLocalhostServer
+        updated=0
+        NginxAddNodejs
+        if [ "$updated" -eq 1 ] 
+        then
+            NginxBuildConf parse_out
+        fi
+        Println "$info nodejs 配置添加成功\n"
+    else
+        NginxCheckLocalhost
+        NginxGetStream
+
+        if [ "$nginx_stream_server_name_count" -eq 0 ] 
+        then
+            echo
+            inquirer list_input "是否启用分流" ny_options yn_option
+            if [ "$yn_option" == "$i18n_no" ] 
+            then
+                Println "$i18n_canceled...\n"
+                exit 1
+            fi
+            echo
+            inquirer text_input "输入默认分流后端地址: " upstream_localhost_server "127.0.0.1:8884"
+        fi
+
+        updated=0
+        NginxAddStream
+
+        if [ "$updated" -eq 1 ] 
+        then
+            NginxGetStream
+            updated=0
+        fi
+
+        case $config_localhost_options_index in
+            3) 
+                Println "SNI 域名分流:\n\n${nginx_stream_server_name_list:-无}\n\n"
+                inquirer text_input "输入指令(分流域名)" server_name_directive "$i18n_cancel"
+                ExitOnCancel server_name_directive
+                echo
+                inquirer text_input "输入指令值(分流后端名称)" server_name_args "$server_name_directive"
+
+                directive_map='{"directive":"map","args":["$ssl_preread_server_name","$upstream"],"block":[]}'
+
+                directives=( map )
+                directives_val=()
+                check_directives=()
+                check_args=( '["$ssl_preread_server_name","$upstream"]' )
+
+                NginxAddDirective 2
+
+                directive_server_name='{"directive":"'"$server_name_directive"'","args":["'"$server_name_args"'"]}'
+
+                directives=( "$server_name_directive" )
+                directives_val=( server_name )
+                check_directives=()
+                check_args=()
+
+                NginxAddDirective 3
+
+                if [ "$updated" -eq 1 ] 
+                then
+                    NginxBuildConf parse_out
+                fi
+                Println "$info SNI 域名分流添加成功\n"
+            ;;
+            4) 
+                Println "SSL 协议分流:\n\n${nginx_stream_protocol_list:-无}\n"
+                Println "$tip 空字符用 '' 表示"
+                inquirer text_input "输入指令(分流 SSL 协议)" protocol_directive "$i18n_cancel"
+                ExitOnCancel protocol_directive
+                if [ "$protocol_directive" == "''" ] 
+                then
+                    protocol_directive=""
+                fi
+                echo
+                inquirer text_input "输入指令值(分流后端名称)" protocol_args "$i18n_cancel"
+                ExitOnCancel protocol_args
+
+                directive_map='{"directive":"map","args":["$ssl_preread_protocol","$ssl_proxy"],"block":[]}'
+
+                directives=( map )
+                directives_val=()
+                check_directives=()
+                check_args=( '["$ssl_preread_protocol","$ssl_proxy"]' )
+
+                NginxAddDirective 2
+
+                directive_protocol='{"directive":"'"$protocol_directive"'","args":["'"$protocol_args"'"]}'
+
+                directives=( "$protocol_directive" )
+                directives_val=( protocol )
+                check_directives=()
+                check_args=()
+
+                NginxAddDirective 3
+
+                if [ "$updated" -eq 1 ] 
+                then
+                    NginxBuildConf parse_out
+                fi
+                Println "$info SSL 协议分流添加成功\n"
+            ;;
+            5) 
+                Println "ALPN 协议分流:\n\n${nginx_stream_alpn_protocols_list:-无}\n\n"
+                inquirer text_input "输入指令(分流 ALPN 协议)" alpn_protocols_directive "$i18n_cancel"
+                ExitOnCancel alpn_protocols_directive
+                echo
+                inquirer text_input "输入指令值(分流后端名称)" alpn_protocols_args "$i18n_cancel"
+                ExitOnCancel alpn_protocols_args
+
+                directive_map='{"directive":"map","args":["$ssl_preread_alpn_protocols","$proxy_pass"],"block":[]}'
+
+                directives=( map )
+                directives_val=()
+                check_directives=()
+                check_args=( '["$ssl_preread_alpn_protocols","$proxy_pass"]' )
+
+                NginxAddDirective 2
+
+                directive_alpn_protocols='{"directive":"'"$alpn_protocols_directive"'","args":["'"$alpn_protocols_args"'"]}'
+
+                directives=( "$alpn_protocols_directive" )
+                directives_val=( alpn_protocols )
+                check_directives=()
+                check_args=()
+
+                NginxAddDirective 3
+
+                if [ "$updated" -eq 1 ] 
+                then
+                    NginxBuildConf parse_out
+                fi
+                Println "$info ALPN 协议分流添加成功\n"
+            ;;
+            6) 
+                Println "分流后端:\n\n${nginx_stream_upstream_list:-无}\n\n"
+                inquirer text_input "输入指令(分流后端名称)" upstream_args "$i18n_cancel"
+                ExitOnCancel upstream_args
+                Println "$tip 比如: 127.0.0.1:8888"
+                inquirer text_input "输入指令值(分流后端地址)" upstream_server_args "$i18n_cancel"
+                ExitOnCancel upstream_server_args
+
+                directive_upstream='{"directive":"upstream","args":["'"$upstream_args"'"],"block":[]}'
+
+                directives=( upstream )
+                directives_val=()
+                check_directives=()
+                check_args=( '["'"$upstream_args"'"]' )
+
+                NginxAddDirective 2
+
+                if [ "$updated" -eq 0 ] 
+                then
+                    Println "$error 分流后端已经存在\n"
+                    exit 1
+                fi
+
+                directive_upstream_server='{"directive":"server","args":["'"$upstream_server_args"'"]}'
+
+                directives=( upstream_server )
+                directives_val=()
+                check_directives=()
+                check_args=()
+
+                NginxAddDirective 3
+                NginxBuildConf parse_out
+
+                Println "$info 分流后端添加成功\n"
+            ;;
+            7) 
+                echo
+                set +u
+                inquirer checkbox_input_indices "选择删除的 SNI 域名分流: " nginx_stream_server_name server_name_selected
+                set -u
+
+                if [ -z "${server_name_selected:-}" ] 
+                then
+                    Println "$i18n_canceled...\n"
+                    exit 1
+                fi
+
+                directive_map='{"directive":"map","args":["$ssl_preread_server_name","$upstream"],"block":[]}'
+
+                directives=( map )
+                directives_val=()
+                check_directives=()
+                check_args=( '["$ssl_preread_server_name","$upstream"]' )
+
+                NginxAddDirective 2
+
+                for((i=0;i<${#server_name_selected[@]};i++));
+                do
+                    jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"${level_2_add_indices[0]}"',"block"]'
+                    level_3_index=${server_name_selected[i]}
+                    JQs delete parse_out $((level_3_index-i))
+                    NginxGetConfig
+                done
+
+                NginxBuildConf parse_out
+                Println "$info SNI 域名分流删除成功\n"
+            ;;
+            8) 
+                echo
+                set +u
+                inquirer checkbox_input_indices "选择删除的 SSL 协议分流: " nginx_stream_protocol protocol_selected
+                set -u
+
+                if [ -z "${protocol_selected:-}" ] 
+                then
+                    Println "$i18n_canceled...\n"
+                    exit 1
+                fi
+
+                directive_map='{"directive":"map","args":["$ssl_preread_protocol","$ssl_proxy"],"block":[]}'
+
+                directives=( map )
+                directives_val=()
+                check_directives=()
+                check_args=( '["$ssl_preread_protocol","$ssl_proxy"]' )
+
+                NginxAddDirective 2
+
+                for((i=0;i<${#protocol_selected[@]};i++));
+                do
+                    jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"${level_2_add_indices[0]}"',"block"]'
+                    level_3_index=${protocol_selected[i]}
+                    JQs delete parse_out $((level_3_index-i))
+                    NginxGetConfig
+                done
+
+                NginxBuildConf parse_out
+                Println "$info SSL 协议分流删除成功\n"
+            ;;
+            9) 
+                echo
+                set +u
+                inquirer checkbox_input_indices "选择删除的 ALPN 协议分流: " nginx_stream_alpn_protocols alpn_protocols_selected
+                set -u
+
+                if [ -z "${alpn_protocols_selected:-}" ] 
+                then
+                    Println "$i18n_canceled...\n"
+                    exit 1
+                fi
+
+                directive_map='{"directive":"map","args":["$ssl_preread_alpn_protocols","$proxy_pass"],"block":[]}'
+
+                directives=( map )
+                directives_val=()
+                check_directives=()
+                check_args=( '["$ssl_preread_alpn_protocols","$proxy_pass"]' )
+
+                NginxAddDirective 2
+
+                for((i=0;i<${#alpn_protocols_selected[@]};i++));
+                do
+                    jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"${level_2_add_indices[0]}"',"block"]'
+                    level_3_index=${alpn_protocols_selected[i]}
+                    JQs delete parse_out $((level_3_index-i))
+                    NginxGetConfig
+                done
+
+                NginxBuildConf parse_out
+                Println "$info ALPN 协议分流删除成功\n"
+            ;;
+            10) 
+                echo
+                set +u
+                inquirer checkbox_input_indices "选择删除的分流后端: " nginx_stream_upstream upstream_selected
+                set -u
+
+                if [ -z "${upstream_selected:-}" ] 
+                then
+                    Println "$i18n_canceled...\n"
+                    exit 1
+                fi
+
+                for((i=0;i<${#upstream_selected[@]};i++));
+                do
+                    jq_path='["config",0,"parsed",'"$level_1_index"',"block"]'
+                    level_2_index=${upstream_selected[i]}
+                    level_2_index=${nginx_stream_upstream_indices[level_2_index]}
+                    JQs delete parse_out $((level_2_index-i))
+                    NginxGetConfig
+                done
+
+                NginxBuildConf parse_out
+                Println "$info 后端分流删除成功\n"
+            ;;
+        esac
+    fi
 }
 
 NginxConfigServerHttpPort()
@@ -24424,8 +24877,8 @@ GitInstall()
 
 NodejsConfig()
 {
-    nodejs_options=( '域名' '本地' )
     echo
+    nodejs_options=( '域名' '本地' )
     inquirer list_input "选择使用 nodejs 的对象" nodejs_options nodejs_option
 
     if [ "$nodejs_option" == "域名" ] 
@@ -34690,7 +35143,7 @@ CloudflareEnableWorkersMonitor()
     then
         ( CloudflareWorkersMonitor ) 
     else
-        ( CloudflareWorkersMonitor ) > /dev/null 2>> "$MONITOR_LOG" &
+        ( CloudflareWorkersMonitor ) > /dev/null 2> /dev/null < /dev/null &
     fi
 
     Println "$info workers 监控开启成功\n"
@@ -38120,7 +38573,7 @@ VipEnable()
             fi
             [ -n "$vip_public_root" ] && ln -sfT "$VIP_USERS_ROOT" "$vip_public_root/vip"
 
-            ( VipMonitor ) > /dev/null 2>> "$MONITOR_LOG" &
+            ( VipMonitor ) > /dev/null 2> /dev/null < /dev/null &
 
             Println "$info VIP 开启成功\n"
         else
@@ -39077,6 +39530,7 @@ WantedBy=multi-user.target
         ;;
         8) 
             NginxListLocalhost
+            NginxListStream
         ;;
         9) 
             NginxConfigLocalhost
@@ -39222,6 +39676,7 @@ WantedBy=multi-user.target
         ;;
         8) 
             NginxListLocalhost
+            NginxListStream
         ;;
         9) 
             NginxConfigLocalhost
@@ -39407,11 +39862,11 @@ WantedBy=multi-user.target
             fi
 
             echo
-            inquirer text_input "输入前端(比如 nginx) SNI 分流 ipv4 端口: " mmproxy_target_v4_port "$i18n_cancel"
+            inquirer text_input "输入前端(比如 nginx) 分流 ipv4 端口: " mmproxy_target_v4_port "$i18n_cancel"
             ExitOnCancel mmproxy_target_v4_port
 
             echo
-            inquirer text_input "输入前端(比如 nginx) SNI 分流 ipv6 端口: " mmproxy_target_v6_port "$i18n_cancel"
+            inquirer text_input "输入前端(比如 nginx) 分流 ipv6 端口: " mmproxy_target_v6_port "$i18n_cancel"
             ExitOnCancel mmproxy_target_v6_port
 
             echo "[Unit]
@@ -42086,7 +42541,7 @@ then
                         then
                             ( Monitor ) 
                         else
-                            ( Monitor ) > /dev/null 2>> "$MONITOR_LOG" < /dev/null &
+                            ( Monitor ) > /dev/null 2> /dev/null < /dev/null &
                         fi
 
                         Println "$info 监控启动成功 !\n"
@@ -42096,7 +42551,7 @@ then
                         then
                             ( AntiDDoS ) 
                         else
-                            ( AntiDDoS ) > /dev/null 2>> "$MONITOR_LOG" < /dev/null &
+                            ( AntiDDoS ) > /dev/null 2> /dev/null < /dev/null &
                         fi
 
                         Println "$info AntiDDoS 启动成功 !\n"
