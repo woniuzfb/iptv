@@ -23117,8 +23117,8 @@ NginxConfigDirective()
                             jq_path='["config",0,"parsed",'"$level_1_index"',"args"]'
                             JQs replace parse_out "[$new_args]"
                             NginxBuildConf parse_out
-                            NginxGetConfig
                             Println "$info ${level_1_directive_arr[level_1_index]} 指令修改成功\n"
+                            NginxGetConfig
                             continue 2
                         elif [ "$level_1_action" == "删除指令" ] 
                         then
@@ -23129,8 +23129,8 @@ NginxConfigDirective()
                                 jq_path='["config",0,"parsed"]'
                                 JQs delete parse_out "$level_1_index"
                                 NginxBuildConf parse_out
-                                NginxGetConfig
                                 Println "$info 已删除指令 ${level_1_directive_arr[level_1_index]}\n"
+                                NginxGetConfig
                                 continue 2
                             fi
                         fi
@@ -23632,7 +23632,7 @@ NginxConfigDirective()
 NginxConfigLocalhost()
 {
     echo
-    config_localhost_options=( '修改指令' '添加 flv 设置' '添加 nodejs 设置' '添加 SNI 域名分流' '添加 SSL 协议分流' '添加 ALPN 协议分流' '添加分流后端' '删除 SNI 域名分流' '删除 SSL 协议分流' '删除 ALPN 协议分流' '删除分流后端' )
+    config_localhost_options=( '修改指令' '添加 flv 设置' '添加 nodejs 设置' '添加 SNI 域名分流' '添加 SSL 协议分流' '添加 ALPN 协议分流' '添加 分流后端' '删除 SNI 域名分流' '删除 SSL 协议分流' '删除 ALPN 协议分流' '删除 分流后端' )
     inquirer list_input_index "选择操作" config_localhost_options config_localhost_options_index
 
     if [ "$config_localhost_options_index" -eq 0 ] 
@@ -37545,7 +37545,7 @@ VipSetChannelEpgId()
     fi
 }
 
-VipSetChannel()
+VipAddChannel()
 {
     echo
     add_vip_channel_options=( '选择频道' '手动输入频道' )
@@ -37826,6 +37826,53 @@ VipSetChannel()
         JQ add "$VIP_FILE" "$new_channel"
         Println "$info 频道 $vip_channel_name 添加成功\n"
     fi
+}
+
+VipDeployChannel()
+{
+    VipListChannel
+
+    deploy_options=( '快速部署(使用默认值)' '手动部署' )
+    inquirer list_input_index "选择操作" deploy_options deploy_options_index
+
+    for vip_channels_num in "${vip_channels_num_arr[@]}"
+    do
+        xc=$deploy_options_index
+
+        vip_channels_index=$((vip_channels_num-1))
+        vip_channel_id=${vip_channels_id[vip_channels_index]}
+        vip_channel_name=${vip_channels_name[vip_channels_index]}
+
+        if [ -n "${vip_public_host:-}" ] 
+        then
+            stream_link="$vip_public_host/vip/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8"
+        else
+            stream_link="$VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8"
+        fi
+
+        if [ "$xc" -eq 0 ] 
+        then
+            $SH_FILE -i "$stream_link" -z "$vip_channel_name" -o "$vip_channel_id" > /dev/null
+            Println "$info 频道 [ $vip_channel_name ] 添加成功"
+            continue
+        fi
+
+        user_agent=""
+        headers=""
+        cookies=""
+        stream_links="$stream_link"
+
+        Println "$info 添加频道 [ $vip_channel_name ]\n\n"
+        inquirer list_input "是否推流 flv" ny_options add_channel_flv_yn
+        if [[ $add_channel_flv_yn == "$i18n_yes" ]] 
+        then
+            kind="flv"
+        else
+            kind=""
+        fi
+
+        AddChannel
+    done
 }
 
 VipEditChannel()
@@ -38737,18 +38784,19 @@ VipMenu()
   ${red}3.${normal} `gettext \"设置 VIP 用户\"`
   ${red}4.${normal} `gettext \"查看 VIP 频道\"`
   ${red}5.${normal} `gettext \"添加 VIP 频道\"`
-  ${red}6.${normal} `gettext \"设置 VIP 频道\"`
-  ${red}7.${normal} `gettext \"查看 VIP 服务器\"`
-  ${red}8.${normal} `gettext \"添加 VIP 服务器\"`
-  ${red}9.${normal} `gettext \"设置 VIP 服务器\"`
- ${red}10.${normal} `gettext \"删除 VIP 用户\"`
- ${red}11.${normal} `gettext \"删除 VIP 频道\"`
- ${red}12.${normal} `gettext \"删除 VIP 服务器\"`
- ${red}13.${normal} `gettext \"开启 VIP\"`
- ${red}14.${normal} `gettext \"关闭 VIP\"`
+  ${red}6.${normal} `gettext \"部署 VIP 频道\"`
+  ${red}7.${normal} `gettext \"设置 VIP 频道\"`
+  ${red}8.${normal} `gettext \"查看 VIP 服务器\"`
+  ${red}9.${normal} `gettext \"添加 VIP 服务器\"`
+ ${red}10.${normal} `gettext \"设置 VIP 服务器\"`
+ ${red}11.${normal} `gettext \"删除 VIP 用户\"`
+ ${red}12.${normal} `gettext \"删除 VIP 频道\"`
+ ${red}13.${normal} `gettext \"删除 VIP 服务器\"`
+ ${red}14.${normal} `gettext \"开启 VIP\"`
+ ${red}15.${normal} `gettext \"关闭 VIP\"`
 
  `eval_gettext \"\\\$tip 输入: h 切换到 HLS 面板, f 切换到 FLV 面板\"`\n\n"
-    read -p "`gettext \"输入序号\"` [1-14]: " vip_menu_num
+    read -p "`gettext \"输入序号\"` [1-15]: " vip_menu_num
     case "$vip_menu_num" in
         h)
             kind=""
@@ -38768,27 +38816,29 @@ VipMenu()
         ;;
         4) VipListChannel
         ;;
-        5) VipSetChannel
+        5) VipAddChannel
         ;;
-        6) VipEditChannel
+        6) VipDeployChannel
         ;;
-        7) VipListHosts
+        7) VipEditChannel
         ;;
-        8) VipAddHost
+        8) VipListHosts
         ;;
-        9) VipEditHost
+        9) VipAddHost
         ;;
-        10) VipDelUser
+        10) VipEditHost
         ;;
-        11) VipDelChannel
+        11) VipDelUser
         ;;
-        12) VipDelHost
+        12) VipDelChannel
         ;;
-        13) VipEnable
+        13) VipDelHost
         ;;
-        14) VipDisable
+        14) VipEnable
         ;;
-        *) Println "$error $i18n_input_correct_number [1-14]\n"
+        15) VipDisable
+        ;;
+        *) Println "$error $i18n_input_correct_number [1-15]\n"
         ;;
     esac
 }
@@ -41148,7 +41198,7 @@ config interface 'lan'
             if [ "$core" == "xray-core" ] 
             then
                 echo
-                xray_options=( '最新' '1.4.2' '1.4.0' '1.3.1' '1.3.0' '1.2.4' '1.2.3' )
+                xray_options=( '最新' '1.4.2' '1.4.0' '1.3.1' '1.3.0' )
                 inquirer list_input "选择 xray 版本" xray_options xray_ver
                 if [ "$xray_ver" == "最新" ] && ! xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/openwrt-xray.json" | $JQ_FILE -r '.tag_name')
                 then
@@ -41827,7 +41877,7 @@ then
             if [ "$core" == "xray-core" ] 
             then
                 echo
-                xray_options=( '最新' '1.4.2' '1.4.0' '1.3.1' '1.3.0' '1.2.4' '1.2.3' )
+                xray_options=( '最新' '1.4.2' '1.4.0' '1.3.1' '1.3.0' )
                 inquirer list_input "选择 xray 版本" xray_options xray_ver
                 if [ "$xray_ver" == "最新" ] && ! xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/openwrt-xray.json" | $JQ_FILE -r '.tag_name')
                 then
@@ -43377,15 +43427,17 @@ else
                 then
                     encrypt="-e"
                     encrypt_yn="yes"
+                    encrypt_session_yn=$d_encrypt_session_yn
                 else
                     encrypt=""
                     encrypt_yn="no"
+                    encrypt_session_yn="no"
                 fi
             else
                 encrypt_yn="yes"
+                encrypt_session_yn=$d_encrypt_session_yn
             fi
 
-            encrypt_session_yn="no"
             keyinfo_name=${keyinfo_name:-$d_keyinfo_name}
             keyinfo_name=${keyinfo_name:-$(RandStr)}
             key_name=${key_name:-$d_key_name}
