@@ -420,6 +420,7 @@ async function handleRequest(request) {
     response.headers.set("Access-Control-Allow-Origin", requestOrigin)
   }
 
+  response.headers.set("Access-Control-Allow-Credentials", true)
   response.headers.append("Vary", "Origin")
 
   return response

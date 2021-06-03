@@ -1,17 +1,17 @@
 #!/bin/bash
-# FFmpeg / nginx / openresty / xray / v2ray / cloudflare partner,workers / ibm cf / armbian / proxmox Wrapper Script By MTimer
+# FFmpeg / nginx / openresty / xray / v2ray / cloudflare partner,workers / ibm cf / armbian / proxmox ve Wrapper Script By MTimer
 # Copyright (C) 2019-2021
 # Released under GPL Version 3 License
 
 set -euo pipefail
 
-sh_ver="1.80.8"
+sh_ver="1.80.9"
 sh_debug=0
 export LANGUAGE=
 export LC_ALL=
 export LANG=en_US.UTF-8
 SH_LINK="https://woniuzfb.github.io/iptv/iptv.sh"
-SH_LINK_BACKUP="http://tv.epub.fun/iptv.sh"
+SH_LINK_FALLBACK="http://tv.epub.fun/iptv.sh"
 SH_FILE="/usr/local/bin/tv"
 i18n_FILE="/usr/local/bin/tv-i18n"
 OR_FILE="/usr/local/bin/or"
@@ -36,7 +36,7 @@ FFMPEG_LOG_ROOT="$IPTV_ROOT/ffmpeg"
 FFMPEG_MIRROR_LINK="http://pngquant.com/ffmpeg"
 V2_FILE="/usr/local/bin/v2"
 V2_LINK="https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh"
-V2_LINK_BACKUP="$FFMPEG_MIRROR_LINK/v2ray_install-release.sh"
+V2_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/v2ray_install-release.sh"
 V2CTL_FILE="/usr/local/bin/v2ctl"
 V2_CONFIG="/usr/local/etc/v2ray/config.json"
 X_FILE="/usr/local/bin/x"
@@ -51,18 +51,18 @@ VIP_USERS_ROOT="$VIP_ROOT/users"
 C_ROOT="$IPTV_ROOT/c"
 MD5SUM_FILE="$C_ROOT/md5sum"
 MD5SUM_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/scripts/md5sum.c"
-MD5SUM_LINK_BACKUP="$FFMPEG_MIRROR_LINK/md5sum.c"
+MD5SUM_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/md5sum.c"
 CREATOR_FILE="$IPTV_ROOT/HLS-Stream-Creator.sh"
 CF_FILE="/usr/local/bin/cf"
 CF_CONFIG="$HOME/cloudflare.json"
 CF_WORKERS_ROOT="$HOME/workers"
 CF_WORKERS_FILE="$CF_WORKERS_ROOT/cloudflare_workers.py"
 CF_WORKERS_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/scripts/cloudflare_workers.py"
-CF_WORKERS_LINK_BACKUP="$FFMPEG_MIRROR_LINK/cloudflare_workers.py"
+CF_WORKERS_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/cloudflare_workers.py"
 STREAM_PROXY_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/scripts/stream_proxy.js"
-STREAM_PROXY_LINK_BACKUP="$FFMPEG_MIRROR_LINK/stream_proxy.js"
+STREAM_PROXY_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/stream_proxy.js"
 XTREAM_CODES_PROXY_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/scripts/xtream_codes_proxy.js"
-XTREAM_CODES_PROXY_LINK_BACKUP="$FFMPEG_MIRROR_LINK/xtream_codes_proxy.js"
+XTREAM_CODES_PROXY_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/xtream_codes_proxy.js"
 IBM_FILE="/usr/local/bin/ibm"
 IBM_APPS_ROOT="$HOME/ibm_apps"
 IBM_CONFIG="$HOME/ibm.json"
@@ -102,11 +102,11 @@ ReleaseCheck()
         then
             release="rpm"
             break
-        elif grep -Eqi "Ubuntu" < "$release_file" 
+        elif grep -qi "Ubuntu" < "$release_file" 
         then
             release="ubu"
             break
-        elif grep -Eqi "Debian" < "$release_file" 
+        elif grep -qi "Debian" < "$release_file" 
         then
             release="deb"
             break
@@ -117,6 +117,36 @@ ReleaseCheck()
     then
         Println "${red}[ERROR]${normal} not support yet...\n"
         exit 1
+    fi
+}
+
+ArchCheck()
+{
+    [ -n "${arch:-}" ] && return 0
+
+    arch=$(uname -m)
+
+    if grep -Eqi "x86_64|amd64" <<< "$arch" 
+    then
+        arch="x86_64"
+    elif grep -Eqi "i386|i686" <<< "$arch" 
+    then
+        arch="i386"
+    elif grep -Eqi "aarch64|armv8" <<< "$arch" 
+    then
+        arch="arm64"
+    elif grep -qi "armv7" <<< "$arch" 
+    then
+        arch="armhf"
+    elif grep -qi "armv6" <<< "$arch" 
+    then
+        arch="armv6l"
+    elif grep -qi "arm" <<< "$arch" 
+    then
+        arch="armel"
+    elif grep -qi "s390" <<< "$arch" 
+    then
+        arch="s390x"
     fi
 }
 
@@ -1390,7 +1420,7 @@ ShFileCheck()
             Println "`eval_gettext \"\\\$info 脚本下载完成\"`"
         else
             Println "`eval_gettext \"\\\$error 无法连接到 Github ! 尝试备用链接...\"`"
-            if curl -s -Lm 30 "$SH_LINK_BACKUP" -o "${SH_FILE}_tmp" 
+            if curl -s -Lm 30 "$SH_LINK_FALLBACK" -o "${SH_FILE}_tmp" 
             then
                 mv "${SH_FILE}_tmp" "$SH_FILE"
                 chmod +x "$SH_FILE"
@@ -1433,7 +1463,7 @@ ShFileUpdate()
         fi
     else
         Println "`eval_gettext \"\\\$error 无法连接到 Github ! 尝试备用链接...\"`"
-        if curl -s -Lm 30 "$SH_LINK_BACKUP" -o "${SH_FILE}_tmp" 
+        if curl -s -Lm 30 "$SH_LINK_FALLBACK" -o "${SH_FILE}_tmp" 
         then
             mv "${SH_FILE}_tmp" "$SH_FILE"
             chmod +x "$SH_FILE"
@@ -1544,6 +1574,64 @@ CrossplaneInstall()
     pip3 install crossplane
 }
 
+GoInstall()
+{
+    if [[ -x $(command -v go) ]] 
+    then
+        go_version_list=($(go version))
+        if [[ "${go_version_list[2]}" =~ ^go([0-9]+)\.([0-9]+)\. ]] && [ "${BASH_REMATCH[1]}" -ge 1 ] && [ "${BASH_REMATCH[2]}" -ge 11 ]
+        then
+            return 0
+        fi
+    fi
+
+    ArchCheck
+
+    DepInstall curl
+
+    go_version=""
+
+    while IFS= read -r line
+    do
+        if [[ $line == *"goVersion = "* ]] 
+        then
+            go_version=${line#*\"}
+            go_version=${go_version%\"*}
+            break
+        fi
+    done < <(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://golang.org/doc/install" 2> /dev/null)
+
+    go_version=${go_version:-1.16.5}
+
+    if [ "$arch" == "i386" ] 
+    then
+        go_package="$go_version.linux-386.tar.gz"
+    elif [ "$arch" == "x86_64" ] 
+    then
+        go_package="$go_version.linux-amd64.tar.gz"
+    elif [ "$arch" == "arm64" ] || [ "$arch" == "armv6l" ]
+    then
+        go_package="$go_version.linux-$arch.tar.gz"
+    else
+        DepInstall golang
+        return 0
+    fi
+
+    if ! curl -L https://golang.org/dl/$go_package -o ~/$go_package && ! curl -L https://gomirrors.org/dl/$go_package -o ~/$go_package
+    then
+        Println "$error 下载 golang 失败, 请稍后再试\n"
+        exit 1
+    fi
+
+    rm -rf /usr/local/go && tar -C /usr/local -xzf ~/$go_package
+
+    if [[ ! -x $(command -v go) ]] 
+    then
+        export PATH=$PATH:/usr/local/go/bin
+        echo "export PATH=\$PATH:/usr/local/go/bin" >> /etc/profile
+    fi
+}
+
 FFmpegInstall()
 {
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
@@ -1551,19 +1639,29 @@ FFmpegInstall()
     if [ ! -e "$FFMPEG" ]
     then
         Println "`eval_gettext \"\\\$info 开始下载/安装 FFmpeg...\"`"
-        [ -z "${arch:-}" ] && arch=$(uname -m)
-        if [ "$arch" == "aarch64" ]
-        then
-            ffmpeg_package="ffmpeg-git-arm64-static.tar.xz"
-        elif grep -q 64 <<< "$arch"
+        ArchCheck
+        if [ "$arch" == "x86_64" ]
         then
             ffmpeg_package="ffmpeg-git-amd64-static.tar.xz"
-        else
+        elif [ "$arch" == "i386" ] 
+        then
+            ffmpeg_package="ffmpeg-git-i686-static.tar.xz"
+        elif [ "$arch" == "armv6l" ] 
+        then
+            ffmpeg_package="ffmpeg-git-armel-static.tar.xz"
+        elif grep -q "arm" <<< "$arch" 
+        then
             ffmpeg_package="ffmpeg-git-$arch-static.tar.xz"
+        else
+            Println "$error FFmpeg 不支持当前系统\n"
+            exit 1
         fi
         FFMPEG_PACKAGE_FILE="$IPTV_ROOT/$ffmpeg_package"
-        curl -L "$FFMPEG_MIRROR_LINK/builds/$ffmpeg_package" -o "$FFMPEG_PACKAGE_FILE"
-        [ ! -e "$FFMPEG_PACKAGE_FILE" ] && Println "`eval_gettext \"\\\$error FFmpeg 下载失败 !\"`" && exit 1
+        if ! curl -L "$FFMPEG_MIRROR_LINK/builds/$ffmpeg_package" -o "$FFMPEG_PACKAGE_FILE"
+        then
+            Println "`eval_gettext \"\\\$error FFmpeg 下载失败 !\"`"
+            exit 1
+        fi
         tar xJf "$FFMPEG_PACKAGE_FILE" -C "$IPTV_ROOT" && rm -f "${FFMPEG_PACKAGE_FILE:-notfound}"
         FFMPEG=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
         [ ! -e "$FFMPEG" ] && Println "`eval_gettext \"\\\$error FFmpeg 解压失败 !\"`" && exit 1
@@ -2389,7 +2487,8 @@ Cflags: -I\${includedir}
 
 JQInstall()
 {
-    if [[ -x $(command -v armbian-config) ]] 
+    ArchCheck
+    if grep -q "arm" <<< "$arch" 
     then
         if ! /usr/local/bin/jq -V > /dev/null 2>&1 
         then
@@ -2417,7 +2516,6 @@ JQInstall()
         #experimental# grep -Po '"tag_name": "jq-\K.*?(?=")'
         if jq_ver=$(curl -s -m 10 "$FFMPEG_MIRROR_LINK/jq.json" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
         then
-            [ -z "${arch:-}" ] && arch=$(uname -m)
             if grep -q 64 <<< "$arch" 
             then
                 jq_package="jq-linux64"
@@ -2547,6 +2645,7 @@ Install()
         }' > "$CHANNELS_FILE"
 
         ln -sf "$IPTV_ROOT"/ffmpeg-git-*/ff* /usr/local/bin/
+
         Println "`eval_gettext \"\\\$info 安装完成\"`\n"
     fi
 }
@@ -9983,7 +10082,7 @@ EditChannelMenu()
                 EditForSecurity
             ;;
             *)
-                echo "$i18n_input_correct_no...\n" && exit 1
+                Println "$i18n_input_correct_no...\n" && exit 1
             ;;
         esac
 
@@ -10411,7 +10510,6 @@ StartChannel()
         chnl_cookies=""
         if [[ $chnl_stream_link =~ inews ]] 
         then
-            chnl_audio_codec="aac"
             if [ "$chnl_video_codec" == "copy" ] && [[ ! $chnl_output_flags =~ -map ]] 
             then
                 chnl_output_flags="$chnl_output_flags -map 0:p:0"
@@ -10427,7 +10525,7 @@ StartChannel()
                     chnl_output_flags="$chnl_output_flags -vsync 0"
                 fi
             fi
-            if [[ ! $chnl_output_flags =~ -ar ]] 
+            if [ "$chnl_audio_codec" != "copy" ] && [[ ! $chnl_output_flags =~ -ar ]] 
             then
                 chnl_output_flags="$chnl_output_flags -ar 32000"
             fi
@@ -11532,7 +11630,7 @@ StopChannel()
             rm -rf "$chnl_output_dir_root"
             rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
         else
-            kill "$chnl_pid" 2> /dev/null
+            kill "$chnl_pid" 2> /dev/null || true
             if ! flock -E 1 -w 30 -x "$FFMPEG_LOG_ROOT/$chnl_pid.pid" rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
             then
                 MonitorError "频道[ $chnl_channel_name ] 进程 $chnl_pid 不存在"
@@ -14208,7 +14306,7 @@ ScheduleSingteltv()
                             program_sys_time=$(date -d "${program_times[program_i]}" +%s)
                             [ -n "$schedule" ] && schedule="$schedule,"
                             schedule=$schedule'{
-                                "title":"'"${program_titles[program_i]}"'",
+                                "title":"'"${program_titles[program_i]//\"/}"'",
                                 "time":"'"$program_time"'",
                                 "sys_time":"'"$program_sys_time"'"
                             }'
@@ -21241,7 +21339,7 @@ NginxInstall()
             nginx_package_name=${nginx_package_name%%.tar.gz*}
             break
         fi
-    done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://nginx.org/en/download.html" 2> /dev/null)
+    done < <(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://nginx.org/en/download.html" 2> /dev/null)
 
     if [ ! -d "./$nginx_package_name" ] 
     then
@@ -21340,7 +21438,7 @@ NginxViewStatus()
     then
         Println "$error $nginx_name 未安装 !\n"
     else
-        systemctl status $nginx_name.service --no-pager
+        systemctl --no-pager status $nginx_name
     fi
 }
 
@@ -21363,6 +21461,11 @@ NginxToggle()
 
 NginxRestart()
 {
+    if ! $NGINX_FILE -t
+    then
+        Println "$error 请检查配置错误\n"
+        exit 1
+    fi
     if systemctl restart $nginx_name 
     then
         Println "$info $nginx_name 重启成功\n"
@@ -21779,6 +21882,15 @@ NginxConfigDomain()
         fi
         Println "$info flv 配置添加成功\n"
     else
+        server_name=${nginx_domain_servers_name[nginx_domain_servers_index]}
+
+        if [[ $server_name =~ , ]] 
+        then
+            IFS="," read -r -a domains <<< "$server_name"
+
+            echo
+            inquirer list_input "选择域名: " domains server_name
+        fi
         updated=0
         NginxAddNodejs
         if [ "$updated" -eq 1 ] 
@@ -22649,7 +22761,7 @@ NginxAddLocalhost()
 
 NginxAddNodejs()
 {
-    server_ip=${server_ip:-$(GetServerIp)}
+    proxy_cookie_domain=${server_name:-$(GetServerIp)}
 
     directive_location_1='
     {"directive":"location","args":["=","/"],"block":[
@@ -22658,7 +22770,7 @@ NginxAddNodejs()
         {"directive":"proxy_cache_bypass","args":["1"]},
         {"directive":"proxy_no_cache","args":["1"]},
         {"directive":"proxy_cookie_path","args":["/","/$samesite_none"]},
-        {"directive":"proxy_cookie_domain","args":["localhost","'"$server_ip"'"]}
+        {"directive":"proxy_cookie_domain","args":["localhost","'"$proxy_cookie_domain"'"]}
     ]}'
 
     directive_location_2='
@@ -22681,7 +22793,7 @@ NginxAddNodejs()
         {"directive":"proxy_cache_bypass","args":["1"]},
         {"directive":"proxy_no_cache","args":["1"]},
         {"directive":"proxy_cookie_path","args":["/","/$samesite_none"]},
-        {"directive":"proxy_cookie_domain","args":["localhost","'"$server_ip"'"]}
+        {"directive":"proxy_cookie_domain","args":["localhost","'"$proxy_cookie_domain"'"]}
     ]}'
 
     directive_location_5='
@@ -22870,9 +22982,9 @@ NginxAddSameSiteNone()
     NginxAddDirective 2
 
     directive_default='{"directive":"default","args":["; Secure"]}'
-    directive_chrome='{"directive":"~Chrom[^ \\/]+\\/8[\\d][\\.\\d]*","args":["; Secure; SameSite=None"]}'
+    directive_chrome='{"directive":"~Chrom[^ \\/]+\\/[89][\\d][\\.\\d]*","args":["; Secure; SameSite=None"]}'
 
-    directives=( default '~Chrom[^ \\/]+\\/8[\\d][\\.\\d]*' )
+    directives=( default '~Chrom[^ \\/]+\\/[89][\\d][\\.\\d]*' )
     directives_val=( default chrome )
     check_directives=()
     check_args=( '["; Secure"]' )
@@ -23632,7 +23744,7 @@ NginxConfigDirective()
 NginxConfigLocalhost()
 {
     echo
-    config_localhost_options=( '修改指令' '添加 flv 设置' '添加 nodejs 设置' '添加 SNI 域名分流' '添加 SSL 协议分流' '添加 ALPN 协议分流' '添加 分流后端' '删除 SNI 域名分流' '删除 SSL 协议分流' '删除 ALPN 协议分流' '删除 分流后端' )
+    config_localhost_options=( '修改指令' '添加 flv 设置' '添加 nodejs 设置' '添加 SNI 域名分流' '添加 SSL 协议分流' '添加 ALPN 协议分流' '添加 分流后端' '删除 SNI 域名分流' '删除 SSL 协议分流' '删除 ALPN 协议分流' '删除 分流后端' '取消' )
     inquirer list_input_index "选择操作" config_localhost_options config_localhost_options_index
 
     if [ "$config_localhost_options_index" -eq 0 ] 
@@ -23666,6 +23778,9 @@ NginxConfigLocalhost()
             NginxBuildConf parse_out
         fi
         Println "$info nodejs 配置添加成功\n"
+    elif [ "$config_localhost_options_index" -eq 11 ]
+    then
+        Println "$i18n_canceled...\n"
     else
         NginxCheckLocalhost
         NginxGetStream
@@ -23765,6 +23880,7 @@ NginxConfigLocalhost()
                 Println "ALPN 协议分流:\n\n${nginx_stream_alpn_protocols_list:-无}\n\n"
                 inquirer text_input "输入指令(分流 ALPN 协议)" alpn_protocols_directive "$i18n_cancel"
                 ExitOnCancel alpn_protocols_directive
+                alpn_protocols_directive=${alpn_protocols_directive//\\/\\\\}
                 echo
                 inquirer text_input "输入指令值(分流后端名称)" alpn_protocols_args "$i18n_cancel"
                 ExitOnCancel alpn_protocols_args
@@ -24254,7 +24370,7 @@ NginxLogRotate()
   compress
   delaycompress
   notifempty
-  create 660 nginx root
+  create 660 '"$nginx_name"' root
   sharedscripts
   postrotate
     [ ! -f '"$nginx_prefix"'/logs/nginx.pid ] || /bin/kill -USR1 `cat '"$nginx_prefix"'/logs/nginx.pid`
@@ -24265,7 +24381,7 @@ NginxLogRotate()
             Println "$error 日志切割定时任务设置成功 !\n"
         fi
     else
-        LOGROTATE_FILE=$(command -v logrotate)
+        LOGROTATE_FILE=$(command -v logrotate) || LOGROTATE_FILE=""
 
         if [ ! -x "$LOGROTATE_FILE" ] 
         then
@@ -24284,16 +24400,16 @@ NginxLogRotate()
   compress
   delaycompress
   notifempty
-  create 660 nginx root
+  create 660 '"$nginx_name"' root
   sharedscripts
   postrotate
     [ ! -f '"$nginx_prefix"'/logs/nginx.pid ] || /bin/kill -USR1 `cat '"$nginx_prefix"'/logs/nginx.pid`
   endscript
 }
 '
-    fi
+        fi
 
-    logrotate="$logrotate
+        logrotate="$logrotate
 $IPTV_ROOT/*.log {
   monthly
   missingok
@@ -24757,26 +24873,40 @@ NodejsInstall()
     echo -n "...100%" && Println "$info nodejs 安装完成"
 }
 
-NodejsInstallMongodb()
+ResourceLimit()
 {
-    Println "$info 安装 mongodb, 请等待(国内可能无法安装)..."
+    ReleaseCheck
+
+    if [ ! -e /proc/sys/fs/file-max ] 
+    then
+        echo 65536 > /proc/sys/fs/file-max
+        echo "fs.file-max=65536" >> /etc/sysctl.conf
+    fi
+
+    file_max=$(< /proc/sys/fs/file-max)
+
+    if [ "$file_max" -lt 65000 ] 
+    then
+        file_max=$((file_max*95/100))
+    else
+        file_max=64000
+    fi
+
     limits=(
-        "root soft nofile 65535"
-        "root hard nofile 65535"
-        "root soft nproc 65535"
-        "root hard nproc 65535"
-        "* soft nofile 64000"
-        "* hard nofile 64000"
-        "mongod soft fsize unlimited"
-        "mongod hard fsize unlimited"
-        "mongod soft cpu unlimited"
-        "mongod hard cpu unlimited"
-        "mongod soft as unlimited"
-        "mongod hard as unlimited"
-        "mongod soft memlock unlimited"
-        "mongod hard memlock unlimited"
-        "mongod soft nproc 64000"
-        "mongod hard nproc 64000"
+        "$USER soft fsize unlimited"
+        "$USER hard fsize unlimited"
+        "$USER soft cpu unlimited"
+        "$USER hard cpu unlimited"
+        "$USER soft as unlimited"
+        "$USER hard as unlimited"
+        "$USER soft memlock unlimited"
+        "$USER hard memlock unlimited"
+        "$USER soft nofile $file_max"
+        "$USER hard nofile $file_max"
+        "$USER soft nproc 64000"
+        "$USER hard nproc 64000"
+        "* soft nofile $file_max"
+        "* hard nofile $file_max"
     )
 
     limits_append=""
@@ -24790,23 +24920,77 @@ NodejsInstallMongodb()
 
     if [ -n "$limits_append" ] 
     then
+        # systemd ignores limits set in the /etc/security/limits.conf
         echo -e "$limits_append" >> "/etc/security/limits.conf"
     fi
 
     ulimit -f unlimited
     ulimit -t unlimited
     ulimit -v unlimited
-    ulimit -n 64000
+    ulimit -l unlimited
+    ulimit -n $file_max
     ulimit -m unlimited
-    ulimit -u 32000
+    ulimit -u 64000
 
-    ReleaseCheck
     if [ "$release" == "rpm" ] 
     then
+        if [ ! -e ~/.bash_profile ] || ! grep -q ulimit < ~/.bash_profile
+        then
+cat >> ~/.bash_profile << EOF
+ulimit -f unlimited
+ulimit -t unlimited
+ulimit -v unlimited
+ulimit -l unlimited
+ulimit -n $file_max
+ulimit -m unlimited
+ulimit -u 64000
+EOF
+        fi
+    else
+        if [ ! -e ~/.profile ] || ! grep -q ulimit < ~/.profile
+        then
+cat >> ~/.profile << EOF
+ulimit -f unlimited
+ulimit -t unlimited
+ulimit -v unlimited
+ulimit -l unlimited
+ulimit -n $file_max
+ulimit -m unlimited
+ulimit -u 64000
+EOF
+        fi
+    fi
+
+    # The limits defined in these files are set by PAM when starting a login session, but daemons started by systemd do not use PAM login sessions
+    #if [ ! -e /etc/security/limits.d/99-mongodb-nproc.conf ] && ls -A /etc/security/limits.d/*-nproc.conf > /dev/null 2>&1 
+    #then
+    #    echo -e "mongodb soft nproc 64000\nmongodb hard nproc 64000" > /etc/security/limits.d/99-mongodb-nproc.conf
+    #fi
+}
+
+NodejsInstallMongodb()
+{
+    Println "$info 安装 mongodb, 请等待(国内可能无法安装)..."
+
+    ResourceLimit
+
+    if [ "$release" == "rpm" ] 
+    then
+        ArchCheck
+        if [ "$arch" == "arm64" ]
+        then
+            arch_path="aarch64"
+        elif [ "$arch" == "x86_64" ] || [ "$arch" == "s390x" ]
+        then
+            arch_path="$arch"
+        else
+            Println "$error 不支持当前系统\n"
+            exit 1
+        fi
         printf '%s' "
 [mongodb-org-4.4]
 name=MongoDB Repository
-baseurl=https://repo.mongodb.org/yum/redhat/\$releasever/mongodb-org/4.4/x86_64/
+baseurl=https://repo.mongodb.org/yum/redhat/\$releasever/mongodb-org/4.4/$arch_path/
 gpgcheck=1
 enabled=1
 gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
@@ -24823,19 +25007,19 @@ gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
         then
             if grep -q "xenial" < "/etc/apt/sources.list"
             then
-                echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/4.4 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+                echo "deb [ arch=amd64,arm64,s390x ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
             elif grep -q "bionic" < "/etc/apt/sources.list" 
             then
-                echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/4.4 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+                echo "deb [ arch=amd64,arm64,s390x ] https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
             else
-                echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/4.4 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+                echo "deb [ arch=amd64,arm64,s390x ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
             fi
         else
             if grep -q "stretch" < "/etc/apt/sources.list"
             then
-                echo "deb http://repo.mongodb.org/apt/debian stretch/mongodb-org/4.4 main" | sudo tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+                echo "deb http://repo.mongodb.org/apt/debian stretch/mongodb-org/4.4 main" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
             else
-                echo "deb http://repo.mongodb.org/apt/debian buster/mongodb-org/4.4 main" | sudo tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+                echo "deb http://repo.mongodb.org/apt/debian buster/mongodb-org/4.4 main" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
             fi
         fi
 
@@ -24845,16 +25029,16 @@ gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
 
     if [[ $(ps --no-headers -o comm 1) == "systemd" ]] 
     then
-        if ! systemctl start mongod > /dev/null 2>&1
-        then
-            systemctl daemon-reload
-            systemctl start mongod > /dev/null 2>&1
-        fi
+        sed -i "s/LimitNOFILE=.*/LimitNOFILE=$file_max/" /lib/systemd/system/mongod.service
+        systemctl daemon-reload
+        systemctl start mongod
         systemctl enable mongod
     else
         service mongod start
     fi
+
     sleep 3
+
     Println "$info mongodb 安装成功"
 }
 
@@ -24885,6 +25069,16 @@ NodejsConfig()
     then
         NginxListDomain
         NginxSelectDomainServer
+
+        server_name=${nginx_domain_servers_name[nginx_domain_servers_index]}
+
+        if [[ $server_name =~ , ]] 
+        then
+            IFS="," read -r -a domains <<< "$server_name"
+
+            echo
+            inquirer list_input "选择域名: " domains server_name
+        fi
     else
         NginxListLocalhost
         NginxSelectLocalhostServer
@@ -25069,7 +25263,7 @@ V2rayInstall()
 
     if [ "$v2ray_name" == "v2ray" ] 
     then
-        { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_BACKUP"; } \
+        { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_FALLBACK"; } \
         | sed "s+nobody+$v2ray_name+g" \
         | sed "s+ 'sha1'++g" \
         | sed "s+ 'sha256'++g" \
@@ -25077,7 +25271,7 @@ V2rayInstall()
         | sed "s+https://api.github.com/repos/v2fly/v2ray-core/releases/latest+$FFMPEG_MIRROR_LINK/$v2ray_name.json+g" \
         | sed "s+https://github.com/v2fly/v2ray-core/releases/download+$FFMPEG_MIRROR_LINK/$v2ray_name+g" | bash
     else
-        { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_BACKUP"; } \
+        { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_FALLBACK"; } \
         | sed "s+nobody+$v2ray_name+g" \
         | sed "s+ 'sha1'++g" \
         | sed "s+ 'sha256'++g" \
@@ -25122,7 +25316,7 @@ V2rayUpdate()
 
     if [ "$v2ray_name" == "v2ray" ] 
     then
-        { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_BACKUP"; } \
+        { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_FALLBACK"; } \
         | sed "s+nobody+$v2ray_name+g" \
         | sed "s+ 'sha1'++g" \
         | sed "s+ 'sha256'++g" \
@@ -25130,7 +25324,7 @@ V2rayUpdate()
         | sed "s+https://api.github.com/repos/v2fly/v2ray-core/releases/latest+$FFMPEG_MIRROR_LINK/$v2ray_name.json+g" \
         | sed "s+https://github.com/v2fly/v2ray-core/releases/download+$FFMPEG_MIRROR_LINK/$v2ray_name+g" | bash
     else
-        { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_BACKUP"; } \
+        { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_FALLBACK"; } \
         | sed "s+nobody+$v2ray_name+g" \
         | sed "s+ 'sha1'++g" \
         | sed "s+ 'sha256'++g" \
@@ -25263,7 +25457,7 @@ V2rayConfigUpdate()
 
 V2rayStatus()
 {
-    systemctl status $v2ray_name --no-pager
+    systemctl --no-pager status $v2ray_name
 }
 
 V2raySetListen()
@@ -26477,7 +26671,7 @@ V2rayAddInbound()
         V2raySetSniffingDomainsExcluded
     fi
 
-    if [ "$self" == "ibm" ] || [ "$self" == "ibm.sh" ] 
+    if [ "$self" == "ibm" ] 
     then
         V2raySetSecurity
         V2raySetTag
@@ -27808,10 +28002,7 @@ V2rayListInboundAccountLink()
             Println "$info 安装 ImageMagick"
             ImageMagickInstall
         fi
-        if [[ ! -x $(command -v qrencode) ]] 
-        then
-            DepInstall qrencode
-        fi
+        DepInstall qrencode
         qrencode -s 1 -o "$HOME/vmess_link.png" "vmess://$vmess_link"
         /usr/local/bin/imgcat --half-height "$HOME/vmess_link.png"
     fi
@@ -30857,7 +31048,7 @@ TrojanInstall()
 
     Println "$info 安装 $trojan_name..."
 
-    { curl -s -m 10 "$TR_LINK" || curl -s -m 30 "$TR_LINK_BACKUP"; } \
+    { curl -s -m 10 "$TR_LINK" || curl -s -m 30 "$TR_LINK_FALLBACK"; } \
     | sed "s+nobody+$trojan_name+g" \
     | sed "s+ 'sha1'++g" \
     | sed "s+ 'sha256'++g" \
@@ -32993,7 +33184,7 @@ CloudflareSetWorkerUpstream()
     then
         Println "$tip 比如: youdomain.com/path"
         inquirer text_input "输入 worker: $cf_worker_name 源站地址: " cf_worker_upstream "$i18n_cancel"
-        ExitOnCancel
+        ExitOnCancel cf_worker_upstream
     fi
 }
 
@@ -33021,7 +33212,7 @@ CloudflareAddWorker()
                 then
                     wrangler generate "stream_proxy"
                     wget --timeout=10 --tries=1 --no-check-certificate "$STREAM_PROXY_LINK" -qO "$CF_WORKERS_ROOT/stream_proxy/index.js" \
-                    || wget --timeout=10 --tries=3 --no-check-certificate "$STREAM_PROXY_LINK_BACKUP" -qO "$CF_WORKERS_ROOT/stream_proxy/index.js"
+                    || wget --timeout=10 --tries=3 --no-check-certificate "$STREAM_PROXY_LINK_FALLBACK" -qO "$CF_WORKERS_ROOT/stream_proxy/index.js"
                 fi
 
                 CloudflareSetWorkerName
@@ -33035,7 +33226,7 @@ CloudflareAddWorker()
                 then
                     wrangler generate "xtream_codes_proxy"
                     wget --timeout=10 --tries=1 --no-check-certificate "$XTREAM_CODES_PROXY_LINK" -qO "$CF_WORKERS_ROOT/xtream_codes_proxy/index.js" \
-                    || wget --timeout=10 --tries=3 --no-check-certificate "$XTREAM_CODES_PROXY_LINK_BACKUP" -qO "$CF_WORKERS_ROOT/xtream_codes_proxy/index.js"
+                    || wget --timeout=10 --tries=3 --no-check-certificate "$XTREAM_CODES_PROXY_LINK_FALLBACK" -qO "$CF_WORKERS_ROOT/xtream_codes_proxy/index.js"
                 fi
 
                 CloudflareSetWorkerName
@@ -33337,7 +33528,7 @@ CloudflareDeployWorker()
     do
         [ -z "$cf_workers_num" ] && Println "$i18n_canceled...\n" && exit 1
 
-        if [[ $cf_workers_num -eq $((cf_workers_count+1)) ]]
+        if [ "$cf_workers_num" == "$((cf_workers_count+1))" ]
         then
             for((i=0;i<cf_workers_count;i++));
             do
@@ -33424,7 +33615,7 @@ CloudflareDeployWorker()
     do
         [ -z "$cf_users_num" ] && Println "$i18n_canceled...\n" && exit 1
 
-        if [[ $cf_users_num -eq $((cf_users_count+1)) ]]
+        if [ "$cf_users_num" == "$((cf_users_count+1))" ]
         then
             for((i=0;i<cf_users_count;i++));
             do
@@ -33527,7 +33718,7 @@ CloudflareDeployWorker()
 
                 Println "$info 更新 ${CF_WORKERS_FILE##*/}"
                 wget --timeout=10 --tries=1 --no-check-certificate "$CF_WORKERS_LINK" -qO "$CF_WORKERS_FILE" \
-                || wget --timeout=10 --tries=3 --no-check-certificate "$CF_WORKERS_LINK_BACKUP" -qO "$CF_WORKERS_FILE"
+                || wget --timeout=10 --tries=3 --no-check-certificate "$CF_WORKERS_LINK_FALLBACK" -qO "$CF_WORKERS_FILE"
 
                 for((i=0;i<3;i++));
                 do
@@ -33605,7 +33796,7 @@ CloudflareDeployWorker()
                 if [ "$sh_debug" -eq 0 ] && [ ! -f "$IPTV_ROOT/VIP" ]
                 then
                     curl -s -Lm 10 "$CF_WORKERS_LINK" -o "$CF_WORKERS_FILE" \
-                    || curl -s -Lm 20 "$CF_WORKERS_LINK_BACKUP" -o "$CF_WORKERS_FILE"
+                    || curl -s -Lm 20 "$CF_WORKERS_LINK_FALLBACK" -o "$CF_WORKERS_FILE"
                 fi
 
                 for((i=0;i<3;i++));
@@ -35133,7 +35324,7 @@ CloudflareEnableWorkersMonitor()
         if [ "$sh_debug" -eq 0 ] && [ ! -f "$IPTV_ROOT/VIP" ]
         then
             curl -s -Lm 10 "$CF_WORKERS_LINK" -o "$CF_WORKERS_FILE" \
-            || curl -s -Lm 20 "$CF_WORKERS_LINK_BACKUP" -o "$CF_WORKERS_FILE"
+            || curl -s -Lm 20 "$CF_WORKERS_LINK_FALLBACK" -o "$CF_WORKERS_FILE"
         fi  
     fi
 
@@ -38610,7 +38801,7 @@ VipEnable()
                 fi
                 mkdir -p "$C_ROOT"
                 wget --timeout=10 --tries=1 --no-check-certificate "$MD5SUM_LINK" -qO "$MD5SUM_FILE.c" \
-                || wget --timeout=10 --tries=3 --no-check-certificate "$MD5SUM_LINK_BACKUP" -qO "$MD5SUM_FILE.c"
+                || wget --timeout=10 --tries=3 --no-check-certificate "$MD5SUM_LINK_FALLBACK" -qO "$MD5SUM_FILE.c"
                 gcc -Wall -O3 -o "$MD5SUM_FILE" "$MD5SUM_FILE.c"
                 Println "$info md5sum 安装成功"
             fi
@@ -38757,7 +38948,7 @@ VipUserMenu()
         ;;
         f)
             kind="flv"
-            color=$blue
+            color=${blue}
             Menu
         ;;
         1) VipListUserChannel
@@ -38805,7 +38996,7 @@ VipMenu()
         ;;
         f)
             kind="flv"
-            color=$blue
+            color=${blue}
             Menu
         ;;
         1) VipListUser
@@ -39019,7 +39210,7 @@ Menu()
         ;;
         f)
             kind="flv"
-            color=$blue
+            color=${blue}
             Menu
         ;;
         v)
@@ -39109,9 +39300,10 @@ Usage()
 
  `gettext \"快捷键:\"`
      `gettext \"tv 打开 HLS 管理面板\"`
-         `gettext \"tv l 列出所有开启的频道\"`
-         `gettext \"tv d 添加演示频道\"`
-         `gettext \"tv e 手动修改 channels.json\"`
+       `gettext \"tv l 列出所有开启的频道\"`
+       `gettext \"tv d 添加演示频道\"`
+       `gettext \"tv e 手动修改 channels.json\"`
+       `gettext \"tv ee 手动修改 sync_file\"`
        `gettext \"tv f 打开 FLV 管理面板\"`
        `gettext \"tv v 打开 VIP 面板\"`
        `gettext \"tv m 开启监控\"`
@@ -39144,6 +39336,10 @@ Usage()
      `gettext \"arm 打开 Armbian 管理面板\"`
 
      `gettext \"pve 打开 Proxmox VE 管理面板\"`
+
+     `gettext \"tv ed 选择默认编辑器\"`
+
+     `gettext \"tv a 设置自定义命令\"`
 
      `gettext \"tv c <en|ru|de|zh_CN|...> 切换/更新 语言\"`
     "
@@ -39373,9 +39569,16 @@ then
     UpdateSelf
 fi
 
-self=${0##*/}
+if [[ -x $(command -v readlink) ]] && [ -L "$0" ] && alternative=$(readlink "$0") && [ -L "$alternative" ]
+then
+    self=${alternative##*/}
+else
+    self=${0##*/}
+fi
 
-if [ "$self" == "ibm" ] || [ "$self" == "ibm.sh" ]
+self=${self%.*}
+
+if [ "$self" == "ibm" ] 
 then
     ShFileCheck
 
@@ -39431,7 +39634,7 @@ then
         IbmCfMenu
     fi
     exit 0
-elif [ "$self" == "cf" ] || [ "$self" == "cf.sh" ]
+elif [ "$self" == "cf" ] 
 then
     ShFileCheck
 
@@ -39483,7 +39686,7 @@ then
         CloudflarePartnerMenu
     fi
     exit 0
-elif [ "$self" == "or" ] || [ "$self" == "or.sh" ]
+elif [ "$self" == "or" ] 
 then
     ShFileCheck
 
@@ -39496,6 +39699,7 @@ then
 
     if [ ! -s "/etc/systemd/system/$nginx_name.service" ] && [ -d "$nginx_prefix" ]
     then
+        ResourceLimit
         echo "[Unit]
 Description=$nginx_name
 After=syslog.target network-online.target remote-fs.target nss-lookup.target
@@ -39510,10 +39714,21 @@ ExecStartPost=/bin/sleep 0.1
 ExecReload=$nginx_prefix/sbin/nginx -s reload
 ExecStop=/bin/kill -s QUIT \$MAINPID
 PrivateTmp=true
+# file size
+LimitFSIZE=infinity
+# cpu time
+LimitCPU=infinity
+# virtual memory size
+LimitAS=infinity
+# open files
+LimitNOFILE=$file_max
+# processes/threads
+LimitNPROC=64000
+# locked memory
+LimitMEMLOCK=infinity
 
 [Install]
-WantedBy=multi-user.target
-" > /etc/systemd/system/$nginx_name.service
+WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
         $NGINX_FILE -s stop 2> /dev/null || true
         systemctl daemon-reload
         systemctl enable "$nginx_name"
@@ -39537,11 +39752,10 @@ WantedBy=multi-user.target
  ${green}11.${normal} 开关
  ${green}12.${normal} 重启
 ————————————
- ${green}13.${normal} 删除域名
- ${green}14.${normal} 日志切割
-————————————
- ${green}15.${normal} 安装 nodejs
- ${green}16.${normal} 识别 cloudflare/ibm ip
+ ${green}13.${normal} 配置 日志切割
+ ${green}14.${normal} 配置 nodejs
+ ${green}15.${normal} 识别 cloudflare/ibm ip
+ ${green}16.${normal} 删除域名
 
  $tip 输入: or 打开面板
 
@@ -39594,12 +39808,9 @@ WantedBy=multi-user.target
             NginxRestart
         ;;
         13) 
-            NginxDeleteDomain
-        ;;
-        14) 
             NginxLogRotate
         ;;
-        15)
+        14)
             [ ! -d "$IPTV_ROOT" ] && Println "$error 请先输入 tv 安装 !\n" && exit 1
             if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
             then
@@ -39617,14 +39828,17 @@ WantedBy=multi-user.target
                 Println "$error nodejs 配置已存在\n" && exit 1
             fi
         ;;
-        16)
+        15)
             NginxUpdateCFIBMip
+        ;;
+        16) 
+            NginxDeleteDomain
         ;;
         *) Println "$error $i18n_input_correct_number [1-16]\n"
         ;;
     esac
     exit 0
-elif [ "$self" == "nx" ] || [ "$self" == "nx.sh" ]
+elif [ "$self" == "nx" ] 
 then
     ShFileCheck
 
@@ -39637,6 +39851,7 @@ then
 
     if [ ! -s "/etc/systemd/system/$nginx_name.service" ] && [ -d "$nginx_prefix" ]
     then
+        ResourceLimit
         echo "[Unit]
 Description=$nginx_name
 After=syslog.target network-online.target remote-fs.target nss-lookup.target
@@ -39651,10 +39866,21 @@ ExecStartPost=/bin/sleep 0.1
 ExecReload=$nginx_prefix/sbin/nginx -s reload
 ExecStop=/bin/kill -s QUIT \$MAINPID
 PrivateTmp=true
+# file size
+LimitFSIZE=infinity
+# cpu time
+LimitCPU=infinity
+# virtual memory size
+LimitAS=infinity
+# open files
+LimitNOFILE=$file_max
+# processes/threads
+LimitNPROC=64000
+# locked memory
+LimitMEMLOCK=infinity
 
 [Install]
-WantedBy=multi-user.target
-" > /etc/systemd/system/$nginx_name.service
+WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
         $NGINX_FILE -s stop 2> /dev/null || true
         systemctl daemon-reload
         systemctl enable "$nginx_name"
@@ -39678,16 +39904,16 @@ WantedBy=multi-user.target
  ${green}11.${normal} 开关
  ${green}12.${normal} 重启
 ————————————
- ${green}13.${normal} 删除域名
- ${green}14.${normal} 日志切割
+ ${green}13.${normal} 配置 日志切割
+ ${green}14.${normal} 配置 nodejs
+ ${green}15.${normal} 配置 postfix
+ ${green}16.${normal} 配置 mmproxy
+ ${green}17.${normal} 配置 dnscrypt proxy
+ ${green}18.${normal} 识别 cloudflare/ibm ip
+ ${green}19.${normal} 删除域名
 ————————————
- ${green}15.${normal} 安装 nodejs
- ${green}16.${normal} 安装 pdf2htmlEX
- ${green}17.${normal} 安装 tesseract
- ${green}18.${normal} 配置 postfix
- ${green}19.${normal} 配置 mmproxy
- ${green}20.${normal} 配置 dnscrypt proxy
- ${green}21.${normal} 识别 cloudflare/ibm ip
+ ${green}20.${normal} 安装 pdf2htmlEX
+ ${green}21.${normal} 安装 tesseract
 
  $tip 输入: nx 打开面板
 
@@ -39740,12 +39966,9 @@ WantedBy=multi-user.target
             NginxRestart
         ;;
         13) 
-            NginxDeleteDomain
-        ;;
-        14) 
             NginxLogRotate
         ;;
-        15)
+        14)
             [ ! -d "$IPTV_ROOT" ] && Println "$error 请先输入 tv 安装 !\n" && exit 1
             if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
             then
@@ -39763,38 +39986,7 @@ WantedBy=multi-user.target
                 Println "$error nodejs 配置已存在\n" && exit 1
             fi
         ;;
-        16)
-            if [[ ! -x $(command -v pdf2htmlEX) ]] 
-            then
-                echo
-                AskIfContinue n "`gettext \"因为是编译 pdf2htmlEX, 耗时会很长, 是否继续\"`"
-                Pdf2htmlInstall
-                Println "$info pdf2htmlEX 安装完成, 输入 source /etc/profile 可立即使用\n"
-            else
-                Println "$error pdf2htmlEX 已存在!\n"
-            fi
-        ;;
-        17)
-            if [[ ! -x $(command -v tesseract) ]] 
-            then
-                DepsCheck
-                echo
-                if [ "$release" == "ubu" ] 
-                then
-                    add-apt-repository ppa:alex-p/tesseract-ocr -y
-                    AptUpdate
-                    apt-get -y install tesseract
-                elif [ "$release" == "deb" ] 
-                then
-                    Println "$info 参考 https://notesalexp.org/tesseract-ocr/ ...\n"
-                else
-                    Println "$info 参考 https://tesseract-ocr.github.io/tessdoc/Home.html ...\n"
-                fi
-            else
-                Println "$error tesseract 已存在!\n"
-            fi
-        ;;
-        18)
+        15)
             if [[ ! -x $(command -v postfix) ]] 
             then
                 ReleaseCheck
@@ -39856,25 +40048,30 @@ WantedBy=multi-user.target
             fi
             Println "$info smtp 设置成功\n"
         ;;
-        19)
-            if [ ! -d ~/mmproxy ] 
+        16)
+            if [ ! -e ~/allowed-subnets.txt ] 
             then
-                if [[ ! -x $(command -v git) ]] 
-                then
-                    Spinner "安装 git" GitInstall
-                fi
-                trap '
-                    rm -rf ~/mmproxy
-                ' EXIT
-                cd ~
-                git clone  https://github.com/cloudflare/mmproxy
-                cd mmproxy
-                git clone https://github.com/sustrik/libmill.git
-                git clone https://github.com/seccomp/libseccomp.git
+                echo -en "0.0.0.0/0\n::/0\n" > ~/allowed-subnets.txt
+            fi
 
-                make CC=clang
-                echo -en "0.0.0.0/0\n::/0\n" > allowed-networks.txt
-                trap - EXIT
+            if [[ ! -x "$HOME/go/bin/go-mmproxy" ]] 
+            then
+                Println "$info 安装 go-mmproxy"
+
+                GoInstall
+                go get github.com/path-network/go-mmproxy
+
+                if [[ ! -x $(command -v go-mmproxy) ]] 
+                then
+                    export PATH="$PATH:$HOME/go/bin"
+                    ReleaseCheck
+                    if [ "$release" == "rpm" ] 
+                    then
+                        echo "export PATH=\$PATH:\$HOME/go/bin" >> ~/.bash_profile
+                    else
+                        echo "export PATH=\$PATH:\$HOME/go/bin" >> ~/.profile
+                    fi
+                fi
             fi
 
             echo
@@ -39884,9 +40081,11 @@ WantedBy=multi-user.target
             if [ "$mmproxy_opotions_index" -eq 0 ] 
             then
                 mmproxy_name="acme"
-            elif [ "$mmproxy_opotions_index" -eq 0 ] 
+                acme_tip="(acme 监听端口)"
+            elif [ "$mmproxy_opotions_index" -eq 1 ] 
             then
                 mmproxy_name="ssh"
+                ssh_tip="(ssh 监听端口)"
             else
                 echo
                 inquirer text_input "输入 mmproxy 配置名称(英文)" mmproxy_name "$i18n_cancel"
@@ -39903,21 +40102,29 @@ WantedBy=multi-user.target
                 fi
             fi
 
-            echo
-            inquirer text_input "输入 mmproxy 监听端口: " mmproxy_listen_port "随机"
+            Println "$tip 比如 nginx 分流后端: 127.0.0.1:1234"
+            inquirer text_input "输入 mmproxy 监听 地址+端口: " mmproxy_listen "随机"
 
-            if [ "$mmproxy_listen_port" == "随机" ] 
+            if [ "$mmproxy_listen" == "随机" ] 
             then
-                mmproxy_listen_port=$(GetFreePort)
+                mmproxy_listen="127.0.0.1:$(GetFreePort)"
             fi
 
-            echo
-            inquirer text_input "输入前端(比如 nginx) 分流 ipv4 端口: " mmproxy_target_v4_port "$i18n_cancel"
-            ExitOnCancel mmproxy_target_v4_port
+            if [ "$mmproxy_name" == "ssh" ] 
+            then
+                Println "$tip 请确保已经设置 ssh 监听地址和端口"
+            fi
 
-            echo
-            inquirer text_input "输入前端(比如 nginx) 分流 ipv6 端口: " mmproxy_target_v6_port "$i18n_cancel"
-            ExitOnCancel mmproxy_target_v6_port
+            Println "$tip 比如: 127.0.0.1:2222"
+            inquirer text_input "输入 ipv4 分流目标 地址+端口${acme_tip:-}${ssh_tip:-}: " mmproxy_target_v4 "$i18n_cancel"
+            ExitOnCancel mmproxy_target_v4
+
+            inquirer text_input "输入 ipv6 分流目标 地址+端口${acme_tip:-}${ssh_tip:-}: " mmproxy_target_v6 "[::1]:${mmproxy_target_v4#*:}"
+
+            if [ -e "/etc/systemd/system/mmproxy-$mmproxy_name.service" ] 
+            then
+                reload=1
+            fi
 
             echo "[Unit]
 Description=mmproxy-$mmproxy_name
@@ -39925,30 +40132,28 @@ After=syslog.target network-online.target nss-lookup.target
 Wants=network-online.target
 
 [Service]
-ExecStart=$HOME/mmproxy/mmproxy --allowed-networks $HOME/mmproxy/allowed-networks.txt -l 127.0.0.1:$mmproxy_listen_port -4 127.0.0.1:$mmproxy_target_v4_port -6 [::1]:$mmproxy_target_v6_port
+ExecStart=$HOME/go/bin/go-mmproxy --allowed-subnets $HOME/allowed-subnets.txt -l $mmproxy_listen -4 $mmproxy_target_v4 -6 $mmproxy_target_v6
 Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target" > "/etc/systemd/system/mmproxy-$mmproxy_name.service"
 
-            if ! grep -q 'iif lo lookup 100' < <(ip rule list)
+            if [ "${reload:-0}" -eq 1 ] 
             then
-                ip -4 rule add from 127.0.0.1/8 iif lo table 100
-                ip -6 rule add from ::1/128 iif lo table 100
-
-                ip route add local 0.0.0.0/0 dev lo table 100
-                ip -6 route add local ::/0 dev lo table 100
+                systemctl daemon-reload
+                systemctl enable "mmproxy-$mmproxy_name"
+                systemctl restart "mmproxy-$mmproxy_name"
+            else
+                systemctl enable "mmproxy-$mmproxy_name"
+                systemctl start "mmproxy-$mmproxy_name"
             fi
-
-            systemctl enable "mmproxy-$mmproxy_name"
-            systemctl start "mmproxy-$mmproxy_name"
 
             if [ ! -f ~/ip.sh ] 
             then
                 echo "#!/bin/bash
-ip -4 rule add from 127.0.0.1/8 iif lo table 100
-ip -6 rule add from ::1/128 iif lo table 100
+ip rule add from 127.0.0.1/8 iif lo table 100
 ip route add local 0.0.0.0/0 dev lo table 100
+ip -6 rule add from ::1/128 iif lo table 100
 ip -6 route add local ::/0 dev lo table 100" > ~/ip.sh
                 chmod +x ~/ip.sh
             fi
@@ -39966,13 +40171,16 @@ $HOME/ip.sh" > /etc/rc.local
 
             if [[ $(systemctl is-active rc-local) == "inactive" ]] 
             then
-                systemctl enbale rc-local
-                systemctl start rc-local
+                systemctl enable rc-local || true
+                if ! grep -q 'iif lo lookup 100' < <(ip rule list)
+                then
+                    systemctl start rc-local || true
+                fi
             fi
 
             Println "$info mmproxy-$mmproxy_name 设置成功\n"
         ;;
-        20)
+        17)
             DepInstall curl
 
             DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
@@ -40030,7 +40238,12 @@ $HOME/ip.sh" > /etc/rc.local
                 exit 0
             fi
 
-            arch=$(uname -m)
+            ArchCheck
+
+            if [ "$arch" != "arm64" ] && grep -q "arm" <<< "$arch"  
+            then
+                arch="arm"
+            fi
 
             if dnscrypt_version=$(curl -s -Lm 20 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') 
             then
@@ -40137,14 +40350,48 @@ $HOME/ip.sh" > /etc/rc.local
                 Println "$error 无法连接服务器, 请稍后再试\n"
             fi
         ;;
-        21)
+        18)
             NginxUpdateCFIBMip
+        ;;
+        19)
+            NginxDeleteDomain
+        ;;
+        20)
+            if [[ ! -x $(command -v pdf2htmlEX) ]] 
+            then
+                echo
+                AskIfContinue n "`gettext \"因为是编译 pdf2htmlEX, 耗时会很长, 是否继续\"`"
+                Pdf2htmlInstall
+                Println "$info pdf2htmlEX 安装完成, 输入 source /etc/profile 可立即使用\n"
+            else
+                Println "$error pdf2htmlEX 已存在!\n"
+            fi
+        ;;
+        21)
+            if [[ ! -x $(command -v tesseract) ]] 
+            then
+                DepsCheck
+                echo
+                if [ "$release" == "ubu" ] 
+                then
+                    add-apt-repository ppa:alex-p/tesseract-ocr -y
+                    AptUpdate
+                    apt-get -y install tesseract
+                elif [ "$release" == "deb" ] 
+                then
+                    Println "$info 参考 https://notesalexp.org/tesseract-ocr/ ...\n"
+                else
+                    Println "$info 参考 https://tesseract-ocr.github.io/tessdoc/Home.html ...\n"
+                fi
+            else
+                Println "$error tesseract 已存在!\n"
+            fi
         ;;
         *) Println "$error $i18n_input_correct_number [1-21]\n"
         ;;
     esac
     exit 0
-elif [ "$self" == "v2" ] || [ "$self" == "v2.sh" ] || [ "$self" == "V2.sh" ] || [ "$self" == "x" ] || [ "$self" == "x.sh" ] || [ "$self" == "xray.sh" ]
+elif [ "$self" == "v2" ] || [ "$self" == "V2" ] || [ "$self" == "x" ] || [ "$self" == "xray" ]
 then
     ShFileCheck
     [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
@@ -40152,19 +40399,19 @@ then
     v2ray_name="v2ray"
     tls_name="TLS"
 
-    if [ "$self" == "x" ] || [ "$self" == "x.sh" ] || [ "$self" == "xray.sh" ]
+    if [ "$self" == "x" ] || [ "$self" == "xray" ] 
     then
         v2ray_sh="x"
         v2ray_name="xray"
         tls_name="XTLS"
         V2_FILE="/usr/local/bin/x"
         V2_LINK="https://raw.githubusercontent.com/XTLS/Xray-install/main/install-release.sh"
-        V2_LINK_BACKUP="$FFMPEG_MIRROR_LINK/xray_install-release.sh"
+        V2_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/xray_install-release.sh"
         V2CTL_FILE="/usr/local/bin/xray"
         V2_CONFIG="/usr/local/etc/xray/config.json"
     elif [ -d "/etc/v2ray/" ] 
     then
-        systemctl disable v2ray.service --now > /dev/null 2> /dev/null || true
+        systemctl disable v2ray --now > /dev/null 2> /dev/null || true
         rm -rf /usr/bin/v2ray/
         rm -f /etc/systemd/system/v2ray.service
         rm -f /lib/systemd/system/v2ray.service
@@ -40192,7 +40439,7 @@ then
     case $* in
         "e") 
             [ ! -e "$V2_CONFIG" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
-            vim "$V2_CONFIG" && exit 0
+            editor "$V2_CONFIG" && exit 0
         ;;
         *) 
         ;;
@@ -40383,7 +40630,7 @@ then
         ;;
     esac
     exit 0
-elif [ "$self" == "cx" ] || [ "$self" == "cx.sh" ]
+elif [ "$self" == "cx" ] 
 then
     [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
 
@@ -40519,7 +40766,7 @@ ${green}8.${normal} 浏览频道
         ;;
     esac
     exit 0
-elif [ "$self" == "arm" ] || [ "$self" == "arm.sh" ]
+elif [ "$self" == "arm" ] 
 then
     if [[ ! -x $(command -v armbian-config) ]] 
     then
@@ -40799,7 +41046,7 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
                 exit 1
             fi
 
-            if [[ $(systemctl is-active docker.service) == "inactive" ]] 
+            if [[ $(systemctl is-active docker) == "inactive" ]] 
             then
                 systemctl start docker
             fi
@@ -41453,7 +41700,7 @@ config interface 'lan'
         ;;
     esac
     exit 0
-elif [ "$self" == "pve" ] || [ "$self" == "pve.sh" ]
+elif [ "$self" == "pve" ] 
 then
     if [[ ! -x $(command -v pveum) ]] 
     then
@@ -41470,9 +41717,9 @@ then
   ${green}1.${normal} 设置 apt 源
   ${green}2.${normal} 设置 vimrc
   ${green}3.${normal} 设置 显示器
-————————————
   ${green}4.${normal} 查看 温度 / 风扇
   ${green}5.${normal} 设置 风扇
+————————————
   ${green}6.${normal} 安装 升级 dnscrypt
   ${green}7.${normal} 安装 qemu-guest-agent
   ${green}8.${normal} 安装 openwrt-v2ray
@@ -41607,15 +41854,15 @@ then
             fi
 
             echo
-            nbfc_options=( '查看状态' '风扇切换为手动控制' '设置风扇转速' '搜索配置' '应用配置' )
-            inquirer list_input "选择操作" nbfc_options nbfc_option
+            nbfc_options=( '查看状态' '切换风扇手动/自动控制' '设置风扇转速' '搜索配置' '应用配置' )
+            inquirer list_input_index "选择操作" nbfc_options nbfc_options_index
 
             cd /opt/nbfc
 
-            if [ "$nbfc_option" == "查看状态" ] 
+            if [ "$nbfc_options_index" -eq 0 ] 
             then
                 mono nbfc.exe status --all
-            elif [ "$nbfc_option" == "风扇切换为手动控制" ]
+            elif [ "$nbfc_options_index" -eq 1 ]
             then
                 echo
                 inquirer text_input "输入寄存器地址, 比如 0x93: " register_address "$i18n_cancel"
@@ -41634,7 +41881,7 @@ then
                 fi
 
                 Println "$tip 不一定写入成功, 请自行检查\n"
-            elif [ "$nbfc_option" == "设置风扇转速" ] 
+            elif [ "$nbfc_options_index" -eq 2 ] 
             then
                 Println "$tip 请确保风扇处于手动控制状态"
                 echo
@@ -41667,10 +41914,10 @@ then
 
                     Println "$tip 操作成功\n"
                 fi
-            elif [ "$nbfc_option" == "搜索配置" ] 
+            elif [ "$nbfc_options_index" -eq 3 ] 
             then
                 mono nbfc.exe config -r
-            elif [ "$nbfc_option" == "应用配置" ]
+            elif [ "$nbfc_options_index" -eq 4 ]
             then
                 echo
                 inquirer text_input "输入配置名称, 比如: Acer Aspire 5745G" config_name "$i18n_cancel"
@@ -42613,13 +42860,17 @@ then
         ;;
         "e") 
             [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
-            vim "$CHANNELS_FILE" && exit 0
+            editor "$CHANNELS_FILE" && exit 0
         ;;
         "ee") 
             [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
             GetDefault
             [ -z "$d_sync_file" ] && Println "$error sync_file 未设置, 请检查 !\n" && exit 1
-            vim "${d_sync_file%% *}" && exit 0
+            echo
+            edit_options=($d_sync_file)
+            inquirer list_input "选择修改的文件" edit_options edit_option
+            editor "$edit_option"
+            exit 0
         ;;
         "d")
             [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
@@ -42758,7 +43009,7 @@ then
 
                 #Println "输入镜像网站链接(比如: $FFMPEG_MIRROR_LINK)"
                 #read -p "$i18n_default_cancel" FFMPEG_LINK
-                #[ -z "$FFMPEG_LINK" ] && echo "$i18n_canceled...\n" && exit 1
+                #[ -z "$FFMPEG_LINK" ] && Println "$i18n_canceled...\n" && exit 1
                 #sed -i "s+https://johnvansickle.com/ffmpeg/\(builds\|releases\)/\(.*\).tar.xz\"+$FFMPEG_LINK/\1/\2.tar.xz\"+g" "$FFMPEG_MIRROR_ROOT/index.html"
 
                 sed -i "s+https://johnvansickle.com/ffmpeg/\(builds\|releases\)/\(.*\).tar.xz\"+\1/\2.tar.xz\"+g" "$FFMPEG_MIRROR_ROOT/index.html"
@@ -42820,48 +43071,48 @@ then
                 Println "$error jq 下载出错, 无法连接 github ?"
             fi
 
+            archs=( 32 64 arm32-v5 arm32-v6 arm32-v7a arm64-v8a s390x)
+
             if v2ray_ver=$(curl -s -m 30 "https://api.github.com/repos/v2fly/v2ray-core/releases/latest" | $JQ_FILE -r '.tag_name') 
             then
-                if [ ! -e "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-64.zip" ] || [ ! -e "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-32.zip" ] 
-                then
-                    Println "$info 下载 v2ray $v2ray_ver ..."
-                    mkdir -p "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/"
-                    if curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-64.zip" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-64.zip_tmp" \
-                    && curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-32.zip" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-32.zip_tmp" \
-                    && curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-64.zip.dgst" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-64.zip.dgst_tmp" \
-                    && curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-32.zip.dgst" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-32.zip.dgst_tmp"
+                mkdir -p "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/"
+                for arch in "${archs[@]}"
+                do
+                    if [ ! -e "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip" ] 
                     then
-                        mv "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-64.zip_tmp" "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-64.zip"
-                        mv "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-32.zip_tmp" "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-32.zip"
-                        mv "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-64.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-64.zip.dgst"
-                        mv "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-32.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-32.zip.dgst"
-                    else
-                        Println "$error v2ray $v2ray_ver 下载出错, 无法连接 github ?"
+                        Println "$info 下载 v2ray-linux-$arch $v2ray_ver ..."
+                        if curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-$arch.zip" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip_tmp" \
+                        && curl -s -L "https://github.com/v2fly/v2ray-core/releases/download/$v2ray_ver/v2ray-linux-$arch.zip.dgst" -o "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip.dgst_tmp" 
+                        then
+                            mv "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip_tmp" "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip"
+                            mv "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/v2ray/$v2ray_ver/v2ray-linux-$arch.zip.dgst"
+                        else
+                            Println "$error v2ray-linux-$arch $v2ray_ver 下载出错, 无法连接 github ?"
+                        fi
                     fi
-                fi
+                done
             else
                 Println "$error v2ray $v2ray_ver 下载出错, 无法连接 github ?"
             fi
 
             if xray_ver=$(curl -s -m 30 "https://api.github.com/repos/XTLS/Xray-core/releases/latest" | $JQ_FILE -r '.tag_name') 
             then
-                if [ ! -e "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-64.zip" ] || [ ! -e "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-32.zip" ] 
-                then
-                    Println "$info 下载 xray $xray_ver ..."
-                    mkdir -p "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/"
-                    if curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-64.zip" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-64.zip_tmp" \
-                    && curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-32.zip" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-32.zip_tmp" \
-                    && curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-64.zip.dgst" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-64.zip.dgst_tmp" \
-                    && curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-32.zip.dgst" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-32.zip.dgst_tmp"
+                mkdir -p "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/"
+                for arch in "${archs[@]}"
+                do
+                    if [ ! -e "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip" ] 
                     then
-                        mv "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-64.zip_tmp" "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-64.zip"
-                        mv "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-32.zip_tmp" "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-32.zip"
-                        mv "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-64.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-64.zip.dgst"
-                        mv "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-32.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-32.zip.dgst"
-                    else
-                        Println "$error xray $xray_ver 下载出错, 无法连接 github ?"
+                        Println "$info 下载 Xray-linux-$arch $xray_ver ..."
+                        if curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-$arch.zip" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip_tmp" \
+                        && curl -s -L "https://github.com/XTLS/Xray-core/releases/download/$xray_ver/Xray-linux-$arch.zip.dgst" -o "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip.dgst_tmp" 
+                        then
+                            mv "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip_tmp" "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip"
+                            mv "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip.dgst_tmp" "$FFMPEG_MIRROR_ROOT/xray/$xray_ver/Xray-linux-$arch.zip.dgst"
+                        else
+                            Println "$error Xray-linux-$arch $xray_ver 下载出错, 无法连接 github ?"
+                        fi
                     fi
-                fi
+                done
             else
                 Println "$error xray $xray_ver 下载出错, 无法连接 github ?"
             fi
@@ -42917,7 +43168,7 @@ then
 
             if dnscrypt_ver=$(curl -s -m 30 "https://api.github.com/repos/DNSCrypt/dnscrypt-proxy/releases/latest" | $JQ_FILE -r '.tag_name') 
             then
-                archs=( arm64 x86_64 )
+                archs=( arm arm64 i386 x86_64 )
 
                 for arch in "${archs[@]}"
                 do
@@ -43216,6 +43467,40 @@ then
         ;;
         "debug")
             sed -i "0,/sh_debug=.*/s//sh_debug=${2:-1}/" "$SH_FILE"
+            exit 0
+        ;;
+        "ed"|"editor")
+            ReleaseCheck
+            DepInstall vim
+            if [ "$release" == "rpm" ] 
+            then
+                alternatives --config editor
+            else
+                update-alternatives --config editor
+            fi
+            exit 0
+        ;;
+        "a")
+            if [[ ! -x $(command -v readlink) ]] 
+            then
+                Println "$error 系统不支持 readlink\n"
+                exit 1
+            fi
+            echo
+            inquirer text_input "输入自定义命令名称" name "$i18n_cancel"
+            ExitOnCancel name
+            if command -v "$name" > /dev/null
+            then
+                Println "$error 命令已经存在\n"
+                exit 1
+            fi
+            echo
+            alternative_options=( nginx openresty xray v2ray armbian "proxmox ve" 
+            "ibm cloud foundry" "cloudflare partner,workers" ffmpeg )
+            inquirer list_input_index "选择执行的脚本" alternative_options alternative_options_index
+            commands=( NX_FILE OR_FILE X_FILE V2_FILE ARM_FILE PVE_FILE IBM_FILE CF_FILE SH_FILE )
+            ln -s ${!commands[alternative_options_index]} /usr/bin/$name
+            Println "$info 自定义命令 $name 添加成功\n"
             exit 0
         ;;
         "c")

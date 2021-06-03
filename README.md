@@ -6,6 +6,7 @@ tv c <en|zh_CN|...> # change/update language
 
 ## 目录
 
+- [目录](#目录)
 - [一键管理 nginx 脚本](#一键管理-nginx-脚本)
 - [一键管理 openresty 脚本](#一键管理-openresty-脚本)
 - [一键管理 xray 脚本](#一键管理-xray-脚本)
@@ -35,6 +36,7 @@ nx # 打开 Nginx 管理面板
 
 - 使用官方 crossplane 解析配置
 - 支持修改最多五级指令
+- SNI/SSL/APLN 分流
 
 ---
 

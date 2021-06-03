@@ -10,7 +10,7 @@ then
   GSED="gsed"
   if [ -z "$(which $GSED)" ]
   then
-    brew install gnu-sed
+    brew install gnu-sed || exit 1
   fi
   if [ -z "$(which gettext)" ]
   then
@@ -41,11 +41,21 @@ PACKAGE_NAME=iptv.sh # iptv.sh, v2.sh, x.sh, nx.sh, or.sh, cf.sh, ibm.sh, arm.sh
 PACKAGE_POT_LANGUAGE=$1 # en, zh_CN
 PACKAGE_PO_LANGUAGE=$2 # ru, de ...
 
+XSRC=../docs/$PACKAGE_NAME
+
+PACKAGE_VERSION=$(grep 'sh_ver="' < $XSRC |awk -F "=" '{print $NF}'|$GSED 's/\"//g'|head -1)
+PACKAGE_TITLE="Locale ${PACKAGE_PO_LANGUAGE:-en} For $PACKAGE_NAME v$PACKAGE_VERSION - ONE Click Script"
+
 if [ "$1" == "b" ] && [ -e "po/$PACKAGE_NAME-en.po" ]
 then
   awk '$1 == "msgstr" { s=$0; sub(/msgstr/, "msgid", s); print s; print "msgstr \"\""; next }
     $1 == "msgid" { next }
     1' "po/$PACKAGE_NAME-en.po" > "$PACKAGE_NAME.pot"
+  $GSED -i '
+  {
+    s~Locale .*$~'"$PACKAGE_TITLE"'~
+    s~Project-Id-Version: .*$~Project-Id-Version: '"$PACKAGE_NAME"' '"$PACKAGE_VERSION"'\\n"~
+  }' "$PACKAGE_NAME.pot"
   exit 0
 fi
 
@@ -72,10 +82,6 @@ IENC=UTF-8
 # Output encoding
 OENC=UTF-8
 
-XSRC=../docs/$PACKAGE_NAME
-
-PACKAGE_VERSION=$(grep 'sh_ver="' < $XSRC |awk -F "=" '{print $NF}'|$GSED 's/\"//g'|head -1)
-PACKAGE_TITLE="Locale $PACKAGE_PO_LANGUAGE For $PACKAGE_NAME v$PACKAGE_VERSION - ONE Click Script"
 PACKAGE_COPYRIGHT="GPL Version 3 License"
 PACKAGE_FIRST_POT_AUTHOR="MTimer https://github.com/woniuzfb/iptv"
 PACKAGE_POT_CREATION_TZ="UTC"
@@ -143,6 +149,11 @@ then
   cp -f "$FPOT" "po/$FPO"
 else
   msgmerge --update -N --backup=none --no-wrap "po/$FPO" "$FPOT"
+  $GSED -i '
+  {
+    s~Locale .*$~'"$PACKAGE_TITLE"'~
+    s~Project-Id-Version: .*$~Project-Id-Version: '"$PACKAGE_NAME"' '"$PACKAGE_VERSION"'\\n"~
+  }' "po/$FPO"
 fi
 
 if [ "$PACKAGE_POT_LANGUAGE" == "zh_CN" ] 
