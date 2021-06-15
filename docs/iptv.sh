@@ -21083,6 +21083,8 @@ NginxDomainInstallCert()
         fi
     fi
 
+    AcmeCheck
+
     Println "$info 安装 $domain 证书..."
 
     NginxDomainUpdateCrt "$domain" 1
@@ -21466,7 +21468,16 @@ NginxRestart()
         Println "$error 请检查配置错误\n"
         exit 1
     fi
-    if systemctl restart $nginx_name 
+    echo
+    nginx_actions=( '重载配置' '强制重启' )
+    inquirer list_input_index "选择操作" nginx_actions nginx_actions_index
+    if [ "$nginx_actions_index" -eq 0 ] 
+    then
+        nginx_action=reload-or-restart
+    else
+        nginx_action=restart
+    fi
+    if systemctl $nginx_action $nginx_name 
     then
         Println "$info $nginx_name 重启成功\n"
     else
@@ -21871,6 +21882,7 @@ NginxConfigDomain()
         NginxConfigDirective level_2
     elif [ "$domain_server_options_index" -eq 1 ] 
     then
+        AcmeCheck
         NginxDomainServerUpdateCrt
     elif [ "$domain_server_options_index" -eq 2 ] 
     then
@@ -24187,19 +24199,80 @@ NginxConfigBlockAliyun()
     fi
 }
 
+AcmeCheck()
+{
+    [ -n "${ca_server:-}" ] && return 0
+
+    if [ ! -f "$HOME/.acme.sh/acme.sh" ] 
+    then
+        DepInstall socat
+        { curl -s -m 10 https://get.acme.sh || curl -s -m 20 "$FFMPEG_MIRROR_LINK/acme.sh"; } \
+        | sed "s+https://raw.githubusercontent.com/acmesh-official+$FFMPEG_MIRROR_LINK/acmesh-content+g" \
+        | sed "s+| sh+| sed 's~PROJECT=\"https://github.com/acmesh-official~PROJECT=\"$FFMPEG_MIRROR_LINK/acmesh-project~' | sed 's~https://api.github.com~$FFMPEG_MIRROR_LINK/acmesh-api~g' | sh+g" | bash
+    fi
+
+    Println "$tip zerossl 不支持 tls-alpn-01"
+    ca_options=( letsencrypt zerossl )
+    inquirer list_input "选择 CA" ca_options ca_server
+
+    if [ "$ca_server" == "zerossl" ] 
+    then
+        if [ -e ~/.acme.sh/ca/acme.zerossl.com/ca.conf ] 
+        then
+            . ~/.acme.sh/ca/acme.zerossl.com/ca.conf
+        fi
+
+        if [ -n "${CA_EAB_KEY_ID:-}" ] && [ -n "${CA_EAB_HMAC_KEY:-}" ]
+        then
+            Println "$tip 请确保已有账号的 EAB 认证信息未过期, 否则请重新设置"
+            inquirer list_input "是否重新设置 zerossl 账号" ny_options yn_option
+            if [ "$yn_option" == "$i18n_no" ] 
+            then
+                return 0
+            fi
+        fi
+
+        echo
+        zerossl_options=( '注册新账号' '输入已有账号的 EAB 认证信息' )
+        inquirer list_input_index "未发现 zerossl 账号" zerossl_options zerossl_options_index
+
+        if [ "$zerossl_options_index" -eq 0 ] 
+        then
+            echo
+            inquirer text_input "输入邮箱: " zerossl_email "$i18n_cancel"
+            ExitOnCancel zerossl_email
+
+            if ! ~/.acme.sh/acme.sh --register-account -m "$zerossl_email" --server zerossl 
+            then
+                Println "$error 注册账号失败, 请稍后再试或前往官网注册 https://app.zerossl.com/signup?fpr=iptv-sh \n"
+                exit 1
+            fi
+        else
+            Println "$tip 可以在 https://app.zerossl.com/developer?fpr=iptv-sh 页面获取"
+            inquirer text_input "输入 EAB KID: " zerossl_eab_kid "$i18n_cancel"
+            ExitOnCancel zerossl_eab_kid
+            echo
+            inquirer text_input "输入 EAB HMAC Key: " zerossl_eab_hmac_key "$i18n_cancel"
+            ExitOnCancel zerossl_eab_hmac_key
+
+            if ! ~/.acme.sh/acme.sh --register-account --server zerossl --eab-kid "$zerossl_eab_kid" --eab-hmac-key "$zerossl_eab_hmac_key" 
+            then
+                Println "$error 注册账号失败, 请确保输入正确\n"
+                exit 1
+            fi
+        fi
+
+        Println "$info 账号注册成功\n"
+    fi
+}
+
 NginxDomainUpdateCrt()
 {
     local domain=$1 quiet=${2:-0}
 
     [ "$quiet" -eq 0 ] && Println "$info 更新 $domain 证书..."
 
-    if [ ! -f "$HOME/.acme.sh/acme.sh" ] 
-    then
-        DepInstall socat
-        bash <(curl -s -m 20 https://get.acme.sh) > /dev/null
-    fi
-
-    if [ -f /etc/systemd/system/mmproxy-acme.service ] && [[ $(systemctl is-active mmproxy-acme) == "active" ]]
+    if [ "$ca_server" == "letsencrypt" ] && [ -f /etc/systemd/system/mmproxy-acme.service ] && [[ $(systemctl is-active mmproxy-acme) == "active" ]] 
     then
         if [ -z "${tls_port:-}" ] 
         then
@@ -24214,7 +24287,7 @@ NginxDomainUpdateCrt()
             fi
         fi
 
-        ~/.acme.sh/acme.sh --force --issue --alpn --tlsport "$tls_port" -d "$domain" --standalone -k ec-256 > /dev/null
+        ~/.acme.sh/acme.sh --force --issue --alpn --tlsport "$tls_port" -d "$domain" --standalone -k ec-256 --server "$ca_server" > /dev/null
         ~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "$nginx_prefix/conf/sites_crt/$domain.crt" --keypath "$nginx_prefix/conf/sites_crt/$domain.key" --ecc > /dev/null
     else
         stopped=0
@@ -24227,10 +24300,22 @@ NginxDomainUpdateCrt()
 
         sleep 1
 
-        ~/.acme.sh/acme.sh --force --issue -d "$domain" --standalone -k ec-256 > /dev/null
+        ~/.acme.sh/acme.sh --force --issue -d "$domain" --standalone -k ec-256 --server "$ca_server" > /dev/null
         ~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "$nginx_prefix/conf/sites_crt/$domain.crt" --keypath "$nginx_prefix/conf/sites_crt/$domain.key" --ecc > /dev/null
 
         [ "$stopped" -eq 1 ] && systemctl start $nginx_name
+    fi
+
+    if [ -e "/usr/local/share/v2ray/$domain.crt" ] 
+    then
+        cp -f "$nginx_prefix/conf/sites_crt/$domain.crt" "/usr/local/share/v2ray/$domain.crt"
+        cp -f "$nginx_prefix/conf/sites_crt/$domain.key" "/usr/local/share/v2ray/$domain.key"
+    fi
+
+    if [ -e "/usr/local/share/xray/$domain.crt" ] 
+    then
+        cp -f "$nginx_prefix/conf/sites_crt/$domain.crt" "/usr/local/share/xray/$domain.crt"
+        cp -f "$nginx_prefix/conf/sites_crt/$domain.key" "/usr/local/share/xray/$domain.key"
     fi
 
     [ "$quiet" -eq 0 ] && Println "$info $domain 证书更新成功\n"
@@ -25775,7 +25860,7 @@ V2raySetCertificates()
         fi
         if [ "$crt_option" == "添加域名" ] 
         then
-            Println "$tip 如果证书不存在需请求新 CA 证书, 请确保没有程序占用 80 端口"
+            Println "$tip 如果证书不存在需请求新 CA 证书, 请确保没有程序占用 80 端口或已经设置 mmproxy acme"
             inquirer text_input "输入域名: " domain "$i18n_cancel"
             ExitOnCancel domain
             if [ ! -s "/usr/local/share/$v2ray_name/$domain.crt" ] 
@@ -25789,11 +25874,13 @@ V2raySetCertificates()
                     cp -f "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" "/usr/local/share/$v2ray_name/$domain.crt"
                     cp -f "/usr/local/openresty/nginx/conf/sites_crt/$domain.key" "/usr/local/share/$v2ray_name/$domain.key"
                 else
-                    Println "$info 安装证书..."
+                    AcmeCheck
 
-                    V2rayDomainUpdateCrt "$domain" 1
+                    Println "$info 安装 $domain 证书..."
 
-                    Println "$info 证书安装成功"
+                    V2rayDomainUpdateCrt "$domain"
+
+                    Println "$info $domain 证书安装成功"
                 fi
             fi
             chown $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/*
@@ -30374,17 +30461,9 @@ V2rayListInboundDomains()
 
 V2rayDomainUpdateCrt()
 {
-    local domain=$1 quiet=${2:-0}
+    local domain=$1
 
-    [ "$quiet" -eq 0 ] && Println "$info 更新 $domain 证书..."
-
-    if [ ! -f "$HOME/.acme.sh/acme.sh" ] 
-    then
-        DepInstall socat
-        bash <(curl -s -m 20 https://get.acme.sh) > /dev/null
-    fi
-
-    if [ -f /etc/systemd/system/mmproxy-acme.service ] && [[ $(systemctl is-active mmproxy-acme) == "active" ]]
+    if [ "$ca_server" == "letsencrypt" ] && [ -f /etc/systemd/system/mmproxy-acme.service ] && [[ $(systemctl is-active mmproxy-acme) == "active" ]]
     then
         if [ -z "${tls_port:-}" ] 
         then
@@ -30399,7 +30478,7 @@ V2rayDomainUpdateCrt()
             fi
         fi
 
-        ~/.acme.sh/acme.sh --force --issue --alpn --tlsport "$tls_port" -d "$domain" --standalone -k ec-256 > /dev/null
+        ~/.acme.sh/acme.sh --force --issue --alpn --tlsport "$tls_port" -d "$domain" --standalone -k ec-256 --server "$ca_server" > /dev/null
         ~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "/usr/local/share/$v2ray_name/$domain.crt" --keypath "/usr/local/share/$v2ray_name/$domain.key" --ecc > /dev/null
     else
         stopped=0
@@ -30415,13 +30494,23 @@ V2rayDomainUpdateCrt()
             sleep 1
         fi
 
-        ~/.acme.sh/acme.sh --force --issue -d "$domain" --standalone -k ec-256 > /dev/null
+        ~/.acme.sh/acme.sh --force --issue -d "$domain" --standalone -k ec-256 --server "$ca_server" > /dev/null
         ~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "/usr/local/share/$v2ray_name/$domain.crt" --keypath "/usr/local/share/$v2ray_name/$domain.key" --ecc > /dev/null
 
         [ "$stopped" -eq 1 ] && systemctl start $nginx_name
     fi
 
-    [ "$quiet" -eq 0 ] && Println "$info $domain 证书更新成功\n"
+    if [ -e "/usr/local/nginx/conf/sites_crt/$domain.crt" ] 
+    then
+        cp -f "/usr/local/share/$v2ray_name/$domain.crt" "/usr/local/nginx/conf/sites_crt/$domain.crt"
+        cp -f "/usr/local/share/$v2ray_name/$domain.key" "/usr/local/nginx/conf/sites_crt/$domain.key"
+    fi
+
+    if [ -e "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" ] 
+    then
+        cp -f "/usr/local/share/$v2ray_name/$domain.crt" "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt"
+        cp -f "/usr/local/share/$v2ray_name/$domain.key" "/usr/local/openresty/nginx/conf/sites_crt/$domain.key"
+    fi
 
     return 0
 }
@@ -30593,6 +30682,7 @@ V2rayNginxSelectDomainServerProxy()
                 exit 1
             ;;
             $v2ray_nginx_domain_server_update_crt_number)
+                AcmeCheck
                 V2rayNginxDomainServerUpdateCrt
                 exit 0
             ;;
@@ -30994,9 +31084,11 @@ V2rayConfigDomain()
             echo
             inquirer text_input "请输入证书域名: " certificate_domain "$certificate_name"
 
+            AcmeCheck
+
             Println "$info 更新 $certificate_domain 证书..."
 
-            V2rayDomainUpdateCrt "$certificate_domain" 1
+            V2rayDomainUpdateCrt "$certificate_domain"
 
             jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"',"certificateFile"]'
             JQ update "$V2_CONFIG" "/usr/local/share/$v2ray_name/$certificate_domain.crt"
@@ -43322,6 +43414,14 @@ then
                 mv "$FFMPEG_MIRROR_ROOT/v2ray_install-release.sh_tmp" "$FFMPEG_MIRROR_ROOT/v2ray_install-release.sh"
             else
                 Println "$error v2ray install-release.sh 下载出错, 无法连接 github ?"
+            fi
+
+            Println "$info 下载 acme.sh ..."
+            if curl -s -L https://get.acme.sh -o "$FFMPEG_MIRROR_ROOT/acme.sh_tmp"
+            then
+                mv "$FFMPEG_MIRROR_ROOT/acme.sh_tmp" "$FFMPEG_MIRROR_ROOT/acme.sh"
+            else
+                Println "$error acme.sh 下载出错, 无法连接 github ?"
             fi
 
             locale_options=( en )
