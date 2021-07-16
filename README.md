@@ -28,7 +28,7 @@ tv c <en|zh_CN|...> # change/update language
 ## 一键管理 nginx 脚本
 
 ``` bash
-wget -q https://git.io/nx.sh && bash nx.sh
+wget -q https://woniuzfb.github.io/iptv/nx.sh && bash nx.sh
 
 nx # 打开 Nginx 管理面板
 
@@ -43,7 +43,7 @@ nx # 打开 Nginx 管理面板
 ## 一键管理 openresty 脚本
 
 ``` bash
-wget -q https://git.io/or.sh && bash or.sh
+wget -q https://woniuzfb.github.io/iptv/or.sh && bash or.sh
 
 or # 打开 OpenResty 管理面板
 
@@ -54,7 +54,7 @@ or # 打开 OpenResty 管理面板
 ## 一键管理 xray 脚本
 
 ``` bash
-wget -q https://git.io/xray.sh && bash xray.sh
+wget -q https://woniuzfb.github.io/iptv/x.sh && bash x.sh
 
 x # 打开 xray 管理面板
 
@@ -65,8 +65,7 @@ x # 打开 xray 管理面板
 ## 一键管理 v2ray 脚本
 
 ``` bash
-wget -q https://git.io/V2.sh && bash V2.sh
-# git.io/V2.sh（大写的 V）
+wget -q https://woniuzfb.github.io/iptv/v2.sh && bash v2.sh
 
 v2 # 打开 v2ray 管理面板
 
@@ -77,7 +76,7 @@ v2 # 打开 v2ray 管理面板
 ## 一键管理 armbian 脚本
 
 ``` bash
-wget -q https://git.io/arm.sh && bash arm.sh
+wget -q https://woniuzfb.github.io/iptv/arm.sh && bash arm.sh
 
 arm # 打开 Armbian 管理面板
 
@@ -96,7 +95,7 @@ arm # 打开 Armbian 管理面板
 ## 一键管理 proxmox ve 脚本
 
 ``` bash
-wget -q https://git.io/pve.sh && bash pve.sh
+wget -q https://woniuzfb.github.io/iptv/pve.sh && bash pve.sh
 
 pve # 打开 Proxmox VE 管理面板
 
@@ -113,7 +112,7 @@ pve # 打开 Proxmox VE 管理面板
 ## 一键管理 ibm cloud foundry 脚本
 
 ``` bash
-wget -q https://git.io/ibm.sh && bash ibm.sh
+wget -q https://woniuzfb.github.io/iptv/ibm.sh && bash ibm.sh
 
 ibm # 打开 ibm CF 管理面板
 
@@ -128,7 +127,7 @@ ibm x  # 打开 ibm xray  APP 管理面板
 ## 一键管理 cloudflare partner,workers 脚本
 
 ``` bash
-wget -q https://git.io/cf.sh && bash cf.sh
+wget -q https://woniuzfb.github.io/iptv/cf.sh && bash cf.sh
 
 cf # 打开 cloudflare partner,workers 管理面板
 
@@ -156,7 +155,7 @@ Mac/Linux 一键获取最优 IP 可以用脚本 [cloudflare-fping](https://githu
 ### [演示](https://mtime.info/)
 
 ``` bash
-wget -q https://git.io/iptv.sh && bash iptv.sh
+wget -q https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 
 tv # 打开 iptv 管理面板
 

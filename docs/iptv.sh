@@ -399,9 +399,9 @@ LocaleFix()
         yum -y install glibc-common glibc-locale-source glibc-all-langpacks glibc-langpack-en glibc-langpacks-zh langpacks-zh_CN >/dev/null 2>&1 || true
     else
         [ "$release" == "deb" ] && DebFixSources
-        AptUpdate
         if [[ ! -x $(command -v locale-gen) ]] 
         then
+            AptUpdate
             if ! apt-get -y install locales >/dev/null 2>&1
             then
                 Println "${red}[ERROR]${normal} locales installation failed\n" && exit 1
@@ -24533,7 +24533,7 @@ NginxUpdateCFIBMip()
     Println "$info 更新 ip ..."
 
     printf '%s' "#!/bin/bash
-echo '#Cloudflare' > $nginx_prefix/conf/cloudflare_ip.conf;
+echo -e 'set_real_ip_from 127.0.0.0/24;\n#Cloudflare' > $nginx_prefix/conf/cloudflare_ip.conf;
 ibm_ips=(
   50.22.0.0/16
   50.23.0.0/16
@@ -39183,6 +39183,7 @@ set expandtab
 autocmd BufRead,BufNewFile *.conf setfiletype conf
 filetype indent off
 " > ~/.vimrc
+        DepInstall git
         Println "$info vimrc 设置完成, 请在 vim 下执行 PlugInstall\n"
     else
         Println "$error 无法连接服务器, 请稍后再试\n"
@@ -40211,6 +40212,7 @@ WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
             inquirer text_input "输入 ipv4 分流目标 地址+端口${acme_tip:-}${ssh_tip:-}: " mmproxy_target_v4 "$i18n_cancel"
             ExitOnCancel mmproxy_target_v4
 
+            echo
             inquirer text_input "输入 ipv6 分流目标 地址+端口${acme_tip:-}${ssh_tip:-}: " mmproxy_target_v6 "[::1]:${mmproxy_target_v4#*:}"
 
             if [ -e "/etc/systemd/system/mmproxy-$mmproxy_name.service" ] 
@@ -41460,29 +41462,35 @@ config interface 'lan'
                 exit 1
             fi
 
+            if ! luci_app_xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/luci-app-xray.json" | $JQ_FILE -r '.tag_name')
+            then
+                Println "$error 无法连接服务器, 请稍后再试\n"
+                exit 1
+            else
+                luci_app_xray_ver=${luci_app_xray_ver#*v}
+            fi
+
             docker exec -it openwrt /bin/ash -c "
             if ! opkg list-installed | grep -q v2ray
             then
-                sed -i 's_downloads.openwrt.org_${FFMPEG_MIRROR_LINK#*\/\/}/openwrt_' /etc/opkg/distfeeds.conf
-                if ! grep -q kuoruan < /etc/opkg/customfeeds.conf
-                then
-                    wget -O kuoruan-public.key $FFMPEG_MIRROR_LINK/openwrt-v2ray/packages/public.key
-                    opkg-key add kuoruan-public.key
-                    echo \"src/gz kuoruan_packages $FFMPEG_MIRROR_LINK/openwrt-v2ray/packages/releases/\$(. /etc/openwrt_release ; echo \$DISTRIB_ARCH)\" >> /etc/opkg/customfeeds.conf
-                    echo \"src/gz kuoruan_universal $FFMPEG_MIRROR_LINK/openwrt-v2ray/packages/releases/all\" >> /etc/opkg/customfeeds.conf
-                fi
+                sed -i 's_http://downloads.openwrt.org_$FFMPEG_MIRROR_LINK/openwrt_' /etc/opkg/distfeeds.conf
+                sed -i 's_https://downloads.openwrt.org_$FFMPEG_MIRROR_LINK/openwrt_' /etc/opkg/distfeeds.conf
                 opkg update
-                opkg install zoneinfo-asia kmod-tcp-bbr libustream-openssl
+                opkg download dnsmasq-full
+                opkg remove dnsmasq
+                opkg install dnsmasq-full --cache .
+                opkg install zoneinfo-asia kmod-tcp-bbr libustream-openssl jshn ip-full ipset iptables iptables-mod-tproxy resolveip
                 opkg install luci luci-base luci-compat
                 if ! test -e /etc/sysctl.d/12-tcp-bbr.conf || ! grep -q default_qdisc < /etc/sysctl.d/12-tcp-bbr.conf
                 then
                     echo \"net.core.default_qdisc=fq\" >> /etc/sysctl.d/12-tcp-bbr.conf
                     sysctl -p
                 fi
-                opkg remove dnsmasq
                 opkg install v2ray-core
-                opkg install luci-app-v2ray
-                opkg install luci-i18n-v2ray-zh-cn
+                wget -O luci-app-v2ray_${luci_app_xray_ver}_all.ipk $FFMPEG_MIRROR_LINK/luci-app-v2ray_${luci_app_xray_ver}_all.ipk
+                opkg install luci-app-v2ray_${luci_app_xray_ver}_all.ipk --force-reinstall || true
+                wget -O luci-i18n-v2ray-zh-cn_${luci_app_xray_ver}_all.ipk $FFMPEG_MIRROR_LINK/luci-i18n-v2ray-zh-cn_${luci_app_xray_ver}_all.ipk
+                opkg install luci-i18n-v2ray-zh-cn_${luci_app_xray_ver}_all.ipk --force-reinstall || true
             fi
             "
 
@@ -41515,7 +41523,8 @@ config interface 'lan'
             docker exec -it openwrt /bin/ash -c "
             if ! opkg list-installed | grep -q luci-i18n-base-$lang
             then
-                sed -i 's_downloads.openwrt.org_${FFMPEG_MIRROR_LINK#*\/\/}/openwrt_' /etc/opkg/distfeeds.conf
+                sed -i 's_http://downloads.openwrt.org_$FFMPEG_MIRROR_LINK/openwrt_' /etc/opkg/distfeeds.conf
+                sed -i 's_https://downloads.openwrt.org_$FFMPEG_MIRROR_LINK/openwrt_' /etc/opkg/distfeeds.conf
                 opkg update
                 opkg install luci-i18n-base-$lang
             fi
@@ -41845,22 +41854,22 @@ then
                 then
                     if [ -f /etc/apt/sources.list.d/pve-no-subscription.list ] 
                     then
-                        sed -i "s_#deb http://download.proxmox.com/debian/pve $VERSION_CODENAME pve-no-subscription_deb http://download.proxmox.com/debian/pve $VERSION_CODENAME pve-no-subscription_" /etc/apt/sources.list.d/pve-no-subscription.list
+                        sed -i "s_#deb http://download.proxmox.com/debian/pve $VERSION_CODENAME pve-no-subscription_deb $FFMPEG_MIRROR_LINK/proxmox/debian/pve $VERSION_CODENAME pve-no-subscription_" /etc/apt/sources.list.d/pve-no-subscription.list
                     elif grep -q "pve-no-subscription" < /etc/apt/sources.list 
                     then
-                        sed -i "s_#deb http://download.proxmox.com/debian/pve $VERSION_CODENAME pve-no-subscription_deb http://download.proxmox.com/debian/pve $VERSION_CODENAME pve-no-subscription_" /etc/apt/sources.list
+                        sed -i "s_#deb http://download.proxmox.com/debian/pve $VERSION_CODENAME pve-no-subscription_deb $FFMPEG_MIRROR_LINK/proxmox/debian/pve $VERSION_CODENAME pve-no-subscription_" /etc/apt/sources.list
                     else
-                        echo "deb http://download.proxmox.com/debian/pve $VERSION_CODENAME pve-no-subscription" > /etc/apt/sources.list.d/pve-no-subscription.list
+                        echo "deb $FFMPEG_MIRROR_LINK/proxmox/debian/pve $VERSION_CODENAME pve-no-subscription" > /etc/apt/sources.list.d/pve-no-subscription.list
                     fi
                 else
                     if [ -f /etc/apt/sources.list.d/pve-enterprise.list ] 
                     then
-                        sed -i "s_#deb https://enterprise.proxmox.com/debian/pve $VERSION_CODENAME pve-enterprise_deb https://enterprise.proxmox.com/debian/pve $VERSION_CODENAME pve-enterprise_" /etc/apt/sources.list.d/pve-enterprise.list
+                        sed -i "s_#deb https://enterprise.proxmox.com/debian/pve $VERSION_CODENAME pve-enterprise_deb $FFMPEG_MIRROR_LINK/proxmox-enterprise/debian/pve $VERSION_CODENAME pve-enterprise_" /etc/apt/sources.list.d/pve-enterprise.list
                     elif grep -q "pve-enterprise" < /etc/apt/sources.list 
                     then
-                        sed -i "s_#deb https://enterprise.proxmox.com/debian/pve $VERSION_CODENAME pve-enterprise_deb https://enterprise.proxmox.com/debian/pve $VERSION_CODENAME pve-enterprise_" /etc/apt/sources.list
+                        sed -i "s_#deb https://enterprise.proxmox.com/debian/pve $VERSION_CODENAME pve-enterprise_deb $FFMPEG_MIRROR_LINK/proxmox-enterprise/debian/pve $VERSION_CODENAME pve-enterprise_" /etc/apt/sources.list
                     else
-                        echo "deb https://enterprise.proxmox.com/debian/pve $VERSION_CODENAME pve-enterprise" > /etc/apt/sources.list.d/pve-enterprise.list
+                        echo "deb $FFMPEG_MIRROR_LINK/proxmox-enterprise/debian/pve $VERSION_CODENAME pve-enterprise" > /etc/apt/sources.list.d/pve-enterprise.list
                     fi
                 fi
 
@@ -41883,7 +41892,7 @@ then
                 echo
                 inquirer text_input "输入多少秒后关闭显示器" console_blank_secs 120
 
-                sed -i 's_GRUB_CMDLINE_LINUX=""_GRUB_CMDLINE_LINUX="consoleblank='"$console_blank_secs"'"_' /etc/default/grub
+                sed -i '0,/GRUB_CMDLINE_LINUX=""/s//GRUB_CMDLINE_LINUX="consoleblank='"$console_blank_secs"'"/' /etc/default/grub
             else
                 sed -i '0,/GRUB_CMDLINE_LINUX=.*/s//GRUB_CMDLINE_LINUX=""/' /etc/default/grub
             fi
@@ -41914,12 +41923,10 @@ then
                 echo
                 AskIfContinue n "`gettext \"需要安装 mono, 耗时会很长, 是否继续\"`"
 
-                . /etc/os-release
-
                 apt-get update
                 apt-get -y install apt-transport-https dirmngr gnupg ca-certificates
                 apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF
-                echo "deb https://download.mono-project.com/repo/debian stable-$VERSION_CODENAME main" | tee /etc/apt/sources.list.d/mono-official-stable.list
+                echo "deb https://download.mono-project.com/repo/debian stable main" | tee /etc/apt/sources.list.d/mono-official-stable.list
                 apt-get update
                 apt-get -y install mono-complete git
             fi
@@ -41928,20 +41935,21 @@ then
             then
                 Println "$info 安装 nbfc..."
 
-                if [[ ! -x $(command -v git) ]] 
-                then
-                    Println "$info 安装 git..."
-                    apt-get update
-                    apt-get -y install git
-                fi
+                DepInstall git
+                DepInstall curl
+                DepInstall unzip
 
-                git clone https://github.com/hirschmann/nbfc.git /tmp/nbfc
-                cd /tmp/nbfc
+                cd /tmp/
+                curl -s -L "$FFMPEG_MIRROR_LINK/nbfc.zip" -o nbfc.zip
+                unzip nbfc.zip >/dev/null 2>&1
+
+                cd nbfc-master
+                sed -i 's~NUGET_URL=\"https://dist.nuget.org~NUGET_URL=\"$FFMPEG_MIRROR_LINK/nuget~' build.sh
                 ./build.sh
 
                 mkdir /opt/nbfc
-                cp -r /tmp/nbfc/Linux/bin/Release/* /opt/nbfc/
-                cp /tmp/nbfc/Linux/{nbfc.service,nbfc-sleep.service} /etc/systemd/system/
+                cp -r /tmp/nbfc-master/Linux/bin/Release/* /opt/nbfc/
+                cp /tmp/nbfc-master/Linux/{nbfc.service,nbfc-sleep.service} /etc/systemd/system/
                 systemctl enable nbfc --now || true
             fi
 
@@ -41969,7 +41977,7 @@ then
                 if [ -f /opt/nbfc/nbfcservice.sh ] 
                 then
                     sed -i '/mono \/opt\/nbfc\/ec-probe.exe write /d' /opt/nbfc/nbfcservice.sh
-                    sed -i '/start/a \\t    mono \/opt\/nbfc\/ec-probe.exe write '"$register_address"' '"$register_value"'' /opt/nbfc/nbfcservice.sh
+                    sed -i '/start"/a \\t    mono \/opt\/nbfc\/ec-probe.exe write '"$register_address"' '"$register_value"'' /opt/nbfc/nbfcservice.sh
                 fi
 
                 Println "$tip 不一定写入成功, 请自行检查\n"
@@ -43397,14 +43405,25 @@ then
                 fi
             fi
 
-            Println "$info 下载 pdf2htmlEX ..."
             if [ ! -e "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip" ] 
             then
+                Println "$info 下载 pdf2htmlEX ..."
                 if curl -s -L "https://github.com/pdf2htmlEX/pdf2htmlEX/archive/v0.18.7-poppler-0.81.0.zip" -o "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip_tmp"
                 then
                     mv "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip_tmp" "$FFMPEG_MIRROR_ROOT/pdf2htmlEX-0.18.7-poppler-0.81.0.zip"
                 else
                     Println "$error pdf2htmlEX 下载出错, 无法连接 github ?"
+                fi
+            fi
+
+            if [ ! -e "$FFMPEG_MIRROR_ROOT/nbfc.zip" ] 
+            then
+                Println "$info 下载 nbfc ..."
+                if curl -s -L "https://github.com/hirschmann/nbfc/archive/master.zip" -o "$FFMPEG_MIRROR_ROOT/nbfc.zip_tmp"
+                then
+                    mv "$FFMPEG_MIRROR_ROOT/nbfc.zip_tmp" "$FFMPEG_MIRROR_ROOT/nbfc.zip"
+                else
+                    Println "$error nbfc 下载出错, 无法连接 github ?"
                 fi
             fi
 
