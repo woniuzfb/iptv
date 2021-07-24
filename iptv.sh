@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-sh_ver="1.80.9"
+sh_ver="1.80.10"
 sh_debug=0
 export LANGUAGE=
 export LC_ALL=
@@ -7723,7 +7723,7 @@ SetEncrypt()
             then
                 encrypt_session_yn="yes"
 
-                if [ ! -d "/usr/local/nginx" ] && [ ! -d "/usr/local/openresty" ]
+                if [ ! -d /usr/local/nginx ] && [ ! -d /usr/local/openresty ]
                 then
                     echo
                     nginx_openresty_options=( 'nginx' 'openresty' '不安装' )
@@ -7749,11 +7749,11 @@ SetEncrypt()
                     fi
                 fi
 
-                if [ -d "/usr/local/nginx" ] || [ -d "/usr/local/openresty" ] 
+                if [ -d /usr/local/nginx ] || [ -d /usr/local/openresty ] 
                 then
                     if [ -z "${nginx_name:-}" ] 
                     then
-                        if [ -d "/usr/local/nginx" ] && [ -d "/usr/local/openresty" ]
+                        if [ -d /usr/local/nginx ] && [ -d /usr/local/openresty ]
                         then
                             echo
                             if [ -s "/usr/local/openresty/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/openresty/nginx/logs/nginx.pid")" 2> /dev/null
@@ -7773,7 +7773,7 @@ SetEncrypt()
                                 nginx_name="openresty"
                                 nginx_ctl="or"
                             fi
-                        elif [ -d "/usr/local/nginx" ] 
+                        elif [ -d /usr/local/nginx ] 
                         then
                             nginx_prefix="/usr/local/nginx"
                             nginx_name="nginx"
@@ -16269,7 +16269,7 @@ ImgcatInstall()
 
     cd ~
 
-    if [ ! -d ./imgcat-master ] 
+    if [ ! -d imgcat-master ] 
     then
         wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/imgcat.zip" -qO imgcat.zip
         unzip imgcat.zip >/dev/null 2>&1
@@ -21161,19 +21161,19 @@ OpenrestyInstall()
     echo -n "...40%..."
 
     cd ~
-    if [ ! -d "./pcre-8.44" ] 
+    if [ ! -d pcre-8.44 ] 
     then
         curl -s -L "https://ftp.pcre.org/pub/pcre/pcre-8.44.tar.gz" -o "pcre-8.44.tar.gz"
         tar xzf "pcre-8.44.tar.gz"
     fi
 
-    if [ ! -d "./zlib-1.2.11" ] 
+    if [ ! -d zlib-1.2.11 ] 
     then
         curl -s -L "https://www.zlib.net/zlib-1.2.11.tar.gz" -o "zlib-1.2.11.tar.gz"
         tar xzf "zlib-1.2.11.tar.gz"
     fi
 
-    if [ ! -d "./openssl-1.1.1f-patched" ] || [ ! -s "./openssl-1.1.1f-patched/openssl-1.1.1f-sess_set_get_cb_yield.patch" ]
+    if [ ! -d openssl-1.1.1f-patched ] || [ ! -s openssl-1.1.1f-patched/openssl-1.1.1f-sess_set_get_cb_yield.patch ]
     then
         rm -rf openssl-1.1.1f
         rm -rf openssl-1.1.1f-patched
@@ -21296,13 +21296,13 @@ NginxInstall()
     echo -n "...40%..."
 
     cd ~
-    if [ ! -d "./pcre-8.44" ] 
+    if [ ! -d pcre-8.44 ] 
     then
         curl -s -L "https://ftp.pcre.org/pub/pcre/pcre-8.44.tar.gz" -o "pcre-8.44.tar.gz"
         tar xzf "pcre-8.44.tar.gz"
     fi
 
-    if [ ! -d "./zlib-1.2.11" ] 
+    if [ ! -d zlib-1.2.11 ] 
     then
         curl -s -L "https://www.zlib.net/zlib-1.2.11.tar.gz" -o "zlib-1.2.11.tar.gz"
         tar xzf "zlib-1.2.11.tar.gz"
@@ -40503,7 +40503,7 @@ then
         V2_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/xray_install-release.sh"
         V2CTL_FILE="/usr/local/bin/xray"
         V2_CONFIG="/usr/local/etc/xray/config.json"
-    elif [ -d "/etc/v2ray/" ] 
+    elif [ -d /etc/v2ray/ ] 
     then
         systemctl disable v2ray --now > /dev/null 2> /dev/null || true
         rm -rf /usr/bin/v2ray/
@@ -40879,22 +40879,23 @@ then
 ————————————
   ${green}3.${normal} 安装 docker
   ${green}4.${normal} 安装/升级 dnscrypt
-  ${green}5.${normal} 安装/升降级 openwrt
-  ${green}6.${normal} 安装 openwrt-v2ray
+  ${green}5.${normal} 安装 AdGuardHome
+  ${green}6.${normal} 安装/升降级 openwrt
+  ${green}7.${normal} 安装 openwrt-v2ray
 ————————————
-  ${green}7.${normal} 切换 openwrt 语言
-  ${green}8.${normal} 切换 v2ray/xray core
-  ${green}9.${normal} 切换 配置文件
+  ${green}8.${normal} 切换 openwrt 语言
+  ${green}9.${normal} 切换 v2ray/xray core
+ ${green}10.${normal} 切换 配置文件
 ————————————
- ${green}10.${normal} 设置 docker 镜像加速
- ${green}11.${normal} 设置 vimrc
- ${green}12.${normal} 开关 edns0
- ${green}13.${normal} 开关 ipv6 查询
- ${green}14.${normal} NAT 类型测试
- ${green}15.${normal} 更新脚本
+ ${green}11.${normal} 设置 docker 镜像加速
+ ${green}12.${normal} 设置 vimrc
+ ${green}13.${normal} 开关 edns0
+ ${green}14.${normal} 开关 ipv6 查询
+ ${green}15.${normal} NAT 类型测试
+ ${green}16.${normal} 更新脚本
 
 "
-    read -p "`gettext \"输入序号\"` [1-15]: " armbian_num
+    read -p "`gettext \"输入序号\"` [1-16]: " armbian_num
 
     case $armbian_num in
         1) 
@@ -41126,6 +41127,27 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
             fi
         ;;
         5)
+            DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
+            dnscrypt_version_old=${DNSCRYPT_ROOT##*-}
+
+            if [[ $dnscrypt_version_old == "*" ]] 
+            then
+                Println "$error 请先安装 dnscrypt proxy\n"
+                exit 1
+            fi
+
+            if [ -d /opt/AdGuardHome ] 
+            then
+                Println "$error AdGuard Home 已经存在\n"
+                exit 1
+            fi
+
+            if curl -s -S -L $FFMPEG_MIRROR_LINK/AdGuardHome/master/scripts/install.sh | sh -s -- -v 
+            then
+                Println "$info AdGuard Home 安装成功\n\n设置教程: https://github.com/woniuzfb/iptv/wiki/AdGuardHome\n"
+            fi
+        ;;
+        6)
             if [[ ! -x $(command -v docker) ]] 
             then
                 Println "$error 请先安装 docker\n"
@@ -41455,7 +41477,7 @@ config interface 'lan'
             nmcli con down hMACvLAN > /dev/null 2>&1 || true
             nmcli con up hMACvLAN > /dev/null
         ;;
-        6)
+        7)
             if ! docker inspect openwrt > /dev/null 2>&1
             then
                 Println "$error 请先安装或运行 openwrt\n"
@@ -41473,8 +41495,7 @@ config interface 'lan'
             docker exec -it openwrt /bin/ash -c "
             if ! opkg list-installed | grep -q v2ray
             then
-                sed -i 's_http://downloads.openwrt.org_$FFMPEG_MIRROR_LINK/openwrt_' /etc/opkg/distfeeds.conf
-                sed -i 's_https://downloads.openwrt.org_$FFMPEG_MIRROR_LINK/openwrt_' /etc/opkg/distfeeds.conf
+                sed -i 's_http[s]*://downloads.openwrt.org_$FFMPEG_MIRROR_LINK/openwrt_' /etc/opkg/distfeeds.conf
                 opkg update
                 opkg download dnsmasq-full
                 opkg remove dnsmasq
@@ -41499,7 +41520,7 @@ config interface 'lan'
 
             Println "$info openwrt-v2ray 安装成功\n"
         ;;
-        7)
+        8)
             if ! docker inspect openwrt > /dev/null 2>&1
             then
                 Println "$error 请先安装或运行 openwrt\n"
@@ -41533,7 +41554,7 @@ config interface 'lan'
 
             Println "$info 界面语言切换成功\n"
         ;;
-        8)
+        9)
             if ! docker inspect openwrt > /dev/null 2>&1
             then
                 Println "$error 请先安装或运行 openwrt\n"
@@ -41582,6 +41603,17 @@ config interface 'lan'
                 sed -i '/\/usr\/bin\/xray/a \\\toption asset_location \/usr\/share\/xray' /etc/config/v2ray
                 /etc/init.d/v2ray start"
             else
+                echo
+                inquirer list_input "是否更新 openwrt-v2ray" ny_options ny_option
+
+                if [ "$ny_option" == "$i18n_yes" ] 
+                then
+                    Println "$info 更新 openwrt-v2ray, 请稍等 ...\n"
+                    docker exec -it openwrt /bin/ash -c "
+                    opkg update
+                    opkg install v2ray-core"
+                fi
+
                 docker exec -it openwrt /bin/ash -c "
                 /etc/init.d/v2ray stop
                 sed -i 's_/usr/bin/xray_/usr/bin/v2ray_' /etc/config/v2ray
@@ -41590,7 +41622,7 @@ config interface 'lan'
             fi
             Println "$info 切换成功\n"
         ;;
-        9)
+        10)
             if [[ ! -x $(command -v docker) ]] || [[ -z $(docker container ls -a -f name=openwrt$ -q) ]]
             then
                 Println "$error 请先安装并运行 openwrt ...\n"
@@ -41703,7 +41735,7 @@ config interface 'lan'
                 Println "$info 配置切换成功\n"
             fi
         ;;
-        10)
+        11)
             if [[ ! -x $(command -v docker) ]] 
             then
                 Println "$error 请先安装 docker\n"
@@ -41729,10 +41761,10 @@ config interface 'lan'
 
             Println "$info docker 镜像加速设置成功\n"
         ;;
-        11)
+        12)
             VimConfig
         ;;
-        12)
+        13)
             DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
             dnscrypt_version=${DNSCRYPT_ROOT##*-}
             if [[ $dnscrypt_version == "*" ]] 
@@ -41760,7 +41792,7 @@ config interface 'lan'
                 Println "$info edns0 已开启\n"
             fi
         ;;
-        13)
+        14)
             DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
             dnscrypt_version=${DNSCRYPT_ROOT##*-}
             if [[ $dnscrypt_version == "*" ]] 
@@ -41782,7 +41814,7 @@ config interface 'lan'
                 Println "$info ipv6 查询已关闭\n"
             fi
         ;;
-        14)
+        15)
             if [[ ! -x $(command -v pystun) ]] 
             then
                 Println "$tip 请确保已经修改了合适的 apt 源"
@@ -41794,10 +41826,10 @@ config interface 'lan'
             Println "$tip 建议关闭远端服务器防火墙, 检测中...\n"
             pystun
         ;;
-        15)
+        16)
             ShFileUpdate Armbian
         ;;
-        *) Println "$error $i18n_input_correct_number [1-15]\n"
+        *) Println "$error $i18n_input_correct_number [1-16]\n"
         ;;
     esac
     exit 0
@@ -41822,19 +41854,20 @@ then
   ${green}5.${normal} 设置 风扇
 ————————————
   ${green}6.${normal} 安装 升级 dnscrypt
-  ${green}7.${normal} 安装 qemu-guest-agent
-  ${green}8.${normal} 安装 openwrt-v2ray
+  ${green}7.${normal} 安装 AdGuardHome
+  ${green}8.${normal} 安装 qemu-guest-agent
+  ${green}9.${normal} 安装 openwrt-v2ray
 ————————————
-  ${green}9.${normal} 切换 openwrt 语言
- ${green}10.${normal} 切换 v2ray/xray core
- ${green}11.${normal} 切换 配置文件
+ ${green}10.${normal} 切换 openwrt 语言
+ ${green}11.${normal} 切换 v2ray/xray core
+ ${green}12.${normal} 切换 配置文件
 ————————————
- ${green}12.${normal} 开关 edns0
- ${green}13.${normal} 开关 ipv6 查询
- ${green}14.${normal} 更新脚本
+ ${green}13.${normal} 开关 edns0
+ ${green}14.${normal} 开关 ipv6 查询
+ ${green}15.${normal} 更新脚本
 
 "
-    read -p "`gettext \"输入序号\"` [1-14]: " pve_num
+    read -p "`gettext \"输入序号\"` [1-15]: " pve_num
 
     case $pve_num in
         1) 
@@ -41861,6 +41894,13 @@ then
                     else
                         echo "deb $FFMPEG_MIRROR_LINK/proxmox/debian/pve $VERSION_CODENAME pve-no-subscription" > /etc/apt/sources.list.d/pve-no-subscription.list
                     fi
+                    if [ -f /etc/apt/sources.list.d/pve-enterprise.list ] 
+                    then
+                        rm -f /etc/apt/sources.list.d/pve-enterprise.list
+                    elif grep -q "pve-enterprise" < /etc/apt/sources.list 
+                    then
+                        sed -i "s_^deb https://enterprise.proxmox.com/debian/pve $VERSION_CODENAME pve-enterprise_#deb $FFMPEG_MIRROR_LINK/proxmox-enterprise/debian/pve $VERSION_CODENAME pve-enterprise_" /etc/apt/sources.list
+                    fi
                 else
                     if [ -f /etc/apt/sources.list.d/pve-enterprise.list ] 
                     then
@@ -41870,6 +41910,13 @@ then
                         sed -i "s_#deb https://enterprise.proxmox.com/debian/pve $VERSION_CODENAME pve-enterprise_deb $FFMPEG_MIRROR_LINK/proxmox-enterprise/debian/pve $VERSION_CODENAME pve-enterprise_" /etc/apt/sources.list
                     else
                         echo "deb $FFMPEG_MIRROR_LINK/proxmox-enterprise/debian/pve $VERSION_CODENAME pve-enterprise" > /etc/apt/sources.list.d/pve-enterprise.list
+                    fi
+                    if [ -f /etc/apt/sources.list.d/pve-no-subscription.list ] 
+                    then
+                        rm -f /etc/apt/sources.list.d/pve-no-subscription.list
+                    elif grep -q "pve-no-subscription" < /etc/apt/sources.list 
+                    then
+                        sed -i "s_^deb $FFMPEG_MIRROR_LINK/proxmox/debian/pve $VERSION_CODENAME pve-no-subscription_#deb $FFMPEG_MIRROR_LINK/proxmox/debian/pve $VERSION_CODENAME pve-no-subscription_" /etc/apt/sources.list
                     fi
                 fi
 
@@ -41954,7 +42001,7 @@ then
             fi
 
             echo
-            nbfc_options=( '查看状态' '切换风扇手动/自动控制' '设置风扇转速' '搜索配置' '应用配置' )
+            nbfc_options=( '查看状态' '设置寄存器值' '开启自动控制' '设置风扇转速' '搜索配置' '应用配置' )
             inquirer list_input_index "选择操作" nbfc_options nbfc_options_index
 
             cd /opt/nbfc
@@ -41983,7 +42030,14 @@ then
                 Println "$tip 不一定写入成功, 请自行检查\n"
             elif [ "$nbfc_options_index" -eq 2 ] 
             then
-                Println "$tip 请确保风扇处于手动控制状态"
+                Println "$tip 请查询各厂商风扇手动模式的寄存器值, 只有设置风扇为手动模式 nbfc 才能自动控制"
+                Println "$tip 请确保已经正确应用配置文件\n"
+                inquirer text_input "输入风扇序号(从 0 开始): " fan_index 0
+                mono nbfc.exe set -f $fan_index -a
+                Println "$info 风扇 $fan_index 已开启自动控制\n"
+            elif [ "$nbfc_options_index" -eq 3 ] 
+            then
+                Println "$tip 请确保风扇寄存器值处于手动控制状态, 设置风扇转速将关闭 nbfc 自动控制"
                 echo
                 fan_options=( '输入寄存器值' '输入配置百分比' )
                 inquirer list_input "选择控制方式" fan_options fan_option
@@ -42003,7 +42057,6 @@ then
                     Println "$tip 不一定写入成功, 请自行检查\n"
                 else
                     Println "$tip 请确保已经正确应用配置文件"
-                    echo
                     inquirer text_input "输入风扇序号(从 0 开始): " fan_index 0
 
                     echo
@@ -42014,10 +42067,10 @@ then
 
                     Println "$tip 操作成功\n"
                 fi
-            elif [ "$nbfc_options_index" -eq 3 ] 
+            elif [ "$nbfc_options_index" -eq 4 ] 
             then
                 mono nbfc.exe config -r
-            elif [ "$nbfc_options_index" -eq 4 ]
+            elif [ "$nbfc_options_index" -eq 5 ]
             then
                 echo
                 inquirer text_input "输入配置名称, 比如: Acer Aspire 5745G" config_name "$i18n_cancel"
@@ -42134,6 +42187,27 @@ then
             fi
         ;;
         7)
+            DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
+            dnscrypt_version_old=${DNSCRYPT_ROOT##*-}
+
+            if [[ $dnscrypt_version_old == "*" ]] 
+            then
+                Println "$error 请先安装 dnscrypt proxy\n"
+                exit 1
+            fi
+
+            if [ -d /opt/AdGuardHome ] 
+            then
+                Println "$error AdGuard Home 已经存在\n"
+                exit 1
+            fi
+
+            if curl -s -S -L $FFMPEG_MIRROR_LINK/AdGuardHome/master/scripts/install.sh | sh -s -- -v 
+            then
+                Println "$info AdGuard Home 安装成功\n\n设置教程: https://github.com/woniuzfb/iptv/wiki/AdGuardHome\n"
+            fi
+        ;;
+        8)
             PveListVMs
 
             PveSelectVM
@@ -42146,9 +42220,9 @@ then
 
             qm set $vm_id --agent 1
 
-            Println "$info 请在虚拟机内执行 opkg update; opkg install qemu-ga 后关闭虚拟机几秒后再打开\n"
+            Println "$info 请在虚拟机内执行 opkg update; opkg install qemu-ga 后关闭虚拟机几秒后再打开\n\n如果是在国内, 可以在 openwrt 内执行下面命令加快 opkg 速度\n sed -i 's_http[s]*://downloads.openwrt.org_$FFMPEG_MIRROR_LINK/openwrt_' /etc/opkg/distfeeds.conf\n"
         ;;
-        8)
+        9)
             ReleaseCheck
             JQInstall
 
@@ -42172,9 +42246,9 @@ then
             echo
             qm guest exec $vm_id --timeout 0 ash "/root/openwrt-v2ray-install.sh" | $JQ_FILE -r '."err-data" // ."out-data"'
 
-            echo
+            Println "$info openwrt-v2ray 安装成功, 请重新登录 openwrt 后台\n"
         ;;
-        9)
+        10)
             ReleaseCheck
             JQInstall
 
@@ -42208,7 +42282,7 @@ then
 
             Println "$info 界面语言切换成功\n"
         ;;
-        10)
+        11)
             ReleaseCheck
             JQInstall
 
@@ -42253,6 +42327,17 @@ then
                 echo
                 qm guest exec $vm_id --timeout 0 ash "/root/openwrt-xray-install.sh" "$xray_ver" "$luci_app_xray_ver" | $JQ_FILE -r '."err-data" // ."out-data"'
             else
+                echo
+                inquirer list_input "是否更新 openwrt-v2ray" ny_options ny_option
+
+                if [ "$ny_option" == "$i18n_yes" ] 
+                then
+                    Println "$info 更新 openwrt-v2ray, 请稍等 ...\n"
+                    qm guest exec $vm_id opkg "update" | $JQ_FILE -r '."err-data" // ."out-data"'
+                    echo
+                    qm guest exec $vm_id opkg "install" -- "v2ray-core" | $JQ_FILE -r '."err-data" // ."out-data"'
+                fi
+
                 Println "$info 切换 openwrt-v2ray, 请稍等 ..."
 
                 echo
@@ -42270,7 +42355,7 @@ then
 
             Println "$info 切换成功\n"
         ;;
-        11)
+        12)
             ReleaseCheck
             JQInstall
 
@@ -42376,7 +42461,7 @@ then
                 Println "$info 配置切换成功\n"
             fi
         ;;
-        12)
+        13)
             DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
             dnscrypt_version=${DNSCRYPT_ROOT##*-}
             if [[ $dnscrypt_version == "*" ]] 
@@ -42402,7 +42487,7 @@ then
                 Println "$info edns0 已开启\n"
             fi
         ;;
-        13)
+        14)
             DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
             dnscrypt_version=${DNSCRYPT_ROOT##*-}
             if [[ $dnscrypt_version == "*" ]] 
@@ -42424,10 +42509,10 @@ then
                 Println "$info ipv6 查询已关闭\n"
             fi
         ;;
-        14) 
+        15) 
             ShFileUpdate PVE
         ;;
-        *) Println "$error $i18n_input_correct_number [1-14]\n"
+        *) Println "$error $i18n_input_correct_number [1-15]\n"
         ;;
     esac
     exit 0
