@@ -41930,21 +41930,126 @@ then
             VimConfig
         ;;
         3) 
-            echo
-            monitor_options=( '关闭显示器' '取消关闭显示器' )
-            inquirer list_input "选择操作" monitor_options monitor_option
+            Println "$tip 此选项主要用于笔记本"
+            bootloader_options=( Grub Systemd-boot )
+            inquirer list_input "选择当前引导程序" bootloader_options bootloader
 
-            if [ "$monitor_option" == "关闭显示器" ] 
+            echo
+            monitor_options=( '自动关闭显示器' '取消自动关闭显示器' )
+            inquirer list_input_index "选择操作" monitor_options monitor_options_index
+
+            if [ "$monitor_options_index" -eq 0 ] 
             then
                 echo
-                inquirer text_input "输入多少秒后关闭显示器" console_blank_secs 120
+                inquirer text_input "输入多少秒后自动关闭显示器" console_blank_secs 120
 
-                sed -i '0,/GRUB_CMDLINE_LINUX=""/s//GRUB_CMDLINE_LINUX="consoleblank='"$console_blank_secs"'"/' /etc/default/grub
+                if [ "$bootloader" == "Grub" ] 
+                then
+                    . /etc/default/grub
+
+                    if grep -q "consoleblank=" <<< "$GRUB_CMDLINE_LINUX_DEFAULT"  
+                    then
+                        cmdline=($GRUB_CMDLINE_LINUX_DEFAULT)
+                        GRUB_CMDLINE_LINUX_DEFAULT=""
+                        for ele in "${cmdline[@]}"
+                        do
+                            [ -n "$GRUB_CMDLINE_LINUX_DEFAULT" ] && GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT "
+                            if [ "${ele%=*}" == "consoleblank" ] 
+                            then
+                                GRUB_CMDLINE_LINUX_DEFAULT="${GRUB_CMDLINE_LINUX_DEFAULT}consoleblank=$console_blank_secs"
+                            else
+                                GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT$ele"
+                            fi
+                        done
+                    elif [ -n "$GRUB_CMDLINE_LINUX_DEFAULT" ] 
+                    then
+                        GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT consoleblank=$console_blank_secs"
+                    else
+                        GRUB_CMDLINE_LINUX_DEFAULT="consoleblank=$console_blank_secs"
+                    fi
+
+                    sed -i '0,/GRUB_CMDLINE_LINUX_DEFAULT=.*/s//GRUB_CMDLINE_LINUX_DEFAULT="'"$GRUB_CMDLINE_LINUX_DEFAULT"'"/' /etc/default/grub
+                    update-grub
+
+                    Println "$info 设置成功\n"
+
+                    exit 0
+                fi
+
+                if [ ! -s /etc/kernel/cmdline ] 
+                then
+                    echo -n "consoleblank=$console_blank_secs" >> /etc/kernel/cmdline
+                elif ! grep -q "consoleblank=" < /etc/kernel/cmdline 
+                then
+                    echo -n "$(< /etc/kernel/cmdline) consoleblank=$console_blank_secs" > /etc/kernel/cmdline
+                else
+                    line=$(< /etc/kernel/cmdline)
+                    cmdline=($line)
+                    SYS_CMDLINE=""
+                    for ele in "${cmdline[@]}"
+                    do
+                        [ -n "$SYS_CMDLINE" ] && SYS_CMDLINE="$SYS_CMDLINE "
+                        if [ "${ele%=*}" == "consoleblank" ] 
+                        then
+                            SYS_CMDLINE="${SYS_CMDLINE}consoleblank=$console_blank_secs"
+                        else
+                            SYS_CMDLINE="$SYS_CMDLINE$ele"
+                        fi
+                    done
+                    echo -n "$SYS_CMDLINE" > /etc/kernel/cmdline
+                fi
             else
-                sed -i '0,/GRUB_CMDLINE_LINUX=.*/s//GRUB_CMDLINE_LINUX=""/' /etc/default/grub
+                if [ "$bootloader" == "Grub" ] 
+                then
+                    . /etc/default/grub
+
+                    if ! grep -q "consoleblank=" <<< "$GRUB_CMDLINE_LINUX_DEFAULT" 
+                    then
+                        Println "$error 无需操作\n"
+                        exit 1
+                    fi
+
+                    cmdline=($GRUB_CMDLINE_LINUX_DEFAULT)
+                    GRUB_CMDLINE_LINUX_DEFAULT=""
+                    for ele in "${cmdline[@]}"
+                    do
+                        [ -n "$GRUB_CMDLINE_LINUX_DEFAULT" ] && GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT "
+                        if [ "${ele%=*}" == "consoleblank" ] 
+                        then
+                            continue
+                        fi
+                        GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT$ele"
+                    done
+
+                    sed -i '0,/GRUB_CMDLINE_LINUX_DEFAULT=.*/s//GRUB_CMDLINE_LINUX_DEFAULT="'"$GRUB_CMDLINE_LINUX_DEFAULT"'"/' /etc/default/grub
+                    update-grub
+
+                    Println "$info 设置成功\n"
+                    exit 0
+                fi
+
+                if [ ! -s /etc/kernel/cmdline ] || ! grep -q "consoleblank=" < /etc/kernel/cmdline
+                then
+                    Println "$error 无需操作\n"
+                    exit 1
+                fi
+
+                line=$(< /etc/kernel/cmdline)
+                cmdline=($line)
+                SYS_CMDLINE=""
+                for ele in "${cmdline[@]}"
+                do
+                    [ -n "$SYS_CMDLINE" ] && SYS_CMDLINE="$SYS_CMDLINE "
+                    if [ "${ele%=*}" == "consoleblank" ] 
+                    then
+                        continue
+                    fi
+                    SYS_CMDLINE="$SYS_CMDLINE$ele"
+                done
+                echo -n "$SYS_CMDLINE" > /etc/kernel/cmdline
             fi
 
-            update-grub
+            pve-efiboot-tool refresh
 
             Println "$info 设置成功\n"
         ;;
@@ -41967,7 +42072,7 @@ then
         5)
             if [[ ! -x $(command -v mono) ]] 
             then
-                echo
+                Println "$tip 此选项主要用于笔记本"
                 AskIfContinue n "`gettext \"需要安装 mono, 耗时会很长, 是否继续\"`"
 
                 apt-get update
@@ -42220,7 +42325,7 @@ then
 
             qm set $vm_id --agent 1
 
-            Println "$info 请在虚拟机内执行 opkg update; opkg install qemu-ga 后关闭虚拟机几秒后再打开\n\n如果是在国内, 可以在 openwrt 内执行下面命令加快 opkg 速度\n sed -i 's_http[s]*://downloads.openwrt.org_$FFMPEG_MIRROR_LINK/openwrt_' /etc/opkg/distfeeds.conf\n"
+            Println "$info 请在虚拟机内执行 opkg update; opkg install qemu-ga 后重启\n\n如果是在国内, 可以在 openwrt 内执行下面命令加快 opkg 速度\nsed -i 's_http[s]*://downloads.openwrt.org_$FFMPEG_MIRROR_LINK/openwrt_' /etc/opkg/distfeeds.conf\n"
         ;;
         9)
             ReleaseCheck
@@ -42241,7 +42346,7 @@ then
             echo
             qm guest exec $vm_id wget "$FFMPEG_MIRROR_LINK/pve/snippets/openwrt-v2ray-install.sh" -- "-O" "/root/openwrt-v2ray-install.sh" | $JQ_FILE -r '."err-data" // ."out-data"'
 
-            Println "$info 安装 openwrt-v2ray, 请稍等 ..."
+            Println "$info 正在安装 openwrt-v2ray, 请耐心等待 ..."
 
             echo
             qm guest exec $vm_id --timeout 0 ash "/root/openwrt-v2ray-install.sh" | $JQ_FILE -r '."err-data" // ."out-data"'

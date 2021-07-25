@@ -1,16 +1,14 @@
 #
 
-``` bash
-tv c <en|zh_CN|...> # change/update language
-```
+`tv c <en|zh_CN|...>` change/update language
 
 ## 目录
 
 - [目录](#目录)
+- [一键管理 v2ray 脚本](#一键管理-v2ray-脚本)
+- [一键管理 xray 脚本](#一键管理-xray-脚本)
 - [一键管理 nginx 脚本](#一键管理-nginx-脚本)
 - [一键管理 openresty 脚本](#一键管理-openresty-脚本)
-- [一键管理 xray 脚本](#一键管理-xray-脚本)
-- [一键管理 v2ray 脚本](#一键管理-v2ray-脚本)
 - [一键管理 armbian 脚本](#一键管理-armbian-脚本)
 - [一键管理 proxmox ve 脚本](#一键管理-proxmox-ve-脚本)
 - [一键管理 ibm cloud foundry 脚本](#一键管理-ibm-cloud-foundry-脚本)
@@ -25,14 +23,36 @@ tv c <en|zh_CN|...> # change/update language
   - [参数详解](#参数详解)
   - [举例](#举例)
 
+## 一键管理 v2ray 脚本
+
+``` bash
+wget https://woniuzfb.github.io/iptv/v2.sh && bash v2.sh
+
+```
+
+`v2` 打开 v2ray 管理面板
+
+---
+
+## 一键管理 xray 脚本
+
+``` bash
+wget https://woniuzfb.github.io/iptv/x.sh && bash x.sh
+
+```
+
+`x` 打开 xray 管理面板
+
+---
+
 ## 一键管理 nginx 脚本
 
 ``` bash
-wget -q https://woniuzfb.github.io/iptv/nx.sh && bash nx.sh
-
-nx # 打开 Nginx 管理面板
+wget https://woniuzfb.github.io/iptv/nx.sh && bash nx.sh
 
 ```
+
+`nx` 打开 Nginx 管理面板
 
 - 使用官方 crossplane 解析配置
 - 支持修改最多五级指令
@@ -43,44 +63,22 @@ nx # 打开 Nginx 管理面板
 ## 一键管理 openresty 脚本
 
 ``` bash
-wget -q https://woniuzfb.github.io/iptv/or.sh && bash or.sh
-
-or # 打开 OpenResty 管理面板
+wget https://woniuzfb.github.io/iptv/or.sh && bash or.sh
 
 ```
 
----
-
-## 一键管理 xray 脚本
-
-``` bash
-wget -q https://woniuzfb.github.io/iptv/x.sh && bash x.sh
-
-x # 打开 xray 管理面板
-
-```
-
----
-
-## 一键管理 v2ray 脚本
-
-``` bash
-wget -q https://woniuzfb.github.io/iptv/v2.sh && bash v2.sh
-
-v2 # 打开 v2ray 管理面板
-
-```
+`or` 打开 OpenResty 管理面板
 
 ---
 
 ## 一键管理 armbian 脚本
 
 ``` bash
-wget -q https://woniuzfb.github.io/iptv/arm.sh && bash arm.sh
-
-arm # 打开 Armbian 管理面板
+wget https://woniuzfb.github.io/iptv/arm.sh && bash arm.sh
 
 ```
+
+`arm` 打开 Armbian 管理面板
 
 - docker
 - dnscrypt proxy
@@ -95,11 +93,11 @@ arm # 打开 Armbian 管理面板
 ## 一键管理 proxmox ve 脚本
 
 ``` bash
-wget -q https://woniuzfb.github.io/iptv/pve.sh && bash pve.sh
-
-pve # 打开 Proxmox VE 管理面板
+wget https://woniuzfb.github.io/iptv/pve.sh && bash pve.sh
 
 ```
+
+`pve` 打开 Proxmox VE 管理面板
 
 - nbfc
 - dnscrypt proxy
@@ -112,28 +110,28 @@ pve # 打开 Proxmox VE 管理面板
 ## 一键管理 ibm cloud foundry 脚本
 
 ``` bash
-wget -q https://woniuzfb.github.io/iptv/ibm.sh && bash ibm.sh
-
-ibm # 打开 ibm CF 管理面板
-
-ibm v2 # 打开 ibm v2ray APP 管理面板
-
-ibm x  # 打开 ibm xray  APP 管理面板
+wget https://woniuzfb.github.io/iptv/ibm.sh && bash ibm.sh
 
 ```
+
+`ibm` 打开 ibm CF 管理面板
+
+`ibm v2` 打开 ibm v2ray APP 管理面板
+
+`ibm x` 打开 ibm xray  APP 管理面板
 
 ---
 
 ## 一键管理 cloudflare partner,workers 脚本
 
 ``` bash
-wget -q https://woniuzfb.github.io/iptv/cf.sh && bash cf.sh
-
-cf # 打开 cloudflare partner,workers 管理面板
-
-cf w # 打开 cloudflare workers 管理面板
+wget https://woniuzfb.github.io/iptv/cf.sh && bash cf.sh
 
 ```
+
+`cf` 打开 cloudflare partner,workers 管理面板
+
+`cf w` 打开 cloudflare workers 管理面板
 
 Mac/Linux 一键获取最优 IP 可以用脚本 [cloudflare-fping](https://github.com/woniuzfb/cloudflare-fping)
 
@@ -155,17 +153,17 @@ Mac/Linux 一键获取最优 IP 可以用脚本 [cloudflare-fping](https://githu
 ### [演示](https://mtime.info/)
 
 ``` bash
-wget -q https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
+wget https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 
-tv # 打开 iptv 管理面板
+```
+
+`tv` 打开 iptv 管理面板
 
 始终用最新的脚本，升级方式
 
 - 管理面板（推荐）
 或
 - 用这里的 iptv.sh 覆盖 /usr/local/bin/tv ，删除主目录 /usr/local/iptv 下的 lock 文件
-
-```
 
 ### 编译 h265 patched 静态 FFmpeg
 
@@ -178,13 +176,9 @@ docker run -it ffmpeg-h265-static
 
 ### 自动解析直播源
 
-``` bash
-tv 4g # 打开 4gtv 频道管理面板
-```
+`tv 4g` 打开 4gtv 频道管理面板
 
-``` bash
-tv d # 添加演示频道
-```
+`tv d` 添加演示频道
 
 - tvb
 - fengshows
@@ -194,15 +188,11 @@ tv d # 添加演示频道
 
 ### xtream codes 频道
 
-``` bash
-cx # 打开 Xtream Codes 账号/频道 管理面板
-```
+`cx` 打开 Xtream Codes 账号/频道 管理面板
 
 ### VIP 频道
 
-``` bash
-tv v # 直接打开 VIP 频道面板
-```
+`tv v` 直接打开 VIP 频道面板
 
 - IP 控制
 - 自带 m3u, epg
