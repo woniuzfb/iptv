@@ -38800,7 +38800,7 @@ VipMonitor()
                 fi
 
                 PrepTerm
-                sleep 60 &
+                sleep 300 &
                 WaitTerm
 
                 vip_users_license_old=("${vip_users_license[@]}")
@@ -42083,7 +42083,7 @@ then
                 apt-get -y install mono-complete git
             fi
 
-            if [ ! -d /opt/nbfc/ ] 
+            if [ ! -d /opt/nbfc/ ] || ! ls -A /opt/nbfc/* > /dev/null 2>&1
             then
                 Println "$info 安装 nbfc..."
 
@@ -42093,13 +42093,13 @@ then
 
                 cd /tmp/
                 curl -s -L "$FFMPEG_MIRROR_LINK/nbfc.zip" -o nbfc.zip
-                unzip nbfc.zip >/dev/null 2>&1
+                unzip -o nbfc.zip >/dev/null 2>&1
 
                 cd nbfc-master
-                sed -i 's~NUGET_URL=\"https://dist.nuget.org~NUGET_URL=\"$FFMPEG_MIRROR_LINK/nuget~' build.sh
+                sed -i 's~NUGET_URL=\"https://dist.nuget.org~NUGET_URL=\"'"$FFMPEG_MIRROR_LINK"'/nuget~' build.sh
                 ./build.sh
 
-                mkdir /opt/nbfc
+                mkdir -p /opt/nbfc
                 cp -r /tmp/nbfc-master/Linux/bin/Release/* /opt/nbfc/
                 cp /tmp/nbfc-master/Linux/{nbfc.service,nbfc-sleep.service} /etc/systemd/system/
                 systemctl enable nbfc --now || true
@@ -42325,7 +42325,7 @@ then
 
             qm set $vm_id --agent 1
 
-            Println "$info 请在虚拟机内执行 opkg update; opkg install qemu-ga 后重启\n\n如果是在国内, 可以在 openwrt 内执行下面命令加快 opkg 速度\nsed -i 's_http[s]*://downloads.openwrt.org_$FFMPEG_MIRROR_LINK/openwrt_' /etc/opkg/distfeeds.conf\n"
+            Println "$info 请在虚拟机内执行 opkg update; opkg install qemu-ga 后关机再开启\n\n如果是在国内, 可以在 openwrt 内执行下面命令加快 opkg 速度\nsed -i 's_http[s]*://downloads.openwrt.org_$FFMPEG_MIRROR_LINK/openwrt_' /etc/opkg/distfeeds.conf\n"
         ;;
         9)
             ReleaseCheck
