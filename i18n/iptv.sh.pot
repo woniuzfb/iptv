@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: iptv.sh 1.80.10\n"
 "Report-Msgid-Bugs-To: tg @woniuzfb\n"
-"POT-Creation-Date: 2021-07-25 15:41+0000\n"
+"POT-Creation-Date: 2021-08-31 10:26+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -574,8 +574,8 @@ msgstr ""
 #: ../docs/iptv.sh:30547 ../docs/iptv.sh:30572 ../docs/iptv.sh:30676
 #: ../docs/iptv.sh:33031 ../docs/iptv.sh:35494 ../docs/iptv.sh:39034
 #: ../docs/iptv.sh:39082 ../docs/iptv.sh:39297 ../docs/iptv.sh:39856
-#: ../docs/iptv.sh:40014 ../docs/iptv.sh:40599 ../docs/iptv.sh:40744
-#: ../docs/iptv.sh:40898 ../docs/iptv.sh:41870
+#: ../docs/iptv.sh:40014 ../docs/iptv.sh:40607 ../docs/iptv.sh:40752
+#: ../docs/iptv.sh:40906 ../docs/iptv.sh:41887
 msgid "Input No."
 msgstr ""
 
@@ -589,7 +589,7 @@ msgstr ""
 msgid "$info Parsing youtube link..."
 msgstr ""
 
-#: ../docs/iptv.sh:7132 ../docs/iptv.sh:7206 ../docs/iptv.sh:42646
+#: ../docs/iptv.sh:7132 ../docs/iptv.sh:7206 ../docs/iptv.sh:42672
 msgid "Installing openssl"
 msgstr ""
 
@@ -1151,65 +1151,65 @@ msgstr ""
 msgid "postfix exits. Do you want to reconfig smtp"
 msgstr ""
 
-#: ../docs/iptv.sh:40297 ../docs/iptv.sh:41778 ../docs/iptv.sh:42580
+#: ../docs/iptv.sh:40297 ../docs/iptv.sh:41795 ../docs/iptv.sh:42606
 msgid "Disable edns0"
 msgstr ""
 
-#: ../docs/iptv.sh:40304 ../docs/iptv.sh:41786 ../docs/iptv.sh:42587
+#: ../docs/iptv.sh:40304 ../docs/iptv.sh:41803 ../docs/iptv.sh:42613
 msgid "Enable edns0"
 msgstr ""
 
-#: ../docs/iptv.sh:40457
+#: ../docs/iptv.sh:40465
 msgid "Compiling pdf2htmlEX, it takes awhile. Do you want to continue"
 msgstr ""
 
-#: ../docs/iptv.sh:40704
+#: ../docs/iptv.sh:40712
 #, sh-format
 msgid "$v2ray_name is running, stopping now"
 msgstr ""
 
-#: ../docs/iptv.sh:40709
+#: ../docs/iptv.sh:40717
 #, sh-format
 msgid "$v2ray_name is stopped, starting now"
 msgstr ""
 
-#: ../docs/iptv.sh:40758
+#: ../docs/iptv.sh:40766
 msgid "It takes awhile. Do you want to continue"
 msgstr ""
 
-#: ../docs/iptv.sh:40906
+#: ../docs/iptv.sh:40914
 msgid "This is for PHICOMM n1. It need to be run after apt upgrade. Do you want to continue"
 msgstr ""
 
-#: ../docs/iptv.sh:40957 ../docs/iptv.sh:41089 ../docs/iptv.sh:41242
-#: ../docs/iptv.sh:41821
+#: ../docs/iptv.sh:40965 ../docs/iptv.sh:41100 ../docs/iptv.sh:41259
+#: ../docs/iptv.sh:41838
 msgid "Do you want to continue"
 msgstr ""
 
-#: ../docs/iptv.sh:42076
+#: ../docs/iptv.sh:42093
 msgid "Installing mono, it takes awhile. Do you want to continue"
 msgstr ""
 
-#: ../docs/iptv.sh:43892
+#: ../docs/iptv.sh:43918
 msgid "Not installed, start installing now"
-msgstr ""
-
-#: ../docs/iptv.sh:43908
-#, sh-format
-msgid "Use proxy $d_proxy: "
 msgstr ""
 
 #: ../docs/iptv.sh:43934
 #, sh-format
+msgid "Use proxy $d_proxy: "
+msgstr ""
+
+#: ../docs/iptv.sh:43960
+#, sh-format
 msgid "Use xtream codes proxy $d_xc_proxy: "
 msgstr ""
 
-#: ../docs/iptv.sh:44112
+#: ../docs/iptv.sh:44138
 #, sh-format
 msgid "$error push link not set..."
 msgstr ""
 
-#: ../docs/iptv.sh:44133
+#: ../docs/iptv.sh:44159
 #, sh-format
 msgid "$info channel added successfully"
 msgstr ""

@@ -40278,7 +40278,7 @@ $HOME/ip.sh" > /etc/rc.local
             DepInstall curl
 
             DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
-            dnscrypt_version_old=${DNSCRYPT_ROOT##*-}
+            dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
 
             echo
             dnscrypt_options=( '安装/升级 dnscrypt proxy' '开关 edns0' '开关 ipv6 查询' )
@@ -40362,7 +40362,7 @@ $HOME/ip.sh" > /etc/rc.local
                         then
                             sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
                             sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
-                            sed -i "0,/.*fallback_resolvers =.*/s//fallback_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
+                            sed -i "0,/.*bootstrap_resolvers =.*/s//bootstrap_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
                             sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
                         else
                             sed -i "0,/.*server_names = \[.*/s//server_names = ['google', 'cloudflare']/" dnscrypt-proxy.toml
@@ -40390,7 +40390,7 @@ $HOME/ip.sh" > /etc/rc.local
                         if [ -f /etc/resolv.conf ] 
                         then
                             printf -v now '%(%m-%d-%H:%M:%S)T' -1
-                            cp -f /etc/resolv.conf /etc/resolv.conf-$now
+                            mv /etc/resolv.conf /etc/resolv.conf-$now
                         fi
 
                         echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
@@ -40414,6 +40414,12 @@ $HOME/ip.sh" > /etc/rc.local
                 then
                     if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz_tmp
                     then
+                        if [ -L /etc/resolv.conf ] 
+                        then
+                            etc_resolv=$(< /etc/resolv.conf)
+                            rm -f /etc/resolv.conf
+                            echo "$etc_resolv" > /etc/resolv.conf
+                        fi
                         cd ~/dnscrypt-$dnscrypt_version_old
                         ./dnscrypt-proxy -service stop > /dev/null
                         ./dnscrypt-proxy -service uninstall > /dev/null
@@ -40427,8 +40433,10 @@ $HOME/ip.sh" > /etc/rc.local
                         then
                             sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
                             sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
-                            sed -i "0,/.*fallback_resolvers =.*/s//fallback_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
+                            sed -i "0,/.*bootstrap_resolvers =.*/s//bootstrap_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
                             sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
+                        else
+                            sed -i "0,/.*server_names = \[.*/s//server_names = ['google', 'cloudflare']/" dnscrypt-proxy.toml
                         fi
                         ./dnscrypt-proxy -service install > /dev/null
                         ./dnscrypt-proxy -service start > /dev/null
@@ -40878,9 +40886,9 @@ then
   ${green}2.${normal} 修复 N1 dtb
 ————————————
   ${green}3.${normal} 安装 docker
-  ${green}4.${normal} 安装/升级 dnscrypt
+  ${green}4.${normal} 安装 升级 dnscrypt proxy
   ${green}5.${normal} 安装 AdGuardHome
-  ${green}6.${normal} 安装/升降级 openwrt
+  ${green}6.${normal} 安装 升降级 openwrt
   ${green}7.${normal} 安装 openwrt-v2ray
 ————————————
   ${green}8.${normal} 切换 openwrt 语言
@@ -40950,7 +40958,7 @@ then
             if dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
             then
                 DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
-                dnscrypt_version_old=${DNSCRYPT_ROOT##*-}
+                dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
                 if [[ $dnscrypt_version_old == "*" ]]
                 then
                     Println "$tip 请确保已经将本机器用网线连接到主路由器的 LAN 口"
@@ -40963,6 +40971,9 @@ then
                     Println "$tip 必须和主路由器 ip 在同一网段"
                     inquirer text_input "设置本机静态 ip : " eth0_ip "$i18n_cancel"
                     ExitOnCancel eth0_ip
+
+                    echo
+                    inquirer text_input "输入监听端口 : " listen_port 53
 
                     Println "$info 下载 dnscrypt proxy ..."
                     if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp
@@ -41026,9 +41037,9 @@ dns-search=
 method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
 
                         sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
-                        sed -i "0,/.*listen_addresses = \['127.0.0.1:53']/s//listen_addresses = ['127.0.0.1:53', '$eth0_ip:53']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*listen_addresses = \['127.0.0.1:53']/s//listen_addresses = ['127.0.0.1:$listen_port', '$eth0_ip:$listen_port', '[::1]:$listen_port']/" dnscrypt-proxy.toml
                         sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
-                        sed -i "0,/.*fallback_resolvers =.*/s//fallback_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*bootstrap_resolvers =.*/s//bootstrap_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
                         sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
 
                         for((i=0;i<3;i++));
@@ -41068,7 +41079,7 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
                         if [ -f /etc/resolv.conf ] 
                         then
                             printf -v now '%(%m-%d-%H:%M:%S)T' -1
-                            cp -f /etc/resolv.conf /etc/resolv.conf-$now
+                            mv /etc/resolv.conf /etc/resolv.conf-$now
                         fi
 
                         echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
@@ -41091,6 +41102,12 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
 
                     if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp
                     then
+                        if [ -L /etc/resolv.conf ] 
+                        then
+                            etc_resolv=$(< /etc/resolv.conf)
+                            rm -f /etc/resolv.conf
+                            echo "$etc_resolv" > /etc/resolv.conf
+                        fi
                         cd ~/dnscrypt-$dnscrypt_version_old
                         ./dnscrypt-proxy -service stop > /dev/null
                         ./dnscrypt-proxy -service uninstall > /dev/null
@@ -41102,9 +41119,9 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
                         cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
                         eth0_ip=$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)
                         sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
-                        sed -i "0,/.*listen_addresses = \['127.0.0.1:53']/s//listen_addresses = ['127.0.0.1:53', '$eth0_ip:53']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*listen_addresses = \['127.0.0.1:53']/s//listen_addresses = ['127.0.0.1:$listen_port', '$eth0_ip:$listen_port', '[::1]:$listen_port']/" dnscrypt-proxy.toml
                         sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
-                        sed -i "0,/.*fallback_resolvers =.*/s//fallback_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*bootstrap_resolvers =.*/s//bootstrap_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
                         sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
                         ./dnscrypt-proxy -service install > /dev/null
                         ./dnscrypt-proxy -service start > /dev/null
@@ -41128,7 +41145,7 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
         ;;
         5)
             DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
-            dnscrypt_version_old=${DNSCRYPT_ROOT##*-}
+            dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
 
             if [[ $dnscrypt_version_old == "*" ]] 
             then
@@ -41155,7 +41172,7 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
             fi
 
             DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
-            dnscrypt_version_old=${DNSCRYPT_ROOT##*-}
+            dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
             if [[ $dnscrypt_version_old == "*" ]] 
             then
                 Println "$error 请先安装 dnscrypt proxy\n"
@@ -41168,7 +41185,7 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
             fi
 
             echo
-            openwrt_options=( '19.07.7' '19.07.6' '19.07.5' '19.07.4' '手动输入' )
+            openwrt_options=( '19.07.8' '19.07.7' '19.07.6' '19.07.5' '19.07.4' '手动输入' )
             inquirer list_input "选择版本: " openwrt_options openwrt_ver
 
             if [ "$openwrt_ver" == "手动输入" ] 
@@ -41766,7 +41783,7 @@ config interface 'lan'
         ;;
         13)
             DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
-            dnscrypt_version=${DNSCRYPT_ROOT##*-}
+            dnscrypt_version=${DNSCRYPT_ROOT#*-}
             if [[ $dnscrypt_version == "*" ]] 
             then
                 Println "$error 请先安装 dnscrypt proxy\n"
@@ -41794,7 +41811,7 @@ config interface 'lan'
         ;;
         14)
             DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
-            dnscrypt_version=${DNSCRYPT_ROOT##*-}
+            dnscrypt_version=${DNSCRYPT_ROOT#*-}
             if [[ $dnscrypt_version == "*" ]] 
             then
                 Println "$error 请先安装 dnscrypt proxy\n"
@@ -42194,11 +42211,14 @@ then
             if dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
             then
                 DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
-                dnscrypt_version_old=${DNSCRYPT_ROOT##*-}
+                dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
 
                 echo
                 inquirer text_input "输入本机静态 ip : " proxmox_ip "$i18n_cancel"
                 ExitOnCancel proxmox_ip
+
+                echo
+                inquirer text_input "输入监听端口 : " listen_port 53
 
                 if [[ $dnscrypt_version_old == "*" ]]
                 then
@@ -42215,9 +42235,9 @@ then
                         cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
 
                         sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
-                        sed -i "0,/.*listen_addresses = \['127.0.0.1:53']/s//listen_addresses = ['127.0.0.1:53', '$proxmox_ip:53']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*listen_addresses = \['127.0.0.1:53']/s//listen_addresses = ['127.0.0.1:$listen_port', '$proxmox_ip:$listen_port', '[::1]:$listen_port']/" dnscrypt-proxy.toml
                         sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
-                        sed -i "0,/.*fallback_resolvers =.*/s//fallback_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*bootstrap_resolvers =.*/s//bootstrap_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
                         sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
 
                         for((i=0;i<3;i++));
@@ -42244,7 +42264,7 @@ then
                         if [ -f /etc/resolv.conf ] 
                         then
                             printf -v now '%(%m-%d-%H:%M:%S)T' -1
-                            cp -f /etc/resolv.conf /etc/resolv.conf-$now
+                            mv /etc/resolv.conf /etc/resolv.conf-$now
                         fi
 
                         echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
@@ -42258,6 +42278,12 @@ then
                 then
                     if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz_tmp
                     then
+                        if [ -L /etc/resolv.conf ] 
+                        then
+                            etc_resolv=$(< /etc/resolv.conf)
+                            rm -f /etc/resolv.conf
+                            echo "$etc_resolv" > /etc/resolv.conf
+                        fi
                         cd ~/dnscrypt-$dnscrypt_version_old
                         ./dnscrypt-proxy -service stop > /dev/null
                         ./dnscrypt-proxy -service uninstall > /dev/null
@@ -42268,9 +42294,9 @@ then
                         cd dnscrypt-$dnscrypt_version
                         cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
                         sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
-                        sed -i "0,/.*listen_addresses = \['127.0.0.1:53']/s//listen_addresses = ['127.0.0.1:53', '$proxmox_ip:53']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*listen_addresses = \['127.0.0.1:53']/s//listen_addresses = ['127.0.0.1:$listen_port', '$proxmox_ip:$listen_port', '[::1]:$listen_port']/" dnscrypt-proxy.toml
                         sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
-                        sed -i "0,/.*fallback_resolvers =.*/s//fallback_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
+                        sed -i "0,/.*bootstrap_resolvers =.*/s//bootstrap_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
                         sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
                         ./dnscrypt-proxy -service install > /dev/null
                         ./dnscrypt-proxy -service start > /dev/null
@@ -42293,7 +42319,7 @@ then
         ;;
         7)
             DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
-            dnscrypt_version_old=${DNSCRYPT_ROOT##*-}
+            dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
 
             if [[ $dnscrypt_version_old == "*" ]] 
             then
@@ -42568,7 +42594,7 @@ then
         ;;
         13)
             DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
-            dnscrypt_version=${DNSCRYPT_ROOT##*-}
+            dnscrypt_version=${DNSCRYPT_ROOT#*-}
             if [[ $dnscrypt_version == "*" ]] 
             then
                 Println "$error 请先安装 dnscrypt proxy\n"
@@ -42594,7 +42620,7 @@ then
         ;;
         14)
             DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
-            dnscrypt_version=${DNSCRYPT_ROOT##*-}
+            dnscrypt_version=${DNSCRYPT_ROOT#*-}
             if [[ $dnscrypt_version == "*" ]] 
             then
                 Println "$error 请先安装 dnscrypt proxy\n"
