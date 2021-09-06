@@ -21451,6 +21451,11 @@ NginxToggle()
     then
         AskIfContinue y "`eval_gettext \"\\\$nginx_name 正在运行, 是否关闭\"`"
 
+        if [[ $(echo $SSH_CONNECTION | cut -d' ' -f3) == "127.0.0.1" ]] 
+        then
+            Println "$error 请使用非 $nginx_name 监听端口连接 ssh 后重试\n"
+            exit 1
+        fi
         systemctl stop $nginx_name
         Println "$info $nginx_name 已关闭\n"
     else
@@ -24294,6 +24299,11 @@ NginxDomainUpdateCrt()
 
         if [[ $(systemctl is-active $nginx_name) == "active" ]]
         then
+            if [[ $(echo $SSH_CONNECTION | cut -d' ' -f3) == "127.0.0.1" ]] 
+            then
+                Println "$error 请使用非 $nginx_name 监听端口连接 ssh 后重试\n"
+                exit 1
+            fi
             systemctl stop $nginx_name
             stopped=1
         fi
@@ -30487,6 +30497,11 @@ V2rayDomainUpdateCrt()
         then
             if [[ $(systemctl is-active $nginx_name) == "active" ]]
             then
+                if [[ $(echo $SSH_CONNECTION | cut -d' ' -f3) == "127.0.0.1" ]] 
+                then
+                    Println "$error 请使用非 $nginx_name 监听端口连接 ssh 后重试\n"
+                    exit 1
+                fi
                 systemctl stop $nginx_name
                 stopped=1
             fi
@@ -41185,7 +41200,7 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
             fi
 
             echo
-            openwrt_options=( '19.07.8' '19.07.7' '19.07.6' '19.07.5' '19.07.4' '手动输入' )
+            openwrt_options=( '21.02.0' '19.07.8' '19.07.7' '19.07.6' '19.07.5' '19.07.4' '手动输入' )
             inquirer list_input "选择版本: " openwrt_options openwrt_ver
 
             if [ "$openwrt_ver" == "手动输入" ] 
@@ -41450,15 +41465,22 @@ fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
                 Println "$info 下载 armvirt-64-$openwrt_ver ..."
                 docker import $FFMPEG_MIRROR_LINK/openwrt/releases/$openwrt_ver/targets/armvirt/64/openwrt-$openwrt_ver-armvirt-64-default-rootfs.tar.gz openwrtorg/rootfs:armvirt-64-$openwrt_ver
 
+                if [ "${openwrt_ver%%.*}" -ge 21 ] 
+                then
+                    option_name="device"
+                else
+                    option_name="ifname"
+                fi
+
                 openwrt_network="
 config interface 'loopback'
-        option ifname 'lo'
+        option $option_name 'lo'
         option proto 'static'
         option ipaddr '127.0.0.1'
         option netmask '255.0.0.0'
 
 config interface 'lan'
-        option ifname 'eth0'
+        option $option_name 'eth0'
         option proto 'static'
         option netmask '255.255.255.0'
         option ipaddr '$openwrt_ip'
@@ -41870,7 +41892,7 @@ then
   ${green}4.${normal} 查看 温度 / 风扇
   ${green}5.${normal} 设置 风扇
 ————————————
-  ${green}6.${normal} 安装 升级 dnscrypt
+  ${green}6.${normal} 安装 升级 dnscrypt proxy
   ${green}7.${normal} 安装 AdGuardHome
   ${green}8.${normal} 安装 qemu-guest-agent
   ${green}9.${normal} 安装 openwrt-v2ray
@@ -42508,7 +42530,7 @@ then
             Println "$tip 备份 openwrt-v2ray, 请稍等 ..."
             qm guest exec $vm_id wget "$FFMPEG_MIRROR_LINK/pve/snippets/openwrt-config-install.sh" -- "-O" "/root/openwrt-config-install.sh" | $JQ_FILE -r '."err-data" // ."out-data"'
 
-            if [ $(qm guest exec $vm_id ash "/root/openwrt-config-install.sh" | $JQ_FILE -r '."err-data" // ."out-data"') == "no" ]
+            if [[ $(qm guest exec $vm_id ash "/root/openwrt-config-install.sh" | $JQ_FILE -r '."err-data" // ."out-data"') == "no" ]]
             then
                 Println "$error 请先安装 openwrt-v2ray\n"
                 exit 1
