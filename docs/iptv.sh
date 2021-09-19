@@ -644,7 +644,7 @@ inquirer()
     }
 
     inquirer:on_default() {
-        true;
+        return 0
     }
 
     inquirer:on_keypress() {
@@ -820,12 +820,11 @@ inquirer()
             tput el
             tput cuu1
         done
-        tput cub "$(tput cols)"
 
+        tput cub "$(tput cols)"
         tput cuf $((prompt_width+3))
         printf '%s' "${cyan}$(inquirer:join _checkbox_selected_options)${normal}"
         tput el
-
         tput cud1
         tput cub "$(tput cols)"
         tput el
@@ -923,10 +922,7 @@ inquirer()
             tput el
         done
 
-        for j in $(inquirer:gen_index ${#_checkbox_list[@]})
-        do
-            tput cuu1
-        done
+        tput cuu ${#_checkbox_list[@]}
 
         inquirer:on_keypress inquirer:on_checkbox_input_up inquirer:on_checkbox_input_down inquirer:on_checkbox_input_space inquirer:on_checkbox_input_enter inquirer:on_default inquirer:on_default inquirer:on_checkbox_input_ascii
     }
@@ -972,6 +968,12 @@ inquirer()
 
     inquirer:on_list_input_up() {
         inquirer:remove_list_instructions
+
+        if [ "${#_list_options[@]}" -eq 1 ]
+        then
+            return 0
+        fi
+
         tput cub "$(tput cols)"
 
         printf '%s' "  ${_list_options[$_list_selected_index]}"
@@ -995,6 +997,12 @@ inquirer()
 
     inquirer:on_list_input_down() {
         inquirer:remove_list_instructions
+
+        if [ "${#_list_options[@]}" -eq 1 ]
+        then
+            return 0
+        fi
+
         tput cub "$(tput cols)"
 
         printf '%s' "  ${_list_options[$_list_selected_index]}"
@@ -1027,12 +1035,11 @@ inquirer()
             tput el
             tput cuu1
         done
-        tput cub "$(tput cols)"
 
+        tput cub "$(tput cols)"
         tput cuf $((prompt_width+3))
         printf '%s' "${cyan}${_list_options[$_list_selected_index]}${normal}"
         tput el
-
         tput cud1
         tput cub "$(tput cols)"
         tput el
@@ -1041,10 +1048,9 @@ inquirer()
         IFS=$OLD_IFS
     }
 
-    inquirer:on_list_input_input_ascii()
+    inquirer:on_list_input_ascii()
     {
-        local key=$1
-        case "$key" in
+        case "$1" in
             "w" ) inquirer:on_list_input_up;;
             "s" ) inquirer:on_list_input_down;;
         esac
@@ -1078,7 +1084,6 @@ inquirer()
 
         for i in $(inquirer:gen_index ${#_list_options[@]})
         do
-            tput cub "$(tput cols)"
             if [ $i = 0 ]
             then
                 inquirer:print "${cyan}${arrow} ${_list_options[i]} ${normal}"
@@ -1088,12 +1093,9 @@ inquirer()
             tput el
         done
 
-        for j in $(inquirer:gen_index ${#_list_options[@]})
-        do
-            tput cuu1
-        done
+        tput cuu ${#_list_options[@]}
 
-        inquirer:on_keypress inquirer:on_list_input_up inquirer:on_list_input_down inquirer:on_list_input_enter_space inquirer:on_list_input_enter_space inquirer:on_default inquirer:on_default inquirer:on_list_input_input_ascii
+        inquirer:on_keypress inquirer:on_list_input_up inquirer:on_list_input_down inquirer:on_list_input_enter_space inquirer:on_list_input_enter_space inquirer:on_default inquirer:on_default inquirer:on_list_input_ascii
     }
 
     inquirer:list_input() {
@@ -1121,7 +1123,6 @@ inquirer()
     }
 
     inquirer:on_text_input_left() {
-        inquirer:remove_regex_failed
         if [[ $_current_pos -gt 0 ]]
         then
             local current=${_text_input:$_current_pos:1} current_width
@@ -1133,7 +1134,6 @@ inquirer()
     }
 
     inquirer:on_text_input_right() {
-        inquirer:remove_regex_failed
         if [[ $((_current_pos+1)) -eq ${#_text_input} ]] 
         then
             tput cuf1
@@ -1149,121 +1149,92 @@ inquirer()
     }
 
     inquirer:on_text_input_enter() {
-        inquirer:remove_regex_failed
-
         _text_input=${_text_input:-$_text_default_value}
 
-        if [[ $($_text_input_validator "$_text_input") = true ]]
+        tput civis
+        tput cub "$(tput cols)"
+        tput el
+
+        if $_text_input_validator "$_text_input"
         then
-            tput cuu 1
-            tput cub "$(tput cols)"
+            tput sc
+            tput cuu $((1+_regex_failed_count*3))
             tput cuf $((prompt_width+3))
             printf '%s' "${cyan}${_text_input}${normal}"
             tput el
-            tput cud1
-            tput cub "$(tput cols)"
-            tput el
-            read -r ${var_name?} <<< "$_text_input"
+            tput rc
             _break_keypress=true
         else
-            _text_input_regex_failed=true
-            tput civis
-            tput cuu1
-            tput cub "$(tput cols)"
-            tput cuf $((prompt_width+3))
-            tput el
+            _regex_failed_count=$((_regex_failed_count+1))
             tput cud1
-            tput cub "$(tput cols)"
-            tput el
+            inquirer:print "${red}${_text_input_regex_failed_msg}${normal}"
             tput cud1
-            tput cub "$(tput cols)"
-            printf '%b' "${red}$_text_input_regex_failed_msg${normal}"
-            tput el
-            _text_input=""
-            _current_pos=0
-            tput cnorm
+            if [ "$_text_input" == "$_text_default_value" ] 
+            then
+                _text_input=""
+                _current_pos=0
+            else
+                printf '%s' "${_text_input}"
+                _current_pos=${#_text_input}
+            fi
         fi
-    }
 
-    inquirer:on_text_input_ascii() {
-        inquirer:remove_regex_failed
-        local c=${1:- }
-
-        local rest=${_text_input:$_current_pos} rest_width
-        local current=${_text_input:$_current_pos:1} current_width
-        rest_width=$(inquirer:display_length "$rest")
-        current_width=$(inquirer:display_length "$current")
-
-        _text_input="${_text_input:0:$_current_pos}$c$rest"
-        _current_pos=$((_current_pos+1))
-
-        tput civis
-        [[ $current_width -gt 1 ]] && tput cub $((current_width-1))
-        printf '%s' "$c$rest"
-        tput el
-
-        if [[ $rest_width -gt 0 ]]
-        then
-            tput cub $((rest_width-current_width+1))
-        fi
         tput cnorm
     }
 
-    inquirer:display_length() {
-        local display_length=0 byte_len
-        local oLC_ALL=${LC_ALL:-} oLANG=${LANG:-} LC_ALL=${LC_ALL:-} LANG=${LANG:-}
-
-        while IFS="" read -rsn1 char
-        do
-            case "$char" in
-                '')
-                ;;
-                *[$'\x80'-$'\xFF']*) 
-                    LC_ALL='' LANG=C
-                    byte_len=${#char}
-                    LC_ALL=$oLC_ALL LANG=$oLANG
-                    if [[ $byte_len -eq 2 ]] 
-                    then
-                        display_length=$((display_length+1))
-                    else
-                        display_length=$((display_length+2))
-                    fi
-                ;;
-                *) 
-                    display_length=$((display_length+1))
-                ;;
-            esac
-        done <<< "$1"
-
-        echo "$display_length"
-    }
-
-    inquirer:on_text_input_not_ascii() {
-        inquirer:remove_regex_failed
-        local c=$1
-
-        local rest="${_text_input:$_current_pos}" rest_width
+    inquirer:on_text_input_ascii() {
+        local c=${1:- }
+        local rest=${_text_input:$_current_pos} rest_width
         local current=${_text_input:$_current_pos:1} current_width
+
         rest_width=$(inquirer:display_length "$rest")
         current_width=$(inquirer:display_length "$current")
-
         _text_input="${_text_input:0:$_current_pos}$c$rest"
         _current_pos=$((_current_pos+1))
 
         tput civis
+
         [[ $current_width -gt 1 ]] && tput cub $((current_width-1))
+
         printf '%s' "$c$rest"
+
         tput el
 
         if [[ $rest_width -gt 0 ]]
         then
             tput cub $((rest_width-current_width+1))
         fi
+
+        tput cnorm
+    }
+
+    inquirer:on_text_input_not_ascii() {
+        local c=$1
+        local rest="${_text_input:$_current_pos}" rest_width
+        local current=${_text_input:$_current_pos:1} current_width
+
+        rest_width=$(inquirer:display_length "$rest")
+        current_width=$(inquirer:display_length "$current")
+        _text_input="${_text_input:0:$_current_pos}$c$rest"
+        _current_pos=$((_current_pos+1))
+
+        tput civis
+
+        [[ $current_width -gt 1 ]] && tput cub $((current_width-1))
+
+        printf '%s' "$c$rest"
+
+        tput el
+
+        if [[ $rest_width -gt 0 ]]
+        then
+            tput cub $((rest_width-current_width+1))
+        fi
+
         tput cnorm
     }
 
     inquirer:on_text_input_backspace() {
-        inquirer:remove_regex_failed
         if [ $_current_pos -gt 0 ] || { [ $_current_pos -eq 0 ] && [ "${#_text_input}" -gt 0 ]; }
         then
             local start rest rest_width del del_width next next_width offset
@@ -1309,35 +1280,24 @@ inquirer()
         fi
     }
 
-    inquirer:remove_regex_failed() {
-        if [ "$_text_input_regex_failed" = true ]
-        then
-            _text_input_regex_failed=false
-            tput sc
-            tput cud1
-            tput el1
-            tput el
-            tput rc
-        fi
-    }
-
     inquirer:text_input_default_validator() {
-        echo true;
+        return 0
     }
 
     inquirer:text_input() {
         var_name=$2
+
         if [ -n "$_text_default_value" ] 
         then
-            _text_default_tip=" $dim($_text_default_value)"
+            _text_default_tip=" ${bold}${dim}($_text_default_value)${normal}"
         else
             _text_default_tip=""
         fi
+
         _text_input_regex_failed_msg=${4:-$(gettext "输入验证错误")}
         _text_input_validator=${5:-inquirer:text_input_default_validator}
-        _text_input_regex_failed=false
 
-        inquirer:print "${green}?${normal} ${bold}${prompt}$_text_default_tip${normal}"
+        inquirer:print "${green}?${normal} ${prompt}${_text_default_tip}"
 
         trap inquirer:control_c SIGINT EXIT
 
@@ -1350,9 +1310,216 @@ inquirer()
         inquirer:cleanup
     }
 
+    inquirer:date_pick_default_validator() {
+        if ! date +%s -d "$1" > /dev/null 2>&1
+        then
+            return 1
+        fi
+        return 0
+    }
+
+    inquirer:remove_date_instructions() {
+        if [ "$_first_keystroke" = true ]
+        then
+            tput sc
+            tput cuu 1
+            tput cub "$(tput cols)"
+            tput cuf $((prompt_width+3))
+            tput el
+            tput rc
+            _first_keystroke=false
+        fi
+    }
+
+    inquirer:on_date_pick_ascii()
+    {
+        case "$1" in
+            "w" ) inquirer:on_date_pick_up;;
+            "s" ) inquirer:on_date_pick_down;;
+            "a" ) inquirer:on_date_pick_left;;
+            "d" ) inquirer:on_date_pick_right;;
+        esac
+    }
+
+    inquirer:on_date_pick_up() {
+        inquirer:remove_date_instructions
+        case $_current_pos in
+            3)  _date_pick="$((${_date_pick:0:4}+1))${_date_pick:4}"
+            ;;
+            6) 
+                local month=$((10#${_date_pick:5:2}+1))
+                [ "$month" -eq 13 ] && month=1
+                _date_pick="${_date_pick:0:5}$(printf %02d "$month")${_date_pick:7}"
+            ;;
+            9) 
+                local day=$((10#${_date_pick:8:2}+1))
+                [ "$day" -eq 32 ] && day=1
+                _date_pick="${_date_pick:0:8}$(printf %02d "$day")${_date_pick:10}"
+            ;;
+            12) 
+                local hour=$(((10#${_date_pick:11:2}+1)%24))
+                _date_pick="${_date_pick:0:11}$(printf %02d "$hour")${_date_pick:13}"
+            ;;
+            15) 
+                local min=$(((10#${_date_pick:14:2}+1)%60))
+                _date_pick="${_date_pick:0:14}$(printf %02d "$min")${_date_pick:16}"
+            ;;
+            18) 
+                local sec=$(((10#${_date_pick:17:2}+1)%60))
+                _date_pick="${_date_pick:0:17}$(printf %02d "$sec")${_date_pick:19}"
+            ;;
+        esac
+
+        tput sc
+        tput civis
+        tput cub $_current_pos
+        printf '%s' "$_date_pick"
+        tput rc
+        tput cnorm
+    }
+
+    inquirer:on_date_pick_down() {
+        inquirer:remove_date_instructions
+        case $_current_pos in
+            3)  
+                local year=$((${_date_pick:0:4}-1))
+                [ "$year" -eq 2020 ] && return 0
+                _date_pick="$year${_date_pick:4}"
+            ;;
+            6) 
+                local month=$((10#${_date_pick:5:2}-1))
+                [ "$month" -eq 0 ] && month=12
+                _date_pick="${_date_pick:0:5}$(printf %02d "$month")${_date_pick:7}"
+            ;;
+            9) 
+                local day=$((10#${_date_pick:8:2}-1))
+                [ "$day" -eq 0 ] && day=31
+                _date_pick="${_date_pick:0:8}$(printf %02d "$day")${_date_pick:10}"
+            ;;
+            12) 
+                local hour=$(((10#${_date_pick:11:2}+23)%24))
+                _date_pick="${_date_pick:0:11}$(printf %02d "$hour")${_date_pick:13}"
+            ;;
+            15) 
+                local min=$(((10#${_date_pick:14:2}+59)%60))
+                _date_pick="${_date_pick:0:14}$(printf %02d "$min")${_date_pick:16}"
+            ;;
+            18) 
+                local sec=$(((10#${_date_pick:17:2}+59)%60))
+                _date_pick="${_date_pick:0:17}$(printf %02d "$sec")${_date_pick:19}"
+            ;;
+        esac
+
+        tput sc
+        tput civis
+        tput cub $_current_pos
+        printf '%s' "$_date_pick"
+        tput rc
+        tput cnorm
+    }
+
+    inquirer:on_date_pick_left() {
+        inquirer:remove_date_instructions
+        if [[ $_current_pos -gt 3 ]] 
+        then
+            tput cub 3
+            _current_pos=$((_current_pos-3))
+        fi
+    }
+
+    inquirer:on_date_pick_right() {
+        inquirer:remove_date_instructions
+        if [[ $_current_pos -lt 18 ]] 
+        then
+            tput cuf 3
+            _current_pos=$((_current_pos+3))
+        fi
+    }
+
+    inquirer:on_date_pick_enter_space() {
+        tput civis
+        tput cub $_current_pos
+        tput el
+
+        if $_date_pick_validator "$_date_pick"
+        then
+            tput sc
+            tput cuu $((1+_regex_failed_count*3))
+            tput cuf $((prompt_width+3))
+            printf '%s' "${cyan}${_date_pick}${normal}"
+            tput el
+            tput rc
+            _break_keypress=true
+        else
+            _regex_failed_count=$((_regex_failed_count+1))
+            tput cud1
+            inquirer:print "${red}${_date_pick_regex_failed_msg}${normal}"
+            tput cud1
+            printf '%s' "${_date_pick}"
+            tput cub $((19-_current_pos))
+        fi
+
+        tput cnorm
+    }
+
+    inquirer:date_pick() {
+        var_name=$2
+        _date_pick_regex_failed_msg=${3:-$(gettext "时间验证错误")}
+        _date_pick_validator=${4:-inquirer:date_pick_default_validator}
+        _date_pick=$(printf '%(%Y-%m-%d %H:%M:%S)T' -1)
+        _current_pos=12
+        _first_keystroke=true
+
+        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}`gettext \"(使用箭头选择)\"`${normal}"
+        printf '%s' "$_date_pick"
+        tput cub 7
+
+        trap inquirer:control_c SIGINT EXIT
+
+        stty -echo
+        tput cnorm
+
+        inquirer:on_keypress inquirer:on_date_pick_up inquirer:on_date_pick_down inquirer:on_date_pick_enter_space inquirer:on_date_pick_enter_space inquirer:on_date_pick_left inquirer:on_date_pick_right inquirer:on_date_pick_ascii
+        read -r ${var_name?} <<< "$_date_pick"
+
+        unset _first_keystroke
+
+        inquirer:cleanup
+    }
+
+    inquirer:display_length() {
+        local display_length=0 byte_len
+        local oLC_ALL=${LC_ALL:-} oLANG=${LANG:-} LC_ALL=${LC_ALL:-} LANG=${LANG:-}
+
+        while IFS="" read -rsn1 char
+        do
+            case "$char" in
+                '')
+                ;;
+                *[$'\x80'-$'\xFF']*) 
+                    LC_ALL='' LANG=C
+                    byte_len=${#char}
+                    LC_ALL=$oLC_ALL LANG=$oLANG
+                    if [[ $byte_len -eq 2 ]] 
+                    then
+                        display_length=$((display_length+1))
+                    else
+                        display_length=$((display_length+2))
+                    fi
+                ;;
+                *) 
+                    display_length=$((display_length+1))
+                ;;
+            esac
+        done <<< "$1"
+
+        echo "$display_length"
+    }
+
     local option=$1
     shift
-    local var_name prompt=${1:-} prompt_width _text_default_value=${3:-} _current_pos=0 _text_input="" _text_input_regex_failed_msg _text_input_validator _text_input_regex_failed
+    local var_name prompt=${1:-} prompt_width _text_default_value=${3:-} _current_pos=0 _text_input="" \
+    _text_input_regex_failed_msg _text_input_validator _regex_failed_count=0 _date_pick_regex_failed_msg
     prompt_width=$(inquirer:display_length "$prompt")
     inquirer:$option "$@"
 }
@@ -3297,9 +3464,9 @@ JQs()
         "add") 
             if [ "${4:-}" == "pre" ] 
             then
-                read -r $2 < <($JQ_FILE -c --argjson path "${jq_path:-[]}" --argjson value "$3" 'getpath($path) |= [$value] + .' <<< "${!2}")
+                read -r $2 < <($JQ_FILE -c --argjson path "${jq_path:-[]}" --argjson value "$3" 'getpath($path) |= $value + .' <<< "${!2}")
             else
-                read -r $2 < <($JQ_FILE -c --argjson path "${jq_path:-[]}" --argjson value "$3" 'getpath($path) += [$value]' <<< "${!2}")
+                read -r $2 < <($JQ_FILE -c --argjson path "${jq_path:-[]}" --argjson value "$3" 'getpath($path) += $value' <<< "${!2}")
             fi
             jq_path=""
         ;;
@@ -7667,10 +7834,10 @@ SetVideoAudioShift()
     while true 
     do
         echo
-        inquirer list_input "画面或声音延迟" video_audio_shift_options video_audio_shift_selected
+        inquirer list_input_index "画面或声音延迟" video_audio_shift_options video_audio_shift_options_index
 
-        case $video_audio_shift_selected in
-            "$d_video_audio_shift_text") 
+        case $video_audio_shift_options_index in
+            0) 
                 if [ "$d_video_audio_shift_text" != "不设置" ] 
                 then
                     if [ -n "${d_video_shift:-}" ] 
@@ -7688,8 +7855,8 @@ SetVideoAudioShift()
                 video_audio_shift_text=$d_video_audio_shift_text
                 break
             ;;
-            "设置 画面延迟") 
-                Println "请输入延迟时间(比如 0.5)"
+            1) 
+                Println "请输入延迟时间(秒)"
                 read -p "(默认: 返回上级选项): " video_shift
                 if [ -n "$video_shift" ] 
                 then
@@ -7698,8 +7865,8 @@ SetVideoAudioShift()
                     break
                 fi
             ;;
-            "设置 声音延迟") 
-                Println "请输入延迟时间(比如 0.5)"
+            2) 
+                Println "请输入延迟时间(秒)"
                 read -p "(默认: 返回上级选项): " audio_shift
                 if [ -n "$audio_shift" ] 
                 then
@@ -7708,7 +7875,7 @@ SetVideoAudioShift()
                     break
                 fi
             ;;
-            "不设置"|"") 
+            3) 
                 video_audio_shift=""
                 video_audio_shift_text="不设置"
                 break
@@ -15682,7 +15849,14 @@ Schedule()
         "zgzwws:556:浙江卫视"
         "foxsports:670:Fox 体育"
         "foxsports2:671:Fox 体育2"
-        "foxsports3:672:Fox 体育3" )
+        "foxsports3:672:Fox 体育3"
+        "nowpremiersportstv:620:Now Sports Premier League TV"
+        "nowpremiersports1:621:Now Sports Premier League 1"
+        "nowpremiersports2:622:Now Sports Premier League 2"
+        "nowpremiersports3:623:Now Sports Premier League 3"
+        "nowpremiersports4:624:Now Sports Premier League 4"
+        "nowpremiersports5:625:Now Sports Premier League 5"
+        "nowpremiersports6:626:Now Sports Premier League 6" )
 
     icable_chnls=(
         "hkopen:001:香港开电视"
@@ -22398,7 +22572,7 @@ NginxAddDirective()
                 add_count=$((add_count+1))
                 jq_path='["config",0,"parsed"]'
                 new_directive="directive_${directives_val[directive_i]:-${directives[directive_i]}}"
-                JQs add parse_out "${!new_directive}"
+                JQs add parse_out "[${!new_directive}]"
             done
 
             if [ -n "$new_directive" ] 
@@ -22454,7 +22628,7 @@ NginxAddDirective()
                 add_count=$((add_count+1))
                 jq_path='["config",0,"parsed",'"$level_1_index"',"block"]'
                 new_directive="directive_${directives_val[directive_i]:-${directives[directive_i]}}"
-                JQs add parse_out "${!new_directive}"
+                JQs add parse_out "[${!new_directive}]"
             done
 
             if [ -n "$new_directive" ] 
@@ -22514,7 +22688,7 @@ NginxAddDirective()
                 add_count=$((add_count+1))
                 jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block"]'
                 new_directive="directive_${directives_val[directive_i]:-${directives[directive_i]}}"
-                JQs add parse_out "${!new_directive}"
+                JQs add parse_out "[${!new_directive}]"
             done
 
             if [ -n "$new_directive" ] 
@@ -22578,7 +22752,7 @@ NginxAddDirective()
                 add_count=$((add_count+1))
                 jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block"]'
                 new_directive="directive_${directives_val[directive_i]:-${directives[directive_i]}}"
-                JQs add parse_out "${!new_directive}"
+                JQs add parse_out "[${!new_directive}]"
             done
 
             if [ -n "$new_directive" ] 
@@ -22646,7 +22820,7 @@ NginxAddDirective()
                 add_count=$((add_count+1))
                 jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block",'"$level_4_index"',"block"]'
                 new_directive="directive_${directives_val[directive_i]:-${directives[directive_i]}}"
-                JQs add parse_out "${!new_directive}"
+                JQs add parse_out "[${!new_directive}]"
             done
 
             if [ -n "$new_directive" ] 
@@ -22717,7 +22891,7 @@ NginxAddDirective()
             done
 
             jq_path="[$jq_path]"
-            JQs add parse_out "$directive"
+            JQs add parse_out "[$directive]"
 
             NginxBuildConf parse_out
             NginxGetConfig
@@ -23242,7 +23416,7 @@ NginxCheckLocalhost()
                                     jq_path='["block",'"$level_3_index"',"args"]'
                                     JQs replace new_server '["'${domains[l]}'"]'
                                     jq_path='["config"]'
-                                    JQs add new_conf '{"file":"'"$nginx_prefix/conf/sites_available/${domains[l]}.conf"'","status":"ok","errors":[],"parsed":['"$new_server"']}'
+                                    JQs add new_conf '[{"file":"'"$nginx_prefix/conf/sites_available/${domains[l]}.conf"'","status":"ok","errors":[],"parsed":['"$new_server"']}]'
                                     ln -sf "$nginx_prefix/conf/sites_available/${domains[l]}.conf" "$nginx_prefix/conf/sites_enabled/"
                                 done
                                 NginxBuildConf new_conf
@@ -25764,6 +25938,13 @@ V2raySetAddressPort()
         esac
     done
     Println "  端口: ${green} $address_port ${normal}"
+}
+
+V2raySetSocksVersion()
+{
+    echo
+    socks_version_options=( '5' '4a' '4' )
+    inquirer list_input "选择 Socks 协议版本" socks_version_options socks_version
 }
 
 V2raySetDnsPort()
@@ -28411,9 +28592,9 @@ V2rayListInbounds()
         then
             if [ "${inbounds_sniffing_metadata_only[inbounds_index]}" == "false" ] 
             then
-                protocol_settings_list="$protocol_settings_list流量探测: ${green}开启${normal} 仅使用元数据: ${red}否${normal} 指定流量类型: ${green}${inbounds_sniffing_dest_override[inbounds_index]//|/,}${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}流量探测: ${green}开启${normal} 仅使用元数据: ${red}否${normal} 指定流量类型: ${green}${inbounds_sniffing_dest_override[inbounds_index]//|/,}${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list流量探测: ${green}开启${normal} 仅使用元数据: ${green}是${normal} 指定流量类型: ${green}${inbounds_sniffing_dest_override[inbounds_index]//|/,}${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}流量探测: ${green}开启${normal} 仅使用元数据: ${green}是${normal} 指定流量类型: ${green}${inbounds_sniffing_dest_override[inbounds_index]//|/,}${normal}\n${indent_6}"
             fi
             if [ -n "${inbounds_sniffing_domains_excluded[inbounds_index]}" ] 
             then
@@ -28423,68 +28604,68 @@ V2rayListInbounds()
                 do
                     domains_list="$domains_list${green}$domain${normal}\n${indent_6}"
                 done
-                protocol_settings_list="$protocol_settings_list排除域名:\n${indent_6}$domains_list"
+                protocol_settings_list="${protocol_settings_list}排除域名:\n${indent_6}$domains_list"
             fi
         fi
 
         if [ "${inbounds_allocate_strategy[inbounds_index]}" == "random" ] 
         then
-            protocol_settings_list="$protocol_settings_list随机端口: ${green}开启${normal} 刷新间隔: ${green}${inbounds_allocate_refresh[inbounds_index]} 分钟${normal} 随机端口数量: ${green}${inbounds_allocate_concurrency[inbounds_index]}${normal}\n${indent_6}"
+            protocol_settings_list="${protocol_settings_list}随机端口: ${green}开启${normal} 刷新间隔: ${green}${inbounds_allocate_refresh[inbounds_index]} 分钟${normal} 随机端口数量: ${green}${inbounds_allocate_concurrency[inbounds_index]}${normal}\n${indent_6}"
         fi
 
         if [ "${inbounds_protocol[inbounds_index]}" == "vmess" ] 
         then
             if [ "${inbounds_settings_disable_insecure_encryption[inbounds_index]}" == "false" ] 
             then
-                protocol_settings_list="$protocol_settings_list禁止不安全加密: ${red}否${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}禁止不安全加密: ${red}否${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list禁止不安全加密: ${green}是${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}禁止不安全加密: ${green}是${normal}\n${indent_6}"
             fi
             if [ -n "${inbounds_settings_detour_to[inbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list指定的另一个入站: ${green}${inbounds_settings_detour_to[inbounds_index]}${normal} 默认等级: ${green}${inbounds_settings_default_level[inbounds_index]}${normal} 默认 alterId: ${green}${inbounds_setttings_default_alter_id[inbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}指定的另一个入站: ${green}${inbounds_settings_detour_to[inbounds_index]}${normal} 默认等级: ${green}${inbounds_settings_default_level[inbounds_index]}${normal} 默认 alterId: ${green}${inbounds_setttings_default_alter_id[inbounds_index]}${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "vless" ] 
         then
             if [ "${inbounds_settings_decryption[inbounds_index]}" == "none" ] 
             then
-                protocol_settings_list="$protocol_settings_list解密协议: ${red}否${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}解密协议: ${red}否${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list解密协议: ${green}${inbounds_settings_decryption[inbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}解密协议: ${green}${inbounds_settings_decryption[inbounds_index]}${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "http" ] 
         then
-            protocol_settings_list="$protocol_settings_list入站数据时间限制: ${green}${inbounds_settings_timeout[inbounds_index]}${normal}\n${indent_6}"
+            protocol_settings_list="${protocol_settings_list}入站数据时间限制: ${green}${inbounds_settings_timeout[inbounds_index]}${normal}\n${indent_6}"
             if [ -n "${inbounds_settings_user_level[inbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list连接使用等级: ${green}${inbounds_settings_user_level[inbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}连接使用等级: ${green}${inbounds_settings_user_level[inbounds_index]}${normal}\n${indent_6}"
             fi
             if [ "${inbounds_settings_allow_transparent[inbounds_index]}" == "false" ] 
             then
-                protocol_settings_list="$protocol_settings_list转发所有请求: ${red}否${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}转发所有请求: ${red}否${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list转发所有请求: ${green}是${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}转发所有请求: ${green}是${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "socks" ] 
         then
             if [ "${inbounds_settings_auth[inbounds_index]}" == "noauth" ] 
             then
-                protocol_settings_list="$protocol_settings_list认证方式: ${green}匿名${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}认证方式: ${green}匿名${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list认证方式: ${green}用户密码${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}认证方式: ${green}用户密码${normal}\n${indent_6}"
             fi
             if [ "${inbounds_settings_udp[inbounds_index]}" == "false" ] 
             then
-                protocol_settings_list="$protocol_settings_list支持 UDP 协议: ${red}否${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}支持 UDP 协议: ${red}否${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list支持 UDP 协议: ${green}是${normal}\n${indent_6}本机 IP 地址: ${green}${inbounds_settings_ip[inbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}支持 UDP 协议: ${green}是${normal}\n${indent_6}本机 IP 地址: ${green}${inbounds_settings_ip[inbounds_index]}${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] 
         then
-            protocol_settings_list="$protocol_settings_list可接收的网络协议类型: ${green}${inbounds_settings_network[inbounds_index]}${normal}\n${indent_6}"
+            protocol_settings_list="${protocol_settings_list}可接收的网络协议类型: ${green}${inbounds_settings_network[inbounds_index]}${normal}\n${indent_6}"
             if [ -n "${inbounds_settings_method[inbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list加密方式: ${green}${inbounds_settings_method[inbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}加密方式: ${green}${inbounds_settings_method[inbounds_index]}${normal}\n${indent_6}"
             fi
             if [ "${inbounds_settings_iv_check[inbounds_index]}" == "false" ] 
             then
@@ -28494,16 +28675,16 @@ V2rayListInbounds()
             fi
         elif [ "${inbounds_protocol[inbounds_index]}" == "dokodemo-door" ] 
         then
-            protocol_settings_list="$protocol_settings_list可接收的网络协议类型: ${green}${inbounds_settings_network[inbounds_index]}${normal}\n${indent_6}入站数据时间限制: ${green}${inbounds_settings_timeout[inbounds_index]}${normal}\n${indent_6}"
+            protocol_settings_list="${protocol_settings_list}可接收的网络协议类型: ${green}${inbounds_settings_network[inbounds_index]}${normal}\n${indent_6}入站数据时间限制: ${green}${inbounds_settings_timeout[inbounds_index]}${normal}\n${indent_6}"
             if [ -n "${inbounds_settings_user_level[inbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list连接使用等级: ${green}${inbounds_settings_user_level[inbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}连接使用等级: ${green}${inbounds_settings_user_level[inbounds_index]}${normal}\n${indent_6}"
             fi
             if [ "${inbounds_settings_follow_redirect[inbounds_index]}" == "false" ] 
             then
-                protocol_settings_list="$protocol_settings_list转发防火墙: ${red}否${normal}\n${indent_6}目标地址: ${green}${inbounds_settings_address[inbounds_index]}${normal} 目标端口: ${green}${inbounds_settings_port[inbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}转发防火墙: ${red}否${normal}\n${indent_6}目标地址: ${green}${inbounds_settings_address[inbounds_index]}${normal} 目标端口: ${green}${inbounds_settings_port[inbounds_index]}${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list转发防火墙: ${green}是${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}转发防火墙: ${green}是${normal}\n${indent_6}"
             fi
         fi
 
@@ -28590,9 +28771,9 @@ V2rayListInbounds()
 
         if [ "${inbounds_stream_sockopt_tproxy[inbounds_index]}" == "off" ] 
         then
-            stream_settings_list="$stream_settings_list透明代理: ${red}否${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}透明代理: ${red}否${normal}\n${indent_6}"
         else
-            stream_settings_list="$stream_settings_list透明代理: ${green}${inbounds_stream_sockopt_tproxy[inbounds_index]}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}透明代理: ${green}${inbounds_stream_sockopt_tproxy[inbounds_index]}${normal}\n${indent_6}"
         fi
 
         if [ "${inbounds_stream_sockopt_tcp_fast_open[inbounds_index]}" == "true" ] 
@@ -28609,15 +28790,15 @@ V2rayListInbounds()
         then
             if [ "${inbounds_stream_accept_proxy_protocol[inbounds_index]}" == "false" ] 
             then
-                stream_settings_list="$stream_settings_list接收 PROXY 协议: ${red}否${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}接收 PROXY 协议: ${red}否${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list接收 PROXY 协议: ${green}是${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}接收 PROXY 协议: ${green}是${normal}\n${indent_6}"
             fi
             if [ "${inbounds_stream_header_type[inbounds_index]}" == "none" ] 
             then
-                stream_settings_list="$stream_settings_list数据包头部伪装: ${red}否${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}数据包头部伪装: ${red}否${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list数据包头部伪装: ${green}${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}数据包头部伪装: ${green}${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
                 if [ -n "${inbounds_stream_header_request[inbounds_index]}" ] 
                 then
                     IFS="|" read -r -a header_request <<< "${inbounds_stream_header_request[inbounds_index]}"
@@ -28653,38 +28834,38 @@ V2rayListInbounds()
                             header_request_list="$header_request_list${green}$request_key${normal}: ${green}${request_value//~/, }${normal}\n${indent_6}"
                         fi
                     done
-                    [ -n "$header_request_list" ] && stream_settings_list="$stream_settings_list自定义 HTTP 头:\n${indent_6}$header_request_list"
+                    [ -n "$header_request_list" ] && stream_settings_list="${stream_settings_list}自定义 HTTP 头:\n${indent_6}$header_request_list"
                 fi
             fi
         elif [ "${inbounds_stream_network[inbounds_index]}" == "kcp" ] 
         then
             if [ "${inbounds_stream_header_type[inbounds_index]}" == "none" ] 
             then
-                stream_settings_list="$stream_settings_list数据包头部伪装: ${red}否${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}数据包头部伪装: ${red}否${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list数据包头部伪装: ${green}${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}数据包头部伪装: ${green}${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
             fi
             if [ "${inbounds_stream_kcp_congestion[inbounds_index]}" == "false" ] 
             then
-                stream_settings_list="$stream_settings_list拥塞控制: ${red}否${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}拥塞控制: ${red}否${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list拥塞控制: ${green}是${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}拥塞控制: ${green}是${normal}\n${indent_6}"
             fi
-            stream_settings_list="$stream_settings_list最大传输单元: ${green}${inbounds_stream_kcp_mtu[inbounds_index]}${normal}\n${indent_6}传输时间间隔: ${green}${inbounds_stream_kcp_tti[inbounds_index]}(ms)${normal}\n${indent_6}上行链路容量: ${green}${inbounds_stream_kcp_uplink_capacity[inbounds_index]}(MB/s)${normal}\n${indent_6}下行链路容量: ${green}${inbounds_stream_kcp_downlink_capacity[inbounds_index]}(MB/s)${normal}\n${indent_6}读取缓冲区大小: ${green}${inbounds_stream_kcp_downlink_capacity[inbounds_index]}(MB)${normal}\n${indent_6}写入缓冲区大小: ${green}${inbounds_stream_kcp_downlink_capacity[inbounds_index]}(MB)${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}最大传输单元: ${green}${inbounds_stream_kcp_mtu[inbounds_index]}${normal}\n${indent_6}传输时间间隔: ${green}${inbounds_stream_kcp_tti[inbounds_index]}(ms)${normal}\n${indent_6}上行链路容量: ${green}${inbounds_stream_kcp_uplink_capacity[inbounds_index]}(MB/s)${normal}\n${indent_6}下行链路容量: ${green}${inbounds_stream_kcp_downlink_capacity[inbounds_index]}(MB/s)${normal}\n${indent_6}读取缓冲区大小: ${green}${inbounds_stream_kcp_downlink_capacity[inbounds_index]}(MB)${normal}\n${indent_6}写入缓冲区大小: ${green}${inbounds_stream_kcp_downlink_capacity[inbounds_index]}(MB)${normal}\n${indent_6}"
             if [ -n "${inbounds_stream_kcp_seed[inbounds_index]}" ] 
             then
-                stream_settings_list="$stream_settings_list混淆密码: ${green}${inbounds_stream_kcp_seed[inbounds_index]}${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}混淆密码: ${green}${inbounds_stream_kcp_seed[inbounds_index]}${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list混淆密码: ${red}否${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}混淆密码: ${red}否${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_stream_network[inbounds_index]}" == "ws" ] 
         then
-            stream_settings_list="$stream_settings_list路径: ${green}${inbounds_stream_path[inbounds_index]}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}路径: ${green}${inbounds_stream_path[inbounds_index]}${normal}\n${indent_6}"
             if [ "${inbounds_stream_accept_proxy_protocol[inbounds_index]}" == "false" ] 
             then
-                stream_settings_list="$stream_settings_list接收 PROXY 协议: ${red}否${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}接收 PROXY 协议: ${red}否${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list接收 PROXY 协议: ${green}是${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}接收 PROXY 协议: ${green}是${normal}\n${indent_6}"
             fi
             if [ -n "${inbounds_stream_ws_headers[inbounds_index]}" ] 
             then
@@ -28694,41 +28875,41 @@ V2rayListInbounds()
                 do
                     headers_list="$headers_list${green}${header%%=*}${normal}: ${green}${header#*=}${normal}\n${indent_6}"
                 done
-                [ -n "$headers_list" ] && stream_settings_list="$stream_settings_list自定义 HTTP 头:\n${indent_6}$headers_list"
+                [ -n "$headers_list" ] && stream_settings_list="${stream_settings_list}自定义 HTTP 头:\n${indent_6}$headers_list"
             fi
             if [ "$v2ray_name" == "v2ray" ] 
             then
                 if [ "${inbounds_stream_ws_max_early_data[inbounds_index]}" -eq 0 ] 
                 then
-                    stream_settings_list="$stream_settings_list前置数据支持: ${red}否${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}前置数据支持: ${red}否${normal}\n${indent_6}"
                 else
                     if [ -n "${inbounds_stream_ws_early_data_header_name[inbounds_index]}" ] 
                     then
-                        stream_settings_list="$stream_settings_list前置数据: ${green}基于 HTTP 头 ${inbounds_stream_ws_early_data_header_name[inbounds_index]}${normal}\n${indent_6}"
+                        stream_settings_list="${stream_settings_list}前置数据: ${green}基于 HTTP 头 ${inbounds_stream_ws_early_data_header_name[inbounds_index]}${normal}\n${indent_6}"
                     else
-                        stream_settings_list="$stream_settings_list前置数据: ${green}基于路径${normal}\n${indent_6}"
+                        stream_settings_list="${stream_settings_list}前置数据: ${green}基于路径${normal}\n${indent_6}"
                     fi
                 fi
                 if [ "${inbounds_stream_ws_use_browser_forwarding[inbounds_index]}" == "false" ] || [ "${inbounds_stream_ws_early_data_header_name[inbounds_index]}" != "Sec-WebSocket-Protocol" ]
                 then
-                    stream_settings_list="$stream_settings_list浏览器转发: ${red}否${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}浏览器转发: ${red}否${normal}\n${indent_6}"
                 else
-                    stream_settings_list="$stream_settings_list浏览器转发: ${green}是${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}浏览器转发: ${green}是${normal}\n${indent_6}"
                 fi
             fi
         elif [ "${inbounds_stream_network[inbounds_index]}" == "http" ] 
         then
-            stream_settings_list="$stream_settings_list路径: ${green}${inbounds_stream_path[inbounds_index]}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}路径: ${green}${inbounds_stream_path[inbounds_index]}${normal}\n${indent_6}"
             if [ -n "${inbounds_stream_http_host[inbounds_index]}" ] 
             then
-                stream_settings_list="$stream_settings_list通信域名: ${green}${inbounds_stream_http_host[inbounds_index]//|/, }${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}通信域名: ${green}${inbounds_stream_http_host[inbounds_index]//|/, }${normal}\n${indent_6}"
             fi
             if [ "$v2ray_name" == "v2ray" ] 
             then
                 stream_settings_list="${stream_settings_list}HTTP 方法: ${green}${inbounds_stream_http_method[inbounds_index]}${normal}\n${indent_6}"
                 if [ -z "${inbounds_stream_http_headers[inbounds_index]}" ] 
                 then
-                    stream_settings_list="$stream_settings_list自定义 HTTP 头: ${red}否${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}自定义 HTTP 头: ${red}否${normal}\n${indent_6}"
                 else
                     IFS="|" read -r -a http_headers <<< "${inbounds_stream_http_headers[inbounds_index]}"
                     http_headers_list="${green}headers${normal}:\n\033[8C"
@@ -28748,26 +28929,26 @@ V2rayListInbounds()
                             header_request_list="$header_request_list${green}$header_key => \"\"${normal}\n\033[8C"
                         fi
                     done
-                    stream_settings_list="$stream_settings_list自定义 HTTP 头:\n${indent_6}$http_headers_list"
+                    stream_settings_list="${stream_settings_list}自定义 HTTP 头:\n${indent_6}$http_headers_list"
                 fi
             fi
         elif [ "${inbounds_stream_network[inbounds_index]}" == "quic" ] 
         then
             if [ "${inbounds_stream_quic_security[inbounds_index]}" == "none" ] 
             then
-                stream_settings_list="$stream_settings_list数据包加密方式: ${green}不加密${normal} 密钥: ${green}${inbounds_stream_quic_key[inbounds_index]}${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}数据包加密方式: ${green}不加密${normal} 密钥: ${green}${inbounds_stream_quic_key[inbounds_index]}${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list数据包加密方式: ${green}${inbounds_stream_quic_security[inbounds_index]}${normal} 密钥: ${green}${inbounds_stream_quic_key[inbounds_index]}${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}数据包加密方式: ${green}${inbounds_stream_quic_security[inbounds_index]}${normal} 密钥: ${green}${inbounds_stream_quic_key[inbounds_index]}${normal}\n${indent_6}"
             fi
             if [ "${inbounds_stream_header_type[inbounds_index]}" == "none" ] 
             then
-                stream_settings_list="$stream_settings_list数据包头部伪装: ${red}否${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}数据包头部伪装: ${red}否${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list数据包头部伪装: ${green}${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}数据包头部伪装: ${green}${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
             fi
         elif [ "${inbounds_stream_network[inbounds_index]}" == "domainsocket" ] 
         then
-            stream_settings_list="$stream_settings_list文件路径: ${green}${inbounds_stream_path[inbounds_index]}${normal} abstract: ${green}${inbounds_stream_ds_abstract[inbounds_index]}${normal} padding: ${green}${inbounds_stream_ds_padding[inbounds_index]}${normal}\n${indent_6}"
+            stream_settings_list="${stream_settings_list}文件路径: ${green}${inbounds_stream_path[inbounds_index]}${normal} abstract: ${green}${inbounds_stream_ds_abstract[inbounds_index]}${normal} padding: ${green}${inbounds_stream_ds_padding[inbounds_index]}${normal}\n${indent_6}"
         elif [ "${inbounds_stream_network[inbounds_index]}" == "grpc" ] 
         then
             if [ "$v2ray_name" == "v2ray" ] 
@@ -29201,7 +29382,7 @@ V2rayAddOutbound()
         $JQ_FILE --arg address "$address" --arg port "$address_port" \
         '. * 
         {
-            "settings": { 
+            "settings": {
                 "vnext" : [
                     {
                         "address": $address,
@@ -29215,11 +29396,12 @@ V2rayAddOutbound()
     then
         V2raySetAddress
         V2raySetAddressPort
+
         new_outbound=$(
         $JQ_FILE --arg address "$address" --arg port "$address_port" \
         '. * 
         {
-            "settings": { 
+            "settings": {
                 "servers" : [
                     {
                         "address": $address,
@@ -29229,6 +29411,20 @@ V2rayAddOutbound()
                 ]
             }
         }' <<< "$new_outbound")
+
+        if [ "$v2ray_name" == "v2ray" ] && [ "$protocol" == "socks" ]
+        then
+            V2raySetSocksVersion
+
+            new_outbound=$(
+            $JQ_FILE --arg version "$socks_version" \
+            '. * 
+            {
+                "settings": {
+                    "version" : $version
+                }
+            }' <<< "$new_outbound")
+        fi
     elif [ "$protocol" == "shadowsocks" ] 
     then
         V2raySetEmail
@@ -29290,7 +29486,7 @@ V2rayAddOutbound()
         $JQ_FILE \
         '. * 
         {
-            "settings": { 
+            "settings": {
                 "servers" : []
             }
         }' <<< "$new_outbound")
@@ -29823,7 +30019,7 @@ V2rayGetOutbounds()
 {
     IFS=$'`\t' read -r map_send_through map_protocol map_settings_user_level map_settings_address \
     map_settings_port map_settings_network map_settings_response_type map_settings_domain_strategy \
-    map_settings_redirect map_settings_email map_settings_method map_settings_password \
+    map_settings_redirect map_settings_version map_settings_email map_settings_method map_settings_password \
     map_settings_iv_check map_stream_network map_stream_security map_stream_tls_server_name \
     map_stream_tls_alpn map_stream_tls_allow_insecure map_stream_tls_disable_system_root \
     map_stream_tls_pinned_peer_certificate_chain_sha256 map_stream_tls_enable_session_resumption \
@@ -29849,6 +30045,7 @@ V2rayGetOutbounds()
     ([.outbounds[]|.settings.response.type // "none"|. + "^"]|join("") + "`"),
     ([.outbounds[]|.settings.domainStrategy // "AsIs"|. + "^"]|join("") + "`"),
     ([.outbounds[]|.settings.redirect|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.settings.version // 5|tostring|. + "^"]|join("") + "`"),
     ([.outbounds[]|.settings.servers[0].email|. + "^"]|join("") + "`"),
     ([.outbounds[]|.settings.servers[0].method // "none"|. + "^"]|join("") + "`"),
     ([.outbounds[]|.settings.servers[0].password|. + "^"]|join("") + "`"),
@@ -29934,6 +30131,7 @@ V2rayGetOutbounds()
     IFS="^" read -r -a outbounds_settings_response_type <<< "${map_settings_response_type:-$if_null}"
     IFS="^" read -r -a outbounds_settings_domain_strategy <<< "${map_settings_domain_strategy:-$if_null}"
     IFS="^" read -r -a outbounds_settings_redirect <<< "${map_settings_redirect:-$if_null}"
+    IFS="^" read -r -a outbounds_settings_version <<< "${map_settings_version:-$if_null}"
     IFS="^" read -r -a outbounds_settings_email <<< "${map_settings_email:-$if_null}"
     IFS="^" read -r -a outbounds_settings_method <<< "${map_settings_method:-$if_null}"
     IFS="^" read -r -a outbounds_settings_password <<< "${map_settings_password:-$if_null}"
@@ -30004,21 +30202,21 @@ V2rayListOutbounds()
 
         if [ "${outbounds_send_through[outbounds_index]}" != "0.0.0.0" ] 
         then
-            protocol_settings_list="$protocol_settings_list发送数据的 IP 地址: ${green}${outbounds_send_through[outbounds_index]}${normal}\n${indent_6}"
+            protocol_settings_list="${protocol_settings_list}发送数据的 IP 地址: ${green}${outbounds_send_through[outbounds_index]}${normal}\n${indent_6}"
         fi
 
         if [ -n "${outbounds_settings_address[outbounds_index]}" ] 
         then
-            protocol_settings_list="$protocol_settings_list目标地址: ${green}${outbounds_settings_address[outbounds_index]}${normal} 目标端口: ${green}${outbounds_settings_port[outbounds_index]}${normal}\n${indent_6}"
+            protocol_settings_list="${protocol_settings_list}目标地址: ${green}${outbounds_settings_address[outbounds_index]}${normal} 目标端口: ${green}${outbounds_settings_port[outbounds_index]}${normal}\n${indent_6}"
         fi
 
         if [ "${outbounds_protocol[outbounds_index]}" == "blackhole" ] 
         then
             if [ "${outbounds_settings_response_type[outbounds_index]}" == "none" ] 
             then
-                protocol_settings_list="$protocol_settings_list黑洞的响应方式: ${green}直接关闭${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}黑洞的响应方式: ${green}直接关闭${normal}\n${indent_6}"
             else
-                protocol_settings_list="$protocol_settings_list黑洞的响应方式: ${green}返回403并关闭${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}黑洞的响应方式: ${green}返回403并关闭${normal}\n${indent_6}"
             fi
         elif [ "${outbounds_protocol[outbounds_index]}" == "dns" ] 
         then
@@ -30027,16 +30225,19 @@ V2rayListOutbounds()
         then
             if [ -n "${outbounds_settings_domain_strategy[outbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list域名策略: ${green}${outbounds_settings_domain_strategy[outbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}域名策略: ${green}${outbounds_settings_domain_strategy[outbounds_index]}${normal}\n${indent_6}"
             fi
             if [ -n "${outbounds_settings_redirect[outbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list发送到指定地址: ${green}${outbounds_settings_redirect[outbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}发送到指定地址: ${green}${outbounds_settings_redirect[outbounds_index]}${normal}\n${indent_6}"
             fi
             if [ -n "${outbounds_settings_user_level[outbounds_index]}" ] 
             then
-                protocol_settings_list="$protocol_settings_list使用用户等级: ${green}${outbounds_settings_user_level[outbounds_index]}${normal}\n${indent_6}"
+                protocol_settings_list="${protocol_settings_list}使用用户等级: ${green}${outbounds_settings_user_level[outbounds_index]}${normal}\n${indent_6}"
             fi
+        elif [ "${outbounds_protocol[outbounds_index]}" == "socks" ] 
+        then
+            protocol_settings_list="${protocol_settings_list}Socks 协议版本: ${green}${outbounds_settings_version[outbounds_index]}${normal}\n${indent_6}"
         elif [ "${outbounds_protocol[outbounds_index]}" == "shadowsocks" ] 
         then
             protocol_settings_list="$protocol_settings_list邮箱地址: ${green}${outbounds_settings_email[outbounds_index]}${normal}\n${indent_6}服务器地址: ${green}${outbounds_settings_address[outbounds_index]}${normal}\n${indent_6}服务器端口: ${green}${outbounds_settings_port[outbounds_index]}${normal}\n${indent_6}加密方式: ${green}${outbounds_settings_method[outbounds_index]}${normal}\n${indent_6}密码: ${green}${outbounds_settings_password[outbounds_index]}${normal}\n${indent_6}用户等级: ${green}${outbounds_settings_level[outbounds_index]}${normal}\n${indent_6}"
@@ -30056,9 +30257,9 @@ V2rayListOutbounds()
 
             if [ "${outbounds_stream_sockopt_mark[outbounds_index]}" -eq 0 ] 
             then
-                stream_settings_list="$stream_settings_list出站标记: ${red}否${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}出站标记: ${red}否${normal}\n${indent_6}"
             else
-                stream_settings_list="$stream_settings_list出站标记: ${green}${outbounds_stream_sockopt_mark[outbounds_index]}${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}出站标记: ${green}${outbounds_stream_sockopt_mark[outbounds_index]}${normal}\n${indent_6}"
             fi
 
             if [ "${outbounds_stream_network[outbounds_index]}" == "http" ] 
@@ -30156,9 +30357,9 @@ V2rayListOutbounds()
             then
                 if [ "${outbounds_stream_header_type[outbounds_index]}" == "none" ] 
                 then
-                    stream_settings_list="$stream_settings_list数据包头部: ${red}不伪装${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}数据包头部: ${red}不伪装${normal}\n${indent_6}"
                 else
-                    stream_settings_list="$stream_settings_list数据包头部: ${green}http 伪装${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}数据包头部: ${green}http 伪装${normal}\n${indent_6}"
                     if [ -n "${outbounds_stream_header_request[outbounds_index]}" ] 
                     then
                         IFS="|" read -r -a header_request <<< "${outbounds_stream_header_request[outbounds_index]}"
@@ -30194,33 +30395,33 @@ V2rayListOutbounds()
                                 header_request_list="$header_request_list${green}$request_key${normal}: ${green}${request_value//~/, }${normal}\n${indent_6}"
                             fi
                         done
-                        [ -n "$header_request_list" ] && stream_settings_list="$stream_settings_list自定义 HTTP 头:\n${indent_6}$header_request_list"
+                        [ -n "$header_request_list" ] && stream_settings_list="${stream_settings_list}自定义 HTTP 头:\n${indent_6}$header_request_list"
                     fi
                 fi
             elif [ "${outbounds_stream_network[outbounds_index]}" == "kcp" ] 
             then
                 if [ "${outbounds_stream_header_type[outbounds_index]}" == "none" ] 
                 then
-                    stream_settings_list="$stream_settings_list数据包头部伪装: ${red}否${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}数据包头部伪装: ${red}否${normal}\n${indent_6}"
                 else
-                    stream_settings_list="$stream_settings_list数据包头部伪装: ${green}${outbounds_stream_network[outbounds_index]}${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}数据包头部伪装: ${green}${outbounds_stream_network[outbounds_index]}${normal}\n${indent_6}"
                 fi
                 if [ "${outbounds_stream_kcp_congestion[outbounds_index]}" == "false" ] 
                 then
-                    stream_settings_list="$stream_settings_list拥塞控制: ${red}否${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}拥塞控制: ${red}否${normal}\n${indent_6}"
                 else
-                    stream_settings_list="$stream_settings_list拥塞控制: ${green}是${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}拥塞控制: ${green}是${normal}\n${indent_6}"
                 fi
-                stream_settings_list="$stream_settings_list最大传输单元: ${green}${outbounds_stream_kcp_mtu[outbounds_index]}${normal}\n${indent_6}传输时间间隔: ${green}${outbounds_stream_kcp_tti[outbounds_index]}(ms)${normal}\n${indent_6}上行链路容量: ${green}${outbounds_stream_kcp_uplink_capacity[outbounds_index]}(MB/s)${normal}\n${indent_6}下行链路容量: ${green}${outbounds_stream_kcp_downlink_capacity[outbounds_index]}(MB/s)${normal}\n${indent_6}读取缓冲区大小: ${green}${outbounds_stream_kcp_downlink_capacity[outbounds_index]}(MB)${normal}\n${indent_6}写入缓冲区大小: ${green}${outbounds_stream_kcp_downlink_capacity[outbounds_index]}(MB)${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}最大传输单元: ${green}${outbounds_stream_kcp_mtu[outbounds_index]}${normal}\n${indent_6}传输时间间隔: ${green}${outbounds_stream_kcp_tti[outbounds_index]}(ms)${normal}\n${indent_6}上行链路容量: ${green}${outbounds_stream_kcp_uplink_capacity[outbounds_index]}(MB/s)${normal}\n${indent_6}下行链路容量: ${green}${outbounds_stream_kcp_downlink_capacity[outbounds_index]}(MB/s)${normal}\n${indent_6}读取缓冲区大小: ${green}${outbounds_stream_kcp_downlink_capacity[outbounds_index]}(MB)${normal}\n${indent_6}写入缓冲区大小: ${green}${outbounds_stream_kcp_downlink_capacity[outbounds_index]}(MB)${normal}\n${indent_6}"
                 if [ -n "${outbounds_stream_kcp_seed[outbounds_index]}" ] 
                 then
-                    stream_settings_list="$stream_settings_list混淆密码: ${green}${outbounds_stream_kcp_seed[outbounds_index]}${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}混淆密码: ${green}${outbounds_stream_kcp_seed[outbounds_index]}${normal}\n${indent_6}"
                 else
-                    stream_settings_list="$stream_settings_list混淆密码: ${red}否${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}混淆密码: ${red}否${normal}\n${indent_6}"
                 fi
             elif [ "${outbounds_stream_network[outbounds_index]}" == "ws" ] 
             then
-                stream_settings_list="$stream_settings_list路径: ${green}${outbounds_stream_path[outbounds_index]}${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}路径: ${green}${outbounds_stream_path[outbounds_index]}${normal}\n${indent_6}"
                 if [ -n "${outbounds_stream_ws_headers[outbounds_index]}" ] 
                 then
                     IFS="|" read -r -a headers <<< "${outbounds_stream_ws_headers[outbounds_index]}"
@@ -30229,42 +30430,42 @@ V2rayListOutbounds()
                     do
                         headers_list="$headers_list${green}${header%%=*}${normal}: ${green}${header#*=}${normal}\n${indent_6}"
                     done
-                    [ -n "$headers_list" ] && stream_settings_list="$stream_settings_list自定义 HTTP 头:\n${indent_6}$headers_list"
+                    [ -n "$headers_list" ] && stream_settings_list="${stream_settings_list}自定义 HTTP 头:\n${indent_6}$headers_list"
                 fi
                 if [ "$v2ray_name" == "v2ray" ] 
                 then
                     if [ "${outbounds_stream_ws_max_early_data[outbounds_index]}" -eq 0 ] 
                     then
-                        stream_settings_list="$stream_settings_list前置数据: ${red}否${normal}\n${indent_6}"
+                        stream_settings_list="${stream_settings_list}前置数据: ${red}否${normal}\n${indent_6}"
                     else
-                        stream_settings_list="$stream_settings_list前置数据最长长度: ${green}${outbounds_stream_ws_max_early_data[outbounds_index]}${normal}\n${indent_6}"
+                        stream_settings_list="${stream_settings_list}前置数据最长长度: ${green}${outbounds_stream_ws_max_early_data[outbounds_index]}${normal}\n${indent_6}"
                         if [ -n "${outbounds_stream_ws_early_data_header_name[outbounds_index]}" ] 
                         then
-                            stream_settings_list="$stream_settings_list前置数据: ${green}基于 HTTP 头 ${outbounds_stream_ws_early_data_header_name[outbounds_index]}${normal}\n${indent_6}"
+                            stream_settings_list="${stream_settings_list}前置数据: ${green}基于 HTTP 头 ${outbounds_stream_ws_early_data_header_name[outbounds_index]}${normal}\n${indent_6}"
                         else
-                            stream_settings_list="$stream_settings_list前置数据: ${green}基于路径${normal}\n${indent_6}"
+                            stream_settings_list="${stream_settings_list}前置数据: ${green}基于路径${normal}\n${indent_6}"
                         fi
                     fi
                     if [ "${outbounds_stream_ws_use_browser_forwarding[outbounds_index]}" == "false" ] || [ "${outbounds_stream_ws_early_data_header_name[outbounds_index]}" != "Sec-WebSocket-Protocol" ]
                     then
-                        stream_settings_list="$stream_settings_list浏览器转发: ${red}否${normal}\n${indent_6}"
+                        stream_settings_list="${stream_settings_list}浏览器转发: ${red}否${normal}\n${indent_6}"
                     else
-                        stream_settings_list="$stream_settings_list浏览器转发: ${green}是${normal}\n${indent_6}"
+                        stream_settings_list="${stream_settings_list}浏览器转发: ${green}是${normal}\n${indent_6}"
                     fi
                 fi
             elif [ "${outbounds_stream_network[outbounds_index]}" == "http" ] 
             then
-                stream_settings_list="$stream_settings_list路径: ${green}${outbounds_stream_path[outbounds_index]}${normal}\n${indent_6}"
+                stream_settings_list="${stream_settings_list}路径: ${green}${outbounds_stream_path[outbounds_index]}${normal}\n${indent_6}"
                 if [ -n "${outbounds_stream_http_host[outbounds_index]}" ] 
                 then
-                    stream_settings_list="$stream_settings_list通信域名: ${green}${outbounds_stream_http_host[outbounds_index]//|/, }${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}通信域名: ${green}${outbounds_stream_http_host[outbounds_index]//|/, }${normal}\n${indent_6}"
                 fi
                 if [ "$v2ray_name" == "v2ray" ] 
                 then
                     stream_settings_list="${stream_settings_list}HTTP 方法: ${green}${outbounds_stream_http_method[outbounds_index]}${normal}\n${indent_6}"
                     if [ -z "${outbounds_stream_http_headers[outbounds_index]}" ] 
                     then
-                        stream_settings_list="$stream_settings_list自定义 HTTP 头: ${red}否${normal}\n${indent_6}"
+                        stream_settings_list="${stream_settings_list}自定义 HTTP 头: ${red}否${normal}\n${indent_6}"
                     else
                         IFS="|" read -r -a http_headers <<< "${outbounds_stream_http_headers[outbounds_index]}"
                         http_headers_list="${green}headers${normal}:\n\033[8C"
@@ -30284,22 +30485,22 @@ V2rayListOutbounds()
                                 header_request_list="$header_request_list${green}$header_key => \"\"${normal}\n\033[8C"
                             fi
                         done
-                        stream_settings_list="$stream_settings_list自定义 HTTP 头:\n${indent_6}$http_headers_list"
+                        stream_settings_list="${stream_settings_list}自定义 HTTP 头:\n${indent_6}$http_headers_list"
                     fi
                 fi
             elif [ "${outbounds_stream_network[outbounds_index]}" == "quic" ] 
             then
                 if [ "${outbounds_stream_quic_security[outbounds_index]}" == "none" ] 
                 then
-                    stream_settings_list="$stream_settings_list数据包加密方式: ${red}不加密${normal} 密钥: ${green}${outbounds_stream_quic_key[outbounds_index]}${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}数据包加密方式: ${red}不加密${normal} 密钥: ${green}${outbounds_stream_quic_key[outbounds_index]}${normal}\n${indent_6}"
                 else
-                    stream_settings_list="$stream_settings_list数据包加密方式: ${green}${outbounds_stream_quic_security[outbounds_index]}${normal} 密钥: ${green}${outbounds_stream_quic_key[outbounds_index]}${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}数据包加密方式: ${green}${outbounds_stream_quic_security[outbounds_index]}${normal} 密钥: ${green}${outbounds_stream_quic_key[outbounds_index]}${normal}\n${indent_6}"
                 fi
                 if [ "${outbounds_stream_header_type[outbounds_index]}" == "none" ] 
                 then
-                    stream_settings_list="$stream_settings_list数据包头部: ${red}不伪装${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}数据包头部: ${red}不伪装${normal}\n${indent_6}"
                 else
-                    stream_settings_list="$stream_settings_list数据包头部: ${green}http 伪装${normal}\n${indent_6}"
+                    stream_settings_list="${stream_settings_list}数据包头部: ${green}http 伪装${normal}\n${indent_6}"
                 fi
             elif [ "${outbounds_stream_network[outbounds_index]}" == "grpc" ] 
             then
@@ -31348,7 +31549,8 @@ V2raySetReverse()
 V2rayGetDns()
 {
     IFS=$'`\t' read -r m_dns_hosts_domain m_dns_hosts_address m_dns_servers \
-    dns_client_ip dns_tag < <($JQ_FILE -r '[
+    dns_client_ip dns_tag dns_query_strategy dns_disable_cache dns_disable_fallback \
+    dns_disable_fallback_if_match < <($JQ_FILE -r '[
     ([.dns.hosts // {}|to_entries[]|.key|. + "^"]|join("") + "`"),
     ([.dns.hosts // {}|to_entries[]|.value|. + "^"]|join("") + "`"),
     ([.dns.servers // []|.[]|if (.|type) == "object" then 
@@ -31361,7 +31563,11 @@ V2rayGetDns()
     else 
         . end|. + "^"]|join("") + "`"),
     (.dns.clientIp|. + "`"),
-    (.dns.tag|. + "`")]|@tsv' "$V2_CONFIG")
+    (.dns.tag|. + "`"),
+    (.dns.queryStrategy // "UseIP"|. + "`"),
+    (.dns.disableCache // false|tostring|. + "`"),
+    (.dns.disableFallback // false|tostring|. + "`"),
+    (.dns.disableFallbackIfMatch // false|tostring|. + "`")]|@tsv' "$V2_CONFIG")
 
     if [ -z "$m_dns_hosts_domain" ] 
     then
@@ -31384,6 +31590,7 @@ V2rayGetDns()
 V2rayListDns()
 {
     V2rayGetDns
+
     if [ "$dns_hosts_count" -eq 0 ] 
     then
         dns_hosts_list="静态 IP 列表: ${red}无${normal}\n"
@@ -31394,6 +31601,7 @@ V2rayListDns()
             dns_hosts_list="$dns_hosts_list$((dns_hosts_i+1)). 域名: ${green}${dns_hosts_domain[dns_hosts_i]}${normal} 地址: ${green}${dns_hosts_address[dns_hosts_i]}${normal}\n${indent_6}"
         done
     fi
+
     if [ "$dns_servers_count" -eq 0 ] 
     then
         dns_servers_list="DNS 服务器列表: ${red}无${normal}\n"
@@ -31421,22 +31629,55 @@ V2rayListDns()
             fi
         done
     fi
+
     if [ -z "$dns_client_ip" ] 
     then
-        dns_list="用于 dns 查询 IP: ${red}${dns_client_ip:-未设置}${normal}\n"
+        dns_list="用于 DNS 查询 IP: ${red}无${normal}\n\n"
     else
-        dns_list="用于 dns 查询 IP: ${green}${dns_client_ip:-未设置}${normal}\n"
+        dns_list="用于 DNS 查询 IP: ${green}$dns_client_ip${normal}\n\n"
     fi
-    dns_list="$dns_list\n$dns_hosts_list\n$dns_servers_list"
+
+    if [ -z "$dns_tag" ] 
+    then
+        dns_list="${dns_list}DNS 标签: ${red}无${normal}\n\n"
+    else
+        dns_list="${dns_list}DNS 标签: ${green}$dns_tag${normal}\n\n"
+    fi
+
+    dns_list="${dns_list}网络类型: ${green}$dns_query_strategy${normal}\n\n"
+
+    if [ "$dns_disable_cache" == "false" ] 
+    then
+        dns_list="${dns_list}禁用缓存: ${red}否${normal}\n\n"
+    else
+        dns_list="${dns_list}禁用缓存: ${green}是${normal}\n\n"
+    fi
+
+    if [ "$dns_disable_fallback" == "false" ] 
+    then
+        dns_list="${dns_list}禁用回退: ${red}否${normal}\n\n"
+    else
+        dns_list="${dns_list}禁用回退: ${green}是${normal}\n\n"
+    fi
+
+    if [ "$dns_disable_fallback_if_match" == "false" ] 
+    then
+        dns_list="${dns_list}禁用命中时回退: ${red}否${normal}\n\n"
+    else
+        dns_list="${dns_list}禁用命中时回退: ${green}是${normal}\n\n"
+    fi
+
+    dns_list="$dns_list$dns_hosts_list\n$dns_servers_list"
     Println "$dns_list\n"
 }
 
 V2raySetDns()
 {
     echo
-    set_dns_options=( '添加静态 IP' '添加 dns 服务器' '设置用于 dns 查询的 IP 地址' '设置 dns 标签' '删除静态 IP' '删除 dns 服务器' )
-    inquirer list_input "选择操作" set_dns_options set_dns_option
-    if [ "$set_dns_option" == "添加静态 IP" ] 
+    set_dns_options=( '添加静态 IP' '添加 DNS 服务器' '设置用于 DNS 查询的 IP 地址' '设置 DNS 标签' '设置 DNS 查询使用的网络类型' 
+    '禁用 DNS 缓存' '禁用 DNS 回退查询' '禁用优先匹配域名列表命中时执行 DNS 回退查询' '删除静态 IP' '删除 DNS 服务器' )
+    inquirer list_input_index "选择操作" set_dns_options set_dns_options_index
+    if [ "$set_dns_options_index" -eq 0 ] 
     then
         Println "$tip 格式如 v2ray.com, regexp:xxx, domain:xxx, keyword:xxx, geosite:cn"
         ExitOnCancel "输入域名" hosts_domain
@@ -31447,7 +31688,7 @@ V2raySetDns()
         jq_path='["dns","hosts","'"$hosts_domain"'"]'
         JQ replace "$V2_CONFIG" \""$hosts_address"\"
         Println "$info 静态 IP 添加成功\n"
-    elif [ "$set_dns_option" == "添加 dns 服务器" ] 
+    elif [ "$set_dns_options_index" -eq 1 ] 
     then
         Println "$tip 格式如: localhost, 8.8.8.8, https://host:port/dns-query, https+local://host:port/dns-query"
         ExitOnCancel "输入服务器地址: " dns_server_address
@@ -31456,7 +31697,7 @@ V2raySetDns()
         then
             jq_path='["dns","servers"]'
             JQ add "$V2_CONFIG" ["\"$dns_server_address\""]
-            Println "$info dns 服务器添加成功\n"
+            Println "$info DNS 服务器添加成功\n"
             return 0
         fi
         echo
@@ -31483,7 +31724,7 @@ V2raySetDns()
         then
             jq_path='["dns","servers"]'
             JQ add "$V2_CONFIG" ["\"$dns_server_address\""]
-            Println "$info dns 服务器添加成功\n"
+            Println "$info DNS 服务器添加成功\n"
             return 0
         fi
         new_dns_server=$(
@@ -31527,8 +31768,8 @@ V2raySetDns()
         fi
         jq_path='["dns","servers"]'
         JQ add "$V2_CONFIG" ["$new_dns_server"]
-        Println "$info dns 服务器添加成功\n"
-    elif [ "$set_dns_option" == "设置用于 dns 查询的 IP 地址" ] 
+        Println "$info DNS 服务器添加成功\n"
+    elif [ "$set_dns_options_index" -eq 2 ] 
     then
         Println "$tip 用于 DNS 查询时通知服务器客户端的所在位置, 不能是私有地址"
         ExitOnCancel "输入 IP 地址: " dns_client_ip
@@ -31536,15 +31777,59 @@ V2raySetDns()
         jq_path='["dns","clientIp"]'
         JQ replace "$V2_CONFIG" \""$dns_client_ip"\"
         Println "$info IP 地址设置成功\n"
-    elif [ "$set_dns_option" == "设置 dns 标签" ] 
+    elif [ "$set_dns_options_index" -eq 3 ] 
     then
         Println "$tip 可在路由使用 inboundTag 进行匹配"
-        ExitOnCancel "输入 dns 标签: " dns_tag
+        ExitOnCancel "输入 DNS 标签: " dns_tag
 
         jq_path='["dns","tag"]'
         JQ replace "$V2_CONFIG" \""$dns_tag"\"
-        Println "$info dns 标签设置成功\n"
-    elif [ "$set_dns_option" == "删除静态 IP" ] 
+        Println "$info DNS 标签设置成功\n"
+    elif [ "$set_dns_options_index" -eq 4 ] 
+    then
+        echo
+        query_strategy_options=( 'UseIP' 'UseIPv4' 'UseIPv6' )
+        inquirer list_input "选择 DNS 查询所使用的网络类型" query_strategy_options query_strategy
+        jq_path='["dns","queryStrategy"]'
+        JQ replace "$V2_CONFIG" \""$query_strategy"\"
+        Println "$info DNS 查询所使用的网络类型设置成功\n"
+    elif [ "$set_dns_options_index" -eq 5 ] 
+    then
+        echo
+        inquirer list_input "禁用 DNS 缓存" ny_options ny_option
+        if [ "$ny_option" == "$i18n_no" ] 
+        then
+            disable_cache="false"
+        else
+            disable_cache="yes"
+        fi
+        JQ update "$V2_CONFIG" '.dns.disableCache='"$disable_cache"''
+        Println "$info DNS 缓存设置成功\n"
+    elif [ "$set_dns_options_index" -eq 6 ] 
+    then
+        echo
+        inquirer list_input "禁用 DNS 回退查询" ny_options ny_option
+        if [ "$ny_option" == "$i18n_no" ] 
+        then
+            disable_fallback="false"
+        else
+            disable_fallback="yes"
+        fi
+        JQ update "$V2_CONFIG" '.dns.disableFallback='"$disable_fallback"''
+        Println "$info DNS 回退查询设置成功\n"
+    elif [ "$set_dns_options_index" -eq 7 ] 
+    then
+        echo
+        inquirer list_input "禁用优先匹配域名列表命中时执行 DNS 回退查询" ny_options ny_option
+        if [ "$ny_option" == "$i18n_no" ] 
+        then
+            disable_fallback_if_match="false"
+        else
+            disable_fallback_if_match="yes"
+        fi
+        JQ update "$V2_CONFIG" '.dns.disableFallbackIfMatch='"$disable_fallback_if_match"''
+        Println "$info DNS 优先匹配域名列表命中时执行 DNS 回退查询设置成功\n"
+    elif [ "$set_dns_options_index" -eq 8 ] 
     then
         V2rayListDns
         [ "$dns_hosts_count" -eq 0 ] && exit 1
@@ -31559,14 +31844,14 @@ V2raySetDns()
         V2rayListDns
         [ "$dns_servers_count" -eq 0 ] && exit 1
         echo
-        ExitOnCancel "输入 dns 服务器序号: " dns_server_num
+        ExitOnCancel "输入 DNS 服务器序号: " dns_server_num
 
         dns_server_index=$((dns_server_num-1))
         jq_path='["dns","servers"]'
         JQ delete "$V2_CONFIG" "$dns_server_index"
         if [[ ${dns_servers[dns_server_index]} =~ ^(.+)\|(.*)\|(.*)\|(.*)$ ]] 
         then
-            Println "$info dns 服务器: ${BASH_REMATCH[1]}:${BASH_REMATCH[2]:-53} 删除成功\n"
+            Println "$info DNS 服务器: ${BASH_REMATCH[1]}:${BASH_REMATCH[2]:-53} 删除成功\n"
         fi
     fi
 }
@@ -32078,7 +32363,7 @@ V2rayNginxDomainServerAddProxy()
     fi
 
     jq_path='["config",0,"parsed",0,"block",'"$v2ray_nginx_domain_servers_index"',"block"]'
-    JQs add parse_out "$new_proxy"
+    JQs add parse_out "[$new_proxy]"
 
     NginxBuildConf parse_out
 
@@ -32340,7 +32625,7 @@ V2rayConfigDomain()
                 new_proxy_port_options=( '输入新的代理端口' '浏览并选择端口' )
                 inquirer list_input_index "选择操作" new_proxy_port_options new_proxy_port_options_index
 
-                if [ "$new_proxy_port_options" -eq 0 ] 
+                if [ "$new_proxy_port_options_index" -eq 0 ] 
                 then
                     echo
                     inquirer text_input "输入新的代理端口: " new_proxy_port "$v2ray_nginx_domain_server_proxy_port"
