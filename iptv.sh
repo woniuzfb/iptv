@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-sh_ver="1.81.0"
+sh_ver="1.82.0"
 sh_debug=0
 export LANGUAGE=
 export LC_ALL=
@@ -1480,7 +1480,7 @@ inquirer()
         tput cnorm
 
         inquirer:on_keypress inquirer:on_date_pick_up inquirer:on_date_pick_down inquirer:on_date_pick_enter_space inquirer:on_date_pick_enter_space inquirer:on_date_pick_left inquirer:on_date_pick_right inquirer:on_date_pick_ascii
-        read -r ${var_name?} <<< "$_date_pick"
+        read -r ${var_name?} <<< $(date +%s -d "$_date_pick")
 
         unset _first_keystroke
 
@@ -1661,7 +1661,7 @@ Progress()
     done
 }
 
-AskIfContinue()
+ExitOnList()
 {
     if [ "$1" == "y" ] 
     then
@@ -1677,7 +1677,7 @@ AskIfContinue()
     fi
 }
 
-ExitOnCancel()
+ExitOnText()
 {
     inquirer text_input "$1" "$2" "$i18n_cancel"
 
@@ -2825,7 +2825,7 @@ Uninstall()
     [ ! -d "$IPTV_ROOT" ] && Println "`eval_gettext \"\\\$error 尚未安装, 请检查 !\"`\n" && exit 1
 
     echo
-    AskIfContinue n "`gettext \"确定要 卸载此脚本以及产生的全部文件\"`"
+    ExitOnList n "`gettext \"确定要 卸载此脚本以及产生的全部文件\"`"
 
     MonitorStop
     VipDisable
@@ -2863,6 +2863,8 @@ Uninstall()
 
 Update()
 {
+    ShFileUpdate
+
     [ ! -d "$IPTV_ROOT" ] && Println "`eval_gettext \"\\\$error 尚未安装, 请检查 !\"`\n" && exit 1
 
     while IFS= read -r line 
@@ -2884,7 +2886,7 @@ Update()
     if [ -s "$IPTV_ROOT/monitor.pid" ] || [ -s "$IPTV_ROOT/antiddos.pid" ]
     then
         echo
-        AskIfContinue y "`gettext \"需要先关闭监控, 是否继续\"`"
+        ExitOnList y "`gettext \"需要先关闭监控, 是否继续\"`"
         MonitorStop
     fi
 
@@ -2912,8 +2914,6 @@ Update()
     fi
 
     JQInstall > /dev/null
-
-    ShFileUpdate
 
     ln -sf "$IPTV_ROOT"/ffmpeg-git-*/ff* /usr/local/bin/
     Println "`eval_gettext \"脚本已更新为最新版本 [ \\\${green}\\\$sh_new_ver\\\${normal} ] ! (输入: tv 使用)\"`\n" && exit 0
@@ -3407,6 +3407,9 @@ JQ()
                     if [ "${4:-}" == "number" ] 
                     then
                         $JQ_FILE --argjson path "$jq_path" --arg value "$3" 'getpath($path) = ($value | tonumber)' "$FILE" > "$TMP_FILE"
+                    elif [ "${4:-}" == "bool" ] 
+                    then
+                        $JQ_FILE --argjson path "$jq_path" --arg value "$3" 'getpath($path) = ($value | test("true"))' "$FILE" > "$TMP_FILE"
                     else
                         $JQ_FILE --argjson path "$jq_path" --arg value "$3" 'getpath($path) = $value' "$FILE" > "$TMP_FILE"
                     fi
@@ -3418,7 +3421,14 @@ JQ()
             "replace") 
                 if [ -n "${jq_path:-}" ] 
                 then
-                    $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) = $value' "$FILE" > "$TMP_FILE"
+                    if [ "${4:-}" == "file" ] 
+                    then
+                        printf '%s' "${!3}" > "$TMP_FILE"
+                        temp_file=$($JQ_FILE --argjson path "$jq_path" --slurpfile value "$TMP_FILE" 'getpath($path) = $value' "$FILE")
+                        printf '%s' "$temp_file" > "$TMP_FILE"
+                    else
+                        $JQ_FILE --argjson path "$jq_path" --argjson value "$3" 'getpath($path) = $value' "$FILE" > "$TMP_FILE"
+                    fi
                     jq_path=""
                 else
                     $JQ_FILE --arg index "$3" --argjson value "$4" '.[$index] = $value' "$FILE" > "$TMP_FILE"
@@ -4404,6 +4414,7 @@ FlvStreamCreator()
                     cookies: "'"$chnl_cookies"'",
                     flv_push_link: "'"$chnl_flv_push_link"'",
                     flv_pull_link: "'"$chnl_flv_pull_link"'",
+                    channel_name: "'"$chnl_channel_name"'",
                     channel_time: '"$chnl_channel_time"'
                 } // .)'
 
@@ -5555,6 +5566,7 @@ HlsStreamCreatorPlus()
                     seg_name: "'"$chnl_seg_name"'",
                     key_name: "'"$chnl_key_name"'",
                     key_time: '"$chnl_key_time"',
+                    channel_name: "'"$chnl_channel_name"'",
                     channel_time: '"$chnl_channel_time"'
                 } // .)'
 
@@ -6379,6 +6391,7 @@ HlsStreamCreator()
                     seg_name: "'"$chnl_seg_name"'",
                     key_name: "'"$chnl_key_name"'",
                     key_time: '"$chnl_key_time"',
+                    channel_name: "'"$chnl_channel_name"'",
                     channel_time: '"$chnl_channel_time"'
                 } // .)'
 
@@ -6554,22 +6567,30 @@ GetChannels()
 
     [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
 
-    IFS=$'\003\t' read -r m_pid m_status m_stream_link m_live m_proxy m_xc_proxy m_user_agent m_headers m_cookies \
+    IFS=$'\004\t' read -r m_pid m_status m_stream_link m_live m_proxy m_xc_proxy m_user_agent m_headers m_cookies \
     m_output_dir_name m_playlist_name m_seg_dir_name m_seg_name m_seg_length m_seg_count \
     m_video_codec m_audio_codec m_video_audio_shift m_txt_format m_draw_text m_quality m_bitrates m_const m_encrypt \
     m_encrypt_session m_keyinfo_name m_key_name m_key_time m_input_flags m_output_flags \
     m_channel_name m_channel_time m_sync m_sync_file m_sync_index m_sync_pairs m_flv_status \
-    m_flv_h265 m_flv_push_link m_flv_pull_link < <(JQs flat "$CHANNELS_FILE" '' '
+    m_flv_h265 m_flv_push_link m_flv_pull_link m_schedule_start_time m_schedule_end_time \
+    m_schedule_hls_change m_schedule_channel_name m_schedule_status < <(JQs flat "$CHANNELS_FILE" '' '
     (.channels | if . == "" then {} else . end) as $channels |
+    ($channels.schedule // {} | if (.|type) == "string" then {} else . end) as $schedule |
     reduce ({pid,status,stream_link,live,proxy,xc_proxy,user_agent,headers,cookies,output_dir_name,
     playlist_name,seg_dir_name,seg_name,seg_length,seg_count,video_codec,audio_codec,video_audio_shift,
     txt_format,draw_text,quality,bitrates,const,encrypt,encrypt_session,keyinfo_name,key_name,key_time,
     input_flags,output_flags,channel_name,channel_time,sync,sync_file,sync_index,sync_pairs,flv_status,
     flv_h265,flv_push_link,flv_pull_link}|keys_unsorted[]) as $key ([];
         $channels[$key] as $val | if $val then
-            . + [$val + "\u0002\u0003"]
+            . + [$val + "\u0002\u0004"]
         else
-            . + ["\u0003"]
+            . + ["\u0004"]
+        end
+    ) + reduce ({start_time,end_time,hls_change,channel_name,status}|keys_unsorted[]) as $key ([];
+        $schedule[$key] as $val | if $val then
+            . + [$val + "\u0003\u0004"]
+        else
+            . + ["\u0004"]
         end
     )|@tsv' "${delimiters[@]}")
 
@@ -6587,6 +6608,7 @@ GetChannels()
     if_null_empty=${if_null_off//off/}
     if_null_yes=${if_null_off//off/yes}
     if_null_no=${if_null_off//off/no}
+    if_null_schedule_empty=${if_null_empty//${delimiters[1]}/${delimiters[2]}}
 
     IFS="${delimiters[1]}" read -ra chnls_stream_links <<< "${m_stream_link:-$if_null_empty}"
 
@@ -6641,6 +6663,11 @@ GetChannels()
     IFS="${delimiters[1]}" read -ra chnls_flv_h265 <<< "${m_flv_h265:-$if_null_no}"
     IFS="${delimiters[1]}" read -ra chnls_flv_push_link <<< "${m_flv_push_link:-$if_null_empty}"
     IFS="${delimiters[1]}" read -ra chnls_flv_pull_link <<< "${m_flv_pull_link:-$if_null_empty}"
+    IFS="${delimiters[2]}" read -ra chnls_schedule_start_time <<< "${m_schedule_start_time:-$if_null_schedule_empty}"
+    IFS="${delimiters[2]}" read -ra chnls_schedule_end_time <<< "${m_schedule_end_time:-$if_null_schedule_empty}"
+    IFS="${delimiters[2]}" read -ra chnls_schedule_hls_change <<< "${m_schedule_hls_change:-$if_null_schedule_empty}"
+    IFS="${delimiters[2]}" read -ra chnls_schedule_channel_name <<< "${m_schedule_channel_name:-$if_null_schedule_empty}"
+    IFS="${delimiters[2]}" read -ra chnls_schedule_status <<< "${m_schedule_status:-$if_null_schedule_empty}"
 }
 
 ListChannels()
@@ -6800,8 +6827,10 @@ GetChannel()
     chnl_encrypt_yn chnl_encrypt_session_yn chnl_keyinfo_name chnl_key_name chnl_key_time \
     chnl_input_flags chnl_output_flags chnl_channel_name chnl_channel_time chnl_sync_yn \
     chnl_sync_file chnl_sync_index chnl_sync_pairs chnl_flv_status chnl_flv_h265_yn chnl_flv_push_link \
-    chnl_flv_pull_link < <($JQ_FILE -c -r --arg select_index "$select_index" --argjson select_json "$select_json" '
-    .channels[] | select(.[$select_index] == $select_json[$select_index]) as $channel | 
+    chnl_flv_pull_link chnl_schedule_start_time chnl_schedule_end_time \
+    chnl_schedule_hls_change chnl_schedule_channel_name chnl_schedule_status < <($JQ_FILE -c -r --arg select_index "$select_index" --argjson select_json "$select_json" '
+    .channels[] | select(.[$select_index] == $select_json[$select_index]) as $channel |
+    ($channel.schedule // [] | if . == "" then [] else . end) as $schedule |
     reduce ({pid,status,stream_link,live,proxy,xc_proxy,user_agent,headers,cookies,output_dir_name,
     playlist_name,seg_dir_name,seg_name,seg_length,seg_count,video_codec,audio_codec,video_audio_shift,
     txt_format,draw_text,quality,bitrates,const,encrypt,encrypt_session,keyinfo_name,key_name,key_time,
@@ -6814,7 +6843,13 @@ GetChannel()
         else
             . + ["\u0002"]
         end
-    )|@tsv' "$CHANNELS_FILE")
+    ) + 
+    [([$schedule[]|.start_time // 0|tostring|. + "\u0001"]|join("") + "\u0002")] +
+    [([$schedule[]|.end_time // 0|tostring|. + "\u0001"]|join("") + "\u0002")] +
+    [([$schedule[]|.hls_change // true|tostring|. + "\u0001"]|join("") + "\u0002")] +
+    [([$schedule[]|.channel_name|. + "\u0001"]|join("") + "\u0002")] +
+    [([$schedule[]|.status // 2|tostring|. + "\u0001"]|join("") + "\u0002")]
+    |@tsv' "$CHANNELS_FILE")
 
     if [ -z "$chnl_pid" ] && [ -z "${monitor:-}" ]
     then
@@ -6848,6 +6883,7 @@ GetChannel()
 
     chnl_xc_proxy_ori=$chnl_xc_proxy
     chnl_xc_proxy=""
+
     if [ -n "$chnl_xc_proxy_ori" ] && [[ $chnl_stream_link =~ ^([^|]+)|http ]]
     then
         XtreamCodesGetDomains
@@ -6874,6 +6910,7 @@ GetChannel()
     chnl_output_dir_root="$LIVE_ROOT/$chnl_output_dir_name"
 
     v_or_a=${chnl_video_audio_shift%_*}
+
     if [ "$v_or_a" == "v" ] 
     then
         chnl_video_shift=${chnl_video_audio_shift#*_}
@@ -6909,6 +6946,19 @@ GetChannel()
     fi
 
     chnl_keyinfo_name=${chnl_keyinfo_name:-$(RandStr)}
+
+    if [ -z "$chnl_schedule_status" ] 
+    then
+        chnl_schedules_count=0
+    else
+        IFS="${delimiters[0]}" read -r -a chnl_schedules_start_time <<< "$chnl_schedule_start_time"
+        IFS="${delimiters[0]}" read -r -a chnl_schedules_end_time <<< "$chnl_schedule_end_time"
+        IFS="${delimiters[0]}" read -r -a chnl_schedules_hls_change <<< "$chnl_schedule_hls_change"
+        IFS="${delimiters[0]}" read -r -a chnl_schedules_channel_name <<< "$chnl_schedule_channel_name"
+        IFS="${delimiters[0]}" read -r -a chnl_schedules_status <<< "$chnl_schedule_status"
+
+        chnl_schedules_count=${#chnl_schedules_status[@]}
+    fi
 
     if [ -z "${monitor:-}" ] 
     then
@@ -7259,19 +7309,19 @@ SetStreamLink()
         if [ "$stream_links_options_index" -gt 0 ] 
         then
             echo
-            ExitOnCancel "`gettext \"请输入直播源( mpegts / hls / flv / youtube ...): \"`" stream_links_input
+            ExitOnText "`gettext \"请输入直播源( mpegts / hls / flv / youtube ...): \"`" stream_links_input
 
             chnl_stream_links[stream_links_options_index-2]=("$stream_links_input")
             stream_links=("${chnl_stream_links[@]}")
         else
             Println "`eval_gettext \"\\\$tip 可以是视频路径, 可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔\"`"
-            ExitOnCancel "`gettext \"请输入直播源( mpegts / hls / flv / youtube ...): \"`" stream_links_input
+            ExitOnText "`gettext \"请输入直播源( mpegts / hls / flv / youtube ...): \"`" stream_links_input
 
             IFS=" " read -ra stream_links <<< "$stream_links_input"
         fi
     else
         Println "`eval_gettext \"\\\$tip 可以是视频路径, 可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔\"`"
-        ExitOnCancel "`gettext \"请输入直播源( mpegts / hls / flv / youtube ...): \"`" stream_links_input
+        ExitOnText "`gettext \"请输入直播源( mpegts / hls / flv / youtube ...): \"`" stream_links_input
 
         IFS=" " read -ra stream_links <<< "$stream_links_input"
     fi
@@ -7402,7 +7452,7 @@ SetStreamLink()
         if [[ ! -x $(command -v openssl) ]] 
         then
             echo
-            AskIfContinue y "`gettext \"是否安装 openssl\"`"
+            ExitOnList y "`gettext \"是否安装 openssl\"`"
             OpensslInstall
         fi
         Println "`eval_gettext \"\\\$info 解析 4gtv 链接 ...\"`"
@@ -7476,7 +7526,7 @@ SetStreamLink()
         if [[ ! -x $(command -v openssl) ]] 
         then
             echo
-            AskIfContinue y "`gettext \"是否安装 openssl\"`"
+            ExitOnList y "`gettext \"是否安装 openssl\"`"
             OpensslInstall
         fi
         Println "`eval_gettext \"\\\$info 解析 4gtv 链接 ...\"`"
@@ -8422,15 +8472,18 @@ SetAntiDDosPort()
                     if [[ $anti_ddos_ports_start == *[!0-9]* ]] || [[ $anti_ddos_ports_end == *[!0-9]* ]] || [ "$anti_ddos_ports_start" -eq 0 ] || [ "$anti_ddos_ports_end" -eq 0 ] || [ "$anti_ddos_ports_start" -ge "$anti_ddos_ports_end" ]
                     then
                         error_no=3
+                        break
                     fi
                 ;;
                 *[!0-9]*)
                     error_no=1
+                    break
                 ;;
                 *)
                     if [ "$anti_ddos_port" -lt 1 ]  
                     then
                         error_no=2
+                        break
                     fi
                 ;;
             esac
@@ -8665,47 +8718,38 @@ SetAntiLeech()
             fi
         fi
 
-        if [ -n "${flv_nums:-}" ] 
+        echo
+        if [ "$d_anti_leech_restart_flv_changes_yn" == "yes" ] 
         then
-            echo
-            if [ "$d_anti_leech_restart_flv_changes_yn" == "yes" ] 
-            then
-                inquirer list_input "是否每当重启 FLV 频道更改成随机的推流和拉流地址" yn_options anti_leech_restart_flv_changes_yn
-            else
-                inquirer list_input "是否每当重启 FLV 频道更改成随机的推流和拉流地址" ny_options anti_leech_restart_flv_changes_yn
-            fi
-
-            if [[ $anti_leech_restart_flv_changes_yn == "$i18n_yes" ]] 
-            then
-                anti_leech_restart_flv_changes_yn="yes"
-            else
-                anti_leech_restart_flv_changes_yn="no"
-            fi
+            inquirer list_input "是否每当重启 FLV 频道更改成随机的推流和拉流地址" yn_options anti_leech_restart_flv_changes_yn
         else
-            anti_leech_restart_flv_changes_yn=$d_anti_leech_restart_flv_changes_yn
+            inquirer list_input "是否每当重启 FLV 频道更改成随机的推流和拉流地址" ny_options anti_leech_restart_flv_changes_yn
         fi
 
-        if [ -n "$hls_nums" ] 
+        if [[ $anti_leech_restart_flv_changes_yn == "$i18n_yes" ]] 
         then
-            echo
-            if [ "$d_anti_leech_restart_hls_changes_yn" == "yes" ] 
-            then
-                inquirer list_input "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 分片名称, key 名称" yn_options anti_leech_restart_hls_changes_yn
-            else
-                inquirer list_input "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 分片名称, key 名称" ny_options anti_leech_restart_hls_changes_yn
-            fi
-
-            if [[ $anti_leech_restart_hls_changes_yn == "$i18n_yes" ]] 
-            then
-                anti_leech_restart_hls_changes_yn="yes"
-            else
-                anti_leech_restart_hls_changes_yn="no"
-            fi
-            SetHlsKeyPeriod
-            hls_key_expire_seconds=$((hls_key_period+hls_delay_seconds))
+            anti_leech_restart_flv_changes_yn="yes"
         else
-            anti_leech_restart_hls_changes_yn=$d_anti_leech_restart_hls_changes_yn
+            anti_leech_restart_flv_changes_yn="no"
         fi
+
+        echo
+        if [ "$d_anti_leech_restart_hls_changes_yn" == "yes" ] 
+        then
+            inquirer list_input "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 分片名称, key 名称" yn_options anti_leech_restart_hls_changes_yn
+        else
+            inquirer list_input "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 分片名称, key 名称" ny_options anti_leech_restart_hls_changes_yn
+        fi
+
+        if [[ $anti_leech_restart_hls_changes_yn == "$i18n_yes" ]] 
+        then
+            anti_leech_restart_hls_changes_yn="yes"
+        else
+            anti_leech_restart_hls_changes_yn="no"
+        fi
+
+        SetHlsKeyPeriod
+        hls_key_expire_seconds=$((hls_key_period+hls_delay_seconds))
     else
         anti_leech_yn="no"
         anti_leech_restart_nums=$d_anti_leech_restart_nums
@@ -9157,15 +9201,18 @@ AddChannel()
                                     if [[ $stream_url_num_start == *[!0-9]* ]] || [[ $stream_url_num_end == *[!0-9]* ]] || [ "$stream_url_num_start" -eq 0 ] || [ "$stream_url_num_end" -eq 0 ] || [ "$stream_url_num_end" -gt "$stream_urls_count" ] || [ "$stream_url_num_start" -ge "$stream_url_num_end" ]
                                     then
                                         error_no=3
+                                        break
                                     fi
                                 ;;
                                 *[!0-9]*)
                                     error_no=1
+                                    break
                                 ;;
                                 *)
                                     if [ "$stream_url_num" -lt 1 ] || [ "$stream_url_num" -gt "$stream_urls_count" ] 
                                     then
                                         error_no=2
+                                        break
                                     fi
                                 ;;
                             esac
@@ -9293,15 +9340,18 @@ AddChannel()
                                         if [[ $stream_audio_num_start == *[!0-9]* ]] || [[ $stream_audio_num_end == *[!0-9]* ]] || [ "$stream_audio_num_start" -eq 0 ] || [ "$stream_audio_num_end" -eq 0 ] || [ "$stream_audio_num_end" -gt "$stream_audio_count" ] || [ "$stream_audio_num_start" -ge "$stream_audio_num_end" ]
                                         then
                                             error_no=3
+                                            break
                                         fi
                                     ;;
                                     *[!0-9]*)
                                         error_no=1
+                                        break
                                     ;;
                                     *)
                                         if [ "$stream_audio_num" -lt 1 ] || [ "$stream_audio_num" -gt "$stream_audio_count" ] 
                                         then
                                             error_no=2
+                                            break
                                         fi
                                     ;;
                                 esac
@@ -9446,15 +9496,18 @@ AddChannel()
                                         if [[ $stream_subtitles_num_start == *[!0-9]* ]] || [[ $stream_subtitles_num_end == *[!0-9]* ]] || [ "$stream_subtitles_num_start" -eq 0 ] || [ "$stream_subtitles_num_end" -eq 0 ] || [ "$stream_subtitles_num_end" -gt "$stream_subtitles_count" ] || [ "$stream_subtitles_num_start" -ge "$stream_subtitles_num_end" ]
                                         then
                                             error_no=3
+                                            break
                                         fi
                                     ;;
                                     *[!0-9]*)
                                         error_no=1
+                                        break
                                     ;;
                                     *)
                                         if [ "$stream_subtitles_num" -lt 1 ] || [ "$stream_subtitles_num" -gt "$stream_subtitles_count" ] 
                                         then
                                             error_no=2
+                                            break
                                         fi
                                     ;;
                                 esac
@@ -9787,8 +9840,8 @@ EditOutputDirName()
 {
     if [ "$chnl_status" == "on" ]
     then
-        echo
-        AskIfContinue n "`gettext \"检测到频道正在运行, 是否现在关闭\"`"
+        Println "$tip 如果正在监控此频道, 需要先关闭监控"
+        ExitOnList n "`gettext \"检测到频道正在运行, 是否现在关闭\"`"
         StopChannel
         echo && echo
     fi
@@ -9989,14 +10042,14 @@ EditChannelAll()
     then
         kind="flv"
         echo
-        AskIfContinue n "`gettext \"检测到频道正在运行, 是否现在关闭\"`"
+        ExitOnList n "`gettext \"检测到频道正在运行, 是否现在关闭\"`"
         StopChannel
         echo && echo
     elif [ "$chnl_status" == "on" ]
     then
         kind=""
         echo
-        AskIfContinue n "`gettext \"检测到频道正在运行, 是否现在关闭\"`"
+        ExitOnList n "`gettext \"检测到频道正在运行, 是否现在关闭\"`"
         StopChannel
         echo && echo
     fi
@@ -11262,15 +11315,18 @@ StartChannel()
                                     if [[ $chnl_stream_url_num_start == *[!0-9]* ]] || [[ $chnl_stream_url_num_end == *[!0-9]* ]] || [ "$chnl_stream_url_num_start" -eq 0 ] || [ "$chnl_stream_url_num_end" -eq 0 ] || [ "$chnl_stream_url_num_end" -gt "$chnl_stream_urls_count" ] || [ "$chnl_stream_url_num_start" -ge "$chnl_stream_url_num_end" ]
                                     then
                                         error_no=3
+                                        break
                                     fi
                                 ;;
                                 *[!0-9]*)
                                     error_no=1
+                                    break
                                 ;;
                                 *)
                                     if [ "$chnl_stream_url_num" -lt 1 ] || [ "$chnl_stream_url_num" -gt "$chnl_stream_urls_count" ] 
                                     then
                                         error_no=2
+                                        break
                                     fi
                                 ;;
                             esac
@@ -11408,15 +11464,18 @@ StartChannel()
                                     if [[ $chnl_stream_audio_num_start == *[!0-9]* ]] || [[ $chnl_stream_audio_num_end == *[!0-9]* ]] || [ "$chnl_stream_audio_num_start" -eq 0 ] || [ "$chnl_stream_audio_num_end" -eq 0 ] || [ "$chnl_stream_audio_num_end" -gt "$chnl_stream_audio_count" ] || [ "$chnl_stream_audio_num_start" -ge "$chnl_stream_audio_num_end" ]
                                     then
                                         error_no=3
+                                        break
                                     fi
                                 ;;
                                 *[!0-9]*)
                                     error_no=1
+                                    break
                                 ;;
                                 *)
                                     if [ "$chnl_stream_audio_num" -lt 1 ] || [ "$chnl_stream_audio_num" -gt "$chnl_stream_audio_count" ] 
                                     then
                                         error_no=2
+                                        break
                                     fi
                                 ;;
                             esac
@@ -11566,15 +11625,18 @@ StartChannel()
                                     if [[ $chnl_stream_subtitles_num_start == *[!0-9]* ]] || [[ $chnl_stream_subtitles_num_end == *[!0-9]* ]] || [ "$chnl_stream_subtitles_num_start" -eq 0 ] || [ "$chnl_stream_subtitles_num_end" -eq 0 ] || [ "$chnl_stream_subtitles_num_end" -gt "$chnl_stream_subtitles_count" ] || [ "$chnl_stream_subtitles_num_start" -ge "$chnl_stream_subtitles_num_end" ]
                                     then
                                         error_no=3
+                                        break
                                     fi
                                 ;;
                                 *[!0-9]*)
                                     error_no=1
+                                    break
                                 ;;
                                 *)
                                     if [ "$chnl_stream_subtitles_num" -lt 1 ] || [ "$chnl_stream_subtitles_num" -gt "$chnl_stream_subtitles_count" ] 
                                     then
                                         error_no=2
+                                        break
                                     fi
                                 ;;
                             esac
@@ -12058,6 +12120,853 @@ EditDefault()
         JQ update "$CHANNELS_FILE" "${!1}"
     fi
     Println "$info $1 修改成功\n"
+}
+
+ListChannelsSchedule()
+{
+    GetChannels
+
+    if [ "$chnls_count" -eq 0 ]
+    then
+        Println "`eval_gettext \"\\\$error 没有发现频道, 请检查 !\"`\n" && exit 1
+    fi
+
+    chnls_indices=("${!chnls_pid[@]}")
+
+    chnls_schedule_list=""
+    chnls_schedule_indices=()
+
+    for chnls_index in "${chnls_indices[@]}"
+    do
+        if [ -z "${chnls_schedule_status[chnls_index]}" ] 
+        then
+            continue
+        fi
+
+        chnls_schedule_indices+=("$chnls_index")
+
+        chnls_schedule_list="$chnls_schedule_list  ${green}$((chnls_index+1)).${normal}${indent_6}${chnls_channel_name[chnls_index]}\n\n"
+
+        IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
+        IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
+        IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
+        IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
+
+        chnl_schedules_if_null="${chnls_schedule_hls_change[chnls_index]//false/}"
+        chnl_schedules_if_null="${chnl_schedules_if_null//true/}"
+
+        IFS="${delimiters[1]}" read -ra chnl_schedules_channel_name <<< "${chnls_schedule_channel_name[chnls_index]:-$chnl_schedules_if_null}${delimiters[1]}"
+
+        chnl_schedules_indices=("${!chnl_schedules_status[@]}")
+
+        for chnl_schedules_index in "${chnl_schedules_indices[@]}"
+        do
+            if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ] 
+            then
+                chnl_schedule_status_list="${green}等待${normal}"
+            elif [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 1 ] 
+            then
+                chnl_schedule_status_list="${blue}进行${normal}"
+            else
+                chnl_schedule_status_list="${red}结束${normal}"
+            fi
+            if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "true" ] 
+            then
+                chnl_schedule_hls_change_list="${green}是${normal}"
+            else
+                chnl_schedule_hls_change_list="${red}否${normal}"
+            fi
+            if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
+            then
+                chnl_schedule_channel_name_list="${indent_6}频道名称: ${chnl_schedules_channel_name[chnl_schedules_index]}\n"
+            else
+                chnl_schedule_channel_name_list=""
+            fi
+            chnls_schedule_list="$chnls_schedule_list${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
+        done
+    done
+
+    if [ -n "$chnls_schedule_list" ] 
+    then
+        Println "$chnls_schedule_list"
+    fi
+}
+
+AddChannelsSchedule()
+{
+    ListChannels
+    InputChannelsIndex
+
+    for chnls_index in "${chnls_indices[@]}"
+    do
+        chnl_schedules_list="${indent_6}${green}${chnls_channel_name[chnls_index]}${normal}\n\n"
+
+        if [ -n "${chnls_schedule_status[chnls_index]}" ] 
+        then
+            IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
+            IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
+            IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
+            IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
+
+            chnl_schedules_if_null="${chnls_schedule_hls_change[chnls_index]//false/}"
+            chnl_schedules_if_null="${chnl_schedules_if_null//true/}"
+
+            IFS="${delimiters[1]}" read -ra chnl_schedules_channel_name <<< "${chnls_schedule_channel_name[chnls_index]:-$chnl_schedules_if_null}${delimiters[1]}"
+
+            chnl_schedules_indices=("${!chnl_schedules_status[@]}")
+
+            for chnl_schedules_index in "${chnl_schedules_indices[@]}"
+            do
+                if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ] 
+                then
+                    chnl_schedule_status_list="${green}等待${normal}"
+                elif [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 1 ] 
+                then
+                    chnl_schedule_status_list="${blue}进行${normal}"
+                else
+                    chnl_schedule_status_list="${red}结束${normal}"
+                fi
+                if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "true" ] 
+                then
+                    chnl_schedule_hls_change_list="${green}是${normal}"
+                else
+                    chnl_schedule_hls_change_list="${red}否${normal}"
+                fi
+                if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
+                then
+                    chnl_schedule_channel_name_list="${indent_6}频道名称: ${chnl_schedules_channel_name[chnl_schedules_index]}\n"
+                else
+                    chnl_schedule_channel_name_list=""
+                fi
+                chnl_schedules_list="$chnl_schedules_list${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
+            done
+        fi
+
+        Println "$chnl_schedules_list"
+
+        while true 
+        do
+            inquirer date_pick "设置开始日期" schedule_start_time
+
+            echo
+            inquirer date_pick "设置结束日期" schedule_end_time
+
+            echo
+            inquirer list_input_index "防盗链" yn_options yn_options_index
+
+            if [ "$yn_options_index" -eq 0 ] 
+            then
+                schedule_hls_change="true"
+            else
+                schedule_hls_change="false"
+            fi
+
+            echo
+            inquirer text_input "输入频道名称" schedule_channel_name "不设置"
+
+            if [ "$schedule_channel_name" == "不设置" ] 
+            then
+                schedule_channel_name=""
+            fi
+
+            chnl_schedule=$(
+                $JQ_FILE -n --arg start_time "$schedule_start_time" --arg end_time "$schedule_end_time" \
+                    --arg hls_change "$schedule_hls_change" --arg channel_name "$schedule_channel_name" \
+                    --arg status 0 \
+                '{
+                    start_time: $start_time | tonumber,
+                    end_time: $end_time | tonumber,
+                    hls_change: $hls_change | test("true"),
+                    channel_name: $channel_name,
+                    status: $status | tonumber
+                }'
+            )
+
+            jq_path='["channels",'"$chnls_index"',"schedule"]'
+            JQ add "$CHANNELS_FILE" "[$chnl_schedule]"
+
+            Println "$info 频道 [ ${schedule_channel_name:-${chnls_channel_name[chnls_index]}} ] 计划添加成功\n"
+
+            echo
+            inquirer list_input_index "是否继续添加此频道计划" ny_options ny_options_index
+
+            if [ "$ny_options_index" -eq 0 ] 
+            then
+                break
+            fi
+
+            echo
+        done
+    done
+
+    echo
+}
+
+EditChannelSchedule()
+{
+    echo
+    channel_schedule_options=( '开始日期' '结束日期' '防盗链' '频道名称' '状态' )
+
+    set +u
+    inquirer checkbox_input_indices "选择修改 [ ${chnls_channel_name[chnls_index]} ] 计划 $((chnl_schedules_index+1))" channel_schedule_options channel_schedule_options_indices
+    set -u
+
+    for channel_schedule_options_index in "${channel_schedule_options_indices[@]}"
+    do
+        echo
+        if [ "$channel_schedule_options_index" -eq 0 ] 
+        then
+            inquirer date_pick "设置开始日期" schedule_start_time
+
+            jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"start_time"]'
+            JQ update "$CHANNELS_FILE" "$schedule_start_time" number
+        elif [ "$channel_schedule_options_index" -eq 1 ] 
+        then
+            inquirer date_pick "设置结束日期" schedule_end_time
+
+            jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"end_time"]'
+            JQ update "$CHANNELS_FILE" "$schedule_end_time" number
+        elif [ "$channel_schedule_options_index" -eq 2 ] 
+        then
+            inquirer list_input_index "防盗链" yn_options yn_options_index
+
+            if [ "$yn_options_index" -eq 0 ] 
+            then
+                schedule_hls_change="true"
+            else
+                schedule_hls_change="false"
+            fi
+
+            jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"hls_change"]'
+            JQ update "$CHANNELS_FILE" "$schedule_hls_change" bool
+        elif [ "$channel_schedule_options_index" -eq 3 ] 
+        then
+            inquirer text_input "输入频道名称" schedule_channel_name "不设置"
+
+            if [ "$schedule_channel_name" == "不设置" ] 
+            then
+                schedule_channel_name=""
+            fi
+
+            jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"channel_name"]'
+            JQ update "$CHANNELS_FILE" "$schedule_channel_name"
+        elif [ "$channel_schedule_options_index" -eq 4 ] 
+        then
+            schedule_status_options=( '等待' '进行' '结束' )
+            inquirer list_input_index "设置状态" schedule_status_options schedule_status
+
+            jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"status"]'
+            JQ update "$CHANNELS_FILE" "$schedule_status" number
+        fi
+    done
+
+    Println "$info 频道 [ ${chnls_channel_name[chnls_index]} ] 计划 $((chnl_schedules_index+1)) 修改成功\n"
+}
+
+EditChannelSchedules()
+{
+    IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
+    IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
+    IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
+    IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
+
+    chnl_schedules_if_null="${chnls_schedule_hls_change[chnls_index]//false/}"
+    chnl_schedules_if_null="${chnl_schedules_if_null//true/}"
+
+    IFS="${delimiters[1]}" read -ra chnl_schedules_channel_name <<< "${chnls_schedule_channel_name[chnls_index]:-$chnl_schedules_if_null}${delimiters[1]}"
+
+    chnl_schedules_indices=("${!chnl_schedules_status[@]}")
+    chnl_schedules_count=${#chnl_schedules_status[@]}
+    chnl_schedules_list="${indent_6}${green}${chnls_channel_name[chnls_index]}${normal}\n\n"
+
+    for chnl_schedules_index in "${chnl_schedules_indices[@]}"
+    do
+        if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ] 
+        then
+            chnl_schedule_status_list="${green}等待${normal}"
+        elif [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 1 ] 
+        then
+            chnl_schedule_status_list="${blue}进行${normal}"
+        else
+            chnl_schedule_status_list="${red}结束${normal}"
+        fi
+        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "true" ] 
+        then
+            chnl_schedule_hls_change_list="${green}是${normal}"
+        else
+            chnl_schedule_hls_change_list="${red}否${normal}"
+        fi
+        if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
+        then
+            chnl_schedule_channel_name_list="${indent_6}频道名称: ${chnl_schedules_channel_name[chnl_schedules_index]}\n"
+        else
+            chnl_schedule_channel_name_list=""
+        fi
+        chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
+    done
+
+    Println "$chnl_schedules_list"
+
+    echo -e "  ${green}$((chnl_schedules_count+1)).${normal}${indent_6}全部\n\n"
+
+    echo "输入计划序号(多个计划用空格分隔 比如: 1 2 4-5)"
+    while read -p "$i18n_default_cancel" chnl_schedules_num
+    do
+        if [ -z "$chnl_schedules_num" ] 
+        then
+            Println "$i18n_canceled...\n" && break
+        fi
+
+        if [ "$chnl_schedules_num" == $((chnl_schedules_count+1)) ] 
+        then
+            for chnl_schedules_index in "${chnl_schedules_indices[@]}"
+            do
+                EditChannelSchedule
+            done
+            break
+        fi
+
+        IFS=" " read -ra chnl_schedules_num_arr <<< "$chnl_schedules_num"
+
+        error_no=0
+        for chnl_schedule_num in "${chnl_schedules_num_arr[@]}"
+        do
+            case "$chnl_schedule_num" in
+                *"-"*)
+                    chnl_schedule_num_start=${chnl_schedule_num%-*}
+                    chnl_schedule_num_end=${chnl_schedule_num#*-}
+                    if [[ $chnl_schedule_num_start == *[!0-9]* ]] || [[ $chnl_schedule_num_end == *[!0-9]* ]] || [ "$chnl_schedule_num_start" -eq 0 ] || [ "$chnl_schedule_num_end" -eq 0 ] || [ "$chnl_schedule_num_end" -gt "$chnl_schedules_count" ] || [ "$chnl_schedule_num_start" -ge "$chnl_schedule_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$chnl_schedule_num" -lt 1 ] || [ "$chnl_schedule_num" -gt "$chnl_schedules_count" ] 
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                for chnl_schedule_num in "${chnl_schedules_num_arr[@]}"
+                do
+                    if [[ $chnl_schedule_num =~ - ]] 
+                    then
+                        start=${chnl_schedule_num%-*}
+                        end=${chnl_schedule_num#*-}
+                        for((chnl_schedules_index=start-1;chnl_schedules_index<end;chnl_schedules_index++));
+                        do
+                            EditChannelSchedule
+                        done
+                    else
+                        chnl_schedules_index=$((chnl_schedule_num-1))
+                        EditChannelSchedule
+                    fi
+                done
+                break
+            ;;
+        esac
+    done
+}
+
+EditChannelsSchedule()
+{
+    ListChannelsSchedule
+
+    if [ -z "$chnls_schedule_list" ] 
+    then
+        Println "$error 请先添加频道计划\n"
+        exit 1
+    fi
+
+    echo -e "  ${green}$((chnls_count+1)).${normal}${indent_6}全部\n\n"
+
+    echo "输入频道序号(多个频道用空格分隔 比如: 1 2 4-5)"
+    while read -p "$i18n_default_cancel" chnls_num
+    do
+        if [ -z "$chnls_num" ] 
+        then
+            Println "$i18n_canceled...\n" && exit 1
+        fi
+
+        if [ "$chnls_num" == $((chnls_count+1)) ] 
+        then
+            for chnls_index in "${chnls_schedule_indices[@]}"
+            do
+                EditChannelSchedules
+            done
+            break
+        fi
+
+        IFS=" " read -ra chnls_num_arr <<< "$chnls_num"
+
+        error_no=0
+        for chnl_num in "${chnls_num_arr[@]}"
+        do
+            case "$chnl_num" in
+                *"-"*)
+                    chnl_num_start=${chnl_num%-*}
+                    chnl_num_end=${chnl_num#*-}
+                    if [[ $chnl_num_start == *[!0-9]* ]] || [[ $chnl_num_end == *[!0-9]* ]] || [ "$chnl_num_start" -eq 0 ] || [ "$chnl_num_end" -eq 0 ] || [ "$chnl_num_end" -gt "$chnls_count" ] || [ "$chnl_num_start" -ge "$chnl_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    else
+                        for((i=chnl_num_start-1;i<chnl_num_end;i++));
+                        do
+                            if [ -z "${chnls_schedule_status[i]}" ] 
+                            then
+                                error_no=3
+                                break 2
+                            fi
+                        done
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$chnl_num" -lt 1 ] || [ "$chnl_num" -gt "$chnls_count" ] || [ -z "${chnls_schedule_status[chnl_num-1]}" ]
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                for chnl_num in "${chnls_num_arr[@]}"
+                do
+                    if [[ $chnl_num =~ - ]] 
+                    then
+                        start=${chnl_num%-*}
+                        end=${chnl_num#*-}
+                        for((chnls_index=start-1;chnls_index<end;chnls_index++));
+                        do
+                            EditChannelSchedules
+                        done
+                    else
+                        chnls_index=$((chnl_num-1))
+                        EditChannelSchedules
+                    fi
+                done
+                break
+            ;;
+        esac
+    done
+}
+
+DelChannelSchedule()
+{
+    jq_path='["channels",'"$chnls_index"',"schedule"]'
+    JQ delete "$CHANNELS_FILE" "$chnl_schedules_index"
+
+    Println "$info 频道 [ ${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} ] 计划 $((chnl_schedules_index+1)) 删除成功\n"
+}
+
+DelChannelSchedules()
+{
+    IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
+    IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
+    IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
+    IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
+
+    chnl_schedules_if_null="${chnls_schedule_hls_change[chnls_index]//false/}"
+    chnl_schedules_if_null="${chnl_schedules_if_null//true/}"
+
+    IFS="${delimiters[1]}" read -ra chnl_schedules_channel_name <<< "${chnls_schedule_channel_name[chnls_index]:-$chnl_schedules_if_null}${delimiters[1]}"
+
+    chnl_schedules_indices=("${!chnl_schedules_status[@]}")
+    chnl_schedules_count=${#chnl_schedules_status[@]}
+    chnl_schedules_list="${indent_6}${green}${chnls_channel_name[chnls_index]}${normal}\n\n"
+
+    for chnl_schedules_index in "${chnl_schedules_indices[@]}"
+    do
+        if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ] 
+        then
+            chnl_schedule_status_list="${green}等待${normal}"
+        elif [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 1 ] 
+        then
+            chnl_schedule_status_list="${blue}进行${normal}"
+        else
+            chnl_schedule_status_list="${red}结束${normal}"
+        fi
+        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "true" ] 
+        then
+            chnl_schedule_hls_change_list="${green}是${normal}"
+        else
+            chnl_schedule_hls_change_list="${red}否${normal}"
+        fi
+        if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
+        then
+            chnl_schedule_channel_name_list="${indent_6}频道名称: ${chnl_schedules_channel_name[chnl_schedules_index]}\n"
+        else
+            chnl_schedule_channel_name_list=""
+        fi
+        chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
+    done
+
+    Println "$chnl_schedules_list"
+
+    echo -e "  ${green}$((chnl_schedules_count+1)).${normal}${indent_6}全部\n\n"
+
+    echo "输入计划序号(多个计划用空格分隔 比如: 1 2 4-5)"
+    while read -p "$i18n_default_cancel" chnl_schedules_num
+    do
+        if [ -z "$chnl_schedules_num" ] 
+        then
+            Println "$i18n_canceled...\n" && break
+        fi
+
+        if [ "$chnl_schedules_num" == $((chnl_schedules_count+1)) ] 
+        then
+            chnl_schedules_indices=($(printf '%s\n' "${chnl_schedules_indices[@]}" | sort -nr))
+
+            for chnl_schedules_index in "${chnl_schedules_indices[@]}"
+            do
+                DelChannelSchedule
+            done
+            break
+        fi
+
+        IFS=" " read -ra chnl_schedules_num_arr <<< "$chnl_schedules_num"
+
+        error_no=0
+        for chnl_schedule_num in "${chnl_schedules_num_arr[@]}"
+        do
+            case "$chnl_schedule_num" in
+                *"-"*)
+                    chnl_schedule_num_start=${chnl_schedule_num%-*}
+                    chnl_schedule_num_end=${chnl_schedule_num#*-}
+                    if [[ $chnl_schedule_num_start == *[!0-9]* ]] || [[ $chnl_schedule_num_end == *[!0-9]* ]] || [ "$chnl_schedule_num_start" -eq 0 ] || [ "$chnl_schedule_num_end" -eq 0 ] || [ "$chnl_schedule_num_end" -gt "$chnl_schedules_count" ] || [ "$chnl_schedule_num_start" -ge "$chnl_schedule_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$chnl_schedule_num" -lt 1 ] || [ "$chnl_schedule_num" -gt "$chnl_schedules_count" ] 
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                declare -a new_array
+                for chnl_schedule_num in "${chnl_schedules_num_arr[@]}"
+                do
+                    if [[ $chnl_schedule_num =~ - ]] 
+                    then
+                        start=${chnl_schedule_num%-*}
+                        end=${chnl_schedule_num#*-}
+                        for((chnl_schedules_index=start-1;chnl_schedules_index<end;chnl_schedules_index++));
+                        do
+                            new_array+=("$chnl_schedules_index")
+                        done
+                    else
+                        new_array+=("$((chnl_schedule_num-1))")
+                    fi
+                done
+
+                new_array=($(printf '%s\n' "${new_array[@]}" | sort -nr))
+
+                for chnl_schedules_index in "${new_array[@]}"
+                do
+                    DelChannelSchedule
+                done
+
+                unset new_array
+                break
+            ;;
+        esac
+    done
+}
+
+DelChannelsSchedule()
+{
+    ListChannelsSchedule
+
+    if [ -z "$chnls_schedule_list" ] 
+    then
+        Println "$error 请先添加频道计划\n"
+        exit 1
+    fi
+
+    echo -e "  ${green}$((chnls_count+1)).${normal}${indent_6}全部\n\n"
+
+    echo "输入频道序号(多个频道用空格分隔 比如: 1 2 4-5)"
+    while read -p "$i18n_default_cancel" chnls_num
+    do
+        if [ -z "$chnls_num" ] 
+        then
+            Println "$i18n_canceled...\n" && exit 1
+        fi
+
+        if [ "$chnls_num" == $((chnls_count+1)) ] 
+        then
+            for chnls_index in "${chnls_schedule_indices[@]}"
+            do
+                DelChannelSchedules
+            done
+            break
+        fi
+
+        IFS=" " read -ra chnls_num_arr <<< "$chnls_num"
+
+        error_no=0
+        for chnl_num in "${chnls_num_arr[@]}"
+        do
+            case "$chnl_num" in
+                *"-"*)
+                    chnl_num_start=${chnl_num%-*}
+                    chnl_num_end=${chnl_num#*-}
+                    if [[ $chnl_num_start == *[!0-9]* ]] || [[ $chnl_num_end == *[!0-9]* ]] || [ "$chnl_num_start" -eq 0 ] || [ "$chnl_num_end" -eq 0 ] || [ "$chnl_num_end" -gt "$chnls_count" ] || [ "$chnl_num_start" -ge "$chnl_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    else
+                        for((i=chnl_num_start-1;i<chnl_num_end;i++));
+                        do
+                            if [ -z "${chnls_schedule_status[i]}" ] 
+                            then
+                                error_no=3
+                                break 2
+                            fi
+                        done
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$chnl_num" -lt 1 ] || [ "$chnl_num" -gt "$chnls_count" ] || [ -z "${chnls_schedule_status[chnl_num-1]}" ]
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                for chnl_num in "${chnls_num_arr[@]}"
+                do
+                    if [[ $chnl_num =~ - ]] 
+                    then
+                        start=${chnl_num%-*}
+                        end=${chnl_num#*-}
+                        for((chnls_index=start-1;chnls_index<end;chnls_index++));
+                        do
+                            DelChannelSchedules
+                        done
+                    else
+                        chnls_index=$((chnl_num-1))
+                        DelChannelSchedules
+                    fi
+                done
+                break
+            ;;
+        esac
+    done
+}
+
+ScheduleMenu()
+{
+    echo
+    chnls_schedule_options=( '查看' '添加' '修改' '删除' )
+    inquirer list_input_index "请选择" chnls_schedule_options chnls_schedule_options_index
+
+    if [ "$chnls_schedule_options_index" -eq 0 ] 
+    then
+        ListChannelsSchedule
+
+        if [ -z "$chnls_schedule_list" ] 
+        then
+            Println "$error 请先添加频道计划\n"
+            exit 1
+        fi
+    elif [ "$chnls_schedule_options_index" -eq 1 ] 
+    then
+        AddChannelsSchedule
+    elif [ "$chnls_schedule_options_index" -eq 2 ] 
+    then
+        EditChannelsSchedule
+    else
+        DelChannelsSchedule
+    fi
+}
+
+MonitorList()
+{
+    if [ -s "$MONITOR_LOG" ] 
+    then
+        Println "$info 监控日志: "
+        count=0
+        log=""
+        last_line=""
+        printf -v this_hour '%(%H)T' -1
+        while IFS= read -r line 
+        do
+            if [ "$count" -lt "${1:-10}" ] 
+            then
+                message=${line#* }
+                message=${message#* }
+                if [ -z "$last_line" ] 
+                then
+                    count=$((count+1))
+                    log=$line
+                    last_line=$message
+                elif [ "$message" != "$last_line" ] 
+                then
+                    count=$((count+1))
+                    log="$line\n$log"
+                    last_line="$message"
+                fi
+            fi
+
+            if [ "${line:2:1}" == "-" ] 
+            then
+                hour=${line:6:2}
+            elif [ "${line:2:1}" == ":" ] 
+            then
+                hour=${line:0:2}
+            fi
+
+            if [ -n "${hour:-}" ] && [ "$hour" != "$this_hour" ] && [ "$count" -eq "${1:-10}" ] 
+            then
+                break
+            elif [ -n "${hour:-}" ] && [ "$hour" == "$this_hour" ] && [[ $line == *"计划重启时间"* ]]
+            then
+                [ -z "${found_line:-}" ] && found_line=$line
+            fi
+        done < <(awk '{a[i++]=$0} END {for (j=i-1; j>=0;) print a[j--] }' "$MONITOR_LOG")
+        Println "$log"
+        [ -n "${found_line:-}" ] && Println "${green}${found_line#* }${normal}"
+        echo
+    fi
+    if [ -s "$IP_LOG" ] 
+    then
+        Println "$info AntiDDoS 日志: "
+        tail -n 10 "$IP_LOG"
+    fi
+    if [ ! -s "$MONITOR_LOG" ] && [ ! -s "$IP_LOG" ]
+    then
+        Println "$error 无日志\n"
+    fi
+}
+
+MonitorStart()
+{
+    if [ -s "$IPTV_ROOT/monitor.pid" ] || [ -s "$IPTV_ROOT/antiddos.pid" ]
+    then
+        Println "$error 监控已经在运行 !\n" && exit 1
+    else
+        if { [ -d "/usr/local/openresty" ] && [ ! -d "/usr/local/nginx" ]; } || { [ -s "/usr/local/openresty/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/openresty/nginx/logs/nginx.pid")" 2> /dev/null ; }
+        then
+            nginx_prefix="/usr/local/openresty/nginx"
+            nginx_name="openresty"
+            nginx_ctl="or"
+        elif { [ -d "/usr/local/nginx" ] && [ ! -d "/usr/local/openresty" ]; } || { [ -s "/usr/local/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/nginx/logs/nginx.pid")" 2> /dev/null ; }
+        then
+            nginx_prefix="/usr/local/nginx"
+            nginx_name="nginx"
+            nginx_ctl="nx"
+        else
+            echo
+            inquirer list_input "没有检测到运行的 nginx, 是否使用 openresty" ny_options use_openresty_yn
+
+            if [[ $use_openresty_yn == "$i18n_yes" ]] 
+            then
+                nginx_prefix="/usr/local/openresty/nginx"
+                nginx_name="openresty"
+                nginx_ctl="or"
+            else
+                nginx_prefix="/usr/local/nginx"
+                nginx_name="nginx"
+                nginx_ctl="nx"
+            fi
+        fi
+
+        NGINX_FILE="$nginx_prefix/sbin/nginx"
+        printf -v date_now '%(%m-%d %H:%M:%S)T' -1
+        MonitorSet
+
+        i18nGetMsg get_channel
+
+        if [ "$sh_debug" -eq 1 ] 
+        then
+            ( Monitor ) 
+        else
+            ( Monitor ) > /dev/null 2> /dev/null < /dev/null &
+        fi
+
+        Println "$info 监控启动成功 !\n"
+        AntiDDoSSet
+
+        if [ "$sh_debug" -eq 1 ] 
+        then
+            ( AntiDDoS ) 
+        else
+            ( AntiDDoS ) > /dev/null 2> /dev/null < /dev/null &
+        fi
+
+        Println "$info AntiDDoS 启动成功 !\n"
+        rm -f "$IPTV_ROOT/ip.pid"
+    fi
+}
+
+MonitorMenu()
+{
+    [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请先安装 !" && exit 1
+    [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
+
+    echo
+    monitor_options=( '查看' '开启' '关闭' )
+    inquirer list_input_index "选择操作" monitor_options monitor_options_index
+
+    if [ "$monitor_options_index" -eq 0 ] 
+    then
+        MonitorList
+    elif [ "$monitor_options_index" -eq 1 ] 
+    then
+        MonitorStart
+    else
+        MonitorStop
+    fi
 }
 
 EditDefaultMenu()
@@ -13010,15 +13919,18 @@ Add4gtvLink()
                             if [[ $stream_url_num_start == *[!0-9]* ]] || [[ $stream_url_num_end == *[!0-9]* ]] || [ "$stream_url_num_start" -eq 0 ] || [ "$stream_url_num_end" -eq 0 ] || [ "$stream_url_num_end" -gt "$stream_urls_count" ] || [ "$stream_url_num_start" -ge "$stream_url_num_end" ]
                             then
                                 error_no=3
+                                break
                             fi
                         ;;
                         *[!0-9]*)
                             error_no=1
+                            break
                         ;;
                         *)
                             if [ "$stream_url_num" -lt 1 ] || [ "$stream_url_num" -gt "$stream_urls_count" ] 
                             then
                                 error_no=2
+                                break
                             fi
                         ;;
                     esac
@@ -13208,15 +14120,18 @@ Start4gtvLink()
                                 if [[ $chnl_stream_url_num_start == *[!0-9]* ]] || [[ $chnl_stream_url_num_end == *[!0-9]* ]] || [ "$chnl_stream_url_num_start" -eq 0 ] || [ "$chnl_stream_url_num_end" -eq 0 ] || [ "$chnl_stream_url_num_end" -gt "$chnl_stream_urls_count" ] || [ "$chnl_stream_url_num_start" -ge "$chnl_stream_url_num_end" ]
                                 then
                                     error_no=3
+                                    break
                                 fi
                             ;;
                             *[!0-9]*)
                                 error_no=1
+                                break
                             ;;
                             *)
                                 if [ "$chnl_stream_url_num" -lt 1 ] || [ "$chnl_stream_url_num" -gt "$chnl_stream_urls_count" ] 
                                 then
                                     error_no=2
+                                    break
                                 fi
                             ;;
                         esac
@@ -14084,7 +14999,7 @@ ScheduleTvbhd()
     if [[ ! -x $(command -v pdf2htmlEX) ]] 
     then
         echo
-        AskIfContinue n "`gettext \"需要先安装 pdf2htmlEX, 因为是编译 pdf2htmlEX, 耗时会很长, 是否继续\"`"
+        ExitOnList n "`gettext \"需要先安装 pdf2htmlEX, 因为是编译 pdf2htmlEX, 耗时会很长, 是否继续\"`"
 
         Pdf2htmlInstall
         Println "$info pdf2htmlEX 安装完成\n"
@@ -14927,8 +15842,7 @@ ScheduleAdd()
     ScheduleView
     echo -e " ${green}$((chnls_count+1)).${normal}${indent_6}全部"
 
-    Println "$tip (多个频道用空格分隔 比如: 5 7 9-11)"
-
+    Println "多个频道用空格分隔 比如: 5 7 9-11"
     while read -p "$i18n_default_cancel" chnls_num
     do
         if [ -z "$chnls_num" ] 
@@ -14957,15 +15871,18 @@ ScheduleAdd()
                     if [[ $chnl_num_start == *[!0-9]* ]] || [[ $chnl_num_end == *[!0-9]* ]] || [ "$chnl_num_start" -eq 0 ] || [ "$chnl_num_end" -eq 0 ] || [ "$chnl_num_end" -gt "$chnls_count" ] || [ "$chnl_num_start" -ge "$chnl_num_end" ]
                     then
                         error_no=3
+                        break
                     fi
                 ;;
                 *[!0-9]*)
                     error_no=1
+                    break
                 ;;
                 *)
                     if [ "$chnl_num" -lt 1 ] || [ "$chnl_num" -gt "$chnls_count" ] 
                     then
                         error_no=2
+                        break
                     fi
                 ;;
             esac
@@ -15052,9 +15969,8 @@ ScheduleDel()
 
     echo -e " ${green}$((chnls_count+1)).${normal}${indent_6}全部"
 
-    Println "$tip (多个频道用空格分隔 比如: 5 7 9-11)"
-
-    while read -p "选择删除的频道(默认: 取消): " chnls_num
+    Println "选择删除的频道, 多个频道用空格分隔 比如: 5 7 9-11"
+    while read -p "$i18n_default_cancel" chnls_num
     do
         if [ -z "$chnls_num" ] 
         then
@@ -15079,15 +15995,18 @@ ScheduleDel()
                     if [[ $chnl_num_start == *[!0-9]* ]] || [[ $chnl_num_end == *[!0-9]* ]] || [ "$chnl_num_start" -eq 0 ] || [ "$chnl_num_end" -eq 0 ] || [ "$chnl_num_end" -gt "$chnls_count" ] || [ "$chnl_num_start" -ge "$chnl_num_end" ]
                     then
                         error_no=3
+                        break
                     fi
                 ;;
                 *[!0-9]*)
                     error_no=1
+                    break
                 ;;
                 *)
                     if [ "$chnl_num" -lt 1 ] || [ "$chnl_num" -gt "$chnls_count" ] 
                     then
                         error_no=2
+                        break
                     fi
                 ;;
             esac
@@ -15856,7 +16775,14 @@ Schedule()
         "nowpremiersports3:623:Now Sports Premier League 3"
         "nowpremiersports4:624:Now Sports Premier League 4"
         "nowpremiersports5:625:Now Sports Premier League 5"
-        "nowpremiersports6:626:Now Sports Premier League 6" )
+        "nowpremiersports6:626:Now Sports Premier League 6"
+        "nowsports1:631:Now Sports 1"
+        "nowsports2:632:Now Sports 2"
+        "nowsports3:633:Now Sports 3"
+        "nowsports4:634:Now Sports 4"
+        "nowsports5:635:Now Sports 5"
+        "nowsports6:636:Now Sports 6"
+        "nowsports7:637:Now Sports 7" )
 
     icable_chnls=(
         "hkopen:001:香港开电视"
@@ -16532,7 +17458,7 @@ TsImg()
 ImgcatInstall()
 {
     echo
-    AskIfContinue y "`gettext \"缺少 imgcat, 是否现在安装\"`"
+    ExitOnList y "`gettext \"缺少 imgcat, 是否现在安装\"`"
 
     Progress &
     progress_pid=$!
@@ -16649,7 +17575,7 @@ TsRegister()
                         if [ "${reg_array[ret]}" -eq 0 ] 
                         then
                             echo
-                            AskIfContinue n "`gettext \"注册成功 ,是否登录账号\"`"
+                            ExitOnList n "`gettext \"注册成功 ,是否登录账号\"`"
                             TsLogin
                         else
                             Println "$error 注册失败!"
@@ -16681,7 +17607,7 @@ TsRegister()
         if [ "${reg_array[ret]}" -eq 0 ] 
         then
             echo
-            AskIfContinue n "`gettext \"注册成功 ,是否登录账号\"`"
+            ExitOnList n "`gettext \"注册成功 ,是否登录账号\"`"
             TsLogin
         else
             Println "$error 发生错误"
@@ -16743,7 +17669,7 @@ TsLogin()
         Println "$error 账号错误"
         printf '%s\n' "${login_array[@]}"
         echo
-        AskIfContinue n "`gettext \"是否注册账号\"`"
+        ExitOnList n "`gettext \"是否注册账号\"`"
         TsRegister
     else
         while :; do
@@ -16805,7 +17731,7 @@ TsLogin()
                 if [[ ${chnl_stream_links[j]} =~ programid=$programid ]] 
                 then
                     echo
-                    AskIfContinue y "`gettext \"检测到此频道原有链接, 是否替换成新的ts链接\"`"
+                    ExitOnList y "`gettext \"检测到此频道原有链接, 是否替换成新的ts链接\"`"
 
                     jq_path='["channels",'$i',"stream_link",'$j']'
                     JQ update "$CHANNELS_FILE" "$TS_LINK"
@@ -17254,36 +18180,46 @@ AntiDDoS()
     } 202<"$pid_file"
 }
 
+MonitorHlsRemoveFailed()
+{
+    declare -a new_array
+    for element in ${hls_failed[@]+"${hls_failed[@]}"}
+    do
+        [ "$element" != "$hls_index" ] && new_array+=("$element")
+    done
+
+    if [ -z "${new_array:-}" ] 
+    then
+        hls_failed=()
+    else
+        hls_failed=("${new_array[@]}")
+    fi
+
+    unset new_array
+
+    declare -a new_array
+    for element in ${hls_recheck_time[@]+"${hls_recheck_time[@]}"}
+    do
+        [ "$element" != "${hls_recheck_time[failed_i]}" ] && new_array+=("$element")
+    done
+
+    if [ -z "${new_array:-}" ] 
+    then
+        hls_recheck_time=()
+    else
+        hls_recheck_time=("${new_array[@]}")
+    fi
+
+    unset new_array
+}
+
 MonitorHlsRestartSuccess()
 {
     if [ -n "${failed_restart_nums:-}" ] 
     then
-        declare -a new_array
-        for element in ${hls_failed[@]+"${hls_failed[@]}"}
-        do
-            [ "$element" != "$output_dir_name" ] && new_array+=("$element")
-        done
-        if [ -z "${new_array:-}" ] 
-        then
-            hls_failed=()
-        else
-            hls_failed=("${new_array[@]}")
-        fi
-        unset new_array
-
-        declare -a new_array
-        for element in ${hls_recheck_time[@]+"${hls_recheck_time[@]}"}
-        do
-            [ "$element" != "${hls_recheck_time[failed_i]}" ] && new_array+=("$element")
-        done
-        if [ -z "${new_array:-}" ] 
-        then
-            hls_recheck_time=()
-        else
-            hls_recheck_time=("${new_array[@]}")
-        fi
-        unset new_array
+        MonitorHlsRemoveFailed
     fi
+
     printf -v date_now '%(%m-%d %H:%M:%S)T' -1
     printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
 }
@@ -17299,20 +18235,22 @@ MonitorHlsRestartFail()
         hls_recheck_time[failed_i]=$recheck_time
     else
         hls_recheck_time+=("$recheck_time")
-        hls_failed+=("$output_dir_name")
+        hls_failed+=("$hls_index")
     fi
 
     declare -a new_array
-    for element in "${monitor_dir_names_chosen[@]}"
+    for element in "${hls_indices[@]}"
     do
-        [ "$element" != "$output_dir_name" ] && new_array+=("$element")
+        [ "$element" != "$hls_index" ] && new_array+=("$element")
     done
+
     if [ -z "${new_array:-}" ] 
     then
-        monitor_dir_names_chosen=()
+        hls_indices=()
     else
-        monitor_dir_names_chosen=("${new_array[@]}")
+        hls_indices=("${new_array[@]}")
     fi
+
     unset new_array
 
     printf -v date_now '%(%m-%d %H:%M:%S)T' -1
@@ -17328,7 +18266,7 @@ MonitorHlsRestartChannel()
 
     for((failed_i=0;failed_i<${#hls_failed[@]};failed_i++));
     do
-        if [ "${hls_failed[failed_i]}" == "$output_dir_name" ] 
+        if [ "${hls_failed[failed_i]}" == "$hls_index" ] 
         then
             failed_restart_nums=3
             break
@@ -17649,10 +18587,15 @@ MonitorHlsRestartChannel()
 
         action="skip"
         StopChannel
+
         if [ "$anti_leech_yn" == "yes" ] && [ "$anti_leech_restart_hls_changes_yn" == "yes" ] 
         then
-            chnl_playlist_name=$(RandStr)
-            chnl_seg_name=$chnl_playlist_name
+            if [ "${hls_change[hls_index]:-true}" == "true" ] 
+            then
+                chnl_playlist_name=$(RandStr)
+                chnl_seg_name=$chnl_playlist_name
+            fi
+
             if [ "$chnl_encrypt_yn" == "yes" ] 
             then
                 mkdir -p "$chnl_output_dir_root"
@@ -17665,6 +18608,11 @@ MonitorHlsRestartChannel()
                     echo -e "$chnl_key_name.key\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
                 fi
             fi
+        fi
+
+        if [ -n "${channel_name[hls_index]:-}" ] 
+        then
+            chnl_channel_name="${channel_name[hls_index]}"
         fi
 
         StartChannel
@@ -17770,14 +18718,16 @@ MonitorFlvRestartSuccess()
         declare -a new_array
         for element in ${flv_failed[@]+"${flv_failed[@]}"}
         do
-            [ "$element" != "$flv_num" ] && new_array+=("$element")
+            [ "$element" != "$flv_index" ] && new_array+=("$element")
         done
+
         if [ -z "${new_array:-}" ] 
         then
             flv_failed=()
         else
             flv_failed=("${new_array[@]}")
         fi
+
         unset new_array
 
         declare -a new_array
@@ -17785,14 +18735,17 @@ MonitorFlvRestartSuccess()
         do
             [ "$element" != "${flv_recheck_time[failed_i]}" ] && new_array+=("$element")
         done
+
         if [ -z "${new_array:-}" ] 
         then
             flv_recheck_time=()
         else
             flv_recheck_time=("${new_array[@]}")
         fi
+
         unset new_array
     fi
+
     printf -v date_now '%(%m-%d %H:%M:%S)T' -1
     printf '%s\n' "$date_now $chnl_channel_name 重启成功" >> "$MONITOR_LOG"
 }
@@ -17808,20 +18761,22 @@ MonitorFlvRestartFail()
         flv_recheck_time[failed_i]=$recheck_time
     else
         flv_recheck_time+=("$recheck_time")
-        flv_failed+=("$flv_num")
+        flv_failed+=("$flv_index")
     fi
 
     declare -a new_array
-    for element in "${flv_nums_arr[@]}"
+    for element in "${flv_indices[@]}"
     do
-        [ "$element" != "$flv_num" ] && new_array+=("$element")
+        [ "$element" != "$flv_index" ] && new_array+=("$element")
     done
+
     if [ -z "${new_array:-}" ] 
     then
-        flv_nums_arr=()
+        flv_indices=()
     else
-        flv_nums_arr=("${new_array[@]}")
+        flv_indices=("${new_array[@]}")
     fi
+
     unset new_array
 
     printf -v date_now '%(%m-%d %H:%M:%S)T' -1
@@ -17837,7 +18792,7 @@ MonitorFlvRestartChannel()
 
     for((failed_i=0;failed_i<${#flv_failed[@]};failed_i++));
     do
-        if [ "${flv_failed[failed_i]}" == "$flv_num" ] 
+        if [ "${flv_failed[failed_i]}" == "$flv_index" ] 
         then
             failed_restart_nums=3
             break
@@ -18161,6 +19116,7 @@ MonitorFlvRestartChannel()
 
         action="skip"
         StopChannel
+
         if [ "$anti_leech_yn" == "yes" ] && [ "$anti_leech_restart_flv_changes_yn" == "yes" ] 
         then
             stream_name=${chnl_flv_push_link##*/}
@@ -18177,6 +19133,7 @@ MonitorFlvRestartChannel()
                 monitor_flv_pull_links[i]=$chnl_flv_pull_link
             fi
         fi
+
         StartChannel
         sleep 15
         GetChannel
@@ -18414,8 +19371,12 @@ MonitorTryAccounts()
                         then
                             if [ -z "${kind:-}" ] && [ "$anti_leech_restart_hls_changes_yn" == "yes" ]
                             then
-                                chnl_playlist_name=$(RandStr)
-                                chnl_seg_name=$chnl_playlist_name
+                                if [ "${hls_change[hls_index]:-true}" == "true" ] 
+                                then
+                                    chnl_playlist_name=$(RandStr)
+                                    chnl_seg_name=$chnl_playlist_name
+                                fi
+
                                 if [ "$chnl_encrypt_yn" == "yes" ] 
                                 then
                                     mkdir -p "$chnl_output_dir_root"
@@ -18446,7 +19407,13 @@ MonitorTryAccounts()
                             fi
                         fi
 
+                        if [ -n "${monitor:-}" ] && [ -n "${channel_name[hls_index]:-}" ] 
+                        then
+                            chnl_channel_name="${channel_name[hls_index]}"
+                        fi
+
                         StartChannel
+
                         if [ -z "${monitor:-}" ] 
                         then
                             try_success=1
@@ -18624,8 +19591,12 @@ MonitorTryAccounts()
                 then
                     if [ -z "${kind:-}" ] && [ "$anti_leech_restart_hls_changes_yn" == "yes" ]
                     then
-                        chnl_playlist_name=$(RandStr)
-                        chnl_seg_name=$chnl_playlist_name
+                        if [ "${hls_change[hls_index]:-true}" == "true" ] 
+                        then
+                            chnl_playlist_name=$(RandStr)
+                            chnl_seg_name=$chnl_playlist_name
+                        fi
+
                         if [ "$chnl_encrypt_yn" == "yes" ] 
                         then
                             mkdir -p "$chnl_output_dir_root"
@@ -18656,7 +19627,13 @@ MonitorTryAccounts()
                     fi
                 fi
 
+                if [ -n "${monitor:-}" ] && [ -n "${channel_name[hls_index]:-}" ] 
+                then
+                    chnl_channel_name="${channel_name[hls_index]}"
+                fi
+
                 StartChannel
+
                 if [ -z "${monitor:-}" ] 
                 then
                     try_success=1
@@ -18771,57 +19748,65 @@ MonitorTryAccounts()
 
 MonitorSet()
 {
-    flv_count=0
-    monitor_channel_names=()
-    monitor_stream_links=()
     monitor_flv_push_links=()
     monitor_flv_pull_links=()
-    monitor_dir_names_chosen=()
+    monitor_output_dir_names=()
 
+    GetDefault
     GetChannels
+
+    flv_list=""
+    flv_count=0
+    hls_count=0
+    hls_list=""
+
     for((i=0;i<chnls_count;i++));
     do
         if [ "${chnls_flv_status[i]}" == "on" ] && [ "${chnls_live[i]}" == "yes" ]
         then
             flv_count=$((flv_count+1))
-            monitor_channel_names+=("${chnls_channel_name[i]}")
-            monitor_stream_links+=("${chnls_stream_link[i]}")
+
+            IFS="${delimiters[0]}" read -ra chnl_stream_links <<< "${chnls_stream_links[i]}"
+
+            chnl_stream_links_text=""
+            for((list_i=0;list_i<${#chnl_stream_links[@]};list_i++));
+            do
+                chnl_stream_links_text="$chnl_stream_links_text${indent_6}源$((list_i+1)): ${chnl_stream_links[list_i]}\n"
+            done
+
             monitor_flv_push_links+=("${chnls_flv_push_link[i]}")
             monitor_flv_pull_links+=("${chnls_flv_pull_link[i]}")
+
+            flv_list="$flv_list  ${green}$flv_count.${normal}${indent_6}${chnls_channel_name[i]}\n$chnl_stream_links_text${indent_6}推: ${chnls_flv_push_link[i]}\n${indent_6}拉: ${chnls_flv_pull_link[i]:-无}\n\n"
+        elif [ -d "$LIVE_ROOT/${chnls_output_dir_name[i]}" ] && [ "${chnls_live[i]}" == "yes" ] && [ "${chnls_seg_count[i]}" != 0 ] 
+        then
+            hls_count=$((hls_count + 1))
+            monitor_output_dir_names+=("${chnls_output_dir_name[i]}")
+            hls_list="$hls_list  ${green}$hls_count.${normal}${indent_6}${chnls_channel_name[i]}\n\n"
         fi
     done
 
     if [ "$flv_count" -gt 0 ] 
     then
-        GetDefault
-        Println "请选择需要监控的 FLV 推流频道(多个频道用空格分隔 比如: 5 7 9-11)\n"
-
-        result=""
-        for((i=0;i<flv_count;i++));
-        do
-            flv_pull_link=${monitor_flv_pull_links[i]}
-            result=$result"  ${green}$((i+1)).${normal}${indent_6}${monitor_channel_names[i]}\n${indent_6}源: ${monitor_stream_links[i]}\n${indent_6}pull: ${flv_pull_link:-无}\n\n"
-        done
-
-        Println "$result"
+        Println "$flv_list"
         Println "  ${green}$((flv_count+1)).${normal}${indent_6}全部"
-        Println "  ${green}$((flv_count+2)).${normal}${indent_6}不设置\n"
+        Println "  ${green}$((flv_count+2)).${normal}${indent_6}不设置"
+
+        Println "请选择需要监控的 FLV 推流频道(多个频道用空格分隔 比如: 5 7 9-11)"
         while read -p "(默认: 不设置): " flv_nums
         do
             if [ -z "$flv_nums" ] || [ "$flv_nums" == $((flv_count+2)) ] 
             then
-                flv_nums=""
+                flv_indices=()
                 break
             fi
 
             if [ "$flv_nums" == $((flv_count+1)) ] 
             then
-                flv_nums=""
-                for((i=1;i<=flv_count;i++));
-                do
-                    [ -n "$flv_nums" ] && flv_nums="$flv_nums "
-                    flv_nums="$flv_nums$i"
-                done
+                flv_indices=("${!monitor_flv_push_links[@]}")
+                SetFlvDelaySeconds
+                SetFlvRestartNums
+                break
             fi
 
             IFS=" " read -ra flv_nums_arr <<< "$flv_nums"
@@ -18836,15 +19821,18 @@ MonitorSet()
                         if [[ $flv_num_start == *[!0-9]* ]] || [[ $flv_num_end == *[!0-9]* ]] || [ "$flv_num_start" -eq 0 ] || [ "$flv_num_end" -eq 0 ] || [ "$flv_num_end" -gt "$flv_count" ] || [ "$flv_num_start" -ge "$flv_num_end" ]
                         then
                             error_no=3
+                            break
                         fi
                     ;;
                     *[!0-9]*)
                         error_no=1
+                        break
                     ;;
                     *)
                         if [ "$flv_num" -lt 1 ] || [ "$flv_num" -gt "$flv_count" ] 
                         then
                             error_no=2
+                            break
                         fi
                     ;;
                 esac
@@ -18862,7 +19850,96 @@ MonitorSet()
                         then
                             start=${element%-*}
                             end=${element#*-}
-                            for((i=start;i<=end;i++));
+                            for((i=start-1;i<end;i++));
+                            do
+                                new_array+=("$i")
+                            done
+                        else
+                            new_array+=("$((element-1))")
+                        fi
+                    done
+
+                    if [ -z "${new_array:-}" ] 
+                    then
+                        flv_indices=()
+                    else
+                        flv_indices=("${new_array[@]}")
+                    fi
+
+                    unset new_array
+
+                    SetFlvDelaySeconds
+                    SetFlvRestartNums
+                    break
+                ;;
+            esac
+        done
+    fi
+
+    if [ -n "$hls_list" ]
+    then
+        Println "$hls_list"
+        Println "  ${green}$((hls_count+1)).${normal}${indent_6}全部"
+        Println "  ${green}$((hls_count+2)).${normal}${indent_6}不设置"
+
+        Println "请选择需要监控的 HLS 频道(多个频道用空格分隔 比如 5 7 9-11)"
+        while read -p "(默认: 不设置): " hls_nums
+        do
+            if [ -z "$hls_nums" ] || [ "$hls_nums" == $((hls_count+2)) ] 
+            then
+                hls_indices=()
+                Println "$info 继续为频道计划设置"
+                break
+            fi
+
+            IFS=" " read -ra hls_nums_arr <<< "$hls_nums"
+
+            if [ "$hls_nums" == $((hls_count+1)) ] 
+            then
+                hls_indices=("${!monitor_output_dir_names[@]}")
+                break
+            fi
+
+            error_no=0
+            for hls_num in ${hls_nums_arr[@]+"${hls_nums_arr[@]}"}
+            do
+                case "$hls_num" in
+                    *"-"*)
+                        hls_num_start=${hls_num%-*}
+                        hls_num_end=${hls_num#*-}
+                        if [[ $hls_num_start == *[!0-9]* ]] || [[ $hls_num_end == *[!0-9]* ]] || [ "$hls_num_start" -eq 0 ] || [ "$hls_num_end" -eq 0 ] || [ "$hls_num_end" -gt "$hls_count" ] || [ "$hls_num_start" -ge "$hls_num_end" ]
+                        then
+                            error_no=3
+                            break
+                        fi
+                    ;;
+                    *[!0-9]*)
+                        error_no=1
+                        break
+                    ;;
+                    *)
+                        if [ "$hls_num" -lt 1 ] || [ "$hls_num" -gt "$hls_count" ] 
+                        then
+                            error_no=2
+                            break
+                        fi
+                    ;;
+                esac
+            done
+
+            case "$error_no" in
+                1|2|3)
+                    Println "$error $i18n_input_correct_number\n"
+                ;;
+                *)
+                    declare -a new_array
+                    for element in "${hls_nums_arr[@]}"
+                    do
+                        if [[ $element =~ - ]] 
+                        then
+                            start=${element%-*}
+                            end=${element#*-}
+                            for((i=start-1;i<end;i++));
                             do
                                 new_array+=("$i")
                             done
@@ -18870,176 +19947,26 @@ MonitorSet()
                             new_array+=("$element")
                         fi
                     done
+
                     if [ -z "${new_array:-}" ] 
                     then
-                        flv_nums_arr=()
+                        hls_indices=()
                     else
-                        flv_nums_arr=("${new_array[@]}")
+                        hls_indices=("${new_array[@]}")
                     fi
-                    unset new_array
 
-                    SetFlvDelaySeconds
+                    unset new_array
                     break
                 ;;
             esac
         done
-
-        if [ -n "$flv_nums" ] 
-        then
-            SetFlvRestartNums
-        fi
+    else
+        Println "$info 继续为频道计划设置"
     fi
 
-    if ! ls -A $LIVE_ROOT/* > /dev/null 2>&1
-    then
-        if [ "$flv_count" -eq 0 ] 
-        then
-            Println "$error 没有开启的频道!\n" && exit 1
-        elif [ -z "${flv_delay_seconds:-}" ] 
-        then
-            Println "$i18n_canceled...\n" && exit 1
-        else
-            SetRecheckPeriod
-            SetAntiLeech
-            JQ update "$CHANNELS_FILE" '.default|=. * 
-            {
-                flv_delay_seconds: '"$flv_delay_seconds"',
-                flv_restart_nums: '"$flv_restart_nums"',
-                anti_leech: "'"$anti_leech_yn"'",
-                anti_leech_restart_nums: '"$anti_leech_restart_nums"',
-                anti_leech_restart_flv_changes: "'"$anti_leech_restart_flv_changes_yn"'",
-                anti_leech_restart_hls_changes: "'"$anti_leech_restart_hls_changes_yn"'",
-                recheck_period: '"$recheck_period"'
-            } // .'
-            return 0
-        fi
-    fi
-    Println "请选择需要监控的 HLS 频道(多个频道用空格分隔 比如 5 7 9-11)\n"
-    monitor_count=0
-    monitor_dir_names=()
-    exclude_paths=()
-    GetDefault
-    result=""
-    for((i=0;i<chnls_count;i++));
-    do
-        if [ -e "$LIVE_ROOT/${chnls_output_dir_name[i]}" ] && [ "${chnls_live[i]}" == "yes" ] && [ "${chnls_seg_count[i]}" != 0 ]
-        then
-            monitor_count=$((monitor_count + 1))
-            monitor_dir_names+=("${chnls_output_dir_name[i]}")
-            result=$result"  ${green}$monitor_count.${normal}${indent_6}${chnls_channel_name[i]}\n\n"
-        fi
-    done
-
-    Println "$result"
-    Println "  ${green}$((monitor_count+1)).${normal}${indent_6}全部"
-    Println "  ${green}$((monitor_count+2)).${normal}${indent_6}不设置\n"
-
-    while read -p "(默认: 不设置): " hls_nums
-    do
-        if [ -z "$hls_nums" ] || [ "$hls_nums" == $((monitor_count+2)) ] 
-        then
-            hls_nums=""
-            break
-        fi
-        IFS=" " read -ra hls_nums_arr <<< "$hls_nums"
-
-        if [ "$hls_nums" == $((monitor_count+1)) ] 
-        then
-            monitor_dir_names_chosen=("${monitor_dir_names[@]}")
-
-            SetHlsDelaySeconds
-            break
-        fi
-
-        error_no=0
-        for hls_num in ${hls_nums_arr[@]+"${hls_nums_arr[@]}"}
-        do
-            case "$hls_num" in
-                *"-"*)
-                    hls_num_start=${hls_num%-*}
-                    hls_num_end=${hls_num#*-}
-                    if [[ $hls_num_start == *[!0-9]* ]] || [[ $hls_num_end == *[!0-9]* ]] || [ "$hls_num_start" -eq 0 ] || [ "$hls_num_end" -eq 0 ] || [ "$hls_num_end" -gt "$monitor_count" ] || [ "$hls_num_start" -ge "$hls_num_end" ]
-                    then
-                        error_no=3
-                    fi
-                ;;
-                *[!0-9]*)
-                    error_no=1
-                ;;
-                *)
-                    if [ "$hls_num" -lt 1 ] || [ "$hls_num" -gt "$monitor_count" ] 
-                    then
-                        error_no=2
-                    fi
-                ;;
-            esac
-        done
-
-        case "$error_no" in
-            1|2|3)
-                Println "$error $i18n_input_correct_number\n"
-            ;;
-            *)
-                declare -a new_array
-                for element in "${hls_nums_arr[@]}"
-                do
-                    if [[ $element =~ - ]] 
-                    then
-                        start=${element%-*}
-                        end=${element#*-}
-                        for((i=start;i<=end;i++));
-                        do
-                            new_array+=("$i")
-                        done
-                    else
-                        new_array+=("$element")
-                    fi
-                done
-                if [ -z "${new_array:-}" ] 
-                then
-                    hls_nums_arr=()
-                else
-                    hls_nums_arr=("${new_array[@]}")
-                fi
-                unset new_array
-
-                for hls_num in "${hls_nums_arr[@]}"
-                do
-                    monitor_dir_names_chosen+=("${monitor_dir_names[((hls_num - 1))]}")
-                done
-
-                Println "设置超时多少秒自动重启频道"
-                echo -e "$tip 必须大于 分片时长*分片数目"
-                while read -p "(默认: $d_hls_delay_seconds 秒): " hls_delay_seconds
-                do
-                    case $hls_delay_seconds in
-                        "") hls_delay_seconds=$d_hls_delay_seconds && break
-                        ;;
-                        *[!0-9]*) Println "$error $i18n_input_correct_number\n"
-                        ;;
-                        *) 
-                            if [ "$hls_delay_seconds" -gt 60 ]
-                            then
-                                break
-                            else
-                                Println "$error $i18n_input_correct_number [>60]\n"
-                            fi
-                        ;;
-                    esac
-                done
-
-                break
-            ;;
-        esac
-    done
-
-    if [ -n "$hls_nums" ] 
-    then
-        SetHlsMinBitrates
-
-        hls_min_bitrates=$((hls_min_bitrates * 1000))
-    fi
-
+    SetHlsDelaySeconds
+    SetHlsMinBitrates
+    hls_min_bitrates=$((hls_min_bitrates * 1000))
     SetHlsMaxSegSize
     SetHlsRestartNums
 
@@ -19051,6 +19978,7 @@ MonitorSet()
     hls_delay_seconds=${hls_delay_seconds:-$d_hls_delay_seconds}
     hls_min_bitrates=${hls_min_bitrates:-$d_hls_min_bitrates}
     hls_key_period=${hls_key_period:-$d_hls_key_period}
+
     JQ update "$CHANNELS_FILE" '.default|=. * 
     {
         flv_delay_seconds: '"$flv_delay_seconds"',
@@ -19083,15 +20011,310 @@ Monitor()
 
             FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
             FFPROBE="$FFMPEG_ROOT/ffprobe"
-            XtreamCodesGetDomains
             monitor=1
+
+            XtreamCodesGetDomains
+
             flv_failed=()
             flv_recheck_time=()
             hls_failed=()
             hls_recheck_time=()
+            hls_change=()
+            channel_name=()
+
             while true
             do
+                GetChannels
+
                 printf -v now '%(%s)T' -1
+
+                if [ "$chnls_count" -gt 0 ] 
+                then
+                    chnls_indices=("${!chnls_pid[@]}")
+
+                    for chnls_index in "${chnls_indices[@]}"
+                    do
+                        if [ -n "${chnls_schedule_status[chnls_index]}" ] 
+                        then
+                            IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
+                            IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
+                            IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
+                            IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
+
+                            chnl_schedules_if_null="${chnls_schedule_hls_change[chnls_index]//false/}"
+                            chnl_schedules_if_null="${chnl_schedules_if_null//true/}"
+
+                            IFS="${delimiters[1]}" read -ra chnl_schedules_channel_name <<< "${chnls_schedule_channel_name[chnls_index]:-$chnl_schedules_if_null}${delimiters[1]}"
+
+                            chnl_schedules_indices=("${!chnl_schedules_status[@]}")
+
+                            if [ "${chnls_status[chnls_index]}" == "on" ] 
+                            then
+                                for chnl_schedules_index in "${chnl_schedules_indices[@]}"
+                                do
+                                    if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ] || [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 1 ]
+                                    then
+                                        if [ "${chnl_schedules_end_time[chnl_schedules_index]}" -le "$now" ] 
+                                        then
+                                            jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"status"]'
+                                            JQ update "$CHANNELS_FILE" 2 number
+
+                                            output_dir_name="${chnls_output_dir_name[chnls_index]}"
+
+                                            declare -a new_array
+                                            for hls_index in ${hls_indices[@]+"${hls_indices[@]}"}
+                                            do
+                                                if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ] 
+                                                then
+                                                    unset 'hls_change[hls_index]'
+                                                    unset 'channel_name[hls_index]'
+                                                else
+                                                    new_array+=("$hls_index")
+                                                fi
+                                            done
+
+                                            if [ -z "${new_array:-}" ] 
+                                            then
+                                                hls_indices=()
+                                            else
+                                                hls_indices=("${new_array[@]}")
+                                            fi
+
+                                            unset new_array
+
+                                            for hls_index in ${hls_failed[@]+"${hls_failed[@]}"}
+                                            do
+                                                if [ "${monitor_output_dir_names[hls_index]}" == "${chnls_output_dir_name[chnls_index]}" ] 
+                                                then
+                                                    MonitorHlsRemoveFailed
+                                                    unset 'hls_change[hls_index]'
+                                                    unset 'channel_name[hls_index]'
+                                                    break
+                                                fi
+                                            done
+
+                                            GetChannel
+                                            StopChannel
+                                        else
+                                            if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ] 
+                                            then
+                                                jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"status"]'
+                                                JQ update "$CHANNELS_FILE" 1 number
+                                            fi
+
+                                            for hls_index in ${hls_indices[@]+"${hls_indices[@]}"}
+                                            do
+                                                if [ "${monitor_output_dir_names[hls_index]}" == "${chnls_output_dir_name[chnls_index]}" ] 
+                                                then
+                                                    if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "false" ] 
+                                                    then
+                                                        hls_change[hls_index]="false"
+                                                    fi
+                                                    if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
+                                                    then
+                                                        channel_name[hls_index]="${chnl_schedules_channel_name[chnl_schedules_index]}"
+                                                    fi
+                                                    continue 3
+                                                fi
+                                            done
+
+                                            if [ -n "${monitor_output_dir_names:-}" ] 
+                                            then
+                                                for((i=0;i<${#monitor_output_dir_names[@]};i++));
+                                                do
+                                                    if [ "${monitor_output_dir_names[i]}" == "${chnls_output_dir_name[chnls_index]}" ] 
+                                                    then
+                                                        hls_indices+=("$i")
+                                                        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "false" ] 
+                                                        then
+                                                            hls_change[i]="false"
+                                                        fi
+                                                        if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
+                                                        then
+                                                            channel_name[i]="${chnl_schedules_channel_name[chnl_schedules_index]}"
+                                                        fi
+                                                        continue 3
+                                                    fi
+                                                done
+                                            fi
+
+                                            monitor_output_dir_names+=("${chnls_output_dir_name[chnls_index]}")
+                                            hls_index=$((${#monitor_output_dir_names[@]}-1))
+                                            hls_indices+=("$hls_index")
+
+                                            if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "false" ] 
+                                            then
+                                                hls_change[hls_index]="false"
+                                            fi
+                                            if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
+                                            then
+                                                channel_name[hls_index]="${chnl_schedules_channel_name[chnl_schedules_index]}"
+                                            fi
+                                        fi
+                                        continue 2
+                                    fi
+                                done
+                            elif [ "${chnls_flv_status[chnls_index]}" == "off" ] 
+                            then
+                                for flv_index in ${flv_indices[@]+"${flv_indices[@]}"}
+                                do
+                                    if [ "${monitor_flv_push_links[flv_index]}" == "${chnls_flv_push_link[chnls_index]}" ] 
+                                    then
+                                        continue 2
+                                    fi
+                                done
+
+                                for flv_index in ${flv_failed[@]+"${flv_failed[@]}"}
+                                do
+                                    if [ "${monitor_flv_push_links[flv_index]}" == "${chnls_flv_push_link[chnls_index]}" ] 
+                                    then
+                                        continue 2
+                                    fi
+                                done
+
+                                for chnl_schedules_index in "${chnl_schedules_indices[@]}"
+                                do
+                                    if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ] || [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 1 ]
+                                    then
+                                        if [ "${chnl_schedules_end_time[chnl_schedules_index]}" -le "$now" ] 
+                                        then
+                                            jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"status"]'
+                                            JQ update "$CHANNELS_FILE" 2 number
+
+                                            declare -a new_array
+                                            for hls_index in ${hls_indices[@]+"${hls_indices[@]}"}
+                                            do
+                                                if [ "${monitor_output_dir_names[hls_index]}" == "${chnls_output_dir_name[chnls_index]}" ] 
+                                                then
+                                                    unset 'hls_change[hls_index]'
+                                                    unset 'channel_name[hls_index]'
+                                                else
+                                                    new_array+=("$hls_index")
+                                                fi
+                                            done
+
+                                            if [ -z "${new_array:-}" ] 
+                                            then
+                                                hls_indices=()
+                                            else
+                                                hls_indices=("${new_array[@]}")
+                                            fi
+
+                                            unset new_array
+
+                                            for hls_index in ${hls_failed[@]+"${hls_failed[@]}"}
+                                            do
+                                                if [ "${monitor_output_dir_names[hls_index]}" == "${chnls_output_dir_name[chnls_index]}" ] 
+                                                then
+                                                    MonitorHlsRemoveFailed
+                                                    unset 'hls_change[hls_index]'
+                                                    unset 'channel_name[hls_index]'
+                                                    break
+                                                fi
+                                            done
+                                        elif [ "${chnl_schedules_start_time[chnl_schedules_index]}" -le "$now" ] 
+                                        then
+                                            if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ] 
+                                            then
+                                                jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"status"]'
+                                                JQ update "$CHANNELS_FILE" 1 number
+                                            fi
+
+                                            for hls_index in ${hls_indices[@]+"${hls_indices[@]}"}
+                                            do
+                                                if [ "${monitor_output_dir_names[hls_index]}" == "${chnls_output_dir_name[chnls_index]}" ] 
+                                                then
+                                                    if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "false" ] 
+                                                    then
+                                                        hls_change[hls_index]="false"
+                                                    fi
+                                                    if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
+                                                    then
+                                                        channel_name[hls_index]="${chnl_schedules_channel_name[chnl_schedules_index]}"
+                                                    fi
+                                                    continue 3
+                                                fi
+                                            done
+
+                                            if [ -n "${monitor_output_dir_names:-}" ] 
+                                            then
+                                                for((i=0;i<${#monitor_output_dir_names[@]};i++));
+                                                do
+                                                    if [ "${monitor_output_dir_names[i]}" == "${chnls_output_dir_name[chnls_index]}" ] 
+                                                    then
+                                                        hls_indices+=("$i")
+                                                        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "false" ] 
+                                                        then
+                                                            hls_change[i]="false"
+                                                        fi
+                                                        if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
+                                                        then
+                                                            channel_name[i]="${chnl_schedules_channel_name[chnl_schedules_index]}"
+                                                        fi
+                                                        continue 3
+                                                    fi
+                                                done
+                                            fi
+
+                                            monitor_output_dir_names+=("${chnls_output_dir_name[chnls_index]}")
+                                            hls_index=$((${#monitor_output_dir_names[@]}-1))
+                                            hls_indices+=("$hls_index")
+
+                                            if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "false" ] 
+                                            then
+                                                hls_change[hls_index]="false"
+                                            fi
+                                            if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
+                                            then
+                                                channel_name[hls_index]="${chnl_schedules_channel_name[chnl_schedules_index]}"
+                                            fi
+                                        else
+                                            if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 1 ] 
+                                            then
+                                                jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"status"]'
+                                                JQ update "$CHANNELS_FILE" 0 number
+                                            fi
+
+                                            declare -a new_array
+                                            for hls_index in ${hls_indices[@]+"${hls_indices[@]}"}
+                                            do
+                                                if [ "${monitor_output_dir_names[hls_index]}" == "${chnls_output_dir_name[chnls_index]}" ] 
+                                                then
+                                                    unset 'hls_change[hls_index]'
+                                                    unset 'channel_name[hls_index]'
+                                                else
+                                                    new_array+=("$hls_index")
+                                                fi
+                                            done
+
+                                            if [ -z "${new_array:-}" ] 
+                                            then
+                                                hls_indices=()
+                                            else
+                                                hls_indices=("${new_array[@]}")
+                                            fi
+
+                                            unset new_array
+
+                                            for hls_index in ${hls_failed[@]+"${hls_failed[@]}"}
+                                            do
+                                                if [ "${monitor_output_dir_names[hls_index]}" == "${chnls_output_dir_name[chnls_index]}" ] 
+                                                then
+                                                    MonitorHlsRemoveFailed
+                                                    unset 'hls_change[hls_index]'
+                                                    unset 'channel_name[hls_index]'
+                                                    break
+                                                fi
+                                            done
+                                        fi
+                                        continue 2
+                                    fi
+                                done
+                            fi
+                        fi
+                    done
+                fi
+
                 if [ "$recheck_period" -gt 0 ] 
                 then
                     if [ -n "${flv_recheck_time:-}" ] 
@@ -19100,14 +20323,15 @@ Monitor()
                         do
                             if [ "$now" -ge "${flv_recheck_time[i]}" ] 
                             then
-                                for flv_num in ${flv_nums_arr[@]+"${flv_nums_arr[@]}"}
+                                for flv_index in ${flv_indices[@]+"${flv_indices[@]}"}
                                 do
-                                    if [ "$flv_num" == "${flv_failed[i]}" ] 
+                                    if [ "$flv_index" == "${flv_failed[i]}" ] 
                                     then
                                         continue 2
                                     fi
                                 done
-                                flv_nums_arr+=("${flv_failed[i]}")
+
+                                flv_indices+=("${flv_failed[i]}")
                             fi
                         done
                     fi
@@ -19118,14 +20342,15 @@ Monitor()
                         do
                             if [ "$now" -ge "${hls_recheck_time[i]}" ] 
                             then
-                                for dir_name in ${monitor_dir_names_chosen[@]+"${monitor_dir_names_chosen[@]}"}
+                                for hls_index in ${hls_indices[@]+"${hls_indices[@]}"}
                                 do
-                                    if [ "$dir_name" == "${hls_failed[i]}" ] 
+                                    if [ "$hls_index" == "${hls_failed[i]}" ] 
                                     then
                                         continue 2
                                     fi
                                 done
-                                monitor_dir_names_chosen+=("${hls_failed[i]}")
+
+                                hls_indices+=("${hls_failed[i]}")
                             fi
                         done
                     fi
@@ -19157,6 +20382,7 @@ Monitor()
                     if [ -n "${minutes:-}" ] && [ "$current_minute" -gt "$current_minute_old" ]
                     then
                         declare -a new_array
+
                         for minute in "${minutes[@]}"
                         do
                             if [ "$minute" -gt "$current_minute" ] 
@@ -19170,12 +20396,14 @@ Monitor()
                                 rand_restart_hls_done=0
                             fi
                         done
+
                         if [ -z "${new_array:-}" ] 
                         then
                             minutes=()
                         else
                             minutes=("${new_array[@]}")
                         fi
+
                         unset new_array
                         [ -z "${minutes:-}" ] && skip_hour=$current_hour
                     fi
@@ -19189,6 +20417,7 @@ Monitor()
                         [ "$restart_nums" -gt "$minutes_left" ] && restart_nums=$minutes_left
                         minute_gap=$((minutes_left / anti_leech_restart_nums / 2))
                         [ "$minute_gap" -eq 0 ] && minute_gap=1
+
                         for((i=0;i<restart_nums;i++));
                         do
                             while true 
@@ -19197,6 +20426,7 @@ Monitor()
                                 if [ "$rand_minute" -gt "$current_minute" ] 
                                 then
                                     valid=1
+
                                     for minute in ${minutes[@]+"${minutes[@]}"}
                                     do
                                         if [ "$minute" -eq "$rand_minute" ] 
@@ -19213,34 +20443,33 @@ Monitor()
                                             break
                                         fi
                                     done
+
                                     if [ "$valid" -eq 1 ] 
                                     then
                                         break
                                     fi
                                 fi
                             done
+
                             minutes+=("$rand_minute")
                         done
+
                         printf '%s\n' "$current_time 计划重启时间 ${minutes[*]}" >> "$MONITOR_LOG"
                     fi
                 fi
 
-                if [ -n "${flv_nums:-}" ] 
+                if [ -n "${flv_indices:-}" ] 
                 then
                     kind="flv"
-                    rand_found=0
-                    if [ -n "${rand_restart_flv_done:-}" ] && [ "$rand_restart_flv_done" -eq 0 ] && [ -z "${flv_nums_arr:-}" ]
-                    then
-                        rand_restart_flv_done=1
-                        rand_found=1
-                    fi
-                    for flv_num in ${flv_nums_arr[@]+"${flv_nums_arr[@]}"}
+
+                    for flv_index in ${flv_indices[@]+"${flv_indices[@]}"}
                     do
-                        chnl_flv_pull_link=${monitor_flv_pull_links[flv_num-1]}
-                        chnl_flv_push_link=${monitor_flv_push_links[flv_num-1]}
+                        chnl_flv_pull_link=${monitor_flv_pull_links[flv_index]}
+                        chnl_flv_push_link=${monitor_flv_push_links[flv_index]}
 
                         audio=0
                         video=0
+
                         while IFS= read -r line 
                         do
                             if [[ $line == *"codec_type=audio"* ]] 
@@ -19258,6 +20487,7 @@ Monitor()
                         if [ "$audio" -eq 0 ] || [ "$video" -eq 0 ]
                         then
                             GetChannel
+
                             if [ -n "${flv_first_fail:-}" ] 
                             then
                                 printf -v flv_fail_time '%(%s)T' -1
@@ -19278,142 +20508,150 @@ Monitor()
                                     printf -v flv_first_fail '%(%s)T' -1
                                 fi
 
-                                new_array=("$flv_num")
-                                for element in ${flv_nums_arr[@]+"${flv_nums_arr[@]}"}
+                                new_array=("$flv_index")
+
+                                for element in ${flv_indices[@]+"${flv_indices[@]}"}
                                 do
-                                    [ "$element" != "$flv_num" ] && new_array+=("$element")
+                                    [ "$element" != "$flv_index" ] && new_array+=("$element")
                                 done
-                                if [ -z "${new_array:-}" ] 
-                                then
-                                    flv_nums_arr=()
-                                else
-                                    flv_nums_arr=("${new_array[@]}")
-                                fi
+
+                                flv_indices=("${new_array[@]}")
+
                                 unset new_array
                             fi
-                            break 1
+
+                            break
                         else
                             flv_first_fail=""
 
                             if [ -n "${rand_restart_flv_done:-}" ] && [ "$rand_restart_flv_done" -eq 0 ]
                             then
-                                rand_found=1
+                                rand_restart_flv_done=1
                                 printf -v date_now '%(%m-%d %H:%M:%S)T' -1
+                                GetChannel
                                 printf '%s\n' "$date_now $chnl_channel_name FLV 随机重启" >> "$MONITOR_LOG"
                                 MonitorFlvRestartChannel
                             fi
                         fi
                     done
-                    if [ "$rand_found" -eq 1 ] 
-                    then
-                        rand_restart_flv_done=1
-                    fi
                 else
                     rand_restart_flv_done=1
                 fi
 
                 kind=""
 
-                if ls -A $LIVE_ROOT/* > /dev/null 2>&1
-                then
-                    exclude_command=""
-                    for exclude_path in ${exclude_paths[@]+"${exclude_paths[@]}"}
-                    do
-                        exclude_command="$exclude_command -not \( -path $exclude_path -prune \)"
-                    done
+                exclude_command=""
 
-                    if [ -n "${hls_max_seg_size:-}" ] 
+                if [ -n "${hls_indices:-}" ] 
+                then
+                    if ls -A $LIVE_ROOT/* > /dev/null 2>&1
                     then
+                        for output_dir_root in "$LIVE_ROOT"/*
+                        do
+                            output_dir_name=${output_dir_root#*$LIVE_ROOT/}
+
+                            for hls_index in ${hls_indices[@]+"${hls_indices[@]}"}
+                            do
+                                if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ] 
+                                then
+                                    continue 2
+                                fi
+                            done
+
+                            exclude_command="$exclude_command -not \( -path $LIVE_ROOT/$output_dir_name -prune \)"
+                        done
+
                         largest_file=$(find "$LIVE_ROOT" $exclude_command -type f -name "*.ts" -printf "%s %p\n" 2> /dev/null | sort -n | tail -1) || true
+
                         if [ -n "${largest_file:-}" ] 
                         then
                             largest_file_size=${largest_file%% *}
                             largest_file_path=${largest_file#* }
                             output_dir_name=${largest_file_path#*$LIVE_ROOT/}
                             output_dir_name=${output_dir_name%%/*}
+
                             if [ "$largest_file_size" -gt $(( hls_max_seg_size * 1000000)) ]
                             then
                                 GetChannel
-                                if [ -n "$chnl_live" ] 
-                                then
-                                    printf '%s\n' "$chnl_channel_name 文件过大重启" >> "$MONITOR_LOG"
-                                    MonitorHlsRestartChannel
-                                else
-                                    exclude_paths+=("$LIVE_ROOT/$output_dir_name")
-                                fi
+                                printf '%s\n' "$chnl_channel_name 文件过大重启" >> "$MONITOR_LOG"
+
+                                for hls_index in ${hls_indices[@]+"${hls_indices[@]}"}
+                                do
+                                    if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ] 
+                                    then
+                                        break
+                                    fi
+                                done
+
+                                MonitorHlsRestartChannel
                             fi
                         fi
                     fi
-                fi
 
-                if [ -n "${monitor_dir_names_chosen:-}" ] 
-                then
-                    rand_found=0
                     if [ -z "${loop:-}" ] || [ "$loop" -eq 10 ]
                     then
                         loop=1
                     else
                         ((loop++))
                     fi
+
                     while IFS= read -r old_file_path
                     do
                         output_dir_name=${old_file_path#*$LIVE_ROOT/}
                         output_dir_name=${output_dir_name%%/*}
-                        for dir_name in "${monitor_dir_names_chosen[@]}"
+
+                        for hls_index in ${hls_indices[@]+"${hls_indices[@]}"}
                         do
-                            if [ "$dir_name" == "$output_dir_name" ] 
+                            if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ] 
                             then
                                 GetChannel
-                                if [ -n "$chnl_live" ] 
-                                then
-                                    printf '%s\n' "$chnl_channel_name 超时重启" >> "$MONITOR_LOG"
-                                    MonitorHlsRestartChannel
-                                    break 2
-                                else
-                                    exclude_paths+=("$LIVE_ROOT/$output_dir_name")
-                                fi
+                                printf '%s\n' "$chnl_channel_name 超时重启" >> "$MONITOR_LOG"
+                                MonitorHlsRestartChannel
+                                break 2
                             fi
                         done
                     done < <(find "$LIVE_ROOT" -type f -name "*.ts" $exclude_command \! -newermt "-$hls_delay_seconds seconds" 2> /dev/null)
 
-                    GetChannels
+                    chnls_indices=("${!chnls_pid[@]}")
 
-                    for output_dir_name in "${monitor_dir_names_chosen[@]}"
+                    for hls_index in ${hls_indices[@]+"${hls_indices[@]}"}
                     do
-                        monitor_found=0
-                        for((monitor_i=0;monitor_i<chnls_count;monitor_i++));
+                        for chnls_index in "${chnls_indices[@]}"
                         do
-                            if [ "${chnls_output_dir_name[monitor_i]}" == "$output_dir_name" ] 
-                            then
-                                monitor_found=1
+                            output_dir_name="${chnls_output_dir_name[chnls_index]}"
 
-                                if [ "${chnls_status[monitor_i]}" == "off" ] 
+                            if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ] 
+                            then
+                                if [ "${chnls_status[chnls_index]}" == "off" ] 
                                 then
-                                    if [ "${chnls_stream_link[monitor_i]:0:23}" == "https://www.youtube.com" ] || [ "${chnls_stream_link[monitor_i]:0:19}" == "https://youtube.com" ]
+                                    if [ "${chnls_stream_link[chnls_index]:0:23}" == "https://www.youtube.com" ] || [ "${chnls_stream_link[chnls_index]:0:19}" == "https://youtube.com" ]
                                     then
                                         sleep 10
                                     else
                                         sleep 5
                                     fi
+
                                     chnl_status=""
                                     GetChannel
+
                                     if [ -z "$chnl_status" ] 
                                     then
                                         declare -a new_array
-                                        for element in "${monitor_dir_names_chosen[@]}"
+                                        for element in "${hls_indices[@]}"
                                         do
-                                            [ "$element" != "$output_dir_name" ] && new_array+=("$element")
+                                            [ "$element" != "$hls_index" ] && new_array+=("$element")
                                         done
+
                                         if [ -z "${new_array:-}" ] 
                                         then
-                                            monitor_dir_names_chosen=()
+                                            hls_indices=()
                                         else
-                                            monitor_dir_names_chosen=("${new_array[@]}")
+                                            hls_indices=("${new_array[@]}")
                                         fi
+
                                         unset new_array
                                         break 2
-                                    fi
-                                    if [ "$chnl_status" == "off" ] 
+                                    elif [ "$chnl_status" == "off" ] 
                                     then
                                         printf '%s\n' "$chnl_channel_name 开启" >> "$MONITOR_LOG"
                                         MonitorHlsRestartChannel
@@ -19421,31 +20659,33 @@ Monitor()
                                     fi
                                 fi
 
-                                if [ "${rand_restart_hls_done:-}" != 0 ] && [ "$anti_leech_yn" == "yes" ] && [ "${chnls_encrypt[monitor_i]}" == "yes" ] && [[ $((now-chnls_key_time[monitor_i])) -gt $hls_key_period ]] && ls -A "$LIVE_ROOT/$output_dir_name/"*.key > /dev/null 2>&1
+                                if [ "${rand_restart_hls_done:-}" != 0 ] && [ "$anti_leech_yn" == "yes" ] && [ "${chnls_encrypt[chnls_index]}" == "yes" ] && [[ $((now-chnls_key_time[chnls_index])) -gt $hls_key_period ]] && ls -A "$LIVE_ROOT/$output_dir_name/"*.key > /dev/null 2>&1
                                 then
                                     while IFS= read -r old_key 
                                     do
                                         old_key_name=${old_key##*/}
                                         old_key_name=${old_key_name%%.*}
-                                        [ "$old_key_name" != "${chnls_key_name[monitor_i]}" ] && rm -f "$old_key"
+                                        [ "$old_key_name" != "${chnls_key_name[chnls_index]}" ] && rm -f "$old_key"
                                     done < <(find "$LIVE_ROOT/$output_dir_name" -type f -name "*.key" \! -newermt "-$hls_key_expire_seconds seconds" 2> /dev/null)
 
                                     new_key_name=$(RandStr)
+
                                     if openssl rand 16 > "$LIVE_ROOT/$output_dir_name/$new_key_name.key" 
                                     then
-                                        if [ "${chnls_encrypt_session[monitor_i]}" == "yes" ] 
+                                        if [ "${chnls_encrypt_session[chnls_index]}" == "yes" ] 
                                         then
-                                            if ! echo -e "/keys?key=$new_key_name&channel=$output_dir_name\n$LIVE_ROOT/$output_dir_name/$new_key_name.key\n$(openssl rand -hex 16)" > "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[monitor_i]}.keyinfo"
+                                            if ! echo -e "/keys?key=$new_key_name&channel=$output_dir_name\n$LIVE_ROOT/$output_dir_name/$new_key_name.key\n$(openssl rand -hex 16)" > "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[chnls_index]}.keyinfo"
                                             then
                                                 break 2
                                             fi
                                         else
-                                            if ! echo -e "$new_key_name.key\n$LIVE_ROOT/$output_dir_name/$new_key_name.key\n$(openssl rand -hex 16)" > "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[monitor_i]}.keyinfo"
+                                            if ! echo -e "$new_key_name.key\n$LIVE_ROOT/$output_dir_name/$new_key_name.key\n$(openssl rand -hex 16)" > "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[chnls_index]}.keyinfo"
                                             then
                                                 break 2
                                             fi
                                         fi
-                                        JQ update "$CHANNELS_FILE" '.channels|=map(select(.pid=='"${chnls_pid[monitor_i]}"') * 
+
+                                        JQ update "$CHANNELS_FILE" '.channels|=map(select(.pid=='"${chnls_pid[chnls_index]}"') * 
                                         {
                                             key_name: "'"$new_key_name"'",
                                             key_time: '"$now"'
@@ -19455,17 +20695,18 @@ Monitor()
                                     fi
                                 fi
 
-                                if [ "$loop" -eq 1 ] && { [ "$anti_leech_yn" == "no" ] || [ "${chnls_encrypt[monitor_i]}" == "no" ]; }
+                                if [ "$loop" -eq 1 ] && { [ "$anti_leech_yn" == "no" ] || [ "${chnls_encrypt[chnls_index]}" == "no" ]; }
                                 then
-                                    if [ "${chnls_encrypt[monitor_i]}" == "yes" ] 
+                                    if [ "${chnls_encrypt[chnls_index]}" == "yes" ] 
                                     then
-                                        if [ -e "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[monitor_i]}.keyinfo" ] && \
-                                        [ -e "$LIVE_ROOT/$output_dir_name/${chnls_key_name[monitor_i]}.key" ] && \
-                                        iv_hex=$(awk 'NR==3{print}' "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[monitor_i]}.keyinfo") && \
-                                        encrypt_key=$(hexdump -e '16/1 "%02x"' < "$LIVE_ROOT/$output_dir_name/${chnls_key_name[monitor_i]}.key")
+                                        if [ -e "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[chnls_index]}.keyinfo" ] && \
+                                        [ -e "$LIVE_ROOT/$output_dir_name/${chnls_key_name[chnls_index]}.key" ] && \
+                                        iv_hex=$(awk 'NR==3{print}' "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[chnls_index]}.keyinfo") && \
+                                        encrypt_key=$(hexdump -e '16/1 "%02x"' < "$LIVE_ROOT/$output_dir_name/${chnls_key_name[chnls_index]}.key")
                                         then
                                             encrypt_command="-key $encrypt_key -iv $iv_hex"
                                         else
+                                            GetChannel
                                             printf '%s\n' "$chnl_channel_name 开启" >> "$MONITOR_LOG"
                                             MonitorHlsRestartChannel
                                             break 2
@@ -19479,7 +20720,8 @@ Monitor()
                                     video_bitrate=0
                                     bitrate_check=0
                                     f_count=1
-                                    for f in "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[monitor_i]}/"*.ts
+
+                                    for f in "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[chnls_index]}/"*.ts
                                     do
                                         ((f_count++))
                                     done
@@ -19487,14 +20729,16 @@ Monitor()
                                     f_num=$((f_count/2))
                                     f_count=1
 
-                                    for f in "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[monitor_i]}/"*.ts
+                                    for f in "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[chnls_index]}/"*.ts
                                     do
                                         if [ "$f_count" -lt "$f_num" ] 
                                         then
                                             ((f_count++))
                                             continue
                                         fi
+
                                         [ -n "$encrypt_command" ] && f="crypto:$f"
+
                                         while IFS= read -r line 
                                         do
                                             if [[ $line == *"codec_type=video"* ]] 
@@ -19521,18 +20765,22 @@ Monitor()
                                         [ -n "$encrypt_command" ] && f="crypto:$f"
                                         fail_count=1
                                         f_count=1
-                                        for f in "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[monitor_i]}/"*.ts
+
+                                        for f in "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[chnls_index]}/"*.ts
                                         do
                                             if [ "$f_count" -lt "$f_num" ] 
                                             then
                                                 ((f_count++))
                                                 continue
                                             fi
+
                                             [ ! -e "$f" ] && continue
+
                                             audio=0
                                             video=0
                                             video_bitrate=0
                                             bitrate_check=0
+
                                             while IFS= read -r line 
                                             do
                                                 if [[ $line == *"codec_type=video"* ]] 
@@ -19556,6 +20804,7 @@ Monitor()
                                             then
                                                 ((fail_count++))
                                             fi
+
                                             if [ "$fail_count" -gt 3 ] 
                                             then
                                                 GetChannel
@@ -19566,37 +20815,43 @@ Monitor()
                                         done
                                     fi
                                 fi
-                                break 1
+
+                                continue 2
                             fi
                         done
 
-                        if [ "$monitor_found" -eq 0 ] 
+                        declare -a new_array
+                        for element in "${hls_indices[@]}"
+                        do
+                            [ "$element" != "$hls_index" ] && new_array+=("$element")
+                        done
+
+                        if [ -z "${new_array:-}" ] 
                         then
-                            declare -a new_array
-                            for element in "${monitor_dir_names_chosen[@]}"
-                            do
-                                [ "$element" != "$output_dir_name" ] && new_array+=("$element")
-                            done
-                            if [ -z "${new_array:-}" ] 
+                            hls_indices=()
+                        else
+                            hls_indices=("${new_array[@]}")
+                        fi
+
+                        unset new_array
+                        break
+                    done
+
+                    if [ -n "${hls_indices:-}" ] && [ -n "${rand_restart_hls_done:-}" ] && [ "$rand_restart_hls_done" -eq 0 ] 
+                    then
+                        rand_restart_hls_done=1
+
+                        for hls_index in "${hls_indices[@]}"
+                        do
+                            if [ "${hls_change[hls_index]:-true}" == "false" ] 
                             then
-                                monitor_dir_names_chosen=()
-                            else
-                                monitor_dir_names_chosen=("${new_array[@]}")
+                                continue
                             fi
-                            unset new_array
-                            break 1
-                        elif [ -n "${rand_restart_hls_done:-}" ] && [ "$rand_restart_hls_done" -eq 0 ] 
-                        then
-                            rand_found=1
+                            output_dir_name="${monitor_output_dir_names[hls_index]}"
                             GetChannel
                             printf '%s\n' "$chnl_channel_name HLS 随机重启" >> "$MONITOR_LOG"
                             MonitorHlsRestartChannel
-                        fi
-                    done
-
-                    if [ "$rand_found" -eq 1 ] 
-                    then
-                        rand_restart_hls_done=1
+                        done
                     fi
                 else
                     rand_restart_hls_done=1
@@ -20858,8 +22113,8 @@ XtreamCodesListChnls()
                         Println "$error 返回错误, 请重试"
                     fi
 
-                    Println "$tip 输入 a 返回上级页面, 输入 b 使用下个 mac 地址\n"
-                    while read -p "输入分类序号(默认: 取消): " genres_num 
+                    Println "输入分类序号, 输入 a 返回上级页面, 输入 b 使用下个 mac 地址"
+                    while read -p "$i18n_default_cancel" genres_num 
                     do
                         case "$genres_num" in
                             "")
@@ -21693,7 +22948,7 @@ NginxUninstall()
     fi
 
     echo
-    AskIfContinue n "`eval_gettext \"确定删除 \\\$nginx_name 包括所有配置文件, 操作不可恢复\"`"
+    ExitOnList n "`eval_gettext \"确定删除 \\\$nginx_name 包括所有配置文件, 操作不可恢复\"`"
 
     systemctl stop $nginx_name || true
 
@@ -21709,16 +22964,16 @@ NginxUninstall()
 
 NginxUpdate()
 {
+    ShFileUpdate "$nginx_name"
+
     if [ ! -d "$nginx_prefix" ] 
     then
         Println "$error $nginx_name 未安装 !\n"
         exit 1
     fi
 
-    ShFileUpdate "$nginx_name"
-
     echo
-    AskIfContinue n "`eval_gettext \"是否重新编译 \\\$nginx_name\"`"
+    ExitOnList n "`eval_gettext \"是否重新编译 \\\$nginx_name\"`"
 
     nginx_name_upper=$(tr '[:lower:]' '[:upper:]' <<< "${nginx_name:0:1}")"${nginx_name:1}"
     "$nginx_name_upper"Install
@@ -21740,7 +22995,7 @@ NginxToggle()
     echo
     if [[ $(systemctl is-active $nginx_name) == "active" ]] 
     then
-        AskIfContinue y "`eval_gettext \"\\\$nginx_name 正在运行, 是否关闭\"`"
+        ExitOnList y "`eval_gettext \"\\\$nginx_name 正在运行, 是否关闭\"`"
 
         if [[ $(echo $SSH_CONNECTION | cut -d' ' -f3) == "127.0.0.1" ]] 
         then
@@ -21750,7 +23005,7 @@ NginxToggle()
         systemctl stop $nginx_name
         Println "$info $nginx_name 已关闭\n"
     else
-        AskIfContinue y "`eval_gettext \"\\\$nginx_name 未运行, 是否开启\"`"
+        ExitOnList y "`eval_gettext \"\\\$nginx_name 未运行, 是否开启\"`"
 
         systemctl start $nginx_name
         Println "$info $nginx_name 已开启\n"
@@ -24118,7 +25373,7 @@ NginxConfigLocalhost()
         case $config_localhost_options_index in
             3) 
                 Println "SNI 域名分流:\n\n${nginx_stream_server_name_list:-无}\n\n"
-                ExitOnCancel "输入指令(分流域名)" server_name_directive
+                ExitOnText "输入指令(分流域名)" server_name_directive
 
                 echo
                 inquirer text_input "输入指令值(分流后端名称)" server_name_args "$server_name_directive"
@@ -24150,7 +25405,7 @@ NginxConfigLocalhost()
             4) 
                 Println "SSL 协议分流:\n\n${nginx_stream_protocol_list:-无}\n"
                 Println "$tip 空字符用 '' 表示"
-                ExitOnCancel "输入指令(分流 SSL 协议)" protocol_directive
+                ExitOnText "输入指令(分流 SSL 协议)" protocol_directive
 
                 if [ "$protocol_directive" == "''" ] 
                 then
@@ -24158,7 +25413,7 @@ NginxConfigLocalhost()
                 fi
 
                 echo
-                ExitOnCancel "输入指令值(分流后端名称)" protocol_args
+                ExitOnText "输入指令值(分流后端名称)" protocol_args
 
                 directive_map='{"directive":"map","args":["$ssl_preread_protocol","$ssl_proxy"],"block":[]}'
 
@@ -24186,12 +25441,12 @@ NginxConfigLocalhost()
             ;;
             5) 
                 Println "ALPN 协议分流:\n\n${nginx_stream_alpn_protocols_list:-无}\n\n"
-                ExitOnCancel "输入指令(分流 ALPN 协议)" alpn_protocols_directive
+                ExitOnText "输入指令(分流 ALPN 协议)" alpn_protocols_directive
 
                 alpn_protocols_directive=${alpn_protocols_directive//\\/\\\\}
 
                 echo
-                ExitOnCancel "输入指令值(分流后端名称)" alpn_protocols_args
+                ExitOnText "输入指令值(分流后端名称)" alpn_protocols_args
 
                 directive_map='{"directive":"map","args":["$ssl_preread_alpn_protocols","$proxy_pass"],"block":[]}'
 
@@ -24219,10 +25474,10 @@ NginxConfigLocalhost()
             ;;
             6) 
                 Println "分流后端:\n\n${nginx_stream_upstream_list:-无}\n\n"
-                ExitOnCancel "输入指令(分流后端名称)" upstream_args
+                ExitOnText "输入指令(分流后端名称)" upstream_args
 
                 Println "$tip 比如: 127.0.0.1:8888"
-                ExitOnCancel "输入指令值(分流后端地址)" upstream_server_args
+                ExitOnText "输入指令值(分流后端地址)" upstream_server_args
 
                 directive_upstream='{"directive":"upstream","args":["'"$upstream_args"'"],"block":[]}'
 
@@ -24534,7 +25789,7 @@ AcmeCheck()
         if [ "$zerossl_options_index" -eq 0 ] 
         then
             echo
-            ExitOnCancel "输入邮箱: " zerossl_email
+            ExitOnText "输入邮箱: " zerossl_email
 
             if ! ~/.acme.sh/acme.sh --register-account -m "$zerossl_email" --server zerossl 
             then
@@ -24543,10 +25798,10 @@ AcmeCheck()
             fi
         else
             Println "$tip 可以在 https://app.zerossl.com/developer?fpr=iptv-sh 页面获取"
-            ExitOnCancel "输入 EAB KID: " zerossl_eab_kid
+            ExitOnText "输入 EAB KID: " zerossl_eab_kid
 
             echo
-            ExitOnCancel "输入 EAB HMAC Key: " zerossl_eab_hmac_key
+            ExitOnText "输入 EAB HMAC Key: " zerossl_eab_hmac_key
 
             if ! ~/.acme.sh/acme.sh --register-account --server zerossl --eab-kid "$zerossl_eab_kid" --eab-hmac-key "$zerossl_eab_hmac_key" 
             then
@@ -25626,7 +26881,7 @@ V2rayInstall()
     if [ -s "$V2_CONFIG" ] 
     then
         Println "$error $v2ray_name 已存在...\n"
-        AskIfContinue n "`gettext \"是否覆盖原安装\"`"
+        ExitOnList n "`gettext \"是否覆盖原安装\"`"
     fi
 
     DepsCheck
@@ -25865,7 +27120,7 @@ V2raySetFollowRedirect()
 V2raySetAddress()
 {
     echo
-    ExitOnCancel "输入目标服务器地址(ip或域名): " address
+    ExitOnText "输入目标服务器地址(ip或域名): " address
 }
 
 V2raySetDnsAddress()
@@ -26317,7 +27572,7 @@ V2raySetCertificates()
         if [ "$crt_option" == "添加域名" ] 
         then
             Println "$tip 如果证书不存在需请求新 CA 证书, 请确保没有程序占用 80 端口或已经设置 mmproxy acme"
-            ExitOnCancel "输入域名: " domain
+            ExitOnText "输入域名: " domain
 
             if [ ! -s "/usr/local/share/$v2ray_name/$domain.crt" ] 
             then
@@ -26870,7 +28125,7 @@ V2raySetQuicKey()
 V2raySetDsPath()
 {
     Println "$tip 在运行 $v2ray_name 之前, 这个文件必须不存在"
-    ExitOnCancel "输入 domainsocket 文件路径: " ds_path
+    ExitOnText "输入 domainsocket 文件路径: " ds_path
 
     Println "  domainsocket 文件路径: ${green} $ds_path ${normal}"
 }
@@ -29268,7 +30523,7 @@ V2rayListInboundAccountLink()
         }' | base64 -w 0)
         Println "分享链接: ${green}vmess://$vmess_link${normal}\n"
         echo
-        AskIfContinue y "`gettext \"打印二维码\"`"
+        ExitOnList y "`gettext \"打印二维码\"`"
         ReleaseCheck
         if [ ! -e "/usr/local/bin/imgcat" ] 
         then
@@ -31103,7 +32358,7 @@ V2raySetRouting()
     elif [ "$set_routing_option" == "添加负载均衡器" ] 
     then
         Println "$tip 用于匹配路由规则"
-        ExitOnCancel "输入负载均衡器标签: " routing_balancer_tag
+        ExitOnText "输入负载均衡器标签: " routing_balancer_tag
 
         new_routing_balancer=$(
         $JQ_FILE --arg tag "$routing_balancer_tag" \
@@ -31141,7 +32396,7 @@ V2raySetRouting()
         V2rayListRouting
         [ "$routing_rules_count" -eq 0 ] && exit 1
         echo
-        ExitOnCancel "输入路由规则序号: " routing_rule_num
+        ExitOnText "输入路由规则序号: " routing_rule_num
 
         routing_rule_index=$((routing_rule_num-1))
         jq_path='["routing","rules"]'
@@ -31151,7 +32406,7 @@ V2raySetRouting()
         V2rayListRouting
         [ "$routing_balancers_count" -eq 0 ] && exit 1
         echo
-        ExitOnCancel "输入负载均衡器序号: " routing_balancer_num
+        ExitOnText "输入负载均衡器序号: " routing_balancer_num
 
         routing_balancer_index=$((routing_balancer_num-1))
         jq_path='["routing","balancers"]'
@@ -31493,10 +32748,10 @@ V2raySetReverse()
     if [ "$set_reverse_option" == "添加 bridge" ] 
     then
         echo
-        ExitOnCancel "输入标签: " reverse_bridge_tag
+        ExitOnText "输入标签: " reverse_bridge_tag
 
         echo
-        ExitOnCancel "输入域名: " reverse_bridge_domain
+        ExitOnText "输入域名: " reverse_bridge_domain
 
         new_reverse_bridge=(
         $JQ_FILE -n --arg tag "reverse_bridge_tag" --arg domain "$reverse_bridge_domain" \
@@ -31510,10 +32765,10 @@ V2raySetReverse()
     elif [ "$set_reverse_option" == "添加 portal" ] 
     then
         echo
-        ExitOnCancel "输入标签: " reverse_portal_tag
+        ExitOnText "输入标签: " reverse_portal_tag
 
         echo
-        ExitOnCancel "输入域名: " reverse_portal_domain
+        ExitOnText "输入域名: " reverse_portal_domain
 
         new_reverse_portal=(
         $JQ_FILE -n --arg tag "reverse_portal_tag" --arg domain "$reverse_portal_domain" \
@@ -31528,7 +32783,7 @@ V2raySetReverse()
     then
         V2rayListReverse
         [ "$reverse_bridges_count" -eq 0 ] && exit 1
-        ExitOnCancel "输入 bridge 序号: " reverse_bridge_num
+        ExitOnText "输入 bridge 序号: " reverse_bridge_num
 
         reverse_bridge_index=$((reverse_bridge_num-1))
         jq_path='["reverse","bridges"]'
@@ -31537,7 +32792,7 @@ V2raySetReverse()
     else
         V2rayListReverse
         [ "$reverse_portals_count" -eq 0 ] && exit 1
-        ExitOnCancel "输入 portal 序号: " reverse_portal_num
+        ExitOnText "输入 portal 序号: " reverse_portal_num
 
         reverse_portal_index=$((reverse_portal_num-1))
         jq_path='["reverse","portals"]'
@@ -31680,10 +32935,10 @@ V2raySetDns()
     if [ "$set_dns_options_index" -eq 0 ] 
     then
         Println "$tip 格式如 v2ray.com, regexp:xxx, domain:xxx, keyword:xxx, geosite:cn"
-        ExitOnCancel "输入域名" hosts_domain
+        ExitOnText "输入域名" hosts_domain
 
         Println "$tip 格式如 127.0.0.1, v2ray.com, regexp:xxx, domain:xxx, keyword:xxx, geosite:cn"
-        ExitOnCancel "输入地址" hosts_address
+        ExitOnText "输入地址" hosts_address
 
         jq_path='["dns","hosts","'"$hosts_domain"'"]'
         JQ replace "$V2_CONFIG" \""$hosts_address"\"
@@ -31691,7 +32946,7 @@ V2raySetDns()
     elif [ "$set_dns_options_index" -eq 1 ] 
     then
         Println "$tip 格式如: localhost, 8.8.8.8, https://host:port/dns-query, https+local://host:port/dns-query"
-        ExitOnCancel "输入服务器地址: " dns_server_address
+        ExitOnText "输入服务器地址: " dns_server_address
 
         if [ "$dns_server_address" == "localhost" ] || [[ $dns_server_address =~ ^http ]]
         then
@@ -31772,7 +33027,7 @@ V2raySetDns()
     elif [ "$set_dns_options_index" -eq 2 ] 
     then
         Println "$tip 用于 DNS 查询时通知服务器客户端的所在位置, 不能是私有地址"
-        ExitOnCancel "输入 IP 地址: " dns_client_ip
+        ExitOnText "输入 IP 地址: " dns_client_ip
 
         jq_path='["dns","clientIp"]'
         JQ replace "$V2_CONFIG" \""$dns_client_ip"\"
@@ -31780,7 +33035,7 @@ V2raySetDns()
     elif [ "$set_dns_options_index" -eq 3 ] 
     then
         Println "$tip 可在路由使用 inboundTag 进行匹配"
-        ExitOnCancel "输入 DNS 标签: " dns_tag
+        ExitOnText "输入 DNS 标签: " dns_tag
 
         jq_path='["dns","tag"]'
         JQ replace "$V2_CONFIG" \""$dns_tag"\"
@@ -31834,7 +33089,7 @@ V2raySetDns()
         V2rayListDns
         [ "$dns_hosts_count" -eq 0 ] && exit 1
         echo
-        ExitOnCancel "输入静态 IP 序号: " dns_host_num
+        ExitOnText "输入静态 IP 序号: " dns_host_num
 
         dns_host_index=$((dns_host_num-1))
         jq_path='["dns","hosts","'"${dns_hosts_domain[dns_host_index]}"'"]'
@@ -31844,7 +33099,7 @@ V2raySetDns()
         V2rayListDns
         [ "$dns_servers_count" -eq 0 ] && exit 1
         echo
-        ExitOnCancel "输入 DNS 服务器序号: " dns_server_num
+        ExitOnText "输入 DNS 服务器序号: " dns_server_num
 
         dns_server_index=$((dns_server_num-1))
         jq_path='["dns","servers"]'
@@ -32073,7 +33328,7 @@ V2rayListStats()
 V2rayResetStats()
 {
     V2rayGetStats
-    AskIfContinue n "`gettext \"将重置所有的流量统计\"`"
+    ExitOnList n "`gettext \"将重置所有的流量统计\"`"
     $V2CTL_FILE api --server=$api_inbound_listen:$api_inbound_port StatsService.QueryStats 'pattern: "" reset: true'
 }
 
@@ -32823,7 +34078,7 @@ TrojanInstall()
     if [ -s "$TR_CONFIG" ] 
     then
         Println "$error $trojan_name 已存在...\n"
-        AskIfContinue n "`gettext \"是否覆盖原安装\"`"
+        ExitOnList n "`gettext \"是否覆盖原安装\"`"
     fi
 
     DepsCheck
@@ -34214,7 +35469,7 @@ CloudflareDelZone()
             Println "$error ${msg:-超时, 请重试}\n"
         fi
         echo
-        AskIfContinue n "`gettext \"是否仍要删除此源站, 只有这里和官网都删除才能重新添加此源站\"`"
+        ExitOnList n "`gettext \"是否仍要删除此源站, 只有这里和官网都删除才能重新添加此源站\"`"
 
         jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
         JQ delete "$CF_CONFIG" "$cf_zones_index"
@@ -34262,7 +35517,7 @@ CloudflareDelHost()
     if [ "$cf_zones_count" -gt 0 ] 
     then
         echo
-        AskIfContinue n "`gettext \"是否删除此 CFP 下所有的源站\"`"
+        ExitOnList n "`gettext \"是否删除此 CFP 下所有的源站\"`"
 
         for((i=0;i<${#cf_zones_name[@]};i++));
         do
@@ -34520,7 +35775,7 @@ CloudflareAddToken()
     done
 
     echo
-    AskIfContinue n "`gettext \"需要更新此 Token 后才能添加到脚本, 是否继续\"`"
+    ExitOnList n "`gettext \"需要更新此 Token 后才能添加到脚本, 是否继续\"`"
 
     Println "$info 更新 Token"
     cf_user_token_new=$(curl -s -X PUT https://api.cloudflare.com/client/v4/user/tokens/$token_id/value \
@@ -34976,7 +36231,7 @@ CloudflareSetWorkerUpstream()
     if [ -z "${cf_worker_upstream:-}" ] 
     then
         Println "$tip 比如: youdomain.com/path"
-        ExitOnCancel "输入 worker: $cf_worker_name 源站地址: " cf_worker_upstream
+        ExitOnText "输入 worker: $cf_worker_name 源站地址: " cf_worker_upstream
     fi
 }
 
@@ -35035,7 +36290,7 @@ CloudflareAddWorker()
                 if [ -d "$CF_WORKERS_ROOT/$cf_worker_path" ] 
                 then
                     echo
-                    AskIfContinue n "`gettext \"路径已经存在, 是否仍要添加\"`"
+                    ExitOnList n "`gettext \"路径已经存在, 是否仍要添加\"`"
                 else
                     wrangler generate "$cf_worker_path"
                 fi
@@ -35344,15 +36599,18 @@ CloudflareDeployWorker()
                     [ "$cf_worker_num_start" -ge "$cf_worker_num_end" ]
                     then
                         error_no=3
+                        break
                     fi
                 ;;
                 *[!0-9]*)
                     error_no=1
+                    break
                 ;;
                 *)
                     if [ "$cf_worker_num" -lt 1 ] || [ "$cf_worker_num" -gt "$cf_workers_count" ] 
                     then
                         error_no=2
+                        break
                     fi
                 ;;
             esac
@@ -35431,15 +36689,18 @@ CloudflareDeployWorker()
                     [ "$cf_user_num_start" -ge "$cf_user_num_end" ]
                     then
                         error_no=3
+                        break
                     fi
                 ;;
                 *[!0-9]*)
                     error_no=1
+                    break
                 ;;
                 *)
                     if [ "$cf_user_num" -lt 1 ] || [ "$cf_user_num" -gt "$cf_users_count" ] 
                     then
                         error_no=2
+                        break
                     fi
                 ;;
             esac
@@ -36707,15 +37968,18 @@ CloudflareEnableWorkersMonitor()
                     [ "$worker_num_start" -ge "$worker_num_end" ]
                     then
                         error_no=3
+                        break
                     fi
                 ;;
                 *[!0-9]*)
                     error_no=1
+                    break
                 ;;
                 *)
                     if [ "$worker_num" -lt 1 ] || [ "$worker_num" -gt "$cf_workers_count" ] 
                     then
                         error_no=2
+                        break
                     fi
                 ;;
             esac
@@ -36957,15 +38221,18 @@ CloudflareEnableWorkersMonitor()
                     [ "$zone_num_start" -ge "$zone_num_end" ]
                     then
                         error_no=3
+                        break
                     fi
                 ;;
                 *[!0-9]*)
                     error_no=1
+                    break
                 ;;
                 *)
                     if [ "$zone_num" -lt 1 ] || [ "$zone_num" -gt "$cf_zones_count" ] 
                     then
                         error_no=2
+                        break
                     fi
                 ;;
             esac
@@ -38471,15 +39738,18 @@ IbmSetCfAppCron()
                     [ "$app_num_start" -ge "$app_num_end" ]
                     then
                         error_no=3
+                        break
                     fi
                 ;;
                 *[!0-9]*)
                     error_no=1
+                    break
                 ;;
                 *)
                     if [ "$app_num" -lt 1 ] || [ "$app_num" -gt "$ibm_cf_apps_count" ] 
                     then
                         error_no=2
+                        break
                     fi
                 ;;
             esac
@@ -38815,7 +40085,7 @@ IbmUninstallCfCli()
     fi
 
     echo
-    AskIfContinue n "`gettext \"确定删除 IBM CF CLI\"`"
+    ExitOnList n "`gettext \"确定删除 IBM CF CLI\"`"
 
     EXIT_STATUS=0
 
@@ -39608,15 +40878,18 @@ VipAddChannel()
                         if [[ $vip_channel_num_start == *[!0-9]* ]] || [[ $vip_channel_num_end == *[!0-9]* ]] || [ "$vip_channel_num_start" -eq 0 ] || [ "$vip_channel_num_end" -eq 0 ] || [ "$vip_channel_num_end" -gt "$vip_channels_count" ] || [ "$vip_channel_num_start" -ge "$vip_channel_num_end" ]
                         then
                             error_no=3
+                            break
                         fi
                     ;;
                     *[!0-9]*)
                         error_no=1
+                        break
                     ;;
                     *)
                         if [ "$vip_channel_num" -lt 1 ] || [ "$vip_channel_num" -gt "$vip_channels_count" ] 
                         then
                             error_no=2
+                            break
                         fi
                     ;;
                 esac
@@ -39876,15 +41149,18 @@ VipEditChannel()
                     if [[ $vip_channel_num_start == *[!0-9]* ]] || [[ $vip_channel_num_end == *[!0-9]* ]] || [ "$vip_channel_num_start" -eq 0 ] || [ "$vip_channel_num_end" -eq 0 ] || [ "$vip_channel_num_end" -gt "$vip_channels_count" ] || [ "$vip_channel_num_start" -ge "$vip_channel_num_end" ]
                     then
                         error_no=3
+                        break
                     fi
                 ;;
                 *[!0-9]*)
                     error_no=1
+                    break
                 ;;
                 *)
                     if [ "$vip_channel_num" -lt 1 ] || [ "$vip_channel_num" -gt "$vip_channels_count" ] 
                     then
                         error_no=2
+                        break
                     fi
                 ;;
             esac
@@ -40090,15 +41366,18 @@ VipListChannel()
                     if [[ $vip_channel_num_start == *[!0-9]* ]] || [[ $vip_channel_num_end == *[!0-9]* ]] || [ "$vip_channel_num_start" -eq 0 ] || [ "$vip_channel_num_end" -eq 0 ] || [ "$vip_channel_num_end" -gt "$vip_channels_count" ] || [ "$vip_channel_num_start" -ge "$vip_channel_num_end" ]
                     then
                         error_no=3
+                        break
                     fi
                 ;;
                 *[!0-9]*)
                     error_no=1
+                    break
                 ;;
                 *)
                     if [ "$vip_channel_num" -lt 1 ] || [ "$vip_channel_num" -gt "$vip_channels_count" ] 
                     then
                         error_no=2
+                        break
                     fi
                 ;;
             esac
@@ -40862,7 +42141,7 @@ VimConfig()
     if [ -e ~/.vimrc ] 
     then
         echo
-        AskIfContinue n "`gettext \"将安装 vim-plug 并覆盖 ~/.vimrc , 是否继续\"`"
+        ExitOnList n "`gettext \"将安装 vim-plug 并覆盖 ~/.vimrc , 是否继续\"`"
     fi
 
     if curl -s -fLo ~/.vim/autoload/plug.vim --create-dirs "$FFMPEG_MIRROR_LINK/vim-plug.vim"
@@ -40989,11 +42268,13 @@ Menu()
   ${color}8.${normal} `gettext \"重启频道\"`
   ${color}9.${normal} `gettext \"查看日志\"`
  ${color}10.${normal} `gettext \"删除频道\"`
- ${color}11.${normal} `gettext \"修改默认\"`
+ ${color}11.${normal} `gettext \"设置计划\"`
+ ${color}12.${normal} `gettext \"设置监控\"`
+ ${color}13.${normal} `gettext \"修改默认\"`
 
  `eval_gettext \"\\\$tip 当前: \\\${green}\\\$title\\\${normal} 面板\"`
  $tip $msg\n\n"
-    read -p "`gettext \"输入序号\"` [1-11]: " menu_num
+    read -p "`gettext \"输入序号\"` [1-13]: " menu_num
     case "$menu_num" in
         h)
             kind=""
@@ -41028,9 +42309,13 @@ Menu()
         ;;
         10) DelChannel
         ;;
-        11) EditDefaultMenu
+        11) ScheduleMenu
         ;;
-        *) Println "$error $i18n_input_correct_number [1-11]\n"
+        12) MonitorMenu
+        ;;
+        13) EditDefaultMenu
+        ;;
+        *) Println "$error $i18n_input_correct_number [1-13]\n"
         ;;
     esac
 }
@@ -41143,7 +42428,7 @@ UpdateSelf()
     if [ ! -e "$JQ_FILE" ] 
     then
         echo
-        AskIfContinue y "`gettext \"检测到安装未完成, 是否卸载重装\"`"
+        ExitOnList y "`gettext \"检测到安装未完成, 是否卸载重装\"`"
 
         Uninstall
         Install
@@ -41274,8 +42559,6 @@ UpdateSelf()
 
         for((i=0;i<chnls_count;i++));
         do
-            [ -n "$new_channels" ] && new_channels="$new_channels,"
-
             while [[ ${chnls_headers[i]} =~ \\\\ ]]
             do
                 chnls_headers[i]=${chnls_headers[i]//\\\\/\\}
@@ -41305,6 +42588,43 @@ UpdateSelf()
                 done
             fi
 
+            chnl_schedule="[]"
+
+            if [ -n "${chnls_schedule_status[i]}" ] 
+            then
+                IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[i]}"
+                IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[i]}"
+                IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[i]}"
+                IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[i]}"
+
+                chnl_schedules_if_null="${chnls_schedule_hls_change[i]//false/}"
+                chnl_schedules_if_null="${chnl_schedules_if_null//true/}"
+
+                IFS="${delimiters[1]}" read -ra chnl_schedules_channel_name <<< "${chnls_schedule_channel_name[i]:-$chnl_schedules_if_null}${delimiters[1]}"
+
+                chnl_schedules_indices=("${!chnl_schedules_status[@]}")
+
+                for chnl_schedules_index in "${chnl_schedules_indices[@]}"
+                do
+                    chnl_schedule=$(
+                        $JQ_FILE --arg start_time "${chnl_schedules_start_time[chnl_schedules_index]}" \
+                            --arg end_time "${chnl_schedules_end_time[chnl_schedules_index]}" \
+                            --arg hls_change "${chnl_schedules_hls_change[chnl_schedules_index]:-true}" \
+                            --arg channel_name "${chnl_schedules_channel_name[chnl_schedules_index]:-}" \
+                            --arg status "${chnl_schedules_status[chnl_schedules_index]}" \
+                        '. + [
+                            {
+                                "start_time": $start_time | tonumber,
+                                "end_time": $end_time | tonumber,
+                                "hls_change": $hls_change | test("true"),
+                                "channel_name": $channel_name,
+                                "status": $status | tonumber
+                            }
+                        ]' <<< "$chnl_schedule"
+                    )
+                done
+            fi
+
             new_channel=$(
             $JQ_FILE -n --arg pid "${chnls_pid[i]}" --arg status "${chnls_status[i]}" \
                 --argjson stream_link "$stream_link" --arg live "${chnls_live[i]}" \
@@ -41316,13 +42636,13 @@ UpdateSelf()
                 --arg seg_length "${chnls_seg_length[i]}" --arg seg_count "${chnls_seg_count[i]}" \
                 --arg video_codec "${chnls_video_codec[i]}" --arg audio_codec "${chnls_audio_codec[i]}" \
                 --arg video_audio_shift "${chnls_video_audio_shift[i]}" --arg txt_format "${chnls_txt_format[i]}"\
-                --arg draw_text "${chnls_draw_text[i]}" \
-                --arg quality "${chnls_quality[i]}" --arg bitrates "${chnls_bitrates[i]}" \
-                --arg const "${chnls_const[i]}" --arg encrypt "${chnls_encrypt[i]}" \
-                --arg encrypt_session "${chnls_encrypt_session[i]}" --arg keyinfo_name "${chnls_keyinfo_name[i]}" \
-                --arg key_name "${chnls_key_name[i]}" --arg key_time "${chnls_key_time[i]}" \
-                --arg input_flags "$new_input_flags" --arg output_flags "${chnls_output_flags[i]}" \
-                --arg channel_name "${chnls_channel_name[i]}" --arg channel_time "${chnls_channel_time[i]}" \
+                --arg draw_text "${chnls_draw_text[i]}" --arg quality "${chnls_quality[i]}" \
+                --arg bitrates "${chnls_bitrates[i]}" --arg const "${chnls_const[i]}" \
+                --arg encrypt "${chnls_encrypt[i]}" --arg encrypt_session "${chnls_encrypt_session[i]}" \
+                --arg keyinfo_name "${chnls_keyinfo_name[i]}" --arg key_name "${chnls_key_name[i]}" \
+                --arg key_time "${chnls_key_time[i]}" --arg input_flags "$new_input_flags" \
+                --arg output_flags "${chnls_output_flags[i]}" --arg channel_name "${chnls_channel_name[i]}" \
+                --arg channel_time "${chnls_channel_time[i]}" --argjson schedule "$chnl_schedule" \
                 --arg sync "${chnls_sync[i]}" --arg sync_file "${chnls_sync_file[i]}" \
                 --arg sync_index "${chnls_sync_index[i]}" --arg sync_pairs "${chnls_sync_pairs[i]}" \
                 --arg flv_status "${chnls_flv_status[i]}" --arg flv_h265 "${chnls_flv_h265[i]}" \
@@ -41360,6 +42680,7 @@ UpdateSelf()
                     output_flags: $output_flags,
                     channel_name: $channel_name,
                     channel_time: $channel_time | tonumber,
+                    schedule: $schedule,
                     sync: $sync,
                     sync_file: $sync_file,
                     sync_index: $sync_index,
@@ -41374,7 +42695,8 @@ UpdateSelf()
             new_channels="$new_channels$new_channel"
         done
 
-        JQ replace "$CHANNELS_FILE" channels "[$new_channels]"
+        jq_path='["channels"]'
+        JQ replace "$CHANNELS_FILE" new_channels file
     fi
     printf '%s' "" > ${LOCK_FILE}
 }
@@ -41584,7 +42906,7 @@ WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
             fi
 
             echo
-            AskIfContinue n "`gettext \"因为是编译 openresty, 耗时会很长, 是否继续\"`"
+            ExitOnList n "`gettext \"因为是编译 openresty, 耗时会很长, 是否继续\"`"
 
             OpenrestyInstall
             Println "$info openresty 安装完成\n"
@@ -41742,7 +43064,7 @@ WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
             fi
 
             echo
-            AskIfContinue n "`gettext \"因为是编译 nginx, 耗时会很长, 是否继续\"`"
+            ExitOnList n "`gettext \"因为是编译 nginx, 耗时会很长, 是否继续\"`"
 
             NginxInstall
             Println "$info nginx 安装完成\n"
@@ -41808,19 +43130,19 @@ WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
                 Spinner "安装 postfix" PostfixInstall
             else
                 echo
-                AskIfContinue y "`gettext \"postfix 已存在, 是否重新设置 smtp\"`"
+                ExitOnList y "`gettext \"postfix 已存在, 是否重新设置 smtp\"`"
             fi
             echo
-            ExitOnCancel "请输入 smtp 地址 (比如 hwsmtp.exmail.qq.com) : " smtp_address
+            ExitOnText "请输入 smtp 地址 (比如 hwsmtp.exmail.qq.com) : " smtp_address
 
             echo
-            ExitOnCancel "请输入 smtp 端口 (比如 465) : " smtp_port
+            ExitOnText "请输入 smtp 端口 (比如 465) : " smtp_port
 
             echo
-            ExitOnCancel "请输入 smtp 邮箱 : " smtp_email
+            ExitOnText "请输入 smtp 邮箱 : " smtp_email
 
             echo
-            ExitOnCancel "请输入 smtp 密码 : " smtp_pass
+            ExitOnText "请输入 smtp 密码 : " smtp_pass
 
             hostname=$(hostname -f)
             sed -i "0,/.*myhostname = .*/s//myhostname = $hostname/" /etc/postfix/main.cf
@@ -41903,7 +43225,7 @@ WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
                 ssh_tip="(ssh 监听端口)"
             else
                 echo
-                ExitOnCancel "输入 mmproxy 配置名称(英文)" mmproxy_name
+                ExitOnText "输入 mmproxy 配置名称(英文)" mmproxy_name
 
                 if [ "$mmproxy_name" == "acme" ] || [ "$mmproxy_name" == "ssh" ]
                 then
@@ -41930,7 +43252,7 @@ WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
             fi
 
             Println "$tip 比如: 127.0.0.1:2222"
-            ExitOnCancel "输入 ipv4 分流目标 地址+端口${acme_tip:-}${ssh_tip:-}: " mmproxy_target_v4
+            ExitOnText "输入 ipv4 分流目标 地址+端口${acme_tip:-}${ssh_tip:-}: " mmproxy_target_v4
 
             echo
             inquirer text_input "输入 ipv6 分流目标 地址+端口${acme_tip:-}${ssh_tip:-}: " mmproxy_target_v6 "[::1]:${mmproxy_target_v4#*:}"
@@ -42016,14 +43338,14 @@ $HOME/ip.sh" > /etc/rc.local
                 echo
                 if grep -q "options edns0" < /etc/resolv.conf
                 then
-                    AskIfContinue n "`gettext \"是否关闭 edns0\"`"
+                    ExitOnList n "`gettext \"是否关闭 edns0\"`"
 
                     sed -i '/options edns0/d' /etc/resolv.conf
                     sed -i "0,/.*require_dnssec = .*/s//require_dnssec = false/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
                     systemctl restart dnscrypt-proxy
                     Println "$info edns0 已关闭\n"
                 else
-                    AskIfContinue n "`gettext \"是否开启 edns0\"`"
+                    ExitOnList n "`gettext \"是否开启 edns0\"`"
 
                     echo "options edns0" >> /etc/resolv.conf
                     sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
@@ -42184,7 +43506,7 @@ $HOME/ip.sh" > /etc/rc.local
             if [[ ! -x $(command -v pdf2htmlEX) ]] 
             then
                 echo
-                AskIfContinue n "`gettext \"因为是编译 pdf2htmlEX, 耗时会很长, 是否继续\"`"
+                ExitOnList n "`gettext \"因为是编译 pdf2htmlEX, 耗时会很长, 是否继续\"`"
                 Pdf2htmlInstall
                 Println "$info pdf2htmlEX 安装完成, 输入 source /etc/profile 可立即使用\n"
             else
@@ -42431,12 +43753,12 @@ then
             echo
             if [[ $(systemctl is-active $v2ray_name) == "active" ]]
             then
-                AskIfContinue y "`eval_gettext \"\\\$v2ray_name 正在运行, 是否关闭\"`"
+                ExitOnList y "`eval_gettext \"\\\$v2ray_name 正在运行, 是否关闭\"`"
 
                 systemctl stop $v2ray_name > /dev/null 2>&1
                 Println "$info $v2ray_name 已关闭\n"
             else
-                AskIfContinue y "`eval_gettext \"\\\$v2ray_name 未运行, 是否开启\"`"
+                ExitOnList y "`eval_gettext \"\\\$v2ray_name 未运行, 是否开启\"`"
 
                 systemctl start $v2ray_name > /dev/null 2>&1
                 Println "$info $v2ray_name 已开启\n"
@@ -42485,7 +43807,7 @@ ${green}8.${normal} 浏览频道
             [ ! -s "$XTREAM_CODES" ] && Println "$error 没有账号 !\n" && exit 1
 
             echo
-            AskIfContinue n "`gettext \"耗时可能很长, 是否继续\"`"
+            ExitOnList n "`gettext \"耗时可能很长, 是否继续\"`"
 
             Println "$info 检测中..."
             printf -v now '%(%m-%d-%H:%M:%S)T' -1
@@ -42611,7 +43933,7 @@ then
   ${green}4.${normal} 安装 升级 dnscrypt proxy
   ${green}5.${normal} 安装 AdGuardHome
   ${green}6.${normal} 安装 升降级 openwrt
-  ${green}7.${normal} 安装 openwrt-v2ray
+  ${green}7.${normal} 安装 升级 openwrt-v2ray
 ————————————
   ${green}8.${normal} 切换 openwrt 语言
   ${green}9.${normal} 切换 v2ray/xray core
@@ -42633,7 +43955,7 @@ then
         ;;
         2) 
             echo
-            AskIfContinue n "`gettext \"适用于 斐讯 n1, apt upgrade 后需要重新修复, 是否继续\"`"
+            ExitOnList n "`gettext \"适用于 斐讯 n1, apt upgrade 后需要重新修复, 是否继续\"`"
 
             if [ ! -d ~/Amlogic_s905-kernel-master ] 
             then
@@ -42684,13 +44006,13 @@ then
                 if [[ $dnscrypt_version_old == "*" ]]
                 then
                     Println "$tip 请确保已经将本机器用网线连接到主路由器的 LAN 口"
-                    AskIfContinue n "`gettext \"是否继续\"`"
+                    ExitOnList n "`gettext \"是否继续\"`"
 
                     echo
-                    ExitOnCancel "请输入主路由器 ip : " eth0_gateway
+                    ExitOnText "请输入主路由器 ip : " eth0_gateway
 
                     Println "$tip 必须和主路由器 ip 在同一网段"
-                    ExitOnCancel "设置本机静态 ip : " eth0_ip
+                    ExitOnText "设置本机静态 ip : " eth0_ip
 
                     echo
                     inquirer text_input "输入监听端口 : " listen_port 53
@@ -42817,7 +44139,7 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
                     if [[ -x $(command -v docker) ]] && [[ -n $(docker container ls -a -f name=openwrt$ -q) ]]
                     then
                         Println "$tip 如果已经安装并运行旁路由 openwrt-v2ray, 建议先关闭旁路由 openwrt-v2ray"
-                        AskIfContinue n "`gettext \"是否继续\"`"
+                        ExitOnList n "`gettext \"是否继续\"`"
                     fi
 
                     if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp
@@ -42911,7 +44233,7 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
             if [ "$openwrt_ver" == "手动输入" ] 
             then
                 echo
-                ExitOnCancel "输入版本号: " openwrt_ver
+                ExitOnText "输入版本号: " openwrt_ver
             fi
 
             if grep -q "armvirt-64-$openwrt_ver" < <(docker container ls -a)
@@ -42975,15 +44297,15 @@ fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
 
             Println "$tip openwrt 作为旁路由, 请确保已经将本机器用网线连接到主路由器的 LAN 口, 并且当前连接使用的网关是主路由的地址(可能需要手动设定)"
             Println "$tip 如果是升级, 注意备份原 openwrt 配置(系统 - 备份/还原)"
-            AskIfContinue n "`gettext \"是否继续\"`"
+            ExitOnList n "`gettext \"是否继续\"`"
 
             if ! ip addr show hMACvLAN >/dev/null 2>&1
             then
                 Println "$tip 必须和主路由器 ip 在同一网段"
-                ExitOnCancel "设置虚拟接口 hMACvLAN 静态 ip : " hMACvLAN_ip
+                ExitOnText "设置虚拟接口 hMACvLAN 静态 ip : " hMACvLAN_ip
 
                 Println "$tip 必须和主路由器 ip 在同一网段"
-                ExitOnCancel "设置 openwrt 静态 ip : " openwrt_ip
+                ExitOnText "设置 openwrt 静态 ip : " openwrt_ip
 
                 nmcli connection add type macvlan dev eth0 mode bridge ifname hMACvLAN autoconnect yes save yes > /dev/null
                 nmcli connection modify macvlan-hMACvLAN con-name hMACvLAN
@@ -43034,10 +44356,10 @@ method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
                 if [ -z "${openwrt_ip:-}" ] 
                 then
                     Println "$tip 必须和主路由器 ip 在同一网段"
-                    ExitOnCancel "设置虚拟接口 hMACvLAN 静态 ip : " hMACvLAN_ip
+                    ExitOnText "设置虚拟接口 hMACvLAN 静态 ip : " hMACvLAN_ip
 
                     Println "$tip 必须和主路由器 ip 在同一网段"
-                    ExitOnCancel "设置 openwrt 静态 ip : " openwrt_ip
+                    ExitOnText "设置 openwrt 静态 ip : " openwrt_ip
 
                     while IFS= read -r line 
                     do
@@ -43306,7 +44628,7 @@ config interface 'lan'
             if [ "$core" == "xray-core" ] 
             then
                 echo
-                xray_options=( '最新' '1.4.3' '1.4.2' '1.4.0' )
+                xray_options=( '最新' '1.4.5' '1.4.3' '1.4.2' '1.4.0' )
                 inquirer list_input "选择 xray 版本" xray_options xray_ver
                 if [ "$xray_ver" == "最新" ] && ! xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/openwrt-xray.json" | $JQ_FILE -r '.tag_name')
                 then
@@ -43487,7 +44809,7 @@ config interface 'lan'
             fi
 
             Println "$tip 可以登录阿里云 (https://cr.console.aliyun.com/cn-shanghai/) 查看镜像加速器地址"
-            ExitOnCancel "请输入加速器地址 : " registry_mirrors
+            ExitOnText "请输入加速器地址 : " registry_mirrors
 
             if ! $JQ_FILE -V > /dev/null 2>&1
             then
@@ -43513,7 +44835,7 @@ config interface 'lan'
             echo
             if grep -q "options edns0" < /etc/resolv.conf
             then
-                AskIfContinue n "`gettext \"是否关闭 edns0\"`"
+                ExitOnList n "`gettext \"是否关闭 edns0\"`"
 
                 chattr -i /etc/resolv.conf
                 sed -i '/options edns0/d' /etc/resolv.conf
@@ -43521,7 +44843,7 @@ config interface 'lan'
                 systemctl restart dnscrypt-proxy
                 Println "$info edns0 已关闭\n"
             else
-                AskIfContinue n "`gettext \"是否开启 edns0\"`"
+                ExitOnList n "`gettext \"是否开启 edns0\"`"
 
                 echo "options edns0" >> /etc/resolv.conf
                 chattr +i /etc/resolv.conf
@@ -43556,7 +44878,7 @@ config interface 'lan'
             if [[ ! -x $(command -v pystun) ]] 
             then
                 Println "$tip 请确保已经修改了合适的 apt 源"
-                AskIfContinue n "`gettext \"是否继续\"`"
+                ExitOnList n "`gettext \"是否继续\"`"
                 apt-get update
                 apt-get -y install python python-pip python-setuptools python-wheel
                 pip install pystun
@@ -43594,7 +44916,7 @@ then
   ${green}6.${normal} 安装 升级 dnscrypt proxy
   ${green}7.${normal} 安装 AdGuardHome
   ${green}8.${normal} 安装 qemu-guest-agent
-  ${green}9.${normal} 安装 openwrt-v2ray
+  ${green}9.${normal} 安装 升级 openwrt-v2ray
 ————————————
  ${green}10.${normal} 切换 openwrt 语言
  ${green}11.${normal} 切换 v2ray/xray core
@@ -43811,7 +45133,7 @@ then
             if [[ ! -x $(command -v mono) ]] 
             then
                 Println "$tip 此选项主要用于笔记本"
-                AskIfContinue n "`gettext \"需要安装 mono, 耗时会很长, 是否继续\"`"
+                ExitOnList n "`gettext \"需要安装 mono, 耗时会很长, 是否继续\"`"
 
                 apt-get update
                 apt-get -y install apt-transport-https dirmngr gnupg ca-certificates
@@ -43855,10 +45177,10 @@ then
             elif [ "$nbfc_options_index" -eq 1 ]
             then
                 echo
-                ExitOnCancel "输入寄存器地址, 比如 0x93: " register_address
+                ExitOnText "输入寄存器地址, 比如 0x93: " register_address
 
                 echo
-                ExitOnCancel "输入值, 比如 0x14: " register_value
+                ExitOnText "输入值, 比如 0x14: " register_value
 
                 mono ec-probe.exe write $register_address $register_value
 
@@ -43886,10 +45208,10 @@ then
                 if [ "$fan_option" == "输入寄存器值" ] 
                 then
                     echo
-                    ExitOnCancel "输入寄存器地址, 比如 0x94: " register_address
+                    ExitOnText "输入寄存器地址, 比如 0x94: " register_address
 
                     echo
-                    ExitOnCancel "输入值, 比如 0x99: " register_value
+                    ExitOnText "输入值, 比如 0x99: " register_value
 
                     mono ec-probe.exe write $register_address $register_value
 
@@ -43899,7 +45221,7 @@ then
                     inquirer text_input "输入风扇序号(从 0 开始): " fan_index 0
 
                     echo
-                    ExitOnCancel "输入转速百分比: " fan_speed
+                    ExitOnText "输入转速百分比: " fan_speed
 
                     mono nbfc.exe set -f $fan_index -s $fan_speed
 
@@ -43911,7 +45233,7 @@ then
             elif [ "$nbfc_options_index" -eq 5 ]
             then
                 echo
-                ExitOnCancel "输入配置名称, 比如: Acer Aspire 5745G" config_name
+                ExitOnText "输入配置名称, 比如: Acer Aspire 5745G" config_name
 
                 mono nbfc.exe config --apply "$config_name"
                 mono nbfc.exe start
@@ -43929,7 +45251,7 @@ then
                 dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
 
                 echo
-                ExitOnCancel "输入本机静态 ip : " proxmox_ip
+                ExitOnText "输入本机静态 ip : " proxmox_ip
 
                 echo
                 inquirer text_input "输入监听端口 : " listen_port 53
@@ -44143,7 +45465,7 @@ then
             if [ "$core" == "xray-core" ] 
             then
                 echo
-                xray_options=( '最新' '1.4.3' '1.4.2' '1.4.0' )
+                xray_options=( '最新' '1.4.5' '1.4.3' '1.4.2' '1.4.0' )
                 inquirer list_input "选择 xray 版本" xray_options xray_ver
                 if [ "$xray_ver" == "最新" ] && ! xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/openwrt-xray.json" | $JQ_FILE -r '.tag_name')
                 then
@@ -44317,14 +45639,14 @@ then
             echo
             if grep -q "options edns0" < /etc/resolv.conf
             then
-                AskIfContinue n "`gettext \"是否关闭 edns0\"`"
+                ExitOnList n "`gettext \"是否关闭 edns0\"`"
 
                 sed -i '/options edns0/d' /etc/resolv.conf
                 sed -i "0,/.*require_dnssec = .*/s//require_dnssec = false/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
                 systemctl restart dnscrypt-proxy
                 Println "$info edns0 已关闭\n"
             else
-                AskIfContinue n "`gettext \"是否开启 edns0\"`"
+                ExitOnList n "`gettext \"是否开启 edns0\"`"
 
                 echo "options edns0" >> /etc/resolv.conf
                 sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
@@ -44383,7 +45705,7 @@ then
             if [[ ! -x $(command -v openssl) ]] 
             then
                 echo
-                AskIfContinue y "`gettext \"是否安装 openssl\"`"
+                ExitOnList y "`gettext \"是否安装 openssl\"`"
                 OpensslInstall
             fi
 
@@ -44559,15 +45881,18 @@ then
                             [ "$chnl_num_start" -ge "$chnl_num_end" ]
                             then
                                 error_no=3
+                                break
                             fi
                         ;;
                         *[!0-9]*)
                             error_no=1
+                            break
                         ;;
                         *)
                             if [ "$chnl_num" -lt 1 ] || [ "$chnl_num" -gt "$chnls_count" ] 
                             then
                                 error_no=2
+                                break
                             fi
                         ;;
                     esac
@@ -44773,118 +46098,10 @@ then
                     MonitorStop
                 ;;
                 "l"|"log")
-                    if [ -s "$MONITOR_LOG" ] 
-                    then
-                        Println "$info 监控日志: "
-                        count=0
-                        log=""
-                        last_line=""
-                        printf -v this_hour '%(%H)T' -1
-                        while IFS= read -r line 
-                        do
-                            if [ "$count" -lt "${3:-10}" ] 
-                            then
-                                message=${line#* }
-                                message=${message#* }
-                                if [ -z "$last_line" ] 
-                                then
-                                    count=$((count+1))
-                                    log=$line
-                                    last_line=$message
-                                elif [ "$message" != "$last_line" ] 
-                                then
-                                    count=$((count+1))
-                                    log="$line\n$log"
-                                    last_line="$message"
-                                fi
-                            fi
-
-                            if [ "${line:2:1}" == "-" ] 
-                            then
-                                hour=${line:6:2}
-                            elif [ "${line:2:1}" == ":" ] 
-                            then
-                                hour=${line:0:2}
-                            fi
-
-                            if [ -n "${hour:-}" ] && [ "$hour" != "$this_hour" ] && [ "$count" -eq "${3:-10}" ] 
-                            then
-                                break
-                            elif [ -n "${hour:-}" ] && [ "$hour" == "$this_hour" ] && [[ $line == *"计划重启时间"* ]]
-                            then
-                                [ -z "${found_line:-}" ] && found_line=$line
-                            fi
-                        done < <(awk '{a[i++]=$0} END {for (j=i-1; j>=0;) print a[j--] }' "$MONITOR_LOG")
-                        Println "$log"
-                        [ -n "${found_line:-}" ] && Println "${green}${found_line#* }${normal}"
-                    fi
-                    if [ -s "$IP_LOG" ] 
-                    then
-                        Println "$info AntiDDoS 日志: "
-                        tail -n 10 "$IP_LOG"
-                    fi
-                    if [ ! -s "$MONITOR_LOG" ] && [ ! -s "$IP_LOG" ]
-                    then
-                        Println "$error 无日志\n"
-                    fi
+                    MonitorList "${3:-}"
                 ;;
                 *) 
-                    if [ -s "$IPTV_ROOT/monitor.pid" ] || [ -s "$IPTV_ROOT/antiddos.pid" ]
-                    then
-                        Println "$error 监控已经在运行 !\n" && exit 1
-                    else
-                        if { [ -d "/usr/local/openresty" ] && [ ! -d "/usr/local/nginx" ]; } || { [ -s "/usr/local/openresty/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/openresty/nginx/logs/nginx.pid")" 2> /dev/null ; }
-                        then
-                            nginx_prefix="/usr/local/openresty/nginx"
-                            nginx_name="openresty"
-                            nginx_ctl="or"
-                        elif { [ -d "/usr/local/nginx" ] && [ ! -d "/usr/local/openresty" ]; } || { [ -s "/usr/local/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/nginx/logs/nginx.pid")" 2> /dev/null ; }
-                        then
-                            nginx_prefix="/usr/local/nginx"
-                            nginx_name="nginx"
-                            nginx_ctl="nx"
-                        else
-                            echo
-                            inquirer list_input "没有检测到运行的 nginx, 是否使用 openresty" ny_options use_openresty_yn
-
-                            if [[ $use_openresty_yn == "$i18n_yes" ]] 
-                            then
-                                nginx_prefix="/usr/local/openresty/nginx"
-                                nginx_name="openresty"
-                                nginx_ctl="or"
-                            else
-                                nginx_prefix="/usr/local/nginx"
-                                nginx_name="nginx"
-                                nginx_ctl="nx"
-                            fi
-                        fi
-
-                        NGINX_FILE="$nginx_prefix/sbin/nginx"
-                        printf -v date_now '%(%m-%d %H:%M:%S)T' -1
-                        MonitorSet
-
-                        i18nGetMsg get_channel
-
-                        if [ "$sh_debug" -eq 1 ] 
-                        then
-                            ( Monitor ) 
-                        else
-                            ( Monitor ) > /dev/null 2> /dev/null < /dev/null &
-                        fi
-
-                        Println "$info 监控启动成功 !\n"
-                        AntiDDoSSet
-
-                        if [ "$sh_debug" -eq 1 ] 
-                        then
-                            ( AntiDDoS ) 
-                        else
-                            ( AntiDDoS ) > /dev/null 2> /dev/null < /dev/null &
-                        fi
-
-                        Println "$info AntiDDoS 启动成功 !\n"
-                        rm -f "$IPTV_ROOT/ip.pid"
-                    fi
+                    MonitorStart
                 ;;
             esac
             exit 0
@@ -45407,6 +46624,8 @@ then
             shift
         ;;
         "l"|"ll") 
+            shift
+
             GetChannels
 
             if [ "$chnls_count" -gt 0 ] 
@@ -45416,7 +46635,19 @@ then
                 flv_list=""
                 hls_list=""
 
-                for((i=0;i<chnls_count;i++));
+                indices=()
+
+                if [ -n "${1:-}" ] 
+                then
+                    for num in "${@}"
+                    do
+                        indices+=("$((num-1))")
+                    done
+                else
+                    indices=("${!chnls_pid[@]}")
+                fi
+
+                for i in "${indices[@]}"
                 do
                     if [ "${chnls_flv_status[i]}" == "on" ] 
                     then
@@ -45481,19 +46712,22 @@ then
                 Println "${green}HLS 频道${normal}\n\n$hls_list"
             fi
 
-            if ls -A $LIVE_ROOT/* > /dev/null 2>&1 
+            if [ -z "${1:-}" ] && ls -A $LIVE_ROOT/* > /dev/null 2>&1 
             then
                 for output_dir_root in "$LIVE_ROOT"/*
                 do
                     output_dir_name=${output_dir_root#*$LIVE_ROOT/}
 
-                    for hls_index in "${hls_indices[@]}"
-                    do
-                        if [ "$output_dir_name" == "${chnls_output_dir_name[hls_index]}" ] 
-                        then
-                            continue 2
-                        fi
-                    done
+                    if [ -n "${hls_indices:-}" ] 
+                    then
+                        for hls_index in "${hls_indices[@]}"
+                        do
+                            if [ "$output_dir_name" == "${chnls_output_dir_name[hls_index]}" ] 
+                            then
+                                continue 2
+                            fi
+                        done
+                    fi
 
                     Println "$error 未知目录 $output_dir_name\n"
 
@@ -45534,7 +46768,7 @@ then
                 exit 1
             fi
             echo
-            ExitOnCancel "输入自定义命令名称" name
+            ExitOnText "输入自定义命令名称" name
 
             if command -v "$name" > /dev/null
             then
@@ -45627,7 +46861,7 @@ else
         if [ ! -d "$IPTV_ROOT" ]
         then
             echo
-            AskIfContinue n "`gettext \"尚未安装, 是否现在安装\"`"
+            ExitOnList n "`gettext \"尚未安装, 是否现在安装\"`"
             Install
         else
             FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)

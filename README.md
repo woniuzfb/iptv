@@ -4,7 +4,6 @@
 
 ## 目录
 
-- [目录](#目录)
 - [一键管理 v2ray 脚本](#一键管理-v2ray-脚本)
 - [一键管理 xray 脚本](#一键管理-xray-脚本)
 - [一键管理 nginx 脚本](#一键管理-nginx-脚本)
@@ -199,12 +198,13 @@ docker run -it ffmpeg-h265-static
 
 ---
 
-- 自带加密 NODE.JS <- HTTP -> NginX <- HTTPS -> CLIENT
-- 自带防护
-- 自带监控
-- 自带防盗链
-- 自建节目表
-- 自带 VIP 模块
+- 加密 NODE.JS <- HTTP -> NginX <- HTTPS -> CLIENT
+- 计划任务(定时开启/关闭)
+- 监控
+- 防护
+- 防盗链
+- 节目表
+- VIP 模块
 - 添加频道
   - 可以用命令行，详见 tv -h
   - 也可以使用 shell 对话，输入 tv 打开面板
