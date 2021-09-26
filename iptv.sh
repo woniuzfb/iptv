@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-sh_ver="1.82.0"
+sh_ver="1.82.1"
 sh_debug=0
 export LANGUAGE=
 export LC_ALL=
@@ -585,29 +585,21 @@ inquirer()
         DepsCheck
     fi
 
-    local arrow checked unchecked red green blue cyan bold normal dim
-    arrow=$(echo -e '\xe2\x9d\xaf')
-    checked=$(echo -e '\xe2\x97\x89')
-    unchecked=$(echo -e '\xe2\x97\xaf')
-    red=$(tput setaf 1)
-    green=$(tput setaf 2)
-    blue=$(tput setaf 4)
-    cyan=$(tput setaf 6)
-    bold=$(tput bold)
-    normal=$(tput sgr0)
-    dim=$'\e[2m'
-
     inquirer:print() {
-        echo "$1"
         tput el
+        printf '%b' "$1"
     }
 
     inquirer:join() {
-        local IFS=$'\n'
         local var=("$1"[@])
-        local _join_list=("${!var}")
+        if [[ -z ${!var:-} ]] 
+        then
+            return 0
+        fi
+        local join_list=("${!var}")
+        local IFS=$'\n'
         local first=true
-        for item in "${_join_list[@]}"
+        for item in "${join_list[@]}"
         do
             if [ "$first" = true ]
             then
@@ -616,30 +608,6 @@ inquirer()
             else
                 printf "${2-, }%s" "$item"
             fi
-        done
-    }
-
-    inquirer:gen_env_from_options() {
-        local IFS=$'\n'
-        local var=("$1"[@])
-        local _indices=("${!var}")
-        var=("$2"[@])
-        local _env_names=("${!var}")
-        local _checkbox_selected
-
-        for i in $(inquirer:gen_index ${#_env_names[@]})
-        do
-            _checkbox_selected[i]=false
-        done
-
-        for i in "${_indices[@]}"
-        do
-            _checkbox_selected[i]=true
-        done
-
-        for i in $(inquirer:gen_index ${#_env_names[@]})
-        do
-            printf "%s=%s\n" "${_env_names[i]}" "${_checkbox_selected[i]}"
         done
     }
 
@@ -659,7 +627,7 @@ inquirer()
         local on_ascii=${7:-inquirer:on_default}
         local on_backspace=${8:-inquirer:on_default}
         local on_not_ascii=${9:-inquirer:on_default}
-        _break_keypress=false
+        break_keypress=false
         while IFS="" read -rsn1 key
         do
             case "$key" in
@@ -683,21 +651,12 @@ inquirer()
                 # [^ -~]
                 *) $on_ascii "$key";;
             esac
-            if [ "$_break_keypress" = true ]
+            if [ "$break_keypress" = true ]
             then
                 break
             fi
         done
         IFS=$OLD_IFS
-    }
-
-    inquirer:gen_index() {
-        local k=$1
-        local l=0
-        for((l=0;l<k;l++));
-        do
-            echo $l
-        done
     }
 
     inquirer:cleanup() {
@@ -713,154 +672,120 @@ inquirer()
         exit $?
     }
 
-    inquirer:select_indices() {
-        local var=("$1"[@])
-        local _select_list
-        read -r -a _select_list <<< "${!var}"
-        var=("$2"[@])
-        local _select_indices
-        read -r -a _select_indices <<< "${!var}"
-        local _select_var_name=$3
-        declare -a new_array
-        for i in $(inquirer:gen_index ${#_select_indices[@]})
-        do
-            new_array+=("${_select_list[${_select_indices[i]}]}")
-        done
-        read -r -a ${_select_var_name?} <<< "${new_array[@]}"
-        unset new_array
+    inquirer:remove_instructions() {
+        if [ "$first_keystroke" = true ]
+        then
+            tput cuu $((current_index+1))
+            tput cub "$(tput cols)"
+            tput cuf $((prompt_width+3))
+            tput el
+            tput cud $((current_index+1))
+            first_keystroke=false
+        fi
     }
 
     inquirer:on_checkbox_input_up() {
-        inquirer:remove_checkbox_instructions
+        inquirer:remove_instructions
         tput cub "$(tput cols)"
 
-        if [ "${_checkbox_selected[$_current_index]}" = true ]
+        if [ "${checkbox_selected[$current_index]}" = true ]
         then
-            printf '%s' " ${green}${checked}${normal} ${_checkbox_list[$_current_index]} ${normal}"
+            inquirer:print " ${green}${checked}${normal} ${checkbox_list[$current_index]}"
         else
-            printf '%s' " ${unchecked} ${_checkbox_list[$_current_index]} ${normal}"
+            inquirer:print " ${unchecked} ${checkbox_list[$current_index]}"
         fi
-        tput el
 
-        if [ $_current_index = 0 ]
+        if [ $current_index = 0 ]
         then
-            _current_index=$((${#_checkbox_list[@]}-1))
-            tput cud $((${#_checkbox_list[@]}-1))
-            tput cub "$(tput cols)"
+            current_index=$((${#checkbox_list[@]}-1))
+            tput cud $((${#checkbox_list[@]}-1))
         else
-            _current_index=$((_current_index-1))
-
+            current_index=$((current_index-1))
             tput cuu1
-            tput cub "$(tput cols)"
-            tput el
         fi
 
-        if [ "${_checkbox_selected[$_current_index]}" = true ]
+        tput cub "$(tput cols)"
+
+        if [ "${checkbox_selected[$current_index]}" = true ]
         then
-            printf '%s' "${cyan}${arrow}${green}${checked}${normal} ${_checkbox_list[$_current_index]} ${normal}"
+            inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_list[$current_index]}"
         else
-            printf '%s' "${cyan}${arrow}${normal}${unchecked} ${_checkbox_list[$_current_index]} ${normal}"
+            inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_list[$current_index]}"
         fi
     }
 
     inquirer:on_checkbox_input_down() {
-        inquirer:remove_checkbox_instructions
+        inquirer:remove_instructions
         tput cub "$(tput cols)"
 
-        if [ "${_checkbox_selected[$_current_index]}" = true ]
+        if [ "${checkbox_selected[$current_index]}" = true ]
         then
-            printf '%s' " ${green}${checked}${normal} ${_checkbox_list[$_current_index]} ${normal}"
+            inquirer:print " ${green}${checked}${normal} ${checkbox_list[$current_index]}"
         else
-            printf '%s' " ${unchecked} ${_checkbox_list[$_current_index]} ${normal}"
+            inquirer:print " ${unchecked} ${checkbox_list[$current_index]}"
         fi
 
-        tput el
-
-        if [ $_current_index = $((${#_checkbox_list[@]}-1)) ]
+        if [ $current_index = $((${#checkbox_list[@]}-1)) ]
         then
-            _current_index=0
-            tput cuu $((${#_checkbox_list[@]}-1))
-            tput cub "$(tput cols)"
+            current_index=0
+            tput cuu $((${#checkbox_list[@]}-1))
         else
-            _current_index=$((_current_index+1))
+            current_index=$((current_index+1))
             tput cud1
-            tput cub "$(tput cols)"
-            tput el
         fi
 
-        if [ "${_checkbox_selected[$_current_index]}" = true ]
+        tput cub "$(tput cols)"
+
+        if [ "${checkbox_selected[$current_index]}" = true ]
         then
-            printf '%s' "${cyan}${arrow}${green}${checked}${normal} ${_checkbox_list[$_current_index]} ${normal}"
+            inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_list[$current_index]}"
         else
-            printf '%s' "${cyan}${arrow}${normal}${unchecked} ${_checkbox_list[$_current_index]} ${normal}"
+            inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_list[$current_index]}"
         fi
     }
 
     inquirer:on_checkbox_input_enter() {
-        local OLD_IFS=$IFS
-        _checkbox_selected_indices=()
-        _checkbox_selected_options=()
+        local i OLD_IFS=$IFS
+
         IFS=$'\n'
 
-        for i in $(inquirer:gen_index ${#_checkbox_list[@]})
+        for i in "${!checkbox_list[@]}"
         do
-            if [ "${_checkbox_selected[i]}" = true ]
+            if [ "${checkbox_selected[i]}" = true ]
             then
-                _checkbox_selected_indices+=("$i")
-                _checkbox_selected_options+=("${_checkbox_list[i]}")
+                checkbox_selected_indices+=("$i")
+                checkbox_selected_options+=("${checkbox_list[i]}")
             fi
         done
 
-        tput cud $((${#_checkbox_list[@]}-_current_index))
+        tput cud $((${#checkbox_list[@]}-current_index))
         tput cub "$(tput cols)"
 
-        for i in $(seq $((${#_checkbox_list[@]}+1)))
+        for i in $(seq $((${#checkbox_list[@]}+1)))
         do
-            tput el1
             tput el
             tput cuu1
         done
 
-        tput cub "$(tput cols)"
         tput cuf $((prompt_width+3))
-        printf '%s' "${cyan}$(inquirer:join _checkbox_selected_options)${normal}"
-        tput el
-        tput cud1
-        tput cub "$(tput cols)"
-        tput el
+        inquirer:print "${cyan}$(inquirer:join checkbox_selected_options)${normal}\n"
 
-        _break_keypress=true
+        break_keypress=true
         IFS=$OLD_IFS
     }
 
     inquirer:on_checkbox_input_space() {
-        inquirer:remove_checkbox_instructions
+        inquirer:remove_instructions
         tput cub "$(tput cols)"
         tput el
-        if [ "${_checkbox_selected[$_current_index]}" = true ]
-        then
-            _checkbox_selected[$_current_index]=false
-        else
-            _checkbox_selected[$_current_index]=true
-        fi
 
-        if [ "${_checkbox_selected[$_current_index]}" = true ]
+        if [ "${checkbox_selected[$current_index]}" = true ]
         then
-            printf '%s' "${cyan}${arrow}${green}${checked}${normal} ${_checkbox_list[$_current_index]} ${normal}"
+            checkbox_selected[$current_index]=false
+            inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_list[$current_index]}"
         else
-            printf '%s' "${cyan}${arrow}${normal}${unchecked} ${_checkbox_list[$_current_index]} ${normal}"
-        fi
-    }
-
-    inquirer:remove_checkbox_instructions() {
-        if [ "$_first_keystroke" = true ]
-        then
-            tput cuu $((_current_index+1))
-            tput cub "$(tput cols)"
-            tput cuf $((prompt_width+3))
-            tput el
-            tput cud $((_current_index+1))
-            _first_keystroke=false
+            checkbox_selected[$current_index]=true
+            inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_list[$current_index]}"
         fi
     }
 
@@ -873,309 +798,461 @@ inquirer()
     }
 
     inquirer:_checkbox_input() {
-        local i j var=("$2"[@])
-        _checkbox_list=("${!var}")
-        _current_index=0
-        _first_keystroke=true
+        local i var=("$2"[@])
+        checkbox_selected=()
+        checkbox_selected_indices=()
+        checkbox_selected_options=()
+        checkbox_list=("${!var}")
+        current_index=0
+        first_keystroke=true
 
         trap inquirer:control_c SIGINT EXIT
 
         stty -echo
         tput civis
 
-        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}`gettext \"(按 <space> 选择, <enter> 确认)\"`${normal}"
+        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}`gettext \"(按 <space> 选择, <enter> 确认)\"`${normal}\n"
 
-        for i in $(inquirer:gen_index ${#_checkbox_list[@]})
+        for i in "${!checkbox_list[@]}"
         do
-            _checkbox_selected[i]=false
+            checkbox_selected[i]=false
         done
 
         if [ -n "${3:-}" ]
         then
             var=("$3"[@])
-            _selected_indices=("${!var}")
-            for i in "${_selected_indices[@]}"
-            do
-                _checkbox_selected[i]=true
-            done
+            if [[ -n ${!var:-} ]] 
+            then
+                checkbox_selected_indices=("${!var}")
+                for i in "${checkbox_selected_indices[@]}"
+                do
+                    checkbox_selected[i]=true
+                done
+            fi
         fi
 
-        for i in $(inquirer:gen_index ${#_checkbox_list[@]})
+        for i in "${!checkbox_list[@]}"
         do
-            tput cub "$(tput cols)"
             if [ $i = 0 ]
             then
-                if [ "${_checkbox_selected[i]}" = true ]
+                if [ "${checkbox_selected[i]}" = true ]
                 then
-                    inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${_checkbox_list[i]} ${normal}"
+                    inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_list[i]}\n"
                 else
-                    inquirer:print "${cyan}${arrow}${normal}${unchecked} ${_checkbox_list[i]} ${normal}"
+                    inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_list[i]}\n"
                 fi
             else
-                if [ "${_checkbox_selected[i]}" = true ]
+                if [ "${checkbox_selected[i]}" = true ]
                 then
-                    inquirer:print " ${green}${checked}${normal} ${_checkbox_list[i]} ${normal}"
+                    inquirer:print " ${green}${checked}${normal} ${checkbox_list[i]}\n"
                 else
-                    inquirer:print " ${unchecked} ${_checkbox_list[i]} ${normal}"
+                    inquirer:print " ${unchecked} ${checkbox_list[i]}\n"
                 fi
             fi
-            tput el
         done
 
-        tput cuu ${#_checkbox_list[@]}
+        tput cuu ${#checkbox_list[@]}
 
         inquirer:on_keypress inquirer:on_checkbox_input_up inquirer:on_checkbox_input_down inquirer:on_checkbox_input_space inquirer:on_checkbox_input_enter inquirer:on_default inquirer:on_default inquirer:on_checkbox_input_ascii
     }
 
     inquirer:checkbox_input() {
-        inquirer:_checkbox_input "$1" "$2"
-        _checkbox_input_output_var_name=$3
-        inquirer:select_indices _checkbox_list _checkbox_selected_indices $_checkbox_input_output_var_name
+        var_name=$3
 
-        unset _checkbox_list
-        unset _break_keypress
-        unset _first_keystroke
-        unset _current_index
-        unset _checkbox_input_output_var_name
-        unset _checkbox_selected_indices
-        unset _checkbox_selected_options
+        inquirer:_checkbox_input "$1" "$2"
+
+        read -r -a ${var_name?} <<< "${checkbox_selected_options[@]}"
+        unset new_array
 
         inquirer:cleanup
     }
 
     inquirer:checkbox_input_indices() {
-        inquirer:_checkbox_input "$1" "$2" "$3"
-        _checkbox_input_output_var_name=$3
+        var_name=$3
 
-        declare -a new_array
-        for i in $(inquirer:gen_index ${#_checkbox_selected_indices[@]})
+        inquirer:_checkbox_input "$1" "$2" "$var_name"
+
+        read -r -a ${var_name?} <<< "${checkbox_selected_indices[@]}"
+
+        inquirer:cleanup
+    }
+
+    inquirer:on_sort_up() {
+        if [ "${#sort_options[@]}" -eq 1 ]
+        then
+            return 0
+        fi
+
+        tput cub "$(tput cols)"
+
+        inquirer:print "  ${sort_options[$current_index]}"
+
+        if [ $current_index = 0 ]
+        then
+            current_index=$((${#sort_options[@]}-1))
+            tput cud $((${#sort_options[@]}-1))
+        else
+            current_index=$((current_index-1))
+            tput cuu1
+        fi
+
+        tput cub "$(tput cols)"
+
+        inquirer:print "${cyan}${arrow} ${sort_options[$current_index]} ${normal}"
+    }
+
+    inquirer:on_sort_down() {
+        if [ "${#sort_options[@]}" -eq 1 ]
+        then
+            return 0
+        fi
+
+        tput cub "$(tput cols)"
+
+        inquirer:print "  ${sort_options[$current_index]}"
+
+        if [ $current_index = $((${#sort_options[@]}-1)) ]
+        then
+            current_index=0
+            tput cuu $((${#sort_options[@]}-1))
+        else
+            current_index=$((current_index+1))
+            tput cud1
+        fi
+
+        tput cub "$(tput cols)"
+
+        inquirer:print "${cyan}${arrow} ${sort_options[$current_index]} ${normal}"
+    }
+
+    inquirer:on_sort_move_up() {
+        if [ "${#sort_options[@]}" -eq 1 ]
+        then
+            return 0
+        fi
+
+        local i
+
+        tput cub "$(tput cols)"
+
+        if [ $current_index = 0 ]
+        then
+            for((i=1;i<${#sort_options[@]};i++));
+            do
+                inquirer:print "  ${sort_options[i]}\n"
+            done
+            inquirer:print "${cyan}${arrow} ${sort_options[$current_index]} ${normal}"
+            current_index=$((${#sort_options[@]}-1))
+            sort_options=( "${sort_options[@]:1}" "${sort_options[@]:0:1}" )
+            sort_indices=( "${sort_indices[@]:1}" "${sort_indices[@]:0:1}" )
+        else
+            inquirer:print "  ${sort_options[current_index-1]}"
+            tput cuu1
+            tput cub "$(tput cols)"
+            inquirer:print "${cyan}${arrow} ${sort_options[$current_index]} ${normal}"
+            local tmp="${sort_options[$current_index]}"
+            sort_options[current_index]="${sort_options[$current_index-1]}"
+            sort_options[current_index-1]="$tmp"
+            tmp="${sort_indices[current_index]}"
+            sort_indices[current_index]="${sort_indices[$current_index-1]}"
+            sort_indices[current_index-1]="$tmp"
+            current_index=$((current_index-1))
+        fi
+    }
+
+    inquirer:on_sort_move_down() {
+        if [ "${#sort_options[@]}" -eq 1 ]
+        then
+            return 0
+        fi
+
+        tput cub "$(tput cols)"
+
+        if [ $current_index = $((${#sort_options[@]}-1)) ]
+        then
+            tput cuu $((${#sort_options[@]}-1))
+            inquirer:print "${cyan}${arrow} ${sort_options[$current_index]} ${normal}\n"
+            for((i=0;i<current_index;i++));
+            do
+                inquirer:print "  ${sort_options[i]}\n"
+            done
+            tput cuu ${#sort_options[@]}
+            sort_options=( "${sort_options[@]:current_index}" "${sort_options[@]:0:current_index}" )
+            sort_indices=( "${sort_indices[@]:current_index}" "${sort_indices[@]:0:current_index}" )
+            current_index=0
+        else
+            inquirer:print "  ${sort_options[current_index+1]}"
+            tput cud1
+            tput cub "$(tput cols)"
+            inquirer:print "${cyan}${arrow} ${sort_options[$current_index]} ${normal}"
+            local tmp="${sort_options[$current_index]}"
+            sort_options[current_index]="${sort_options[$current_index+1]}"
+            sort_options[current_index+1]="$tmp"
+            tmp="${sort_indices[$current_index]}"
+            sort_indices[current_index]="${sort_indices[$current_index+1]}"
+            sort_indices[current_index+1]="$tmp"
+            current_index=$((current_index+1))
+        fi
+    }
+
+    inquirer:on_sort_ascii() {
+        case "$1" in
+            "w" ) inquirer:on_sort_move_up;;
+            "s" ) inquirer:on_sort_move_down;;
+        esac
+    }
+
+    inquirer:on_sort_enter_space()
+    {
+        local i OLD_IFS=$IFS
+        IFS=$'\n'
+
+        tput cud $((${#sort_options[@]}-current_index))
+        tput cub "$(tput cols)"
+
+        for i in $(seq $((${#sort_options[@]}+1)))
         do
-            new_array+=("${_checkbox_selected_indices[i]}")
+            tput el
+            tput cuu1
         done
-        read -r -a ${_checkbox_input_output_var_name?} <<< "${new_array[@]}"
-        unset new_array
 
-        unset _checkbox_list
-        unset _break_keypress
-        unset _first_keystroke
-        unset _current_index
-        unset _checkbox_input_output_var_name
-        unset _checkbox_selected_indices
-        unset _checkbox_selected_options
+        tput cuf $((prompt_width+3))
+        inquirer:print "${cyan}$(inquirer:join sort_options)${normal}\n"
+
+        break_keypress=true
+        IFS=$OLD_IFS
+    }
+
+    inquirer:_sort_input() {
+        local i var=("$2"[@])
+        sort_options=("${!var}")
+        sort_indices=("${!sort_options[@]}")
+
+        current_index=0
+
+        trap inquirer:control_c SIGINT EXIT
+
+        stty -echo
+        tput civis
+
+        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}`gettext \"(上下箭头选择, 按 <w> <s> 上下移动)\"`${normal}\n"
+
+        for i in "${!sort_options[@]}"
+        do
+            if [ $i = 0 ]
+            then
+                inquirer:print "${cyan}${arrow} ${sort_options[i]} ${normal}\n"
+            else
+                inquirer:print "  ${sort_options[i]}\n"
+            fi
+        done
+
+        tput cuu ${#sort_options[@]}
+
+        inquirer:on_keypress inquirer:on_sort_up inquirer:on_sort_down inquirer:on_sort_enter_space inquirer:on_sort_enter_space inquirer:on_default inquirer:on_default inquirer:on_sort_ascii
+    }
+
+    inquirer:sort_input() {
+        var_name=$3
+
+        inquirer:_sort_input "$1" "$2"
+
+        read -r -a ${var_name?} <<< "${sort_options[@]}"
+
+        inquirer:cleanup
+    }
+
+    inquirer:sort_input_indices() {
+        var_name=$3
+
+        inquirer:_sort_input "$1" "$2"
+
+        read -r -a ${var_name?} <<< "${sort_indices[@]}"
 
         inquirer:cleanup
     }
 
     inquirer:on_list_input_up() {
-        inquirer:remove_list_instructions
+        inquirer:remove_instructions
 
-        if [ "${#_list_options[@]}" -eq 1 ]
+        if [ "${#list_options[@]}" -eq 1 ]
         then
             return 0
         fi
 
         tput cub "$(tput cols)"
 
-        printf '%s' "  ${_list_options[$_list_selected_index]}"
-        tput el
+        inquirer:print "  ${list_options[$current_index]}"
 
-        if [ $_list_selected_index = 0 ]
+        if [ $current_index = 0 ]
         then
-            _list_selected_index=$((${#_list_options[@]}-1))
-            tput cud $((${#_list_options[@]}-1))
-            tput cub "$(tput cols)"
+            current_index=$((${#list_options[@]}-1))
+            tput cud $((${#list_options[@]}-1))
         else
-            _list_selected_index=$((_list_selected_index-1))
-
+            current_index=$((current_index-1))
             tput cuu1
-            tput cub "$(tput cols)"
-            tput el
         fi
 
-        printf "${cyan}${arrow} %s ${normal}" "${_list_options[$_list_selected_index]}"
+        tput cub "$(tput cols)"
+
+        inquirer:print "${cyan}${arrow} ${list_options[$current_index]}${normal}"
     }
 
     inquirer:on_list_input_down() {
-        inquirer:remove_list_instructions
+        inquirer:remove_instructions
 
-        if [ "${#_list_options[@]}" -eq 1 ]
+        if [ "${#list_options[@]}" -eq 1 ]
         then
             return 0
         fi
 
         tput cub "$(tput cols)"
 
-        printf '%s' "  ${_list_options[$_list_selected_index]}"
-        tput el
+        inquirer:print "  ${list_options[$current_index]}"
 
-        if [ $_list_selected_index = $((${#_list_options[@]}-1)) ]
+        if [ $current_index = $((${#list_options[@]}-1)) ]
         then
-            _list_selected_index=0
-            tput cuu $((${#_list_options[@]}-1))
-            tput cub "$(tput cols)"
+            current_index=0
+            tput cuu $((${#list_options[@]}-1))
         else
-            _list_selected_index=$((_list_selected_index+1))
+            current_index=$((current_index+1))
             tput cud1
-            tput cub "$(tput cols)"
-            tput el
         fi
-        printf "${cyan}${arrow} %s ${normal}" "${_list_options[$_list_selected_index]}"
+
+        tput cub "$(tput cols)"
+
+        inquirer:print "${cyan}${arrow} ${list_options[$current_index]} ${normal}"
     }
 
     inquirer:on_list_input_enter_space() {
-        local OLD_IFS=$IFS
+        local i OLD_IFS=$IFS
         IFS=$'\n'
 
-        tput cud $((${#_list_options[@]}-_list_selected_index))
+        tput cud $((${#list_options[@]}-current_index))
         tput cub "$(tput cols)"
 
-        for i in $(seq $((${#_list_options[@]}+1)))
+        for i in $(seq $((${#list_options[@]}+1)))
         do
-            tput el1
             tput el
             tput cuu1
         done
 
-        tput cub "$(tput cols)"
         tput cuf $((prompt_width+3))
-        printf '%s' "${cyan}${_list_options[$_list_selected_index]}${normal}"
-        tput el
-        tput cud1
-        tput cub "$(tput cols)"
-        tput el
+        inquirer:print "${cyan}${list_options[$current_index]}${normal}\n"
 
-        _break_keypress=true
+        break_keypress=true
         IFS=$OLD_IFS
     }
 
-    inquirer:on_list_input_ascii()
-    {
+    inquirer:on_list_input_ascii() {
         case "$1" in
             "w" ) inquirer:on_list_input_up;;
             "s" ) inquirer:on_list_input_down;;
         esac
     }
 
-    inquirer:remove_list_instructions() {
-        if [ "$_first_keystroke" = true ]
-        then
-            tput cuu $((_list_selected_index+1))
-            tput cub "$(tput cols)"
-            tput cuf $((prompt_width+3))
-            tput el
-            tput cud $((_list_selected_index+1))
-            _first_keystroke=false
-        fi
-    }
-
     inquirer:_list_input() {
-        local i j var=("$2"[@])
-        _list_options=("${!var}")
+        local i var=("$2"[@])
+        list_options=("${!var}")
 
-        _list_selected_index=0
-        _first_keystroke=true
+        current_index=0
+        first_keystroke=true
 
         trap inquirer:control_c SIGINT EXIT
 
         stty -echo
         tput civis
 
-        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}`gettext \"(使用上下箭头选择)\"`${normal}"
+        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}`gettext \"(使用上下箭头选择)\"`${normal}\n"
 
-        for i in $(inquirer:gen_index ${#_list_options[@]})
+        for i in "${!list_options[@]}"
         do
             if [ $i = 0 ]
             then
-                inquirer:print "${cyan}${arrow} ${_list_options[i]} ${normal}"
+                inquirer:print "${cyan}${arrow} ${list_options[i]} ${normal}\n"
             else
-                inquirer:print "  ${_list_options[i]}"
+                inquirer:print "  ${list_options[i]}\n"
             fi
-            tput el
         done
 
-        tput cuu ${#_list_options[@]}
+        tput cuu ${#list_options[@]}
 
         inquirer:on_keypress inquirer:on_list_input_up inquirer:on_list_input_down inquirer:on_list_input_enter_space inquirer:on_list_input_enter_space inquirer:on_default inquirer:on_default inquirer:on_list_input_ascii
     }
 
     inquirer:list_input() {
-        inquirer:_list_input "$1" "$2"
         var_name=$3
-        read -r ${var_name?} <<< "${_list_options[$_list_selected_index]}"
-        unset _list_selected_index
-        unset _list_options
-        unset _break_keypress
-        unset _first_keystroke
+
+        inquirer:_list_input "$1" "$2"
+
+        read -r ${var_name?} <<< "${list_options[$current_index]}"
 
         inquirer:cleanup
     }
 
     inquirer:list_input_index() {
-        inquirer:_list_input "$1" "$2"
         var_name=$3
-        read -r ${var_name?} <<< "$_list_selected_index"
-        unset _list_selected_index
-        unset _list_options
-        unset _break_keypress
-        unset _first_keystroke
+
+        inquirer:_list_input "$1" "$2"
+
+        read -r ${var_name?} <<< "$current_index"
 
         inquirer:cleanup
     }
 
     inquirer:on_text_input_left() {
-        if [[ $_current_pos -gt 0 ]]
+        if [[ $current_pos -gt 0 ]]
         then
-            local current=${_text_input:$_current_pos:1} current_width
+            local current=${text_input:$current_pos:1} current_width
             current_width=$(inquirer:display_length "$current")
 
             tput cub $current_width
-            _current_pos=$((_current_pos-1))
+            current_pos=$((current_pos-1))
         fi
     }
 
     inquirer:on_text_input_right() {
-        if [[ $((_current_pos+1)) -eq ${#_text_input} ]] 
+        if [[ $((current_pos+1)) -eq ${#text_input} ]] 
         then
             tput cuf1
-            _current_pos=$((_current_pos+1))
-        elif [[ $_current_pos -lt ${#_text_input} ]]
+            current_pos=$((current_pos+1))
+        elif [[ $current_pos -lt ${#text_input} ]]
         then
-            local next=${_text_input:$((_current_pos+1)):1} next_width
+            local next=${text_input:$((current_pos+1)):1} next_width
             next_width=$(inquirer:display_length "$next")
 
             tput cuf $next_width
-            _current_pos=$((_current_pos+1))
+            current_pos=$((current_pos+1))
         fi
     }
 
     inquirer:on_text_input_enter() {
-        _text_input=${_text_input:-$_text_default_value}
+        text_input=${text_input:-$text_default_value}
 
         tput civis
         tput cub "$(tput cols)"
         tput el
 
-        if $_text_input_validator "$_text_input"
+        if $text_input_validator "$text_input"
         then
             tput sc
-            tput cuu $((1+_regex_failed_count*3))
+            tput cuu $((1+regex_failed_count*3))
             tput cuf $((prompt_width+3))
-            printf '%s' "${cyan}${_text_input}${normal}"
-            tput el
+            inquirer:print "${cyan}${text_input}${normal}"
             tput rc
-            _break_keypress=true
+            break_keypress=true
         else
-            _regex_failed_count=$((_regex_failed_count+1))
+            regex_failed_count=$((regex_failed_count+1))
             tput cud1
-            inquirer:print "${red}${_text_input_regex_failed_msg}${normal}"
+            inquirer:print "${red}${text_input_regex_failed_msg}${normal}"
             tput cud1
-            if [ "$_text_input" == "$_text_default_value" ] 
+            if [ "$text_input" == "$text_default_value" ] 
             then
-                _text_input=""
-                _current_pos=0
+                text_input=""
+                current_pos=0
             else
-                printf '%s' "${_text_input}"
-                _current_pos=${#_text_input}
+                inquirer:print "${text_input}"
+                current_pos=${#text_input}
             fi
         fi
 
@@ -1184,21 +1261,19 @@ inquirer()
 
     inquirer:on_text_input_ascii() {
         local c=${1:- }
-        local rest=${_text_input:$_current_pos} rest_width
-        local current=${_text_input:$_current_pos:1} current_width
+        local rest=${text_input:$current_pos} rest_width
+        local current=${text_input:$current_pos:1} current_width
 
         rest_width=$(inquirer:display_length "$rest")
         current_width=$(inquirer:display_length "$current")
-        _text_input="${_text_input:0:$_current_pos}$c$rest"
-        _current_pos=$((_current_pos+1))
+        text_input="${text_input:0:$current_pos}$c$rest"
+        current_pos=$((current_pos+1))
 
         tput civis
 
         [[ $current_width -gt 1 ]] && tput cub $((current_width-1))
 
-        printf '%s' "$c$rest"
-
-        tput el
+        inquirer:print "$c$rest"
 
         if [[ $rest_width -gt 0 ]]
         then
@@ -1210,21 +1285,19 @@ inquirer()
 
     inquirer:on_text_input_not_ascii() {
         local c=$1
-        local rest="${_text_input:$_current_pos}" rest_width
-        local current=${_text_input:$_current_pos:1} current_width
+        local rest="${text_input:$current_pos}" rest_width
+        local current=${text_input:$current_pos:1} current_width
 
         rest_width=$(inquirer:display_length "$rest")
         current_width=$(inquirer:display_length "$current")
-        _text_input="${_text_input:0:$_current_pos}$c$rest"
-        _current_pos=$((_current_pos+1))
+        text_input="${text_input:0:$current_pos}$c$rest"
+        current_pos=$((current_pos+1))
 
         tput civis
 
         [[ $current_width -gt 1 ]] && tput cub $((current_width-1))
 
-        printf '%s' "$c$rest"
-
-        tput el
+        inquirer:print "$c$rest"
 
         if [[ $rest_width -gt 0 ]]
         then
@@ -1235,46 +1308,43 @@ inquirer()
     }
 
     inquirer:on_text_input_backspace() {
-        if [ $_current_pos -gt 0 ] || { [ $_current_pos -eq 0 ] && [ "${#_text_input}" -gt 0 ]; }
+        if [ $current_pos -gt 0 ] || { [ $current_pos -eq 0 ] && [ "${#text_input}" -gt 0 ]; }
         then
             local start rest rest_width del del_width next next_width offset
-            local current=${_text_input:$_current_pos:1} current_width
+            local current=${text_input:$current_pos:1} current_width
             current_width=$(inquirer:display_length "$current")
 
             tput civis
-            if [ $_current_pos -eq 0 ] 
+            if [ $current_pos -eq 0 ] 
             then
-                rest=${_text_input:$((_current_pos+1))}
-                next=${_text_input:$((_current_pos+1)):1}
+                rest=${text_input:$((current_pos+1))}
+                next=${text_input:$((current_pos+1)):1}
                 rest_width=$(inquirer:display_length "$rest")
                 next_width=$(inquirer:display_length "$next")
                 offset=$((current_width-1))
                 [[ $offset -gt 0 ]] && tput cub $offset
-                printf '%s' "$rest"
-                tput el
+                inquirer:print "$rest"
                 offset=$((rest_width-next_width+1))
                 [[ $offset -gt 0 ]] && tput cub $offset
-                _text_input=$rest
+                text_input=$rest
             else
-                rest=${_text_input:$_current_pos}
-                start=${_text_input:0:$((_current_pos-1))}
-                del=${_text_input:$((_current_pos-1)):1}
+                rest=${text_input:$current_pos}
+                start=${text_input:0:$((current_pos-1))}
+                del=${text_input:$((current_pos-1)):1}
                 rest_width=$(inquirer:display_length "$rest")
                 del_width=$(inquirer:display_length "$del")
-                _current_pos=$((_current_pos-1))
+                current_pos=$((current_pos-1))
                 if [[ $current_width -gt 1 ]] 
                 then
                     tput cub $((del_width+current_width-1))
-                    printf '%s' "$rest"
-                    tput el
+                    inquirer:print "$rest"
                     tput cub $((rest_width-current_width+1))
                 else
                     tput cub $del_width
-                    printf '%s' "$rest"
-                    tput el
+                    inquirer:print "$rest"
                     [[ $rest_width -gt 0 ]] && tput cub $((rest_width-current_width+1))
                 fi
-                _text_input="$start$rest"
+                text_input="$start$rest"
             fi
             tput cnorm
         fi
@@ -1286,18 +1356,23 @@ inquirer()
 
     inquirer:text_input() {
         var_name=$2
+        text_default_value=${3:-}
+        text_input=""
+        current_pos=0
+        regex_failed_count=0
+        local text_default_tip
 
-        if [ -n "$_text_default_value" ] 
+        if [ -n "$text_default_value" ] 
         then
-            _text_default_tip=" ${bold}${dim}($_text_default_value)${normal}"
+            text_default_tip=" ${bold}${dim}($text_default_value)${normal}"
         else
-            _text_default_tip=""
+            text_default_tip=""
         fi
 
-        _text_input_regex_failed_msg=${4:-$(gettext "输入验证错误")}
-        _text_input_validator=${5:-inquirer:text_input_default_validator}
+        text_input_regex_failed_msg=${4:-$(gettext "输入验证错误")}
+        text_input_validator=${5:-inquirer:text_input_default_validator}
 
-        inquirer:print "${green}?${normal} ${prompt}${_text_default_tip}"
+        inquirer:print "${green}?${normal} ${prompt}${text_default_tip}\n"
 
         trap inquirer:control_c SIGINT EXIT
 
@@ -1305,7 +1380,7 @@ inquirer()
         tput cnorm
 
         inquirer:on_keypress inquirer:on_default inquirer:on_default inquirer:on_text_input_ascii inquirer:on_text_input_enter inquirer:on_text_input_left inquirer:on_text_input_right inquirer:on_text_input_ascii inquirer:on_text_input_backspace inquirer:on_text_input_not_ascii
-        read -r ${var_name?} <<< "$_text_input"
+        read -r ${var_name?} <<< "$text_input"
 
         inquirer:cleanup
     }
@@ -1319,7 +1394,7 @@ inquirer()
     }
 
     inquirer:remove_date_instructions() {
-        if [ "$_first_keystroke" = true ]
+        if [ "$first_keystroke" = true ]
         then
             tput sc
             tput cuu 1
@@ -1327,12 +1402,11 @@ inquirer()
             tput cuf $((prompt_width+3))
             tput el
             tput rc
-            _first_keystroke=false
+            first_keystroke=false
         fi
     }
 
-    inquirer:on_date_pick_ascii()
-    {
+    inquirer:on_date_pick_ascii() {
         case "$1" in
             "w" ) inquirer:on_date_pick_up;;
             "s" ) inquirer:on_date_pick_down;;
@@ -1343,120 +1417,119 @@ inquirer()
 
     inquirer:on_date_pick_up() {
         inquirer:remove_date_instructions
-        case $_current_pos in
-            3)  _date_pick="$((${_date_pick:0:4}+1))${_date_pick:4}"
+        case $current_pos in
+            3)  date_pick="$((${date_pick:0:4}+1))${date_pick:4}"
             ;;
             6) 
-                local month=$((10#${_date_pick:5:2}+1))
+                local month=$((10#${date_pick:5:2}+1))
                 [ "$month" -eq 13 ] && month=1
-                _date_pick="${_date_pick:0:5}$(printf %02d "$month")${_date_pick:7}"
+                date_pick="${date_pick:0:5}$(printf %02d "$month")${date_pick:7}"
             ;;
             9) 
-                local day=$((10#${_date_pick:8:2}+1))
+                local day=$((10#${date_pick:8:2}+1))
                 [ "$day" -eq 32 ] && day=1
-                _date_pick="${_date_pick:0:8}$(printf %02d "$day")${_date_pick:10}"
+                date_pick="${date_pick:0:8}$(printf %02d "$day")${date_pick:10}"
             ;;
             12) 
-                local hour=$(((10#${_date_pick:11:2}+1)%24))
-                _date_pick="${_date_pick:0:11}$(printf %02d "$hour")${_date_pick:13}"
+                local hour=$(((10#${date_pick:11:2}+1)%24))
+                date_pick="${date_pick:0:11}$(printf %02d "$hour")${date_pick:13}"
             ;;
             15) 
-                local min=$(((10#${_date_pick:14:2}+1)%60))
-                _date_pick="${_date_pick:0:14}$(printf %02d "$min")${_date_pick:16}"
+                local min=$(((10#${date_pick:14:2}+1)%60))
+                date_pick="${date_pick:0:14}$(printf %02d "$min")${date_pick:16}"
             ;;
             18) 
-                local sec=$(((10#${_date_pick:17:2}+1)%60))
-                _date_pick="${_date_pick:0:17}$(printf %02d "$sec")${_date_pick:19}"
+                local sec=$(((10#${date_pick:17:2}+1)%60))
+                date_pick="${date_pick:0:17}$(printf %02d "$sec")${date_pick:19}"
             ;;
         esac
 
         tput sc
         tput civis
-        tput cub $_current_pos
-        printf '%s' "$_date_pick"
+        tput cub $current_pos
+        inquirer:print "$date_pick"
         tput rc
         tput cnorm
     }
 
     inquirer:on_date_pick_down() {
         inquirer:remove_date_instructions
-        case $_current_pos in
+        case $current_pos in
             3)  
-                local year=$((${_date_pick:0:4}-1))
+                local year=$((${date_pick:0:4}-1))
                 [ "$year" -eq 2020 ] && return 0
-                _date_pick="$year${_date_pick:4}"
+                date_pick="$year${date_pick:4}"
             ;;
             6) 
-                local month=$((10#${_date_pick:5:2}-1))
+                local month=$((10#${date_pick:5:2}-1))
                 [ "$month" -eq 0 ] && month=12
-                _date_pick="${_date_pick:0:5}$(printf %02d "$month")${_date_pick:7}"
+                date_pick="${date_pick:0:5}$(printf %02d "$month")${date_pick:7}"
             ;;
             9) 
-                local day=$((10#${_date_pick:8:2}-1))
+                local day=$((10#${date_pick:8:2}-1))
                 [ "$day" -eq 0 ] && day=31
-                _date_pick="${_date_pick:0:8}$(printf %02d "$day")${_date_pick:10}"
+                date_pick="${date_pick:0:8}$(printf %02d "$day")${date_pick:10}"
             ;;
             12) 
-                local hour=$(((10#${_date_pick:11:2}+23)%24))
-                _date_pick="${_date_pick:0:11}$(printf %02d "$hour")${_date_pick:13}"
+                local hour=$(((10#${date_pick:11:2}+23)%24))
+                date_pick="${date_pick:0:11}$(printf %02d "$hour")${date_pick:13}"
             ;;
             15) 
-                local min=$(((10#${_date_pick:14:2}+59)%60))
-                _date_pick="${_date_pick:0:14}$(printf %02d "$min")${_date_pick:16}"
+                local min=$(((10#${date_pick:14:2}+59)%60))
+                date_pick="${date_pick:0:14}$(printf %02d "$min")${date_pick:16}"
             ;;
             18) 
-                local sec=$(((10#${_date_pick:17:2}+59)%60))
-                _date_pick="${_date_pick:0:17}$(printf %02d "$sec")${_date_pick:19}"
+                local sec=$(((10#${date_pick:17:2}+59)%60))
+                date_pick="${date_pick:0:17}$(printf %02d "$sec")${date_pick:19}"
             ;;
         esac
 
         tput sc
         tput civis
-        tput cub $_current_pos
-        printf '%s' "$_date_pick"
+        tput cub $current_pos
+        inquirer:print "$date_pick"
         tput rc
         tput cnorm
     }
 
     inquirer:on_date_pick_left() {
         inquirer:remove_date_instructions
-        if [[ $_current_pos -gt 3 ]] 
+        if [[ $current_pos -gt 3 ]] 
         then
             tput cub 3
-            _current_pos=$((_current_pos-3))
+            current_pos=$((current_pos-3))
         fi
     }
 
     inquirer:on_date_pick_right() {
         inquirer:remove_date_instructions
-        if [[ $_current_pos -lt 18 ]] 
+        if [[ $current_pos -lt 18 ]] 
         then
             tput cuf 3
-            _current_pos=$((_current_pos+3))
+            current_pos=$((current_pos+3))
         fi
     }
 
     inquirer:on_date_pick_enter_space() {
         tput civis
-        tput cub $_current_pos
+        tput cub $current_pos
         tput el
 
-        if $_date_pick_validator "$_date_pick"
+        if $date_pick_validator "$date_pick"
         then
             tput sc
-            tput cuu $((1+_regex_failed_count*3))
+            tput cuu $((1+regex_failed_count*3))
             tput cuf $((prompt_width+3))
-            printf '%s' "${cyan}${_date_pick}${normal}"
-            tput el
+            inquirer:print "${cyan}${date_pick}${normal}"
             tput rc
-            _break_keypress=true
+            break_keypress=true
         else
-            _regex_failed_count=$((_regex_failed_count+1))
+            regex_failed_count=$((regex_failed_count+1))
             tput cud1
-            inquirer:print "${red}${_date_pick_regex_failed_msg}${normal}"
+            inquirer:print "${red}${date_pick_regex_failed_msg}${normal}\n"
             tput cud1
-            printf '%s' "${_date_pick}"
-            tput cub $((19-_current_pos))
+            inquirer:print "${date_pick}"
+            tput cub $((19-current_pos))
         fi
 
         tput cnorm
@@ -1464,14 +1537,15 @@ inquirer()
 
     inquirer:date_pick() {
         var_name=$2
-        _date_pick_regex_failed_msg=${3:-$(gettext "时间验证错误")}
-        _date_pick_validator=${4:-inquirer:date_pick_default_validator}
-        _date_pick=$(printf '%(%Y-%m-%d %H:%M:%S)T' -1)
-        _current_pos=12
-        _first_keystroke=true
+        date_pick_regex_failed_msg=${3:-$(gettext "时间验证错误")}
+        date_pick_validator=${4:-inquirer:date_pick_default_validator}
+        date_pick=$(printf '%(%Y-%m-%d %H:%M:%S)T' -1)
+        current_pos=12
+        regex_failed_count=0
+        first_keystroke=true
 
-        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}`gettext \"(使用箭头选择)\"`${normal}"
-        printf '%s' "$_date_pick"
+        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}`gettext \"(使用箭头选择)\"`${normal}\n"
+        inquirer:print "$date_pick"
         tput cub 7
 
         trap inquirer:control_c SIGINT EXIT
@@ -1480,9 +1554,9 @@ inquirer()
         tput cnorm
 
         inquirer:on_keypress inquirer:on_date_pick_up inquirer:on_date_pick_down inquirer:on_date_pick_enter_space inquirer:on_date_pick_enter_space inquirer:on_date_pick_left inquirer:on_date_pick_right inquirer:on_date_pick_ascii
-        read -r ${var_name?} <<< $(date +%s -d "$_date_pick")
+        read -r ${var_name?} <<< $(date +%s -d "$date_pick")
 
-        unset _first_keystroke
+        unset first_keystroke
 
         inquirer:cleanup
     }
@@ -1511,16 +1585,49 @@ inquirer()
                     display_length=$((display_length+1))
                 ;;
             esac
-        done <<< "$1"
+        done <<< "${1:-}"
 
         echo "$display_length"
     }
 
-    local option=$1
-    shift
-    local var_name prompt=${1:-} prompt_width _text_default_value=${3:-} _current_pos=0 _text_input="" \
-    _text_input_regex_failed_msg _text_input_validator _regex_failed_count=0 _date_pick_regex_failed_msg
+    local option=$1 var_name \
+    prompt=${2:-} \
+    prompt_width \
+    break_keypress \
+    first_keystroke \
+    current_index \
+    checkbox_list \
+    checkbox_selected \
+    checkbox_selected_indices \
+    checkbox_selected_options \
+    sort_options \
+    sort_indices \
+    list_options \
+    current_pos \
+    regex_failed_count \
+    text_default_value \
+    text_input \
+    text_input_regex_failed_msg \
+    text_input_validator \
+    date_pick \
+    date_pick_regex_failed_msg \
+    date_pick_validator \
+    arrow checked unchecked red green blue cyan bold normal dim
+
     prompt_width=$(inquirer:display_length "$prompt")
+
+    arrow=$(echo -e '\xe2\x9d\xaf')
+    checked=$(echo -e '\xe2\x97\x89')
+    unchecked=$(echo -e '\xe2\x97\xaf')
+    red=$(tput setaf 1)
+    green=$(tput setaf 2)
+    blue=$(tput setaf 4)
+    cyan=$(tput setaf 6)
+    bold=$(tput bold)
+    normal=$(tput sgr0)
+    dim=$'\e[2m'
+
+    shift
     inquirer:$option "$@"
 }
 
@@ -12306,10 +12413,7 @@ EditChannelSchedule()
 {
     echo
     channel_schedule_options=( '开始日期' '结束日期' '防盗链' '频道名称' '状态' )
-
-    set +u
     inquirer checkbox_input_indices "选择修改 [ ${chnls_channel_name[chnls_index]} ] 计划 $((chnl_schedules_index+1))" channel_schedule_options channel_schedule_options_indices
-    set -u
 
     for channel_schedule_options_index in "${channel_schedule_options_indices[@]}"
     do
@@ -12574,6 +12678,180 @@ EditChannelsSchedule()
     done
 }
 
+SortChannelSchedules()
+{
+    IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
+    IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
+    IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
+    IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
+
+    chnl_schedules_if_null="${chnls_schedule_hls_change[chnls_index]//false/}"
+    chnl_schedules_if_null="${chnl_schedules_if_null//true/}"
+
+    IFS="${delimiters[1]}" read -ra chnl_schedules_channel_name <<< "${chnls_schedule_channel_name[chnls_index]:-$chnl_schedules_if_null}${delimiters[1]}"
+
+    chnl_schedules_count=${#chnl_schedules_status[@]}
+
+    if [ "$chnl_schedules_count" -eq 1 ] 
+    then
+        Println "$error 频道 [ ${chnls_channel_name[chnls_index]} ] 计划只有一个"
+        return 0
+    fi
+
+    chnl_schedules_indices=("${!chnl_schedules_status[@]}")
+    chnl_schedules_list="${indent_6}${green}${chnls_channel_name[chnls_index]}${normal}\n\n"
+    chnl_schedules_options=()
+
+    for chnl_schedules_index in "${chnl_schedules_indices[@]}"
+    do
+        if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ] 
+        then
+            chnl_schedule_status_list="${green}等待${normal}"
+        elif [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 1 ] 
+        then
+            chnl_schedule_status_list="${blue}进行${normal}"
+        else
+            chnl_schedule_status_list="${red}结束${normal}"
+        fi
+        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "true" ] 
+        then
+            chnl_schedule_hls_change_list="${green}是${normal}"
+        else
+            chnl_schedule_hls_change_list="${red}否${normal}"
+        fi
+        if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
+        then
+            chnl_schedule_channel_name_list="${indent_6}频道名称: ${chnl_schedules_channel_name[chnl_schedules_index]}\n"
+        else
+            chnl_schedule_channel_name_list=""
+        fi
+        chnl_schedules_options+=("计划$((chnl_schedules_index+1))")
+        chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
+    done
+
+    Println "$chnl_schedules_list"
+
+    echo
+    inquirer sort_input_indices "排序计划" chnl_schedules_options chnl_schedules_indices
+
+    new_schedules=""
+
+    for chnl_schedules_index in "${chnl_schedules_indices[@]}"
+    do
+        new_schedule=$(
+            $JQ_FILE -n --arg start_time "${chnl_schedules_start_time[chnl_schedules_index]}" --arg end_time "${chnl_schedules_end_time[chnl_schedules_index]}" \
+                --arg hls_change "${chnl_schedules_hls_change[chnl_schedules_index]}" --arg channel_name "${chnl_schedules_channel_name[chnl_schedules_index]}" \
+                --arg status "${chnl_schedules_status[chnl_schedules_index]}" \
+            '{
+                start_time: $start_time | tonumber,
+                end_time: $end_time | tonumber,
+                hls_change: $hls_change | test("true"),
+                channel_name: $channel_name,
+                status: $status | tonumber
+            }'
+        )
+        new_schedules="$new_schedules$new_schedule"
+    done
+
+    jq_path='["channels",'"$chnls_index"',"schedule"]'
+    JQ replace "$CHANNELS_FILE" new_schedules file
+
+    Println "$info 频道 [ ${chnls_channel_name[chnls_index]} ] 计划排序成功\n"
+}
+
+SortChannelsSchedule()
+{
+    ListChannelsSchedule
+
+    if [ -z "$chnls_schedule_list" ] 
+    then
+        Println "$error 请先添加频道计划\n"
+        exit 1
+    fi
+
+    echo -e "  ${green}$((chnls_count+1)).${normal}${indent_6}全部\n\n"
+
+    echo "输入频道序号(多个频道用空格分隔 比如: 1 2 4-5)"
+    while read -p "$i18n_default_cancel" chnls_num
+    do
+        if [ -z "$chnls_num" ] 
+        then
+            Println "$i18n_canceled...\n" && exit 1
+        fi
+
+        if [ "$chnls_num" == $((chnls_count+1)) ] 
+        then
+            for chnls_index in "${chnls_schedule_indices[@]}"
+            do
+                SortChannelSchedules
+            done
+            break
+        fi
+
+        IFS=" " read -ra chnls_num_arr <<< "$chnls_num"
+
+        error_no=0
+        for chnl_num in "${chnls_num_arr[@]}"
+        do
+            case "$chnl_num" in
+                *"-"*)
+                    chnl_num_start=${chnl_num%-*}
+                    chnl_num_end=${chnl_num#*-}
+                    if [[ $chnl_num_start == *[!0-9]* ]] || [[ $chnl_num_end == *[!0-9]* ]] || [ "$chnl_num_start" -eq 0 ] || [ "$chnl_num_end" -eq 0 ] || [ "$chnl_num_end" -gt "$chnls_count" ] || [ "$chnl_num_start" -ge "$chnl_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    else
+                        for((i=chnl_num_start-1;i<chnl_num_end;i++));
+                        do
+                            if [ -z "${chnls_schedule_status[i]}" ] 
+                            then
+                                error_no=3
+                                break 2
+                            fi
+                        done
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$chnl_num" -lt 1 ] || [ "$chnl_num" -gt "$chnls_count" ] || [ -z "${chnls_schedule_status[chnl_num-1]}" ]
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                for chnl_num in "${chnls_num_arr[@]}"
+                do
+                    if [[ $chnl_num =~ - ]] 
+                    then
+                        start=${chnl_num%-*}
+                        end=${chnl_num#*-}
+                        for((chnls_index=start-1;chnls_index<end;chnls_index++));
+                        do
+                            SortChannelSchedules
+                        done
+                    else
+                        chnls_index=$((chnl_num-1))
+                        SortChannelSchedules
+                    fi
+                done
+                break
+            ;;
+        esac
+    done
+}
+
 DelChannelSchedule()
 {
     jq_path='["channels",'"$chnls_index"',"schedule"]'
@@ -12807,7 +13085,7 @@ DelChannelsSchedule()
 ScheduleMenu()
 {
     echo
-    chnls_schedule_options=( '查看' '添加' '修改' '删除' )
+    chnls_schedule_options=( '查看' '添加' '修改' '排序' '删除' )
     inquirer list_input_index "请选择" chnls_schedule_options chnls_schedule_options_index
 
     if [ "$chnls_schedule_options_index" -eq 0 ] 
@@ -12825,6 +13103,9 @@ ScheduleMenu()
     elif [ "$chnls_schedule_options_index" -eq 2 ] 
     then
         EditChannelsSchedule
+    elif [ "$chnls_schedule_options_index" -eq 3 ] 
+    then
+        SortChannelsSchedule
     else
         DelChannelsSchedule
     fi
@@ -18284,7 +18565,7 @@ MonitorHlsRestartChannel()
     do
         if [ "$restart_i" -gt 0 ] && [ "$chnl_stream_links_count" -gt 1 ] 
         then
-            chnl_stream_links=(${chnl_stream_links[@]:1} ${chnl_stream_links[@]:0:1})
+            chnl_stream_links=("${chnl_stream_links[@]:1}" "${chnl_stream_links[@]:0:1}")
             chnl_stream_link=${chnl_stream_links[0]}
         fi
 
@@ -18810,7 +19091,7 @@ MonitorFlvRestartChannel()
     do
         if [ "$restart_i" -gt 0 ] && [ "$chnl_stream_links_count" -gt 1 ]
         then
-            chnl_stream_links=(${chnl_stream_links[@]:1} ${chnl_stream_links[@]:0:1})
+            chnl_stream_links=("${chnl_stream_links[@]:1}" "${chnl_stream_links[@]:0:1}")
             chnl_stream_link=${chnl_stream_links[0]}
         fi
 
@@ -20653,7 +20934,7 @@ Monitor()
                                         break 2
                                     elif [ "$chnl_status" == "off" ] 
                                     then
-                                        printf '%s\n' "$chnl_channel_name 开启" >> "$MONITOR_LOG"
+                                        printf '%s\n' "${channel_name[hls_index]:-$chnl_channel_name} 开启" >> "$MONITOR_LOG"
                                         MonitorHlsRestartChannel
                                         break 2
                                     fi
@@ -20707,7 +20988,7 @@ Monitor()
                                             encrypt_command="-key $encrypt_key -iv $iv_hex"
                                         else
                                             GetChannel
-                                            printf '%s\n' "$chnl_channel_name 开启" >> "$MONITOR_LOG"
+                                            printf '%s\n' "${channel_name[hls_index]:-$chnl_channel_name} 开启" >> "$MONITOR_LOG"
                                             MonitorHlsRestartChannel
                                             break 2
                                         fi
@@ -25508,9 +25789,7 @@ NginxConfigLocalhost()
             ;;
             7) 
                 echo
-                set +u
                 inquirer checkbox_input_indices "选择删除的 SNI 域名分流: " nginx_stream_server_name server_name_selected
-                set -u
 
                 if [ -z "${server_name_selected:-}" ] 
                 then
@@ -25540,9 +25819,7 @@ NginxConfigLocalhost()
             ;;
             8) 
                 echo
-                set +u
                 inquirer checkbox_input_indices "选择删除的 SSL 协议分流: " nginx_stream_protocol protocol_selected
-                set -u
 
                 if [ -z "${protocol_selected:-}" ] 
                 then
@@ -25572,9 +25849,7 @@ NginxConfigLocalhost()
             ;;
             9) 
                 echo
-                set +u
                 inquirer checkbox_input_indices "选择删除的 ALPN 协议分流: " nginx_stream_alpn_protocols alpn_protocols_selected
-                set -u
 
                 if [ -z "${alpn_protocols_selected:-}" ] 
                 then
@@ -25604,9 +25879,7 @@ NginxConfigLocalhost()
             ;;
             10) 
                 echo
-                set +u
                 inquirer checkbox_input_indices "选择删除的分流后端: " nginx_stream_upstream upstream_selected
-                set -u
 
                 if [ -z "${upstream_selected:-}" ] 
                 then
@@ -25885,9 +26158,7 @@ NginxDomainServerUpdateCrt()
         IFS="," read -r -a domains <<< "$nginx_domain_server_name"
 
         echo
-        set +u
         inquirer checkbox_input "选择域名: " domains domains_selected
-        set -u
 
         for domain in "${domains_selected[@]}"
         do
@@ -28447,11 +28718,10 @@ V2raySetSniffingEnabled()
 
 V2raySetSniffingDestOverride()
 {
-    Println "$tip 客户端已经设置过的流量类型这里可以不设置"
     sniffing_dest_override_options=( 'tls' 'http' )
-    set +u
+    Println "$tip 客户端已经设置过的流量类型这里可以不设置"
     inquirer checkbox_input "指定流量类型: " sniffing_dest_override_options sniffing_dest_override_selected
-    set -u
+
     sniffing_dest_override=""
     if [ -n "${sniffing_dest_override_selected:-}" ] 
     then
@@ -32292,11 +32562,11 @@ V2raySetRouting()
                 "user": $user
             }' <<< "$new_routing_rule")
         fi
-        Println "$tip 可多选, 必须开启入站代理中的流量探测选项"
+
         routing_rule_protocols=( 'http' 'tls' 'bittorrent' )
-        set +u
+        Println "$tip 可多选, 必须开启入站代理中的流量探测选项"
         inquirer checkbox_input "选择匹配的协议: " routing_rule_protocols routing_rule_protocols_selected
-        set -u
+
         if [ -n "${routing_rule_protocols_selected:-}" ] 
         then
             printf -v routing_rule_protocol ',"%s"' "${routing_rule_protocols_selected[@]}"
@@ -33557,9 +33827,7 @@ V2rayNginxDomainServerUpdateCrt()
         IFS="," read -r -a domains <<< "$v2ray_nginx_domain_server_name"
 
         echo
-        set +u
         inquirer checkbox_input "选择域名: " domains domains_selected
-        set -u
 
         for domain in "${domains_selected[@]}"
         do
