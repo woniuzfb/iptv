@@ -436,6 +436,26 @@ function videojsLoad(sourceOverlay,channel) {
         alertInfo('无法连接直播源！',10);
       }
     });
+
+    let retry_count = 0;
+    player.tech().on('retryplaylist', () => {
+      retry_count++;
+      if (retry_count > 10) {
+        player.pause();
+        player.reset();
+        player.error("直播源已更新, 请刷新页面!");
+      }
+    });
+
+    player.on('timeupdate', function() {
+      let duration_time = Math.floor(this.duration());
+      let current_time = Math.floor(this.currentTime());
+      if (current_time > 0 && (current_time == duration_time)) {
+        this.pause();
+        this.reset();
+        this.error("直播源已更新, 请刷新页面!");
+      }
+    });
   });
 }
 

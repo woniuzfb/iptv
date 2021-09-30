@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-sh_ver="1.82.5"
+sh_ver="1.83.0"
 sh_debug=0
 export LANGUAGE=
 export LC_ALL=
@@ -52,7 +52,6 @@ C_ROOT="$IPTV_ROOT/c"
 MD5SUM_FILE="$C_ROOT/md5sum"
 MD5SUM_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/master/scripts/md5sum.c"
 MD5SUM_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/md5sum.c"
-CREATOR_FILE="$IPTV_ROOT/HLS-Stream-Creator.sh"
 CF_FILE="/usr/local/bin/cf"
 CF_CONFIG="$HOME/cloudflare.json"
 CF_WORKERS_ROOT="$HOME/workers"
@@ -71,6 +70,7 @@ DEFAULT_CHANNELS_LINK="http://tv.epub.fun/channels.json"
 XTREAM_CODES_LINK="http://tv.epub.fun/xtream_codes"
 USER_AGENT_BROWSER="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36"
 USER_AGENT_TV="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
+monitor=false
 green="\033[32m"
 red="\033[31m"
 blue="\033[34m"
@@ -364,6 +364,7 @@ i18nGetMsg()
             i18n_seg_length=${i18n_seg_length:-$(gettext "分片时长")}
             i18n_seg_count=${i18n_seg_count:-$(gettext "分片数")}
             i18n_encrypt=${i18n_encrypt:-$(gettext "加密")}
+            i18n_encrypt_session=${i18n_encrypt_session:-$(gettext "加密 session")}
             i18n_keyinfo_name=${i18n_keyinfo_name:-$(gettext "keyinfo名称")}
             i18n_key_name=${i18n_key_name:-$(gettext "key名称")}
             i18n_live=${i18n_live:-$(gettext "直播")}
@@ -2846,22 +2847,24 @@ Install()
             --arg audio_codec "aac" --arg video_audio_shift '' \
             --arg txt_format '' --arg draw_text '' \
             --arg quality '' \
-            --arg bitrates "900-1280x720" --arg const "no" \
-            --arg encrypt "no" --arg encrypt_session "no" \
+            --arg bitrates "900-1280x720" --arg const "false" \
+            --arg encrypt "false" --arg encrypt_session "false" \
             --arg keyinfo_name '' --arg key_name '' \
             --arg input_flags "-copy_unknown -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -rw_timeout 10000000 -y -nostats -nostdin -hide_banner -loglevel error" \
-            --arg output_flags "-g 50 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main" --arg sync "yes" \
+            --arg output_flags "-g 50 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main" \
+            --arg sync "true" \
             --arg sync_file '' --arg sync_index "data:0:channels" \
-            --arg sync_pairs "chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live" --arg schedule_file '' \
+            --arg sync_pairs "chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live" \
+            --arg schedule_file '' \
             --arg flv_delay_seconds 20 --arg flv_restart_nums 20 \
             --arg hls_delay_seconds 120 --arg hls_min_bitrates 500 \
             --arg hls_max_seg_size 5 --arg hls_restart_nums 20 \
             --arg hls_key_period 30 --arg anti_ddos_port 80 \
-            --arg anti_ddos_syn_flood "no" --arg anti_ddos_syn_flood_delay_seconds 3 \
-            --arg anti_ddos_syn_flood_seconds 3600 --arg anti_ddos "no" \
+            --arg anti_ddos_syn_flood "false" --arg anti_ddos_syn_flood_delay_seconds 3 \
+            --arg anti_ddos_syn_flood_seconds 3600 --arg anti_ddos "false" \
             --arg anti_ddos_seconds 120 --arg anti_ddos_level 6 \
-            --arg anti_leech "no" --arg anti_leech_restart_nums 3 \
-            --arg anti_leech_restart_flv_changes "yes" --arg anti_leech_restart_hls_changes "yes" \
+            --arg anti_leech "false" --arg anti_leech_restart_nums 3 \
+            --arg anti_leech_restart_flv_changes "true" --arg anti_leech_restart_hls_changes "true" \
             --arg recheck_period 0 --arg version "$sh_ver" \
             '{
                 proxy: $proxy,
@@ -2881,14 +2884,14 @@ Install()
                 draw_text: $draw_text,
                 quality: $quality,
                 bitrates: $bitrates,
-                const: $const,
-                encrypt: $encrypt,
-                encrypt_session: $encrypt_session,
+                const: $const | test("true"),
+                encrypt: $encrypt | test("true"),
+                encrypt_session: $encrypt_session | test("true"),
                 keyinfo_name: $keyinfo_name,
                 key_name: $key_name,
                 input_flags: $input_flags,
                 output_flags: $output_flags,
-                sync: $sync,
+                sync: $sync | test("true"),
                 sync_file: $sync_file,
                 sync_index: $sync_index,
                 sync_pairs: $sync_pairs,
@@ -2901,16 +2904,16 @@ Install()
                 hls_restart_nums: $hls_restart_nums | tonumber,
                 hls_key_period: $hls_key_period | tonumber,
                 anti_ddos_port: $anti_ddos_port,
-                anti_ddos_syn_flood: $anti_ddos_syn_flood,
+                anti_ddos_syn_flood: $anti_ddos_syn_flood | test("true"),
                 anti_ddos_syn_flood_delay_seconds: $anti_ddos_syn_flood_delay_seconds | tonumber,
                 anti_ddos_syn_flood_seconds: $anti_ddos_syn_flood_seconds | tonumber,
-                anti_ddos: $anti_ddos,
+                anti_ddos: $anti_ddos | test("true"),
                 anti_ddos_seconds: $anti_ddos_seconds | tonumber,
                 anti_ddos_level: $anti_ddos_level | tonumber,
-                anti_leech: $anti_leech,
+                anti_leech: $anti_leech | test("true"),
                 anti_leech_restart_nums: $anti_leech_restart_nums | tonumber,
-                anti_leech_restart_flv_changes: $anti_leech_restart_flv_changes,
-                anti_leech_restart_hls_changes: $anti_leech_restart_hls_changes,
+                anti_leech_restart_flv_changes: $anti_leech_restart_flv_changes | test("true"),
+                anti_leech_restart_hls_changes: $anti_leech_restart_hls_changes | test("true"),
                 recheck_period: $recheck_period | tonumber,
                 version: $version
             }'
@@ -3003,7 +3006,7 @@ Update()
     then
         echo
         inquirer list_input "`gettext \"FFmpeg 已经是最新, 是否重装\"`" ny_options reinstall_ffmpeg_yn
-        if [[ $reinstall_ffmpeg_yn == "$i18n_no" ]]
+        if [ "$reinstall_ffmpeg_yn" == "$i18n_no" ]
         then
             reinstall_ffmpeg_yn="N"
         else
@@ -4081,7 +4084,7 @@ SyncFile()
     chnl_sync_index=${chnl_sync_index:-$d_sync_index}
     chnl_sync_pairs=${chnl_sync_pairs:-$d_sync_pairs}
 
-    if [ "$chnl_sync_yn" == "yes" ] && [ -n "$chnl_sync_file" ] && [ -n "$chnl_sync_index" ] && [ -n "$chnl_sync_pairs" ]
+    if [ "$chnl_sync" = true ] && [ -n "$chnl_sync_file" ] && [ -n "$chnl_sync_index" ] && [ -n "$chnl_sync_pairs" ]
     then
         IFS=" " read -ra chnl_sync_files <<< "$chnl_sync_file"
         IFS=" " read -ra chnl_sync_indices <<< "$chnl_sync_index"
@@ -4255,7 +4258,7 @@ FlvStreamCreator()
 
                 new_channel=$(
                 $JQ_FILE -n --arg pid "$pid" --arg status "off" \
-                    --argjson stream_link "$stream_links_json" --arg live "$live_yn" \
+                    --argjson stream_link "$stream_links_json" --arg live "$live" \
                     --arg proxy "$proxy" --arg xc_proxy "$xc_proxy" \
                     --arg user_agent "$user_agent" --arg headers "$headers" \
                     --arg cookies "$cookies" --arg output_dir_name "$output_dir_name" \
@@ -4265,19 +4268,20 @@ FlvStreamCreator()
                     --arg audio_codec "$audio_codec" --arg video_audio_shift "$video_audio_shift" \
                     --arg txt_format "$txt_format" --arg draw_text "$draw_text" \
                     --arg quality "$quality" --arg bitrates "$bitrates" \
-                    --arg const "$const_yn" --arg encrypt "$encrypt_yn" \
-                    --arg encrypt_session "$encrypt_session_yn" --arg keyinfo_name "$keyinfo_name" \
+                    --arg const "$const" --arg encrypt "$encrypt" \
+                    --arg encrypt_session "$encrypt_session" --arg keyinfo_name "$keyinfo_name" \
                     --arg key_name "$key_name" --arg input_flags "$input_flags" \
                     --arg output_flags "$output_flags" --arg channel_name "$channel_name" \
-                    --argjson schedule "[]" --arg sync "$sync_yn" \
+                    --argjson schedule "[]" --arg sync "$sync" \
                     --arg sync_file "$sync_file" --arg sync_index "$sync_index" \
-                    --arg sync_pairs "$sync_pairs" --arg flv_status "on" --arg flv_h265 "$flv_h265_yn" \
+                    --arg sync_pairs "$sync_pairs" --arg hls_end_list "$hls_end_list" \
+                    --arg flv_status "on" --arg flv_h265 "$flv_h265" \
                     --arg flv_push_link "$flv_push_link" --arg flv_pull_link "$flv_pull_link" \
                     '{
                         pid: $pid | tonumber,
                         status: $status,
                         stream_link: $stream_link,
-                        live: $live,
+                        live: $live | test("true"),
                         proxy: $proxy,
                         xc_proxy: $xc_proxy,
                         user_agent: $user_agent,
@@ -4296,23 +4300,24 @@ FlvStreamCreator()
                         draw_text: $draw_text,
                         quality: $quality,
                         bitrates: $bitrates,
-                        const: $const,
-                        encrypt: $encrypt,
-                        encrypt_session: $encrypt_session,
+                        const: $const | test("true"),
+                        encrypt: $encrypt | test("true"),
+                        encrypt_session: $encrypt_session | test("true"),
                         keyinfo_name: $keyinfo_name,
                         key_name: $key_name,
-                        key_time: now|strflocaltime("%s")|tonumber,
+                        key_time: now | strflocaltime("%s") | tonumber,
                         input_flags: $input_flags,
                         output_flags: $output_flags,
                         channel_name: $channel_name,
-                        channel_time: now|strflocaltime("%s")|tonumber,
+                        channel_time: now|strflocaltime("%s") | tonumber,
                         schedule: $schedule,
-                        sync: $sync,
+                        sync: $sync | test("true"),
                         sync_file: $sync_file,
                         sync_index: $sync_index,
                         sync_pairs: $sync_pairs,
+                        hls_end_list: $hls_end_list | test("true"),
                         flv_status: $flv_status,
-                        flv_h265: $flv_h265,
+                        flv_h265: $flv_h265 | test("true"),
                         flv_push_link: $flv_push_link,
                         flv_pull_link: $flv_pull_link
                     }'
@@ -4342,7 +4347,7 @@ FlvStreamCreator()
     headers_command=""
     [ -n "$headers" ] && printf -v headers_command '%b' "$headers"
 
-    if [ "$flv_h265_yn" == "yes" ] 
+    if [ "$flv_h265" = true ] 
     then
         FFMPEG="/usr/local/bin/ffmpeg_c"
     fi
@@ -4389,7 +4394,7 @@ FlvStreamCreator()
             then
                 variant_bitrate=${stream_url_qualities[i]%-*}
                 variant_resolution=${stream_url_qualities[i]#*-}
-                if [ -n "$const" ]
+                if [ "$const" = true ]
                 then
                     variants_output_command+=( -b:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k )
                 else
@@ -4527,7 +4532,7 @@ FlvStreamCreator()
                     bitrates=${variant%-*}
                     resolution=${variant#*-}
 
-                    if [ -n "$const" ] 
+                    if [ "$const" = true ] 
                     then
                         variants_output_command+=( -b:v:$i ${bitrates}k -bufsize:v:$i ${bitrates}k -minrate:v:$i ${bitrates}k -maxrate:v:$i ${bitrates}k )
                     else
@@ -4539,7 +4544,7 @@ FlvStreamCreator()
                 then
                     variants_output_command+=( -s:v:$i $variant )
                 else
-                    if [ -n "$const" ] 
+                    if [ "$const" = true ] 
                     then
                         variants_output_command+=( -b:v:$i ${variant}k -bufsize:v:$i ${variant}k -minrate:v:$i ${variant}k -maxrate:v:$i ${variant}k )
                     else
@@ -4775,7 +4780,7 @@ FlvStreamCreator()
     chnl_headers_command=""
     [ -n "$chnl_headers" ] && printf -v chnl_headers_command '%b' "$chnl_headers"
 
-    if [ "$chnl_flv_h265_yn" == "yes" ] 
+    if [ "$chnl_flv_h265" = true ] 
     then
         FFMPEG="/usr/local/bin/ffmpeg_c"
     fi
@@ -4822,7 +4827,7 @@ FlvStreamCreator()
             then
                 chnl_variant_bitrate=${chnl_stream_url_qualities[i]%-*}
                 chnl_variant_resolution=${chnl_stream_url_qualities[i]#*-}
-                if [ -n "$chnl_const" ]
+                if [ "$chnl_const" = true ]
                 then
                     chnl_variants_output_command+=( -b:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k )
                 else
@@ -4966,7 +4971,7 @@ FlvStreamCreator()
                     chnl_bitrates=${chnl_variant%-*}
                     chnl_resolution=${chnl_variant#*-}
 
-                    if [ -n "$chnl_const" ] 
+                    if [ "$chnl_const" = true ] 
                     then
                         chnl_variants_output_command+=( -b:v:$i ${chnl_bitrates}k -bufsize:v:$i ${chnl_bitrates}k -minrate:v:$i ${chnl_bitrates}k -maxrate:v:$i ${chnl_bitrates}k )
                     else
@@ -4978,7 +4983,7 @@ FlvStreamCreator()
                 then
                     chnl_variants_output_command+=( -s:v:$i $chnl_variant )
                 else
-                    if [ -n "$chnl_const" ] 
+                    if [ "$chnl_const" = true ] 
                     then
                         chnl_variants_output_command+=( -b:v:$i ${chnl_variant}k -bufsize:v:$i ${chnl_variant}k -minrate:v:$i ${chnl_variant}k -maxrate:v:$i ${chnl_variant}k )
                     else
@@ -5184,8 +5189,15 @@ HlsStreamCreatorPlus()
     fi
     case $from in
         "AddChannel") 
-            delete_on_term="$output_dir_root"
+            if [ "$hls_end_list" = true ] 
+            then
+                unset delete_on_term
+            else
+                delete_on_term="$output_dir_root"
+            fi
+
             pid_file="$FFMPEG_LOG_ROOT/$pid.pid"
+
             {
                 flock -x 201
 
@@ -5198,7 +5210,7 @@ HlsStreamCreatorPlus()
 
                 new_channel=$(
                 $JQ_FILE -n --arg pid "$pid" --arg status "on" \
-                    --argjson stream_link "$stream_links_json" --arg live "$live_yn" \
+                    --argjson stream_link "$stream_links_json" --arg live "$live" \
                     --arg proxy "$proxy" --arg xc_proxy "$xc_proxy" \
                     --arg user_agent "$user_agent" --arg headers "$headers" \
                     --arg cookies "$cookies" --arg output_dir_name "$output_dir_name" \
@@ -5208,19 +5220,20 @@ HlsStreamCreatorPlus()
                     --arg audio_codec "$audio_codec" --arg video_audio_shift "$video_audio_shift" \
                     --arg txt_format "$txt_format" --arg draw_text "$draw_text" \
                     --arg quality "$quality" --arg bitrates "$bitrates" \
-                    --arg const "$const_yn" --arg encrypt "$encrypt_yn" \
-                    --arg encrypt_session "$encrypt_session_yn" --arg keyinfo_name "$keyinfo_name" \
+                    --arg const "$const" --arg encrypt "$encrypt" \
+                    --arg encrypt_session "$encrypt_session" --arg keyinfo_name "$keyinfo_name" \
                     --arg key_name "$key_name" --arg input_flags "$input_flags" \
                     --arg output_flags "$output_flags" --arg channel_name "$channel_name" \
-                    --argjson schedule "[]" --arg sync "$sync_yn" \
+                    --argjson schedule "[]" --arg sync "$sync" \
                     --arg sync_file "$sync_file" --arg sync_index "$sync_index" \
-                    --arg sync_pairs "$sync_pairs" --arg flv_status "off" --arg flv_h265 "$flv_h265_yn" \
+                    --arg sync_pairs "$sync_pairs" --arg hls_end_list "$hls_end_list" \
+                    --arg flv_status "off" --arg flv_h265 "$flv_h265" \
                     --arg flv_push_link '' --arg flv_pull_link '' \
                     '{
                         pid: $pid | tonumber,
                         status: $status,
                         stream_link: $stream_link,
-                        live: $live,
+                        live: $live | test("true"),
                         proxy: $proxy,
                         xc_proxy: $xc_proxy,
                         user_agent: $user_agent,
@@ -5239,23 +5252,24 @@ HlsStreamCreatorPlus()
                         draw_text: $draw_text,
                         quality: $quality,
                         bitrates: $bitrates,
-                        const: $const,
-                        encrypt: $encrypt,
-                        encrypt_session: $encrypt_session,
+                        const: $const | test("true"),
+                        encrypt: $encrypt | test("true"),
+                        encrypt_session: $encrypt_session | test("true"),
                         keyinfo_name: $keyinfo_name,
                         key_name: $key_name,
-                        key_time: now|strflocaltime("%s")|tonumber,
+                        key_time: now | strflocaltime("%s")| tonumber,
                         input_flags: $input_flags,
                         output_flags: $output_flags,
                         channel_name: $channel_name,
-                        channel_time: now|strflocaltime("%s")|tonumber,
+                        channel_time: now | strflocaltime("%s") | tonumber,
                         schedule: $schedule,
-                        sync: $sync,
+                        sync: $sync | test("true"),
                         sync_file: $sync_file,
                         sync_index: $sync_index,
                         sync_pairs: $sync_pairs,
+                        hls_end_list: $hls_end_list | test("true"),
                         flv_status: $flv_status,
-                        flv_h265: $flv_h265,
+                        flv_h265: $flv_h265 | test("true"),
                         flv_push_link: $flv_push_link,
                         flv_pull_link: $flv_pull_link
                     }'
@@ -5276,10 +5290,18 @@ HlsStreamCreatorPlus()
         chnl_pid=$pid
         action="stop"
         SyncFile
-        rm -rf "$delete_on_term"
+        if [ "$hls_end_list" = true ] && ls -A "$output_dir_root/$seg_dir_path${seg_name}"*.ts
+        then
+            for play_list in "$output_dir_root/"*.m3u8
+            do
+                echo "#EXT-X-ENDLIST" >> "$play_list"
+            done
+            sleep "$seg_length"
+        fi
+        rm -rf "$output_dir_root"
     ' EXIT
 
-    mkdir -p "$delete_on_term"
+    mkdir -p "$output_dir_root"
 
     variants_input_command=()
     variants_output_command=()
@@ -5297,7 +5319,7 @@ HlsStreamCreatorPlus()
         hls_command+=( -hls_delete_threshold $seg_count )
     fi
 
-    if [ -n "$live" ] 
+    if [ "$live" = true ] 
     then
         # segment_command+=( -segment_list_flags +live -segment_list_size $seg_count -segment_wrap $((seg_count * 2)) )
 
@@ -5309,12 +5331,6 @@ HlsStreamCreatorPlus()
         fi
     else
         hls_command+=( -hls_flags periodic_rekey )
-    fi
-
-    seg_dir_path=""
-    if [ -n "$seg_dir_name" ] 
-    then
-        seg_dir_path="$seg_dir_name/"
     fi
 
     if [ -n "${stream_url_cdn:-}" ] 
@@ -5406,7 +5422,7 @@ HlsStreamCreatorPlus()
                     variant_bitrate=${stream_url_qualities[i]%-*}
                     variant_resolution=${stream_url_qualities[i]#*-}
 
-                    if [ -n "$const" ]
+                    if [ "$const" = true ]
                     then
                         variants_output_command+=( -b:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k )
                     else
@@ -5418,7 +5434,7 @@ HlsStreamCreatorPlus()
                 then
                     variants_output_command+=( -s:v:$i ${stream_url_qualities[i]} )
                 else
-                    if [ -n "$const" ]
+                    if [ "$const" = true ]
                     then
                         variants_output_command+=( -b:v:$i ${stream_url_qualities[i]}k -bufsize:v:$i ${stream_url_qualities[i]}k -minrate:v:$i ${stream_url_qualities[i]}k -maxrate:v:$i ${stream_url_qualities[i]}k )
                     else
@@ -5512,10 +5528,10 @@ HlsStreamCreatorPlus()
         variants_output_command+=( $output_flags_command )
         var_stream_map_command+=( -var_stream_map "$var_stream_map" )
 
-        if [ "$encrypt_yn" == "yes" ] 
+        if [ "$encrypt" = true ] 
         then
             openssl rand 16 > "$output_dir_root/$key_name.key"
-            if [ "$encrypt_session_yn" == "yes" ] 
+            if [ "$encrypt_session" = true ] 
             then
                 echo -e "/keys?key=$key_name&channel=$output_dir_name\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
             else
@@ -5617,7 +5633,7 @@ HlsStreamCreatorPlus()
                     bitrates=${variant%-*}
                     resolution=${variant#*-}
 
-                    if [ -n "$const" ] 
+                    if [ "$const" = true ] 
                     then
                         variants_output_command+=( -b:v:$i ${bitrates}k -bufsize:v:$i ${bitrates}k -minrate:v:$i ${bitrates}k -maxrate:v:$i ${bitrates}k )
                     else
@@ -5631,7 +5647,7 @@ HlsStreamCreatorPlus()
                     variants_output_command+=( -s:v:$i $variant )
                     hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=$variant$subtitle_append\n"
                 else
-                    if [ -n "$const" ] 
+                    if [ "$const" = true ] 
                     then
                         variants_output_command+=( -b:v:$i ${variant}k -bufsize:v:$i ${variant}k -minrate:v:$i ${variant}k -maxrate:v:$i ${variant}k )
                     else
@@ -5839,10 +5855,10 @@ HlsStreamCreatorPlus()
         var_stream_map_command+=( -var_stream_map "$var_stream_map" )
     fi
 
-    if [ "$encrypt_yn" == "yes" ] 
+    if [ "$encrypt" = true ] 
     then
         openssl rand 16 > "$output_dir_root/$key_name.key"
-        if [ "$encrypt_session_yn" == "yes" ] 
+        if [ "$encrypt_session" = true ] 
         then
             echo -e "/keys?key=$key_name&channel=$output_dir_name\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
         else
@@ -5886,9 +5902,16 @@ HlsStreamCreatorPlus()
             } 201>"$pid_file"
         ;;
         "StartChannel") 
+            if [ "$chnl_hls_end_list" = true ] 
+            then
+                unset delete_on_term
+            else
+                delete_on_term="$chnl_output_dir_root"
+            fi
+
             new_pid=$pid
-            delete_on_term="$chnl_output_dir_root"
             pid_file="$FFMPEG_LOG_ROOT/$new_pid.pid"
+
             {
                 flock -x 201
 
@@ -5935,10 +5958,18 @@ HlsStreamCreatorPlus()
                     chnl_pid=$new_pid
                     action="stop"
                     SyncFile
-                    rm -rf "$delete_on_term"
+                    if [ "$chnl_hls_end_list" = true ] && ls -A "$chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}"*.ts
+                    then
+                        for play_list in "$chnl_output_dir_root/"*.m3u8
+                        do
+                            echo "#EXT-X-ENDLIST" >> "$play_list"
+                        done
+                        sleep "$chnl_seg_length"
+                    fi
+                    rm -rf "$chnl_output_dir_root"
                 ' EXIT
 
-    mkdir -p "$delete_on_term"
+    mkdir -p "$chnl_output_dir_root"
 
     chnl_variants_input_command=()
     chnl_variants_output_command=()
@@ -5956,7 +5987,7 @@ HlsStreamCreatorPlus()
         chnl_hls_command+=( -hls_delete_threshold $chnl_seg_count )
     fi
 
-    if [ -n "$chnl_live" ] 
+    if [ "$chnl_live" = true ] 
     then
         # chnl_segment_command+=( -segment_list_flags +live -segment_list_size $chnl_seg_count -segment_wrap $((chnl_seg_count * 2)) )
 
@@ -5968,12 +5999,6 @@ HlsStreamCreatorPlus()
         fi
     else
         chnl_hls_command+=( -hls_flags periodic_rekey )
-    fi
-
-    chnl_seg_dir_path=""
-    if [ -n "$chnl_seg_dir_name" ] 
-    then
-        chnl_seg_dir_path="$chnl_seg_dir_name/"
     fi
 
     if [ -n "${chnl_stream_url_cdn:-}" ] 
@@ -6065,7 +6090,7 @@ HlsStreamCreatorPlus()
                     chnl_variant_bitrate=${chnl_stream_url_qualities[i]%-*}
                     chnl_variant_resolution=${chnl_stream_url_qualities[i]#*-}
 
-                    if [ -n "$chnl_const" ]
+                    if [ "$chnl_const" = true ]
                     then
                         chnl_variants_output_command+=( -b:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k )
                     else
@@ -6077,7 +6102,7 @@ HlsStreamCreatorPlus()
                 then
                     chnl_variants_output_command+=( -s:v:$i ${chnl_stream_url_qualities[i]} )
                 else
-                    if [ -n "$chnl_const" ]
+                    if [ "$chnl_const" = true ]
                     then
                         chnl_variants_output_command+=( -b:v:$i ${chnl_stream_url_qualities[i]}k -bufsize:v:$i ${chnl_stream_url_qualities[i]}k -minrate:v:$i ${chnl_stream_url_qualities[i]}k -maxrate:v:$i ${chnl_stream_url_qualities[i]}k )
                     else
@@ -6171,10 +6196,10 @@ HlsStreamCreatorPlus()
         chnl_variants_output_command+=( $chnl_output_flags_command )
         chnl_var_stream_map_command+=( -var_stream_map "$chnl_var_stream_map" )
 
-        if [ "$chnl_encrypt_yn" == "yes" ] 
+        if [ "$chnl_encrypt_" = true ] 
         then
             openssl rand 16 > "$chnl_output_dir_root/$chnl_key_name.key"
-            if [ "$chnl_encrypt_session_yn" == "yes" ] 
+            if [ "$chnl_encrypt_session" = true ] 
             then
                 echo -e "/keys?key=$chnl_key_name&channel=$chnl_output_dir_name\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
             else
@@ -6276,7 +6301,7 @@ HlsStreamCreatorPlus()
                     chnl_bitrates=${chnl_variant%-*}
                     chnl_resolution=${chnl_variant#*-}
 
-                    if [ -n "$chnl_const" ] 
+                    if [ "$chnl_const" = true ] 
                     then
                         chnl_variants_output_command+=( -b:v:$i ${chnl_bitrates}k -bufsize:v:$i ${chnl_bitrates}k -minrate:v:$i ${chnl_bitrates}k -maxrate:v:$i ${chnl_bitrates}k )
                     else
@@ -6290,7 +6315,7 @@ HlsStreamCreatorPlus()
                     chnl_variants_output_command+=( -s:v:$i $chnl_variant )
                     chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000,RESOLUTION=$chnl_variant$chnl_subtitle_append\n"
                 else
-                    if [ -n "$chnl_const" ] 
+                    if [ "$chnl_const" = true ] 
                     then
                         chnl_variants_output_command+=( -b:v:$i ${chnl_variant}k -bufsize:v:$i ${chnl_variant}k -minrate:v:$i ${chnl_variant}k -maxrate:v:$i ${chnl_variant}k )
                     else
@@ -6498,10 +6523,10 @@ HlsStreamCreatorPlus()
         chnl_var_stream_map_command=( -var_stream_map "$chnl_var_stream_map" )
     fi
 
-    if [ "$chnl_encrypt_yn" == "yes" ] 
+    if [ "$chnl_encrypt" = true ] 
     then
         openssl rand 16 > "$chnl_output_dir_root/$chnl_key_name.key"
-        if [ "$chnl_encrypt_session_yn" == "yes" ] 
+        if [ "$chnl_encrypt_session" = true ] 
         then
             echo -e "/keys?key=$chnl_key_name&channel=$chnl_output_dir_name\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
         else
@@ -6548,302 +6573,6 @@ HlsStreamCreatorPlus()
     esac
 }
 
-HlsStreamCreator()
-{
-    trap '' HUP INT
-    unset force_exit
-    pkill=1
-    pid="$BASHPID"
-    if [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$pid"')' "$CHANNELS_FILE") ]] 
-    then
-        true &
-        rand_pid=$!
-        while [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$rand_pid"')' "$CHANNELS_FILE") ]] 
-        do
-            true &
-            rand_pid=$!
-        done
-
-        number=true
-        jq_path='["channels"]'
-        jq_path2='["pid"]'
-        JQ update "$CHANNELS_FILE" pid "$pid" "$rand_pid"
-    fi
-    case $from in
-        "AddChannel") 
-            delete_on_term="$output_dir_root"
-            pid_file="$FFMPEG_LOG_ROOT/$pid.pid"
-            {
-                flock -x 201
-
-                stream_links_json="[]"
-
-                for link in "${stream_links[@]}"
-                do
-                    stream_links_json=$($JQ_FILE --arg stream_link "$link" '. + [$stream_link]' <<< "$stream_links_json")
-                done
-
-                new_channel=$(
-                $JQ_FILE -n --arg pid "$pid" --arg status "on" \
-                    --argjson stream_link "$stream_links_json" --arg live "$live_yn" \
-                    --arg proxy "$proxy" --arg xc_proxy "$xc_proxy" \
-                    --arg user_agent "$user_agent" --arg headers "$headers" \
-                    --arg cookies "$cookies" --arg output_dir_name "$output_dir_name" \
-                    --arg playlist_name "$playlist_name" --arg seg_dir_name "$seg_dir_name" \
-                    --arg seg_name "$seg_name" --arg seg_length "$seg_length" \
-                    --arg seg_count "$seg_count" --arg video_codec "$video_codec" \
-                    --arg audio_codec "$audio_codec" --arg video_audio_shift "$video_audio_shift" \
-                    --arg txt_format "$txt_format" --arg draw_text "$draw_text" \
-                    --arg quality "$quality" --arg bitrates "$bitrates" \
-                    --arg const "$const_yn" --arg encrypt "$encrypt_yn" \
-                    --arg encrypt_session "$encrypt_session_yn" --arg keyinfo_name "$keyinfo_name" \
-                    --arg key_name "$key_name" --arg input_flags "$input_flags" \
-                    --arg output_flags "$output_flags" --arg channel_name "$channel_name" \
-                    --argjson schedule "[]" --arg sync "$sync_yn" \
-                    --arg sync_file "$sync_file" --arg sync_index "$sync_index" \
-                    --arg sync_pairs "$sync_pairs" --arg flv_status "off" --arg flv_h265 "$flv_h265_yn" \
-                    --arg flv_push_link '' --arg flv_pull_link '' \
-                    '{
-                        pid: $pid | tonumber,
-                        status: $status,
-                        stream_link: $stream_link,
-                        live: $live,
-                        proxy: $proxy,
-                        xc_proxy: $xc_proxy,
-                        user_agent: $user_agent,
-                        headers: $headers,
-                        cookies: $cookies,
-                        output_dir_name: $output_dir_name,
-                        playlist_name: $playlist_name,
-                        seg_dir_name: $seg_dir_name,
-                        seg_name: $seg_name,
-                        seg_length: $seg_length | tonumber,
-                        seg_count: $seg_count | tonumber,
-                        video_codec: $video_codec,
-                        audio_codec: $audio_codec,
-                        video_audio_shift: $video_audio_shift,
-                        txt_format: $txt_format,
-                        draw_text: $draw_text,
-                        quality: $quality,
-                        bitrates: $bitrates,
-                        const: $const,
-                        encrypt: $encrypt,
-                        encrypt_session: $encrypt_session,
-                        keyinfo_name: $keyinfo_name,
-                        key_name: $key_name,
-                        key_time: now|strflocaltime("%s")|tonumber,
-                        input_flags: $input_flags,
-                        output_flags: $output_flags,
-                        channel_name: $channel_name,
-                        channel_time: now|strflocaltime("%s")|tonumber,
-                        schedule: $schedule,
-                        sync: $sync,
-                        sync_file: $sync_file,
-                        sync_index: $sync_index,
-                        sync_pairs: $sync_pairs,
-                        flv_status: $flv_status,
-                        flv_h265: $flv_h265,
-                        flv_push_link: $flv_push_link,
-                        flv_pull_link: $flv_pull_link
-                    }'
-                )
-
-                jq_path='["channels"]'
-                JQ add "$CHANNELS_FILE" "[$new_channel]"
-
-                action="add"
-                SyncFile
-
-                trap '
-                    jq_path=[\"channels\"]
-                    jq_path2=[\"status\"]
-                    JQ update "$CHANNELS_FILE" pid "$pid" off
-                    printf -v date_now "%(%m-%d %H:%M:%S)T" -1
-                    printf "%s\n" "`eval_gettext \"\\\$date_now \\\$channel_name HLS 关闭\"`" >> "$MONITOR_LOG"
-                    chnl_pid=$pid
-                    action="stop"
-                    SyncFile
-                    rm -rf "$delete_on_term"
-                ' EXIT
-
-                mkdir -p "$delete_on_term"
-
-                if [ -n "$live" ]
-                then
-                    seg_count_command="-c $seg_count"
-                else
-                    seg_count_command=""
-                fi
-
-                if [ -n "$encrypt" ] 
-                then
-                    key_name_command="-K $key_name"
-                else
-                    key_name_command=""
-                fi
-
-                if [ -n "$quality" ] 
-                then
-                    quality_command="-q ${quality%%,*}"
-                else
-                    quality_command=""
-                fi
-
-                if [ -n "$bitrates" ] 
-                then
-                    bitrates_command="-b $bitrates"
-                else
-                    bitrates_command=""
-                fi
-
-                if [ -n "$seg_dir_name" ] 
-                then
-                    seg_dir_name_command="-S $seg_dir_name"
-                else
-                    seg_dir_name_command=""
-                fi
-
-                if [[ $stream_link =~ ^https?:// ]] 
-                then
-                    export FFMPEG_PROXY="$proxy"
-                    export FFMPEG_USER_AGENT="$user_agent"
-                    export FFMPEG_HEADERS="$headers"
-                    export FFMPEG_COOKIES="$cookies"
-                elif [[ $stream_link =~ ^icecast:// ]] 
-                then
-                    export FFMPEG_USER_AGENT="$user_agent"
-                fi
-
-                export FFMPEG_INPUT_FLAGS="$input_flags"
-                export FFMPEG_FLAGS="$output_flags"
-                export AUDIO_CODEC="$audio_codec"
-                export VIDEO_CODEC="$video_codec"
-
-                PrepTerm
-                $CREATOR_FILE $live -i "$stream_link" -s "$seg_length" \
-                -o "$output_dir_root" $seg_count_command $bitrates_command $seg_dir_name_command \
-                -p "$playlist_name" -t "$seg_name" $key_name_command $quality_command \
-                $const $encrypt > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
-                WaitTerm
-            } 201>"$pid_file"
-        ;;
-        "StartChannel") 
-            new_pid=$pid
-            delete_on_term="$chnl_output_dir_root"
-            pid_file="$FFMPEG_LOG_ROOT/$new_pid.pid"
-            {
-                flock -x 201
-
-                file=true
-                jq_path='["channels"]'
-                jq_path2='["stream_link"]'
-                JQ update "$CHANNELS_FILE" pid "$chnl_pid" chnl_stream_links
-
-                update=$(
-                    $JQ_FILE -n --arg pid "$new_pid" --arg status "on" \
-                    --arg user_agent "$chnl_user_agent" --arg headers "$chnl_headers" \
-                    --arg cookies "$chnl_cookies" --arg playlist_name "$chnl_playlist_name" \
-                    --arg seg_name "$chnl_seg_name" --arg key_name "$chnl_key_name" \
-                    --arg key_time "$chnl_key_time" --arg channel_name "$chnl_channel_name" \
-                    --arg channel_time "$chnl_channel_time" \
-                    '{
-                        pid: $pid | tonumber,
-                        status: $status,
-                        user_agent: $user_agent,
-                        headers: $headers,
-                        cookies: $cookies,
-                        playlist_name: $playlist_name,
-                        seg_name: $seg_name,
-                        key_name: $key_name,
-                        key_time: $key_time | tonumber,
-                        channel_name: $channel_name,
-                        channel_time: $channel_time | tonumber
-                    }'
-                )
-
-                merge=true
-                jq_path='["channels"]'
-                JQ update "$CHANNELS_FILE" pid "$chnl_pid" "$update"
-
-                action="start"
-                SyncFile
-
-                trap '
-                    jq_path=[\"channels\"]
-                    jq_path2=[\"status\"]
-                    JQ update "$CHANNELS_FILE" pid "$new_pid" off
-                    printf -v date_now "%(%m-%d %H:%M:%S)T" -1
-                    printf "%s\n" "`eval_gettext \"\\\$date_now \\\$chnl_channel_name HLS 关闭\"`" >> "$MONITOR_LOG"
-                    chnl_pid=$new_pid
-                    action="stop"
-                    SyncFile
-                    rm -rf "$delete_on_term"
-                ' EXIT
-
-                mkdir -p "$delete_on_term"
-
-                if [ -n "$chnl_live" ]
-                then
-                    chnl_seg_count_command="-c $chnl_seg_count"
-                else
-                    chnl_seg_count_command=""
-                fi
-
-                if [ -n "$chnl_encrypt" ] 
-                then
-                    chnl_key_name_command="-K $chnl_key_name"
-                else
-                    chnl_key_name_command=""
-                fi
-
-                if [ -n "$chnl_quality" ] 
-                then
-                    chnl_quality_command="-q ${chnl_quality%%,*}"
-                else
-                    chnl_quality_command=""
-                fi
-
-                if [ -n "$chnl_bitrates" ] 
-                then
-                    chnl_bitrates_command="-b $chnl_bitrates"
-                else
-                    chnl_bitrates_command=""
-                fi
-
-                if [ -n "$chnl_seg_dir_name" ] 
-                then
-                    chnl_seg_dir_name_command="-S $chnl_seg_dir_name"
-                else
-                    chnl_seg_dir_name_command=""
-                fi
-
-                if [[ $chnl_stream_link =~ ^https?:// ]] 
-                then
-                    export FFMPEG_PROXY="$chnl_proxy"
-                    export FFMPEG_USER_AGENT="$chnl_user_agent"
-                    export FFMPEG_HEADERS="$chnl_headers"
-                    export FFMPEG_COOKIES="$chnl_cookies"
-                elif [[ $chnl_stream_link =~ ^icecast:// ]] 
-                then
-                    export FFMPEG_USER_AGENT="$chnl_user_agent"
-                fi
-
-                export FFMPEG_INPUT_FLAGS="$chnl_input_flags"
-                export FFMPEG_FLAGS="$chnl_output_flags"
-                export AUDIO_CODEC="$chnl_audio_codec"
-                export VIDEO_CODEC="$chnl_video_codec"
-
-                PrepTerm
-                $CREATOR_FILE $chnl_live -i "$chnl_stream_link" -s "$chnl_seg_length" \
-                -o "$chnl_output_dir_root" $chnl_seg_count_command $chnl_bitrates_command $chnl_seg_dir_name_command \
-                -p "$chnl_playlist_name" -t "$chnl_seg_name" $chnl_key_name_command $chnl_quality_command \
-                $chnl_const $chnl_encrypt > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
-                WaitTerm
-            } 201>"$pid_file"
-        ;;
-    esac
-}
-
 GetDefault()
 {
     if [ -n "${d_version:-}" ] 
@@ -6853,14 +6582,14 @@ GetDefault()
 
     IFS=$'\001\t' read -r d_proxy d_xc_proxy d_user_agent d_headers d_cookies d_playlist_name \
     d_seg_dir_name d_seg_name d_seg_length d_seg_count d_video_codec d_audio_codec \
-    d_video_audio_shift d_txt_format d_draw_text d_quality d_bitrates d_const_yn d_encrypt_yn d_encrypt_session_yn \
-    d_keyinfo_name d_key_name d_input_flags d_output_flags d_sync_yn d_sync_file \
+    d_video_audio_shift d_txt_format d_draw_text d_quality d_bitrates d_const d_encrypt d_encrypt_session \
+    d_keyinfo_name d_key_name d_input_flags d_output_flags d_sync d_sync_file \
     d_sync_index d_sync_pairs d_schedule_file d_flv_delay_seconds d_flv_restart_nums \
     d_hls_delay_seconds d_hls_min_bitrates d_hls_max_seg_size d_hls_restart_nums \
-    d_hls_key_period d_anti_ddos_port d_anti_ddos_syn_flood_yn d_anti_ddos_syn_flood_delay_seconds \
-    d_anti_ddos_syn_flood_seconds d_anti_ddos_yn d_anti_ddos_seconds d_anti_ddos_level \
-    d_anti_leech_yn d_anti_leech_restart_nums d_anti_leech_restart_flv_changes_yn \
-    d_anti_leech_restart_hls_changes_yn d_recheck_period d_version < <($JQ_FILE -c -r '
+    d_hls_key_period d_anti_ddos_port d_anti_ddos_syn_flood d_anti_ddos_syn_flood_delay_seconds \
+    d_anti_ddos_syn_flood_seconds d_anti_ddos d_anti_ddos_seconds d_anti_ddos_level \
+    d_anti_leech d_anti_leech_restart_nums d_anti_leech_restart_flv_changes \
+    d_anti_leech_restart_hls_changes d_recheck_period d_version < <($JQ_FILE -c -r '
     .default as $default | 
     reduce ({proxy,xc_proxy,user_agent,headers,cookies,playlist_name,seg_dir_name,seg_name,seg_length,
     seg_count,video_codec,audio_codec,video_audio_shift,txt_format,draw_text,quality,bitrates,const,
@@ -6900,9 +6629,9 @@ GetDefault()
     else
         d_video_audio_shift_text=$(gettext "不设置")
     fi
-    d_encrypt_yn=${d_encrypt_yn:-no}
-    d_encrypt_session_yn=${d_encrypt_session_yn:-no}
-    d_sync_yn=${d_sync_yn:-yes}
+    d_encrypt=${d_encrypt:-false}
+    d_encrypt_session=${d_encrypt_session:-false}
+    d_sync=${d_sync:-true}
     d_flv_delay_seconds=${d_flv_delay_seconds:-20}
     d_flv_restart_nums=${d_flv_restart_nums:-20}
     d_hls_delay_seconds=${d_hls_delay_seconds:-120}
@@ -6913,16 +6642,16 @@ GetDefault()
     d_anti_ddos_port=${d_anti_ddos_port:-80}
     d_anti_ddos_port_text=${d_anti_ddos_port//,/ }
     d_anti_ddos_port_text=${d_anti_ddos_port_text//:/-}
-    [ "${d_anti_ddos_syn_flood_yn:-}" != "yes" ] && d_anti_ddos_syn_flood_yn="no"
+    d_anti_ddos_syn_flood=${d_anti_ddos_syn_flood:-false}
     d_anti_ddos_syn_flood_delay_seconds=${d_anti_ddos_syn_flood_delay_seconds:-3}
     d_anti_ddos_syn_flood_seconds=${d_anti_ddos_syn_flood_seconds:-3600}
-    [ "${d_anti_ddos_yn:-}" != "yes" ] && d_anti_ddos_yn="no"
+    d_anti_ddos=${d_anti_ddos:-false}
     d_anti_ddos_seconds=${d_anti_ddos_seconds:-120}
     d_anti_ddos_level=${d_anti_ddos_level:-6}
-    [ "${d_anti_leech_yn:-}" != "yes" ] && d_anti_leech_yn="no"
+    d_anti_leech=${d_anti_leech:-false}
     d_anti_leech_restart_nums=${d_anti_leech_restart_nums:-0}
-    [ "${d_anti_leech_restart_flv_changes_yn:-}" != "yes" ] && d_anti_leech_restart_flv_changes_yn="no"
-    [ "${d_anti_leech_restart_hls_changes_yn:-}" != "yes" ] && d_anti_leech_restart_hls_changes_yn="no"
+    d_anti_leech_restart_flv_changes=${d_anti_leech_restart_flv_changes:-false}
+    d_anti_leech_restart_hls_changes=${d_anti_leech_restart_hls_changes:-false}
     d_recheck_period=${d_recheck_period:-0}
     if [ "$d_recheck_period" -eq 0 ] 
     then
@@ -6943,7 +6672,7 @@ GetChannels()
     m_output_dir_name m_playlist_name m_seg_dir_name m_seg_name m_seg_length m_seg_count \
     m_video_codec m_audio_codec m_video_audio_shift m_txt_format m_draw_text m_quality m_bitrates m_const m_encrypt \
     m_encrypt_session m_keyinfo_name m_key_name m_key_time m_input_flags m_output_flags \
-    m_channel_name m_channel_time m_sync m_sync_file m_sync_index m_sync_pairs m_flv_status \
+    m_channel_name m_channel_time m_sync m_sync_file m_sync_index m_sync_pairs m_hls_end_list m_flv_status \
     m_flv_h265 m_flv_push_link m_flv_pull_link m_schedule_start_time m_schedule_end_time \
     m_schedule_hls_change m_schedule_channel_name m_schedule_status < <(JQs flat "$CHANNELS_FILE" '' '
     (.channels | if . == "" then {} else . end) as $channels |
@@ -6951,8 +6680,8 @@ GetChannels()
     reduce ({pid,status,stream_link,live,proxy,xc_proxy,user_agent,headers,cookies,output_dir_name,
     playlist_name,seg_dir_name,seg_name,seg_length,seg_count,video_codec,audio_codec,video_audio_shift,
     txt_format,draw_text,quality,bitrates,const,encrypt,encrypt_session,keyinfo_name,key_name,key_time,
-    input_flags,output_flags,channel_name,channel_time,sync,sync_file,sync_index,sync_pairs,flv_status,
-    flv_h265,flv_push_link,flv_pull_link}|keys_unsorted[]) as $key ([];
+    input_flags,output_flags,channel_name,channel_time,sync,sync_file,sync_index,sync_pairs,hls_end_list,
+    flv_status,flv_h265,flv_push_link,flv_pull_link}|keys_unsorted[]) as $key ([];
         $channels[$key] as $val | if $val then
             . + [$val + "\u0002\u0004"]
         else
@@ -6978,15 +6707,15 @@ GetChannels()
     chnls_count=${#chnls_pid[@]}
     if_null_off=${m_status//on/off}
     if_null_empty=${if_null_off//off/}
-    if_null_yes=${if_null_off//off/yes}
-    if_null_no=${if_null_off//off/no}
+    if_null_true=${if_null_off//off/true}
+    if_null_false=${if_null_off//off/false}
     if_null_schedule_empty=${if_null_empty//${delimiters[1]}/${delimiters[2]}}
 
     IFS="${delimiters[1]}" read -ra chnls_stream_links <<< "${m_stream_link:-$if_null_empty}"
 
     chnls_stream_link=("${chnls_stream_links[@]%%${delimiters[0]}*}")
 
-    IFS="${delimiters[1]}" read -ra chnls_live <<< "${m_live:-$if_null_yes}"
+    IFS="${delimiters[1]}" read -ra chnls_live <<< "${m_live:-$if_null_true}"
     IFS="${delimiters[1]}" read -ra chnls_proxy <<< "${m_proxy:-$if_null_empty}"
     IFS="${delimiters[1]}" read -ra chnls_xc_proxy <<< "${m_xc_proxy:-$if_null_empty}"
     IFS="${delimiters[1]}" read -ra chnls_user_agent <<< "${m_user_agent:-${if_null_off//off/$USER_AGENT_TV}}"
@@ -7005,11 +6734,10 @@ GetChannels()
     IFS="${delimiters[1]}" read -ra chnls_draw_text <<< "${m_draw_text:-$if_null_empty}"
     IFS="${delimiters[1]}" read -ra chnls_quality <<< "$m_quality"
     IFS="${delimiters[1]}" read -ra chnls_bitrates <<< "$m_bitrates"
-    IFS="${delimiters[1]}" read -ra chnls_const <<< "${m_const:-$if_null_no}"
-    m_encrypt=${m_encrypt:-$if_null_no}
-    m_encrypt=${m_encrypt//-e/yes}
-    IFS="${delimiters[1]}" read -ra chnls_encrypt <<< "${m_encrypt:-$if_null_no}"
-    IFS="${delimiters[1]}" read -ra chnls_encrypt_session <<< "${m_encrypt_session:-$if_null_no}"
+    IFS="${delimiters[1]}" read -ra chnls_const <<< "${m_const:-$if_null_false}"
+    m_encrypt=${m_encrypt//-e/false}
+    IFS="${delimiters[1]}" read -ra chnls_encrypt <<< "${m_encrypt:-$if_null_false}"
+    IFS="${delimiters[1]}" read -ra chnls_encrypt_session <<< "${m_encrypt_session:-$if_null_false}"
     IFS="${delimiters[1]}" read -ra chnls_keyinfo_name <<< "${m_keyinfo_name:-${if_null_off//off/keyinfo}}"
     IFS="${delimiters[1]}" read -ra chnls_key_name <<< "${m_key_name:-${if_null_off//off/keyname}}"
     if [ -z "$m_key_time" ] 
@@ -7027,12 +6755,13 @@ GetChannels()
         m_channel_time=${if_null_off//off/${now}}
     fi
     IFS="${delimiters[1]}" read -ra chnls_channel_time <<< "$m_channel_time"
-    IFS="${delimiters[1]}" read -ra chnls_sync <<< "${m_sync:-$if_null_yes}"
+    IFS="${delimiters[1]}" read -ra chnls_sync <<< "${m_sync:-$if_null_true}"
     IFS="${delimiters[1]}" read -ra chnls_sync_file <<< "${m_sync_file:-$if_null_empty}"
     IFS="${delimiters[1]}" read -ra chnls_sync_index <<< "${m_sync_index:-$if_null_empty}"
     IFS="${delimiters[1]}" read -ra chnls_sync_pairs <<< "${m_sync_pairs:-$if_null_empty}"
+    IFS="${delimiters[1]}" read -ra chnls_hls_end_list <<< "${m_hls_end_list:-$if_null_false}"
     IFS="${delimiters[1]}" read -ra chnls_flv_status <<< "${m_flv_status:-$if_null_off}"
-    IFS="${delimiters[1]}" read -ra chnls_flv_h265 <<< "${m_flv_h265:-$if_null_no}"
+    IFS="${delimiters[1]}" read -ra chnls_flv_h265 <<< "${m_flv_h265:-$if_null_false}"
     IFS="${delimiters[1]}" read -ra chnls_flv_push_link <<< "${m_flv_push_link:-$if_null_empty}"
     IFS="${delimiters[1]}" read -ra chnls_flv_pull_link <<< "${m_flv_pull_link:-$if_null_empty}"
     IFS="${delimiters[2]}" read -ra chnls_schedule_start_time <<< "${m_schedule_start_time:-$if_null_schedule_empty}"
@@ -7071,11 +6800,11 @@ ListChannels()
             chnls_video_audio_shift_text="$i18n_not_set"
         fi
 
-        if [ "${chnls_const[index]}" == "no" ] 
+        if [ "${chnls_const[index]}" = false ] 
         then
-            chnls_const_index_text="$i18n_const_no"
+            chnls_const_text="$i18n_const_no"
         else
-            chnls_const_index_text="$i18n_const_yes"
+            chnls_const_text="$i18n_const_yes"
         fi
 
         chnls_quality_text=""
@@ -7091,16 +6820,16 @@ ListChannels()
                     chnls_br_a=${chnls_br%-*}
                     chnls_br_b=" $i18n_resolution: ${chnls_br#*-}"
                     chnls_quality_text="${chnls_quality_text}[ -maxrate ${chnls_br_a}k -bufsize ${chnls_br_a}k${chnls_br_b} ] "
-                    chnls_bitrates_text="${chnls_bitrates_text}[ $i18n_bitrates ${chnls_br_a}k${chnls_br_b}${chnls_const_index_text} ] "
+                    chnls_bitrates_text="${chnls_bitrates_text}[ $i18n_bitrates ${chnls_br_a}k${chnls_br_b}${chnls_const_text} ] "
                     chnls_playlist_file_text="$chnls_playlist_file_text$chnls_output_dir_root/${chnls_playlist_name[index]}_$chnls_br_a.m3u8 "
                 elif [[ $chnls_br == *"x"* ]] 
                 then
                     chnls_quality_text="${chnls_quality_text}[ $i18n_resolution: $chnls_br ] "
-                    chnls_bitrates_text="${chnls_bitrates_text}[ $i18n_resolution: $chnls_br${chnls_const_index_text} ] "
+                    chnls_bitrates_text="${chnls_bitrates_text}[ $i18n_resolution: $chnls_br${chnls_const_text} ] "
                     chnls_playlist_file_text="$chnls_playlist_file_text$chnls_output_dir_root/${chnls_playlist_name[index]}.m3u8 "
                 else
                     chnls_quality_text="${chnls_quality_text}[ -maxrate ${chnls_br}k -bufsize ${chnls_br}k ] "
-                    chnls_bitrates_text="${chnls_bitrates_text}[ $i18n_bitrates ${chnls_br}k${chnls_const_index_text} ] "
+                    chnls_bitrates_text="${chnls_bitrates_text}[ $i18n_bitrates ${chnls_br}k${chnls_const_text} ] "
                     chnls_playlist_file_text="$chnls_playlist_file_text$chnls_output_dir_root/${chnls_playlist_name[index]}_$chnls_br.m3u8 "
                 fi
             done <<< ${chnls_bitrates[index]//,/$'\n'}
@@ -7177,7 +6906,7 @@ GetChannel()
 {
     GetDefault
 
-    if [ -z "${monitor:-}" ] 
+    if [ "$monitor" = false ] 
     then
         select_index="pid"
         select_json='{ "pid": '"$chnl_pid"' }'
@@ -7192,13 +6921,13 @@ GetChannel()
 
     [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
 
-    IFS=$'\002\t' read -r chnl_pid chnl_status chnl_stream_links_list chnl_live_yn chnl_proxy chnl_xc_proxy \
+    IFS=$'\002\t' read -r chnl_pid chnl_status chnl_stream_links_list chnl_live chnl_proxy chnl_xc_proxy \
     chnl_user_agent chnl_headers chnl_cookies chnl_output_dir_name chnl_playlist_name \
     chnl_seg_dir_name chnl_seg_name chnl_seg_length chnl_seg_count chnl_video_codec \
-    chnl_audio_codec chnl_video_audio_shift chnl_txt_format chnl_draw_text chnl_quality chnl_bitrates chnl_const_yn \
-    chnl_encrypt_yn chnl_encrypt_session_yn chnl_keyinfo_name chnl_key_name chnl_key_time \
-    chnl_input_flags chnl_output_flags chnl_channel_name chnl_channel_time chnl_sync_yn \
-    chnl_sync_file chnl_sync_index chnl_sync_pairs chnl_flv_status chnl_flv_h265_yn chnl_flv_push_link \
+    chnl_audio_codec chnl_video_audio_shift chnl_txt_format chnl_draw_text chnl_quality chnl_bitrates chnl_const \
+    chnl_encrypt chnl_encrypt_session chnl_keyinfo_name chnl_key_name chnl_key_time \
+    chnl_input_flags chnl_output_flags chnl_channel_name chnl_channel_time chnl_sync \
+    chnl_sync_file chnl_sync_index chnl_sync_pairs chnl_hls_end_list chnl_flv_status chnl_flv_h265 chnl_flv_push_link \
     chnl_flv_pull_link chnl_schedule_start_time chnl_schedule_end_time \
     chnl_schedule_hls_change chnl_schedule_channel_name chnl_schedule_status < <($JQ_FILE -c -r --arg select_index "$select_index" --argjson select_json "$select_json" '
     .channels[] | select(.[$select_index] == $select_json[$select_index]) as $channel |
@@ -7206,8 +6935,8 @@ GetChannel()
     reduce ({pid,status,stream_link,live,proxy,xc_proxy,user_agent,headers,cookies,output_dir_name,
     playlist_name,seg_dir_name,seg_name,seg_length,seg_count,video_codec,audio_codec,video_audio_shift,
     txt_format,draw_text,quality,bitrates,const,encrypt,encrypt_session,keyinfo_name,key_name,key_time,
-    input_flags,output_flags,channel_name,channel_time,sync,sync_file,sync_index,sync_pairs,flv_status,
-    flv_h265,flv_push_link,flv_pull_link}|keys_unsorted[]) as $key ([];
+    input_flags,output_flags,channel_name,channel_time,sync,sync_file,sync_index,sync_pairs,hls_end_list,
+    flv_status,flv_h265,flv_push_link,flv_pull_link}|keys_unsorted[]) as $key ([];
         $channel[$key] as $val | if ($val|type == "array") then
             . + [($val | join("\u0001")) + "\u0002"]
         elif $val then
@@ -7223,7 +6952,7 @@ GetChannel()
     [([$schedule[]|.status // 2|tostring|. + "\u0001"]|join("") + "\u0002")]
     |@tsv' "$CHANNELS_FILE")
 
-    if [ -z "$chnl_pid" ] && [ -z "${monitor:-}" ]
+    if [ -z "$chnl_pid" ] && [ "$monitor" = false ]
     then
         Println "$error $i18n_channel_try_again\n"
         exit 1
@@ -7232,12 +6961,10 @@ GetChannel()
     chnl_pid=${chnl_pid#\"}
     chnl_flv_pull_link=${chnl_flv_pull_link%\"}
 
-    if [ "$chnl_live_yn" == "no" ]
+    if [ "$chnl_live" = false ]
     then
-        chnl_live=""
         chnl_live_text="${red}$i18n_no${normal}"
     else
-        chnl_live="-l"
         chnl_live_text="${green}$i18n_yes${normal}"
     fi
 
@@ -7281,6 +7008,12 @@ GetChannel()
 
     chnl_output_dir_root="$LIVE_ROOT/$chnl_output_dir_name"
 
+    chnl_seg_dir_path=""
+    if [ -n "$chnl_seg_dir_name" ] 
+    then
+        chnl_seg_dir_path="$chnl_seg_dir_name/"
+    fi
+
     v_or_a=${chnl_video_audio_shift%_*}
 
     if [ "$v_or_a" == "v" ] 
@@ -7299,22 +7032,25 @@ GetChannel()
         chnl_audio_shift=""
     fi
 
-    if [ "$chnl_const_yn" == "no" ]
+    if [ "$chnl_const" = false ]
     then
-        chnl_const=""
         chnl_const_text="$i18n_const_no"
     else
-        chnl_const="-C"
         chnl_const_text="$i18n_const_yes"
     fi
 
-    if [ "$chnl_encrypt_yn" == "no" ]
+    if [ "$chnl_encrypt" = false ]
     then
-        chnl_encrypt=""
         chnl_encrypt_text="${red}$i18n_no${normal}"
     else
-        chnl_encrypt="-e"
         chnl_encrypt_text="${green}$i18n_yes${normal}"
+    fi
+
+    if [ "$chnl_encrypt_session" = false ]
+    then
+        chnl_encrypt_session_text="${red}$i18n_no${normal}"
+    else
+        chnl_encrypt_session_text="${green}$i18n_yes${normal}"
     fi
 
     chnl_keyinfo_name=${chnl_keyinfo_name:-$(RandStr)}
@@ -7332,9 +7068,9 @@ GetChannel()
         chnl_schedules_count=${#chnl_schedules_status[@]}
     fi
 
-    if [ -z "${monitor:-}" ] 
+    if [ "$monitor" = false ] 
     then
-        if [ "$chnl_sync_yn" == "no" ]
+        if [ "$chnl_sync" = false ]
         then
             chnl_sync_text="${red}$i18n_disabled${normal}"
         else
@@ -7349,12 +7085,14 @@ GetChannel()
         fi
 
         chnl_seg_dir_name_text=${chnl_seg_dir_name:-$i18n_not_set}
+
         if [ -n "$chnl_seg_dir_name" ] 
         then
             chnl_seg_dir_name_text="${green}$chnl_seg_dir_name${normal}"
         else
             chnl_seg_dir_name_text="${red}$i18n_not_set${normal}"
         fi
+
         chnl_seg_length_text="${green}$chnl_seg_length($i18n_seconds)${normal}"
 
         chnl_crf_text=""
@@ -7387,7 +7125,7 @@ GetChannel()
             chnl_playlist_file_text="$chnl_playlist_file_text${green}$chnl_output_dir_root/${chnl_playlist_name}.m3u8${normal} "
         fi
 
-        if [ "$chnl_sync_yn" == "yes" ]
+        if [ "$chnl_sync" = true ]
         then
             sync_file=${chnl_sync_file:-$d_sync_file}
             sync_index=${chnl_sync_index:-$d_sync_index}
@@ -7410,6 +7148,13 @@ GetChannel()
             chnl_video_quality_text="${green}crf $chnl_quality ${chnl_crf_text:-$i18n_not_set}${normal}"
         else
             chnl_video_quality_text="${green}$i18n_bitrates ${chnl_nocrf_text:-$i18n_not_set}${normal}"
+        fi
+
+        if [ "$chnl_hls_end_list" = true ]
+        then
+            chnl_hls_end_list_text="${green}$i18n_yes${normal}"
+        else
+            chnl_hls_end_list_text="${red}$i18n_no${normal}"
         fi
 
         if [ "$chnl_flv_status" == "on" ]
@@ -7457,10 +7202,11 @@ ListChannel()
         printf ' %b' "$i18n_seg_length${indent_20}$chnl_seg_length_text\n"
         printf " %s${indent_20}${green}%s${normal}\n" "$i18n_seg_count" "$chnl_seg_count"
         printf ' %b' "$i18n_encrypt${indent_20}$chnl_encrypt_text\n"
-        if [ -n "$chnl_encrypt" ] 
+        if [ "$chnl_encrypt" = true ] 
         then
             printf " %s${indent_20}${green}%s${normal}\n" "$i18n_keyinfo_name" "$chnl_keyinfo_name"
             printf " %s${indent_20}${green}%s${normal}\n" "$i18n_key_name" "$chnl_key_name"
+            printf ' %b' "$i18n_encrypt_session${indent_20}$chnl_encrypt_session_text\n"
         fi
     elif [ "$kind" == "flv" ] 
     then
@@ -7482,6 +7228,7 @@ ListChannel()
 
     printf " %s${indent_20}${green}%s${normal}\n" "$i18n_input_flags" "${chnl_input_flags:-$i18n_not_set}"
     printf " %s${indent_20}${green}%s${normal}\n" "$i18n_output_flags" "${chnl_output_flags:-$i18n_not_set}"
+    printf ' %b' "EXT-X-ENDLIST${indent_20}$chnl_hls_end_list_text\n"
     printf ' %b' "sync${indent_20}$chnl_sync_text\n"
 
     [ -n "$chnl_sync_file" ] && printf " %s${indent_20}${green}%s${normal}\n" "sync_file" "${chnl_sync_file// /, }"
@@ -8003,14 +7750,14 @@ SetLive()
     else
         Println "$tip 选择 否 则无法监控"
     fi
-    inquirer list_input "是否是无限时长直播源" yn_options live_yn
-    if [[ $live_yn == "$i18n_yes" ]]
+
+    inquirer list_input_index "是否是无限时长直播源" yn_options yn_options_index
+
+    if [ "$yn_options_index" -eq 0 ]
     then
-        live="-l"
-        live_yn="yes"
+        live=true
     else
-        live=""
-        live_yn="no"
+        live=false
     fi
 }
 
@@ -8122,7 +7869,6 @@ SetOutputDirName()
             Println "$error 目录已存在!\n"
         fi
     done
-    output_dir_root="$LIVE_ROOT/$output_dir_name"
 }
 
 SetPlaylistName()
@@ -8183,6 +7929,19 @@ SetSegLength()
             ;;
         esac
     done
+}
+
+SetHlsEndList()
+{
+    Println "$tip 如果添加此字段, 关闭频道会延迟一个分片时长的时间"
+    inquirer list_input_index "添加 EXT-X-ENDLIST 字段" ny_options ny_options_index
+
+    if [ "$ny_options_index" -eq 0 ] 
+    then
+        hls_end_list=false
+    else
+        hls_end_list=true
+    fi
 }
 
 SetSegCount()
@@ -8337,48 +8096,44 @@ SetBitrates()
 SetConst()
 {
     echo
-    if [ "$d_const_yn" == "yes" ] 
+    if [ "$d_const" = true ] 
     then
         inquirer list_input "是否使用固定码率: " yn_options const_yn
     else
         inquirer list_input "是否使用固定码率: " ny_options const_yn
     fi
 
-    if [[ $const_yn == "$i18n_yes" ]]
+    if [ "$const_yn" == "$i18n_yes" ]
     then
-        const="-C"
-        const_yn="yes"
+        const=true
     else
-        const=""
-        const_yn="no"
+        const=false
     fi
 }
 
 SetEncrypt()
 {
     echo
-    if [ "$d_encrypt_yn" == "yes" ] 
+    if [ "$d_encrypt" = true ] 
     then
         inquirer list_input "是否加密分片: " yn_options encrypt_yn
     else
         inquirer list_input "是否加密分片: " ny_options encrypt_yn
     fi
 
-    if [[ $encrypt_yn == "$i18n_yes" ]]
+    if [ "$encrypt_yn" == "$i18n_yes" ]
     then
-        encrypt="-e"
-        encrypt_yn="yes"
+        encrypt=true
 
         if [[ ! -x $(command -v openssl) ]]
         then
             echo
             inquirer list_input "是否安装 openssl: " yn_options install_openssl_yn
-            if [[ $install_openssl_yn == "$i18n_yes" ]]
+            if [ "$install_openssl_yn" == "$i18n_yes" ]
             then
                 OpensslInstall
             else
-                encrypt=""
-                encrypt_yn="no"
+                encrypt=false
             fi
         fi
 
@@ -8386,31 +8141,31 @@ SetEncrypt()
         then
             Println "$tip 加密后只能通过网页浏览"
 
-            if [ "$d_encrypt_session_yn" == "no" ] 
+            if [ "$d_encrypt_session" = false ] 
             then
                 inquirer list_input "是否加密 session: " ny_options encrypt_session_text
             else
                 inquirer list_input "是否加密 session: " yn_options encrypt_session_text
             fi
 
-            if [[ $encrypt_session_text == "$i18n_yes" ]]
+            if [ "$encrypt_session_text" == "$i18n_yes" ]
             then
-                encrypt_session_yn="yes"
+                encrypt_session=true
 
                 if [ ! -d /usr/local/nginx ] && [ ! -d /usr/local/openresty ]
                 then
                     echo
                     nginx_openresty_options=( 'nginx' 'openresty' '不安装' )
-                    inquirer list_input "选择安装 nginx 或 openresty, 耗时会很长: " nginx_openresty_options nginx_openresty_selected
+                    inquirer list_input_index "选择安装 nginx 或 openresty, 耗时会很长: " nginx_openresty_options nginx_openresty_options_index
 
-                    if [[ $nginx_openresty_selected == "nginx" ]] 
+                    if [ "$nginx_openresty_options_index" -eq 0 ] 
                     then
                         nginx_prefix="/usr/local/nginx"
                         nginx_name="nginx"
                         nginx_ctl="nx"
                         NGINX_FILE="$nginx_prefix/sbin/nginx"
                         NginxInstall
-                    elif [[ $nginx_openresty_selected == "openresty" ]] 
+                    elif [ "$nginx_openresty_options_index" -eq 1 ] 
                     then
                         nginx_prefix="/usr/local/openresty/nginx"
                         nginx_name="openresty"
@@ -8418,7 +8173,7 @@ SetEncrypt()
                         NGINX_FILE="$nginx_prefix/sbin/nginx"
                         OpenrestyInstall
                     else
-                        encrypt_session_yn="no"
+                        encrypt_session=false
                         encrypt_session_text="$i18n_no"
                     fi
                 fi
@@ -8437,7 +8192,7 @@ SetEncrypt()
                                 nginx_openresty_options=( 'nginx' 'openresty' )
                             fi
                             inquirer list_input "选择使用 nginx 或 openresty: " nginx_openresty_options nginx_openresty_selected
-                            if [[ $nginx_openresty_selected == "nginx" ]] 
+                            if [ "$nginx_openresty_selected" == "nginx" ] 
                             then
                                 nginx_prefix="/usr/local/nginx"
                                 nginx_name="nginx"
@@ -8464,7 +8219,7 @@ SetEncrypt()
                     then
                         echo
                         inquirer list_input "需安装配置 nodejs, 是否继续: " yn_options encrypt_session_text
-                        if [[ $encrypt_session_text == "$i18n_yes" ]] 
+                        if [ "$encrypt_session_text" == "$i18n_yes" ] 
                         then
                             NodejsInstall
                             if [[ -x $(command -v node) ]] && [[ -x $(command -v npm) ]] 
@@ -8474,13 +8229,13 @@ SetEncrypt()
                                     NodejsConfig
                                 fi
                             else
-                                encrypt_session_yn="no"
+                                encrypt_session=false
                                 encrypt_session_text="$i18n_no"
                                 Println "$error nodejs 安装发生错误"
                                 Println "  加密 session: ${green} $encrypt_session_text ${normal}"
                             fi
                         else
-                            encrypt_session_yn="no"
+                            encrypt_session=false
                         fi
                     elif [ ! -e "$NODE_ROOT/index.js" ] 
                     then
@@ -8488,13 +8243,12 @@ SetEncrypt()
                     fi
                 fi
             else
-                encrypt_session_yn="no"
+                encrypt_session=false
             fi
         fi
     else
-        encrypt=""
-        encrypt_yn="no"
-        encrypt_session_yn="no"
+        encrypt=false
+        encrypt_session=false
     fi
 }
 
@@ -8574,7 +8328,7 @@ SetChannelName()
 SetSync()
 {
     echo
-    if [ "$d_sync_yn" == "yes" ] 
+    if [ "$d_sync" = true ] 
     then
         inquirer list_input "是否启用 sync: " yn_options sync_yn
     else
@@ -8583,9 +8337,9 @@ SetSync()
 
     if [[ $sync_yn == "$i18n_yes" ]]
     then
-        sync_yn="yes"
+        sync=true
     else
-        sync_yn="no"
+        sync=false
     fi
 }
 
@@ -8907,16 +8661,16 @@ SetAntiDDosPort()
 SetAntiDDosSynFlood()
 {
     echo
-    if [ "$d_anti_ddos_syn_flood_yn" == "yes" ] 
+    if [ "$d_anti_ddos_syn_flood" = true ] 
     then
         inquirer list_input "是否开启 SYN Flood attack 防御" yn_options anti_ddos_syn_flood_yn
     else
         inquirer list_input "是否开启 SYN Flood attack 防御" ny_options anti_ddos_syn_flood_yn
     fi
 
-    if [[ $anti_ddos_syn_flood_yn == "$i18n_yes" ]] 
+    if [ "$anti_ddos_syn_flood_yn" == "$i18n_yes" ] 
     then
-        anti_ddos_syn_flood_yn="yes"
+        anti_ddos_syn_flood=true
         sysctl -w net.ipv4.tcp_syn_retries=6 > /dev/null
         sysctl -w net.ipv4.tcp_synack_retries=2 > /dev/null
         sysctl -w net.ipv4.tcp_syncookies=1 > /dev/null
@@ -8961,23 +8715,23 @@ SetAntiDDosSynFlood()
             esac
         done
     else
-        anti_ddos_syn_flood_yn="no"
+        anti_ddos_syn_flood=false
     fi
 }
 
 SetAntiDDos()
 {
     echo
-    if [ "$d_anti_ddos_yn" == "yes" ] 
+    if [ "$d_anti_ddos" = true ] 
     then
         inquirer list_input "是否开启 iptv 防御" yn_options anti_ddos_yn
     else
         inquirer list_input "是否开启 iptv 防御" ny_options anti_ddos_yn
     fi
 
-    if [[ $anti_ddos_yn == "$i18n_yes" ]] 
+    if [ "$anti_ddos_yn" == "$i18n_yes" ] 
     then
-        anti_ddos_yn="yes"
+        anti_ddos=true
 
         Println "设置封禁用户 ip 多少秒"
         while read -p "(默认: $d_anti_ddos_seconds 秒): " anti_ddos_seconds
@@ -9020,23 +8774,23 @@ SetAntiDDos()
             esac
         done
     else
-        anti_ddos_yn="no"
+        anti_ddos=false
     fi
 }
 
 SetAntiLeech()
 {
     echo
-    if [ "$d_anti_leech_yn" == "yes" ] 
+    if [ "$d_anti_leech" = true ] 
     then
         inquirer list_input "是否开启防盗链" yn_options anti_leech_yn
     else
         inquirer list_input "是否开启防盗链" ny_options anti_leech_yn
     fi
 
-    if [[ $anti_leech_yn == "$i18n_yes" ]]
+    if [ "$anti_leech_yn" == "$i18n_yes" ]
     then
-        anti_leech_yn="yes"
+        anti_leech=true
 
         Println "请输入每小时随机重启次数 (大于等于0)"
         while read -p "(默认: $d_anti_leech_restart_nums): " anti_leech_restart_nums
@@ -9070,42 +8824,42 @@ SetAntiLeech()
         fi
 
         echo
-        if [ "$d_anti_leech_restart_flv_changes_yn" == "yes" ] 
+        if [ "$d_anti_leech_restart_flv_changes" = true ] 
         then
             inquirer list_input "是否每当重启 FLV 频道更改成随机的推流和拉流地址" yn_options anti_leech_restart_flv_changes_yn
         else
             inquirer list_input "是否每当重启 FLV 频道更改成随机的推流和拉流地址" ny_options anti_leech_restart_flv_changes_yn
         fi
 
-        if [[ $anti_leech_restart_flv_changes_yn == "$i18n_yes" ]] 
+        if [ "$anti_leech_restart_flv_changes_yn" == "$i18n_yes" ] 
         then
-            anti_leech_restart_flv_changes_yn="yes"
+            anti_leech_restart_flv_changes=true
         else
-            anti_leech_restart_flv_changes_yn="no"
+            anti_leech_restart_flv_changes=false
         fi
 
         echo
-        if [ "$d_anti_leech_restart_hls_changes_yn" == "yes" ] 
+        if [ "$d_anti_leech_restart_hls_changes" = true ] 
         then
             inquirer list_input "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 分片名称, key 名称" yn_options anti_leech_restart_hls_changes_yn
         else
             inquirer list_input "是否每当重启 HLS 频道更改成随机的 m3u8 名称, 分片名称, key 名称" ny_options anti_leech_restart_hls_changes_yn
         fi
 
-        if [[ $anti_leech_restart_hls_changes_yn == "$i18n_yes" ]] 
+        if [ "$anti_leech_restart_hls_changes_yn" == "$i18n_yes" ] 
         then
-            anti_leech_restart_hls_changes_yn="yes"
+            anti_leech_restart_hls_changes=true
         else
-            anti_leech_restart_hls_changes_yn="no"
+            anti_leech_restart_hls_changes=false
         fi
 
         SetHlsKeyPeriod
         hls_key_expire_seconds=$((hls_key_period+hls_delay_seconds))
     else
-        anti_leech_yn="no"
+        anti_leech=false
         anti_leech_restart_nums="$d_anti_leech_restart_nums"
-        anti_leech_restart_flv_changes_yn="$d_anti_leech_restart_flv_changes_yn"
-        anti_leech_restart_hls_changes_yn="$d_anti_leech_restart_hls_changes_yn"
+        anti_leech_restart_flv_changes="$d_anti_leech_restart_flv_changes"
+        anti_leech_restart_hls_changes="$d_anti_leech_restart_hls_changes"
     fi
 }
 
@@ -9132,21 +8886,21 @@ SetRecheckPeriod()
     done
 }
 
-SetFlvIsH265()
+SetFlvH265()
 {
     echo
-    inquirer list_input "是否推流 h265" ny_options flv_h265_yn
-    if [[ $flv_h265_yn == "$i18n_no" ]] 
+    inquirer list_input_index "是否推流 h265" ny_options ny_options_index
+    if [ "$ny_options_index" -eq 0 ] 
     then
-        flv_h265_yn="no"
+        flv_h265=false
     else
-        flv_h265_yn="yes"
+        flv_h265=true
         if [[ ! -x $(command -v ffmpeg_c) ]] 
         then
             echo
             ffmpeg_c_options=( '快速安装' '编译 ffmpeg (耗时非常非常久)' )
-            inquirer list_input "选择 ffmpeg (h265版本) 安装方式" ffmpeg_c_options ffmpeg_c_option
-            if [[ $ffmpeg_c_option == "快速安装" ]] 
+            inquirer list_input_index "选择 ffmpeg (h265版本) 安装方式" ffmpeg_c_options ffmpeg_c_options_index
+            if [ "$ffmpeg_c_options_index" -eq 0 ] 
             then
                 if curl -L "$FFMPEG_MIRROR_LINK/ffmpeg_c" -o /usr/local/bin/ffmpeg_c
                 then
@@ -9960,8 +9714,7 @@ AddChannel()
 
     quality=""
     bitrates=""
-    const=""
-    const_yn="no"
+    const=false
 
     if [ "$video_codec" != "copy" ] && [ "${stream_url_qualities_count:-0}" -le 1 ] 
     then
@@ -9982,7 +9735,7 @@ AddChannel()
         then
             SetDrawtext
         fi
-        SetFlvIsH265
+        SetFlvH265
         SetFlvPushLink
         SetFlvPullLink
         output_dir_name=$(RandOutputDirName)
@@ -9991,9 +9744,9 @@ AddChannel()
         seg_name="$playlist_name"
         seg_length="$d_seg_length"
         seg_count="$d_seg_count"
-        encrypt=""
-        encrypt_yn="no"
-        encrypt_session_yn="no"
+        hls_end_list=false
+        encrypt=false
+        encrypt_session=false
         keyinfo_name=$(RandStr)
         key_name=$(RandStr)
         txt_format=""
@@ -10003,7 +9756,7 @@ AddChannel()
         then
             SetDrawtext
         fi
-        flv_h265_yn="no"
+        flv_h265=false
         flv_push_link=""
         flv_pull_link=""
         SetOutputDirName
@@ -10017,8 +9770,9 @@ AddChannel()
         else
             seg_count="$d_seg_count"
         fi
+        SetHlsEndList
         SetEncrypt
-        if [ -n "$encrypt" ] 
+        if [ "$encrypt" = true ] 
         then
             SetKeyInfoName
             SetKeyName
@@ -10026,6 +9780,14 @@ AddChannel()
             keyinfo_name=$(RandStr)
             key_name=$(RandStr)
         fi
+    fi
+
+    output_dir_root="$LIVE_ROOT/$output_dir_name"
+
+    seg_dir_path=""
+    if [ -n "$seg_dir_name" ] 
+    then
+        seg_dir_path="$seg_dir_name/"
     fi
 
     subtitle_append=""
@@ -10054,7 +9816,8 @@ AddChannel()
     sync_file=""
     sync_index=""
     sync_pairs=""
-    if [ "$sync_yn" == "yes" ]
+
+    if [ "$sync" = true ]
     then
         SetSyncFile
         SetSyncIndex
@@ -10142,8 +9905,9 @@ EditStreamLink()
 EditLive()
 {
     SetLive
+    bool=true
     jq_path='["channels",'"$chnls_index"',"live"]'
-    JQ update "$CHANNELS_FILE" "$live_yn"
+    JQ update "$CHANNELS_FILE" "$live"
     Println "$info 无限时长直播修改成功 !\n"
 }
 
@@ -10303,8 +10067,9 @@ EditBitrates()
 EditConst()
 {
     SetConst
+    bool=true
     jq_path='["channels",'"$chnls_index"',"const"]'
-    JQ update "$CHANNELS_FILE" "$const_yn"
+    JQ update "$CHANNELS_FILE" "$const"
     Println "$info 是否固定码率修改成功 !\n"
 }
 
@@ -10312,8 +10077,8 @@ EditEncrypt()
 {
     SetEncrypt
     update='{
-        "encrypt": "'"$encrypt_yn"'",
-        "encrypt_session": "'"$encrypt_session_yn"'"
+        "encrypt": '"$encrypt"',
+        "encrypt_session": '"$encrypt_session"'
     }'
     merge=true
     jq_path='["channels",'"$chnls_index"']'
@@ -10364,9 +10129,10 @@ EditChannelName()
 EditSync()
 {
     SetSync
+    bool=true
     jq_path='["channels",'"$chnls_index"',"sync"]'
-    JQ update "$CHANNELS_FILE" "$sync_yn"
-    Println "$info 是否开启 sync 修改成功 !\n"
+    JQ update "$CHANNELS_FILE" "$sync"
+    Println "$info sync 修改成功 !\n"
 }
 
 EditSyncFile()
@@ -10393,11 +10159,21 @@ EditSyncPairs()
     Println "$info sync_pairs 修改成功 !\n"
 }
 
-EditFlvIsH265()
+EditHlsEndList()
 {
-    SetFlvIsH265
+    SetHlsEndList
+    bool=true
+    jq_path='["channels",'"$chnls_index"',"hls_end_list"]'
+    JQ update "$CHANNELS_FILE" "$hls_end_list"
+    Println "$info hls_end_list 修改成功 !\n"
+}
+
+EditFlvH265()
+{
+    SetFlvH265
+    bool=true
     jq_path='["channels",'"$chnls_index"',"flv_h265"]'
-    JQ update "$CHANNELS_FILE" "$flv_h265_yn"
+    JQ update "$CHANNELS_FILE" "$flv_h265"
     Println "$info 是否推流 h265 修改成功 !\n"
 }
 
@@ -10489,8 +10265,7 @@ EditChannelAll()
 
     quality=""
     bitrates=""
-    const=""
-    const_yn="no"
+    const=false
 
     if [ "$video_codec" != "copy" ] 
     then
@@ -10511,7 +10286,7 @@ EditChannelAll()
         then
             SetDrawtext
         fi
-        SetFlvIsH265
+        SetFlvH265
         SetFlvPushLink
         SetFlvPullLink
         output_dir_name=$(RandOutputDirName)
@@ -10520,8 +10295,9 @@ EditChannelAll()
         seg_name="$playlist_name"
         seg_length="$d_seg_length"
         seg_count="$d_seg_count"
-        encrypt=""
-        encrypt_yn="no"
+        hls_end_list=false
+        encrypt=false
+        encrypt_session=false
         keyinfo_name=$(RandStr)
         key_name=$(RandStr)
         txt_format=""
@@ -10531,7 +10307,7 @@ EditChannelAll()
         then
             SetDrawtext
         fi
-        flv_h265_yn="no"
+        flv_h265=false
         flv_push_link=""
         flv_pull_link=""
         SetOutputDirName
@@ -10539,14 +10315,15 @@ EditChannelAll()
         SetSegDirName
         SetSegName
         SetSegLength
-        if [ -n "$live" ] 
+        if [ "$live" = true ] 
         then
             SetSegCount
         else
             seg_count="$d_seg_count"
         fi
+        SetHlsEndList
         SetEncrypt
-        if [ -n "$encrypt" ] 
+        if [ "$encrypt" = true ] 
         then
             SetKeyInfoName
             SetKeyName
@@ -10564,7 +10341,8 @@ EditChannelAll()
     sync_file=""
     sync_index=""
     sync_pairs=""
-    if [ "$sync_yn" == "yes" ]
+
+    if [ "$sync" = true ]
     then
         SetSyncFile
         SetSyncIndex
@@ -10576,7 +10354,7 @@ EditChannelAll()
     JQ update "$CHANNELS_FILE" stream_links
 
     update=$(
-        $JQ_FILE -n --arg live "$live_yn" --arg proxy "$proxy" \
+        $JQ_FILE -n --arg live "$live" --arg proxy "$proxy" \
         --arg xc_proxy "$xc_proxy" --arg user_agent "$user_agent" \
         --arg headers "$headers" --arg cookies "$cookies" \
         --arg output_dir_name "$output_dir_name" --arg playlist_name "$playlist_name" \
@@ -10585,16 +10363,17 @@ EditChannelAll()
         --arg video_codec "$video_codec" --arg audio_codec "$audio_codec" \
         --arg video_audio_shift "$video_audio_shift" --arg txt_format "$txt_format" \
         --arg draw_text "$draw_text" --arg quality "$quality" \
-        --arg bitrates "$bitrates" --arg const "$const_yn" \
-        --arg encrypt "$encrypt_yn" --arg encrypt_session "$encrypt_session_yn" \
+        --arg bitrates "$bitrates" --arg const "$const" \
+        --arg encrypt "$encrypt" --arg encrypt_session "$encrypt_session" \
         --arg keyinfo_name "$keyinfo_name" --arg key_name "$key_name" \
         --arg input_flags "$input_flags" --arg output_flags "$output_flags" \
-        --arg channel_name "$channel_name" --arg sync "$sync_yn" \
+        --arg channel_name "$channel_name" --arg sync "$sync" \
         --arg sync_file "$sync_file" --arg sync_index "$sync_index" \
-        --arg sync_pairs "$sync_pairs" --arg flv_h265 "$flv_h265_yn" \
-        --arg flv_push_link "$flv_push_link" --arg flv_pull_link "$flv_pull_link" \
+        --arg sync_pairs "$sync_pairs" --arg hls_end_list "$hls_end_list" \
+        --arg flv_h265 "$flv_h265" --arg flv_push_link "$flv_push_link" \
+        --arg flv_pull_link "$flv_pull_link" \
         '{
-            live: $live,
+            live: $live | test("true"),
             proxy: $proxy,
             xc_proxy: $xc_proxy,
             user_agent: $user_agent,
@@ -10613,19 +10392,20 @@ EditChannelAll()
             draw_text: $draw_text,
             quality: $quality,
             bitrates: $bitrates,
-            const: $const,
-            encrypt: $encrypt,
-            encrypt_session: $encrypt_session,
+            const: $const | test("true"),
+            encrypt: $encrypt | test("true"),
+            encrypt_session: $encrypt_session | test("true"),
             keyinfo_name: $keyinfo_name,
             key_name: $key_name,
             input_flags: $input_flags,
             output_flags: $output_flags,
             channel_name: $channel_name,
-            sync: $sync,
+            sync: $sync | test("true"),
             sync_file: $sync_file,
             sync_index: $sync_index,
             sync_pairs: $sync_pairs,
-            flv_h265: $flv_h265,
+            hls_end_list: $hls_end_list | test("true"),
+            flv_h265: $flv_h265 | test("true"),
             flv_push_link: $flv_push_link,
             flv_pull_link: $flv_pull_link
         }'
@@ -10703,12 +10483,13 @@ EditChannelMenu()
    ${green}29.${normal} 修改 sync file
    ${green}30.${normal} 修改 sync index
    ${green}31.${normal} 修改 sync pairs
-   ${green}32.${normal} 修改 是否推流 h265
-   ${green}33.${normal} 修改 推流地址
-   ${green}34.${normal} 修改 拉流地址
-   ${green}35.${normal} 修改 全部配置
+   ${green}32.${normal} 修改 EXT-X-ENDLIST
+   ${green}33.${normal} 修改 是否推流 h265
+   ${green}34.${normal} 修改 推流地址
+   ${green}35.${normal} 修改 拉流地址
+   ${green}36.${normal} 修改 全部配置
     ————— 组合[常用] —————
-   ${green}36.${normal} 修改 分片名称, m3u8名称 (防盗链/DDoS)
+   ${green}37.${normal} 修改 分片名称, m3u8名称 (防盗链/DDoS)
 
 "
         read -p "$i18n_default_cancel" edit_channel_num
@@ -10808,18 +10589,21 @@ EditChannelMenu()
                 EditSyncPairs
             ;;
             32)
-                EditFlvIsH265
+                EditHlsEndList
             ;;
             33)
-                EditFlvPushLink
+                EditFlvH265
             ;;
             34)
-                EditFlvPullLink
+                EditFlvPushLink
             ;;
             35)
-                EditChannelAll
+                EditFlvPullLink
             ;;
             36)
+                EditChannelAll
+            ;;
+            37)
                 EditForSecurity
             ;;
             *)
@@ -10849,7 +10633,7 @@ EditChannelMenu()
         else
             inquirer list_input "是否启动此频道" yn_options start_yn
 
-            if [[ $start_yn == "$i18n_no" ]]
+            if [ "$start_yn" == "$i18n_no" ]
             then
                 Println "不启动...\n"
             else
@@ -11198,7 +10982,7 @@ StartChannel()
 
         if [[ $chnl_stream_link != *"|"* ]] 
         then
-            if [ -n "${monitor:-}" ] 
+            if [ "$monitor" = true ] 
             then
                 return 0
             fi
@@ -11385,7 +11169,7 @@ StartChannel()
                     chnl_stream_link_url=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
                     chnl_stream_link_url_path=${chnl_stream_link_url%/*}
                     Start4gtvLink
-                elif [ -z "${monitor:-}" ]
+                elif [ "$monitor" = false ]
                 then
                     Println "$error 无法连接 4gtv !\n" && exit 1
                 fi
@@ -11460,11 +11244,11 @@ StartChannel()
                     | $JQ_FILE -r '.flstURLs[0]')
                 chnl_stream_link_url_path=${chnl_stream_link_url%/*}
                 Start4gtvLink
-            elif [ -z "${monitor:-}" ] 
+            elif [ "$monitor" = false ] 
             then
                 Println "$error 此服务器 ip 不支持或频道不可用!\n"
             fi
-        elif [ -z "${monitor:-}" ] 
+        elif [ "$monitor" = false ] 
         then
             Println "$error 无法连接 4gtv !\n" && exit 1
         fi
@@ -11670,7 +11454,7 @@ StartChannel()
                 do
                     for((j=0;j<chnl_stream_urls_count;j++));
                     do
-                        if { ! [[ ${chnl_stream_url_qualities[i]} =~ - ]] || [ "${chnl_stream_urls_bitrate[j]}" == "${chnl_stream_url_qualities[i]%-*}" ] || [ -n "${monitor:-}" ]; } && [ "${chnl_stream_urls_resolution[j]}" == "${chnl_stream_url_qualities[i]#*-}" ]
+                        if { ! [[ ${chnl_stream_url_qualities[i]} =~ - ]] || [ "${chnl_stream_urls_bitrate[j]}" == "${chnl_stream_url_qualities[i]%-*}" ] || [ "$monitor" = true ]; } && [ "${chnl_stream_urls_resolution[j]}" == "${chnl_stream_url_qualities[i]#*-}" ]
                         then
                             chnl_stream_url_qualities[i]="${chnl_stream_urls_bitrate[j]}-${chnl_stream_urls_resolution[j]}"
                             chnl_stream_url_video_indices+=("$j")
@@ -11686,7 +11470,7 @@ StartChannel()
 
             if [ "$choose" -eq 1 ]
             then
-                if [ -z "${monitor:-}" ] 
+                if [ "$monitor" = false ] 
                 then
                     chnl_stream_urls_select_all=$((chnl_stream_urls_count+1))
                     chnl_stream_urls_list="$chnl_stream_urls_list ${green}$chnl_stream_urls_select_all.${normal}${indent_6}全部\n"
@@ -11804,7 +11588,7 @@ StartChannel()
                                     continue 2
                                 fi
                             done
-                            if [ -n "${monitor:-}" ] 
+                            if [ "$monitor" = true ] 
                             then
                                 MonitorError "$chnl_channel_name 请重新选择音轨"
                                 return 0
@@ -11965,7 +11749,7 @@ StartChannel()
                                     continue 2
                                 fi
                             done
-                            if [ -n "${monitor:-}" ] 
+                            if [ "$monitor" = true ] 
                             then
                                 MonitorError "$chnl_channel_name 请重新选择字幕"
                                 return 0
@@ -12109,7 +11893,7 @@ StartChannel()
                 chnl_origin_hls_url=0
                 chnl_stream_link=${chnl_stream_link_url%%|*}
                 chnl_stream_link_url="$chnl_stream_link_url|parse"
-            elif [[ $chnl_stream_link =~ \|origin\| ]] || [ -n "${monitor:-}" ]
+            elif [[ $chnl_stream_link =~ \|origin\| ]] || [ "$monitor" = true ]
             then
                 chnl_origin_hls_url=1
                 chnl_stream_link=${chnl_stream_link_url%%|*}
@@ -12190,7 +11974,7 @@ StartChannel()
     then
         chnl_quality=""
         chnl_bitrates=""
-        chnl_const=""
+        chnl_const=false
     fi
 
     if [ -n "${chnl_txt_format:-}" ] && [ -z "${kind:-}" ]
@@ -12259,16 +12043,16 @@ StartChannel()
         then
             Println "$error HLS 频道正开启, 走错片场了？\n" && exit 1
         fi
-        if [ "$chnl_flv_h265_yn" == "yes" ] 
+        if [ "$chnl_flv_h265" = true ] 
         then
             if [[ ! -x $(command -v ffmpeg_c) ]]  
             then
-                if [ -z "${monitor:-}" ] 
+                if [ "$monitor" = false ] 
                 then
                     echo
                     ffmpeg_c_options=( '快速安装' '编译 ffmpeg (耗时非常非常久)' )
-                    inquirer list_input "选择 ffmpeg (h265版本) 安装方式" ffmpeg_c_options ffmpeg_c_option
-                    if [[ $ffmpeg_c_option == "快速安装" ]] 
+                    inquirer list_input_index "选择 ffmpeg (h265版本) 安装方式" ffmpeg_c_options ffmpeg_c_options_index
+                    if [ "$ffmpeg_c_options_index" -eq 0 ] 
                     then
                         if curl -L "$FFMPEG_MIRROR_LINK/ffmpeg_c" -o /usr/local/bin/ffmpeg_c
                         then
@@ -12281,7 +12065,7 @@ StartChannel()
                         FFmpegCompile
                     fi
                 else
-                    chnl_flv_h265_yn="no"
+                    chnl_flv_h265=false
                 fi
             fi
         fi
@@ -12361,7 +12145,7 @@ StopChannel()
             rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
         else
             kill "$chnl_pid" 2> /dev/null || true
-            if ! flock -E 1 -w 30 -x "$FFMPEG_LOG_ROOT/$chnl_pid.pid" rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
+            if ! flock -E 1 -w 30 -x "$FFMPEG_LOG_ROOT/$chnl_pid.pid" rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
             then
                 MonitorError "频道 [ $chnl_channel_name ] 进程 $chnl_pid 不存在"
                 jq_path='["channels"]'
@@ -12385,12 +12169,19 @@ StopChannel()
             printf '%s\n' "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
             action="stop"
             SyncFile
-            rm -rf "$chnl_output_dir_root"
-            rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
+            rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
         else
             kill "$chnl_pid" 2> /dev/null || true
-            if ! flock -E 1 -w 30 -x "$FFMPEG_LOG_ROOT/$chnl_pid.pid" rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
+            if ! flock -E 1 -w $((30+chnl_seg_length)) -x "$FFMPEG_LOG_ROOT/$chnl_pid.pid" rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
             then
+                if [ "$chnl_hls_end_list" = true ] && ls -A "$chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}"*.ts > /dev/null 2>&1 
+                then
+                    for play_list in "$chnl_output_dir_root/"*.m3u8
+                    do
+                        echo "#EXT-X-ENDLIST" >> "$play_list"
+                    done
+                    sleep "$chnl_seg_length"
+                fi
                 MonitorError "频道 [ $chnl_channel_name ] 进程 $chnl_pid 不存在"
                 jq_path='["channels"]'
                 jq_path2='["status"]'
@@ -12399,9 +12190,9 @@ StopChannel()
                 printf '%s\n' "$date_now $chnl_channel_name HLS 关闭" >> "$MONITOR_LOG"
                 action="stop"
                 SyncFile
-                rm -rf "$chnl_output_dir_root"
             fi
         fi
+        rm -rf "$chnl_output_dir_root"
         chnl_status="off"
     fi
     Println "$info 频道 [ $chnl_channel_name ] 已关闭 !\n"
@@ -12439,7 +12230,7 @@ StopChannelsForce()
         action="stop"
         SyncFile > /dev/null
 
-        if [ "${chnls_live[i]}" == "yes" ] 
+        if [ "${chnls_live[i]}" = true ] 
         then
             rm -rf "${chnls_output_dir_root[i]}"
         fi
@@ -12601,7 +12392,7 @@ ListChannelsSchedule()
             else
                 chnl_schedule_status_list="${red}结束${normal}"
             fi
-            if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "true" ] 
+            if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
             then
                 chnl_schedule_hls_change_list="${green}是${normal}"
             else
@@ -12657,7 +12448,7 @@ AddChannelsSchedule()
                 else
                     chnl_schedule_status_list="${red}结束${normal}"
                 fi
-                if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "true" ] 
+                if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
                 then
                     chnl_schedule_hls_change_list="${green}是${normal}"
                 else
@@ -12822,7 +12613,7 @@ EditChannelSchedules()
         else
             chnl_schedule_status_list="${red}结束${normal}"
         fi
-        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "true" ] 
+        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
         then
             chnl_schedule_hls_change_list="${green}是${normal}"
         else
@@ -13041,7 +12832,7 @@ SortChannelSchedules()
         else
             chnl_schedule_status_list="${red}结束${normal}"
         fi
-        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "true" ] 
+        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
         then
             chnl_schedule_hls_change_list="${green}是${normal}"
         else
@@ -13217,7 +13008,7 @@ DelChannelSchedules()
         else
             chnl_schedule_status_list="${red}结束${normal}"
         fi
-        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "true" ] 
+        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
         then
             chnl_schedule_hls_change_list="${green}是${normal}"
         else
@@ -13518,9 +13309,9 @@ MonitorStart()
             nginx_ctl="nx"
         else
             echo
-            inquirer list_input "没有检测到运行的 nginx, 是否使用 openresty" ny_options use_openresty_yn
+            inquirer list_input_index "没有检测到运行的 nginx, 是否使用 openresty" yn_options yn_options_index
 
-            if [[ $use_openresty_yn == "$i18n_yes" ]] 
+            if [ "$yn_options_index" -eq 0 ] 
             then
                 nginx_prefix="/usr/local/openresty/nginx"
                 nginx_name="openresty"
@@ -13705,12 +13496,15 @@ EditDefaultMenu()
         ;;
         18)
             SetConst
-            EditDefault const "$const_yn"
+            bool=true
+            EditDefault const "$const"
         ;;
         19)
             SetEncrypt
-            EditDefault encrypt "$encrypt_yn"
-            EditDefault encrypt_session "$encrypt_session_yn"
+            bool=true
+            EditDefault encrypt "$encrypt"
+            bool=true
+            EditDefault encrypt_session "$encrypt_session"
         ;;
         20)
             SetKeyInfoName
@@ -13730,7 +13524,8 @@ EditDefaultMenu()
         ;;
         24)
             SetSync
-            EditDefault sync "$sync_yn"
+            bool=true
+            EditDefault sync "$sync"
         ;;
         25)
             SetSyncFile
@@ -13789,8 +13584,9 @@ EditDefaultMenu()
         ;;
         37)
             SetAntiDDosSynFlood
-            EditDefault anti_ddos_syn_flood "$anti_ddos_syn_flood_yn"
-            if [ "$anti_ddos_syn_flood_yn" == "yes" ] 
+            bool=true
+            EditDefault anti_ddos_syn_flood "$anti_ddos_syn_flood"
+            if [ "$anti_ddos_syn_flood" = true ] 
             then
                 number=true
                 EditDefault anti_ddos_syn_flood_delay_seconds
@@ -13800,8 +13596,9 @@ EditDefaultMenu()
         ;;
         38)
             SetAntiDDos
-            EditDefault anti_ddos "$anti_ddos_yn"
-            if [ "$anti_ddos_yn" == "yes" ] 
+            bool=true
+            EditDefault anti_ddos "$anti_ddos"
+            if [ "$anti_ddos" = true ] 
             then
                 number=true
                 EditDefault anti_ddos_seconds
@@ -13811,13 +13608,16 @@ EditDefaultMenu()
         ;;
         39)
             SetAntiLeech
-            EditDefault anti_leech "$anti_leech_yn"
-            if [ "$anti_leech_yn" == "yes" ] 
+            bool=true
+            EditDefault anti_leech "$anti_leech"
+            if [ "$anti_leech" = true ] 
             then
                 number=true
                 EditDefault anti_leech_restart_nums
-                EditDefault anti_leech_restart_flv_changes "$anti_leech_restart_flv_changes_yn"
-                EditDefault anti_leech_restart_hls_changes "$anti_leech_restart_hls_changes_yn"
+                bool=true
+                EditDefault anti_leech_restart_flv_changes "$anti_leech_restart_flv_changes"
+                bool=true
+                EditDefault anti_leech_restart_hls_changes "$anti_leech_restart_hls_changes"
             fi
         ;;
         40)
@@ -13876,7 +13676,7 @@ Reg4gtvAcc()
         | $JQ_FILE -r '[.Success,.ErrMessage]|join(" ")'
     ) || true
 
-    if [ "$result" == "true" ]
+    if [ "$result" = true ]
     then
         if [ ! -s "$SERVICES_FILE" ] 
         then
@@ -14037,7 +13837,7 @@ Login4gtvAcc()
             | $JQ_FILE -r '[.Success,.ErrMessage,.Data]|join("^")'
         ) || true
 
-        if [ "$result" == "true" ]
+        if [ "$result" = true ]
         then
             break
         else
@@ -14062,7 +13862,7 @@ Login4gtvAcc()
             | $JQ_FILE -r '.Success'
         ) || true
 
-        if [ "$result" == "true" ] 
+        if [ "$result" = true ] 
         then
             break
         fi
@@ -14078,7 +13878,7 @@ Login4gtvAcc()
         | $JQ_FILE -r '[.Success,.ErrMessage]|join("^")'
     ) || true
 
-    if [ "$result" == "true" ] 
+    if [ "$result" = true ] 
     then
         Println "$info 7 天豪华套餐开启成功\n"
     else
@@ -14123,7 +13923,7 @@ List4gtvAcc()
                             -d "clsIDENTITY_VALIDATE_ARUS%5BfsVALUE%5D=$(UrlencodeUpper $fsVALUE)" \
                             | $JQ_FILE -r '[.Success,.ErrMessage,.Data.fnLEFT_PROMO_DAYS]|join("^")'
                         ) || true
-                        if [ "$result" == "true" ] 
+                        if [ "$result" = true ] 
                         then
                             if [ "$fnLEFT_PROMO_DAYS" -eq -1 ] 
                             then
@@ -14289,7 +14089,7 @@ _4gtvCron()
         | $JQ_FILE -r '[.Success,.ErrMessage]|join(" ")'
     ) || true
 
-    if [ "$result" == "true" ]
+    if [ "$result" = true ]
     then
         if [ ! -s "$SERVICES_FILE" ] 
         then
@@ -14345,7 +14145,7 @@ _4gtvCron()
             | $JQ_FILE -r '[.Success,.ErrMessage,.Data]|join("^")'
         ) || true
 
-        if [ "$result" == "true" ]
+        if [ "$result" = true ]
         then
             break
         elif [ "$i" -eq 4 ] 
@@ -14375,7 +14175,7 @@ _4gtvCron()
             | $JQ_FILE -r '.Success'
         ) || true
 
-        if [ "$result" == "true" ] 
+        if [ "$result" = true ] 
         then
             break
         fi
@@ -14391,7 +14191,7 @@ _4gtvCron()
         | $JQ_FILE -r '[.Success,.ErrMessage]|join("^")'
     ) || true
 
-    if [ "$result" == "true" ] 
+    if [ "$result" = true ] 
     then
         Println "$info 7 天豪华套餐开启成功\n"
     else
@@ -14432,7 +14232,7 @@ Add4gtvLink()
     if [[ $stream_link_url =~ \.m3u8$ ]] 
     then
         Println "$error 你的 IP 可能已被禁\n"
-        if [ -n "${monitor:-}" ] 
+        if [ "$monitor" = true ] 
         then
             return 0
         fi
@@ -14620,7 +14420,7 @@ Start4gtvLink()
     if [[ $chnl_stream_link_url =~ \.m3u8$ ]] 
     then
         Println "$error 你的 IP 可能已被禁\n"
-        if [ -n "${monitor:-}" ] 
+        if [ "$monitor" = true ] 
         then
             return 0
         fi
@@ -14680,7 +14480,7 @@ Start4gtvLink()
             do
                 for((j=0;j<chnl_stream_urls_count;j++));
                 do
-                    if { [ "${auto_select_yn:-}" == "$i18n_yes" ] || ! [[ ${chnl_stream_url_qualities[i]} =~ - ]] || [ "${chnl_stream_urls_bitrate[j]}" == "${chnl_stream_url_qualities[i]%-*}" ] || [ -n "${monitor:-}" ]; } && [ "${chnl_stream_urls_resolution[j]}" == "${chnl_stream_url_qualities[i]#*-}" ]
+                    if { [ "${auto_select_yn:-}" == "$i18n_yes" ] || ! [[ ${chnl_stream_url_qualities[i]} =~ - ]] || [ "${chnl_stream_urls_bitrate[j]}" == "${chnl_stream_url_qualities[i]%-*}" ] || [ "$monitor" = true ]; } && [ "${chnl_stream_urls_resolution[j]}" == "${chnl_stream_url_qualities[i]#*-}" ]
                     then
                         chnl_stream_url_qualities[i]="${chnl_stream_urls_bitrate[j]}-${chnl_stream_urls_resolution[j]}"
                         chnl_stream_url_video_indices+=("$j")
@@ -14706,7 +14506,7 @@ Start4gtvLink()
 
         if [ "$choose" -eq 1 ] 
         then
-            if [ -z "${monitor:-}" ] 
+            if [ "$monitor" = false ] 
             then
                 if [ -z "${kind:-}" ] 
                 then
@@ -18426,16 +18226,16 @@ TsMenu()
 
     user_agent="iPhone; CPU iPhone OS 13_6 like Mac OS X"
     echo
-    inquirer list_input "是否使用默认频道文件: $DEFAULT_CHANNELS_LINK" yn_options use_default_channels_yn
-    if [[ $use_default_channels_yn == "$i18n_yes" ]]
+    inquirer list_input_index "是否使用默认频道文件: $DEFAULT_CHANNELS_LINK" yn_options yn_options_index
+    if [ "$yn_options_index" -eq 0 ]
     then
         TS_CHANNELS_LINK="$DEFAULT_CHANNELS_LINK"
     else
         if [ -n "$d_sync_file" ] && [[ -n $($JQ_FILE '.data[] | select(.reg_url != null)' "${d_sync_file%% *}") ]] 
         then
             echo
-            inquirer list_input "是否使用本地频道文件? 本地路径: ${d_sync_file%% *}" yn_options use_local_channels_yn
-            if [[ $use_local_channels_yn == [Yy] ]] 
+            inquirer list_input_index "是否使用本地频道文件? 本地路径: ${d_sync_file%% *}" yn_options yn_options_index
+            if [ "$yn_options_index" -eq 0 ] 
             then
                 TS_CHANNELS_FILE=${d_sync_file%% *}
             fi
@@ -18565,13 +18365,13 @@ AntiDDoSSet()
 
         SetAntiDDos
 
-        if [ "$anti_ddos_syn_flood_yn" == "no" ] && [ "$anti_ddos_yn" == "no" ] 
+        if [ "$anti_ddos_syn_flood" = false ] && [ "$anti_ddos" = false ] 
         then
-            if [ "$d_anti_ddos_syn_flood_yn" != "no" ] || [ "$d_anti_ddos_yn" != "no" ]
+            if [ "$d_anti_ddos_syn_flood" == true ] || [ "$d_anti_ddos" == true ]
             then
                 update='{
-                    "anti_ddos_syn_flood": "no",
-                    "anti_ddos": "no"
+                    "anti_ddos_syn_flood": false,
+                    "anti_ddos": false
                 }'
                 merge=true
                 jq_path='["default"]'
@@ -18583,18 +18383,18 @@ AntiDDoSSet()
             anti_ddos_ports=${anti_ddos_port%% *}
 
             update=$(
-                $JQ_FILE -n --arg anti_ddos_syn_flood "${anti_ddos_syn_flood_yn:-$d_anti_ddos_syn_flood_yn}" \
+                $JQ_FILE -n --arg anti_ddos_syn_flood "${anti_ddos_syn_flood:-$d_anti_ddos_syn_flood}" \
                     --arg anti_ddos_syn_flood_delay_seconds "${anti_ddos_syn_flood_delay_seconds:-$d_anti_ddos_syn_flood_delay_seconds}" \
                     --arg anti_ddos_syn_flood_seconds "${anti_ddos_syn_flood_seconds:-$d_anti_ddos_syn_flood_seconds}" \
-                    --arg anti_ddos "${anti_ddos_yn:-$d_anti_ddos_yn}" \
+                    --arg anti_ddos "${anti_ddos:-$d_anti_ddos}" \
                     --arg anti_ddos_port "$anti_ddos_ports" \
                     --arg anti_ddos_seconds "${anti_ddos_seconds:-$d_anti_ddos_seconds}" \
                     anti_ddos_level "${anti_ddos_level:-$d_anti_ddos_level}" \
                 '{
-                    anti_ddos_syn_flood: $anti_ddos_syn_flood,
+                    anti_ddos_syn_flood: $anti_ddos_syn_flood | test("true"),
                     anti_ddos_syn_flood_delay_seconds: $anti_ddos_syn_flood_delay_seconds | tonumber,
                     anti_ddos_syn_flood_seconds: $anti_ddos_syn_flood_seconds | tonumber,
-                    anti_ddos: $anti_ddos,
+                    anti_ddos: $anti_ddos | test("true"),
                     anti_ddos_port: $anti_ddos_port,
                     anti_ddos_seconds: $anti_ddos_seconds | tonumber,
                     anti_ddos_level: $anti_ddos_level | tonumber
@@ -18684,10 +18484,11 @@ AntiDDoS()
 
             current_ip=${SSH_CLIENT%% *}
             [ -n "${anti_ddos_level:-}" ] && ((anti_ddos_level++))
-            monitor=1
+            monitor=true
+
             while true
             do
-                if [ "$anti_ddos_syn_flood_yn" == "yes" ] 
+                if [ "$anti_ddos_syn_flood" = true ] 
                 then
                     anti_ddos_syn_flood_ips=()
                     while IFS= read -r anti_ddos_syn_flood_ip 
@@ -18734,7 +18535,7 @@ AntiDDoS()
                     done < <(ss -taH|awk '{gsub(/.*:/, "", $4);gsub(/:.*/, "", $5); if ($1 == "SYN-RECV" && $5 != "'"$current_ip"'" && ('"$anti_ddos_ports_command$anti_ddos_ports_range_command"')) print $5}')
                 fi
 
-                if [ "$anti_ddos_yn" == "yes" ] 
+                if [ "$anti_ddos" = true ] 
                 then
                     chnls_count=0
                     chnls_output_dir_name=()
@@ -19280,20 +19081,20 @@ MonitorHlsRestartChannel()
         action="skip"
         StopChannel
 
-        if [ "$anti_leech_yn" == "yes" ] && [ "$anti_leech_restart_hls_changes_yn" == "yes" ] 
+        if [ "$anti_leech" = true ] && [ "$anti_leech_restart_hls_changes" = true ] 
         then
-            if [ "${hls_change[hls_index]:-true}" == "true" ] 
+            if [ "${hls_change[hls_index]:-true}" = true ] 
             then
                 chnl_playlist_name=$(RandStr)
                 chnl_seg_name="$chnl_playlist_name"
             fi
 
-            if [ "$chnl_encrypt_yn" == "yes" ] 
+            if [ "$chnl_encrypt" = true ] 
             then
                 mkdir -p "$chnl_output_dir_root"
                 chnl_key_name=$(RandStr)
                 openssl rand 16 > "$chnl_output_dir_root/$chnl_key_name.key"
-                if [ "$chnl_encrypt_session_yn" == "yes" ] 
+                if [ "$chnl_encrypt_session" = true ] 
                 then
                     echo -e "/keys?key=$chnl_key_name&channel=$chnl_output_dir_name\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
                 else
@@ -19314,7 +19115,7 @@ MonitorHlsRestartChannel()
         if ls -A "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts > /dev/null 2>&1 
         then
             skip_check_stream=0
-            if [ "$chnl_encrypt_yn" == "yes" ] 
+            if [ "$chnl_encrypt" = true ] 
             then
                 if [ -e "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo" ] && \
                 [ -e "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key" ] && \
@@ -19809,7 +19610,7 @@ MonitorFlvRestartChannel()
         action="skip"
         StopChannel
 
-        if [ "$anti_leech_yn" == "yes" ] && [ "$anti_leech_restart_flv_changes_yn" == "yes" ] 
+        if [ "$anti_leech" = true ] && [ "$anti_leech_restart_flv_changes" = true ] 
         then
             stream_name=${chnl_flv_push_link##*/}
             new_stream_name=$(RandStr)
@@ -19938,7 +19739,7 @@ MonitorTryAccounts()
             echo
             for((macs_i=0;macs_i<macs_count;macs_i++));
             do
-                if [ -z "${monitor:-}" ] 
+                if [ "$monitor" = false ] 
                 then
                     printf '%b' "\r$macs_i/$macs_count 检测中..."
                 fi
@@ -20059,29 +19860,29 @@ MonitorTryAccounts()
 
                         chnl_stream_links[0]="$chnl_domain|$chnl_stream_link|$chnl_cmd|$mac_address"
 
-                        if [ -n "${monitor:-}" ] && [ "$anti_leech_yn" == "yes" ]
+                        if [ "$monitor" = true ] && [ "$anti_leech" = true ]
                         then
-                            if [ -z "${kind:-}" ] && [ "$anti_leech_restart_hls_changes_yn" == "yes" ]
+                            if [ -z "${kind:-}" ] && [ "$anti_leech_restart_hls_changes" = true ]
                             then
-                                if [ "${hls_change[hls_index]:-true}" == "true" ] 
+                                if [ "${hls_change[hls_index]:-true}" = true ] 
                                 then
                                     chnl_playlist_name=$(RandStr)
                                     chnl_seg_name="$chnl_playlist_name"
                                 fi
 
-                                if [ "$chnl_encrypt_yn" == "yes" ] 
+                                if [ "$chnl_encrypt" = true ] 
                                 then
                                     mkdir -p "$chnl_output_dir_root"
                                     chnl_key_name=$(RandStr)
                                     openssl rand 16 > "$chnl_output_dir_root/$chnl_key_name.key"
-                                    if [ "$chnl_encrypt_session_yn" == "yes" ] 
+                                    if [ "$chnl_encrypt_session" = true ] 
                                     then
                                         echo -e "/keys?key=$chnl_key_name&channel=$chnl_output_dir_name\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
                                     else
                                         echo -e "$chnl_key_name.key\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
                                     fi
                                 fi
-                            elif [ "${kind:-}" == "flv" ] && [ "$anti_leech_restart_flv_changes_yn" == "yes" ]
+                            elif [ "${kind:-}" == "flv" ] && [ "$anti_leech_restart_flv_changes" = true ]
                             then
                                 stream_name=${chnl_flv_push_link##*/}
                                 new_stream_name=$(RandStr)
@@ -20099,14 +19900,14 @@ MonitorTryAccounts()
                             fi
                         fi
 
-                        if [ -n "${monitor:-}" ] && [ -n "${channel_name[hls_index]:-}" ] 
+                        if [ "$monitor" = true ] && [ -n "${channel_name[hls_index]:-}" ] 
                         then
                             chnl_channel_name="${channel_name[hls_index]}"
                         fi
 
                         StartChannel
 
-                        if [ -z "${monitor:-}" ] 
+                        if [ "$monitor" = false ] 
                         then
                             try_success=1
                             sleep 3
@@ -20145,7 +19946,7 @@ MonitorTryAccounts()
                             GetChannel
                             if ls -A "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts > /dev/null 2>&1 
                             then
-                                if [ "$chnl_encrypt_yn" == "yes" ] 
+                                if [ "$chnl_encrypt" = true ] 
                                 then
                                     if [ -e "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo" ] && \
                                     [ -e "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key" ] && \
@@ -20224,7 +20025,7 @@ MonitorTryAccounts()
         echo
         for((accounts_i=0;accounts_i<accounts_count;accounts_i++));
         do
-            if [ -z "${monitor:-}" ] 
+            if [ "$monitor" = false ] 
             then
                 printf '%b' "\r$accounts_i/$accounts_count 检测中..."
             fi
@@ -20279,29 +20080,29 @@ MonitorTryAccounts()
 
                 chnl_stream_links[0]="$chnl_stream_link"
 
-                if [ -n "${monitor:-}" ] && [ "$anti_leech_yn" == "yes" ]
+                if [ "$monitor" = true ] && [ "$anti_leech" = true ]
                 then
-                    if [ -z "${kind:-}" ] && [ "$anti_leech_restart_hls_changes_yn" == "yes" ]
+                    if [ -z "${kind:-}" ] && [ "$anti_leech_restart_hls_changes" = true ]
                     then
-                        if [ "${hls_change[hls_index]:-true}" == "true" ] 
+                        if [ "${hls_change[hls_index]:-true}" = true ] 
                         then
                             chnl_playlist_name=$(RandStr)
                             chnl_seg_name="$chnl_playlist_name"
                         fi
 
-                        if [ "$chnl_encrypt_yn" == "yes" ] 
+                        if [ "$chnl_encrypt" = true ] 
                         then
                             mkdir -p "$chnl_output_dir_root"
                             chnl_key_name=$(RandStr)
                             openssl rand 16 > "$chnl_output_dir_root/$chnl_key_name.key"
-                            if [ "$chnl_encrypt_session_yn" == "yes" ] 
+                            if [ "$chnl_encrypt_session" = true ] 
                             then
                                 echo -e "/keys?key=$chnl_key_name&channel=$chnl_output_dir_name\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
                             else
                                 echo -e "$chnl_key_name.key\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
                             fi
                         fi
-                    elif [ "${kind:-}" == "flv" ] && [ "$anti_leech_restart_flv_changes_yn" == "yes" ]
+                    elif [ "${kind:-}" == "flv" ] && [ "$anti_leech_restart_flv_changes" = true ]
                     then
                         stream_name=${chnl_flv_push_link##*/}
                         new_stream_name=$(RandStr)
@@ -20319,14 +20120,14 @@ MonitorTryAccounts()
                     fi
                 fi
 
-                if [ -n "${monitor:-}" ] && [ -n "${channel_name[hls_index]:-}" ] 
+                if [ "$monitor" = true ] && [ -n "${channel_name[hls_index]:-}" ] 
                 then
                     chnl_channel_name="${channel_name[hls_index]}"
                 fi
 
                 StartChannel
 
-                if [ -z "${monitor:-}" ] 
+                if [ "$monitor" = false ] 
                 then
                     try_success=1
                     sleep 3
@@ -20365,7 +20166,7 @@ MonitorTryAccounts()
                     GetChannel
                     if ls -A "$LIVE_ROOT/$output_dir_name/$chnl_seg_dir_name/"*.ts > /dev/null 2>&1 
                     then
-                        if [ "$chnl_encrypt_yn" == "yes" ] 
+                        if [ "$chnl_encrypt" = true ] 
                         then
                             if [ -e "$LIVE_ROOT/$output_dir_name/$chnl_keyinfo_name.keyinfo" ] && \
                             [ -e "$LIVE_ROOT/$output_dir_name/$chnl_key_name.key" ] && \
@@ -20454,7 +20255,7 @@ MonitorSet()
 
     for((i=0;i<chnls_count;i++));
     do
-        if [ "${chnls_flv_status[i]}" == "on" ] && [ "${chnls_live[i]}" == "yes" ]
+        if [ "${chnls_flv_status[i]}" == "on" ] && [ "${chnls_live[i]}" = true ]
         then
             flv_count=$((flv_count+1))
 
@@ -20470,7 +20271,7 @@ MonitorSet()
             monitor_flv_pull_links+=("${chnls_flv_pull_link[i]}")
 
             flv_list="$flv_list  ${green}$flv_count.${normal}${indent_6}${chnls_channel_name[i]}\n$chnl_stream_links_text${indent_6}推: ${chnls_flv_push_link[i]}\n${indent_6}拉: ${chnls_flv_pull_link[i]:-无}\n\n"
-        elif [ -d "$LIVE_ROOT/${chnls_output_dir_name[i]}" ] && [ "${chnls_live[i]}" == "yes" ] && [ "${chnls_seg_count[i]}" != 0 ] 
+        elif [ -d "$LIVE_ROOT/${chnls_output_dir_name[i]}" ] && [ "${chnls_live[i]}" = true ] && [ "${chnls_seg_count[i]}" != 0 ] 
         then
             hls_count=$((hls_count + 1))
             monitor_output_dir_names+=("${chnls_output_dir_name[i]}")
@@ -20679,10 +20480,10 @@ MonitorSet()
             --arg hls_max_seg_size "$hls_max_seg_size" \
             --arg hls_restart_nums "$hls_restart_nums" \
             --arg hls_key_period "$hls_key_period" \
-            --arg anti_leech "$anti_leech_yn" \
+            --arg anti_leech "$anti_leech" \
             --arg anti_leech_restart_nums "$anti_leech_restart_nums" \
-            --arg anti_leech_restart_flv_changes "$anti_leech_restart_flv_changes_yn" \
-            --arg anti_leech_restart_hls_changes "$anti_leech_restart_hls_changes_yn" \
+            --arg anti_leech_restart_flv_changes "$anti_leech_restart_flv_changes" \
+            --arg anti_leech_restart_hls_changes "$anti_leech_restart_hls_changes" \
             --arg recheck_period "$recheck_period" \
         '{
             flv_delay_seconds: $flv_delay_seconds | tonumber,
@@ -20692,10 +20493,10 @@ MonitorSet()
             hls_max_seg_size: $hls_max_seg_size | tonumber,
             hls_restart_nums: $hls_restart_nums | tonumber,
             hls_key_period: $hls_key_period | tonumber,
-            anti_leech: $anti_leech,
+            anti_leech: $anti_leech | test("true"),
             anti_leech_restart_nums: $anti_leech_restart_nums | tonumber,
-            anti_leech_restart_flv_changes: $anti_leech_restart_flv_changes,
-            anti_leech_restart_hls_changes: $anti_leech_restart_hls_changes,
+            anti_leech_restart_flv_changes: $anti_leech_restart_flv_changes | test("true"),
+            anti_leech_restart_hls_changes: $anti_leech_restart_hls_changes | test("true"),
             recheck_period: $recheck_period | tonumber
         }'
     )
@@ -20720,7 +20521,7 @@ Monitor()
 
             FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
             FFPROBE="$FFMPEG_ROOT/ffprobe"
-            monitor=1
+            monitor=true
 
             XtreamCodesGetDomains
 
@@ -20821,7 +20622,7 @@ Monitor()
                                             do
                                                 if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ] 
                                                 then
-                                                    if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "false" ] 
+                                                    if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
                                                     then
                                                         hls_change[hls_index]="false"
                                                     fi
@@ -20840,7 +20641,7 @@ Monitor()
                                                     if [ "${monitor_output_dir_names[i]}" == "$output_dir_name" ] 
                                                     then
                                                         hls_indices+=("$i")
-                                                        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "false" ] 
+                                                        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
                                                         then
                                                             hls_change[i]="false"
                                                         fi
@@ -20857,7 +20658,7 @@ Monitor()
                                             hls_index=$((${#monitor_output_dir_names[@]}-1))
                                             hls_indices+=("$hls_index")
 
-                                            if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "false" ] 
+                                            if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
                                             then
                                                 hls_change[hls_index]="false"
                                             fi
@@ -20945,7 +20746,7 @@ Monitor()
                                             do
                                                 if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ] 
                                                 then
-                                                    if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "false" ] 
+                                                    if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
                                                     then
                                                         hls_change[hls_index]="false"
                                                     fi
@@ -20964,7 +20765,7 @@ Monitor()
                                                     if [ "${monitor_output_dir_names[i]}" == "$output_dir_name" ] 
                                                     then
                                                         hls_indices+=("$i")
-                                                        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "false" ] 
+                                                        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
                                                         then
                                                             hls_change[i]="false"
                                                         fi
@@ -20981,7 +20782,7 @@ Monitor()
                                             hls_index=$((${#monitor_output_dir_names[@]}-1))
                                             hls_indices+=("$hls_index")
 
-                                            if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" == "false" ] 
+                                            if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
                                             then
                                                 hls_change[hls_index]="false"
                                             fi
@@ -21080,7 +20881,7 @@ Monitor()
                     fi
                 fi
 
-                if [ "$anti_leech_yn" == "yes" ] && [ "$anti_leech_restart_nums" -gt 0 ] && [ "${rand_restart_flv_done:-}" != 0 ] && [ "${rand_restart_hls_done:-}" != 0 ] 
+                if [ "$anti_leech" = true ] && [ "$anti_leech_restart_nums" -gt 0 ] && [ "${rand_restart_flv_done:-}" != 0 ] && [ "${rand_restart_hls_done:-}" != 0 ] 
                 then
                     current_minute_old=${current_minute:-}
                     current_hour_old=${current_hour:-25}
@@ -21381,7 +21182,7 @@ Monitor()
                                     fi
                                 fi
 
-                                if [ "${rand_restart_hls_done:-}" != 0 ] && [ "$anti_leech_yn" == "yes" ] && [ "${chnls_encrypt[chnls_index]}" == "yes" ] && [[ $((now-chnls_key_time[chnls_index])) -gt $hls_key_period ]] && ls -A "$LIVE_ROOT/$output_dir_name/"*.key > /dev/null 2>&1
+                                if [ "${rand_restart_hls_done:-}" != 0 ] && [ "$anti_leech" = true ] && [ "${chnls_encrypt[chnls_index]}" = true ] && [[ $((now-chnls_key_time[chnls_index])) -gt $hls_key_period ]] && ls -A "$LIVE_ROOT/$output_dir_name/"*.key > /dev/null 2>&1
                                 then
                                     while IFS= read -r old_key 
                                     do
@@ -21394,7 +21195,7 @@ Monitor()
 
                                     if openssl rand 16 > "$LIVE_ROOT/$output_dir_name/$new_key_name.key" 
                                     then
-                                        if [ "${chnls_encrypt_session[chnls_index]}" == "yes" ] 
+                                        if [ "${chnls_encrypt_session[chnls_index]}" = true ] 
                                         then
                                             if ! echo -e "/keys?key=$new_key_name&channel=$output_dir_name\n$LIVE_ROOT/$output_dir_name/$new_key_name.key\n$(openssl rand -hex 16)" > "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[chnls_index]}.keyinfo"
                                             then
@@ -21420,9 +21221,9 @@ Monitor()
                                     fi
                                 fi
 
-                                if [ "$loop" -eq 1 ] && { [ "$anti_leech_yn" == "no" ] || [ "${chnls_encrypt[chnls_index]}" == "no" ]; }
+                                if [ "$loop" -eq 1 ] && { [ "$anti_leech" = false ] || [ "${chnls_encrypt[chnls_index]}" = false ]; }
                                 then
-                                    if [ "${chnls_encrypt[chnls_index]}" == "yes" ] 
+                                    if [ "${chnls_encrypt[chnls_index]}" = true ] 
                                     then
                                         if [ -e "$LIVE_ROOT/$output_dir_name/${chnls_keyinfo_name[chnls_index]}.keyinfo" ] && \
                                         [ -e "$LIVE_ROOT/$output_dir_name/${chnls_key_name[chnls_index]}.key" ] && \
@@ -21568,7 +21369,7 @@ Monitor()
 
                         for hls_index in "${hls_indices[@]}"
                         do
-                            if [ "${hls_change[hls_index]:-true}" == "false" ] 
+                            if [ "${hls_change[hls_index]:-true}" = false ] 
                             then
                                 continue
                             fi
@@ -22699,7 +22500,7 @@ XtreamCodesListChnls()
         then
             echo
             inquirer list_input "是否使用代理 $d_xc_proxy: " yn_options use_proxy_yn
-            if [[ $use_proxy_yn == "$i18n_yes" ]]
+            if [ "$use_proxy_yn" == "$i18n_yes" ]
             then
                 server="${d_xc_proxy%\/}/http://$domain"
             else
@@ -23263,7 +23064,7 @@ XtreamCodesAddMac()
     then
         echo
         inquirer list_input "是否使用代理 $d_xc_proxy 验证: " yn_options use_proxy_yn
-        if [[ $use_proxy_yn == "$i18n_yes" ]]
+        if [ "$use_proxy_yn" == "$i18n_yes" ]
         then
             server="${d_xc_proxy%\/}/http://$domain"
         else
@@ -26414,7 +26215,7 @@ NginxConfigBlockAliyun()
 {
     echo
     inquirer list_input "是否屏蔽所有阿里云ip段" ny_options block_aliyun_yn
-    if [[ $block_aliyun_yn == "$i18n_yes" ]] 
+    if [ "$block_aliyun_yn" == "$i18n_yes" ] 
     then
         Println "输入本机IP"
         echo -e "$tip 多个IP用空格分隔\n"
@@ -27057,7 +26858,7 @@ NginxAddDomain()
                     echo
                     inquirer list_input "是否设置跳转到其它网址" ny_options http_redirect_yn
 
-                    if [[ $http_redirect_yn == "$i18n_yes" ]] 
+                    if [ "$http_redirect_yn" == "$i18n_yes" ] 
                     then
                         NginxAppendHttpRedirectConf
                     else
@@ -27078,7 +26879,7 @@ NginxAddDomain()
                     echo
                     inquirer list_input "是否设置 http 跳转 https" yn_options http_to_https_yn
 
-                    if [[ $http_to_https_yn == "$i18n_yes" ]] 
+                    if [ "$http_to_https_yn" == "$i18n_yes" ] 
                     then
                         Println "$info 设置 $server_domain http 配置"
                         NginxConfigServerHttpPort
@@ -27089,7 +26890,7 @@ NginxAddDomain()
                     echo
                     inquirer list_input "是否设置 https 跳转到其它网址" ny_options https_redirect_yn
 
-                    if [[ $https_redirect_yn == "$i18n_yes" ]] 
+                    if [ "$https_redirect_yn" == "$i18n_yes" ] 
                     then
                         NginxAppendHttpsRedirectConf
                     else
@@ -27110,13 +26911,13 @@ NginxAddDomain()
                     echo
                     inquirer list_input "http 和 https 是否使用相同的目录" yn_options http_https_same_dir_yn
 
-                    if [[ $http_https_same_dir_yn == "$i18n_yes" ]] 
+                    if [ "$http_https_same_dir_yn" == "$i18n_yes" ] 
                     then
                         NginxConfigServerHttpPort
                         NginxConfigServerHttpsPort
                         echo
                         inquirer list_input "是否设置跳转到其它网址" ny_options http_https_redirect_yn
-                        if [[ $http_https_redirect_yn == "$i18n_yes" ]] 
+                        if [ "$http_https_redirect_yn" == "$i18n_yes" ] 
                         then
                             NginxAppendHttpHttpsRedirectConf
                         else
@@ -27128,7 +26929,7 @@ NginxAddDomain()
                         NginxConfigServerHttpPort
                         echo
                         inquirer list_input "是否设置 http 跳转到其它网址" ny_options http_redirect_yn
-                        if [[ $http_redirect_yn == "$i18n_yes" ]] 
+                        if [ "$http_redirect_yn" == "$i18n_yes" ] 
                         then
                             NginxAppendHttpRedirectConf
                             NginxConfigServerHttpsPort
@@ -27136,7 +26937,7 @@ NginxAddDomain()
                             echo
                             inquirer list_input "是否设置 https 跳转到其它网址" yn_options https_redirect_yn
 
-                            if [[ $https_redirect_yn == "$i18n_yes" ]] 
+                            if [ "$https_redirect_yn" == "$i18n_yes" ] 
                             then
                                 NginxAppendHttpsRedirectConf
                             else
@@ -27157,7 +26958,7 @@ NginxAddDomain()
                             echo
                             inquirer list_input "是否设置 https 跳转到其它网址" yn_options https_redirect_yn
 
-                            if [[ $https_redirect_yn == "$i18n_yes" ]] 
+                            if [ "$https_redirect_yn" == "$i18n_yes" ] 
                             then
                                 NginxAppendHttpConf
                                 NginxAppendHttpsRedirectConf
@@ -27938,13 +27739,13 @@ V2raySetSettingsNetwork()
 V2raySetIvCheck()
 {
     echo
-    inquirer list_input "启用 IV 检查功能" ny_options iv_check_yn
+    inquirer list_input_index "启用 IV 检查功能" ny_options ny_options_index
 
-    if [ "$iv_check_yn" == "no" ] 
+    if [ "$ny_options_index" -eq 0 ] 
     then
-        iv_check="false"
+        iv_check=false
     else
-        iv_check="yes"
+        iv_check=true
     fi
 }
 
@@ -28024,12 +27825,12 @@ V2raySetTlsServerName()
 V2raySetTlsAllowInsecure()
 {
     Println "$tip 在自定义证书的情况开可以选 否"
-    inquirer list_input "是否检测证书有效性" yn_options tls_allow_insecure_yn
-    if [[ $tls_allow_insecure_yn == "$i18n_yes" ]]
+    inquirer list_input_index "是否检测证书有效性" yn_options yn_options_index
+    if [ "$yn_options_index" -eq 0 ]
     then
-        tls_allow_insecure="false"
+        tls_allow_insecure=false
     else
-        tls_allow_insecure="true"
+        tls_allow_insecure=true
     fi
 }
 
@@ -28060,9 +27861,9 @@ V2raySetTlsDisableSystemRoot()
 
     if [ "$tls_disable_system_root_yn" == "$i18n_no" ] 
     then
-        tls_disable_system_root="false"
+        tls_disable_system_root=false
     else
-        tls_disable_system_root="true"
+        tls_disable_system_root=true
     fi
 }
 
@@ -28095,9 +27896,9 @@ V2raySetTlsPreferServerCipherSuites()
 
     if [ "$tls_prefer_server_cipher_suites_yn" == "$i18n_no" ] 
     then
-        tls_prefer_server_cipher_suites="false"
+        tls_prefer_server_cipher_suites=false
     else
-        tls_prefer_server_cipher_suites="true"
+        tls_prefer_server_cipher_suites=true
     fi
 }
 
@@ -28119,9 +27920,9 @@ V2raySetTlsEnableSessionResumption()
 
     if [ "$tls_enable_session_resumption_yn" == "$i18n_no" ] 
     then
-        tls_enable_session_resumption="false"
+        tls_enable_session_resumption=false
     else
-        tls_enable_session_resumption="true"
+        tls_enable_session_resumption=true
     fi
 }
 
@@ -28144,9 +27945,9 @@ V2raySetTlsRejectUnknownSni()
 
     if [ "$tls_reject_unknown_sni_yn" == "$i18n_yes" ] 
     then
-        tls_reject_unknown_sni="true"
+        tls_reject_unknown_sni=true
     else
-        tls_reject_unknown_sni="false"
+        tls_reject_unknown_sni=false
     fi
 }
 
@@ -28157,9 +27958,9 @@ V2raySetTlsVerifyClientCertificate()
 
     if [ "$tls_verify_client_certificate_yn" == "$i18n_no" ] 
     then
-        tls_verify_client_certificate="false"
+        tls_verify_client_certificate=false
     else
-        tls_verify_client_certificate="true"
+        tls_verify_client_certificate=true
     fi
 }
 
@@ -28457,9 +28258,9 @@ V2raySetSockoptAcceptProxyProtocol()
 
     if [ "$sockopt_accept_proxy_protocol_yn" == "$i18n_yes" ] 
     then
-        sockopt_accept_proxy_protocol="true"
+        sockopt_accept_proxy_protocol=true
     else
-        sockopt_accept_proxy_protocol="false"
+        sockopt_accept_proxy_protocol=false
     fi
 }
 
@@ -28538,9 +28339,9 @@ V2raySetUseBrowserForwarding()
 
     if [ "$use_browser_forwarding_yn" == "$i18n_no" ] 
     then
-        use_browser_forwarding="false"
+        use_browser_forwarding=false
     else
-        use_browser_forwarding="true"
+        use_browser_forwarding=true
     fi
 }
 
@@ -28716,9 +28517,9 @@ V2raySetAllowTransparent()
     inquirer list_input "转发所有 HTTP 请求, 而非只是代理请求, 若配置不当, 开启此选项会导致死循环" ny_options allow_transparent_yn
     if [[ $allow_transparent_yn == "$i18n_yes" ]]
     then
-        allow_transparent="true"
+        allow_transparent=true
     else
-        allow_transparent="false"
+        allow_transparent=false
     fi
     Println "  allowTransparent: ${green} $allow_transparent ${normal}"
 }
@@ -28901,9 +28702,9 @@ V2raySetGrpcMultiMode()
 
     if [ "$grpc_multi_mode_yn" == "$i18n_no" ] 
     then
-        grpc_multi_mode="false"
+        grpc_multi_mode=false
     else
-        grpc_multi_mode="true"
+        grpc_multi_mode=true
     fi
 }
 
@@ -28923,12 +28724,12 @@ V2raySetDetourDefault()
 V2raySetDisableInsecureEncryption()
 {
     Println "$tip 当客户端使用 none / aes-128-cfb 加密方式时, 服务器会主动断开连接"
-    inquirer list_input "是否禁止客户端使用不安全的加密方式" yn_options disable_insecure_encryption
-    if [[ $disable_insecure_encryption == "$i18n_yes" ]] 
+    inquirer list_input_index "是否禁止客户端使用不安全的加密方式" yn_options yn_options_index
+    if [ "$yn_options_index" == "$i18n_yes" ] 
     then
-        disable_insecure_encryption="true"
+        disable_insecure_encryption=true
     else
-        disable_insecure_encryption="false"
+        disable_insecure_encryption=false
     fi
 }
 
@@ -29111,9 +28912,9 @@ V2raySetKcpCongestion()
 
     if [ "$kcp_congestion_yn" == "$i18n_no" ] 
     then
-        kcp_congestion="false"
+        kcp_congestion=false
     else
-        kcp_congestion="true"
+        kcp_congestion=true
     fi
 }
 
@@ -29182,9 +28983,9 @@ V2raySetSniffingMetadataOnly()
 
     if [ "$sniffing_metadata_only_yn" == "$i18n_yes" ] 
     then
-        sniffing_metadata_only="true"
+        sniffing_metadata_only=true
     else
-        sniffing_metadata_only="false"
+        sniffing_metadata_only=false
     fi
 }
 
@@ -29283,9 +29084,9 @@ V2raySetProxyTransportLayer()
     inquirer list_input "启用传输层转发支持" ny_options transport_layer_yn
     if [ "$transport_layer_yn" == "$i18n_no" ] 
     then
-        transport_layer="false"
+        transport_layer=false
     else
-        transport_layer="true"
+        transport_layer=true
     fi
 }
 
@@ -29472,9 +29273,9 @@ V2raySetUdp()
     inquirer list_input "是否支持 udp" ny_options udp_yn
     if [ "$udp_yn" == "$i18n_no" ] 
     then
-        udp="false"
+        udp=false
     else
-        udp="true"
+        udp=true
     fi
 }
 
@@ -29508,7 +29309,7 @@ V2rayAddInbound()
 
     V2raySetSniffingEnabled
 
-    if [ "$sniffing_enabled" == "true" ] 
+    if [ "$sniffing_enabled" = true ] 
     then
         V2raySetSniffingDestOverride
         V2raySetSniffingMetadataOnly
@@ -29619,7 +29420,7 @@ V2rayAddInbound()
 
     if [ -n "$sockopt_tfo" ] 
     then
-        if [ "$sockopt_tfo" == "true" ] || [ "$sockopt_tfo" == "false" ]
+        if [ "$sockopt_tfo" = true ] || [ "$sockopt_tfo" = false ]
         then
             new_inbound=$(
             $JQ_FILE --arg tcpFastOpen "$sockopt_tfo" \
@@ -29704,7 +29505,7 @@ V2rayAddInbound()
 
         while true 
         do
-            if [ "$tls_disable_system_root" == "false" ] 
+            if [ "$tls_disable_system_root" = false ] 
             then
                 echo
                 inquirer list_input "是否继续添加证书" ny_options continue_yn
@@ -29725,7 +29526,7 @@ V2rayAddInbound()
                 }
             }')
             JQs merge new_inbound "$merge"
-            if [ "$tls_disable_system_root" == "true" ] 
+            if [ "$tls_disable_system_root" = true ] 
             then
                 echo
                 inquirer list_input "是否继续添加证书" ny_options continue_yn
@@ -29783,7 +29584,7 @@ V2rayAddInbound()
 
         while true 
         do
-            if [ "$tls_disable_system_root" == "false" ] 
+            if [ "$tls_disable_system_root" = false ] 
             then
                 echo
                 inquirer list_input "是否继续添加证书" ny_options continue_yn
@@ -29804,7 +29605,7 @@ V2rayAddInbound()
                 }
             }')
             JQs merge new_inbound "$merge"
-            if [ "$tls_disable_system_root" == "true" ] 
+            if [ "$tls_disable_system_root" = true ] 
             then
                 echo
                 inquirer list_input "是否继续添加证书" ny_options continue_yn
@@ -29925,7 +29726,7 @@ V2rayAddInbound()
             }
         }' <<< "$new_inbound")
 
-        if [ "$udp" == "true" ] 
+        if [ "$udp" = true ] 
         then
             V2raySetIp
             new_inbound=$(
@@ -30010,7 +29811,7 @@ V2rayAddInbound()
             V2raySetLevel
             V2raySetFollowRedirect
 
-            if [ "$follow_redirect" == "true" ] 
+            if [ "$follow_redirect" = true ] 
             then
                 new_inbound=$(
                 $JQ_FILE --arg network "$settings_network" --arg timeout "$timeout" \
@@ -30559,9 +30360,9 @@ V2rayListInbounds()
             protocol_settings_list="传输协议: ${green}${inbounds_protocol[inbounds_index]}${normal}\n${indent_6}"
         fi
 
-        if [ "${inbounds_sniffing_enabled[inbounds_index]}" == "true" ] 
+        if [ "${inbounds_sniffing_enabled[inbounds_index]}" = true ] 
         then
-            if [ "${inbounds_sniffing_metadata_only[inbounds_index]}" == "false" ] 
+            if [ "${inbounds_sniffing_metadata_only[inbounds_index]}" = false ] 
             then
                 protocol_settings_list="${protocol_settings_list}流量探测: ${green}开启${normal} 仅使用元数据: ${red}否${normal} 指定流量类型: ${green}${inbounds_sniffing_dest_override[inbounds_index]//|/,}${normal}\n${indent_6}"
             else
@@ -30586,7 +30387,7 @@ V2rayListInbounds()
 
         if [ "${inbounds_protocol[inbounds_index]}" == "vmess" ] 
         then
-            if [ "${inbounds_settings_disable_insecure_encryption[inbounds_index]}" == "false" ] 
+            if [ "${inbounds_settings_disable_insecure_encryption[inbounds_index]}" = false ] 
             then
                 protocol_settings_list="${protocol_settings_list}禁止不安全加密: ${red}否${normal}\n${indent_6}"
             else
@@ -30611,7 +30412,7 @@ V2rayListInbounds()
             then
                 protocol_settings_list="${protocol_settings_list}连接使用等级: ${green}${inbounds_settings_user_level[inbounds_index]}${normal}\n${indent_6}"
             fi
-            if [ "${inbounds_settings_allow_transparent[inbounds_index]}" == "false" ] 
+            if [ "${inbounds_settings_allow_transparent[inbounds_index]}" = false ] 
             then
                 protocol_settings_list="${protocol_settings_list}转发所有请求: ${red}否${normal}\n${indent_6}"
             else
@@ -30625,7 +30426,7 @@ V2rayListInbounds()
             else
                 protocol_settings_list="${protocol_settings_list}认证方式: ${green}用户密码${normal}\n${indent_6}"
             fi
-            if [ "${inbounds_settings_udp[inbounds_index]}" == "false" ] 
+            if [ "${inbounds_settings_udp[inbounds_index]}" = false ] 
             then
                 protocol_settings_list="${protocol_settings_list}支持 UDP 协议: ${red}否${normal}\n${indent_6}"
             else
@@ -30638,7 +30439,7 @@ V2rayListInbounds()
             then
                 protocol_settings_list="${protocol_settings_list}加密方式: ${green}${inbounds_settings_method[inbounds_index]}${normal}\n${indent_6}"
             fi
-            if [ "${inbounds_settings_iv_check[inbounds_index]}" == "false" ] 
+            if [ "${inbounds_settings_iv_check[inbounds_index]}" = false ] 
             then
                 protocol_settings_list="${protocol_settings_list}IV 检查: ${red}否${normal}\n${indent_6}"
             else
@@ -30651,7 +30452,7 @@ V2rayListInbounds()
             then
                 protocol_settings_list="${protocol_settings_list}连接使用等级: ${green}${inbounds_settings_user_level[inbounds_index]}${normal}\n${indent_6}"
             fi
-            if [ "${inbounds_settings_follow_redirect[inbounds_index]}" == "false" ] 
+            if [ "${inbounds_settings_follow_redirect[inbounds_index]}" = false ] 
             then
                 protocol_settings_list="${protocol_settings_list}转发防火墙: ${red}否${normal}\n${indent_6}目标地址: ${green}${inbounds_settings_address[inbounds_index]}${normal} 目标端口: ${green}${inbounds_settings_port[inbounds_index]}${normal}\n${indent_6}"
             else
@@ -30677,7 +30478,7 @@ V2rayListInbounds()
             else
                 stream_settings_list="${stream_settings_list}指定证书域名: ${red}否${normal}\n${indent_6}"
             fi
-            if [ "${inbounds_stream_tls_disable_system_root[inbounds_index]}" == "false" ] 
+            if [ "${inbounds_stream_tls_disable_system_root[inbounds_index]}" = false ] 
             then
                 stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: ${red}否${normal}\n${indent_6}"
             else
@@ -30720,7 +30521,7 @@ V2rayListInbounds()
                     fi
                     if [ "$v2ray_name" == "xray" ] && [ "${usages[certificate_i]}" == "encipherment" ]
                     then
-                        if [ "${one_time_loading[certificate_i]}" == "true" ] 
+                        if [ "${one_time_loading[certificate_i]}" = true ] 
                         then
                             certificates_list="$certificates_list证书热重载: ${red}否${normal}\n${indent_6}"
                         else
@@ -30747,10 +30548,10 @@ V2rayListInbounds()
             stream_settings_list="${stream_settings_list}透明代理: ${green}${inbounds_stream_sockopt_tproxy[inbounds_index]}${normal}\n${indent_6}"
         fi
 
-        if [ "${inbounds_stream_sockopt_tcp_fast_open[inbounds_index]}" == "true" ] 
+        if [ "${inbounds_stream_sockopt_tcp_fast_open[inbounds_index]}" = true ] 
         then
             stream_settings_list="${stream_settings_list}TFO: ${green}是${normal}\n${indent_6}"
-        elif [ "${inbounds_stream_sockopt_tcp_fast_open[inbounds_index]}" == "false" ] 
+        elif [ "${inbounds_stream_sockopt_tcp_fast_open[inbounds_index]}" = false ] 
         then
             stream_settings_list="${stream_settings_list}TFO: ${red}否${normal}\n${indent_6}"
         else
@@ -30759,7 +30560,7 @@ V2rayListInbounds()
 
         if [ "${inbounds_stream_network[inbounds_index]}" == "tcp" ] 
         then
-            if [ "${inbounds_stream_accept_proxy_protocol[inbounds_index]}" == "false" ] 
+            if [ "${inbounds_stream_accept_proxy_protocol[inbounds_index]}" = false ] 
             then
                 stream_settings_list="${stream_settings_list}接收 PROXY 协议: ${red}否${normal}\n${indent_6}"
             else
@@ -30816,7 +30617,7 @@ V2rayListInbounds()
             else
                 stream_settings_list="${stream_settings_list}数据包头部伪装: ${green}${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
             fi
-            if [ "${inbounds_stream_kcp_congestion[inbounds_index]}" == "false" ] 
+            if [ "${inbounds_stream_kcp_congestion[inbounds_index]}" = false ] 
             then
                 stream_settings_list="${stream_settings_list}拥塞控制: ${red}否${normal}\n${indent_6}"
             else
@@ -30832,7 +30633,7 @@ V2rayListInbounds()
         elif [ "${inbounds_stream_network[inbounds_index]}" == "ws" ] 
         then
             stream_settings_list="${stream_settings_list}路径: ${green}${inbounds_stream_path[inbounds_index]}${normal}\n${indent_6}"
-            if [ "${inbounds_stream_accept_proxy_protocol[inbounds_index]}" == "false" ] 
+            if [ "${inbounds_stream_accept_proxy_protocol[inbounds_index]}" = false ] 
             then
                 stream_settings_list="${stream_settings_list}接收 PROXY 协议: ${red}否${normal}\n${indent_6}"
             else
@@ -30861,7 +30662,7 @@ V2rayListInbounds()
                         stream_settings_list="${stream_settings_list}前置数据: ${green}基于路径${normal}\n${indent_6}"
                     fi
                 fi
-                if [ "${inbounds_stream_ws_use_browser_forwarding[inbounds_index]}" == "false" ] || [ "${inbounds_stream_ws_early_data_header_name[inbounds_index]}" != "Sec-WebSocket-Protocol" ]
+                if [ "${inbounds_stream_ws_use_browser_forwarding[inbounds_index]}" = false ] || [ "${inbounds_stream_ws_early_data_header_name[inbounds_index]}" != "Sec-WebSocket-Protocol" ]
                 then
                     stream_settings_list="${stream_settings_list}浏览器转发: ${red}否${normal}\n${indent_6}"
                 else
@@ -30925,7 +30726,7 @@ V2rayListInbounds()
             if [ "$v2ray_name" == "v2ray" ] 
             then
                 stream_settings_list="${stream_settings_list}gRPC 服务名称: ${green}${inbounds_stream_grpc_service_name[inbounds_index]}${normal}\n${indent_6}"
-            elif [ "${inbounds_stream_grpc_multi_mode[inbounds_index]}" == "false" ] 
+            elif [ "${inbounds_stream_grpc_multi_mode[inbounds_index]}" = false ] 
             then
                 stream_settings_list="${stream_settings_list}gRPC 服务名称: ${green}${inbounds_stream_grpc_service_name[inbounds_index]}${normal} multiMode: ${red}否${normal}\n${indent_6}"
             else
@@ -31874,7 +31675,7 @@ V2rayAddOutbound()
 
             while true 
             do
-                if [ "$tls_disable_system_root" == "false" ] 
+                if [ "$tls_disable_system_root" = false ] 
                 then
                     echo
                     inquirer list_input "是否继续添加证书" ny_options continue_yn
@@ -31895,7 +31696,7 @@ V2rayAddOutbound()
                     }
                 }')
                 JQs merge new_outbound "$merge"
-                if [ "$tls_disable_system_root" == "true" ] 
+                if [ "$tls_disable_system_root" = true ] 
                 then
                     echo
                     inquirer list_input "是否继续添加证书" ny_options continue_yn
@@ -31948,7 +31749,7 @@ V2rayAddOutbound()
 
             while true 
             do
-                if [ "$tls_disable_system_root" == "false" ] 
+                if [ "$tls_disable_system_root" = false ] 
                 then
                     echo
                     inquirer list_input "是否继续添加证书" ny_options continue_yn
@@ -31969,7 +31770,7 @@ V2rayAddOutbound()
                     }
                 }')
                 JQs merge new_outbound "$merge"
-                if [ "$tls_disable_system_root" == "true" ] 
+                if [ "$tls_disable_system_root" = true ] 
                 then
                     echo
                     inquirer list_input "是否继续添加证书" ny_options continue_yn
@@ -32214,7 +32015,7 @@ V2rayListOutbounds()
         elif [ "${outbounds_protocol[outbounds_index]}" == "shadowsocks" ] 
         then
             protocol_settings_list="$protocol_settings_list邮箱地址: ${green}${outbounds_settings_email[outbounds_index]}${normal}\n${indent_6}服务器地址: ${green}${outbounds_settings_address[outbounds_index]}${normal}\n${indent_6}服务器端口: ${green}${outbounds_settings_port[outbounds_index]}${normal}\n${indent_6}加密方式: ${green}${outbounds_settings_method[outbounds_index]}${normal}\n${indent_6}密码: ${green}${outbounds_settings_password[outbounds_index]}${normal}\n${indent_6}用户等级: ${green}${outbounds_settings_level[outbounds_index]}${normal}\n${indent_6}"
-            if [ "${outbounds_settings_iv_check[outbounds_index]}" == "false" ] 
+            if [ "${outbounds_settings_iv_check[outbounds_index]}" = false ] 
             then
                 protocol_settings_list="${protocol_settings_list}IV 检查: ${red}否${normal}\n${indent_6}"
             else
@@ -32256,13 +32057,13 @@ V2rayListOutbounds()
                     else
                         stream_settings_list="${stream_settings_list}指定证书域名: ${red}否${normal}\n${indent_6}"
                     fi
-                    if [ "${outbounds_stream_tls_allow_insecure[outbounds_index]}" == "false" ] 
+                    if [ "${outbounds_stream_tls_allow_insecure[outbounds_index]}" = false ] 
                     then
                         stream_settings_list="${stream_settings_list}允许不安全连接: ${red}否${normal}\n${indent_6}"
                     else
                         stream_settings_list="${stream_settings_list}允许不安全连接: ${green}是${normal}\n${indent_6}"
                     fi
-                    if [ "${outbounds_stream_tls_disable_system_root[outbounds_index]}" == "false" ] 
+                    if [ "${outbounds_stream_tls_disable_system_root[outbounds_index]}" = false ] 
                     then
                         stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: ${red}否${normal}\n${indent_6}"
                     else
@@ -32305,7 +32106,7 @@ V2rayListOutbounds()
                             fi
                             if [ "$v2ray_name" == "xray" ] && [ "${usages[certificate_i]}" == "encipherment" ]
                             then
-                                if [ "${one_time_loading[certificate_i]}" == "true" ] 
+                                if [ "${one_time_loading[certificate_i]}" = true ] 
                                 then
                                     certificates_list="$certificates_list证书热重载: ${red}否${normal}\n${indent_6}"
                                 else
@@ -32379,7 +32180,7 @@ V2rayListOutbounds()
                 else
                     stream_settings_list="${stream_settings_list}数据包头部伪装: ${green}${outbounds_stream_network[outbounds_index]}${normal}\n${indent_6}"
                 fi
-                if [ "${outbounds_stream_kcp_congestion[outbounds_index]}" == "false" ] 
+                if [ "${outbounds_stream_kcp_congestion[outbounds_index]}" = false ] 
                 then
                     stream_settings_list="${stream_settings_list}拥塞控制: ${red}否${normal}\n${indent_6}"
                 else
@@ -32419,7 +32220,7 @@ V2rayListOutbounds()
                             stream_settings_list="${stream_settings_list}前置数据: ${green}基于路径${normal}\n${indent_6}"
                         fi
                     fi
-                    if [ "${outbounds_stream_ws_use_browser_forwarding[outbounds_index]}" == "false" ] || [ "${outbounds_stream_ws_early_data_header_name[outbounds_index]}" != "Sec-WebSocket-Protocol" ]
+                    if [ "${outbounds_stream_ws_use_browser_forwarding[outbounds_index]}" = false ] || [ "${outbounds_stream_ws_early_data_header_name[outbounds_index]}" != "Sec-WebSocket-Protocol" ]
                     then
                         stream_settings_list="${stream_settings_list}浏览器转发: ${red}否${normal}\n${indent_6}"
                     else
@@ -32480,7 +32281,7 @@ V2rayListOutbounds()
                 if [ "$v2ray_name" == "v2ray" ] 
                 then
                     stream_settings_list="${stream_settings_list}gRPC 服务名称: ${green}${outbounds_stream_grpc_service_name[outbounds_index]}${normal}\n${indent_6}"
-                elif [ "${outbounds_stream_grpc_multi_mode[outbounds_index]}" == "false" ] 
+                elif [ "${outbounds_stream_grpc_multi_mode[outbounds_index]}" = false ] 
                 then
                     stream_settings_list="${stream_settings_list}gRPC 服务名称: ${green}${outbounds_stream_grpc_service_name[outbounds_index]}${normal} multiMode: ${red}否${normal}\n${indent_6}"
                 else
@@ -32489,7 +32290,7 @@ V2rayListOutbounds()
             fi
         fi
 
-        if [ "${outbounds_mux_enabled[outbounds_index]}" == "true" ] 
+        if [ "${outbounds_mux_enabled[outbounds_index]}" = true ] 
         then
             mux_settings_list="${green}已开启 Mux${normal} 最大并发连接数: ${green}${outbounds_mux_concurrency[outbounds_index]}${normal}\n${indent_6}"
         else
@@ -33216,13 +33017,13 @@ V2rayListPolicy()
     levels_list="=== 用户等级数 ${green} $policy_levels_count ${normal}\n\n"
     for((i=0;i<policy_levels_count;i++));
     do
-        if [ "${policy_levels_stats_user_uplink[i]}" == "true" ] 
+        if [ "${policy_levels_stats_user_uplink[i]}" = true ] 
         then
             policy_levels_stats_user_uplink_list="上行流量统计: ${green}是${normal}\n${indent_6}"
         else
             policy_levels_stats_user_uplink_list="上行流量统计: ${red}否${normal}\n${indent_6}"
         fi
-        if [ "${policy_levels_stats_user_downlink[i]}" == "true" ] 
+        if [ "${policy_levels_stats_user_downlink[i]}" = true ] 
         then
             policy_levels_stats_user_downlink_list="下行流量统计: ${green}是${normal}\n${indent_6}"
         else
@@ -33231,28 +33032,28 @@ V2rayListPolicy()
         levels_list="$levels_list# ${green}$((i+1))${normal}${indent_6}等级: ${green}${policy_levels_id[i]}${normal}\n${indent_6}握手时间限制: ${green}${policy_levels_handshake[i]}${normal} 秒\n${indent_6}连接空闲的时间限制: ${green}${policy_levels_conn_idle[i]}${normal} 秒\n${indent_6}出站代理时间限制: ${green}${policy_levels_uplink_only[i]}${normal} 秒\n${indent_6}入站代理时间限制: ${green}${policy_levels_downlink_only[i]}${normal} 秒\n${indent_6}缓存大小: ${green}${policy_levels_buffer_size[i]}${normal} kB\n${indent_6}$policy_levels_stats_user_uplink_list$policy_levels_stats_user_downlink_list\n\n"
     done
 
-    if [ "$policy_system_stats_inbound_uplink" == "false" ] 
+    if [ "$policy_system_stats_inbound_uplink" = false ] 
     then
         system_list="入站上行流量统计: ${red}否${normal}\n\n"
     else
         system_list="入站上行流量统计: ${green}是${normal}\n\n"
     fi
 
-    if [ "$policy_system_stats_inbound_downlink" == "false" ] 
+    if [ "$policy_system_stats_inbound_downlink" = false ] 
     then
         system_list="$system_list入站下行流量统计: ${red}否${normal}\n\n"
     else
         system_list="$system_list入站下行流量统计: ${green}是${normal}\n\n"
     fi
 
-    if [ "$policy_system_stats_outbound_uplink" == "false" ] 
+    if [ "$policy_system_stats_outbound_uplink" = false ] 
     then
         system_list="$system_list出站上行流量统计: ${red}否${normal}\n\n"
     else
         system_list="$system_list出站上行流量统计: ${green}是${normal}\n\n"
     fi
 
-    if [ "$policy_system_stats_outbound_downlink" == "false" ] 
+    if [ "$policy_system_stats_outbound_downlink" = false ] 
     then
         system_list="$system_list出站下行流量统计: ${red}否${normal}\n\n"
     else
@@ -33636,21 +33437,21 @@ V2rayListDns()
 
     dns_list="${dns_list}网络类型: ${green}$dns_query_strategy${normal}\n\n"
 
-    if [ "$dns_disable_cache" == "false" ] 
+    if [ "$dns_disable_cache" = false ] 
     then
         dns_list="${dns_list}禁用缓存: ${red}否${normal}\n\n"
     else
         dns_list="${dns_list}禁用缓存: ${green}是${normal}\n\n"
     fi
 
-    if [ "$dns_disable_fallback" == "false" ] 
+    if [ "$dns_disable_fallback" = false ] 
     then
         dns_list="${dns_list}禁用回退: ${red}否${normal}\n\n"
     else
         dns_list="${dns_list}禁用回退: ${green}是${normal}\n\n"
     fi
 
-    if [ "$dns_disable_fallback_if_match" == "false" ] 
+    if [ "$dns_disable_fallback_if_match" = false ] 
     then
         dns_list="${dns_list}禁用命中时回退: ${red}否${normal}\n\n"
     else
@@ -33757,7 +33558,7 @@ V2raySetDns()
             }' <<< "$new_dns_server")
         fi
         jq_path='["dns","servers"]'
-        JQ add "$V2_CONFIG" ["$new_dns_server"]
+        JQ add "$V2_CONFIG" "[$new_dns_server]"
         Println "$info DNS 服务器添加成功\n"
     elif [ "$set_dns_options_index" -eq 2 ] 
     then
@@ -33789,9 +33590,9 @@ V2raySetDns()
         inquirer list_input "禁用 DNS 缓存" ny_options ny_option
         if [ "$ny_option" == "$i18n_no" ] 
         then
-            disable_cache="false"
+            disable_cache=false
         else
-            disable_cache="yes"
+            disable_cache=true
         fi
         bool=true
         jq_path='["dns","disableCache"]'
@@ -33803,9 +33604,9 @@ V2raySetDns()
         inquirer list_input "禁用 DNS 回退查询" ny_options ny_option
         if [ "$ny_option" == "$i18n_no" ] 
         then
-            disable_fallback="false"
+            disable_fallback=false
         else
-            disable_fallback="yes"
+            disable_fallback=true
         fi
         bool=true
         jq_path='["dns","disableFallback"]'
@@ -33817,9 +33618,9 @@ V2raySetDns()
         inquirer list_input "禁用优先匹配域名列表命中时执行 DNS 回退查询" ny_options ny_option
         if [ "$ny_option" == "$i18n_no" ] 
         then
-            disable_fallback_if_match="false"
+            disable_fallback_if_match=false
         else
-            disable_fallback_if_match="yes"
+            disable_fallback_if_match=true
         fi
         bool=true
         jq_path='["dns","disableFallbackIfMatch"]'
@@ -33971,13 +33772,13 @@ V2rayListStats()
     for((i=0;i<inbounds_count;i++));
     do
         stats_list="$stats_list入站标签: ${green}${inbounds_tag[i]}${normal} "
-        if [ "$policy_system_stats_inbound_uplink" == "true" ] 
+        if [ "$policy_system_stats_inbound_uplink" = true ] 
         then
             stats_list="$stats_list上行流量: ${green}$(V2rayGetTraffic inbound ${inbounds_tag[i]} uplink)${normal} "
         else
             stats_list="$stats_list上行流量: ${red}关闭${normal} "
         fi
-        if [ "$policy_system_stats_inbound_downlink" == "true" ] 
+        if [ "$policy_system_stats_inbound_downlink" = true ] 
         then
             stats_list="$stats_list下行流量: ${green}$(V2rayGetTraffic inbound ${inbounds_tag[i]} downlink)${normal}\n\n"
         else
@@ -33991,13 +33792,13 @@ V2rayListStats()
         if [ -n "${outbounds_tag[i]}" ] 
         then
             stats_list="$stats_list出站标签: ${green}${outbounds_tag[i]}${normal} "
-            if [ "$policy_system_stats_outbound_uplink" == "true" ] 
+            if [ "$policy_system_stats_outbound_uplink" = true ] 
             then
                 stats_list="$stats_list上行流量: ${green}$(V2rayGetTraffic outbound ${outbounds_tag[i]} uplink)${normal} "
             else
                 stats_list="$stats_list上行流量: ${red}关闭${normal} "
             fi
-            if [ "$policy_system_stats_outbound_downlink" == "true" ] 
+            if [ "$policy_system_stats_outbound_downlink" = true ] 
             then
                 stats_list="$stats_list下行流量: ${green}$(V2rayGetTraffic outbound ${outbounds_tag[i]} downlink)${normal}\n\n"
             else
@@ -34026,13 +33827,13 @@ V2rayListStats()
             do
                 if [ "${policy_levels_id[i]}" == "${inbounds_settings_user_level[inbounds_index]}" ] 
                 then
-                    if [ "${policy_levels_stats_user_uplink[i]}" == "false" ] 
+                    if [ "${policy_levels_stats_user_uplink[i]}" = false ] 
                     then
                         Println "上行流量: ${red}关闭${normal}"
                     else
                         Println "上行流量: ${green}$(V2rayGetTraffic user ${inbounds_settings_email[inbounds_index]} uplink)${normal}"
                     fi
-                    if [ "${policy_levels_stats_user_downlink[i]}" == "false" ] 
+                    if [ "${policy_levels_stats_user_downlink[i]}" = false ] 
                     then
                         Println "下行流量: ${red}关闭${normal}\n"
                     else
@@ -34050,13 +33851,13 @@ V2rayListStats()
         do
             if [ "${policy_levels_id[i]}" == "${accounts_level[accounts_index]}" ] 
             then
-                if [ "${policy_levels_stats_user_uplink[i]}" == "false" ] 
+                if [ "${policy_levels_stats_user_uplink[i]}" = false ] 
                 then
                     Println "上行流量: ${red}关闭${normal}"
                 else
                     Println "上行流量: ${green}$(V2rayGetTraffic user ${accounts_email[accounts_index]} uplink)${normal}"
                 fi
-                if [ "${policy_levels_stats_user_downlink[i]}" == "false" ] 
+                if [ "${policy_levels_stats_user_downlink[i]}" = false ] 
                 then
                     Println "下行流量: ${red}关闭${normal}\n"
                 else
@@ -34912,7 +34713,7 @@ CloudflareAddHost()
     )
 
     jq_path='["hosts"]'
-    JQ add "$CF_CONFIG" ["$new_host"]
+    JQ add "$CF_CONFIG" "[$new_host]"
     Println "$info CFP 添加成功\n"
 }
 
@@ -34958,7 +34759,7 @@ CloudflareSetUserToken()
     else
         if [[ $(curl -s -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
             -H "Authorization: Bearer $cf_user_token" \
-            -H "Content-Type:application/json" | $JQ_FILE -r '.success') == "false" ]]
+            -H "Content-Type:application/json" | $JQ_FILE -r '.success') = false ]]
         then
             Println "$error Token 验证失败\n"
             exit 1
@@ -35046,6 +34847,7 @@ CloudflareSetZoneResolve()
 CloudflareSetZoneAlwaysUseHttps()
 {
     echo
+
     if [[ ${cf_zone_always_use_https:-} == "on" ]] 
     then
         inquirer list_input "始终使用 https 访问域名, 开启后客户端和 cloudflare 之间连接始终为 https" yn_options cf_zone_always_use_https_yn
@@ -35059,6 +34861,7 @@ CloudflareSetZoneAlwaysUseHttps()
     else
         cf_zone_always_use_https='off'
     fi
+
     Println "  始终使用 https: ${green} $cf_zone_always_use_https ${normal}\n"
 }
 
@@ -35172,7 +34975,7 @@ CloudflareAddUser()
     )
 
     jq_path='["users"]'
-    JQ add "$CF_CONFIG" ["$new_user"]
+    JQ add "$CF_CONFIG" "[$new_user]"
     Println "$info 用户添加成功\n"
 }
 
@@ -35232,7 +35035,7 @@ CloudflareListUser()
     (.result|if (.|type == "string") then {} else . end).id + "\u0002"]
     |@tsv' "${delimiters[@]}")
 
-    if [ "$success" == "false" ] 
+    if [ "$success" = false ] 
     then
         Println "$error 获取账号 ID 失败: ${error_message//${delimiters[0]}/, }\n"
         exit 1
@@ -35418,7 +35221,7 @@ CloudflareAddZone()
     )
 
     jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
-    JQ add "$CF_CONFIG" ["$new_zone"]
+    JQ add "$CF_CONFIG" "[$new_zone]"
     Println "$info 源站添加成功\n"
 }
 
@@ -35711,7 +35514,7 @@ CloudflareMoveZone()
     )
 
     jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
-    JQ add "$CF_CONFIG" ["$new_zone"]
+    JQ add "$CF_CONFIG" "[$new_zone]"
 
     subdomains=""
 
@@ -35786,7 +35589,7 @@ CloudflareGetUser()
 
         if [ -z "$cf_user_key" ] 
         then
-            if [ "${monitor:-0}" -eq 1 ] 
+            if [ "$monitor" = true ] 
             then
                 MonitorError "源站 $cf_zone_name 的用户已被 CFP 删除或未添加成功, 尝试重新添加 ..."
             fi
@@ -37068,7 +36871,7 @@ CloudflareAddWorker()
     fi
 
     jq_path='["workers"]'
-    JQ add "$CF_CONFIG" ["$new_worker"]
+    JQ add "$CF_CONFIG" "[$new_worker]"
     Println "$info worker: $cf_worker_name 添加成功\n"
 }
 
@@ -37217,9 +37020,9 @@ CloudflareEditWorker()
                         if [ -d "$CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]:-notfound}" ] 
                         then
                             echo
-                            inquirer list_input "是否删除原路径目录" yn_options delete_old_path_yn
+                            inquirer list_input_index "是否删除原路径目录" yn_options yn_options_index
 
-                            if [[ $delete_old_path_yn == "$i18n_yes" ]] 
+                            if [ "$yn_options_index" -eq 0 ] 
                             then
                                 rm -rf "$CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]:-notfound}"
                             fi  
@@ -37815,7 +37618,7 @@ CloudflareConfigWorkerRoute()
                                     -H ''"$curl_header_auth_token"'' \
                                     -H "Content-Type: application/json" \
                                     --data '{"pattern":"'"$pattern"'","script":"'"$script"'"}' \
-                                    | $JQ_FILE -r '.success' ) == "true" ]]
+                                    | $JQ_FILE -r '.success' ) = true ]]
                                 then
                                     Println "$info 路由更改成功\n"
                                 else
@@ -37828,7 +37631,7 @@ CloudflareConfigWorkerRoute()
                                     -H ''"$curl_header_auth_key"'' \
                                     -H ''"$curl_header_auth_token"'' \
                                     -H "Content-Type: application/json" \
-                                    | $JQ_FILE -r '.success' ) == "true" ]] 
+                                    | $JQ_FILE -r '.success' ) = true ]] 
                                 then
                                     Println "$info 路由删除成功\n"
                                 else
@@ -37861,9 +37664,9 @@ CloudflareConfigWorkerRoute()
     then
         cf_workers_index=$((script-1))
         echo
-        inquirer list_input "是想要输入 ${cf_workers_project_name[cf_workers_index]}" yn_options mistake_yn
+        inquirer list_input_index "是想要输入 ${cf_workers_project_name[cf_workers_index]}" yn_options yn_options_index
 
-        if [[ $mistake_yn == "$i18n_yes" ]] 
+        if [ "$yn_options_index" -eq 0 ] 
         then
             script=${cf_workers_project_name[cf_workers_index]}
         fi
@@ -37877,7 +37680,7 @@ CloudflareConfigWorkerRoute()
         -H ''"$curl_header_auth_token"'' \
         -H "Content-Type: application/json" \
         --data '{"pattern":"'"$pattern"'","script":"'"$script"'"}' \
-        | $JQ_FILE -r '.success' ) == "true" ]]
+        | $JQ_FILE -r '.success' ) = true ]]
     then
         Println "$info 路由添加成功\n"
     else
@@ -37994,7 +37797,7 @@ CloudflareWorkersMonitorMoveZone()
     )
 
     jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
-    JQ add "$CF_CONFIG" ["$new_zone"]
+    JQ add "$CF_CONFIG" "[$new_zone]"
 
     CloudflareGetUser
 
@@ -38115,7 +37918,7 @@ CloudflareWorkersMonitorUpdateRoutes()
                     -H ''"$curl_header_auth_key"'' \
                     -H ''"$curl_header_auth_token"'' \
                     -H "Content-Type: application/json" \
-                    --data '{"value":"'"$cf_zone_always_use_https"'"}' | $JQ_FILE -r '.success') == "true" ]] 
+                    --data '{"value":"'"$cf_zone_always_use_https"'"}' | $JQ_FILE -r '.success') = true ]] 
                 do
                     MonitorError "域名: $cf_zone_name always_use_https 设置失败, Token: $cf_user_token, zone id: ${zones_id[j]}, $zone_always_use_https => $cf_zone_always_use_https"
                     Println "$error 域名: $cf_zone_name always_use_https 设置失败\n"
@@ -38142,7 +37945,7 @@ CloudflareWorkersMonitorUpdateRoutes()
                     -H ''"$curl_header_auth_key"'' \
                     -H ''"$curl_header_auth_token"'' \
                     -H "Content-Type: application/json" \
-                    --data '{"value":"'"$cf_zone_ssl"'"}' | $JQ_FILE -r '.success') == "true" ]] 
+                    --data '{"value":"'"$cf_zone_ssl"'"}' | $JQ_FILE -r '.success') = true ]] 
                 do
                     MonitorError "域名: $cf_zone_name ssl 设置失败, Token: $cf_user_token, zone id: ${zones_id[j]}, $zone_ssl => $cf_zone_ssl"
                     Println "$error 域名: $cf_zone_name ssl 设置失败\n"
@@ -38169,7 +37972,7 @@ CloudflareWorkersMonitorUpdateRoutes()
             for((k=0;k<workers_count;k++));
             do
                 pattern_found=0
-                if [[ $update_workers_data_yn == "$i18n_yes" ]] 
+                if [ "$update_workers_data_yn" == "$i18n_yes" ] 
                 then
                     script_found=0
                 else
@@ -38200,7 +38003,7 @@ CloudflareWorkersMonitorUpdateRoutes()
                         -H ''"$curl_header_auth_key"'' \
                         -H ''"$curl_header_auth_token"'' \
                         -H "Content-Type: application/javascript" \
-                        --data "${workers_data[k]}" | $JQ_FILE -r '.success') == "true" ]] 
+                        --data "${workers_data[k]}" | $JQ_FILE -r '.success') = true ]] 
                     do
                         MonitorError "部署 worker 失败 Token: $cf_user_token, pattern: ${workers_pattern[k]}, script: ${workers_project_name[k]}"
                         Println "$error worker: ${workers_name[j]} 部署失败\n"
@@ -38218,7 +38021,7 @@ CloudflareWorkersMonitorUpdateRoutes()
                         -H ''"$curl_header_auth_token"'' \
                         -H "Content-Type: application/json" \
                         --data '{"pattern":"'"${workers_pattern[k]}"'","script":"'"${workers_project_name[k]}"'"}' \
-                        | $JQ_FILE -r '.success' ) == "true" ]] 
+                        | $JQ_FILE -r '.success' ) = true ]] 
                     do
                         MonitorError "路由添加失败 Token: $cf_user_token, pattern: ${workers_pattern[k]}, script: ${workers_project_name[k]}"
                         Println "$error 路由添加失败\n"
@@ -38234,7 +38037,7 @@ CloudflareWorkersMonitorUpdateRoutes()
                         -H ''"$curl_header_auth_token"'' \
                         -H "Content-Type: application/json" \
                         --data '{"pattern":"'"${workers_pattern[k]}"'","script":"'"${workers_project_name[k]}"'"}' \
-                        | $JQ_FILE -r '.success' ) == "true" ]] 
+                        | $JQ_FILE -r '.success' ) = true ]] 
                     do
                         MonitorError "路由添加失败 Token: $cf_user_token, pattern: ${workers_pattern[k]}, script: ${workers_project_name[k]}"
                         Println "$error 路由添加失败\n"
@@ -38273,7 +38076,7 @@ CloudflareWorkersMonitorDeploy()
             -H ''"$curl_header_auth_key"'' \
             -H ''"$curl_header_auth_token"'' \
             -H "Content-Type: application/javascript" \
-            --data "${workers_data[j]}" | $JQ_FILE -r '.success') == "true" ]]
+            --data "${workers_data[j]}" | $JQ_FILE -r '.success') = true ]]
         then
             Println "$info ${workers_name[j]} 部署成功\n"
         fi
@@ -38302,7 +38105,7 @@ CloudflareWorkersMonitorGetRequests()
     (.errors|if (.|type == "string") then {} else . end).message + "\u0002",
     (.result|if (.|type == "string") then {} else . end).id + "\u0002"]|@tsv' "${delimiters[@]}")
 
-    if [ "$success" == "false" ] 
+    if [ "$success" = false ] 
     then
         request_count="获取账号 ID 失败: ${error_message//${delimiters[0]}/, }"
         return 0
@@ -38376,7 +38179,7 @@ CloudflareWorkersMonitor()
 
             if [ "$sh_debug" -eq 0 ] 
             then
-                monitor=1
+                monitor=true
             fi
 
             while true 
@@ -38441,7 +38244,7 @@ CloudflareWorkersMonitor()
                         then
                             IFS=" " read -r success request_count api_token < <($JQ_FILE -r '[.success,.result.totals.requestCount,.api_token]|join(" ")' <<< "$request_count_json")
 
-                            if [ "$success" == "true" ] && [ -n "$request_count" ] 
+                            if [ "$success" = true ] && [ -n "$request_count" ] 
                             then
                                 if [ "$request_count" -gt "$cf_workers_monitor_request_counts" ] 
                                 then
@@ -38519,7 +38322,7 @@ CloudflareWorkersMonitor()
                                 jq_path='["users"]'
                                 JQ delete "$CF_CONFIG" email "${cf_users_email[cf_users_index]}"
                                 jq_path='["users"]'
-                                JQ add "$CF_CONFIG" ["$new_user"]
+                                JQ add "$CF_CONFIG" "[$new_user]"
                                 Println "$info 用户 ${cf_users_email[cf_users_index]} 修改成功\n"
                             else
                                 continue
@@ -38594,7 +38397,7 @@ CloudflareWorkersMonitor()
                             then
                                 IFS=" " read -r success request_count api_token < <($JQ_FILE -r '[.success,.result.totals.requestCount,.api_token]|join(" ")' <<< "$request_count_json")
 
-                                if [ "$success" == "true" ] && [ -n "$request_count" ] 
+                                if [ "$success" = true ] && [ -n "$request_count" ] 
                                 then
                                     if [ "$request_count" -gt "$cf_workers_monitor_request_counts" ] 
                                     then
@@ -38882,7 +38685,7 @@ CloudflareEnableWorkersMonitor()
         )
 
         jq_path='["workers_monitor","stream_proxy"]'
-        JQ add "$CF_CONFIG" ["$new_workers_monitor_history"]
+        JQ add "$CF_CONFIG" "[$new_workers_monitor_history]"
     fi
 
     CloudflareGetHosts
@@ -39561,7 +39364,7 @@ IbmAddUser()
     )
 
     jq_path='["users"]'
-    JQ add "$IBM_CONFIG" ["$new_user"]
+    JQ add "$IBM_CONFIG" "[$new_user]"
     Println "$info 用户添加成功\n"
 }
 
@@ -39755,7 +39558,7 @@ IbmAddCfApp()
     )
 
     jq_path='["cf","apps"]'
-    JQ add "$IBM_CONFIG" ["$ibm_cf_app"]
+    JQ add "$IBM_CONFIG" "[$ibm_cf_app]"
 
     Println "$info APP 添加成功\n"
 }
@@ -39999,7 +39802,7 @@ IbmAddCfAppRoute()
     )
 
     jq_path='["cf","apps",'"$ibm_cf_apps_index"',"routes"]'
-    JQ add "$IBM_CONFIG" ["$ibm_cf_app_route"]
+    JQ add "$IBM_CONFIG" "[$ibm_cf_app_route]"
 
     Println "$info 路由添加成功"
 }
@@ -40048,7 +39851,7 @@ IbmDelApp()
     echo
     inquirer list_input "是否删除 APP 绑定的路由" yn_options delete_app_routes_yn
 
-    if [[ $delete_app_routes_yn == "$i18n_yes" ]] 
+    if [ "$delete_app_routes_yn" == "$i18n_yes" ] 
     then
         ibmcloud cf delete "$ibm_cf_app_name" -r
     else
@@ -40980,10 +40783,10 @@ VipSetHostStatus()
 
     if [[ $vip_host_status == "$i18n_yes" ]] 
     then
-        vip_host_status_yn="on"
+        vip_host_status="on"
         vip_host_status_text="${green}启用${normal}"
     else
-        vip_host_status_yn="off"
+        vip_host_status="off"
         vip_host_status_text="${red}禁用${normal}"
     fi
     Println "  VIP 服务器状态: $vip_host_status_text\n"
@@ -41005,7 +40808,7 @@ VipAddHost()
     new_host=$(
     $JQ_FILE -n --arg ip "$vip_host_ip" --arg port "$vip_host_port" \
         --arg seed "$vip_host_seed" --arg token "$vip_host_token" \
-        --arg status "$vip_host_status_yn" \
+        --arg status "$vip_host_status" \
         '{
             ip: $ip,
             port: $port | tonumber,
@@ -41017,7 +40820,7 @@ VipAddHost()
     )
 
     jq_path='["hosts"]'
-    JQ add "$VIP_FILE" ["$new_host"]
+    JQ add "$VIP_FILE" "[$new_host]"
     Println "$info VIP 服务器添加成功\n"
 }
 
@@ -41042,8 +40845,8 @@ VipEditHost()
                     vip_host_port=${vip_hosts_port[vip_hosts_index]}
                     vip_host_seed=${vip_hosts_seed[vip_hosts_index]}
                     vip_host_token=${vip_hosts_token[vip_hosts_index]}
-                    vip_host_status_yn=${vip_hosts_status_yn[vip_hosts_index]}
-                    if [ "$vip_host_status_yn" == "yes" ] 
+                    vip_host_status=${vip_hosts_status[vip_hosts_index]}
+                    if [ "$vip_host_status" == "on" ] 
                     then
                         vip_host_status_text="${green}启用${normal}"
                     else
@@ -41103,7 +40906,7 @@ VipEditHost()
             Println "原状态: $vip_host_status_text"
             VipSetHostStatus
             jq_path='["hosts",'"$vip_hosts_index"',"status"]'
-            JQ update "$VIP_FILE" "$vip_host_status_yn"
+            JQ update "$VIP_FILE" "$vip_host_status"
             Println "$info 状态修改成功\n"
         ;;
         *) Println "$i18n_canceled...\n" && exit 1
@@ -41119,12 +40922,12 @@ VipGetHosts()
     vip_hosts_port=()
     vip_hosts_seed=()
     vip_hosts_token=()
-    vip_hosts_status_yn=()
+    vip_hosts_status=()
     vip_hosts_channel_count=()
     vip_hosts_channel_id=()
     vip_hosts_channel_name=()
     vip_hosts_channel_epg_id=()
-    while IFS="^" read -r ip port seed token status_yn channels_count channels_id channels_name channels_epg_id
+    while IFS="^" read -r ip port seed token status channels_count channels_id channels_name channels_epg_id
     do
         vip_hosts_count=$((vip_hosts_count+1))
         ip=${ip#\"}
@@ -41132,8 +40935,8 @@ VipGetHosts()
         vip_hosts_port+=("$port")
         vip_hosts_seed+=("$seed")
         vip_hosts_token+=("$token")
-        vip_hosts_status_yn+=("$status_yn")
-        if [ "$status_yn" == "on" ] 
+        vip_hosts_status+=("$status")
+        if [ "$status" == "on" ] 
         then
             status_text="${green} [启用] ${normal}"
         else
@@ -41336,7 +41139,7 @@ VipAddUser()
     )
 
     jq_path='["users"]'
-    JQ add "$VIP_FILE" ["$new_user"]
+    JQ add "$VIP_FILE" "[$new_user]"
 
     Println "$info 添加成功\n"
 }
@@ -41705,13 +41508,13 @@ VipAddChannel()
                         then
                             echo
                             inquirer list_input "是否添加服务器 $vip_channel_host_ip:$vip_channel_host_port" yn_options add_vip_host_yn
-                            if [[ $add_vip_host_yn == "$i18n_yes" ]] 
+                            if [ "$add_vip_host_yn" == "$i18n_yes" ] 
                             then
                                 vip_host_ip=$vip_channel_host_ip
                                 vip_host_port=$vip_channel_host_port
                                 VipSetHostSeed
                                 VipSetHostToken
-                                vip_host_status_yn="on"
+                                vip_host_status="on"
 
                                 if [ ! -s "$VIP_FILE" ] 
                                 then
@@ -41721,7 +41524,7 @@ VipAddChannel()
                                 new_host=$(
                                 $JQ_FILE -n --arg ip "$vip_host_ip" --arg port "$vip_host_port" \
                                     --arg seed "$vip_host_seed" --arg token "$vip_host_token" \
-                                    --arg status "$vip_host_status_yn" \
+                                    --arg status "$vip_host_status" \
                                     '{
                                         ip: $ip,
                                         port: $port | tonumber,
@@ -41733,7 +41536,7 @@ VipAddChannel()
                                 )
 
                                 jq_path='["hosts"]'
-                                JQ add "$VIP_FILE" ["$new_host"]
+                                JQ add "$VIP_FILE" "[$new_host]"
                                 Println "$info $vip_channel_host_ip:$vip_channel_host_port 服务器添加成功\n"
                                 VipGetHosts
                                 i=$((vip_hosts_count-1))
@@ -41758,7 +41561,7 @@ VipAddChannel()
                         )
 
                         jq_path='["hosts",'"$i"',"channels"]'
-                        JQ add "$VIP_FILE" ["$new_channel"]
+                        JQ add "$VIP_FILE" "[$new_channel]"
 
                         Println "$info $vip_channel_name 添加成功"
                     done
@@ -41817,7 +41620,7 @@ VipAddChannel()
             new_channels="$new_channels$new_channel"
         done
         jq_path='["hosts",'"$vip_hosts_index"',"channels"]'
-        JQ add "$VIP_FILE" ["$new_channels"]
+        JQ add "$VIP_FILE" "[$new_channels]"
         Println "$info 批量添加成功\n"
     else
         VipSetChannelId
@@ -41834,7 +41637,7 @@ VipAddChannel()
         )
 
         jq_path='["hosts",'"$vip_hosts_index"',"channels"]'
-        JQ add "$VIP_FILE" ["$new_channel"]
+        JQ add "$VIP_FILE" "[$new_channel]"
         Println "$info 频道 $vip_channel_name 添加成功\n"
     fi
 }
@@ -41875,7 +41678,7 @@ VipDeployChannel()
 
         Println "$info 添加频道 [ $vip_channel_name ]\n\n"
         inquirer list_input "是否推流 flv" ny_options add_channel_flv_yn
-        if [[ $add_channel_flv_yn == "$i18n_yes" ]] 
+        if [ "$add_channel_flv_yn" == "$i18n_yes" ] 
         then
             kind="flv"
         else
@@ -42446,13 +42249,13 @@ VipMonitor()
                                 vip_host_port=${vip_hosts_port[j]}
                                 vip_host_seed=${vip_hosts_seed[j]}
                                 vip_host_token=${vip_hosts_token[j]}
-                                vip_host_status_yn=${vip_hosts_status_yn[j]}
+                                vip_host_status=${vip_hosts_status[j]}
                                 vip_channels_count=${vip_hosts_channel_count[j]}
                                 vip_channel_id=${vip_hosts_channel_id[j]}
                                 vip_channel_name=${vip_hosts_channel_name[j]}
                                 vip_channel_epg_id=${vip_hosts_channel_epg_id[j]}
 
-                                if [ "$vip_host_status_yn" == "on" ] && [ "$vip_channels_count" -gt 0 ] 
+                                if [ "$vip_host_status" == "on" ] && [ "$vip_channels_count" -gt 0 ] 
                                 then
                                     vip_channel_id_lower=$(tr '[:upper:]' '[:lower:]' <<< "$vip_channel_id")
                                     IFS="|" read -r -a vip_channels_id_lower <<< "$vip_channel_id_lower"
@@ -42754,7 +42557,7 @@ VipVerifyLicense()
         done < <($JQ_FILE -r '.ip' <<< "$vip_user")
 
         jq_path='["users"]'
-        JQ add "$VIP_FILE" ["$vip_user"]
+        JQ add "$VIP_FILE" "[$vip_user]"
         Println "$info 授权码验证成功\n"
     else
         Println "$error 授权码验证失败, 请联系微信 woniuzfb 或 tg @ woniuzfb\n"
@@ -43203,16 +43006,13 @@ UpdateSelf()
         minor_ver=${d_version#*.}
         minor_ver=${minor_ver%%.*}
 
-        if [ "$major_ver" -eq 1 ] 
+        if [ "$minor_ver" -lt 35 ] 
         then
-            if [ "$minor_ver" -lt 35 ] 
-            then
-                Println "$info 需要先关闭所有频道, 请稍等...\n"
-                StopChannelsForce
-                rm -rf "/tmp/flv.lockdir/"
-                rm -rf "/tmp/monitor.lockdir"
-                rm -rf "$FFMPEG_LOG_ROOT/"*.lock
-            fi
+            Println "$info 需要先关闭所有频道, 请稍等...\n"
+            StopChannelsForce
+            rm -rf "/tmp/flv.lockdir/"
+            rm -rf "/tmp/monitor.lockdir"
+            rm -f "$FFMPEG_LOG_ROOT/"*.lock
         fi
 
         Println "$info 更新中, 请稍等...\n"
@@ -43233,32 +43033,98 @@ UpdateSelf()
 
         d_input_flags=${d_input_flags//-timeout 2000000000/-rw_timeout 10000000}
 
+        if [ "$minor_ver" -lt 83 ] 
+        then
+            if [ "$d_const" == "yes" ] 
+            then
+                d_const=true
+            else
+                d_const=false
+            fi
+
+            if [ "$d_encrypt" == "yes" ] 
+            then
+                d_encrypt=true
+            else
+                d_encrypt=false
+            fi
+
+            if [ "$d_encrypt_session" == "yes" ] 
+            then
+                d_encrypt_session=true
+            else
+                d_encrypt_session=false
+            fi
+
+            if [ "$d_sync" == "yes" ] 
+            then
+                d_sync=true
+            else
+                d_sync=false
+            fi
+
+            if [ "$d_anti_ddos_syn_flood" == "yes" ] 
+            then
+                d_anti_ddos_syn_flood=true
+            else
+                d_anti_ddos_syn_flood=false
+            fi
+
+            if [ "$d_anti_ddos" == "yes" ] 
+            then
+                d_anti_ddos=true
+            else
+                d_anti_ddos=false
+            fi
+
+            if [ "$d_anti_leech" == "yes" ] 
+            then
+                d_anti_leech=true
+            else
+                d_anti_leech=false
+            fi
+
+            if [ "$d_anti_leech_restart_flv_changes" == "yes" ] 
+            then
+                d_anti_leech_restart_flv_changes=true
+            else
+                d_anti_leech_restart_flv_changes=false
+            fi
+
+            if [ "$d_anti_leech_restart_hls_changes" == "yes" ] 
+            then
+                d_anti_leech_restart_hls_changes=true
+            else
+                d_anti_leech_restart_hls_changes=false
+            fi
+        fi
+
         default=$(
         $JQ_FILE -n --arg proxy "$d_proxy" --arg xc_proxy "$d_xc_proxy" \
-            --arg user_agent "$d_user_agent" \
-            --arg headers "$d_headers" --arg cookies "$d_cookies" \
-            --arg playlist_name "$d_playlist_name" --arg seg_dir_name "$d_seg_dir_name" \
-            --arg seg_name "$d_seg_name" --arg seg_length "$d_seg_length" \
-            --arg seg_count "$d_seg_count" --arg video_codec "$d_video_codec" \
-            --arg audio_codec "$d_audio_codec" --arg video_audio_shift "$d_video_audio_shift" \
-            --arg txt_format "$d_txt_format" --arg draw_text "$d_draw_text" \
-            --arg quality "$d_quality" --arg bitrates "$d_bitrates" \
-            --arg const "$d_const_yn" --arg encrypt "$d_encrypt_yn" \
-            --arg encrypt_session "$d_encrypt_session_yn" \
+            --arg user_agent "$d_user_agent" --arg headers "$d_headers" \
+            --arg cookies "$d_cookies" --arg playlist_name "$d_playlist_name" \
+            --arg seg_dir_name "$d_seg_dir_name" --arg seg_name "$d_seg_name" \
+            --arg seg_length "$d_seg_length" --arg seg_count "$d_seg_count" \
+            --arg video_codec "$d_video_codec" --arg audio_codec "$d_audio_codec" \
+            --arg video_audio_shift "$d_video_audio_shift" --arg txt_format "$d_txt_format" \
+            --arg draw_text "$d_draw_text" --arg quality "$d_quality" \
+            --arg bitrates "$d_bitrates" --arg const "$d_const" \
+            --arg encrypt "$d_encrypt" --arg encrypt_session "$d_encrypt_session" \
             --arg keyinfo_name "$d_keyinfo_name" --arg key_name "$d_key_name" \
-            --arg input_flags "$d_input_flags" \
-            --arg output_flags "$d_output_flags" --arg sync "$d_sync_yn" \
-            --arg sync_file "$d_sync_file" --arg sync_index "$d_sync_index" \
-            --arg sync_pairs "$d_sync_pairs" --arg schedule_file "$d_schedule_file" \
-            --arg flv_delay_seconds "$d_flv_delay_seconds" --arg flv_restart_nums "$d_flv_restart_nums" \
-            --arg hls_delay_seconds "$d_hls_delay_seconds" --arg hls_min_bitrates "$d_hls_min_bitrates" \
-            --arg hls_max_seg_size "$d_hls_max_seg_size" --arg hls_restart_nums "$d_hls_restart_nums" \
-            --arg hls_key_period "$d_hls_key_period" --arg anti_ddos_port "$d_anti_ddos_port" \
-            --arg anti_ddos_syn_flood "$d_anti_ddos_syn_flood_yn" --arg anti_ddos_syn_flood_delay_seconds "$d_anti_ddos_syn_flood_delay_seconds" \
-            --arg anti_ddos_syn_flood_seconds "$d_anti_ddos_syn_flood_seconds" --arg anti_ddos "$d_anti_ddos_yn" \
+            --arg input_flags "$d_input_flags" --arg output_flags "$d_output_flags" \
+            --arg sync "$d_sync" --arg sync_file "$d_sync_file" \
+            --arg sync_index "$d_sync_index" --arg sync_pairs "$d_sync_pairs" \
+            --arg schedule_file "$d_schedule_file" --arg flv_delay_seconds "$d_flv_delay_seconds" \
+            --arg flv_restart_nums "$d_flv_restart_nums" --arg hls_delay_seconds "$d_hls_delay_seconds" \
+            --arg hls_min_bitrates "$d_hls_min_bitrates" --arg hls_max_seg_size "$d_hls_max_seg_size" \
+            --arg hls_restart_nums "$d_hls_restart_nums" --arg hls_key_period "$d_hls_key_period" \
+            --arg anti_ddos_port "$d_anti_ddos_port" --arg anti_ddos_syn_flood "$d_anti_ddos_syn_flood" \
+            --arg anti_ddos_syn_flood_delay_seconds "$d_anti_ddos_syn_flood_delay_seconds" \
+            --arg anti_ddos_syn_flood_seconds "$d_anti_ddos_syn_flood_seconds" --arg anti_ddos "$d_anti_ddos" \
             --arg anti_ddos_seconds "$d_anti_ddos_seconds" --arg anti_ddos_level "$d_anti_ddos_level" \
-            --arg anti_leech "$d_anti_leech_yn" --arg anti_leech_restart_nums "$d_anti_leech_restart_nums" \
-            --arg anti_leech_restart_flv_changes "$d_anti_leech_restart_flv_changes_yn" --arg anti_leech_restart_hls_changes "$d_anti_leech_restart_hls_changes_yn" \
+            --arg anti_leech "$d_anti_leech" --arg anti_leech_restart_nums "$d_anti_leech_restart_nums" \
+            --arg anti_leech_restart_flv_changes "$d_anti_leech_restart_flv_changes" \
+            --arg anti_leech_restart_hls_changes "$d_anti_leech_restart_hls_changes" \
             --arg recheck_period "$d_recheck_period" --arg version "$sh_ver" \
             '{
                 proxy: $proxy,
@@ -43278,14 +43144,14 @@ UpdateSelf()
                 draw_text: $draw_text,
                 quality: $quality,
                 bitrates: $bitrates,
-                const: $const,
-                encrypt: $encrypt,
-                encrypt_session: $encrypt_session,
+                const: $const | test("true"),
+                encrypt: $encrypt | test("true"),
+                encrypt_session: $encrypt_session | test("true"),
                 keyinfo_name: $keyinfo_name,
                 key_name: $key_name,
                 input_flags: $input_flags,
                 output_flags: $output_flags,
-                sync: $sync,
+                sync: $sync | test("true"),
                 sync_file: $sync_file,
                 sync_index: $sync_index,
                 sync_pairs: $sync_pairs,
@@ -43298,16 +43164,16 @@ UpdateSelf()
                 hls_restart_nums: $hls_restart_nums | tonumber,
                 hls_key_period: $hls_key_period | tonumber,
                 anti_ddos_port: $anti_ddos_port,
-                anti_ddos_syn_flood: $anti_ddos_syn_flood,
+                anti_ddos_syn_flood: $anti_ddos_syn_flood | test("true"),
                 anti_ddos_syn_flood_delay_seconds: $anti_ddos_syn_flood_delay_seconds | tonumber,
                 anti_ddos_syn_flood_seconds: $anti_ddos_syn_flood_seconds | tonumber,
-                anti_ddos: $anti_ddos,
+                anti_ddos: $anti_ddos | test("true"),
                 anti_ddos_seconds: $anti_ddos_seconds | tonumber,
                 anti_ddos_level: $anti_ddos_level | tonumber,
-                anti_leech: $anti_leech,
+                anti_leech: $anti_leech | test("true"),
                 anti_leech_restart_nums: $anti_leech_restart_nums | tonumber,
-                anti_leech_restart_flv_changes: $anti_leech_restart_flv_changes,
-                anti_leech_restart_hls_changes: $anti_leech_restart_hls_changes,
+                anti_leech_restart_flv_changes: $anti_leech_restart_flv_changes | test("true"),
+                anti_leech_restart_hls_changes: $anti_leech_restart_hls_changes | test("true"),
                 recheck_period: $recheck_period | tonumber,
                 version: $version
             }'
@@ -43387,33 +43253,78 @@ UpdateSelf()
                 done
             fi
 
+            if [ "$minor_ver" -lt 83 ] 
+            then
+                if [ "${chnls_live[i]}" == "yes" ] 
+                then
+                    chnls_live[i]=true
+                else
+                    chnls_live[i]=false
+                fi
+
+                if [ "${chnls_sync[i]}" == "yes" ] 
+                then
+                    chnls_sync[i]=true
+                else
+                    chnls_sync[i]=false
+                fi
+
+                if [ "${chnls_const[i]}" == "yes" ] 
+                then
+                    chnls_const[i]=true
+                else
+                    chnls_const[i]=false
+                fi
+
+                if [ "${chnls_encrypt[i]}" == "yes" ] 
+                then
+                    chnls_encrypt[i]=true
+                else
+                    chnls_encrypt[i]=false
+                fi
+
+                if [ "${chnls_encrypt_session[i]}" == "yes" ] 
+                then
+                    chnls_encrypt_session[i]=true
+                else
+                    chnls_encrypt_session[i]=false
+                fi
+
+                if [ "${chnls_flv_h265[i]}" == "yes" ] 
+                then
+                    chnls_flv_h265[i]=true
+                else
+                    chnls_flv_h265[i]=false
+                fi
+            fi
+
             new_channel=$(
             $JQ_FILE -n --arg pid "${chnls_pid[i]}" --arg status "${chnls_status[i]}" \
                 --argjson stream_link "$stream_link" --arg live "${chnls_live[i]}" \
                 --arg proxy "${chnls_proxy[i]}" --arg xc_proxy "${chnls_xc_proxy[i]}" \
-                --arg user_agent "${chnls_user_agent[i]}" \
-                --arg headers "${chnls_headers[i]}" --arg cookies "${chnls_cookies[i]}" \
-                --arg output_dir_name "${chnls_output_dir_name[i]}" --arg playlist_name "${chnls_playlist_name[i]}" \
-                --arg seg_dir_name "${chnls_seg_dir_name[i]}" --arg seg_name "${chnls_seg_name[i]}" \
-                --arg seg_length "${chnls_seg_length[i]}" --arg seg_count "${chnls_seg_count[i]}" \
-                --arg video_codec "${chnls_video_codec[i]}" --arg audio_codec "${chnls_audio_codec[i]}" \
-                --arg video_audio_shift "${chnls_video_audio_shift[i]}" --arg txt_format "${chnls_txt_format[i]}"\
-                --arg draw_text "${chnls_draw_text[i]}" --arg quality "${chnls_quality[i]}" \
-                --arg bitrates "${chnls_bitrates[i]}" --arg const "${chnls_const[i]}" \
-                --arg encrypt "${chnls_encrypt[i]}" --arg encrypt_session "${chnls_encrypt_session[i]}" \
-                --arg keyinfo_name "${chnls_keyinfo_name[i]}" --arg key_name "${chnls_key_name[i]}" \
-                --arg key_time "${chnls_key_time[i]}" --arg input_flags "$new_input_flags" \
-                --arg output_flags "${chnls_output_flags[i]}" --arg channel_name "${chnls_channel_name[i]}" \
-                --arg channel_time "${chnls_channel_time[i]}" --argjson schedule "$chnl_schedule" \
-                --arg sync "${chnls_sync[i]}" --arg sync_file "${chnls_sync_file[i]}" \
-                --arg sync_index "${chnls_sync_index[i]}" --arg sync_pairs "${chnls_sync_pairs[i]}" \
+                --arg user_agent "${chnls_user_agent[i]}" --arg headers "${chnls_headers[i]}" \
+                --arg cookies "${chnls_cookies[i]}" --arg output_dir_name "${chnls_output_dir_name[i]}" \
+                --arg playlist_name "${chnls_playlist_name[i]}" --arg seg_dir_name "${chnls_seg_dir_name[i]}" \
+                --arg seg_name "${chnls_seg_name[i]}" --arg seg_length "${chnls_seg_length[i]}" \
+                --arg seg_count "${chnls_seg_count[i]}" --arg video_codec "${chnls_video_codec[i]}" \
+                --arg audio_codec "${chnls_audio_codec[i]}" --arg video_audio_shift "${chnls_video_audio_shift[i]}" \
+                --arg txt_format "${chnls_txt_format[i]}" --arg draw_text "${chnls_draw_text[i]}" \
+                --arg quality "${chnls_quality[i]}" --arg bitrates "${chnls_bitrates[i]}" \
+                --arg const "${chnls_const[i]}" --arg encrypt "${chnls_encrypt[i]}" \
+                --arg encrypt_session "${chnls_encrypt_session[i]}" --arg keyinfo_name "${chnls_keyinfo_name[i]}" \
+                --arg key_name "${chnls_key_name[i]}" --arg key_time "${chnls_key_time[i]}" \
+                --arg input_flags "$new_input_flags" --arg output_flags "${chnls_output_flags[i]}" \
+                --arg channel_name "${chnls_channel_name[i]}" --arg channel_time "${chnls_channel_time[i]}" \
+                --argjson schedule "$chnl_schedule" --arg sync "${chnls_sync[i]}" \
+                --arg sync_file "${chnls_sync_file[i]}" --arg sync_index "${chnls_sync_index[i]}" \
+                --arg sync_pairs "${chnls_sync_pairs[i]}" --arg hls_end_list "${chnls_hls_end_list[i]}" \
                 --arg flv_status "${chnls_flv_status[i]}" --arg flv_h265 "${chnls_flv_h265[i]}" \
                 --arg flv_push_link "${chnls_flv_push_link[i]}" --arg flv_pull_link "${chnls_flv_pull_link[i]}" \
                 '{
                     pid: $pid | tonumber,
                     status: $status,
                     stream_link: $stream_link,
-                    live: $live,
+                    live: $live | test("true"),
                     proxy: $proxy,
                     xc_proxy: $xc_proxy,
                     user_agent: $user_agent,
@@ -43432,9 +43343,9 @@ UpdateSelf()
                     draw_text: $draw_text,
                     quality: $quality,
                     bitrates: $bitrates,
-                    const: $const,
-                    encrypt: $encrypt,
-                    encrypt_session: $encrypt_session,
+                    const: $const | test("true"),
+                    encrypt: $encrypt | test("true"),
+                    encrypt_session: $encrypt_session | test("true"),
                     keyinfo_name: $keyinfo_name,
                     key_name: $key_name,
                     key_time: $key_time | tonumber,
@@ -43443,12 +43354,13 @@ UpdateSelf()
                     channel_name: $channel_name,
                     channel_time: $channel_time | tonumber,
                     schedule: $schedule,
-                    sync: $sync,
+                    sync: $sync | test("true"),
                     sync_file: $sync_file,
                     sync_index: $sync_index,
                     sync_pairs: $sync_pairs,
+                    hls_end_list: $hls_end_list | test("true"),
                     flv_status: $flv_status,
-                    flv_h265: $flv_h265,
+                    flv_h265: $flv_h265 | test("true"),
                     flv_push_link: $flv_push_link,
                     flv_pull_link: $flv_pull_link
                 }'
@@ -45169,7 +45081,7 @@ method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
             then
                 echo
                 inquirer list_input "是否重新设置 openwrt 静态 IP" ny_options change_openwrt_ip_yn
-                if [[ $change_openwrt_ip_yn == "$i18n_yes" ]] 
+                if [ "$change_openwrt_ip_yn" == "$i18n_yes" ] 
                 then
                     Println "$tip 必须和主路由器 ip 在同一网段"
                     inquirer text_input "设置 openwrt 静态 ip : " openwrt_ip "$i18n_cancel"
@@ -46702,7 +46614,7 @@ then
                     hinet_4gtv_chnl_name_enc=$(Urlencode "$hinet_4gtv_chnl_name")
                     Println "$info 添加频道 [ $hinet_4gtv_chnl_name ]\n\n"
                     inquirer list_input "是否推流 flv" ny_options add_channel_flv_yn
-                    if [[ $add_channel_flv_yn == "$i18n_yes" ]] 
+                    if [ "$add_channel_flv_yn" == "$i18n_yes" ] 
                     then
                         kind="flv"
                     else
@@ -46735,7 +46647,7 @@ then
                     _4gtv_chnl_aid=${_4gtv_chnls_aid[_4gtv_chnl_index]}
                     Println "$info 添加频道 [ $_4gtv_chnl_name ]\n\n"
                     inquirer list_input "是否推流 flv" ny_options add_channel_flv_yn
-                    if [[ $add_channel_flv_yn == "$i18n_yes" ]] 
+                    if [ "$add_channel_flv_yn" == "$i18n_yes" ] 
                     then
                         kind="flv"
                     else
@@ -46841,7 +46753,7 @@ then
             chnls_list=""
             for((i=0;i<${#chnls_id[@]};i++));
             do
-                if [ "${chnls_is_hd[i]}" == "true" ] 
+                if [ "${chnls_is_hd[i]}" = true ] 
                 then
                     is_hd="${green}是${normal}"
                 else
@@ -47594,7 +47506,7 @@ else
     do
         case "$flag" in
             i) stream_link="$OPTARG";;
-            l) live_yn="no";;
+            l) live=false;;
             P) proxy="$OPTARG";;
             o) output_dir_name="$OPTARG";;
             p) playlist_name="$OPTARG";;
@@ -47608,14 +47520,14 @@ else
             d) txt_format="$OPTARG";;
             q) quality="$OPTARG";;
             b) bitrates="$OPTARG";;
-            C) const="-C";;
-            e) encrypt="-e";;
+            C) const=true;;
+            e) encrypt=true;;
             k) kind="$OPTARG";;
             K) key_name="$OPTARG";;
             m) input_flags="$OPTARG";;
             n) output_flags="$OPTARG";;
             z) channel_name="$OPTARG";;
-            H) flv_h265_yn="yes";;
+            H) flv_h265=true;;
             T) flv_push_link="$OPTARG";;
             L) flv_pull_link="$OPTARG";;
             *) Usage;
@@ -47645,7 +47557,7 @@ else
                 then
                     echo
                     inquirer list_input "`eval_gettext \"是否使用代理 \\\$d_proxy: \"`" yn_options use_proxy_yn
-                    if [[ $use_proxy_yn == "$i18n_yes" ]]
+                    if [ "$use_proxy_yn" == "$i18n_yes" ]
                     then
                         proxy="$d_proxy"
                     else
@@ -47671,7 +47583,7 @@ else
                             then
                                 echo
                                 inquirer list_input "`eval_gettext \"是否使用 xtream codes 代理 \\\$d_xc_proxy: \"`" yn_options use_proxy_yn
-                                if [[ $use_proxy_yn == "$i18n_yes" ]]
+                                if [ "$use_proxy_yn" == "$i18n_yes" ]
                                 then
                                     xc_proxy="$d_xc_proxy"
                                 else
@@ -47690,6 +47602,7 @@ else
 
             user_agent="$d_user_agent"
             headers="$d_headers"
+
             while [[ $headers =~ \\\\ ]]
             do
                 headers=${headers//\\\\/\\}
@@ -47698,11 +47611,19 @@ else
             then
                 headers="$headers\r\n"
             fi
+
             cookies="$d_cookies"
             output_dir_name="${output_dir_name:-$(RandOutputDirName)}"
             output_dir_root="$LIVE_ROOT/$output_dir_name"
             playlist_name="${playlist_name:-$(RandPlaylistName)}"
             seg_dir_name="${seg_dir_name:-$d_seg_dir_name}"
+
+            seg_dir_path=""
+            if [ -n "$seg_dir_name" ] 
+            then
+                seg_dir_path="$seg_dir_name/"
+            fi
+
             seg_name="${seg_name:-$playlist_name}"
             seg_length="${seg_length:-$d_seg_length}"
             seg_count="${seg_count:-$d_seg_count}"
@@ -47711,24 +47632,13 @@ else
             origin_hls_url=0
             hboasia_host="hbogoasia.com:8443"
 
-            if [ -n "${const:-}" ] 
-            then
-                const_yn="yes"
-            else
-                const_yn="$d_const_yn"
-                const=""
-            fi
+            const=${const:-false}
 
-            live_yn=${live_yn:-yes}
-            if [ "$live_yn" == "yes" ] 
-            then
-                live="-l"
-            else
-                live=""
-            fi
+            live=${live:-true}
 
             video_audio_shift="${video_audio_shift:-}"
             v_or_a="${video_audio_shift%_*}"
+
             if [ "$v_or_a" == "v" ] 
             then
                 video_shift="${video_audio_shift#*_}"
@@ -47756,19 +47666,17 @@ else
 
             if [ -z "${encrypt:-}" ]  
             then
-                if [ "$d_encrypt_yn" == "yes" ] 
+                if [ "$d_encrypt" = true ] 
                 then
-                    encrypt="-e"
-                    encrypt_yn="yes"
-                    encrypt_session_yn="$d_encrypt_session_yn"
+                    encrypt=true
+                    encrypt_session="$d_encrypt_session"
                 else
-                    encrypt=""
-                    encrypt_yn="no"
-                    encrypt_session_yn="no"
+                    encrypt=false
+                    encrypt_session=false
                 fi
             else
-                encrypt_yn="yes"
-                encrypt_session_yn="$d_encrypt_session_yn"
+                encrypt=true
+                encrypt_session="$d_encrypt_session"
             fi
 
             keyinfo_name="${keyinfo_name:-$d_keyinfo_name}"
@@ -47811,15 +47719,16 @@ else
             fi
 
             channel_name="${channel_name:-$playlist_name}"
-            sync_yn="$d_sync_yn"
+            sync="$d_sync"
             sync_file="${sync_file:-}"
             sync_index="${sync_index:-}"
             sync_pairs="${sync_pairs:-}"
+            hls_end_list=false
 
             [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
             from="AddChannel"
 
-            flv_h265_yn="${flv_h265_yn:-no}"
+            flv_h265="${flv_h265:-false}"
             flv_push_link="${flv_push_link:-}"
             flv_pull_link="${flv_pull_link:-}"
 

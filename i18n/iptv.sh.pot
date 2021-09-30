@@ -1,4 +1,4 @@
-# Locale en For iptv.sh v1.82.5 - ONE Click Script
+# Locale en For iptv.sh v1.83.0 - ONE Click Script
 # Copyright (C) GPL Version 3 License
 # This file is distributed under the same license as the iptv.sh package.
 # MTimer https://github.com/woniuzfb/iptv
@@ -6,9 +6,9 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: iptv.sh 1.82.5\n"
+"Project-Id-Version: iptv.sh 1.83.0\n"
 "Report-Msgid-Bugs-To: tg @woniuzfb\n"
-"POT-Creation-Date: 2021-09-29 05:09+0000\n"
+"POT-Creation-Date: 2021-10-01 15:00+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -94,8 +94,8 @@ msgstr ""
 msgid "seconds"
 msgstr ""
 
-#: ../docs/iptv.sh:323 ../docs/iptv.sh:348 ../docs/iptv.sh:6889
-#: ../docs/iptv.sh:6901 ../docs/iptv.sh:6929
+#: ../docs/iptv.sh:323 ../docs/iptv.sh:348 ../docs/iptv.sh:6618
+#: ../docs/iptv.sh:6630 ../docs/iptv.sh:6658
 msgid "not set"
 msgstr ""
 
@@ -147,7 +147,7 @@ msgstr ""
 msgid "codec"
 msgstr ""
 
-#: ../docs/iptv.sh:336 ../docs/iptv.sh:376
+#: ../docs/iptv.sh:336 ../docs/iptv.sh:377
 msgid "delay"
 msgstr ""
 
@@ -212,1011 +212,1015 @@ msgid "encrypt"
 msgstr ""
 
 #: ../docs/iptv.sh:367
-msgid "keyinfo name"
+msgid "encrypt session"
 msgstr ""
 
 #: ../docs/iptv.sh:368
-msgid "key name"
+msgid "keyinfo name"
 msgstr ""
 
 #: ../docs/iptv.sh:369
-msgid "live"
+msgid "key name"
 msgstr ""
 
 #: ../docs/iptv.sh:370
-msgid "xtream codes proxy"
+msgid "live"
 msgstr ""
 
 #: ../docs/iptv.sh:371
-msgid "user agent"
+msgid "xtream codes proxy"
 msgstr ""
 
 #: ../docs/iptv.sh:372
-msgid "headers"
+msgid "user agent"
 msgstr ""
 
 #: ../docs/iptv.sh:373
-msgid "cookies"
+msgid "headers"
 msgstr ""
 
 #: ../docs/iptv.sh:374
-msgid "video codec"
+msgid "cookies"
 msgstr ""
 
 #: ../docs/iptv.sh:375
+msgid "video codec"
+msgstr ""
+
+#: ../docs/iptv.sh:376
 msgid "audio codec"
 msgstr ""
 
-#: ../docs/iptv.sh:377
+#: ../docs/iptv.sh:378
 msgid "input flags"
 msgstr ""
 
-#: ../docs/iptv.sh:378
+#: ../docs/iptv.sh:379
 msgid "output flags"
 msgstr ""
 
-#: ../docs/iptv.sh:379
+#: ../docs/iptv.sh:380
 msgid "none"
 msgstr ""
 
-#: ../docs/iptv.sh:437
+#: ../docs/iptv.sh:438
 #, sh-format
 msgid "${red}[ERROR]${normal} MUST BE ROOT, TRY${green} sudo su ${normal}"
 msgstr ""
 
-#: ../docs/iptv.sh:486
+#: ../docs/iptv.sh:487
 msgid "Checking dependencies, it takes awhile"
 msgstr ""
 
-#: ../docs/iptv.sh:505 ../docs/iptv.sh:516 ../docs/iptv.sh:526
-#: ../docs/iptv.sh:536 ../docs/iptv.sh:551 ../docs/iptv.sh:562
-#: ../docs/iptv.sh:572
+#: ../docs/iptv.sh:506 ../docs/iptv.sh:517 ../docs/iptv.sh:527
+#: ../docs/iptv.sh:537 ../docs/iptv.sh:552 ../docs/iptv.sh:563
+#: ../docs/iptv.sh:573
 #, sh-format
 msgid "$info dependency $depend installation succeed"
 msgstr ""
 
-#: ../docs/iptv.sh:507 ../docs/iptv.sh:518 ../docs/iptv.sh:528
-#: ../docs/iptv.sh:538 ../docs/iptv.sh:553 ../docs/iptv.sh:564
-#: ../docs/iptv.sh:574
+#: ../docs/iptv.sh:508 ../docs/iptv.sh:519 ../docs/iptv.sh:529
+#: ../docs/iptv.sh:539 ../docs/iptv.sh:554 ../docs/iptv.sh:565
+#: ../docs/iptv.sh:575
 #, sh-format
 msgid "$error dependency $depend installation failed"
 msgstr ""
 
-#: ../docs/iptv.sh:814
+#: ../docs/iptv.sh:815
 msgid "(Press <space> Select, <enter> Confirm)"
 msgstr ""
 
-#: ../docs/iptv.sh:1039
+#: ../docs/iptv.sh:1040
 msgid "(Use arrow to select, <w> <s> move up/down)"
 msgstr ""
 
-#: ../docs/iptv.sh:1167
+#: ../docs/iptv.sh:1168
 msgid "(Use up/down arrow to select)"
 msgstr ""
 
-#: ../docs/iptv.sh:1373
+#: ../docs/iptv.sh:1374
 msgid "input verification failed"
 msgstr ""
 
-#: ../docs/iptv.sh:1541
+#: ../docs/iptv.sh:1542
 msgid "date verification failed"
 msgstr ""
 
-#: ../docs/iptv.sh:1548
+#: ../docs/iptv.sh:1549
 msgid "(Use arrow to select)"
 msgstr ""
 
-#: ../docs/iptv.sh:1696 ../docs/iptv.sh:1703
+#: ../docs/iptv.sh:1697 ../docs/iptv.sh:1704
 #, sh-format
 msgid "$info Script downloading completed"
 msgstr ""
 
-#: ../docs/iptv.sh:1698 ../docs/iptv.sh:1741
+#: ../docs/iptv.sh:1699 ../docs/iptv.sh:1742
 #, sh-format
 msgid "$error can't connect Github! Trying backup link..."
 msgstr ""
 
-#: ../docs/iptv.sh:1705
+#: ../docs/iptv.sh:1706
 #, sh-format
 msgid "$error can't connect backup link! Script downloading failed, try again later"
 msgstr ""
 
-#: ../docs/iptv.sh:1728
+#: ../docs/iptv.sh:1729
 #, sh-format
 msgid "$info updating script $sh_name..."
 msgstr ""
 
-#: ../docs/iptv.sh:1734 ../docs/iptv.sh:1746
+#: ../docs/iptv.sh:1735 ../docs/iptv.sh:1747
 #, sh-format
 msgid "$info script $sh_name updating completed"
 msgstr ""
 
-#: ../docs/iptv.sh:1753
+#: ../docs/iptv.sh:1754
 #, sh-format
 msgid "$error can't connect backup link! Script $sh_name updating failed, try again later"
 msgstr ""
 
-#: ../docs/iptv.sh:1764
+#: ../docs/iptv.sh:1765
 #, sh-format
 msgid "$info Installing, please wait..."
 msgstr ""
 
-#: ../docs/iptv.sh:1808
+#: ../docs/iptv.sh:1809
 #, sh-format
 msgid "$info Installing python3 ..."
 msgstr ""
 
-#: ../docs/iptv.sh:1919
+#: ../docs/iptv.sh:1920
 #, sh-format
 msgid "$info Start downloading/installing FFmpeg..."
 msgstr ""
 
-#: ../docs/iptv.sh:1940
+#: ../docs/iptv.sh:1941
 #, sh-format
 msgid "$error FFmpeg downloading failed!"
 msgstr ""
 
-#: ../docs/iptv.sh:1945
+#: ../docs/iptv.sh:1946
 #, sh-format
 msgid "$error FFmpeg decompression failed!"
 msgstr ""
 
-#: ../docs/iptv.sh:1947
+#: ../docs/iptv.sh:1948
 #, sh-format
 msgid "$info FFmpeg installed"
 msgstr ""
 
-#: ../docs/iptv.sh:1949
+#: ../docs/iptv.sh:1950
 #, sh-format
 msgid "$info FFmpeg already installed"
 msgstr ""
 
-#: ../docs/iptv.sh:1959
+#: ../docs/iptv.sh:1960
 #, sh-format
 msgid "$error not support centos"
 msgstr ""
 
-#: ../docs/iptv.sh:1964
+#: ../docs/iptv.sh:1965
 msgid "Choose tls"
 msgstr ""
 
-#: ../docs/iptv.sh:2763
+#: ../docs/iptv.sh:2764
 #, sh-format
 msgid "$info FFmpeg compiled successfully"
 msgstr ""
 
-#: ../docs/iptv.sh:2773 ../docs/iptv.sh:2793
+#: ../docs/iptv.sh:2774 ../docs/iptv.sh:2794
 #, sh-format
 msgid "$info Start downloading/installing JQ..."
 msgstr ""
 
-#: ../docs/iptv.sh:2790 ../docs/iptv.sh:2806
+#: ../docs/iptv.sh:2791 ../docs/iptv.sh:2807
 #, sh-format
 msgid "$info JQ installed"
 msgstr ""
 
-#: ../docs/iptv.sh:2809
+#: ../docs/iptv.sh:2810
 #, sh-format
 msgid "$error JQ downloading failed, try again!"
 msgstr ""
 
-#: ../docs/iptv.sh:2812 ../docs/iptv.sh:2990
+#: ../docs/iptv.sh:2813 ../docs/iptv.sh:2993
 #, sh-format
 msgid "$error Can't connect server, try again later!"
 msgstr ""
 
-#: ../docs/iptv.sh:2815
+#: ../docs/iptv.sh:2816
 #, sh-format
 msgid "$info JQ already installed"
 msgstr ""
 
-#: ../docs/iptv.sh:2823
+#: ../docs/iptv.sh:2824
 #, sh-format
 msgid "$error directory already exists, uninstall first..."
 msgstr ""
 
-#: ../docs/iptv.sh:2927
+#: ../docs/iptv.sh:2930
 #, sh-format
 msgid "$info Installation completed"
 msgstr ""
 
-#: ../docs/iptv.sh:2933 ../docs/iptv.sh:2976 ../docs/iptv.sh:6938
+#: ../docs/iptv.sh:2936 ../docs/iptv.sh:2979 ../docs/iptv.sh:6667
 #, sh-format
 msgid "$error Not installed!"
 msgstr ""
 
-#: ../docs/iptv.sh:2936
+#: ../docs/iptv.sh:2939
 msgid "Do you confirm deleting this script and files with it"
 msgstr ""
 
-#: ../docs/iptv.sh:2969
+#: ../docs/iptv.sh:2972
 #, sh-format
 msgid "$info Uninstallation completed"
 msgstr ""
 
-#: ../docs/iptv.sh:2997
+#: ../docs/iptv.sh:3000
 msgid "monitoring need to be stopped, do you want to continue"
 msgstr ""
 
-#: ../docs/iptv.sh:3005
+#: ../docs/iptv.sh:3008
 msgid "You already have the latest version of FFmpeg, do you want to reinstall it"
 msgstr ""
 
-#: ../docs/iptv.sh:3021
+#: ../docs/iptv.sh:3024
 msgid "updating FFmpeg"
 msgstr ""
 
-#: ../docs/iptv.sh:3027
+#: ../docs/iptv.sh:3030
 #, sh-format
 msgid "script updated to the latest version [ ${green}$sh_new_ver${normal} ] ! (cmd: tv)"
 msgstr ""
 
-#: ../docs/iptv.sh:3032
+#: ../docs/iptv.sh:3035
 #, sh-format
 msgid "$info Installing youtube-dl..."
 msgstr ""
 
-#: ../docs/iptv.sh:3094
+#: ../docs/iptv.sh:3097
 #, sh-format
 msgid "$error Can't parse $link"
 msgstr ""
 
-#: ../docs/iptv.sh:3099 ../docs/iptv.sh:18487 ../docs/iptv.sh:24121
-#: ../docs/iptv.sh:24444 ../docs/iptv.sh:26625 ../docs/iptv.sh:26664
-#: ../docs/iptv.sh:27051 ../docs/iptv.sh:31270 ../docs/iptv.sh:32712
-#: ../docs/iptv.sh:34244 ../docs/iptv.sh:34269 ../docs/iptv.sh:34371
-#: ../docs/iptv.sh:36733 ../docs/iptv.sh:39210 ../docs/iptv.sh:42772
-#: ../docs/iptv.sh:42820 ../docs/iptv.sh:43037 ../docs/iptv.sh:43664
-#: ../docs/iptv.sh:43822 ../docs/iptv.sh:44415 ../docs/iptv.sh:44560
-#: ../docs/iptv.sh:44714 ../docs/iptv.sh:45696
+#: ../docs/iptv.sh:3102 ../docs/iptv.sh:18287 ../docs/iptv.sh:23922
+#: ../docs/iptv.sh:24245 ../docs/iptv.sh:26426 ../docs/iptv.sh:26465
+#: ../docs/iptv.sh:26852 ../docs/iptv.sh:31071 ../docs/iptv.sh:32513
+#: ../docs/iptv.sh:34045 ../docs/iptv.sh:34070 ../docs/iptv.sh:34172
+#: ../docs/iptv.sh:36536 ../docs/iptv.sh:39013 ../docs/iptv.sh:42575
+#: ../docs/iptv.sh:42623 ../docs/iptv.sh:42840 ../docs/iptv.sh:43576
+#: ../docs/iptv.sh:43734 ../docs/iptv.sh:44327 ../docs/iptv.sh:44472
+#: ../docs/iptv.sh:44626 ../docs/iptv.sh:45608
 msgid "Input No."
 msgstr ""
 
-#: ../docs/iptv.sh:3141
+#: ../docs/iptv.sh:3144
 #, sh-format
 msgid "$info openssl installation completed"
 msgstr ""
 
-#: ../docs/iptv.sh:3162
+#: ../docs/iptv.sh:3165
 #, sh-format
 msgid "$info magick installation completed"
 msgstr ""
 
-#: ../docs/iptv.sh:3758
+#: ../docs/iptv.sh:3761
 #, sh-format
 msgid "$FILE JQ fd 200 failed"
 msgstr ""
 
-#: ../docs/iptv.sh:4116 ../docs/iptv.sh:4147
+#: ../docs/iptv.sh:4119 ../docs/iptv.sh:4150
 #, sh-format
 msgid "$error wrong sync settings"
 msgstr ""
 
-#: ../docs/iptv.sh:4217
+#: ../docs/iptv.sh:4220
 #, sh-format
 msgid "$info channel [ $chnl_channel_name ] sync succeed..."
 msgstr ""
 
-#: ../docs/iptv.sh:6888
+#: ../docs/iptv.sh:6617
 msgid "random name"
 msgstr ""
 
-#: ../docs/iptv.sh:6890
+#: ../docs/iptv.sh:6619
 msgid "same as playlist name"
 msgstr ""
 
-#: ../docs/iptv.sh:6895
+#: ../docs/iptv.sh:6624
 #, sh-format
 msgid "video delay $d_video_shift seconds"
 msgstr ""
 
-#: ../docs/iptv.sh:6899
+#: ../docs/iptv.sh:6628
 #, sh-format
 msgid "audio delay $d_audio_shift seconds"
 msgstr ""
 
-#: ../docs/iptv.sh:7051 ../docs/iptv.sh:12562
+#: ../docs/iptv.sh:6780 ../docs/iptv.sh:12353
 #, sh-format
 msgid "$error no channels found!"
 msgstr ""
 
-#: ../docs/iptv.sh:7164
+#: ../docs/iptv.sh:6893
 msgid "Starting all stopped channels"
 msgstr ""
 
-#: ../docs/iptv.sh:7165
+#: ../docs/iptv.sh:6894
 msgid "Stopping all running channels"
 msgstr ""
 
-#: ../docs/iptv.sh:7168
+#: ../docs/iptv.sh:6897
 msgid "Restart all running channels"
 msgstr ""
 
-#: ../docs/iptv.sh:7172
+#: ../docs/iptv.sh:6901
 msgid "channels count"
 msgstr ""
 
-#: ../docs/iptv.sh:7440
+#: ../docs/iptv.sh:7185
 #, sh-format
 msgid "Channel [$chnl_channel_name] configuration"
 msgstr ""
 
-#: ../docs/iptv.sh:7498
+#: ../docs/iptv.sh:7245
 #, sh-format
 msgid "$tip multiple numbers separated with space e.g. 5 7 9-11"
 msgstr ""
 
-#: ../docs/iptv.sh:7499
+#: ../docs/iptv.sh:7246
 msgid "Input numbers(default: cancel): "
 msgstr ""
 
-#: ../docs/iptv.sh:7524
+#: ../docs/iptv.sh:7271
 #, sh-format
 msgid "$error stopped channel not found"
 msgstr ""
 
-#: ../docs/iptv.sh:7540 ../docs/iptv.sh:7557
+#: ../docs/iptv.sh:7287 ../docs/iptv.sh:7304
 #, sh-format
 msgid "$error running channel not found"
 msgstr ""
 
-#: ../docs/iptv.sh:7573 ../docs/iptv.sh:7584
+#: ../docs/iptv.sh:7320 ../docs/iptv.sh:7331
 #, sh-format
 msgid "$error wrong number"
 msgstr ""
 
-#: ../docs/iptv.sh:7619 ../docs/iptv.sh:7959
+#: ../docs/iptv.sh:7366 ../docs/iptv.sh:7706
 msgid "stream link:"
 msgstr ""
 
-#: ../docs/iptv.sh:7626
+#: ../docs/iptv.sh:7373
 #, sh-format
 msgid "reorder stream links of channel [ $chnl_channel_name ]"
 msgstr ""
 
-#: ../docs/iptv.sh:7663 ../docs/iptv.sh:7669 ../docs/iptv.sh:7675
+#: ../docs/iptv.sh:7410 ../docs/iptv.sh:7416 ../docs/iptv.sh:7422
 msgid "Please input stream link( mpegts / hls / flv / youtube ...): "
 msgstr ""
 
-#: ../docs/iptv.sh:7668 ../docs/iptv.sh:7674
+#: ../docs/iptv.sh:7415 ../docs/iptv.sh:7421
 #, sh-format
 msgid "$tip It can be local path and also multiple links, separated by space"
 msgstr ""
 
-#: ../docs/iptv.sh:7706
+#: ../docs/iptv.sh:7453
 #, sh-format
 msgid "$info Parsing youtube link..."
 msgstr ""
 
-#: ../docs/iptv.sh:7806 ../docs/iptv.sh:7880 ../docs/iptv.sh:46474
+#: ../docs/iptv.sh:7553 ../docs/iptv.sh:7627 ../docs/iptv.sh:46386
 msgid "Installing openssl"
 msgstr ""
 
-#: ../docs/iptv.sh:7809 ../docs/iptv.sh:7883
+#: ../docs/iptv.sh:7556 ../docs/iptv.sh:7630
 #, sh-format
 msgid "$info Parsing 4gtv link ..."
 msgstr ""
 
-#: ../docs/iptv.sh:7870 ../docs/iptv.sh:7938
+#: ../docs/iptv.sh:7617 ../docs/iptv.sh:7685
 #, sh-format
 msgid "$error Can't connect 4gtv !"
 msgstr ""
 
-#: ../docs/iptv.sh:7944
+#: ../docs/iptv.sh:7691
 #, sh-format
 msgid "$error Channel unavailable or this server ip not allowed!"
 msgstr ""
 
-#: ../docs/iptv.sh:10195 ../docs/iptv.sh:10426 ../docs/iptv.sh:10433
+#: ../docs/iptv.sh:9959 ../docs/iptv.sh:10202 ../docs/iptv.sh:10209
 msgid "Channel is running, stopping now"
 msgstr ""
 
-#: ../docs/iptv.sh:15655
+#: ../docs/iptv.sh:15455
 msgid "pdf2htmlEX required. Compiling pdf2htmlEX, it takes awhile. Do you want to continue"
 msgstr ""
 
-#: ../docs/iptv.sh:18138
+#: ../docs/iptv.sh:17938
 msgid "Installing imgcat"
 msgstr ""
 
-#: ../docs/iptv.sh:18255 ../docs/iptv.sh:18287
+#: ../docs/iptv.sh:18055 ../docs/iptv.sh:18087
 msgid "Registration is complete, login now"
 msgstr ""
 
-#: ../docs/iptv.sh:18349
+#: ../docs/iptv.sh:18149
 msgid "Register an account"
 msgstr ""
 
-#: ../docs/iptv.sh:18411
+#: ../docs/iptv.sh:18211
 msgid "old link detected. Do you want to replace it with this new link"
 msgstr ""
 
-#: ../docs/iptv.sh:23677
+#: ../docs/iptv.sh:23478
 #, sh-format
 msgid "Are you sure you want to permanently remove all $nginx_name files"
 msgstr ""
 
-#: ../docs/iptv.sh:23702
+#: ../docs/iptv.sh:23503
 #, sh-format
 msgid "Recompiling $nginx_name"
 msgstr ""
 
-#: ../docs/iptv.sh:23724
+#: ../docs/iptv.sh:23525
 #, sh-format
 msgid "$nginx_name is running, stopping now"
 msgstr ""
 
-#: ../docs/iptv.sh:23734
+#: ../docs/iptv.sh:23535
 #, sh-format
 msgid "$nginx_name is stopped, starting now"
 msgstr ""
 
-#: ../docs/iptv.sh:27600 ../docs/iptv.sh:34823
+#: ../docs/iptv.sh:27401 ../docs/iptv.sh:34624
 msgid "override old installation"
 msgstr ""
 
-#: ../docs/iptv.sh:31242
+#: ../docs/iptv.sh:31043
 msgid "print QR code"
 msgstr ""
 
-#: ../docs/iptv.sh:34074
+#: ../docs/iptv.sh:33875
 msgid "reset all traffic stats"
 msgstr ""
 
-#: ../docs/iptv.sh:36216
+#: ../docs/iptv.sh:36019
 msgid "Deleting this domain anyway. Also remove domain from official website to add this domain again"
 msgstr ""
 
-#: ../docs/iptv.sh:36264
+#: ../docs/iptv.sh:36067
 msgid "Do you want to delete all domains added with this CFP"
 msgstr ""
 
-#: ../docs/iptv.sh:36523
+#: ../docs/iptv.sh:36326
 msgid "Updating this token"
 msgstr ""
 
-#: ../docs/iptv.sh:37039
+#: ../docs/iptv.sh:36842
 msgid "directory already exits, add anyway"
 msgstr ""
 
-#: ../docs/iptv.sh:40841
+#: ../docs/iptv.sh:40644
 msgid "Deleting IBM CF CLI, do you want to continue"
 msgstr ""
 
-#: ../docs/iptv.sh:42766 ../docs/iptv.sh:42801
+#: ../docs/iptv.sh:42569 ../docs/iptv.sh:42604
 msgid "VIP manager"
 msgstr ""
 
-#: ../docs/iptv.sh:42768 ../docs/iptv.sh:42806
+#: ../docs/iptv.sh:42571 ../docs/iptv.sh:42609
 msgid "View VIP channels"
 msgstr ""
 
-#: ../docs/iptv.sh:42769
+#: ../docs/iptv.sh:42572
 msgid "Input VIP auth code"
 msgstr ""
 
-#: ../docs/iptv.sh:42771 ../docs/iptv.sh:42819
+#: ../docs/iptv.sh:42574 ../docs/iptv.sh:42622
 #, sh-format
 msgid "$tip cmd: h => HLS manager, f => FLV manager"
 msgstr ""
 
-#: ../docs/iptv.sh:42795
+#: ../docs/iptv.sh:42598
 #, sh-format
 msgid "$error Intall first with cmd: tv"
 msgstr ""
 
-#: ../docs/iptv.sh:42803
+#: ../docs/iptv.sh:42606
 msgid "View VIP user"
 msgstr ""
 
-#: ../docs/iptv.sh:42804
+#: ../docs/iptv.sh:42607
 msgid "Add VIP user"
 msgstr ""
 
-#: ../docs/iptv.sh:42805
+#: ../docs/iptv.sh:42608
 msgid "Config VIP user"
 msgstr ""
 
-#: ../docs/iptv.sh:42807
+#: ../docs/iptv.sh:42610
 msgid "Add VIP channel"
 msgstr ""
 
-#: ../docs/iptv.sh:42808
+#: ../docs/iptv.sh:42611
 msgid "Deploy VIP channel"
 msgstr ""
 
-#: ../docs/iptv.sh:42809
+#: ../docs/iptv.sh:42612
 msgid "Config VIP channel"
 msgstr ""
 
-#: ../docs/iptv.sh:42810
+#: ../docs/iptv.sh:42613
 msgid "View VIP server"
 msgstr ""
 
-#: ../docs/iptv.sh:42811
+#: ../docs/iptv.sh:42614
 msgid "Add VIP server"
 msgstr ""
 
-#: ../docs/iptv.sh:42812
+#: ../docs/iptv.sh:42615
 msgid "Config VIP server"
 msgstr ""
 
-#: ../docs/iptv.sh:42813
+#: ../docs/iptv.sh:42616
 msgid "Delete VIP user"
 msgstr ""
 
-#: ../docs/iptv.sh:42814
+#: ../docs/iptv.sh:42617
 msgid "Delete VIP channel"
 msgstr ""
 
-#: ../docs/iptv.sh:42815
+#: ../docs/iptv.sh:42618
 msgid "Delete VIP server"
 msgstr ""
 
-#: ../docs/iptv.sh:42816
+#: ../docs/iptv.sh:42619
 msgid "Enable VIP"
 msgstr ""
 
-#: ../docs/iptv.sh:42817
+#: ../docs/iptv.sh:42620
 msgid "Disable VIP"
 msgstr ""
 
-#: ../docs/iptv.sh:42904
+#: ../docs/iptv.sh:42707
 msgid "Installing vim-plug and overriding ~/.vimrc, do you want to continue"
 msgstr ""
 
-#: ../docs/iptv.sh:43009
+#: ../docs/iptv.sh:42812
 msgid "cmd: f => FLV manager, v => VIP manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43013
+#: ../docs/iptv.sh:42816
 msgid "cmd: h => HLS manager, v => VIP manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43018
+#: ../docs/iptv.sh:42821
 msgid "IPTV manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43020
+#: ../docs/iptv.sh:42823
 msgid "Install"
 msgstr ""
 
-#: ../docs/iptv.sh:43021
+#: ../docs/iptv.sh:42824
 msgid "Uninstall"
 msgstr ""
 
-#: ../docs/iptv.sh:43022
+#: ../docs/iptv.sh:42825
 msgid "Update"
 msgstr ""
 
-#: ../docs/iptv.sh:43024
+#: ../docs/iptv.sh:42827
 msgid "View channel"
 msgstr ""
 
-#: ../docs/iptv.sh:43025
+#: ../docs/iptv.sh:42828
 msgid "Add channel"
 msgstr ""
 
-#: ../docs/iptv.sh:43026
+#: ../docs/iptv.sh:42829
 msgid "Config channel"
 msgstr ""
 
-#: ../docs/iptv.sh:43027
+#: ../docs/iptv.sh:42830
 msgid "Toggle channel"
 msgstr ""
 
-#: ../docs/iptv.sh:43028
+#: ../docs/iptv.sh:42831
 msgid "Restart channel"
 msgstr ""
 
-#: ../docs/iptv.sh:43029
+#: ../docs/iptv.sh:42832
 msgid "View logs"
 msgstr ""
 
-#: ../docs/iptv.sh:43030
+#: ../docs/iptv.sh:42833
 msgid "Delete channel"
 msgstr ""
 
-#: ../docs/iptv.sh:43031
+#: ../docs/iptv.sh:42834
 msgid "Config schedule"
 msgstr ""
 
-#: ../docs/iptv.sh:43032
+#: ../docs/iptv.sh:42835
 msgid "Config monitor"
 msgstr ""
 
-#: ../docs/iptv.sh:43033
+#: ../docs/iptv.sh:42836
 msgid "Config default"
 msgstr ""
 
-#: ../docs/iptv.sh:43035
+#: ../docs/iptv.sh:42838
 #, sh-format
 msgid "$tip now: ${green}$title${normal} manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43085
+#: ../docs/iptv.sh:42888
 msgid "Usage: tv -i [input stream] [-s segment length(s)] [-o output directory name] [-c segments count] [-b bitrates] [-p HLS playlist name] [-C] [-l] [-P http proxy]"
 msgstr ""
 
-#: ../docs/iptv.sh:43086
+#: ../docs/iptv.sh:42889
 msgid " -i  input stream(support mpegts / hls / flv / youtube ...)"
 msgstr ""
 
-#: ../docs/iptv.sh:43087
+#: ../docs/iptv.sh:42890
 msgid "can be path to local video"
 msgstr ""
 
-#: ../docs/iptv.sh:43088
+#: ../docs/iptv.sh:42891
 msgid "you can input multiple stream links, separate with space"
 msgstr ""
 
-#: ../docs/iptv.sh:43089
+#: ../docs/iptv.sh:42892
 msgid " -s  segment length(s)(default: 6)"
 msgstr ""
 
-#: ../docs/iptv.sh:43090
+#: ../docs/iptv.sh:42893
 msgid " -o  output directory name(default: random)"
 msgstr ""
 
-#: ../docs/iptv.sh:43092
+#: ../docs/iptv.sh:42895
 msgid " -l  not live stream, in this case it can't be monitored nor set segments number(default: no)"
 msgstr ""
 
-#: ../docs/iptv.sh:43093
+#: ../docs/iptv.sh:42896
 msgid " -P  http proxy for FFmpeg, apply to http input stream(default: no)"
 msgstr ""
 
-#: ../docs/iptv.sh:43095
+#: ../docs/iptv.sh:42898
 msgid " -p  HLS playlist name(default: random)"
 msgstr ""
 
-#: ../docs/iptv.sh:43096
+#: ../docs/iptv.sh:42899
 msgid " -c  segments number in HLS playlist(default: 5)"
 msgstr ""
 
-#: ../docs/iptv.sh:43097
+#: ../docs/iptv.sh:42900
 msgid " -S  sub directory for segments(default: no)"
 msgstr ""
 
-#: ../docs/iptv.sh:43098
+#: ../docs/iptv.sh:42901
 msgid " -t  segments name(prefix)(default: same as playlist name)"
 msgstr ""
 
-#: ../docs/iptv.sh:43099
+#: ../docs/iptv.sh:42902
 msgid " -a  audio codec(default: aac) (e.g. copy)"
 msgstr ""
 
-#: ../docs/iptv.sh:43100
+#: ../docs/iptv.sh:42903
 msgid " -v  video codec(default: libx264) (e.g. copy)"
 msgstr ""
 
-#: ../docs/iptv.sh:43101
+#: ../docs/iptv.sh:42904
 msgid " -f  video or audio delay(e.g. v_3 video delay 3 seconds, a_2 audio delay 2 seconds)"
 msgstr ""
 
-#: ../docs/iptv.sh:43102
+#: ../docs/iptv.sh:42905
 msgid " -d  convert dvb teletext, options: text,ass (default: no)"
 msgstr ""
 
-#: ../docs/iptv.sh:43103
+#: ../docs/iptv.sh:42906
 msgid " -q crf value(precedence over bitrates)(0-63 greater number worse video qualit), multiple crf can be separated by comma"
 msgstr ""
 
-#: ../docs/iptv.sh:43104
+#: ../docs/iptv.sh:42907
 msgid "(default: crf not set)"
 msgstr ""
 
-#: ../docs/iptv.sh:43105
+#: ../docs/iptv.sh:42908
 msgid " -b  bitrates of the output video(kb/s)(default: 900-1280x720)"
 msgstr ""
 
-#: ../docs/iptv.sh:43106
+#: ../docs/iptv.sh:42909
 msgid "If crf is set, bitrates value apply to -maxrate -bufsize"
 msgstr ""
 
-#: ../docs/iptv.sh:43107
+#: ../docs/iptv.sh:42910
 msgid "If crf is not set you can continue to set const option of FFmpeg"
 msgstr ""
 
-#: ../docs/iptv.sh:43108
+#: ../docs/iptv.sh:42911
 msgid "multiple bitrates can be separated by comma(in this case adaptive stream will be created)"
 msgstr ""
 
-#: ../docs/iptv.sh:43109
+#: ../docs/iptv.sh:42912
 msgid "you can set video dimensions(e.g. -b 800-640x360,1000-960x540,1500-1280x720)"
 msgstr ""
 
-#: ../docs/iptv.sh:43110
+#: ../docs/iptv.sh:42913
 msgid "input omit to skip this option"
 msgstr ""
 
-#: ../docs/iptv.sh:43111
+#: ../docs/iptv.sh:42914
 msgid " -C  constant bitrates(only work if crf not set)(default: no)"
 msgstr ""
 
-#: ../docs/iptv.sh:43112
+#: ../docs/iptv.sh:42915
 msgid " -e  encrypt segments(default: no)"
 msgstr ""
 
-#: ../docs/iptv.sh:43113
+#: ../docs/iptv.sh:42916
 msgid " -K  Key name(default: random)"
 msgstr ""
 
-#: ../docs/iptv.sh:43114
+#: ../docs/iptv.sh:42917
 msgid " -z  channel name(default: same as playlist name)"
 msgstr ""
 
-#: ../docs/iptv.sh:43115
+#: ../docs/iptv.sh:42918
 msgid "push FLV stream instead of HLS"
 msgstr ""
 
-#: ../docs/iptv.sh:43116
+#: ../docs/iptv.sh:42919
 msgid " -k  push stream kind, e.g. -k flv"
 msgstr ""
 
-#: ../docs/iptv.sh:43117
+#: ../docs/iptv.sh:42920
 msgid " -H  push h265 stream(default: no)"
 msgstr ""
 
-#: ../docs/iptv.sh:43118
+#: ../docs/iptv.sh:42921
 msgid " -T  push address, e.g. rtmp://127.0.0.1/flv/xxx"
 msgstr ""
 
-#: ../docs/iptv.sh:43119
+#: ../docs/iptv.sh:42922
 msgid " -L  pull(play) address(default: omit). e.g. http://domain.com/flv?app=flv&stream=xxx"
 msgstr ""
 
-#: ../docs/iptv.sh:43120
+#: ../docs/iptv.sh:42923
 msgid " -m  more input flags for FFmpeg"
 msgstr ""
 
-#: ../docs/iptv.sh:43121 ../docs/iptv.sh:43127
+#: ../docs/iptv.sh:42924 ../docs/iptv.sh:42930
 msgid "default:"
 msgstr ""
 
-#: ../docs/iptv.sh:43124
+#: ../docs/iptv.sh:42927
 msgid "If it's HLS input stream, remove -reconnect_at_eof 1"
 msgstr ""
 
-#: ../docs/iptv.sh:43125
+#: ../docs/iptv.sh:42928
 msgid "If it's rtmp or local video, remove -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000"
 msgstr ""
 
-#: ../docs/iptv.sh:43126
+#: ../docs/iptv.sh:42929
 msgid " -n  output flags for FFmpeg, input omit to skip this option"
 msgstr ""
 
-#: ../docs/iptv.sh:43129
+#: ../docs/iptv.sh:42932
 msgid "Examples:"
 msgstr ""
 
-#: ../docs/iptv.sh:43130
+#: ../docs/iptv.sh:42933
 msgid "Use crf to control video quality:"
 msgstr ""
 
-#: ../docs/iptv.sh:43131
+#: ../docs/iptv.sh:42934
 msgid "tv -i http://xxx.com/xxx.ts -s 6 -o hbo1 -p hbo1 -q 15 -b 1500-1280x720 -z 'hbo stream 1'"
 msgstr ""
 
-#: ../docs/iptv.sh:43132
+#: ../docs/iptv.sh:42935
 msgid "Use bitrates to control video quality[default]:"
 msgstr ""
 
-#: ../docs/iptv.sh:43133
+#: ../docs/iptv.sh:42936
 msgid "tv -i http://xxx.com/xxx.ts -s 6 -o hbo2 -p hbo2 -b 900-1280x720 -z 'hbo stream 2'"
 msgstr ""
 
-#: ../docs/iptv.sh:43134
+#: ../docs/iptv.sh:42937
 msgid "If no need converting:"
 msgstr ""
 
-#: ../docs/iptv.sh:43135
+#: ../docs/iptv.sh:42938
 msgid "Push FLV instead of HLS:"
 msgstr ""
 
-#: ../docs/iptv.sh:43138
+#: ../docs/iptv.sh:42941
 msgid "Shortcuts:"
 msgstr ""
 
-#: ../docs/iptv.sh:43139
+#: ../docs/iptv.sh:42942
 msgid "tv # open HLS manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43140
+#: ../docs/iptv.sh:42943
 msgid "tv l # list all running channels"
 msgstr ""
 
-#: ../docs/iptv.sh:43141
+#: ../docs/iptv.sh:42944
 msgid "tv d # add demo channels"
 msgstr ""
 
-#: ../docs/iptv.sh:43142
+#: ../docs/iptv.sh:42945
 msgid "tv e # mannual editing channels.json"
 msgstr ""
 
-#: ../docs/iptv.sh:43143
+#: ../docs/iptv.sh:42946
 msgid "tv ee # mannual editing sync_file"
 msgstr ""
 
-#: ../docs/iptv.sh:43144
+#: ../docs/iptv.sh:42947
 msgid "tv f # open FLV manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43145
+#: ../docs/iptv.sh:42948
 msgid "tv v # open VIP manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43146
+#: ../docs/iptv.sh:42949
 msgid "tv m # start monitoring"
 msgstr ""
 
-#: ../docs/iptv.sh:43147
+#: ../docs/iptv.sh:42950
 msgid "tv m l [lines count] # view monitoring log"
 msgstr ""
 
-#: ../docs/iptv.sh:43148
+#: ../docs/iptv.sh:42951
 msgid "tv m s # stop monitoring"
 msgstr ""
 
-#: ../docs/iptv.sh:43149
+#: ../docs/iptv.sh:42952
 msgid "tv s # tv guide manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43150
+#: ../docs/iptv.sh:42953
 msgid "tv 4g # 4gtv manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43151
+#: ../docs/iptv.sh:42954
 msgid "tv FFmpeg # create mirror for FFmpeg"
 msgstr ""
 
-#: ../docs/iptv.sh:43152
+#: ../docs/iptv.sh:42955
 msgid "tv debug 1/0 # enable/disable debug"
 msgstr ""
 
-#: ../docs/iptv.sh:43154
+#: ../docs/iptv.sh:42957
 msgid "cx # open xtream codes accoutns/channels manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43156
+#: ../docs/iptv.sh:42959
 msgid "v2 # open v2ray manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43157
+#: ../docs/iptv.sh:42960
 msgid "v2 e # mannual editing config.json"
 msgstr ""
 
-#: ../docs/iptv.sh:43159
+#: ../docs/iptv.sh:42962
 msgid "x # open xray manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43160
+#: ../docs/iptv.sh:42963
 msgid "x e # mannual editing config.json"
 msgstr ""
 
-#: ../docs/iptv.sh:43162
+#: ../docs/iptv.sh:42965
 msgid "nx # open nginx manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43164
+#: ../docs/iptv.sh:42967
 msgid "or # open openresty manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43166
+#: ../docs/iptv.sh:42969
 msgid "cf # open cloudflare partner / workers manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43167
+#: ../docs/iptv.sh:42970
 msgid "cf w # open cloudflare workers manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43169
+#: ../docs/iptv.sh:42972
 msgid "ibm # open IBM Cloud Foundry manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43170
+#: ../docs/iptv.sh:42973
 msgid "ibm v2 # open ibm v2ray app manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43171
+#: ../docs/iptv.sh:42974
 msgid "ibm x # open ibm xray app manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43173
+#: ../docs/iptv.sh:42976
 msgid "arm # open Armbian manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43175
+#: ../docs/iptv.sh:42978
 msgid "pve # open Proxmox VE manager"
 msgstr ""
 
-#: ../docs/iptv.sh:43177
+#: ../docs/iptv.sh:42980
 msgid "tv ed # choose default editor"
 msgstr ""
 
-#: ../docs/iptv.sh:43179
+#: ../docs/iptv.sh:42982
 msgid "tv a # creating custom commands"
 msgstr ""
 
-#: ../docs/iptv.sh:43181
+#: ../docs/iptv.sh:42984
 msgid "tv c <en|ru|de|zh_CN|...> change/update language"
 msgstr ""
 
-#: ../docs/iptv.sh:43191
+#: ../docs/iptv.sh:42994
 msgid "Installation was not completed, do you want to reinstall"
 msgstr ""
 
-#: ../docs/iptv.sh:43673
+#: ../docs/iptv.sh:43585
 msgid "Compiling openresty, it takes awhile. Do you want to continue"
 msgstr ""
 
-#: ../docs/iptv.sh:43831
+#: ../docs/iptv.sh:43743
 msgid "Compiling nginx, it takes awhile. Do you want to continue"
 msgstr ""
 
-#: ../docs/iptv.sh:43897
+#: ../docs/iptv.sh:43809
 msgid "postfix exits. Do you want to reconfig smtp"
 msgstr ""
 
-#: ../docs/iptv.sh:44105 ../docs/iptv.sh:45604 ../docs/iptv.sh:46408
+#: ../docs/iptv.sh:44017 ../docs/iptv.sh:45516 ../docs/iptv.sh:46320
 msgid "Disable edns0"
 msgstr ""
 
-#: ../docs/iptv.sh:44112 ../docs/iptv.sh:45612 ../docs/iptv.sh:46415
+#: ../docs/iptv.sh:44024 ../docs/iptv.sh:45524 ../docs/iptv.sh:46327
 msgid "Enable edns0"
 msgstr ""
 
-#: ../docs/iptv.sh:44273
+#: ../docs/iptv.sh:44185
 msgid "Compiling pdf2htmlEX, it takes awhile. Do you want to continue"
 msgstr ""
 
-#: ../docs/iptv.sh:44520
+#: ../docs/iptv.sh:44432
 #, sh-format
 msgid "$v2ray_name is running, stopping now"
 msgstr ""
 
-#: ../docs/iptv.sh:44525
+#: ../docs/iptv.sh:44437
 #, sh-format
 msgid "$v2ray_name is stopped, starting now"
 msgstr ""
 
-#: ../docs/iptv.sh:44574
+#: ../docs/iptv.sh:44486
 msgid "It takes awhile. Do you want to continue"
 msgstr ""
 
-#: ../docs/iptv.sh:44722
+#: ../docs/iptv.sh:44634
 msgid "This is for PHICOMM n1. It need to be run after apt upgrade. Do you want to continue"
 msgstr ""
 
-#: ../docs/iptv.sh:44773 ../docs/iptv.sh:44906 ../docs/iptv.sh:45064
-#: ../docs/iptv.sh:45647
+#: ../docs/iptv.sh:44685 ../docs/iptv.sh:44818 ../docs/iptv.sh:44976
+#: ../docs/iptv.sh:45559
 msgid "Do you want to continue"
 msgstr ""
 
-#: ../docs/iptv.sh:45902
+#: ../docs/iptv.sh:45814
 msgid "Installing mono, it takes awhile. Do you want to continue"
 msgstr ""
 
-#: ../docs/iptv.sh:47631
+#: ../docs/iptv.sh:47543
 msgid "Not installed, start installing now"
 msgstr ""
 
-#: ../docs/iptv.sh:47647
+#: ../docs/iptv.sh:47559
 #, sh-format
 msgid "Use proxy $d_proxy: "
 msgstr ""
 
-#: ../docs/iptv.sh:47673
+#: ../docs/iptv.sh:47585
 #, sh-format
 msgid "Use xtream codes proxy $d_xc_proxy: "
 msgstr ""
 
-#: ../docs/iptv.sh:47848
+#: ../docs/iptv.sh:47757
 #, sh-format
 msgid "$error push link not set..."
 msgstr ""
 
-#: ../docs/iptv.sh:47869
+#: ../docs/iptv.sh:47778
 #, sh-format
 msgid "$info channel added successfully"
 msgstr ""
