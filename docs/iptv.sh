@@ -68,7 +68,7 @@ IBM_CONFIG="$HOME/ibm.json"
 DEFAULT_DEMOS="http://tv.epub.fun/default.json"
 DEFAULT_CHANNELS_LINK="http://tv.epub.fun/channels.json"
 XTREAM_CODES_LINK="http://tv.epub.fun/xtream_codes"
-USER_AGENT_BROWSER="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36"
+USER_AGENT_BROWSER="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.71 Safari/537.36"
 USER_AGENT_TV="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
 monitor=false
 green="\033[32m"
@@ -7555,6 +7555,7 @@ SetStreamLink()
         fi
         Println "`eval_gettext \"\\\$info 解析 4gtv 链接 ...\"`"
         hinet_4gtv=(
+            "litv-ftv13:民視新聞台"
             "litv-longturn14:寰宇新聞台"
             "4gtv-4gtv052:華視新聞資訊台"
             "4gtv-4gtv012:空中英語教室"
@@ -7575,7 +7576,7 @@ SetStreamLink()
             "litv-ftv12:i-Fun動漫台3"
             "4gtv-4gtv002:民視無線台"
             "4gtv-4gtv027:CI 罪案偵查頻道"
-            "4gtv-4gtv013:CNEX DOC CHANNEL"
+            "4gtv-4gtv013:CNEX紀實頻道"
             "litv-longturn03:龍華電影台"
             "4gtv-4gtv004:民視綜藝台"
             "litv-longturn20:ELTV英語學習台"
@@ -7612,7 +7613,10 @@ SetStreamLink()
                     hexiv=$(echo -n "${stream_link_data:0:16}" | hexdump -v -e '/1 "%02x"')
                     stream_link_url=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
                     stream_link_url_path=${stream_link_url%/*}
-                    Add4gtvLink
+                    if ! Add4gtvLink
+                    then
+                        exit 1
+                    fi
                 else
                     Println "`eval_gettext \"\\\$error 无法连接 4gtv !\"`\n" && exit 1
                 fi
@@ -7693,7 +7697,10 @@ SetStreamLink()
             stream_link_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
                 | $JQ_FILE -r '.flstURLs[0]')
             stream_link_url_path=${stream_link_url%/*}
-            Add4gtvLink
+            if ! Add4gtvLink
+            then
+                exit 1
+            fi
         fi
     elif [[ $stream_link == http://*.macaulotustv.com/* ]] 
     then
@@ -11106,6 +11113,7 @@ StartChannel()
     then
         Println "$info 解析 [ $chnl_channel_name ] 链接 ..."
         hinet_4gtv=(
+            "litv-ftv13:民視新聞台"
             "litv-longturn14:寰宇新聞台"
             "4gtv-4gtv052:華視新聞資訊台"
             "4gtv-4gtv012:空中英語教室"
@@ -11126,7 +11134,7 @@ StartChannel()
             "litv-ftv12:i-Fun動漫台3"
             "4gtv-4gtv002:民視無線台"
             "4gtv-4gtv027:CI 罪案偵查頻道"
-            "4gtv-4gtv013:CNEX DOC CHANNEL"
+            "4gtv-4gtv013:CNEX紀實頻道"
             "litv-longturn03:龍華電影台"
             "4gtv-4gtv004:民視綜藝台"
             "litv-longturn20:ELTV英語學習台"
@@ -11145,6 +11153,7 @@ StartChannel()
             channel_id=${channel%%:*}
             channel_name=${channel#*:}
             channel_name_enc=$(Urlencode "$channel_name")
+
             if [[ $channel_name_enc == "${BASH_REMATCH[1]}" ]] 
             then
                 if [ -n "$chnl_proxy" ] 
@@ -11153,26 +11162,34 @@ StartChannel()
                 else
                     _4gtv_proxy_command=()
                 fi
+
                 chnl_user_agent="$USER_AGENT_BROWSER"
                 chnl_headers="Referer: https://embed.4gtv.tv/HiNet/$channel_name_enc.html?ar=0&as=1&volume=0\r\n"
                 chnl_cookies=""
+
                 stream_link_data=$(curl -s -Lm 10 \
                 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
                 -H "User-Agent: $chnl_user_agent" \
                 -H "${chnl_headers:0:-4}" \
                 "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)") || true
-                if [ -n "$stream_link_data" ] 
+
+                if [ -z "$stream_link_data" ] 
                 then
-                    stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
-                    hexkey=$(echo -n "VxzAfiseH0AbLShkQOPwdsssw5KyLeuv" | hexdump -v -e '/1 "%02x"')
-                    hexiv=$(echo -n "${stream_link_data:0:16}" | hexdump -v -e '/1 "%02x"')
-                    chnl_stream_link_url=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
-                    chnl_stream_link_url_path=${chnl_stream_link_url%/*}
-                    Start4gtvLink
-                elif [ "$monitor" = false ]
-                then
-                    Println "$error 无法连接 4gtv !\n" && exit 1
+                    Println "$error 无法连接 4gtv !\n"
+                    return 0
                 fi
+
+                stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
+                hexkey=$(echo -n "VxzAfiseH0AbLShkQOPwdsssw5KyLeuv" | hexdump -v -e '/1 "%02x"')
+                hexiv=$(echo -n "${stream_link_data:0:16}" | hexdump -v -e '/1 "%02x"')
+                chnl_stream_link_url=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+                chnl_stream_link_url_path=${chnl_stream_link_url%/*}
+
+                if ! Start4gtvLink
+                then
+                    return 0
+                fi
+
                 break
             fi
         done
@@ -11182,16 +11199,19 @@ StartChannel()
         chnl_user_agent="$USER_AGENT_BROWSER"
         chnl_headers="Referer: ${chnl_stream_link%%|*}\r\n"
         chnl_cookies=""
+
         if [ -n "$chnl_proxy" ] 
         then
             _4gtv_proxy_command=( -x "$chnl_proxy" )
         else
             _4gtv_proxy_command=()
         fi
+
         set_id=${chnl_stream_link#*channelSet_id=}
         set_id=${set_id%%&*}
         set_id=${set_id%%|*}
         fsVALUE=""
+
         if [ "$set_id" -eq 1 ] 
         then
             GetServiceAccs 4gtv
@@ -11204,6 +11224,7 @@ StartChannel()
                 fi
             done
         fi
+
         fnCHANNEL_ID=${chnl_stream_link#*channel_id=}
         fnCHANNEL_ID=${fnCHANNEL_ID%%&*}
         fnCHANNEL_ID=${fnCHANNEL_ID%%|*}
@@ -11216,12 +11237,14 @@ StartChannel()
         hexiv=$(echo -n $iv | hexdump -v -e '/1 "%02x"')
         post_data='{"fnCHANNEL_ID":'"$fnCHANNEL_ID"',"fsASSET_ID":"'"$fsASSET_ID"'","fsDEVICE_TYPE":"pc","clsIDENTITY_VALIDATE_ARUS":{"fsVALUE":"'$fsVALUE'"}}'
         post_data=$(echo -n "$post_data" | openssl enc -aes-256-cbc -iv "$hexiv" -K "$hexkey" -a)
+
         if [ -n "$fsVALUE" ] 
         then
             value="$(UrlencodeUpper ${post_data//[[:space:]]/})"
         else
             value="$(Urlencode ${post_data//[[:space:]]/})"
         fi
+
         for((try_i=0;try_i<10;try_i++));
         do
             stream_link_data=$(curl -s -Lm 10 -X POST \
@@ -11230,27 +11253,34 @@ StartChannel()
             -H "${chnl_headers:0:-4}" \
             --data "value=$value" \
             "https://api2.4gtv.tv/Channel/GetChannelUrl3") || true
+
             if [ -n "$stream_link_data" ] 
             then
                 break
             fi
         done
-        if [ -n "$stream_link_data" ] 
+
+        if [ -z "$stream_link_data" ] 
         then
-            stream_link_data=$($JQ_FILE -r '.Data' <<< "$stream_link_data")
-            if [ "$stream_link_data" != null ] 
-            then
-                chnl_stream_link_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
-                    | $JQ_FILE -r '.flstURLs[0]')
-                chnl_stream_link_url_path=${chnl_stream_link_url%/*}
-                Start4gtvLink
-            elif [ "$monitor" = false ] 
-            then
-                Println "$error 此服务器 ip 不支持或频道不可用!\n"
-            fi
-        elif [ "$monitor" = false ] 
+            Println "$error 无法连接 4gtv !\n"
+            return 0
+        fi
+
+        stream_link_data=$($JQ_FILE -r '.Data' <<< "$stream_link_data")
+
+        if [ "$stream_link_data" == null ] 
         then
-            Println "$error 无法连接 4gtv !\n" && exit 1
+            Println "$error 此服务器 ip 不支持或频道 [ $chnl_channel_name ] 不可用!\n"
+            return 0
+        fi
+
+        chnl_stream_link_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
+            | $JQ_FILE -r '.flstURLs[0]')
+        chnl_stream_link_url_path=${chnl_stream_link_url%/*}
+
+        if ! Start4gtvLink
+        then
+            return 0
         fi
     elif [[ ${chnl_stream_link##*|} =~ ([0-9]+)-([0-9]+)x([0-9]+) ]] 
     then
@@ -14412,6 +14442,7 @@ Add4gtvLink()
         fi
     else
         Println "$error 频道 [$channel_name] 不可用\n"
+        return 1
     fi
 }
 
@@ -14610,7 +14641,7 @@ Start4gtvLink()
             chnl_stream_url_quality=${chnl_stream_url_quality:1}
         fi
 
-        chnl_stream_urls[0]="$chnl_stream_url_root|$chnl_stream_url_quality"
+        chnl_stream_links[0]="$chnl_stream_url_root|$chnl_stream_url_quality"
 
         if [ -n "${_4gtv_proxy_command:-}" ] 
         then
@@ -14618,6 +14649,7 @@ Start4gtvLink()
         fi
     else
         Println "$error 频道 [$chnl_channel_name] 不可用\n"
+        return 1
     fi
 }
 
@@ -46450,6 +46482,7 @@ then
             done
 
             hinet_4gtv=(
+                "litv-ftv13:民視新聞台"
                 "litv-longturn14:寰宇新聞台"
                 "4gtv-4gtv052:華視新聞資訊台"
                 "4gtv-4gtv012:空中英語教室"
@@ -46470,7 +46503,7 @@ then
                 "litv-ftv12:i-Fun動漫台3"
                 "4gtv-4gtv002:民視無線台"
                 "4gtv-4gtv027:CI 罪案偵查頻道"
-                "4gtv-4gtv013:CNEX DOC CHANNEL"
+                "4gtv-4gtv013:CNEX紀實頻道"
                 "litv-longturn03:龍華電影台"
                 "4gtv-4gtv004:民視綜藝台"
                 "litv-longturn20:ELTV英語學習台"
@@ -46635,11 +46668,15 @@ then
                         stream_link="${stream_links[0]}"
                         stream_link_url=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
                         stream_link_url_path=${stream_link_url%/*}
-                        Add4gtvLink
+                        channel_name="$hinet_4gtv_chnl_name"
+                        if ! Add4gtvLink
+                        then
+                            continue
+                        fi
+                        AddChannel
                     else
-                        Println "$error 无法连接 4gtv !\n" && exit 1
+                        Println "$error hinet 4gtv 或频道 [ $hinet_4gtv_chnl_name ] 不可用!\n"
                     fi
-                    AddChannel
                 else
                     _4gtv_chnl_index=$((chnl_num-hinet_4gtv_count-1))
                     _4gtv_chnl_id=${_4gtv_chnls_id[_4gtv_chnl_index]}
@@ -46691,13 +46728,17 @@ then
 
                     if [ "$stream_link_data" == null ] 
                     then
-                        Println "$error 此服务器 ip 不支持或频道不可用!\n"
+                        Println "$error 此服务器 ip 不支持或频道 [ $_4gtv_chnl_name ] 不可用!\n"
                     else
                         stream_link="${stream_links[0]}"
                         stream_link_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
                             | $JQ_FILE -r '.flstURLs[0]')
                         stream_link_url_path=${stream_link_url%/*}
-                        Add4gtvLink
+                        channel_name="$_4gtv_chnl_name"
+                        if ! Add4gtvLink 
+                        then
+                            continue
+                        fi
                         AddChannel
                     fi
                 fi
