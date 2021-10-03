@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-sh_ver="1.83.0"
+sh_ver="1.84.0"
 sh_debug=0
 export LANGUAGE=
 export LC_ALL=
@@ -6674,7 +6674,7 @@ GetChannels()
     m_encrypt_session m_keyinfo_name m_key_name m_key_time m_input_flags m_output_flags \
     m_channel_name m_channel_time m_sync m_sync_file m_sync_index m_sync_pairs m_hls_end_list m_flv_status \
     m_flv_h265 m_flv_push_link m_flv_pull_link m_schedule_start_time m_schedule_end_time \
-    m_schedule_hls_change m_schedule_channel_name m_schedule_status < <(JQs flat "$CHANNELS_FILE" '' '
+    m_schedule_hls_change m_schedule_hls_change_once m_schedule_channel_name m_schedule_status < <(JQs flat "$CHANNELS_FILE" '' '
     (.channels | if . == "" then {} else . end) as $channels |
     ($channels.schedule // {} | if (.|type) == "string" then {} else . end) as $schedule |
     reduce ({pid,status,stream_link,live,proxy,xc_proxy,user_agent,headers,cookies,output_dir_name,
@@ -6687,7 +6687,7 @@ GetChannels()
         else
             . + ["\u0004"]
         end
-    ) + reduce ({start_time,end_time,hls_change,channel_name,status}|keys_unsorted[]) as $key ([];
+    ) + reduce ({start_time,end_time,hls_change,hls_change_once,channel_name,status}|keys_unsorted[]) as $key ([];
         $schedule[$key] as $val | if $val then
             . + [$val + "\u0003\u0004"]
         else
@@ -6767,6 +6767,7 @@ GetChannels()
     IFS="${delimiters[2]}" read -ra chnls_schedule_start_time <<< "${m_schedule_start_time:-$if_null_schedule_empty}"
     IFS="${delimiters[2]}" read -ra chnls_schedule_end_time <<< "${m_schedule_end_time:-$if_null_schedule_empty}"
     IFS="${delimiters[2]}" read -ra chnls_schedule_hls_change <<< "${m_schedule_hls_change:-$if_null_schedule_empty}"
+    IFS="${delimiters[2]}" read -ra chnls_schedule_hls_change_once <<< "${m_schedule_hls_change_once:-$if_null_schedule_empty}"
     IFS="${delimiters[2]}" read -ra chnls_schedule_channel_name <<< "${m_schedule_channel_name:-$if_null_schedule_empty}"
     IFS="${delimiters[2]}" read -ra chnls_schedule_status <<< "${m_schedule_status:-$if_null_schedule_empty}"
 }
@@ -6929,7 +6930,7 @@ GetChannel()
     chnl_input_flags chnl_output_flags chnl_channel_name chnl_channel_time chnl_sync \
     chnl_sync_file chnl_sync_index chnl_sync_pairs chnl_hls_end_list chnl_flv_status chnl_flv_h265 chnl_flv_push_link \
     chnl_flv_pull_link chnl_schedule_start_time chnl_schedule_end_time \
-    chnl_schedule_hls_change chnl_schedule_channel_name chnl_schedule_status < <($JQ_FILE -c -r --arg select_index "$select_index" --argjson select_json "$select_json" '
+    chnl_schedule_hls_change chnl_schedule_hls_change_once chnl_schedule_channel_name chnl_schedule_status < <($JQ_FILE -c -r --arg select_index "$select_index" --argjson select_json "$select_json" '
     .channels[] | select(.[$select_index] == $select_json[$select_index]) as $channel |
     ($channel.schedule // [] | if . == "" then [] else . end) as $schedule |
     reduce ({pid,status,stream_link,live,proxy,xc_proxy,user_agent,headers,cookies,output_dir_name,
@@ -6948,6 +6949,7 @@ GetChannel()
     [([$schedule[]|.start_time // 0|tostring|. + "\u0001"]|join("") + "\u0002")] +
     [([$schedule[]|.end_time // 0|tostring|. + "\u0001"]|join("") + "\u0002")] +
     [([$schedule[]|.hls_change // true|tostring|. + "\u0001"]|join("") + "\u0002")] +
+    [([$schedule[]|.hls_change_once // false|tostring|. + "\u0001"]|join("") + "\u0002")] +
     [([$schedule[]|.channel_name|. + "\u0001"]|join("") + "\u0002")] +
     [([$schedule[]|.status // 2|tostring|. + "\u0001"]|join("") + "\u0002")]
     |@tsv' "$CHANNELS_FILE")
@@ -7062,6 +7064,7 @@ GetChannel()
         IFS="${delimiters[0]}" read -r -a chnl_schedules_start_time <<< "$chnl_schedule_start_time"
         IFS="${delimiters[0]}" read -r -a chnl_schedules_end_time <<< "$chnl_schedule_end_time"
         IFS="${delimiters[0]}" read -r -a chnl_schedules_hls_change <<< "$chnl_schedule_hls_change"
+        IFS="${delimiters[0]}" read -r -a chnl_schedules_hls_change_once <<< "$chnl_schedule_hls_change_once"
         IFS="${delimiters[0]}" read -r -a chnl_schedules_channel_name <<< "$chnl_schedule_channel_name"
         IFS="${delimiters[0]}" read -r -a chnl_schedules_status <<< "$chnl_schedule_status"
 
@@ -12402,6 +12405,7 @@ ListChannelsSchedule()
         IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
         IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
         IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
+        IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[chnls_index]}"
         IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
 
         chnl_schedules_if_null="${chnls_schedule_hls_change[chnls_index]//false/}"
@@ -12425,6 +12429,9 @@ ListChannelsSchedule()
             if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
             then
                 chnl_schedule_hls_change_list="${green}是${normal}"
+            elif [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
+            then
+                chnl_schedule_hls_change_list="${green}一次${normal}"
             else
                 chnl_schedule_hls_change_list="${red}否${normal}"
             fi
@@ -12458,6 +12465,7 @@ AddChannelsSchedule()
             IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
             IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
             IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
+            IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[chnls_index]}"
             IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
 
             chnl_schedules_if_null="${chnls_schedule_hls_change[chnls_index]//false/}"
@@ -12481,6 +12489,9 @@ AddChannelsSchedule()
                 if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
                 then
                     chnl_schedule_hls_change_list="${green}是${normal}"
+                elif [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
+                then
+                    chnl_schedule_hls_change_list="${green}一次${normal}"
                 else
                     chnl_schedule_hls_change_list="${red}否${normal}"
                 fi
@@ -12508,9 +12519,20 @@ AddChannelsSchedule()
 
             if [ "$yn_options_index" -eq 0 ] 
             then
-                schedule_hls_change="true"
+                schedule_hls_change=true
+                schedule_hls_change_once=false
             else
-                schedule_hls_change="false"
+                schedule_hls_change=false
+
+                echo
+                inquirer list_input_index "防盗链一次" yn_options yn_options_index
+
+                if [ "$yn_options_index" -eq 0 ] 
+                then
+                    schedule_hls_change_once=true
+                else
+                    schedule_hls_change_once=false
+                fi
             fi
 
             echo
@@ -12522,13 +12544,17 @@ AddChannelsSchedule()
             fi
 
             chnl_schedule=$(
-                $JQ_FILE -n --arg start_time "$schedule_start_time" --arg end_time "$schedule_end_time" \
-                    --arg hls_change "$schedule_hls_change" --arg channel_name "$schedule_channel_name" \
+                $JQ_FILE -n --arg start_time "$schedule_start_time" \
+                    --arg end_time "$schedule_end_time" \
+                    --arg hls_change "$schedule_hls_change" \
+                    --arg hls_change_once "$schedule_hls_change_once" \
+                    --arg channel_name "$schedule_channel_name" \
                     --arg status 0 \
                 '{
                     start_time: $start_time | tonumber,
                     end_time: $end_time | tonumber,
                     hls_change: $hls_change | test("true"),
+                    hls_change_once: $hls_change_once | test("true"),
                     channel_name: $channel_name,
                     status: $status | tonumber
                 }'
@@ -12583,14 +12609,29 @@ EditChannelSchedule()
 
             if [ "$yn_options_index" -eq 0 ] 
             then
-                schedule_hls_change="true"
+                schedule_hls_change=true
+                schedule_hls_change_once=false
             else
-                schedule_hls_change="false"
+                schedule_hls_change=false
+
+                echo
+                inquirer list_input_index "防盗链一次" yn_options yn_options_index
+
+                if [ "$yn_options_index" -eq 0 ] 
+                then
+                    schedule_hls_change_once=true
+                else
+                    schedule_hls_change_once=false
+                fi
             fi
 
             bool=true
             jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"hls_change"]'
             JQ update "$CHANNELS_FILE" "$schedule_hls_change"
+
+            bool=true
+            jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"hls_change_once"]'
+            JQ update "$CHANNELS_FILE" "$schedule_hls_change_once"
         elif [ "$channel_schedule_options_index" -eq 3 ] 
         then
             inquirer text_input "输入频道名称" schedule_channel_name "不设置"
@@ -12621,6 +12662,7 @@ EditChannelSchedules()
     IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
+    IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
 
     chnl_schedules_if_null="${chnls_schedule_hls_change[chnls_index]//false/}"
@@ -12646,6 +12688,9 @@ EditChannelSchedules()
         if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
         then
             chnl_schedule_hls_change_list="${green}是${normal}"
+        elif [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
+        then
+            chnl_schedule_hls_change_list="${green}一次${normal}"
         else
             chnl_schedule_hls_change_list="${red}否${normal}"
         fi
@@ -12832,6 +12877,7 @@ SortChannelSchedules()
     IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
+    IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
 
     chnl_schedules_if_null="${chnls_schedule_hls_change[chnls_index]//false/}"
@@ -12865,6 +12911,9 @@ SortChannelSchedules()
         if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
         then
             chnl_schedule_hls_change_list="${green}是${normal}"
+        elif [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
+        then
+            chnl_schedule_hls_change_list="${green}一次${normal}"
         else
             chnl_schedule_hls_change_list="${red}否${normal}"
         fi
@@ -12888,13 +12937,17 @@ SortChannelSchedules()
     for chnl_schedules_index in "${chnl_schedules_indices[@]}"
     do
         new_schedule=$(
-            $JQ_FILE -n --arg start_time "${chnl_schedules_start_time[chnl_schedules_index]}" --arg end_time "${chnl_schedules_end_time[chnl_schedules_index]}" \
-                --arg hls_change "${chnl_schedules_hls_change[chnl_schedules_index]}" --arg channel_name "${chnl_schedules_channel_name[chnl_schedules_index]}" \
+            $JQ_FILE -n --arg start_time "${chnl_schedules_start_time[chnl_schedules_index]}" \
+                --arg end_time "${chnl_schedules_end_time[chnl_schedules_index]}" \
+                --arg hls_change "${chnl_schedules_hls_change[chnl_schedules_index]}" \
+                --arg hls_change_once "${chnl_schedules_hls_change_once[chnl_schedules_index]}" \
+                --arg channel_name "${chnl_schedules_channel_name[chnl_schedules_index]}" \
                 --arg status "${chnl_schedules_status[chnl_schedules_index]}" \
             '{
                 start_time: $start_time | tonumber,
                 end_time: $end_time | tonumber,
                 hls_change: $hls_change | test("true"),
+                hls_change_once: $hls_change_once | test("true"),
                 channel_name: $channel_name,
                 status: $status | tonumber
             }'
@@ -13016,6 +13069,7 @@ DelChannelSchedules()
     IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
+    IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
 
     chnl_schedules_if_null="${chnls_schedule_hls_change[chnls_index]//false/}"
@@ -13041,6 +13095,9 @@ DelChannelSchedules()
         if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
         then
             chnl_schedule_hls_change_list="${green}是${normal}"
+        elif [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
+        then
+            chnl_schedule_hls_change_list="${green}一次${normal}"
         else
             chnl_schedule_hls_change_list="${red}否${normal}"
         fi
@@ -19119,6 +19176,11 @@ MonitorHlsRestartChannel()
             then
                 chnl_playlist_name=$(RandStr)
                 chnl_seg_name="$chnl_playlist_name"
+            elif [ "${hls_change_once[hls_index]:-false}" = true ] 
+            then
+                hls_change_once[hls_index]=false
+                chnl_playlist_name=$(RandStr)
+                chnl_seg_name="$chnl_playlist_name"
             fi
 
             if [ "$chnl_encrypt" = true ] 
@@ -19900,6 +19962,11 @@ MonitorTryAccounts()
                                 then
                                     chnl_playlist_name=$(RandStr)
                                     chnl_seg_name="$chnl_playlist_name"
+                                elif [ "${hls_change_once[hls_index]:-false}" = true ] 
+                                then
+                                    hls_change_once[hls_index]=false
+                                    chnl_playlist_name=$(RandStr)
+                                    chnl_seg_name="$chnl_playlist_name"
                                 fi
 
                                 if [ "$chnl_encrypt" = true ] 
@@ -20118,6 +20185,11 @@ MonitorTryAccounts()
                     then
                         if [ "${hls_change[hls_index]:-true}" = true ] 
                         then
+                            chnl_playlist_name=$(RandStr)
+                            chnl_seg_name="$chnl_playlist_name"
+                        elif [ "${hls_change_once[hls_index]:-false}" = true ] 
+                        then
+                            hls_change_once[hls_index]=false
                             chnl_playlist_name=$(RandStr)
                             chnl_seg_name="$chnl_playlist_name"
                         fi
@@ -20562,6 +20634,7 @@ Monitor()
             hls_failed=()
             hls_recheck_time=()
             hls_change=()
+            hls_change_once=()
             channel_name=()
 
             while true
@@ -20583,6 +20656,7 @@ Monitor()
                             IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
                             IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
                             IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
+                            IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[chnls_index]}"
                             IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
 
                             chnl_schedules_if_null="${chnls_schedule_hls_change[chnls_index]//false/}"
@@ -20612,6 +20686,7 @@ Monitor()
                                                 if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ] 
                                                 then
                                                     unset 'hls_change[hls_index]'
+                                                    unset 'hls_change_once[hls_index]'
                                                     unset 'channel_name[hls_index]'
                                                 else
                                                     new_array+=("$hls_index")
@@ -20633,6 +20708,7 @@ Monitor()
                                                 then
                                                     MonitorHlsRemoveFailed
                                                     unset 'hls_change[hls_index]'
+                                                    unset 'hls_change_once[hls_index]'
                                                     unset 'channel_name[hls_index]'
                                                     break
                                                 fi
@@ -20656,7 +20732,11 @@ Monitor()
                                                 then
                                                     if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
                                                     then
-                                                        hls_change[hls_index]="false"
+                                                        hls_change[hls_index]=false
+                                                    fi
+                                                    if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] && [ -z "${hls_change_once[hls_index]:-}" ]
+                                                    then
+                                                        hls_change_once[hls_index]=true
                                                     fi
                                                     if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
                                                     then
@@ -20675,7 +20755,11 @@ Monitor()
                                                         hls_indices+=("$i")
                                                         if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
                                                         then
-                                                            hls_change[i]="false"
+                                                            hls_change[i]=false
+                                                        fi
+                                                        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
+                                                        then
+                                                            hls_change_once[i]=true
                                                         fi
                                                         if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
                                                         then
@@ -20692,7 +20776,11 @@ Monitor()
 
                                             if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
                                             then
-                                                hls_change[hls_index]="false"
+                                                hls_change[hls_index]=false
+                                            fi
+                                            if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] && [ -z "${hls_change_once[hls_index]:-}" ]
+                                            then
+                                                hls_change_once[hls_index]=true
                                             fi
                                             if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
                                             then
@@ -20738,6 +20826,7 @@ Monitor()
                                                 if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ] 
                                                 then
                                                     unset 'hls_change[hls_index]'
+                                                    unset 'hls_change_once[hls_index]'
                                                     unset 'channel_name[hls_index]'
                                                 else
                                                     new_array+=("$hls_index")
@@ -20759,6 +20848,7 @@ Monitor()
                                                 then
                                                     MonitorHlsRemoveFailed
                                                     unset 'hls_change[hls_index]'
+                                                    unset 'hls_change_once[hls_index]'
                                                     unset 'channel_name[hls_index]'
                                                     break
                                                 fi
@@ -20780,7 +20870,11 @@ Monitor()
                                                 then
                                                     if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
                                                     then
-                                                        hls_change[hls_index]="false"
+                                                        hls_change[hls_index]=false
+                                                    fi
+                                                    if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] && [ -z "${hls_change_once[hls_index]:-}" ]
+                                                    then
+                                                        hls_change_once[hls_index]=true
                                                     fi
                                                     if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
                                                     then
@@ -20799,7 +20893,11 @@ Monitor()
                                                         hls_indices+=("$i")
                                                         if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
                                                         then
-                                                            hls_change[i]="false"
+                                                            hls_change[i]=false
+                                                        fi
+                                                        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
+                                                        then
+                                                            hls_change_once[i]=true
                                                         fi
                                                         if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
                                                         then
@@ -20816,7 +20914,11 @@ Monitor()
 
                                             if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
                                             then
-                                                hls_change[hls_index]="false"
+                                                hls_change[hls_index]=false
+                                            fi
+                                            if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] && [ -z "${hls_change_once[hls_index]:-}" ]
+                                            then
+                                                hls_change_once[hls_index]=true
                                             fi
                                             if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
                                             then
@@ -20838,6 +20940,7 @@ Monitor()
                                                 if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ] 
                                                 then
                                                     unset 'hls_change[hls_index]'
+                                                    unset 'hls_change_once[hls_index]'
                                                     unset 'channel_name[hls_index]'
                                                 else
                                                     new_array+=("$hls_index")
@@ -20859,6 +20962,7 @@ Monitor()
                                                 then
                                                     MonitorHlsRemoveFailed
                                                     unset 'hls_change[hls_index]'
+                                                    unset 'hls_change_once[hls_index]'
                                                     unset 'channel_name[hls_index]'
                                                     break
                                                 fi
@@ -21401,7 +21505,7 @@ Monitor()
 
                         for hls_index in "${hls_indices[@]}"
                         do
-                            if [ "${hls_change[hls_index]:-true}" = false ] 
+                            if [ "${hls_change[hls_index]:-true}" = false ] && [ "${hls_change_once[hls_index]:-false}" = false ]
                             then
                                 continue
                             fi
@@ -27660,9 +27764,9 @@ V2raySetFollowRedirect()
     inquirer list_input "识别出由 iptables 转发而来的数据, 并转发到相应的目标地址" ny_options follow_redirect
     if [ "$follow_redirect" == "$i18n_no" ] 
     then
-        follow_redirect="false"
+        follow_redirect=false
     else
-        follow_redirect="true"
+        follow_redirect=true
     fi
 }
 
@@ -28052,10 +28156,10 @@ V2raySetCertificates()
 
         if [ "$ny_option" == "$i18n_no" ] 
         then
-            one_time_loading="true"
+            one_time_loading=true
             ocsp_stapling=3600
         else
-            one_time_loading="false"
+            one_time_loading=false
             echo
             inquirer text_input "输入 OCSP 装订更新与证书热重载的时间间隔(秒): " ocsp_stapling 3600
         fi
@@ -28224,9 +28328,9 @@ V2raySetInboundSockoptTcpFastOpen()
             inquirer text_input "输入正整数" sockopt_tfo 256
             return 0
         fi
-        sockopt_tfo="true"
+        sockopt_tfo=true
     else
-        sockopt_tfo="false"
+        sockopt_tfo=false
     fi
 }
 
@@ -28240,9 +28344,9 @@ V2raySetOutboundSockoptTcpFastOpen()
         sockopt_tfo=""
     elif [ "$sockopt_tfo_options_index" -eq 1 ] 
     then
-        sockopt_tfo="true"
+        sockopt_tfo=true
     else
-        sockopt_tfo="false"
+        sockopt_tfo=false
     fi
 }
 
@@ -28636,9 +28740,9 @@ V2raySetAcceptProxyProtocol()
     inquirer list_input "是否接收 PROXY 协议" ny_options accept_proxy_protocol
     if [[ $accept_proxy_protocol == "$i18n_yes" ]] 
     then
-        accept_proxy_protocol="true"
+        accept_proxy_protocol=true
     else
-        accept_proxy_protocol="false"
+        accept_proxy_protocol=false
     fi
 }
 
@@ -28685,9 +28789,9 @@ V2raySetDsAbstract()
     inquirer list_input "是否为 abstract domain socket" ny_options ds_abstract
     if [[ $ds_abstract == "$i18n_no" ]] 
     then
-        ds_abstract="false"
+        ds_abstract=false
     else
-        ds_abstract="true"
+        ds_abstract=true
     fi
 }
 
@@ -28697,9 +28801,9 @@ V2raySetDsPadding()
     inquirer list_input "abstract domain socket 是否带 padding" ny_options ds_padding
     if [[ $ds_padding == "$i18n_no" ]] 
     then
-        ds_padding="false"
+        ds_padding=false
     else
-        ds_padding="true"
+        ds_padding=true
     fi
 }
 
@@ -28988,9 +29092,9 @@ V2raySetSniffingEnabled()
     inquirer list_input "是否开启流量探测" ny_options sniffing_enabled
     if [[ $sniffing_enabled == "$i18n_no" ]] 
     then
-        sniffing_enabled="false"
+        sniffing_enabled=false
     else
-        sniffing_enabled="true"
+        sniffing_enabled=true
     fi
 }
 
@@ -29128,9 +29232,9 @@ V2raySetMuxEnabled()
     inquirer list_input "是否启用 Mux 转发请求" ny_options mux_enabled
     if [ "$mux_enabled" == "$i18n_no" ] 
     then
-        mux_enabled="false"
+        mux_enabled=false
     else
-        mux_enabled="true"
+        mux_enabled=true
     fi
 }
 
@@ -29347,7 +29451,7 @@ V2rayAddInbound()
         V2raySetSniffingMetadataOnly
     else
         sniffing_dest_override=""
-        sniffing_metadata_only="false"
+        sniffing_metadata_only=false
     fi
 
     if [ "$v2ray_name" == "xray" ] && [ -n "$sniffing_dest_override" ] 
@@ -29910,13 +30014,13 @@ V2rayAddInbound()
 
                 if [ -n "$early_data_header_name" ] && [ "$early_data_header_name" != "Sec-WebSocket-Protocol" ]
                 then
-                    use_browser_forwarding="false"
+                    use_browser_forwarding=false
                 else
                     V2raySetUseBrowserForwarding
                 fi
             else
                 early_data_header_name=""
-                use_browser_forwarding="false"
+                use_browser_forwarding=false
             fi
 
             new_inbound=$(
@@ -31498,13 +31602,13 @@ V2rayAddOutbound()
 
                     if [ -n "$early_data_header_name" ] && [ "$early_data_header_name" != "Sec-WebSocket-Protocol" ]
                     then
-                        use_browser_forwarding="false"
+                        use_browser_forwarding=false
                     else
                         V2raySetUseBrowserForwarding
                     fi
                 else
                     early_data_header_name=""
-                    use_browser_forwarding="false"
+                    use_browser_forwarding=false
                 fi
 
                 new_outbound=$(
@@ -33161,17 +33265,17 @@ V2raySetPolicy()
         inquirer list_input "当前等级的所有用户的上行流量统计" switch_options policy_level_stats_user_uplink
         if [ "$policy_level_stats_user_uplink" == "开启" ] 
         then
-            policy_level_stats_user_uplink="true"
+            policy_level_stats_user_uplink=true
         else
-            policy_level_stats_user_uplink="false"
+            policy_level_stats_user_uplink=false
         fi
         echo
         inquirer list_input "当前等级的所有用户的上行流量统计" switch_options policy_level_stats_user_downlink
         if [ "$policy_level_stats_user_downlink" == "开启" ] 
         then
-            policy_level_stats_user_downlink="true"
+            policy_level_stats_user_downlink=true
         else
-            policy_level_stats_user_downlink="false"
+            policy_level_stats_user_downlink=false
         fi
         new_policy_level=$(
         $JQ_FILE -n --arg handshake "$policy_level_handshake" --arg connIdle "$policy_level_conn_idle" \
@@ -33196,9 +33300,9 @@ V2raySetPolicy()
         inquirer list_input "所有入站代理的上行流量统计" switch_options policy_system_stats_inbound_uplink
         if [ "$policy_system_stats_inbound_uplink" == "开启" ] 
         then
-            policy_system_stats_inbound_uplink="true"
+            policy_system_stats_inbound_uplink=true
         else
-            policy_system_stats_inbound_uplink="false"
+            policy_system_stats_inbound_uplink=false
         fi
         bool=true
         jq_path='["policy","system","statsInboundUplink"]'
@@ -33209,9 +33313,9 @@ V2raySetPolicy()
         inquirer list_input "所有入站代理的下行流量统计" switch_options policy_system_stats_inbound_downlink
         if [ "$policy_system_stats_inbound_downlink" == "开启" ] 
         then
-            policy_system_stats_inbound_downlink="true"
+            policy_system_stats_inbound_downlink=true
         else
-            policy_system_stats_inbound_downlink="false"
+            policy_system_stats_inbound_downlink=false
         fi
         bool=true
         jq_path='["policy","system","statsInboundDownlink"]'
@@ -33222,9 +33326,9 @@ V2raySetPolicy()
         inquirer list_input "所有出站代理的上行流量统计" switch_options policy_system_stats_outbound_uplink
         if [ "$policy_system_stats_outbound_uplink" == "开启" ] 
         then
-            policy_system_stats_outbound_uplink="true"
+            policy_system_stats_outbound_uplink=true
         else
-            policy_system_stats_outbound_uplink="false"
+            policy_system_stats_outbound_uplink=false
         fi
         bool=true
         jq_path='["policy","system","statsOutboundUplink"]'
@@ -33234,9 +33338,9 @@ V2raySetPolicy()
         inquirer list_input "所有出站代理的下行流量统计" switch_options policy_system_stats_outbound_downlink
         if [ "$policy_system_stats_outbound_downlink" == "开启" ] 
         then
-            policy_system_stats_outbound_downlink="true"
+            policy_system_stats_outbound_downlink=true
         else
-            policy_system_stats_outbound_downlink="false"
+            policy_system_stats_outbound_downlink=false
         fi
         bool=true
         jq_path='["policy","system","statsOutboundDownlink"]'
@@ -43255,6 +43359,7 @@ UpdateSelf()
                 IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[i]}"
                 IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[i]}"
                 IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[i]}"
+                IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[i]}"
                 IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[i]}"
 
                 chnl_schedules_if_null="${chnls_schedule_hls_change[i]//false/}"
@@ -43270,6 +43375,7 @@ UpdateSelf()
                         $JQ_FILE --arg start_time "${chnl_schedules_start_time[chnl_schedules_index]}" \
                             --arg end_time "${chnl_schedules_end_time[chnl_schedules_index]}" \
                             --arg hls_change "${chnl_schedules_hls_change[chnl_schedules_index]:-true}" \
+                            --arg hls_change_once "${chnl_schedules_hls_change_once[chnl_schedules_index]:-false}" \
                             --arg channel_name "${chnl_schedules_channel_name[chnl_schedules_index]:-}" \
                             --arg status "${chnl_schedules_status[chnl_schedules_index]}" \
                         '. + [
@@ -43277,6 +43383,7 @@ UpdateSelf()
                                 "start_time": $start_time | tonumber,
                                 "end_time": $end_time | tonumber,
                                 "hls_change": $hls_change | test("true"),
+                                "hls_change_once": $hls_change_once | test("true"),
                                 "channel_name": $channel_name,
                                 "status": $status | tonumber
                             }
