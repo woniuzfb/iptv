@@ -193,7 +193,7 @@ AptUpdate()
 {
     if [ "${apt_updated:-0}" -eq 0 ] 
     then
-        apt-get -y update >/dev/null
+        apt-get update >/dev/null
         apt_updated=1
     fi
 }
@@ -12426,12 +12426,12 @@ ListChannelsSchedule()
             else
                 chnl_schedule_status_list="${red}结束${normal}"
             fi
-            if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
-            then
-                chnl_schedule_hls_change_list="${green}是${normal}"
-            elif [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
+            if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
             then
                 chnl_schedule_hls_change_list="${green}一次${normal}"
+            elif [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
+            then
+                chnl_schedule_hls_change_list="${green}是${normal}"
             else
                 chnl_schedule_hls_change_list="${red}否${normal}"
             fi
@@ -12486,12 +12486,12 @@ AddChannelsSchedule()
                 else
                     chnl_schedule_status_list="${red}结束${normal}"
                 fi
-                if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
-                then
-                    chnl_schedule_hls_change_list="${green}是${normal}"
-                elif [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
+                if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
                 then
                     chnl_schedule_hls_change_list="${green}一次${normal}"
+                elif [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
+                then
+                    chnl_schedule_hls_change_list="${green}是${normal}"
                 else
                     chnl_schedule_hls_change_list="${red}否${normal}"
                 fi
@@ -12520,19 +12520,19 @@ AddChannelsSchedule()
             if [ "$yn_options_index" -eq 0 ] 
             then
                 schedule_hls_change=true
-                schedule_hls_change_once=false
-            else
-                schedule_hls_change=false
 
                 echo
-                inquirer list_input_index "防盗链一次" yn_options yn_options_index
+                inquirer list_input_index "防盗链一次" ny_options yn_options_index
 
                 if [ "$yn_options_index" -eq 0 ] 
                 then
-                    schedule_hls_change_once=true
-                else
                     schedule_hls_change_once=false
+                else
+                    schedule_hls_change_once=true
                 fi
+            else
+                schedule_hls_change=false
+                schedule_hls_change_once=false
             fi
 
             echo
@@ -12610,19 +12610,19 @@ EditChannelSchedule()
             if [ "$yn_options_index" -eq 0 ] 
             then
                 schedule_hls_change=true
-                schedule_hls_change_once=false
-            else
-                schedule_hls_change=false
 
                 echo
-                inquirer list_input_index "防盗链一次" yn_options yn_options_index
+                inquirer list_input_index "防盗链一次" ny_options yn_options_index
 
                 if [ "$yn_options_index" -eq 0 ] 
                 then
-                    schedule_hls_change_once=true
-                else
                     schedule_hls_change_once=false
+                else
+                    schedule_hls_change_once=true
                 fi
+            else
+                schedule_hls_change=false
+                schedule_hls_change_once=false
             fi
 
             bool=true
@@ -12685,12 +12685,12 @@ EditChannelSchedules()
         else
             chnl_schedule_status_list="${red}结束${normal}"
         fi
-        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
-        then
-            chnl_schedule_hls_change_list="${green}是${normal}"
-        elif [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
+        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
         then
             chnl_schedule_hls_change_list="${green}一次${normal}"
+        elif [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
+        then
+            chnl_schedule_hls_change_list="${green}是${normal}"
         else
             chnl_schedule_hls_change_list="${red}否${normal}"
         fi
@@ -12908,12 +12908,12 @@ SortChannelSchedules()
         else
             chnl_schedule_status_list="${red}结束${normal}"
         fi
-        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
-        then
-            chnl_schedule_hls_change_list="${green}是${normal}"
-        elif [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
+        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
         then
             chnl_schedule_hls_change_list="${green}一次${normal}"
+        elif [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
+        then
+            chnl_schedule_hls_change_list="${green}是${normal}"
         else
             chnl_schedule_hls_change_list="${red}否${normal}"
         fi
@@ -13092,12 +13092,12 @@ DelChannelSchedules()
         else
             chnl_schedule_status_list="${red}结束${normal}"
         fi
-        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
-        then
-            chnl_schedule_hls_change_list="${green}是${normal}"
-        elif [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
+        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
         then
             chnl_schedule_hls_change_list="${green}一次${normal}"
+        elif [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = true ] 
+        then
+            chnl_schedule_hls_change_list="${green}是${normal}"
         else
             chnl_schedule_hls_change_list="${red}否${normal}"
         fi
@@ -19174,11 +19174,10 @@ MonitorHlsRestartChannel()
         then
             if [ "${hls_change[hls_index]:-true}" = true ] 
             then
-                chnl_playlist_name=$(RandStr)
-                chnl_seg_name="$chnl_playlist_name"
-            elif [ "${hls_change_once[hls_index]:-false}" = true ] 
-            then
-                hls_change_once[hls_index]=false
+                if [ "${hls_change_once[hls_index]:-false}" = true ] 
+                then
+                    hls_change_once[hls_index]=false
+                fi
                 chnl_playlist_name=$(RandStr)
                 chnl_seg_name="$chnl_playlist_name"
             fi
@@ -19960,11 +19959,10 @@ MonitorTryAccounts()
                             then
                                 if [ "${hls_change[hls_index]:-true}" = true ] 
                                 then
-                                    chnl_playlist_name=$(RandStr)
-                                    chnl_seg_name="$chnl_playlist_name"
-                                elif [ "${hls_change_once[hls_index]:-false}" = true ] 
-                                then
-                                    hls_change_once[hls_index]=false
+                                    if [ "${hls_change_once[hls_index]:-false}" = true ] 
+                                    then
+                                        hls_change_once[hls_index]=false
+                                    fi
                                     chnl_playlist_name=$(RandStr)
                                     chnl_seg_name="$chnl_playlist_name"
                                 fi
@@ -20185,11 +20183,10 @@ MonitorTryAccounts()
                     then
                         if [ "${hls_change[hls_index]:-true}" = true ] 
                         then
-                            chnl_playlist_name=$(RandStr)
-                            chnl_seg_name="$chnl_playlist_name"
-                        elif [ "${hls_change_once[hls_index]:-false}" = true ] 
-                        then
-                            hls_change_once[hls_index]=false
+                            if [ "${hls_change_once[hls_index]:-false}" = true ] 
+                            then
+                                hls_change_once[hls_index]=false
+                            fi
                             chnl_playlist_name=$(RandStr)
                             chnl_seg_name="$chnl_playlist_name"
                         fi
@@ -20757,7 +20754,7 @@ Monitor()
                                                         then
                                                             hls_change[i]=false
                                                         fi
-                                                        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
+                                                        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] && [ -z "${hls_change_once[hls_index]:-}" ]
                                                         then
                                                             hls_change_once[i]=true
                                                         fi
@@ -20895,7 +20892,7 @@ Monitor()
                                                         then
                                                             hls_change[i]=false
                                                         fi
-                                                        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
+                                                        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] && [ -z "${hls_change_once[hls_index]:-}" ]
                                                         then
                                                             hls_change_once[i]=true
                                                         fi
@@ -21505,7 +21502,7 @@ Monitor()
 
                         for hls_index in "${hls_indices[@]}"
                         do
-                            if [ "${hls_change[hls_index]:-true}" = false ] && [ "${hls_change_once[hls_index]:-false}" = false ]
+                            if [ "${hls_change[hls_index]:-true}" = false ] || { [ -n "${hls_change_once[hls_index]:-}" ] && [ "${hls_change_once[hls_index]}" = false ]; }
                             then
                                 continue
                             fi
@@ -27146,14 +27143,15 @@ NodejsInstall()
     ' EXIT
     if [ "$release" == "rpm" ] 
     then
-        yum -y install gcc-c++ make >/dev/null 2>&1
+        yum -y install ca-certificates gcc-c++ make >/dev/null 2>&1
         # yum groupinstall 'Development Tools'
-        if bash <(curl -sL https://rpm.nodesource.com/setup_10.x) > /dev/null
+        if bash <(curl -sL https://rpm.nodesource.com/setup_14.x) > /dev/null
         then
             yum -y install nodejs >/dev/null 2>&1
         fi
     else
-        if bash <(curl -sL https://deb.nodesource.com/setup_10.x) > /dev/null 
+        apt-get install -y ca-certificates >/dev/null 2>&1
+        if bash <(curl -sL https://deb.nodesource.com/setup_14.x) > /dev/null 
         then
             apt-get install -y nodejs >/dev/null 2>&1
         fi
@@ -27278,6 +27276,7 @@ NodejsInstallMongodb()
             Println "$error 不支持当前系统\n"
             exit 1
         fi
+        yum -y install ca-certificates >/dev/null 2>&1
         printf '%s' "
 [mongodb-org-4.4]
 name=MongoDB Repository
@@ -27287,7 +27286,10 @@ enabled=1
 gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
 " > "/etc/yum.repos.d/mongodb-org-4.4.repo"
         yum install -y mongodb-org >/dev/null 2>&1
-    else 
+    else
+        AptUpdate
+        apt-get install -y ca-certificates >/dev/null 2>&1
+
         if ! wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | apt-key add - > /dev/null 2>&1
         then
             apt-get -y install gnupg >/dev/null 2>&1
@@ -27314,7 +27316,7 @@ gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
             fi
         fi
 
-        AptUpdate
+        apt-get update >/dev/null
         apt-get install -y mongodb-org >/dev/null 2>&1
     fi
 
@@ -27430,54 +27432,65 @@ NodejsConfig()
 
     mkdir -p "$NODE_ROOT"
     echo "
+'use strict';
+
 const express = require('express');
 const session = require('express-session');
-const MongoDBStore = require('connect-mongodb-session')(session);
-
-const store = new MongoDBStore({
-    uri: 'mongodb://$username:$password@127.0.0.1/admin',
-    databaseName: 'encrypt',
-    collection: 'sessions'
-});
+const MongoStore = require('connect-mongo');
+const mongoose = require('mongoose');
+const path = require('path');
 
 const app = express();
 const port = $nodejs_port;
 
-app.set('trust proxy', 1);
-app.use(session({name: '$(RandStr)', resave: false, saveUninitialized: true, secret: '$(RandStr)', store: store, cookie: { domain: 'localhost', maxAge: 60 * 60 * 2000, httpOnly: true }}));
+const clientP = mongoose.connect(
+    'mongodb://$username:$password@127.0.0.1/admin',
+    { useNewUrlParser: true, useUnifiedTopology: true }
+).then(m => m.connection.getClient())
 
-app.get('/', function(req, res){
-    sessionData = req.session || {};
-    sessionData.websiteUser = true;
+app.set('trust proxy', 1);
+app.use(session({
+    name: '$(RandStr)',
+    secret: '$(RandStr)',
+    resave: false,
+    saveUninitialized: false,
+    store: MongoStore.create({
+        clientPromise: clientP,
+        dbName: 'encrypt',
+        stringify: false,
+        collectionName: 'sessions',
+        autoRemove: 'interval',
+        autoRemoveInterval: 120
+    }),
+    cookie: {
+        domain: 'localhost',
+        maxAge: 60 * 60 * 2000,
+        httpOnly: true
+    }
+}));
+
+app.get('/keys', (req, res) => {
+    if (!req.session.websiteUser || !req.query.key || !req.query.channel){
+        res.status(403).end();
+    }
+    res.sendFile(req.query.channel + '/' + req.query.key + '.key', {root: path.join(__dirname, '../${LIVE_ROOT##*/}')});
+});
+
+app.get('/', (req, res) => {
+    req.session.websiteUser = true;
     res.sendFile('$server_root/index.html');
 });
 
-app.get('/remote', function(req, res){
-    sessionData = req.session || {};
-    sessionData.websiteUser = true;
+app.get('/remote', (req, res) => {
+    req.session.websiteUser = true;
     res.sendFile('$server_root/channels.json');
 });
 
-app.get('/channels', function(req, res){
-    sessionData = req.session;
-    if (!sessionData.websiteUser){
-        res.send('error');
-        return;
+app.get('/channels', (req, res) => {
+    if (!req.session.websiteUser){
+        res.status(403).end();
     }
     res.sendFile('$server_root/channels.json');
-});
-
-app.get('/keys', function(req, res){
-    sessionData = req.session;
-    if (!sessionData.websiteUser){
-        res.send('error');
-        return;
-    }
-    let keyName = req.query.key;
-    let channelDirName = req.query.channel;
-    if (keyName && channelDirName){
-        res.sendFile('$server_live_root/${LIVE_ROOT##*/}/' + channelDirName + '/' + keyName + '.key');
-    }
 });
 
 app.listen(port, () => console.log(\`App listening on port \${port}!\`))
@@ -27497,9 +27510,12 @@ app.listen(port, () => console.log(\`App listening on port \${port}!\`))
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "connect-mongodb-session": "^2.3.1",
+    "connect-mongo": "^4.6.0",
     "express": "^4.17.1",
-    "express-session": "^1.17.0"
+    "express-session": "^1.17.0",
+    "mongodb": "^4.1.2",
+    "mongoose": "^6.0.8",
+    "path": "^0.12.7"
   }
 }' > "$NODE_ROOT/package.json"
 
@@ -44800,6 +44816,8 @@ then
             then
                 sed -i '/docker-ce/d' /etc/apt/sources.list
             fi
+            apt-get update
+            apt-get -y install ca-certificates
             if [ ! -f "/etc/apt/sources.list.d/docker.list" ] 
             then
                 curl -fsSL http://mirrors.ustc.edu.cn/docker-ce/linux/debian/gpg | apt-key add -
