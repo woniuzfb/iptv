@@ -39,7 +39,6 @@ function switchCategory(e) {
           localStorage.setItem('dark', 0);
         }
         toggleClass('li','white');
-        toggleClass('button','white');
         toggleClass('input','white');
         toggleClass('a','white');
         toggleClass('body','bgBlack');
@@ -388,7 +387,7 @@ function videojsLoad(sourceOverlay,channel) {
     player.on('error', function(e) {
       let time = this.currentTime();
       if (this.error().code === 2) {
-        alertInfo('频道发生错误！',10);
+        alertInfo('频道发生错误!',10);
         this.error(null).pause().load().currentTime(time).play();
       } else if (this.error().code === 4) {
         if (hlsVideoUrl.indexOf('playtype=lookback') !== -1) {
@@ -402,7 +401,7 @@ function videojsLoad(sourceOverlay,channel) {
             rate = 'sd';
             playBack(sourceReg);
           } else {
-            alertInfo('录像还未准备好！',10);
+            alertInfo('录像还未准备好!',10);
           }
         } else if (hlsVideoUrl.indexOf('playtype=live') !== -1) {
           if (rate === 'org') {
@@ -415,14 +414,27 @@ function videojsLoad(sourceOverlay,channel) {
             rate = 'sd';
             playVideo();
           } else {
-            alertInfo('频道不可用！',10);
+            const modal = player.createModal('频道不可用!');
+            modal.addClass('vjs-errors-dialog');
+            modal.on('modalclose', function() {
+              player.dispose();
+              deleteSchedule();
+            });
           }
         } else if (hlsVideoUrl.indexOf('flv?app=') !== -1 && videojs.browser.IS_IOS) {
-          alertInfo('此频道不支持 ios 系统！',10);
-        /*} else if (videojs.browser.IS_ANDROID) {
-          alertInfo('不支持安卓系统！',10);*/
+          const modal = player.createModal('此频道不支持 ios 系统!');
+          modal.addClass('vjs-errors-dialog');
+          modal.on('modalclose', function() {
+            player.dispose();
+            deleteSchedule();
+          });
         } else {
-          alertInfo('频道不可用！直播源不定时刷新，刷新页面即可继续观看！',10);
+          const modal = player.createModal('直播源已更新, 请刷新页面!');
+          modal.addClass('vjs-errors-dialog');
+          modal.on('modalclose', function() {
+            player.dispose();
+            deleteSchedule();
+          });
         }
         /*
         if (programId) {
@@ -433,7 +445,12 @@ function videojsLoad(sourceOverlay,channel) {
         }
         */
       } else {
-        alertInfo('无法连接直播源！',10);
+        const modal = player.createModal('直播源已更新, 请刷新页面!');
+        modal.addClass('vjs-errors-dialog');
+        modal.on('modalclose', function() {
+          player.dispose();
+          deleteSchedule();
+        });
       }
     });
 
@@ -443,7 +460,7 @@ function videojsLoad(sourceOverlay,channel) {
       if (retry_count > 10) {
         player.pause();
         player.reset();
-        player.error("直播源已更新, 请刷新页面!");
+        player.error('直播源已更新, 请刷新页面!');
       }
     });
 
@@ -453,7 +470,7 @@ function videojsLoad(sourceOverlay,channel) {
       if (current_time > 0 && (current_time == duration_time)) {
         this.pause();
         this.reset();
-        this.error("直播源已更新, 请刷新页面!");
+        this.error('直播源已更新, 请刷新页面!');
       }
     });
   });

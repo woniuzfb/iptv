@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-sh_ver="1.84.0"
+sh_ver="1.85.0"
 sh_debug=0
 export LANGUAGE=
 export LC_ALL=
@@ -154,6 +154,9 @@ DebFixSources()
 {
     if [ "${deb_fix:-1}" -eq 1 ] 
     then
+        sed -i 's/^mozilla\/DST_Root_CA_X3.crt/!mozilla\/DST_Root_CA_X3.crt/g' /etc/ca-certificates.conf
+        update-ca-certificates -f >/dev/null 2>&1 || true
+
         if [ -f /etc/apt/sources.list.d/sources-aliyun-0.list ] 
         then
             deb_list=$(< /etc/apt/sources.list.d/sources-aliyun-0.list)
@@ -217,6 +220,7 @@ DepInstall()
                 setenforce permissive
                 sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
             fi
+
             if yum -y install $dependency >/dev/null 2>&1
             then
                 Println "${green}[INFO]${normal} $dependency installation succeed..."
@@ -225,8 +229,13 @@ DepInstall()
                 exit 1
             fi
         else
-            [ "$release" == "deb" ] && DebFixSources
+            if [ "$release" == "deb" ] 
+            then
+                DebFixSources
+            fi
+
             AptUpdate
+
             if apt-get -y install $dependency >/dev/null 2>&1
             then
                 Println "${green}[INFO]${normal} $dependency installation succeed..."
@@ -248,6 +257,7 @@ DepInstall()
             setenforce permissive
             sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
         fi
+
         if yum -y install $dependency >/dev/null 2>&1
         then
             Println "`eval_gettext \"\\\$info \\\$dependency 安装成功\"`"
@@ -256,8 +266,13 @@ DepInstall()
             exit 1
         fi
     else
-        [ "$release" == "deb" ] && DebFixSources
+        if [ "$release" == "deb" ] 
+        then
+            DebFixSources
+        fi
+
         AptUpdate
+
         if apt-get -y install $1 >/dev/null 2>&1
         then
             Println "`eval_gettext \"\\\$info \\\$dependency 安装成功\"`"
@@ -317,6 +332,7 @@ i18nGetMsg()
             ny_options=( "$i18n_no" "$i18n_yes" )
         ;;
         list_channels) 
+            i18n_output_dir_name=${i18n_output_dir_name:-$(gettext "输出目录")}
             i18n_video_shift=${i18n_video_shift:-$(gettext "画面延迟")}
             i18n_audio_shift=${i18n_audio_shift:-$(gettext "声音延迟")}
             i18n_seconds=${i18n_seconds:-$(gettext "秒")}
@@ -397,9 +413,14 @@ LocaleFix()
             setenforce permissive
             sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
         fi
+
         yum -y install glibc-common glibc-locale-source glibc-all-langpacks glibc-langpack-en glibc-langpacks-zh langpacks-zh_CN >/dev/null 2>&1 || true
     else
-        [ "$release" == "deb" ] && DebFixSources
+        if [ "$release" == "deb" ] 
+        then
+            DebFixSources
+        fi
+
         if [[ ! -x $(command -v locale-gen) ]] 
         then
             AptUpdate
@@ -408,10 +429,12 @@ LocaleFix()
                 Println "${red}[ERROR]${normal} locales installation failed\n" && exit 1
             fi
         fi
+
         if [ -s /etc/locale.gen ] 
         then
             sed -i "s/# $1.UTF-8 UTF-8/$1.UTF-8 UTF-8/" /etc/locale.gen
         fi
+
         locale-gen $1.UTF-8 >/dev/null
     fi
 
@@ -496,7 +519,24 @@ DepsInstall()
             setenforce permissive
             sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
         fi
+
         depends=(wget unzip vim curl crond logrotate patch)
+
+        if [[ ! -x $(command -v dig) ]] 
+        then
+            depends+=(bind-utils)
+        fi
+
+        if [[ ! -x $(command -v hexdump) ]] 
+        then
+            depends+=(util-linux)
+        fi
+
+        if [[ ! -x $(command -v ss) ]] 
+        then
+            depends+=(iproute)
+        fi
+
         for depend in "${depends[@]}"
         do
             if [[ ! -x $(command -v "$depend") ]] 
@@ -505,44 +545,35 @@ DepsInstall()
                 then
                     Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
                 else
-                    Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n" && exit 1
+                    Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n"
+                    exit 1
                 fi
             fi
         done
+
+        yum -y update ca-certificates >/dev/null 2>&1 || yum -y reinstall ca-certificates >/dev/null 2>&1
+    else
+        if [ "$release" == "deb" ] 
+        then
+            DebFixSources
+        fi
+
+        AptUpdate
+
+        apt-get -y install ca-certificates >/dev/null 2>&1
+
+        depends=(wget unzip vim curl cron ufw python3 logrotate patch)
+
         if [[ ! -x $(command -v dig) ]] 
         then
-            depend=dig
-            if yum -y install bind-utils >/dev/null 2>&1
-            then
-                Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
-            else
-                Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n" && exit 1
-            fi
+            depends+=(dnsutils)
         fi
+
         if [[ ! -x $(command -v hexdump) ]] 
         then
-            depend=hexdump
-            if yum -y install util-linux >/dev/null 2>&1
-            then
-                Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
-            else
-                Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n" && exit 1
-            fi
+            depends+=(bsdmainutils)
         fi
-        if [[ ! -x $(command -v ss) ]] 
-        then
-            depend=ss
-            if yum -y install iproute >/dev/null 2>&1
-            then
-                Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
-            else
-                Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n" && exit 1
-            fi
-        fi
-    else
-        [ "$release" == "deb" ] && DebFixSources
-        AptUpdate
-        depends=(wget unzip vim curl cron ufw python3 logrotate patch)
+
         for depend in "${depends[@]}"
         do
             if [[ ! -x $(command -v "$depend") ]] 
@@ -551,30 +582,11 @@ DepsInstall()
                 then
                     Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
                 else
-                    Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n" && exit 1
+                    Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n"
+                    exit 1
                 fi
             fi
         done
-        if [[ ! -x $(command -v dig) ]] 
-        then
-            depend=dig
-            if apt-get -y install dnsutils >/dev/null 2>&1
-            then
-                Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
-            else
-                Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n" && exit 1
-            fi
-        fi
-        if [[ ! -x $(command -v hexdump) ]] 
-        then
-            depend=hexdump
-            if apt-get -y install bsdmainutils >/dev/null 2>&1
-            then
-                Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
-            else
-                Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n" && exit 1
-            fi
-        fi
     fi
 }
 
@@ -583,7 +595,7 @@ inquirer()
 {
     if [[ ! -x $(command -v tput) ]] 
     then
-        DepsCheck
+        DepInstall tput
     fi
 
     inquirer:print() {
@@ -597,9 +609,7 @@ inquirer()
         then
             return 0
         fi
-        local join_list=("${!var}")
-        local IFS=$'\n'
-        local first=true
+        local join_list=("${!var}") first=true item
         for item in "${join_list[@]}"
         do
             if [ "$first" = true ]
@@ -689,11 +699,11 @@ inquirer()
         inquirer:remove_instructions
         tput cub "$(tput cols)"
 
-        if [ "${checkbox_selected[$current_index]}" = true ]
+        if [ "${checkbox_selected[current_index]}" = true ]
         then
-            inquirer:print " ${green}${checked}${normal} ${checkbox_list[$current_index]}"
+            inquirer:print " ${green}${checked}${normal} ${checkbox_list[current_index]}"
         else
-            inquirer:print " ${unchecked} ${checkbox_list[$current_index]}"
+            inquirer:print " ${unchecked} ${checkbox_list[current_index]}"
         fi
 
         if [ $current_index = 0 ]
@@ -707,11 +717,11 @@ inquirer()
 
         tput cub "$(tput cols)"
 
-        if [ "${checkbox_selected[$current_index]}" = true ]
+        if [ "${checkbox_selected[current_index]}" = true ]
         then
-            inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_list[$current_index]}"
+            inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_list[current_index]}"
         else
-            inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_list[$current_index]}"
+            inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_list[current_index]}"
         fi
     }
 
@@ -719,11 +729,11 @@ inquirer()
         inquirer:remove_instructions
         tput cub "$(tput cols)"
 
-        if [ "${checkbox_selected[$current_index]}" = true ]
+        if [ "${checkbox_selected[current_index]}" = true ]
         then
-            inquirer:print " ${green}${checked}${normal} ${checkbox_list[$current_index]}"
+            inquirer:print " ${green}${checked}${normal} ${checkbox_list[current_index]}"
         else
-            inquirer:print " ${unchecked} ${checkbox_list[$current_index]}"
+            inquirer:print " ${unchecked} ${checkbox_list[current_index]}"
         fi
 
         if [ $current_index = $((${#checkbox_list[@]}-1)) ]
@@ -737,56 +747,102 @@ inquirer()
 
         tput cub "$(tput cols)"
 
-        if [ "${checkbox_selected[$current_index]}" = true ]
+        if [ "${checkbox_selected[current_index]}" = true ]
         then
-            inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_list[$current_index]}"
+            inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_list[current_index]}"
         else
-            inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_list[$current_index]}"
+            inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_list[current_index]}"
         fi
     }
 
     inquirer:on_checkbox_input_enter() {
-        local i OLD_IFS=$IFS
-
-        IFS=$'\n'
+        local i
 
         for i in "${!checkbox_list[@]}"
         do
-            if [ "${checkbox_selected[i]}" = true ]
+            if [ "${checkbox_selected[i]}" = true ] && [ "$i" -ne "$checkbox_list_count" ]
             then
                 checkbox_selected_indices+=("$i")
                 checkbox_selected_options+=("${checkbox_list[i]}")
             fi
         done
 
-        tput cud $((${#checkbox_list[@]}-current_index))
         tput cub "$(tput cols)"
 
-        for i in $(seq $((${#checkbox_list[@]}+1)))
-        do
-            tput el
-            tput cuu1
-        done
+        if [ -z "${checkbox_selected_indices:-}" ] 
+        then
+            tput sc
+            failed_count=$((failed_count+1))
+            tput cuu $((current_index+1))
+            tput cuf $((prompt_width+3))
+            inquirer:print "${red}${checkbox_input_failed_msg}${normal}"
+            tput rc
+        else
+            tput cud $((${#checkbox_list[@]}-current_index))
 
-        tput cuf $((prompt_width+3))
-        inquirer:print "${cyan}$(inquirer:join checkbox_selected_options)${normal}\n"
+            for i in $(seq $((${#checkbox_list[@]}+1)))
+            do
+                tput el
+                tput cuu1
+            done
 
-        break_keypress=true
-        IFS=$OLD_IFS
+            tput cuf $((prompt_width+3))
+            inquirer:print "${cyan}$(inquirer:join checkbox_selected_options)${normal}\n"
+
+            break_keypress=true
+        fi
     }
 
     inquirer:on_checkbox_input_space() {
+        local i
+
         inquirer:remove_instructions
         tput cub "$(tput cols)"
         tput el
 
-        if [ "${checkbox_selected[$current_index]}" = true ]
+        if [ "$current_index" -eq "$checkbox_list_count" ] 
         then
-            checkbox_selected[$current_index]=false
-            inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_list[$current_index]}"
+            if [ "${checkbox_selected[current_index]}" = true ]
+            then
+                tput cuu $current_index
+                for i in "${!checkbox_list[@]}"
+                do
+                    if [ "$i" -eq "$current_index" ]
+                    then
+                        inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_list[i]}"
+                    else
+                        inquirer:print " ${unchecked} ${checkbox_list[i]}\n"
+                    fi
+                done
+                for i in "${!checkbox_list[@]}"
+                do
+                    checkbox_selected[i]=false
+                done
+            else
+                tput cuu $current_index
+                for i in "${!checkbox_list[@]}"
+                do
+                    if [ "$i" -eq "$current_index" ]
+                    then
+                        inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_list[i]}"
+                    else
+                        inquirer:print " ${green}${checked}${normal} ${checkbox_list[i]}\n"
+                    fi
+                done
+                for i in "${!checkbox_list[@]}"
+                do
+                    checkbox_selected[i]=true
+                done
+            fi
         else
-            checkbox_selected[$current_index]=true
-            inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_list[$current_index]}"
+            if [ "${checkbox_selected[current_index]}" = true ]
+            then
+                checkbox_selected[current_index]=false
+                inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_list[current_index]}"
+            else
+                checkbox_selected[current_index]=true
+                inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_list[current_index]}"
+            fi
         fi
     }
 
@@ -804,7 +860,11 @@ inquirer()
         checkbox_selected_indices=()
         checkbox_selected_options=()
         checkbox_list=("${!var}")
+        checkbox_list_count=${#checkbox_list[@]}
+        checkbox_list+=("$(gettext 全选)")
+        checkbox_input_failed_msg=${4:-$(gettext "选择不能为空")}
         current_index=0
+        failed_count=0
         first_keystroke=true
 
         trap inquirer:control_c SIGINT EXIT
@@ -864,7 +924,6 @@ inquirer()
         inquirer:_checkbox_input "$1" "$2"
 
         read -r -a ${var_name?} <<< "${checkbox_selected_options[@]}"
-        unset new_array
 
         inquirer:cleanup
     }
@@ -887,7 +946,7 @@ inquirer()
 
         tput cub "$(tput cols)"
 
-        inquirer:print "  ${sort_options[$current_index]}"
+        inquirer:print "  ${sort_options[current_index]}"
 
         if [ $current_index = 0 ]
         then
@@ -900,7 +959,7 @@ inquirer()
 
         tput cub "$(tput cols)"
 
-        inquirer:print "${cyan}${arrow} ${sort_options[$current_index]} ${normal}"
+        inquirer:print "${cyan}${arrow} ${sort_options[current_index]} ${normal}"
     }
 
     inquirer:on_sort_down() {
@@ -911,7 +970,7 @@ inquirer()
 
         tput cub "$(tput cols)"
 
-        inquirer:print "  ${sort_options[$current_index]}"
+        inquirer:print "  ${sort_options[current_index]}"
 
         if [ $current_index = $((${#sort_options[@]}-1)) ]
         then
@@ -924,7 +983,7 @@ inquirer()
 
         tput cub "$(tput cols)"
 
-        inquirer:print "${cyan}${arrow} ${sort_options[$current_index]} ${normal}"
+        inquirer:print "${cyan}${arrow} ${sort_options[current_index]} ${normal}"
     }
 
     inquirer:on_sort_move_up() {
@@ -943,7 +1002,7 @@ inquirer()
             do
                 inquirer:print "  ${sort_options[i]}\n"
             done
-            inquirer:print "${cyan}${arrow} ${sort_options[$current_index]} ${normal}"
+            inquirer:print "${cyan}${arrow} ${sort_options[current_index]} ${normal}"
             current_index=$((${#sort_options[@]}-1))
             sort_options=( "${sort_options[@]:1}" "${sort_options[@]:0:1}" )
             sort_indices=( "${sort_indices[@]:1}" "${sort_indices[@]:0:1}" )
@@ -951,12 +1010,12 @@ inquirer()
             inquirer:print "  ${sort_options[current_index-1]}"
             tput cuu1
             tput cub "$(tput cols)"
-            inquirer:print "${cyan}${arrow} ${sort_options[$current_index]} ${normal}"
-            local tmp="${sort_options[$current_index]}"
-            sort_options[current_index]="${sort_options[$current_index-1]}"
+            inquirer:print "${cyan}${arrow} ${sort_options[current_index]} ${normal}"
+            local tmp="${sort_options[current_index]}"
+            sort_options[current_index]="${sort_options[current_index-1]}"
             sort_options[current_index-1]="$tmp"
             tmp="${sort_indices[current_index]}"
-            sort_indices[current_index]="${sort_indices[$current_index-1]}"
+            sort_indices[current_index]="${sort_indices[current_index-1]}"
             sort_indices[current_index-1]="$tmp"
             current_index=$((current_index-1))
         fi
@@ -968,12 +1027,14 @@ inquirer()
             return 0
         fi
 
+        local i
+
         tput cub "$(tput cols)"
 
         if [ $current_index = $((${#sort_options[@]}-1)) ]
         then
             tput cuu $((${#sort_options[@]}-1))
-            inquirer:print "${cyan}${arrow} ${sort_options[$current_index]} ${normal}\n"
+            inquirer:print "${cyan}${arrow} ${sort_options[current_index]} ${normal}\n"
             for((i=0;i<current_index;i++));
             do
                 inquirer:print "  ${sort_options[i]}\n"
@@ -986,12 +1047,12 @@ inquirer()
             inquirer:print "  ${sort_options[current_index+1]}"
             tput cud1
             tput cub "$(tput cols)"
-            inquirer:print "${cyan}${arrow} ${sort_options[$current_index]} ${normal}"
-            local tmp="${sort_options[$current_index]}"
-            sort_options[current_index]="${sort_options[$current_index+1]}"
+            inquirer:print "${cyan}${arrow} ${sort_options[current_index]} ${normal}"
+            local tmp="${sort_options[current_index]}"
+            sort_options[current_index]="${sort_options[current_index+1]}"
             sort_options[current_index+1]="$tmp"
-            tmp="${sort_indices[$current_index]}"
-            sort_indices[current_index]="${sort_indices[$current_index+1]}"
+            tmp="${sort_indices[current_index]}"
+            sort_indices[current_index]="${sort_indices[current_index+1]}"
             sort_indices[current_index+1]="$tmp"
             current_index=$((current_index+1))
         fi
@@ -1006,8 +1067,7 @@ inquirer()
 
     inquirer:on_sort_enter_space()
     {
-        local i OLD_IFS=$IFS
-        IFS=$'\n'
+        local i
 
         tput cud $((${#sort_options[@]}-current_index))
         tput cub "$(tput cols)"
@@ -1022,7 +1082,6 @@ inquirer()
         inquirer:print "${cyan}$(inquirer:join sort_options)${normal}\n"
 
         break_keypress=true
-        IFS=$OLD_IFS
     }
 
     inquirer:_sort_input() {
@@ -1084,7 +1143,7 @@ inquirer()
 
         tput cub "$(tput cols)"
 
-        inquirer:print "  ${list_options[$current_index]}"
+        inquirer:print "  ${list_options[current_index]}"
 
         if [ $current_index = 0 ]
         then
@@ -1097,7 +1156,7 @@ inquirer()
 
         tput cub "$(tput cols)"
 
-        inquirer:print "${cyan}${arrow} ${list_options[$current_index]}${normal}"
+        inquirer:print "${cyan}${arrow} ${list_options[current_index]}${normal}"
     }
 
     inquirer:on_list_input_down() {
@@ -1110,7 +1169,7 @@ inquirer()
 
         tput cub "$(tput cols)"
 
-        inquirer:print "  ${list_options[$current_index]}"
+        inquirer:print "  ${list_options[current_index]}"
 
         if [ $current_index = $((${#list_options[@]}-1)) ]
         then
@@ -1123,12 +1182,11 @@ inquirer()
 
         tput cub "$(tput cols)"
 
-        inquirer:print "${cyan}${arrow} ${list_options[$current_index]} ${normal}"
+        inquirer:print "${cyan}${arrow} ${list_options[current_index]} ${normal}"
     }
 
     inquirer:on_list_input_enter_space() {
-        local i OLD_IFS=$IFS
-        IFS=$'\n'
+        local i
 
         tput cud $((${#list_options[@]}-current_index))
         tput cub "$(tput cols)"
@@ -1140,10 +1198,9 @@ inquirer()
         done
 
         tput cuf $((prompt_width+3))
-        inquirer:print "${cyan}${list_options[$current_index]}${normal}\n"
+        inquirer:print "${cyan}${list_options[current_index]}${normal}\n"
 
         break_keypress=true
-        IFS=$OLD_IFS
     }
 
     inquirer:on_list_input_ascii() {
@@ -1187,7 +1244,7 @@ inquirer()
 
         inquirer:_list_input "$1" "$2"
 
-        read -r ${var_name?} <<< "${list_options[$current_index]}"
+        read -r ${var_name?} <<< "${list_options[current_index]}"
 
         inquirer:cleanup
     }
@@ -1238,13 +1295,13 @@ inquirer()
         if $text_input_validator "$text_input"
         then
             tput sc
-            tput cuu $((1+regex_failed_count*3))
+            tput cuu $((1+failed_count*3))
             tput cuf $((prompt_width+3))
             inquirer:print "${cyan}${text_input}${normal}"
             tput rc
             break_keypress=true
         else
-            regex_failed_count=$((regex_failed_count+1))
+            failed_count=$((failed_count+1))
             tput cud1
             inquirer:print "${red}${text_input_regex_failed_msg}${normal}"
             tput cud1
@@ -1361,7 +1418,7 @@ inquirer()
         text_default_value=${3:-}
         text_input=""
         current_pos=0
-        regex_failed_count=0
+        failed_count=0
         local text_default_tip
 
         if [ -n "$text_default_value" ] 
@@ -1399,11 +1456,13 @@ inquirer()
         if [ "$first_keystroke" = true ]
         then
             tput sc
+            tput civis
             tput cuu 1
             tput cub "$(tput cols)"
             tput cuf $((prompt_width+3))
             tput el
             tput rc
+            tput cnorm
             first_keystroke=false
         fi
     }
@@ -1520,13 +1579,13 @@ inquirer()
         if $date_pick_validator "$date_pick"
         then
             tput sc
-            tput cuu $((1+regex_failed_count*3))
+            tput cuu $((1+failed_count*3))
             tput cuf $((prompt_width+3))
             inquirer:print "${cyan}${date_pick}${normal}"
             tput rc
             break_keypress=true
         else
-            regex_failed_count=$((regex_failed_count+1))
+            failed_count=$((failed_count+1))
             tput cud1
             inquirer:print "${red}${date_pick_regex_failed_msg}${normal}\n"
             tput cud1
@@ -1543,7 +1602,7 @@ inquirer()
         date_pick_validator=${4:-inquirer:date_pick_default_validator}
         date_pick=$(printf '%(%Y-%m-%d %H:%M:%S)T' -1)
         current_pos=12
-        regex_failed_count=0
+        failed_count=0
         first_keystroke=true
 
         inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}`gettext \"(使用箭头选择)\"`${normal}\n"
@@ -1557,8 +1616,6 @@ inquirer()
 
         inquirer:on_keypress inquirer:on_date_pick_up inquirer:on_date_pick_down inquirer:on_date_pick_enter_space inquirer:on_date_pick_enter_space inquirer:on_date_pick_left inquirer:on_date_pick_right inquirer:on_date_pick_ascii
         read -r ${var_name?} <<< $(date +%s -d "$date_pick")
-
-        unset first_keystroke
 
         inquirer:cleanup
     }
@@ -1599,14 +1656,16 @@ inquirer()
     first_keystroke \
     current_index \
     checkbox_list \
+    checkbox_list_count \
     checkbox_selected \
     checkbox_selected_indices \
     checkbox_selected_options \
+    checkbox_input_failed_msg \
     sort_options \
     sort_indices \
     list_options \
     current_pos \
-    regex_failed_count \
+    failed_count \
     text_default_value \
     text_input \
     text_input_regex_failed_msg \
@@ -1637,8 +1696,9 @@ inquirer()
 Spinner(){
     if [[ ! -x $(command -v tput) ]] 
     then
-        DepsCheck
+        DepInstall tput
     fi
+
     local i=1 delay=0.05 FUNCTION_NAME="$2" VARIABLE_NAME="${3:-}" list tempfile
     local green cyan normal
     green=$(tput setaf 2)
@@ -1650,7 +1710,9 @@ Spinner(){
 
     trap 'inquirer cleanup' SIGINT
 
-    stty -echo && tput civis
+    stty -echo
+    tput civis
+
     $FUNCTION_NAME >> "$tempfile" 2>>"$tempfile" &
     local pid=$!
 
@@ -1678,7 +1740,8 @@ Spinner(){
 
     rm -f "$tempfile"
 
-    tput cnorm && stty echo
+    tput cnorm
+    stty echo
 
     trap - SIGINT
 
@@ -3167,6 +3230,23 @@ ImageMagickInstall()
 
 Pdf2htmlInstall()
 {
+    if [[ -x $(command -v pdf2htmlEX) ]] 
+    then
+        Println "$error pdf2htmlEX 已存在!\n"
+        return 0
+    fi
+
+    echo
+    ExitOnList n "`gettext \"因为是编译 pdf2htmlEX, 耗时会很长, 是否继续\"`"
+
+    Println "$info pdf2htmlEX 安装完成, 输入 source /etc/profile 可立即使用\n"
+
+    if ! pdf2htmlEX -v > /dev/null 2>&1
+    then
+        Println "$info 请先输入 source /etc/profile 以启用 pdf2htmlEX\n"
+        exit 1
+    fi
+
     ReleaseCheck
     Progress &
     progress_pid=$!
@@ -3265,6 +3345,29 @@ Pdf2htmlInstall()
     else
         echo 'export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig' >> /etc/profile
         echo 'export LD_LIBRARY_PATH=/usr/local/lib:${LD_LIBRARY_PATH:-}' >> /etc/profile
+    fi
+}
+
+TesseractInstall()
+{
+    if [[ -x $(command -v tesseract) ]] 
+    then
+        Println "$error tesseract 已存在!\n"
+        return 0
+    fi
+
+    DepsCheck
+
+    if [ "$release" == "ubu" ] 
+    then
+        add-apt-repository ppa:alex-p/tesseract-ocr -y
+        AptUpdate
+        apt-get -y install tesseract
+    elif [ "$release" == "deb" ] 
+    then
+        Println "$info 参考 https://notesalexp.org/tesseract-ocr/ ...\n"
+    else
+        Println "$info 参考 https://tesseract-ocr.github.io/tessdoc/Home.html ...\n"
     fi
 }
 
@@ -4257,7 +4360,7 @@ FlvStreamCreator()
                 done
 
                 new_channel=$(
-                $JQ_FILE -n --arg pid "$pid" --arg status "off" \
+                $JQ_FILE -n --arg pid "$pid" --arg status "off" --arg hide "false" \
                     --argjson stream_link "$stream_links_json" --arg live "$live" \
                     --arg proxy "$proxy" --arg xc_proxy "$xc_proxy" \
                     --arg user_agent "$user_agent" --arg headers "$headers" \
@@ -4280,6 +4383,7 @@ FlvStreamCreator()
                     '{
                         pid: $pid | tonumber,
                         status: $status,
+                        hide: $hide | test("true"),
                         stream_link: $stream_link,
                         live: $live | test("true"),
                         proxy: $proxy,
@@ -5209,7 +5313,7 @@ HlsStreamCreatorPlus()
                 done
 
                 new_channel=$(
-                $JQ_FILE -n --arg pid "$pid" --arg status "on" \
+                $JQ_FILE -n --arg pid "$pid" --arg status "on" --arg hide "false" \
                     --argjson stream_link "$stream_links_json" --arg live "$live" \
                     --arg proxy "$proxy" --arg xc_proxy "$xc_proxy" \
                     --arg user_agent "$user_agent" --arg headers "$headers" \
@@ -5232,6 +5336,7 @@ HlsStreamCreatorPlus()
                     '{
                         pid: $pid | tonumber,
                         status: $status,
+                        hide: $hide | test("true"),
                         stream_link: $stream_link,
                         live: $live | test("true"),
                         proxy: $proxy,
@@ -6668,7 +6773,7 @@ GetChannels()
 
     [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
 
-    IFS=$'\004\t' read -r m_pid m_status m_stream_link m_live m_proxy m_xc_proxy m_user_agent m_headers m_cookies \
+    IFS=$'\004\t' read -r m_pid m_status m_hide m_stream_link m_live m_proxy m_xc_proxy m_user_agent m_headers m_cookies \
     m_output_dir_name m_playlist_name m_seg_dir_name m_seg_name m_seg_length m_seg_count \
     m_video_codec m_audio_codec m_video_audio_shift m_txt_format m_draw_text m_quality m_bitrates m_const m_encrypt \
     m_encrypt_session m_keyinfo_name m_key_name m_key_time m_input_flags m_output_flags \
@@ -6677,7 +6782,7 @@ GetChannels()
     m_schedule_hls_change m_schedule_hls_change_once m_schedule_channel_name m_schedule_status < <(JQs flat "$CHANNELS_FILE" '' '
     (.channels | if . == "" then {} else . end) as $channels |
     ($channels.schedule // {} | if (.|type) == "string" then {} else . end) as $schedule |
-    reduce ({pid,status,stream_link,live,proxy,xc_proxy,user_agent,headers,cookies,output_dir_name,
+    reduce ({pid,status,hide,stream_link,live,proxy,xc_proxy,user_agent,headers,cookies,output_dir_name,
     playlist_name,seg_dir_name,seg_name,seg_length,seg_count,video_codec,audio_codec,video_audio_shift,
     txt_format,draw_text,quality,bitrates,const,encrypt,encrypt_session,keyinfo_name,key_name,key_time,
     input_flags,output_flags,channel_name,channel_time,sync,sync_file,sync_index,sync_pairs,hls_end_list,
@@ -6711,6 +6816,7 @@ GetChannels()
     if_null_false=${if_null_off//off/false}
     if_null_schedule_empty=${if_null_empty//${delimiters[1]}/${delimiters[2]}}
 
+    IFS="${delimiters[1]}" read -ra chnls_hide <<< "${m_hide:-$if_null_false}"
     IFS="${delimiters[1]}" read -ra chnls_stream_links <<< "${m_stream_link:-$if_null_empty}"
 
     chnls_stream_link=("${chnls_stream_links[@]%%${delimiters[0]}*}")
@@ -6783,25 +6889,33 @@ ListChannels()
 
     i18nGetMsg list_channels
 
-    chnls_list=""
-    for((index=0;index<chnls_count;index++))
-    do
-        chnls_output_dir_root="$LIVE_ROOT/${chnls_output_dir_name[index]}"
+    chnls_indices=("${!chnls_pid[@]}")
 
-        v_or_a=${chnls_video_audio_shift[index]%_*}
+    chnls_list=""
+
+    for chnls_index in "${chnls_indices[@]}"
+    do
+        if [ "${chnls_hide[chnls_index]}" = true ] 
+        then
+            continue
+        fi
+
+        chnls_output_dir_root="$LIVE_ROOT/${chnls_output_dir_name[chnls_index]}"
+
+        v_or_a=${chnls_video_audio_shift[chnls_index]%_*}
         if [ "$v_or_a" == "v" ] 
         then
-            chnls_video_shift=${chnls_video_audio_shift[index]#*_}
+            chnls_video_shift=${chnls_video_audio_shift[chnls_index]#*_}
             chnls_video_audio_shift_text="$i18n_video_shift $chnls_video_shift($i18n_seconds)"
         elif [ "$v_or_a" == "a" ] 
         then
-            chnls_audio_shift=${chnls_video_audio_shift[index]#*_}
+            chnls_audio_shift=${chnls_video_audio_shift[chnls_index]#*_}
             chnls_video_audio_shift_text="$i18n_audio_shift $chnls_audio_shift($i18n_seconds)"
         else
             chnls_video_audio_shift_text="$i18n_not_set"
         fi
 
-        if [ "${chnls_const[index]}" = false ] 
+        if [ "${chnls_const[chnls_index]}" = false ] 
         then
             chnls_const_text="$i18n_const_no"
         else
@@ -6812,7 +6926,7 @@ ListChannels()
         chnls_bitrates_text=""
         chnls_playlist_file_text=""
 
-        if [ -n "${chnls_bitrates[index]}" ] 
+        if [ -n "${chnls_bitrates[chnls_index]}" ] 
         then
             while IFS= read -r chnls_br
             do
@@ -6822,42 +6936,42 @@ ListChannels()
                     chnls_br_b=" $i18n_resolution: ${chnls_br#*-}"
                     chnls_quality_text="${chnls_quality_text}[ -maxrate ${chnls_br_a}k -bufsize ${chnls_br_a}k${chnls_br_b} ] "
                     chnls_bitrates_text="${chnls_bitrates_text}[ $i18n_bitrates ${chnls_br_a}k${chnls_br_b}${chnls_const_text} ] "
-                    chnls_playlist_file_text="$chnls_playlist_file_text$chnls_output_dir_root/${chnls_playlist_name[index]}_$chnls_br_a.m3u8 "
+                    chnls_playlist_file_text="$chnls_playlist_file_text$chnls_output_dir_root/${chnls_playlist_name[chnls_index]}_$chnls_br_a.m3u8 "
                 elif [[ $chnls_br == *"x"* ]] 
                 then
                     chnls_quality_text="${chnls_quality_text}[ $i18n_resolution: $chnls_br ] "
                     chnls_bitrates_text="${chnls_bitrates_text}[ $i18n_resolution: $chnls_br${chnls_const_text} ] "
-                    chnls_playlist_file_text="$chnls_playlist_file_text$chnls_output_dir_root/${chnls_playlist_name[index]}.m3u8 "
+                    chnls_playlist_file_text="$chnls_playlist_file_text$chnls_output_dir_root/${chnls_playlist_name[chnls_index]}.m3u8 "
                 else
                     chnls_quality_text="${chnls_quality_text}[ -maxrate ${chnls_br}k -bufsize ${chnls_br}k ] "
                     chnls_bitrates_text="${chnls_bitrates_text}[ $i18n_bitrates ${chnls_br}k${chnls_const_text} ] "
-                    chnls_playlist_file_text="$chnls_playlist_file_text$chnls_output_dir_root/${chnls_playlist_name[index]}_$chnls_br.m3u8 "
+                    chnls_playlist_file_text="$chnls_playlist_file_text$chnls_output_dir_root/${chnls_playlist_name[chnls_index]}_$chnls_br.m3u8 "
                 fi
-            done <<< ${chnls_bitrates[index]//,/$'\n'}
+            done <<< ${chnls_bitrates[chnls_index]//,/$'\n'}
         else
-            chnls_playlist_file_text="$chnls_playlist_file_text$chnls_output_dir_root/${chnls_playlist_name[index]}.m3u8 "
+            chnls_playlist_file_text="$chnls_playlist_file_text$chnls_output_dir_root/${chnls_playlist_name[chnls_index]}.m3u8 "
         fi
 
-        if [ -n "${chnls_quality[index]}" ] 
+        if [ -n "${chnls_quality[chnls_index]}" ] 
         then
-            chnls_video_quality_text="crf ${chnls_quality[index]} ${chnls_quality_text:-$i18n_not_set}"
+            chnls_video_quality_text="crf ${chnls_quality[chnls_index]} ${chnls_quality_text:-$i18n_not_set}"
         else
             chnls_video_quality_text="$i18n_bitrates ${chnls_bitrates_text:-$i18n_not_set}"
         fi
 
-        if [ -z "${kind:-}" ] && [ "${chnls_video_codec[index]}" == "copy" ] && [ "${chnls_audio_codec[index]}" == "copy" ]  
+        if [ -z "${kind:-}" ] && [ "${chnls_video_codec[chnls_index]}" == "copy" ] && [ "${chnls_audio_codec[chnls_index]}" == "copy" ]  
         then
             chnls_video_quality_text="$i18n_original"
         fi
 
-        if [ -n "${chnls_proxy[index]}" ] 
+        if [ -n "${chnls_proxy[chnls_index]}" ] 
         then
             chnls_proxy_text="[$i18n_proxy]"
         else
             chnls_proxy_text=""
         fi
 
-        IFS="${delimiters[0]}" read -ra chnl_stream_links <<< "${chnls_stream_links[index]}"
+        IFS="${delimiters[0]}" read -ra chnl_stream_links <<< "${chnls_stream_links[chnls_index]}"
 
         chnl_stream_links_text=""
 
@@ -6868,22 +6982,22 @@ ListChannels()
 
         if [ -z "${kind:-}" ] 
         then
-            if [ "${chnls_status[index]}" == "on" ]
+            if [ "${chnls_status[chnls_index]}" == "on" ]
             then
                 chnls_status_text="${green}$i18n_enabled${normal}"
             else
                 chnls_status_text="${red}$i18n_disabled${normal}"
             fi
-            chnls_list="$chnls_list# ${green}$((index+1))${normal}${indent_6}$i18n_pid: ${green}${chnls_pid[index]}${normal} $i18n_status: $chnls_status_text $i18n_channel_name: ${green}${chnls_channel_name[index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: ${green}${chnls_video_codec[index]}:${chnls_audio_codec[index]}${normal} $i18n_video_audio_shift: ${green}$chnls_video_audio_shift_text${normal} $i18n_video_quality: ${green}$chnls_video_quality_text${normal}\n$chnl_stream_links_text${indent_6}$i18n_playlist_file: $chnls_playlist_file_text\n\n"
+            chnls_list="$chnls_list# ${green}$((chnls_index+1))${normal}${indent_6}$i18n_pid: ${green}${chnls_pid[chnls_index]}${normal} $i18n_status: $chnls_status_text $i18n_channel_name: ${green}${chnls_channel_name[chnls_index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: ${green}${chnls_video_codec[chnls_index]}:${chnls_audio_codec[chnls_index]}${normal} $i18n_video_audio_shift: ${green}$chnls_video_audio_shift_text${normal} $i18n_video_quality: ${green}$chnls_video_quality_text${normal}\n$chnl_stream_links_text${indent_6}$i18n_playlist_file: $chnls_playlist_file_text\n\n"
         elif [ "$kind" == "flv" ] 
         then
-            if [ "${chnls_flv_status[index]}" == "on" ] 
+            if [ "${chnls_flv_status[chnls_index]}" == "on" ] 
             then
                 chnls_flv_status_text="${green}$i18n_enabled${normal}"
             else
                 chnls_flv_status_text="${red}$i18n_disabled${normal}"
             fi
-            chnls_list="$chnls_list# ${green}$((index+1))${normal}${indent_6}$i18n_pid: ${green}${chnls_pid[index]}${normal} $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${green}${chnls_channel_name[index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: ${green}${chnls_video_codec[index]}:${chnls_audio_codec[index]}${normal} $i18n_video_audio_shift: ${green}$chnls_video_audio_shift_text${normal} $i18n_video_quality: ${green}$chnls_video_quality_text${normal}\n$chnl_stream_links_text${indent_6}flv$i18n_flv_push_link: ${chnls_flv_push_link[index]:-无}\n${indent_6}$i18n_flv_pull_link: ${chnls_flv_pull_link[index]:-无}\n\n"
+            chnls_list="$chnls_list# ${green}$((chnls_index+1))${normal}${indent_6}$i18n_pid: ${green}${chnls_pid[chnls_index]}${normal} $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${green}${chnls_channel_name[chnls_index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: ${green}${chnls_video_codec[chnls_index]}:${chnls_audio_codec[chnls_index]}${normal} $i18n_video_audio_shift: ${green}$chnls_video_audio_shift_text${normal} $i18n_video_quality: ${green}$chnls_video_quality_text${normal}\n$chnl_stream_links_text${indent_6}flv$i18n_flv_push_link: ${chnls_flv_push_link[chnls_index]:-无}\n${indent_6}$i18n_flv_pull_link: ${chnls_flv_pull_link[chnls_index]:-无}\n\n"
         fi
     done
 
@@ -6972,8 +7086,14 @@ GetChannel()
 
     IFS="${delimiters[0]}" read -ra chnl_stream_links <<< "$chnl_stream_links_list"
 
-    chnl_stream_links_count=${#chnl_stream_links[@]}
-    chnl_stream_link=${chnl_stream_links[0]:-}
+    if [ -z "${chnl_stream_links:-}" ] 
+    then
+        chnl_stream_links_count=0
+        chnl_stream_link=""
+    else
+        chnl_stream_links_count=${#chnl_stream_links[@]}
+        chnl_stream_link=${chnl_stream_links[0]:-}
+    fi
 
     if [ -n "$chnl_proxy" ] && { [[ $chnl_stream_link =~ ^https?:// ]] || [[ ${chnl_stream_link##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]]; }
     then
@@ -7370,57 +7490,8 @@ SetStreamLink()
         return 0
     fi
 
-    if [ -n "${chnl_stream_links:-}" ] && [ "$chnl_stream_links_count" -gt 1 ]
+    if [ -z "${chnl_pid:-}" ] 
     then
-        echo
-        inquirer list_input "`eval_gettext \"是否只是调整频道 [ \\\$chnl_channel_name ] 直播源顺序\"`" ny_options ny_option
-
-        if [ "$ny_option" == "$i18n_yes" ] 
-        then
-            stream_links_list=""
-            chnl_stream_links_options=()
-            for((list_i=0;list_i<chnl_stream_links_count;list_i++));
-            do
-                stream_links_list="$stream_links_list ${green}$((list_i+1)).${normal}${indent_6}${chnl_stream_links[list_i]}\n\n"
-                chnl_stream_links_options+=("源$((list_i+1))")
-            done
-
-            Println "$stream_links_list"
-
-            echo
-            inquirer sort_input_indices "排序直播源" chnl_stream_links_options chnl_stream_links_indices
-
-            declare -a new_array
-            for chnl_stream_links_index in "${chnl_stream_links_indices[@]}"
-            do
-                new_array+=("${chnl_stream_links[chnl_stream_links_index]}")
-            done
-
-            stream_links=("${new_array[@]}")
-
-            unset new_array
-
-            return 0
-        fi
-
-        echo
-        stream_links_options=( "全部" "${chnl_stream_links[@]}" )
-        inquirer list_input_index "选择修改的直播源" stream_links_options stream_links_options_index
-
-        if [ "$stream_links_options_index" -gt 0 ] 
-        then
-            echo
-            ExitOnText "`gettext \"请输入直播源( mpegts / hls / flv / youtube ...): \"`" stream_links_input
-
-            chnl_stream_links[stream_links_options_index-2]=("$stream_links_input")
-            stream_links=("${chnl_stream_links[@]}")
-        else
-            Println "`eval_gettext \"\\\$tip 可以是视频路径, 可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔\"`"
-            ExitOnText "`gettext \"请输入直播源( mpegts / hls / flv / youtube ...): \"`" stream_links_input
-
-            IFS=" " read -ra stream_links <<< "$stream_links_input"
-        fi
-    else
         Println "`eval_gettext \"\\\$tip 可以是视频路径, 可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔\"`"
         ExitOnText "`gettext \"请输入直播源( mpegts / hls / flv / youtube ...): \"`" stream_links_input
 
@@ -7429,7 +7500,7 @@ SetStreamLink()
 
     stream_links_count=${#stream_links[@]}
 
-    if [[ ${stream_links[0]} == *"https://www.youtube.com"* ]] || [[ ${stream_links[0]} == *"https://youtube.com"* ]] 
+    if [[ ${stream_links[0]} =~ ^https://(www\.)?(youtube.com|twitch.tv) ]] 
     then
         if [[ ! -x $(command -v youtube-dl) ]] 
         then
@@ -7439,21 +7510,23 @@ SetStreamLink()
             youtube-dl -U > /dev/null
             youtube_dl_updated=1
         fi
+
         if [[ ! -x $(command -v python) ]] 
         then
             ln -s /usr/bin/python3 /usr/bin/python
         fi
-        for((i=0;i<${#stream_links[@]};i++));
+
+        for((s_i=0;s_i<${#stream_links[@]};s_i++));
         do
-            link="${stream_links[i]}"
-            if { [ "${link:0:23}" == "https://www.youtube.com" ] || [ "${link:0:19}" == "https://youtube.com" ]; } && [[ $link != *".m3u8"* ]] && [[ $link != *"|"* ]]
+            link="${stream_links[s_i]}"
+            if [[ $link =~ ^https://(www\.)?(youtube.com|twitch.tv) ]] && [[ $link != *".m3u8"* ]] && [[ $link != *"|"* ]]
             then
                 YoutubeDlParse
-                stream_links[i]="${stream_links[i]}|$code"
+                stream_links[s_i]="${stream_links[s_i]}|$code"
             fi
         done
 
-        Println "`eval_gettext \"\\\$info 解析 youtube 链接...\"`"
+        Println "`eval_gettext \"\\\$info youtube-dl 解析链接...\"`"
         stream_link=${stream_links[0]}
         code=${stream_link#*|}
         stream_link=${stream_link%|*}
@@ -7646,11 +7719,11 @@ SetStreamLink()
         if [ "$set_id" -eq 1 ] 
         then
             GetServiceAccs 4gtv
-            for((i=0;i<${#_4gtv_accs_token[@]};i++));
+            for((s_i=0;s_i<${#_4gtv_accs_token[@]};s_i++));
             do
-                if [ -n "${_4gtv_accs_token[i]:-}" ] 
+                if [ -n "${_4gtv_accs_token[s_i]:-}" ] 
                 then
-                    fsVALUE=${_4gtv_accs_token[i]}
+                    fsVALUE=${_4gtv_accs_token[s_i]}
                     break
                 fi
             done
@@ -8234,8 +8307,13 @@ SetEncrypt()
                             NodejsInstall
                             if [[ -x $(command -v node) ]] && [[ -x $(command -v npm) ]] 
                             then
-                                if [ ! -e "$NODE_ROOT/index.js" ] 
+                                if [ ! -f "$NODE_ROOT/index.js" ] 
                                 then
+                                    if [[ ! -x $(command -v mongo) ]] 
+                                    then
+                                        MongodbInstall
+                                    fi
+
                                     NodejsConfig
                                 fi
                             else
@@ -8247,8 +8325,13 @@ SetEncrypt()
                         else
                             encrypt_session=false
                         fi
-                    elif [ ! -e "$NODE_ROOT/index.js" ] 
+                    elif [ ! -f "$NODE_ROOT/index.js" ] 
                     then
+                        if [[ ! -x $(command -v mongo) ]] 
+                        then
+                            MongodbInstall
+                        fi
+
                         NodejsConfig
                     fi
                 fi
@@ -9905,7 +9988,97 @@ AddChannel()
 
 EditStreamLink()
 {
-    SetStreamLink
+    chnl_stream_links_list=""
+    chnl_stream_links_options=()
+    for((list_i=0;list_i<chnl_stream_links_count;list_i++));
+    do
+        chnl_stream_links_list="$chnl_stream_links_list ${green}源$((list_i+1)).${normal}${indent_6}${chnl_stream_links[list_i]}\n\n"
+        chnl_stream_links_options+=("源$((list_i+1))")
+    done
+
+    Println "$chnl_stream_links_list"
+
+    chnl_stream_links_actions=( '添加' )
+
+    if [ "$chnl_stream_links_count" -gt 0 ] 
+    then
+        chnl_stream_links_actions+=( '修改' '删除' )
+
+        if [ "$chnl_stream_links_count" -gt 1 ] 
+        then
+            chnl_stream_links_actions+=( '排序' )
+        fi
+    fi
+
+    inquirer list_input_index "选择操作" chnl_stream_links_actions chnl_stream_links_actions_index
+
+    if [ "$chnl_stream_links_actions_index" -eq 0 ] 
+    then
+        Println "`eval_gettext \"\\\$tip 可以是视频路径, 可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔\"`"
+        ExitOnText "`gettext \"请输入直播源( mpegts / hls / flv / youtube ...): \"`" stream_links_input
+
+        IFS=" " read -ra stream_links_add <<< "$stream_links_input"
+
+        for stream_link_new in "${stream_links_add[@]}"
+        do
+            stream_links=("$stream_link_new")
+
+            SetStreamLink
+
+            chnl_stream_links+=("${stream_links[0]}")
+        done
+
+        stream_links=("${chnl_stream_links[@]}")
+    elif [ "$chnl_stream_links_actions_index" -eq 1 ] 
+    then
+        echo
+        inquirer checkbox_input_indices "选择修改的直播源" chnl_stream_links_options chnl_stream_links_indices
+
+        for chnl_stream_links_index in "${chnl_stream_links_indices[@]}"
+        do
+            Println "$info 修改源$((chnl_stream_links_index+1)): ${chnl_stream_links[chnl_stream_links_index]}"
+            inquirer text_input "输入新的直播源( mpegts / hls / flv / youtube ...): " stream_link_new "不设置"
+
+            if [ "$stream_link_new" == "不设置" ] 
+            then
+                continue
+            fi
+
+            stream_links=("$stream_link_new")
+
+            SetStreamLink
+
+            chnl_stream_links[chnl_stream_links_index]="${stream_links[0]}"
+        done
+
+        stream_links=("${chnl_stream_links[@]}")
+    elif [ "$chnl_stream_links_actions_index" -eq 2 ]
+    then
+        echo
+        inquirer checkbox_input_indices "选择删除的直播源" chnl_stream_links_options chnl_stream_links_indices
+
+        for chnl_stream_links_index in "${chnl_stream_links_indices[@]}"
+        do
+            unset 'chnl_stream_links[chnl_stream_links_index]'
+        done
+
+        stream_links=("${chnl_stream_links[@]}")
+    elif [ "$chnl_stream_links_actions_index" -eq 3 ] 
+    then
+        echo
+        inquirer sort_input_indices "排序直播源" chnl_stream_links_options chnl_stream_links_indices
+
+        declare -a new_array
+        for chnl_stream_links_index in "${chnl_stream_links_indices[@]}"
+        do
+            new_array+=("${chnl_stream_links[chnl_stream_links_index]}")
+        done
+
+        stream_links=("${new_array[@]}")
+
+        unset new_array
+    fi
+
     file=true
     jq_path='["channels",'"$chnls_index"',"stream_link"]'
     JQ update "$CHANNELS_FILE" stream_links
@@ -10221,7 +10394,7 @@ EditChannelAll()
         echo && echo
     fi
 
-    SetStreamLink
+    EditStreamLink
 
     is_local=0
     if [ "${stream_link:0:1}" == "/" ] 
@@ -10359,10 +10532,6 @@ EditChannelAll()
         SetSyncPairs
     fi
 
-    file=true
-    jq_path='["channels",'"$chnls_index"',"stream_link"]'
-    JQ update "$CHANNELS_FILE" stream_links
-
     update=$(
         $JQ_FILE -n --arg live "$live" --arg proxy "$proxy" \
         --arg xc_proxy "$xc_proxy" --arg user_agent "$user_agent" \
@@ -10450,17 +10619,23 @@ EditForSecurity()
 
 EditChannelMenu()
 {
-    ListChannels
-    InputChannelsIndex
-    i18nGetMsg list_channel
+    echo
+    edit_channel_options=( '设置' '排序' '隐藏' '显示' )
+    inquirer list_input_index "选择操作" edit_channel_options edit_channel_options_index
 
-    for chnls_pid_chosen_index in "${!chnls_indices[@]}"
-    do
-        chnl_pid=${chnls_pid_chosen[chnls_pid_chosen_index]}
-        chnls_index=${chnls_indices[chnls_pid_chosen_index]}
-        GetChannel
-        ListChannel
-        Println "选择修改内容
+    if [ "$edit_channel_options_index" -eq 0 ] 
+    then
+        ListChannels
+        InputChannelsIndex
+        i18nGetMsg list_channel
+
+        for chnls_pid_chosen_index in "${!chnls_indices[@]}"
+        do
+            chnl_pid=${chnls_pid_chosen[chnls_pid_chosen_index]}
+            chnls_index=${chnls_indices[chnls_pid_chosen_index]}
+            GetChannel
+            ListChannel
+            Println "选择修改内容
 
     ${green}1.${normal} 修改 直播源
     ${green}2.${normal} 修改 无限时长直播
@@ -10502,162 +10677,339 @@ EditChannelMenu()
    ${green}37.${normal} 修改 分片名称, m3u8名称 (防盗链/DDoS)
 
 "
-        read -p "$i18n_default_cancel" edit_channel_num
-        [ -z "$edit_channel_num" ] && Println "$i18n_canceled...\n" && exit 1
-        case $edit_channel_num in
-            1)
-                EditStreamLink
-            ;;
-            2)
-                EditLive
-            ;;
-            3)
-                EditProxy
-            ;;
-            4)
-                EditXtreamCodesProxy
-            ;;
-            5)
-                EditUserAgent
-            ;;
-            6)
-                EditHeaders
-            ;;
-            7)
-                EditCookies
-            ;;
-            8)
-                EditOutputDirName
-            ;;
-            9)
-                EditPlaylistName
-            ;;
-            10)
-                EditSegDirName
-            ;;
-            11)
-                EditSegName
-            ;;
-            12)
-                EditSegLength
-            ;;
-            13)
-                EditSegCount
-            ;;
-            14)
-                EditVideoCodec
-            ;;
-            15)
-                EditAudioCodec
-            ;;
-            16)
-                EditVideoAudioShift
-            ;;
-            17)
-                EditSubtitle
-            ;;
-            18)
-                EditDrawtext
-            ;;
-            19)
-                EditQuality
-            ;;
-            20)
-                EditBitrates
-            ;;
-            21)
-                EditConst
-            ;;
-            22)
-                EditEncrypt
-            ;;
-            23)
-                EditKeyInfoName
-            ;;
-            24)
-                EditKeyName
-            ;;
-            25)
-                EditInputFlags
-            ;;
-            26)
-                EditOutputFlags
-            ;;
-            27)
-                EditChannelName
-            ;;
-            28)
-                EditSync
-            ;;
-            29)
-                EditSyncFile
-            ;;
-            30)
-                EditSyncIndex
-            ;;
-            31)
-                EditSyncPairs
-            ;;
-            32)
-                EditHlsEndList
-            ;;
-            33)
-                EditFlvH265
-            ;;
-            34)
-                EditFlvPushLink
-            ;;
-            35)
-                EditFlvPullLink
-            ;;
-            36)
-                EditChannelAll
-            ;;
-            37)
-                EditForSecurity
-            ;;
-            *)
-                Println "$error $i18n_input_correct_no\n" && exit 1
-            ;;
-        esac
+            read -p "$i18n_default_cancel" edit_channel_num
+            [ -z "$edit_channel_num" ] && Println "$i18n_canceled...\n" && exit 1
+            case $edit_channel_num in
+                1)
+                    EditStreamLink
+                ;;
+                2)
+                    EditLive
+                ;;
+                3)
+                    EditProxy
+                ;;
+                4)
+                    EditXtreamCodesProxy
+                ;;
+                5)
+                    EditUserAgent
+                ;;
+                6)
+                    EditHeaders
+                ;;
+                7)
+                    EditCookies
+                ;;
+                8)
+                    EditOutputDirName
+                ;;
+                9)
+                    EditPlaylistName
+                ;;
+                10)
+                    EditSegDirName
+                ;;
+                11)
+                    EditSegName
+                ;;
+                12)
+                    EditSegLength
+                ;;
+                13)
+                    EditSegCount
+                ;;
+                14)
+                    EditVideoCodec
+                ;;
+                15)
+                    EditAudioCodec
+                ;;
+                16)
+                    EditVideoAudioShift
+                ;;
+                17)
+                    EditSubtitle
+                ;;
+                18)
+                    EditDrawtext
+                ;;
+                19)
+                    EditQuality
+                ;;
+                20)
+                    EditBitrates
+                ;;
+                21)
+                    EditConst
+                ;;
+                22)
+                    EditEncrypt
+                ;;
+                23)
+                    EditKeyInfoName
+                ;;
+                24)
+                    EditKeyName
+                ;;
+                25)
+                    EditInputFlags
+                ;;
+                26)
+                    EditOutputFlags
+                ;;
+                27)
+                    EditChannelName
+                ;;
+                28)
+                    EditSync
+                ;;
+                29)
+                    EditSyncFile
+                ;;
+                30)
+                    EditSyncIndex
+                ;;
+                31)
+                    EditSyncPairs
+                ;;
+                32)
+                    EditHlsEndList
+                ;;
+                33)
+                    EditFlvH265
+                ;;
+                34)
+                    EditFlvPushLink
+                ;;
+                35)
+                    EditFlvPullLink
+                ;;
+                36)
+                    EditChannelAll
+                ;;
+                37)
+                    EditForSecurity
+                ;;
+                *)
+                    Println "$error $i18n_input_correct_no\n" && exit 1
+                ;;
+            esac
+
+            echo
+            if [ "$chnl_status" == "on" ] || [ "$chnl_flv_status" == "on" ]
+            then
+                inquirer list_input "是否重启此频道" yn_options restart_yn
+
+                if [[ $restart_yn == "$i18n_no" ]]
+                then
+                    Println "不重启...\n"
+                else
+                    StopChannel
+                    GetChannel
+                    CheckIfXtreamCodes
+                    if [ "$to_try" -eq 1 ] 
+                    then
+                        continue
+                    fi
+                    StartChannel
+                    Println "$info 频道重启成功 !\n"
+                fi
+            else
+                inquirer list_input "是否启动此频道" yn_options start_yn
+
+                if [ "$start_yn" == "$i18n_no" ]
+                then
+                    Println "不启动...\n"
+                else
+                    GetChannel
+                    CheckIfXtreamCodes
+                    if [ "$to_try" -eq 1 ] 
+                    then
+                        continue
+                    fi
+                    StartChannel
+                    Println "$info 频道启动成功 !\n"
+                fi
+            fi
+        done
+    elif [ "$edit_channel_options_index" -eq 1 ] 
+    then
+        GetChannels
+        i18nGetMsg list_channels
+
+        if [ "$chnls_count" -eq 0 ]
+        then
+            Println "`eval_gettext \"\\\$error 没有发现频道, 请检查 !\"`\n"
+            exit 1
+        elif [ "$chnls_count" -eq 1 ] 
+        then
+            Println "`eval_gettext \"\\\$error 请添加更多频道 !\"`\n"
+            exit 1
+        fi
+
+        chnls_indices=("${!chnls_pid[@]}")
+        chnls_options=()
+
+        if [ -z "${kind:-}" ] 
+        then
+            for chnls_index in "${chnls_indices[@]}"
+            do
+                if [ "${chnls_status[chnls_index]}" == "on" ]
+                then
+                    chnls_status_text="$i18n_enabled"
+                else
+                    chnls_status_text="$i18n_disabled"
+                fi
+                chnls_options+=("频道$((chnls_index+1)) $i18n_status: $chnls_status_text $i18n_output_dir_name: ${chnls_output_dir_name[chnls_index]} $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
+            done
+        else
+            for chnls_index in "${chnls_indices[@]}"
+            do
+                if [ "${chnls_flv_status[chnls_index]}" == "on" ] 
+                then
+                    chnls_flv_status_text="$i18n_enabled"
+                else
+                    chnls_flv_status_text="$i18n_disabled"
+                fi
+                chnls_options+=("频道$((chnls_index+1)) $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
+            done
+        fi
 
         echo
-        if [ "$chnl_status" == "on" ] || [ "$chnl_flv_status" == "on" ]
+        inquirer sort_input_indices "排序频道" chnls_options chnls_indices
+
+        declare -a new_array
+        for chnls_index in "${chnls_indices[@]}"
+        do
+            jq_path='["channels",'"$chnls_index"']'
+            new_array+=("$($JQ_FILE --argjson path $jq_path 'getpath($path)' $CHANNELS_FILE)")
+        done
+
+        file=true
+        file_json=true
+        jq_path='["channels"]'
+        JQ update "$CHANNELS_FILE" new_array
+
+        unset new_array
+
+        Println "$info 频道排序成功\n"
+    elif [ "$edit_channel_options_index" -eq 2 ] 
+    then
+        GetChannels
+        i18nGetMsg list_channels
+
+        if [ "$chnls_count" -eq 0 ]
         then
-            inquirer list_input "是否重启此频道" yn_options restart_yn
-
-            if [[ $restart_yn == "$i18n_no" ]]
-            then
-                Println "不重启...\n"
-            else
-                StopChannel
-                GetChannel
-                CheckIfXtreamCodes
-                if [ "$to_try" -eq 1 ] 
-                then
-                    continue
-                fi
-                StartChannel
-                Println "$info 频道重启成功 !\n"
-            fi
-        else
-            inquirer list_input "是否启动此频道" yn_options start_yn
-
-            if [ "$start_yn" == "$i18n_no" ]
-            then
-                Println "不启动...\n"
-            else
-                GetChannel
-                CheckIfXtreamCodes
-                if [ "$to_try" -eq 1 ] 
-                then
-                    continue
-                fi
-                StartChannel
-                Println "$info 频道启动成功 !\n"
-            fi
+            Println "`eval_gettext \"\\\$error 没有发现频道, 请检查 !\"`\n"
+            exit 1
         fi
-    done
+
+        chnls_indices=("${!chnls_pid[@]}")
+        chnls_options=()
+        chnls_hide_indices=()
+
+        for chnls_index in "${chnls_indices[@]}"
+        do
+            if [ "${chnls_hide[chnls_index]}" = true ] 
+            then
+                continue
+            fi
+            chnls_hide_indices+=("$chnls_index")
+            if [ -z "${kind:-}" ] 
+            then
+                if [ "${chnls_status[chnls_index]}" == "on" ]
+                then
+                    chnls_status_text="$i18n_enabled"
+                else
+                    chnls_status_text="$i18n_disabled"
+                fi
+                chnls_options+=("频道$((chnls_index+1)) $i18n_status: $chnls_status_text $i18n_output_dir_name: ${chnls_output_dir_name[chnls_index]} $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
+            else
+                if [ "${chnls_flv_status[chnls_index]}" == "on" ] 
+                then
+                    chnls_flv_status_text="$i18n_enabled"
+                else
+                    chnls_flv_status_text="$i18n_disabled"
+                fi
+                chnls_options+=("频道$((chnls_index+1)) $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
+            fi
+        done
+
+        if [ -z "${chnls_options:-}" ] 
+        then
+            Println "$error 没有显示的频道\n"
+            exit 1
+        fi
+
+        echo
+        inquirer checkbox_input_indices "选择需要隐藏的频道" chnls_options chnls_options_indices
+
+        for chnls_options_index in "${chnls_options_indices[@]}"
+        do
+            bool=true
+            jq_path='["channels",'"${chnls_hide_indices[chnls_options_index]}"',"hide"]'
+            JQ update "$CHANNELS_FILE" true
+            Println "$info 频道 [ ${chnls_channel_name[${chnls_hide_indices[chnls_options_index]}]} ] 隐藏成功"
+        done
+    else
+        GetChannels
+        i18nGetMsg list_channels
+
+        if [ "$chnls_count" -eq 0 ]
+        then
+            Println "`eval_gettext \"\\\$error 没有发现频道, 请检查 !\"`\n"
+            exit 1
+        fi
+
+        chnls_indices=("${!chnls_pid[@]}")
+        chnls_options=()
+        chnls_hide_indices=()
+
+        for chnls_index in "${chnls_indices[@]}"
+        do
+            if [ "${chnls_hide[chnls_index]}" = false ] 
+            then
+                continue
+            fi
+            chnls_hide_indices+=("$chnls_index")
+            if [ -z "${kind:-}" ] 
+            then
+                if [ "${chnls_status[chnls_index]}" == "on" ]
+                then
+                    chnls_status_text="$i18n_enabled"
+                else
+                    chnls_status_text="$i18n_disabled"
+                fi
+                chnls_options+=("频道$((chnls_index+1)) $i18n_status: $chnls_status_text $i18n_output_dir_name: ${chnls_output_dir_name[chnls_index]} $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
+            else
+                if [ "${chnls_flv_status[chnls_index]}" == "on" ] 
+                then
+                    chnls_flv_status_text="$i18n_enabled"
+                else
+                    chnls_flv_status_text="$i18n_disabled"
+                fi
+                chnls_options+=("频道$((chnls_index+1)) $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
+            fi
+        done
+
+        if [ -z "${chnls_options:-}" ] 
+        then
+            Println "$error 没有隐藏的频道\n"
+            exit 1
+        fi
+
+        echo
+        inquirer checkbox_input_indices "选择需要显示的频道" chnls_options chnls_options_indices
+
+        for chnls_options_index in "${chnls_options_indices[@]}"
+        do
+            bool=true
+            jq_path='["channels",'"${chnls_hide_indices[chnls_options_index]}"',"hide"]'
+            JQ update "$CHANNELS_FILE" false
+            Println "$info 频道 [ ${chnls_channel_name[${chnls_hide_indices[chnls_options_index]}]} ] 显示成功"
+        done
+    fi
 }
 
 CheckIfXtreamCodes()
@@ -10975,7 +11327,7 @@ StartChannel()
     hboasia_host="hbogoasia.com:8443"
     hboasia_cdn_host="dai3fd1oh325y.cloudfront.net"
 
-    if [ "${chnl_stream_link:0:23}" == "https://www.youtube.com" ] || [ "${chnl_stream_link:0:19}" == "https://youtube.com" ] 
+    if [[ $chnl_stream_link =~ ^https://(www\.)?(youtube.com|twitch.tv) ]] 
     then
         chnl_user_agent="$USER_AGENT_BROWSER"
         chnl_headers=""
@@ -11004,7 +11356,7 @@ StartChannel()
             chnl_stream_links[0]="${chnl_stream_links[0]}|$code"
         fi
 
-        Println "$info 解析 youtube 链接..."
+        Println "`eval_gettext \"\\\$info youtube-dl 解析链接...\"`"
         code=${chnl_stream_link#*|}
         chnl_stream_link=${chnl_stream_link%|*}
         if ! chnl_stream_link=$(youtube-dl -f "$code" -g "$chnl_stream_link")
@@ -12265,7 +12617,7 @@ StopChannelsForce()
 
         if [ "${chnls_live[i]}" = true ] 
         then
-            rm -rf "${chnls_output_dir_root[i]}"
+            rm -rf "$LIVE_ROOT/${chnls_output_dir_name[i]}"
         fi
     done
 
@@ -14498,7 +14850,7 @@ Add4gtvLink()
             stream_link="http://${stream_link:8}"
         fi
     else
-        Println "$error 频道 [$channel_name] 不可用\n"
+        Println "$error 频道 [ $channel_name ] 不可用\n"
         return 1
     fi
 }
@@ -14705,7 +15057,7 @@ Start4gtvLink()
             chnl_stream_link="http://${chnl_stream_link:8}"
         fi
     else
-        Println "$error 频道 [$chnl_channel_name] 不可用\n"
+        Println "$error 频道 [ $chnl_channel_name ] 不可用\n"
         return 1
     fi
 }
@@ -15540,15 +15892,7 @@ ScheduleTvbhd()
 {
     if [[ ! -x $(command -v pdf2htmlEX) ]] 
     then
-        echo
-        ExitOnList n "`gettext \"需要先安装 pdf2htmlEX, 因为是编译 pdf2htmlEX, 耗时会很长, 是否继续\"`"
-
         Pdf2htmlInstall
-        Println "$info pdf2htmlEX 安装完成\n"
-        if ! pdf2htmlEX -v > /dev/null 2>&1
-        then
-            Println "$info 请先输入 source /etc/profile 以启用 pdf2htmlEX\n" && exit 1
-        fi
     fi
 
     wget --timeout=10 --tries=3 --no-check-certificate "https://schedule.tvbusa.com/current/tvb_hd.pdf" -qO "$IPTV_ROOT/tvb_hd.pdf"
@@ -20754,7 +21098,7 @@ Monitor()
                                                         then
                                                             hls_change[i]=false
                                                         fi
-                                                        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] && [ -z "${hls_change_once[hls_index]:-}" ]
+                                                        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] && [ -z "${hls_change_once[i]:-}" ]
                                                         then
                                                             hls_change_once[i]=true
                                                         fi
@@ -20892,7 +21236,7 @@ Monitor()
                                                         then
                                                             hls_change[i]=false
                                                         fi
-                                                        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] && [ -z "${hls_change_once[hls_index]:-}" ]
+                                                        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] && [ -z "${hls_change_once[i]:-}" ]
                                                         then
                                                             hls_change_once[i]=true
                                                         fi
@@ -21280,7 +21624,7 @@ Monitor()
                             then
                                 if [ "${chnls_status[chnls_index]}" == "off" ] 
                                 then
-                                    if [ "${chnls_stream_link[chnls_index]:0:23}" == "https://www.youtube.com" ] || [ "${chnls_stream_link[chnls_index]:0:19}" == "https://youtube.com" ]
+                                    if [[ ${chnls_stream_link[chnls_index]} =~ ^https://(www\.)?(youtube.com|twitch.tv) ]] 
                                     then
                                         sleep 10
                                     else
@@ -23367,10 +23711,10 @@ OpenrestyInstall()
     echo -n "...40%..."
 
     cd ~
-    if [ ! -d pcre-8.44 ] 
+    if [ ! -d pcre-8.45 ] 
     then
-        curl -s -L "https://ftp.pcre.org/pub/pcre/pcre-8.44.tar.gz" -o "pcre-8.44.tar.gz"
-        tar xzf "pcre-8.44.tar.gz"
+        curl -s -L "https://ftp.pcre.org/pub/pcre/pcre-8.45.tar.gz" -o "pcre-8.45.tar.gz"
+        tar xzf "pcre-8.45.tar.gz"
     fi
 
     if [ ! -d zlib-1.2.11 ] 
@@ -23431,7 +23775,7 @@ OpenrestyInstall()
     cd ../..
 
     ./configure --add-module=../nginx-http-flv-module-master \
-        --with-pcre=../pcre-8.44 --with-pcre-jit \
+        --with-pcre=../pcre-8.45 --with-pcre-jit \
         --with-zlib=../zlib-1.2.11 --with-openssl=../openssl-1.1.1f-patched \
         --with-http_ssl_module --with-http_v2_module \
         --without-mail_pop3_module --without-mail_imap_module \
@@ -23502,10 +23846,10 @@ NginxInstall()
     echo -n "...40%..."
 
     cd ~
-    if [ ! -d pcre-8.44 ] 
+    if [ ! -d pcre-8.45 ] 
     then
-        curl -s -L "https://ftp.pcre.org/pub/pcre/pcre-8.44.tar.gz" -o "pcre-8.44.tar.gz"
-        tar xzf "pcre-8.44.tar.gz"
+        curl -s -L "https://ftp.pcre.org/pub/pcre/pcre-8.45.tar.gz" -o "pcre-8.45.tar.gz"
+        tar xzf "pcre-8.45.tar.gz"
     fi
 
     if [ ! -d zlib-1.2.11 ] 
@@ -23559,7 +23903,7 @@ NginxInstall()
 
     cd "$nginx_package_name/"
     ./configure --add-module=../nginx-http-flv-module-master \
-        --with-pcre=../pcre-8.44 --with-pcre-jit --with-zlib=../zlib-1.2.11 \
+        --with-pcre=../pcre-8.45 --with-pcre-jit --with-zlib=../zlib-1.2.11 \
         --with-openssl=../$openssl_name --with-openssl-opt=no-nextprotoneg \
         --with-http_stub_status_module --with-http_ssl_module --with-http_v2_module \
         --with-http_realip_module --with-threads --with-stream --with-stream_ssl_preread_module \
@@ -23646,7 +23990,7 @@ NginxViewStatus()
     then
         Println "$error $nginx_name 未安装 !\n"
     else
-        systemctl --no-pager status $nginx_name
+        systemctl --no-pager -l status $nginx_name
     fi
 }
 
@@ -27133,33 +27477,21 @@ NginxAddDomain()
     fi
 }
 
-NodejsInstall()
+GitInstall()
 {
-    DepsCheck
-    Progress &
-    progress_pid=$!
-    trap '
-        kill $progress_pid 2> /dev/null
-    ' EXIT
+    ReleaseCheck
     if [ "$release" == "rpm" ] 
     then
-        yum -y install ca-certificates gcc-c++ make >/dev/null 2>&1
-        # yum groupinstall 'Development Tools'
-        if bash <(curl -sL https://rpm.nodesource.com/setup_14.x) > /dev/null
-        then
-            yum -y install nodejs >/dev/null 2>&1
-        fi
+        yum -y install git > /dev/null
+    elif [ "$release" == "ubu" ] 
+    then
+        add-apt-repository ppa:git-core/ppa -y > /dev/null 
+        AptUpdate
+        apt-get -y install git > /dev/null
     else
-        apt-get install -y ca-certificates >/dev/null 2>&1
-        if bash <(curl -sL https://deb.nodesource.com/setup_14.x) > /dev/null 
-        then
-            apt-get install -y nodejs >/dev/null 2>&1
-        fi
+        apt-get -y install git > /dev/null
     fi
-
-    kill $progress_pid
-    trap - EXIT
-    echo -n "...100%" && Println "$info nodejs 安装完成"
+    Println "$info git 安装成功...\n"
 }
 
 ResourceLimit()
@@ -27257,100 +27589,41 @@ EOF
     #fi
 }
 
-NodejsInstallMongodb()
+NodejsInstall()
 {
-    Println "$info 安装 mongodb, 请等待(国内可能无法安装)..."
+    DepsCheck
 
-    ResourceLimit
+    if [ "$release" == "rpm" ] && { [[ -x $(command -v node) ]] || [[ -x $(command -v npm) ]]; }
+    then
+        yum remove -y nodejs npm
+    fi
+
+    Progress &
+    progress_pid=$!
+
+    trap '
+        kill $progress_pid 2> /dev/null
+    ' EXIT
 
     if [ "$release" == "rpm" ] 
     then
-        ArchCheck
-        if [ "$arch" == "arm64" ]
+        yum -y install gcc-c++ make >/dev/null 2>&1
+        # yum groupinstall 'Development Tools'
+
+        if bash <(curl -sL https://rpm.nodesource.com/setup_14.x) > /dev/null
         then
-            arch_path="aarch64"
-        elif [ "$arch" == "x86_64" ] || [ "$arch" == "s390x" ]
-        then
-            arch_path="$arch"
-        else
-            Println "$error 不支持当前系统\n"
-            exit 1
+            yum -y install nodejs >/dev/null 2>&1
         fi
-        yum -y install ca-certificates >/dev/null 2>&1
-        printf '%s' "
-[mongodb-org-4.4]
-name=MongoDB Repository
-baseurl=https://repo.mongodb.org/yum/redhat/\$releasever/mongodb-org/4.4/$arch_path/
-gpgcheck=1
-enabled=1
-gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
-" > "/etc/yum.repos.d/mongodb-org-4.4.repo"
-        yum install -y mongodb-org >/dev/null 2>&1
     else
-        AptUpdate
-        apt-get install -y ca-certificates >/dev/null 2>&1
-
-        if ! wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | apt-key add - > /dev/null 2>&1
+        if bash <(curl -sL https://deb.nodesource.com/setup_14.x) > /dev/null 
         then
-            apt-get -y install gnupg >/dev/null 2>&1
-            wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | apt-key add - > /dev/null
+            apt-get install -y nodejs >/dev/null 2>&1
         fi
-
-        if [ "$release" == "ubu" ] 
-        then
-            if grep -q "xenial" < "/etc/apt/sources.list"
-            then
-                echo "deb [ arch=amd64,arm64,s390x ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
-            elif grep -q "bionic" < "/etc/apt/sources.list" 
-            then
-                echo "deb [ arch=amd64,arm64,s390x ] https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
-            else
-                echo "deb [ arch=amd64,arm64,s390x ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
-            fi
-        else
-            if grep -q "stretch" < "/etc/apt/sources.list"
-            then
-                echo "deb http://repo.mongodb.org/apt/debian stretch/mongodb-org/4.4 main" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
-            else
-                echo "deb http://repo.mongodb.org/apt/debian buster/mongodb-org/4.4 main" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
-            fi
-        fi
-
-        apt-get update >/dev/null
-        apt-get install -y mongodb-org >/dev/null 2>&1
     fi
 
-    if [[ $(ps --no-headers -o comm 1) == "systemd" ]] 
-    then
-        sed -i "s/LimitNOFILE=.*/LimitNOFILE=$file_max/" /lib/systemd/system/mongod.service
-        sed -i '/TasksAccounting=/a RestartSec=5\nStartLimitIntervalSec=0\nRestart=on-failure' /lib/systemd/system/mongod.service
-        systemctl daemon-reload
-        systemctl start mongod
-        systemctl enable mongod
-    else
-        service mongod start
-    fi
-
-    sleep 3
-
-    Println "$info mongodb 安装成功"
-}
-
-GitInstall()
-{
-    ReleaseCheck
-    if [ "$release" == "rpm" ] 
-    then
-        yum -y install git > /dev/null
-    elif [ "$release" == "ubu" ] 
-    then
-        add-apt-repository ppa:git-core/ppa -y > /dev/null 
-        AptUpdate
-        apt-get -y install git > /dev/null
-    else
-        apt-get -y install git > /dev/null
-    fi
-    Println "$info git 安装成功...\n"
+    kill $progress_pid
+    trap - EXIT
+    echo -n "...100%" && Println "$info nodejs 安装完成"
 }
 
 NodejsConfig()
@@ -27416,11 +27689,6 @@ NodejsConfig()
     username=$(RandStr)
     password=$(RandStr)
 
-    if [[ ! -x $(command -v mongo) ]] 
-    then
-        NodejsInstallMongodb
-    fi
-
     if [[ $(ps --no-headers -o comm 1) == "systemd" ]] 
     then
         mongo admin --eval "db.getSiblingDB('admin').createUser({user: '${username}', pwd: '${password}', roles: ['root']})"
@@ -27432,8 +27700,6 @@ NodejsConfig()
 
     mkdir -p "$NODE_ROOT"
     echo "
-'use strict';
-
 const express = require('express');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
@@ -27470,10 +27736,11 @@ app.use(session({
 }));
 
 app.get('/keys', (req, res) => {
-    if (!req.session.websiteUser || !req.query.key || !req.query.channel){
-        res.status(403).end();
+    const { key, channel } = req.query;
+    if (!req.session.websiteUser || !key || !channel){
+        res.status(400).end();
     }
-    res.sendFile(req.query.channel + '/' + req.query.key + '.key', {root: path.join(__dirname, '../${LIVE_ROOT##*/}')});
+    res.sendFile(channel + '/' + key + '.key', {root: path.join(__dirname, '../${LIVE_ROOT##*/}')});
 });
 
 app.get('/', (req, res) => {
@@ -27510,10 +27777,10 @@ app.listen(port, () => console.log(\`App listening on port \${port}!\`))
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "connect-mongo": "^4.6.0",
     "express": "^4.17.1",
     "express-session": "^1.17.0",
     "mongodb": "^4.1.2",
+    "connect-mongo": "^4.6.0",
     "mongoose": "^6.0.8",
     "path": "^0.12.7"
   }
@@ -27530,6 +27797,190 @@ app.listen(port, () => console.log(\`App listening on port \${port}!\`))
     pm2 start "$NODE_ROOT/index.js"
     pm2 startup
     Println "$info nodejs 配置完成"
+}
+
+NodejsMenu()
+{
+    [ ! -d "$IPTV_ROOT" ] && Println "$error 请先输入 tv 安装 !\n" && exit 1
+
+    echo
+    nodejs_options=( '安装' '升级' '运行 iptv node' )
+    inquirer list_input_index "选择操作" nodejs_options nodejs_options_index
+
+    if [ "$nodejs_options_index" -eq 0 ] 
+    then
+        if [[ -x $(command -v node) ]] && [[ -x $(command -v npm) ]] 
+        then
+            Println "$error nodejs 已存在\n"
+            exit 1
+        fi
+
+        NodejsInstall
+    elif [ "$nodejs_options_index" -eq 1 ] 
+    then
+        if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
+        then
+            Println "$error 请先安装 nodejs\n"
+            exit 1
+        fi
+
+        NodejsInstall
+    else
+        if [ -f "$NODE_ROOT/index.js" ] 
+        then
+            Println "$error iptv node 已存在\n"
+            exit 1
+        fi
+
+        if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
+        then
+            Println "$error 请先安装 nodejs\n"
+            exit 1
+        fi
+
+        if [[ ! -x $(command -v mongo) ]] 
+        then
+            Println "$error 请先安装 mongodb\n"
+            exit 1
+        fi
+
+        NodejsConfig
+    fi
+}
+
+MongodbInstall()
+{
+    DepsCheck
+
+    Println "$info 安装 mongodb, 请等待(国内可能无法安装)..."
+
+    ResourceLimit
+
+    if [ "$release" == "rpm" ] 
+    then
+        ArchCheck
+        if [ "$arch" == "arm64" ]
+        then
+            arch_path="aarch64"
+        elif [ "$arch" == "x86_64" ] || [ "$arch" == "s390x" ]
+        then
+            arch_path="$arch"
+        else
+            Println "$error 不支持当前系统\n"
+            exit 1
+        fi
+
+        printf '%s' "
+[mongodb-org-4.4]
+name=MongoDB Repository
+baseurl=https://repo.mongodb.org/yum/redhat/\$releasever/mongodb-org/4.4/$arch_path/
+gpgcheck=1
+enabled=1
+gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
+" > /etc/yum.repos.d/mongodb-org-4.4.repo
+
+        yum install -y mongodb-org >/dev/null 2>&1
+    else
+        AptUpdate
+
+        if ! wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | apt-key add - > /dev/null 2>&1
+        then
+            apt-get -y install gnupg >/dev/null 2>&1
+            wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | apt-key add - > /dev/null
+        fi
+
+        if [ "$release" == "ubu" ] 
+        then
+            if grep -q "xenial" < "/etc/apt/sources.list"
+            then
+                echo "deb [ arch=amd64,arm64,s390x ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+            elif grep -q "bionic" < "/etc/apt/sources.list" 
+            then
+                echo "deb [ arch=amd64,arm64,s390x ] https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+            else
+                echo "deb [ arch=amd64,arm64,s390x ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+            fi
+        else
+            if grep -q "stretch" < "/etc/apt/sources.list"
+            then
+                echo "deb http://repo.mongodb.org/apt/debian stretch/mongodb-org/4.4 main" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+            else
+                echo "deb http://repo.mongodb.org/apt/debian buster/mongodb-org/4.4 main" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+            fi
+        fi
+
+        apt-get update >/dev/null
+        apt-get install -y mongodb-org >/dev/null 2>&1
+    fi
+
+    if [[ $(ps --no-headers -o comm 1) == "systemd" ]] 
+    then
+        sed -i "s/LimitNOFILE=.*/LimitNOFILE=$file_max/" /lib/systemd/system/mongod.service
+        sed -i '/TasksAccounting=/a RestartSec=5\nStartLimitIntervalSec=0\nRestart=on-failure' /lib/systemd/system/mongod.service
+        systemctl daemon-reload
+        sed -i "s/destination: file/destination: syslog/" /etc/mongod.conf
+        sed -i "s/  logAppend: true/  #logAppend: true/" /etc/mongod.conf
+        sed -i "s+  path: /var/log/mongodb/mongod.log+  #path: /var/log/mongodb/mongod.log+" /etc/mongod.conf
+        systemctl start mongod
+        systemctl enable mongod
+    else
+        service mongod start
+    fi
+
+    Println "$info mongodb 安装成功"
+}
+
+MongodbMenu()
+{
+    echo
+    mongodb_options=( '查看' '安装' '升级' )
+    inquirer list_input_index "选择操作" mongodb_options mongodb_options_index
+
+    if [ "$mongodb_options_index" -eq 0 ] 
+    then
+        if [[ ! -x $(command -v mongo) ]] 
+        then
+            Println "$error 请先安装 mongodb\n"
+            exit 1
+        fi
+
+        systemctl --no-pager -l status mongod
+    elif [ "$mongodb_options_index" -eq 1 ] 
+    then
+        if [[ -x $(command -v mongo) ]] 
+        then
+            Println "$error mongodb 已存在\n"
+            exit 1
+        fi
+
+        MongodbInstall
+    else
+        if [[ ! -x $(command -v mongo) ]] 
+        then
+            Println "$error 请先安装 mongodb\n"
+            exit 1
+        fi
+
+        ExitOnList n "升级会清除现有 mongodb 配置, 是否继续"
+
+        ReleaseCheck
+
+        service mongod stop
+
+        if [ "$release" == "rpm" ] 
+        then
+            yum -y erase mongodb-org*
+
+            rm -f /etc/yum.repos.d/mongodb-org-*.repo
+        else
+            apt-get -y purge mongodb-org*
+            apt-get -y autoremove
+
+            rm -f /etc/apt/sources.list.d/mongodb-org-*.list
+        fi
+
+        MongodbInstall
+    fi
 }
 
 GetFreeTag()
@@ -27765,7 +28216,7 @@ V2rayConfigUpdate()
 
 V2rayStatus()
 {
-    systemctl --no-pager status $v2ray_name
+    systemctl --no-pager -l status $v2ray_name
 }
 
 V2raySetListen()
@@ -43454,7 +43905,7 @@ UpdateSelf()
             fi
 
             new_channel=$(
-            $JQ_FILE -n --arg pid "${chnls_pid[i]}" --arg status "${chnls_status[i]}" \
+            $JQ_FILE -n --arg pid "${chnls_pid[i]}" --arg status "${chnls_status[i]}" --arg hide "${chnls_hide[i]}" \
                 --argjson stream_link "$stream_link" --arg live "${chnls_live[i]}" \
                 --arg proxy "${chnls_proxy[i]}" --arg xc_proxy "${chnls_xc_proxy[i]}" \
                 --arg user_agent "${chnls_user_agent[i]}" --arg headers "${chnls_headers[i]}" \
@@ -43478,6 +43929,7 @@ UpdateSelf()
                 '{
                     pid: $pid | tonumber,
                     status: $status,
+                    hide: $hide | test("true"),
                     stream_link: $stream_link,
                     live: $live | test("true"),
                     proxy: $proxy,
@@ -43721,14 +44173,13 @@ WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
  ${green}12.${normal} 重启
 ————————————
  ${green}13.${normal} 配置 日志切割
- ${green}14.${normal} 配置 nodejs
- ${green}15.${normal} 识别 cloudflare/ibm ip
- ${green}16.${normal} 删除域名
+ ${green}14.${normal} 识别 cloudflare/ibm ip
+ ${green}15.${normal} 删除域名
 
  $tip 输入: or 打开面板
 
 "
-    read -p "`gettext \"输入序号\"` [1-16]: " openresty_num
+    read -p "`gettext \"输入序号\"` [1-15]: " openresty_num
     case "$openresty_num" in
         1) 
             if [ -d "$nginx_prefix" ] 
@@ -43779,30 +44230,12 @@ WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
             NginxLogRotate
         ;;
         14)
-            [ ! -d "$IPTV_ROOT" ] && Println "$error 请先输入 tv 安装 !\n" && exit 1
-            if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
-            then
-                NodejsInstall
-            fi
-            if [ ! -e "$NODE_ROOT/index.js" ] 
-            then
-                if [[ -x $(command -v node) ]] && [[ -x $(command -v npm) ]] 
-                then
-                    NodejsConfig
-                else
-                    Println "$error nodejs 安装发生错误\n" && exit 1
-                fi
-            else
-                Println "$error nodejs 配置已存在\n" && exit 1
-            fi
-        ;;
-        15)
             NginxUpdateCFIBMip
         ;;
-        16) 
+        15) 
             NginxDeleteDomain
         ;;
-        *) Println "$error $i18n_input_correct_number [1-16]\n"
+        *) Println "$error $i18n_input_correct_number [1-15]\n"
         ;;
     esac
     exit 0
@@ -43874,19 +44307,17 @@ WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
 ————————————
  ${green}13.${normal} 配置 日志切割
  ${green}14.${normal} 配置 nodejs
- ${green}15.${normal} 配置 postfix
- ${green}16.${normal} 配置 mmproxy
- ${green}17.${normal} 配置 dnscrypt proxy
- ${green}18.${normal} 识别 cloudflare/ibm ip
- ${green}19.${normal} 删除域名
-————————————
- ${green}20.${normal} 安装 pdf2htmlEX
- ${green}21.${normal} 安装 tesseract
+ ${green}15.${normal} 配置 mongodb
+ ${green}16.${normal} 配置 postfix
+ ${green}17.${normal} 配置 mmproxy
+ ${green}18.${normal} 配置 dnscrypt proxy
+ ${green}19.${normal} 识别 cloudflare/ibm ip
+ ${green}20.${normal} 删除域名
 
  $tip 输入: nx 打开面板
 
 "
-    read -p "`gettext \"输入序号\"` [1-21]: " nginx_num
+    read -p "`gettext \"输入序号\"` [1-20]: " nginx_num
     case "$nginx_num" in
         1) 
             if [ -d "$nginx_prefix" ] 
@@ -43937,24 +44368,12 @@ WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
             NginxLogRotate
         ;;
         14)
-            [ ! -d "$IPTV_ROOT" ] && Println "$error 请先输入 tv 安装 !\n" && exit 1
-            if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
-            then
-                NodejsInstall
-            fi
-            if [ ! -e "$NODE_ROOT/index.js" ] 
-            then
-                if [[ -x $(command -v node) ]] && [[ -x $(command -v npm) ]] 
-                then
-                    NodejsConfig
-                else
-                    Println "$error nodejs 安装发生错误\n" && exit 1
-                fi
-            else
-                Println "$error nodejs 配置已存在\n" && exit 1
-            fi
+            NodejsMenu
         ;;
         15)
+            MongodbMenu
+        ;;
+        16)
             if [[ ! -x $(command -v postfix) ]] 
             then
                 ReleaseCheck
@@ -44016,7 +44435,7 @@ WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
             fi
             Println "$info smtp 设置成功\n"
         ;;
-        16)
+        17)
             if [ ! -e ~/allowed-subnets.txt ] 
             then
                 echo -en "0.0.0.0/0\n::/0\n" > ~/allowed-subnets.txt
@@ -44149,7 +44568,7 @@ $HOME/ip.sh" > /etc/rc.local
 
             Println "$info mmproxy-$mmproxy_name 设置成功\n"
         ;;
-        17)
+        18)
             DepInstall curl
 
             DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
@@ -44327,44 +44746,13 @@ $HOME/ip.sh" > /etc/rc.local
                 Println "$error 无法连接服务器, 请稍后再试\n"
             fi
         ;;
-        18)
+        19)
             NginxUpdateCFIBMip
         ;;
-        19)
+        20)
             NginxDeleteDomain
         ;;
-        20)
-            if [[ ! -x $(command -v pdf2htmlEX) ]] 
-            then
-                echo
-                ExitOnList n "`gettext \"因为是编译 pdf2htmlEX, 耗时会很长, 是否继续\"`"
-                Pdf2htmlInstall
-                Println "$info pdf2htmlEX 安装完成, 输入 source /etc/profile 可立即使用\n"
-            else
-                Println "$error pdf2htmlEX 已存在!\n"
-            fi
-        ;;
-        21)
-            if [[ ! -x $(command -v tesseract) ]] 
-            then
-                DepsCheck
-                echo
-                if [ "$release" == "ubu" ] 
-                then
-                    add-apt-repository ppa:alex-p/tesseract-ocr -y
-                    AptUpdate
-                    apt-get -y install tesseract
-                elif [ "$release" == "deb" ] 
-                then
-                    Println "$info 参考 https://notesalexp.org/tesseract-ocr/ ...\n"
-                else
-                    Println "$info 参考 https://tesseract-ocr.github.io/tessdoc/Home.html ...\n"
-                fi
-            else
-                Println "$error tesseract 已存在!\n"
-            fi
-        ;;
-        *) Println "$error $i18n_input_correct_number [1-21]\n"
+        *) Println "$error $i18n_input_correct_number [1-20]\n"
         ;;
     esac
     exit 0

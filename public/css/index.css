@@ -186,7 +186,7 @@ section {
   display: inline-block;
 }
 
-.categories li, .channels li, .formToggle, button {
+.categories li, .channels li, .formToggle {
   display: inline-block;
   text-decoration: none;
   letter-spacing: .1rem;
@@ -236,6 +236,14 @@ footer span {
 .video-js .vjs-overlay-center {
   left: 50%;
   top: 50%;
+}
+
+.video-js .vjs-errors-dialog {
+  font-size: 1.6rem;
+  z-index: 3;
+  text-align: center;
+  border: 1px #999 solid;
+  background: #181818;
 }
 
 .working {
@@ -352,6 +360,9 @@ footer span {
   .github-corner svg {
     width: 40px;
     height: 40px;
+  }
+  .video-js .vjs-errors-dialog {
+    font-size: .8rem;
   }
 }
 
