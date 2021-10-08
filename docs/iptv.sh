@@ -3110,8 +3110,11 @@ YoutubeDlParse()
 
     youtube_found=0
     count=0
-    codes=()
-    format_list=""
+    formats_code=()
+    formats_resolution=()
+    formats_bitrate=()
+    formats_indices=()
+    formats_list=""
 
     while IFS= read -r line 
     do
@@ -3121,9 +3124,9 @@ YoutubeDlParse()
         elif [[ $youtube_found -eq 1 ]] 
         then
             count=$((count+1))
-            code=${line%% *}
-            codes+=("$code")
-            code="code: ${green}$code${normal}, "
+            format_code=${line%% *}
+            formats_code+=("$format_code")
+            format_code="code: ${green}$format_code${normal}, "
             line=${line#* }
             lead=${line%%[^[:blank:]]*}
             line=${line#${lead}}
@@ -3134,58 +3137,143 @@ YoutubeDlParse()
             line=${line#${lead}}
             note=${line#* , }
             line=${line%% , *}
-            bitrate=${line##* }
+            format_bitrate=${line##* }
+
             if [[ ${line:0:1} == *[!0-9]* ]] 
             then
                 resolution=""
-                line=${line// $bitrate/}
-                note="其它: $line$note"
+                line=${line// $format_bitrate/}
+                formats_resolution+=("")
+                formats_bitrate+=("")
             else
                 resolution=${line%% *}
+                formats_resolution+=("$resolution")
                 line=${line#* }
                 lead=${line%%[^[:blank:]]*}
                 line=${line#${lead}}
-                line=${line// $bitrate/}
+                line=${line// $format_bitrate/}
                 trail=${line##*[^[:blank:]]}
                 line=${line%${trail}}
-                resolution="分辨率: ${green}$resolution${normal}, ${green}${line##* }${normal}, "
-                note="其它: $line$note"
+                format_bitrate="${line##* }"
+                formats_bitrate+=("${format_bitrate:0:-1}")
+                resolution="分辨率: ${green}$resolution${normal}, ${green}$format_bitrate${normal}, "
             fi
-            format_list="$format_list${green}$count.${normal} $resolution$code$extension$note\n\n"
+
+            formats_list="$formats_list${green}$count.${normal} $resolution$format_code${extension}其它: $line$note\n\n"
         fi
     done < <(youtube-dl --list-formats "$link")
 
-    if [ -z "$format_list" ] 
+    if [ -z "$formats_list" ] 
     then
         Println "`eval_gettext \"\\\$error 无法解析链接 \\\$link\"`\n"
-        exit 1
+        return 0
     fi
 
-    Println "$format_list"
-    echo "`gettext \"输入序号\"`"
-    while read -p "(默认: $count): " format_num
-    do
-        case "$format_num" in
-            "")
-                code=${codes[count-1]}
-                break
-            ;;
-            *[!0-9]*)
-                Println "$error $i18n_input_correct_number\n"
-            ;;
-            *)
-                if [ "$format_num" -ge 1 ] && [ "$format_num" -le $count ]
-                then
-                    code=${codes[format_num-1]}
-                    break
-                else
-                    Println "$error $i18n_input_correct_number\n"
-                fi
-            ;;
-        esac
-    done
+    if [ -n "${code:-}" ] 
+    then
+        IFS=, read -r -a codes <<< "$code"
 
-    return 0
+        for codes_index in "${!codes[@]}"
+        do
+            for formats_code_index in "${!formats_code[@]}"
+            do
+                if [ "${formats_code[formats_code_index]}" == "${codes[codes_index]}" ] 
+                then
+                    formats_indices+=("$formats_code_index")
+                    continue 2
+                fi
+            done
+        done
+
+        if [ -z "${formats_indices:-}" ] 
+        then
+            return 0
+        fi
+    else
+        Println "$formats_list"
+
+        echo -e "`eval_gettext \"\\\$tip 多个序号用空格分隔 比如: 5 7 9-11\"`\n"
+        while read -p "请输入序号(默认: $count): " formats_num
+        do
+            if [ -z "$formats_num" ] 
+            then
+                formats_indices=("$((count-1))")
+                break
+            fi
+
+            IFS=" " read -ra formats_num_arr <<< "$formats_num"
+
+            error_no=0
+            for format_num in "${formats_num_arr[@]}"
+            do
+                case "$format_num" in
+                    *"-"*)
+                        format_num_start=${format_num%-*}
+                        format_num_end=${format_num#*-}
+                        if [[ $format_num_start == *[!0-9]* ]] || [[ $format_num_end == *[!0-9]* ]] || [ "$format_num_start" -eq 0 ] || [ "$format_num_end" -eq 0 ] || [ "$format_num_end" -gt "$count" ] || [ "$format_num_start" -ge "$format_num_end" ]
+                        then
+                            error_no=3
+                            break
+                        fi
+                    ;;
+                    *[!0-9]*)
+                        error_no=1
+                        break
+                    ;;
+                    *)
+                        if [ "$format_num" -lt 1 ] || [ "$format_num" -gt "$count" ] 
+                        then
+                            error_no=2
+                            break
+                        fi
+                    ;;
+                esac
+            done
+
+            case "$error_no" in
+                1|2|3)
+                    Println "$error $i18n_input_correct_number\n"
+                ;;
+                *)
+                    declare -a new_array
+                    for format_num in "${formats_num_arr[@]}"
+                    do
+                        if [[ $format_num =~ - ]] 
+                        then
+                            start=${format_num%-*}
+                            end=${format_num#*-}
+                            for((i=start-1;i<end;i++));
+                            do
+                                new_array+=("$i")
+                            done
+                        else
+                            new_array+=("$((format_num-1))")
+                        fi
+                    done
+
+                    formats_indices=("${new_array[@]}")
+
+                    unset new_array
+
+                    break
+                ;;
+            esac
+        done
+    fi
+
+    if [ "${#formats_indices[@]}" -eq 1 ] 
+    then
+        formats_index=${formats_indices[0]}
+        code=${formats_code[formats_index]}
+    else
+        code=""
+
+        for formats_index in "${formats_indices[@]}"
+        do
+            [ -n "$code" ] && code="$code,"
+            code="${code}${formats_code[formats_index]}"
+        done
+    fi
 }
 
 OpensslInstall()
@@ -4449,6 +4537,7 @@ FlvStreamCreator()
     map_command=()
     flv_command=( -f flv "$flv_push_link" )
     headers_command=""
+
     [ -n "$headers" ] && printf -v headers_command '%b' "$headers"
 
     if [ "$flv_h265" = true ] 
@@ -4882,6 +4971,7 @@ FlvStreamCreator()
     chnl_map_command=()
     chnl_flv_command=( -f flv "$chnl_flv_push_link" )
     chnl_headers_command=""
+
     [ -n "$chnl_headers" ] && printf -v chnl_headers_command '%b' "$chnl_headers"
 
     if [ "$chnl_flv_h265" = true ] 
@@ -5417,6 +5507,7 @@ HlsStreamCreatorPlus()
     hls_master_list="#EXTM3U\n#EXT-X-VERSION:7\n"
     var_stream_map=""
     headers_command=""
+
     [ -n "$headers" ] && printf -v headers_command '%b' "$headers"
 
     if [ "$seg_count" -gt 0 ] 
@@ -6085,6 +6176,7 @@ HlsStreamCreatorPlus()
     chnl_hls_master_list="#EXTM3U\n#EXT-X-VERSION:7\n"
     chnl_var_stream_map=""
     chnl_headers_command=""
+
     [ -n "$chnl_headers" ] && printf -v chnl_headers_command '%b' "$chnl_headers"
 
     if [ "$chnl_seg_count" -gt 0 ] 
@@ -6301,7 +6393,7 @@ HlsStreamCreatorPlus()
         chnl_variants_output_command+=( $chnl_output_flags_command )
         chnl_var_stream_map_command+=( -var_stream_map "$chnl_var_stream_map" )
 
-        if [ "$chnl_encrypt_" = true ] 
+        if [ "$chnl_encrypt" = true ] 
         then
             openssl rand 16 > "$chnl_output_dir_root/$chnl_key_name.key"
             if [ "$chnl_encrypt_session" = true ] 
@@ -7507,6 +7599,7 @@ SetStreamLink()
             YoutubeDlInstall
         elif [ "${youtube_dl_updated:-0}" -eq 0 ] 
         then
+            Println "$info 更新 youtube-dl ..."
             youtube-dl -U > /dev/null
             youtube_dl_updated=1
         fi
@@ -7521,16 +7614,64 @@ SetStreamLink()
             link="${stream_links[s_i]}"
             if [[ $link =~ ^https://(www\.)?(youtube.com|twitch.tv) ]] && [[ $link != *".m3u8"* ]] && [[ $link != *"|"* ]]
             then
+                unset code
+
                 YoutubeDlParse
+
+                if [ -z "${formats_indices:-}" ] 
+                then
+                    exit 1
+                fi
+
                 stream_links[s_i]="${stream_links[s_i]}|$code"
+
+                if [ "$s_i" -eq 0 ] && [[ $code =~ , ]]
+                then
+                    stream_urls_resolution=("${formats_resolution[@]}")
+                    stream_urls_bitrate=("${formats_bitrate[@]}")
+
+                    stream_url_video_indices=("${formats_indices[@]}")
+                    stream_url_qualities_count=${#formats_indices[@]}
+                    stream_urls_audio=()
+                    stream_urls_subtitles=()
+                    stream_url_qualities=()
+
+                    for stream_urls_index in "${stream_url_video_indices[@]}"
+                    do
+                        stream_urls_audio[stream_urls_index]=""
+                        stream_urls_subtitles[stream_urls_index]=""
+                        stream_url_qualities+=("${stream_urls_bitrate[stream_urls_index]}-${stream_urls_resolution[stream_urls_index]}")
+                    done
+                fi
             fi
         done
 
         Println "`eval_gettext \"\\\$info youtube-dl 解析链接...\"`"
+
         stream_link=${stream_links[0]}
         code=${stream_link#*|}
         stream_link=${stream_link%|*}
-        stream_link=$(youtube-dl -f "$code" -g "$stream_link")
+
+        if [[ $code =~ , ]] 
+        then
+            IFS=, read -r -a formats_code <<< "$code"
+
+            stream_urls=()
+
+            for((s_i=0;s_i<stream_url_qualities_count;s_i++));
+            do
+                formats_index=${formats_indices[s_i]}
+                format_code=${formats_code[s_i]}
+                stream_urls[formats_index]="$(youtube-dl -f $format_code -g $stream_link)"
+            done
+
+            stream_urls_count=${#stream_urls[@]}
+
+            printf -v stream_link ' %s' "${stream_urls[@]}"
+            stream_link=${stream_link:1}
+        else
+            stream_link=$(youtube-dl -f "$code" -g "$stream_link")
+        fi
     else
         stream_link=${stream_links[0]}
     fi
@@ -9303,8 +9444,6 @@ AddChannel()
                     stream_url_cdn="https://$hboasia_cdn_host/${BASH_REMATCH[1]}?${stream_urls[0]#*\?}"
                 fi
 
-                choose=1
-
                 if [[ $stream_link =~ \|([^|]+)$ ]] 
                 then
                     choose=0
@@ -9354,11 +9493,14 @@ AddChannel()
                                 continue 2
                             fi
                         done
+
                         Println "$error ${stream_url_qualities[i]} 不存在 !"
                         choose=1
                         Println "$error 请重新选择 $channel_name 分辨率"
                         break
                     done
+                else
+                    choose=1
                 fi
 
                 if [ "$choose" -eq 1 ]
@@ -9376,14 +9518,14 @@ AddChannel()
                         then
                             stream_url_qualities=()
                             stream_url_video_indices=()
+
                             for((i=0;i<stream_urls_count;i++));
                             do
                                 stream_url_qualities+=("${stream_urls_bitrate[i]}-${stream_urls_resolution[i]}")
                                 stream_url_video_indices+=("$i")
                             done
+
                             stream_url_qualities_count=$stream_urls_count
-                            printf -v stream_url_quality ',%s' "${stream_url_qualities[@]}"
-                            stream_url_quality=${stream_url_quality:1}
                             break
                         fi
 
@@ -9440,17 +9582,16 @@ AddChannel()
                                         stream_url_video_indices+=("$((stream_url_num-1))")
                                     fi
                                 done
+
                                 stream_url_qualities_count=${#stream_url_qualities[@]}
-                                printf -v stream_url_quality ',%s' "${stream_url_qualities[@]}"
-                                stream_url_quality=${stream_url_quality:1}
                                 break
                             ;;
                         esac
                     done
-                else
-                    printf -v stream_url_quality ',%s' "${stream_url_qualities[@]}"
-                    stream_url_quality=${stream_url_quality:1}
                 fi
+
+                printf -v stream_url_quality ',%s' "${stream_url_qualities[@]}"
+                stream_url_quality=${stream_url_quality:1}
 
                 if [ -n "${stream_audio_name:-}" ] 
                 then
@@ -11338,30 +11479,83 @@ StartChannel()
             YoutubeDlInstall
         elif [ "${youtube_dl_updated:-0}" -eq 0 ] 
         then
+            Println "$info 更新 youtube-dl ..."
             youtube-dl -U > /dev/null
             youtube_dl_updated=1
         fi
 
-        if [[ $chnl_stream_link != *"|"* ]] 
+        Println "`eval_gettext \"\\\$info youtube-dl 解析链接...\"`"
+
+        if [[ $chnl_stream_link =~ ^(.+)\|(.+)$ ]] 
         then
-            if [ "$monitor" = true ] 
-            then
-                return 0
-            fi
-
-            link="$chnl_stream_link"
-
-            YoutubeDlParse
-
-            chnl_stream_links[0]="${chnl_stream_links[0]}|$code"
+            chnl_stream_link=${BASH_REMATCH[1]}
+            code=${BASH_REMATCH[2]}
+        elif [ "$monitor" = true ] 
+        then
+            return 0
+        else
+            unset code
         fi
 
-        Println "`eval_gettext \"\\\$info youtube-dl 解析链接...\"`"
-        code=${chnl_stream_link#*|}
-        chnl_stream_link=${chnl_stream_link%|*}
-        if ! chnl_stream_link=$(youtube-dl -f "$code" -g "$chnl_stream_link")
+        link="$chnl_stream_link"
+
+        YoutubeDlParse
+
+        if [ -z "${formats_indices:-}" ] 
         then
-            Println "$error 解析发生错误, 直播链接不存在 ?"
+            Println "$error [ $chnl_channel_name ] 解析发生错误, 直播链接不存在?\n"
+            return 0
+        fi
+
+        chnl_stream_links[0]="$chnl_stream_link|$code"
+
+        if [[ $code =~ , ]] 
+        then
+            chnl_stream_urls_resolution=("${formats_resolution[@]}")
+            chnl_stream_urls_bitrate=("${formats_bitrate[@]}")
+
+            chnl_stream_url_video_indices=("${formats_indices[@]}")
+            chnl_stream_url_qualities_count=${#formats_indices[@]}
+            chnl_stream_urls_audio=()
+            chnl_stream_urls_subtitles=()
+            chnl_stream_url_qualities=()
+
+            for chnl_stream_urls_index in "${chnl_stream_url_video_indices[@]}"
+            do
+                chnl_stream_urls_audio[chnl_stream_urls_index]=""
+                chnl_stream_urls_subtitles[chnl_stream_urls_index]=""
+                chnl_stream_url_qualities+=("${chnl_stream_urls_bitrate[chnl_stream_urls_index]}-${chnl_stream_urls_resolution[chnl_stream_urls_index]}")
+            done
+
+            IFS=, read -r -a formats_code <<< "$code"
+
+            chnl_stream_urls=()
+            chnl_stream_urls_count=0
+
+            for((s_i=0;s_i<chnl_stream_url_qualities_count;s_i++));
+            do
+                formats_index=${formats_indices[s_i]}
+                format_code=${formats_code[s_i]}
+
+                if ! chnl_stream_url=$(youtube-dl -f "$format_code" -g "$chnl_stream_link")
+                then
+                    Println "$error [ $chnl_channel_name ] 解析 $format_code 发生错误"
+                    continue
+                fi
+
+                chnl_stream_urls[formats_index]="$chnl_stream_url"
+                chnl_stream_urls_count=$((chnl_stream_urls_count+1))
+            done
+
+            if [ "$chnl_stream_urls_count" -eq 0 ] 
+            then
+                Println "$error [ $chnl_channel_name ] 解析发生错误, 直播链接不存在?"
+                return 0
+            fi
+        elif ! chnl_stream_link=$(youtube-dl -f "$code" -g "$chnl_stream_link")
+        then
+            Println "$error [ $chnl_channel_name ] 解析发生错误, 直播链接不存在?"
+            return 0
         fi
     elif [ "${chnl_stream_link:13:12}" == "fengshows.cn" ] 
     then
@@ -11796,7 +11990,8 @@ StartChannel()
                 chnl_stream_url_cdn="https://$hboasia_cdn_host/${BASH_REMATCH[1]}?${chnl_stream_urls[0]#*\?}"
             fi
 
-            choose=1
+            chnl_stream_url_qualities_count=0
+
             if [[ $chnl_stream_link =~ \|([^|]+)$ ]] 
             then
                 choose=0
@@ -11833,123 +12028,163 @@ StartChannel()
                     IFS="," read -ra chnl_stream_subtitles_name_allow <<< "$chnl_stream_subtitles_name_allow_list"
                 fi
 
+                if [ "$monitor" = true ] 
+                then
+                    auto_select=true
+                else
+                    auto_select=false
+                fi
+
+                choose_asked=false
+                quality_unset=false
+
                 chnl_stream_url_video_indices=()
 
                 for((i=0;i<chnl_stream_url_qualities_count;i++));
                 do
                     for((j=0;j<chnl_stream_urls_count;j++));
                     do
-                        if { ! [[ ${chnl_stream_url_qualities[i]} =~ - ]] || [ "${chnl_stream_urls_bitrate[j]}" == "${chnl_stream_url_qualities[i]%-*}" ] || [ "$monitor" = true ]; } && [ "${chnl_stream_urls_resolution[j]}" == "${chnl_stream_url_qualities[i]#*-}" ]
+                        if { [ "$auto_select" = true ] || ! [[ ${chnl_stream_url_qualities[i]} =~ - ]] || [ "${chnl_stream_urls_bitrate[j]}" == "${chnl_stream_url_qualities[i]%-*}" ]; } && [ "${chnl_stream_urls_resolution[j]}" == "${chnl_stream_url_qualities[i]#*-}" ]
                         then
                             chnl_stream_url_qualities[i]="${chnl_stream_urls_bitrate[j]}-${chnl_stream_urls_resolution[j]}"
                             chnl_stream_url_video_indices+=("$j")
                             continue 2
                         fi
                     done
+
                     Println "$error ${chnl_stream_url_qualities[i]} 不存在 !"
+
+                    if [ "$monitor" = true ] 
+                    then
+                        quality_unset=true
+                        unset 'chnl_stream_url_qualities[i]'
+                        chnl_stream_url_qualities_count=$((chnl_stream_url_qualities_count-1))
+                        continue
+                    elif [ "$choose_asked" = false ] 
+                    then
+                        choose_asked=true
+                        echo
+                        inquirer list_input_index "是否按分辨率自动选择" yn_options yn_options_index
+
+                        if [ "$yn_options_index" -eq 0 ] 
+                        then
+                            i=$((i-1))
+                            continue
+                        fi
+                    fi
+
                     choose=1
                     Println "$error 请重新选择 $chnl_channel_name 分辨率"
                     break
                 done
+
+                if [ "$chnl_stream_url_qualities_count" -eq 0 ] 
+                then
+                    Println "$error 请重新选择 $chnl_channel_name 分辨率"
+                    return 0
+                fi
+
+                if [ "$quality_unset" = true ] 
+                then
+                    chnl_stream_url_qualities=("${chnl_stream_url_qualities[@]}")
+                fi
+            elif [ "$monitor" = true ] 
+            then
+                Println "$error 请重新选择 $chnl_channel_name 分辨率"
+                return 0
+            else
+                choose=1
             fi
 
             if [ "$choose" -eq 1 ]
             then
-                if [ "$monitor" = false ] 
-                then
-                    chnl_stream_urls_select_all=$((chnl_stream_urls_count+1))
-                    chnl_stream_urls_list="$chnl_stream_urls_list ${green}$chnl_stream_urls_select_all.${normal}${indent_6}全部\n"
-                    Println "$chnl_stream_urls_list"
-                    echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
+                chnl_stream_urls_select_all=$((chnl_stream_urls_count+1))
+                chnl_stream_urls_list="$chnl_stream_urls_list ${green}$chnl_stream_urls_select_all.${normal}${indent_6}全部\n"
+                Println "$chnl_stream_urls_list"
+                echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
 
-                    while read -p "(默认: $chnl_stream_urls_count): " chnl_stream_urls_num 
-                    do
-                        chnl_stream_urls_num=${chnl_stream_urls_num:-$chnl_stream_urls_count}
+                while read -p "(默认: $chnl_stream_urls_count): " chnl_stream_urls_num 
+                do
+                    chnl_stream_urls_num=${chnl_stream_urls_num:-$chnl_stream_urls_count}
 
-                        if [ "$chnl_stream_urls_num" == "$chnl_stream_urls_select_all" ] 
-                        then
-                            chnl_stream_url_qualities=()
-                            chnl_stream_url_video_indices=()
-                            for((i=0;i<chnl_stream_urls_count;i++));
-                            do
-                                chnl_stream_url_qualities+=("${chnl_stream_urls_bitrate[i]}-${chnl_stream_urls_resolution[i]}")
-                                chnl_stream_url_video_indices+=("$i")
-                            done
-                            chnl_stream_url_qualities_count=$chnl_stream_urls_count
-                            printf -v chnl_stream_url_quality ',%s' "${chnl_stream_url_qualities[@]}"
-                            chnl_stream_url_quality=${chnl_stream_url_quality:1}
-                            break
-                        fi
+                    if [ "$chnl_stream_urls_num" == "$chnl_stream_urls_select_all" ] 
+                    then
+                        chnl_stream_url_qualities=()
+                        chnl_stream_url_video_indices=()
 
-                        IFS=" " read -ra chnl_stream_urls_num_arr <<< "$chnl_stream_urls_num"
-
-                        error_no=0
-                        for chnl_stream_url_num in "${chnl_stream_urls_num_arr[@]}"
+                        for((i=0;i<chnl_stream_urls_count;i++));
                         do
-                            case "$chnl_stream_url_num" in
-                                *"-"*)
-                                    chnl_stream_url_num_start=${chnl_stream_url_num%-*}
-                                    chnl_stream_url_num_end=${chnl_stream_url_num#*-}
-                                    if [[ $chnl_stream_url_num_start == *[!0-9]* ]] || [[ $chnl_stream_url_num_end == *[!0-9]* ]] || [ "$chnl_stream_url_num_start" -eq 0 ] || [ "$chnl_stream_url_num_end" -eq 0 ] || [ "$chnl_stream_url_num_end" -gt "$chnl_stream_urls_count" ] || [ "$chnl_stream_url_num_start" -ge "$chnl_stream_url_num_end" ]
-                                    then
-                                        error_no=3
-                                        break
-                                    fi
-                                ;;
-                                *[!0-9]*)
-                                    error_no=1
-                                    break
-                                ;;
-                                *)
-                                    if [ "$chnl_stream_url_num" -lt 1 ] || [ "$chnl_stream_url_num" -gt "$chnl_stream_urls_count" ] 
-                                    then
-                                        error_no=2
-                                        break
-                                    fi
-                                ;;
-                            esac
+                            chnl_stream_url_qualities+=("${chnl_stream_urls_bitrate[i]}-${chnl_stream_urls_resolution[i]}")
+                            chnl_stream_url_video_indices+=("$i")
                         done
 
-                        case "$error_no" in
-                            1|2|3)
-                                Println "$error $i18n_input_correct_no\n"
+                        chnl_stream_url_qualities_count=$chnl_stream_urls_count
+                        break
+                    fi
+
+                    IFS=" " read -ra chnl_stream_urls_num_arr <<< "$chnl_stream_urls_num"
+
+                    error_no=0
+                    for chnl_stream_url_num in "${chnl_stream_urls_num_arr[@]}"
+                    do
+                        case "$chnl_stream_url_num" in
+                            *"-"*)
+                                chnl_stream_url_num_start=${chnl_stream_url_num%-*}
+                                chnl_stream_url_num_end=${chnl_stream_url_num#*-}
+                                if [[ $chnl_stream_url_num_start == *[!0-9]* ]] || [[ $chnl_stream_url_num_end == *[!0-9]* ]] || [ "$chnl_stream_url_num_start" -eq 0 ] || [ "$chnl_stream_url_num_end" -eq 0 ] || [ "$chnl_stream_url_num_end" -gt "$chnl_stream_urls_count" ] || [ "$chnl_stream_url_num_start" -ge "$chnl_stream_url_num_end" ]
+                                then
+                                    error_no=3
+                                    break
+                                fi
+                            ;;
+                            *[!0-9]*)
+                                error_no=1
+                                break
                             ;;
                             *)
-                                chnl_stream_url_qualities=()
-                                chnl_stream_url_video_indices=()
-                                for chnl_stream_url_num in "${chnl_stream_urls_num_arr[@]}"
-                                do
-                                    if [[ $chnl_stream_url_num =~ - ]] 
-                                    then
-                                        start=${chnl_stream_url_num%-*}
-                                        end=${chnl_stream_url_num#*-}
-                                        for((i=start-1;i<end;i++));
-                                        do
-                                            chnl_stream_url_qualities+=("${chnl_stream_urls_bitrate[i]}-${chnl_stream_urls_resolution[i]}")
-                                            chnl_stream_url_video_indices+=("$i")
-                                        done
-                                    else
-                                        chnl_stream_urls_index=$((chnl_stream_url_num-1))
-                                        chnl_stream_url_qualities+=("${chnl_stream_urls_bitrate[chnl_stream_urls_index]}-${chnl_stream_urls_resolution[chnl_stream_urls_index]}")
-                                        chnl_stream_url_video_indices+=("$chnl_stream_urls_index")
-                                    fi
-                                done
-                                chnl_stream_url_qualities_count=${#chnl_stream_url_qualities[@]}
-                                printf -v chnl_stream_url_quality ',%s' "${chnl_stream_url_qualities[@]}"
-                                chnl_stream_url_quality=${chnl_stream_url_quality:1}
-                                break
+                                if [ "$chnl_stream_url_num" -lt 1 ] || [ "$chnl_stream_url_num" -gt "$chnl_stream_urls_count" ] 
+                                then
+                                    error_no=2
+                                    break
+                                fi
                             ;;
                         esac
                     done
-                else
-                    chnl_stream_url_qualities=("$((chnl_stream_urls_count-1))")
-                    chnl_stream_url_quality="${chnl_stream_urls_bitrate[chnl_stream_urls_count-1]}-${chnl_stream_urls_resolution[chnl_stream_urls_count-1]}"
-                    chnl_stream_url_qualities_count=1
-                fi
-            else
-                printf -v chnl_stream_url_quality ',%s' "${chnl_stream_url_qualities[@]}"
-                chnl_stream_url_quality=${chnl_stream_url_quality:1}
+
+                    case "$error_no" in
+                        1|2|3)
+                            Println "$error $i18n_input_correct_no\n"
+                        ;;
+                        *)
+                            chnl_stream_url_qualities=()
+                            chnl_stream_url_video_indices=()
+                            for chnl_stream_url_num in "${chnl_stream_urls_num_arr[@]}"
+                            do
+                                if [[ $chnl_stream_url_num =~ - ]] 
+                                then
+                                    start=${chnl_stream_url_num%-*}
+                                    end=${chnl_stream_url_num#*-}
+                                    for((i=start-1;i<end;i++));
+                                    do
+                                        chnl_stream_url_qualities+=("${chnl_stream_urls_bitrate[i]}-${chnl_stream_urls_resolution[i]}")
+                                        chnl_stream_url_video_indices+=("$i")
+                                    done
+                                else
+                                    chnl_stream_urls_index=$((chnl_stream_url_num-1))
+                                    chnl_stream_url_qualities+=("${chnl_stream_urls_bitrate[chnl_stream_urls_index]}-${chnl_stream_urls_resolution[chnl_stream_urls_index]}")
+                                    chnl_stream_url_video_indices+=("$chnl_stream_urls_index")
+                                fi
+                            done
+
+                            chnl_stream_url_qualities_count=${#chnl_stream_url_qualities[@]}
+                            break
+                        ;;
+                    esac
+                done
             fi
+
+            printf -v chnl_stream_url_quality ',%s' "${chnl_stream_url_qualities[@]}"
+            chnl_stream_url_quality=${chnl_stream_url_quality:1}
 
             if [ -n "${chnl_stream_audio_name:-}" ] 
             then
@@ -14715,7 +14950,6 @@ Add4gtvLink()
     if [ -n "$stream_urls_list" ] 
     then
         stream_url_root=${stream_link%%|*}
-        choose=1
 
         if [[ $stream_link =~ \|([^|]+)$ ]] 
         then
@@ -14742,6 +14976,8 @@ Add4gtvLink()
                 choose=1
                 Println "$error 请重新选择 $channel_name 分辨率"
             done
+        else
+            choose=1
         fi
 
         if [ "$choose" -eq 1 ] 
@@ -14766,14 +15002,14 @@ Add4gtvLink()
                 then
                     stream_url_qualities=()
                     stream_url_video_indices=()
+
                     for((i=0;i<stream_urls_count;i++));
                     do
                         stream_url_qualities+=("${stream_urls_bitrate[i]}-${stream_urls_resolution[i]}")
                         stream_url_video_indices+=("$i")
                     done
+
                     stream_url_qualities_count=$stream_urls_count
-                    printf -v stream_url_quality ',%s' "${stream_url_qualities[@]}"
-                    stream_url_quality=${stream_url_quality:1}
                     break
                 fi
 
@@ -14831,18 +15067,16 @@ Add4gtvLink()
                                 stream_url_video_indices+=("$stream_urls_index")
                             fi
                         done
+
                         stream_url_qualities_count=${#stream_url_qualities[@]}
-                        printf -v stream_url_quality ',%s' "${stream_url_qualities[@]}"
-                        stream_url_quality=${stream_url_quality:1}
                         break
                     ;;
                 esac
             done
-        else
-            printf -v stream_url_quality ',%s' "${stream_url_qualities[@]}"
-            stream_url_quality=${stream_url_quality:1}
         fi
 
+        printf -v stream_url_quality ',%s' "${stream_url_qualities[@]}"
+        stream_url_quality=${stream_url_quality:1}
         stream_links[0]="$stream_url_root|$stream_url_quality"
 
         if [ -n "${_4gtv_proxy_command:-}" ] 
@@ -14904,7 +15138,7 @@ Start4gtvLink()
     if [ -n "$chnl_stream_urls_list" ] 
     then
         chnl_stream_url_root=${chnl_stream_link%%|*}
-        choose=1
+        chnl_stream_url_qualities_count=0
 
         if [[ $chnl_stream_link =~ \|([^|]+)$ ]] 
         then
@@ -14916,139 +15150,169 @@ Start4gtvLink()
 
             chnl_stream_url_video_indices=()
 
+            if [ "$monitor" = true ] 
+            then
+                auto_select=true
+            else
+                auto_select=false
+            fi
+
+            choose_asked=false
+            quality_unset=false
+
             for((i=0;i<chnl_stream_url_qualities_count;i++));
             do
                 for((j=0;j<chnl_stream_urls_count;j++));
                 do
-                    if { [ "${auto_select_yn:-}" == "$i18n_yes" ] || ! [[ ${chnl_stream_url_qualities[i]} =~ - ]] || [ "${chnl_stream_urls_bitrate[j]}" == "${chnl_stream_url_qualities[i]%-*}" ] || [ "$monitor" = true ]; } && [ "${chnl_stream_urls_resolution[j]}" == "${chnl_stream_url_qualities[i]#*-}" ]
+                    if { [ "$auto_select" = true ] || ! [[ ${chnl_stream_url_qualities[i]} =~ - ]] || [ "${chnl_stream_urls_bitrate[j]}" == "${chnl_stream_url_qualities[i]%-*}" ]; } && [ "${chnl_stream_urls_resolution[j]}" == "${chnl_stream_url_qualities[i]#*-}" ]
                     then
                         chnl_stream_url_qualities[i]="${chnl_stream_urls_bitrate[j]}-${chnl_stream_urls_resolution[j]}"
                         chnl_stream_url_video_indices+=("$j")
                         continue 2
                     fi
                 done
+
                 Println "$error ${chnl_stream_url_qualities[i]} 不存在 !"
-                if [ -z "${auto_select_yn:-}" ] 
+
+                if [ "$monitor" = true ] 
                 then
+                    quality_unset=true
+                    unset 'chnl_stream_url_qualities[i]'
+                    chnl_stream_url_qualities_count=$((chnl_stream_url_qualities_count-1))
+                    continue
+                elif [ "$choose_asked" = false ] 
+                then
+                    choose_asked=true
                     echo
-                    inquirer list_input "是否按分辨率自动选择" yn_options auto_select_yn
-                    if [ "$auto_select_yn" == "$i18n_yes" ] 
+                    inquirer list_input_index "是否按分辨率自动选择" yn_options yn_options_index
+
+                    if [ "$yn_options_index" -eq 0 ] 
                     then
                         i=$((i-1))
                         continue
                     fi
                 fi
+
                 choose=1
                 Println "$error 请重新选择 $chnl_channel_name 分辨率"
                 break
             done
+
+            if [ "$chnl_stream_url_qualities_count" -eq 0 ] 
+            then
+                Println "$error 请重新选择 $chnl_channel_name 分辨率"
+                return 1
+            fi
+
+            if [ "$quality_unset" = true ] 
+            then
+                chnl_stream_url_qualities=("${chnl_stream_url_qualities[@]}")
+            fi
+        elif [ "$monitor" = true ] 
+        then
+            Println "$error 请重新选择 $chnl_channel_name 分辨率"
+            return 1
+        else
+            choose=1
         fi
 
         if [ "$choose" -eq 1 ] 
         then
-            if [ "$monitor" = false ] 
+            if [ -z "${kind:-}" ] 
             then
-                if [ -z "${kind:-}" ] 
+                chnl_stream_urls_select_all=$((chnl_stream_urls_count+1))
+                chnl_stream_urls_list="$chnl_stream_urls_list ${green}$chnl_stream_urls_select_all.${normal}${indent_6}全部\n"
+                Println "$chnl_stream_urls_list"
+                echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
+            else
+                chnl_stream_urls_select_all=""
+                Println "$chnl_stream_urls_list"
+                echo "选择分辨率"
+            fi
+
+            while read -p "(默认: $chnl_stream_urls_count): " chnl_stream_urls_num 
+            do
+                chnl_stream_urls_num=${chnl_stream_urls_num:-$chnl_stream_urls_count}
+
+                if [ "$chnl_stream_urls_num" == "$chnl_stream_urls_select_all" ] 
                 then
-                    chnl_stream_urls_select_all=$((chnl_stream_urls_count+1))
-                    chnl_stream_urls_list="$chnl_stream_urls_list ${green}$chnl_stream_urls_select_all.${normal}${indent_6}全部\n"
-                    Println "$chnl_stream_urls_list"
-                    echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
-                else
-                    chnl_stream_urls_select_all=""
-                    Println "$chnl_stream_urls_list"
-                    echo "选择分辨率"
-                fi
+                    chnl_stream_url_qualities=()
+                    chnl_stream_url_video_indices=()
 
-                while read -p "(默认: $chnl_stream_urls_count): " chnl_stream_urls_num 
-                do
-                    chnl_stream_urls_num=${chnl_stream_urls_num:-$chnl_stream_urls_count}
-
-                    if [ "$chnl_stream_urls_num" == "$chnl_stream_urls_select_all" ] 
-                    then
-                        chnl_stream_url_qualities=()
-                        chnl_stream_url_video_indices=()
-                        for((i=0;i<chnl_stream_urls_count;i++));
-                        do
-                            chnl_stream_url_qualities+=("${chnl_stream_urls_bitrate[i]}-${chnl_stream_urls_resolution[i]}")
-                            chnl_stream_url_video_indices+=("$i")
-                        done
-                        chnl_stream_url_qualities_count=$chnl_stream_urls_count
-                        printf -v chnl_stream_url_quality ',%s' "${chnl_stream_url_qualities[@]}"
-                        chnl_stream_url_quality=${chnl_stream_url_quality:1}
-                        break
-                    fi
-
-                    IFS=" " read -ra chnl_stream_urls_num_arr <<< "$chnl_stream_urls_num"
-
-                    error_no=0
-                    for chnl_stream_url_num in "${chnl_stream_urls_num_arr[@]}"
+                    for((i=0;i<chnl_stream_urls_count;i++));
                     do
-                        case "$chnl_stream_url_num" in
-                            *"-"*)
-                                chnl_stream_url_num_start=${chnl_stream_url_num%-*}
-                                chnl_stream_url_num_end=${chnl_stream_url_num#*-}
-                                if [[ $chnl_stream_url_num_start == *[!0-9]* ]] || [[ $chnl_stream_url_num_end == *[!0-9]* ]] || [ "$chnl_stream_url_num_start" -eq 0 ] || [ "$chnl_stream_url_num_end" -eq 0 ] || [ "$chnl_stream_url_num_end" -gt "$chnl_stream_urls_count" ] || [ "$chnl_stream_url_num_start" -ge "$chnl_stream_url_num_end" ]
-                                then
-                                    error_no=3
-                                    break
-                                fi
-                            ;;
-                            *[!0-9]*)
-                                error_no=1
-                                break
-                            ;;
-                            *)
-                                if [ "$chnl_stream_url_num" -lt 1 ] || [ "$chnl_stream_url_num" -gt "$chnl_stream_urls_count" ] 
-                                then
-                                    error_no=2
-                                    break
-                                fi
-                            ;;
-                        esac
+                        chnl_stream_url_qualities+=("${chnl_stream_urls_bitrate[i]}-${chnl_stream_urls_resolution[i]}")
+                        chnl_stream_url_video_indices+=("$i")
                     done
 
-                    case "$error_no" in
-                        1|2|3)
-                            Println "$error $i18n_input_correct_no\n"
+                    chnl_stream_url_qualities_count=$chnl_stream_urls_count
+                    break
+                fi
+
+                IFS=" " read -ra chnl_stream_urls_num_arr <<< "$chnl_stream_urls_num"
+
+                error_no=0
+                for chnl_stream_url_num in "${chnl_stream_urls_num_arr[@]}"
+                do
+                    case "$chnl_stream_url_num" in
+                        *"-"*)
+                            chnl_stream_url_num_start=${chnl_stream_url_num%-*}
+                            chnl_stream_url_num_end=${chnl_stream_url_num#*-}
+                            if [[ $chnl_stream_url_num_start == *[!0-9]* ]] || [[ $chnl_stream_url_num_end == *[!0-9]* ]] || [ "$chnl_stream_url_num_start" -eq 0 ] || [ "$chnl_stream_url_num_end" -eq 0 ] || [ "$chnl_stream_url_num_end" -gt "$chnl_stream_urls_count" ] || [ "$chnl_stream_url_num_start" -ge "$chnl_stream_url_num_end" ]
+                            then
+                                error_no=3
+                                break
+                            fi
+                        ;;
+                        *[!0-9]*)
+                            error_no=1
+                            break
                         ;;
                         *)
-                            chnl_stream_url_qualities=()
-                            chnl_stream_url_video_indices=()
-
-                            for chnl_stream_url_num in "${chnl_stream_urls_num_arr[@]}"
-                            do
-                                if [[ $chnl_stream_url_num =~ - ]] 
-                                then
-                                    start=${chnl_stream_url_num%-*}
-                                    end=${chnl_stream_url_num#*-}
-                                    for((i=start-1;i<end;i++));
-                                    do
-                                        chnl_stream_url_qualities+=("${chnl_stream_urls_bitrate[i]}-${chnl_stream_urls_resolution[i]}")
-                                        chnl_stream_url_video_indices+=("$i")
-                                    done
-                                else
-                                    chnl_stream_urls_index=$((chnl_stream_url_num-1))
-                                    chnl_stream_url_qualities+=("${chnl_stream_urls_bitrate[chnl_stream_urls_index]}-${chnl_stream_urls_resolution[chnl_stream_urls_index]}")
-                                    chnl_stream_url_video_indices+=("$chnl_stream_urls_index")
-                                fi
-                            done
-                            chnl_stream_url_qualities_count=${#chnl_stream_url_qualities[@]}
-                            printf -v chnl_stream_url_quality ',%s' "${chnl_stream_url_qualities[@]}"
-                            chnl_stream_url_quality=${chnl_stream_url_quality:1}
-                            break
+                            if [ "$chnl_stream_url_num" -lt 1 ] || [ "$chnl_stream_url_num" -gt "$chnl_stream_urls_count" ] 
+                            then
+                                error_no=2
+                                break
+                            fi
                         ;;
                     esac
                 done
-            else
-                chnl_stream_url_qualities=("$((chnl_stream_urls_count-1))")
-                chnl_stream_url_quality="${chnl_stream_urls_bitrate[chnl_stream_urls_count-1]}-${chnl_stream_urls_resolution[chnl_stream_urls_count-1]}"
-                chnl_stream_url_qualities_count=1
-            fi
-        else
-            printf -v chnl_stream_url_quality ',%s' "${chnl_stream_url_qualities[@]}"
-            chnl_stream_url_quality=${chnl_stream_url_quality:1}
+
+                case "$error_no" in
+                    1|2|3)
+                        Println "$error $i18n_input_correct_no\n"
+                    ;;
+                    *)
+                        chnl_stream_url_qualities=()
+                        chnl_stream_url_video_indices=()
+
+                        for chnl_stream_url_num in "${chnl_stream_urls_num_arr[@]}"
+                        do
+                            if [[ $chnl_stream_url_num =~ - ]] 
+                            then
+                                start=${chnl_stream_url_num%-*}
+                                end=${chnl_stream_url_num#*-}
+                                for((i=start-1;i<end;i++));
+                                do
+                                    chnl_stream_url_qualities+=("${chnl_stream_urls_bitrate[i]}-${chnl_stream_urls_resolution[i]}")
+                                    chnl_stream_url_video_indices+=("$i")
+                                done
+                            else
+                                chnl_stream_urls_index=$((chnl_stream_url_num-1))
+                                chnl_stream_url_qualities+=("${chnl_stream_urls_bitrate[chnl_stream_urls_index]}-${chnl_stream_urls_resolution[chnl_stream_urls_index]}")
+                                chnl_stream_url_video_indices+=("$chnl_stream_urls_index")
+                            fi
+                        done
+
+                        chnl_stream_url_qualities_count=${#chnl_stream_url_qualities[@]}
+                        break
+                    ;;
+                esac
+            done
         fi
+
+        printf -v chnl_stream_url_quality ',%s' "${chnl_stream_url_qualities[@]}"
+        chnl_stream_url_quality=${chnl_stream_url_quality:1}
 
         chnl_stream_links[0]="$chnl_stream_url_root|$chnl_stream_url_quality"
 
@@ -20882,7 +21146,7 @@ MonitorSet()
                                 new_array+=("$i")
                             done
                         else
-                            new_array+=("$element")
+                            new_array+=("$((element-1))")
                         fi
                     done
 
