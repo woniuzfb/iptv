@@ -287,6 +287,7 @@ function videojsLoad(sourceOverlay,channel) {
 
     player.hlsQualitySelector({
       displayCurrentQuality: false,
+      vjsIconClass: 'vjs-icon-cog'
     });
 
     player.ready(function() {
