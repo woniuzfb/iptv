@@ -1,10 +1,7 @@
 #
 
-`tv c <en|zh_CN|...>` change/update language
-
 ## 目录
 
-- [目录](#目录)
 - [一键管理 v2ray 脚本](#一键管理-v2ray-脚本)
 - [一键管理 xray 脚本](#一键管理-xray-脚本)
 - [一键管理 nginx 脚本](#一键管理-nginx-脚本)
@@ -17,7 +14,6 @@
   - [演示](#演示)
   - [编译静态 FFmpeg](#编译静态-ffmpeg)
   - [自动解析直播源](#自动解析直播源)
-  - [xtream codes 频道](#xtream-codes-频道)
   - [快捷键](#快捷键)
   - [参数详解](#参数详解)
   - [举例](#举例)
@@ -26,7 +22,6 @@
 
 ``` bash
 wget https://woniuzfb.github.io/iptv/v2.sh && bash v2.sh
-
 ```
 
 `v2` 打开 v2ray 管理面板
@@ -37,7 +32,6 @@ wget https://woniuzfb.github.io/iptv/v2.sh && bash v2.sh
 
 ``` bash
 wget https://woniuzfb.github.io/iptv/x.sh && bash x.sh
-
 ```
 
 `x` 打开 xray 管理面板
@@ -48,7 +42,6 @@ wget https://woniuzfb.github.io/iptv/x.sh && bash x.sh
 
 ``` bash
 wget https://woniuzfb.github.io/iptv/nx.sh && bash nx.sh
-
 ```
 
 `nx` 打开 Nginx 管理面板
@@ -56,6 +49,11 @@ wget https://woniuzfb.github.io/iptv/nx.sh && bash nx.sh
 - 使用官方 crossplane 解析配置
 - 支持修改最多五级指令
 - SNI/SSL/APLN 分流
+- nodejs
+- mongodb
+- postfix
+- mmproxy
+- dnscrypt proxy
 
 ---
 
@@ -63,7 +61,6 @@ wget https://woniuzfb.github.io/iptv/nx.sh && bash nx.sh
 
 ``` bash
 wget https://woniuzfb.github.io/iptv/or.sh && bash or.sh
-
 ```
 
 `or` 打开 OpenResty 管理面板
@@ -74,7 +71,6 @@ wget https://woniuzfb.github.io/iptv/or.sh && bash or.sh
 
 ``` bash
 wget https://woniuzfb.github.io/iptv/arm.sh && bash arm.sh
-
 ```
 
 `arm` 打开 Armbian 管理面板
@@ -93,7 +89,6 @@ wget https://woniuzfb.github.io/iptv/arm.sh && bash arm.sh
 
 ``` bash
 wget https://woniuzfb.github.io/iptv/pve.sh && bash pve.sh
-
 ```
 
 `pve` 打开 Proxmox VE 管理面板
@@ -110,7 +105,6 @@ wget https://woniuzfb.github.io/iptv/pve.sh && bash pve.sh
 
 ``` bash
 wget https://woniuzfb.github.io/iptv/ibm.sh && bash ibm.sh
-
 ```
 
 `ibm` 打开 ibm CF 管理面板
@@ -125,17 +119,13 @@ wget https://woniuzfb.github.io/iptv/ibm.sh && bash ibm.sh
 
 ``` bash
 wget https://woniuzfb.github.io/iptv/cf.sh && bash cf.sh
-
 ```
 
 `cf` 打开 cloudflare partner,workers 管理面板
 
 `cf w` 打开 cloudflare workers 管理面板
 
-Mac/Linux 一键获取最优 IP 可以用脚本 [cloudflare-fping](https://github.com/woniuzfb/cloudflare-fping)
-
 - 多 CFP 管理
-- 勿更改公开的 CFP host key
 - 开启 workers 监控
   - 可以在超过请求数( 默认 100000 )时自动上传 worker 到其他账号并移动域名 CNAME 记录
   - 准备工作
@@ -144,6 +134,7 @@ Mac/Linux 一键获取最优 IP 可以用脚本 [cloudflare-fping](https://githu
     - 脚本添加源站 CNAME 记录(一个 CNAME 对应一个 worker), 所有域名必须在同一 cloudflare 账号
     - 如果是新账号需要登录官网完成验证邮箱并点击 workers 设置站点域名
   - 可以设置中转 IBM CF
+- 账号可能会被 cloudflare 列入黑名单, 无法使用 api
 
 ---
 
@@ -153,16 +144,18 @@ Mac/Linux 一键获取最优 IP 可以用脚本 [cloudflare-fping](https://githu
 
 ``` bash
 wget https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
-
 ```
 
 `tv` 打开 iptv 管理面板
 
-始终用最新的脚本，升级方式
+`tv c <en|zh_CN|...>` 更改语言
 
-- 管理面板（推荐）
-或
-- 用这里的 iptv.sh 覆盖 /usr/local/bin/tv ，删除主目录 /usr/local/iptv 下的 lock 文件
+- 计划任务(定时开启/关闭)
+- 监控
+- 防护
+- 防盗链
+- 节目表
+- VIP 模块
 
 ### 编译静态 FFmpeg
 
@@ -175,6 +168,8 @@ docker run -it ffmpeg-h265-static
 
 ### 自动解析直播源
 
+`cx` 打开 xtream codes 账号/频道 管理面板
+
 `tv 4g` 打开 4gtv 频道管理面板
 
 `tv d` 添加演示频道
@@ -185,22 +180,6 @@ docker run -it ffmpeg-h265-static
 - youtube
 - twitch
 - hbo asia
-
-### xtream codes 频道
-
-`cx` 打开 Xtream Codes 账号/频道 管理面板
-
----
-
-- 加密 NODE.JS <- HTTP -> NginX <- HTTPS -> CLIENT
-- 计划任务(定时开启/关闭)
-- 监控
-- 防护
-- 防盗链
-- 节目表
-- VIP 模块
-- 管理频道
-
 
 ### 快捷键
 
@@ -240,7 +219,7 @@ docker run -it ffmpeg-h265-static
     如果没有设置 CRF 固定质量因子, 用于指定输出视频码率(ABR 或 CBR)
     可以输入 omit 省略此选项
 -r  输出视频的分辨率(多个用逗号分隔 比如: 960x540,1280x720)(默认: 1280x720)
--C  固定码率(设置码率的情况下有效)(默认: 否)
+-C  限制性编码(设置码率的情况下有效)(默认: 否)
     如果已经设置 CRF 固定质量因子, 使用限制性编码 VBV (capped CRF)
     如果没有设置 CRF 固定质量因子, 使用限制性编码 VBV (ABR)
 -R  固定码率 CBR (设置 -C 情况下有效)(默认: 否)
@@ -260,7 +239,7 @@ docker run -it ffmpeg-h265-static
     如果输入的直播源是 rtmp 或本地链接，需去除 -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000
     如果要查看详细日志 fatal 改成 error / warning / ...
 -n  FFmpeg 额外的输出参数, 可以输入 omit 省略此选项 (除非有特殊需求, 不需要转码时请省略此选项)
-    (默认：-g 250 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main)
+    (默认：-g 60 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main)
 ```
 
 ### 举例
