@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-sh_ver="1.86.1"
+sh_ver="1.86.2"
 sh_debug=0
 export LANGUAGE=
 export LC_ALL=
@@ -4789,8 +4789,16 @@ FlvStreamCreator()
     map_command=()
     flv_command=( -f flv "$flv_push_link" )
     headers_command=""
+    cookies_command=""
 
     [ -n "$headers" ] && printf -v headers_command '%b' "$headers"
+
+    if [ -n "$cookies" ] 
+    then
+        Trim cookies
+        cookies="${cookies%\;}"
+        printf -v cookies_command '%b' "${cookies//;/; path=\/;\\r\\n}; path=/;"
+    fi
 
     if [ "$flv_h265" = true ] 
     then
@@ -4806,7 +4814,7 @@ FlvStreamCreator()
                 [ -n "$proxy" ] && variants_input_command+=( -http_proxy "$proxy" )
                 [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
                 [ -n "$headers_command" ] && variants_input_command+=( -headers "$headers_command" )
-                [ -n "$cookies" ] && variants_input_command+=( -cookies "$cookies" )
+                [ -n "$cookies_command" ] && variants_input_command+=( -cookies "$cookies_command" )
             elif [[ $stream_link =~ ^icecast?:// ]] 
             then
                 [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
@@ -4829,7 +4837,7 @@ FlvStreamCreator()
                     [ -n "$proxy" ] && variants_input_command+=( -http_proxy "$proxy" )
                     [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
                     [ -n "$headers_command" ] && variants_input_command+=( -headers "$headers_command" )
-                    [ -n "$cookies" ] && variants_input_command+=( -cookies "$cookies" )
+                    [ -n "$cookies_command" ] && variants_input_command+=( -cookies "$cookies_command" )
                 elif [[ ${stream_urls[stream_urls_index]} =~ ^icecast?:// ]] 
                 then
                     [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
@@ -4933,7 +4941,7 @@ FlvStreamCreator()
                             [ -n "$proxy" ] && variants_input_command+=( -http_proxy "$proxy" )
                             [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
                             [ -n "$headers_command" ] && variants_input_command+=( -headers "$headers_command" )
-                            [ -n "$cookies" ] && variants_input_command+=( -cookies "$cookies" )
+                            [ -n "$cookies_command" ] && variants_input_command+=( -cookies "$cookies_command" )
                         elif [[ ${stream_audio_url[stream_url_audio_index]} =~ ^icecast?:// ]] 
                         then
                             [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
@@ -4982,7 +4990,7 @@ FlvStreamCreator()
         [ -n "$proxy" ] && input_command+=( -http_proxy "$proxy" )
         [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
         [ -n "$headers_command" ] && input_command+=( -headers "$headers_command" )
-        [ -n "$cookies" ] && input_command+=( -cookies "$cookies" )
+        [ -n "$cookies_command" ] && input_command+=( -cookies "$cookies_command" )
     elif [[ $stream_link =~ ^icecast?:// ]] 
     then
         [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
@@ -5002,7 +5010,7 @@ FlvStreamCreator()
                 [ -n "$proxy" ] && input_command+=( -http_proxy "$proxy" )
                 [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
                 [ -n "$headers_command" ] && input_command+=( -headers "$headers_command" )
-                [ -n "$cookies" ] && input_command+=( -cookies "$cookies" )
+                [ -n "$cookies_command" ] && input_command+=( -cookies "$cookies_command" )
             elif [[ $stream_link =~ ^icecast?:// ]] 
             then
                 [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
@@ -5018,7 +5026,7 @@ FlvStreamCreator()
                     [ -n "$proxy" ] && input_command+=( -http_proxy "$proxy" )
                     [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
                     [ -n "$headers_command" ] && input_command+=( -headers "$headers_command" )
-                    [ -n "$cookies" ] && input_command+=( -cookies "$cookies" )
+                    [ -n "$cookies_command" ] && input_command+=( -cookies "$cookies_command" )
                 elif [[ $stream_link =~ ^icecast?:// ]] 
                 then
                     [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
@@ -5252,8 +5260,16 @@ FlvStreamCreator()
     chnl_map_command=()
     chnl_flv_command=( -f flv "$chnl_flv_push_link" )
     chnl_headers_command=""
+    chnl_cookies_command=""
 
     [ -n "$chnl_headers" ] && printf -v chnl_headers_command '%b' "$chnl_headers"
+
+    if [ -n "$chnl_cookies" ] 
+    then
+        Trim chnl_cookies
+        chnl_cookies="${chnl_cookies%\;}"
+        printf -v chnl_cookies_command '%b' "${chnl_cookies//;/; path=\/;\\r\\n}; path=/;"
+    fi
 
     if [ "$chnl_flv_h265" = true ] 
     then
@@ -5269,7 +5285,7 @@ FlvStreamCreator()
                 [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
                 [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
                 [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
-                [ -n "$chnl_cookies" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies" )
+                [ -n "$chnl_cookies_command" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies_command" )
             elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
             then
                 [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
@@ -5292,7 +5308,7 @@ FlvStreamCreator()
                     [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
                     [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
                     [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
-                    [ -n "$chnl_cookies" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies" )
+                    [ -n "$chnl_cookies_command" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies_command" )
                 elif [[ ${chnl_stream_urls[chnl_stream_urls_index]} =~ ^icecast?:// ]] 
                 then
                     [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
@@ -5395,7 +5411,7 @@ FlvStreamCreator()
                             [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
                             [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
                             [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
-                            [ -n "$chnl_cookies" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies" )
+                            [ -n "$chnl_cookies_command" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies_command" )
                         elif [[ ${chnl_stream_audio_url[chnl_stream_url_audio_index]} =~ ^icecast?:// ]] 
                         then
                             [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
@@ -5444,7 +5460,7 @@ FlvStreamCreator()
         [ -n "$chnl_proxy" ] && chnl_input_command+=( -http_proxy "$chnl_proxy" )
         [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
         [ -n "$chnl_headers_command" ] && chnl_input_command+=( -headers "$chnl_headers_command" )
-        [ -n "$chnl_cookies" ] && chnl_input_command+=( -cookies "$chnl_cookies" )
+        [ -n "$chnl_cookies_command" ] && chnl_input_command+=( -cookies "$chnl_cookies_command" )
     elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
     then
         [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
@@ -5464,7 +5480,7 @@ FlvStreamCreator()
                 [ -n "$chnl_proxy" ] && chnl_input_command+=( -http_proxy "$chnl_proxy" )
                 [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
                 [ -n "$chnl_headers_command" ] && chnl_input_command+=( -headers "$chnl_headers_command" )
-                [ -n "$chnl_cookies" ] && chnl_input_command+=( -cookies "$chnl_cookies" )
+                [ -n "$chnl_cookies_command" ] && chnl_input_command+=( -cookies "$chnl_cookies_command" )
             elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
             then
                 [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
@@ -5480,7 +5496,7 @@ FlvStreamCreator()
                     [ -n "$chnl_proxy" ] && chnl_input_command+=( -http_proxy "$chnl_proxy" )
                     [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
                     [ -n "$chnl_headers_command" ] && chnl_input_command+=( -headers "$chnl_headers_command" )
-                    [ -n "$chnl_cookies" ] && chnl_input_command+=( -cookies "$chnl_cookies" )
+                    [ -n "$chnl_cookies_command" ] && chnl_input_command+=( -cookies "$chnl_cookies_command" )
                 elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
                 then
                     [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
@@ -5815,8 +5831,16 @@ HlsStreamCreatorPlus()
     hls_master_list="#EXTM3U\n#EXT-X-VERSION:7\n"
     var_stream_map=""
     headers_command=""
+    cookies_command=""
 
     [ -n "$headers" ] && printf -v headers_command '%b' "$headers"
+
+    if [ -n "$cookies" ] 
+    then
+        Trim cookies
+        cookies="${cookies%\;}"
+        printf -v cookies_command '%b' "${cookies//;/; path=\/;\\r\\n}; path=/;"
+    fi
 
     if [ "$seg_count" -gt 0 ] 
     then
@@ -5851,7 +5875,7 @@ HlsStreamCreatorPlus()
                 [ -n "$proxy" ] && variants_input_command+=( -http_proxy "$proxy" )
                 [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
                 [ -n "$headers_command" ] && variants_input_command+=( -headers "$headers_command" )
-                [ -n "$cookies" ] && variants_input_command+=( -cookies "$cookies" )
+                [ -n "$cookies_command" ] && variants_input_command+=( -cookies "$cookies_command" )
             elif [[ $stream_link =~ ^icecast?:// ]] 
             then
                 [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
@@ -5912,7 +5936,7 @@ HlsStreamCreatorPlus()
                     [ -n "$proxy" ] && variants_input_command+=( -http_proxy "$proxy" )
                     [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
                     [ -n "$headers_command" ] && variants_input_command+=( -headers "$headers_command" )
-                    [ -n "$cookies" ] && variants_input_command+=( -cookies "$cookies" )
+                    [ -n "$cookies_command" ] && variants_input_command+=( -cookies "$cookies_command" )
                 elif [[ ${stream_urls[stream_urls_index]} =~ ^icecast?:// ]] 
                 then
                     [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
@@ -6019,7 +6043,7 @@ HlsStreamCreatorPlus()
                             [ -n "$proxy" ] && variants_input_command+=( -http_proxy "$proxy" )
                             [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
                             [ -n "$headers_command" ] && variants_input_command+=( -headers "$headers_command" )
-                            [ -n "$cookies" ] && variants_input_command+=( -cookies "$cookies" )
+                            [ -n "$cookies_command" ] && variants_input_command+=( -cookies "$cookies_command" )
                         elif [[ ${stream_audio_url[stream_url_audio_index]} =~ ^icecast?:// ]] 
                         then
                             [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
@@ -6065,7 +6089,7 @@ HlsStreamCreatorPlus()
                         [ -n "$proxy" ] && variants_input_command+=( -http_proxy "$proxy" )
                         [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
                         [ -n "$headers_command" ] && variants_input_command+=( -headers "$headers_command" )
-                        [ -n "$cookies" ] && variants_input_command+=( -cookies "$cookies" )
+                        [ -n "$cookies_command" ] && variants_input_command+=( -cookies "$cookies_command" )
                     elif [[ ${stream_subtitles_url[stream_url_subtitles_index]} =~ ^icecast?:// ]] 
                     then
                         [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
@@ -6125,7 +6149,7 @@ HlsStreamCreatorPlus()
         [ -n "$proxy" ] && input_command+=( -http_proxy "$proxy" )
         [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
         [ -n "$headers_command" ] && input_command+=( -headers "$headers_command" )
-        [ -n "$cookies" ] && input_command+=( -cookies "$cookies" )
+        [ -n "$cookies_command" ] && input_command+=( -cookies "$cookies_command" )
     elif [[ $stream_link =~ ^icecast?:// ]] 
     then
         [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
@@ -6145,7 +6169,7 @@ HlsStreamCreatorPlus()
                 [ -n "$proxy" ] && input_command+=( -http_proxy "$proxy" )
                 [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
                 [ -n "$headers_command" ] && input_command+=( -headers "$headers_command" )
-                [ -n "$cookies" ] && input_command+=( -cookies "$cookies" )
+                [ -n "$cookies_command" ] && input_command+=( -cookies "$cookies_command" )
             elif [[ $stream_link =~ ^icecast?:// ]] 
             then
                 [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
@@ -6161,7 +6185,7 @@ HlsStreamCreatorPlus()
                     [ -n "$proxy" ] && input_command+=( -http_proxy "$proxy" )
                     [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
                     [ -n "$headers_command" ] && input_command+=( -headers "$headers_command" )
-                    [ -n "$cookies" ] && input_command+=( -cookies "$cookies" )
+                    [ -n "$cookies_command" ] && input_command+=( -cookies "$cookies_command" )
                 elif [[ $stream_link =~ ^icecast?:// ]] 
                 then
                     [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
@@ -6553,8 +6577,16 @@ HlsStreamCreatorPlus()
     chnl_hls_master_list="#EXTM3U\n#EXT-X-VERSION:7\n"
     chnl_var_stream_map=""
     chnl_headers_command=""
+    chnl_cookies_command=""
 
     [ -n "$chnl_headers" ] && printf -v chnl_headers_command '%b' "$chnl_headers"
+
+    if [ -n "$chnl_cookies" ] 
+    then
+        Trim chnl_cookies
+        chnl_cookies="${chnl_cookies%\;}"
+        printf -v chnl_cookies_command '%b' "${chnl_cookies//;/; path=\/;\\r\\n}; path=/;"
+    fi
 
     if [ "$chnl_seg_count" -gt 0 ] 
     then
@@ -6589,11 +6621,17 @@ HlsStreamCreatorPlus()
                 [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
                 [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
                 [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
-                [ -n "$chnl_cookies" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies" )
+                [ -n "$chnl_cookies_command" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies_command" )
             elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
             then
                 [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
             fi
+
+            #if [ "${chnl_stream_url_subtitles_count:-0}" -gt 0 ] 
+            #then
+            #    chnl_variants_input_command+=( -strict experimental )
+            #fi
+
             chnl_variants_input_command+=( $chnl_input_flags_command -i "$chnl_stream_link" )
         fi
 
@@ -6650,7 +6688,7 @@ HlsStreamCreatorPlus()
                     [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
                     [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
                     [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
-                    [ -n "$chnl_cookies" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies" )
+                    [ -n "$chnl_cookies_command" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies_command" )
                 elif [[ ${chnl_stream_urls[chnl_stream_urls_index]} =~ ^icecast?:// ]] 
                 then
                     [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
@@ -6757,7 +6795,7 @@ HlsStreamCreatorPlus()
                             [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
                             [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
                             [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
-                            [ -n "$chnl_cookies" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies" )
+                            [ -n "$chnl_cookies_command" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies_command" )
                         elif [[ ${chnl_stream_urls[chnl_stream_urls_index]} =~ ^icecast?:// ]] 
                         then
                             [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
@@ -6803,7 +6841,7 @@ HlsStreamCreatorPlus()
                         [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
                         [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
                         [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
-                        [ -n "$chnl_cookies" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies" )
+                        [ -n "$chnl_cookies_command" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies_command" )
                     elif [[ ${chnl_stream_urls[chnl_stream_urls_index]} =~ ^icecast?:// ]] 
                     then
                         [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
@@ -6863,7 +6901,7 @@ HlsStreamCreatorPlus()
         [ -n "$chnl_proxy" ] && chnl_input_command+=( -http_proxy "$chnl_proxy" )
         [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
         [ -n "$chnl_headers_command" ] && chnl_input_command+=( -headers "$chnl_headers_command" )
-        [ -n "$chnl_cookies" ] && chnl_input_command+=( -cookies "$chnl_cookies" )
+        [ -n "$chnl_cookies_command" ] && chnl_input_command+=( -cookies "$chnl_cookies_command" )
     elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
     then
         [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
@@ -6883,7 +6921,7 @@ HlsStreamCreatorPlus()
                 [ -n "$chnl_proxy" ] && chnl_input_command+=( -http_proxy "$chnl_proxy" )
                 [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
                 [ -n "$chnl_headers_command" ] && chnl_input_command+=( -headers "$chnl_headers_command" )
-                [ -n "$chnl_cookies" ] && chnl_input_command+=( -cookies "$chnl_cookies" )
+                [ -n "$chnl_cookies_command" ] && chnl_input_command+=( -cookies "$chnl_cookies_command" )
             elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
             then
                 [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
@@ -6899,7 +6937,7 @@ HlsStreamCreatorPlus()
                     [ -n "$chnl_proxy" ] && chnl_input_command+=( -http_proxy "$chnl_proxy" )
                     [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
                     [ -n "$chnl_headers_command" ] && chnl_input_command+=( -headers "$chnl_headers_command" )
-                    [ -n "$chnl_cookies" ] && chnl_input_command+=( -cookies "$chnl_cookies" )
+                    [ -n "$chnl_cookies_command" ] && chnl_input_command+=( -cookies "$chnl_cookies_command" )
                 elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
                 then
                     [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
@@ -8114,7 +8152,8 @@ ParseHlsStreamLink()
     hboasia_cdn_host="dai3fd1oh325y.cloudfront.net"
 
     stream_link_url="${stream_link%%|*}"
-    stream_link_url_path="${stream_link_url%/*}"
+    stream_link_url_path="${stream_link_url%\?*}"
+    stream_link_url_path="${stream_link_url_path%/*}"
 
     stream_link_url_path_cdn="$stream_link_url_path"
     if [[ $stream_link_url_path =~ $hboasia_host/(.+)$ ]] 
@@ -8613,7 +8652,11 @@ ParseHlsStreamLink()
         stream_url_audio_count=0
     fi
 
-    if [ -n "${stream_subtitles_name:-}" ] 
+    if [[ ${stream_links[0]} =~ ^https?://news\.tvb\.com ]] 
+    then
+        stream_url_subtitles_count=0
+        stream_link_url="${stream_link_url}|sg:none"
+    elif [ -n "${stream_subtitles_name:-}" ] 
     then
         stream_url_subtitles_indices=()
         choose=1
@@ -8973,16 +9016,7 @@ SetStreamLink()
             -H "User-Agent: $user_agent" \
             -H "${headers:0:-4}" \
             "https://api.news.tvb.com/news/v2.2.1/live?profile=web" \
-            | $JQ_FILE -r '.items[]|select(.path=="'"${chnl#*_}"'").video.ios[]|select(.type=="hd").url')
-
-        if [ -z "$token_url" ] 
-        then
-            token_url=$(curl -s -Lm 10 \
-                -H "User-Agent: $user_agent" \
-                -H "${headers:0:-4}" \
-                "https://api.news.tvb.com/news/v2.2.1/live?profile=web" \
-                | $JQ_FILE -r '.items[]|select(.path=="'"${chnl%_*}"'").video.ios[]|select(.type=="hd").url')
-        fi
+            | $JQ_FILE -r '.items[]|select(.path=="'"$chnl"'" or .path=="'"${chnl#*_}"'" or .path=="'"${chnl%_*}"'").video.ios[]|select(.type=="hd").url')
 
         if [ -z "$token_url" ] 
         then
@@ -11736,6 +11770,8 @@ CheckIfXtreamCodes()
                 chnl_headers="Authorization: Bearer $access_token\r\n"
                 printf -v chnl_headers_command '%b' "$chnl_headers"
 
+                printf -v chnl_cookies_command '%b' "${chnl_cookies//;/; path=\/;\\r\\n}; path=/;"
+
                 profile=$(curl -s -Lm 10\
                     -H "$chnl_user_agent" \
                     -H "${chnl_headers:0:-4}" \
@@ -11833,7 +11869,7 @@ CheckIfXtreamCodes()
                     then
                         video=1
                     fi
-                done < <($FFPROBE $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies" -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet)
+                done < <($FFPROBE $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies_command" -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet)
 
                 if [ "$audio" -eq 0 ] || [ "$video" -eq 0 ]
                 then
@@ -11893,6 +11929,8 @@ CheckIfXtreamCodes()
         elif [ "$to_try" -eq 1 ] 
         then
             printf -v chnl_headers_command '%b' "$chnl_headers"
+            printf -v chnl_cookies_command '%b' "${chnl_cookies//;/; path=\/;\\r\\n}; path=/;"
+
             audio=0
             video=0
             while IFS= read -r line 
@@ -11907,7 +11945,7 @@ CheckIfXtreamCodes()
                 then
                     video=1
                 fi
-            done < <($FFPROBE $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies" -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet)
+            done < <($FFPROBE $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies_command" -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet)
 
             if [ "$audio" -eq 0 ] || [ "$video" -eq 0 ] 
             then
@@ -12306,16 +12344,7 @@ StartChannel()
                 -H "User-Agent: $chnl_user_agent" \
                 -H "${chnl_headers:0:-4}" \
                 "https://api.news.tvb.com/news/v2.2.1/live?profile=web" \
-                | $JQ_FILE -r '.items[]|select(.path=="'"${chnl#*_}"'").video.ios[]|select(.type=="hd").url')
-
-            if [ -z "$token_url" ] 
-            then
-                token_url=$(curl -s -Lm 10 \
-                    -H "User-Agent: $chnl_user_agent" \
-                    -H "${chnl_headers:0:-4}" \
-                    "https://api.news.tvb.com/news/v2.2.1/live?profile=web" \
-                    | $JQ_FILE -r '.items[]|select(.path=="'"${chnl%_*}"'").video.ios[]|select(.type=="hd").url')
-            fi
+                | $JQ_FILE -r '.items[]|select(.path=="'"$chnl"'" or .path=="'"${chnl#*_}"'" or .path=="'"${chnl%_*}"'").video.ios[]|select(.type=="hd").url')
 
             if [ -z "$token_url" ] 
             then
@@ -12352,7 +12381,8 @@ StartChannel()
         fi
 
         chnl_stream_link_url="${chnl_stream_link%%|*}"
-        chnl_stream_link_url_path="${chnl_stream_link_url%/*}"
+        chnl_stream_link_url_path="${chnl_stream_link_url%\?*}"
+        chnl_stream_link_url_path="${chnl_stream_link_url_path%/*}"
 
         chnl_stream_link_url_path_cdn="$chnl_stream_link_url_path"
         if [[ $chnl_stream_link_url_path =~ $hboasia_host/(.+)$ ]] 
@@ -12865,7 +12895,11 @@ StartChannel()
                 chnl_stream_url_audio_count=0
             fi
 
-            if [ -n "${chnl_stream_subtitles_name:-}" ] 
+            if [[ ${chnl_stream_links[0]} =~ ^https?://news\.tvb\.com ]] 
+            then
+                chnl_stream_url_subtitles_count=0
+                chnl_stream_link_url="${chnl_stream_link_url}|sg:none"
+            elif [ -n "${chnl_stream_subtitles_name:-}" ] 
             then
                 chnl_stream_url_subtitles_indices=()
                 choose=1
@@ -13120,16 +13154,7 @@ StartChannel()
             -H "User-Agent: $chnl_user_agent" \
             -H "${chnl_headers:0:-4}" \
             "https://api.news.tvb.com/news/v2.2.1/live?profile=web" \
-            | $JQ_FILE -r '.items[]|select(.path=="'"${chnl#*_}"'").video.ios[]|select(.type=="hd").url')
-
-        if [ -z "$token_url" ] 
-        then
-            token_url=$(curl -s -Lm 10 \
-                -H "User-Agent: $chnl_user_agent" \
-                -H "${chnl_headers:0:-4}" \
-                "https://api.news.tvb.com/news/v2.2.1/live?profile=web" \
-                | $JQ_FILE -r '.items[]|select(.path=="'"${chnl%_*}"'").video.ios[]|select(.type=="hd").url')
-        fi
+            | $JQ_FILE -r '.items[]|select(.path=="'"$chnl"'" or .path=="'"${chnl#*_}"'" or .path=="'"${chnl%_*}"'").video.ios[]|select(.type=="hd").url')
 
         if [ -z "$token_url" ] 
         then
@@ -13625,7 +13650,7 @@ ListChannelsSchedule()
 
         chnls_schedule_indices+=("$chnls_index")
 
-        chnls_schedule_list="$chnls_schedule_list  ${green}$((chnls_index+1)).${normal}${indent_6}${dim_underlined}${chnls_channel_name[chnls_index]}${normal}\n\n"
+        chnls_schedule_list="$chnls_schedule_list  ${green}$((chnls_index+1)).${normal}${indent_6}${dim_underlined}${chnls_channel_name[chnls_index]} [${chnls_output_dir_name[chnls_index]}] ${normal}\n\n"
 
         IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
         IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
@@ -13683,7 +13708,7 @@ AddChannelsSchedule()
 
     for chnls_index in "${chnls_indices[@]}"
     do
-        chnl_schedules_list="${indent_6}${dim_underlined}${chnls_channel_name[chnls_index]}${normal}\n\n"
+        chnl_schedules_list="${indent_6}${dim_underlined}${chnls_channel_name[chnls_index]} [${chnls_output_dir_name[chnls_index]}] ${normal}\n\n"
 
         if [ -n "${chnls_schedule_status[chnls_index]}" ] 
         then
@@ -13882,6 +13907,13 @@ EditChannelSchedule()
                     chnl_pid="${chnls_pid[chnls_index]}"
                     GetChannel
 
+                    if [ -f "$chnl_output_dir_root/${chnl_playlist_name}_master.m3u8" ]
+                    then
+                        master=1
+                    else
+                        master=0
+                    fi
+
                     action="start"
                     SyncFile
                 fi
@@ -13915,7 +13947,7 @@ EditChannelSchedules()
 
     chnl_schedules_indices=("${!chnl_schedules_status[@]}")
     chnl_schedules_count=${#chnl_schedules_status[@]}
-    chnl_schedules_list="${indent_6}${dim_underlined}${chnls_channel_name[chnls_index]}${normal}\n\n"
+    chnl_schedules_list="${indent_6}${dim_underlined}${chnls_channel_name[chnls_index]} [${chnls_output_dir_name[chnls_index]}]${normal}\n\n"
 
     for chnl_schedules_index in "${chnl_schedules_indices[@]}"
     do
@@ -20485,13 +20517,6 @@ MonitorHlsRestartChannel()
 
             if [ "$skip_check_stream" -eq 0 ] 
             then
-                if [ -f "$chnl_output_dir_root/${chnl_playlist_name}_master.m3u8" ] 
-                then
-                    master=1
-                else
-                    master=0
-                fi
-
                 audio=0
                 video=0
                 video_bitrate=0
@@ -21134,6 +21159,8 @@ MonitorTryAccounts()
                     chnl_headers="Authorization: Bearer $access_token\r\n"
                     printf -v chnl_headers_command '%b' "$chnl_headers"
 
+                    printf -v chnl_cookies_command '%b' "${chnl_cookies//;/; path=\/;\\r\\n}; path=/;"
+
                     profile=$(curl -s -Lm 10 \
                         -H "User-Agent: $chnl_user_agent" \
                         -H "${chnl_headers:0:-4}" \
@@ -21204,7 +21231,7 @@ MonitorTryAccounts()
                         then
                             video=1
                         fi
-                    done < <($FFPROBE $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies" -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet)
+                    done < <($FFPROBE $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies_command" -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet)
 
                     if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ]
                     then
@@ -24031,6 +24058,7 @@ XtreamCodesListChnls()
                 genres_list_pages=()
                 FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
                 FFPROBE="$FFMPEG_ROOT/ffprobe"
+                FFMPEG="$FFMPEG_ROOT/ffmpeg"
                 while true 
                 do
                     Println "$genres_list\n\n${green}账号到期时间:${normal} $exp_date\n"
@@ -24260,11 +24288,9 @@ XtreamCodesListChnls()
 
                         if [ "$use_proxy_yn" == "$i18n_yes" ] 
                         then
-                            ffprobe_headers="Cookie: $cookies\r\n"
                             stream_link="$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}"
                             Println "${green}${xc_chnls_name[xc_chnls_index]}:${normal} $stream_link\n"
                         else
-                            ffprobe_headers="Authorization: Bearer $access_token\r\nCookie: $cookies\r\n"
                             create_link_url="$server/portal.php?type=itv&action=create_link&cmd=${xc_chnls_cmd[xc_chnls_index]}&series=&forced_storage=undefined&disable_ad=0&download=0"
 
                             cmd=$(curl -s -Lm 10 \
@@ -24289,10 +24315,48 @@ XtreamCodesListChnls()
 
                         EXIT_STATUS=0
 
-                        printf -v ffprobe_headers_command '%b' "$ffprobe_headers"
+                        printf -v headers_command '%b' "$headers"
+                        printf -v cookies_command '%b' "${cookies//;/; path=\/;\\r\\n}; path=/;"
 
-                        $FFPROBE -i "$stream_link" -user_agent "$user_agent" \
-                            -headers "$ffprobe_headers_command" -show_streams -hide_banner || EXIT_STATUS=$?
+                        echo
+                        inquirer list_input_index "截图" ny_options ny_options_index
+
+                        if [[ $ny_options_index -eq 1 ]] 
+                        then
+                            Println "$tip 格式如 HH:MM:SS"
+                            inquirer text_input "输入截图位置" ss 00:00:03
+
+                            if TMP_FILE=$(mktemp -q) 
+                            then
+                                chmod +r "$TMP_FILE"
+                            else
+                                printf -v TMP_FILE '%(%m-%d-%H:%M:%S)T' -1
+                            fi
+
+                            trap '
+                                rm -f "$TMP_FILE"
+                                rm -f "${TMP_FILE}.jpeg"
+                            ' EXIT
+
+                            $FFMPEG -hide_banner -loglevel debug -user_agent "$user_agent" \
+                                -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" -ss "$ss" -frames:v 1 "${TMP_FILE}.jpeg" || EXIT_STATUS=$?
+
+                            ReleaseCheck
+                            if [ ! -e "/usr/local/bin/imgcat" ] 
+                            then
+                                ImgcatInstall
+                            fi
+
+                            /usr/local/bin/imgcat --half-height "${TMP_FILE}.jpeg"
+
+                            rm -f "$TMP_FILE"
+                            rm -f "${TMP_FILE}.jpeg"
+
+                            trap - EXIT
+                        else
+                            $FFPROBE -hide_banner -loglevel debug -show_streams -user_agent "$user_agent" \
+                                -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" || EXIT_STATUS=$?
+                        fi
 
                         if [ "$EXIT_STATUS" -ne 0 ] && [ "$use_proxy_yn" == "$i18n_yes" ]
                         then
@@ -24307,13 +24371,41 @@ XtreamCodesListChnls()
                                 Println "$error 返回错误[ stream_link: ${stream_link:-无} ], 请重试"
                                 continue
                             fi
+
+                            EXIT_STATUS=0
                             access_token="$new_access_token"
                             cookies="$new_cookies"
-                            ffprobe_headers="Authorization: Bearer $access_token\r\nCookie: $cookies\r\n"
-                            printf -v ffprobe_headers_command '%b' "$ffprobe_headers"
-                            EXIT_STATUS=0
-                            $FFPROBE -i "$stream_link" -user_agent "$user_agent" \
-                                -headers "$ffprobe_headers_command" -show_streams -hide_banner || EXIT_STATUS=$?
+
+                            printf -v headers_command '%b' "$Authorization: Bearer $access_token"
+                            printf -v cookies_command '%b' "${cookies//;/; path=\/;\\r\\n}; path=/;"
+
+                            if [[ $ny_options_index -eq 1 ]] 
+                            then
+                                if TMP_FILE=$(mktemp -q) 
+                                then
+                                    chmod +r "$TMP_FILE"
+                                else
+                                    printf -v TMP_FILE '%(%m-%d-%H:%M:%S)T' -1
+                                fi
+
+                                trap '
+                                    rm -f "$TMP_FILE"
+                                    rm -f "${TMP_FILE}.jpeg"
+                                ' EXIT
+
+                                $FFMPEG -hide_banner -loglevel debug -user_agent "$user_agent" \
+                                    -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" -ss "$ss" -frames:v 1 "${TMP_FILE}.jpeg" || EXIT_STATUS=$?
+
+                                /usr/local/bin/imgcat --half-height "${TMP_FILE}.jpeg"
+
+                                rm -f "$TMP_FILE"
+                                rm -f "${TMP_FILE}.jpeg"
+
+                                trap - EXIT
+                            else
+                                $FFPROBE -hide_banner -loglevel debug -show_streams -user_agent "$user_agent" \
+                                    -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" || EXIT_STATUS=$?
+                            fi
                         fi
 
                         if [ "$EXIT_STATUS" -eq 0 ]
@@ -43545,8 +43637,8 @@ VipListChannel()
 
             printf -v ffprobe_headers_command '%b' "x-forwarded-for: 127.0.0.1\r\n"
 
-            if ! $FFPROBE -i "$stream_link" -user_agent "$USER_AGENT_TV" \
-                -headers "$ffprobe_headers_command" -show_streams -hide_banner
+            if ! $FFPROBE -user_agent "$USER_AGENT_TV" \
+                -headers "$ffprobe_headers_command" -show_streams -hide_banner -i "$stream_link"
             then
                 if [ -n "${vip_public_host:-}" ] 
                 then
