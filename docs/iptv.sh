@@ -14037,9 +14037,9 @@ EditChannelSchedules()
                 do
                     if [[ $chnl_schedule_num =~ - ]] 
                     then
-                        start=${chnl_schedule_num%-*}
-                        end=${chnl_schedule_num#*-}
-                        for((chnl_schedules_index=start-1;chnl_schedules_index<end;chnl_schedules_index++));
+                        chnl_schedules_start=${chnl_schedule_num%-*}
+                        chnl_schedules_end=${chnl_schedule_num#*-}
+                        for((chnl_schedules_index=chnl_schedules_start-1;chnl_schedules_index<chnl_schedules_end;chnl_schedules_index++));
                         do
                             EditChannelSchedule
                         done
@@ -14130,9 +14130,9 @@ EditChannelsSchedule()
                 do
                     if [[ $chnl_num =~ - ]] 
                     then
-                        start=${chnl_num%-*}
-                        end=${chnl_num#*-}
-                        for((chnls_index=start-1;chnls_index<end;chnls_index++));
+                        chnls_start=${chnl_num%-*}
+                        chnls_end=${chnl_num#*-}
+                        for((chnls_index=chnls_start-1;chnls_index<chnls_end;chnls_index++));
                         do
                             EditChannelSchedules
                         done
@@ -14314,9 +14314,9 @@ SortChannelsSchedule()
                 do
                     if [[ $chnl_num =~ - ]] 
                     then
-                        start=${chnl_num%-*}
-                        end=${chnl_num#*-}
-                        for((chnls_index=start-1;chnls_index<end;chnls_index++));
+                        chnls_start=${chnl_num%-*}
+                        chnls_end=${chnl_num#*-}
+                        for((chnls_index=chnls_start-1;chnls_index<chnls_end;chnls_index++));
                         do
                             SortChannelSchedules
                         done
@@ -14447,9 +14447,9 @@ DelChannelSchedules()
                 do
                     if [[ $chnl_schedule_num =~ - ]] 
                     then
-                        start=${chnl_schedule_num%-*}
-                        end=${chnl_schedule_num#*-}
-                        for((chnl_schedules_index=start-1;chnl_schedules_index<end;chnl_schedules_index++));
+                        chnl_schedules_start=${chnl_schedule_num%-*}
+                        chnl_schedules_end=${chnl_schedule_num#*-}
+                        for((chnl_schedules_index=chnl_schedules_start-1;chnl_schedules_index<chnl_schedules_end;chnl_schedules_index++));
                         do
                             new_array+=("$chnl_schedules_index")
                         done
@@ -14548,9 +14548,9 @@ DelChannelsSchedule()
                 do
                     if [[ $chnl_num =~ - ]] 
                     then
-                        start=${chnl_num%-*}
-                        end=${chnl_num#*-}
-                        for((chnls_index=start-1;chnls_index<end;chnls_index++));
+                        chnls_start=${chnl_num%-*}
+                        chnls_end=${chnl_num#*-}
+                        for((chnls_index=chnls_start-1;chnls_index<chnls_end;chnls_index++));
                         do
                             DelChannelSchedules
                         done
@@ -24347,7 +24347,7 @@ XtreamCodesListChnls()
                                 ImgcatInstall
                             fi
 
-                            /usr/local/bin/imgcat --half-height "${TMP_FILE}.jpeg"
+                            /usr/local/bin/imgcat --half-height "${TMP_FILE}.jpeg" 2> /dev/null || EXIT_STATUS=$?
 
                             rm -f "$TMP_FILE"
                             rm -f "${TMP_FILE}.jpeg"
@@ -24396,7 +24396,7 @@ XtreamCodesListChnls()
                                 $FFMPEG -hide_banner -loglevel debug -user_agent "$user_agent" \
                                     -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" -ss "$ss" -frames:v 1 "${TMP_FILE}.jpeg" || EXIT_STATUS=$?
 
-                                /usr/local/bin/imgcat --half-height "${TMP_FILE}.jpeg"
+                                /usr/local/bin/imgcat --half-height "${TMP_FILE}.jpeg" 2> /dev/null || EXIT_STATUS=$?
 
                                 rm -f "$TMP_FILE"
                                 rm -f "${TMP_FILE}.jpeg"
@@ -28755,8 +28755,9 @@ app.get('/keys', (req, res) => {
     const { key, channel } = req.query;
     if (!req.session.websiteUser || !key || !channel){
         res.status(400).end();
+    } esle {
+        res.sendFile(channel + '/' + key + '.key', {root: path.join(__dirname, '../${LIVE_ROOT##*/}')});
     }
-    res.sendFile(channel + '/' + key + '.key', {root: path.join(__dirname, '../${LIVE_ROOT##*/}')});
 });
 
 app.get('/', (req, res) => {
@@ -28772,8 +28773,9 @@ app.get('/remote', (req, res) => {
 app.get('/channels', (req, res) => {
     if (!req.session.websiteUser){
         res.status(403).end();
+    } else {
+        res.sendFile('$server_root/channels.json');
     }
-    res.sendFile('$server_root/channels.json');
 });
 
 app.listen(port, () => console.log(\`App listening on port \${port}!\`))
@@ -46568,7 +46570,7 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
             fi
 
             echo
-            openwrt_options=( '21.02.0' '19.07.8' '19.07.7' '19.07.6' '19.07.5' '19.07.4' '手动输入' )
+            openwrt_options=( '21.02.1' '21.02.0' '19.07.8' '19.07.7' '19.07.6' '19.07.5' '19.07.4' '手动输入' )
             inquirer list_input "选择版本: " openwrt_options openwrt_ver
 
             if [ "$openwrt_ver" == "手动输入" ] 
