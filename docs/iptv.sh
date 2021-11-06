@@ -5,13 +5,13 @@
 
 set -euo pipefail
 
-sh_ver="1.86.2"
+sh_ver="1.86.3"
 sh_debug=0
 export LANGUAGE=
 export LC_ALL=
 export LANG=en_US.UTF-8
 SH_LINK="https://woniuzfb.github.io/iptv/iptv.sh"
-SH_LINK_FALLBACK="http://tv.epub.fun/iptv.sh"
+SH_FALLBACK="cn.epub.fun"
 SH_FILE="/usr/local/bin/tv"
 i18n_FILE="/usr/local/bin/tv-i18n"
 OR_FILE="/usr/local/bin/or"
@@ -65,9 +65,9 @@ XTREAM_CODES_PROXY_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/xtream_codes_proxy.js"
 IBM_FILE="/usr/local/bin/ibm"
 IBM_APPS_ROOT="$HOME/ibm_apps"
 IBM_CONFIG="$HOME/ibm.json"
-DEFAULT_DEMOS="http://tv.epub.fun/default.json"
-DEFAULT_CHANNELS_LINK="http://tv.epub.fun/channels.json"
-XTREAM_CODES_LINK="http://tv.epub.fun/xtream_codes"
+DEFAULT_DEMOS="default.json"
+DEFAULT_CHANNELS="channels.json"
+XTREAM_CODES_CHANNELS="xtream_codes"
 USER_AGENT_BROWSER="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.71 Safari/537.36"
 USER_AGENT_TV="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
 monitor=false
@@ -258,6 +258,11 @@ DepInstall()
             sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
         fi
 
+        if [ "$dependency" == "dig" ] 
+        then
+            dependency="bind-utils"
+        fi
+
         if yum -y install $dependency >/dev/null 2>&1
         then
             Println "`eval_gettext \"\\\$info \\\$dependency 安装成功\"`"
@@ -272,6 +277,11 @@ DepInstall()
         fi
 
         AptUpdate
+
+        if [ "$dependency" == "dig" ] 
+        then
+            dependency="dnsutils"
+        fi
 
         if apt-get -y install $1 >/dev/null 2>&1
         then
@@ -1826,11 +1836,86 @@ Spinner()
     wait $pid
 }
 
+ShFallback()
+{
+    DepInstall dig
+    sh_txt=$(dig +short $SH_FALLBACK txt)
+    sh_txt=${sh_txt#\"}
+    sh_txt=${sh_txt%\"}
+
+    if [[ $sh_txt == *[!0-9]* ]] 
+    then
+        SH_FALLBACK="https://"
+        sh_nums=(${sh_txt% *})
+        sh_txt="${sh_txt##* }"
+        sh_nums_indices=("${!sh_nums[@]}")
+    else
+        SH_FALLBACK="http://"
+    fi
+
+    sh_txt_count=${#sh_txt}
+    sh_txt_arr=()
+
+    for((i=0;i<sh_txt_count;i+=3));
+    do
+        j=$((i/3+1))
+        k=$((j%3))
+        if [ "$k" -eq 0 ] 
+        then
+            sh_txt_arr+=("${sh_txt:$i:3}")
+        elif [ "$k" -eq 1 ] 
+        then
+            sh_txt_arr+=("${sh_txt:$((i+1)):1}${sh_txt:$i:1}${sh_txt:$((i+2)):1}")
+        elif [ "$k" -eq 2 ] 
+        then
+            sh_txt_arr+=("${sh_txt:$((i+2)):1}${sh_txt:$i:2}")
+        fi
+    done
+
+    if [[ $sh_txt == *[!0-9]* ]] 
+    then
+        sh_txt_tmp=""
+
+        for ele in "${sh_txt_arr[@]}"
+        do
+            ele=${ele#\-}
+            ele=${ele#\-}
+            sh_txt_tmp="$sh_txt_tmp$ele"
+        done
+
+        sh_txt=""
+
+        for sh_nums_index in "${sh_nums_indices[@]}"
+        do
+            [ -n "$sh_txt" ] && sh_txt="$sh_txt."
+            sh_index=$((${sh_nums[sh_nums_index]}+sh_nums_index+1))
+            sh_txt="$sh_txt${sh_txt_tmp:0:$sh_index}"
+            sh_txt_tmp="${sh_txt_tmp:$sh_index}"
+        done
+    else
+        sh_txt=""
+
+        for ele in "${sh_txt_arr[@]}"
+        do
+            [ -n "$sh_txt" ] && sh_txt="$sh_txt."
+            ele=${ele#\0}
+            ele=${ele#\0}
+            sh_txt="$sh_txt$ele"
+        done
+    fi
+
+    SH_FALLBACK="$SH_FALLBACK$sh_txt"
+
+    return 0
+}
+
 ShFileCheck()
 {
     if [ ! -e "$SH_FILE" ] 
     then
         DepInstall curl
+        ShFallback
+
         if curl -s -Lm 20 "$SH_LINK" -o "${SH_FILE}_tmp"
         then
             mv "${SH_FILE}_tmp" "$SH_FILE"
@@ -1838,7 +1923,7 @@ ShFileCheck()
             Println "`eval_gettext \"\\\$info 脚本下载完成\"`"
         else
             Println "`eval_gettext \"\\\$error 无法连接到 Github ! 尝试备用链接...\"`"
-            if curl -s -Lm 30 "$SH_LINK_FALLBACK" -o "${SH_FILE}_tmp" 
+            if curl -s -Lm 30 "$SH_FALLBACK/${SH_LINK##*/}" -o "${SH_FILE}_tmp" 
             then
                 mv "${SH_FILE}_tmp" "$SH_FILE"
                 chmod +x "$SH_FILE"
@@ -1869,6 +1954,8 @@ ShFileUpdate()
 
     Println "`eval_gettext \"\\\$info 更新 \\\$sh_name 脚本...\"`"
 
+    ShFallback
+
     if curl -s -Lm 20 "$SH_LINK" -o "${SH_FILE}_tmp"
     then
         mv "${SH_FILE}_tmp" "$SH_FILE"
@@ -1881,7 +1968,7 @@ ShFileUpdate()
         fi
     else
         Println "`eval_gettext \"\\\$error 无法连接到 Github ! 尝试备用链接...\"`"
-        if curl -s -Lm 30 "$SH_LINK_FALLBACK" -o "${SH_FILE}_tmp" 
+        if curl -s -Lm 30 "$SH_FALLBACK/${SH_LINK##*/}" -o "${SH_FILE}_tmp" 
         then
             mv "${SH_FILE}_tmp" "$SH_FILE"
             chmod +x "$SH_FILE"
@@ -3216,27 +3303,44 @@ YoutubeDlInstall()
         ln -s /usr/bin/python3 /usr/bin/python
     fi
 
+    printf -v now '%(%s)T' -1
+    youtube_dl_update_time=${youtube_dl_update_time:-0}
+
     if [[ -x $(command -v youtube-dl) ]] 
     then
-        if [ "${youtube_dl_updated:-false}" = false ] 
+        if [[ $((now-youtube_dl_update_time)) -lt 86400 ]] 
         then
-            Println "$info 更新 youtube-dl ..."
-            youtube-dl -U > /dev/null || true
-            youtube_dl_updated=true
+            return 0
         fi
-        return 0
+
+        Println "$info 更新 youtube-dl ..."
+
+        if youtube-dl -U > /dev/null
+        then
+            youtube_dl_update_time=$now
+            return 0
+        fi
     fi
 
     Println "`eval_gettext \"\\\$info 安装 youtube-dl...\"`\n"
 
-    curl -L https://yt-dl.org/downloads/latest/youtube-dl -o /usr/local/bin/youtube-dl
-
-    if [ ! -s /usr/local/bin/youtube-dl ] 
+    if ! curl -L $FFMPEG_MIRROR_LINK/yt-dl -o /usr/local/bin/youtube-dl_tmp || [ ! -s /usr/local/bin/youtube-dl_tmp ]
     then
-        curl -L https://dl.netsyms.net/programs/youtube-dl/latest/youtube-dl -o /usr/local/bin/youtube-dl
+        rm -f /usr/local/bin/youtube-dl_tmp
+
+        if [ "$monitor" = true ] 
+        then
+            MonitorError "无法安装 youtube-dl"
+            return 0
+        fi
+
+        Println "$error 无法安装 youtube-dl, 请稍后再试\n"
+        exit 1
     fi
 
+    mv /usr/local/bin/youtube-dl_tmp /usr/local/bin/youtube-dl
     chmod a+rx /usr/local/bin/youtube-dl
+    youtube_dl_update_time=$now
 }
 
 YtDlpInstall()
@@ -3248,23 +3352,44 @@ YtDlpInstall()
         ln -s /usr/bin/python3 /usr/bin/python
     fi
 
+    printf -v now '%(%s)T' -1
+    yt_dlp_update_time=${yt_dlp_update_time:-0}
+
     if [[ -x $(command -v yt-dlp) ]] 
     then
-        if [ "${yt_dlp_updated:-false}" = false ] 
+        if [[ $((now-yt_dlp_update_time)) -lt 86400 ]] 
         then
-            Println "$info 更新 yt-dlp ..."
-            yt-dlp -U > /dev/null || true
-            yt_dlp_updated=true
+            return 0
         fi
-        return 0
+
+        Println "$info 更新 yt-dlp ..."
+
+        if yt-dlp -U > /dev/null 
+        then
+            yt_dlp_update_time=$now
+            return 0
+        fi
     fi
 
     Println "`eval_gettext \"\\\$info 安装 yt-dlp...\"`\n"
 
-    if curl -L $FFMPEG_MIRROR_LINK/yt-dlp -o /usr/local/bin/yt-dlp
+    if ! curl -L $FFMPEG_MIRROR_LINK/yt-dlp -o /usr/local/bin/yt-dlp_tmp || [ ! -s /usr/local/bin/yt-dlp_tmp ]
     then
-        chmod a+rx /usr/local/bin/yt-dlp
+        rm -f /usr/local/bin/yt-dlp_tmp
+
+        if [ "$monitor" = true ] 
+        then
+            MonitorError "无法安装 yt-dlp"
+            return 0
+        fi
+
+        Println "$error 无法安装 yt-dlp, 请稍后再试\n"
+        exit 1
     fi
+
+    mv /usr/local/bin/yt-dlp_tmp /usr/local/bin/yt-dlp
+    chmod a+rx /usr/local/bin/yt-dlp
+    yt_dlp_update_time=$now
 }
 
 Trim()
@@ -19616,6 +19741,10 @@ TsMenu()
     GetDefault
 
     user_agent="iPhone; CPU iPhone OS 13_6 like Mac OS X"
+
+    ShFallback
+    DEFAULT_CHANNELS_LINK="$SH_FALLBACK/$DEFAULT_CHANNELS"
+
     echo
     inquirer list_input_index "是否使用默认频道文件: $DEFAULT_CHANNELS_LINK" yn_options yn_options_index
     if [ "$yn_options_index" -eq 0 ]
@@ -22975,7 +23104,8 @@ XtreamCodesGetDomains()
 
     if [ ! -s "$XTREAM_CODES" ] 
     then
-        curl -s -L $XTREAM_CODES_LINK -o "$XTREAM_CODES"
+        ShFallback
+        curl -s -L "$SH_FALLBACK/$XTREAM_CODES_CHANNELS" -o "$XTREAM_CODES"
     fi
 
     IFS="," read -ra xtream_codes_domains <<< $(awk -v ORS=, '$1 { gsub(/\|/, ",", $2); print $2 }' "$XTREAM_CODES")
@@ -45800,7 +45930,7 @@ $HOME/ip.sh" > /etc/rc.local
 
                         if [ -d /etc/resolvconf ] 
                         then
-                            apt-get -y --purge remove resolvconf > /dev/null 2>&1 || true
+                            DEBIAN_FRONTEND=noninteractive apt-get -y --purge remove resolvconf > /dev/null 2>&1 || true
                         fi
 
                         if [ -f /etc/resolv.conf ] 
@@ -46196,7 +46326,9 @@ ${green}8.${normal} 浏览频道
                 cp -f "$XTREAM_CODES" "${XTREAM_CODES}_$now"
             fi
 
-            IFS=" " read -r m_ip m_domains m_accounts < <(curl -s -Lm 20 $XTREAM_CODES_LINK|awk '$1 {a=a $1",";b=b $2",";$1=$2="";c=c substr($0,3)","} END {print a,b,c}')
+            ShFallback
+
+            IFS=" " read -r m_ip m_domains m_accounts < <(curl -s -Lm 20 "$SH_FALLBACK/$XTREAM_CODES_CHANNELS"|awk '$1 {a=a $1",";b=b $2",";$1=$2="";c=c substr($0,3)","} END {print a,b,c}')
             IFS="," read -r -a new_domains <<< "$m_domains"
             IFS="," read -r -a new_accounts <<< "$m_accounts"
 
@@ -46441,7 +46573,10 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
                             fi
                         done
 
-                        apt-get -y --purge remove resolvconf > /dev/null
+                        if [ -d /etc/resolvconf ] 
+                        then
+                            DEBIAN_FRONTEND=noninteractive apt-get -y --purge remove resolvconf > /dev/null 2>&1 || true
+                        fi
 
                         systemctl stop systemd-resolved
                         systemctl disable systemd-resolved
@@ -47635,7 +47770,10 @@ then
                             fi
                         done
 
-                        apt-get -y --purge remove resolvconf > /dev/null
+                        if [ -d /etc/resolvconf ] 
+                        then
+                            DEBIAN_FRONTEND=noninteractive apt-get -y --purge remove resolvconf > /dev/null 2>&1 || true
+                        fi
 
                         systemctl stop systemd-resolved
                         systemctl disable systemd-resolved
@@ -48478,6 +48616,8 @@ then
             [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
             echo
             ExitOnList n "请确保已经升级到最新脚本, 是否继续"
+            ShFallback
+            DEFAULT_DEMOS="$SH_FALLBACK/$DEFAULT_DEMOS"
             channels=""
             while IFS= read -r line 
             do
