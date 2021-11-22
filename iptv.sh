@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-sh_ver="1.86.4"
+sh_ver="1.87.0"
 sh_debug=0
 export LANGUAGE=
 export LC_ALL=
@@ -382,6 +382,7 @@ i18nGetMsg()
             i18n_hls_max_seg_size=${i18n_hls_max_seg_size:-$(gettext "hls 允许最大分片")}
             i18n_hls_restart_nums=${i18n_hls_restart_nums:-$(gettext "hls 重启次数")}
             i18n_hls_key_period=${i18n_hls_key_period:-$(gettext "hls key 持续时间")}
+            i18n_hls_end_list=${i18n_hls_end_list:-$(gettext "EXT-X-ENDLIST")}
             i18n_anti_ddos_port=${i18n_anti_ddos_port:-$(gettext "anti ddos 封禁端口")}
             i18n_anti_ddos_syn_flood=${i18n_anti_ddos_syn_flood:-$(gettext "SYN Flood 防御")}
             i18n_anti_ddos=${i18n_anti_ddos:-$(gettext "anti ddos")}
@@ -3104,6 +3105,7 @@ Install()
             --arg hls_max_seg_size 5 \
             --arg hls_restart_nums 20 \
             --arg hls_key_period 30 \
+            --arg hls_end_list "false" \
             --arg anti_ddos_port 80 \
             --arg anti_ddos_syn_flood "false" \
             --arg anti_ddos_syn_flood_delay_seconds 3 \
@@ -3156,6 +3158,7 @@ Install()
                 hls_max_seg_size: $hls_max_seg_size | tonumber,
                 hls_restart_nums: $hls_restart_nums | tonumber,
                 hls_key_period: $hls_key_period | tonumber,
+                hls_end_list: $hls_end_list | test("true"),
                 anti_ddos_port: $anti_ddos_port,
                 anti_ddos_syn_flood: $anti_ddos_syn_flood | test("true"),
                 anti_ddos_syn_flood_delay_seconds: $anti_ddos_syn_flood_delay_seconds | tonumber,
@@ -4334,7 +4337,7 @@ JQ()
         if ! $JQ_FILE "${jq_args[@]}" "${jq_commands[*]}" "$FILE" > "$TMP_FILE" || [ ! -s "$TMP_FILE" ]
         then
             [ ! -s "$TMP_FILE" ] && rm -f "$TMP_FILE"
-            printf 'JQ ERROR!! action: %s, file: %s, tmp_file: %s, $3: %s, $4: %s' "$1" "$FILE" "$TMP_FILE" "${3:-none}" "${4:-none}" >> "$MONITOR_LOG"
+            MonitorLog "JQ ERROR!! action: $1, file: $FILE, tmp_file: $TMP_FILE, \$3: ${3:-none}, \$4: ${4:-none}, \$5: ${5:-none}"
         else
             mv "$TMP_FILE" "$FILE"
         fi
@@ -7392,7 +7395,7 @@ GetDefault()
     d_encrypt d_encrypt_session d_keyinfo_name d_key_name d_input_flags d_output_flags d_sync d_sync_file \
     d_sync_index d_sync_pairs d_schedule_file d_flv_delay_seconds d_flv_restart_nums \
     d_hls_delay_seconds d_hls_min_bitrate d_hls_max_seg_size d_hls_restart_nums \
-    d_hls_key_period d_anti_ddos_port d_anti_ddos_syn_flood d_anti_ddos_syn_flood_delay_seconds \
+    d_hls_key_period d_hls_end_list d_anti_ddos_port d_anti_ddos_syn_flood d_anti_ddos_syn_flood_delay_seconds \
     d_anti_ddos_syn_flood_seconds d_anti_ddos d_anti_ddos_seconds d_anti_ddos_level \
     d_anti_leech d_anti_leech_restart_nums d_anti_leech_restart_flv_changes \
     d_anti_leech_restart_hls_changes d_recheck_period d_version < <($JQ_FILE -c -r '
@@ -7401,7 +7404,7 @@ GetDefault()
     seg_count,video_codec,audio_codec,video_audio_shift,txt_format,draw_text,quality,bitrate,resolution,const,
     const_cbr,encrypt,encrypt_session,keyinfo_name,key_name,input_flags,output_flags,sync,sync_file,sync_index,
     sync_pairs,schedule_file,flv_delay_seconds,flv_restart_nums,hls_delay_seconds,hls_min_bitrate,
-    hls_max_seg_size,hls_restart_nums,hls_key_period,anti_ddos_port,anti_ddos_syn_flood,
+    hls_max_seg_size,hls_restart_nums,hls_key_period,hls_end_list,anti_ddos_port,anti_ddos_syn_flood,
     anti_ddos_syn_flood_delay_seconds,anti_ddos_syn_flood_seconds,anti_ddos,anti_ddos_seconds,
     anti_ddos_level,anti_leech,anti_leech_restart_nums,anti_leech_restart_flv_changes,
     anti_leech_restart_hls_changes,recheck_period,version}|keys_unsorted[]) as $key ([];
@@ -7445,6 +7448,7 @@ GetDefault()
     d_hls_max_seg_size=${d_hls_max_seg_size:-5}
     d_hls_restart_nums=${d_hls_restart_nums:-20}
     d_hls_key_period=${d_hls_key_period:-30}
+    d_hls_end_list=${d_hls_end_list:-false}
     d_anti_ddos_port=${d_anti_ddos_port:-80}
     d_anti_ddos_port_text=${d_anti_ddos_port//,/ }
     d_anti_ddos_port_text=${d_anti_ddos_port_text//:/-}
@@ -7481,7 +7485,7 @@ GetChannels()
     m_encrypt m_encrypt_session m_keyinfo_name m_key_name m_key_time m_input_flags \
     m_output_flags m_channel_name m_channel_time m_sync m_sync_file m_sync_index \
     m_sync_pairs m_hls_end_list m_flv_status m_flv_h265 m_flv_push_link m_flv_pull_link \
-    m_schedule_start_time m_schedule_end_time m_schedule_hls_change \
+    m_schedule_start_time m_schedule_end_time m_schedule_loop m_schedule_auto_remove m_schedule_hls_change \
     m_schedule_hls_change_once m_schedule_channel_name m_schedule_status < <(JQs flat "$CHANNELS_FILE" '' '
     (.channels | if . == "" then {} else . end) as $channels |
     ($channels.schedule // {} | if (.|type) == "string" then {} else . end) as $schedule |
@@ -7495,7 +7499,7 @@ GetChannels()
         else
             . + ["\u0004"]
         end
-    ) + reduce ({start_time,end_time,hls_change,hls_change_once,channel_name,status}|keys_unsorted[]) as $key ([];
+    ) + reduce ({start_time,end_time,loop,auto_remove,hls_change,hls_change_once,channel_name,status}|keys_unsorted[]) as $key ([];
         $schedule[$key] as $val | if $val then
             . + [$val + "\u0003\u0004"]
         else
@@ -7577,6 +7581,8 @@ GetChannels()
     IFS="${delimiters[1]}" read -ra chnls_flv_pull_link <<< "${m_flv_pull_link:-$if_null_empty}"
     IFS="${delimiters[2]}" read -ra chnls_schedule_start_time <<< "${m_schedule_start_time:-$if_null_schedule_empty}"
     IFS="${delimiters[2]}" read -ra chnls_schedule_end_time <<< "${m_schedule_end_time:-$if_null_schedule_empty}"
+    IFS="${delimiters[2]}" read -ra chnls_schedule_loop <<< "${m_schedule_loop:-$if_null_schedule_empty}"
+    IFS="${delimiters[2]}" read -ra chnls_schedule_auto_remove <<< "${m_schedule_auto_remove:-$if_null_schedule_empty}"
     IFS="${delimiters[2]}" read -ra chnls_schedule_hls_change <<< "${m_schedule_hls_change:-$if_null_schedule_empty}"
     IFS="${delimiters[2]}" read -ra chnls_schedule_hls_change_once <<< "${m_schedule_hls_change_once:-$if_null_schedule_empty}"
     IFS="${delimiters[2]}" read -ra chnls_schedule_channel_name <<< "${m_schedule_channel_name:-$if_null_schedule_empty}"
@@ -7789,8 +7795,8 @@ GetChannel()
     chnl_encrypt chnl_encrypt_session chnl_keyinfo_name chnl_key_name chnl_key_time \
     chnl_input_flags chnl_output_flags chnl_channel_name chnl_channel_time chnl_sync \
     chnl_sync_file chnl_sync_index chnl_sync_pairs chnl_hls_end_list chnl_flv_status chnl_flv_h265 chnl_flv_push_link \
-    chnl_flv_pull_link chnl_schedule_start_time chnl_schedule_end_time \
-    chnl_schedule_hls_change chnl_schedule_hls_change_once chnl_schedule_channel_name \
+    chnl_flv_pull_link chnl_schedule_start_time chnl_schedule_end_time chnl_schedule_loop \
+    chnl_schedule_auto_remove chnl_schedule_hls_change chnl_schedule_hls_change_once chnl_schedule_channel_name \
     chnl_schedule_status < <($JQ_FILE -c -r --arg select_index "$select_index" --argjson select_json "$select_json" '
     .channels[] | select(.[$select_index] == $select_json[$select_index]) as $channel |
     ($channel.schedule // [] | if . == "" then [] else . end) as $schedule |
@@ -7809,6 +7815,8 @@ GetChannel()
     ) + 
     [([$schedule[]|.start_time // 0|tostring|. + "\u0001"]|join("") + "\u0002")] +
     [([$schedule[]|.end_time // 0|tostring|. + "\u0001"]|join("") + "\u0002")] +
+    [([$schedule[]|.loop // true|tostring|. + "\u0001"]|join("") + "\u0002")] +
+    [([$schedule[]|.auto_remove // true|tostring|. + "\u0001"]|join("") + "\u0002")] +
     [([$schedule[]|.hls_change // true|tostring|. + "\u0001"]|join("") + "\u0002")] +
     [([$schedule[]|.hls_change_once // false|tostring|. + "\u0001"]|join("") + "\u0002")] +
     [([$schedule[]|.channel_name|. + "\u0001"]|join("") + "\u0002")] +
@@ -9331,7 +9339,7 @@ SetStreamLink()
     elif [[ $stream_link == http://*.macaulotustv.com/* ]] 
     then
         user_agent="${user_agent:-$USER_AGENT_BROWSER}"
-        headers="${headers:-Origin: http://www.lotustv.cc\\r\\nReferer: http://www.lotustv.cc/index.php/index/live.html\\r\\n}"
+        headers="${headers:-Origin: http://www.lotustv.cc\\r\\nReferer: http://www.lotustv.cc/\\r\\n}"
         cookies="${cookies:-}"
     fi
 
@@ -9495,7 +9503,7 @@ SetCookies()
 
 SetOutputDirName()
 {
-    Println "$tip 是名称不是路径"
+    echo
     while true 
     do
         inquirer text_input "请输入频道输出目录名称: " output_dir_name "$i18n_random"
@@ -9588,13 +9596,19 @@ SetSegLength()
 SetHlsEndList()
 {
     Println "$tip 如果添加此字段, 关闭频道会延迟一个分片时长的时间"
-    inquirer list_input_index "添加 EXT-X-ENDLIST 字段" ny_options ny_options_index
 
-    if [ "$ny_options_index" -eq 0 ] 
+    if [ "$d_hls_end_list" = true ] 
     then
-        hls_end_list=false
+        inquirer list_input "添加 EXT-X-ENDLIST 字段" yn_options hls_end_list_yn
     else
+        inquirer list_input "添加 EXT-X-ENDLIST 字段" ny_options hls_end_list_yn
+    fi
+
+    if [ "$hls_end_list_yn" == "$i18n_yes" ] 
+    then
         hls_end_list=true
+    else
+        hls_end_list=false
     fi
 }
 
@@ -13313,7 +13327,7 @@ StartChannel()
     elif [[ $chnl_stream_link == http://*.macaulotustv.com/* ]] 
     then
         chnl_user_agent="$USER_AGENT_BROWSER"
-        chnl_headers="Origin: http://www.lotustv.cc\r\nReferer: http://www.lotustv.cc/index.php/index/live.html\r\n"
+        chnl_headers="Origin: http://www.lotustv.cc\r\nReferer: http://www.lotustv.cc/\r\n"
         chnl_cookies=""
     elif [ "${chnl_stream_link:0:4}" == "rtmp" ] || [ "${chnl_stream_link:0:1}" == "/" ]
     then
@@ -13778,6 +13792,8 @@ ListChannelsSchedule()
 
         IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
         IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
+        IFS="${delimiters[1]}" read -ra chnl_schedules_loop <<< "${chnls_schedule_loop[chnls_index]}"
+        IFS="${delimiters[1]}" read -ra chnl_schedules_auto_remove <<< "${chnls_schedule_auto_remove[chnls_index]}"
         IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
         IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[chnls_index]}"
         IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
@@ -13809,13 +13825,25 @@ ListChannelsSchedule()
             else
                 chnl_schedule_hls_change_list="${red}否${normal}"
             fi
+            if [ "${chnl_schedules_loop[chnl_schedules_index]}" = true ] 
+            then
+                chnl_schedule_loop_list="${green}是${normal}"
+            else
+                chnl_schedule_loop_list="${red}否${normal}"
+            fi
+            if [ "${chnl_schedules_auto_remove[chnl_schedules_index]}" = true ] 
+            then
+                chnl_schedule_auto_remove_list="${green}是${normal}"
+            else
+                chnl_schedule_auto_remove_list="${red}否${normal}"
+            fi
             if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
             then
                 chnl_schedule_channel_name_list="${indent_6}频道名称: ${blue}${chnl_schedules_channel_name[chnl_schedules_index]}${normal}\n"
             else
                 chnl_schedule_channel_name_list=""
             fi
-            chnls_schedule_list="$chnls_schedule_list${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
+            chnls_schedule_list="$chnls_schedule_list${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n${indent_6}循环: $chnl_schedule_loop_list${indent_20}自动清除: $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
         done
     done
 
@@ -13838,6 +13866,8 @@ AddChannelsSchedule()
         then
             IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
             IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
+            IFS="${delimiters[1]}" read -ra chnl_schedules_loop <<< "${chnls_schedule_loop[chnls_index]}"
+            IFS="${delimiters[1]}" read -ra chnl_schedules_auto_remove <<< "${chnls_schedule_auto_remove[chnls_index]}"
             IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
             IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[chnls_index]}"
             IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
@@ -13869,13 +13899,25 @@ AddChannelsSchedule()
                 else
                     chnl_schedule_hls_change_list="${red}否${normal}"
                 fi
+                if [ "${chnl_schedules_loop[chnl_schedules_index]}" = true ] 
+                then
+                    chnl_schedule_loop_list="${green}是${normal}"
+                else
+                    chnl_schedule_loop_list="${red}否${normal}"
+                fi
+                if [ "${chnl_schedules_auto_remove[chnl_schedules_index]}" = true ] 
+                then
+                    chnl_schedule_auto_remove_list="${green}是${normal}"
+                else
+                    chnl_schedule_auto_remove_list="${red}否${normal}"
+                fi
                 if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
                 then
                     chnl_schedule_channel_name_list="${indent_6}频道名称: ${blue}${chnl_schedules_channel_name[chnl_schedules_index]}${normal}\n"
                 else
                     chnl_schedule_channel_name_list=""
                 fi
-                chnl_schedules_list="$chnl_schedules_list${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
+                chnl_schedules_list="$chnl_schedules_list${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n${indent_6}循环: $chnl_schedule_loop_list${indent_20}自动清除: $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
             done
         fi
 
@@ -13887,6 +13929,27 @@ AddChannelsSchedule()
 
             echo
             inquirer date_pick "设置结束日期" schedule_end_time
+
+            echo
+            inquirer list_input_index "每日循环" ny_options ny_options_index
+
+            if [ "$ny_options_index" -eq 0 ] 
+            then
+                schedule_loop=false
+
+                echo
+                inquirer list_input_index "结束后自动清除" ny_options ny_options_index
+
+                if [ "$ny_options_index" -eq 0 ] 
+                then
+                    schedule_auto_remove=false
+                else
+                    schedule_auto_remove=true
+                fi
+            else
+                schedule_loop=true
+                schedule_auto_remove=false
+            fi
 
             echo
             inquirer list_input_index "防盗链" yn_options yn_options_index
@@ -13920,6 +13983,8 @@ AddChannelsSchedule()
             chnl_schedule=$(
                 $JQ_FILE -n --arg start_time "$schedule_start_time" \
                     --arg end_time "$schedule_end_time" \
+                    --arg loop "$schedule_loop" \
+                    --arg auto_remove "$schedule_auto_remove" \
                     --arg hls_change "$schedule_hls_change" \
                     --arg hls_change_once "$schedule_hls_change_once" \
                     --arg channel_name "$schedule_channel_name" \
@@ -13927,6 +13992,8 @@ AddChannelsSchedule()
                 '{
                     start_time: $start_time | tonumber,
                     end_time: $end_time | tonumber,
+                    loop: $loop | test("true"),
+                    auto_remove: $auto_remove | test("true"),
                     hls_change: $hls_change | test("true"),
                     hls_change_once: $hls_change_once | test("true"),
                     channel_name: $channel_name,
@@ -13957,7 +14024,7 @@ AddChannelsSchedule()
 EditChannelSchedule()
 {
     echo
-    channel_schedule_options=( '开始日期' '结束日期' '防盗链' '频道名称' '状态' )
+    channel_schedule_options=( '开始日期' '结束日期' '循环' '自动清除' '防盗链' '频道名称' '状态' )
     inquirer checkbox_input_indices "选择修改 [ ${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} ] 计划 $((chnl_schedules_index+1))" channel_schedule_options channel_schedule_options_indices
 
     for channel_schedule_options_index in "${channel_schedule_options_indices[@]}"
@@ -13978,6 +14045,34 @@ EditChannelSchedule()
             jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"end_time"]'
             JQ update "$CHANNELS_FILE" "$schedule_end_time"
         elif [ "$channel_schedule_options_index" -eq 2 ] 
+        then
+            inquirer list_input_index "每日循环" ny_options ny_options_index
+
+            if [ "$ny_options_index" -eq 0 ] 
+            then
+                schedule_loop=false
+            else
+                schedule_loop=true
+            fi
+
+            bool=true
+            jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"loop"]'
+            JQ update "$CHANNELS_FILE" "$schedule_loop"
+        elif [ "$channel_schedule_options_index" -eq 3 ] 
+        then
+            inquirer list_input_index "自动清除" ny_options ny_options_index
+
+            if [ "$ny_options_index" -eq 0 ] 
+            then
+                schedule_auto_remove=false
+            else
+                schedule_auto_remove=true
+            fi
+
+            bool=true
+            jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"auto_remove"]'
+            JQ update "$CHANNELS_FILE" "$schedule_auto_remove"
+        elif [ "$channel_schedule_options_index" -eq 4 ] 
         then
             inquirer list_input_index "防盗链" yn_options yn_options_index
 
@@ -14006,7 +14101,7 @@ EditChannelSchedule()
             bool=true
             jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"hls_change_once"]'
             JQ update "$CHANNELS_FILE" "$schedule_hls_change_once"
-        elif [ "$channel_schedule_options_index" -eq 3 ] 
+        elif [ "$channel_schedule_options_index" -eq 5 ] 
         then
             inquirer text_input "输入频道名称" schedule_channel_name "$i18n_not_set"
 
@@ -14042,7 +14137,7 @@ EditChannelSchedule()
                     SyncFile
                 fi
             fi
-        elif [ "$channel_schedule_options_index" -eq 4 ] 
+        elif [ "$channel_schedule_options_index" -eq 6 ] 
         then
             schedule_status_options=( '等待' '进行' '结束' )
             inquirer list_input_index "设置状态" schedule_status_options schedule_status
@@ -14060,6 +14155,8 @@ EditChannelSchedules()
 {
     IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
+    IFS="${delimiters[1]}" read -ra chnl_schedules_loop <<< "${chnls_schedule_loop[chnls_index]}"
+    IFS="${delimiters[1]}" read -ra chnl_schedules_auto_remove <<< "${chnls_schedule_auto_remove[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
@@ -14093,13 +14190,25 @@ EditChannelSchedules()
         else
             chnl_schedule_hls_change_list="${red}否${normal}"
         fi
+        if [ "${chnl_schedules_loop[chnl_schedules_index]}" = true ] 
+        then
+            chnl_schedule_loop_list="${green}是${normal}"
+        else
+            chnl_schedule_loop_list="${red}否${normal}"
+        fi
+        if [ "${chnl_schedules_auto_remove[chnl_schedules_index]}" = true ] 
+        then
+            chnl_schedule_auto_remove_list="${green}是${normal}"
+        else
+            chnl_schedule_auto_remove_list="${red}否${normal}"
+        fi
         if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
         then
             chnl_schedule_channel_name_list="${indent_6}频道名称: ${blue}${chnl_schedules_channel_name[chnl_schedules_index]}${normal}\n"
         else
             chnl_schedule_channel_name_list=""
         fi
-        chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
+        chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n${indent_6}循环: $chnl_schedule_loop_list${indent_20}自动清除: $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
     done
 
     Println "$chnl_schedules_list"
@@ -14275,6 +14384,8 @@ SortChannelSchedules()
 {
     IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
+    IFS="${delimiters[1]}" read -ra chnl_schedules_loop <<< "${chnls_schedule_loop[chnls_index]}"
+    IFS="${delimiters[1]}" read -ra chnl_schedules_auto_remove <<< "${chnls_schedule_auto_remove[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
@@ -14316,6 +14427,18 @@ SortChannelSchedules()
         else
             chnl_schedule_hls_change_list="${red}否${normal}"
         fi
+        if [ "${chnl_schedules_loop[chnl_schedules_index]}" = true ] 
+        then
+            chnl_schedule_loop_list="${green}是${normal}"
+        else
+            chnl_schedule_loop_list="${red}否${normal}"
+        fi
+        if [ "${chnl_schedules_auto_remove[chnl_schedules_index]}" = true ] 
+        then
+            chnl_schedule_auto_remove_list="${green}是${normal}"
+        else
+            chnl_schedule_auto_remove_list="${red}否${normal}"
+        fi
         if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
         then
             chnl_schedule_channel_name_list="${indent_6}频道名称: ${blue}${chnl_schedules_channel_name[chnl_schedules_index]}${normal}\n"
@@ -14323,7 +14446,7 @@ SortChannelSchedules()
             chnl_schedule_channel_name_list=""
         fi
         chnl_schedules_options+=("计划$((chnl_schedules_index+1))")
-        chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
+        chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n${indent_6}循环: $chnl_schedule_loop_list${indent_20}自动清除: $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
     done
 
     Println "$chnl_schedules_list"
@@ -14338,6 +14461,8 @@ SortChannelSchedules()
         new_schedule=$(
             $JQ_FILE -n --arg start_time "${chnl_schedules_start_time[chnl_schedules_index]}" \
                 --arg end_time "${chnl_schedules_end_time[chnl_schedules_index]}" \
+                --arg loop "${chnl_schedules_loop[chnl_schedules_index]}" \
+                --arg auto_remove "${chnl_schedules_auto_remove[chnl_schedules_index]}" \
                 --arg hls_change "${chnl_schedules_hls_change[chnl_schedules_index]}" \
                 --arg hls_change_once "${chnl_schedules_hls_change_once[chnl_schedules_index]}" \
                 --arg channel_name "${chnl_schedules_channel_name[chnl_schedules_index]}" \
@@ -14345,6 +14470,8 @@ SortChannelSchedules()
             '{
                 start_time: $start_time | tonumber,
                 end_time: $end_time | tonumber,
+                loop: $loop | test("true"),
+                auto_remove: $auto_remove | test("true"),
                 hls_change: $hls_change | test("true"),
                 hls_change_once: $hls_change_once | test("true"),
                 channel_name: $channel_name,
@@ -14467,6 +14594,8 @@ DelChannelSchedules()
 {
     IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
+    IFS="${delimiters[1]}" read -ra chnl_schedules_loop <<< "${chnls_schedule_loop[chnls_index]}"
+    IFS="${delimiters[1]}" read -ra chnl_schedules_auto_remove <<< "${chnls_schedule_auto_remove[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[chnls_index]}"
     IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
@@ -14500,13 +14629,25 @@ DelChannelSchedules()
         else
             chnl_schedule_hls_change_list="${red}否${normal}"
         fi
+        if [ "${chnl_schedules_loop[chnl_schedules_index]}" = true ] 
+        then
+            chnl_schedule_loop_list="${green}是${normal}"
+        else
+            chnl_schedule_loop_list="${red}否${normal}"
+        fi
+        if [ "${chnl_schedules_auto_remove[chnl_schedules_index]}" = true ] 
+        then
+            chnl_schedule_auto_remove_list="${green}是${normal}"
+        else
+            chnl_schedule_auto_remove_list="${red}否${normal}"
+        fi
         if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
         then
             chnl_schedule_channel_name_list="${indent_6}频道名称: ${blue}${chnl_schedules_channel_name[chnl_schedules_index]}${normal}\n"
         else
             chnl_schedule_channel_name_list=""
         fi
-        chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
+        chnl_schedules_list="$chnl_schedules_list  ${green}$((chnl_schedules_index+1)).${normal}${indent_6}状态: $chnl_schedule_status_list${indent_20}防盗链: $chnl_schedule_hls_change_list\n${indent_6}循环: $chnl_schedule_loop_list${indent_20}自动清除: $chnl_schedule_auto_remove_list\n$chnl_schedule_channel_name_list${indent_6}开始时间: $(date +%c --date=@"${chnl_schedules_start_time[chnl_schedules_index]}")\n${indent_6}结束时间: $(date +%c --date=@"${chnl_schedules_end_time[chnl_schedules_index]}")\n\n"
     done
 
     Println "$chnl_schedules_list"
@@ -14898,6 +15039,7 @@ EditDefaultMenu()
         "$i18n_hls_max_seg_size"
         "$i18n_hls_restart_nums"
         "$i18n_hls_key_period"
+        "$i18n_hls_end_list"
         "$i18n_anti_ddos_port"
         "$i18n_anti_ddos_syn_flood"
         "$i18n_anti_ddos"
@@ -15074,10 +15216,15 @@ EditDefaultMenu()
                 EditDefault hls_key_period
             ;;
             36)
+                SetHlsEndList
+                bool=true
+                EditDefault hls_end_list
+            ;;
+            37)
                 SetAntiDDosPort
                 EditDefault anti_ddos_port
             ;;
-            37)
+            38)
                 SetAntiDDosSynFlood
                 bool=true
                 EditDefault anti_ddos_syn_flood "$anti_ddos_syn_flood"
@@ -15089,7 +15236,7 @@ EditDefaultMenu()
                     EditDefault anti_ddos_syn_flood_seconds
                 fi
             ;;
-            38)
+            39)
                 SetAntiDDos
                 bool=true
                 EditDefault anti_ddos "$anti_ddos"
@@ -15101,7 +15248,7 @@ EditDefaultMenu()
                     EditDefault anti_ddos_level
                 fi
             ;;
-            39)
+            40)
                 SetAntiLeech
                 bool=true
                 EditDefault anti_leech "$anti_leech"
@@ -15115,7 +15262,7 @@ EditDefaultMenu()
                     EditDefault anti_leech_restart_hls_changes "$anti_leech_restart_hls_changes"
                 fi
             ;;
-            40)
+            41)
                 SetRecheckPeriod
                 number=true
                 EditDefault recheck_period
@@ -18365,6 +18512,7 @@ Schedule()
         "tvbfc:TVB 翡翠台"
         "tvbpearl:TVB Pearl"
         "tvbj2:TVB J2"
+        "tvbj5:TVB J5"
         "tvbwxxw:TVB 互動新聞台"
         "xgws:香港衛視綜合台"
         "foxfamily:福斯家庭電影台"
@@ -19460,10 +19608,10 @@ ImgcatInstall()
     ReleaseCheck
     if [ "$release" == "rpm" ] 
     then
-        yum -y install gcc gcc-c++ make ncurses-devel autoconf >/dev/null 2>&1
+        yum -y install gcc gcc-c++ make ncurses-devel autoconf libjpeg-turbo-devel libpng-devel >/dev/null 2>&1
         echo -n "...50%..."
     else
-        apt-get -y install debconf-utils libncurses5-dev autotools-dev autoconf >/dev/null 2>&1
+        apt-get -y install debconf-utils libncurses5-dev autotools-dev autoconf libjpeg-dev libpng-dev >/dev/null 2>&1
         echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
         apt-get -y install software-properties-common pkg-config build-essential >/dev/null 2>&1
         echo -n "...50%..."
@@ -20599,11 +20747,11 @@ MonitorHlsRestartChannel()
 
         if [ "$anti_leech" = true ] && [ "$anti_leech_restart_hls_changes" = true ] 
         then
-            if [ "${hls_change[hls_index]:-true}" = true ] 
+            if [ "${hls_change[hls_index]}" = true ] && { [ "${hls_change_once[hls_index]}" = false ] || [ "${hls_changed[hls_index]:-false}" = false ]; }
             then
-                if [ "${hls_change_once[hls_index]:-false}" = true ] 
+                if [ "${hls_change_once[hls_index]}" = true ] 
                 then
-                    hls_change_once[hls_index]=false
+                    hls_changed[hls_index]=true
                 fi
                 chnl_playlist_name=$(RandStr)
                 chnl_seg_name="$chnl_playlist_name"
@@ -21376,11 +21524,11 @@ MonitorTryAccounts()
                         then
                             if [ -z "${kind:-}" ] && [ "$anti_leech_restart_hls_changes" = true ]
                             then
-                                if [ "${hls_change[hls_index]:-true}" = true ] 
+                                if [ "${hls_change[hls_index]}" = true ] && { [ "${hls_change_once[hls_index]}" = false ] || [ "${hls_changed[hls_index]:-false}" = false ]; }
                                 then
-                                    if [ "${hls_change_once[hls_index]:-false}" = true ] 
+                                    if [ "${hls_change_once[hls_index]}" = true ] 
                                     then
-                                        hls_change_once[hls_index]=false
+                                        hls_changed[hls_index]=true
                                     fi
                                     chnl_playlist_name=$(RandStr)
                                     chnl_seg_name="$chnl_playlist_name"
@@ -21589,11 +21737,11 @@ MonitorTryAccounts()
                 then
                     if [ -z "${kind:-}" ] && [ "$anti_leech_restart_hls_changes" = true ]
                     then
-                        if [ "${hls_change[hls_index]:-true}" = true ] 
+                        if [ "${hls_change[hls_index]}" = true ] && { [ "${hls_change_once[hls_index]}" = false ] || [ "${hls_changed[hls_index]:-false}" = false ]; }
                         then
-                            if [ "${hls_change_once[hls_index]:-false}" = true ] 
+                            if [ "${hls_change_once[hls_index]}" = true ] 
                             then
-                                hls_change_once[hls_index]=false
+                                hls_changed[hls_index]=true
                             fi
                             chnl_playlist_name=$(RandStr)
                             chnl_seg_name="$chnl_playlist_name"
@@ -22032,6 +22180,7 @@ Monitor()
             hls_recheck_time=()
             hls_change=()
             hls_change_once=()
+            hls_changed=()
             channel_name=()
 
             while true
@@ -22055,6 +22204,8 @@ Monitor()
 
                         IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[chnls_index]}"
                         IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[chnls_index]}"
+                        IFS="${delimiters[1]}" read -ra chnl_schedules_loop <<< "${chnls_schedule_loop[chnls_index]}"
+                        IFS="${delimiters[1]}" read -ra chnl_schedules_auto_remove <<< "${chnls_schedule_auto_remove[chnls_index]}"
                         IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[chnls_index]}"
                         IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[chnls_index]}"
                         IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[chnls_index]}"
@@ -22074,11 +22225,46 @@ Monitor()
                                 then
                                     if [ "${chnl_schedules_end_time[chnl_schedules_index]}" -le "$now" ] 
                                     then
-                                        map_string=true
-                                        number=true
-                                        jq_path='["channels"]'
-                                        jq_path2='["schedule",'"$chnl_schedules_index"',"status"]'
-                                        JQ update "$CHANNELS_FILE" output_dir_name "$output_dir_name" 2
+                                        if [ "${chnl_schedules_loop[chnl_schedules_index]}" = true ] 
+                                        then
+                                            update=$(
+                                                $JQ_FILE -n --arg start_time "$((${chnl_schedules_start_time[chnl_schedules_index]}+86400))" \
+                                                    --arg end_time "$((${chnl_schedules_end_time[chnl_schedules_index]}+86400))" \
+                                                    --arg loop "${chnl_schedules_loop[chnl_schedules_index]}" \
+                                                    --arg auto_remove "${chnl_schedules_auto_remove[chnl_schedules_index]}" \
+                                                    --arg hls_change "${chnl_schedules_hls_change[chnl_schedules_index]}" \
+                                                    --arg hls_change_once "${chnl_schedules_hls_change_once[chnl_schedules_index]}" \
+                                                    --arg channel_name "${chnl_schedules_channel_name[chnl_schedules_index]}" \
+                                                    --arg status 0 \
+                                                '{
+                                                        "start_time": $start_time | tonumber,
+                                                        "end_time": $end_time | tonumber,
+                                                        "loop": $loop | test("true"),
+                                                        "auto_remove": $auto_remove | test("true"),
+                                                        "hls_change": $hls_change | test("true"),
+                                                        "hls_change_once": $hls_change_once | test("true"),
+                                                        "channel_name": $channel_name,
+                                                        "status": $status | tonumber
+                                                }'
+                                            )
+                                            merge=true
+                                            map_string=true
+                                            jq_path='["channels"]'
+                                            jq_path2='["schedule",'"$chnl_schedules_index"']'
+                                            JQ update "$CHANNELS_FILE" output_dir_name "$output_dir_name" "$update"
+                                        elif [ "${chnl_schedules_auto_remove[chnl_schedules_index]}" = true ] 
+                                        then
+                                            map_string=true
+                                            jq_path='["channels"]'
+                                            jq_path2='["schedule",'"$chnl_schedules_index"']'
+                                            JQ delete "$CHANNELS_FILE" output_dir_name "$output_dir_name"
+                                        else
+                                            map_string=true
+                                            number=true
+                                            jq_path='["channels"]'
+                                            jq_path2='["schedule",'"$chnl_schedules_index"',"status"]'
+                                            JQ update "$CHANNELS_FILE" output_dir_name "$output_dir_name" 2
+                                        fi
 
                                         declare -a new_array
                                         for hls_index in ${hls_indices[@]+"${hls_indices[@]}"}
@@ -22087,6 +22273,7 @@ Monitor()
                                             then
                                                 unset 'hls_change[hls_index]'
                                                 unset 'hls_change_once[hls_index]'
+                                                unset 'hls_changed[hls_index]'
                                                 unset 'channel_name[hls_index]'
                                             else
                                                 new_array+=("$hls_index")
@@ -22109,6 +22296,7 @@ Monitor()
                                                 MonitorHlsRemoveFailed
                                                 unset 'hls_change[hls_index]'
                                                 unset 'hls_change_once[hls_index]'
+                                                unset 'hls_changed[hls_index]'
                                                 unset 'channel_name[hls_index]'
                                                 break
                                             fi
@@ -22130,13 +22318,16 @@ Monitor()
                                         do
                                             if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ] 
                                             then
-                                                if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
-                                                then
-                                                    hls_change[hls_index]=false
-                                                fi
-                                                if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] && [ -z "${hls_change_once[hls_index]:-}" ]
+                                                hls_change[hls_index]="${chnl_schedules_hls_change[chnl_schedules_index]}"
+                                                if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
                                                 then
                                                     hls_change_once[hls_index]=true
+                                                else
+                                                    if [ "${hls_changed[hls_index]:-false}" = true ] 
+                                                    then
+                                                        hls_changed[hls_index]=false
+                                                    fi
+                                                    hls_change_once[hls_index]=false
                                                 fi
                                                 if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
                                                 then
@@ -22153,13 +22344,16 @@ Monitor()
                                                 if [ "${monitor_output_dir_names[i]}" == "$output_dir_name" ] 
                                                 then
                                                     hls_indices+=("$i")
-                                                    if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
-                                                    then
-                                                        hls_change[i]=false
-                                                    fi
-                                                    if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] && [ -z "${hls_change_once[i]:-}" ]
+                                                    hls_change[i]="${chnl_schedules_hls_change[chnl_schedules_index]}"
+                                                    if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
                                                     then
                                                         hls_change_once[i]=true
+                                                    else
+                                                        if [ "${hls_changed[i]:-false}" = true ] 
+                                                        then
+                                                            hls_changed[i]=false
+                                                        fi
+                                                        hls_change_once[i]=false
                                                     fi
                                                     if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
                                                     then
@@ -22174,13 +22368,16 @@ Monitor()
                                         hls_index=$((${#monitor_output_dir_names[@]}-1))
                                         hls_indices+=("$hls_index")
 
-                                        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
-                                        then
-                                            hls_change[hls_index]=false
-                                        fi
-                                        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] && [ -z "${hls_change_once[hls_index]:-}" ]
+                                        hls_change[hls_index]="${chnl_schedules_hls_change[chnl_schedules_index]}"
+                                        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
                                         then
                                             hls_change_once[hls_index]=true
+                                        else
+                                            if [ "${hls_changed[hls_index]:-false}" = true ] 
+                                            then
+                                                hls_changed[hls_index]=false
+                                            fi
+                                            hls_change_once[hls_index]=false
                                         fi
                                         if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
                                         then
@@ -22214,11 +22411,46 @@ Monitor()
                                 then
                                     if [ "${chnl_schedules_end_time[chnl_schedules_index]}" -le "$now" ] 
                                     then
-                                        map_string=true
-                                        number=true
-                                        jq_path='["channels"]'
-                                        jq_path2='["schedule",'"$chnl_schedules_index"',"status"]'
-                                        JQ update "$CHANNELS_FILE" output_dir_name "$output_dir_name" 2
+                                        if [ "${chnl_schedules_loop[chnl_schedules_index]}" = true ] 
+                                        then
+                                            update=$(
+                                                $JQ_FILE -n --arg start_time "$((${chnl_schedules_start_time[chnl_schedules_index]}+86400))" \
+                                                    --arg end_time "$((${chnl_schedules_end_time[chnl_schedules_index]}+86400))" \
+                                                    --arg loop "${chnl_schedules_loop[chnl_schedules_index]}" \
+                                                    --arg auto_remove "${chnl_schedules_auto_remove[chnl_schedules_index]}" \
+                                                    --arg hls_change "${chnl_schedules_hls_change[chnl_schedules_index]}" \
+                                                    --arg hls_change_once "${chnl_schedules_hls_change_once[chnl_schedules_index]}" \
+                                                    --arg channel_name "${chnl_schedules_channel_name[chnl_schedules_index]}" \
+                                                    --arg status 0 \
+                                                '{
+                                                        "start_time": $start_time | tonumber,
+                                                        "end_time": $end_time | tonumber,
+                                                        "loop": $loop | test("true"),
+                                                        "auto_remove": $auto_remove | test("true"),
+                                                        "hls_change": $hls_change | test("true"),
+                                                        "hls_change_once": $hls_change_once | test("true"),
+                                                        "channel_name": $channel_name,
+                                                        "status": $status | tonumber
+                                                }'
+                                            )
+                                            merge=true
+                                            map_string=true
+                                            jq_path='["channels"]'
+                                            jq_path2='["schedule",'"$chnl_schedules_index"']'
+                                            JQ update "$CHANNELS_FILE" output_dir_name "$output_dir_name" "$update"
+                                        elif [ "${chnl_schedules_auto_remove[chnl_schedules_index]}" = true ] 
+                                        then
+                                            map_string=true
+                                            jq_path='["channels"]'
+                                            jq_path2='["schedule",'"$chnl_schedules_index"']'
+                                            JQ delete "$CHANNELS_FILE" output_dir_name "$output_dir_name"
+                                        else
+                                            map_string=true
+                                            number=true
+                                            jq_path='["channels"]'
+                                            jq_path2='["schedule",'"$chnl_schedules_index"',"status"]'
+                                            JQ update "$CHANNELS_FILE" output_dir_name "$output_dir_name" 2
+                                        fi
 
                                         declare -a new_array
                                         for hls_index in ${hls_indices[@]+"${hls_indices[@]}"}
@@ -22227,6 +22459,7 @@ Monitor()
                                             then
                                                 unset 'hls_change[hls_index]'
                                                 unset 'hls_change_once[hls_index]'
+                                                unset 'hls_changed[hls_index]'
                                                 unset 'channel_name[hls_index]'
                                             else
                                                 new_array+=("$hls_index")
@@ -22249,6 +22482,7 @@ Monitor()
                                                 MonitorHlsRemoveFailed
                                                 unset 'hls_change[hls_index]'
                                                 unset 'hls_change_once[hls_index]'
+                                                unset 'hls_changed[hls_index]'
                                                 unset 'channel_name[hls_index]'
                                                 break
                                             fi
@@ -22268,13 +22502,16 @@ Monitor()
                                         do
                                             if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ] 
                                             then
-                                                if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
-                                                then
-                                                    hls_change[hls_index]=false
-                                                fi
-                                                if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] && [ -z "${hls_change_once[hls_index]:-}" ]
+                                                hls_change[hls_index]="${chnl_schedules_hls_change[chnl_schedules_index]}"
+                                                if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
                                                 then
                                                     hls_change_once[hls_index]=true
+                                                else
+                                                    if [ "${hls_changed[hls_index]:-false}" = true ] 
+                                                    then
+                                                        hls_changed[hls_index]=false
+                                                    fi
+                                                    hls_change_once[hls_index]=false
                                                 fi
                                                 if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
                                                 then
@@ -22288,13 +22525,16 @@ Monitor()
                                         do
                                             if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ] 
                                             then
-                                                if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
-                                                then
-                                                    hls_change[hls_index]=false
-                                                fi
-                                                if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] && [ -z "${hls_change_once[hls_index]:-}" ]
+                                                hls_change[hls_index]="${chnl_schedules_hls_change[chnl_schedules_index]}"
+                                                if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
                                                 then
                                                     hls_change_once[hls_index]=true
+                                                else
+                                                    if [ "${hls_changed[hls_index]:-false}" = true ] 
+                                                    then
+                                                        hls_changed[hls_index]=false
+                                                    fi
+                                                    hls_change_once[hls_index]=false
                                                 fi
                                                 if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
                                                 then
@@ -22311,13 +22551,16 @@ Monitor()
                                                 if [ "${monitor_output_dir_names[i]}" == "$output_dir_name" ] 
                                                 then
                                                     hls_indices+=("$i")
-                                                    if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
-                                                    then
-                                                        hls_change[i]=false
-                                                    fi
-                                                    if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] && [ -z "${hls_change_once[i]:-}" ]
+                                                    hls_change[i]="${chnl_schedules_hls_change[chnl_schedules_index]}"
+                                                    if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
                                                     then
                                                         hls_change_once[i]=true
+                                                    else
+                                                        if [ "${hls_changed[i]:-false}" = true ] 
+                                                        then
+                                                            hls_changed[i]=false
+                                                        fi
+                                                        hls_change_once[i]=false
                                                     fi
                                                     if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
                                                     then
@@ -22332,13 +22575,16 @@ Monitor()
                                         hls_index=$((${#monitor_output_dir_names[@]}-1))
                                         hls_indices+=("$hls_index")
 
-                                        if [ "${chnl_schedules_hls_change[chnl_schedules_index]}" = false ] 
-                                        then
-                                            hls_change[hls_index]=false
-                                        fi
-                                        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] && [ -z "${hls_change_once[hls_index]:-}" ]
+                                        hls_change[hls_index]="${chnl_schedules_hls_change[chnl_schedules_index]}"
+                                        if [ "${chnl_schedules_hls_change_once[chnl_schedules_index]}" = true ] 
                                         then
                                             hls_change_once[hls_index]=true
+                                        else
+                                            if [ "${hls_changed[hls_index]:-false}" = true ] 
+                                            then
+                                                hls_changed[hls_index]=false
+                                            fi
+                                            hls_change_once[hls_index]=false
                                         fi
                                         if [ -n "${chnl_schedules_channel_name[chnl_schedules_index]}" ] 
                                         then
@@ -22361,6 +22607,7 @@ Monitor()
                                             then
                                                 unset 'hls_change[hls_index]'
                                                 unset 'hls_change_once[hls_index]'
+                                                unset 'hls_changed[hls_index]'
                                                 unset 'channel_name[hls_index]'
                                             else
                                                 new_array+=("$hls_index")
@@ -22383,6 +22630,7 @@ Monitor()
                                                 MonitorHlsRemoveFailed
                                                 unset 'hls_change[hls_index]'
                                                 unset 'hls_change_once[hls_index]'
+                                                unset 'hls_changed[hls_index]'
                                                 unset 'channel_name[hls_index]'
                                                 break
                                             fi
@@ -22468,10 +22716,7 @@ Monitor()
                             if [ "$minute" -gt "$current_minute" ] 
                             then
                                 new_array+=("$minute")
-                            fi
-
-                            if [ "$minute" -eq "$current_minute" ] 
-                            then
+                            else
                                 rand_restart_flv_done=0
                                 rand_restart_hls_done=0
                             fi
@@ -22922,7 +23167,7 @@ Monitor()
 
                         for hls_index in "${hls_indices[@]}"
                         do
-                            if [ "${hls_change[hls_index]:-true}" = false ] || { [ -n "${hls_change_once[hls_index]:-}" ] && [ "${hls_change_once[hls_index]}" = false ]; }
+                            if [ "${hls_change[hls_index]}" = false ] || [ "${hls_changed[hls_index]:-false}" = true ]
                             then
                                 continue
                             fi
@@ -24856,35 +25101,35 @@ OpenrestyInstall()
     cd ~
     if [ ! -d pcre-8.45 ] 
     then
-        curl -s -L "https://ftp.pcre.org/pub/pcre/pcre-8.45.tar.gz" -o "pcre-8.45.tar.gz"
-        tar xzf "pcre-8.45.tar.gz"
+        curl -s -L https://downloads.sourceforge.net/pcre/pcre/8.45/pcre-8.45.zip -o pcre-8.45.zip
+        unzip pcre-8.45.zip >/dev/null 2>&1
     fi
 
     if [ ! -d zlib-1.2.11 ] 
     then
-        curl -s -L "https://www.zlib.net/zlib-1.2.11.tar.gz" -o "zlib-1.2.11.tar.gz"
-        tar xzf "zlib-1.2.11.tar.gz"
+        curl -s -L https://www.zlib.net/zlib-1.2.11.tar.gz -o zlib-1.2.11.tar.gz
+        tar xzf zlib-1.2.11.tar.gz
     fi
 
     if [ ! -d openssl-1.1.1f-patched ] || [ ! -s openssl-1.1.1f-patched/openssl-1.1.1f-sess_set_get_cb_yield.patch ]
     then
         rm -rf openssl-1.1.1f
         rm -rf openssl-1.1.1f-patched
-        curl -s -L "https://www.openssl.org/source/openssl-1.1.1f.tar.gz" -o "openssl-1.1.1f.tar.gz"
-        tar xzf "openssl-1.1.1f.tar.gz"
+        curl -s -L "https://www.openssl.org/source/openssl-1.1.1f.tar.gz" -o openssl-1.1.1f.tar.gz
+        tar xzf openssl-1.1.1f.tar.gz
         mv openssl-1.1.1f openssl-1.1.1f-patched
         cd openssl-1.1.1f-patched
-        curl -s -L "$FFMPEG_MIRROR_LINK/openssl-1.1.1f-sess_set_get_cb_yield.patch" -o "openssl-1.1.1f-sess_set_get_cb_yield.patch"
+        curl -s -L "$FFMPEG_MIRROR_LINK/openssl-1.1.1f-sess_set_get_cb_yield.patch" -o openssl-1.1.1f-sess_set_get_cb_yield.patch
         patch -p1 < openssl-1.1.1f-sess_set_get_cb_yield.patch >/dev/null 2>&1
         cd ~
     fi
 
     rm -rf nginx-http-flv-module-master
-    curl -s -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o "nginx-http-flv-module.zip"
-    unzip "nginx-http-flv-module.zip" >/dev/null 2>&1
+    curl -s -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o nginx-http-flv-module.zip
+    unzip nginx-http-flv-module.zip >/dev/null 2>&1
 
     cd nginx-http-flv-module-master
-    curl -s -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o "Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch"
+    curl -s -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch
     patch -p1 < Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch >/dev/null 2>&1
     cd ~
 
@@ -24912,7 +25157,7 @@ OpenrestyInstall()
 
     cd "$openresty_package_name/bundle/ngx_lua-"*
 
-    curl -s -L "$FFMPEG_MIRROR_LINK/fix_ngx_lua_resp_get_headers_key_whitespace.patch" -o "fix_ngx_lua_resp_get_headers_key_whitespace.patch"
+    curl -s -L "$FFMPEG_MIRROR_LINK/fix_ngx_lua_resp_get_headers_key_whitespace.patch" -o fix_ngx_lua_resp_get_headers_key_whitespace.patch
     patch -p1 < fix_ngx_lua_resp_get_headers_key_whitespace.patch >/dev/null 2>&1
 
     cd ../..
@@ -24993,14 +25238,14 @@ NginxInstall()
     cd ~
     if [ ! -d pcre-8.45 ] 
     then
-        curl -s -L "https://ftp.pcre.org/pub/pcre/pcre-8.45.tar.gz" -o "pcre-8.45.tar.gz"
-        tar xzf "pcre-8.45.tar.gz"
+        curl -s -L "https://downloads.sourceforge.net/pcre/pcre/8.45/pcre-8.45.zip" -o pcre-8.45.zip
+        unzip pcre-8.45.zip >/dev/null 2>&1
     fi
 
     if [ ! -d zlib-1.2.11 ] 
     then
-        curl -s -L "https://www.zlib.net/zlib-1.2.11.tar.gz" -o "zlib-1.2.11.tar.gz"
-        tar xzf "zlib-1.2.11.tar.gz"
+        curl -s -L "https://www.zlib.net/zlib-1.2.11.tar.gz" -o zlib-1.2.11.tar.gz
+        tar xzf zlib-1.2.11.tar.gz
     fi
 
     while IFS= read -r line
@@ -25020,11 +25265,11 @@ NginxInstall()
     fi
 
     rm -rf nginx-http-flv-module-master
-    curl -s -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o "nginx-http-flv-module.zip"
-    unzip "nginx-http-flv-module.zip" >/dev/null 2>&1
+    curl -s -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o nginx-http-flv-module.zip
+    unzip nginx-http-flv-module.zip >/dev/null 2>&1
 
     cd nginx-http-flv-module-master
-    curl -s -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o "Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch"
+    curl -s -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch
     patch -p1 < Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch >/dev/null 2>&1
     cd ~
 
@@ -44980,6 +45225,7 @@ UpdateSelf()
             --arg hls_max_seg_size "$d_hls_max_seg_size" \
             --arg hls_restart_nums "$d_hls_restart_nums" \
             --arg hls_key_period "$d_hls_key_period" \
+            --arg hls_end_list "$d_hls_end_list" \
             --arg anti_ddos_port "$d_anti_ddos_port" \
             --arg anti_ddos_syn_flood "$d_anti_ddos_syn_flood" \
             --arg anti_ddos_syn_flood_delay_seconds "$d_anti_ddos_syn_flood_delay_seconds" \
@@ -45032,6 +45278,7 @@ UpdateSelf()
                 hls_max_seg_size: $hls_max_seg_size | tonumber,
                 hls_restart_nums: $hls_restart_nums | tonumber,
                 hls_key_period: $hls_key_period | tonumber,
+                hls_end_list: $hls_end_list | test("true"),
                 anti_ddos_port: $anti_ddos_port,
                 anti_ddos_syn_flood: $anti_ddos_syn_flood | test("true"),
                 anti_ddos_syn_flood_delay_seconds: $anti_ddos_syn_flood_delay_seconds | tonumber,
@@ -45091,6 +45338,8 @@ UpdateSelf()
             then
                 IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[i]}"
                 IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[i]}"
+                IFS="${delimiters[1]}" read -ra chnl_schedules_loop <<< "${chnls_schedule_loop[i]}"
+                IFS="${delimiters[1]}" read -ra chnl_schedules_auto_remove <<< "${chnls_schedule_auto_remove[i]}"
                 IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[i]}"
                 IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[i]}"
                 IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[i]}"
@@ -45107,6 +45356,8 @@ UpdateSelf()
                     chnl_schedule=$(
                         $JQ_FILE --arg start_time "${chnl_schedules_start_time[chnl_schedules_index]}" \
                             --arg end_time "${chnl_schedules_end_time[chnl_schedules_index]}" \
+                            --arg loop "${chnl_schedules_loop[chnl_schedules_index]:-false}" \
+                            --arg auto_remove "${chnl_schedules_auto_remove[chnl_schedules_index]:-false}" \
                             --arg hls_change "${chnl_schedules_hls_change[chnl_schedules_index]:-true}" \
                             --arg hls_change_once "${chnl_schedules_hls_change_once[chnl_schedules_index]:-false}" \
                             --arg channel_name "${chnl_schedules_channel_name[chnl_schedules_index]:-}" \
@@ -45115,6 +45366,8 @@ UpdateSelf()
                             {
                                 "start_time": $start_time | tonumber,
                                 "end_time": $end_time | tonumber,
+                                "loop": $loop | test("true"),
+                                "auto_remove": $auto_remove | test("true"),
                                 "hls_change": $hls_change | test("true"),
                                 "hls_change_once": $hls_change_once | test("true"),
                                 "channel_name": $channel_name,
@@ -47044,6 +47297,7 @@ fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
                 uci set network.lan.ipaddr='$openwrt_ip'
                 uci set network.lan.gateway='$eth0_gateway'
                 uci add_list network.lan.dns='$eth0_ip'
+                uci set dhcp.@dnsmasq[0].rebind_protection='0'
                 uci commit
                 reload_config
                 "
@@ -48517,6 +48771,11 @@ then
                     if [ -n "$stream_link_data" ] 
                     then
                         stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
+                        if [ -z "$stream_link_data" ] 
+                        then
+                            Println "$error hinet 4gtv 或频道 [ $hinet_4gtv_chnl_name ] 不可用!\n"
+                            continue
+                        fi
                         hexkey=$(echo -n "VxzAfiseH0AbLShkQOPwdsssw5KyLeuv" | hexdump -v -e '/1 "%02x"')
                         hexiv=$(echo -n "${stream_link_data:0:16}" | hexdump -v -e '/1 "%02x"')
                         stream_link="${stream_links[0]}"
