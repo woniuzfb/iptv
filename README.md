@@ -148,14 +148,12 @@ wget https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 
 `tv` 打开 iptv 管理面板
 
-`tv c <en|zh_CN|...>` 更改语言
-
 - 计划任务(定时开启/关闭)
 - 监控
 - 防护
 - 防盗链
 - 节目表
-- VIP 模块
+- VIP
 
 ### 编译静态 FFmpeg
 
@@ -184,6 +182,10 @@ docker run -it ffmpeg-h265-static
 ### 快捷键
 
 见 `tv -h`
+
+`tv c <en|zh_CN|...>` 更改语言
+
+`tv color` 自定义文字和背景颜色
 
 ### 参数详解
 

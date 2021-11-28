@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-sh_ver="1.87.0"
+sh_ver="1.87.1"
 sh_debug=0
 export LANGUAGE=
 export LC_ALL=
@@ -71,13 +71,16 @@ XTREAM_CODES_CHANNELS="xtream_codes"
 USER_AGENT_BROWSER="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.71 Safari/537.36"
 USER_AGENT_TV="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
 monitor=false
-green="\033[32m"
-red="\033[31m"
-blue="\033[34m"
-normal="\033[0m"
-dim_underlined="\033[37;4;2m"
-indent_6="\r\033[6C"
-indent_20="\r\033[20C"
+red='\033[31m'
+green='\033[32m'
+yellow='\033[33m'
+cyan='\033[36m'
+white='\033[37m'
+blue='\033[94m'
+normal='\033[0m'
+dim_underlined='\033[37;4;2m'
+indent_6='\r\033[6C'
+indent_20='\r\033[20C'
 
 Println()
 {
@@ -687,10 +690,10 @@ inquirer()
         do
             if [ "$first" = true ]
             then
-                printf "%s" "$item"
+                printf '%b' "$item"
                 first=false
             else
-                printf "${2-, }%s" "$item"
+                printf "${2-, }%b" "$item"
             fi
         done
     }
@@ -848,7 +851,7 @@ inquirer()
             failed_count=$((failed_count+1))
             tput cuu $((current_index+1))
             tput cuf $((prompt_width+3))
-            inquirer:print "${red}${checkbox_input_failed_msg}${normal}"
+            inquirer:print "${bg_black}${red}${checkbox_input_failed_msg}${normal}"
             tput rc
         else
             tput cud $((${#checkbox_list[@]}-current_index))
@@ -860,7 +863,7 @@ inquirer()
             done
 
             tput cuf $((prompt_width+3))
-            inquirer:print "${cyan}$(inquirer:join checkbox_selected_options)${normal}\n"
+            inquirer:print "${bg_black}${cyan}$(inquirer:join checkbox_selected_options)${normal}\n"
 
             break_keypress=true
         fi
@@ -949,12 +952,12 @@ inquirer()
         failed_count=0
         first_keystroke=true
 
-        trap inquirer:control_c SIGINT EXIT
+        trap inquirer:control_c EXIT
 
         stty -echo
         tput civis
 
-        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}`gettext \"(按 <space> 选择, <enter> 确认)\"`${normal}\n"
+        inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt} ${dim}`gettext \"(按 <space> 选择, <enter> 确认)\"`${normal}\n"
 
         for i in "${!checkbox_list[@]}"
         do
@@ -1008,6 +1011,8 @@ inquirer()
         read -r -a ${var_name?} <<< "${checkbox_selected_options[@]}"
 
         inquirer:cleanup
+
+        trap - EXIT
     }
 
     inquirer:checkbox_input_indices() {
@@ -1018,6 +1023,8 @@ inquirer()
         read -r -a ${var_name?} <<< "${checkbox_selected_indices[@]}"
 
         inquirer:cleanup
+
+        trap - EXIT
     }
 
     inquirer:on_sort_up() {
@@ -1161,7 +1168,7 @@ inquirer()
         done
 
         tput cuf $((prompt_width+3))
-        inquirer:print "${cyan}$(inquirer:join sort_options)${normal}\n"
+        inquirer:print "${bg_black}${cyan}$(inquirer:join sort_options)${normal}\n"
 
         break_keypress=true
     }
@@ -1173,12 +1180,12 @@ inquirer()
 
         current_index=0
 
-        trap inquirer:control_c SIGINT EXIT
+        trap inquirer:control_c EXIT
 
         stty -echo
         tput civis
 
-        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}`gettext \"(上下箭头选择, 按 <w> <s> 上下移动)\"`${normal}\n"
+        inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt} ${dim}`gettext \"(上下箭头选择, 按 <w> <s> 上下移动)\"`${normal}\n"
 
         for i in "${!sort_options[@]}"
         do
@@ -1203,6 +1210,8 @@ inquirer()
         read -r -a ${var_name?} <<< "${sort_options[@]}"
 
         inquirer:cleanup
+
+        trap - EXIT
     }
 
     inquirer:sort_input_indices() {
@@ -1213,6 +1222,8 @@ inquirer()
         read -r -a ${var_name?} <<< "${sort_indices[@]}"
 
         inquirer:cleanup
+
+        trap - EXIT
     }
 
     inquirer:on_list_input_up() {
@@ -1280,7 +1291,7 @@ inquirer()
         done
 
         tput cuf $((prompt_width+3))
-        inquirer:print "${cyan}${list_options[current_index]}${normal}\n"
+        inquirer:print "${bg_black}${cyan}${list_options[current_index]}${normal}\n"
 
         break_keypress=true
     }
@@ -1304,12 +1315,12 @@ inquirer()
 
         first_keystroke=true
 
-        trap inquirer:control_c SIGINT EXIT
+        trap inquirer:control_c EXIT
 
         stty -echo
         tput civis
 
-        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}`gettext \"(使用上下箭头选择)\"`${normal}\n"
+        inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt} ${dim}`gettext \"(使用上下箭头选择)\"`${normal}\n"
 
         for i in "${!list_options[@]}"
         do
@@ -1334,6 +1345,8 @@ inquirer()
         read -r ${var_name?} <<< "${list_options[current_index]}"
 
         inquirer:cleanup
+
+        trap - EXIT
     }
 
     inquirer:list_input_index() {
@@ -1344,6 +1357,8 @@ inquirer()
         read -r ${var_name?} <<< "$current_index"
 
         inquirer:cleanup
+
+        trap - EXIT
     }
 
     inquirer:on_text_input_left() {
@@ -1373,7 +1388,7 @@ inquirer()
     }
 
     inquirer:on_text_input_enter() {
-        text_input=${text_input:-$text_default_value}
+        text_input=${text_input:-$text_default}
 
         tput civis
         tput cub "$(tput cols)"
@@ -1384,15 +1399,15 @@ inquirer()
             tput sc
             tput cuu $((1+failed_count*3))
             tput cuf $((prompt_width+3))
-            inquirer:print "${cyan}${text_input}${normal}"
+            inquirer:print "${bg_black}${cyan}${text_input}${normal}"
             tput rc
             break_keypress=true
         else
             failed_count=$((failed_count+1))
             tput cud1
-            inquirer:print "${red}${text_input_regex_failed_msg}${normal}"
+            inquirer:print "${bg_black}${red}${text_input_regex_failed_msg}${normal}"
             tput cud1
-            if [ "$text_input" == "$text_default_value" ] 
+            if [ "$text_input" == "$text_default" ] 
             then
                 text_input=""
                 current_pos=0
@@ -1502,25 +1517,25 @@ inquirer()
 
     inquirer:text_input() {
         var_name=$2
-        text_default_value=${3:-}
+        text_default=${3:-}
         text_input=""
         current_pos=0
         failed_count=0
         local text_default_tip
 
-        if [ -n "$text_default_value" ] 
+        if [ -n "$text_default" ] 
         then
-            text_default_tip=" ${bold}${dim}($text_default_value)${normal}"
+            text_default_tip=" ${bold}${dim}($text_default)${normal}"
         else
-            text_default_tip=""
+            text_default_tip="${normal}"
         fi
 
         text_input_regex_failed_msg=${4:-$(gettext "输入验证错误")}
         text_input_validator=${5:-inquirer:text_input_default_validator}
 
-        inquirer:print "${green}?${normal} ${prompt}${text_default_tip}\n"
+        inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt}${text_default_tip}\n"
 
-        trap inquirer:control_c SIGINT EXIT
+        trap inquirer:control_c EXIT
 
         stty -echo
         tput cnorm
@@ -1529,6 +1544,8 @@ inquirer()
         read -r ${var_name?} <<< "$text_input"
 
         inquirer:cleanup
+
+        trap - EXIT
     }
 
     inquirer:date_pick_default_validator() {
@@ -1668,13 +1685,13 @@ inquirer()
             tput sc
             tput cuu $((1+failed_count*3))
             tput cuf $((prompt_width+3))
-            inquirer:print "${cyan}${date_pick}${normal}"
+            inquirer:print "${bg_black}${cyan}${date_pick}${normal}"
             tput rc
             break_keypress=true
         else
             failed_count=$((failed_count+1))
             tput cud1
-            inquirer:print "${red}${date_pick_regex_failed_msg}${normal}\n"
+            inquirer:print "${bg_black}${red}${date_pick_regex_failed_msg}${normal}\n"
             tput cud1
             inquirer:print "${date_pick}"
             tput cub $((19-current_pos))
@@ -1692,11 +1709,11 @@ inquirer()
         failed_count=0
         first_keystroke=true
 
-        inquirer:print "${green}?${normal} ${bold}${prompt}${normal} ${dim}`gettext \"(使用箭头选择)\"`${normal}\n"
+        inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt} ${dim}`gettext \"(使用箭头选择)\"`${normal}\n"
         inquirer:print "$date_pick"
         tput cub 7
 
-        trap inquirer:control_c SIGINT EXIT
+        trap inquirer:control_c EXIT
 
         stty -echo
         tput cnorm
@@ -1705,6 +1722,97 @@ inquirer()
         read -r ${var_name?} <<< $(date +%s -d "$date_pick")
 
         inquirer:cleanup
+
+        trap - EXIT
+    }
+
+    inquirer:remove_color_instructions() {
+        if [ "$first_keystroke" = true ]
+        then
+            tput cuu 1
+            tput cub "$(tput cols)"
+            tput cuf $((prompt_width+3))
+            tput el
+            tput cud 1
+            first_keystroke=false
+        fi
+    }
+
+    inquirer:on_color_pick_ascii() {
+        case "$1" in
+            "w" ) inquirer:on_color_pick_up;;
+            "s" ) inquirer:on_color_pick_down;;
+            "a" ) inquirer:on_color_pick_left;;
+            "d" ) inquirer:on_color_pick_right;;
+        esac
+    }
+
+    inquirer:on_color_pick_up() {
+        inquirer:remove_color_instructions
+        tput cub "$(tput cols)"
+        colors_index=$(((colors_index+1)%16))
+        inquirer:print "${bg_colors[bg_colors_index]}${colors[colors_index]}$text_default${normal}"
+    }
+
+    inquirer:on_color_pick_down() {
+        inquirer:remove_color_instructions
+        tput cub "$(tput cols)"
+        colors_index=$(((colors_index-1)%16))
+        inquirer:print "${bg_colors[bg_colors_index]}${colors[colors_index]}$text_default${normal}"
+    }
+
+    inquirer:on_color_pick_left() {
+        inquirer:remove_color_instructions
+        tput cub "$(tput cols)"
+        bg_colors_index=$(((bg_colors_index-1)%17))
+        inquirer:print "${bg_colors[bg_colors_index]}${colors[colors_index]}$text_default${normal}"
+    }
+
+    inquirer:on_color_pick_right() {
+        inquirer:remove_color_instructions
+        tput cub "$(tput cols)"
+        bg_colors_index=$(((bg_colors_index+1)%17))
+        inquirer:print "${bg_colors[bg_colors_index]}${colors[colors_index]}$text_default${normal}"
+    }
+
+    inquirer:on_color_pick_enter_space() {
+        tput cub "$(tput cols)"
+        tput el
+        tput sc
+        tput cuu 1
+        tput cuf $((prompt_width+3))
+        inquirer:print "${bg_colors[bg_colors_index]}${colors[colors_index]}$text_default${normal}"
+        tput rc
+        break_keypress=true
+
+        tput cnorm
+    }
+
+    inquirer:color_pick() {
+        var_name=$2
+        text_default="${3:-$(gettext "示例文字 ABC 123")}"
+        colors=( '\033[30m' '\033[31m' '\033[32m' '\033[33m' '\033[34m' '\033[35m' '\033[36m' '\033[37m' 
+            '\033[90m' '\033[91m' '\033[92m' '\033[93m' '\033[94m' '\033[95m' '\033[96m' '\033[97m' )
+        bg_colors=( '' '\033[40m' '\033[41m' '\033[42m' '\033[43m' '\033[44m' '\033[45m' '\033[46m' '\033[47m' 
+            '\033[100m' '\033[101m' '\033[102m' '\033[103m' '\033[104m' '\033[105m' '\033[106m' '\033[107m' )
+        colors_index=7
+        bg_colors_index=0
+        first_keystroke=true
+
+        inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt} ${dim}`gettext \"(上下/左右 箭头选择 文字/背景颜色)\"`${normal}\n"
+        inquirer:print "${colors[colors_index]}${bg_colors[bg_colors_index]}$text_default${normal}"
+
+        trap inquirer:control_c EXIT
+
+        tput civis
+
+        inquirer:on_keypress inquirer:on_color_pick_up inquirer:on_color_pick_down inquirer:on_color_pick_enter_space inquirer:on_color_pick_enter_space inquirer:on_color_pick_left inquirer:on_color_pick_right inquirer:on_color_pick_ascii
+
+        read -r ${var_name?} <<< "${colors[colors_index]}${bg_colors[bg_colors_index]}"
+
+        inquirer:cleanup
+
+        trap - EXIT
     }
 
     inquirer:display_length() {
@@ -1738,6 +1846,7 @@ inquirer()
 
     local option=$1 var_name \
     prompt=${2:-} \
+    prompt_raw \
     prompt_width \
     break_keypress \
     first_keystroke \
@@ -1753,27 +1862,35 @@ inquirer()
     list_options \
     current_pos \
     failed_count \
-    text_default_value \
+    text_default \
     text_input \
     text_input_regex_failed_msg \
     text_input_validator \
     date_pick \
     date_pick_regex_failed_msg \
     date_pick_validator \
-    arrow checked unchecked red green blue cyan bold normal dim
+    colors \
+    bg_colors \
+    colors_index \
+    bg_colors_index \
+    arrow checked unchecked bold dim normal
 
-    prompt_width=$(inquirer:display_length "$prompt")
+    prompt_raw=$(printf '%b' "$prompt"|sed 's/\x1b\[[0-9;]*m//g')
+    prompt_width=$(inquirer:display_length "$prompt_raw")
 
-    arrow=$(echo -e '\xe2\x9d\xaf')
-    checked=$(echo -e '\xe2\x97\x89')
-    unchecked=$(echo -e '\xe2\x97\xaf')
-    red=$(tput setaf 1)
-    green=$(tput setaf 2)
-    blue=$(tput setaf 4)
-    cyan=$(tput setaf 6)
-    bold=$(tput bold)
-    normal=$(tput sgr0)
-    dim=$'\e[2m'
+    arrow='\xe2\x9d\xaf'
+    checked='\xe2\x97\x89'
+    unchecked='\xe2\x97\xaf'
+    red=${red:-'\033[31m'}
+    green=${green:-'\033[32m'}
+    yellow=${yellow:-'\033[33m'}
+    blue=${blue:-'\033[34m'}
+    cyan=${cyan:-'\033[36m'}
+    white=${white:-'\033[37m'}
+    bg_black=${bg_black:-'\033[40m'}
+    bold='\033[1m'
+    dim='\033[2m'
+    normal='\033[0m'
 
     shift
     inquirer:$option "$@"
@@ -1787,32 +1904,41 @@ Spinner()
         DepInstall tput
     fi
 
-    local i=1 delay=0.05 FUNCTION_NAME="$2" VARIABLE_NAME="${3:-}" list tempfile
+    local i=1 delay=0.05 FUNCTION_NAME="$2" VARIABLE_NAME="${3:-}" list TMP_FILE
     local green cyan normal
-    green=$(tput setaf 2)
-    cyan=$(tput setaf 6)
-    normal=$(tput sgr0)
+    green='\033[32m'
+    cyan='\033[36m'
+    normal='\033[0m'
 
-    IFS=" " read -a list < <(echo -e '\xe2\xa0\x8b \xe2\xa0\x99 \xe2\xa0\xb9 \xe2\xa0\xb8 \xe2\xa0\xbc \xe2\xa0\xb4 \xe2\xa0\xa6 \xe2\xa0\xa7 \xe2\xa0\x87 \xe2\xa0\x8f')
-    tempfile=$(mktemp)
+    list=( '\xe2\xa0\x8b' '\xe2\xa0\x99' '\xe2\xa0\xb9' '\xe2\xa0\xb8' '\xe2\xa0\xbc' '\xe2\xa0\xb4' '\xe2\xa0\xa6' '\xe2\xa0\xa7' '\xe2\xa0\x87' '\xe2\xa0\x8f' )
 
-    trap 'inquirer cleanup' SIGINT
+    if TMP_FILE=$(mktemp -q) 
+    then
+        chmod +r "$TMP_FILE"
+    else
+        printf -v TMP_FILE '%(%m-%d-%H:%M:%S)T' -1
+    fi
+
+    trap '
+        rm -f "$TMP_FILE"
+        inquirer cleanup
+    ' EXIT
 
     stty -echo
     tput civis
 
-    $FUNCTION_NAME >> "$tempfile" 2>>"$tempfile" &
+    $FUNCTION_NAME > "$TMP_FILE" 2>> "$TMP_FILE" &
     local pid=$!
 
     echo
     tput sc
-    printf "%s %s" "${list[i]}" "${green}$1${normal}"
+    printf '%b %b' "${list[i]}" "${green}$1${normal}"
     tput el
     tput rc
 
     while ps -p $pid -o pid= >/dev/null
     do
-        printf "%s" "$cyan${list[i]}${normal}"
+        printf '%b' "$cyan${list[i]}${normal}"
         i=$(((i+1)%10))
         sleep $delay
         printf "\b\b\b"
@@ -1822,17 +1948,17 @@ Spinner()
 
     if [[ -n $VARIABLE_NAME ]]
     then
-        read -r ${VARIABLE_NAME?} < "$tempfile"
+        read -r ${VARIABLE_NAME?} < "$TMP_FILE"
     else
-        awk '{print}' "$tempfile"
+        awk '{print}' "$TMP_FILE"
     fi
 
-    rm -f "$tempfile"
+    rm -f "$TMP_FILE"
 
     tput cnorm
     stty echo
 
-    trap - SIGINT
+    trap - EXIT
 
     wait $pid
 }
@@ -3661,6 +3787,14 @@ YoutubeParse()
 
 OpensslInstall()
 {
+    if [[ -x $(command -v openssl) ]] 
+    then
+        return 0
+    fi
+
+    echo
+    ExitOnList y "`gettext \"是否安装 openssl\"`"
+
     Progress &
     progress_pid=$!
     trap '
@@ -7740,7 +7874,7 @@ ListChannels()
                 chnls_playlist_file_text="$chnls_output_dir_root/${chnls_playlist_name[chnls_index]}.m3u8"
             fi
 
-            chnls_list="$chnls_list# ${green}$((chnls_index+1))${normal}${indent_6}$i18n_pid: ${green}${chnls_pid[chnls_index]}${normal} $i18n_status: $chnls_status_text $i18n_channel_name: ${green}${chnls_channel_name[chnls_index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: ${green}${chnls_video_codec[chnls_index]}:${chnls_audio_codec[chnls_index]}${normal} $i18n_video_audio_shift: ${green}$chnls_video_audio_shift_text${normal}\n$chnl_stream_links_text$chnls_video_quality_text${indent_6}$i18n_playlist_file: $chnls_playlist_file_text\n\n"
+            chnls_list="$chnls_list# ${green}$((chnls_index+1))${normal}${indent_6}$i18n_pid: ${green}${chnls_pid[chnls_index]}${normal} $i18n_status: $chnls_status_text $i18n_channel_name: ${blue}${chnls_channel_name[chnls_index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: ${green}${chnls_video_codec[chnls_index]}:${chnls_audio_codec[chnls_index]}${normal} $i18n_video_audio_shift: ${green}$chnls_video_audio_shift_text${normal}\n$chnl_stream_links_text$chnls_video_quality_text${indent_6}$i18n_playlist_file: $chnls_playlist_file_text\n\n"
         elif [ "$kind" == "flv" ] 
         then
             if [ "${chnls_flv_status[chnls_index]}" == "on" ] 
@@ -7749,7 +7883,7 @@ ListChannels()
             else
                 chnls_flv_status_text="${red}$i18n_disabled${normal}"
             fi
-            chnls_list="$chnls_list# ${green}$((chnls_index+1))${normal}${indent_6}$i18n_pid: ${green}${chnls_pid[chnls_index]}${normal} $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${green}${chnls_channel_name[chnls_index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: ${green}${chnls_video_codec[chnls_index]}:${chnls_audio_codec[chnls_index]}${normal} $i18n_video_audio_shift: ${green}$chnls_video_audio_shift_text${normal}\n$chnl_stream_links_text$chnls_video_quality_text${indent_6}$i18n_flv_push_link: ${chnls_flv_push_link[chnls_index]:-无}\n${indent_6}$i18n_flv_pull_link: ${chnls_flv_pull_link[chnls_index]:-无}\n\n"
+            chnls_list="$chnls_list# ${green}$((chnls_index+1))${normal}${indent_6}$i18n_pid: ${green}${chnls_pid[chnls_index]}${normal} $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${blue}${chnls_channel_name[chnls_index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: ${green}${chnls_video_codec[chnls_index]}:${chnls_audio_codec[chnls_index]}${normal} $i18n_video_audio_shift: ${green}$chnls_video_audio_shift_text${normal}\n$chnl_stream_links_text$chnls_video_quality_text${indent_6}$i18n_flv_push_link: ${chnls_flv_push_link[chnls_index]:-无}\n${indent_6}$i18n_flv_pull_link: ${chnls_flv_pull_link[chnls_index]:-无}\n\n"
         fi
     done
 
@@ -9183,13 +9317,9 @@ SetStreamLink()
         done < <(curl -s -I -H "User-Agent: $user_agent" -H "${headers:0:-4}" --cookie "$cookies" "$stream_link" 2> /dev/null)
     elif [[ $stream_link =~ ^https://embed\.4gtv\.tv/HiNet/(.+)\.html ]] 
     then
-        if [[ ! -x $(command -v openssl) ]] 
-        then
-            echo
-            ExitOnList y "`gettext \"是否安装 openssl\"`"
-            OpensslInstall
-        fi
+        OpensslInstall
         Println "`eval_gettext \"\\\$info 解析 4gtv 链接 ...\"`"
+
         hinet_4gtv=(
             "litv-ftv13:民視新聞台"
             "litv-longturn14:寰宇新聞台"
@@ -9260,12 +9390,7 @@ SetStreamLink()
         done
     elif [[ $stream_link == *"4gtv.tv/"* ]] 
     then
-        if [[ ! -x $(command -v openssl) ]] 
-        then
-            echo
-            ExitOnList y "`gettext \"是否安装 openssl\"`"
-            OpensslInstall
-        fi
+        OpensslInstall
         Println "`eval_gettext \"\\\$info 解析 4gtv 链接 ...\"`"
         user_agent="${user_agent:-$USER_AGENT_BROWSER}"
         headers="${headers:-Referer: ${stream_link%%|*}\\r\\n}"
@@ -9803,18 +9928,7 @@ SetEncrypt()
     if [ "$encrypt_yn" == "$i18n_yes" ]
     then
         encrypt=true
-
-        if [[ ! -x $(command -v openssl) ]]
-        then
-            echo
-            inquirer list_input "是否安装 openssl: " yn_options install_openssl_yn
-            if [ "$install_openssl_yn" == "$i18n_yes" ]
-            then
-                OpensslInstall
-            else
-                encrypt=false
-            fi
-        fi
+        OpensslInstall
 
         if [[ -x $(command -v openssl) ]] 
         then
@@ -16575,20 +16689,22 @@ ScheduleHbozw()
         printf '{"%s":[]}' "hbo" > "$SCHEDULE_JSON"
     fi
 
-    hboasia_proxy=()
-    if [ -s "$IPTV_ROOT/hboasia_proxy" ] 
-    then
-        hboasia_proxy+=( -x $(< $IPTV_ROOT/hboasia_proxy) )
-    fi
-
     for chnl in "${hbozw_chnls[@]}"
     do
         chnl_id=${chnl%%:*}
         chnl_feed=${chnl#*:}
         chnl_name=${chnl_feed#*:}
         chnl_feed=${chnl_feed%:*}
+        curl_commands=()
 
-        SCHEDULE_LINK="https://hboasia.com/HBO/zh-cn/ajax/home_schedule?date=$today&channel=${chnl_id//$chnl_feed/}&feed=$chnl_feed"
+        schedule_path="/HBO/zh-cn/ajax/home_schedule?date=$today&channel=${chnl_id//$chnl_feed/}&feed=$chnl_feed"
+
+        if [ -s "$IPTV_ROOT/hboasia_proxy" ] 
+        then
+            curl_commands+=( -s -Lm 20 "$(< $IPTV_ROOT/hboasia_proxy)$schedule_path" )
+        else
+            curl_commands+=( -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://hboasia.com$schedule_path" )
+        fi
 
         schedule=""
         while IFS="^" read -r program_id program_time program_sys_time program_title program_title_local
@@ -16608,7 +16724,7 @@ ScheduleHbozw()
                 "time":"'"$program_time"'",
                 "sys_time":"'"$program_sys_time"'"
             }'
-        done < <(curl ${hboasia_proxy[@]+"${hboasia_proxy[@]}"} -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "$SCHEDULE_LINK" | $JQ_FILE '.[] | [.id,.time,.sys_time,.title,.title_local] | join("^")')
+        done < <(curl ${curl_commands[@]+"${curl_commands[@]}"} | $JQ_FILE '.[] | [.id,.time,.sys_time,.title,.title_local] | join("^")')
 
         if [ -n "$schedule" ] 
         then
@@ -25115,7 +25231,7 @@ OpenrestyInstall()
     then
         rm -rf openssl-1.1.1f
         rm -rf openssl-1.1.1f-patched
-        curl -s -L "https://www.openssl.org/source/openssl-1.1.1f.tar.gz" -o openssl-1.1.1f.tar.gz
+        curl -s -L https://www.openssl.org/source/openssl-1.1.1f.tar.gz -o openssl-1.1.1f.tar.gz
         tar xzf openssl-1.1.1f.tar.gz
         mv openssl-1.1.1f openssl-1.1.1f-patched
         cd openssl-1.1.1f-patched
@@ -25238,13 +25354,13 @@ NginxInstall()
     cd ~
     if [ ! -d pcre-8.45 ] 
     then
-        curl -s -L "https://downloads.sourceforge.net/pcre/pcre/8.45/pcre-8.45.zip" -o pcre-8.45.zip
+        curl -s -L https://downloads.sourceforge.net/pcre/pcre/8.45/pcre-8.45.zip -o pcre-8.45.zip
         unzip pcre-8.45.zip >/dev/null 2>&1
     fi
 
     if [ ! -d zlib-1.2.11 ] 
     then
-        curl -s -L "https://www.zlib.net/zlib-1.2.11.tar.gz" -o zlib-1.2.11.tar.gz
+        curl -s -L https://www.zlib.net/zlib-1.2.11.tar.gz -o zlib-1.2.11.tar.gz
         tar xzf zlib-1.2.11.tar.gz
     fi
 
@@ -25571,6 +25687,8 @@ NginxListDomains()
         exit 1
     fi
 
+    OpensslInstall
+
     nginx_domains_list=""
     nginx_domains_count=0
     nginx_domains=()
@@ -25583,7 +25701,7 @@ NginxListDomains()
             nginx_domains_count=$((nginx_domains_count+1))
             domain=${f##*/}
             domain=${domain%.conf}
-            if [ -e "$nginx_prefix/conf/sites_enabled/$domain.conf" ] 
+            if [ -f "$nginx_prefix/conf/sites_enabled/$domain.conf" ] 
             then
                 domain_status=1
                 domain_status_text="${green} [开启] ${normal}"
@@ -25591,7 +25709,22 @@ NginxListDomains()
                 domain_status=0
                 domain_status_text="${red} [关闭] ${normal}"
             fi
-            nginx_domains_list="$nginx_domains_list ${green}$nginx_domains_count.${normal}${indent_6}$domain $domain_status_text\n\n"
+            if [ -f "$nginx_prefix/conf/sites_crt/$domain.crt" ] 
+            then
+                domain_expire_date=$(date +%c --date="$(openssl x509 -enddate -noout -in $nginx_prefix/conf/sites_crt/$domain.crt | cut -d= -f 2)")
+                if openssl x509 -checkend 1209600 -noout -in "$nginx_prefix/conf/sites_crt/$domain.crt" > /dev/null
+                then
+                    domain_expire_text=" ${green}[$domain_expire_date]${normal}"
+                elif openssl x509 -checkend 0 -noout -in "$nginx_prefix/conf/sites_crt/$domain.crt" > /dev/null
+                then
+                    domain_expire_text=" ${yellow}[$domain_expire_date]${normal}"
+                else
+                    domain_expire_text=" ${red}[$domain_expire_date]${normal}"
+                fi
+            else
+                domain_expire_text=""
+            fi
+            nginx_domains_list="$nginx_domains_list ${green}$nginx_domains_count.${normal}${indent_6}$domain $domain_status_text$domain_expire_text\n\n"
             nginx_domains+=("$domain")
             nginx_domains_status+=("$domain_status")
         done
@@ -45019,6 +45152,8 @@ Usage()
 
      `gettext \"tv a 设置自定义命令\"`
 
+     `gettext \"tv color 自定义文字颜色和背景颜色\"`
+
      `gettext \"tv c <en|ru|de|zh_CN|...> 切换/更新 语言\"`
     "
     exit
@@ -48520,12 +48655,7 @@ then
                 exit 0
             fi
 
-            if [[ ! -x $(command -v openssl) ]] 
-            then
-                echo
-                ExitOnList y "`gettext \"是否安装 openssl\"`"
-                OpensslInstall
-            fi
+            OpensslInstall
 
             Println "  4gtv 面板
 
@@ -49644,6 +49774,59 @@ then
             i18nInstall "$new_locale"
             exit 0
         ;;
+        "color")
+            echo
+            color_options=( '设置颜色' '恢复默认' )
+            inquirer list_input_index "选择操作" color_options color_options_index
+
+            if [ "$color_options_index" -eq 1 ] 
+            then
+                sed -E -i '/(bg_black|red|green|yellow|blue|cyan|white)=/d' "$i18n_FILE"
+                Println "$info 颜色重置成功\n"
+                exit 0
+            fi
+
+            echo
+            color_options=( "${red}默认红色文字${normal}" "${green}默认绿色文字${normal}" "${yellow}默认黄色文字${normal}" 
+                "${blue}默认蓝色文字${normal}" "${cyan}默认青色文字${normal}" "${white}默认白色文字${normal}" '默认黑色背景' )
+            inquirer list_input_index "选择修改内容" color_options color_options_index
+
+            echo
+            inquirer color_pick "设置 ${color_options[color_options_index]}" color_pick
+
+            if [ "$color_options_index" -eq 0 ] 
+            then
+                sed -i '/red=/d' "$i18n_FILE"
+                printf "red='%s'" "$color_pick" >> "$i18n_FILE"
+            elif [ "$color_options_index" -eq 1 ] 
+            then
+                sed -i '/green=/d' "$i18n_FILE"
+                printf "green='%s'" "$color_pick" >> "$i18n_FILE"
+            elif [ "$color_options_index" -eq 2 ] 
+            then
+                sed -i '/yellow=/d' "$i18n_FILE"
+                printf "yellow='%s'" "$color_pick" >> "$i18n_FILE"
+            elif [ "$color_options_index" -eq 3 ] 
+            then
+                sed -i '/blue=/d' "$i18n_FILE"
+                printf "blue='%s'" "$color_pick" >> "$i18n_FILE"
+            elif [ "$color_options_index" -eq 4 ] 
+            then
+                sed -i '/cyan=/d' "$i18n_FILE"
+                printf "cyan='%s'" "$color_pick" >> "$i18n_FILE"
+            elif [ "$color_options_index" -eq 5 ] 
+            then
+                sed -i '/white=/d' "$i18n_FILE"
+                printf "white='%s'" "$color_pick" >> "$i18n_FILE"
+            else
+                sed -i '/bg_black=/d' "$i18n_FILE"
+                printf "bg_black='%s'" "$color_pick" >> "$i18n_FILE"
+            fi
+
+            Println "$info 颜色设置成功\n"
+
+            exit 0
+        ;;
         *)
         ;;
     esac
@@ -49692,269 +49875,270 @@ else
             *) Usage;
         esac
     done
+
     if [ -z "${stream_link:-}" ]
     then
         Usage
+    fi
+
+    if [ ! -d "$IPTV_ROOT" ]
+    then
+        echo
+        ExitOnList n "`gettext \"尚未安装, 是否现在安装\"`"
+        Install
     else
-        if [ ! -d "$IPTV_ROOT" ]
+        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+        FFMPEG="$FFMPEG_ROOT/ffmpeg"
+        GetDefault
+        export FFMPEG
+
+        stream_links=($stream_link)
+        stream_link="${stream_links[0]}"
+
+        if [ -z "${proxy:-}" ] 
         then
-            echo
-            ExitOnList n "`gettext \"尚未安装, 是否现在安装\"`"
-            Install
-        else
-            FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-            FFMPEG="$FFMPEG_ROOT/ffmpeg"
-            GetDefault
-            export FFMPEG
-
-            stream_links=($stream_link)
-            stream_link="${stream_links[0]}"
-
-            if [ -z "${proxy:-}" ] 
+            if [[ $stream_link =~ ^https?:// ]] && [ -n "$d_proxy" ] 
             then
-                if [[ $stream_link =~ ^https?:// ]] && [ -n "$d_proxy" ] 
+                echo
+                inquirer list_input "`eval_gettext \"是否使用代理 \\\$d_proxy: \"`" yn_options use_proxy_yn
+                if [ "$use_proxy_yn" == "$i18n_yes" ]
                 then
-                    echo
-                    inquirer list_input "`eval_gettext \"是否使用代理 \\\$d_proxy: \"`" yn_options use_proxy_yn
-                    if [ "$use_proxy_yn" == "$i18n_yes" ]
-                    then
-                        proxy="$d_proxy"
-                    else
-                        proxy=""
-                    fi
+                    proxy="$d_proxy"
                 else
                     proxy=""
                 fi
+            else
+                proxy=""
             fi
+        fi
 
-            if [ -z "${xc_proxy:-}" ] 
+        if [ -z "${xc_proxy:-}" ] 
+        then
+            if [ -n "$d_xc_proxy" ] 
             then
-                if [ -n "$d_xc_proxy" ] 
+                if [[ $stream_link =~ ^http://([^/]+) ]] 
                 then
-                    if [[ $stream_link =~ ^http://([^/]+) ]] 
-                    then
-                        XtreamCodesGetDomains
+                    XtreamCodesGetDomains
 
-                        xc_proxy=""
-                        for xc_domain in "${xtream_codes_domains[@]}"
-                        do
-                            if [ "$xc_domain" == "${BASH_REMATCH[1]}" ] 
+                    xc_proxy=""
+                    for xc_domain in "${xtream_codes_domains[@]}"
+                    do
+                        if [ "$xc_domain" == "${BASH_REMATCH[1]}" ] 
+                        then
+                            echo
+                            inquirer list_input "`eval_gettext \"是否使用 xtream codes 代理 \\\$d_xc_proxy: \"`" yn_options use_proxy_yn
+                            if [ "$use_proxy_yn" == "$i18n_yes" ]
                             then
-                                echo
-                                inquirer list_input "`eval_gettext \"是否使用 xtream codes 代理 \\\$d_xc_proxy: \"`" yn_options use_proxy_yn
-                                if [ "$use_proxy_yn" == "$i18n_yes" ]
-                                then
-                                    xc_proxy="$d_xc_proxy"
-                                else
-                                    xc_proxy=""
-                                fi
-                                break
+                                xc_proxy="$d_xc_proxy"
+                            else
+                                xc_proxy=""
                             fi
-                        done
-                    else
-                        xc_proxy=""
-                    fi
+                            break
+                        fi
+                    done
                 else
                     xc_proxy=""
                 fi
-            fi
-
-            user_agent="$d_user_agent"
-            headers="$d_headers"
-
-            while [[ $headers =~ \\\\ ]]
-            do
-                headers=${headers//\\\\/\\}
-            done
-            if [ -n "$headers" ] && [[ ! $headers =~ \\r\\n$ ]]
-            then
-                headers="$headers\r\n"
-            fi
-
-            cookies="$d_cookies"
-            output_dir_name="${output_dir_name:-$(RandOutputDirName)}"
-            output_dir_root="$LIVE_ROOT/$output_dir_name"
-            playlist_name="${playlist_name:-$(RandPlaylistName)}"
-            seg_dir_name="${seg_dir_name:-$d_seg_dir_name}"
-
-            seg_dir_path=""
-            if [ -n "$seg_dir_name" ] 
-            then
-                seg_dir_path="$seg_dir_name/"
-            fi
-
-            seg_name="${seg_name:-$playlist_name}"
-            seg_length="${seg_length:-$d_seg_length}"
-            seg_count="${seg_count:-$d_seg_count}"
-            audio_codec="${audio_codec:-$d_audio_codec}"
-            video_codec="${video_codec:-$d_video_codec}"
-            use_primary_playlist=false
-            hboasia_host="hbogoasia.com:8443"
-
-            const=${const:-$d_const}
-            const_cbr=${const_cbr:-$d_const_cbr}
-
-            live=${live:-true}
-
-            video_audio_shift="${video_audio_shift:-}"
-            v_or_a="${video_audio_shift%_*}"
-
-            if [ "$v_or_a" == "v" ] 
-            then
-                video_shift="${video_audio_shift#*_}"
-            elif [ "$v_or_a" == "a" ] 
-            then
-                audio_shift="${video_audio_shift#*_}"
-            fi
-
-            txt_format="${txt_format:-$d_txt_format}"
-            draw_text="${draw_text:-$d_draw_text}"
-            quality="${quality:-$d_quality}"
-            bitrate="${bitrate:-$d_bitrate}"
-            resolution="${resolution:-$d_resolution}"
-
-            subtitle_append=""
-            if [ -n "$txt_format" ]
-            then
-                subtitle_append=',SUBTITLES="subs"'
-            fi
-
-            master=0
-            if [[ $bitrate =~ , ]] || [[ $quality =~ , ]] || [[ $resolution =~ , ]] || [ -n "$subtitle_append" ]
-            then
-                master=1
-            fi
-
-            if [ -z "${encrypt:-}" ]  
-            then
-                if [ "$d_encrypt" = true ] 
-                then
-                    encrypt=true
-                    encrypt_session="$d_encrypt_session"
-                else
-                    encrypt=false
-                    encrypt_session=false
-                fi
             else
+                xc_proxy=""
+            fi
+        fi
+
+        user_agent="$d_user_agent"
+        headers="$d_headers"
+
+        while [[ $headers =~ \\\\ ]]
+        do
+            headers=${headers//\\\\/\\}
+        done
+        if [ -n "$headers" ] && [[ ! $headers =~ \\r\\n$ ]]
+        then
+            headers="$headers\r\n"
+        fi
+
+        cookies="$d_cookies"
+        output_dir_name="${output_dir_name:-$(RandOutputDirName)}"
+        output_dir_root="$LIVE_ROOT/$output_dir_name"
+        playlist_name="${playlist_name:-$(RandPlaylistName)}"
+        seg_dir_name="${seg_dir_name:-$d_seg_dir_name}"
+
+        seg_dir_path=""
+        if [ -n "$seg_dir_name" ] 
+        then
+            seg_dir_path="$seg_dir_name/"
+        fi
+
+        seg_name="${seg_name:-$playlist_name}"
+        seg_length="${seg_length:-$d_seg_length}"
+        seg_count="${seg_count:-$d_seg_count}"
+        audio_codec="${audio_codec:-$d_audio_codec}"
+        video_codec="${video_codec:-$d_video_codec}"
+        use_primary_playlist=false
+        hboasia_host="hbogoasia.com:8443"
+
+        const=${const:-$d_const}
+        const_cbr=${const_cbr:-$d_const_cbr}
+
+        live=${live:-true}
+
+        video_audio_shift="${video_audio_shift:-}"
+        v_or_a="${video_audio_shift%_*}"
+
+        if [ "$v_or_a" == "v" ] 
+        then
+            video_shift="${video_audio_shift#*_}"
+        elif [ "$v_or_a" == "a" ] 
+        then
+            audio_shift="${video_audio_shift#*_}"
+        fi
+
+        txt_format="${txt_format:-$d_txt_format}"
+        draw_text="${draw_text:-$d_draw_text}"
+        quality="${quality:-$d_quality}"
+        bitrate="${bitrate:-$d_bitrate}"
+        resolution="${resolution:-$d_resolution}"
+
+        subtitle_append=""
+        if [ -n "$txt_format" ]
+        then
+            subtitle_append=',SUBTITLES="subs"'
+        fi
+
+        master=0
+        if [[ $bitrate =~ , ]] || [[ $quality =~ , ]] || [[ $resolution =~ , ]] || [ -n "$subtitle_append" ]
+        then
+            master=1
+        fi
+
+        if [ -z "${encrypt:-}" ]  
+        then
+            if [ "$d_encrypt" = true ] 
+            then
                 encrypt=true
                 encrypt_session="$d_encrypt_session"
-            fi
-
-            keyinfo_name="${keyinfo_name:-$d_keyinfo_name}"
-            keyinfo_name="${keyinfo_name:-$(RandStr)}"
-            key_name="${key_name:-$d_key_name}"
-            key_name="${key_name:-$(RandStr)}"
-
-            if [ "${stream_link:0:4}" == "rtmp" ] || [ "${stream_link:0:1}" == "/" ]
-            then
-                d_input_flags="${d_input_flags//-timeout 2000000000/}"
-                d_input_flags="${d_input_flags//-reconnect 1/}"
-                d_input_flags="${d_input_flags//-reconnect_at_eof 1/}"
-                d_input_flags="${d_input_flags//-reconnect_streamed 1/}"
-                d_input_flags="${d_input_flags//-reconnect_delay_max 2000/}"
-                lead="${d_input_flags%%[^[:blank:]]*}"
-                d_input_flags="${d_input_flags#${lead}}"
-            elif [[ $stream_link == *".m3u8"* ]]
-            then
-                d_input_flags="${d_input_flags//-reconnect_at_eof 1/}"
-            fi
-
-            input_flags="${input_flags:-$d_input_flags}"
-            if [[ ${input_flags:0:1} == "'" ]] 
-            then
-                input_flags="${input_flags%\'}"
-                input_flags="${input_flags#\'}"
-            fi
-
-            if [ "${output_flags:-}" == "omit" ] 
-            then
-                output_flags=""
             else
-                output_flags="${output_flags:-$d_output_flags}"
+                encrypt=false
+                encrypt_session=false
             fi
-
-            if [[ ${output_flags:0:1} == "'" ]] 
-            then
-                output_flags="${output_flags%\'}"
-                output_flags="${output_flags#\'}"
-            fi
-
-            channel_name="${channel_name:-$playlist_name}"
-            sync="$d_sync"
-            sync_file="${sync_file:-}"
-            sync_index="${sync_index:-}"
-            sync_pairs="${sync_pairs:-}"
-            hls_end_list=false
-
-            [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
-
-            flv_h265="${flv_h265:-false}"
-            flv_push_link="${flv_push_link:-}"
-            flv_pull_link="${flv_pull_link:-}"
-
-            extra_filters=""
-            if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
-            then
-                filters=( vf filter:v )
-                for filter in "${filters[@]}"
-                do
-                    if [[ $output_flags =~ (.*)"-$filter "([^ ]+)(.*) ]] 
-                    then
-                        extra_filters="${BASH_REMATCH[2]},"
-                        output_flags="${BASH_REMATCH[1]} ${BASH_REMATCH[3]}"
-                    fi
-                done
-            fi
-
-            flags_command=( -flags )
-            if [[ $output_flags =~ (.*)"-flags "([^ ]+)(.*) ]] 
-            then
-                flags="${BASH_REMATCH[2]}"
-
-                if [[ $flags =~ global_header ]] 
-                then
-                    flags_command=( -flags "$flags" )
-                else
-                    flags_command+=("-global_header$flags")
-                fi
-
-                output_flags="${BASH_REMATCH[1]} ${BASH_REMATCH[3]}"
-            else
-                flags_command+=(-global_header)
-            fi
-
-            FilterString input_flags output_flags
-
-            from="AddChannel"
-
-            if [ -n "${kind:-}" ] 
-            then
-                if [ "$kind" == "flv" ] 
-                then
-                    if [ -z "${flv_push_link:-}" ] 
-                    then
-                        Println "`eval_gettext \"\\\$error 未设置推流地址...\"`\n" && exit 1
-                    else
-                        if [ "$sh_debug" -eq 1 ] 
-                        then
-                            ( FlvStreamCreator ) 
-                        else
-                            ( FlvStreamCreator ) > /dev/null 2> /dev/null < /dev/null &
-                        fi
-                    fi
-                else
-                    Println "`eval_gettext \"\\\$error 暂不支持输出 \$kind ...\"`\n" && exit 1
-                fi
-            else
-                if [ "$sh_debug" -eq 1 ] 
-                then
-                    ( HlsStreamCreatorPlus ) 
-                else
-                    ( HlsStreamCreatorPlus ) > /dev/null 2> /dev/null < /dev/null &
-                fi
-            fi
-
-            Println "`eval_gettext \"\\\$info 添加频道成功\"`\n"
+        else
+            encrypt=true
+            encrypt_session="$d_encrypt_session"
         fi
+
+        keyinfo_name="${keyinfo_name:-$d_keyinfo_name}"
+        keyinfo_name="${keyinfo_name:-$(RandStr)}"
+        key_name="${key_name:-$d_key_name}"
+        key_name="${key_name:-$(RandStr)}"
+
+        if [ "${stream_link:0:4}" == "rtmp" ] || [ "${stream_link:0:1}" == "/" ]
+        then
+            d_input_flags="${d_input_flags//-timeout 2000000000/}"
+            d_input_flags="${d_input_flags//-reconnect 1/}"
+            d_input_flags="${d_input_flags//-reconnect_at_eof 1/}"
+            d_input_flags="${d_input_flags//-reconnect_streamed 1/}"
+            d_input_flags="${d_input_flags//-reconnect_delay_max 2000/}"
+            lead="${d_input_flags%%[^[:blank:]]*}"
+            d_input_flags="${d_input_flags#${lead}}"
+        elif [[ $stream_link == *".m3u8"* ]]
+        then
+            d_input_flags="${d_input_flags//-reconnect_at_eof 1/}"
+        fi
+
+        input_flags="${input_flags:-$d_input_flags}"
+        if [[ ${input_flags:0:1} == "'" ]] 
+        then
+            input_flags="${input_flags%\'}"
+            input_flags="${input_flags#\'}"
+        fi
+
+        if [ "${output_flags:-}" == "omit" ] 
+        then
+            output_flags=""
+        else
+            output_flags="${output_flags:-$d_output_flags}"
+        fi
+
+        if [[ ${output_flags:0:1} == "'" ]] 
+        then
+            output_flags="${output_flags%\'}"
+            output_flags="${output_flags#\'}"
+        fi
+
+        channel_name="${channel_name:-$playlist_name}"
+        sync="$d_sync"
+        sync_file="${sync_file:-}"
+        sync_index="${sync_index:-}"
+        sync_pairs="${sync_pairs:-}"
+        hls_end_list=false
+
+        [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
+
+        flv_h265="${flv_h265:-false}"
+        flv_push_link="${flv_push_link:-}"
+        flv_pull_link="${flv_pull_link:-}"
+
+        extra_filters=""
+        if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+        then
+            filters=( vf filter:v )
+            for filter in "${filters[@]}"
+            do
+                if [[ $output_flags =~ (.*)"-$filter "([^ ]+)(.*) ]] 
+                then
+                    extra_filters="${BASH_REMATCH[2]},"
+                    output_flags="${BASH_REMATCH[1]} ${BASH_REMATCH[3]}"
+                fi
+            done
+        fi
+
+        flags_command=( -flags )
+        if [[ $output_flags =~ (.*)"-flags "([^ ]+)(.*) ]] 
+        then
+            flags="${BASH_REMATCH[2]}"
+
+            if [[ $flags =~ global_header ]] 
+            then
+                flags_command=( -flags "$flags" )
+            else
+                flags_command+=("-global_header$flags")
+            fi
+
+            output_flags="${BASH_REMATCH[1]} ${BASH_REMATCH[3]}"
+        else
+            flags_command+=(-global_header)
+        fi
+
+        FilterString input_flags output_flags
+
+        from="AddChannel"
+
+        if [ -n "${kind:-}" ] 
+        then
+            if [ "$kind" == "flv" ] 
+            then
+                if [ -z "${flv_push_link:-}" ] 
+                then
+                    Println "`eval_gettext \"\\\$error 未设置推流地址...\"`\n" && exit 1
+                else
+                    if [ "$sh_debug" -eq 1 ] 
+                    then
+                        ( FlvStreamCreator ) 
+                    else
+                        ( FlvStreamCreator ) > /dev/null 2> /dev/null < /dev/null &
+                    fi
+                fi
+            else
+                Println "`eval_gettext \"\\\$error 暂不支持输出 \$kind ...\"`\n" && exit 1
+            fi
+        else
+            if [ "$sh_debug" -eq 1 ] 
+            then
+                ( HlsStreamCreatorPlus ) 
+            else
+                ( HlsStreamCreatorPlus ) > /dev/null 2> /dev/null < /dev/null &
+            fi
+        fi
+
+        Println "`eval_gettext \"\\\$info 添加频道成功\"`\n"
     fi
 fi
