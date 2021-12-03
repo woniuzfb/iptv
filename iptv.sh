@@ -6156,7 +6156,7 @@ HlsStreamCreatorPlus()
 
             hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=${stream_urls_bitrate[stream_urls_index]},AVERAGE-BANDWIDTH=${stream_urls_bitrate[stream_urls_index]},RESOLUTION=${stream_urls_resolution[stream_urls_index]}"
 
-            if [ -n "${stream_urls_audio[stream_urls_index]}" ] 
+            if [ -n "${stream_urls_audio[stream_urls_index]:-}" ] 
             then
                 if [ "${stream_url_audio_count:-0}" -gt 0 ] 
                 then
@@ -6174,7 +6174,7 @@ HlsStreamCreatorPlus()
                 var_stream_map="$var_stream_map,a:$i"
             fi
 
-            if [ -n "${stream_urls_subtitles[stream_urls_index]}" ] && [ "${stream_url_subtitles_count:-0}" -gt 0 ]
+            if [ -n "${stream_urls_subtitles[stream_urls_index]:-}" ] && [ "${stream_url_subtitles_count:-0}" -gt 0 ]
             then
                 for stream_url_subtitles_index in "${stream_url_subtitles_indices[@]}"
                 do
@@ -6908,7 +6908,7 @@ HlsStreamCreatorPlus()
 
             chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=${chnl_stream_urls_bitrate[chnl_stream_urls_index]},AVERAGE-BANDWIDTH=${chnl_stream_urls_bitrate[chnl_stream_urls_index]},RESOLUTION=${chnl_stream_urls_resolution[chnl_stream_urls_index]}"
 
-            if [ -n "${chnl_stream_urls_audio[chnl_stream_urls_index]}" ] 
+            if [ -n "${chnl_stream_urls_audio[chnl_stream_urls_index]:-}" ] 
             then
                 if [ "${chnl_stream_url_audio_count:-0}" -gt 0 ] 
                 then
@@ -6926,7 +6926,7 @@ HlsStreamCreatorPlus()
                 chnl_var_stream_map="$chnl_var_stream_map,a:$i"
             fi
 
-            if [ -n "${chnl_stream_urls_subtitles[chnl_stream_urls_index]}" ] && [ "${chnl_stream_url_subtitles_count:-0}" -gt 0 ]
+            if [ -n "${chnl_stream_urls_subtitles[chnl_stream_urls_index]:-}" ] && [ "${chnl_stream_url_subtitles_count:-0}" -gt 0 ]
             then
                 for chnl_stream_url_subtitles_index in "${chnl_stream_url_subtitles_indices[@]}"
                 do
@@ -8393,7 +8393,7 @@ ParseHlsStreamLink()
     if [[ $stream_link =~ \.m3u8 ]] 
     then
         is_hls=true
-    elif [[ $stream_link =~ \.flv ]] || [[ $stream_link =~ \.ts ]]
+    elif [[ $stream_link =~ \.flv ]] || [[ $stream_link =~ \.ts ]] || [[ $stream_link == *"4gtv.tv/"* ]]
     then
         is_hls=false
     else
@@ -28278,6 +28278,14 @@ AcmeCheck()
         { curl -s -m 10 https://get.acme.sh || curl -s -m 20 "$FFMPEG_MIRROR_LINK/acme.sh"; } \
         | sed "s+https://raw.githubusercontent.com/acmesh-official+$FFMPEG_MIRROR_LINK/acmesh-content+g" \
         | sed "s+| sh+| sed 's~PROJECT=\"https://github.com/acmesh-official~PROJECT=\"$FFMPEG_MIRROR_LINK/acmesh-project~' | sed 's~https://api.github.com~$FFMPEG_MIRROR_LINK/acmesh-api~g' | sh+g" | bash
+    else
+        echo
+        inquirer list_input_index "更新 acme.sh" ny_options ny_options_index
+
+        if [ "$ny_options_index" -eq 1 ] 
+        then
+            ~/.acme.sh/acme.sh --upgrade
+        fi
     fi
 
     Println "$tip zerossl 不支持 tls-alpn-01"
@@ -44966,6 +44974,17 @@ PveSelectVM()
     done
 }
 
+DNSCryptConfig()
+{
+    sed -i "0,/.*\[static\..*/s//\[static\.\'alidns-doh-fix\'\]/" dnscrypt-proxy.toml
+    sed -i "0,/.*stamp = .*/s//stamp = \'sdns:\/\/AgAAAAAAAAAAACCY49XlNq8pWM0vfxT3BO9KJ20l4zzWXy5l9eTycnwTMA5kbnMuYWxpZG5zLmNvbQovZG5zLXF1ZXJ5\'/" dnscrypt-proxy.toml
+    sed -i "0,/.*server_names = \[.*/s//server_names = ['dnspod-doh','alidns-doh-fix']/" dnscrypt-proxy.toml
+    sed -i "0,/^listen_addresses = .*/s//listen_addresses = ['[::]:${listen_port:-53}']/" dnscrypt-proxy.toml
+    sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
+    sed -i "0,/.*bootstrap_resolvers =.*/s//bootstrap_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
+    sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
+}
+
 Menu()
 {
     color=${color:-${green}}
@@ -46311,10 +46330,7 @@ $HOME/ip.sh" > /etc/rc.local
 
                         if [ "$ny_option" == "$i18n_yes" ] 
                         then
-                            sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
-                            sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
-                            sed -i "0,/.*bootstrap_resolvers =.*/s//bootstrap_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
-                            sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
+                            DNSCryptConfig
                         else
                             sed -i "0,/.*server_names = \[.*/s//server_names = ['google', 'cloudflare']/" dnscrypt-proxy.toml
                         fi
@@ -46371,6 +46387,7 @@ $HOME/ip.sh" > /etc/rc.local
                             rm -f /etc/resolv.conf
                             echo "$etc_resolv" > /etc/resolv.conf
                         fi
+
                         cd ~/dnscrypt-$dnscrypt_version_old
                         ./dnscrypt-proxy -service stop > /dev/null
                         ./dnscrypt-proxy -service uninstall > /dev/null
@@ -46380,15 +46397,14 @@ $HOME/ip.sh" > /etc/rc.local
                         mv linux-$arch dnscrypt-$dnscrypt_version
                         cd dnscrypt-$dnscrypt_version
                         cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
+
                         if [ "$ny_option" == "$i18n_yes" ] 
                         then
-                            sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
-                            sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
-                            sed -i "0,/.*bootstrap_resolvers =.*/s//bootstrap_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
-                            sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
+                            DNSCryptConfig
                         else
                             sed -i "0,/.*server_names = \[.*/s//server_names = ['google', 'cloudflare']/" dnscrypt-proxy.toml
                         fi
+
                         ./dnscrypt-proxy -service install > /dev/null
                         ./dnscrypt-proxy -service start > /dev/null
                         Println "$info dnscrypt proxy 升级成功\n"
@@ -46887,6 +46903,7 @@ then
             then
                 Spinner "编译安装 JQ, 耗时可能会很长" JQInstall
             fi
+
             if dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
             then
                 DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
@@ -46972,11 +46989,7 @@ addr-gen-mode=stable-privacy
 dns-search=
 method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
 
-                    sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
-                    sed -i "0,/^listen_addresses = .*/s//listen_addresses = ['[::]:$listen_port']/" dnscrypt-proxy.toml
-                    sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
-                    sed -i "0,/.*bootstrap_resolvers =.*/s//bootstrap_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
-                    sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
+                    DNSCryptConfig
 
                     for((i=0;i<3;i++));
                     do
@@ -47060,11 +47073,9 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
                     mv linux-arm64 dnscrypt-$dnscrypt_version
                     cd dnscrypt-$dnscrypt_version
                     cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
-                    sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
-                    sed -i "0,/^listen_addresses = .*/s//listen_addresses = ['[::]:$listen_port']/" dnscrypt-proxy.toml
-                    sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
-                    sed -i "0,/.*bootstrap_resolvers =.*/s//bootstrap_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
-                    sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
+
+                    DNSCryptConfig
+
                     ./dnscrypt-proxy -service install > /dev/null
                     ./dnscrypt-proxy -service start > /dev/null
 
@@ -47711,6 +47722,13 @@ fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
                         echo "$ip" >> /etc/v2ray/directlist.txt
                     fi
                 done
+                for ip in $(resolveip doh.pub)
+                do
+                    if ! grep -q "$ip" < /etc/v2ray/directlist.txt
+                    then
+                        echo "$ip" >> /etc/v2ray/directlist.txt
+                    fi
+                done
                 '
                 Println "$info 配置切换成功\n"
             fi
@@ -48198,11 +48216,7 @@ then
                     cd dnscrypt-$dnscrypt_version
                     cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
 
-                    sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
-                    sed -i "0,/^listen_addresses = .*/s//listen_addresses = ['[::]:$listen_port']/" dnscrypt-proxy.toml
-                    sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
-                    sed -i "0,/.*bootstrap_resolvers =.*/s//bootstrap_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
-                    sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
+                    DNSCryptConfig
 
                     for((i=0;i<3;i++));
                     do
@@ -48254,6 +48268,7 @@ then
                         rm -f /etc/resolv.conf
                         echo "$etc_resolv" > /etc/resolv.conf
                     fi
+
                     cd ~/dnscrypt-$dnscrypt_version_old
                     ./dnscrypt-proxy -service stop > /dev/null
                     ./dnscrypt-proxy -service uninstall > /dev/null
@@ -48263,11 +48278,9 @@ then
                     mv linux-x86_64 dnscrypt-$dnscrypt_version
                     cd dnscrypt-$dnscrypt_version
                     cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
-                    sed -i "0,/.*server_names = \[.*/s//server_names = ['alidns-doh']/" dnscrypt-proxy.toml
-                    sed -i "0,/^listen_addresses = .*/s//listen_addresses = ['[::]:$listen_port']/" dnscrypt-proxy.toml
-                    sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
-                    sed -i "0,/.*bootstrap_resolvers =.*/s//bootstrap_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
-                    sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
+
+                    DNSCryptConfig
+
                     ./dnscrypt-proxy -service install > /dev/null
                     ./dnscrypt-proxy -service start > /dev/null
                     Println "$info dnscrypt proxy 升级成功\n"
