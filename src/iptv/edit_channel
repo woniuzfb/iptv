@@ -1,0 +1,675 @@
+EditStreamLink()
+{
+    chnl_stream_links_list=""
+    chnl_stream_links_options=()
+    for((list_i=0;list_i<chnl_stream_links_count;list_i++));
+    do
+        chnl_stream_links_list="$chnl_stream_links_list ${green}源$((list_i+1)).${normal}${indent_6}${chnl_stream_links[list_i]}\n\n"
+        chnl_stream_links_options+=("源$((list_i+1))")
+    done
+
+    Println "$chnl_stream_links_list"
+
+    chnl_stream_links_actions=( '添加' )
+
+    if [ "$chnl_stream_links_count" -gt 0 ] 
+    then
+        chnl_stream_links_actions+=( '修改' '删除' )
+
+        if [ "$chnl_stream_links_count" -gt 1 ] 
+        then
+            chnl_stream_links_actions+=( '排序' )
+        fi
+    fi
+
+    inquirer list_input_index "选择操作" chnl_stream_links_actions chnl_stream_links_actions_index
+
+    if [ "$chnl_stream_links_actions_index" -eq 0 ] 
+    then
+        Println "`eval_gettext \"\\\$tip 可以是视频路径, 可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔\"`"
+        ExitOnText "`gettext \"请输入直播源( mpegts / hls / flv / youtube ...): \"`" stream_links_input
+
+        IFS=" " read -ra stream_links_add <<< "$stream_links_input"
+
+        stream_link_parsed=true
+
+        for stream_link in "${stream_links_add[@]}"
+        do
+            stream_links=("$stream_link")
+
+            SetStreamLink
+
+            chnl_stream_links+=("${stream_links[0]}")
+        done
+
+        stream_links=("${chnl_stream_links[@]}")
+    elif [ "$chnl_stream_links_actions_index" -eq 1 ] 
+    then
+        echo
+        inquirer checkbox_input_indices "选择修改的直播源" chnl_stream_links_options chnl_stream_links_indices
+
+        stream_link_parsed=true
+
+        if [ -s "$XTREAM_CODES" ] 
+        then
+            IFS=" " read -r m_ip m_domains m_accounts < <(awk '$1 {a=a $1",";b=b $2",";$1=$2="";c=c substr($0,3)","} END {print a,b,c}' "$XTREAM_CODES")
+            IFS="," read -r -a new_domains <<< "$m_domains"
+            IFS="," read -r -a new_accounts <<< "$m_accounts"
+            xc_count=${#new_domains[@]}
+        fi
+
+        for chnl_stream_links_index in "${chnl_stream_links_indices[@]}"
+        do
+            Println "$info 修改源$((chnl_stream_links_index+1)): ${chnl_stream_links[chnl_stream_links_index]}"
+
+            xc_select=false
+
+            if [ -s "$XTREAM_CODES" ] && [[ ${chnl_stream_links[chnl_stream_links_index]##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+            then
+                chnl_domain=${chnl_stream_links[chnl_stream_links_index]%%|*}
+                for((xc_i=0;xc_i<xc_count;xc_i++));
+                do
+                    if [[ ${new_domains[xc_i]} =~ $chnl_domain ]] 
+                    then
+                        xc_macs=(${new_accounts[xc_i]} "输入mac" "输入新的直播源")
+                        inquirer list_input_index "选择操作" xc_macs xc_macs_index
+                        if [ "$xc_macs_index" -eq $xc_count ] 
+                        then
+                            ExitOnText "请输入mac: " new_mac
+                            xc_select=true
+                        elif [ "$xc_macs_index" -lt $xc_count ] 
+                        then
+                            new_mac="${xc_macs[xc_macs_index]}"
+                            xc_select=true
+                        fi
+                        break
+                    fi
+                done
+                
+            fi
+
+            if [ "$xc_select" = false ] 
+            then
+                inquirer text_input "输入新的直播源( mpegts / hls / flv / youtube ...): " stream_link "$i18n_not_set"
+            else
+                stream_link="${chnl_stream_links[chnl_stream_links_index]//${chnl_stream_links[chnl_stream_links_index]##*|}/$new_mac}"
+            fi
+
+            if [ "$stream_link" == "$i18n_not_set" ] 
+            then
+                continue
+            fi
+
+            stream_links=("$stream_link")
+
+            SetStreamLink
+
+            chnl_stream_links[chnl_stream_links_index]="${stream_links[0]}"
+        done
+
+        stream_links=("${chnl_stream_links[@]}")
+    elif [ "$chnl_stream_links_actions_index" -eq 2 ]
+    then
+        echo
+        inquirer checkbox_input_indices "选择删除的直播源" chnl_stream_links_options chnl_stream_links_indices
+
+        for chnl_stream_links_index in "${chnl_stream_links_indices[@]}"
+        do
+            unset 'chnl_stream_links[chnl_stream_links_index]'
+        done
+
+        stream_links=("${chnl_stream_links[@]}")
+    elif [ "$chnl_stream_links_actions_index" -eq 3 ] 
+    then
+        echo
+        inquirer sort_input_indices "排序直播源" chnl_stream_links_options chnl_stream_links_indices
+
+        declare -a new_array
+        for chnl_stream_links_index in "${chnl_stream_links_indices[@]}"
+        do
+            new_array+=("${chnl_stream_links[chnl_stream_links_index]}")
+        done
+
+        stream_links=("${new_array[@]}")
+
+        unset new_array
+    fi
+
+    file=true
+    jq_path='["channels",'"$chnls_index"',"stream_link"]'
+    JQ update "$CHANNELS_FILE" stream_links
+    Println "$info 直播源修改成功 !\n"
+}
+
+EditLive()
+{
+    SetLive
+    bool=true
+    jq_path='["channels",'"$chnls_index"',"live"]'
+    JQ update "$CHANNELS_FILE" "$live"
+    Println "$info 无限时长直播修改成功 !\n"
+}
+
+EditProxy()
+{
+    SetProxy
+    jq_path='["channels",'"$chnls_index"',"proxy"]'
+    JQ update "$CHANNELS_FILE" "$proxy"
+    Println "$info 代理修改成功 !\n"
+}
+
+EditXtreamCodesProxy()
+{
+    SetXtreamCodesProxy
+    jq_path='["channels",'"$chnls_index"',"xc_proxy"]'
+    JQ update "$CHANNELS_FILE" "$xc_proxy"
+    Println "$info xtream codes 代理修改成功 !\n"
+}
+
+EditUserAgent()
+{
+    SetUserAgent
+    jq_path='["channels",'"$chnls_index"',"user_agent"]'
+    JQ update "$CHANNELS_FILE" "$user_agent"
+    Println "$info user agent 修改成功 !\n"
+}
+
+EditHeaders()
+{
+    SetHeaders
+    jq_path='["channels",'"$chnls_index"',"headers"]'
+    JQ update "$CHANNELS_FILE" "$headers"
+    Println "$info headers 修改成功 !\n"
+}
+
+EditCookies()
+{
+    SetCookies
+    jq_path='["channels",'"$chnls_index"',"cookies"]'
+    JQ update "$CHANNELS_FILE" "$cookies"
+    Println "$info cookies 修改成功 !\n"
+}
+
+EditOutputDirName()
+{
+    if [ "$chnl_status" == "on" ]
+    then
+        Println "$tip 如果正在监控此频道, 需要先关闭监控"
+        ExitOnList n "`gettext \"检测到频道正在运行, 是否现在关闭\"`"
+        StopChannel
+        echo && echo
+    fi
+    SetOutputDirName
+    jq_path='["channels",'"$chnls_index"',"output_dir_name"]'
+    JQ update "$CHANNELS_FILE" "$output_dir_name"
+    Println "$info 输出目录名称修改成功 !\n"
+}
+
+EditPlaylistName()
+{
+    SetPlaylistName
+    jq_path='["channels",'"$chnls_index"',"playlist_name"]'
+    JQ update "$CHANNELS_FILE" "$playlist_name"
+    Println "$info m3u8名称修改成功 !\n"
+}
+
+EditSegDirName()
+{
+    SetSegDirName
+    jq_path='["channels",'"$chnls_index"',"seg_dir_name"]'
+    JQ update "$CHANNELS_FILE" "$seg_dir_name"
+    Println "$info 分片所在子目录名称修改成功 !\n"
+}
+
+EditSegName()
+{
+    SetSegName
+    jq_path='["channels",'"$chnls_index"',"seg_name"]'
+    JQ update "$CHANNELS_FILE" "$seg_name"
+    Println "$info 分片名称修改成功 !\n"
+}
+
+EditSegLength()
+{
+    SetSegLength
+    number=true
+    jq_path='["channels",'"$chnls_index"',"seg_length"]'
+    JQ update "$CHANNELS_FILE" "$seg_length"
+    Println "$info 分片时长修改成功 !\n"
+}
+
+EditSegCount()
+{
+    SetSegCount
+    number=true
+    jq_path='["channels",'"$chnls_index"',"seg_count"]'
+    JQ update "$CHANNELS_FILE" "$seg_count"
+    Println "$info 分片数目修改成功 !\n"
+}
+
+EditVideoCodec()
+{
+    SetVideoCodec
+    jq_path='["channels",'"$chnls_index"',"video_codec"]'
+    JQ update "$CHANNELS_FILE" "$video_codec"
+    Println "$info 视频编码修改成功 !\n"
+}
+
+EditAudioCodec()
+{
+    SetAudioCodec
+    jq_path='["channels",'"$chnls_index"',"audio_codec"]'
+    JQ update "$CHANNELS_FILE" "$audio_codec"
+    Println "$info 音频编码修改成功 !\n"
+}
+
+EditVideoAudioShift()
+{
+    SetVideoAudioShift
+    jq_path='["channels",'"$chnls_index"',"video_audio_shift"]'
+    JQ update "$CHANNELS_FILE" "$video_audio_shift"
+    Println "$info 视频/音频延迟修改成功 !\n"
+}
+
+EditSubtitle()
+{
+    SetSubtitle
+    json=true
+    jq_path='["channels",'"$chnls_index"',"subtitle"]'
+    JQ update "$CHANNELS_FILE" "$subtitle"
+    Println "$info 字幕修改成功 !\n"
+}
+
+EditDrawtext()
+{
+    SetDrawtext
+    jq_path='["channels",'"$chnls_index"',"draw_text"]'
+    JQ update "$CHANNELS_FILE" "$draw_text"
+    Println "$info drawtext 水印修改成功 !\n"
+}
+
+EditQuality()
+{
+    SetQuality
+    jq_path='["channels",'"$chnls_index"',"quality"]'
+    JQ update "$CHANNELS_FILE" "$quality"
+    Println "$info $i18n_crf 修改成功 !\n"
+}
+
+EditBitrate()
+{
+    SetBitrate
+    jq_path='["channels",'"$chnls_index"',"bitrate"]'
+    JQ update "$CHANNELS_FILE" "$bitrate"
+    Println "$info $i18n_bitrate 修改成功 !\n"
+}
+
+EditResolution()
+{
+    SetResolution
+    jq_path='["channels",'"$chnls_index"',"resolution"]'
+    JQ update "$CHANNELS_FILE" "$resolution"
+    Println "$info $i18n_resolution 修改成功 !\n"
+}
+
+EditConst()
+{
+    SetConst
+    bool=true
+    jq_path='["channels",'"$chnls_index"',"const"]'
+    JQ update "$CHANNELS_FILE" "$const"
+    bool=true
+    jq_path='["channels",'"$chnls_index"',"const_cbr"]'
+    JQ update "$CHANNELS_FILE" "$const_cbr"
+    Println "$info 固定码率修改成功 !\n"
+}
+
+EditEncrypt()
+{
+    SetEncrypt
+    update='{
+        "encrypt": '"$encrypt"',
+        "encrypt_session": '"$encrypt_session"'
+    }'
+    merge=true
+    jq_path='["channels",'"$chnls_index"']'
+    JQ update "$CHANNELS_FILE" "$update"
+    Println "$info 加密设置修改成功 !\n"
+}
+
+EditKeyInfoName()
+{
+    SetKeyInfoName
+    jq_path='["channels",'"$chnls_index"',"keyinfo_name"]'
+    JQ update "$CHANNELS_FILE" "$keyinfo_name"
+    Println "$info keyinfo 名称修改成功 !\n"
+}
+
+EditKeyName()
+{
+    SetKeyName
+    jq_path='["channels",'"$chnls_index"',"key_name"]'
+    JQ update "$CHANNELS_FILE" "$key_name"
+    Println "$info key 名称修改成功 !\n"
+}
+
+EditInputFlags()
+{
+    SetInputFlags
+    jq_path='["channels",'"$chnls_index"',"input_flags"]'
+    JQ update "$CHANNELS_FILE" "$input_flags"
+    Println "$info 输入参数修改成功 !\n"
+}
+
+EditOutputFlags()
+{
+    SetOutputFlags
+    jq_path='["channels",'"$chnls_index"',"output_flags"]'
+    JQ update "$CHANNELS_FILE" "$output_flags"
+    Println "$info 输出参数修改成功 !\n"
+}
+
+EditChannelName()
+{
+    SetChannelName
+    jq_path='["channels",'"$chnls_index"',"channel_name"]'
+    JQ update "$CHANNELS_FILE" "$channel_name"
+    Println "$info 频道名称修改成功 !\n"
+}
+
+EditSync()
+{
+    SetSync
+    bool=true
+    jq_path='["channels",'"$chnls_index"',"sync"]'
+    JQ update "$CHANNELS_FILE" "$sync"
+    Println "$info sync 修改成功 !\n"
+}
+
+EditSyncFile()
+{
+    SetSyncFile
+    jq_path='["channels",'"$chnls_index"',"sync_file"]'
+    JQ update "$CHANNELS_FILE" "$sync_file"
+    Println "$info sync_file 修改成功 !\n"
+}
+
+EditSyncIndex()
+{
+    SetSyncIndex
+    jq_path='["channels",'"$chnls_index"',"sync_index"]'
+    JQ update "$CHANNELS_FILE" "$sync_index"
+    Println "$info sync_index 修改成功 !\n"
+}
+
+EditSyncPairs()
+{
+    SetSyncPairs
+    jq_path='["channels",'"$chnls_index"',"sync_pairs"]'
+    JQ update "$CHANNELS_FILE" "$sync_pairs"
+    Println "$info sync_pairs 修改成功 !\n"
+}
+
+EditHlsEndList()
+{
+    SetHlsEndList
+    bool=true
+    jq_path='["channels",'"$chnls_index"',"hls_end_list"]'
+    JQ update "$CHANNELS_FILE" "$hls_end_list"
+    Println "$info hls_end_list 修改成功 !\n"
+}
+
+EditFlvH265()
+{
+    SetFlvH265
+    bool=true
+    jq_path='["channels",'"$chnls_index"',"flv_h265"]'
+    JQ update "$CHANNELS_FILE" "$flv_h265"
+    Println "$info 是否推流 h265 修改成功 !\n"
+}
+
+EditFlvPushLink()
+{
+    SetFlvPushLink
+    jq_path='["channels",'"$chnls_index"',"flv_push_link"]'
+    JQ update "$CHANNELS_FILE" "$flv_push_link"
+    Println "$info 推流地址修改成功 !\n"
+}
+
+EditFlvPullLink()
+{
+    SetFlvPullLink
+    jq_path='["channels",'"$chnls_index"',"flv_pull_link"]'
+    JQ update "$CHANNELS_FILE" "$flv_pull_link"
+    Println "$info 拉流地址修改成功 !\n"
+}
+
+EditChannelAll()
+{
+    if [ "$chnl_flv_status" == "on" ] 
+    then
+        kind="flv"
+        echo
+        ExitOnList n "`gettext \"检测到频道正在运行, 是否现在关闭\"`"
+        StopChannel
+        echo && echo
+    elif [ "$chnl_status" == "on" ]
+    then
+        kind=""
+        echo
+        ExitOnList n "`gettext \"检测到频道正在运行, 是否现在关闭\"`"
+        StopChannel
+        echo && echo
+    fi
+
+    SetProxy
+    SetUserAgent
+    SetHeaders
+    SetCookies
+
+    EditStreamLink
+
+    SetLive
+
+    xc_proxy=${xc_proxy:-}
+    if [[ $stream_link =~ ^http://([^/]+) ]] 
+    then
+        XtreamCodesGetDomains
+
+        for xc_domain in "${xtream_codes_domains[@]}"
+        do
+            if [ "$xc_domain" == "${BASH_REMATCH[1]}" ] 
+            then
+                SetXtreamCodesProxy
+                break
+            fi
+        done
+    fi
+
+    SetVideoCodec
+    SetAudioCodec
+    SetVideoAudioShift
+
+    quality=""
+    bitrate=""
+    resolution=""
+    const=false
+    const_cbr=false
+
+    if [ "$video_codec" != "copy" ] 
+    then
+        SetQuality
+        SetBitrate
+    fi
+
+    SetResolution
+
+    if [ -n "$bitrate" ] 
+    then
+        SetConst
+    fi
+
+    draw_text=""
+
+    if [ "${kind:-}" == "flv" ] 
+    then
+        if [ "$video_codec" != "copy" ] 
+        then
+            SetDrawtext
+        fi
+
+        SetFlvH265
+        SetFlvPushLink
+        SetFlvPullLink
+        output_dir_name=$(RandOutputDirName)
+        playlist_name=$(RandPlaylistName)
+        seg_dir_name="$d_seg_dir_name"
+        seg_name="$playlist_name"
+        seg_length="$d_seg_length"
+        seg_count="$d_seg_count"
+        hls_end_list=false
+        encrypt=false
+        encrypt_session=false
+        keyinfo_name=$(RandStr)
+        key_name=$(RandStr)
+        subtitle="[]"
+    else
+        SetSubtitle
+
+        if [ "$video_codec" != "copy" ] 
+        then
+            SetDrawtext
+        fi
+
+        flv_h265=false
+        flv_push_link=""
+        flv_pull_link=""
+        SetOutputDirName
+        SetPlaylistName
+        SetSegDirName
+        SetSegName
+        SetSegLength
+
+        if [ "$live" = true ] 
+        then
+            SetSegCount
+        else
+            seg_count="$d_seg_count"
+        fi
+
+        SetHlsEndList
+        SetEncrypt
+
+        if [ "$encrypt" = true ] 
+        then
+            SetKeyInfoName
+            SetKeyName
+        else
+            keyinfo_name=$(RandStr)
+            key_name=$(RandStr)
+        fi
+    fi
+
+    SetInputFlags
+    SetOutputFlags
+    SetChannelName
+    SetSync
+
+    sync_file=""
+    sync_index=""
+    sync_pairs=""
+
+    if [ "$sync" = true ]
+    then
+        SetSyncFile
+        SetSyncIndex
+        SetSyncPairs
+    fi
+
+    update=$(
+        $JQ_FILE -n --arg live "$live" --arg proxy "$proxy" \
+        --arg xc_proxy "$xc_proxy" --arg user_agent "$user_agent" \
+        --arg headers "$headers" --arg cookies "$cookies" \
+        --arg output_dir_name "$output_dir_name" --arg playlist_name "$playlist_name" \
+        --arg seg_dir_name "$seg_dir_name" --arg seg_name "$seg_name" \
+        --arg seg_length "$seg_length" --arg seg_count "$seg_count" \
+        --arg video_codec "$video_codec" --arg audio_codec "$audio_codec" \
+        --arg video_audio_shift "$video_audio_shift" --argjson subtitle "$subtitle" \
+        --arg draw_text "$draw_text" --arg quality "$quality" \
+        --arg bitrate "$bitrate" --arg resolution "$resolution" \
+        --arg const "$const" --arg const_cbr "$const_cbr" \
+        --arg encrypt "$encrypt" --arg encrypt_session "$encrypt_session" \
+        --arg keyinfo_name "$keyinfo_name" --arg key_name "$key_name" \
+        --arg input_flags "$input_flags" --arg output_flags "$output_flags" \
+        --arg channel_name "$channel_name" --arg sync "$sync" \
+        --arg sync_file "$sync_file" --arg sync_index "$sync_index" \
+        --arg sync_pairs "$sync_pairs" --arg hls_end_list "$hls_end_list" \
+        --arg flv_h265 "$flv_h265" --arg flv_push_link "$flv_push_link" \
+        --arg flv_pull_link "$flv_pull_link" \
+        '{
+            live: $live | test("true"),
+            proxy: $proxy,
+            xc_proxy: $xc_proxy,
+            user_agent: $user_agent,
+            headers: $headers,
+            cookies: $cookies,
+            output_dir_name: $output_dir_name,
+            playlist_name: $playlist_name,
+            seg_dir_name: $seg_dir_name,
+            seg_name: $seg_name,
+            seg_length: $seg_length | tonumber,
+            seg_count: $seg_count | tonumber,
+            video_codec: $video_codec,
+            audio_codec: $audio_codec,
+            video_audio_shift: $video_audio_shift,
+            subtitle: $subtitle,
+            draw_text: $draw_text,
+            quality: $quality,
+            bitrate: $bitrate,
+            resolution: $resolution,
+            const: $const | test("true"),
+            const_cbr: $const_cbr | test("true"),
+            encrypt: $encrypt | test("true"),
+            encrypt_session: $encrypt_session | test("true"),
+            keyinfo_name: $keyinfo_name,
+            key_name: $key_name,
+            input_flags: $input_flags,
+            output_flags: $output_flags,
+            channel_name: $channel_name,
+            sync: $sync | test("true"),
+            sync_file: $sync_file,
+            sync_index: $sync_index,
+            sync_pairs: $sync_pairs,
+            hls_end_list: $hls_end_list | test("true"),
+            flv_h265: $flv_h265 | test("true"),
+            flv_push_link: $flv_push_link,
+            flv_pull_link: $flv_pull_link
+        }'
+    )
+
+    merge=true
+    jq_path='["channels",'"$chnls_index"']'
+    JQ update "$CHANNELS_FILE" "$update"
+
+    Println "$info 频道 [ $channel_name ] 修改成功 !\n"
+}
+
+EditForSecurity()
+{
+    SetPlaylistName
+    SetSegName
+
+    update=$(
+        $JQ_FILE -n --arg playlist_name "$playlist_name" --arg seg_name "$seg_name" \
+        '{
+            playlist_name: $playlist_name,
+            seg_name: $seg_name
+        }'
+    )
+
+    merge=true
+    jq_path='["channels",'"$chnls_index"']'
+    JQ update "$CHANNELS_FILE" "$update"
+
+    Println "$info 分片名称, m3u8名称 修改成功 !\n"
+}

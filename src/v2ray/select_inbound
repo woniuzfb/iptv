@@ -1,0 +1,33 @@
+V2raySelectInbound()
+{
+    echo "选择入站"
+    while read -p "$i18n_default_cancel" inbound_num
+    do
+        case "$inbound_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$inbound_num" -gt 0 ] && [ "$inbound_num" -le $count ]
+                then
+                    inbound_num=$((inbound_num-1))
+                    if [ "$list_inbounds_options_index" -eq 0 ] 
+                    then
+                        inbounds_index=$inbound_num
+                    elif [ "$list_inbounds_options_index" -eq 1 ] 
+                    then
+                        inbounds_index=${inbounds_nginx_index[inbound_num]}
+                    else
+                        inbounds_index=${inbounds_other_index[inbound_num]}
+                    fi
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+}

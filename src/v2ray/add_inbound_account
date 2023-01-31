@@ -1,0 +1,130 @@
+V2rayAddInboundAccount()
+{
+    V2rayListInbounds
+    V2raySelectInbound
+
+    if [ "${inbounds_protocol[inbounds_index]}" == "vmess" ] 
+    then
+        V2raySetId
+        V2raySetLevel
+        V2raySetAlterId
+        V2raySetEmail
+        jq_path='["inbounds",'"$inbounds_index"',"settings","clients"]'
+        new_account=$(
+        $JQ_FILE -n --arg id "$id" --arg level "$level" \
+            --arg alterId "$alter_id" --arg email "$email" \
+        '{
+            "id": $id,
+            "level": $level | tonumber,
+            "alterId": $alterId | tonumber,
+            "email": $email
+        }')
+    elif [ "${inbounds_protocol[inbounds_index]}" == "vless" ] 
+    then
+        V2raySetId
+        V2raySetLevel
+        V2raySetEmail
+        jq_path='["inbounds",'"$inbounds_index"',"settings","clients"]'
+        if [ "$v2ray_name" == "xray" ] 
+        then
+            V2raySetInboundFlow
+            new_account=$(
+            $JQ_FILE -n --arg id "$id" --arg flow "$flow" \
+                --arg level "$level" --arg email "$email" \
+            '{
+                "id": $id,
+                "flow": $flow,
+                "level": $level | tonumber,
+                "email": $email
+            }')
+        else
+            new_account=$(
+            $JQ_FILE -n --arg id "$id" --arg level "$level" \
+                --arg email "$email" \
+            '{
+                "id": $id,
+                "level": $level | tonumber,
+                "email": $email
+            }')
+        fi
+    elif [ "${inbounds_protocol[inbounds_index]}" == "http" ] || [ "${inbounds_protocol[inbounds_index]}" == "socks" ]
+    then
+        V2raySetHttpAccount
+        jq_path='["inbounds",'"$inbounds_index"',"settings","accounts"]'
+        new_account=$(
+        $JQ_FILE -n --arg user "$user" --arg pass "$pass" \
+        '{
+            "user": $user,
+            "pass": $pass
+        }')
+    elif [ "${inbounds_protocol[inbounds_index]}" == "trojan" ] 
+    then
+        V2raySetPassword
+        V2raySetLevel
+        V2raySetEmail
+        jq_path='["inbounds",'"$inbounds_index"',"settings","clients"]'
+        if [ "$v2ray_name" == "xray" ] 
+        then
+            V2raySetInboundFlow
+            new_account=$(
+            $JQ_FILE -n --arg password "$password" --arg flow "$flow" \
+                --arg email "$email" --arg level "$level" \
+            '{
+                "password": $password,
+                "flow": $flow,
+                "email": $email,
+                "level": $level | tonumber
+            }')
+        else
+            new_account=$(
+            $JQ_FILE -n --arg password "$password" --arg email "$email" \
+                --arg level "$level" \
+            '{
+                "password": $password,
+                "email": $email,
+                "level": $level | tonumber
+            }')
+        fi
+    elif [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] 
+    then
+        if [ "$v2ray_name" == "xray" ] 
+        then
+            if [[ $($V2CTL_FILE version | head -1 | cut -d' ' -f2) =~ ([^.]+).([^.]+).([^.]+) ]] && \
+            [ "${BASH_REMATCH[1]}" -ge 1 ] && [ "${BASH_REMATCH[2]}" -ge 2 ] && [ "${BASH_REMATCH[3]}" -ge 3 ]
+            then
+                if [ -n "${inbounds_settings_email[inbounds_index]}" ] 
+                then
+                    Println "$error 请重新添加 shadowsocks 协议入站\n"
+                    exit 1
+                fi
+                V2raySetEmail
+                V2raySetShadowsocksMethod
+                V2raySetPassword
+                V2raySetLevel
+                jq_path='["inbounds",'"$inbounds_index"',"settings","clients"]'
+                new_account=$(
+                $JQ_FILE -n --arg email "$email" --arg method "$shadowsocks_method" \
+                    --arg password "$password" --arg level "$level" \
+                '{
+                    "email": $email,
+                    "method": $method,
+                    "password": $password,
+                    "level": $level | tonumber
+                }')
+            else
+                Println "$error 请更新 xray\n"
+                exit 1
+            fi
+        else
+            Println "$error shadowsocks 协议不支持多账号\n"
+            exit 1
+        fi
+    elif [ "${inbounds_protocol[inbounds_index]}" == "dokodemo-door" ] 
+    then
+        Println "$error 无法添加账号到任意门协议\n"
+        exit 1
+    fi
+
+    JQ add "$V2_CONFIG" "[$new_account]"
+    Println "$info 入站账号添加成功\n"
+}

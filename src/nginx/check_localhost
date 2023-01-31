@@ -1,0 +1,140 @@
+NginxCheckLocalhost()
+{
+    if [ ! -d "$nginx_prefix" ] 
+    then
+        Println "$error $nginx_name 未安装 !\n"
+        exit 1
+    fi
+
+    mkdir -p "$nginx_prefix/conf/sites_crt/"
+    mkdir -p "$nginx_prefix/conf/sites_available/"
+    mkdir -p "$nginx_prefix/conf/sites_enabled/"
+
+    NginxParseConfig
+    NginxGetConfig
+
+    updated=0
+
+    NginxAddUser
+
+    NginxAddHttp
+
+    NginxAddEnabled
+
+    NginxAddSsl
+
+    server_offset=0
+
+    if [ "$level_2_d1_count" -gt 0 ] 
+    then
+        for((level_1_index=0;level_1_index<level_1_count;level_1_index++));
+        do
+            if [ "${level_1_directive_arr[level_1_index]}" == "http" ] 
+            then
+                if [ -z "${level_2_directive_arr[level_1_index]}" ] 
+                then
+                    break
+                fi
+
+                level_2_directive_d1=${level_2_directive_arr[level_1_index]}
+                level_2_args_d1=${level_2_args_arr[level_1_index]}
+                IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
+                IFS="${delimiters[1]}" read -r -a level_2_args_d1_arr <<< "$level_2_args_d1${delimiters[1]}"
+
+                if [ "$level_3_d1_count" -gt 0 ] && [ -n "${level_3_directive_arr[level_1_index]}" ]
+                then
+                    level_3_directive_d1=${level_3_directive_arr[level_1_index]}
+                    level_3_args_d1=${level_3_args_arr[level_1_index]}
+                    IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+                    IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+                fi
+
+                for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
+                do
+                    if [ "${level_2_directive_d1_arr[level_2_index]}" == "server" ] && [ "$level_3_d1_count" -gt 0 ] && [ -n "${level_3_directive_arr[level_1_index]}" ] && [ -n "${level_3_directive_d1_arr[level_2_index]}" ]
+                    then
+                        level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
+                        level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
+                        IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
+                        IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+
+                        for((level_3_index=0;level_3_index<${#level_3_directive_d2_arr[@]};level_3_index++));
+                        do
+                            if [ "${level_3_directive_d2_arr[level_3_index]}" == "server_name" ] 
+                            then
+                                if [ "${level_3_args_d2_arr[level_3_index]}" == "localhost" ] 
+                                then
+                                    continue 2
+                                fi
+                                updated=1
+                                IFS="${delimiters[0]}" read -r -a domains <<< "${level_3_args_d2_arr[level_3_index]}${delimiters[0]}"
+                                new_conf='{"status":"ok","errors":[],"config":[]}'
+                                localhost_found=0
+                                for((l=0;l<${#domains[@]};l++));
+                                do
+                                    if [ "${domains[l]}" == "localhost" ] 
+                                    then
+                                        localhost_found=1
+                                        continue
+                                    fi
+                                    jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"']'
+                                    JQs get parse_out new_server
+                                    jq_path='["block",'"$level_3_index"',"args"]'
+                                    JQs replace new_server '["'${domains[l]}'"]'
+                                    jq_path='["config"]'
+                                    JQs add new_conf '[{"file":"'"$nginx_prefix/conf/sites_available/${domains[l]}.conf"'","status":"ok","errors":[],"parsed":['"$new_server"']}]'
+                                    ln -sf "$nginx_prefix/conf/sites_available/${domains[l]}.conf" "$nginx_prefix/conf/sites_enabled/"
+                                done
+                                NginxBuildConf new_conf
+                                if [ "$localhost_found" -eq 0 ] 
+                                then
+                                    jq_path='["config",0,"parsed",'"$level_1_index"',"block"]'
+                                    JQs delete parse_out "$((j-server_offset))"
+                                    server_offset=$((server_offset+1))
+                                else
+                                    jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"args"]'
+                                    JQs replace parse_out '["localhost"]'
+                                fi
+                            elif [ "${level_3_directive_d2_arr[level_3_index]}" == "add_header" ] && [ "${level_3_args_d2_arr[level_3_index]}" == 'Access-Control-Allow-Origin'"${delimiters[0]}"'$corsHost' ]
+                            then
+                                updated=1
+                                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"args"]'
+                                JQs replace parse_out '["Access-Control-Allow-Origin","$cors_host"]'
+                            fi
+                        done
+                    elif [ "${level_2_directive_d1_arr[level_2_index]}" == "map" ] && [ "${level_2_args_d1_arr[level_2_index]}" == '$http_origin'"${delimiters[0]}"'$corsHost' ]
+                    then
+                        updated=1
+                        jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"args"]'
+                        JQs replace parse_out '["$http_origin","$cors_host"]'
+                    fi
+                done
+                break
+            fi
+        done
+    fi
+
+    if [ "$server_offset" -gt 0 ] 
+    then
+        NginxGetConfig
+    fi
+
+    NginxAddLocalhost
+
+    NginxAddRtmp
+
+    if [ "$updated" -eq 1 ] 
+    then
+        NginxBuildConf parse_out
+
+        if ls -A "$nginx_prefix/conf/sites_available/"* > /dev/null 2>&1 
+        then
+            for f in "$nginx_prefix/conf/sites_available/"*
+            do
+                sed -i 's/$corsHost/$cors_host/g' "$f"
+            done
+        fi
+
+        sed -i 's/$corsHost/$cors_host/g' "$nginx_prefix/conf/nginx.conf"
+    fi
+}

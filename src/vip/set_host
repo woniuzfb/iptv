@@ -1,0 +1,49 @@
+VipSetHostIp()
+{
+    Println "请输入 VIP 频道所在服务器 IP/域名"
+    read -p "$i18n_default_cancel" vip_host_ip
+    [ -z "$vip_host_ip" ] && Println "$i18n_canceled...\n" && exit 1
+    Println "  VIP 服务器 IP/域名: ${green} $vip_host_ip ${normal}\n"
+}
+
+VipSetHostPort()
+{
+    Println "请输入 VIP 频道所在服务器端口"
+    read -p "$i18n_default_cancel" vip_host_port
+    [ -z "$vip_host_port" ] && Println "$i18n_canceled...\n" && exit 1
+    Println "  VIP 服务器端口: ${green} $vip_host_port ${normal}\n"
+}
+
+VipSetHostSeed()
+{
+    Println "请输入 VIP 频道所在服务器的 seed"
+    read -p "$i18n_default_cancel" vip_host_seed
+    [ -z "$vip_host_seed" ] && Println "$i18n_canceled...\n" && exit 1
+    Println "  VIP 服务器 seed: ${green} $vip_host_seed ${normal}\n"
+}
+
+VipSetHostToken()
+{
+    echo
+    inquirer text_input "请输入 VIP 频道所在服务器的 token: " vip_host_token "$i18n_not_set"
+    if [ "$vip_host_token" == "$i18n_not_set" ] 
+    then
+        vip_host_token=""
+    fi
+}
+
+VipSetHostStatus()
+{
+    echo
+    inquirer list_input "是否开启用此 VIP 服务器" yn_options vip_host_status
+
+    if [[ $vip_host_status == "$i18n_yes" ]] 
+    then
+        vip_host_status="on"
+        vip_host_status_text="${green}启用${normal}"
+    else
+        vip_host_status="off"
+        vip_host_status_text="${red}禁用${normal}"
+    fi
+    Println "  VIP 服务器状态: $vip_host_status_text\n"
+}

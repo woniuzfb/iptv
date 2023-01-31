@@ -1,0 +1,38 @@
+VimConfig()
+{
+    if [[ ! -x $(command -v vim) ]] 
+    then
+        Println "$info 安装 vim ..."
+        AptUpdate
+        apt-get -y install vim
+    fi
+
+    if [ -e ~/.vimrc ] 
+    then
+        echo
+        ExitOnList n "`gettext \"将安装 vim-plug 并覆盖 ~/.vimrc , 是否继续\"`"
+    fi
+
+    if curl -s -fLo ~/.vim/autoload/plug.vim --create-dirs "$FFMPEG_MIRROR_LINK/vim-plug.vim"
+    then
+        printf '%s' "
+call plug#begin('~/.vim/plugged')
+Plug 'preservim/nerdcommenter'
+Plug 'ryanpcmcquen/fix-vim-pasting'
+call plug#end()
+
+set number
+set mouse=a
+set tabstop=2
+set shiftwidth=2
+set expandtab
+
+autocmd BufRead,BufNewFile *.conf setfiletype conf
+filetype indent off
+" > ~/.vimrc
+        DepInstall git
+        Println "$info vimrc 设置完成, 请在 vim 下执行 PlugInstall\n"
+    else
+        Println "$error 无法连接服务器, 请稍后再试\n"
+    fi
+}

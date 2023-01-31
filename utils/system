@@ -1,0 +1,392 @@
+DistCheck()
+{
+    [ -n "${dist:-}" ] && return 0
+
+    dist_files=( /etc/issue /etc/os-release /proc/version )
+    dist=""
+
+    for dist_file in "${dist_files[@]}"
+    do
+        if [ ! -s "$dist_file" ] 
+        then
+            continue
+        fi
+
+        if grep -Eqi "Red Hat|redhat|CentOS|Fedora|Amazon" < "$dist_file" 
+        then
+            dist="rpm"
+            break
+        elif grep -qi "Ubuntu" < "$dist_file" 
+        then
+            dist="ubu"
+            break
+        elif grep -qi "Debian" < "$dist_file" 
+        then
+            dist="deb"
+            break
+        fi
+    done
+
+    if [ -z "$dist" ] 
+    then
+        Println "${red}[ERROR]${normal} not support yet...\n"
+        exit 1
+    fi
+}
+
+ArchCheck()
+{
+    [ -n "${arch:-}" ] && return 0
+
+    arch=$(uname -m)
+
+    if grep -Eqi "x86_64|amd64" <<< "$arch" 
+    then
+        arch="x86_64"
+    elif grep -Eqi "i386|i686" <<< "$arch" 
+    then
+        arch="i386"
+    elif grep -Eqi "aarch64|armv8" <<< "$arch" 
+    then
+        arch="arm64"
+    elif grep -qi "armv7" <<< "$arch" 
+    then
+        arch="armhf"
+    elif grep -qi "armv6" <<< "$arch" 
+    then
+        arch="armv6l"
+    elif grep -qi "arm" <<< "$arch" 
+    then
+        arch="armel"
+    elif grep -qi "s390" <<< "$arch" 
+    then
+        arch="s390x"
+    fi
+}
+
+DebFixSources()
+{
+    if [ "${deb_fix:-1}" -eq 1 ] 
+    then
+        sed -i 's/^mozilla\/DST_Root_CA_X3.crt/!mozilla\/DST_Root_CA_X3.crt/g' /etc/ca-certificates.conf
+        update-ca-certificates -f >/dev/null 2>&1 || true
+
+        if [ -f /etc/apt/sources.list.d/sources-aliyun-0.list ] 
+        then
+            deb_list=$(< /etc/apt/sources.list.d/sources-aliyun-0.list)
+            rm -f /etc/apt/sources.list.d/sources-aliyun-0.list
+            rm -rf /var/lib/apt/lists/*
+        else
+            deb_list=$(< /etc/apt/sources.list)
+        fi
+
+        if grep -q "jessie" <<< "$deb_list"
+        then
+            printf '%s' "
+deb http://archive.debian.org/debian/ jessie main
+deb-src http://archive.debian.org/debian/ jessie main
+
+deb http://security.debian.org jessie/updates main
+deb-src http://security.debian.org jessie/updates main
+" > "/etc/apt/sources.list"
+            apt-get clean >/dev/null 2>&1
+        elif grep -q "wheezy" <<< "$deb_list" 
+        then
+            printf '%s' "
+deb http://archive.debian.org/debian/ wheezy main
+deb-src http://archive.debian.org/debian/ wheezy main
+
+deb http://security.debian.org wheezy/updates main
+deb-src http://security.debian.org wheezy/updates main
+" > "/etc/apt/sources.list"
+            apt-get clean >/dev/null 2>&1
+        fi
+
+        deb_fix=0
+    fi
+}
+
+AptUpdate()
+{
+    if [ "${apt_updated:-false}" = false ] 
+    then
+        apt-get update --allow-releaseinfo-change >/dev/null
+        apt_updated=true
+    fi
+}
+
+DepInstall()
+{
+    dependency=$1
+
+    [[ -x $(command -v $dependency) ]] && return 0
+
+    DistCheck
+
+    if [ "$dependency" == "gettext" ] || [ "$dependency" == "wget" ]
+    then
+        Println "${green}[INFO]${normal} Installing $dependency, it takes awhile..."
+
+        if [ "$dist" == "rpm" ] 
+        then
+            if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
+            then
+                setenforce permissive
+                sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+            fi
+
+            if yum -y install $dependency >/dev/null 2>&1
+            then
+                Println "${green}[INFO]${normal} $dependency installation succeed..."
+            else
+                Println "${green}[ERROR]${normal} $dependency installation failed...\n"
+                exit 1
+            fi
+        else
+            if [ "$dist" == "deb" ] 
+            then
+                DebFixSources
+            fi
+
+            AptUpdate
+
+            if apt-get -y install $dependency >/dev/null 2>&1
+            then
+                Println "${green}[INFO]${normal} $dependency installation succeed..."
+            else
+                Println "${green}[ERROR]${normal} $dependency installation failed...\n"
+                exit 1
+            fi
+        fi
+
+        return 0
+    fi
+
+    Println "`eval_gettext \"\\\$info 安装 \\\$dependency, 请稍等...\"`"
+
+    if [ "$dist" == "rpm" ] 
+    then
+        if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
+        then
+            setenforce permissive
+            sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+        fi
+
+        if [ "$dependency" == "dig" ] 
+        then
+            dependency="bind-utils"
+        fi
+
+        if yum -y install $dependency >/dev/null 2>&1
+        then
+            Println "`eval_gettext \"\\\$info \\\$dependency 安装成功\"`"
+        else
+            Println "`eval_gettext \"\\\$error \\\$dependency 安装失败\"`\n"
+            exit 1
+        fi
+    else
+        if [ "$dist" == "deb" ] 
+        then
+            DebFixSources
+        fi
+
+        AptUpdate
+
+        if [ "$dependency" == "dig" ] 
+        then
+            dependency="dnsutils"
+        fi
+
+        if apt-get -y install $1 >/dev/null 2>&1
+        then
+            Println "`eval_gettext \"\\\$info \\\$dependency 安装成功\"`"
+        else
+            Println "`eval_gettext \"\\\$error \\\$dependency 安装失败\"`\n"
+            exit 1
+        fi
+    fi
+}
+
+DepsCheck()
+{
+    DistCheck
+
+    DepInstall tput
+
+    Spinner "`gettext \"检查依赖, 耗时可能会很长\"`" DepsInstall
+}
+
+DepsInstall()
+{
+    if [ "$dist" == "rpm" ] 
+    then
+        if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
+        then
+            setenforce permissive
+            sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+        fi
+
+        depends=(wget unzip vim curl crond logrotate patch nscd)
+
+        if [[ ! -x $(command -v dig) ]] 
+        then
+            depends+=(bind-utils)
+        fi
+
+        if [[ ! -x $(command -v hexdump) ]] 
+        then
+            depends+=(util-linux)
+        fi
+
+        if [[ ! -x $(command -v ss) ]] 
+        then
+            depends+=(iproute)
+        fi
+
+        for depend in "${depends[@]}"
+        do
+            if [[ ! -x $(command -v "$depend") ]] 
+            then
+                if yum -y install "$depend" >/dev/null 2>&1
+                then
+                    Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
+                else
+                    Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n"
+                    exit 1
+                fi
+            fi
+        done
+
+        yum -y update ca-certificates >/dev/null 2>&1 || yum -y reinstall ca-certificates >/dev/null 2>&1
+    else
+        if [ "$dist" == "deb" ] 
+        then
+            DebFixSources
+        fi
+
+        AptUpdate
+
+        apt-get -y install ca-certificates >/dev/null 2>&1
+
+        depends=(wget unzip vim curl cron ufw python3 logrotate patch nscd)
+
+        if [[ ! -x $(command -v dig) ]] 
+        then
+            depends+=(dnsutils)
+        fi
+
+        if [[ ! -x $(command -v hexdump) ]] 
+        then
+            depends+=(bsdmainutils)
+        fi
+
+        for depend in "${depends[@]}"
+        do
+            if [[ ! -x $(command -v "$depend") ]] 
+            then
+                if apt-get -y install "$depend" >/dev/null 2>&1
+                then
+                    Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
+                else
+                    Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n"
+                    exit 1
+                fi
+            fi
+        done
+    fi
+}
+
+ResourceLimit()
+{
+    DistCheck
+
+    if [ ! -e /proc/sys/fs/file-max ] 
+    then
+        echo 65536 > /proc/sys/fs/file-max
+        echo "fs.file-max=65536" >> /etc/sysctl.conf
+    fi
+
+    file_max=$(< /proc/sys/fs/file-max)
+
+    if [ "$file_max" -lt 65000 ] 
+    then
+        file_max=$((file_max*95/100))
+    else
+        file_max=64000
+    fi
+
+    limits=(
+        "$USER soft fsize unlimited"
+        "$USER hard fsize unlimited"
+        "$USER soft cpu unlimited"
+        "$USER hard cpu unlimited"
+        "$USER soft as unlimited"
+        "$USER hard as unlimited"
+        "$USER soft memlock unlimited"
+        "$USER hard memlock unlimited"
+        "$USER soft nofile $file_max"
+        "$USER hard nofile $file_max"
+        "$USER soft nproc 64000"
+        "$USER hard nproc 64000"
+        "* soft nofile $file_max"
+        "* hard nofile $file_max"
+    )
+
+    limits_append=""
+    for limit in "${limits[@]}"
+    do
+        if ! grep -q "${limit% *}" < "/etc/security/limits.conf" 
+        then
+            limits_append="$limits_append$limit\n"
+        fi
+    done
+
+    if [ -n "$limits_append" ] 
+    then
+        # systemd ignores limits set in the /etc/security/limits.conf
+        echo -e "$limits_append" >> "/etc/security/limits.conf"
+    fi
+
+    ulimit -f unlimited
+    ulimit -t unlimited
+    ulimit -v unlimited
+    ulimit -l unlimited
+    ulimit -n $file_max
+    ulimit -m unlimited
+    ulimit -u 64000
+
+    if [ "$dist" == "rpm" ] 
+    then
+        if [ ! -e ~/.bash_profile ] || ! grep -q ulimit < ~/.bash_profile
+        then
+cat >> ~/.bash_profile << EOF
+ulimit -f unlimited
+ulimit -t unlimited
+ulimit -v unlimited
+ulimit -l unlimited
+ulimit -n $file_max
+ulimit -m unlimited
+ulimit -u 64000
+EOF
+        fi
+    else
+        if [ ! -e ~/.profile ] || ! grep -q ulimit < ~/.profile
+        then
+cat >> ~/.profile << EOF
+ulimit -f unlimited
+ulimit -t unlimited
+ulimit -v unlimited
+ulimit -l unlimited
+ulimit -n $file_max
+ulimit -m unlimited
+ulimit -u 64000
+EOF
+        fi
+    fi
+
+    # The limits defined in these files are set by PAM when starting a login session, but daemons started by systemd do not use PAM login sessions
+    #if [ ! -e /etc/security/limits.d/99-mongodb-nproc.conf ] && ls -A /etc/security/limits.d/*-nproc.conf > /dev/null 2>&1 
+    #then
+    #    echo -e "mongodb soft nproc 64000\nmongodb hard nproc 64000" > /etc/security/limits.d/99-mongodb-nproc.conf
+    #fi
+}

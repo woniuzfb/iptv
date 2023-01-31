@@ -1,0 +1,16 @@
+CloudflareListUsers()
+{
+    if [ ! -s "$CF_CONFIG" ] 
+    then
+        Println "$error 请先添加用户\n" && exit 1
+    fi
+
+    CloudflareGetUsers
+
+    if [ "$cf_users_count" -gt 0 ] 
+    then
+        Println "$cf_users_list"
+    else
+        Println "$error 没有用户\n"
+    fi
+}

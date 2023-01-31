@@ -1,0 +1,964 @@
+Include src/iptv/filter_string "$@"
+
+Include src/iptv/rand_name "$@"
+
+Include src/iptv/sync_file "$@"
+
+Include src/iptv/flv_creator "$@"
+
+Include src/iptv/hls_creator "$@"
+
+Include src/iptv/get_default "$@"
+
+Include src/iptv/get_channels "$@"
+
+Include src/iptv/list_channels "$@"
+
+Include src/iptv/get_channel "$@"
+
+Include src/iptv/list_channel "$@"
+
+Include src/iptv/input_channels "$@"
+
+Include src/iptv/view_channel "$@"
+
+Include src/iptv/parse_hls "$@"
+
+Include src/iptv/parse_youtube "$@"
+
+Include src/iptv/parse_stream "$@"
+
+Include src/iptv/set_stream "$@"
+
+Include src/iptv/add_channel "$@"
+
+Include src/iptv/edit_channel "$@"
+
+Include src/iptv/menu_edit_channel "$@"
+
+Include src/iptv/toggle_channel "$@"
+
+Include src/iptv/check_xtream "$@"
+
+Include src/iptv/start_channel "$@"
+
+Include src/iptv/stop_channel "$@"
+
+Include src/iptv/restart_channel "$@"
+
+Include src/iptv/view_log "$@"
+
+Include src/iptv/delete_channel "$@"
+
+Include src/iptv/edit_default "$@"
+
+Include src/iptv/list_schedule "$@"
+
+Include src/iptv/parse_schedule "$@"
+
+Include src/iptv/search_soccer "$@"
+
+Include src/iptv/add_schedule "$@"
+
+Include src/iptv/edit_schedule "$@"
+
+Include src/iptv/sort_schedule "$@"
+
+Include src/iptv/delete_schedule "$@"
+
+Include src/iptv/menu_schedule "$@"
+
+Include src/iptv/list_monitor "$@"
+
+Include src/iptv/start_monitor "$@"
+
+Include src/iptv/menu_monitor "$@"
+
+Include src/iptv/menu_edit_default "$@"
+
+Include src/iptv/get_service "$@"
+
+Include src/_4gtv/set_acc "$@"
+
+Include src/_4gtv/reg_acc "$@"
+
+Include src/_4gtv/list_accs "$@"
+
+Include src/_4gtv/login_acc "$@"
+
+Include src/_4gtv/list_acc "$@"
+
+Include src/_4gtv/edit_acc "$@"
+
+Include src/_4gtv/del_acc "$@"
+
+Include src/_4gtv/get_acc_token "$@"
+
+Include src/_4gtv/use_proxy "$@"
+
+Include src/_4gtv/cron "$@"
+
+Include src/_4gtv/enable_cron "$@"
+
+Include src/_4gtv/disable_cron "$@"
+
+Include src/_4gtv/add_link "$@"
+
+Include src/_4gtv/start_link "$@"
+
+Include src/xtream_codes/get_domains "$@"
+
+Include src/xtream_codes/get_channels "$@"
+
+Include src/xtream_codes/add_account "$@"
+
+Include src/xtream_codes/verify_mac "$@"
+
+Include src/xtream_codes/list "$@"
+
+Include src/xtream_codes/list_account "$@"
+
+Include src/xtream_codes/test_account "$@"
+
+Include src/xtream_codes/list_mac "$@"
+
+Include src/xtream_codes/search_channels "$@"
+
+Include src/xtream_codes/list_channels "$@"
+
+Include src/xtream_codes/add_mac "$@"
+
+Include src/vip/set_host "$@"
+
+Include src/vip/add_host "$@"
+
+Include src/vip/edit_host "$@"
+
+Include src/vip/get_hosts "$@"
+
+Include src/vip/list_hosts "$@"
+
+Include src/vip/delete_host "$@"
+
+Include src/vip/set_user "$@"
+
+Include src/vip/add_user "$@"
+
+Include src/vip/edit_user "$@"
+
+Include src/vip/get_users "$@"
+
+Include src/vip/list_users "$@"
+
+Include src/vip/list_user "$@"
+
+Include src/vip/delete_user "$@"
+
+Include src/vip/set_channel "$@"
+
+Include src/vip/add_channel "$@"
+
+Include src/vip/deploy_channel "$@"
+
+Include src/vip/edit_channel "$@"
+
+Include src/vip/list_channels "$@"
+
+Include src/vip/get_stream "$@"
+
+Include src/vip/list_channel "$@"
+
+Include src/vip/delete_channel "$@"
+
+Include src/vip/get_config "$@"
+
+Include src/vip/set_public "$@"
+
+Include src/vip/process_lists "$@"
+
+Include src/vip/get_schedules "$@"
+
+Include src/vip/monitor "$@"
+
+Include src/vip/enable "$@"
+
+Include src/vip/disable "$@"
+
+Include src/vip/list_user_channel "$@"
+
+Include src/vip/verify_license "$@"
+
+Include src/iptv/menu_vip_user "$@"
+
+Include src/iptv/menu_vip "$@"
+
+Include src/iptv/menu_iptv "$@"
+
+Include src/iptv/usage "$@"
+
+Install()
+{
+    if [ -e "$IPTV_ROOT" ]
+    then
+        Println "`eval_gettext \"\\\$error 目录已存在, 请先卸载...\"`\n" && exit 1
+    else
+        DepsCheck
+
+        #if grep -q '\--show-progress' < <(wget --help)
+        #then
+        #    _PROGRESS_OPT="--show-progress"
+        #else
+        #    _PROGRESS_OPT=""
+        #fi
+
+        mkdir -p "$IPTV_ROOT"
+
+        FFmpegInstall
+        JQInstall
+
+        default=$(
+        $JQ_FILE -n \
+            --arg proxy '' \
+            --arg xc_proxy '' \
+            --arg user_agent "$USER_AGENT_TV" \
+            --arg headers '' \
+            --arg cookies 'stb_lang=en; timezone=Europe/Amsterdam' \
+            --arg playlist_name '' \
+            --arg seg_dir_name '' \
+            --arg seg_name '' \
+            --arg seg_length 6 \
+            --arg seg_count 5 \
+            --arg video_codec "libx264" \
+            --arg audio_codec "aac" \
+            --arg video_audio_shift '' \
+            --arg draw_text '' \
+            --arg quality '' \
+            --arg bitrate "900" \
+            --arg resolution "1280x720" \
+            --arg const "false" \
+            --arg const_cbr "false" \
+            --arg encrypt "false" \
+            --arg encrypt_session "false" \
+            --arg keyinfo_name '' \
+            --arg key_name '' \
+            --arg input_flags "-copy_unknown -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000 -rw_timeout 10000000 -y -nostats -nostdin -hide_banner -loglevel error" \
+            --arg output_flags "-g 60 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main" \
+            --arg sync "true" \
+            --arg sync_file '' \
+            --arg sync_index "data:0:channels" \
+            --arg sync_pairs "chnl_name:channel_name,chnl_id:output_dir_name,chnl_pid:pid,chnl_cat=港澳台,url=http://xxx.com/live" \
+            --arg schedule_file '' \
+            --arg flv_delay_seconds 20 \
+            --arg flv_restart_nums 20 \
+            --arg hls_delay_seconds 120 \
+            --arg hls_min_bitrate 500 \
+            --arg hls_max_seg_size 5 \
+            --arg hls_restart_nums 20 \
+            --arg hls_key_period 30 \
+            --arg hls_end_list "false" \
+            --arg anti_ddos_port 80 \
+            --arg anti_ddos_syn_flood "false" \
+            --arg anti_ddos_syn_flood_delay_seconds 3 \
+            --arg anti_ddos_syn_flood_seconds 3600 \
+            --arg anti_ddos "false" \
+            --arg anti_ddos_seconds 120 \
+            --arg anti_ddos_level 6 \
+            --arg anti_leech "false" \
+            --arg anti_leech_restart_nums 3 \
+            --arg anti_leech_restart_flv_changes "true" \
+            --arg anti_leech_restart_hls_changes "true" \
+            --arg recheck_period 0 \
+            --arg version "$sh_ver" \
+            '{
+                proxy: $proxy,
+                xc_proxy: $xc_proxy,
+                user_agent: $user_agent,
+                headers: $headers,
+                cookies: $cookies,
+                playlist_name: $playlist_name,
+                seg_dir_name: $seg_dir_name,
+                seg_name: $seg_name,
+                seg_length: $seg_length | tonumber,
+                seg_count: $seg_count | tonumber,
+                video_codec: $video_codec,
+                audio_codec: $audio_codec,
+                video_audio_shift: $video_audio_shift,
+                draw_text: $draw_text,
+                quality: $quality,
+                bitrate: $bitrate,
+                resolution: $resolution,
+                const: $const | test("true"),
+                const_cbr: $const_cbr | test("true"),
+                encrypt: $encrypt | test("true"),
+                encrypt_session: $encrypt_session | test("true"),
+                keyinfo_name: $keyinfo_name,
+                key_name: $key_name,
+                input_flags: $input_flags,
+                output_flags: $output_flags,
+                sync: $sync | test("true"),
+                sync_file: $sync_file,
+                sync_index: $sync_index,
+                sync_pairs: $sync_pairs,
+                schedule_file: $schedule_file,
+                flv_delay_seconds: $flv_delay_seconds | tonumber,
+                flv_restart_nums: $flv_restart_nums | tonumber,
+                hls_delay_seconds: $hls_delay_seconds | tonumber,
+                hls_min_bitrate: $hls_min_bitrate | tonumber,
+                hls_max_seg_size: $hls_max_seg_size | tonumber,
+                hls_restart_nums: $hls_restart_nums | tonumber,
+                hls_key_period: $hls_key_period | tonumber,
+                hls_end_list: $hls_end_list | test("true"),
+                anti_ddos_port: $anti_ddos_port,
+                anti_ddos_syn_flood: $anti_ddos_syn_flood | test("true"),
+                anti_ddos_syn_flood_delay_seconds: $anti_ddos_syn_flood_delay_seconds | tonumber,
+                anti_ddos_syn_flood_seconds: $anti_ddos_syn_flood_seconds | tonumber,
+                anti_ddos: $anti_ddos | test("true"),
+                anti_ddos_seconds: $anti_ddos_seconds | tonumber,
+                anti_ddos_level: $anti_ddos_level | tonumber,
+                anti_leech: $anti_leech | test("true"),
+                anti_leech_restart_nums: $anti_leech_restart_nums | tonumber,
+                anti_leech_restart_flv_changes: $anti_leech_restart_flv_changes | test("true"),
+                anti_leech_restart_hls_changes: $anti_leech_restart_hls_changes | test("true"),
+                recheck_period: $recheck_period | tonumber,
+                version: $version
+            }'
+        )
+
+        $JQ_FILE -n --argjson default "$default" \
+        '{
+            default: $default,
+            channels: []
+        }' > "$CHANNELS_FILE"
+
+        ln -sf "$IPTV_ROOT"/ffmpeg-git-*/ff* /usr/local/bin/
+
+        Println "`eval_gettext \"\\\$info 安装完成\"`\n"
+    fi
+}
+
+Uninstall()
+{
+    [ ! -d "$IPTV_ROOT" ] && Println "`eval_gettext \"\\\$error 尚未安装, 请检查 !\"`\n" && exit 1
+
+    echo
+    ExitOnList n "`gettext \"确定要 卸载此脚本以及产生的全部文件\"`"
+
+    MonitorStop
+    VipDisable
+    CloudflareDisableWorkersMonitor
+
+    if [ -e "$NODE_ROOT/index.js" ] 
+    then
+        pm2 stop 0 2> /dev/null || true
+    fi
+
+    if crontab -l | grep -q "$LOGROTATE_CONFIG" 2> /dev/null
+    then
+        crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
+        sed -i "/${LOGROTATE_CONFIG//\//\\/}/d" "$IPTV_ROOT/cron_tmp"
+        crontab "$IPTV_ROOT/cron_tmp" > /dev/null
+        rm -f "$IPTV_ROOT/cron_tmp"
+        Println "$info 已停止 logrotate\n"
+    fi
+
+    i18nGetMsg get_channel
+
+    while IFS= read -r chnl_pid
+    do
+        GetChannel
+        if [ "$chnl_flv_status" == "on" ] 
+        then
+            kind="flv"
+            StopChannel
+        elif [ "$chnl_status" == "on" ]
+        then
+            kind=""
+            StopChannel
+        fi
+    done < <($JQ_FILE '.channels[].pid' $CHANNELS_FILE)
+
+    StopChannelsForce 2> /dev/null || true
+
+    rm -rf "${IPTV_ROOT:-notfound}"
+
+    Println "`eval_gettext \"\\\$info 卸载完成 !\"`\n"
+}
+
+Update()
+{
+    ShFileUpdate
+
+    pkill -f 'tv s -' 2> /dev/null || true
+
+    [ ! -d "$IPTV_ROOT" ] && Println "`eval_gettext \"\\\$error 尚未安装, 请检查 !\"`\n" && exit 1
+
+    while IFS= read -r line 
+    do
+        if [[ $line == *"built on "* ]] 
+        then
+            line=${line#*built on }
+            git_date=${line%<*}
+            break
+        fi
+    done < <(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/index.html" 2> /dev/null)
+
+    if [ -z "${git_date:-}" ] 
+    then
+        Println "`eval_gettext \"\\\$error 暂时无法连接服务器, 请稍后再试 !\"`\n"
+        exit 1
+    fi
+
+    if [ -s "$IPTV_ROOT/monitor.pid" ] || [ -s "$IPTV_ROOT/antiddos.pid" ]
+    then
+        echo
+        ExitOnList y "`gettext \"需要先关闭监控, 是否继续\"`"
+        MonitorStop
+    fi
+
+    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+    if [[ ${FFMPEG_ROOT##*/} == *"${git_date:-20200101}"* ]] 
+    then
+        echo
+        inquirer list_input "`gettext \"FFmpeg 已经是最新, 是否重装\"`" ny_options reinstall_ffmpeg_yn
+        if [ "$reinstall_ffmpeg_yn" == "$i18n_no" ]
+        then
+            reinstall_ffmpeg_yn="N"
+        else
+            reinstall_ffmpeg_yn="Y"
+        fi
+    else
+        reinstall_ffmpeg_yn="Y"
+    fi
+
+    DistCheck
+
+    if [[ ${reinstall_ffmpeg_yn:-N} == [Yy] ]] 
+    then
+        rm -rf "$IPTV_ROOT"/ffmpeg-git-*/
+        Spinner "`gettext \"更新 FFmpeg\"`" FFmpegInstall
+    fi
+
+    # A limitation of statically linking glibc is the loss of DNS resolution.
+    DepInstall nscd
+
+    JQInstall > /dev/null
+
+    ln -sf "$IPTV_ROOT"/ffmpeg-git-*/ff* /usr/local/bin/
+    Println "`eval_gettext \"脚本已更新为最新版本 [ \\\${green}\\\$sh_new_ver\\\${normal} ] ! (输入: tv 使用)\"`\n" && exit 0
+}
+
+UpdateSelf()
+{
+    if [ ! -e "$JQ_FILE" ] 
+    then
+        echo
+        ExitOnList y "`gettext \"检测到安装未完成, 是否卸载重装\"`"
+
+        Uninstall
+        Install
+        exit 0
+    fi
+
+    GetDefault
+
+    if [ "${d_version%.*}" != "${sh_ver%.*}" ] 
+    then
+        major_ver=${d_version%%.*}
+        minor_ver=${d_version#*.}
+        minor_ver=${minor_ver%%.*}
+
+        if [ "$minor_ver" -lt 35 ] 
+        then
+            Println "$info 需要先关闭所有频道, 请稍等...\n"
+            StopChannelsForce
+            rm -rf "/tmp/flv.lockdir/"
+            rm -rf "/tmp/monitor.lockdir"
+            rm -f "$FFMPEG_LOG_ROOT/"*.lock
+        fi
+
+        Println "$info 更新中, 请稍等...\n"
+        printf -v update_date '%(%m-%d-%H:%M:%S)T' -1
+        cp -f "$CHANNELS_FILE" "${CHANNELS_FILE}_$update_date"
+
+        GetChannels
+
+        while [[ $d_headers =~ \\\\ ]]
+        do
+            d_headers=${d_headers//\\\\/\\}
+        done
+
+        if [[ ! $d_input_flags =~ -copy_unknown ]] 
+        then
+            d_input_flags="-copy_unknown $d_input_flags"
+        fi
+
+        d_input_flags=${d_input_flags//-timeout 2000000000/-rw_timeout 10000000}
+
+        if [ "$minor_ver" -lt 83 ] 
+        then
+            if [ "$d_const" == "yes" ] 
+            then
+                d_const=true
+            else
+                d_const=false
+            fi
+
+            if [ "$d_encrypt" == "yes" ] 
+            then
+                d_encrypt=true
+            else
+                d_encrypt=false
+            fi
+
+            if [ "$d_encrypt_session" == "yes" ] 
+            then
+                d_encrypt_session=true
+            else
+                d_encrypt_session=false
+            fi
+
+            if [ "$d_sync" == "yes" ] 
+            then
+                d_sync=true
+            else
+                d_sync=false
+            fi
+
+            if [ "$d_anti_ddos_syn_flood" == "yes" ] 
+            then
+                d_anti_ddos_syn_flood=true
+            else
+                d_anti_ddos_syn_flood=false
+            fi
+
+            if [ "$d_anti_ddos" == "yes" ] 
+            then
+                d_anti_ddos=true
+            else
+                d_anti_ddos=false
+            fi
+
+            if [ "$d_anti_leech" == "yes" ] 
+            then
+                d_anti_leech=true
+            else
+                d_anti_leech=false
+            fi
+
+            if [ "$d_anti_leech_restart_flv_changes" == "yes" ] 
+            then
+                d_anti_leech_restart_flv_changes=true
+            else
+                d_anti_leech_restart_flv_changes=false
+            fi
+
+            if [ "$d_anti_leech_restart_hls_changes" == "yes" ] 
+            then
+                d_anti_leech_restart_hls_changes=true
+            else
+                d_anti_leech_restart_hls_changes=false
+            fi
+        fi
+
+        if [ "$minor_ver" -lt 86 ] 
+        then
+            IFS="=" read -r d_bitrate d_hls_min_bitrate < <($JQ_FILE -r '.default|[.bitrates,.hls_min_bitrates]|join("=")' $CHANNELS_FILE)
+
+            if [[ $d_bitrate =~ - ]] 
+            then
+                d_resolution=${d_bitrate#*-}
+                d_bitrate=${d_bitrate%-*}
+            elif [[ $d_bitrate =~ x ]] 
+            then
+                d_resolution="$d_bitrate"
+                d_bitrate=""
+            fi
+
+            IFS="=" read -r -a chnls_bitrates < <($JQ_FILE -r '[.channels[].bitrates]|join("=")' $CHANNELS_FILE)
+
+            for((i=0;i<chnls_count;i++));
+            do
+                bitrate=""
+                resolution=""
+
+                if [ -n "${chnls_bitrates[i]:-}" ] 
+                then
+                    IFS=, read -r -a chnl_bitrates <<< "${chnls_bitrates[i]}"
+
+                    for chnl_bitrate in "${chnl_bitrates[@]}"
+                    do
+                        [ -n "$bitrate" ] && bitrate="$bitrate,"
+                        [ -n "$resolution" ] && resolution="$resolution,"
+
+                        if [[ $chnl_bitrate =~ - ]] 
+                        then
+                            bitrate="$bitrate${chnl_bitrate%-*}"
+                            resolution="$resolution${chnl_bitrate#*-}"
+                        elif [[ $chnl_bitrate =~ x ]] 
+                        then
+                            resolution="$resolution$chnl_bitrate"
+                        else
+                            bitrate="$bitrate$chnl_bitrate"
+                        fi
+                    done
+                fi
+
+                chnls_bitrate[i]="$bitrate"
+                chnls_resolution[i]="$resolution"
+            done
+        fi
+
+        default=$(
+        $JQ_FILE -n \
+            --arg proxy "$d_proxy" \
+            --arg xc_proxy "$d_xc_proxy" \
+            --arg user_agent "$d_user_agent" \
+            --arg headers "$d_headers" \
+            --arg cookies "$d_cookies" \
+            --arg playlist_name "$d_playlist_name" \
+            --arg seg_dir_name "$d_seg_dir_name" \
+            --arg seg_name "$d_seg_name" \
+            --arg seg_length "$d_seg_length" \
+            --arg seg_count "$d_seg_count" \
+            --arg video_codec "$d_video_codec" \
+            --arg audio_codec "$d_audio_codec" \
+            --arg video_audio_shift "$d_video_audio_shift" \
+            --arg draw_text "$d_draw_text" \
+            --arg quality "$d_quality" \
+            --arg bitrate "$d_bitrate" \
+            --arg resolution "$d_resolution" \
+            --arg const "$d_const" \
+            --arg const_cbr "$d_const_cbr" \
+            --arg encrypt "$d_encrypt" \
+            --arg encrypt_session "$d_encrypt_session" \
+            --arg keyinfo_name "$d_keyinfo_name" \
+            --arg key_name "$d_key_name" \
+            --arg input_flags "$d_input_flags" \
+            --arg output_flags "$d_output_flags" \
+            --arg sync "$d_sync" \
+            --arg sync_file "$d_sync_file" \
+            --arg sync_index "$d_sync_index" \
+            --arg sync_pairs "$d_sync_pairs" \
+            --arg schedule_file "$d_schedule_file" \
+            --arg flv_delay_seconds "$d_flv_delay_seconds" \
+            --arg flv_restart_nums "$d_flv_restart_nums" \
+            --arg hls_delay_seconds "$d_hls_delay_seconds" \
+            --arg hls_min_bitrate "$d_hls_min_bitrate" \
+            --arg hls_max_seg_size "$d_hls_max_seg_size" \
+            --arg hls_restart_nums "$d_hls_restart_nums" \
+            --arg hls_key_period "$d_hls_key_period" \
+            --arg hls_end_list "$d_hls_end_list" \
+            --arg anti_ddos_port "$d_anti_ddos_port" \
+            --arg anti_ddos_syn_flood "$d_anti_ddos_syn_flood" \
+            --arg anti_ddos_syn_flood_delay_seconds "$d_anti_ddos_syn_flood_delay_seconds" \
+            --arg anti_ddos_syn_flood_seconds "$d_anti_ddos_syn_flood_seconds" \
+            --arg anti_ddos "$d_anti_ddos" \
+            --arg anti_ddos_seconds "$d_anti_ddos_seconds" \
+            --arg anti_ddos_level "$d_anti_ddos_level" \
+            --arg anti_leech "$d_anti_leech" \
+            --arg anti_leech_restart_nums "$d_anti_leech_restart_nums" \
+            --arg anti_leech_restart_flv_changes "$d_anti_leech_restart_flv_changes" \
+            --arg anti_leech_restart_hls_changes "$d_anti_leech_restart_hls_changes" \
+            --arg recheck_period "$d_recheck_period" \
+            --arg version "$sh_ver" \
+            '{
+                proxy: $proxy,
+                xc_proxy: $xc_proxy,
+                user_agent: $user_agent,
+                headers: $headers,
+                cookies: $cookies,
+                playlist_name: $playlist_name,
+                seg_dir_name: $seg_dir_name,
+                seg_name: $seg_name,
+                seg_length: $seg_length | tonumber,
+                seg_count: $seg_count | tonumber,
+                video_codec: $video_codec,
+                audio_codec: $audio_codec,
+                video_audio_shift: $video_audio_shift,
+                draw_text: $draw_text,
+                quality: $quality,
+                bitrate: $bitrate,
+                resolution: $resolution,
+                const: $const | test("true"),
+                const_cbr: $const_cbr | test("true"),
+                encrypt: $encrypt | test("true"),
+                encrypt_session: $encrypt_session | test("true"),
+                keyinfo_name: $keyinfo_name,
+                key_name: $key_name,
+                input_flags: $input_flags,
+                output_flags: $output_flags,
+                sync: $sync | test("true"),
+                sync_file: $sync_file,
+                sync_index: $sync_index,
+                sync_pairs: $sync_pairs,
+                schedule_file: $schedule_file,
+                flv_delay_seconds: $flv_delay_seconds | tonumber,
+                flv_restart_nums: $flv_restart_nums | tonumber,
+                hls_delay_seconds: $hls_delay_seconds | tonumber,
+                hls_min_bitrate: $hls_min_bitrate | tonumber,
+                hls_max_seg_size: $hls_max_seg_size | tonumber,
+                hls_restart_nums: $hls_restart_nums | tonumber,
+                hls_key_period: $hls_key_period | tonumber,
+                hls_end_list: $hls_end_list | test("true"),
+                anti_ddos_port: $anti_ddos_port,
+                anti_ddos_syn_flood: $anti_ddos_syn_flood | test("true"),
+                anti_ddos_syn_flood_delay_seconds: $anti_ddos_syn_flood_delay_seconds | tonumber,
+                anti_ddos_syn_flood_seconds: $anti_ddos_syn_flood_seconds | tonumber,
+                anti_ddos: $anti_ddos | test("true"),
+                anti_ddos_seconds: $anti_ddos_seconds | tonumber,
+                anti_ddos_level: $anti_ddos_level | tonumber,
+                anti_leech: $anti_leech | test("true"),
+                anti_leech_restart_nums: $anti_leech_restart_nums | tonumber,
+                anti_leech_restart_flv_changes: $anti_leech_restart_flv_changes | test("true"),
+                anti_leech_restart_hls_changes: $anti_leech_restart_hls_changes | test("true"),
+                recheck_period: $recheck_period | tonumber,
+                version: $version
+            }'
+        )
+
+        json=true
+        jq_path='["default"]'
+        JQ update "$CHANNELS_FILE" "$default"
+
+        new_channels=()
+
+        for((i=0;i<chnls_count;i++));
+        do
+            while [[ ${chnls_headers[i]} =~ \\\\ ]]
+            do
+                chnls_headers[i]=${chnls_headers[i]//\\\\/\\}
+            done
+
+            if [[ ! ${chnls_input_flags[i]} =~ -copy_unknown ]] 
+            then
+                chnls_input_flags[i]="-copy_unknown ${chnls_input_flags[i]}"
+            fi
+
+            new_input_flags=${chnls_input_flags[i]//-timeout 2000000000/-rw_timeout 10000000}
+
+            if [ "$minor_ver" -lt 81 ] 
+            then
+                IFS=" " read -ra chnl_stream_links <<< "${chnls_stream_links[i]}"
+            else
+                IFS="${delimiters[0]}" read -ra chnl_stream_links <<< "${chnls_stream_links[i]}"
+            fi
+
+            stream_link="[]"
+
+            if [ -n "${chnl_stream_links:-}" ] 
+            then
+                for chnl_stream_link in "${chnl_stream_links[@]}"
+                do
+                    stream_link=$($JQ_FILE --arg stream_link "$chnl_stream_link" '. + [$stream_link]' <<< "$stream_link")
+                done
+            fi
+
+            chnl_subtitle="[]"
+
+            if [ -n "${chnls_subtitle_name[i]}" ] 
+            then
+                IFS="${delimiters[1]}" read -ra chnl_subtitles_name <<< "${chnls_subtitle_name[i]}"
+                IFS="${delimiters[1]}" read -ra chnl_subtitles_map <<< "${chnls_subtitle_map[i]}"
+
+                chnl_subtitles_if_null=("${chnls_subtitle_name[@]//*/}")
+
+                IFS="${delimiters[1]}" read -ra chnl_subtitles_language <<< "${chnls_subtitle_language[i]:-$chnl_subtitles_if_null}"
+                IFS="${delimiters[1]}" read -ra chnl_subtitles_default <<< "${chnls_subtitle_default[i]:-$chnl_subtitles_if_null}"
+                IFS="${delimiters[1]}" read -ra chnl_subtitles_auto_select <<< "${chnls_subtitle_auto_select[i]:-$chnl_subtitles_if_null}"
+
+                chnl_subtitles_indices=("${!chnls_subtitle_name[@]}")
+
+                for chnl_subtitles_index in "${chnl_subtitles_indices[@]}"
+                do
+                    chnl_subtitle=$(
+                        $JQ_FILE --arg name "${chnl_subtitles_name[chnl_subtitles_index]}" \
+                            --arg language "${chnl_subtitles_language[chnl_subtitles_index]:-}" \
+                            --arg default "${chnl_subtitles_default[chnl_subtitles_index]:-false}" \
+                            --arg auto_select "${chnl_subtitles_auto_select[chnl_subtitles_index]:-false}" \
+                            --arg map "${chnl_subtitles_map[chnl_subtitles_index]}" \
+                        '. + [
+                            {
+                                "name": $name,
+                                "language": $language,
+                                "default": $default | test("true"),
+                                "auto_select": $auto_select | test("true"),
+                                "map": $map | tonumber
+                            }
+                        ]' <<< "$chnl_subtitle"
+                    )
+                done
+            fi
+
+            chnl_schedule="[]"
+
+            if [ -n "${chnls_schedule_status[i]}" ] 
+            then
+                IFS="${delimiters[1]}" read -ra chnl_schedules_start_time <<< "${chnls_schedule_start_time[i]}"
+                IFS="${delimiters[1]}" read -ra chnl_schedules_end_time <<< "${chnls_schedule_end_time[i]}"
+                IFS="${delimiters[1]}" read -ra chnl_schedules_loop <<< "${chnls_schedule_loop[i]}"
+                IFS="${delimiters[1]}" read -ra chnl_schedules_auto_remove <<< "${chnls_schedule_auto_remove[i]}"
+                IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change <<< "${chnls_schedule_hls_change[i]}"
+                IFS="${delimiters[1]}" read -ra chnl_schedules_hls_change_once <<< "${chnls_schedule_hls_change_once[i]}"
+                IFS="${delimiters[1]}" read -ra chnl_schedules_status <<< "${chnls_schedule_status[i]}"
+
+                chnl_schedules_if_null="${chnls_schedule_hls_change[i]//false/}"
+                chnl_schedules_if_null="${chnl_schedules_if_null//true/}"
+
+                IFS="${delimiters[1]}" read -ra chnl_schedules_channel_name <<< "${chnls_schedule_channel_name[i]:-$chnl_schedules_if_null}${delimiters[1]}"
+
+                chnl_schedules_indices=("${!chnl_schedules_status[@]}")
+
+                for chnl_schedules_index in "${chnl_schedules_indices[@]}"
+                do
+                    chnl_schedule=$(
+                        $JQ_FILE --arg start_time "${chnl_schedules_start_time[chnl_schedules_index]}" \
+                            --arg end_time "${chnl_schedules_end_time[chnl_schedules_index]}" \
+                            --arg loop "${chnl_schedules_loop[chnl_schedules_index]:-false}" \
+                            --arg auto_remove "${chnl_schedules_auto_remove[chnl_schedules_index]:-false}" \
+                            --arg hls_change "${chnl_schedules_hls_change[chnl_schedules_index]:-true}" \
+                            --arg hls_change_once "${chnl_schedules_hls_change_once[chnl_schedules_index]:-false}" \
+                            --arg channel_name "${chnl_schedules_channel_name[chnl_schedules_index]:-}" \
+                            --arg status "${chnl_schedules_status[chnl_schedules_index]}" \
+                        '. + [
+                            {
+                                "start_time": $start_time | tonumber,
+                                "end_time": $end_time | tonumber,
+                                "loop": $loop | test("true"),
+                                "auto_remove": $auto_remove | test("true"),
+                                "hls_change": $hls_change | test("true"),
+                                "hls_change_once": $hls_change_once | test("true"),
+                                "channel_name": $channel_name,
+                                "status": $status | tonumber
+                            }
+                        ]' <<< "$chnl_schedule"
+                    )
+                done
+            fi
+
+            if [ "$minor_ver" -lt 83 ] 
+            then
+                if [ "${chnls_live[i]}" == "yes" ] 
+                then
+                    chnls_live[i]=true
+                else
+                    chnls_live[i]=false
+                fi
+
+                if [ "${chnls_sync[i]}" == "yes" ] 
+                then
+                    chnls_sync[i]=true
+                else
+                    chnls_sync[i]=false
+                fi
+
+                if [ "${chnls_const[i]}" == "yes" ] 
+                then
+                    chnls_const[i]=true
+                else
+                    chnls_const[i]=false
+                fi
+
+                if [ "${chnls_encrypt[i]}" == "yes" ] 
+                then
+                    chnls_encrypt[i]=true
+                else
+                    chnls_encrypt[i]=false
+                fi
+
+                if [ "${chnls_encrypt_session[i]}" == "yes" ] 
+                then
+                    chnls_encrypt_session[i]=true
+                else
+                    chnls_encrypt_session[i]=false
+                fi
+
+                if [ "${chnls_flv_h265[i]}" == "yes" ] 
+                then
+                    chnls_flv_h265[i]=true
+                else
+                    chnls_flv_h265[i]=false
+                fi
+            fi
+
+            new_channel=$(
+            $JQ_FILE -n --arg pid "${chnls_pid[i]}" --arg status "${chnls_status[i]}" --arg hide "${chnls_hide[i]}" \
+                --argjson stream_link "$stream_link" --arg live "${chnls_live[i]}" \
+                --arg proxy "${chnls_proxy[i]}" --arg xc_proxy "${chnls_xc_proxy[i]}" \
+                --arg user_agent "${chnls_user_agent[i]}" --arg headers "${chnls_headers[i]}" \
+                --arg cookies "${chnls_cookies[i]}" --arg output_dir_name "${chnls_output_dir_name[i]}" \
+                --arg playlist_name "${chnls_playlist_name[i]}" --arg seg_dir_name "${chnls_seg_dir_name[i]}" \
+                --arg seg_name "${chnls_seg_name[i]}" --arg seg_length "${chnls_seg_length[i]}" \
+                --arg seg_count "${chnls_seg_count[i]}" --arg video_codec "${chnls_video_codec[i]}" \
+                --arg audio_codec "${chnls_audio_codec[i]}" --arg video_audio_shift "${chnls_video_audio_shift[i]}" \
+                --argjson subtitle "$chnl_subtitle" --arg draw_text "${chnls_draw_text[i]}" \
+                --arg quality "${chnls_quality[i]}" --arg bitrate "${chnls_bitrate[i]}" \
+                --arg resolution "${chnls_resolution[i]}" --arg const "${chnls_const[i]}" \
+                --arg const_cbr "${chnls_const_cbr[i]}" --arg encrypt "${chnls_encrypt[i]}" \
+                --arg encrypt_session "${chnls_encrypt_session[i]}" --arg keyinfo_name "${chnls_keyinfo_name[i]}" \
+                --arg key_name "${chnls_key_name[i]}" --arg key_time "${chnls_key_time[i]}" \
+                --arg input_flags "$new_input_flags" --arg output_flags "${chnls_output_flags[i]}" \
+                --arg channel_name "${chnls_channel_name[i]}" --arg channel_time "${chnls_channel_time[i]}" \
+                --argjson schedule "$chnl_schedule" --arg sync "${chnls_sync[i]}" \
+                --arg sync_file "${chnls_sync_file[i]}" --arg sync_index "${chnls_sync_index[i]}" \
+                --arg sync_pairs "${chnls_sync_pairs[i]}" --arg hls_end_list "${chnls_hls_end_list[i]}" \
+                --arg flv_status "${chnls_flv_status[i]}" --arg flv_h265 "${chnls_flv_h265[i]}" \
+                --arg flv_push_link "${chnls_flv_push_link[i]}" --arg flv_pull_link "${chnls_flv_pull_link[i]}" \
+                '{
+                    pid: $pid | tonumber,
+                    status: $status,
+                    hide: $hide | test("true"),
+                    stream_link: $stream_link,
+                    live: $live | test("true"),
+                    proxy: $proxy,
+                    xc_proxy: $xc_proxy,
+                    user_agent: $user_agent,
+                    headers: $headers,
+                    cookies: $cookies,
+                    output_dir_name: $output_dir_name,
+                    playlist_name: $playlist_name,
+                    seg_dir_name: $seg_dir_name,
+                    seg_name: $seg_name,
+                    seg_length: $seg_length | tonumber,
+                    seg_count: $seg_count | tonumber,
+                    video_codec: $video_codec,
+                    audio_codec: $audio_codec,
+                    video_audio_shift: $video_audio_shift,
+                    subtitle: $subtitle,
+                    draw_text: $draw_text,
+                    quality: $quality,
+                    bitrate: $bitrate,
+                    resolution: $resolution,
+                    const: $const | test("true"),
+                    const_cbr: $const_cbr | test("true"),
+                    encrypt: $encrypt | test("true"),
+                    encrypt_session: $encrypt_session | test("true"),
+                    keyinfo_name: $keyinfo_name,
+                    key_name: $key_name,
+                    key_time: $key_time | tonumber,
+                    input_flags: $input_flags,
+                    output_flags: $output_flags,
+                    channel_name: $channel_name,
+                    channel_time: $channel_time | tonumber,
+                    schedule: $schedule,
+                    sync: $sync | test("true"),
+                    sync_file: $sync_file,
+                    sync_index: $sync_index,
+                    sync_pairs: $sync_pairs,
+                    hls_end_list: $hls_end_list | test("true"),
+                    flv_status: $flv_status,
+                    flv_h265: $flv_h265 | test("true"),
+                    flv_push_link: $flv_push_link,
+                    flv_pull_link: $flv_pull_link
+                }'
+            )
+
+            new_channels+=("$new_channel")
+        done
+
+        file=true
+        file_json=true
+        jq_path='["channels"]'
+        JQ update "$CHANNELS_FILE" new_channels
+    fi
+    printf '%s' "" > ${LOCK_FILE}
+}

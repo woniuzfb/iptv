@@ -1,0 +1,13 @@
+NginxIsBlockDirective()
+{
+    local level=("level_${1}_block_directives"[@])
+    local block_directives=("${!level}")
+    for block_directive in "${block_directives[@]}"
+    do
+        if [ "$block_directive" == "$2" ] 
+        then
+            return 0
+        fi
+    done
+    return 1
+}

@@ -1,0 +1,115 @@
+IbmCfAppCronExec()
+{
+    IFS="^" read -r app_name user_email path < <($JQ_FILE '.cf.cron|[([.job[].app]|join(" ")),([.job[].user_email]|join(" ")),([.job[].path]|join(" "))]|join("^")' "$IBM_CONFIG")
+    app_name=${app_name#\"}
+    path=${path%\"}
+
+    [ -z "$app_name" ] && Println "$error 请先设置定时重启任务\n" && exit 1
+
+    IbmUpdateCfCli
+
+    IFS=" " read -r -a apps_name <<< "$app_name"
+    IFS=" " read -r -a apps_user_email <<< "$user_email"
+    IFS=" " read -r -a apps_path <<< "$path"
+
+    IbmGetUsers
+
+    for((i=0;i<${#apps_name[@]};i++));
+    do
+        for((j=0;j<ibm_users_count;j++));
+        do
+            if [ "${ibm_users_email[j]}" == "${apps_user_email[i]}" ] 
+            then
+                ibm_user_pass=${ibm_users_pass[j]}
+                ibm_user_region=${ibm_users_region[j]}
+                ibm_user_resource_group=${ibm_users_resource_group[j]}
+                ibm_user_org=${ibm_users_org[j]}
+                ibm_user_space=${ibm_users_space[j]}
+
+                Println "$info 登录账号: ${apps_user_email[i]} [ $ibm_user_region ]"
+                ibmcloud login -u "${apps_user_email[i]}" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
+                ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
+
+                if [ "${apps_path[i]}" == "ibm_v2ray" ] || [ "${apps_path[i]}" == "ibm_xray" ]
+                then
+                    v2ray_rand_name=$(RandStr)
+                    cp -r "$IBM_APPS_ROOT/${apps_path[i]}" "$IBM_APPS_ROOT/ibm_$v2ray_rand_name"
+
+                    cd "$IBM_APPS_ROOT/ibm_$v2ray_rand_name/"
+                    mv "${apps_path[i]#*_}" "$v2ray_rand_name"
+                    if [ "${apps_path[i]}" == "ibm_xray" ] 
+                    then
+                        ./v2ctl convert config.json > "$v2ray_rand_name.pb"
+                    else
+                        ./v2ctl config config.json > "$v2ray_rand_name.pb"
+                    fi
+                    tar zcf "$v2ray_rand_name.tar.gz" "$v2ray_rand_name" "$v2ray_rand_name.pb"
+                    rm -f config.json
+                    rm -f config.json.lock
+                    rm -f "$v2ray_rand_name"
+                    rm -f "$v2ray_rand_name.pb"
+                    rm -f v2ctl
+
+                    ibmcloud cf create-app-manifest "${apps_name[i]}"
+
+                    routes=""
+                    while read -r line 
+                    do
+                        if [[ $line =~ disk_quota: ]] 
+                        then
+                            disk_quota=${line##* }
+                        elif [[ $line =~ instances: ]] 
+                        then
+                            instances=${line##* }
+                        elif [[ $line =~ memory: ]] 
+                        then
+                            memory=${line##* }
+                        elif [[ $line =~ routes: ]] || [[ $line =~ route: ]]
+                        then
+                            [ -n "$routes" ] && routes="$routes\n"
+                            routes="$routes$line"
+                        elif [[ $line =~ stack: ]] 
+                        then
+                            stack=${line##* }
+                        fi
+                    done < "${apps_name[i]}_manifest.yml"
+
+                    echo -e "---
+applications:
+- name: ${apps_name[i]}
+  command:
+    tar xzf $v2ray_rand_name.tar.gz &&
+    { ./$v2ray_rand_name -config ./$v2ray_rand_name.pb -format=pb & } &&
+    sleep 5 &&
+    rm ./$v2ray_rand_name.pb &&
+    rm ./$v2ray_rand_name
+  disk_quota: $disk_quota
+  instances: ${instances:-1}
+  memory: $memory
+  stack: $stack
+  buildpacks:
+    - go_buildpack
+  env:
+    GOPACKAGENAME: goapp
+" > "${apps_name[i]}_manifest.yml"
+
+                    printf '%s' 'package main
+
+func main() {
+
+}
+' > "main.go"
+                    ibmcloud cf push -f "${apps_name[i]}_manifest.yml"
+                    cd ..
+                    rm -rf "$IBM_APPS_ROOT/ibm_$v2ray_rand_name"
+                else
+                    cd "$IBM_APPS_ROOT/${apps_path[i]}/"
+                    ibmcloud cf create-app-manifest "${apps_name[i]}"
+                    ibmcloud cf push -f "${apps_name[i]}_manifest.yml"
+                fi
+                continue 2
+            fi
+        done
+        Println "$error APP ${apps_name[i]} 没有找到用户 ${apps_user_email[i]}"
+    done
+}

@@ -1,0 +1,105 @@
+V2rayListStats()
+{
+    V2rayGetStats
+
+    stats_list=""
+
+    for((i=0;i<inbounds_count;i++));
+    do
+        stats_list="$stats_list入站标签: ${green}${inbounds_tag[i]}${normal} "
+        if [ "$policy_system_stats_inbound_uplink" = true ] 
+        then
+            stats_list="$stats_list上行流量: ${green}$(V2rayGetTraffic inbound ${inbounds_tag[i]} uplink)${normal} "
+        else
+            stats_list="$stats_list上行流量: ${red}关闭${normal} "
+        fi
+        if [ "$policy_system_stats_inbound_downlink" = true ] 
+        then
+            stats_list="$stats_list下行流量: ${green}$(V2rayGetTraffic inbound ${inbounds_tag[i]} downlink)${normal}\n\n"
+        else
+            stats_list="$stats_list下行流量: ${red}关闭${normal}\n\n"
+        fi
+    done
+
+    V2rayGetOutbounds
+    for((i=0;i<outbounds_count;i++));
+    do
+        if [ -n "${outbounds_tag[i]}" ] 
+        then
+            stats_list="$stats_list出站标签: ${green}${outbounds_tag[i]}${normal} "
+            if [ "$policy_system_stats_outbound_uplink" = true ] 
+            then
+                stats_list="$stats_list上行流量: ${green}$(V2rayGetTraffic outbound ${outbounds_tag[i]} uplink)${normal} "
+            else
+                stats_list="$stats_list上行流量: ${red}关闭${normal} "
+            fi
+            if [ "$policy_system_stats_outbound_downlink" = true ] 
+            then
+                stats_list="$stats_list下行流量: ${green}$(V2rayGetTraffic outbound ${outbounds_tag[i]} downlink)${normal}\n\n"
+            else
+                stats_list="$stats_list下行流量: ${red}关闭${normal}\n\n"
+            fi
+        fi
+    done
+
+    Println "$stats_list"
+
+    echo
+    inquirer list_input "查看特定用户的流量" ny_options continue_yn
+    if [ "$continue_yn" == "$i18n_no" ] 
+    then
+        echo
+    else
+        V2rayListInboundAccounts
+
+        if [ "${inbounds_protocol[inbounds_index]}" == "http" ] 
+        then
+            Println "$error 用户没有邮箱, 不会开启统计\n"
+            exit 1
+        elif [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] 
+        then
+            for((i=0;i<policy_levels_count;i++));
+            do
+                if [ "${policy_levels_id[i]}" == "${inbounds_settings_user_level[inbounds_index]}" ] 
+                then
+                    if [ "${policy_levels_stats_user_uplink[i]}" = false ] 
+                    then
+                        Println "上行流量: ${red}关闭${normal}"
+                    else
+                        Println "上行流量: ${green}$(V2rayGetTraffic user ${inbounds_settings_email[inbounds_index]} uplink)${normal}"
+                    fi
+                    if [ "${policy_levels_stats_user_downlink[i]}" = false ] 
+                    then
+                        Println "下行流量: ${red}关闭${normal}\n"
+                    else
+                        Println "下行流量: ${green}$(V2rayGetTraffic user ${inbounds_settings_email[inbounds_index]} downlink)${normal}\n"
+                    fi
+                    break
+                fi
+            done
+            exit 0
+        fi
+
+        V2raySelectAccount
+
+        for((i=0;i<policy_levels_count;i++));
+        do
+            if [ "${policy_levels_id[i]}" == "${accounts_level[accounts_index]}" ] 
+            then
+                if [ "${policy_levels_stats_user_uplink[i]}" = false ] 
+                then
+                    Println "上行流量: ${red}关闭${normal}"
+                else
+                    Println "上行流量: ${green}$(V2rayGetTraffic user ${accounts_email[accounts_index]} uplink)${normal}"
+                fi
+                if [ "${policy_levels_stats_user_downlink[i]}" = false ] 
+                then
+                    Println "下行流量: ${red}关闭${normal}\n"
+                else
+                    Println "下行流量: ${green}$(V2rayGetTraffic user ${accounts_email[accounts_index]} downlink)${normal}\n"
+                fi
+                break
+            fi
+        done
+    fi
+}

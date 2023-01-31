@@ -1,0 +1,59 @@
+MonitorStart()
+{
+    if [ -s "$IPTV_ROOT/monitor.pid" ] || [ -s "$IPTV_ROOT/antiddos.pid" ]
+    then
+        Println "$error 监控已经在运行 !\n" && exit 1
+    else
+        if { [ -d "/usr/local/openresty" ] && [ ! -d "/usr/local/nginx" ]; } || { [ -s "/usr/local/openresty/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/openresty/nginx/logs/nginx.pid")" 2> /dev/null ; }
+        then
+            nginx_prefix="/usr/local/openresty/nginx"
+            nginx_name="openresty"
+            nginx_ctl="or"
+        elif { [ -d "/usr/local/nginx" ] && [ ! -d "/usr/local/openresty" ]; } || { [ -s "/usr/local/nginx/logs/nginx.pid" ] && kill -0 "$(< "/usr/local/nginx/logs/nginx.pid")" 2> /dev/null ; }
+        then
+            nginx_prefix="/usr/local/nginx"
+            nginx_name="nginx"
+            nginx_ctl="nx"
+        else
+            echo
+            inquirer list_input_index "没有检测到运行的 nginx, 是否使用 openresty" yn_options yn_options_index
+
+            if [ "$yn_options_index" -eq 0 ] 
+            then
+                nginx_prefix="/usr/local/openresty/nginx"
+                nginx_name="openresty"
+                nginx_ctl="or"
+            else
+                nginx_prefix="/usr/local/nginx"
+                nginx_name="nginx"
+                nginx_ctl="nx"
+            fi
+        fi
+
+        NGINX_FILE="$nginx_prefix/sbin/nginx"
+
+        MonitorSet
+
+        i18nGetMsg get_channel
+
+        if [ "$sh_debug" = true ] 
+        then
+            ( Monitor ) 
+        else
+            ( Monitor ) > /dev/null 2> /dev/null < /dev/null &
+        fi
+
+        Println "$info 监控启动成功 !\n"
+        AntiDDoSSet
+
+        if [ "$sh_debug" = true ] 
+        then
+            ( AntiDDoS ) 
+        else
+            ( AntiDDoS ) > /dev/null 2> /dev/null < /dev/null &
+        fi
+
+        Println "$info AntiDDoS 启动成功 !\n"
+        rm -f "$IPTV_ROOT/ip.pid"
+    fi
+}

@@ -1,0 +1,90 @@
+sh_test=false
+sh_debug=false
+monitor=false
+
+export LANGUAGE=
+export LC_ALL=
+export LANG=en_US.UTF-8
+
+red='\033[31m'
+green='\033[32m'
+yellow='\033[33m'
+cyan='\033[36m'
+white='\033[37m'
+blue='\033[94m'
+normal='\033[0m'
+dim_underlined='\033[37;4;2m'
+indent_6='\r\033[6C'
+indent_20='\r\033[20C'
+
+# files
+SH_LINK="https://woniuzfb.github.io/iptv/iptv.sh"
+SH_FALLBACK="cn.epub.fun"
+SH_FILE="/usr/local/bin/tv"
+i18n_FILE="/usr/local/bin/tv-i18n"
+OR_FILE="/usr/local/bin/or"
+NX_FILE="/usr/local/bin/nx"
+XC_FILE="/usr/local/bin/cx"
+ARM_FILE="/usr/local/bin/arm"
+PVE_FILE="/usr/local/bin/pve"
+
+# iptv
+IPTV_ROOT="/usr/local/iptv"
+FFMPEG_LOG_ROOT="$IPTV_ROOT/ffmpeg"
+FFMPEG_MIRROR_LINK="http://pngquant.com/ffmpeg"
+FFMPEG_MIRROR_ROOT="$IPTV_ROOT/ffmpeg"
+LOCK_FILE="$IPTV_ROOT/lock"
+JQ_FILE="$IPTV_ROOT/jq"
+CHANNELS_FILE="$IPTV_ROOT/channels.json"
+MONITOR_LOG="$IPTV_ROOT/monitor.log"
+LOGROTATE_CONFIG="$IPTV_ROOT/logrotate"
+CRON_FILE="$IPTV_ROOT/cron"
+XTREAM_CODES="$IPTV_ROOT/xtream_codes"
+XTREAM_CODES_EXAM="$IPTV_ROOT/xtream_codes_exam"
+NODE_ROOT="$IPTV_ROOT/node"
+IP_DENY="$IPTV_ROOT/ip.deny"
+IP_LOG="$IPTV_ROOT/ip.log"
+LIVE_ROOT="$IPTV_ROOT/live"
+SERVICES_FILE="$IPTV_ROOT/services.json"
+VIP_FILE="$IPTV_ROOT/vip.json"
+VIP_CHANNELS_LINK="$FFMPEG_MIRROR_LINK/vip_channels.json"
+VIP_CHANNELS_FILE="$IPTV_ROOT/vip_channels.json"
+VIP_ROOT="$IPTV_ROOT/vip"
+VIP_USERS_ROOT="$VIP_ROOT/users"
+C_ROOT="$IPTV_ROOT/c"
+MD5SUM_FILE="$C_ROOT/md5sum"
+MD5SUM_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/main/scripts/md5sum.c"
+MD5SUM_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/md5sum.c"
+DEFAULT_DEMOS="default.json"
+TS_CHANNELS="channels.json"
+XTREAM_CODES_CHANNELS="xtream_codes"
+USER_AGENT_BROWSER="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.55 Safari/537.36"
+USER_AGENT_TV="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
+USER_AGENT_PHONE="iPhone; CPU iPhone OS 15_2 like Mac OS X"
+
+# v2ray
+V2_FILE="/usr/local/bin/v2"
+V2_LINK="https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh"
+V2_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/v2ray_install-release.sh"
+V2CTL_FILE="/usr/local/bin/v2ctl"
+V2_CONFIG="/usr/local/etc/v2ray/config.json"
+
+# xray
+X_FILE="/usr/local/bin/x"
+
+# cloudflare
+CF_FILE="/usr/local/bin/cf"
+CF_CONFIG="$HOME/cloudflare.json"
+CF_WORKERS_ROOT="$HOME/workers"
+CF_WORKERS_FILE="$CF_WORKERS_ROOT/cloudflare_workers.py"
+CF_WORKERS_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/main/scripts/cloudflare_workers.py"
+CF_WORKERS_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/cloudflare_workers.py"
+STREAM_PROXY_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/main/scripts/stream_proxy.js"
+STREAM_PROXY_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/stream_proxy.js"
+XTREAM_CODES_PROXY_LINK="https://raw.githubusercontent.com/woniuzfb/iptv/main/scripts/xtream_codes_proxy.js"
+XTREAM_CODES_PROXY_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/xtream_codes_proxy.js"
+
+# ibm cf
+IBM_FILE="/usr/local/bin/ibm"
+IBM_APPS_ROOT="$HOME/ibm_apps"
+IBM_CONFIG="$HOME/ibm.json"

@@ -1,0 +1,10 @@
+NginxAddEnabled()
+{
+    directive_include='{"directive":"include","args":["sites_enabled/*.conf"]}'
+    directives=( include )
+    directives_val=()
+    check_directives=()
+    check_args=( '["sites_enabled/*.conf"]' )
+
+    NginxAddDirective 2
+}

@@ -1,0 +1,39 @@
+VipDisable()
+{
+    # deprecated
+    if [ -s "/tmp/vip.pid" ] 
+    then
+        vip_pid=$(< /tmp/vip.pid)
+        if kill -0 "$vip_pid" 2> /dev/null
+        then
+            kill "$vip_pid" 2> /dev/null
+            MonitorLog "关闭 VIP  PID $vip_pid !"
+            Println "$info VIP 关闭成功\n"
+        else
+            Println "$error VIP 未开启\n"
+        fi
+        rm -f "/tmp/vip.pid"
+    elif [ -s "$IPTV_ROOT/vip.pid" ] 
+    then
+        PID=$(< "$IPTV_ROOT/vip.pid")
+        if kill -0 "$PID" 2> /dev/null 
+        then
+            Println "$info 关闭 VIP, 稍等..."
+            kill "$PID" 2> /dev/null
+            if flock -E 1 -w 20 -x "$IPTV_ROOT/vip.pid" rm -f "$IPTV_ROOT/vip.pid"
+            then
+                MonitorLog "关闭 VIP PID $PID !"
+                Println "$info VIP 关闭成功 !\n"
+            else
+                Println "$error VIP 关闭超时, 请重试\n"
+                exit 1
+            fi
+        else
+            rm -f "$IPTV_ROOT/vip.pid"
+            Println "$error VIP 未开启\n"
+        fi
+    else
+        [ -e "$IPTV_ROOT/vip.pid" ] && rm -f "$IPTV_ROOT/vip.pid"
+        Println "$error VIP 未开启\n"
+    fi
+}

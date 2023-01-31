@@ -1,0 +1,200 @@
+Println()
+{
+    printf '\n%b\n' "$1"
+}
+
+Trim()
+{
+    local text="${!1}"
+    text="${text#"${text%%[![:space:]]*}"}"
+    text="${text%"${text##*[![:space:]]}"}"
+    read -r ${1} <<< "$text"
+}
+
+RandStr()
+{
+    str_size=8
+    str_array=(
+        q w e r t y u i o p a s d f g h j k l z x c v b n m Q W E R T Y U I O P A S D
+F G H J K L Z X C V B N M
+    )
+    str_array_size=${#str_array[*]}
+    str_len=0
+    rand_str=""
+    while [[ $str_len -lt $str_size ]]
+    do
+        str_index=$((RANDOM%str_array_size))
+        rand_str="$rand_str${str_array[str_index]}"
+        str_len=$((str_len+1))
+    done
+    echo "$rand_str"
+}
+
+# printf %s "$1" | jq -s -R -r @uri
+Urlencode()
+{
+    local LC_ALL='' LANG=C i c e=''
+    for ((i=0;i<${#1};i++))
+    do
+        c=${1:$i:1}
+        [[ $c =~ [a-zA-Z0-9\.\~\_\-] ]] || printf -v c '%%%02x' "'$c"
+        e+="$c"
+    done
+    echo "$e"
+}
+
+UrlencodeUpper()
+{
+    local LC_ALL='' LANG=C i c e=''
+    for ((i=0;i<${#1};i++))
+    do
+        c=${1:$i:1}
+        [[ $c =~ [a-zA-Z0-9\.\~\_\-] ]] || printf -v c '%%%02X' "'$c"
+        e+="$c"
+    done
+    echo "$e"
+}
+
+Urldecode()
+{
+    local i="${*//+/ }"
+    echo -e "${i//%/\\x}"
+}
+
+GetServerIp()
+{
+    ip=$(dig +short myip.opendns.com @resolver1.opendns.com) || true
+    if [ -z "$ip" ] || [ "${#ip}" -gt 15 ]
+    then
+        ip=$(curl -s whatismyip.akamai.com)
+    fi
+    [ -z "$ip" ] && ip=$(curl -s ipv4.icanhazip.com)
+    [ -z "$ip" ] && ip=$(curl -s api.ip.sb/ip)
+    [ -z "$ip" ] && ip=$(curl -s ipinfo.io/ip)
+    echo "$ip"
+}
+
+GetFreePort()
+{
+    if [ -n "${1:-}" ] && [ -n "${2:-}" ]
+    then
+        lport=$1
+        uport=$2
+    else
+        read lport uport < /proc/sys/net/ipv4/ip_local_port_range
+    fi
+
+    while true
+    do
+        candidate=$((lport+RANDOM%(uport-lport)))
+        if ! ( echo -n "" >/dev/tcp/127.0.0.1/"$candidate" )  >/dev/null 2>&1
+        then
+            echo "$candidate"
+            break
+        fi
+    done
+}
+
+GetRandomMac()
+{
+    echo $RANDOM|md5sum|sed 's/../&:/g'|cut -c 1-17
+}
+
+PrepTerm()
+{
+    unset term_child_pid
+    unset term_kill_needed
+    unset term_signal
+    trap 'HandleTerm' TERM
+}
+
+HandleTerm()
+{
+    if [ -n "${term_child_pid:-}" ]
+    then
+        if [ "${pkill:-0}" -eq 1 ] 
+        then
+            pkill -TERM -P "$term_child_pid" 2> /dev/null || true
+        elif [ "${force_exit:-0}" -eq 1 ] 
+        then
+            kill -9 "$term_child_pid" 2> /dev/null || true
+        else
+            kill -TERM "$term_child_pid" 2> /dev/null || true
+        fi
+    else
+        term_kill_needed=1
+    fi
+}
+
+WaitTerm()
+{
+    term_child_pid=$!
+    if [ "${term_kill_needed:-0}" -eq 1 ]
+    then
+        if [ "${pkill:-0}" -eq 1 ] 
+        then
+            pkill -TERM -P "$term_child_pid" 2> /dev/null || true
+        elif [ "${force_exit:-0}" -eq 1 ] 
+        then
+            kill -9 "$term_child_pid" 2> /dev/null || true
+        else
+            kill -TERM "$term_child_pid" 2> /dev/null || true
+        fi
+    fi
+    wait $term_child_pid 2> /dev/null || term_signal=1
+    trap - TERM
+    wait $term_child_pid 2> /dev/null || true
+    if [ "${term_signal:-0}" -eq 1 ] 
+    then
+        rm -rf "${delete_on_term:-notfound}"
+        exit 1
+    fi
+}
+
+Include utils/system "$@"
+
+Include utils/inquirer "$@"
+
+Include utils/spinner "$@"
+
+Include utils/progress "$@"
+
+Include utils/shfile "$@"
+
+Include utils/python "$@"
+
+Include utils/crossplane "$@"
+
+Include utils/go "$@"
+
+Include utils/ffmpeg "$@"
+
+Include utils/jq "$@"
+
+Include utils/youtube "$@"
+
+Include utils/openssl "$@"
+
+Include utils/imagemagick "$@"
+
+Include utils/pdf2html "$@"
+
+Include utils/postfix "$@"
+
+Include utils/tesseract "$@"
+
+Include utils/imgcat "$@"
+
+Include utils/git "$@"
+
+Include utils/nodejs "$@"
+
+Include utils/mongodb "$@"
+
+Include utils/wrangler "$@"
+
+Include utils/apt "$@"
+
+Include utils/vim "$@"
+
+Include utils/dnscrypt "$@"

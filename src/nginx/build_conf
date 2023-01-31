@@ -1,0 +1,31 @@
+NginxBuildConf()
+{
+    if TMP_FILE=$(mktemp -q)
+    then
+        chmod +r "$TMP_FILE"
+    else
+        exit $?
+    fi
+
+    trap '
+        rm -f "$TMP_FILE"
+    ' EXIT
+
+    if [ "$parse_domain" -eq 1 ] 
+    then
+        parse_out_domain=${!1}
+        jq_path='["config",0,"parsed",0,"block"]'
+        JQs get parse_out_domain domain_conf
+        jq_path='["config",0,"parsed"]'
+        JQs replace parse_out_domain "$domain_conf"
+        echo "$parse_out_domain" > "$TMP_FILE"
+    else
+        echo "${!1}" > "$TMP_FILE"
+    fi
+
+    crossplane build -f --no-headers "$TMP_FILE"
+
+    rm -f "$TMP_FILE"
+
+    trap - EXIT
+}

@@ -1,0 +1,366 @@
+NginxAddDirective()
+{
+    case $1 in
+        1) 
+            local level_1_index
+            new_directive=""
+            add_count=0
+            level_1_add_indices=()
+
+            for((directive_i=0;directive_i<${#directives[@]};directive_i++));
+            do
+                if [ "${check_directives[directive_i]:-1}" -eq 1 ] 
+                then
+                    for((level_1_index=0;level_1_index<level_1_count;level_1_index++));
+                    do
+                        if [ "${level_1_directive_arr[level_1_index]}" == "${directives[directive_i]}" ] 
+                        then
+                            if [ -n "${check_args[directive_i]:-}" ] 
+                            then
+                                jq_path='["config",0,"parsed",'"$level_1_index"',"args"]'
+                                JQs get parse_out args
+                                if [ "$args" == "${check_args[directive_i]}" ] 
+                                then
+                                    level_1_add_indices+=("$level_1_index")
+                                    continue 2
+                                fi
+                            else
+                                level_1_add_indices+=("$level_1_index")
+                                continue 2
+                            fi
+                        fi
+                    done
+                fi
+
+                level_1_add_indices+=("$((level_1_count+add_count))")
+                add_count=$((add_count+1))
+                jq_path='["config",0,"parsed"]'
+                new_directive="directive_${directives_val[directive_i]:-${directives[directive_i]}}"
+                JQs add parse_out "[${!new_directive}]"
+            done
+
+            if [ -n "$new_directive" ] 
+            then
+                NginxGetConfig
+                updated=1
+            fi
+        ;;
+        2) 
+            local level_1_index level_2_index
+            new_directive=""
+            add_count=0
+            level_2_add_indices=()
+
+            for((directive_i=0;directive_i<${#directives[@]};directive_i++));
+            do
+                level_1_index=${level_1_add_indices[directive_i]:-${level_1_add_indices[0]}}
+
+                level_2_directive_d1=${level_2_directive_arr[level_1_index]}
+
+                level_2_directive_d1_arr_count=0
+
+                if [ -n "$level_2_directive_d1" ] 
+                then
+                    IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
+                    level_2_directive_d1_arr_count=${#level_2_directive_d1_arr[@]}
+                fi
+
+                if [ "${check_directives[directive_i]:-1}" -eq 1 ] 
+                then
+                    for((level_2_index=0;level_2_index<level_2_directive_d1_arr_count;level_2_index++));
+                    do
+                        if [ "${level_2_directive_d1_arr[level_2_index]}" == "${directives[directive_i]}" ] 
+                        then
+                            if [ -n "${check_args[directive_i]:-}" ] 
+                            then
+                                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"args"]'
+                                JQs get parse_out args
+                                if [ "$args" == "${check_args[directive_i]}" ] 
+                                then
+                                    level_2_add_indices+=("$level_2_index")
+                                    continue 2
+                                fi
+                            else
+                                level_2_add_indices+=("$level_2_index")
+                                continue 2
+                            fi
+                        fi
+                    done
+                fi
+
+                level_2_add_indices+=("$((level_2_directive_d1_arr_count+add_count))")
+                add_count=$((add_count+1))
+                jq_path='["config",0,"parsed",'"$level_1_index"',"block"]'
+                new_directive="directive_${directives_val[directive_i]:-${directives[directive_i]}}"
+                JQs add parse_out "[${!new_directive}]"
+            done
+
+            if [ -n "$new_directive" ] 
+            then
+                NginxGetConfig
+                updated=1
+            fi
+        ;;
+        3) 
+            local level_1_index level_2_index level_3_index
+            new_directive=""
+            add_count=0
+            level_3_add_indices=()
+
+            for((directive_i=0;directive_i<${#directives[@]};directive_i++));
+            do
+                level_1_index=${level_1_add_indices[directive_i]:-${level_1_add_indices[0]}}
+                level_2_index=${level_2_add_indices[directive_i]:-${level_2_add_indices[0]}}
+
+                level_3_directive_d1=${level_3_directive_arr[level_1_index]}
+                IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+
+                level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
+
+                level_3_directive_d2_arr_count=0
+
+                if [ -n "$level_3_directive_d2" ] 
+                then
+                    IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
+                    level_3_directive_d2_arr_count=${#level_3_directive_d2_arr[@]}
+                fi
+
+                if [ "${check_directives[directive_i]:-1}" -eq 1 ] 
+                then
+                    for((level_3_index=0;level_3_index<level_3_directive_d2_arr_count;level_3_index++));
+                    do
+                        if [ "${level_3_directive_d2_arr[level_3_index]}" == "${directives[directive_i]}" ] 
+                        then
+                            if [ -n "${check_args[directive_i]:-}" ] 
+                            then
+                                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"args"]'
+                                JQs get parse_out args
+                                if [ "$args" == "${check_args[directive_i]}" ] 
+                                then
+                                    level_3_add_indices+=("$level_3_index")
+                                    continue 2
+                                fi
+                            else
+                                level_3_add_indices+=("$level_3_index")
+                                continue 2
+                            fi
+                        fi
+                    done
+                fi
+
+                level_3_add_indices+=("$((level_3_directive_d2_arr_count+add_count))")
+                add_count=$((add_count+1))
+                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block"]'
+                new_directive="directive_${directives_val[directive_i]:-${directives[directive_i]}}"
+                JQs add parse_out "[${!new_directive}]"
+            done
+
+            if [ -n "$new_directive" ] 
+            then
+                NginxGetConfig
+                updated=1
+            fi
+        ;;
+        4) 
+            local level_1_index level_2_index level_3_index level_4_index
+            new_directive=""
+            add_count=0
+            level_4_add_indices=()
+
+            for((directive_i=0;directive_i<${#directives[@]};directive_i++));
+            do
+                level_1_index=${level_1_add_indices[directive_i]:-${level_1_add_indices[0]}}
+                level_2_index=${level_2_add_indices[directive_i]:-${level_2_add_indices[0]}}
+                level_3_index=${level_3_add_indices[directive_i]:-${level_3_add_indices[0]}}
+
+                level_4_directive_d1=${level_4_directive_arr[level_1_index]}
+                IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
+
+                level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
+                IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
+
+                level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
+
+                level_4_directive_d3_arr_count=0
+
+                if [ -n "$level_4_directive_d3" ] 
+                then
+                    IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
+                    level_4_directive_d3_arr_count=${#level_4_directive_d3_arr[@]}
+                fi
+
+                if [ "${check_directives[directive_i]:-1}" -eq 1 ] 
+                then
+                    for((level_4_index=0;level_4_index<level_4_directive_d3_arr_count;level_4_index++));
+                    do
+                        if [ "${level_4_directive_d3_arr[level_4_index]}" == "${directives[directive_i]}" ] 
+                        then
+                            if [ -n "${check_args[directive_i]:-}" ] 
+                            then
+                                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block",'"$level_4_index"',"args"]'
+                                JQs get parse_out args
+                                if [ "$args" == "${check_args[directive_i]}" ] 
+                                then
+                                    level_4_add_indices+=("$level_4_index")
+                                    continue 2
+                                fi
+                            else
+                                level_4_add_indices+=("$level_4_index")
+                                continue 2
+                            fi
+                        fi
+                    done
+                fi
+
+                level_4_add_indices+=("$((level_4_directive_d3_arr_count+add_count))")
+                add_count=$((add_count+1))
+                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block"]'
+                new_directive="directive_${directives_val[directive_i]:-${directives[directive_i]}}"
+                JQs add parse_out "[${!new_directive}]"
+            done
+
+            if [ -n "$new_directive" ] 
+            then
+                NginxGetConfig
+                updated=1
+            fi
+        ;;
+        5) 
+            local level_1_index level_2_index level_3_index level_4_index level_5_index
+            new_directive=""
+            add_count=0
+            level_5_add_indices=()
+
+            for((directive_i=0;directive_i<${#directives[@]};directive_i++));
+            do
+                level_1_index=${level_1_add_indices[directive_i]:-${level_1_add_indices[0]}}
+                level_2_index=${level_2_add_indices[directive_i]:-${level_2_add_indices[0]}}
+                level_3_index=${level_3_add_indices[directive_i]:-${level_3_add_indices[0]}}
+                level_4_index=${level_4_add_indices[directive_i]:-${level_4_add_indices[0]}}
+
+                level_5_directive_d1=${level_5_directive_arr[level_1_index]}
+                IFS="${delimiters[4]}" read -r -a level_5_directive_d1_arr <<< "$level_5_directive_d1${delimiters[4]}"
+
+                level_5_directive_d2=${level_5_directive_d1_arr[level_2_index]}
+                IFS="${delimiters[3]}" read -r -a level_5_directive_d2_arr <<< "$level_5_directive_d2${delimiters[3]}"
+
+                level_5_directive_d3=${level_5_directive_d2_arr[level_3_index]}
+                IFS="${delimiters[2]}" read -r -a level_5_directive_d3_arr <<< "$level_5_directive_d3${delimiters[2]}"
+
+                level_5_directive_d4=${level_5_directive_d3_arr[level_4_index]}
+
+                level_5_directive_d4_arr_count=0
+
+                if [ -n "$level_5_directive_d4" ] 
+                then
+                    IFS="${delimiters[1]}" read -r -a level_5_directive_d4_arr <<< "$level_5_directive_d4${delimiters[1]}"
+                    level_5_directive_d4_arr_count=${#level_5_directive_d4_arr[@]}
+                fi
+
+                if [ "${check_directives[directive_i]:-1}" -eq 1 ] 
+                then
+                    for((level_5_index=0;level_5_index<level_5_directive_d4_arr_count;level_5_index++));
+                    do
+                        if [ "${level_5_directive_d4_arr_count[level_5_index]}" == "${directives[directive_i]}" ] 
+                        then
+                            if [ -n "${check_args[directive_i]:-}" ] 
+                            then
+                                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block",'"$level_4_index"',"block",'"$level_5_index"',"args"]'
+                                JQs get parse_out args
+                                if [ "$args" == "${check_args[directive_i]}" ] 
+                                then
+                                    level_5_add_indices+=("$level_5_index")
+                                    continue 2
+                                fi
+                            else
+                                level_5_add_indices+=("$level_5_index")
+                                continue 2
+                            fi
+                        fi
+                    done
+                fi
+
+                level_5_add_indices+=("$((level_5_directive_d4_arr_count+add_count))")
+                add_count=$((add_count+1))
+                jq_path='["config",0,"parsed",'"$level_1_index"',"block",'"$level_2_index"',"block",'"$level_3_index"',"block",'"$level_4_index"',"block"]'
+                new_directive="directive_${directives_val[directive_i]:-${directives[directive_i]}}"
+                JQs add parse_out "[${!new_directive}]"
+            done
+
+            if [ -n "$new_directive" ] 
+            then
+                NginxGetConfig
+                updated=1
+            fi
+        ;;
+        level_1|level_2|level_3|level_4|level_5) 
+            level_id=${1#*_}
+
+            zh=( "" "一" "二" "三" "四" "五" )
+
+            Println "$tip 空字符用 '' 表示"
+            inquirer text_input "输入${zh[level_id]}级指令: " new_directive "$i18n_cancel"
+
+            if [ "$new_directive" == "$i18n_cancel" ] 
+            then
+                return 0
+            fi
+
+            if [ "$new_directive" == "''" ] 
+            then
+                new_directive=""
+            fi
+
+            NginxInputArgs
+
+            is_block_directive=0
+
+            if [ "$level_id" -ne 5 ] 
+            then
+                Println "$tip 如果需要添加下级指令请选择 是"
+                inquirer list_input "是否是 块 指令" ny_options yn_option
+
+                if [ "$yn_option" == "$i18n_yes" ] 
+                then
+                    is_block_directive=1
+                fi
+            fi
+
+            if [ "$is_block_directive" -eq 1 ]
+            then
+                directive=$(
+                    $JQ_FILE -n --arg directive "$new_directive" --argjson args "[$new_args]" \
+                    '{
+                        "directive": $directive,
+                        "args": $args,
+                        "block":[]
+                    }'
+                )
+            else
+                directive=$(
+                    $JQ_FILE -n --arg directive "$new_directive" --argjson args "[$new_args]" \
+                    '{
+                        "directive": $directive,
+                        "args": $args
+                    }'
+                )
+            fi
+
+            jq_path='"config",0,"parsed"'
+
+            for((level_i=1;level_i<level_id;level_i++));
+            do
+                index_name="level_${level_i}_index"
+                jq_path="$jq_path,${!index_name},\"block\""
+            done
+
+            jq_path="[$jq_path]"
+            JQs add parse_out "[$directive]"
+
+            NginxBuildConf parse_out
+            NginxGetConfig
+
+            Println "$info 指令 $new_directive 添加成功\n"
+        ;;
+    esac
+}

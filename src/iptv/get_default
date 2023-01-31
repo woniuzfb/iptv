@@ -1,0 +1,89 @@
+GetDefault()
+{
+    if [ -n "${d_version:-}" ] 
+    then
+        return 0
+    fi
+
+    IFS=$'\001\t' read -r d_proxy d_xc_proxy d_user_agent d_headers d_cookies d_playlist_name \
+    d_seg_dir_name d_seg_name d_seg_length d_seg_count d_video_codec d_audio_codec \
+    d_video_audio_shift d_draw_text d_quality d_bitrate d_resolution d_const d_const_cbr \
+    d_encrypt d_encrypt_session d_keyinfo_name d_key_name d_input_flags d_output_flags d_sync d_sync_file \
+    d_sync_index d_sync_pairs d_schedule_file d_flv_delay_seconds d_flv_restart_nums \
+    d_hls_delay_seconds d_hls_min_bitrate d_hls_max_seg_size d_hls_restart_nums \
+    d_hls_key_period d_hls_end_list d_anti_ddos_port d_anti_ddos_syn_flood d_anti_ddos_syn_flood_delay_seconds \
+    d_anti_ddos_syn_flood_seconds d_anti_ddos d_anti_ddos_seconds d_anti_ddos_level \
+    d_anti_leech d_anti_leech_restart_nums d_anti_leech_restart_flv_changes \
+    d_anti_leech_restart_hls_changes d_recheck_period d_version < <($JQ_FILE -c -r '
+    .default as $default | 
+    reduce ({proxy,xc_proxy,user_agent,headers,cookies,playlist_name,seg_dir_name,seg_name,seg_length,
+    seg_count,video_codec,audio_codec,video_audio_shift,draw_text,quality,bitrate,resolution,const,
+    const_cbr,encrypt,encrypt_session,keyinfo_name,key_name,input_flags,output_flags,sync,sync_file,sync_index,
+    sync_pairs,schedule_file,flv_delay_seconds,flv_restart_nums,hls_delay_seconds,hls_min_bitrate,
+    hls_max_seg_size,hls_restart_nums,hls_key_period,hls_end_list,anti_ddos_port,anti_ddos_syn_flood,
+    anti_ddos_syn_flood_delay_seconds,anti_ddos_syn_flood_seconds,anti_ddos,anti_ddos_seconds,
+    anti_ddos_level,anti_leech,anti_leech_restart_nums,anti_leech_restart_flv_changes,
+    anti_leech_restart_hls_changes,recheck_period,version}|keys_unsorted[]) as $key ([];
+        $default[$key] as $val | if $val then
+            . + [($val | tostring) + "\u0001"]
+        else
+            . + ["\u0001"]
+        end
+    )|@tsv' "$CHANNELS_FILE")
+
+    if [ -z "$d_version" ]
+    then
+        return 0
+    fi
+
+    d_user_agent="${d_user_agent:-$USER_AGENT_TV}"
+    d_cookies="${d_cookies:-stb_lang=en; timezone=Europe/Amsterdam}"
+
+    v_or_a=${d_video_audio_shift%_*}
+
+    if [ "$v_or_a" == "v" ] 
+    then
+        d_video_shift=${d_video_audio_shift#*_}
+        d_video_audio_shift_text=$(eval_gettext "画面延迟 \$d_video_shift 秒")
+    elif [ "$v_or_a" == "a" ] 
+    then
+        d_audio_shift=${d_video_audio_shift#*_}
+        d_video_audio_shift_text=$(eval_gettext "声音延迟 \$d_audio_shift 秒")
+    else
+        d_video_audio_shift_text=$i18n_not_set
+    fi
+
+    d_const_cbr=${d_const_cbr:-false}
+    d_encrypt=${d_encrypt:-false}
+    d_encrypt_session=${d_encrypt_session:-false}
+    d_sync=${d_sync:-true}
+    d_flv_delay_seconds=${d_flv_delay_seconds:-20}
+    d_flv_restart_nums=${d_flv_restart_nums:-20}
+    d_hls_delay_seconds=${d_hls_delay_seconds:-120}
+    d_hls_min_bitrate=${d_hls_min_bitrate:-500}
+    d_hls_max_seg_size=${d_hls_max_seg_size:-5}
+    d_hls_restart_nums=${d_hls_restart_nums:-20}
+    d_hls_key_period=${d_hls_key_period:-30}
+    d_hls_end_list=${d_hls_end_list:-false}
+    d_anti_ddos_port=${d_anti_ddos_port:-80}
+    d_anti_ddos_port_text=${d_anti_ddos_port//,/ }
+    d_anti_ddos_port_text=${d_anti_ddos_port_text//:/-}
+    d_anti_ddos_syn_flood=${d_anti_ddos_syn_flood:-false}
+    d_anti_ddos_syn_flood_delay_seconds=${d_anti_ddos_syn_flood_delay_seconds:-3}
+    d_anti_ddos_syn_flood_seconds=${d_anti_ddos_syn_flood_seconds:-3600}
+    d_anti_ddos=${d_anti_ddos:-false}
+    d_anti_ddos_seconds=${d_anti_ddos_seconds:-120}
+    d_anti_ddos_level=${d_anti_ddos_level:-6}
+    d_anti_leech=${d_anti_leech:-false}
+    d_anti_leech_restart_nums=${d_anti_leech_restart_nums:-0}
+    d_anti_leech_restart_flv_changes=${d_anti_leech_restart_flv_changes:-false}
+    d_anti_leech_restart_hls_changes=${d_anti_leech_restart_hls_changes:-false}
+    d_recheck_period=${d_recheck_period:-0}
+
+    if [ "$d_recheck_period" -eq 0 ] 
+    then
+        d_recheck_period_text=$i18n_not_set
+    else
+        d_recheck_period_text="$d_recheck_period"
+    fi
+}

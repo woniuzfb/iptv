@@ -1,0 +1,19 @@
+NginxAddSsl()
+{
+    directive_ssl_session_cache='{"directive":"ssl_session_cache","args":["shared:SSL:20m"]}'
+    directive_ssl_session_timeout='{"directive":"ssl_session_timeout","args":["2h"]}'
+    directive_ssl_prefer_server_ciphers='{"directive":"ssl_prefer_server_ciphers","args":["on"]}'
+    directive_ssl_protocols='{"directive":"ssl_protocols","args":["TLSv1.2","TLSv1.3"]}'
+    directive_ssl_ciphers='{"directive":"ssl_ciphers","args":["HIGH:!aNULL:!MD5"]}'
+    directive_ssl_stapling='{"directive":"ssl_stapling","args":["on"]}'
+    directive_ssl_stapling_verify='{"directive":"ssl_stapling_verify","args":["on"]}'
+    directive_resolver='{"directive":"resolver","args":["8.8.8.8"]}'
+
+    directives=( ssl_session_cache ssl_session_timeout ssl_prefer_server_ciphers ssl_protocols 
+        ssl_ciphers ssl_stapling ssl_stapling_verify resolver )
+    directives_val=()
+    check_directives=()
+    check_args=()
+
+    NginxAddDirective 2
+}

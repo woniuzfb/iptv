@@ -1,0 +1,51 @@
+V2rayDeleteOutboundAccount()
+{
+    V2rayListOutboundAccounts
+
+    if [ "${outbounds_protocol[outbounds_index]}" == "shadowsocks" ] 
+    then
+        Println "$error 请直接删除此出站\n"
+        exit 1
+    fi
+
+    echo -e "# ${green}$((accounts_count+1))${normal}${indent_6}删除所有账号\n\n"
+    echo "`gettext \"输入序号\"`"
+    while read -p "$i18n_default_cancel" accounts_index
+    do
+        case "$accounts_index" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$accounts_index" -gt 0 ] && [ "$accounts_index" -le $((accounts_count+1)) ]
+                then
+                    accounts_index=$((accounts_index-1))
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    if [ "${outbounds_protocol[outbounds_index]}" == "http" ] 
+    then
+        group_name="servers"
+    else
+        group_name="vnext"
+    fi
+
+    if [ "$accounts_index" == "$accounts_count" ] 
+    then
+        json=true
+        jq_path='["outbounds",'"$outbounds_index"',"settings","'"$group_name"'",0,"users"]'
+        JQ update "$V2_CONFIG" []
+    else
+        jq_path='["outbounds",'"$outbounds_index"',"settings","'"$group_name"'",0,"users",'"$accounts_index"']'
+        JQ delete "$V2_CONFIG"
+    fi
+    Println "$info 出站账号删除成功\n"
+}

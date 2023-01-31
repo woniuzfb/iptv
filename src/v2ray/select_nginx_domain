@@ -1,0 +1,24 @@
+V2rayNginxSelectDomain()
+{
+    echo "`gettext \"输入序号\"`"
+    while read -p "$i18n_default_cancel" v2ray_nginx_domains_index
+    do
+        case "$v2ray_nginx_domains_index" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$v2ray_nginx_domains_index" -gt 0 ] && [ "$v2ray_nginx_domains_index" -le "$v2ray_nginx_domains_count" ]
+                then
+                    v2ray_nginx_domains_index=$((v2ray_nginx_domains_index-1))
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+}

@@ -1,0 +1,104 @@
+XtreamCodesListAcc()
+{
+    XtreamCodesList
+
+    Println "请输入服务器的序号"
+    while read -p "$i18n_default_cancel" server_num
+    do
+        case $server_num in
+            "") Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*) Println "$error $i18n_input_correct_number\n"
+            ;;
+            *) 
+                if [ "$server_num" -gt 0 ] && [ "$server_num" -le "$ips_acc_count" ]
+                then
+                    ips_index=${ips_acc[server_num-1]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    domain=${new_domains[ips_index]}
+
+    if [[ $domain == *"|"* ]] 
+    then
+        IFS="|" read -ra domains <<< "$domain"
+        domains_list=""
+        domains_count=${#domains[@]}
+        for((i=0;i<domains_count;i++));
+        do
+            domains_list="$domains_list ${green}$((i+1)).${normal}${indent_6}${domains[i]}\n\n"
+        done
+        Println "$domains_list"
+
+        Println "请选择域名"
+        while read -p "$i18n_default_cancel" domains_num
+        do
+            case $domains_num in
+                "") Println "$i18n_canceled...\n" && exit 1
+                ;;
+                *[!0-9]*) Println "$error $i18n_input_correct_number\n"
+                ;;
+                *) 
+                    if [ "$domains_num" -gt 0 ] && [ "$domains_num" -le "$domains_count" ]
+                    then
+                        domain=${domains[domains_num-1]}
+                        break
+                    else
+                        Println "$error $i18n_input_correct_no\n"
+                    fi
+                ;;
+            esac
+        done
+    fi
+
+    account=${new_accounts[ips_index]}
+    IFS=" " read -ra accounts <<< "$account"
+
+    accs=()
+    for account in "${accounts[@]}"
+    do
+        if [[ ! $account =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+        then
+            accs+=("$account")
+        fi
+    done
+
+    XtreamCodesGetDomains
+    XtreamCodesGetChnls
+
+    accs_count=${#accs[@]}
+    if [ "$accs_count" -gt 1 ] 
+    then
+        accs_list="账号: \n\n"
+        for((i=0;i<accs_count;i++));
+        do
+            using=""
+            for xc_chnl in ${xc_chnls[@]+"${xc_chnls[@]}"}
+            do
+                if [ "$xc_chnl" == "$domain/${accs[i]}" ] 
+                then
+                    using="${red}[使用中]${normal}"
+                    break
+                fi
+            done
+            accs_list="$accs_list ${green}$((i+1)).${normal}${indent_6}${accs[i]%:*}${indent_20}${accs[i]#*:} $using\n\n"
+        done
+        Println "$accs_list"
+    else
+        using=""
+        for xc_chnl in ${xc_chnls[@]+"${xc_chnls[@]}"}
+        do
+            if [ "$xc_chnl" == "$domain/${accs[i]}" ] 
+            then
+                using="${red}[使用中]${normal}"
+                break
+            fi
+        done
+        Println "账号: \n\n${green}1.${normal} ${accs[0]%:*}${indent_20}${accs[0]#*:} $using\n"
+    fi
+}

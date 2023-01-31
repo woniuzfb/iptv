@@ -1,0 +1,28 @@
+V2rayGetReverse()
+{
+    IFS=$'`\t' read -r m_reverse_bridges_tag m_reverse_bridges_domain m_reverse_portals_tag \
+    m_reverse_portals_domain < <($JQ_FILE -r '[
+        ([.reverse.bridges // []|.[].tag]|join("^") + "`"),
+        ([.reverse.bridges // []|.[].domain]|join("^") + "`"),
+        ([.reverse.portals // []|.[].tag]|join("^") + "`"),
+        ([.reverse.portals // []|.[].domain]|join("^") + "`")
+    ]|@tsv' "$V2_CONFIG")
+
+    if [ -z "$m_reverse_bridges_tag" ] 
+    then
+        reverse_bridges_count=0
+    else
+        IFS="^" read -r -a reverse_bridges_tag <<< "$m_reverse_bridges_tag"
+        IFS="^" read -r -a reverse_bridges_domain <<< "$m_reverse_bridges_domain"
+        reverse_bridges_count=${#reverse_bridges_tag[@]}
+    fi
+
+    if [ -z "$m_reverse_portals_tag" ] 
+    then
+        reverse_portals_count=0
+    else
+        IFS="^" read -r -a reverse_portals_tag <<< "$m_reverse_portals_tag"
+        IFS="^" read -r -a reverse_portals_domain <<< "$m_reverse_portals_domain"
+        reverse_portals_count=${#reverse_portals_tag[@]}
+    fi
+}

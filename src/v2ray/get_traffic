@@ -1,0 +1,12 @@
+V2rayGetTraffic()
+{
+    while IFS= read -r line
+    do
+        if [[ $line =~ value: ]] 
+        then
+            echo ${line#*:} | numfmt --to=iec --suffix=B
+            break
+        fi
+    done < <($V2CTL_FILE api --server=$api_inbound_listen:$api_inbound_port StatsService.GetStats 'name: "'"$1"'>>>'"$2"'>>>traffic>>>'"$3"'" reset: false' 2> /dev/null)
+    return 0
+}

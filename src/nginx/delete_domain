@@ -1,0 +1,36 @@
+NginxDeleteDomain()
+{
+    NginxListDomains
+
+    [ "$nginx_domains_count" -eq 0 ] && Println "$error 没有域名\n" && exit 1
+
+    echo "`gettext \"输入序号\"`"
+    while read -p "$i18n_default_cancel" nginx_domains_index
+    do
+        case "$nginx_domains_index" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$nginx_domains_index" -gt 0 ] && [ "$nginx_domains_index" -le "$nginx_domains_count" ]
+                then
+                    nginx_domains_index=$((nginx_domains_index-1))
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    server_domain=${nginx_domains[nginx_domains_index]}
+    if [ "${nginx_domains_status[nginx_domains_index]}" -eq 1 ] 
+    then
+        NginxDisableDomain
+    fi
+    rm -f "$nginx_prefix/conf/sites_available/$server_domain.conf"
+    Println "$info $server_domain 删除成功\n"
+}

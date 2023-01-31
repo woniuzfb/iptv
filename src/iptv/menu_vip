@@ -1,0 +1,73 @@
+VipMenu()
+{
+    [ ! -d "$IPTV_ROOT" ] && Println "`eval_gettext \"\\\$error 请先输入 tv 安装 !\"`\n" && exit 1
+    if [ ! -f "$IPTV_ROOT/VIP" ] 
+    then
+        VipUserMenu
+        return 0
+    fi
+    Println "  `gettext \"VIP 面板\"`
+
+  ${red}1.${normal} `gettext \"查看 VIP 用户\"`
+  ${red}2.${normal} `gettext \"添加 VIP 用户\"`
+  ${red}3.${normal} `gettext \"设置 VIP 用户\"`
+  ${red}4.${normal} `gettext \"查看 VIP 频道\"`
+  ${red}5.${normal} `gettext \"添加 VIP 频道\"`
+  ${red}6.${normal} `gettext \"部署 VIP 频道\"`
+  ${red}7.${normal} `gettext \"设置 VIP 频道\"`
+  ${red}8.${normal} `gettext \"查看 VIP 服务器\"`
+  ${red}9.${normal} `gettext \"添加 VIP 服务器\"`
+ ${red}10.${normal} `gettext \"设置 VIP 服务器\"`
+ ${red}11.${normal} `gettext \"删除 VIP 用户\"`
+ ${red}12.${normal} `gettext \"删除 VIP 频道\"`
+ ${red}13.${normal} `gettext \"删除 VIP 服务器\"`
+ ${red}14.${normal} `gettext \"开启 VIP\"`
+ ${red}15.${normal} `gettext \"关闭 VIP\"`
+
+ `eval_gettext \"\\\$tip 输入: h 切换到 HLS 面板, f 切换到 FLV 面板\"`\n\n"
+    read -p "`gettext \"输入序号\"` [1-15]: " vip_menu_num
+    case "$vip_menu_num" in
+        h)
+            kind=""
+            color=${green}
+            Menu
+        ;;
+        f)
+            kind="flv"
+            color=${blue}
+            Menu
+        ;;
+        1) VipListUser
+        ;;
+        2) VipAddUser
+        ;;
+        3) VipEditUser
+        ;;
+        4) VipListChannel
+        ;;
+        5) VipAddChannel
+        ;;
+        6) VipDeployChannel
+        ;;
+        7) VipEditChannel
+        ;;
+        8) VipListHosts
+        ;;
+        9) VipAddHost
+        ;;
+        10) VipEditHost
+        ;;
+        11) VipDelUser
+        ;;
+        12) VipDelChannel
+        ;;
+        13) VipDelHost
+        ;;
+        14) VipEnable
+        ;;
+        15) VipDisable
+        ;;
+        *) Println "$error $i18n_input_correct_number [1-15]\n"
+        ;;
+    esac
+}

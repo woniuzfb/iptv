@@ -1,0 +1,159 @@
+[ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+
+Include src/xtream_codes/get_domains "$@"
+
+Include src/xtream_codes/get_channels "$@"
+
+Include src/xtream_codes/add_account "$@"
+
+Include src/xtream_codes/verify_mac "$@"
+
+Include src/xtream_codes/list "$@"
+
+Include src/xtream_codes/list_account "$@"
+
+Include src/xtream_codes/test_account "$@"
+
+Include src/xtream_codes/list_mac "$@"
+
+Include src/xtream_codes/search_channels "$@"
+
+Include src/xtream_codes/list_channels "$@"
+
+Include src/xtream_codes/add_mac "$@"
+
+Println "  Xtream Codes 面板 ${normal}
+
+${green}1.${normal} 查看账号
+${green}2.${normal} 添加账号
+${green}3.${normal} 批量检测
+${green}4.${normal} 测试账号
+${green}5.${normal} 获取账号
+————————————
+${green}6.${normal} 查看 mac 地址
+${green}7.${normal} 添加 mac 地址
+${green}8.${normal} 浏览频道
+
+"
+read -p "`gettext \"输入序号\"` [1-8]: " xtream_codes_num
+
+case $xtream_codes_num in
+    1) 
+        XtreamCodesListAcc
+    ;;
+    2) 
+        XtreamCodesAddAccount
+        XtreamCodesList
+    ;;
+    3) 
+        [ ! -s "$XTREAM_CODES" ] && Println "$error 没有账号 !\n" && exit 1
+
+        echo
+        ExitOnList n "`gettext \"耗时可能很长, 是否继续\"`"
+
+        Println "$info 检测中..."
+        printf -v now '%(%m-%d-%H:%M:%S)T' -1
+
+        cp -f "$XTREAM_CODES" "${XTREAM_CODES}_$now"
+
+        IFS=" " read -r m_ip m_domains m_accounts < <(awk '$1 {a=a $1",";b=b $2",";$1=$2="";c=c substr($0,3)","} END {print a,b,c}' "$XTREAM_CODES")
+        IFS="," read -r -a new_domains <<< "$m_domains"
+        IFS="," read -r -a new_accounts <<< "$m_accounts"
+
+        result=""
+
+        for((i=0;i<${#new_domains[@]};i++));
+        do
+            IFS="|" read -r -a domains <<< "${new_domains[i]}"
+            IFS=" " read -r -a accounts <<< "${new_accounts[i]}"
+            for domain in "${domains[@]}"
+            do
+                ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || continue
+                for account in "${accounts[@]}"
+                do
+                    [ -n "$result" ] && result="$result\n"
+                    result="$result$ip $domain $account"
+                done
+            done
+        done
+
+        echo -e "$result" > "$XTREAM_CODES_EXAM"
+
+        verify_mac=1
+
+        XtreamCodesList
+
+        Println "$info 账号检测完成\n"
+    ;;
+    4) 
+        XtreamCodesTestAcc
+    ;;
+    5) 
+        Println "$info 稍等...\n"
+
+        if [ -s "$XTREAM_CODES" ] 
+        then
+            printf -v now '%(%m-%d-%H:%M:%S)T' -1
+            cp -f "$XTREAM_CODES" "${XTREAM_CODES}_$now"
+        fi
+
+        ShFallback
+
+        IFS=" " read -r m_ip m_domains m_accounts < <(curl -s -Lm 20 "$SH_FALLBACK/$XTREAM_CODES_CHANNELS"|awk '$1 {a=a $1",";b=b $2",";$1=$2="";c=c substr($0,3)","} END {print a,b,c}')
+        IFS="," read -r -a new_domains <<< "$m_domains"
+        IFS="," read -r -a new_accounts <<< "$m_accounts"
+
+        result=""
+        new_domains_count=${#new_domains[@]}
+
+        for((i=0;i<new_domains_count;i++));
+        do
+            printf '%b' "\r$((i*100/new_domains_count))%"
+            IFS="|" read -r -a domains <<< "${new_domains[i]}"
+            IFS=" " read -r -a accounts <<< "${new_accounts[i]}"
+            for domain in "${domains[@]}"
+            do
+                ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || continue
+                for account in "${accounts[@]}"
+                do
+                    [ -n "$result" ] && result="$result\n"
+                    result="$result$ip $domain $account"
+                done
+            done
+        done
+
+        [ -z "$result" ] && Println "$error 暂时无法连接, 请稍后再试...\n" && exit 1
+
+        echo -e "$result" >> "$XTREAM_CODES_EXAM"
+
+        echo && echo
+        inquirer list_input_index "验证 mac" ny_options ny_options_index
+
+        if [ "$ny_options_index" -eq 1 ] 
+        then
+            verify_mac=1
+        fi
+
+        XtreamCodesList
+
+        Println "$info 账号添加成功\n"
+    ;;
+    6) 
+        XtreamCodesListMac
+    ;;
+    7) 
+        XtreamCodesAddMac
+        if [ "$add_mac_success" = true ] 
+        then
+            XtreamCodesList mac
+            Println "$info mac 添加成功!\n"
+        fi
+    ;;
+    8) 
+        XtreamCodesListChnls
+    ;;
+    *) Println "$error $i18n_input_correct_number [1-8]\n"
+    ;;
+esac
+
+exit 0

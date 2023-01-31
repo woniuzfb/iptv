@@ -1,0 +1,155 @@
+Include src/ibm_cf/get_users "$@"
+
+Include src/ibm_cf/get_apps "$@"
+
+Include src/ibm_cf/list_users "$@"
+
+Include src/ibm_cf/login_user "$@"
+
+Include src/ibm_cf/update_app "$@"
+
+Include src/ibm_cf/set_user "$@"
+
+Include src/ibm_cf/get_api "$@"
+
+Include src/ibm_cf/add_user "$@"
+
+Include src/ibm_cf/edit_user "$@"
+
+Include src/ibm_cf/set_app "$@"
+
+Include src/ibm_cf/add_app "$@"
+
+Include src/ibm_cf/list_apps "$@"
+
+Include src/ibm_cf/list_app "$@"
+
+Include src/ibm_cf/add_route "$@"
+
+Include src/ibm_cf/delete_user "$@"
+
+Include src/ibm_cf/delete_app "$@"
+
+Include src/ibm_cf/delete_route "$@"
+
+Include src/ibm_cf/update_v2ray_config "$@"
+
+Include src/ibm_cf/download_v2ray "$@"
+
+Include src/ibm_cf/update_v2ray "$@"
+
+Include src/ibm_cf/deploy_v2ray "$@"
+
+Include src/ibm_cf/menu_v2ray "$@"
+
+Include src/ibm_cf/set_cron "$@"
+
+Include src/ibm_cf/enable_cron "$@"
+
+Include src/ibm_cf/disable_cron "$@"
+
+Include src/ibm_cf/exec_cron "$@"
+
+Include src/ibm_cf/menu_cf "$@"
+
+IbmInstallCfCli()
+{
+    if [[ -x $(command -v ibmcloud) ]] 
+    then
+        Println "$error IBM CF CLI 已存在\n"
+        exit 1
+    fi
+    Println "$info 安装 IBM CF CLI ..."
+    curl -sL https://ibm.biz/idt-installer | bash
+    ibmcloud cf install
+}
+
+IbmUpdateCfCli()
+{
+    if [[ ! -x $(command -v ibmcloud) ]] 
+    then
+        Println "$error IBM CF CLI 未安装\n"
+        exit 1
+    fi
+    Println "$info 更新 IBM CF CLI ..."
+    ibmcloud update -f
+    ibmcloud cf install -f
+}
+
+IbmUninstallCfCli()
+{
+    if [[ ! -x $(command -v ibmcloud) ]] 
+    then
+        Println "$error IBM CF CLI 未安装\n"
+        exit 1
+    fi
+
+    echo
+    ExitOnList n "`gettext \"确定删除 IBM CF CLI\"`"
+
+    EXIT_STATUS=0
+
+    rm -Rf /usr/local/ibmcloud || EXIT_STATUS=$?
+
+    rm -f /usr/local/bin/ibmcloud || EXIT_STATUS=$?
+    rm -f /usr/local/bin/bluemix || EXIT_STATUS=$?
+    rm -f /usr/local/bin/bx || EXIT_STATUS=$?
+    rm -f /usr/local/bin/ibmcloud-analytics || true
+
+    if [ $EXIT_STATUS -eq 0 ]
+    then
+        Println "$info 删除成功\n"
+    else
+        Println "$error 发生错误\n"
+    fi
+}
+
+ShFileCheck
+
+JQInstall
+
+if [ -d "$IPTV_ROOT" ]
+then
+    IBM_CONFIG_NEW="$IPTV_ROOT/${IBM_CONFIG##*/}"
+
+    if [ -e "$IBM_CONFIG" ] && [ ! -e "$IBM_CONFIG_NEW" ]
+    then
+        mv "$IBM_CONFIG" "$IBM_CONFIG_NEW"
+    fi
+
+    IBM_CONFIG="$IBM_CONFIG_NEW"
+
+    IBM_APPS_ROOT_NEW="$IPTV_ROOT/${IBM_APPS_ROOT##*/}"
+
+    if [ -d "$IBM_APPS_ROOT" ] && [ ! -d "$IBM_APPS_ROOT_NEW" ]
+    then
+        mv "$IBM_APPS_ROOT" "$IPTV_ROOT/"
+    fi
+
+    IBM_APPS_ROOT="$IBM_APPS_ROOT_NEW"
+fi
+
+if [ "${1:-}" == "v2" ] 
+then
+    v2ray_name="v2ray"
+    v2ray_package_name="v2ray"
+    tls_name="TLS"
+    V2CTL_FILE="$IBM_APPS_ROOT/ibm_v2ray/v2ctl"
+    V2_CONFIG="$IBM_APPS_ROOT/ibm_v2ray/config.json"
+    IbmV2rayMenu
+elif [ "${1:-}" == "x" ] 
+then
+    v2ray_name="xray"
+    v2ray_package_name="Xray"
+    tls_name="XTLS"
+    V2CTL_FILE="$IBM_APPS_ROOT/ibm_xray/xray"
+    V2_CONFIG="$IBM_APPS_ROOT/ibm_xray/config.json"
+    IbmV2rayMenu
+elif [ "${1:-}" == "cron" ] 
+then
+    IbmCfAppCronExec
+else
+    IbmCfMenu
+fi
+
+exit 0

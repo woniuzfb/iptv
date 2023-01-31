@@ -1,0 +1,256 @@
+V2raySetRouting()
+{
+    echo
+    set_routing_options=( '添加路由规则' '添加负载均衡器' '设置域名解析策略' '删除路由规则' '删除负载均衡器' )
+    inquirer list_input "选择操作" set_routing_options set_routing_option
+    if [ "$set_routing_option" == "添加路由规则" ] 
+    then
+        echo
+        add_routing_rule_options=( '快速选择入站出站' '详细设置' )
+        inquirer list_input_index "选择添加路由方式" add_routing_rule_options add_routing_rule_options_index
+        if [ "$add_routing_rule_options_index" -eq 0 ] 
+        then
+            V2rayListInbounds
+            V2raySelectInbound
+
+            if [ -z "${inbounds_tag[inbounds_index]}" ] 
+            then
+                Println "$error 此入站没有标签\n"
+                exit 1
+            fi
+
+            V2rayListOutbounds
+            V2raySelectOutbound
+
+            if [ -z "${outbounds_tag[outbounds_index]}" ] 
+            then
+                Println "$error 此出站没有标签\n"
+                exit 1
+            fi
+
+            jq_path='["routing","rules"]'
+            new_rule=$(
+            $JQ_FILE -n --arg inbound_tag "${inbounds_tag[inbounds_index]}" --arg outbound_tag "${outbounds_tag[outbounds_index]}" \
+            '{
+                "type": "field",
+                "inboundTag": [
+                    $inbound_tag
+                ],
+                "outboundTag": $outbound_tag
+            }')
+
+            pre=true
+            JQ add "$V2_CONFIG" "[$new_rule]"
+            Println "$info 路由添加成功\n"
+            return 0
+        fi
+        echo
+        routing_rule_network_options=( 'tcp' 'udp' 'tcp,udp' )
+        inquirer list_input "选择匹配的连接方式: " routing_rule_network_options routing_rule_network
+        new_routing_rule=$(
+        $JQ_FILE -n --arg network "$routing_rule_network" \
+        '{
+            "type": "field",
+            "network": $network
+        }')
+        Println "$tip 多个域名用空格分隔, 格式如 127.0.0.1, 10.0.0.0/8, geoip:cn, geoip:private, ext:file:tag"
+        inquirer text_input "输入匹配的域名: " routing_rule_domain "$i18n_not_set"
+        if [ "$routing_rule_domain" != "$i18n_not_set" ] 
+        then
+            IFS=" " read -r -a domains <<< "$routing_rule_domain"
+            printf -v routing_rule_domain ',"%s"' "${domains[@]}"
+            routing_rule_domain=${routing_rule_domain:1}
+            new_routing_rule=$(
+            $JQ_FILE --argjson domain "[$routing_rule_domain]" \
+            '. * 
+            {
+                "domain": $domain
+            }' <<< "$new_routing_rule")
+        fi
+        Println "$tip 多个 IP 范围用空格分隔"
+        inquirer text_input "输入匹配的 IP 范围: " routing_rule_ip "$i18n_not_set"
+        if [ "$routing_rule_ip" != "$i18n_not_set" ] 
+        then
+            IFS=" " read -r -a ips <<< "$routing_rule_ip"
+            printf -v routing_rule_ip ',"%s"' "${ips[@]}"
+            routing_rule_ip=${routing_rule_ip:1}
+            new_routing_rule=$(
+            $JQ_FILE --argjson ip "[$routing_rule_ip]" \
+            '. * 
+            {
+                "ip": $ip
+            }' <<< "$new_routing_rule")
+        fi
+        Println "$tip 多个端口用空格分隔, 格式如 53 443 1000-2000"
+        inquirer text_input "输入目标端口范围: " routing_rule_port "$i18n_not_set"
+        if [ "$routing_rule_port" != "$i18n_not_set" ] 
+        then
+            new_routing_rule=$(
+            $JQ_FILE --arg port "${routing_rule_port// /,}" \
+            '. * 
+            {
+                "port": $port
+            }' <<< "$new_routing_rule")
+        fi
+        Println "$tip 多个端口用空格分隔, 格式如 53 443 1000-2000"
+        inquirer text_input "输入来源端口范围: " routing_rule_source_port "$i18n_not_set"
+        if [ "$routing_rule_source_port" != "$i18n_not_set" ] 
+        then
+            new_routing_rule=$(
+            $JQ_FILE --arg sourcePort "${routing_rule_source_port// /,}" \
+            '. * 
+            {
+                "sourcePort": $sourcePort
+            }' <<< "$new_routing_rule")
+        fi
+        Println "$tip 多个 IP 用空格分隔, 格式如 127.0.0.1, 10.0.0.0/8"
+        inquirer text_input "输入匹配的来源 IP: " routing_rule_source "$i18n_not_set"
+        if [ "$routing_rule_source" != "$i18n_not_set" ] 
+        then
+            IFS=" " read -r -a sources <<< "$routing_rule_source"
+            printf -v routing_rule_source ',"%s"' "${sources[@]}"
+            routing_rule_source=${routing_rule_source:1}
+            new_routing_rule=$(
+            $JQ_FILE --argjson routing_rule_source "[$routing_rule_source]" \
+            '. * 
+            {
+                "source": $routing_rule_source
+            }' <<< "$new_routing_rule")
+        fi
+        Println "$tip 多个邮箱地址用空格分隔, Shadowsocks 和 VMess 支持此规则"
+        inquirer text_input "输入匹配的邮箱地址: " routing_rule_user "$i18n_not_set"
+        if [ "$routing_rule_user" != "$i18n_not_set" ] 
+        then
+            IFS=" " read -r -a users <<< "$routing_rule_user"
+            printf -v routing_rule_user ',"%s"' "${users[@]}"
+            routing_rule_user=${routing_rule_user:1}
+            new_routing_rule=$(
+            $JQ_FILE --argjson user "[$routing_rule_user]" \
+            '. * 
+            {
+                "user": $user
+            }' <<< "$new_routing_rule")
+        fi
+
+        routing_rule_protocols=( 'http' 'tls' 'bittorrent' )
+        Println "$tip 可多选, 必须开启入站代理中的流量探测选项"
+        inquirer checkbox_input "选择匹配的协议: " routing_rule_protocols routing_rule_protocols_selected
+
+        if [ -n "${routing_rule_protocols_selected:-}" ] 
+        then
+            printf -v routing_rule_protocol ',"%s"' "${routing_rule_protocols_selected[@]}"
+            routing_rule_protocol=${routing_rule_protocol:1}
+            new_routing_rule=$(
+            $JQ_FILE --argjson protocol "[$routing_rule_protocol]" \
+            '. * 
+            {
+                "protocol": $protocol
+            }' <<< "$new_routing_rule")
+        fi
+        Println "$tip 用于检测流量的属性值, 目前只有 http 入站代理会设置这一属性"
+        inquirer text_input "输入 starlark 脚本: " routing_rule_attrs "$i18n_not_set"
+        if [ "$routing_rule_attrs" != "$i18n_not_set" ] 
+        then
+            new_routing_rule=$(
+            $JQ_FILE --arg attrs "$routing_rule_attrs" \
+            '. * 
+            {
+                "attrs": $attrs
+            }' <<< "$new_routing_rule")
+        fi
+        echo
+        inquirer text_input "输入匹配的入站标签: " routing_rule_inbound_tag "$i18n_not_set"
+        if [ "$routing_rule_inbound_tag" != "$i18n_not_set" ] 
+        then
+            new_routing_rule=$(
+            $JQ_FILE --arg inboundTag "$routing_rule_inbound_tag" \
+            '. * 
+            {
+                "inboundTag": [$inboundTag]
+            }' <<< "$new_routing_rule")
+        fi
+        Println "$tip 出站标签 和 负载均衡器标签 须二选一, 同时指定时, 出站标签 生效"
+        inquirer text_input "输入对应的出站标签: " routing_rule_outbound_tag "$i18n_not_set"
+        if [ "$routing_rule_outbound_tag" != "$i18n_not_set" ] 
+        then
+            new_routing_rule=$(
+            $JQ_FILE --arg outboundTag "$routing_rule_outbound_tag" \
+            '. * 
+            {
+                "outboundTag": $outboundTag
+            }' <<< "$new_routing_rule")
+        fi
+        echo
+        inquirer text_input "输入对应的负载均衡器标签: " routing_rule_balancer_tag "$i18n_not_set"
+        if [ "$routing_rule_balancer_tag" != "$i18n_not_set" ] 
+        then
+            new_routing_rule=$(
+            $JQ_FILE --arg balancerTag "$routing_rule_balancer_tag" \
+            '. * 
+            {
+                "balancerTag": $balancerTag
+            }' <<< "$new_routing_rule")
+        fi
+        pre=true
+        jq_path='["routing","rules"]'
+        JQ add "$V2_CONFIG" "[$new_routing_rule]"
+        Println "$info 路由规则添加成功\n"
+    elif [ "$set_routing_option" == "添加负载均衡器" ] 
+    then
+        Println "$tip 用于匹配路由规则"
+        ExitOnText "输入负载均衡器标签: " routing_balancer_tag
+
+        new_routing_balancer=$(
+        $JQ_FILE --arg tag "$routing_balancer_tag" \
+        '. * 
+        {
+            "tag": $tag
+        }')
+        Println "$tip 多个字符串用空格分隔"
+        inquirer text_input "输入匹配出站标签字符串: " routing_balancer_selector "$i18n_not_set"
+        if [ "$routing_balancer_selector" != "$i18n_not_set" ] 
+        then
+            IFS=" " read -r -a selectors <<< "$routing_balancer_selector"
+            printf -v routing_balancer_selector ',"%s"' "${selectors[@]}"
+            routing_balancer_selector=${routing_balancer_selector:1}
+            new_routing_balancer=$(
+            $JQ_FILE --argjson selector "[$routing_balancer_selector]" \
+            '. * 
+            {
+                "selector": $selector
+            }' <<< "$new_routing_balancer")
+        fi
+        jq_path='["routing","balancers"]'
+        JQ add "$V2_CONFIG" "[$new_routing_balancer]"
+        Println "$info 负载均衡器添加成功\n"
+    elif [ "$set_routing_option" == "设置域名解析策略" ] 
+    then
+        echo
+        routing_domain_strategy_options=( 'AsIs' 'IPIfNonMatch' 'IPOnDemand' )
+        inquirer list_input "域名解析策略" routing_domain_strategy_options routing_domain_strategy
+        jq_path='["routing","domainStrategy"]'
+        JQ update "$V2_CONFIG" "$routing_domain_strategy"
+        Println "$info 域名解析策略设置成功\n"
+    elif [ "$set_routing_option" == "删除路由规则" ] 
+    then
+        V2rayListRouting
+        [ "$routing_rules_count" -eq 0 ] && exit 1
+        echo
+        ExitOnText "输入路由规则序号: " routing_rule_num
+
+        routing_rule_index=$((routing_rule_num-1))
+        jq_path='["routing","rules",'"$routing_rule_index"']'
+        JQ delete "$V2_CONFIG"
+        Println "$info 路由规则删除成功\n"
+    else
+        V2rayListRouting
+        [ "$routing_balancers_count" -eq 0 ] && exit 1
+        echo
+        ExitOnText "输入负载均衡器序号: " routing_balancer_num
+
+        routing_balancer_index=$((routing_balancer_num-1))
+        jq_path='["routing","balancers",'"$routing_balancer_index"']'
+        JQ delete "$V2_CONFIG"
+        Println "$info 负载均衡器删除成功\n"
+    fi
+}

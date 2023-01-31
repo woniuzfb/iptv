@@ -1,0 +1,170 @@
+V2rayGetOutbounds()
+{
+    IFS=$'`\t' read -r map_send_through map_protocol map_settings_user_level map_settings_address \
+    map_settings_port map_settings_network map_settings_response_type map_settings_domain_strategy \
+    map_settings_redirect map_settings_version map_settings_email map_settings_method map_settings_password \
+    map_settings_iv_check map_stream_network map_stream_security map_stream_tls_server_name \
+    map_stream_tls_alpn map_stream_tls_allow_insecure map_stream_tls_disable_system_root \
+    map_stream_tls_pinned_peer_certificate_chain_sha256 map_stream_tls_enable_session_resumption \
+    map_stream_tls_fingerprint map_stream_tls_certificates_ocsp_stapling map_stream_tls_certificates_one_time_loading \
+    map_stream_tls_certificates_usage map_stream_tls_certificates_certificate_file \
+    map_stream_tls_certificates_key_file map_stream_tls_certificates_certificate \
+    map_stream_tls_certificates_key map_stream_header_type map_stream_header_request map_stream_header_response \
+    map_stream_kcp_mtu map_stream_kcp_tti map_stream_kcp_uplink_capacity map_stream_kcp_downlink_capacity \
+    map_stream_kcp_congestion map_stream_kcp_read_buffer_size map_stream_kcp_write_buffer_size \
+    map_stream_kcp_seed map_stream_path map_stream_ws_headers map_stream_ws_max_early_data \
+    map_stream_ws_use_browser_forwarding map_stream_ws_early_data_header_name map_stream_http_host \
+    map_stream_http_method map_stream_http_headers map_stream_quic_security map_stream_quic_key \
+    map_stream_grpc_service_name map_stream_grpc_multi_mode map_stream_sockopt_mark \
+    map_stream_sockopt_tcp_fast_open map_stream_sockopt_tcp_keep_alive_interval \
+    map_stream_sockopt_domain_strategy map_proxy_tag map_proxy_transport_layer map_mux_enabled \
+    map_mux_concurrency map_tag < <($JQ_FILE -c -r '[
+    ([.outbounds[]|.sendThrough|if . == "" // . == null then "0.0.0.0" else . end|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.protocol|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.settings.userLevel // .settings.servers[0].level // ""|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.settings.address // .settings.vnext[0].address // .settings.servers[0].address|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.settings.port // .settings.vnext[0].port // .settings.servers[0].port // ""|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.settings.network|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.settings.response.type // "none"|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.settings.domainStrategy // "AsIs"|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.settings.redirect|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.settings.version // 5|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.settings.servers[0].email|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.settings.servers[0].method // "none"|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.settings.servers[0].password|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.settings.servers[0].ivCheck // false|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.network|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.security // "none"|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.serverName // .streamSettings.xtlsSettings.serverName|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.alpn // .streamSettings.xtlsSettings.alpn // []|join("|")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.allowInsecure // .streamSettings.xtlsSettings.allowInsecure // false|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.disableSystemRoot // .streamSettings.xtlsSettings.disableSystemRoot // false|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.pinnedPeerCertificateChainSha256|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.enableSessionResumption // .streamSettings.xtlsSettings.enableSessionResumption // false|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.fingerprint // .streamSettings.xtlsSettings.fingerprint|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].ocspStapling // 3600|tostring|. + "|"]|join("")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].oneTimeLoading // false|tostring|. + "|"]|join("")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].usage|. + "|"]|join("")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].certificateFile|. + "|"]|join("")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].keyFile|. + "|"]|join("")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].certificate // []|join(" ")]|join("|")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tlsSettings.certificates // .streamSettings.xtlsSettings.certificates // []|[.[].key // []|join(" ")]|join("|")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tcpSettings.header.type // .streamSettings.kcpSettings.header.type // .streamSettings.quicSettings.header.type // "none"|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tcpSettings.header.request // {}|to_entries|
+    map("\(.key)=\(.value|(. | type) as $type|if ($type == "array") then (.|join("~")) 
+    elif ($type == "object") then (.|to_entries|map("\(.key)=\(
+        (.value|(. | type) as $type2|if ($type2 == "array") then (.|join("~")) else . end))")|join("!"))
+    else . end)")|join("|")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.tcpSettings.header.response // {}|to_entries|
+    map("\(.key)=\(.value|(. | type) as $type|if ($type == "object") then (.|to_entries|map("\(.key)=\(
+        (.value|(. | type) as $type2|if ($type2 == "array") then (.|join("~")) else . end))")|join("!"))
+    else . end)")|join("|")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.kcpSettings.mtu // 1350|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.kcpSettings.tti // 20|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.kcpSettings.uplinkCapacity // 5|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.kcpSettings.downlinkCapacity // 20|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.kcpSettings.congestion // false|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.kcpSettings.readBufferSize // 2|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.kcpSettings.writeBufferSize // 2|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.kcpSettings.seed|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.wsSettings.path // .streamSettings.httpSettings.path|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.wsSettings.headers // {}|to_entries|map("\(.key)=\(.value)")|join("|")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.wsSettings.maxEarlyData // 0|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.wsSettings.useBrowserForwarding // false|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.wsSettings.earlyDataHeaderName|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.httpSettings.host // []|join("|")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.httpSettings.method // "method"|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.httpSettings.headers // {}|to_entries|
+    map("\(.key)=\(.value|if (.|type == "array") then (.|join("~")) else . end)")|join("|")|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.quicSettings.security // "none"|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.quicSettings.key|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.grpcSettings.serviceName|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.grpcSettings.multiMode // false|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.sockopt.mark // 0|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.sockopt.tcpFastOpen // ""|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.sockopt.tcpKeepAliveInterval // 0|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.sockopt.domainStrategy // "AsIs"|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.streamSettings.sockopt.dialerProxy // .proxySettings.tag|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.proxySettings.transportLayer // false|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.mux.enabled // false|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.mux.concurrency // 8|tostring|. + "^"]|join("") + "`"),
+    ([.outbounds[]|.tag|. + "^"]|join("") + "`")
+    ]|@tsv' "$V2_CONFIG")
+
+    if [ -z "$map_protocol" ] 
+    then
+        outbounds_count=0
+        return 0
+    fi
+
+    IFS="^" read -r -a outbounds_protocol <<< "$map_protocol"
+    outbounds_count=${#outbounds_protocol[@]}
+    if_null=""
+
+    for((outbounds_i=0;outbounds_i<outbounds_count;outbounds_i++));
+    do
+        if_null="$if_null^"
+    done
+
+    IFS="^" read -r -a outbounds_send_through <<< "${map_send_through:-$if_null}"
+    IFS="^" read -r -a outbounds_settings_user_level <<< "${map_settings_user_level:-$if_null}"
+    IFS="^" read -r -a outbounds_settings_address <<< "${map_settings_address:-$if_null}"
+    IFS="^" read -r -a outbounds_settings_port <<< "${map_settings_port:-$if_null}"
+    IFS="^" read -r -a outbounds_settings_network <<< "${map_settings_network:-$if_null}"
+    IFS="^" read -r -a outbounds_settings_response_type <<< "${map_settings_response_type:-$if_null}"
+    IFS="^" read -r -a outbounds_settings_domain_strategy <<< "${map_settings_domain_strategy:-$if_null}"
+    IFS="^" read -r -a outbounds_settings_redirect <<< "${map_settings_redirect:-$if_null}"
+    IFS="^" read -r -a outbounds_settings_version <<< "${map_settings_version:-$if_null}"
+    IFS="^" read -r -a outbounds_settings_email <<< "${map_settings_email:-$if_null}"
+    IFS="^" read -r -a outbounds_settings_method <<< "${map_settings_method:-$if_null}"
+    IFS="^" read -r -a outbounds_settings_password <<< "${map_settings_password:-$if_null}"
+    IFS="^" read -r -a outbounds_settings_iv_check <<< "${map_settings_iv_check:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_network <<< "${map_stream_network:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_security <<< "${map_stream_security:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_tls_server_name <<< "${map_stream_tls_server_name:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_tls_alpn <<< "${map_stream_tls_alpn:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_tls_allow_insecure <<< "${map_stream_tls_allow_insecure:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_tls_disable_system_root <<< "${map_stream_tls_disable_system_root:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_tls_pinned_peer_certificate_chain_sha256 <<< "${map_stream_tls_pinned_peer_certificate_chain_sha256:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_tls_enable_session_resumption <<< "${map_stream_tls_enable_session_resumption:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_tls_fingerprint <<< "${map_stream_tls_fingerprint:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_tls_certificates_ocsp_stapling <<< "${map_stream_tls_certificates_ocsp_stapling:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_tls_certificates_one_time_loading <<< "${map_stream_tls_certificates_one_time_loading:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_tls_certificates_usage <<< "${map_stream_tls_certificates_usage:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_tls_certificates_certificate_file <<< "${map_stream_tls_certificates_certificate_file:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_tls_certificates_key_file <<< "${map_stream_tls_certificates_key_file:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_tls_certificates_certificate <<< "${map_stream_tls_certificates_certificate:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_tls_certificates_key <<< "${map_stream_tls_certificates_key:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_header_type <<< "${map_stream_header_type:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_header_request <<< "${map_stream_header_request:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_header_response <<< "${map_stream_header_response:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_kcp_mtu <<< "${map_stream_kcp_mtu:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_kcp_tti <<< "${map_stream_kcp_tti:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_kcp_uplink_capacity <<< "${map_stream_kcp_uplink_capacity:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_kcp_downlink_capacity <<< "${map_stream_kcp_downlink_capacity:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_kcp_congestion <<< "${map_stream_kcp_congestion:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_kcp_read_buffer_size <<< "${map_stream_kcp_read_buffer_size:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_kcp_write_buffer_size <<< "${map_stream_kcp_write_buffer_size:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_kcp_seed <<< "${map_stream_kcp_seed:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_path <<< "${map_stream_path:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_ws_headers <<< "${map_stream_ws_headers:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_ws_max_early_data <<< "${map_stream_ws_max_early_data:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_ws_use_browser_forwarding <<< "${map_stream_ws_use_browser_forwarding:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_ws_early_data_header_name <<< "${map_stream_ws_early_data_header_name:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_http_host <<< "${map_stream_http_host:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_http_method <<< "${map_stream_http_method:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_http_headers <<< "${map_stream_http_headers:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_quic_security <<< "${map_stream_quic_security:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_quic_key <<< "${map_stream_quic_key:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_grpc_service_name <<< "${map_stream_grpc_service_name:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_grpc_multi_mode <<< "${map_stream_grpc_multi_mode:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_sockopt_mark <<< "${map_stream_sockopt_mark:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_sockopt_tcp_fast_open <<< "${map_stream_sockopt_tcp_fast_open:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_sockopt_tcp_keep_alive_interval <<< "${map_stream_sockopt_tcp_keep_alive_interval:-$if_null}"
+    IFS="^" read -r -a outbounds_stream_sockopt_domain_strategy <<< "${map_stream_sockopt_domain_strategy:-$if_null}"
+    IFS="^" read -r -a outbounds_proxy_tag <<< "${map_proxy_tag:-$if_null}"
+    IFS="^" read -r -a outbounds_proxy_transport_layer <<< "${map_proxy_transport_layer:-$if_null}"
+    IFS="^" read -r -a outbounds_mux_enabled <<< "${map_mux_enabled:-$if_null}"
+    IFS="^" read -r -a outbounds_mux_concurrency <<< "${map_mux_concurrency:-$if_null}"
+    IFS="^" read -r -a outbounds_tag <<< "${map_tag:-$if_null}"
+}

@@ -1,0 +1,28 @@
+ScheduleMenu()
+{
+    echo
+    chnls_schedule_options=( '查看' '添加' '修改' '排序' '删除' )
+    inquirer list_input_index "请选择" chnls_schedule_options chnls_schedule_options_index
+
+    if [ "$chnls_schedule_options_index" -eq 0 ] 
+    then
+        ListChannelsSchedule
+
+        if [ -z "$chnls_schedule_list" ] 
+        then
+            Println "$error 请先添加频道计划\n"
+            exit 1
+        fi
+    elif [ "$chnls_schedule_options_index" -eq 1 ] 
+    then
+        AddChannelsSchedule
+    elif [ "$chnls_schedule_options_index" -eq 2 ] 
+    then
+        EditChannelsSchedule
+    elif [ "$chnls_schedule_options_index" -eq 3 ] 
+    then
+        SortChannelsSchedule
+    else
+        DelChannelsSchedule
+    fi
+}

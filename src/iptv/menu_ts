@@ -1,0 +1,900 @@
+[ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+
+TsGetToken()
+{
+    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' --data '{"role":"guest","deviceno":"'"$device_no"'","deviceType":"yuj"}' "$access_token_url") 
+    then
+        Println "$error 无法连接服务器, 请重试"
+        return 1
+    fi
+
+    IFS=" " read -r ret access_token refresh_token refresh_time < <($JQ_FILE -r '[.ret,.accessToken,.refreshToken,.refreshTime]|join(" ")' <<< "$res")
+
+    if [ "$ret" != 0 ] || [ -z "$access_token" ] || [ -z "$refresh_token" ] || [ -z "$refresh_time" ]
+    then
+        echo "$res"
+        Println "$error 获取 token 错误, 请重试"
+        return 2
+    fi
+
+    Println "$info 请等待 $refresh_time 秒..."
+
+    sleep $refresh_time
+
+    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' --data '{"accessToken":"'"$access_token"'","refreshToken":"'"$refresh_token"'"}' "$refresh_access_token_url") 
+    then
+        Println "$error 无法连接服务器, 请重试"
+        return 3
+    fi
+
+    IFS=" " read -r ret access_token refresh_token refresh_time < <($JQ_FILE -r '[.ret,.accessToken,.refreshToken,.refreshTime]|join(" ")' <<< "$res")
+
+    if [ "$ret" != 0 ] || [ -z "$access_token" ] || [ -z "$refresh_token" ] || [ -z "$refresh_time" ]
+    then
+        echo "$res"
+        Println "$error 获取 token 错误, 请重试"
+        return 4
+    fi
+
+    printf -v now '%(%s)T' -1
+
+    refresh=$((now+refresh_time))
+}
+
+TsValidateLogin()
+{
+    if [ "$1" == "$i18n_cancel" ] || [[ $1 =~ ^[0-9]{11}$ ]] || [[ $1 =~ ^[A-Za-z][A-Za-z0-9_]{3,13}$ ]]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+TsValidateUserName()
+{
+    if [ "$1" == "$i18n_cancel" ] || [[ $1 =~ ^[A-Za-z][A-Za-z0-9_]{3,13}$ ]] 
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+TsValidatePhoneNumber()
+{
+    if [ "$1" == "$i18n_cancel" ] || [[ $1 =~ ^[0-9]{11}$ ]] 
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+GetDefault
+ShFallback
+ts_options=("$SH_FALLBACK/$TS_CHANNELS")
+
+if [ -n "$d_sync_file" ] 
+then
+    ts_options+=($d_sync_file)
+fi
+
+ts_options+=("手动输入")
+
+echo
+inquirer list_input_index "选择使用的频道文件" ts_options ts_options_index
+
+if [ "$ts_options_index" -eq $((${#ts_options[@]}-1)) ]
+then
+    echo
+    ExitOnText "请输入使用的频道文件链接或本地路径" ts_option
+else
+    ts_option="${ts_options[ts_options_index]}"
+fi
+
+if [[ $ts_option =~ ^https?:// ]] 
+then
+    if ! ts_source=$(curl -s -Lm 10 "$ts_option") 
+    then
+        Println "$error 无法连接 $ts_option\n"
+        exit 1
+    fi
+else
+    if [ ! -f "$ts_option" ] 
+    then
+        Println "$error $ts_option 不存在\n"
+        exit 1
+    fi
+    ts_source=$(< "$ts_option")
+fi
+
+[ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+
+EXIT_STATUS=0
+
+IFS=$'\004\t' read -r m_id m_name m_user_agent m_verify_type m_verify_acc_type m_reg_type m_server_version m_unique_url \
+m_access_token_url m_refresh_access_token_url m_third_token_url m_img_url m_sms_url m_verify_url m_reg_url m_login_url \
+m_user_info_url m_auth_info_url m_auth_verify_url m_play_url m_playback_url m_list_url m_schedule_url m_event_info_url \
+m_operating_system m_system_version m_model m_app_version < <(JQs flat "$ts_source" '.[0].data |
+map(select(.reg_url != null)|with_entries(select(.key as $k |
+["id","name","user_agent","verify_type","verify_acc_type","reg_type","server_version",
+"extend_info","unique_url","access_token_url","refresh_access_token_url","third_token_url","img_url","sms_url","verify_url",
+"reg_url","login_url","user_info_url","auth_info_url","auth_verify_url","play_url","playback_url","list_url","schedule_url",
+"event_info_url"] | index($k))))' '. as $source | ($source.extend_info // {} | if (.|type) == "string" then {} else . end) 
+as $extend_info | reduce ({id,name,user_agent,verify_type,verify_acc_type,reg_type,server_version,unique_url,access_token_url,
+refresh_access_token_url,third_token_url,img_url,sms_url,verify_url,reg_url,login_url,user_info_url,auth_info_url,
+auth_verify_url,play_url,playback_url,list_url,schedule_url,event_info_url}|keys_unsorted[]) as $key ([];
+    $source[$key] as $val | if $val then
+        . + [$val + "\u0002\u0004"]
+    else
+        . + ["\u0004"]
+    end
+) + reduce ({operatingsystem,systemversion,model,appversion}|keys_unsorted[]) as $key ([];
+    $extend_info[$key] as $val | if $val then
+        . + [$val + "\u0003\u0004"]
+    else
+        . + ["\u0004"]
+    end
+)|@tsv' "${delimiters[@]}") || EXIT_STATUS=$?
+
+if [ "$EXIT_STATUS" -ne 0 ] || [ -z "$m_name" ]
+then
+    Println "$error 没有找到频道\n"
+    exit 1
+fi
+
+IFS="${delimiters[1]}" read -ra ts_id <<< "$m_id"
+IFS="${delimiters[1]}" read -ra ts_name <<< "$m_name"
+IFS="${delimiters[1]}" read -ra ts_user_agent <<< "$m_user_agent"
+IFS="${delimiters[1]}" read -ra ts_verify_type <<< "$m_verify_type"
+IFS="${delimiters[1]}" read -ra ts_verify_acc_type <<< "$m_verify_acc_type"
+IFS="${delimiters[1]}" read -ra ts_reg_type <<< "$m_reg_type"
+IFS="${delimiters[1]}" read -ra ts_server_version <<< "$m_server_version"
+IFS="${delimiters[1]}" read -ra ts_unique_url <<< "$m_unique_url"
+IFS="${delimiters[1]}" read -ra ts_access_token_url <<< "$m_access_token_url"
+IFS="${delimiters[1]}" read -ra ts_refresh_access_token_url <<< "$m_refresh_access_token_url"
+IFS="${delimiters[1]}" read -ra ts_third_token_url <<< "$m_third_token_url"
+IFS="${delimiters[1]}" read -ra ts_img_url <<< "$m_img_url"
+IFS="${delimiters[1]}" read -ra ts_sms_url <<< "$m_sms_url"
+IFS="${delimiters[1]}" read -ra ts_verify_url <<< "$m_verify_url"
+IFS="${delimiters[1]}" read -ra ts_reg_url <<< "$m_reg_url"
+IFS="${delimiters[1]}" read -ra ts_login_url <<< "$m_login_url"
+IFS="${delimiters[1]}" read -ra ts_user_info_url <<< "$m_user_info_url"
+IFS="${delimiters[1]}" read -ra ts_auth_info_url <<< "$m_auth_info_url"
+IFS="${delimiters[1]}" read -ra ts_auth_verify_url <<< "$m_auth_verify_url"
+IFS="${delimiters[1]}" read -ra ts_play_url <<< "$m_play_url"
+IFS="${delimiters[1]}" read -ra ts_playback_url <<< "$m_playback_url"
+IFS="${delimiters[1]}" read -ra ts_list_url <<< "$m_list_url"
+IFS="${delimiters[1]}" read -ra ts_schedule_url <<< "$m_schedule_url"
+IFS="${delimiters[1]}" read -ra ts_event_info_url <<< "$m_event_info_url"
+IFS="${delimiters[2]}" read -ra ts_operating_system <<< "$m_operating_system"
+IFS="${delimiters[2]}" read -ra ts_system_version <<< "$m_system_version"
+IFS="${delimiters[2]}" read -ra ts_model <<< "$m_model"
+IFS="${delimiters[2]}" read -ra ts_app_version <<< "$m_app_version"
+
+rm -rf /tmp/cookie_jar
+mkdir -p /tmp/cookie_jar
+
+while true 
+do
+    unset phone_number
+
+    echo
+    inquirer list_input_index "选择直播源" ts_name ts_index
+
+    if [ "${ts_id[ts_index]}" == "jxtvnet" ] 
+    then
+        lan_options=( '不选择' '电信' '联通' )
+        Println "$tip 部分地区不选择线路可能无法连接"
+        inquirer list_input_index "选择线路" lan_options lan_options_index
+
+        sed -i '/.*.jxtvnet.tv/d' /etc/hosts
+
+        if [ "$lan_options_index" -eq 1 ] 
+        then
+            echo -e "59.63.205.33 access.jxtvnet.tv\n59.63.205.33 stream.slave.jxtvnet.tv\n59.63.205.33 slave.jxtvnet.tv" >> /etc/hosts
+        elif [ "$lan_options_index" -eq 2 ] 
+        then
+            echo -e "58.17.42.129 access.jxtvnet.tv\n58.17.42.129 stream.slave.jxtvnet.tv\n58.17.42.129 slave.jxtvnet.tv" >> /etc/hosts
+        fi
+    fi
+
+    id="${ts_id[ts_index]}"
+    name="${ts_name[ts_index]}"
+    user_agent="${ts_user_agent[ts_index]:-$USER_AGENT_PHONE}"
+    verify_type="${ts_verify_type[ts_index]}"
+    verify_acc_type="${ts_verify_acc_type[ts_index]}"
+    reg_type="${ts_reg_type[ts_index]}"
+    server_version="${ts_server_version[ts_index]}"
+    unique_url="${ts_unique_url[ts_index]}"
+    access_token_url="${ts_access_token_url[ts_index]}"
+    refresh_access_token_url="${ts_refresh_access_token_url[ts_index]}"
+    third_token_url="${ts_third_token_url[ts_index]}"
+    img_url="${ts_img_url[ts_index]}"
+    sms_url="${ts_sms_url[ts_index]}"
+    verify_url="${ts_verify_url[ts_index]}"
+    reg_url="${ts_reg_url[ts_index]}"
+    login_url="${ts_login_url[ts_index]}"
+    user_info_url="${ts_user_info_url[ts_index]}"
+    auth_info_url="${ts_auth_info_url[ts_index]}"
+    auth_verify_url="${ts_auth_verify_url[ts_index]}"
+    play_url="${ts_play_url[ts_index]}"
+    playback_url="${ts_playback_url[ts_index]}"
+    list_url="${ts_list_url[ts_index]}"
+    schedule_url="${ts_schedule_url[ts_index]}"
+    event_info_url="${ts_event_info_url[ts_index]}"
+    operating_system="${ts_operating_system[ts_index]}"
+    system_version="${ts_system_version[ts_index]}"
+    model="${ts_model[ts_index]}"
+    app_version="${ts_app_version[ts_index]}"
+
+    GetServiceAccs "$id"
+
+    accs_options=()
+
+    for((ts_accs_index=0;ts_accs_index<ts_accs_count;ts_accs_index++));
+    do
+        if [[ ${ts_accs_user_name[ts_accs_index]} =~ ^[A-Za-z] ]] 
+        then
+            accs_options+=("${ts_accs_user_name[ts_accs_index]} ${ts_accs_phone_number[ts_accs_index]}")
+        else
+            accs_options+=("${ts_accs_phone_number[ts_accs_index]}")
+        fi
+    done
+
+    accs_options+=( '添加账号' '注册账号' )
+
+    echo
+    inquirer list_input_index "选择账号" accs_options accs_options_index
+
+    if [ "$accs_options_index" -eq "$ts_accs_count" ] 
+    then
+        echo
+        ExitOnText "输入用户名或手机号" login TsValidateLogin "用户名以字母开头, 4到14位字母、数字、下划线组成"
+
+        if [[ $login =~ ^[0-9]{11}$ ]] 
+        then
+            phone_number="$login"
+            user_name="$phone_number"
+        else
+            user_name="$login"
+        fi
+
+        echo
+        ExitOnText "输入密码" password
+
+        device_no=$(< /proc/sys/kernel/random/uuid)
+        str=$(printf '%s' "$device_no" | md5sum)
+        str=${str%% *}
+        str=${str:7:1}
+        device_no="$device_no$str"
+
+        if ! TsGetToken 
+        then
+            continue
+        fi
+
+        if [ -s "/tmp/cookie_jar/$id" ] 
+        then
+            cookie_jar=( -b "/tmp/cookie_jar/$id" )
+        else
+            cookie_jar=()
+        fi
+    elif [ "$accs_options_index" -eq "$((ts_accs_count+1))" ] 
+    then
+        while true 
+        do
+            if [ -z "$img_url" ] 
+            then
+                echo
+                ExitOnText "输入用户名" login TsValidateUserName "用户名以字母开头, 4到14位字母、数字、下划线组成"
+
+                user_name="$login"
+                reg_acc_type=1
+
+                if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} "$unique_url?username=$login&accounttype=$reg_acc_type") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
+                then
+                    echo "$res"
+                    Println "$error 账号已经存在, 请登陆或重新输入!"
+                    continue
+                fi
+            else
+                echo
+                ExitOnText "输入用户名或手机号" login TsValidateLogin "用户名以字母开头, 4到14位字母、数字、下划线组成"
+
+                if [ -z "$third_token_url" ] 
+                then
+                    if [ -s "/tmp/cookie_jar/$id" ] 
+                    then
+                        cookie_jar=( -b "/tmp/cookie_jar/$id" )
+                    else
+                        cookie_jar=( -c "/tmp/cookie_jar/$id" )
+                    fi
+                else
+                    cookie_jar=()
+                fi
+
+                if [[ $login =~ ^[0-9]{11}$ ]] 
+                then
+                    phone_number="$login"
+                    user_name="$login"
+                    reg_acc_type=2
+
+                    if [ -n "$unique_url" ] 
+                    then
+                        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} "$unique_url?username=$login&accounttype=$reg_acc_type") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
+                        then
+                            echo "$res"
+                            Println "$error 账号已经存在, 请登陆或重新输入!"
+                            unset phone_number
+                            continue
+                        fi
+                    fi
+                else
+                    user_name="$login"
+                    reg_acc_type=1
+
+                    if [ -n "$unique_url" ] 
+                    then
+                        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} "$unique_url?username=$login&accounttype=$reg_acc_type") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
+                        then
+                            echo "$res"
+                            Println "$error 账号已经存在, 请登陆或重新输入!"
+                            continue
+                        fi
+                    fi
+
+                    echo
+                    ExitOnText "输入绑定的手机号" phone_number TsValidatePhoneNumber "请输入正确的手机号"
+                fi
+            fi
+
+            break
+        done
+
+        echo
+        ExitOnText "输入密码" password
+
+        device_no=$(< /proc/sys/kernel/random/uuid)
+        str=$(printf '%s' "$device_no" | md5sum)
+        str=${str%% *}
+        str=${str:7:1}
+        device_no="$device_no$str"
+
+        if ! TsGetToken 
+        then
+            continue
+        fi
+
+        if [ -z "$img_url" ] 
+        then
+            md5_password=$(printf '%s' "$password" | md5sum)
+            md5_password=${md5_password%% *}
+
+            if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' "$reg_url?username=$user_name&iconid=1&pwd=$md5_password&birthday=1970-1-1&type=$reg_type&accounttype=$reg_acc_type") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
+            then
+                echo "$res"
+                Println "$error 注册失败, 请重试"
+                continue
+            fi
+
+            Println "$info 注册成功, 请稍等..."
+            sleep 3
+        else
+            if [ ! -e "/usr/local/bin/imgcat" ] 
+            then
+                ImgcatInstall
+            fi
+
+            while true 
+            do
+                if [ -n "$third_token_url" ] 
+                then
+                    if [ -s "/tmp/cookie_jar/$id" ] 
+                    then
+                        cookie_jar=( -b "/tmp/cookie_jar/$id" )
+                    else
+                        cookie_jar=( -c "/tmp/cookie_jar/$id" )
+                    fi
+
+                    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"usagescen":1}' "$third_token_url") 
+                    then
+                        Println "$error 无法获取 token, 请重试"
+                        continue 2
+                    fi
+
+                    IFS=" " read -r ret third_token < <($JQ_FILE -r '[.ret,.access_token]|join(" ")' <<< "$res")
+                else
+                    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' --data '{"role":"guest","deviceno":"'"$device_no"'","deviceType":"yuj"}' "$access_token_url") 
+                    then
+                        Println "$error 无法获取 token, 请重试"
+                        return 1
+                    fi
+
+                    IFS=" " read -r ret third_token < <($JQ_FILE -r '[.ret,.accessToken]|join(" ")' <<< "$res")
+                fi
+
+                if [ "$ret" != 0 ] || [ -z "$third_token" ]
+                then
+                    echo "$res"
+                    Println "$error 无法获取 token, 请重试"
+                    continue 2
+                fi
+
+                if [ ! -s "/tmp/cookie_jar/$id" ] 
+                then
+                    cookie_jar=()
+                fi
+
+                if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} "$img_url?accesstoken=$third_token") 
+                then
+                    Println "$error 无法获取图形验证码, 请重试"
+                    continue 2
+                fi
+
+                IFS=" " read -r ret picid image < <($JQ_FILE -r '[.ret,.picid,.image]|join(" ")' <<< "$res")
+
+                if [ "$ret" != 0 ] || [ -z "$picid" ] || [ -z "$image" ]
+                then
+                    echo "$res"
+                    Println "$error 无法获取图形验证码, 请重试"
+                    continue 2
+                fi
+
+                if TMP_FILE=$(mktemp -q) 
+                then
+                    chmod +r "$TMP_FILE"
+                else
+                    printf -v TMP_FILE '%(%m-%d-%H:%M:%S)T' -1
+                fi
+
+                trap '
+                    rm -f "$TMP_FILE"
+                ' EXIT
+
+                base64 -d <<< "${image#*,}" > "$TMP_FILE"
+
+                /usr/local/bin/imgcat --half-height "$TMP_FILE"
+
+                rm -f "$TMP_FILE"
+
+                trap - EXIT
+
+                echo
+                inquirer text_input "输入图片验证码" pincode "刷新"
+
+                if [ "$pincode" != "刷新" ] 
+                then
+                    while true 
+                    do
+                        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} "$sms_url?pincode=$pincode&picid=$picid&verifytype=$verify_type&account=$phone_number&accounttype=$verify_acc_type") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
+                        then
+                            echo "$res"
+                            Println "$error 无法获取短信验证码, 请重试"
+                            continue 2
+                        fi
+
+                        printf -v now '%(%s)T' -1
+                        next=$((now+120))
+
+                        echo
+                        inquirer text_input "输入短信验证码" smscode "再次发送"
+
+                        if [ "$smscode" == "再次发送" ] 
+                        then
+                            printf -v now '%(%s)T' -1
+                            if [ "$now" -lt "$next" ] 
+                            then
+                                for((secs=next-now;secs>0;secs--));
+                                do
+                                    echo -en "\r$secs 秒后重试"
+                                    sleep 1
+                                done
+                            fi
+                            continue 2
+                        fi
+
+                        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} "$verify_url?verifycode=$smscode&verifytype=$verify_type&username=$user_name&account=$phone_number") 
+                        then
+                            Println "$error 无法连接服务器, 请重试"
+                            continue 3
+                        fi
+
+                        IFS=" " read -r ret code < <($JQ_FILE -r '[.ret,.code]|join(" ")' <<< "$res")
+
+                        if [ "$ret" != 0 ] || [ -z "$code" ]
+                        then
+                            echo "$res"
+                            Println "$error 短信验证码错误, 请重试"
+                            continue 2
+                        fi
+
+                        md5_password=$(printf '%s' "$password" | md5sum)
+                        md5_password=${md5_password%% *}
+                        printf -v timestamp '%(%s)T' -1
+                        timestamp=$((timestamp * 1000))
+                        signature="$login|$md5_password|$device_no|yuj|$timestamp"
+                        signature=$(printf '%s' "$signature" | md5sum)
+                        signature=${signature%% *}
+
+                        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"account":"'"$phone_number"'","deviceno":"'"$device_no"'","devicetype":"yuj","code":"'"$code"'","signature":"'"$signature"'","birthday":"1970-1-1","username":"'"$user_name"'","type":'"$reg_type"',"timestamp":"'"$timestamp"'","pwd":"'"$md5_password"'","accounttype":'"$reg_acc_type"'}' "$reg_url") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
+                        then
+                            echo "$res"
+                            Println "$error 注册失败, 请重试"
+                            continue 3
+                        fi
+
+                        Println "$info 注册成功, 请稍等..."
+                        sleep 3
+                        break 2
+                    done
+                fi
+            done
+        fi
+    else
+        echo
+        acc_options=( '登陆' '删除' )
+        inquirer list_input_index "选择操作" acc_options acc_options_index
+
+        if [ "$acc_options_index" -eq 1 ] 
+        then
+            jq_path='["'"$id"'","accounts",'"$accs_options_index"']'
+            JQ delete "$SERVICES_FILE"
+            Println "$info 账号删除成功"
+            continue
+        fi
+
+        user_name="${ts_accs_user_name[accs_options_index]}"
+        phone_number="${ts_accs_phone_number[accs_options_index]}"
+        password="${ts_accs_password[accs_options_index]}"
+        access_token="${ts_accs_access_token[accs_options_index]}"
+        device_no="${ts_accs_device_no[accs_options_index]}"
+        device_id="${ts_accs_device_id[accs_options_index]}"
+        refresh="${ts_accs_refresh[accs_options_index]}"
+
+        if [ -n "$refresh" ] 
+        then
+            printf -v now '%(%s)T' -1
+
+            if [ "$now" -lt "$refresh" ] 
+            then
+                break
+            fi
+        fi
+
+        if [ -z "$device_no" ] 
+        then
+            device_no=$(< /proc/sys/kernel/random/uuid)
+            str=$(printf '%s' "$device_no" | md5sum)
+            str=${str%% *}
+            str=${str:7:1}
+            device_no="$device_no$str"
+        fi
+
+        if ! TsGetToken 
+        then
+            continue
+        fi
+
+        if [ -s "/tmp/cookie_jar/$id" ] 
+        then
+            cookie_jar=( -b "/tmp/cookie_jar/$id" )
+        else
+            cookie_jar=()
+        fi
+    fi
+
+    md5_password=$(printf '%s' "$password" | md5sum)
+    md5_password=${md5_password%% *}
+
+    if [ -z "$img_url" ] 
+    then
+        login_acc_type=2
+        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} "$login_url?deviceno=$device_no&devicetype=3&accounttype=$login_acc_type&accesstoken=(null)&account=$user_name&pwd=$md5_password&isforce=1&businessplatform=1")
+        then
+            Println "$error 无法登陆直播源, 请重试"
+            continue
+        fi
+    else
+        printf -v timestamp '%(%s)T' -1
+        timestamp=$((timestamp * 1000))
+
+        if [[ $user_name =~ ^[A-Za-z][A-Za-z0-9_]{3,13}$ ]] 
+        then
+            login_acc_type=2
+            login="$user_name"
+        else
+            login_acc_type=3
+            login="$phone_number"
+        fi
+
+        signature="$device_no|yuj|$login_acc_type|$login|$timestamp"
+        signature=$(printf '%s' "$signature" | md5sum)
+        signature=${signature%% *}
+
+        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"account":"'"$login"'","deviceno":"'"$device_no"'","pwd":"'"$md5_password"'","devicetype":"yuj","businessplatform":1,"signature":"'"$signature"'","isforce":1,"extendinfo":{"operatingsystem":"'"$operating_system"'","systemversion":"'"$system_version"'","model":"'"$model"'","appversion":"'"$app_version"'"},"serverVersion":"'"$server_version"'","timestamp":"'"$timestamp"'","accounttype":'"$login_acc_type"'}' "$login_url")
+        then
+            Println "$error 无法登陆直播源, 请重试"
+            continue
+        fi
+    fi
+
+    IFS=" " read -r ret access_token device_id user_name < <($JQ_FILE -r '[.ret,.access_token,.device_id,.user_name]|join(" ")' <<< "$res")
+
+    if [ "$ret" != 0 ] || [ -z "$access_token" ] || [ -z "$device_id" ] || [ -z "$user_name" ]
+    then
+        echo "$res"
+        Println "$error 登陆错误, 请重试"
+        continue
+    fi
+
+    if [ "$accs_options_index" -lt "$ts_accs_count" ] 
+    then
+        update=$(
+        $JQ_FILE -n --arg access_token "$access_token" --arg device_no "$device_no" \
+            --arg device_id "$device_id" --arg refresh "$refresh" \
+            '{
+                access_token: $access_token,
+                device_no: $device_no,
+                device_id: $device_id | tonumber,
+                refresh: $refresh | tonumber
+            }'
+        )
+
+        merge=true
+        jq_path='["'"$id"'","accounts",'"$accs_options_index"']'
+        JQ update "$SERVICES_FILE" "$update"
+    else
+        if [ -n "$img_url" ] 
+        then
+            if [ -z "${phone_number:-}" ] 
+            then
+                if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' ${cookie_jar[@]+"${cookie_jar[@]}"} "$user_info_url?accesstoken=$access_token")
+                then
+                    Println "$error 无法获取用户信息, 请重试"
+                    continue
+                fi
+
+                IFS=" " read -r phone_number < <($JQ_FILE -r '.telephone' <<< "$res")
+
+                if [ -z "$phone_number" ] 
+                then
+                    Println "$error 无法获取用户手机号, 请重新注册"
+                    continue
+                fi
+            fi
+
+            new_acc=$(
+            $JQ_FILE -n --arg user_name "$user_name" --arg phone_number "$phone_number" \
+                --arg password "$password" --arg access_token "$access_token" \
+                --arg device_no "$device_no" --arg device_id "$device_id" \
+                --arg refresh "$refresh" \
+                '{
+                    user_name: $user_name,
+                    phone_number: $phone_number | tonumber,
+                    password: $password,
+                    access_token: $access_token,
+                    device_no: $device_no,
+                    device_id: $device_id | tonumber,
+                    refresh: $refresh | tonumber
+                }'
+            )
+        else
+            new_acc=$(
+            $JQ_FILE -n --arg user_name "$user_name" --arg password "$password" \
+                --arg access_token "$access_token" --arg device_no "$device_no" \
+                --arg device_id "$device_id" --arg refresh "$refresh" \
+                '{
+                    user_name: $user_name,
+                    password: $password,
+                    access_token: $access_token,
+                    device_no: $device_no,
+                    device_id: $device_id | tonumber,
+                    refresh: $refresh | tonumber
+                }'
+            )
+        fi
+
+        if [[ $($JQ_FILE --argjson path '["'"$id"'","accounts"]' --arg user_name "$user_name" 'getpath($path) // []|map(select(.user_name==$user_name))' "$SERVICES_FILE") != "[]" ]] 
+        then
+            merge=true
+            map_string=true
+            jq_path='["'"$id"'","accounts"]'
+            JQ update "$SERVICES_FILE" user_name "$user_name" "$new_acc"
+        else
+            jq_path='["'"$id"'","accounts"]'
+            JQ add "$SERVICES_FILE" "[$new_acc]"
+        fi
+    fi
+
+    break
+done
+
+Println "$info 获取频道..."
+
+if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' "$list_url?pageidx=1&pagenum=500&accesstoken=$access_token") 
+then
+    echo "$res"
+    Println "$error 无法获取频道\n"
+    exit 1
+fi
+
+IFS=" " read -r ret total < <($JQ_FILE -r '[.ret,.total]|join(" ")' <<< "$res")
+
+if [ "$ret" != 0 ] 
+then
+    echo "$res"
+    Println "$error 无法获取频道\n"
+    exit 1
+elif [ "$total" -eq 0 ] 
+then
+    echo "$res"
+    Println "$error 没有频道\n"
+    exit 1
+fi
+
+EXIT_STATUS=0
+
+IFS=$'\003\t' read -r m_chnl_id m_str_chnl_id m_chnl_name m_chnl_type m_chnl_num m_logic_num m_definition m_is_favorite \
+m_is_free m_is_hide m_is_livetv m_is_tstv m_is_lock m_is_purchased m_is_public m_is_boot m_is_fast_channel_change \
+m_stream_type m_times m_comment_num m_score m_praise_num m_degrade_num m_score_num m_iframe_url m_device_type m_providerid \
+m_provider_icon_font m_ts_id m_content_type m_sub_type m_subtype_name m_label_name m_support_playback m_rate_list \
+m_tstv_url m_livetv_url m_video_code m_trial_short m_trial_longest m_trial_times m_play_type m_codec_info \
+m_logo_info < <(JQs flat "$res" '.[0].chnl_list | map(select(.chnl_id != null)|with_entries(select(.key as $k |
+["chnl_id","str_chnl_id","chnl_name","chnl_type","chnl_num","logic_num","definition","is_favorite","is_free","is_hide","is_livetv","is_tstv",
+"is_lock","is_purchased","is_public","is_boot","is_fast_channel_change","stream_type","times","comment_num","score","praise_num","degrade_num",
+"score_num","iframe_url","device_type","providerid","provider_icon_font","ts_id","content_type","sub_type","subtype_name","label_name",
+"support_playback","rate_list","tstv_url","livetv_url","video_code","trial_short","trial_longest","trial_times","play_type",
+"codec_info","logo_info"] | index($k))))' '. as $channel | reduce ({chnl_id,str_chnl_id,chnl_name,chnl_type,chnl_num,logic_num,definition,
+is_favorite,is_free,is_hide,is_livetv,is_tstv,is_lock,is_purchased,is_public,is_boot,is_fast_channel_change,stream_type,times,comment_num,
+score,praise_num,degrade_num,score_num,iframe_url,device_type,providerid,provider_icon_font,ts_id,content_type,sub_type,subtype_name,
+label_name,support_playback,rate_list,tstv_url,livetv_url,video_code,trial_short,trial_longest,trial_times,play_type,
+codec_info,logo_info}|keys_unsorted[]) as $key ([];
+    $channel[$key] as $val | if $val then
+        . + [$val + "\u0002\u0003"]
+    else
+        . + ["\u0003"]
+    end
+)|@tsv' "${delimiters[@]}") || EXIT_STATUS=$?
+
+if [ "$EXIT_STATUS" -ne 0 ] 
+then
+    echo "$res"
+    Println "$error 无法解析频道\n"
+    exit 1
+fi
+
+IFS="${delimiters[1]}" read -ra chnl_id <<< "$m_chnl_id"
+IFS="${delimiters[1]}" read -ra chnl_name <<< "$m_chnl_name"
+IFS="${delimiters[1]}" read -ra rate_list <<< "$m_rate_list"
+IFS="${delimiters[1]}" read -ra livetv_url <<< "$m_livetv_url"
+
+echo
+inquirer checkbox_input_indices "选择添加的频道" chnl_name chnl_indices
+
+FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+FFMPEG="$FFMPEG_ROOT/ffmpeg"
+FFPROBE="$FFMPEG_ROOT/ffprobe"
+
+headers=""
+cookies=""
+
+for chnl_index in "${chnl_indices[@]}"
+do
+    IFS="${delimiters[0]}" read -ra rates <<< "${rate_list[chnl_index]}"
+
+    echo
+    inquirer list_input "选择频道 ${chnl_name[chnl_index]} 分辨率" rates rate
+
+    if [ -z "$play_url" ] 
+    then
+        IFS="${delimiters[0]}" read -ra play_urls <<< "${livetv_url[chnl_index]}"
+
+        echo
+        inquirer list_input "选择频道 ${chnl_name[chnl_index]} 地址" play_urls play_url
+    fi
+
+    echo
+    protocol_options=( http hls )
+    inquirer list_input "选择频道 ${chnl_name[chnl_index]} 协议" protocol_options protocol
+
+    if [ -z "$auth_info_url" ] 
+    then
+        stream_link="$play_url?protocol=$protocol&accesstoken=$access_token&programid=${chnl_id[chnl_index]}&playtoken=ABCDEFGH&verifycode=$device_id&rate=$rate&playtype=live"
+    else
+        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' "$auth_info_url?accesstoken=$access_token&programid=${chnl_id[chnl_index]}&playtype=live&protocol=$protocol&verifycode=$device_id") 
+        then
+            Println "$error 无法验证 ${chnl_name[chnl_index]}"
+            continue
+        fi
+
+        IFS=" " read -r ret auth_random_sn play_token < <($JQ_FILE -r '[.ret,.auth_random_sn,.play_token]|join(" ")' <<< "$res")
+
+        if [ "$ret" != 0 ] || [ -z "$auth_random_sn" ] || [ -z "$play_token" ]
+        then
+            echo "$res"
+            Println "$error 无法验证 ${chnl_name[chnl_index]}"
+            continue
+        fi
+
+        authtoken="ipanel123#%#&*(&(*#*&^*@#&*%()#*()$)#@&%(*@#()*%321ipanel$auth_random_sn"
+        authtoken=$(printf '%s' "$authtoken" | md5sum)
+        authtoken=${authtoken%% *}
+
+        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: ' "$auth_verify_url?programid=${chnl_id[chnl_index]}&playtype=live&protocol=$protocol&accesstoken=$access_token&verifycode=$device_id&authtoken=$authtoken") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
+        then
+            Println "$error 无法验证 ${chnl_name[chnl_index]}"
+            continue
+        fi
+
+        stream_link="$play_url?protocol=$protocol&accesstoken=$access_token&programid=${chnl_id[chnl_index]}&playtoken=$play_token&verifycode=$device_id&rate=$rate&playtype=live"
+    fi
+
+    stream_link_parsed=true
+    stream_links=("$stream_link")
+
+    ParseStream
+
+    if ! ParseStream
+    then
+        Println "$error 无法连接 ${chnl_name[chnl_index]}"
+        continue
+    fi
+
+    echo
+    inquirer list_input_index "添加频道 ${chnl_name[chnl_index]}" yn_options yn_options_index
+
+    if [ "$yn_options_index" -eq 0 ] 
+    then
+        stream_links=("$stream_link|$id|$user_name")
+
+        echo
+        inquirer list_input_index "是否 添加/替换 现有频道直播源" ny_options ny_options_index
+
+        if [ "$ny_options_index" -eq 1 ] 
+        then
+            ListChannels
+            InputChannelsIndex
+
+            for((i=0;i<${#chnls_pid_chosen[@]};i++));
+            do
+                chnl_pid=${chnls_pid_chosen[i]}
+                chnls_index=${chnls_indices[i]}
+
+                ListChannel
+
+                echo
+                change_options=( '添加' '替换' )
+                inquirer list_input_index "如何修改频道 [ $chnl_channel_name ]" change_options change_options_index
+
+                if [ "$change_options_index" -eq 0 ] 
+                then
+                    pre=true
+                    jq_path='["channels",'"$chnls_index"',"stream_link"]'
+                    JQ add "$CHANNELS_FILE" ["\"${stream_links[0]}\""]
+                else
+                    echo
+                    inquirer list_input_index "选择替换的直播源" chnl_stream_links chnl_stream_links_index
+
+                    jq_path='["channels",'"$chnls_index"',"stream_link",'"$chnl_stream_links_index"']'
+                    JQ update "$CHANNELS_FILE" "${stream_links[0]}"
+                fi
+
+                Println "$info 频道 [ $chnl_channel_name ] 修改成功 !\n"
+            done
+        else
+            echo
+            inquirer list_input_index "是否推流 flv" ny_options ny_options_index
+
+            if [ "$ny_options_index" -eq 1 ] 
+            then
+                kind="flv"
+            fi
+
+            AddChannel
+        fi
+    fi
+done
+
+exit 0

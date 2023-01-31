@@ -1,0 +1,30 @@
+VipSetChannelId()
+{
+    Println "请输入频道 ID, 同时也是目录名称"
+    read -p "$i18n_default_cancel" vip_channel_id
+
+    [ -z "$vip_channel_id" ] && Println "$i18n_canceled...\n" && exit 1
+
+    if [[ -n $($JQ_FILE --arg vip_host_ip "$vip_host_ip" --arg vip_channel_id "$vip_channel_id" '.hosts[] | select(.ip==$vip_host_ip).channels[] | select(.id==$vip_channel_id)' "$VIP_FILE") ]] 
+    then
+        Println "$error $vip_channel_id 频道已经存在\n" && exit 1
+    fi
+}
+
+VipSetChannelName()
+{
+    Println "请输入频道名称(可以是中文)"
+    read -p "$i18n_default_cancel" vip_channel_name
+    [ -z "$vip_channel_name" ] && Println "$i18n_canceled...\n" && exit 1
+    Println "  VIP 频道名称: ${green} $vip_channel_name ${normal}\n"
+}
+
+VipSetChannelEpgId()
+{
+    echo
+    inquirer text_input "请输入频道 epg id: " vip_channel_epg_id "$i18n_not_set"
+    if [ "$vip_channel_epg_id" == "$i18n_not_set" ] 
+    then
+        vip_channel_epg_id=""
+    fi
+}

@@ -1,0 +1,23 @@
+IbmDelApp()
+{
+    IbmListCfApp
+
+    Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
+    ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
+    ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
+
+    echo
+    inquirer list_input "是否删除 APP 绑定的路由" yn_options delete_app_routes_yn
+
+    if [ "$delete_app_routes_yn" == "$i18n_yes" ] 
+    then
+        ibmcloud cf delete "$ibm_cf_app_name" -r
+    else
+        ibmcloud cf delete "$ibm_cf_app_name"
+    fi
+
+    jq_path='["cf","apps",'"$ibm_cf_apps_index"']'
+    JQ delete "$IBM_CONFIG"
+
+    Println "$info APP $ibm_cf_app_name 删除成功"
+}

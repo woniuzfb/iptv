@@ -1,0 +1,121 @@
+shift
+
+GetChannels
+
+if [ "$chnls_count" -gt 0 ] 
+then
+    hls_indices=()
+    hls_stream_links_list=()
+    flv_list=""
+    hls_list=""
+
+    indices=()
+
+    if [ -n "${1:-}" ] 
+    then
+        for num in "${@}"
+        do
+            indices+=("$((num-1))")
+        done
+    else
+        indices=("${!chnls_pid[@]}")
+    fi
+
+    for i in "${indices[@]}"
+    do
+        if [ "${chnls_flv_status[i]:-}" == "on" ] 
+        then
+            IFS="${delimiters[0]}" read -ra chnl_stream_links <<< "${chnls_stream_link[i]}"
+
+            chnl_stream_links_list=""
+
+            for((j=0;j<${#chnl_stream_links[@]};j++));
+            do
+                chnl_stream_links_list="$chnl_stream_links_list${indent_6}源$((j+1)): ${chnl_stream_links[j]}\n"
+            done
+
+            flv_list="$flv_list  ${green}$((i+1)).${normal}${indent_6}${chnls_channel_name[i]}\n\n$chnl_stream_links_list\n${indent_6}拉: ${chnls_flv_pull_link[i]:-无}\n\n"
+        elif [ "${chnls_status[i]:-}" == "on" ] 
+        then
+            IFS="${delimiters[0]}" read -ra chnl_stream_links <<< "${chnls_stream_link[i]}"
+
+            chnl_stream_links_list=""
+
+            for((j=0;j<${#chnl_stream_links[@]};j++));
+            do
+                chnl_stream_links_list="$chnl_stream_links_list${indent_6}源$((j+1)): ${chnl_stream_links[j]}\n"
+            done
+
+            hls_indices+=("$i")
+            hls_stream_links_list+=("$chnl_stream_links_list")
+
+            hls_list="$hls_list  ${green}$((i+1)).${normal}${indent_6}${chnls_channel_name[i]}\n\n$chnl_stream_links_list\n\n"
+        fi
+    done
+fi
+
+echo
+
+if [ -n "${hls_indices:-}" ] 
+then
+    for((i=0;i<${#hls_indices[@]};i++));
+    do
+        hls_index=${hls_indices[i]}
+        echo -e "  ${green}$((i+1)).${normal}${indent_6}${chnls_channel_name[hls_index]}\n\n${hls_stream_links_list[i]}"
+        if [ -d "$LIVE_ROOT/${chnls_output_dir_name[hls_index]}" ] 
+        then
+            if ls -A "$LIVE_ROOT/${chnls_output_dir_name[hls_index]}"/* > /dev/null 2>&1 
+            then
+                ls "$LIVE_ROOT/${chnls_output_dir_name[hls_index]}"/* -lght && echo
+            else
+                Println "$error 无\n"
+            fi
+        else
+            Println "$error 目录不存在\n"
+        fi
+    done
+fi
+
+if [ -n "${flv_list:-}" ] 
+then
+    Println "${green}FLV 频道${normal}\n\n$flv_list"
+fi
+
+if [ -n "${hls_list:-}" ] 
+then
+    Println "${green}HLS 频道${normal}\n\n$hls_list"
+fi
+
+if [ -z "${1:-}" ] && ls -A $LIVE_ROOT/* > /dev/null 2>&1 
+then
+    for output_dir_root in "$LIVE_ROOT"/*
+    do
+        output_dir_name=${output_dir_root#*$LIVE_ROOT/}
+
+        if [ -n "${hls_indices:-}" ] 
+        then
+            for hls_index in "${hls_indices[@]}"
+            do
+                if [ "$output_dir_name" == "${chnls_output_dir_name[hls_index]}" ] 
+                then
+                    continue 2
+                fi
+            done
+        fi
+
+        Println "$error 未知目录 $output_dir_name\n"
+
+        if ls -A "$output_dir_root"/* > /dev/null 2>&1 
+        then
+            ls "$output_dir_root"/* -lght
+        fi
+    done
+fi
+
+if [ -z "${flv_list:-}" ] && [ -z "${hls_list:-}" ]
+then
+    Println "$error 没有开启的频道 !\n"
+    exit 1
+fi
+
+exit 0

@@ -1,0 +1,1677 @@
+V2raySetListen()
+{
+    echo
+    inquirer text_input "输入监听地址: " listen "0.0.0.0"
+}
+
+V2raySetFollowRedirect()
+{
+    Println "$tip 如果选 是, 安全起见需要你自己设置透明代理的防火墙 详见: https://www.v2fly.org/config/protocols/dokodemo.html"
+    inquirer list_input "识别出由 iptables 转发而来的数据, 并转发到相应的目标地址" ny_options follow_redirect
+    if [ "$follow_redirect" == "$i18n_no" ] 
+    then
+        follow_redirect=false
+    else
+        follow_redirect=true
+    fi
+}
+
+V2raySetAddress()
+{
+    echo
+    ExitOnText "输入目标服务器地址(ip或域名): " address
+}
+
+V2raySetDnsAddress()
+{
+    Println "$tip 当不指定时, 保持来源中指定的地址不变"
+    inquirer text_input "修改 DNS 服务器地址: " dns_address "不指定"
+
+    if [ "$dns_address" == "不指定" ] 
+    then
+        dns_address=""
+    fi
+}
+
+V2raySetLocalPort()
+{
+    Println "请输入端口, 可以是 整型数值, 环境变量, 端口范围"
+    while read -p "(默认: 随机生成): " port
+    do
+        case "$port" in
+            "")
+                port=$(GetFreePort)
+                break
+            ;;
+            *[!0-9]*)
+                if [[ $port =~ ^([0-9]+)-([0-9]+)$ ]] 
+                then
+                    break
+                else
+                    Println "$error 输入错误\n"
+                fi
+            ;;
+            *)
+                if [ "$port" -ge 1 ] && [ "$port" -le 65535 ]
+                then
+                    if ( echo -n "" >/dev/tcp/127.0.0.1/"$port" ) >/dev/null 2>&1
+                    then
+                        Println "$error 端口已被其他程序占用!请重新输入! \n"
+                    else
+                        break
+                    fi
+                else
+                    Println "$error $i18n_input_correct_number [1-65535]\n"
+                fi
+            ;;
+        esac
+    done
+    Println "  端口: ${green} $port ${normal}"
+}
+
+V2raySetAddressPort()
+{
+    Println "请输入端口"
+    while read -p "$i18n_default_cancel" address_port
+    do
+        case "$address_port" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                if [ "$address_port" -gt 0 ] && [ "$address_port" -le 65535 ]
+                then
+                    break
+                else
+                    Println "$error $i18n_input_correct_number\n"
+                fi
+            ;;
+        esac
+    done
+    Println "  端口: ${green} $address_port ${normal}"
+}
+
+V2raySetSocksVersion()
+{
+    echo
+    socks_version_options=( '5' '4a' '4' )
+    inquirer list_input "选择 Socks 协议版本" socks_version_options socks_version
+}
+
+V2raySetDnsPort()
+{
+    Println "$tip 当不指定时, 保持来源中指定的端口不变"
+    inquirer text_input "修改 DNS 服务器端口: " dns_port "不指定"
+    if [ "$dns_port" == "不指定" ] 
+    then
+        dns_port=""
+    fi
+}
+
+V2raySetSettingsNetwork()
+{
+    Println "$tip 比如当指定为 tcp 时, 仅会接收 TCP 流量"
+    settings_network_options=( 'tcp' 'udp' 'tcp,udp' )
+    inquirer list_input "可接收的网络协议类型" settings_network_options settings_network
+}
+
+V2raySetIvCheck()
+{
+    echo
+    inquirer list_input_index "启用 IV 检查功能" ny_options ny_options_index
+
+    if [ "$ny_options_index" -eq 0 ] 
+    then
+        iv_check=false
+    else
+        iv_check=true
+    fi
+}
+
+V2raySetDnsNetwork()
+{
+    Println "$tip 当不指定时, 保持来源的传输方式不变"
+    dns_network_options=( 'tcp' 'udp' '不指定' )
+    inquirer list_input "DNS 流量的传输层协议" dns_network_options dns_network
+    if [ "$dns_network" == "不指定" ] 
+    then
+        dns_network=""
+    fi
+}
+
+V2raySetInboundProtocol()
+{
+    echo
+    protocol_options=( 'vmess' 'vless' 'http' 'socks' 'shadowsocks' 'dokodemo-door' 'trojan' )
+    inquirer list_input "选择传输协议" protocol_options protocol
+}
+
+V2raySetOutboundProtocol()
+{
+    echo
+    protocol_options=( 'vmess' 'vless' 'http' 'socks' 'shadowsocks' 'trojan' 'blackhole' 'dns' 'freedom' )
+    if [ "$v2ray_name" == "v2ray" ] 
+    then
+        protocol_options+=('loopback')
+    fi
+    inquirer list_input "选择传输协议" protocol_options protocol
+}
+
+V2raySetInboundNetwork()
+{
+    echo
+    network_options=( 'ws' 'tcp' 'kcp' 'http/2' 'quic' 'domainsocket' 'grpc' )
+    inquirer list_input "选择传输方式" network_options network
+    if [ "$network" == "http/2" ] 
+    then
+        network="http"
+    fi
+}
+
+V2raySetOutboundNetwork()
+{
+    echo
+    network_options=( 'ws' 'tcp' 'kcp' 'http/2' 'quic' 'grpc' )
+    inquirer list_input "选择传输方式" network_options network
+    if [ "$network" == "http/2" ] 
+    then
+        network="http"
+    fi
+}
+
+V2raySetSecurity()
+{
+    echo
+    if [ "$v2ray_name" == "xray" ] && { [ "$protocol" == "vless" ] || [ "$protocol" == "trojan" ]; }
+    then
+        security_options=( 'none' 'tls' 'xtls' )
+    else
+        security_options=( 'none' 'tls' )
+    fi
+    inquirer list_input "选择传输加密" security_options security
+}
+
+V2raySetTlsServerName()
+{
+    Println "$tip 在连接由 IP 建立时有用"
+    inquirer text_input "指定服务器端证书的域名" tls_server_name "$i18n_not_set"
+    if [ "$tls_server_name" == "$i18n_not_set" ] 
+    then
+        tls_server_name=""
+    fi
+}
+
+V2raySetTlsAllowInsecure()
+{
+    Println "$tip 在自定义证书的情况开可以选 否"
+    inquirer list_input_index "是否检测证书有效性" yn_options yn_options_index
+    if [ "$yn_options_index" -eq 0 ]
+    then
+        tls_allow_insecure=false
+    else
+        tls_allow_insecure=true
+    fi
+}
+
+V2raySetTlsAlpn()
+{
+    if [ -n "${new_inbound:-}" ] && { [ "$protocol" == "vless" ] || [ "$protocol" == "trojan" ]; } && [ "$network" == "tcp" ]
+    then
+        Println "$tip 多个 ALPN 值用空格分隔, 如果要设置 $protocol 协议回落这里至少需要 http/1.1"
+    else
+        Println "$tip 多个 ALPN 值用空格分隔"
+    fi
+    inquirer text_input "指定 ALPN 值" tls_alpn "h2 http/1.1"
+    IFS=" " read -r -a tls_alpns <<< "$tls_alpn"
+    printf -v tls_alpn ',"%s"' "${tls_alpns[@]}"
+    tls_alpn=${tls_alpn:1}
+}
+
+V2raySetTlsDisableSystemRoot()
+{
+    Println "$tip 不禁用时只会使用操作系统自带的 CA 证书进行 $tls_name 握手"
+
+    if [ -n "${new_inbound:-}" ] 
+    then
+        inquirer list_input "是否禁用操作系统自带的 CA 证书" yn_options tls_disable_system_root_yn
+    else
+        inquirer list_input "是否禁用操作系统自带的 CA 证书" ny_options tls_disable_system_root_yn
+    fi
+
+    if [ "$tls_disable_system_root_yn" == "$i18n_no" ] 
+    then
+        tls_disable_system_root=false
+    else
+        tls_disable_system_root=true
+    fi
+}
+
+V2raySetTlsMinVersion()
+{
+    echo
+    inquirer text_input "输入可接受的最小 TLS 版本: " tls_min_version "$i18n_not_set"
+
+    if [ "$tls_min_version" == "$i18n_not_set" ] 
+    then
+        tls_min_version=""
+    fi
+}
+
+V2raySetTlsMaxVersion()
+{
+    echo
+    inquirer text_input "输入可接受的最大 TLS 版本: " tls_max_version "$i18n_not_set"
+
+    if [ "$tls_max_version" == "$i18n_not_set" ] 
+    then
+        tls_max_version=""
+    fi
+}
+
+V2raySetTlsPreferServerCipherSuites()
+{
+    echo
+    inquirer list_input "优先服务器密码套件" ny_options tls_prefer_server_cipher_suites_yn
+
+    if [ "$tls_prefer_server_cipher_suites_yn" == "$i18n_no" ] 
+    then
+        tls_prefer_server_cipher_suites=false
+    else
+        tls_prefer_server_cipher_suites=true
+    fi
+}
+
+V2raySetTlsCipherSuites()
+{
+    Println "$tip 每个套件名称之间用:进行分隔"
+    inquirer text_input "输入密码套件" tls_cipher_suites "$i18n_not_set"
+
+    if [ "$tls_cipher_suites" == "$i18n_not_set" ] 
+    then
+        tls_cipher_suites=""
+    fi
+}
+
+V2raySetTlsEnableSessionResumption()
+{
+    echo
+    inquirer list_input "开启 ClientHello 的 session_ticket 扩展" ny_options tls_enable_session_resumption_yn
+
+    if [ "$tls_enable_session_resumption_yn" == "$i18n_no" ] 
+    then
+        tls_enable_session_resumption=false
+    else
+        tls_enable_session_resumption=true
+    fi
+}
+
+V2raySetTlsFingerprint()
+{
+    echo
+    tls_fingerprint_options=( '不设置' 'chrome' 'firefox' 'safari' 'randomized' )
+    inquirer list_input "指定 TLS Client Hello 的指纹" tls_fingerprint_options tls_fingerprint
+
+    if [ "$tls_fingerprint" == "$i18n_not_set" ] 
+    then
+        tls_fingerprint=""
+    fi
+}
+
+V2raySetTlsRejectUnknownSni()
+{
+    echo
+    inquirer list_input "拒绝未知 SNI" yn_options tls_reject_unknown_sni_yn
+
+    if [ "$tls_reject_unknown_sni_yn" == "$i18n_yes" ] 
+    then
+        tls_reject_unknown_sni=true
+    else
+        tls_reject_unknown_sni=false
+    fi
+}
+
+V2raySetTlsVerifyClientCertificate()
+{
+    echo
+    inquirer list_input "在连接时进行客户端证书认证" ny_options tls_verify_client_certificate_yn
+
+    if [ "$tls_verify_client_certificate_yn" == "$i18n_no" ] 
+    then
+        tls_verify_client_certificate=false
+    else
+        tls_verify_client_certificate=true
+    fi
+}
+
+V2raySetTlsPinnedPeerCertificateChainSha256()
+{
+    echo
+    inquirer text_input "证书链的SHA256散列值" tls_pinned_peer_certificate_chain_sha256 "$i18n_not_set"
+
+    if [ "$tls_pinned_peer_certificate_chain_sha256" == "$i18n_not_set" ] 
+    then
+        tls_pinned_peer_certificate_chain_sha256=""
+    fi
+}
+
+V2raySetCertificateFile()
+{
+    Println "$tip 如使用 OpenSSL 生成, 后缀名为 .crt, 文件必须存在"
+    inquirer text_input "输入证书文件路径: " certificate_file
+
+    if [ -s "$certificate_file" ] 
+    then
+        cp -f "$certificate_file" /usr/local/share/$v2ray_name/
+        certificate_file="/usr/local/share/$v2ray_name/${certificate_file##*/}"
+        chown $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/*
+        Println "$info 已复制证书到 $certificate_file 并赋予 $v2ray_name:$v2ray_name 权限"
+    else
+        Println "$error 证书不存在, 请稍后手动添加证书并赋予 $v2ray_name 权限(chown $v2ray_name:$v2ray_name $certificate_file)"
+    fi
+}
+
+V2raySetKeyFile()
+{
+    Println "$tip 如使用 OpenSSL 生成, 后缀名为 .key, 密钥必须存在"
+    inquirer text_input "输入证书密钥路径: " key_file
+
+    if [ -s "$key_file" ] 
+    then
+        cp -f "$key_file" /usr/local/share/$v2ray_name/
+        key_file="/usr/local/share/$v2ray_name/${key_file##*/}"
+        chown $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/*
+        Println "$info 已复制密钥到 $key_file 并赋予 $v2ray_name:$v2ray_name 权限"
+    else
+        Println "$error 密钥不存在, 请稍后手动添加密钥并赋予 $v2ray_name 权限(chown $v2ray_name:$v2ray_name $key_file)"
+    fi
+}
+
+V2raySetCertificates()
+{
+    echo
+    usage_options=( "$tls_name 认证和加密" "验证远端 $tls_name 的证书" "签发其它证书" )
+
+    if [ "$v2ray_name" == "v2ray" ] 
+    then
+        usage_options+=("验证客户端身份")
+    else
+        inquirer list_input "开启证书热重载功能和 OCSP 装订" ny_options ny_option
+
+        if [ "$ny_option" == "$i18n_no" ] 
+        then
+            one_time_loading=true
+            ocsp_stapling=3600
+        else
+            one_time_loading=false
+            echo
+            inquirer text_input "输入 OCSP 装订更新与证书热重载的时间间隔(秒): " ocsp_stapling 3600
+        fi
+
+        echo
+    fi
+
+    inquirer list_input_index "选择证书用途" usage_options usage_options_index
+
+    if [ "$usage_options_index" -eq 0 ] 
+    then
+        usage="encipherment"
+    elif [ "$usage_options_index" -eq 1 ] 
+    then
+        usage="verify"
+    elif [ "$usage_options_index" -eq 2 ] 
+    then
+        usage="issue"
+    else
+        usage="verifyclient"
+    fi
+
+    echo
+    add_crt_options=( '自签名 / CA证书' '选择现有证书/请求真实域名证书' '输入证书地址' )
+    inquirer list_input "选择添加证书方式" add_crt_options add_crt_option
+
+    if [ "$add_crt_option" == "自签名 / CA证书" ] 
+    then
+        if [ "$v2ray_name" == "xray" ] 
+        then
+            crt=$($V2CTL_FILE tls cert)
+        elif [ "$usage" == "encipherment" ] 
+        then
+            echo
+            inquirer list_input "是否是 CA 证书" yn_options ca_yn
+            if [ "$ca_yn" == "$i18n_yes" ] 
+            then
+                crt=$($V2CTL_FILE cert -ca)
+            else
+                crt=$($V2CTL_FILE cert)
+            fi
+        else
+            crt=$($V2CTL_FILE cert -ca)
+        fi
+        certificate=$($JQ_FILE "{\"usage\":\"$usage\"} * ." <<< "$crt")
+    elif [ "$add_crt_option" == "选择现有证书/请求真实域名证书" ] 
+    then
+        if ls -A /usr/local/share/$v2ray_name/*.crt > /dev/null 2>&1 
+        then
+            crt_options=()
+            for f in /usr/local/share/$v2ray_name/*.crt
+            do
+                domain=${f##*/}
+                domain=${domain%.*}
+                crt_options+=("$domain")
+            done
+            crt_options+=("添加域名")
+            echo
+            inquirer list_input "选择证书" crt_options crt_option
+        else
+            crt_option="添加域名"
+        fi
+        if [ "$crt_option" == "添加域名" ] 
+        then
+            Println "$tip 如果证书不存在需请求新 CA 证书, 请确保没有程序占用 80 端口或已经设置 mmproxy acme"
+            ExitOnText "输入域名: " domain
+
+            if [ ! -s "/usr/local/share/$v2ray_name/$domain.crt" ] 
+            then
+                if [ -s "/usr/local/nginx/conf/sites_crt/$domain.crt" ] 
+                then
+                    cp -f "/usr/local/nginx/conf/sites_crt/$domain.crt" "/usr/local/share/$v2ray_name/$domain.crt"
+                    cp -f "/usr/local/nginx/conf/sites_crt/$domain.key" "/usr/local/share/$v2ray_name/$domain.key"
+                elif [ -s "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" ] 
+                then
+                    cp -f "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" "/usr/local/share/$v2ray_name/$domain.crt"
+                    cp -f "/usr/local/openresty/nginx/conf/sites_crt/$domain.key" "/usr/local/share/$v2ray_name/$domain.key"
+                else
+                    AcmeCheck
+
+                    Println "$info 安装 $domain 证书..."
+
+                    V2rayDomainUpdateCrt "$domain"
+
+                    Println "$info $domain 证书安装成功"
+                fi
+            fi
+            chown $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/*
+            certificate=$(
+            $JQ_FILE -n --arg usage "$usage" --arg certificateFile "/usr/local/share/$v2ray_name/$domain.crt" \
+                --arg keyFile "/usr/local/share/$v2ray_name/$domain.key" \
+            '{
+                "usage": $usage,
+                "certificateFile": $certificateFile,
+                "keyFile": $keyFile
+            }')
+        else
+            certificate=$(
+            $JQ_FILE -n --arg usage "$usage" --arg certificateFile "/usr/local/share/$v2ray_name/$crt_option.crt" \
+                --arg keyFile "/usr/local/share/$v2ray_name/$crt_option.key" \
+            '{
+                "usage": $usage,
+                "certificateFile": $certificateFile,
+                "keyFile": $keyFile
+            }')
+        fi
+    else
+        V2raySetCertificateFile
+
+        if [ "$usage" == "verify" ] 
+        then
+            echo
+            inquirer list_input "是否继续添加证书密钥" ny_options continue_yn
+            if [ "$continue_yn" == "$i18n_no" ] 
+            then
+                certificate=$(
+                $JQ_FILE -n --arg usage "$usage" --arg certificateFile "$certificate_file" \
+                '{
+                    "usage": $usage,
+                    "certificateFile": $certificateFile
+                }')
+                return 0
+            fi
+        fi
+
+        V2raySetKeyFile
+
+        certificate=$(
+        $JQ_FILE -n --arg usage "$usage" --arg certificateFile "$certificate_file" \
+            --arg keyFile "$key_file" \
+        '{
+            "usage": $usage,
+            "certificateFile": $certificateFile,
+            "keyFile": $keyFile
+        }')
+    fi
+
+    if [ "$v2ray_name" == "xray" ] 
+    then
+        certificate=$(
+        $JQ_FILE --arg ocspStapling "$ocsp_stapling" \
+            --arg oneTimeLoading "$one_time_loading" \
+        '{
+            "ocspStapling": $ocspStapling | tonumber,
+            "oneTimeLoading": $oneTimeLoading | test("true")
+        } * .' <<< "$certificate")
+    fi
+
+    Println "$info 证书添加成功"
+}
+
+V2raySetInboundSockoptTcpFastOpen()
+{
+    echo
+    sockopt_tfo_options=( '系统默认' '强制开启' '强制关闭' )
+    inquirer list_input_index "TCP Fast Open" sockopt_tfo_options sockopt_tfo_options_index
+
+    if [ "$sockopt_tfo_options_index" -eq 0 ] 
+    then
+        sockopt_tfo=""
+    elif [ "$sockopt_tfo_options_index" -eq 1 ] 
+    then
+        if [ "$v2ray_name" == "xray" ] 
+        then
+            Println "$tip 表示待处理的 TFO 连接请求数上限"
+            inquirer text_input "输入正整数" sockopt_tfo 256
+            return 0
+        fi
+        sockopt_tfo=true
+    else
+        sockopt_tfo=false
+    fi
+}
+
+V2raySetOutboundSockoptTcpFastOpen()
+{
+    echo
+    sockopt_tfo_options=( '系统默认' '强制开启' '强制关闭' )
+    inquirer list_input_index "TCP Fast Open" sockopt_tfo_options sockopt_tfo_options_index
+
+    if [ "$sockopt_tfo_options_index" -eq 0 ] 
+    then
+        sockopt_tfo=""
+    elif [ "$sockopt_tfo_options_index" -eq 1 ] 
+    then
+        sockopt_tfo=true
+    else
+        sockopt_tfo=false
+    fi
+}
+
+V2raySetSockoptTproxy()
+{
+    echo
+    sockopt_tproxy_options=( 'off' 'redirect' 'tproxy' )
+    inquirer list_input "设置透明代理模式" sockopt_tproxy_options sockopt_tproxy
+}
+
+V2raySetSockoptMark()
+{
+    Println "$tip 当其值非零时, 在出站连接上标记 SO_MARK"
+    inquirer text_input "输入出站连接标记(整数): " sockopt_mark 0
+}
+
+V2raySetSockoptTcpKeepAliveInterval()
+{
+    Println "$tip 0 代表保持默认值"
+    inquirer text_input "TCP 保持活跃的数据包发送间隔(秒): " sockopt_tcp_keep_alive_interval 0
+}
+
+V2raySetSockoptDomainStrategy()
+{
+    echo
+    sockopt_domain_strategy_options=( "AsIs" "UseIP" "UseIPv4" "UseIPv6" )
+    inquirer list_input "选择建立连接时域名解析方式" sockopt_domain_strategy_options sockopt_domain_strategy
+}
+
+V2raySetSockoptDialerProxy()
+{
+    Println "$tip 此选项可用于支持底层传输方式的链式转发"
+    inquirer text_input "出站代理的标识: " sockopt_dialer_proxy "$i18n_not_set"
+
+    if [ "$sockopt_dialer_proxy" == "$i18n_not_set" ] 
+    then
+        sockopt_dialer_proxy=""
+    fi
+}
+
+V2raySetSockoptAcceptProxyProtocol()
+{
+    echo
+    inquirer list_input "接收 PROXY protocol" ny_options sockopt_accept_proxy_protocol_yn
+
+    if [ "$sockopt_accept_proxy_protocol_yn" == "$i18n_yes" ] 
+    then
+        sockopt_accept_proxy_protocol=true
+    else
+        sockopt_accept_proxy_protocol=false
+    fi
+}
+
+V2raySetPath()
+{
+    echo
+    inquirer text_input "输入路径: " path "$i18n_random"
+    if [ "$path" == "$i18n_random" ]
+    then
+        path="/$(RandStr)"
+        Println "  路径: ${green} $path ${normal}"
+    fi
+}
+
+V2raySetWsHeaders()
+{
+    ws_headers=""
+    while true 
+    do
+        echo
+        inquirer text_input "输入自定义 HTTP 头的名称: " ws_header_name "$i18n_not_set"
+        if [ "$ws_header_name" == "$i18n_not_set" ] 
+        then
+            break
+        fi
+        echo
+        inquirer text_input "输入自定义 HTTP 头 $ws_header_name 的值: " ws_header_value "$i18n_not_set"
+        if [ "$ws_header_value" == "$i18n_not_set" ] 
+        then
+            break
+        fi
+        [ -n "$ws_headers" ] && ws_headers="$ws_headers, "
+        ws_headers="$ws_headers\"$ws_header_name\":\"$ws_header_value\""
+        echo
+        inquirer list_input "是否继续添加" ny_options continue_yn
+        if [ "$continue_yn" == "$i18n_no" ] 
+        then
+            break
+        fi
+    done
+}
+
+V2raySetInboundMaxEarlyData()
+{
+    echo
+    inquirer list_input "启用前置数据支持" ny_options max_early_data_yn
+
+    if [ "$max_early_data_yn" == "$i18n_no" ] 
+    then
+        max_early_data=1
+    else
+        max_early_data=0
+    fi
+}
+
+V2raySetOutboundMaxEarlyData()
+{
+    echo
+    inquirer text_input "输入发送的前置数据的最长长度" max_early_data 0
+}
+
+V2raySetEarlyDataHeaderName()
+{
+    Println "$tip 当且仅当 HTTP 头的名字为 Sec-WebSocket-Protocol 时可以启用基于 HTTP 头的前置数据浏览器转发功能"
+    inquirer text_input "输入发送的前置数据的 HTTP 头的名字: " early_data_header_name "$i18n_not_set"
+
+    if [ "$early_data_header_name" == "$i18n_not_set" ] 
+    then
+        earlyDataHeaderName=""
+    fi
+}
+
+V2raySetUseBrowserForwarding()
+{
+    echo
+    inquirer list_input "启用浏览器转发" ny_options use_browser_forwarding_yn
+
+    if [ "$use_browser_forwarding_yn" == "$i18n_no" ] 
+    then
+        use_browser_forwarding=false
+    else
+        use_browser_forwarding=true
+    fi
+}
+
+V2raySetHttpMethod()
+{
+    echo
+    inquirer text_input "输入 HTTP 方法: " http_method PUT
+}
+
+V2raySetHttpHeaders()
+{
+    http_headers=""
+    while true 
+    do
+        echo
+        inquirer text_input "输入自定义 HTTP 头的名称: " http_header_name "$i18n_not_set"
+        if [ "$http_header_name" == "$i18n_not_set" ] 
+        then
+            break
+        fi
+
+        http_header_values=""
+        http_header_values_count=0
+
+        while true 
+        do
+            echo
+            inquirer text_input "输入自定义 HTTP 头 $http_header_name 的值: " http_header_value "$i18n_not_set"
+
+            if [ "$http_header_value" == "$i18n_not_set" ] 
+            then
+                http_header_value=""
+            else
+                http_header_value=${http_header_value//\\/\\\\}
+                http_header_value=${http_header_value//\"/\\\"}
+            fi
+
+            http_header_values_count=$((http_header_values_count+1))
+
+            [ -n "$http_header_values" ] && http_header_values="$http_header_values,"
+
+            http_header_values="$http_header_values\"$http_header_value\""
+
+            echo
+            inquirer list_input "是否继续添加自定义 HTTP 头 $http_header_name 的值" ny_options continue_yn
+
+            if [ "$continue_yn" == "$i18n_no" ] 
+            then
+                break
+            fi
+        done
+
+        [ -n "$http_headers" ] && http_headers="$http_headers, "
+
+        if [ "$http_header_values_count" -eq 1 ] 
+        then
+            http_headers="$http_headers\"$http_header_name\":$http_header_values"
+        else
+            http_headers="$http_headers\"$http_header_name\":[$http_header_values]"
+        fi
+
+        inquirer list_input "是否继续添加自定义 HTTP 头" ny_options continue_yn
+
+        if [ "$continue_yn" == "$i18n_no" ] 
+        then
+            break
+        fi
+    done
+}
+
+V2raySetId()
+{
+    echo
+    inquirer text_input "输入 id: " id "$i18n_random"
+    if [ "$id" == "$i18n_random" ] 
+    then
+        id=$($V2CTL_FILE uuid)
+        Println "  id: ${green} $id ${normal}"
+    fi
+}
+
+V2raySetInboundFlow()
+{
+    echo
+    flow_options=( 'xtls-rprx-direct' 'xtls-rprx-origin' )
+    inquirer list_input "选择模式" flow_options flow
+}
+
+V2raySetOutboundFlow()
+{
+    echo
+    flow_options=( 'xtls-rprx-direct' 'xtls-rprx-direct-udp443' 'xtls-rprx-splice' 'xtls-rprx-splice-udp443' 'xtls-rprx-origin' 'xtls-rprx-origin-udp443' )
+    inquirer list_input "选择模式" flow_options flow
+}
+
+V2raySetAlterId()
+{
+    Println "请输入 alterId"
+    while read -p "(默认: 0): " alter_id
+    do
+        case "$alter_id" in
+            "")
+                alter_id=0
+                break
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number [0-65535]\n"
+            ;;
+            *)
+                if [ "$alter_id" -ge 0 ] && [ "$alter_id" -le 65535 ]
+                then
+                    break
+                else
+                    Println "$error $i18n_input_correct_number [0-65535]\n"
+                fi
+            ;;
+        esac
+    done
+    Println "  alterId: ${green} $alter_id ${normal}"
+}
+
+V2raySetEmail()
+{
+    echo
+    inquirer text_input "输入邮箱: " email "$i18n_random"
+    if [ "$email" == "$i18n_random" ] 
+    then
+        email="$(RandStr)@localhost"
+        Println "  邮箱: ${green} $email ${normal}"
+    fi
+}
+
+V2raySetPassword()
+{
+    echo
+    inquirer text_input "输入密码: " password "$i18n_random"
+    if [ "$password" == "$i18n_random" ] 
+    then
+        password=$(RandStr)
+        Println "  密码: ${green} $password ${normal}"
+    fi
+}
+
+V2raySetTimeout()
+{
+    Println "入站数据的时间限制(秒)"
+    while read -p "(默认: 300): " timeout
+    do
+        case "$timeout" in
+            "")
+                timeout=300
+                break
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number [>0]\n"
+            ;;
+            *)
+                if [ "$timeout" -gt 0 ]
+                then
+                    break
+                else
+                    Println "$error $i18n_input_correct_number [>0]\n"
+                fi
+            ;;
+        esac
+    done
+    Println "  时间限制: ${green} $timeout ${normal}"
+}
+
+V2raySetAllowTransparent()
+{
+    echo
+    inquirer list_input "转发所有 HTTP 请求, 而非只是代理请求, 若配置不当, 开启此选项会导致死循环" ny_options allow_transparent_yn
+    if [[ $allow_transparent_yn == "$i18n_yes" ]]
+    then
+        allow_transparent=true
+    else
+        allow_transparent=false
+    fi
+    Println "  allowTransparent: ${green} $allow_transparent ${normal}"
+}
+
+V2raySetLevel()
+{
+    V2rayListPolicy
+
+    echo -e "选择等级"
+    while read -p "(默认: 1): " level
+    do
+        case "$level" in
+            "")
+                level=0
+                break
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$level" -gt 0 ] && [ "$level" -le $((policy_levels_count+1)) ]
+                then
+                    level=$((level-1))
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+    Println "  等级: ${green} $level ${normal}\n"
+}
+
+V2raySetHttpAccount()
+{
+    echo
+    inquirer text_input "输入用户名: " user "$i18n_random"
+    if [ "$user" == "$i18n_random" ] 
+    then
+        user=$(RandStr)
+        Println "  用户名: ${green} $user ${normal}"
+    fi
+    echo
+    inquirer text_input "输入密码: " pass "$i18n_random"
+    if [ "$pass" == "$i18n_random" ] 
+    then
+        pass=$(RandStr)
+        Println "  密码: ${green} $pass ${normal}"
+    fi
+}
+
+V2raySetTag()
+{
+    echo
+    inquirer text_input "输入标签: " tag "$i18n_random"
+    if [ "$tag" == "$i18n_random" ] 
+    then
+        tag=$(GetFreeTag)
+        tag=${tag//nginx-/}
+        Println "  标签: ${green} $tag ${normal}"
+    fi
+}
+
+V2raySetNginxTag()
+{
+    i=0
+    while true 
+    do
+        i=$((i+1))
+        tag="nginx-$i"
+        if ! grep -q '"tag": "'"$tag"'"' < "$V2_CONFIG"
+        then
+            break
+        fi
+    done
+    Println "  标签: ${green} $tag ${normal}\n"
+}
+
+V2raySetAcceptProxyProtocol()
+{
+    Println "$tip PROXY 协议专用于传递请求的真实来源 IP 和端口, 如果前端 nginx 发送 PROXY Protocol 必须选是"
+    inquirer list_input "是否接收 PROXY 协议" ny_options accept_proxy_protocol
+    if [[ $accept_proxy_protocol == "$i18n_yes" ]] 
+    then
+        accept_proxy_protocol=true
+    else
+        accept_proxy_protocol=false
+    fi
+}
+
+V2raySetVmessSecurity()
+{
+    echo
+    vmess_security_options=( 'auto' 'aes-128-gcm' 'chacha20-poly1305' 'none' )
+    inquirer list_input "选择加密方式" vmess_security_options vmess_security
+}
+
+V2raySetQuicSecurity()
+{
+    echo
+    quic_security_options=( 'none' 'aes-128-gcm' 'chacha20-poly1305' )
+    inquirer list_input "设置 QUIC 加密方式" quic_security_options quic_security
+}
+
+V2raySetQuicKey()
+{
+    if [ "$quic_security" == "none" ] 
+    then
+        quic_key=""
+    else
+        echo
+        inquirer text_input "输入 QUIC 加密密钥: " quic_key "$i18n_random"
+        if [[ $quic_key == "$i18n_random" ]] 
+        then
+            quic_key=$(RandStr)
+        fi
+    fi
+}
+
+V2raySetDsPath()
+{
+    Println "$tip 在运行 $v2ray_name 之前, 这个文件必须不存在"
+    ExitOnText "输入 domainsocket 文件路径: " ds_path
+
+    Println "  domainsocket 文件路径: ${green} $ds_path ${normal}"
+}
+
+V2raySetDsAbstract()
+{
+    echo
+    inquirer list_input "是否为 abstract domain socket" ny_options ds_abstract
+    if [[ $ds_abstract == "$i18n_no" ]] 
+    then
+        ds_abstract=false
+    else
+        ds_abstract=true
+    fi
+}
+
+V2raySetDsPadding()
+{
+    echo
+    inquirer list_input "abstract domain socket 是否带 padding" ny_options ds_padding
+    if [[ $ds_padding == "$i18n_no" ]] 
+    then
+        ds_padding=false
+    else
+        ds_padding=true
+    fi
+}
+
+V2raySetGrpcServiceName()
+{
+    while true 
+    do
+        echo
+        inquirer text_input "输入 gRPC 服务的名称: " grpc_service_name "$i18n_random"
+
+        case "$grpc_service_name" in
+            "$i18n_random")
+                grpc_service_name=$(RandStr)
+                break
+            ;;
+            *[!0-9A-Za-z_.]*) 
+                Println "$error 名称格式错误\n"
+            ;;
+            *)
+                break
+            ;;
+        esac
+    done
+
+    Println "  gRPC 服务的名称: ${green} $grpc_service_name ${normal}"
+}
+
+V2raySetGrpcMultiMode()
+{
+    echo
+    inquirer list_input "启用 multiMode" ny_options grpc_multi_mode_yn
+
+    if [ "$grpc_multi_mode_yn" == "$i18n_no" ] 
+    then
+        grpc_multi_mode=false
+    else
+        grpc_multi_mode=true
+    fi
+}
+
+V2raySetDetourTo()
+{
+    Println "$tip 指定的入站协议必须是 VMess"
+    inquirer text_input "使用另一个入站的出站(输入指定的另一个入站的标签): " detour_to "$i18n_not_set"
+    Println "  指定的另一个入站: ${green} $detour_to ${normal}"
+}
+
+V2raySetDetourDefault()
+{
+    V2raySetLevel
+    V2raySetAlterId
+}
+
+V2raySetDisableInsecureEncryption()
+{
+    Println "$tip 当客户端使用 none / aes-128-cfb 加密方式时, 服务器会主动断开连接"
+    inquirer list_input_index "是否禁止客户端使用不安全的加密方式" yn_options yn_options_index
+    if [ "$yn_options_index" == "$i18n_yes" ] 
+    then
+        disable_insecure_encryption=true
+    else
+        disable_insecure_encryption=false
+    fi
+}
+
+V2raySetHeaderType()
+{
+    echo
+    if [ "$network" == "tcp" ] 
+    then
+        header_type_options=( 'none' 'http' )
+        header_http_request='{}'
+        header_http_response='{}'
+    else
+        header_type_options=( 'none' 'srtp' 'utp' 'wechat-video' 'dtls' 'wireguard' )
+    fi
+    inquirer list_input "设置数据包头部伪装" header_type_options header_type
+
+    if [ "$header_type" == "http" ] 
+    then
+        echo
+        inquirer text_input "输入 HTTP 请求版本: " http_request_version "1.1"
+
+        echo
+        inquirer text_input "输入 HTTP 请求方法: " http_request_method "GET"
+
+        Println "$tip 多个路径用空格分隔, 当有多个值时, 每次请求随机选择一个值"
+        inquirer text_input "输入 HTTP 请求路径: " http_request_path "/"
+        IFS=" " read -r -a request_path <<< "$http_request_path"
+        printf -v http_request_path ',"%s"' "${request_path[@]}"
+        http_request_path=${http_request_path:1}
+
+        http_request_headers='{}'
+        while true 
+        do
+            echo
+            inquirer text_input "输入自定义 HTTP 请求头的名称: " header_name "$i18n_not_set"
+            if [ "$header_name" == "$i18n_not_set" ] 
+            then
+                break
+            fi
+
+            Println "$tip 多个值用 | 分隔"
+            inquirer text_input "输入自定义 HTTP 请求头 $header_name 的值: " header_value "$i18n_not_set"
+            if [ "$header_value" == "$i18n_not_set" ] 
+            then
+                break
+            fi
+
+            if [[ $header_value =~ \| ]] 
+            then
+                IFS="|" read -r -a header_values <<< "$header_value"
+                printf -v header_value ',"%s"' "${header_values[@]}"
+                header_value="${header_value:1}"
+                http_request_headers=$(
+                $JQ_FILE --arg key "$header_name" --argjson value "[$header_value]" \
+                '. * 
+                {
+                    ($key): $value
+                }' <<< "$http_request_headers")
+            else
+                http_request_headers=$(
+                $JQ_FILE --arg key "$header_name" --arg value "$header_value" \
+                '. * 
+                {
+                    ($key): $value
+                }' <<< "$http_request_headers")
+            fi
+
+            echo
+            inquirer list_input "是否继续添加" ny_options continue_yn
+            if [ "$continue_yn" == "$i18n_no" ] 
+            then
+                break
+            fi
+        done
+
+        header_http_request=$(
+        $JQ_FILE -n --arg version "$http_request_version" --arg method "$http_request_method" \
+        --argjson path "[$http_request_path]" --argjson headers "$http_request_headers" \
+        '{
+            "version": $version,
+            "method": $method,
+            "path": $path,
+            "headers": $headers,
+        }')
+
+        echo
+        inquirer text_input "输入 HTTP 响应版本: " http_response_version "1.1"
+
+        echo
+        inquirer text_input "输入 HTTP 响应状态: " http_response_status "200"
+
+        echo
+        inquirer text_input "输入 HTTP 响应说明: " http_response_reason "OK"
+
+        http_response_headers='{}'
+        while true 
+        do
+            echo
+            inquirer text_input "输入自定义 HTTP 响应头的名称: " header_name "$i18n_not_set"
+            if [ "$header_name" == "$i18n_not_set" ] 
+            then
+                break
+            fi
+
+            Println "$tip 多个值用|分隔"
+            inquirer text_input "输入自定义 HTTP 响应头 $header_name 的值: " header_value "$i18n_not_set"
+            if [ "$header_value" == "$i18n_not_set" ] 
+            then
+                break
+            fi
+
+            if [[ $header_value =~ \| ]] 
+            then
+                IFS="|" read -r -a header_values <<< "$header_value"
+                printf -v header_value ',"%s"' "${header_values[@]}"
+                header_value="${header_value:1}"
+                http_response_headers=$(
+                $JQ_FILE --arg key "$header_name" --argjson value "[$header_value]" \
+                '. * 
+                {
+                    ($key): $value
+                }' <<< "$http_response_headers")
+            else
+                http_response_headers=$(
+                $JQ_FILE --arg key "$header_name" --arg value "$header_value" \
+                '. * 
+                {
+                    ($key): $value
+                }' <<< "$http_response_headers")
+            fi
+
+            echo
+            inquirer list_input "是否继续添加" ny_options continue_yn
+            if [ "$continue_yn" == "$i18n_no" ] 
+            then
+                break
+            fi
+        done
+
+        header_http_response=$(
+        $JQ_FILE -n --arg version "$http_response_version" --arg status "$http_response_status" \
+        --arg reason "$http_response_reason" --argjson headers "$http_response_headers" \
+        '{
+            "version": $version,
+            "status": $status,
+            "reason": $reason,
+            "headers": $headers,
+        }')
+    fi
+}
+
+V2raySetKcpMtu()
+{
+    Println "$tip 介于 576 ~ 1460"
+    inquirer text_input "输入最大传输单元: " kcp_mtu 1350
+}
+
+V2raySetKcpTti()
+{
+    Println "$tip 介于 10 ~ 100"
+    inquirer text_input "输入传输时间间隔(毫秒): " kcp_tti 50
+}
+
+V2raySetKcpUplinkCapacity()
+{
+    Println "$tip 即主机发出数据所用的最大带宽"
+    inquirer text_input "上行链路容量(MB/s): " kcp_uplink_capacity 5
+}
+
+V2raySetKcpDownlinkCapacity()
+{
+    Println "$tip 即主机接收数据所用的最大带宽"
+    inquirer text_input "下行链路容量(MB/s): " kcp_uplink_capacity 20
+}
+
+V2raySetKcpCongestion()
+{
+    Println "$tip 开启后, 当丢包严重时, 会自动降低吞吐量; 当网络畅通时, 也会适当增加吞吐量"
+    inquirer list_input "启用拥塞控制" ny_options kcp_congestion_yn
+
+    if [ "$kcp_congestion_yn" == "$i18n_no" ] 
+    then
+        kcp_congestion=false
+    else
+        kcp_congestion=true
+    fi
+}
+
+V2raySetKcpReadBufferSize()
+{
+    echo
+    inquirer text_input "单个连接的读取缓冲区大小(MB): " kcp_read_buffer_size 2
+}
+
+V2raySetKcpWriteBufferSize()
+{
+    echo
+    inquirer text_input "单个连接的写入缓冲区大小(MB): " kcp_write_buffer_size 2
+}
+
+V2raySetKcpSeed()
+{
+    echo
+    inquirer text_input "输入混淆密码: " kcp_write_buffer_size "$i18n_not_set"
+
+    if [ "$kcp_write_buffer_size" == "$i18n_not_set" ] 
+    then
+        kcp_write_buffer_size=""
+    fi
+}
+
+V2raySetHttpHost()
+{
+    Println "$tip 多个域名用空格分隔, 客户端会随机从列表中选出一个域名进行通信, 服务器会验证域名是否在列表中"
+    inquirer text_input "输入通信域名: " http_host "v2ray.com"
+    IFS=" " read -r -a http_hosts <<< "$http_host"
+    printf -v http_host ',"%s"' "${http_hosts[@]}"
+    http_host=${http_host:1}
+}
+
+V2raySetSniffingEnabled()
+{
+    echo
+    inquirer list_input "是否开启流量探测" ny_options sniffing_enabled
+    if [[ $sniffing_enabled == "$i18n_no" ]] 
+    then
+        sniffing_enabled=false
+    else
+        sniffing_enabled=true
+    fi
+}
+
+V2raySetSniffingDestOverride()
+{
+    sniffing_dest_override_options=( 'tls' 'http' )
+    Println "$tip 客户端已经设置过的流量类型这里可以不设置"
+    inquirer checkbox_input "指定流量类型: " sniffing_dest_override_options sniffing_dest_override_selected
+
+    sniffing_dest_override=""
+    if [ -n "${sniffing_dest_override_selected:-}" ] 
+    then
+        printf -v sniffing_dest_override ',"%s"' "${sniffing_dest_override_selected[@]}"
+        sniffing_dest_override=${dest_override:1}
+    fi
+}
+
+V2raySetSniffingMetadataOnly()
+{
+    echo
+    inquirer list_input "仅使用连接的元数据嗅探目标地址" ny_options sniffing_metadata_only_yn
+
+    if [ "$sniffing_metadata_only_yn" == "$i18n_yes" ] 
+    then
+        sniffing_metadata_only=true
+    else
+        sniffing_metadata_only=false
+    fi
+}
+
+V2raySetSniffingDomainsExcluded()
+{
+    Println "$tip 多个域名用空格分隔"
+    inquirer text_input "输入排除流量探测的域名: " sniffing_domains_excluded "$i18n_not_set"
+    if [ "$sniffing_domains_excluded" == "$i18n_not_set" ] 
+    then
+        sniffing_domains_excluded=""
+    else
+        IFS=" " read -r -a sniffing_domains <<< "$sniffing_domains_excluded"
+        printf -v sniffing_domains_excluded ',"%s"' "${sniffing_domains[@]}"
+        sniffing_domains_excluded=${sniffing_domains_excluded:1}
+    fi
+}
+
+SetV2rayAllocateStrategy()
+{
+    echo
+    allocate_strategy_options=( 'always' 'random' )
+    inquirer list_input "端口分配策略" allocate_strategy_options allocate_strategy
+}
+
+SetV2rayAllocateRefresh()
+{
+    Println "随机端口刷新间隔(分钟)"
+    while read -p "(默认: 5): " allocate_refresh
+    do
+        case "$allocate_refresh" in
+            "")
+                allocate_refresh=5
+                break
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number [>1]\n"
+            ;;
+            *)
+                if [ "$allocate_refresh" -ge 2 ]
+                then
+                    break
+                else
+                    Println "$error $i18n_input_correct_number [>1]\n"
+                fi
+            ;;
+        esac
+    done
+    Println "  刷新间隔: ${green} $allocate_refresh ${normal}"
+}
+
+SetV2rayAllocateConcurrency()
+{
+    Println "随机端口数量, 最大值为端口范围的三分之一"
+    while read -p "(默认: 3): " allocate_concurrency
+    do
+        case "$allocate_concurrency" in
+            "")
+                allocate_concurrency=3
+                break
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number [>0]\n"
+            ;;
+            *)
+                if [ "$allocate_concurrency" -ge 1 ]
+                then
+                    break
+                else
+                    Println "$error $i18n_input_correct_number [>0]\n"
+                fi
+            ;;
+        esac
+    done
+    Println "  随机端口数量: ${green} $allocate_concurrency ${normal}"
+}
+
+V2raySetSendThrough()
+{
+    Println "$tip 当主机有多个 IP 地址时有效"
+    inquirer text_input "用于发送数据的 IP 地址: " send_through "0.0.0.0"
+}
+
+V2raySetProxyTag()
+{
+    Println "$tip 如果指定另一个出站协议, 当前协议发出的数据, 将从指定的出站协议发出"
+    inquirer text_input "输入指定的另一个出站协议的标签: " proxy_tag "$i18n_not_set"
+    if [ "$proxy_tag" == "$i18n_not_set" ] 
+    then
+        proxy_tag=""
+    fi
+}
+
+V2raySetProxyTransportLayer()
+{
+    echo
+    inquirer list_input "启用传输层转发支持" ny_options transport_layer_yn
+    if [ "$transport_layer_yn" == "$i18n_no" ] 
+    then
+        transport_layer=false
+    else
+        transport_layer=true
+    fi
+}
+
+V2raySetMuxEnabled()
+{
+    Println "$info Mux 功能是在一条 TCP 连接上分发多个 TCP 连接的数据, 是为了减少 TCP 的握手延迟而设计, 而非提高连接的吞吐量"
+    inquirer list_input "是否启用 Mux 转发请求" ny_options mux_enabled
+    if [ "$mux_enabled" == "$i18n_no" ] 
+    then
+        mux_enabled=false
+    else
+        mux_enabled=true
+    fi
+}
+
+V2raySetMuxConcurrency()
+{
+    Println "$tip 最小值 1, 最大值 1024, 填负数, 比如 -1, 则不加载 mux 模块"
+    inquirer text_input "最大并发连接数: " mux_concurrency 8
+}
+
+V2raySetResponseType()
+{
+    Println "$tip none 时直接关闭, http 时返回 403 并关闭"
+    response_type_options=( 'none' 'http' )
+    inquirer list_input "选择黑洞的响应方式" response_type
+}
+
+V2raySetFreedomDomainStrategy()
+{
+    Println "$tip AsIs - 直接向此域名发出连接, 其余将域名用内建的 dns 解析为 IP 之后再建立连接"
+    freedom_domain_strategy_options=( 'AsIs' 'UseIP' 'UseIPv4' 'UseIPv6' )
+    inquirer list_input "域名策略" freedom_domain_strategy_options freedom_domain_strategy
+}
+
+V2raySetFreedomRedirect()
+{
+    Println "例如 127.0.0.1:80, :1234 - 不改变原先的目标地址, v2ray.com:0 - 不改变原先的端口"
+    inquirer text_input "强制将所有数据发送到指定地址: " freedom_redirect "$i18n_not_set"
+    if [ "$freedom_redirect" == "$i18n_not_set" ] 
+    then
+        freedom_redirect=""
+    fi
+}
+
+V2raySetFallbacks()
+{
+    echo
+    inquirer list_input "是否配置协议回落" ny_options v2ray_fallbacks_yn
+    if [ "$v2ray_fallbacks_yn" == "$i18n_yes" ] 
+    then
+        if [ "$v2ray_name" == "xray" ] 
+        then
+            v2ray_fallbacks=$(
+            $JQ_FILE -n --arg name "" --arg alpn "" \
+            --arg path "" --arg dest 80 --arg xver 0 \
+            '[{
+                "name": $name,
+                "alpn": $alpn,
+                "path": $path,
+                "dest": $dest | tonumber,
+                "xver": $xver | tonumber
+            }]')
+        else
+            v2ray_fallbacks=$(
+            $JQ_FILE -n --arg alpn "" --arg path "" \
+            --arg dest 80 --arg xver 0 \
+            '[{
+                "alpn": $alpn,
+                "path": $path,
+                "dest": $dest | tonumber,
+                "xver": $xver | tonumber
+            }]')
+        fi
+        while true 
+        do
+            if [ "$v2ray_name" == "xray" ] 
+            then
+                Println "$tip 一般不用设置"
+                inquirer text_input "输入 SNI 分流匹配值: " v2ray_fallback_name "$i18n_not_set"
+                if [ "$v2ray_fallback_name" == "$i18n_not_set" ] 
+                then
+                    v2ray_fallback_name=""
+                fi
+            else
+                v2ray_fallback_name=""
+            fi
+            Println "$tip 请输入单个, 比如 http/1.1 或 h2"
+            inquirer text_input "输入尝试匹配 $tls_name ALPN 协商结果: " v2ray_fallback_alpn "$i18n_not_set"
+            if [ "$v2ray_fallback_alpn" == "$i18n_not_set" ] 
+            then
+                v2ray_fallback_alpn=""
+            elif [ "$v2ray_fallback_alpn" == "h2" ] && [[ ! $tls_alpn =~ h2 ]]
+            then
+                Println "$error 协议回落存在 h2 时, $tls_name 需设置 h2 http/1.1\n"
+                exit 1
+            fi
+            Println "$tip 非空则必须以 / 开头, 不支持 h2c"
+            inquirer text_input "输入尝试匹配首包 HTTP PATH: " v2ray_fallback_path "任意"
+            if [ "$v2ray_fallback_path" == "任意" ] 
+            then
+                v2ray_fallback_path=""
+            fi
+            Println "$tip 格式为 addr:port 或 /dev/shm/domain.socket, 若填写域名, 也将直接发起 TCP 连接(而不走内置的 DNS)"
+            inquirer text_input "输入 $tls_name 解密后 TCP 流量的去向: " v2ray_fallback_dest
+            if [ -z "$v2ray_fallback_dest" ] 
+            then
+                Println "$error $i18n_canceled...\n"
+                exit 1
+            fi
+            Println "$tip 如果配置 nginx 的 PROXY protocol 记得设置 set_real_ip_from"
+            v2ray_fallback_proxy_protocol_options=( '不发送' '版本1' '版本2' )
+            inquirer list_input "选择 PROXY protocol" v2ray_fallback_proxy_protocol_options v2ray_fallback_proxy_protocol
+            if [ "$v2ray_fallback_proxy_protocol" == "不发送" ] 
+            then
+                v2ray_fallback_proxy_protocol=0
+            elif [ "$v2ray_fallback_proxy_protocol" == "版本1" ] 
+            then
+                v2ray_fallback_proxy_protocol=1
+            else
+                v2ray_fallback_proxy_protocol=2
+            fi
+            if [[ $v2ray_fallback_dest =~ ^[0-9]+$ ]] 
+            then
+                v2ray_fallback=$(
+                $JQ_FILE -n --arg alpn "$v2ray_fallback_alpn" --arg path "$v2ray_fallback_path" \
+                --arg dest "$v2ray_fallback_dest" --arg xver "$v2ray_fallback_proxy_protocol" \
+                '{
+                    "alpn": $alpn,
+                    "path": $path,
+                    "dest": $dest | tonumber,
+                    "xver": $xver | tonumber
+                }')
+            else
+                v2ray_fallback=$(
+                $JQ_FILE -n --arg alpn "$v2ray_fallback_alpn" --arg path "$v2ray_fallback_path" \
+                --arg dest "$v2ray_fallback_dest" --arg xver "$v2ray_fallback_proxy_protocol" \
+                '{
+                    "alpn": $alpn,
+                    "path": $path,
+                    "dest": $dest,
+                    "xver": $xver | tonumber
+                }')
+            fi
+            if [ -n "${v2ray_fallback_name:-}" ] 
+            then
+                v2ray_fallback=$(
+                $JQ_FILE --arg name "$v2ray_fallback_name" \
+                '{
+                    "name": $name
+                } * .' <<< "$v2ray_fallback")
+            fi
+            v2ray_fallbacks=$(
+            $JQ_FILE --arg name "$v2ray_fallback_name" --argjson fallback "[$v2ray_fallback]" \
+            '. + $fallback' <<< "$v2ray_fallbacks")
+            echo
+            inquirer list_input "回落添加成功, 是否继续添加新的回落" ny_options v2ray_fallbacks_yn
+            if [ "$v2ray_fallbacks_yn" == "$i18n_no" ] 
+            then
+                break
+            fi
+        done
+    else
+        v2ray_fallbacks="[]"
+    fi
+}
+
+V2raySetAuth()
+{
+    echo
+    auth_options=( '匿名' '用户密码' )
+    inquirer list_input "选择认证方式" auth_options auth_option
+    if [ "$auth_option" == "匿名" ] 
+    then
+        auth="noauth"
+    else
+        auth="password"
+    fi
+}
+
+V2raySetUdp()
+{
+    echo
+    inquirer list_input "是否支持 udp" ny_options udp_yn
+    if [ "$udp_yn" == "$i18n_no" ] 
+    then
+        udp=false
+    else
+        udp=true
+    fi
+}
+
+V2raySetIp()
+{
+    echo
+    inquirer text_input "输入用于 udp 的本机 IP: " ip "127.0.0.1"
+}
+
+V2raySetShadowsocksMethod()
+{
+    echo
+    shadowsocks_method_options=( 'aes-256-gcm' 'aes-128-gcm' 'chacha20-poly1305' 'none' )
+    inquirer list_input "选择加密方式" shadowsocks_method_options shadowsocks_method
+}

@@ -1,0 +1,16 @@
+VipListHosts()
+{
+    if [ ! -s "$VIP_FILE" ] 
+    then
+        Println "$error 请先添加 VIP 服务器\n" && exit 1
+    fi
+
+    VipGetHosts
+
+    if [ "$vip_hosts_count" -gt 0 ] 
+    then
+        Println "$vip_hosts_list"
+    else
+        Println "$error 请先添加 VIP 服务器\n" && exit 1
+    fi
+}

@@ -1,0 +1,56 @@
+NginxConfigBlockAliyun()
+{
+    echo
+    inquirer list_input "是否屏蔽所有阿里云ip段" ny_options block_aliyun_yn
+    if [ "$block_aliyun_yn" == "$i18n_yes" ] 
+    then
+        Println "输入本机IP"
+        echo -e "$tip 多个IP用空格分隔\n"
+
+        while read -p "(默认: 自动检测): " server_ip
+        do
+            server_ip=${server_ip:-$(GetServerIp)}
+            if [ -z "$server_ip" ]
+            then
+                Println "$error 无法获取本机IP, 请手动输入\n"
+            else
+                Println "$info      本机IP: $server_ip\n"
+                break
+            fi
+        done
+
+        start=0
+        deny_aliyun="
+            location ${server_live_root#*$server_root}/${LIVE_ROOT##*/} {"
+
+        IFS=" " read -ra server_ips <<< "$server_ip"
+        for ip in "${server_ips[@]}"
+        do
+            deny_aliyun="$deny_aliyun
+                allow $ip;"
+        done
+
+        while IFS= read -r line 
+        do
+            if [[ $line == *"ipTabContent"* ]] 
+            then
+                start=1
+            elif [ "$start" -eq 1 ] && [[ $line == *"AS45102"* ]] 
+            then
+                line=${line#*AS45102\/}
+                ip=${line%\"*}
+                deny_aliyun="$deny_aliyun
+                deny $ip;"
+            elif [ "$start" -eq 1 ] && [[ $line == *"</tbody>"* ]] 
+            then
+                break
+            fi
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" https://ipinfo.io/AS45102)
+        deny_aliyun="$deny_aliyun
+                allow all;"
+        deny_aliyun="$deny_aliyun
+            }
+
+"
+    fi
+}

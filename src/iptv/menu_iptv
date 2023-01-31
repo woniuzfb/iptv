@@ -1,0 +1,80 @@
+Menu()
+{
+    color=${color:-${green}}
+
+    if [ -z "${kind:-}" ] 
+    then
+        title="HLS"
+        msg=$(gettext "输入: f 切换到 FLV 面板, v 切换到 VIP 面板")
+    elif [ "$kind" == "flv" ] 
+    then
+        title="FLV"
+        msg=$(gettext "输入: h 切换到 HLS 面板, v 切换到 VIP 面板")
+    fi
+
+    Println "  ${dim_underlined}MTimer | http://hbo.epub.fun${normal}
+
+  `gettext \"IPTV 一键管理脚本\"` ${red}[v$sh_ver]${normal}
+
+  ${color}1.${normal} `gettext \"安装\"`
+  ${color}2.${normal} `gettext \"卸载\"`
+  ${color}3.${normal} `gettext \"升级\"`
+————————————
+  ${color}4.${normal} `gettext \"查看频道\"`
+  ${color}5.${normal} `gettext \"添加频道\"`
+  ${color}6.${normal} `gettext \"修改频道\"`
+  ${color}7.${normal} `gettext \"开关频道\"`
+  ${color}8.${normal} `gettext \"重启频道\"`
+  ${color}9.${normal} `gettext \"查看日志\"`
+ ${color}10.${normal} `gettext \"删除频道\"`
+ ${color}11.${normal} `gettext \"设置计划\"`
+ ${color}12.${normal} `gettext \"设置监控\"`
+ ${color}13.${normal} `gettext \"修改默认\"`
+
+ `eval_gettext \"\\\$tip 当前: \\\${green}\\\$title\\\${normal} 面板\"`
+ $tip $msg\n\n"
+    read -p "`gettext \"输入序号\"` [1-13]: " menu_num
+    case "$menu_num" in
+        h)
+            kind=""
+            color=${green}
+            Menu
+        ;;
+        f)
+            kind="flv"
+            color=${blue}
+            Menu
+        ;;
+        v)
+            VipMenu
+        ;;
+        1) Install
+        ;;
+        2) Uninstall
+        ;;
+        3) Update
+        ;;
+        4) ViewChannel
+        ;;
+        5) AddChannel
+        ;;
+        6) EditChannelMenu
+        ;;
+        7) ToggleChannel
+        ;;
+        8) RestartChannel
+        ;;
+        9) ViewChannelLog
+        ;;
+        10) DelChannel
+        ;;
+        11) ScheduleMenu
+        ;;
+        12) MonitorMenu
+        ;;
+        13) EditDefaultMenu
+        ;;
+        *) Println "$error $i18n_input_correct_number [1-13]\n"
+        ;;
+    esac
+}

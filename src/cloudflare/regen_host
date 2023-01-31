@@ -1,0 +1,49 @@
+CloudflareRegenHost()
+{
+    CloudflareListHosts
+
+    echo "选择 CFP"
+    echo -e "$tip 请勿更改公开的 CFP !\n"
+    while read -p "$i18n_default_cancel" cf_hosts_num
+    do
+        case "$cf_hosts_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$cf_hosts_num" -gt 0 ] && [ "$cf_hosts_num" -le "$cf_hosts_count" ]
+                then
+                    cf_hosts_index=$((cf_hosts_num-1))
+                    cf_host_name=${cf_hosts_name[cf_hosts_index]}
+                    cf_host_key=${cf_hosts_key[cf_hosts_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "$info 稍等..."
+    IFS="^" read -r result cf_host_key_new msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
+        -d 'act=host_key_regen' \
+        -d "host_key=$cf_host_key" \
+        | $JQ_FILE '[.result,.request."host:key".__host_key,.msg]|join("^")'
+    ) || true
+
+    result=${result#\"}
+    msg=${msg%\"}
+
+    if [ -z "$result" ] || [ "$result" == "error" ]
+    then
+        Println "$error ${msg:-超时, 请重试}\n" && exit 1
+    fi
+
+    jq_path='["hosts",'"$cf_hosts_index"',"key"]'
+    JQ update "$CF_CONFIG" "$cf_host_key_new"
+
+    Println "$info $cf_host_name host key 修改成功"
+}

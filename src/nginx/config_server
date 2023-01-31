@@ -1,0 +1,61 @@
+NginxConfigServerHttpPort()
+{
+    echo
+    inquirer text_input "输入 http 端口: " server_http_port 80
+}
+
+NginxConfigServerHttpsPort()
+{
+    echo
+    inquirer text_input "输入 https 端口: " server_https_port 443
+}
+
+NginxConfigServerRoot()
+{
+    Println "设置公开的根目录"
+    while read -p "(默认: $nginx_prefix/html): " server_root 
+    do
+        if [ -z "$server_root" ] 
+        then
+            server_root="$nginx_prefix/html"
+            break
+        elif [ "${server_root:0:1}" != "/" ] 
+        then
+            Println "$error 输入错误\n"
+        else
+            if [ "${server_root: -1}" == "/" ] 
+            then
+                server_root=${server_root:0:-1}
+            fi
+
+            mkdir -p "$server_root"
+            break
+        fi
+    done
+}
+
+NginxConfigServerLiveRoot()
+{
+    Println "设置公开目录下的(live目录 - HLS输出目录)位置"
+    while read -p "(默认: $server_root/): " server_live_root 
+    do
+        if [ -z "$server_live_root" ] 
+        then
+            server_live_root="$server_root"
+            ln -sf "$LIVE_ROOT" "$server_live_root/"
+            break
+        elif [ "${server_live_root:0:1}" != "/" ] 
+        then
+            Println "$error 输入错误\n"
+        else
+            if [ "${server_live_root: -1}" == "/" ] 
+            then
+                server_live_root=${server_live_root:0:-1}
+            fi
+
+            mkdir -p "$server_live_root"
+            ln -sf "$LIVE_ROOT" "$server_live_root/"
+            break
+        fi
+    done
+}

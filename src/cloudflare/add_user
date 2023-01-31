@@ -1,0 +1,27 @@
+CloudflareAddUser()
+{
+    CloudflareSetUserEmail
+    CloudflareSetUserPass
+    CloudflareSetUserToken
+    CloudflareSetUserKey
+
+    if [ ! -s "$CF_CONFIG" ] 
+    then
+        printf '{"%s":[],"%s":[]}' "users" "hosts" > "$CF_CONFIG"
+    fi
+
+    new_user=$(
+    $JQ_FILE -n --arg email "$cf_user_email" --arg pass "$cf_user_pass" \
+        --arg token "$cf_user_token" --arg key "$cf_user_api_key" \
+        '{
+            email: $email,
+            pass: $pass,
+            token: $token,
+            key: $key
+        }'
+    )
+
+    jq_path='["users"]'
+    JQ add "$CF_CONFIG" "[$new_user]"
+    Println "$info 用户添加成功\n"
+}

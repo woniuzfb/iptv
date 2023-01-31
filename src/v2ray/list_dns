@@ -1,0 +1,83 @@
+V2rayListDns()
+{
+    V2rayGetDns
+
+    if [ "$dns_hosts_count" -eq 0 ] 
+    then
+        dns_hosts_list="静态 IP 列表: ${red}无${normal}\n"
+    else
+        dns_hosts_list="静态 IP 列表: \n\n${indent_6}"
+        for((dns_hosts_i=0;dns_hosts_i<dns_hosts_count;dns_hosts_i++));
+        do
+            dns_hosts_list="$dns_hosts_list$((dns_hosts_i+1)). 域名: ${green}${dns_hosts_domain[dns_hosts_i]}${normal} 地址: ${green}${dns_hosts_address[dns_hosts_i]//,/, }${normal}\n${indent_6}"
+        done
+    fi
+
+    if [ "$dns_servers_count" -eq 0 ] 
+    then
+        dns_servers_list="DNS 服务器列表: ${red}无${normal}\n"
+    else
+        dns_servers_list="DNS 服务器列表: \n\n"
+        for((dns_servers_i=0;dns_servers_i<dns_servers_count;dns_servers_i++));
+        do
+            if [[ ${dns_servers[dns_servers_i]} =~ ^(.+)\|(.*)\|(.*)\|(.*)$ ]] 
+            then
+                if [ -z "${BASH_REMATCH[3]}" ] 
+                then
+                    dns_server_domain_list="使用的域名: ${red}未设置${normal}\n${indent_6}"
+                else
+                    dns_server_domain_list="使用的域名: ${green}${BASH_REMATCH[3]}${normal}\n${indent_6}"
+                fi
+                if [ -z "${BASH_REMATCH[4]}" ] 
+                then
+                    dns_server_expect_ips_list="IP 范围: ${red}未设置${normal}\n${indent_6}"
+                else
+                    dns_server_expect_ips_list="IP 范围: ${green}${BASH_REMATCH[4]}${normal}\n${indent_6}"
+                fi
+                dns_servers_list="$dns_servers_list$((dns_servers_i+1)).${indent_6}服务器地址: ${green}${BASH_REMATCH[1]}${normal} 端口: ${green}${BASH_REMATCH[2]:-53}${normal}\n${indent_6}$dns_server_domain_list$dns_server_expect_ips_list"
+            else
+                dns_servers_list="$dns_servers_list$((dns_servers_i+1)).${indent_6}服务器地址: ${green}${dns_servers[dns_servers_i]}${normal} 端口: ${green}53${normal}\n${indent_6}"
+            fi
+        done
+    fi
+
+    if [ -z "$dns_client_ip" ] 
+    then
+        dns_list="用于 DNS 查询 IP: ${red}无${normal}\n\n"
+    else
+        dns_list="用于 DNS 查询 IP: ${green}$dns_client_ip${normal}\n\n"
+    fi
+
+    if [ -z "$dns_tag" ] 
+    then
+        dns_list="${dns_list}DNS 标签: ${red}无${normal}\n\n"
+    else
+        dns_list="${dns_list}DNS 标签: ${green}$dns_tag${normal}\n\n"
+    fi
+
+    dns_list="${dns_list}网络类型: ${green}$dns_query_strategy${normal}\n\n"
+
+    if [ "$dns_disable_cache" = false ] 
+    then
+        dns_list="${dns_list}禁用缓存: ${red}否${normal}\n\n"
+    else
+        dns_list="${dns_list}禁用缓存: ${green}是${normal}\n\n"
+    fi
+
+    if [ "$dns_disable_fallback" = false ] 
+    then
+        dns_list="${dns_list}禁用回退: ${red}否${normal}\n\n"
+    else
+        dns_list="${dns_list}禁用回退: ${green}是${normal}\n\n"
+    fi
+
+    if [ "$dns_disable_fallback_if_match" = false ] 
+    then
+        dns_list="${dns_list}禁用命中时回退: ${red}否${normal}\n\n"
+    else
+        dns_list="${dns_list}禁用命中时回退: ${green}是${normal}\n\n"
+    fi
+
+    dns_list="$dns_list$dns_hosts_list\n$dns_servers_list"
+    Println "$dns_list\n"
+}

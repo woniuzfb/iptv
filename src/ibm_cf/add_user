@@ -1,0 +1,49 @@
+IbmAddUser()
+{
+    if [ ! -s "$IBM_CONFIG" ] 
+    then
+        printf '{"%s":[],"%s":{"%s":[]}}' "users" "cf" "apps" > "$IBM_CONFIG"
+    fi
+
+    IbmSetUserEmail
+    IbmSetUserPass
+
+    IbmGetApi
+
+    ibmcloud api "$ibm_api"
+
+    IbmSetUserRegion
+
+    Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
+    ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region"
+
+    IbmSetUserResourceGroup
+
+    ibmcloud target -g "$ibm_user_resource_group"
+
+    IbmSetUserOrg
+
+    ibmcloud target -o "$ibm_user_org"
+
+    IbmSetUserSpace
+
+    ibmcloud target -s "$ibm_user_space"
+
+    new_user=$(
+    $JQ_FILE -n --arg email "$ibm_user_email" --arg pass "$ibm_user_pass" \
+        --arg region "$ibm_user_region" --arg resource_group "$ibm_user_resource_group" \
+        --arg org "$ibm_user_org" --arg space "$ibm_user_space" \
+        '{
+            email: $email,
+            pass: $pass,
+            region: $region,
+            resource_group: $resource_group,
+            org: $org,
+            space: $space
+        }'
+    )
+
+    jq_path='["users"]'
+    JQ add "$IBM_CONFIG" "[$new_user]"
+    Println "$info 用户添加成功\n"
+}

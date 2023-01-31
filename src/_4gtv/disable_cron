@@ -1,0 +1,13 @@
+Disable4gtvCron()
+{
+    if crontab -l | grep -q "/usr/local/bin/tv 4g -" 2> /dev/null
+    then
+        crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
+        sed -i "/\/usr\/local\/bin\/tv 4g -/d" "$IPTV_ROOT/cron_tmp"
+        crontab "$IPTV_ROOT/cron_tmp" > /dev/null
+        rm -f "$IPTV_ROOT/cron_tmp"
+        Println "$info 定时任务 (每5天注册账号) 关闭成功\n"
+    else
+        Println "$error 定时任务 (每5天注册账号) 未开启 !\n"
+    fi
+}

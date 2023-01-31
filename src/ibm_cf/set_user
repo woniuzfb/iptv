@@ -1,0 +1,56 @@
+IbmSetUserEmail()
+{
+    Println "请输入用户邮箱"
+    read -p "$i18n_default_cancel" ibm_user_email
+    [ -z "$ibm_user_email" ] && Println "$i18n_canceled...\n" && exit 1
+    if [[ -n $($JQ_FILE '.users[]|select(.email=="'"$ibm_user_email"'")' "$IBM_CONFIG") ]] 
+    then
+        Println "$error 用户已经存在\n"
+        exit 1
+    fi
+    Println "  用户邮箱: ${green} $ibm_user_email ${normal}\n"
+}
+
+IbmSetUserPass()
+{
+    Println "请输入用户密码"
+    read -p "$i18n_default_cancel" ibm_user_pass
+    [ -z "$ibm_user_pass" ] && Println "$i18n_canceled...\n" && exit 1
+    Println "  用户密码: ${green} $ibm_user_pass ${normal}\n"
+}
+
+IbmSetUserRegion()
+{
+    ibmcloud regions
+    Println "请输入账号所在区域名称"
+    read -p "(默认: us-south): " ibm_user_region
+    ibm_user_region=${ibm_user_region:-us-south}
+    Println "  区域: ${green} $ibm_user_region ${normal}\n"
+}
+
+IbmSetUserResourceGroup()
+{
+    ibmcloud resource groups
+    Println "请输入资源组名称"
+    read -p "(默认: Default): " ibm_user_resource_group
+    ibm_user_resource_group=${ibm_user_resource_group:-Default}
+    Println "  资源组: ${green} $ibm_user_resource_group ${normal}\n"
+}
+
+IbmSetUserOrg()
+{
+    ibmcloud account orgs
+    Println "请输入组织名称"
+    read -p "(默认: $ibm_user_email): " ibm_user_org
+    ibm_user_org=${ibm_user_org:-$ibm_user_email}
+    Println "  组织: ${green} $ibm_user_org ${normal}\n"
+}
+
+IbmSetUserSpace()
+{
+    ibmcloud account spaces
+    Println "请输入空间名称"
+    read -p "(默认: dev): " ibm_user_space
+    ibm_user_space=${ibm_user_space:-dev}
+    Println "  空间: ${green} $ibm_user_space ${normal}\n"
+}

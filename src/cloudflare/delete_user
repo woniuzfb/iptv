@@ -1,0 +1,36 @@
+CloudflareDelUser()
+{
+    CloudflareListUsers
+
+    if [ "$cf_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
+
+    echo -e "选择用户"
+    while read -p "$i18n_default_cancel" cf_users_num
+    do
+        case "$cf_users_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
+                then
+                    cf_users_index=$((cf_users_num-1))
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    jq_path='["users",'"$cf_users_index"']'
+    JQ delete "$CF_CONFIG"
+    Println "$info 用户删除成功\n"
+}

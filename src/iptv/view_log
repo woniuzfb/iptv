@@ -1,0 +1,27 @@
+ViewChannelLog()
+{
+    ListChannels
+    InputChannelsIndex
+
+    for chnl_pid in "${chnls_pid_chosen[@]}"
+    do
+        ListChannel
+
+        Println "${green}输出日志:${normal}\n"
+        if [ -s "$FFMPEG_LOG_ROOT/$chnl_pid.log" ] 
+        then
+            tail -n 10 "$FFMPEG_LOG_ROOT/$chnl_pid.log"
+        else
+            echo "无"
+        fi
+
+        Println "${red}错误日志:${normal}\n"
+        if [ -s "$FFMPEG_LOG_ROOT/$chnl_pid.err" ] 
+        then
+            cat "$FFMPEG_LOG_ROOT/$chnl_pid.err"
+        else
+            echo "无"
+        fi
+        echo
+    done
+}

@@ -1,0 +1,287 @@
+V2rayConfigDomain()
+{
+    if [ -d "$nginx_prefix" ] 
+    then
+        echo
+        v2ray_config_domain_options=( "$v2ray_name" nginx openresty )
+        inquirer list_input "选择修改的配置" v2ray_config_domain_options v2ray_config_domain_option
+
+        if [ "$v2ray_config_domain_option" != "$v2ray_name" ] 
+        then
+            if [ ! -d "/usr/local/$v2ray_config_domain_option" ] 
+            then
+                Println "$error 请先安装 $v2ray_config_domain_option\n"
+                exit 1
+            fi
+
+            if [ "$v2ray_config_domain_option" == "nginx" ] 
+            then
+                nginx_prefix="/usr/local/nginx"
+                nginx_name="nginx"
+                nginx_ctl="nx"
+            else
+                nginx_prefix="/usr/local/openresty/nginx"
+                nginx_name="openresty"
+                nginx_ctl="or"
+            fi
+
+            NGINX_FILE="$nginx_prefix/sbin/nginx"
+
+            V2rayNginxListDomains
+            V2rayNginxListDomain
+
+            V2rayNginxSelectDomainServer
+
+            v2ray_nginx_domain_server_proxies_list=""
+            v2ray_nginx_domain_server_proxies_count=0
+
+            v2ray_nginx_domain_server_proxy=${v2ray_nginx_domain_servers_proxy[v2ray_nginx_domain_servers_index]}
+
+            if [ -n "$v2ray_nginx_domain_server_proxy" ] 
+            then
+                v2ray_nginx_domain_server_location_indices=()
+                v2ray_nginx_domain_server_proxy_indices=()
+                v2ray_nginx_domain_server_proxies_port=()
+                v2ray_nginx_domain_server_proxies_path=()
+                v2ray_nginx_domain_server_proxies_list=""
+
+                IFS=" " read -r -a v2ray_nginx_domain_server_proxies <<< "$v2ray_nginx_domain_server_proxy"
+
+                for((i=0;i<${#v2ray_nginx_domain_server_proxies[@]};i++));
+                do
+                    if [[ ${v2ray_nginx_domain_server_proxies[i]} =~ ^([^|]+)\|([^|]+)\|([^|]+)\|(.+)$ ]] 
+                    then
+                        v2ray_nginx_domain_server_location_indices+=("${BASH_REMATCH[1]}")
+                        v2ray_nginx_domain_server_proxy_indices+=("${BASH_REMATCH[2]}")
+                        v2ray_nginx_domain_server_proxies_port+=("${BASH_REMATCH[3]}")
+                        v2ray_nginx_domain_server_proxies_path+=("${BASH_REMATCH[4]}")
+                        v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list $((i+1)).${indent_6}路径: ${green}${BASH_REMATCH[4]}${normal} => 端口: ${green}${BASH_REMATCH[3]}${normal}\n\n"
+                    fi
+                done
+
+                v2ray_nginx_domain_server_proxies_count=${#v2ray_nginx_domain_server_proxies_path[@]}
+            fi
+
+            v2ray_nginx_domain_server_update_crt_number=$((v2ray_nginx_domain_server_proxies_count+1))
+            v2ray_nginx_domain_server_add_proxy_number=$((v2ray_nginx_domain_server_proxies_count+2))
+            v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list $v2ray_nginx_domain_server_update_crt_number.${indent_6}${green}更新证书${normal}\n\n"
+            v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list $v2ray_nginx_domain_server_add_proxy_number.${indent_6}${green}添加代理${normal}\n"
+
+            Println "代理配置:\n\n$v2ray_nginx_domain_server_proxies_list"
+
+            V2rayNginxSelectDomainServerProxy
+
+            v2ray_nginx_domain_server_location_index=${v2ray_nginx_domain_server_location_indices[v2ray_nginx_domain_server_proxies_index]}
+            v2ray_nginx_domain_server_proxy_index=${v2ray_nginx_domain_server_proxy_indices[v2ray_nginx_domain_server_proxies_index]}
+            v2ray_nginx_domain_server_proxy_port=${v2ray_nginx_domain_server_proxies_port[v2ray_nginx_domain_server_proxies_index]}
+            v2ray_nginx_domain_server_proxy_path=${v2ray_nginx_domain_server_proxies_path[v2ray_nginx_domain_server_proxies_index]}
+
+            echo
+            v2ray_nginx_domain_server_proxy_options=( '修改代理路径' '修改代理端口' '删除此代理' )
+            inquirer list_input_index "选择操作" v2ray_nginx_domain_server_proxy_options v2ray_nginx_domain_server_proxy_options_index
+
+            if [ "$v2ray_nginx_domain_server_proxy_options_index" -eq 0 ] 
+            then
+                echo
+                inquirer text_input "输入新的代理路径: " new_path "$v2ray_nginx_domain_server_proxy_path"
+                jq_path='["config",0,"parsed",0,"block",'"$v2ray_nginx_domain_servers_index"',"block",'"$v2ray_nginx_domain_server_location_index"',"args"]'
+                JQs replace parse_out "$new_path"
+            elif [ "$v2ray_nginx_domain_server_proxy_options_index" -eq 1 ] 
+            then
+                echo
+                new_proxy_port_options=( '输入新的代理端口' '浏览并选择端口' )
+                inquirer list_input_index "选择操作" new_proxy_port_options new_proxy_port_options_index
+
+                if [ "$new_proxy_port_options_index" -eq 0 ] 
+                then
+                    echo
+                    inquirer text_input "输入新的代理端口: " new_proxy_port "$v2ray_nginx_domain_server_proxy_port"
+                else
+                    V2rayListInbounds nginx
+                    V2raySelectInbound
+
+                    if [ "${inbounds_stream_network[inbounds_index]}" == "domainsocket" ] 
+                    then
+                        Println "$error 选择错误\n"
+                        exit 1
+                    fi
+
+                    new_proxy_port=${inbounds_port[inbounds_index]}
+                fi
+
+                jq_path='["config",0,"parsed",0,"block",'"$v2ray_nginx_domain_servers_index"',"block",'"$v2ray_nginx_domain_server_location_index"',"block",'"$v2ray_nginx_domain_server_proxy_index"',"args"]'
+                JQs replace parse_out "$new_proxy_port"
+            else
+                jq_path='["config",0,"parsed",0,"block",'"$v2ray_nginx_domain_servers_index"',"block"]'
+                JQs delete parse_out "$v2ray_nginx_domain_server_location_index"
+            fi
+
+            NginxBuildConf parse_out
+
+            Println "$info 操作成功\n"
+            exit 0
+        fi
+    fi
+
+    V2rayListInbounds direct
+
+    V2raySelectInbound
+
+    if [ -z "${inbounds_stream_tls_certificates_usage[inbounds_index]}" ] 
+    then
+        Println "$error 没有证书\n"
+        exit 1
+    fi
+
+    certificates_list="${green}证书:${normal}\n${indent_6}"
+    certificates_indices=()
+
+    IFS="|" read -r -a usages <<< "${inbounds_stream_tls_certificates_usage[inbounds_index]}"
+    IFS="|" read -r -a certificate_files <<< "${inbounds_stream_tls_certificates_certificate_file[inbounds_index]}"
+    IFS="|" read -r -a key_files <<< "${inbounds_stream_tls_certificates_key_file[inbounds_index]}"
+    IFS="|" read -r -a certificates <<< "${inbounds_stream_tls_certificates_certificate[inbounds_index]}"
+
+    for((certificate_i=0;certificate_i<${#usages[@]};certificate_i++));
+    do
+        if [ -z "${certificate_files[certificate_i]}" ] || [ -z "${key_files[certificate_i]}" ]
+        then
+            continue
+        fi
+
+        certificates_indices+=("$certificate_i")
+
+        if [ "${usages[certificate_i]}" == "encipherment" ] 
+        then
+            certificate_usage="$tls_name 认证和加密"
+        elif [ "${usages[certificate_i]}" == "verify" ] 
+        then
+            certificate_usage="验证远端 $tls_name"
+        elif [ "${usages[certificate_i]}" == "issue" ] 
+        then
+            certificate_usage="签发其它证书"
+        else
+            certificate_usage="验证客户端身份"
+        fi
+
+        if [ -n "${certificates:-}" ] && [ -n "${certificates[certificate_i]}" ] 
+        then
+            certificates_list="$certificates_list${#certificates_indices[@]}.${indent_6}用途: ${green}$certificate_usage [自签名]${normal}\n"
+        else
+            certificates_list="$certificates_list${#certificates_indices[@]}.${indent_6}用途: ${green}$certificate_usage${normal}\n"
+        fi
+
+        certificates_list="${certificates_list}${indent_6}证书路径: ${green}${certificate_files[certificate_i]}${normal}\n"
+
+        certificates_list="${certificates_list}${indent_6}密钥路径: ${green}${key_files[certificate_i]}${normal}\n\n"
+    done
+
+    if [ -z "$certificates_list" ] 
+    then
+        Println "$error 没有可管理证书\n"
+        exit 1
+    fi
+
+    Println "$certificates_list"
+
+    certificates_count=${#certificates_indices[@]}
+
+    echo "选择证书"
+    while read -p "$i18n_default_cancel" certificates_num
+    do
+        case "$certificates_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$certificates_num" -gt 0 ] && [ "$certificates_num" -le $certificates_count ]
+                then
+                    certificates_index=${certificates_indices[certificates_num-1]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    certificate_file=${certificate_files[certificates_index]}
+    tls_settings_name=$(tr '[:upper:]' '[:lower:]' <<< "$tls_name")"Settings"
+
+    echo
+    certificates_options=( '更新证书' '修改证书路径' '修改密钥路径' )
+    inquirer list_input_index "选择操作" certificates_options certificates_options_index
+
+    if [ "$certificates_options_index" -eq 0 ] 
+    then
+        if [ -n "${certificates:-}" ] && [ -n "${certificates[certificates_index]}" ] 
+        then
+            if [ "$v2ray_name" == "xray" ] 
+            then
+                crt=$($V2CTL_FILE tls cert)
+            elif [ "$usage" == "encipherment" ] 
+            then
+                echo
+                inquirer list_input "是否是 CA 证书" yn_options ca_yn
+                if [ "$ca_yn" == "$i18n_yes" ] 
+                then
+                    crt=$($V2CTL_FILE cert -ca)
+                else
+                    crt=$($V2CTL_FILE cert)
+                fi
+            else
+                crt=$($V2CTL_FILE cert -ca)
+            fi
+
+            certificate=$($JQ_FILE "{\"usage\":\"${usages[certificates_index]}\"} * ." <<< "$crt")
+
+            json=true
+            jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"']'
+            JQ update "$V2_CONFIG" "$certificate"
+
+            Println "$info 证书更新成功\n"
+        else
+            if [ -n "${inbounds_stream_tls_server_name[inbounds_index]}" ] 
+            then
+                certificate_name=${inbounds_stream_tls_server_name[inbounds_index]}
+            else
+                certificate_name=${certificate_file##*/}
+                certificate_name=${certificate_name%.*}
+            fi
+
+            echo
+            inquirer text_input "请输入证书域名: " certificate_domain "$certificate_name"
+
+            AcmeCheck
+
+            Println "$info 更新 $certificate_domain 证书..."
+
+            V2rayDomainUpdateCert "$certificate_domain"
+
+            jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"',"certificateFile"]'
+            JQ update "$V2_CONFIG" "/usr/local/share/$v2ray_name/$certificate_domain.crt"
+
+            jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"',"keyFile"]'
+            JQ update "$V2_CONFIG" "/usr/local/share/$v2ray_name/$certificate_domain.key"
+
+            Println "$info $certificate_domain 证书更新成功\n"
+        fi
+    elif [ "$certificates_options_index" -eq 1 ] 
+    then
+        V2raySetCertificateFile
+
+        jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"',"certificateFile"]'
+        JQ update "$V2_CONFIG" "$certificate_file"
+
+        Println "$info 证书路径修改成功\n"
+    else
+        V2raySetKeyFile
+
+        jq_path='["inbounds",'"$inbounds_index"',"streamSettings","'"$tls_settings_name"'","certificates",'"$certificates_index"',"keyFile"]'
+        JQ update "$V2_CONFIG" "$key_file"
+
+        Println "$info 密钥路径修改成功\n"
+    fi
+}

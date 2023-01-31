@@ -1,0 +1,1322 @@
+StartChannel()
+{
+    chnl_use_primary_playlist=false
+    chnl_use_cdn=false
+    hboasia_host="hbogoasia.com:8443"
+    hboasia_cdn_host="dai3fd1oh325y.cloudfront.net"
+
+    if [[ $chnl_stream_link =~ \| ]] 
+    then
+        chnl_parse=true
+        code="${chnl_stream_link#*|}"
+        chnl_stream_link="${chnl_stream_link%%|*}"
+        chnl_map_flags=""
+    else
+        chnl_parse=false
+        code=""
+        chnl_map_flags="-map 0"
+    fi
+
+    if [[ $chnl_stream_link =~ ^https://(www\.)?(youtube.com|twitch.tv) ]] 
+    then
+        YoutubeDlInstall
+        YtDlpInstall
+
+        chnl_user_agent="$USER_AGENT_BROWSER"
+        chnl_headers=""
+        chnl_cookies=""
+
+        Println "`eval_gettext \"\\\$info youtube-dl 解析链接...\"`"
+
+        if [ -z "$code" ] && [ "$monitor" = true ]
+        then
+            return 0
+        fi
+
+        link="$chnl_stream_link"
+
+        ParseYoutube yt-dlp
+
+        if [ -z "${formats_indices:-}" ] 
+        then
+            ParseYoutube youtube-dl
+
+            if [ -z "${formats_indices:-}" ] 
+            then
+                Println "$error [ $chnl_channel_name ] 解析发生错误, 直播链接不存在?\n"
+                MonitorErr "$chnl_channel_name 解析发生错误, 直播链接不存在?"
+                return 0
+            fi
+        fi
+
+        chnl_stream_links[0]="$chnl_stream_link|$code"
+
+        if [[ $code =~ , ]] 
+        then
+            chnl_stream_urls_resolution=("${formats_resolution[@]}")
+            chnl_stream_urls_bitrate=("${formats_bitrate[@]}")
+
+            chnl_stream_url_video_indices=("${formats_indices[@]}")
+            chnl_stream_url_qualities_count=${#formats_indices[@]}
+            chnl_stream_urls_audio=()
+            chnl_stream_urls_subtitles=()
+            chnl_stream_url_qualities=()
+
+            for chnl_stream_urls_index in "${chnl_stream_url_video_indices[@]}"
+            do
+                chnl_stream_urls_audio[chnl_stream_urls_index]=""
+                chnl_stream_urls_subtitles[chnl_stream_urls_index]=""
+                chnl_stream_url_qualities+=("${chnl_stream_urls_bitrate[chnl_stream_urls_index]}-${chnl_stream_urls_resolution[chnl_stream_urls_index]}")
+            done
+
+            if ! parse_urls=($(yt-dlp --no-warnings -f "$code" -g "$chnl_stream_link")) && ! parse_urls=($(youtube-dl -f "$code" -g "$chnl_stream_link"))
+            then
+                Println "$error [ $chnl_channel_name ] 解析 $code 发生错误"
+                MonitorErr "$chnl_channel_name 解析 $code 发生错误"
+                return 0
+            fi
+
+            chnl_stream_urls=()
+
+            for((s_i=0;s_i<chnl_stream_url_qualities_count;s_i++));
+            do
+                formats_index=${formats_indices[s_i]}
+                chnl_stream_urls[formats_index]="${parse_urls[s_i]}"
+            done
+        elif ! chnl_stream_link=$(yt-dlp --no-warnings -f "$code" -g "$chnl_stream_link") && ! chnl_stream_link=$(youtube-dl -f "$code" -g "$chnl_stream_link")
+        then
+            Println "$error [ $chnl_channel_name ] 解析发生错误, 直播链接不存在?"
+            return 0
+        fi
+
+        unset code
+    elif [ "${chnl_stream_link:13:12}" == "fengshows.cn" ] 
+    then
+        chnl_user_agent="FengWatch/3.1.8 (iPhone; iOS 13.5; Scale/2.00)"
+        chnl_headers="fengshows-client: app(ios,30$(GetFreePort 4000 6000)7);iPhone12,1;13.5\r\n"
+        chnl_cookies=""
+
+        feng_id=${chnl_stream_link##*/}
+        feng_id=${feng_id%%.*}
+        feng_id=$(tr '[:upper:]' '[:lower:]' <<< "$feng_id")
+
+        while IFS=" " read -r title chnl_stream_link
+        do
+            if { [[ $feng_id == *"pin"* ]] && [ "$title" == "資訊台" ]; } || { [[ $feng_id == *"pcc"* ]] && [ "$title" == "中文台" ]; } || { [[ $feng_id == *"phk"* ]] && [ "$title" == "香港台" ]; }
+            then
+                break
+            fi
+        done < <(curl -s -Lm 10 \
+            -H "User-Agent: $chnl_user_agent" \
+            -H "${chnl_headers:0:-4}" "https://api.fengshows.cn/live?live_type=tv&page=1&page_size=15" \
+            | $JQ_FILE -r '.[]|[.title,.live_url_fhd]|join(" ")')
+
+        chnl_stream_link="${chnl_stream_link%\?*}"
+        relative_path="${chnl_stream_link#*//}"
+        relative_path="/${relative_path#*/}"
+        ts=$(date +%s%3N)
+        tx_time=$(printf '%X' $((ts/1000+1800)))
+        tx_secret=$(printf '%s' "obb9Lxyv5C${relative_path%.*}$tx_time" | md5sum)
+        tx_secret=${tx_secret%% *}
+
+        chnl_stream_link="$chnl_stream_link?txSecret=$tx_secret&txTime=$tx_time"
+    elif [[ $chnl_stream_link =~ ^https://embed\.4gtv\.tv/HiNet/(.+)\.html ]] 
+    then
+        Println "$info 解析 [ $chnl_channel_name ] 链接 ..."
+        hinet_4gtv=(
+            "litv-ftv13:民視新聞台"
+            "litv-longturn14:寰宇新聞台"
+            "4gtv-4gtv052:華視新聞資訊台"
+            "4gtv-4gtv012:空中英語教室"
+            "litv-ftv07:民視旅遊台"
+            "litv-ftv15:i-Fun動漫台"
+            "4gtv-live206:幸福空間居家台"
+            "4gtv-4gtv070:愛爾達娛樂台"
+            "litv-longturn17:亞洲旅遊台"
+            "4gtv-4gtv025:MTV Live HD"
+            "litv-longturn15:寰宇新聞台灣台"
+            "4gtv-4gtv001:民視台灣台"
+            "4gtv-4gtv074:中視新聞台"
+            "4gtv-4gtv011:影迷數位電影台"
+            "4gtv-4gtv047:靖天日本台"
+            "litv-longturn11:龍華日韓台"
+            "litv-longturn12:龍華偶像台"
+            "4gtv-4gtv042:公視戲劇"
+            "litv-ftv12:i-Fun動漫台3"
+            "4gtv-4gtv002:民視無線台"
+            "4gtv-4gtv027:CI 罪案偵查頻道"
+            "4gtv-4gtv013:CNEX紀實頻道"
+            "litv-longturn03:龍華電影台"
+            "4gtv-4gtv004:民視綜藝台"
+            "litv-longturn20:ELTV英語學習台"
+            "litv-longturn01:龍華卡通台"
+            "4gtv-4gtv040:中視無線台"
+            "litv-longturn02:Baby First"
+            "4gtv-4gtv003:民視第一台"
+            "4gtv-4gtv007:大愛電視台"
+            "4gtv-4gtv076:SMART 知識頻道"
+            "4gtv-4gtv030:CNBC"
+            "litv-ftv10:半島電視台"
+        )
+
+        for channel in "${hinet_4gtv[@]}"
+        do
+            channel_id=${channel%%:*}
+            channel_name=${channel#*:}
+            channel_name_enc=$(Urlencode "$channel_name")
+
+            if [[ $channel_name_enc == "${BASH_REMATCH[1]}" ]] 
+            then
+                if [ -n "$chnl_proxy" ] 
+                then
+                    _4gtv_proxy_command=( -x "$chnl_proxy" )
+                else
+                    _4gtv_proxy_command=()
+                fi
+
+                chnl_user_agent="$USER_AGENT_BROWSER"
+                chnl_headers="Referer: https://embed.4gtv.tv/HiNet/$channel_name_enc.html?ar=0&as=1&volume=0\r\n"
+                chnl_cookies=""
+
+                stream_link_data=$(curl -s -Lm 10 \
+                ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
+                -H "User-Agent: $chnl_user_agent" \
+                -H "${chnl_headers:0:-4}" \
+                "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)") || true
+
+                if [ -z "$stream_link_data" ] 
+                then
+                    Println "$error 无法连接 4gtv !\n"
+                    return 0
+                fi
+
+                stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
+                hexkey=$(echo -n "VxzAfiseH0AbLShkQOPwdsssw5KyLeuv" | hexdump -v -e '/1 "%02x"')
+                hexiv=$(echo -n "${stream_link_data:0:16}" | hexdump -v -e '/1 "%02x"')
+                chnl_stream_link_url=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+                chnl_stream_link_url_path="${chnl_stream_link_url%/*}"
+
+                if ! Start4gtvLink
+                then
+                    return 0
+                fi
+
+                break
+            fi
+        done
+    elif [[ $chnl_stream_link == *"4gtv.tv/"* ]] 
+    then
+        Println "$info 解析 [ $chnl_channel_name ] 链接 ..."
+        chnl_user_agent="$USER_AGENT_BROWSER"
+        chnl_headers="Referer: $chnl_stream_link\r\n"
+        chnl_cookies=""
+
+        if [ -n "$chnl_proxy" ] 
+        then
+            _4gtv_proxy_command=( -x "$chnl_proxy" )
+        else
+            _4gtv_proxy_command=()
+        fi
+
+        set_id="${chnl_stream_link#*channelSet_id=}"
+        set_id="${set_id%%&*}"
+        fsVALUE=""
+
+        if [ "$set_id" -eq 1 ] 
+        then
+            GetServiceAccs 4gtv
+            for((i=0;i<_4gtv_accs_count;i++));
+            do
+                if [ -n "${_4gtv_accs_token[i]:-}" ] 
+                then
+                    fsVALUE=${_4gtv_accs_token[i]}
+                    break
+                fi
+            done
+        fi
+
+        fnCHANNEL_ID="${chnl_stream_link#*channel_id=}"
+        fnCHANNEL_ID="${fnCHANNEL_ID%%&*}"
+        fsASSET_ID="${chnl_stream_link#*asset_id=}"
+        fsASSET_ID="${fsASSET_ID%%&*}"
+        key="ilyB29ZdruuQjC45JhBBR7o2Z8WJ26Vg"
+        iv="JUMxvVMmszqUTeKn"
+        hexkey=$(echo -n $key | hexdump -v -e '/1 "%02x"')
+        hexiv=$(echo -n $iv | hexdump -v -e '/1 "%02x"')
+        post_data='{"fnCHANNEL_ID":'"$fnCHANNEL_ID"',"fsASSET_ID":"'"$fsASSET_ID"'","fsDEVICE_TYPE":"pc","clsIDENTITY_VALIDATE_ARUS":{"fsVALUE":"'$fsVALUE'"}}'
+        post_data=$(echo -n "$post_data" | openssl enc -aes-256-cbc -iv "$hexiv" -K "$hexkey" -a)
+
+        if [ -n "$fsVALUE" ] 
+        then
+            value="$(UrlencodeUpper ${post_data//[[:space:]]/})"
+        else
+            value="$(Urlencode ${post_data//[[:space:]]/})"
+        fi
+
+        for((try_i=0;try_i<10;try_i++));
+        do
+            stream_link_data=$(curl -s -Lm 10 \
+            ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
+            -H "User-Agent: $chnl_user_agent" \
+            -H "${chnl_headers:0:-4}" \
+            --data "value=$value" \
+            "https://api2.4gtv.tv/Channel/GetChannelUrl3") || true
+
+            if [ -n "$stream_link_data" ] 
+            then
+                break
+            fi
+        done
+
+        if [ -z "$stream_link_data" ] 
+        then
+            Println "$error 无法连接 4gtv !\n"
+            return 0
+        fi
+
+        stream_link_data=$($JQ_FILE -r '.Data' <<< "$stream_link_data")
+
+        if [ "$stream_link_data" == null ] 
+        then
+            Println "$error 此服务器 ip 不支持或频道 [ $chnl_channel_name ] 不可用!\n"
+            return 0
+        fi
+
+        chnl_stream_link_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
+            | $JQ_FILE -r '.flstURLs[0]')
+        chnl_stream_link_url_path="${chnl_stream_link_url%/*}"
+
+        if ! Start4gtvLink
+        then
+            return 0
+        fi
+    elif [[ $chnl_stream_link == http://*.macaulotustv.com/* ]] 
+    then
+        chnl_user_agent="$USER_AGENT_BROWSER"
+        chnl_headers="Origin: http://www.macaulotustv.cc\r\nReferer: http://www.macaulotustv.cc/\r\n"
+        chnl_cookies=""
+    elif [[ $chnl_stream_link =~ ^http://(.+)\?protocol=(.+)\&accesstoken=(.+)\&programid=(.+)\&playtoken=(.+)\&verifycode=(.+)\&rate=(.+)\&playtype=live ]] 
+    then
+        chnl_ts_play_url="${BASH_REMATCH[1]}"
+        chnl_ts_protocol="${BASH_REMATCH[2]}"
+        chnl_ts_access_token="${BASH_REMATCH[3]}"
+        chnl_ts_program_id="${BASH_REMATCH[4]}"
+        chnl_ts_play_token="${BASH_REMATCH[5]}"
+        chnl_ts_verify_code="${BASH_REMATCH[6]}"
+        chnl_ts_rate="${BASH_REMATCH[7]}"
+    elif [[ $chnl_stream_link =~ ^https?://news\.tvb\.com ]] 
+    then
+        if [ "${chnl_stream_link:0:5}" == "http:" ] 
+        then
+            chnl_stream_link="https${chnl_stream_link:4}"
+        fi
+
+        chnl_user_agent="$USER_AGENT_BROWSER"
+        chnl_headers="Referer: $chnl_stream_link\r\n"
+        chnl_cookies=""
+
+        if [[ $chnl_stream_link =~ inews ]] 
+        then
+            if [ "$chnl_parse" = false ] 
+            then
+                chnl_map_flags="-map 0:p:0"
+            fi
+
+            if [ "$chnl_video_codec" != "copy" ] 
+            then
+                if [[ ! $chnl_output_flags =~ -filter:v ]] && [[ ! $chnl_output_flags =~ -vf ]]
+                then
+                    chnl_output_flags="$chnl_output_flags -filter:v fps=fps=25"
+                fi
+                if [[ ! $chnl_output_flags =~ -vsync ]] 
+                then
+                    chnl_output_flags="$chnl_output_flags -vsync 0"
+                fi
+            fi
+
+            if [ "$chnl_audio_codec" != "copy" ] && [[ ! $chnl_output_flags =~ -ar ]] 
+            then
+                chnl_output_flags="$chnl_output_flags -ar 32000"
+            fi
+
+            if [[ ! $chnl_output_flags =~ -copyts ]] 
+            then
+                chnl_output_flags="$chnl_output_flags -copyts"
+            fi
+        fi
+
+        while IFS= read -r line 
+        do
+            if [[ $line =~ tag_deviceid= ]] 
+            then
+                line="${line#* }"
+                chnl_cookies="${line%% *}"
+            elif [[ $line =~ country_code= ]] 
+            then
+                line="${line#* }"
+                chnl_cookies="$chnl_cookies ${line%% *}"
+                break
+            fi
+        done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" -c - "$chnl_stream_link" 2> /dev/null)
+
+        chnl="${chnl_stream_link%\?*}"
+        chnl="${chnl##*/}"
+
+        token_url=$(curl -s -Lm 10 \
+            -H "User-Agent: $chnl_user_agent" \
+            -H "${chnl_headers:0:-4}" \
+            "https://api.news.tvb.com/news/v2.2.1/live?profile=web" \
+            | $JQ_FILE -r '.items[]|select(.path=="'"$chnl"'" or .path=="'"${chnl#*_}"'" or .path=="'"${chnl%_*}"'").video.ios[]|select(.type=="hd").url')
+
+        if [ -z "$token_url" ] 
+        then
+            Println "$error 无法解析 tvb: token url\n"
+            return 0
+        fi
+
+        query_string="$token_url&feed&client_ip=$(GetServerIp)"
+        query_string=$(UrlencodeUpper "$query_string")
+        chnl_stream_link=$(curl -s -Lm 10 \
+            -H "User-Agent: $chnl_user_agent" \
+            -H "${chnl_headers:0:-4}" \
+            --cookie "$chnl_cookies" \
+            "https://news.tvb.com/ajax_call/getVideo.php?token=$query_string" \
+            | $JQ_FILE -r '.url')
+
+        if [ "$chnl_stream_link" == null ] 
+        then
+            Println "$error 无法解析 tvb: url\n"
+            return 0
+        fi
+
+        while IFS= read -r line 
+        do
+            if [[ $line =~ hdntl= ]] 
+            then
+                line="${line#* }"
+                chnl_cookies="$chnl_cookies ${line%% *}"
+                break
+            fi
+        done < <(curl -s -I -H "User-Agent: $chnl_user_agent" -H "${chnl_headers:0:-4}" --cookie "$chnl_cookies" "$chnl_stream_link" 2> /dev/null)
+    fi
+
+    if [ -n "$code" ] 
+    then
+        code="|$code"
+
+        if { [[ $code =~ \|origin\| ]] || [[ $code =~ \|parse\| ]]; } && [[ ${code##*|} =~ ([0-9]+)-([0-9]+)x([0-9]+) ]]
+        then
+            chnl_stream_link_url="$chnl_stream_link"
+            chnl_stream_link_url_path="${chnl_stream_link_url%\?*}"
+            chnl_stream_link_url_path="${chnl_stream_link_url_path%/*}"
+
+            if [[ $chnl_stream_link_url_path =~ $hboasia_host/(.+)$ ]] 
+            then
+                if [ "$chnl_use_cdn" = true ] 
+                then
+                    chnl_stream_link_url_path="https://$hboasia_cdn_host/${BASH_REMATCH[1]}"
+                fi
+                #chnl_headers="range: \r\n"
+                if [[ ! $chnl_output_flags =~ -seekable ]] 
+                then
+                    chnl_output_flags="$chnl_output_flags -seekable 0"
+                fi
+                if [[ ! $chnl_output_flags =~ -vsync ]] 
+                then
+                    chnl_output_flags="$chnl_output_flags -vsync 0"
+                fi
+            fi
+
+            chnl_stream_audio_group_id=()
+            chnl_stream_audio_name=()
+            chnl_stream_audio_default=()
+            chnl_stream_audio_language=()
+            chnl_stream_audio_url=()
+            chnl_stream_subtitles_group_id=()
+            chnl_stream_subtitles_name=()
+            chnl_stream_subtitles_default=()
+            chnl_stream_subtitles_language=()
+            chnl_stream_subtitles_url=()
+            chnl_stream_urls=()
+            chnl_stream_urls_bitrate=()
+            chnl_stream_urls_resolution=()
+            chnl_stream_urls_audio=()
+            chnl_stream_urls_subtitles=()
+            chnl_stream_urls_list=""
+            chnl_stream_urls_count=0
+
+            while IFS= read -r line 
+            do
+                if [[ $line =~ TYPE=AUDIO ]] 
+                then
+                    IFS="," read -r -a chnl_stream_audio <<< "${line#*:}"
+                    chnl_stream_audio_keys=(${chnl_stream_audio[*]%%=*})
+                    chnl_stream_audio_values=(${chnl_stream_audio[*]#*=})
+                    for((i=0;i<${#chnl_stream_audio_keys[@]};i++));
+                    do
+                        if [ "${chnl_stream_audio_keys[i]}" == "GROUP-ID" ] 
+                        then
+                            chnl_stream_audio_group_id+=("${chnl_stream_audio_values[i]//\"/}")
+                        elif [ "${chnl_stream_audio_keys[i]}" == "NAME" ] 
+                        then
+                            chnl_stream_audio_name+=("${chnl_stream_audio_values[i]//\"/}")
+                        elif [ "${chnl_stream_audio_keys[i]}" == "DEFAULT" ] 
+                        then
+                            chnl_stream_audio_default+=("${chnl_stream_audio_values[i]}")
+                        elif [ "${chnl_stream_audio_keys[i]}" == "LANGUAGE" ] 
+                        then
+                            chnl_stream_audio_language+=("${chnl_stream_audio_values[i]//\"/}")
+                        elif [ "${chnl_stream_audio_keys[i]}" == "URI" ] 
+                        then
+                            chnl_stream_audio_uri=${chnl_stream_audio_values[i]//\"/}
+                            if [[ $chnl_stream_audio_uri =~ ^https?:// ]] 
+                            then
+                                chnl_stream_audio_url+=("$chnl_stream_audio_uri")
+                            else
+                                chnl_stream_audio_url+=("$chnl_stream_link_url_path/$chnl_stream_audio_uri")
+                            fi
+                        fi
+                    done
+                elif [[ $line =~ TYPE=SUBTITLES ]] 
+                then
+                    IFS="," read -r -a chnl_stream_subtitles <<< "${line#*:}"
+                    chnl_stream_subtitles_keys=(${chnl_stream_subtitles[*]%%=*})
+                    chnl_stream_subtitles_values=(${chnl_stream_subtitles[*]#*=})
+                    for((i=0;i<${#chnl_stream_subtitles_keys[@]};i++));
+                    do
+                        if [ "${chnl_stream_subtitles_keys[i]}" == "GROUP-ID" ] 
+                        then
+                            chnl_stream_subtitles_group_id+=("${chnl_stream_subtitles_values[i]//\"/}")
+                        elif [ "${chnl_stream_subtitles_keys[i]}" == "NAME" ] 
+                        then
+                            chnl_stream_subtitles_name+=("${chnl_stream_subtitles_values[i]//\"/}")
+                        elif [ "${chnl_stream_subtitles_keys[i]}" == "DEFAULT" ] 
+                        then
+                            chnl_stream_subtitles_default+=("${chnl_stream_subtitles_values[i]}")
+                        elif [ "${chnl_stream_subtitles_keys[i]}" == "LANGUAGE" ] 
+                        then
+                            chnl_stream_subtitles_language+=("${chnl_stream_subtitles_values[i]//\"/}")
+                        elif [ "${chnl_stream_subtitles_keys[i]}" == "URI" ] 
+                        then
+                            chnl_stream_subtitles_uri=${chnl_stream_subtitles_values[i]//\"/}
+                            if [[ $chnl_stream_subtitles_uri =~ ^https?:// ]] 
+                            then
+                                chnl_stream_subtitles_url+=("$chnl_stream_subtitles_uri")
+                            else
+                                chnl_stream_subtitles_url+=("$chnl_stream_link_url_path/$chnl_stream_subtitles_uri")
+                            fi
+                        fi
+                    done
+                elif [[ $line =~ RESOLUTION=([^ ]+) ]] 
+                then
+                    chnl_stream_url_resolution=${BASH_REMATCH[1]%%,*}
+                    chnl_stream_urls_resolution+=("$chnl_stream_url_resolution")
+                    if [[ $line =~ BANDWIDTH=([^ ]+) ]] 
+                    then
+                        chnl_stream_url_bitrate=${BASH_REMATCH[1]%%,*}
+                        chnl_stream_url_bitrate=$((chnl_stream_url_bitrate/1000))
+                    else
+                        chnl_stream_url_bitrate=""
+                    fi
+                    chnl_stream_urls_bitrate+=("$chnl_stream_url_bitrate")
+                    if [ -n "$chnl_stream_url_bitrate" ] 
+                    then
+                        chnl_stream_url_bitrate_text=" [ $chnl_stream_url_bitrate k ]"
+                    else
+                        chnl_stream_url_bitrate_text=""
+                    fi
+                    if [[ $line =~ AUDIO=([^ ]+) ]] 
+                    then
+                        chnl_stream_url_audio=${BASH_REMATCH[1]%%,*}
+                        chnl_stream_url_audio=${chnl_stream_url_audio#\"}
+                        chnl_stream_url_audio=${chnl_stream_url_audio%\"}
+                    else
+                        chnl_stream_url_audio=""
+                    fi
+                    chnl_stream_urls_audio+=("$chnl_stream_url_audio")
+                    if [[ $line =~ SUBTITLES=([^ ]+) ]] 
+                    then
+                        chnl_stream_url_subtitles=${BASH_REMATCH[1]%%,*}
+                        chnl_stream_url_subtitles=${chnl_stream_url_subtitles#\"}
+                        chnl_stream_url_subtitles=${chnl_stream_url_subtitles%\"}
+                    else
+                        chnl_stream_url_subtitles=""
+                    fi
+                    chnl_stream_urls_subtitles+=("$chnl_stream_url_subtitles")
+                    chnl_stream_urls_count=$((chnl_stream_urls_count+1))
+                    chnl_stream_urls_list="$chnl_stream_urls_list ${green}$chnl_stream_urls_count.${normal}${indent_6}$chnl_stream_url_resolution$chnl_stream_url_bitrate_text $chnl_stream_url_audio $chnl_stream_url_subtitles\n\n"
+                elif [[ $line =~ \.m3u8 ]] 
+                then
+                    if [[ $line =~ ^https?:// ]] 
+                    then
+                        chnl_stream_urls+=("$line")
+                    else
+                        chnl_stream_urls+=("$chnl_stream_link_url_path/$line")
+                    fi
+                fi
+            done < <(curl -s -Lm 20 -H "User-Agent: $chnl_user_agent" "$chnl_stream_link_url")
+
+            if [ -n "$chnl_stream_urls_list" ] 
+            then
+                if [ "$chnl_use_cdn" = true ] && [[ $chnl_stream_link_url =~ $hboasia_host/(.+)$ ]] 
+                then
+                    chnl_stream_url_cdn="https://$hboasia_cdn_host/${BASH_REMATCH[1]}?${chnl_stream_urls[0]#*\?}"
+                fi
+
+                chnl_stream_url_qualities_count=0
+
+                if [[ $chnl_stream_link =~ \|([^|]+)$ ]] 
+                then
+                    choose=0
+                    chnl_stream_url_quality=${BASH_REMATCH[1]}
+                    chnl_stream_audio_group_id_allow=()
+                    chnl_stream_audio_name_allow=()
+                    chnl_stream_subtitles_group_id_allow=()
+                    chnl_stream_subtitles_name_allow=()
+
+                    IFS="," read -r -a chnl_stream_url_qualities <<< "$chnl_stream_url_quality"
+                    chnl_stream_url_qualities_count=${#chnl_stream_url_qualities[@]}
+
+                    if [[ $chnl_stream_link =~ \|ag:([^|]+) ]] 
+                    then
+                        chnl_stream_audio_group_id_allow_list=${BASH_REMATCH[1]}
+                        IFS="," read -ra chnl_stream_audio_group_id_allow <<< "$chnl_stream_audio_group_id_allow_list"
+                    fi
+
+                    if [[ $chnl_stream_link =~ \|a:([^|]+) ]] 
+                    then
+                        chnl_stream_audio_name_allow_list=${BASH_REMATCH[1]}
+                        IFS="," read -ra chnl_stream_audio_name_allow <<< "$chnl_stream_audio_name_allow_list"
+                    fi
+
+                    if [[ $chnl_stream_link =~ \|sg:([^|]+) ]] 
+                    then
+                        chnl_stream_subtitles_group_id_allow_list=${BASH_REMATCH[1]}
+                        IFS="," read -ra chnl_stream_subtitles_group_id_allow <<< "$chnl_stream_subtitles_group_id_allow_list"
+                    fi
+
+                    if [[ $chnl_stream_link =~ \|s:([^|]+) ]] 
+                    then
+                        chnl_stream_subtitles_name_allow_list=${BASH_REMATCH[1]}
+                        IFS="," read -ra chnl_stream_subtitles_name_allow <<< "$chnl_stream_subtitles_name_allow_list"
+                    fi
+
+                    if [ "$monitor" = true ] 
+                    then
+                        auto_select=true
+                    else
+                        auto_select=false
+                    fi
+
+                    choose_asked=false
+                    quality_unset=false
+
+                    chnl_stream_url_video_indices=()
+
+                    for((i=0;i<chnl_stream_url_qualities_count;i++));
+                    do
+                        for((j=0;j<chnl_stream_urls_count;j++));
+                        do
+                            if { [ "$auto_select" = true ] || ! [[ ${chnl_stream_url_qualities[i]} =~ - ]] || [ "${chnl_stream_urls_bitrate[j]}" == "${chnl_stream_url_qualities[i]%-*}" ]; } && [ "${chnl_stream_urls_resolution[j]}" == "${chnl_stream_url_qualities[i]#*-}" ]
+                            then
+                                chnl_stream_url_qualities[i]="${chnl_stream_urls_bitrate[j]}-${chnl_stream_urls_resolution[j]}"
+                                chnl_stream_url_video_indices+=("$j")
+                                continue 2
+                            fi
+                        done
+
+                        Println "$error ${chnl_stream_url_qualities[i]} 不存在 !"
+
+                        if [ "$monitor" = true ] 
+                        then
+                            quality_unset=true
+                            unset 'chnl_stream_url_qualities[i]'
+                            chnl_stream_url_qualities_count=$((chnl_stream_url_qualities_count-1))
+                            continue
+                        elif [ "$choose_asked" = false ] 
+                        then
+                            choose_asked=true
+                            echo
+                            inquirer list_input_index "是否按分辨率自动选择" yn_options yn_options_index
+
+                            if [ "$yn_options_index" -eq 0 ] 
+                            then
+                                i=$((i-1))
+                                continue
+                            fi
+                        fi
+
+                        choose=1
+                        Println "$error 请重新选择 $chnl_channel_name 分辨率"
+                        break
+                    done
+
+                    if [ "$chnl_stream_url_qualities_count" -eq 0 ] 
+                    then
+                        Println "$error 请重新选择 $chnl_channel_name 分辨率"
+                        return 0
+                    fi
+
+                    if [ "$quality_unset" = true ] 
+                    then
+                        chnl_stream_url_qualities=("${chnl_stream_url_qualities[@]}")
+                    fi
+                elif [ "$monitor" = true ] 
+                then
+                    Println "$error 请重新选择 $chnl_channel_name 分辨率"
+                    return 0
+                else
+                    choose=1
+                fi
+
+                if [ "$choose" -eq 1 ]
+                then
+                    chnl_stream_urls_select_all=$((chnl_stream_urls_count+1))
+                    chnl_stream_urls_list="$chnl_stream_urls_list ${green}$chnl_stream_urls_select_all.${normal}${indent_6}全部\n"
+                    Println "$chnl_stream_urls_list"
+                    echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
+
+                    while read -p "(默认: $chnl_stream_urls_count): " chnl_stream_urls_num 
+                    do
+                        chnl_stream_urls_num=${chnl_stream_urls_num:-$chnl_stream_urls_count}
+
+                        if [ "$chnl_stream_urls_num" == "$chnl_stream_urls_select_all" ] 
+                        then
+                            chnl_stream_url_qualities=()
+                            chnl_stream_url_video_indices=()
+
+                            for((i=0;i<chnl_stream_urls_count;i++));
+                            do
+                                chnl_stream_url_qualities+=("${chnl_stream_urls_bitrate[i]}-${chnl_stream_urls_resolution[i]}")
+                                chnl_stream_url_video_indices+=("$i")
+                            done
+
+                            chnl_stream_url_qualities_count=$chnl_stream_urls_count
+                            break
+                        fi
+
+                        IFS=" " read -ra chnl_stream_urls_num_arr <<< "$chnl_stream_urls_num"
+
+                        error_no=0
+                        for chnl_stream_url_num in "${chnl_stream_urls_num_arr[@]}"
+                        do
+                            case "$chnl_stream_url_num" in
+                                *"-"*)
+                                    chnl_stream_url_num_start=${chnl_stream_url_num%-*}
+                                    chnl_stream_url_num_end=${chnl_stream_url_num#*-}
+                                    if [[ $chnl_stream_url_num_start == *[!0-9]* ]] || [[ $chnl_stream_url_num_end == *[!0-9]* ]] || [ "$chnl_stream_url_num_start" -eq 0 ] || [ "$chnl_stream_url_num_end" -eq 0 ] || [ "$chnl_stream_url_num_end" -gt "$chnl_stream_urls_count" ] || [ "$chnl_stream_url_num_start" -ge "$chnl_stream_url_num_end" ]
+                                    then
+                                        error_no=3
+                                        break
+                                    fi
+                                ;;
+                                *[!0-9]*)
+                                    error_no=1
+                                    break
+                                ;;
+                                *)
+                                    if [ "$chnl_stream_url_num" -lt 1 ] || [ "$chnl_stream_url_num" -gt "$chnl_stream_urls_count" ] 
+                                    then
+                                        error_no=2
+                                        break
+                                    fi
+                                ;;
+                            esac
+                        done
+
+                        case "$error_no" in
+                            1|2|3)
+                                Println "$error $i18n_input_correct_no\n"
+                            ;;
+                            *)
+                                chnl_stream_url_qualities=()
+                                chnl_stream_url_video_indices=()
+                                for chnl_stream_url_num in "${chnl_stream_urls_num_arr[@]}"
+                                do
+                                    if [[ $chnl_stream_url_num =~ - ]] 
+                                    then
+                                        start=${chnl_stream_url_num%-*}
+                                        end=${chnl_stream_url_num#*-}
+                                        for((i=start-1;i<end;i++));
+                                        do
+                                            chnl_stream_url_qualities+=("${chnl_stream_urls_bitrate[i]}-${chnl_stream_urls_resolution[i]}")
+                                            chnl_stream_url_video_indices+=("$i")
+                                        done
+                                    else
+                                        chnl_stream_urls_index=$((chnl_stream_url_num-1))
+                                        chnl_stream_url_qualities+=("${chnl_stream_urls_bitrate[chnl_stream_urls_index]}-${chnl_stream_urls_resolution[chnl_stream_urls_index]}")
+                                        chnl_stream_url_video_indices+=("$chnl_stream_urls_index")
+                                    fi
+                                done
+
+                                chnl_stream_url_qualities_count=${#chnl_stream_url_qualities[@]}
+                                break
+                            ;;
+                        esac
+                    done
+                fi
+
+                printf -v chnl_stream_url_quality ',%s' "${chnl_stream_url_qualities[@]}"
+                chnl_stream_url_quality=${chnl_stream_url_quality:1}
+
+                if [ -n "${chnl_stream_audio_name:-}" ] 
+                then
+                    chnl_stream_url_audio_indices=()
+                    choose=1
+                    if [ -n "${chnl_stream_audio_group_id_allow:-}" ] 
+                    then
+                        choose=0
+                        if [ "${chnl_stream_audio_group_id_allow[0]}" == "none" ] 
+                        then
+                            chnl_stream_link_url="${chnl_stream_link_url}|ag:none"
+                            chnl_stream_url_audio_count=0
+                        else
+                            for((i=0;i<${#chnl_stream_audio_group_id_allow[@]};i++));
+                            do
+                                for((j=0;j<${#chnl_stream_audio_group_id[@]};j++));
+                                do
+                                    if [ "${chnl_stream_audio_group_id_allow[i]}" == "${chnl_stream_audio_group_id[j]}" ] && [ "${chnl_stream_audio_name_allow[i]}" == "${chnl_stream_audio_name[j]}" ]
+                                    then
+                                        chnl_stream_url_audio_indices+=("$j")
+                                        continue 2
+                                    fi
+                                done
+                                if [ "$monitor" = true ] 
+                                then
+                                    MonitorErr "$chnl_channel_name 请重新选择音轨"
+                                    return 0
+                                fi
+                                choose=1
+                                Println "$error 请重新选择音轨\n"
+                                break
+                            done
+                        fi
+                    fi
+
+                    if [ "$choose" -eq 1 ] 
+                    then
+                        chnl_stream_audio_count=${#chnl_stream_audio_name[@]}
+                        chnl_stream_audio_list=""
+                        chnl_stream_audio_num_default=1
+
+                        for((i=0;i<chnl_stream_audio_count;i++));
+                        do
+                            if [ "${chnl_stream_audio_default[i]}" == "YES" ] 
+                            then
+                                chnl_stream_audio_num_default=$((i+1))
+                            fi
+                            chnl_stream_audio_list="$chnl_stream_audio_list ${green}$((i+1)).${normal}${indent_6}音轨组: ${green}${chnl_stream_audio_group_id[i]}${normal} 名称: ${green}${chnl_stream_audio_name[i]}${normal} 语言: ${green}${chnl_stream_audio_language[i]}${normal}\n\n"
+                        done
+
+                        chnl_stream_audio_unselect_all=$((chnl_stream_audio_count+1))
+                        chnl_stream_audio_list="$chnl_stream_audio_list ${green}$chnl_stream_audio_unselect_all.${normal}${indent_6}不启用\n\n"
+
+                        chnl_stream_audio_select_all=$((chnl_stream_audio_count+2))
+                        chnl_stream_audio_list="$chnl_stream_audio_list ${green}$chnl_stream_audio_select_all.${normal}${indent_6}全部启用"
+                        Println "$chnl_stream_audio_list\n"
+                        echo "选择启用音轨 (多个音轨用空格分隔 比如: 1 2 4-5)"
+                        chnl_stream_audio_num_default=$chnl_stream_audio_select_all
+
+                        while read -p "(默认: $chnl_stream_audio_num_default): " chnl_stream_audio_num 
+                        do
+                            chnl_stream_audio_num=${chnl_stream_audio_num:-$chnl_stream_audio_num_default}
+
+                            if [ "$chnl_stream_audio_num" == "$chnl_stream_audio_unselect_all" ] 
+                            then
+                                unset 'chnl_stream_audio_group_id'
+                                unset 'chnl_stream_audio_name'
+                                break
+                            fi
+
+                            if [ "$chnl_stream_audio_num" == "$chnl_stream_audio_select_all" ] 
+                            then
+                                chnl_stream_url_audio_indices=()
+                                for((i=0;i<chnl_stream_audio_count;i++));
+                                do
+                                    chnl_stream_url_audio_indices+=("$i")
+                                done
+                                break
+                            fi
+
+                            IFS=" " read -ra chnl_stream_audio_num_arr <<< "$chnl_stream_audio_num"
+
+                            error_no=0
+                            for chnl_stream_audio_num in "${chnl_stream_audio_num_arr[@]}"
+                            do
+                                case "$chnl_stream_audio_num" in
+                                    *"-"*)
+                                        chnl_stream_audio_num_start=${chnl_stream_audio_num%-*}
+                                        chnl_stream_audio_num_end=${chnl_stream_audio_num#*-}
+                                        if [[ $chnl_stream_audio_num_start == *[!0-9]* ]] || [[ $chnl_stream_audio_num_end == *[!0-9]* ]] || [ "$chnl_stream_audio_num_start" -eq 0 ] || [ "$chnl_stream_audio_num_end" -eq 0 ] || [ "$chnl_stream_audio_num_end" -gt "$chnl_stream_audio_count" ] || [ "$chnl_stream_audio_num_start" -ge "$chnl_stream_audio_num_end" ]
+                                        then
+                                            error_no=3
+                                            break
+                                        fi
+                                    ;;
+                                    *[!0-9]*)
+                                        error_no=1
+                                        break
+                                    ;;
+                                    *)
+                                        if [ "$chnl_stream_audio_num" -lt 1 ] || [ "$chnl_stream_audio_num" -gt "$chnl_stream_audio_count" ] 
+                                        then
+                                            error_no=2
+                                            break
+                                        fi
+                                    ;;
+                                esac
+                            done
+
+                            case "$error_no" in
+                                1|2|3)
+                                    Println "$error $i18n_input_correct_no\n"
+                                ;;
+                                *)
+                                    chnl_stream_url_audio_indices=()
+                                    for((i=0;i<chnl_stream_audio_count;i++));
+                                    do
+                                        i_num=$((i+1))
+                                        for chnl_stream_audio_num in "${chnl_stream_audio_num_arr[@]}"
+                                        do
+                                            if [[ $chnl_stream_audio_num =~ - ]] 
+                                            then
+                                                if [ "$i_num" -ge "${chnl_stream_audio_num%-*}" ] && [ "$i_num" -le "${chnl_stream_audio_num#*-}" ]
+                                                then
+                                                    chnl_stream_url_audio_indices+=("$i")
+                                                    continue 2
+                                                fi
+                                            elif [ "$i_num" -eq "$chnl_stream_audio_num" ] 
+                                            then
+                                                chnl_stream_url_audio_indices+=("$i")
+                                                continue 2
+                                            fi
+                                        done
+                                        unset 'chnl_stream_audio_group_id[i]'
+                                        unset 'chnl_stream_audio_name[i]'
+                                    done
+                                    break
+                                ;;
+                            esac
+                        done
+
+                        if [ -n "${chnl_stream_audio_name+x}" ] 
+                        then
+                            printf -v chnl_stream_audio_group_id_allow_list ',%s' "${chnl_stream_audio_group_id[@]}"
+                            chnl_stream_audio_group_id_allow_list=${chnl_stream_audio_group_id_allow_list:1}
+                            printf -v chnl_stream_audio_name_allow_list ',%s' "${chnl_stream_audio_name[@]}"
+                            chnl_stream_audio_name_allow_list=${chnl_stream_audio_name_allow_list:1}
+                            chnl_stream_link_url="$chnl_stream_link_url|ag:$chnl_stream_audio_group_id_allow_list|a:$chnl_stream_audio_name_allow_list"
+                            chnl_stream_url_audio_count=${#chnl_stream_audio_name[@]}
+                        else
+                            chnl_stream_url_audio_count=0
+                            chnl_stream_link_url="${chnl_stream_link_url}|ag:none"
+                        fi
+                    elif [ -n "${chnl_stream_url_audio_indices:-}" ] 
+                    then
+                        chnl_stream_url_audio_count=${#chnl_stream_url_audio_indices[@]}
+                        chnl_stream_link_url="${chnl_stream_link_url}|ag:$chnl_stream_audio_group_id_allow_list|a:$chnl_stream_audio_name_allow_list"
+                    fi
+                else
+                    chnl_stream_url_audio_count=0
+                fi
+
+                if [[ ${chnl_stream_links[0]} =~ ^https?://news\.tvb\.com ]] 
+                then
+                    chnl_stream_url_subtitles_count=0
+                    chnl_stream_link_url="${chnl_stream_link_url}|sg:none"
+                elif [ -n "${chnl_stream_subtitles_name:-}" ] 
+                then
+                    chnl_stream_url_subtitles_indices=()
+                    choose=1
+                    if [ -n "${chnl_stream_subtitles_group_id_allow:-}" ] 
+                    then
+                        choose=0
+                        if [ "${chnl_stream_subtitles_group_id_allow[0]}" == "none" ] 
+                        then
+                            chnl_stream_link_url="${chnl_stream_link_url}|sg:none"
+                            chnl_stream_url_subtitles_count=0
+                        else
+                            for((i=0;i<${#chnl_stream_subtitles_group_id_allow[@]};i++));
+                            do
+                                for((j=0;j<${#chnl_stream_subtitles_group_id[@]};j++));
+                                do
+                                    if [ "${chnl_stream_subtitles_group_id_allow[i]}" == "${chnl_stream_subtitles_group_id[j]}" ] && [ "${chnl_stream_subtitles_name_allow[i]}" == "${chnl_stream_subtitles_name[j]}" ]
+                                    then
+                                        chnl_stream_url_subtitles_indices+=("$j")
+                                        continue 2
+                                    fi
+                                done
+                                if [ "$monitor" = true ] 
+                                then
+                                    MonitorErr "$chnl_channel_name 请重新选择字幕"
+                                    return 0
+                                fi
+                                choose=1
+                                Println "$error 请重新选择字幕\n"
+                                break
+                            done
+                        fi
+                    fi
+
+                    if [ "$choose" -eq 1 ] 
+                    then
+                        chnl_stream_subtitles_count=${#chnl_stream_subtitles_name[@]}
+                        chnl_stream_subtitles_list=""
+                        chnl_stream_subtitles_num_default=1
+
+                        for((i=0;i<chnl_stream_subtitles_count;i++));
+                        do
+                            if [ "${chnl_stream_subtitles_default[i]}" == "YES" ] 
+                            then
+                                chnl_stream_subtitles_num_default=$((i+1))
+                            fi
+                            chnl_stream_subtitles_list="$chnl_stream_subtitles_list ${green}$((i+1)).${normal}${indent_6}字幕组: ${green}${chnl_stream_subtitles_group_id[i]}${normal} 名称: ${green}${chnl_stream_subtitles_name[i]}${normal} 语言: ${green}${chnl_stream_subtitles_language[i]}${normal}\n\n"
+                        done
+
+                        chnl_stream_subtitles_unselect_all=$((chnl_stream_subtitles_count+1))
+                        chnl_stream_subtitles_list="$chnl_stream_subtitles_list ${green}$chnl_stream_subtitles_unselect_all.${normal}${indent_6}不启用\n\n"
+
+                        chnl_stream_subtitles_select_all=$((chnl_stream_subtitles_count+2))
+                        chnl_stream_subtitles_list="$chnl_stream_subtitles_list ${green}$chnl_stream_subtitles_select_all.${normal}${indent_6}全部启用"
+                        Println "$chnl_stream_subtitles_list\n"
+                        echo "选择字幕 (多个字幕用空格分隔 比如: 1 2 4-5)"
+                        chnl_stream_subtitles_num_default=$chnl_stream_subtitles_select_all
+
+                        while read -p "(默认: $chnl_stream_subtitles_num_default): " chnl_stream_subtitles_num 
+                        do
+                            chnl_stream_subtitles_num=${chnl_stream_subtitles_num:-$chnl_stream_subtitles_num_default}
+
+                            if [ "$chnl_stream_subtitles_num" == "$chnl_stream_subtitles_unselect_all" ] 
+                            then
+                                unset 'chnl_stream_subtitles_group_id'
+                                unset 'chnl_stream_subtitles_name'
+                                break
+                            fi
+
+                            if [ "$chnl_stream_subtitles_num" == "$chnl_stream_subtitles_select_all" ] 
+                            then
+                                chnl_stream_url_subtitles_indices=()
+                                for((i=0;i<chnl_stream_subtitles_count;i++));
+                                do
+                                    chnl_stream_url_subtitles_indices+=("$i")
+                                done
+                                break
+                            fi
+
+                            IFS=" " read -ra chnl_stream_subtitles_num_arr <<< "$chnl_stream_subtitles_num"
+
+                            error_no=0
+                            for chnl_stream_subtitles_num in "${chnl_stream_subtitles_num_arr[@]}"
+                            do
+                                case "$chnl_stream_subtitles_num" in
+                                    *"-"*)
+                                        chnl_stream_subtitles_num_start=${chnl_stream_subtitles_num%-*}
+                                        chnl_stream_subtitles_num_end=${chnl_stream_subtitles_num#*-}
+                                        if [[ $chnl_stream_subtitles_num_start == *[!0-9]* ]] || [[ $chnl_stream_subtitles_num_end == *[!0-9]* ]] || [ "$chnl_stream_subtitles_num_start" -eq 0 ] || [ "$chnl_stream_subtitles_num_end" -eq 0 ] || [ "$chnl_stream_subtitles_num_end" -gt "$chnl_stream_subtitles_count" ] || [ "$chnl_stream_subtitles_num_start" -ge "$chnl_stream_subtitles_num_end" ]
+                                        then
+                                            error_no=3
+                                            break
+                                        fi
+                                    ;;
+                                    *[!0-9]*)
+                                        error_no=1
+                                        break
+                                    ;;
+                                    *)
+                                        if [ "$chnl_stream_subtitles_num" -lt 1 ] || [ "$chnl_stream_subtitles_num" -gt "$chnl_stream_subtitles_count" ] 
+                                        then
+                                            error_no=2
+                                            break
+                                        fi
+                                    ;;
+                                esac
+                            done
+
+                            case "$error_no" in
+                                1|2|3)
+                                    Println "$error $i18n_input_correct_no\n"
+                                ;;
+                                *)
+                                    chnl_stream_url_subtitles_indices=()
+                                    for((i=0;i<chnl_stream_subtitles_count;i++));
+                                    do
+                                        i_num=$((i+1))
+                                        for chnl_stream_subtitles_num in "${chnl_stream_subtitles_num_arr[@]}"
+                                        do
+                                            if [[ $chnl_stream_subtitles_num =~ - ]] 
+                                            then
+                                                if [ "$i_num" -ge "${chnl_stream_subtitles_num%-*}" ] && [ "$i_num" -le "${chnl_stream_subtitles_num#*-}" ]
+                                                then
+                                                    chnl_stream_url_subtitles_indices+=("$i")
+                                                    continue 2
+                                                fi
+                                            elif [ "$i_num" -eq "$chnl_stream_subtitles_num" ] 
+                                            then
+                                                chnl_stream_url_subtitles_indices+=("$i")
+                                                continue 2
+                                            fi
+                                        done
+                                        unset 'chnl_stream_subtitles_group_id[i]'
+                                        unset 'chnl_stream_subtitles_name[i]'
+                                    done
+                                    break
+                                ;;
+                            esac
+                        done
+
+                        if [ -n "${chnl_stream_subtitles_name+x}" ] 
+                        then
+                            printf -v chnl_stream_subtitles_group_id_allow_list ',%s' "${chnl_stream_subtitles_group_id[@]}"
+                            chnl_stream_subtitles_group_id_allow_list=${chnl_stream_subtitles_group_id_allow_list:1}
+                            printf -v chnl_stream_subtitles_name_allow_list ',%s' "${chnl_stream_subtitles_name[@]}"
+                            chnl_stream_subtitles_name_allow_list=${chnl_stream_subtitles_name_allow_list:1}
+                            chnl_stream_link_url="$chnl_stream_link_url|sg:$chnl_stream_subtitles_group_id_allow_list|s:$chnl_stream_subtitles_name_allow_list"
+                            chnl_stream_url_subtitles_count=${#chnl_stream_subtitles_name[@]}
+                        else
+                            chnl_stream_url_subtitles_count=0
+                            chnl_stream_link_url="${chnl_stream_link_url}|sg:none"
+                        fi
+                    elif [ -n "${chnl_stream_url_subtitles_indices:-}" ] 
+                    then
+                        chnl_stream_url_subtitles_count=${#chnl_stream_url_subtitles_indices[@]}
+                        chnl_stream_link_url="${chnl_stream_link_url}|sg:$chnl_stream_subtitles_group_id_allow_list|s:$chnl_stream_subtitles_name_allow_list"
+                    fi
+                else
+                    chnl_stream_url_subtitles_count=0
+                fi
+
+                if [[ $chnl_stream_link =~ \|parse\| ]] 
+                then
+                    chnl_use_primary_playlist=false
+                    chnl_stream_link=${chnl_stream_link_url%%|*}
+                    chnl_stream_link_url="$chnl_stream_link_url|parse"
+                elif [[ $chnl_stream_link =~ \|origin\| ]] || [ "$monitor" = true ]
+                then
+                    chnl_use_primary_playlist=true
+                    chnl_stream_link=${chnl_stream_link_url%%|*}
+                    chnl_stream_link_url="${chnl_stream_link_url}|origin"
+                else
+                    Println "$tip 如果选 是 只修改 map 参数, FFmpeg 输入的将是原链接而非解析链接"
+                    inquirer list_input "是否是需要鉴权的直播源" yn_options yn_option
+                    if [ "$yn_option" == "$i18n_yes" ] 
+                    then
+                        chnl_use_primary_playlist=true
+                        chnl_stream_link=${chnl_stream_link_url%%|*}
+                        chnl_stream_link_url="$chnl_stream_link_url|origin"
+                    else
+                        chnl_use_primary_playlist=false
+                        chnl_stream_link=${chnl_stream_link_url%%|*}
+                        chnl_stream_link_url="$chnl_stream_link_url|parse"
+                    fi
+                fi
+
+                if [[ ${chnl_stream_links[0]} =~ ^https?://news\.tvb\.com ]] 
+                then
+                    chnl_stream_links[0]="${chnl_stream_links[0]%%|*}$code|$chnl_stream_url_quality"
+                else
+                    chnl_stream_links[0]="$chnl_stream_link_url|$chnl_stream_url_quality"
+                fi
+            fi
+        elif [[ $code =~ \|a: ]] || [[ $code =~ \|v: ]] || [[ $code =~ \|s: ]]
+        then
+            if [[ $code =~ \|a:([^|]+) ]] 
+            then
+                chnl_audio_indices="${BASH_REMATCH[1]}"
+            fi
+
+            if [[ $code =~ \|v:([^|]+) ]] 
+            then
+                chnl_video_indices="${BASH_REMATCH[1]}"
+            fi
+
+            if [[ $code =~ \|s:([^|]+) ]] 
+            then
+                chnl_subtitle_indices="${BASH_REMATCH[1]}"
+            fi
+        elif [[ $code =~ \|([^|]+)\|(.+)$ ]] 
+        then
+            chnl_ts_id="${BASH_REMATCH[1]}"
+            chnl_ts_user_name="${BASH_REMATCH[2]}"
+        else
+            Println "$error 无法解析 code\n"
+            MonitorErr "$chnl_channel_name 无法解析 code"
+            return 0
+        fi
+    fi
+
+    if [ "${chnl_stream_link:0:4}" == "rtmp" ] || [ "${chnl_stream_link:0:1}" == "/" ]
+    then
+        chnl_input_flags=${chnl_input_flags//-timeout 2000000000/}
+        chnl_input_flags=${chnl_input_flags//-reconnect 1/}
+        chnl_input_flags=${chnl_input_flags//-reconnect_at_eof 1/}
+        chnl_input_flags=${chnl_input_flags//-reconnect_streamed 1/}
+        chnl_input_flags=${chnl_input_flags//-reconnect_delay_max 2000/}
+        Trim chnl_input_flags
+    fi
+
+    if [ "$chnl_use_cdn" = true ] 
+    then
+        hboasia_host="$hboasia_cdn_host"
+    fi
+
+    if [[ $chnl_stream_link == *".m3u8"* ]] || [[ ${chnl_stream_links[0]} =~ \|(origin|parse)\| ]]
+    then
+        chnl_input_flags=${chnl_input_flags//-reconnect_at_eof 1/}
+    fi
+
+    master=0
+    if [ "${chnl_stream_url_qualities_count:-0}" -gt 0 ] 
+    then
+        if [[ $chnl_bitrate =~ , ]] || [[ $chnl_quality =~ , ]] || [[ $chnl_resolution =~ , ]] || [ "${chnl_stream_url_qualities_count:-0}" -gt 1 ] || [ "${chnl_stream_url_audio_count:-0}" -gt 0 ] || [ "${chnl_stream_url_subtitles_count:-0}" -gt 0 ] 
+        then
+            master=1
+        fi
+    elif [[ $chnl_bitrate =~ , ]] || [[ $chnl_quality =~ , ]] || [[ $chnl_resolution =~ , ]] || [ "${chnl_subtitle:-}" != "[]" ]
+    then
+        master=1
+    fi
+
+    if [ "$chnl_video_codec" == "copy" ]
+    then
+        chnl_quality=""
+        chnl_bitrate=""
+        chnl_const=false
+    fi
+
+    if [ -z "${FFMPEG:-}" ] 
+    then
+        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+        FFMPEG="$FFMPEG_ROOT/ffmpeg"
+        FFPROBE="$FFMPEG_ROOT/ffprobe"
+    fi
+
+    if [[ ${chnl_input_flags:0:1} == "'" ]] 
+    then
+        chnl_input_flags=${chnl_input_flags%\'}
+        chnl_input_flags=${chnl_input_flags#\'}
+    fi
+    if [[ ${chnl_output_flags:0:1} == "'" ]] 
+    then
+        chnl_output_flags=${chnl_output_flags%\'}
+        chnl_output_flags=${chnl_output_flags#\'}
+    fi
+
+    [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
+
+    printf -v start_time '%(%s)T' -1
+    chnl_channel_time=$start_time
+
+    chnl_extra_filters=""
+    if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+    then
+        filters=( vf filter:v )
+        for filter in "${filters[@]}"
+        do
+            if [[ $chnl_output_flags =~ (.*)"-$filter "([^ ]+)(.*) ]] 
+            then
+                chnl_extra_filters="${BASH_REMATCH[2]},"
+                chnl_output_flags="${BASH_REMATCH[1]} ${BASH_REMATCH[3]}"
+            fi
+        done
+    fi
+
+    chnl_flags_command=( -flags )
+    if [[ $chnl_output_flags =~ (.*)"-flags "([^ ]+)(.*) ]] 
+    then
+        chnl_flags="${BASH_REMATCH[2]}"
+
+        if [[ $chnl_flags =~ global_header ]] 
+        then
+            chnl_flags_command=( -flags "$chnl_flags" )
+        else
+            chnl_flags_command+=("-global_header$chnl_flags")
+        fi
+
+        chnl_output_flags="${BASH_REMATCH[1]} ${BASH_REMATCH[3]}"
+    else
+        chnl_flags_command+=(-global_header)
+    fi
+
+    FilterString chnl_input_flags chnl_output_flags
+
+    from="StartChannel"
+
+    if [ -n "${kind:-}" ] 
+    then
+        if [ "$chnl_status" == "on" ] 
+        then
+            Println "$error HLS 频道正开启, 走错片场了？\n" && exit 1
+        fi
+
+        if [ "$chnl_flv_h265" = true ] 
+        then
+            if [[ ! -x $(command -v ffmpeg_c) ]]  
+            then
+                if [ "$monitor" = false ] 
+                then
+                    echo
+                    ffmpeg_c_options=( '快速安装' '编译 FFmpeg (耗时非常非常久)' )
+                    inquirer list_input_index "选择 FFmpeg (h265版本) 安装方式" ffmpeg_c_options ffmpeg_c_options_index
+                    if [ "$ffmpeg_c_options_index" -eq 0 ] 
+                    then
+                        if curl -L "$FFMPEG_MIRROR_LINK/ffmpeg_c" -o /usr/local/bin/ffmpeg_c
+                        then
+                            chmod +x /usr/local/bin/ffmpeg_c
+                        else
+                            Println "$error 暂时无法连接服务器, 请稍后再试 !\n"
+                            exit 1
+                        fi
+                    else
+                        FFmpegCompile
+                    fi
+                else
+                    chnl_flv_h265=false
+                fi
+            fi
+        fi
+
+        chnl_output_flags=${chnl_output_flags//-sc_threshold 0/}
+
+        if [ "$kind" == "flv" ] 
+        then
+            rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.log"
+            rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.err"
+            rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
+            if [ "$sh_debug" = true ] 
+            then
+                ( FlvStreamCreator ) 
+            else
+                ( FlvStreamCreator ) > /dev/null 2> /dev/null < /dev/null &
+            fi
+        else
+            Println "$error 暂不支持输出 $kind ...\n" && exit 1
+        fi
+    else
+        if [ "$chnl_flv_status" == "on" ] 
+        then
+            Println "$error FLV 频道正开启, 走错片场了？\n" && exit 1
+        fi
+
+        rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.log"
+        rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.err"
+        rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
+
+        if [ "$sh_debug" = true ] 
+        then
+            ( HlsStreamCreatorPlus )
+        else
+            ( HlsStreamCreatorPlus ) > /dev/null 2> /dev/null < /dev/null &
+        fi
+    fi
+
+    chnl_stream_audio_url=()
+    chnl_stream_subtitles_url=()
+    chnl_stream_url_qualities_count=0
+    chnl_stream_url_audio_count=0
+    chnl_stream_url_subtitles_count=0
+    chnl_stream_url_quality=""
+    chnl_stream_url_cdn=""
+    chnl_xc_proxy=""
+
+    Println "$info 频道 [ $chnl_channel_name ] 已开启 !\n"
+}

@@ -1,0 +1,8 @@
+V2rayDeleteOutbound()
+{
+    V2rayListOutbounds
+    V2raySelectOutbound
+    jq_path='["outbounds",'"$outbounds_index"']'
+    JQ delete "$V2_CONFIG"
+    Println "$info 出站 ${outbounds_tag[outbounds_index]} 删除成功\n"
+}

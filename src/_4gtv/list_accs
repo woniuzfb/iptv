@@ -1,0 +1,23 @@
+List4gtvAccs()
+{
+    GetServiceAccs 4gtv
+    _4gtv_accs_list=""
+
+    for((i=0;i<_4gtv_accs_count;i++));
+    do
+        if [ -n "${_4gtv_accs_token[i]:-}" ]
+        then
+            is_login="${green} [ 已登录 ] ${normal}"
+        else
+            is_login=""
+        fi
+        _4gtv_accs_list="$_4gtv_accs_list ${green}$((i+1)).${normal}${indent_6}邮箱: ${green}${_4gtv_accs_email[i]}${normal}$is_login\n${indent_6}密码: ${green}${_4gtv_accs_pass[i]}${normal}\n\n"
+    done
+
+    if [ -n "$_4gtv_accs_list" ] 
+    then
+        Println "$_4gtv_accs_list"
+    else
+        Println "$error 没有账号\n"
+    fi
+}

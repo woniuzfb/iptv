@@ -1,0 +1,84 @@
+V2rayListPolicy()
+{
+    V2rayGetPolicy
+
+    if [ "$policy_levels_count" -eq 0 ] 
+    then
+        default_levels='{
+            "levels": {
+                "0": {
+                    "handshake": 4,
+                    "connIdle": 300,
+                    "uplinkOnly": 2,
+                    "downlinkOnly": 5,
+                    "statsUserUplink": false,
+                    "statsUserDownlink": false,
+                    "bufferSize": 512
+                }
+            },
+            "system": {
+                "statsInboundUplink": false,
+                "statsInboundDownlink": false,
+                "statsOutboundUplink": false,
+                "statsOutboundDownlink": false
+            }
+        }'
+
+        json=true
+        jq_path='["policy"]'
+        JQ update "$V2_CONFIG" "$default_levels"
+        jq_path='["PolicyObject"]'
+        JQ delete "$V2_CONFIG"
+        V2rayGetPolicy
+    fi
+
+    levels_list="=== 用户等级数 ${green} $policy_levels_count ${normal}\n\n"
+    for((i=0;i<policy_levels_count;i++));
+    do
+        if [ "${policy_levels_stats_user_uplink[i]}" = true ] 
+        then
+            policy_levels_stats_user_uplink_list="上行流量统计: ${green}是${normal}\n${indent_6}"
+        else
+            policy_levels_stats_user_uplink_list="上行流量统计: ${red}否${normal}\n${indent_6}"
+        fi
+        if [ "${policy_levels_stats_user_downlink[i]}" = true ] 
+        then
+            policy_levels_stats_user_downlink_list="下行流量统计: ${green}是${normal}\n${indent_6}"
+        else
+            policy_levels_stats_user_downlink_list="下行流量统计: ${red}否${normal}\n${indent_6}"
+        fi
+        levels_list="$levels_list# ${green}$((i+1))${normal}${indent_6}等级: ${green}${policy_levels_id[i]}${normal}\n${indent_6}握手时间限制: ${green}${policy_levels_handshake[i]}${normal} 秒\n${indent_6}连接空闲的时间限制: ${green}${policy_levels_conn_idle[i]}${normal} 秒\n${indent_6}出站代理时间限制: ${green}${policy_levels_uplink_only[i]}${normal} 秒\n${indent_6}入站代理时间限制: ${green}${policy_levels_downlink_only[i]}${normal} 秒\n${indent_6}缓存大小: ${green}${policy_levels_buffer_size[i]}${normal} kB\n${indent_6}$policy_levels_stats_user_uplink_list$policy_levels_stats_user_downlink_list\n\n"
+    done
+
+    if [ "$policy_system_stats_inbound_uplink" = false ] 
+    then
+        system_list="入站上行流量统计: ${red}否${normal}\n\n"
+    else
+        system_list="入站上行流量统计: ${green}是${normal}\n\n"
+    fi
+
+    if [ "$policy_system_stats_inbound_downlink" = false ] 
+    then
+        system_list="$system_list入站下行流量统计: ${red}否${normal}\n\n"
+    else
+        system_list="$system_list入站下行流量统计: ${green}是${normal}\n\n"
+    fi
+
+    if [ "$policy_system_stats_outbound_uplink" = false ] 
+    then
+        system_list="$system_list出站上行流量统计: ${red}否${normal}\n\n"
+    else
+        system_list="$system_list出站上行流量统计: ${green}是${normal}\n\n"
+    fi
+
+    if [ "$policy_system_stats_outbound_downlink" = false ] 
+    then
+        system_list="$system_list出站下行流量统计: ${red}否${normal}\n\n"
+    else
+        system_list="$system_list出站下行流量统计: ${green}是${normal}\n\n"
+    fi
+
+    policy_list="$levels_list$system_list"
+
+    Println "$policy_list"
+}

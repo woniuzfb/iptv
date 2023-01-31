@@ -1,0 +1,42 @@
+TrojanInstall()
+{
+    if [ -s "$TR_CONFIG" ] 
+    then
+        Println "$error $trojan_name 已存在...\n"
+        ExitOnList n "`gettext \"是否覆盖原安装\"`"
+    fi
+
+    DepsCheck
+    JQInstall
+
+    if ! grep -q "$trojan_name:" < "/etc/passwd"
+    then
+        if grep -q '\--group ' < <(adduser --help)
+        then
+            adduser $trojan_name --system --group --no-create-home > /dev/null
+        else
+            adduser $trojan_name --system --no-create-home > /dev/null
+        fi
+        usermod -s /usr/sbin/nologin $trojan_name
+    fi
+
+    Println "$info 安装 $trojan_name..."
+
+    { curl -s -m 10 "$TR_LINK" || curl -s -m 30 "$TR_LINK_FALLBACK"; } \
+    | sed "s+nobody+$trojan_name+g" \
+    | sed "s+ 'sha1'++g" \
+    | sed "s+ 'sha256'++g" \
+    | sed "s+ 'sha512'++g" \
+    | sed "s+https://api.github.com/repos/p4gefau1t/trojan-go/releases/latest+$FFMPEG_MIRROR_LINK/$trojan_name.json+g" \
+    | sed "s+https://github.com/p4gefau1t/trojan-go/releases/download+$FFMPEG_MIRROR_LINK/$trojan_name+g" | bash
+
+    TrojanConfigInstall
+
+    systemctl daemon-reload
+    systemctl enable $trojan_name
+    systemctl start $trojan_name
+
+    Println "$info $trojan_name 安装成功\n"
+}
+
+exit 0

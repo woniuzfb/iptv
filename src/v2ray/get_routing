@@ -1,0 +1,52 @@
+V2rayGetRouting()
+{
+    IFS=$'`\t' read -r routing_domain_strategy m_rules_type m_rules_domain m_rules_ip m_rules_port \
+    m_rules_source_port m_rules_network m_rules_source m_rules_user m_rules_inbound_tag \
+    m_rules_protocol m_rules_attrs m_rules_outbound_tag m_rules_balancer_tag m_balancers_tag \
+    m_balancers_selector < <($JQ_FILE -r '[
+    (.routing.domainStrategy|if . == "" // . == null then "AsIs" else . end + "`"),
+    ([(.routing.rules // [])[]|.type|if . == "" // . == null then "field" else . end|. + "^"]|join("") + "`"),
+    ([(.routing.rules // [])[]|.domain // [] |join("|")|. + "^"]|join("") + "`"),
+    ([(.routing.rules // [])[]|.ip // [] |join("|")|. + "^"]|join("") + "`"),
+    ([(.routing.rules // [])[]|.port|. + "^"]|join("") + "`"),
+    ([(.routing.rules // [])[]|.sourcePort|. + "^"]|join("") + "`"),
+    ([(.routing.rules // [])[]|.network|. + "^"]|join("") + "`"),
+    ([(.routing.rules // [])[]|.source // [] |join("|")|. + "^"]|join("") + "`"),
+    ([(.routing.rules // [])[]|.user // [] |join("|")|. + "^"]|join("") + "`"),
+    ([(.routing.rules // [])[]|.inboundTag // [] |join("|")|. + "^"]|join("") + "`"),
+    ([(.routing.rules // [])[]|.protocol // [] |join("|")|. + "^"]|join("") + "`"),
+    ([(.routing.rules // [])[]|.attrs|. + "^"]|join("") + "`"),
+    ([(.routing.rules // [])[]|.outboundTag|. + "^"]|join("") + "`"),
+    ([(.routing.rules // [])[]|.balancerTag|. + "^"]|join("") + "`"),
+    ([(.routing.balancers // [])[]|.tag|. + "^"]|join("") + "`"),
+    ([(.routing.balancers // [])[]|.selector // [] |join("|")|. + "^"]|join("") + "`")]|@tsv' "$V2_CONFIG")
+
+    if [ -z "$m_rules_type" ] 
+    then
+        routing_rules_count=0
+    else
+        IFS="^" read -r -a routing_rules_type <<< "$m_rules_type"
+        IFS="^" read -r -a routing_rules_domain <<< "$m_rules_domain"
+        IFS="^" read -r -a routing_rules_ip <<< "$m_rules_ip"
+        IFS="^" read -r -a routing_rules_port <<< "$m_rules_port"
+        IFS="^" read -r -a routing_rules_source_port <<< "$m_rules_source_port"
+        IFS="^" read -r -a routing_rules_network <<< "$m_rules_network"
+        IFS="^" read -r -a routing_rules_source <<< "$m_rules_source"
+        IFS="^" read -r -a routing_rules_user <<< "$m_rules_user"
+        IFS="^" read -r -a routing_rules_inbound_tag <<< "$m_rules_inbound_tag"
+        IFS="^" read -r -a routing_rules_protocol <<< "$m_rules_protocol"
+        IFS="^" read -r -a routing_rules_attrs <<< "$m_rules_attrs"
+        IFS="^" read -r -a routing_rules_outbound_tag <<< "$m_rules_outbound_tag"
+        IFS="^" read -r -a routing_rules_balancer_tag <<< "$m_rules_balancer_tag"
+        routing_rules_count=${#routing_rules_type[@]}
+    fi
+
+    if [ -z "$m_balancers_tag" ] 
+    then
+        routing_balancers_count=0
+    else
+        IFS="^" read -r -a routing_balancers_tag <<< "$m_balancers_tag"
+        IFS="^" read -r -a routing_balancers_selector <<< "$m_balancers_selector"
+        routing_balancers_count=${#routing_balancers_tag[@]}
+    fi
+}

@@ -1,0 +1,42 @@
+SearchXtreamCodesChnls()
+{
+    search_result=""
+
+    for((i=1;i<=pages;i++));
+    do
+        if [ "$i" -gt 1 ] 
+        then
+            echo -en "\r$((i*100/pages))%"
+        else
+            Println "$info 搜索进度"
+            echo -n "$((i*100/pages))%"
+        fi
+        sleep 1
+        page_index=$((i-1))
+        if [ -n "${ordered_list_pages[page_index]:-}" ] 
+        then
+            ordered_list_page=${ordered_list_pages[page_index]}
+        else
+            if [ "$i" -gt 1 ] 
+            then
+                ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=$i"
+                ordered_list_page=$(curl -s -Lm 10 \
+                    -H "User-Agent: $user_agent" \
+                    -H "${headers:0:-4}" \
+                    --cookie "$cookies" "$ordered_list_url" | $JQ_FILE -r -c '.' 2> /dev/null) || ordered_list_page=""
+            fi
+            ordered_list_pages[page_index]="$ordered_list_page"
+        fi
+
+        while IFS= read -r name
+        do
+            name=${name#\"}
+            name=${name%\"}
+            name_lower=$(tr '[:upper:]' '[:lower:]' <<< "$name")
+            if [[ $name_lower == *"$search_phrase"* ]] 
+            then
+                search_result="$search_result页数: ${green}$i${normal} 频道名称: ${green}$name${normal}\n\n"
+            fi
+        done < <($JQ_FILE '.js.data[].name' <<< "$ordered_list_page")
+    done
+}

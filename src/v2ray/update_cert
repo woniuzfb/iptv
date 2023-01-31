@@ -1,0 +1,60 @@
+V2rayDomainUpdateCert()
+{
+    local domain=$1
+
+    if [ "$ca_server" == "letsencrypt" ] && [ -f /etc/systemd/system/mmproxy-acme.service ] && [[ $(systemctl is-active mmproxy-acme) == "active" ]]
+    then
+        if [ -z "${tls_port:-}" ] 
+        then
+            tls_port=$(grep ^ExecStart= < /etc/systemd/system/mmproxy-acme.service)
+            if [[ $tls_port =~ -4\ 127.0.0.1:([^ ]+) ]] 
+            then
+                tls_port=${BASH_REMATCH[1]}
+            else
+                tls_port=${tls_port#*-4 }
+                tls_port=${tls_port#*:}
+                tls_port=${tls_port%% *}
+            fi
+        fi
+
+        ~/.acme.sh/acme.sh --force --issue --alpn --tlsport "$tls_port" -d "$domain" --standalone -k ec-256 --server "$ca_server" > /dev/null
+        ~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "/usr/local/share/$v2ray_name/$domain.crt" --keypath "/usr/local/share/$v2ray_name/$domain.key" --ecc > /dev/null
+    else
+        stopped=0
+
+        if [ -d "$nginx_prefix" ] 
+        then
+            if [[ $(systemctl is-active $nginx_name) == "active" ]]
+            then
+                if [[ $(echo $SSH_CONNECTION | cut -d' ' -f3) == "127.0.0.1" ]] 
+                then
+                    Println "$error 请使用非 $nginx_name 监听端口连接 ssh 后重试\n"
+                    exit 1
+                fi
+                systemctl stop $nginx_name
+                stopped=1
+            fi
+
+            sleep 1
+        fi
+
+        ~/.acme.sh/acme.sh --force --issue -d "$domain" --standalone -k ec-256 --server "$ca_server" > /dev/null
+        ~/.acme.sh/acme.sh --force --installcert -d "$domain" --fullchainpath "/usr/local/share/$v2ray_name/$domain.crt" --keypath "/usr/local/share/$v2ray_name/$domain.key" --ecc > /dev/null
+
+        [ "$stopped" -eq 1 ] && systemctl start $nginx_name
+    fi
+
+    if [ -e "/usr/local/nginx/conf/sites_crt/$domain.crt" ] 
+    then
+        cp -f "/usr/local/share/$v2ray_name/$domain.crt" "/usr/local/nginx/conf/sites_crt/$domain.crt"
+        cp -f "/usr/local/share/$v2ray_name/$domain.key" "/usr/local/nginx/conf/sites_crt/$domain.key"
+    fi
+
+    if [ -e "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" ] 
+    then
+        cp -f "/usr/local/share/$v2ray_name/$domain.crt" "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt"
+        cp -f "/usr/local/share/$v2ray_name/$domain.key" "/usr/local/openresty/nginx/conf/sites_crt/$domain.key"
+    fi
+
+    return 0
+}

@@ -1,0 +1,9 @@
+DistCheck
+DepInstall vim
+if [ "$dist" == "rpm" ] 
+then
+    alternatives --config editor
+else
+    update-alternatives --config editor
+fi
+exit 0

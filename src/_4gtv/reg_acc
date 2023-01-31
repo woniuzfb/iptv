@@ -1,0 +1,33 @@
+Reg4gtvAcc()
+{
+    Set4gtvAccEmail
+    Set4gtvAccPass
+    IFS=" " read -r result msg < <(curl -s -Lm 10 \
+        -H "User-Agent: $user_agent" \
+        -H 'Origin: https://www.4gtv.tv' \
+        -H 'Referer: https://www.4gtv.tv/signup.html' \
+        -d "fnREGISTER_TYPE=1&fsLOGIN_TYPE=&fsLINK_ID=&fsUSER=$_4gtv_acc_email&fsLOGIN_TYPE=&fsLINK_ID=&fsPASSWORD=$_4gtv_acc_pass&fsPASSWORD1=$_4gtv_acc_pass&fnBIRTH_YEAR=$((RANDOM%20+1980))&fsSEX=male" \
+        https://api2.4gtv.tv/Account/Register \
+        | $JQ_FILE -r '[.Success,.ErrMessage]|join(" ")'
+    ) || true
+
+    if [ "$result" = true ]
+    then
+        if [ ! -s "$SERVICES_FILE" ] 
+        then
+            printf '{"%s":{"%s":[]}}' "4gtv" "accounts" > "$SERVICES_FILE"
+        fi
+        new_acc=$(
+        $JQ_FILE -n --arg email "$_4gtv_acc_email" --arg password "$_4gtv_acc_pass" \
+            '{
+                email: $email,
+                password: $password
+            }'
+        )
+        jq_path='["4gtv","accounts"]'
+        JQ add "$SERVICES_FILE" "[$new_acc]"
+        Println "$info 账号注册成功\n"
+    else
+        Println "$error 账号注册失败, 请重试\n\n$msg\n"
+    fi
+}

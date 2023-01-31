@@ -1,0 +1,6 @@
+NginxListStream()
+{
+    NginxGetStream
+
+    Println "分流配置:\n\n SNI 域名分流:\n\n${nginx_stream_server_name_list:- 无}\n\n SSL 协议分流(\$ssl_proxy):\n\n${nginx_stream_protocol_list:- 无}\n\n ALPN 协议分流:\n\n${nginx_stream_alpn_protocols_list:- 无}\n\n 分流后端(\$upstream):\n\n${nginx_stream_upstream_list:- 无}\n\n"
+}

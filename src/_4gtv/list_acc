@@ -1,0 +1,59 @@
+List4gtvAcc()
+{
+    List4gtvAccs
+
+    if [ "$_4gtv_accs_count" -eq 0 ] 
+    then
+        exit 1
+    fi
+
+    echo -e "选择账号"
+    while read -p "$i18n_default_cancel" _4gtv_accs_num
+    do
+        case "$_4gtv_accs_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$_4gtv_accs_num" -gt 0 ] && [ "$_4gtv_accs_num" -le "$_4gtv_accs_count" ]
+                then
+                    _4gtv_accs_index=$((_4gtv_accs_num-1))
+                    fsVALUE=${_4gtv_accs_token[_4gtv_accs_index]:-}
+                    if [ -z "$fsVALUE" ] 
+                    then
+                        Println "$error 请先登录此账号\n"
+                        exit 1
+                    else
+                        Println "$info 查询中..."
+                        IFS="^" read -r result msg fnLEFT_PROMO_DAYS < <(curl -s -Lm 20 \
+                            -H "User-Agent: $user_agent" \
+                            -H 'Origin: https://www.4gtv.tv' \
+                            -H 'Referer: https://www.4gtv.tv/channel.html' \
+                            -d "clsIDENTITY_VALIDATE_ARUS%5BfsVALUE%5D=$(UrlencodeUpper $fsVALUE)" \
+                            https://api2.4gtv.tv//Account/GetAccountInfo \
+                            | $JQ_FILE -r '[.Success,.ErrMessage,.Data.fnLEFT_PROMO_DAYS]|join("^")'
+                        ) || true
+                        if [ "$result" = true ] 
+                        then
+                            if [ "$fnLEFT_PROMO_DAYS" -eq -1 ] 
+                            then
+                                days_left="${red}未开通${normal}"
+                            else
+                                days_left="还剩 ${green}$fnLEFT_PROMO_DAYS${normal} 天"
+                            fi
+                            Println "$info 豪华套餐: $days_left\n"
+                        else
+                            Println "$error 查询遇到错误\n\n$msg\n"
+                        fi
+                    fi
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+}

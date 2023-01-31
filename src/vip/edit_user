@@ -1,0 +1,83 @@
+VipEditUser()
+{
+    VipListUsers
+
+    while read -p "请选择用户: " vip_users_num
+    do
+        case "$vip_users_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$vip_users_num" -gt 0 ] && [ "$vip_users_num" -le "$vip_users_count" ]
+                then
+                    vip_users_index=$((vip_users_num-1))
+                    vip_user_ip=${vip_users_ip[vip_users_index]}
+                    vip_user_license=${vip_users_license[vip_users_index]}
+                    vip_user_sum=${vip_users_sum[vip_users_index]}
+                    vip_user_expire=${vip_users_expire[vip_users_index]}
+                    if [ "$vip_user_expire" -gt 0 ] 
+                    then
+                        vip_user_expire_text=$(date +%c --date=@"$vip_user_expire")
+                    else
+                        vip_user_expire_text="无"
+                    fi
+                    vip_user_name=${vip_users_name[vip_users_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "
+选择修改内容
+
+    ${green}1.${normal} 修改 用户名
+    ${green}2.${normal} 修改 IP
+    ${green}3.${normal} 修改 授权码
+    ${green}4.${normal} 修改 验证类型/到期日
+
+"
+    read -p "$i18n_default_cancel" edit_vip_user_num
+
+    case $edit_vip_user_num in
+        1) 
+            Println "原用户名: ${red}$vip_user_name${normal}"
+            VipSetUserName
+            jq_path='["users",'"$vip_users_index"',"name"]'
+            JQ update "$VIP_FILE" "$vip_user_name"
+            Println "$info 用户名修改成功\n"
+        ;;
+        2) 
+            Println "原 IP: ${red}$vip_user_ip${normal}"
+            VipSetUserIp
+            jq_path='["users",'"$vip_users_index"',"ip"]'
+            JQ update "$VIP_FILE" "$vip_user_ip"
+            Println "$info IP 修改成功\n"
+        ;;
+        3) 
+            Println "原授权码: ${red}$vip_user_license${normal}"
+            VipSetUserLicense
+            jq_path='["users",'"$vip_users_index"',"license"]'
+            JQ update "$VIP_FILE" "$vip_user_license"
+            Println "$info 授权码修改成功\n"
+        ;;
+        4) 
+            Println "原验证类型: ${red}$vip_user_sum${normal}\n原到期日: ${red}$vip_user_expire_text${normal}"
+            VipSetUserSum
+            jq_path='["users",'"$vip_users_index"',"sum"]'
+            JQ update "$VIP_FILE" "$vip_user_sum"
+            number=true
+            jq_path='["users",'"$vip_users_index"',"expire"]'
+            JQ update "$VIP_FILE" "$vip_user_expire"
+            Println "$info 验证类型/到期日修改成功\n"
+        ;;
+        *) Println "$i18n_canceled...\n" && exit 1
+        ;;
+    esac
+}

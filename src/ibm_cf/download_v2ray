@@ -1,0 +1,34 @@
+IbmDownloadV2ray()
+{
+    if [ -d "$IBM_APPS_ROOT/ibm_$v2ray_name" ] 
+    then
+        Println "$error ibm $v2ray_name 已存在\n"
+    else
+        DepsCheck
+        JQInstall
+
+        Println "$info 下载 ibm $v2ray_name ..."
+        cd ~
+        rm -rf $v2ray_package_name-linux-64
+        if v2ray_version=$(curl -s -L "$FFMPEG_MIRROR_LINK/$v2ray_name.json" | $JQ_FILE -r '.tag_name') && curl -L "$FFMPEG_MIRROR_LINK/$v2ray_name/$v2ray_version/$v2ray_package_name-linux-64.zip" -o "$v2ray_package_name-linux-64.zip" && unzip "$v2ray_package_name-linux-64.zip" -d "$v2ray_package_name-linux-64" > /dev/null
+        then
+            mkdir -p "$IBM_APPS_ROOT/ibm_$v2ray_name"
+            mv ${v2ray_package_name}-linux-64/$v2ray_name "$IBM_APPS_ROOT/ibm_$v2ray_name/"
+            if [ "$v2ray_name" == "xray" ] 
+            then
+                if ! curl -L "$FFMPEG_MIRROR_LINK/xray/v2ctl" -o "$IBM_APPS_ROOT/ibm_$v2ray_name/v2ctl"
+                then
+                    Println "$error 无法连接服务器, 请稍后再试\n"
+                    exit 1
+                fi
+            else
+                mv $v2ray_package_name-linux-64/v2ctl "$IBM_APPS_ROOT/ibm_$v2ray_name/"
+            fi
+            chmod 700 "$IBM_APPS_ROOT/ibm_$v2ray_name/$v2ray_name"
+            chmod 700 "$IBM_APPS_ROOT/ibm_$v2ray_name/v2ctl"
+            Println "$info ibm $v2ray_name 下载完成\n"
+        else
+            Println "$error 无法连接服务器, 请稍后再试\n"
+        fi
+    fi
+}

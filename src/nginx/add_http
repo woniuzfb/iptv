@@ -1,0 +1,31 @@
+NginxAddHttp()
+{
+    directive_http='
+    {"directive":"http","args":[],"block":[
+        {"directive":"include","args":["mime.types"]},
+        {"directive":"default_type","args":["application/octet-stream"]},
+        {"directive":"sendfile","args":["on"]},
+        {"directive":"keepalive_timeout","args":["65"]},
+        {"directive":"server","args":[],"block":[
+            {"directive":"listen","args":["80"]},
+            {"directive":"server_name","args":["localhost"]},
+            {"directive":"access_log","args":["logs/localhost-access.log"]},
+            {"directive":"error_log","args":["logs/localhost-error.log"]},
+            {"directive":"location","args":["/"],"block":[
+                {"directive":"root","args":["html/localhost"]},
+                {"directive":"index","args":["index.html","index.htm"]}
+            ]},
+            {"directive":"error_page","args":["500","502","503","504","/50x.html"]},
+            {"directive":"location","args":["/50x.html"],"block":[
+                {"directive":"root","args":["html/localhost"]}
+            ]}
+        ]}
+    ]}'
+
+    directives=( http )
+    directives_val=()
+    check_directives=()
+    check_args=()
+
+    NginxAddDirective 1
+}

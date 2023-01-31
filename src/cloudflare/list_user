@@ -1,0 +1,111 @@
+CloudflareListUser()
+{
+    CloudflareListUsers
+
+    if [ "$cf_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
+
+    echo -e "选择用户"
+    while read -p "$i18n_default_cancel" cf_users_num
+    do
+        case "$cf_users_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
+                then
+                    cf_users_index=$((cf_users_num-1))
+                    cf_user_email=${cf_users_email[cf_users_index]}
+                    cf_user_pass=${cf_users_pass[cf_users_index]}
+                    cf_user_token=${cf_users_token[cf_users_index]}
+                    cf_user_api_key=${cf_users_api_key[cf_users_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    if [ -n "$cf_user_api_key" ] 
+    then
+        curl_header_auth_email="X-Auth-Email: $cf_user_email"
+        curl_header_auth_key="X-Auth-Key: $cf_user_api_key"
+        curl_header_auth_token=""
+    else
+        curl_header_auth_email=""
+        curl_header_auth_key=""
+        curl_header_auth_token="Authorization: Bearer $cf_user_token"
+    fi
+
+    [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+    IFS=$'\002\t' read -r success error_message CF_ACCOUNT_ID < <(
+    JQs flat "$(curl -s -X GET -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
+    -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/accounts)" '' \
+    '[.success + "\u0002",
+    (.errors|if (.|type == "string") then {} else . end).message + "\u0002",
+    (.result|if (.|type == "string") then {} else . end).id + "\u0002"]
+    |@tsv' "${delimiters[@]}")
+
+    if [ "$success" = false ] 
+    then
+        Println "$error 获取账号 ID 失败: ${error_message//${delimiters[0]}/, }\n"
+        exit 1
+    fi
+
+    end_epoch=$(date --utc -d 'tomorrow 00:00:00' +%s)
+    start_epoch=$(date --utc -d 'today 00:00:00' +%s)
+    start_date=$(date --utc --date="@$start_epoch" +'%Y-%m-%dT%H:%m:%SZ')
+    end_date=$(date --utc --date="@$end_epoch" +'%Y-%m-%dT%H:%m:%SZ')
+
+    PAYLOAD='{ "query":
+    "query {
+        viewer {
+        accounts(filter: { accountTag: $accountTag }) {
+        workersInvocationsAdaptive(
+            filter: {
+            datetime_geq: $datetimeStart,
+            datetime_leq: $datetimeEnd
+            }
+            limit: 100
+        ) {
+            sum {
+                requests
+                subrequests
+                errors
+            }
+            }
+        }
+        }
+    }",'
+
+    PAYLOAD="$PAYLOAD
+
+    \"variables\": {
+        \"accountTag\": \"$CF_ACCOUNT_ID\",
+        \"datetimeStart\": \"$start_date\",
+        \"datetimeEnd\": \"$end_date\"
+    }
+    }"
+
+    IFS=$'\002\t' read -r cf_workers_requests error_message < <(
+    JQs flat "$(curl -s -H 'Content-Type: application/json' -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
+    --data "$(echo $PAYLOAD)" https://api.cloudflare.com/client/v4/graphql)" '' \
+    '[((.data|if (.|type == "string") then {} else . end).viewer.accounts.workersInvocationsAdaptive|if (.|type == "string") then {} else . end).sum.requests + "\u0002",
+    (.errors|if (.|type == "string") then {} else . end).message + "\u0002"]|@tsv' "{delimiters[@]}")
+
+    if [ -z "$cf_workers_requests" ] 
+    then
+        Println "$error 获取 workers 访问数失败: ${error_message//${delimiters[0]}/, }\n"
+        exit 1
+    fi
+
+    Println "$info workers 访问总数: $cf_workers_requests\n"
+}

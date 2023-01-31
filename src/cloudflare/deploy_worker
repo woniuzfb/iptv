@@ -1,0 +1,309 @@
+CloudflareDeployWorker()
+{
+    CloudflareListWorkers
+
+    if [ "$cf_workers_count" -eq 0 ] 
+    then
+        Println "$error 请先添加 worker\n"
+        exit 1
+    fi
+
+    echo -e " ${green}$((cf_workers_count+1)).${normal}${indent_6}全部"
+
+    Println "选择 worker, 多个 worker 用空格分隔, 比如 5 7 9-11"
+    while read -p "$i18n_default_cancel" cf_workers_num
+    do
+        [ -z "$cf_workers_num" ] && Println "$i18n_canceled...\n" && exit 1
+
+        if [ "$cf_workers_num" == "$((cf_workers_count+1))" ]
+        then
+            for((i=0;i<cf_workers_count;i++));
+            do
+                cf_workers_indices+=("$i")
+            done
+            break
+        fi
+
+        IFS=" " read -ra cf_workers_num_arr <<< "$cf_workers_num"
+
+        error_no=0
+        for cf_worker_num in "${cf_workers_num_arr[@]}"
+        do
+            case "$cf_worker_num" in
+                *"-"*)
+                    cf_worker_num_start=${cf_worker_num%-*}
+                    cf_worker_num_end=${cf_worker_num#*-}
+                    if [[ $cf_worker_num_start == *[!0-9]* ]] || [[ $cf_worker_num_end == *[!0-9]* ]] || \
+                    [ "$cf_worker_num_start" -eq 0 ] || [ "$cf_worker_num_end" -eq 0 ] || \
+                    [ "$cf_worker_num_end" -gt "$cf_workers_count" ] || \
+                    [ "$cf_worker_num_start" -ge "$cf_worker_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$cf_worker_num" -lt 1 ] || [ "$cf_worker_num" -gt "$cf_workers_count" ] 
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                for element in "${cf_workers_num_arr[@]}"
+                do
+                    if [[ $element =~ - ]] 
+                    then
+                        start=${element%-*}
+                        end=${element#*-}
+                        for((i=start-1;i<end;i++));
+                        do
+                            cf_workers_indices+=("$i")
+                        done
+                    else
+                        cf_workers_indices+=("$((element-1))")
+                    fi
+                done
+                break
+            ;;
+        esac
+    done
+
+    for cf_workers_index in "${cf_workers_indices[@]}"
+    do
+        if [ ! -d "$CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]}" ] 
+        then
+            Println "$error worker ${cf_workers_name[cf_workers_index]} 目录: $CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]} 不存在\n"
+            exit 1
+        fi
+    done
+
+    CloudflareListUsers
+
+    if [ "$cf_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
+
+    echo -e " ${green}$((cf_users_count+1)).${normal}${indent_6}全部"
+
+    cf_users_indices=()
+    Println "选择用户, 多个用户用空格分隔, 比如 5 7 9-11"
+    while read -p "$i18n_default_cancel" cf_users_num 
+    do
+        [ -z "$cf_users_num" ] && Println "$i18n_canceled...\n" && exit 1
+
+        if [ "$cf_users_num" == "$((cf_users_count+1))" ]
+        then
+            for((i=0;i<cf_users_count;i++));
+            do
+                cf_users_indices+=("$i")
+            done
+            break
+        fi
+
+        IFS=" " read -ra cf_users_num_arr <<< "$cf_users_num"
+
+        error_no=0
+        for cf_user_num in "${cf_users_num_arr[@]}"
+        do
+            case "$cf_user_num" in
+                *"-"*)
+                    cf_user_num_start=${cf_user_num%-*}
+                    cf_user_num_end=${cf_user_num#*-}
+                    if [[ $cf_user_num_start == *[!0-9]* ]] || [[ $cf_user_num_end == *[!0-9]* ]] || \
+                    [ "$cf_user_num_start" -eq 0 ] || [ "$cf_user_num_end" -eq 0 ] || \
+                    [ "$cf_user_num_end" -gt "$cf_users_count" ] || \
+                    [ "$cf_user_num_start" -ge "$cf_user_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$cf_user_num" -lt 1 ] || [ "$cf_user_num" -gt "$cf_users_count" ] 
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                for element in "${cf_users_num_arr[@]}"
+                do
+                    if [[ $element =~ - ]] 
+                    then
+                        start=${element%-*}
+                        end=${element#*-}
+                        for((i=start-1;i<end;i++));
+                        do
+                            cf_users_indices+=("$i")
+                        done
+                    else
+                        cf_users_indices+=("$((element-1))")
+                    fi
+                done
+                break
+            ;;
+        esac
+    done
+
+    for cf_workers_index in "${cf_workers_indices[@]}"
+    do
+        cf_worker_name=${cf_workers_name[cf_workers_index]}
+        cf_worker_path=${cf_workers_path[cf_workers_index]}
+        cf_worker_project_name=${cf_workers_project_name[cf_workers_index]}
+        cf_worker_upstream=${cf_workers_upstream[cf_workers_index]}
+
+        for cf_users_index in "${cf_users_indices[@]}"
+        do
+            cf_user_email=${cf_users_email[cf_users_index]}
+            Println "$info 部署到 $cf_user_email"
+
+            cf_user_pass=${cf_users_pass[cf_users_index]}
+            cf_user_token=${cf_users_token[cf_users_index]}
+            cf_user_api_key=${cf_users_api_key[cf_users_index]}
+
+            if [ -n "$cf_user_api_key" ] 
+            then
+                curl_header_auth_email="X-Auth-Email: $cf_user_email"
+                curl_header_auth_key="X-Auth-Key: $cf_user_api_key"
+                curl_header_auth_token=""
+            else
+                curl_header_auth_email=""
+                curl_header_auth_key=""
+                curl_header_auth_token="Authorization: Bearer $cf_user_token"
+            fi
+
+            if [ -z "$cf_user_token" ] && [ -z "$cf_user_api_key" ]
+            then
+                if [ "$cf_use_api" -eq 1 ] 
+                then
+                    Println "$error 请添加账号 $cf_user_email Token 或 Key\n"
+                    exit 1
+                fi
+
+                Println "$info 尝试获取用户 Token ..."
+
+                PythonInstall
+
+                Println "$info 更新 ${CF_WORKERS_FILE##*/}"
+                wget --timeout=10 --tries=1 --no-check-certificate "$CF_WORKERS_LINK" -qO "$CF_WORKERS_FILE" \
+                || wget --timeout=10 --tries=3 --no-check-certificate "$CF_WORKERS_LINK_FALLBACK" -qO "$CF_WORKERS_FILE"
+
+                for((i=0;i<3;i++));
+                do
+                    if cf_user_token=$(python3 \
+                        "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o api_token
+                    ) 
+                    then
+                        break
+                    else
+                        sleep 10
+                    fi
+                done
+
+                if [ -z "$cf_user_token" ] 
+                then
+                    Println "$error 无法获取用户 ID, 账号或密码错误 或者 cloudflare 暂时限制登录\n"
+                    exit 1
+                else
+                    cf_users_token[cf_users_index]="$cf_user_token"
+
+                    new_user=$(
+                    $JQ_FILE -n --arg email "$cf_user_email" --arg pass "$cf_user_pass" \
+                        --arg token "$cf_user_token" --arg key "$cf_user_api_key" \
+                        '{
+                            email: $email,
+                            pass: $pass,
+                            token: $token,
+                            key: $key
+                        }'
+                    )
+
+                    json=true
+                    jq_path='["users",'"$cf_users_index"']'
+                    JQ update "$CF_CONFIG" "$new_user"
+                    Println "$info 获取用户 $cf_user_email Token 成功"
+                fi
+            fi
+
+            CF_ACCOUNT_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/accounts" \
+                -H "Content-Type: application/json" \
+                -H ''"$curl_header_auth_email"'' \
+                -H ''"$curl_header_auth_key"'' \
+                -H ''"$curl_header_auth_token"'' \
+                | $JQ_FILE -r '.result[0].id'
+            ) || true
+
+            if [ -z "$CF_ACCOUNT_ID" ] || [ "$CF_ACCOUNT_ID" == null ]
+            then
+                Println "$error 无法获取用户 ID, Token 错误 ?\n"
+                exit 1
+            fi
+
+            if [ "$cf_worker_path" == "stream_proxy" ] 
+            then
+                CloudflareSetWorkerUpstream
+                sed -i 's/const UPSTREAM_DOMAIN = .*/const UPSTREAM_DOMAIN = "'"$cf_worker_upstream"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/index.js"
+                # deprecated
+                sed -i 's/const upstream = .*/const upstream = "'"$cf_worker_upstream"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/index.js"
+            fi
+
+            cd "$CF_WORKERS_ROOT/$cf_worker_path"
+            sed -i 's/account_id = .*/account_id = "'"$CF_ACCOUNT_ID"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/wrangler.toml"
+            sed -i 's/name = .*/name = "'"$cf_worker_project_name"'"/' "$CF_WORKERS_ROOT/$cf_worker_path/wrangler.toml"
+
+            if CF_API_TOKEN="$cf_user_token" wrangler publish 
+            then
+                Println "$info worker: $cf_worker_name 部署成功\n"
+            elif [ "$cf_use_api" -eq 1 ] 
+            then
+                Println "$error 请检查 worker: $cf_worker_name Token 权限\n"
+            else
+                Println "$error 请检查 worker: $cf_worker_name Token 权限, 尝试修复 ...\n"
+
+                PythonInstall
+
+                if [ "$sh_debug" = false ] && [ ! -f "$IPTV_ROOT/VIP" ]
+                then
+                    curl -s -Lm 10 "$CF_WORKERS_LINK" -o "$CF_WORKERS_FILE" \
+                    || curl -s -Lm 20 "$CF_WORKERS_LINK_FALLBACK" -o "$CF_WORKERS_FILE"
+                fi
+
+                for((i=0;i<3;i++));
+                do
+                    if [[ $(python3 "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o add_subdomain) == "ok" ]] 
+                    then
+                        CF_API_TOKEN="$cf_user_token" wrangler publish
+                        continue 2
+                    else
+                        sleep 10
+                    fi
+                done
+            fi
+        done
+    done
+}

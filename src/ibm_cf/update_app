@@ -1,0 +1,62 @@
+IbmUpdateCfApp()
+{
+    IbmListCfApps
+
+    echo -e "选择 APP"
+    while read -p "$i18n_default_cancel" ibm_cf_apps_num
+    do
+        case "$ibm_cf_apps_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$ibm_cf_apps_num" -gt 0 ] && [ "$ibm_cf_apps_num" -le "$ibm_cf_apps_count" ]
+                then
+                    ibm_cf_apps_index=$((ibm_cf_apps_num-1))
+                    ibm_cf_app_name=${ibm_cf_apps_name[ibm_cf_apps_index]}
+                    ibm_user_email=${ibm_cf_apps_user_email[ibm_cf_apps_index]}
+                    ibm_cf_app_routes_count=${ibm_cf_apps_routes_count[ibm_cf_apps_index]}
+                    ibm_cf_app_route_hostname=${ibm_cf_apps_route_hostname[ibm_cf_apps_index]}
+                    ibm_cf_app_route_port=${ibm_cf_apps_route_port[ibm_cf_apps_index]}
+                    ibm_cf_app_route_domain=${ibm_cf_apps_route_domain[ibm_cf_apps_index]}
+                    ibm_cf_app_route_path=${ibm_cf_apps_route_path[ibm_cf_apps_index]}
+                    IFS="|" read -r -a ibm_cf_app_routes_hostname <<< "$ibm_cf_app_route_hostname"
+                    IFS="|" read -r -a ibm_cf_app_routes_port <<< "$ibm_cf_app_route_port"
+                    IFS="|" read -r -a ibm_cf_app_routes_domain <<< "$ibm_cf_app_route_domain"
+                    IFS="|" read -r -a ibm_cf_app_routes_path <<< "${ibm_cf_app_route_path}|"
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    IbmGetUsers
+
+    for((i=0;i<ibm_users_count;i++));
+    do
+        if [ "${ibm_users_email[i]}" == "$ibm_user_email" ] 
+        then
+            ibm_user_pass=${ibm_users_pass[i]}
+            ibm_user_region=${ibm_users_region[i]}
+            ibm_user_resource_group=${ibm_users_resource_group[i]}
+            ibm_user_org=${ibm_users_org[i]}
+            ibm_user_space=${ibm_users_space[i]}
+            break
+        fi
+    done
+
+    if [ -z "${ibm_user_pass:-}" ] 
+    then
+        Println "$error 没有找到用户 $ibm_user_email\n"
+        exit 1
+    fi
+
+    Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
+    ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
+    ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
+}

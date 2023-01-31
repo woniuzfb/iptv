@@ -1,0 +1,323 @@
+EditChannelMenu()
+{
+    echo
+    edit_channel_options=( '设置' '排序' '隐藏' '显示' )
+    inquirer list_input_index "选择操作" edit_channel_options edit_channel_options_index
+
+    if [ "$edit_channel_options_index" -eq 0 ] 
+    then
+        ListChannels
+        InputChannelsIndex
+
+        edit_options=(
+            "$i18n_source"
+            "$i18n_live"
+            "$i18n_proxy"
+            "$i18n_xtream_codes_proxy"
+            "$i18n_user_agent"
+            "$i18n_headers"
+            "$i18n_cookies"
+            "$i18n_output_dir_name"
+            "$i18n_playlist_name"
+            "$i18n_seg_dir_name"
+            "$i18n_seg_name"
+            "$i18n_seg_length"
+            "$i18n_seg_count"
+            "$i18n_video_codec"
+            "$i18n_audio_codec"
+            "$i18n_delay"
+            "$i18n_subtitle"
+            "$i18n_drawtext"
+            "$i18n_crf"
+            "$i18n_bitrate"
+            "$i18n_resolution"
+            "$i18n_rate_control"
+            "$i18n_encrypt"
+            "$i18n_keyinfo_name"
+            "$i18n_key_name"
+            "$i18n_input_flags"
+            "$i18n_output_flags"
+            "$i18n_channel_name"
+            "$i18n_sync"
+            "$i18n_sync_file"
+            "$i18n_sync_index"
+            "$i18n_sync_pairs"
+            "$i18n_hls_end_list"
+            "$i18n_flv_h265"
+            "$i18n_flv_push_link"
+            "$i18n_flv_pull_link"
+            "$i18n_anti_leech"
+        )
+
+        edit_actions=(
+            EditStreamLink
+            EditLive
+            EditProxy
+            EditXtreamCodesProxy
+            EditUserAgent
+            EditHeaders
+            EditCookies
+            EditOutputDirName
+            EditPlaylistName
+            EditSegDirName
+            EditSegName
+            EditSegLength
+            EditSegCount
+            EditVideoCodec
+            EditAudioCodec
+            EditVideoAudioShift
+            EditSubtitle
+            EditDrawtext
+            EditQuality
+            EditBitrate
+            EditResolution
+            EditConst
+            EditEncrypt
+            EditKeyInfoName
+            EditKeyName
+            EditInputFlags
+            EditOutputFlags
+            EditChannelName
+            EditSync
+            EditSyncFile
+            EditSyncIndex
+            EditSyncPairs
+            EditHlsEndList
+            EditFlvH265
+            EditFlvPushLink
+            EditFlvPullLink
+            EditForSecurity
+        )
+
+        for chnls_pid_chosen_index in "${!chnls_indices[@]}"
+        do
+            chnl_pid=${chnls_pid_chosen[chnls_pid_chosen_index]}
+            chnls_index=${chnls_indices[chnls_pid_chosen_index]}
+
+            ListChannel
+
+            echo
+            inquirer checkbox_input_indices "选择修改内容" edit_options edit_options_indices
+
+            for edit_options_index in "${edit_options_indices[@]}"
+            do
+                ${edit_actions[edit_options_index]}
+            done
+
+            echo
+            if [ "$chnl_status" == "on" ] || [ "$chnl_flv_status" == "on" ]
+            then
+                inquirer list_input_index "重启频道" ny_options ny_options_index
+
+                if [ "$ny_options_index" -eq 0 ]
+                then
+                    Println "不重启...\n"
+                else
+                    StopChannel
+                    GetChannel
+                    CheckIfXtreamCodes
+                    if [ "$to_try" -eq 1 ] 
+                    then
+                        continue
+                    fi
+                    StartChannel
+                fi
+            else
+                inquirer list_input_index "启动频道" ny_options ny_options_index
+
+                if [ "$ny_options_index" -eq 0 ]
+                then
+                    Println "不启动...\n"
+                else
+                    if [ -d "$chnl_output_dir_root" ] 
+                    then
+                        StopChannel
+                    fi
+                    GetChannel
+                    CheckIfXtreamCodes
+                    if [ "$to_try" -eq 1 ] 
+                    then
+                        continue
+                    fi
+                    StartChannel
+                fi
+            fi
+        done
+    elif [ "$edit_channel_options_index" -eq 1 ] 
+    then
+        GetChannels
+        i18nGetMsg get_channels
+
+        if [ "$chnls_count" -eq 0 ]
+        then
+            Println "`eval_gettext \"\\\$error 没有发现频道, 请检查 !\"`\n"
+            exit 1
+        elif [ "$chnls_count" -eq 1 ] 
+        then
+            Println "`eval_gettext \"\\\$error 请添加更多频道 !\"`\n"
+            exit 1
+        fi
+
+        chnls_indices=("${!chnls_pid[@]}")
+        chnls_options=()
+
+        if [ -z "${kind:-}" ] 
+        then
+            for chnls_index in "${chnls_indices[@]}"
+            do
+                if [ "${chnls_status[chnls_index]}" == "on" ]
+                then
+                    chnls_status_text="$i18n_enabled"
+                else
+                    chnls_status_text="$i18n_disabled"
+                fi
+                chnls_options+=("频道$((chnls_index+1)) $i18n_status: $chnls_status_text $i18n_output_dir_name: ${chnls_output_dir_name[chnls_index]} $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
+            done
+        else
+            for chnls_index in "${chnls_indices[@]}"
+            do
+                if [ "${chnls_flv_status[chnls_index]}" == "on" ] 
+                then
+                    chnls_flv_status_text="$i18n_enabled"
+                else
+                    chnls_flv_status_text="$i18n_disabled"
+                fi
+                chnls_options+=("频道$((chnls_index+1)) $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
+            done
+        fi
+
+        echo
+        inquirer sort_input_indices "排序频道" chnls_options chnls_indices
+
+        declare -a new_array
+        for chnls_index in "${chnls_indices[@]}"
+        do
+            jq_path='["channels",'"$chnls_index"']'
+            new_array+=("$($JQ_FILE --argjson path $jq_path 'getpath($path)' $CHANNELS_FILE)")
+        done
+
+        file=true
+        file_json=true
+        jq_path='["channels"]'
+        JQ update "$CHANNELS_FILE" new_array
+
+        unset new_array
+
+        Println "$info 频道排序成功\n"
+    elif [ "$edit_channel_options_index" -eq 2 ] 
+    then
+        GetChannels
+        i18nGetMsg get_channels
+
+        if [ "$chnls_count" -eq 0 ]
+        then
+            Println "`eval_gettext \"\\\$error 没有发现频道, 请检查 !\"`\n"
+            exit 1
+        fi
+
+        chnls_indices=("${!chnls_pid[@]}")
+        chnls_options=()
+        chnls_hide_indices=()
+
+        for chnls_index in "${chnls_indices[@]}"
+        do
+            if [ "${chnls_hide[chnls_index]}" = true ] 
+            then
+                continue
+            fi
+            chnls_hide_indices+=("$chnls_index")
+            if [ -z "${kind:-}" ] 
+            then
+                if [ "${chnls_status[chnls_index]}" == "on" ]
+                then
+                    chnls_status_text="$i18n_enabled"
+                else
+                    chnls_status_text="$i18n_disabled"
+                fi
+                chnls_options+=("频道$((chnls_index+1)) $i18n_status: $chnls_status_text $i18n_output_dir_name: ${chnls_output_dir_name[chnls_index]} $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
+            else
+                if [ "${chnls_flv_status[chnls_index]}" == "on" ] 
+                then
+                    chnls_flv_status_text="$i18n_enabled"
+                else
+                    chnls_flv_status_text="$i18n_disabled"
+                fi
+                chnls_options+=("频道$((chnls_index+1)) $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
+            fi
+        done
+
+        if [ -z "${chnls_options:-}" ] 
+        then
+            Println "$error 没有显示的频道\n"
+            exit 1
+        fi
+
+        echo
+        inquirer checkbox_input_indices "选择需要隐藏的频道" chnls_options chnls_options_indices
+
+        for chnls_options_index in "${chnls_options_indices[@]}"
+        do
+            bool=true
+            jq_path='["channels",'"${chnls_hide_indices[chnls_options_index]}"',"hide"]'
+            JQ update "$CHANNELS_FILE" true
+            Println "$info 频道 [ ${chnls_channel_name[${chnls_hide_indices[chnls_options_index]}]} ] 隐藏成功"
+        done
+    else
+        GetChannels
+        i18nGetMsg get_channels
+
+        if [ "$chnls_count" -eq 0 ]
+        then
+            Println "`eval_gettext \"\\\$error 没有发现频道, 请检查 !\"`\n"
+            exit 1
+        fi
+
+        chnls_indices=("${!chnls_pid[@]}")
+        chnls_options=()
+        chnls_hide_indices=()
+
+        for chnls_index in "${chnls_indices[@]}"
+        do
+            if [ "${chnls_hide[chnls_index]}" = false ] 
+            then
+                continue
+            fi
+            chnls_hide_indices+=("$chnls_index")
+            if [ -z "${kind:-}" ] 
+            then
+                if [ "${chnls_status[chnls_index]}" == "on" ]
+                then
+                    chnls_status_text="$i18n_enabled"
+                else
+                    chnls_status_text="$i18n_disabled"
+                fi
+                chnls_options+=("频道$((chnls_index+1)) $i18n_status: $chnls_status_text $i18n_output_dir_name: ${chnls_output_dir_name[chnls_index]} $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
+            else
+                if [ "${chnls_flv_status[chnls_index]}" == "on" ] 
+                then
+                    chnls_flv_status_text="$i18n_enabled"
+                else
+                    chnls_flv_status_text="$i18n_disabled"
+                fi
+                chnls_options+=("频道$((chnls_index+1)) $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${chnls_channel_name[chnls_index]}")
+            fi
+        done
+
+        if [ -z "${chnls_options:-}" ] 
+        then
+            Println "$error 没有隐藏的频道\n"
+            exit 1
+        fi
+
+        echo
+        inquirer checkbox_input_indices "选择需要显示的频道" chnls_options chnls_options_indices
+
+        for chnls_options_index in "${chnls_options_indices[@]}"
+        do
+            bool=true
+            jq_path='["channels",'"${chnls_hide_indices[chnls_options_index]}"',"hide"]'
+            JQ update "$CHANNELS_FILE" false
+            Println "$info 频道 [ ${chnls_channel_name[${chnls_hide_indices[chnls_options_index]}]} ] 显示成功"
+        done
+    fi
+}

@@ -1,0 +1,53 @@
+CloudflareListZones()
+{
+    CloudflareListHosts
+
+    echo -e "选择 CFP"
+    while read -p "$i18n_default_cancel" cf_hosts_num
+    do
+        case "$cf_hosts_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$cf_hosts_num" -gt 0 ] && [ "$cf_hosts_num" -le "$cf_hosts_count" ]
+                then
+                    cf_hosts_index=$((cf_hosts_num-1))
+                    cf_host_name=${cf_hosts_name[cf_hosts_index]}
+                    cf_host_key=${cf_hosts_key[cf_hosts_index]}
+                    cf_zones_count=${cf_hosts_zones_count[cf_hosts_index]}
+                    cf_zone_name=${cf_hosts_zone_name[cf_hosts_index]}
+                    cf_zone_resolve_to=${cf_hosts_zone_resolve_to[cf_hosts_index]}
+                    cf_zone_user_email=${cf_hosts_zone_user_email[cf_hosts_index]}
+                    cf_zone_user_unique_id=${cf_hosts_zone_user_unique_id[cf_hosts_index]}
+                    cf_zone_always_use_https=${cf_hosts_zone_always_use_https[cf_hosts_index]}
+                    cf_zone_ssl=${cf_hosts_zone_ssl[cf_hosts_index]}
+                    cf_zone_subdomains=${cf_hosts_zone_subdomains[cf_hosts_index]}
+                    IFS="|" read -r -a cf_zones_name <<< "$cf_zone_name"
+                    IFS="|" read -r -a cf_zones_resolve_to <<< "$cf_zone_resolve_to"
+                    IFS="|" read -r -a cf_zones_user_email <<< "$cf_zone_user_email"
+                    IFS="|" read -r -a cf_zones_user_unique_id <<< "$cf_zone_user_unique_id"
+                    IFS="|" read -r -a cf_zones_always_use_https <<< "${cf_zone_always_use_https}|"
+                    IFS="|" read -r -a cf_zones_ssl <<< "${cf_zone_ssl}|"
+                    IFS="|" read -r -a cf_zones_subdomains <<< "${cf_zone_subdomains}|"
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    cf_zones_list=""
+    for((i=0;i<cf_zones_count;i++));
+    do
+        cf_zones_list="$cf_zones_list ${green}$((i+1)).${normal}${indent_6}源站: ${green}${cf_zones_name[i]}${normal} 用户: ${green}${cf_zones_user_email[i]}${normal}\n${indent_6}始终 https: ${green}${cf_zones_always_use_https[i]:-off}${normal}  ssl: ${green}${cf_zones_ssl[i]:-flexible}${normal}\n\n"
+    done
+
+    [ -z "$cf_zones_list" ] && Println "$error 请先添加源站\n" && exit 1
+
+    Println "$cf_zones_list"
+}

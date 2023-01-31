@@ -1,0 +1,53 @@
+ReplaceInclude()
+{
+    local replace_path="$DEV_PATH"
+    local replace_name="$1"
+
+    if [ "$replace_name" == "build" ] 
+    then
+        echo "${2:-}echo -n"
+        return
+    elif [ "$replace_name" == "src/\$self" ] 
+    then
+        echo "${2:-}if [ \"\$self\" == \"tv\" ]"
+        echo "${2:-}then"
+        ReplaceInclude src/tv "    ${2:-}"
+        bins=(v2 x nx or pve arm ibm cf cx)
+        for bin in "${bins[@]}"
+        do
+            echo "${2:-}elif [ \"\$self\" == \"$bin\" ]"
+            echo "${2:-}then"
+            ReplaceInclude src/$bin "    ${2:-}"
+        done
+        echo "${2:-}elif [ \"\$self\" == \"tr\" ]"
+        echo "${2:-}then"
+        ReplaceInclude src/tr "    ${2:-}"
+        echo "${2:-}fi"
+        return
+    fi
+
+    while [[ $replace_name =~ \/ ]] 
+    do
+        replace_path="$replace_path/${replace_name%%/*}"
+        replace_name="${replace_name#*/}"
+    done
+
+    while IFS= read -r line 
+    do
+        if [ -z "$line" ] 
+        then
+            echo
+        elif [[ $line =~ ^([ ]*)Include\ ([^ ]+) ]] 
+        then
+            ReplaceInclude ${BASH_REMATCH[2]} "${2:-}${BASH_REMATCH[1]}"
+        else
+            echo "${2:-}$line"
+        fi
+    done < "$replace_path/$replace_name"
+}
+
+ReplaceInclude make | sed '/DEV_PATH/,/sh_ver/{/sh_ver/!d;};/if \[ "\$sh_test" = false \]/,/Println/{/Println/!d;}' > "$DEV_PATH/iptv.sh"
+
+echo "new iptv.sh created! For devs only!!"
+
+exit 0

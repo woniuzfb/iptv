@@ -1,0 +1,72 @@
+AcmeCheck()
+{
+    [ -n "${ca_server:-}" ] && return 0
+
+    if [ ! -f "$HOME/.acme.sh/acme.sh" ] 
+    then
+        DepInstall socat
+        { curl -s -m 10 https://get.acme.sh || curl -s -m 20 "$FFMPEG_MIRROR_LINK/acme.sh"; } \
+        | sed "s+https://raw.githubusercontent.com/acmesh-official+$FFMPEG_MIRROR_LINK/acmesh-content+g" \
+        | sed "s+| sh+| sed 's~PROJECT=\"https://github.com/acmesh-official~PROJECT=\"$FFMPEG_MIRROR_LINK/acmesh-project~' | sed 's~https://api.github.com~$FFMPEG_MIRROR_LINK/acmesh-api~g' | sh+g" | bash
+    else
+        echo
+        inquirer list_input_index "更新 acme.sh" ny_options ny_options_index
+
+        if [ "$ny_options_index" -eq 1 ] 
+        then
+            ~/.acme.sh/acme.sh --upgrade
+        fi
+    fi
+
+    Println "$tip zerossl 不支持 tls-alpn-01"
+    ca_options=( letsencrypt zerossl )
+    inquirer list_input "选择 CA" ca_options ca_server
+
+    if [ "$ca_server" == "zerossl" ] 
+    then
+        if [ -e ~/.acme.sh/ca/acme.zerossl.com/ca.conf ] 
+        then
+            . ~/.acme.sh/ca/acme.zerossl.com/ca.conf
+        fi
+
+        if [ -n "${CA_EAB_KEY_ID:-}" ] && [ -n "${CA_EAB_HMAC_KEY:-}" ]
+        then
+            Println "$tip 请确保已有账号的 EAB 认证信息未过期, 否则请重新设置"
+            inquirer list_input "是否重新设置 zerossl 账号" ny_options yn_option
+            if [ "$yn_option" == "$i18n_no" ] 
+            then
+                return 0
+            fi
+        fi
+
+        echo
+        zerossl_options=( '注册新账号' '输入已有账号的 EAB 认证信息' )
+        inquirer list_input_index "未发现 zerossl 账号" zerossl_options zerossl_options_index
+
+        if [ "$zerossl_options_index" -eq 0 ] 
+        then
+            echo
+            ExitOnText "输入邮箱: " zerossl_email
+
+            if ! ~/.acme.sh/acme.sh --register-account -m "$zerossl_email" --server zerossl 
+            then
+                Println "$error 注册账号失败, 请稍后再试或前往官网注册 https://app.zerossl.com/signup?fpr=iptv-sh \n"
+                exit 1
+            fi
+        else
+            Println "$tip 可以在 https://app.zerossl.com/developer?fpr=iptv-sh 页面获取"
+            ExitOnText "输入 EAB KID: " zerossl_eab_kid
+
+            echo
+            ExitOnText "输入 EAB HMAC Key: " zerossl_eab_hmac_key
+
+            if ! ~/.acme.sh/acme.sh --register-account --server zerossl --eab-kid "$zerossl_eab_kid" --eab-hmac-key "$zerossl_eab_hmac_key" 
+            then
+                Println "$error 注册账号失败, 请确保输入正确\n"
+                exit 1
+            fi
+        fi
+
+        Println "$info 账号注册成功\n"
+    fi
+}

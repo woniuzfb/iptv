@@ -1,0 +1,12 @@
+XtreamCodesGetDomains()
+{
+    [ -n "${xtream_codes_domains:-}" ] && return 0
+
+    if [ ! -s "$XTREAM_CODES" ] 
+    then
+        ShFallback
+        curl -s -L "$SH_FALLBACK/$XTREAM_CODES_CHANNELS" -o "$XTREAM_CODES"
+    fi
+
+    IFS="," read -ra xtream_codes_domains <<< $(awk -v ORS=, '$1 { gsub(/\|/, ",", $2); print $2 }' "$XTREAM_CODES")
+}

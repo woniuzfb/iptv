@@ -1,0 +1,58 @@
+NginxUpdateIp()
+{
+    if [ ! -f $nginx_prefix/conf/nginx.conf ] 
+    then
+        Println "$error 请先安装 $nginx_name\n"
+        exit 1
+    fi
+
+    if ! grep -q "include cloudflare_ip.conf;" < $nginx_prefix/conf/nginx.conf
+    then
+        sed -i '/http {/a\    include cloudflare_ip.conf;' $nginx_prefix/conf/nginx.conf
+    else
+        Println "$error $nginx_name 配置已经存在\n"
+    fi
+
+    Println "$info 更新 ip ..."
+
+    printf '%s' "#!/bin/bash
+echo -e 'set_real_ip_from 127.0.0.0/24;\n#Cloudflare' > $nginx_prefix/conf/cloudflare_ip.conf;
+ibm_ips=(
+  50.22.0.0/16
+  50.23.0.0/16
+  66.228.118.0/23
+  67.228.66.0/24
+  75.126.0.0/16
+  108.168.157.0/24
+  173.192.0.0/16
+  174.35.17.0/24
+  184.172.0.0/16
+  192.255.0.0/16
+  198.23.0.0/16
+  208.43.15.0/24
+  169.45.0.0/16
+  169.46.0.0/16
+  169.47.0.0/16
+  169.48.0.0/16
+  169.61.0.0/16
+  169.62.0.0/16
+)
+for i in \"\${ibm_ips[@]}\"; do
+        echo \"set_real_ip_from \$i;\" >> $nginx_prefix/conf/cloudflare_ip.conf;
+done
+for i in \$(curl https://www.cloudflare.com/ips-v4); do
+        echo \"set_real_ip_from \$i;\" >> $nginx_prefix/conf/cloudflare_ip.conf;
+done
+for i in \$(curl https://www.cloudflare.com/ips-v6); do
+        echo \"set_real_ip_from \$i;\" >> $nginx_prefix/conf/cloudflare_ip.conf;
+done
+echo >> $nginx_prefix/conf/cloudflare_ip.conf;
+echo '# use any of the following two' >> $nginx_prefix/conf/cloudflare_ip.conf;
+echo 'real_ip_header CF-Connecting-IP;' >> $nginx_prefix/conf/cloudflare_ip.conf;
+echo '#real_ip_header X-Forwarded-For;' >> $nginx_prefix/conf/cloudflare_ip.conf;
+" > ~/update_cf_ibm_ip.sh
+
+    bash ~/update_cf_ibm_ip.sh
+
+    Println "$info IP 更新成功\n"
+}

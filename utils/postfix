@@ -1,0 +1,9 @@
+PostfixInstall()
+{
+    if [ "$dist" == "rpm" ] 
+    then
+        yum -y install postfix > /dev/null
+    else
+        DEBIAN_FRONTEND=noninteractive apt-get -y install postfix > /dev/null
+    fi
+}

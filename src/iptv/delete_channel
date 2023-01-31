@@ -1,0 +1,30 @@
+DelChannel()
+{
+    ListChannels
+    InputChannelsIndex
+
+    for chnl_pid in "${chnls_pid_chosen[@]}"
+    do
+        GetChannel
+
+        if [ "${kind:-}" == "flv" ] 
+        then
+            if [ "$chnl_flv_status" == "on" ] 
+            then
+                StopChannel
+            fi
+        elif [ "$chnl_status" == "on" ] 
+        then
+            StopChannel
+        fi
+
+        jq_path='["channels"]'
+        JQ delete "$CHANNELS_FILE" pid "$chnl_pid"
+
+        rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.log"
+        rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.err"
+        rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
+
+        Println "$info 频道 [ $chnl_channel_name ] 删除成功 !\n"
+    done
+}

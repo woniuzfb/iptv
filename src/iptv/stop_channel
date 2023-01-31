@@ -1,0 +1,122 @@
+StopChannel()
+{
+    if [ -n "${kind:-}" ]
+    then
+        if [ "$kind" != "flv" ] 
+        then
+            Println "$error 暂不支持 $kind ...\n" && exit 1
+        elif [ "$chnl_status" == "on" ]
+        then
+            Println "$error HLS 频道正开启, 走错片场了？\n" && exit 1
+        fi
+    elif [ "$chnl_flv_status" == "on" ]
+    then
+        Println "$error FLV 频道正开启, 走错片场了？\n" && exit 1
+    fi
+
+    Println "$info 关闭频道 [ $chnl_channel_name ] 请稍等..."
+
+    if [ "${kind:-}" == "flv" ] 
+    then
+        if ! kill -0 "$chnl_pid" 2> /dev/null 
+        then
+            MonitorLog "频道 [ $chnl_channel_name ] 进程 $chnl_pid 不存在"
+            jq_path='["channels"]'
+            jq_path2='["flv_status"]'
+            JQ update "$CHANNELS_FILE" pid "$chnl_pid" off
+            MonitorLog "$chnl_channel_name FLV 关闭"
+            action="stop"
+            SyncFile
+            rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
+        else
+            kill "$chnl_pid" 2> /dev/null || true
+            if ! flock -E 1 -w 30 -x "$FFMPEG_LOG_ROOT/$chnl_pid.pid" rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
+            then
+                MonitorLog "频道 [ $chnl_channel_name ] 进程 $chnl_pid 不存在"
+                jq_path='["channels"]'
+                jq_path2='["flv_status"]'
+                JQ update "$CHANNELS_FILE" pid "$chnl_pid" off
+                MonitorLog "$chnl_channel_name FLV 关闭"
+                action="stop"
+                SyncFile
+            fi
+        fi
+        chnl_flv_status="off"
+    else
+        if ! kill -0 "$chnl_pid" 2> /dev/null
+        then
+            MonitorLog "频道 [ $chnl_channel_name ] 进程 $chnl_pid 不存在"
+            jq_path='["channels"]'
+            jq_path2='["status"]'
+            JQ update "$CHANNELS_FILE" pid "$chnl_pid" off
+            MonitorLog "$chnl_channel_name HLS 关闭"
+            action="stop"
+            SyncFile
+            rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
+        else
+            kill "$chnl_pid" 2> /dev/null || true
+            if ! flock -E 1 -w $((30+chnl_seg_length)) -x "$FFMPEG_LOG_ROOT/$chnl_pid.pid" rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
+            then
+                if [ "$chnl_hls_end_list" = true ] && ls -A "$chnl_output_dir_root/"*.m3u8 > /dev/null 2>&1 
+                then
+                    for play_list in "$chnl_output_dir_root/"*.m3u8
+                    do
+                        echo "#EXT-X-ENDLIST" >> "$play_list" || true
+                    done
+                    sleep "$chnl_seg_length"
+                fi
+                MonitorLog "频道 [ $chnl_channel_name ] 进程 $chnl_pid 不存在"
+                jq_path='["channels"]'
+                jq_path2='["status"]'
+                JQ update "$CHANNELS_FILE" pid "$chnl_pid" off
+                MonitorLog "$chnl_channel_name HLS 关闭"
+                action="stop"
+                SyncFile
+            fi
+        fi
+        rm -rf "$chnl_output_dir_root"
+        chnl_status="off"
+    fi
+
+    Println "$info 频道 [ $chnl_channel_name ] 已关闭 !\n"
+}
+
+StopChannelsForce()
+{
+    pkill -9 -f ffmpeg 2> /dev/null || true
+    pkill -f 'tv m' 2> /dev/null || true
+    rm -rf "$CHANNELS_FILE.lockdir"
+
+    GetChannels
+    GetDefault
+
+    for((i=0;i<chnls_count;i++));
+    do
+        update='{
+            "status": "off",
+            "flv_status": "off"
+        }'
+
+        merge=true
+        jq_path='["channels"]'
+        JQ update "$CHANNELS_FILE" pid "${chnls_pid[i]}" "$update"
+
+        chnl_sync_file=${chnls_sync_file[i]:-$d_sync_file}
+        IFS=" " read -ra chnl_sync_files <<< "$chnl_sync_file"
+
+        for sync_file in ${chnl_sync_files[@]+"${chnl_sync_files[@]}"}
+        do
+            rm -rf "$sync_file.lockdir"
+        done
+
+        action="stop"
+        SyncFile > /dev/null
+
+        if [ "${chnls_live[i]}" = true ] 
+        then
+            rm -rf "$LIVE_ROOT/${chnls_output_dir_name[i]}"
+        fi
+    done
+
+    Println "$info 全部频道已关闭 !\n"
+}

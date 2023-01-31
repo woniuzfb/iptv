@@ -1,0 +1,68 @@
+V2rayListInboundAccounts()
+{
+    V2rayListInbounds
+    V2raySelectInbound
+
+    if [ "${inbounds_protocol[inbounds_index]}" == "dokodemo-door" ] 
+    then
+        Println "$error 任意门协议没有账号\n"
+        exit 1
+    fi
+
+    if [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] && [ -n "${inbounds_settings_email[inbounds_index]}" ]
+    then
+        Println "邮箱: ${green}${inbounds_settings_email[inbounds_index]}${normal}\n密码: ${green}${inbounds_settings_password[inbounds_index]}${normal}\n等级: ${green}${inbounds_settings_user_level[inbounds_index]}${normal}\n"
+        return 0
+    fi
+
+    accounts_count=0
+    accounts_id=()
+    accounts_level=()
+    accounts_alter_id=()
+    accounts_email=()
+    accounts_list=""
+    while IFS="^" read -r map_id map_flow map_level map_alter_id map_email map_user map_pass map_method
+    do
+        accounts_count=$((accounts_count+1))
+        accounts_id+=("$map_id")
+        accounts_level+=("$map_level")
+        accounts_alter_id+=("$map_alter_id")
+        accounts_email+=("$map_email")
+        if [ "${inbounds_protocol[inbounds_index]}" == "http" ] 
+        then
+            accounts_list="$accounts_list# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}HTTP${normal} 用户名: ${green}$map_user${normal} 密码: ${green}$map_pass${normal}\n\n"
+        elif [ "${inbounds_protocol[inbounds_index]}" == "socks" ] 
+        then
+            accounts_list="$accounts_list# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}Socks${normal} 用户名: ${green}$map_user${normal} 密码: ${green}$map_pass${normal} 等级: ${green}$map_level${normal}\n\n"
+        elif [ "${inbounds_protocol[inbounds_index]}" == "trojan" ] 
+        then
+            accounts_list="$accounts_list# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}Trojan${normal} 密码: ${green}$map_pass${normal} 邮箱: ${green}$map_email${normal} 等级: ${green}$map_level${normal}\n\n"
+        elif [ "${inbounds_protocol[inbounds_index]}" == "vless" ] 
+        then
+            if [ "$v2ray_name" == "xray" ] 
+            then
+                accounts_list="$accounts_list# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}VLESS${normal} ID: ${green}$map_id${normal} 模式: ${green}$map_flow${normal} 等级: ${green}$map_level${normal} 邮箱: ${green}$map_email${normal}\n\n"
+            else
+                accounts_list="$accounts_list# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}VLESS${normal} ID: ${green}$map_id${normal} 等级: ${green}$map_level${normal} 邮箱: ${green}$map_email${normal}\n\n"
+            fi
+        elif [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] 
+        then
+            accounts_list="$accounts_list# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}Shadowsocks${normal} 邮箱: ${green}$map_email${normal} 加密方式: ${green}$map_method${normal} 密码: ${green}$map_pass${normal} 等级: ${green}$map_level${normal}\n\n"
+        else
+            accounts_list="$accounts_list# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}VMESS${normal} ID: ${green}$map_id${normal} 等级: ${green}$map_level${normal} alterId: ${green}$map_alter_id${normal} 邮箱: ${green}$map_email${normal}\n\n"
+        fi
+    done < <($JQ_FILE -r '.inbounds['"$inbounds_index"'].settings | (.clients // .accounts)[] | [.id,.flow,.level,.alterId,.email,.user,(.pass // .password),.method] | join("^")' "$V2_CONFIG")
+
+    if [ "${inbounds_tag[inbounds_index]:0:6}" == "nginx-" ] 
+    then
+        V2rayListInboundDomains
+    fi
+
+    if [ -n "$accounts_list" ] 
+    then
+        Println "可用账号:\n\n$accounts_list\n"
+    else
+        Println "$error 此入站没有账号\n"
+        exit 1
+    fi
+}

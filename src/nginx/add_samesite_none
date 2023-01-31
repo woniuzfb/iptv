@@ -1,0 +1,22 @@
+NginxAddSameSiteNone()
+{
+    directive_map='{"directive":"map","args":["$http_user_agent","$samesite_none"],"block":[]}'
+
+    directives=( map )
+    directives_val=()
+    check_directives=()
+    check_args=( '["$http_user_agent","$samesite_none"]' )
+
+    NginxAddDirective 2
+
+    directive_default='{"directive":"default","args":["; Secure"]}'
+    directive_chrome1='{"directive":"~Chrom[^ \\/]+\\/[1][\\d][\\d][\\.\\d]*","args":["; Secure; SameSite=None"]}'
+    directive_chrome2='{"directive":"~Chrom[^ \\/]+\\/[89][\\d][\\.\\d]*","args":["; Secure; SameSite=None"]}'
+
+    directives=( default '~Chrom[^ \\/]+\\/[89][\\d][\\.\\d]*' )
+    directives_val=( default chrome1 chrome2 )
+    check_directives=()
+    check_args=( '["; Secure"]' )
+
+    NginxAddDirective 3
+}

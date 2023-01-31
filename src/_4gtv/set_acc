@@ -1,0 +1,31 @@
+Set4gtvAccEmail()
+{
+    Println "输入新账号邮箱"
+    while read -p "(默认: 随机): " _4gtv_acc_email 
+    do
+        [ -z "$_4gtv_acc_email" ] && _4gtv_acc_email="$(RandStr)_$(printf '%(%s)T' -1)@gmail.com"
+        if [[ $_4gtv_acc_email =~ ^[A-Za-z0-9]([a-zA-Z0-9_\.\-]*)@([A-Za-z0-9]+)([a-zA-Z0-9\.\-]*)\.([A-Za-z]{2,})$ ]] 
+        then
+            break
+        else
+            Println "$error 邮箱格式错误, 请重新输入\n"
+        fi
+    done
+    Println "  4gtv 账号邮箱: ${green} $_4gtv_acc_email ${normal}\n"
+}
+
+Set4gtvAccPass()
+{
+    Println "输入新账号密码(字母或数字 8-12 位)"
+    while read -p "(默认: 随机): " _4gtv_acc_pass 
+    do
+        [ -z "$_4gtv_acc_pass" ] && _4gtv_acc_pass=$(RandStr)
+        if [[ $_4gtv_acc_pass =~ ^[A-Za-z0-9]{8,12}$ ]] 
+        then
+            break
+        else
+            Println "$error 账号密码格式错误, 请重新输入\n"
+        fi
+    done
+    Println "  4gtv 账号密码: ${green} $_4gtv_acc_pass ${normal}\n"
+}

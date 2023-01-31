@@ -1,0 +1,35 @@
+RandOutputDirName()
+{
+    while :;do
+        output_dir_name=$(RandStr)
+        if [[ -z $($JQ_FILE '.channels[] | select(.output_dir_name=="'"$output_dir_name"'")' "$CHANNELS_FILE") ]]
+        then
+            echo "$output_dir_name"
+            break
+        fi
+    done
+}
+
+RandPlaylistName()
+{
+    while :;do
+        playlist_name=$(RandStr)
+        if [[ -z $($JQ_FILE '.channels[] | select(.playlist_name=="'"$playlist_name"'")' "$CHANNELS_FILE") ]]
+        then
+            echo "$playlist_name"
+            break
+        fi
+    done
+}
+
+RandSegDirName()
+{
+    while :;do
+        seg_dir_name=$(RandStr)
+        if [[ -z $($JQ_FILE '.channels[] | select(.seg_dir_name=="'"$seg_dir_name"'")' "$CHANNELS_FILE") ]]
+        then
+            echo "$seg_dir_name"
+            break
+        fi
+    done
+}

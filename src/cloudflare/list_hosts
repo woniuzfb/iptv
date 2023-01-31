@@ -1,0 +1,16 @@
+CloudflareListHosts()
+{
+    if [ ! -s "$CF_CONFIG" ] 
+    then
+        Println "$error 请先添加 CFP\n" && exit 1
+    fi
+
+    CloudflareGetHosts
+
+    if [ "$cf_hosts_count" -gt 0 ] 
+    then
+        Println "$cf_hosts_list"
+    else
+        Println "$error 请先添加 CFP\n" && exit 1
+    fi
+}

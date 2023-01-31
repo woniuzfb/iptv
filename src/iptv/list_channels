@@ -1,0 +1,179 @@
+ListChannels()
+{
+    GetChannels
+
+    if [ "$chnls_count" -eq 0 ]
+    then
+        Println "`eval_gettext \"\\\$error 没有发现频道, 请检查 !\"`\n" && exit 1
+    fi
+
+    i18nGetMsg get_channels
+
+    chnls_indices=("${!chnls_pid[@]}")
+
+    chnls_list=""
+
+    for chnls_index in "${chnls_indices[@]}"
+    do
+        if [ "${chnls_hide[chnls_index]}" = true ] 
+        then
+            continue
+        fi
+
+        chnls_output_dir_root="$LIVE_ROOT/${chnls_output_dir_name[chnls_index]}"
+
+        v_or_a=${chnls_video_audio_shift[chnls_index]%_*}
+        if [ "$v_or_a" == "v" ] 
+        then
+            chnls_video_shift=${chnls_video_audio_shift[chnls_index]#*_}
+            chnls_video_audio_shift_text="$i18n_video_shift $chnls_video_shift($i18n_seconds)"
+        elif [ "$v_or_a" == "a" ] 
+        then
+            chnls_audio_shift=${chnls_video_audio_shift[chnls_index]#*_}
+            chnls_video_audio_shift_text="$i18n_audio_shift $chnls_audio_shift($i18n_seconds)"
+        else
+            chnls_video_audio_shift_text="$i18n_not_set"
+        fi
+
+        IFS=, read -r -a chnl_qualities <<< "${chnls_quality[chnls_index]}"
+        IFS=, read -r -a chnl_bitrates <<< "${chnls_bitrate[chnls_index]}"
+        IFS=, read -r -a chnl_resolutions <<< "${chnls_resolution[chnls_index]}"
+
+        if [ -n "${chnl_qualities+x}" ] 
+        then
+            chnl_qualities_count=${#chnl_qualities[@]}
+        else
+            chnl_qualities_count=0
+        fi
+
+        if [ -n "${chnl_bitrates+x}" ] 
+        then
+            chnl_bitrates_count=${#chnl_bitrates[@]}
+        else
+            chnl_bitrates_count=0
+        fi
+
+        if [ -n "${chnl_resolutions+x}" ] 
+        then
+            chnl_resolutions_count=${#chnl_resolutions[@]}
+        else
+            chnl_resolutions_count=0
+        fi
+
+        if [ "$chnl_bitrates_count" -gt "$chnl_qualities_count" ] 
+        then
+            chnl_variants_count=$chnl_bitrates_count
+        else
+            chnl_variants_count=$chnl_qualities_count
+        fi
+
+        if [ "$chnl_resolutions_count" -gt "$chnl_variants_count" ] 
+        then
+            chnl_variants_count=$chnl_resolutions_count
+        fi
+
+        chnls_video_quality_text=""
+
+        for((chnl_i=0;chnl_i<chnl_variants_count;chnl_i++));
+        do
+            chnls_video_quality_text="$chnls_video_quality_text${indent_6}输出$((chnl_i+1)): "
+
+            if [ -n "${chnl_qualities[chnl_i]:-}" ] 
+            then
+                chnls_video_quality_text="$chnls_video_quality_text${green}[ $i18n_crf ${chnl_qualities[chnl_i]} ]${normal} "
+            fi
+
+            if [ -n "${chnl_bitrates[chnl_i]:-}" ] 
+            then
+                chnls_video_quality_text="$chnls_video_quality_text${green}[ $i18n_bitrate ${chnl_bitrates[chnl_i]}k ]${normal} "
+            fi
+
+            if [ -n "${chnl_resolutions[chnl_i]:-}" ] 
+            then
+                chnls_video_quality_text="$chnls_video_quality_text${green}[ $i18n_resolution ${chnl_resolutions[chnl_i]} ]${normal} "
+            fi
+
+            if [ -n "${chnl_qualities[chnl_i]:-}" ]  
+            then
+                if [ "${chnls_const[chnls_index]}" = true ] && [ -n "${chnl_bitrates[chnl_i]:-}" ]
+                then
+                    chnls_video_quality_text="$chnls_video_quality_text${green}[ $i18n_constrained_encoding ]${normal}\n"
+                else
+                    chnls_video_quality_text="$chnls_video_quality_text\n"
+                fi
+            elif [ -n "${chnl_bitrates[chnl_i]:-}" ] 
+            then
+                if [ "${chnls_const[chnls_index]}" = true ] 
+                then
+                    if [ "${chnls_const_cbr[chnls_index]}" = true ] 
+                    then
+                        chnls_video_quality_text="$chnls_video_quality_text${green}[ $i18n_constant_bitrate (CBR) ]${normal}\n"
+                    else
+                        chnls_video_quality_text="$chnls_video_quality_text${green}[ $i18n_constrained_encoding (VBV) ]${normal}\n"
+                    fi
+                else
+                    chnls_video_quality_text="$chnls_video_quality_text${green}[ $i18n_average_bitrate (ABR) ]${normal}\n"
+                fi
+            fi
+        done
+
+        if [ -n "${chnls_proxy[chnls_index]}" ] 
+        then
+            chnls_proxy_text="[$i18n_proxy]"
+        else
+            chnls_proxy_text=""
+        fi
+
+        IFS="${delimiters[0]}" read -ra chnl_stream_links <<< "${chnls_stream_links[chnls_index]}"
+
+        chnl_stream_links_text=""
+
+        for((list_i=0;list_i<${#chnl_stream_links[@]};list_i++));
+        do
+            chnl_stream_links_text="$chnl_stream_links_text${indent_6}源$((list_i+1)): ${chnl_stream_links[list_i]}\n"
+        done
+
+        if [ -z "${kind:-}" ] 
+        then
+            if [ "${chnls_status[chnls_index]}" == "on" ]
+            then
+                chnls_status_text="${green}$i18n_enabled${normal}"
+            else
+                chnls_status_text="${red}$i18n_disabled${normal}"
+            fi
+
+            if [ "$chnl_variants_count" -gt 1 ] 
+            then
+                chnls_playlist_file_text="$chnls_output_dir_root/${chnls_playlist_name[chnls_index]}_master.m3u8"
+            else
+                chnls_playlist_file_text="$chnls_output_dir_root/${chnls_playlist_name[chnls_index]}.m3u8"
+            fi
+
+            chnls_list="$chnls_list# ${green}$((chnls_index+1))${normal}${indent_6}$i18n_pid: ${green}${chnls_pid[chnls_index]}${normal} $i18n_status: $chnls_status_text $i18n_channel_name: ${blue}${chnls_channel_name[chnls_index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: ${green}${chnls_video_codec[chnls_index]}:${chnls_audio_codec[chnls_index]}${normal} $i18n_video_audio_shift: ${green}$chnls_video_audio_shift_text${normal}\n$chnl_stream_links_text$chnls_video_quality_text${indent_6}$i18n_playlist_file: $chnls_playlist_file_text\n\n"
+        elif [ "$kind" == "flv" ] 
+        then
+            if [ "${chnls_flv_status[chnls_index]}" == "on" ] 
+            then
+                chnls_flv_status_text="${green}$i18n_enabled${normal}"
+            else
+                chnls_flv_status_text="${red}$i18n_disabled${normal}"
+            fi
+            chnls_list="$chnls_list# ${green}$((chnls_index+1))${normal}${indent_6}$i18n_pid: ${green}${chnls_pid[chnls_index]}${normal} $i18n_status: $chnls_flv_status_text $i18n_channel_name: ${blue}${chnls_channel_name[chnls_index]} $chnls_proxy_text${normal}\n${indent_6}$i18n_codec: ${green}${chnls_video_codec[chnls_index]}:${chnls_audio_codec[chnls_index]}${normal} $i18n_video_audio_shift: ${green}$chnls_video_audio_shift_text${normal}\n$chnl_stream_links_text$chnls_video_quality_text${indent_6}$i18n_flv_push_link: ${chnls_flv_push_link[chnls_index]:-无}\n${indent_6}$i18n_flv_pull_link: ${chnls_flv_pull_link[chnls_index]:-无}\n\n"
+        fi
+    done
+
+    if [ -n "${menu_num:-}" ] 
+    then
+        if [ "$menu_num" -eq 7 ] 
+        then
+            chnls_list="$chnls_list# ${green}$((chnls_count+1))${normal}${indent_6}`gettext \"开启所有关闭的频道\"`\n\n"
+            chnls_list="$chnls_list# ${green}$((chnls_count+2))${normal}${indent_6}`gettext \"关闭所有开启的频道\"`\n\n"
+        elif [ "$menu_num" -eq 8 ] 
+        then
+            chnls_list="$chnls_list# ${green}$((chnls_count+1))${normal}${indent_6}`gettext \"重启所有开启的频道\"`\n\n"
+        fi
+    fi
+
+    Println "=== `gettext \"频道总数\"` ${green} $chnls_count ${normal}"
+    Println "$chnls_list"
+}

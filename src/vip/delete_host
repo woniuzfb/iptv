@@ -1,0 +1,32 @@
+VipDelHost()
+{
+    VipListHosts
+    echo -e "选择 VIP 服务器"
+    while read -p "$i18n_default_cancel" vip_hosts_num
+    do
+        case "$vip_hosts_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$vip_hosts_num" -gt 0 ] && [ "$vip_hosts_num" -le "$vip_hosts_count" ]
+                then
+                    vip_hosts_index=$((vip_hosts_num-1))
+                    vip_host_ip=${vip_hosts_ip[vip_hosts_index]}
+                    vip_host_port=${vip_hosts_port[vip_hosts_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    jq_path='["hosts",'"$vip_hosts_index"']'
+    JQ delete "$VIP_FILE"
+
+    Println "服务器 ${green}[ $vip_host_ip ]${normal} 删除成功\n"
+}

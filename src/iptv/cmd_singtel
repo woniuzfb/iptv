@@ -1,0 +1,19 @@
+Println "$info 检测 singteltv ..."
+while IFS= read -r line 
+do
+    if [[ $line =~ epgEndPoint ]] 
+    then
+        line=${line#*epgEndPoint&#34;:&#34;}
+        epg_end_point=${line%%&#34*}
+        line=${line#*tvChannelLists&#34;:}
+        tv_channel_lists=${line%%,&#34;errorMessage*}
+        tv_channel_lists=${tv_channel_lists//&#34;/\"}
+        $JQ_FILE -r '.[]|[
+            (.title // "空"),
+            (.channelId // "空"),
+            (.language // []|join(","))
+        ]|@tsv' <<< "$tv_channel_lists"
+        break
+    fi
+done < <(curl -s -L "https://www.singtel.com/personal/products-services/tv/tv-programme-guide" 2> /dev/null)
+exit 0

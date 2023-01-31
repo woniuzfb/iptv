@@ -1,0 +1,80 @@
+CloudflareEditZone()
+{
+    CloudflareListZones
+
+    echo -e "选择源站"
+    while read -p "$i18n_default_cancel" cf_zones_num
+    do
+        case "$cf_zones_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$cf_zones_num" -gt 0 ] && [ "$cf_zones_num" -le "$cf_zones_count" ]
+                then
+                    cf_zones_index=$((cf_zones_num-1))
+                    cf_zone_name=${cf_zones_name[cf_zones_index]}
+                    cf_zone_resolve_to=${cf_zones_resolve_to[cf_zones_index]}
+                    cf_user_email=${cf_zones_user_email[cf_zones_index]}
+                    cf_user_unique_id=${cf_zones_user_unique_id[cf_zones_index]}
+                    cf_zone_always_use_https=${cf_zones_always_use_https[cf_zones_index]}
+                    cf_zone_ssl=${cf_zones_ssl[cf_zones_index]}
+                    cf_zone_subdomains=${cf_zones_subdomains[cf_zones_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "  选择需要修改的设置
+
+  ${green}1.${normal} Always Use HTTPS
+  ${green}2.${normal} SSL
+
+  "
+    while read -p "$i18n_default_cancel" zone_edit_num
+    do
+        case $zone_edit_num in
+            "") 
+                Println "$i18n_canceled...\n"
+                exit 1
+            ;;
+            1) 
+                CloudflareSetZoneAlwaysUseHttps
+                break
+            ;;
+            2) 
+                CloudflareSetZoneSsl
+                break
+            ;;
+            *) 
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+        esac
+    done
+
+    new_zone=$(
+    $JQ_FILE -n --arg name "$cf_zone_name" --arg resolve_to "$cf_zone_resolve_to" \
+        --arg user_email "$cf_user_email" --arg user_unique_id "$cf_user_unique_id" \
+        --arg always_use_https "${cf_zone_always_use_https:-off}" --arg ssl "${cf_zone_ssl:-flexible}" --arg subdomains "$cf_zone_subdomains" \
+        '{
+            name: $name,
+            resolve_to: $resolve_to,
+            user_email: $user_email,
+            user_unique_id: $user_unique_id | tonumber,
+            always_use_https: $always_use_https,
+            ssl: $ssl,
+            subdomains: $subdomains
+        }'
+    )
+
+    json=true
+    jq_path='["hosts",'"$cf_hosts_index"',"zones",'"$cf_zones_index"']'
+    JQ update "$CF_CONFIG" "$new_zone"
+    Println "$info 源站修改成功\n"
+}

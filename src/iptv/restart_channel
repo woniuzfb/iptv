@@ -1,0 +1,24 @@
+RestartChannel()
+{
+    ListChannels
+    InputChannelsIndex
+
+    for chnl_pid in "${chnls_pid_chosen[@]}"
+    do
+        GetChannel
+
+        if [ "$chnl_status" == "on" ] || [ "$chnl_flv_status" == "on" ] || [ -d "$chnl_output_dir_root" ]
+        then
+            StopChannel
+        fi
+
+        CheckIfXtreamCodes
+
+        if [ "$to_try" -eq 1 ] 
+        then
+            continue
+        fi
+
+        StartChannel
+    done
+}

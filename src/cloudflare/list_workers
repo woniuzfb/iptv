@@ -1,0 +1,29 @@
+CloudflareListWorkers()
+{
+    if [ ! -s "$CF_CONFIG" ] 
+    then
+        Println "$error 请先添加 worker\n" && exit 1
+    fi
+
+    CloudflareGetWorkers
+
+    if [ "$cf_workers_count" -gt 0 ] 
+    then
+        cf_workers_list=""
+
+        for((i=0;i<cf_workers_count;i++));
+        do
+            if [ "${cf_workers_path[i]}" == "stream_proxy" ] 
+            then
+                cf_worker_upstream_list=" 源站: ${green}${cf_workers_upstream[i]:-无}${normal}"
+            else
+                cf_worker_upstream_list=""
+            fi
+            cf_workers_list="$cf_workers_list ${green}$((i+1)).${normal}${indent_6}名称: ${green}${cf_workers_name[i]}${normal}  路径: ${green}${cf_workers_path[i]}${normal}\n${indent_6}项目名称: ${green}${cf_workers_project_name[i]}${normal}$cf_worker_upstream_list\n\n"
+        done
+
+        Println "$cf_workers_list"
+    else
+        Println "$error 没有 worker\n"
+    fi
+}

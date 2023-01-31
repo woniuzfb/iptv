@@ -1,0 +1,29 @@
+ToggleChannel()
+{
+    ListChannels
+    InputChannelsIndex
+
+    for chnl_pid in "${chnls_pid_chosen[@]}"
+    do
+        GetChannel
+
+        if { [ -z "${kind:-}" ] && [ "$chnl_status" == "off" ]; } || { [ "${kind:-}" == "flv" ] && [ "$chnl_flv_status" == "off" ]; }
+        then
+            if [ -d "$chnl_output_dir_root" ] 
+            then
+                StopChannel
+            fi
+
+            CheckIfXtreamCodes
+
+            if [ "$to_try" -eq 1 ] 
+            then
+                continue
+            fi
+
+            StartChannel
+        else
+            StopChannel
+        fi
+    done
+}

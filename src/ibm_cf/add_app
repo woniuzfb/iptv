@@ -1,0 +1,105 @@
+IbmAddCfApp()
+{
+    IbmLoginUser
+
+    ibmcloud cf apps
+
+    IbmSetCfAppName
+
+    Println "$info 查询路由 ..."
+
+    app_guid=$(ibmcloud cf app "$ibm_cf_app_name" --guid -q)
+
+    IFS="^" read -r route_guid hostname domain_guid path < <(ibmcloud cf curl "/v2/apps/$app_guid/routes" -q \
+        | $JQ_FILE -r '[([.resources[].metadata.guid]|join("|")),([.resources[].entity.host]|join("|")),([.resources[].entity.domain_guid]|join("|")),([.resources[].entity.path]|join("|"))]|join("^")')
+
+    ibm_cf_app_routes_count=0
+    if [ -n "$route_guid" ] 
+    then
+        IFS="|" read -r -a ibm_cf_app_routes_guid <<< "$route_guid"
+        IFS="|" read -r -a ibm_cf_app_routes_hostname <<< "$hostname"
+        IFS="|" read -r -a ibm_cf_app_routes_domain_guid <<< "$domain_guid"
+        IFS="|" read -r -a ibm_cf_app_routes_path <<< "${path}|"
+        ibm_cf_app_routes_count=${#ibm_cf_app_routes_guid[@]}
+
+        IFS="^" read -r port route_guid < <(ibmcloud cf curl "/v2/route_mappings?q=app_guid:$app_guid" -q \
+            | $JQ_FILE -r '[([.resources[].entity.app_port]|join("|")),([.resources[].entity.route_guid]|join("|"))]|join("^")')
+
+        IFS="|" read -r -a ports <<< "$port"
+        IFS="|" read -r -a routes_guid <<< "$route_guid"
+
+        IFS="^" read -r domain domain_guid < <(ibmcloud cf curl "/v2/domains" -q \
+            | $JQ_FILE -r '[([.resources[].entity.name]|join("|")),([.resources[].metadata.guid]|join("|"))]|join("^")')
+
+        IFS="|" read -r -a domains <<< "$domain"
+        IFS="|" read -r -a domains_guid <<< "$domain_guid"
+
+        ibm_cf_app_routes_port=()
+        ibm_cf_app_routes_domain=()
+
+        for((i=0;i<ibm_cf_app_routes_count;i++));
+        do
+            for((j=0;j<ibm_cf_app_routes_count;j++));
+            do
+                if [ "${routes_guid[j]}" == "${ibm_cf_app_routes_guid[i]}" ] 
+                then
+                    ibm_cf_app_routes_port+=("${ports[j]}")
+                    break
+                fi
+            done
+
+            for((k=0;k<${#domains_guid[@]};k++));
+            do
+                if [ "${domains_guid[k]}" == "${ibm_cf_app_routes_domain_guid[i]}" ] 
+                then
+                    ibm_cf_app_routes_domain+=("${domains[k]}")
+                    break
+                fi
+            done
+        done
+
+        for ibm_cf_app_route_guid in "${ibm_cf_app_routes_guid[@]}"
+        do
+            for((i=0;i<ibm_cf_app_routes_count;i++));
+            do
+                if [ "${routes_guid[i]}" == "$ibm_cf_app_route_guid" ] 
+                then
+                    ibm_cf_app_routes_port+=("${ports[i]}")
+                    break
+                fi
+            done
+        done
+    fi
+
+    ibm_cf_app_routes=""
+    for((i=0;i<ibm_cf_app_routes_count;i++));
+    do
+        [ -n "$ibm_cf_app_routes" ] && ibm_cf_app_routes="$ibm_cf_app_routes,"
+        ibm_cf_app_route=$(
+        $JQ_FILE -n --arg hostname "${ibm_cf_app_routes_hostname[i]}" --arg port "${ibm_cf_app_routes_port[i]}" \
+            --arg domain "${ibm_cf_app_routes_domain[i]}" --arg path "${ibm_cf_app_routes_path[i]}" \
+            '{
+                hostname: $hostname,
+                port: $port | tonumber,
+                domain: $domain,
+                path: $path
+            }'
+        )
+        ibm_cf_app_routes="$ibm_cf_app_routes$ibm_cf_app_route"
+    done
+
+    ibm_cf_app=$(
+    $JQ_FILE -n --arg name "$ibm_cf_app_name" --arg user_email "$ibm_user_email" \
+        --argjson routes "[$ibm_cf_app_routes]" \
+        '{
+            name: $name,
+            user_email: $user_email,
+            routes: $routes
+        }'
+    )
+
+    jq_path='["cf","apps"]'
+    JQ add "$IBM_CONFIG" "[$ibm_cf_app]"
+
+    Println "$info APP 添加成功\n"
+}

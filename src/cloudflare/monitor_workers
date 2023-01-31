@@ -1,0 +1,1301 @@
+CloudflareWorkersMonitorMoveZone()
+{
+    CloudflareGetUser
+
+    Println "$info 删除源站 ..."
+
+    IFS="^" read -r result err_code msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
+        -d 'act=zone_delete' \
+        -d "host_key=$cf_host_key" \
+        -d "user_key=$cf_user_key" \
+        -d "zone_name=$cf_zone_name" \
+        | $JQ_FILE '[.result,.err_code,.msg]|join("^")'
+    ) || true
+
+    result=${result#\"}
+    msg=${msg%\"}
+
+    if [ -z "$result" ] || [ "$result" == "error" ]
+    then
+        if [ "$err_code" -eq 115 ] || [ "$err_code" -eq 703 ]
+        then
+            Println "$error 此用户已被 CFP 删除或未添加成功, 可以到 Cloudflare 官网手动删除源站或者重新添加 !"
+        else
+            Println "$error ${msg:-超时, 请重试}\n"
+        fi
+        MonitorErr "move zone 删除源站 $err_code, $msg"
+        exit 1
+    else
+        map_string=true
+        jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
+        JQ delete "$CF_CONFIG" name "$cf_zone_name"
+        Println "$info $cf_zone_name 删除成功"
+    fi
+
+    Println "$info 移动中 ..."
+    cf_user_key=""
+    until [ -n "$cf_user_key" ] 
+    do
+        random_number=$(od -An -N6 -t u8 < /dev/urandom)
+        cf_user_unique_id=${random_number: -12}
+        IFS="^" read -r result cf_user_key cf_user_api_key msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
+            -d 'act=user_create' \
+            -d "host_key=$cf_host_key" \
+            -d "cloudflare_email=$cf_user_email_new" \
+            -d "cloudflare_pass=$cf_user_pass_new" \
+            -d "unique_id=$cf_user_unique_id" \
+            | $JQ_FILE '[.result,.response.user_key,.response.user_api_key,.msg]|join("^")'
+        ) || true
+
+        result=${result#\"}
+        msg=${msg%\"}
+        if [ "$result" == "error" ] 
+        then
+            Println "$error $msg"
+            if [[ $msg == *"assword"* ]] 
+            then
+                Println "$error 请检查密码是否正确\n"
+                MonitorErr "move zone 移动中 请检查密码是否正确, $msg"
+                exit 1
+            fi
+        elif [ -z "$cf_user_api_key_new" ] 
+        then
+            jq_path='["users",'"$cf_users_index"',"key"]'
+            JQ update "$CF_CONFIG" "$cf_user_api_key"
+            Println "$info 用户 $cf_user_email_new API Key 添加成功\n"
+            cf_user_api_key_new="$cf_user_api_key"
+        fi
+    done
+
+    cf_zones_user_unique_id[zone_index]="$cf_user_unique_id"
+
+    cf_user_email="$cf_user_email_new"
+    cf_user_pass="$cf_user_pass_new"
+    cf_user_token="$cf_user_token_new"
+
+    if [ -z "$cf_zone_subdomains" ] 
+    then
+        CloudflareGetUser
+        CloudflareGetZone
+        for((i=0;i<${#cf_hosted_cnames[@]};i++));
+        do
+            if [[ ${cf_hosted_cnames[i]} =~ ^([^.]+).([^.]+)$ ]] 
+            then
+                continue
+            fi
+            cf_hosted_cname=${cf_hosted_cnames[i]}
+            cf_hosted_cname=${cf_hosted_cname%.*}
+            cf_hosted_cname_prefix=${cf_hosted_cname%.*}
+            [ -n "$cf_zone_subdomains" ] && cf_zone_subdomains="$cf_zone_subdomains,"
+            cf_zone_subdomains="$cf_zone_subdomains$cf_hosted_cname_prefix:${cf_resolve_tos[i]}"
+        done
+    fi
+
+    new_zone=$(
+    $JQ_FILE -n --arg name "$cf_zone_name" --arg resolve_to "$cf_zone_resolve_to" \
+        --arg user_email "$cf_user_email" --arg user_unique_id "$cf_user_unique_id" \
+        --arg always_use_https "$cf_zone_always_use_https" --arg ssl "$cf_zone_ssl" --arg subdomains "$cf_zone_subdomains" \
+        '{
+            name: $name,
+            resolve_to: $resolve_to,
+            user_email: $user_email,
+            user_unique_id: $user_unique_id | tonumber,
+            always_use_https: $always_use_https,
+            ssl: $ssl,
+            subdomains: $subdomains
+        }'
+    )
+
+    jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
+    JQ add "$CF_CONFIG" "[$new_zone]"
+
+    CloudflareGetUser
+
+    IFS="^" read -r result cf_zone_resolving_to cf_zone_hosted_cnames cf_zone_forward_tos msg < <(curl -s -Lm 20 https://api.cloudflare.com/host-gw.html \
+        -d 'act=zone_set' \
+        -d "host_key=$cf_host_key" \
+        -d "user_key=$cf_user_key" \
+        -d "zone_name=$cf_zone_name" \
+        -d "resolve_to=$cf_zone_resolve_to" \
+        -d "subdomains=$cf_zone_subdomains" \
+        | $JQ_FILE '[.result,.response.resolving_to,([(.response.hosted_cnames| if .== null then {} else . end)|to_entries[]
+        |([.key,.value]|join("="))]
+        |join("|")),([(.response.forward_tos| if .== null then {} else . end)|to_entries[]
+        |([.key,.value]|join("="))]
+        |join("|")),.msg]|join("^")'
+    ) || true
+
+    result=${result#\"}
+    msg=${msg%\"}
+
+    if [ -z "$result" ] || [ "$result" == "error" ]
+    then
+        MonitorErr "move zone 连接超时, 请查看是否已经完成 $msg"
+        Println "$error ${msg:-连接超时, 请查看是否已经完成}\n"
+    fi
+
+    Println "$info 源站移动成功\n"
+}
+
+CloudflareWorkersMonitorUpdateRoutes()
+{
+    zone_cnames=()
+    zone_resolves=()
+
+    if [ -n "$cf_zone_subdomains" ] 
+    then
+        IFS="," read -r -a pairs <<< "$cf_zone_subdomains"
+        for pair in "${pairs[@]}"
+        do
+            if [[ $pair == *":"* ]] 
+            then
+                zone_cnames+=("${pair%:*}.$cf_zone_name")
+                zone_resolves+=("${pair#*:}")
+            else
+                zone_cnames+=("$pair.$cf_zone_name")
+                zone_resolves+=("$cf_zone_resolve_to")
+            fi
+        done
+    else
+        CloudflareGetUser
+        CloudflareGetZone
+        for((j=0;j<${#cf_hosted_cnames[@]};j++));
+        do
+            if [[ ${cf_resolve_tos[j]} =~ ^([^.]+).([^.]+).workers.dev$ ]] 
+            then
+                zone_cnames+=("${cf_hosted_cnames[j]}")
+                zone_resolves+=("${cf_resolve_tos[j]}")
+            fi
+        done
+    fi
+
+    workers_pattern=()
+    for worker_project_name in "${workers_project_name[@]}"
+    do
+        zone_cname_found=0
+        for((j=0;j<${#zone_cnames[@]};j++));
+        do
+            zone_resolve_to=${zone_resolves[j]}
+            if [[ ${zone_resolve_to%%.*} == "$worker_project_name" ]] 
+            then
+                zone_cname_found=1
+                worker_pattern="${zone_cnames[j]}/*"
+                break
+            fi
+        done
+        if [ "$zone_cname_found" -eq 0 ] 
+        then
+            if [ "$worker_project_name" == "${cf_zone_name%.*}" ] 
+            then
+                worker_pattern="$cf_zone_name/*"
+            else
+                worker_pattern="$worker_project_name.$cf_zone_name/*"
+            fi
+        fi
+        workers_pattern+=("$worker_pattern")
+    done
+
+    IFS=" " read -r zone_id zone_name account_id < <(curl -s -X GET "https://api.cloudflare.com/client/v4/zones" \
+        -H "Content-Type: application/json" \
+        -H ''"$curl_header_auth_email"'' \
+        -H ''"$curl_header_auth_key"'' \
+        -H ''"$curl_header_auth_token"'' \
+        | $JQ_FILE -r '[([.result[].id]|join("|")),([.result[].name]|join("|")),([.result[].account.id]|join("|"))]|join(" ")' 2> /dev/null
+    ) || Println "$error Token 权限错误 ?"
+
+    IFS="|" read -r -a zones_id <<< "$zone_id"
+    IFS="|" read -r -a zones_name <<< "$zone_name"
+    IFS="|" read -r -a accounts_id <<< "$account_id"
+
+    for((j=0;j<${#zones_id[@]};j++));
+    do
+        if [ "${zones_name[j]}" == "$cf_zone_name" ] 
+        then
+            cf_zone_always_use_https=${cf_zone_always_use_https:-off}
+            zone_always_use_https=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/settings/always_use_https" \
+                -H "Content-Type: application/json" \
+                -H ''"$curl_header_auth_email"'' \
+                -H ''"$curl_header_auth_key"'' \
+                -H ''"$curl_header_auth_token"'' \
+                | $JQ_FILE -r '.result.value'
+            )
+
+            if [ "$zone_always_use_https" != "$cf_zone_always_use_https" ] 
+            then
+                fail_time=0
+                until [[ $(curl -s -X PATCH "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/settings/always_use_https" \
+                    -H ''"$curl_header_auth_email"'' \
+                    -H ''"$curl_header_auth_key"'' \
+                    -H ''"$curl_header_auth_token"'' \
+                    -H "Content-Type: application/json" \
+                    --data '{"value":"'"$cf_zone_always_use_https"'"}' | $JQ_FILE -r '.success') = true ]] 
+                do
+                    MonitorErr "域名: $cf_zone_name always_use_https 设置失败, Token: $cf_user_token, zone id: ${zones_id[j]}, $zone_always_use_https => $cf_zone_always_use_https"
+                    Println "$error 域名: $cf_zone_name always_use_https 设置失败\n"
+                    fail_time=$((fail_time+1))
+                    [ "$fail_time" -ge 5 ] && exit 1
+                done
+                Println "$info 域名: $cf_zone_name always_use_https 设置成功\n"
+            fi
+
+            cf_zone_ssl=${cf_zone_ssl:-flexible}
+            zone_ssl=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/settings/ssl" \
+                -H "Content-Type: application/json" \
+                -H ''"$curl_header_auth_email"'' \
+                -H ''"$curl_header_auth_key"'' \
+                -H ''"$curl_header_auth_token"'' \
+                | $JQ_FILE -r '.result.value'
+            )
+
+            if [ "$zone_ssl" != "$cf_zone_ssl" ] 
+            then
+                fail_time=0
+                until [[ $(curl -s -X PATCH "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/settings/ssl" \
+                    -H ''"$curl_header_auth_email"'' \
+                    -H ''"$curl_header_auth_key"'' \
+                    -H ''"$curl_header_auth_token"'' \
+                    -H "Content-Type: application/json" \
+                    --data '{"value":"'"$cf_zone_ssl"'"}' | $JQ_FILE -r '.success') = true ]] 
+                do
+                    MonitorErr "域名: $cf_zone_name ssl 设置失败, Token: $cf_user_token, zone id: ${zones_id[j]}, $zone_ssl => $cf_zone_ssl"
+                    Println "$error 域名: $cf_zone_name ssl 设置失败\n"
+                    fail_time=$((fail_time+1))
+                    [ "$fail_time" -ge 5 ] && exit 1
+                done
+                Println "$info 域名: $cf_zone_name ssl 设置成功\n"
+            fi
+
+            IFS="^" read -r count id script pattern < <(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/workers/routes" \
+                -H "Content-Type: application/json" \
+                -H ''"$curl_header_auth_email"'' \
+                -H ''"$curl_header_auth_key"'' \
+                -H ''"$curl_header_auth_token"'' \
+                | $JQ_FILE '[(.result|length),([.result[].id]|join(" ")),([.result[].script]|join(" ")),([.result[].pattern]|join(" "))]|join("^")'
+            )
+
+            pattern=${pattern%\"}
+
+            IFS=" " read -r -a ids <<< "$id"
+            IFS=" " read -r -a scripts <<< "$script"
+            IFS=" " read -r -a patterns <<< "$pattern"
+
+            for((k=0;k<workers_count;k++));
+            do
+                pattern_found=0
+                if [ "$update_workers_data_yn" == "$i18n_yes" ] 
+                then
+                    script_found=0
+                else
+                    script_found=0
+                    for script in "${scripts[@]}"
+                    do
+                        if [ "$script" == "${workers_project_name[k]}" ] 
+                        then
+                            script_found=1
+                            break
+                        fi
+                    done
+                fi
+                for((m=0;m<${#patterns[@]};m++));
+                do
+                    if [ "${patterns[m]}" == "${workers_pattern[k]}" ] 
+                    then
+                        pattern_found=1
+                        id=${ids[m]}
+                        break
+                    fi
+                done
+                if [ "$script_found" -eq 0 ] 
+                then
+                    fail_time=0
+                    until [[ $(curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/${accounts_id[j]}/workers/scripts/${workers_project_name[k]}" \
+                        -H ''"$curl_header_auth_email"'' \
+                        -H ''"$curl_header_auth_key"'' \
+                        -H ''"$curl_header_auth_token"'' \
+                        -H "Content-Type: application/javascript" \
+                        --data "${workers_data[k]}" | $JQ_FILE -r '.success') = true ]] 
+                    do
+                        MonitorErr "部署 worker 失败 Token: $cf_user_token, pattern: ${workers_pattern[k]}, script: ${workers_project_name[k]}"
+                        Println "$error worker: ${workers_name[j]} 部署失败\n"
+                        fail_time=$((fail_time+1))
+                        [ "$fail_time" -ge 5 ] && exit 1
+                    done
+                    Println "$info worker: ${workers_name[j]} 部署成功\n"
+                fi
+                if [ "$pattern_found" -eq 1 ] 
+                then
+                    fail_time=0
+                    until [[ $(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/workers/routes/$id" \
+                        -H ''"$curl_header_auth_email"'' \
+                        -H ''"$curl_header_auth_key"'' \
+                        -H ''"$curl_header_auth_token"'' \
+                        -H "Content-Type: application/json" \
+                        --data '{"pattern":"'"${workers_pattern[k]}"'","script":"'"${workers_project_name[k]}"'"}' \
+                        | $JQ_FILE -r '.success' ) = true ]] 
+                    do
+                        MonitorErr "路由添加失败 Token: $cf_user_token, pattern: ${workers_pattern[k]}, script: ${workers_project_name[k]}"
+                        Println "$error 路由添加失败\n"
+                        fail_time=$((fail_time+1))
+                        [ "$fail_time" -ge 5 ] && exit 1
+                    done
+                    Println "$info 路由修改成功\n"
+                else
+                    fail_time=0
+                    until [[ $(curl -s "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/workers/routes" \
+                        -H ''"$curl_header_auth_email"'' \
+                        -H ''"$curl_header_auth_key"'' \
+                        -H ''"$curl_header_auth_token"'' \
+                        -H "Content-Type: application/json" \
+                        --data '{"pattern":"'"${workers_pattern[k]}"'","script":"'"${workers_project_name[k]}"'"}' \
+                        | $JQ_FILE -r '.success' ) = true ]] 
+                    do
+                        MonitorErr "路由添加失败 Token: $cf_user_token, pattern: ${workers_pattern[k]}, script: ${workers_project_name[k]}"
+                        Println "$error 路由添加失败\n"
+                        fail_time=$((fail_time+1))
+                        [ "$fail_time" -ge 5 ] && exit 1
+                    done
+                    Println "$info 路由添加成功\n"
+                fi
+            done
+            break
+        fi
+    done
+}
+
+CloudflareWorkersMonitorDeploy()
+{
+    CF_ACCOUNT_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/accounts" \
+        -H "Content-Type: application/json" \
+        -H ''"$curl_header_auth_email"'' \
+        -H ''"$curl_header_auth_key"'' \
+        -H ''"$curl_header_auth_token"'' \
+        | $JQ_FILE -r '.result[0].id'
+    ) || true
+
+    if [ -z "$CF_ACCOUNT_ID" ] || [ "$CF_ACCOUNT_ID" == null ]
+    then
+        MonitorErr "无法获取用户 ID, Token 错误 ? $cf_user_token"
+        Println "$error 无法获取用户 ID, Token 错误 ?\n"
+        exit 1
+    fi
+
+    for((j=0;j<workers_count;j++));
+    do
+        if [[ $(curl -s -X PUT "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/workers/scripts/${workers_project_name[j]}" \
+            -H ''"$curl_header_auth_email"'' \
+            -H ''"$curl_header_auth_key"'' \
+            -H ''"$curl_header_auth_token"'' \
+            -H "Content-Type: application/javascript" \
+            --data "${workers_data[j]}" | $JQ_FILE -r '.success') = true ]]
+        then
+            Println "$info ${workers_name[j]} 部署成功\n"
+        fi
+    done
+}
+
+CloudflareWorkersMonitorGetRequests()
+{
+    local cf_user_email=$1 cf_user_token=$2 cf_user_api_key=$3
+    if [ -n "$cf_user_api_key" ] 
+    then
+        curl_header_auth_email="X-Auth-Email: $cf_user_email"
+        curl_header_auth_key="X-Auth-Key: $cf_user_api_key"
+        curl_header_auth_token=""
+    else
+        curl_header_auth_email=""
+        curl_header_auth_key=""
+        curl_header_auth_token="Authorization: Bearer $cf_user_token"
+    fi
+
+    [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+    IFS=$'\002\t' read -r success error_message CF_ACCOUNT_ID < <(
+    JQs flat "$(curl -s -X GET -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
+    -H 'Content-Type: application/json' https://api.cloudflare.com/client/v4/accounts)" '' \
+    '[.success + "\u0002",
+    (.errors|if (.|type == "string") then {} else . end).message + "\u0002",
+    (.result|if (.|type == "string") then {} else . end).id + "\u0002"]|@tsv' "${delimiters[@]}")
+
+    if [ "$success" = false ] 
+    then
+        request_count="获取账号 ID 失败: ${error_message//${delimiters[0]}/, }"
+        return 0
+    fi
+
+    end_epoch=$(date --utc -d 'tomorrow 00:00:00' +%s)
+    start_epoch=$(date --utc -d 'today 00:00:00' +%s)
+    start_date=$(date --utc --date="@$start_epoch" +'%Y-%m-%dT%H:%m:%SZ')
+    end_date=$(date --utc --date="@$end_epoch" +'%Y-%m-%dT%H:%m:%SZ')
+
+    PAYLOAD='{ "query":
+    "query {
+        viewer {
+        accounts(filter: { accountTag: $accountTag }) {
+        workersInvocationsAdaptive(
+            filter: {
+            datetime_geq: $datetimeStart,
+            datetime_leq: $datetimeEnd
+            }
+            limit: 100
+        ) {
+            sum {
+                requests
+                subrequests
+                errors
+            }
+            }
+        }
+        }
+    }",'
+
+    PAYLOAD="$PAYLOAD
+
+    \"variables\": {
+        \"accountTag\": \"$CF_ACCOUNT_ID\",
+        \"datetimeStart\": \"$start_date\",
+        \"datetimeEnd\": \"$end_date\"
+    }
+    }"
+
+    IFS=$'\002\t' read -r cf_workers_requests error_message < <(
+    JQs flat "$(curl -s -H 'Content-Type: application/json' -H ''"$curl_header_auth_email"'' -H ''"$curl_header_auth_key"'' -H ''"$curl_header_auth_token"'' \
+    --data "$(echo $PAYLOAD)" https://api.cloudflare.com/client/v4/graphql)" '' \
+    '[((.data|if (.|type == "string") then {} else . end).viewer.accounts.workersInvocationsAdaptive|if (.|type == "string") then {} else . end).sum.requests + "\u0002",
+    (.errors|if (.|type == "string") then {} else . end).message + "\u0002"]|@tsv' "${delimiters[@]}")
+
+    if [ -z "$cf_workers_requests" ] 
+    then
+        request_count="获取 workers 访问数失败: ${error_message//${delimiters[0]}/, }"
+        return 0
+    fi
+
+    request_count="$cf_workers_requests"
+}
+
+CloudflareWorkersMonitor()
+{
+    trap '' HUP INT
+    trap 'MonitorErr $LINENO' ERR
+
+    pid_file="$CF_WORKERS_ROOT/cf_workers.pid"
+    printf '%s' "$BASHPID" > "$pid_file"
+    {
+        flock -x 204
+        {
+            MonitorLog "启动 workers 监控  PID $BASHPID !"
+
+            clear=$(date --utc -d 'tomorrow 00:00:10' +%s)
+            emails_dead=()
+
+            if [ "$sh_debug" = false ] 
+            then
+                monitor=true
+            fi
+
+            while true 
+            do
+                printf -v now '%(%s)T' -1
+                if [ "$now" -ge "$clear" ] 
+                then
+                    clear=$(date --utc -d 'tomorrow 00:00:10' +%s)
+                    emails_dead=()
+                    start_from_begin=1
+                fi
+
+                zone_index=${zones_index_monitor[0]}
+                cf_zone_user_email=${cf_zones_user_email[zone_index]}
+                cf_zone_user_pass=${cf_zones_user_pass[zone_index]}
+                cf_zone_user_token=${cf_zones_user_token[zone_index]}
+                cf_zone_user_api_key=${cf_zones_user_api_key[zone_index]}
+
+                if [ -n "$cf_zone_user_api_key" ] 
+                then
+                    curl_header_auth_email="X-Auth-Email: $cf_zone_user_email"
+                    curl_header_auth_key="X-Auth-Key: $cf_zone_user_api_key"
+                    curl_header_auth_token=""
+                else
+                    curl_header_auth_email=""
+                    curl_header_auth_key=""
+                    curl_header_auth_token="Authorization: Bearer $cf_zone_user_token"
+                fi
+
+                dead_email=0
+                for email in ${emails_dead[@]+"${emails_dead[@]}"}
+                do
+                    if [ "$email" == "$cf_zone_user_email" ] 
+                    then
+                        dead_email=1
+                        break
+                    fi
+                done
+
+                if [ "$dead_email" -eq 0 ] 
+                then
+                    for((i=0;i<20;i++));
+                    do
+                        if [ "$cf_use_api" -eq 1 ] 
+                        then
+                            CloudflareWorkersMonitorGetRequests "$cf_zone_user_email" "$cf_zone_user_token" "$cf_zone_user_api_key"
+                            if [ -z "$request_count" ] || [[ $request_count == *[!0-9]* ]]
+                            then
+                                MonitorErr "request_count : ${request_count:-无}"
+                                sleep 10
+                            else
+                                if [ "$request_count" -gt "$cf_workers_monitor_request_counts" ] 
+                                then
+                                    dead_email=1
+                                    emails_dead+=("$cf_zone_user_email")
+                                fi
+                                break
+                            fi
+                        elif request_count_json=$(python3 \
+                            "$CF_WORKERS_FILE" -e "$cf_zone_user_email" -p "$cf_zone_user_pass" -o request_count
+                        ) 
+                        then
+                            IFS=" " read -r success request_count api_token < <($JQ_FILE -r '[.success,.result.totals.requestCount,.api_token]|join(" ")' <<< "$request_count_json")
+
+                            if [ "$success" = true ] && [ -n "$request_count" ] 
+                            then
+                                if [ "$request_count" -gt "$cf_workers_monitor_request_counts" ] 
+                                then
+                                    dead_email=1
+                                    emails_dead+=("$cf_zone_user_email")
+                                fi
+                                break
+                            else
+                                MonitorErr "request_count_json 1 : $request_count_json"
+                                sleep 30
+                            fi
+                        else
+                            sleep 10
+                        fi
+                    done
+                fi
+
+                if [ "$dead_email" -eq 1 ] 
+                then
+                    if [ "$start_from_begin" -eq 1 ] 
+                    then
+                        continue=0
+                    else
+                        continue=1
+                    fi
+                    for((cf_users_index=0;i<cf_users_count;cf_users_index++));
+                    do
+                        if [ "$continue" -eq 1 ]
+                        then
+                            if [ "${cf_users_email[cf_users_index]}" == "$cf_zone_user_email" ]
+                            then
+                                continue=0
+                            fi
+                            continue
+                        fi
+
+                        for email in ${emails_dead[@]+"${emails_dead[@]}"}
+                        do
+                            if [ "$email" == "${cf_users_email[cf_users_index]}" ] 
+                            then
+                                continue 2
+                            fi
+                        done
+
+                        if [ "$cf_use_api" -eq 0 ] && [ -z "${cf_users_token[cf_users_index]}" ] && [ -z "${cf_users_api_key[cf_users_index]}" ] 
+                        then
+                            for((index=0;index<10;index++));
+                            do
+                                if cf_user_token=$(python3 \
+                                    "$CF_WORKERS_FILE" -e "${cf_users_email[cf_users_index]}" -p "${cf_users_pass[cf_users_index]}" -o api_token
+                                )
+                                then
+                                    break
+                                else
+                                    sleep 20
+                                fi
+                            done
+
+                            if [ -n "$cf_user_token" ] 
+                            then
+                                cf_users_token[cf_users_index]="$cf_user_token"
+
+                                new_user=$(
+                                $JQ_FILE -n --arg email "${cf_users_email[cf_users_index]}" --arg pass "${cf_users_pass[cf_users_index]}" \
+                                    --arg token "${cf_users_token[cf_users_index]}" --arg key "${cf_users_api_key[cf_users_index]}" \
+                                    '{
+                                        email: $email,
+                                        pass: $pass,
+                                        token: $token,
+                                        key: $key
+                                    }'
+                                )
+
+                                map_string=true
+                                jq_path='["users"]'
+                                JQ delete "$CF_CONFIG" email "${cf_users_email[cf_users_index]}"
+                                jq_path='["users"]'
+                                JQ add "$CF_CONFIG" "[$new_user]"
+                                Println "$info 用户 ${cf_users_email[cf_users_index]} 修改成功\n"
+                            else
+                                continue
+                            fi
+                        fi
+
+                        cf_user_email_new=${cf_users_email[cf_users_index]}
+                        cf_user_pass_new=${cf_users_pass[cf_users_index]}
+                        cf_user_token_new=${cf_users_token[cf_users_index]}
+                        cf_user_api_key_new=${cf_users_api_key[cf_users_index]}
+
+                        for zone_index in "${zones_index_monitor[@]}"
+                        do
+                            cf_zone_name=${cf_zones_name[zone_index]}
+                            cf_zone_host_name=${cf_zones_host_name[zone_index]}
+                            cf_zone_host_key=${cf_zones_host_key[zone_index]}
+                            cf_zone_user_email=${cf_zones_user_email[zone_index]}
+                            cf_zone_user_pass=${cf_zones_user_pass[zone_index]}
+                            cf_zone_user_token=${cf_zones_user_token[zone_index]}
+                            cf_zone_user_unique_id=${cf_zones_user_unique_id[zone_index]}
+                            cf_zone_resolve_to=${cf_zones_resolve_to[zone_index]}
+                            cf_zone_always_use_https=${cf_zones_always_use_https[zone_index]}
+                            cf_zone_ssl=${cf_zones_ssl[zone_index]}
+                            cf_zone_subdomains=${cf_zones_subdomains[zone_index]}
+
+                            cf_zones_user_email[zone_index]="$cf_user_email_new"
+                            cf_zones_user_pass[zone_index]="$cf_user_pass_new"
+                            cf_zones_user_token[zone_index]="$cf_user_token_new"
+
+                            cf_user_unique_id="$cf_zone_user_unique_id"
+                            cf_host_key="$cf_zone_host_key"
+                            cf_hosts_index=${cf_zones_host_index[zone_index]}
+                            cf_user_email="$cf_zone_user_email"
+                            cf_user_pass="$cf_zone_user_pass"
+                            cf_user_token="$cf_zone_user_token"
+
+                            CloudflareWorkersMonitorMoveZone
+
+                            cf_zones_user_api_key[zone_index]=$cf_user_api_key_new
+                            cf_zone_user_api_key=${cf_zones_user_api_key[zone_index]}
+                            cf_user_api_key="$cf_zone_user_api_key"
+
+                            curl_header_auth_email="X-Auth-Email: $cf_user_email_new"
+                            curl_header_auth_key="X-Auth-Key: $cf_user_api_key"
+                            curl_header_auth_token=""
+
+                            CloudflareWorkersMonitorUpdateRoutes
+                        done
+
+                        for((index=0;index<20;index++));
+                        do
+                            if [ "$cf_use_api" -eq 1 ] 
+                            then
+                                CloudflareWorkersMonitorGetRequests "$cf_user_email_new" "$cf_user_token_new" "$cf_user_api_key_new"
+                                if [ -z "$request_count" ] || [[ $request_count == *[!0-9]* ]]
+                                then
+                                    MonitorErr "request_count 2 : ${request_count:-无}"
+                                    sleep 10
+                                else
+                                    if [ "$request_count" -gt "$cf_workers_monitor_request_counts" ] 
+                                    then
+                                        emails_dead+=("$cf_user_email_new")
+                                        break
+                                    else
+                                        dead_email=0
+                                        break 2
+                                    fi
+                                fi
+                            elif request_count_json=$(python3 \
+                                "$CF_WORKERS_FILE" -e "$cf_user_email_new" -p "$cf_user_pass_new" -o request_count
+                            ) 
+                            then
+                                IFS=" " read -r success request_count api_token < <($JQ_FILE -r '[.success,.result.totals.requestCount,.api_token]|join(" ")' <<< "$request_count_json")
+
+                                if [ "$success" = true ] && [ -n "$request_count" ] 
+                                then
+                                    if [ "$request_count" -gt "$cf_workers_monitor_request_counts" ] 
+                                    then
+                                        emails_dead+=("$cf_user_email_new")
+                                        break
+                                    else
+                                        dead_email=0
+                                        break 2
+                                    fi
+                                else
+                                    MonitorErr "request_count_json 2 : $request_count_json"
+                                    sleep 30
+                                fi
+                            else
+                                sleep 10
+                            fi
+                        done
+                    done
+                else
+                    for zone_index in "${zones_index_monitor[@]}"
+                    do
+                        cf_zone_name=${cf_zones_name[zone_index]}
+                        cf_zone_host_name=${cf_zones_host_name[zone_index]}
+                        cf_zone_host_key=${cf_zones_host_key[zone_index]}
+                        cf_zone_user_email=${cf_zones_user_email[zone_index]}
+                        cf_zone_user_pass=${cf_zones_user_pass[zone_index]}
+                        cf_zone_user_token=${cf_zones_user_token[zone_index]}
+                        cf_zone_user_api_key=${cf_zones_user_api_key[zone_index]}
+                        cf_zone_user_unique_id=${cf_zones_user_unique_id[zone_index]}
+                        cf_zone_resolve_to=${cf_zones_resolve_to[zone_index]}
+                        cf_zone_always_use_https=${cf_zones_always_use_https[zone_index]}
+                        cf_zone_ssl=${cf_zones_ssl[zone_index]}
+                        cf_zone_subdomains=${cf_zones_subdomains[zone_index]}
+
+                        cf_user_unique_id="$cf_zone_user_unique_id"
+                        cf_host_key="$cf_zone_host_key"
+                        cf_user_email="$cf_zone_user_email"
+                        cf_user_pass="$cf_zone_user_pass"
+                        cf_user_token="$cf_zone_user_token"
+                        cf_user_api_key="$cf_zone_user_api_key"
+
+                        if [ -n "$cf_user_token" ] || [ -n "$cf_user_api_key" ]
+                        then
+                            CloudflareWorkersMonitorUpdateRoutes
+                        else
+                            for((index=0;index<20;index++));
+                            do
+                                if cf_user_token=$(python3 \
+                                    "$CF_WORKERS_FILE" -e "$cf_user_email" -p "$cf_user_pass" -o api_token
+                                ) 
+                                then
+                                    if [ -n "$cf_user_token" ] 
+                                    then
+                                        cf_zones_user_token[zone_index]=$cf_user_token
+                                        CloudflareWorkersMonitorUpdateRoutes
+                                        break
+                                    else
+                                        MonitorErr "无法获取 $cf_zone_user_email Token"
+                                        sleep 30
+                                    fi
+                                else
+                                    sleep 10
+                                fi
+                            done
+                        fi
+                    done
+                fi
+
+                PrepTerm
+                sleep "$cf_workers_monitor_seconds" &
+                WaitTerm
+
+                CloudflareGetUsers
+            done
+        } 204>&-
+    } 204<"$pid_file"
+}
+
+CloudflareEnableWorkersMonitor()
+{
+    # deprecated
+    if [ -s "/tmp/cf_workers.pid" ] && kill -0 "$(< /tmp/cf_workers.pid)" 2> /dev/null
+    then
+        Println "$error workers 监控已开启\n" && exit 1
+    fi
+
+    if [ -s "$CF_WORKERS_ROOT/cf_workers.pid" ] && kill -0 "$(< $CF_WORKERS_ROOT/cf_workers.pid)" 2> /dev/null
+    then
+        Println "$error workers 监控已开启\n" && exit 1
+    fi
+
+    CloudflareListWorkers
+
+    if [ "$cf_workers_count" -eq 0 ] 
+    then
+        Println "$error 请先添加 worker\n"
+        exit 1
+    fi
+
+    workers_name=()
+    workers_path=()
+    workers_project_name=()
+    workers_upstream=()
+    echo "选择 worker, 多个 worker 用空格分隔, 比如 5 7 9-11"
+    while read -p "$i18n_default_cancel" workers_num 
+    do
+        [ -z "$workers_num" ] && Println "$i18n_canceled...\n" && exit 1
+        IFS=" " read -ra workers_num_arr <<< "$workers_num"
+
+        error_no=0
+        for worker_num in "${workers_num_arr[@]}"
+        do
+            case "$worker_num" in
+                *"-"*)
+                    worker_num_start=${worker_num%-*}
+                    worker_num_end=${worker_num#*-}
+                    if [[ $worker_num_start == *[!0-9]* ]] || [[ $worker_num_end == *[!0-9]* ]] || \
+                    [ "$worker_num_start" -eq 0 ] || [ "$worker_num_end" -eq 0 ] || \
+                    [ "$worker_num_end" -gt "$cf_workers_count" ] || \
+                    [ "$worker_num_start" -ge "$worker_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$worker_num" -lt 1 ] || [ "$worker_num" -gt "$cf_workers_count" ] 
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                for element in "${workers_num_arr[@]}"
+                do
+                    if [[ $element =~ - ]] 
+                    then
+                        start=${element%-*}
+                        end=${element#*-}
+                        for((i=start;i<=end;i++));
+                        do
+                            cf_workers_index=$((i-1))
+                            workers_name+=("${cf_workers_name[cf_workers_index]}")
+                            workers_path+=("${cf_workers_path[cf_workers_index]}")
+                            workers_project_name+=("${cf_workers_project_name[cf_workers_index]}")
+                            workers_upstream+=("${cf_workers_upstream[cf_workers_index]}")
+                        done
+                    else
+                        cf_workers_index=$((element-1))
+                        workers_name+=("${cf_workers_name[cf_workers_index]}")
+                        workers_path+=("${cf_workers_path[cf_workers_index]}")
+                        workers_project_name+=("${cf_workers_project_name[cf_workers_index]}")
+                        workers_upstream+=("${cf_workers_upstream[cf_workers_index]}")
+                    fi
+                done
+                break
+            ;;
+        esac
+    done
+
+    workers_data=()
+    stream_proxy_history=()
+    workers_count=${#workers_name[@]}
+
+    workers_monitor_stream_proxy_pairs=()
+    workers_monitor_stream_proxy_list=""
+    workers_monitor_stream_proxy_count=0
+    while IFS="^" read -r history_date history_pair
+    do
+        history_date=${history_date#\"}
+        history_date=${history_date%\"}
+        if [ -n "$history_date" ] 
+        then
+            workers_monitor_stream_proxy_count=$((workers_monitor_stream_proxy_count+1))
+            history_pair=${history_pair%\"}
+            workers_monitor_stream_proxy_pairs+=("$history_pair")
+            history_pair=${history_pair// / => }
+            workers_monitor_stream_proxy_pairs_list=${history_pair//|/$'\n' }
+            printf -v date '%(%m-%d %H:%M:%S)T' "$history_date"
+            workers_monitor_stream_proxy_list="$workers_monitor_stream_proxy_list $workers_monitor_stream_proxy_count. ${green}$date${normal}\n $workers_monitor_stream_proxy_pairs_list\n\n"
+        fi
+    done < <($JQ_FILE '(.workers_monitor.stream_proxy| if .== null then [] else . end)[]|([.date,(.pairs|to_entries|map([.value.project_name,.value.upstream]|join(" "))|join("|"))]|join("^"))' "$CF_CONFIG")
+
+    if [ -n "$workers_monitor_stream_proxy_list" ] 
+    then
+        Println "$workers_monitor_stream_proxy_list"
+        while read -p "选择 stream proxy worker 历史配置(默认: 不选择): " history_num
+        do
+            case $history_num in
+                "") 
+                    break
+                ;;
+                *[!0-9]*) 
+                    Println "$error $i18n_input_correct_no\n"
+                ;;
+                *) 
+                    if [ "$history_num" -gt 0 ] && [ "$history_num" -le "$workers_monitor_stream_proxy_count" ] 
+                    then
+                        history_index=$((history_num-1))
+                        pair=${workers_monitor_stream_proxy_pairs[history_index]}
+                        IFS="|" read -r -a pairs <<< "$pair"
+                        break
+                    else
+                        Println "$error $i18n_input_correct_no\n"
+                    fi
+                ;;
+            esac
+        done
+    fi
+
+    for((i=0;i<workers_count;i++));
+    do
+        if [ "${workers_path[i]}" == "stream_proxy" ] && [ -n "${history_num:-}" ] 
+        then
+            for pair in "${pairs[@]}"
+            do
+                if [ "${pair% *}" == "${workers_project_name[i]}" ]
+                then
+                    sed -i 's/const UPSTREAM_DOMAIN = .*/const UPSTREAM_DOMAIN = "'"${pair#* }"'"/' "$CF_WORKERS_ROOT/stream_proxy/index.js"
+                    # deprecated
+                    sed -i 's/const upstream = .*/const upstream = "'"${pair#* }"'"/' "$CF_WORKERS_ROOT/stream_proxy/index.js"
+                    worker_data=$(< "$CF_WORKERS_ROOT/stream_proxy/index.js")
+                    workers_data+=("$worker_data")
+                    continue 2
+                fi
+            done
+        fi
+        if [ "${workers_path[i]}" == "stream_proxy" ]
+        then
+            cf_worker_name=${workers_name[i]}
+            cf_worker_upstream=${workers_upstream[i]}
+            CloudflareSetWorkerUpstream
+            sed -i 's/const UPSTREAM_DOMAIN = .*/const UPSTREAM_DOMAIN = "'"$cf_worker_upstream"'"/' "$CF_WORKERS_ROOT/${workers_path[i]}/index.js"
+            # deprecated
+            sed -i 's/const upstream = .*/const upstream = "'"$cf_worker_upstream"'"/' "$CF_WORKERS_ROOT/${workers_path[i]}/index.js"
+            stream_proxy_history+=("${workers_project_name[i]} $cf_worker_upstream")
+        fi
+        worker_data=$(< "$CF_WORKERS_ROOT/${workers_path[i]}/index.js")
+        workers_data+=("$worker_data")
+    done
+
+    echo
+    inquirer list_input "是否更新远端 worker" ny_options update_workers_data_yn
+
+    if [ -n "${stream_proxy_history:-}" ] 
+    then
+        if [ -n "${pairs:-}" ] 
+        then
+            for pair in "${pairs[@]}"
+            do
+                stream_proxy_history+=("$pair")
+            done
+        fi
+        new_historys=""
+        for history in "${stream_proxy_history[@]}"
+        do
+            new_history=$(
+            $JQ_FILE -n --arg project_name "${history% *}" --arg upstream "${history#* }" \
+                '{
+                    project_name: $project_name,
+                    upstream: $upstream
+                }'
+            )
+            [ -n "$new_historys" ] && new_historys="$new_historys,"
+            new_historys="$new_historys$new_history"
+        done
+
+        new_workers_monitor_history=$(
+        $JQ_FILE -n --argjson pairs "[$new_historys]" --arg date "$(date +%s)" \
+            '{
+                date: $date | tonumber,
+                pairs: $pairs
+            }'
+        )
+
+        jq_path='["workers_monitor","stream_proxy"]'
+        JQ add "$CF_CONFIG" "[$new_workers_monitor_history]"
+    fi
+
+    CloudflareGetHosts
+
+    if [ "$cf_hosts_count" -eq 0 ] 
+    then
+        Println "$error 请先添加 CFP\n" && exit 1
+    fi
+
+    cf_zones_count=0
+    cf_zones_host_index=()
+    cf_zones_host_name=()
+    cf_zones_host_key=()
+    cf_zones_name=()
+    cf_zones_resolve_to=()
+    cf_zones_always_use_https=()
+    cf_zones_ssl=()
+    cf_zones_subdomains=()
+    cf_zones_user_email=()
+    cf_zones_user_unique_id=()
+    for((i=0;i<cf_hosts_count;i++));
+    do
+        cf_host_name=${cf_hosts_name[i]}
+        cf_host_key=${cf_hosts_key[i]}
+        cf_host_zones_count=${cf_hosts_zones_count[i]}
+        cf_zones_count=$((cf_zones_count+cf_host_zones_count))
+        cf_host_zone_name=${cf_hosts_zone_name[i]}
+        cf_host_zone_resolve_to=${cf_hosts_zone_resolve_to[i]}
+        cf_host_zone_always_use_https=${cf_hosts_zone_always_use_https[i]}
+        cf_host_zone_ssl=${cf_hosts_zone_ssl[i]}
+        cf_host_zone_subdomains=${cf_hosts_zone_subdomains[i]}
+        cf_host_zone_user_email=${cf_hosts_zone_user_email[i]}
+        cf_host_zone_user_unique_id=${cf_hosts_zone_user_unique_id[i]}
+        IFS="|" read -r -a cf_host_zones_name <<< "$cf_host_zone_name"
+        IFS="|" read -r -a cf_host_zones_resolve_to <<< "$cf_host_zone_resolve_to"
+        IFS="|" read -r -a cf_host_zones_always_use_https <<< "${cf_host_zone_always_use_https}|"
+        IFS="|" read -r -a cf_host_zones_ssl <<< "${cf_host_zone_ssl}|"
+        IFS="|" read -r -a cf_host_zones_subdomains <<< "${cf_host_zone_subdomains}|"
+        IFS="|" read -r -a cf_host_zones_user_email <<< "$cf_host_zone_user_email"
+        IFS="|" read -r -a cf_host_zones_user_unique_id <<< "$cf_host_zone_user_unique_id"
+
+        for((j=0;j<cf_host_zones_count;j++));
+        do
+            cf_zones_host_index+=("$i")
+            cf_zones_host_name+=("$cf_host_name")
+            cf_zones_host_key+=("$cf_host_key")
+            cf_zones_name+=("${cf_host_zones_name[j]}")
+            cf_zones_resolve_to+=("${cf_host_zones_resolve_to[j]}")
+            cf_zones_always_use_https+=("${cf_host_zones_always_use_https[j]}")
+            cf_zones_ssl+=("${cf_host_zones_ssl[j]}")
+            cf_zones_subdomains+=("${cf_host_zones_subdomains[j]}")
+            cf_zones_user_email+=("${cf_host_zones_user_email[j]}")
+            cf_zones_user_unique_id+=("${cf_host_zones_user_unique_id[j]}")
+        done
+    done
+
+    if [ "$cf_zones_count" -eq 0 ] 
+    then
+        Println "$error 请先添加源站\n" && exit 1
+    fi
+
+    cf_zones_list=""
+    for((i=0;i<cf_zones_count;i++));
+    do
+        cf_zones_list="$cf_zones_list ${green}$((i+1)).${normal}${indent_6}源站: ${green}${cf_zones_name[i]}${normal} 用户: ${green}${cf_zones_user_email[i]}${normal}\n\n"
+    done
+
+    Println "$cf_zones_list"
+
+    echo -e "选择源站, 多个源站用空格分隔, 比如 5 7 9-11"
+    while read -p "$i18n_default_cancel" zones_num 
+    do
+        [ -z "$zones_num" ] && Println "$i18n_canceled...\n" && exit 1
+        IFS=" " read -ra zones_num_arr <<< "$zones_num"
+
+        error_no=0
+        for zone_num in "${zones_num_arr[@]}"
+        do
+            case "$zone_num" in
+                *"-"*)
+                    zone_num_start=${zone_num%-*}
+                    zone_num_end=${zone_num#*-}
+                    if [[ $zone_num_start == *[!0-9]* ]] || [[ $zone_num_end == *[!0-9]* ]] || \
+                    [ "$zone_num_start" -eq 0 ] || [ "$zone_num_end" -eq 0 ] || \
+                    [ "$zone_num_end" -gt "$cf_zones_count" ] || \
+                    [ "$zone_num_start" -ge "$zone_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$zone_num" -lt 1 ] || [ "$zone_num" -gt "$cf_zones_count" ] 
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                declare -a new_array
+                for element in "${zones_num_arr[@]}"
+                do
+                    if [[ $element =~ - ]] 
+                    then
+                        start=${element%-*}
+                        end=${element#*-}
+                        for((i=start-1;i<end;i++));
+                        do
+                            new_array+=("$i")
+                        done
+                    else
+                        new_array+=("$((element-1))")
+                    fi
+                done
+                zones_index_monitor=("${new_array[@]}")
+                unset new_array
+                break
+            ;;
+        esac
+    done
+
+    #Println "$tip 模拟登录官网暂时有问题, 只能选 是"
+    #inquirer list_input "使用 api 获取 workers 请求数" yn_options yn_option
+    #if [ "$yn_option" == "$i18n_yes" ] 
+    #then
+        cf_use_api=1
+        cf_workers_monitor_seconds_default=1200
+    #else
+    #    cf_use_api=0
+    #    cf_workers_monitor_seconds_default=1800
+    #fi
+
+    CloudflareGetUsers
+    cf_zones_user_token=()
+    cf_zones_user_pass=()
+    cf_zones_user_api_key=()
+
+    for((i=0;i<cf_zones_count;i++));
+    do
+        for((j=0;j<cf_users_count;j++));
+        do
+            if [ "${cf_users_email[j]}" == "${cf_zones_user_email[i]}" ]
+            then
+                cf_zones_user_pass+=("${cf_users_pass[j]}")
+                if [ -z "${cf_users_token[j]}" ] && [ -z "${cf_users_api_key[j]}" ] && [ "$cf_use_api" -eq 1 ]
+                then
+                    cf_host_key=${cf_zones_host_key[i]}
+                    cf_user_unique_id=${cf_zones_user_unique_id[i]}
+                    cf_zone_name=${cf_zones_name[i]}
+                    cf_user_email=${cf_zones_user_email[i]}
+                    cf_user_pass=${cf_users_pass[j]}
+                    cf_zone_resolve_to=${cf_zones_resolve_to[i]}
+                    cf_zone_subdomains=${cf_zones_subdomains[i]}
+                    CloudflareGetUser
+                    CloudflareGetUsers
+                    if [ -z "${cf_users_api_key[j]}" ] 
+                    then
+                        Println "$error 请先添加 ${cf_users_email[j]} Token 或 Key\n"
+                        exit 1
+                    fi
+                fi
+                cf_zones_user_token+=("${cf_users_token[j]}")
+                cf_zones_user_api_key+=("${cf_users_api_key[j]}")
+                continue 2
+            fi
+        done
+        for index in "${zones_index_monitor[@]}"
+        do
+            if [ "$index" == "$i" ]
+            then
+                Println "$error 请先添加用户 ${cf_zones_user_email[i]}\n"
+                exit 1
+            fi
+        done
+    done
+
+    Println "$info 设置检查时间间隔, 时间太短可能会被 cloudflare 限制查询 (秒)"
+    while read -p "(默认: $cf_workers_monitor_seconds_default): " cf_workers_monitor_seconds
+    do
+        case $cf_workers_monitor_seconds in
+            "") 
+                cf_workers_monitor_seconds=$cf_workers_monitor_seconds_default
+                break
+            ;;
+            *[!0-9]*) 
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *) 
+                if [ "$cf_workers_monitor_seconds" -ge $((cf_workers_monitor_seconds_default/3)) ] 
+                then
+                    break
+                else
+                    Println "$error 检查时间间隔太短\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "$info 设置阀值, 请求数超过此值就会移动源站 CNAME"
+    while read -p "(默认: 100000): " cf_workers_monitor_request_counts
+    do
+        case $cf_workers_monitor_request_counts in
+            "") 
+                cf_workers_monitor_request_counts=100000
+                break
+            ;;
+            *[!0-9]*) 
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *) 
+                if [ "$cf_workers_monitor_request_counts" -ge 0 ] 
+                then
+                    break
+                else
+                    Println "$error $i18n_input_correct_number\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "$tip 如果今天(UTC时间)已经开启过可以选 否"
+    inquirer list_input "是否从第一个账号开始" yn_options start_from_begin
+
+    if [[ $start_from_begin == "$i18n_yes" ]] 
+    then
+        start_from_begin=1
+    else
+        start_from_begin=0
+    fi
+
+    if [ "$cf_use_api" -eq 0 ] 
+    then
+        PythonInstall
+
+        Println "$info 更新 ${CF_WORKERS_FILE##*/} ..."
+        if [ "$sh_debug" = false ] && [ ! -f "$IPTV_ROOT/VIP" ]
+        then
+            curl -s -Lm 10 "$CF_WORKERS_LINK" -o "$CF_WORKERS_FILE" \
+            || curl -s -Lm 20 "$CF_WORKERS_LINK_FALLBACK" -o "$CF_WORKERS_FILE"
+        fi  
+    fi
+
+    [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
+
+    if [ "$sh_debug" = true ] 
+    then
+        ( CloudflareWorkersMonitor ) 
+    else
+        ( CloudflareWorkersMonitor ) > /dev/null 2> /dev/null < /dev/null &
+    fi
+
+    Println "$info workers 监控开启成功\n"
+}
+
+CloudflareDisableWorkersMonitor()
+{
+    # deprecated
+    if [ -s "/tmp/cf_workers.pid" ] 
+    then
+        cf_workers_pid=$(< /tmp/cf_workers.pid)
+        if kill -0 "$cf_workers_pid" 2> /dev/null
+        then
+            kill "$cf_workers_pid" 2> /dev/null
+            [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
+            MonitorLog "关闭 workers 监控 PID $cf_workers_pid !"
+            Println "$info workers 监控 关闭成功\n"
+        else
+            Println "$error workers 监控 未开启\n"
+        fi
+    elif [ -s "$CF_WORKERS_ROOT/cf_workers.pid" ]
+    then
+        PID=$(< "$CF_WORKERS_ROOT/cf_workers.pid")
+        if kill -0 "$PID" 2> /dev/null 
+        then
+            Println "$info 关闭 workers 监控, 稍等..."
+            kill "$PID" 2> /dev/null
+            if flock -E 1 -w 20 -x "$CF_WORKERS_ROOT/cf_workers.pid" rm -f "$CF_WORKERS_ROOT/cf_workers.pid"
+            then
+                MonitorLog "关闭 workers 监控 PID $PID !"
+                Println "$info workers 监控 关闭成功 !\n"
+            else
+                Println "$error workers 监控 关闭超时, 请重试\n"
+                exit 1
+            fi
+        else
+            rm -f "$CF_WORKERS_ROOT/cf_workers.pid"
+            Println "$error workers 监控 未开启\n"
+        fi
+    else
+        [ -e "$CF_WORKERS_ROOT/cf_workers.pid" ] && rm -f "$CF_WORKERS_ROOT/cf_workers.pid"
+        Println "$error workers 监控 未开启\n"
+    fi
+}

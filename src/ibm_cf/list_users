@@ -1,0 +1,16 @@
+IbmListUsers()
+{
+    if [ ! -s "$IBM_CONFIG" ] 
+    then
+        Println "$error 请先添加用户\n" && exit 1
+    fi
+
+    IbmGetUsers
+
+    if [ "$ibm_users_count" -gt 0 ] 
+    then
+        Println "$ibm_users_list"
+    else
+        Println "$error 没有用户\n"
+    fi
+}

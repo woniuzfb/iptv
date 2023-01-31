@@ -1,0 +1,748 @@
+ParseStream()
+{
+    if [ "${stream_link_parsed:-false}" = false ] 
+    then
+        stream_links_count=${#stream_links[@]}
+        stream_link="${stream_links[0]}"
+
+        if [[ $stream_link =~ ^https://(www\.)?(youtube.com|twitch.tv) ]] 
+        then
+            YoutubeDlInstall
+            YtDlpInstall
+
+            echo
+            youtube_options=( youtube-dl yt-dlp )
+            inquirer list_input "选择解析工具" youtube_options youtube_option
+
+            for((s_i=0;s_i<stream_links_count;s_i++));
+            do
+                link="${stream_links[s_i]}"
+                if [[ $link =~ ^https://(www\.)?(youtube.com|twitch.tv) ]] && [[ $link != *".m3u8"* ]] && [[ $link != *"|"* ]]
+                then
+                    unset code
+
+                    ParseYoutube "$youtube_option"
+
+                    if [ -z "${formats_indices:-}" ] 
+                    then
+                        Println "$error 无法解析 youtube 链接 $link"
+                        exit 1
+                    fi
+
+                    stream_links[s_i]="${stream_links[s_i]}|$code"
+
+                    if [ "$s_i" -eq 0 ] && [[ $code =~ , ]]
+                    then
+                        stream_urls_resolution=("${formats_resolution[@]}")
+                        stream_urls_bitrate=("${formats_bitrate[@]}")
+
+                        stream_url_video_indices=("${formats_indices[@]}")
+                        stream_url_qualities_count=${#formats_indices[@]}
+                        stream_urls_audio=()
+                        stream_urls_subtitles=()
+                        stream_url_qualities=()
+
+                        for stream_urls_index in "${stream_url_video_indices[@]}"
+                        do
+                            stream_urls_audio[stream_urls_index]=""
+                            stream_urls_subtitles[stream_urls_index]=""
+                            stream_url_qualities+=("${stream_urls_bitrate[stream_urls_index]}-${stream_urls_resolution[stream_urls_index]}")
+                        done
+                    fi
+                fi
+            done
+
+            Println "`eval_gettext \"\\\$info youtube-dl 解析链接...\"`"
+
+            stream_link="${stream_links[0]}"
+            code=${stream_link#*|}
+            stream_link=${stream_link%|*}
+
+            if [[ $code =~ , ]] 
+            then
+                parse_urls=($(yt-dlp --no-warnings -f "$code" -g "$stream_link")) || parse_urls=($(youtube-dl -f "$code" -g "$stream_link"))
+
+                stream_urls=()
+
+                for((s_i=0;s_i<stream_url_qualities_count;s_i++));
+                do
+                    formats_index=${formats_indices[s_i]}
+                    stream_urls[formats_index]="${parse_urls[s_i]}"
+                done
+
+                stream_urls_count=${#stream_urls[@]}
+
+                printf -v stream_link ' %s' "${stream_urls[@]}"
+                stream_link="${stream_link:1}"
+            else
+                stream_link=$(yt-dlp --no-warnings -f "$code" -g "$stream_link") || stream_link=$(youtube-dl -f "$code" -g "$stream_link")
+            fi
+
+            user_agent="${user_agent:-$USER_AGENT_BROWSER}"
+        elif [ "${stream_link:13:12}" == "fengshows.cn" ] 
+        then
+            user_agent="${user_agent:-FengWatch/3.1.8 (iPhone; iOS 15.2; Scale/2.00)}"
+            headers="${headers:-fengshows-client: app(ios,30$(GetFreePort 4000 6000)7);iPhone15,2;15.2\\r\\n}"
+            cookies="${cookies:-}"
+
+            feng_id=${stream_link##*/}
+            feng_id=${feng_id%%.*}
+            feng_id=$(tr '[:upper:]' '[:lower:]' <<< "$feng_id")
+
+            while IFS=" " read -r title stream_link
+            do
+                if { [[ $feng_id == *"pin"* ]] && [ "$title" == "資訊台" ]; } || { [[ $feng_id == *"pcc"* ]] && [ "$title" == "中文台" ]; } || { [[ $feng_id == *"phk"* ]] && [ "$title" == "香港台" ]; }
+                then
+                    break
+                fi
+            done < <(curl -s -Lm 10 \
+                -H "User-Agent: $user_agent" \
+                -H "${headers:0:-4}" "https://api.fengshows.cn/live?live_type=tv&page=1&page_size=15" \
+                | $JQ_FILE -r '.[]|[.title,.live_url_fhd]|join(" ")')
+
+            ts=$(date +%s%3N)
+            tx_time=$(printf '%X' $((ts/1000+1800)))
+
+            stream_link=${stream_link%\?*}
+
+            relative_path=${stream_link#*//}
+            relative_path="/${relative_path#*/}"
+
+            tx_secret=$(printf '%s' "obb9Lxyv5C${relative_path%.*}$tx_time" | md5sum)
+            tx_secret=${tx_secret%% *}
+
+            stream_link="$stream_link?txSecret=$tx_secret&txTime=$tx_time"
+            stream_links[0]="$stream_link"
+
+            #token=$(printf '%s' "$ts/${relative_path:1}ifengims" | md5sum)
+            #token=${token%% *}
+            #stream_link_md5="$stream_link?ts=$ts&token=$token"
+        elif [[ $stream_link =~ ^https?://news\.tvb\.com ]] 
+        then
+            Println "$info 解析 tvb 链接 ..."
+
+            if [ "${stream_link:0:5}" == "http:" ] 
+            then
+                stream_link="https${stream_link:4}"
+            fi
+
+            user_agent="${user_agent:-$USER_AGENT_BROWSER}"
+            headers="${headers:-Referer: $stream_link\\r\\n}"
+            cookies="${cookies:-}"
+
+            while IFS= read -r line 
+            do
+                if [[ $line =~ tag_deviceid= ]] 
+                then
+                    line=${line#* }
+                    cookies=${line%% *}
+                elif [[ $line =~ country_code= ]] 
+                then
+                    line=${line#* }
+                    cookies="$cookies ${line%% *}"
+                    break
+                fi
+            done < <(curl -s -I -H "User-Agent: $user_agent" -H "${headers:0:-4}" -c - "$stream_link" 2> /dev/null)
+
+            chnl="${stream_link%\?*}"
+            chnl=${chnl##*/}
+
+            token_url=$(curl -s -Lm 10 \
+                -H "User-Agent: $user_agent" \
+                -H "${headers:0:-4}" \
+                "https://api.news.tvb.com/news/v2.2.1/live?profile=web" \
+                | $JQ_FILE -r '.items[]|select(.path=="'"$chnl"'" or .path=="'"${chnl#*_}"'" or .path=="'"${chnl%_*}"'").video.ios[]|select(.type=="hd").url')
+
+            if [ -z "$token_url" ] 
+            then
+                Println "$error 无法解析 tvb: token url\n"
+                return 0
+            fi
+
+            query_string="$token_url&feed&client_ip=$(GetServerIp)"
+            query_string=$(UrlencodeUpper "$query_string")
+
+            stream_link=$(curl -s -Lm 10 \
+                -H "User-Agent: $user_agent" \
+                -H "${headers:0:-4}" \
+                --cookie "$cookies" \
+                "https://news.tvb.com/ajax_call/getVideo.php?token=$query_string" \
+                | $JQ_FILE -r '.url')
+
+            if [ "$stream_link" == null ] 
+            then
+                Println "$error 无法解析 tvb: url\n"
+                return 0
+            fi
+
+            while IFS= read -r line 
+            do
+                if [[ $line =~ hdntl= ]] 
+                then
+                    line=${line#* }
+                    cookies="$cookies ${line%% *}"
+                    break
+                fi
+            done < <(curl -s -I -H "User-Agent: $user_agent" -H "${headers:0:-4}" --cookie "$cookies" "$stream_link" 2> /dev/null)
+        elif [[ $stream_link =~ ^https://embed\.4gtv\.tv/HiNet/(.+)\.html ]] 
+        then
+            OpensslInstall
+            Println "`eval_gettext \"\\\$info 解析 4gtv 链接 ...\"`"
+
+            hinet_4gtv=(
+                "litv-ftv13:民視新聞台"
+                "litv-longturn14:寰宇新聞台"
+                "4gtv-4gtv052:華視新聞資訊台"
+                "4gtv-4gtv012:空中英語教室"
+                "litv-ftv07:民視旅遊台"
+                "litv-ftv15:i-Fun動漫台"
+                "4gtv-live206:幸福空間居家台"
+                "4gtv-4gtv070:愛爾達娛樂台"
+                "litv-longturn17:亞洲旅遊台"
+                "4gtv-4gtv025:MTV Live HD"
+                "litv-longturn15:寰宇新聞台灣台"
+                "4gtv-4gtv001:民視台灣台"
+                "4gtv-4gtv074:中視新聞台"
+                "4gtv-4gtv011:影迷數位電影台"
+                "4gtv-4gtv047:靖天日本台"
+                "litv-longturn11:龍華日韓台"
+                "litv-longturn12:龍華偶像台"
+                "4gtv-4gtv042:公視戲劇"
+                "litv-ftv12:i-Fun動漫台3"
+                "4gtv-4gtv002:民視無線台"
+                "4gtv-4gtv027:CI 罪案偵查頻道"
+                "4gtv-4gtv013:CNEX紀實頻道"
+                "litv-longturn03:龍華電影台"
+                "4gtv-4gtv004:民視綜藝台"
+                "litv-longturn20:ELTV英語學習台"
+                "litv-longturn01:龍華卡通台"
+                "4gtv-4gtv040:中視無線台"
+                "litv-longturn02:Baby First"
+                "4gtv-4gtv003:民視第一台"
+                "4gtv-4gtv007:大愛電視台"
+                "4gtv-4gtv076:SMART 知識頻道"
+                "4gtv-4gtv030:CNBC"
+                "litv-ftv10:半島電視台"
+            )
+
+            stream_link_uri_name=${BASH_REMATCH[1]}
+
+            for channel in "${hinet_4gtv[@]}"
+            do
+                channel_id=${channel%%:*}
+                channel_name=${channel#*:}
+                channel_name_enc=$(Urlencode "$channel_name")
+                if [[ $channel_name_enc == "$stream_link_uri_name" ]] 
+                then
+                    user_agent="${user_agent:-$USER_AGENT_BROWSER}"
+                    headers="${headers:-Referer: https://embed.4gtv.tv/HiNet/$channel_name_enc.html?ar=0&as=1&volume=0\\r\\n}"
+                    cookies="${cookies:-}"
+                    stream_link_data=$(curl -s -Lm 10 \
+                    -H "User-Agent: $user_agent" \
+                    -H "${headers:0:-4}" \
+                    "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)") || true
+
+                    if [ -n "$stream_link_data" ] 
+                    then
+                        stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
+                        hexkey=$(echo -n "VxzAfiseH0AbLShkQOPwdsssw5KyLeuv" | hexdump -v -e '/1 "%02x"')
+                        hexiv=$(echo -n "${stream_link_data:0:16}" | hexdump -v -e '/1 "%02x"')
+                        stream_link_url=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+                        stream_link_url_path=${stream_link_url%/*}
+
+                        if ! Add4gtvLink
+                        then
+                            exit 1
+                        fi
+                    else
+                        Println "`eval_gettext \"\\\$error 无法连接 4gtv !\"`\n"
+                        exit 1
+                    fi
+                    break
+                fi
+            done
+        elif [[ $stream_link == *"4gtv.tv/"* ]] 
+        then
+            OpensslInstall
+            Println "`eval_gettext \"\\\$info 解析 4gtv 链接 ...\"`"
+            user_agent="${user_agent:-$USER_AGENT_BROWSER}"
+            headers="${headers:-Referer: ${stream_link%%|*}\\r\\n}"
+            cookies="${cookies:-}"
+            set_id=${stream_link#*channelSet_id=}
+            set_id=${set_id%%&*}
+            set_id=${set_id%%|*}
+            fsVALUE=""
+
+            if [ "$set_id" -eq 1 ] 
+            then
+                GetServiceAccs 4gtv
+                for((s_i=0;s_i<_4gtv_accs_count;s_i++));
+                do
+                    if [ -n "${_4gtv_accs_token[s_i]:-}" ] 
+                    then
+                        fsVALUE=${_4gtv_accs_token[s_i]}
+                        break
+                    fi
+                done
+            fi
+
+            fnCHANNEL_ID=${stream_link#*channel_id=}
+            fnCHANNEL_ID=${fnCHANNEL_ID%%&*}
+            fnCHANNEL_ID=${fnCHANNEL_ID%%|*}
+            fsASSET_ID=${stream_link#*asset_id=}
+            fsASSET_ID=${fsASSET_ID%%&*}
+            fsASSET_ID=${fsASSET_ID%%|*}
+            key="ilyB29ZdruuQjC45JhBBR7o2Z8WJ26Vg"
+            iv="JUMxvVMmszqUTeKn"
+            hexkey=$(echo -n $key | hexdump -v -e '/1 "%02x"')
+            hexiv=$(echo -n $iv | hexdump -v -e '/1 "%02x"')
+            post_data='{"fnCHANNEL_ID":'"$fnCHANNEL_ID"',"fsASSET_ID":"'"$fsASSET_ID"'","fsDEVICE_TYPE":"pc","clsIDENTITY_VALIDATE_ARUS":{"fsVALUE":"'"$fsVALUE"'"}}'
+            post_data=$(echo -n "$post_data" | openssl enc -aes-256-cbc -iv "$hexiv" -K "$hexkey" -a)
+
+            if [ -n "$fsVALUE" ] 
+            then
+                value="$(UrlencodeUpper ${post_data//[[:space:]]/})"
+            else
+                value="$(Urlencode ${post_data//[[:space:]]/})"
+            fi
+
+            for((try_i=0;try_i<10;try_i++));
+            do
+                stream_link_data=$(curl -s -Lm 10 \
+                -H "User-Agent: $user_agent" \
+                -H "${headers:0:-4}" \
+                --data "value=$value" \
+                "https://api2.4gtv.tv/Channel/GetChannelUrl3") || true
+                if [ -n "$stream_link_data" ] 
+                then
+                    break
+                fi
+            done
+
+            if [ -z "$stream_link_data" ] 
+            then
+                Println "`eval_gettext \"\\\$error 无法连接 4gtv !\"`\n" && exit 1
+            fi
+
+            stream_link_data=$($JQ_FILE -r '.Data' <<< "$stream_link_data")
+
+            if [ "$stream_link_data" == null ] 
+            then
+                Println "`eval_gettext \"\\\$error 此服务器 ip 不支持或频道不可用!\"`\n"
+            else
+                stream_link_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
+                    | $JQ_FILE -r '.flstURLs[0]')
+                stream_link_url_path=${stream_link_url%/*}
+
+                if ! Add4gtvLink
+                then
+                    exit 1
+                fi
+            fi
+        elif [[ $stream_link == http://*.macaulotustv.com/* ]] 
+        then
+            user_agent="${user_agent:-$USER_AGENT_BROWSER}"
+            headers="${headers:-Origin: http://www.macaulotustv.cc\\r\\nReferer: http://www.macaulotustv.cc/\\r\\n}"
+            cookies="${cookies:-}"
+        fi
+
+        Println "$info 使用输入源 ${stream_links[0]}"
+        inquirer list_input_index "自动检测" yn_options yn_options_index
+    fi
+
+    if [ "${stream_link_parsed:-false}" = true ] || [ "$yn_options_index" -eq 0 ] 
+    then
+        Println "$info 检测中..."
+
+        if [ -z "${FFMPEG:-}" ] 
+        then
+            FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+            FFMPEG="$FFMPEG_ROOT/ffmpeg"
+            FFPROBE="$FFMPEG_ROOT/ffprobe"
+        fi
+
+        ffprobe_command=()
+
+        if [ -n "$headers" ] 
+        then
+            printf -v headers_command '%b' "$headers"
+            ffprobe_command+=( -headers "$headers_command" )
+        fi
+
+        if [ -n "$cookies" ] 
+        then
+            printf -v cookies_command '%b' "${cookies//;/; path=\/;\\r\\n}; path=/;"
+            ffprobe_command+=( -cookies "$cookies_command" )
+        fi
+
+        if probe=$($FFPROBE -v quiet -print_format json -show_programs -show_streams -show_format -user_agent "$user_agent" \
+            ${ffprobe_command[@]+"${ffprobe_command[@]}"} -i "$stream_link") 
+        then
+            [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+
+            IFS=$'\004\t' read -r m_programs_program_id m_programs_program_num m_programs_streams_count m_programs_tags \
+            m_programs_streams_index m_streams_index m_streams_codec_name m_streams_codec_type m_streams_width m_streams_height \
+            m_streams_closed_captions m_streams_pix_fmt m_streams_field_order m_streams_r_frame_rate m_streams_channels \
+            m_streams_channel_layout m_streams_bit_rate m_streams_tags streams_count programs_count format_name \
+            m_format_tags < <(JQs flat_c "$probe" '' '. as $probe |
+            ($probe.programs // {} | if (.|type) == "string" then {} else . end) as $programs |
+            ($programs.streams // {} | if (.|type) == "string" then {} else . end) as $programs_streams |
+            ($probe.streams // {} | if (.|type) == "string" then {} else . end) as $streams |
+            ($probe.format // {} | if (.|type) == "string" then {} else . end) as $format |
+            reduce ({program_id,program_num,nb_streams}|keys_unsorted[]) as $key ([];
+                $programs[$key] as $val | if $val then
+                    . + [$val + "\u0002\u0004"]
+                else
+                    . + ["\u0004"]
+                end
+            ) + ($programs.tags | if . then
+                    [(with_entries(.value = .key + "\u0001" + (.value|tostring) + "\u0003\u0002")|join("")+"\u0004")]
+                else
+                    ["\u0004"]
+                end
+            ) + ($programs_streams.index | if . then
+                    [(. + "\u0003\u0004")]
+                else
+                    ["\u0004"]
+                end
+            ) + reduce ({index,codec_name,codec_type,width,height,closed_captions,pix_fmt,field_order,r_frame_rate,channels,channel_layout,bit_rate}|keys_unsorted[]) as $key ([];
+                $streams[$key] as $val | if $val then
+                    . + [$val + "\u0002\u0004"]
+                else
+                    . + ["\u0004"]
+                end
+            ) + ($streams.tags | if . then
+                    [(with_entries(.value = .key + "\u0001" + (.value|tostring) + "\u0003\u0002")|join("")+"\u0004")]
+                else
+                    ["\u0004"]
+                end
+            ) + reduce ({nb_streams,nb_programs,format_name}|keys_unsorted[]) as $key ([];
+                $format[$key] as $val | if $val then
+                    . + [$val + "\u0004"]
+                else
+                    . + ["\u0004"]
+                end
+            ) + ($format.tags | if . then
+                    [(with_entries(.value = .key + "\u0001" + (.value|tostring) + "\u0002")|join("")+"\u0004")]
+                else
+                    ["\u0004"]
+                end
+            )|@tsv' "${delimiters[@]}")
+
+            if [ "$streams_count" -gt 0 ] 
+            then
+                if [ "$format_name" == "hls" ]
+                then
+                    is_hls=true
+
+                    Println "$tip 输入源是多级索引列表的情况下可以选择是"
+                    inquirer list_input_index "解析 hls 一级索引列表" ny_options ny_options_index
+
+                    if [ "$ny_options_index" -eq 1 ] 
+                    then
+                        if ParseHlsPlaylist 
+                        then
+                            return 0
+                        fi
+                    fi
+                else
+                    is_hls=false
+                fi
+
+                IFS="${delimiters[1]}" read -r -a streams_index <<< "$m_streams_index"
+
+                streams_if_null=""
+                for stream_index in "${streams_index[@]}"
+                do
+                    streams_if_null="$streams_if_null${delimiters[1]}"
+                done
+
+                IFS="${delimiters[1]}" read -r -a streams_codec_name <<< "$m_streams_codec_name"
+                IFS="${delimiters[1]}" read -r -a streams_codec_type <<< "$m_streams_codec_type"
+                IFS="${delimiters[1]}" read -r -a streams_width <<< "${m_streams_width:-$streams_if_null}"
+                IFS="${delimiters[1]}" read -r -a streams_height <<< "${m_streams_height:-$streams_if_null}"
+                IFS="${delimiters[1]}" read -r -a streams_closed_captions <<< "${m_streams_closed_captions:-$streams_if_null}"
+                IFS="${delimiters[1]}" read -r -a streams_pix_fmt <<< "${m_streams_pix_fmt:-$streams_if_null}"
+                IFS="${delimiters[1]}" read -r -a streams_field_order <<< "${m_streams_field_order:-$streams_if_null}"
+                IFS="${delimiters[1]}" read -r -a streams_r_frame_rate <<< "$m_streams_r_frame_rate"
+                IFS="${delimiters[1]}" read -r -a streams_channels <<< "${m_streams_channels:-$streams_if_null}"
+                IFS="${delimiters[1]}" read -r -a streams_channel_layout <<< "${m_streams_channel_layout:-$streams_if_null}"
+                IFS="${delimiters[1]}" read -r -a streams_bit_rate <<< "${m_streams_bit_rate:-$streams_if_null}"
+                IFS="${delimiters[1]}" read -r -a streams_tags <<< "$m_streams_tags"
+                IFS="${delimiters[1]}" read -r -a format_tags <<< "$m_format_tags"
+
+                if [ -n "${format_tags:-}" ] 
+                then
+                    format_tags_list=""
+
+                    for format_tag in "${format_tags[@]}"
+                    do
+                        format_tags_list="$format_tags_list${format_tag//${delimiters[0]}/: }\n"
+                    done
+
+                    Println "格式标签:\n$format_tags_list"
+                fi
+
+                streams_program_id=()
+ 
+                if [ "$programs_count" -gt 0 ] 
+                then
+                    IFS="${delimiters[1]}" read -r -a programs_program_id <<< "$m_programs_program_id"
+                    IFS="${delimiters[1]}" read -r -a programs_program_num <<< "$m_programs_program_num"
+                    IFS="${delimiters[1]}" read -r -a programs_streams_count <<< "$m_programs_streams_count"
+                    IFS="${delimiters[1]}" read -r -a programs_tags <<< "$m_programs_tags"
+
+                    programs_tags_list=()
+
+                    if [ -n "${programs_tags:-}" ] 
+                    then
+                        for programs_tag in "${programs_tags[@]}"
+                        do
+                            programs_tag_key="${programs_tag%${delimiters[0]}*}"
+                            programs_tag_value="${programs_tag#*${delimiters[0]}}"
+
+                            IFS="${delimiters[2]}" read -r -a programs_tag_arr <<< "$programs_tag_value"
+
+                            for((programs_i=0;programs_i<${#programs_tag_arr[@]};programs_i++));
+                            do
+                                if [ -z "${programs_tag_arr[programs_i]}" ] 
+                                then
+                                    continue
+                                fi
+
+                                programs_tags_list[programs_i]="${programs_tags_list[programs_i]:-}$programs_tag_key: ${programs_tag_arr[programs_i]}\n"
+                            done
+                        done
+                    fi
+
+                    IFS="${delimiters[2]}" read -r -a programs_streams_index <<< "${m_programs_streams_index:-$programs_tags_if_null}"
+
+                    programs_list=""
+
+                    for((programs_i=0;programs_i<programs_count;programs_i++));
+                    do
+                        programs_list="$programs_list节目${programs_program_id[programs_i]} (${programs_program_num[programs_i]})\n${programs_tags_list[programs_i]:-}\n"
+                        program_streams_count="${programs_streams_count[programs_i]}"
+
+                        if [ "$program_streams_count" -eq 0 ] 
+                        then
+                            continue
+                        fi
+
+                        program_streams_index="${programs_streams_index[programs_i]}"
+
+                        IFS="${delimiters[1]}" read -r -a program_streams_indices <<< "$program_streams_index"
+
+                        for((program_streams_i=0;program_streams_i<program_streams_count;program_streams_i++));
+                        do
+                            stream_index="${program_streams_indices[program_streams_i]}"
+                            if ! [[ ${streams_program_id[stream_index]:-} =~ ,${programs_program_id[programs_i]}, ]] 
+                            then
+                                streams_program_id[stream_index]="${streams_program_id[stream_index]:-},${programs_program_id[programs_i]},"
+                            fi
+                        done
+                    done
+
+                    Println "$programs_list"
+                fi
+
+                streams_tags_list=()
+
+                if [ -n "${streams_tags:-}" ] 
+                then
+                    for streams_tag in "${streams_tags[@]}"
+                    do
+                        streams_tag_key="${streams_tag%${delimiters[0]}*}"
+                        streams_tag_value="${streams_tag#*${delimiters[0]}}"
+
+                        IFS="${delimiters[2]}" read -r -a streams_tag_arr <<< "$streams_tag_value"
+
+                        for((streams_i=0;streams_i<${#streams_tag_arr[@]};streams_i++));
+                        do
+                            if [ -z "${streams_tag_arr[streams_i]}" ] 
+                            then
+                                continue
+                            fi
+
+                            streams_tags_list[streams_i]="${streams_tags_list[streams_i]:-}$streams_tag_key: ${streams_tag_arr[streams_i]}\n"
+                        done
+                    done
+                fi
+
+                video_options=()
+                audio_options=()
+                subtitle_options=()
+
+                for((streams_i=0;streams_i<streams_count;streams_i++));
+                do
+                    if [ -n "${streams_tags_list[streams_i]:-}" ] 
+                    then
+                        streams_tags_list[streams_i]="流#$streams_i 标签:\n${streams_tags_list[streams_i]}\n"
+                    fi
+                    if [ -n "${streams_program_id[streams_i]:-}" ] 
+                    then
+                        streams_program_id[streams_i]="${streams_program_id[streams_i]//,,/,}"
+                        stream_program_id=" 节目${streams_program_id[streams_i]:1:-1}"
+                    else
+                        stream_program_id=""
+                    fi
+                    if [ "${streams_codec_type[streams_i]}" == "video" ] 
+                    then
+                        video_stream_indices+=("$streams_i")
+                        if [ "${streams_closed_captions[streams_i]}" -eq 1 ] 
+                        then
+                            closed_captions=" 硬字幕"
+                        else
+                            closed_captions=""
+                        fi
+                        video_options+=("#$streams_i ${streams_codec_name[streams_i]} ${streams_width[streams_i]}x${streams_height[streams_i]} ${streams_r_frame_rate[streams_i]}$closed_captions$stream_program_id")
+                    elif [ "${streams_codec_type[streams_i]}" == "audio" ] 
+                    then
+                        audio_stream_indices+=("$streams_i")
+                        if [ -n "${streams_bit_rate[streams_i]:-}" ] 
+                        then
+                            stream_bit_rate=" ${streams_bit_rate[streams_i]}bps"
+                        else
+                            stream_bit_rate=""
+                        fi
+                        audio_options+=("#$streams_i ${streams_codec_name[streams_i]} ${streams_channels[streams_i]}声道 ${streams_channel_layout[streams_i]}$stream_bit_rate$stream_program_id")
+                    elif [ "${streams_codec_type[streams_i]}" == "subtitle" ] 
+                    then
+                        subtitle_stream_indices+=("$streams_i")
+                        subtitle_options+=("#$streams_i ${streams_codec_name[streams_i]}$stream_program_id")
+                    else
+                        continue
+                    fi
+                done
+
+                if [ -n "${streams_tags:-}" ] 
+                then
+                    printf '%b' "${streams_tags_list[@]}"
+                fi
+
+                video_indices=()
+
+                if [ -n "${video_options:-}" ] 
+                then
+                    video_options_count="${#video_options[@]}"
+                    video_options+=("不选择")
+                    echo
+                    inquirer checkbox_input_indices "选择视频流" video_options video_options_indices
+
+                    for video_options_index in "${video_options_indices[@]}"
+                    do
+                        if [ "$video_options_index" -eq "$video_options_count" ] 
+                        then
+                            video_indices=()
+                            break
+                        fi
+                        video_indices+=("${video_stream_indices[video_options_index]}")
+                    done
+                fi
+
+                audio_indices=()
+
+                if [ -n "${audio_options:-}" ] 
+                then
+                    audio_options_count="${#audio_options[@]}"
+                    audio_options+=("不选择")
+                    echo
+                    inquirer checkbox_input_indices "选择音频流" audio_options audio_options_indices
+
+                    for audio_options_index in "${audio_options_indices[@]}"
+                    do
+                        if [ "$audio_options_index" -eq "$audio_options_count" ] 
+                        then
+                            audio_indices=()
+                            break
+                        fi
+                        audio_indices+=("${audio_stream_indices[audio_options_index]}")
+                    done
+                fi
+
+                subtitle_indices=()
+
+                if [ -n "${subtitle_options:-}" ] 
+                then
+                    subtitle_options_count="${#subtitle_options[@]}"
+                    subtitle_options+=("不选择")
+                    echo
+                    inquirer checkbox_input_indices "选择音频流" subtitle_options subtitle_options_indices
+
+                    for subtitle_options_index in "${subtitle_options_indices[@]}"
+                    do
+                        if [ "$subtitle_options_index" -eq "$subtitle_options_count" ] 
+                        then
+                            subtitle_indices=()
+                            break
+                        fi
+                        subtitle_indices+=("${subtitle_stream_indices[subtitle_options_index]}")
+                    done
+                fi
+
+                if [ -n "${video_indices:-}" ] 
+                then
+                    printf -v video_indices_list ',%s' "${video_indices[@]}"
+                    stream_links[0]="${stream_links[0]}|v:${video_indices_list:1}"
+                fi
+
+                if [ -n "${audio_indices:-}" ] 
+                then
+                    printf -v audio_indices_list ',%s' "${audio_indices[@]}"
+                    stream_links[0]="${stream_links[0]}|a:${audio_indices_list:1}"
+                fi
+
+                if [ -n "${subtitle_indices:-}" ] 
+                then
+                    printf -v subtitle_indices_list ',%s' "${subtitle_indices[@]}"
+                    stream_links[0]="${stream_links[0]}|s:${subtitle_indices_list:1}"
+                fi
+
+                return 0
+            fi
+        elif [ "${stream_link_parsed:-false}" = true ] 
+        then
+            return 1
+        fi
+
+        Println "$error 无法检测输入源, 请手动设置以下选项"
+    fi
+
+    SetIsHls
+
+    if [ "$is_hls" = true ] 
+    then
+        Println "$tip 输入源是多级索引列表的情况下可以选择是"
+        inquirer list_input_index "解析 hls 一级索引列表" ny_options ny_options_index
+
+        if [ "$ny_options_index" -eq 1 ] 
+        then
+            if ParseHlsPlaylist 
+            then
+                return 0
+            fi
+        fi
+    fi
+
+    SetVideoMap
+    SetAudioMap
+    SetSubtitleMap
+
+    if [ -n "${video_indices:-}" ] 
+    then
+        printf -v video_indices_list ',%s' "${video_indices[@]}"
+        stream_links[0]="${stream_links[0]}|v:${video_indices_list:1}"
+    fi
+
+    if [ -n "${audio_indices:-}" ] 
+    then
+        printf -v audio_indices_list ',%s' "${audio_indices[@]}"
+        stream_links[0]="${stream_links[0]}|a:${audio_indices_list:1}"
+    fi
+
+    if [ -n "${subtitle_indices:-}" ] 
+    then
+        printf -v subtitle_indices_list ',%s' "${subtitle_indices[@]}"
+        stream_links[0]="${stream_links[0]}|s:${subtitle_indices_list:1}"
+    fi
+}

@@ -1,0 +1,89 @@
+VipEditHost()
+{
+    VipListHosts
+    echo -e "选择 VIP 服务器"
+    while read -p "$i18n_default_cancel" vip_hosts_num
+    do
+        case "$vip_hosts_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$vip_hosts_num" -gt 0 ] && [ "$vip_hosts_num" -le "$vip_hosts_count" ]
+                then
+                    vip_hosts_index=$((vip_hosts_num-1))
+                    vip_host_ip=${vip_hosts_ip[vip_hosts_index]}
+                    vip_host_port=${vip_hosts_port[vip_hosts_index]}
+                    vip_host_seed=${vip_hosts_seed[vip_hosts_index]}
+                    vip_host_token=${vip_hosts_token[vip_hosts_index]}
+                    vip_host_status=${vip_hosts_status[vip_hosts_index]}
+                    if [ "$vip_host_status" == "on" ] 
+                    then
+                        vip_host_status_text="${green}启用${normal}"
+                    else
+                        vip_host_status_text="${red}禁用${normal}"
+                    fi
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "
+选择修改内容
+
+    ${green}1.${normal} 修改 IP/域名
+    ${green}2.${normal} 修改 端口
+    ${green}3.${normal} 修改 seed
+    ${green}4.${normal} 修改 token
+    ${green}5.${normal} 修改 状态
+
+"
+    read -p "$i18n_default_cancel" edit_vip_host_num
+
+    case $edit_vip_host_num in
+        1) 
+            Println "原 IP/域名: ${red}$vip_host_ip${normal}"
+            VipSetHostIp
+            jq_path='["hosts",'"$vip_hosts_index"',"ip"]'
+            JQ update "$VIP_FILE" "$vip_host_ip"
+            Println "$info IP/域名 修改成功\n"
+        ;;
+        2) 
+            Println "原端口: ${red}$vip_host_port${normal}"
+            VipSetHostPort
+            number=true
+            jq_path='["hosts",'"$vip_hosts_index"',"port"]'
+            JQ update "$VIP_FILE" "$vip_host_port"
+            Println "$info 端口 修改成功\n"
+        ;;
+        3) 
+            Println "原 seed: ${red}$vip_host_seed${normal}"
+            VipSetHostSeed
+            jq_path='["hosts",'"$vip_hosts_index"',"seed"]'
+            JQ update "$VIP_FILE" "$vip_host_seed"
+            Println "$info seed 修改成功\n"
+        ;;
+        4) 
+            Println "原 token: ${red}$vip_host_token${normal}"
+            VipSetHostToken
+            jq_path='["hosts",'"$vip_hosts_index"',"token"]'
+            JQ update "$VIP_FILE" "$vip_host_token"
+            Println "$info token 修改成功\n"
+        ;;
+        5) 
+            Println "原状态: $vip_host_status_text"
+            VipSetHostStatus
+            jq_path='["hosts",'"$vip_hosts_index"',"status"]'
+            JQ update "$VIP_FILE" "$vip_host_status"
+            Println "$info 状态修改成功\n"
+        ;;
+        *) Println "$i18n_canceled...\n" && exit 1
+        ;;
+    esac
+}

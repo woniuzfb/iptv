@@ -1,0 +1,46 @@
+V2rayNginxDomainServerAddProxy()
+{
+    V2rayListInbounds nginx
+    V2raySelectInbound
+
+    if [ "${inbounds_stream_network[inbounds_index]}" == "domainsocket" ] 
+    then
+        Println "$error 不能使用此入站\n"
+        exit 1
+    fi
+
+    if [ -z "${inbounds_stream_path[inbounds_index]}" ] 
+    then
+        Println "$error 此入站没有路径\n"
+        exit 1
+    fi
+
+    proxy_path=${inbounds_stream_path[inbounds_index]}
+    proxy_port=${inbounds_port[inbounds_index]}
+
+    if [ "${inbounds_stream_network[inbounds_index]}" == "ws" ] 
+    then
+        new_proxy='
+        {"directive":"location","args":["=","'"$proxy_path"'"],"block":[
+            {"directive":"proxy_redirect","args":["off"]},
+            {"directive":"proxy_pass","args":["http://127.0.0.1:'"$proxy_port"'"]},
+            {"directive":"proxy_http_version","args":["1.1"]},
+            {"directive":"proxy_set_header","args":["Upgrade","$http_upgrade"]},
+            {"directive":"proxy_set_header","args":["Connection","upgrade"]}
+        ]}'
+    else
+        new_proxy='
+        {"directive":"location","args":["=","'"$proxy_path"'"],"block":[
+            {"directive":"proxy_redirect","args":["off"]},
+            {"directive":"proxy_pass","args":["http://127.0.0.1:'"$proxy_port"'"]},
+            {"directive":"proxy_http_version","args":["1.1"]}
+        ]}'
+    fi
+
+    jq_path='["config",0,"parsed",0,"block",'"$v2ray_nginx_domain_servers_index"',"block"]'
+    JQs add parse_out "[$new_proxy]"
+
+    NginxBuildConf parse_out
+
+    Println "$info 代理添加成功\n"
+}

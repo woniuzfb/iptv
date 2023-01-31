@@ -1,0 +1,96 @@
+V2rayGetStats()
+{
+    IFS=$'`\t' read -r api_tag m_api_services < <($JQ_FILE -r '[(.api.tag + "`"),
+    (.api.services // []|join("|") + "`")]|@tsv' "$V2_CONFIG")
+
+    if [ -z "$api_tag" ] || [ -z "$m_api_services" ]
+    then
+        json=true
+        jq_path='["stats"]'
+        JQ update "$V2_CONFIG" "{}"
+        api='{
+            "tag": "api",
+            "services": [
+                "StatsService"
+            ]
+        }'
+        json=true
+        jq_path='["api"]'
+        JQ update "$V2_CONFIG" "$api"
+        if [ -z "$api_tag" ] 
+        then
+            api_tag="api"
+        fi
+    else
+        IFS="|" read -r -a api_services <<< "$m_api_services"
+        stats_service_found=0
+        for api_service in "${api_services[@]}"
+        do
+            if [ "$api_service" == "StatsService" ] 
+            then
+                stats_service_found=1
+                break
+            fi
+        done
+        if [ "$stats_service_found" -eq 0 ] 
+        then
+            jq_path='["api","services"]'
+            JQ add "$V2_CONFIG" ["StatsService"]
+        fi
+    fi
+
+    V2rayGetRouting
+
+    if [ "$routing_rules_count" -eq 0 ] 
+    then
+        Println "$error 请先添加一个路由: 入站协议为 dokodemo-door (需要创建此协议的入站), 出站标签是 $api_tag (不用创建出站)\n"
+        exit 1
+    else
+        routing_rule_found=0
+        for((i=0;i<routing_rules_count;i++));
+        do
+            if [ -n "${routing_rules_outbound_tag[i]}" ] 
+            then
+                IFS="|" read -r -a outbound_tags <<< "${routing_rules_outbound_tag[i]}"
+                for outbound_tag in "${outbound_tags[@]}"
+                do
+                    if [ "$outbound_tag" == "$api_tag" ] 
+                    then
+                        routing_rule_found=1
+                        api_inbound_tag=${routing_rules_inbound_tag[i]}
+                        break 2
+                    fi
+                done
+            fi
+        done
+        if [ "$routing_rule_found" -eq 0 ] || [ -z "${api_inbound_tag:-}" ]
+        then
+            Println "$error 请先添加协议为 dokodemo-door 的入站路由到标签是 $api_tag 的出站\n"
+            exit 1
+        fi
+    fi
+
+    V2rayListPolicy
+    V2rayGetInbounds
+
+    for((i=0;i<inbounds_count;i++));
+    do
+        if [ "${inbounds_tag[i]}" == "$api_inbound_tag" ] 
+        then
+            if [ "${inbounds_listen[i]}" == "0.0.0.0" ] 
+            then
+                api_inbound_listen="127.0.0.1"
+            else
+                api_inbound_listen=${inbounds_listen[i]}
+            fi
+            api_inbound_port=${inbounds_port[i]}
+            break
+        fi
+    done
+
+    if [ -z "${api_inbound_listen:-}" ] 
+    then
+        Println "$error 标签为 $api_inbound_tag 的入站不存在?\n"
+        exit 1
+    fi
+}

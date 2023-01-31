@@ -1,0 +1,74 @@
+NginxAddNodejs()
+{
+    proxy_cookie_domain=${server_name:-$(GetServerIp)}
+
+    directive_location_1='
+    {"directive":"location","args":["=","/"],"block":[
+        {"directive":"proxy_redirect","args":["off"]},
+        {"directive":"proxy_pass","args":["http://nodejs"]},
+        {"directive":"proxy_cache_bypass","args":["1"]},
+        {"directive":"proxy_no_cache","args":["1"]},
+        {"directive":"proxy_cookie_path","args":["/","/$samesite_none"]},
+        {"directive":"proxy_cookie_domain","args":["localhost","'"$proxy_cookie_domain"'"]}
+    ]}'
+
+    directive_location_2='
+    {"directive":"location","args":["=","/channels"],"block":[
+        {"directive":"proxy_redirect","args":["off"]},
+        {"directive":"proxy_pass","args":["http://nodejs"]},
+        {"directive":"proxy_cache_bypass","args":["1"]},
+        {"directive":"proxy_no_cache","args":["1"]}
+    ]}'
+
+    directive_location_3='
+    {"directive":"location","args":["=","/channels.json"],"block":[
+        {"directive":"return","args":["302","/channels"]}
+    ]}'
+
+    directive_location_4='
+    {"directive":"location","args":["=","/remote"],"block":[
+        {"directive":"proxy_redirect","args":["off"]},
+        {"directive":"proxy_pass","args":["http://nodejs"]},
+        {"directive":"proxy_cache_bypass","args":["1"]},
+        {"directive":"proxy_no_cache","args":["1"]},
+        {"directive":"proxy_cookie_path","args":["/","/$samesite_none"]},
+        {"directive":"proxy_cookie_domain","args":["localhost","'"$proxy_cookie_domain"'"]}
+    ]}'
+
+    directive_location_5='
+    {"directive":"location","args":["=","/remote.json"],"block":[
+        {"directive":"return","args":["302","/remote"]}
+    ]}'
+
+    directive_location_6='
+    {"directive":"location","args":["=","/keys"],"block":[
+        {"directive":"proxy_redirect","args":["off"]},
+        {"directive":"proxy_pass","args":["http://nodejs"]},
+        {"directive":"proxy_cache_bypass","args":["1"]},
+        {"directive":"proxy_no_cache","args":["1"]}
+    ]}'
+
+    directive_location_7='
+    {"directive":"location","args":["~","\\.(keyinfo|key)$"],"block":[
+        {"directive":"return","args":["403"]}
+    ]}'
+
+    directive_add_header_1='{"directive":"add_header","args":["Access-Control-Allow-Origin","$cors_host"]}'
+    directive_add_header_2='{"directive":"add_header","args":["Vary","Origin"]}'
+    directive_add_header_3='{"directive":"add_header","args":["X-Frame-Options","SAMEORIGIN"]}'
+    directive_add_header_4='{"directive":"add_header","args":["Access-Control-Allow-Credentials","true"]}'
+    directive_add_header_5='{"directive":"add_header","args":["Cache-Control","no-cache"]}'
+
+    directives=( location location location location location location location 
+        add_header add_header add_header add_header add_header location )
+    directives_val=( location_1 location_2 location_3 location_4 location_5 location_6 location_7 
+        add_header_1 add_header_2 add_header_3 add_header_4 add_header_5 )
+
+    check_directives=()
+    check_args=( '["=","/"]' '["=","/channels"]' '["=","/channels.json"]' '["=","/remote"]' 
+        '["=","/remote.json"]' '["=","/keys"]' '["~","\\.(keyinfo|key)$"]' '["Access-Control-Allow-Origin","$cors_host"]' 
+        '["Vary","Origin"]' '["X-Frame-Options","SAMEORIGIN"]' '["Access-Control-Allow-Credentials","true"]' 
+        '["Cache-Control","no-cache"]' )
+
+    NginxAddDirective 3
+}

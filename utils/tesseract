@@ -1,0 +1,22 @@
+TesseractInstall()
+{
+    if [[ -x $(command -v tesseract) ]] 
+    then
+        Println "$error tesseract 已存在!\n"
+        return 0
+    fi
+
+    DepsCheck
+
+    if [ "$dist" == "ubu" ] 
+    then
+        add-apt-repository ppa:alex-p/tesseract-ocr -y
+        AptUpdate
+        apt-get -y install tesseract
+    elif [ "$dist" == "deb" ] 
+    then
+        Println "$info 参考 https://notesalexp.org/tesseract-ocr/ ...\n"
+    else
+        Println "$info 参考 https://tesseract-ocr.github.io/tessdoc/Home.html ...\n"
+    fi
+}

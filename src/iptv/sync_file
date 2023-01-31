@@ -1,0 +1,154 @@
+SyncFile()
+{
+    if [ "$action" == "add" ] 
+    then
+        chnl_pid=$pid
+        i18nGetMsg get_channel
+        GetChannel
+    else
+        GetDefault
+    fi
+
+    chnl_sync_file=${chnl_sync_file:-$d_sync_file}
+    chnl_sync_index=${chnl_sync_index:-$d_sync_index}
+    chnl_sync_pairs=${chnl_sync_pairs:-$d_sync_pairs}
+
+    if [ "$chnl_sync" = true ] && [ -n "$chnl_sync_file" ] && [ -n "$chnl_sync_index" ] && [ -n "$chnl_sync_pairs" ]
+    then
+        IFS=" " read -ra chnl_sync_files <<< "$chnl_sync_file"
+        IFS=" " read -ra chnl_sync_indices <<< "$chnl_sync_index"
+
+        chnl_pid_key=${chnl_sync_pairs%%:pid*}
+        chnl_pid_key=${chnl_pid_key##*,}
+        sync_count=${#chnl_sync_files[@]}
+        [ "${#chnl_sync_indices[@]}" -lt "$sync_count" ] && sync_count=${#chnl_sync_indices[@]}
+
+        for((sync_i=0;sync_i<sync_count;sync_i++));
+        do
+            if [ ! -s "${chnl_sync_files[sync_i]}" ] 
+            then
+                $JQ_FILE -n --arg name "$(RandStr)" \
+                '{
+                    "ret": 0,
+                    "data": [
+                        {
+                            "name": $name
+                        }
+                    ]
+                }' > "${chnl_sync_files[sync_i]}"
+            fi
+
+            jq_index=""
+            jq_path="["
+
+            while IFS=':' read -ra index_arr
+            do
+                for a in "${index_arr[@]}"
+                do
+                    [ "$jq_path" != "[" ] && jq_path="$jq_path,"
+                    case $a in
+                        '') 
+                            Println "`eval_gettext \"\\\$error sync设置错误...\"`\n" && exit 1
+                        ;;
+                        *[!0-9]*)
+                            jq_index="$jq_index.$a"
+                            jq_path="$jq_path\"$a\""
+                        ;;
+                        *) 
+                            jq_index="${jq_index}[$a]"
+                            jq_path="${jq_path}$a"
+                        ;;
+                    esac
+                done
+            done <<< "${chnl_sync_indices[sync_i]}"
+
+            jq_path="$jq_path]"
+
+            if [ "$action" == "stop" ]
+            then
+                if [[ -n $($JQ_FILE "${jq_index}[]|select(.$chnl_pid_key==$chnl_pid)" "${chnl_sync_files[sync_i]}") ]] 
+                then
+                    JQ delete "${chnl_sync_files[sync_i]}" "$chnl_pid_key" "$chnl_pid"
+                fi
+            else
+                jq_channel_new=""
+
+                while IFS=',' read -ra index_arr
+                do
+                    for b in "${index_arr[@]}"
+                    do
+                        case $b in
+                            '') 
+                                Println "`eval_gettext \"\\\$error sync设置错误...\"`\n" && exit 1
+                            ;;
+                            *) 
+                                if [[ $b == *"="* ]] 
+                                then
+                                    key=${b%=*}
+                                    value=${b#*=}
+                                    if [[ $value =~ ^http ]]  
+                                    then
+                                        if [ -n "${kind:-}" ] 
+                                        then
+                                            if [ "$kind" == "flv" ] 
+                                            then
+                                                value="$chnl_flv_pull_link"
+                                            else
+                                                value=""
+                                            fi
+                                        elif [ -z "${master:-}" ] || [ "$master" -eq 1 ]
+                                        then
+                                            value="$value/$chnl_output_dir_name/${chnl_playlist_name}_master.m3u8"
+                                        else
+                                            value="$value/$chnl_output_dir_name/${chnl_playlist_name}.m3u8"
+                                        fi
+                                    fi
+                                else
+                                    key=${b%:*}
+                                    value=${b#*:}
+                                    value="chnl_$value"
+                                    if [ "$value" == "chnl_pid" ] 
+                                    then
+                                        if [ -n "${new_pid:-}" ] 
+                                        then
+                                            value=$new_pid
+                                        else
+                                            value=${!value}
+                                        fi
+                                    else 
+                                        value=${!value}
+                                    fi
+                                fi
+
+                                if [ -n "$jq_channel_new" ] 
+                                then
+                                    jq_channel_new="$jq_channel_new,"
+                                fi
+
+                                if [[ $value == *[!0-9]* ]] 
+                                then
+                                    jq_channel_new="$jq_channel_new\"$key\":\"$value\""
+                                else
+                                    jq_channel_new="$jq_channel_new\"$key\":$value"
+                                fi
+                            ;;
+                        esac
+                    done
+                done <<< "$chnl_sync_pairs"
+
+                if [ "$action" == "add" ] || [[ -z $($JQ_FILE "${jq_index}[]|select(.$chnl_pid_key==$chnl_pid)" "${chnl_sync_files[sync_i]}") ]]
+                then
+                    JQ add "${chnl_sync_files[sync_i]}" "[{$jq_channel_new}]"
+                else
+                    merge=true
+                    JQ update "${chnl_sync_files[sync_i]}" "$chnl_pid_key" "$chnl_pid" "{$jq_channel_new}"
+                fi
+            fi
+
+            jq_path=""
+        done
+
+        Println "`eval_gettext \"\\\$info 频道 [ \\\$chnl_channel_name ] sync 执行成功...\"`"
+    fi
+    action=""
+}

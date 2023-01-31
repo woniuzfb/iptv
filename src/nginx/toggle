@@ -1,0 +1,21 @@
+NginxToggle()
+{
+    echo
+    if [[ $(systemctl is-active $nginx_name) == "active" ]] 
+    then
+        ExitOnList y "`eval_gettext \"\\\$nginx_name 正在运行, 是否关闭\"`"
+
+        if [[ $(echo $SSH_CONNECTION | cut -d' ' -f3) == "127.0.0.1" ]] 
+        then
+            Println "$error 请使用非 $nginx_name 监听端口连接 ssh 后重试\n"
+            exit 1
+        fi
+        systemctl stop $nginx_name
+        Println "$info $nginx_name 已关闭\n"
+    else
+        ExitOnList y "`eval_gettext \"\\\$nginx_name 未运行, 是否开启\"`"
+
+        systemctl start $nginx_name
+        Println "$info $nginx_name 已开启\n"
+    fi
+}

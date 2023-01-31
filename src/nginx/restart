@@ -1,0 +1,23 @@
+NginxRestart()
+{
+    if ! $NGINX_FILE -t
+    then
+        Println "$error 请检查配置错误\n"
+        exit 1
+    fi
+    echo
+    nginx_actions=( '重载配置' '强制重启' )
+    inquirer list_input_index "选择操作" nginx_actions nginx_actions_index
+    if [ "$nginx_actions_index" -eq 0 ] 
+    then
+        nginx_action=reload-or-restart
+    else
+        nginx_action=restart
+    fi
+    if systemctl $nginx_action $nginx_name 
+    then
+        Println "$info $nginx_name 重启成功\n"
+    else
+        Println "$error $nginx_name 重启失败, 请检查配置\n"
+    fi
+}

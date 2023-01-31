@@ -1,0 +1,25 @@
+NginxSelectDomain()
+{
+    echo "选择域名"
+    while read -p "$i18n_default_cancel" nginx_domains_index
+    do
+        case "$nginx_domains_index" in
+            "")
+                Println "$i18n_canceled...\n"
+                exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$nginx_domains_index" -gt 0 ] && [ "$nginx_domains_index" -le "$nginx_domains_count" ]
+                then
+                    nginx_domains_index=$((nginx_domains_index-1))
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+}

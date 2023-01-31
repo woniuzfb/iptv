@@ -1,0 +1,72 @@
+CloudflareEditUser()
+{
+    CloudflareListUsers
+
+    if [ "$cf_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
+
+    echo -e "选择用户"
+    while read -p "$i18n_default_cancel" cf_users_num
+    do
+        case "$cf_users_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
+                then
+                    cf_users_index=$((cf_users_num-1))
+                    cf_user_email=${cf_users_email[cf_users_index]}
+                    cf_user_pass=${cf_users_pass[cf_users_index]}
+                    cf_user_token=${cf_users_token[cf_users_index]}
+                    cf_user_api_key=${cf_users_api_key[cf_users_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "请输入用户邮箱"
+    read -p "(默认: $cf_user_email): " cf_user_email_new
+    cf_user_email_new=${cf_user_email_new:-$cf_user_email}
+    Println "  用户邮箱: ${green} $cf_user_email_new ${normal}\n"
+
+    Println "请输入用户密码"
+    read -p "(默认: $cf_user_pass): " cf_user_pass_new
+    cf_user_pass_new=${cf_user_pass_new:-$cf_user_pass}
+    Println "  用户密码: ${green} $cf_user_pass_new ${normal}\n"
+
+    Println "请输入用户 Token"
+    read -p "(默认: ${cf_user_token:-$i18n_not_set}): " cf_user_token_new
+    cf_user_token_new=${cf_user_token_new:-$cf_user_token}
+    Println "  用户 Token: ${green} ${cf_user_token_new:-$i18n_not_set} ${normal}\n"
+
+    Println "请输入用户 Key"
+    read -p "(默认: ${cf_user_api_key:-$i18n_not_set}): " cf_user_api_key_new
+    cf_user_api_key_new=${cf_user_api_key_new:-$cf_user_api_key}
+    Println "  用户 Token: ${green} ${cf_user_api_key_new:-$i18n_not_set} ${normal}\n"
+
+    new_user=$(
+    $JQ_FILE -n --arg email "$cf_user_email_new" --arg pass "$cf_user_pass_new" \
+        --arg token "$cf_user_token_new" --arg key "$cf_user_api_key_new" \
+        '{
+            email: $email,
+            pass: $pass,
+            token: $token,
+            key: $key
+        }'
+    )
+
+    json=true
+    jq_path='["users",'"$cf_users_index"']'
+    JQ update "$CF_CONFIG" "$new_user"
+    Println "$info 用户修改成功\n"
+}

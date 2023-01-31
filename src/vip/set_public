@@ -1,0 +1,33 @@
+VipSetPublicRoot()
+{
+    Println "请输入公开目录, 比如 /usr/local/nginx/html 或 /usr/local/openresty/nginx/html"
+    read -p "(默认: 不公开): " vip_public_root
+    if [ -n "$vip_public_root" ] 
+    then
+        vip_public_root=${vip_public_root%\/}
+    fi
+    jq_path='["config","public_root"]'
+    JQ update "$VIP_FILE" "$vip_public_root"
+    Println "  VIP 公开目录: ${green} ${vip_public_root:-无} ${normal}\n"
+}
+
+VipSetPublicHost()
+{
+    Println "$tip 比如 http://localhost"
+    inquirer text_input "请输入公开目录的 域名 或者 IP 网址: " vip_public_host "$i18n_not_set"
+    if [ "$vip_public_host" == "$i18n_not_set" ] 
+    then
+        vip_public_host=""
+    fi
+    jq_path='["config","public_host"]'
+    JQ update "$VIP_FILE" "$vip_public_host"
+}
+
+VipConfig()
+{
+    VipSetPublicRoot
+    if [ -n "$vip_public_root" ] 
+    then
+        VipSetPublicHost
+    fi
+}

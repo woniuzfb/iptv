@@ -1,0 +1,651 @@
+JQInstall()
+{
+    [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
+
+    if [[ -x "$JQ_FILE" ]] 
+    then
+        return 0
+    fi
+
+    DepsCheck
+    ArchCheck
+
+    if grep -q "arm" <<< "$arch" 
+    then
+        if ! /usr/local/bin/jq -V > /dev/null 2>&1 
+        then
+            Println "`eval_gettext \"\\\$info 开始下载/安装 JQ...\"`"
+            cd ~
+            git clone https://github.com/stedolan/jq.git > /dev/null
+            cd jq
+            apt-get -y install flex bison libtool make automake autoconf > /dev/null
+            git submodule update --init > /dev/null
+            autoreconf -fi > /dev/null
+            ./configure --with-oniguruma=builtin > /dev/null
+            nproc="-j$(nproc 2> /dev/null)" || nproc=""
+            make $nproc > /dev/null
+            make install > /dev/null
+        fi
+        if [ "$JQ_FILE" != "/usr/local/bin/jq" ] 
+        then
+            rm -f "$JQ_FILE"
+            ln -sf /usr/local/bin/jq "$JQ_FILE"
+        fi
+        Println "`eval_gettext \"\\\$info JQ 安装完成\"`"
+    elif [ ! -e "$JQ_FILE" ] || ! $JQ_FILE -V > /dev/null 2>&1 
+    then
+        Println "`eval_gettext \"\\\$info 开始下载/安装 JQ...\"`"
+        #experimental# grep -Po '"tag_name": "jq-\K.*?(?=")'
+        if jq_ver=$(curl -s -m 10 "$FFMPEG_MIRROR_LINK/jq.json" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        then
+            if grep -q 64 <<< "$arch" 
+            then
+                jq_package="jq-linux64"
+            else
+                jq_package="jq-linux32"
+            fi
+            if curl -L "$FFMPEG_MIRROR_LINK/$jq_ver/$jq_package" -o "$JQ_FILE"
+            then
+                chmod +x "$JQ_FILE"
+                Println "`eval_gettext \"\\\$info JQ 安装完成\"`"
+            else
+                rm -f "$JQ_FILE"
+                Println "`eval_gettext \"\\\$error 下载 JQ 失败, 请重试 !\"`" && exit 1
+            fi
+        else
+            Println "`eval_gettext \"\\\$error 暂时无法连接服务器, 请稍后再试 !\"`" && exit 1
+        fi
+    else
+        Println "`eval_gettext \"\\\$info JQ 已安装\"`"
+    fi
+}
+
+JQ()
+{
+    local FILE TMP_FILE jq_args=() jq_commands=() slurp_arg
+
+    jq_path=${jq_path:-}
+    jq_path2=${jq_path2:-}
+
+    map_bool=${map_bool:-false}
+    map_string=${map_string:-false}
+    merge=${merge:-false}
+    json=${json:-false}
+    number=${number:-false}
+    bool=${bool:-false}
+    pre=${pre:-false}
+    file=${file:-false}
+    file_json=${file_json:-false}
+
+    [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
+
+    FILE=$2
+
+    if TMP_FILE=$(mktemp -q) 
+    then
+        chmod +r "$TMP_FILE"
+    else
+        printf -v TMP_FILE "${FILE}_%s" "$BASHPID"
+    fi
+
+    trap '
+        rm -f "$TMP_FILE"
+        rm -f "${TMP_FILE}_slurp"
+    ' EXIT
+
+    if [ -n "$jq_path" ] 
+    then
+        jq_args+=( --argjson path "$jq_path" )
+    fi
+
+    if [ -n "$jq_path2" ] 
+    then
+        jq_args+=( --argjson path2 "$jq_path2" )
+    fi
+
+    case $1 in
+        add)
+            if [ -n "$jq_path" ] 
+            then
+                jq_commands=( 'getpath($path)' )
+            fi
+
+            if [ -n "${4:-}" ] 
+            then
+                if [ -n "$jq_path" ] 
+                then
+                    jq_commands+=( '|=' )
+                fi
+
+                if [ -n "$jq_path2" ] 
+                then
+                    jq_commands+=( 'map((select(.[$key]==' )
+                else
+                    jq_commands+=( 'map(select(.[$key]==' )
+                fi
+
+                if [ "$map_bool" = true ] 
+                then
+                    jq_commands+=( '($value|test("true")))' )
+                elif [ "$map_string" = true ] 
+                then
+                    jq_commands+=( '$value)' )
+                else
+                    jq_commands+=( '($value|tonumber))' )
+                fi
+
+                if [ -n "$jq_path2" ] 
+                then
+                    jq_commands+=( '|getpath($path2))' )
+                fi
+
+                jq_args+=( --arg key "$3" --arg value "$4" )
+
+                if [ "$file" = true ] 
+                then
+                    slurp_arg=("$5"[@])
+                else
+                    jq_args+=( --argjson add "$5" )
+                fi
+
+                if [ "$pre" = true ] 
+                then
+                    jq_commands+=( '|=$add+.)' )
+                else
+                    jq_commands+=( '+=$add)' )
+                fi
+            else
+                if [ "$file" = true ] 
+                then
+                    slurp_arg=("$3"[@])
+                else
+                    jq_args+=( --argjson add "$3" )
+                fi
+
+                if [ "$pre" = true ] 
+                then
+                    jq_commands+=( '|=$add+.' )
+                else
+                    jq_commands+=( '+=$add' )
+                fi
+            fi
+
+            if [ "$file" = true ] 
+            then
+                jq_args+=( --slurpfile add "${TMP_FILE}_slurp" )
+
+                if [[ -z ${!slurp_arg:-} ]] 
+                then
+                    printf '%s' "" > "${TMP_FILE}_slurp"
+                elif [ "$file_json" = true ] 
+                then
+                    printf '%s\n' "${!slurp_arg//\\\\/\\}" > "${TMP_FILE}_slurp"
+                else
+                    printf '"%s"\n' "${!slurp_arg//\"/\\\"}" > "${TMP_FILE}_slurp"
+                fi
+            fi
+        ;;
+        update)
+            if [ -n "$jq_path" ] 
+            then
+                jq_commands=( 'getpath($path)' )
+            fi
+
+            if [ -n "${4:-}" ] 
+            then
+                if [ -n "$jq_path" ] 
+                then
+                    jq_commands+=( '|=' )
+                fi
+
+                if [ -n "$jq_path2" ] 
+                then
+                    jq_commands+=( 'map((select(.[$key]==' )
+                else
+                    jq_commands+=( 'map(select(.[$key]==' )
+                fi
+
+                if [ "$map_bool" = true ] 
+                then
+                    jq_commands+=( '($value|test("true")))' )
+                elif [ "$map_string" = true ] 
+                then
+                    jq_commands+=( '$value)' )
+                else
+                    jq_commands+=( '($value|tonumber))' )
+                fi
+
+                if [ -n "$jq_path2" ] 
+                then
+                    jq_commands+=( '|getpath($path2))' )
+                fi
+
+                jq_args+=( --arg key "$3" --arg value "$4" )
+
+                if [ "$file" = true ] 
+                then
+                    slurp_arg=("$5"[@])
+                elif [ "$json" = true ] || [ "$merge" = true ]
+                then
+                    jq_args+=( --argjson update "$5" )
+                else
+                    jq_args+=( --arg update "$5" )
+                fi
+
+                if [ "$merge" = true ] 
+                then
+                    jq_commands+=( '|=.*$update//.)' )
+                elif [ "$number" = true ] 
+                then
+                    jq_commands+=( '=($update|tonumber))' )
+                elif [ "$bool" = true ] 
+                then
+                    jq_commands+=( '=($update|test("true")))' )
+                else
+                    jq_commands+=( '=$update)' )
+                fi
+            else
+                if [ "$file" = true ] 
+                then
+                    slurp_arg=("$3"[@])
+                elif [ "$json" = true ] || [ "$merge" = true ]
+                then
+                    jq_args+=( --argjson update "$3" )
+                else
+                    jq_args+=( --arg update "$3" )
+                fi
+
+                if [ "$merge" = true ] 
+                then
+                    jq_commands+=( '|=.*$update//.' )
+                elif [ "$number" = true ] 
+                then
+                    jq_commands+=( '=($update|tonumber)' )
+                elif [ "$bool" = true ] 
+                then
+                    jq_commands+=( '=($update|test("true"))' )
+                else
+                    jq_commands+=( '=$update' )
+                fi
+            fi
+
+            if [ "$file" = true ] 
+            then
+                jq_args+=( --slurpfile update "${TMP_FILE}_slurp" )
+
+                if [[ -z ${!slurp_arg:-} ]] 
+                then
+                    printf '%s' "" > "${TMP_FILE}_slurp"
+                elif [ "$file_json" = true ] 
+                then
+                    printf '%s\n' "${!slurp_arg//\\\\/\\}" > "${TMP_FILE}_slurp"
+                else
+                    printf '"%s"\n' "${!slurp_arg//\"/\\\"}" > "${TMP_FILE}_slurp"
+                fi
+            fi
+        ;;
+        delete)
+            if [ -n "${3:-}" ] 
+            then
+                if [ -z "${5:-}" ] 
+                then
+                    jq_commands=( 'del(' )
+
+                    if [ -n "$jq_path" ] 
+                    then
+                        jq_commands+=( 'getpath($path)[]|' )
+                    else
+                        jq_commands+=( '.[]|' )
+                    fi
+
+                    if [ -n "$jq_path2" ] 
+                    then
+                        jq_commands+=( '(select(.[$key]==' )
+                    else
+                        jq_commands+=( 'select(.[$key]==' )
+                    fi
+                else
+                    if [ -n "$jq_path" ] 
+                    then
+                        jq_commands=( 'getpath($path)|=' )
+                    fi
+
+                    if [ -n "$jq_path2" ] 
+                    then
+                        jq_commands+=( 'map((select(.[$key]==' )
+                    else
+                        jq_commands+=( 'map(select(.[$key]==' )
+                    fi
+                fi
+
+                if [ "$map_bool" = true ] 
+                then
+                    jq_commands+=( '($value|test("true")))' )
+                elif [ "$map_string" = true ] 
+                then
+                    jq_commands+=( '$value)' )
+                else
+                    jq_commands+=( '($value|tonumber))' )
+                fi
+
+                if [ -n "$jq_path2" ] 
+                then
+                    jq_commands+=( '|getpath($path2))' )
+                fi
+
+                jq_args+=( --arg key "$3" --arg value "$4" )
+
+                if [ -n "${5:-}" ] 
+                then
+                    jq_args+=( --argjson delete "$5" )
+                    jq_commands+=( '-=$delete' )
+                fi
+
+                jq_commands+=( ')' )
+            else
+                jq_commands+=( 'del(getpath($path))' )
+            fi
+        ;;
+    esac
+
+    {
+        flock -x 200 || { MonitorErr "`eval_gettext \"\\\$FILE JQ fd 200 失败\"`"; exit 1; }
+
+        if ! $JQ_FILE "${jq_args[@]}" "${jq_commands[*]}" "$FILE" > "$TMP_FILE" || [ ! -s "$TMP_FILE" ]
+        then
+            [ ! -s "$TMP_FILE" ] && rm -f "$TMP_FILE"
+            MonitorLog "JQ ERROR!! action: $1, file: $FILE, tmp_file: $TMP_FILE, \$3: ${3:-none}, \$4: ${4:-none}, \$5: ${5:-none}"
+        else
+            mv "$TMP_FILE" "$FILE"
+        fi
+
+        rm -f "${TMP_FILE}_slurp"
+    } 200>"$FILE.lock"
+
+    trap - EXIT
+
+    jq_path=""
+    jq_path2=""
+
+    map_bool=false
+    map_string=false
+    merge=false
+    json=false
+    number=false
+    bool=false
+    pre=false
+    file=false
+    file_json=false
+}
+
+JQs()
+{
+    case $1 in
+        "get") 
+            read -r $3 < <($JQ_FILE -c --argjson path "$jq_path" 'getpath($path)' <<< "${!2}")
+            jq_path=""
+        ;;
+        "add") 
+            if [ "${4:-}" == "pre" ] 
+            then
+                read -r $2 < <($JQ_FILE -c --argjson path "${jq_path:-[]}" --argjson value "$3" 'getpath($path) |= $value + .' <<< "${!2}")
+            else
+                read -r $2 < <($JQ_FILE -c --argjson path "${jq_path:-[]}" --argjson value "$3" 'getpath($path) += $value' <<< "${!2}")
+            fi
+            jq_path=""
+        ;;
+        "update") 
+            if [ "${4:-}" == "number" ] 
+            then
+                read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" --arg value "$3" 'getpath($path) = ($value | tonumber)' <<< "${!2}")
+            else
+                read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" --arg value "$3" 'getpath($path) = $value' <<< "${!2}")
+            fi
+            jq_path=""
+        ;;
+        "replace") 
+            read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" --argjson value "$3" 'getpath($path) = $value' <<< "${!2}")
+            jq_path=""
+        ;;
+        "delete") 
+            if [ -z "${3:-}" ] 
+            then
+                read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" 'del(getpath($path))' <<< "${!2}")
+            else
+                read -r $2 < <($JQ_FILE -c --argjson path "$jq_path" --arg index "$3" 'del(getpath($path)[$index|tonumber])' <<< "${!2}")
+            fi
+            jq_path=""
+        ;;
+        "merge")
+            read -r $2 < <($JQ_FILE -c -s '
+            def merge(a;b):
+                reduce b[] as $item (a;
+                reduce ($item | keys_unsorted[]) as $key (.;
+                $item[$key] as $val | ($val | type) as $type | .[$key] = if ($type == "object") then
+                    merge({}; [if .[$key] == null then {} else .[$key] end, $val])
+                elif ($type == "array") then
+                    (.[$key] + $val | unique)
+                else
+                    $val
+                end)
+                );
+            merge({}; .)' <<< "${!2} $3")
+        ;;
+        "flat")
+            if [[ $2 =~ ^/ ]] 
+            then
+                jq_input=$(< $2)
+            else
+                jq_input="$2"
+            fi
+
+            $JQ_FILE --arg d1 "$5" --arg d2 "${6:-$5}" --arg d3 "${7:-$5}" --arg d4 "${8:-$5}" --arg d5 "${9:-$5}" --arg d6 "${10:-$5}" -r -c -s '
+            def flat(a;b;c;d;e;f;g):
+                a as $a | (a[0]| type) as $type | if ($type == "object") then
+                    ([a[] | keys_unsorted[]] | unique) as $keys | reduce a[] as $item ({};
+                    reduce($keys[]) as $key (.;
+                    $item[$key] as $val | ($val | type) as $type | (.[$key]) as $val2 | ($val2 | type) as $type2 | .[$key] = 
+                        if ($type == "object") then
+                            if ($type2 == "object") then
+                                flat([$val2,$val];c;d;e;f;g;b)
+                            elif ($val2) then
+                                if ($val == {}) then
+                                    $val2 + c
+                                else
+                                    (reduce($val2 | split(c)[]) as $item2 ([]; 
+                                        . + [{}]
+                                    )| if .== [] then [{}] else . end) as $x |
+                                    flat($x + [$val];b;c;d;e;f;g)
+                                end
+                            elif ($val == {}) then
+                                ""
+                            else
+                                flat([$val];b;c;d;e;f;g)
+                            end
+                        elif ($type == "array") then
+                            flat($val;b;c;d;e;f;g) as $val3 | 
+                            if ($type2 == "object") then
+                                flat([$val2,($val3|if .== "" then {} else . end)];c;d;e;f;g;b)
+                            elif ($val2) then
+                                if ($val3 == {}) then
+                                    $val2 + c
+                                elif ($val3 | type == "object") then
+                                    (reduce($val2 | split(c)[]) as $item2 ([]; 
+                                        . + [{}]
+                                    )| if .== [] then [{}] else . end) as $x |
+                                    flat($x + [$val3];c;d;e;f;g;b)
+                                else
+                                    $val2 + c + $val3
+                                end
+                            elif ($val3 == {}) then
+                                ""
+                            else
+                                $val3
+                            end
+                        elif ($type == "null") then
+                            if ($type2 == "object") then
+                                flat([$val2,{}];c;d;e;f;g;b)
+                            elif ($val2) then
+                                $val2 + c
+                            else
+                                ""
+                            end
+                        else
+                            if ($val2) then
+                                $val2 + c + ($val | tostring)
+                            else
+                                ($val | tostring)
+                            end
+                        end
+                    ))
+                elif ($type == "array") then
+                    flat([flat(a[];b;c;d;e;f;g)];b;c;d;e;f;g)
+                elif ($a == [""]) then
+                    "\"\""
+                else
+                    a|join(b)
+                end;
+            flat('"${3:-.}"';$d1;$d2;$d3;$d4;$d5;$d6)|'"$4"'' <<< "$jq_input"
+        ;;
+        "flat_c")
+            if [[ $2 =~ ^/ ]] 
+            then
+                jq_input=$(< $2)
+            else
+                jq_input="$2"
+            fi
+
+            $JQ_FILE --arg d1 "$5" --arg d2 "${6:-$5}" --arg d3 "${7:-$5}" --arg d4 "${8:-$5}" --arg d5 "${9:-$5}" --arg d6 "${10:-$5}" -r -c -s '
+            def flat(a;x;b;c;d;e;f;g):
+                a as $a | (a[0]| type) as $type | if ($type == "object") then
+                    ([a[] | keys_unsorted[]] | unique) as $keys | 
+
+                    (reduce a[] as $item ({};
+                        reduce($keys[]) as $key (.; ($item[$key]) as $val | ($val | type) as $type | (.[$key]) as $val2 | .[$key] = 
+                            if ($val and $val != [] and $val != {}) then
+                                if ($val2 and ($val2|.[-1:]) == [""]) then
+                                    $val2
+                                else
+                                    ($val2 // []) + [""]
+                                end
+                            else
+                                if ($val2) then
+                                    if ($val2|.[-1:] == [""]) then
+                                        $val2
+                                    else
+                                        $val2 + [{}]
+                                    end
+                                else
+                                    [{}]
+                                end
+                            end
+                        )
+                    )) as $blank | (reduce($keys[]) as $key ({};
+                        .[$key] = ($blank[$key] | .[:-1])
+                    )) as $blank |
+
+                    reduce a[] as $item ({};
+                    reduce($keys[]) as $key (.;
+                    $blank[$key] as $x | $item[$key] as $val | ($val | type) as $type | (.[$key]) as $val2 |($val2 | type) as $type2 | 
+                    .[$key] = 
+                        if ($type == "object") then
+                            if ($val2) then
+                                if ($type2 == "object") then
+                                    if (x == [""]) then
+                                        flat([$val2,$val];$x + [1];c;d;e;f;g;b)
+                                    else
+                                        flat([$val2,flat([$val];x;b;c;d;e;f;g)];x;c;d;e;f;g;b)
+                                    end
+                                elif ($val == {}) then
+                                    $val2 + c
+                                else
+                                    if (x|.[-1:] == [1]) then
+                                        flat(($x + (x | .[:-1]) + [$val]);$x + x;c;d;e;f;g;b)
+                                    else
+                                        flat(($x + [$val]);[];c;d;e;f;g;b)
+                                    end
+                                end
+                            else
+                                if ($val == {}) then
+                                    ""
+                                elif (x == [""]) then
+                                    $val
+                                else
+                                    flat([$val];[];b;c;d;e;f;g)
+                                end
+                            end
+                        elif ($type == "array") then
+                            if ($val[0] | type == "object") then
+                                if ($val2) then
+                                    if ($type2 == "object") then
+                                        $val2
+                                    else
+                                        ($a|index($item)) as $index | 
+                                        if ($a|length - $index == 1) then
+                                            flat(($x + [flat($val;$x;b;c;d;e;f;g)]);[];c;d;e;f;g;b)
+                                        else
+                                            flat(reduce($a|.[$index:]|.[]) as $obj ($x;
+                                                if ($obj[$key] and $obj[$key] != []) then
+                                                    . + [flat($obj[$key];[];b;c;d;e;f;g)]
+                                                else
+                                                    . + [{}]
+                                                end
+                                            );[""];c;d;e;f;g;b)
+                                        end
+                                    end
+                                else
+                                    ($a|index($item)) as $index | 
+                                    if ($a|length - $index == 1) then
+                                        flat($val;$x;b;c;d;e;f;g)
+                                    else
+                                        flat(reduce($a|.[$index:]|.[]) as $obj ([];
+                                            if ($obj[$key] and $obj[$key] != []) then
+                                                . + [flat($obj[$key];[];b;c;d;e;f;g)]
+                                            else
+                                                . + [{}]
+                                            end
+                                        );[""];c;d;e;f;g;b)
+                                    end
+                                end
+                            else
+                                if ($val2) then
+                                    if ($type2 == "object") then
+                                        $val2
+                                    else
+                                        $val2 + c + flat($val;$x;b;c;d;e;f;g)
+                                    end
+                                else
+                                    flat($val;$x;b;c;d;e;f;g)
+                                end
+                            end
+                        elif ($type == "null") then
+                            if ($type2 == "object") then
+                                if (x != [""] and (x|.[-1:] != [1])) then
+                                    $val2
+                                else
+                                    flat([$val2,{}];x;c;d;e;f;g;b)
+                                end
+                            elif ($val2) then
+                                $val2 + c
+                            else
+                                ""
+                            end
+                        else
+                            if ($val2) then
+                                $val2 + c + ($val | tostring)
+                            else
+                                ($val | tostring)
+                            end
+                        end
+                    ))
+                elif ($type == "array") then
+                    flat([flat(a[];x;b;c;d;e;f;g)];x;b;c;d;e;f;g)
+                elif ($a == [""]) then
+                    "\"\""
+                else
+                    a|join(b)
+                end;
+            flat('"${3:-.}"';[];$d1;$d2;$d3;$d4;$d5;$d6)|'"$4"'' <<< "$jq_input"
+        ;;
+    esac
+}

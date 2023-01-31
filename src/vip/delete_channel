@@ -1,0 +1,65 @@
+VipDelChannel()
+{
+    VipListChannels
+
+    if [ -z "${vip_hosts_index:-}" ] 
+    then
+        echo
+        inquirer list_input_index "清空所有频道" ny_options ny_options_index
+
+        if [ "$ny_options_index" -eq 1 ] 
+        then
+            for((vip_hosts_index=0;vip_hosts_index<vip_hosts_count;vip_hosts_index++));
+            do
+                json=true
+                jq_path='["hosts",'"$vip_hosts_index"',"channels"]'
+                JQ update "$VIP_FILE" []
+            done
+
+            Println "$info 频道清空成功\n"
+            return 0
+        fi
+
+        Println "$i18n_canceled...\n"
+        exit 0
+    fi
+
+    echo -e " ${green}$((vip_channels_count+1)).${normal}\r\033[7C全部删除\n"
+
+    while read -p "请选择频道: " vip_channels_num
+    do
+        if [ "$vip_channels_num" == $((vip_channels_count+1)) ] 
+        then
+            json=true
+            jq_path='["hosts",'"$vip_hosts_index"',"channels"]'
+            JQ update "$VIP_FILE" []
+
+            Println "$info 频道删除成功\n"
+            exit 0
+        fi
+        case "$vip_channels_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$vip_channels_num" -gt 0 ] && [ "$vip_channels_num" -le "$vip_channels_count" ]
+                then
+                    vip_channels_index=$((vip_channels_num-1))
+                    vip_channel_id=${vip_channels_id[vip_channels_index]}
+                    vip_channel_name=${vip_channels_name[vip_channels_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    jq_path='["hosts",'"$vip_hosts_index"',"channels",'"$vip_channels_index"']'
+    JQ delete "$VIP_FILE"
+
+    Println "频道 ${green}[ $vip_channel_name ]${normal} 删除成功\n"
+}

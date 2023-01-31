@@ -1,0 +1,34 @@
+CloudflareSetHostKey()
+{
+    Println "请输入 CFP host key"
+    read -p "$i18n_default_cancel" cf_host_key
+    [ -z "$cf_host_key" ] && Println "$i18n_canceled...\n" && exit 1
+    Println "$info 稍等..."
+    IFS=" " read -r result msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
+        -d 'act=zone_list' \
+        -d "host_key=$cf_host_key" \
+        -d 'limit=1' \
+        -d 'offset=0' \
+        -d 'zone_status=ALL' \
+        -d 'sub_status=ALL' \
+        | $JQ_FILE '[.result,.msg]|join(" ")'
+    ) || true
+
+    result=${result#\"}
+    msg=${msg%\"}
+
+    if [ -z "$result" ] || [ "$result" == "error" ]
+    then
+        Println "$error ${msg:-超时, 请重试}\n" && exit 1
+    fi
+
+    Println "  CFP: ${green} $cf_host_key ${normal}\n"
+}
+
+CloudflareSetHostName()
+{
+    Println "请输入 CFP 邮箱或名称, 便于区分 host key"
+    read -p "$i18n_default_cancel" cf_host_name
+    [ -z "$cf_host_name" ] && Println "$i18n_canceled...\n" && exit 1
+    Println "  CFP 邮箱或名称: ${green} $cf_host_name ${normal}\n"
+}

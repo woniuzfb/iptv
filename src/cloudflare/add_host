@@ -1,0 +1,24 @@
+CloudflareAddHost()
+{
+    CloudflareSetHostKey
+    CloudflareSetHostName
+
+    if [ ! -s "$CF_CONFIG" ] 
+    then
+        printf '{"%s":[],"%s":[]}' "users" "hosts" > "$CF_CONFIG"
+    fi
+
+    new_host=$(
+    $JQ_FILE -n --arg name "$cf_host_name" --arg key "$cf_host_key" \
+        '{
+            name: $name,
+            key: $key,
+            free: 0,
+            zones: []
+        }'
+    )
+
+    jq_path='["hosts"]'
+    JQ add "$CF_CONFIG" "[$new_host]"
+    Println "$info CFP 添加成功\n"
+}

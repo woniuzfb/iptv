@@ -1,0 +1,35 @@
+CloudflareGetHosts()
+{
+    cf_hosts_list=""
+    cf_hosts_count=0
+    cf_hosts_name=()
+    cf_hosts_key=()
+    cf_hosts_zones_count=()
+    cf_hosts_zone_name=()
+    cf_hosts_zone_resolve_to=()
+    cf_hosts_zone_user_email=()
+    cf_hosts_zone_user_unique_id=()
+    cf_hosts_zone_always_use_https=()
+    cf_hosts_zone_ssl=()
+    cf_hosts_zone_subdomains=()
+    while IFS="^" read -r name key zones_count zone_name zone_resolve_to zone_user_email zone_user_unique_id zone_always_use_https zone_ssl zone_subdomains
+    do
+        cf_hosts_count=$((cf_hosts_count+1))
+        name=${name#\"}
+        cf_hosts_name+=("$name")
+        cf_hosts_key+=("$key")
+        cf_hosts_zones_count+=("$zones_count")
+        cf_hosts_zone_name+=("$zone_name")
+        cf_hosts_zone_resolve_to+=("$zone_resolve_to")
+        cf_hosts_zone_user_email+=("$zone_user_email")
+        zone_user_unique_id=${zone_user_unique_id%\"}
+        cf_hosts_zone_user_unique_id+=("$zone_user_unique_id")
+        cf_hosts_zone_always_use_https+=("$zone_always_use_https")
+        cf_hosts_zone_ssl+=("$zone_ssl")
+        zone_subdomains=${zone_subdomains%\"}
+        cf_hosts_zone_subdomains+=("$zone_subdomains")
+
+        cf_hosts_list="$cf_hosts_list ${green}$cf_hosts_count.${normal}${indent_6}CFP: ${green}$name${normal}  host key: ${green}$key${normal}  域名数: ${green}$zones_count${normal}\n\n"
+    done < <($JQ_FILE '.hosts[]|[.name,.key,(.zones|length),([.zones[].name]|join("|")),([.zones[].resolve_to]|join("|")),([.zones[].user_email]|join("|")),([.zones[].user_unique_id]|join("|")),([.zones[].always_use_https]|join("|")),([.zones[].ssl]|join("|")),([.zones[].subdomains]|join("|"))]|join("^")' "$CF_CONFIG")
+    return 0
+}

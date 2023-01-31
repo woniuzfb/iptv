@@ -1,0 +1,42 @@
+V2rayGetPolicy()
+{
+    IFS=$'`\t' read -r m_levels_id m_levels_handshake m_levels_conn_idle m_levels_uplink_only \
+    m_levels_downlink_only m_levels_stats_user_uplink m_levels_stats_user_downlink \
+    m_levels_buffer_size policy_system_stats_inbound_uplink policy_system_stats_inbound_downlink \
+    policy_system_stats_outbound_uplink policy_system_stats_outbound_downlink < <($JQ_FILE -r '[
+    ([.policy.levels // {}|to_entries[]|.key|tostring|. + "^"]|join("") + "`"),
+    ([.policy.levels // {}|to_entries[]|.value.handshake // 4|tostring|. + "^"]|join("") + "`"),
+    ([.policy.levels // {}|to_entries[]|.value.connIdle // 300|tostring|. + "^"]|join("") + "`"),
+    ([.policy.levels // {}|to_entries[]|.value.uplinkOnly // 2|tostring|. + "^"]|join("") + "`"),
+    ([.policy.levels // {}|to_entries[]|.value.downlinkOnly // 5|tostring|. + "^"]|join("") + "`"),
+    ([.policy.levels // {}|to_entries[]|.value.statsUserUplink // false|tostring|. + "^"]|join("") + "`"),
+    ([.policy.levels // {}|to_entries[]|.value.statsUserDownlink // false|tostring|. + "^"]|join("") + "`"),
+    ([.policy.levels // {}|to_entries[]|.value.bufferSize // 512|tostring|. + "^"]|join("") + "`"),
+    (.policy.system.statsInboundUplink // false|tostring|. + "`"),
+    (.policy.system.statsInboundDownlink // false|tostring|. + "`"),
+    (.policy.system.statsOutboundUplink // false|tostring|. + "`"),
+    (.policy.system.statsOutboundDownlink // false|tostring|. + "`")]|@tsv' "$V2_CONFIG")
+
+    if [ -n "$m_levels_id" ] 
+    then
+        IFS="^" read -r -a policy_levels_id <<< "$m_levels_id"
+        policy_levels_count=${#policy_levels_id[@]}
+
+        if_null=""
+
+        for((policy_levels_i=0;policy_levels_i<policy_levels_count;policy_levels_i++));
+        do
+            if_null="$if_null^"
+        done
+
+        IFS="^" read -r -a policy_levels_handshake <<< "${m_levels_handshake:-$if_null}"
+        IFS="^" read -r -a policy_levels_conn_idle <<< "${m_levels_conn_idle:-$if_null}"
+        IFS="^" read -r -a policy_levels_uplink_only <<< "${m_levels_uplink_only:-$if_null}"
+        IFS="^" read -r -a policy_levels_downlink_only <<< "${m_levels_downlink_only:-$if_null}"
+        IFS="^" read -r -a policy_levels_stats_user_uplink <<< "${m_levels_stats_user_uplink:-$if_null}"
+        IFS="^" read -r -a policy_levels_stats_user_downlink <<< "${m_levels_stats_user_downlink:-$if_null}"
+        IFS="^" read -r -a policy_levels_buffer_size <<< "${m_levels_buffer_size:-$if_null}"
+    else
+        policy_levels_count=0
+    fi
+}

@@ -1,0 +1,75 @@
+V2rayListRouting()
+{
+    V2rayGetRouting
+    if [ "$routing_rules_count" -eq 0 ] 
+    then
+        routing_rules_list="路由规则列表: ${red}无${normal}\n\n"
+    else
+        routing_rules_list="路由规则列表: \n"
+        for((routing_rules_i=0;routing_rules_i<routing_rules_count;routing_rules_i++));
+        do
+            routing_rules_list="$routing_rules_list\n$((routing_rules_i+1)). 类型: ${green}${routing_rules_type[routing_rules_i]}${normal}\n"
+            if [ -n "${routing_rules_protocol[routing_rules_i]}" ] 
+            then
+                routing_rules_list="$routing_rules_list匹配入站协议: ${green}${routing_rules_protocol[routing_rules_i]}${normal}\n"
+            fi
+            if [ -n "${routing_rules_inbound_tag[routing_rules_i]}" ] 
+            then
+                routing_rules_list="$routing_rules_list匹配入站标签: ${green}${routing_rules_inbound_tag[routing_rules_i]}${normal}\n"
+            fi
+            if [ -n "${routing_rules_outbound_tag[routing_rules_i]}" ] 
+            then
+                routing_rules_list="$routing_rules_list匹配出站标签: ${green}${routing_rules_outbound_tag[routing_rules_i]}${normal}\n"
+            fi
+            if [ -n "${routing_rules_balancer_tag[routing_rules_i]}" ] 
+            then
+                routing_rules_list="$routing_rules_list匹配负载均衡器标签: ${green}${routing_rules_balancer_tag[routing_rules_i]}${normal}\n"
+            fi
+            routing_rules_list="$routing_rules_list匹配连接方式: ${green}${routing_rules_network[routing_rules_i]:-tcp,udp}${normal}\n"
+            if [ -n "${routing_rules_domain[routing_rules_i]}" ] 
+            then
+                routing_rules_list="$routing_rules_list匹配域名: ${green}${routing_rules_domain[routing_rules_i]}${normal}\n"
+            fi
+            if [ -n "${routing_rules_source[routing_rules_i]}" ] 
+            then
+                routing_rules_list="$routing_rules_list匹配来源 IP: ${green}${routing_rules_source[routing_rules_i]}${normal}\n"
+            fi
+            if [ -n "${routing_rules_source_port[routing_rules_i]}" ] 
+            then
+                routing_rules_list="$routing_rules_list匹配来源端口: ${green}${routing_rules_source_port[routing_rules_i]}${normal}\n"
+            fi
+            if [ -n "${routing_rules_ip[routing_rules_i]}" ] 
+            then
+                routing_rules_list="$routing_rules_list匹配目标 IP: ${green}${routing_rules_ip[routing_rules_i]}${normal}\n"
+            fi
+            if [ -n "${routing_rules_port[routing_rules_i]}" ] 
+            then
+                routing_rules_list="$routing_rules_list匹配目标端口: ${green}${routing_rules_port[routing_rules_i]}${normal}\n"
+            fi
+            if [ -n "${routing_rules_user[routing_rules_i]}" ] 
+            then
+                routing_rules_list="$routing_rules_list匹配用户邮箱: ${green}${routing_rules_user[routing_rules_i]}${normal}\n"
+            fi
+            if [ -n "${routing_rules_attrs[routing_rules_i]}" ] 
+            then
+                routing_rules_list="${routing_rules_list}starlark 脚本: ${green}${routing_rules_attrs[routing_rules_i]}${normal}\n"
+            fi
+        done
+    fi
+    if [ "$routing_balancers_count" -eq 0 ] 
+    then
+        routing_balancers_list="负载均衡器列表: ${red}无${normal}\n"
+    else
+        routing_balancers_list="负载均衡器列表: \n\n"
+        for((routing_balancers_i=0;routing_balancers_i<routing_balancers_count;routing_balancers_i++));
+        do
+            routing_balancers_list="$routing_balancers_list$((routing_balancers_i+1)). 负载均衡器标签: ${green}${routing_balancers_tag[routing_balancers_i]}${normal}\n"
+            if [ -n "${routing_balancers_selector[routing_balancers_i]}" ] 
+            then
+                routing_balancers_list="$routing_balancers_list匹配出站标签字符串: ${green}${routing_balancers_selector[routing_balancers_i]//|/,}${normal}\n"
+            fi
+        done
+    fi
+    routing_list="域名解析策略: ${green}${routing_domain_strategy:-AsIs}${normal}\n\n$routing_rules_list\n$routing_balancers_list"
+    Println "$routing_list\n"
+}

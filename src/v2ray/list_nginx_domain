@@ -1,0 +1,125 @@
+V2rayNginxListDomain()
+{
+    if [ "$v2ray_nginx_domains_count" -eq 0 ] 
+    then
+        Println "$error 请先使用 $nginx_name 管理面板添加域名\n"
+        exit 1
+    fi
+
+    level_1_add_indices=( 0 )
+
+    V2rayNginxSelectDomain
+    NginxParseConfig ${v2ray_nginx_domains[v2ray_nginx_domains_index]}
+    NginxGetConfig
+
+    if [ "$level_3_d1_count" -eq 0 ] 
+    then
+        Println "$error 请先添加 ${v2ray_nginx_domains[v2ray_nginx_domains_index]} 配置\n"
+        exit 1
+    fi
+
+    v2ray_nginx_domain_servers_list=""
+    v2ray_nginx_domain_servers_count=0
+    v2ray_nginx_domain_servers_indices=()
+    v2ray_nginx_domain_servers_name=()
+    v2ray_nginx_domain_servers_proxy=()
+
+    level_1_index=0
+
+    level_2_directive_d1=${level_2_directive_arr[level_1_index]}
+    level_3_directive_d1=${level_3_directive_arr[level_1_index]}
+    level_3_args_d1=${level_3_args_arr[level_1_index]}
+
+    IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
+    IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+    IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+
+    if [ "$level_4_d1_count" -gt 0 ] 
+    then
+        level_4_directive_d1=${level_4_directive_arr[level_1_index]}
+        level_4_args_d1=${level_4_args_arr[level_1_index]}
+        IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
+        IFS="${delimiters[3]}" read -r -a level_4_args_d1_arr <<< "$level_4_args_d1${delimiters[3]}"
+    fi
+
+    for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
+    do
+        if [ "${level_2_directive_d1_arr[level_2_index]}" == "server" ] 
+        then
+            level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
+            level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
+
+            IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
+            IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+
+            if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ]
+            then
+                level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
+                level_4_args_d2=${level_4_args_d1_arr[level_2_index]}
+                IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
+                IFS="${delimiters[2]}" read -r -a level_4_args_d2_arr <<< "$level_4_args_d2${delimiters[2]}"
+            fi
+
+            v2ray_nginx_domain_servers_count=$((v2ray_nginx_domain_servers_count+1))
+            v2ray_nginx_domain_servers_indices+=("$level_2_index")
+            v2ray_nginx_domain_server_listen_list=""
+            v2ray_nginx_domain_server_name_list=""
+            v2ray_nginx_domain_server_proxies=""
+            v2ray_nginx_domain_server_proxies_list=""
+
+            for((level_3_index=0;level_3_index<${#level_3_directive_d2_arr[@]};level_3_index++));
+            do
+                level_3_directive=${level_3_directive_d2_arr[level_3_index]}
+                level_3_args=${level_3_args_d2_arr[level_3_index]}
+
+                if [ "$level_3_directive" == "listen" ] 
+                then
+                    [ -n "$v2ray_nginx_domain_server_listen_list" ] && v2ray_nginx_domain_server_listen_list="$v2ray_nginx_domain_server_listen_list, "
+                    v2ray_nginx_domain_server_listen_list="$v2ray_nginx_domain_server_listen_list${level_3_args//${delimiters[0]}/ }"
+                elif [ "$level_3_directive" == "server_name" ] 
+                then
+                    [ -n "$v2ray_nginx_domain_server_name_list" ] && v2ray_nginx_domain_server_name_list="$v2ray_nginx_domain_server_name_list, "
+                    v2ray_nginx_domain_server_name_list="$v2ray_nginx_domain_server_name_list${level_3_args//${delimiters[0]}/, }"
+                elif [ "$level_3_directive" == "location" ] 
+                then
+                    if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d2_arr[level_3_index]}" ]
+                    then
+                        level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
+                        level_4_args_d3=${level_4_args_d2_arr[level_3_index]}
+                        IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
+                        IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3${delimiters[1]}"
+
+                        if [[ ${level_3_args} =~ ^=${delimiters[0]}(.+) ]] 
+                        then
+                            v2ray_nginx_domain_server_proxy_path=${BASH_REMATCH[1]}
+                            for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
+                            do
+                                if [ "${level_4_directive_d3_arr[level_4_index]}" == "proxy_pass" ] 
+                                then
+                                    if [[ ${level_4_args_d3_arr[level_4_index]} =~ ^http://127.0.0.1:(.+) ]] 
+                                    then
+                                        v2ray_nginx_domain_server_proxies="$v2ray_nginx_domain_server_proxies$level_3_index|$level_4_index|${BASH_REMATCH[1]}|$v2ray_nginx_domain_server_proxy_path "
+                                        v2ray_nginx_domain_server_proxies_list="$v2ray_nginx_domain_server_proxies_list${indent_6}路径: ${green}$v2ray_nginx_domain_server_proxy_path${normal} => $v2ray_name 端口: ${green}${BASH_REMATCH[1]}${normal}\n"
+                                    fi
+                                    break
+                                fi
+                            done
+                        fi
+                    fi
+                fi
+            done
+
+            if [ -z "$v2ray_nginx_domain_server_proxies_list" ] 
+            then
+                v2ray_nginx_domain_server_proxies_list="${red}未配置${normal}"
+            fi
+
+            v2ray_nginx_domain_servers_name+=("${v2ray_nginx_domain_server_name_list//, /,}")
+            v2ray_nginx_domain_servers_proxy+=("$v2ray_nginx_domain_server_proxies")
+
+            v2ray_nginx_domain_servers_list="$v2ray_nginx_domain_servers_list $v2ray_nginx_domain_servers_count.${indent_6}域名: ${green}${v2ray_nginx_domain_server_name_list:-未设置}${normal}\n${indent_6}端口: ${green}${v2ray_nginx_domain_server_listen_list:-未设置}${normal}\n${indent_6}代理: $v2ray_nginx_domain_server_proxies_list\n\n"
+        fi
+    done
+
+    Println "域名 ${green}${v2ray_nginx_domains[v2ray_nginx_domains_index]}${normal} 配置:\n\n$v2ray_nginx_domain_servers_list"
+}

@@ -1,0 +1,39 @@
+VipListUserChannel()
+{
+    if [ ! -s "$VIP_FILE" ] 
+    then
+        Println "$error 请先输入授权码, 加微信 woniuzfb 或 tg @ woniuzfb\n"
+    else
+        VipGetUsers
+        printf -v now '%(%s)T' -1
+        vip_users_list=""
+        for((i=0;i<vip_users_count;i++));
+        do
+            vip_user_ip=${vip_users_ip[i]}
+            vip_user_license=${vip_users_license[i]}
+            vip_user_expire=${vip_users_expire[i]}
+            vip_user_name=${vip_users_name[i]}
+
+            if [ "$vip_user_expire" -gt 0 ] 
+            then
+                expire_text=$(date +%c --date=@"$vip_user_expire")
+            else
+                expire_text="无"
+            fi
+            if [ "$now" -lt "$vip_user_expire" ] || [ "$vip_user_expire" -eq 0 ]
+            then
+                vip_users_list="$vip_users_list ${green}$((i+1)).${normal}${indent_6}用户名: ${green}$vip_user_name${normal}  ip: ${green}$vip_user_ip${normal}  到期日: ${green}$expire_text${normal}\n${indent_6}授权码: ${green}$vip_user_license${normal}\n${indent_6}m3u 播放链接: ${green}${FFMPEG_MIRROR_LINK%/*}/vip/$vip_user_license/playlist.m3u${normal}\n\n"
+            fi
+        done
+
+        if [ -n "$vip_users_list" ] 
+        then
+            Println "$vip_users_list"
+        elif [ "$vip_users_count" -eq 0 ] 
+        then
+            Println "$error 授权码不存在, 请联系微信 woniuzfb 或 tg @ woniuzfb\n"
+        else
+            Println "$error 授权码已过期, 请联系微信 woniuzfb 或 tg @ woniuzfb\n"
+        fi
+    fi
+}

@@ -1,0 +1,306 @@
+VipAddChannel()
+{
+    echo
+    add_vip_channel_options=( '选择频道' '手动输入频道' )
+    inquirer list_input_index "添加方式" add_vip_channel_options add_vip_channel_options_index
+
+    if [ "$add_vip_channel_options_index" -eq 0 ] 
+    then
+        if [ ! -f "$IPTV_ROOT/VIP" ] 
+        then
+            Println "$info 获取频道中..."
+            if ! curl -s -L "$VIP_CHANNELS_LINK" -o "${VIP_CHANNELS_FILE}_tmp"
+            then
+                if [ ! -s "$VIP_CHANNELS_FILE" ] 
+                then
+                    Println "$error 暂时无法获取频道, 请稍后再试\n"
+                    exit 1
+                fi
+                Println "$error 更新频道失败, 使用原有频道\n"
+            else
+                mv "${VIP_CHANNELS_FILE}_tmp" "$VIP_CHANNELS_FILE"
+            fi
+        fi
+
+        [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+
+        EXIT_STATUS=0
+
+        IFS=$'\003\t' read -r m_name m_url < <(JQs flat "$VIP_CHANNELS_FILE" '.[0]|map(select(.url // ""|test("http://?.*";"i")))' '. as $channels |
+        reduce ({name,url}|keys_unsorted[]) as $key ([];
+            $channels[$key] as $val | if $val then
+                . + [$val + "\u0002\u0003"]
+            else
+                . + ["\u0003"]
+            end
+        )|@tsv' "${delimiters[@]}") || EXIT_STATUS=$?
+
+        if [ "$EXIT_STATUS" -ne 0 ] || [ -z "$m_name" ]
+        then
+            Println "$error 没有找到频道\n"
+            exit 1
+        fi
+
+        IFS="${delimiters[1]}" read -r -a vip_channels_name <<< "$m_name"
+        IFS="${delimiters[1]}" read -r -a vip_channels_url <<< "$m_url"
+
+        vip_channels_host_ip=()
+        vip_channels_host_port=()
+        vip_channels_id=()
+
+        for vip_channel_url in "${vip_channels_url[@]}"
+        do
+            if [ -n "$vip_channel_url" ] && [[ $vip_channel_url =~ ^http://?([^/]+):([^/]+)/([^/]+) ]]
+            then
+                vip_channels_host_ip+=("${BASH_REMATCH[1]}")
+                vip_channels_host_port+=("${BASH_REMATCH[2]}")
+                vip_channels_id+=("${BASH_REMATCH[3]}")
+            fi
+        done
+
+        vip_channels_list=""
+        vip_channels_count=${#vip_channels_id[@]}
+        vip_channels_epg_id=("${vip_channels_id[@]}")
+
+        flag=0
+        for((i=0;i<vip_channels_count;i++));
+        do
+            if [ "$flag" -eq 0 ] 
+            then
+                flag=1
+                i_last=$i
+                vip_channels_list="$vip_channels_list ${green}$((i+1)).${normal}\r\033[7C${vip_channels_name[i]}"
+            else
+                flag=0
+                vip_channels_list="$vip_channels_list\r\033[40C${green}$((i+1)).${normal}\r\033[47C${vip_channels_name[i]}\n\033[7C频道ID: ${vip_channels_id[i_last]}\r\033[47C频道ID: ${vip_channels_id[i]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-无}\r\033[47CEPG ID: ${vip_channels_epg_id[i]:-无}\n\n"
+            fi
+        done
+
+        if [ "$flag" -eq 1 ] 
+        then
+            vip_channels_list="$vip_channels_list\n\033[7C频道ID: ${vip_channels_id[i_last]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-无}\n\n"
+        fi
+
+        Println "$vip_channels_list"
+
+        echo -e "$tip 多个频道用空格分隔, 比如 5 7 9-11"
+        while read -p "请选择频道: " vip_channels_num
+        do
+            [ -z "$vip_channels_num" ] && Println "$i18n_canceled...\n" && exit 1
+            IFS=" " read -ra vip_channels_num_arr <<< "$vip_channels_num"
+
+            error_no=0
+            for vip_channel_num in "${vip_channels_num_arr[@]}"
+            do
+                case "$vip_channel_num" in
+                    *"-"*)
+                        vip_channel_num_start=${vip_channel_num%-*}
+                        vip_channel_num_end=${vip_channel_num#*-}
+                        if [[ $vip_channel_num_start == *[!0-9]* ]] || [[ $vip_channel_num_end == *[!0-9]* ]] || [ "$vip_channel_num_start" -eq 0 ] || [ "$vip_channel_num_end" -eq 0 ] || [ "$vip_channel_num_end" -gt "$vip_channels_count" ] || [ "$vip_channel_num_start" -ge "$vip_channel_num_end" ]
+                        then
+                            error_no=3
+                            break
+                        fi
+                    ;;
+                    *[!0-9]*)
+                        error_no=1
+                        break
+                    ;;
+                    *)
+                        if [ "$vip_channel_num" -lt 1 ] || [ "$vip_channel_num" -gt "$vip_channels_count" ] 
+                        then
+                            error_no=2
+                            break
+                        fi
+                    ;;
+                esac
+            done
+
+            case "$error_no" in
+                1|2|3)
+                    Println "$error $i18n_input_correct_number\n"
+                ;;
+                *)
+                    declare -a new_array
+                    for element in "${vip_channels_num_arr[@]}"
+                    do
+                        if [[ $element =~ - ]] 
+                        then
+                            start=${element%-*}
+                            end=${element#*-}
+                            for((i=start;i<=end;i++));
+                            do
+                                new_array+=("$i")
+                            done
+                        else
+                            new_array+=("$element")
+                        fi
+                    done
+
+                    vip_channels_num_arr=("${new_array[@]}")
+                    unset new_array
+
+                    VipGetHosts
+                    skip_hosts=""
+
+                    for vip_channels_num in "${vip_channels_num_arr[@]}"
+                    do
+                        vip_channels_index=$((vip_channels_num-1))
+                        vip_channel_id=${vip_channels_id[vip_channels_index]}
+                        vip_channel_name=${vip_channels_name[vip_channels_index]}
+                        vip_channel_epg_id=${vip_channels_epg_id[vip_channels_index]}
+                        vip_channel_host_ip=${vip_channels_host_ip[vip_channels_index]}
+                        vip_channel_host_port=${vip_channels_host_port[vip_channels_index]}
+
+                        if [[ $skip_hosts =~ $vip_channel_host_ip:$vip_channel_host_port ]] 
+                        then
+                            continue
+                        fi
+
+                        vip_host_found=0
+                        for((i=0;i<vip_hosts_count;i++));
+                        do
+                            if [ "${vip_hosts_ip[i]}" == "$vip_channel_host_ip" ] && [ "${vip_hosts_port[i]}" == "$vip_channel_host_port" ]
+                            then
+                                vip_host_found=1
+                                break
+                            fi
+                        done
+
+                        if [ "$vip_host_found" -eq 0 ] 
+                        then
+                            echo
+                            inquirer list_input "是否添加服务器 $vip_channel_host_ip:$vip_channel_host_port" yn_options add_vip_host_yn
+                            if [ "$add_vip_host_yn" == "$i18n_yes" ] 
+                            then
+                                vip_host_ip=$vip_channel_host_ip
+                                vip_host_port=$vip_channel_host_port
+                                VipSetHostSeed
+                                VipSetHostToken
+                                vip_host_status="on"
+
+                                if [ ! -s "$VIP_FILE" ] 
+                                then
+                                    printf '{"%s":{},"%s":[],"%s":[]}' "config" "users" "hosts" > "$VIP_FILE"
+                                fi
+
+                                new_host=$(
+                                $JQ_FILE -n --arg ip "$vip_host_ip" --arg port "$vip_host_port" \
+                                    --arg seed "$vip_host_seed" --arg token "$vip_host_token" \
+                                    --arg status "$vip_host_status" \
+                                    '{
+                                        ip: $ip,
+                                        port: $port | tonumber,
+                                        seed: $seed,
+                                        token: $token,
+                                        status: $status,
+                                        channels: []
+                                    }'
+                                )
+
+                                jq_path='["hosts"]'
+                                JQ add "$VIP_FILE" "[$new_host]"
+                                Println "$info $vip_channel_host_ip:$vip_channel_host_port 服务器添加成功\n"
+                                VipGetHosts
+                                i=$((vip_hosts_count-1))
+                            else
+                                skip_hosts="$skip_hosts$vip_channel_host_ip:$vip_channel_host_port "
+                                continue
+                            fi
+                        fi
+
+                        map_string=true
+                        jq_path='["hosts",'"$i"',"channels"]'
+                        JQ delete "$VIP_FILE" id "$vip_channel_id"
+
+                        new_channel=$(
+                        $JQ_FILE -n --arg id "$vip_channel_id" --arg name "$vip_channel_name" \
+                            --arg epg_id "$vip_channel_epg_id" \
+                            '{
+                                id: $id,
+                                name: $name,
+                                epg_id: $epg_id
+                            }'
+                        )
+
+                        jq_path='["hosts",'"$i"',"channels"]'
+                        JQ add "$VIP_FILE" "[$new_channel]"
+
+                        Println "$info $vip_channel_name 添加成功"
+                    done
+                    break
+                ;;
+            esac
+        done
+        exit
+    fi
+
+    VipListHosts
+    echo -e "选择 VIP 服务器"
+    while read -p "$i18n_default_cancel" vip_hosts_num
+    do
+        case "$vip_hosts_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$vip_hosts_num" -gt 0 ] && [ "$vip_hosts_num" -le "$vip_hosts_count" ]
+                then
+                    vip_hosts_index=$((vip_hosts_num-1))
+                    vip_host_ip=${vip_hosts_ip[vip_hosts_index]}
+                    vip_host_port=${vip_hosts_port[vip_hosts_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    # awk -v ORS=" " '$1 { print $0; } END { printf("\n"); }'
+    echo
+    inquirer list_input "是否批量添加" ny_options vip_bulk_add
+
+    if [[ $vip_bulk_add == "$i18n_yes" ]] 
+    then
+        Println "请输入频道 ID, 同时也是目录名称和频道名称, 用空格分隔"
+        read -p "$i18n_default_cancel" vip_channel
+        IFS=" " read -r -a vip_channels <<< "$vip_channel"
+        new_channels=""
+        for vip_channel in "${vip_channels[@]}"
+        do
+            new_channel=$(
+            $JQ_FILE -n --arg id "$vip_channel" --arg name "$vip_channel" \
+                '{
+                    id: $id,
+                    name: $name
+                }'
+            )
+            [ -n "$new_channels" ] && new_channels="$new_channels,"
+            new_channels="$new_channels$new_channel"
+        done
+        jq_path='["hosts",'"$vip_hosts_index"',"channels"]'
+        JQ add "$VIP_FILE" "[$new_channels]"
+        Println "$info 批量添加成功\n"
+    else
+        VipSetChannelId
+        VipSetChannelName
+        VipSetChannelEpgId
+        new_channel=$(
+        $JQ_FILE -n --arg id "$vip_channel_id" --arg name "$vip_channel_name" \
+            --arg epg_id "$vip_channel_epg_id" \
+            '{
+                id: $id,
+                name: $name,
+                epg_id: $epg_id
+            }'
+        )
+
+        jq_path='["hosts",'"$vip_hosts_index"',"channels"]'
+        JQ add "$VIP_FILE" "[$new_channel]"
+        Println "$info 频道 $vip_channel_name 添加成功\n"
+    fi
+}

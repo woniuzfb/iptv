@@ -1,0 +1,10 @@
+NginxAddUser()
+{
+    directive_user='{"directive":"user","args":["'"$nginx_name"'","'"$nginx_name"'"]}'
+    directives=( user )
+    directives_val=()
+    check_directives=()
+    check_args=()
+
+    NginxAddDirective 1
+}

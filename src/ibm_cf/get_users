@@ -1,0 +1,26 @@
+IbmGetUsers()
+{
+    ibm_users_list=""
+    ibm_users_count=0
+    ibm_users_email=()
+    ibm_users_pass=()
+    ibm_users_region=()
+    ibm_users_resource_group=()
+    ibm_users_org=()
+    ibm_users_space=()
+    while IFS=" " read -r email pass region resource_group org space
+    do
+        ibm_users_count=$((ibm_users_count+1))
+        email=${email#\"}
+        ibm_users_email+=("$email")
+        ibm_users_pass+=("$pass")
+        ibm_users_region+=("$region")
+        ibm_users_resource_group+=("$resource_group")
+        ibm_users_org+=("$org")
+        space=${space%\"}
+        ibm_users_space+=("$space")
+
+        ibm_users_list="$ibm_users_list ${green}$ibm_users_count.${normal}${indent_6}地区: ${green}$region${normal}  资源组: ${green}$resource_group${normal}\n${indent_6}邮箱: ${green}$email${normal}  密码: ${green}$pass${normal}\n${indent_6}组织: ${green}$org${normal}  空间: ${green}$space${normal}\n\n"
+    done < <($JQ_FILE '.users[]|[.email,.pass,.region,.resource_group,.org,.space]|join(" ")' "$IBM_CONFIG")
+    return 0
+}

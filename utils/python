@@ -1,0 +1,44 @@
+PythonInstall()
+{
+    if [[ -x $(command -v python3) ]] && [[ -x $(command -v pip3) ]] 
+    then
+        return 0
+    fi
+
+    DistCheck
+
+    Println "`eval_gettext \"\\\$info 安装 python3 ...\"`"
+
+    Progress &
+    progress_pid=$!
+
+    trap '
+        kill $progress_pid
+        wait $progress_pid 2> /dev/null
+    ' EXIT
+
+    if [ "$dist" == "rpm" ] 
+    then
+        if ! yum -y install python3 python3-pip > /dev/null 2>&1
+        then
+            yum groupinstall -y 'Development Tools' >/dev/null 2>&1
+            yum install -y gcc openssl-devel bzip2-devel libffi-devel >/dev/null 2>&1
+            echo -n "...50%..."
+            cd ~
+            wget --timeout=10 --tries=3 --no-check-certificate https://www.python.org/ftp/python/3.8.9/Python-3.8.9.tgz -qO Python-3.8.9.tgz
+            tar xzf Python-3.8.9.tgz
+            cd Python-3.8.9
+            ./configure >/dev/null 2>&1
+            make >/dev/null 2>&1
+            make install >/dev/null 2>&1
+            pip3 install requests > /dev/null
+        fi
+    else
+        apt-get -y install python3 python3-pip >/dev/null 2>&1
+    fi
+
+    kill $progress_pid
+    wait $progress_pid 2> /dev/null || true
+    trap - EXIT
+    echo "...100%"
+}

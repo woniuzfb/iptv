@@ -1,0 +1,10 @@
+ViewChannel()
+{
+    ListChannels
+    InputChannelsIndex
+
+    for chnl_pid in "${chnls_pid_chosen[@]}"
+    do
+        ListChannel
+    done
+}

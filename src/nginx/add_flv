@@ -1,0 +1,21 @@
+NginxAddFlv()
+{
+    directive_location='{"directive":"location","args":["/flv"],"block":[]}'
+
+    directives=( location )
+    directives_val=()
+    check_directives=()
+    check_args=( '["/flv"]' )
+
+    NginxAddDirective 3
+
+    directive_flv_live='{"directive":"flv_live","args":["on"]}'
+    directive_chunked_transfer_encoding='{"directive":"chunked_transfer_encoding","args":["on"]}'
+
+    directives=( flv_live chunked_transfer_encoding )
+    directives_val=()
+    check_directives=()
+    check_args=()
+
+    NginxAddDirective 4
+}

@@ -1,11 +1,11 @@
 #!/bin/bash
-# FFmpeg / nginx / openresty / v2ray / xray / cloudflare partner,workers / ibm cf / armbian / proxmox ve Wrapper Script By MTimer
-# Copyright (C) 2019-2021
+# FFmpeg / Nginx / Openresty / V2ray / Xray / Cloudflare / IBM Cloud Foundry / Armbian / Proxmox VE / ...
+# Copyright (C) 2019-2023
 # Released under GPL Version 3 License
 
 set -euo pipefail
 
-sh_ver="1.87.3"
+sh_ver="1.87.8"
 sh_debug=0
 export LANGUAGE=
 export LC_ALL=
@@ -66,10 +66,11 @@ IBM_FILE="/usr/local/bin/ibm"
 IBM_APPS_ROOT="$HOME/ibm_apps"
 IBM_CONFIG="$HOME/ibm.json"
 DEFAULT_DEMOS="default.json"
-DEFAULT_CHANNELS="channels.json"
+TS_CHANNELS="channels.json"
 XTREAM_CODES_CHANNELS="xtream_codes"
 USER_AGENT_BROWSER="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.55 Safari/537.36"
 USER_AGENT_TV="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
+USER_AGENT_PHONE="iPhone; CPU iPhone OS 15_2 like Mac OS X"
 monitor=false
 red='\033[31m'
 green='\033[32m'
@@ -745,8 +746,6 @@ inquirer()
     }
 
     inquirer:cleanup() {
-        # Reset character attributes, make cursor visible, and restore
-        # previous screen contents (if possible).
         tput sgr0
         tput cnorm
         stty echo
@@ -1403,7 +1402,7 @@ inquirer()
         else
             failed_count=$((failed_count+1))
             tput cud1
-            inquirer:print "${bg_black}${red}${text_input_regex_failed_msg}${normal}"
+            inquirer:print "${bg_black}${red}${text_input_regex_failed_msg}${normal}\n"
             tput cud1
             if [ "$text_input" == "$text_default" ] 
             then
@@ -1411,7 +1410,8 @@ inquirer()
                 current_pos=0
             else
                 inquirer:print "${text_input}"
-                current_pos=${#text_input}
+                tput cub "$(tput cols)"
+                tput cuf "$current_pos"
             fi
         fi
 
@@ -1528,8 +1528,8 @@ inquirer()
             text_default_tip="${normal}"
         fi
 
-        text_input_regex_failed_msg=${4:-$(gettext "输入验证错误")}
-        text_input_validator=${5:-inquirer:text_input_default_validator}
+        text_input_validator=${4:-inquirer:text_input_default_validator}
+        text_input_regex_failed_msg=${5:-$(gettext "输入验证错误")}
 
         inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt}${text_default_tip}\n"
 
@@ -1700,8 +1700,8 @@ inquirer()
 
     inquirer:date_pick() {
         var_name=$2
-        date_pick_regex_failed_msg=${3:-$(gettext "时间验证错误")}
-        date_pick_validator=${4:-inquirer:date_pick_default_validator}
+        date_pick_validator=${3:-inquirer:date_pick_default_validator}
+        date_pick_regex_failed_msg=${4:-$(gettext "时间验证错误")}
         date_pick=$(printf '%(%Y-%m-%d %H:%M:%S)T' "${!var_name:--1}")
         current_pos=12
         failed_count=0
@@ -2150,7 +2150,7 @@ ExitOnList()
 
 ExitOnText()
 {
-    inquirer text_input "$1" "$2" "$i18n_cancel"
+    inquirer text_input "$1" "$2" "$i18n_cancel" "${3:-}" "${4:-}"
 
     if [ "${!2}" == "$i18n_cancel" ] 
     then
@@ -2174,7 +2174,8 @@ PythonInstall()
     progress_pid=$!
 
     trap '
-        kill $progress_pid 2> /dev/null
+        kill $progress_pid
+        wait $progress_pid 2> /dev/null
     ' EXIT
 
     if [ "$dist" == "rpm" ] 
@@ -2198,6 +2199,7 @@ PythonInstall()
     fi
 
     kill $progress_pid
+    wait $progress_pid 2> /dev/null || true
     trap - EXIT
     echo "...100%"
 }
@@ -2277,10 +2279,14 @@ FFmpegInstall()
 {
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
     FFMPEG="$FFMPEG_ROOT/ffmpeg"
-    if [ ! -e "$FFMPEG" ]
+    FFPROBE="$FFMPEG_ROOT/ffprobe"
+
+    if [ ! -e "$FFMPEG" ] || [ ! -e "$FFPROBE" ]
     then
         Println "`eval_gettext \"\\\$info 开始下载/安装 FFmpeg...\"`"
+
         ArchCheck
+
         if [ "$arch" == "x86_64" ]
         then
             ffmpeg_package="ffmpeg-git-amd64-static.tar.xz"
@@ -2297,16 +2303,27 @@ FFmpegInstall()
             Println "$error FFmpeg 不支持当前系统\n"
             exit 1
         fi
+
         FFMPEG_PACKAGE_FILE="$IPTV_ROOT/$ffmpeg_package"
+
         if ! curl -L "$FFMPEG_MIRROR_LINK/builds/$ffmpeg_package" -o "$FFMPEG_PACKAGE_FILE"
         then
             Println "`eval_gettext \"\\\$error FFmpeg 下载失败 !\"`"
             exit 1
         fi
+
         tar xJf "$FFMPEG_PACKAGE_FILE" -C "$IPTV_ROOT" && rm -f "${FFMPEG_PACKAGE_FILE:-notfound}"
-        FFMPEG=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-        [ ! -e "$FFMPEG" ] && Println "`eval_gettext \"\\\$error FFmpeg 解压失败 !\"`" && exit 1
-        export FFMPEG
+
+        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+        FFMPEG="$FFMPEG_ROOT/ffmpeg"
+        FFPROBE="$FFMPEG_ROOT/ffprobe"
+
+        if [ ! -e "$FFMPEG" ] || [ ! -e "$FFPROBE" ]
+        then
+            Println "`eval_gettext \"\\\$error FFmpeg 解压失败 !\"`"
+            exit 1
+        fi
+
         Println "`eval_gettext \"\\\$info FFmpeg 安装成功\"`"
     else
         Println "`eval_gettext \"\\\$info FFmpeg 已安装\"`"
@@ -3373,6 +3390,8 @@ Update()
 {
     ShFileUpdate
 
+    pkill -f 'tv s -' 2> /dev/null || true
+
     [ ! -d "$IPTV_ROOT" ] && Println "`eval_gettext \"\\\$error 尚未安装, 请检查 !\"`\n" && exit 1
 
     while IFS= read -r line 
@@ -3806,7 +3825,8 @@ OpensslInstall()
     Progress &
     progress_pid=$!
     trap '
-        kill $progress_pid 2> /dev/null
+        kill $progress_pid
+        wait $progress_pid 2> /dev/null
     ' EXIT
     DistCheck
     if [ "$dist" == "rpm" ] 
@@ -3816,6 +3836,7 @@ OpensslInstall()
         apt-get -y install openssl libssl-dev >/dev/null 2>&1
     fi
     kill $progress_pid
+    wait $progress_pid 2> /dev/null || true
     trap - EXIT
     echo -n "...100%" && Println "`eval_gettext \"\\\$info openssl 安装完成\"`"
 }
@@ -3825,7 +3846,8 @@ ImageMagickInstall()
     Progress &
     progress_pid=$!
     trap '
-        kill $progress_pid 2> /dev/null
+        kill $progress_pid
+        wait $progress_pid 2> /dev/null
     ' EXIT
     rm -f "$IPTV_ROOT/magick"
     DistCheck
@@ -3836,6 +3858,7 @@ ImageMagickInstall()
         apt-get -y install imagemagick >/dev/null 2>&1
     fi
     kill $progress_pid
+    wait $progress_pid 2> /dev/null || true
     trap - EXIT
     echo -n "...100%"
     Println "\n`eval_gettext \"\\\$info magick 安装完成\"`\n"
@@ -3864,7 +3887,8 @@ Pdf2htmlInstall()
     Progress &
     progress_pid=$!
     trap '
-        kill $progress_pid 2> /dev/null
+        kill $progress_pid
+        wait $progress_pid 2> /dev/null
     ' EXIT
     if [ "$dist" == "rpm" ] 
     then
@@ -3946,6 +3970,7 @@ Pdf2htmlInstall()
     make install >/dev/null 2>&1
 
     kill $progress_pid
+    wait $progress_pid 2> /dev/null || true
     trap - EXIT
     echo "...100%"
 
@@ -4122,7 +4147,10 @@ Urldecode()
 GetServerIp()
 {
     ip=$(dig +short myip.opendns.com @resolver1.opendns.com) || true
-    [ -z "$ip" ] && ip=$(curl -s whatismyip.akamai.com)
+    if [ -z "$ip" ] || [ "${#ip}" -gt 15 ]
+    then
+        ip=$(curl -s whatismyip.akamai.com)
+    fi
     [ -z "$ip" ] && ip=$(curl -s ipv4.icanhazip.com)
     [ -z "$ip" ] && ip=$(curl -s api.ip.sb/ip)
     [ -z "$ip" ] && ip=$(curl -s ipinfo.io/ip)
@@ -6092,6 +6120,11 @@ HlsStreamCreatorPlus()
     SyncFile
 
     trap '
+        if [ "$live" = false ]
+        then
+            MonitorLog "$channel_name HLS 切片完成"
+            exit 1
+        fi
         jq_path=[\"channels\"]
         jq_path2=[\"status\"]
         JQ update "$CHANNELS_FILE" pid "$pid" off
@@ -6099,7 +6132,7 @@ HlsStreamCreatorPlus()
         chnl_pid=$pid
         action="stop"
         SyncFile
-        if [ "$hls_end_list" = true ] && ls -A "$output_dir_root/$seg_dir_path${seg_name}"*.ts
+        if [ "$hls_end_list" = true ] && ls -A "$output_dir_root/"*.m3u8 > /dev/null 2>&1
         then
             for play_list in "$output_dir_root/"*.m3u8
             do
@@ -6698,7 +6731,7 @@ HlsStreamCreatorPlus()
     then
         if [ -n "$subtitle_append" ] 
         then
-            hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000$subtitle_append\n${playlist_name}_vtt.m3u8\n\n"
+            hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000$subtitle_append\n${playlist_name}_0.m3u8\n\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"简体中文\",DEFAULT=\"YES\",AUTOSELECT=YES,LANGUAGE=\"chi\",URI=\"${playlist_name}_0_vtt.m3u8\"\n\n"
         fi
 
         if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
@@ -6838,6 +6871,11 @@ HlsStreamCreatorPlus()
     SyncFile
 
     trap '
+        if [ "$chnl_live" = false ]
+        then
+            MonitorLog "$chnl_channel_name HLS 切片完成"
+            exit 1
+        fi
         jq_path=[\"channels\"]
         jq_path2=[\"status\"]
         JQ update "$CHANNELS_FILE" pid "$new_pid" off
@@ -6845,7 +6883,7 @@ HlsStreamCreatorPlus()
         chnl_pid=$new_pid
         action="stop"
         SyncFile
-        if [ "$chnl_hls_end_list" = true ] && ls -A "$chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}"*.ts
+        if [ "$chnl_hls_end_list" = true ] && ls -A "$chnl_output_dir_root/"*.m3u8 > /dev/null 2>&1
         then
             for play_list in "$chnl_output_dir_root/"*.m3u8
             do
@@ -7450,7 +7488,7 @@ HlsStreamCreatorPlus()
     then
         if [ -n "$chnl_subtitle_append" ] 
         then
-            chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000$chnl_subtitle_append\n${chnl_playlist_name}_vtt.m3u8\n\n"
+            chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000$chnl_subtitle_append\n${chnl_playlist_name}_0.m3u8\n\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"简体中文\",DEFAULT=\"YES\",AUTOSELECT=YES,LANGUAGE=\"chi\",URI=\"${chnl_playlist_name}_0_vtt.m3u8\"\n\n"
         fi
 
         if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
@@ -8789,7 +8827,7 @@ ParseHlsStreamLink()
     fi
 
     printf -v stream_url_quality ',%s' "${stream_url_qualities[@]}"
-    stream_url_quality=${stream_url_quality:1}
+    stream_url_quality="${stream_url_quality:1}"
 
     if [ -n "${stream_audio_name:-}" ] 
     then
@@ -9431,7 +9469,7 @@ SetStreamLink()
         if [ "$set_id" -eq 1 ] 
         then
             GetServiceAccs 4gtv
-            for((s_i=0;s_i<${#_4gtv_accs_token[@]};s_i++));
+            for((s_i=0;s_i<_4gtv_accs_count;s_i++));
             do
                 if [ -n "${_4gtv_accs_token[s_i]:-}" ] 
                 then
@@ -9504,7 +9542,7 @@ SetStreamLink()
 
 SetIsHls()
 {
-    Println "$tip 如果直播链接重定向至 .m3u8 地址, 请选择 是"
+    Println "$tip 如果直播源重定向至 .m3u8 地址, 请选择 是"
     inquirer list_input_index "是否是 HLS 链接" ny_options ny_options_index
 
     if [ "$ny_options_index" -eq 0 ]
@@ -9531,7 +9569,7 @@ SetSubtitle()
 
 SetDrawtext()
 {
-    Println "$tip 比如 fontsize=25:fontfile=/usr/local/iptv/AlibabaSans-Regular.otf:fontcolor=white:box=1:boxcolor=black@0.5:x=50:y=10:text=mtime.info"
+    Println "$tip 比如 fontsize=25:fontfile=/usr/local/iptv/AlibabaSans-Regular.otf:fontcolor=white:box=1:boxcolor=black@0.5:x=50:y=10:text=yourdomain.com"
     inquirer text_input "输入 drawtext 水印 : " draw_text "${d_draw_text:-$i18n_not_set}"
     if [ "$draw_text" == "omit" ] || [ "$draw_text" == "$i18n_not_set" ]
     then
@@ -10366,7 +10404,7 @@ SetHlsKeyPeriod()
 SetAntiDDosPort()
 {
     Println "设置封禁端口"
-    echo -e "$tip 多个端口用空格分隔 比如 22 80 443 12480-12489\n"
+    echo -e "$tip 多个端口用空格分隔 比如 22 80 443 12480-12489"
     while read -p "(默认: $d_anti_ddos_port_text): " anti_ddos_ports
     do
         anti_ddos_ports=${anti_ddos_ports:-$d_anti_ddos_port_text}
@@ -10885,16 +10923,18 @@ AddChannel()
 
     output_dir_root="$LIVE_ROOT/$output_dir_name"
 
-    seg_dir_path=""
     if [ -n "$seg_dir_name" ] 
     then
         seg_dir_path="$seg_dir_name/"
+    else
+        seg_dir_path=""
     fi
 
-    subtitle_append=""
     if [ -n "$txt_format" ]
     then
         subtitle_append=',SUBTITLES="subs"'
+    else
+        subtitle_append=""
     fi
 
     master=0
@@ -10925,9 +10965,12 @@ AddChannel()
         SetSyncPairs
     fi
 
-    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-    FFMPEG="$FFMPEG_ROOT/ffmpeg"
-    export FFMPEG
+    if [ -z "${FFMPEG:-}" ] 
+    then
+        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+        FFMPEG="$FFMPEG_ROOT/ffmpeg"
+        FFPROBE="$FFMPEG_ROOT/ffprobe"
+    fi
 
     if [[ ${input_flags:0:1} == "'" ]] 
     then
@@ -11060,10 +11103,49 @@ EditStreamLink()
         echo
         inquirer checkbox_input_indices "选择修改的直播源" chnl_stream_links_options chnl_stream_links_indices
 
+        if [ -s "$XTREAM_CODES" ] 
+        then
+            IFS=" " read -r m_ip m_domains m_accounts < <(awk '$1 {a=a $1",";b=b $2",";$1=$2="";c=c substr($0,3)","} END {print a,b,c}' "$XTREAM_CODES")
+            IFS="," read -r -a new_domains <<< "$m_domains"
+            IFS="," read -r -a new_accounts <<< "$m_accounts"
+            xc_count=${#new_domains[@]}
+        fi
+
         for chnl_stream_links_index in "${chnl_stream_links_indices[@]}"
         do
             Println "$info 修改源$((chnl_stream_links_index+1)): ${chnl_stream_links[chnl_stream_links_index]}"
-            inquirer text_input "输入新的直播源( mpegts / hls / flv / youtube ...): " stream_link "$i18n_not_set"
+
+            xc_select=false
+
+            if [ -s "$XTREAM_CODES" ] && [[ ${chnl_stream_links[chnl_stream_links_index]##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+            then
+                chnl_domain=${chnl_stream_links[chnl_stream_links_index]%%|*}
+                for((xc_i=0;xc_i<xc_count;xc_i++));
+                do
+                    if [[ ${new_domains[xc_i]} =~ $chnl_domain ]] 
+                    then
+                        xc_macs=(${new_accounts[xc_i]} "输入mac" "输入新的直播源")
+                        inquirer list_input_index "选择操作" xc_macs xc_macs_index
+                        if [ "$xc_macs_index" -eq $xc_count ] 
+                        then
+                            ExitOnText "请输入mac: " new_mac
+                            xc_select=true
+                        elif [ "$xc_macs_index" -lt $xc_count ] 
+                        then
+                            new_mac="${xc_macs[xc_macs_index]}"
+                            xc_select=true
+                        fi
+                        break
+                    fi
+                done
+            fi
+
+            if [ "$xc_select" = false ] 
+            then
+                inquirer text_input "输入新的直播源( mpegts / hls / flv / youtube ...): " stream_link "$i18n_not_set"
+            else
+                stream_link="${chnl_stream_links[chnl_stream_links_index]//${chnl_stream_links[chnl_stream_links_index]##*|}/$new_mac}"
+            fi
 
             if [ "$stream_link" == "$i18n_not_set" ] 
             then
@@ -11974,6 +12056,7 @@ CheckIfXtreamCodes()
     if [ -z "${FFPROBE:-}" ] 
     then
         FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+        FFMPEG="$FFMPEG_ROOT/ffmpeg"
         FFPROBE="$FFMPEG_ROOT/ffprobe"
     fi
 
@@ -12121,6 +12204,9 @@ CheckIfXtreamCodes()
                     elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
                     then
                         chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                    elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+) ]] 
+                    then
+                        chnl_stream_link="http://localhost:3000/${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]%%\?*}?${BASH_REMATCH[4]##*\?}"
                     else
                         Println "$error $chnl_domain 返回 cmd: ${cmd:-无} $chnl_domain $chnl_mac\n" && exit 1
                     fi
@@ -12464,7 +12550,7 @@ StartChannel()
                 hexkey=$(echo -n "VxzAfiseH0AbLShkQOPwdsssw5KyLeuv" | hexdump -v -e '/1 "%02x"')
                 hexiv=$(echo -n "${stream_link_data:0:16}" | hexdump -v -e '/1 "%02x"')
                 chnl_stream_link_url=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
-                chnl_stream_link_url_path=${chnl_stream_link_url%/*}
+                chnl_stream_link_url_path="${chnl_stream_link_url%/*}"
 
                 if ! Start4gtvLink
                 then
@@ -12496,7 +12582,7 @@ StartChannel()
         if [ "$set_id" -eq 1 ] 
         then
             GetServiceAccs 4gtv
-            for((i=0;i<${#_4gtv_accs_token[@]};i++));
+            for((i=0;i<_4gtv_accs_count;i++));
             do
                 if [ -n "${_4gtv_accs_token[i]:-}" ] 
                 then
@@ -12557,7 +12643,7 @@ StartChannel()
 
         chnl_stream_link_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
             | $JQ_FILE -r '.flstURLs[0]')
-        chnl_stream_link_url_path=${chnl_stream_link_url%/*}
+        chnl_stream_link_url_path="${chnl_stream_link_url%/*}"
 
         if ! Start4gtvLink
         then
@@ -13504,10 +13590,11 @@ StartChannel()
         chnl_input_flags=${chnl_input_flags//-reconnect_at_eof 1/}
     fi
 
-    chnl_subtitle_append=""
     if [ -n "$chnl_txt_format" ]
     then
         chnl_subtitle_append=',SUBTITLES="subs"'
+    else
+        chnl_subtitle_append=""
     fi
 
     master=0
@@ -13534,15 +13621,15 @@ StartChannel()
         if [ -z "$chnl_input_flags" ] 
         then
             chnl_input_flags="-txt_format $chnl_txt_format -fix_sub_duration"
-        else
-            if [[ ! $chnl_input_flags =~ -fix_sub_duration ]] 
-            then
-                chnl_input_flags="-fix_sub_duration $chnl_input_flags"
-            fi
-            if [[ ! $chnl_input_flags =~ -txt_format ]] 
-            then
-                chnl_input_flags="-txt_format $chnl_txt_format $chnl_input_flags"
-            fi
+        #else
+            #@if [[ ! $chnl_input_flags =~ -fix_sub_duration ]] 
+            #then
+            #    chnl_input_flags="-fix_sub_duration $chnl_input_flags"
+            #fi
+            #if [[ ! $chnl_input_flags =~ -txt_format ]] 
+            #then
+            #    chnl_input_flags="-txt_format $chnl_txt_format $chnl_input_flags"
+            #fi
         fi
     else
         chnl_txt_format=""
@@ -13552,9 +13639,12 @@ StartChannel()
         chnl_input_flags=${chnl_input_flags//-fix_sub_duration/}
     fi
 
-    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-    FFMPEG="$FFMPEG_ROOT/ffmpeg"
-    export FFMPEG
+    if [ -z "${FFMPEG:-}" ] 
+    then
+        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+        FFMPEG="$FFMPEG_ROOT/ffmpeg"
+        FFPROBE="$FFMPEG_ROOT/ffprobe"
+    fi
 
     if [[ ${chnl_input_flags:0:1} == "'" ]] 
     then
@@ -13703,7 +13793,7 @@ StopChannel()
         Println "$error FLV 频道正开启, 走错片场了？\n" && exit 1
     fi
 
-    Println "$info 关闭频道, 请稍等..."
+    Println "$info 关闭频道 [ $chnl_channel_name ] 请稍等..."
 
     if [ "${kind:-}" == "flv" ] 
     then
@@ -13719,7 +13809,7 @@ StopChannel()
             rm -rf "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
         else
             kill "$chnl_pid" 2> /dev/null || true
-            if ! flock -E 1 -w 30 -x "$FFMPEG_LOG_ROOT/$chnl_pid.pid" rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid" 2> /dev/null
+            if ! flock -E 1 -w 30 -x "$FFMPEG_LOG_ROOT/$chnl_pid.pid" rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
             then
                 MonitorLog "频道 [ $chnl_channel_name ] 进程 $chnl_pid 不存在"
                 jq_path='["channels"]'
@@ -13744,9 +13834,9 @@ StopChannel()
             rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
         else
             kill "$chnl_pid" 2> /dev/null || true
-            if ! flock -E 1 -w $((30+chnl_seg_length)) -x "$FFMPEG_LOG_ROOT/$chnl_pid.pid" rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid" 2> /dev/null
+            if ! flock -E 1 -w $((30+chnl_seg_length)) -x "$FFMPEG_LOG_ROOT/$chnl_pid.pid" rm -f "$FFMPEG_LOG_ROOT/$chnl_pid.pid"
             then
-                if [ "$chnl_hls_end_list" = true ] && ls -A "$chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}"*.ts > /dev/null 2>&1 
+                if [ "$chnl_hls_end_list" = true ] && ls -A "$chnl_output_dir_root/"*.m3u8 > /dev/null 2>&1 
                 then
                     for play_list in "$chnl_output_dir_root/"*.m3u8
                     do
@@ -14095,17 +14185,15 @@ ScheduleParse()
 
     for schedule_index in "${schedule_indices[@]}"
     do
+        if [ "$((${schedule_end_time[schedule_index]}-${schedule_start_time[schedule_index]}))" -lt 5400 ] 
+        then
+            continue
+        fi
         schedules_chnl_id+=("$chnl_id")
         schedules_start_time+=("${schedule_start_time[schedule_index]}")
         schedules_end_time+=("${schedule_end_time[schedule_index]}")
         schedules_title+=("${schedule_title[schedule_index]}")
-        if [ "$((${schedule_end_time[schedule_index]}-${schedule_start_time[schedule_index]}))" -gt 5000 ] 
-        then
-            mark=" ${red}*${normal}"
-        else
-            mark=""
-        fi
-        schedules_list+=("${schedule_title[schedule_index]} ${green}[$chnl_id]${normal} ${blue}[${schedule_time[schedule_index]}]${normal}$mark")
+        schedules_list+=("${schedule_title[schedule_index]} ${green}[$chnl_id]${normal} ${blue}[${schedule_time[schedule_index]}]${normal}")
     done
 }
 
@@ -14140,21 +14228,23 @@ SearchSoccerSchedules()
     )
 
     supersport_chnls=(
-        "supersportpremierleague:SuperSport Premier League"
-        "supersportfootball:SuperSport Football"
-        "supersportlaliga:SuperSport La Liga"
-        "supersportvariety1:SuperSport Variety 1"
-        "supersportvariety2:SuperSport Variety 2"
-        "supersportvariety3:SuperSport Variety 3"
-        "supersportvariety4:SuperSport Variety 4"
-        "supersportgrandstand:SuperSport Grandstand"
+        "supersportpremierleague:SS Premier League:SuperSport Premier League"
+        "supersportfootball:SS Football:SuperSport Football"
+        "supersportlaliga:SS La Liga:SuperSport La Liga"
+        "supersportvariety1:SS Variety 1:SuperSport Variety 1"
+        "supersportvariety2:SS Variety 2:SuperSport Variety 2"
+        "supersportvariety3:SS Variety 3:SuperSport Variety 3"
+        "supersportvariety4:SS Variety 4:SuperSport Variety 4"
+        "supersportgrandstand:SS Grandstand:SuperSport Grandstand"
     )
 
     btsport_chnls=(
-        "btsportespn:BT Sport//ESPN"
-        "btsport1:BT Sport 1"
-        "btsport2:BT Sport 2"
-        "btsport3:BT Sport 3"
+        #"btsportespn:BT Sport//ESPN"
+        "btsportultimate:hspr:BT Sport Ultimate"
+        "btsport1:hspc:BT Sport 1"
+        "btsport2:hspd:BT Sport 2"
+        "btsport3:hspf:BT Sport 3"
+        "btsport4:hspg:BT Sport 4"
     )
 
     sky_chnls=(
@@ -14203,7 +14293,7 @@ SearchSoccerSchedules()
 
         today_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://contenthub-api.eco.astro.com.my/channel/$astro_id.json" |
             $JQ_FILE --arg today "$today" --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","start_time","end_time"]' '.response.schedule[$today]
-            | map(select(.title|test("(L).* vs ";"i"))
+            | map(select(.title|test("\\(L\\).* vs ";"i"))
             | .["start_time"] = (.datetimeInUtc|sub("(?<date>.*) (?<time>.*)\\.[\\d]{1}"; "\(.date)T\(.time)Z")|fromdate)
             | select(.start_time > ($min|tonumber) and .start_time < ($max|tonumber))
             | .["end_time"] = (.start_time + ($today + "T" + .duration + "Z"|fromdate) - ($today + "T00:00:00Z"|fromdate))
@@ -14226,7 +14316,7 @@ SearchSoccerSchedules()
         else
             tomorrow_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://contenthub-api.eco.astro.com.my/channel/$astro_id.json" |
                 $JQ_FILE --arg tomorrow "$tomorrow" --arg max "$max_start_time" --argjson keys '["title","time","start_time","end_time"]' '.response.schedule[$tomorrow]
-                | map(select(.title|test("(L).* vs ";"i"))
+                | map(select(.title|test("\\(L\\).* vs ";"i"))
                 | .["start_time"] = (.datetimeInUtc|sub("(?<date>.*) (?<time>.*)\\.[\\d]{1}"; "\(.date)T\(.time)Z")|fromdate)
                 | select(.start_time < ($max|tonumber))
                 | .["end_time"] = (.start_time + ($tomorrow + "T" + .duration + "Z"|fromdate) - ($tomorrow + "T00:00:00Z"|fromdate))
@@ -14535,14 +14625,25 @@ SearchSoccerSchedules()
         ScheduleParse
     done
 
-    supersport_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://supersport.com/tv-guide" "https://supersport.com/api/videos/tv-guide?timestamps[]=$min_start_time&timestamps[]=$max_start_time&live=false&country_code=ZA")
+    ss_yesterday_schedule=$(curl -s -Lm 20 --compressed -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://supersport.com/tv-guide" "https://supersport.com/apix/guide/v5.3/tvguide?countryCode=za&channelOnly=false&startDateTime=$yesterday&liveOnly=false")
+    ss_today_schedule=$(curl -s -Lm 20 --compressed -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://supersport.com/tv-guide" "https://supersport.com/apix/guide/v5.3/tvguide?countryCode=za&channelOnly=false&startDateTime=$today&liveOnly=false")
+    ss_tomorrow_schedule=$(curl -s -Lm 20 --compressed -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://supersport.com/tv-guide" "https://supersport.com/apix/guide/v5.3/tvguide?countryCode=za&channelOnly=false&startDateTime=$tomorrow&liveOnly=false")
 
     for chnl in "${supersport_chnls[@]}"
     do
         chnl_id=${chnl%%:*}
         chnl_name="${chnl#*:}"
+        supersport_name="${chnl_name%:*}"
+        chnl_name="${chnl_name#*:}"
 
-        schedule=$($JQ_FILE --arg chnl_name "$chnl_name" --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","start_time","end_time"]' 'map(select(.channel == $chnl_name and (.title|test(" v ";"i"))) | .["start_time"] = (.starts_at|fromdate) | select(.start_time > ($min|tonumber) and .start_time < ($max|tonumber)) | .["end_time"] = (.ends_at|fromdate) | .["time"] = (.start_time|strflocaltime("%Y-%m-%d %H:%M %p")) | with_entries(select(.key as $k | $keys | index($k))))' <<< "$supersport_schedule")
+        yesterday_schedule=$($JQ_FILE --arg supersport_name "$supersport_name" --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","start_time","end_time"]' 'map(select(.sport == "Football" and .name == $supersport_name and .isLive == true and (.title|test(" v ";"i"))) 
+        | .["start_time"] = (.start|sub("(?<month>.*)/(?<day>.*)/(?<year>.*) (?<time>.*)"; "\(.year)-\(.month)-\(.day)T\(.time)Z")|fromdate - 7200) | select(.start_time > ($min|tonumber) and .start_time < ($max|tonumber)) | .["end_time"] = (.end|sub("(?<month>.*)/(?<day>.*)/(?<year>.*) (?<time>.*)"; "\(.year)-\(.month)-\(.day)T\(.time)Z")|fromdate - 7200) | .["time"] = (.start_time|strflocaltime("%Y-%m-%d %H:%M %p")) | with_entries(select(.key as $k | $keys | index($k))))' <<< "$ss_yesterday_schedule")
+        today_schedule=$($JQ_FILE --arg supersport_name "$supersport_name" --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","start_time","end_time"]' 'map(select(.sport == "Football" and .name == $supersport_name and .isLive == true and (.title|test(" v ";"i"))) 
+        | .["start_time"] = (.start|sub("(?<month>.*)/(?<day>.*)/(?<year>.*) (?<time>.*)"; "\(.year)-\(.month)-\(.day)T\(.time)Z")|fromdate - 7200) | select(.start_time > ($min|tonumber) and .start_time < ($max|tonumber)) | .["end_time"] = (.end|sub("(?<month>.*)/(?<day>.*)/(?<year>.*) (?<time>.*)"; "\(.year)-\(.month)-\(.day)T\(.time)Z")|fromdate - 7200) | .["time"] = (.start_time|strflocaltime("%Y-%m-%d %H:%M %p")) | with_entries(select(.key as $k | $keys | index($k))))' <<< "$ss_today_schedule")
+        tomorrow_schedule=$($JQ_FILE --arg supersport_name "$supersport_name" --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","start_time","end_time"]' 'map(select(.sport == "Football" and .name == $supersport_name and .isLive == true and (.title|test(" v ";"i"))) 
+        | .["start_time"] = (.start|sub("(?<month>.*)/(?<day>.*)/(?<year>.*) (?<time>.*)"; "\(.year)-\(.month)-\(.day)T\(.time)Z")|fromdate - 7200) | select(.start_time > ($min|tonumber) and .start_time < ($max|tonumber)) | .["end_time"] = (.end|sub("(?<month>.*)/(?<day>.*)/(?<year>.*) (?<time>.*)"; "\(.year)-\(.month)-\(.day)T\(.time)Z")|fromdate - 7200) | .["time"] = (.start_time|strflocaltime("%Y-%m-%d %H:%M %p")) | with_entries(select(.key as $k | $keys | index($k))))' <<< "$ss_tomorrow_schedule")
+
+        schedule=$($JQ_FILE --argjson today "$today_schedule" --argjson tomorrow "$tomorrow_schedule" '.+=$today|.+=$tomorrow' <<< "$yesterday_schedule")
 
         if [ "$schedule" == "[]" ]
         then
@@ -14558,28 +14659,30 @@ SearchSoccerSchedules()
     #bt_prop="${bt_prop%;*}"
     #bt_channels=$($JQ_FILE -r '.epg.modules.common.channels|join(",")' <<< "$bt_prop")
     #api_key=$($JQ_FILE -r '.epg.modules.common.apiKey' <<< "$bt_prop")
-    bt_channels="hspr,hspc,hspd,hspf,hspg,hspk"
-    api_key="b5986b31b34243c4be2da2dc8020aaaf"
 
-    btsport_today_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.bt.com/" "https://users-atlas.metabroadcast.com/4/schedules.json?id=$bt_channels&annotations=channel,content_detail,content.broadcast_channel&from=${yesterday}T16:00:00.000Z&to=${today}T16:00:00.000Z&source=api.youview.tv&key=$api_key")
+    #bt_prop=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.bt.com/" https://www.player.bt.com/)
+    #bt_prop="${bt_prop##*src=\"}"
+    #bt_prop="${bt_prop%%\"*}"
+    #bt_prop=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.player.bt.com/" https://www.player.bt.com/$bt_prop)
+    #bt_prop="${bt_prop##*_yvContentEnabled\?\"}"
+    #api_key="${bt_prop%%\"*}"
 
-    if [ "$search_options_index" -eq 2 ] 
-    then
-        btsport_tomorrow_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.bt.com/" "https://users-atlas.metabroadcast.com/4/schedules.json?id=$bt_channels&annotations=channel,content_detail,content.broadcast_channel&from=${today}T16:00:00.000Z&to=${tomorrow}T16:00:00.000Z&source=api.youview.tv&key=$api_key")
-    fi
+    api_key="b4d2edb68da14dfb9e47b5465e99b1b1"
 
     for chnl in "${btsport_chnls[@]}"
     do
         chnl_id=${chnl%%:*}
         chnl_name="${chnl#*:}"
+        bt_id=${chnl_name%:*}
+        chnl_name="${chnl_name#*:}"
 
-        today_schedule=$($JQ_FILE --arg channel_name "$chnl_name" --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","start_time","end_time"]' '.schedules | map(select(.channel.title == $channel_name).entries[] | select(.item.title|test(" v ";"i")) | .["start_time"] = (.broadcast.transmission_time|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate) | select(.start_time > ($min|tonumber) and .start_time < ($max|tonumber)) | .["end_time"] = (.broadcast.transmission_end_time|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate) |.["time"] = (.start_time|strflocaltime("%Y-%m-%d %H:%M %p")) | .["title"] = .item.title | with_entries(select(.key as $k | $keys | index($k))))' <<< "$btsport_today_schedule")
+        today_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.player.bt.com/" "https://voila.metabroadcast.com/4/schedules/$bt_id.json?key=$api_key&from=${yesterday}T16:00:00.000Z&to=${today}T16:00:00.000Z&source=api.youview.tv&annotations=content.description,content.brand_summary,content.broadcasts,content.locations" | $JQ_FILE --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","start_time","end_time"]' '.schedule.entries | map(select(.item.title|test(" v ";"i")) | .["start_time"] = (.broadcast.transmission_time|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate) | select(.start_time > ($min|tonumber) and .start_time < ($max|tonumber)) | .["end_time"] = (.broadcast.transmission_end_time|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate) |.["time"] = (.start_time|strflocaltime("%Y-%m-%d %H:%M %p")) | .["title"] = .item.title | with_entries(select(.key as $k | $keys | index($k))))')
 
         if [ "$search_options_index" -lt 2 ] 
         then
             schedule="$today_schedule"
         else
-            tomorrow_schedule=$($JQ_FILE --arg channel_name "$chnl_name" --arg max "$max_start_time" --argjson keys '["title","time","start_time","end_time"]' '.schedules | map(select(.channel.title == $channel_name).entries[] | select(.item.title|test(" v ";"i")) | .["start_time"] = (.broadcast.transmission_time|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate) | select(.start_time < ($max|tonumber)) | .["end_time"] = (.broadcast.transmission_end_time|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate) | .["time"] = (.start_time|strflocaltime("%Y-%m-%d %H:%M %p")) | .["title"] = .item.title | with_entries(select(.key as $k | $keys | index($k))))' <<< "$btsport_tomorrow_schedule")
+            tomorrow_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.player.bt.com/" "https://voila.metabroadcast.com/4/schedules/$bt_id.json?key=$api_key&from=${today}T16:00:00.000Z&to=${tomorrow}T16:00:00.000Z&source=api.youview.tv&annotations=content.description,content.brand_summary,content.broadcasts,content.locations" | $JQ_FILE --arg max "$max_start_time" --argjson keys '["title","time","start_time","end_time"]' '.schedule.entries | map(select(.item.title|test(" v ";"i")) | .["start_time"] = (.broadcast.transmission_time|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate) | select(.start_time < ($max|tonumber)) | .["end_time"] = (.broadcast.transmission_end_time|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate) | .["time"] = (.start_time|strflocaltime("%Y-%m-%d %H:%M %p")) | .["title"] = .item.title | with_entries(select(.key as $k | $keys | index($k))))')
 
             schedule=$($JQ_FILE --argjson merge "$tomorrow_schedule" '.+=$merge' <<< "$today_schedule")
         fi
@@ -14658,7 +14761,8 @@ AddChannelsSchedule()
         progress_pid=$!
 
         trap '
-            kill $progress_pid 2> /dev/null
+            kill $progress_pid
+            wait $progress_pid 2> /dev/null
         ' EXIT
 
         SearchSoccerSchedules
@@ -14699,6 +14803,7 @@ AddChannelsSchedule()
         done
 
         kill $progress_pid
+        wait $progress_pid 2> /dev/null || true
         trap - EXIT
         echo "...100%"
 
@@ -15737,7 +15842,7 @@ MonitorStart()
         then
             ( Monitor ) 
         else
-            ( Monitor ) > /dev/null 2>> "${MONITOR_LOG%.*}.err" < /dev/null &
+            ( Monitor ) > /dev/null 2> /dev/null < /dev/null &
         fi
 
         Println "$info 监控启动成功 !\n"
@@ -16117,37 +16222,73 @@ Reg4gtvAcc()
 GetServiceAccs()
 {
     local service_name=$1
+
     if [ ! -s "$SERVICES_FILE" ] 
     then
         printf '{"%s":{"%s":[]}}' "$service_name" "accounts" > "$SERVICES_FILE"
     fi
-    case $service_name in
-        "4gtv") 
-            [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
-            IFS=$'\002\t' read -r _4gtv_acc_email _4gtv_acc_pass _4gtv_acc_token < <(JQs flat "$SERVICES_FILE" '' '
-            (."'"$service_name"'".accounts | if (.|type == "string") then {} else . end) as $accounts |
-            reduce ({email,password,token}|keys_unsorted[]) as $key ([];
-            $accounts[$key] as $val | if $val then
-                . + [$val + "\u0001\u0002"]
-            else
-                . + ["\u0002"]
-            end
-            )|@tsv' "${delimiters[@]}")
 
-            IFS="${delimiters[0]}" read -r -a _4gtv_accs_email <<< "$_4gtv_acc_email"
-            IFS="${delimiters[0]}" read -r -a _4gtv_accs_pass <<< "$_4gtv_acc_pass"
-            IFS="${delimiters[0]}" read -r -a _4gtv_accs_token <<< "$_4gtv_acc_token"
-        ;;
-        *) 
-        ;;
-    esac
+    [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+
+    if [ "$service_name" == "4gtv" ] 
+    then
+        IFS=$'\003\t' read -r d_4gtv_proxy _4gtv_acc_email _4gtv_acc_pass _4gtv_acc_token < <(JQs flat "$SERVICES_FILE" '' '
+        [(."'"$service_name"'".proxy // "") + "\u0003"] + ((."'"$service_name"'".accounts | if (.|type == "string") then {} else . end) as $accounts |
+        reduce ({email,password,token}|keys_unsorted[]) as $key ([];
+        $accounts[$key] as $val | if $val then
+            . + [$val + "\u0002\u0003"]
+        else
+            . + ["\u0003"]
+        end
+        ))|@tsv' "${delimiters[@]}")
+
+        IFS="${delimiters[1]}" read -r -a _4gtv_accs_email <<< "$_4gtv_acc_email"
+        IFS="${delimiters[1]}" read -r -a _4gtv_accs_pass <<< "$_4gtv_acc_pass"
+        IFS="${delimiters[1]}" read -r -a _4gtv_accs_token <<< "$_4gtv_acc_token"
+
+        _4gtv_accs_count=${#_4gtv_accs_email[@]}
+    else
+        IFS=$'\003\t' read -r m_user_name m_phone_number m_password m_access_token m_device_no m_device_id m_refresh < <(JQs flat "$SERVICES_FILE" '' '
+        (."'"$service_name"'".accounts | if (.|type == "string") then {} else . end) as $accounts |
+        reduce ({user_name,phone_number,password,access_token,device_no,device_id,refresh}|keys_unsorted[]) as $key ([];
+        $accounts[$key] as $val | if $val then
+            . + [$val + "\u0002\u0003"]
+        else
+            . + ["\u0003"]
+        end
+        )|@tsv' "${delimiters[@]}")
+
+        if [ -z "$m_user_name" ] 
+        then
+            ts_accs_count=0
+            return 0
+        fi
+
+        IFS="${delimiters[1]}" read -r -a ts_accs_user_name <<< "$m_user_name"
+        ts_accs_count=${#ts_accs_user_name[@]}
+
+        if [ -z "$m_phone_number" ] 
+        then
+            ts_accs_phone_number=("${ts_accs_user_name[@]//*/}")
+        else
+            IFS="${delimiters[1]}" read -r -a ts_accs_phone_number <<< "$m_phone_number"
+        fi
+
+        IFS="${delimiters[1]}" read -r -a ts_accs_password <<< "$m_password"
+        IFS="${delimiters[1]}" read -r -a ts_accs_access_token <<< "$m_access_token"
+        IFS="${delimiters[1]}" read -r -a ts_accs_device_no <<< "$m_device_no"
+        IFS="${delimiters[1]}" read -r -a ts_accs_device_id <<< "$m_device_id"
+        IFS="${delimiters[1]}" read -r -a ts_accs_refresh <<< "$m_refresh"
+
+        ts_accs_count=${#ts_accs_user_name[@]}
+    fi
 }
 
 List4gtvAccs()
 {
     GetServiceAccs 4gtv
-    _4gtv_accs_count=${#_4gtv_accs_email[@]}
     _4gtv_accs_list=""
+
     for((i=0;i<_4gtv_accs_count;i++));
     do
         if [ -n "${_4gtv_accs_token[i]:-}" ]
@@ -16158,6 +16299,7 @@ List4gtvAccs()
         fi
         _4gtv_accs_list="$_4gtv_accs_list ${green}$((i+1)).${normal}${indent_6}邮箱: ${green}${_4gtv_accs_email[i]}${normal}$is_login\n${indent_6}密码: ${green}${_4gtv_accs_pass[i]}${normal}\n\n"
     done
+
     if [ -n "$_4gtv_accs_list" ] 
     then
         Println "$_4gtv_accs_list"
@@ -16488,8 +16630,9 @@ Get4gtvAccToken()
 Use4gtvProxy()
 {
     GetDefault
+    d_4gtv_proxy=${d_4gtv_proxy:-$d_proxy}
     Println "$tip 可以使用脚本自带的 v2ray 管理面板添加代理, 可以输入 omit 省略此选项"
-    inquirer text_input "请输入 4gtv 代理, 比如 http://username:passsword@127.0.0.1:5555 : " _4gtv_proxy "${d_proxy:-$i18n_not_set}"
+    inquirer text_input "请输入 4gtv 代理, 比如 http://username:passsword@127.0.0.1:5555 : " _4gtv_proxy "${d_4gtv_proxy:-$i18n_not_set}"
     if [ "$_4gtv_proxy" == "omit" ] || [ "$_4gtv_proxy" == "$i18n_not_set" ]
     then
         _4gtv_proxy=""
@@ -17134,7 +17277,6 @@ ScheduleNiotv()
     fi
 
     printf -v today '%(%Y-%m-%d)T' -1
-    SCHEDULE_LINK_NIOTV="http://www.niotv.com/i_index.php?cont=day"
 
     for chnl in "${niotv_chnls[@]}"
     do
@@ -17142,25 +17284,22 @@ ScheduleNiotv()
         niotv_id=${chnl#*:}
         chnl_name=${niotv_id#*:}
         niotv_id=${niotv_id%%:*}
+        SCHEDULE_LINK_NIOTV="http://www.niotv.com/i_index.php?cont=day&ch_id=$niotv_id"
         empty=1
         check=1
         schedule=""
         while IFS= read -r line
         do
-            if [[ $line == *"<td class=epg_tab_tm>"* ]] 
-            then
+            while [[ $line =~ epg_col_time\'\> ]] 
+            do
                 empty=0
-                line=${line#*<td class=epg_tab_tm>}
+                line=${line#*epg_col_time\'>}
                 start_time=${line%%~*}
                 end_time=${line#*~}
                 end_time=${end_time%%</td>*}
-            fi
-
-            if [[ $line == *"</a></td>"* ]] 
-            then
-                line=${line%% </a></td>*}
-                line=${line%%</a></td>*}
-                title=${line#*target=_blank>}
+                title=${line%% </a></td>*}
+                title=${title%%</a></td>*}
+                title=${title##*>}
                 title=${title//\"/}
                 title=${title//\'/}
                 title=${title//\\/\'}
@@ -17182,7 +17321,7 @@ ScheduleNiotv()
                     "time":"'"$start_time"'",
                     "sys_time":"'"$sys_time"'"
                 }'
-            fi
+            done
         done < <(curl ${niotv_proxy[@]+"${niotv_proxy[@]}"} -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" --data "act=select&sch_id=$niotv_id&day=$today" "$SCHEDULE_LINK_NIOTV")
 
         if [ "$empty" -eq 1 ] 
@@ -17354,7 +17493,7 @@ ScheduleJiushi()
     done
 }
 
-ScheduleHbozw()
+ScheduleHboasia()
 {
     printf -v today '%(%Y-%m-%d)T' -1
 
@@ -17363,51 +17502,47 @@ ScheduleHbozw()
         printf '{"%s":[]}' "hbo" > "$SCHEDULE_JSON"
     fi
 
-    for chnl in "${hbozw_chnls[@]}"
+    for chnl in "${hboasia_chnls[@]}"
     do
         chnl_id=${chnl%%:*}
-        chnl_feed=${chnl#*:}
-        chnl_name=${chnl_feed#*:}
-        chnl_feed=${chnl_feed%:*}
-        curl_commands=()
-
-        schedule_path="/HBO/zh-cn/ajax/home_schedule?date=$today&channel=${chnl_id//$chnl_feed/}&feed=$chnl_feed"
-
-        if [ -s "$IPTV_ROOT/hboasia_proxy" ] 
-        then
-            curl_commands+=( -s -Lm 20 "$(< $IPTV_ROOT/hboasia_proxy)$schedule_path" )
-        else
-            curl_commands+=( -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://hboasia.com$schedule_path" )
-        fi
+        chnl_name=${chnl#*:}
+        hbo_id=${chnl_name%:*}
+        chnl_name=${chnl_name#*:}
 
         schedule=""
-        while IFS="^" read -r program_id program_time program_sys_time program_title program_title_local
+        while IFS="^" read -r program_time program_title program_classification
         do
-            program_id=${program_id#\"}
-            program_title_local=${program_title_local%\"}
+            program_time=${program_time#\"}
+            program_classification=${program_classification%\"}
 
-            if [ -n "$program_title_local" ] 
+            if [ -n "$program_classification" ] 
             then
-                program_title="$program_title_local $program_title"
+                program_title="$program_title($program_classification)"
             fi
+
+            program_sys_time=$(date -d "$program_time" +%s)
+            new_program_time=$(printf '%(%H:%M)T' "$program_sys_time")
 
             [ -n "$schedule" ] && schedule="$schedule,"
             schedule=$schedule'{
-                "id":"'"$program_id"'",
+                "id":"'"$hbo_id"'",
                 "title":"'"$program_title"'",
-                "time":"'"$program_time"'",
+                "time":"'"$new_program_time"'",
                 "sys_time":"'"$program_sys_time"'"
             }'
-        done < <(curl ${curl_commands[@]+"${curl_commands[@]}"} | $JQ_FILE '.[] | [.id,.time,.sys_time,.title,.title_local] | join("^")')
+        done < <(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" \
+                -d "channel=$hbo_id" \
+                -d "date=$today" \
+                https://hboasia.com/ajax/getschedule.php | $JQ_FILE '.[] | [.publictime,.title,.classification] | join("^")')
 
         if [ -n "$schedule" ] 
         then
             json=true
             jq_path='["'"$chnl_id"'"]'
             JQ update "$SCHEDULE_JSON" "[$schedule]"
-            Println "$info $chnl_name [$chnl_id] hbo 中文节目表更新成功"
+            Println "$info $chnl_name [$chnl_id] hbo亚洲 节目表更新成功"
         else
-            Println "$error $chnl_name [$chnl_id] hbo 中文节目表更新失败"
+            Println "$error $chnl_name [$chnl_id] hbo亚洲 节目表更新失败"
         fi
     done
 }
@@ -17517,7 +17652,7 @@ ScheduleOntvtonight()
         schedule=""
         start=0
 
-        if [ "${chnl_id%_*}" == "us" ] 
+        if [ "${chnl_id%_*}" == "us" ] || [ "${chnl_id%_*}" == "foxnews" ]
         then
             ct=""
         else
@@ -17715,7 +17850,7 @@ ScheduleAmlh()
     printf -v today '%(%Y-%-m-%-d)T' -1
     timestamp=$(date -d $today +%s)
 
-    SCHEDULE_LINK="http://www.lotustv.cc/index.php/index/getdetail.html"
+    SCHEDULE_LINK="http://www.macaulotustv.cc/index.php/index/getdetail.html"
 
     if [ ! -s "$SCHEDULE_JSON" ] 
     then
@@ -17806,17 +17941,47 @@ ScheduleAmlh()
     fi
 }
 
-ScheduleTvbhk()
+ScheduleFoxnews()
 {
     printf -v today '%(%Y-%m-%d)T' -1
-    sys_time=$(date -d $today +%s)
-    max_sys_time=$((sys_time+86400))
     yesterday=$(date --date="yesterday" +"%Y-%m-%d")
+    min_start_time=$(date -d "yesterday 22:00:00" +%s)
+    max_start_time=$(date -d "today 23:59:59" +%s)
+    schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://apps.foxnews.com/schedule_new/feed/fox-news.jn" |
+        $JQ_FILE --arg today "$today" --arg yesterday "$yesterday" --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","sys_time"]' '.day
+        | map(select(.["@attributes"].value == $yesterday or .["@attributes"].value == $today).show[]
+        | .["sys_time"] = (."start-utc"|fromdate)
+        | select(.sys_time > ($min|tonumber) and .sys_time < ($max|tonumber))
+        | .["time"] = (.sys_time|strflocaltime("%-H:%M%p"))
+        | with_entries(select(.key as $k | $keys | index($k))))[]')
+
+    if [ -n "$schedule" ] 
+    then
+        file=true
+        file_json=true
+        jq_path='["'"$chnl_id"'"]'
+        JQ update "$SCHEDULE_JSON" schedule
+        Println "$info $chnl_name [$chnl_id] 节目表更新成功"
+    else
+        Println "$error $chnl_name [$chnl_id] 节目表更新失败"
+    fi
+}
+
+ScheduleTvbhk()
+{
+    printf -v today '%(%Y%m%d)T' -1
+    sys_time=$(date -d $today +%s)
+    min_sys_time=$((sys_time-7200))
+    max_sys_time=$((sys_time+86400))
+    yesterday=$(date --date="yesterday" +"%Y%m%d")
 
     if [ ! -s "$SCHEDULE_JSON" ] 
     then
         printf '{"%s":[]}' "tvbhk_pearl" > "$SCHEDULE_JSON"
     fi
+
+    tvbhk_yesterday_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://programme.tvb.com/" "https://programme.tvb.com/api/schedule?input_date=$yesterday&network_code=J,B,C,P,A")
+    tvbhk_today_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://programme.tvb.com/" "https://programme.tvb.com/api/schedule?input_date=$today&network_code=J,B,C,P,A")
 
     for chnl in "${tvbhk_chnls[@]}"
     do
@@ -17825,81 +17990,16 @@ ScheduleTvbhk()
         chnl_name=${chnl_code#*:}
         chnl_code=${chnl_code%%:*}
 
-        schedule=""
+        yesterday_schedule=$($JQ_FILE --arg code "$chnl_code" --arg min "$min_sys_time" --argjson keys '["title","time","sys_time"]' '.data.list | map(select(.network_code == $code).schedules[] | select((.event_time|tonumber) > ($min|tonumber)) | .["time"] = (.event_time|strflocaltime("%H:%M")) | .["sys_time"] = .event_time | .["title"] = .programme_title | with_entries(select(.key as $k | $keys | index($k))))' <<< "$tvbhk_yesterday_schedule")
+        today_schedule=$($JQ_FILE --arg code "$chnl_code" --arg max "$max_sys_time" --argjson keys '["title","time","sys_time"]' '.data.list | map(select(.network_code == $code).schedules[] | select((.event_time|tonumber) < ($max|tonumber)) | .["time"] = (.event_time|strflocaltime("%H:%M")) | .["sys_time"] = .event_time | .["title"] = .programme_title | with_entries(select(.key as $k | $keys | index($k))))' <<< "$tvbhk_today_schedule")
 
-        while IFS= read -r line
-        do
-            if [[ $line == *"<li"* ]] 
-            then
-                while [[ $line == *"<li"* ]] 
-                do
-                    line=${line#*time=\"}
-                    program_sys_time=${line%%\"*}
-                    if [ "$program_sys_time" -ge "$sys_time" ]
-                    then
-                        line=${line#*<span class=\"time\">}
-                        program_time=${line%%</span>*}
-                        line=${line#*<p class=\"ftit\">}
-                        if [ "${line:0:7}" == "<a href" ] 
-                        then
-                            line=${line#*>}
-                        fi
-                        program_title=${line%%</p>*}
-                        program_title=${program_title%% <cite*}
-                        program_title=${program_title%%</a>*}
-                        program_title=${program_title%%<em *}
-                        program_title=${program_title//&nbsp;/ }
-                        [ -n "$schedule" ] && schedule="$schedule,"
-                        schedule=$schedule'{
-                            "title":"'"$program_title"'",
-                            "time":"'"$program_time"'",
-                            "sys_time":"'"$program_sys_time"'"
-                        }'
-                    fi
-                done
-                break
-            fi
-        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://programme.tvb.com/ajax.php?action=channellist&code=$chnl_code&date=$yesterday" 2> /dev/null)
-
-        while IFS= read -r line
-        do
-            if [[ $line == *"<li"* ]] 
-            then
-                while [[ $line == *"<li"* ]] 
-                do
-                    line=${line#*time=\"}
-                    program_sys_time=${line%%\"*}
-                    if [ "$program_sys_time" -ge "$sys_time" ] && [ "$program_sys_time" -le "$max_sys_time" ]
-                    then
-                        line=${line#*<span class=\"time\">}
-                        program_time=${line%%</span>*}
-                        line=${line#*<p class=\"ftit\">}
-                        if [ "${line:0:7}" == "<a href" ] 
-                        then
-                            line=${line#*>}
-                        fi
-                        program_title=${line%%</p>*}
-                        program_title=${program_title%% <cite*}
-                        program_title=${program_title%%</a>*}
-                        program_title=${program_title%%<em *}
-                        program_title=${program_title//&nbsp;/ }
-                        [ -n "$schedule" ] && schedule="$schedule,"
-                        schedule=$schedule'{
-                            "title":"'"$program_title"'",
-                            "time":"'"$program_time"'",
-                            "sys_time":"'"$program_sys_time"'"
-                        }'
-                    fi
-                done
-                break
-            fi
-        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://programme.tvb.com/ajax.php?action=channellist&code=$chnl_code&date=$today" 2> /dev/null)
+        schedule=$($JQ_FILE --argjson merge "$today_schedule" '.+=$merge|unique_by(.sys_time)' <<< "$yesterday_schedule")
 
         if [ -n "$schedule" ] 
         then
             json=true
             jq_path='["'"$chnl_id"'"]'
-            JQ update "$SCHEDULE_JSON" "[$schedule]"
+            JQ update "$SCHEDULE_JSON" "$schedule"
             Println "$info $chnl_name [$chnl_id] tvbhk 节目表更新成功"
         else
             Println "$error $chnl_name [$chnl_id] tvbhk 节目表更新失败"
@@ -18773,16 +18873,29 @@ ScheduleSupersport()
         printf '{"%s":[]}' "supersportfootball" > "$SCHEDULE_JSON"
     fi
 
-    supersport_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://supersport.com/tv-guide" "https://supersport.com/api/videos/tv-guide?timestamps[]=$(date -d 01:00:00 +%s)&timestamps[]=$(date -d 23:59:59 +%s)&live=false&country_code=ZA")
+    printf -v today '%(%Y-%m-%d)T' -1
+    yesterday=$(date -d "yesterday" +"%Y-%m-%d")
+    min_start_time=$(date -d "yesterday 22:00:00" +%s)
+    max_start_time=$(date -d "today 23:59:59" +%s)
+
+    ss_yesterday_schedule=$(curl -s -Lm 20 --compressed -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://supersport.com/tv-guide" "https://supersport.com/apix/guide/v5.3/tvguide?countryCode=za&channelOnly=false&startDateTime=$yesterday&liveOnly=false")
+    ss_today_schedule=$(curl -s -Lm 20 --compressed -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://supersport.com/tv-guide" "https://supersport.com/apix/guide/v5.3/tvguide?countryCode=za&channelOnly=false&startDateTime=$today&liveOnly=false")
 
     for chnl in "${supersport_chnls[@]}"
     do
         chnl_id=${chnl%%:*}
         chnl_name="${chnl#*:}"
+        supersport_name="${chnl_name%:*}"
+        chnl_name="${chnl_name#*:}"
 
-        schedule=$($JQ_FILE --arg chnl_name "$chnl_name" --argjson keys '["title","time","sys_time"]' 'map(select(.channel == $chnl_name) | .["time"] = (.starts_at|fromdate|strflocaltime("%H:%M")) | .["sys_time"] = (.starts_at|fromdate) | with_entries(select(.key as $k | $keys | index($k))))' <<< "$supersport_schedule")
+        yesterday_schedule=$($JQ_FILE --arg supersport_name "$supersport_name" --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","sys_time"]' 'map(select(.name == $supersport_name) 
+        | .["sys_time"] = (.start|sub("(?<month>.*)/(?<day>.*)/(?<year>.*) (?<time>.*)"; "\(.year)-\(.month)-\(.day)T\(.time)Z")|fromdate - 7200) | select(.sys_time > ($min|tonumber) and .sys_time < ($max|tonumber)) | .["time"] = (.sys_time|strflocaltime("%-H:%M%p")) | with_entries(select(.key as $k | $keys | index($k))))' <<< "$ss_yesterday_schedule")
+        today_schedule=$($JQ_FILE --arg supersport_name "$supersport_name" --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","sys_time"]' 'map(select(.name == $supersport_name) 
+        | .["sys_time"] = (.start|sub("(?<month>.*)/(?<day>.*)/(?<year>.*) (?<time>.*)"; "\(.year)-\(.month)-\(.day)T\(.time)Z")|fromdate - 7200) | select(.sys_time > ($min|tonumber) and .sys_time < ($max|tonumber)) | .["time"] = (.sys_time|strflocaltime("%-H:%M%p")) | with_entries(select(.key as $k | $keys | index($k))))' <<< "$ss_today_schedule")
 
-        if [ -n "$schedule" ] 
+        schedule=$($JQ_FILE --argjson today "$today_schedule" '.+=$today' <<< "$yesterday_schedule")
+
+        if [ "$schedule" != "[]" ] 
         then
             json=true
             jq_path='["'"$chnl_id"'"]'
@@ -18810,17 +18923,24 @@ ScheduleBtsport()
     #bt_prop="${bt_prop%;*}"
     #bt_channels=$($JQ_FILE -r '.epg.modules.common.channels|join(",")' <<< "$bt_prop")
     #api_key=$($JQ_FILE -r '.epg.modules.common.apiKey' <<< "$bt_prop")
-    bt_channels="hspr,hspc,hspd,hspf,hspg,hspk"
-    api_key="b5986b31b34243c4be2da2dc8020aaaf"
 
-    btsport_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.bt.com/" "https://users-atlas.metabroadcast.com/4/schedules.json?id=$bt_channels&annotations=channel,content_detail,content.broadcast_channel&from=${yesterday}T16:00:00.000Z&to=${today}T16:00:00.000Z&source=api.youview.tv&key=$api_key")
+    #bt_prop=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.bt.com/" https://www.player.bt.com/)
+    #bt_prop="${bt_prop##*src=\"}"
+    #bt_prop="${bt_prop%%\"*}"
+    #bt_prop=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.player.bt.com/" https://www.player.bt.com/$bt_prop)
+    #bt_prop="${bt_prop##*_yvContentEnabled\?\"}"
+    #api_key="${bt_prop%%\"*}"
+
+    api_key="b4d2edb68da14dfb9e47b5465e99b1b1"
 
     for chnl in "${btsport_chnls[@]}"
     do
         chnl_id=${chnl%%:*}
         chnl_name="${chnl#*:}"
+        bt_id=${chnl_name%:*}
+        chnl_name="${chnl_name#*:}"
 
-        schedule=$($JQ_FILE --arg channel_name "$chnl_name" --argjson keys '["title","time","sys_time"]' '.schedules | map(select(.channel.title == $channel_name).entries[] | .["time"] = (.broadcast.transmission_time|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate|strflocaltime("%H:%M")) | .["sys_time"] = (.broadcast.transmission_time|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate) | .["title"] = .item.title | with_entries(select(.key as $k | $keys | index($k))))' <<< "$btsport_schedule")
+        schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.player.bt.com/" "https://voila.metabroadcast.com/4/schedules/$bt_id.json?key=$api_key&from=${yesterday}T16:00:00.000Z&to=${today}T16:00:00.000Z&source=api.youview.tv&annotations=content.description,content.brand_summary,content.broadcasts,content.locations" | $JQ_FILE --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","start_time","end_time"]' '.schedule.entries | map(select(.item.title|test(" v ";"i")) | .["start_time"] = (.broadcast.transmission_time|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate) | select(.start_time > ($min|tonumber) and .start_time < ($max|tonumber)) | .["end_time"] = (.broadcast.transmission_end_time|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate) |.["time"] = (.start_time|strflocaltime("%Y-%m-%d %H:%M %p")) | .["title"] = .item.title | with_entries(select(.key as $k | $keys | index($k))))')
 
         if [ -n "$schedule" ] 
         then
@@ -20291,16 +20411,13 @@ Schedule()
         "rh:902:惹火台"
     )
 
-    hbozw_chnls=(
-        "hbo:satellite:HBO 亚洲"
-        "hbohd:satellite:HBO HD 亚洲"
-        "hits:satellite:HBO 强档巨献 亚洲"
-        "signature:satellite:HBO 原创巨献 亚洲"
-        "family:satellite:HBO 温馨家庭 亚洲"
-        "red:satellite:HBO RED 亚洲"
-        "cinemax:satellite:CINEMAX 亚洲"
-        "hbocn:cn:HBO 中国"
-        "hbotw:tw:HBO 台湾"
+    hboasia_chnls=(
+        "hbo:1:HBO 亚洲"
+        "hbohd:2:HBO HD 亚洲"
+        "signature:3:HBO 原创巨献 亚洲"
+        "family:4:HBO 温馨家庭 亚洲"
+        "hits:5:HBO 强档巨献 亚洲"
+        "cinemax:7:CINEMAX 亚洲"
     )
 
     hbous_chnls=(
@@ -20324,8 +20441,10 @@ Schedule()
         "us_abc@abc@69048344@-04:00:ABC"
         "au_abcnews@abc-news@2141@+02:00:ABC NEWS"
         "us_cbs@cbs@69048345@-04:00:CBS"
+        "us_cnn@cable-news-network@69047095@-04:00:CNN"
         "us_nbc@nbc@69048423@-04:00:NBC"
-        "us_fox@fox@69048367@-04:00:FOX"
+        "us_fox@fox@69048367@-05:00:FOX"
+        "us_fs1@fox-sports-1@666266122@-04:00:FOX Sports 1"
         "us_msnbc@msnbc@69023101@-04:00:MSNBC"
         "us_amc@amc-east@69047124@-04:00:AMC"
         "us_nickjr@nick-jr@69047681@-04:00:Nick Jr"
@@ -20338,23 +20457,28 @@ Schedule()
         "uk_mtvbase@mtv-base@69036338@+01:00:MTV Base 英国"
         "uk_mtvclassic@mtv-classic@69043201@+01:00:MTV Classic 英国"
         "uk_mtvhits@mtv-hits-eu@69036341@+01:00:MTV Hits 英国"
+        "uk_bbcone@bbc-1@69035371@+01:00:BBC One"
         "us_comedycentral@comedy-central-east@69036536@-04:00:Comedy Central"
+        "foxnews@fox-news-channel@69047256@-05:00:FOX News"
+        "ca_tsn1@tsn@69024762@-04:15:TSN1"
+        "ca_tsn3@tsn3@1163557839@-04:15:TSN3"
+        "ca_tsn4@tsn4@1162010745@-04:15:TSN4"
     )
 
     tvbhk_chnls=(
-        "tvbhk_pearl:P:TVB 明珠台"
-        "tvbhk_jade:J:TVB 翡翠台"
-        "tvbhk_j2:B:TVB J2"
-        "tvbhk_tvbnewschannel:C:TVB 无线新闻台"
-        "tvbhk_tvbfinanceinformationchannel:A:TVB 无线财经资讯台"
-        "tvbhk_xinghe:X:TVB 星河频道"
-        "tvbhk_tvbclassic:E:TVB 经典台"
-        "tvbhk_tvbkoreandrama:K:TVB 韩剧台"
-        "tvbhk_tvbasiandrama:D:TVB 亚洲剧台"
-        "tvbhk_tvbchinesedrama:U:TVB 华语剧台"
-        "tvbhk_asianvariety:V:TVB 综艺旅游台"
-        "tvbhk_tvbfood:L:TVB 为食台"
-        "tvbhk_tvbclassicmovies:W:粤语片台"
+        "tvbhk_pearl:p:TVB 明珠台"
+        "tvbhk_jade:j:TVB 翡翠台"
+        "tvbhk_j2:b:TVB J2"
+        "tvbhk_tvbnewschannel:c:TVB 无线新闻台"
+        "tvbhk_tvbfinanceinformationchannel:a:TVB 无线财经资讯台"
+#        "tvbhk_xinghe:x:TVB 星河频道"
+#        "tvbhk_tvbclassic:e:TVB 经典台"
+#        "tvbhk_tvbkoreandrama:k:TVB 韩剧台"
+#        "tvbhk_tvbasiandrama:d:TVB 亚洲剧台"
+#        "tvbhk_tvbchinesedrama:u:TVB 华语剧台"
+#        "tvbhk_asianvariety:v:TVB 综艺旅游台"
+#        "tvbhk_tvbfood:l:TVB 为食台"
+#        "tvbhk_tvbclassicmovies:w:粤语片台"
     )
 
     singteltv_chnls=(
@@ -20469,38 +20593,38 @@ Schedule()
     )
 
     supersport_chnls=(
-        "supersportpremierleague:SuperSport Premier League"
-        "supersportespn:ESPN"
-        "supersportespn2:ESPN2"
-        "supersportfootball:SuperSport Football"
-        "supersportpsl:SuperSport PSL"
-        "supersportcricket:SuperSport Cricket"
-        "supersportgrandstand:SuperSport Grandstand"
-        "supersportrugby:SuperSport Rugby"
-        "supersportgolf:SuperSport Golf"
-        "supersportaction:SuperSport Action"
-        "supersportblitz:SuperSport Blitz"
-        "supersportlaliga:SuperSport La Liga"
-        "supersportmotorsport:SuperSport Motorsport"
-        "supersportplay:SuperSport Play"
-        "supersportmaximo1:SuperSport MáXimo 1"
-        "supersporttennis:SuperSport Tennis"
-        "supersportginx:Ginx eSports TV"
-        "supersportwwe:WWE Channel"
-        "supersportcsn:Community Services Network"
-        "supersportvariety1:SuperSport Variety 1"
-        "supersportvariety2:SuperSport Variety 2"
-        "supersportvariety3:SuperSport Variety 3"
-        "supersportvariety4:SuperSport Variety 4"
+        "supersportpremierleague:SS Premier League:SuperSport Premier League"
+        "supersportespn:ESPN HD:ESPN HD"
+        "supersportespn2:ESPN 2 HD:ESPN2 HD"
+        "supersportfootball:SS Football:SuperSport Football"
+        "supersportpsl:SS PSL:SuperSport PSL"
+        "supersportcricket:SS Cricket:SuperSport Cricket"
+        "supersportgrandstand:SS Grandstand:SuperSport Grandstand"
+        "supersportrugby:SS Rugby:SuperSport Rugby"
+        "supersportgolf:SS Golf:SuperSport Golf"
+        "supersportaction:SS Action:SuperSport Action"
+        "supersportblitz:SS Blitz:SuperSport Blitz"
+        "supersportlaliga:SS La Liga:SuperSport La Liga"
+        "supersportmotorsport:SS Motorsport:SuperSport Motorsport"
+        "supersportplay:SS Play:SuperSport Play"
+        "supersportmaximo1:SS Maximo 1:SuperSport MáXimo 1"
+        "supersporttennis:SS Tennis:SuperSport Tennis"
+        "supersportginx:Ginx eSports HD:Ginx eSports TV"
+#        "supersportwwe:WWE Channel"
+#        "supersportcsn:Community Services Network"
+        "supersportvariety1:SS Variety 1:SuperSport Variety 1"
+        "supersportvariety2:SS Variety 2:SuperSport Variety 2"
+        "supersportvariety3:SS Variety 3:SuperSport Variety 3"
+        "supersportvariety4:SS Variety 4:SuperSport Variety 4"
     )
 
     btsport_chnls=(
-        "btsportespn:BT Sport//ESPN"
-        "btsport1:BT Sport 1"
-        "btsport2:BT Sport 2"
-        "btsport3:BT Sport 3"
-        "btsportultimate:BT Sport Ultimate"
-        "boxnation:Box Nation"
+        #"btsportespn:BT Sport//ESPN"
+        "btsportultimate:hspr:BT Sport Ultimate"
+        "btsport1:hspc:BT Sport 1"
+        "btsport2:hspd:BT Sport 2"
+        "btsport3:hspf:BT Sport 3"
+        "btsport4:hspg:BT Sport 4"
     )
 
     btsporton_chnls=(
@@ -20563,7 +20687,7 @@ Schedule()
         "ifundm2:litv-ftv11:i-Fun動漫台2"
         "ifundm3:litv-ftv12:i-Fun動漫台3"
         "babyfirst:litv-longturn02:Baby First"
-        "momoqz:4gtv-4gtv107:MOMO親子台"
+        "momoqz:4gtv-live107:MOMO親子台"
         "cnkt:4gtv-live205:CN卡通"
         "dsgw1:4gtv-live047:東森購物一台"
         "dsxw:litv-ftv14:東森新聞台"
@@ -20588,9 +20712,9 @@ Schedule()
         "hgyl:4gtv-4gtv016:韓國娛樂台 KMTV"
         "comedycentral:4gtv-4gtv024:Comedy Central 爆笑頻道"
         "lifetime:4gtv-4gtv029:Lifetime 娛樂頻道"
-        "dyys:4gtv-4gtv031:電影原聲台CMusic"
+        "dyys:4gtv-live031:電影原聲台CMusic"
         "traceurban:4gtv-4gtv082:TRACE Urban"
-        "mtvlivetw:4gtv-4gtv025:MTV Live HD 音樂頻道"
+        "mtvlivetw:4gtv-live025:MTV Live HD 音樂頻道"
         "mezzolive:4gtv-4gtv083:Mezzo Live HD"
         "classica:4gtv-4gtv059:CLASSICA 古典樂"
         "mdqys:litv-longturn16:梅迪奇藝術頻道"
@@ -20668,12 +20792,17 @@ Schedule()
         "tvbshl:4gtv-4gtv068:TVBS 欢乐台"
         "liveabc:4gtv-live030:LiveABC 互動英語頻道"
         "arirang:4gtv-live202:阿里郎頻道"
+        "gdlrollor:4gtv-live012:滚动力roller"
+        "jdkt:4gtv-live022:经典卡通台"
+        "etkt:4gtv-live009:儿童卡通台"
+        "jxdm:4gtv-live024:精选动漫台"
     )
 
     other_chnls=(
         "disneyjr:迪士尼儿童频道(台湾)"
         "foxmovies:fox movies (台湾)"
         "amlh:澳门莲花"
+        "foxnews:FOX News"
     )
 
     providers=(
@@ -20681,7 +20810,7 @@ Schedule()
         "niotv:niotv 节目表"
         "nowtv:nowtv 节目表"
         "icable:i-cable 节目表"
-        "hbozw:hbo 中文 节目表"
+        "hboasia:hbo 亚洲 节目表"
         "hbous:hbo 美国 节目表"
         "ontvtonight:ontvtonight 节目表"
         "tvbhk:TVB 香港 节目表"
@@ -20705,7 +20834,7 @@ Schedule()
         provider_id="_4gtv"
     elif [ "${2:-}" == "hbo" ] 
     then
-        provider_id="hbozw"
+        provider_id="hboasia"
     elif [ "${2:-}" == "si" ] 
     then
         provider_id="singteltv"
@@ -20770,8 +20899,8 @@ Schedule()
         icable)
             ScheduleIcable
         ;;
-        hbo|hbozw)
-            ScheduleHbozw
+        hbo|hboasia)
+            ScheduleHboasia
         ;;
         hbous)
             ScheduleHbous "${4:-}"
@@ -20930,94 +21059,6 @@ Schedule()
     esac
 }
 
-TsIsUnique()
-{
-    not_unique=$(curl -s -Lm 10 -H "User-Agent: $user_agent" "${ts_array[unique_url]}?accounttype=${ts_array[acc_type_reg]}&username=$account" | $JQ_FILE '.ret')
-    if [ "$not_unique" != 0 ] 
-    then
-        Println "$error 用户名已存在,请重新输入!"
-    fi
-}
-
-TsImg()
-{
-    IMG_FILE="$IPTV_ROOT/ts_yzm.jpg"
-    if [ -n "${ts_array[refresh_token_url]:-}" ] 
-    then
-        deviceno=$(< /proc/sys/kernel/random/uuid)
-        str=$(printf '%s' "$deviceno" | md5sum)
-        str=${str%% *}
-        str=${str:7:1}
-        deviceno="$deviceno$str"
-        declare -A token_array
-        while IFS="=" read -r key value
-        do
-            token_array[$key]="$value"
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' --data '{"role":"guest","deviceno":"'"$deviceno"'","deviceType":"yuj"}' "${ts_array[token_url]}" | $JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]')
-
-        if [ "${token_array[ret]}" -eq 0 ] 
-        then
-            declare -A refresh_token_array
-            while IFS="=" read -r key value
-            do
-                refresh_token_array[$key]="$value"
-            done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' --data '{"accessToken":"'"${token_array[accessToken]}"'","refreshToken":"'"${token_array[refreshToken]}"'"}' "${ts_array[refresh_token_url]}" | $JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]')
-
-            if [ "${refresh_token_array[ret]}" -eq 0 ] 
-            then
-                declare -A img_array
-                while IFS="=" read -r key value
-                do
-                    img_array[$key]="$value"
-                done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "${ts_array[img_url]}?accesstoken=${refresh_token_array[accessToken]}" | $JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]')
-
-                if [ "${img_array[ret]}" -eq 0 ] 
-                then
-                    picid=${img_array[picid]}
-                    image=${img_array[image]}
-                    refresh_img=0
-                    base64 -d <<< "${image#*,}" > "$IMG_FILE"
-                    /usr/local/bin/imgcat --half-height "$IMG_FILE"
-                    rm -f "${IMG_FILE:-notfound}"
-                    Println "$info 输入图片验证码: "
-                    read -p "(默认: 刷新验证码): " pincode
-                    [ -z "$pincode" ] && refresh_img=1
-                    return 0
-                fi
-            fi
-        fi
-    else
-        declare -A token_array
-        while IFS="=" read -r key value
-        do
-            token_array[$key]="$value"
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' --data '{"usagescen":1}' "${ts_array[token_url]}" | $JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]')
-
-        if [ "${token_array[ret]}" -eq 0 ] 
-        then
-            declare -A img_array
-            while IFS="=" read -r key value
-            do
-                img_array[$key]="$value"
-            done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "${ts_array[img_url]}?accesstoken=${token_array[access_token]}" | $JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]')
-
-            if [ "${img_array[ret]}" -eq 0 ] 
-            then
-                picid=${img_array[picid]}
-                image=${img_array[image]}
-                refresh_img=0
-                base64 -d <<< "${image#*,}" > "$IMG_FILE"
-                /usr/local/bin/imgcat --half-height "$IMG_FILE"
-                rm -f "${IMG_FILE:-notfound}"
-                Println "$info 输入图片验证码: "
-                read -p "(默认: 刷新验证码): " pincode
-                [ -z "$pincode" ] && refresh_img=1
-                return 0
-            fi
-        fi
-    fi
-}
-
 ImgcatInstall()
 {
     echo
@@ -21026,7 +21067,8 @@ ImgcatInstall()
     Progress &
     progress_pid=$!
     trap '
-        kill $progress_pid 2> /dev/null
+        kill $progress_pid
+        wait $progress_pid 2> /dev/null
     ' EXIT
     DistCheck
     if [ "$dist" == "rpm" ] 
@@ -21057,369 +21099,881 @@ ImgcatInstall()
     make >/dev/null 2>&1
     make install >/dev/null 2>&1
     kill $progress_pid
+    wait $progress_pid 2> /dev/null || true
     trap - EXIT
     echo -n "...100%" && Println "$info imgcat 安装完成"
 }
 
-TsRegister()
+TsGetToken()
 {
-    if [ ! -e "/usr/local/bin/imgcat" ] &&  [ -n "${ts_array[img_url]:-}" ]
+    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' --data '{"role":"guest","deviceno":"'"$device_no"'","deviceType":"yuj"}' "$access_token_url") 
     then
-        ImgcatInstall
+        Println "$error 无法连接服务器, 请重试"
+        return 1
     fi
-    not_unique=1
-    while [ "$not_unique" != 0 ] 
-    do
-        Println "$info 输入账号: "
-        read -p "$i18n_default_cancel" account
-        [ -z "$account" ] && Println "$i18n_canceled...\n" && exit 1
-        if [ -z "${ts_array[unique_url]:-}" ] 
-        then
-            not_unique=0
-        else
-            TsIsUnique
-        fi
-    done
 
-    Println "$info 输入密码: "
-    read -p "$i18n_default_cancel" password
-    [ -z "$password" ] && Println "$i18n_canceled...\n" && exit 1
+    IFS=" " read -r ret access_token refresh_token refresh_time < <($JQ_FILE -r '[.ret,.accessToken,.refreshToken,.refreshTime]|join(" ")' <<< "$res")
 
-    if [ -n "${ts_array[img_url]:-}" ] 
+    if [ "$ret" != 0 ] || [ -z "$access_token" ] || [ -z "$refresh_token" ] || [ -z "$refresh_time" ]
     then
-        refresh_img=1
-        while [ "$refresh_img" != 0 ] 
-        do
-            TsImg
-            [ "$refresh_img" -eq 1 ] && continue
-
-            if [ -n "${ts_array[sms_url]:-}" ] 
-            then
-                declare -A sms_array
-                while IFS="=" read -r key value
-                do
-                    sms_array[$key]="$value"
-                done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "${ts_array[sms_url]}?pincode=$pincode&picid=$picid&verifytype=3&account=$account&accounttype=1" | $JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]')
-
-                if [ "${sms_array[ret]}" -eq 0 ] 
-                then
-                    Println "$info 短信已发送!"
-                    Println "$info 输入短信验证码: "
-                    read -p "$i18n_default_cancel" smscode
-                    [ -z "$smscode" ] && Println "$i18n_canceled...\n" && exit 1
-
-                    declare -A verify_array
-                    while IFS="=" read -r key value
-                    do
-                        verify_array[$key]="$value"
-                    done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "${ts_array[verify_url]}?verifycode=$smscode&verifytype=3&username=$account&account=$account" | $JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]')
-
-                    if [ "${verify_array[ret]}" -eq 0 ] 
-                    then
-                        deviceno=$(< /proc/sys/kernel/random/uuid)
-                        str=$(printf '%s' "$deviceno" | md5sum)
-                        str=${str%% *}
-                        str=${str:7:1}
-                        deviceno="$deviceno$str"
-                        devicetype="yuj"
-                        md5_password=$(printf '%s' "$password" | md5sum)
-                        md5_password=${md5_password%% *}
-                        printf -v timestamp '%(%s)T' -1
-                        timestamp=$((timestamp * 1000))
-                        signature="$account|$md5_password|$deviceno|$devicetype|$timestamp"
-                        signature=$(printf '%s' "$signature" | md5sum)
-                        signature=${signature%% *}
-                        declare -A reg_array
-                        while IFS="=" read -r key value
-                        do
-                            reg_array[$key]="$value"
-                        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' --data '{"account":"'"$account"'","deviceno":"'"$deviceno"'","devicetype":"'"$devicetype"'","code":"'"${verify_array[code]}"'","signature":"'"$signature"'","birthday":"1970-1-1","username":"'"$account"'","type":1,"timestamp":"'"$timestamp"'","pwd":"'"$md5_password"'","accounttype":"'"${ts_array[acc_type_reg]}"'"}' "${ts_array[reg_url]}" | $JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]')
-
-                        if [ "${reg_array[ret]}" -eq 0 ] 
-                        then
-                            echo
-                            ExitOnList n "`gettext \"注册成功 ,是否登录账号\"`"
-                            TsLogin
-                        else
-                            Println "$error 注册失败!"
-                            printf '%s\n' "${reg_array[@]}"
-                        fi
-                    fi
-
-                else
-                    if [ -z "${ts_array[unique_url]:-}" ] 
-                    then
-                        Println "$error 验证码或其它错误!请重新尝试!"
-                    else
-                        Println "$error 验证码错误!"
-                    fi
-                    #printf '%s\n' "${sms_array[@]}"
-                    refresh_img=1
-                fi
-            fi
-        done
-    else
-        md5_password=$(printf '%s' "$password" | md5sum)
-        md5_password=${md5_password%% *}
-        declare -A reg_array
-        while IFS="=" read -r key value
-        do
-            reg_array[$key]="$value"
-        done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "${ts_array[reg_url]}?username=$account&iconid=1&pwd=$md5_password&birthday=1970-1-1&type=1&accounttype=${ts_array[acc_type_reg]}" | $JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]')
-
-        if [ "${reg_array[ret]}" -eq 0 ] 
-        then
-            echo
-            ExitOnList n "`gettext \"注册成功 ,是否登录账号\"`"
-            TsLogin
-        else
-            Println "$error 发生错误"
-            printf '%s\n' "${sms_array[@]}"
-        fi
+        echo "$res"
+        Println "$error 获取 token 错误, 请重试"
+        return 2
     fi
+
+    Println "$info 请等待 $refresh_time 秒..."
+
+    sleep $refresh_time
+
+    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' --data '{"accessToken":"'"$access_token"'","refreshToken":"'"$refresh_token"'"}' "$refresh_access_token_url") 
+    then
+        Println "$error 无法连接服务器, 请重试"
+        return 3
+    fi
+
+    IFS=" " read -r ret access_token refresh_token refresh_time < <($JQ_FILE -r '[.ret,.accessToken,.refreshToken,.refreshTime]|join(" ")' <<< "$res")
+
+    if [ "$ret" != 0 ] || [ -z "$access_token" ] || [ -z "$refresh_token" ] || [ -z "$refresh_time" ]
+    then
+        echo "$res"
+        Println "$error 获取 token 错误, 请重试"
+        return 4
+    fi
+
+    printf -v now '%(%s)T' -1
+
+    refresh=$((now+refresh_time))
 }
 
-TsLogin()
+TsValidateLogin()
 {
-    if [ -z "${account:-}" ] 
+    if [ "$1" == "$i18n_cancel" ] || [[ $1 =~ ^[0-9]{11}$ ]] || [[ $1 =~ ^[A-Za-z][A-Za-z0-9_]{3,13}$ ]]
     then
-        Println "$info 输入账号: "
-        read -p "$i18n_default_cancel" account
-        [ -z "$account" ] && Println "$i18n_canceled...\n" && exit 1
+        return 0
     fi
 
-    if [ -z "${password:-}" ] 
+    return 1
+}
+
+TsValidateUserName()
+{
+    if [ "$1" == "$i18n_cancel" ] || [[ $1 =~ ^[A-Za-z][A-Za-z0-9_]{3,13}$ ]] 
     then
-        Println "$info 输入密码: "
-        read -p "$i18n_default_cancel" password
-        [ -z "$password" ] && Println "$i18n_canceled...\n" && exit 1
+        return 0
     fi
 
-    deviceno=$(< /proc/sys/kernel/random/uuid)
-    str=$(printf '%s' "$deviceno" | md5sum)
-    str=${str%% *}
-    str=${str:7:1}
-    deviceno="$deviceno$str"
-    md5_password=$(printf '%s' "$password" | md5sum)
-    md5_password=${md5_password%% *}
+    return 1
+}
 
-    if [ -z "${ts_array[img_url]:-}" ] 
+TsValidatePhoneNumber()
+{
+    if [ "$1" == "$i18n_cancel" ] || [[ $1 =~ ^[0-9]{11}$ ]] 
     then
-        TOKEN_LINK="${ts_array[login_url]}?deviceno=$deviceno&devicetype=3&accounttype=${ts_array[acc_type_login]:-2}&accesstoken=(null)&account=$account&pwd=$md5_password&isforce=1&businessplatform=1"
-        token=$(curl -s -Lm 10 -H "User-Agent: $user_agent" "$TOKEN_LINK")
-    else
-        printf -v timestamp '%(%s)T' -1
-        timestamp=$((timestamp * 1000))
-        signature="$deviceno|yuj|${ts_array[acc_type_login]}|$account|$timestamp"
-        signature=$(printf '%s' "$signature" | md5sum)
-        signature=${signature%% *}
-        if [[ ${ts_array[extend_info]} == "{"*"}" ]] 
-        then
-            token=$(curl -s -H 'Content-Type: application/json' --data '{"account":"'"$account"'","deviceno":"'"$deviceno"'","pwd":"'"$md5_password"'","devicetype":"yuj","businessplatform":1,"signature":"'"$signature"'","isforce":1,"extendinfo":'"${ts_array[extend_info]}"',"timestamp":"'"$timestamp"'","accounttype":'"${ts_array[acc_type_login]}"'}' "${ts_array[login_url]}")
-        else
-            token=$(curl -s -H 'Content-Type: application/json' --data '{"account":"'"$account"'","deviceno":"'"$deviceno"'","pwd":"'"$md5_password"'","devicetype":"yuj","businessplatform":1,"signature":"'"$signature"'","isforce":1,"extendinfo":"'"${ts_array[extend_info]}"'","timestamp":"'"$timestamp"'","accounttype":'"${ts_array[acc_type_login]}"'}' "${ts_array[login_url]}")
-        fi
+        return 0
     fi
 
-    declare -A login_array
-    while IFS="=" read -r key value
-    do
-        login_array[$key]="$value"
-    done < <($JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]' <<< "$token")
-
-    if [ -z "${login_array[access_token]:-}" ] 
-    then
-        Println "$error 账号错误"
-        printf '%s\n' "${login_array[@]}"
-        echo
-        ExitOnList n "`gettext \"是否注册账号\"`"
-        TsRegister
-    else
-        while :; do
-            Println "$info 输入需要转换的频道号码: "
-            read -p "$i18n_default_cancel" programid
-            [ -z "$programid" ] && Println "$i18n_canceled...\n" && exit 1
-            [[ $programid =~ ^[0-9]{10}$ ]] || { Println "$error频道号码错误!"; continue; }
-            break
-        done
-
-        if [ -n "${ts_array[auth_info_url]:-}" ] 
-        then
-            declare -A auth_info_array
-            while IFS="=" read -r key value
-            do
-                auth_info_array[$key]="$value"
-            done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "${ts_array[auth_info_url]}?accesstoken=${login_array[access_token]}&programid=$programid&playtype=live&protocol=hls&verifycode=${login_array[device_id]}" | $JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]')
-
-            if [ "${auth_info_array[ret]}" -eq 0 ] 
-            then
-                authtoken="ipanel123#%#&*(&(*#*&^*@#&*%()#*()$)#@&%(*@#()*%321ipanel${auth_info_array[auth_random_sn]}"
-                authtoken=$(printf '%s' "$authtoken" | md5sum)
-                authtoken=${authtoken%% *}
-                playtoken=${auth_info_array[play_token]}
-
-                declare -A auth_verify_array
-                while IFS="=" read -r key value
-                do
-                    auth_verify_array[$key]="$value"
-                done < <(curl -s -Lm 10 -H "User-Agent: $user_agent" "${ts_array[auth_verify_url]}?programid=$programid&playtype=live&protocol=hls&accesstoken=${login_array[access_token]}&verifycode=${login_array[device_id]}&authtoken=$authtoken" | $JQ_FILE -r 'to_entries | map("\(.key)=\(.value)") | .[]')
-
-                if [ "${auth_verify_array[ret]}" -eq 0 ] 
-                then
-                    TS_LINK="${ts_array[play_url]}?playtype=live&protocol=http&accesstoken=${login_array[access_token]}&playtoken=$playtoken&verifycode=${login_array[device_id]}&rate=org&programid=$programid"
-                else
-                    Println "$error 发生错误"
-                    printf '%s\n' "${auth_verify_array[@]}"
-                    exit 1
-                fi
-            else
-                Println "$error 发生错误"
-                printf '%s\n' "${auth_info_array[@]}"
-                exit 1
-            fi
-        else
-            TS_LINK="${ts_array[play_url]}?playtype=live&protocol=http&accesstoken=${login_array[access_token]}&playtoken=ABCDEFGH&verifycode=${login_array[device_id]}&rate=org&programid=$programid"
-        fi
-
-        Println "$info ts链接: \n$TS_LINK"
-
-        GetChannels
-
-        for((i=0;i<chnls_count;i++));
-        do
-            IFS="${delimiters[0]}" read -ra chnl_stream_links <<< "${chnls_stream_links[i]}"
-
-            for((j=0;j<${#chnl_stream_links[@]};j++));
-            do
-                if [[ ${chnl_stream_links[j]} =~ programid=$programid ]] 
-                then
-                    echo
-                    ExitOnList y "`gettext \"检测到此频道原有链接, 是否替换成新的ts链接\"`"
-
-                    jq_path='["channels",'$i',"stream_link",'$j']'
-                    JQ update "$CHANNELS_FILE" "$TS_LINK"
-                    Println "$info 修改成功 !\n"
-                    exit 0
-                fi
-            done
-        done
-    fi
+    return 1
 }
 
 TsMenu()
 {
     GetDefault
-
-    user_agent="iPhone; CPU iPhone OS 13_6 like Mac OS X"
-
     ShFallback
-    DEFAULT_CHANNELS_LINK="$SH_FALLBACK/$DEFAULT_CHANNELS"
+    ts_options=("$SH_FALLBACK/$TS_CHANNELS")
+
+    if [ -n "$d_sync_file" ] 
+    then
+        ts_options+=($d_sync_file)
+    fi
+
+    ts_options+=("手动输入")
 
     echo
-    inquirer list_input_index "是否使用默认频道文件: $DEFAULT_CHANNELS_LINK" yn_options yn_options_index
+    inquirer list_input_index "选择使用的频道文件" ts_options ts_options_index
 
-    if [ "$yn_options_index" -eq 0 ]
+    if [ "$ts_options_index" -eq $((${#ts_options[@]}-1)) ]
     then
-        TS_CHANNELS_LINK="$DEFAULT_CHANNELS_LINK"
+        echo
+        ExitOnText "请输入使用的频道文件链接或本地路径" ts_option
     else
-        if [ -n "$d_sync_file" ] && [[ -n $($JQ_FILE '.data[] | select(.reg_url != null)' "${d_sync_file%% *}") ]] 
+        ts_option="${ts_options[ts_options_index]}"
+    fi
+
+    if [[ $ts_option =~ ^https?:// ]] 
+    then
+        if ! ts_source=$(curl -s -Lm 10 "$ts_option") 
+        then
+            Println "$error 无法连接 $ts_option\n"
+            exit 1
+        fi
+    else
+        if [ ! -f "$ts_option" ] 
+        then
+            Println "$error $ts_option 不存在\n"
+            exit 1
+        fi
+        ts_source=$(< "$ts_option")
+    fi
+
+    [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+
+    EXIT_STATUS=0
+
+    IFS=$'\004\t' read -r m_name m_desc m_user_agent m_verify_type m_verify_acc_type m_reg_type \
+    m_server_version m_unique_url m_access_token_url m_refresh_access_token_url m_third_token_url m_play_url m_playback_url m_list_url \
+    m_img_url m_sms_url m_verify_url m_reg_url m_login_url m_auth_info_url m_auth_verify_url m_schedule_url \
+    m_event_info_url m_operating_system m_system_version m_model m_app_version < <(JQs flat "$ts_source" '.[0].data |
+    map(select(.reg_url != null)|with_entries(select(.key as $k |
+    ["name","desc","user_agent","verify_type","verify_acc_type","reg_type","server_version",
+    "extend_info","unique_url","access_token_url","refresh_access_token_url","third_token_url","play_url","playback_url","list_url","img_url",
+    "sms_url","verify_url","reg_url","login_url","auth_info_url","auth_verify_url","schedule_url","event_info_url"] | index($k))))' '
+    . as $source | ($source.extend_info // {} | if (.|type) == "string" then {} else . end) as $extend_info | reduce ({name,desc,
+    user_agent,verify_type,verify_acc_type,reg_type,server_version,unique_url,
+    access_token_url,refresh_access_token_url,third_token_url,play_url,playback_url,list_url,img_url,sms_url,verify_url,reg_url,
+    login_url,auth_info_url,auth_verify_url,schedule_url,event_info_url}|keys_unsorted[]) as $key ([];
+        $source[$key] as $val | if $val then
+            . + [$val + "\u0002\u0004"]
+        else
+            . + ["\u0004"]
+        end
+    ) + reduce ({operatingsystem,systemversion,model,appversion}|keys_unsorted[]) as $key ([];
+        $extend_info[$key] as $val | if $val then
+            . + [$val + "\u0003\u0004"]
+        else
+            . + ["\u0004"]
+        end
+    )|@tsv' "${delimiters[@]}") || EXIT_STATUS=$?
+
+    if [ "$EXIT_STATUS" -ne 0 ] || [ -z "$m_name" ]
+    then
+        Println "$error 没有找到频道\n"
+        exit 1
+    fi
+
+    IFS="${delimiters[1]}" read -ra ts_name <<< "$m_name"
+    IFS="${delimiters[1]}" read -ra ts_desc <<< "$m_desc"
+    IFS="${delimiters[1]}" read -ra ts_user_agent <<< "$m_user_agent"
+    IFS="${delimiters[1]}" read -ra ts_verify_type <<< "$m_verify_type"
+    IFS="${delimiters[1]}" read -ra ts_verify_acc_type <<< "$m_verify_acc_type"
+    IFS="${delimiters[1]}" read -ra ts_reg_type <<< "$m_reg_type"
+    IFS="${delimiters[1]}" read -ra ts_server_version <<< "$m_server_version"
+    IFS="${delimiters[1]}" read -ra ts_unique_url <<< "$m_unique_url"
+    IFS="${delimiters[1]}" read -ra ts_access_token_url <<< "$m_access_token_url"
+    IFS="${delimiters[1]}" read -ra ts_refresh_access_token_url <<< "$m_refresh_access_token_url"
+    IFS="${delimiters[1]}" read -ra ts_third_token_url <<< "$m_third_token_url"
+    IFS="${delimiters[1]}" read -ra ts_play_url <<< "$m_play_url"
+    IFS="${delimiters[1]}" read -ra ts_playback_url <<< "$m_playback_url"
+    IFS="${delimiters[1]}" read -ra ts_list_url <<< "$m_list_url"
+    IFS="${delimiters[1]}" read -ra ts_img_url <<< "$m_img_url"
+    IFS="${delimiters[1]}" read -ra ts_sms_url <<< "$m_sms_url"
+    IFS="${delimiters[1]}" read -ra ts_verify_url <<< "$m_verify_url"
+    IFS="${delimiters[1]}" read -ra ts_reg_url <<< "$m_reg_url"
+    IFS="${delimiters[1]}" read -ra ts_login_url <<< "$m_login_url"
+    IFS="${delimiters[1]}" read -ra ts_auth_info_url <<< "$m_auth_info_url"
+    IFS="${delimiters[1]}" read -ra ts_auth_verify_url <<< "$m_auth_verify_url"
+    IFS="${delimiters[1]}" read -ra ts_schedule_url <<< "$m_schedule_url"
+    IFS="${delimiters[1]}" read -ra ts_event_info_url <<< "$m_event_info_url"
+    IFS="${delimiters[2]}" read -ra ts_operating_system <<< "$m_operating_system"
+    IFS="${delimiters[2]}" read -ra ts_system_version <<< "$m_system_version"
+    IFS="${delimiters[2]}" read -ra ts_model <<< "$m_model"
+    IFS="${delimiters[2]}" read -ra ts_app_version <<< "$m_app_version"
+
+    rm -rf /tmp/cookie_jar
+    mkdir -p /tmp/cookie_jar
+
+    while true 
+    do
+        unset phone_number
+
+        echo
+        inquirer list_input_index "选择直播源" ts_desc ts_index
+
+        if [ "${ts_name[ts_index]}" == "jxtvnet" ] 
+        then
+            lan_options=( '不选择' '电信' '联通' )
+            Println "$tip 部分地区不选择线路可能无法连接"
+            inquirer list_input_index "选择线路" lan_options lan_options_index
+
+            sed -i '/.*.jxtvnet.tv/d' /etc/hosts
+
+            if [ "$lan_options_index" -eq 1 ] 
+            then
+                echo -e "59.63.205.33 access.jxtvnet.tv\n59.63.205.33 stream.slave.jxtvnet.tv\n59.63.205.33 slave.jxtvnet.tv" >> /etc/hosts
+            elif [ "$lan_options_index" -eq 2 ] 
+            then
+                echo -e "58.17.42.129 access.jxtvnet.tv\n58.17.42.129 stream.slave.jxtvnet.tv\n58.17.42.129 slave.jxtvnet.tv" >> /etc/hosts
+            fi
+        fi
+
+        name="${ts_name[ts_index]}"
+        desc="${ts_desc[ts_index]}"
+        user_agent="${ts_user_agent[ts_index]:-$USER_AGENT_PHONE}"
+        verify_type="${ts_verify_type[ts_index]}"
+        verify_acc_type="${ts_verify_acc_type[ts_index]}"
+        reg_type="${ts_reg_type[ts_index]}"
+        server_version="${ts_server_version[ts_index]}"
+        unique_url="${ts_unique_url[ts_index]}"
+        access_token_url="${ts_access_token_url[ts_index]}"
+        refresh_access_token_url="${ts_refresh_access_token_url[ts_index]}"
+        third_token_url="${ts_third_token_url[ts_index]}"
+        play_url="${ts_play_url[ts_index]}"
+        playback_url="${ts_playback_url[ts_index]}"
+        list_url="${ts_list_url[ts_index]}"
+        img_url="${ts_img_url[ts_index]}"
+        sms_url="${ts_sms_url[ts_index]}"
+        verify_url="${ts_verify_url[ts_index]}"
+        reg_url="${ts_reg_url[ts_index]}"
+        login_url="${ts_login_url[ts_index]}"
+        auth_info_url="${ts_auth_info_url[ts_index]}"
+        auth_verify_url="${ts_auth_verify_url[ts_index]}"
+        schedule_url="${ts_schedule_url[ts_index]}"
+        event_info_url="${ts_event_info_url[ts_index]}"
+        operating_system="${ts_operating_system[ts_index]}"
+        system_version="${ts_system_version[ts_index]}"
+        model="${ts_model[ts_index]}"
+        app_version="${ts_app_version[ts_index]}"
+
+        GetServiceAccs "$name"
+
+        accs_options=()
+
+        for((ts_accs_index=0;ts_accs_index<ts_accs_count;ts_accs_index++));
+        do
+            if [[ ${ts_accs_user_name[ts_accs_index]} =~ ^[A-Za-z] ]] 
+            then
+                accs_options+=("${ts_accs_user_name[ts_accs_index]} ${ts_accs_phone_number[ts_accs_index]}")
+            else
+                accs_options+=("${ts_accs_phone_number[ts_accs_index]}")
+            fi
+        done
+
+        accs_options+=( '添加账号' '注册账号' )
+
+        echo
+        inquirer list_input_index "选择账号" accs_options accs_options_index
+
+        if [ "$accs_options_index" -eq "$ts_accs_count" ] 
         then
             echo
-            inquirer list_input_index "是否使用本地频道文件? 本地路径: ${d_sync_file%% *}" yn_options yn_options_index
-            if [ "$yn_options_index" -eq 0 ] 
+            ExitOnText "输入用户名或手机号" login TsValidateLogin "用户名以字母开头, 4到14位字母、数字、下划线组成"
+
+            if [[ $login =~ ^[0-9]{11}$ ]] 
             then
-                TS_CHANNELS_FILE=${d_sync_file%% *}
-            fi
-        fi
-        if [ -z "${TS_CHANNELS_FILE:-}" ]
-        then
-            Println "$info 请输入使用的频道文件链接或本地路径: \n"
-            read -p "$i18n_default_cancel" TS_CHANNELS_LINK_OR_FILE
-            [ -z "$TS_CHANNELS_LINK_OR_FILE" ] && Println "$i18n_canceled...\n" && exit 1
-            if [[ $TS_CHANNELS_LINK_OR_FILE =~ ^https?:// ]] 
-            then
-                TS_CHANNELS_LINK="$TS_CHANNELS_LINK_OR_FILE"
+                phone_number="$login"
+                user_name="$phone_number"
             else
-                [ ! -e "$TS_CHANNELS_LINK_OR_FILE" ] && Println "文件不存在, $i18n_canceled...\n" && exit 1
-                TS_CHANNELS_FILE="$TS_CHANNELS_LINK_OR_FILE"
+                user_name="$login"
+            fi
+
+            echo
+            ExitOnText "输入密码" password
+
+            device_no=$(< /proc/sys/kernel/random/uuid)
+            str=$(printf '%s' "$device_no" | md5sum)
+            str=${str%% *}
+            str=${str:7:1}
+            device_no="$device_no$str"
+
+            if ! TsGetToken 
+            then
+                continue
+            fi
+
+            if [ -s "/tmp/cookie_jar/$name" ] 
+            then
+                cookie_jar=( -b "/tmp/cookie_jar/$name" )
+            else
+                cookie_jar=()
+            fi
+        elif [ "$accs_options_index" -eq "$((ts_accs_count+1))" ] 
+        then
+            while true 
+            do
+                if [ -z "$img_url" ] 
+                then
+                    echo
+                    ExitOnText "输入用户名" login TsValidateUserName "用户名以字母开头, 4到14位字母、数字、下划线组成"
+
+                    user_name="$login"
+                    reg_acc_type=1
+
+                    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" ${cookie_jar[@]+"${cookie_jar[@]}"} "$unique_url?username=$login&accounttype=$reg_acc_type") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
+                    then
+                        echo "$res"
+                        Println "$error 账号已经存在, 请登陆或重新输入!"
+                        continue
+                    fi
+                else
+                    echo
+                    ExitOnText "输入用户名或手机号" login TsValidateLogin "用户名以字母开头, 4到14位字母、数字、下划线组成"
+
+                    if [ -z "$third_token_url" ] 
+                    then
+                        if [ -s "/tmp/cookie_jar/$name" ] 
+                        then
+                            cookie_jar=( -b "/tmp/cookie_jar/$name" )
+                        else
+                            cookie_jar=( -c "/tmp/cookie_jar/$name" )
+                        fi
+                    else
+                        cookie_jar=()
+                    fi
+
+                    if [[ $login =~ ^[0-9]{11}$ ]] 
+                    then
+                        phone_number="$login"
+                        user_name="$login"
+                        reg_acc_type=2
+
+                        if [ -n "$unique_url" ] 
+                        then
+                            if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" ${cookie_jar[@]+"${cookie_jar[@]}"} "$unique_url?username=$login&accounttype=$reg_acc_type") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
+                            then
+                                echo "$res"
+                                Println "$error 账号已经存在, 请登陆或重新输入!"
+                                unset phone_number
+                                continue
+                            fi
+                        fi
+                    else
+                        user_name="$login"
+                        reg_acc_type=1
+
+                        if [ -n "$unique_url" ] 
+                        then
+                            if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" ${cookie_jar[@]+"${cookie_jar[@]}"} "$unique_url?username=$login&accounttype=$reg_acc_type") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
+                            then
+                                echo "$res"
+                                Println "$error 账号已经存在, 请登陆或重新输入!"
+                                continue
+                            fi
+                        fi
+
+                        echo
+                        ExitOnText "输入绑定的手机号" phone_number TsValidatePhoneNumber "请输入正确的手机号"
+                    fi
+                fi
+
+                break
+            done
+
+            echo
+            ExitOnText "输入密码" password
+
+            device_no=$(< /proc/sys/kernel/random/uuid)
+            str=$(printf '%s' "$device_no" | md5sum)
+            str=${str%% *}
+            str=${str:7:1}
+            device_no="$device_no$str"
+
+            if ! TsGetToken 
+            then
+                continue
+            fi
+
+            if [ -z "$img_url" ] 
+            then
+                md5_password=$(printf '%s' "$password" | md5sum)
+                md5_password=${md5_password%% *}
+
+                if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" "$reg_url?username=$user_name&iconid=1&pwd=$md5_password&birthday=1970-1-1&type=$reg_type&accounttype=$reg_acc_type") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
+                then
+                    echo "$res"
+                    Println "$error 注册失败, 请重试"
+                    continue
+                fi
+
+                Println "$info 注册成功, 请稍等..."
+                sleep 3
+            else
+                if [ ! -e "/usr/local/bin/imgcat" ] 
+                then
+                    ImgcatInstall
+                fi
+
+                while true 
+                do
+                    if [ -n "$third_token_url" ] 
+                    then
+                        if [ -s "/tmp/cookie_jar/$name" ] 
+                        then
+                            cookie_jar=( -b "/tmp/cookie_jar/$name" )
+                        else
+                            cookie_jar=( -c "/tmp/cookie_jar/$name" )
+                        fi
+
+                        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"usagescen":1}' "$third_token_url") 
+                        then
+                            Println "$error 无法获取 token, 请重试"
+                            continue 2
+                        fi
+
+                        IFS=" " read -r ret third_token < <($JQ_FILE -r '[.ret,.access_token]|join(" ")' <<< "$res")
+                    else
+                        if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' --data '{"role":"guest","deviceno":"'"$device_no"'","deviceType":"yuj"}' "$access_token_url") 
+                        then
+                            Println "$error 无法获取 token, 请重试"
+                            return 1
+                        fi
+
+                        IFS=" " read -r ret third_token < <($JQ_FILE -r '[.ret,.accessToken]|join(" ")' <<< "$res")
+                    fi
+
+                    if [ "$ret" != 0 ] || [ -z "$third_token" ]
+                    then
+                        echo "$res"
+                        Println "$error 无法获取 token, 请重试"
+                        continue 2
+                    fi
+
+                    if [ ! -s "/tmp/cookie_jar/$name" ] 
+                    then
+                        cookie_jar=()
+                    fi
+
+                    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" ${cookie_jar[@]+"${cookie_jar[@]}"} "$img_url?accesstoken=$third_token") 
+                    then
+                        Println "$error 无法获取图形验证码, 请重试"
+                        continue 2
+                    fi
+
+                    IFS=" " read -r ret picid image < <($JQ_FILE -r '[.ret,.picid,.image]|join(" ")' <<< "$res")
+
+                    if [ "$ret" != 0 ] || [ -z "$picid" ] || [ -z "$image" ]
+                    then
+                        echo "$res"
+                        Println "$error 无法获取图形验证码, 请重试"
+                        continue 2
+                    fi
+
+                    if TMP_FILE=$(mktemp -q) 
+                    then
+                        chmod +r "$TMP_FILE"
+                    else
+                        printf -v TMP_FILE '%(%m-%d-%H:%M:%S)T' -1
+                    fi
+
+                    trap '
+                        rm -f "$TMP_FILE"
+                    ' EXIT
+
+                    base64 -d <<< "${image#*,}" > "$TMP_FILE"
+
+                    /usr/local/bin/imgcat --half-height "$TMP_FILE"
+
+                    rm -f "$TMP_FILE"
+
+                    trap - EXIT
+
+                    echo
+                    inquirer text_input "输入图片验证码" pincode "刷新"
+
+                    if [ "$pincode" != "刷新" ] 
+                    then
+                        while true 
+                        do
+                            if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" ${cookie_jar[@]+"${cookie_jar[@]}"} "$sms_url?pincode=$pincode&picid=$picid&verifytype=$verify_type&account=$phone_number&accounttype=$verify_acc_type") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
+                            then
+                                echo "$res"
+                                Println "$error 无法获取短信验证码, 请重试"
+                                continue 2
+                            fi
+
+                            printf -v now '%(%s)T' -1
+                            next=$((now+120))
+
+                            echo
+                            inquirer text_input "输入短信验证码" smscode "再次发送"
+
+                            if [ "$smscode" == "再次发送" ] 
+                            then
+                                printf -v now '%(%s)T' -1
+                                if [ "$now" -lt "$next" ] 
+                                then
+                                    for((secs=next-now;secs>0;secs--));
+                                    do
+                                        echo -en "\r$secs 秒后重试"
+                                        sleep 1
+                                    done
+                                fi
+                                continue 2
+                            fi
+
+                            if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" ${cookie_jar[@]+"${cookie_jar[@]}"} "$verify_url?verifycode=$smscode&verifytype=$verify_type&username=$user_name&account=$phone_number") 
+                            then
+                                Println "$error 无法连接服务器, 请重试"
+                                continue 3
+                            fi
+
+                            IFS=" " read -r ret code < <($JQ_FILE -r '[.ret,.code]|join(" ")' <<< "$res")
+
+                            if [ "$ret" != 0 ] || [ -z "$code" ]
+                            then
+                                echo "$res"
+                                Println "$error 短信验证码错误, 请重试"
+                                continue 2
+                            fi
+
+                            md5_password=$(printf '%s' "$password" | md5sum)
+                            md5_password=${md5_password%% *}
+                            printf -v timestamp '%(%s)T' -1
+                            timestamp=$((timestamp * 1000))
+                            signature="$login|$md5_password|$device_no|yuj|$timestamp"
+                            signature=$(printf '%s' "$signature" | md5sum)
+                            signature=${signature%% *}
+
+                            if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"account":"'"$phone_number"'","deviceno":"'"$device_no"'","devicetype":"yuj","code":"'"$code"'","signature":"'"$signature"'","birthday":"1970-1-1","username":"'"$user_name"'","type":'"$reg_type"',"timestamp":"'"$timestamp"'","pwd":"'"$md5_password"'","accounttype":'"$reg_acc_type"'}' "$reg_url") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
+                            then
+                                echo "$res"
+                                Println "$error 注册失败, 请重试"
+                                continue 3
+                            fi
+
+                            Println "$info 注册成功, 请稍等..."
+                            sleep 3
+                            break 2
+                        done
+                    fi
+                done
+            fi
+        else
+            echo
+            acc_options=( '登陆' '删除' )
+            inquirer list_input_index "选择操作" acc_options acc_options_index
+
+            if [ "$acc_options_index" -eq 1 ] 
+            then
+                jq_path='["'"$name"'","accounts",'"$accs_options_index"']'
+                JQ delete "$SERVICES_FILE"
+                Println "$info 账号删除成功"
+                continue
+            fi
+
+            user_name="${ts_accs_user_name[accs_options_index]}"
+            phone_number="${ts_accs_phone_number[accs_options_index]}"
+            password="${ts_accs_password[accs_options_index]}"
+            access_token="${ts_accs_access_token[accs_options_index]}"
+            device_no="${ts_accs_device_no[accs_options_index]}"
+            device_id="${ts_accs_device_id[accs_options_index]}"
+            refresh="${ts_accs_refresh[accs_options_index]}"
+
+            if [ -n "$refresh" ] 
+            then
+                printf -v now '%(%s)T' -1
+
+                if [ "$now" -lt "$refresh" ] 
+                then
+                    break
+                fi
+            fi
+
+            if [ -z "$device_no" ] 
+            then
+                device_no=$(< /proc/sys/kernel/random/uuid)
+                str=$(printf '%s' "$device_no" | md5sum)
+                str=${str%% *}
+                str=${str:7:1}
+                device_no="$device_no$str"
+            fi
+
+            if ! TsGetToken 
+            then
+                continue
+            fi
+
+            if [ -s "/tmp/cookie_jar/$name" ] 
+            then
+                cookie_jar=( -b "/tmp/cookie_jar/$name" )
+            else
+                cookie_jar=()
             fi
         fi
-    fi
 
-    if [ -z "${TS_CHANNELS_LINK:-}" ] 
-    then
-        ts_channels=$(< "$TS_CHANNELS_FILE")
-    else
-        ts_channels=$(curl -s -Lm 10 "$TS_CHANNELS_LINK")
+        md5_password=$(printf '%s' "$password" | md5sum)
+        md5_password=${md5_password%% *}
 
-        [ -z "$ts_channels" ] && Println "$error 无法连接文件地址, 请重试...\n" && exit 1
-    fi
+        if [ -z "$img_url" ] 
+        then
+            login_acc_type=2
+            if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" ${cookie_jar[@]+"${cookie_jar[@]}"} "$login_url?deviceno=$device_no&devicetype=3&accounttype=$login_acc_type&accesstoken=(null)&account=$user_name&pwd=$md5_password&isforce=1&businessplatform=1")
+            then
+                Println "$error 无法登陆直播源, 请重试"
+                continue
+            fi
+        else
+            printf -v timestamp '%(%s)T' -1
+            timestamp=$((timestamp * 1000))
 
-    ts_channels_desc=()
-    while IFS='' read -r desc 
-    do
-        ts_channels_desc+=("$desc")
-    done < <($JQ_FILE -r '.data[] | select(.reg_url != null) | .desc | @sh' <<< "$ts_channels")
+            if [[ $user_name =~ ^[A-Za-z][A-Za-z0-9_]{3,13}$ ]] 
+            then
+                login_acc_type=2
+                login="$user_name"
+            else
+                login_acc_type=3
+                login="$phone_number"
+            fi
 
-    count=${#ts_channels_desc[@]}
+            signature="$device_no|yuj|$login_acc_type|$login|$timestamp"
+            signature=$(printf '%s' "$signature" | md5sum)
+            signature=${signature%% *}
 
-    Println "$info 选择需要操作的直播源\n"
+            if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" -H 'Content-Type: application/json' ${cookie_jar[@]+"${cookie_jar[@]}"} --data '{"account":"'"$login"'","deviceno":"'"$device_no"'","pwd":"'"$md5_password"'","devicetype":"yuj","businessplatform":1,"signature":"'"$signature"'","isforce":1,"extendinfo":{"operatingsystem":"'"$operating_system"'","systemversion":"'"$system_version"'","model":"'"$model"'","appversion":"'"$app_version"'"},"serverVersion":"'"$server_version"'","timestamp":"'"$timestamp"'","accounttype":'"$login_acc_type"'}' "$login_url")
+            then
+                Println "$error 无法登陆直播源, 请重试"
+                continue
+            fi
+        fi
 
-    for((i=0;i<count;i++));
-    do
-        desc=${ts_channels_desc[i]//\"/}
-        desc=${desc//\'/}
-        desc=${desc//\\/\'}
-        echo -e "${green}$((i+1)).${normal}${indent_6}$desc"
+        IFS=" " read -r ret access_token device_id user_name < <($JQ_FILE -r '[.ret,.access_token,.device_id,.user_name]|join(" ")' <<< "$res")
+
+        if [ "$ret" != 0 ] || [ -z "$access_token" ] || [ -z "$device_id" ] || [ -z "$user_name" ]
+        then
+            echo "$res"
+            Println "$error 登陆错误, 请重试"
+            continue
+        fi
+
+        if [ "$accs_options_index" -lt "$ts_accs_count" ] 
+        then
+            update=$(
+            $JQ_FILE -n --arg access_token "$access_token" --arg device_no "$device_no" \
+                --arg device_id "$device_id" --arg refresh "$refresh" \
+                '{
+                    access_token: $access_token,
+                    device_no: $device_no,
+                    device_id: $device_id | tonumber,
+                    refresh: $refresh | tonumber
+                }'
+            )
+
+            merge=true
+            jq_path='["'"$name"'","accounts",'"$accs_options_index"']'
+            JQ update "$SERVICES_FILE" "$update"
+        else
+            if [ -z "${phone_number:-}" ] 
+            then
+                new_acc=$(
+                $JQ_FILE -n --arg user_name "$user_name" --arg password "$password" \
+                    --arg access_token "$access_token" --arg device_no "$device_no" \
+                    --arg device_id "$device_id" --arg refresh "$refresh" \
+                    '{
+                        user_name: $user_name,
+                        password: $password,
+                        access_token: $access_token,
+                        device_no: $device_no,
+                        device_id: $device_id | tonumber,
+                        refresh: $refresh | tonumber
+                    }'
+                )
+            else
+                new_acc=$(
+                $JQ_FILE -n --arg user_name "$user_name" --arg phone_number "$phone_number" \
+                    --arg password "$password" --arg access_token "$access_token" \
+                    --arg device_no "$device_no" --arg device_id "$device_id" \
+                    --arg refresh "$refresh" \
+                    '{
+                        user_name: $user_name,
+                        phone_number: $phone_number | tonumber,
+                        password: $password,
+                        access_token: $access_token,
+                        device_no: $device_no,
+                        device_id: $device_id | tonumber,
+                        refresh: $refresh | tonumber
+                    }'
+                )
+            fi
+
+            if [[ $($JQ_FILE --argjson path '["'"$name"'","accounts"]' --arg user_name "$user_name" 'getpath($path) // []|map(select(.user_name==$user_name))' "$SERVICES_FILE") != "[]" ]] 
+            then
+                merge=true
+                map_string=true
+                jq_path='["'"$name"'","accounts"]'
+                JQ update "$SERVICES_FILE" user_name "$user_name" "$new_acc"
+            else
+                jq_path='["'"$name"'","accounts"]'
+                JQ add "$SERVICES_FILE" "[$new_acc]"
+            fi
+        fi
+
+        break
     done
 
-    while :; do
-        echo && read -p "$i18n_default_cancel" channel_id
-        [ -z "$channel_id" ] && Println "$i18n_canceled...\n" && exit 1
-        [[ $channel_id =~ ^[0-9]+$ ]] || { Println "$error `gettext \"输入序号\"`!"; continue; }
-        if ((channel_id >= 1 && channel_id <= count)); then
-            ((channel_id--))
-            declare -A ts_array
-            while IFS="=" read -r key value
-            do
-                ts_array[$key]="$value"
-            done < <($JQ_FILE -r '[.data[] | select(.reg_url != null)]['"$channel_id"'] | to_entries | map("\(.key)=\(.value)") | .[]' <<< "$ts_channels")
+    Println "$info 获取频道..."
 
-            if [ "${ts_array[name]}" == "jxtvnet" ] && ! nc -z -w 3 "access.jxtvnet.tv" 81 2> /dev/null
-            then
-                Println "$info 部分服务器无法连接此直播源, 但可以将ip写入 /etc/hosts 来连接, 请选择线路
-  ${green}1.${normal} 电信
-  ${green}2.${normal} 联通"
-                read -p "$i18n_default_cancel" jxtvnet_lane
-                case $jxtvnet_lane in
-                    1) 
-                        printf '%s\n' "59.63.205.33 access.jxtvnet.tv" >> "/etc/hosts"
-                        printf '%s\n' "59.63.205.33 stream.slave.jxtvnet.tv" >> "/etc/hosts"
-                        printf '%s\n' "59.63.205.33 slave.jxtvnet.tv" >> "/etc/hosts"
-                    ;;
-                    2) 
-                        printf '%s\n' "110.52.240.146 access.jxtvnet.tv" >> "/etc/hosts"
-                        printf '%s\n' "110.52.240.146 stream.slave.jxtvnet.tv" >> "/etc/hosts"
-                        printf '%s\n' "110.52.240.146 slave.jxtvnet.tv" >> "/etc/hosts"
-                    ;;
-                    *) Println "$i18n_canceled...\n" && exit 1
-                    ;;
-                esac
-            fi
+    if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" "$list_url?pageidx=1&pagenum=500&accesstoken=$access_token") 
+    then
+        echo "$res"
+        Println "$error 无法获取频道\n"
+        exit 1
+    fi
+
+    IFS=" " read -r ret total < <($JQ_FILE -r '[.ret,.total]|join(" ")' <<< "$res")
+
+    if [ "$ret" != 0 ] 
+    then
+        echo "$res"
+        Println "$error 无法获取频道\n"
+        exit 1
+    elif [ "$total" -eq 0 ] 
+    then
+        echo "$res"
+        Println "$error 没有频道\n"
+        exit 1
+    fi
+
+    EXIT_STATUS=0
+
+    IFS=$'\003\t' read -r m_chnl_id m_str_chnl_id m_chnl_name m_chnl_type m_chnl_num m_logic_num m_definition m_is_favorite \
+    m_is_free m_is_hide m_is_livetv m_is_tstv m_is_lock m_is_purchased m_is_public m_is_boot m_is_fast_channel_change \
+    m_stream_type m_times m_comment_num m_score m_praise_num m_degrade_num m_score_num m_iframe_url m_device_type m_providerid \
+    m_provider_icon_font m_ts_id m_content_type m_sub_type m_subtype_name m_label_name m_support_playback m_rate_list \
+    m_tstv_url m_livetv_url m_video_code m_trial_short m_trial_longest m_trial_times m_play_type m_codec_info \
+    m_logo_info < <(JQs flat "$res" '.[0].chnl_list | map(select(.chnl_id != null)|with_entries(select(.key as $k |
+    ["chnl_id","str_chnl_id","chnl_name","chnl_type","chnl_num","logic_num","definition","is_favorite","is_free","is_hide","is_livetv","is_tstv",
+    "is_lock","is_purchased","is_public","is_boot","is_fast_channel_change","stream_type","times","comment_num","score","praise_num","degrade_num",
+    "score_num","iframe_url","device_type","providerid","provider_icon_font","ts_id","content_type","sub_type","subtype_name","label_name",
+    "support_playback","rate_list","tstv_url","livetv_url","video_code","trial_short","trial_longest","trial_times","play_type",
+    "codec_info","logo_info"] | index($k))))' '. as $channel | reduce ({chnl_id,str_chnl_id,chnl_name,chnl_type,chnl_num,logic_num,definition,
+    is_favorite,is_free,is_hide,is_livetv,is_tstv,is_lock,is_purchased,is_public,is_boot,is_fast_channel_change,stream_type,times,comment_num,
+    score,praise_num,degrade_num,score_num,iframe_url,device_type,providerid,provider_icon_font,ts_id,content_type,sub_type,subtype_name,
+    label_name,support_playback,rate_list,tstv_url,livetv_url,video_code,trial_short,trial_longest,trial_times,play_type,
+    codec_info,logo_info}|keys_unsorted[]) as $key ([];
+        $channel[$key] as $val | if $val then
+            . + [$val + "\u0002\u0003"]
+        else
+            . + ["\u0003"]
+        end
+    )|@tsv' "${delimiters[@]}") || EXIT_STATUS=$?
+
+    if [ "$EXIT_STATUS" -ne 0 ] 
+    then
+        echo "$res"
+        Println "$error 无法解析频道\n"
+        exit 1
+    fi
+
+    IFS="${delimiters[1]}" read -ra chnl_id <<< "$m_chnl_id"
+    IFS="${delimiters[1]}" read -ra chnl_name <<< "$m_chnl_name"
+    IFS="${delimiters[1]}" read -ra rate_list <<< "$m_rate_list"
+    IFS="${delimiters[1]}" read -ra livetv_url <<< "$m_livetv_url"
+
+    echo
+    inquirer checkbox_input_indices "选择添加的频道" chnl_name chnl_indices
+
+    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+    FFPROBE="$FFMPEG_ROOT/ffprobe"
+    FFMPEG="$FFMPEG_ROOT/ffmpeg"
+
+    for chnl_index in "${chnl_indices[@]}"
+    do
+        IFS="${delimiters[0]}" read -ra rates <<< "${rate_list[chnl_index]}"
+
+        echo
+        inquirer list_input "选择频道 ${chnl_name[chnl_index]} 分辨率" rates rate
+
+        if [ -z "$play_url" ] 
+        then
+            IFS="${delimiters[0]}" read -ra play_urls <<< "${livetv_url[chnl_index]}"
 
             echo
-            channel_act_options=( '登录以获取ts链接' '注册账号' )
-            inquirer list_input "选择操作" channel_act_options channel_act
+            inquirer list_input "选择频道 ${chnl_name[chnl_index]} 地址" play_urls play_url
+        fi
 
-            if [[ $channel_act == "登录以获取ts链接" ]] 
-            then
-                TsLogin
-            else
-                TsRegister
-            fi
-            break
+        echo
+        protocol_options=( http hls )
+        inquirer list_input "选择频道 ${chnl_name[chnl_index]} 协议" protocol_options protocol
+
+        if [ -z "$auth_info_url" ] 
+        then
+            stream_link="$play_url?protocol=$protocol&accesstoken=$access_token&programid=${chnl_id[chnl_index]}&playtoken=ABCDEFGH&verifycode=$device_id&rate=$rate&playtype=live"
         else
-            Println "$error序号错误, 请重新输入!"
+            if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" "$auth_info_url?accesstoken=$access_token&programid=${chnl_id[chnl_index]}&playtype=live&protocol=$protocol&verifycode=$device_id") 
+            then
+                Println "$error 无法验证 ${chnl_name[chnl_index]}"
+                continue
+            fi
+
+            IFS=" " read -r ret auth_random_sn play_token < <($JQ_FILE -r '[.ret,.auth_random_sn,.play_token]|join(" ")' <<< "$res")
+
+            if [ "$ret" != 0 ] || [ -z "$auth_random_sn" ] || [ -z "$play_token" ]
+            then
+                echo "$res"
+                Println "$error 无法验证 ${chnl_name[chnl_index]}"
+                continue
+            fi
+
+            authtoken="ipanel123#%#&*(&(*#*&^*@#&*%()#*()$)#@&%(*@#()*%321ipanel$auth_random_sn"
+            authtoken=$(printf '%s' "$authtoken" | md5sum)
+            authtoken=${authtoken%% *}
+
+            if ! res=$(curl -s -Lm 10 -H "User-Agent: $user_agent" "$auth_verify_url?programid=${chnl_id[chnl_index]}&playtype=live&protocol=$protocol&accesstoken=$access_token&verifycode=$device_id&authtoken=$authtoken") || [ $($JQ_FILE -r '.ret' <<< "$res") != 0 ]
+            then
+                Println "$error 无法验证 ${chnl_name[chnl_index]}"
+                continue
+            fi
+
+            stream_link="$play_url?protocol=$protocol&accesstoken=$access_token&programid=${chnl_id[chnl_index]}&playtoken=$play_token&verifycode=$device_id&rate=$rate&playtype=live"
+        fi
+
+        if ! $FFPROBE -hide_banner -loglevel debug -show_streams -user_agent "$user_agent" -i "$stream_link"
+        then
+            Println "$error 无法连接 ${chnl_name[chnl_index]}"
+            continue
+        fi
+
+        echo
+        inquirer list_input_index "添加频道 ${chnl_name[chnl_index]}" yn_options yn_options_index
+
+        if [ "$yn_options_index" -eq 0 ] 
+        then
+            stream_links=("$stream_link|$name|$user_name")
+
+            echo
+            inquirer list_input_index "是否 添加/替换 现有频道直播源" ny_options ny_options_index
+
+            if [ "$ny_options_index" -eq 1 ] 
+            then
+                ListChannels
+                InputChannelsIndex
+
+                for((i=0;i<${#chnls_pid_chosen[@]};i++));
+                do
+                    chnl_pid=${chnls_pid_chosen[i]}
+                    chnls_index=${chnls_indices[i]}
+
+                    ListChannel
+
+                    echo
+                    change_options=( '添加' '替换' )
+                    inquirer list_input_index "如何修改频道 [ $chnl_channel_name ]" change_options change_options_index
+
+                    if [ "$change_options_index" -eq 0 ] 
+                    then
+                        pre=true
+                        jq_path='["channels",'"$chnls_index"',"stream_link"]'
+                        JQ add "$CHANNELS_FILE" ["\"${stream_links[0]}\""]
+                    else
+                        echo
+                        inquirer list_input_index "选择替换的直播源" chnl_stream_links chnl_stream_links_index
+
+                        jq_path='["channels",'"$chnls_index"',"stream_link",'"$chnl_stream_links_index"']'
+                        JQ update "$CHANNELS_FILE" "${stream_links[0]}"
+                    fi
+
+                    Println "$info 频道 [ $chnl_channel_name ] 修改成功 !\n"
+                done
+            else
+                echo
+                inquirer list_input_index "是否推流 flv" ny_options ny_options_index
+
+                if [ "$ny_options_index" -eq 1 ] 
+                then
+                    kind="flv"
+                fi
+
+                skip_set_stream_link=true
+                AddChannel
+            fi
         fi
     done
 }
@@ -21769,9 +22323,21 @@ AntiDDoS()
 MonitorHlsRemoveFailed()
 {
     declare -a new_array
-    for element in ${hls_failed[@]+"${hls_failed[@]}"}
+    for((failed_i=0;failed_i<${#hls_failed[@]};failed_i++));
     do
-        [ "$element" != "$hls_index" ] && new_array+=("$element")
+        failed_index=${hls_failed[failed_i]}
+        if [ "${monitor_output_dir_names[failed_index]}" == "$output_dir_name" ] 
+        then
+            unset 'hls_change[failed_index]'
+            unset 'hls_change_once[failed_index]'
+            unset 'hls_changed[failed_index]'
+            unset 'channel_name[failed_index]'
+
+            unset 'hls_recheck_time[failed_i]'
+            hls_recheck_time=("${hls_recheck_time[@]}")
+        else
+            new_array+=("$failed_index")
+        fi
     done
 
     if [ -z "${new_array:-}" ] 
@@ -21782,28 +22348,17 @@ MonitorHlsRemoveFailed()
     fi
 
     unset new_array
-
-    declare -a new_array
-    for element in ${hls_recheck_time[@]+"${hls_recheck_time[@]}"}
-    do
-        [ "$element" != "${hls_recheck_time[failed_i]}" ] && new_array+=("$element")
-    done
-
-    if [ -z "${new_array:-}" ] 
-    then
-        hls_recheck_time=()
-    else
-        hls_recheck_time=("${new_array[@]}")
-    fi
-
-    unset new_array
 }
 
 MonitorHlsRestartSuccess()
 {
     if [ -n "${failed_restart_nums:-}" ] 
     then
-        MonitorHlsRemoveFailed
+        unset 'hls_failed[failed_i]'
+        unset 'hls_recheck_time[failed_i]'
+
+        hls_failed=("${hls_failed[@]}")
+        hls_recheck_time=("${hls_recheck_time[@]}")
     fi
 
     MonitorLog "$chnl_channel_name 重启成功"
@@ -21843,6 +22398,9 @@ MonitorHlsRestartFail()
 
 MonitorHlsRestartChannel()
 {
+    hls_change[hls_index]=${hls_change[hls_index]:-true}
+    hls_change_once[hls_index]=${hls_change_once[hls_index]:-false}
+    hls_changed[hls_index]=${hls_changed[hls_index]:-false}
     XtreamCodesGetChnls
     domains_tried=()
     hls_restart_nums=${hls_restart_nums:-20}
@@ -22953,7 +23511,7 @@ MonitorTryAccounts()
                         then
                             if [ -z "${kind:-}" ] && [ "$anti_leech_restart_hls_changes" = true ]
                             then
-                                if [ "${hls_change[hls_index]}" = true ] && { [ "${hls_change_once[hls_index]}" = false ] || [ "${hls_changed[hls_index]:-false}" = false ]; }
+                                if [ "${hls_change[hls_index]}" = true ] && { [ "${hls_change_once[hls_index]}" = false ] || [ "${hls_changed[hls_index]}" = false ]; }
                                 then
                                     if [ "${hls_change_once[hls_index]}" = true ] 
                                     then
@@ -23166,7 +23724,7 @@ MonitorTryAccounts()
                 then
                     if [ -z "${kind:-}" ] && [ "$anti_leech_restart_hls_changes" = true ]
                     then
-                        if [ "${hls_change[hls_index]}" = true ] && { [ "${hls_change_once[hls_index]}" = false ] || [ "${hls_changed[hls_index]:-false}" = false ]; }
+                        if [ "${hls_change[hls_index]}" = true ] && { [ "${hls_change_once[hls_index]}" = false ] || [ "${hls_changed[hls_index]}" = false ]; }
                         then
                             if [ "${hls_change_once[hls_index]}" = true ] 
                             then
@@ -23598,6 +24156,7 @@ Monitor()
             MonitorLog "监控启动成功 PID $BASHPID !"
 
             FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+            FFMPEG="$FFMPEG_ROOT/ffmpeg"
             FFPROBE="$FFMPEG_ROOT/ffprobe"
             monitor=true
 
@@ -23718,23 +24277,12 @@ Monitor()
 
                                         unset new_array
 
-                                        for hls_index in ${hls_failed[@]+"${hls_failed[@]}"}
-                                        do
-                                            if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ] 
-                                            then
-                                                MonitorHlsRemoveFailed
-                                                unset 'hls_change[hls_index]'
-                                                unset 'hls_change_once[hls_index]'
-                                                unset 'hls_changed[hls_index]'
-                                                unset 'channel_name[hls_index]'
-                                                break
-                                            fi
-                                        done
+                                        MonitorHlsRemoveFailed
 
-                                        MonitorLog "${chnl_schedules_channel_name[chnl_schedules_index]} 计划到期关闭"
+                                        MonitorLog "${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} 计划到期关闭"
                                         GetChannel
                                         StopChannel
-                                        MonitorLog "${chnl_schedules_channel_name[chnl_schedules_index]} 计划到期关闭成功"
+                                        MonitorLog "${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} 计划到期关闭成功"
                                     else
                                         if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ] 
                                         then
@@ -23842,6 +24390,8 @@ Monitor()
                                 then
                                     if [ "${chnl_schedules_end_time[chnl_schedules_index]}" -le "$now" ] 
                                     then
+                                        MonitorLog "${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} 计划到期关闭"
+
                                         if [ "${chnl_schedules_loop[chnl_schedules_index]}" = true ] 
                                         then
                                             update=$(
@@ -23906,18 +24456,9 @@ Monitor()
 
                                         unset new_array
 
-                                        for hls_index in ${hls_failed[@]+"${hls_failed[@]}"}
-                                        do
-                                            if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ] 
-                                            then
-                                                MonitorHlsRemoveFailed
-                                                unset 'hls_change[hls_index]'
-                                                unset 'hls_change_once[hls_index]'
-                                                unset 'hls_changed[hls_index]'
-                                                unset 'channel_name[hls_index]'
-                                                break
-                                            fi
-                                        done
+                                        MonitorHlsRemoveFailed
+
+                                        MonitorLog "${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} 计划到期关闭成功"
                                     elif [ "${chnl_schedules_start_time[chnl_schedules_index]}" -le "$now" ] 
                                     then
                                         if [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 0 ] 
@@ -24054,18 +24595,7 @@ Monitor()
 
                                         unset new_array
 
-                                        for hls_index in ${hls_failed[@]+"${hls_failed[@]}"}
-                                        do
-                                            if [ "${monitor_output_dir_names[hls_index]}" == "$output_dir_name" ] 
-                                            then
-                                                MonitorHlsRemoveFailed
-                                                unset 'hls_change[hls_index]'
-                                                unset 'hls_change_once[hls_index]'
-                                                unset 'hls_changed[hls_index]'
-                                                unset 'channel_name[hls_index]'
-                                                break
-                                            fi
-                                        done
+                                        MonitorHlsRemoveFailed
                                     fi
                                     continue 2
                                 fi
@@ -24598,7 +25128,7 @@ Monitor()
 
                         for hls_index in "${hls_indices[@]}"
                         do
-                            if [ "${hls_change[hls_index]}" = false ] || [ "${hls_changed[hls_index]:-false}" = true ]
+                            if [ "${hls_change[hls_index]:-true}" = false ] || [ "${hls_changed[hls_index]:-false}" = true ]
                             then
                                 continue
                             fi
@@ -25408,6 +25938,7 @@ XtreamCodesTestAcc()
     Println "${green}账号:${normal}"
 
     FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+    FFMPEG="$FFMPEG_ROOT/ffmpeg"
     FFPROBE="$FFMPEG_ROOT/ffprobe"
 
     for account in "${accounts[@]}"
@@ -25597,6 +26128,13 @@ SearchXtreamCodesChnls()
 
 XtreamCodesListChnls()
 {
+    if [ -z "${FFMPEG:-}" ] 
+    then
+        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+        FFMPEG="$FFMPEG_ROOT/ffmpeg"
+        FFPROBE="$FFMPEG_ROOT/ffprobe"
+    fi
+
     while true 
     do
         if [ -n "${xtream_codes_list:-}" ] 
@@ -25861,9 +26399,7 @@ XtreamCodesListChnls()
             if [ -n "$genres_list" ] 
             then
                 genres_list_pages=()
-                FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-                FFPROBE="$FFMPEG_ROOT/ffprobe"
-                FFMPEG="$FFMPEG_ROOT/ffmpeg"
+
                 while true 
                 do
                     Println "$genres_list\n\n${green}账号到期时间:${normal} $exp_date\n"
@@ -26110,11 +26646,16 @@ XtreamCodesListChnls()
                             elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
                             then
                                 stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                            elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+) ]] 
+                            then
+                                stream_link="http://localhost:3000/${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]%%\?*}?${BASH_REMATCH[4]##*\?}"
                             else
                                 Println "$error 返回 cmd: ${cmd:-无} 错误, 请重试"
                                 continue
                             fi
+
                             stream_link=${stream_link// /}
+                            stream_link=${stream_link//.ts.ts/.ts}
                             Println "${green}${xc_chnls_name[xc_chnls_index]}:${normal} $stream_link\n"
                         fi
 
@@ -26290,14 +26831,7 @@ XtreamCodesListChnls()
                             fi
                         else
                             Println "$error 频道不可用或账号权限不够\n"
-                            inquirer list_input "是否继续" yn_options continue_yn
-
-                            if [ "$continue_yn" == "$i18n_yes" ]
-                            then
-                                continue
-                            else
-                                Println "$i18n_canceled...\n"
-                            fi
+                            continue
                         fi
                         break
                     done
@@ -26377,8 +26911,8 @@ XtreamCodesAddMac()
     account_info_url="$server/portal.php?type=account_info&action=get_main_info"
 
     Println "$info 验证中..."
+    add_mac_success=false
 
-    add_mac_success=0
     for mac_address in "${macs[@]}"
     do
         access_token=""
@@ -26392,13 +26926,8 @@ XtreamCodesAddMac()
 
         if [ -z "$access_token" ] 
         then
-            if [ "$add_mac_success" -eq 0 ] 
-            then
-                Println "$error $domain $mac_address access_token\n" && exit 1
-            else
-                Println "$error $domain $mac_address access_token"
-                continue
-            fi
+            Println "$error $domain $mac_address access_token"
+            continue
         fi
 
         profile=$(curl -s -Lm 10 \
@@ -26413,16 +26942,12 @@ XtreamCodesAddMac()
 
         if [ -z "$exp_date" ] 
         then
-            if [ "$add_mac_success" -eq 0 ] 
-            then
-                Println "$error $domain $mac_address exp_date\n" && exit 1
-            else
-                Println "$error $domain $mac_address exp_date"
-                continue
-            fi
+            Println "$error $domain $mac_address exp_date"
+            continue
         fi
 
-        add_mac_success=1
+        add_mac_success=true
+
         printf '%s\n' "$ip $domain $mac_address" >> "$XTREAM_CODES_EXAM"
     done
 }
@@ -26468,7 +26993,8 @@ OpenrestyInstall()
     Progress &
     progress_pid=$!
     trap '
-        kill $progress_pid 2> /dev/null
+        kill $progress_pid
+        wait $progress_pid 2> /dev/null
     ' EXIT
     if [ "$dist" == "rpm" ] 
     then
@@ -26614,6 +27140,7 @@ OpenrestyInstall()
     make install >/dev/null 2>&1
 
     kill $progress_pid
+    wait $progress_pid 2> /dev/null || true
     trap - EXIT
     echo "...100%"
 
@@ -26648,7 +27175,8 @@ NginxInstall()
     progress_pid=$!
 
     trap '
-        kill $progress_pid 2> /dev/null
+        kill $progress_pid
+        wait $progress_pid 2> /dev/null
     ' EXIT
 
     if [ "$dist" == "rpm" ] 
@@ -26738,6 +27266,7 @@ NginxInstall()
     make install >/dev/null 2>&1
 
     kill $progress_pid
+    wait $progress_pid 2> /dev/null || true
     trap - EXIT
     ln -sf /usr/local/nginx/sbin/nginx /usr/local/bin/
     echo "...100%"
@@ -28388,10 +28917,11 @@ NginxAddSameSiteNone()
     NginxAddDirective 2
 
     directive_default='{"directive":"default","args":["; Secure"]}'
-    directive_chrome='{"directive":"~Chrom[^ \\/]+\\/[89][\\d][\\.\\d]*","args":["; Secure; SameSite=None"]}'
+    directive_chrome1='{"directive":"~Chrom[^ \\/]+\\/[1][\\d][\\d][\\.\\d]*","args":["; Secure; SameSite=None"]}'
+    directive_chrome2='{"directive":"~Chrom[^ \\/]+\\/[89][\\d][\\.\\d]*","args":["; Secure; SameSite=None"]}'
 
     directives=( default '~Chrom[^ \\/]+\\/[89][\\d][\\.\\d]*' )
-    directives_val=( default chrome )
+    directives_val=( default chrome1 chrome2 )
     check_directives=()
     check_args=( '["; Secure"]' )
 
@@ -30449,7 +30979,8 @@ NodejsInstall()
     progress_pid=$!
 
     trap '
-        kill $progress_pid 2> /dev/null
+        kill $progress_pid
+        wait $progress_pid 2> /dev/null
     ' EXIT
 
     if [ "$dist" == "rpm" ] 
@@ -30469,6 +31000,7 @@ NodejsInstall()
     fi
 
     kill $progress_pid
+    wait $progress_pid 2> /dev/null || true
     trap - EXIT
     echo -n "...100%" && Println "$info nodejs 安装完成"
 }
@@ -30810,6 +31342,7 @@ MongodbMenu()
             exit 1
         fi
 
+        echo
         ExitOnList n "升级会清除现有 mongodb 配置, 是否继续"
 
         DistCheck
@@ -31652,6 +32185,7 @@ V2raySetInboundSockoptTcpFastOpen()
 
 V2raySetOutboundSockoptTcpFastOpen()
 {
+    echo
     sockopt_tfo_options=( '系统默认' '强制开启' '强制关闭' )
     inquirer list_input_index "TCP Fast Open" sockopt_tfo_options sockopt_tfo_options_index
 
@@ -31746,6 +32280,7 @@ V2raySetWsHeaders()
         fi
         [ -n "$ws_headers" ] && ws_headers="$ws_headers, "
         ws_headers="$ws_headers\"$ws_header_name\":\"$ws_header_value\""
+        echo
         inquirer list_input "是否继续添加" ny_options continue_yn
         if [ "$continue_yn" == "$i18n_no" ] 
         then
@@ -32229,7 +32764,7 @@ V2raySetHeaderType()
                 break
             fi
 
-            if [[ $header_value =~ | ]] 
+            if [[ $header_value =~ \| ]] 
             then
                 IFS="|" read -r -a header_values <<< "$header_value"
                 printf -v header_value ',"%s"' "${header_values[@]}"
@@ -32293,7 +32828,7 @@ V2raySetHeaderType()
                 break
             fi
 
-            if [[ $header_value =~ | ]] 
+            if [[ $header_value =~ \| ]] 
             then
                 IFS="|" read -r -a header_values <<< "$header_value"
                 printf -v header_value ',"%s"' "${header_values[@]}"
@@ -34678,7 +35213,7 @@ V2rayAddOutbound()
                             "port": $port | tonumber,
                             "method": $method,
                             "password": $password,
-                            "level": $level | tonumber
+                            "level": $level | tonumber,
                             "ivCheck": $ivCheck | test("true")
                         }
                     ]
@@ -34880,6 +35415,7 @@ V2rayAddOutbound()
         fi
 
         V2raySetOutboundNetwork
+        V2raySetSecurity
 
         new_outbound=$(
         $JQ_FILE --arg network "$network" --arg security "$security" \
@@ -35084,8 +35620,6 @@ V2rayAddOutbound()
             fi
         fi
 
-        V2raySetSecurity
-
         if [ "$security" == "tls" ] 
         then
             V2raySetTlsServerName
@@ -35107,23 +35641,36 @@ V2rayAddOutbound()
             V2raySetTlsAllowInsecure
             V2raySetTlsAlpn
             V2raySetTlsDisableSystemRoot
-            V2raySetTlsPinnedPeerCertificateChainSha256
 
             new_outbound=$(
             $JQ_FILE --arg allowInsecure "$tls_allow_insecure" --argjson alpn "[$tls_alpn]" \
                 --arg disableSystemRoot "$tls_disable_system_root" \
-                --arg pinnedPeerCertificateChainSha256 "$tls_pinned_peer_certificate_chain_sha256" \
             '. * 
             {
                 "streamSettings": {
                     "tlsSettings": {
                         "allowInsecure": $allowInsecure | test("true"),
                         "alpn": $alpn,
-                        "disableSystemRoot": $disableSystemRoot | test("true"),
-                        "pinnedPeerCertificateChainSha256": $pinnedPeerCertificateChainSha256
+                        "disableSystemRoot": $disableSystemRoot | test("true")
                     }
                 }
             }' <<< "$new_outbound")
+
+            V2raySetTlsPinnedPeerCertificateChainSha256
+
+            if [ -n "$tls_pinned_peer_certificate_chain_sha256" ] 
+            then
+                new_outbound=$(
+                $JQ_FILE --arg pinnedPeerCertificateChainSha256 "$tls_pinned_peer_certificate_chain_sha256" \
+                '. * 
+                {
+                    "streamSettings": {
+                        "tlsSettings": {
+                            "pinnedPeerCertificateChainSha256": $pinnedPeerCertificateChainSha256
+                        }
+                    }
+                }' <<< "$new_outbound")
+            fi
 
             while true 
             do
@@ -35466,7 +36013,7 @@ V2rayListOutbounds()
             protocol_settings_list="${protocol_settings_list}Socks 协议版本: ${green}${outbounds_settings_version[outbounds_index]}${normal}\n${indent_6}"
         elif [ "${outbounds_protocol[outbounds_index]}" == "shadowsocks" ] 
         then
-            protocol_settings_list="$protocol_settings_list邮箱地址: ${green}${outbounds_settings_email[outbounds_index]}${normal}\n${indent_6}服务器地址: ${green}${outbounds_settings_address[outbounds_index]}${normal}\n${indent_6}服务器端口: ${green}${outbounds_settings_port[outbounds_index]}${normal}\n${indent_6}加密方式: ${green}${outbounds_settings_method[outbounds_index]}${normal}\n${indent_6}密码: ${green}${outbounds_settings_password[outbounds_index]}${normal}\n${indent_6}用户等级: ${green}${outbounds_settings_level[outbounds_index]}${normal}\n${indent_6}"
+            protocol_settings_list="$protocol_settings_list邮箱地址: ${green}${outbounds_settings_email[outbounds_index]}${normal}\n${indent_6}服务器地址: ${green}${outbounds_settings_address[outbounds_index]}${normal}\n${indent_6}服务器端口: ${green}${outbounds_settings_port[outbounds_index]}${normal}\n${indent_6}加密方式: ${green}${outbounds_settings_method[outbounds_index]}${normal}\n${indent_6}密码: ${green}${outbounds_settings_password[outbounds_index]}${normal}\n${indent_6}用户等级: ${green}${outbounds_settings_user_level[outbounds_index]}${normal}\n${indent_6}"
             if [ "${outbounds_settings_iv_check[outbounds_index]}" = false ] 
             then
                 protocol_settings_list="${protocol_settings_list}IV 检查: ${red}否${normal}\n${indent_6}"
@@ -35839,6 +36386,7 @@ V2rayAddOutboundAccount()
     elif [ "${outbounds_protocol[outbounds_index]}" == "http" ] 
     then
         V2raySetHttpAccount
+        jq_path='["outbounds",'"$outbounds_index"',"settings","servers",0,"users"]'
         new_account=$(
         $JQ_FILE -n --arg user "$user" --arg pass "$pass" \
         '{
@@ -35849,6 +36397,7 @@ V2rayAddOutboundAccount()
     then
         V2raySetHttpAccount
         V2raySetLevel
+        jq_path='["outbounds",'"$outbounds_index"',"settings","servers",0,"users"]'
         new_account=$(
         $JQ_FILE -n --arg user "$user" --arg pass "$pass" \
         --arg level "$level" \
@@ -35859,17 +36408,22 @@ V2rayAddOutboundAccount()
         }')
     elif [ "${outbounds_protocol[outbounds_index]}" == "trojan" ] 
     then
+        V2raySetAddress
+        V2raySetAddressPort
         V2raySetPassword
         V2raySetLevel
         V2raySetEmail
-        jq_path='["outbounds",'"$outbounds_index"',"settings","clients"]'
+        jq_path='["outbounds",'"$outbounds_index"',"settings","servers"]'
         if [ "$v2ray_name" == "xray" ] 
         then
             V2raySetOutboundFlow
             new_account=$(
-            $JQ_FILE -n --arg password "$password" --arg flow "$flow" \
+            $JQ_FILE -n --arg address "$address" --arg port "$address_port" \
+            --arg password "$password" --arg flow "$flow" \
             --arg level "$level" --arg email "$email" \
             '{
+                "address": $address,
+                "port": $port | tonumber,
                 "password": $password,
                 "flow": $flow,
                 "email": $email,
@@ -35877,9 +36431,12 @@ V2rayAddOutboundAccount()
             }')
         else
             new_account=$(
-            $JQ_FILE -n --arg password "$password" --arg level "$level" \
+            $JQ_FILE -n --arg address "$address" --arg port "$address_port" \
+            --arg password "$password" --arg level "$level" \
             --arg email "$email" \
             '{
+                "address": $address,
+                "port": $port | tonumber,
                 "password": $password,
                 "email": $email,
                 "level": $level | tonumber
@@ -35903,7 +36460,7 @@ V2rayListOutboundAccounts()
     V2rayListOutbounds
     V2raySelectOutbound
 
-    if [ "${outbounds_protocol[outbounds_index]}" != "vmess" ] && [ "${outbounds_protocol[outbounds_index]}" != "vless" ] && [ "${outbounds_protocol[outbounds_index]}" != "http" ] && [ "${outbounds_protocol[outbounds_index]}" != "socks" ]
+    if [ "${outbounds_protocol[outbounds_index]}" != "vmess" ] && [ "${outbounds_protocol[outbounds_index]}" != "vless" ] && [ "${outbounds_protocol[outbounds_index]}" != "http" ] && [ "${outbounds_protocol[outbounds_index]}" != "socks" ] && [ "${outbounds_protocol[outbounds_index]}" != "trojan" ]
     then
         Println "$error 协议 ${outbounds_protocol[outbounds_index]} 没有账号\n"
         exit 1
@@ -44829,21 +45386,41 @@ VipAddChannel()
             fi
         fi
 
-        vip_channels_name=()
+        [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+
+        EXIT_STATUS=0
+
+        IFS=$'\003\t' read -r m_name m_url < <(JQs flat "$VIP_CHANNELS_FILE" '.[0]|map(select(.url // ""|test("http://?.*";"i")))' '. as $channels |
+        reduce ({name,url}|keys_unsorted[]) as $key ([];
+            $channels[$key] as $val | if $val then
+                . + [$val + "\u0002\u0003"]
+            else
+                . + ["\u0003"]
+            end
+        )|@tsv' "${delimiters[@]}") || EXIT_STATUS=$?
+
+        if [ "$EXIT_STATUS" -ne 0 ] || [ -z "$m_name" ]
+        then
+            Println "$error 没有找到频道\n"
+            exit 1
+        fi
+
+        IFS="${delimiters[1]}" read -r -a vip_channels_name <<< "$m_name"
+        IFS="${delimiters[1]}" read -r -a vip_channels_url <<< "$m_url"
+
         vip_channels_host_ip=()
         vip_channels_host_port=()
         vip_channels_id=()
 
-        while IFS="^" read -r m_name m_url
+        for vip_channel_url in "${vip_channels_url[@]}"
         do
-            if [ -n "$m_url" ] && [[ $m_url =~ ^http://([^/]+):([^/]+)/([^/]+) ]]
+            if [ -n "$vip_channel_url" ] && [[ $vip_channel_url =~ ^http://?([^/]+):([^/]+)/([^/]+) ]]
             then
-                vip_channels_name+=("$m_name")
                 vip_channels_host_ip+=("${BASH_REMATCH[1]}")
                 vip_channels_host_port+=("${BASH_REMATCH[2]}")
                 vip_channels_id+=("${BASH_REMATCH[3]}")
             fi
-        done < <($JQ_FILE -r '.[]|[.name,.url]|join("^")' $VIP_CHANNELS_FILE)
+        done
 
         vip_channels_list=""
         vip_channels_count=${#vip_channels_id[@]}
@@ -45248,6 +45825,9 @@ VipEditChannel()
 VipListChannels()
 {
     VipListHosts
+
+    echo -e " ${green}$((vip_hosts_count+1)).${normal}${indent_6}全部\n\n"
+
     while read -p "选择 VIP 服务器: " vip_hosts_num
     do
         case "$vip_hosts_num" in
@@ -45256,6 +45836,10 @@ VipListChannels()
             ;;
             *[!0-9]*)
                 Println "$error $i18n_input_correct_no\n"
+            ;;
+            "$((vip_hosts_count+1))")
+                unset vip_hosts_index
+                return 0
             ;;
             *)
                 if [ "$vip_hosts_num" -gt 0 ] && [ "$vip_hosts_num" -le "$vip_hosts_count" ]
@@ -45454,6 +46038,12 @@ VipListChannel()
     echo
     inquirer list_input_index "测试频道" ny_options ny_options_index
 
+    if [ "$ny_options_index" -eq 1 ] && [ -z "${FFPROBE:-}" ]
+    then
+        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+        FFPROBE="$FFMPEG_ROOT/ffprobe"
+    fi
+
     for vip_channels_num in "${vip_channels_num_arr[@]}"
     do
         vip_channels_index=$((vip_channels_num-1))
@@ -45465,9 +46055,6 @@ VipListChannel()
 
         if [ "$ny_options_index" -eq 1 ] 
         then
-            FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-            FFPROBE="$FFMPEG_ROOT/ffprobe"
-
             printf -v ffprobe_headers_command '%b' "x-forwarded-for: 127.0.0.1\r\n"
 
             if ! $FFPROBE -user_agent "$USER_AGENT_TV" \
@@ -45496,6 +46083,28 @@ VipListChannel()
 VipDelChannel()
 {
     VipListChannels
+
+    if [ -z "${vip_hosts_index:-}" ] 
+    then
+        echo
+        inquirer list_input_index "清空所有频道" ny_options ny_options_index
+
+        if [ "$ny_options_index" -eq 1 ] 
+        then
+            for((vip_hosts_index=0;vip_hosts_index<vip_hosts_count;vip_hosts_index++));
+            do
+                json=true
+                jq_path='["hosts",'"$vip_hosts_index"',"channels"]'
+                JQ update "$VIP_FILE" []
+            done
+
+            Println "$info 频道清空成功\n"
+            return 0
+        fi
+
+        Println "$i18n_canceled...\n"
+        exit 0
+    fi
 
     echo -e " ${green}$((vip_channels_count+1)).${normal}\r\033[7C全部删除\n"
 
@@ -46292,13 +46901,13 @@ PveSelectVM()
 
 DNSCryptConfig()
 {
-    sed -i "0,/.*\[static\..*/s//\[static\.\'alidns-doh-fix\'\]/" dnscrypt-proxy.toml
-    sed -i "0,/.*stamp = .*/s//stamp = \'sdns:\/\/AgAAAAAAAAAAACCY49XlNq8pWM0vfxT3BO9KJ20l4zzWXy5l9eTycnwTMA5kbnMuYWxpZG5zLmNvbQovZG5zLXF1ZXJ5\'/" dnscrypt-proxy.toml
-    sed -i "0,/.*server_names = \[.*/s//server_names = ['dnspod-doh','alidns-doh-fix']/" dnscrypt-proxy.toml
-    sed -i "0,/^listen_addresses = .*/s//listen_addresses = ['[::]:${listen_port:-53}']/" dnscrypt-proxy.toml
-    sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" dnscrypt-proxy.toml
-    sed -i "0,/.*bootstrap_resolvers =.*/s//bootstrap_resolvers = ['114.114.114.114:53', '8.8.8.8:53']/" dnscrypt-proxy.toml
-    sed -i "0,/.*netprobe_address =.*/s//netprobe_address = '114.114.114.114:53'/" dnscrypt-proxy.toml
+    echo "$(awk '!x{x=sub(/.*\[static\..*/,"  [static.\047alidns-doh-fix\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+    echo "$(awk '!x{x=sub(/.*stamp = .*/,"  stamp = \047sdns://AgAAAAAAAAAAACCY49XlNq8pWM0vfxT3BO9KJ20l4zzWXy5l9eTycnwTMA5kbnMuYWxpZG5zLmNvbQovZG5zLXF1ZXJ5\047")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+    echo "$(awk '!x{x=sub(/.*server_names = \[.*/,"server_names = [\047dnspod-doh\047,\047alidns-doh-fix\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+    echo "$(awk '!x{x=sub(/^listen_addresses = .*/,"listen_addresses = [\047[::]:'"${listen_port:-53}"'\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+    echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = true")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+    echo "$(awk '!x{x=sub(/.*bootstrap_resolvers = .*/,"bootstrap_resolvers = [\047114.114.114.114:53\047, \0478.8.8.8:53\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+    echo "$(awk '!x{x=sub(/.*netprobe_address = .*/,"netprobe_address = \047114.114.114.114:53\047")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
 }
 
 Menu()
@@ -47387,8 +47996,8 @@ WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
             ExitOnText "请输入 smtp 密码 : " smtp_pass
 
             hostname=$(hostname -f)
-            sed -i "0,/.*myhostname = .*/s//myhostname = $hostname/" /etc/postfix/main.cf
-            sed -i "0,/.*relayhost = .*/s//relayhost = [$smtp_address]:$smtp_port/" /etc/postfix/main.cf
+            echo "$(awk '!x{x=sub(/.*myhostname = .*/,"myhostname = '"$hostname"'")}1' /etc/postfix/main.cf)" > /etc/postfix/main.cf
+            echo "$(awk '!x{x=sub(/.*relayhost = .*/,"relayhost = '"[$smtp_address]:$smtp_port"'")}1' /etc/postfix/main.cf)" > /etc/postfix/main.cf
             options=( 
                 smtp_tls_security_level=encrypt
                 smtp_tls_wrappermode=yes
@@ -47406,10 +48015,10 @@ WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
             do
                 if grep -q "${option%=*} = " < /etc/postfix/main.cf
                 then
-                    sed -i "0,/.*${option%=*} = .*/s//${option%=*} = ${option#*=}/" /etc/postfix/main.cf
+                    echo "$(awk '!x{x=sub(/.*'"${option%=*}"' = .*/,"'"${option%=*}"' = '"${option#*=}"'")}1' /etc/postfix/main.cf)" > /etc/postfix/main.cf
                 elif grep -q "${option%=*}=" < /etc/postfix/main.cf 
                 then
-                    sed -i "0,/.*${option%=*}=.*/s//${option%=*}=${option#*=}/" /etc/postfix/main.cf
+                    echo "$(awk '!x{x=sub(/.*'"${option%=*}"'=.*/,"'"${option%=*}"'='"${option#*=}"'")}1' /etc/postfix/main.cf)" > /etc/postfix/main.cf
                 else
                     echo "${option//=/ = }" >> /etc/postfix/main.cf
                 fi
@@ -47583,14 +48192,14 @@ $HOME/ip.sh" > /etc/rc.local
                     ExitOnList n "`gettext \"是否关闭 edns0\"`"
 
                     sed -i '/options edns0/d' /etc/resolv.conf
-                    sed -i "0,/.*require_dnssec = .*/s//require_dnssec = false/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                    echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = false")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
                     systemctl restart dnscrypt-proxy
                     Println "$info edns0 已关闭\n"
                 else
                     ExitOnList n "`gettext \"是否开启 edns0\"`"
 
                     echo "options edns0" >> /etc/resolv.conf
-                    sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                    echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = true")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
                     systemctl restart dnscrypt-proxy
                     Println "$info edns0 已开启\n"
                 fi
@@ -47607,11 +48216,11 @@ $HOME/ip.sh" > /etc/rc.local
                 inquirer list_input_index "选择操作" switch_options switch_options_index
                 if [ "$switch_options_index" -eq 0 ] 
                 then
-                    sed -i "0,/.*block_ipv6 = .*/s//block_ipv6 = false/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                    echo "$(awk '!x{x=sub(/.*block_ipv6 = .*/,"block_ipv6 = false")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
                     systemctl restart dnscrypt-proxy
                     Println "$info ipv6 查询已开启\n"
                 else
-                    sed -i "0,/.*block_ipv6 = .*/s//block_ipv6 = true/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                    echo "$(awk '!x{x=sub(/.*block_ipv6 = .*/,"block_ipv6 = true")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
                     systemctl restart dnscrypt-proxy
                     Println "$info ipv6 查询已关闭\n"
                 fi
@@ -47648,7 +48257,7 @@ $HOME/ip.sh" > /etc/rc.local
                         then
                             DNSCryptConfig
                         else
-                            sed -i "0,/.*server_names = \[.*/s//server_names = ['google', 'cloudflare']/" dnscrypt-proxy.toml
+                            echo "$(awk '!x{x=sub(/.*server_names = \[.*/,"server_names = [\047google\047, \047cloudflare\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
                         fi
 
                         for((i=0;i<3;i++));
@@ -47718,7 +48327,7 @@ $HOME/ip.sh" > /etc/rc.local
                         then
                             DNSCryptConfig
                         else
-                            sed -i "0,/.*server_names = \[.*/s//server_names = ['google', 'cloudflare']/" dnscrypt-proxy.toml
+                            echo "$(awk '!x{x=sub(/.*server_names = \[.*/,"server_names = [\047google\047, \047cloudflare\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
                         fi
 
                         ./dnscrypt-proxy -service install > /dev/null
@@ -48109,7 +48718,7 @@ ${green}8.${normal} 浏览频道
         ;;
         7) 
             XtreamCodesAddMac
-            if [ "$add_mac_success" -eq 1 ] 
+            if [ "$add_mac_success" = true ] 
             then
                 XtreamCodesList mac
                 Println "$info mac 添加成功!\n"
@@ -48333,15 +48942,15 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
 
                     if ! grep -q "#allow-hotplug eth0" < /etc/network/interfaces
                     then
-                        sed -i "0,/allow-hotplug eth0/s//#allow-hotplug eth0/" /etc/network/interfaces
+                        echo "$(awk '!x{x=sub(/allow-hotplug eth0/,"#allow-hotplug eth0")}1' /etc/network/interfaces)" > /etc/network/interfaces
                     fi
                     if ! grep -q "#no-auto-down eth0" < /etc/network/interfaces
                     then
-                        sed -i "0,/no-auto-down eth0/s//#no-auto-down eth0/" /etc/network/interfaces
+                        echo "$(awk '!x{x=sub(/no-auto-down eth0/,"#no-auto-down eth0")}1' /etc/network/interfaces)" > /etc/network/interfaces
                     fi
                     if ! grep -q "#iface eth0 inet dhcp" < /etc/network/interfaces
                     then
-                        sed -i "0,/iface eth0 inet dhcp/s//#iface eth0 inet dhcp/" /etc/network/interfaces
+                        echo "$(awk '!x{x=sub(/iface eth0 inet dhcp/,"#iface eth0 inet dhcp")}1' /etc/network/interfaces)" > /etc/network/interfaces
                     fi
 
                     if [ -f /etc/resolv.conf ] 
@@ -48434,7 +49043,7 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
                 exit 1
             fi
 
-            sed -i "0,/^listen_addresses = .*/s//listen_addresses = ['[::]:$listen_port']/" "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
+            echo "$(awk '!x{x=sub(/^listen_addresses = .*/,"listen_addresses = [\047[::]:'"$listen_port"'\047]")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
             systemctl restart dnscrypt-proxy
 
             if ! curl -s -H 'Content-Type: application/json' \
@@ -48658,7 +49267,7 @@ method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
                         Println "$i18n_canceled...\n"
                         exit 1
                     fi
-                    sed -i "0,/address1=\(.*\),.*/s//address1=\1,$openwrt_ip/" /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
+                    sed -i "/address1=\(.*\),.*/s//address1=\1,$openwrt_ip/" /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
                     nmcli connection reload
                 fi
                 Println "$info 重启 hMACvLAN ..."
@@ -48872,7 +49481,7 @@ fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
             if [ "$core" == "xray-core" ] 
             then
                 echo
-                xray_options=( '最新' '1.4.5' '1.4.3' '1.4.2' '1.4.0' )
+                xray_options=( '最新' '1.4.5' )
                 inquirer list_input "选择 xray 版本" xray_options xray_ver
                 if [ "$xray_ver" == "最新" ] && ! xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/openwrt-xray.json" | $JQ_FILE -r '.tag_name')
                 then
@@ -49093,7 +49702,7 @@ fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
 
                 chattr -i /etc/resolv.conf
                 sed -i '/options edns0/d' /etc/resolv.conf
-                sed -i "0,/.*require_dnssec = .*/s//require_dnssec = false/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = false")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
                 systemctl restart dnscrypt-proxy
                 Println "$info edns0 已关闭\n"
             else
@@ -49101,7 +49710,7 @@ fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
 
                 echo "options edns0" >> /etc/resolv.conf
                 chattr +i /etc/resolv.conf
-                sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = true")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
                 systemctl restart dnscrypt-proxy
                 Println "$info edns0 已开启\n"
             fi
@@ -49125,11 +49734,11 @@ fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
             fi
             if [ "$switch_options_index" -eq 0 ] 
             then
-                sed -i "0,/.*block_ipv6 = .*/s//block_ipv6 = false/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                echo "$(awk '!x{x=sub(/.*block_ipv6 = .*/,"block_ipv6 = false")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
                 systemctl restart dnscrypt-proxy
                 Println "$info ipv6 查询已开启\n"
             else
-                sed -i "0,/.*block_ipv6 = .*/s//block_ipv6 = true/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                echo "$(awk '!x{x=sub(/.*block_ipv6 = .*/,"block_ipv6 = true")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
                 systemctl restart dnscrypt-proxy
                 Println "$info ipv6 查询已关闭\n"
             fi
@@ -49288,7 +49897,7 @@ then
                         GRUB_CMDLINE_LINUX_DEFAULT="consoleblank=$console_blank_secs"
                     fi
 
-                    sed -i '0,/GRUB_CMDLINE_LINUX_DEFAULT=.*/s//GRUB_CMDLINE_LINUX_DEFAULT="'"$GRUB_CMDLINE_LINUX_DEFAULT"'"/' /etc/default/grub
+                    echo "$(awk '!x{x=sub(/GRUB_CMDLINE_LINUX_DEFAULT=.*/,"GRUB_CMDLINE_LINUX_DEFAULT=\"'"$GRUB_CMDLINE_LINUX_DEFAULT"'\"")}1' /etc/default/grub)" > /etc/default/grub
                     update-grub
 
                     Println "$info 设置成功\n"
@@ -49341,7 +49950,7 @@ then
                         GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT$ele"
                     done
 
-                    sed -i '0,/GRUB_CMDLINE_LINUX_DEFAULT=.*/s//GRUB_CMDLINE_LINUX_DEFAULT="'"$GRUB_CMDLINE_LINUX_DEFAULT"'"/' /etc/default/grub
+                    echo "$(awk '!x{x=sub(/GRUB_CMDLINE_LINUX_DEFAULT=.*/,"GRUB_CMDLINE_LINUX_DEFAULT=\"'"$GRUB_CMDLINE_LINUX_DEFAULT"'\"")}1' /etc/default/grub)" > /etc/default/grub
                     update-grub
 
                     Println "$info 设置成功\n"
@@ -49638,7 +50247,7 @@ then
                 exit 1
             fi
 
-            sed -i "0,/^listen_addresses = .*/s//listen_addresses = ['[::]:$listen_port']/" "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
+            echo "$(awk '!x{x=sub(/^listen_addresses = .*/,"listen_addresses = [\047[::]:'"$listen_port"'\047]")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
             systemctl restart dnscrypt-proxy
 
             if ! curl -s -H 'Content-Type: application/json' \
@@ -49741,7 +50350,7 @@ then
             if [ "$core" == "xray-core" ] 
             then
                 echo
-                xray_options=( '最新' '1.4.5' '1.4.3' '1.4.2' '1.4.0' )
+                xray_options=( '最新' '1.4.5' )
                 inquirer list_input "选择 xray 版本" xray_options xray_ver
                 if [ "$xray_ver" == "最新" ] && ! xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/openwrt-xray.json" | $JQ_FILE -r '.tag_name')
                 then
@@ -49918,14 +50527,14 @@ then
                 ExitOnList n "`gettext \"是否关闭 edns0\"`"
 
                 sed -i '/options edns0/d' /etc/resolv.conf
-                sed -i "0,/.*require_dnssec = .*/s//require_dnssec = false/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = false")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
                 systemctl restart dnscrypt-proxy
                 Println "$info edns0 已关闭\n"
             else
                 ExitOnList n "`gettext \"是否开启 edns0\"`"
 
                 echo "options edns0" >> /etc/resolv.conf
-                sed -i "0,/.*require_dnssec = .*/s//require_dnssec = true/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = true")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
                 systemctl restart dnscrypt-proxy
                 Println "$info edns0 已开启\n"
             fi
@@ -49949,11 +50558,11 @@ then
             fi
             if [ "$switch_options_index" -eq 0 ] 
             then
-                sed -i "0,/.*block_ipv6 = .*/s//block_ipv6 = false/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                echo "$(awk '!x{x=sub(/.*block_ipv6 = .*/,"block_ipv6 = false")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
                 systemctl restart dnscrypt-proxy
                 Println "$info ipv6 查询已开启\n"
             else
-                sed -i "0,/.*block_ipv6 = .*/s//block_ipv6 = true/" $DNSCRYPT_ROOT/dnscrypt-proxy.toml
+                echo "$(awk '!x{x=sub(/.*block_ipv6 = .*/,"block_ipv6 = true")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
                 systemctl restart dnscrypt-proxy
                 Println "$info ipv6 查询已关闭\n"
             fi
@@ -50257,13 +50866,6 @@ then
                     _4gtv_chnl_name=${_4gtv_chnls_name[_4gtv_chnl_index]}
                     _4gtv_chnl_aid=${_4gtv_chnls_aid[_4gtv_chnl_index]}
                     Println "$info 添加频道 [ $_4gtv_chnl_name ]\n\n"
-                    inquirer list_input "是否推流 flv" ny_options add_channel_flv_yn
-                    if [ "$add_channel_flv_yn" == "$i18n_yes" ] 
-                    then
-                        kind="flv"
-                    else
-                        kind=""
-                    fi
                     Println "$info 解析 [ $_4gtv_chnl_name ] 链接 ..."
                     stream_links=("https://www.4gtv.tv/channel_sub.html?channelSet_id=$_4gtv_set_id&asset_id=$_4gtv_chnl_aid&channel_id=$_4gtv_chnl_id")
                     headers="Referer: ${stream_links[0]}\r\n"
@@ -50313,7 +50915,62 @@ then
                         then
                             continue
                         fi
-                        AddChannel
+                        echo
+                        inquirer list_input "是否 添加/替换 现有频道直播源" ny_options add_channel_yn
+
+                        if [ "$add_channel_yn" == "$i18n_yes" ]
+                        then
+                            ListChannels
+                            InputChannelsIndex
+
+                            for((i=0;i<${#chnls_pid_chosen[@]};i++));
+                            do
+                                chnl_pid=${chnls_pid_chosen[i]}
+                                chnls_index=${chnls_indices[i]}
+
+                                ListChannel
+
+                                echo
+                                change_options=( '添加' '替换' )
+                                inquirer list_input_index "如何修改频道 [ $chnl_channel_name ]" change_options change_options_index
+
+                                if [ "$change_options_index" -eq 0 ] 
+                                then
+                                    pre=true
+                                    jq_path='["channels",'"$chnls_index"',"stream_link"]'
+                                    JQ add "$CHANNELS_FILE" ["\"${stream_links[0]}\""]
+                                else
+                                    echo
+                                    inquirer list_input_index "选择替换的直播源" chnl_stream_links chnl_stream_links_index
+
+                                    jq_path='["channels",'"$chnls_index"',"stream_link",'"$chnl_stream_links_index"']'
+                                    JQ update "$CHANNELS_FILE" "${stream_links[0]}"
+                                fi
+
+                                jq_path='["channels",'"$chnls_index"',"proxy"]'
+                                JQ update "$CHANNELS_FILE" "$_4gtv_proxy"
+
+                                jq_path='["channels",'"$chnls_index"',"user_agent"]'
+                                JQ update "$CHANNELS_FILE" "$user_agent"
+
+                                jq_path='["channels",'"$chnls_index"',"headers"]'
+                                JQ update "$CHANNELS_FILE" "$headers"
+
+                                jq_path='["channels",'"$chnls_index"',"cookies"]'
+                                JQ update "$CHANNELS_FILE" "$cookies"
+
+                                Println "$info 频道 [ $chnl_channel_name ] 修改成功 !\n"
+                            done
+                        else
+                            inquirer list_input "是否推流 flv" ny_options add_channel_flv_yn
+                            if [ "$add_channel_flv_yn" == "$i18n_yes" ] 
+                            then
+                                kind="flv"
+                            else
+                                kind=""
+                            fi
+                            AddChannel
+                        fi
                     fi
                 fi
             done
@@ -51220,10 +51877,11 @@ else
     else
         FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
         FFMPEG="$FFMPEG_ROOT/ffmpeg"
-        GetDefault
-        export FFMPEG
+        FFPROBE="$FFMPEG_ROOT/ffprobe"
 
-        stream_links=($stream_link)
+        GetDefault
+
+        stream_links=("$stream_link")
         stream_link="${stream_links[0]}"
 
         if [ -z "${proxy:-}" ] 
@@ -51282,6 +51940,7 @@ else
         do
             headers=${headers//\\\\/\\}
         done
+
         if [ -n "$headers" ] && [[ ! $headers =~ \\r\\n$ ]]
         then
             headers="$headers\r\n"
@@ -51293,10 +51952,11 @@ else
         playlist_name="${playlist_name:-$(RandPlaylistName)}"
         seg_dir_name="${seg_dir_name:-$d_seg_dir_name}"
 
-        seg_dir_path=""
         if [ -n "$seg_dir_name" ] 
         then
             seg_dir_path="$seg_dir_name/"
+        else
+            seg_dir_path=""
         fi
 
         seg_name="${seg_name:-$playlist_name}"
@@ -51329,10 +51989,11 @@ else
         bitrate="${bitrate:-$d_bitrate}"
         resolution="${resolution:-$d_resolution}"
 
-        subtitle_append=""
         if [ -n "$txt_format" ]
         then
             subtitle_append=',SUBTITLES="subs"'
+        else
+            subtitle_append=""
         fi
 
         master=0
@@ -51400,7 +52061,7 @@ else
         sync_file="${sync_file:-}"
         sync_index="${sync_index:-}"
         sync_pairs="${sync_pairs:-}"
-        hls_end_list=false
+        hls_end_list="${d_hls_end_list:-false}"
 
         [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
 

@@ -1,0 +1,704 @@
+ParseHlsPlaylist()
+{
+    use_cdn=false
+    hboasia_host="hbogoasia.com:8443"
+    hboasia_cdn_host="dai3fd1oh325y.cloudfront.net"
+
+    stream_link_url="${stream_link%%|*}"
+    stream_link_url_path="${stream_link_url%\?*}"
+    stream_link_url_path="${stream_link_url_path%/*}"
+
+    stream_link_url_path_cdn="$stream_link_url_path"
+    if [[ $stream_link_url_path =~ $hboasia_host/(.+)$ ]] 
+    then
+        if [ "$use_cdn" = true ] 
+        then
+            stream_link_url_path_cdn="https://$hboasia_cdn_host/${BASH_REMATCH[1]}"
+        fi
+        #headers="range: \r\n"
+        if [[ ! $output_flags =~ -seekable ]] 
+        then
+            output_flags="$output_flags -seekable 0"
+        fi
+        if [[ ! $output_flags =~ -vsync ]] 
+        then
+            output_flags="$output_flags -vsync 0"
+        fi
+    fi
+
+    if [ "${stream_link:0:1}" == "/" ] 
+    then
+        m3u8_content=$(< "${stream_link%%|*}")
+    else
+        curl_proxy_command=()
+        if [ -n "${proxy:-}" ] 
+        then
+            curl_proxy_command+=( -x "$proxy" )
+        fi
+
+        curl_cookies_command=()
+        if [ -n "${cookies:-}" ] 
+        then
+            curl_cookies_command+=( --cookie "$cookies" )
+        fi
+
+        curl_headers_command=()
+        if [ -n "${user_agent:-}" ] 
+        then
+            curl_headers_command+=( -H "User-Agent: $user_agent" )
+        fi
+
+        if [ -n "${headers:-}" ] 
+        then
+            curl_headers_command+=( -H "$headers" )
+        fi
+
+        if ! m3u8_content=$(curl -s -Lm 20 ${curl_proxy_command[@]+"${curl_proxy_command[@]}"} ${curl_cookies_command[@]+"${curl_cookies_command[@]}"} ${curl_headers_command[@]+"${curl_headers_command[@]}"} "$stream_link_url")
+        then
+            Println "$error 链接错误\n"
+            exit 1
+        fi
+    fi
+
+    stream_audio_group_id=()
+    stream_audio_name=()
+    stream_audio_default=()
+    stream_audio_language=()
+    stream_audio_url=()
+    stream_subtitles_group_id=()
+    stream_subtitles_name=()
+    stream_subtitles_default=()
+    stream_subtitles_language=()
+    stream_subtitles_url=()
+    stream_urls=()
+    stream_urls_bitrate=()
+    stream_urls_resolution=()
+    stream_urls_audio=()
+    stream_urls_subtitles=()
+    stream_urls_list=""
+    stream_urls_count=0
+
+    while IFS= read -r line 
+    do
+        if [[ $line =~ TYPE=AUDIO ]] 
+        then
+            IFS="," read -r -a stream_audio <<< "${line#*:}"
+            stream_audio_keys=(${stream_audio[*]%%=*})
+            stream_audio_values=(${stream_audio[*]#*=})
+            for((i=0;i<${#stream_audio_keys[@]};i++));
+            do
+                if [ "${stream_audio_keys[i]}" == "GROUP-ID" ] 
+                then
+                    stream_audio_group_id+=("${stream_audio_values[i]//\"/}")
+                elif [ "${stream_audio_keys[i]}" == "NAME" ] 
+                then
+                    stream_audio_name+=("${stream_audio_values[i]//\"/}")
+                elif [ "${stream_audio_keys[i]}" == "DEFAULT" ] 
+                then
+                    stream_audio_default+=("${stream_audio_values[i]}")
+                elif [ "${stream_audio_keys[i]}" == "LANGUAGE" ] 
+                then
+                    stream_audio_language+=("${stream_audio_values[i]//\"/}")
+                elif [ "${stream_audio_keys[i]}" == "URI" ] 
+                then
+                    stream_audio_uri=${stream_audio_values[i]//\"/}
+                    if [[ $stream_audio_uri =~ ^https?:// ]] 
+                    then
+                        stream_audio_url+=("$stream_audio_uri")
+                    else
+                        stream_audio_url+=("$stream_link_url_path_cdn/$stream_audio_uri")
+                    fi
+                fi
+            done
+        elif [[ $line =~ TYPE=SUBTITLES ]] 
+        then
+            IFS="," read -r -a stream_subtitles <<< "${line#*:}"
+            stream_subtitles_keys=(${stream_subtitles[*]%%=*})
+            stream_subtitles_values=(${stream_subtitles[*]#*=})
+            for((i=0;i<${#stream_subtitles_keys[@]};i++));
+            do
+                if [ "${stream_subtitles_keys[i]}" == "GROUP-ID" ] 
+                then
+                    stream_subtitles_group_id+=("${stream_subtitles_values[i]//\"/}")
+                elif [ "${stream_subtitles_keys[i]}" == "NAME" ] 
+                then
+                    stream_subtitles_name+=("${stream_subtitles_values[i]//\"/}")
+                elif [ "${stream_subtitles_keys[i]}" == "DEFAULT" ] 
+                then
+                    stream_subtitles_default+=("${stream_subtitles_values[i]}")
+                elif [ "${stream_subtitles_keys[i]}" == "LANGUAGE" ] 
+                then
+                    stream_subtitles_language+=("${stream_subtitles_values[i]//\"/}")
+                elif [ "${stream_subtitles_keys[i]}" == "URI" ] 
+                then
+                    stream_subtitles_uri=${stream_subtitles_values[i]//\"/}
+                    if [[ $stream_subtitles_uri =~ ^https?:// ]] 
+                    then
+                        stream_subtitles_url+=("$stream_subtitles_uri")
+                    else
+                        stream_subtitles_url+=("$stream_link_url_path_cdn/$stream_subtitles_uri")
+                    fi
+                fi
+            done
+        elif [[ $line =~ RESOLUTION=([^ ]+) ]] 
+        then
+            stream_url_resolution=${BASH_REMATCH[1]%%,*}
+            stream_urls_resolution+=("$stream_url_resolution")
+            if [[ $line =~ BANDWIDTH=([^ ]+) ]] 
+            then
+                stream_url_bitrate=${BASH_REMATCH[1]%%,*}
+                stream_url_bitrate=$((stream_url_bitrate/1000))
+            else
+                stream_url_bitrate=""
+            fi
+            stream_urls_bitrate+=("$stream_url_bitrate")
+            if [ -n "$stream_url_bitrate" ] 
+            then
+                stream_url_bitrate_text=" [ $stream_url_bitrate k ]"
+            else
+                stream_url_bitrate_text=""
+            fi
+            if [[ $line =~ AUDIO=([^ ]+) ]] 
+            then
+                stream_url_audio=${BASH_REMATCH[1]%%,*}
+                stream_url_audio=${stream_url_audio#\"}
+                stream_url_audio=${stream_url_audio%\"}
+            else
+                stream_url_audio=""
+            fi
+            stream_urls_audio+=("$stream_url_audio")
+            if [[ $line =~ SUBTITLES=([^ ]+) ]] 
+            then
+                stream_url_subtitles=${BASH_REMATCH[1]%%,*}
+                stream_url_subtitles=${stream_url_subtitles#\"}
+                stream_url_subtitles=${stream_url_subtitles%\"}
+            else
+                stream_url_subtitles=""
+            fi
+            stream_urls_subtitles+=("$stream_url_subtitles")
+            stream_urls_count=$((stream_urls_count+1))
+            stream_urls_list="$stream_urls_list ${green}$stream_urls_count.${normal}${indent_6}$stream_url_resolution$stream_url_bitrate_text $stream_url_audio $stream_url_subtitles\n\n"
+        elif [[ $line =~ \.m3u8 ]] 
+        then
+            if [[ $line =~ ^https?:// ]] 
+            then
+                stream_urls+=("$line")
+            else
+                stream_urls+=("$stream_link_url_path_cdn/$line")
+            fi
+        fi
+    done <<< "$m3u8_content"
+
+    if [ -z "$stream_urls_list" ] 
+    then
+        Println "$error 没有可选分辨率"
+        return 1
+    fi
+
+    if [ "$use_cdn" = true ] && [[ $stream_link_url =~ $hboasia_host/(.+)$ ]] 
+    then
+        stream_url_cdn="https://$hboasia_cdn_host/${BASH_REMATCH[1]}?${stream_urls[0]#*\?}"
+    fi
+
+    if [[ $stream_link =~ \|([^|]+)$ ]] 
+    then
+        choose=0
+        stream_url_quality=${BASH_REMATCH[1]}
+        stream_audio_group_id_allow=()
+        stream_audio_name_allow=()
+        stream_subtitles_group_id_allow=()
+        stream_subtitles_name_allow=()
+
+        IFS="," read -r -a stream_url_qualities <<< "$stream_url_quality"
+        stream_url_qualities_count=${#stream_url_qualities[@]}
+
+        if [[ $stream_link =~ \|ag:([^|]+) ]] 
+        then
+            stream_audio_group_id_allow_list=${BASH_REMATCH[1]}
+            IFS="," read -ra stream_audio_group_id_allow <<< "$stream_audio_group_id_allow_list"
+        fi
+
+        if [[ $stream_link =~ \|a:([^|]+) ]] 
+        then
+            stream_audio_name_allow_list=${BASH_REMATCH[1]}
+            IFS="," read -ra stream_audio_name_allow <<< "$stream_audio_name_allow_list"
+        fi
+
+        if [[ $stream_link =~ \|sg:([^|]+) ]] 
+        then
+            stream_subtitles_group_id_allow_list=${BASH_REMATCH[1]}
+            IFS="," read -ra stream_subtitles_group_id_allow <<< "$stream_subtitles_group_id_allow_list"
+        fi
+
+        if [[ $stream_link =~ \|s:([^|]+) ]] 
+        then
+            stream_subtitles_name_allow_list=${BASH_REMATCH[1]}
+            IFS="," read -ra stream_subtitles_name_allow <<< "$stream_subtitles_name_allow_list"
+        fi
+
+        stream_url_video_indices=()
+
+        for((i=0;i<stream_url_qualities_count;i++));
+        do
+            for((j=0;j<stream_urls_count;j++));
+            do
+                if { ! [[ ${stream_url_qualities[i]} =~ - ]] || [ "${stream_urls_bitrate[j]}" == "${stream_url_qualities[i]%-*}" ]; } && [ "${stream_urls_resolution[j]}" == "${stream_url_qualities[i]#*-}" ]
+                then
+                    stream_url_qualities[i]="${stream_urls_bitrate[j]}-${stream_urls_resolution[j]}"
+                    stream_url_video_indices+=("$j")
+                    continue 2
+                fi
+            done
+
+            Println "$error ${stream_url_qualities[i]} 不存在 !"
+            choose=1
+            Println "$error 请重新选择 $channel_name 分辨率"
+            break
+        done
+    else
+        choose=1
+    fi
+
+    if [ "$choose" -eq 1 ]
+    then
+        stream_urls_select_all=$((stream_urls_count+1))
+        stream_urls_list="$stream_urls_list ${green}$stream_urls_select_all.${normal}${indent_6}全部\n"
+        Println "$stream_urls_list"
+        echo "选择分辨率 (多个分辨率用空格分隔 比如: 1 2 4-5)"
+
+        while read -p "(默认: $stream_urls_count): " stream_urls_num 
+        do
+            stream_urls_num=${stream_urls_num:-$stream_urls_count}
+
+            if [ "$stream_urls_num" == "$stream_urls_select_all" ] 
+            then
+                stream_url_qualities=()
+                stream_url_video_indices=()
+
+                for((i=0;i<stream_urls_count;i++));
+                do
+                    stream_url_qualities+=("${stream_urls_bitrate[i]}-${stream_urls_resolution[i]}")
+                    stream_url_video_indices+=("$i")
+                done
+
+                stream_url_qualities_count=$stream_urls_count
+                break
+            fi
+
+            IFS=" " read -ra stream_urls_num_arr <<< "$stream_urls_num"
+
+            error_no=0
+            for stream_url_num in "${stream_urls_num_arr[@]}"
+            do
+                case "$stream_url_num" in
+                    *"-"*)
+                        stream_url_num_start=${stream_url_num%-*}
+                        stream_url_num_end=${stream_url_num#*-}
+                        if [[ $stream_url_num_start == *[!0-9]* ]] || [[ $stream_url_num_end == *[!0-9]* ]] || [ "$stream_url_num_start" -eq 0 ] || [ "$stream_url_num_end" -eq 0 ] || [ "$stream_url_num_end" -gt "$stream_urls_count" ] || [ "$stream_url_num_start" -ge "$stream_url_num_end" ]
+                        then
+                            error_no=3
+                            break
+                        fi
+                    ;;
+                    *[!0-9]*)
+                        error_no=1
+                        break
+                    ;;
+                    *)
+                        if [ "$stream_url_num" -lt 1 ] || [ "$stream_url_num" -gt "$stream_urls_count" ] 
+                        then
+                            error_no=2
+                            break
+                        fi
+                    ;;
+                esac
+            done
+
+            case "$error_no" in
+                1|2|3)
+                    Println "$error $i18n_input_correct_no\n"
+                ;;
+                *)
+                    stream_url_qualities=()
+                    stream_url_video_indices=()
+
+                    for stream_url_num in "${stream_urls_num_arr[@]}"
+                    do
+                        if [[ $stream_url_num =~ - ]] 
+                        then
+                            start=${stream_url_num%-*}
+                            end=${stream_url_num#*-}
+                            for((i=start-1;i<end;i++));
+                            do
+                                stream_url_qualities+=("${stream_urls_bitrate[i]}-${stream_urls_resolution[i]}")
+                                stream_url_video_indices+=("$i")
+                            done
+                        else
+                            stream_url_qualities+=("${stream_urls_bitrate[stream_url_num-1]}-${stream_urls_resolution[stream_url_num-1]}")
+                            stream_url_video_indices+=("$((stream_url_num-1))")
+                        fi
+                    done
+
+                    stream_url_qualities_count=${#stream_url_qualities[@]}
+                    break
+                ;;
+            esac
+        done
+    fi
+
+    printf -v stream_url_quality ',%s' "${stream_url_qualities[@]}"
+    stream_url_quality="${stream_url_quality:1}"
+
+    if [ -n "${stream_audio_name:-}" ] 
+    then
+        stream_url_audio_indices=()
+        choose=1
+        if [ -n "${stream_audio_group_id_allow:-}" ] 
+        then
+            choose=0
+            if [ "${stream_audio_group_id_allow[0]}" == "none" ] 
+            then
+                stream_link_url="${stream_link_url}|ag:none"
+                stream_url_audio_count=0
+            else
+                for((i=0;i<${#stream_audio_group_id_allow[@]};i++));
+                do
+                    for((j=0;j<${#stream_audio_group_id[@]};j++));
+                    do
+                        if [ "${stream_audio_group_id_allow[i]}" == "${stream_audio_group_id[j]}" ] && [ "${stream_audio_name_allow[i]}" == "${stream_audio_name[j]}" ]
+                        then
+                            stream_url_audio_indices+=("$j")
+                            continue 2
+                        fi
+                    done
+                    choose=1
+                    Println "$error 请重新选择音轨\n"
+                    break
+                done
+            fi
+        fi
+
+        if [ "$choose" -eq 1 ] 
+        then
+            stream_audio_count=${#stream_audio_name[@]}
+            stream_audio_list=""
+            stream_audio_num_default=1
+
+            for((i=0;i<stream_audio_count;i++));
+            do
+                if [ "${stream_audio_default[i]}" == "YES" ] 
+                then
+                    stream_audio_num_default=$((i+1))
+                fi
+                stream_audio_list="$stream_audio_list ${green}$((i+1)).${normal}${indent_6}音轨组: ${green}${stream_audio_group_id[i]}${normal} 名称: ${green}${stream_audio_name[i]}${normal} 语言: ${green}${stream_audio_language[i]}${normal}\n\n"
+            done
+
+            stream_audio_unselect_all=$((stream_audio_count+1))
+            stream_audio_list="$stream_audio_list ${green}$stream_audio_unselect_all.${normal}${indent_6}不启用\n\n"
+
+            stream_audio_select_all=$((stream_audio_count+2))
+            stream_audio_list="$stream_audio_list ${green}$stream_audio_select_all.${normal}${indent_6}全部启用"
+            Println "$stream_audio_list\n"
+            echo "选择启用音轨 (多个音轨用空格分隔 比如: 1 2 4-5)"
+            stream_audio_num_default=$stream_audio_select_all
+
+            while read -p "(默认: $stream_audio_num_default): " stream_audio_num 
+            do
+                stream_audio_num=${stream_audio_num:-$stream_audio_num_default}
+
+                if [ "$stream_audio_num" == "$stream_audio_unselect_all" ] 
+                then
+                    unset 'stream_audio_group_id'
+                    unset 'stream_audio_name'
+                    break
+                fi
+
+                if [ "$stream_audio_num" == "$stream_audio_select_all" ] 
+                then
+                    stream_url_audio_indices=()
+                    for((i=0;i<stream_audio_count;i++));
+                    do
+                        stream_url_audio_indices+=("$i")
+                    done
+                    break
+                fi
+
+                IFS=" " read -ra stream_audio_num_arr <<< "$stream_audio_num"
+
+                error_no=0
+                for stream_audio_num in "${stream_audio_num_arr[@]}"
+                do
+                    case "$stream_audio_num" in
+                        *"-"*)
+                            stream_audio_num_start=${stream_audio_num%-*}
+                            stream_audio_num_end=${stream_audio_num#*-}
+                            if [[ $stream_audio_num_start == *[!0-9]* ]] || [[ $stream_audio_num_end == *[!0-9]* ]] || [ "$stream_audio_num_start" -eq 0 ] || [ "$stream_audio_num_end" -eq 0 ] || [ "$stream_audio_num_end" -gt "$stream_audio_count" ] || [ "$stream_audio_num_start" -ge "$stream_audio_num_end" ]
+                            then
+                                error_no=3
+                                break
+                            fi
+                        ;;
+                        *[!0-9]*)
+                            error_no=1
+                            break
+                        ;;
+                        *)
+                            if [ "$stream_audio_num" -lt 1 ] || [ "$stream_audio_num" -gt "$stream_audio_count" ] 
+                            then
+                                error_no=2
+                                break
+                            fi
+                        ;;
+                    esac
+                done
+
+                case "$error_no" in
+                    1|2|3)
+                        Println "$error $i18n_input_correct_no\n"
+                    ;;
+                    *)
+                        stream_url_audio_indices=()
+                        for((i=0;i<stream_audio_count;i++));
+                        do
+                            i_num=$((i+1))
+                            for stream_audio_num in "${stream_audio_num_arr[@]}"
+                            do
+                                if [[ $stream_audio_num =~ - ]] 
+                                then
+                                    if [ "$i_num" -ge "${stream_audio_num%-*}" ] && [ "$i_num" -le "${stream_audio_num#*-}" ]
+                                    then
+                                        stream_url_audio_indices+=("$i")
+                                        continue 2
+                                    fi
+                                elif [ "$i_num" -eq "$stream_audio_num" ] 
+                                then
+                                    stream_url_audio_indices+=("$i")
+                                    continue 2
+                                fi
+                            done
+                            unset 'stream_audio_group_id[i]'
+                            unset 'stream_audio_name[i]'
+                        done
+                        break
+                    ;;
+                esac
+            done
+
+            if [ -n "${stream_audio_name+x}" ] 
+            then
+                printf -v stream_audio_group_id_allow_list ',%s' "${stream_audio_group_id[@]}"
+                stream_audio_group_id_allow_list=${stream_audio_group_id_allow_list:1}
+                printf -v stream_audio_name_allow_list ',%s' "${stream_audio_name[@]}"
+                stream_audio_name_allow_list=${stream_audio_name_allow_list:1}
+                stream_link_url="$stream_link_url|ag:$stream_audio_group_id_allow_list|a:$stream_audio_name_allow_list"
+                stream_url_audio_count=${#stream_audio_name[@]}
+            else
+                stream_url_audio_count=0
+                stream_link_url="${stream_link_url}|ag:none"
+            fi
+        elif [ -n "${stream_url_audio_indices:-}" ] 
+        then
+            stream_link_url="$stream_link_url|ag:$stream_audio_group_id_allow_list|a:$stream_audio_name_allow_list"
+            stream_url_audio_count=${#stream_url_audio_indices[@]}
+        fi
+    else
+        stream_url_audio_count=0
+    fi
+
+    if [[ ${stream_links[0]} =~ ^https?://news\.tvb\.com ]] 
+    then
+        stream_url_subtitles_count=0
+        stream_link_url="${stream_link_url}|sg:none"
+    elif [ -n "${stream_subtitles_name:-}" ] 
+    then
+        stream_url_subtitles_indices=()
+        choose=1
+        if [ -n "${stream_subtitles_group_id_allow:-}" ] 
+        then
+            choose=0
+            if [ "${stream_subtitles_group_id_allow[0]}" == "none" ] 
+            then
+                stream_link_url="${stream_link_url}|sg:none"
+                stream_url_subtitles_count=0
+            else
+                for((i=0;i<${#stream_subtitles_group_id_allow[@]};i++));
+                do
+                    for((j=0;j<${#stream_subtitles_group_id[@]};j++));
+                    do
+                        if [ "${stream_subtitles_group_id_allow[i]}" == "${stream_subtitles_group_id[j]}" ] && [ "${stream_subtitles_name_allow[i]}" == "${stream_subtitles_name[j]}" ]
+                        then
+                            stream_url_subtitles_indices+=("$j")
+                            continue 2
+                        fi
+                    done
+                    choose=1
+                    Println "$error 请重新选择字幕\n"
+                    break
+                done
+            fi
+        fi
+
+        if [ "$choose" -eq 1 ] 
+        then
+            stream_subtitles_count=${#stream_subtitles_name[@]}
+            stream_subtitles_list=""
+            stream_subtitles_num_default=1
+
+            for((i=0;i<stream_subtitles_count;i++));
+            do
+                if [ "${stream_subtitles_default[i]}" == "YES" ] 
+                then
+                    stream_subtitles_num_default=$((i+1))
+                fi
+                stream_subtitles_list="$stream_subtitles_list ${green}$((i+1)).${normal}${indent_6}字幕组: ${green}${stream_subtitles_group_id[i]}${normal} 名称: ${green}${stream_subtitles_name[i]}${normal} 语言: ${green}${stream_subtitles_language[i]}${normal}\n\n"
+            done
+
+            stream_subtitles_unselect_all=$((stream_subtitles_count+1))
+            stream_subtitles_list="$stream_subtitles_list ${green}$stream_subtitles_unselect_all.${normal}${indent_6}不启用\n\n"
+
+            stream_subtitles_select_all=$((stream_subtitles_count+2))
+            stream_subtitles_list="$stream_subtitles_list ${green}$stream_subtitles_select_all.${normal}${indent_6}全部启用"
+            Println "$stream_subtitles_list\n"
+            echo "选择字幕 (多个字幕用空格分隔 比如: 1 2 4-5)"
+            stream_subtitles_num_default=$stream_subtitles_select_all
+
+            while read -p "(默认: $stream_subtitles_num_default): " stream_subtitles_num 
+            do
+                stream_subtitles_num=${stream_subtitles_num:-$stream_subtitles_num_default}
+
+                if [ "$stream_subtitles_num" == "$stream_subtitles_unselect_all" ] 
+                then
+                    unset 'stream_subtitles_group_id'
+                    unset 'stream_subtitles_name'
+                    break
+                fi
+
+                if [ "$stream_subtitles_num" == "$stream_subtitles_select_all" ] 
+                then
+                    stream_url_subtitles_indices=()
+                    for((i=0;i<stream_subtitles_count;i++));
+                    do
+                        stream_url_subtitles_indices+=("$i")
+                    done
+                    break
+                fi
+
+                IFS=" " read -ra stream_subtitles_num_arr <<< "$stream_subtitles_num"
+
+                error_no=0
+                for stream_subtitles_num in "${stream_subtitles_num_arr[@]}"
+                do
+                    case "$stream_subtitles_num" in
+                        *"-"*)
+                            stream_subtitles_num_start=${stream_subtitles_num%-*}
+                            stream_subtitles_num_end=${stream_subtitles_num#*-}
+                            if [[ $stream_subtitles_num_start == *[!0-9]* ]] || [[ $stream_subtitles_num_end == *[!0-9]* ]] || [ "$stream_subtitles_num_start" -eq 0 ] || [ "$stream_subtitles_num_end" -eq 0 ] || [ "$stream_subtitles_num_end" -gt "$stream_subtitles_count" ] || [ "$stream_subtitles_num_start" -ge "$stream_subtitles_num_end" ]
+                            then
+                                error_no=3
+                                break
+                            fi
+                        ;;
+                        *[!0-9]*)
+                            error_no=1
+                            break
+                        ;;
+                        *)
+                            if [ "$stream_subtitles_num" -lt 1 ] || [ "$stream_subtitles_num" -gt "$stream_subtitles_count" ] 
+                            then
+                                error_no=2
+                                break
+                            fi
+                        ;;
+                    esac
+                done
+
+                case "$error_no" in
+                    1|2|3)
+                        Println "$error $i18n_input_correct_no\n"
+                    ;;
+                    *)
+                        stream_url_subtitles_indices=()
+                        for((i=0;i<stream_subtitles_count;i++));
+                        do
+                            i_num=$((i+1))
+                            for stream_subtitles_num in "${stream_subtitles_num_arr[@]}"
+                            do
+                                if [[ $stream_subtitles_num =~ - ]] 
+                                then
+                                    if [ "$i_num" -ge "${stream_subtitles_num%-*}" ] && [ "$i_num" -le "${stream_subtitles_num#*-}" ]
+                                    then
+                                        stream_url_subtitles_indices+=("$i")
+                                        continue 2
+                                    fi
+                                elif [ "$i_num" -eq "$stream_subtitles_num" ] 
+                                then
+                                    stream_url_subtitles_indices+=("$i")
+                                    continue 2
+                                fi
+                            done
+                            unset 'stream_subtitles_group_id[i]'
+                            unset 'stream_subtitles_name[i]'
+                        done
+                        break
+                    ;;
+                esac
+            done
+
+            if [ -n "${stream_subtitles_name+x}" ] 
+            then
+                printf -v stream_subtitles_group_id_allow_list ',%s' "${stream_subtitles_group_id[@]}"
+                stream_subtitles_group_id_allow_list=${stream_subtitles_group_id_allow_list:1}
+                printf -v stream_subtitles_name_allow_list ',%s' "${stream_subtitles_name[@]}"
+                stream_subtitles_name_allow_list=${stream_subtitles_name_allow_list:1}
+                stream_link_url="$stream_link_url|sg:$stream_subtitles_group_id_allow_list|s:$stream_subtitles_name_allow_list"
+                stream_url_subtitles_count=${#stream_subtitles_name[@]}
+            else
+                stream_url_subtitles_count=0
+                stream_link_url="${stream_link_url}|sg:none"
+            fi
+        elif [ -n "${stream_url_subtitles_indices:-}" ] 
+        then
+            stream_link_url="$stream_link_url|sg:$stream_subtitles_group_id_allow_list|s:$stream_subtitles_name_allow_list"
+            stream_url_subtitles_count=${#stream_url_subtitles_indices[@]}
+        fi
+    else
+        stream_url_subtitles_count=0
+    fi
+
+    if [[ $stream_link =~ \|origin\| ]] 
+    then
+        use_primary_playlist=true
+        stream_link=${stream_link_url%%|*}
+        stream_link_url="$stream_link_url|origin"
+    elif [[ $stream_link =~ \|parse\| ]] 
+    then
+        use_primary_playlist=false
+        stream_link=${stream_link_url%%|*}
+        stream_link_url="$stream_link_url|parse"
+    else
+        Println "$tip 如果选 是 只修改 map 参数, FFmpeg 输入的将是原链接而非解析链接"
+        inquirer list_input "是否是需要鉴权的直播源" yn_options yn_option
+        if [ "$yn_option" == "$i18n_yes" ] 
+        then
+            use_primary_playlist=true
+            stream_link=${stream_link_url%%|*}
+            stream_link_url="$stream_link_url|origin"
+        else
+            use_primary_playlist=false
+            stream_link=${stream_link_url%%|*}
+            stream_link_url="$stream_link_url|parse"
+        fi
+    fi
+
+    if [[ ${stream_links[0]} =~ ^https?://news\.tvb\.com ]]
+    then
+        stream_links[0]="${stream_links[0]%%|*}|${stream_link_url#*|}|$stream_url_quality"
+    else
+        stream_links[0]="$stream_link_url|$stream_url_quality"
+    fi
+
+    if [ "$use_cdn" = true ] 
+    then
+        hboasia_host="$hboasia_cdn_host"
+    fi
+}

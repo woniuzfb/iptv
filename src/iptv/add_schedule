@@ -1,0 +1,273 @@
+AddChannelsSchedule()
+{
+    echo
+    add_options=( '手动添加' '足球比赛' )
+    inquirer list_input_index "选择操作" add_options add_options_index
+
+    if [ "$add_options_index" -eq 1 ] 
+    then
+        echo
+        search_options=( '12小时内' '今天' '今明两天' )
+        inquirer list_input_index "搜索范围" search_options search_options_index
+
+        Progress "搜索足球节目表" &
+        progress_pid=$!
+
+        trap '
+            kill $progress_pid
+            wait $progress_pid 2> /dev/null
+        ' EXIT
+
+        SearchSoccerSchedules
+
+        schedules_count=${#schedules_chnl_id[@]}
+
+        for((i=0;i<schedules_count;i++));
+        do
+            flag=0
+
+            for((j=0;j<schedules_count-i-1;j++));
+            do
+                if [ "${schedules_start_time[j]}" -gt "${schedules_start_time[j+1]}" ] 
+                then
+                    temp="${schedules_start_time[j]}"
+                    schedules_start_time[j]="${schedules_start_time[j+1]}"
+                    schedules_start_time[j+1]="$temp"
+                    temp="${schedules_end_time[j]}"
+                    schedules_end_time[j]="${schedules_end_time[j+1]}"
+                    schedules_end_time[j+1]="$temp"
+                    temp="${schedules_chnl_id[j]}"
+                    schedules_chnl_id[j]="${schedules_chnl_id[j+1]}"
+                    schedules_chnl_id[j+1]="$temp"
+                    temp="${schedules_title[j]}"
+                    schedules_title[j]="${schedules_title[j+1]}"
+                    schedules_title[j+1]="$temp"
+                    temp="${schedules_list[j]}"
+                    schedules_list[j]="${schedules_list[j+1]}"
+                    schedules_list[j+1]="$temp"
+                    flag=1
+                fi
+            done
+
+            if [ "$flag" -eq 0 ] 
+            then
+                break
+            fi
+        done
+
+        kill $progress_pid
+        wait $progress_pid 2> /dev/null || true
+        trap - EXIT
+        echo "...100%"
+
+        echo
+        inquirer checkbox_input_indices "选择比赛" schedules_list schedules_indices
+
+        GetChannels
+        chnls_indices=("${!chnls_pid[@]}")
+
+        for schedules_index in "${schedules_indices[@]}"
+        do
+            Println "$info 添加 ${schedules_list[schedules_index]} 计划"
+
+            schedule_chnl_id="${schedules_chnl_id[schedules_index]}"
+            schedule_start_time="${schedules_start_time[schedules_index]}"
+            schedule_end_time="${schedules_end_time[schedules_index]}"
+            schedule_title="${schedules_title[schedules_index]}"
+
+            for chnls_index in "${chnls_indices[@]}"
+            do
+                if [ "${chnls_output_dir_name[chnls_index]}" == "$schedule_chnl_id" ] 
+                then
+                    ListChannelSchedules
+
+                    inquirer date_pick "设置开始日期" schedule_start_time
+
+                    echo
+                    inquirer date_pick "设置结束日期" schedule_end_time
+
+                    echo
+                    inquirer list_input_index "每日循环" ny_options ny_options_index
+
+                    if [ "$ny_options_index" -eq 0 ] 
+                    then
+                        schedule_loop=false
+
+                        echo
+                        inquirer list_input_index "结束后自动清除" ny_options ny_options_index
+
+                        if [ "$ny_options_index" -eq 0 ] 
+                        then
+                            schedule_auto_remove=false
+                        else
+                            schedule_auto_remove=true
+                        fi
+                    else
+                        schedule_loop=true
+                        schedule_auto_remove=false
+                    fi
+
+                    echo
+                    inquirer list_input_index "防盗链" yn_options yn_options_index
+
+                    if [ "$yn_options_index" -eq 0 ] 
+                    then
+                        schedule_hls_change=true
+
+                        echo
+                        inquirer list_input_index "防盗链一次" ny_options yn_options_index
+
+                        if [ "$yn_options_index" -eq 0 ] 
+                        then
+                            schedule_hls_change_once=false
+                        else
+                            schedule_hls_change_once=true
+                        fi
+                    else
+                        schedule_hls_change=false
+                        schedule_hls_change_once=false
+                    fi
+
+                    echo
+                    inquirer text_input "输入频道名称" schedule_channel_name "$schedule_title"
+
+                    chnl_schedule=$(
+                        $JQ_FILE -n --arg start_time "$schedule_start_time" \
+                            --arg end_time "$schedule_end_time" \
+                            --arg loop "$schedule_loop" \
+                            --arg auto_remove "$schedule_auto_remove" \
+                            --arg hls_change "$schedule_hls_change" \
+                            --arg hls_change_once "$schedule_hls_change_once" \
+                            --arg channel_name "$schedule_channel_name" \
+                            --arg status 0 \
+                        '{
+                            start_time: $start_time | tonumber,
+                            end_time: $end_time | tonumber,
+                            loop: $loop | test("true"),
+                            auto_remove: $auto_remove | test("true"),
+                            hls_change: $hls_change | test("true"),
+                            hls_change_once: $hls_change_once | test("true"),
+                            channel_name: $channel_name,
+                            status: $status | tonumber
+                        }'
+                    )
+
+                    jq_path='["channels",'"$chnls_index"',"schedule"]'
+                    JQ add "$CHANNELS_FILE" "[$chnl_schedule]"
+
+                    Println "$info 频道 [ $schedule_channel_name ] 计划添加成功\n"
+
+                    continue 2
+                fi
+            done
+
+            Println "$error 未找到输出目录为 [ $schedule_chnl_id ] 的频道, 请添加频道"
+        done
+
+        return 0
+    fi
+
+    ListChannels
+    InputChannelsIndex
+
+    for chnls_index in "${chnls_indices[@]}"
+    do
+        ListChannelSchedules
+
+        while true 
+        do
+            inquirer date_pick "设置开始日期" schedule_start_time
+
+            echo
+            inquirer date_pick "设置结束日期" schedule_end_time
+
+            echo
+            inquirer list_input_index "每日循环" ny_options ny_options_index
+
+            if [ "$ny_options_index" -eq 0 ] 
+            then
+                schedule_loop=false
+
+                echo
+                inquirer list_input_index "结束后自动清除" ny_options ny_options_index
+
+                if [ "$ny_options_index" -eq 0 ] 
+                then
+                    schedule_auto_remove=false
+                else
+                    schedule_auto_remove=true
+                fi
+            else
+                schedule_loop=true
+                schedule_auto_remove=false
+            fi
+
+            echo
+            inquirer list_input_index "防盗链" yn_options yn_options_index
+
+            if [ "$yn_options_index" -eq 0 ] 
+            then
+                schedule_hls_change=true
+
+                echo
+                inquirer list_input_index "防盗链一次" ny_options yn_options_index
+
+                if [ "$yn_options_index" -eq 0 ] 
+                then
+                    schedule_hls_change_once=false
+                else
+                    schedule_hls_change_once=true
+                fi
+            else
+                schedule_hls_change=false
+                schedule_hls_change_once=false
+            fi
+
+            echo
+            inquirer text_input "输入频道名称" schedule_channel_name "$i18n_not_set"
+
+            if [ "$schedule_channel_name" == "$i18n_not_set" ] 
+            then
+                schedule_channel_name=""
+            fi
+
+            chnl_schedule=$(
+                $JQ_FILE -n --arg start_time "$schedule_start_time" \
+                    --arg end_time "$schedule_end_time" \
+                    --arg loop "$schedule_loop" \
+                    --arg auto_remove "$schedule_auto_remove" \
+                    --arg hls_change "$schedule_hls_change" \
+                    --arg hls_change_once "$schedule_hls_change_once" \
+                    --arg channel_name "$schedule_channel_name" \
+                    --arg status 0 \
+                '{
+                    start_time: $start_time | tonumber,
+                    end_time: $end_time | tonumber,
+                    loop: $loop | test("true"),
+                    auto_remove: $auto_remove | test("true"),
+                    hls_change: $hls_change | test("true"),
+                    hls_change_once: $hls_change_once | test("true"),
+                    channel_name: $channel_name,
+                    status: $status | tonumber
+                }'
+            )
+
+            jq_path='["channels",'"$chnls_index"',"schedule"]'
+            JQ add "$CHANNELS_FILE" "[$chnl_schedule]"
+
+            Println "$info 频道 [ ${schedule_channel_name:-${chnls_channel_name[chnls_index]}} ] 计划添加成功\n"
+
+            echo
+            inquirer list_input_index "是否继续添加此频道计划" ny_options ny_options_index
+
+            if [ "$ny_options_index" -eq 0 ] 
+            then
+                break
+            fi
+
+            echo
+        done
+    done
+
+    echo
+}

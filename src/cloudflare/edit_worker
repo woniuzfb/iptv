@@ -1,0 +1,113 @@
+CloudflareEditWorker()
+{
+    CloudflareListWorkers
+
+    if [ "$cf_workers_count" -eq 0 ] 
+    then
+        Println "$error 请先添加 worker\n"
+        exit 1
+    fi
+
+    echo "选择 worker"
+    while read -p "$i18n_default_cancel" cf_workers_num
+    do
+        case "$cf_workers_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$cf_workers_num" -gt 0 ] && [ "$cf_workers_num" -le "$cf_workers_count" ]
+                then
+                    cf_workers_index=$((cf_workers_num-1))
+                    cf_worker_name=${cf_workers_name[cf_workers_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    echo
+    edit_worker_options=( '修改 worker 名称' '修改 worker 路径' '修改 worker 项目名称')
+
+    if [ "${cf_workers_path[cf_workers_index]}" == "stream_proxy" ] 
+    then
+        edit_worker_options+=("修改 worker 源站")
+    fi
+
+    inquirer list_input_index "选择操作" edit_worker_options edit_worker_options_index
+
+    if [ "$edit_worker_options_index" -eq 0 ] 
+    then
+        CloudflareSetWorkerName
+        jq_path='["workers",'"$cf_workers_index"',"name"]'
+        JQ update "$CF_CONFIG" "$cf_worker_name"
+    elif [ "$edit_worker_options_index" -eq 1 ] 
+    then
+        Println "请输入 cloudflare worker 路径名称"
+        while read -p "$i18n_default_cancel" cf_worker_path
+        do
+            case $cf_worker_path in
+                "") 
+                    Println "$i18n_canceled...\n" && exit 1
+                ;;
+                *[!0-9A-Za-z_-]*) 
+                    Println "$error 路径格式错误\n"
+                ;;
+                *) 
+                    if [ "$cf_worker_path" == "${cf_workers_path[cf_workers_index]}" ] 
+                    then
+                        break
+                    elif [ -d "$CF_WORKERS_ROOT/$cf_worker_path" ] 
+                    then
+                        echo
+                        inquirer list_input "路径已经存在, 是否仍要修改" ny_options force_edit_yn
+
+                        if [[ $force_edit_yn == "$i18n_no" ]] 
+                        then
+                            continue
+                        fi
+
+                        if [ -d "$CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]:-notfound}" ] 
+                        then
+                            echo
+                            inquirer list_input_index "是否删除原路径目录" yn_options yn_options_index
+
+                            if [ "$yn_options_index" -eq 0 ] 
+                            then
+                                rm -rf "$CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]:-notfound}"
+                            fi  
+                        fi
+                    else
+                        if [ "${cf_workers_path[cf_workers_index]}" == "stream_proxy" ] || [ "${cf_workers_path[cf_workers_index]}" == "xc_proxy" ]
+                        then
+                            cp -r "$CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]}" "$CF_WORKERS_ROOT/$cf_worker_path"
+                        elif [ -n "${cf_workers_path[cf_workers_index]}" ] 
+                        then
+                            mv "$CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]}" "$CF_WORKERS_ROOT/$cf_worker_path"
+                        fi
+                    fi
+                    break
+                ;;
+            esac
+        done
+        Println "  worker 路径: ${green} $cf_worker_path ${normal}\n"
+        jq_path='["workers",'"$cf_workers_index"',"path"]'
+        JQ update "$CF_CONFIG" "$cf_worker_path"
+    elif [ "$edit_worker_options_index" -eq 2 ] 
+    then
+        CloudflareSetWorkerProjectName
+        jq_path='["workers",'"$cf_workers_index"',"project_name"]'
+        JQ update "$CF_CONFIG" "$cf_worker_project_name"
+    else
+        CloudflareSetWorkerUpstream
+        jq_path='["workers",'"$cf_workers_index"',"upstream"]'
+        JQ update "$CF_CONFIG" "$cf_worker_upstream"
+    fi
+
+    Println "$info worker 修改成功\n"
+}

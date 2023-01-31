@@ -1,0 +1,26 @@
+V2rayNginxListDomains()
+{
+    v2ray_nginx_domains_list=""
+    v2ray_nginx_domains_count=0
+    v2ray_nginx_domains=()
+
+    if ls -A "$nginx_prefix/conf/sites_available/"* > /dev/null 2>&1
+    then
+        for f in "$nginx_prefix/conf/sites_available/"*
+        do
+            domain=${f##*/}
+            domain=${domain%.conf}
+            v2ray_nginx_domains_count=$((v2ray_nginx_domains_count+1))
+            v2ray_nginx_domains+=("$domain")
+            if [ -e "$nginx_prefix/conf/sites_enabled/$domain.conf" ] 
+            then
+                v2ray_nginx_domain_status_text="${green} [开启] ${normal}"
+            else
+                v2ray_nginx_domain_status_text="${red} [关闭] ${normal}"
+            fi
+            v2ray_nginx_domains_list="$v2ray_nginx_domains_list ${green}$v2ray_nginx_domains_count.${normal}${indent_6}$domain $v2ray_nginx_domain_status_text\n\n"
+        done
+    fi
+
+    Println "${green}域名列表:${normal}\n\n${v2ray_nginx_domains_list:-无}"
+}

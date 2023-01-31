@@ -1,0 +1,61 @@
+if [[ ! -x $(command -v postfix) ]] 
+then
+    DistCheck
+    Spinner "安装 postfix" PostfixInstall
+else
+    echo
+    ExitOnList y "`gettext \"postfix 已存在, 是否重新设置 smtp\"`"
+fi
+
+echo
+ExitOnText "请输入 smtp 地址 (比如 hwsmtp.exmail.qq.com) : " smtp_address
+
+echo
+ExitOnText "请输入 smtp 端口 (比如 465) : " smtp_port
+
+echo
+ExitOnText "请输入 smtp 邮箱 : " smtp_email
+
+echo
+ExitOnText "请输入 smtp 密码 : " smtp_pass
+
+hostname=$(hostname -f)
+echo "$(awk '!x{x=sub(/.*myhostname = .*/,"myhostname = '"$hostname"'")}1' /etc/postfix/main.cf)" > /etc/postfix/main.cf
+echo "$(awk '!x{x=sub(/.*relayhost = .*/,"relayhost = '"[$smtp_address]:$smtp_port"'")}1' /etc/postfix/main.cf)" > /etc/postfix/main.cf
+options=( 
+    smtp_tls_security_level=encrypt
+    smtp_tls_wrappermode=yes
+    smtp_sasl_auth_enable=yes
+    smtp_sasl_security_options=noanonymous
+    smtp_sasl_password_maps=hash:/etc/postfix/sasl_passwd
+    smtp_generic_maps=hash:/etc/postfix/generic
+)
+Println "$info 设置 postfix ..."
+echo "[$smtp_address]:$smtp_port $smtp_email:$smtp_pass" > /etc/postfix/sasl_passwd
+postmap /etc/postfix/sasl_passwd
+echo "$USER@$hostname $smtp_email" > /etc/postfix/generic
+postmap /etc/postfix/generic
+for option in "${options[@]}"
+do
+    if grep -q "${option%=*} = " < /etc/postfix/main.cf
+    then
+        echo "$(awk '!x{x=sub(/.*'"${option%=*}"' = .*/,"'"${option%=*}"' = '"${option#*=}"'")}1' /etc/postfix/main.cf)" > /etc/postfix/main.cf
+    elif grep -q "${option%=*}=" < /etc/postfix/main.cf 
+    then
+        echo "$(awk '!x{x=sub(/.*'"${option%=*}"'=.*/,"'"${option%=*}"'='"${option#*=}"'")}1' /etc/postfix/main.cf)" > /etc/postfix/main.cf
+    else
+        echo "${option//=/ = }" >> /etc/postfix/main.cf
+    fi
+done
+if ! grep -q "$USER:" < /etc/aliases
+then
+    echo "$USER: $smtp_email" >> /etc/aliases
+    newaliases
+fi
+if [[ $(ps --no-headers -o comm 1) == "systemd" ]] 
+then
+    systemctl restart postfix
+else
+    service postfix restart
+fi
+Println "$info smtp 设置成功\n"

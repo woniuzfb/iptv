@@ -1,0 +1,110 @@
+VipSetUserIp()
+{
+    Println "请输入用户的 IP"
+    read -p "(默认: 本机 IP): " vip_user_ip
+    [ -z "$vip_user_ip" ] && vip_user_ip=$(GetServerIp)
+    if [[ -n $($JQ_FILE '.users[]|select(.ip=="'"$vip_user_ip"'")' "$VIP_FILE") ]] 
+    then
+        Println "$error 此 IP 已存在\n" && exit 1
+    fi
+    Println "  用户 IP: ${green} $vip_user_ip ${normal}\n"
+}
+
+VipSetUserLicense()
+{
+    Println "请输入用户的授权码"
+    read -p "(默认: 自动生成): " vip_user_license
+    if [ -z "$vip_user_license" ] 
+    then
+        random_number=$(od -An -N6 -t u8 < /dev/urandom)
+        vip_user_license="m${random_number: -12}"
+        while [[ -n $($JQ_FILE '.users[]|select(.license=="'"$vip_user_license"'")' "$VIP_FILE") ]] 
+        do
+            random_number=$(od -An -N6 -t u8 < /dev/urandom)
+            vip_user_license="m${random_number: -12}"
+        done
+    elif [[ -n $($JQ_FILE '.users[]|select(.license=="'"$vip_user_license"'")' "$VIP_FILE") ]] 
+    then
+        Println "$error 此授权码已存在\n" && exit 1
+    fi
+    Println "  用户 license: ${green} $vip_user_license ${normal}\n"
+}
+
+VipSetUserSum()
+{
+    Println "选择验证类型
+
+  ${green}1.${normal} ssum (一天)
+  ${green}2.${normal} tsum (可控制天数)
+  ${green}3.${normal} isum (永久)
+
+"
+
+    while read -p "(默认: 2): " vip_user_sum_num 
+    do
+        case $vip_user_sum_num in
+            1) 
+                vip_user_expire_days=1
+                vip_user_sum="ssum"
+                printf -v now '%(%s)T' -1
+                vip_user_expire=$((now+86400))
+                break
+            ;;
+            2|"") 
+                vip_user_sum="tsum"
+                Println "请输入天数"
+                while read -p "(默认: 1): " vip_user_expire_days 
+                do
+                    case $vip_user_expire_days in
+                        ""|1) 
+                            vip_user_expire_days=1
+                            printf -v now '%(%s)T' -1
+                            vip_user_expire=$((now+86400))
+                            break 2
+                        ;;
+                        *[!0-9]*) 
+                            Println "$error 输入错误\n"
+                        ;;
+                        *) 
+                            if [[ $vip_user_expire_days -gt 1 ]]
+                            then
+                                printf -v now '%(%s)T' -1
+                                vip_user_expire=$((now+86400*vip_user_expire_days))
+                                break 2
+                            else
+                                Println "$error 输入错误\n"
+                            fi
+                        ;;
+                    esac
+                done
+            ;;
+            3) 
+                vip_user_expire_days=""
+                vip_user_sum="isum"
+                vip_user_expire=0
+                break
+            ;;
+            *) Println "$error 输入错误\n"
+            ;;
+        esac
+    done
+    Println "  验证类型: ${green} $vip_user_sum ${normal}\n  到期天数: ${green} ${vip_user_expire_days:-无} ${normal}\n"
+}
+
+VipSetUserName()
+{
+    Println "请输入用户名称(可以是中文)"
+    read -p "(默认: 随机): " vip_user_name
+    if [ -z "$vip_user_name" ] 
+    then
+        vip_user_name=$(RandStr)
+        while [[ -n $($JQ_FILE '.users[]|select(.name=="'"$vip_user_name"'")' "$VIP_FILE") ]] 
+        do
+            vip_user_name=$(RandStr)
+        done
+    elif [[ -n $($JQ_FILE '.users[]|select(.name=="'"$vip_user_name"'")' "$VIP_FILE") ]] 
+    then
+        Println "$error 此用户名已存在\n" && exit 1
+    fi
+    Println "  用户名称: ${green} $vip_user_name ${normal}\n"
+}

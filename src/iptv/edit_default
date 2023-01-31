@@ -1,0 +1,13 @@
+EditDefault()
+{
+    jq_path='["default","'"$1"'"]'
+
+    if [ -n "${2:-}" ] 
+    then
+        JQ update "$CHANNELS_FILE" "$2"
+    else
+        JQ update "$CHANNELS_FILE" "${!1}"
+    fi
+
+    Println "$info $1 修改成功\n"
+}

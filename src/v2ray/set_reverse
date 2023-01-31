@@ -1,0 +1,60 @@
+V2raySetReverse()
+{
+    echo
+    set_reverse_options=( '添加 bridge' '添加 portal' '删除 bridge' '删除 portal' )
+    inquirer list_input "选择操作" set_reverse_options set_reverse_option
+    if [ "$set_reverse_option" == "添加 bridge" ] 
+    then
+        echo
+        ExitOnText "输入标签: " reverse_bridge_tag
+
+        echo
+        ExitOnText "输入域名: " reverse_bridge_domain
+
+        new_reverse_bridge=(
+        $JQ_FILE -n --arg tag "reverse_bridge_tag" --arg domain "$reverse_bridge_domain" \
+        '{
+            "tag": $tag,
+            "domain": $domain
+        }')
+        jq_path='["reverse","bridges"]'
+        JQ add "$V2_CONFIG" "[$new_reverse_bridge]"
+        Println "$info bridge 添加成功\n"
+    elif [ "$set_reverse_option" == "添加 portal" ] 
+    then
+        echo
+        ExitOnText "输入标签: " reverse_portal_tag
+
+        echo
+        ExitOnText "输入域名: " reverse_portal_domain
+
+        new_reverse_portal=(
+        $JQ_FILE -n --arg tag "reverse_portal_tag" --arg domain "$reverse_portal_domain" \
+        '{
+            "tag": $tag,
+            "domain": $domain
+        }')
+        jq_path='["reverse","portals"]'
+        JQ add "$V2_CONFIG" "[$new_reverse_portal]"
+        Println "$info portal 添加成功\n"
+    elif [ "$set_reverse_option" == "删除 bridge" ] 
+    then
+        V2rayListReverse
+        [ "$reverse_bridges_count" -eq 0 ] && exit 1
+        ExitOnText "输入 bridge 序号: " reverse_bridge_num
+
+        reverse_bridge_index=$((reverse_bridge_num-1))
+        jq_path='["reverse","bridges",'"$reverse_bridge_index"']'
+        JQ delete "$V2_CONFIG"
+        Println "$info bridge 删除成功\n"
+    else
+        V2rayListReverse
+        [ "$reverse_portals_count" -eq 0 ] && exit 1
+        ExitOnText "输入 portal 序号: " reverse_portal_num
+
+        reverse_portal_index=$((reverse_portal_num-1))
+        jq_path='["reverse","portals",'"$reverse_portal_index"']'
+        JQ delete "$V2_CONFIG"
+        Println "$info portal 删除成功\n"
+    fi
+}

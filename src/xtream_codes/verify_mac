@@ -1,0 +1,80 @@
+VerifyXtreamCodesMac()
+{
+    to_continue=0
+
+    if [ "${test_mac_domain:-}" != "$domain" ] 
+    then
+        test_mac_domain=$domain
+
+        if [ "${skip_ip_check:-0}" -eq 0 ] 
+        then
+            ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
+        fi
+
+        if [ "$verify_mac" -eq 0 ] 
+        then
+            return 0
+        fi
+
+        Println "$info 验证 $domain ..."
+
+        server="http://$domain"
+        token_url="$server/portal.php?type=stb&action=handshake"
+        profile_url="$server/portal.php?type=stb&action=get_profile"
+        account_info_url="$server/portal.php?type=account_info&action=get_main_info"
+        [ -z "${timezone:-}" ] && timezone=$(UrlencodeUpper "Europe/Amsterdam")
+    fi
+
+    if [ -z "$ip" ] 
+    then
+        to_continue=1
+        return 0
+    fi
+
+    if [ "$verify_mac" -eq 0 ] 
+    then
+        return 0
+    fi
+
+    mac_address="$account"
+    access_token=""
+    profile=""
+    exp_date=""
+    mac=$(UrlencodeUpper "$mac_address")
+
+    access_token=$(curl -s -Lm 10 \
+        -H "User-Agent: $USER_AGENT_TV" \
+        --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" \
+        | $JQ_FILE -r '.js.token' 2> /dev/null) || true
+
+    if [ -z "$access_token" ] 
+    then
+        Println "$error $domain $mac_address"
+        to_continue=1
+        return 0
+    fi
+
+    profile=$(curl -s -Lm 10 \
+        -H "User-Agent: $USER_AGENT_TV" \
+        -H "Authorization: Bearer $access_token" \
+        --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
+
+    exp_date=$(curl -s -Lm 10 \
+        -H "User-Agent: $USER_AGENT_TV" \
+        -H "Authorization: Bearer $access_token" \
+        --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
+
+    if [ -z "$exp_date" ] 
+    then
+        if [ -z "$profile" ] 
+        then
+            Println "$error $domain $mac_address profile"
+        else
+            Println "$error $domain $mac_address exp_date"
+        fi
+        to_continue=1
+        return 0
+    fi
+
+    account="$mac_address"
+}

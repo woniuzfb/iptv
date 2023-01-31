@@ -44,7 +44,7 @@ PACKAGE_PO_LANGUAGE=$2 # ru, de ...
 XSRC=../docs/$PACKAGE_NAME
 
 PACKAGE_VERSION=$(grep 'sh_ver="' < $XSRC |awk -F "=" '{print $NF}'|$GSED 's/\"//g'|head -1)
-PACKAGE_TITLE="Locale ${PACKAGE_PO_LANGUAGE:-en} For $PACKAGE_NAME v$PACKAGE_VERSION - ONE Click Script"
+PACKAGE_TITLE="Locale ${PACKAGE_PO_LANGUAGE:-en} For $PACKAGE_NAME v$PACKAGE_VERSION"
 
 if [ "$1" == "b" ] && [ -e "po/$PACKAGE_NAME-en.po" ]
 then

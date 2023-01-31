@@ -1,0 +1,18 @@
+PveGetVMs()
+{
+    pve_vm_count=0
+
+    IFS=" " read -r m_id m_name m_status m_mem m_boot_disk m_pid < <(qm list | awk '$1 {a=a $1",";b=b $2",";c=c $3",";d=d $4",";e=e $5",";f=f $6","} END {print a,b,c,d,e,f}')
+
+    if [ -n "${m_id#*,}" ] 
+    then
+        IFS="," read -r -a pve_vm_ids <<< "${m_id#*,}"
+        IFS="," read -r -a pve_vm_name <<< "${m_name#*,}"
+        IFS="," read -r -a pve_vm_status <<< "${m_status#*,}"
+        IFS="," read -r -a pve_vm_mem <<< "${m_mem#*,}"
+        IFS="," read -r -a pve_vm_boot_disk <<< "${m_boot_disk#*,}"
+        IFS="," read -r -a pve_vm_pid <<< "${m_pid#*,}"
+
+        pve_vm_count=${#pve_vm_ids[@]}
+    fi
+}

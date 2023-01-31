@@ -1,0 +1,16 @@
+GitInstall()
+{
+    DistCheck
+    if [ "$dist" == "rpm" ] 
+    then
+        yum -y install git > /dev/null
+    elif [ "$dist" == "ubu" ] 
+    then
+        add-apt-repository ppa:git-core/ppa -y > /dev/null 
+        AptUpdate
+        apt-get -y install git > /dev/null
+    else
+        apt-get -y install git > /dev/null
+    fi
+    Println "$info git 安装成功...\n"
+}

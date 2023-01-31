@@ -1,0 +1,31 @@
+PveSelectVM()
+{
+    echo "选择 VM"
+    while read -p "$i18n_default_cancel" pve_vm_index
+    do
+        case "$pve_vm_index" in
+            "")
+                Println "$i18n_canceled...\n"
+                exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$pve_vm_index" -gt 0 ] && [ "$pve_vm_index" -le "$pve_vm_count" ]
+                then
+                    pve_vm_index=$((pve_vm_index-1))
+                    vm_id=${pve_vm_ids[pve_vm_index]}
+                    vm_name=${pve_vm_name[pve_vm_index]}
+                    vm_status=${pve_vm_status[pve_vm_index]}
+                    vm_mem=${pve_vm_mem[pve_vm_index]}
+                    vm_boot_disk=${pve_vm_boot_disk[pve_vm_index]}
+                    vm_pid=${pve_vm_pid[pve_vm_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+}

@@ -1,0 +1,28 @@
+IbmGetCfApps()
+{
+    ibm_cf_apps_list=""
+    ibm_cf_apps_count=0
+    ibm_cf_apps_name=()
+    ibm_cf_apps_user_email=()
+    ibm_cf_apps_routes_count=()
+    ibm_cf_apps_route_hostname=()
+    ibm_cf_apps_route_port=()
+    ibm_cf_apps_route_domain=()
+    ibm_cf_apps_route_path=()
+    while IFS="^" read -r name user_email routes_count route_hostname route_port route_domain route_path
+    do
+        ibm_cf_apps_count=$((ibm_cf_apps_count+1))
+        name=${name#\"}
+        ibm_cf_apps_name+=("$name")
+        ibm_cf_apps_user_email+=("$user_email")
+        ibm_cf_apps_routes_count+=("$routes_count")
+        ibm_cf_apps_route_hostname+=("$route_hostname")
+        ibm_cf_apps_route_port+=("$route_port")
+        ibm_cf_apps_route_domain+=("$route_domain")
+        route_path=${route_path%\"}
+        ibm_cf_apps_route_path+=("$route_path")
+
+        ibm_cf_apps_list="$ibm_cf_apps_list ${green}$ibm_cf_apps_count.${normal}${indent_6}APP: ${green}$name${normal}  用户: ${green}$user_email${normal}  路由数: ${green}$routes_count${normal}\n\n"
+    done < <($JQ_FILE '.cf.apps[]|[.name,.user_email,(.routes|length),([.routes[].hostname]|join("|")),([.routes[].port]|join("|")),([.routes[].domain]|join("|")),([.routes[].path]|join("|"))]|join("^")' "$IBM_CONFIG")
+    return 0
+}

@@ -1,0 +1,12 @@
+CrossplaneInstall()
+{
+    if [[ -x $(command -v crossplane) ]] 
+    then
+        return 0
+    fi
+
+    Println "$info 安装 crossplane ..."
+
+    PythonInstall
+    pip3 install crossplane
+}

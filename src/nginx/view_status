@@ -1,0 +1,9 @@
+NginxViewStatus()
+{
+    if [ ! -d "$nginx_prefix" ] 
+    then
+        Println "$error $nginx_name 未安装 !\n"
+    else
+        systemctl --no-pager -l status $nginx_name
+    fi
+}

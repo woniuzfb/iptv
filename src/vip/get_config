@@ -1,0 +1,13 @@
+VipGetConfig()
+{
+    while IFS=" " read -r key value
+    do
+        if [ -z "$key" ] 
+        then
+            break
+        else
+            read -r vip_${key?} <<< "$value"
+        fi
+    done < <($JQ_FILE -r '.config|to_entries[]|[.key,.value]|join(" ")' "$VIP_FILE")
+    return 0
+}

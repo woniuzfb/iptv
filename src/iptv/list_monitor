@@ -1,0 +1,58 @@
+MonitorList()
+{
+    if [ -s "$MONITOR_LOG" ] 
+    then
+        Println "$info 监控日志: "
+        count=0
+        log=""
+        last_line=""
+        printf -v this_hour '%(%H)T' -1
+        while IFS= read -r line 
+        do
+            if [ "$count" -lt "${1:-10}" ] 
+            then
+                message=${line#* }
+                message=${message#* }
+                if [ -z "$last_line" ] 
+                then
+                    count=$((count+1))
+                    log="$line"
+                    last_line="$message"
+                elif [ "$message" != "$last_line" ] 
+                then
+                    count=$((count+1))
+                    log="$line\n$log"
+                    last_line="$message"
+                fi
+            fi
+
+            if [ "${line:2:1}" == "-" ] 
+            then
+                hour=${line:6:2}
+            elif [ "${line:2:1}" == ":" ] 
+            then
+                hour=${line:0:2}
+            fi
+
+            if [ -n "${hour:-}" ] && [ "$hour" != "$this_hour" ] && [ "$count" -eq "${1:-10}" ] 
+            then
+                break
+            elif [ -n "${hour:-}" ] && [ "$hour" == "$this_hour" ] && [[ $line == *"计划重启时间"* ]]
+            then
+                [ -z "${found_line:-}" ] && found_line="$line"
+            fi
+        done < <(awk '{a[i++]=$0} END {for (j=i-1; j>=0;) print a[j--] }' "$MONITOR_LOG")
+        Println "$log"
+        [ -n "${found_line:-}" ] && Println "${green}${found_line#* }${normal}"
+        echo
+    fi
+    if [ -s "$IP_LOG" ] 
+    then
+        Println "$info AntiDDoS 日志: "
+        tail -n 10 "$IP_LOG"
+    fi
+    if [ ! -s "$MONITOR_LOG" ] && [ ! -s "$IP_LOG" ]
+    then
+        Println "$error 无日志\n"
+    fi
+}

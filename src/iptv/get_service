@@ -1,0 +1,64 @@
+GetServiceAccs()
+{
+    local service_id=$1
+
+    if [ ! -s "$SERVICES_FILE" ] 
+    then
+        printf '{"%s":{"%s":[]}}' "$service_id" "accounts" > "$SERVICES_FILE"
+    fi
+
+    [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+
+    if [ "$service_id" == "4gtv" ] 
+    then
+        IFS=$'\003\t' read -r d_4gtv_proxy _4gtv_acc_email _4gtv_acc_pass _4gtv_acc_token < <(JQs flat "$SERVICES_FILE" '' '
+        [(."'"$service_id"'".proxy // "") + "\u0003"] + ((."'"$service_id"'".accounts | if (.|type == "string") then {} else . end) as $accounts |
+        reduce ({email,password,token}|keys_unsorted[]) as $key ([];
+        $accounts[$key] as $val | if $val then
+            . + [$val + "\u0002\u0003"]
+        else
+            . + ["\u0003"]
+        end
+        ))|@tsv' "${delimiters[@]}")
+
+        IFS="${delimiters[1]}" read -r -a _4gtv_accs_email <<< "$_4gtv_acc_email"
+        IFS="${delimiters[1]}" read -r -a _4gtv_accs_pass <<< "$_4gtv_acc_pass"
+        IFS="${delimiters[1]}" read -r -a _4gtv_accs_token <<< "$_4gtv_acc_token"
+
+        _4gtv_accs_count=${#_4gtv_accs_email[@]}
+    else
+        IFS=$'\003\t' read -r m_user_name m_phone_number m_password m_access_token m_device_no m_device_id m_refresh < <(JQs flat "$SERVICES_FILE" '' '
+        (."'"$service_id"'".accounts | if (.|type == "string") then {} else . end) as $accounts |
+        reduce ({user_name,phone_number,password,access_token,device_no,device_id,refresh}|keys_unsorted[]) as $key ([];
+        $accounts[$key] as $val | if $val then
+            . + [$val + "\u0002\u0003"]
+        else
+            . + ["\u0003"]
+        end
+        )|@tsv' "${delimiters[@]}")
+
+        if [ -z "$m_user_name" ] 
+        then
+            ts_accs_count=0
+            return 0
+        fi
+
+        IFS="${delimiters[1]}" read -r -a ts_accs_user_name <<< "$m_user_name"
+        ts_accs_count=${#ts_accs_user_name[@]}
+
+        if [ -z "$m_phone_number" ] 
+        then
+            ts_accs_phone_number=("${ts_accs_user_name[@]//*/}")
+        else
+            IFS="${delimiters[1]}" read -r -a ts_accs_phone_number <<< "$m_phone_number"
+        fi
+
+        IFS="${delimiters[1]}" read -r -a ts_accs_password <<< "$m_password"
+        IFS="${delimiters[1]}" read -r -a ts_accs_access_token <<< "$m_access_token"
+        IFS="${delimiters[1]}" read -r -a ts_accs_device_no <<< "$m_device_no"
+        IFS="${delimiters[1]}" read -r -a ts_accs_device_id <<< "$m_device_id"
+        IFS="${delimiters[1]}" read -r -a ts_accs_refresh <<< "$m_refresh"
+
+        ts_accs_count=${#ts_accs_user_name[@]}
+    fi
+}

@@ -1,0 +1,44 @@
+ImgcatInstall()
+{
+    echo
+    ExitOnList y "`gettext \"缺少 imgcat, 是否现在安装\"`"
+
+    Progress &
+    progress_pid=$!
+    trap '
+        kill $progress_pid
+        wait $progress_pid 2> /dev/null
+    ' EXIT
+    DistCheck
+    if [ "$dist" == "rpm" ] 
+    then
+        yum -y install gcc gcc-c++ make ncurses-devel autoconf libjpeg-turbo-devel libpng-devel >/dev/null 2>&1
+        echo -n "...50%..."
+    else
+        apt-get -y install debconf-utils libncurses5-dev autotools-dev autoconf libjpeg-dev libpng-dev >/dev/null 2>&1
+        echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
+        apt-get -y install software-properties-common pkg-config build-essential >/dev/null 2>&1
+        echo -n "...50%..."
+    fi
+
+    cd ~
+
+    if [ ! -d imgcat-master ] 
+    then
+        wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/imgcat.zip" -qO imgcat.zip
+        unzip imgcat.zip >/dev/null 2>&1
+    fi
+
+    cd ./imgcat-master
+    rm -rf CImg
+    wget --timeout=10 --tries=3 --no-check-certificate "$FFMPEG_MIRROR_LINK/CImg.zip" -qO CImg.zip
+    unzip CImg.zip >/dev/null 2>&1
+    mv CImg-master CImg
+    ./configure >/dev/null 2>&1
+    make >/dev/null 2>&1
+    make install >/dev/null 2>&1
+    kill $progress_pid
+    wait $progress_pid 2> /dev/null || true
+    trap - EXIT
+    echo -n "...100%" && Println "$info imgcat 安装完成"
+}

@@ -1,0 +1,190 @@
+CloudflareAddSubdomain()
+{
+    CloudflareListZones
+
+    echo -e "选择源站"
+    while read -p "$i18n_default_cancel" cf_zones_num
+    do
+        case "$cf_zones_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$cf_zones_num" -gt 0 ] && [ "$cf_zones_num" -le "$cf_zones_count" ]
+                then
+                    cf_zones_index=$((cf_zones_num-1))
+                    cf_zone_name=${cf_zones_name[cf_zones_index]}
+                    cf_zone_resolve_to=${cf_zones_resolve_to[cf_zones_index]}
+                    cf_user_email=${cf_zones_user_email[cf_zones_index]}
+                    cf_user_unique_id=${cf_zones_user_unique_id[cf_zones_index]}
+                    cf_zone_always_use_https=${cf_zones_always_use_https[cf_zones_index]}
+                    cf_zone_ssl=${cf_zones_ssl[cf_zones_index]}
+                    cf_zone_subdomains=${cf_zones_subdomains[cf_zones_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    #cf_user_pass=$($JQ_FILE -r '.users[]|select(.email=="'"$cf_user_email"'") | .pass' $CF_CONFIG)
+
+    #[ -z "$cf_user_pass" ] && Println "$error 用户 $cf_user_email 不存在\n" && exit 1
+
+    CloudflareGetUser
+
+    Println "请输入子域名前缀, 比如 www, 多个前缀用空格分隔"
+    read -p "$i18n_default_cancel" cf_zone_subdomains_prefix_input
+    [ -z "$cf_zone_subdomains_prefix_input" ] && Println "$i18n_canceled...\n" && exit 1
+    Println "  子域名: ${green} $cf_zone_subdomains_prefix_input ${normal}\n"
+
+    IFS=" " read -r -a cf_zone_subdomains_prefix <<< "$cf_zone_subdomains_prefix_input"
+    cf_zone_subdomains_resolve_to=()
+    for cf_zone_subdomain_prefix in "${cf_zone_subdomains_prefix[@]}"
+    do
+        Println "请输入子域名 $cf_zone_subdomain_prefix.$cf_zone_name 经 cloudflare 中转后解析地址"
+        read -p "(默认: $cf_zone_resolve_to): " cf_zone_subdomain_resolve_to
+        cf_zone_subdomain_resolve_to=${cf_zone_subdomain_resolve_to:-$cf_zone_resolve_to}
+        cf_zone_subdomains_resolve_to+=("$cf_zone_subdomain_resolve_to")
+    done
+
+    CloudflareGetZone
+    for((i=0;i<${#cf_hosted_cnames[@]};i++));
+    do
+        if [[ ${cf_hosted_cnames[i]} =~ ^([^.]+).([^.]+)$ ]] 
+        then
+            continue
+        fi
+
+        for cf_zone_subdomain_prefix in "${cf_zone_subdomains_prefix[@]}"
+        do
+            if [ "$cf_zone_subdomain_prefix.$cf_zone_name" == "${cf_hosted_cnames[i]}" ] 
+            then
+                continue 2
+            fi
+        done
+
+        cf_hosted_cname=${cf_hosted_cnames[i]}
+        cf_hosted_cname=${cf_hosted_cname%.*}
+        cf_hosted_cname_prefix=${cf_hosted_cname%.*}
+        cf_zone_subdomains_prefix+=("$cf_hosted_cname_prefix")
+        cf_zone_subdomains_resolve_to+=("${cf_resolve_tos[i]}")
+    done
+
+    subdomains=""
+
+    for((i=0;i<${#cf_zone_subdomains_prefix[@]};i++));
+    do
+        [ -n "$subdomains" ] && subdomains="$subdomains,"
+        if [ "${cf_zone_subdomains_resolve_to[i]}" != "$cf_zone_resolve_to" ] 
+        then
+            subdomains="$subdomains${cf_zone_subdomains_prefix[i]}:${cf_zone_subdomains_resolve_to[i]}"
+        else
+            subdomains="$subdomains${cf_zone_subdomains_prefix[i]}"
+        fi
+    done
+
+    new_zone=$(
+    $JQ_FILE -n --arg name "$cf_zone_name" --arg resolve_to "$cf_zone_resolve_to" \
+        --arg user_email "$cf_user_email" --arg user_unique_id "$cf_user_unique_id" \
+        --arg always_use_https "$cf_zone_always_use_https" --arg ssl "$cf_zone_ssl" --arg subdomains "$subdomains" \
+        '{
+            name: $name,
+            resolve_to: $resolve_to,
+            user_email: $user_email,
+            user_unique_id: $user_unique_id | tonumber,
+            always_use_https: $always_use_https,
+            ssl: $ssl,
+            subdomains: $subdomains
+        }'
+    )
+
+    json=true
+    jq_path='["hosts",'"$cf_hosts_index"',"zones",'"$cf_zones_index"']'
+    JQ update "$CF_CONFIG" "$new_zone"
+
+    Println "$info 稍等..."
+    IFS="^" read -r result cf_zone_resolving_to cf_zone_hosted_cnames cf_zone_forward_tos msg < <(curl -s -Lm 20 https://api.cloudflare.com/host-gw.html \
+        -d 'act=zone_set' \
+        -d "host_key=$cf_host_key" \
+        -d "user_key=$cf_user_key" \
+        -d "zone_name=$cf_zone_name" \
+        -d "resolve_to=$cf_zone_resolve_to" \
+        -d "subdomains=$subdomains" \
+        | $JQ_FILE '[.result,.response.resolving_to,([(.response.hosted_cnames| if .== null then {} else . end)|to_entries[]
+        |([.key,.value]|join("="))]
+        |join("|")),([(.response.forward_tos| if .== null then {} else . end)|to_entries[]
+        |([.key,.value]|join("="))]
+        |join("|")),.msg]|join("^")'
+    ) || true
+
+    result=${result#\"}
+    msg=${msg%\"}
+
+    if [ -z "$result" ] || [ "$result" == "error" ]
+    then
+        Println "$error ${msg:-连接超时, 请查看是否已经完成}\n" && exit 1
+    fi
+
+    IFS="|" read -r -a cf_zone_hosted_cnames_arr <<< "$cf_zone_hosted_cnames"
+    IFS="|" read -r -a cf_zone_forward_tos_arr <<< "$cf_zone_forward_tos"
+
+    cf_hosted_cnames=()
+    cf_resolve_tos=()
+    cf_forward_tos=()
+
+    for cf_zone_hosted_cname in "${cf_zone_hosted_cnames_arr[@]}"
+    do
+        cf_hosted_cname=${cf_zone_hosted_cname%%=*}
+        cf_resolve_to=${cf_zone_hosted_cname#*=}
+        cf_hosted_cnames+=("$cf_hosted_cname")
+        cf_resolve_tos+=("$cf_resolve_to")
+        for cf_zone_forward_to in "${cf_zone_forward_tos_arr[@]}"
+        do
+            if [ "${cf_zone_forward_to%%=*}" == "$cf_hosted_cname" ] 
+            then
+                cf_forward_tos+=("${cf_zone_forward_to#*=}")
+                break
+            fi
+        done
+    done
+
+    msg=""
+
+    if [ "$cf_zone_resolving_to" != "$cf_zone_name" ] 
+    then
+        zone_found=0
+        for cf_resolve_to in "${cf_resolve_tos[@]}"
+        do
+            if [ "$cf_resolve_to" == "$cf_zone_name" ] 
+            then
+                zone_found=1
+                break
+            fi
+        done
+        if [ "$zone_found" -eq 0 ] && [[ ${cf_forward_tos[0]} =~ ([^.]+).([^.]+).([^.]+)$ ]] 
+        then
+            cf_zone_name_resolve_to="$cf_zone_name.${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+            msg="请添加域名 ${green}$cf_zone_name${normal} CNAME 记录到 ${green}$cf_zone_name_resolve_to${normal}\n\n"
+        fi
+    fi
+
+    for((i=0;i<${#cf_hosted_cnames[@]};i++));
+    do
+        for cf_zone_subdomain_prefix in "${cf_zone_subdomains_prefix[@]}"
+        do
+            if [ "$cf_zone_subdomain_prefix.$cf_zone_name" == "${cf_hosted_cnames[i]}" ] 
+            then
+                msg="$msg请添加域名 ${green}${cf_hosted_cnames[i]}${normal} CNAME 记录到 ${green}${cf_forward_tos[i]}${normal}\n\n"
+                break
+            fi
+        done
+    done
+
+    Println "$msg"
+    Println "$info 子域名添加成功\n"
+}

@@ -1,0 +1,49 @@
+CloudflareDelWorker()
+{
+    CloudflareListWorkers
+
+    if [ "$cf_workers_count" -eq 0 ] 
+    then
+        Println "$error 请先添加 worker\n"
+        exit 1
+    fi
+
+    echo "选择 worker"
+    while read -p "$i18n_default_cancel" cf_workers_num
+    do
+        case "$cf_workers_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$cf_workers_num" -gt 0 ] && [ "$cf_workers_num" -le "$cf_workers_count" ]
+                then
+                    cf_workers_index=$((cf_workers_num-1))
+                    cf_worker_name=${cf_workers_name[cf_workers_index]}
+                    cf_worker_path=${cf_workers_path[cf_workers_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    if [ -d "$CF_WORKERS_ROOT/$cf_worker_path" ] 
+    then
+        echo
+        inquirer list_input "是否删除 worker 目录 $CF_WORKERS_ROOT/$cf_worker_path" ny_options del_cf_worker_path
+
+        if [[ $del_cf_worker_path == "$i18n_yes" ]] 
+        then
+            rm -rf "$CF_WORKERS_ROOT/${cf_worker_path:-notfound}"
+        fi
+    fi
+
+    jq_path='["workers",'"$cf_workers_index"']'
+    JQ delete "$CF_CONFIG"
+    Println "$info worker: $cf_worker_name 删除成功\n"
+}

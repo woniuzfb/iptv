@@ -1,0 +1,5 @@
+NginxDisableDomain()
+{
+    rm -f "$nginx_prefix/conf/sites_enabled/$server_domain.conf"
+    NginxRestart
+}

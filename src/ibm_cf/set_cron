@@ -1,0 +1,214 @@
+IbmSetCfAppCron()
+{
+    IbmListCfApps
+
+    echo -e "选择 APP"
+    echo -e "$tip 多个 APP 用空格分隔, 比如 5 7 9-11\n"
+    apps_name=()
+    apps_user_email=()
+    while read -p "$i18n_default_cancel" apps_num
+    do
+        [ -z "$apps_num" ] && Println "$i18n_canceled...\n" && exit 1
+        IFS=" " read -ra apps_num_arr <<< "$apps_num"
+
+        error_no=0
+        for app_num in "${apps_num_arr[@]}"
+        do
+            case "$app_num" in
+                *"-"*)
+                    app_num_start=${app_num%-*}
+                    app_num_end=${app_num#*-}
+                    if [[ $app_num_start == *[!0-9]* ]] || [[ $app_num_end == *[!0-9]* ]] || \
+                    [ "$app_num_start" -eq 0 ] || [ "$app_num_end" -eq 0 ] || \
+                    [ "$app_num_end" -gt "$ibm_cf_apps_count" ] || \
+                    [ "$app_num_start" -ge "$app_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$app_num" -lt 1 ] || [ "$app_num" -gt "$ibm_cf_apps_count" ] 
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                for element in "${apps_num_arr[@]}"
+                do
+                    if [[ $element =~ - ]] 
+                    then
+                        start=${element%-*}
+                        end=${element#*-}
+                        for((i=start;i<=end;i++));
+                        do
+                            ibm_cf_apps_index=$((i-1))
+                            apps_name+=("${ibm_cf_apps_name[ibm_cf_apps_index]}")
+                            apps_user_email+=("${ibm_cf_apps_user_email[ibm_cf_apps_index]}")
+                        done
+                    else
+                        ibm_cf_apps_index=$((element-1))
+                        apps_name+=("${ibm_cf_apps_name[ibm_cf_apps_index]}")
+                        apps_user_email+=("${ibm_cf_apps_user_email[ibm_cf_apps_index]}")
+                    fi
+                done
+                break
+            ;;
+        esac
+    done
+
+    ibm_cf_apps_path=()
+    ibm_cf_apps_path_list=""
+    ibm_cf_apps_path_count=0
+
+    for path in "$IBM_APPS_ROOT"/*
+    do
+        [ ! -d "$path" ] && continue
+        ibm_cf_apps_path_count=$((ibm_cf_apps_path_count+1))
+        app_path=${path##*/}
+        ibm_cf_apps_path+=("$app_path")
+        ibm_cf_apps_path_list="$ibm_cf_apps_path_list $ibm_cf_apps_path_count.${indent_6}${green}$app_path${normal}\n\n"
+    done
+
+    if [ "$ibm_cf_apps_path_count" -eq 0 ] 
+    then
+        Println "$error 请将 APP 所在目录移动到目录 $IBM_APPS_ROOT 下\n"
+        exit 1
+    fi
+
+    apps_path=()
+    new_jobs=""
+    for((i=0;i<${#apps_name[@]};i++));
+    do
+        Println "$ibm_cf_apps_path_list"
+        echo -e "$info 选择 APP: ${green}${apps_name[i]}${normal} 本地目录"
+        while read -p "$i18n_default_cancel" apps_path_num 
+        do
+            case $apps_path_num in
+                "") 
+                    Println "$i18n_canceled...\n"
+                    exit 1
+                ;;
+                *[!0-9]*) 
+                    Println "$error $i18n_input_correct_no\n"
+                ;;
+                *) 
+                    if [ "$apps_path_num" -gt 0 ] && [ "$apps_path_num" -le "$ibm_cf_apps_path_count" ] 
+                    then
+                        ibm_cf_apps_path_index=$((apps_path_num-1))
+                        apps_path+=("${ibm_cf_apps_path[ibm_cf_apps_path_index]}")
+                        break
+                    else
+                        Println "$error $i18n_input_correct_no\n"
+                    fi
+                ;;
+            esac
+        done
+
+        new_job=$(
+        $JQ_FILE -n --arg app "${apps_name[i]}" --arg user_email "${apps_user_email[i]}" \
+            --arg path "${apps_path[i]}" \
+            '{
+                "app": $app,
+                "user_email": $user_email,
+                "path": $path
+            }'
+        )
+        [ -n "$new_jobs" ] && new_jobs="$new_jobs,"
+        new_jobs="$new_jobs$new_job"
+    done
+
+    Println "$info 输入重启间隔天数"
+    while read -p "(默认: 5): " cron_days 
+    do
+        case $cron_days in
+            "") 
+                cron_days=5
+                break
+            ;;
+            *[!0-9]*) 
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *) 
+                if [ "$cron_days" -gt 0 ] 
+                then
+                    break
+                else
+                    Println "$error $i18n_input_correct_number\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "$info 输入重启小时 [0-23]"
+    while read -p "(默认: 0): " cron_hour 
+    do
+        case $cron_hour in
+            "") 
+                cron_hour=0
+                break
+            ;;
+            *[!0-9]*) 
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *) 
+                if [ "$cron_hour" -ge 0 ] && [ "$cron_hour" -le 23 ]
+                then
+                    break
+                else
+                    Println "$error $i18n_input_correct_number\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "$info 输入重启分钟 [0-59]"
+    while read -p "(默认: 0): " cron_min 
+    do
+        case $cron_min in
+            "") 
+                cron_min=0
+                break
+            ;;
+            *[!0-9]*) 
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *) 
+                if [ "$cron_min" -gt 0 ] && [ "$cron_hour" -le 59 ]
+                then
+                    break
+                else
+                    Println "$error $i18n_input_correct_number\n"
+                fi
+            ;;
+        esac
+    done
+
+    cron=$(
+    $JQ_FILE -n --arg days "$cron_days" --arg hour "$cron_hour" \
+        --arg min "$cron_min" --argjson job "[$new_jobs]" \
+        '{
+            "days": $days | tonumber,
+            "hour": $hour | tonumber,
+            "min": $min | tonumber,
+            "job": $job
+        }'
+    )
+
+    json=true
+    jq_path='["cf","cron"]'
+    JQ update "$IBM_CONFIG" "$cron"
+    Println "$info 定时重启任务设置成功\n"
+}

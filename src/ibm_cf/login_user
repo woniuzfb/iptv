@@ -1,0 +1,42 @@
+IbmLoginUser()
+{
+    IbmListUsers
+
+    if [ "$ibm_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
+
+    echo -e "选择用户"
+    while read -p "$i18n_default_cancel" ibm_users_num
+    do
+        case "$ibm_users_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$ibm_users_num" -gt 0 ] && [ "$ibm_users_num" -le "$ibm_users_count" ]
+                then
+                    ibm_users_index=$((ibm_users_num-1))
+                    ibm_user_email=${ibm_users_email[ibm_users_index]}
+                    ibm_user_pass=${ibm_users_pass[ibm_users_index]}
+                    ibm_user_region=${ibm_users_region[ibm_users_index]}
+                    ibm_user_resource_group=${ibm_users_resource_group[ibm_users_index]}
+                    ibm_user_org=${ibm_users_org[ibm_users_index]}
+                    ibm_user_space=${ibm_users_space[ibm_users_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
+    ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
+    ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
+}

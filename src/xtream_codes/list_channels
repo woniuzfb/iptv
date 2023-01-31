@@ -1,0 +1,745 @@
+XtreamCodesListChnls()
+{
+    if [ -z "${FFMPEG:-}" ] 
+    then
+        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+        FFMPEG="$FFMPEG_ROOT/ffmpeg"
+        FFPROBE="$FFMPEG_ROOT/ffprobe"
+    fi
+
+    while true 
+    do
+        if [ -n "${xtream_codes_list:-}" ] 
+        then
+            Println "$xtream_codes_list"
+        else
+            XtreamCodesList mac
+        fi
+
+        Println "请输入服务器的序号"
+        while read -p "$i18n_default_cancel" server_num
+        do
+            case $server_num in
+                "") Println "$i18n_canceled...\n" && exit 1
+                ;;
+                *[!0-9]*) Println "$error $i18n_input_correct_number\n"
+                ;;
+                *) 
+                    if [ "$server_num" -gt 0 ] && [ "$server_num" -le "$ips_mac_count" ]
+                    then
+                        ips_index=${ips_mac[server_num-1]}
+                        break
+                    else
+                        Println "$error $i18n_input_correct_no\n"
+                    fi
+                ;;
+            esac
+        done
+
+        domain=${new_domains[ips_index]}
+
+        if [[ $domain == *"|"* ]] 
+        then
+            IFS="|" read -ra domains <<< "$domain"
+            domains_list=""
+            domains_count=${#domains[@]}
+            for((i=0;i<domains_count;i++));
+            do
+                domains_list="$domains_list ${green}$((i+1)).${normal}${indent_6}${domains[i]}\n\n"
+            done
+            Println "$domains_list"
+
+            Println "请选择域名"
+            while read -p "(默认: 回到上级): " domains_num
+            do
+                case $domains_num in
+                    ""|a) continue 2
+                    ;;
+                    *[!0-9]*) Println "$error $i18n_input_correct_number\n"
+                    ;;
+                    *) 
+                        if [ "$domains_num" -gt 0 ] && [ "$domains_num" -le "$domains_count" ]
+                        then
+                            domain=${domains[domains_num-1]}
+                            break
+                        else
+                            Println "$error $i18n_input_correct_no\n"
+                        fi
+                    ;;
+                esac
+            done
+        fi
+
+        account=${new_accounts[ips_index]}
+        IFS=" " read -ra accounts <<< "$account"
+
+        macs=()
+        for account in ${accounts[@]+"${accounts[@]}"}
+        do
+            if [[ $account =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+            then
+                macs+=("$account")
+            fi
+        done
+
+        XtreamCodesGetDomains
+        XtreamCodesGetChnls
+
+        macs_count=${#macs[@]}
+        if [ "$macs_count" -gt 1 ] 
+        then
+            macs_list="mac 地址: \n\n"
+            for((i=0;i<macs_count;i++));
+            do
+                using=""
+                for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
+                do
+                    if [ "$xc_chnl_mac" == "$domain/${macs[i]}" ] 
+                    then
+                        using="${red}[使用中]${normal}"
+                        break
+                    fi
+                done
+                macs_list="$macs_list ${green}$((i+1)).${normal}${indent_6}${macs[i]} $using\n\n"
+            done
+            Println "$macs_list"
+
+            Println "请选择 mac"
+            while read -p "(默认: 回到上级): " macs_num
+            do
+                case $macs_num in
+                    ""|a) continue 2
+                    ;;
+                    *[!0-9]*) Println "$error $i18n_input_correct_number\n"
+                    ;;
+                    *) 
+                        if [ "$macs_num" -gt 0 ] && [ "$macs_num" -le "$macs_count" ]
+                        then
+                            mac_address=${macs[macs_num-1]}
+                            for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
+                            do
+                                if [ "$xc_chnl_mac" == "$domain/$mac_address" ] 
+                                then
+                                    Println "$error 此账号已经在使用!\n"
+                                    continue 2
+                                fi
+                            done
+                            break
+                        else
+                            Println "$error $i18n_input_correct_no\n"
+                        fi
+                    ;;
+                esac
+            done
+        else
+            mac_address=${macs[0]}
+        fi
+
+        user_agent="$USER_AGENT_TV"
+        timezone=$(UrlencodeUpper "Europe/Amsterdam")
+        mac_addresses_failed=()
+        GetDefault
+
+        if [ -n "${d_xc_proxy:-}" ] 
+        then
+            echo
+            inquirer list_input "是否使用代理 $d_xc_proxy: " yn_options use_proxy_yn
+            if [ "$use_proxy_yn" == "$i18n_yes" ]
+            then
+                server="${d_xc_proxy%\/}/http://$domain"
+            else
+                server="http://$domain"
+            fi
+        else
+            server="http://$domain"
+            use_proxy_yn="$i18n_no"
+        fi
+
+        token_url="$server/portal.php?type=stb&action=handshake"
+        profile_url="$server/portal.php?type=stb&action=get_profile"
+        genres_url="$server/portal.php?type=itv&action=get_genres"
+        account_info_url="$server/portal.php?type=account_info&action=get_main_info"
+
+        while true 
+        do
+            mac=$(UrlencodeUpper "$mac_address")
+            cookies="mac=$mac; stb_lang=en; timezone=$timezone"
+
+            access_token=$(curl -s -Lm 10 \
+                -H "User-Agent: $user_agent" \
+                --cookie "$cookies" "$token_url" \
+                | $JQ_FILE -r '.js.token' 2> /dev/null) || true
+
+            if [ -z "$access_token" ] 
+            then
+                Println "$error $domain $mac_address access\n"
+
+                mac_addresses_failed+=("$mac_address")
+
+                for mac in "${macs[@]}"
+                do
+                    if [ "$mac_address" != "$mac" ] 
+                    then
+                        for mac_address_failed in "${mac_addresses_failed[@]}"
+                        do
+                            if [ "$mac_address_failed" == "$mac" ] 
+                            then
+                                continue 2
+                            fi
+                        done
+                        for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
+                        do
+                            if [ "$xc_chnl_mac" == "$domain/$mac" ] 
+                            then
+                                continue 2
+                            fi
+                        done
+                        Println "$info 测试 $mac\n"
+                        mac_address="$mac"
+                        continue 2
+                    fi
+                done
+                exit 1
+            fi
+
+            headers="Authorization: Bearer $access_token\r\n"
+            printf -v headers_command '%b' "$headers"
+
+            profile=$(curl -s -Lm 10 \
+                -H "User-Agent: $user_agent" \
+                -H "${headers:0:-4}" \
+                --cookie "$cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
+
+            exp_date=$(curl -s -Lm 10 \
+                -H "User-Agent: $user_agent" \
+                -H "${headers:0:-4}" \
+                --cookie "$cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
+
+            if [ -z "$exp_date" ] 
+            then
+                if [ -z "$profile" ] 
+                then
+                    Println "$error $domain $mac_address profile\n"
+                else
+                    Println "$error $domain $mac_address exp_date\n"
+                fi
+
+                mac_addresses_failed+=("$mac_address")
+
+                for mac in "${macs[@]}"
+                do
+                    if [ "$mac_address" != "$mac" ] 
+                    then
+                        for mac_address_failed in "${mac_addresses_failed[@]}"
+                        do
+                            if [ "$mac_address_failed" == "$mac" ] 
+                            then
+                                continue 2
+                            fi
+                        done
+                        for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
+                        do
+                            if [ "$xc_chnl_mac" == "$domain/$mac" ] 
+                            then
+                                continue 2
+                            fi
+                        done
+                        Println "$info 测试 $mac\n"
+                        mac_address="$mac"
+                        continue 2
+                    fi
+                done
+                exit 1
+            fi
+
+            genres_list=""
+            genres_count=0
+            genres_id=()
+            while IFS="=" read -r map_id map_title
+            do
+                map_id=${map_id#\"}
+                map_title=${map_title%\"}
+                genres_count=$((genres_count+1))
+                genres_id+=("$map_id")
+                genres_list="$genres_list ${green}$genres_count.${normal}${indent_6}$map_title\n\n"
+            done < <(curl -s -Lm 10 \
+                -H "User-Agent: $user_agent" \
+                -H "${headers:0:-4}" \
+                --cookie "$cookies" "$genres_url" \
+                | $JQ_FILE '.js[] | [.id,.title] | join("=")')
+
+            if [ -n "$genres_list" ] 
+            then
+                genres_list_pages=()
+
+                while true 
+                do
+                    Println "$genres_list\n\n${green}账号到期时间:${normal} $exp_date\n"
+
+                    if [ "${return_err:-0}" -eq 1 ] 
+                    then
+                        return_err=0
+                        Println "$error 返回错误, 请重试"
+                    fi
+
+                    Println "输入分类序号, 输入 a 返回上级页面, 输入 b 使用下个 mac 地址"
+                    while read -p "$i18n_default_cancel" genres_num 
+                    do
+                        case "$genres_num" in
+                            "")
+                                Println "$i18n_canceled...\n" && exit
+                            ;;
+                            a)
+                                continue 4
+                            ;;
+                            b)
+                                mac_addresses_failed+=("$mac_address")
+
+                                for mac in "${macs[@]}"
+                                do
+                                    if [ "$mac_address" != "$mac" ] 
+                                    then
+                                        for mac_address_failed in "${mac_addresses_failed[@]}"
+                                        do
+                                            if [ "$mac_address_failed" == "$mac" ] 
+                                            then
+                                                continue 2
+                                            fi
+                                        done
+                                        for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
+                                        do
+                                            if [ "$xc_chnl_mac" == "$domain/$mac" ] 
+                                            then
+                                                continue 2
+                                            fi
+                                        done
+                                        Println "$info 测试 $mac\n"
+                                        mac_address="$mac"
+                                        continue 4
+                                    fi
+                                done
+                                Println "$error 没有剩余 mac 地址\n"
+                                exit 1
+                            ;;
+                            *[!0-9]*)
+                                Println "$error $i18n_input_correct_no\n"
+                            ;;
+                            *)
+                                if [ "$genres_num" -gt 0 ] && [ "$genres_num" -le "$genres_count" ]
+                                then
+                                    genres_index=$((genres_num-1))
+                                    break
+                                else
+                                    Println "$error $i18n_input_correct_no\n"
+                                fi
+                            ;;
+                        esac
+                    done
+
+                    if [ -n "${genres_list_pages[genres_index]:-}" ] 
+                    then
+                        ordered_list_page=${genres_list_pages[genres_index]}
+                    else
+                        ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=1"
+                        ordered_list_page=$(curl -s -Lm 10 \
+                            -H "User-Agent: $user_agent" \
+                            -H "${headers:0:-4}" \
+                            --cookie "$cookies" "$ordered_list_url" | $JQ_FILE -r -c '.' 2> /dev/null) || ordered_list_page=""
+                        [ -z "$ordered_list_page" ] && return_err=1 && continue 2
+                        genres_list_pages[genres_index]="$ordered_list_page"
+                    fi
+
+                    exec 100< <($JQ_FILE -r '.js.total_items, .js.max_page_items' <<< "$ordered_list_page")
+                    read total_items <&100
+                    read max_page_items <&100
+                    exec 100<&-
+
+                    if [ "$total_items" == null ] || [ "${total_items:-0}" -eq 0 ] 
+                    then
+                        Println "$error 此分类没有频道!\n"
+                        continue
+                    fi
+
+                    if [ "$total_items" -le "$max_page_items" ] 
+                    then
+                        pages=1
+                    else
+                        pages=$((total_items / max_page_items))
+                        if [ "$total_items" -gt $((pages * max_page_items)) ] 
+                        then
+                            pages=$((pages+1))
+                        fi
+                    fi
+
+                    page=1
+                    ordered_list_pages=()
+
+                    while true 
+                    do
+                        page_index=$((page-1))
+                        if [ -n "${ordered_list_pages[page_index]:-}" ] 
+                        then
+                            ordered_list_page=${ordered_list_pages[page_index]}
+                        else
+                            if [ "$page" -gt 1 ] 
+                            then
+                                ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=$page"
+                                ordered_list_page=$(curl -s -Lm 10 \
+                                    -H "User-Agent: $user_agent" \
+                                    -H "${headers:0:-4}" \
+                                    --cookie "$cookies" "$ordered_list_url" | $JQ_FILE -r -c '.' 2> /dev/null) || ordered_list_page=""
+                                [ -z "$ordered_list_page" ] && return_err=1 && continue 3
+                            fi
+                            ordered_list_pages[page_index]="$ordered_list_page"
+                        fi
+
+                        xc_chnls_id=()
+                        xc_chnls_name=()
+                        xc_chnls_cmd=()
+                        xc_chnls_list=""
+                        xc_chnls_count=0
+                        while IFS="^" read -r map_id map_cmd map_name
+                        do
+                            xc_chnls_count=$((xc_chnls_count+1))
+                            map_id=${map_id#\"}
+                            map_name=${map_name%\"}
+                            map_cmd=${map_cmd#* }
+                            map_cmd=${map_cmd%\_}
+                            map_cmd="http://localhost/ch/${map_cmd##*/}_"
+                            xc_chnls_id+=("$map_id")
+                            xc_chnls_name+=("$map_name")
+                            xc_chnls_cmd+=("$map_cmd")
+                            xc_chnls_list="$xc_chnls_list# ${green}$xc_chnls_count${normal} $map_name\n\n"
+                        done < <($JQ_FILE '.js.data[] | [.id,.cmd,.name] | join("^")' <<< "$ordered_list_page")
+
+                        Println "$xc_chnls_list"
+                        echo -e "$tip 输入 a 返回上级页面"
+                        echo -e "$tip 输入 s 频道名称 搜索频道"
+                        echo -e "$tip 输入 p 页数 跳转页面"
+                        if [ "$pages" -gt 1 ] 
+                        then
+                            Println "当前第 $page 页, 共 $pages 页"
+                            if [ "$page" -eq 1 ] 
+                            then
+                                echo -e "$tip 输入 x 转到下一页"
+                            elif [ "$page" -eq "$pages" ] 
+                            then
+                                echo -e "$tip 输入 z 转到上一页"
+                            else
+                                echo -e "$tip 输入 z 转到上一页, 输入 x 转到下一页"
+                            fi
+                        fi
+
+                        echo && while read -p "输入频道序号: " xc_chnls_num 
+                        do
+                            if [[ $xc_chnls_num =~ ^s\ * ]] 
+                            then
+                                search_phrase=${xc_chnls_num#*s }
+                                Trim search_phrase
+                                if [ -z "$search_phrase" ] 
+                                then
+                                    Println "$error 搜索内容不能为空\n"
+                                else
+                                    SearchXtreamCodesChnls
+                                fi
+
+                                if [ -n "$search_result" ] 
+                                then
+                                    Println "搜索结果:\n\n$search_result"
+                                else
+                                    Println "$error 没有搜索结果\n"
+                                fi
+                                continue
+                            elif [[ $xc_chnls_num =~ ^p\ [0-9]+ ]] 
+                            then
+                                if [ "${xc_chnls_num#* }" -le "$pages" ]
+                                then
+                                    page=${xc_chnls_num#* }
+                                    continue 2
+                                else
+                                    Println "$error 页数错误\n"
+                                    continue
+                                fi
+                            fi
+                            case "$xc_chnls_num" in
+                                a)
+                                    continue 3
+                                ;;
+                                z)
+                                    if [ "$page" -gt 1 ]
+                                    then
+                                        page=$((page-1))
+                                        continue 2
+                                    else
+                                        Println "$error 没有上一页\n"
+                                    fi
+                                ;;
+                                x)
+                                    if [ "$page" -lt "$pages" ]
+                                    then
+                                        page=$((page+1))
+                                        continue 2
+                                    else
+                                        Println "$error 没有下一页\n"
+                                    fi
+                                ;;
+                                ""|*[!0-9]*)
+                                    Println "$error $i18n_input_correct_no\n"
+                                ;;
+                                *)
+                                    if [ "$xc_chnls_num" -gt 0 ] && [ "$xc_chnls_num" -le "$xc_chnls_count" ]
+                                    then
+                                        xc_chnls_index=$((xc_chnls_num-1))
+                                        break
+                                    else
+                                        Println "$error $i18n_input_correct_no\n"
+                                    fi
+                                ;;
+                            esac
+                        done
+
+                        if [ "$use_proxy_yn" == "$i18n_yes" ] 
+                        then
+                            stream_link="$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}"
+                            Println "${green}${xc_chnls_name[xc_chnls_index]}:${normal} $stream_link\n"
+                        else
+                            create_link_url="$server/portal.php?type=itv&action=create_link&cmd=${xc_chnls_cmd[xc_chnls_index]}&series=&forced_storage=undefined&disable_ad=0&download=0"
+
+                            cmd=$(curl -s -Lm 10 \
+                                -H "User-Agent: $user_agent" \
+                                -H "${headers:0:-4}" \
+                                --cookie "$cookies" "$create_link_url" \
+                                | $JQ_FILE -r '.js.cmd') || true
+
+                            if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
+                            then
+                                stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                            elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/(.+) ]] 
+                            then
+                                #stream_link="http://localhost:3000/${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
+                                stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                            elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+) ]] 
+                            then
+                                stream_link="http://localhost:3000/${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]%%\?*}?${BASH_REMATCH[4]##*\?}"
+                            else
+                                Println "$error 返回 cmd: ${cmd:-无} 错误, 请重试"
+                                continue
+                            fi
+                            stream_link=${stream_link// /}
+                            stream_link=${stream_link//.ts.ts/.ts}
+                            Println "${green}${xc_chnls_name[xc_chnls_index]}:${normal} $stream_link\n"
+                        fi
+
+                        EXIT_STATUS=0
+
+                        printf -v headers_command '%b' "$headers"
+                        printf -v cookies_command '%b' "${cookies//;/; path=\/;\\r\\n}; path=/;"
+
+                        echo
+                        inquirer list_input_index "截图" ny_options ny_options_index
+
+                        if [[ $ny_options_index -eq 1 ]] 
+                        then
+                            Println "$tip 格式如 HH:MM:SS"
+                            inquirer text_input "输入截图位置" ss 00:00:03
+
+                            if TMP_FILE=$(mktemp -q) 
+                            then
+                                chmod +r "$TMP_FILE"
+                            else
+                                printf -v TMP_FILE '%(%m-%d-%H:%M:%S)T' -1
+                            fi
+
+                            trap '
+                                rm -f "$TMP_FILE"
+                                rm -f "${TMP_FILE}.jpeg"
+                            ' EXIT
+
+                            $FFMPEG -hide_banner -loglevel debug -user_agent "$user_agent" \
+                                -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" -ss "$ss" -frames:v 1 "${TMP_FILE}.jpeg" || EXIT_STATUS=$?
+
+                            DistCheck
+                            if [ ! -e "/usr/local/bin/imgcat" ] 
+                            then
+                                ImgcatInstall
+                            fi
+
+                            /usr/local/bin/imgcat --half-height "${TMP_FILE}.jpeg" 2> /dev/null || EXIT_STATUS=$?
+
+                            rm -f "$TMP_FILE"
+                            rm -f "${TMP_FILE}.jpeg"
+
+                            trap - EXIT
+                        else
+                            $FFPROBE -hide_banner -loglevel debug -show_streams -user_agent "$user_agent" \
+                                -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" || EXIT_STATUS=$?
+                        fi
+
+                        if [ "$EXIT_STATUS" -ne 0 ] && [ "$use_proxy_yn" == "$i18n_yes" ]
+                        then
+                            Println "$info 尝试直连 ..."
+                            # curl -k -s -o /dev/null -w '%{redirect_url}'
+                            IFS=" " read -r stream_link new_access_token new_cookies < <(curl -sL \
+                                -H "User-Agent: $user_agent" \
+                                --cookie "$cookies" \
+                                "$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}&check=1" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
+                            if [[ ! $stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
+                            then
+                                Println "$error curl -sL '$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}&check=1' -H 'User-Agent: $user_agent' -H '${headers:0:-4}' --cookie '$cookies'"
+                                Println "$error 返回错误[ stream_link: ${stream_link:-无} ], 请重试"
+                                continue
+                            fi
+
+                            EXIT_STATUS=0
+                            access_token="$new_access_token"
+                            cookies="$new_cookies"
+
+                            printf -v headers_command '%b' "$Authorization: Bearer $access_token"
+                            printf -v cookies_command '%b' "${cookies//;/; path=\/;\\r\\n}; path=/;"
+
+                            if [[ $ny_options_index -eq 1 ]] 
+                            then
+                                if TMP_FILE=$(mktemp -q) 
+                                then
+                                    chmod +r "$TMP_FILE"
+                                else
+                                    printf -v TMP_FILE '%(%m-%d-%H:%M:%S)T' -1
+                                fi
+
+                                trap '
+                                    rm -f "$TMP_FILE"
+                                    rm -f "${TMP_FILE}.jpeg"
+                                ' EXIT
+
+                                $FFMPEG -hide_banner -loglevel debug -user_agent "$user_agent" \
+                                    -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" -ss "$ss" -frames:v 1 "${TMP_FILE}.jpeg" || EXIT_STATUS=$?
+
+                                /usr/local/bin/imgcat --half-height "${TMP_FILE}.jpeg" 2> /dev/null || EXIT_STATUS=$?
+
+                                rm -f "$TMP_FILE"
+                                rm -f "${TMP_FILE}.jpeg"
+
+                                trap - EXIT
+                            else
+                                $FFPROBE -hide_banner -loglevel debug -show_streams -user_agent "$user_agent" \
+                                    -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" || EXIT_STATUS=$?
+                            fi
+                        fi
+
+                        if [ "$EXIT_STATUS" -eq 0 ]
+                        then
+                            echo
+                            inquirer list_input "是否添加此频道" ny_options add_channel_yn
+                            if [ "$add_channel_yn" == "$i18n_yes" ]
+                            then
+                                if [ "$use_proxy_yn" == "$i18n_yes" ] 
+                                then
+                                    if [[ $stream_link =~ cmd= ]] 
+                                    then
+                                        headers=""
+                                        headers_command=""
+                                    else
+                                        headers="Authorization: Bearer $access_token\r\n"
+                                        printf -v headers_command '%b' "$headers"
+                                    fi
+                                fi
+
+                                stream_links=("$domain|$stream_link|${xc_chnls_cmd[xc_chnls_index]}|$mac_address")
+
+                                echo
+                                inquirer list_input "是否 添加/替换 现有频道直播源" ny_options add_channel_yn
+
+                                if [ "$add_channel_yn" == "$i18n_yes" ]
+                                then
+                                    ListChannels
+                                    InputChannelsIndex
+
+                                    for((i=0;i<${#chnls_pid_chosen[@]};i++));
+                                    do
+                                        chnl_pid=${chnls_pid_chosen[i]}
+                                        chnls_index=${chnls_indices[i]}
+
+                                        ListChannel
+
+                                        echo
+                                        change_options=( '添加' '替换' )
+                                        inquirer list_input_index "如何修改频道 [ $chnl_channel_name ]" change_options change_options_index
+
+                                        if [ "$change_options_index" -eq 0 ] 
+                                        then
+                                            pre=true
+                                            jq_path='["channels",'"$chnls_index"',"stream_link"]'
+                                            JQ add "$CHANNELS_FILE" ["\"${stream_links[0]}\""]
+                                        else
+                                            echo
+                                            inquirer list_input_index "选择替换的直播源" chnl_stream_links chnl_stream_links_index
+
+                                            jq_path='["channels",'"$chnls_index"',"stream_link",'"$chnl_stream_links_index"']'
+                                            JQ update "$CHANNELS_FILE" "${stream_links[0]}"
+                                        fi
+
+                                        Println "$info 频道 [ $chnl_channel_name ] 修改成功 !\n"
+                                    done
+                                else
+                                    echo
+                                    inquirer list_input "是否推流 flv" ny_options add_channel_flv_yn
+
+                                    if [[ $add_channel_flv_yn == "$i18n_yes" ]] 
+                                    then
+                                        kind="flv"
+                                    fi
+
+                                    if [ "$use_proxy_yn" == "$i18n_yes" ] 
+                                    then
+                                        xtream_codes_proxy="$server"
+                                    fi
+
+                                    stream_link_parsed=true
+                                    AddChannel
+                                fi
+                            else
+                                continue
+                            fi
+                        else
+                            Println "$error 频道不可用或账号权限不够\n"
+                            continue
+                        fi
+                        break
+                    done
+                    break
+                done
+            else
+                Println "$error $mac_address 错误, 找不到分类! 账号到期时间: $exp_date\n"
+
+                mac_addresses_failed+=("$mac_address")
+
+                for mac in "${macs[@]}"
+                do
+                    if [ "$mac_address" != "$mac" ] 
+                    then
+                        for mac_address_failed in "${mac_addresses_failed[@]}"
+                        do
+                            if [ "$mac_address_failed" == "$mac" ] 
+                            then
+                                continue 2
+                            fi
+                        done
+                        for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
+                        do
+                            if [ "$xc_chnl_mac" == "$domain/$mac" ] 
+                            then
+                                continue 2
+                            fi
+                        done
+                        Println "$info 测试 $mac\n"
+                        mac_address="$mac"
+                        continue 2
+                    fi
+                done
+                exit 1
+            fi
+            break
+        done
+        break
+    done
+}

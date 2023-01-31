@@ -1,0 +1,39 @@
+AptSetSources()
+{
+    echo
+    apt_sources_options=( '国内' '国外' )
+    inquirer list_input_index "选择源" apt_sources_options apt_sources_options_index
+    if [ "$apt_sources_options_index" -eq 0 ]
+    then
+        sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
+        sed -i 's/ftp.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
+        sed -i 's|security.debian.org|mirrors.ustc.edu.cn/debian-security|g' /etc/apt/sources.list
+        if [ -f "/etc/apt/sources.list.d/armbian.list" ]
+        then
+            sed -i 's|http[s]*://apt.armbian.com|http://mirrors.ustc.edu.cn/armbian|g' /etc/apt/sources.list.d/armbian.list
+            sed -i 's|http://mirrors.nju.edu.cn/armbian|http://mirrors.ustc.edu.cn/armbian|g' /etc/apt/sources.list.d/armbian.list
+        fi
+        if [ -f "/etc/apt/sources.list.d/docker.list" ] 
+        then
+            curl -fsSL http://mirrors.ustc.edu.cn/docker-ce/linux/debian/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] http://mirrors.ustc.edu.cn/docker-ce/linux/debian \
+            $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+        fi
+    else
+        sed -i 's/mirrors.ustc.edu.cn/deb.debian.org/g' /etc/apt/sources.list
+        sed -i 's|mirrors.ustc.edu.cn/debian-security|security.debian.org|g' /etc/apt/sources.list
+        if [ -f "/etc/apt/sources.list.d/armbian.list" ]
+        then
+            sed -i 's|http://mirrors.nju.edu.cn/armbian|http://apt.armbian.com|g' /etc/apt/sources.list.d/armbian.list
+            sed -i 's|http://mirrors.ustc.edu.cn/armbian|http://apt.armbian.com|g' /etc/apt/sources.list.d/armbian.list
+            sed -i 's/https:/http:/g' /etc/apt/sources.list.d/armbian.list
+        fi
+        if [ -f "/etc/apt/sources.list.d/docker.list" ] 
+        then
+            curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
+            $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+        fi
+    fi
+    Println "$info 源更改成功\n"
+}

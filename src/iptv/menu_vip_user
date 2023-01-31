@@ -1,0 +1,28 @@
+VipUserMenu()
+{
+    Println "  `gettext \"VIP 面板\"`
+
+  ${red}1.${normal} `gettext \"查看 VIP 频道\"`
+  ${red}2.${normal} `gettext \"输入 VIP 授权码\"`
+
+ `eval_gettext \"\\\$tip 输入: h 切换到 HLS 面板, f 切换到 FLV 面板\"`\n\n"
+    read -p "`gettext \"输入序号\"` [1-2]: " vip_menu_num
+    case "$vip_menu_num" in
+        h)
+            kind=""
+            color=${green}
+            Menu
+        ;;
+        f)
+            kind="flv"
+            color=${blue}
+            Menu
+        ;;
+        1) VipListUserChannel
+        ;;
+        2) VipVerifyLicense
+        ;;
+        *) Println "$error $i18n_input_correct_number [1-2]\n"
+        ;;
+    esac
+}

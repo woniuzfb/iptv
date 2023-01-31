@@ -1,0 +1,64 @@
+VipEnable()
+{
+    # deprecated
+    if [ -s "/tmp/vip.pid" ] && kill -0 "$(< /tmp/vip.pid)" 2> /dev/null
+    then
+        Println "$error VIP 已开启\n" && exit 1
+    fi
+
+    if [ -s "$IPTV_ROOT/vip.pid" ] && kill -0 "$(< $IPTV_ROOT/vip.pid)" 2> /dev/null
+    then
+        Println "$error VIP 已开启\n" && exit 1
+    fi
+
+    if [ ! -s "$VIP_FILE" ] 
+    then
+        Println "$error 请先添加 VIP 服务器\n" && exit 1
+    fi
+
+    echo
+    inquirer text_input "输入检测间隔(秒): " sleep_time 86400
+
+    VipGetHosts
+
+    if [ "$vip_hosts_count" -gt 0 ] 
+    then
+        VipGetUsers
+
+        if [ "$vip_users_count" -gt 0 ] 
+        then
+            if [ ! -e "$MD5SUM_FILE" ] 
+            then
+                Println "$info 安装 md5sum..."
+                if [[ ! -x $(command -v gcc) ]] 
+                then
+                    DistCheck
+                    if [ "$dist" == "rpm" ] 
+                    then
+                        yum -y install gcc gcc-c++ >/dev/null 2>&1
+                    else
+                        apt-get -y install build-essential >/dev/null 2>&1
+                    fi
+                fi
+                mkdir -p "$C_ROOT"
+                wget --timeout=10 --tries=1 --no-check-certificate "$MD5SUM_LINK" -qO "$MD5SUM_FILE.c" \
+                || wget --timeout=10 --tries=3 --no-check-certificate "$MD5SUM_LINK_FALLBACK" -qO "$MD5SUM_FILE.c"
+                gcc -Wall -O3 -o "$MD5SUM_FILE" "$MD5SUM_FILE.c"
+                Println "$info md5sum 安装成功"
+            fi
+            if [ -z "${vip_public_root:-}" ] 
+            then
+                VipConfig
+            fi
+            [ -n "$vip_public_root" ] && ln -sfT "$VIP_USERS_ROOT" "$vip_public_root/vip"
+
+            ( VipMonitor ) > /dev/null 2> /dev/null < /dev/null &
+
+            Println "$info VIP 开启成功\n"
+        else
+            Println "$error 请先添加用户\n" && exit 1
+        fi
+    else
+        Println "$error 请先添加 VIP 服务器\n" && exit 1
+    fi
+}

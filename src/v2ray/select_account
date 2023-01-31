@@ -1,0 +1,24 @@
+V2raySelectAccount()
+{
+    echo "选择账号"
+    while read -p "$i18n_default_cancel" account_num
+    do
+        case "$account_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$account_num" -gt 0 ] && [ "$account_num" -le $accounts_count ]
+                then
+                    accounts_index=$((account_num-1))
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+}

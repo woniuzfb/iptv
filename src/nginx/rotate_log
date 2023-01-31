@@ -1,0 +1,91 @@
+NginxLogRotate()
+{
+    if [ ! -d "$IPTV_ROOT" ] 
+    then
+        Println "$error 请先安装脚本 !\n" && exit 1
+    fi
+
+    if ! ls -A $nginx_prefix/logs/*.log > /dev/null 2>&1
+    then
+        Println "$error 没有日志 !\n" && exit 1
+    fi
+
+    if [ -d "$nginx_prefix" ] 
+    then
+        chown $nginx_name:root $nginx_prefix/logs/*.log
+        chmod 660 $nginx_prefix/logs/*.log
+    fi
+
+    if crontab -l | grep -q "$LOGROTATE_CONFIG" 2> /dev/null
+    then
+        if grep -q "$nginx_prefix" < "$LOGROTATE_CONFIG"
+        then
+            Println "$error 日志切割定时任务已存在 !\n"
+        else
+            logrotate='
+'"$nginx_prefix"'/logs/*.log {
+  daily
+  missingok
+  rotate 14
+  compress
+  delaycompress
+  notifempty
+  create 660 '"$nginx_name"' root
+  sharedscripts
+  postrotate
+    [ ! -f '"$nginx_prefix"'/logs/nginx.pid ] || /bin/kill -USR1 `cat '"$nginx_prefix"'/logs/nginx.pid`
+  endscript
+}
+'
+            printf '%s\n' "$logrotate" >> "$LOGROTATE_CONFIG"
+            Println "$error 日志切割定时任务设置成功 !\n"
+        fi
+    else
+        LOGROTATE_FILE=$(command -v logrotate) || LOGROTATE_FILE=""
+
+        if [ ! -x "$LOGROTATE_FILE" ] 
+        then
+            Println "$error 请先安装 logrotate !\n" && exit 1
+        fi
+
+        logrotate=""
+
+        if [ -d "$nginx_prefix" ] 
+        then
+            logrotate='
+'"$nginx_prefix"'/logs/*.log {
+  daily
+  missingok
+  rotate 14
+  compress
+  delaycompress
+  notifempty
+  create 660 '"$nginx_name"' root
+  sharedscripts
+  postrotate
+    [ ! -f '"$nginx_prefix"'/logs/nginx.pid ] || /bin/kill -USR1 `cat '"$nginx_prefix"'/logs/nginx.pid`
+  endscript
+}
+'
+        fi
+
+        logrotate="$logrotate
+$IPTV_ROOT/*.log {
+  monthly
+  missingok
+  rotate 3
+  compress
+  nodelaycompress
+  notifempty
+  sharedscripts
+}
+"
+        printf '%s' "$logrotate" > "$LOGROTATE_CONFIG"
+
+        crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
+        printf '%s\n' "0 0 * * * $LOGROTATE_FILE $LOGROTATE_CONFIG" >> "$IPTV_ROOT/cron_tmp"
+        crontab "$IPTV_ROOT/cron_tmp" > /dev/null
+        rm -f "$IPTV_ROOT/cron_tmp"
+        Println "$info 日志切割定时任务开启成功 !\n"
+    fi
+}

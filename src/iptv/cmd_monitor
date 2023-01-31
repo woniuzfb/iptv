@@ -1,0 +1,17 @@
+[ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请先安装 !" && exit 1
+[ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
+
+cmd=${2:-}
+
+case $cmd in
+    "s"|"stop") 
+        MonitorStop
+    ;;
+    "l"|"log")
+        MonitorList "${3:-}"
+    ;;
+    *) 
+        MonitorStart
+    ;;
+esac
+exit 0

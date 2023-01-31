@@ -1,0 +1,89 @@
+CloudflareListWorkersRoutes()
+{
+    if [ ! -s "$CF_CONFIG" ] 
+    then
+        Println "$error 请先添加用户\n" && exit 1
+    fi
+
+    CloudflareGetUsers
+
+    if [ "$cf_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
+
+    cf_users_zones_list=""
+    cf_users_zones_count=0
+    cf_users_zones_name=()
+    cf_users_zones_id=()
+    cf_users_zones_account_id=()
+    cf_users_zones_account_token=()
+    cf_users_zones_account_api_key=()
+    cf_users_zones_account_email=()
+    cf_users_zones_routes_count=()
+    cf_users_zones_route_id=()
+    cf_users_zones_route_script=()
+    cf_users_zones_route_pattern=()
+    for((i=0;i<cf_users_count;i++));
+    do
+        if [ -n "${cf_users_api_key[i]:-}" ] 
+        then
+            curl_header_auth_email="X-Auth-Email: ${cf_users_email[i]}"
+            curl_header_auth_key="X-Auth-Key: ${cf_users_api_key[i]}"
+            curl_header_auth_token=""
+        elif [ -n "${cf_users_token[i]:-}" ] 
+        then
+            curl_header_auth_email=""
+            curl_header_auth_key=""
+            curl_header_auth_token="Authorization: Bearer ${cf_users_token[i]}"
+        else
+            continue
+        fi
+
+        IFS=" " read -r zone_id zone_name account_id < <(curl -s -X GET "https://api.cloudflare.com/client/v4/zones" \
+            -H "Content-Type: application/json" \
+            -H ''"$curl_header_auth_email"'' \
+            -H ''"$curl_header_auth_key"'' \
+            -H ''"$curl_header_auth_token"'' \
+            | $JQ_FILE -r '[([.result[].id]|join("|")),([.result[].name]|join("|")),([.result[].account.id]|join("|"))]|join(" ")' 2> /dev/null
+        ) || Println "$error Token 权限错误 ?"
+        IFS="|" read -r -a zones_id <<< "$zone_id"
+        IFS="|" read -r -a zones_name <<< "$zone_name"
+        IFS="|" read -r -a accounts_id <<< "$account_id"
+        for((j=0;j<${#zones_id[@]};j++));
+        do
+            cf_users_zones_count=$((cf_users_zones_count+1))
+            IFS="^" read -r count id script pattern < <(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/${zones_id[j]}/workers/routes" \
+                -H "Content-Type: application/json" \
+                -H ''"$curl_header_auth_email"'' \
+                -H ''"$curl_header_auth_key"'' \
+                -H ''"$curl_header_auth_token"'' \
+                | $JQ_FILE '[(.result|length),([.result[].id]|join(" ")),([.result[].script]|join(" ")),([.result[].pattern]|join(" "))]|join("^")'
+            )
+
+            count=${count#\"}
+            pattern=${pattern%\"}
+            cf_users_zones_routes_count+=("$count")
+            cf_users_zones_route_id+=("$id")
+            cf_users_zones_route_script+=("$script")
+            cf_users_zones_route_pattern+=("$pattern")
+
+            cf_users_zones_id+=("${zones_id[j]}")
+            cf_users_zones_name+=("${zones_name[j]}")
+            cf_users_zones_account_id+=("${accounts_id[j]}")
+            cf_users_zones_account_token+=("${cf_users_token[i]}")
+            cf_users_zones_account_api_key+=("${cf_users_api_key[i]}")
+            cf_users_zones_account_email+=("${cf_users_email[i]}")
+            cf_users_zones_list="$cf_users_zones_list $cf_users_zones_count.${indent_6}${green}${zones_name[j]}${normal}  路由数: ${green}$count${normal}\n\n"
+        done
+    done
+
+    if [ "$cf_users_zones_count" -eq 0 ] 
+    then
+        Println "$error 没有找到域名, 请先添加源站\n"
+        exit 1
+    fi
+
+    Println "$cf_users_zones_list"
+}

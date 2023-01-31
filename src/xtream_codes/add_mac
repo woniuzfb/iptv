@@ -1,0 +1,78 @@
+XtreamCodesAddMac()
+{
+    echo && read -p "请输入服务器地址: " server
+    [ -z "$server" ] && Println "$i18n_canceled...\n" && exit 1
+
+    domain=${server#*http://}
+    domain=${domain%%/*}
+    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
+
+    [ -z "${ip:-}" ] && Println "$error 无法解析域名 !\n" && exit 1
+
+    echo && read -p "请输入 mac 地址(多个地址空格分隔): " mac_address
+    [ -z "$mac_address" ] && Println "$i18n_canceled...\n" && exit 1
+
+    IFS=" " read -ra macs <<< "$mac_address"
+
+    GetDefault
+
+    if [ -n "${d_xc_proxy:-}" ] 
+    then
+        echo
+        inquirer list_input "是否使用代理 $d_xc_proxy 验证: " yn_options use_proxy_yn
+        if [ "$use_proxy_yn" == "$i18n_yes" ]
+        then
+            server="${d_xc_proxy%\/}/http://$domain"
+        else
+            server="http://$domain"
+        fi
+    else
+        server="http://$domain"
+    fi
+
+    timezone=$(UrlencodeUpper "Europe/Amsterdam")
+    token_url="$server/portal.php?type=stb&action=handshake"
+    profile_url="$server/portal.php?type=stb&action=get_profile"
+    account_info_url="$server/portal.php?type=account_info&action=get_main_info"
+
+    Println "$info 验证中..."
+    add_mac_success=false
+
+    for mac_address in "${macs[@]}"
+    do
+        access_token=""
+        exp_date=""
+        mac=$(UrlencodeUpper "$mac_address")
+
+        access_token=$(curl -s -Lm 10 \
+            -H "User-Agent: $USER_AGENT_TV" \
+            --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" \
+            | $JQ_FILE -r '.js.token' 2> /dev/null) || true
+
+        if [ -z "$access_token" ] 
+        then
+            Println "$error $domain $mac_address access_token"
+            continue
+        fi
+
+        profile=$(curl -s -Lm 10 \
+            -H "User-Agent: $USER_AGENT_TV" \
+            -H "Authorization: Bearer $access_token" \
+            --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
+
+        exp_date=$(curl -s -Lm 10 \
+            -H "User-Agent: $USER_AGENT_TV" \
+            -H "Authorization: Bearer $access_token" \
+            --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
+
+        if [ -z "$exp_date" ] 
+        then
+            Println "$error $domain $mac_address exp_date"
+            continue
+        fi
+
+        add_mac_success=true
+
+        printf '%s\n' "$ip $domain $mac_address" >> "$XTREAM_CODES_EXAM"
+    done
+}

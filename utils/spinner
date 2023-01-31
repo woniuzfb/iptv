@@ -1,0 +1,66 @@
+# based on https://raw.githubusercontent.com/kahkhang/ora.sh/master/ora.sh
+Spinner()
+{
+    if [[ ! -x $(command -v tput) ]] 
+    then
+        DepInstall tput
+    fi
+
+    local i=1 delay=0.05 FUNCTION_NAME="$2" VARIABLE_NAME="${3:-}" list TMP_FILE
+    local green cyan normal
+    green='\033[32m'
+    cyan='\033[36m'
+    normal='\033[0m'
+
+    list=( '\xe2\xa0\x8b' '\xe2\xa0\x99' '\xe2\xa0\xb9' '\xe2\xa0\xb8' '\xe2\xa0\xbc' '\xe2\xa0\xb4' '\xe2\xa0\xa6' '\xe2\xa0\xa7' '\xe2\xa0\x87' '\xe2\xa0\x8f' )
+
+    if TMP_FILE=$(mktemp -q) 
+    then
+        chmod +r "$TMP_FILE"
+    else
+        printf -v TMP_FILE '%(%m-%d-%H:%M:%S)T' -1
+    fi
+
+    trap '
+        rm -f "$TMP_FILE"
+        inquirer cleanup
+    ' EXIT
+
+    stty -echo
+    tput civis
+
+    $FUNCTION_NAME > "$TMP_FILE" 2>> "$TMP_FILE" &
+    local pid=$!
+
+    echo
+    tput sc
+    printf '%b %b' "${list[i]}" "${green}$1${normal}"
+    tput el
+    tput rc
+
+    while ps -p $pid -o pid= >/dev/null
+    do
+        printf '%b' "$cyan${list[i]}${normal}"
+        i=$(((i+1)%10))
+        sleep $delay
+        printf "\b\b\b"
+    done
+
+    tput el
+
+    if [[ -n $VARIABLE_NAME ]]
+    then
+        read -r ${VARIABLE_NAME?} < "$TMP_FILE"
+    else
+        awk '{print}' "$TMP_FILE"
+    fi
+
+    rm -f "$TMP_FILE"
+
+    tput cnorm
+    stty echo
+
+    trap - EXIT
+
+    wait $pid
+}

@@ -1,0 +1,46 @@
+CloudflareWorkersMenu()
+{
+    Println "  cloudflare 面板 ${normal}${red}[v$sh_ver]${normal}
+
+  ${green}1.${normal} 安装 wrangler
+  ${green}2.${normal} 更新 wrangler
+  ${green}3.${normal} 查看 worker
+  ${green}4.${normal} 添加 worker
+  ${green}5.${normal} 更改 worker
+  ${green}6.${normal} 部署 worker
+  ${green}7.${normal} 设置 路由
+  ${green}8.${normal} 开启 监控
+  ${green}9.${normal} 关闭 监控
+ ${green}10.${normal} 删除 worker
+
+ $tip 当前: ${green}workers${normal} 面板
+ $tip 输入: c 切换到 partner 面板\n\n"
+    read -p "`gettext \"输入序号\"` [1-10]: " cloudflare_workers_num
+    case $cloudflare_workers_num in
+        c)
+            CloudflarePartnerMenu
+        ;;
+        1) WranglerInstall
+        ;;
+        2) WranglerUpdate
+        ;;
+        3) CloudflareListWorker
+        ;;
+        4) CloudflareAddWorker
+        ;;
+        5) CloudflareEditWorker
+        ;;
+        6) CloudflareDeployWorker
+        ;;
+        7) CloudflareConfigWorkerRoute
+        ;;
+        8) CloudflareEnableWorkersMonitor
+        ;;
+        9) CloudflareDisableWorkersMonitor
+        ;;
+        10) CloudflareDelWorker
+        ;;
+        *) Println "$error $i18n_input_correct_number [1-10]\n"
+        ;;
+    esac
+}

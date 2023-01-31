@@ -1,0 +1,104 @@
+IbmDeployV2ray()
+{
+    V2rayGetInbounds
+
+    port_found=0
+    for port in ${inbounds_port[@]+"${inbounds_port[@]}"}
+    do
+        if [ "$port" -eq 8080 ] 
+        then
+            port_found=1
+            break
+        fi
+    done
+
+    if [ "$port_found" -eq 0 ] 
+    then
+        Println "$error 请先添加 8080 端口\n"
+        exit 1
+    fi
+
+    if [ ! -e "$IBM_APPS_ROOT/ibm_$v2ray_name/$v2ray_name" ] || [ ! -e "$IBM_APPS_ROOT/ibm_$v2ray_name/v2ctl" ]
+    then
+        Println "$error 请先更新 IBM $v2ray_name APP\n"
+        exit 1
+    fi
+
+    IbmListCfApp
+
+    Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
+    ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region" -g "$ibm_user_resource_group" 
+    ibmcloud target -o "$ibm_user_org" -s "$ibm_user_space"
+
+    v2ray_rand_name=$(RandStr)
+    cp -r "$IBM_APPS_ROOT/ibm_$v2ray_name" "$IBM_APPS_ROOT/ibm_$v2ray_rand_name"
+
+    cd "$IBM_APPS_ROOT/ibm_$v2ray_rand_name/"
+
+    mv $v2ray_name "$v2ray_rand_name"
+    if [ "$v2ray_name" == "xray" ] 
+    then
+        ./v2ctl convert config.json > "$v2ray_rand_name.pb"
+    else
+        ./v2ctl config config.json > "$v2ray_rand_name.pb"
+    fi
+    tar zcf "$v2ray_rand_name.tar.gz" "$v2ray_rand_name" "$v2ray_rand_name.pb"
+    rm -f config.json
+    rm -f config.json.lock
+    rm -f "$v2ray_rand_name"
+    rm -f "$v2ray_rand_name.pb"
+    rm -f v2ctl
+
+    ibmcloud cf create-app-manifest "$ibm_cf_app_name"
+
+    routes=""
+    while read -r line 
+    do
+        if [[ $line =~ disk_quota: ]] 
+        then
+            disk_quota=${line##* }
+        elif [[ $line =~ instances: ]] 
+        then
+            instances=${line##* }
+        elif [[ $line =~ memory: ]] 
+        then
+            memory=${line##* }
+        elif [[ $line =~ routes: ]] || [[ $line =~ route: ]]
+        then
+            [ -n "$routes" ] && routes="$routes\n"
+            routes="$routes$line"
+        elif [[ $line =~ stack: ]] 
+        then
+            stack=${line##* }
+        fi
+    done < "${ibm_cf_app_name}_manifest.yml"
+
+    echo -e "---
+applications:
+- name: $ibm_cf_app_name
+  command:
+    tar xzf $v2ray_rand_name.tar.gz &&
+    { ./$v2ray_rand_name -config ./$v2ray_rand_name.pb -format=pb & } &&
+    sleep 5 &&
+    rm ./$v2ray_rand_name.pb &&
+    rm ./$v2ray_rand_name
+  disk_quota: $disk_quota
+  instances: ${instances:-1}
+  memory: $memory
+  stack: $stack
+  buildpacks:
+    - go_buildpack
+  env:
+    GOPACKAGENAME: goapp
+" > "${ibm_cf_app_name}_manifest.yml"
+
+    printf '%s' 'package main
+
+func main() {
+
+}
+' > "main.go"
+    ibmcloud cf push -f "${ibm_cf_app_name}_manifest.yml"
+    cd ..
+    rm -rf "$IBM_APPS_ROOT/ibm_$v2ray_rand_name"
+}

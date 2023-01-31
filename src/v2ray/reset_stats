@@ -1,0 +1,6 @@
+V2rayResetStats()
+{
+    V2rayGetStats
+    ExitOnList n "`gettext \"将重置所有的流量统计\"`"
+    $V2CTL_FILE api --server=$api_inbound_listen:$api_inbound_port StatsService.QueryStats 'pattern: "" reset: true'
+}

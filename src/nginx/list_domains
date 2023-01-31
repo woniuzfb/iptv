@@ -1,0 +1,56 @@
+NginxListDomains()
+{
+    if [ ! -d "$nginx_prefix" ] 
+    then
+        Println "$error $nginx_name 未安装 ! 输入 $nginx_ctl 安装 $nginx_name\n"
+        exit 1
+    fi
+
+    OpensslInstall
+
+    nginx_domains_list=""
+    nginx_domains_count=0
+    nginx_domains=()
+    nginx_domains_status=()
+
+    if ls -A "$nginx_prefix/conf/sites_available/"* > /dev/null 2>&1
+    then
+        for f in "$nginx_prefix/conf/sites_available/"*
+        do
+            nginx_domains_count=$((nginx_domains_count+1))
+            domain=${f##*/}
+            domain=${domain%.conf}
+            if [ -f "$nginx_prefix/conf/sites_enabled/$domain.conf" ] 
+            then
+                domain_status=1
+                domain_status_text="${green} [开启] ${normal}"
+            else
+                domain_status=0
+                domain_status_text="${red} [关闭] ${normal}"
+            fi
+            if [ -f "$nginx_prefix/conf/sites_crt/$domain.crt" ] 
+            then
+                domain_expire_date=$(date +%c --date="$(openssl x509 -enddate -noout -in $nginx_prefix/conf/sites_crt/$domain.crt | cut -d= -f 2)")
+                if openssl x509 -checkend 1209600 -noout -in "$nginx_prefix/conf/sites_crt/$domain.crt" > /dev/null
+                then
+                    domain_expire_text=" ${green}[$domain_expire_date]${normal}"
+                elif openssl x509 -checkend 0 -noout -in "$nginx_prefix/conf/sites_crt/$domain.crt" > /dev/null
+                then
+                    domain_expire_text=" ${yellow}[$domain_expire_date]${normal}"
+                else
+                    domain_expire_text=" ${red}[$domain_expire_date]${normal}"
+                fi
+            else
+                domain_expire_text=""
+            fi
+            nginx_domains_list="$nginx_domains_list ${green}$nginx_domains_count.${normal}${indent_6}$domain $domain_status_text$domain_expire_text\n\n"
+            nginx_domains+=("$domain")
+            nginx_domains_status+=("$domain_status")
+        done
+    fi
+
+    if [ "$nginx_domains_count" -gt 0 ] 
+    then
+        Println "${green}域名列表:${normal}\n\n$nginx_domains_list"
+    fi
+}

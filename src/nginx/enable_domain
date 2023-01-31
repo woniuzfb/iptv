@@ -1,0 +1,5 @@
+NginxEnableDomain()
+{
+    ln -sf "$nginx_prefix/conf/sites_available/$server_domain.conf" "$nginx_prefix/conf/sites_enabled/$server_domain.conf"
+    NginxRestart
+}

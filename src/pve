@@ -1,0 +1,817 @@
+Include src/proxmox/get_vms "$@"
+
+Include src/proxmox/list_vms "$@"
+
+Include src/proxmox/select_vm "$@"
+
+if [[ ! -x $(command -v pveum) ]] 
+then
+    Println "$error 不是 Proxmox 系统\n"
+    exit 1
+fi
+
+ShFileCheck
+
+JQ_FILE="/usr/local/bin/jq"
+
+Println "  Proxmox VE 管理面板 ${normal}${red}[v$sh_ver]${normal}
+
+  ${green}1.${normal} 设置 apt 源
+  ${green}2.${normal} 设置 vimrc
+  ${green}3.${normal} 设置 显示器
+  ${green}4.${normal} 查看 温度 / 风扇
+  ${green}5.${normal} 设置 风扇
+————————————
+  ${green}6.${normal} 安装 升级 dnscrypt proxy
+  ${green}7.${normal} 安装 AdGuardHome
+  ${green}8.${normal} 安装 qemu-guest-agent
+  ${green}9.${normal} 安装 升级 openwrt-v2ray
+————————————
+ ${green}10.${normal} 切换 openwrt 语言
+ ${green}11.${normal} 切换 v2ray/xray core
+ ${green}12.${normal} 切换 配置文件
+————————————
+ ${green}13.${normal} 开关 edns0
+ ${green}14.${normal} 开关 ipv6 查询
+ ${green}15.${normal} 更新脚本
+
+"
+read -p "`gettext \"输入序号\"` [1-15]: " pve_num
+
+case $pve_num in
+    1) 
+        echo
+        apt_options=( '切换 非订阅源/订阅 源' '切换 debian 国内/国外 源' )
+        inquirer list_input_index "选择操作" apt_options apt_options_index
+
+        . /etc/os-release
+
+        if [ "$apt_options_index" -eq 0 ] 
+        then
+            echo
+            pve_sources_options=( '非订阅源' '订阅源' )
+            inquirer list_input "选择 PVE 源" pve_sources_options pve_sources_option
+
+            if [ "$pve_sources_option" == "非订阅源" ] 
+            then
+                if [ -f /etc/apt/sources.list.d/pve-no-subscription.list ] 
+                then
+                    sed -i "s_#deb http://download.proxmox.com/debian/pve $VERSION_CODENAME pve-no-subscription_deb $FFMPEG_MIRROR_LINK/proxmox/debian/pve $VERSION_CODENAME pve-no-subscription_" /etc/apt/sources.list.d/pve-no-subscription.list
+                elif grep -q "pve-no-subscription" < /etc/apt/sources.list 
+                then
+                    sed -i "s_#deb http://download.proxmox.com/debian/pve $VERSION_CODENAME pve-no-subscription_deb $FFMPEG_MIRROR_LINK/proxmox/debian/pve $VERSION_CODENAME pve-no-subscription_" /etc/apt/sources.list
+                else
+                    echo "deb $FFMPEG_MIRROR_LINK/proxmox/debian/pve $VERSION_CODENAME pve-no-subscription" > /etc/apt/sources.list.d/pve-no-subscription.list
+                fi
+                if [ -f /etc/apt/sources.list.d/pve-enterprise.list ] 
+                then
+                    rm -f /etc/apt/sources.list.d/pve-enterprise.list
+                elif grep -q "pve-enterprise" < /etc/apt/sources.list 
+                then
+                    sed -i "s_^deb https://enterprise.proxmox.com/debian/pve $VERSION_CODENAME pve-enterprise_#deb $FFMPEG_MIRROR_LINK/proxmox-enterprise/debian/pve $VERSION_CODENAME pve-enterprise_" /etc/apt/sources.list
+                fi
+            else
+                if [ -f /etc/apt/sources.list.d/pve-enterprise.list ] 
+                then
+                    sed -i "s_#deb https://enterprise.proxmox.com/debian/pve $VERSION_CODENAME pve-enterprise_deb $FFMPEG_MIRROR_LINK/proxmox-enterprise/debian/pve $VERSION_CODENAME pve-enterprise_" /etc/apt/sources.list.d/pve-enterprise.list
+                elif grep -q "pve-enterprise" < /etc/apt/sources.list 
+                then
+                    sed -i "s_#deb https://enterprise.proxmox.com/debian/pve $VERSION_CODENAME pve-enterprise_deb $FFMPEG_MIRROR_LINK/proxmox-enterprise/debian/pve $VERSION_CODENAME pve-enterprise_" /etc/apt/sources.list
+                else
+                    echo "deb $FFMPEG_MIRROR_LINK/proxmox-enterprise/debian/pve $VERSION_CODENAME pve-enterprise" > /etc/apt/sources.list.d/pve-enterprise.list
+                fi
+                if [ -f /etc/apt/sources.list.d/pve-no-subscription.list ] 
+                then
+                    rm -f /etc/apt/sources.list.d/pve-no-subscription.list
+                elif grep -q "pve-no-subscription" < /etc/apt/sources.list 
+                then
+                    sed -i "s_^deb $FFMPEG_MIRROR_LINK/proxmox/debian/pve $VERSION_CODENAME pve-no-subscription_#deb $FFMPEG_MIRROR_LINK/proxmox/debian/pve $VERSION_CODENAME pve-no-subscription_" /etc/apt/sources.list
+                fi
+            fi
+
+            Println "$info 切换成功\n"
+            exit 0
+        fi
+
+        AptSetSources
+    ;;
+    2) 
+        VimConfig
+    ;;
+    3) 
+        Println "$tip 此选项主要用于笔记本"
+        bootloader_options=( Grub Systemd-boot )
+        inquirer list_input "选择当前引导程序" bootloader_options bootloader
+
+        echo
+        monitor_options=( '自动关闭显示器' '取消自动关闭显示器' )
+        inquirer list_input_index "选择操作" monitor_options monitor_options_index
+
+        if [ "$monitor_options_index" -eq 0 ] 
+        then
+            echo
+            inquirer text_input "输入多少秒后自动关闭显示器" console_blank_secs 120
+
+            if [ "$bootloader" == "Grub" ] 
+            then
+                . /etc/default/grub
+
+                if grep -q "consoleblank=" <<< "$GRUB_CMDLINE_LINUX_DEFAULT"  
+                then
+                    cmdline=($GRUB_CMDLINE_LINUX_DEFAULT)
+                    GRUB_CMDLINE_LINUX_DEFAULT=""
+                    for ele in "${cmdline[@]}"
+                    do
+                        [ -n "$GRUB_CMDLINE_LINUX_DEFAULT" ] && GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT "
+                        if [ "${ele%=*}" == "consoleblank" ] 
+                        then
+                            GRUB_CMDLINE_LINUX_DEFAULT="${GRUB_CMDLINE_LINUX_DEFAULT}consoleblank=$console_blank_secs"
+                        else
+                            GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT$ele"
+                        fi
+                    done
+                elif [ -n "$GRUB_CMDLINE_LINUX_DEFAULT" ] 
+                then
+                    GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT consoleblank=$console_blank_secs"
+                else
+                    GRUB_CMDLINE_LINUX_DEFAULT="consoleblank=$console_blank_secs"
+                fi
+
+                echo "$(awk '!x{x=sub(/GRUB_CMDLINE_LINUX_DEFAULT=.*/,"GRUB_CMDLINE_LINUX_DEFAULT=\"'"$GRUB_CMDLINE_LINUX_DEFAULT"'\"")}1' /etc/default/grub)" > /etc/default/grub
+                update-grub
+
+                Println "$info 设置成功\n"
+
+                exit 0
+            fi
+
+            if [ ! -s /etc/kernel/cmdline ] 
+            then
+                echo -n "consoleblank=$console_blank_secs" >> /etc/kernel/cmdline
+            elif ! grep -q "consoleblank=" < /etc/kernel/cmdline 
+            then
+                echo -n "$(< /etc/kernel/cmdline) consoleblank=$console_blank_secs" > /etc/kernel/cmdline
+            else
+                line=$(< /etc/kernel/cmdline)
+                cmdline=($line)
+                SYS_CMDLINE=""
+                for ele in "${cmdline[@]}"
+                do
+                    [ -n "$SYS_CMDLINE" ] && SYS_CMDLINE="$SYS_CMDLINE "
+                    if [ "${ele%=*}" == "consoleblank" ] 
+                    then
+                        SYS_CMDLINE="${SYS_CMDLINE}consoleblank=$console_blank_secs"
+                    else
+                        SYS_CMDLINE="$SYS_CMDLINE$ele"
+                    fi
+                done
+                echo -n "$SYS_CMDLINE" > /etc/kernel/cmdline
+            fi
+        else
+            if [ "$bootloader" == "Grub" ] 
+            then
+                . /etc/default/grub
+
+                if ! grep -q "consoleblank=" <<< "$GRUB_CMDLINE_LINUX_DEFAULT" 
+                then
+                    Println "$error 无需操作\n"
+                    exit 1
+                fi
+
+                cmdline=($GRUB_CMDLINE_LINUX_DEFAULT)
+                GRUB_CMDLINE_LINUX_DEFAULT=""
+                for ele in "${cmdline[@]}"
+                do
+                    [ -n "$GRUB_CMDLINE_LINUX_DEFAULT" ] && GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT "
+                    if [ "${ele%=*}" == "consoleblank" ] 
+                    then
+                        continue
+                    fi
+                    GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT$ele"
+                done
+
+                echo "$(awk '!x{x=sub(/GRUB_CMDLINE_LINUX_DEFAULT=.*/,"GRUB_CMDLINE_LINUX_DEFAULT=\"'"$GRUB_CMDLINE_LINUX_DEFAULT"'\"")}1' /etc/default/grub)" > /etc/default/grub
+                update-grub
+
+                Println "$info 设置成功\n"
+                exit 0
+            fi
+
+            if [ ! -s /etc/kernel/cmdline ] || ! grep -q "consoleblank=" < /etc/kernel/cmdline
+            then
+                Println "$error 无需操作\n"
+                exit 1
+            fi
+
+            line=$(< /etc/kernel/cmdline)
+            cmdline=($line)
+            SYS_CMDLINE=""
+            for ele in "${cmdline[@]}"
+            do
+                [ -n "$SYS_CMDLINE" ] && SYS_CMDLINE="$SYS_CMDLINE "
+                if [ "${ele%=*}" == "consoleblank" ] 
+                then
+                    continue
+                fi
+                SYS_CMDLINE="$SYS_CMDLINE$ele"
+            done
+            echo -n "$SYS_CMDLINE" > /etc/kernel/cmdline
+        fi
+
+        pve-efiboot-tool refresh
+
+        Println "$info 设置成功\n"
+    ;;
+    4) 
+        if [[ ! -x $(command -v sensors) ]] 
+        then
+            Println "$info 安装 lm-sensors..."
+            AptUpdate
+            apt-get -y install lm-sensors
+        fi
+
+        sensors
+
+        if [ -d /opt/nbfc/ ] 
+        then
+            cd /opt/nbfc
+            mono nbfc.exe status --all
+        fi
+    ;;
+    5)
+        if [[ ! -x $(command -v mono) ]] 
+        then
+            Println "$tip 此选项主要用于笔记本"
+            ExitOnList n "`gettext \"需要安装 mono, 耗时会很长, 是否继续\"`"
+
+            AptUpdate
+            apt-get -y install apt-transport-https dirmngr gnupg ca-certificates
+            apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF
+            echo "deb https://download.mono-project.com/repo/debian stable main" | tee /etc/apt/sources.list.d/mono-official-stable.list
+            apt-get update
+            apt-get -y install mono-complete git
+        fi
+
+        if [ ! -d /opt/nbfc/ ] || ! ls -A /opt/nbfc/* > /dev/null 2>&1
+        then
+            Println "$info 安装 nbfc..."
+
+            DepInstall git
+            DepInstall curl
+            DepInstall unzip
+
+            cd /tmp/
+            curl -s -L "$FFMPEG_MIRROR_LINK/nbfc.zip" -o nbfc.zip
+            unzip -o nbfc.zip >/dev/null 2>&1
+
+            cd nbfc-master
+            sed -i 's~NUGET_URL=\"https://dist.nuget.org~NUGET_URL=\"'"$FFMPEG_MIRROR_LINK"'/nuget~' build.sh
+            ./build.sh
+
+            mkdir -p /opt/nbfc
+            cp -r /tmp/nbfc-master/Linux/bin/Release/* /opt/nbfc/
+            cp /tmp/nbfc-master/Linux/{nbfc.service,nbfc-sleep.service} /etc/systemd/system/
+            systemctl enable nbfc --now || true
+        fi
+
+        echo
+        nbfc_options=( '查看状态' '设置寄存器值' '开启自动控制' '设置风扇转速' '搜索配置' '应用配置' )
+        inquirer list_input_index "选择操作" nbfc_options nbfc_options_index
+
+        cd /opt/nbfc
+
+        if [ "$nbfc_options_index" -eq 0 ] 
+        then
+            mono nbfc.exe status --all
+        elif [ "$nbfc_options_index" -eq 1 ]
+        then
+            echo
+            ExitOnText "输入寄存器地址, 比如 0x93: " register_address
+
+            echo
+            ExitOnText "输入值, 比如 0x14: " register_value
+
+            mono ec-probe.exe write $register_address $register_value
+
+            if [ -f /opt/nbfc/nbfcservice.sh ] 
+            then
+                sed -i '/mono \/opt\/nbfc\/ec-probe.exe write /d' /opt/nbfc/nbfcservice.sh
+                sed -i '/start"/a \\t    mono \/opt\/nbfc\/ec-probe.exe write '"$register_address"' '"$register_value"'' /opt/nbfc/nbfcservice.sh
+            fi
+
+            Println "$tip 不一定写入成功, 请自行检查\n"
+        elif [ "$nbfc_options_index" -eq 2 ] 
+        then
+            Println "$tip 请查询各厂商风扇手动模式的寄存器值, 只有设置风扇为手动模式 nbfc 才能自动控制"
+            Println "$tip 请确保已经正确应用配置文件\n"
+            inquirer text_input "输入风扇序号(从 0 开始): " fan_index 0
+            mono nbfc.exe set -f $fan_index -a
+            Println "$info 风扇 $fan_index 已开启自动控制\n"
+        elif [ "$nbfc_options_index" -eq 3 ] 
+        then
+            Println "$tip 请确保风扇寄存器值处于手动控制状态, 设置风扇转速将关闭 nbfc 自动控制"
+            echo
+            fan_options=( '输入寄存器值' '输入配置百分比' )
+            inquirer list_input "选择控制方式" fan_options fan_option
+
+            if [ "$fan_option" == "输入寄存器值" ] 
+            then
+                echo
+                ExitOnText "输入寄存器地址, 比如 0x94: " register_address
+
+                echo
+                ExitOnText "输入值, 比如 0x99: " register_value
+
+                mono ec-probe.exe write $register_address $register_value
+
+                Println "$tip 不一定写入成功, 请自行检查\n"
+            else
+                Println "$tip 请确保已经正确应用配置文件"
+                inquirer text_input "输入风扇序号(从 0 开始): " fan_index 0
+
+                echo
+                ExitOnText "输入转速百分比: " fan_speed
+
+                mono nbfc.exe set -f $fan_index -s $fan_speed
+
+                Println "$tip 操作成功\n"
+            fi
+        elif [ "$nbfc_options_index" -eq 4 ] 
+        then
+            mono nbfc.exe config -r
+        elif [ "$nbfc_options_index" -eq 5 ]
+        then
+            echo
+            ExitOnText "输入配置名称, 比如: Acer Aspire 5745G" config_name
+
+            mono nbfc.exe config --apply "$config_name"
+            mono nbfc.exe start
+
+            Println "$info 配置已生效\n"
+        fi
+    ;;
+    6) 
+        DistCheck
+        JQInstall
+
+        if dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
+        then
+            DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
+            dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
+
+            if [[ $dnscrypt_version_old == "*" ]]
+            then
+                echo
+                inquirer text_input "输入监听端口 : " listen_port 53
+
+                Println "$info 下载 dnscrypt proxy ..."
+
+                if ! curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz_tmp 
+                then
+                    Println "$error dnscrypt proxy 下载失败, 请重试\n"
+                    exit 1
+                fi
+
+                Println "$info 设置 dnscrypt proxy ..."
+                cd ~
+                mv dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz
+                tar zxf dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz
+                mv linux-x86_64 dnscrypt-$dnscrypt_version
+                chown -R $USER:$USER dnscrypt-$dnscrypt_version
+                cd dnscrypt-$dnscrypt_version
+                cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
+
+                DNSCryptConfig
+
+                for((i=0;i<3;i++));
+                do
+                    if ./dnscrypt-proxy -check > /dev/null 
+                    then
+                        break
+                    elif [[ $i -eq 2 ]] 
+                    then
+                        cd ~
+                        rm -rf dnscrypt-$dnscrypt_version
+                        Println "$error 发生错误, 请重试\n"
+                        exit 1
+                    fi
+                done
+
+                if [ -d /etc/resolvconf ] 
+                then
+                    DEBIAN_FRONTEND=noninteractive apt-get -y --purge remove resolvconf > /dev/null 2>&1 || true
+                fi
+
+                systemctl stop systemd-resolved
+                systemctl disable systemd-resolved
+                ./dnscrypt-proxy -service install > /dev/null
+                ./dnscrypt-proxy -service start > /dev/null
+
+                if [ -f /etc/resolv.conf ] 
+                then
+                    printf -v now '%(%m-%d-%H:%M:%S)T' -1
+                    mv /etc/resolv.conf /etc/resolv.conf-$now
+                fi
+
+                echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
+
+                Println "$info dnscrypt proxy 安装配置成功\n"
+            elif [[ $dnscrypt_version_old != "$dnscrypt_version" ]] 
+            then
+                echo
+                inquirer text_input "输入监听端口 : " listen_port $(sed -n -e "s/^listen_addresses = .*:\([0-9]*\)']/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
+
+                if ! curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz_tmp 
+                then
+                    Println "$error dnscrypt proxy 下载失败, 请重试\n"
+                    exit 1
+                fi
+
+                if [ -L /etc/resolv.conf ] 
+                then
+                    etc_resolv=$(< /etc/resolv.conf)
+                    rm -f /etc/resolv.conf
+                    echo "$etc_resolv" > /etc/resolv.conf
+                fi
+
+                cd ~/dnscrypt-$dnscrypt_version_old
+                ./dnscrypt-proxy -service stop > /dev/null
+                ./dnscrypt-proxy -service uninstall > /dev/null
+                cd ~
+                mv dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz
+                tar zxf dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz
+                mv linux-x86_64 dnscrypt-$dnscrypt_version
+                cd dnscrypt-$dnscrypt_version
+                cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
+
+                DNSCryptConfig
+
+                ./dnscrypt-proxy -service install > /dev/null
+                ./dnscrypt-proxy -service start > /dev/null
+                Println "$info dnscrypt proxy 升级成功\n"
+            else
+                Println "$error dnscrypt proxy 已经是最新\n"
+            fi
+        else
+            Println "$error 无法连接服务器, 请稍后再试\n"
+        fi
+    ;;
+    7)
+        DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
+        dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
+
+        if [[ $dnscrypt_version_old == "*" ]] 
+        then
+            Println "$error 请先安装 dnscrypt proxy\n"
+            exit 1
+        fi
+
+        if [ -d /opt/AdGuardHome ] 
+        then
+            Println "$error AdGuard Home 已经存在\n"
+            exit 1
+        fi
+
+        echo
+        ExitOnText "输入 dnscrypt-proxy 新的监听端口" listen_port
+
+        if [ "$listen_port" -eq 53 ] 
+        then
+            Println "$error 端口不能是 53\n"
+            exit 1
+        fi
+
+        if ! curl -s -S -L $FFMPEG_MIRROR_LINK/AdGuardHome/master/scripts/install.sh | sh -s -- -v 
+        then
+            Println "$error 安装发生错误\n"
+            exit 1
+        fi
+
+        echo "$(awk '!x{x=sub(/^listen_addresses = .*/,"listen_addresses = [\047[::]:'"$listen_port"'\047]")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
+        systemctl restart dnscrypt-proxy
+
+        if ! curl -s -H 'Content-Type: application/json' \
+            --data '{"upstream_dns": ["127.0.0.1:'"$listen_port"'"], "ratelimit": 0}' "http://localhost:3000/control/dns_config" 
+        then
+            Println "$error 请登陆 http://PVE_IP:3000/ 手动修改上游 DNS 服务器为 127.0.0.1:$listen_port 并可以将速度限制设置为 0\n"
+            exit 1
+        fi
+
+        Println "$info AdGuard Home 安装成功\n"
+    ;;
+    8)
+        PveListVMs
+
+        PveSelectVM
+
+        if [ "$vm_status" != "running" ] 
+        then
+            Println "$error 请先启动虚拟机 $vm_name\n"
+            exit 1
+        fi
+
+        qm set $vm_id --agent 1
+
+        Println "$info 请在虚拟机内执行 opkg update; opkg install qemu-ga 后关机再开启\n\n如果是在国内, 可以在 openwrt 内执行下面命令加快 opkg 速度\nsed -i 's_http[s]*://downloads.openwrt.org_$FFMPEG_MIRROR_LINK/openwrt_' /etc/opkg/distfeeds.conf\n"
+    ;;
+    9)
+        DistCheck
+        JQInstall
+
+        Println "$tip 请确保已经安装 qemu-guest-agent\n"
+
+        PveListVMs
+
+        PveSelectVM
+
+        if [ "$vm_status" != "running" ] 
+        then
+            Println "$error 请先启动虚拟机 $vm_name\n"
+            exit 1
+        fi
+
+        echo
+        qm guest exec $vm_id wget "$FFMPEG_MIRROR_LINK/pve/snippets/openwrt-v2ray-install.sh" -- "-O" "/root/openwrt-v2ray-install.sh" | $JQ_FILE -r '."err-data" // ."out-data"'
+
+        Println "$info 正在安装 openwrt-v2ray, 请耐心等待 ..."
+
+        echo
+        qm guest exec $vm_id --timeout 0 ash "/root/openwrt-v2ray-install.sh" | $JQ_FILE -r '."err-data" // ."out-data"'
+
+        Println "$info openwrt-v2ray 安装成功, 请重新登录 openwrt 后台\n"
+    ;;
+    10)
+        DistCheck
+        JQInstall
+
+        Println "$tip 请确保已经安装 qemu-guest-agent\n"
+
+        PveListVMs
+
+        PveSelectVM
+
+        echo
+        lang_options=( '简体中文' '繁体中文' '英文' )
+        inquirer list_input "选择界面语言" lang_options lang
+
+        if [ "$lang" == "简体中文" ] 
+        then
+            lang="zh-cn"
+        elif [ "$lang" == "繁体中文" ] 
+        then
+            lang="zh-tw"
+        else
+            lang="en"
+        fi
+
+        Println "$info 设置 openwrt 语言, 请稍等 ..."
+
+        echo
+        qm guest exec $vm_id wget "$FFMPEG_MIRROR_LINK/pve/snippets/openwrt-language-install.sh" -- "-O" "/root/openwrt-language-install.sh" | $JQ_FILE -r '."err-data" // ."out-data"'
+
+        echo
+        qm guest exec $vm_id --timeout 0 ash "/root/openwrt-language-install.sh" "$lang" | $JQ_FILE -r '."err-data" // ."out-data"'
+
+        Println "$info 界面语言切换成功\n"
+    ;;
+    11)
+        DistCheck
+        JQInstall
+
+        Println "$tip 请确保已经安装 qemu-guest-agent\n"
+
+        PveListVMs
+
+        PveSelectVM
+
+        Println "$tip 请确保已经安装过 openwrt-v2ray"
+        core_options=( 'xray-core' 'v2ray-core' )
+        inquirer list_input "选择切换目标" core_options core
+        if [ "$core" == "xray-core" ] 
+        then
+            echo
+            xray_options=( '最新' '1.4.5' )
+            inquirer list_input "选择 xray 版本" xray_options xray_ver
+            if [ "$xray_ver" == "最新" ] && ! xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/openwrt-xray.json" | $JQ_FILE -r '.tag_name')
+            then
+                Println "$error 无法连接服务器, 请稍后再试\n"
+                exit 1
+            else
+                xray_ver=${xray_ver#*v}
+                if [[ ! $xray_ver =~ - ]] 
+                then
+                    xray_ver="${xray_ver}-1"
+                fi
+            fi
+            if ! luci_app_xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/luci-app-xray.json" | $JQ_FILE -r '.tag_name')
+            then
+                Println "$error 无法连接服务器, 请稍后再试\n"
+                exit 1
+            else
+                luci_app_xray_ver=${luci_app_xray_ver#*v}
+            fi
+
+            Println "$info 切换 openwrt-xray, 请稍等 ..."
+
+            echo
+            qm guest exec $vm_id wget "$FFMPEG_MIRROR_LINK/pve/snippets/openwrt-xray-install.sh" -- "-O" "/root/openwrt-xray-install.sh" | $JQ_FILE -r '."err-data" // ."out-data"'
+
+            echo
+            qm guest exec $vm_id --timeout 0 ash "/root/openwrt-xray-install.sh" "$xray_ver" "$luci_app_xray_ver" | $JQ_FILE -r '."err-data" // ."out-data"'
+        else
+            echo
+            inquirer list_input "是否更新 openwrt-v2ray" ny_options ny_option
+
+            if [ "$ny_option" == "$i18n_yes" ] 
+            then
+                Println "$info 更新 openwrt-v2ray, 请稍等 ...\n"
+                qm guest exec $vm_id opkg update | $JQ_FILE -r '."err-data" // ."out-data"'
+                echo
+                qm guest exec $vm_id opkg install v2ray-core | $JQ_FILE -r '."err-data" // ."out-data"'
+            fi
+
+            Println "$info 切换 openwrt-v2ray, 请稍等 ..."
+
+            echo
+            qm guest exec $vm_id uci set v2ray.main.v2ray_file='/usr/bin/v2ray' | $JQ_FILE -r '."err-data" // ."out-data"'
+
+            echo
+            qm guest exec $vm_id uci del v2ray.main.asset_location | $JQ_FILE -r '."err-data" // ."out-data"'
+
+            echo
+            qm guest exec $vm_id uci commit | $JQ_FILE -r '."err-data" // ."out-data"'
+
+            echo
+            qm guest exec $vm_id reload_config | $JQ_FILE -r '."err-data" // ."out-data"'
+        fi
+
+        Println "$info 切换成功\n"
+    ;;
+    12)
+        DistCheck
+        JQInstall
+
+        Println "$tip 请确保已经安装 qemu-guest-agent\n"
+
+        PveListVMs
+
+        PveSelectVM
+
+        Println "$tip 请确保已经安装过 openwrt-v2ray"
+        inquirer text_input "输入当前配置保存名称: " config_name "$i18n_not_set"
+        if [ "$config_name" == "$i18n_not_set" ] 
+        then
+            config_name=""
+        else
+            config_name="-$config_name"
+        fi
+
+        Println "$tip 备份 openwrt-v2ray, 请稍等 ..."
+        qm guest exec $vm_id wget "$FFMPEG_MIRROR_LINK/pve/snippets/openwrt-config-install.sh" -- "-O" "/root/openwrt-config-install.sh" | $JQ_FILE -r '."err-data" // ."out-data"'
+
+        if [[ $(qm guest exec $vm_id ash "/root/openwrt-config-install.sh" | $JQ_FILE -r '."err-data" // ."out-data"') == "no" ]]
+        then
+            Println "$error 请先安装 openwrt-v2ray\n"
+            exit 1
+        fi
+
+        printf -v timestamp '%(%s)T' -1
+
+        echo
+        qm guest exec $vm_id ash "/root/openwrt-config-install.sh" -- "save" "$timestamp" "$config_name" > /dev/null
+
+        Println "$tip 所有配置文件都是透明代理, 直连国内, 代理国外, 需要自行修改出站连接后使用"
+        config_file_options=( 'v2ray-1' 'xray-1' '复原配置' )
+        inquirer list_input "选择配置文件: " config_file_options config_file
+        if [ "$config_file" == "复原配置" ] 
+        then
+            echo
+            files=($(qm guest exec $vm_id ash "/root/openwrt-config-install.sh" -- "list" | $JQ_FILE -r '."err-data" // ."out-data"'))
+
+            if [ "${files[0]}" == "no" ] 
+            then
+                Println "$error 没有保存的配置\n"
+                exit 1
+            fi
+
+            configs_list=""
+            configs_count=0
+            configs_time=()
+            configs_name=()
+            for file in "${files[@]}"
+            do
+                if [[ ${file##*/} =~ ^config-(.+)-(.+)$ ]] 
+                then
+                    config_time=${BASH_REMATCH[1]}
+                    config_name="-${BASH_REMATCH[2]}"
+                    config_name_list=${BASH_REMATCH[2]}
+                elif [[ ${file##*/} =~ ^config-(.+)$ ]] 
+                then
+                    config_time=${BASH_REMATCH[1]}
+                    config_name=""
+                    config_name_list=""
+                fi
+                configs_time+=("$config_time")
+                configs_name+=("$config_name")
+                configs_count=$((configs_count+1))
+                printf -v config_date '%(%Y-%m-%d %H:%M:%S)T' "$config_time"
+                configs_list="$configs_list $configs_count.${indent_6}名称: ${green}${config_name_list:-无}${normal} 日期: ${green}$config_date${normal}\n\n"
+            done
+
+            Println "$configs_list"
+
+            echo "选择配置"
+            while read -p "$i18n_default_cancel" config_num
+            do
+                case "$config_num" in
+                    "")
+                        Println "$i18n_canceled...\n" && exit 1
+                    ;;
+                    *[!0-9]*)
+                        Println "$error $i18n_input_correct_no\n"
+                    ;;
+                    *)
+                        if [ "$config_num" -gt 0 ] && [ "$config_num" -le $configs_count ]
+                        then
+                            configs_index=$((config_num-1))
+                            config_time=${configs_time[configs_index]}
+                            config_name=${configs_name[configs_index]}
+                            break
+                        else
+                            Println "$error $i18n_input_correct_no\n"
+                        fi
+                    ;;
+                esac
+            done
+
+            echo
+            qm guest exec $vm_id ash "/root/openwrt-config-install.sh" -- "restore" "$config_time" "$config_name" | $JQ_FILE -r '."err-data" // ."out-data"'
+            Println "$info 配置恢复成功\n"
+        else
+            Println "$info 切换配置中, 请稍等 ..."
+            qm guest exec $vm_id ash "/root/openwrt-config-install.sh" -- "switch" "$config_file" | $JQ_FILE -r '."err-data" // ."out-data"'
+            Println "$info 配置切换成功\n"
+        fi
+    ;;
+    13)
+        DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
+        dnscrypt_version=${DNSCRYPT_ROOT#*-}
+        if [[ $dnscrypt_version == "*" ]] 
+        then
+            Println "$error 请先安装 dnscrypt proxy\n"
+            exit 1
+        fi
+        echo
+        if grep -q "options edns0" < /etc/resolv.conf
+        then
+            ExitOnList n "`gettext \"是否关闭 edns0\"`"
+
+            sed -i '/options edns0/d' /etc/resolv.conf
+            echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = false")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
+            systemctl restart dnscrypt-proxy
+            Println "$info edns0 已关闭\n"
+        else
+            ExitOnList n "`gettext \"是否开启 edns0\"`"
+
+            echo "options edns0" >> /etc/resolv.conf
+            echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = true")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
+            systemctl restart dnscrypt-proxy
+            Println "$info edns0 已开启\n"
+        fi
+    ;;
+    14)
+        DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
+        dnscrypt_version=${DNSCRYPT_ROOT#*-}
+        if [[ $dnscrypt_version == "*" ]] 
+        then
+            Println "$error 请先安装 dnscrypt proxy\n"
+            exit 1
+        fi
+        echo
+        switch_options=( '开启' '关闭' )
+        inquirer list_input_index "选择操作" switch_options switch_options_index
+        if [ -f /opt/AdGuardHome/AdGuardHome.yaml ] 
+        then
+            /opt/AdGuardHome/AdGuardHome -s stop || true
+            sed -i "s/aaaa_disabled: false/aaaa_disabled: true/" /opt/AdGuardHome/AdGuardHome.yaml
+            /opt/AdGuardHome/AdGuardHome -s start || true
+        fi
+        if [ "$switch_options_index" -eq 0 ] 
+        then
+            echo "$(awk '!x{x=sub(/.*block_ipv6 = .*/,"block_ipv6 = false")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
+            systemctl restart dnscrypt-proxy
+            Println "$info ipv6 查询已开启\n"
+        else
+            echo "$(awk '!x{x=sub(/.*block_ipv6 = .*/,"block_ipv6 = true")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
+            systemctl restart dnscrypt-proxy
+            Println "$info ipv6 查询已关闭\n"
+        fi
+    ;;
+    15) 
+        ShFileUpdate PVE
+    ;;
+    *) Println "$error $i18n_input_correct_number [1-15]\n"
+    ;;
+esac
+
+exit 0

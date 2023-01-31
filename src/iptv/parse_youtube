@@ -1,0 +1,256 @@
+ParseYoutube()
+{
+    Println "`eval_gettext \"$info 查询 \\\${green}\\\$link\\\${normal} 视频信息...\"`"
+
+    youtube_found=0
+    count=0
+    formats_code=()
+    formats_resolution=()
+    formats_bitrate=()
+    formats_indices=()
+    formats_list=""
+
+    if [ "${1:-}" == "yt-dlp" ] 
+    then
+        while IFS= read -r line 
+        do
+            if [[ $line =~ ^- ]] 
+            then
+                youtube_found=1
+            elif [[ $youtube_found -eq 1 ]] 
+            then
+                count=$((count+1))
+
+                format_code=${line%% *}
+                formats_code+=("$format_code")
+                format_code="code: ${green}$format_code${normal}, "
+
+                line=${line#* }
+                Trim line
+
+                format_ext=${line%% *}
+                format_ext="格式: ${green}$format_ext${normal}, "
+
+                line=${line#* }
+                Trim line
+
+                format_resolution_fps=${line%%|*}
+                Trim format_resolution_fps
+
+                line=${line#*|}
+
+                format_size_tbr_proto=(${line%%|*})
+
+                if [ "${#format_size_tbr_proto[@]}" -eq 2 ] 
+                then
+                    format_size=""
+                    format_bitrate=${format_size_tbr_proto[0]}
+                    format_proto=${format_size_tbr_proto[1]}
+                else
+                    format_size=${format_size_tbr_proto[0]}
+                    format_bitrate=${format_size_tbr_proto[1]}
+                    format_proto=${format_size_tbr_proto[2]}
+                fi
+
+                formats_bitrate+=("${format_bitrate:0:-1}")
+
+                if [[ $format_resolution_fps =~ ^[1-9] ]] 
+                then
+                    format_resolution=${format_resolution_fps%% *}
+                    format_info="${format_resolution_fps##* }fps"
+                    formats_resolution+=("$format_resolution")
+                    format_resolution="分辨率: ${green}$format_resolution${normal}, ${green}$format_bitrate${normal}, "
+                else
+                    format_info="$format_resolution_fps"
+                    formats_resolution+=("")
+                    format_resolution=""
+                fi
+
+                if [ -n "$format_size" ] 
+                then
+                    format_info="$format_info $format_size"
+                fi
+
+                format_info="$format_info $format_proto"
+
+                line=${line#*|}
+                format_more=($line)
+
+                for format_more_index in "${!format_more[@]}"
+                do
+                    if [[ ${format_more[format_more_index]} =~ k$ ]] 
+                    then
+                        unset 'format_more[format_more_index]'
+                    fi
+                done
+
+                format_info="$format_info${format_more[*]}"
+
+                formats_list="$formats_list${green}$count.${normal} $format_resolution$format_code${format_ext}其它: $format_info\n\n"
+            fi
+        done < <(yt-dlp --no-warnings -F "$link")
+    else
+        while IFS= read -r line 
+        do
+            if [[ $line == "format code"* ]] 
+            then
+                youtube_found=1
+            elif [[ $youtube_found -eq 1 ]] 
+            then
+                count=$((count+1))
+
+                format_code=${line%% *}
+                formats_code+=("$format_code")
+                format_code="code: ${green}$format_code${normal}, "
+
+                line=${line#* }
+                Trim line
+
+                format_ext=${line%% *}
+                format_ext="格式: ${green}$format_ext${normal}, "
+
+                line=${line#* }
+                Trim line
+
+                if [[ ${line:0:1} == *[!0-9]* ]] 
+                then
+                    format_info="$line"
+                    format_resolution=""
+                    formats_resolution+=("")
+                    formats_bitrate+=("")
+                else
+                    format_info=${line#* , }
+                    line=${line%% , *}
+                    format_resolution=${line%% *}
+                    formats_resolution+=("$format_resolution")
+                    format_bitrate=${line##* }
+
+                    if [[ $format_bitrate =~ k ]] 
+                    then
+                        formats_bitrate+=("${format_bitrate:0:-1}")
+                    elif [[ $format_info =~ \@[[:space:]]*([0-9]+)k ]] 
+                    then
+                        format_bitrate="${BASH_REMATCH[1]}k"
+                        formats_bitrate+=("$format_bitrate")
+                    fi
+
+                    format_resolution="分辨率: ${green}$format_resolution${normal}, ${green}$format_bitrate${normal}, "
+                fi
+
+                formats_list="$formats_list${green}$count.${normal} $format_resolution$format_code${format_ext}其它: $format_info\n\n"
+            fi
+        done < <(youtube-dl -F "$link")
+    fi
+
+    if [ -z "$formats_list" ] 
+    then
+        Println "`eval_gettext \"\\\$error 无法解析链接 \\\$link\"`\n"
+        return 0
+    fi
+
+    if [ -n "${code:-}" ] 
+    then
+        IFS=, read -r -a codes <<< "$code"
+
+        for codes_index in "${!codes[@]}"
+        do
+            for formats_code_index in "${!formats_code[@]}"
+            do
+                if [ "${formats_code[formats_code_index]}" == "${codes[codes_index]}" ] 
+                then
+                    formats_indices+=("$formats_code_index")
+                    continue 2
+                fi
+            done
+        done
+
+        if [ -z "${formats_indices:-}" ] 
+        then
+            return 0
+        fi
+    else
+        Println "$formats_list"
+
+        echo -e "`eval_gettext \"\\\$tip 多个序号用空格分隔 比如: 5 7 9-11\"`\n"
+        while read -p "请输入序号(默认: $count): " formats_num
+        do
+            if [ -z "$formats_num" ] 
+            then
+                formats_indices=("$((count-1))")
+                break
+            fi
+
+            IFS=" " read -ra formats_num_arr <<< "$formats_num"
+
+            error_no=0
+            for format_num in "${formats_num_arr[@]}"
+            do
+                case "$format_num" in
+                    *"-"*)
+                        format_num_start=${format_num%-*}
+                        format_num_end=${format_num#*-}
+                        if [[ $format_num_start == *[!0-9]* ]] || [[ $format_num_end == *[!0-9]* ]] || [ "$format_num_start" -eq 0 ] || [ "$format_num_end" -eq 0 ] || [ "$format_num_end" -gt "$count" ] || [ "$format_num_start" -ge "$format_num_end" ]
+                        then
+                            error_no=3
+                            break
+                        fi
+                    ;;
+                    *[!0-9]*)
+                        error_no=1
+                        break
+                    ;;
+                    *)
+                        if [ "$format_num" -lt 1 ] || [ "$format_num" -gt "$count" ] 
+                        then
+                            error_no=2
+                            break
+                        fi
+                    ;;
+                esac
+            done
+
+            case "$error_no" in
+                1|2|3)
+                    Println "$error $i18n_input_correct_number\n"
+                ;;
+                *)
+                    declare -a new_array
+                    for format_num in "${formats_num_arr[@]}"
+                    do
+                        if [[ $format_num =~ - ]] 
+                        then
+                            start=${format_num%-*}
+                            end=${format_num#*-}
+                            for((i=start-1;i<end;i++));
+                            do
+                                new_array+=("$i")
+                            done
+                        else
+                            new_array+=("$((format_num-1))")
+                        fi
+                    done
+
+                    formats_indices=("${new_array[@]}")
+
+                    unset new_array
+
+                    break
+                ;;
+            esac
+        done
+    fi
+
+    if [ "${#formats_indices[@]}" -eq 1 ] 
+    then
+        formats_index=${formats_indices[0]}
+        code=${formats_code[formats_index]}
+    else
+        code=""
+
+        for formats_index in "${formats_indices[@]}"
+        do
+            [ -n "$code" ] && code="$code,"
+            code="${code}${formats_code[formats_index]}"
+        done
+    fi
+}

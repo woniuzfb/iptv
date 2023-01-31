@@ -1,0 +1,57 @@
+GoInstall()
+{
+    if [[ -x $(command -v go) ]] 
+    then
+        go_version_list=($(go version))
+        if [[ "${go_version_list[2]}" =~ ^go([0-9]+)\.([0-9]+)\. ]] && [ "${BASH_REMATCH[1]}" -ge 1 ] && [ "${BASH_REMATCH[2]}" -ge 11 ]
+        then
+            return 0
+        fi
+    fi
+
+    ArchCheck
+
+    DepInstall curl
+
+    go_version=""
+
+    while IFS= read -r line
+    do
+        if [[ $line == *"goVersion = "* ]] 
+        then
+            go_version=${line#*\"}
+            go_version=${go_version%\"*}
+            break
+        fi
+    done < <(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://golang.org/doc/install" 2> /dev/null)
+
+    go_version=${go_version:-1.16.5}
+
+    if [ "$arch" == "i386" ] 
+    then
+        go_package="$go_version.linux-386.tar.gz"
+    elif [ "$arch" == "x86_64" ] 
+    then
+        go_package="$go_version.linux-amd64.tar.gz"
+    elif [ "$arch" == "arm64" ] || [ "$arch" == "armv6l" ]
+    then
+        go_package="$go_version.linux-$arch.tar.gz"
+    else
+        DepInstall golang
+        return 0
+    fi
+
+    if ! curl -L https://golang.org/dl/$go_package -o ~/$go_package && ! curl -L https://gomirrors.org/dl/$go_package -o ~/$go_package
+    then
+        Println "$error 下载 golang 失败, 请稍后再试\n"
+        exit 1
+    fi
+
+    rm -rf /usr/local/go && tar -C /usr/local -xzf ~/$go_package
+
+    if [[ ! -x $(command -v go) ]] 
+    then
+        export PATH="$PATH:/usr/local/go/bin"
+        echo "export PATH=\$PATH:/usr/local/go/bin" >> /etc/profile
+    fi
+}

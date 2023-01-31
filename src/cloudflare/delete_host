@@ -1,0 +1,68 @@
+CloudflareDelHost()
+{
+    CloudflareListHosts
+
+    echo -e "选择 CFP"
+    while read -p "$i18n_default_cancel" cf_hosts_num
+    do
+        case "$cf_hosts_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$cf_hosts_num" -gt 0 ] && [ "$cf_hosts_num" -le "$cf_hosts_count" ]
+                then
+                    cf_hosts_index=$((cf_hosts_num-1))
+                    cf_host_name=${cf_hosts_name[cf_hosts_index]}
+                    cf_host_key=${cf_hosts_key[cf_hosts_index]}
+                    cf_zones_count=${cf_hosts_zones_count[cf_hosts_index]}
+                    cf_zone_name=${cf_hosts_zone_name[cf_hosts_index]}
+                    cf_zone_user_unique_id=${cf_hosts_zone_user_unique_id[cf_hosts_index]}
+                    IFS="|" read -r -a cf_zones_name <<< "$cf_zone_name"
+                    IFS="|" read -r -a cf_zones_user_unique_id <<< "$cf_zone_user_unique_id"
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    if [ "$cf_zones_count" -gt 0 ] 
+    then
+        echo
+        ExitOnList n "`gettext \"是否删除此 CFP 下所有的源站\"`"
+
+        for((i=0;i<${#cf_zones_name[@]};i++));
+        do
+            cf_zone_name=${cf_zones_name[i]}
+            cf_user_unique_id=${cf_zones_user_unique_id[i]}
+
+            CloudflareGetUser
+
+            IFS="^" read -r result msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
+                -d 'act=zone_delete' \
+                -d "host_key=$cf_host_key" \
+                -d "user_key=$cf_user_key" \
+                -d "zone_name=$cf_zone_name" \
+                | $JQ_FILE '[.result,.msg]|join("^")'
+            ) || true
+
+            result=${result#\"}
+            msg=${msg%\"}
+
+            if [ -z "$result" ] || [ "$result" == "error" ]
+            then
+                Println "$error 删除 $cf_zone_name 发送错误: ${msg:-超时, 请重试}\n" && exit 1
+            fi
+
+            jq_path='["hosts",'"$cf_hosts_index"',"zones",'"$i"']'
+            JQ delete "$CF_CONFIG"
+
+            Println "$info $cf_zone_name 删除成功\n"
+        done
+    fi
+}

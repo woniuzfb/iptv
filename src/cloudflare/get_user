@@ -1,0 +1,100 @@
+CloudflareGetUser()
+{
+    cf_user_key=""
+    add_subdomains=0
+    unset cf_users_i
+    until [ -n "$cf_user_key" ] 
+    do
+        IFS="^" read -r result cf_user_key cf_user_api_key msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
+            -d 'act=user_lookup' \
+            -d "host_key=$cf_host_key" \
+            -d "unique_id=$cf_user_unique_id" \
+            | $JQ_FILE '[.result,.response.user_key,.response.user_api_key,.msg]|join("^")'
+        ) || true
+
+        if [ -n "$cf_user_api_key" ] && [ -n "${cf_users_i:-}" ] && [ -z "${cf_users_api_key[cf_users_i]}" ]
+        then
+            jq_path='["users",'"$cf_users_i"',"key"]'
+            JQ update "$CF_CONFIG" "$cf_user_api_key"
+            Println "$info 用户 ${cf_users_email[cf_users_i]} API Key 添加成功\n"
+        fi
+
+        result=${result#\"}
+        msg=${msg%\"}
+
+        if [ -z "$result" ] || [ "$result" == "error" ]
+        then
+            Println "$error ${msg:-超时, 请重试}\n" && exit 1
+        fi
+
+        if [ -z "$cf_user_key" ] 
+        then
+            if [ "$monitor" = true ] 
+            then
+                MonitorLog "源站 $cf_zone_name 的用户已被 CFP 删除或未添加成功, 尝试重新添加 ..."
+            fi
+
+            Println "$error 源站 $cf_zone_name 的用户已被 CFP 删除或未添加成功, 尝试重新添加 ..."
+
+            if [ -z "${cf_user_pass:-}" ] 
+            then
+                CloudflareGetUsers
+                for((cf_users_i=0;cf_users_i<cf_users_count;cf_users_i++));
+                do
+                    if [ "${cf_users_email[cf_users_i]}" == "$cf_user_email" ] 
+                    then
+                        cf_user_pass=${cf_users_pass[cf_users_i]}
+                        break
+                    fi
+                done
+            fi
+
+            if [ -z "${cf_user_pass:-}" ] 
+            then
+                Println "$error 请先添加账号 $cf_user_email\n"
+                exit 1
+            fi
+
+            IFS="^" read -r result err_code msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
+                -d 'act=user_create' \
+                -d "host_key=$cf_host_key" \
+                -d "cloudflare_email=$cf_user_email" \
+                -d "cloudflare_pass=$cf_user_pass" \
+                -d "unique_id=$cf_user_unique_id" \
+                | $JQ_FILE '[.result,.err_code,.msg]|join("^")'
+            ) 
+
+            result=${result#\"}
+            msg=${msg%\"}
+            if [ "$result" == "error" ] 
+            then
+                Println "$error $msg"
+            fi
+
+            add_subdomains=1
+        elif [ "$add_subdomains" -eq 1 ] && [ -n "${cf_zone_subdomains:-}" ]
+        then
+            IFS="^" read -r result cf_zone_resolving_to cf_zone_hosted_cnames cf_zone_forward_tos msg < <(curl -s -Lm 20 https://api.cloudflare.com/host-gw.html \
+                -d 'act=zone_set' \
+                -d "host_key=$cf_host_key" \
+                -d "user_key=$cf_user_key" \
+                -d "zone_name=$cf_zone_name" \
+                -d "resolve_to=$cf_zone_resolve_to" \
+                -d "subdomains=$cf_zone_subdomains" \
+                | $JQ_FILE '[.result,.response.resolving_to,([(.response.hosted_cnames| if .== null then {} else . end)|to_entries[]
+                |([.key,.value]|join("="))]
+                |join("|")),([(.response.forward_tos| if .== null then {} else . end)|to_entries[]
+                |([.key,.value]|join("="))]
+                |join("|")),.msg]|join("^")'
+            ) || true
+
+            result=${result#\"}
+            msg=${msg%\"}
+
+            if [ -z "$result" ] || [ "$result" == "error" ]
+            then
+                Println "$error ${msg:-连接超时, 请查看是否已经完成}\n"
+            fi
+        fi
+    done
+}

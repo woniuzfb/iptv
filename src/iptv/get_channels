@@ -1,0 +1,128 @@
+GetChannels()
+{
+    [ ! -d "$IPTV_ROOT" ] && Println "`eval_gettext \"\\\$error 尚未安装, 请检查 !\"`\n" && exit 1
+
+    [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+
+    IFS=$'\004\t' read -r m_pid m_status m_hide m_stream_link m_live m_proxy m_xc_proxy \
+    m_user_agent m_headers m_cookies m_output_dir_name m_playlist_name m_seg_dir_name \
+    m_seg_name m_seg_length m_seg_count m_video_codec m_audio_codec m_video_audio_shift \
+    m_draw_text m_quality m_bitrate m_resolution m_const m_const_cbr \
+    m_encrypt m_encrypt_session m_keyinfo_name m_key_name m_key_time m_input_flags \
+    m_output_flags m_channel_name m_channel_time m_sync m_sync_file m_sync_index \
+    m_sync_pairs m_hls_end_list m_flv_status m_flv_h265 m_flv_push_link m_flv_pull_link \
+    m_subtitle_name m_subtitle_language m_subtitle_default m_subtitle_auto_select m_subtitle_map \
+    m_schedule_start_time m_schedule_end_time m_schedule_loop m_schedule_auto_remove m_schedule_hls_change \
+    m_schedule_hls_change_once m_schedule_channel_name m_schedule_status < <(JQs flat "$CHANNELS_FILE" '' '
+    (.channels | if . == "" then {} else . end) as $channels |
+    ($channels.subtitle // {} | if (.|type) == "string" then {} else . end) as $subtitle |
+    ($channels.schedule // {} | if (.|type) == "string" then {} else . end) as $schedule |
+    reduce ({pid,status,hide,stream_link,live,proxy,xc_proxy,user_agent,headers,cookies,output_dir_name,
+    playlist_name,seg_dir_name,seg_name,seg_length,seg_count,video_codec,audio_codec,video_audio_shift,
+    draw_text,quality,bitrate,resolution,const,const_cbr,encrypt,encrypt_session,keyinfo_name,key_name,key_time,
+    input_flags,output_flags,channel_name,channel_time,sync,sync_file,sync_index,sync_pairs,hls_end_list,
+    flv_status,flv_h265,flv_push_link,flv_pull_link}|keys_unsorted[]) as $key ([];
+        $channels[$key] as $val | if $val then
+            . + [$val + "\u0002\u0004"]
+        else
+            . + ["\u0004"]
+        end
+    ) + reduce ({name,language,default,auto_select,map}|keys_unsorted[]) as $key ([];
+        $subtitle[$key] as $val | if $val then
+            . + [$val + "\u0003\u0004"]
+        else
+            . + ["\u0004"]
+        end
+    ) + reduce ({start_time,end_time,loop,auto_remove,hls_change,hls_change_once,channel_name,status}|keys_unsorted[]) as $key ([];
+        $schedule[$key] as $val | if $val then
+            . + [$val + "\u0003\u0004"]
+        else
+            . + ["\u0004"]
+        end
+    )|@tsv' "${delimiters[@]}")
+
+    if [ -z "$m_pid" ] 
+    then
+        chnls_count=0
+        return 0
+    fi
+
+    IFS="${delimiters[1]}" read -ra chnls_pid <<< "$m_pid"
+    IFS="${delimiters[1]}" read -ra chnls_status <<< "$m_status"
+
+    chnls_count=${#chnls_pid[@]}
+    if_null_off=${m_status//on/off}
+    if_null_empty=${if_null_off//off/}
+    if_null_true=${if_null_off//off/true}
+    if_null_false=${if_null_off//off/false}
+    if_null_empty_2=${if_null_empty//${delimiters[1]}/${delimiters[2]}}
+
+    IFS="${delimiters[1]}" read -ra chnls_hide <<< "${m_hide:-$if_null_false}"
+    IFS="${delimiters[1]}" read -ra chnls_stream_links <<< "${m_stream_link:-$if_null_empty}"
+
+    chnls_stream_link=("${chnls_stream_links[@]%%${delimiters[0]}*}")
+
+    IFS="${delimiters[1]}" read -ra chnls_live <<< "${m_live:-$if_null_true}"
+    IFS="${delimiters[1]}" read -ra chnls_proxy <<< "${m_proxy:-$if_null_empty}"
+    IFS="${delimiters[1]}" read -ra chnls_xc_proxy <<< "${m_xc_proxy:-$if_null_empty}"
+    IFS="${delimiters[1]}" read -ra chnls_user_agent <<< "${m_user_agent:-${if_null_off//off/$USER_AGENT_TV}}"
+    IFS="${delimiters[1]}" read -ra chnls_headers <<< "${m_headers:-$if_null_empty}"
+    IFS="${delimiters[1]}" read -ra chnls_cookies <<< "${m_cookies:-${if_null_off//off/stb_lang=en; timezone=Europe/Amsterdam}}"
+    IFS="${delimiters[1]}" read -ra chnls_output_dir_name <<< "$m_output_dir_name"
+    IFS="${delimiters[1]}" read -ra chnls_playlist_name <<< "$m_playlist_name"
+    IFS="${delimiters[1]}" read -ra chnls_seg_dir_name <<< "$m_seg_dir_name"
+    IFS="${delimiters[1]}" read -ra chnls_seg_name <<< "$m_seg_name"
+    IFS="${delimiters[1]}" read -ra chnls_seg_length <<< "$m_seg_length"
+    IFS="${delimiters[1]}" read -ra chnls_seg_count <<< "$m_seg_count"
+    IFS="${delimiters[1]}" read -ra chnls_video_codec <<< "$m_video_codec"
+    IFS="${delimiters[1]}" read -ra chnls_audio_codec <<< "$m_audio_codec"
+    IFS="${delimiters[1]}" read -ra chnls_video_audio_shift <<< "${m_video_audio_shift:-$if_null_empty}"
+    IFS="${delimiters[1]}" read -ra chnls_draw_text <<< "${m_draw_text:-$if_null_empty}"
+    IFS="${delimiters[1]}" read -ra chnls_quality <<< "$m_quality"
+    IFS="${delimiters[1]}" read -ra chnls_bitrate <<< "${m_bitrate:-$if_null_empty}"
+    IFS="${delimiters[1]}" read -ra chnls_resolution <<< "${m_resolution:-$if_null_empty}"
+    IFS="${delimiters[1]}" read -ra chnls_const <<< "${m_const:-$if_null_false}"
+    IFS="${delimiters[1]}" read -ra chnls_const_cbr <<< "${m_const_cbr:-$if_null_false}"
+    m_encrypt=${m_encrypt//-e/false}
+    IFS="${delimiters[1]}" read -ra chnls_encrypt <<< "${m_encrypt:-$if_null_false}"
+    IFS="${delimiters[1]}" read -ra chnls_encrypt_session <<< "${m_encrypt_session:-$if_null_false}"
+    IFS="${delimiters[1]}" read -ra chnls_keyinfo_name <<< "${m_keyinfo_name:-${if_null_off//off/keyinfo}}"
+    IFS="${delimiters[1]}" read -ra chnls_key_name <<< "${m_key_name:-${if_null_off//off/keyname}}"
+    if [ -z "$m_key_time" ] 
+    then
+        printf -v now '%(%s)T' -1
+        m_key_time=${if_null_off//off/${now}}
+    fi
+    IFS="${delimiters[1]}" read -ra chnls_key_time <<< "$m_key_time"
+    IFS="${delimiters[1]}" read -ra chnls_input_flags <<< "$m_input_flags"
+    IFS="${delimiters[1]}" read -ra chnls_output_flags <<< "$m_output_flags"
+    IFS="${delimiters[1]}" read -ra chnls_channel_name <<< "${m_channel_name:-${if_null_off//off/channel_name}}"
+    if [ -z "$m_channel_time" ] 
+    then
+        printf -v now '%(%s)T' -1
+        m_channel_time=${if_null_off//off/${now}}
+    fi
+    IFS="${delimiters[1]}" read -ra chnls_channel_time <<< "$m_channel_time"
+    IFS="${delimiters[1]}" read -ra chnls_sync <<< "${m_sync:-$if_null_true}"
+    IFS="${delimiters[1]}" read -ra chnls_sync_file <<< "${m_sync_file:-$if_null_empty}"
+    IFS="${delimiters[1]}" read -ra chnls_sync_index <<< "${m_sync_index:-$if_null_empty}"
+    IFS="${delimiters[1]}" read -ra chnls_sync_pairs <<< "${m_sync_pairs:-$if_null_empty}"
+    IFS="${delimiters[1]}" read -ra chnls_hls_end_list <<< "${m_hls_end_list:-$if_null_false}"
+    IFS="${delimiters[1]}" read -ra chnls_flv_status <<< "${m_flv_status:-$if_null_off}"
+    IFS="${delimiters[1]}" read -ra chnls_flv_h265 <<< "${m_flv_h265:-$if_null_false}"
+    IFS="${delimiters[1]}" read -ra chnls_flv_push_link <<< "${m_flv_push_link:-$if_null_empty}"
+    IFS="${delimiters[1]}" read -ra chnls_flv_pull_link <<< "${m_flv_pull_link:-$if_null_empty}"
+    IFS="${delimiters[2]}" read -ra chnls_subtitle_name <<< "${m_subtitle_name:-$if_null_empty_2}"
+    IFS="${delimiters[2]}" read -ra chnls_subtitle_language <<< "${m_subtitle_language:-$if_null_empty_2}"
+    IFS="${delimiters[2]}" read -ra chnls_subtitle_default <<< "${m_subtitle_default:-$if_null_empty_2}"
+    IFS="${delimiters[2]}" read -ra chnls_subtitle_auto_select <<< "${m_subtitle_auto_select:-$if_null_empty_2}"
+    IFS="${delimiters[2]}" read -ra chnls_subtitle_map <<< "${m_subtitle_map:-$if_null_empty_2}"
+    IFS="${delimiters[2]}" read -ra chnls_schedule_start_time <<< "${m_schedule_start_time:-$if_null_empty_2}"
+    IFS="${delimiters[2]}" read -ra chnls_schedule_end_time <<< "${m_schedule_end_time:-$if_null_empty_2}"
+    IFS="${delimiters[2]}" read -ra chnls_schedule_loop <<< "${m_schedule_loop:-$if_null_empty_2}"
+    IFS="${delimiters[2]}" read -ra chnls_schedule_auto_remove <<< "${m_schedule_auto_remove:-$if_null_empty_2}"
+    IFS="${delimiters[2]}" read -ra chnls_schedule_hls_change <<< "${m_schedule_hls_change:-$if_null_empty_2}"
+    IFS="${delimiters[2]}" read -ra chnls_schedule_hls_change_once <<< "${m_schedule_hls_change_once:-$if_null_empty_2}"
+    IFS="${delimiters[2]}" read -ra chnls_schedule_channel_name <<< "${m_schedule_channel_name:-$if_null_empty_2}"
+    IFS="${delimiters[2]}" read -ra chnls_schedule_status <<< "${m_schedule_status:-$if_null_empty_2}"
+}

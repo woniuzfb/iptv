@@ -1,0 +1,1030 @@
+if [[ ! -x $(command -v armbian-config) ]] 
+then
+    Println "$error 不是 Armbian 系统\n"
+    exit 1
+fi
+
+ShFileCheck
+
+JQ_FILE="/usr/local/bin/jq"
+
+Println "  Armbian 管理面板 ${normal}${red}[v$sh_ver]${normal}
+
+  ${green}1.${normal} 更改 apt 源
+  ${green}2.${normal} 修复 N1 dtb
+————————————
+  ${green}3.${normal} 安装 docker
+  ${green}4.${normal} 安装 升级 dnscrypt proxy
+  ${green}5.${normal} 安装 AdGuardHome
+  ${green}6.${normal} 安装 升降级 openwrt
+  ${green}7.${normal} 安装 升级 openwrt-v2ray
+————————————
+  ${green}8.${normal} 切换 openwrt 语言
+  ${green}9.${normal} 切换 v2ray/xray core
+ ${green}10.${normal} 切换 配置文件
+————————————
+ ${green}11.${normal} 设置 docker 镜像加速
+ ${green}12.${normal} 设置 vimrc
+ ${green}13.${normal} 开关 edns0
+ ${green}14.${normal} 开关 ipv6 查询
+ ${green}15.${normal} NAT 类型测试
+ ${green}16.${normal} 更新脚本
+
+"
+read -p "`gettext \"输入序号\"` [1-16]: " armbian_num
+
+case $armbian_num in
+    1) 
+        AptSetSources
+    ;;
+    2) 
+        echo
+        ExitOnList n "`gettext \"适用于 斐讯 n1, 是否继续\"`"
+
+        if [ ! -d ~/Amlogic_s905-kernel-master ] 
+        then
+            if curl -L "$FFMPEG_MIRROR_LINK/Amlogic_s905-kernel-master.zip" -o ~/Amlogic_s905-kernel-master.zip 
+            then
+                unzip Amlogic_s905-kernel-master.zip
+            else
+                Println "$error 下载 Amlogic_s905-kernel-master.zip 发生错误, 请稍后再试\n"
+                exit 1
+            fi
+        fi
+
+        cd ~/Amlogic_s905-kernel-master
+        sed -i 's/interrupts = <29/interrupts = <25/' arch/arm64/boot/dts/amlogic/meson-gxl-s905d-p230.dts
+        make defconfig
+        make dtbs
+        cp -f arch/arm64/boot/dts/amlogic/meson-gxl-s905d-phicomm-n1.dtb /boot/dtb/amlogic/meson-gxl-s905d-phicomm-n1.dtb
+        Println "$info 修复成功\n"
+    ;;
+    3)
+        if [[ -x $(command -v docker) ]] 
+        then
+            Println "$error docker 已经存在\n"
+            exit 1
+        fi
+        if grep -q "docker-ce" < /etc/apt/sources.list
+        then
+            sed -i '/docker-ce/d' /etc/apt/sources.list
+        fi
+        AptUpdate
+        apt-get -y install ca-certificates
+        if [ ! -f "/etc/apt/sources.list.d/docker.list" ] 
+        then
+            if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+            then
+                curl -fsSL http://mirrors.ustc.edu.cn/docker-ce/linux/debian/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
+                $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+            else
+                curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+                echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
+                $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+            fi
+        fi
+        apt-get update
+        apt-get -y install docker-ce docker-ce-cli containerd.io
+        Println "$info docker 安装成功\n"
+    ;;
+    4)
+        if ! $JQ_FILE -V > /dev/null 2>&1
+        then
+            Spinner "编译安装 JQ, 耗时可能会很长" JQInstall
+        fi
+
+        if dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
+        then
+            DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
+            dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
+
+            if [[ $dnscrypt_version_old == "*" ]]
+            then
+                echo
+                inquirer text_input "输入监听端口 : " listen_port 53
+
+                Println "$tip 请确保已经将本机器用网线连接到主路由器的 LAN 口"
+                ExitOnList n "`gettext \"是否继续\"`"
+
+                echo
+                ExitOnText "请输入主路由器 ip : " eth0_gateway
+
+                Println "$tip 必须和主路由器 ip 在同一网段"
+                ExitOnText "设置本机静态 ip : " eth0_ip
+
+                Println "$info 下载 dnscrypt proxy ..."
+
+                if ! curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp 
+                then
+                    Println "$error dnscrypt proxy 下载失败, 请重试\n"
+                    exit 1
+                fi
+
+                Println "$info 设置 dnscrypt proxy ..."
+                cd ~
+                mv dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz
+                tar zxf dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz
+                mv linux-arm64 dnscrypt-$dnscrypt_version
+                chown -R $USER:$USER dnscrypt-$dnscrypt_version
+                cd dnscrypt-$dnscrypt_version
+                cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
+
+                if [ ! -f "/etc/NetworkManager/system-connections/armbian.nmconnection" ] 
+                then
+                    con=$(nmcli -t c s | grep eth0 | head -1)
+                    nmcli connection modify "${con%%:*}" con-name armbian
+                fi
+
+                cp -f /etc/NetworkManager/system-connections/armbian.nmconnection ~/armbian.nmconnection-old
+
+                while IFS= read -r line 
+                do
+                    if [[ $line =~ uuid= ]] 
+                    then
+                        etho_uuid=${line#*=}
+                    elif [[ $line =~ timestamp= ]] 
+                    then
+                        eth0_timestamp=${line#*=}
+                    elif [[ $line =~ mac-address= ]]
+                    then
+                        eth0_mac=${line#*=}
+                        break
+                    fi
+                done < "/etc/NetworkManager/system-connections/armbian.nmconnection"
+
+                echo "[connection]
+id=armbian
+uuid=$etho_uuid
+type=ethernet
+autoconnect=true
+interface-name=eth0
+permissions=
+timestamp=${eth0_timestamp:-$(date +%s)}
+
+[ethernet]
+mac-address=${eth0_mac:-$(GetRandomMac)}
+mac-address-blacklist=
+
+[ipv4]
+address1=$eth0_ip/24,$eth0_gateway
+dns=127.0.0.1;
+dns-priority=100
+dns-search=
+ignore-auto-dns=true
+method=manual
+
+[ipv6]
+addr-gen-mode=stable-privacy
+dns-search=
+method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
+
+                DNSCryptConfig
+
+                for((i=0;i<3;i++));
+                do
+                    if ./dnscrypt-proxy -check > /dev/null 
+                    then
+                        break
+                    elif [[ $i -eq 2 ]] 
+                    then
+                        cd ~
+                        rm -rf dnscrypt-$dnscrypt_version
+                        Println "$error 发生错误, 请重试\n"
+                        exit 1
+                    fi
+                done
+
+                if [ -d /etc/resolvconf ] 
+                then
+                    DEBIAN_FRONTEND=noninteractive apt-get -y --purge remove resolvconf > /dev/null 2>&1 || true
+                fi
+
+                systemctl stop systemd-resolved
+                systemctl disable systemd-resolved
+                ./dnscrypt-proxy -service install > /dev/null
+                ./dnscrypt-proxy -service start > /dev/null
+
+                if ! grep -q "#allow-hotplug eth0" < /etc/network/interfaces
+                then
+                    echo "$(awk '!x{x=sub(/allow-hotplug eth0/,"#allow-hotplug eth0")}1' /etc/network/interfaces)" > /etc/network/interfaces
+                fi
+                if ! grep -q "#no-auto-down eth0" < /etc/network/interfaces
+                then
+                    echo "$(awk '!x{x=sub(/no-auto-down eth0/,"#no-auto-down eth0")}1' /etc/network/interfaces)" > /etc/network/interfaces
+                fi
+                if ! grep -q "#iface eth0 inet dhcp" < /etc/network/interfaces
+                then
+                    echo "$(awk '!x{x=sub(/iface eth0 inet dhcp/,"#iface eth0 inet dhcp")}1' /etc/network/interfaces)" > /etc/network/interfaces
+                fi
+
+                if [ -f /etc/resolv.conf ] 
+                then
+                    printf -v now '%(%m-%d-%H:%M:%S)T' -1
+                    mv /etc/resolv.conf /etc/resolv.conf-$now
+                fi
+
+                echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
+
+                nmcli connection reload
+                systemctl restart NetworkManager
+                Println "$info dnscrypt proxy 安装配置成功, 请重启 Armbian 后连接 IP: $eth0_ip\n"
+                nmcli con up armbian
+            elif [[ $dnscrypt_version_old != "$dnscrypt_version" ]] 
+            then
+                echo
+                inquirer text_input "输入监听端口 : " listen_port $(sed -n -e "s/^listen_addresses = .*:\([0-9]*\)']/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
+
+                if [[ -x $(command -v docker) ]] && [[ -n $(docker container ls -a -f name=openwrt$ -q) ]]
+                then
+                    Println "$tip 如果已经安装并运行旁路由 openwrt-v2ray, 建议先关闭旁路由 openwrt-v2ray"
+                    ExitOnList n "`gettext \"是否继续\"`"
+                fi
+
+                if ! curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp 
+                then
+                    Println "$error dnscrypt proxy 下载失败, 请重试\n"
+                    exit 1
+                fi
+
+                if [ -L /etc/resolv.conf ] 
+                then
+                    etc_resolv=$(< /etc/resolv.conf)
+                    rm -f /etc/resolv.conf
+                    echo "$etc_resolv" > /etc/resolv.conf
+                fi
+
+                cd ~/dnscrypt-$dnscrypt_version_old
+                ./dnscrypt-proxy -service stop > /dev/null
+                ./dnscrypt-proxy -service uninstall > /dev/null
+                cd ~
+                mv dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz
+                tar zxf dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz
+                mv linux-arm64 dnscrypt-$dnscrypt_version
+                cd dnscrypt-$dnscrypt_version
+                cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
+
+                DNSCryptConfig
+
+                ./dnscrypt-proxy -service install > /dev/null
+                ./dnscrypt-proxy -service start > /dev/null
+
+                Println "$info dnscrypt proxy 升级成功\n"
+            else
+                Println "$error dnscrypt proxy 已经是最新\n"
+            fi
+        else
+            Println "$error 无法连接服务器, 请稍后再试\n"
+        fi
+    ;;
+    5)
+        DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
+        dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
+
+        if [[ $dnscrypt_version_old == "*" ]] 
+        then
+            Println "$error 请先安装 dnscrypt proxy\n"
+            exit 1
+        fi
+
+        if [ -d /opt/AdGuardHome ] 
+        then
+            Println "$error AdGuard Home 已经存在\n"
+            exit 1
+        fi
+
+        echo
+        ExitOnText "输入 dnscrypt-proxy 新的监听端口" listen_port
+
+        if [ "$listen_port" -eq 53 ] 
+        then
+            Println "$error 端口不能是 53\n"
+            exit 1
+        fi
+
+        if ! curl -s -S -L $FFMPEG_MIRROR_LINK/AdGuardHome/master/scripts/install.sh | sh -s -- -v 
+        then
+            Println "$error 安装发生错误\n"
+            exit 1
+        fi
+
+        echo "$(awk '!x{x=sub(/^listen_addresses = .*/,"listen_addresses = [\047[::]:'"$listen_port"'\047]")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
+        systemctl restart dnscrypt-proxy
+
+        if ! curl -s -H 'Content-Type: application/json' \
+            --data '{"upstream_dns": ["127.0.0.1:'"$listen_port"'"], "ratelimit": 0}' "http://localhost:3000/control/dns_config" 
+        then
+            Println "$error 请登陆 http://Armbian_IP:3000/ 手动修改上游 DNS 服务器为 127.0.0.1:$listen_port 并可以将速度限制设置为 0\n"
+            exit 1
+        fi
+
+        Println "$info AdGuard Home 安装成功\n"
+    ;;
+    6)
+        if [[ ! -x $(command -v docker) ]] 
+        then
+            Println "$error 请先安装 docker\n"
+            exit 1
+        fi
+
+        DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
+        dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
+        if [[ $dnscrypt_version_old == "*" ]] 
+        then
+            Println "$error 请先安装 dnscrypt proxy\n"
+            exit 1
+        fi
+
+        if [[ $(systemctl is-active docker) == "inactive" ]] 
+        then
+            systemctl start docker
+        fi
+
+        echo
+        openwrt_options=( '21.02.1' '21.02.0' '19.07.8' '19.07.7' '19.07.6' '19.07.5' '19.07.4' '手动输入' )
+        inquirer list_input "选择版本: " openwrt_options openwrt_ver
+
+        if [ "$openwrt_ver" == "手动输入" ] 
+        then
+            echo
+            ExitOnText "输入版本号: " openwrt_ver
+        fi
+
+        if grep -q "armvirt-64-$openwrt_ver" < <(docker container ls -a)
+        then
+            if [ -f /etc/NetworkManager/dispatcher.d/promisc.sh ] 
+            then
+                printf '%s' '#!/usr/bin/env bash
+
+interface=$1
+event=$2
+
+if [[ $event == "up" ]] && [[ $interface == "eth0" ]] 
+then
+  ip link set $interface promisc on
+  echo "$interface received $event" | systemd-cat -p info -t dispatch_script
+fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
+
+                rm -f /etc/NetworkManager/dispatcher.d/promisc.sh
+                chmod +x /etc/NetworkManager/dispatcher.d/90-promisc.sh
+            fi
+            if grep -q "armvirt-64-$openwrt_ver" < <(docker container ls -f name=openwrt) 
+            then
+                Println "$error 此版本 openwrt 已经在运行\n"
+                exit 1
+            fi
+            Println "$info 切换到版本 openwrt-armvirt-64-$openwrt_ver"
+            action="switch"
+        else
+            Println "$info 安装 openwrt-armvirt-64-$openwrt_ver"
+            action="install"
+        fi
+
+        if [ ! -f "/etc/NetworkManager/system-connections/armbian.nmconnection" ] 
+        then
+            con=$(nmcli -t c s | grep eth0 | head -1)
+            nmcli connection modify "${con%%:*}" con-name armbian
+            nmcli connection reload
+        fi
+
+        while IFS= read -r line 
+        do
+            if [[ $line =~ ^address1=([^/]+)/24,(.+) ]]
+            then
+                eth0_ip=${BASH_REMATCH[1]}
+                eth0_gateway=${BASH_REMATCH[2]}
+                break
+            fi
+        done < "/etc/NetworkManager/system-connections/armbian.nmconnection"
+
+        connected_ip=${SSH_CLIENT% *}
+        connected_ip=${connected_ip// /:}
+        armbian_ip=$(ss -taH|grep $connected_ip|awk '{print $4}')
+        armbian_ip=${armbian_ip%:*}
+
+        if [ "$armbian_ip" != "$eth0_ip" ] 
+        then
+            docker container start openwrt >/dev/null 2>&1
+            Println "$error 请连接 IP: $eth0_ip 到 Armbian\n"
+            exit 1
+        fi
+
+        Println "$tip openwrt 作为旁路由, 请确保已经将本机器用网线连接到主路由器的 LAN 口, 并且当前连接使用的网关是主路由的地址(可能需要手动设定)"
+        Println "$tip 如果是升级, 注意备份原 openwrt 配置(系统 - 备份/还原)"
+        ExitOnList n "`gettext \"是否继续\"`"
+
+        if ! ip addr show hMACvLAN >/dev/null 2>&1
+        then
+            Println "$tip 必须和主路由器 ip 在同一网段"
+            ExitOnText "设置虚拟接口 hMACvLAN 静态 ip : " hMACvLAN_ip
+
+            Println "$tip 必须和主路由器 ip 在同一网段"
+            ExitOnText "设置 openwrt 静态 ip : " openwrt_ip
+
+            nmcli connection add type macvlan dev eth0 mode bridge ifname hMACvLAN autoconnect yes save yes > /dev/null
+            nmcli connection modify macvlan-hMACvLAN con-name hMACvLAN
+
+            while IFS= read -r line 
+            do
+                if [[ $line =~ uuid= ]] 
+                then
+                    hMACvLAN_uuid=${line#*=}
+                    break
+                fi
+            done < "/etc/NetworkManager/system-connections/hMACvLAN.nmconnection"
+
+            echo "[connection]
+id=hMACvLAN
+uuid=$hMACvLAN_uuid
+type=macvlan
+interface-name=hMACvLAN
+permissions=
+
+[macvlan]
+mode=2
+parent=eth0
+
+[ipv4]
+address1=$hMACvLAN_ip/24,$openwrt_ip
+dns=127.0.0.1;
+dns-search=
+ignore-auto-dns=true
+method=manual
+route-metric=50
+
+[ipv6]
+addr-gen-mode=stable-privacy
+dns-search=
+method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
+            nmcli connection reload
+        else
+            while IFS= read -r line 
+            do
+                if [[ $line =~ ^address1=([^/]+)/24,(.+) ]] 
+                then
+                    openwrt_ip=${BASH_REMATCH[2]}
+                    break
+                fi
+            done < "/etc/NetworkManager/system-connections/hMACvLAN.nmconnection"
+
+            if [ -z "${openwrt_ip:-}" ] 
+            then
+                Println "$tip 必须和主路由器 ip 在同一网段"
+                ExitOnText "设置虚拟接口 hMACvLAN 静态 ip : " hMACvLAN_ip
+
+                Println "$tip 必须和主路由器 ip 在同一网段"
+                ExitOnText "设置 openwrt 静态 ip : " openwrt_ip
+
+                while IFS= read -r line 
+                do
+                    if [[ $line =~ uuid= ]] 
+                    then
+                        hMACvLAN_uuid=${line#*=}
+                    elif [[ $line =~ timestamp= ]] 
+                    then
+                        hMACvLAN_timestamp=${line#*=}
+                        break
+                    fi
+                done < "/etc/NetworkManager/system-connections/hMACvLAN.nmconnection"
+
+                echo "[connection]
+id=hMACvLAN
+uuid=$hMACvLAN_uuid
+type=macvlan
+interface-name=hMACvLAN
+permissions=
+timestamp=${hMACvLAN_timestamp:-$(date +%s)}
+
+[macvlan]
+mode=2
+parent=eth0
+
+[ipv4]
+address1=$hMACvLAN_ip/24,$openwrt_ip
+dns=127.0.0.1;
+dns-search=
+ignore-auto-dns=true
+method=manual
+route-metric=150
+
+[ipv6]
+addr-gen-mode=stable-privacy
+dns-search=
+method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
+                nmcli connection reload
+            fi
+        fi
+
+        if [[ -n $(docker container ls -a -f name=openwrt$ -q) ]] 
+        then
+            echo
+            inquirer list_input "是否重新设置 openwrt 静态 IP" ny_options change_openwrt_ip_yn
+            if [ "$change_openwrt_ip_yn" == "$i18n_yes" ] 
+            then
+                Println "$tip 必须和主路由器 ip 在同一网段"
+                inquirer text_input "设置 openwrt 静态 ip : " openwrt_ip "$i18n_cancel"
+                if [ "$openwrt_ip" == "$i18n_cancel" ]
+                then
+                    if [[ -z $(docker container ls -f name=openwrt$ -q) ]] 
+                    then
+                        docker container start openwrt >/dev/null 2>&1 || true
+                    fi
+                    Println "$i18n_canceled...\n"
+                    exit 1
+                fi
+                sed -i "/address1=\(.*\),.*/s//address1=\1,$openwrt_ip/" /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
+                nmcli connection reload
+            fi
+            Println "$info 重启 hMACvLAN ..."
+            nmcli connection modify hMACvLAN ipv4.route-metric 150 > /dev/null
+            nmcli con down hMACvLAN > /dev/null 2>&1 || true
+            nmcli con up hMACvLAN > /dev/null
+            sleep 3
+            openwrt_ver_old=$(docker inspect --format='{{.Config.Image}}' openwrt)
+            openwrt_ver_old=${openwrt_ver_old#*:}
+            if [[ -n $(docker container ls -f name=openwrt$ -q) ]] 
+            then
+                docker rename openwrt openwrt-$openwrt_ver_old
+                docker container stop openwrt-$openwrt_ver_old >/dev/null 2>&1
+                Println "$info 网络马上会中断, 请务必退出并等待 30秒 后重新连接 armbian 后重复当前步骤 ...\n"
+                exit 1
+            else
+                docker rename openwrt openwrt-$openwrt_ver_old
+            fi
+        fi
+
+        if [ ! -s "/etc/docker/daemon.json" ] 
+        then
+            printf '%s' "{}" > /etc/docker/daemon.json
+        fi
+
+        if ! $JQ_FILE -V > /dev/null 2>&1
+        then
+            Spinner "编译安装 JQ, 耗时可能会很长" JQInstall
+        fi
+
+        json=true
+        jq_path='["dns"]'
+        JQ update /etc/docker/daemon.json '["'"$eth0_ip"'","8.8.8.8"]'
+
+        if ! docker network inspect macnet >/dev/null 2>&1
+        then
+            docker network create -d macvlan \
+                --subnet=$eth0_ip/24 \
+                --gateway=$eth0_gateway \
+                -o parent=eth0 macnet
+        fi
+
+        if [ ! -s /etc/NetworkManager/dispatcher.d/90-promisc.sh ] 
+        then
+            printf '%s' '#!/usr/bin/env bash
+
+interface=$1
+event=$2
+
+if [[ $event == "up" ]] && [[ $interface == "eth0" ]] 
+then
+  ip link set $interface promisc on
+  echo "$interface received $event" | systemd-cat -p info -t dispatch_script
+fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
+
+            rm -f /etc/NetworkManager/dispatcher.d/promisc.sh
+            chmod +x /etc/NetworkManager/dispatcher.d/90-promisc.sh
+        fi
+
+        ip link set eth0 promisc on
+
+        if [ "$action" == "switch" ] 
+        then
+            docker rename openwrt-armvirt-64-$openwrt_ver openwrt
+            docker container start openwrt >/dev/null
+        else
+            Println "$info 下载 armvirt-64-$openwrt_ver ..."
+            docker import $FFMPEG_MIRROR_LINK/openwrt/releases/$openwrt_ver/targets/armvirt/64/openwrt-$openwrt_ver-armvirt-64-default-rootfs.tar.gz openwrtorg/rootfs:armvirt-64-$openwrt_ver
+
+            if [ "${openwrt_ver%%.*}" -ge 21 ] 
+            then
+                option_name="device"
+            else
+                option_name="ifname"
+            fi
+
+            docker run -d \
+                --restart unless-stopped \
+                --network macnet \
+                --privileged \
+                --name openwrt \
+                openwrtorg/rootfs:armvirt-64-$openwrt_ver /sbin/init
+
+            Println "$info openwrt 启动中..."
+            until [[ $(docker inspect --format='{{.State.Status}}' openwrt) == "running" ]]
+            do
+                sleep 1
+            done
+
+            docker exec -it openwrt /bin/ash -c "
+            uci set firewall.@defaults[0].forward='ACCEPT'
+            uci del firewall.@defaults[0].syn_flood
+            uci set firewall.@defaults[0].synflood_protect='1'
+            uci set firewall.@defaults[0].flow_offloading='1'
+            uci set firewall.@defaults[0].flow_offloading_hw='1'
+            uci set firewall.@zone[1].input='ACCEPT'
+            uci set firewall.@zone[1].forward='ACCEPT'
+            uci set network.lan.ipaddr='$openwrt_ip'
+            uci set network.lan.gateway='$eth0_gateway'
+            uci add_list network.lan.dns='$eth0_ip'
+            uci set dhcp.@dnsmasq[0].rebind_protection='0'
+            uci commit
+            reload_config
+            "
+        fi
+
+        Println "$info openwrt ${green}旁路由${normal} 安装成功, 地址: $openwrt_ip, 是 ${red}主路由${normal} 负责(拨号)联网\n"
+        Println "$tip 具体配置参考 https://github.com/woniuzfb/iptv/wiki/openwrt\n"
+
+        nmcli connection modify hMACvLAN ipv4.route-metric 50 > /dev/null
+        nmcli con down hMACvLAN > /dev/null 2>&1 || true
+        nmcli con up hMACvLAN > /dev/null
+    ;;
+    7)
+        if ! docker inspect openwrt > /dev/null 2>&1
+        then
+            Println "$error 请先安装或运行 openwrt\n"
+            exit 1
+        fi
+
+        if ! luci_app_xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/luci-app-xray.json" | $JQ_FILE -r '.tag_name')
+        then
+            Println "$error 无法连接服务器, 请稍后再试\n"
+            exit 1
+        else
+            luci_app_xray_ver=${luci_app_xray_ver#*v}
+        fi
+
+        docker exec -it openwrt /bin/ash -c "
+        if ! opkg list-installed | grep -q v2ray
+        then
+            sed -i 's_http[s]*://downloads.openwrt.org_$FFMPEG_MIRROR_LINK/openwrt_' /etc/opkg/distfeeds.conf
+            if ! grep -q kuoruan < /etc/opkg/customfeeds.conf
+            then
+                . /etc/openwrt_release
+                wget -O kuoruan-public.key $FFMPEG_MIRROR_LINK/openwrt-v2ray/packages/public.key
+                opkg-key add kuoruan-public.key
+                echo \"src/gz kuoruan_packages $FFMPEG_MIRROR_LINK/openwrt-v2ray/packages/releases/\$DISTRIB_ARCH\" >> /etc/opkg/customfeeds.conf
+                echo \"src/gz kuoruan_universal $FFMPEG_MIRROR_LINK/openwrt-v2ray/packages/releases/all\" >> /etc/opkg/customfeeds.conf
+            fi
+            opkg update
+            opkg download dnsmasq-full
+            opkg remove dnsmasq
+            opkg install dnsmasq-full --cache .
+            opkg install zoneinfo-asia kmod-tcp-bbr libustream-openssl jshn ip-full ipset iptables iptables-mod-tproxy resolveip
+            opkg install luci luci-base luci-compat
+            if ! test -e /etc/sysctl.d/12-tcp-bbr.conf || ! grep -q default_qdisc < /etc/sysctl.d/12-tcp-bbr.conf
+            then
+                echo \"net.core.default_qdisc=fq\" >> /etc/sysctl.d/12-tcp-bbr.conf
+                sysctl -p
+            fi
+        else
+            opkg update
+        fi
+
+        opkg install v2ray-core
+        wget -O luci-app-v2ray_${luci_app_xray_ver}_all.ipk $FFMPEG_MIRROR_LINK/luci-app-v2ray_${luci_app_xray_ver}_all.ipk
+        opkg install luci-app-v2ray_${luci_app_xray_ver}_all.ipk --force-reinstall || true
+        wget -O luci-i18n-v2ray-zh-cn_${luci_app_xray_ver}_all.ipk $FFMPEG_MIRROR_LINK/luci-i18n-v2ray-zh-cn_${luci_app_xray_ver}_all.ipk
+        opkg install luci-i18n-v2ray-zh-cn_${luci_app_xray_ver}_all.ipk --force-reinstall || true
+        "
+
+        Println "$info openwrt-v2ray 安装成功\n"
+    ;;
+    8)
+        if ! docker inspect openwrt > /dev/null 2>&1
+        then
+            Println "$error 请先安装或运行 openwrt\n"
+            exit 1
+        fi
+
+        echo
+        lang_options=( '简体中文' '繁体中文' '英文' )
+        inquirer list_input "选择界面语言" lang_options lang
+
+        if [ "$lang" == "简体中文" ] 
+        then
+            lang="zh-cn"
+        elif [ "$lang" == "繁体中文" ] 
+        then
+            lang="zh-tw"
+        else
+            lang="en"
+        fi
+
+        docker exec -it openwrt /bin/ash -c "
+        if ! opkg list-installed | grep -q luci-i18n-base-$lang
+        then
+            sed -i 's_http://downloads.openwrt.org_$FFMPEG_MIRROR_LINK/openwrt_' /etc/opkg/distfeeds.conf
+            sed -i 's_https://downloads.openwrt.org_$FFMPEG_MIRROR_LINK/openwrt_' /etc/opkg/distfeeds.conf
+            opkg update
+            opkg install luci-i18n-base-$lang
+        fi
+        uci set luci.main.lang='${lang//-/_}'
+        uci commit
+        reload_config
+        "
+
+        Println "$info 界面语言切换成功\n"
+    ;;
+    9)
+        if ! docker inspect openwrt > /dev/null 2>&1
+        then
+            Println "$error 请先安装或运行 openwrt\n"
+            exit 1
+        fi
+
+        Println "$tip 请确保已经安装过 openwrt-v2ray"
+        core_options=( 'xray-core' 'v2ray-core' )
+        inquirer list_input "选择切换目标" core_options core
+        if [ "$core" == "xray-core" ] 
+        then
+            echo
+            xray_options=( '最新' '1.4.5' )
+            inquirer list_input "选择 xray 版本" xray_options xray_ver
+            if [ "$xray_ver" == "最新" ] && ! xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/openwrt-xray.json" | $JQ_FILE -r '.tag_name')
+            then
+                Println "$error 无法连接服务器, 请稍后再试\n"
+                exit 1
+            else
+                xray_ver=${xray_ver#*v}
+                if [[ ! $xray_ver =~ - ]] 
+                then
+                    xray_ver="${xray_ver}-1"
+                fi
+            fi
+            if ! luci_app_xray_ver=$(curl -s -m 30 "$FFMPEG_MIRROR_LINK/luci-app-xray.json" | $JQ_FILE -r '.tag_name')
+            then
+                Println "$error 无法连接服务器, 请稍后再试\n"
+                exit 1
+            else
+                luci_app_xray_ver=${luci_app_xray_ver#*v}
+            fi
+            docker exec -it openwrt /bin/ash -c "
+            if ! opkg list-installed | grep -q 'xray - $xray_ver-1'
+            then
+                . /etc/os-release
+                wget -O xray_${xray_ver}_\$OPENWRT_ARCH.ipk $FFMPEG_MIRROR_LINK/xray_${xray_ver}_\$OPENWRT_ARCH.ipk
+                opkg install xray_${xray_ver}_\$OPENWRT_ARCH.ipk --force-reinstall || true
+            fi
+            wget -O luci-app-v2ray_${luci_app_xray_ver}_all.ipk $FFMPEG_MIRROR_LINK/luci-app-v2ray_${luci_app_xray_ver}_all.ipk
+            opkg install luci-app-v2ray_${luci_app_xray_ver}_all.ipk --force-reinstall || true
+            wget -O luci-i18n-v2ray-zh-cn_${luci_app_xray_ver}_all.ipk $FFMPEG_MIRROR_LINK/luci-i18n-v2ray-zh-cn_${luci_app_xray_ver}_all.ipk
+            opkg install luci-i18n-v2ray-zh-cn_${luci_app_xray_ver}_all.ipk --force-reinstall || true
+            uci set v2ray.main.v2ray_file='/usr/bin/xray'
+            uci set v2ray.main.asset_location='/usr/share/xray'
+            uci commit
+            reload_config
+            "
+        else
+            echo
+            inquirer list_input "是否更新 openwrt-v2ray" ny_options ny_option
+
+            if [ "$ny_option" == "$i18n_yes" ] 
+            then
+                Println "$info 更新 openwrt-v2ray, 请稍等 ...\n"
+                docker exec -it openwrt /bin/ash -c "
+                opkg update
+                opkg install v2ray-core"
+            fi
+
+            docker exec -it openwrt /bin/ash -c "
+            uci set v2ray.main.v2ray_file='/usr/bin/v2ray'
+            uci del v2ray.main.asset_location
+            uci commit
+            reload_config
+            "
+        fi
+        Println "$info 切换成功\n"
+    ;;
+    10)
+        if [[ ! -x $(command -v docker) ]] || [[ -z $(docker container ls -a -f name=openwrt$ -q) ]]
+        then
+            Println "$error 请先安装并运行 openwrt ...\n"
+            exit 1
+        fi
+
+        echo
+        inquirer text_input "输入当前配置保存名称: " config_name "$i18n_not_set"
+        if [ "$config_name" == "$i18n_not_set" ] 
+        then
+            config_name=""
+        else
+            config_name="-$config_name"
+        fi
+
+        mkdir -p "$HOME/openwrt_saved/openwrt-v2ray"
+
+        printf -v timestamp '%(%s)T' -1
+
+        if ! docker cp openwrt:/etc/config/v2ray "$HOME/openwrt_saved/openwrt-v2ray/config-$timestamp$config_name" 2> /dev/null
+        then
+            Println "$error 请先安装 openwrt-v2ray\n"
+            exit 1
+        fi
+
+        docker cp openwrt:/etc/v2ray/directlist.txt "$HOME/openwrt_saved/openwrt-v2ray/directlist-$timestamp$config_name"
+        docker cp openwrt:/etc/v2ray/proxylist.txt "$HOME/openwrt_saved/openwrt-v2ray/proxylist-$timestamp$config_name"
+
+        docker exec -it openwrt /bin/ash -c "
+        cat /var/etc/v2ray/v2ray.main.json 2> /dev/null || true
+        " > "$HOME/openwrt_saved/openwrt-v2ray/main-$timestamp$config_name"
+
+        Println "$tip 所有配置文件都是透明代理, 直连国内, 代理国外, 需要自行修改出站连接后使用"
+        config_file_options=( 'v2ray-1' 'xray-1' '复原配置' )
+        inquirer list_input "选择配置文件: " config_file_options config_file
+        if [ "$config_file" == "复原配置" ] 
+        then
+            if ! ls -A $HOME/openwrt_saved/openwrt-v2ray/config-* > /dev/null 2>&1
+            then
+                Println "$error 没有保存的配置\n"
+                exit 1
+            fi
+
+            configs_list=""
+            configs_count=0
+            configs_time=()
+            configs_name=()
+            for file in "$HOME/openwrt_saved/openwrt-v2ray/config-"*
+            do
+                if [[ ${file##*/} =~ ^config-(.+)-(.+)$ ]] 
+                then
+                    config_time=${BASH_REMATCH[1]}
+                    config_name="-${BASH_REMATCH[2]}"
+                    config_name_list=${BASH_REMATCH[2]}
+                elif [[ ${file##*/} =~ ^config-(.+)$ ]] 
+                then
+                    config_time=${BASH_REMATCH[1]}
+                    config_name=""
+                    config_name_list=""
+                fi
+                configs_time+=("$config_time")
+                configs_name+=("$config_name")
+                configs_count=$((configs_count+1))
+                printf -v config_date '%(%Y-%m-%d %H:%M:%S)T' "$config_time"
+                configs_list="$configs_list $configs_count.${indent_6}名称: ${green}${config_name_list:-无}${normal} 日期: ${green}$config_date${normal}\n\n"
+            done
+
+            Println "$configs_list"
+
+            echo "选择配置"
+            while read -p "$i18n_default_cancel" config_num
+            do
+                case "$config_num" in
+                    "")
+                        Println "$i18n_canceled...\n" && exit 1
+                    ;;
+                    *[!0-9]*)
+                        Println "$error $i18n_input_correct_no\n"
+                    ;;
+                    *)
+                        if [ "$config_num" -gt 0 ] && [ "$config_num" -le $configs_count ]
+                        then
+                            configs_index=$((config_num-1))
+                            config_time=${configs_time[configs_index]}
+                            config_name=${configs_name[configs_index]}
+                            break
+                        else
+                            Println "$error $i18n_input_correct_no\n"
+                        fi
+                    ;;
+                esac
+            done
+
+            docker cp "$HOME/openwrt_saved/openwrt-v2ray/config-$config_time$config_name" openwrt:/etc/config/v2ray
+            docker cp "$HOME/openwrt_saved/openwrt-v2ray/directlist-$config_time$config_name" openwrt:/etc/v2ray/directlist.txt
+            docker cp "$HOME/openwrt_saved/openwrt-v2ray/proxylist-$config_time$config_name" openwrt:/etc/v2ray/proxylist.txt
+            Println "$info 配置恢复成功\n"
+        else
+            docker exec -it -e V2RAY_CONFIG_NAME="$config_file" -e MIRROR="$FFMPEG_MIRROR_LINK" openwrt /bin/ash -c '
+            /etc/init.d/v2ray stop 2> /dev/null || true
+            wget -O /etc/config/v2ray $MIRROR/v2ray-configs/$V2RAY_CONFIG_NAME
+            for ip in $(resolveip dns.alidns.com)
+            do
+                if ! grep -q "$ip" < /etc/v2ray/directlist.txt
+                then
+                    echo "$ip" >> /etc/v2ray/directlist.txt
+                fi
+            done
+            for ip in $(resolveip doh.pub)
+            do
+                if ! grep -q "$ip" < /etc/v2ray/directlist.txt
+                then
+                    echo "$ip" >> /etc/v2ray/directlist.txt
+                fi
+            done
+            '
+            Println "$info 配置切换成功\n"
+        fi
+    ;;
+    11)
+        if [[ ! -x $(command -v docker) ]] 
+        then
+            Println "$error 请先安装 docker\n"
+            exit 1
+        fi
+
+        if [ ! -s "/etc/docker/daemon.json" ] 
+        then
+            printf '%s' "{}" > /etc/docker/daemon.json
+        fi
+
+        Println "$tip 可以登录阿里云 (https://cr.console.aliyun.com/cn-shanghai/) 查看镜像加速器地址"
+        ExitOnText "请输入加速器地址 : " registry_mirrors
+
+        if ! $JQ_FILE -V > /dev/null 2>&1
+        then
+            Spinner "编译安装 JQ, 耗时可能会很长" JQInstall
+        fi
+
+        json=true
+        jq_path='["registry-mirrors"]'
+        JQ update /etc/docker/daemon.json '["'"$registry_mirrors"'"]'
+
+        Println "$info docker 镜像加速设置成功\n"
+    ;;
+    12)
+        VimConfig
+    ;;
+    13)
+        DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
+        dnscrypt_version=${DNSCRYPT_ROOT#*-}
+        if [[ $dnscrypt_version == "*" ]] 
+        then
+            Println "$error 请先安装 dnscrypt proxy\n"
+            exit 1
+        fi
+        echo
+        if grep -q "options edns0" < /etc/resolv.conf
+        then
+            ExitOnList n "`gettext \"是否关闭 edns0\"`"
+
+            chattr -i /etc/resolv.conf
+            sed -i '/options edns0/d' /etc/resolv.conf
+            echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = false")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
+            systemctl restart dnscrypt-proxy
+            Println "$info edns0 已关闭\n"
+        else
+            ExitOnList n "`gettext \"是否开启 edns0\"`"
+
+            echo "options edns0" >> /etc/resolv.conf
+            chattr +i /etc/resolv.conf
+            echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = true")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
+            systemctl restart dnscrypt-proxy
+            Println "$info edns0 已开启\n"
+        fi
+    ;;
+    14)
+        DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
+        dnscrypt_version=${DNSCRYPT_ROOT#*-}
+        if [[ $dnscrypt_version == "*" ]] 
+        then
+            Println "$error 请先安装 dnscrypt proxy\n"
+            exit 1
+        fi
+        echo
+        switch_options=( '开启' '关闭' )
+        inquirer list_input_index "选择操作" switch_options switch_options_index
+        if [ -f /opt/AdGuardHome/AdGuardHome.yaml ] 
+        then
+            /opt/AdGuardHome/AdGuardHome -s stop || true
+            sed -i "s/aaaa_disabled: false/aaaa_disabled: true/" /opt/AdGuardHome/AdGuardHome.yaml
+            /opt/AdGuardHome/AdGuardHome -s start || true
+        fi
+        if [ "$switch_options_index" -eq 0 ] 
+        then
+            echo "$(awk '!x{x=sub(/.*block_ipv6 = .*/,"block_ipv6 = false")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
+            systemctl restart dnscrypt-proxy
+            Println "$info ipv6 查询已开启\n"
+        else
+            echo "$(awk '!x{x=sub(/.*block_ipv6 = .*/,"block_ipv6 = true")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
+            systemctl restart dnscrypt-proxy
+            Println "$info ipv6 查询已关闭\n"
+        fi
+    ;;
+    15)
+        if [[ ! -x $(command -v pystun) ]] 
+        then
+            Println "$tip 请确保已经修改了合适的 apt 源"
+            ExitOnList n "`gettext \"是否继续\"`"
+            AptUpdate
+            apt-get -y install python python-pip python-setuptools python-wheel
+            pip install pystun
+        fi
+        Println "$tip 建议关闭远端服务器防火墙, 检测中...\n"
+        pystun
+    ;;
+    16)
+        ShFileUpdate Armbian
+    ;;
+    *) Println "$error $i18n_input_correct_number [1-16]\n"
+    ;;
+esac
+
+exit 0

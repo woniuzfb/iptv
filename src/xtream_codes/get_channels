@@ -1,0 +1,44 @@
+XtreamCodesGetChnls()
+{
+    xc_chnls=()
+    xc_chnls_mac=()
+    if [ -n "${xtream_codes_domains:-}" ] 
+    then
+        GetChannels
+        if [ "$chnls_count" -gt 0 ] 
+        then
+            for((xc_i=0;xc_i<chnls_count;xc_i++));
+            do
+                if { [ "${chnls_status[xc_i]}" == "on" ] && [ "${chnls_output_dir_name[xc_i]}" != "${chnl_output_dir_name:-}" ]; } || { [ "${chnls_flv_status[xc_i]}" == "on" ] && [ "${chnls_flv_push_link[xc_i]}" != "${chnl_flv_push_link:-}" ]; } 
+                then
+                    if [[ ${chnls_stream_link[xc_i]##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+                    then
+                        f_domain=${chnls_stream_link[xc_i]%%|*}
+                        for xc_domain in "${xtream_codes_domains[@]}"
+                        do
+                            if [ "$f_domain" == "$xc_domain" ] 
+                            then
+                                xc_chnls_mac+=("$f_domain/${BASH_REMATCH[0]}")
+                                break
+                            fi
+                        done
+                    elif [[ ${chnls_stream_link[xc_i]} =~ ^http://([^/]+)/([^/]+)/([^/]+)/ ]]
+                    then
+                        if [ "${BASH_REMATCH[2]}" != "live" ] || [[ ${chnls_stream_link[xc_i]} =~ ^http://([^/]+)/live/([^/]+)/([^/]+)/ ]]
+                        then
+                            f_domain=${BASH_REMATCH[1]}
+                            for xc_domain in "${xtream_codes_domains[@]}"
+                            do
+                                if [ "$f_domain" == "$xc_domain" ] 
+                                then
+                                    xc_chnls+=("$f_domain/${BASH_REMATCH[2]}:${BASH_REMATCH[3]}")
+                                    break
+                                fi
+                            done
+                        fi
+                    fi
+                fi
+            done
+        fi
+    fi
+}

@@ -1,0 +1,45 @@
+NginxConfigDomain()
+{
+    NginxListDomain
+
+    NginxSelectDomainServer
+
+    echo
+    domain_server_options=( '修改指令' '更新证书' '添加 flv 设置' '添加 nodejs 设置' )
+    inquirer list_input_index "选择操作" domain_server_options domain_server_options_index
+
+    if [ "$domain_server_options_index" -eq 0 ] 
+    then
+        NginxConfigDirective level_2
+    elif [ "$domain_server_options_index" -eq 1 ] 
+    then
+        AcmeCheck
+        NginxDomainServerUpdateCrt
+    elif [ "$domain_server_options_index" -eq 2 ] 
+    then
+        updated=0
+        NginxAddFlv
+        if [ "$updated" -eq 1 ] 
+        then
+            NginxBuildConf parse_out
+        fi
+        Println "$info flv 配置添加成功\n"
+    else
+        server_name=${nginx_domain_servers_name[nginx_domain_servers_index]}
+
+        if [[ $server_name =~ , ]] 
+        then
+            IFS="," read -r -a domains <<< "$server_name"
+
+            echo
+            inquirer list_input "选择域名: " domains server_name
+        fi
+        updated=0
+        NginxAddNodejs
+        if [ "$updated" -eq 1 ] 
+        then
+            NginxBuildConf parse_out
+        fi
+        Println "$info nodejs 配置添加成功\n"
+    fi
+}

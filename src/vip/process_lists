@@ -1,0 +1,38 @@
+VipProcessLists()
+{
+    [ ! -d "$VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/${vip_channels_id[k]}" ] && mkdir -p "$VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/${vip_channels_id[k]}"
+    printf '#EXTM3U\n#EXT-X-STREAM-INF:PROGRAM-ID=%s,BANDWIDTH=1500002\n%s' \
+    "$program_id" "$stream_link" > "$VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/${vip_channels_id[k]}/playlist.m3u8"
+    if [ "$k" -eq 0 ] 
+    then
+        m3u_list="$m3u_list#EXTINF:-1,===== $vip_host_ip:$vip_host_port ${vip_channels_name[k]} =====\n$stream_link\n"
+    else
+        m3u_list="$m3u_list#EXTINF:-1,${vip_channels_name[k]}\n$stream_link\n"
+    fi
+    epg_id=${vip_channels_epg_id[k]}
+    if [ -n "$epg_id" ] && [ -n "${schedules_id:-}" ]
+    then
+        for((m=0;m<${#schedules_id[@]};m++));
+        do
+            if [ "${schedules_id[m]}" == "$epg_id" ] && [ -n "${schedules_sys_time[m]}" ]
+            then
+                IFS="^" read -r -a sys_times <<< "${schedules_sys_time[m]}^"
+                IFS="^" read -r -a titles <<< "${schedules_title[m]}^"
+                epg_list="$epg_list<channel id=\"$program_id\">\n<display-name lang=\"zh\">${vip_channels_name[k]}</display-name>\n</channel>\n"
+                programs_count=${#sys_times[@]}
+                for((n=0;n<programs_count;n++));
+                do
+                    printf -v start '%(%Y%m%d%H%M%S)T' "${sys_times[n]}"
+                    if [ "$n" -eq $((programs_count-1)) ] 
+                    then
+                        stop=$(date -d 'tomorrow 00:00:00' "+%Y%m%d%H%M%S")
+                    else
+                        printf -v stop '%(%Y%m%d%H%M%S)T' "${sys_times[n+1]}"
+                    fi
+                    epg_list="$epg_list<programme start=\"$start +0800\" stop=\"$stop +0800\" channel=\"$program_id\">\n<title lang=\"zh\">${titles[n]}</title>\n</programme>\n"
+                done
+                break
+            fi
+        done
+    fi
+}

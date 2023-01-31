@@ -1,0 +1,27 @@
+VipVerifyLicense()
+{
+    Println "请输入授权码"
+    read -p "$i18n_default_cancel" vip_user_license
+    [ -z "$vip_user_license" ] && Println "$i18n_canceled...\n" && exit 1
+
+    if vip_user=$(wget --timeout=10 --tries=3 --no-check-certificate "${FFMPEG_MIRROR_LINK%/*}/vip/$vip_user_license/license.json" -qO- 2> /dev/null)
+    then
+        if [ ! -s "$VIP_FILE" ] 
+        then
+            printf '{"%s":{},"%s":[],"%s":[]}' "config" "users" "hosts" > "$VIP_FILE"
+        fi
+
+        while IFS= read -r license_ip 
+        do
+            map_string=true
+            jq_path='["users"]'
+            JQ delete "$VIP_FILE" ip "$license_ip"
+        done < <($JQ_FILE -r '.ip' <<< "$vip_user")
+
+        jq_path='["users"]'
+        JQ add "$VIP_FILE" "[$vip_user]"
+        Println "$info 授权码验证成功\n"
+    else
+        Println "$error 授权码验证失败, 请联系微信 woniuzfb 或 tg @ woniuzfb\n"
+    fi
+}

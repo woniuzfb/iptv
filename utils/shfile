@@ -1,0 +1,150 @@
+ShFallback()
+{
+    DepInstall dig
+    sh_txt=$(dig +short $SH_FALLBACK txt)
+    sh_txt=${sh_txt#\"}
+    sh_txt=${sh_txt%\"}
+
+    if [[ $sh_txt == *[!0-9]* ]] 
+    then
+        SH_FALLBACK="https://"
+        sh_nums=(${sh_txt% *})
+        sh_txt="${sh_txt##* }"
+        sh_nums_indices=("${!sh_nums[@]}")
+    else
+        SH_FALLBACK="http://"
+    fi
+
+    sh_txt_count=${#sh_txt}
+    sh_txt_arr=()
+    local i j k
+
+    for((i=0;i<sh_txt_count;i+=3));
+    do
+        j=$((i/3+1))
+        k=$((j%3))
+        if [ "$k" -eq 0 ] 
+        then
+            sh_txt_arr+=("${sh_txt:$i:3}")
+        elif [ "$k" -eq 1 ] 
+        then
+            sh_txt_arr+=("${sh_txt:$((i+1)):1}${sh_txt:$i:1}${sh_txt:$((i+2)):1}")
+        elif [ "$k" -eq 2 ] 
+        then
+            sh_txt_arr+=("${sh_txt:$((i+2)):1}${sh_txt:$i:2}")
+        fi
+    done
+
+    if [[ $sh_txt == *[!0-9]* ]] 
+    then
+        sh_txt_tmp=""
+
+        for ele in "${sh_txt_arr[@]}"
+        do
+            ele=${ele#\-}
+            ele=${ele#\-}
+            sh_txt_tmp="$sh_txt_tmp$ele"
+        done
+
+        sh_txt=""
+
+        for sh_nums_index in "${sh_nums_indices[@]}"
+        do
+            [ -n "$sh_txt" ] && sh_txt="$sh_txt."
+            sh_index=$((${sh_nums[sh_nums_index]}+sh_nums_index+1))
+            sh_txt="$sh_txt${sh_txt_tmp:0:$sh_index}"
+            sh_txt_tmp="${sh_txt_tmp:$sh_index}"
+        done
+    else
+        sh_txt=""
+
+        for ele in "${sh_txt_arr[@]}"
+        do
+            [ -n "$sh_txt" ] && sh_txt="$sh_txt."
+            ele=${ele#\0}
+            ele=${ele#\0}
+            sh_txt="$sh_txt$ele"
+        done
+    fi
+
+    SH_FALLBACK="$SH_FALLBACK$sh_txt"
+}
+
+ShFileCheck()
+{
+    if [ ! -e "$SH_FILE" ] 
+    then
+        DepInstall curl
+        ShFallback
+
+        if curl -s -Lm 20 "$SH_LINK" -o "${SH_FILE}_tmp"
+        then
+            mv "${SH_FILE}_tmp" "$SH_FILE"
+            chmod +x "$SH_FILE"
+            Println "`eval_gettext \"\\\$info 脚本下载完成\"`"
+        else
+            Println "`eval_gettext \"\\\$error 无法连接到 Github ! 尝试备用链接...\"`"
+            if curl -s -Lm 30 "$SH_FALLBACK/${SH_LINK##*/}" -o "${SH_FILE}_tmp" 
+            then
+                mv "${SH_FILE}_tmp" "$SH_FILE"
+                chmod +x "$SH_FILE"
+                Println "`eval_gettext \"\\\$info 脚本下载完成\"`"
+            else
+                Println "`eval_gettext \"\\\$error 无法连接备用链接! 脚本下载失败, 请稍后再试\"`\n"
+                exit 1
+            fi
+        fi
+    fi
+
+    [ ! -e "$IBM_FILE" ] && ln -s "$SH_FILE" "$IBM_FILE"
+    [ ! -e "$CF_FILE" ] && ln -s "$SH_FILE" "$CF_FILE"
+    [ ! -e "$OR_FILE" ] && ln -s "$SH_FILE" "$OR_FILE"
+    [ ! -e "$NX_FILE" ] && ln -s "$SH_FILE" "$NX_FILE"
+    [ ! -e "$V2_FILE" ] && ln -s "$SH_FILE" "$V2_FILE"
+    [ ! -e "$X_FILE" ] && ln -s "$SH_FILE" "$X_FILE"
+    [ ! -e "$XC_FILE" ] && ln -s "$SH_FILE" "$XC_FILE"
+    [ ! -e "$ARM_FILE" ] && ln -s "$SH_FILE" "$ARM_FILE"
+    [ ! -e "$PVE_FILE" ] && ln -s "$SH_FILE" "$PVE_FILE"
+
+    return 0
+}
+
+ShFileUpdate()
+{
+    sh_name=${1:-iptv}
+
+    Println "`eval_gettext \"\\\$info 更新 \\\$sh_name 脚本...\"`"
+
+    ShFallback
+
+    if curl -s -Lm 20 "$SH_LINK" -o "${SH_FILE}_tmp"
+    then
+        mv "${SH_FILE}_tmp" "$SH_FILE"
+        chmod +x "$SH_FILE"
+        Println "`eval_gettext \"\\\$info \\\$sh_name 脚本更新完成\"`"
+        sh_new_ver=$(grep 'sh_ver="' < "$SH_FILE" |awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1)
+        if [ "${sh_new_ver%.*}" != "${sh_ver%.*}" ] 
+        then
+            rm -f "$LOCK_FILE"
+        fi
+    else
+        Println "`eval_gettext \"\\\$error 无法连接到 Github ! 尝试备用链接...\"`"
+        if curl -s -Lm 30 "$SH_FALLBACK/${SH_LINK##*/}" -o "${SH_FILE}_tmp" 
+        then
+            mv "${SH_FILE}_tmp" "$SH_FILE"
+            chmod +x "$SH_FILE"
+            Println "`eval_gettext \"\\\$info \\\$sh_name 脚本更新完成\"`"
+            sh_new_ver=$(grep 'sh_ver="' < "$SH_FILE" |awk -F "=" '{print $NF}'|sed 's/\"//g'|head -1)
+            if [ "${sh_new_ver%.*}" != "${sh_ver%.*}" ] 
+            then
+                rm -f "$LOCK_FILE"
+            fi
+        else
+            Println "`eval_gettext \"\\\$error 无法连接备用链接! \\\$sh_name 脚本更新失败, 请稍后再试\"`\n"
+        fi
+    fi
+
+    [ "$sh_locale" != "zh_CN" ] && i18nInstall "$sh_locale" > /dev/null
+
+    return 0
+}

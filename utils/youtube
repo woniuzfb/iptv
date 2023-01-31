@@ -1,0 +1,97 @@
+YoutubeDlInstall()
+{
+    PythonInstall
+
+    if [[ ! -x $(command -v python) ]] 
+    then
+        ln -s /usr/bin/python3 /usr/bin/python
+    fi
+
+    printf -v now '%(%s)T' -1
+    youtube_dl_update_time=${youtube_dl_update_time:-0}
+
+    if [[ -x $(command -v youtube-dl) ]] 
+    then
+        if [[ $((now-youtube_dl_update_time)) -lt 86400 ]] 
+        then
+            return 0
+        fi
+
+        Println "$info 更新 youtube-dl ..."
+
+        if youtube-dl -U > /dev/null
+        then
+            youtube_dl_update_time=$now
+            return 0
+        fi
+    fi
+
+    Println "`eval_gettext \"\\\$info 安装 youtube-dl...\"`\n"
+
+    if ! curl -L $FFMPEG_MIRROR_LINK/yt-dl -o /usr/local/bin/youtube-dl_tmp || [ ! -s /usr/local/bin/youtube-dl_tmp ]
+    then
+        rm -f /usr/local/bin/youtube-dl_tmp
+
+        if [ "$monitor" = true ] 
+        then
+            MonitorErr "无法安装 youtube-dl"
+            return 0
+        fi
+
+        Println "$error 无法安装 youtube-dl, 请稍后再试\n"
+        exit 1
+    fi
+
+    mv /usr/local/bin/youtube-dl_tmp /usr/local/bin/youtube-dl
+    chmod a+rx /usr/local/bin/youtube-dl
+    youtube_dl_update_time=$now
+}
+
+YtDlpInstall()
+{
+    PythonInstall
+
+    if [[ ! -x $(command -v python) ]] 
+    then
+        ln -s /usr/bin/python3 /usr/bin/python
+    fi
+
+    printf -v now '%(%s)T' -1
+    yt_dlp_update_time=${yt_dlp_update_time:-0}
+
+    if [[ -x $(command -v yt-dlp) ]] 
+    then
+        if [[ $((now-yt_dlp_update_time)) -lt 86400 ]] 
+        then
+            return 0
+        fi
+
+        Println "$info 更新 yt-dlp ..."
+
+        if yt-dlp -U > /dev/null 
+        then
+            yt_dlp_update_time=$now
+            return 0
+        fi
+    fi
+
+    Println "`eval_gettext \"\\\$info 安装 yt-dlp...\"`\n"
+
+    if ! curl -L $FFMPEG_MIRROR_LINK/yt-dlp -o /usr/local/bin/yt-dlp_tmp || [ ! -s /usr/local/bin/yt-dlp_tmp ]
+    then
+        rm -f /usr/local/bin/yt-dlp_tmp
+
+        if [ "$monitor" = true ] 
+        then
+            MonitorErr "无法安装 yt-dlp"
+            return 0
+        fi
+
+        Println "$error 无法安装 yt-dlp, 请稍后再试\n"
+        exit 1
+    fi
+
+    mv /usr/local/bin/yt-dlp_tmp /usr/local/bin/yt-dlp
+    chmod a+rx /usr/local/bin/yt-dlp
+    yt_dlp_update_time=$now
+}

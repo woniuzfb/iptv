@@ -1,0 +1,32 @@
+NginxAddRtmp()
+{
+    directive_rtmp_auto_push='{"directive":"rtmp_auto_push","args":["on"]}'
+    directive_rtmp_auto_push_reconnect='{"directive":"rtmp_auto_push_reconnect","args":["1s"]}'
+    directive_rtmp_socket_dir='{"directive":"rtmp_socket_dir","args":["/tmp"]}'
+    directive_rtmp='
+    {"directive":"rtmp","args":[],"block":[
+        {"directive":"out_queue","args":["4096"]},
+        {"directive":"out_cork","args":["8"]},
+        {"directive":"max_streams","args":["128"]},
+        {"directive":"timeout","args":["15s"]},
+        {"directive":"drop_idle_publisher","args":["10s"]},
+        {"directive":"log_interval","args":["120s"]},
+        {"directive":"log_size","args":["1m"]},
+        {"directive":"server","args":[],"block":[
+            {"directive":"listen","args":["1935"]},
+            {"directive":"server_name","args":["localhost"]},
+            {"directive":"access_log","args":["logs/flv.log"]},
+            {"directive":"application","args":["flv"],"block":[
+                {"directive":"live","args":["on"]},
+                {"directive":"gop_cache","args":["on"]}
+            ]}
+        ]}
+    ]}'
+
+    directives=( rtmp_auto_push rtmp_auto_push_reconnect rtmp_socket_dir rtmp )
+    directives_val=()
+    check_directives=()
+    check_args=()
+
+    NginxAddDirective 1
+}

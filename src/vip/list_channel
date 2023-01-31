@@ -1,0 +1,141 @@
+VipListChannel()
+{
+    VipListChannels
+
+    echo -e "$tip 多个频道用空格分隔, 比如 5 7 9-11"
+    while read -p "请选择频道: " vip_channels_num
+    do
+        [ -z "$vip_channels_num" ] && Println "$i18n_canceled...\n" && exit 1
+        IFS=" " read -ra vip_channels_num_arr <<< "$vip_channels_num"
+
+        error_no=0
+        for vip_channel_num in "${vip_channels_num_arr[@]}"
+        do
+            case "$vip_channel_num" in
+                *"-"*)
+                    vip_channel_num_start=${vip_channel_num%-*}
+                    vip_channel_num_end=${vip_channel_num#*-}
+                    if [[ $vip_channel_num_start == *[!0-9]* ]] || [[ $vip_channel_num_end == *[!0-9]* ]] || [ "$vip_channel_num_start" -eq 0 ] || [ "$vip_channel_num_end" -eq 0 ] || [ "$vip_channel_num_end" -gt "$vip_channels_count" ] || [ "$vip_channel_num_start" -ge "$vip_channel_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$vip_channel_num" -lt 1 ] || [ "$vip_channel_num" -gt "$vip_channels_count" ] 
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                declare -a new_array
+                for element in "${vip_channels_num_arr[@]}"
+                do
+                    if [[ $element =~ - ]] 
+                    then
+                        start=${element%-*}
+                        end=${element#*-}
+                        for((i=start;i<=end;i++));
+                        do
+                            new_array+=("$i")
+                        done
+                    else
+                        new_array+=("$element")
+                    fi
+                done
+                vip_channels_num_arr=("${new_array[@]}")
+                unset new_array
+                break
+            ;;
+        esac
+    done
+
+    VipListUsers
+
+    while read -p "请选择用户: " vip_users_num
+    do
+        case "$vip_users_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$vip_users_num" -gt 0 ] && [ "$vip_users_num" -le "$vip_users_count" ]
+                then
+                    vip_users_index=$((vip_users_num-1))
+                    vip_user_ip=${vip_users_ip[vip_users_index]}
+                    vip_user_license=${vip_users_license[vip_users_index]}
+                    vip_user_sum=${vip_users_sum[vip_users_index]}
+                    vip_user_expire=${vip_users_expire[vip_users_index]}
+                    vip_user_name=${vip_users_name[vip_users_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    if [ -z "${vip_public_host:-}" ] 
+    then
+        VipConfig
+    fi
+
+    echo
+    inquirer list_input_index "测试频道" ny_options ny_options_index
+
+    if [ "$ny_options_index" -eq 1 ] && [ -z "${FFPROBE:-}" ]
+    then
+        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+        FFPROBE="$FFMPEG_ROOT/ffprobe"
+    fi
+
+    for vip_channels_num in "${vip_channels_num_arr[@]}"
+    do
+        vip_channels_index=$((vip_channels_num-1))
+        vip_channel_id=${vip_channels_id[vip_channels_index]}
+        vip_channel_name=${vip_channels_name[vip_channels_index]}
+        vip_channel_epg_id=${vip_channels_epg_id[vip_channels_index]}
+
+        VipGetStreamLink
+
+        if [ "$ny_options_index" -eq 1 ] 
+        then
+            printf -v ffprobe_headers_command '%b' "x-forwarded-for: 127.0.0.1\r\n"
+
+            if ! $FFPROBE -user_agent "$USER_AGENT_TV" \
+                -headers "$ffprobe_headers_command" -show_streams -hide_banner -i "$stream_link"
+            then
+                if [ -n "${vip_public_host:-}" ] 
+                then
+                    Println "$error 频道 ${green}[ $vip_channel_name ]${normal}\n\n源链接: $stream_link\n\n地址: $vip_public_host/vip/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
+                else
+                    Println "$error 频道 ${green}[ $vip_channel_name ]${normal}\n\n源链接: $stream_link\n\n地址: $VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
+                fi
+
+                continue
+            fi
+        fi
+
+        if [ -n "${vip_public_host:-}" ] 
+        then
+            Println "频道 ${green}[ $vip_channel_name ]${normal}\n\n源链接: $stream_link\n\n地址: $vip_public_host/vip/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
+        else
+            Println "频道 ${green}[ $vip_channel_name ]${normal}\n\n源链接: $stream_link\n\n地址: $VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port/$vip_channel_id/playlist.m3u8\n"
+        fi
+    done
+}

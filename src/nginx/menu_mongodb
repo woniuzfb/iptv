@@ -1,0 +1,53 @@
+MongodbMenu()
+{
+    echo
+    mongodb_options=( '查看' '安装' '升级' )
+    inquirer list_input_index "选择操作" mongodb_options mongodb_options_index
+
+    if [ "$mongodb_options_index" -eq 0 ] 
+    then
+        if [[ ! -x $(command -v mongo) ]] 
+        then
+            Println "$error 请先安装 mongodb\n"
+            exit 1
+        fi
+
+        systemctl --no-pager -l status mongod
+    elif [ "$mongodb_options_index" -eq 1 ] 
+    then
+        if [[ -x $(command -v mongo) ]] 
+        then
+            Println "$error mongodb 已存在\n"
+            exit 1
+        fi
+
+        MongodbInstall
+    else
+        if [[ ! -x $(command -v mongo) ]] 
+        then
+            Println "$error 请先安装 mongodb\n"
+            exit 1
+        fi
+
+        echo
+        ExitOnList n "升级会清除现有 mongodb 配置, 是否继续"
+
+        DistCheck
+
+        service mongod stop
+
+        if [ "$dist" == "rpm" ] 
+        then
+            yum -y erase mongodb-org*
+
+            rm -f /etc/yum.repos.d/mongodb-org-*.repo
+        else
+            apt-get -y purge mongodb-org*
+            apt-get -y autoremove
+
+            rm -f /etc/apt/sources.list.d/mongodb-org-*.list
+        fi
+
+        MongodbInstall
+    fi
+}

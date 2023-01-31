@@ -1,0 +1,90 @@
+CloudflareAddWorker()
+{
+    if [ ! -s "$CF_CONFIG" ] 
+    then
+        printf '{"%s":[],"%s":[],"%s":[]}' "users" "hosts" "workers" > "$CF_CONFIG"
+    fi
+
+    [ ! -d "$CF_WORKERS_ROOT" ] && mkdir -p "$CF_WORKERS_ROOT"
+    cd "$CF_WORKERS_ROOT"
+
+    Println "
+  ${green}1.${normal} stream proxy (反向代理)
+  ${green}2.${normal} xtream codes proxy
+  ${green}3.${normal} 自定义 worker
+
+    "
+    while read -p "选择 worker: " add_cf_worker_num 
+    do
+        case $add_cf_worker_num in
+            1) 
+                if [ ! -d "$CF_WORKERS_ROOT/stream_proxy" ] 
+                then
+                    wrangler generate "stream_proxy"
+                    wget --timeout=10 --tries=1 --no-check-certificate "$STREAM_PROXY_LINK" -qO "$CF_WORKERS_ROOT/stream_proxy/index.js" \
+                    || wget --timeout=10 --tries=3 --no-check-certificate "$STREAM_PROXY_LINK_FALLBACK" -qO "$CF_WORKERS_ROOT/stream_proxy/index.js"
+                fi
+
+                CloudflareSetWorkerName
+                cf_worker_path="stream_proxy"
+                CloudflareSetWorkerProjectName
+                CloudflareSetWorkerUpstream
+                break
+            ;;
+            2) 
+                if [ ! -d "$CF_WORKERS_ROOT/xtream_codes_proxy" ] 
+                then
+                    wrangler generate "xtream_codes_proxy"
+                    wget --timeout=10 --tries=1 --no-check-certificate "$XTREAM_CODES_PROXY_LINK" -qO "$CF_WORKERS_ROOT/xtream_codes_proxy/index.js" \
+                    || wget --timeout=10 --tries=3 --no-check-certificate "$XTREAM_CODES_PROXY_LINK_FALLBACK" -qO "$CF_WORKERS_ROOT/xtream_codes_proxy/index.js"
+                fi
+
+                CloudflareSetWorkerName
+                cf_worker_path="xtream_codes_proxy"
+                CloudflareSetWorkerProjectName
+                break
+            ;;
+            3) 
+                CloudflareListWorkers
+                CloudflareSetWorkerName
+                CloudflareSetWorkerPath
+                CloudflareSetWorkerProjectName
+
+                if [ -d "$CF_WORKERS_ROOT/$cf_worker_path" ] 
+                then
+                    echo
+                    ExitOnList n "`gettext \"路径已经存在, 是否仍要添加\"`"
+                else
+                    wrangler generate "$cf_worker_path"
+                fi
+                break
+            ;;
+            *) 
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+        esac
+    done
+
+    new_worker=$(
+    $JQ_FILE -n --arg name "$cf_worker_name" --arg path "$cf_worker_path" --arg project_name "$cf_worker_project_name" \
+        '{
+            name: $name,
+            path: $path,
+            project_name: $project_name
+        }'
+    )
+
+    if [ -n "${cf_worker_upstream:-}" ] 
+    then
+        merge=$(
+        $JQ_FILE -n --arg upstream "$cf_worker_upstream" \
+        '{
+            upstream: $upstream
+        }')
+        JQs merge new_worker "$merge"
+    fi
+
+    jq_path='["workers"]'
+    JQ add "$CF_CONFIG" "[$new_worker]"
+    Println "$info worker: $cf_worker_name 添加成功\n"
+}

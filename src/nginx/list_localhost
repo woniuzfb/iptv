@@ -1,0 +1,141 @@
+NginxListLocalhost()
+{
+    NginxCheckLocalhost
+
+    nginx_localhost_list=""
+    nginx_localhost_server_count=0
+    nginx_localhost_server_indices=()
+    nginx_localhost_server_root=()
+
+    for((level_1_index=0;level_1_index<level_1_count;level_1_index++));
+    do
+        if [ "${level_1_directive_arr[level_1_index]}" == "http" ] 
+        then
+            if [ -z "${level_3_directive_arr[level_1_index]}" ] 
+            then
+                break
+            fi
+
+            level_1_add_indices=( "$level_1_index" )
+
+            level_2_directive_d1=${level_2_directive_arr[level_1_index]}
+            level_3_directive_d1=${level_3_directive_arr[level_1_index]}
+            level_3_args_d1=${level_3_args_arr[level_1_index]}
+
+            IFS="${delimiters[1]}" read -r -a level_2_directive_d1_arr <<< "$level_2_directive_d1${delimiters[1]}"
+            IFS="${delimiters[2]}" read -r -a level_3_directive_d1_arr <<< "$level_3_directive_d1${delimiters[2]}"
+            IFS="${delimiters[2]}" read -r -a level_3_args_d1_arr <<< "$level_3_args_d1${delimiters[2]}"
+
+            if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ]
+            then
+                level_4_directive_d1=${level_4_directive_arr[level_1_index]}
+                level_4_args_d1=${level_4_args_arr[level_1_index]}
+                IFS="${delimiters[3]}" read -r -a level_4_directive_d1_arr <<< "$level_4_directive_d1${delimiters[3]}"
+                IFS="${delimiters[3]}" read -r -a level_4_args_d1_arr <<< "$level_4_args_d1${delimiters[3]}"
+            fi
+
+            for((level_2_index=0;level_2_index<${#level_2_directive_d1_arr[@]};level_2_index++));
+            do
+                if [ "${level_2_directive_d1_arr[level_2_index]}" == "server" ] 
+                then
+                    level_3_directive_d2=${level_3_directive_d1_arr[level_2_index]}
+                    level_3_args_d2=${level_3_args_d1_arr[level_2_index]}
+
+                    IFS="${delimiters[1]}" read -r -a level_3_directive_d2_arr <<< "$level_3_directive_d2${delimiters[1]}"
+                    IFS="${delimiters[1]}" read -r -a level_3_args_d2_arr <<< "$level_3_args_d2${delimiters[1]}"
+
+                    if [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ]
+                    then
+                        level_4_directive_d2=${level_4_directive_d1_arr[level_2_index]}
+                        level_4_args_d2=${level_4_args_d1_arr[level_2_index]}
+                        IFS="${delimiters[2]}" read -r -a level_4_directive_d2_arr <<< "$level_4_directive_d2${delimiters[2]}"
+                        IFS="${delimiters[2]}" read -r -a level_4_args_d2_arr <<< "$level_4_args_d2${delimiters[2]}"
+                    fi
+
+                    nginx_localhost_server_count=$((nginx_localhost_server_count+1))
+                    nginx_localhost_server_indices+=("$level_2_index")
+                    nginx_localhost_listen=""
+                    nginx_localhost_flv_status="${red}未配置${normal}"
+                    nginx_localhost_nodejs_status="${red}未配置${normal}"
+                    skip_find_nodejs=0
+                    server_root=""
+
+                    for((level_3_index=0;level_3_index<${#level_3_directive_d2_arr[@]};level_3_index++));
+                    do
+                        level_3_directive=${level_3_directive_d2_arr[level_3_index]}
+                        level_3_args=${level_3_args_d2_arr[level_3_index]}
+
+                        if [ "$level_3_directive" == "listen" ] 
+                        then
+                            [ -n "$nginx_localhost_listen" ] && nginx_localhost_listen="$nginx_localhost_listen, "
+                            nginx_localhost_listen="$nginx_localhost_listen${level_3_args//${delimiters[0]}/ }"
+                        elif [ "$level_3_directive" == "location" ] 
+                        then
+                            if [ "${level_3_args}" == "/flv" ] 
+                            then
+                                nginx_localhost_flv_status="${green}已配置${normal}"
+                            elif [ "$level_4_d1_count" -gt 0 ] && [ -n "${level_4_directive_arr[level_1_index]}" ] && [ -n "${level_4_directive_d1_arr[level_2_index]}" ] && [ -n "${level_4_directive_d2_arr[level_3_index]}" ] 
+                            then
+                                level_4_directive_d3=${level_4_directive_d2_arr[level_3_index]}
+                                level_4_args_d3=${level_4_args_d2_arr[level_3_index]}
+                                IFS="${delimiters[1]}" read -r -a level_4_directive_d3_arr <<< "$level_4_directive_d3${delimiters[1]}"
+                                IFS="${delimiters[1]}" read -r -a level_4_args_d3_arr <<< "$level_4_args_d3${delimiters[1]}"
+
+                                if [ "${level_3_args}" == "=${delimiters[0]}/" ] && [ "$skip_find_nodejs" -eq 0 ] 
+                                then
+                                    for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
+                                    do
+                                        if [ "${level_4_directive_d3_arr[level_4_index]}" == "proxy_pass" ] 
+                                        then
+                                            if [[ ${level_4_args_d3_arr[level_4_index]} =~ ^http://nodejs ]] 
+                                            then
+                                                nginx_localhost_nodejs_status="${green}已配置${normal}"
+                                                skip_find_nodejs=1
+                                            fi
+                                            break
+                                        fi
+                                    done
+                                elif [ "${level_3_args}" == "/" ] 
+                                then
+                                    for((level_4_index=0;level_4_index<${#level_4_directive_d3_arr[@]};level_4_index++));
+                                    do
+                                        if [ "${level_4_directive_d3_arr[level_4_index]}" == "root" ] 
+                                        then
+                                            if [ "${level_4_args_d3_arr[level_4_index]:0:1}" == "/" ] 
+                                            then
+                                                server_root=${level_4_args_d3_arr[level_4_index]}
+                                            else
+                                                server_root="$nginx_prefix/${level_4_args_d3_arr[level_4_index]}"
+                                            fi
+                                            break
+                                        fi
+                                    done
+                                fi
+                            fi
+                        elif [ "$level_3_directive" == "root" ] 
+                        then
+                            if [ "${level_3_args_d2_arr[level_3_index]:0:1}" == "/" ] 
+                            then
+                                server_root=${level_3_args_d2_arr[level_3_index]}
+                            else
+                                server_root="$nginx_prefix/${level_3_args_d2_arr[level_3_index]}"
+                            fi
+                        fi
+                    done
+
+                    nginx_localhost_server_root+=("$server_root")
+                    nginx_localhost_list="$nginx_localhost_list $nginx_localhost_server_count.${indent_6}端口: ${green}${nginx_localhost_listen:-未设置}${normal}\n${indent_6}flv: $nginx_localhost_flv_status\n${indent_6}nodejs: $nginx_localhost_nodejs_status\n\n"
+                fi
+            done
+            break
+        fi
+    done
+
+    if [ "$nginx_localhost_server_count" -eq 0 ] 
+    then
+        Println "$error 请先添加本地配置\n"
+        exit 1
+    fi
+
+    Println "本地配置:\n\n$nginx_localhost_list"
+}

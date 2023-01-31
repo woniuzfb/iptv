@@ -1,0 +1,92 @@
+NginxAddCorsHost()
+{
+    Println "$info 配置 cors..."
+
+    cors_domains=()
+
+    if ls -A "$nginx_prefix/conf/sites_available/"* > /dev/null 2>&1
+    then
+        for f in "$nginx_prefix/conf/sites_available/"*
+        do
+            domain=${f##*/}
+            domain=${domain%.conf}
+            if [[ $domain =~ ^([a-zA-Z0-9](([a-zA-Z0-9-]){0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]] 
+            then
+                cors_domains+=("$domain")
+            fi
+        done
+    fi
+
+    directive_map='{"directive":"map","args":["$http_origin","$cors_host"],"block":[]}'
+    directives=( map )
+    directives_val=()
+
+    check_directives=()
+    check_args=( '["$http_origin","$cors_host"]' )
+
+    NginxAddDirective 2
+
+    server_ip=$(GetServerIp)
+
+    directive_default='{"directive":"default","args":["*"]}'
+
+    read -r directive_server_ip_http < <(
+        $JQ_FILE -c -n --arg directive "~http://$server_ip" --argjson args "[\"~http://$server_ip\"]" \
+        '{
+            "directive":$directive,
+            "args":$args
+        }'
+    )
+
+    read -r directive_server_ip_https < <(
+        $JQ_FILE -c -n --arg directive "~https://$server_ip" --argjson args "[\"~https://$server_ip\"]" \
+        '{
+            "directive":$directive,
+            "args":$args
+        }'
+    )
+
+    directives=( default "~http://$server_ip" "~https://$server_ip" )
+    directives_val=( default server_ip_http server_ip_https )
+
+    if [ -n "${cors_domains:-}" ]
+    then
+        for((cors_i=0;cors_i<${#cors_domains[@]};cors_i++));
+        do
+            read -r directive_cors_domain_${cors_i}_http < <(
+                $JQ_FILE -c -n --arg directive "~http://${cors_domains[cors_i]}" --argjson args "[\"~http://${cors_domains[cors_i]}\"]" \
+                '{
+                    "directive":$directive,
+                    "args":$args
+                }'
+            )
+            read -r directive_cors_domain_${cors_i}_https < <(
+                $JQ_FILE -c -n --arg directive "~https://${cors_domains[cors_i]}" --argjson args "[\"~https://${cors_domains[cors_i]}\"]" \
+                '{
+                    "directive":$directive,
+                    "args":$args
+                }'
+            )
+            directives+=( "~http://${cors_domains[cors_i]}" "~https://${cors_domains[cors_i]}" )
+            directives_val+=( cors_domain_${cors_i}_http cors_domain_${cors_i}_https )
+        done
+    fi
+
+    check_directives=()
+    check_args=()
+
+    NginxAddDirective 3
+
+    if ! grep -q "$nginx_name:" < "/etc/passwd"
+    then
+        if grep -q '\--group ' < <(adduser --help)
+        then
+            adduser "$nginx_name" --system --group --no-create-home > /dev/null
+        else
+            adduser "$nginx_name" --system --no-create-home > /dev/null
+        fi
+        usermod -s /usr/sbin/nologin "$nginx_name"
+    fi
+
+    sed -i "s/#user  nobody;/user $nginx_name $nginx_name;/" "$nginx_prefix/conf/nginx.conf"
+}

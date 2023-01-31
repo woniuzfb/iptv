@@ -1,0 +1,75 @@
+IbmEditUser()
+{
+    IbmListUsers
+
+    if [ "$ibm_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
+
+    echo "选择用户"
+    while read -p "$i18n_default_cancel" ibm_users_num
+    do
+        case "$ibm_users_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$ibm_users_num" -gt 0 ] && [ "$ibm_users_num" -le "$ibm_users_count" ]
+                then
+                    ibm_users_index=$((ibm_users_num-1))
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    IbmSetUserEmail
+    IbmSetUserPass
+
+    IbmGetApi
+
+    ibmcloud api "$ibm_api"
+
+    IbmSetUserRegion
+
+    Println "$info 登录账号: $ibm_user_email [ $ibm_user_region ]"
+    ibmcloud login -u "$ibm_user_email" -p "$ibm_user_pass" -r "$ibm_user_region"
+
+    IbmSetUserResourceGroup
+
+    ibmcloud target -g "$ibm_user_resource_group"
+
+    IbmSetUserOrg
+
+    ibmcloud target -o "$ibm_user_org"
+
+    IbmSetUserSpace
+
+    ibmcloud target -s "$ibm_user_space"
+
+    new_user=$(
+    $JQ_FILE -n --arg email "$ibm_user_email" --arg pass "$ibm_user_pass" \
+        --arg region "$ibm_user_region" --arg resource_group "$ibm_user_resource_group" \
+        --arg org "$ibm_user_org" --arg space "$ibm_user_space" \
+        '{
+            email: $email,
+            pass: $pass,
+            region: $region,
+            resource_group: $resource_group,
+            org: $org,
+            space: $space
+        }'
+    )
+
+    json=true
+    jq_path='["users",'"$ibm_users_index"']'
+    JQ update "$IBM_CONFIG" "$new_user"
+    Println "$info 用户修改成功\n"
+}

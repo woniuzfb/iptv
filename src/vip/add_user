@@ -1,0 +1,30 @@
+VipAddUser()
+{
+    if [ ! -s "$VIP_FILE" ] 
+    then
+        printf '{"%s":{},"%s":[],"%s":[]}' "config" "users" "hosts" > "$VIP_FILE"
+    fi
+
+    VipSetUserIp
+    VipSetUserLicense
+    VipSetUserSum
+    VipSetUserName
+
+    new_user=$(
+    $JQ_FILE -n --arg ip "$vip_user_ip" --arg license "$vip_user_license" \
+        --arg sum "$vip_user_sum" --arg expire "$vip_user_expire" \
+        --arg name "$vip_user_name" \
+        '{
+            ip: $ip,
+            license: $license,
+            sum: $sum,
+            expire: $expire | tonumber,
+            name: $name
+        }'
+    )
+
+    jq_path='["users"]'
+    JQ add "$VIP_FILE" "[$new_user]"
+
+    Println "$info 添加成功\n"
+}

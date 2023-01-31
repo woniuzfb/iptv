@@ -1,0 +1,12 @@
+GetFreeTag()
+{
+    while true 
+    do
+        free_tag=$(RandStr)
+        if ! grep -q '"tag": "'"$free_tag"'"' < "$V2_CONFIG"
+        then
+            echo "$free_tag"
+            break
+        fi
+    done
+}

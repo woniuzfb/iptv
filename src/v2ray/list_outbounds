@@ -1,0 +1,342 @@
+V2rayListOutbounds()
+{
+    V2rayGetOutbounds
+
+    [ "$outbounds_count" -eq 0 ] && Println "$error 没有出站\n" && exit 1
+
+    Println "\n=== 出站数 ${green} $outbounds_count ${normal}"
+
+    outbounds_list=""
+
+    for((outbounds_index=0;outbounds_index<outbounds_count;outbounds_index++));
+    do
+        protocol_settings_list="传输协议: ${green}${outbounds_protocol[outbounds_index]}${normal}\n${indent_6}"
+
+        if [ "${outbounds_send_through[outbounds_index]}" != "0.0.0.0" ] 
+        then
+            protocol_settings_list="${protocol_settings_list}发送数据的 IP 地址: ${green}${outbounds_send_through[outbounds_index]}${normal}\n${indent_6}"
+        fi
+
+        if [ -n "${outbounds_settings_address[outbounds_index]}" ] 
+        then
+            protocol_settings_list="${protocol_settings_list}目标地址: ${green}${outbounds_settings_address[outbounds_index]}${normal} 目标端口: ${green}${outbounds_settings_port[outbounds_index]}${normal}\n${indent_6}"
+        fi
+
+        if [ "${outbounds_protocol[outbounds_index]}" == "blackhole" ] 
+        then
+            if [ "${outbounds_settings_response_type[outbounds_index]}" == "none" ] 
+            then
+                protocol_settings_list="${protocol_settings_list}黑洞的响应方式: ${green}直接关闭${normal}\n${indent_6}"
+            else
+                protocol_settings_list="${protocol_settings_list}黑洞的响应方式: ${green}返回403并关闭${normal}\n${indent_6}"
+            fi
+        elif [ "${outbounds_protocol[outbounds_index]}" == "dns" ] 
+        then
+            protocol_settings_list="${protocol_settings_list}传输层协议: ${green}${outbounds_settings_network[outbounds_index]:-不变}${normal} 服务器地址: ${green}${outbounds_settings_address[outbounds_index]:-不变}${normal} 服务器端口: ${green}${outbounds_settings_port[outbounds_index]:-不变}${normal}\n${indent_6}"
+        elif [ "${outbounds_protocol[outbounds_index]}" == "freedom" ] 
+        then
+            if [ -n "${outbounds_settings_domain_strategy[outbounds_index]}" ] 
+            then
+                protocol_settings_list="${protocol_settings_list}域名策略: ${green}${outbounds_settings_domain_strategy[outbounds_index]}${normal}\n${indent_6}"
+            fi
+            if [ -n "${outbounds_settings_redirect[outbounds_index]}" ] 
+            then
+                protocol_settings_list="${protocol_settings_list}发送到指定地址: ${green}${outbounds_settings_redirect[outbounds_index]}${normal}\n${indent_6}"
+            fi
+            if [ -n "${outbounds_settings_user_level[outbounds_index]}" ] 
+            then
+                protocol_settings_list="${protocol_settings_list}使用用户等级: ${green}${outbounds_settings_user_level[outbounds_index]}${normal}\n${indent_6}"
+            fi
+        elif [ "${outbounds_protocol[outbounds_index]}" == "socks" ] 
+        then
+            protocol_settings_list="${protocol_settings_list}Socks 协议版本: ${green}${outbounds_settings_version[outbounds_index]}${normal}\n${indent_6}"
+        elif [ "${outbounds_protocol[outbounds_index]}" == "shadowsocks" ] 
+        then
+            protocol_settings_list="$protocol_settings_list邮箱地址: ${green}${outbounds_settings_email[outbounds_index]}${normal}\n${indent_6}服务器地址: ${green}${outbounds_settings_address[outbounds_index]}${normal}\n${indent_6}服务器端口: ${green}${outbounds_settings_port[outbounds_index]}${normal}\n${indent_6}加密方式: ${green}${outbounds_settings_method[outbounds_index]}${normal}\n${indent_6}密码: ${green}${outbounds_settings_password[outbounds_index]}${normal}\n${indent_6}用户等级: ${green}${outbounds_settings_user_level[outbounds_index]}${normal}\n${indent_6}"
+            if [ "${outbounds_settings_iv_check[outbounds_index]}" = false ] 
+            then
+                protocol_settings_list="${protocol_settings_list}IV 检查: ${red}否${normal}\n${indent_6}"
+            else
+                protocol_settings_list="${protocol_settings_list}IV 检查: ${green}是${normal}\n${indent_6}"
+            fi
+        fi
+
+        if [ -n "${outbounds_proxy_tag[outbounds_index]}" ] 
+        then
+            stream_settings_list="指定的出站代理标签: ${outbounds_proxy_tag[outbounds_index]}\n${indent_6}"
+        else
+            stream_settings_list=""
+
+            if [ "${outbounds_stream_sockopt_mark[outbounds_index]}" -eq 0 ] 
+            then
+                stream_settings_list="${stream_settings_list}出站标记: ${red}否${normal}\n${indent_6}"
+            else
+                stream_settings_list="${stream_settings_list}出站标记: ${green}${outbounds_stream_sockopt_mark[outbounds_index]}${normal}\n${indent_6}"
+            fi
+
+            if [ "${outbounds_stream_network[outbounds_index]}" == "http" ] 
+            then
+                stream_settings_list="传输方式: ${green}http/2${normal}\n${indent_6}"
+            elif [ -n "${outbounds_stream_network[outbounds_index]}" ]  
+            then
+                stream_settings_list="传输方式: ${green}${outbounds_stream_network[outbounds_index]}${normal}\n${indent_6}"
+            fi
+
+            if [ "${outbounds_protocol[outbounds_index]}" != "blackhole" ] && [ "${outbounds_protocol[outbounds_index]}" != "dns" ] && [ "${outbounds_protocol[outbounds_index]}" != "freedom" ]
+            then
+                if [ "${outbounds_stream_security[outbounds_index]}" == "none" ] 
+                then
+                    stream_settings_list="${stream_settings_list}$tls_name 加密: ${red}否${normal}\n${indent_6}"
+                else
+                    stream_settings_list="${stream_settings_list}$tls_name 加密: ${green}${outbounds_stream_security[outbounds_index]}${normal}\n${indent_6}"
+                    if [ -n "${outbounds_stream_tls_server_name[outbounds_index]}" ] 
+                    then
+                        stream_settings_list="${stream_settings_list}指定证书域名: ${green}${outbounds_stream_tls_server_name[outbounds_index]}${normal}\n${indent_6}"
+                    else
+                        stream_settings_list="${stream_settings_list}指定证书域名: ${red}否${normal}\n${indent_6}"
+                    fi
+                    if [ "${outbounds_stream_tls_allow_insecure[outbounds_index]}" = false ] 
+                    then
+                        stream_settings_list="${stream_settings_list}允许不安全连接: ${red}否${normal}\n${indent_6}"
+                    else
+                        stream_settings_list="${stream_settings_list}允许不安全连接: ${green}是${normal}\n${indent_6}"
+                    fi
+                    if [ "${outbounds_stream_tls_disable_system_root[outbounds_index]}" = false ] 
+                    then
+                        stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: ${red}否${normal}\n${indent_6}"
+                    else
+                        stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: ${green}是${normal}\n${indent_6}"
+                    fi
+                    if [ -n "${outbounds_stream_tls_alpn[outbounds_index]}" ] 
+                    then
+                        stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: ${green}${outbounds_stream_tls_alpn[outbounds_index]//|/,}${normal}\n${indent_6}"
+                    else
+                        stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: ${green}h2,http/1.1${normal}\n${indent_6}"
+                    fi
+                    if [ -n "${outbounds_stream_tls_certificates_usage[outbounds_index]}" ] 
+                    then
+                        certificates_list="${green}证书:${normal}\n${indent_6}"
+                        IFS="|" read -r -a ocsp_stapling <<< "${outbounds_stream_tls_certificates_ocsp_stapling[outbounds_index]}"
+                        IFS="|" read -r -a one_time_loading <<< "${outbounds_stream_tls_certificates_one_time_loading[outbounds_index]}"
+                        IFS="|" read -r -a usages <<< "${outbounds_stream_tls_certificates_usage[outbounds_index]}"
+                        IFS="|" read -r -a certificate_files <<< "${outbounds_stream_tls_certificates_certificate_file[outbounds_index]}"
+                        IFS="|" read -r -a key_files <<< "${outbounds_stream_tls_certificates_key_file[outbounds_index]}"
+                        IFS="|" read -r -a certificates <<< "${outbounds_stream_tls_certificates_certificate[outbounds_index]}"
+                        for((certificate_i=0;certificate_i<${#usages[@]};certificate_i++));
+                        do
+                            if [ "${usages[certificate_i]}" == "encipherment" ] 
+                            then
+                                certificate_usage="$tls_name 认证和加密"
+                            elif [ "${usages[certificate_i]}" == "verify" ] 
+                            then
+                                certificate_usage="验证远端 $tls_name"
+                            elif [ "${usages[certificate_i]}" == "issue" ] 
+                            then
+                                certificate_usage="签发其它证书"
+                            else
+                                certificate_usage="验证客户端身份"
+                            fi
+                            if [ -n "${certificates:-}" ] && [ -n "${certificates[certificate_i]}" ] 
+                            then
+                                certificates_list="$certificates_list$((certificate_i+1)). 用途: ${green}$certificate_usage [自签名]${normal}\n${indent_6}"
+                            else
+                                certificates_list="$certificates_list$((certificate_i+1)). 用途: ${green}$certificate_usage${normal}\n${indent_6}"
+                            fi
+                            if [ "$v2ray_name" == "xray" ] && [ "${usages[certificate_i]}" == "encipherment" ]
+                            then
+                                if [ "${one_time_loading[certificate_i]}" = true ] 
+                                then
+                                    certificates_list="$certificates_list证书热重载: ${red}否${normal}\n${indent_6}"
+                                else
+                                    certificates_list="$certificates_list证书热重载: ${green}是${normal}\n${indent_6}OCSP 装订更新: ${green}${ocsp_stapling[certificate_i]}(秒)${normal}\n${indent_6}"
+                                fi
+                            fi
+                            if [ -n "${certificate_files[certificate_i]}" ] 
+                            then
+                                certificates_list="$certificates_list证书路径: ${green}${certificate_files[certificate_i]}${normal}\n${indent_6}"
+                            fi
+                            if [ -n "${key_files[certificate_i]}" ] 
+                            then
+                                certificates_list="$certificates_list密钥路径: ${green}${key_files[certificate_i]}${normal}\n${indent_6}"
+                            fi
+                        done
+                        stream_settings_list="$stream_settings_list\n${indent_6}$certificates_list\n${indent_6}"
+                    fi
+                fi
+            fi
+
+            if [ "${outbounds_stream_network[outbounds_index]}" == "tcp" ] 
+            then
+                if [ "${outbounds_stream_header_type[outbounds_index]}" == "none" ] 
+                then
+                    stream_settings_list="${stream_settings_list}数据包头部: ${red}不伪装${normal}\n${indent_6}"
+                else
+                    stream_settings_list="${stream_settings_list}数据包头部: ${green}http 伪装${normal}\n${indent_6}"
+                    if [ -n "${outbounds_stream_header_request[outbounds_index]}" ] 
+                    then
+                        IFS="|" read -r -a header_request <<< "${outbounds_stream_header_request[outbounds_index]}"
+                        header_request_list=""
+                        for request in "${header_request[@]}"
+                        do
+                            request_key=${request%%=*}
+                            request_value=${request#*=}
+                            if [ "$request_key" == "headers" ] 
+                            then
+                                IFS="!" read -r -a headers <<< "$request_value"
+                                if [ -n "${headers:-}" ] 
+                                then
+                                    header_request_list="$header_request_list${green}headers${normal}:\n\033[8C"
+                                    for header in "${headers[@]}"
+                                    do
+                                        header_key=${header%%=*}
+                                        header_value=${header#*=}
+                                        IFS="~" read -r -a header_values <<< "$header_value"
+                                        if [ -z "${header_values:-}" ] 
+                                        then
+                                            header_request_list="$header_request_list${green}$header_key => \"\"${normal}\n\033[8C"
+                                            continue
+                                        fi
+                                        header_request_list="$header_request_list${green}$header_key => ${normal}\n\033[8C"
+                                        for header_value in "${header_values[@]}"
+                                        do
+                                            header_request_list="$header_request_list  ${green}$header_value${normal}\n\033[8C"
+                                        done
+                                    done
+                                fi
+                            else
+                                header_request_list="$header_request_list${green}$request_key${normal}: ${green}${request_value//~/, }${normal}\n${indent_6}"
+                            fi
+                        done
+                        [ -n "$header_request_list" ] && stream_settings_list="${stream_settings_list}自定义 HTTP 头:\n${indent_6}$header_request_list"
+                    fi
+                fi
+            elif [ "${outbounds_stream_network[outbounds_index]}" == "kcp" ] 
+            then
+                if [ "${outbounds_stream_header_type[outbounds_index]}" == "none" ] 
+                then
+                    stream_settings_list="${stream_settings_list}数据包头部伪装: ${red}否${normal}\n${indent_6}"
+                else
+                    stream_settings_list="${stream_settings_list}数据包头部伪装: ${green}${outbounds_stream_network[outbounds_index]}${normal}\n${indent_6}"
+                fi
+                if [ "${outbounds_stream_kcp_congestion[outbounds_index]}" = false ] 
+                then
+                    stream_settings_list="${stream_settings_list}拥塞控制: ${red}否${normal}\n${indent_6}"
+                else
+                    stream_settings_list="${stream_settings_list}拥塞控制: ${green}是${normal}\n${indent_6}"
+                fi
+                stream_settings_list="${stream_settings_list}最大传输单元: ${green}${outbounds_stream_kcp_mtu[outbounds_index]}${normal}\n${indent_6}传输时间间隔: ${green}${outbounds_stream_kcp_tti[outbounds_index]}(ms)${normal}\n${indent_6}上行链路容量: ${green}${outbounds_stream_kcp_uplink_capacity[outbounds_index]}(MB/s)${normal}\n${indent_6}下行链路容量: ${green}${outbounds_stream_kcp_downlink_capacity[outbounds_index]}(MB/s)${normal}\n${indent_6}读取缓冲区大小: ${green}${outbounds_stream_kcp_downlink_capacity[outbounds_index]}(MB)${normal}\n${indent_6}写入缓冲区大小: ${green}${outbounds_stream_kcp_downlink_capacity[outbounds_index]}(MB)${normal}\n${indent_6}"
+                if [ -n "${outbounds_stream_kcp_seed[outbounds_index]}" ] 
+                then
+                    stream_settings_list="${stream_settings_list}混淆密码: ${green}${outbounds_stream_kcp_seed[outbounds_index]}${normal}\n${indent_6}"
+                else
+                    stream_settings_list="${stream_settings_list}混淆密码: ${red}否${normal}\n${indent_6}"
+                fi
+            elif [ "${outbounds_stream_network[outbounds_index]}" == "ws" ] 
+            then
+                stream_settings_list="${stream_settings_list}路径: ${green}${outbounds_stream_path[outbounds_index]}${normal}\n${indent_6}"
+                if [ -n "${outbounds_stream_ws_headers[outbounds_index]}" ] 
+                then
+                    IFS="|" read -r -a headers <<< "${outbounds_stream_ws_headers[outbounds_index]}"
+                    headers_list=""
+                    for header in "${headers[@]}"
+                    do
+                        headers_list="$headers_list${green}${header%%=*}${normal}: ${green}${header#*=}${normal}\n${indent_6}"
+                    done
+                    [ -n "$headers_list" ] && stream_settings_list="${stream_settings_list}自定义 HTTP 头:\n${indent_6}$headers_list"
+                fi
+                if [ "$v2ray_name" == "v2ray" ] 
+                then
+                    if [ "${outbounds_stream_ws_max_early_data[outbounds_index]}" -eq 0 ] 
+                    then
+                        stream_settings_list="${stream_settings_list}前置数据: ${red}否${normal}\n${indent_6}"
+                    else
+                        stream_settings_list="${stream_settings_list}前置数据最长长度: ${green}${outbounds_stream_ws_max_early_data[outbounds_index]}${normal}\n${indent_6}"
+                        if [ -n "${outbounds_stream_ws_early_data_header_name[outbounds_index]}" ] 
+                        then
+                            stream_settings_list="${stream_settings_list}前置数据: ${green}基于 HTTP 头 ${outbounds_stream_ws_early_data_header_name[outbounds_index]}${normal}\n${indent_6}"
+                        else
+                            stream_settings_list="${stream_settings_list}前置数据: ${green}基于路径${normal}\n${indent_6}"
+                        fi
+                    fi
+                    if [ "${outbounds_stream_ws_use_browser_forwarding[outbounds_index]}" = false ] || [ "${outbounds_stream_ws_early_data_header_name[outbounds_index]}" != "Sec-WebSocket-Protocol" ]
+                    then
+                        stream_settings_list="${stream_settings_list}浏览器转发: ${red}否${normal}\n${indent_6}"
+                    else
+                        stream_settings_list="${stream_settings_list}浏览器转发: ${green}是${normal}\n${indent_6}"
+                    fi
+                fi
+            elif [ "${outbounds_stream_network[outbounds_index]}" == "http" ] 
+            then
+                stream_settings_list="${stream_settings_list}路径: ${green}${outbounds_stream_path[outbounds_index]}${normal}\n${indent_6}"
+                if [ -n "${outbounds_stream_http_host[outbounds_index]}" ] 
+                then
+                    stream_settings_list="${stream_settings_list}通信域名: ${green}${outbounds_stream_http_host[outbounds_index]//|/, }${normal}\n${indent_6}"
+                fi
+                if [ "$v2ray_name" == "v2ray" ] 
+                then
+                    stream_settings_list="${stream_settings_list}HTTP 方法: ${green}${outbounds_stream_http_method[outbounds_index]}${normal}\n${indent_6}"
+                    if [ -z "${outbounds_stream_http_headers[outbounds_index]}" ] 
+                    then
+                        stream_settings_list="${stream_settings_list}自定义 HTTP 头: ${red}否${normal}\n${indent_6}"
+                    else
+                        IFS="|" read -r -a http_headers <<< "${outbounds_stream_http_headers[outbounds_index]}"
+                        http_headers_list="${green}headers${normal}:\n\033[8C"
+                        for header in "${http_headers[@]}"
+                        do
+                            header_key=${header%%=*}
+                            header_value=${header#*=}
+                            IFS="~" read -r -a header_values <<< "$header_value"
+                            if [ -n "${header_values:-}" ] 
+                            then
+                                header_request_list="$header_request_list${green}$header_key => ${normal}\n\033[8C"
+                                for header_value in "${header_values[@]}"
+                                do
+                                    header_request_list="$header_request_list  ${green}$header_value${normal}\n\033[8C"
+                                done
+                            else
+                                header_request_list="$header_request_list${green}$header_key => \"\"${normal}\n\033[8C"
+                            fi
+                        done
+                        stream_settings_list="${stream_settings_list}自定义 HTTP 头:\n${indent_6}$http_headers_list"
+                    fi
+                fi
+            elif [ "${outbounds_stream_network[outbounds_index]}" == "quic" ] 
+            then
+                if [ "${outbounds_stream_quic_security[outbounds_index]}" == "none" ] 
+                then
+                    stream_settings_list="${stream_settings_list}数据包加密方式: ${red}不加密${normal} 密钥: ${green}${outbounds_stream_quic_key[outbounds_index]}${normal}\n${indent_6}"
+                else
+                    stream_settings_list="${stream_settings_list}数据包加密方式: ${green}${outbounds_stream_quic_security[outbounds_index]}${normal} 密钥: ${green}${outbounds_stream_quic_key[outbounds_index]}${normal}\n${indent_6}"
+                fi
+                if [ "${outbounds_stream_header_type[outbounds_index]}" == "none" ] 
+                then
+                    stream_settings_list="${stream_settings_list}数据包头部: ${red}不伪装${normal}\n${indent_6}"
+                else
+                    stream_settings_list="${stream_settings_list}数据包头部: ${green}http 伪装${normal}\n${indent_6}"
+                fi
+            elif [ "${outbounds_stream_network[outbounds_index]}" == "grpc" ] 
+            then
+                if [ "$v2ray_name" == "v2ray" ] 
+                then
+                    stream_settings_list="${stream_settings_list}gRPC 服务名称: ${green}${outbounds_stream_grpc_service_name[outbounds_index]}${normal}\n${indent_6}"
+                elif [ "${outbounds_stream_grpc_multi_mode[outbounds_index]}" = false ] 
+                then
+                    stream_settings_list="${stream_settings_list}gRPC 服务名称: ${green}${outbounds_stream_grpc_service_name[outbounds_index]}${normal} multiMode: ${red}否${normal}\n${indent_6}"
+                else
+                    stream_settings_list="${stream_settings_list}gRPC 服务名称: ${green}${outbounds_stream_grpc_service_name[outbounds_index]}${normal} multiMode: ${green}是${normal}\n${indent_6}"
+                fi
+            fi
+        fi
+
+        if [ "${outbounds_mux_enabled[outbounds_index]}" = true ] 
+        then
+            mux_settings_list="${green}已开启 Mux${normal} 最大并发连接数: ${green}${outbounds_mux_concurrency[outbounds_index]}${normal}\n${indent_6}"
+        else
+            mux_settings_list=""
+        fi
+
+        outbounds_list="$outbounds_list# ${green}$((outbounds_index+1))${normal}${indent_6}标签: ${green}${outbounds_tag[outbounds_index]:-无}${normal}\n${indent_6}$protocol_settings_list$stream_settings_list$mux_settings_list\n\n"
+    done
+
+    Println "$outbounds_list\n"
+}

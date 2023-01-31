@@ -1,0 +1,236 @@
+ListChannel()
+{
+    GetChannel
+
+    if [ "$chnl_live" = false ]
+    then
+        chnl_live_text="${red}$i18n_no${normal}"
+    else
+        chnl_live_text="${green}$i18n_yes${normal}"
+    fi
+
+    if [ "$chnl_sync" = false ]
+    then
+        chnl_sync_text="${red}$i18n_disabled${normal}"
+    else
+        chnl_sync_text="${green}$i18n_enabled${normal}"
+    fi
+
+    if [ "$chnl_status" == "on" ]
+    then
+        chnl_status_text="${green}$i18n_enabled${normal}"
+    else
+        chnl_status_text="${red}$i18n_disabled${normal}"
+    fi
+
+    if [ -n "$chnl_seg_dir_name" ] 
+    then
+        chnl_seg_dir_name_text="${green}$chnl_seg_dir_name${normal}"
+    else
+        chnl_seg_dir_name_text="${red}$i18n_not_set${normal}"
+    fi
+
+    if [ "$v_or_a" == "v" ] 
+    then
+        chnl_video_audio_shift_text="${green}$i18n_video_shift $chnl_video_shift($i18n_seconds)${normal}"
+    elif [ "$v_or_a" == "a" ] 
+    then
+        chnl_video_audio_shift_text="${green}$i18n_audio_shift $chnl_audio_shift($i18n_seconds)${normal}"
+    else
+        chnl_video_audio_shift_text="${green}$i18n_not_set${normal}"
+    fi
+
+    if [ "$chnl_encrypt" = false ]
+    then
+        chnl_encrypt_text="${red}$i18n_no${normal}"
+    else
+        chnl_encrypt_text="${green}$i18n_yes${normal}"
+    fi
+
+    if [ "$chnl_encrypt_session" = false ]
+    then
+        chnl_encrypt_session_text="${red}$i18n_no${normal}"
+    else
+        chnl_encrypt_session_text="${green}$i18n_yes${normal}"
+    fi
+
+    IFS=, read -r -a chnl_qualities <<< "$chnl_quality"
+    IFS=, read -r -a chnl_bitrates <<< "$chnl_bitrate"
+    IFS=, read -r -a chnl_resolutions <<< "$chnl_resolution"
+
+    if [ -n "${chnl_qualities+x}" ] 
+    then
+        chnl_qualities_count=${#chnl_qualities[@]}
+    else
+        chnl_qualities_count=0
+    fi
+
+    if [ -n "${chnl_bitrates+x}" ] 
+    then
+        chnl_bitrates_count=${#chnl_bitrates[@]}
+    else
+        chnl_bitrates_count=0
+    fi
+
+    if [ -n "${chnl_resolutions+x}" ] 
+    then
+        chnl_resolutions_count=${#chnl_resolutions[@]}
+    else
+        chnl_resolutions_count=0
+    fi
+
+    if [ "$chnl_bitrates_count" -gt "$chnl_qualities_count" ] 
+    then
+        chnl_variants_count=$chnl_bitrates_count
+    else
+        chnl_variants_count=$chnl_qualities_count
+    fi
+
+    if [ "$chnl_resolutions_count" -gt "$chnl_variants_count" ] 
+    then
+        chnl_variants_count=$chnl_resolutions_count
+    fi
+
+    chnl_video_quality_text=""
+
+    for((chnl_i=0;chnl_i<chnl_variants_count;chnl_i++));
+    do
+        chnl_video_quality_text="${chnl_video_quality_text} 输出$((chnl_i+1)): ${indent_20}"
+
+        if [ -n "${chnl_qualities[chnl_i]:-}" ] 
+        then
+            chnl_video_quality_text="$chnl_video_quality_text${green}[ $i18n_crf ${chnl_qualities[chnl_i]} ]${normal} "
+        fi
+
+        if [ -n "${chnl_bitrates[chnl_i]:-}" ] 
+        then
+            chnl_video_quality_text="$chnl_video_quality_text${green}[ $i18n_bitrate ${chnl_bitrates[chnl_i]}k ]${normal} "
+        fi
+
+        if [ -n "${chnl_resolutions[chnl_i]:-}" ] 
+        then
+            chnl_video_quality_text="$chnl_video_quality_text${green}[ $i18n_resolution ${chnl_resolutions[chnl_i]} ]${normal} "
+        fi
+
+        if [ -n "${chnl_qualities[chnl_i]:-}" ]  
+        then
+            if [ "$chnl_const" = true ] && [ -n "${chnl_bitrates[chnl_i]:-}" ]
+            then
+                chnl_video_quality_text="$chnl_video_quality_text${green}[ $i18n_constrained_encoding ]${normal}\n"
+            else
+                chnl_video_quality_text="$chnl_video_quality_text\n"
+            fi
+        elif [ -n "${chnl_bitrates[chnl_i]:-}" ] 
+        then
+            if [ "$chnl_const" = true ] 
+            then
+                if [ "$chnl_const_cbr" = true ] 
+                then
+                    chnl_video_quality_text="$chnl_video_quality_text${green}[ $i18n_constant_bitrate (CBR) ]${normal}\n"
+                else
+                    chnl_video_quality_text="$chnl_video_quality_text${green}[ $i18n_constrained_encoding (VBV) ]${normal}\n"
+                fi
+            else
+                chnl_video_quality_text="$chnl_video_quality_text${green}[ $i18n_average_bitrate (ABR) ]${normal}\n"
+            fi
+        fi
+    done
+
+    if [ "$chnl_variants_count" -gt 1 ] 
+    then
+        chnl_playlist_file="$chnl_output_dir_root/${chnl_playlist_name}_master.m3u8"
+    else
+        chnl_playlist_file="$chnl_output_dir_root/${chnl_playlist_name}.m3u8"
+    fi
+
+    if [ "$chnl_hls_end_list" = true ]
+    then
+        chnl_hls_end_list_text="${green}$i18n_yes${normal}"
+    else
+        chnl_hls_end_list_text="${red}$i18n_no${normal}"
+    fi
+
+    if [ "$chnl_flv_status" == "on" ]
+    then
+        chnl_flv_status_text="${green}$i18n_enabled${normal}"
+    else
+        chnl_flv_status_text="${red}$i18n_disabled${normal}"
+    fi
+
+    if [ "$chnl_sync" = true ]
+    then
+        sync_file=${chnl_sync_file:-$d_sync_file}
+        sync_index=${chnl_sync_index:-$d_sync_index}
+        sync_pairs=${chnl_sync_pairs:-$d_sync_pairs}
+
+        if [ -n "$sync_file" ] && [ -n "$sync_index" ] && [ -n "$sync_pairs" ] && [[ $sync_pairs == *"=http"* ]]
+        then
+            chnl_playlist_link=${sync_pairs#*=http}
+            chnl_playlist_link=${chnl_playlist_link%%,*}
+            chnl_playlist_link="http$chnl_playlist_link/$chnl_output_dir_name/${chnl_playlist_file##*/}"
+            chnl_playlist_link_text="${green}$chnl_playlist_link${normal}"
+        else
+            chnl_playlist_link_text="${red}$i18n_sync_not_set${normal}"
+        fi
+    else
+        chnl_playlist_link_text="${red}$i18n_sync_not_enabled${normal}"
+    fi
+
+    Println "==================================================="
+    Println " `eval_gettext \"频道 [\\\$chnl_channel_name] 的配置信息\"`: \n"
+
+    printf "%s${indent_20}${green}%s${normal}\n" " $i18n_pid" "$chnl_pid"
+
+    for((list_i=0;list_i<chnl_stream_links_count;list_i++));
+    do
+        printf " %s${indent_20}${green}%s${normal}\n" "$i18n_source $((list_i+1))" "${chnl_stream_links[list_i]}"
+    done
+
+    if [ -z "${kind:-}" ] 
+    then
+        printf ' %b' "$i18n_status${indent_20}$chnl_status_text\n"
+        printf " %s${indent_20}${green}%s${normal}\n" "$i18n_playlist_name" "$chnl_playlist_name"
+        printf " %s${indent_20}${green}%s${normal}\n" "$i18n_playlist_file" "$chnl_playlist_file"
+        printf ' %b' "$i18n_playlist_link${indent_20}$chnl_playlist_link_text\n"
+        printf ' %b' "$i18n_seg_dir_name${indent_20}$chnl_seg_dir_name_text\n"
+        printf " %s${indent_20}${green}%s${normal}\n" "$i18n_seg_name" "$chnl_seg_name"
+        printf " %s(%s)${indent_20}${green}%s${normal}\n" "$i18n_seg_length" "$i18n_seconds" "$chnl_seg_length"
+        printf " %s${indent_20}${green}%s${normal}\n" "$i18n_seg_count" "$chnl_seg_count"
+        printf ' %b' "$i18n_encrypt${indent_20}$chnl_encrypt_text\n"
+
+        if [ "$chnl_encrypt" = true ] 
+        then
+            printf " %s${indent_20}${green}%s${normal}\n" "$i18n_keyinfo_name" "$chnl_keyinfo_name"
+            printf " %s${indent_20}${green}%s${normal}\n" "$i18n_key_name" "$chnl_key_name"
+            printf ' %b' "$i18n_encrypt_session${indent_20}$chnl_encrypt_session_text\n"
+        fi
+    elif [ "$kind" == "flv" ] 
+    then
+        printf ' %b' "$i18n_status${indent_20}$chnl_flv_status_text\n"
+        printf " %s${indent_20}${green}%s${normal}\n" "$i18n_flv_push_link" "${chnl_flv_push_link:-$i18n_none}"
+        printf " %s${indent_20}${green}%s${normal}\n" "$i18n_flv_pull_link" "${chnl_flv_pull_link:-$i18n_none}"
+    fi
+
+    printf ' %b' "$i18n_source${indent_20}$chnl_live_text\n"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_proxy" "${chnl_proxy:-$i18n_none}"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_xtream_codes_proxy" "${chnl_xc_proxy:-$i18n_none}"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_user_agent" "${chnl_user_agent:-$i18n_none}"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_headers" "${chnl_headers:-$i18n_none}"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_cookies" "${chnl_cookies:-$i18n_none}"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_video_codec" "$chnl_video_codec"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_audio_codec" "$chnl_audio_codec"
+    printf ' %b' "$i18n_delay${indent_20}$chnl_video_audio_shift_text\n"
+
+    [ -n "$chnl_video_quality_text" ] && printf '%b' "$chnl_video_quality_text"
+
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_input_flags" "${chnl_input_flags:-$i18n_not_set}"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_output_flags" "${chnl_output_flags:-$i18n_not_set}"
+    printf ' %b' "EXT-X-ENDLIST${indent_20}$chnl_hls_end_list_text\n"
+    printf ' %b' "sync${indent_20}$chnl_sync_text\n"
+
+    [ -n "$chnl_sync_file" ] && printf " %s${indent_20}${green}%s${normal}\n" "sync_file" "${chnl_sync_file// /, }"
+    [ -n "$chnl_sync_index" ] && printf " %s${indent_20}${green}%s${normal}\n" "sync_index" "${chnl_sync_index// /, }"
+    [ -n "$chnl_sync_pairs" ] && printf " %s${indent_20}${green}%s${normal}\n" "sync_pairs" "${chnl_sync_pairs// /, }"
+
+    echo
+}

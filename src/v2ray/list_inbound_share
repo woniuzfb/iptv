@@ -1,0 +1,48 @@
+V2rayListInboundShare()
+{
+    if [ "${inbounds_protocol[inbounds_index]}" == "vmess" ] && [ "${inbounds_listen[inbounds_index]}" != "127.0.0.1" ]
+    then
+        V2raySelectAccount
+        if [ "${inbounds_listen[inbounds_index]}" == "0.0.0.0" ] 
+        then
+            server_ip=$(GetServerIp)
+        else
+            server_ip=${inbounds_listen[inbounds_index]}
+        fi
+        vmess_link=$(
+        $JQ_FILE -n --arg ps "${inbounds_tag[inbounds_index]}" --arg add "$server_ip" \
+        --arg port "${inbounds_port[inbounds_index]}" --arg id "${accounts_id[accounts_index]}" \
+        --arg aid "${accounts_alter_id[accounts_index]}" --arg net "${inbounds_stream_network[inbounds_index]}" \
+        --arg header_type "${inbounds_stream_header_type[inbounds_index]}" --arg host "${inbounds_stream_http_host[inbounds_index]}" \
+        --arg path "${inbounds_stream_path[inbounds_index]}" --arg tls "${inbounds_stream_security[inbounds_index]}" \
+        '{
+            "v": "2",
+            "ps": $ps,
+            "add": $add,
+            "port": $port,
+            "id": $id,
+            "aid": $aid,
+            "net": $net,
+            "type": $header_type,
+            "host": $host,
+            "path": $path,
+            "tls": $tls
+        }' | base64 -w 0)
+        Println "分享链接: ${green}vmess://$vmess_link${normal}\n"
+        echo
+        ExitOnList y "`gettext \"打印二维码\"`"
+        DistCheck
+        if [ ! -e "/usr/local/bin/imgcat" ] 
+        then
+            ImgcatInstall
+        fi
+        if [[ ! -x $(command -v convert) ]] 
+        then
+            Println "$info 安装 ImageMagick"
+            ImageMagickInstall
+        fi
+        DepInstall qrencode
+        qrencode -s 1 -o "$HOME/vmess_link.png" "vmess://$vmess_link"
+        /usr/local/bin/imgcat --half-height "$HOME/vmess_link.png"
+    fi
+}

@@ -1,0 +1,133 @@
+CloudflareAddZone()
+{
+    CloudflareListHosts
+
+    echo -e "选择 CFP"
+    while read -p "$i18n_default_cancel" cf_hosts_num
+    do
+        case "$cf_hosts_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$cf_hosts_num" -gt 0 ] && [ "$cf_hosts_num" -le "$cf_hosts_count" ]
+                then
+                    cf_hosts_index=$((cf_hosts_num-1))
+                    cf_host_name=${cf_hosts_name[cf_hosts_index]}
+                    cf_host_key=${cf_hosts_key[cf_hosts_index]}
+                    cf_host_zone_name=${cf_hosts_zone_name[cf_hosts_index]}
+                    IFS="|" read -r -a cf_host_zones_name <<< "$cf_host_zone_name"
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    CloudflareListUsers
+
+    if [ "$cf_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
+
+    echo -e "选择用户"
+    while read -p "$i18n_default_cancel" cf_users_num
+    do
+        case "$cf_users_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
+                then
+                    cf_users_index=$((cf_users_num-1))
+                    cf_user_email=${cf_users_email[cf_users_index]}
+                    cf_user_pass=${cf_users_pass[cf_users_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "$info 稍等..."
+    result=""
+    until [ "$result" == "success" ] 
+    do
+        random_number=$(od -An -N6 -t u8 < /dev/urandom)
+        cf_user_unique_id=${random_number: -12}
+        IFS="^" read -r result err_code msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
+            -d 'act=user_create' \
+            -d "host_key=$cf_host_key" \
+            -d "cloudflare_email=$cf_user_email" \
+            -d "cloudflare_pass=$cf_user_pass" \
+            -d "unique_id=$cf_user_unique_id" \
+            | $JQ_FILE '[.result,.err_code,.msg]|join("^")'
+        ) || true
+
+        result=${result#\"}
+        msg=${msg%\"}
+        if [ "$result" == "error" ] 
+        then
+            Println "$error $msg"
+        fi
+    done
+
+    Println "请输入根域名"
+    echo -e "$tip 如果域名已经由 cloudflare 解析, 请先到官方 cloudflare 面板中删除\n"
+    while read -p "$i18n_default_cancel" cf_zone_name
+    do
+        if [ -z "$cf_zone_name" ] 
+        then
+            Println "$i18n_canceled...\n"
+            exit 1
+        elif [[ $cf_zone_name =~ ^([a-zA-Z0-9][\-a-zA-Z0-9]*\.)+[\-a-zA-Z0-9]{2,20}$ ]] 
+        then
+            Println "  域名: ${green} $cf_zone_name ${normal}\n"
+            break
+        else
+            Println "$error 输入错误, 请输入根域名, 不能是二级域名"
+        fi
+    done
+
+    for cf_host_zone_name in ${cf_host_zones_name[@]+"${cf_host_zones_name[@]}"}
+    do
+        if [ "$cf_host_zone_name" == "$cf_zone_name" ] 
+        then
+            Println "$error 域名已经存在\n"
+            exit 1
+        fi
+    done
+
+    CloudflareSetZoneResolve
+    CloudflareSetZoneAlwaysUseHttps
+    CloudflareSetZoneSsl
+
+    new_zone=$(
+    $JQ_FILE -n --arg name "$cf_zone_name" --arg resolve_to "$cf_zone_resolve_to" \
+        --arg user_email "$cf_user_email" --arg user_unique_id "$cf_user_unique_id" \
+        --arg always_use_https "$cf_zone_always_use_https" --arg ssl "$cf_zone_ssl" \
+        '{
+            name: $name,
+            resolve_to: $resolve_to,
+            user_email: $user_email,
+            user_unique_id: $user_unique_id | tonumber,
+            always_use_https: $always_use_https,
+            ssl: $ssl
+        }'
+    )
+
+    jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
+    JQ add "$CF_CONFIG" "[$new_zone]"
+    Println "$info 源站添加成功\n"
+}

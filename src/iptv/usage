@@ -1,0 +1,112 @@
+Usage()
+{
+    Println " `gettext \"使用方法: tv -i [直播源] [-s 分片时长(秒)] [-o 输出目录名称] [-c m3u8包含的分片数] [-b 码率] [-r 分辨率] [-p m3u8文件名称] [-C] [-R] [-l] [-P http代理]\"`
+    `gettext \" -i  直播源(支持 mpegts / hls / flv / youtube ...)\"`
+         `gettext \"可以是视频路径\"`
+         `gettext \"可以输入不同链接地址(监控按顺序尝试使用), 用空格分隔\"`
+    `gettext \" -s  分片时长(秒)(默认: 6)\"`
+    `gettext \" -o  输出目录名称(默认: 随机名称)\"`
+
+    `gettext \" -l  非无限时长直播, 无法设置切割的分片数且无法监控(默认: 不设置)\"`
+    `gettext \" -P  FFmpeg 的 http 代理, 直播源是 http 链接时可用(默认: 不设置)\"`
+
+    `gettext \" -p  m3u8名称(前缀)(默认: 随机)\"`
+    `gettext \" -c  m3u8里包含的分片数目(默认: 5)\"`
+    `gettext \" -S  分片所在子目录名称(默认: 不使用子目录)\"`
+    `gettext \" -t  分片名称(前缀)(默认: 跟m3u8名称相同)\"`
+    `gettext \" -a  音频编码(默认: aac) (不需要转码时输入 copy)\"`
+    `gettext \" -v  视频编码(默认: libx264) (不需要转码时输入 copy)\"`
+    `gettext \" -f  画面或声音延迟(格式如:  v_3 画面延迟3秒, a_2 声音延迟2秒 画面声音不同步时使用)\"`
+    `gettext \" -q  CRF 固定质量因子, 多个 CRF 用逗号分隔(默认: 不设置)\"`
+         `gettext \"如果同时设置了输出视频码率, 则优先使用 CRF 值控制视频质量\"`
+         `gettext \"取值每 +/- 6 会大概导致码率的减半或加倍\"`
+         `gettext \"x264 和 x265 取值范围为 [0,51]\"`
+         `gettext \"x264 的默认值是 23, 视觉无损值 18\"`
+         `gettext \"x265 的默认值是 28, 视觉无损值 24\"`
+         `gettext \"VP9 取值范围为 [0,63], 建议取值范围为 [15,35]\"`
+    `gettext \" -b  输出视频的码率(k)(多个用逗号分隔 比如: 800,1000,1500)(默认: 900)\"`
+         `gettext \"如果已经设置 CRF 固定质量因子, 用于 VBV 的 -maxrate 和 -bufsize (capped CRF)\"`
+         `gettext \"如果没有设置 CRF 固定质量因子, 用于指定输出视频码率(ABR 或 CBR)\"`
+         `gettext \"可以输入 omit 省略此选项\"`
+    `gettext \" -r  输出视频的分辨率(多个用逗号分隔 比如: 960x540,1280x720)(默认: 1280x720)\"`
+    `gettext \" -C  限制性编码(设置码率的情况下有效)(默认: 否)\"`
+         `gettext \"如果已经设置 CRF 固定质量因子, 使用限制性编码 VBV (capped CRF)\"`
+         `gettext \"如果没有设置 CRF 固定质量因子, 使用限制性编码 VBV (ABR)\"`
+    `gettext \" -R  固定码率 CBR (设置 -C 情况下有效)(默认: 否)\"`
+    `gettext \" -e  加密分片(默认: 不加密)\"`
+    `gettext \" -K  Key名称(默认: 随机)\"`
+    `gettext \" -z  频道名称(默认: 跟m3u8名称相同)\"`
+     `gettext \"也可以不输出 HLS, 比如 flv 推流\"`
+    `gettext \" -k  设置推流类型, 比如 -k flv\"`
+    `gettext \" -H  推流 h265(默认: 不设置)\"`
+    `gettext \" -T  设置推流地址, 比如 rtmp://127.0.0.1/flv/xxx\"`
+    `gettext \" -L  输入拉流(播放)地址(可省略), 比如 http://domain.com/flv?app=flv&stream=xxx\"`
+    `gettext \" -m  FFmpeg 额外的 输入参数\"`
+         (`gettext \"默认:\"` -copy_unknown -reconnect 1 -reconnect_at_eof 1 
+         -reconnect_streamed 1 -reconnect_delay_max 2000 
+         -rw_timeout 10000000 -y -nostats -nostdin -hide_banner -loglevel error)
+         `gettext \"如果输入的直播源是 hls 链接, 需去除 -reconnect_at_eof 1\"`
+         `gettext \"如果输入的直播源是 rtmp 或本地链接, 需去除 -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 2000\"`
+    `gettext \" -n  FFmpeg 额外的 输出参数, 可以输入 omit 省略此选项\"`
+         (`gettext \"默认:\"` -g 60 -sc_threshold 0 -sn -preset superfast -pix_fmt yuv420p -profile:v main)
+
+ `gettext \"举例:\"`
+     `gettext \"使用 CRF 固定质量因子控制视频质量:\"` 
+         `gettext \"tv -i http://xxx.com/xxx.ts -s 6 -o hbo1 -p hbo1 -q 15 -b 1500 -r 1280x720 -z 'hbo直播1'\"`
+     `gettext \"使用码率控制视频质量[默认]:\"` 
+         `gettext \"tv -i http://xxx.com/xxx.ts -s 6 -o hbo2 -p hbo2 -b 900 -r 1280x720 -z 'hbo直播2'\"`
+     `gettext \"不需要转码的设置:\"` -a copy -v copy -n omit
+     `gettext \"不输出 HLS, 推流 flv:\"`
+         tv -i http://xxx/xxx.ts -a aac -v libx264 -b 3000 -k flv -T rtmp://127.0.0.1/flv/xxx
+
+ `gettext \"快捷键:\"`
+     `gettext \"tv 打开 HLS 管理面板\"`
+       `gettext \"tv l 列出所有开启的频道\"`
+       `gettext \"tv d 添加演示频道\"`
+       `gettext \"tv e 手动修改 channels.json\"`
+       `gettext \"tv ee 手动修改 sync_file\"`
+       `gettext \"tv f 打开 FLV 管理面板\"`
+       `gettext \"tv v 打开 VIP 面板\"`
+       `gettext \"tv m 开启监控\"`
+         `gettext \"tv m l [行数] 查看监控日志\"`
+         `gettext \"tv m s 关闭监控\"`
+       `gettext \"tv s 节目表管理面板\"`
+       `gettext \"tv 4g 打开 4gtv 频道管理面板\"`
+       `gettext \"tv FFmpeg 自建 FFmpeg 镜像\"`
+       `gettext \"tv debug 1/0 开启/关闭 调试\"`
+
+     `gettext \"cx 打开 xtream codes 账号/频道管理面板\"`
+
+     `gettext \"v2 打开 v2ray 面板\"`
+        `gettext \"v2 e 手动修改 config.json\"`
+
+     `gettext \"x 打开 xray 面板\"`
+        `gettext \"x e 手动修改 config.json\"`
+
+     `gettext \"nx 打开 nginx 面板\"`
+
+     `gettext \"or 打开 openresty 面板\"`
+
+     `gettext \"cf 打开 cloudflare partner / workers 面板\"`
+        `gettext \"cf w 打开 cloudflare workers 面板\"`
+
+     `gettext \"ibm 打开 IBM Cloud Foundry 面板\"`
+        `gettext \"ibm v2 打开 ibm v2ray app 管理面板\"`
+        `gettext \"ibm x  打开 ibm xray app 管理面板\"`
+
+     `gettext \"arm 打开 Armbian 管理面板\"`
+
+     `gettext \"pve 打开 Proxmox VE 管理面板\"`
+
+     `gettext \"tv ed 选择默认编辑器\"`
+
+     `gettext \"tv a 设置自定义命令\"`
+
+     `gettext \"tv color 自定义文字颜色和背景颜色\"`
+
+     `gettext \"tv c <en|ru|de|zh_CN|...> 切换/更新 语言\"`
+    "
+    exit
+}
+
+# -reconnect_on_network_error 1 -reconnect_on_http_error 4xx,5xx -timeout 2000000000 

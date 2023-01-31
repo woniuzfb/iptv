@@ -1,0 +1,280 @@
+CheckIfXtreamCodes()
+{
+    XtreamCodesGetDomains
+
+    if [ -z "${FFPROBE:-}" ] 
+    then
+        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+        FFMPEG="$FFMPEG_ROOT/ffmpeg"
+        FFPROBE="$FFMPEG_ROOT/ffprobe"
+    fi
+
+    to_try=0
+
+    if [[ ${chnl_stream_link##*|} =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+    then
+        chnl_domain=${chnl_stream_link%%|*}
+        chnl_mac=${chnl_stream_link##*|}
+        chnl_cmd=${chnl_stream_link%|*}
+        chnl_cmd=${chnl_cmd##*|}
+
+        chnl_cmd=${chnl_cmd%\_}
+        chnl_cmd="http://localhost/ch/${chnl_cmd##*/}_"
+
+        for xc_domain in ${xtream_codes_domains[@]+"${xtream_codes_domains[@]}"}
+        do
+            if [ "$xc_domain" == "$chnl_domain" ] 
+            then
+                Println "$info 频道 [ $chnl_channel_name ] 检测账号中..."
+                XtreamCodesGetChnls
+                for xc_chnl_mac in ${xc_chnls_mac[@]+"${xc_chnls_mac[@]}"}
+                do
+                    if [ "$xc_chnl_mac" == "$chnl_domain/$chnl_mac" ] 
+                    then
+                        to_try=1
+                        break
+                    fi
+                done
+                break
+            fi
+        done
+
+        if [ "$to_try" -eq 1 ] 
+        then
+            to_try=1
+            try_success=0
+            MonitorTryAccounts
+            if [ "$try_success" -eq 0 ] 
+            then
+                Println "$error 没有可用账号"
+            fi
+        else
+            GetDefault
+
+            if [ -n "${chnl_xc_proxy:-}" ] 
+            then
+                server="${chnl_xc_proxy%\/}/http://$chnl_domain"
+            else
+                server="http://$chnl_domain"
+            fi
+
+            access_token=""
+            profile=""
+            exp_date=""
+            chnl_user_agent="$USER_AGENT_TV"
+            mac=$(UrlencodeUpper "$chnl_mac")
+            timezone=$(UrlencodeUpper "Europe/Amsterdam")
+            chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
+            token_url="$server/portal.php?type=stb&action=handshake"
+            profile_url="$server/portal.php?type=stb&action=get_profile"
+            account_info_url="$server/portal.php?type=account_info&action=get_main_info"
+            genres_url="$server/portal.php?type=itv&action=get_genres"
+
+            access_token=$(curl -s -Lm 10 \
+                -H "User-Agent: $chnl_user_agent" \
+                --cookie "$chnl_cookies" "$token_url" \
+                | $JQ_FILE -r '.js.token' 2> /dev/null) || true
+
+            if [ -z "$access_token" ] 
+            then
+                to_try=1
+                Println "$error $chnl_domain $chnl_mac"
+            else
+                chnl_headers="Authorization: Bearer $access_token\r\n"
+                printf -v chnl_headers_command '%b' "$chnl_headers"
+
+                printf -v chnl_cookies_command '%b' "${chnl_cookies//;/; path=\/;\\r\\n}; path=/;"
+
+                profile=$(curl -s -Lm 10\
+                    -H "$chnl_user_agent" \
+                    -H "${chnl_headers:0:-4}" \
+                    --cookie "$chnl_cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
+
+                exp_date=$(curl -s -Lm 10 \
+                    -H "User-Agent: $chnl_user_agent" \
+                    -H "${chnl_headers:0:-4}" \
+                    --cookie "$chnl_cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
+
+                if [ -z "$exp_date" ] 
+                then
+                    to_try=1
+                    if [ -z "$profile" ] 
+                    then
+                        Println "$error $chnl_mac profile"
+                    else
+                        Println "$error $chnl_mac exp_date"
+                    fi
+                fi
+            fi
+
+            if [ "$to_try" -eq 1 ] 
+            then
+                to_try=1
+                try_success=0
+                MonitorTryAccounts
+                if [ "$try_success" -eq 0 ] 
+                then
+                    Println "$error 没有可用账号"
+                fi
+            else
+                if [ -n "$chnl_xc_proxy" ] 
+                then
+                    server=${chnl_xc_proxy%\/}
+                    IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(curl -sL "$server/?cmd=$chnl_cmd&check=1" \
+                        -H "User-Agent: $chnl_user_agent" \
+                        -H "${chnl_headers:0:-4}" \
+                        --cookie "$chnl_cookies" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
+                    if [[ ! $chnl_stream_link =~ ([^/]+)//([^/]+)/(.+) ]] 
+                    then
+                        Println "$error $chnl_domain $chnl_mac $chnl_xc_proxy $chnl_stream_link\n" && exit 1
+                    fi
+                    access_token="$new_access_token"
+                    chnl_cookies="$new_cookies"
+                    if [[ ${BASH_REMATCH[1]} =~ [a-z] ]] 
+                    then
+                        chnl_stream_link="$server/?cmd=$chnl_cmd"
+                        chnl_headers=""
+                        chnl_headers_command=""
+                    else
+                        chnl_headers="Authorization: Bearer $access_token\r\n"
+                        printf -v chnl_headers_command '%b' "$chnl_headers"
+                    fi
+                else
+                    create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
+                    cmd=$(curl -s -Lm 10 \
+                        -H "User-Agent: $chnl_user_agent" \
+                        -H "${chnl_headers:0:-4}" \
+                        --cookie "$chnl_cookies" "$create_link_url" \
+                        | $JQ_FILE -r '.js.cmd') || true
+
+                    if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
+                    then
+                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                    elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/(.+) ]] 
+                    then
+                        #chnl_stream_link="http://localhost:3000/${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
+                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                    elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+) ]] 
+                    then
+                        chnl_stream_link="http://localhost:3000/${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}"
+                    else
+                        Println "$error $chnl_domain 返回 cmd: ${cmd:-无} $chnl_domain $chnl_mac\n" && exit 1
+                    fi
+                fi
+
+                chnl_stream_links[0]="$chnl_domain|$chnl_stream_link|$chnl_cmd|$chnl_mac"
+
+                Println "$info 跳过检测频道 [ $chnl_channel_name ] 直接开启 ? [y/N]"
+                read -t 3 -p "(默认: 3 秒后自动检测): " skip_check_yn || true && echo
+                skip_check_yn=${skip_check_yn:-N}
+                if [[ $skip_check_yn == [Yy] ]] 
+                then
+                    return 0
+                fi
+
+                audio=0
+                video=0
+                while IFS= read -r line 
+                do
+                    if [[ $line == *"codec_type=audio"* ]] 
+                    then
+                        audio=1
+                    elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
+                    then
+                        audio=0
+                    elif [[ $line == *"codec_type=video"* ]] 
+                    then
+                        video=1
+                    fi
+                done < <($FFPROBE $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies_command" -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet)
+
+                if [ "$audio" -eq 0 ] || [ "$video" -eq 0 ]
+                then
+                    to_try=1
+                    try_success=0
+                    MonitorTryAccounts
+                    if [ "$try_success" -eq 0 ] 
+                    then
+                        Println "$error 没有可用账号"
+                    fi
+                fi
+            fi
+        fi
+    elif [[ $chnl_stream_link =~ ^http://([^/]+)/([^/]+)/([^/]+)/ ]] 
+    then
+        chnl_domain=${BASH_REMATCH[1]}
+
+        for xc_domain in ${xtream_codes_domains[@]+"${xtream_codes_domains[@]}"}
+        do
+            if [ "$xc_domain" == "$chnl_domain" ] 
+            then
+                Println "$info 频道 [ $chnl_channel_name ] 检测账号中..."
+                to_try=1
+                break
+            fi
+        done
+
+        xc_chnl_found=0
+        if [ "$to_try" -eq 1 ] 
+        then
+            if [ "${BASH_REMATCH[2]}" == "live" ] && [[ $chnl_stream_link =~ ^http://([^/]+)/live/([^/]+)/([^/]+)/ ]] 
+            then
+                chnl_account="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}"
+            else
+                chnl_account="${BASH_REMATCH[2]}:${BASH_REMATCH[3]}"
+            fi
+            XtreamCodesGetChnls
+            for xc_chnl in ${xc_chnls[@]+"${xc_chnls[@]}"}
+            do
+                if [ "$xc_chnl" == "$chnl_domain/$chnl_account" ] 
+                then
+                    xc_chnl_found=1
+                    break
+                fi
+            done
+        fi
+
+        if [ "$xc_chnl_found" -eq 1 ] 
+        then
+            to_try=1
+            try_success=0
+            MonitorTryAccounts
+            if [ "$try_success" -eq 0 ] 
+            then
+                Println "$error 没有可用账号"
+            fi
+        elif [ "$to_try" -eq 1 ] 
+        then
+            printf -v chnl_headers_command '%b' "$chnl_headers"
+            printf -v chnl_cookies_command '%b' "${chnl_cookies//;/; path=\/;\\r\\n}; path=/;"
+
+            audio=0
+            video=0
+            while IFS= read -r line 
+            do
+                if [[ $line == *"codec_type=audio"* ]] 
+                then
+                    audio=1
+                elif [[ $line == *"sample_fmt=unknown"* ]] || [[ $line == *"sample_rate=0"* ]] || [[ $line == *"channels=0"* ]] 
+                then
+                    audio=0
+                elif [[ $line == *"codec_type=video"* ]] 
+                then
+                    video=1
+                fi
+            done < <($FFPROBE $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies_command" -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet)
+
+            if [ "$audio" -eq 0 ] || [ "$video" -eq 0 ] 
+            then
+                try_success=0
+                MonitorTryAccounts
+                if [ "$try_success" -eq 0 ] 
+                then
+                    Println "$error 没有可用账号"
+                fi
+            else
+                to_try=0
+            fi
+        fi
+    fi
+}

@@ -1,0 +1,37 @@
+NginxParseConfig()
+{
+    CrossplaneInstall
+
+    if TMP_FILE=$(mktemp -q)
+    then
+        chmod +r "$TMP_FILE"
+    else
+        exit $?
+    fi
+
+    trap '
+        rm -f "$TMP_FILE"
+    ' EXIT
+
+    if [ -z "${1:-}" ] 
+    then
+        parse_file="$nginx_prefix/conf/nginx.conf"
+        parse_in=$(< $parse_file)
+        parse_domain=0
+    else
+        parse_file="$nginx_prefix/conf/sites_available/$1.conf"
+        parse_in="http {$(< $parse_file)}"
+        parse_domain=1
+    fi
+
+    echo "$parse_in" > "$TMP_FILE"
+
+    parse_out=$(crossplane parse "$TMP_FILE" --single-file)
+
+    rm -f "$TMP_FILE"
+
+    trap - EXIT
+
+    jq_path='["config",0,"file"]'
+    JQs update parse_out "$parse_file"
+}

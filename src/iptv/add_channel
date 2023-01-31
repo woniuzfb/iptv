@@ -1,0 +1,241 @@
+AddChannel()
+{
+    [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+
+    use_primary_playlist=false
+
+    GetDefault
+
+    SetProxy
+    SetUserAgent
+    SetHeaders
+    SetCookies
+
+    SetStreamLink
+
+    SetLive
+
+    xc_proxy=${xc_proxy:-}
+    if [[ $stream_link =~ ^http://([^/]+) ]] 
+    then
+        XtreamCodesGetDomains
+
+        for xc_domain in "${xtream_codes_domains[@]}"
+        do
+            if [ "$xc_domain" == "${BASH_REMATCH[1]}" ] 
+            then
+                SetXtreamCodesProxy
+                break
+            fi
+        done
+    fi
+
+    SetVideoCodec
+    SetAudioCodec
+    SetVideoAudioShift
+
+    quality=""
+    bitrate=""
+    const=false
+    const_cbr=false
+
+    if [ "$video_codec" != "copy" ] 
+    then
+        SetQuality
+        SetBitrate
+    fi
+
+    SetResolution
+
+    if [ -n "$bitrate" ] 
+    then
+        SetConst
+    fi
+
+    draw_text=""
+
+    if [ "${kind:-}" == "flv" ] 
+    then
+        if [ "$video_codec" != "copy" ] 
+        then
+            SetDrawtext
+        fi
+
+        SetFlvH265
+        SetFlvPushLink
+        SetFlvPullLink
+        output_dir_name=$(RandOutputDirName)
+        playlist_name=$(RandPlaylistName)
+        seg_dir_name="$d_seg_dir_name"
+        seg_name="$playlist_name"
+        seg_length="$d_seg_length"
+        seg_count="$d_seg_count"
+        hls_end_list=false
+        encrypt=false
+        encrypt_session=false
+        keyinfo_name=$(RandStr)
+        key_name=$(RandStr)
+        subtitle="[]"
+    else
+        SetSubtitle
+
+        if [ "$video_codec" != "copy" ] 
+        then
+            SetDrawtext
+        fi
+
+        flv_h265=false
+        flv_push_link=""
+        flv_pull_link=""
+        SetOutputDirName
+        SetPlaylistName
+        SetSegDirName
+        SetSegName
+        SetSegLength
+
+        if [ -n "$live" ] 
+        then
+            SetSegCount
+        else
+            seg_count="$d_seg_count"
+        fi
+
+        SetHlsEndList
+        SetEncrypt
+
+        if [ "$encrypt" = true ] 
+        then
+            SetKeyInfoName
+            SetKeyName
+        else
+            keyinfo_name=$(RandStr)
+            key_name=$(RandStr)
+        fi
+    fi
+
+    output_dir_root="$LIVE_ROOT/$output_dir_name"
+
+    if [ -n "$seg_dir_name" ] 
+    then
+        seg_dir_path="$seg_dir_name/"
+    else
+        seg_dir_path=""
+    fi
+
+    master=0
+    if [ "${stream_url_qualities_count:-0}" -gt 0 ] 
+    then
+        if [[ $bitrate =~ , ]] || [[ $quality =~ , ]] || [[ $resolution =~ , ]] || [ "${stream_url_qualities_count:-0}" -gt 1 ] || [ "${stream_url_audio_count:-0}" -gt 0 ] || [ "${stream_url_subtitles_count:-0}" -gt 0 ] 
+        then
+            master=1
+        fi
+    elif [[ $bitrate =~ , ]] || [[ $quality =~ , ]] || [[ $resolution =~ , ]] || [ "$subtitle" != "[]" ]
+    then
+        master=1
+    fi
+
+    SetInputFlags
+    SetOutputFlags
+    SetChannelName
+    SetSync
+
+    sync_file=""
+    sync_index=""
+    sync_pairs=""
+
+    if [ "$sync" = true ]
+    then
+        SetSyncFile
+        SetSyncIndex
+        SetSyncPairs
+    fi
+
+    if [ -z "${FFMPEG:-}" ] 
+    then
+        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+        FFMPEG="$FFMPEG_ROOT/ffmpeg"
+        FFPROBE="$FFMPEG_ROOT/ffprobe"
+    fi
+
+    if [[ ${input_flags:0:1} == "'" ]] 
+    then
+        input_flags=${input_flags%\'}
+        input_flags=${input_flags#\'}
+    fi
+    if [[ ${output_flags:0:1} == "'" ]] 
+    then
+        output_flags=${output_flags%\'}
+        output_flags=${output_flags#\'}
+    fi
+
+    [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
+
+    extra_filters=""
+    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+    then
+        filters=( vf filter:v )
+        for filter in "${filters[@]}"
+        do
+            if [[ $output_flags =~ (.*)"-$filter "([^ ]+)(.*) ]] 
+            then
+                extra_filters="${BASH_REMATCH[2]},"
+                output_flags="${BASH_REMATCH[1]} ${BASH_REMATCH[3]}"
+            fi
+        done
+    fi
+
+    flags_command=( -flags )
+    if [[ $output_flags =~ (.*)"-flags "([^ ]+)(.*) ]] 
+    then
+        flags="${BASH_REMATCH[2]}"
+
+        if [[ $flags =~ global_header ]] 
+        then
+            flags_command=( -flags "$flags" )
+        else
+            flags_command+=("-global_header$flags")
+        fi
+
+        output_flags="${BASH_REMATCH[1]} ${BASH_REMATCH[3]}"
+    else
+        flags_command+=(-global_header)
+    fi
+
+    FilterString input_flags output_flags
+
+    from="AddChannel"
+
+    if [ -n "${kind:-}" ] 
+    then
+        if [ "$kind" == "flv" ] 
+        then
+            if [ "$sh_debug" = true ] 
+            then
+                ( FlvStreamCreator ) 
+            else
+                ( FlvStreamCreator ) > /dev/null 2> /dev/null < /dev/null &
+            fi
+        else
+            Println "$error 暂不支持输出 $kind ...\n" && exit 1
+        fi
+    else
+        if [ "$sh_debug" = true ] 
+        then
+            ( HlsStreamCreatorPlus ) 
+        else
+            ( HlsStreamCreatorPlus ) > /dev/null 2> /dev/null < /dev/null &
+        fi
+    fi
+
+    stream_audio_url=()
+    stream_subtitles_url=()
+    stream_url_qualities_count=0
+    stream_url_audio_count=0
+    stream_url_subtitles_count=0
+    stream_url_quality=""
+    stream_url_cdn=""
+    stream_link_parsed=false
+    xc_proxy=""
+
+    Println "$info 频道添加成功 !\n"
+}

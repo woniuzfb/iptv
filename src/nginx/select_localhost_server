@@ -1,0 +1,27 @@
+NginxSelectLocalhostServer()
+{
+    echo "`gettext \"输入序号\"`"
+    while read -p "$i18n_default_cancel" nginx_localhost_server_num
+    do
+        case "$nginx_localhost_server_num" in
+            "")
+                Println "$i18n_canceled...\n"
+                exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$nginx_localhost_server_num" -gt 0 ] && [ "$nginx_localhost_server_num" -le "$nginx_localhost_server_count" ]
+                then
+                    nginx_localhost_server_index=$((nginx_localhost_server_num-1))
+                    level_2_add_indices=( "${nginx_localhost_server_indices[nginx_localhost_server_index]}" )
+                    server_root=${nginx_localhost_server_root[nginx_localhost_server_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+}

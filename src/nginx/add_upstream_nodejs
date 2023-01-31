@@ -1,0 +1,20 @@
+NginxAddUpstreamNodejs()
+{
+    directive_upstream='{"directive":"upstream","args":["nodejs"],"block":[]}'
+
+    directives=( upstream )
+    directives_val=()
+    check_directives=()
+    check_args=( '["nodejs"]' )
+
+    NginxAddDirective 2
+
+    directive_server='{"directive":"server","args":["127.0.0.1:'"$nodejs_port"'"]}'
+
+    directives=( server )
+    directives_val=()
+    check_directives=()
+    check_args=()
+
+    NginxAddDirective 3
+}

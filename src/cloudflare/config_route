@@ -1,0 +1,180 @@
+CloudflareConfigWorkerRoute()
+{
+    Println "$info 搜索路由 ..."
+
+    CloudflareListWorkersRoutes
+
+    echo -e "选择域名"
+    while read -p "$i18n_default_cancel" cf_zones_num
+    do
+        case $cf_zones_num in
+            "") 
+                Println "$i18n_canceled...\n"
+                exit 1
+            ;;
+            *[!0-9]*) 
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *) 
+                if [ "$cf_zones_num" -gt 0 ] && [ "$cf_zones_num" -le "$cf_users_zones_count" ] 
+                then
+                    cf_zones_index=$((cf_zones_num-1))
+                    cf_users_zone_name=${cf_users_zones_name[cf_zones_index]}
+                    cf_users_zone_id=${cf_users_zones_id[cf_zones_index]}
+                    cf_users_zone_account_id=${cf_users_zones_account_id[cf_zones_index]}
+                    cf_users_zone_account_token=${cf_users_zones_account_token[cf_zones_index]}
+                    cf_users_zone_account_api_key=${cf_users_zones_account_api_key[cf_zones_index]}
+                    cf_users_zone_account_email=${cf_users_zones_account_email[cf_zones_index]}
+                    cf_users_zone_routes_count=${cf_users_zones_routes_count[cf_zones_index]}
+                    cf_users_zone_route_id=${cf_users_zones_route_id[cf_zones_index]}
+                    cf_users_zone_route_script=${cf_users_zones_route_script[cf_zones_index]}
+                    cf_users_zone_route_pattern=${cf_users_zones_route_pattern[cf_zones_index]}
+                    if [ -n "$cf_users_zone_account_api_key" ] 
+                    then
+                        curl_header_auth_email="X-Auth-Email: $cf_users_zone_account_email"
+                        curl_header_auth_key="X-Auth-Key: $cf_users_zone_account_api_key"
+                        curl_header_auth_token=""
+                    elif [ -n "$cf_users_zone_account_token" ] 
+                    then
+                        curl_header_auth_email=""
+                        curl_header_auth_key=""
+                        curl_header_auth_token="Authorization: Bearer $cf_users_zone_account_token"
+                    else
+                        Println "$error 请添加账号 $cf_users_zone_account_email Token 或 Key\n"
+                        exit 1
+                    fi
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    if [ "$cf_users_zone_routes_count" -gt 0 ] 
+    then
+        IFS=" " read -r -a cf_users_zone_routes_id <<< "$cf_users_zone_route_id"
+        IFS=" " read -r -a cf_users_zone_routes_script <<< "$cf_users_zone_route_script"
+        IFS=" " read -r -a cf_users_zone_routes_pattern <<< "$cf_users_zone_route_pattern"
+
+        cf_users_zone_routes_list=""
+        for((i=0;i<cf_users_zone_routes_count;i++));
+        do
+            cf_users_zone_routes_list="$cf_users_zone_routes_list $((i+1)).${indent_6}${green}${cf_users_zone_routes_pattern[i]}${normal} => ${green}${cf_users_zone_routes_script[i]}${normal}\n\n"
+        done
+
+        cf_users_zone_route_add_num=$((cf_users_zone_routes_count+1))
+        cf_users_zone_routes_list="$cf_users_zone_routes_list $cf_users_zone_route_add_num.${indent_6}${green}添加路由${normal}\n"
+        Println "$cf_users_zone_routes_list"
+
+        while read -p "$i18n_default_cancel" cf_users_zone_routes_num
+        do
+            if [ "$cf_users_zone_routes_num" == "$cf_users_zone_route_add_num" ] 
+            then
+                break
+            fi
+            case $cf_users_zone_routes_num in
+                "") 
+                    Println "$i18n_canceled...\n"
+                    exit 1
+                ;;
+                *[!0-9]*) 
+                    Println "$error $i18n_input_correct_no\n"
+                ;;
+                *) 
+                    if [ "$cf_users_zone_routes_num" -gt 0 ] && [ "$cf_users_zone_routes_num" -le "$cf_users_zone_routes_count" ] 
+                    then
+                        cf_users_zone_routes_index=$((cf_users_zone_routes_num-1))
+                        cf_users_zone_route_id=${cf_users_zone_routes_id[cf_users_zone_routes_index]}
+                        cf_users_zone_route_script=${cf_users_zone_routes_script[cf_users_zone_routes_index]}
+                        cf_users_zone_route_pattern=${cf_users_zone_routes_pattern[cf_users_zone_routes_index]}
+                        Println " ${green}$cf_users_zone_route_pattern${normal} => ${green}$cf_users_zone_route_script${normal}\n\n ${green}1.${normal}${indent_6}更改路由\n ${green}2.${normal}${indent_6}删除路由\n"
+                        read -p "$i18n_default_cancel" cf_users_zone_route_num
+                        case $cf_users_zone_route_num in
+                            "") 
+                                Println "$i18n_canceled...\n"
+                                exit 1
+                            ;;
+                            1) 
+                                Println "$info 输入已经存在的 worker 项目名称"
+                                echo -e "$tip 输入的是项目名称, 不是序号\n"
+                                read -p "(默认: $cf_users_zone_route_script): " script
+                                script=${script:-$cf_users_zone_route_script}
+                                Println "$info 输入路由, 比如 abc.domain.com/*"
+                                read -p "(默认: $cf_users_zone_route_pattern): " pattern
+                                pattern=${pattern:-$cf_users_zone_route_pattern}
+                                if [[ $(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$cf_users_zone_id/workers/routes/$cf_users_zone_route_id" \
+                                    -H ''"$curl_header_auth_email"'' \
+                                    -H ''"$curl_header_auth_key"'' \
+                                    -H ''"$curl_header_auth_token"'' \
+                                    -H "Content-Type: application/json" \
+                                    --data '{"pattern":"'"$pattern"'","script":"'"$script"'"}' \
+                                    | $JQ_FILE -r '.success' ) = true ]]
+                                then
+                                    Println "$info 路由更改成功\n"
+                                else
+                                    Println "$error 路由更改失败\n"
+                                fi
+                            ;;
+                            2) 
+                                if [[ $(curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/$cf_users_zone_id/workers/routes/$cf_users_zone_route_id" \
+                                    -H ''"$curl_header_auth_email"'' \
+                                    -H ''"$curl_header_auth_key"'' \
+                                    -H ''"$curl_header_auth_token"'' \
+                                    -H "Content-Type: application/json" \
+                                    | $JQ_FILE -r '.success' ) = true ]] 
+                                then
+                                    Println "$info 路由删除成功\n"
+                                else
+                                    Println "$info 路由删除成功\n"
+                                fi
+                            ;;
+                            *[!0-9]*)
+                                Println "$error $i18n_input_correct_no\n"
+                            ;;
+                            *) 
+                                Println "$error $i18n_input_correct_no\n"
+                            ;;
+                        esac
+                        exit 0
+                    else
+                        Println "$error $i18n_input_correct_no\n"
+                    fi
+                ;;
+            esac
+        done
+    fi
+
+    CloudflareListWorkers
+
+    Println "$info 输入已经存在的 worker 项目名称"
+    echo -e "$tip 输入的是项目名称, 不是序号\n"
+    read -p "$i18n_default_cancel" script
+    [ -z "$script" ] && Println "$i18n_canceled...\n" && exit 1
+    if [[ $script =~ ^[0-9]+$ ]] && [ "$script" -le "$cf_workers_count" ] && [ "$script" -gt 0 ]
+    then
+        cf_workers_index=$((script-1))
+        echo
+        inquirer list_input_index "是想要输入 ${cf_workers_project_name[cf_workers_index]}" yn_options yn_options_index
+
+        if [ "$yn_options_index" -eq 0 ] 
+        then
+            script=${cf_workers_project_name[cf_workers_index]}
+        fi
+    fi
+    Println "$info 输入路由,比如 abc.domain.com/*"
+    read -p "$i18n_default_cancel" pattern
+    [ -z "$pattern" ] && Println "$i18n_canceled...\n" && exit 1
+    if [[ $(curl -s "https://api.cloudflare.com/client/v4/zones/$cf_users_zone_id/workers/routes" \
+        -H ''"$curl_header_auth_email"'' \
+        -H ''"$curl_header_auth_key"'' \
+        -H ''"$curl_header_auth_token"'' \
+        -H "Content-Type: application/json" \
+        --data '{"pattern":"'"$pattern"'","script":"'"$script"'"}' \
+        | $JQ_FILE -r '.success' ) = true ]]
+    then
+        Println "$info 路由添加成功\n"
+    else
+        Println "$error 路由添加失败\n"
+    fi
+}

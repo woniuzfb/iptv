@@ -1,0 +1,38 @@
+NodejsInstall()
+{
+    DepsCheck
+
+    if [ "$dist" == "rpm" ] && { [[ -x $(command -v node) ]] || [[ -x $(command -v npm) ]]; }
+    then
+        yum remove -y nodejs npm
+    fi
+
+    Progress &
+    progress_pid=$!
+
+    trap '
+        kill $progress_pid
+        wait $progress_pid 2> /dev/null
+    ' EXIT
+
+    if [ "$dist" == "rpm" ] 
+    then
+        yum -y install gcc-c++ make >/dev/null 2>&1
+        # yum groupinstall 'Development Tools'
+
+        if bash <(curl -sL https://rpm.nodesource.com/setup_14.x) > /dev/null
+        then
+            yum -y install nodejs >/dev/null 2>&1
+        fi
+    else
+        if bash <(curl -sL https://deb.nodesource.com/setup_14.x) > /dev/null 
+        then
+            apt-get install -y nodejs >/dev/null 2>&1
+        fi
+    fi
+
+    kill $progress_pid
+    wait $progress_pid 2> /dev/null || true
+    trap - EXIT
+    echo -n "...100%" && Println "$info nodejs 安装完成"
+}

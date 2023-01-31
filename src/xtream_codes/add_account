@@ -1,0 +1,41 @@
+XtreamCodesAddAccount()
+{
+    echo && read -p "请输入账号(需包含服务器地址): " xtream_codes_input
+    [ -z "$xtream_codes_input" ] && Println "$i18n_canceled...\n" && exit 1
+
+    if [[ $xtream_codes_input == *"username="* ]] 
+    then
+        domain=${xtream_codes_input#*http://}
+        domain=${domain%%/*}
+        username=${xtream_codes_input#*username=}
+        username=${username%%&*}
+        password=${xtream_codes_input#*password=}
+        password=${password%%&*}
+        ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
+    elif [[ $xtream_codes_input =~ ^http://([^/]+)/([^/]+)/([^/]+)/ ]] 
+    then
+        if [ "${BASH_REMATCH[2]}" == "live" ] 
+        then
+            if [[ $line =~ ^http://([^/]+)/live/([^/]+)/([^/]+)/ ]] 
+            then
+                domain=${BASH_REMATCH[1]}
+                username=${BASH_REMATCH[2]}
+                password=${BASH_REMATCH[3]}
+            else
+                Println "$error 输入错误\n" && exit 1
+            fi
+        else
+            domain=${BASH_REMATCH[1]}
+            username=${BASH_REMATCH[2]}
+            password=${BASH_REMATCH[3]}
+        fi
+        ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
+    else
+        Println "$error 输入错误\n" && exit 1
+    fi
+
+    [ -z "${ip:-}" ] && Println "$error 无法解析域名 !\n" && exit 1
+    printf '%s\n' "$ip $domain $username:$password" >> "$XTREAM_CODES_EXAM"
+
+    Println "$info 账号添加成功 !\n"
+}

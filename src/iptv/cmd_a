@@ -1,0 +1,21 @@
+if [[ ! -x $(command -v readlink) ]] 
+then
+    Println "$error 系统不支持 readlink\n"
+    exit 1
+fi
+echo
+ExitOnText "输入自定义命令名称" name
+
+if command -v "$name" > /dev/null
+then
+    Println "$error 命令已经存在\n"
+    exit 1
+fi
+echo
+alternative_options=( nginx openresty xray v2ray armbian "proxmox ve" 
+"ibm cloud foundry" "cloudflare partner,workers" ffmpeg )
+inquirer list_input_index "选择执行的脚本" alternative_options alternative_options_index
+commands=( NX_FILE OR_FILE X_FILE V2_FILE ARM_FILE PVE_FILE IBM_FILE CF_FILE SH_FILE )
+ln -s ${!commands[alternative_options_index]} /usr/bin/$name
+Println "$info 自定义命令 $name 添加成功\n"
+exit 0

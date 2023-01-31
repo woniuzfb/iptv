@@ -1,0 +1,38 @@
+FilterString()
+{
+    global_options=()
+    global_flags=( 
+        cpuflags y n filter_threads stats stats_period progress debug_ts qphist benchmark 
+        benchmark_all timelimit dump hex filter_complex filter_complex_threads lavfi
+        filter_complex_script sdp_file abort_on max_error_rate xerror auto_conversion_filters
+        nostats nostdin hide_banner loglevel
+    )
+
+    for var in "${@}"
+    do
+        #var_new=${!var//[\^\`]/-}
+        var_new=${!var}
+
+        var_parse="$var_new"
+        if [ -n "$var_parse" ] 
+        then
+            for global_flag in "${global_flags[@]}"
+            do
+                if [[ $var_parse =~ (.*)"-$global_flag"$ ]] 
+                then
+                    global_options+=("-$global_flag")
+                    var_parse="${BASH_REMATCH[1]}"
+                elif [[ $var_parse =~ (.*)"-$global_flag "([^ -]*)(.*) ]] 
+                then
+                    global_options+=("-$global_flag")
+                    [ -n "${BASH_REMATCH[2]}" ] && global_options+=("${BASH_REMATCH[2]}")
+                    var_parse="${BASH_REMATCH[1]}${BASH_REMATCH[3]}"
+                fi
+            done
+        fi
+
+        read -r ${var}_command <<< "$var_parse"
+
+        read -r ${var?} <<< "$var_new"
+    done
+}

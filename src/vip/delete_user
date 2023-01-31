@@ -1,0 +1,36 @@
+VipDelUser()
+{
+    VipListUsers
+
+    while read -p "请选择用户: " vip_users_num
+    do
+        case "$vip_users_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$vip_users_num" -gt 0 ] && [ "$vip_users_num" -le "$vip_users_count" ]
+                then
+                    vip_users_index=$((vip_users_num-1))
+                    vip_user_ip=${vip_users_ip[vip_users_index]}
+                    vip_user_license=${vip_users_license[vip_users_index]}
+                    vip_user_sum=${vip_users_sum[vip_users_index]}
+                    vip_user_expire=${vip_users_expire[vip_users_index]}
+                    vip_user_name=${vip_users_name[vip_users_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    jq_path='["users",'"$vip_users_index"']'
+    JQ delete "$VIP_FILE"
+
+    Println "用户 ${green}$vip_user_name [ $vip_user_license ]${normal} 删除成功"
+    Println "$tip 同一用户2分钟内不能使用不同的授权码\n"
+}

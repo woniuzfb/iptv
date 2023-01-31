@@ -1,0 +1,34 @@
+V2rayNginxSelectDomainServerProxy()
+{
+    echo "`gettext \"输入序号\"`"
+    while read -p "$i18n_default_cancel" v2ray_nginx_domain_server_proxies_num
+    do
+        case "$v2ray_nginx_domain_server_proxies_num" in
+            "")
+                Println "$i18n_canceled...\n"
+                exit 1
+            ;;
+            $v2ray_nginx_domain_server_update_crt_number)
+                AcmeCheck
+                V2rayNginxDomainServerUpdateCert
+                exit 0
+            ;;
+            $v2ray_nginx_domain_server_add_proxy_number)
+                V2rayNginxDomainServerAddProxy
+                exit 0
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$v2ray_nginx_domain_server_proxies_num" -gt 0 ] && [ "$v2ray_nginx_domain_server_proxies_num" -le "$v2ray_nginx_domain_server_proxies_count" ]
+                then
+                    v2ray_nginx_domain_server_proxies_index=$((v2ray_nginx_domain_server_proxies_num-1))
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+}

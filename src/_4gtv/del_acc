@@ -1,0 +1,34 @@
+Del4gtvAcc()
+{
+    List4gtvAccs
+
+    if [ "$_4gtv_accs_count" -eq 0 ] 
+    then
+        exit 1
+    fi
+
+    echo -e "选择账号"
+    while read -p "$i18n_default_cancel" _4gtv_accs_num
+    do
+        case "$_4gtv_accs_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$_4gtv_accs_num" -gt 0 ] && [ "$_4gtv_accs_num" -le "$_4gtv_accs_count" ]
+                then
+                    _4gtv_accs_index=$((_4gtv_accs_num-1))
+                    jq_path='["4gtv","accounts",'"$_4gtv_accs_index"']'
+                    JQ delete "$SERVICES_FILE"
+                    Println "$info 账号删除成功\n"
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+}

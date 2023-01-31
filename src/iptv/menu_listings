@@ -1,0 +1,3842 @@
+ScheduleNowtv()
+{
+    for chnl in "${nowtv_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        nowtv_id=${chnl#*:}
+        chnl_name=${nowtv_id#*:}
+        nowtv_id=${nowtv_id%%:*}
+        SCHEDULE_LINK_NOWTV="https://nowplayer.now.com/tvguide/epglist?channelIdList%5B%5D=$nowtv_id&day=1"
+
+        if [ ! -s "$SCHEDULE_JSON" ] 
+        then
+            printf '{"%s":[]}' "fhwszx" > "$SCHEDULE_JSON"
+        fi
+
+        schedule=""
+        while IFS="=" read -r program_time program_sys_time program_title
+        do
+            program_time=${program_time#\"}
+            program_title=${program_title%\"}
+            program_sys_time=${program_sys_time:0:10}
+            [ -n "$schedule" ] && schedule="$schedule,"
+            schedule=$schedule'{
+                "title":"'"$program_title"'",
+                "time":"'"$program_time"'",
+                "sys_time":"'"$program_sys_time"'"
+            }'
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" --cookie "LANG=zh" "$SCHEDULE_LINK_NOWTV" | $JQ_FILE '.[0][] | [.startTime,.start,.name] | join("=")')
+
+        if [ -n "$schedule" ] 
+        then
+            json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "[$schedule]"
+            Println "$info $chnl_name nowtv [$chnl_id] 节目表更新成功"
+        else
+            Println "$error $chnl_name nowtv [$chnl_id] 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleNiotv()
+{
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "msxw" > "$SCHEDULE_JSON"
+    fi
+
+    niotv_proxy=()
+    if [ -s "$IPTV_ROOT/niotv_proxy" ] 
+    then
+        niotv_proxy+=( -x $(< $IPTV_ROOT/niotv_proxy) )
+    fi
+
+    printf -v today '%(%Y-%m-%d)T' -1
+
+    for chnl in "${niotv_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        niotv_id=${chnl#*:}
+        chnl_name=${niotv_id#*:}
+        niotv_id=${niotv_id%%:*}
+        SCHEDULE_LINK_NIOTV="http://www.niotv.com/i_index.php?cont=day&ch_id=$niotv_id"
+        empty=1
+        check=1
+        schedule=""
+        while IFS= read -r line
+        do
+            while [[ $line =~ epg_col_time\'\> ]] 
+            do
+                empty=0
+                line=${line#*epg_col_time\'>}
+                start_time=${line%%~*}
+                end_time=${line#*~}
+                end_time=${end_time%%</td>*}
+                title=${line%% </a></td>*}
+                title=${title%%</a></td>*}
+                title=${title##*>}
+                title=${title//\"/}
+                title=${title//\'/}
+                title=${title//\\/\'}
+                sys_time=$(date -d "$today $start_time" +%s)
+
+                start_time_num=$sys_time
+                end_time_num=$(date -d "$today $end_time" +%s)
+
+                if [ "$check" -eq 1 ] && [ "$start_time_num" -gt "$end_time_num" ] 
+                then
+                    continue
+                fi
+
+                check=0
+
+                [ -n "$schedule" ] && schedule="$schedule,"
+                schedule=$schedule'{
+                    "title":"'"$title"'",
+                    "time":"'"$start_time"'",
+                    "sys_time":"'"$sys_time"'"
+                }'
+            done
+        done < <(curl ${niotv_proxy[@]+"${niotv_proxy[@]}"} -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" --data "act=select&sch_id=$niotv_id&day=$today" "$SCHEDULE_LINK_NIOTV")
+
+        if [ "$empty" -eq 1 ] 
+        then
+            Println "$error $chnl_name niotv [$chnl_id] 节目表更新失败"
+            continue
+        fi
+
+        json=true
+        jq_path='["'"$chnl_id"'"]'
+        JQ update "$SCHEDULE_JSON" "[$schedule]"
+        Println "$info $chnl_name niotv [$chnl_id] 节目表更新成功"
+    done
+}
+
+ScheduleIcable()
+{
+    printf -v today '%(%Y%m%d)T' -1
+    sys_time=$(date --date="today 0" +"%s")
+    yesterday=$(date --date="yesterday" +"%Y%m%d")
+
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "hkopen" > "$SCHEDULE_JSON"
+    fi
+
+    for chnl in "${icable_chnls[@]}"
+    do
+        if [[ $chnl =~ ([^:]+):([^:]+):([^:]+) ]] 
+        then
+            chnl_id=${BASH_REMATCH[1]}
+            chnl_num=${BASH_REMATCH[2]}
+            chnl_name=${BASH_REMATCH[3]}
+        fi
+
+        schedule=""
+
+        while IFS= read -r line
+        do
+            if [[ $line =~ ch_time ]] 
+            then
+                while [[ $line =~ ch_time ]] 
+                do
+                    line=${line#*ch_time }
+                    if [ "${line%%_*}" == "nm" ] 
+                    then
+                        program_time=${line#*f_eng\">}
+                        program_time=${program_time%%<*}
+                        program_title=${line#*ch_prog\">}
+                        program_title=${program_title%%<*}
+                        program_sys_time=$(date -d "$today $program_time" +%s)
+                        [ -n "$schedule" ] && schedule="$schedule,"
+                        schedule=$schedule'{
+                            "title":"'"${program_title//\"/}"'",
+                            "time":"'"$program_time"'AM",
+                            "sys_time":"'"$program_sys_time"'"
+                        }'
+                    fi
+                done
+                break
+            fi
+        done < <(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "http://epg.i-cable.com/new/ch_getcontent.php?lang=chi&ch=$chnl_num&date=$yesterday" 2> /dev/null)
+
+        while IFS= read -r line
+        do
+            if [[ $line =~ ch_time ]] 
+            then
+                while [[ $line =~ ch_time ]] 
+                do
+                    line=${line#*ch_time }
+                    if [ "${line%%_*}" == "am" ] 
+                    then
+                        time_flag="AM"
+                    elif [ "${line%%_*}" == "pm" ] 
+                    then
+                        time_flag="PM"
+                    else
+                        break
+                    fi
+                    program_time=${line#*f_eng\">}
+                    program_time="${program_time%%<*}$time_flag"
+                    program_title=${line#*ch_prog\">}
+                    program_title=${program_title%%<*}
+                    program_sys_time=$(date -d "$today $program_time" +%s)
+                    [ -n "$schedule" ] && schedule="$schedule,"
+                    schedule=$schedule'{
+                        "title":"'"${program_title//\"/}"'",
+                        "time":"'"$program_time"'",
+                        "sys_time":"'"$program_sys_time"'"
+                    }'
+                done
+                break
+            fi
+        done < <(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "http://epg.i-cable.com/new/ch_getcontent.php?lang=chi&ch=$chnl_num&date=$today" 2> /dev/null)
+
+        if [ -n "$schedule" ] 
+        then
+            json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "[$schedule]"
+            Println "$info $chnl_name [$chnl_id] i-cable 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] i-cable 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleJiushi()
+{
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "tvbfc" > "$SCHEDULE_JSON"
+    fi
+
+    for chnl in "${jiushi_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        chnl_name=${chnl#*:}
+        chnl_name=${chnl_name// /-}
+        chnl_name_encode=$(UrlencodeUpper "$chnl_name")
+
+        printf -v today '%(%Y-%m-%d)T' -1
+
+        SCHEDULE_LINK="https://xn--i0yt6h0rn.tw/channel/$chnl_name_encode/index.json"
+
+        schedule=""
+        while IFS="=" read -r program_time program_title
+        do
+            program_time=${program_time#\"}
+            program_title=${program_title%\"}
+            program_sys_time=$(date -d "$today $program_time" +%s)
+
+            [ -n "$schedule" ] && schedule="$schedule,"
+            schedule=$schedule'{
+                "title":"'"$program_title"'",
+                "time":"'"$program_time"'",
+                "sys_time":"'"$program_sys_time"'"
+            }'
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "$SCHEDULE_LINK" | $JQ_FILE '.list[] | select(.key=="'"$today"'").values[] | [.time,.name] | join("=")')
+
+        if [ -z "$schedule" ]
+        then
+            today=${today//-/\/}
+            while IFS="=" read -r program_time program_title
+            do
+                program_time=${program_time#\"}
+                program_title=${program_title%\"}
+                program_sys_time=$(date -d "$today $program_time" +%s)
+
+                [ -n "$schedule" ] && schedule="$schedule,"
+                schedule=$schedule'{
+                    "title":"'"$program_title"'",
+                    "time":"'"$program_time"'",
+                    "sys_time":"'"$program_sys_time"'"
+                }'
+            done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "$SCHEDULE_LINK" | $JQ_FILE '.list[] | select(.key=="'"$today"'").values[] | [.time,.name] | join("=")')
+
+            if [ -z "$schedule" ] 
+            then
+                Println "$error $chnl_name [$chnl_id] 就是节目表更新失败"
+                continue
+            fi
+        fi
+
+        json=true
+        jq_path='["'"$chnl_id"'"]'
+        JQ update "$SCHEDULE_JSON" "[$schedule]"
+        Println "$info $chnl_name [$chnl_id] 就是节目表更新成功"
+    done
+}
+
+ScheduleHboasia()
+{
+    printf -v today '%(%Y-%m-%d)T' -1
+
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "hbo" > "$SCHEDULE_JSON"
+    fi
+
+    for chnl in "${hboasia_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        chnl_name=${chnl#*:}
+        hbo_id=${chnl_name%:*}
+        chnl_name=${chnl_name#*:}
+
+        schedule=""
+        while IFS="^" read -r program_time program_title program_classification
+        do
+            program_time=${program_time#\"}
+            program_classification=${program_classification%\"}
+
+            if [ -n "$program_classification" ] 
+            then
+                program_title="$program_title($program_classification)"
+            fi
+
+            program_sys_time=$(date -d "$program_time" +%s)
+            new_program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+
+            [ -n "$schedule" ] && schedule="$schedule,"
+            schedule=$schedule'{
+                "id":"'"$hbo_id"'",
+                "title":"'"$program_title"'",
+                "time":"'"$new_program_time"'",
+                "sys_time":"'"$program_sys_time"'"
+            }'
+        done < <(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" \
+                -d "channel=$hbo_id" \
+                -d "date=$today" \
+                https://hboasia.com/ajax/getschedule.php | $JQ_FILE '.[] | [.publictime,.title,.classification] | join("^")')
+
+        if [ -n "$schedule" ] 
+        then
+            json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "[$schedule]"
+            Println "$info $chnl_name [$chnl_id] hbo亚洲 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] hbo亚洲 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleHbous()
+{
+    printf -v today '%(%Y-%m-%d)T' -1
+    sys_time=$(date -d $today +%s)
+    min_sys_time=$((sys_time-7200))
+    max_sys_time=$((sys_time+86400))
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
+
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "us_hbo" > "$SCHEDULE_JSON"
+    fi
+
+    if [ "${1:-}" == "WEST" ] || [ "${1:-}" == "west" ]
+    then
+        zone="WEST"
+    else
+        zone="EAST"
+    fi
+
+    for chnl in "${hbous_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        chnl=${chnl#*:}
+        hbous_name=${chnl%%:*}
+        chnl_zone=${chnl#*:}
+        chnl_name=${chnl_zone#*:}
+        chnl_zone=${chnl_zone%%:*}
+
+        if [ "$zone" != "$chnl_zone" ]
+        then
+            continue
+        fi
+
+        schedule=""
+
+        while IFS="=" read -r program_time program_title
+        do
+            program_time=${program_time#\"}
+            program_title=${program_title%\"}
+            program_sys_time=$(date -d "$program_time" +%s)
+            if [ "$program_sys_time" -ge "$min_sys_time" ] 
+            then
+                program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                [ -n "$schedule" ] && schedule="$schedule,"
+                schedule=$schedule'{
+                    "title":"'"$program_title"'",
+                    "time":"'"$program_time"'",
+                    "sys_time":"'"$program_sys_time"'"
+                }'
+            fi
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://proxy-v4.cms.hbo.com/v1/schedule?date=$yesterday" | $JQ_FILE --arg channelName "$hbous_name" --arg channelZone "$chnl_zone" '.channels | to_entries | map(select(.value.channelName==$channelName and .value.channelZone==$channelZone))[].value.programAirings | to_entries | map("\(.value.airing.playDate)=\(.value.program.title)")[]')
+
+        min_sys_time=${program_sys_time:-$sys_time}
+
+        while IFS="=" read -r program_time program_title
+        do
+            program_time=${program_time#\"}
+            program_title=${program_title%\"}
+            program_sys_time=$(date -d "$program_time" +%s)
+            if [ "$program_sys_time" -le "$max_sys_time" ] && [ "$program_sys_time" -gt "$min_sys_time" ]
+            then
+                program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                [ -n "$schedule" ] && schedule="$schedule,"
+                schedule=$schedule'{
+                    "title":"'"$program_title"'",
+                    "time":"'"$program_time"'",
+                    "sys_time":"'"$program_sys_time"'"
+                }'
+            fi
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://proxy-v4.cms.hbo.com/v1/schedule?date=$today" | $JQ_FILE --arg channelName "$hbous_name" --arg channelZone "$chnl_zone" '.channels | to_entries | map(select(.value.channelName==$channelName and .value.channelZone==$channelZone))[].value.programAirings | to_entries | map("\(.value.airing.playDate)=\(.value.program.title)")[]')
+
+        if [ -n "$schedule" ] 
+        then
+            json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "[$schedule]"
+            Println "$info $chnl_name [$chnl_id] hbous 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] hbous 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleOntvtonight()
+{
+    printf -v today '%(%Y-%m-%d)T' -1
+    sys_time=$(date -d $today +%s)
+    min_sys_time=$((sys_time-7200))
+    max_sys_time=$((sys_time+86400))
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
+
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "us_abc" > "$SCHEDULE_JSON"
+    fi
+
+    for chnl in "${ontvtonight_chnls[@]}"
+    do
+        IFS="@" read -r chnl_id chnl_name chnl_no chnl_zone <<< "$chnl"
+
+        chnl_zone=${chnl_zone%:*}
+        schedule=""
+        start=0
+
+        if [ "${chnl_id%_*}" == "us" ] || [ "${chnl_id%_*}" == "foxnews" ]
+        then
+            ct=""
+        else
+            ct="${chnl_id%_*}/"
+        fi
+
+        while IFS= read -r line
+        do
+            if [[ $line == *"<tbody>"* ]] 
+            then
+                start=1
+            elif [ "$start" -eq 1 ] && [[ $line == *"<h5"* ]] && [[ $line == *"</h5>"* ]]
+            then
+                line=${line#*>}
+                program_time=${line%<*}
+                new_program_time=${program_time% *}
+                hour=${new_program_time%:*}
+                if [ "${program_time#* }" == "pm" ] && [ "$hour" -lt 12 ]
+                then
+                    hour=$((hour+12))
+                    new_program_time="$hour:${new_program_time#*:}"
+                elif [ "${program_time#* }" == "am" ] && [ "$hour" -eq 12 ]
+                then
+                    new_program_time="00:${new_program_time#*:}"
+                fi
+            elif [ "$start" -eq 1 ] && [[ $line == *"</a></h5>"* ]] 
+            then
+                line=${line%%<\/a>*}
+                Trim line
+                program_title="${line}"
+                program_title=${program_title//amp;/}
+                program_title=${program_title//&#039;/\'}
+                program_sys_time=$(date -d "${yesterday}T$new_program_time$chnl_zone" +%s)
+                if [ "$program_sys_time" -ge "$min_sys_time" ] 
+                then
+                    program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                    [ -n "$schedule" ] && schedule="$schedule,"
+                    schedule=$schedule'{
+                        "title":"'"$program_title"'",
+                        "time":"'"$program_time"'",
+                        "sys_time":"'"$program_sys_time"'"
+                    }'
+                fi
+            elif [ "$start" -eq 1 ] && [[ $line == *"</tbody>"* ]] 
+            then
+                break
+            fi
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://www.ontvtonight.com/${ct}guide/listings/channel/$chnl_no/$chnl_name.html?dt=$yesterday" 2> /dev/null)
+
+        while IFS= read -r line
+        do
+            if [[ $line == *"<tbody>"* ]] 
+            then
+                start=1
+            elif [ "$start" -eq 1 ] && [[ $line == *"<h5"* ]] && [[ $line == *"</h5>"* ]] 
+            then
+                line=${line#*>}
+                program_time=${line%<*}
+                new_program_time=${program_time% *}
+                hour=${new_program_time%:*}
+                if [ "${program_time#* }" == "pm" ] && [ "$hour" -lt 12 ]
+                then
+                    hour=$((hour+12))
+                    new_program_time="$hour:${new_program_time#*:}"
+                elif [ "${program_time#* }" == "am" ] && [ "$hour" -eq 12 ]
+                then
+                    new_program_time="00:${new_program_time#*:}"
+                fi
+            elif [ "$start" -eq 1 ] && [[ $line == *"</a></h5>"* ]] 
+            then
+                line=${line%%<\/a>*}
+                Trim line
+                program_title="$line"
+                program_title=${program_title//amp;/}
+                program_title=${program_title//&#039;/\'}
+                program_sys_time=$(date -d "${today}T$new_program_time$chnl_zone" +%s)
+                if [ "$program_sys_time" -le "$max_sys_time" ] 
+                then
+                    program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+                    [ -n "$schedule" ] && schedule="$schedule,"
+                    schedule=$schedule'{
+                        "title":"'"$program_title"'",
+                        "time":"'"$program_time"'",
+                        "sys_time":"'"$program_sys_time"'"
+                    }'
+                fi
+            elif [ "$start" -eq 1 ] && [[ $line == *"</tbody>"* ]] 
+            then
+                break
+            fi
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://www.ontvtonight.com/${ct}guide/listings/channel/$chnl_no/$chnl_name.html?dt=$today" 2> /dev/null)
+
+        if [ -n "$schedule" ] 
+        then
+            json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "[$schedule]"
+            Println "$info $chnl_name [$chnl_id] ontvtonight 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] ontvtonight 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleDisneyjr()
+{
+    printf -v today '%(%Y%m%d)T' -1
+    SCHEDULE_LINK="https://disney.com.tw/_schedule/full/$today/8/%2Fepg"
+
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "disneyjr" > "$SCHEDULE_JSON"
+    fi
+
+    schedule=""
+    while IFS= read -r program 
+    do
+        program_title=${program#*show_title: }
+        program_title=${program_title%%, time: *}
+        program_time=${program#*, time: }
+        program_time=${program_time%%, iso8601_utc_time: *}
+        program_sys_time=${program#*, iso8601_utc_time: }
+        program_sys_time=${program_sys_time%\"}
+        program_sys_time=$(date -d "$program_sys_time" +%s)
+
+        [ -n "$schedule" ] && schedule="$schedule,"
+        schedule=$schedule'{
+            "title":"'"$program_title"'",
+            "time":"'"$program_time"'",
+            "sys_time":"'"$program_sys_time"'"
+        }'
+    done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "$SCHEDULE_LINK" | $JQ_FILE '.schedule | to_entries | map(.value.schedule_items[]) | to_entries | map("show_title: \(.value.show_title), time: \(.value.time), iso8601_utc_time: \(.value.iso8601_utc_time)")[]')
+
+    if [ -n "$schedule" ] 
+    then
+        json=true
+        jq_path='["'"$chnl_id"'"]'
+        JQ update "$SCHEDULE_JSON" "[$schedule]"
+        Println "$info $chnl_name [$chnl_id] 节目表更新成功"
+    else
+        Println "$error $chnl_name [$chnl_id] 节目表更新失败"
+    fi
+}
+
+ScheduleFoxmovies()
+{
+    printf -v today '%(%Y-%-m-%-d)T' -1
+    SCHEDULE_LINK="https://www.fng.tw/foxmovies/program.php?go=$today"
+
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "foxmovies" > "$SCHEDULE_JSON"
+    fi
+
+    schedule=""
+    while IFS= read -r line
+    do
+        if [[ $line == *"<td>"* ]] 
+        then
+            line=${line#*<td>}
+            line=${line%%<\/td>*}
+
+            if [[ $line == *"<br>"* ]]  
+            then
+                line=${line%% <br>*}
+                line=${line//\"/}
+                line=${line//\'/}
+                line=${line//\\/\'}
+                sys_time=$(date -d "$today $time" +%s)
+                [ -n "$schedule" ] && schedule="$schedule,"
+                schedule=$schedule'{
+                    "title":"'"$line"'",
+                    "time":"'"$time"'",
+                    "sys_time":"'"$sys_time"'"
+                }'
+            else
+                time=${line#* }
+            fi
+        fi
+    done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "$SCHEDULE_LINK")
+
+    if [ -n "$schedule" ] 
+    then
+        json=true
+        jq_path='["'"$chnl_id"'"]'
+        JQ update "$SCHEDULE_JSON" "[$schedule]"
+        Println "$info $chnl_name [$chnl_id] 节目表更新成功"
+    else
+        Println "$error $chnl_name [$chnl_id] 节目表更新失败"
+    fi
+}
+
+ScheduleAmlh()
+{
+    printf -v today '%(%Y-%-m-%-d)T' -1
+    timestamp=$(date -d $today +%s)
+
+    SCHEDULE_LINK="http://www.macaulotustv.cc/index.php/index/getdetail.html"
+
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "amlh" > "$SCHEDULE_JSON"
+    fi
+
+    schedule=""
+
+    line=$(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" --data "d=$((timestamp-86400))" "$SCHEDULE_LINK") || true
+
+    if [[ $line == *"<li>"* ]] 
+    then
+        line=${line#*<em>}
+        time=${line%%<*}
+        while [ -n "$time" ] 
+        do
+            time=${time:0:5}
+            line=${line#*<span>}
+            if [ "${flag:-0}" -gt 0 ] && [ "${time:0:1}" -eq 0 ]
+            then
+                title=${line%%<*}
+                title=${title//\\t/ }
+                title=$(printf %b "$title")
+                if [ "${title:0:4}" == "經典影院" ] 
+                then
+                    title=${title:5}
+                fi
+                sys_time=$(date -d "$today $time" +%s)
+                [ -n "$schedule" ] && schedule="$schedule,"
+                schedule=$schedule'{
+                    "title":"'"$title"'",
+                    "time":"'"$time"'",
+                    "sys_time":"'"$sys_time"'"
+                }'
+            else
+                flag=${time:0:1}
+            fi
+            if [[ $line == *"<em>"* ]] 
+            then
+                line=${line#*<em>}
+                time=${line%%<*}
+            else
+                break
+            fi
+        done
+    fi
+
+    flag=0
+    line=$(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" --data "d=$timestamp" "$SCHEDULE_LINK") || true
+
+    while [[ $line == *"<li>"* ]] 
+    do
+        line=${line#*<em>}
+        time=${line%%<*}
+        time=${time:0:5}
+        line=${line#*<span>}
+
+        if [ -z "${time:-}" ] || [ "$flag" -gt "${time:0:1}" ]
+        then
+            break 2
+        fi
+
+        flag=${time:0:1}
+        title=${line%%<*}
+        title=${title//\\t/ }
+        title=$(printf %b "$title")
+        if [ "${title:0:4}" == "經典影院" ] 
+        then
+            title=${title:5}
+        fi
+        sys_time=$(date -d "$today $time" +%s)
+        [ -n "$schedule" ] && schedule="$schedule,"
+        schedule=$schedule'{
+            "title":"'"$title"'",
+            "time":"'"$time"'",
+            "sys_time":"'"$sys_time"'"
+        }'
+    done
+
+    if [ -n "$schedule" ] 
+    then
+        json=true
+        jq_path='["'"$chnl_id"'"]'
+        JQ update "$SCHEDULE_JSON" "[$schedule]"
+        Println "$info $chnl_name [$chnl_id] 节目表更新成功"
+    else
+        Println "$error $chnl_name [$chnl_id] 节目表更新失败"
+    fi
+}
+
+ScheduleFoxnews()
+{
+    printf -v today '%(%Y-%m-%d)T' -1
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
+    min_start_time=$(date -d "yesterday 22:00:00" +%s)
+    max_start_time=$(date -d "today 23:59:59" +%s)
+    schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://apps.foxnews.com/schedule_new/feed/fox-news.jn" |
+        $JQ_FILE --arg today "$today" --arg yesterday "$yesterday" --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","sys_time"]' '.day
+        | map(select(.["@attributes"].value == $yesterday or .["@attributes"].value == $today).show[]
+        | .["sys_time"] = (."start-utc"|fromdate)
+        | select(.sys_time > ($min|tonumber) and .sys_time < ($max|tonumber))
+        | .["time"] = (.sys_time|strflocaltime("%-H:%M%p"))
+        | with_entries(select(.key as $k | $keys | index($k))))[]')
+
+    if [ -n "$schedule" ] 
+    then
+        file=true
+        file_json=true
+        jq_path='["'"$chnl_id"'"]'
+        JQ update "$SCHEDULE_JSON" schedule
+        Println "$info $chnl_name [$chnl_id] 节目表更新成功"
+    else
+        Println "$error $chnl_name [$chnl_id] 节目表更新失败"
+    fi
+}
+
+ScheduleTvbhk()
+{
+    printf -v today '%(%Y%m%d)T' -1
+    sys_time=$(date -d $today +%s)
+    min_sys_time=$((sys_time-7200))
+    max_sys_time=$((sys_time+86400))
+    yesterday=$(date --date="yesterday" +"%Y%m%d")
+
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "tvbhk_pearl" > "$SCHEDULE_JSON"
+    fi
+
+    tvbhk_yesterday_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://programme.tvb.com/" "https://programme.tvb.com/api/schedule?input_date=$yesterday&network_code=J,B,C,P,A")
+    tvbhk_today_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://programme.tvb.com/" "https://programme.tvb.com/api/schedule?input_date=$today&network_code=J,B,C,P,A")
+
+    for chnl in "${tvbhk_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        chnl_code=${chnl#*:}
+        chnl_name=${chnl_code#*:}
+        chnl_code=${chnl_code%%:*}
+
+        yesterday_schedule=$($JQ_FILE --arg code "$chnl_code" --arg min "$min_sys_time" --argjson keys '["title","time","sys_time"]' '.data.list | map(select(.network_code == $code).schedules[] | select((.event_time|tonumber) > ($min|tonumber)) | .["time"] = (.event_time|strflocaltime("%H:%M")) | .["sys_time"] = .event_time | .["title"] = .programme_title | with_entries(select(.key as $k | $keys | index($k))))' <<< "$tvbhk_yesterday_schedule")
+        today_schedule=$($JQ_FILE --arg code "$chnl_code" --arg max "$max_sys_time" --argjson keys '["title","time","sys_time"]' '.data.list | map(select(.network_code == $code).schedules[] | select((.event_time|tonumber) < ($max|tonumber)) | .["time"] = (.event_time|strflocaltime("%H:%M")) | .["sys_time"] = .event_time | .["title"] = .programme_title | with_entries(select(.key as $k | $keys | index($k))))' <<< "$tvbhk_today_schedule")
+
+        schedule=$($JQ_FILE --argjson merge "$today_schedule" '.+=$merge|unique_by(.sys_time)' <<< "$yesterday_schedule")
+
+        if [ -n "$schedule" ] 
+        then
+            json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "$schedule"
+            Println "$info $chnl_name [$chnl_id] tvbhk 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] tvbhk 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleTvbhd()
+{
+    if [[ ! -x $(command -v pdf2htmlEX) ]] 
+    then
+        Pdf2htmlInstall
+    fi
+
+    wget --timeout=10 --tries=3 --no-check-certificate "https://schedule.tvbusa.com/current/tvb_hd.pdf" -qO "$IPTV_ROOT/tvb_hd.pdf"
+    cd "$IPTV_ROOT"
+    pdf2htmlEX --zoom 1.3 "./tvb_hd.pdf"
+
+    printf -v today '%(%Y-%m-%d)T' -1
+    sys_time=$(date -d $today +%s)
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
+
+    weekday_program_title=()
+    weekday_program_time=()
+    saturday_program_title=()
+    saturday_program_time=()
+    sunday_program_title=()
+    sunday_program_time=()
+
+    while IFS= read -r line 
+    do
+        if [[ $line == *"節目表"* ]] 
+        then
+            line=${line#*"星期日"}
+            line=${line#*"日期"}
+            line=${line//"<span class=\"_ _28\"></span>"/}
+            line=${line//"<div class=\"t m0 x10 ha ya ff2 fs3 fc0 sc0 ls0 ws0\">11:30</div></div>"/}
+            old_program_time=""
+            skips=(
+                "4:saturday sunday"
+                "7:saturday"
+                "9:saturday sunday"
+                "10:weekday"
+                "11:weekday saturday"
+                "12:sunday"
+                "13:sunday"
+                "16:saturday sunday"
+                "17:weekday"
+                "18:saturday"
+                "19:sunday"
+                "20:saturday"
+                "22:saturday sunday"
+                "23:sunday"
+                "24:weekday"
+                "25:weekday"
+                "26:sunday"
+                "27:saturday sunday"
+                "28:saturday sunday"
+                "29:weekday"
+                "30:saturday sunday"
+                "32:saturday sunday"
+                "33:saturday"
+                "34:sunday"
+                "36:weekday"
+                "37:sunday"
+                "38:saturday sunday"
+                "39:sunday"
+                "40:saturday sunday"
+                "41:sunday"
+                "43:weekday"
+                "44:weekday"
+                "47:sunday"
+                "48:weekday saturday"
+                "49:sunday"
+                "50:weekday"
+                "51:saturday"
+                "52:sunday"
+                "53:saturday"
+                "54:sunday"
+                "55:saturday"
+                "56:saturday sunday"
+                "57:saturday sunday"
+                "58:saturday sunday"
+                "59:saturday sunday"
+                "60:saturday sunday"
+            )
+            loop=1
+            count=0
+            day="weekday"
+            while true 
+            do
+                class=${line%%\">*}
+                class=${class#*<div class=\"}
+                line=${line#*>}
+                content=${line%%<*}
+
+                case $content in
+                    ""|" "|"AM"|"PM"|"東岸"|"西岸"|"星期日"|"星期一"|"星期二至六"|"日期"|"Next Day") continue
+                    ;;
+                    *"夏令時間"*) continue
+                    ;;
+                    *"將時鐘"*) continue
+                    ;;
+                    "高清台") 
+                        if [[ -n ${program_title:-} ]] 
+                        then
+                            if [[ -n ${program_start_date:-} ]] 
+                            then
+                                program_title="$program_title $program_start_date"
+                            fi
+                            program_title=${program_title//amp;/}
+                            program_title=${program_title//&#039;/\'}
+                            if [ "$day" == "weekday" ] 
+                            then
+                                if [[ -n $old_program_time ]] 
+                                then
+                                    weekday_program_title+=("$program_title")
+                                    weekday_program_time+=("$old_program_time")
+                                else
+                                    index=${#weekday_program_title[@]}
+                                    index=$((index-1))
+                                    weekday_program_title[index]="${weekday_program_title[index]} $program_title"
+                                fi
+                            elif [ "$day" == "saturday" ] 
+                            then
+                                if [[ -n $old_program_time ]] 
+                                then
+                                    saturday_program_title+=("$program_title")
+                                    saturday_program_time+=("$old_program_time")
+                                else
+                                    index=${#saturday_program_title[@]}
+                                    index=$((index-1))
+                                    saturday_program_title[index]="${saturday_program_title[index]} $program_title"
+                                fi
+                            elif [ "$day" == "sunday" ] 
+                            then
+                                if [[ -n $old_program_time ]] 
+                                then
+                                    sunday_program_title+=("$program_title")
+                                    sunday_program_time+=("$old_program_time")
+                                else
+                                    index=${#sunday_program_title[@]}
+                                    index=$((index-1))
+                                    sunday_program_title[index]="${sunday_program_title[index]} $program_title"
+                                fi
+                            fi
+                            program_title=""
+                            old_program_time=""
+                            program_sys_time=""
+                            program_start_date=""
+                        fi
+                        break
+                    ;;
+                    *) 
+                        if [[ ${content:1:1} == "/" ]] && [[ ! ${content:0:1} == *[!0-9]* ]] && [[ ! ${content:2} == *[!0-9]* ]] 
+                        then
+                            program_start_date="$content"
+                        elif [[ ${content:2:1} == "/" ]] && [[ ! ${content:0:2} == *[!0-9]* ]] && [[ ! ${content:3} == *[!0-9]* ]] 
+                        then
+                            program_start_date="$content"
+                        elif [[ ${content:1:1} == ":" ]] 
+                        then
+                            if [[ ! ${content:0:1} == *[!0-9]* ]] && [[ ! ${content:2} == *[!0-9]* ]] 
+                            then
+                                [ -n "${program_time:-}" ] && program_time=""
+                                if [[ -z ${program_time_east:-} ]] 
+                                then
+                                    program_time_east="$content"
+                                else
+                                    program_time="$content"
+                                    program_time_east=""
+                                fi
+                            fi
+                        elif [[ ${content:2:1} == ":" ]] 
+                        then
+                            if [[ ! ${content:0:2} == *[!0-9]* ]] && [[ ! ${content:3} == *[!0-9]* ]] 
+                            then
+                                [ -n "${program_time:-}" ] && program_time=""
+                                if [[ -z ${program_time_east:-} ]] 
+                                then
+                                    program_time_east="$content"
+                                else
+                                    program_time="$content"
+                                    program_time_east=""
+                                fi
+                            fi
+                        else
+                            old_day=$day
+
+                            if [ "$count" -gt 0 ] 
+                            then
+                                if [ "$old_day" == "sunday" ] 
+                                then
+                                    day="weekday"
+                                elif [ "$old_day" == "weekday" ] 
+                                then
+                                    day="saturday"
+                                elif [ "$old_day" == "saturday" ] 
+                                then
+                                    day="sunday"
+                                fi
+                            fi
+
+                            count=$((count+1))
+                            if [[ $((count % 3)) -eq 0 ]] 
+                            then
+                                loop=$((count/3))
+                            else
+                                loop=$((count/3 + 1))
+                            fi
+
+                            redo=1
+                            while [ "$redo" -eq 1 ] 
+                            do
+                                redo=0
+                                for skip in "${skips[@]}"
+                                do
+                                    if [ "${skip%:*}" == "$loop" ] 
+                                    then
+                                        redo=1
+                                        IFS=" " read -ra days <<< "${skip#*:}"
+                                        for ele in "${days[@]}"
+                                        do
+                                            if [ "$ele" == "$day" ] 
+                                            then
+                                                count=$((count+1))
+                                                if [ "$day" == "sunday" ] 
+                                                then
+                                                    day="weekday"
+                                                elif [ "$day" == "weekday" ] 
+                                                then
+                                                    day="saturday"
+                                                elif [ "$day" == "saturday" ] 
+                                                then
+                                                    day="sunday"
+                                                fi
+                                            fi
+                                        done
+                                        if [[ $((count % 3)) -eq 0 ]] 
+                                        then
+                                            new_loop=$((count/3))
+                                        else
+                                            new_loop=$((count/3 + 1))
+                                        fi
+                                        if [ "$new_loop" == "$loop" ] 
+                                        then
+                                            redo=0
+                                        else
+                                            loop="$new_loop"
+                                        fi
+                                        break
+                                    fi
+                                done
+                            done
+
+                            case $((count%3)) in
+                                0) day="sunday"
+                                ;;
+                                1) day="weekday"
+                                ;;
+                                2) day="saturday"
+                                ;;
+                            esac
+
+                            if [[ -n ${program_title:-} ]] 
+                            then
+                                if [[ -n ${program_start_date:-} ]] 
+                                then
+                                    program_title="$program_title $program_start_date"
+                                fi
+                                program_title=${program_title//amp;/}
+                                program_title=${program_title//&#039;/\'}
+                                if [ "$old_day" == "weekday" ] 
+                                then
+                                    if [[ -n $old_program_time ]] 
+                                    then
+                                        weekday_program_title+=("$program_title")
+                                        weekday_program_time+=("$old_program_time")
+                                    else
+                                        index=${#weekday_program_title[@]}
+                                        index=$((index-1))
+                                        weekday_program_title[index]="${weekday_program_title[index]} $program_title"
+                                    fi
+                                elif [ "$old_day" == "saturday" ] 
+                                then
+                                    if [[ -n $old_program_time ]] 
+                                    then
+                                        saturday_program_title+=("$program_title")
+                                        saturday_program_time+=("$old_program_time")
+                                    else
+                                        index=${#saturday_program_title[@]}
+                                        index=$((index-1))
+                                        saturday_program_title[index]="${saturday_program_title[index]} $program_title"
+                                    fi
+                                elif [ "$old_day" == "sunday" ] 
+                                then
+                                    if [[ -n $old_program_time ]] 
+                                    then
+                                        sunday_program_title+=("$program_title")
+                                        sunday_program_time+=("$old_program_time")
+                                    else
+                                        index=${#sunday_program_title[@]}
+                                        index=$((index-1))
+                                        sunday_program_title[index]="${sunday_program_title[index]} $program_title"
+                                    fi
+                                fi
+                                program_title=""
+                                old_program_time=""
+                                program_start_date=""
+                            fi
+
+                            if [ -n "${program_time_east:-}" ] 
+                            then
+                                program_time=$program_time_east
+                                program_time_east=""
+                            fi
+
+                            program_title="$content"
+
+                            if [ -n "$program_time" ] 
+                            then
+                                old_program_time=$program_time
+                                program_time=""
+                            fi
+                        fi
+                    ;;
+                esac
+            done
+            break
+        fi
+    done < "./tvb_hd.html"
+    weekday=$(printf '%(%u)T' -1)
+    if [ "$weekday" -eq 1 ] 
+    then
+        p_title=("${sunday_program_title[@]}")
+        p_time=("${sunday_program_time[@]}")
+    elif [ "$weekday" -eq 0 ] 
+    then
+        p_title=("${saturday_program_title[@]}")
+        p_time=("${saturday_program_time[@]}")
+    else
+        p_title=("${weekday_program_title[@]}")
+        p_time=("${weekday_program_time[@]}")
+    fi
+
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "tvbhd" > "$SCHEDULE_JSON"
+    fi
+
+    schedule=""
+    change=0
+    date=$yesterday
+    for((i=0;i<${#p_time[@]};i++));
+    do
+        [ -n "${program_time:-}" ] && program_time_old=$program_time
+
+        program_time=${p_time[i]}
+
+        if [ -n "${program_time_old:-}" ] &&[ "${program_time%:*}" -lt "${program_time_old%:*}" ]
+        then
+            change=$((change+1))
+        fi
+
+        if [ "$change" -eq 1 ] 
+        then
+            hour=${program_time%:*}
+            hour=$((hour+12))
+            if [ "$hour" -eq 24 ] 
+            then
+                hour="0"
+                date=$today
+            fi
+            new_program_time="$hour:${program_time#*:}"
+        elif [ "$change" -eq 2 ] 
+        then
+            date=$today
+            new_program_time=$program_time
+        else
+            new_program_time=$program_time
+        fi
+
+        if [[ ${new_program_time:1:1} == ":" ]] 
+        then
+            new_program_time="0$new_program_time"
+        else
+            new_program_time=$new_program_time
+        fi
+
+        program_sys_time=$(date -d "${date}T$new_program_time-08:00" +%s)
+        new_program_time=$(printf '%(%H:%M)T' "$program_sys_time")
+
+        program_title=${p_title[i]}
+
+        [ -n "$schedule" ] && schedule="$schedule,"
+        schedule=$schedule'{
+            "title":"'"$program_title"'",
+            "time":"'"$new_program_time"'",
+            "sys_time":"'"$program_sys_time"'"
+        }'
+    done
+
+    if [ -n "$schedule" ] 
+    then
+        json=true
+        jq_path='["tvbhd"]'
+        JQ update "$SCHEDULE_JSON" "[$schedule]"
+        Println "$info tvbhd [$chnl_id] 节目表更新成功"
+    else
+        Println "$error tvbhd [$chnl_id] 节目表更新失败"
+    fi
+}
+
+ScheduleSingteltv()
+{
+    if [ "${singteltv_status:-1}" -eq 2 ] 
+    then
+        return 0
+    fi
+
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "my_tvbjade" > "$SCHEDULE_JSON"
+    fi
+
+    if [ "${singteltv_status:-0}" -eq 0 ] 
+    then
+        Println "$info 解析 singteltv ..."
+        singteltv_status=0
+        while IFS= read -r line 
+        do
+            if [[ $line =~ epgEndPoint ]] 
+            then
+                line=${line#*epgEndPoint&#34;:&#34;}
+                singteltv_epg_end_point=${line%%&#34*}
+                line=${line#*tvChannelLists&#34;:}
+                singteltv_tv_channel_lists=${line%%,&#34;errorMessage*}
+                singteltv_tv_channel_lists=${singteltv_tv_channel_lists//&#34;/\"}
+                singteltv_status=1
+                break
+            fi
+        done < <(curl -s -L "https://www.singtel.com/personal/products-services/tv/tv-programme-guide" 2> /dev/null)
+    fi
+
+    if [ "$singteltv_status" -eq 0 ] 
+    then
+        Println "$error 无法连接 singteltv ?"
+        singteltv_status=2
+        return 0
+    fi
+
+    printf -v today '%(%d%m%Y)T' -1
+    epg_data=$(curl -s -L "https://www.singtel.com$singteltv_epg_end_point/$today.json")
+
+    IFS=$'\t' read -r title channel_id epg_channel_id < <($JQ_FILE -r '[
+        ([.[]|.title|. + "^"]|join("")),
+        ([.[]|.channelId|. + "^"]|join("")),
+        ([.[]|.epgChannelId|. + "^"]|join(""))
+    ]|@tsv' <<< "$singteltv_tv_channel_lists")
+
+    IFS="^" read -r -a titles <<< "$title"
+    IFS="^" read -r -a channel_ids <<< "$channel_id"
+    IFS="^" read -r -a epg_channel_ids <<< "$epg_channel_id"
+
+    IFS=$'\t' read -r schedule_id schedule_title schedule_time < <($JQ_FILE -r '[
+        ([to_entries[]|.key|tostring|. + "^"]|join("")),
+        ([to_entries[]|([.value[].program.title|. + "|"]|join(""))|. + "^"]|join("")),
+        ([to_entries[]|([.value[].startDateTime|. + "|"]|join(""))|. + "^"]|join(""))
+    ]|@tsv' <<< "$epg_data")
+
+    IFS="^" read -r -a schedule_ids <<< "$schedule_id"
+    IFS="^" read -r -a schedule_titles <<< "$schedule_title"
+    IFS="^" read -r -a schedule_times <<< "$schedule_time"
+
+    for chnl in "${singteltv_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        singteltv_id=${chnl#*:}
+        chnl_name=${singteltv_id#*:}
+        singteltv_id=${singteltv_id%%:*}
+
+        schedule=""
+        for((singteltv_i=0;singteltv_i<${#channel_ids[@]};singteltv_i++));
+        do
+            if [ "${channel_ids[singteltv_i]}" == "$singteltv_id" ] 
+            then
+                for((schedule_i=0;schedule_i<${#schedule_ids[@]};schedule_i++));
+                do
+                    if [ "${schedule_ids[schedule_i]}" == "${epg_channel_ids[singteltv_i]}" ] 
+                    then
+                        IFS="|" read -r -a program_titles <<< "${schedule_titles[schedule_i]}"
+                        IFS="|" read -r -a program_times <<< "${schedule_times[schedule_i]}"
+                        for((program_i=0;program_i<${#program_titles[@]};program_i++));
+                        do
+                            program_time=${program_times[program_i]#*T}
+                            program_time=${program_time%:*}
+                            program_sys_time=$(date -d "${program_times[program_i]}" +%s)
+                            [ -n "$schedule" ] && schedule="$schedule,"
+                            schedule=$schedule'{
+                                "title":"'"${program_titles[program_i]//\"/}"'",
+                                "time":"'"$program_time"'",
+                                "sys_time":"'"$program_sys_time"'"
+                            }'
+                        done
+                        break
+                    fi
+                done
+                break
+            fi
+        done
+
+        if [ -n "$schedule" ] 
+        then
+            json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "[$schedule]"
+            Println "$info $chnl_name [$chnl_id] singteltv 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] singteltv 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleCntv()
+{
+    printf -v today '%(%Y%m%d)T' -1
+
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "cctv13" > "$SCHEDULE_JSON"
+    fi
+
+    for chnl in "${cntv_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        chnl_name=${chnl#*:}
+        schedule=""
+
+        while IFS="=" read -r program_sys_time program_time program_title
+        do
+            program_sys_time=${program_sys_time#\"}
+            program_title=${program_title%\"}
+            [ -n "$schedule" ] && schedule="$schedule,"
+            schedule=$schedule'{
+                "title":"'"$program_title"'",
+                "time":"'"$program_time"'",
+                "sys_time":"'"$program_sys_time"'"
+            }'
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "http://api.cntv.cn/epg/getEpgInfoByChannelNew?c=$chnl_id&serviceId=tvcctv&d=$today" | $JQ_FILE '.data.'"$chnl_id"'.list[]|[.startTime,.showTime,.title]|join("=")')
+
+        if [ -n "$schedule" ] 
+        then
+            json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "[$schedule]"
+            Println "$info $chnl_name [$chnl_id] cntv 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] cntv 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleTvbs()
+{
+    printf -v today '%(%Y-%m-%d)T' -1
+
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "tvbs" > "$SCHEDULE_JSON"
+    fi
+
+    lang=2
+
+    for chnl in "${tvbs_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        chnl_order=${chnl#*:}
+        chnl_name=${chnl_order#*:}
+        chnl_order=${chnl_order%%:*}
+
+        schedule=""
+
+        while IFS="=" read -r program_time program_title
+        do
+            program_time=${program_time#\"}
+            program_title=${program_title%\"}
+            program_sys_time=$(date -d "$today $program_time" +%s)
+            [ -n "$schedule" ] && schedule="$schedule,"
+            schedule=$schedule'{
+                "title":"'"$program_title"'",
+                "time":"'"$program_time"'",
+                "sys_time":"'"$program_sys_time"'"
+            }'
+        done < <(curl -s -Lm 10 -H "User-Agent: $USER_AGENT_BROWSER" "https://tvbsapp.tvbs.com.tw/pg_api/pg_list/$chnl_order/$today/1/$lang" | $JQ_FILE '.data|to_entries|map(select(.value.date=="'"$today"'"))|.[].value.data|to_entries|map("\(.value.pg_hour)=\(.value.pg_name)")|.[]')
+
+        if [ -n "$schedule" ] 
+        then
+            json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "[$schedule]"
+            Println "$info $chnl_name [$chnl_id] tvbs 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] tvbs 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleAstro()
+{
+    printf -v today '%(%Y-%m-%d)T' -1
+
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "iqiyi" > "$SCHEDULE_JSON"
+    fi
+
+    for chnl in "${astro_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        astro_id=${chnl#*:}
+        chnl_name=${astro_id#*:}
+        astro_id=${astro_id%%:*}
+
+        schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://contenthub-api.eco.astro.com.my/channel/$astro_id.json" |
+            $JQ_FILE --arg today "$today" --argjson keys '["title","time","sys_time"]' '.response.schedule[$today]
+            | map(.["time"] = (.datetime|sub("(?<date>.*) (?<time>.*):[\\d]{2}\\.[\\d]{1}"; "\(.time)"))
+            | .["sys_time"] = (.datetimeInUtc|sub("(?<date>.*) (?<time>.*)\\.[\\d]{1}"; "\(.date)T\(.time)Z")|fromdate)
+            | .title =
+                if .title[0:.title|length/2-1] == .title[.title|length/2+1:.title|length]
+                then
+                    .title[0:.title|length/2-1]
+                elif .title[4:.title|length/2+1] == .title[.title|length/2+3:.title|length]
+                then
+                    .title[0:.title|length/2+1]
+                else
+                    .title
+                end
+            | with_entries(select(.key as $k | $keys | index($k))))')
+
+        if [ -n "$schedule" ] 
+        then
+            json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "$schedule"
+            Println "$info $chnl_name [$chnl_id] astro 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] astro 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleNbcsn()
+{
+    printf -v today '%(%Y-%m-%d)T' -1
+    sys_time=$(date -d $today +%s)
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
+    min_sys_time=$((sys_time-7200))
+    max_sys_time=$((sys_time+86400))
+    timestamp=$(date -d "$yesterday 08:00:00" +%s)
+
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "nbcsn" > "$SCHEDULE_JSON"
+    fi
+
+    IFS=" " read -r -a nbcsn_pro < <(curl -s -L -k -H "User-Agent: $USER_AGENT_BROWSER" \
+        https://tvlistings.gracenote.com/gapzap_webapi/api/affiliates/getaffiliatesprop/nbcsports/en-us | $JQ_FILE -r '[.defaultheadend,.defaultlanguage,.defaultpostalcode,.device,.dstend,.dststart,.dstutcoffset,.stdutcoffset]|join(" ")')
+
+    IFS=" " read -r prgsvcid callsign < <(curl -s -L -k -H "User-Agent: $USER_AGENT_BROWSER" \
+        -d "aid=nbcsports&prgsvcid=&headendId=${nbcsn_pro[0]}&countryCode=USA&postalCode=${nbcsn_pro[2]}&device=${nbcsn_pro[3]}&languagecode=${nbcsn_pro[1]}" \
+        https://tvlistings.gracenote.com/api/grid/channelList  | $JQ_FILE -r '[([.[].prgsvcid]|join("=")),([.[].callsign]|join("="))]|join(" ")')
+
+    IFS="=" read -r -a prgsvcids <<< "$prgsvcid"
+    IFS="=" read -r -a callsigns <<< "$callsign"
+
+    nbcsn_indices=("${!prgsvcids[@]}")
+
+    for chnl in "${nbcsn_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        nbcsn_id=${chnl#*:}
+        chnl_name=${nbcsn_id#*:}
+        nbcsn_id=${nbcsn_id%%:*}
+
+        for nbcsn_index in "${nbcsn_indices[@]}"
+        do
+            if [ "${callsigns[nbcsn_index]}" == "$nbcsn_id" ] 
+            then
+                break
+            fi
+        done
+
+        sslgrid=$(curl -s -L -k -H "User-Agent: $USER_AGENT_BROWSER" \
+            -d "timespan=336&timestamp=$timestamp&prgsvcid=${prgsvcids[nbcsn_index]}&headendId=${nbcsn_pro[0]}&countryCode=USA&postalCode=${nbcsn_pro[2]}&device=${nbcsn_pro[3]}&userId=-&aid=nbcsports&DSTUTCOffset=+420&STDUTCOffset=+480&DSTStart=$(Urlencode ${nbcsn_pro[5]})&DSTEnd=$(Urlencode ${nbcsn_pro[4]})&languagecode=en-us" \
+            https://tvlistings.gracenote.com/api/sslgrid)
+
+        yesterday_schedule=$($JQ_FILE --arg index "$yesterday" --arg min "$min_sys_time" --argjson keys '["title","time","sys_time"]' '.[$index] | map(select(.startTime|tonumber > ($min|tonumber)) | .["title"] = (if .program.episodeTitle then .program.title + ": " + .program.episodeTitle else .program.title end) | .["time"] = .startTimeFormatted | .["sys_time"] = .startTime | with_entries(select(.key as $k | $keys | index($k))))' <<< "$sslgrid")
+        today_schedule=$($JQ_FILE --arg index "$today" --arg max "$max_sys_time" --argjson keys '["title","time","sys_time"]' '.[$index] | map(select(.startTime|tonumber < ($max|tonumber)) | .["title"] = (if .program.episodeTitle then .program.title + ": " + .program.episodeTitle else .program.title end) | .["time"] = .startTimeFormatted | .["sys_time"] = .startTime | with_entries(select(.key as $k | $keys | index($k))))' <<< "$sslgrid")
+
+        schedule=$($JQ_FILE --argjson merge "$today_schedule" '.+=$merge' <<< "$yesterday_schedule")
+
+        if [ -n "$schedule" ] 
+        then
+            json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "$schedule"
+            Println "$info $chnl_name [$chnl_id] nbcsn 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] nbcsn 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleBeinsports()
+{
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "beinsportsenglish1" > "$SCHEDULE_JSON"
+    fi
+
+    printf -v today '%(%Y-%m-%d)T' -1
+    sys_time=$(date -d $today +%s)
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
+
+    be_html=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" https://epg.beinsports.com/utctime.php?offset=+8&mins=00&serviceidentity=beinsports.com&category=sports&id=123)
+
+    for chnl in "${beinsports_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        be_id=${chnl#*:}
+        chnl_name=${be_id#*:}
+        be_id=${be_id%%:*}
+
+        schedule=()
+        found=0
+
+        while IFS= read -r line 
+        do
+            if [[ $line =~ id=channels_$be_id\> ]] 
+            then
+                found=1
+            elif [ "$found" -eq 1 ] 
+            then
+                if [[ $line =~ class=title\>(.+)\</p\> ]] 
+                then
+                    title="${BASH_REMATCH[1]}"
+                elif [[ $line =~ class=time\>(.+)\&nbsp\;-\&nbsp\;(.+)\</p\> ]] 
+                then
+                    start_time="${BASH_REMATCH[1]}"
+                    end_time="${BASH_REMATCH[2]}"
+
+                    if [ -z "${schedule:-}" ] && [ "${start_time%:*}" -gt "${end_time%:*}" ]
+                    then
+                        sys_time=$(date -d "$yesterday $start_time" +%s)
+                    else
+                        sys_time=$(date -d "$today $start_time" +%s)
+                    fi
+
+                    new_schedule=$(
+                    $JQ_FILE -n --arg schedule_title "$title" --arg schedule_time "$start_time" --arg schedule_sys_time "$sys_time" \
+                        '{
+                            title: $schedule_title,
+                            time: $schedule_time,
+                            sys_time: $schedule_sys_time
+                        }'
+                    )
+
+                    schedule+=("$new_schedule")
+                elif [[ $line =~ \<div\>\<ul\> ]] 
+                then
+                    break
+                fi
+            fi
+        done <<< "$be_html"
+
+        if [ -n "${schedule:-}" ] 
+        then
+            file=true
+            file_json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" schedule
+            Println "$info $chnl_name [$chnl_id] beinsports 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] beinsports 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleBeinsportsau()
+{
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "beinsports1au" > "$SCHEDULE_JSON"
+    fi
+
+    printf -v today '%(%Y-%m-%d)T' -1
+    sys_time=$(date -d $today +%s)
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
+
+    beau_html=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" https://epg.beinsports.com/utctime_au.php?offset=+8&mins=00&id=123)
+
+    for chnl in "${beinsportsau_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        beau_id=${chnl#*:}
+        chnl_name=${beau_id#*:}
+        beau_id=${beau_id%%:*}
+
+        schedule=()
+        found=0
+
+        while IFS= read -r line 
+        do
+            if [[ $line =~ $beau_id ]] 
+            then
+                found=1
+            elif [ "$found" -eq 1 ] 
+            then
+                if [[ $line =~ class=title\>(.+)\</p\> ]] 
+                then
+                    title="${BASH_REMATCH[1]}"
+                elif [[ $line =~ class=format\>(.+)\</p\> ]] 
+                then
+                    title="$title - ${BASH_REMATCH[1]}"
+                elif [[ $line =~ class=time\>(.+)\&nbsp\;-\&nbsp\;(.+)\</td\>\<td ]] 
+                then
+                    start_time="${BASH_REMATCH[1]}"
+                    end_time="${BASH_REMATCH[2]}"
+
+                    if [ -z "${schedule:-}" ] && [ "${start_time%:*}" -gt "${end_time%:*}" ]
+                    then
+                        sys_time=$(date -d "$yesterday $start_time" +%s)
+                    else
+                        sys_time=$(date -d "$today $start_time" +%s)
+                    fi
+
+                    new_schedule=$(
+                    $JQ_FILE -n --arg schedule_title "$title" --arg schedule_time "$start_time" --arg schedule_sys_time "$sys_time" \
+                        '{
+                            title: $schedule_title,
+                            time: $schedule_time,
+                            sys_time: $schedule_sys_time
+                        }'
+                    )
+
+                    schedule+=("$new_schedule")
+                elif [[ $line =~ item_normal ]] 
+                then
+                    break
+                fi
+            fi
+        done <<< "$beau_html"
+
+        if [ -n "${schedule:-}" ] 
+        then
+            file=true
+            file_json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" schedule
+            Println "$info $chnl_name [$chnl_id] beinsports AU 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] beinsports AU 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleSupersport()
+{
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "supersportfootball" > "$SCHEDULE_JSON"
+    fi
+
+    printf -v today '%(%Y-%m-%d)T' -1
+    yesterday=$(date -d "yesterday" +"%Y-%m-%d")
+    min_start_time=$(date -d "yesterday 22:00:00" +%s)
+    max_start_time=$(date -d "today 23:59:59" +%s)
+
+    ss_yesterday_schedule=$(curl -s -Lm 20 --compressed -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://supersport.com/tv-guide" "https://supersport.com/apix/guide/v5.3/tvguide?countryCode=za&channelOnly=false&startDateTime=$yesterday&liveOnly=false")
+    ss_today_schedule=$(curl -s -Lm 20 --compressed -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://supersport.com/tv-guide" "https://supersport.com/apix/guide/v5.3/tvguide?countryCode=za&channelOnly=false&startDateTime=$today&liveOnly=false")
+
+    for chnl in "${supersport_chnls[@]}"
+    do
+        chnl_id="${chnl%%:*}"
+        chnl_name="${chnl#*:}"
+        supersport_name="${chnl_name%:*}"
+        chnl_name="${chnl_name#*:}"
+
+        yesterday_schedule=$($JQ_FILE --arg supersport_name "$supersport_name" --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","sys_time"]' 'map(select(.name == $supersport_name) 
+        | .["sys_time"] = (.start|sub("(?<month>.*)/(?<day>.*)/(?<year>.*) (?<time>.*)"; "\(.year)-\(.month)-\(.day)T\(.time)Z")|fromdate - 7200) | select(.sys_time > ($min|tonumber) and .sys_time < ($max|tonumber)) | .["time"] = (.sys_time|strflocaltime("%-H:%M%p")) | with_entries(select(.key as $k | $keys | index($k))))' <<< "$ss_yesterday_schedule")
+        today_schedule=$($JQ_FILE --arg supersport_name "$supersport_name" --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","sys_time"]' 'map(select(.name == $supersport_name) 
+        | .["sys_time"] = (.start|sub("(?<month>.*)/(?<day>.*)/(?<year>.*) (?<time>.*)"; "\(.year)-\(.month)-\(.day)T\(.time)Z")|fromdate - 7200) | select(.sys_time > ($min|tonumber) and .sys_time < ($max|tonumber)) | .["time"] = (.sys_time|strflocaltime("%-H:%M%p")) | with_entries(select(.key as $k | $keys | index($k))))' <<< "$ss_today_schedule")
+
+        schedule=$($JQ_FILE --argjson today "$today_schedule" '.+=$today' <<< "$yesterday_schedule")
+
+        if [ "$schedule" != "[]" ] 
+        then
+            json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "$schedule"
+            Println "$info $chnl_name [$chnl_id] SuperSport 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] SuperSport 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleBtsport()
+{
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "btsport1" > "$SCHEDULE_JSON"
+    fi
+
+    printf -v today '%(%Y-%m-%d)T' -1
+    yesterday=$(date --date="yesterday" +"%Y-%m-%d")
+
+    #bt_prop=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.bt.com/"  https://widgets.metabroadcast.com/config/1/btsport_v4.js)
+    #bt_prop="${bt_prop#*=}"
+    #bt_prop="${bt_prop%;*}"
+    #bt_prop="${bt_prop%;*}"
+    #bt_channels=$($JQ_FILE -r '.epg.modules.common.channels|join(",")' <<< "$bt_prop")
+    #api_key=$($JQ_FILE -r '.epg.modules.common.apiKey' <<< "$bt_prop")
+
+    #bt_prop=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.bt.com/" https://www.player.bt.com/)
+    #bt_prop="${bt_prop##*src=\"}"
+    #bt_prop="${bt_prop%%\"*}"
+    #bt_prop=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.player.bt.com/" https://www.player.bt.com/$bt_prop)
+    #bt_prop="${bt_prop##*_yvContentEnabled\?\"}"
+    #api_key="${bt_prop%%\"*}"
+
+    api_key="b4d2edb68da14dfb9e47b5465e99b1b1"
+
+    for chnl in "${btsport_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        chnl_name="${chnl#*:}"
+        bt_id=${chnl_name%:*}
+        chnl_name="${chnl_name#*:}"
+
+        schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.player.bt.com/" "https://voila.metabroadcast.com/4/schedules/$bt_id.json?key=$api_key&from=${yesterday}T16:00:00.000Z&to=${today}T16:00:00.000Z&source=api.youview.tv&annotations=content.description,content.brand_summary,content.broadcasts,content.locations" | $JQ_FILE --arg min "$min_start_time" --arg max "$max_start_time" --argjson keys '["title","time","start_time","end_time"]' '.schedule.entries | map(select(.item.title|test(" v ";"i")) | .["start_time"] = (.broadcast.transmission_time|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate) | select(.start_time > ($min|tonumber) and .start_time < ($max|tonumber)) | .["end_time"] = (.broadcast.transmission_end_time|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate) |.["time"] = (.start_time|strflocaltime("%Y-%m-%d %H:%M %p")) | .["title"] = .item.title | with_entries(select(.key as $k | $keys | index($k))))')
+
+        if [ -n "$schedule" ] 
+        then
+            json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "$schedule"
+            Println "$info $chnl_name [$chnl_id] BT Sport 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] BT Sport 节目表更新失败"
+            return 1
+        fi
+    done
+}
+
+ScheduleBtsportOn()
+{
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "btsport1" > "$SCHEDULE_JSON"
+    fi
+
+    btsport_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" -H "referer: https://www.bt.com/sport/watch/whats-on" "https://www.bt.com/content/experience-fragments/bt/portal/sport/system_json/live_on_bt_sport/asset-exporter/master/jcr:content/root/asset_exporter.model.json")
+
+    for chnl in "${btsporton_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        chnl_name="${chnl#*:}"
+
+        schedule=$($JQ_FILE --arg channel_name "$chnl_name" --argjson keys '["title","time","sys_time"]' '.liveEventsList | map(select(.channels[].name | test($channel_name;"i")) | .["time"] = (.startDate|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate|strflocaltime("%H:%M")) | .["sys_time"] = (.startDate|sub("(?<time>.*)\\.[\\d]{3}(?<tz>.*)"; "\(.time)Z")|fromdate) | .["title"] = .competition + " - " + .title | with_entries(select(.key as $k | $keys | index($k))))' <<< "$btsport_schedule")
+
+        if [ -n "$schedule" ] 
+        then
+            json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "$schedule"
+            Println "$info $chnl_name [$chnl_id] BT Sport on 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] BT Sport on 节目表更新失败"
+        fi
+    done
+}
+
+SchedulePremiersports()
+{
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "premiersports1" > "$SCHEDULE_JSON"
+    fi
+
+    printf -v today '%(%Y%m%d)T' -1
+    sys_time=$(date -d $today +%s)
+    yesterday=$(date --date="yesterday" +"%Y%m%d")
+    min_sys_time=$((sys_time-7200))
+    max_sys_time=$((sys_time+86400))
+
+    for chnl in "${premiersports_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        pr_id="${chnl#*:}"
+        chnl_name="${pr_id#*:}"
+        pr_id=${pr_id%%:*}
+
+        schedule=()
+
+        pr_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://www.premiersports.com/system/get-tv-schedule?channel=$pr_id")
+        pr_schedule="${pr_schedule#*<li }"
+
+        while [[ $pr_schedule =~ datetime=\"([0-9T:-]+)\" ]] 
+        do
+            schedule_time="${BASH_REMATCH[1]}"
+            schedule_sys_time=$(date -d "$schedule_time" +%s)
+
+            if [ "$schedule_sys_time" -lt "$min_sys_time" ] 
+            then
+                pr_schedule="${pr_schedule#*<li }"
+                continue
+            elif [ "$schedule_sys_time" -gt "$max_sys_time" ] 
+            then
+                break
+            fi
+
+            printf -v schedule_time '%(%H:%M)T' "$schedule_sys_time"
+
+            new_schedule="${pr_schedule%%</li>*}"
+            schedule_title=""
+
+            if [[ $new_schedule =~ live-status ]] 
+            then
+                schedule_title="LIVE - "
+            elif [[ $new_schedule =~ itemprop=\"name\"\>(.+)\</h3\> ]] 
+            then
+                schedule_title="${BASH_REMATCH[1]}"
+            fi
+
+            new_schedule="${new_schedule#*<h4 }"
+
+            if [[ $new_schedule =~ itemprop=\"name\"\>(.+)\</h4\> ]] 
+            then
+                if [ -n "$schedule_title" ] 
+                then
+                    schedule_title="$schedule_title - "
+                fi
+                schedule_title="$schedule_title${BASH_REMATCH[1]}"
+            fi
+
+            new_schedule=$(
+            $JQ_FILE -n --arg schedule_title "$schedule_title" --arg schedule_time "$schedule_time" --arg schedule_sys_time "$schedule_sys_time" \
+                '{
+                    title: $schedule_title,
+                    time: $schedule_time,
+                    sys_time: $schedule_sys_time
+                }'
+            )
+
+            schedule+=("$new_schedule")
+            pr_schedule="${pr_schedule#*<li }"
+        done
+
+        if [ -n "${schedule:-}" ] 
+        then
+            file=true
+            file_json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" schedule
+            Println "$info $chnl_name [$chnl_id] Premier Sports 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] Premier Sports 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleSky()
+{
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "btsport1" > "$SCHEDULE_JSON"
+    fi
+
+    printf -v today '%(%Y%m%d)T' -1
+    sys_time=$(date -d $today +%s)
+    yesterday=$(date --date="yesterday" +"%Y%m%d")
+    min_sys_time=$((sys_time-7200))
+    max_sys_time=$((sys_time+86400))
+
+    chnls_sid=""
+
+    for chnl in "${sky_chnls[@]}"
+    do
+        sk_sid="${chnl#*:}"
+        sk_sid="${sk_sid%%:*}"
+        [ -n "$chnls_sid" ] && chnls_sid="$chnls_sid,"
+        chnls_sid="$chnls_sid$sk_sid"
+    done
+
+    sk_yesterday_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://awk.epgsky.com/hawk/linear/schedule/$yesterday/$chnls_sid")
+    sk_today_schedule=$(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://awk.epgsky.com/hawk/linear/schedule/$today/$chnls_sid")
+
+    for chnl in "${sky_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        sk_sid="${chnl#*:}"
+        chnl_name="${sk_sid#*:}"
+        sk_sid=${sk_sid%%:*}
+
+        yesterday_schedule=$($JQ_FILE --arg sid "$sk_sid" --arg min "$min_sys_time" --argjson keys '["title","time","sys_time"]' '.schedule | map(select(.sid == $sid).events[] | select((.st|tonumber) > ($min|tonumber)) | .["time"] = (.st|strflocaltime("%H:%M")) | .["sys_time"] = .st | .["title"] = .t | with_entries(select(.key as $k | $keys | index($k))))' <<< "$sk_yesterday_schedule")
+        today_schedule=$($JQ_FILE --arg sid "$sk_sid" --arg max "$max_sys_time" --argjson keys '["title","time","sys_time"]' '.schedule | map(select(.sid == $sid).events[] | select((.st|tonumber) < ($max|tonumber)) | .["time"] = (.st|strflocaltime("%H:%M")) | .["sys_time"] = .st | .["title"] = .t | with_entries(select(.key as $k | $keys | index($k))))' <<< "$sk_today_schedule")
+
+        schedule=$($JQ_FILE --argjson merge "$today_schedule" '.+=$merge|unique_by(.sys_time)' <<< "$yesterday_schedule")
+
+        if [ -n "$schedule" ] 
+        then
+            json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "$schedule"
+            Println "$info $chnl_name [$chnl_id] Sky 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] Sky 节目表更新失败"
+        fi
+    done
+}
+
+Schedule_4gtv()
+{
+    printf -v today '%(%Y-%m-%d)T' -1
+
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "minshidiyi" > "$SCHEDULE_JSON"
+    fi
+
+    for chnl in "${_4gtv_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        _4gtv_id=${chnl#*:}
+        chnl_name=${_4gtv_id#*:}
+        _4gtv_id=${_4gtv_id%%:*}
+
+        schedule=""
+
+        while IFS="=" read -r program_date program_time program_title
+        do
+            program_date=${program_date#\"}
+            if [ "$today" == "$program_date" ] 
+            then
+                program_sys_time=$(date -d "$program_date $program_time" +%s)
+                program_time=${program_time%:*}
+                program_title=${program_title%\"}
+                [ -n "$schedule" ] && schedule="$schedule,"
+                schedule=$schedule'{
+                    "title":"'"$program_title"'",
+                    "time":"'"$program_time"'",
+                    "sys_time":"'"$program_sys_time"'"
+                }'
+            elif [ -n "$schedule" ] 
+            then
+                break
+            fi
+        done < <(curl -s -Lm 20 \
+            -H "User-Agent: $USER_AGENT_BROWSER" \
+            -H "Referer: https://www.4gtv.tv/channel_sub.html?channelSet_id=1&asset_id=$_4gtv_id&channel_id=1" \
+            "https://www.4gtv.tv/proglist/$_4gtv_id.txt" \
+            | $JQ_FILE '.[]|[.sdate,.stime,.title]|join("=")')
+
+        if [ -n "$schedule" ] 
+        then
+            json=true
+            jq_path='["'"$chnl_id"'"]'
+            JQ update "$SCHEDULE_JSON" "[$schedule]"
+            Println "$info $chnl_name [$chnl_id] 4gtv 节目表更新成功"
+        else
+            Println "$error $chnl_name [$chnl_id] 4gtv 节目表更新失败"
+        fi
+    done
+}
+
+ScheduleOther()
+{
+    if [ ! -s "$SCHEDULE_JSON" ] 
+    then
+        printf '{"%s":[]}' "amlh" > "$SCHEDULE_JSON"
+    fi
+
+    for chnl in "${other_chnls[@]}"
+    do
+        chnl_id=${chnl%%:*}
+        chnl_name=${chnl#*:}
+        chnl_id_upper=$(tr '[:lower:]' '[:upper:]' <<< "${chnl_id:0:1}")"${chnl_id:1}"
+        Schedule"$chnl_id_upper"
+    done
+}
+
+GetCronChnls()
+{
+    cron_providers=()
+    cron_chnls=()
+    cron_providers_list=""
+    cron_providers_count=0
+    while IFS= read -r line 
+    do
+        if [[ $line == *"|"* ]] 
+        then
+            cron_providers_count=$((cron_providers_count+1))
+            cron_provider=${line%%|*}
+            for provider in "${providers[@]}"
+            do
+                if [ "${provider%:*}" == "$cron_provider" ] 
+                then
+                    cron_provider_name="${provider#*:}"
+                    break
+                fi
+            done
+
+            cron_providers+=("$cron_provider")
+            cron_chnls+=("${line#*|}")
+            cron_providers_list="$cron_providers_list ${green}$cron_providers_count.${normal}${indent_6}$cron_provider_name\n\n"
+        fi
+    done < <($JQ_FILE -r '.schedule[]|[.provider,.chnls[]]|join("|")' "$CRON_FILE")
+}
+
+ScheduleView()
+{
+    GetCronChnls
+
+    providers_list=""
+    providers_count=0
+
+    for provider in "${providers[@]}"
+    do
+        providers_count=$((providers_count+1))
+        providers_list="$providers_list ${green}$providers_count.${normal}${indent_6}${provider#*:} [${provider%%:*}]\n\n"
+    done
+
+    Println "节目表来源\n\n$providers_list"
+
+    while read -p "$i18n_default_cancel" provider_num
+    do
+        case "$provider_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                if [ "$provider_num" -gt 0 ] && [ "$provider_num" -le "$providers_count" ]
+                then
+                    provider="${providers[$((provider_num-1))]%:*}"
+                    break
+                else
+                    Println "$error $i18n_input_correct_number\n"
+                fi
+            ;;
+        esac
+    done
+
+    var=("$provider"_chnls[@])
+
+    for((i=0;i<cron_providers_count;i++));
+    do
+        if [ "${cron_providers[i]}" == "$provider" ] 
+        then
+            IFS="|" read -r -a cron_chnls <<< "${cron_chnls[i]}|"
+            break
+        fi
+    done
+
+    chnls_list=""
+    chnls_count=0
+
+    for chnl in "${!var}"
+    do
+        using=""
+        for cron_chnl in "${cron_chnls[@]}"
+        do
+            if [ "$cron_chnl" == "$chnl" ] 
+            then
+                using="${green}[已添加]${normal}"
+                break
+            fi
+        done
+        chnl_name=${chnl##*:}
+        if [ "$provider" == "ontvtonight" ] 
+        then
+            chnl_id=${chnl%%@*}
+        else
+            chnl_id=${chnl%%:*}
+        fi
+        chnls_count=$((chnls_count+1))
+        chnls_list="$chnls_list ${green}$chnls_count.${normal}${indent_6}$chnl_name [$chnl_id] $using\n\n"
+    done
+
+    chnls=("${!var}")
+
+    echo -e "\n$chnls_list"
+}
+
+ScheduleAddChannel()
+{
+    for cron_chnl in "${cron_chnls[@]}"
+    do
+        if [ "$cron_chnl" == "$chnl" ] 
+        then
+            return 0
+        fi
+    done
+    if [ "${add_provider:-1}" -eq 1 ] && [[ -z $($JQ_FILE '.schedule[] | select(.provider=="'"$provider"'")' "$CRON_FILE") ]]
+    then
+        add_provider=0
+        new_provider=$(
+        $JQ_FILE -n --arg provider "$provider" --arg chnl "$chnl" \
+        '{
+            "provider": $provider,
+            "chnls": [
+                $chnl
+            ]
+        }')
+        jq_path='["schedule"]'
+        JQ add "$CRON_FILE" "[$new_provider]"
+    else
+        map_string=true
+        jq_path='["schedule"]'
+        jq_path2='["chnls"]'
+        JQ add "$CRON_FILE" provider "$provider" "[\"$chnl\"]"
+        add_provider=0
+    fi
+    Println "$info 频道 [ ${chnl##*:} ] 添加成功"
+}
+
+ScheduleAdd()
+{
+    ScheduleView
+    echo -e " ${green}$((chnls_count+1)).${normal}${indent_6}全部"
+
+    Println "多个频道用空格分隔 比如: 5 7 9-11"
+    while read -p "$i18n_default_cancel" chnls_num
+    do
+        if [ -z "$chnls_num" ] 
+        then
+            Println "$i18n_canceled...\n" && exit 1
+        fi
+
+        if [ "$chnls_num" == $((chnls_count+1)) ] 
+        then
+            for chnl in "${chnls[@]}"
+            do
+                ScheduleAddChannel
+            done
+            break
+        fi
+
+        IFS=" " read -ra chnls_num_arr <<< "$chnls_num"
+
+        error_no=0
+        for chnl_num in "${chnls_num_arr[@]}"
+        do
+            case "$chnl_num" in
+                *"-"*)
+                    chnl_num_start=${chnl_num%-*}
+                    chnl_num_end=${chnl_num#*-}
+                    if [[ $chnl_num_start == *[!0-9]* ]] || [[ $chnl_num_end == *[!0-9]* ]] || [ "$chnl_num_start" -eq 0 ] || [ "$chnl_num_end" -eq 0 ] || [ "$chnl_num_end" -gt "$chnls_count" ] || [ "$chnl_num_start" -ge "$chnl_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$chnl_num" -lt 1 ] || [ "$chnl_num" -gt "$chnls_count" ] 
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                for chnl_num in "${chnls_num_arr[@]}"
+                do
+                    if [[ $chnl_num =~ - ]] 
+                    then
+                        start=${chnl_num%-*}
+                        end=${chnl_num#*-}
+                        for((i=start-1;i<end;i++));
+                        do
+                            chnl="${chnls[i]}"
+                            ScheduleAddChannel
+                        done
+                    else
+                        chnl="${chnls[chnl_num-1]}"
+                        ScheduleAddChannel
+                    fi
+                done
+                break
+            ;;
+        esac
+    done
+}
+
+ScheduleDelChannel()
+{
+    map_string=true
+    jq_path='["schedule"]'
+    jq_path2='["chnls"]'
+    JQ delete "$CRON_FILE" provider "$provider" "[\"$chnl\"]"
+}
+
+ScheduleViewCron()
+{
+    GetCronChnls
+
+    [ -z "$cron_providers_list" ] && Println "$error 没有计划任务\n" && exit 1
+
+    Println "计划任务节目表\n\n$cron_providers_list"
+
+    while read -p "$i18n_default_cancel" provider_num
+    do
+        case "$provider_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                if [ "$provider_num" -gt 0 ] && [ "$provider_num" -le "$cron_providers_count" ]
+                then
+                    provider="${cron_providers[provider_num-1]}"
+                    IFS="|" read -r -a chnls <<< "${cron_chnls[provider_num-1]}|"
+                    break
+                else
+                    Println "$error $i18n_input_correct_number\n"
+                fi
+            ;;
+        esac
+    done
+
+    chnls_list=""
+    chnls_count=0
+
+    for chnl in ${chnls[@]+"${chnls[@]}"}
+    do
+        chnl_name=${chnl##*:}
+        chnls_count=$((chnls_count+1))
+        chnls_list="$chnls_list ${green}$chnls_count.${normal}${indent_6}$chnl_name\n\n"
+    done
+
+    Println "计划任务频道\n\n$chnls_list"
+}
+
+ScheduleDel()
+{
+    ScheduleViewCron
+
+    echo -e " ${green}$((chnls_count+1)).${normal}${indent_6}全部"
+
+    Println "选择删除的频道, 多个频道用空格分隔 比如: 5 7 9-11"
+    while read -p "$i18n_default_cancel" chnls_num
+    do
+        if [ -z "$chnls_num" ] 
+        then
+            Println "$i18n_canceled...\n" && exit 1
+        fi
+
+        if [ "$chnls_num" == $((chnls_count+1)) ] 
+        then
+            map_string=true
+            json=true
+            jq_path='["schedule"]'
+            jq_path2='["chnls"]'
+            JQ update "$CRON_FILE" provider "$provider" []
+            break
+        fi
+
+        IFS=" " read -ra chnls_num_arr <<< "$chnls_num"
+
+        error_no=0
+        for chnl_num in "${chnls_num_arr[@]}"
+        do
+            case "$chnl_num" in
+                *"-"*)
+                    chnl_num_start=${chnl_num%-*}
+                    chnl_num_end=${chnl_num#*-}
+                    if [[ $chnl_num_start == *[!0-9]* ]] || [[ $chnl_num_end == *[!0-9]* ]] || [ "$chnl_num_start" -eq 0 ] || [ "$chnl_num_end" -eq 0 ] || [ "$chnl_num_end" -gt "$chnls_count" ] || [ "$chnl_num_start" -ge "$chnl_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$chnl_num" -lt 1 ] || [ "$chnl_num" -gt "$chnls_count" ] 
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                for chnl_num in "${chnls_num_arr[@]}"
+                do
+                    if [[ $chnl_num =~ - ]] 
+                    then
+                        start=${chnl_num%-*}
+                        end=${chnl_num#*-}
+                        for((i=start-1;i<end;i++));
+                        do
+                            chnl="${chnls[i]}"
+                            ScheduleDelChannel
+                        done
+                    else
+                        chnl="${chnls[chnl_num-1]}"
+                        ScheduleDelChannel
+                    fi
+                done
+                break
+            ;;
+        esac
+    done
+    Println "$info 删除成功\n"
+}
+
+ScheduleExec()
+{
+    if [ -s "$CRON_FILE" ] && [[ $($JQ_FILE '.schedule' "$CRON_FILE") != null ]]
+    then
+        printf '{"%s":[]}' "hbo" > "$SCHEDULE_JSON"
+        while IFS="=" read -r provider_id chnls option
+        do
+            if [ "$chnls" != null ] 
+            then
+                var=("$provider_id"_chnls[@])
+                if [[ -n ${!var:-} ]] 
+                then
+                    unset "$provider_id"_chnls
+                    IFS="|" read -r -a "$provider_id"_chnls <<< "${chnls}|"
+                fi
+                if [ "$provider_id" == "other" ] 
+                then
+                    for chnl in "${other_chnls[@]}"
+                    do
+                        chnl_id=${chnl%%:*}
+                        chnl_name=${chnl#*:}
+                        chnl_id_upper=$(tr '[:lower:]' '[:upper:]' <<< "${chnl_id:0:1}")"${chnl_id:1}"
+
+                        if ! Schedule"$chnl_id_upper"
+                        then
+                            Println "$error $chnl_name 再次尝试..."
+                            Schedule"$chnl_id_upper" || Println "$error $chnl_id_upper 失败"
+                        fi
+                    done
+                else
+                    provider_id_upper=$(tr '[:lower:]' '[:upper:]' <<< "${provider_id:0:1}")"${provider_id:1}"
+
+                    if ! Schedule"$provider_id_upper" "$option"
+                    then
+                        for provider in "${providers[@]}"
+                        do
+                            if [ "${provider%%:*}" == "$provider_id" ] 
+                            then
+                                provider_name="${#*:}"
+                                break
+                            fi
+                        done
+
+                        Println "$error $provider_name 再次尝试..."
+                        Schedule"$provider_id_upper" "$option" || Println "$error $provider_name 失败"
+                    fi
+                fi
+            fi
+        done < <($JQ_FILE -r '.schedule[]|[.provider,(.chnls|sort|join("|")| if .=="" then "null" else . end),.option]|join("=")' "$CRON_FILE")
+        if [ -e "$IPTV_ROOT/vip.pid" ] 
+        then
+            printf '%s' "" > "$VIP_USERS_ROOT/epg.update"
+        fi
+    else
+        Println "$error 计划任务为空, 请先添加频道 !\n"
+    fi
+}
+
+ScheduleBackup()
+{
+    if [ ! -s "$CRON_FILE" ] 
+    then
+        Println "$error 请先添加频道\n"
+        exit 1
+    fi
+    echo
+    inquirer text_input "输入备份名称: " backup_name "无"
+    backup_schedule=""
+    while IFS="=" read -r provider chnls option
+    do
+        if [ "$chnls" != null ] 
+        then
+            [ -n "$backup_schedule" ] && backup_schedule="$backup_schedule,"
+            backup_schedule=$backup_schedule'{
+                "provider":"'"$provider"'",
+                "chnls":"'"$chnls"'"
+            }'
+        fi
+    done < <($JQ_FILE -r '.schedule[]|[.provider,(.chnls|sort|join("|")| if .=="" then "null" else . end),.option]|join("=")' "$CRON_FILE")
+    if [ -z "$backup_schedule" ] 
+    then
+        Println "$error 请先添加频道\n"
+        exit 1
+    fi
+    new_backup=$(
+    $JQ_FILE -n --arg name "$backup_name" --argjson schedule "[$backup_schedule]" \
+        '{
+            name: $name,
+            date: now|strflocaltime("%s")|tonumber,
+            schedule: $schedule
+        }'
+    )
+    jq_path='["schedule_backup"]'
+    JQ add "$CRON_FILE" "[$new_backup]"
+    Println "$info 任务备份成功\n"
+}
+
+ScheduleListBackup()
+{
+    schedule_backup_names=()
+    schedule_backup_dates=()
+    schedule_backup_schedules=()
+    schedule_backup_count=0
+    schedule_backup_list=""
+    while IFS="^" read -r backup_name backup_date backup_schedule
+    do
+        schedule_backup_count=$((schedule_backup_count+1))
+        schedule_backup_names+=("$backup_name")
+        schedule_backup_dates+=("$backup_date")
+        schedule_backup_schedules+=("$backup_schedule")
+        printf -v date '%(%m-%d %H:%M:%S)T' "$backup_date"
+        schedule_backup_list="$schedule_backup_list $schedule_backup_count. 备份名称: ${green}$backup_name${normal} 备份日期: ${green}$date${normal}\n\n"
+    done < <($JQ_FILE -r '(.schedule_backup| if .== null then [] else . end)[]|([.name,.date,(.schedule|to_entries|map([.value.provider,.value.chnls]|join("="))|join(","))]|join("^"))' "$CRON_FILE")
+
+    if [ "$schedule_backup_count" -eq 0 ] 
+    then
+        Println "$error 没有备份\n"
+        exit 1
+    fi
+
+    Println "$schedule_backup_list"
+}
+
+ScheduleViewBackup()
+{
+    ScheduleListBackup
+
+    while read -p "$i18n_default_cancel" backup_num
+    do
+        case "$backup_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                if [ "$backup_num" -gt 0 ] && [ "$backup_num" -le "$schedule_backup_count" ]
+                then
+                    schedule="${schedule_backup_schedules[backup_num-1]}"
+                    IFS="," read -r -a schedules <<< "$schedule"
+                    break
+                else
+                    Println "$error $i18n_input_correct_number\n"
+                fi
+            ;;
+        esac
+    done
+
+    schedules_list=""
+
+    for((i=0;i<${#schedules[@]};i++));
+    do
+        schedule_provider=${schedules[i]%=*}
+        for provider in "${providers[@]}"
+        do
+            if [ "${provider%:*}" == "$schedule_provider" ] 
+            then
+                schedule_provider_name="${provider#*:}"
+                break
+            fi
+        done
+        schedule_chnl=${schedules[i]#*=}
+        IFS="|" read -r -a schedule_chnls <<< "$schedule_chnl"
+        schedule_chnls_list=""
+        for schedule_chnl in "${schedule_chnls[@]}"
+        do
+            if [ "$schedule_provider" == "ontvtonight" ] 
+            then
+                schedule_chnl_id=${schedule_chnl%%@*}
+            else
+                schedule_chnl_id=${schedule_chnl%%:*}
+            fi
+            schedule_chnls_list="$schedule_chnls_list${indent_6}${schedule_chnl##*:} ($schedule_chnl_id)\n"
+        done
+        schedules_list="$schedules_list ${green}$((i+1)).${normal}${indent_6}$schedule_provider_name\n\n$schedule_chnls_list\n"
+    done
+
+    Println "$schedules_list"
+}
+
+ScheduleEditBackup()
+{
+    ScheduleListBackup
+
+    while read -p "$i18n_default_cancel" backup_num
+    do
+        case "$backup_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                if [ "$backup_num" -gt 0 ] && [ "$backup_num" -le "$schedule_backup_count" ]
+                then
+                    backup_index=$((backup_num-1))
+                    backup_name_old=${schedule_backup_names[backup_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_number\n"
+                fi
+            ;;
+        esac
+    done
+
+    echo
+    inquirer text_input "输入新的备份名称: " backup_name "$backup_name_old"
+
+    jq_path='["schedule_backup",'"$backup_index"',"name"]'
+    JQ update "$CRON_FILE" "$backup_name"
+    Println "$info 备份修改成功\n"
+}
+
+ScheduleDelBackup()
+{
+    ScheduleListBackup
+
+    while read -p "$i18n_default_cancel" backup_num
+    do
+        case "$backup_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                if [ "$backup_num" -gt 0 ] && [ "$backup_num" -le "$schedule_backup_count" ]
+                then
+                    backup_index=$((backup_num-1))
+                    backup_name=${schedule_backup_names[backup_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_number\n"
+                fi
+            ;;
+        esac
+    done
+
+    jq_path='["schedule_backup",'"$backup_index"']'
+    JQ delete "$CRON_FILE"
+    Println "$info 备份 $backup_name 删除成功\n"
+}
+
+ScheduleRestoreBackup()
+{
+    ScheduleListBackup
+
+    while read -p "$i18n_default_cancel" backup_num
+    do
+        case "$backup_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                if [ "$backup_num" -gt 0 ] && [ "$backup_num" -le "$schedule_backup_count" ]
+                then
+                    backup_index=$((backup_num-1))
+                    backup_name=${schedule_backup_names[backup_index]}
+                    backup_schedule="${schedule_backup_schedules[backup_index]}"
+                    IFS="," read -r -a backup_schedules <<< "$backup_schedule"
+                    break
+                else
+                    Println "$error $i18n_input_correct_number\n"
+                fi
+            ;;
+        esac
+    done
+
+    schedules_list=""
+    for((i=0;i<${#backup_schedules[@]};i++));
+    do
+        schedule_provider=${backup_schedules[i]%=*}
+        schedule_chnl=${backup_schedules[i]#*=}
+        IFS="|" read -r -a schedule_chnls <<< "$schedule_chnl"
+        schedule_chnls_list=""
+        for schedule_chnl in "${schedule_chnls[@]}"
+        do
+            [ -n "$schedule_chnls_list" ] && schedule_chnls_list="$schedule_chnls_list,"
+            schedule_chnls_list=$schedule_chnls_list'"'$schedule_chnl'"'
+        done
+        [ -n "$schedules_list" ] && schedules_list="$schedules_list,"
+        schedules_list=$schedules_list'{
+            "provider":"'"$schedule_provider"'",
+            "chnls":['"$schedule_chnls_list"']
+        }'
+    done
+
+    json=true
+    jq_path='["schedule"]'
+    JQ update "$CRON_FILE" "[$schedules_list]"
+    Println "$info 备份 $backup_name 恢复成功\n"
+}
+
+ScheduleEnableCron()
+{
+    if crontab -l | grep -q "/usr/local/bin/tv s" 2> /dev/null
+    then
+        Println "$error 计划任务已开启 !\n"
+    else
+        crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
+        printf '%s\n' "0 0 * * * /usr/local/bin/tv s -" >> "$IPTV_ROOT/cron_tmp"
+        crontab "$IPTV_ROOT/cron_tmp" > /dev/null
+        rm -f "$IPTV_ROOT/cron_tmp"
+        Println "$info 计划任务开启成功 !\n"
+    fi
+}
+
+ScheduleDisableCron()
+{
+    if crontab -l | grep -q "/usr/local/bin/tv s" 2> /dev/null
+    then
+        crontab -l > "$IPTV_ROOT/cron_tmp" 2> /dev/null || true
+        sed -i "/\/usr\/local\/bin\/tv s/d" "$IPTV_ROOT/cron_tmp"
+        crontab "$IPTV_ROOT/cron_tmp" > /dev/null
+        rm -f "$IPTV_ROOT/cron_tmp"
+        Println "$info 计划任务已关闭\n"
+    else
+        Println "$error 计划任务未开启 !\n"
+    fi
+}
+
+Schedule()
+{
+    GetDefault
+
+    if [ -n "$d_schedule_file" ] 
+    then
+        SCHEDULE_JSON="$d_schedule_file"
+    else
+        Println "$error 请先设置 schedule_file 位置!\n" && exit 1
+    fi
+
+    if [ ! -s "$CRON_FILE" ] 
+    then
+        printf '{"%s":[]}' "schedule" > "$CRON_FILE"
+    fi
+
+    jiushi_chnls=( 
+#        "foxmovies:FOX MOVIES"
+#        "disney:Disney"
+        "minshi:民視"
+        "minshidiyi:民視第一台"
+        "minshitaiwan:民視台灣台"
+        "mtvlivetw:MTV-Live"
+        "tvbfc:TVB 翡翠台"
+        "tvbpearl:TVB Pearl"
+        "tvbj2:TVB J2"
+        "tvbj5:TVB J5"
+        "tvbwxxw:TVB 互動新聞台"
+        "xgws:香港衛視綜合台"
+        "foxfamily:福斯家庭電影台"
+        "hlwdy:好萊塢電影"
+        "xwdy:星衛HD電影台"
+        "mydy:美亞電影台"
+        "mycinemaeurope:My Cinema Europe HD我的歐洲電影台"
+        "ymjs:影迷數位紀實台"
+        "ymdy:影迷數位電影台"
+        "hyyj:華藝影劇台"
+        "catchplaydy:CatchPlay電影台"
+        "ccyj:采昌影劇台"
+        "lxdy:LS龍祥電影"
+        "cinemax:Cinemax"
+        "cinemaworld:CinemaWorld"
+        "axn:AXN HD"
+        "channelv:Channel V國際娛樂台HD"
+        "dreamworks:DREAMWORKS"
+        "nickasia:Nickelodeon Asia(尼克兒童頻道)"
+        "cbeebies:CBeebies"
+        "babytv:Baby TV"
+        "boomerang:Boomerang"
+        "mykids:MY-KIDS TV"
+        "dwxq:動物星球頻道"
+        "eltvshyy:ELTV生活英語台"
+        "ifundm:i-Fun動漫台"
+        "momoqz:momo親子台"
+        "cnkt:CN卡通台"
+        "ffxw:非凡新聞"
+        "hycj:寰宇財經台"
+        "hyzh:寰宇HD綜合台"
+        "hyxw:寰宇新聞台"
+        "hyxw2:寰宇新聞二台"
+        "aedzh:愛爾達綜合台"
+        "aedyj:愛爾達影劇台"
+        "jtzx:靖天資訊台"
+        "jtzh:靖天綜合台"
+        "jtyl:靖天育樂台"
+        "jtxj:靖天戲劇台"
+        "jthl:Nice TV 靖天歡樂台"
+        "jtyh:靖天映畫"
+        "jtgj:KLT-靖天國際台"
+        "jtrb:靖天日本台"
+        "jtdy:靖天電影台"
+        "jtkt:靖天卡通台"
+        "jyxj:靖洋戲劇台"
+        "jykt:靖洋卡通台Nice Bingo"
+        "lhxj:龍華戲劇"
+        "lhox:龍華偶像"
+        "lhyj:龍華影劇"
+        "lhdy:龍華電影"
+        "lhjd:龍華經典"
+        "lhyp:龍華洋片"
+        "lhdh:龍華動畫"
+        "wszw:衛視中文台"
+        "wsdy:衛視電影台"
+        "gxws:國興衛視"
+        "gs:公視"
+        "gs2:公視2台"
+        "gs3:公視3台"
+        "ts:台視"
+        "tszh:台視綜合台"
+        "tscj:台視財經台"
+        "hs:華視"
+        "hsjywh:華視教育文化"
+        "zs:中視"
+        "zsxw:中視新聞台"
+        "zsjd:中視經典台"
+        "sltw:三立台灣台"
+        "sldh:三立都會台"
+        "slzh:三立綜合台"
+        "slxj:三立戲劇台"
+        "bdzh:八大綜合"
+        "bddy:八大第一"
+        "bdxj:八大戲劇"
+        "bdyl:八大娛樂"
+        "gdyl:高點育樂"
+        "gdzh:高點綜合"
+        "ydsdy:壹電視電影台"
+        "ydszxzh:壹電視資訊綜合台"
+        "wlty:緯來體育台"
+        "wlxj:緯來戲劇台"
+        "wlrb:緯來日本台"
+        "wldy:緯來電影台"
+        "wlzh:緯來綜合台"
+        "wlyl:緯來育樂台"
+        "wljc:緯來精采台"
+        "dszh:東森綜合台"
+        "dsxj:東森戲劇台"
+        "dsyy:東森幼幼台"
+        "dsdy:東森電影台"
+        "dsyp:東森洋片台"
+        "dsxw:東森新聞台"
+        "dscjxw:東森財經新聞台"
+        "dscs:超級電視台"
+        "ztxw:中天新聞台"
+        "ztyl:中天娛樂台"
+        "ztzh:中天綜合台"
+        "msxq:美食星球頻道"
+        "yzms:亞洲美食頻道"
+        "yzly:亞洲旅遊台"
+        "yzzh:亞洲綜合台"
+        "yzxw:亞洲新聞台"
+        "pltw:霹靂台灣"
+        "titvyjm:原住民"
+        "history:歷史頻道"
+        "history2:HISTORY 2"
+        "gjdl:國家地理高畫質頻道"
+        "gjdlyr:國家地理高畫質悠人頻道"
+        "gjdlys:國家地理高畫質野生頻道"
+        "bbcearth:BBC Earth"
+        "bbcworldnews:BBC World News"
+        "bbclifestyle:BBC Lifestyle Channel"
+        "wakawakajapan:WAKUWAKU JAPAN"
+        "luxe:LUXE TV Channel"
+        "bswx:博斯無限台"
+        "bsgq1:博斯高球一台"
+        "bsgq2:博斯高球二台"
+        "bsml:博斯魅力網"
+        "bswq:博斯網球台"
+        "bsyd1:博斯運動一台"
+        "bsyd2:博斯運動二台"
+        "zlty:智林體育台"
+        "eurosport:EUROSPORT"
+        "fox:FOX頻道"
+        "foxsports:FOX SPORTS"
+        "foxsports2:FOX SPORTS 2"
+        "foxsports3:FOX SPORTS 3"
+        "elevensportsplus:ELEVEN SPORTS PLUS"
+        "elevensports2:ELEVEN SPORTS 2"
+        "discoveryasia:Discovery Asia"
+        "discovery:Discovery"
+        "discoverykx:Discovery科學頻道"
+        "tracesportstars:TRACE Sport Stars"
+        "dw:DW(Deutsch)"
+        "lifetime:Lifetime"
+        "foxcrime:FOXCRIME"
+        "animax:Animax"
+        "mtvtw:MTV綜合電視台"
+        "ndmuch:年代MUCH"
+        "ndxw:年代新聞"
+        "nhk:NHK"
+        "euronews:Euronews"
+        "skynews:SKY NEWS HD"
+        "nhkxwzx:NHK新聞資訊台"
+        "jetzh:JET綜合"
+        "tlclysh:旅遊生活"
+        "z:Z頻道"
+        "itvchoice:ITV Choice"
+        "mdrb:曼迪日本台"
+        "smartzs:Smart知識台"
+        "tv5monde:TV5MONDE"
+        "outdoor:Outdoor-Channel"
+        "fashionone:Fashion-One"
+        "ifundm:i-Fun動漫台"
+        "eentertainment:E! Entertainment"
+        "davinci:DaVinCi Learning達文西頻道"
+        "my101zh:MY101綜合台"
+        "blueantextreme:BLUE ANT EXTREME"
+        "blueantentertainmet:BLUE ANT EXTREME"
+        "eyetvxj:EYE TV戲劇台"
+        "eyetvly:EYE TV旅遊台"
+        "travel:Travel Channel"
+        "dmax:DMAX頻道"
+        "hitshd:HITS"
+        "fx:FX"
+        "tvbshd:TVBS"
+        "tvbshl:TVBS歡樂"
+        "tvbsjc:TVBS精采台"
+        "tvbxh:TVB星河頻道"
+        "tvn:tvN"
+        "hgyl:韓國娛樂台KMTV"
+        "xfkjjj:幸福空間居家台"
+        "xwyl:星衛娛樂台"
+        "amc:AMC"
+        "animaxhd:Animax HD"
+        "diva:Diva"
+        "bloomberg:Bloomberg TV"
+        "fgss:時尚頻道"
+        "warner:Warner TV"
+        "ettodayzh:ETtoday綜合台"
+    )
+
+    niotv_chnls=( 
+        "hbohd:629:HBO HD 亚洲"
+        "hits:501:HBO 强档巨献 亚洲"
+        "signature:503:HBO 原创巨献 亚洲"
+        "family:502:HBO 温馨家庭 亚洲"
+        "cinemax:49:CINEMAX 亚洲"
+        "msxw:45:民视新闻"
+        "tsxw:637:台视新闻"
+        "slxw:38:三立新闻"
+        "slinews:172:三立 iNews"
+        "tvbsxw:41:TVBS 新闻"
+        "minshi:16:民视"
+        "minshidiyi:638:民视第一台"
+        "minshitaiwan:742:民视台湾台"
+        "mtvlivetw:751:MTV Live 台湾"
+        "foxmovies:47:Fox 电影"
+        "foxfamily:540:Fox 家庭电影"
+        "foxaction:543:FOX 警匪"
+        "disney:63:迪士尼 台湾"
+        "dreamworks:758:梦工厂"
+        "nickasia:705:尼克亚洲"
+        "cbeebies:771:CBeebies"
+        "babytv:553:Baby TV:Boomerang卡通"
+        "boomerang:766:Boomerang"
+        "dwxq:61:动物星球"
+        "momoqz:148:momo 亲子"
+        "cnkt:65:CN 卡通"
+        "hyxw:695:寰宇新闻"
+        "jtzx:709:靖天资讯"
+        "jtzh:710:靖天综合"
+        "jtyl:202:靖天育乐"
+        "jtxj:721:靖天戏剧"
+        "jthl:708:靖天欢乐"
+        "jtyh:727:靖天映画"
+        "jtrb:711:靖天日本"
+        "jtkt:707:靖天卡通"
+        "jyxj:203:靖洋戏剧"
+        "jykt:706:靖洋卡通"
+        "wszw:19:卫视中文"
+        "wsdy:55:卫视电影"
+        "gxws:73:国兴卫视"
+        "gs:17:公视"
+        "gs2:759:公视台语"
+        "gs3:177:公视3台"
+        "ts:11:台视"
+        "tszh:632:台视综合"
+        "tscj:633:台视财经"
+        "hs:15:华视"
+        "hsjywh:138:华视教育体育文化"
+        "zs:13:中视"
+        "zsxw:668:中视新闻"
+        "zsjd:714:中视经典"
+        "sltw:34:三立台湾"
+        "sldh:35:三立都会"
+        "bdzh:21:八大综合"
+        "bddy:33:八大电影"
+        "bdxj:22:八大戏剧"
+        "bdyl:60:八大娱乐"
+        "gdyl:170:高点育乐"
+        "gdzh:143:高点综合"
+        "ydsdy:187:壹电视电影"
+        "ydszh:681:壹电视综合"
+        "wlty:66:玮来体育"
+        "wlxj:29:玮来戏剧"
+        "wlrb:72:玮来日本"
+        "wldy:57:玮来电影"
+        "wlzh:24:玮来综合"
+        "wlyl:53:玮来育乐"
+        "wljc:546:玮来精采"
+        "dszh:23:东森综合"
+        "dsxj:36:东森戏剧"
+        "dsyy:64:东森幼幼"
+        "dsdy:56:东森电影"
+        "dsyp:48:东森洋片"
+        "dsxw:42:东森新闻"
+        "dscjxw:43:东森财经新闻"
+        "dscs:18:东森超视"
+        "ztxw:668:中天新闻"
+        "ztyl:14:中天娱乐"
+        "ztzh:27:中天综合"
+        "yzly:778:亚洲旅游"
+        "yzms:733:亚洲美食"
+        "yzxw:554:亚洲新闻"
+        "pltw:26:霹雳台湾"
+        "titvyjm:133:原住民"
+        "history:549:历史频道"
+        "history2:198:历史频道2"
+        "gjdl:59:国家地理 台湾"
+        "gjdlyr:670:国家地理悠人"
+        "gjdlys:161:国家地理野生"
+        "gjdlgj:519:国家地理国际"
+        "discoveryasia:563:探索亚洲频道"
+        "discovery:58:探索频道"
+        "discoverykx:520:探索科学频道"
+        "bbcearth:698:BBC 地球"
+        "bbcworldnews:144:BBC 世界新闻"
+        "bbclifestyle:646:BBC Lifestyle"
+        "bswx:587:博斯无限"
+        "bsgq1:529:博斯高球"
+        "bsgq2:526:博斯高球2"
+        "bsml:588:博斯魅力"
+        "bsyd2:635:博斯运动2"
+        "bsyd1:527:博斯运动"
+        "eurosport:581:欧洲体育"
+        "fox:70:FOX"
+        "foxsports:67:FOX 体育"
+        "foxsports2:68:FOX 体育2"
+        "foxsports3:547:FOX 体育3"
+        "elevensportsplus:787:ELEVEN 体育 plus"
+        "elevensports1:769:ELEVEN 体育1"
+        "elevensports2:770:ELEVEN 体育2"
+        "lifetime:199:Lifetime"
+        "foxcrime:543:FOX CRIME"
+        "hlwdy:52:好莱坞电影"
+        "animax:84:ANIMAX"
+        "mtvtw:69:MTV 台湾"
+        "ndmuch:25:年代 MUCH"
+        "ndxw:40:年代新闻"
+        "nhk:74:NHK"
+        "euronews:591:欧洲新闻"
+        "ffxw:79:非凡新闻"
+        "jetzh:71:JET 综合"
+        "tlclysh:62:TLC 旅途生活"
+        "axn:50:AXN"
+        "z:75:Z 频道"
+        "luxe:590:LUXE TV"
+        "catchplaydy:582:CatchPlay 电影"
+        "tv5monde:574:法国 TV5"
+        "channelv:584:Channel [v] 国际"
+        "davinci:669:达芬奇频道"
+        "blueantextreme:779:BLUE ANT Extreme"
+        "blueantentertainmet:785:BLUE ANT Entertainment"
+        "travel:684:Travel"
+        "cnn:107:CNN"
+        "dmax:521:DMAX"
+        "hitshd:692:HITS"
+        "lxdy:141:龙祥电影"
+        "fx:544:FX"
+        "tvn:757:tvN"
+        "hgyl:568:韩国娱乐"
+        "xfkjjj:672:幸福空间居家"
+        "nhkxwzx:773:NHK 新闻资讯"
+        "zlty:676:智林体育"
+        "xwdy:558:星卫电影"
+        "xwyl:539:星卫娱乐"
+        "mycinemaeurope:775:我的欧洲电影"
+        "amc:682:AMC 台湾"
+        "animaxhd:772:ANIMAX HD"
+        "wakawakajapan:765:Wakawaka Japan"
+        "tvbshd:20:TVBS"
+        "tvbshl:32:TVBS 欢乐"
+        "tvbsjc:774:TVBS 精采"
+        "cinemaworld:559:Cinema World"
+        "warner:688:Warner TV"
+    )
+
+    nowtv_chnls=( 
+        "hbohd:115:HBO HD 亚洲"
+        "hits:111:HBO 强档巨献 亚洲"
+        "signature:114:HBO 原创巨献 亚洲"
+        "family:112:HBO 温馨家庭 亚洲"
+        "cinemax:113:CINEMAX 亚洲"
+        "foxmovies:117:Fox 电影"
+        "foxfamily:120:Fox 家庭电影"
+        "foxaction:118:Fox 警匪"
+        "wsdy:139:卫视电影台"
+        "animaxhd:150:Animax"
+        "tvn:155:tvN"
+        "wszw:160:卫视中文台"
+        "discoveryasia:208:探索亚洲频道"
+        "discovery:209:探索频道"
+        "dwxq:210:动物星球"
+        "discoverykx:211:探索科学频道"
+        "dmax:212:DMAX"
+        "tlclysh:213:TLC 旅游生活"
+        "gjdlhk:215:国家地理 香港"
+        "gjdlys:216:国家地理野生"
+        "gjdlyr:217:国家地理悠人"
+        "gjdlgj:218:国家地理国际"
+        "bbcearth:220:BBC 地球"
+        "history:223:历史频道"
+        "historyhd:225:历史频道高清"
+        "cnn:316:CNN"
+        "foxnews:318:FOX News"
+        "bbcworldnews:320:BBC 世界新闻"
+        "bloomberg:321:Bloomberg 电视"
+        "yzxw:322:亚洲新闻台"
+        "skynews:323:天空新闻"
+        "dw:324:DW 英文"
+        "euronews:326:欧洲新闻"
+        "nhk:328:NHK WORLD-JAPAN"
+        "fhwszx:366:凤凰卫视资讯"
+        "fhwsxg:367:凤凰卫视香港"
+        "fhwszw:548:凤凰卫视中文"
+        "xgws:368:香港卫视"
+        "disney:441:迪士尼"
+        "boomerang:445:Boomerang"
+        "cbeebies:447:BBC CBeebies"
+        "babytv:448:Baby tv"
+        "bbclifestyle:502:BBC lifestyle"
+        "comedycentral:505:Comedy Central"
+        "warner:510:WarnerTV"
+        "AXN:512:AXN"
+        "blueantextreme:516:BLUE ANT Extreme"
+        "blueantentertainmet:517:BLUE ANT Entertainment"
+        "fox:518:FOX"
+        "foxcrime:523:FOX CRIME"
+        "fx:524:FX"
+        "lifetime:525:Lifetime"
+        "yzms:527:亚洲美食"
+        "channelv:534:Channel [v] 国际"
+        "zgzwws:556:浙江卫视"
+        "foxsports:670:Fox 体育"
+        "foxsports2:671:Fox 体育2"
+        "foxsports3:672:Fox 体育3"
+        "nowpremiersportstv:620:Now Sports Premier League TV"
+        "nowpremiersports1:621:Now Sports Premier League 1"
+        "nowpremiersports2:622:Now Sports Premier League 2"
+        "nowpremiersports3:623:Now Sports Premier League 3"
+        "nowpremiersports4:624:Now Sports Premier League 4"
+        "nowpremiersports5:625:Now Sports Premier League 5"
+        "nowpremiersports6:626:Now Sports Premier League 6"
+        "nowsports1:631:Now Sports 1"
+        "nowsports2:632:Now Sports 2"
+        "nowsports3:633:Now Sports 3"
+        "nowsports4:634:Now Sports 4"
+        "nowsports5:635:Now Sports 5"
+        "nowsports6:636:Now Sports 6"
+        "nowsports7:637:Now Sports 7"
+    )
+
+    icable_chnls=(
+        "hkopen:001:香港开电视"
+        "hkibc:002:香港国际财经台"
+        "cjzx:108:财经资讯台"
+        "xw:109:新闻台"
+        "zbxw:110:直播新闻台"
+        "cctv13:111:中央电视台新闻频道"
+        "cctv4:112:中央电视台中文国际频道"
+        "fhwszx:113:凤凰卫视资讯台"
+        "dsyzxw:114:东森亚洲新闻台"
+        "bbcworldnews:122:BBC WorldNews"
+        "foxnews:123:FOX News"
+        "cnni:124:CNNI"
+        "cnnhlnnews:125:CNN HLN News"
+        "nhkworldjapan:126:NHK World-Japan"
+        "cnbchk:127:CNBC HK"
+        "bloomberg:128:Bloomberg TV HD"
+        "zghqdsw:129:中国环球电视网"
+        "yzxw:130:亚洲新闻台"
+        "russiatoday:131:Russia Today"
+        "dw:140:DW (Deutsch)"
+        "yxdy:201:有线电影台"
+        "gyoz:202:光影欧洲"
+        "wsdy:204:卫视电影台"
+        "wsks:205:卫视卡式台"
+        "foxmovies:214:FOX Movies"
+        "foxfamily:215:FOX Family Movies"
+        "foxaction:216:FOX Action Movies"
+        "gqsryy:218:高清私人影院"
+        "jsdy:219:惊悚电影台"
+        "zhyl:301:综合娱乐台"
+        "fhwsxg:304:凤凰卫视香港台"
+        "zjpd:305:珠江频道"
+        "fox:311:FOX"
+        "foxlife:312:FOXlife"
+        "fx:313:FX"
+        "blueantentertainmet:317:Blue Ant 综合娱乐 HD"
+        "blueantextreme:318:Blue Ant 超级娱乐 HD"
+        "fashiontv:319:Fashion TV HD"
+        "tvn:320:tvN HD"
+        "nhkworldpr:322:NHK World Pr"
+        "comedycentral:324:Comedy Central 爆笑台"
+        "arirangtv:325:Arirang TV"
+        "abcaustralia:326:ABC Australia"
+        "dsyzws:331:东森亚洲卫视"
+        "wszw:332:卫视中文台"
+        "mtvchina:333:MTV China"
+        "dfwsgj:334:东方卫视国际频道"
+        "szds:335:深圳电视台"
+        "hbws:337:湖北卫视"
+        "cctv11:340:中央电视台戏曲频道"
+        "cctv1:341:中央电视台综合频道"
+        "fhwszw:376:凤凰卫视中文台"
+        "dsyzyy:502:东森亚洲幼幼台"
+        "dreamworks:510:梦工厂"
+        "ktpd:511:卡通频道"
+        "boomerang:512:Boomerang 频道"
+        "dwx:513:达文西频道"
+        "nickelodeon:514:Nickelodeon"
+        "nickasia:515:Nick Jr."
+        "babytv:516:Baby TV"
+        "cbeebies:517:CBeebies"
+        "zoomoo:518:ZooMoo"
+        "fixfoxi:519:Fix & Foxi"
+        "ybb:520:鸭宝宝"
+        "disney:530:Disney Channel"
+        "disneyjr:531:Disney Junior"
+        "gqty:601:高清体育台"
+        "sportsplus1:602:Sports Plus 1 HD"
+        "gq603:603:高清603台"
+        "sportsplus2:604:Sports Plus 2 HD"
+        "sportsplus3:605:Sports Plus 3 HD"
+        "foxsports:611:Fox Sports"
+        "foxsports2:612:Fox Sports 2"
+        "foxsports3:613:Fox Sports 3"
+        "beinsports1:614:beIN Sports 1"
+        "beinsports2:615:beIN Sports 2"
+        "beinsportsmax:616:beIN SPORTS MAX"
+        "yx18:618:有线18台"
+        "yxty:661:有线体育台"
+        "sm1:668:赛马1台"
+        "sm2:669:赛马2台"
+        "gjdlys:701:国家地理野生高清频道"
+        "gjdlgq:702:国家地理高清频道"
+        "gjdlyr:703:国家地理悠人高清频道"
+        "discoveryasia:710:Discovery Asia"
+        "discovery:711:Discovery 高清频道"
+        "tlclysh:712:旅遊生活高清频道"
+        "eve:713:EVE 高清频道"
+        "dwxq:714:动物星球高清频道"
+        "discoverykx:715:Discovery 科学高清频道"
+        "dmax:716:DMAX 高清频道"
+        "bbclifestyle:720:BBC Lifestyle 高清频道"
+        "bbcearth:721:BBC Earth"
+        "zghqdswjl:722:中国环球电视网记录频道"
+        "petclubtv:730:Pet Club TV"
+        "zeetv:851:Zee TV"
+        "zeenews:852:Zee News"
+        "zeecinema:853:Zee Cinema"
+        "zing:854:Zing"
+        "hl:901:欢乐台"
+        "rh:902:惹火台"
+    )
+
+    hboasia_chnls=(
+        "hbo:1:HBO 亚洲"
+        "hbohd:2:HBO HD 亚洲"
+        "signature:3:HBO 原创巨献 亚洲"
+        "family:4:HBO 温馨家庭 亚洲"
+        "hits:5:HBO 强档巨献 亚洲"
+        "cinemax:7:CINEMAX 亚洲"
+    )
+
+    hbous_chnls=(
+        "us_hbo:HBO:EAST:HBO East"
+        "us_hbo2:HBO2:EAST:HBO 2 EAST"
+        "us_hbosignature:HBO SIGNATURE:EAST:HBO Signature East"
+        "us_hbofamily:HBO FAMILY:EAST:HBO family East"
+        "us_hbocomedy:HBO COMEDY:EAST:HBO comedy East"
+        "us_hbozone:HBO ZONE:EAST:HBO Zone East"
+        "us_hbolatino:HBO LATINO:EAST:HBO Lation East"
+        "us_hbo:HBO:WEST:HBO West"
+        "us_hbo2:HBO2:WEST:HBO 2 West"
+        "us_hbosignature:HBO SIGNATURE:WEST:HBO Signature West"
+        "us_hbofamily:HBO FAMILY:WEST:HBO family West"
+        "us_hbocomedy:HBO COMEDY:WEST:HBO COMEDY  West"
+        "us_hbozone:HBO ZONE:WEST:HBO Zone West"
+        "us_hbolatino:HBO LATINO:WEST:HBO Lation West"
+    )
+
+    ontvtonight_chnls=(
+        "us_abc@abc@69048344@-04:00:ABC"
+        "au_abcnews@abc-news@2141@+02:00:ABC NEWS"
+        "us_cbs@cbs@69048345@-04:00:CBS"
+        "us_cnn@cable-news-network@69047095@-05:00:CNN"
+        "us_nbc@nbc@69048423@-04:00:NBC"
+        "us_fox@fox@69048367@-05:00:FOX"
+        "us_fs1@fox-sports-1@666266122@-04:00:FOX Sports 1"
+        "us_msnbc@msnbc@69023101@-04:00:MSNBC"
+        "us_amc@amc-east@69047124@-04:00:AMC"
+        "us_nickjr@nick-jr@69047681@-04:00:Nick Jr"
+        "us_universalkids@universal-kids@69027178@-04:00:Universal Kids"
+        "us_disneyjr@disney-junior-hdtv-east@69044944@-04:00:Disney Junior"
+        "us_mtvhd@mtv-hdtv-east@69032459@-04:00:MTV HD 美国"
+        "us_mtvlive@mtv-live-hdtv@69027734@-04:00:MTV Live 美国"
+        "uk_mtvlivehd@mtv-live-hdtv@69038784@+01:00:MTV Live HD 英国"
+        "uk_mtvmusic@mtv-music-uk@69042501@+04:00:MTV Music 英国"
+        "uk_mtvbase@mtv-base@69036338@+01:00:MTV Base 英国"
+        "uk_mtvclassic@mtv-classic@69043201@+01:00:MTV Classic 英国"
+        "uk_mtvhits@mtv-hits-eu@69036341@+01:00:MTV Hits 英国"
+        "uk_bbcone@bbc-1@69035371@+01:00:BBC One"
+        "us_comedycentral@comedy-central-east@69036536@-04:00:Comedy Central"
+        "foxnews@fox-news-channel@69047256@-05:00:FOX News"
+        "ca_tsn1@tsn@69024762@-04:15:TSN1"
+        "ca_tsn3@tsn3@1163557839@-04:15:TSN3"
+        "ca_tsn4@tsn4@1162010745@-04:15:TSN4"
+    )
+
+    tvbhk_chnls=(
+        "tvbhk_pearl:p:TVB 明珠台"
+        "tvbhk_jade:j:TVB 翡翠台"
+        "tvbhk_j2:b:TVB J2"
+        "tvbhk_tvbnewschannel:c:TVB 无线新闻台"
+        "tvbhk_tvbfinanceinformationchannel:a:TVB 无线财经资讯台"
+#        "tvbhk_xinghe:x:TVB 星河频道"
+#        "tvbhk_tvbclassic:e:TVB 经典台"
+#        "tvbhk_tvbkoreandrama:k:TVB 韩剧台"
+#        "tvbhk_tvbasiandrama:d:TVB 亚洲剧台"
+#        "tvbhk_tvbchinesedrama:u:TVB 华语剧台"
+#        "tvbhk_asianvariety:v:TVB 综艺旅游台"
+#        "tvbhk_tvbfood:l:TVB 为食台"
+#        "tvbhk_tvbclassicmovies:w:粤语片台"
+    )
+
+    singteltv_chnls=(
+        "my_ch5:2:Channel 5"
+        "my_ch8:3:Channel 8"
+        "my_chu:7:Channel U"
+        "my_kidschannel:243:少儿频道"
+        "my_ele:501:e-Le"
+        "my_jiale:502:佳乐"
+        "my_starchinese:507:卫视中文台"
+        "my_tvbjade:511:TVB 翡翠台 东南亚"
+        "my_nowjelli:512:now Jelli 紫金国际台"
+        "my_one:513:One HD"
+        "my_xingkong:516:星空卫视"
+        "my_xinghe:517:TVB 星河"
+        "my_tvn:518:tvN HD"
+        "my_gem:519:GEM"
+        "my_ettvasia:521:东森亚洲卫视"
+        "my_oh!k:525:Oh!K"
+        "my_entertainment:531:Entertainment"
+        "my_cbo:532:中国电视剧频道"
+        "my_foodandhealth:533:美食健康频道"
+        "my_cctventertainment:534:CCTV 娱乐"
+        "my_dragontvintl:535:东方卫视"
+        "my_channelvchina:547:Channel [V] 中国"
+        "my_mtvchina:550:MTV 中国"
+        "my_cctv4:555:CCTV 4"
+        "my_ctiasia:557:中天亚洲台"
+        "my_ettvnews:561:ETTV 东森新闻"
+        "my_scmhd:571:卫视电影台"
+        "my_scmlegend:573:卫视卡式台"
+        "my_ccm:580:天映经典频道"
+        "my_celestialmovies:585:天映频道"
+    )
+
+    cntv_chnls=(
+        "cctv1"
+        "cctv2"
+        "cctv3"
+        "cctv4"
+        "cctv5"
+        "cctv6"
+        "cctv7"
+        "cctv8"
+        "cctvjilu:CCTV 9 纪录频道"
+        "cctv10"
+        "cctv11"
+        "cctv12"
+        "cctv13"
+        "cctvchild:CCTV 14 少儿频道"
+        "cctv15"
+        "cctv5plus:CCTV 5+"
+        "cctv17"
+        "cctveurope:CCTV 中文国际频道"
+        "cctvamerica:CCTV America"
+    )
+
+    tvbs_chnls=( 
+        "tvbsxw:1:TVBS 新闻"
+        "tvbshl:2:TVBS 欢乐台"
+        "tvbshd:3:TVBS HD"
+        "tvbsjc:4:TVBS 精采台"
+        "tvbsyz:5:TVBS 亚洲"
+    )
+
+    astro_chnls=(
+        "iqiyi:355:astro 爱奇艺"
+        "my_tvbclassic:425:TVB 经典台"
+        "astrobeinsports:236:beIN Sports HD"
+        "astrobeinsportsmax:313:beIN Sports MAX HD"
+        "astrosupersport:154:Astro SuperSport HD"
+        "astrosupersport2:138:Astro SuperSport 2 HD"
+        "astrosupersport3:164:Astro SuperSport 3 HD"
+        "astrosupersport4:241:Astro SuperSport 4 HD"
+        "astrosupersport5:455:Astro SuperSport 5 HD"
+    )
+
+    nbcsn_chnls=(
+        "nbcsn:NBCSN:NBCSN"
+        "nbcsnhd:NBCSNHD:NBCSN HD"
+    )
+
+    beinsports_chnls=(
+        "beinsports:1:beinsports"
+        "beinsportsar:2:beinsports AR"
+        "beinsports1:3:beinsports 1"
+        "beinsports2:4:beinsports 2"
+        "beinsports3:5:beinsports 3"
+        "beinsports4:6:beinsports 4"
+        "beinsports5:7:beinsports 5"
+        "beinsports6:8:beinsports 6"
+        "beinsports7:9:beinsports 7"
+        "beinsportspremium1:10:beinsports premium 1"
+        "beinsportspremium2:11:beinsports premium 2"
+        "beinsportspremium3:12:beinsports premium 3"
+        "beinsportsxtra1:13:beinsports xtra 1"
+        "beinsportsxtra2:14:beinsports xtra 2"
+        "beinsports4k:15:beinsports 4K"
+        "beinsportsnba:16:beinsports NBA"
+        "beinsportsenglish1:17:beinsports english 1"
+        "beinsportsenglish2:18:beinsports english 2"
+        "beinsportsenglish3:19:beinsports english 3"
+        "beinsportsfrench1:20:beinsports french 1"
+        "beinsportsfrench2:21:beinsports french 2"
+        "beinsportsfrench3:22:beinsports french 3"
+    )
+
+    beinsportsau_chnls=(
+        "beinsports1au:BEINSP1:beinsports 1 AU"
+        "beinsports2au:BEINSP2:beinsports 2 AU"
+        "beinsports3au:BEINSP3:beinsports 3 AU"
+    )
+
+    supersport_chnls=(
+        "supersportpremierleague:SS Premier League:SuperSport Premier League"
+        "supersportespn:ESPN HD:ESPN HD"
+        "supersportespn2:ESPN 2 HD:ESPN2 HD"
+        "supersportfootball:SS Football:SuperSport Football"
+        "supersportpsl:SS PSL:SuperSport PSL"
+        "supersportcricket:SS Cricket:SuperSport Cricket"
+        "supersportgrandstand:SS Grandstand:SuperSport Grandstand"
+        "supersportrugby:SS Rugby:SuperSport Rugby"
+        "supersportgolf:SS Golf:SuperSport Golf"
+        "supersportaction:SS Action:SuperSport Action"
+        "supersportblitz:SS Blitz:SuperSport Blitz"
+        "supersportlaliga:SS La Liga:SuperSport La Liga"
+        "supersportmotorsport:SS Motorsport:SuperSport Motorsport"
+        "supersportplay:SS Play:SuperSport Play"
+        "supersportmaximo1:SS Maximo 1:SuperSport MáXimo 1"
+        "supersporttennis:SS Tennis:SuperSport Tennis"
+        "supersportginx:Ginx eSports HD:Ginx eSports TV"
+#        "supersportwwe:WWE Channel"
+#        "supersportcsn:Community Services Network"
+        "supersportvariety1:SS Variety 1:SuperSport Variety 1"
+        "supersportvariety2:SS Variety 2:SuperSport Variety 2"
+        "supersportvariety3:SS Variety 3:SuperSport Variety 3"
+        "supersportvariety4:SS Variety 4:SuperSport Variety 4"
+    )
+
+    btsport_chnls=(
+        #"btsportespn:BT Sport//ESPN"
+        "btsportultimate:hspr:BT Sport Ultimate"
+        "btsport1:hspc:BT Sport 1"
+        "btsport2:hspd:BT Sport 2"
+        "btsport3:hspf:BT Sport 3"
+        "btsport4:hspg:BT Sport 4"
+    )
+
+    btsporton_chnls=(
+        "btsportespn:BT Sport ESPN"
+        "btsport1:BT Sport 1"
+        "btsport2:BT Sport 2"
+        "btsport3:BT Sport 3"
+        "btsportextra1:BT Sport Extra 1"
+        "btsportextra2:BT Sport Extra 2"
+        "btsportextra3:BT Sport Extra 3"
+        "btsportextra4:BT Sport Extra 4"
+        "btsportultimate:BT Sport Ultimate"
+        "digitalexclusive:Digital Exclusive"
+    )
+
+    premiersports_chnls=(
+        "premiersports1:premiersports1:premier sports 1"
+        "premiersports2:premiersports2:premier sports 2"
+        "laligatv:LaLiga:LaLiga TV"
+        "freesports:freesports:freesports"
+        "boxnation:Boxnation:Boxnation"
+    )
+
+    sky_chnls=(
+        "skysportspremierleague:1303:SkySp PL"
+        "skysportsmainevent:1301:SkySpMainEv"
+        "skysportsfootball:3838:SkySp F'ball"
+        "skysportscricket:1302:SkySp Cricket "
+        "premiersports1:5153:Premier 1 HD"
+        "premiersports2:1634:Premier 2 HD"
+        "laligatv:1015:LaLigaTV HD"
+    )
+
+    _4gtv_chnls=(
+        "minshidiyi:4gtv-4gtv003:民視第一台"
+        "minshitaiwan:4gtv-4gtv001:民視台灣台"
+        "minshi:4gtv-4gtv002:民視"
+        "zsjc:4gtv-4gtv064:中視菁采台"
+        "zs:4gtv-4gtv040:中視"
+        "zsjd:4gtv-4gtv080:中視經典台"
+        "hs:4gtv-4gtv041:華視"
+        "slzh:4gtv-live207:三立綜合台"
+        "kjds:4gtv-4gtv043:客家電視台"
+        "bdzy:4gtv-4gtv039:八大綜藝台"
+        "tvbsjc:4gtv-4gtv086:TVBS精采台"
+        "aedyl:4gtv-4gtv070:愛爾達娛樂台"
+        "jtzh:4gtv-4gtv046:靖天綜合台"
+        "jtrb:4gtv-4gtv047:靖天日本台"
+        "xtryt:4gtv-4gtv050:新唐人亞太台"
+        "ztzh:4gtv-4gtv033:中天綜合台"
+        "kzyyjs:4gtv-4gtv012:空中英語教室"
+        "dwx:4gtv-4gtv018:達文西頻道"
+        "eltvshyy:litv-longturn20:ELTV生活英語台"
+        "nickjr:4gtv-live032:Nick Jr. 兒童頻道"
+        "nickelodeon:4gtv-live105:Nickelodeon"
+        "lhkt:litv-longturn01:龍華卡通台"
+        "jtkt:4gtv-4gtv044:靖天卡通台"
+        "jykt:4gtv-4gtv057:靖洋卡通Nice Bingo"
+        "ifundm:litv-ftv15:i-Fun動漫台"
+        "ifundm2:litv-ftv11:i-Fun動漫台2"
+        "ifundm3:litv-ftv12:i-Fun動漫台3"
+        "babyfirst:litv-longturn02:Baby First"
+        "momoqz:4gtv-live107:MOMO親子台"
+        "cnkt:4gtv-live205:CN卡通"
+        "dsgw1:4gtv-live047:東森購物一台"
+        "dsxw:litv-ftv14:東森新聞台"
+        "ztxw:4gtv-4gtv009:中天新聞台"
+        "msxw:litv-ftv13:民視新聞台"
+        "slcjxw:4gtv-4gtv089:三立財經新聞iNEWS"
+        "tvbsxw:4gtv-4gtv072:TVBS新聞"
+        "dscjxw:4gtv-4gtv019:東森財經新聞台"
+        "zsxw:4gtv-4gtv074:中視新聞"
+        "hsxw:4gtv-4gtv052:華視新聞"
+        "hyxw:litv-longturn14:寰宇新聞台"
+        "hyxwtw:litv-longturn15:寰宇新聞台灣台"
+        "zhcj:4gtv-4gtv060:中華財經台"
+        "dsgw2:4gtv-live046:東森購物二台"
+        "mszy:4gtv-4gtv004:民視綜藝台"
+        "zglgtx:4gtv-4gtv006:豬哥亮歌廳秀"
+        "jtyl:4gtv-4gtv062:靖天育樂台"
+        "jtgj:4gtv-4gtv063:KLT-靖天國際台"
+        "jthl:4gtv-4gtv054:Nice TV 靖天歡樂台"
+        "jtzx:4gtv-4gtv065:靖天資訊台"
+        "hymbczh:4gtv-4gtv015:華藝MBC綜合台"
+        "hgyl:4gtv-4gtv016:韓國娛樂台 KMTV"
+        "comedycentral:4gtv-4gtv024:Comedy Central 爆笑頻道"
+        "lifetime:4gtv-4gtv029:Lifetime 娛樂頻道"
+        "dyys:4gtv-live031:電影原聲台CMusic"
+        "traceurban:4gtv-4gtv082:TRACE Urban"
+        "mtvlivetw:4gtv-live025:MTV Live HD 音樂頻道"
+        "mezzolive:4gtv-4gtv083:Mezzo Live HD"
+        "classica:4gtv-4gtv059:CLASSICA 古典樂"
+        "mdqys:litv-longturn16:梅迪奇藝術頻道"
+        "bsgq:litv-longturn05:博斯高球台"
+        "bsgq2:litv-longturn06:博斯高球二台"
+        "bsyd:litv-longturn07:博斯運動一台"
+        "bswx:litv-longturn10:博斯無限台"
+        "bswq:litv-longturn09:博斯網球台"
+        "bsyd2:litv-longturn08:博斯運動二台"
+        "bsml:litv-longturn04:博斯魅力台"
+        "tracesportstars:4gtv-4gtv077:TRACE Sport Stars"
+        "zlty:4gtv-4gtv101:智林體育台"
+        "ssydx:4gtv-4gtv014:時尚運動X"
+        "cmtv:4gtv-live201:車迷TV"
+        "ginxesportstv:4gtv-4gtv053:GINX Esports TV"
+        "yzly:litv-longturn17:亞洲旅遊台"
+        "msly:litv-ftv07:民視旅遊台"
+        "outdoor:4gtv-4gtv078:Outdoor Channel"
+        "travel:4gtv-4gtv079:Travel Channel"
+        "fashionone:litv-longturn19:Fashion One"
+        "xfkjjj:4gtv-live206:幸福空間居家台"
+        "lovenature:4gtv-live208:Love Nature"
+        "history:4gtv-live026:History 歷史頻道"
+        "history2:4gtv-4gtv028:HISTORY 2 頻道"
+        "smithsonian:4gtv-4gtv088:Smithsonian Channel"
+        "smartzs:4gtv-4gtv076:SMART 知識頻道"
+        "techstorm:4gtv-live109:TechStorm"
+        "luxe:4gtv-live121:LUXE TV Channel"
+        "tv5monde:4gtv-live122:TV5MONDE STYLE HD 生活時尚"
+        "gsxj:4gtv-4gtv042:公視戲劇"
+        "msyj:litv-ftv09:民視影劇台"
+        "lhxj:litv-longturn18:龍華戲劇台"
+        "lhox:litv-longturn12:龍華偶像台"
+        "lhrh:litv-longturn11:龍華日韓台"
+        "bdjc:4gtv-4gtv034:八大精彩台"
+        "tyjd:4gtv-4gtv112:天映經典頻道"
+        "jtxj:4gtv-4gtv058:靖天戲劇台"
+        "jyxj:4gtv-4gtv045:靖洋戲劇台"
+        "cizazt:4gtv-4gtv027:CI 罪案偵查頻道"
+        "snhrjs:4gtv-4gtv013:視納華仁紀實頻道"
+        "ymjs:4gtv-4gtv105:影迷數位紀實台"
+        "jgbdx:4gtv-4gtv144:金光布袋戲"
+        "blueantextreme:4gtv-live138:BLUE ANT EXTREME"
+        "ccyj:4gtv-4gtv049:采昌影劇台"
+        "jtyh:4gtv-4gtv055:靖天映畫"
+        "jtdy:4gtv-4gtv061:靖天電影台"
+        "lhdy:litv-longturn03:龍華電影台"
+        "ydy1:4gtv-4gtv075:优電影一台"
+        "ydy2:4gtv-4gtv081:优電影二台"
+        "ydy3:4gtv-4gtv087:优電影三台"
+        "ymdy:4gtv-4gtv011:影迷數位電影台"
+        "amc:4gtv-4gtv017:AMC"
+        "cinemaworld:4gtv-4gtv069:CinemaWorld"
+        "warner:4gtv-4gtv037:Warner TV"
+        "catchplaydy:4gtv-live048:CATCHPLAY電影台"
+        "mycinemaeurope:4gtv-live157:My Cinema Europe HD 我的歐洲電影"
+        "hxx2:litv-ftv17:好消息2台"
+        "hxx:litv-ftv16:好消息"
+        "dads:4gtv-4gtv007:大愛電視"
+        "da2:4gtv-4gtv106:大愛二台"
+        "rjws:4gtv-4gtv008:人間衛視"
+        "bdgjxw:litv-ftv10:半島國際新聞台"
+        "voamgzy:litv-ftv03:VOA美國之音"
+        "cnbcasiacj:4gtv-4gtv030:CNBC Asia 財經台"
+        "dwdgzs:4gtv-4gtv071:DW德國之聲"
+        "vtv4:4gtv-4gtv108:VTV4"
+        "cnnttxw:4gtv-live203:CNN頭條新聞台"
+        "cnngjxw:4gtv-live204:CNN國際新聞台"
+        "gh1:4gtv-4gtv084:國會頻道1"
+        "gh2:4gtv-4gtv085:國會頻道2"
+        "petclubtv:4gtv-live110:Pet Club TV"
+        "tvbshd:4gtv-4gtv073:TVBS"
+        "hitshd:4gtv-live620:HITS"
+        "sbnqqcj:4gtv-4gtv060:sbn 全球财经台"
+        "tvbshl:4gtv-4gtv068:TVBS 欢乐台"
+        "liveabc:4gtv-live030:LiveABC 互動英語頻道"
+        "arirang:4gtv-live202:阿里郎頻道"
+        "gdlrollor:4gtv-live012:滚动力roller"
+        "jdkt:4gtv-live022:经典卡通台"
+        "etkt:4gtv-live009:儿童卡通台"
+        "jxdm:4gtv-live024:精选动漫台"
+    )
+
+    other_chnls=(
+        "disneyjr:迪士尼儿童频道(台湾)"
+        "foxmovies:fox movies (台湾)"
+        "amlh:澳门莲花"
+        "foxnews:FOX News"
+    )
+
+    providers=(
+        "jiushi:就是 节目表"
+        "niotv:niotv 节目表"
+        "nowtv:nowtv 节目表"
+        "icable:i-cable 节目表"
+        "hboasia:hbo 亚洲 节目表"
+        "hbous:hbo 美国 节目表"
+        "ontvtonight:ontvtonight 节目表"
+        "tvbhk:TVB 香港 节目表"
+        "singteltv:singteltv 节目表"
+        "cntv:cntv 节目表"
+        "tvbs:tvbs 节目表"
+        "astro:astro 节目表"
+        "nbcsn:nbcsn 节目表"
+        "beinsports:beinsports 节目表"
+        "beinsportsau:beinsports AU 节目表"
+        "supersport:supersport 节目表"
+        "btsport:bt sport 节目表"
+        "premiersports:premier sports 节目表"
+        "sky:Sky 节目表"
+        "_4gtv:4gtv 节目表"
+        "other:其它节目表"
+    )
+
+    if [ "${2:-}" == "4gtv" ] 
+    then
+        provider_id="_4gtv"
+    elif [ "${2:-}" == "hbo" ] 
+    then
+        provider_id="hboasia"
+    elif [ "${2:-}" == "si" ] 
+    then
+        provider_id="singteltv"
+    elif [ "${2:-}" == "be" ] 
+    then
+        provider_id="beinsports"
+    elif [ "${2:-}" == "beau" ] 
+    then
+        provider_id="beinsportsau"
+    elif [ "${2:-}" == "su" ] 
+    then
+        provider_id="supersport"
+    elif [ "${2:-}" == "bt" ] 
+    then
+        provider_id="btsport"
+    elif [ "${2:-}" == "bton" ] 
+    then
+        provider_id="btsporton"
+    elif [ "${2:-}" == "pr" ] 
+    then
+        provider_id="premiersports"
+    elif [ "${2:-}" == "sk" ] 
+    then
+        provider_id="sky"
+    else
+        provider_id=${2:-}
+    fi
+
+    if [ -n "${3:-}" ] 
+    then
+        # variable indirection
+        var=("$provider_id"_chnls[@])
+        if [[ -n ${!var:-} ]] 
+        then
+            provider_found=0
+            for chnl in "${!var}"
+            do
+                chnl_id=${chnl%%@*}
+                chnl_id=${chnl_id%%:*}
+                if [ "$chnl_id" == "$3" ] 
+                then
+                    provider_found=1
+                    unset "$provider_id"_chnls
+                    IFS= read -r -a "$provider_id"_chnls <<< "$chnl"
+                    break
+                fi
+            done
+            [ "$provider_found" -eq 0 ] && Println "$error 没有找到频道\n" && exit 1
+        fi
+    fi
+
+    case $provider_id in
+        jiushi)
+            ScheduleJiushi
+        ;;
+        niotv)
+            ScheduleNiotv
+        ;;
+        nowtv)
+            ScheduleNowtv
+        ;;
+        icable)
+            ScheduleIcable
+        ;;
+        hbo|hboasia)
+            ScheduleHboasia
+        ;;
+        hbous)
+            ScheduleHbous "${4:-}"
+        ;;
+        ontvtonight)
+            ScheduleOntvtonight
+        ;;
+        tvbhk)
+            ScheduleTvbhk
+        ;;
+        tvbhd)
+            ScheduleTvbhd
+        ;;
+        si|singteltv)
+            ScheduleSingteltv
+        ;;
+        cntv)
+            ScheduleCntv
+        ;;
+        tvbs)
+            ScheduleTvbs
+        ;;
+        astro)
+            ScheduleAstro
+        ;;
+        nbcsn)
+            ScheduleNbcsn
+        ;;
+        be|beinsports)
+            ScheduleBeinsports
+        ;;
+        beau|beinsportsau)
+            ScheduleBeinsportsau
+        ;;
+        su|supersport)
+            ScheduleSupersport
+        ;;
+        bt|btsport)
+            ScheduleBtsport
+        ;;
+        pr|premiersports)
+            SchedulePremiersports
+        ;;
+        sk|sky)
+            ScheduleSky
+        ;;
+        _4gtv)
+            Schedule_4gtv
+        ;;
+        other)
+            ScheduleOther
+        ;;
+        "") 
+            Println "节目表计划任务面板
+
+  ${green}1.${normal} 查看频道
+  ${green}2.${normal} 添加频道
+  ${green}3.${normal} 删除频道
+  ${green}4.${normal} 查看任务
+  ${green}5.${normal} 执行任务
+  ${green}6.${normal} 开启计划任务
+  ${green}7.${normal} 关闭计划任务
+  ${green}8.${normal} 备份任务
+  ${green}9.${normal} 查看备份
+ ${green}10.${normal} 修改备份
+ ${green}11.${normal} 恢复备份
+ ${green}12.${normal} 删除备份
+
+"
+            read -p "$i18n_default_cancel" cron_num
+            [ -z "$cron_num" ] && Println "$i18n_canceled...\n" && exit 1
+
+            case $cron_num in
+                1) ScheduleView
+                ;;
+                2) ScheduleAdd
+                ;;
+                3) ScheduleDel
+                ;;
+                4) ScheduleViewCron
+                ;;
+                5) ScheduleExec
+                ;;
+                6) ScheduleEnableCron
+                ;;
+                7) ScheduleDisableCron
+                ;;
+                8) ScheduleBackup
+                ;;
+                9) ScheduleViewBackup
+                ;;
+                10) ScheduleEditBackup
+                ;;
+                11) ScheduleRestoreBackup
+                ;;
+                12) ScheduleDelBackup
+                ;;
+                *) Println "$i18n_canceled...\n" && exit 1
+                ;;
+            esac
+        ;;
+        "-")
+            while IFS= read -r line 
+            do
+                if [[ $line == *"错误"* ]] 
+                then
+                    Println "错误: ${line#* }"
+                fi
+            done < <(ScheduleExec)
+        ;;
+        *)
+            for provider in "${providers[@]}"
+            do
+                provider_id=${provider%%:*}
+                provider_name=${provider#*:}
+                provider_chnls=("$provider_id"_chnls[@])
+                schedule=""
+                for provider_chnl in "${!provider_chnls}"
+                do
+                    if [ "$provider_id" == "ontvtonight" ] 
+                    then
+                        chnl_id=${provider_chnl%%@*}
+                        chnl_name=${provider_chnl##@:}
+                    else
+                        chnl_id=${provider_chnl%%:*}
+                        chnl_name=${provider_chnl##*:}
+                    fi
+                    if [ "$chnl_id" == "$2" ] 
+                    then
+                        unset "${provider_id}_chnls"
+                        IFS="|" read -r -a "${provider_id}_chnls" <<< "${provider_chnl}|"
+                        if [ "$provider_id" == "other" ] 
+                        then
+                            chnl_id_upper=$(tr '[:lower:]' '[:upper:]' <<< "${chnl_id:0:1}")"${chnl_id:1}"
+                            Schedule"$chnl_id_upper" "${3:-}"
+                        else
+                            provider_id_upper=$(tr '[:lower:]' '[:upper:]' <<< "${provider_id:0:1}")"${provider_id:1}"
+                            Schedule"$provider_id_upper" "${3:-}"
+                        fi
+                        break
+                    fi
+                done
+
+                if [ -z "${schedule:-}" ] 
+                then
+                    Println "$error $provider_name 没有找到: $2"
+                else
+                    if [ -e "$IPTV_ROOT/vip.pid" ] 
+                    then
+                        printf '%s' "" > "$VIP_USERS_ROOT/epg.update"
+                    fi
+                    break
+                fi
+            done
+        ;;
+    esac
+}
+
+[ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请先安装 !" && exit 1
+
+Schedule "$@"
+
+exit 0

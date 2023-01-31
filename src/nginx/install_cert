@@ -1,0 +1,34 @@
+NginxDomainInstallCert()
+{
+    local domain=$1
+
+    if [ -e "/usr/local/nginx/conf/sites_crt/$domain.crt" ] && [ -d /usr/local/openresty/nginx/conf ] && [ ! -e "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" ]
+    then
+        mkdir -p /usr/local/openresty/nginx/conf/sites_crt
+        ln "/usr/local/nginx/conf/sites_crt/$domain.crt" "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt"
+        ln "/usr/local/nginx/conf/sites_crt/$domain.key" "/usr/local/openresty/nginx/conf/sites_crt/$domain.key"
+    elif [ -e "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" ] && [ -d /usr/local/nginx/conf ] && [ ! -e "/usr/local/nginx/conf/sites_crt/$domain.crt" ] 
+    then
+        mkdir -p /usr/local/nginx/conf/sites_crt
+        ln "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" "/usr/local/nginx/conf/sites_crt/$domain.crt"
+        ln "/usr/local/openresty/nginx/conf/sites_crt/$domain.key" "/usr/local/nginx/conf/sites_crt/$domain.key"
+    fi
+
+    if [ -e "$nginx_prefix/conf/sites_crt/$domain.crt" ] && [ -e "$nginx_prefix/conf/sites_crt/$domain.key" ]
+    then
+        echo
+        inquirer list_input "检测到证书已存在, 是否重新安装证书" ny_options reinstall_crt_yn
+        if [ "$reinstall_crt_yn" == "$i18n_no" ] 
+        then
+            return 0
+        fi
+    fi
+
+    AcmeCheck
+
+    Println "$info 安装 $domain 证书..."
+
+    NginxDomainUpdateCrt "$domain" 1
+
+    Println "$info $domain 证书安装成功"
+}

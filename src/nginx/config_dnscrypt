@@ -1,0 +1,173 @@
+DepInstall curl
+
+DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
+dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
+
+echo
+dnscrypt_options=( '安装/升级 dnscrypt proxy' '开关 edns0' '开关 ipv6 查询' )
+inquirer list_input_index "选择操作" dnscrypt_options dnscrypt_options_index
+
+if [ "$dnscrypt_options_index" -eq 1 ] 
+then
+    if [[ $dnscrypt_version_old == "*" ]] 
+    then
+        Println "$error 请先安装 dnscrypt proxy\n"
+        exit 1
+    fi
+    echo
+    if grep -q "options edns0" < /etc/resolv.conf
+    then
+        ExitOnList n "`gettext \"是否关闭 edns0\"`"
+
+        sed -i '/options edns0/d' /etc/resolv.conf
+        echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = false")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
+        systemctl restart dnscrypt-proxy
+        Println "$info edns0 已关闭\n"
+    else
+        ExitOnList n "`gettext \"是否开启 edns0\"`"
+
+        echo "options edns0" >> /etc/resolv.conf
+        echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = true")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
+        systemctl restart dnscrypt-proxy
+        Println "$info edns0 已开启\n"
+    fi
+    exit 0
+elif [ "$dnscrypt_options_index" -eq 2 ] 
+then
+    if [[ $dnscrypt_version_old == "*" ]] 
+    then
+        Println "$error 请先安装 dnscrypt proxy\n"
+        exit 1
+    fi
+    echo
+    switch_options=( '开启' '关闭' )
+    inquirer list_input_index "选择操作" switch_options switch_options_index
+    if [ "$switch_options_index" -eq 0 ] 
+    then
+        echo "$(awk '!x{x=sub(/.*block_ipv6 = .*/,"block_ipv6 = false")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
+        systemctl restart dnscrypt-proxy
+        Println "$info ipv6 查询已开启\n"
+    else
+        echo "$(awk '!x{x=sub(/.*block_ipv6 = .*/,"block_ipv6 = true")}1' $DNSCRYPT_ROOT/dnscrypt-proxy.toml)" > "$DNSCRYPT_ROOT/dnscrypt-proxy.toml"
+        systemctl restart dnscrypt-proxy
+        Println "$info ipv6 查询已关闭\n"
+    fi
+    exit 0
+fi
+
+ArchCheck
+
+if [ "$arch" != "arm64" ] && grep -q "arm" <<< "$arch"  
+then
+    arch="arm"
+fi
+
+if dnscrypt_version=$(curl -s -Lm 20 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') 
+then
+    echo
+    inquirer list_input "本机是否在国内" ny_options ny_option
+
+    if [[ $dnscrypt_version_old == "*" ]]
+    then
+        Println "$info 下载 dnscrypt proxy ..."
+        if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz_tmp
+        then
+            Println "$info 设置 dnscrypt proxy ..."
+            cd ~
+            mv dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz
+            tar zxf dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz
+            mv linux-$arch dnscrypt-$dnscrypt_version
+            chown -R $USER:$USER dnscrypt-$dnscrypt_version
+            cd dnscrypt-$dnscrypt_version
+            cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
+
+            if [ "$ny_option" == "$i18n_yes" ] 
+            then
+                DNSCryptConfig
+            else
+                echo "$(awk '!x{x=sub(/.*server_names = \[.*/,"server_names = [\047google\047, \047cloudflare\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+            fi
+
+            for((i=0;i<3;i++));
+            do
+                if ./dnscrypt-proxy -check > /dev/null 
+                then
+                    break
+                elif [[ $i -eq 2 ]] 
+                then
+                    cd ~
+                    rm -rf dnscrypt-$dnscrypt_version
+                    Println "$error 发生错误, 请重试\n"
+                    exit 1
+                fi
+            done
+
+            if [ -d /etc/resolvconf ] 
+            then
+                DEBIAN_FRONTEND=noninteractive apt-get -y --purge remove resolvconf > /dev/null 2>&1 || true
+            fi
+
+            if [ -f /etc/resolv.conf ] 
+            then
+                printf -v now '%(%m-%d-%H:%M:%S)T' -1
+                mv /etc/resolv.conf /etc/resolv.conf-$now
+            fi
+
+            echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
+
+            systemctl stop systemd-resolved > /dev/null 2>&1 || true
+            systemctl disable systemd-resolved > /dev/null 2>&1 || true
+            ./dnscrypt-proxy -service install > /dev/null
+            ./dnscrypt-proxy -service start > /dev/null
+
+            if [[ $(systemctl is-active postfix) == "active" ]] 
+            then
+                systemctl restart postfix
+            fi
+
+            Println "$info dnscrypt proxy 安装配置成功\n"
+        else
+            Println "$error dnscrypt proxy 下载失败, 请重试\n"
+            exit 1
+        fi
+    elif [[ $dnscrypt_version_old != "$dnscrypt_version" ]] 
+    then
+        if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz_tmp
+        then
+            if [ -L /etc/resolv.conf ] 
+            then
+                etc_resolv=$(< /etc/resolv.conf)
+                rm -f /etc/resolv.conf
+                echo "$etc_resolv" > /etc/resolv.conf
+            fi
+
+            cd ~/dnscrypt-$dnscrypt_version_old
+            ./dnscrypt-proxy -service stop > /dev/null
+            ./dnscrypt-proxy -service uninstall > /dev/null
+            cd ~
+            mv dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz
+            tar zxf dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz
+            mv linux-$arch dnscrypt-$dnscrypt_version
+            cd dnscrypt-$dnscrypt_version
+            cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
+
+            if [ "$ny_option" == "$i18n_yes" ] 
+            then
+                DNSCryptConfig
+            else
+                echo "$(awk '!x{x=sub(/.*server_names = \[.*/,"server_names = [\047google\047, \047cloudflare\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+            fi
+
+            ./dnscrypt-proxy -service install > /dev/null
+            ./dnscrypt-proxy -service start > /dev/null
+            Println "$info dnscrypt proxy 升级成功\n"
+        else
+            Println "$error dnscrypt proxy 下载失败, 请重试\n"
+            exit 1
+        fi
+    else
+        Println "$error dnscrypt proxy 已经是最新\n"
+    fi
+else
+    Println "$error 无法连接服务器, 请稍后再试\n"
+fi

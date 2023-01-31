@@ -1,0 +1,300 @@
+EditChannelSchedule()
+{
+    echo
+    channel_schedule_options=( '开始日期' '结束日期' '循环' '自动清除' '防盗链' '频道名称' '状态' )
+    inquirer checkbox_input_indices "选择修改 [ ${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} ] 计划 $((chnl_schedules_index+1))" channel_schedule_options channel_schedule_options_indices
+
+    for channel_schedule_options_index in "${channel_schedule_options_indices[@]}"
+    do
+        echo
+        if [ "$channel_schedule_options_index" -eq 0 ] 
+        then
+            inquirer date_pick "设置开始日期" schedule_start_time
+
+            number=true
+            jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"start_time"]'
+            JQ update "$CHANNELS_FILE" "$schedule_start_time"
+        elif [ "$channel_schedule_options_index" -eq 1 ] 
+        then
+            inquirer date_pick "设置结束日期" schedule_end_time
+
+            number=true
+            jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"end_time"]'
+            JQ update "$CHANNELS_FILE" "$schedule_end_time"
+        elif [ "$channel_schedule_options_index" -eq 2 ] 
+        then
+            inquirer list_input_index "每日循环" ny_options ny_options_index
+
+            if [ "$ny_options_index" -eq 0 ] 
+            then
+                schedule_loop=false
+            else
+                schedule_loop=true
+            fi
+
+            bool=true
+            jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"loop"]'
+            JQ update "$CHANNELS_FILE" "$schedule_loop"
+        elif [ "$channel_schedule_options_index" -eq 3 ] 
+        then
+            inquirer list_input_index "自动清除" ny_options ny_options_index
+
+            if [ "$ny_options_index" -eq 0 ] 
+            then
+                schedule_auto_remove=false
+            else
+                schedule_auto_remove=true
+            fi
+
+            bool=true
+            jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"auto_remove"]'
+            JQ update "$CHANNELS_FILE" "$schedule_auto_remove"
+        elif [ "$channel_schedule_options_index" -eq 4 ] 
+        then
+            inquirer list_input_index "防盗链" yn_options yn_options_index
+
+            if [ "$yn_options_index" -eq 0 ] 
+            then
+                schedule_hls_change=true
+
+                echo
+                inquirer list_input_index "防盗链一次" ny_options yn_options_index
+
+                if [ "$yn_options_index" -eq 0 ] 
+                then
+                    schedule_hls_change_once=false
+                else
+                    schedule_hls_change_once=true
+                fi
+            else
+                schedule_hls_change=false
+                schedule_hls_change_once=false
+            fi
+
+            bool=true
+            jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"hls_change"]'
+            JQ update "$CHANNELS_FILE" "$schedule_hls_change"
+
+            bool=true
+            jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"hls_change_once"]'
+            JQ update "$CHANNELS_FILE" "$schedule_hls_change_once"
+        elif [ "$channel_schedule_options_index" -eq 5 ] 
+        then
+            inquirer text_input "输入频道名称" schedule_channel_name "$i18n_not_set"
+
+            if [ "$schedule_channel_name" == "$i18n_not_set" ] 
+            then
+                schedule_channel_name=""
+            fi
+
+            jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"channel_name"]'
+            JQ update "$CHANNELS_FILE" "$schedule_channel_name"
+
+            if [ -n "$schedule_channel_name" ] && [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 1 ] && [ "$schedule_channel_name" != "${chnls_channel_name[chnls_index]}" ]
+            then
+                echo
+                inquirer list_input_index "同步频道名称" ny_options ny_options_index
+
+                if [ "$ny_options_index" -eq 1 ] 
+                then
+                    jq_path='["channels",'"$chnls_index"',"channel_name"]'
+                    JQ update "$CHANNELS_FILE" "$schedule_channel_name"
+
+                    chnl_pid="${chnls_pid[chnls_index]}"
+                    GetChannel
+
+                    if [ -f "$chnl_output_dir_root/${chnl_playlist_name}_master.m3u8" ]
+                    then
+                        master=1
+                    else
+                        master=0
+                    fi
+
+                    action="start"
+                    SyncFile
+                fi
+            fi
+        elif [ "$channel_schedule_options_index" -eq 6 ] 
+        then
+            schedule_status_options=( '等待' '进行' '结束' )
+            inquirer list_input_index "设置状态" schedule_status_options schedule_status
+
+            number=true
+            jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"',"status"]'
+            JQ update "$CHANNELS_FILE" "$schedule_status"
+        fi
+    done
+
+    Println "$info 频道 [ ${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} ] 计划 $((chnl_schedules_index+1)) 修改成功\n"
+}
+
+EditChannelSchedules()
+{
+    ListChannelSchedules
+
+    echo -e "  ${green}$((chnl_schedules_count+1)).${normal}${indent_6}全部\n\n"
+
+    echo "输入计划序号(多个计划用空格分隔 比如: 1 2 4-5)"
+    while read -p "$i18n_default_cancel" chnl_schedules_num
+    do
+        if [ -z "$chnl_schedules_num" ] 
+        then
+            Println "$i18n_canceled...\n" && break
+        fi
+
+        if [ "$chnl_schedules_num" == $((chnl_schedules_count+1)) ] 
+        then
+            for chnl_schedules_index in "${chnl_schedules_indices[@]}"
+            do
+                EditChannelSchedule
+            done
+            break
+        fi
+
+        IFS=" " read -ra chnl_schedules_num_arr <<< "$chnl_schedules_num"
+
+        error_no=0
+        for chnl_schedule_num in "${chnl_schedules_num_arr[@]}"
+        do
+            case "$chnl_schedule_num" in
+                *"-"*)
+                    chnl_schedule_num_start=${chnl_schedule_num%-*}
+                    chnl_schedule_num_end=${chnl_schedule_num#*-}
+                    if [[ $chnl_schedule_num_start == *[!0-9]* ]] || [[ $chnl_schedule_num_end == *[!0-9]* ]] || [ "$chnl_schedule_num_start" -eq 0 ] || [ "$chnl_schedule_num_end" -eq 0 ] || [ "$chnl_schedule_num_end" -gt "$chnl_schedules_count" ] || [ "$chnl_schedule_num_start" -ge "$chnl_schedule_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$chnl_schedule_num" -lt 1 ] || [ "$chnl_schedule_num" -gt "$chnl_schedules_count" ] 
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                for chnl_schedule_num in "${chnl_schedules_num_arr[@]}"
+                do
+                    if [[ $chnl_schedule_num =~ - ]] 
+                    then
+                        chnl_schedules_start=${chnl_schedule_num%-*}
+                        chnl_schedules_end=${chnl_schedule_num#*-}
+                        for((chnl_schedules_index=chnl_schedules_start-1;chnl_schedules_index<chnl_schedules_end;chnl_schedules_index++));
+                        do
+                            EditChannelSchedule
+                        done
+                    else
+                        chnl_schedules_index=$((chnl_schedule_num-1))
+                        EditChannelSchedule
+                    fi
+                done
+                break
+            ;;
+        esac
+    done
+}
+
+EditChannelsSchedule()
+{
+    ListChannelsSchedule
+
+    if [ -z "$chnls_schedule_list" ] 
+    then
+        Println "$error 请先添加频道计划\n"
+        exit 1
+    fi
+
+    echo -e "  ${green}$((chnls_count+1)).${normal}${indent_6}全部\n\n"
+
+    echo "输入频道序号(多个频道用空格分隔 比如: 1 2 4-5)"
+    while read -p "$i18n_default_cancel" chnls_num
+    do
+        if [ -z "$chnls_num" ] 
+        then
+            Println "$i18n_canceled...\n" && exit 1
+        fi
+
+        if [ "$chnls_num" == $((chnls_count+1)) ] 
+        then
+            for chnls_index in "${chnls_schedule_indices[@]}"
+            do
+                EditChannelSchedules
+            done
+            break
+        fi
+
+        IFS=" " read -ra chnls_num_arr <<< "$chnls_num"
+
+        error_no=0
+        for chnl_num in "${chnls_num_arr[@]}"
+        do
+            case "$chnl_num" in
+                *"-"*)
+                    chnl_num_start=${chnl_num%-*}
+                    chnl_num_end=${chnl_num#*-}
+                    if [[ $chnl_num_start == *[!0-9]* ]] || [[ $chnl_num_end == *[!0-9]* ]] || [ "$chnl_num_start" -eq 0 ] || [ "$chnl_num_end" -eq 0 ] || [ "$chnl_num_end" -gt "$chnls_count" ] || [ "$chnl_num_start" -ge "$chnl_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    else
+                        for((i=chnl_num_start-1;i<chnl_num_end;i++));
+                        do
+                            if [ -z "${chnls_schedule_status[i]}" ] 
+                            then
+                                error_no=3
+                                break 2
+                            fi
+                        done
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$chnl_num" -lt 1 ] || [ "$chnl_num" -gt "$chnls_count" ] || [ -z "${chnls_schedule_status[chnl_num-1]}" ]
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                for chnl_num in "${chnls_num_arr[@]}"
+                do
+                    if [[ $chnl_num =~ - ]] 
+                    then
+                        chnls_start=${chnl_num%-*}
+                        chnls_end=${chnl_num#*-}
+                        for((chnls_index=chnls_start-1;chnls_index<chnls_end;chnls_index++));
+                        do
+                            EditChannelSchedules
+                        done
+                    else
+                        chnls_index=$((chnl_num-1))
+                        EditChannelSchedules
+                    fi
+                done
+                break
+            ;;
+        esac
+    done
+}

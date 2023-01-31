@@ -1,0 +1,22 @@
+CloudflareGetUsers()
+{
+    cf_users_list=""
+    cf_users_count=0
+    cf_users_email=()
+    cf_users_pass=()
+    cf_users_token=()
+    cf_users_api_key=()
+    while IFS="^" read -r email pass token key
+    do
+        cf_users_count=$((cf_users_count+1))
+        email=${email#\"}
+        cf_users_email+=("$email")
+        cf_users_pass+=("$pass")
+        cf_users_token+=("$token")
+        key=${key%\"}
+        cf_users_api_key+=("$key")
+
+        cf_users_list="$cf_users_list ${green}$cf_users_count.${normal}${indent_6}邮箱: ${green}$email${normal}  密码: ${green}$pass${normal}\n${indent_6}Token: ${green}${token:-无}${normal}\n${indent_6}Key: ${green}${key:-无}${normal}\n\n"
+    done < <($JQ_FILE '.users[]|[.email,.pass,.token,.key]|join("^")' "$CF_CONFIG")
+    return 0
+}

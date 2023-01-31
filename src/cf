@@ -1,0 +1,127 @@
+Include src/cloudflare/set_host "$@"
+
+Include src/cloudflare/add_host "$@"
+
+Include src/cloudflare/set_user "$@"
+
+Include src/cloudflare/get_hosts "$@"
+
+Include src/cloudflare/list_hosts "$@"
+
+Include src/cloudflare/list_host "$@"
+
+Include src/cloudflare/set_zone "$@"
+
+Include src/cloudflare/get_users "$@"
+
+Include src/cloudflare/list_users "$@"
+
+Include src/cloudflare/add_user "$@"
+
+Include src/cloudflare/list_user "$@"
+
+Include src/cloudflare/add_zone "$@"
+
+Include src/cloudflare/list_zones "$@"
+
+Include src/cloudflare/list_zone "$@"
+
+Include src/cloudflare/get_zone "$@"
+
+Include src/cloudflare/move_zone "$@"
+
+Include src/cloudflare/get_user "$@"
+
+Include src/cloudflare/add_subdomain "$@"
+
+Include src/cloudflare/list_subdomain "$@"
+
+Include src/cloudflare/delete_zone "$@"
+
+Include src/cloudflare/delete_host "$@"
+
+Include src/cloudflare/edit_user "$@"
+
+Include src/cloudflare/regen_host "$@"
+
+Include src/cloudflare/list_token "$@"
+
+Include src/cloudflare/add_token "$@"
+
+Include src/cloudflare/update_token "$@"
+
+Include src/cloudflare/delete_user "$@"
+
+Include src/cloudflare/edit_zone "$@"
+
+Include src/cloudflare/menu_partner "$@"
+
+Include src/cloudflare/set_worker "$@"
+
+Include src/cloudflare/add_worker "$@"
+
+Include src/cloudflare/get_workers "$@"
+
+Include src/cloudflare/list_workers "$@"
+
+Include src/cloudflare/list_worker "$@"
+
+Include src/cloudflare/edit_worker "$@"
+
+Include src/cloudflare/delete_worker "$@"
+
+Include src/cloudflare/deploy_worker "$@"
+
+Include src/cloudflare/list_routes "$@"
+
+Include src/cloudflare/config_route "$@"
+
+Include src/cloudflare/monitor_workers "$@"
+
+Include src/cloudflare/menu_workers "$@"
+
+ShFileCheck
+
+JQInstall
+
+if [ -d "$IPTV_ROOT" ]
+then
+    CF_CONFIG_NEW="$IPTV_ROOT/${CF_CONFIG##*/}"
+    if [ -e "$CF_CONFIG" ] && [ ! -e "$CF_CONFIG_NEW" ]
+    then
+        mv "$CF_CONFIG" "$CF_CONFIG_NEW"
+    fi
+    CF_CONFIG="$CF_CONFIG_NEW"
+
+    CF_WORKERS_ROOT_NEW="$IPTV_ROOT/${CF_WORKERS_ROOT##*/}"
+    if [ -d "$CF_WORKERS_ROOT" ] && [ ! -d "$CF_WORKERS_ROOT_NEW" ]
+    then
+        mv "$CF_WORKERS_ROOT" "$IPTV_ROOT/"
+    fi
+    CF_WORKERS_ROOT="$CF_WORKERS_ROOT_NEW"
+
+    IBM_CONFIG_NEW="$IPTV_ROOT/${IBM_CONFIG##*/}"
+    if [ -e "$IBM_CONFIG" ] && [ ! -e "$IBM_CONFIG_NEW" ]
+    then
+        mv "$IBM_CONFIG" "$IBM_CONFIG_NEW"
+    fi
+    IBM_CONFIG="$IBM_CONFIG_NEW"
+
+    CF_WORKERS_FILE_NEW="$CF_WORKERS_ROOT/${CF_WORKERS_FILE##*/}"
+    if [ -e "$CF_WORKERS_FILE" ] && [ ! -e "$CF_WORKERS_FILE_NEW" ]
+    then
+        mv "$CF_WORKERS_FILE" "$CF_WORKERS_FILE_NEW"
+    fi
+    CF_WORKERS_FILE="$CF_WORKERS_FILE_NEW"
+fi
+
+cf_use_api=1
+
+if [ "${1:-}" == "w" ] 
+then
+    CloudflareWorkersMenu
+else
+    CloudflarePartnerMenu
+fi
+
+exit 0

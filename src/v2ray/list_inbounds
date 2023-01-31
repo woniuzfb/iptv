@@ -1,0 +1,443 @@
+V2rayListInbounds()
+{
+    V2rayGetInbounds
+
+    list_inbounds_options=( '全部入站' '本地 nginx 入站' "直连 $v2ray_name 入站" )
+
+    if [ "${1:-}" == "nginx" ] 
+    then
+        list_inbounds_options_index=1
+        count=$inbounds_nginx_count
+    elif [ "${1:-}" == "direct" ] 
+    then
+        list_inbounds_options_index=2
+        count=$((inbounds_count-inbounds_nginx_count))
+    else
+        echo
+        inquirer list_input_index "选择显示的范围" list_inbounds_options list_inbounds_options_index
+
+        if [ "$list_inbounds_options_index" -eq 0 ] 
+        then
+            count=$inbounds_count
+        elif [ "$list_inbounds_options_index" -eq 1 ] 
+        then
+            count=$inbounds_nginx_count
+        else
+            count=$((inbounds_count-inbounds_nginx_count))
+        fi
+    fi
+
+    if [ "$count" -eq 0 ] 
+    then
+        if [ "$list_inbounds_options_index" -eq 0 ] 
+        then
+            Println "$error 请先添加入站\n"
+        else
+            Println "$error 请先添加 ${list_inbounds_options[list_inbounds_options_index]}\n"
+        fi
+
+        exit 1
+    fi
+
+    Println "\n=== ${list_inbounds_options[list_inbounds_options_index]}数 ${green} $count ${normal}"
+
+    inbounds_list=""
+
+    for((i=0;i<count;i++));
+    do
+        if [ "$list_inbounds_options_index" -eq 0 ] 
+        then
+            inbounds_index=$i
+        elif [ "$list_inbounds_options_index" -eq 1 ] 
+        then
+            inbounds_index=${inbounds_nginx_index[i]}
+        else
+            inbounds_index=${inbounds_other_index[i]}
+        fi
+
+        if [ "${inbounds_stream_network[inbounds_index]}" != "domainsocket" ] 
+        then
+            protocol_settings_list="监听地址: ${green}${inbounds_listen[inbounds_index]}${normal} 监听端口: ${green}${inbounds_port[inbounds_index]}${normal}\n${indent_6}传输协议: ${green}${inbounds_protocol[inbounds_index]}${normal}\n${indent_6}"
+        else
+            protocol_settings_list="传输协议: ${green}${inbounds_protocol[inbounds_index]}${normal}\n${indent_6}"
+        fi
+
+        if [ "${inbounds_sniffing_enabled[inbounds_index]}" = true ] 
+        then
+            if [ "${inbounds_sniffing_metadata_only[inbounds_index]}" = false ] 
+            then
+                protocol_settings_list="${protocol_settings_list}流量探测: ${green}开启${normal} 仅使用元数据: ${red}否${normal} 指定流量类型: ${green}${inbounds_sniffing_dest_override[inbounds_index]//|/,}${normal}\n${indent_6}"
+            else
+                protocol_settings_list="${protocol_settings_list}流量探测: ${green}开启${normal} 仅使用元数据: ${green}是${normal} 指定流量类型: ${green}${inbounds_sniffing_dest_override[inbounds_index]//|/,}${normal}\n${indent_6}"
+            fi
+            if [ -n "${inbounds_sniffing_domains_excluded[inbounds_index]}" ] 
+            then
+                IFS="|" read -r -a domains <<< "${inbounds_sniffing_domains_excluded[inbounds_index]}"
+                domains_list=""
+                for domain in "${domains[@]}"
+                do
+                    domains_list="$domains_list${green}$domain${normal}\n${indent_6}"
+                done
+                protocol_settings_list="${protocol_settings_list}排除域名:\n${indent_6}$domains_list"
+            fi
+        fi
+
+        if [ "${inbounds_allocate_strategy[inbounds_index]}" == "random" ] 
+        then
+            protocol_settings_list="${protocol_settings_list}随机端口: ${green}开启${normal} 刷新间隔: ${green}${inbounds_allocate_refresh[inbounds_index]} 分钟${normal} 随机端口数量: ${green}${inbounds_allocate_concurrency[inbounds_index]}${normal}\n${indent_6}"
+        fi
+
+        if [ "${inbounds_protocol[inbounds_index]}" == "vmess" ] 
+        then
+            if [ "${inbounds_settings_disable_insecure_encryption[inbounds_index]}" = false ] 
+            then
+                protocol_settings_list="${protocol_settings_list}禁止不安全加密: ${red}否${normal}\n${indent_6}"
+            else
+                protocol_settings_list="${protocol_settings_list}禁止不安全加密: ${green}是${normal}\n${indent_6}"
+            fi
+            if [ -n "${inbounds_settings_detour_to[inbounds_index]}" ] 
+            then
+                protocol_settings_list="${protocol_settings_list}指定的另一个入站: ${green}${inbounds_settings_detour_to[inbounds_index]}${normal} 默认等级: ${green}${inbounds_settings_default_level[inbounds_index]}${normal} 默认 alterId: ${green}${inbounds_setttings_default_alter_id[inbounds_index]}${normal}\n${indent_6}"
+            fi
+        elif [ "${inbounds_protocol[inbounds_index]}" == "vless" ] 
+        then
+            if [ "${inbounds_settings_decryption[inbounds_index]}" == "none" ] 
+            then
+                protocol_settings_list="${protocol_settings_list}解密协议: ${red}否${normal}\n${indent_6}"
+            else
+                protocol_settings_list="${protocol_settings_list}解密协议: ${green}${inbounds_settings_decryption[inbounds_index]}${normal}\n${indent_6}"
+            fi
+        elif [ "${inbounds_protocol[inbounds_index]}" == "http" ] 
+        then
+            protocol_settings_list="${protocol_settings_list}入站数据时间限制: ${green}${inbounds_settings_timeout[inbounds_index]}${normal}\n${indent_6}"
+            if [ -n "${inbounds_settings_user_level[inbounds_index]}" ] 
+            then
+                protocol_settings_list="${protocol_settings_list}连接使用等级: ${green}${inbounds_settings_user_level[inbounds_index]}${normal}\n${indent_6}"
+            fi
+            if [ "${inbounds_settings_allow_transparent[inbounds_index]}" = false ] 
+            then
+                protocol_settings_list="${protocol_settings_list}转发所有请求: ${red}否${normal}\n${indent_6}"
+            else
+                protocol_settings_list="${protocol_settings_list}转发所有请求: ${green}是${normal}\n${indent_6}"
+            fi
+        elif [ "${inbounds_protocol[inbounds_index]}" == "socks" ] 
+        then
+            if [ "${inbounds_settings_auth[inbounds_index]}" == "noauth" ] 
+            then
+                protocol_settings_list="${protocol_settings_list}认证方式: ${green}匿名${normal}\n${indent_6}"
+            else
+                protocol_settings_list="${protocol_settings_list}认证方式: ${green}用户密码${normal}\n${indent_6}"
+            fi
+            if [ "${inbounds_settings_udp[inbounds_index]}" = false ] 
+            then
+                protocol_settings_list="${protocol_settings_list}支持 UDP 协议: ${red}否${normal}\n${indent_6}"
+            else
+                protocol_settings_list="${protocol_settings_list}支持 UDP 协议: ${green}是${normal}\n${indent_6}本机 IP 地址: ${green}${inbounds_settings_ip[inbounds_index]}${normal}\n${indent_6}"
+            fi
+        elif [ "${inbounds_protocol[inbounds_index]}" == "shadowsocks" ] 
+        then
+            protocol_settings_list="${protocol_settings_list}可接收的网络协议类型: ${green}${inbounds_settings_network[inbounds_index]}${normal}\n${indent_6}"
+            if [ -n "${inbounds_settings_method[inbounds_index]}" ] 
+            then
+                protocol_settings_list="${protocol_settings_list}加密方式: ${green}${inbounds_settings_method[inbounds_index]}${normal}\n${indent_6}"
+            fi
+            if [ "${inbounds_settings_iv_check[inbounds_index]}" = false ] 
+            then
+                protocol_settings_list="${protocol_settings_list}IV 检查: ${red}否${normal}\n${indent_6}"
+            else
+                protocol_settings_list="${protocol_settings_list}IV 检查: ${green}是${normal}\n${indent_6}"
+            fi
+        elif [ "${inbounds_protocol[inbounds_index]}" == "dokodemo-door" ] 
+        then
+            protocol_settings_list="${protocol_settings_list}可接收的网络协议类型: ${green}${inbounds_settings_network[inbounds_index]}${normal}\n${indent_6}入站数据时间限制: ${green}${inbounds_settings_timeout[inbounds_index]}${normal}\n${indent_6}"
+            if [ -n "${inbounds_settings_user_level[inbounds_index]}" ] 
+            then
+                protocol_settings_list="${protocol_settings_list}连接使用等级: ${green}${inbounds_settings_user_level[inbounds_index]}${normal}\n${indent_6}"
+            fi
+            if [ "${inbounds_settings_follow_redirect[inbounds_index]}" = false ] 
+            then
+                protocol_settings_list="${protocol_settings_list}转发防火墙: ${red}否${normal}\n${indent_6}目标地址: ${green}${inbounds_settings_address[inbounds_index]}${normal} 目标端口: ${green}${inbounds_settings_port[inbounds_index]}${normal}\n${indent_6}"
+            else
+                protocol_settings_list="${protocol_settings_list}转发防火墙: ${green}是${normal}\n${indent_6}"
+            fi
+        fi
+
+        if [ "${inbounds_stream_network[inbounds_index]}" == "http" ] 
+        then
+            stream_settings_list="传输方式: ${green}http/2${normal}\n${indent_6}"
+        else
+            stream_settings_list="传输方式: ${green}${inbounds_stream_network[inbounds_index]}${normal}\n${indent_6}"
+        fi
+
+        if [ "${inbounds_stream_security[inbounds_index]}" == "none" ] 
+        then
+            stream_settings_list="${stream_settings_list}$tls_name 加密: ${red}否${normal}\n${indent_6}"
+        else
+            stream_settings_list="${stream_settings_list}$tls_name 加密: ${green}${inbounds_stream_security[inbounds_index]}${normal}\n${indent_6}"
+            if [ -n "${inbounds_stream_tls_server_name[inbounds_index]}" ] 
+            then
+                stream_settings_list="${stream_settings_list}指定证书域名: ${green}${inbounds_stream_tls_server_name[inbounds_index]}${normal}\n${indent_6}"
+            else
+                stream_settings_list="${stream_settings_list}指定证书域名: ${red}否${normal}\n${indent_6}"
+            fi
+            if [ "${inbounds_stream_tls_disable_system_root[inbounds_index]}" = false ] 
+            then
+                stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: ${red}否${normal}\n${indent_6}"
+            else
+                stream_settings_list="${stream_settings_list}禁用操作系统自带 CA 证书: ${green}是${normal}\n${indent_6}"
+            fi
+            if [ -n "${inbounds_stream_tls_alpn[inbounds_index]}" ] 
+            then
+                stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: ${green}${inbounds_stream_tls_alpn[inbounds_index]//|/,}${normal}\n${indent_6}"
+            else
+                stream_settings_list="${stream_settings_list}$tls_name 握手 ALPN: ${green}h2,http/1.1${normal}\n${indent_6}"
+            fi
+            if [ -n "${inbounds_stream_tls_certificates_usage[inbounds_index]}" ] 
+            then
+                certificates_list="${green}证书:${normal}\n${indent_6}"
+                IFS="|" read -r -a ocsp_stapling <<< "${inbounds_stream_tls_certificates_ocsp_stapling[inbounds_index]}"
+                IFS="|" read -r -a one_time_loading <<< "${inbounds_stream_tls_certificates_one_time_loading[inbounds_index]}"
+                IFS="|" read -r -a usages <<< "${inbounds_stream_tls_certificates_usage[inbounds_index]}"
+                IFS="|" read -r -a certificate_files <<< "${inbounds_stream_tls_certificates_certificate_file[inbounds_index]}"
+                IFS="|" read -r -a key_files <<< "${inbounds_stream_tls_certificates_key_file[inbounds_index]}"
+                IFS="|" read -r -a certificates <<< "${inbounds_stream_tls_certificates_certificate[inbounds_index]}"
+                for((certificate_i=0;certificate_i<${#usages[@]};certificate_i++));
+                do
+                    if [ "${usages[certificate_i]}" == "encipherment" ] 
+                    then
+                        certificate_usage="$tls_name 认证和加密"
+                    elif [ "${usages[certificate_i]}" == "verify" ] 
+                    then
+                        certificate_usage="验证远端 $tls_name"
+                    elif [ "${usages[certificate_i]}" == "issue" ] 
+                    then
+                        certificate_usage="签发其它证书"
+                    else
+                        certificate_usage="验证客户端身份"
+                    fi
+                    if [ -n "${certificates:-}" ] && [ -n "${certificates[certificate_i]}" ] 
+                    then
+                        certificates_list="$certificates_list$((certificate_i+1)). 用途: ${green}$certificate_usage [自签名]${normal}\n${indent_6}"
+                    else
+                        certificates_list="$certificates_list$((certificate_i+1)). 用途: ${green}$certificate_usage${normal}\n${indent_6}"
+                    fi
+                    if [ "$v2ray_name" == "xray" ] && [ "${usages[certificate_i]}" == "encipherment" ]
+                    then
+                        if [ "${one_time_loading[certificate_i]}" = true ] 
+                        then
+                            certificates_list="$certificates_list证书热重载: ${red}否${normal}\n${indent_6}"
+                        else
+                            certificates_list="$certificates_list证书热重载: ${green}是${normal}\n${indent_6}OCSP 装订更新: ${green}${ocsp_stapling[certificate_i]}(秒)${normal}\n${indent_6}"
+                        fi
+                    fi
+                    if [ -n "${certificate_files[certificate_i]}" ] 
+                    then
+                        certificates_list="$certificates_list证书路径: ${green}${certificate_files[certificate_i]}${normal}\n${indent_6}"
+                    fi
+                    if [ -n "${key_files[certificate_i]}" ] 
+                    then
+                        certificates_list="$certificates_list密钥路径: ${green}${key_files[certificate_i]}${normal}\n${indent_6}"
+                    fi
+                done
+                stream_settings_list="$stream_settings_list\n${indent_6}$certificates_list\n${indent_6}"
+            fi
+        fi
+
+        if [ "${inbounds_stream_sockopt_tproxy[inbounds_index]}" == "off" ] 
+        then
+            stream_settings_list="${stream_settings_list}透明代理: ${red}否${normal}\n${indent_6}"
+        else
+            stream_settings_list="${stream_settings_list}透明代理: ${green}${inbounds_stream_sockopt_tproxy[inbounds_index]}${normal}\n${indent_6}"
+        fi
+
+        if [ "${inbounds_stream_sockopt_tcp_fast_open[inbounds_index]}" = true ] 
+        then
+            stream_settings_list="${stream_settings_list}TFO: ${green}是${normal}\n${indent_6}"
+        elif [ "${inbounds_stream_sockopt_tcp_fast_open[inbounds_index]}" = false ] 
+        then
+            stream_settings_list="${stream_settings_list}TFO: ${red}否${normal}\n${indent_6}"
+        else
+            stream_settings_list="${stream_settings_list}TFO: ${green}系统默认${normal}\n${indent_6}"
+        fi
+
+        if [ "${inbounds_stream_network[inbounds_index]}" == "tcp" ] 
+        then
+            if [ "${inbounds_stream_accept_proxy_protocol[inbounds_index]}" = false ] 
+            then
+                stream_settings_list="${stream_settings_list}接收 PROXY 协议: ${red}否${normal}\n${indent_6}"
+            else
+                stream_settings_list="${stream_settings_list}接收 PROXY 协议: ${green}是${normal}\n${indent_6}"
+            fi
+            if [ "${inbounds_stream_header_type[inbounds_index]}" == "none" ] 
+            then
+                stream_settings_list="${stream_settings_list}数据包头部伪装: ${red}否${normal}\n${indent_6}"
+            else
+                stream_settings_list="${stream_settings_list}数据包头部伪装: ${green}${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
+                if [ -n "${inbounds_stream_header_request[inbounds_index]}" ] 
+                then
+                    IFS="|" read -r -a header_request <<< "${inbounds_stream_header_request[inbounds_index]}"
+                    header_request_list=""
+                    for request in "${header_request[@]}"
+                    do
+                        request_key=${request%%=*}
+                        request_value=${request#*=}
+                        if [ "$request_key" == "headers" ] 
+                        then
+                            IFS="!" read -r -a headers <<< "$request_value"
+                            if [ -n "${headers:-}" ] 
+                            then
+                                header_request_list="$header_request_list${green}headers${normal}:\n\033[8C"
+                                for header in "${headers[@]}"
+                                do
+                                    header_key=${header%%=*}
+                                    header_value=${header#*=}
+                                    IFS="~" read -r -a header_values <<< "$header_value"
+                                    if [ -z "${header_values:-}" ] 
+                                    then
+                                        header_request_list="$header_request_list${green}$header_key => \"\"${normal}\n\033[8C"
+                                        continue
+                                    fi
+                                    header_request_list="$header_request_list${green}$header_key => ${normal}\n\033[8C"
+                                    for header_value in "${header_values[@]}"
+                                    do
+                                        header_request_list="$header_request_list  ${green}$header_value${normal}\n\033[8C"
+                                    done
+                                done
+                            fi
+                        else
+                            header_request_list="$header_request_list${green}$request_key${normal}: ${green}${request_value//~/, }${normal}\n${indent_6}"
+                        fi
+                    done
+                    [ -n "$header_request_list" ] && stream_settings_list="${stream_settings_list}自定义 HTTP 头:\n${indent_6}$header_request_list"
+                fi
+            fi
+        elif [ "${inbounds_stream_network[inbounds_index]}" == "kcp" ] 
+        then
+            if [ "${inbounds_stream_header_type[inbounds_index]}" == "none" ] 
+            then
+                stream_settings_list="${stream_settings_list}数据包头部伪装: ${red}否${normal}\n${indent_6}"
+            else
+                stream_settings_list="${stream_settings_list}数据包头部伪装: ${green}${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
+            fi
+            if [ "${inbounds_stream_kcp_congestion[inbounds_index]}" = false ] 
+            then
+                stream_settings_list="${stream_settings_list}拥塞控制: ${red}否${normal}\n${indent_6}"
+            else
+                stream_settings_list="${stream_settings_list}拥塞控制: ${green}是${normal}\n${indent_6}"
+            fi
+            stream_settings_list="${stream_settings_list}最大传输单元: ${green}${inbounds_stream_kcp_mtu[inbounds_index]}${normal}\n${indent_6}传输时间间隔: ${green}${inbounds_stream_kcp_tti[inbounds_index]}(ms)${normal}\n${indent_6}上行链路容量: ${green}${inbounds_stream_kcp_uplink_capacity[inbounds_index]}(MB/s)${normal}\n${indent_6}下行链路容量: ${green}${inbounds_stream_kcp_downlink_capacity[inbounds_index]}(MB/s)${normal}\n${indent_6}读取缓冲区大小: ${green}${inbounds_stream_kcp_downlink_capacity[inbounds_index]}(MB)${normal}\n${indent_6}写入缓冲区大小: ${green}${inbounds_stream_kcp_downlink_capacity[inbounds_index]}(MB)${normal}\n${indent_6}"
+            if [ -n "${inbounds_stream_kcp_seed[inbounds_index]}" ] 
+            then
+                stream_settings_list="${stream_settings_list}混淆密码: ${green}${inbounds_stream_kcp_seed[inbounds_index]}${normal}\n${indent_6}"
+            else
+                stream_settings_list="${stream_settings_list}混淆密码: ${red}否${normal}\n${indent_6}"
+            fi
+        elif [ "${inbounds_stream_network[inbounds_index]}" == "ws" ] 
+        then
+            stream_settings_list="${stream_settings_list}路径: ${green}${inbounds_stream_path[inbounds_index]}${normal}\n${indent_6}"
+            if [ "${inbounds_stream_accept_proxy_protocol[inbounds_index]}" = false ] 
+            then
+                stream_settings_list="${stream_settings_list}接收 PROXY 协议: ${red}否${normal}\n${indent_6}"
+            else
+                stream_settings_list="${stream_settings_list}接收 PROXY 协议: ${green}是${normal}\n${indent_6}"
+            fi
+            if [ -n "${inbounds_stream_ws_headers[inbounds_index]}" ] 
+            then
+                IFS="|" read -r -a headers <<< "${inbounds_stream_ws_headers[inbounds_index]}"
+                headers_list=""
+                for header in "${headers[@]}"
+                do
+                    headers_list="$headers_list${green}${header%%=*}${normal}: ${green}${header#*=}${normal}\n${indent_6}"
+                done
+                [ -n "$headers_list" ] && stream_settings_list="${stream_settings_list}自定义 HTTP 头:\n${indent_6}$headers_list"
+            fi
+            if [ "$v2ray_name" == "v2ray" ] 
+            then
+                if [ "${inbounds_stream_ws_max_early_data[inbounds_index]}" -eq 0 ] 
+                then
+                    stream_settings_list="${stream_settings_list}前置数据支持: ${red}否${normal}\n${indent_6}"
+                else
+                    if [ -n "${inbounds_stream_ws_early_data_header_name[inbounds_index]}" ] 
+                    then
+                        stream_settings_list="${stream_settings_list}前置数据: ${green}基于 HTTP 头 ${inbounds_stream_ws_early_data_header_name[inbounds_index]}${normal}\n${indent_6}"
+                    else
+                        stream_settings_list="${stream_settings_list}前置数据: ${green}基于路径${normal}\n${indent_6}"
+                    fi
+                fi
+                if [ "${inbounds_stream_ws_use_browser_forwarding[inbounds_index]}" = false ] || [ "${inbounds_stream_ws_early_data_header_name[inbounds_index]}" != "Sec-WebSocket-Protocol" ]
+                then
+                    stream_settings_list="${stream_settings_list}浏览器转发: ${red}否${normal}\n${indent_6}"
+                else
+                    stream_settings_list="${stream_settings_list}浏览器转发: ${green}是${normal}\n${indent_6}"
+                fi
+            fi
+        elif [ "${inbounds_stream_network[inbounds_index]}" == "http" ] 
+        then
+            stream_settings_list="${stream_settings_list}路径: ${green}${inbounds_stream_path[inbounds_index]}${normal}\n${indent_6}"
+            if [ -n "${inbounds_stream_http_host[inbounds_index]}" ] 
+            then
+                stream_settings_list="${stream_settings_list}通信域名: ${green}${inbounds_stream_http_host[inbounds_index]//|/, }${normal}\n${indent_6}"
+            fi
+            if [ "$v2ray_name" == "v2ray" ] 
+            then
+                stream_settings_list="${stream_settings_list}HTTP 方法: ${green}${inbounds_stream_http_method[inbounds_index]}${normal}\n${indent_6}"
+                if [ -z "${inbounds_stream_http_headers[inbounds_index]}" ] 
+                then
+                    stream_settings_list="${stream_settings_list}自定义 HTTP 头: ${red}否${normal}\n${indent_6}"
+                else
+                    IFS="|" read -r -a http_headers <<< "${inbounds_stream_http_headers[inbounds_index]}"
+                    http_headers_list="${green}headers${normal}:\n\033[8C"
+                    for header in "${http_headers[@]}"
+                    do
+                        header_key=${header%%=*}
+                        header_value=${header#*=}
+                        IFS="~" read -r -a header_values <<< "$header_value"
+                        if [ -n "${header_values:-}" ] 
+                        then
+                            header_request_list="$header_request_list${green}$header_key => ${normal}\n\033[8C"
+                            for header_value in "${header_values[@]}"
+                            do
+                                header_request_list="$header_request_list  ${green}$header_value${normal}\n\033[8C"
+                            done
+                        else
+                            header_request_list="$header_request_list${green}$header_key => \"\"${normal}\n\033[8C"
+                        fi
+                    done
+                    stream_settings_list="${stream_settings_list}自定义 HTTP 头:\n${indent_6}$http_headers_list"
+                fi
+            fi
+        elif [ "${inbounds_stream_network[inbounds_index]}" == "quic" ] 
+        then
+            if [ "${inbounds_stream_quic_security[inbounds_index]}" == "none" ] 
+            then
+                stream_settings_list="${stream_settings_list}数据包加密方式: ${green}不加密${normal} 密钥: ${green}${inbounds_stream_quic_key[inbounds_index]}${normal}\n${indent_6}"
+            else
+                stream_settings_list="${stream_settings_list}数据包加密方式: ${green}${inbounds_stream_quic_security[inbounds_index]}${normal} 密钥: ${green}${inbounds_stream_quic_key[inbounds_index]}${normal}\n${indent_6}"
+            fi
+            if [ "${inbounds_stream_header_type[inbounds_index]}" == "none" ] 
+            then
+                stream_settings_list="${stream_settings_list}数据包头部伪装: ${red}否${normal}\n${indent_6}"
+            else
+                stream_settings_list="${stream_settings_list}数据包头部伪装: ${green}${inbounds_stream_header_type[inbounds_index]}${normal}\n${indent_6}"
+            fi
+        elif [ "${inbounds_stream_network[inbounds_index]}" == "domainsocket" ] 
+        then
+            stream_settings_list="${stream_settings_list}文件路径: ${green}${inbounds_stream_path[inbounds_index]}${normal} abstract: ${green}${inbounds_stream_ds_abstract[inbounds_index]}${normal} padding: ${green}${inbounds_stream_ds_padding[inbounds_index]}${normal}\n${indent_6}"
+        elif [ "${inbounds_stream_network[inbounds_index]}" == "grpc" ] 
+        then
+            if [ "$v2ray_name" == "v2ray" ] 
+            then
+                stream_settings_list="${stream_settings_list}gRPC 服务名称: ${green}${inbounds_stream_grpc_service_name[inbounds_index]}${normal}\n${indent_6}"
+            elif [ "${inbounds_stream_grpc_multi_mode[inbounds_index]}" = false ] 
+            then
+                stream_settings_list="${stream_settings_list}gRPC 服务名称: ${green}${inbounds_stream_grpc_service_name[inbounds_index]}${normal} multiMode: ${red}否${normal}\n${indent_6}"
+            else
+                stream_settings_list="${stream_settings_list}gRPC 服务名称: ${green}${inbounds_stream_grpc_service_name[inbounds_index]}${normal} multiMode: ${green}是${normal}\n${indent_6}"
+            fi
+        fi
+
+        inbounds_list="$inbounds_list# ${green}$((i+1))${normal}${indent_6}标签: ${green}${inbounds_tag[inbounds_index]:-无}${normal}\n${indent_6}$protocol_settings_list$stream_settings_list\n\n"
+    done
+
+    Println "$inbounds_list\n"
+}

@@ -1,0 +1,31 @@
+VipAddHost()
+{
+    VipSetHostIp
+    VipSetHostPort
+    VipSetHostSeed
+    VipSetHostToken
+    VipSetHostStatus
+
+    if [ ! -s "$VIP_FILE" ] 
+    then
+        printf '{"%s":{},"%s":[],"%s":[]}' "config" "users" "hosts" > "$VIP_FILE"
+    fi
+
+    new_host=$(
+    $JQ_FILE -n --arg ip "$vip_host_ip" --arg port "$vip_host_port" \
+        --arg seed "$vip_host_seed" --arg token "$vip_host_token" \
+        --arg status "$vip_host_status" \
+        '{
+            ip: $ip,
+            port: $port | tonumber,
+            seed: $seed,
+            token: $token,
+            status: $status,
+            channels: []
+        }'
+    )
+
+    jq_path='["hosts"]'
+    JQ add "$VIP_FILE" "[$new_host]"
+    Println "$info VIP 服务器添加成功\n"
+}

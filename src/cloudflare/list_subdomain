@@ -1,0 +1,113 @@
+CloudflareListSubdomain()
+{
+    CloudflareListZones
+
+    echo -e "选择源站"
+    while read -p "$i18n_default_cancel" cf_zones_num
+    do
+        case "$cf_zones_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$cf_zones_num" -gt 0 ] && [ "$cf_zones_num" -le "$cf_zones_count" ]
+                then
+                    cf_zones_index=$((cf_zones_num-1))
+                    cf_zone_name=${cf_zones_name[cf_zones_index]}
+                    cf_zone_resolve_to=${cf_zones_resolve_to[cf_zones_index]}
+                    cf_user_email=${cf_zones_user_email[cf_zones_index]}
+                    cf_user_unique_id=${cf_zones_user_unique_id[cf_zones_index]}
+                    cf_zone_subdomains=${cf_zones_subdomains[cf_zones_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    #cf_user_pass=$($JQ_FILE -r '.users[]|select(.email=="'"$cf_user_email"'") | .pass' $CF_CONFIG)
+
+    #[ -z "$cf_user_pass" ] && Println "$error 用户 $cf_user_email 不存在\n" && exit 1
+
+    CloudflareGetUser
+    CloudflareGetZone
+
+    cf_subdomains_list=""
+    for((i=0;i<${#cf_hosted_cnames[@]};i++));
+    do
+        cf_subdomains_list="$cf_subdomains_list ${green}$((i+1)).${normal}${indent_6}CNAME: ${green}${cf_hosted_cnames[i]}${normal} => ${green}${cf_forward_tos[i]}${normal}\n${indent_6}解析地址: ${green}${cf_resolve_tos[i]}${normal}\n\n"
+    done
+
+    if [ -z "$cf_subdomains_list" ] 
+    then
+        cf_subdomains_list="$error 没有子域名\n\n$tip 至少添加一个子域名才能激活源站 cloudflare 解析\n"
+        ssl_status=""
+        ssl_meta_tag=""
+        if [ -n "$cf_zone_subdomains" ] 
+        then
+            IFS="^" read -r result cf_zone_resolving_to cf_zone_hosted_cnames cf_zone_forward_tos msg < <(curl -s -Lm 20 https://api.cloudflare.com/host-gw.html \
+                -d 'act=zone_set' \
+                -d "host_key=$cf_host_key" \
+                -d "user_key=$cf_user_key" \
+                -d "zone_name=$cf_zone_name" \
+                -d "resolve_to=$cf_zone_resolve_to" \
+                -d "subdomains=$cf_zone_subdomains" \
+                | $JQ_FILE '[.result,.response.resolving_to,([(.response.hosted_cnames| if .== null then {} else . end)|to_entries[]
+                |([.key,.value]|join("="))]
+                |join("|")),([(.response.forward_tos| if .== null then {} else . end)|to_entries[]
+                |([.key,.value]|join("="))]
+                |join("|")),.msg]|join("^")'
+            ) || true
+
+            result=${result#\"}
+            msg=${msg%\"}
+
+            if [ -z "$result" ] || [ "$result" == "error" ]
+            then
+                Println "$error ${msg:-连接超时, 请查看是否已经完成}\n"
+            fi
+
+            CloudflareGetZone
+
+            cf_subdomains_list=""
+            for((i=0;i<${#cf_hosted_cnames[@]};i++));
+            do
+                cf_subdomains_list="$cf_subdomains_list ${green}$((i+1)).${normal}${indent_6}CNAME: ${green}${cf_hosted_cnames[i]}${normal} => ${green}${cf_forward_tos[i]}${normal}\n${indent_6}解析地址: ${green}${cf_resolve_tos[i]}${normal}\n\n"
+            done
+
+            if [ "$cf_zone_ssl_status" == "ready" ] 
+            then
+                ssl_status="SSL 状态: ${green}激活${normal}\n"
+                ssl_meta_tag=""
+            else
+                ssl_status="SSL 状态: ${red}无${normal}\n"
+                if [ -n "$cf_zone_ssl_meta_tag" ]
+                then
+                    ssl_meta_tag="\n请在子域名页面 HEAD 处添加 ${green}$cf_zone_ssl_meta_tag${normal} 以激活 ssl\n"
+                else
+                    ssl_meta_tag=""
+                fi
+            fi
+
+            Println "${cf_subdomains_list}$ssl_status$ssl_meta_tag"
+        fi
+    elif [ "$cf_zone_ssl_status" == "ready" ] 
+    then
+        ssl_status="SSL 状态: ${green}激活${normal}\n"
+        ssl_meta_tag=""
+    else
+        ssl_status="SSL 状态: ${red}无${normal}\n"
+        if [ -n "$cf_zone_ssl_meta_tag" ]
+        then
+            ssl_meta_tag="\n请在子域名页面 HEAD 处添加 ${green}$cf_zone_ssl_meta_tag${normal} 以激活 ssl\n"
+        else
+            ssl_meta_tag=""
+        fi
+    fi
+
+    Println "${cf_subdomains_list}$ssl_status$ssl_meta_tag"
+}

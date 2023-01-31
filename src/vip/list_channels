@@ -1,0 +1,70 @@
+VipListChannels()
+{
+    VipListHosts
+
+    echo -e " ${green}$((vip_hosts_count+1)).${normal}${indent_6}全部\n\n"
+
+    while read -p "选择 VIP 服务器: " vip_hosts_num
+    do
+        case "$vip_hosts_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            "$((vip_hosts_count+1))")
+                unset vip_hosts_index
+                return 0
+            ;;
+            *)
+                if [ "$vip_hosts_num" -gt 0 ] && [ "$vip_hosts_num" -le "$vip_hosts_count" ]
+                then
+                    vip_hosts_index=$((vip_hosts_num-1))
+                    vip_host_ip=${vip_hosts_ip[vip_hosts_index]}
+                    vip_host_port=${vip_hosts_port[vip_hosts_index]}
+                    vip_host_seed=${vip_hosts_seed[vip_hosts_index]}
+                    vip_host_token=${vip_hosts_token[vip_hosts_index]}
+                    vip_channel_id=${vip_hosts_channel_id[vip_hosts_index]}
+                    vip_channel_name=${vip_hosts_channel_name[vip_hosts_index]}
+                    vip_channel_epg_id=${vip_hosts_channel_epg_id[vip_hosts_index]}
+                    IFS="|" read -r -a vip_channels_id <<< "$vip_channel_id"
+                    IFS="|" read -r -a vip_channels_name <<< "$vip_channel_name"
+                    IFS="|" read -r -a vip_channels_epg_id <<< "${vip_channel_epg_id}|"
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    vip_channels_list=""
+    vip_channels_count=${vip_hosts_channel_count[vip_hosts_index]}
+
+    flag=0
+    for((i=0;i<vip_channels_count;i++));
+    do
+        if [ "$flag" -eq 0 ] 
+        then
+            flag=1
+            i_last=$i
+            vip_channels_list="$vip_channels_list ${green}$((i+1)).${normal}\r\033[7C${vip_channels_name[i]}"
+        else
+            flag=0
+            vip_channels_list="$vip_channels_list\r\033[40C${green}$((i+1)).${normal}\r\033[47C${vip_channels_name[i]}\n\033[7C频道ID: ${vip_channels_id[i_last]}\r\033[47C频道ID: ${vip_channels_id[i]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-无}\r\033[47CEPG ID: ${vip_channels_epg_id[i]:-无}\n\n"
+        fi
+    done
+
+    if [ "$flag" -eq 1 ] 
+    then
+        vip_channels_list="$vip_channels_list\n\033[7C频道ID: ${vip_channels_id[i_last]}\n\033[7CEPG ID: ${vip_channels_epg_id[i_last]:-无}\n\n"
+    fi
+
+    if [ -n "$vip_channels_list" ] 
+    then
+        Println "$vip_channels_list"
+    else
+        Println "$error 请先添加频道\n" && exit 1
+    fi
+}

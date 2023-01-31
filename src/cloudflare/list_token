@@ -1,0 +1,72 @@
+CloudflareListToken()
+{
+    CloudflareListUsers
+
+    if [ "$cf_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
+
+    echo -e "选择用户"
+    while read -p "$i18n_default_cancel" cf_users_num
+    do
+        case "$cf_users_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
+                then
+                    cf_users_index=$((cf_users_num-1))
+                    cf_user_email=${cf_users_email[cf_users_index]}
+                    cf_user_pass=${cf_users_pass[cf_users_index]}
+                    cf_user_api_key=${cf_users_api_key[cf_users_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    if [ -z "$cf_user_api_key" ] 
+    then
+        Println "$error 此用户没有 Global API Key, 请手动添加\n"
+        exit 1
+    fi
+
+    IFS="#" read -r success token < <(curl -s \
+        -X GET "https://api.cloudflare.com/client/v4/user/tokens?page=1&per_page=50&direction=desc" \
+        -H "X-Auth-Email:$cf_user_email" \
+        -H "X-Auth-Key:$cf_user_api_key" \
+        -H "Content-Type: application/json" \
+        | $JQ_FILE '[.success,(.result|to_entries|map([.value.id,.value.name,.value.status,([.value.policies[].permission_groups[].name]|join(", "))]|join("|"))|join("^"))]|join("#")' 2> /dev/null
+    ) || true
+
+    success=${success#\"}
+    token=${token%\"}
+
+    if [ "$success" != "true" ] 
+    then
+        Println "$error 获取 Token 错误, 必须是 Global API Key 才可以获取用户 Token \n"
+        exit 1
+    fi
+
+    IFS="^" read -r -a tokens <<< "$token"
+    tokens_count=${#tokens[@]}
+    tokens_list=""
+    tokens_id=()
+
+    for((i=0;i<tokens_count;i++));
+    do
+        IFS="|" read -r token_id token_name token_status token_permission <<< "${tokens[i]}"
+        tokens_id+=("$token_id")
+        tokens_list="$tokens_list ${green}$((i+1)).${normal}${indent_6}名称: ${green}$token_name${normal}  状态: ${green}$token_status${normal}\n${indent_6}权限: ${green}${token_permission:-无}${normal}\n\n"
+    done
+
+    Println "$tokens_list"
+}

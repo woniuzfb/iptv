@@ -1,0 +1,19 @@
+Progress()
+{
+    local msg
+
+    if [ -z "${1:-}" ] 
+    then
+        msg="`eval_gettext \"\\\$info 安装中, 请等待...\"`"
+    else
+        msg="$info $1..."
+    fi
+
+    echo -ne "\n$msg"
+
+    while true
+    do
+        echo -n "."
+        sleep 5
+    done
+}

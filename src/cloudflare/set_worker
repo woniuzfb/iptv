@@ -1,0 +1,149 @@
+CloudflareSetWorkerName()
+{
+    Println "请输入 cloudflare worker 名称"
+    read -p "$i18n_default_cancel" cf_worker_name
+    [ -z "$cf_worker_name" ] && Println "$i18n_canceled...\n" && exit 1
+    Println "  worker 名称: ${green} $cf_worker_name ${normal}\n"
+}
+
+CloudflareSetWorkerPath()
+{
+    Println "请输入 cloudflare worker 路径名称"
+    while read -p "$i18n_default_cancel" cf_worker_path 
+    do
+        case $cf_worker_path in
+            "") 
+                Println "$i18n_canceled...\n"
+                exit 1
+            ;;
+            *[!0-9A-Za-z_-.@]*) 
+                Println "$error 路径格式错误\n"
+            ;;
+            *) 
+                break
+            ;;
+        esac
+    done
+    Println "  worker 路径: ${green} $cf_worker_path ${normal}\n"
+}
+
+CloudflareSetWorkerProjectName()
+{
+    Println "请输入 cloudflare worker 项目名称"
+    while read -p "(默认: 随机): " cf_worker_project_name 
+    do
+        case $cf_worker_project_name in
+            "") 
+                printf -v cf_worker_project_name '%(%s)T' -1
+                cf_worker_project_name="$(RandStr)_$cf_worker_project_name"
+                break
+            ;;
+            *) 
+                if [[ $cf_worker_project_name =~ ^[A-Za-z0-9](([a-zA-Z0-9\_\-]{0,61})[A-Za-z0-9])?$ ]] 
+                then
+                    cf_worker_project_name=$(tr '[:upper:]' '[:lower:]' <<< "$cf_worker_project_name")
+                    break
+                else
+                    Println "$error 项目名称格式错误\n"
+                fi
+            ;;
+        esac
+    done
+    Println "  worker 项目名称: ${green} $cf_worker_project_name ${normal}\n"
+}
+
+CloudflareSetWorkerUpstream()
+{
+    if [ -s "$IBM_CONFIG" ] && [ -z "${cf_worker_upstream:-}" ]
+    then
+        IbmGetCfApps
+        if [ "$ibm_cf_apps_count" -gt 0 ] 
+        then
+            echo
+            inquirer list_input "worker: $cf_worker_name 是否指向 IBM CF APP" yn_options use_ibm_cf_app_yn
+
+            if [ "$use_ibm_cf_app_yn" == "$i18n_yes" ] 
+            then
+                IbmListCfApps
+                echo -e "选择 APP"
+                while read -p "$i18n_default_cancel" ibm_cf_apps_num
+                do
+                    case "$ibm_cf_apps_num" in
+                        "")
+                            Println "$i18n_canceled...\n" && exit 1
+                        ;;
+                        *[!0-9]*)
+                            Println "$error $i18n_input_correct_no\n"
+                        ;;
+                        *)
+                            if [ "$ibm_cf_apps_num" -gt 0 ] && [ "$ibm_cf_apps_num" -le "$ibm_cf_apps_count" ]
+                            then
+                                ibm_cf_apps_index=$((ibm_cf_apps_num-1))
+                                ibm_cf_app_name=${ibm_cf_apps_name[ibm_cf_apps_index]}
+                                ibm_user_email=${ibm_cf_apps_user_email[ibm_cf_apps_index]}
+                                ibm_cf_app_routes_count=${ibm_cf_apps_routes_count[ibm_cf_apps_index]}
+                                ibm_cf_app_route_hostname=${ibm_cf_apps_route_hostname[ibm_cf_apps_index]}
+                                ibm_cf_app_route_port=${ibm_cf_apps_route_port[ibm_cf_apps_index]}
+                                ibm_cf_app_route_domain=${ibm_cf_apps_route_domain[ibm_cf_apps_index]}
+                                ibm_cf_app_route_path=${ibm_cf_apps_route_path[ibm_cf_apps_index]}
+                                IFS="|" read -r -a ibm_cf_app_routes_hostname <<< "$ibm_cf_app_route_hostname"
+                                IFS="|" read -r -a ibm_cf_app_routes_port <<< "$ibm_cf_app_route_port"
+                                IFS="|" read -r -a ibm_cf_app_routes_domain <<< "$ibm_cf_app_route_domain"
+                                IFS="|" read -r -a ibm_cf_app_routes_path <<< "${ibm_cf_app_route_path}|"
+                                break
+                            else
+                                Println "$error $i18n_input_correct_no\n"
+                            fi
+                        ;;
+                    esac
+                done
+
+                ibm_cf_apps_list=""
+                ibm_cf_apps_link=()
+                for((i=0;i<ibm_cf_app_routes_count;i++));
+                do
+                    if [ -n "${ibm_cf_app_routes_path[i]}" ] 
+                    then
+                        path="/${ibm_cf_app_routes_path[i]}"
+                    else
+                        path=""
+                    fi
+                    upstream="${ibm_cf_app_routes_hostname[i]}.${ibm_cf_app_routes_domain[i]}$path"
+                    ibm_cf_apps_link+=("$upstream")
+                    ibm_cf_apps_list="$ibm_cf_apps_list ${green}$((i+1)).${normal}${indent_6}源站: ${green}$upstream${normal} 端口: ${green}${ibm_cf_app_routes_port[i]}${normal}\n\n"
+                done
+
+                Println "$ibm_cf_apps_list"
+
+                echo -e "选择源站"
+                while read -p "$i18n_default_cancel" ibm_cf_apps_link_num 
+                do
+                    case $ibm_cf_apps_link_num in
+                        "") 
+                            Println "$i18n_canceled...\n"
+                            exit 1
+                        ;;
+                        *[!0-9]*) 
+                            Println "$error $i18n_input_correct_no\n"
+                        ;;
+                        *) 
+                            if [ "$ibm_cf_apps_link_num" -gt 0 ] && [ "$ibm_cf_apps_link_num" -le "$ibm_cf_app_routes_count" ] 
+                            then
+                                ibm_cf_apps_link_index=$((ibm_cf_apps_link_num-1))
+                                cf_worker_upstream=${ibm_cf_apps_link[ibm_cf_apps_link_index]}
+                                break
+                            else
+                                Println "$error $i18n_input_correct_no\n"
+                            fi
+                        ;;
+                    esac
+                done
+            fi
+        fi
+    fi
+    if [ -z "${cf_worker_upstream:-}" ] 
+    then
+        Println "$tip 比如: youdomain.com/path"
+        ExitOnText "输入 worker: $cf_worker_name 源站地址: " cf_worker_upstream
+    fi
+}

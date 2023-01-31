@@ -1,0 +1,81 @@
+MongodbInstall()
+{
+    DepsCheck
+
+    Println "$info 安装 mongodb, 请等待(国内可能无法安装)..."
+
+    ResourceLimit
+
+    if [ "$dist" == "rpm" ] 
+    then
+        ArchCheck
+        if [ "$arch" == "arm64" ]
+        then
+            arch_path="aarch64"
+        elif [ "$arch" == "x86_64" ] || [ "$arch" == "s390x" ]
+        then
+            arch_path="$arch"
+        else
+            Println "$error 不支持当前系统\n"
+            exit 1
+        fi
+
+        printf '%s' "
+[mongodb-org-4.4]
+name=MongoDB Repository
+baseurl=https://repo.mongodb.org/yum/redhat/\$releasever/mongodb-org/4.4/$arch_path/
+gpgcheck=1
+enabled=1
+gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
+" > /etc/yum.repos.d/mongodb-org-4.4.repo
+
+        yum install -y mongodb-org >/dev/null 2>&1
+    else
+        AptUpdate
+
+        if ! wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | apt-key add - > /dev/null 2>&1
+        then
+            apt-get -y install gnupg >/dev/null 2>&1
+            wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | apt-key add - > /dev/null
+        fi
+
+        if [ "$dist" == "ubu" ] 
+        then
+            if grep -q "xenial" < "/etc/apt/sources.list"
+            then
+                echo "deb [ arch=amd64,arm64,s390x ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+            elif grep -q "bionic" < "/etc/apt/sources.list" 
+            then
+                echo "deb [ arch=amd64,arm64,s390x ] https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+            else
+                echo "deb [ arch=amd64,arm64,s390x ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+            fi
+        else
+            if grep -q "stretch" < "/etc/apt/sources.list"
+            then
+                echo "deb http://repo.mongodb.org/apt/debian stretch/mongodb-org/4.4 main" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+            else
+                echo "deb http://repo.mongodb.org/apt/debian buster/mongodb-org/4.4 main" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+            fi
+        fi
+
+        apt-get update >/dev/null
+        apt-get install -y mongodb-org >/dev/null 2>&1
+    fi
+
+    if [[ $(ps --no-headers -o comm 1) == "systemd" ]] 
+    then
+        sed -i "s/LimitNOFILE=.*/LimitNOFILE=$file_max/" /lib/systemd/system/mongod.service
+        sed -i '/TasksAccounting=/a RestartSec=5\nStartLimitIntervalSec=0\nRestart=on-failure' /lib/systemd/system/mongod.service
+        systemctl daemon-reload
+        sed -i "s/destination: file/destination: syslog/" /etc/mongod.conf
+        sed -i "s/  logAppend: true/  #logAppend: true/" /etc/mongod.conf
+        sed -i "s+  path: /var/log/mongodb/mongod.log+  #path: /var/log/mongodb/mongod.log+" /etc/mongod.conf
+        systemctl start mongod
+        systemctl enable mongod
+    else
+        service mongod start
+    fi
+
+    Println "$info mongodb 安装成功"
+}

@@ -1,0 +1,51 @@
+echo
+color_options=( '设置颜色' '恢复默认' )
+inquirer list_input_index "选择操作" color_options color_options_index
+
+if [ "$color_options_index" -eq 1 ] 
+then
+    sed -E -i '/(bg_black|red|green|yellow|blue|cyan|white)=/d' "$i18n_FILE"
+    Println "$info 颜色重置成功\n"
+    exit 0
+fi
+
+echo
+color_options=( "${red}默认红色文字${normal}" "${green}默认绿色文字${normal}" "${yellow}默认黄色文字${normal}" 
+    "${blue}默认蓝色文字${normal}" "${cyan}默认青色文字${normal}" "${white}默认白色文字${normal}" '默认黑色背景' )
+inquirer list_input_index "选择修改内容" color_options color_options_index
+
+echo
+inquirer color_pick "设置 ${color_options[color_options_index]}" color_pick
+
+if [ "$color_options_index" -eq 0 ] 
+then
+    sed -i '/red=/d' "$i18n_FILE"
+    printf "red='%s'" "$color_pick" >> "$i18n_FILE"
+elif [ "$color_options_index" -eq 1 ] 
+then
+    sed -i '/green=/d' "$i18n_FILE"
+    printf "green='%s'" "$color_pick" >> "$i18n_FILE"
+elif [ "$color_options_index" -eq 2 ] 
+then
+    sed -i '/yellow=/d' "$i18n_FILE"
+    printf "yellow='%s'" "$color_pick" >> "$i18n_FILE"
+elif [ "$color_options_index" -eq 3 ] 
+then
+    sed -i '/blue=/d' "$i18n_FILE"
+    printf "blue='%s'" "$color_pick" >> "$i18n_FILE"
+elif [ "$color_options_index" -eq 4 ] 
+then
+    sed -i '/cyan=/d' "$i18n_FILE"
+    printf "cyan='%s'" "$color_pick" >> "$i18n_FILE"
+elif [ "$color_options_index" -eq 5 ] 
+then
+    sed -i '/white=/d' "$i18n_FILE"
+    printf "white='%s'" "$color_pick" >> "$i18n_FILE"
+else
+    sed -i '/bg_black=/d' "$i18n_FILE"
+    printf "bg_black='%s'" "$color_pick" >> "$i18n_FILE"
+fi
+
+Println "$info 颜色设置成功\n"
+
+exit 0

@@ -1,0 +1,75 @@
+CloudflareSetZoneResolve()
+{
+    Println "请输入 CNAME 经 cloudflare 中转后默认解析到的地址, 比如 resolve-to-cloudflare.example.com"
+    echo -e "$tip 此地址应指向源站\n"
+    read -p "$i18n_default_cancel" cf_zone_resolve_to
+    [ -z "$cf_zone_resolve_to" ] && Println "$i18n_canceled...\n" && exit 1
+    Println "  默认解析地址: ${green} $cf_zone_resolve_to ${normal}\n"
+}
+
+CloudflareSetZoneAlwaysUseHttps()
+{
+    echo
+
+    if [[ ${cf_zone_always_use_https:-} == "on" ]] 
+    then
+        inquirer list_input "始终使用 https 访问域名, 开启后客户端和 cloudflare 之间连接始终为 https" yn_options cf_zone_always_use_https_yn
+    else
+        inquirer list_input "始终使用 https 访问域名, 开启后客户端和 cloudflare 之间连接始终为 https" ny_options cf_zone_always_use_https_yn
+    fi
+
+    if [[ $cf_zone_always_use_https_yn == "$i18n_yes" ]] 
+    then
+        cf_zone_always_use_https='on'
+    else
+        cf_zone_always_use_https='off'
+    fi
+
+    Println "  始终使用 https: ${green} $cf_zone_always_use_https ${normal}\n"
+}
+
+CloudflareSetZoneSsl()
+{
+    Println "选择域名 ${green}$cf_zone_name${normal} SSL 设置
+
+  ${green}1.${normal} off ( 客户端 <= http => cloudflare <= http => 源站)
+  ${green}2.${normal} flexible ( 客户端 <= https => cloudflare <= http => 源站)
+  ${green}3.${normal} full ( 客户端 <= https => cloudflare <= https => 源站[ SSL证书/自定义证书 ])
+  ${green}4.${normal} strict ( 客户端 <= https => cloudflare <= https => 源站[ CA SSL证书 ])
+    "
+    case ${cf_zone_ssl:-} in
+        "off") ssl_num=1
+        ;;
+        "flexible"|"") ssl_num=2
+        ;;
+        "full") ssl_num=3
+        ;;
+        "strict") ssl_num=4
+        ;;
+    esac
+    while read -p "(默认: $ssl_num): " cf_zone_ssl_num
+    do
+        case $cf_zone_ssl_num in
+            ""|2) 
+                cf_zone_ssl='flexible'
+                break
+            ;;
+            1) 
+                cf_zone_ssl='off'
+                break
+            ;;
+            3) 
+                cf_zone_ssl='full'
+                break
+            ;;
+            4) 
+                cf_zone_ssl='strict'
+                break
+            ;;
+            *) 
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+        esac
+    done
+    Println "  SSL 设置: ${green} $cf_zone_ssl ${normal}\n"
+}

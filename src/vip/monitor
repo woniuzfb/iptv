@@ -1,0 +1,222 @@
+VipMonitor()
+{
+    trap '' HUP INT
+    trap 'MonitorErr $LINENO' ERR
+
+    delete_on_term="${vip_public_root:-notfound}/vip"
+    pid_file="$IPTV_ROOT/vip.pid"
+    printf '%s' "$BASHPID" > "$pid_file"
+    {
+        flock -x 205
+        {
+            MonitorLog "启动 VIP  PID $BASHPID !"
+            printf -v now '%(%s)T' -1
+            never=$((now+86400*720))
+
+            VipGetSchedules
+            ct2=$(date +%s%3N)
+            clear=$(date --utc -d 'tomorrow 00:00:10' +%s)
+
+            while true 
+            do
+                if [ "$now" -ge "$clear" ] 
+                then
+                    ct2=$(date +%s%3N)
+                    clear=$(date --utc -d 'tomorrow 00:00:10' +%s)
+                fi
+                if [ "$vip_hosts_count" -gt 0 ] && [ "$vip_users_count" -gt 0 ]
+                then
+                    if [ -e "$VIP_USERS_ROOT/epg.update" ] 
+                    then
+                        VipGetSchedules
+                    fi
+                    epg_update=1
+                    for((i=0;i<vip_users_count;i++));
+                    do
+                        vip_user_ip="${vip_users_ip[i]}"
+                        vip_user_license="${vip_users_license[i]}"
+                        vip_user_sum="${vip_users_sum[i]}"
+                        vip_user_expire="${vip_users_expire[i]}"
+                        vip_user_name="${vip_users_name[i]}"
+
+                        tid="$vip_user_license"
+                        #tid_lower=$(tr '[:upper:]' '[:lower:]' <<< "$tid")
+                        tid_lower=$tid
+                        if [ "$vip_user_expire" -gt 0 ] 
+                        then
+                            day=$((vip_user_expire/86400))
+                            st2=$vip_user_expire
+                        else
+                            st2=$never
+                        fi
+
+                        if [ "$now" -lt "$vip_user_expire" ] || [ "$vip_user_expire" -eq 0 ]
+                        then
+                            if [ ! -e "$VIP_USERS_ROOT/$vip_user_license/license.json" ] 
+                            then
+                                license_json=$(
+                                $JQ_FILE -n --arg ip "$vip_user_ip" --arg license "$vip_user_license" \
+                                    --arg sum "$vip_user_sum" --arg expire "$vip_user_expire" \
+                                    --arg name "$vip_user_name" \
+                                    '{
+                                        ip: $ip,
+                                        license: $license,
+                                        sum: $sum,
+                                        expire: $expire | tonumber,
+                                        name: $name
+                                    }'
+                                )
+                                [ ! -d "$VIP_USERS_ROOT/$vip_user_license" ] && mkdir -p "$VIP_USERS_ROOT/$vip_user_license"
+                                printf '%s' "$license_json" > "$VIP_USERS_ROOT/$vip_user_license/license.json"
+                            fi
+                            m3u_list=""
+                            epg_list=""
+                            program_id=0
+                            for((j=0;j<vip_hosts_count;j++));
+                            do
+                                vip_host_ip=${vip_hosts_ip[j]}
+                                vip_host_port=${vip_hosts_port[j]}
+                                vip_host_seed=${vip_hosts_seed[j]}
+                                vip_host_token=${vip_hosts_token[j]}
+                                vip_host_status=${vip_hosts_status[j]}
+                                vip_channels_count=${vip_hosts_channel_count[j]}
+                                vip_channel_id=${vip_hosts_channel_id[j]}
+                                vip_channel_name=${vip_hosts_channel_name[j]}
+                                vip_channel_epg_id=${vip_hosts_channel_epg_id[j]}
+
+                                if [ "$vip_host_status" == "on" ] && [ "$vip_channels_count" -gt 0 ] 
+                                then
+                                    vip_channel_id_lower=$(tr '[:upper:]' '[:lower:]' <<< "$vip_channel_id")
+                                    IFS="|" read -r -a vip_channels_id_lower <<< "$vip_channel_id_lower"
+                                    IFS="|" read -r -a vip_channels_id <<< "$vip_channel_id"
+                                    IFS="|" read -r -a vip_channels_name <<< "$vip_channel_name"
+                                    IFS="|" read -r -a vip_channels_epg_id <<< "${vip_channel_epg_id}|"
+
+                                    seed="$vip_host_seed"
+                                    token="$vip_host_token"
+                                    ss=$($MD5SUM_FILE "$st2$token$vip_user_ip$tid")
+
+                                    cs=()
+                                    for vip_channel_id in "${vip_channels_id_lower[@]}"
+                                    do
+                                        cs+=("$st2$ss$ct2$vip_channel_id$tid_lower")
+                                    done
+                                    mapfile -t vip_channels_cs < <($MD5SUM_FILE "${cs[@]}")
+
+                                    case $vip_user_sum in
+                                        "ssum") 
+                                            ssum=()
+                                            for vip_channel_id in "${vip_channels_id[@]}"
+                                            do
+                                                ssum+=("$seed/$vip_channel_id/playlist.m3u8$tid$day")
+                                            done
+                                            mapfile -t vip_channels_ssum < <($MD5SUM_FILE "${ssum[@]}")
+                                            for((k=0;k<vip_channels_count;k++));
+                                            do
+                                                program_id=$((program_id+1))
+                                                stream_link="http://$vip_host_ip:$vip_host_port/${vip_channels_id[k]}/playlist.m3u8?tid=$tid&ssum=${vip_channels_ssum[k]}&st2=$st2&ss=$ss&ct2=$ct2&cs=${vip_channels_cs[k]}"
+                                                VipProcessLists
+                                            done
+                                        ;;
+                                        "tsum") 
+                                            ct=$day
+                                            tsum=()
+                                            for vip_channel_id in "${vip_channels_id[@]}"
+                                            do
+                                                tsum+=("$seed/$vip_channel_id/playlist.m3u8$tid$ct")
+                                            done
+                                            mapfile -t vip_channels_tsum < <($MD5SUM_FILE "${tsum[@]}")
+                                            for((k=0;k<vip_channels_count;k++));
+                                            do
+                                                program_id=$((program_id+1))
+                                                stream_link="http://$vip_host_ip:$vip_host_port/${vip_channels_id[k]}/playlist.m3u8?tid=$tid&ct=$ct&tsum=${vip_channels_tsum[k]}&st2=$st2&ss=$ss&ct2=$ct2&cs=${vip_channels_cs[k]}"
+                                                VipProcessLists
+                                            done
+                                        ;;
+                                        "isum") 
+                                            isum=()
+                                            for vip_channel_id in "${vip_channels_id[@]}"
+                                            do
+                                                isum+=("$seed$vip_user_ip/$vip_channel_id/playlist.m3u8$tid")
+                                            done
+                                            mapfile -t vip_channels_isum < <($MD5SUM_FILE "${isum[@]}")
+                                            for((k=0;k<vip_channels_count;k++));
+                                            do
+                                                program_id=$((program_id+1))
+                                                stream_link="http://$vip_host_ip:$vip_host_port/${vip_channels_id[k]}/playlist.m3u8?tid=$tid&isum=${vip_channels_isum[k]}&st2=$st2&ss=$ss&ct2=$ct2&cs=${vip_channels_cs[k]}"
+                                                VipProcessLists
+                                            done
+                                        ;;
+                                    esac
+                                elif [ -d "$VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}$vip_host_port" ] 
+                                then
+                                    rm -rf "$VIP_USERS_ROOT/$vip_user_license/${vip_host_ip//./}${vip_host_port:-notfound}"
+                                fi
+                            done
+                            [ -n "$m3u_list" ] && echo -e "#EXTM3U\n$m3u_list" > "$VIP_USERS_ROOT/$vip_user_license/playlist.m3u"
+                            if { [ "$epg_update" -eq 1 ] || [ -e "$VIP_USERS_ROOT/epg.update" ]; } && [ -n "$epg_list" ]
+                            then
+                                epg_update=0
+                                echo -e "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<tv>\n$epg_list</tv>" > "$VIP_USERS_ROOT/epg.xml.new"
+                                mv "$VIP_USERS_ROOT/epg.xml.new" "$VIP_USERS_ROOT/epg.xml"
+                                rm -f "$VIP_USERS_ROOT/epg.update"
+                            fi
+                        elif [ -d "$VIP_USERS_ROOT/$vip_user_license" ] 
+                        then
+                            rm -rf "$VIP_USERS_ROOT/${vip_user_license:-notfound}"
+                        fi
+                    done
+                fi
+
+                PrepTerm
+                sleep $sleep_time &
+                WaitTerm
+
+                vip_users_license_old=("${vip_users_license[@]}")
+                vip_hosts_channel_id_old=("${vip_hosts_channel_id[@]}")
+
+                VipGetHosts
+                VipGetUsers
+
+                for vip_user_license_old in ${vip_users_license_old[@]+"${vip_users_license_old[@]}"}
+                do
+                    for vip_user_license in ${vip_users_license[@]+"${vip_users_license[@]}"}
+                    do
+                        if [ "$vip_user_license" == "$vip_user_license_old" ] 
+                        then
+                            for vip_host_channel_id_old in ${vip_hosts_channel_id_old[@]+"${vip_hosts_channel_id_old[@]}"}
+                            do
+                                for vip_host_channel_id in ${vip_hosts_channel_id[@]+"${vip_hosts_channel_id[@]}"}
+                                do
+                                    if [ "$vip_host_channel_id" == "$vip_host_channel_id_old" ] 
+                                    then
+                                        break 4
+                                    fi
+                                done
+                                IFS="|" read -r -a vip_channels_id_old <<< "$vip_host_channel_id_old"
+                                for vip_channel_id_old in "${vip_channels_id_old[@]}"
+                                do
+                                    for vip_host_channel_id in ${vip_hosts_channel_id[@]+"${vip_hosts_channel_id[@]}"}
+                                    do
+                                        IFS="|" read -r -a vip_channels_id <<< "$vip_host_channel_id"
+                                        for vip_channel_id in "${vip_channels_id[@]}"
+                                        do
+                                            if [ "$vip_channel_id" == "$vip_channel_id_old" ] 
+                                            then
+                                                break 6
+                                            fi
+                                        done
+                                    done
+                                    rm -rf "$VIP_USERS_ROOT/$vip_user_license_old/${vip_host_ip//./}$vip_host_port/${vip_channel_id_old:-notfound}"
+                                done
+                            done
+                            break 2
+                        fi
+                    done
+                    rm -rf "$VIP_USERS_ROOT/${vip_user_license_old:-notfound}"
+                done
+                printf -v now '%(%s)T' -1
+            done
+        } 205>&-
+    } 205<"$pid_file"
+}

@@ -1,0 +1,59 @@
+CloudflareSetUserEmail()
+{
+    Println "请输入用户邮箱"
+    while read -p "$i18n_default_cancel" cf_user_email 
+    do
+        [ -z "$cf_user_email" ] && Println "$i18n_canceled...\n" && exit 1
+        if [[ $cf_user_email =~ ^[A-Za-z0-9]([a-zA-Z0-9_\.\-]*)@([A-Za-z0-9]+)([a-zA-Z0-9\.\-]*)\.([A-Za-z]{2,})$ ]] 
+        then
+            break
+        else
+            Println "$error 邮箱格式错误, 请重新输入\n"
+        fi
+    done
+    Println "  用户邮箱: ${green} $cf_user_email ${normal}\n"
+}
+
+CloudflareSetUserPass()
+{
+    Println "输入用户密码"
+    while read -p "(默认: 随机): " cf_user_pass 
+    do
+        [ -z "$cf_user_pass" ] && cf_user_pass=$(RandStr)
+        if [[ ${#cf_user_pass} -ge 8 ]] 
+        then
+            break
+        else
+            Println "$error 账号密码至少 8 位\n"
+        fi
+    done
+    Println "  用户密码: ${green} $cf_user_pass ${normal}\n"
+}
+
+CloudflareSetUserToken()
+{
+    Println "$tip 需要 workers 和 zone(区域) 编辑权限, 以及 zone(区域) 的 Analytics 读取权限"
+    inquirer text_input "请输入用户 Token: " cf_user_token "$i18n_not_set"
+    if [ "$cf_user_token" == "$i18n_not_set" ] 
+    then
+        cf_user_token=""
+    else
+        if [[ $(curl -s -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+            -H "Authorization: Bearer $cf_user_token" \
+            -H "Content-Type:application/json" | $JQ_FILE -r '.success') = false ]]
+        then
+            Println "$error Token 验证失败\n"
+            exit 1
+        fi
+    fi
+}
+
+CloudflareSetUserKey()
+{
+    echo
+    inquirer text_input "请输入用户 Global API KEY: " cf_user_api_key "$i18n_not_set"
+    if [ "$cf_user_api_key" == "$i18n_not_set" ] 
+    then
+        cf_user_api_key=""
+    fi
+}

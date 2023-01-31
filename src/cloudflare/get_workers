@@ -1,0 +1,32 @@
+CloudflareGetWorkers()
+{
+    [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+    IFS=$'\002\t' read -r name path project_name upstream < <(JQs flat "$CF_CONFIG" '.[0].workers' '
+    (. // {}| if . == "" then {} else . end) as $workers |
+    reduce ({name,path,project_name,upstream}|keys_unsorted[]) as $key ([];
+    $workers[$key] as $val | if $val then
+        . + [$val + "\u0001\u0002"]
+    else
+        . + ["\u0002"]
+    end
+    )|@tsv' "${delimiters[@]}")
+
+    if [ -z "$name" ] 
+    then
+        cf_workers_count=0
+        return 0
+    fi
+
+    IFS="${delimiters[0]}" read -r -a cf_workers_name <<< "$name"
+    IFS="${delimiters[0]}" read -r -a cf_workers_path <<< "$path"
+    IFS="${delimiters[0]}" read -r -a cf_workers_project_name <<< "$project_name"
+
+    if [ -z "$upstream" ] 
+    then
+        cf_workers_upstream=("${cf_workers_name[@]//*/}")
+    else
+        IFS="${delimiters[0]}" read -r -a cf_workers_upstream <<< "$upstream"
+    fi
+
+    cf_workers_count=${#cf_workers_name[@]}
+}

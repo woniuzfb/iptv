@@ -1,0 +1,49 @@
+WranglerInstall()
+{
+    if [[ -x $(command -v cargo) ]] 
+    then
+        echo
+        inquirer list_input "检测到 cargo, 是否使用 cargo 安装 wrangler, 否则使用 npm 安装" ny_options user_cargo_yn
+
+        if [[ $user_cargo_yn == "$i18n_yes" ]] 
+        then
+            cargo install wrangler
+            Println "$info wrangler 安装成功\n"
+            exit 0
+        fi
+    fi
+    if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
+    then
+        NodejsInstall
+    fi
+    Println "$info 国内可能会因网络原因安装失败, 可以手动下载 wrangler 覆盖 ~/.wrangler/bin/wrangler ...\n"
+    npm i @cloudflare/wrangler -g --unsafe-perm=true --allow-root
+    Println "$info wrangler 安装成功\n"
+}
+
+WranglerUpdate()
+{
+    if [[ ! -x $(command -v wrangler) ]] 
+    then
+        Println "$error wrangler 未安装\n"
+        exit 1
+    fi
+    if [[ -x $(command -v cargo) ]] 
+    then
+        echo
+        inquirer list_input "检测到 cargo, 是否使用 cargo 更新 wrangler, 否则使用 npm 更新" ny_options user_cargo_yn
+
+        if [[ $user_cargo_yn == "$i18n_yes" ]] 
+        then
+            cargo install wrangler --force
+            Println "$info wrangler 更新成功\n"
+            exit 0
+        fi
+    fi
+    if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
+    then
+        NodejsInstall
+    fi
+    npm uninstall -g @cloudflare/wrangler && npm install -g @cloudflare/wrangler --unsafe-perm=true --allow-root
+    Println "$info wrangler 更新成功\n"
+}

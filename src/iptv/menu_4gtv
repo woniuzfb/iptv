@@ -1,0 +1,445 @@
+if [ ! -d "$IPTV_ROOT" ] 
+then
+    Println "$error 请先安装脚本 !\n" && exit 1
+fi
+
+user_agent="$USER_AGENT_BROWSER"
+
+if [ "${2:-}" == "-" ] 
+then
+    _4gtvCron
+    exit 0
+fi
+
+OpensslInstall
+
+Println "  4gtv 面板
+
+  ${green}1.${normal} 注册账号
+  ${green}2.${normal} 登录账号
+  ${green}3.${normal} 查看账号
+  ${green}4.${normal} 修改账号
+  ${green}5.${normal} 删除账号
+  ${green}6.${normal} 使用免费频道
+  ${green}7.${normal} 使用豪华频道
+  ${green}8.${normal} 开启计划任务
+  ${green}9.${normal} 关闭计划任务
+
+"
+while read -p "(默认: 6): " _4gtv_menu_num 
+do
+    _4gtv_menu_num=${_4gtv_menu_num:-6}
+    case "$_4gtv_menu_num" in
+        1) 
+            Reg4gtvAcc
+            exit 0
+        ;;
+        2) 
+            Login4gtvAcc
+            exit 0
+        ;;
+        3) 
+            List4gtvAcc
+            exit 0
+        ;;
+        4) 
+            Edit4gtvAcc
+            exit 0
+        ;;
+        5) 
+            Del4gtvAcc
+            exit 0
+        ;;
+        6) 
+            _4gtv_set_id=4
+            fsVALUE=""
+            Use4gtvProxy
+            break
+        ;;
+        7) 
+            Get4gtvAccToken
+            _4gtv_set_id=1
+            Use4gtvProxy
+            break
+        ;;
+        8) 
+            Enable4gtvCron
+            exit 0
+        ;;
+        9) 
+            Disable4gtvCron
+            exit 0
+        ;;
+        *) Println "$error $i18n_input_correct_number [1-9]\n"
+        ;;
+    esac
+done
+
+hinet_4gtv=(
+    "litv-ftv13:民視新聞台"
+    "litv-longturn14:寰宇新聞台"
+    "4gtv-4gtv052:華視新聞資訊台"
+    "4gtv-4gtv012:空中英語教室"
+    "litv-ftv07:民視旅遊台"
+    "litv-ftv15:i-Fun動漫台"
+    "4gtv-live206:幸福空間居家台"
+    "4gtv-4gtv070:愛爾達娛樂台"
+    "litv-longturn17:亞洲旅遊台"
+    "4gtv-4gtv025:MTV Live HD"
+    "litv-longturn15:寰宇新聞台灣台"
+    "4gtv-4gtv001:民視台灣台"
+    "4gtv-4gtv074:中視新聞台"
+    "4gtv-4gtv011:影迷數位電影台"
+    "4gtv-4gtv047:靖天日本台"
+    "litv-longturn11:龍華日韓台"
+    "litv-longturn12:龍華偶像台"
+    "4gtv-4gtv042:公視戲劇"
+    "litv-ftv12:i-Fun動漫台3"
+    "4gtv-4gtv002:民視無線台"
+    "4gtv-4gtv027:CI 罪案偵查頻道"
+    "4gtv-4gtv013:CNEX紀實頻道"
+    "litv-longturn03:龍華電影台"
+    "4gtv-4gtv004:民視綜藝台"
+    "litv-longturn20:ELTV英語學習台"
+    "litv-longturn01:龍華卡通台"
+    "4gtv-4gtv040:中視無線台"
+    "litv-longturn02:Baby First"
+    "4gtv-4gtv003:民視第一台"
+    "4gtv-4gtv007:大愛電視台"
+    "4gtv-4gtv076:SMART 知識頻道"
+    "4gtv-4gtv030:CNBC"
+    "litv-ftv10:半島電視台"
+)
+
+GetChannels
+
+hinet_4gtv_count=${#hinet_4gtv[@]}
+hinet_4gtv_list=""
+for((i=0;i<hinet_4gtv_count;i++));
+do
+    hinet_4gtv_chnl_added=""
+    for chnl in ${chnls_stream_link[@]+"${chnls_stream_link[@]}"}
+    do
+        if [[ $chnl =~ embed.4gtv.tv/HiNet ]] && [[ $chnl =~ asset_id=${hinet_4gtv[i]%:*}\& ]] 
+        then
+            hinet_4gtv_chnl_added=" ${green}[已添加]${normal}"
+            break
+        fi
+    done
+    hinet_4gtv_list="$hinet_4gtv_list ${green}$((i+1)).${normal}${indent_6}${hinet_4gtv[i]#*:}$hinet_4gtv_chnl_added\n\n"
+done
+
+cookies=""
+
+Println "$info 获取频道 ..."
+IFS="^" read -r _4gtv_chnl_id _4gtv_chnl_name _4gtv_chnl_aid < <(curl -s -Lm 10 \
+    -H "User-Agent: $user_agent" \
+    -H "Referer: https://www.4gtv.tv/channel.html?channelSet_id=$_4gtv_set_id" \
+    "https://api2.4gtv.tv/Channel/GetChannelBySetId/$_4gtv_set_id/pc/L" \
+    | $JQ_FILE -r '[([.Data[].fnID]|join("|")),([.Data[].fsNAME]|join("|")),([.Data[].fs4GTV_ID]|join("|"))]|join("^")'
+) || true
+
+IFS="|" read -r -a _4gtv_chnls_id <<< "$_4gtv_chnl_id"
+IFS="|" read -r -a _4gtv_chnls_name <<< "$_4gtv_chnl_name"
+IFS="|" read -r -a _4gtv_chnls_aid <<< "$_4gtv_chnl_aid"
+
+if [ -n "${_4gtv_chnls_id:-}" ] 
+then
+    _4gtv_list=""
+    _4gtv_chnls_count=${#_4gtv_chnls_id[@]}
+    for((i=0;i<_4gtv_chnls_count;i++));
+    do
+        _4gtv_chnl_added=""
+        for chnl in ${chnls_stream_link[@]+"${chnls_stream_link[@]}"}
+        do
+            if [[ $chnl =~ 4gtv.tv/channel_sub.html ]] && [[ $chnl =~ asset_id=${_4gtv_chnls_aid[i]}\& ]] 
+            then
+                _4gtv_chnl_added=" ${green}[已添加]${normal}"
+                break
+            fi
+        done
+        _4gtv_list="$_4gtv_list ${green}$((i+hinet_4gtv_count+1)).${normal}${indent_6}${_4gtv_chnls_name[i]}$_4gtv_chnl_added\n\n"
+    done
+    chnls_list="HiNet 4gtv 频道:\n\n${hinet_4gtv_list}4gtv 官网频道:\n\n$_4gtv_list"
+else
+    _4gtv_chnls_count=0
+    chnls_list="HiNet 4gtv 频道:\n\n$hinet_4gtv_list"
+fi
+
+chnls_count=$((hinet_4gtv_count+_4gtv_chnls_count))
+Println "$chnls_list"
+echo "选择需要添加的频道序号, 多个频道用空格分隔, 比如 5 7 9-11"
+while read -p "$i18n_default_cancel" chnls_num 
+do
+    [ -z "$chnls_num" ] && Println "$i18n_canceled...\n" && exit 1
+    IFS=" " read -ra chnls_num_arr <<< "$chnls_num"
+
+    error_no=0
+    for chnl_num in "${chnls_num_arr[@]}"
+    do
+        case "$chnl_num" in
+            *"-"*)
+                chnl_num_start=${chnl_num%-*}
+                chnl_num_end=${chnl_num#*-}
+                if [[ $chnl_num_start == *[!0-9]* ]] || [[ $chnl_num_end == *[!0-9]* ]] || \
+                [ "$chnl_num_start" -eq 0 ] || [ "$chnl_num_end" -eq 0 ] || \
+                [ "$chnl_num_end" -gt "$chnls_count" ] || \
+                [ "$chnl_num_start" -ge "$chnl_num_end" ]
+                then
+                    error_no=3
+                    break
+                fi
+            ;;
+            *[!0-9]*)
+                error_no=1
+                break
+            ;;
+            *)
+                if [ "$chnl_num" -lt 1 ] || [ "$chnl_num" -gt "$chnls_count" ] 
+                then
+                    error_no=2
+                    break
+                fi
+            ;;
+        esac
+    done
+
+    case "$error_no" in
+        1|2|3)
+            Println "$error $i18n_input_correct_number\n"
+        ;;
+        *)
+            declare -a new_array
+            for element in "${chnls_num_arr[@]}"
+            do
+                if [[ $element =~ - ]] 
+                then
+                    start=${element%-*}
+                    end=${element#*-}
+                    for((i=start;i<=end;i++));
+                    do
+                        new_array+=("$i")
+                    done
+                else
+                    new_array+=("$element")
+                fi
+            done
+            chnls_num_arr=("${new_array[@]}")
+            unset new_array
+            break
+        ;;
+    esac
+done
+
+for chnl_num in "${chnls_num_arr[@]}"
+do
+    stream_link_parsed=true
+    if [ "$chnl_num" -le "$hinet_4gtv_count" ] 
+    then
+        hinet_4gtv_chnl_index=$((chnl_num-1))
+        hinet_4gtv_chnl_id=${hinet_4gtv[hinet_4gtv_chnl_index]%%:*}
+        hinet_4gtv_chnl_name=${hinet_4gtv[hinet_4gtv_chnl_index]#*:}
+        hinet_4gtv_chnl_name_enc=$(Urlencode "$hinet_4gtv_chnl_name")
+        Println "$info 添加频道 [ $hinet_4gtv_chnl_name ]\n\n"
+        Println "$info 解析 [ $hinet_4gtv_chnl_name ] 链接 ..."
+        stream_links=("https://embed.4gtv.tv/HiNet/$hinet_4gtv_chnl_name_enc.html")
+        headers="Referer: ${stream_links[0]}?ar=0&as=1&volume=0\r\n"
+        stream_link_data=$(curl -s -Lm 10 \
+            ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
+            -H "User-Agent: $user_agent" \
+            -H "${headers:0:-4}" \
+            "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$hinet_4gtv_chnl_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)") || true
+        if [ -n "$stream_link_data" ] 
+        then
+            stream_link_data=$($JQ_FILE -r '.VideoURL' <<< "${stream_link_data:12:-1}")
+            if [ -z "$stream_link_data" ] 
+            then
+                Println "$error hinet 4gtv 或频道 [ $hinet_4gtv_chnl_name ] 不可用!\n"
+                continue
+            fi
+            hexkey=$(echo -n "VxzAfiseH0AbLShkQOPwdsssw5KyLeuv" | hexdump -v -e '/1 "%02x"')
+            hexiv=$(echo -n "${stream_link_data:0:16}" | hexdump -v -e '/1 "%02x"')
+            stream_link="${stream_links[0]}"
+            stream_link_url=$(echo "${stream_link_data:16}" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a)
+            stream_link_url_path=${stream_link_url%/*}
+            channel_name="$hinet_4gtv_chnl_name"
+            if ! Add4gtvLink
+            then
+                continue
+            fi
+            echo
+            inquirer list_input "是否 添加/替换 现有频道直播源" ny_options add_channel_yn
+
+            if [ "$add_channel_yn" == "$i18n_yes" ]
+            then
+                ListChannels
+                InputChannelsIndex
+
+                for((i=0;i<${#chnls_pid_chosen[@]};i++));
+                do
+                    chnl_pid=${chnls_pid_chosen[i]}
+                    chnls_index=${chnls_indices[i]}
+
+                    ListChannel
+
+                    echo
+                    change_options=( '添加' '替换' )
+                    inquirer list_input_index "如何修改频道 [ $chnl_channel_name ]" change_options change_options_index
+
+                    if [ "$change_options_index" -eq 0 ] 
+                    then
+                        pre=true
+                        jq_path='["channels",'"$chnls_index"',"stream_link"]'
+                        JQ add "$CHANNELS_FILE" ["\"${stream_links[0]}\""]
+                    else
+                        echo
+                        inquirer list_input_index "选择替换的直播源" chnl_stream_links chnl_stream_links_index
+
+                        jq_path='["channels",'"$chnls_index"',"stream_link",'"$chnl_stream_links_index"']'
+                        JQ update "$CHANNELS_FILE" "${stream_links[0]}"
+                    fi
+
+                    jq_path='["channels",'"$chnls_index"',"proxy"]'
+                    JQ update "$CHANNELS_FILE" "$_4gtv_proxy"
+
+                    jq_path='["channels",'"$chnls_index"',"user_agent"]'
+                    JQ update "$CHANNELS_FILE" "$user_agent"
+
+                    jq_path='["channels",'"$chnls_index"',"headers"]'
+                    JQ update "$CHANNELS_FILE" "$headers"
+
+                    jq_path='["channels",'"$chnls_index"',"cookies"]'
+                    JQ update "$CHANNELS_FILE" "$cookies"
+
+                    Println "$info 频道 [ $chnl_channel_name ] 修改成功 !\n"
+                done
+            else
+                inquirer list_input "是否推流 flv" ny_options add_channel_flv_yn
+                if [ "$add_channel_flv_yn" == "$i18n_yes" ] 
+                then
+                    kind="flv"
+                else
+                    kind=""
+                fi
+                AddChannel
+            fi
+        else
+            Println "$error hinet 4gtv 或频道 [ $hinet_4gtv_chnl_name ] 不可用!\n"
+        fi
+    else
+        _4gtv_chnl_index=$((chnl_num-hinet_4gtv_count-1))
+        _4gtv_chnl_id=${_4gtv_chnls_id[_4gtv_chnl_index]}
+        _4gtv_chnl_name=${_4gtv_chnls_name[_4gtv_chnl_index]}
+        _4gtv_chnl_aid=${_4gtv_chnls_aid[_4gtv_chnl_index]}
+        Println "$info 添加频道 [ $_4gtv_chnl_name ]\n\n"
+        Println "$info 解析 [ $_4gtv_chnl_name ] 链接 ..."
+        stream_links=("https://www.4gtv.tv/channel_sub.html?channelSet_id=$_4gtv_set_id&asset_id=$_4gtv_chnl_aid&channel_id=$_4gtv_chnl_id")
+        headers="Referer: ${stream_links[0]}\r\n"
+        key="ilyB29ZdruuQjC45JhBBR7o2Z8WJ26Vg"
+        iv="JUMxvVMmszqUTeKn"
+        hexkey=$(echo -n $key | hexdump -v -e '/1 "%02x"')
+        hexiv=$(echo -n $iv | hexdump -v -e '/1 "%02x"')
+        post_data='{"fnCHANNEL_ID":'"$_4gtv_chnl_id"',"fsASSET_ID":"'"$_4gtv_chnl_aid"'","fsDEVICE_TYPE":"pc","clsIDENTITY_VALIDATE_ARUS":{"fsVALUE":"'"$fsVALUE"'"}}'
+        post_data=$(echo -n "$post_data" | openssl enc -aes-256-cbc -iv "$hexiv" -K "$hexkey" -a)
+        if [ -n "$fsVALUE" ] 
+        then
+            value="$(UrlencodeUpper ${post_data//[[:space:]]/})"
+        else
+            value="$(Urlencode ${post_data//[[:space:]]/})"
+        fi
+
+        for((try_i=0;try_i<10;try_i++));
+        do
+            stream_link_data=$(curl -s -Lm 10 \
+                ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
+                -H "User-Agent: $user_agent" \
+                -H "${headers:0:-4}" \
+                --data "value=$value" "https://api2.4gtv.tv/Channel/GetChannelUrl3") || true
+            if [ -n "$stream_link_data" ] 
+            then
+                break
+            fi
+        done
+
+        if [ -z "$stream_link_data" ] 
+        then
+            Println "$error 无法连接 4gtv !\n" && exit 1
+        fi
+
+        stream_link_data=$($JQ_FILE -r '.Data' <<< "$stream_link_data")
+
+        if [ "$stream_link_data" == null ] 
+        then
+            Println "$error 此服务器 ip 不支持或频道 [ $_4gtv_chnl_name ] 不可用!\n"
+        else
+            stream_link="${stream_links[0]}"
+            stream_link_url=$(echo "$stream_link_data" | openssl enc -aes-256-cbc -d -iv "$hexiv" -K "$hexkey" -a \
+                | $JQ_FILE -r '.flstURLs[0]')
+            stream_link_url_path=${stream_link_url%/*}
+            channel_name="$_4gtv_chnl_name"
+            if ! Add4gtvLink 
+            then
+                continue
+            fi
+
+            echo
+            inquirer list_input "是否 添加/替换 现有频道直播源" ny_options add_channel_yn
+
+            if [ "$add_channel_yn" == "$i18n_yes" ]
+            then
+                ListChannels
+                InputChannelsIndex
+
+                for((i=0;i<${#chnls_pid_chosen[@]};i++));
+                do
+                    chnl_pid=${chnls_pid_chosen[i]}
+                    chnls_index=${chnls_indices[i]}
+
+                    ListChannel
+
+                    echo
+                    change_options=( '添加' '替换' )
+                    inquirer list_input_index "如何修改频道 [ $chnl_channel_name ]" change_options change_options_index
+
+                    if [ "$change_options_index" -eq 0 ] 
+                    then
+                        pre=true
+                        jq_path='["channels",'"$chnls_index"',"stream_link"]'
+                        JQ add "$CHANNELS_FILE" ["\"${stream_links[0]}\""]
+                    else
+                        echo
+                        inquirer list_input_index "选择替换的直播源" chnl_stream_links chnl_stream_links_index
+
+                        jq_path='["channels",'"$chnls_index"',"stream_link",'"$chnl_stream_links_index"']'
+                        JQ update "$CHANNELS_FILE" "${stream_links[0]}"
+                    fi
+
+                    jq_path='["channels",'"$chnls_index"',"proxy"]'
+                    JQ update "$CHANNELS_FILE" "$_4gtv_proxy"
+
+                    jq_path='["channels",'"$chnls_index"',"user_agent"]'
+                    JQ update "$CHANNELS_FILE" "$user_agent"
+
+                    jq_path='["channels",'"$chnls_index"',"headers"]'
+                    JQ update "$CHANNELS_FILE" "$headers"
+
+                    jq_path='["channels",'"$chnls_index"',"cookies"]'
+                    JQ update "$CHANNELS_FILE" "$cookies"
+
+                    Println "$info 频道 [ $chnl_channel_name ] 修改成功 !\n"
+                done
+            else
+                inquirer list_input "是否推流 flv" ny_options add_channel_flv_yn
+                if [ "$add_channel_flv_yn" == "$i18n_yes" ] 
+                then
+                    kind="flv"
+                else
+                    kind=""
+                fi
+                AddChannel
+            fi
+        fi
+    fi
+done
+
+exit 0

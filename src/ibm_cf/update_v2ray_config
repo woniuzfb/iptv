@@ -1,0 +1,28 @@
+IbmUpdateV2rayConfig()
+{
+    if [ ! -d "$IBM_APPS_ROOT/ibm_$v2ray_name" ] 
+    then
+        Println "$error $v2ray_name 未安装...\n"
+        exit 1
+    elif [ ! -s "$V2_CONFIG" ] 
+    then
+        printf '%s' '{
+  "log": {
+    "access": "none",
+    "error": "none",
+    "loglevel": "none"
+  },
+  "inbounds": [],
+  "outbounds": [
+    {
+      "protocol": "freedom",
+      "tag": "direct"
+    },
+    {
+      "protocol": "blackhole",
+      "tag": "block"
+    }
+  ]
+}' > "$V2_CONFIG"
+    fi
+}

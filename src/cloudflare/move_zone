@@ -1,0 +1,227 @@
+CloudflareMoveZone()
+{
+    CloudflareListZones
+
+    echo -e "选择源站"
+    while read -p "$i18n_default_cancel" cf_zones_num
+    do
+        case "$cf_zones_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$cf_zones_num" -gt 0 ] && [ "$cf_zones_num" -le "$cf_zones_count" ]
+                then
+                    cf_zones_index=$((cf_zones_num-1))
+                    cf_zone_name=${cf_zones_name[cf_zones_index]}
+                    cf_zone_resolve_to=${cf_zones_resolve_to[cf_zones_index]}
+                    cf_user_email=${cf_zones_user_email[cf_zones_index]}
+                    cf_user_unique_id=${cf_zones_user_unique_id[cf_zones_index]}
+                    cf_zone_always_use_https=${cf_zones_always_use_https[cf_zones_index]}
+                    cf_zone_ssl=${cf_zones_ssl[cf_zones_index]}
+                    cf_zone_subdomains=${cf_zones_subdomains[cf_zones_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    CloudflareGetUser
+
+    CloudflareGetZone
+
+    Println "$info 删除源站 ..."
+
+    IFS="^" read -r result err_code msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
+        -d 'act=zone_delete' \
+        -d "host_key=$cf_host_key" \
+        -d "user_key=$cf_user_key" \
+        -d "zone_name=$cf_zone_name" \
+        | $JQ_FILE '[.result,.err_code,.msg]|join("^")'
+    ) || true
+
+    result=${result#\"}
+    msg=${msg%\"}
+
+    if [ -z "$result" ] || [ "$result" == "error" ]
+    then
+        if [ "$err_code" -eq 115 ] || [ "$err_code" -eq 703 ]
+        then
+            Println "$error 此用户已被 CFP 删除或未添加成功, 可以到 Cloudflare 官网手动删除源站或者重新添加 !"
+        else
+            Println "$error ${msg:-超时, 请重试}\n"
+        fi
+        exit 1
+    else
+        jq_path='["hosts",'"$cf_hosts_index"',"zones",'"$cf_zones_index"']'
+        JQ delete "$CF_CONFIG"
+        Println "$info $cf_zone_name 删除成功"
+    fi
+
+    CloudflareListHosts
+
+    echo -e "选择移动到的 CFP"
+    while read -p "$i18n_default_cancel" cf_hosts_num
+    do
+        case "$cf_hosts_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$cf_hosts_num" -gt 0 ] && [ "$cf_hosts_num" -le "$cf_hosts_count" ]
+                then
+                    cf_hosts_index=$((cf_hosts_num-1))
+                    cf_host_name=${cf_hosts_name[cf_hosts_index]}
+                    cf_host_key=${cf_hosts_key[cf_hosts_index]}
+                    cf_host_zone_name=${cf_hosts_zone_name[cf_hosts_index]}
+                    IFS="|" read -r -a cf_host_zones_name <<< "$cf_host_zone_name"
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    for cf_host_zone_name in "${cf_host_zones_name[@]}"
+    do
+        if [ "$cf_host_zone_name" == "$cf_zone_name" ] 
+        then
+            Println "$error 域名已经存在\n"
+            return 0
+        fi
+    done
+
+    CloudflareListUsers
+
+    if [ "$cf_users_count" -eq 0 ] 
+    then
+        Println "$error 请先添加用户\n"
+        exit 1
+    fi
+
+    echo -e "选择移动到的用户"
+    while read -p "$i18n_default_cancel" cf_users_num
+    do
+        case "$cf_users_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$cf_users_num" -gt 0 ] && [ "$cf_users_num" -le "$cf_users_count" ]
+                then
+                    cf_users_index=$((cf_users_num-1))
+                    cf_user_email=${cf_users_email[cf_users_index]}
+                    cf_user_pass=${cf_users_pass[cf_users_index]}
+                    cf_user_api_key=${cf_users_api_key[cf_users_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    Println "$info 移动中 ..."
+    cf_user_key=""
+    until [ -n "$cf_user_key" ] 
+    do
+        random_number=$(od -An -N6 -t u8 < /dev/urandom)
+        cf_user_unique_id=${random_number: -12}
+        IFS="^" read -r result cf_user_key cf_user_api_key msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
+            -d 'act=user_create' \
+            -d "host_key=$cf_host_key" \
+            -d "cloudflare_email=$cf_user_email" \
+            -d "cloudflare_pass=$cf_user_pass" \
+            -d "unique_id=$cf_user_unique_id" \
+            | $JQ_FILE '[.result,.response.user_key,.response.user_api_key,.msg]|join("^")'
+        ) || true
+
+        result=${result#\"}
+        msg=${msg%\"}
+        if [ "$result" == "error" ] 
+        then
+            Println "$error $msg"
+            if [[ $msg == *"assword"* ]] 
+            then
+                Println "$error 请检查密码是否正确\n"
+                exit 1
+            fi
+        elif [ -z "${cf_users_api_key[cf_users_index]}" ] 
+        then
+            jq_path='["users",'"$cf_users_index"',"key"]'
+            JQ update "$CF_CONFIG" "$cf_user_api_key"
+            Println "$info 用户 $cf_user_email API Key 添加成功\n"
+        fi
+    done
+
+    new_zone=$(
+    $JQ_FILE -n --arg name "$cf_zone_name" --arg resolve_to "$cf_zone_resolve_to" \
+        --arg user_email "$cf_user_email" --arg user_unique_id "$cf_user_unique_id" \
+        --arg always_use_https "$cf_zone_always_use_https" --arg ssl "$cf_zone_ssl" --arg subdomains "$cf_zone_subdomains" \
+        '{
+            name: $name,
+            resolve_to: $resolve_to,
+            user_email: $user_email,
+            user_unique_id: $user_unique_id | tonumber,
+            always_use_https: $always_use_https,
+            ssl: $ssl,
+            subdomains: $subdomains
+        }'
+    )
+
+    jq_path='["hosts",'"$cf_hosts_index"',"zones"]'
+    JQ add "$CF_CONFIG" "[$new_zone]"
+
+    subdomains=""
+
+    for((i=0;i<${#cf_hosted_cnames[@]};i++));
+    do
+        if [[ ${cf_hosted_cnames[i]} =~ ^([^.]+).([^.]+)$ ]] 
+        then
+            continue
+        fi
+        cf_hosted_cname=${cf_hosted_cnames[i]}
+        cf_hosted_cname=${cf_hosted_cname%.*}
+        cf_hosted_cname_prefix=${cf_hosted_cname%.*}
+        [ -n "$subdomains" ] && subdomains="$subdomains,"
+        subdomains="$subdomains$cf_hosted_cname_prefix:${cf_resolve_tos[i]}"
+    done
+
+    CloudflareGetUser
+
+    IFS="^" read -r result cf_zone_resolving_to cf_zone_hosted_cnames cf_zone_forward_tos msg < <(curl -s -Lm 20 https://api.cloudflare.com/host-gw.html \
+        -d 'act=zone_set' \
+        -d "host_key=$cf_host_key" \
+        -d "user_key=$cf_user_key" \
+        -d "zone_name=$cf_zone_name" \
+        -d "resolve_to=$cf_zone_resolve_to" \
+        -d "subdomains=$subdomains" \
+        | $JQ_FILE '[.result,.response.resolving_to,([(.response.hosted_cnames| if .== null then {} else . end)|to_entries[]
+        |([.key,.value]|join("="))]
+        |join("|")),([(.response.forward_tos| if .== null then {} else . end)|to_entries[]
+        |([.key,.value]|join("="))]
+        |join("|")),.msg]|join("^")'
+    ) || true
+
+    result=${result#\"}
+    msg=${msg%\"}
+
+    if [ -z "$result" ] || [ "$result" == "error" ]
+    then
+        Println "$error ${msg:-连接超时, 请查看是否已经完成}\n" && exit 1
+    fi
+
+    Println "$info 源站移动成功\n"
+}

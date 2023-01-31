@@ -1,0 +1,293 @@
+while getopts "i:l:P:o:p:S:t:s:c:v:a:f:q:b:r:k:K:m:n:z:H:T:L:CRe" flag
+do
+    case "$flag" in
+        i) stream_link="$OPTARG";;
+        l) live=false;;
+        P) proxy="$OPTARG";;
+        o) output_dir_name="$OPTARG";;
+        p) playlist_name="$OPTARG";;
+        S) seg_dir_name="$OPTARG";;
+        t) seg_name="$OPTARG";;
+        s) seg_length="$OPTARG";;
+        c) seg_count="$OPTARG";;
+        v) video_codec="$OPTARG";;
+        a) audio_codec="$OPTARG";;
+        f) video_audio_shift="$OPTARG";;
+        q) quality="$OPTARG";;
+        b) bitrate="$OPTARG";;
+        r) resolution="$OPTARG";;
+        C) const=true;;
+        R) const_cbr=true;;
+        e) encrypt=true;;
+        k) kind="$OPTARG";;
+        K) key_name="$OPTARG";;
+        m) input_flags="$OPTARG";;
+        n) output_flags="$OPTARG";;
+        z) channel_name="$OPTARG";;
+        H) flv_h265=true;;
+        T) flv_push_link="$OPTARG";;
+        L) flv_pull_link="$OPTARG";;
+        *) Usage;
+    esac
+done
+
+if [ -z "${stream_link:-}" ]
+then
+    Usage
+fi
+
+if [ ! -d "$IPTV_ROOT" ]
+then
+    echo
+    ExitOnList n "`gettext \"尚未安装, 是否现在安装\"`"
+    Install
+else
+    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+    FFMPEG="$FFMPEG_ROOT/ffmpeg"
+    FFPROBE="$FFMPEG_ROOT/ffprobe"
+
+    GetDefault
+
+    stream_links=("$stream_link")
+    stream_link="${stream_links[0]}"
+
+    if [ -z "${proxy:-}" ] 
+    then
+        if [[ $stream_link =~ ^https?:// ]] && [ -n "$d_proxy" ] 
+        then
+            echo
+            inquirer list_input "`eval_gettext \"是否使用代理 \\\$d_proxy: \"`" yn_options use_proxy_yn
+            if [ "$use_proxy_yn" == "$i18n_yes" ]
+            then
+                proxy="$d_proxy"
+            else
+                proxy=""
+            fi
+        else
+            proxy=""
+        fi
+    fi
+
+    if [ -z "${xc_proxy:-}" ] 
+    then
+        if [ -n "$d_xc_proxy" ] 
+        then
+            if [[ $stream_link =~ ^http://([^/]+) ]] 
+            then
+                XtreamCodesGetDomains
+
+                xc_proxy=""
+                for xc_domain in "${xtream_codes_domains[@]}"
+                do
+                    if [ "$xc_domain" == "${BASH_REMATCH[1]}" ] 
+                    then
+                        echo
+                        inquirer list_input "`eval_gettext \"是否使用 xtream codes 代理 \\\$d_xc_proxy: \"`" yn_options use_proxy_yn
+                        if [ "$use_proxy_yn" == "$i18n_yes" ]
+                        then
+                            xc_proxy="$d_xc_proxy"
+                        else
+                            xc_proxy=""
+                        fi
+                        break
+                    fi
+                done
+            else
+                xc_proxy=""
+            fi
+        else
+            xc_proxy=""
+        fi
+    fi
+
+    user_agent="$d_user_agent"
+    headers="$d_headers"
+
+    while [[ $headers =~ \\\\ ]]
+    do
+        headers=${headers//\\\\/\\}
+    done
+
+    if [ -n "$headers" ] && [[ ! $headers =~ \\r\\n$ ]]
+    then
+        headers="$headers\r\n"
+    fi
+
+    cookies="$d_cookies"
+    output_dir_name="${output_dir_name:-$(RandOutputDirName)}"
+    output_dir_root="$LIVE_ROOT/$output_dir_name"
+    playlist_name="${playlist_name:-$(RandPlaylistName)}"
+    seg_dir_name="${seg_dir_name:-$d_seg_dir_name}"
+
+    if [ -n "$seg_dir_name" ] 
+    then
+        seg_dir_path="$seg_dir_name/"
+    else
+        seg_dir_path=""
+    fi
+
+    seg_name="${seg_name:-$playlist_name}"
+    seg_length="${seg_length:-$d_seg_length}"
+    seg_count="${seg_count:-$d_seg_count}"
+    audio_codec="${audio_codec:-$d_audio_codec}"
+    video_codec="${video_codec:-$d_video_codec}"
+    use_primary_playlist=false
+    hboasia_host="hbogoasia.com:8443"
+
+    const=${const:-$d_const}
+    const_cbr=${const_cbr:-$d_const_cbr}
+
+    live=${live:-true}
+
+    video_audio_shift="${video_audio_shift:-}"
+    v_or_a="${video_audio_shift%_*}"
+
+    if [ "$v_or_a" == "v" ] 
+    then
+        video_shift="${video_audio_shift#*_}"
+    elif [ "$v_or_a" == "a" ] 
+    then
+        audio_shift="${video_audio_shift#*_}"
+    fi
+
+    draw_text="${draw_text:-$d_draw_text}"
+    quality="${quality:-$d_quality}"
+    bitrate="${bitrate:-$d_bitrate}"
+    resolution="${resolution:-$d_resolution}"
+
+    master=0
+    if [[ $bitrate =~ , ]] || [[ $quality =~ , ]] || [[ $resolution =~ , ]] 
+    then
+        master=1
+    fi
+
+    if [ -z "${encrypt:-}" ]  
+    then
+        if [ "$d_encrypt" = true ] 
+        then
+            encrypt=true
+            encrypt_session="$d_encrypt_session"
+        else
+            encrypt=false
+            encrypt_session=false
+        fi
+    else
+        encrypt=true
+        encrypt_session="$d_encrypt_session"
+    fi
+
+    keyinfo_name="${keyinfo_name:-$d_keyinfo_name}"
+    keyinfo_name="${keyinfo_name:-$(RandStr)}"
+    key_name="${key_name:-$d_key_name}"
+    key_name="${key_name:-$(RandStr)}"
+
+    if [ "${stream_link:0:4}" == "rtmp" ] || [ "${stream_link:0:1}" == "/" ]
+    then
+        d_input_flags="${d_input_flags//-timeout 2000000000/}"
+        d_input_flags="${d_input_flags//-reconnect 1/}"
+        d_input_flags="${d_input_flags//-reconnect_at_eof 1/}"
+        d_input_flags="${d_input_flags//-reconnect_streamed 1/}"
+        d_input_flags="${d_input_flags//-reconnect_delay_max 2000/}"
+        Trim d_input_flags
+    elif [[ $stream_link == *".m3u8"* ]] || [[ $stream_link =~ \|(origin|parse)\| ]]
+    then
+        d_input_flags="${d_input_flags//-reconnect_at_eof 1/}"
+    fi
+
+    input_flags="${input_flags:-$d_input_flags}"
+    if [[ ${input_flags:0:1} == "'" ]] 
+    then
+        input_flags="${input_flags%\'}"
+        input_flags="${input_flags#\'}"
+    fi
+
+    if [ "${output_flags:-}" == "omit" ] 
+    then
+        output_flags=""
+    else
+        output_flags="${output_flags:-$d_output_flags}"
+    fi
+
+    if [[ ${output_flags:0:1} == "'" ]] 
+    then
+        output_flags="${output_flags%\'}"
+        output_flags="${output_flags#\'}"
+    fi
+
+    channel_name="${channel_name:-$playlist_name}"
+    sync="$d_sync"
+    sync_file="${sync_file:-}"
+    sync_index="${sync_index:-}"
+    sync_pairs="${sync_pairs:-}"
+    hls_end_list="${d_hls_end_list:-false}"
+
+    [ ! -e $FFMPEG_LOG_ROOT ] && mkdir $FFMPEG_LOG_ROOT
+
+    flv_h265="${flv_h265:-false}"
+    flv_push_link="${flv_push_link:-}"
+    flv_pull_link="${flv_pull_link:-}"
+
+    extra_filters=""
+    if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+    then
+        filters=( vf filter:v )
+        for filter in "${filters[@]}"
+        do
+            if [[ $output_flags =~ (.*)"-$filter "([^ ]+)(.*) ]] 
+            then
+                extra_filters="${BASH_REMATCH[2]},"
+                output_flags="${BASH_REMATCH[1]} ${BASH_REMATCH[3]}"
+            fi
+        done
+    fi
+
+    flags_command=( -flags )
+    if [[ $output_flags =~ (.*)"-flags "([^ ]+)(.*) ]] 
+    then
+        flags="${BASH_REMATCH[2]}"
+
+        if [[ $flags =~ global_header ]] 
+        then
+            flags_command=( -flags "$flags" )
+        else
+            flags_command+=("-global_header$flags")
+        fi
+
+        output_flags="${BASH_REMATCH[1]} ${BASH_REMATCH[3]}"
+    else
+        flags_command+=(-global_header)
+    fi
+
+    FilterString input_flags output_flags
+
+    from="AddChannel"
+
+    if [ -n "${kind:-}" ] 
+    then
+        if [ "$kind" == "flv" ] 
+        then
+            if [ -z "${flv_push_link:-}" ] 
+            then
+                Println "`eval_gettext \"\\\$error 未设置推流地址...\"`\n" && exit 1
+            else
+                if [ "$sh_debug" = true ] 
+                then
+                    ( FlvStreamCreator ) 
+                else
+                    ( FlvStreamCreator ) > /dev/null 2> /dev/null < /dev/null &
+                fi
+            fi
+        else
+            Println "`eval_gettext \"\\\$error 暂不支持输出 \$kind ...\"`\n" && exit 1
+        fi
+    else
+        if [ "$sh_debug" = true ] 
+        then
+            ( HlsStreamCreatorPlus ) 
+        else
+            ( HlsStreamCreatorPlus ) > /dev/null 2> /dev/null < /dev/null &
+        fi
+    fi
+
+    Println "`eval_gettext \"\\\$info 添加频道成功\"`\n"
+fi

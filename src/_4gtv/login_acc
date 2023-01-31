@@ -1,0 +1,140 @@
+Login4gtvAcc()
+{
+    if [ ! -e "/usr/local/bin/imgcat" ] 
+    then
+        ImgcatInstall
+    fi
+
+    List4gtvAccs
+
+    _4gtv_input_acc_num=$((_4gtv_accs_count+1))
+    echo -e " ${green}$_4gtv_input_acc_num.${normal}${indent_6}手动输入\n"
+
+    echo -e "选择账号"
+    while read -p "$i18n_default_cancel" _4gtv_accs_num
+    do
+        case "$_4gtv_accs_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            $_4gtv_input_acc_num)
+                _4gtv_accs_index=$((_4gtv_accs_num-1))
+                Set4gtvAccEmail
+                Set4gtvAccPass
+                new_acc=$(
+                $JQ_FILE -n --arg email "$_4gtv_acc_email" --arg password "$_4gtv_acc_pass" \
+                    '{
+                        email: $email,
+                        password: $password
+                    }'
+                )
+                jq_path='["4gtv","accounts"]'
+                JQ add "$SERVICES_FILE" "[$new_acc]"
+                Println "$info 账号添加成功\n"
+                break
+            ;;
+            *)
+                if [ "$_4gtv_accs_num" -gt 0 ] && [ "$_4gtv_accs_num" -le "$_4gtv_accs_count" ]
+                then
+                    _4gtv_accs_index=$((_4gtv_accs_num-1))
+                    _4gtv_acc_email=${_4gtv_accs_email[_4gtv_accs_index]}
+                    _4gtv_acc_pass=${_4gtv_accs_pass[_4gtv_accs_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    IMG_FILE="$IPTV_ROOT/4gtv.png"
+
+    if [[ ! -x $(command -v convert) ]] 
+    then
+        Println "$info 安装 ImageMagick"
+        ImageMagickInstall
+    fi
+
+    while true 
+    do
+        if curl -s -Lm 20 \
+            -H 'authority: www.4gtv.tv' \
+            -H "User-Agent: $user_agent" \
+            -H 'referer: https://www.4gtv.tv/channel.html' \
+            "https://www.4gtv.tv/validatecode?t=$(date +%s%3N)" -o "$IMG_FILE" && /usr/local/bin/imgcat --half-height "$IMG_FILE"
+        then
+            rm -f "${IMG_FILE:-notfound}"
+            Println "$info 输入图片验证码: "
+            read -p "(默认: 刷新验证码): " validatecode
+            [ -z "$validatecode" ] && continue
+        else
+            Println "$info 尝试修复 magick ..."
+            ImageMagickInstall
+            rm -f "${IMG_FILE:-notfound}"
+            Println "$error 连接发生错误, 请重试\n"
+            exit 1
+        fi
+
+        Println "$info 登录账号..."
+        IFS="^" read -r result msg token < <(curl -s -Lm 20 \
+            -H "User-Agent: $user_agent" \
+            -H 'Origin: https://www.4gtv.tv' \
+            -H 'Referer: https://www.4gtv.tv/channel.html' \
+            -d "fsUSER=$_4gtv_acc_email&fsPASSWORD=$_4gtv_acc_pass&fsVALIDATE_CODE=$validatecode" \
+            https://api2.4gtv.tv/Account/SignIn \
+            | $JQ_FILE -r '[.Success,.ErrMessage,.Data]|join("^")'
+        ) || true
+
+        if [ "$result" = true ]
+        then
+            break
+        else
+            Println "$error 账号登录失败, 请重试\n\n$msg\n"
+        fi
+    done
+
+    jq_path='["4gtv","accounts",'"$_4gtv_accs_index"',"token"]'
+    JQ update "$SERVICES_FILE" "$token"
+    Println "$info 账号登录成功"
+    Println "$info 验证账号..."
+    for((i=0;i<3;i++));
+    do
+        random_number=$(od -An -N6 -t u8 < /dev/urandom)
+        random_number=${random_number: -12}
+        fsLINK_ID="$random_number${random_number:0:9}"
+        IFS="^" read -r result < <(curl -s -Lm 20 \
+            -H "User-Agent: $user_agent" \
+            -H 'Origin: https://www.4gtv.tv' \
+            -H 'Referer: https://www.4gtv.tv/channel_sub.html?channelSet_id=1&asset_id=4gtv-4gtv003&channel_id=1' \
+            -d "fsLOGIN_TYPE=03&fsLINK_ID=$fsLINK_ID&clsIDENTITY_VALIDATE_ARUS%5BfsVALUE%5D=$(UrlencodeUpper $token)" \
+            https://api2.4gtv.tv/Account/SignIn \
+            | $JQ_FILE -r '.Success'
+        ) || true
+
+        if [ "$result" = true ] 
+        then
+            break
+        fi
+    done
+    Println "$info 账号验证成功"
+    Println "$info 开启 7 天豪华套餐"
+
+    IFS="^" read -r result msg < <(curl -s -Lm 20 \
+        -H "User-Agent: $user_agent" \
+        -H 'Origin: https://www.4gtv.tv' \
+        -H 'Referer: https://www.4gtv.tv/channel_sub.html?channelSet_id=1&asset_id=4gtv-4gtv003&channel_id=1' \
+        -d "fsVALUE=$(UrlencodeUpper $token)" \
+        https://api2.4gtv.tv/Account/AccountPromo \
+        | $JQ_FILE -r '[.Success,.ErrMessage]|join("^")'
+    ) || true
+
+    if [ "$result" = true ] 
+    then
+        Println "$info 7 天豪华套餐开启成功\n"
+    else
+        Println "$error 开启 7 天豪华套餐发生错误, 请重试\n\n$msg\n"
+    fi
+}

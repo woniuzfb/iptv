@@ -1,0 +1,52 @@
+V2rayListOutboundAccounts()
+{
+    V2rayListOutbounds
+    V2raySelectOutbound
+
+    if [ "${outbounds_protocol[outbounds_index]}" != "vmess" ] && [ "${outbounds_protocol[outbounds_index]}" != "vless" ] && [ "${outbounds_protocol[outbounds_index]}" != "http" ] && [ "${outbounds_protocol[outbounds_index]}" != "socks" ] && [ "${outbounds_protocol[outbounds_index]}" != "trojan" ]
+    then
+        Println "$error 协议 ${outbounds_protocol[outbounds_index]} 没有账号\n"
+        exit 1
+    fi
+
+    if [ "${outbounds_protocol[outbounds_index]}" == "shadowsocks" ] 
+    then
+        Println "邮箱: ${green}${outbounds_settings_email[outbounds_index]}${normal}\n密码: ${green}${outbounds_settings_password[outbounds_index]}${normal}\n等级: ${green}${outbounds_settings_user_level[outbounds_index]}${normal}\n"
+        return 0
+    fi
+
+    accounts_count=0
+    accounts_list=""
+    while IFS="^" read -r map_id map_flow map_level map_alter_id map_security map_user map_pass map_address map_port map_email
+    do
+        accounts_count=$((accounts_count+1))
+        if [ "${outbounds_protocol[outbounds_index]}" == "http" ] 
+        then
+            accounts_list="$accounts_list# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}HTTP${normal} 用户名: ${green}$map_user${normal} 密码: ${green}$map_pass${normal}\n\n"
+        elif [ "${outbounds_protocol[outbounds_index]}" == "socks" ] 
+        then
+            accounts_list="$accounts_list# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}Socks${normal} 用户名: ${green}$map_user${normal} 密码: ${green}$map_pass${normal} 等级: ${green}$map_level${normal}\n\n"
+        elif [ "${outbounds_protocol[outbounds_index]}" == "trojan" ] 
+        then
+            accounts_list="$accounts_list# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}Trojan${normal} 服务器地址: ${green}$map_address${normal} 服务器端口: ${green}$map_port${normal}\n${indent_6}密码: ${green}$map_pass${normal} 邮箱: ${green}$map_email${normal} 等级: ${green}$map_level${normal}\n\n"
+        elif [ "${outbounds_protocol[outbounds_index]}" == "vless" ] 
+        then
+            if [ "$v2ray_name" == "xray" ] 
+            then
+                accounts_list="$accounts_list# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}VLESS${normal} ID: ${green}$map_id${normal} 模式: ${green}$map_flow${normal} 等级: ${green}$map_level${normal} 加密方式: ${green}$map_security${normal}\n\n"
+            else
+                accounts_list="$accounts_list# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}VLESS${normal} ID: ${green}$map_id${normal} 等级: ${green}$map_level${normal} 加密方式: ${green}$map_security${normal}\n\n"
+            fi
+        else
+            accounts_list="$accounts_list# ${green}$accounts_count${normal}${indent_6}传输协议: ${green}VMESS${normal} ID: ${green}$map_id${normal} 等级: ${green}$map_level${normal} alterId: ${green}$map_alter_id${normal} 加密方式: ${green}$map_security${normal}\n\n"
+        fi
+    done < <($JQ_FILE -r '.outbounds['"$outbounds_index"'].settings | (.vnext // .servers)[0].users[] | [.id,.flow,.level,.alterId,.security,.user,(.pass // .password),.address,.port,.email] | join("^")' "$V2_CONFIG")
+
+    if [ -n "$accounts_list" ] 
+    then
+        Println "可用账号:\n\n$accounts_list\n"
+    else
+        Println "$error 此出站没有账号\n"
+        exit 1
+    fi
+}

@@ -1,0 +1,222 @@
+XtreamCodesList()
+{
+    if [ -s "$XTREAM_CODES_EXAM" ] && [ ! -f "$XTREAM_CODES" ]
+    then
+        printf '%s' "" > "$XTREAM_CODES"
+    elif [ ! -s "$XTREAM_CODES" ] 
+    then
+        Println "$error 没有账号 !\n"
+        exit 1
+    fi
+
+    ips=()
+    new_domains=()
+    new_accounts=()
+    verify_mac=${verify_mac:-0}
+
+    if [ "$verify_mac" -eq 0 ] 
+    then
+        IFS=" " read -r m_ip m_domains m_accounts < <(awk '$1 {a=a $1",";b=b $2",";$1=$2="";c=c substr($0,3)","} END {print a,b,c}' "$XTREAM_CODES")
+        IFS="," read -r -a ips <<< "$m_ip"
+        IFS="," read -r -a new_domains <<< "$m_domains"
+        IFS="," read -r -a new_accounts <<< "$m_accounts"
+    fi
+
+    if [ -s "$XTREAM_CODES_EXAM" ] 
+    then
+        while IFS= read -r line 
+        do
+            if [[ $line =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3} ]] 
+            then
+                if [[ $line =~ ([^ ]+)\ ([^ ]+)\ ([^ ]+) ]] 
+                then
+                    skip_ip_check=1
+                    ip=${BASH_REMATCH[1]}
+                    domain=${BASH_REMATCH[2]}
+                    account=${BASH_REMATCH[3]}
+
+                    if [[ $account =~ (([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})) ]] 
+                    then
+                        VerifyXtreamCodesMac 2> /dev/null
+                        if [ "$to_continue" -eq 1 ] 
+                        then
+                            skip_ip_check=0
+                            continue
+                        fi
+                    fi
+
+                    skip_ip_check=0
+                else
+                    continue
+                fi
+            elif [[ $line == *"username="* ]] 
+            then
+                domain=${line#*http://}
+                if [ "${test_mac_domain:-}" != "$domain" ] 
+                then
+                    test_mac_domain=$domain
+                    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
+                fi
+                [ -z "$ip" ] && continue
+                domain=${domain%%/*}
+                username=${line#*username=}
+                username=${username%%&*}
+                password=${line#*password=}
+                password=${password%%&*}
+                account="$username:$password"
+            elif [[ $line =~ http://([^/]+)/([^/]+)/([^/]+)/ ]] 
+            then
+                if [ "${BASH_REMATCH[2]}" == "live" ] 
+                then
+                    if ! [[ $line =~ http://([^/]+)/live/([^/]+)/([^/]+)/ ]] 
+                    then
+                        continue
+                    fi
+                fi
+
+                domain=${BASH_REMATCH[1]}
+                if [ "${test_mac_domain:-}" != "$domain" ] 
+                then
+                    test_mac_domain=$domain
+                    ip=$(getent ahosts "${domain%%:*}" | awk '{ print $1 ; exit }') || true
+                fi
+                [ -z "$ip" ] && continue
+                username=${BASH_REMATCH[2]}
+                password=${BASH_REMATCH[3]}
+                account="$username:$password"
+            elif [[ $line =~ http://([^/]+)/ ]] 
+            then
+                stb_domain=${BASH_REMATCH[1]}
+
+                if [[ ! $line =~ (([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})) ]] 
+                then
+                    continue
+                fi
+
+                domain="$stb_domain"
+                account=${BASH_REMATCH[1]}
+
+                VerifyXtreamCodesMac 2> /dev/null
+
+                if [ "$to_continue" -eq 1 ] 
+                then
+                    continue
+                fi
+            elif [ -n "${stb_domain:-}" ] && [[ $line =~ (([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})) ]] 
+            then
+                domain="$stb_domain"
+                account=${BASH_REMATCH[1]}
+
+                VerifyXtreamCodesMac 2> /dev/null
+
+                if [ "$to_continue" -eq 1 ] 
+                then
+                    continue
+                fi
+            else
+                continue
+            fi
+
+            for((i=0;i<${#ips[@]};i++));
+            do
+                if [[ ${ips[i]} == *"$ip"* ]] 
+                then
+                    if ! [[ ${new_domains[i]} == *"$domain"* ]] 
+                    then
+                        new_domains[i]="${new_domains[i]}|$domain"
+                    fi
+
+                    if ! [[ ${new_accounts[i]} == *"$account"* ]] 
+                    then
+                        new_accounts[i]="${new_accounts[i]} $account"
+                    fi
+                    continue 2
+                fi
+            done
+
+            for((i=0;i<${#new_domains[@]};i++));
+            do
+                if [[ ${new_domains[i]} == *"$domain"* ]] 
+                then
+                    if ! [[ ${ips[i]} == *"$ip"* ]] 
+                    then
+                        ips[i]="${ips[i]}|$ip"
+                    fi
+
+                    if ! [[ ${new_accounts[i]} == *"$account"* ]] 
+                    then
+                        new_accounts[i]="${new_accounts[i]} $account"
+                    fi
+                    continue 2
+                fi
+            done
+
+            ips+=("$ip")
+            new_domains+=("$domain")
+            new_accounts+=("$account")
+        done < <(awk '$1=$1' "$XTREAM_CODES_EXAM")
+    fi
+
+    if [ -n "${ips:-}" ] 
+    then
+        ips_count=${#ips[@]}
+        print_list=""
+        xtream_codes_list=""
+        ips_acc_count=0
+        ips_acc=()
+        ips_mac_count=0
+        ips_mac=()
+
+        for((i=0;i<ips_count;i++));
+        do
+            print_list="$print_list${ips[i]} ${new_domains[i]} ${new_accounts[i]}\n"
+            IFS=" " read -ra accounts <<< "${new_accounts[i]}"
+            accounts_list=""
+            macs_num=0
+            accs_num=0
+            for account in "${accounts[@]}"
+            do
+                if [ "${1:-}" == "mac" ] 
+                then
+                    if [[ $account =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+                    then
+                        macs_num=$((macs_num+1))
+                        accounts_list="$accounts_list${account}\n"
+                    fi
+                elif [[ ! $account =~ ^([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})$ ]] 
+                then
+                    accs_num=$((accs_num+1))
+                    accounts_list="$accounts_list${account%:*}${indent_20}${account#*:}\n"
+                fi
+            done
+            if [ -n "$accounts_list" ] 
+            then
+                if [ "${1:-}" == "mac" ] 
+                then
+                    ips_mac+=("$i")
+                    ips_mac_count=$((ips_mac_count+1))
+                    xtream_codes_list="$xtream_codes_list ${green}$ips_mac_count.${normal} IP: ${green}${ips[i]//|/, }${normal} 域名: ${green}${new_domains[i]//|/, }${normal} mac 地址个数: ${green}$macs_num${normal}\n\n"
+                else
+                    ips_acc+=("$i")
+                    ips_acc_count=$((ips_acc_count+1))
+                    xtream_codes_list="$xtream_codes_list ${green}$ips_acc_count.${normal} IP: ${green}${ips[i]//|/, }${normal} 域名: ${green}${new_domains[i]//|/, }${normal} 账号个数: ${green}$accs_num${normal}\n\n"
+                fi
+            fi
+        done
+
+        if [ -s "$XTREAM_CODES_EXAM" ] 
+        then
+            printf '%b' "$print_list" > "$XTREAM_CODES"
+            printf '%s' "" > "$XTREAM_CODES_EXAM"
+        fi
+
+        if [ "${1:-}" == "mac" ] && [ "$ips_mac_count" -eq 0 ]
+        then
+            Println "$error 请先添加 mac 地址!\n" && exit 1
+        else
+            Println "$xtream_codes_list"
+        fi
+    else
+        Println "$error 没有账号!\n" && exit 1
+    fi
+}

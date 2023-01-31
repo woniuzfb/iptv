@@ -1,0 +1,32 @@
+NginxAddStream()
+{
+    directive_stream='
+    {"directive":"stream","args":[],"block":[
+        {"directive":"map","args":["$ssl_preread_server_name","$upstream"],"block":[
+            {"directive":"default","args":["localhost"]}
+        ]},
+        {"directive":"map","args":["$ssl_preread_protocol","$ssl_proxy"],"block":[
+            {"directive":"default","args":["$upstream"]}
+        ]},
+        {"directive":"map","args":["$ssl_preread_alpn_protocols","$proxy_pass"],"block":[
+            {"directive":"default","args":["$ssl_proxy"]}
+        ]},
+        {"directive":"upstream","args":["localhost"],"block":[
+            {"directive":"server","args":["'"${upstream_localhost_server:-127.0.0.1:8884}"'"]}
+        ]},
+        {"directive":"server","args":[],"block":[
+            {"directive":"listen","args":["443","reuseport"]},
+            {"directive":"listen","args":["[::]:443","reuseport"]},
+            {"directive":"proxy_pass","args":["$proxy_pass"]},
+            {"directive":"proxy_protocol","args":["on"]},
+            {"directive":"ssl_preread","args":["on"]}
+        ]}
+    ]}'
+
+    directives=( stream )
+    directives_val=()
+    check_directives=()
+    check_args=()
+
+    NginxAddDirective 1
+}

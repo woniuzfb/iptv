@@ -1,0 +1,74 @@
+V2rayListInboundDomains()
+{
+    v2ray_domains_inbound_list=""
+    v2ray_domains_inbound_count=0
+    v2ray_domains_inbound=()
+    v2ray_domains_inbound_https_port=()
+
+    if ls -A "$nginx_prefix/conf/sites_available/"* > /dev/null 2>&1
+    then
+        for f in "$nginx_prefix/conf/sites_available/"*
+        do
+            domain=${f##*/}
+            domain=${domain%.conf}
+            if [ -e "$nginx_prefix/conf/sites_enabled/$domain.conf" ] 
+            then
+                v2ray_status_text="${green}开启${normal}"
+            else
+                v2ray_status_text="${red}关闭${normal}"
+            fi
+            if [[ $domain =~ ^([a-zA-Z0-9](([a-zA-Z0-9-]){0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]] || grep -q "proxy_pass http://127.0.0.1:${inbounds_port[inbounds_index]}" < "$nginx_prefix/conf/sites_available/$domain.conf" 
+            then
+                server_found=0
+                server_flag=0
+                while IFS= read -r line 
+                do
+                    if [[ $line == *"server {"* ]] 
+                    then
+                        server_found=1
+                        server_ports=""
+                        is_inbound=0
+                    fi
+
+                    if [[ $server_found -eq 1 ]] && [[ $line == *"{"* ]]
+                    then
+                        server_flag=$((server_flag+1))
+                    fi
+
+                    if [[ $server_found -eq 1 ]] && [[ $line == *"}"* ]]
+                    then
+                        server_flag=$((server_flag-1))
+                        if [[ $server_flag -eq 0 ]] 
+                        then
+                            server_found=0
+                            if [[ $is_inbound -eq 1 ]]
+                            then
+                                v2ray_domains_inbound_count=$((v2ray_domains_inbound_count+1))
+                                v2ray_domains_inbound+=("$domain")
+                                v2ray_domains_inbound_https_port+=("$server_ports")
+                                v2ray_domains_inbound_list="$v2ray_domains_inbound_list${green}$v2ray_domains_inbound_count.${normal}${indent_6}域名: ${green}$domain${normal} nginx 端口: ${green}$server_ports${normal} nginx 路径: ${green}${inbounds_stream_path[inbounds_index]}${normal} 状态: $v2ray_status_text\n\n"
+                            fi
+                        fi
+                    fi
+
+                    if [[ $server_found -eq 1 ]] && [[ $line == *"listen "* ]]
+                    then
+                        line=${line#*listen }
+                        line=${line% ssl;*}
+                        Trim line
+                        [ -n "$server_ports" ] && server_ports="$server_ports, "
+                        server_ports="$server_ports${line:0:-1}"
+                    fi
+
+                    if [[ $server_found -eq 1 ]] && [[ $line == *"proxy_pass http://127.0.0.1:${inbounds_port[inbounds_index]}"* ]]
+                    then
+                        is_inbound=1
+                    fi
+                done < "$nginx_prefix/conf/sites_available/$domain.conf"
+            else
+                continue
+            fi
+        done
+    fi
+    Println "绑定的${green}域名列表:${normal}\n\n${v2ray_domains_inbound_list:-无}\n"
+}

@@ -1,0 +1,16 @@
+VipGetSchedules()
+{
+    GetDefault
+    if [ -n "$d_schedule_file" ] && [ -s "$d_schedule_file" ]
+    then
+        schedules_id=()
+        schedules_sys_time=()
+        schedules_title=()
+        while IFS="%" read -r schedule_id schedule_sys_time schedule_tile
+        do
+            schedules_id+=("${schedule_id#\"}")
+            schedules_sys_time+=("$schedule_sys_time")
+            schedules_title+=("${schedule_tile%\"}")
+        done < <($JQ_FILE -M 'to_entries[]|[.key,([.value[].sys_time]|join("^")),([.value[].title]|join("^"))]|join("%")' "$d_schedule_file")
+    fi
+}

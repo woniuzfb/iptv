@@ -1,0 +1,8 @@
+V2rayDeleteInbound()
+{
+    V2rayListInbounds
+    V2raySelectInbound
+    jq_path='["inbounds",'"$inbounds_index"']'
+    JQ delete "$V2_CONFIG"
+    Println "$info 入站 ${inbounds_tag[inbounds_index]} 删除成功\n"
+}

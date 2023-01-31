@@ -1,0 +1,267 @@
+EditDefaultMenu()
+{
+    i18nGetMsg get_default
+
+    edit_options=(
+        "$i18n_proxy"
+        "$i18n_xtream_codes_proxy"
+        "$i18n_user_agent"
+        "$i18n_headers"
+        "$i18n_cookies"
+        "$i18n_playlist_name"
+        "$i18n_seg_dir_name"
+        "$i18n_seg_name"
+        "$i18n_seg_length"
+        "$i18n_seg_count"
+        "$i18n_video_codec"
+        "$i18n_audio_codec"
+        "$i18n_delay"
+        "$i18n_drawtext"
+        "$i18n_crf"
+        "$i18n_bitrate"
+        "$i18n_resolution"
+        "$i18n_rate_control"
+        "$i18n_encrypt"
+        "$i18n_keyinfo_name"
+        "$i18n_key_name"
+        "$i18n_input_flags"
+        "$i18n_output_flags"
+        "$i18n_sync"
+        "$i18n_sync_file"
+        "$i18n_sync_index"
+        "$i18n_sync_pairs"
+        "$i18n_schedule_file"
+        "$i18n_flv_delay_seconds"
+        "$i18n_flv_restart_nums"
+        "$i18n_hls_delay_seconds"
+        "$i18n_hls_min_bitrate"
+        "$i18n_hls_max_seg_size"
+        "$i18n_hls_restart_nums"
+        "$i18n_hls_key_period"
+        "$i18n_hls_end_list"
+        "$i18n_anti_ddos_port"
+        "$i18n_anti_ddos_syn_flood"
+        "$i18n_anti_ddos"
+        "$i18n_anti_leech"
+        "$i18n_recheck_period"
+    )
+
+    GetDefault
+
+    echo
+    inquirer checkbox_input_indices "选择修改内容" edit_options edit_options_indices
+
+    for edit_options_index in "${edit_options_indices[@]}"
+    do
+        case $edit_options_index in
+            0)
+                SetProxy
+                EditDefault proxy
+            ;;
+            1)
+                SetXtreamCodesProxy
+                EditDefault xc_proxy
+            ;;
+            2)
+                SetUserAgent
+                EditDefault user_agent
+            ;;
+            3)
+                SetHeaders
+                EditDefault headers
+            ;;
+            4)
+                SetCookies
+                EditDefault cookies
+            ;;
+            5)
+                SetPlaylistName
+                EditDefault playlist_name
+            ;;
+            6)
+                SetSegDirName
+                EditDefault seg_dir_name
+            ;;
+            7)
+                SetSegName
+                EditDefault seg_name
+            ;;
+            8)
+                SetSegLength
+                number=true
+                EditDefault seg_length
+            ;;
+            9)
+                SetSegCount
+                number=true
+                EditDefault seg_count
+            ;;
+            10)
+                SetVideoCodec
+                EditDefault video_codec
+            ;;
+            11)
+                SetAudioCodec
+                EditDefault audio_codec
+            ;;
+            12)
+                SetVideoAudioShift
+                EditDefault video_audio_shift
+            ;;
+            13)
+                SetDrawtext
+                EditDefault draw_text
+            ;;
+            14)
+                SetQuality
+                EditDefault quality
+            ;;
+            15)
+                SetBitrate
+                EditDefault bitrate
+            ;;
+            16)
+                SetResolution
+                EditDefault resolution
+            ;;
+            17)
+                SetConst
+                bool=true
+                EditDefault const "$const"
+                bool=true
+                EditDefault const_cbr "$const_cbr"
+            ;;
+            18)
+                SetEncrypt
+                bool=true
+                EditDefault encrypt "$encrypt"
+                bool=true
+                EditDefault encrypt_session "$encrypt_session"
+            ;;
+            19)
+                SetKeyInfoName
+                EditDefault keyinfo_name
+            ;;
+            20)
+                SetKeyName
+                EditDefault key_name
+            ;;
+            21)
+                SetInputFlags
+                EditDefault input_flags
+            ;;
+            22)
+                SetOutputFlags
+                EditDefault output_flags
+            ;;
+            23)
+                SetSync
+                bool=true
+                EditDefault sync "$sync"
+            ;;
+            24)
+                SetSyncFile
+                EditDefault sync_file
+            ;;
+            25)
+                SetSyncIndex
+                EditDefault sync_index
+            ;;
+            26)
+                SetSyncPairs
+                EditDefault sync_pairs
+            ;;
+            27)
+                SetScheduleFile
+                EditDefault schedule_file
+            ;;
+            28)
+                SetFlvDelaySeconds
+                number=true
+                EditDefault flv_delay_seconds
+            ;;
+            29)
+                SetFlvRestartNums
+                number=true
+                EditDefault flv_restart_nums
+            ;;
+            30)
+                SetHlsDelaySeconds
+                number=true
+                EditDefault hls_delay_seconds
+            ;;
+            31)
+                SetHlsMinBitrate
+                number=true
+                EditDefault hls_min_bitrate
+            ;;
+            32)
+                SetHlsMaxSegSize
+                number=true
+                EditDefault hls_max_seg_size
+            ;;
+            33)
+                SetHlsRestartNums
+                number=true
+                EditDefault hls_restart_nums
+            ;;
+            34)
+                SetHlsKeyPeriod
+                number=true
+                EditDefault hls_key_period
+            ;;
+            35)
+                SetHlsEndList
+                bool=true
+                EditDefault hls_end_list
+            ;;
+            36)
+                SetAntiDDosPort
+                EditDefault anti_ddos_port
+            ;;
+            37)
+                SetAntiDDosSynFlood
+                bool=true
+                EditDefault anti_ddos_syn_flood "$anti_ddos_syn_flood"
+                if [ "$anti_ddos_syn_flood" = true ] 
+                then
+                    number=true
+                    EditDefault anti_ddos_syn_flood_delay_seconds
+                    number=true
+                    EditDefault anti_ddos_syn_flood_seconds
+                fi
+            ;;
+            38)
+                SetAntiDDos
+                bool=true
+                EditDefault anti_ddos "$anti_ddos"
+                if [ "$anti_ddos" = true ] 
+                then
+                    number=true
+                    EditDefault anti_ddos_seconds
+                    number=true
+                    EditDefault anti_ddos_level
+                fi
+            ;;
+            39)
+                SetAntiLeech
+                bool=true
+                EditDefault anti_leech "$anti_leech"
+                if [ "$anti_leech" = true ] 
+                then
+                    number=true
+                    EditDefault anti_leech_restart_nums
+                    bool=true
+                    EditDefault anti_leech_restart_flv_changes "$anti_leech_restart_flv_changes"
+                    bool=true
+                    EditDefault anti_leech_restart_hls_changes "$anti_leech_restart_hls_changes"
+                fi
+            ;;
+            40)
+                SetRecheckPeriod
+                number=true
+                EditDefault recheck_period
+            ;;
+        esac
+    done
+}

@@ -1,0 +1,10 @@
+if [[ ${2:-1} == "1" ]] 
+then
+    flag=true
+else
+    flag=false
+fi
+
+sed -i "0,/sh_debug=.*/s//sh_debug=$flag/" "$SH_FILE"
+
+exit 0

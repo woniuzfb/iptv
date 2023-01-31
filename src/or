@@ -1,0 +1,312 @@
+OpenrestyInstall()
+{
+    DepsCheck
+    Progress &
+    progress_pid=$!
+    trap '
+        kill $progress_pid
+        wait $progress_pid 2> /dev/null
+    ' EXIT
+    if [ "$dist" == "rpm" ] 
+    then
+        yum -y install gcc gcc-c++ make >/dev/null 2>&1
+        timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
+        systemctl restart crond >/dev/null 2>&1
+        #if grep -q "Fedora" < "/etc/redhat-release"
+        #then
+        #    dnf install -y dnf-plugins-core >/dev/null 2>&1
+        #    dnf config-manager --add-repo https://openresty.org/package/fedora/openresty.repo >/dev/null 2>&1
+        #    dnf install -y openresty >/dev/null 2>&1 || true
+        #    dnf install -y openresty-resty >/dev/null 2>&1
+        #elif grep -q "Amazon" < "/etc/redhat-release"
+        #then
+        #    yum install -y yum-utils >/dev/null 2>&1
+        #    yum-config-manager --add-repo https://openresty.org/package/amazon/openresty.repo >/dev/null 2>&1
+        #    yum install -y openresty >/dev/null 2>&1 || true
+        #    yum install -y openresty-resty >/dev/null 2>&1
+        #elif grep -q "Red Hat" < "/etc/redhat-release"
+        #then
+        #    wget https://openresty.org/package/rhel/openresty.repo -qO /etc/yum.repos.d/openresty.repo >/dev/null 2>&1
+        #    yum check-update >/dev/null 2>&1
+        #    yum install -y openresty >/dev/null 2>&1 || true
+        #    yum install -y openresty-resty >/dev/null 2>&1
+        #else
+        #    wget https://openresty.org/package/centos/openresty.repo -qO /etc/yum.repos.d/openresty.repo >/dev/null 2>&1
+        #    yum check-update >/dev/null 2>&1
+        #    yum install -y openresty >/dev/null 2>&1 || true
+        #    yum install -y openresty-resty >/dev/null 2>&1
+        #fi
+    #elif [ "$dist" == "ubu" ] 
+    #then
+        #apt-get -y install ca-certificates >/dev/null 2>&1
+        #if ! wget -qO - https://openresty.org/package/pubkey.gpg | apt-key add - > /dev/null 2>&1
+        #then
+        #    apt-get -y install gnupg >/dev/null 2>&1
+        #    wget -qO - https://openresty.org/package/pubkey.gpg | apt-key add - > /dev/null
+        #fi
+        #echo "deb http://openresty.org/package/ubuntu $(lsb_release -sc) main" > /etc/apt/sources.list.d/openresty.list
+        #apt-get update >/dev/null 2>&1
+        #apt-get -y install openresty >/dev/null 2>&1 || true
+    else
+        timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
+        systemctl restart cron >/dev/null 2>&1
+        apt-get -y install debconf-utils >/dev/null 2>&1
+        echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
+        apt-get -y install perl software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext build-essential >/dev/null 2>&1
+        #apt-get -y install ca-certificates software-properties-common >/dev/null 2>&1
+        #if ! wget -qO - https://openresty.org/package/pubkey.gpg | apt-key add - > /dev/null 2>&1
+        #then
+        #    apt-get -y install gnupg >/dev/null 2>&1
+        #    wget -qO - https://openresty.org/package/pubkey.gpg | apt-key add - > /dev/null
+        #fi
+        #codename=$(grep -Po 'VERSION="[0-9]+ \(\K[^)]+' /etc/os-release)
+        #echo "deb http://openresty.org/package/debian $codename openresty" > /etc/apt/sources.list.d/openresty.list
+        #apt-get update >/dev/null 2>&1
+        #apt-get -y install openresty >/dev/null 2>&1 || true
+    fi
+
+    echo -n "...40%..."
+
+    cd ~
+    if [ ! -d pcre-8.45 ] 
+    then
+        curl -s -L https://downloads.sourceforge.net/pcre/pcre/8.45/pcre-8.45.zip -o pcre-8.45.zip
+        unzip pcre-8.45.zip >/dev/null 2>&1
+    fi
+
+    if [ ! -d zlib-1.2.11 ] 
+    then
+        curl -s -L https://www.zlib.net/zlib-1.2.11.tar.gz -o zlib-1.2.11.tar.gz
+        tar xzf zlib-1.2.11.tar.gz
+    fi
+
+    if [ ! -d openssl-1.1.1f-patched ] || [ ! -s openssl-1.1.1f-patched/openssl-1.1.1f-sess_set_get_cb_yield.patch ]
+    then
+        rm -rf openssl-1.1.1f
+        rm -rf openssl-1.1.1f-patched
+        curl -s -L https://www.openssl.org/source/openssl-1.1.1f.tar.gz -o openssl-1.1.1f.tar.gz
+        tar xzf openssl-1.1.1f.tar.gz
+        mv openssl-1.1.1f openssl-1.1.1f-patched
+        cd openssl-1.1.1f-patched
+        curl -s -L "$FFMPEG_MIRROR_LINK/openssl-1.1.1f-sess_set_get_cb_yield.patch" -o openssl-1.1.1f-sess_set_get_cb_yield.patch
+        patch -p1 < openssl-1.1.1f-sess_set_get_cb_yield.patch >/dev/null 2>&1
+        cd ~
+    fi
+
+    rm -rf nginx-http-flv-module-master
+    curl -s -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o nginx-http-flv-module.zip
+    unzip nginx-http-flv-module.zip >/dev/null 2>&1
+
+    cd nginx-http-flv-module-master
+    curl -s -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch
+    patch -p1 < Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch >/dev/null 2>&1
+    cd ~
+
+    latest_release=0
+    while IFS= read -r line
+    do
+        if [[ $line == *"Lastest release"* ]] 
+        then
+            latest_release=1
+        elif [ "$latest_release" -eq 1 ] && [[ $line == *"<a "* ]]
+        then
+            openresty_package_name=${line#*/download/}
+            openresty_package_name=${openresty_package_name%%.tar.gz*}
+            break
+        fi
+    done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://openresty.org/en/download.html 2> /dev/null)
+
+    if [ ! -d "./$openresty_package_name" ] 
+    then
+        curl -s -L "https://openresty.org/download/$openresty_package_name.tar.gz" -o "$openresty_package_name.tar.gz"
+        tar xzf "$openresty_package_name.tar.gz"
+    fi
+
+    echo -n "...60%..."
+
+    cd "$openresty_package_name/bundle/ngx_lua-"*
+
+    curl -s -L "$FFMPEG_MIRROR_LINK/fix_ngx_lua_resp_get_headers_key_whitespace.patch" -o fix_ngx_lua_resp_get_headers_key_whitespace.patch
+    patch -p1 < fix_ngx_lua_resp_get_headers_key_whitespace.patch >/dev/null 2>&1
+
+    cd ../..
+
+    ./configure --add-module=../nginx-http-flv-module-master \
+        --with-pcre=../pcre-8.45 --with-pcre-jit \
+        --with-zlib=../zlib-1.2.11 --with-openssl=../openssl-1.1.1f-patched \
+        --with-http_ssl_module --with-http_v2_module \
+        --without-mail_pop3_module --without-mail_imap_module \
+        --without-mail_smtp_module --with-http_stub_status_module \
+        --with-http_realip_module --with-debug --with-http_addition_module \
+        --with-http_auth_request_module --with-http_secure_link_module \
+        --with-http_random_index_module --with-http_gzip_static_module \
+        --with-http_sub_module --with-http_dav_module --with-http_flv_module \
+        --with-http_mp4_module --with-http_gunzip_module --with-stream --with-stream_ssl_preread_module \
+        --with-stream_ssl_module --with-stream_realip_module --with-threads >/dev/null 2>&1
+
+    echo -n "...80%..."
+
+    nproc="-j$(nproc 2> /dev/null)" || nproc="-j1"
+    make $nproc >/dev/null 2>&1
+    make install >/dev/null 2>&1
+
+    kill $progress_pid
+    wait $progress_pid 2> /dev/null || true
+    trap - EXIT
+    echo "...100%"
+
+    if ! grep -q "$nginx_name:" < "/etc/passwd"
+    then
+        if grep -q '\--group ' < <(adduser --help)
+        then
+            adduser "$nginx_name" --system --group --no-create-home > /dev/null
+        else
+            adduser "$nginx_name" --system --no-create-home > /dev/null
+        fi
+        usermod -s /usr/sbin/nologin "$nginx_name"
+    fi
+
+    sed -i "s/#user  nobody;/user $nginx_name $nginx_name;/" "$nginx_prefix/conf/nginx.conf"
+    sed -i "s/worker_processes .*/worker_processes  ${nproc:2};/" "$nginx_prefix/conf/nginx.conf"
+    sed -i "s/worker_connections  1024;/worker_connections  51200;/" "$nginx_prefix/conf/nginx.conf"
+
+    mkdir -p "$nginx_prefix/conf/sites_crt/"
+    mkdir -p "$nginx_prefix/conf/sites_available/"
+    mkdir -p "$nginx_prefix/conf/sites_enabled/"
+    mkdir -p "$nginx_prefix/html/localhost/"
+
+    CrossplaneInstall
+}
+
+ShFileCheck
+
+[ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
+
+nginx_prefix="/usr/local/openresty/nginx"
+nginx_name="openresty"
+nginx_ctl="or"
+NGINX_FILE="$nginx_prefix/sbin/nginx"
+
+if [ ! -s "/etc/systemd/system/$nginx_name.service" ] && [ -d "$nginx_prefix" ]
+then
+    ResourceLimit
+    echo "[Unit]
+Description=$nginx_name
+After=syslog.target network-online.target remote-fs.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+PIDFile=$nginx_prefix/logs/nginx.pid
+ExecStartPre=$nginx_prefix/sbin/nginx -t
+ExecStart=$nginx_prefix/sbin/nginx
+ExecStartPost=/bin/sleep 0.1
+ExecReload=$nginx_prefix/sbin/nginx -s reload
+ExecStop=/bin/kill -s QUIT \$MAINPID
+PrivateTmp=true
+# file size
+LimitFSIZE=infinity
+# cpu time
+LimitCPU=infinity
+# virtual memory size
+LimitAS=infinity
+# open files
+LimitNOFILE=$file_max
+# processes/threads
+LimitNPROC=64000
+# locked memory
+LimitMEMLOCK=infinity
+
+[Install]
+WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
+    $NGINX_FILE -s stop 2> /dev/null || true
+    systemctl daemon-reload
+    systemctl enable "$nginx_name"
+    systemctl start "$nginx_name"
+fi
+
+Println "  openresty 管理面板 ${normal}${red}[v$sh_ver]${normal}
+
+  ${green}1.${normal} 安装
+  ${green}2.${normal} 卸载
+  ${green}3.${normal} 升级
+————————————
+  ${green}4.${normal} 查看域名
+  ${green}5.${normal} 添加域名
+  ${green}6.${normal} 修改域名
+  ${green}7.${normal} 开关域名
+  ${green}8.${normal} 查看本地
+  ${green}9.${normal} 修改本地
+————————————
+ ${green}10.${normal} 状态
+ ${green}11.${normal} 开关
+ ${green}12.${normal} 重启
+————————————
+ ${green}13.${normal} 配置 日志切割
+ ${green}14.${normal} 识别 cloudflare/ibm ip
+ ${green}15.${normal} 删除域名
+
+ $tip 输入: or 打开面板
+
+"
+read -p "`gettext \"输入序号\"` [1-15]: " openresty_num
+case "$openresty_num" in
+    1) 
+        if [ -d "$nginx_prefix" ] 
+        then
+            Println "$error openresty 已经存在 !\n" && exit 1
+        fi
+
+        echo
+        ExitOnList n "`gettext \"因为是编译 openresty, 耗时会很长, 是否继续\"`"
+
+        OpenrestyInstall
+        Println "$info openresty 安装完成\n"
+    ;;
+    2) 
+        NginxUninstall
+    ;;
+    3) 
+        NginxUpdate
+    ;;
+    4) 
+        NginxListDomain
+    ;;
+    5) 
+        NginxAddDomain
+    ;;
+    6) 
+        NginxConfigDomain
+    ;;
+    7) 
+        NginxToggleDomain
+    ;;
+    8) 
+        NginxListLocalhost
+        NginxListStream
+    ;;
+    9) 
+        NginxConfigLocalhost
+    ;;
+    10) 
+        NginxViewStatus
+    ;;
+    11) NginxToggle
+    ;;
+    12) 
+        NginxRestart
+    ;;
+    13) 
+        NginxLogRotate
+    ;;
+    14)
+        NginxUpdateIp
+    ;;
+    15) 
+        NginxDeleteDomain
+    ;;
+    *) Println "$error $i18n_input_correct_number [1-15]\n"
+    ;;
+esac
+
+exit 0

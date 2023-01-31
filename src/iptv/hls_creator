@@ -1,0 +1,1583 @@
+HlsStreamCreatorPlus()
+{
+    trap '' HUP INT
+    force_exit=1
+    pid="$BASHPID"
+
+    if [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$pid"')' "$CHANNELS_FILE") ]] 
+    then
+        true &
+        rand_pid=$!
+        while [[ -n $($JQ_FILE '.channels[]|select(.pid=='"$rand_pid"')' "$CHANNELS_FILE") ]] 
+        do
+            true &
+            rand_pid=$!
+        done
+
+        number=true
+        jq_path='["channels"]'
+        jq_path2='["pid"]'
+        JQ update "$CHANNELS_FILE" pid "$pid" "$rand_pid"
+    fi
+
+    case $from in
+        "AddChannel") 
+            if [ "$hls_end_list" = true ] 
+            then
+                unset delete_on_term
+            else
+                delete_on_term="$output_dir_root"
+            fi
+
+            pid_file="$FFMPEG_LOG_ROOT/$pid.pid"
+
+            {
+                flock -x 201
+
+    stream_links_json="[]"
+
+    for link in "${stream_links[@]}"
+    do
+        stream_links_json=$($JQ_FILE --arg stream_link "$link" '. + [$stream_link]' <<< "$stream_links_json")
+    done
+
+    new_channel=$(
+    $JQ_FILE -n --arg pid "$pid" --arg status "on" --arg hide "false" \
+        --argjson stream_link "$stream_links_json" --arg live "$live" \
+        --arg proxy "$proxy" --arg xc_proxy "$xc_proxy" \
+        --arg user_agent "$user_agent" --arg headers "$headers" \
+        --arg cookies "$cookies" --arg output_dir_name "$output_dir_name" \
+        --arg playlist_name "$playlist_name" --arg seg_dir_name "$seg_dir_name" \
+        --arg seg_name "$seg_name" --arg seg_length "$seg_length" \
+        --arg seg_count "$seg_count" --arg video_codec "$video_codec" \
+        --arg audio_codec "$audio_codec" --arg video_audio_shift "$video_audio_shift" \
+        --argjson subtitle "$subtitle" --arg draw_text "$draw_text" \
+        --arg quality "$quality" --arg bitrate "$bitrate" \
+        --arg resolution "$resolution" --arg const "$const" \
+        --arg const_cbr "$const_cbr" --arg encrypt "$encrypt" \
+        --arg encrypt_session "$encrypt_session" --arg keyinfo_name "$keyinfo_name" \
+        --arg key_name "$key_name" --arg input_flags "$input_flags" \
+        --arg output_flags "$output_flags" --arg channel_name "$channel_name" \
+        --argjson schedule "[]" --arg sync "$sync" \
+        --arg sync_file "$sync_file" --arg sync_index "$sync_index" \
+        --arg sync_pairs "$sync_pairs" --arg hls_end_list "$hls_end_list" \
+        --arg flv_status "off" --arg flv_h265 "$flv_h265" \
+        --arg flv_push_link '' --arg flv_pull_link '' \
+        '{
+            pid: $pid | tonumber,
+            status: $status,
+            hide: $hide | test("true"),
+            stream_link: $stream_link,
+            live: $live | test("true"),
+            proxy: $proxy,
+            xc_proxy: $xc_proxy,
+            user_agent: $user_agent,
+            headers: $headers,
+            cookies: $cookies,
+            output_dir_name: $output_dir_name,
+            playlist_name: $playlist_name,
+            seg_dir_name: $seg_dir_name,
+            seg_name: $seg_name,
+            seg_length: $seg_length | tonumber,
+            seg_count: $seg_count | tonumber,
+            video_codec: $video_codec,
+            audio_codec: $audio_codec,
+            video_audio_shift: $video_audio_shift,
+            subtitle: $subtitle,
+            draw_text: $draw_text,
+            quality: $quality,
+            bitrate: $bitrate,
+            resolution: $resolution,
+            const: $const | test("true"),
+            const_cbr: $const_cbr | test("true"),
+            encrypt: $encrypt | test("true"),
+            encrypt_session: $encrypt_session | test("true"),
+            keyinfo_name: $keyinfo_name,
+            key_name: $key_name,
+            key_time: now | strflocaltime("%s")| tonumber,
+            input_flags: $input_flags,
+            output_flags: $output_flags,
+            channel_name: $channel_name,
+            channel_time: now | strflocaltime("%s") | tonumber,
+            schedule: $schedule,
+            sync: $sync | test("true"),
+            sync_file: $sync_file,
+            sync_index: $sync_index,
+            sync_pairs: $sync_pairs,
+            hls_end_list: $hls_end_list | test("true"),
+            flv_status: $flv_status,
+            flv_h265: $flv_h265 | test("true"),
+            flv_push_link: $flv_push_link,
+            flv_pull_link: $flv_pull_link
+        }'
+    )
+
+    jq_path='["channels"]'
+    JQ add "$CHANNELS_FILE" "[$new_channel]"
+
+    action="add"
+    SyncFile
+
+    trap '
+        if [ "$live" = false ]
+        then
+            MonitorLog "$channel_name HLS 切片完成"
+            exit 1
+        fi
+        jq_path=[\"channels\"]
+        jq_path2=[\"status\"]
+        JQ update "$CHANNELS_FILE" pid "$pid" off
+        MonitorLog "`eval_gettext \"\\\$channel_name HLS 关闭\"`"
+        chnl_pid=$pid
+        action="stop"
+        SyncFile
+        if [ "$hls_end_list" = true ] && ls -A "$output_dir_root/"*.m3u8 > /dev/null 2>&1
+        then
+            for play_list in "$output_dir_root/"*.m3u8
+            do
+                echo "#EXT-X-ENDLIST" >> "$play_list" || exit 1
+            done
+            sleep "$seg_length"
+        fi
+        rm -rf "$output_dir_root"
+    ' EXIT
+
+    mkdir -p "$output_dir_root"
+
+    variants_input_command=()
+    variants_output_command=()
+    map_command=()
+    var_stream_map_command=()
+    hls_command=( -hls_time "$seg_length" -hls_list_size "$seg_count" )
+    # segment_command=()
+    hls_master_list="#EXTM3U\n#EXT-X-VERSION:7\n"
+    var_stream_map=""
+    headers_command=""
+    cookies_command=""
+
+    [ -n "$headers" ] && printf -v headers_command '%b' "$headers"
+
+    if [ -n "$cookies" ] 
+    then
+        Trim cookies
+        cookies="${cookies%\;}"
+        printf -v cookies_command '%b' "${cookies//;/; path=\/;\\r\\n}; path=/;"
+    fi
+
+    if [ "$seg_count" -gt 0 ] 
+    then
+        hls_command+=( -hls_delete_threshold $seg_count )
+    fi
+
+    if [ "$live" = true ] 
+    then
+        # segment_command+=( -segment_list_flags +live -segment_list_size $seg_count -segment_wrap $((seg_count * 2)) )
+
+        if [ "$seg_count" -gt 0 ] 
+        then
+            hls_command+=( -hls_flags periodic_rekey+delete_segments )
+        else
+            hls_command+=( -hls_flags periodic_rekey )
+        fi
+    else
+        hls_command+=( -hls_flags periodic_rekey )
+    fi
+
+    if [ -n "${stream_url_cdn:-}" ] 
+    then
+        stream_link="$stream_url_cdn"
+    fi
+
+    if [ "${stream_url_qualities_count:-0}" -gt 1 ] || [ "${stream_url_audio_count:-0}" -gt 0 ] || [ "${stream_url_subtitles_count:-0}" -gt 0 ]
+    then
+        if [ "$use_primary_playlist" = true ] 
+        then
+            if [[ $stream_link =~ ^https?:// ]] 
+            then
+                [ -n "$proxy" ] && variants_input_command+=( -http_proxy "$proxy" )
+                [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+                [ -n "$headers_command" ] && variants_input_command+=( -headers "$headers_command" )
+                [ -n "$cookies_command" ] && variants_input_command+=( -cookies "$cookies_command" )
+            elif [[ $stream_link =~ ^icecast?:// ]] 
+            then
+                [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+            fi
+            variants_input_command+=( $input_flags_command -i "$stream_link" )
+        fi
+
+        IFS=, read -r -a variants_quality <<< "$quality"
+        IFS=, read -r -a variants_bitrate <<< "$bitrate"
+        IFS=, read -r -a variants_resolution <<< "$resolution"
+
+        for((i=0;i<stream_url_qualities_count;i++));
+        do
+            var_stream_map="$var_stream_map v:$i"
+
+            stream_urls_index=${stream_url_video_indices[i]}
+
+            hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=${stream_urls_bitrate[stream_urls_index]},AVERAGE-BANDWIDTH=${stream_urls_bitrate[stream_urls_index]},RESOLUTION=${stream_urls_resolution[stream_urls_index]}"
+
+            if [ -n "${stream_urls_audio[stream_urls_index]:-}" ] 
+            then
+                if [ "${stream_url_audio_count:-0}" -gt 0 ] 
+                then
+                    for stream_url_audio_index in "${stream_url_audio_indices[@]}"
+                    do
+                        if [ "${stream_audio_group_id[stream_url_audio_index]}" == "${stream_urls_audio[stream_urls_index]}" ] 
+                        then
+                            hls_master_list="$hls_master_list,AUDIO=\"${stream_urls_audio[stream_urls_index]}\""
+                            var_stream_map="$var_stream_map,agroup:${stream_urls_audio[stream_urls_index]}"
+                            break
+                        fi
+                    done
+                fi
+            else
+                var_stream_map="$var_stream_map,a:$i"
+            fi
+
+            if [ -n "${stream_urls_subtitles[stream_urls_index]:-}" ] && [ "${stream_url_subtitles_count:-0}" -gt 0 ]
+            then
+                for stream_url_subtitles_index in "${stream_url_subtitles_indices[@]}"
+                do
+                    if [ "${stream_subtitles_group_id[stream_url_subtitles_index]}" == "${stream_urls_subtitles[stream_urls_index]}" ] 
+                    then
+                        hls_master_list="$hls_master_list,SUBTITLES=\"${stream_urls_subtitles[stream_urls_index]}\""
+                        var_stream_map="$var_stream_map,sgroup:${stream_urls_subtitles[stream_urls_index]}"
+                        break
+                    fi
+                done
+            fi
+
+            hls_master_list="$hls_master_list\n${playlist_name}_${stream_urls_resolution[stream_urls_index]}.m3u8\n\n"
+            var_stream_map="$var_stream_map,name:${stream_urls_resolution[stream_urls_index]}"
+
+            if [ "$use_primary_playlist" = false ] 
+            then
+                if [[ ${stream_urls[stream_urls_index]} =~ ^https?:// ]] 
+                then
+                    [ -n "$proxy" ] && variants_input_command+=( -http_proxy "$proxy" )
+                    [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+                    [ -n "$headers_command" ] && variants_input_command+=( -headers "$headers_command" )
+                    [ -n "$cookies_command" ] && variants_input_command+=( -cookies "$cookies_command" )
+                elif [[ ${stream_urls[stream_urls_index]} =~ ^icecast?:// ]] 
+                then
+                    [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+                fi
+                variants_input_command+=( $input_flags_command -i "${stream_urls[stream_urls_index]}" )
+                map_command+=( -map $i:v )
+            else
+                map_command+=( -map 0:v:$stream_urls_index )
+            fi
+
+            if [ "$video_codec" == "copy" ] 
+            then
+                continue
+            fi
+
+            if [ -n "${variants_quality[i]:-}" ] 
+            then
+                variant_quality=${variants_quality[i]}
+            else
+                variant_quality=""
+            fi
+
+            if [ -n "${variants_bitrate[i]:-}" ] 
+            then
+                variant_bitrate=${variants_bitrate[i]}
+            else
+                variant_bitrate=${stream_url_qualities[i]%-*}
+            fi
+
+            if [ -n "$variant_quality" ] 
+            then
+                variants_output_command+=( -crf:v:$i $variant_quality )
+
+                # VBV
+                if [ "$const" = true ] 
+                then
+                    if [ "$video_codec" == "libx264" ] 
+                    then
+                        variants_output_command+=( -maxrate:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k )
+                    elif [ "$video_codec" == "libx265" ] 
+                    then
+                        variants_output_command+=( -x265-params:v:$i vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
+                    elif [ "$video_codec" == "libvpx-vp9" ] 
+                    then
+                        variants_output_command+=( -b:v:$i ${variant_bitrate}k )
+                    fi
+                fi
+            else
+                variants_output_command+=( -b:v:$i ${variant_bitrate}k )
+
+                if [ "$const" = true ] 
+                then
+                    if [ "$const_cbr" = true ] 
+                    then
+                        if [ "$video_codec" == "libx264" ] 
+                        then
+                            variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
+                        elif [ "$video_codec" == "libx265" ] 
+                        then
+                            variants_output_command+=( -muxrate:v:$i ${variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
+                        elif [ "$video_codec" == "libvpx-vp9" ] 
+                        then
+                            variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k )
+                        fi
+                    else
+                        # VBV
+                        if [ "$video_codec" == "libx264" ] || [ "$video_codec" == "libvpx-vp9" ]
+                        then
+                            variants_output_command+=( -maxrate:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k )
+                        elif [ "$video_codec" == "libx265" ] 
+                        then
+                            variants_output_command+=( -x265-params:v:$i vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
+                        fi
+                    fi
+                fi
+            fi
+
+            if [ -n "${variants_resolution[i]:-}" ] 
+            then
+                variants_output_command+=( -s:v:$i ${variants_resolution[i]} )
+            elif [[ ${stream_url_qualities[i]} =~ - ]] 
+            then
+                variants_output_command+=( -s:v:$i ${stream_url_qualities[i]#*-} )
+            fi
+        done
+
+        variants_output_command+=( -c:v "$video_codec" -c:a "$audio_codec" )
+
+        if [ -n "${stream_audio_url:-}" ] 
+        then
+            if [ "${stream_url_audio_count:-0}" -gt 0 ] 
+            then
+                for((i=0;i<stream_url_audio_count;i++));
+                do
+                    stream_url_audio_index=${stream_url_audio_indices[i]}
+
+                    hls_master_list="$hls_master_list#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"${stream_audio_group_id[stream_url_audio_index]}\",NAME=\"${stream_audio_name[stream_url_audio_index]}\",DEFAULT=\"${stream_audio_default[stream_url_audio_index]}\",AUTOSELECT=YES,LANGUAGE=\"${stream_audio_language[stream_url_audio_index]}\",URI=\"${playlist_name}_${stream_audio_name[stream_url_audio_index]}.m3u8\"\n"
+                    var_stream_map="$var_stream_map a:$i,agroup:${stream_audio_group_id[stream_url_audio_index]},default:${stream_audio_default[stream_url_audio_index]},language:${stream_audio_language[stream_url_audio_index]},name:${stream_audio_name[stream_url_audio_index]}"
+
+                    if [ "$use_primary_playlist" = false ] 
+                    then
+                        if [[ ${stream_audio_url[stream_url_audio_index]} =~ ^https?:// ]] 
+                        then
+                            [ -n "$proxy" ] && variants_input_command+=( -http_proxy "$proxy" )
+                            [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+                            [ -n "$headers_command" ] && variants_input_command+=( -headers "$headers_command" )
+                            [ -n "$cookies_command" ] && variants_input_command+=( -cookies "$cookies_command" )
+                        elif [[ ${stream_audio_url[stream_url_audio_index]} =~ ^icecast?:// ]] 
+                        then
+                            [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+                        fi
+                        variants_input_command+=( $input_flags_command -i "${stream_audio_url[stream_url_audio_index]}" )
+                        map_command+=( -map $((i+stream_url_qualities_count)):a )
+                    else
+                        map_command+=( -map 0:a:$stream_url_audio_index )
+                    fi
+                done
+            fi
+        else
+            for((i=0;i<stream_url_qualities_count;i++));
+            do
+                if [ "$use_primary_playlist" = false ] 
+                then
+                    map_command+=( -map $i:a )
+                else
+                    map_command+=( -map 0:a:$i )
+                fi
+            done
+        fi
+
+        if [ "${stream_url_subtitles_count:-0}" -gt 0 ] 
+        then
+            for((i=0;i<stream_url_subtitles_count;i++));
+            do
+                stream_url_subtitles_index=${stream_url_subtitles_indices[i]}
+
+                if [[ ${stream_subtitles_url[stream_url_subtitles_index]} =~ $hboasia_host/(.+)$ ]] 
+                then
+                    hls_master_list="$hls_master_list#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"${stream_subtitles_group_id[stream_url_subtitles_index]}\",NAME=\"${stream_subtitles_name[stream_url_subtitles_index]}\",DEFAULT=\"${stream_subtitles_default[stream_url_subtitles_index]}\",AUTOSELECT=YES,LANGUAGE=\"${stream_subtitles_language[stream_url_subtitles_index]}\",URI=\"https://hboasia.epub.fun/${BASH_REMATCH[1]%%\?*}\"\n"
+                    continue
+                fi
+
+                hls_master_list="$hls_master_list#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"${stream_subtitles_group_id[stream_url_subtitles_index]}\",NAME=\"${stream_subtitles_name[stream_url_subtitles_index]}\",DEFAULT=\"${stream_subtitles_default[stream_url_subtitles_index]}\",AUTOSELECT=YES,LANGUAGE=\"${stream_subtitles_language[stream_url_subtitles_index]}\",URI=\"${stream_subtitles_group_id[stream_url_subtitles_index]}_${stream_subtitles_name[stream_url_subtitles_index]}_vtt.m3u8\"\n"
+                var_stream_map="$var_stream_map s:$i,sgroup:${stream_subtitles_group_id[stream_url_subtitles_index]},default:${stream_subtitles_default[stream_url_subtitles_index]},language:${stream_subtitles_language[stream_url_subtitles_index]},name:${stream_subtitles_name[stream_url_subtitles_index]}"
+
+                if [ "$use_primary_playlist" = false ] 
+                then
+                    if [[ ${stream_subtitles_url[stream_url_subtitles_index]} =~ ^https?:// ]] 
+                    then
+                        [ -n "$proxy" ] && variants_input_command+=( -http_proxy "$proxy" )
+                        [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+                        [ -n "$headers_command" ] && variants_input_command+=( -headers "$headers_command" )
+                        [ -n "$cookies_command" ] && variants_input_command+=( -cookies "$cookies_command" )
+                    elif [[ ${stream_subtitles_url[stream_url_subtitles_index]} =~ ^icecast?:// ]] 
+                    then
+                        [ -n "$user_agent" ] && variants_input_command+=( -user_agent "$user_agent" )
+                    fi
+                    variants_input_command+=( $input_flags_command -i "${stream_subtitles_url[stream_url_subtitles_index]}" )
+                    map_command+=( -map $((i+stream_url_qualities_count+stream_url_audio_count)):s )
+                else
+                    map_command+=( -map 0:s:${stream_url_subtitles_index}? )
+                fi
+            done
+
+            variants_output_command+=( -c:s webvtt )
+        fi
+
+        variants_output_command+=( $output_flags_command )
+        var_stream_map_command+=( -var_stream_map "$var_stream_map" )
+
+        if [ "$encrypt" = true ] 
+        then
+            openssl rand 16 > "$output_dir_root/$key_name.key"
+            if [ "$encrypt_session" = true ] 
+            then
+                echo -e "/keys?key=$key_name&channel=$output_dir_name\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
+            else
+                echo -e "$key_name.key\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
+            fi
+            hls_command+=( -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" )
+        fi
+
+        echo -e "$hls_master_list" > "$output_dir_root/${playlist_name}_master.m3u8"
+        hls_command+=( -hls_segment_filename "$output_dir_root/$seg_dir_path${seg_name}"_%v_%05d.ts )
+        hls_command+=( "$output_dir_root/${playlist_name}_%v.m3u8" )
+
+        PrepTerm
+        $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+        ${variants_input_command[@]+"${variants_input_command[@]}"} \
+        ${variants_output_command[@]+"${variants_output_command[@]}"} \
+        ${map_command[@]+"${map_command[@]}"} \
+        ${flags_command[@]+"${flags_command[@]}"} \
+        -f hls ${var_stream_map_command[@]+"${var_stream_map_command[@]}"} \
+        ${hls_command[@]+"${hls_command[@]}"} > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+        WaitTerm
+        exit 0
+    fi
+
+    input_command=()
+    filter_complex=""
+
+    if [ "${stream_url_qualities_count:-0}" -eq 1 ] 
+    then
+        stream_urls_index=${stream_url_video_indices[0]}
+        stream_link=${stream_urls[stream_urls_index]}
+    fi
+
+    if [[ $stream_link =~ ^https?:// ]] 
+    then
+        [ -n "$proxy" ] && input_command+=( -http_proxy "$proxy" )
+        [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
+        [ -n "$headers_command" ] && input_command+=( -headers "$headers_command" )
+        [ -n "$cookies_command" ] && input_command+=( -cookies "$cookies_command" )
+    elif [[ $stream_link =~ ^icecast?:// ]] 
+    then
+        [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
+    fi
+
+    input_command+=( $input_flags_command -i $stream_link )
+
+    video_shift_index=0
+    audio_shift_index=0
+    if ! [[ $input_flags =~ -an ]] && ! [[ $output_flags =~ -an ]] 
+    then
+        if [ -n "${video_shift:-}" ] 
+        then
+            video_shift_index=1
+            if [[ $stream_link =~ ^https?:// ]] 
+            then
+                [ -n "$proxy" ] && input_command+=( -http_proxy "$proxy" )
+                [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
+                [ -n "$headers_command" ] && input_command+=( -headers "$headers_command" )
+                [ -n "$cookies_command" ] && input_command+=( -cookies "$cookies_command" )
+            elif [[ $stream_link =~ ^icecast?:// ]] 
+            then
+                [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
+            fi
+            input_command+=( $input_flags_command -itsoffset $video_shift -i $stream_link )
+        elif [ -n "${audio_shift:-}" ] 
+        then
+            if [ "$audio_codec" == "copy" ] 
+            then
+                audio_shift_index=1
+                if [[ $stream_link =~ ^https?:// ]] 
+                then
+                    [ -n "$proxy" ] && input_command+=( -http_proxy "$proxy" )
+                    [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
+                    [ -n "$headers_command" ] && input_command+=( -headers "$headers_command" )
+                    [ -n "$cookies_command" ] && input_command+=( -cookies "$cookies_command" )
+                elif [[ $stream_link =~ ^icecast?:// ]] 
+                then
+                    [ -n "$user_agent" ] && input_command+=( -user_agent "$user_agent" )
+                fi
+                input_command+=( $input_flags_command -itsoffset $audio_shift -i $stream_link )
+            else
+                input_command+=( -filter_complex "[0:a] adelay=delays=${audio_shift}s:all=1 [delayed_audio]" )
+            fi
+        fi
+    fi
+
+    IFS="," read -r -a qualities <<< "$quality"
+    IFS="," read -r -a bitrates <<< "$bitrate"
+    IFS="," read -r -a resolutions <<< "$resolution"
+
+    if [ -n "${qualities+x}" ] 
+    then
+        qualities_count=${#qualities[@]}
+    else
+        qualities_count=0
+    fi
+
+    if [ -n "${bitrates+x}" ] 
+    then
+        bitrates_count=${#bitrates[@]}
+    else
+        bitrates_count=0
+    fi
+
+    if [ -n "${resolutions+x}" ] 
+    then
+        resolutions_count=${#resolutions[@]}
+    else
+        resolutions_count=0
+    fi
+
+    if [ "$bitrates_count" -gt "$qualities_count" ] 
+    then
+        variants_count=$bitrates_count
+    else
+        variants_count=$qualities_count
+    fi
+
+    if [ "$resolutions_count" -gt "$variants_count" ] 
+    then
+        variants_count=$resolutions_count
+    fi
+
+    for((i=0;i<variants_count;i++));
+    do
+        if [ -n "${qualities[i]:-}" ] 
+        then
+            variants_output_command+=( -crf:v:$i $variant_quality )
+
+            # VBV
+            if [ "$const" = true ] && [ -n "${bitrates[i]:-}" ]
+            then
+                variant_bitrate=${bitrates[i]}
+
+                if [ "$video_codec" == "libx264" ] 
+                then
+                    variants_output_command+=( -maxrate:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k )
+                elif [ "$video_codec" == "libx265" ] 
+                then
+                    variants_output_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${variant_bitrate}k --vbv-bufsize:v:$i ${variant_bitrate}k )
+                elif [ "$video_codec" == "libvpx-vp9" ] 
+                then
+                    variants_output_command+=( -b:v:$i ${variant_bitrate}k )
+                fi
+            fi
+
+            if [ -n "${bitrates[i]:-}" ] 
+            then
+                variant_bitrate=${bitrates[i]}
+            else
+                if [ "$video_codec" == "libx264" ] 
+                then
+                    base=18
+                elif [ "$video_codec" == "libx265" ] 
+                then
+                    base=24
+                else
+                    base=15
+                fi
+
+                variant_bitrate=4000000
+
+                if [ "${qualities[i]}" -gt "$base" ] 
+                then
+                    for((j=0;j<(qualities[i]-base)/6;j++));
+                    do
+                        variant_bitrate=$((variant_bitrate/2))
+                    done
+                fi
+            fi
+
+            hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((variant_bitrate*1000))"
+
+            if [ -n "${resolutions[i]:-}" ] 
+            then
+                hls_master_list="$hls_master_list,RESOLUTION=${resolutions[i]}$subtitle_append\n${playlist_name}_crf_${qualities[i]}_$variant_bitrate-${resolutions[i]}.m3u8\n\n"
+            else
+                hls_master_list="$hls_master_list$subtitle_append\n${playlist_name}_crf_${qualities[i]}_$variant_bitrate.m3u8\n\n"
+            fi
+        elif [ -n "${bitrates[i]:-}" ]
+        then
+            variant_bitrate=${bitrates[i]}
+
+            variants_output_command+=( -b:v:$i ${variant_bitrate}k )
+
+            if [ "$const" = true ] 
+            then
+                if [ "$const_cbr" = true ] 
+                then
+                    if [ "$video_codec" == "libx264" ] 
+                    then
+                        variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
+                    elif [ "$video_codec" == "libx265" ] 
+                    then
+                        variants_output_command+=( -muxrate:v:$i ${variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
+                    elif [ "$video_codec" == "libvpx-vp9" ] 
+                    then
+                        variants_output_command+=( -minrate:v:$i ${variant_bitrate}k -maxrate:v:$i ${variant_bitrate}k )
+                    fi
+                else
+                    # VBV
+                    if [ "$video_codec" == "libx264" ] || [ "$video_codec" == "libvpx-vp9" ]
+                    then
+                        variants_output_command+=( -maxrate:v:$i ${variant_bitrate}k -bufsize:v:$i ${variant_bitrate}k )
+                    elif [ "$video_codec" == "libx265" ] 
+                    then
+                        variants_output_command+=( -x265-params:v:$i vbv-maxrate=${variant_bitrate}:vbv-bufsize=${variant_bitrate} )
+                    fi
+                fi
+            fi
+
+            hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((variant_bitrate*1000))"
+
+            if [ -n "${resolutions[i]:-}" ] 
+            then
+                hls_master_list="$hls_master_list,RESOLUTION=${resolutions[i]}$subtitle_append\n${playlist_name}_${variant_bitrate}-${resolutions[i]}.m3u8\n\n"
+            else
+                hls_master_list="$hls_master_list$subtitle_append\n${playlist_name}_${variant_bitrate}.m3u8\n\n"
+            fi
+        fi
+
+        if [ -n "${resolutions[i]:-}" ] 
+        then
+            variants_output_command+=( -s:v:$i ${resolutions[i]} )
+        fi
+
+        if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+        then
+            [ -n "$filter_complex" ] && filter_complex="$filter_complex;"
+            filter_complex="${filter_complex}[$video_shift_index:v] ${extra_filters}drawtext=$draw_text [drawtext_video_$i]"
+        fi
+
+        if [[ $input_flags =~ -an ]] || [[ $output_flags =~ -an ]] 
+        then
+            if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+            then
+                map_command+=( -map "[drawtext_video_$i]" )
+            else
+                map_command+=( -map $video_shift_index:v )
+            fi
+
+            if [ -n "${qualities[i]:-}" ] 
+            then
+                var_stream_map="$var_stream_map v:$i,name:crf_${qualities[i]}_$variant_bitrate"
+
+                if [ -n "${resolutions[i]:-}" ] 
+                then
+                    var_stream_map="${var_stream_map}-${resolutions[i]}"
+                fi
+            elif [ -n "${bitrates[i]:-}" ] 
+            then
+                var_stream_map="$var_stream_map v:$i,name:${bitrates[i]}"
+
+                if [ -n "${resolutions[i]:-}" ] 
+                then
+                    var_stream_map="${var_stream_map}-${resolutions[i]}"
+                fi
+            fi
+        else
+            if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+            then
+                map_command+=( -map "[drawtext_video_$i]" )
+            else
+                map_command+=( -map $video_shift_index:v )
+            fi
+
+            if [ -n "${audio_shift:-}" ] && [ "$audio_codec" != "copy" ] 
+            then
+                map_command+=( -map '[delayed_audio]' )
+            else
+                map_command+=( -map $audio_shift_index:a )
+            fi
+
+            if [ -n "${qualities[i]:-}" ] 
+            then
+                var_stream_map="$var_stream_map v:$i,a:$i,name:crf_${qualities[i]}_$variant_bitrate"
+
+                if [ -n "${resolutions[i]:-}" ] 
+                then
+                    var_stream_map="${var_stream_map}-${resolutions[i]}"
+                fi
+            elif [ -n "${bitrates[i]:-}" ] 
+            then
+                var_stream_map="$var_stream_map v:$i,name:${bitrates[i]}"
+
+                if [ -n "${resolutions[i]:-}" ] 
+                then
+                    var_stream_map="${var_stream_map}-${resolutions[i]}"
+                fi
+            fi
+        fi
+    done
+
+    if [ "$variants_count" -eq 0 ] 
+    then
+        if [ -n "$subtitle_append" ] 
+        then
+            hls_master_list="$hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000$subtitle_append\n${playlist_name}_0.m3u8\n\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"简体中文\",DEFAULT=\"YES\",AUTOSELECT=YES,LANGUAGE=\"chi\",URI=\"${playlist_name}_0_vtt.m3u8\"\n\n"
+        fi
+
+        if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+        then
+            filter_complex="${filter_complex}[$video_shift_index:v] ${extra_filters}drawtext=$draw_text [drawtext_video]"
+        fi
+
+        if [ "$video_codec" != "copy" ] && [ -n "$draw_text" ] 
+        then
+            map_command+=( -map '[drawtext_video]' )
+        else
+            map_command+=( -map $video_shift_index:v )
+        fi
+
+        if ! [[ $input_flags =~ -an ]] && ! [[ $output_flags =~ -an ]] 
+        then
+            if [ -n "${audio_shift:-}" ] && [ "$audio_codec" != "copy" ] 
+            then
+                map_command+=( -map '[delayed_audio]' )
+            else
+                map_command+=( -map $audio_shift_index:a )
+            fi
+        fi
+    fi
+
+    variants_output_command+=( -c:v "$video_codec" -c:a "$audio_codec" )
+
+    if [ -n "$subtitle_append" ] 
+    then
+        variants_output_command+=( -c:s webvtt )
+    fi
+
+    variants_output_command+=( $output_flags_command )
+
+    if [ -n "$filter_complex" ] 
+    then
+        input_command+=( -filter_complex "$filter_complex" )
+    fi
+
+    if [ -n "$var_stream_map" ] 
+    then
+        var_stream_map_command+=( -var_stream_map "$var_stream_map" )
+    fi
+
+    if [ "$encrypt" = true ] 
+    then
+        openssl rand 16 > "$output_dir_root/$key_name.key"
+        if [ "$encrypt_session" = true ] 
+        then
+            echo -e "/keys?key=$key_name&channel=$output_dir_name\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
+        else
+            echo -e "$key_name.key\n$output_dir_root/$key_name.key\n$(openssl rand -hex 16)" > "$output_dir_root/$keyinfo_name.keyinfo"
+        fi
+        hls_command+=( -hls_key_info_file "$output_dir_root/$keyinfo_name.keyinfo" )
+    fi
+
+    if [ "$master" -eq 0 ] 
+    then
+        hls_command+=( -hls_segment_filename "$output_dir_root/$seg_dir_path${seg_name}_%05d.ts" )
+        hls_command+=( "$output_dir_root/$playlist_name.m3u8" )
+    else
+        echo -e "$hls_master_list" > "$output_dir_root/${playlist_name}_master.m3u8"
+        hls_command+=( -hls_segment_filename "$output_dir_root/$seg_dir_path${seg_name}_%v_%05d.ts" )
+        hls_command+=( "$output_dir_root/${playlist_name}_%v.m3u8" )
+    fi
+
+    PrepTerm
+    $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+    ${input_command[@]+"${input_command[@]}"} \
+    ${variants_output_command[@]+"${variants_output_command[@]}"} \
+    ${map_command[@]+"${map_command[@]}"} \
+    ${flags_command[@]+"${flags_command[@]}"} \
+    -f hls ${var_stream_map_command[@]+"${var_stream_map_command[@]}"} \
+    ${hls_command[@]+"${hls_command[@]}"} > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+    WaitTerm
+
+    # seg
+    # PrepTerm
+    # $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+    # ${input_command[@]+"${input_command[@]}"} \
+    # ${variants_output_command[@]+"${variants_output_command[@]}"} \
+    # ${map_command[@]+"${map_command[@]}"} \
+    # ${flags_command[@]+"${flags_command[@]}"} \
+    # -f segment ${var_stream_map_command[@]+"${var_stream_map_command[@]}"} \
+    # -segment_time "$seg_length" -segment_format mpeg_ts \
+    # -segment_list $output_dir_root/$playlist_name.m3u8 $output_dir_root/$seg_dir_path${seg_name}_%05d.ts \
+    # ${segment_command[@]+"${segment_command[@]}"} > "$FFMPEG_LOG_ROOT/$pid.log" 2> "$FFMPEG_LOG_ROOT/$pid.err" &
+    # WaitTerm
+            } 201>"$pid_file"
+        ;;
+        "StartChannel") 
+            if [ "$chnl_hls_end_list" = true ] 
+            then
+                unset delete_on_term
+            else
+                delete_on_term="$chnl_output_dir_root"
+            fi
+
+            new_pid=$pid
+            pid_file="$FFMPEG_LOG_ROOT/$new_pid.pid"
+
+            {
+                flock -x 201
+
+    file=true
+    jq_path='["channels"]'
+    jq_path2='["stream_link"]'
+    JQ update "$CHANNELS_FILE" pid "$chnl_pid" chnl_stream_links
+
+    update=$(
+        $JQ_FILE -n --arg pid "$new_pid" --arg status "on" \
+        --arg user_agent "$chnl_user_agent" --arg headers "$chnl_headers" \
+        --arg cookies "$chnl_cookies" --arg playlist_name "$chnl_playlist_name" \
+        --arg seg_name "$chnl_seg_name" --arg key_name "$chnl_key_name" \
+        --arg key_time "$chnl_key_time" --arg channel_name "$chnl_channel_name" \
+        --arg channel_time "$chnl_channel_time" \
+        '{
+            pid: $pid | tonumber,
+            status: $status,
+            user_agent: $user_agent,
+            headers: $headers,
+            cookies: $cookies,
+            playlist_name: $playlist_name,
+            seg_name: $seg_name,
+            key_name: $key_name,
+            key_time: $key_time | tonumber,
+            channel_name: $channel_name,
+            channel_time: $channel_time | tonumber
+        }'
+    )
+
+    merge=true
+    jq_path='["channels"]'
+    JQ update "$CHANNELS_FILE" pid "$chnl_pid" "$update"
+
+    action="start"
+    SyncFile
+
+    trap '
+        if [ "$chnl_live" = false ]
+        then
+            MonitorLog "$chnl_channel_name HLS 切片完成"
+            exit 1
+        fi
+        jq_path=[\"channels\"]
+        jq_path2=[\"status\"]
+        JQ update "$CHANNELS_FILE" pid "$new_pid" off
+        MonitorLog "`eval_gettext \"\\\$chnl_channel_name HLS 关闭\"`"
+        chnl_pid=$new_pid
+        action="stop"
+        SyncFile
+        if [ "$chnl_hls_end_list" = true ] && ls -A "$chnl_output_dir_root/"*.m3u8 > /dev/null 2>&1
+        then
+            for play_list in "$chnl_output_dir_root/"*.m3u8
+            do
+                echo "#EXT-X-ENDLIST" >> "$play_list" || exit 1
+            done
+            sleep "$chnl_seg_length"
+        fi
+        rm -rf "$chnl_output_dir_root"
+    ' EXIT
+
+    mkdir -p "$chnl_output_dir_root"
+
+    chnl_variants_input_command=()
+    chnl_variants_output_command=()
+    chnl_map_command=()
+    chnl_var_stream_map_command=()
+    chnl_hls_command=( -hls_time "$chnl_seg_length" -hls_list_size "$chnl_seg_count" )
+    # chnl_segment_command=()
+    chnl_hls_master_list="#EXTM3U\n#EXT-X-VERSION:7\n"
+    chnl_var_stream_map=""
+    chnl_headers_command=""
+    chnl_cookies_command=""
+
+    [ -n "$chnl_headers" ] && printf -v chnl_headers_command '%b' "$chnl_headers"
+
+    if [ -n "$chnl_cookies" ] 
+    then
+        Trim chnl_cookies
+        chnl_cookies="${chnl_cookies%\;}"
+        printf -v chnl_cookies_command '%b' "${chnl_cookies//;/; path=\/;\\r\\n}; path=/;"
+    fi
+
+    if [ "$chnl_seg_count" -gt 0 ] 
+    then
+        chnl_hls_command+=( -hls_delete_threshold $chnl_seg_count )
+    fi
+
+    if [ "$chnl_live" = true ] 
+    then
+        # chnl_segment_command+=( -segment_list_flags +live -segment_list_size $chnl_seg_count -segment_wrap $((chnl_seg_count * 2)) )
+
+        if [ "$chnl_seg_count" -gt 0 ] 
+        then
+            chnl_hls_command+=( -hls_flags periodic_rekey+delete_segments )
+        else
+            chnl_hls_command+=( -hls_flags periodic_rekey )
+        fi
+    else
+        chnl_hls_command+=( -hls_flags periodic_rekey )
+    fi
+
+    if [ -n "${chnl_stream_url_cdn:-}" ] 
+    then
+        chnl_stream_link="$chnl_stream_url_cdn"
+    fi
+
+    if [ "${chnl_stream_url_qualities_count:-0}" -gt 1 ] || [ "${chnl_stream_url_audio_count:-0}" -gt 0 ] || [ "${chnl_stream_url_subtitles_count:-0}" -gt 0 ]
+    then
+        if [ "$chnl_use_primary_playlist" = true ] 
+        then
+            if [[ $chnl_stream_link =~ ^https?:// ]] 
+            then
+                [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
+                [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+                [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
+                [ -n "$chnl_cookies_command" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies_command" )
+            elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
+            then
+                [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+            fi
+
+            #if [ "${chnl_stream_url_subtitles_count:-0}" -gt 0 ] 
+            #then
+            #    chnl_variants_input_command+=( -strict experimental )
+            #fi
+
+            chnl_variants_input_command+=( $chnl_input_flags_command -i "$chnl_stream_link" )
+        fi
+
+        IFS=, read -r -a chnl_variants_quality <<< "$chnl_quality"
+        IFS=, read -r -a chnl_variants_bitrate <<< "$chnl_bitrate"
+        IFS=, read -r -a chnl_variants_resolution <<< "$chnl_resolution"
+
+        for((i=0;i<chnl_stream_url_qualities_count;i++));
+        do
+            chnl_var_stream_map="$chnl_var_stream_map v:$i"
+
+            chnl_stream_urls_index=${chnl_stream_url_video_indices[i]}
+
+            chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=${chnl_stream_urls_bitrate[chnl_stream_urls_index]},AVERAGE-BANDWIDTH=${chnl_stream_urls_bitrate[chnl_stream_urls_index]},RESOLUTION=${chnl_stream_urls_resolution[chnl_stream_urls_index]}"
+
+            if [ -n "${chnl_stream_urls_audio[chnl_stream_urls_index]:-}" ] 
+            then
+                if [ "${chnl_stream_url_audio_count:-0}" -gt 0 ] 
+                then
+                    for chnl_stream_url_audio_index in "${chnl_stream_url_audio_indices[@]}"
+                    do
+                        if [ "${chnl_stream_audio_group_id[chnl_stream_url_audio_index]}" == "${chnl_stream_urls_audio[chnl_stream_urls_index]}" ] 
+                        then
+                            chnl_hls_master_list="$chnl_hls_master_list,AUDIO=\"${chnl_stream_urls_audio[chnl_stream_urls_index]}\""
+                            chnl_var_stream_map="$chnl_var_stream_map,agroup:${chnl_stream_urls_audio[chnl_stream_urls_index]}"
+                            break
+                        fi
+                    done
+                fi
+            else
+                chnl_var_stream_map="$chnl_var_stream_map,a:$i"
+            fi
+
+            if [ -n "${chnl_stream_urls_subtitles[chnl_stream_urls_index]:-}" ] && [ "${chnl_stream_url_subtitles_count:-0}" -gt 0 ]
+            then
+                for chnl_stream_url_subtitles_index in "${chnl_stream_url_subtitles_indices[@]}"
+                do
+                    if [ "${chnl_stream_subtitles_group_id[chnl_stream_url_subtitles_index]}" == "${chnl_stream_urls_subtitles[chnl_stream_urls_index]}" ] 
+                    then
+                        chnl_hls_master_list="$chnl_hls_master_list,SUBTITLES=\"${chnl_stream_urls_subtitles[chnl_stream_urls_index]}\""
+                        chnl_var_stream_map="$chnl_var_stream_map,sgroup:${chnl_stream_urls_subtitles[chnl_stream_urls_index]}"
+                        break
+                    fi
+                done
+            fi
+
+            chnl_hls_master_list="$chnl_hls_master_list\n${chnl_playlist_name}_${chnl_stream_urls_resolution[chnl_stream_urls_index]}.m3u8\n\n"
+            chnl_var_stream_map="$chnl_var_stream_map,name:${chnl_stream_urls_resolution[chnl_stream_urls_index]}"
+
+            if [ "$chnl_use_primary_playlist" = false ] 
+            then
+                if [[ ${chnl_stream_urls[chnl_stream_urls_index]} =~ ^https?:// ]] 
+                then
+                    [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
+                    [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+                    [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
+                    [ -n "$chnl_cookies_command" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies_command" )
+                elif [[ ${chnl_stream_urls[chnl_stream_urls_index]} =~ ^icecast?:// ]] 
+                then
+                    [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+                fi
+                chnl_variants_input_command+=( $chnl_input_flags_command -i "${chnl_stream_urls[chnl_stream_urls_index]}" )
+                chnl_map_command+=( -map $i:v )
+            else
+                chnl_map_command+=( -map 0:v:$chnl_stream_urls_index )
+            fi
+
+            if [ "$chnl_video_codec" == "copy" ] 
+            then
+                continue
+            fi
+
+            if [ -n "${chnl_variants_quality[i]:-}" ] 
+            then
+                chnl_variant_quality=${chnl_variants_quality[i]}
+            else
+                chnl_variant_quality=""
+            fi
+
+            if [ -n "${chnl_variants_bitrate[i]:-}" ] 
+            then
+                chnl_variant_bitrate=${chnl_variants_bitrate[i]}
+            else
+                chnl_variant_bitrate=${chnl_stream_url_qualities[i]%-*}
+            fi
+
+            if [ -n "$chnl_variant_quality" ] 
+            then
+                chnl_variants_output_command+=( -crf:v:$i $chnl_variant_quality )
+
+                # VBV
+                if [ "$chnl_const" = true ] 
+                then
+                    if [ "$chnl_video_codec" == "libx264" ] 
+                    then
+                        chnl_variants_output_command+=( -maxrate:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k )
+                    elif [ "$chnl_video_codec" == "libx265" ] 
+                    then
+                        chnl_variants_output_command+=( -x265-params:v:$i vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
+                    elif [ "$chnl_video_codec" == "libvpx-vp9" ] 
+                    then
+                        chnl_variants_output_command+=( -b:v:$i ${chnl_variant_bitrate}k )
+                    fi
+                fi
+            else
+                chnl_variants_output_command+=( -b:v:$i ${chnl_variant_bitrate}k )
+
+                if [ "$chnl_const" = true ] 
+                then
+                    if [ "$chnl_const_cbr" = true ] 
+                    then
+                        if [ "$chnl_video_codec" == "libx264" ] 
+                        then
+                            chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
+                        elif [ "$chnl_video_codec" == "libx265" ] 
+                        then
+                            chnl_variants_output_command+=( -muxrate:v:$i ${chnl_variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
+                        elif [ "$chnl_video_codec" == "libvpx-vp9" ] 
+                        then
+                            chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k )
+                        fi
+                    else
+                        # VBV
+                        if [ "$chnl_video_codec" == "libx264" ] || [ "$chnl_video_codec" == "libvpx-vp9" ]
+                        then
+                            chnl_variants_output_command+=( -maxrate:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k )
+                        elif [ "$chnl_video_codec" == "libx265" ] 
+                        then
+                            chnl_variants_output_command+=( -x265-params:v:$i vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
+                        fi
+                    fi
+                fi
+            fi
+
+            if [ -n "${chnl_variants_resolution[i]:-}" ] 
+            then
+                chnl_variants_output_command+=( -s:v:$i ${chnl_variants_resolution[i]} )
+            elif [[ ${chnl_stream_url_qualities[i]} =~ - ]] 
+            then
+                chnl_variants_output_command+=( -s:v:$i ${chnl_stream_url_qualities[i]#*-} )
+            fi
+        done
+
+        chnl_variants_output_command+=( -c:v "$chnl_video_codec" -c:a "$chnl_audio_codec" )
+
+        if [ -n "${chnl_stream_audio_url:-}" ] 
+        then
+            if [ "${chnl_stream_url_audio_count:-0}" -gt 0 ] 
+            then
+                for((i=0;i<chnl_stream_url_audio_count;i++));
+                do
+                    chnl_stream_url_audio_index=${chnl_stream_url_audio_indices[i]}
+
+                    chnl_hls_master_list="$chnl_hls_master_list#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"${chnl_stream_audio_group_id[chnl_stream_url_audio_index]}\",NAME=\"${chnl_stream_audio_name[chnl_stream_url_audio_index]}\",DEFAULT=\"${chnl_stream_audio_default[chnl_stream_url_audio_index]}\",AUTOSELECT=YES,LANGUAGE=\"${chnl_stream_audio_language[chnl_stream_url_audio_index]}\",URI=\"${chnl_playlist_name}_${chnl_stream_audio_name[chnl_stream_url_audio_index]}.m3u8\"\n"
+                    chnl_var_stream_map="$chnl_var_stream_map a:$i,agroup:${chnl_stream_audio_group_id[chnl_stream_url_audio_index]},default:${chnl_stream_audio_default[chnl_stream_url_audio_index]},language:${chnl_stream_audio_language[chnl_stream_url_audio_index]},name:${chnl_stream_audio_name[chnl_stream_url_audio_index]}"
+
+                    if [ "$chnl_use_primary_playlist" = false ] 
+                    then
+                        if [[ ${chnl_stream_urls[chnl_stream_urls_index]} =~ ^https?:// ]] 
+                        then
+                            [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
+                            [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+                            [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
+                            [ -n "$chnl_cookies_command" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies_command" )
+                        elif [[ ${chnl_stream_urls[chnl_stream_urls_index]} =~ ^icecast?:// ]] 
+                        then
+                            [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+                        fi
+                        chnl_variants_input_command+=( $chnl_input_flags_command -i "${chnl_stream_audio_url[chnl_stream_url_audio_index]}" )
+                        chnl_map_command+=( -map $((i+chnl_stream_url_qualities_count)):a )
+                    else
+                        chnl_map_command+=( -map 0:a:$chnl_stream_url_audio_index )
+                    fi
+                done
+            fi
+        else
+            for((i=0;i<chnl_stream_url_qualities_count;i++));
+            do
+                if [ "$chnl_use_primary_playlist" = false ] 
+                then
+                    chnl_map_command+=( -map $i:a )
+                else
+                    chnl_map_command+=( -map 0:a:$i )
+                fi
+            done
+        fi
+
+        if [ "${chnl_stream_url_subtitles_count:-0}" -gt 0 ] 
+        then
+            for((i=0;i<chnl_stream_url_subtitles_count;i++));
+            do
+                chnl_stream_url_subtitles_index=${chnl_stream_url_subtitles_indices[i]}
+
+                if [[ ${chnl_stream_subtitles_url[chnl_stream_url_subtitles_index]} =~ $hboasia_host/(.+)$ ]] 
+                then
+                    chnl_hls_master_list="$chnl_hls_master_list#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"${chnl_stream_subtitles_group_id[chnl_stream_url_subtitles_index]}\",NAME=\"${chnl_stream_subtitles_name[chnl_stream_url_subtitles_index]}\",DEFAULT=\"${chnl_stream_subtitles_default[chnl_stream_url_subtitles_index]}\",AUTOSELECT=YES,LANGUAGE=\"${chnl_stream_subtitles_language[chnl_stream_url_subtitles_index]}\",URI=\"https://hboasia.epub.fun/${BASH_REMATCH[1]%%\?*}\"\n"
+                    continue
+                fi
+
+                chnl_hls_master_list="$chnl_hls_master_list#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"${chnl_stream_subtitles_group_id[chnl_stream_url_subtitles_index]}\",NAME=\"${chnl_stream_subtitles_name[chnl_stream_url_subtitles_index]}\",DEFAULT=\"${chnl_stream_subtitles_default[chnl_stream_url_subtitles_index]}\",AUTOSELECT=YES,LANGUAGE=\"${chnl_stream_subtitles_language[chnl_stream_url_subtitles_index]}\",URI=\"${chnl_stream_subtitles_group_id[chnl_stream_url_subtitles_index]}_${chnl_stream_subtitles_name[chnl_stream_url_subtitles_index]}_vtt.m3u8\"\n"
+                chnl_var_stream_map="$chnl_var_stream_map s:$i,sgroup:${chnl_stream_subtitles_group_id[chnl_stream_url_subtitles_index]},default:${chnl_stream_subtitles_default[chnl_stream_url_subtitles_index]},language:${chnl_stream_subtitles_language[chnl_stream_url_subtitles_index]},name:${chnl_stream_subtitles_name[chnl_stream_url_subtitles_index]}"
+
+                if [ "$chnl_use_primary_playlist" = false ] 
+                then
+                    if [[ ${chnl_stream_urls[chnl_stream_urls_index]} =~ ^https?:// ]] 
+                    then
+                        [ -n "$chnl_proxy" ] && chnl_variants_input_command+=( -http_proxy "$chnl_proxy" )
+                        [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+                        [ -n "$chnl_headers_command" ] && chnl_variants_input_command+=( -headers "$chnl_headers_command" )
+                        [ -n "$chnl_cookies_command" ] && chnl_variants_input_command+=( -cookies "$chnl_cookies_command" )
+                    elif [[ ${chnl_stream_urls[chnl_stream_urls_index]} =~ ^icecast?:// ]] 
+                    then
+                        [ -n "$chnl_user_agent" ] && chnl_variants_input_command+=( -user_agent "$chnl_user_agent" )
+                    fi
+                    chnl_variants_input_command+=( $chnl_input_flags_command -i "${chnl_stream_subtitles_url[chnl_stream_url_subtitles_index]}" )
+                    chnl_map_command+=( -map $((i+chnl_stream_url_qualities_count+chnl_stream_url_audio_count)):s )
+                else
+                    chnl_map_command+=( -map 0:s:${chnl_stream_url_subtitles_index}? )
+                fi
+            done
+
+            chnl_variants_output_command+=( -c:s webvtt )
+        fi
+
+        chnl_variants_output_command+=( $chnl_output_flags_command )
+        chnl_var_stream_map_command+=( -var_stream_map "$chnl_var_stream_map" )
+
+        if [ "$chnl_encrypt" = true ] 
+        then
+            openssl rand 16 > "$chnl_output_dir_root/$chnl_key_name.key"
+            if [ "$chnl_encrypt_session" = true ] 
+            then
+                echo -e "/keys?key=$chnl_key_name&channel=$chnl_output_dir_name\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
+            else
+                echo -e "$chnl_key_name.key\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
+            fi
+            chnl_hls_command+=( -hls_key_info_file "$chnl_output_dir_root/$chnl_keyinfo_name".keyinfo )
+        fi
+
+        echo -e "$chnl_hls_master_list" > "$chnl_output_dir_root/${chnl_playlist_name}_master.m3u8"
+        chnl_hls_command+=( -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}"_%v_%05d.ts )
+        chnl_hls_command+=( "$chnl_output_dir_root/${chnl_playlist_name}_%v.m3u8" )
+
+        PrepTerm
+        $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+        ${chnl_variants_input_command[@]+"${chnl_variants_input_command[@]}"} \
+        ${chnl_variants_output_command[@]+"${chnl_variants_output_command[@]}"} \
+        ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
+        ${chnl_flags_command[@]+"${chnl_flags_command[@]}"} \
+        -f hls ${chnl_var_stream_map_command[@]+"${chnl_var_stream_map_command[@]}"} \
+        ${chnl_hls_command[@]+"${chnl_hls_command[@]}"} > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+        WaitTerm
+        exit 0
+    fi
+
+    chnl_input_command=()
+    chnl_filter_complex=""
+
+    if [ "${chnl_stream_url_qualities_count:-0}" -eq 1 ] 
+    then
+        chnl_stream_urls_index=${chnl_stream_url_video_indices[0]}
+        chnl_stream_link=${chnl_stream_urls[chnl_stream_urls_index]}
+    fi
+
+    if [[ $chnl_stream_link =~ ^https?:// ]] 
+    then
+        [ -n "$chnl_proxy" ] && chnl_input_command+=( -http_proxy "$chnl_proxy" )
+        [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
+        [ -n "$chnl_headers_command" ] && chnl_input_command+=( -headers "$chnl_headers_command" )
+        [ -n "$chnl_cookies_command" ] && chnl_input_command+=( -cookies "$chnl_cookies_command" )
+    elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
+    then
+        [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
+    fi
+
+    chnl_input_command+=( $chnl_input_flags_command -i $chnl_stream_link )
+
+    chnl_video_shift_index=0
+    chnl_audio_shift_index=0
+    if ! [[ $chnl_input_flags =~ -an ]] && ! [[ $chnl_output_flags =~ -an ]] 
+    then
+        if [ -n "${chnl_video_shift:-}" ] 
+        then
+            chnl_video_shift_index=1
+            if [[ $chnl_stream_link =~ ^https?:// ]] 
+            then
+                [ -n "$chnl_proxy" ] && chnl_input_command+=( -http_proxy "$chnl_proxy" )
+                [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
+                [ -n "$chnl_headers_command" ] && chnl_input_command+=( -headers "$chnl_headers_command" )
+                [ -n "$chnl_cookies_command" ] && chnl_input_command+=( -cookies "$chnl_cookies_command" )
+            elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
+            then
+                [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
+            fi
+            chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_video_shift -i $chnl_stream_link )
+        elif [ -n "${chnl_audio_shift:-}" ] 
+        then
+            if [ "$chnl_audio_codec" == "copy" ] 
+            then
+                chnl_audio_shift_index=1
+                if [[ $chnl_stream_link =~ ^https?:// ]] 
+                then
+                    [ -n "$chnl_proxy" ] && chnl_input_command+=( -http_proxy "$chnl_proxy" )
+                    [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
+                    [ -n "$chnl_headers_command" ] && chnl_input_command+=( -headers "$chnl_headers_command" )
+                    [ -n "$chnl_cookies_command" ] && chnl_input_command+=( -cookies "$chnl_cookies_command" )
+                elif [[ $chnl_stream_link =~ ^icecast?:// ]] 
+                then
+                    [ -n "$chnl_user_agent" ] && chnl_input_command+=( -user_agent "$chnl_user_agent" )
+                fi
+                chnl_input_command+=( $chnl_input_flags_command -itsoffset $chnl_audio_shift -i $chnl_stream_link )
+            else
+                chnl_input_command+=( -filter_complex "[0:a] adelay=delays=${chnl_audio_shift}s:all=1 [delayed_audio]" )
+            fi
+        fi
+    fi
+
+    IFS="," read -r -a chnl_qualities <<< "$chnl_quality"
+    IFS="," read -r -a chnl_bitrates <<< "$chnl_bitrate"
+    IFS="," read -r -a chnl_resolutions <<< "$chnl_resolution"
+
+    if [ -n "${chnl_qualities+x}" ] 
+    then
+        chnl_qualities_count=${#chnl_qualities[@]}
+    else
+        chnl_qualities_count=0
+    fi
+
+    if [ -n "${chnl_bitrates+x}" ] 
+    then
+        chnl_bitrates_count=${#chnl_bitrates[@]}
+    else
+        chnl_bitrates_count=0
+    fi
+
+    if [ -n "${chnl_resolutions+x}" ] 
+    then
+        chnl_resolutions_count=${#chnl_resolutions[@]}
+    else
+        chnl_resolutions_count=0
+    fi
+
+    if [ "$chnl_bitrates_count" -gt "$chnl_qualities_count" ] 
+    then
+        chnl_variants_count=$chnl_bitrates_count
+    else
+        chnl_variants_count=$chnl_qualities_count
+    fi
+
+    if [ "$chnl_resolutions_count" -gt "$chnl_variants_count" ] 
+    then
+        chnl_variants_count=$chnl_resolutions_count
+    fi
+
+    for((i=0;i<chnl_variants_count;i++));
+    do
+        if [ -n "${chnl_qualities[i]:-}" ] 
+        then
+            chnl_variants_output_command+=( -crf:v:$i $chnl_variant_quality )
+
+            # VBV
+            if [ "$chnl_const" = true ] && [ -n "${chnl_bitrates[i]:-}" ]
+            then
+                chnl_variant_bitrate=${chnl_bitrates[i]}
+
+                if [ "$chnl_video_codec" == "libx264" ] 
+                then
+                    chnl_variants_output_command+=( -maxrate:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k )
+                elif [ "$chnl_video_codec" == "libx265" ] 
+                then
+                    chnl_variants_output_command+=( -x265-params:v:$i --vbv-maxrate:v:$i ${chnl_variant_bitrate}k --vbv-bufsize:v:$i ${chnl_variant_bitrate}k )
+                elif [ "$chnl_video_codec" == "libvpx-vp9" ] 
+                then
+                    chnl_variants_output_command+=( -b:v:$i ${chnl_variant_bitrate}k )
+                fi
+            fi
+
+            if [ -n "${chnl_bitrates[i]:-}" ] 
+            then
+                chnl_variant_bitrate=${chnl_bitrates[i]}
+            else
+                if [ "$chnl_video_codec" == "libx264" ] 
+                then
+                    base=18
+                elif [ "$chnl_video_codec" == "libx265" ] 
+                then
+                    base=24
+                else 
+                    base=15
+                fi
+
+                chnl_variant_bitrate=4000000
+
+                if [ "${chnl_qualities[i]}" -gt "$base" ] 
+                then
+                    for((j=0;j<(chnl_qualities[i]-base)/6;j++));
+                    do
+                        chnl_variant_bitrate=$((chnl_variant_bitrate/2))
+                    done
+                fi
+            fi
+
+            chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((chnl_variant_bitrate*1000))"
+
+            if [ -n "${chnl_resolutions[i]:-}" ] 
+            then
+                chnl_hls_master_list="$chnl_hls_master_list,RESOLUTION=${chnl_resolutions[i]}$chnl_subtitle_append\n${chnl_playlist_name}_crf_${chnl_qualities[i]}_$chnl_variant_bitrate-${chnl_resolutions[i]}.m3u8\n\n"
+            else
+                chnl_hls_master_list="$chnl_hls_master_list$chnl_subtitle_append\n${chnl_playlist_name}_crf_${chnl_qualities[i]}_$chnl_variant_bitrate.m3u8\n\n"
+            fi
+        elif [ -n "${chnl_bitrates[i]:-}" ]
+        then
+            chnl_variant_bitrate=${chnl_bitrates[i]}
+
+            chnl_variants_output_command+=( -b:v:$i ${chnl_variant_bitrate}k )
+
+            if [ "$chnl_const" = true ] 
+            then
+                if [ "$chnl_const_cbr" = true ] 
+                then
+                    if [ "$chnl_video_codec" == "libx264" ] 
+                    then
+                        chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k -x264-params:v:$i nal-hrd=cbr:force-cfr=1 )
+                    elif [ "$chnl_video_codec" == "libx265" ] 
+                    then
+                        chnl_variants_output_command+=( -muxrate:v:$i ${chnl_variant_bitrate}k -x265-params:v:$i strict-cbr=1:vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
+                    elif [ "$chnl_video_codec" == "libvpx-vp9" ] 
+                    then
+                        chnl_variants_output_command+=( -minrate:v:$i ${chnl_variant_bitrate}k -maxrate:v:$i ${chnl_variant_bitrate}k )
+                    fi
+                else
+                    # VBV
+                    if [ "$chnl_video_codec" == "libx264" ] || [ "$chnl_video_codec" == "libvpx-vp9" ]
+                    then
+                        chnl_variants_output_command+=( -maxrate:v:$i ${chnl_variant_bitrate}k -bufsize:v:$i ${chnl_variant_bitrate}k )
+                    elif [ "$chnl_video_codec" == "libx265" ] 
+                    then
+                        chnl_variants_output_command+=( -x265-params:v:$i vbv-maxrate=${chnl_variant_bitrate}:vbv-bufsize=${chnl_variant_bitrate} )
+                    fi
+                fi
+            fi
+
+            chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=$((chnl_variant_bitrate*1000))"
+
+            if [ -n "${chnl_resolutions[i]:-}" ] 
+            then
+                chnl_hls_master_list="$chnl_hls_master_list,RESOLUTION=${chnl_resolutions[i]}$chnl_subtitle_append\n${chnl_playlist_name}_${chnl_variant_bitrate}-${chnl_resolutions[i]}.m3u8\n\n"
+            else
+                chnl_hls_master_list="$chnl_hls_master_list$chnl_subtitle_append\n${chnl_playlist_name}_${chnl_variant_bitrate}.m3u8\n\n"
+            fi
+        fi
+
+        if [ -n "${chnl_resolutions[i]:-}" ] 
+        then
+            chnl_variants_output_command+=( -s:v:$i ${chnl_resolutions[i]} )
+        fi
+
+        if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+        then
+            [ -n "$chnl_filter_complex" ] && chnl_filter_complex="$chnl_filter_complex;"
+            chnl_filter_complex="${chnl_filter_complex}[$chnl_video_shift_index:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video_$i]"
+        fi
+
+        if [[ $chnl_input_flags =~ -an ]] || [[ $chnl_output_flags =~ -an ]] 
+        then
+            if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+            then
+                chnl_map_command+=( -map "[drawtext_video_$i]" )
+            else
+                chnl_map_command+=( -map $chnl_video_shift_index:v )
+            fi
+
+            if [ -n "${chnl_qualities[i]:-}" ] 
+            then
+                chnl_var_stream_map="$chnl_var_stream_map v:$i,name:crf_${chnl_qualities[i]}_$chnl_variant_bitrate"
+
+                if [ -n "${chnl_resolutions[i]:-}" ] 
+                then
+                    chnl_var_stream_map="${chnl_var_stream_map}-${chnl_resolutions[i]}"
+                fi
+            elif [ -n "${chnl_bitrates[i]:-}" ] 
+            then
+                chnl_var_stream_map="$chnl_var_stream_map v:$i,name:${chnl_bitrates[i]}"
+
+                if [ -n "${chnl_resolutions[i]:-}" ] 
+                then
+                    chnl_var_stream_map="${chnl_var_stream_map}-${chnl_resolutions[i]}"
+                fi
+            fi
+        else
+            if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+            then
+                chnl_map_command+=( -map "[drawtext_video_$i]" )
+            else
+                chnl_map_command+=( -map $chnl_video_shift_index:v )
+            fi
+
+            if [ -n "${chnl_audio_shift:-}" ] && [ "$chnl_audio_codec" != "copy" ] 
+            then
+                chnl_map_command+=( -map '[delayed_audio]' )
+            else
+                chnl_map_command+=( -map $chnl_audio_shift_index:a )
+            fi
+
+            if [ -n "${chnl_qualities[i]:-}" ] 
+            then
+                chnl_var_stream_map="$chnl_var_stream_map v:$i,a:$i,name:crf_${chnl_qualities[i]}_$chnl_variant_bitrate"
+
+                if [ -n "${chnl_resolutions[i]:-}" ] 
+                then
+                    chnl_var_stream_map="${chnl_var_stream_map}-${chnl_resolutions[i]}"
+                fi
+            elif [ -n "${chnl_bitrates[i]:-}" ] 
+            then
+                chnl_var_stream_map="$chnl_var_stream_map v:$i,name:${chnl_bitrates[i]}"
+
+                if [ -n "${chnl_resolutions[i]:-}" ] 
+                then
+                    chnl_var_stream_map="${chnl_var_stream_map}-${chnl_resolutions[i]}"
+                fi
+            fi
+        fi
+    done
+
+    if [ "$chnl_variants_count" -eq 0 ] 
+    then
+        if [ -n "$chnl_subtitle_append" ] 
+        then
+            chnl_hls_master_list="$chnl_hls_master_list#EXT-X-STREAM-INF:BANDWIDTH=500000$chnl_subtitle_append\n${chnl_playlist_name}_0.m3u8\n\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"subs\",NAME=\"简体中文\",DEFAULT=\"YES\",AUTOSELECT=YES,LANGUAGE=\"chi\",URI=\"${chnl_playlist_name}_0_vtt.m3u8\"\n\n"
+        fi
+
+        if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+        then
+            chnl_filter_complex="${chnl_filter_complex}[$chnl_video_shift_index:v] ${chnl_extra_filters}drawtext=$chnl_draw_text [drawtext_video]"
+        fi
+
+        if [ "$chnl_video_codec" != "copy" ] && [ -n "$chnl_draw_text" ] 
+        then
+            chnl_map_command+=( -map '[drawtext_video]' )
+        else
+            chnl_map_command+=( -map $chnl_video_shift_index:v )
+        fi
+
+        if ! [[ $chnl_input_flags =~ -an ]] && ! [[ $chnl_output_flags =~ -an ]] 
+        then
+            if [ -n "${chnl_audio_shift:-}" ] && [ "$chnl_audio_codec" != "copy" ] 
+            then
+                chnl_map_command+=( -map '[delayed_audio]' )
+            else
+                chnl_map_command+=( -map $chnl_audio_shift_index:a )
+            fi
+        fi
+    fi
+
+    chnl_variants_output_command+=( -c:v "$chnl_video_codec" -c:a "$chnl_audio_codec" )
+
+    if [ -n "$chnl_subtitle_append" ] 
+    then
+        chnl_variants_output_command+=( -c:s webvtt )
+    fi
+
+    chnl_variants_output_command+=( $chnl_output_flags_command )
+
+    if [ -n "$chnl_filter_complex" ] 
+    then
+        chnl_input_command+=( -filter_complex "$chnl_filter_complex" )
+    fi
+
+    if [ -n "$chnl_var_stream_map" ] 
+    then
+        chnl_var_stream_map_command=( -var_stream_map "$chnl_var_stream_map" )
+    fi
+
+    if [ "$chnl_encrypt" = true ] 
+    then
+        openssl rand 16 > "$chnl_output_dir_root/$chnl_key_name.key"
+        if [ "$chnl_encrypt_session" = true ] 
+        then
+            echo -e "/keys?key=$chnl_key_name&channel=$chnl_output_dir_name\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
+        else
+            echo -e "$chnl_key_name.key\n$chnl_output_dir_root/$chnl_key_name.key\n$(openssl rand -hex 16)" > "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo"
+        fi
+        chnl_hls_command+=( -hls_key_info_file "$chnl_output_dir_root/$chnl_keyinfo_name.keyinfo" )
+    fi
+
+    if [ "$master" -eq 0 ] 
+    then
+        chnl_hls_command+=( -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}_%05d.ts" )
+        chnl_hls_command+=( "$chnl_output_dir_root/$chnl_playlist_name.m3u8" )
+    else
+        echo -e "$chnl_hls_master_list" > "$chnl_output_dir_root/${chnl_playlist_name}_master.m3u8"
+        chnl_hls_command+=( -hls_segment_filename "$chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}_%v_%05d.ts" )
+        chnl_hls_command+=( "$chnl_output_dir_root/${chnl_playlist_name}_%v.m3u8" )
+    fi
+
+    # https://stackoverflow.com/questions/23235651/how-can-i-do-ansi-c-quoting-of-an-existing-bash-variable
+    PrepTerm
+    $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+    ${chnl_input_command[@]+"${chnl_input_command[@]}"} \
+    ${chnl_variants_output_command[@]+"${chnl_variants_output_command[@]}"} \
+    ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
+    ${chnl_flags_command[@]+"${chnl_flags_command[@]}"} \
+    -f hls ${chnl_var_stream_map_command[@]+"${chnl_var_stream_map_command[@]}"} \
+    ${chnl_hls_command[@]+"${chnl_hls_command[@]}"} > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+    WaitTerm
+
+    # seg
+    # PrepTerm
+    # $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+    # ${chnl_input_command[@]+"${chnl_input_command[@]}"} \
+    # ${chnl_variants_output_command[@]+"${chnl_variants_output_command[@]}"} \
+    # ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
+    # ${chnl_flags_command[@]+"${chnl_flags_command[@]}"} \
+    # -f segment ${chnl_var_stream_map_command[@]+"${chnl_var_stream_map_command[@]}"} \
+    # -segment_time "$chnl_seg_length" -segment_format mpeg_ts \
+    # -segment_list $chnl_output_dir_root/$chnl_playlist_name.m3u8 $chnl_output_dir_root/$chnl_seg_dir_path${chnl_seg_name}_%05d.ts \
+    # ${chnl_segment_command[@]+"${chnl_segment_command[@]}"} > "$FFMPEG_LOG_ROOT/$new_pid.log" 2> "$FFMPEG_LOG_ROOT/$new_pid.err" &
+    # WaitTerm
+            } 201>"$pid_file"
+        ;;
+    esac
+}

@@ -1,0 +1,37 @@
+VipGetHosts()
+{
+    vip_hosts_list=""
+    vip_hosts_count=0
+    vip_hosts_ip=()
+    vip_hosts_port=()
+    vip_hosts_seed=()
+    vip_hosts_token=()
+    vip_hosts_status=()
+    vip_hosts_channel_count=()
+    vip_hosts_channel_id=()
+    vip_hosts_channel_name=()
+    vip_hosts_channel_epg_id=()
+    while IFS="^" read -r ip port seed token status channels_count channels_id channels_name channels_epg_id
+    do
+        vip_hosts_count=$((vip_hosts_count+1))
+        ip=${ip#\"}
+        vip_hosts_ip+=("$ip")
+        vip_hosts_port+=("$port")
+        vip_hosts_seed+=("$seed")
+        vip_hosts_token+=("$token")
+        vip_hosts_status+=("$status")
+        if [ "$status" == "on" ] 
+        then
+            status_text="${green} [启用] ${normal}"
+        else
+            status_text="${red} [禁用] ${normal}"
+        fi
+        vip_hosts_channel_count+=("$channels_count")
+        vip_hosts_channel_id+=("$channels_id")
+        vip_hosts_channel_name+=("$channels_name")
+        channels_epg_id=${channels_epg_id%\"}
+        vip_hosts_channel_epg_id+=("$channels_epg_id")
+        vip_hosts_list="$vip_hosts_list ${green}$vip_hosts_count.${normal}${indent_6}服务器: ${green}$ip${normal}  端口: ${green}$port${normal}  频道数: ${green}$channels_count${normal}$status_text\n${indent_6}seed: ${green}$seed${normal}  token: ${green}${token:-无}${normal}\n\n"
+    done < <($JQ_FILE '.hosts[]|[.ip,.port,.seed,.token,.status,(.channels|length),([.channels[].id]|join("|")),([.channels[].name]|join("|")),([.channels[].epg_id]|join("|"))]|join("^")' "$VIP_FILE")
+    return 0
+}

@@ -1,0 +1,44 @@
+VipGetStreamLink()
+{
+    seed="$vip_host_seed"
+    tid="$vip_user_license"
+    tid_lower=$(tr '[:upper:]' '[:lower:]' <<< "$tid")
+    if [ "$vip_user_expire" -gt 0 ] 
+    then
+        day=$((vip_user_expire/86400))
+        st2="$vip_user_expire"
+    else
+        printf -v now '%(%s)T' -1
+        st2=$((now+86400*720))
+    fi
+
+    token="$vip_host_token"
+    ss=$(printf '%s' "$st2$token$vip_user_ip$tid" | md5sum)
+    ss=${ss%% *}
+    [ -z "${ct2:-}" ] && ct2=$(date +%s%3N)
+    vip_channel_id_lower=$(tr '[:upper:]' '[:lower:]' <<< "$vip_channel_id")
+    cs=$(printf '%s' "$st2$ss$ct2$vip_channel_id_lower$tid_lower" | md5sum)
+    cs=${cs%% *}
+
+    case $vip_user_sum in
+        "ssum") 
+            ssum="$seed/$vip_channel_id/playlist.m3u8$tid$day"
+            ssum=$(printf '%s' "$ssum" | md5sum)
+            ssum=${ssum%% *}
+            stream_link="http://$vip_host_ip:$vip_host_port/$vip_channel_id/playlist.m3u8?tid=$tid&ssum=$ssum&st2=$st2&ss=$ss&ct2=$ct2&cs=$cs"
+        ;;
+        "tsum") 
+            ct=$day
+            tsum="$seed/$vip_channel_id/playlist.m3u8$tid$ct"
+            tsum=$(printf '%s' "$tsum" | md5sum)
+            tsum=${tsum%% *}
+            stream_link="http://$vip_host_ip:$vip_host_port/$vip_channel_id/playlist.m3u8?tid=$tid&ct=$ct&tsum=$tsum&st2=$st2&ss=$ss&ct2=$ct2&cs=$cs"
+        ;;
+        "isum") 
+            isum="$seed$vip_user_ip/$vip_channel_id/playlist.m3u8$tid"
+            isum=$(printf '%s' "$isum" | md5sum)
+            isum=${isum%% *}
+            stream_link="http://$vip_host_ip:$vip_host_port/$vip_channel_id/playlist.m3u8?tid=$tid&isum=$isum&st2=$st2&ss=$ss&ct2=$ct2&cs=$cs"
+        ;;
+    esac
+}

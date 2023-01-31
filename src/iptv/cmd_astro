@@ -1,0 +1,33 @@
+Println "$info 检测 astro ..."
+
+delimiters=( $'\001' )
+IFS=$'\002\t' read -r m_id m_title m_description m_is_hd m_language < <(
+JQs flat "$(curl -s -Lm 20 -H 'User-Agent: '"$USER_AGENT_BROWSER"'' https://contenthub-api.eco.astro.com.my/channel/all.json)" '.[0].response' '
+. as $response | reduce ({id,title,description,isHd,language}|keys_unsorted[]) as $key ([];
+    $response[$key] as $val | if $val then
+        . + [$val + "\u0001\u0002"]
+    else
+        . + ["\u0002"]
+    end
+)|@tsv' "${delimiters[@]}")
+
+IFS="${delimiters[0]}" read -ra chnls_id <<< "$m_id"
+IFS="${delimiters[0]}" read -ra chnls_title <<< "$m_title"
+IFS="${delimiters[0]}" read -ra chnls_description <<< "$m_description"
+IFS="${delimiters[0]}" read -ra chnls_is_hd <<< "$m_is_hd"
+IFS="${delimiters[0]}" read -ra chnls_language <<< "$m_language"
+
+chnls_list=""
+for((i=0;i<${#chnls_id[@]};i++));
+do
+    if [ "${chnls_is_hd[i]}" = true ] 
+    then
+        is_hd="${green}是${normal}"
+    else
+        is_hd="${red}否${normal}"
+    fi
+    chnls_list="$chnls_list ${green}$((i+1)).${normal}${indent_6}频道ID: ${green}${chnls_id[i]}${normal} 频道名称: ${green}${chnls_title[i]}${normal}\n${indent_6}高清: ${green}$is_hd${normal} 语言: ${green}${chnls_language[i]}${normal}\n${indent_6}${chnls_description[i]}\n\n"
+done
+
+Println "$chnls_list"
+exit 0

@@ -1,0 +1,64 @@
+CloudflareDelZone()
+{
+    CloudflareListZones
+
+    echo -e "选择源站"
+    while read -p "$i18n_default_cancel" cf_zones_num
+    do
+        case "$cf_zones_num" in
+            "")
+                Println "$i18n_canceled...\n" && exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$cf_zones_num" -gt 0 ] && [ "$cf_zones_num" -le "$cf_zones_count" ]
+                then
+                    cf_zones_index=$((cf_zones_num-1))
+                    cf_zone_name=${cf_zones_name[cf_zones_index]}
+                    cf_zone_resolve_to=${cf_zones_resolve_to[cf_zones_index]}
+                    cf_user_email=${cf_zones_user_email[cf_zones_index]}
+                    cf_user_unique_id=${cf_zones_user_unique_id[cf_zones_index]}
+                    cf_zone_subdomains=${cf_zones_subdomains[cf_zones_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+
+    CloudflareGetUser
+    Println "$info 稍等..."
+    IFS="^" read -r result err_code msg < <(curl -s -Lm 50 https://api.cloudflare.com/host-gw.html \
+        -d 'act=zone_delete' \
+        -d "host_key=$cf_host_key" \
+        -d "user_key=$cf_user_key" \
+        -d "zone_name=$cf_zone_name" \
+        | $JQ_FILE '[.result,.err_code,.msg]|join("^")'
+    ) || true
+
+    result=${result#\"}
+    msg=${msg%\"}
+
+    if [ -z "$result" ] || [ "$result" == "error" ]
+    then
+        if [ "$err_code" -eq 115 ] || [ "$err_code" -eq 703 ]
+        then
+            Println "$error 此用户已被 CFP 删除或未添加成功, 可以到 Cloudflare 官网手动删除源站或者重新添加 !"
+        else
+            Println "$error ${msg:-超时, 请重试}\n"
+        fi
+        echo
+        ExitOnList n "`gettext \"是否仍要删除此源站, 只有这里和官网都删除才能重新添加此源站\"`"
+
+        jq_path='["hosts",'"$cf_hosts_index"',"zones",'"$cf_zones_index"']'
+        JQ delete "$CF_CONFIG"
+        Println "$info $cf_zone_name 删除成功\n"
+    else
+        jq_path='["hosts",'"$cf_hosts_index"',"zones",'"$cf_zones_index"']'
+        JQ delete "$CF_CONFIG"
+        Println "$info $cf_zone_name 删除成功\n"
+    fi
+}

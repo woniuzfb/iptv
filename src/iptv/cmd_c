@@ -1,0 +1,22 @@
+to_locale=${2:-}
+new_locale=""
+
+if [ -n "$to_locale" ] 
+then
+    new_locale=${to_locale%.*}
+
+    if [[ $new_locale =~ ^(.+)[-|_](.+)$ ]] 
+    then
+        new_locale=$(tr '[:upper:]' '[:lower:]' <<< "${BASH_REMATCH[1]}")_$(tr '[:lower:]' '[:upper:]' <<< "${BASH_REMATCH[2]}")
+    else
+        new_locale=$(tr '[:upper:]' '[:lower:]' <<< "$new_locale")
+    fi
+
+    if [[ $to_locale =~ \. ]] 
+    then
+        new_locale="$new_locale.${to_locale#*.}"
+    fi
+fi
+
+i18nInstall "$new_locale"
+exit 0

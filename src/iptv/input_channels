@@ -1,0 +1,106 @@
+InputChannelsIndex()
+{
+    echo -e "`eval_gettext \"\\\$tip 多个序号用空格分隔 比如: 5 7 9-11\"`\n"
+    while read -p "`gettext \"请输入频道的序号(默认: 取消): \"`" chnls_indices_input
+    do
+        [ -z "$chnls_indices_input" ] && Println "$i18n_canceled...\n" && exit 1
+
+        chnls_pid_chosen=()
+        chnls_indices=()
+
+        if [ -n "${menu_num:-}" ] 
+        then
+            if [[ $menu_num -eq 7 ]] 
+            then
+                if [[ $chnls_indices_input == $((chnls_count+1)) ]] 
+                then
+                    for((i=0;i<chnls_count;i++));
+                    do
+                        if [[ -z ${kind:-} ]] && [[ ${chnls_status[i]} == "off" ]]
+                        then
+                            chnls_pid_chosen+=("${chnls_pid[i]}")
+                            chnls_indices+=("$i")
+                        elif [[ ${kind:-} == "flv" ]] && [[ ${chnls_flv_status[i]} == "off" ]]
+                        then
+                            chnls_pid_chosen+=("${chnls_pid[i]}")
+                            chnls_indices+=("$i")
+                        fi
+                    done
+                    [ -z "${chnls_pid_chosen:-}" ] && Println "`eval_gettext \"\\\$error 没有找到关闭的频道\"`\n" && exit 1
+                    break
+                elif [[ $chnls_indices_input == $((chnls_count+2)) ]] 
+                then
+                    for((i=0;i<chnls_count;i++));
+                    do
+                        if [[ -z ${kind:-} ]] && [[ ${chnls_status[i]} == "on" ]]
+                        then
+                            chnls_pid_chosen+=("${chnls_pid[i]}")
+                            chnls_indices+=("$i")
+                        elif [[ ${kind:-} == "flv" ]] && [[ ${chnls_flv_status[i]} == "on" ]]
+                        then
+                            chnls_pid_chosen+=("${chnls_pid[i]}")
+                            chnls_indices+=("$i")
+                        fi
+                    done
+                    [ -z "${chnls_pid_chosen:-}" ] && Println "`eval_gettext \"\\\$error 没有找到开启的频道\"`\n" && exit 1
+                    break
+                fi
+            elif [[ $menu_num -eq 8 ]] && [[ $chnls_indices_input == $((chnls_count+1)) ]]
+            then
+                for((i=0;i<chnls_count;i++));
+                do
+                    if [[ -z ${kind:-} ]] && [[ ${chnls_status[i]} == "on" ]]
+                    then
+                        chnls_pid_chosen+=("${chnls_pid[i]}")
+                        chnls_indices+=("$i")
+                    elif [[ ${kind:-} == "flv" ]] && [[ ${chnls_flv_status[i]} == "on" ]]
+                    then
+                        chnls_pid_chosen+=("${chnls_pid[i]}")
+                        chnls_indices+=("$i")
+                    fi
+                done
+                [ -z "${chnls_pid_chosen:-}" ] && Println "`eval_gettext \"\\\$error 没有找到开启的频道\"`\n" && exit 1
+                break
+            fi
+        fi
+
+        IFS=" " read -ra chnls_indices_input_arr <<< "$chnls_indices_input"
+
+        for chnl_index in "${chnls_indices_input_arr[@]}"
+        do
+            if [[ $chnl_index =~ - ]] 
+            then
+                chnl_index_start=${chnl_index%-*}
+                chnl_index_end=${chnl_index#*-}
+
+                if [[ $chnl_index_start == *[!0-9]* ]] || [[ $chnl_index_end == *[!0-9]* ]] 
+                then
+                    Println "`eval_gettext \"\\\$error 多选输入错误!\"`\n"
+                    continue 2
+                elif [[ $chnl_index_start -gt 0 ]] && [[ $chnl_index_end -le $chnls_count ]] && [[ $chnl_index_end -gt $chnl_index_start ]] 
+                then
+                    ((chnl_index_start--))
+                    for((i=chnl_index_start;i<chnl_index_end;i++));
+                    do
+                        chnls_pid_chosen+=("${chnls_pid[i]}")
+                        chnls_indices+=("$i")
+                    done
+                else
+                    Println "`eval_gettext \"\\\$error 多选输入错误!\"`\n"
+                    continue 2
+                fi
+            elif [[ $chnl_index == *[!0-9]* ]] || [[ $chnl_index -eq 0 ]] || [[ $chnl_index -gt $chnls_count ]] 
+            then
+                Println "$error $i18n_input_correct_no\n"
+                continue 2
+            else
+                ((chnl_index--))
+                chnls_pid_chosen+=("${chnls_pid[chnl_index]}")
+                chnls_indices+=("$chnl_index")
+            fi
+        done
+        break
+    done
+
+    i18nGetMsg get_channel
+}

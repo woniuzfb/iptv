@@ -1,0 +1,867 @@
+FFmpegInstall()
+{
+    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+    FFMPEG="$FFMPEG_ROOT/ffmpeg"
+    FFPROBE="$FFMPEG_ROOT/ffprobe"
+
+    if [ ! -e "$FFMPEG" ] || [ ! -e "$FFPROBE" ]
+    then
+        Println "`eval_gettext \"\\\$info 开始下载/安装 FFmpeg...\"`"
+
+        ArchCheck
+
+        if [ "$arch" == "x86_64" ]
+        then
+            ffmpeg_package="ffmpeg-git-amd64-static.tar.xz"
+        elif [ "$arch" == "i386" ] 
+        then
+            ffmpeg_package="ffmpeg-git-i686-static.tar.xz"
+        elif [ "$arch" == "armv6l" ] 
+        then
+            ffmpeg_package="ffmpeg-git-armel-static.tar.xz"
+        elif grep -q "arm" <<< "$arch" 
+        then
+            ffmpeg_package="ffmpeg-git-$arch-static.tar.xz"
+        else
+            Println "$error FFmpeg 不支持当前系统\n"
+            exit 1
+        fi
+
+        FFMPEG_PACKAGE_FILE="$IPTV_ROOT/$ffmpeg_package"
+
+        if ! curl -L "$FFMPEG_MIRROR_LINK/builds/$ffmpeg_package" -o "$FFMPEG_PACKAGE_FILE"
+        then
+            Println "`eval_gettext \"\\\$error FFmpeg 下载失败 !\"`"
+            exit 1
+        fi
+
+        tar xJf "$FFMPEG_PACKAGE_FILE" -C "$IPTV_ROOT" && rm -f "${FFMPEG_PACKAGE_FILE:-notfound}"
+
+        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
+        FFMPEG="$FFMPEG_ROOT/ffmpeg"
+        FFPROBE="$FFMPEG_ROOT/ffprobe"
+
+        if [ ! -e "$FFMPEG" ] || [ ! -e "$FFPROBE" ]
+        then
+            Println "`eval_gettext \"\\\$error FFmpeg 解压失败 !\"`"
+            exit 1
+        fi
+
+        Println "`eval_gettext \"\\\$info FFmpeg 安装成功\"`"
+    else
+        Println "`eval_gettext \"\\\$info FFmpeg 已安装\"`"
+    fi
+}
+
+FFmpegCompile()
+{
+    DepsCheck
+
+    if [ "$dist" == "rpm" ] 
+    then
+        Println "`eval_gettext \"\\\$error 不支持 centos\"`\n"
+        exit 1
+    fi
+
+    tls_options=( 'gnutls' 'openssl' )
+    inquirer list_input "`gettext \"选择 tls\"`" tls_options tls_option
+
+    nproc="-j$(nproc 2> /dev/null)" || nproc=""
+
+    if ! grep -q "swapfile" /etc/fstab 
+    then
+        fallocate -l 1024M /opt/swapfile > /dev/null 2>&1 || dd if=/dev/zero of=/opt/swapfile bs=1M count=1024 > /dev/null 2>&1
+        chmod 600 /opt/swapfile
+        mkswap /opt/swapfile
+        swapon /opt/swapfile
+        echo "/opt/swapfile none swap defaults 0 0" >> /etc/fstab
+    fi
+
+    mkdir -p ~/ffmpeg_sources
+
+    apt-get -y install autoconf automake build-essential cmake zlib1g-dev \
+        libtool pkg-config texinfo frei0r-plugins-dev libopencore-amrnb-dev \
+        libopencore-amrwb-dev libtheora-dev libvo-amrwbenc-dev libxvidcore-dev \
+        libssl-dev libva-dev libvdpau-dev libxcb1-dev libxcb-shm0-dev \
+        libxcb-xfixes0-dev flex bison libharfbuzz-dev \
+        libfontconfig-dev libfreetype6-dev python3 python3-pip \
+        python3-setuptools python3-wheel ninja-build doxygen git libxext-dev \
+        libsndfile1-dev libasound2-dev graphviz
+
+    export CMAKE_PREFIX_PATH="$HOME/ffmpeg_build"
+    export PATH="$HOME/ffmpeg_build/bin:$PATH"
+    export LDFLAGS="-L$HOME/ffmpeg_build/lib"
+    # -Wl,-z,relro,-z,now
+    export DYLD_LIBRARY_PATH="$HOME/ffmpeg_build/lib"
+    export PKG_CONFIG_PATH="$HOME/ffmpeg_build/lib/pkgconfig"
+    export CFLAGS="-I$HOME/ffmpeg_build/include $LDFLAGS"
+    # -O3 -static-libgcc -fno-strict-overflow -fstack-protector-all -fPIE
+    # export CXXFLAGS="-O3 -static-libgcc -fno-strict-overflow -fstack-protector-all -fPIE"
+
+    # zlib
+    cd ~/ffmpeg_sources
+    if [ ! -d zlib-1.2.11 ] 
+    then
+        [ ! -f zlib-1.2.11.tar.gz ] && curl -L "https://www.zlib.net/zlib-1.2.11.tar.gz" -o zlib-1.2.11.tar.gz
+        tar xzf zlib-1.2.11.tar.gz
+    fi
+    cd zlib-1.2.11
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build" --static
+    make $nproc
+    make install
+
+    # CMake
+    cmake_install=1
+    if [[ -x $(command -v cmake) ]] 
+    then
+        cmake_ver=$(cmake --version | awk '{print $3}' | head -1)
+        if [[ $cmake_ver =~ ([^.]+).([^.]+).([^.]+) ]] && [[ ${BASH_REMATCH[1]} -lt 14 ]]
+        then
+            apt-get -y remove cmake
+            hash -r
+        else
+            cmake_install=0
+        fi
+    fi
+
+    if [ "$cmake_install" -eq 1 ] 
+    then
+        cd ~/ffmpeg_sources
+        if [ ! -d CMake-3.18.4 ] 
+        then
+            [ ! -f cmake-3.18.4.tar.gz ] && curl -L "https://github.com/Kitware/CMake/archive/v3.18.4.tar.gz" -o cmake-3.18.4.tar.gz
+            tar xzf cmake-3.18.4.tar.gz
+        fi
+        cd CMake-3.18.4
+        if [ -f Makefile ] 
+        then
+            make distclean || true
+        fi
+        ./bootstrap
+        make $nproc
+        make install
+    fi
+
+    # libbz2
+    cd ~/ffmpeg_sources
+    if [ ! -d bzip2-1.0.6 ] 
+    then
+        [ ! -f bzip2-1.0.6.tar.gz ] && curl -L "https://downloads.sourceforge.net/bzip2/bzip2-1.0.6.tar.gz" -o bzip2-1.0.6.tar.gz
+        tar xzf bzip2-1.0.6.tar.gz
+    fi
+    cd bzip2-1.0.6
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    make
+    make install PREFIX="$HOME/ffmpeg_build"
+    echo "prefix=$HOME/ffmpeg_build
+exec_prefix=\${prefix}
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
+
+Name: bzip2
+Description: bzip2
+Version: 1.0.6
+Requires:
+Libs: -L\${libdir} -lbz2
+Cflags: -I\${includedir}
+" > "$HOME/ffmpeg_build/lib/pkgconfig/bzip2.pc"
+
+    # yasm
+    cd ~/ffmpeg_sources
+    if [ ! -d yasm-1.3.0 ] 
+    then
+        [ ! -f yasm-1.3.0.tar.gz ] && curl -L "http://www.tortall.net/projects/yasm/releases/yasm-1.3.0.tar.gz" -o yasm-1.3.0.tar.gz
+        tar xzf yasm-1.3.0.tar.gz
+    fi
+    cd yasm-1.3.0
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build"
+    make $nproc
+    make install
+
+    # nasm
+    # uname -mpi | grep -qE 'x86|i386|i686'
+    if [ "$dist" != "arm" ] 
+    then
+        cd ~/ffmpeg_sources
+        if [ ! -d nasm-2.15.05 ] 
+        then
+            [ ! -f nasm-2.15.05.tar.gz ] && curl -L "https://www.nasm.us/pub/nasm/releasebuilds/2.15.05/nasm-2.15.05.tar.gz" -o nasm-2.15.05.tar.gz
+            tar xzf nasm-2.15.05.tar.gz
+        fi
+        cd nasm-2.15.05
+        if [ -f Makefile ] 
+        then
+            make distclean || true
+        fi
+        ./autogen.sh
+        ./configure --prefix="$HOME/ffmpeg_build"
+        make $nproc
+        make install
+    fi
+
+    # x264
+    cd ~/ffmpeg_sources
+    git -C x264 pull 2> /dev/null || git clone --depth 1 https://code.videolan.org/videolan/x264.git
+    cd x264
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build" --enable-static --enable-pic
+    make $nproc
+    make install
+
+    # libnuma (for x265)
+    cd ~/ffmpeg_sources
+    git -C numactl pull 2> /dev/null || git clone --depth 1 https://github.com/numactl/numactl.git
+    cd numactl
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared
+    make $nproc
+    make install
+
+    # x265
+    cd ~/ffmpeg_sources
+    rm -rf x265_git
+    git clone https://bitbucket.org/multicoreware/x265_git
+    cd x265_git/build/linux
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DENABLE_SHARED=OFF -DSTATIC_LINK_CRT=ON -DENABLE_CLI=OFF ../../source
+    make $nproc
+    sed -i 's/-lgcc_s/-lgcc_eh/g' x265.pc
+    make install
+
+    # liblzma (for libxml2, ffmpeg)
+    cd ~/ffmpeg_sources
+    if [ ! -d xz-5.2.5 ] 
+    then
+        [ ! -f xz-5.2.5.tar.xz ] && curl -L "https://downloads.sourceforge.net/lzmautils/xz-5.2.5.tar.xz" -o xz-5.2.5.tar.xz
+        tar xJf xz-5.2.5.tar.xz
+    fi
+    cd xz-5.2.5
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared --enable-static
+    make $nproc
+    make install
+
+    # libiconv (for libxml2)
+    cd ~/ffmpeg_sources
+    if [ ! -d libiconv-1.16 ] 
+    then
+        [ ! -f libiconv-1.16.tar.gz ] && curl -L "https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.16.tar.gz" -o libiconv-1.16.tar.gz
+        tar xzf libiconv-1.16.tar.gz
+    fi
+    cd libiconv-1.16
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared --enable-static
+    make $nproc
+    make install
+
+    # libxml2
+    cd ~/ffmpeg_sources
+    rm -rf libxml2
+    git clone https://github.com/GNOME/libxml2.git
+    mkdir -p libxml2/build
+    cd libxml2/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF ..
+    make $nproc
+    make install
+    printf '%s' "prefix=$HOME/ffmpeg_build
+exec_prefix=\${prefix}
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
+
+Name: libxml2
+Description: libxml2
+Version: 2.9.10
+Requires:
+Libs: -L\${libdir} -lxml2
+Cflags: -I\${includedir}
+" > "$HOME/ffmpeg_build/lib/pkgconfig/libxml-2.0.pc"
+
+    # libpng (for openjpeg)
+    cd ~/ffmpeg_sources
+    if [ ! -d libpng-1.6.37 ] 
+    then
+        [ ! -f libpng-1.6.37.tar.gz ] && curl -L "https://downloads.sourceforge.net/libpng/libpng-1.6.37.tar.gz" -o libpng-1.6.37.tar.gz
+        tar xzf libpng-1.6.37.tar.gz
+    fi
+    cd libpng-1.6.37
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build" --enable-static=yes --enable-shared=no
+    make $nproc
+    make install
+
+    # c2man (for fribidi)
+    cd ~/ffmpeg_sources
+    rm -rf c2man
+    git clone --depth 1 https://github.com/fribidi/c2man.git
+    cd c2man
+    rm -rf "$HOME/ffmpeg_sources/c2man_build"
+    rm -f "$HOME/ffmpeg_build/bin/c2man"
+    mkdir "$HOME/ffmpeg_sources/c2man_build"
+    ./Configure -dE
+    echo "binexp=$HOME/ffmpeg_build/bin" >> config.sh
+    echo "installprivlib=$HOME/ffmpeg_sources/c2man_build" >> config.sh
+    echo "mansrc=$HOME/ffmpeg_sources/c2man_build" >> config.sh
+    sh config_h.SH
+    sh flatten.SH
+    sh Makefile.SH
+    make depend
+    make
+    make install
+
+    # fribidi (for libass)
+    cd ~/ffmpeg_sources
+    if [ ! -d fribidi-1.0.10 ] 
+    then
+        [ ! -f fribidi-1.0.10.tar.gz ] && curl -L "https://github.com/fribidi/fribidi/archive/v1.0.10.tar.gz" -o fribidi-1.0.10.tar.gz
+        tar xzf fribidi-1.0.10.tar.gz
+    fi
+    cd fribidi-1.0.10
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared --enable-static
+    make $nproc
+    make install
+
+    # libass
+    cd ~/ffmpeg_sources
+    if [ ! -d libass-0.14.0 ] 
+    then
+        [ ! -f libass-0.14.0.tar.gz ] && curl -L "https://github.com/libass/libass/archive/0.14.0.tar.gz" -o libass-0.14.0.tar.gz
+        tar xzf libass-0.14.0.tar.gz
+    fi
+    cd libass-0.14.0
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared
+    make $nproc
+    make install
+
+    # zvbi
+    cd ~/ffmpeg_sources
+    if [ ! -d zvbi-0.2.35 ] 
+    then
+        [ ! -f zvbi-0.2.35.tar.bz2 ] && curl -L "https://downloads.sourceforge.net/zapping/zvbi/zvbi-0.2.35.tar.bz2" -o zvbi-0.2.35.tar.bz2
+        tar xjf zvbi-0.2.35.tar.bz2
+    fi
+    cd zvbi-0.2.35
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared --enable-static
+    make $nproc
+    make install
+
+    # sdl2
+    cd ~/ffmpeg_sources
+    rm -rf SDL2-2.0.12
+    [ ! -f SDL2-2.0.12.tar.gz ] && curl -L "https://www.libsdl.org/release/SDL2-2.0.12.tar.gz" -o SDL2-2.0.12.tar.gz
+    tar xzf SDL2-2.0.12.tar.gz
+    mkdir -p SDL2-2.0.12/build
+    cd SDL2-2.0.12/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF ..
+    make $nproc
+    make install
+
+    # lame
+    cd ~/ffmpeg_sources
+    if [ ! -d lame-3.100 ] 
+    then
+        [ ! -f lame-3.100.tar.gz ] && curl -L "https://downloads.sourceforge.net/lame/lame/lame-3.100.tar.gz" -o lame-3.100.tar.gz
+        tar xzf lame-3.100.tar.gz
+    fi
+    cd lame-3.100
+    # uname -a | grep -q 'aarch64'
+    if [ "$dist" == "arm" ] 
+    then
+        lame_build_target="--build=arm-linux"
+    else
+        lame_build_target=""
+    fi
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build" --enable-nasm --disable-shared $lame_build_target
+    make $nproc
+    make install
+
+    # opus
+    cd ~/ffmpeg_sources
+    rm -rf opus
+    git -C opus pull 2> /dev/null || git clone --depth 1 https://github.com/xiph/opus.git
+    cd opus
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared
+    make $nproc
+    make install
+
+    # libvpx
+    cd ~/ffmpeg_sources
+    git -C libvpx pull 2> /dev/null || git clone --depth 1 https://chromium.googlesource.com/webm/libvpx.git
+    cd libvpx
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-examples --disable-unit-tests --enable-vp9-highbitdepth --as=yasm --enable-pic
+    make $nproc
+    make install
+
+    # soxr
+    cd ~/ffmpeg_sources
+    rm -rf soxr-0.1.3-Source
+    [ ! -f soxr-0.1.3-Source.tar.xz ] && curl -L "https://downloads.sourceforge.net/soxr/soxr-0.1.3-Source.tar.xz" -o soxr-0.1.3-Source.tar.xz
+    tar xJf soxr-0.1.3-Source.tar.xz
+    mkdir -p soxr-0.1.3-Source/build
+    cd soxr-0.1.3-Source/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF -DWITH_OPENMP=OFF -DBUILD_TESTS=OFF ..
+    make $nproc
+    make install
+
+    # vidstab
+    cd ~/ffmpeg_sources
+    rm -rf vid.stab-1.1.0
+    [ ! -f vid.stab-1.1.0.tar.gz ] && curl -L "https://github.com/georgmartius/vid.stab/archive/v1.1.0.tar.gz" -o vid.stab-1.1.0.tar.gz
+    tar xzf vid.stab-1.1.0.tar.gz
+    mkdir -p vid.stab-1.1.0/build
+    cd vid.stab-1.1.0/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF ..
+    make $nproc
+    make install
+
+    # openjpeg
+    cd ~/ffmpeg_sources
+    rm -rf openjpeg-2.3.1
+    [ ! -f openjpeg-2.3.1.tar.gz ] && curl -L "https://github.com/uclouvain/openjpeg/archive/v2.3.1.tar.gz" -o openjpeg-2.3.1.tar.gz
+    tar xzf openjpeg-2.3.1.tar.gz
+    mkdir -p openjpeg-2.3.1/build
+    cd openjpeg-2.3.1/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF ..
+    make $nproc
+    make install
+
+    # zimg
+    cd ~/ffmpeg_sources
+    git -C zimg pull 2> /dev/null || git clone --depth 1 https://github.com/sekrit-twc/zimg.git
+    cd zimg
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --enable-static  --prefix="$HOME/ffmpeg_build" --disable-shared
+    make $nproc
+    make install
+
+    # libwebp
+    cd ~/ffmpeg_sources
+    if [ ! -d libwebp-1.0.0 ] 
+    then
+        [ ! -f libwebp-1.0.0.tar.gz ] && curl -L "https://github.com/webmproject/libwebp/archive/v1.0.0.tar.gz" -o libwebp-1.0.0.tar.gz
+        tar xzf libwebp-1.0.0.tar.gz
+    fi
+    cd libwebp-1.0.0
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared
+    make $nproc
+    make install
+
+    # fdk-aac
+    cd ~/ffmpeg_sources
+    git -C fdk-aac pull 2> /dev/null || git clone --depth 1 https://github.com/mstorsjo/fdk-aac.git
+    cd fdk-aac
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared
+    make $nproc
+    make install
+
+    # libogg
+    cd ~/ffmpeg_sources
+    if [ ! -d ogg-1.3.4 ] 
+    then
+        [ ! -f ogg-1.3.4.tar.gz ] && curl -L "https://github.com/xiph/ogg/archive/v1.3.4.tar.gz" -o ogg-1.3.4.tar.gz
+        tar xzf ogg-1.3.4.tar.gz
+    fi
+    cd ogg-1.3.4
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared
+    make $nproc
+    make install
+
+    # libvorbis
+    cd ~/ffmpeg_sources
+    if [ ! -d vorbis-1.3.7 ] 
+    then
+        [ ! -f vorbis-1.3.7.tar.gz ] && curl -L "https://github.com/xiph/vorbis/archive/v1.3.7.tar.gz" -o vorbis-1.3.7.tar.gz
+        tar xzf vorbis-1.3.7.tar.gz
+    fi
+    cd vorbis-1.3.7
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared
+    make $nproc
+    make install
+
+    # speex
+    cd ~/ffmpeg_sources
+    if [ ! -d speex-Speex-1.2.0 ] 
+    then
+        [ ! -f Speex-1.2.0.tar.gz ] && curl -L "https://github.com/xiph/speex/archive/Speex-1.2.0.tar.gz" -o Speex-1.2.0.tar.gz
+        tar xzf Speex-1.2.0.tar.gz
+    fi
+    cd speex-Speex-1.2.0
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./autogen.sh
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared
+    make $nproc
+    make install
+
+    # gmp
+    cd ~/ffmpeg_sources
+    if [ ! -d gmp-6.2.0 ] 
+    then
+        [ ! -f gmp-6.2.0.tar.xz ] && curl -L "https://gmplib.org/download/gmp/gmp-6.2.0.tar.xz" -o gmp-6.2.0.tar.xz
+        tar xJf gmp-6.2.0.tar.xz
+    fi
+    cd gmp-6.2.0
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build" --disable-shared --with-pic
+    make $nproc
+    make install
+
+    tls_args=()
+    if [ "$tls_option" == "openssl" ] 
+    then
+        tls_args+=( --enable-openssl )
+        # openssl
+        cd ~/ffmpeg_sources
+        if [ ! -d openssl-OpenSSL_1_1_1h ] 
+        then
+            [ ! -f OpenSSL_1_1_1h.tar.gz ] && curl -L "https://github.com/openssl/openssl/archive/OpenSSL_1_1_1h.tar.gz" -o OpenSSL_1_1_1h.tar.gz
+            tar xzf OpenSSL_1_1_1h.tar.gz
+        fi
+        cd openssl-OpenSSL_1_1_1h
+        if [ -f Makefile ] 
+        then
+            make distclean || true
+        fi
+        ./config --prefix="$HOME/ffmpeg_build"
+        make $nproc
+        make install_sw
+    else
+        tls_args+=( --enable-gnutls )
+
+        # libtasn1
+        cd ~/ffmpeg_sources
+        if [ ! -d libtasn1-4.16.0 ] 
+        then
+            [ ! -f libtasn1-4.16.0.tar.gz ] && curl -L "https://ftp.gnu.org/gnu/libtasn1/libtasn1-4.16.0.tar.gz" -o libtasn1-4.16.0.tar.gz
+            tar xzf libtasn1-4.16.0.tar.gz
+        fi
+        cd libtasn1-4.16.0
+        if [ -f Makefile ] 
+        then
+            make distclean || true
+        fi
+        ./configure --prefix="$HOME/ffmpeg_build" --disable-shared
+        make $nproc
+        make install
+
+        # nettle
+        cd ~/ffmpeg_sources
+        if [ ! -d nettle-3.5 ] 
+        then
+            [ ! -f nettle-3.5.tar.gz ] && curl -L "https://ftp.gnu.org/gnu/nettle/nettle-3.5.tar.gz" -o nettle-3.5.tar.gz
+            tar xzf nettle-3.5.tar.gz
+        fi
+        cd nettle-3.5
+        if [ -f Makefile ] 
+        then
+            make distclean || true
+        fi
+        ./configure --prefix="$HOME/ffmpeg_build" --disable-shared --enable-pic
+        make $nproc
+        make install
+
+        # gnutls
+        cd ~/ffmpeg_sources
+        if [ ! -d gnutls-3.6.15 ] 
+        then
+            [ ! -f gnutls-3.6.15.tar.xz ] && curl -L "https://www.gnupg.org/ftp/gcrypt/gnutls/v3.6/gnutls-3.6.15.tar.xz" -o gnutls-3.6.15.tar.xz
+            tar xJf gnutls-3.6.15.tar.xz
+        fi
+        cd gnutls-3.6.15
+        if [ -f Makefile ] 
+        then
+            make distclean || true
+        fi
+        ./configure --prefix="$HOME/ffmpeg_build" --disable-shared --enable-static \
+        --with-pic --with-included-libtasn1 --with-included-unistring --without-p11-kit --disable-doc
+        make $nproc
+        make install
+    fi
+
+    # fftw
+    cd ~/ffmpeg_sources
+    rm -rf fftw-3.3.8
+    [ ! -f fftw-3.3.8.tar.gz ] && curl -L "http://www.fftw.org/fftw-3.3.8.tar.gz" -o fftw-3.3.8.tar.gz
+    tar xzf fftw-3.3.8.tar.gz
+    mkdir -p fftw-3.3.8/build
+    cd fftw-3.3.8/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF ..
+    make $nproc
+    make install
+
+    # libsamplerate
+    cd ~/ffmpeg_sources
+    rm -rf libsamplerate
+    git clone https://github.com/libsndfile/libsamplerate.git
+    mkdir -p libsamplerate/build
+    cd libsamplerate/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF ..
+    make $nproc
+    make install
+
+    # vamp-plugin-sdk
+    cd ~/ffmpeg_sources
+    git -C vamp-plugin-sdk pull 2> /dev/null || git clone https://github.com/c4dm/vamp-plugin-sdk.git
+    cd vamp-plugin-sdk
+    if [ -f Makefile ] 
+    then
+        make distclean || true
+    fi
+    ./configure --prefix="$HOME/ffmpeg_build"
+    make $nproc
+    make install
+
+    # rubberband
+    cd ~/ffmpeg_sources
+    rm -rf rubberband-1.9
+    [ ! -f rubberband-1.9.tar.gz ] && curl -L "https://github.com/breakfastquay/rubberband/archive/v1.9.tar.gz" -o rubberband-1.9.tar.gz
+    tar xzf rubberband-1.9.tar.gz
+    cd rubberband-1.9
+    if [ ! -f CMakeLists.txt ] 
+    then
+        curl -L "https://raw.githubusercontent.com/breakfastquay/rubberband/8e09e4a2a9d54e627d5c80da89a0f4d2cdf8f65d/CMakeLists.txt" -o CMakeLists.txt
+    fi
+    mkdir build
+    cd build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" ..
+    make $nproc
+    make install
+    mkdir -p "$HOME/ffmpeg_build/include/rubberband/"
+    cp -f ../rubberband/* "$HOME/ffmpeg_build/include/rubberband/"
+    printf '%s' "prefix=$HOME/ffmpeg_build
+exec_prefix=\${prefix}
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
+
+Name: rubberband
+Version: 1.9
+Description:
+Libs: -L\${libdir} -lrubberband
+Cflags: -I\${includedir}
+" > "$HOME/ffmpeg_build/lib/pkgconfig/rubberband.pc"
+
+    # libsrt
+    cd ~/ffmpeg_sources
+    rm -rf srt-1.4.2
+    [ ! -f srt-1.4.2.tar.gz ] && curl -L "https://github.com/Haivision/srt/archive/v1.4.2.tar.gz" -o srt-1.4.2.tar.gz
+    tar xzf srt-1.4.2.tar.gz
+    mkdir -p srt-1.4.2/build
+    cd srt-1.4.2/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DENABLE_SHARED=OFF ..
+    make $nproc
+    sed -i 's/-lgcc_s/-lgcc_eh/g' srt.pc
+    make install
+
+    # libgme
+    cd ~/ffmpeg_sources
+    rm -rf game-music-emu-0.6.2
+    [ ! -f game-music-emu-0.6.2.tar.xz ] && curl -L "https://bitbucket.org/mpyne/game-music-emu/downloads/game-music-emu-0.6.2.tar.xz" -o game-music-emu-0.6.2.tar.xz
+    tar xJf game-music-emu-0.6.2.tar.xz
+    mkdir -p game-music-emu-0.6.2/build
+    cd game-music-emu-0.6.2/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF ..
+    make $nproc
+    make install
+
+    # aom
+    cd ~/ffmpeg_sources
+    rm -rf aom
+    git clone --depth 1 https://aomedia.googlesource.com/aom
+    mkdir -p aom/build
+    cd aom/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF -DENABLE_NASM=on ..
+    make $nproc
+    make install
+
+    # SVT-AV1
+    cd ~/ffmpeg_sources
+    rm -rf SVT-AV1
+    git clone https://github.com/AOMediaCodec/SVT-AV1.git
+    mkdir -p SVT-AV1/build
+    cd SVT-AV1/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DCMAKE_BUILD_TYPE=Release -DBUILD_DEC=OFF -DBUILD_SHARED_LIBS=OFF ..
+    make $nproc
+    make install
+
+    # vmaf
+    cd ~/ffmpeg_sources
+    rm -rf vmaf-1.5.3
+    [ ! -f vmaf_v1.5.3.tar.gz ] && curl -L https://github.com/Netflix/vmaf/archive/v1.5.3.tar.gz -o vmaf_v1.5.3.tar.gz
+    tar zxf vmaf_v1.5.3.tar.gz
+    cd vmaf-1.5.3
+    pip3 install meson
+    pip3 install Cython
+    pip3 install numpy
+    meson setup libvmaf/build libvmaf --buildtype=release --default-library=static --prefix="$HOME/ffmpeg_build"
+    ninja -vC libvmaf/build install
+    cp -f ~/ffmpeg_build/lib/*-linux-gnu/pkgconfig/libvmaf.pc ~/ffmpeg_build/lib/pkgconfig/
+
+    # dav1d
+    cd ~/ffmpeg_sources
+    rm -rf dav1d
+    git clone https://code.videolan.org/videolan/dav1d.git
+    cd dav1d
+    meson build --buildtype release --default-library static --prefix "$HOME/ffmpeg_build" --libdir lib
+    cd build
+    meson configure
+    ninja
+    meson test -v
+    ninja install
+
+    # graphite2
+    cd ~/ffmpeg_sources
+    rm -rf graphite
+    git clone https://github.com/silnrsi/graphite.git
+    mkdir -p graphite/build
+    cd graphite/build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF ..
+    make $nproc
+    make install
+
+    # ffmpeg
+    cd ~/ffmpeg_sources
+    rm -rf ffmpeg
+    curl -L https://ffmpeg.org/releases/ffmpeg-snapshot.tar.bz2 -o ffmpeg-snapshot.tar.bz2
+    tar xjf ffmpeg-snapshot.tar.bz2
+
+    cd ffmpeg
+    curl -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch" -o Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch
+    patch -p1 < Add-SVT-HEVC-FLV-support-on-FFmpeg-git.patch
+    ./configure \
+    --prefix="$HOME/ffmpeg_build" \
+    --pkg-config-flags="--static" \
+    --extra-cflags="-fopenmp -I$HOME/ffmpeg_build/include -I$HOME/ffmpeg_build/include/libxml2" \
+    --extra-ldflags="-static -fopenmp -L$HOME/ffmpeg_build/lib" \
+    --extra-libs="-lpthread -lfftw3 -lsamplerate -lz -llzma -liconv -lm -lstdc++" \
+    --disable-debug \
+    --disable-shared \
+    --disable-indev=sndio \
+    --disable-outdev=sndio \
+    --enable-static \
+    --enable-gpl \
+    --enable-pic \
+    --enable-ffplay \
+    --enable-version3 \
+    --enable-iconv \
+    --enable-fontconfig \
+    --enable-frei0r \
+    --enable-gmp \
+    --enable-libgme \
+    --enable-gray \
+    --enable-libaom \
+    --enable-libfribidi \
+    --enable-libass \
+    --enable-libfdk-aac \
+    --enable-libfreetype \
+    --enable-libmp3lame \
+    --enable-libopencore-amrnb \
+    --enable-libopencore-amrwb \
+    --enable-libopenjpeg \
+    --enable-libsoxr \
+    --enable-libspeex \
+    --enable-libvorbis \
+    --enable-libopus \
+    --enable-libtheora \
+    --enable-libvidstab \
+    --enable-libvo-amrwbenc \
+    --enable-libvpx \
+    --enable-libwebp \
+    --enable-libx264 \
+    --enable-libx265 \
+    --enable-libsvtav1 \
+    --enable-libdav1d \
+    --enable-libxvid \
+    --enable-libzvbi \
+    --enable-libzimg \
+    --enable-nonfree \
+    --enable-librubberband \
+    --enable-libsrt \
+    --enable-libvmaf \
+    --enable-libxml2 ${tls_args[@]+"${tls_args[@]}"}
+    make $nproc
+    #make install
+    #hash -r
+    mv ffmpeg /usr/local/bin/ffmpeg_c
+    Println "`eval_gettext \"\\\$info FFmpeg 编译成功\"`\n"
+}

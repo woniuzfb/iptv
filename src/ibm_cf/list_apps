@@ -1,0 +1,17 @@
+IbmListCfApps()
+{
+    if [ ! -s "$IBM_CONFIG" ] 
+    then
+        Println "$error 请先添加 APP\n" && exit 1
+    fi
+
+    IbmGetCfApps
+
+    if [ "$ibm_cf_apps_count" -gt 0 ] 
+    then
+        Println "$ibm_cf_apps_list"
+    else
+        Println "$error 没有 APP\n"
+        exit 1
+    fi
+}

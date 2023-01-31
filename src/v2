@@ -1,0 +1,348 @@
+Include src/v2ray/get_free_tag "$@"
+
+Include src/v2ray/view_staus "$@"
+
+Include src/v2ray/set_bound "$@"
+
+Include src/v2ray/add_inbound "$@"
+
+Include src/v2ray/get_inbounds "$@"
+
+Include src/v2ray/list_inbounds "$@"
+
+Include src/v2ray/select_inbound "$@"
+
+Include src/v2ray/select_account "$@"
+
+Include src/v2ray/delete_inbound "$@"
+
+Include src/v2ray/add_inbound_account "$@"
+
+Include src/v2ray/list_inbound_accounts "$@"
+
+Include src/v2ray/list_inbound_share "$@"
+
+Include src/v2ray/delete_inbound_account "$@"
+
+Include src/v2ray/add_outbound "$@"
+
+Include src/v2ray/get_outbounds "$@"
+
+Include src/v2ray/list_outbounds "$@"
+
+Include src/v2ray/select_outbound "$@"
+
+Include src/v2ray/delete_outbound "$@"
+
+Include src/v2ray/add_outbound_account "$@"
+
+Include src/v2ray/list_outbound_accounts "$@"
+
+Include src/v2ray/delete_outbound_account "$@"
+
+Include src/v2ray/get_routing "$@"
+
+Include src/v2ray/list_routing "$@"
+
+Include src/v2ray/set_routing "$@"
+
+Include src/v2ray/get_policy "$@"
+
+Include src/v2ray/list_policy "$@"
+
+Include src/v2ray/set_policy "$@"
+
+Include src/v2ray/get_reverse "$@"
+
+Include src/v2ray/list_reverse "$@"
+
+Include src/v2ray/set_reverse "$@"
+
+Include src/v2ray/get_dns "$@"
+
+Include src/v2ray/list_dns "$@"
+
+Include src/v2ray/set_dns "$@"
+
+Include src/v2ray/get_stats "$@"
+
+Include src/v2ray/get_traffic "$@"
+
+Include src/v2ray/list_stats "$@"
+
+Include src/v2ray/reset_stats "$@"
+
+Include src/v2ray/list_inbound_domains "$@"
+
+Include src/v2ray/update_cert "$@"
+
+Include src/v2ray/list_nginx_domains "$@"
+
+Include src/v2ray/select_nginx_domain "$@"
+
+Include src/v2ray/select_nginx_server "$@"
+
+Include src/v2ray/update_nginx_cert "$@"
+
+Include src/v2ray/add_nginx_proxy "$@"
+
+Include src/v2ray/select_nginx_proxy "$@"
+
+Include src/v2ray/list_nginx_domain "$@"
+
+Include src/v2ray/config_domain "$@"
+
+V2rayInstall()
+{
+    if [ -s "$V2_CONFIG" ] 
+    then
+        Println "$error $v2ray_name 已存在...\n"
+        ExitOnList n "`gettext \"是否覆盖原安装\"`"
+    fi
+
+    DepsCheck
+    JQInstall
+
+    if ! grep -q "$v2ray_name:" < "/etc/passwd"
+    then
+        if grep -q '\--group ' < <(adduser --help)
+        then
+            adduser $v2ray_name --system --group --no-create-home > /dev/null
+        else
+            adduser $v2ray_name --system --no-create-home > /dev/null
+        fi
+        usermod -s /usr/sbin/nologin $v2ray_name
+    fi
+
+    Println "$info 安装 $v2ray_name..."
+
+    if [ "$v2ray_name" == "v2ray" ] 
+    then
+        { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_FALLBACK"; } \
+        | sed "s+nobody+$v2ray_name+g" \
+        | sed "s+ 'sha1'++g" \
+        | sed "s+ 'sha256'++g" \
+        | sed "s+ 'sha512'++g" \
+        | sed "s+https://api.github.com/repos/v2fly/v2ray-core/releases/latest+$FFMPEG_MIRROR_LINK/$v2ray_name.json+g" \
+        | sed "s+https://github.com/v2fly/v2ray-core/releases/download+$FFMPEG_MIRROR_LINK/$v2ray_name+g" | bash
+    else
+        { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_FALLBACK"; } \
+        | sed "s+nobody+$v2ray_name+g" \
+        | sed "s+ 'sha1'++g" \
+        | sed "s+ 'sha256'++g" \
+        | sed "s+ 'sha512'++g" \
+        | sed "s+https://api.github.com/repos/XTLS/Xray-core/releases/latest+$FFMPEG_MIRROR_LINK/$v2ray_name.json+g" \
+        | sed "s+https://github.com/XTLS/Xray-core/releases/download+$FFMPEG_MIRROR_LINK/$v2ray_name+g" | bash
+    fi
+
+    sed -i "s+nobody+$v2ray_name+g" "/etc/systemd/system/$v2ray_name.service"
+    sed -i "s+nobody+$v2ray_name+g" "/etc/systemd/system/$v2ray_name@.service"
+
+    mkdir -p /var/log/$v2ray_name/
+    [ ! -e "/var/log/$v2ray_name/error.log" ] && printf '%s' "" > /var/log/$v2ray_name/error.log
+    chown -R $v2ray_name:$v2ray_name /var/log/$v2ray_name/
+    chown -R $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/
+
+    V2rayConfigUpdate
+
+    systemctl daemon-reload
+    systemctl enable $v2ray_name
+    systemctl start $v2ray_name
+
+    Println "$info $v2ray_name 安装完成\n"
+}
+
+V2rayUpdate()
+{
+    DepsCheck
+    JQInstall
+    ShFileUpdate $v2ray_name
+
+    if ! grep -q "$v2ray_name:" < "/etc/passwd"
+    then
+        if grep -q '\--group ' < <(adduser --help)
+        then
+            adduser $v2ray_name --system --group --no-create-home > /dev/null
+        else
+            adduser $v2ray_name --system --no-create-home > /dev/null
+        fi
+        usermod -s /usr/sbin/nologin $v2ray_name
+    fi
+
+    if [ "$v2ray_name" == "v2ray" ] 
+    then
+        { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_FALLBACK"; } \
+        | sed "s+nobody+$v2ray_name+g" \
+        | sed "s+ 'sha1'++g" \
+        | sed "s+ 'sha256'++g" \
+        | sed "s+ 'sha512'++g" \
+        | sed "s+https://api.github.com/repos/v2fly/v2ray-core/releases/latest+$FFMPEG_MIRROR_LINK/$v2ray_name.json+g" \
+        | sed "s+https://github.com/v2fly/v2ray-core/releases/download+$FFMPEG_MIRROR_LINK/$v2ray_name+g" | bash
+    else
+        { curl -s -m 10 "$V2_LINK" || curl -s -m 30 "$V2_LINK_FALLBACK"; } \
+        | sed "s+nobody+$v2ray_name+g" \
+        | sed "s+ 'sha1'++g" \
+        | sed "s+ 'sha256'++g" \
+        | sed "s+ 'sha512'++g" \
+        | sed "s+https://api.github.com/repos/XTLS/Xray-core/releases/latest+$FFMPEG_MIRROR_LINK/$v2ray_name.json+g" \
+        | sed "s+https://github.com/XTLS/Xray-core/releases/download+$FFMPEG_MIRROR_LINK/$v2ray_name+g" | bash
+    fi
+
+    sed -i "s+nobody+$v2ray_name+g" "/etc/systemd/system/$v2ray_name.service"
+    sed -i "s+nobody+$v2ray_name+g" "/etc/systemd/system/$v2ray_name@.service"
+
+    mkdir -p /var/log/$v2ray_name/
+    [ ! -e "/var/log/$v2ray_name/error.log" ] && printf '%s' "" > /var/log/$v2ray_name/error.log
+    chown -R $v2ray_name:$v2ray_name /var/log/$v2ray_name/
+    chown -R $v2ray_name:$v2ray_name /usr/local/share/$v2ray_name/
+
+    V2rayConfigUpdate
+
+    systemctl daemon-reload
+    systemctl restart $v2ray_name
+
+    Println "$info $v2ray_name 升级完成\n"
+}
+
+V2rayConfigUpdate()
+{
+    if [ ! -e "$V2_CONFIG" ] 
+    then
+        Println "$error $v2ray_name 未安装...\n"
+        exit 1
+    fi
+
+    if ! outbounds=$($JQ_FILE '.outbounds' "$V2_CONFIG" 2> /dev/null) || [ "$outbounds" == "null" ]
+    then
+        if grep -q '"path": "' < "$V2_CONFIG" 
+        then
+            while IFS= read -r line 
+            do
+                if [[ $line == *"path"* ]] 
+                then
+                    path=${line#*: \"}
+                    path=${path%\"*}
+                    break
+                fi
+            done < "$V2_CONFIG"
+        fi
+
+        printf -v update_date '%(%m-%d-%H:%M:%S)T' -1
+        cp -f "$V2_CONFIG" "${V2_CONFIG}_$update_date"
+        while IFS= read -r line 
+        do
+            if [[ $line == *"port"* ]] 
+            then
+                port=${line#*: }
+                port=${port%,*}
+            elif [[ $line == *"id"* ]] 
+            then
+                id=${line#*: \"}
+                id=${id%\"*}
+                break
+            fi
+        done < "$V2_CONFIG"
+
+        $JQ_FILE -n --arg port "${port:-$(GetFreePort)}" --arg id "${id:-$($V2CTL_FILE uuid)}" --arg path "${path:-/$(RandStr)}" \
+        --arg error "/var/log/$v2ray_name/error.log" \
+        '{
+            "log": {
+                "access": "none",
+                "error": $error,
+                "loglevel": "error"
+            },
+            "inbounds": [
+                {
+                    "listen": "127.0.0.1",
+                    "port": $port | tonumber,
+                    "protocol": "vmess",
+                    "settings": {
+                        "clients": [
+                            {
+                                "id": $id,
+                                "level": 0,
+                                "alterId": 64,
+                                "email": "name@localhost"
+                            }
+                        ]
+                    },
+                    "streamSettings": {
+                        "network": "ws",
+                        "wsSettings": {
+                            "path": $path
+                        }
+                    },
+                    "tag": "nginx-1"
+                }
+            ],
+            "outbounds": [
+                {
+                    "protocol": "freedom",
+                    "tag": "direct"
+                },
+                {
+                    "protocol": "blackhole",
+                    "tag": "block"
+                }
+            ],
+            "policy": {
+                "levels": {
+                    "0": {
+                        "handshake": 4,
+                        "connIdle": 300,
+                        "uplinkOnly": 2,
+                        "downlinkOnly": 5,
+                        "statsUserUplink": false,
+                        "statsUserDownlink": false,
+                        "bufferSize": 512
+                    }
+                },
+                "system": {
+                    "statsInboundUplink": false,
+                    "statsInboundDownlink": false,
+                    "statsOutboundUplink": false,
+                    "statsOutboundDownlink": false
+                }
+            }
+        }' > "$V2_CONFIG"
+
+        Println "$info $v2ray_name 配置文件已更新\n"
+    fi
+}
+
+ShFileCheck
+
+[ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
+
+v2ray_sh="v2"
+v2ray_name="v2ray"
+tls_name="TLS"
+
+if [ -d /etc/v2ray/ ] && [ ! -d /usr/local/etc/v2ray/ ]
+then
+    systemctl disable v2ray --now > /dev/null 2> /dev/null || true
+    rm -rf /usr/bin/v2ray/
+    rm -f /etc/systemd/system/v2ray.service
+    rm -f /lib/systemd/system/v2ray.service
+    rm -f /etc/init.d/v2ray
+    mv /etc/v2ray/ /usr/local/etc/
+    if ! grep -q "v2ray:" < "/etc/passwd"
+    then
+        if grep -q '\--group ' < <(adduser --help)
+        then
+            adduser v2ray --system --group --no-create-home > /dev/null
+        else
+            adduser v2ray --system --no-create-home > /dev/null
+        fi
+        usermod -s /usr/sbin/nologin v2ray
+    fi
+    mkdir -p /var/log/v2ray/
+    [ ! -e "/var/log/v2ray/error.log" ] && printf '%s' "" > /var/log/v2ray/error.log
+    chown -R v2ray:v2ray /var/log/v2ray/
+    chown -R v2ray:v2ray /usr/local/share/v2ray/
+    V2rayUpdate
+    systemctl enable v2ray
+    systemctl start v2ray
+fi
+
+Include src/v2ray/menu "$@"

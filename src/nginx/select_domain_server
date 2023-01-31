@@ -1,0 +1,27 @@
+NginxSelectDomainServer()
+{
+    echo "`gettext \"输入序号\"`"
+    while read -p "$i18n_default_cancel" nginx_domain_servers_num
+    do
+        case "$nginx_domain_servers_num" in
+            "")
+                Println "$i18n_canceled...\n"
+                exit 1
+            ;;
+            *[!0-9]*)
+                Println "$error $i18n_input_correct_no\n"
+            ;;
+            *)
+                if [ "$nginx_domain_servers_num" -gt 0 ] && [ "$nginx_domain_servers_num" -le "$nginx_domain_servers_count" ]
+                then
+                    nginx_domain_servers_index=$((nginx_domain_servers_num-1))
+                    level_2_add_indices=( "${nginx_domain_servers_indices[nginx_domain_servers_index]}" )
+                    server_root=${nginx_domain_servers_root[nginx_domain_servers_index]}
+                    break
+                else
+                    Println "$error $i18n_input_correct_no\n"
+                fi
+            ;;
+        esac
+    done
+}

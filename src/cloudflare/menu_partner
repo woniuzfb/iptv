@@ -1,0 +1,77 @@
+CloudflarePartnerMenu()
+{
+    Println "  cloudflare 面板 ${normal}${red}[v$sh_ver]${normal}
+
+  ${green}1.${normal} 查看 源站 CNAME
+  ${green}2.${normal} 添加 源站 CNAME
+  ${green}3.${normal} 查看 源站
+  ${green}4.${normal} 添加 源站
+  ${green}5.${normal} 设置 源站
+  ${green}6.${normal} 移动 源站
+  ${green}7.${normal} 查看 用户
+  ${green}8.${normal} 添加 用户
+  ${green}9.${normal} 更改 用户
+ ${green}10.${normal} 查看 用户 Token
+ ${green}11.${normal} 添加 用户 Token
+ ${green}12.${normal} 更新 用户 Token
+ ${green}13.${normal} 查看 CFP
+ ${green}14.${normal} 添加 CFP
+ ${green}15.${normal} 更改 CFP
+ ${green}16.${normal} 删除 源站
+ ${green}17.${normal} 删除 用户
+ ${green}18.${normal} 删除 CFP
+ ${green}19.${normal} 获取最优 IP
+ ${green}20.${normal} 更新脚本
+
+ $tip 当前: ${green}partner${normal} 面板
+ $tip 输入: w 切换到 workers 面板\n\n"
+    read -p "`gettext \"输入序号\"` [1-20]: " cloudflare_partner_num
+    case $cloudflare_partner_num in
+        w)
+            CloudflareWorkersMenu
+        ;;
+        1) CloudflareListSubdomain
+        ;;
+        2) CloudflareAddSubdomain
+        ;;
+        3) CloudflareListZone
+        ;;
+        4) CloudflareAddZone
+        ;;
+        5) CloudflareEditZone
+        ;;
+        6) CloudflareMoveZone
+        ;;
+        7) CloudflareListUser
+        ;;
+        8) CloudflareAddUser
+        ;;
+        9) CloudflareEditUser
+        ;;
+        10) CloudflareListToken
+        ;;
+        11) CloudflareAddToken
+        ;;
+        12) CloudflareUpdateToken
+        ;;
+        13) CloudflareListHost
+        ;;
+        14) CloudflareAddHost
+        ;;
+        15) CloudflareRegenHost
+        ;;
+        16) CloudflareDelZone
+        ;;
+        17) CloudflareDelUser
+        ;;
+        18) CloudflareDelHost
+        ;;
+        19) 
+            Println "$info 一键获取最优 IP 脚本 Mac/Linux: \n\nhttps://github.com/woniuzfb/cloudflare-fping\n"
+        ;;
+        20) ShFileUpdate cloudflare
+        ;;
+        *) Println "$error $i18n_input_correct_number [1-20]\n"
+        ;;
+    esac
+}

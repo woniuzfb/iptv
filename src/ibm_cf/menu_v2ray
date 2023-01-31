@@ -1,0 +1,136 @@
+IbmV2rayMenu()
+{
+    [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
+
+    Println " IBM $v2ray_package_name APP 面板 ${normal}${red}[v$sh_ver]${normal}
+
+  ${green}1.${normal} 下载 $v2ray_package_name APP
+  ${green}2.${normal} 更新 $v2ray_package_name APP
+  ${green}3.${normal} 部署 $v2ray_package_name APP
+————————————
+  ${green}4.${normal} 查看入站
+  ${green}5.${normal} 添加入站
+  ${green}6.${normal} 添加入站账号
+————————————
+  ${green}7.${normal} 查看出站
+  ${green}8.${normal} 添加出站
+  ${green}9.${normal} 添加出站账号
+————————————
+ ${green}10.${normal} 查看DNS
+ ${green}11.${normal} 设置DNS
+————————————
+ ${green}12.${normal} 查看路由
+ ${green}13.${normal} 设置路由
+————————————
+ ${green}14.${normal} 查看策略
+ ${green}15.${normal} 设置策略
+————————————
+ ${green}16.${normal} 查看流量
+ ${green}17.${normal} 重置流量
+————————————
+ ${green}18.${normal} 查看反向代理
+ ${green}19.${normal} 设置反向代理
+————————————
+ ${green}20.${normal} 删除入站
+ ${green}21.${normal} 删除入站账号
+ ${green}22.${normal} 删除出站
+ ${green}23.${normal} 删除出站账号
+
+    "
+    read -p "$i18n_default_cancel" ibm_v2ray_num
+    case $ibm_v2ray_num in
+        1) 
+            IbmDownloadV2ray
+        ;;
+        2) 
+            IbmUpdateV2ray
+        ;;
+        3) 
+            IbmUpdateV2rayConfig
+            IbmDeployV2ray
+        ;;
+        4) 
+            IbmUpdateV2rayConfig
+            V2rayListInboundAccounts
+            V2rayListInboundShare
+        ;;
+        5) 
+            IbmUpdateV2rayConfig
+            V2rayAddInbound
+        ;;
+        6) 
+            IbmUpdateV2rayConfig
+            V2rayAddInboundAccount
+        ;;
+        7) 
+            IbmUpdateV2rayConfig
+            V2rayListOutboundAccounts
+        ;;
+        8) 
+            IbmUpdateV2rayConfig
+            V2rayAddOutbound
+        ;;
+        9) 
+            IbmUpdateV2rayConfig
+            V2rayAddOutboundAccount
+        ;;
+        10) 
+            IbmUpdateV2rayConfig
+            V2rayListDns
+        ;;
+        11) 
+            IbmUpdateV2rayConfig
+            V2raySetDns
+        ;;
+        12) 
+            IbmUpdateV2rayConfig
+            V2rayListRouting
+        ;;
+        13) 
+            IbmUpdateV2rayConfig
+            V2raySetRouting
+        ;;
+        14) 
+            IbmUpdateV2rayConfig
+            V2rayListPolicy
+        ;;
+        15) 
+            IbmUpdateV2rayConfig
+            V2raySetPolicy
+        ;;
+        16) 
+            IbmUpdateV2rayConfig
+            V2rayListStats
+        ;;
+        17) 
+            IbmUpdateV2rayConfig
+            V2rayResetStats
+        ;;
+        18) 
+            IbmUpdateV2rayConfig
+            V2rayListReverse
+        ;;
+        19) 
+            IbmUpdateV2rayConfig
+            V2raySetReverse
+        ;;
+        20) 
+            IbmUpdateV2rayConfig
+            V2rayDeleteInbound
+        ;;
+        21) 
+            IbmUpdateV2rayConfig
+            V2rayDeleteInboundAccount
+        ;;
+        22) 
+            IbmUpdateV2rayConfig
+            V2rayDeleteOutbound
+        ;;
+        23) 
+            IbmUpdateV2rayConfig
+            V2rayDeleteOutboundAccount
+        ;;
+        *) Println "$error $i18n_input_correct_number [1-23]\n"
+        ;;
+    esac
+}

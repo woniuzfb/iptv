@@ -1,0 +1,147 @@
+V2raySetPolicy()
+{
+    V2rayListPolicy
+    switch_options=( '开启' '关闭' )
+    echo
+    set_policy_options=( '添加策略等级' '开关入站上行流量统计' '开关入站下行流量统计' '开关出站上行流量统计' '开关出站下行流量统计' '删除策略等级' )
+    inquirer list_input "选择操作" set_policy_options set_policy_option
+    echo
+    if [ "$set_policy_option" == "添加策略等级" ] 
+    then
+        inquirer text_input "输入新的用户等级(数字): " policy_level_id "自动"
+        if [ "$policy_level_id" == "自动" ] 
+        then
+            for((policy_level_id=0;policy_level_id<$((policy_levels_count+1));policy_level_id++));
+            do
+                policy_level_id_found=0
+                for level_id in "${policy_levels_id[@]}"
+                do
+                    if [ "$level_id" -eq "$policy_level_id" ] 
+                    then
+                        policy_level_id_found=1
+                        break
+                    fi
+                done
+                if [ "$policy_level_id_found" -eq 0 ] 
+                then
+                    break
+                fi
+            done
+            Println "$info 用户等级: ${green}$policy_level_id${normal}"
+        elif [[ ! $policy_level_id =~ ^[0-9]+$ ]] 
+        then
+            Println "$error 必须是数字\n"
+            exit 1
+        else
+            policy_level_id_found=0
+            for level_id in "${policy_levels_id[@]}"
+            do
+                if [ "$level_id" -eq "$policy_level_id" ] 
+                then
+                    policy_level_id_found=1
+                    break
+                fi
+            done
+            if [ "$policy_level_id_found" -eq 1 ] 
+            then
+                Println "$error 等级 $policy_level_id 已经存在\n"
+                exit 1
+            fi
+        fi
+        echo
+        inquirer text_input "入站握手时间限制: " policy_level_handshake 4
+        echo
+        inquirer text_input "入站出站连接空闲的时间限制: " policy_level_conn_idle 300
+        echo
+        inquirer text_input "出站线路关闭后的时间限制: " policy_level_uplink_only 2
+        echo
+        inquirer text_input "入站线路关闭后的时间限制: " policy_level_downlink_only 300
+        echo
+        inquirer text_input "每个连接的缓存大小: " policy_level_buffer_size 512
+        echo
+        inquirer list_input "当前等级的所有用户的上行流量统计" switch_options policy_level_stats_user_uplink
+        if [ "$policy_level_stats_user_uplink" == "开启" ] 
+        then
+            policy_level_stats_user_uplink=true
+        else
+            policy_level_stats_user_uplink=false
+        fi
+        echo
+        inquirer list_input "当前等级的所有用户的上行流量统计" switch_options policy_level_stats_user_downlink
+        if [ "$policy_level_stats_user_downlink" == "开启" ] 
+        then
+            policy_level_stats_user_downlink=true
+        else
+            policy_level_stats_user_downlink=false
+        fi
+        new_policy_level=$(
+        $JQ_FILE -n --arg handshake "$policy_level_handshake" --arg connIdle "$policy_level_conn_idle" \
+        --arg uplinkOnly "$policy_level_uplink_only" --arg downlinkOnly "$policy_level_downlink_only" \
+        --arg statsUserUplink "$policy_level_stats_user_uplink" --arg statsUserDownlink "$policy_level_stats_user_downlink" \
+        --arg bufferSize "$policy_level_buffer_size" \
+        '{
+            "handshake": $handshake | tonumber,
+            "connIdle": $connIdle | tonumber,
+            "uplinkOnly": $uplinkOnly | tonumber,
+            "downlinkOnly": $downlinkOnly | tonumber,
+            "statsUserUplink": $statsUserUplink | test("true"),
+            "statsUserDownlink": $statsUserDownlink | test("true"),
+            "bufferSize": $bufferSize | tonumber
+        }')
+        json=true
+        jq_path='["policy","levels",'"$policy_level_id"']'
+        JQ update "$V2_CONFIG" "$new_policy_level"
+        Println "$info 策略等级添加成功\n"
+    elif [ "$set_policy_option" == "开关入站上行流量统计" ] 
+    then
+        inquirer list_input "所有入站代理的上行流量统计" switch_options policy_system_stats_inbound_uplink
+        if [ "$policy_system_stats_inbound_uplink" == "开启" ] 
+        then
+            policy_system_stats_inbound_uplink=true
+        else
+            policy_system_stats_inbound_uplink=false
+        fi
+        bool=true
+        jq_path='["policy","system","statsInboundUplink"]'
+        JQ update "$V2_CONFIG" "$policy_system_stats_inbound_uplink"
+        Println "$info 入站上行流量统计设置成功\n"
+    elif [ "$set_policy_option" == "开关入站下行流量统计" ] 
+    then
+        inquirer list_input "所有入站代理的下行流量统计" switch_options policy_system_stats_inbound_downlink
+        if [ "$policy_system_stats_inbound_downlink" == "开启" ] 
+        then
+            policy_system_stats_inbound_downlink=true
+        else
+            policy_system_stats_inbound_downlink=false
+        fi
+        bool=true
+        jq_path='["policy","system","statsInboundDownlink"]'
+        JQ update "$V2_CONFIG" "$policy_system_stats_inbound_downlink"
+        Println "$info 入站下行流量统计设置成功\n"
+    elif [ "$set_policy_option" == "开关出站上行流量统计" ] 
+    then
+        inquirer list_input "所有出站代理的上行流量统计" switch_options policy_system_stats_outbound_uplink
+        if [ "$policy_system_stats_outbound_uplink" == "开启" ] 
+        then
+            policy_system_stats_outbound_uplink=true
+        else
+            policy_system_stats_outbound_uplink=false
+        fi
+        bool=true
+        jq_path='["policy","system","statsOutboundUplink"]'
+        JQ update "$V2_CONFIG" "$policy_system_stats_outbound_uplink"
+        Println "$info 出站上行流量统计设置成功\n"
+    else
+        inquirer list_input "所有出站代理的下行流量统计" switch_options policy_system_stats_outbound_downlink
+        if [ "$policy_system_stats_outbound_downlink" == "开启" ] 
+        then
+            policy_system_stats_outbound_downlink=true
+        else
+            policy_system_stats_outbound_downlink=false
+        fi
+        bool=true
+        jq_path='["policy","system","statsOutboundDownlink"]'
+        JQ update "$V2_CONFIG" "$policy_system_stats_outbound_downlink"
+        Println "$info 出站下行流量统计设置成功\n"
+    fi
+}

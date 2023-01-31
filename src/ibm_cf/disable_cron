@@ -1,0 +1,13 @@
+IbmDisableCfAppCron()
+{
+    if crontab -l | grep -q "/usr/local/bin/ibm cron" 2> /dev/null
+    then
+        crontab -l > "$IBM_APPS_ROOT/cron_tmp" 2> /dev/null || true
+        sed -i "/\/usr\/local\/bin\/ibm cron/d" "$IBM_APPS_ROOT/cron_tmp"
+        crontab "$IBM_APPS_ROOT/cron_tmp" > /dev/null
+        rm -f "$IBM_APPS_ROOT/cron_tmp"
+        Println "$info 定时重启任务关闭成功\n"
+    else
+        Println "$error 定时重启任务未开启 !\n"
+    fi
+}

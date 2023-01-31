@@ -1,0 +1,8 @@
+[ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+GetDefault
+[ -z "$d_sync_file" ] && Println "$error sync_file 未设置, 请检查 !\n" && exit 1
+echo
+edit_options=($d_sync_file)
+inquirer list_input "选择修改的文件" edit_options edit_option
+editor "$edit_option"
+exit 0

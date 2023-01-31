@@ -1,0 +1,43 @@
+V2rayGetDns()
+{
+    IFS=$'`\t' read -r m_dns_hosts_domain m_dns_hosts_address m_dns_servers \
+    dns_client_ip dns_tag dns_query_strategy dns_disable_cache dns_disable_fallback \
+    dns_disable_fallback_if_match < <($JQ_FILE -r '[
+    ([.dns.hosts // {}|to_entries[]|.key|. + "^"]|join("") + "`"),
+    ([.dns.hosts // {}|to_entries[]|.value|if (.|type) == "array" then
+        (.|join(","))
+    else
+        . end|. + "^"]|join("") + "`"),
+    ([.dns.servers // []|.[]|if (.|type) == "object" then 
+        ([
+            .address,
+            (.port // ""|tostring),
+            (.domains // []|join(",")),
+            (.expectIPs // []|join(","))
+        ]|join("|"))
+    else 
+        . end|. + "^"]|join("") + "`"),
+    (.dns.clientIp|. + "`"),
+    (.dns.tag|. + "`"),
+    (.dns.queryStrategy // "UseIP"|. + "`"),
+    (.dns.disableCache // false|tostring|. + "`"),
+    (.dns.disableFallback // false|tostring|. + "`"),
+    (.dns.disableFallbackIfMatch // false|tostring|. + "`")]|@tsv' "$V2_CONFIG")
+
+    if [ -z "$m_dns_hosts_domain" ] 
+    then
+        dns_hosts_count=0
+    else
+        IFS="^" read -r -a dns_hosts_domain <<< "$m_dns_hosts_domain"
+        IFS="^" read -r -a dns_hosts_address <<< "$m_dns_hosts_address"
+        dns_hosts_count=${#dns_hosts_domain[@]}
+    fi
+
+    if [ -z "$m_dns_servers" ] 
+    then
+        dns_servers_count=0
+    else
+        IFS="^" read -r -a dns_servers <<< "$m_dns_servers"
+        dns_servers_count=${#dns_servers[@]}
+    fi
+}

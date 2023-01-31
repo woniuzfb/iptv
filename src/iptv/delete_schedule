@@ -1,0 +1,189 @@
+DelChannelSchedule()
+{
+    jq_path='["channels",'"$chnls_index"',"schedule",'"$chnl_schedules_index"']'
+    JQ delete "$CHANNELS_FILE"
+
+    Println "$info 频道 [ ${chnl_schedules_channel_name[chnl_schedules_index]:-${chnls_channel_name[chnls_index]}} ] 计划 $((chnl_schedules_index+1)) 删除成功\n"
+}
+
+DelChannelSchedules()
+{
+    ListChannelSchedules
+
+    echo -e "  ${green}$((chnl_schedules_count+1)).${normal}${indent_6}全部\n\n"
+
+    echo "输入计划序号(多个计划用空格分隔 比如: 1 2 4-5)"
+    while read -p "$i18n_default_cancel" chnl_schedules_num
+    do
+        if [ -z "$chnl_schedules_num" ] 
+        then
+            Println "$i18n_canceled...\n" && break
+        fi
+
+        if [ "$chnl_schedules_num" == $((chnl_schedules_count+1)) ] 
+        then
+            chnl_schedules_indices=($(printf '%s\n' "${chnl_schedules_indices[@]}" | sort -nr))
+
+            for chnl_schedules_index in "${chnl_schedules_indices[@]}"
+            do
+                DelChannelSchedule
+            done
+            break
+        fi
+
+        IFS=" " read -ra chnl_schedules_num_arr <<< "$chnl_schedules_num"
+
+        error_no=0
+        for chnl_schedule_num in "${chnl_schedules_num_arr[@]}"
+        do
+            case "$chnl_schedule_num" in
+                *"-"*)
+                    chnl_schedule_num_start=${chnl_schedule_num%-*}
+                    chnl_schedule_num_end=${chnl_schedule_num#*-}
+                    if [[ $chnl_schedule_num_start == *[!0-9]* ]] || [[ $chnl_schedule_num_end == *[!0-9]* ]] || [ "$chnl_schedule_num_start" -eq 0 ] || [ "$chnl_schedule_num_end" -eq 0 ] || [ "$chnl_schedule_num_end" -gt "$chnl_schedules_count" ] || [ "$chnl_schedule_num_start" -ge "$chnl_schedule_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$chnl_schedule_num" -lt 1 ] || [ "$chnl_schedule_num" -gt "$chnl_schedules_count" ] 
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                declare -a new_array
+                for chnl_schedule_num in "${chnl_schedules_num_arr[@]}"
+                do
+                    if [[ $chnl_schedule_num =~ - ]] 
+                    then
+                        chnl_schedules_start=${chnl_schedule_num%-*}
+                        chnl_schedules_end=${chnl_schedule_num#*-}
+                        for((chnl_schedules_index=chnl_schedules_start-1;chnl_schedules_index<chnl_schedules_end;chnl_schedules_index++));
+                        do
+                            new_array+=("$chnl_schedules_index")
+                        done
+                    else
+                        new_array+=("$((chnl_schedule_num-1))")
+                    fi
+                done
+
+                new_array=($(printf '%s\n' "${new_array[@]}" | sort -nr))
+
+                for chnl_schedules_index in "${new_array[@]}"
+                do
+                    DelChannelSchedule
+                done
+
+                unset new_array
+                break
+            ;;
+        esac
+    done
+}
+
+DelChannelsSchedule()
+{
+    ListChannelsSchedule
+
+    if [ -z "$chnls_schedule_list" ] 
+    then
+        Println "$error 请先添加频道计划\n"
+        exit 1
+    fi
+
+    echo -e "  ${green}$((chnls_count+1)).${normal}${indent_6}全部\n\n"
+
+    echo "输入频道序号(多个频道用空格分隔 比如: 1 2 4-5)"
+    while read -p "$i18n_default_cancel" chnls_num
+    do
+        if [ -z "$chnls_num" ] 
+        then
+            Println "$i18n_canceled...\n" && exit 1
+        fi
+
+        if [ "$chnls_num" == $((chnls_count+1)) ] 
+        then
+            for chnls_index in "${chnls_schedule_indices[@]}"
+            do
+                DelChannelSchedules
+            done
+            break
+        fi
+
+        IFS=" " read -ra chnls_num_arr <<< "$chnls_num"
+
+        error_no=0
+        for chnl_num in "${chnls_num_arr[@]}"
+        do
+            case "$chnl_num" in
+                *"-"*)
+                    chnl_num_start=${chnl_num%-*}
+                    chnl_num_end=${chnl_num#*-}
+                    if [[ $chnl_num_start == *[!0-9]* ]] || [[ $chnl_num_end == *[!0-9]* ]] || [ "$chnl_num_start" -eq 0 ] || [ "$chnl_num_end" -eq 0 ] || [ "$chnl_num_end" -gt "$chnls_count" ] || [ "$chnl_num_start" -ge "$chnl_num_end" ]
+                    then
+                        error_no=3
+                        break
+                    else
+                        for((i=chnl_num_start-1;i<chnl_num_end;i++));
+                        do
+                            if [ -z "${chnls_schedule_status[i]}" ] 
+                            then
+                                error_no=3
+                                break 2
+                            fi
+                        done
+                    fi
+                ;;
+                *[!0-9]*)
+                    error_no=1
+                    break
+                ;;
+                *)
+                    if [ "$chnl_num" -lt 1 ] || [ "$chnl_num" -gt "$chnls_count" ] || [ -z "${chnls_schedule_status[chnl_num-1]}" ]
+                    then
+                        error_no=2
+                        break
+                    fi
+                ;;
+            esac
+        done
+
+        case "$error_no" in
+            1|2|3)
+                Println "$error $i18n_input_correct_number\n"
+            ;;
+            *)
+                for chnl_num in "${chnls_num_arr[@]}"
+                do
+                    if [[ $chnl_num =~ - ]] 
+                    then
+                        chnls_start=${chnl_num%-*}
+                        chnls_end=${chnl_num#*-}
+                        for((chnls_index=chnls_start-1;chnls_index<chnls_end;chnls_index++));
+                        do
+                            DelChannelSchedules
+                        done
+                    else
+                        chnls_index=$((chnl_num-1))
+                        DelChannelSchedules
+                    fi
+                done
+                break
+            ;;
+        esac
+    done
+}

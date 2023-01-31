@@ -1,0 +1,161 @@
+NginxAppendHttpConf()
+{
+    printf '%s' "    server {
+        listen      $server_http_port;
+        server_name $server_domain;
+
+        access_log logs/access.log;
+
+        add_header Access-Control-Allow-Origin \$cors_host;
+        add_header Vary Origin;
+        add_header X-Frame-Options SAMEORIGIN;
+        add_header Access-Control-Allow-Credentials true;
+        add_header Cache-Control no-cache;
+
+        location / {${deny_aliyun:-}
+            root   ${server_root#*$nginx_prefix/};
+            index  index.html index.htm;
+        }
+    }
+
+" >> "$nginx_prefix/conf/sites_available/$server_domain.conf"
+}
+
+NginxAppendHttpRedirectConf()
+{
+    echo && read -p "输入网址: " http_redirect_address
+    printf '%s' "    server {
+        listen      $server_http_port;
+        server_name $server_domain;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header Connection \"\";
+
+        location / {
+            return 301 $http_redirect_address\$request_uri;
+        }
+    }
+
+" >> "$nginx_prefix/conf/sites_available/$server_domain.conf"
+}
+
+NginxAppendHttpRedirectToHttpsConf()
+{
+    printf '%s' "    server {
+        listen      $server_http_port;
+        server_name $server_domain;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header Connection \"\";
+
+        location / {
+            return 301 https://$server_domain\$request_uri;
+        }
+    }
+
+" > "$nginx_prefix/conf/sites_available/$server_domain.conf"
+}
+
+NginxAppendHttpsConf()
+{
+    printf '%s' "    server {
+        listen      $server_https_port ssl;
+        server_name $server_domain;
+
+        access_log logs/access.log;
+
+        ssl_certificate      $nginx_prefix/conf/sites_crt/$server_domain.crt;
+        ssl_certificate_key  $nginx_prefix/conf/sites_crt/$server_domain.key;
+
+        add_header Access-Control-Allow-Origin \$cors_host;
+        add_header Vary Origin;
+        add_header X-Frame-Options SAMEORIGIN;
+        add_header Access-Control-Allow-Credentials true;
+        add_header Cache-Control no-cache;
+
+        location / {${deny_aliyun:-}
+            root   ${server_root#*$nginx_prefix/};
+            index  index.html index.htm;
+        }
+    }
+
+" >> "$nginx_prefix/conf/sites_available/$server_domain.conf"
+}
+
+NginxAppendHttpsRedirectConf()
+{
+    echo && read -p "输入网址: " https_redirect_address
+    printf '%s' "    server {
+        listen      $server_https_port;
+        server_name $server_domain;
+
+        access_log off;
+
+        ssl_certificate      $nginx_prefix/conf/sites_crt/$server_domain.crt;
+        ssl_certificate_key  $nginx_prefix/conf/sites_crt/$server_domain.key;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header Connection \"\";
+
+        location / {
+            return 301 $https_redirect_address\$request_uri;
+        }
+    }
+
+" >> "$nginx_prefix/conf/sites_available/$server_domain.conf"
+}
+
+NginxAppendHttpHttpsRedirectConf()
+{
+    echo && read -p "输入网址: " http_https_redirect_address
+    printf '%s' "    server {
+        listen      $server_http_port;
+        listen      $server_https_port;
+        server_name $server_domain;
+
+        access_log off;
+
+        ssl_certificate      $nginx_prefix/conf/sites_crt/$server_domain.crt;
+        ssl_certificate_key  $nginx_prefix/conf/sites_crt/$server_domain.key;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header Connection \"\";
+
+        location / {
+            return 301 $http_https_redirect_address\$request_uri;
+        }
+    }
+
+" >> "$nginx_prefix/conf/sites_available/$server_domain.conf"
+}
+
+NginxAppendHttpHttpsConf()
+{
+    printf '%s' "    server {
+        listen      $server_http_port;
+        listen      $server_https_port ssl;
+        server_name $server_domain;
+
+        access_log logs/access.log;
+
+        ssl_certificate      $nginx_prefix/conf/sites_crt/$server_domain.crt;
+        ssl_certificate_key  $nginx_prefix/conf/sites_crt/$server_domain.key;
+
+        add_header Access-Control-Allow-Origin \$cors_host;
+        add_header Vary Origin;
+        add_header X-Frame-Options SAMEORIGIN;
+        add_header Access-Control-Allow-Credentials true;
+        add_header Cache-Control no-cache;
+
+        location / {${deny_aliyun:-}
+            root   ${server_root#*$nginx_prefix/};
+            index  index.html index.htm;
+        }
+    }
+
+" > "$nginx_prefix/conf/sites_available/$server_domain.conf"
+}

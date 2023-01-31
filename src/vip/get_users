@@ -1,0 +1,36 @@
+VipGetUsers()
+{
+    VipGetConfig
+    vip_users_list=""
+    vip_users_count=0
+    vip_users_ip=()
+    vip_users_license=()
+    vip_users_sum=()
+    vip_users_expire=()
+    vip_users_name=()
+    while IFS=":" read -r ip license sum expire name
+    do
+        vip_users_count=$((vip_users_count+1))
+        ip=${ip#\"}
+        vip_users_ip+=("$ip")
+        vip_users_license+=("$license")
+        vip_users_sum+=("$sum")
+        vip_users_expire+=("$expire")
+        name=${name%\"}
+        vip_users_name+=("$name")
+        if [ "$expire" -gt 0 ] 
+        then
+            expire_text=$(date +%c --date=@"$expire")
+        else
+            expire_text="无"
+        fi
+        if [ -n "${vip_public_host:-}" ] 
+        then
+            m3u_link="$vip_public_host/vip/$license/playlist.m3u"
+        else
+            m3u_link="${FFMPEG_MIRROR_LINK%/*}/vip/$license/playlist.m3u"
+        fi
+        vip_users_list="$vip_users_list ${green}$vip_users_count.${normal}${indent_6}用户名: ${green}$name${normal}  ip: ${green}$ip${normal}  到期日: ${green}$expire_text${normal}\n${indent_6}授权码: ${green}$license${normal}  认证方式: ${green}$sum${normal}\n${indent_6}m3u 播放链接: ${green}$m3u_link${normal}\n\n"
+    done < <($JQ_FILE '.users[]|[.ip,.license,.sum,.expire,.name]|join(":")' "$VIP_FILE")
+    return 0
+}

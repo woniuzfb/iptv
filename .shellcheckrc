@@ -1,0 +1,3 @@
+external-sources=true
+check-sourced=true
+disable=SC2292,SC2250

@@ -1,0 +1,30 @@
+V2rayListReverse()
+{
+    V2rayGetReverse
+
+    if [ "$reverse_bridges_count" -eq 0 ] 
+    then
+        reverse_bridges_list="bridge 列表: ${red}无${normal}\n\n"
+    else
+        reverse_bridges_list="bridge 列表:\n\n"
+        for((reverse_bridges_i=0;reverse_bridges_i<reverse_bridges_count;reverse_bridges_i++));
+        do
+            reverse_bridges_list="$reverse_bridges_list$((reverse_bridges_i+1)). 标签: ${green}${reverse_bridges_tag[reverse_bridges_i]}${normal} 域名: ${green}${reverse_bridges_domain[reverse_bridges_i]}${normal}\n"
+        done
+    fi
+
+    if [ "$reverse_portals_count" -eq 0 ] 
+    then
+        reverse_portals_list="portal 列表: ${red}无${normal}\n\n"
+    else
+        reverse_portals_list="portal 列表:\n\n"
+        for((reverse_portals_i=0;reverse_portals_i<reverse_portals_count;reverse_portals_i++));
+        do
+            reverse_portals_list="$reverse_portals_list$((reverse_portals_i+1)). 标签: ${green}${reverse_portals_tag[reverse_portals_i]}${normal} 域名: ${green}${reverse_portals_domain[reverse_portals_i]}${normal}\n"
+        done
+    fi
+
+    reverse_list="$reverse_bridges_list\n$reverse_portals_list"
+
+    Println "$reverse_list"
+}
