@@ -17,7 +17,10 @@ PythonInstall()
         wait $progress_pid 2> /dev/null
     ' EXIT
 
-    if [ "$dist" == "rpm" ] 
+    if [ "$dist" == "mac" ] 
+    then
+        DepInstall python > /dev/null
+    elif [ "$dist" == "rpm" ] 
     then
         if ! yum -y install python3 python3-pip > /dev/null 2>&1
         then

@@ -346,6 +346,13 @@ else
     Println "$error dnscrypt.json 下载出错, 无法连接 github ?"
 fi
 
+if curl -s -L "https://api.github.com/repos/PCRE2Project/pcre2/releases/latest" -o "$FFMPEG_MIRROR_ROOT/pcre2.json_tmp"
+then
+    mv "$FFMPEG_MIRROR_ROOT/pcre2.json_tmp" "$FFMPEG_MIRROR_ROOT/pcre2.json"
+else
+    Println "$error pcre2.json 下载出错, 无法连接 github ?"
+fi
+
 if curl -s -L "https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim" -o "$FFMPEG_MIRROR_ROOT/vim-plug.vim_tmp"
 then
     mv "$FFMPEG_MIRROR_ROOT/vim-plug.vim_tmp" "$FFMPEG_MIRROR_ROOT/vim-plug.vim"

@@ -26990,12 +26990,47 @@ NginxDomainInstallCert()
 OpenrestyInstall()
 {
     DepsCheck
+    JQInstall >/dev/null
+
     Progress &
     progress_pid=$!
+
     trap '
         kill $progress_pid
         wait $progress_pid 2> /dev/null
     ' EXIT
+
+    cd ~
+
+    rm -rf nginx-http-flv-module-master
+    curl -s -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o nginx-http-flv-module.zip
+    unzip nginx-http-flv-module.zip >/dev/null 2>&1
+
+    #cd nginx-http-flv-module-master
+    #curl -s -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch
+    #patch -p1 < Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch >/dev/null 2>&1
+    #cd ~
+
+    latest_release=0
+    while IFS= read -r line
+    do
+        if [[ $line == *"Lastest release"* ]] 
+        then
+            latest_release=1
+        elif [ "$latest_release" -eq 1 ] && [[ $line == *"<a "* ]]
+        then
+            openresty_package_name=${line#*/download/}
+            openresty_package_name=${openresty_package_name%%.tar.gz*}
+            break
+        fi
+    done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://openresty.org/en/download.html 2> /dev/null)
+
+    if [ ! -d "./$openresty_package_name" ] 
+    then
+        curl -s -L "https://openresty.org/download/$openresty_package_name.tar.gz" -o "$openresty_package_name.tar.gz"
+        tar xzf "$openresty_package_name.tar.gz"
+    fi
+
     if [ "$dist" == "rpm" ] 
     then
         yum -y install gcc gcc-c++ make >/dev/null 2>&1
@@ -27056,59 +27091,41 @@ OpenrestyInstall()
 
     echo -n "...40%..."
 
-    cd ~
-    if [ ! -d pcre-8.45 ] 
+    while IFS= read -r line
+    do
+        if [[ $line =~ \<A\ HREF=\"(.+)\.tar\.gz ]] 
+        then
+            zlib_name=${BASH_REMATCH[1]}
+            break
+        fi
+    done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://www.zlib.net 2> /dev/null)
+
+    if [ ! -d $zlib_name ] 
     then
-        curl -s -L https://downloads.sourceforge.net/pcre/pcre/8.45/pcre-8.45.zip -o pcre-8.45.zip
-        unzip pcre-8.45.zip >/dev/null 2>&1
+        curl -s -L https://www.zlib.net/$zlib_name.tar.gz -o $zlib_name.tar.gz
+        tar xzf $zlib_name.tar.gz
     fi
 
-    if [ ! -d zlib-1.2.11 ] 
+    pcre_name=pcre-8.45
+    if [ ! -d $pcre_name ] 
     then
-        curl -s -L https://www.zlib.net/zlib-1.2.11.tar.gz -o zlib-1.2.11.tar.gz
-        tar xzf zlib-1.2.11.tar.gz
+        curl -s -L https://downloads.sourceforge.net/pcre/pcre/${pcre_name#*-}/$pcre_name.zip -o $pcre_name.zip
+        unzip $pcre_name.zip >/dev/null 2>&1
     fi
 
-    if [ ! -d openssl-1.1.1f-patched ] || [ ! -s openssl-1.1.1f-patched/openssl-1.1.1f-sess_set_get_cb_yield.patch ]
+    openssl_name=openssl-1.1.1n
+
+    if [ ! -d ${openssl_name}-patched ] || [ ! -s ${openssl_name}-patched/openssl-1.1.1f-sess_set_get_cb_yield.patch ]
     then
-        rm -rf openssl-1.1.1f
-        rm -rf openssl-1.1.1f-patched
-        curl -s -L https://www.openssl.org/source/openssl-1.1.1f.tar.gz -o openssl-1.1.1f.tar.gz
-        tar xzf openssl-1.1.1f.tar.gz
-        mv openssl-1.1.1f openssl-1.1.1f-patched
-        cd openssl-1.1.1f-patched
+        rm -rf ${openssl_name}
+        rm -rf ${openssl_name}-patched
+        curl -s -L https://www.openssl.org/source/$openssl_name.tar.gz -o $openssl_name.tar.gz
+        tar xzf $openssl_name.tar.gz
+        mv $openssl_name $openssl_name-patched
+        cd $openssl_name-patched
         curl -s -L "$FFMPEG_MIRROR_LINK/openssl-1.1.1f-sess_set_get_cb_yield.patch" -o openssl-1.1.1f-sess_set_get_cb_yield.patch
         patch -p1 < openssl-1.1.1f-sess_set_get_cb_yield.patch >/dev/null 2>&1
         cd ~
-    fi
-
-    rm -rf nginx-http-flv-module-master
-    curl -s -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o nginx-http-flv-module.zip
-    unzip nginx-http-flv-module.zip >/dev/null 2>&1
-
-    cd nginx-http-flv-module-master
-    curl -s -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch
-    patch -p1 < Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch >/dev/null 2>&1
-    cd ~
-
-    latest_release=0
-    while IFS= read -r line
-    do
-        if [[ $line == *"Lastest release"* ]] 
-        then
-            latest_release=1
-        elif [ "$latest_release" -eq 1 ] && [[ $line == *"<a "* ]]
-        then
-            openresty_package_name=${line#*/download/}
-            openresty_package_name=${openresty_package_name%%.tar.gz*}
-            break
-        fi
-    done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://openresty.org/en/download.html 2> /dev/null)
-
-    if [ ! -d "./$openresty_package_name" ] 
-    then
-        curl -s -L "https://openresty.org/download/$openresty_package_name.tar.gz" -o "$openresty_package_name.tar.gz"
-        tar xzf "$openresty_package_name.tar.gz"
     fi
 
     echo -n "...60%..."
@@ -27120,18 +27137,42 @@ OpenrestyInstall()
 
     cd ../..
 
-    ./configure --add-module=../nginx-http-flv-module-master \
-        --with-pcre=../pcre-8.45 --with-pcre-jit \
-        --with-zlib=../zlib-1.2.11 --with-openssl=../openssl-1.1.1f-patched \
-        --with-http_ssl_module --with-http_v2_module \
-        --without-mail_pop3_module --without-mail_imap_module \
-        --without-mail_smtp_module --with-http_stub_status_module \
-        --with-http_realip_module --with-debug --with-http_addition_module \
-        --with-http_auth_request_module --with-http_secure_link_module \
-        --with-http_random_index_module --with-http_gzip_static_module \
-        --with-http_sub_module --with-http_dav_module --with-http_flv_module \
-        --with-http_mp4_module --with-http_gunzip_module --with-stream --with-stream_ssl_preread_module \
-        --with-stream_ssl_module --with-stream_realip_module --with-threads >/dev/null 2>&1
+    ./configure \
+    --add-module=../nginx-http-flv-module-master \
+    --with-pcre=../$pcre_name \
+    --with-pcre-jit \
+    --with-zlib=../$zlib_name \
+    --with-openssl=../$openssl_name-patched \
+    --with-openssl-opt="no-threads shared zlib -g enable-ssl3 enable-ssl3-method enable-ec_nistp_64_gcc_128" \
+    --with-http_ssl_module \
+    --with-http_v2_module \
+    --without-mail_pop3_module \
+    --without-mail_imap_module \
+    --without-mail_smtp_module \
+    --without-http_rds_json_module \
+    --without-http_rds_csv_module \
+    --without-lua_rds_parser \
+    --with-http_stub_status_module \
+    --with-http_realip_module \
+    --with-debug \
+    --with-http_addition_module \
+    --with-http_auth_request_module \
+    --with-http_secure_link_module \
+    --with-http_slice_module \
+    --with-http_random_index_module \
+    --with-http_gzip_static_module \
+    --with-http_sub_module \
+    --with-http_dav_module \
+    --with-http_degradation_module \
+    --with-http_flv_module \
+    --with-http_mp4_module \
+    --with-http_gunzip_module \
+    --with-stream \
+    --with-stream_ssl_preread_module \
+    --with-stream_ssl_module \
+    --with-stream_realip_module \
+    --with-threads \
+    --with-luajit-xcflags=-DLUAJIT_NUMMODE=2\ -DLUAJIT_ENABLE_LUA52COMPAT\ -fno-stack-check >/dev/null 2>&1
 
     echo -n "...80%..."
 
@@ -27169,8 +27210,17 @@ OpenrestyInstall()
 
 NginxInstall()
 {
+    echo
+    pcre_options=( pcre pcre2 )
+    inquirer list_input_index "选择 pcre 版本" pcre_options pcre_options_index
+
+    echo
+    openssl_options=( openssl@1.1 openssl@3 )
+    inquirer list_input_index "选择 openssl 版本" openssl_options openssl_options_index
+
     DepsCheck
     JQInstall >/dev/null
+
     Progress &
     progress_pid=$!
 
@@ -27179,59 +27229,16 @@ NginxInstall()
         wait $progress_pid 2> /dev/null
     ' EXIT
 
-    if [ "$dist" == "rpm" ] 
-    then
-        yum -y install gcc gcc-c++ make >/dev/null 2>&1
-        # yum groupinstall 'Development Tools'
-        timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
-        systemctl restart crond >/dev/null 2>&1
-    else
-        timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
-        systemctl restart cron >/dev/null 2>&1
-        apt-get -y install debconf-utils >/dev/null 2>&1
-        echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
-        apt-get -y install software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip build-essential gettext >/dev/null 2>&1
-    fi
-
-    echo -n "...40%..."
-
     cd ~
-    if [ ! -d pcre-8.45 ] 
-    then
-        curl -s -L https://downloads.sourceforge.net/pcre/pcre/8.45/pcre-8.45.zip -o pcre-8.45.zip
-        unzip pcre-8.45.zip >/dev/null 2>&1
-    fi
-
-    if [ ! -d zlib-1.2.11 ] 
-    then
-        curl -s -L https://www.zlib.net/zlib-1.2.11.tar.gz -o zlib-1.2.11.tar.gz
-        tar xzf zlib-1.2.11.tar.gz
-    fi
-
-    while IFS= read -r line
-    do
-        if [[ $line == *"openssl-1."* ]] 
-        then
-            openssl_name=${line#*<a href=\"}
-            openssl_name=${openssl_name%%.tar.gz*}
-            break
-        fi
-    done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://www.openssl.org/source/ 2> /dev/null)
-
-    if [ ! -d "./$openssl_name" ] 
-    then
-        curl -s -L "https://www.openssl.org/source/$openssl_name.tar.gz" -o "$openssl_name.tar.gz"
-        tar xzf "$openssl_name.tar.gz"
-    fi
 
     rm -rf nginx-http-flv-module-master
     curl -s -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o nginx-http-flv-module.zip
     unzip nginx-http-flv-module.zip >/dev/null 2>&1
 
-    cd nginx-http-flv-module-master
-    curl -s -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch
-    patch -p1 < Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch >/dev/null 2>&1
-    cd ~
+    #cd nginx-http-flv-module-master
+    #curl -s -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch
+    #patch -p1 < Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch >/dev/null 2>&1
+    #cd ~
 
     while IFS= read -r line
     do
@@ -27249,26 +27256,127 @@ NginxInstall()
         tar xzf "$nginx_package_name.tar.gz"
     fi
 
+    if [ "$dist" == "rpm" ] 
+    then
+        yum -y install gcc gcc-c++ make >/dev/null 2>&1
+        # yum groupinstall 'Development Tools'
+        timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
+        systemctl restart crond >/dev/null 2>&1
+    else
+        timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
+        systemctl restart cron >/dev/null 2>&1
+        apt-get -y install debconf-utils >/dev/null 2>&1
+        echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
+        apt-get -y install software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip build-essential gettext >/dev/null 2>&1
+    fi
+
+    echo -n "...40%..."
+
+    while IFS= read -r line
+    do
+        if [[ $line =~ \<A\ HREF=\"(.+)\.tar\.gz ]] 
+        then
+            zlib_name=${BASH_REMATCH[1]}
+            break
+        fi
+    done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://www.zlib.net 2> /dev/null)
+
+    if [ ! -d $zlib_name ] 
+    then
+        curl -s -L https://www.zlib.net/$zlib_name.tar.gz -o $zlib_name.tar.gz
+        tar xzf $zlib_name.tar.gz
+    fi
+
+    if [ "$pcre_options_index" -eq 0 ] 
+    then
+        pcre_name=pcre-8.45
+        if [ ! -d $pcre_name ] 
+        then
+            curl -s -L https://downloads.sourceforge.net/pcre/pcre/${pcre_name#*-}/$pcre_name.zip -o $pcre_name.zip
+            unzip $pcre_name.zip >/dev/null 2>&1
+        fi
+    else
+        pcre_name=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/pcre2.json" | $JQ_FILE -r '.tag_name')
+        if [ ! -d $pcre_name ] 
+        then
+            curl -s -L $FFMPEG_MIRROR_LINK/pcre2/$pcre_name/$pcre_name.zip -o $pcre_name.zip
+            unzip $pcre_name.zip >/dev/null 2>&1
+        fi
+    fi
+
+    while IFS= read -r line
+    do
+        if [ "$openssl_options_index" -eq 0 ] 
+        then
+            if [[ $line == *"openssl-1."* ]] 
+            then
+                openssl_name=${line#*<a href=\"}
+                openssl_name=${openssl_name%%.tar.gz*}
+                break
+            fi
+        else
+            if [[ $line == *"openssl-3.0"* ]] 
+            then
+                openssl_name=${line#*<a href=\"}
+                openssl_name=${openssl_name%%.tar.gz*}
+                break
+            fi
+        fi
+    done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://www.openssl.org/source/ 2> /dev/null)
+
+    if [ ! -d "./$openssl_name" ] 
+    then
+        curl -s -L "https://www.openssl.org/source/$openssl_name.tar.gz" -o "$openssl_name.tar.gz"
+        tar xzf "$openssl_name.tar.gz"
+    fi
+
     echo -n "...60%..."
 
     cd "$nginx_package_name/"
-    ./configure --add-module=../nginx-http-flv-module-master \
-        --with-pcre=../pcre-8.45 --with-pcre-jit --with-zlib=../zlib-1.2.11 \
-        --with-openssl=../$openssl_name --with-openssl-opt=no-nextprotoneg \
-        --with-http_stub_status_module --with-http_ssl_module --with-http_v2_module \
-        --with-http_realip_module --with-threads --with-stream --with-stream_ssl_preread_module \
-        --with-stream_ssl_module --with-stream_realip_module --with-debug >/dev/null 2>&1
+
+    ./configure \
+    --add-module=../nginx-http-flv-module-master \
+    --with-debug \
+    --with-http_addition_module \
+    --with-http_auth_request_module \
+    --with-http_dav_module \
+    --with-http_degradation_module \
+    --with-http_gunzip_module \
+    --with-http_gzip_static_module \
+    --with-http_mp4_module \
+    --with-http_random_index_module \
+    --with-http_realip_module \
+    --with-http_secure_link_module \
+    --with-http_slice_module \
+    --with-http_ssl_module \
+    --with-http_stub_status_module \
+    --with-http_sub_module \
+    --with-http_v2_module \
+    --with-mail \
+    --with-mail_ssl_module \
+    --with-pcre=../$pcre_name \
+    --with-pcre-jit \
+    --with-zlib=../$zlib_name \
+    --with-stream \
+    --with-stream_realip_module \
+    --with-stream_ssl_module \
+    --with-stream_ssl_preread_module \
+    --with-openssl=../$openssl_name \
+    --with-threads >/dev/null 2>&1
 
     echo -n "...80%..."
 
     nproc="-j$(nproc 2> /dev/null)" || nproc="-j1"
+
     make $nproc >/dev/null 2>&1
     make install >/dev/null 2>&1
 
     kill $progress_pid
     wait $progress_pid 2> /dev/null || true
     trap - EXIT
+
     ln -sf /usr/local/nginx/sbin/nginx /usr/local/bin/
+
     echo "...100%"
 
     if ! grep -q "$nginx_name:" < "/etc/passwd"
@@ -51454,6 +51562,13 @@ then
                 mv "$FFMPEG_MIRROR_ROOT/dnscrypt.json_tmp" "$FFMPEG_MIRROR_ROOT/dnscrypt.json"
             else
                 Println "$error dnscrypt.json 下载出错, 无法连接 github ?"
+            fi
+
+            if curl -s -L "https://api.github.com/repos/PCRE2Project/pcre2/releases/latest" -o "$FFMPEG_MIRROR_ROOT/pcre2.json_tmp"
+            then
+                mv "$FFMPEG_MIRROR_ROOT/pcre2.json_tmp" "$FFMPEG_MIRROR_ROOT/pcre2.json"
+            else
+                Println "$error pcre2.json 下载出错, 无法连接 github ?"
             fi
 
             if curl -s -L "https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim" -o "$FFMPEG_MIRROR_ROOT/vim-plug.vim_tmp"
