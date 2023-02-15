@@ -8,6 +8,15 @@ FFmpegInstall()
     then
         Println "`eval_gettext \"\\\$info 开始下载/安装 FFmpeg...\"`"
 
+        if [ "$dist" == "mac" ] 
+        then
+            DepInstall ffmpeg
+            mkdir -p "$IPTV_ROOT"/ffmpeg-git-brew/
+            ln -sf /usr/local/bin/ffmpeg "$IPTV_ROOT"/ffmpeg-git-brew/ffmpeg
+            ln -sf /usr/local/bin/ffprobe "$IPTV_ROOT"/ffmpeg-git-brew/ffprobe
+            return 0
+        fi
+
         ArchCheck
 
         if [ "$arch" == "x86_64" ]

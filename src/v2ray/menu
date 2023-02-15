@@ -63,7 +63,7 @@ Println "  $v2ray_name 管理面板 ${normal}${red}[v$sh_ver]${normal}
  ${green}25.${normal} 开关
  ${green}26.${normal} 重启
 
- $tip 输入: $v2ray_sh 打开面板
+ ${tip} 输入: $v2ray_sh 打开面板
 "
 read -p "`gettext \"输入序号\"` [1-26]: " v2ray_num
 case $v2ray_num in

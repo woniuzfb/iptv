@@ -1,24 +1,23 @@
-#
+# All In One Script
 
-## 目录
+- [All In One Script](#all-in-one-script)
+  - [V2ray](#v2ray)
+  - [Xray](#xray)
+  - [Nginx](#nginx)
+  - [Openresty](#openresty)
+  - [Armbian](#armbian)
+  - [Proxmox VE](#proxmox-ve)
+  - [IBM Cloud Foundry](#ibm-cloud-foundry)
+  - [Cloudflare partner,workers](#cloudflare-partnerworkers)
+  - [FFmpeg](#ffmpeg)
+    - [编译静态 FFmpeg](#编译静态-ffmpeg)
+    - [自动解析直播源](#自动解析直播源)
+    - [快捷键](#快捷键)
+    - [参数详解](#参数详解)
+    - [举例](#举例)
+  - [Dev](#dev)
 
-- [一键管理 v2ray 脚本](#一键管理-v2ray-脚本)
-- [一键管理 xray 脚本](#一键管理-xray-脚本)
-- [一键管理 nginx 脚本](#一键管理-nginx-脚本)
-- [一键管理 openresty 脚本](#一键管理-openresty-脚本)
-- [一键管理 armbian 脚本](#一键管理-armbian-脚本)
-- [一键管理 proxmox ve 脚本](#一键管理-proxmox-ve-脚本)
-- [一键管理 ibm cloud foundry 脚本](#一键管理-ibm-cloud-foundry-脚本)
-- [一键管理 cloudflare partner,workers 脚本](#一键管理-cloudflare-partnerworkers-脚本)
-- [一键管理 FFmpeg 脚本](#一键管理-ffmpeg-脚本)
-  - [演示](#演示)
-  - [编译静态 FFmpeg](#编译静态-ffmpeg)
-  - [自动解析直播源](#自动解析直播源)
-  - [快捷键](#快捷键)
-  - [参数详解](#参数详解)
-  - [举例](#举例)
-
-## 一键管理 v2ray 脚本
+## V2ray
 
 ``` bash
 wget https://woniuzfb.github.io/iptv/v2.sh && bash v2.sh
@@ -28,7 +27,7 @@ wget https://woniuzfb.github.io/iptv/v2.sh && bash v2.sh
 
 ---
 
-## 一键管理 xray 脚本
+## Xray
 
 ``` bash
 wget https://woniuzfb.github.io/iptv/x.sh && bash x.sh
@@ -38,7 +37,7 @@ wget https://woniuzfb.github.io/iptv/x.sh && bash x.sh
 
 ---
 
-## 一键管理 nginx 脚本
+## Nginx
 
 ``` bash
 wget https://woniuzfb.github.io/iptv/nx.sh && bash nx.sh
@@ -57,7 +56,7 @@ wget https://woniuzfb.github.io/iptv/nx.sh && bash nx.sh
 
 ---
 
-## 一键管理 openresty 脚本
+## Openresty
 
 ``` bash
 wget https://woniuzfb.github.io/iptv/or.sh && bash or.sh
@@ -67,7 +66,7 @@ wget https://woniuzfb.github.io/iptv/or.sh && bash or.sh
 
 ---
 
-## 一键管理 armbian 脚本
+## Armbian
 
 ``` bash
 wget https://woniuzfb.github.io/iptv/arm.sh && bash arm.sh
@@ -85,7 +84,7 @@ wget https://woniuzfb.github.io/iptv/arm.sh && bash arm.sh
 
 ---
 
-## 一键管理 proxmox ve 脚本
+## Proxmox VE
 
 ``` bash
 wget https://woniuzfb.github.io/iptv/pve.sh && bash pve.sh
@@ -101,7 +100,7 @@ wget https://woniuzfb.github.io/iptv/pve.sh && bash pve.sh
 
 ---
 
-## 一键管理 ibm cloud foundry 脚本
+## IBM Cloud Foundry
 
 ``` bash
 wget https://woniuzfb.github.io/iptv/ibm.sh && bash ibm.sh
@@ -115,7 +114,7 @@ wget https://woniuzfb.github.io/iptv/ibm.sh && bash ibm.sh
 
 ---
 
-## 一键管理 cloudflare partner,workers 脚本
+## Cloudflare partner,workers
 
 ``` bash
 wget https://woniuzfb.github.io/iptv/cf.sh && bash cf.sh
@@ -138,9 +137,7 @@ wget https://woniuzfb.github.io/iptv/cf.sh && bash cf.sh
 
 ---
 
-## 一键管理 FFmpeg 脚本
-
-### [演示](https://mtime.info/)
+## FFmpeg
 
 ``` bash
 wget https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
@@ -261,3 +258,13 @@ docker run -it ffmpeg-h265-static
     `tv -i http://xxx/xxx.ts -a aac -v libx264 -b 3000 -k flv -T rtmp://127.0.0.1/flv/xxx`
 
 - 或者输入 tv 打开 HLS 面板， tv f 打开 FLV 面板，使用方法  **Enter**
+
+## Dev
+
+v2.0.0 broken atm
+
+```bash
+./debug [tv|cf|v2|x|...] [options]
+
+./make [install]
+```

@@ -1,3 +1,121 @@
+Include utils/python "$@"
+
+Include utils/crossplane "$@"
+
+Include utils/openssl "$@"
+
+Include utils/go "$@"
+
+Include utils/postfix "$@"
+
+Include utils/tesseract "$@"
+
+Include utils/git "$@"
+
+Include utils/nodejs "$@"
+
+Include utils/mongodb "$@"
+
+Include utils/dnscrypt "$@"
+
+Include src/nginx/install_cert "$@"
+
+Include src/nginx/view_status "$@"
+
+Include src/nginx/toggle "$@"
+
+Include src/nginx/restart "$@"
+
+Include src/nginx/parse_config "$@"
+
+Include src/nginx/get_config "$@"
+
+Include src/nginx/list_domains "$@"
+
+Include src/nginx/select_domain "$@"
+
+Include src/nginx/list_domain "$@"
+
+Include src/nginx/select_domain_server "$@"
+
+Include src/nginx/config_domain "$@"
+
+Include src/nginx/get_stream "$@"
+
+Include src/nginx/list_stream "$@"
+
+Include src/nginx/list_localhost "$@"
+
+Include src/nginx/select_localhost_server "$@"
+
+Include src/nginx/is_block_directive "$@"
+
+Include src/nginx/input_args "$@"
+
+Include src/nginx/add_directive "$@"
+
+Include src/nginx/add_user "$@"
+
+Include src/nginx/add_stream "$@"
+
+Include src/nginx/add_http "$@"
+
+Include src/nginx/add_rtmp "$@"
+
+Include src/nginx/add_enabled "$@"
+
+Include src/nginx/add_ssl "$@"
+
+Include src/nginx/add_localhost "$@"
+
+Include src/nginx/add_nodejs "$@"
+
+Include src/nginx/add_cors "$@"
+
+Include src/nginx/add_upstream_nodejs "$@"
+
+Include src/nginx/add_flv "$@"
+
+Include src/nginx/add_samesite_none "$@"
+
+Include src/nginx/build_conf "$@"
+
+Include src/nginx/check_localhost "$@"
+
+Include src/nginx/config_directive "$@"
+
+Include src/nginx/config_localhost "$@"
+
+Include src/nginx/config_server "$@"
+
+Include src/nginx/check_acme "$@"
+
+Include src/nginx/update_cert "$@"
+
+Include src/nginx/toggle_domain "$@"
+
+Include src/nginx/delete_domain "$@"
+
+Include src/nginx/delete_domain "$@"
+
+Include src/nginx/rotate_log "$@"
+
+Include src/nginx/update_ip "$@"
+
+Include src/nginx/enable_domain "$@"
+
+Include src/nginx/disable_domain "$@"
+
+Include src/nginx/append_conf "$@"
+
+Include src/nginx/add_domain "$@"
+
+Include src/nginx/config_nodejs "$@"
+
+Include src/nginx/menu_nodejs "$@"
+
+Include src/nginx/menu_mongodb "$@"
+
 OpenrestyInstall()
 {
     DepsCheck
@@ -246,7 +364,7 @@ Println "  openresty 管理面板 ${normal}${red}[v$sh_ver]${normal}
  ${green}14.${normal} 识别 cloudflare/ibm ip
  ${green}15.${normal} 删除域名
 
- $tip 输入: or 打开面板
+ ${tip} 输入: or 打开面板
 
 "
 read -p "`gettext \"输入序号\"` [1-15]: " openresty_num

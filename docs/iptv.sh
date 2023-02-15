@@ -46924,7 +46924,7 @@ Menu()
         msg=$(gettext "输入: h 切换到 HLS 面板, v 切换到 VIP 面板")
     fi
 
-    Println "  ${dim_underlined}MTimer | http://hbo.epub.fun${normal}
+    Println "  ${dim_underlined}[AI]OS | @woniuzfb${normal}
 
   `gettext \"IPTV 一键管理脚本\"` ${red}[v$sh_ver]${normal}
 

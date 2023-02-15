@@ -193,6 +193,15 @@ LocaleFix()
         fi
 
         yum -y install glibc-common glibc-locale-source glibc-all-langpacks glibc-langpack-en glibc-langpacks-zh langpacks-zh_CN >/dev/null 2>&1 || true
+
+        if [[ -x $(command -v localectl) ]] 
+        then
+            localectl set-locale LANG=$1.UTF-8 >/dev/null
+        elif [ -s /etc/sysconfig/i18n ] 
+        then
+            sed -i '/LANG=/d' /etc/sysconfig/i18n
+            echo "LANG=$1.UTF-8" >> /etc/sysconfig/i18n
+        fi
     else
         if [ "$dist" == "deb" ] 
         then
@@ -214,6 +223,7 @@ LocaleFix()
         fi
 
         locale-gen $1.UTF-8 >/dev/null
+        update-locale LANG=$1.UTF-8 LANGUAGE
     fi
 
     if ! grep -q "$1" < <(locale -a 2> /dev/null) 
@@ -227,14 +237,31 @@ eval_gettext()
     gettext "$1" | (export PATH `envsubst --variables "$1"`; envsubst "$1")
 }
 
+DistCheck
+
 TEXTDOMAIN=iptv
-TEXTDOMAINDIR=/usr/share/locale
+
+if [ "$dist" == "mac" ] 
+then
+    TEXTDOMAINDIR=/usr/local/share/locale
+
+    DepInstall gsed
+
+sed()
+{
+    gsed "$@"
+}
+
+    JQ_FILE=/usr/local/bin/jq
+else
+    TEXTDOMAINDIR=/usr/share/locale
+fi
 
 export TEXTDOMAIN TEXTDOMAINDIR
 
 DepInstall gettext
 
-[ $EUID -ne 0 ] && Println "`eval_gettext \"\\\${red}[ERROR]\\\${normal} MUST BE ROOT, TRY\\\${green} sudo su \\\${normal}\"`\n" && exit 1
+# [ $EUID -ne 0 ] && Println "`eval_gettext \"\\\${red}[ERROR]\\\${normal} MUST BE ROOT, TRY\\\${green} sudo su \\\${normal}\"`\n" && exit 1
 
 if [ -s "$i18n_FILE" ] 
 then

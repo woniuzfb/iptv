@@ -12,7 +12,7 @@ Menu()
         msg=$(gettext "输入: h 切换到 HLS 面板, v 切换到 VIP 面板")
     fi
 
-    Println "  ${dim_underlined}MTimer | http://hbo.epub.fun${normal}
+    Println "  ${dim_underlined}[AI]OS | @woniuzfb${normal}
 
   `gettext \"IPTV 一键管理脚本\"` ${red}[v$sh_ver]${normal}
 
@@ -32,7 +32,7 @@ Menu()
  ${color}13.${normal} `gettext \"修改默认\"`
 
  `eval_gettext \"\\\$tip 当前: \\\${green}\\\$title\\\${normal} 面板\"`
- $tip $msg\n\n"
+ ${tip} $msg\n\n"
     read -p "`gettext \"输入序号\"` [1-13]: " menu_num
     case "$menu_num" in
         h)

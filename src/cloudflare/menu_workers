@@ -13,8 +13,8 @@ CloudflareWorkersMenu()
   ${green}9.${normal} 关闭 监控
  ${green}10.${normal} 删除 worker
 
- $tip 当前: ${green}workers${normal} 面板
- $tip 输入: c 切换到 partner 面板\n\n"
+ ${tip} 当前: ${green}workers${normal} 面板
+ ${tip} 输入: c 切换到 partner 面板\n\n"
     read -p "`gettext \"输入序号\"` [1-10]: " cloudflare_workers_num
     case $cloudflare_workers_num in
         c)

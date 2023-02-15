@@ -35,6 +35,11 @@ JQInstall()
     elif [ ! -e "$JQ_FILE" ] || ! $JQ_FILE -V > /dev/null 2>&1 
     then
         Println "`eval_gettext \"\\\$info 开始下载/安装 JQ...\"`"
+        if [ "$dist" == "mac" ] 
+        then
+            DepInstall jq
+            return 0
+        fi
         #experimental# grep -Po '"tag_name": "jq-\K.*?(?=")'
         if jq_ver=$(curl -s -m 10 "$FFMPEG_MIRROR_LINK/jq.json" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
         then

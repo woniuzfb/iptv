@@ -1,3 +1,23 @@
+Include utils/python "$@"
+
+Include utils/crossplane "$@"
+
+Include utils/openssl "$@"
+
+Include utils/go "$@"
+
+Include utils/postfix "$@"
+
+Include utils/tesseract "$@"
+
+Include utils/git "$@"
+
+Include utils/nodejs "$@"
+
+Include utils/mongodb "$@"
+
+Include utils/dnscrypt "$@"
+
 Include src/nginx/install_cert "$@"
 
 Include src/nginx/view_status "$@"
@@ -337,7 +357,7 @@ Println "  nginx 管理面板 ${normal}${red}[v$sh_ver]${normal}
  ${green}19.${normal} 识别 cloudflare/ibm ip
  ${green}20.${normal} 删除域名
 
- $tip 输入: nx 打开面板
+ ${tip} 输入: nx 打开面板
 
 "
 read -p "`gettext \"输入序号\"` [1-20]: " nginx_num

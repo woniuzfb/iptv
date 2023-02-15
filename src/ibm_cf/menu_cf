@@ -22,7 +22,7 @@ IbmCfMenu()
  ${green}18.${normal} 关闭 APP 定时重启
  ${green}19.${normal} 更新脚本
 
- $tip 输入: ibm 打开面板\n\n"
+ ${tip} 输入: ibm 打开面板\n\n"
     read -p "$i18n_default_cancel" ibm_cf_num
     case $ibm_cf_num in
         1) IbmInstallCfCli

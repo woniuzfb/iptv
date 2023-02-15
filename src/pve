@@ -1,3 +1,9 @@
+Include utils/apt "$@"
+
+Include utils/vim "$@"
+
+Include utils/dnscrypt "$@"
+
 Include src/proxmox/get_vms "$@"
 
 Include src/proxmox/list_vms "$@"

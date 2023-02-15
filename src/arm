@@ -4,6 +4,12 @@ then
     exit 1
 fi
 
+Include utils/apt "$@"
+
+Include utils/vim "$@"
+
+Include utils/dnscrypt "$@"
+
 ShFileCheck
 
 JQ_FILE="/usr/local/bin/jq"

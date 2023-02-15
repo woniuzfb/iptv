@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # FFmpeg / Nginx / Openresty / V2ray / Xray / Cloudflare / IBM Cloud Foundry / Armbian / Proxmox VE / ...
 # Copyright (C) 2019-2023
 # Released under GPL Version 3 License
@@ -34,102 +34,91 @@ Include ver
 
 Include env
 
-if [ "$sh_test" = false ] 
-then
-    Include build "$@"
-fi
-
-Include debug "$@"
-
 Include core "$@"
 
 Include utils/i18n "$@"
 
-if [ -e "$IPTV_ROOT" ] && [ ! -e "$LOCK_FILE" ] 
-then
-    UpdateSelf
-fi
+Include build "$@"
 
-if [ "$sh_test" = true ] 
+if [[ -x $(command -v readlink) ]] && [ -L "$0" ] && alternative=$(readlink "$0") && [ -L "$alternative" ]
 then
-    self=${1:-tv}
-    shift
+    self=${alternative##*/}
 else
-    if [[ -x $(command -v readlink) ]] && [ -L "$0" ] && alternative=$(readlink "$0") && [ -L "$alternative" ]
-    then
-        self=${alternative##*/}
-    else
-        self=${0##*/}
-    fi
-
-    self=${self%.*}
+    self=${0##*/}
 fi
+
+self=${self%.*}
 
 Include src/$self "$@"
+
+if [ -e "$IPTV_ROOT" ] && [ ! -e "$LOCK_FILE" ] 
+then
+    Include src/iptv/update_self
+fi
 
 if [[ -n ${1+x} ]]
 then
     case $1 in
-        "4g")
+        4g)
             Include src/iptv/menu_4gtv "$@"
         ;;
-        "s") 
+        s) 
             Include src/iptv/menu_listings "$@"
         ;;
-        "singtel") 
+        singtel) 
             Include src/iptv/cmd_singtel "$@"
         ;;
-        "astro")
+        astro)
             Include src/iptv/cmd_astro "$@"
         ;;
-        "m") 
+        m) 
             Include src/iptv/cmd_monitor "$@"
         ;;
-        "e") 
+        e) 
             Include src/iptv/cmd_e "$@"
         ;;
-        "ee") 
+        ee) 
             Include src/iptv/cmd_ee "$@"
         ;;
-        "d")
+        d)
             Include src/iptv/cmd_default "$@"
         ;;
-        "ffmpeg"|"FFmpeg") 
+        ffmpeg|FFmpeg) 
             Include utils/mirror "$@"
         ;;
-        "ts") 
+        ts) 
             Include src/iptv/menu_ts "$@"
         ;;
-        "f"|"flv") 
+        f|flv) 
             [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
             kind="flv"
             color="$blue"
             shift
         ;;
-        "v"|"vip") 
+        v|vip) 
             [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
             vip=true
             shift
         ;;
-        "l"|"ll") 
+        l|ll) 
             Include src/iptv/cmd_list "$@"
         ;;
-        "debug")
+        debug)
             Include src/iptv/cmd_debug "$@"
         ;;
-        "ed"|"editor")
+        ed|editor)
             Include src/iptv/cmd_ed "$@"
         ;;
-        "a")
+        a)
             Include src/iptv/cmd_a "$@"
         ;;
-        "c")
+        c)
             Include src/iptv/cmd_c "$@"
         ;;
-        "color")
+        color)
             Include src/iptv/menu_color "$@"
         ;;
-        "b")
+        b)
             Include src/iptv/cmd_backup "$@"
         ;;
         *)

@@ -23,8 +23,8 @@ CloudflarePartnerMenu()
  ${green}19.${normal} 获取最优 IP
  ${green}20.${normal} 更新脚本
 
- $tip 当前: ${green}partner${normal} 面板
- $tip 输入: w 切换到 workers 面板\n\n"
+ ${tip} 当前: ${green}partner${normal} 面板
+ ${tip} 输入: w 切换到 workers 面板\n\n"
     read -p "`gettext \"输入序号\"` [1-20]: " cloudflare_partner_num
     case $cloudflare_partner_num in
         w)

@@ -1,3 +1,7 @@
+Include utils/imagemagick "$@"
+
+Include utils/imgcat "$@"
+
 Include src/v2ray/get_free_tag "$@"
 
 Include src/v2ray/view_staus "$@"

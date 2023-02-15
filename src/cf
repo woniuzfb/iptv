@@ -1,3 +1,9 @@
+Include utils/python "$@"
+
+Include utils/nodejs "$@"
+
+Include utils/wrangler "$@"
+
 Include src/cloudflare/set_host "$@"
 
 Include src/cloudflare/add_host "$@"

@@ -27,6 +27,9 @@ AcmeCheck()
         if [ -e ~/.acme.sh/ca/acme.zerossl.com/ca.conf ] 
         then
             . ~/.acme.sh/ca/acme.zerossl.com/ca.conf
+        elif [ -e ~/.acme.sh/ca/acme.zerossl.com/v2/DV90/ca.conf ] 
+        then
+            . ~/.acme.sh/ca/acme.zerossl.com/v2/DV90/ca.conf
         fi
 
         if [ -n "${CA_EAB_KEY_ID:-}" ] && [ -n "${CA_EAB_HMAC_KEY:-}" ]

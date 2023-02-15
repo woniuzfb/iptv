@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+DEV_PATH=$(dirname "$0")
+
+Error()
+{
+    echo
+    exit 1
+}
+
+Include()
+{
+    INCLUDE_PATH="$DEV_PATH"
+    include_name="$1"
+
+    while [[ $include_name =~ \/ ]] 
+    do
+        INCLUDE_PATH="$INCLUDE_PATH/${include_name%%/*}"
+        include_name="${include_name#*/}"
+    done
+
+    shift
+
+    # shellcheck disable=SC1090
+    . "$INCLUDE_PATH/$include_name" "$@" || Error include $?
+}
+
+Include ver
+
+Include env
+
+Include core "$@"
+
+Include utils/i18n "$@"
+
+if [ -z "$*" ] 
+then
+    echo
+    debug_options=( '编译' '测试' )
+    inquirer list_input_index "选择操作" debug_options debug_options_index
+
+    if [ "$debug_options_index" -eq 0 ] 
+    then
+        echo
+        inquirer list_input_index "是否部署" ny_options ny_options_index
+
+        if [ "$ny_options_index" -eq 0 ] 
+        then
+            "$DEV_PATH"/make
+        else
+            "$DEV_PATH"/make install
+        fi
+
+        exit 0
+    elif [ "$debug_options_index" -eq 1 ] 
+    then
+        self_options=()
+        for file in "$DEV_PATH"/src/*
+        do
+            if [ ! -d "$file" ] 
+            then
+                self_options+=("${file##*/}")
+            fi
+        done
+
+        echo
+        inquirer list_input "选择测试的程序" self_options self
+
+        echo
+        inquirer text_input "输入参数" args_input "$i18n_not_set"
+
+        if [ "$args_input" == "$i18n_not_set" ] 
+        then
+            args=()
+        else
+            IFS= read -ra args <<< "$args_input"
+        fi
+    fi
+else
+    self=$1
+    shift
+    args=("${@}")
+fi
+
+Include src/$self "${args[@]}"
+
+if [[ -n ${args[0]+x} ]]
+then
+    case ${args[0]} in
+        4g)
+            Include src/iptv/menu_4gtv "$@"
+        ;;
+        s) 
+            Include src/iptv/menu_listings "$@"
+        ;;
+        singtel) 
+            Include src/iptv/cmd_singtel "$@"
+        ;;
+        astro)
+            Include src/iptv/cmd_astro "$@"
+        ;;
+        m) 
+            Include src/iptv/cmd_monitor "$@"
+        ;;
+        e) 
+            Include src/iptv/cmd_e "$@"
+        ;;
+        ee) 
+            Include src/iptv/cmd_ee "$@"
+        ;;
+        d)
+            Include src/iptv/cmd_default "$@"
+        ;;
+        ffmpeg|FFmpeg) 
+            Include utils/mirror "$@"
+        ;;
+        ts) 
+            Include src/iptv/menu_ts "$@"
+        ;;
+        f|flv) 
+            [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+            kind="flv"
+            color="$blue"
+            shift
+        ;;
+        v|vip) 
+            [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
+            vip=true
+            shift
+        ;;
+        l|ll) 
+            Include src/iptv/cmd_list "$@"
+        ;;
+        debug)
+            Include src/iptv/cmd_debug "$@"
+        ;;
+        ed|editor)
+            Include src/iptv/cmd_ed "$@"
+        ;;
+        a)
+            Include src/iptv/cmd_a "$@"
+        ;;
+        c)
+            Include src/iptv/cmd_c "$@"
+        ;;
+        color)
+            Include src/iptv/menu_color "$@"
+        ;;
+        b)
+            Include src/iptv/cmd_backup "$@"
+        ;;
+        *)
+        ;;
+    esac
+fi
+
+if [ -z "$*" ]
+then
+    ShFileCheck
+    if [ "${vip:-false}" = true ] 
+    then
+        VipMenu
+    else
+        Menu
+    fi
+else
+    Include src/iptv/cmd_add "$@"
+fi

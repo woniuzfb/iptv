@@ -5,7 +5,6 @@ ReplaceInclude()
 
     if [ "$replace_name" == "build" ] 
     then
-        echo "${2:-}echo -n"
         return
     elif [ "$replace_name" == "src/\$self" ] 
     then
@@ -40,14 +39,34 @@ ReplaceInclude()
         elif [[ $line =~ ^([ ]*)Include\ ([^ ]+) ]] 
         then
             ReplaceInclude ${BASH_REMATCH[2]} "${2:-}${BASH_REMATCH[1]}"
+        elif [[ $line =~ ^([ ]*)\$\{ ]] || [[ $line =~ ^([ ]*)\` ]] || [[ $line =~ ^([ ]*)\— ]]
+        then
+            echo "$line"
         else
             echo "${2:-}$line"
         fi
     done < "$replace_path/$replace_name"
 }
 
-ReplaceInclude make | sed '/DEV_PATH/,/sh_ver/{/sh_ver/!d;};/if \[ "\$sh_test" = false \]/,/Println/{/Println/!d;}' > "$DEV_PATH/iptv.sh"
+BuildShFile()
+{
+    ReplaceInclude make | sed '/DEV_PATH/,/sh_ver/{/sh_ver/!d;};/Include build/d' > "$DEV_PATH/iptv.sh"
 
-echo "new iptv.sh created! For devs only!!"
+    if [ "$INSTALL_SH" = true ] 
+    then
+        cp -f "$DEV_PATH/iptv.sh" "$SH_FILE"
+    fi
+}
+
+if [ "${1:-}" == "install" ] 
+then
+    INSTALL_SH=true
+else
+    INSTALL_SH=false
+fi
+
+Spinner "Building iptv.sh" BuildShFile
+
+Println "$info new iptv.sh created! For devs only!!\n"
 
 exit 0
