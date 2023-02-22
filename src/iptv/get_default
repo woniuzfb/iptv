@@ -5,7 +5,7 @@ GetDefault()
         return 0
     fi
 
-    IFS=$'\001\t' read -r d_proxy d_xc_proxy d_user_agent d_headers d_cookies d_playlist_name \
+    IFS="${delimiters[0]}"$'\t' read -r d_proxy d_xc_proxy d_user_agent d_headers d_cookies d_playlist_name \
     d_seg_dir_name d_seg_name d_seg_length d_seg_count d_video_codec d_audio_codec \
     d_video_audio_shift d_draw_text d_quality d_bitrate d_resolution d_const d_const_cbr \
     d_encrypt d_encrypt_session d_keyinfo_name d_key_name d_input_flags d_output_flags d_sync d_sync_file \
@@ -14,7 +14,7 @@ GetDefault()
     d_hls_key_period d_hls_end_list d_anti_ddos_port d_anti_ddos_syn_flood d_anti_ddos_syn_flood_delay_seconds \
     d_anti_ddos_syn_flood_seconds d_anti_ddos d_anti_ddos_seconds d_anti_ddos_level \
     d_anti_leech d_anti_leech_restart_nums d_anti_leech_restart_flv_changes \
-    d_anti_leech_restart_hls_changes d_recheck_period d_version < <($JQ_FILE -c -r '
+    d_anti_leech_restart_hls_changes d_recheck_period d_version < <($JQ_FILE -c -r --arg delimiter "${delimiters[0]}" '
     .default as $default | 
     reduce ({proxy,xc_proxy,user_agent,headers,cookies,playlist_name,seg_dir_name,seg_name,seg_length,
     seg_count,video_codec,audio_codec,video_audio_shift,draw_text,quality,bitrate,resolution,const,
@@ -24,10 +24,10 @@ GetDefault()
     anti_ddos_syn_flood_delay_seconds,anti_ddos_syn_flood_seconds,anti_ddos,anti_ddos_seconds,
     anti_ddos_level,anti_leech,anti_leech_restart_nums,anti_leech_restart_flv_changes,
     anti_leech_restart_hls_changes,recheck_period,version}|keys_unsorted[]) as $key ([];
-        $default[$key] as $val | if $val then
-            . + [($val | tostring) + "\u0001"]
+        $default[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
+            . + [($val | tostring) + $delimiter]
         else
-            . + ["\u0001"]
+            . + [$delimiter]
         end
     )|@tsv' "$CHANNELS_FILE")
 

@@ -11,6 +11,82 @@ Trim()
     read -r ${1} <<< "$text"
 }
 
+JoinByChar()
+{
+  local IFS="$1"
+  shift
+  echo "$*"
+}
+
+JoinByString()
+{
+  local separator="$1"
+  shift
+  local first="$1"
+  shift
+  printf "%s" "$first" "${@/#/$separator}"
+}
+
+shopt -s extglob
+
+EleInArray()
+{
+  local ele="$1"
+  shift
+  local arr=("$@")
+  [[ "$ele" == @($(JoinByChar '|' "${arr[@]//|/\\|}")) ]]
+}
+
+printf()
+{
+    if [ "${BASH_VERSINFO[0]}" -lt 4 ] 
+    then
+        DistCheck
+
+        if [[ "${3:-}" =~ \%\((.+)\)T ]] 
+        then
+            if [ "${4:--1}" == "-1" ] 
+            then
+                read -r $2 < <(date +"${BASH_REMATCH[1]}")
+            elif [ "$dist" == "mac" ] && ! type -p gdate &>/dev/null
+            then
+                read -r $2 < <(date -r $4 +"${BASH_REMATCH[1]}")
+            else
+                read -r $2 < <(date +"${BASH_REMATCH[1]}" -d @$4)
+            fi
+
+            return 0
+        elif [[ "$1" =~ \%\((.+)\)T ]] 
+        then
+            if [ "${2:--1}" == "-1" ] 
+            then
+                echo $(date +"${BASH_REMATCH[1]}")
+            elif [ "$dist" == "mac" ] && ! type -p gdate &>/dev/null
+            then
+                echo $(date -r $2 +"${BASH_REMATCH[1]}")
+            else
+                echo $(date +"${BASH_REMATCH[1]}" -d @$2)
+            fi
+
+            return 0
+        fi
+    fi
+
+    builtin printf "$@"
+}
+
+SetDelimiters()
+{
+    [ -n "${delimiters:-}" ] && return 0
+
+    if [ "${BASH_VERSINFO[0]}" -lt 4 ] 
+    then
+        delimiters=( $'μ' $'\002' $'\003' $'\004' $'\005' $'\006' )
+    else
+        delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+    fi
+}
+
 RandStr()
 {
     str_size=8
@@ -162,3 +238,5 @@ Include utils/progress "$@"
 Include utils/shfile "$@"
 
 Include utils/jq "$@"
+
+Include utils/log

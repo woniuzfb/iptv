@@ -82,8 +82,6 @@ JQ()
     file=${file:-false}
     file_json=${file_json:-false}
 
-    [ ! -d "${MONITOR_LOG%/*}" ] && MONITOR_LOG="$HOME/monitor.log"
-
     FILE=$2
 
     if TMP_FILE=$(mktemp -q) 
@@ -354,12 +352,12 @@ JQ()
     esac
 
     {
-        flock -x 200 || { MonitorErr "`eval_gettext \"\\\$FILE JQ fd 200 失败\"`"; exit 1; }
+        flock -x 200 || { LogErr "`eval_gettext \"\\\$FILE JQ fd 200 失败\"`"; exit 1; }
 
         if ! $JQ_FILE "${jq_args[@]}" "${jq_commands[*]}" "$FILE" > "$TMP_FILE" || [ ! -s "$TMP_FILE" ]
         then
             [ ! -s "$TMP_FILE" ] && rm -f "$TMP_FILE"
-            MonitorLog "JQ ERROR!! action: $1, file: $FILE, tmp_file: $TMP_FILE, \$3: ${3:-none}, \$4: ${4:-none}, \$5: ${5:-none}"
+            LogInfo "JQ ERROR!! action: $1, file: $FILE, tmp_file: $TMP_FILE, \$3: ${3:-none}, \$4: ${4:-none}, \$5: ${5:-none}"
         else
             mv "$TMP_FILE" "$FILE"
         fi

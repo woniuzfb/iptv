@@ -7,7 +7,7 @@ GetServiceAccs()
         printf '{"%s":{"%s":[]}}' "$service_id" "accounts" > "$SERVICES_FILE"
     fi
 
-    [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+    SetDelimiters
 
     if [ "$service_id" == "4gtv" ] 
     then
@@ -26,6 +26,33 @@ GetServiceAccs()
         IFS="${delimiters[1]}" read -r -a _4gtv_accs_token <<< "$_4gtv_acc_token"
 
         _4gtv_accs_count=${#_4gtv_accs_email[@]}
+    elif [ "$service_id" == "alist" ] 
+    then
+        IFS=$'\004\t' read -r alist_name alist_url alist_acc_username \
+        alist_acc_password alist_acc_token < <(JQs flat "$SERVICES_FILE" '' '
+        (."'"$service_id"'" | if (.|type == "string") then {} else . end) as $alist |
+        ($alist.accs // {} | if (.|type) == "string" then {} else . end) as $accs |
+        reduce ({name,url}|keys_unsorted[]) as $key ([];
+        $alist[$key] as $val | if $val then
+            . + [$val + "\u0002\u0004"]
+        else
+            . + ["\u0004"]
+        end
+        ) + reduce ({username,password,token}|keys_unsorted[]) as $key ([];
+            $accs[$key] as $val | if $val then
+                . + [$val + "\u0003\u0004"]
+            else
+                . + ["\u0004"]
+            end
+        )|@tsv' "${delimiters[@]}")
+
+        IFS="${delimiters[1]}" read -r -a alists_name <<< "$alist_name"
+        IFS="${delimiters[1]}" read -r -a alists_url <<< "$alist_url"
+        IFS="${delimiters[2]}" read -r -a alists_acc_username <<< "$alist_acc_username"
+        IFS="${delimiters[2]}" read -r -a alists_acc_password <<< "$alist_acc_password"
+        IFS="${delimiters[2]}" read -r -a alists_acc_token <<< "$alist_acc_token"
+
+        alists_count=${#alists_name[@]}
     else
         IFS=$'\003\t' read -r m_user_name m_phone_number m_password m_access_token m_device_no m_device_id m_refresh < <(JQs flat "$SERVICES_FILE" '' '
         (."'"$service_id"'".accounts | if (.|type == "string") then {} else . end) as $accounts |
@@ -44,7 +71,6 @@ GetServiceAccs()
         fi
 
         IFS="${delimiters[1]}" read -r -a ts_accs_user_name <<< "$m_user_name"
-        ts_accs_count=${#ts_accs_user_name[@]}
 
         if [ -z "$m_phone_number" ] 
         then

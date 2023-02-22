@@ -11,7 +11,7 @@ ReplaceInclude()
         echo "${2:-}if [ \"\$self\" == \"tv\" ]"
         echo "${2:-}then"
         ReplaceInclude src/tv "    ${2:-}"
-        bins=(v2 x nx or pve arm ibm cf cx)
+        bins=(v2 x nx or pve arm ibm cf cx ali)
         for bin in "${bins[@]}"
         do
             echo "${2:-}elif [ \"\$self\" == \"$bin\" ]"

@@ -2,7 +2,7 @@ ParseSchedule()
 {
     schedule=$($JQ_FILE 'unique_by(.start_time)' <<< "$schedule")
 
-    [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+    SetDelimiters
     IFS=$'\003\t' read -r m_title m_time m_start_time m_end_time < <(JQs flat "$schedule" '' '
     . as $schedles | reduce ({title,time,start_time,end_time}|keys_unsorted[]) as $key ([];
         $schedles[$key] as $val | if $val then

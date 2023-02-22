@@ -15,7 +15,7 @@ GetChannel()
         select_json='{ "output_dir_name": "'"$output_dir_name"'" }'
     fi
 
-    [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+    SetDelimiters
 
     IFS=$'\002\t' read -r chnl_pid chnl_status chnl_stream_links_list chnl_live chnl_proxy chnl_xc_proxy \
     chnl_user_agent chnl_headers chnl_cookies chnl_output_dir_name chnl_playlist_name chnl_seg_dir_name \
@@ -26,7 +26,7 @@ GetChannel()
     chnl_flv_h265 chnl_flv_push_link chnl_flv_pull_link chnl_subtitle_name chnl_subtitle_language chnl_subtitle_default \
     chnl_subtitle_auto_select chnl_subtitle_map chnl_schedule_start_time chnl_schedule_end_time chnl_schedule_loop \
     chnl_schedule_auto_remove chnl_schedule_hls_change chnl_schedule_hls_change_once chnl_schedule_channel_name \
-    chnl_schedule_status < <($JQ_FILE -c -r --arg select_index "$select_index" --argjson select_json "$select_json" '
+    chnl_schedule_status < <($JQ_FILE -c -r --arg delimiter "${delimiters[0]}" --arg select_index "$select_index" --argjson select_json "$select_json" '
     .channels[] | select(.[$select_index] == $select_json[$select_index]) as $channel |
     ($channel.subtitle // [] | if . == "" then [] else . end) as $subtitle |
     ($channel.schedule // [] | if . == "" then [] else . end) as $schedule |
@@ -36,26 +36,26 @@ GetChannel()
     input_flags,output_flags,channel_name,channel_time,sync,sync_file,sync_index,sync_pairs,hls_end_list,
     flv_status,flv_h265,flv_push_link,flv_pull_link}|keys_unsorted[]) as $key ([];
         $channel[$key] as $val | if ($val|type == "array") then
-            . + [($val | join("\u0001")) + "\u0002"]
+            . + [($val | join($delimiter)) + "\u0002"]
         elif $val then
             . + [($val | tostring) + "\u0002"]
         else
             . + ["\u0002"]
         end
     ) + 
-    [([$subtitle[]|.name|. + "\u0001"]|join("") + "\u0002")] +
-    [([$subtitle[]|.language|. + "\u0001"]|join("") + "\u0002")] +
-    [([$subtitle[]|.default // false|tostring|. + "\u0001"]|join("") + "\u0002")] +
-    [([$subtitle[]|.auto_select // false|tostring|. + "\u0001"]|join("") + "\u0002")] +
-    [([$subtitle[]|.map|tostring|. + "\u0001"]|join("") + "\u0002")] +
-    [([$schedule[]|.start_time // 0|tostring|. + "\u0001"]|join("") + "\u0002")] +
-    [([$schedule[]|.end_time // 0|tostring|. + "\u0001"]|join("") + "\u0002")] +
-    [([$schedule[]|.loop // true|tostring|. + "\u0001"]|join("") + "\u0002")] +
-    [([$schedule[]|.auto_remove // true|tostring|. + "\u0001"]|join("") + "\u0002")] +
-    [([$schedule[]|.hls_change // true|tostring|. + "\u0001"]|join("") + "\u0002")] +
-    [([$schedule[]|.hls_change_once // false|tostring|. + "\u0001"]|join("") + "\u0002")] +
-    [([$schedule[]|.channel_name|. + "\u0001"]|join("") + "\u0002")] +
-    [([$schedule[]|.status // 2|tostring|. + "\u0001"]|join("") + "\u0002")]
+    [([$subtitle[]|.name|. + $delimiter]|join("") + "\u0002")] +
+    [([$subtitle[]|.language|. + $delimiter]|join("") + "\u0002")] +
+    [([$subtitle[]|.default // false|tostring|. + $delimiter]|join("") + "\u0002")] +
+    [([$subtitle[]|.auto_select // false|tostring|. + $delimiter]|join("") + "\u0002")] +
+    [([$subtitle[]|.map|tostring|. + $delimiter]|join("") + "\u0002")] +
+    [([$schedule[]|.start_time // 0|tostring|. + $delimiter]|join("") + "\u0002")] +
+    [([$schedule[]|.end_time // 0|tostring|. + $delimiter]|join("") + "\u0002")] +
+    [([$schedule[]|.loop // true|tostring|. + $delimiter]|join("") + "\u0002")] +
+    [([$schedule[]|.auto_remove // true|tostring|. + $delimiter]|join("") + "\u0002")] +
+    [([$schedule[]|.hls_change // true|tostring|. + $delimiter]|join("") + "\u0002")] +
+    [([$schedule[]|.hls_change_once // false|tostring|. + $delimiter]|join("") + "\u0002")] +
+    [([$schedule[]|.channel_name|. + $delimiter]|join("") + "\u0002")] +
+    [([$schedule[]|.status // 2|tostring|. + $delimiter]|join("") + "\u0002")]
     |@tsv' "$CHANNELS_FILE")
 
     if [ -z "$chnl_pid" ] 

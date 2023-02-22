@@ -150,7 +150,7 @@ DepInstall()
 
     DistCheck
 
-    if [ "$dependency" == "gettext" ] || [ "$dependency" == "wget" ] || [ "$dependency" == "gsed" ]
+    if [ "$dependency" == "gettext" ] || [ "$dependency" == "wget" ] || [ "$dependency" == "gsed" ] || [ "$dependency" == "gdate" ]
     then
         Println "${green}[INFO]${normal} Installing $dependency, it takes awhile..."
 
@@ -161,9 +161,14 @@ DepInstall()
                 BrewInstall
             fi
 
-            if [ "$dependency" == "sed" ] 
+            if [ "$dependency" == "gsed" ] 
             then
-                dependency="gnu-sed"
+                dependency=gnu-sed
+            fi
+
+            if [ "$dependency" == "gdate" ] 
+            then
+                dependency=coreutils
             fi
 
             if brew install $dependency >/dev/null 2>&1

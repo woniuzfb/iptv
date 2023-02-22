@@ -40,7 +40,7 @@ CloudflareSetUserToken()
     else
         if [[ $(curl -s -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
             -H "Authorization: Bearer $cf_user_token" \
-            -H "Content-Type:application/json" | $JQ_FILE -r '.success') = false ]]
+            -H "Content-Type: application/json" | $JQ_FILE -r '.success') = false ]]
         then
             Println "$error Token 验证失败\n"
             exit 1

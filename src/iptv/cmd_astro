@@ -1,11 +1,11 @@
 Println "$info 检测 astro ..."
 
-delimiters=( $'\001' )
+SetDelimiters
 IFS=$'\002\t' read -r m_id m_title m_description m_is_hd m_language < <(
 JQs flat "$(curl -s -Lm 20 -H 'User-Agent: '"$USER_AGENT_BROWSER"'' https://contenthub-api.eco.astro.com.my/channel/all.json)" '.[0].response' '
 . as $response | reduce ({id,title,description,isHd,language}|keys_unsorted[]) as $key ([];
     $response[$key] as $val | if $val then
-        . + [$val + "\u0001\u0002"]
+        . + [$val + "'"${delimiters[0]}"'\u0002"]
     else
         . + ["\u0002"]
     end

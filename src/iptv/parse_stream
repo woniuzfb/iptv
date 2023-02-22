@@ -378,7 +378,7 @@ ParseStream()
         if probe=$($FFPROBE -v quiet -print_format json -show_programs -show_streams -show_format -user_agent "$user_agent" \
             ${ffprobe_command[@]+"${ffprobe_command[@]}"} -i "$stream_link") 
         then
-            [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+            SetDelimiters
 
             IFS=$'\004\t' read -r m_programs_program_id m_programs_program_num m_programs_streams_count m_programs_tags \
             m_programs_streams_index m_streams_index m_streams_codec_name m_streams_codec_type m_streams_width m_streams_height \
@@ -396,7 +396,7 @@ ParseStream()
                     . + ["\u0004"]
                 end
             ) + ($programs.tags | if . then
-                    [(with_entries(.value = .key + "\u0001" + (.value|tostring) + "\u0003\u0002")|join("")+"\u0004")]
+                    [(with_entries(.value = .key + "'"${delimiters[0]}"'" + (.value|tostring) + "\u0003\u0002")|join("")+"\u0004")]
                 else
                     ["\u0004"]
                 end
@@ -412,7 +412,7 @@ ParseStream()
                     . + ["\u0004"]
                 end
             ) + ($streams.tags | if . then
-                    [(with_entries(.value = .key + "\u0001" + (.value|tostring) + "\u0003\u0002")|join("")+"\u0004")]
+                    [(with_entries(.value = .key + "'"${delimiters[0]}"'" + (.value|tostring) + "\u0003\u0002")|join("")+"\u0004")]
                 else
                     ["\u0004"]
                 end
@@ -423,7 +423,7 @@ ParseStream()
                     . + ["\u0004"]
                 end
             ) + ($format.tags | if . then
-                    [(with_entries(.value = .key + "\u0001" + (.value|tostring) + "\u0002")|join("")+"\u0004")]
+                    [(with_entries(.value = .key + "'"${delimiters[0]}"'" + (.value|tostring) + "\u0002")|join("")+"\u0004")]
                 else
                     ["\u0004"]
                 end

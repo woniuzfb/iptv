@@ -1,0 +1,50 @@
+AlistViewAcc()
+{
+    GetServiceAccs alist
+
+    if [ "$alists_count" -eq 0 ] 
+    then
+        Println "$error 请先添加 Alist\n"
+        exit 1
+    fi
+
+    alists_options=()
+    for((i=0;i<alists_count;i++));
+    do
+        alists_options+=("名称: ${alists_name[i]:-无} 地址: ${alists_url[i]}")
+    done
+
+    echo
+    inquirer checkbox_input_indices "选择 Alist" alists_options alists_indices
+
+    for alists_index in "${alists_indices[@]}"
+    do
+        alist_txt="${green}名称:${normal}${indent_6}${alists_name[alists_index]:-无}\n${green}地址:${normal}${indent_6}${alists_url[alists_index]}\n"
+
+        if [ -z "${alists_acc_username[alists_index]}" ] 
+        then
+            alist_txt="$alist_txt${green}账号:${normal}${indent_6}${red}无${normal}\n\n"
+        else
+            IFS="${delimiters[1]}" read -ra alist_accs_username <<< "${alists_acc_username[alists_index]}"
+
+            new_arr=("${alist_accs_username[@]//*/}")
+            alist_if_null=$(JoinByChar "${delimiters[1]}" "${new_arr[@]}")
+
+            IFS="${delimiters[1]}" read -ra alist_accs_password <<< "${alists_acc_password[alists_index]:-$alist_if_null}${delimiters[1]}"
+            IFS="${delimiters[1]}" read -ra alist_accs_token <<< "${alists_acc_token[alists_index]:-$alist_if_null}${delimiters[1]}"
+
+            alist_accs_count=${#alist_accs_username[@]}
+
+            alist_txt="$alist_txt${green}账号:${normal}\n"
+
+            for((i=0;i<alist_accs_count;i++));
+            do
+                alist_txt="$alist_txt${green}$((i+1)).${normal}${indent_6}用户名: ${alist_accs_username[i]}\n${indent_6}密码: ${alist_accs_password[i]:-无}\n${indent_6}Token: ${alist_accs_token[i]:-无}\n\n"
+            done
+        fi
+
+        Println "$alist_txt"
+    done
+
+    return 0
+}

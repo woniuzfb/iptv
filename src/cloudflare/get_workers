@@ -1,11 +1,11 @@
 CloudflareGetWorkers()
 {
-    [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+    SetDelimiters
     IFS=$'\002\t' read -r name path project_name upstream < <(JQs flat "$CF_CONFIG" '.[0].workers' '
     (. // {}| if . == "" then {} else . end) as $workers |
     reduce ({name,path,project_name,upstream}|keys_unsorted[]) as $key ([];
     $workers[$key] as $val | if $val then
-        . + [$val + "\u0001\u0002"]
+        . + [$val + "'"${delimiters[0]}"'\u0002"]
     else
         . + ["\u0002"]
     end

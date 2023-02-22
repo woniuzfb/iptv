@@ -47,7 +47,7 @@ inquirer()
         local on_backspace=${8:-inquirer:on_default}
         local on_not_ascii=${9:-inquirer:on_default}
         break_keypress=false
-        while IFS="" read -rsn1 key
+        while IFS= read -rsn1 key
         do
             case "$key" in
                 $'\x1b')
@@ -484,8 +484,7 @@ inquirer()
         esac
     }
 
-    inquirer:on_sort_enter_space()
-    {
+    inquirer:on_sort_enter_space() {
         local i
 
         tput cud $((${#sort_options[@]}-current_index))
@@ -1147,16 +1146,43 @@ inquirer()
     }
 
     inquirer:display_length() {
-        local display_length=0 byte_len
-        local oLC_ALL=${LC_ALL:-} oLANG=${LANG:-} LC_ALL=${LC_ALL:-} LANG=${LANG:-}
+        local display_length=0 byte_len char_len char_i char
+        local oLC_ALL=${LC_ALL:-} oLANG=${LANG:-}
 
-        while IFS="" read -rsn1 char
+        if [[ ${BASH_VERSINFO[0]} -lt 4 ]] 
+        then
+            char_len="${#1}"
+            for((char_i=0;char_i<char_len;char_i++));
+            do
+                char="${1:char_i:1}"
+                case $char in
+                    *[$'\x80'-$'\xFF']*) 
+                        LC_ALL= LANG=C
+                        byte_len=${#char}
+                        LC_ALL=$oLC_ALL LANG=$oLANG
+                        if [[ $byte_len -eq 2 ]] 
+                        then
+                            display_length=$((display_length+1))
+                        else
+                            display_length=$((display_length+2))
+                        fi
+                    ;;
+                    *) display_length=$((display_length+1))
+                    ;;
+                esac
+            done
+
+            echo $display_length
+            return 0
+        fi
+
+        while IFS= read -rsn1 char
         do
             case "$char" in
                 '')
                 ;;
                 *[$'\x80'-$'\xFF']*) 
-                    LC_ALL='' LANG=C
+                    LC_ALL= LANG=C
                     byte_len=${#char}
                     LC_ALL=$oLC_ALL LANG=$oLANG
                     if [[ $byte_len -eq 2 ]] 

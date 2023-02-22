@@ -109,7 +109,7 @@ else
     ts_source=$(< "$ts_option")
 fi
 
-[ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+SetDelimiters
 
 EXIT_STATUS=0
 

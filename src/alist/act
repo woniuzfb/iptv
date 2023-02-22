@@ -1,0 +1,273 @@
+AlistAct()
+{
+    GetServiceAccs alist
+
+    if [ "$alists_count" -eq 0 ] 
+    then
+        Println "$error 请先添加 Alist\n"
+        exit 1
+    fi
+
+    alists_txt=""
+    alists_options=()
+    for((alists_index=0;alists_index<alists_count;alists_index++));
+    do
+        alists_options+=("Alist $((alists_index+1))")
+        if [ -z "${alists_acc_username[alists_index]}" ] 
+        then
+            alist_accs_count=0
+        else
+            IFS="${delimiters[1]}" read -ra alist_accs_username <<< "${alists_acc_username[alists_index]}"
+            alist_accs_count=${#alist_accs_username[@]}
+        fi
+        alists_txt="$alists_txt\n${green}$((alists_index+1)).${normal}${indent_6}名称: ${alists_name[alists_index]:-无}\n${indent_6}地址: ${alists_url[alists_index]}\n${indent_6}账号: ${alist_accs_count}个\n"
+    done
+
+    Println "$alists_txt\n"
+
+    echo
+    inquirer list_input_index "选择 Alist" alists_options alists_index
+
+    if [ -z "${alists_acc_username[alists_index]}" ] 
+    then
+        Println "$error 请先添加账号\n"
+        exit 1
+    fi
+
+    IFS="${delimiters[1]}" read -ra alist_accs_username <<< "${alists_acc_username[alists_index]}"
+
+    new_arr=("${alist_accs_username[@]//*/}")
+    alist_if_null=$(JoinByChar "${delimiters[1]}" "${new_arr[@]}")
+
+    IFS="${delimiters[1]}" read -ra alist_accs_password <<< "${alists_acc_password[alists_index]:-$alist_if_null}${delimiters[1]}"
+    IFS="${delimiters[1]}" read -ra alist_accs_token <<< "${alists_acc_token[alists_index]:-$alist_if_null}${delimiters[1]}"
+
+    alist_accs_count=${#alist_accs_username[@]}
+
+    alist_txt="${green}账号:${normal}\n"
+
+    for((i=0;i<alist_accs_count;i++));
+    do
+        alist_txt="$alist_txt${green}$((i+1)).${normal}${indent_6}用户名: ${alist_accs_username[i]}\n${indent_6}密码: ${alist_accs_password[i]:-无}\n${indent_6}Token: ${alist_accs_token[i]:-无}\n\n"
+    done
+
+    Println "$alist_txt"
+
+    inquirer list_input_index "选择账号" alist_accs_username alist_accs_index
+
+    alist_acc_username="${alist_accs_username[alist_accs_index]}"
+    alist_acc_password="${alist_accs_password[alist_accs_index]}"
+
+    if [ -n "${alist_accs_token[alist_accs_index]}" ] 
+    then
+        echo
+        inquirer list_input_index "是否重新登陆账号" ny_options ny_options_index
+
+        if [ "$ny_options_index" -eq 0 ] 
+        then
+            alist_acc_token="${alist_accs_token[alist_accs_index]}"
+        else
+            Alist.auth.login
+        fi
+    else
+        Alist.auth.login
+    fi
+
+    echo
+    inquirer text_input "输入访问路径" alist_path "/" SetAlistPathValidate "必须是 / 开始的路径"
+
+    while true 
+    do
+        alist_files_count=0
+
+        if ! Alist.fs.list "$alist_path" 
+        then
+            Println "$error 发生错误: $fs_list_message\n"
+            if [ "$alist_path" == "/" ] 
+            then
+                exit 1
+            fi
+        elif [ -n "$content_name" ] 
+        then
+            IFS="${delimiters[1]}" read -ra alist_files_name <<< "$content_name"
+            IFS="${delimiters[1]}" read -ra alist_files_is_dir <<< "$content_is_dir"
+
+            alist_files_count=${#alist_files_name[@]}
+        else
+            Println "$error 没有文件\n"
+            if [ "$alist_path" == "/" ] 
+            then
+                exit 1
+            fi
+        fi
+
+        alist_files_root=true
+        alist_files_options=()
+
+        if [ "$alist_path" != "/" ] 
+        then
+            alist_files_options+=("..")
+            alist_files_root=false
+        fi
+
+        alist_not_dir_indices=()
+        alist_dir_indices=()
+        alist_checkbox_options=()
+
+        for((alist_files_index=0;alist_files_index<alist_files_count;alist_files_index++));
+        do
+            if [ "${alist_files_is_dir[alist_files_index]}" = true ] 
+            then
+                alist_files_options+=("${alist_files_name[alist_files_index]}/")
+                alist_dir_indices+=("$alist_files_index")
+                alist_checkbox_options+=("${alist_files_name[alist_files_index]}/")
+            else
+                alist_files_options+=("${alist_files_name[alist_files_index]}")
+                alist_not_dir_indices+=("$alist_files_index")
+                alist_checkbox_options+=("${alist_files_name[alist_files_index]}")
+            fi
+        done
+
+        if [ -n "${alist_not_dir_indices:-}" ] || [ -n "${alist_dir_indices:-}" ]
+        then
+            alist_files_options+=("${red}修改${normal}")
+        fi
+
+        echo
+        inquirer list_input_index "请选择" alist_files_options alist_files_index
+
+        if [ "$alist_files_root" = false ] && [ "$alist_files_index" -eq 0 ]
+        then
+            alist_path="${alist_path%/*}"
+            continue
+        fi
+
+        if { [ "$alist_files_root" = false ] && [ "$alist_files_index" -eq $((alist_files_count+1)) ]; } || { [ "$alist_files_root" = true ] && [ "$alist_files_index" -eq $((alist_files_count)) ]; }
+        then
+            alist_files_options=("多选")
+
+            if [ -n "${alist_dir_indices:-}" ] 
+            then
+                alist_files_options+=("选择所有目录文件")
+            fi
+            if [ -n "${alist_not_dir_indices:-}" ] 
+            then
+                alist_files_options+=("选择所有非目录文件")
+            fi
+
+            echo
+            inquirer list_input_index "请选择" alist_files_options alist_files_options_index
+
+            if [ "$alist_files_options_index" -eq 0 ] 
+            then
+                echo
+                alist_files_indices=()
+                inquirer checkbox_input_indices "多选" alist_checkbox_options alist_files_indices
+            elif [ "${alist_files_options[alist_files_options_index]}" == "选择所有目录文件" ] 
+            then
+                alist_files_indices=("${alist_dir_indices[@]}")
+            else
+                alist_files_indices=("${alist_not_dir_indices[@]}")
+            fi
+        else
+            if [ "$alist_files_root" = false ] 
+            then
+                alist_files_index=$((alist_files_index-1))
+            fi
+
+            if [ "${alist_files_is_dir[alist_files_index]}" = true ] 
+            then
+                alist_path="$alist_path/${alist_files_name[alist_files_index]}"
+                continue
+            fi
+
+            alist_files_indices=("$alist_files_index")
+        fi
+
+        alist_files_edit_count=${#alist_files_indices[@]}
+
+        alist_files_edit_options=()
+
+        if [ "$alist_files_edit_count" -eq 1 ] 
+        then
+            alist_files_edit_options+=("重命名")
+        else
+            alist_files_edit_options+=( '逐个重命名' '批量重命名')
+        fi
+
+        alist_files_edit_options+=( '删除' )
+
+        echo
+        inquirer list_input "选择操作" alist_files_edit_options alist_files_edit_option
+
+        if [ "$alist_files_edit_option" == "重命名" ] 
+        then
+            echo
+            inquirer text_input "输入新的名称" alist_file_name "$i18n_cancel"
+            if [ "$alist_file_name" == "$i18n_cancel" ] 
+            then
+                continue
+            fi
+            Alist.fs.rename
+        elif [ "$alist_files_edit_option" == "逐个重命名" ] 
+        then
+            for alist_files_index in "${alist_files_indices[@]}"
+            do
+                echo
+                Println "$info 修改 ${alist_files_name[alist_files_index]}\n"
+                inquirer text_input "输入新的名称" alist_file_name "$i18n_cancel"
+                if [ "$alist_file_name" == "$i18n_cancel" ] 
+                then
+                    continue
+                fi
+                Alist.fs.rename
+            done
+        elif [ "$alist_files_edit_option" == "批量重命名" ] 
+        then
+            echo
+            inquirer text_input "输入 sed 命令" alist_files_edit_sed "$i18n_cancel"
+            if [ "$alist_file_name" == "$i18n_cancel" ] 
+            then
+                continue
+            fi
+        else
+            echo
+            alist_files_txt=""
+            alist_files_delete_names=()
+            for((alist_files_edit_index=0;alist_files_edit_index<alist_files_edit_count;alist_files_edit_index++));
+            do
+                alist_files_index="${alist_files_indices[alist_files_edit_index]}"
+                alist_files_txt="$alist_files_txt${green}$((alist_files_edit_index+1)).${normal}${indent_6}${alist_files_name[alist_files_index]}\n"
+                alist_files_delete_names+=("${alist_files_name[alist_files_index]}")
+            done
+
+            Println "$alist_files_txt\n"
+            inquirer list_input_index "确认删除以上文件" ny_options ny_options_index
+
+            if [ "$ny_options_index" -eq 1 ] 
+            then
+                for alist_file_delete_name in "${alist_files_delete_names[@]}"
+                do
+                    if Alist.fs.remove
+                    then
+                        Println "$info 文件 $alist_file_delete_name 删除成功"
+                    else
+                        Println "$error 文件 $alist_file_delete_name 删除失败: $fs_remove_message"
+                    fi
+                done
+            fi
+        fi
+    done
+
+    return 0
+}
+
+SetAlistPathValidate()
+{
+    if [ "${1:0:1}" == "/" ] 
+    then
+        return 0
+    fi
+
+    return 1
+}

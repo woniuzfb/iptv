@@ -105,6 +105,7 @@ ShFileCheck()
     [ ! -e "$XC_FILE" ] && ln -s "$SH_FILE" "$XC_FILE"
     [ ! -e "$ARM_FILE" ] && ln -s "$SH_FILE" "$ARM_FILE"
     [ ! -e "$PVE_FILE" ] && ln -s "$SH_FILE" "$PVE_FILE"
+    [ ! -e "$ALIST_FILE" ] && ln -s "$SH_FILE" "$ALIST_FILE"
 
     return 0
 }

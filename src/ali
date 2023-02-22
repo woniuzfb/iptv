@@ -1,0 +1,58 @@
+Include src/iptv/get_service
+Include src/alist/add_app
+Include src/alist/view_app
+Include src/alist/add_acc
+Include src/alist/view_acc
+Include src/alist/login_acc
+Include src/alist/api
+Include src/alist/act
+
+echo
+alist_options=( '文件管理' 'Alist管理' '账号管理' '退出' )
+inquirer list_input_index "请选择" alist_options alist_options_index
+
+case $alist_options_index in
+    0) 
+        AlistAct
+    ;;
+    1) 
+        echo
+        alist_app_options=( '查看' '添加' '安装' '修改' '删除' )
+        inquirer list_input_index "选择操作" alist_app_options alist_app_options_index
+
+        case $alist_app_options_index in
+            0) AlistViewApp
+            ;;
+            1) AlistAddApp
+            ;;
+            2) AlistInstallApp
+            ;;
+            3) AlistEditApp
+            ;;
+            4) AlistDelApp
+            ;;
+        esac
+    ;;
+    2) 
+        echo
+        alist_acc_options=( '查看' '添加' '登陆' '修改' '删除' )
+        inquirer list_input_index "选择操作" alist_acc_options alist_acc_options_index
+
+        case $alist_acc_options_index in
+            0) AlistViewAcc
+            ;;
+            1) AlistAddAcc
+            ;;
+            2) AlistLoginAcc
+            ;;
+            3) AlistEditAcc
+            ;;
+            4) AlistDelAcc
+            ;;
+        esac
+    ;;
+    *) 
+    ;;
+esac
+
+exit 0

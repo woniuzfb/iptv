@@ -1,6 +1,6 @@
 NginxGetConfig()
 {
-    [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+    SetDelimiters
     IFS=$'\007\t' read -r status error_message level_1_directive level_1_args \
     level_2_directive level_2_args level_3_directive level_3_args \
     level_4_directive level_4_args level_5_directive level_5_args < <(

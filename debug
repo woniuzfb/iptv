@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 set -euo pipefail
 
@@ -81,7 +81,7 @@ then
 else
     self=$1
     shift
-    args=("${@}")
+    args=("${@:-}")
 fi
 
 Include src/$self "${args[@]}"

@@ -26,6 +26,7 @@ NX_FILE=/usr/local/bin/nx
 XC_FILE=/usr/local/bin/cx
 ARM_FILE=/usr/local/bin/arm
 PVE_FILE=/usr/local/bin/pve
+LOG_FILE="$HOME/iptv.log"
 
 # iptv
 IPTV_ROOT=/usr/local/iptv
@@ -87,3 +88,6 @@ XTREAM_CODES_PROXY_LINK_FALLBACK="$FFMPEG_MIRROR_LINK"/xtream_codes_proxy.js
 IBM_FILE=/usr/local/bin/ibm
 IBM_APPS_ROOT="$HOME"/ibm_apps
 IBM_CONFIG="$HOME"/ibm.json
+
+# Alist
+ALIST_FILE=/usr/local/bin/ali

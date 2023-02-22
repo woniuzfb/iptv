@@ -20,8 +20,8 @@ do
     channels="$channels$line"
 done < <(curl -s -Lm 20 "$SH_FALLBACK/$DEFAULT_DEMOS")
 [ -z "$channels" ] && Println "$error 暂时无法连接服务器, 请稍后再试 !\n" && exit 1
-delimiters=( $'\001' )
-IFS=$'\001' read -r -a channels_name < <(JQs flat "$channels" '' '.channel_name' "${delimiters[@]}")
+SetDelimiters
+IFS="${delimiters[0]}"$'\t' read -r -a channels_name < <(JQs flat "$channels" '' '.channel_name' "${delimiters[@]}")
 echo
 channels_name+=("全部")
 inquirer list_input "选择添加的频道" channels_name channel_name

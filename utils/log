@@ -1,0 +1,28 @@
+ChangeLogFile()
+{
+    if [ "${change_log_file:-true}" = false ] 
+    then
+        return 0
+    fi
+
+    if [ -d "${MONITOR_LOG%/*}" ] 
+    then
+        LOG_FILE="$MONITOR_LOG"
+    fi
+
+    change_log_file=false
+}
+
+LogInfo()
+{
+    ChangeLogFile
+    printf -v date_now '%(%m-%d %H:%M:%S)T' -1
+    printf '%s\n' "$date_now $1" >> "$LOG_FILE"
+}
+
+LogErr()
+{
+    ChangeLogFile
+    printf -v date_now '%(%m-%d %H:%M:%S)T' -1
+    printf '%s\n' "$date_now [ERROR: $1]" >> "$LOG_FILE"
+}

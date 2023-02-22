@@ -2,7 +2,7 @@ GetChannels()
 {
     [ ! -d "$IPTV_ROOT" ] && Println "`eval_gettext \"\\\$error 尚未安装, 请检查 !\"`\n" && exit 1
 
-    [ -z "${delimiters:-}" ] && delimiters=( $'\001' $'\002' $'\003' $'\004' $'\005' $'\006' )
+    SetDelimiters
 
     IFS=$'\004\t' read -r m_pid m_status m_hide m_stream_link m_live m_proxy m_xc_proxy \
     m_user_agent m_headers m_cookies m_output_dir_name m_playlist_name m_seg_dir_name \

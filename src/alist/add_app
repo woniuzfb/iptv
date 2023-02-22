@@ -1,0 +1,52 @@
+AlistAddApp()
+{
+    GetServiceAccs alist
+
+    if [ "$alists_count" -gt 0 ] 
+    then
+        alists_txt=""
+        for((i=0;i<alists_count;i++));
+        do
+            alists_txt="$alists_txt\n${green}$((i+1)).${normal}${indent_6}名称: ${alists_name[i]:-无}\n${indent_6}地址: ${alists_url[i]}\n"
+        done
+
+        Println "$alists_txt"
+    fi
+
+    echo
+    inquirer text_input "输入 Alist 名称" alist_name "$i18n_not_set"
+
+    if [ "$alist_name" == "$i18n_not_set" ] 
+    then
+        alist_name=""
+    fi
+
+    echo
+    ExitOnText "输入 Alist 地址" alist_url
+
+    if [ "$alists_count" -gt 0 ] 
+    then
+        for url in "${alists_url[@]}"
+        do
+            if [ "$url" == "$alist_url" ] 
+            then
+                Println "$error Alist 地址已存在\n"
+                exit 1
+            fi
+        done
+    fi
+
+    new_app=$(
+    $JQ_FILE -n --arg name "$alist_name" --arg url "$alist_url" \
+        '{
+            name: $name,
+            url: $url,
+            accs: []
+        }'
+    )
+
+    jq_path='["alist"]'
+    JQ add "$SERVICES_FILE" "[$new_app]"
+
+    Println "$info Alist 添加成功\n"
+}

@@ -246,10 +246,16 @@ then
     TEXTDOMAINDIR=/usr/local/share/locale
 
     DepInstall gsed
+    DepInstall gdate
 
 sed()
 {
     gsed "$@"
+}
+
+date()
+{
+    gdate "$@"
 }
 
     JQ_FILE=/usr/local/bin/jq

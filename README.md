@@ -15,6 +15,7 @@
     - [快捷键](#快捷键)
     - [参数详解](#参数详解)
     - [举例](#举例)
+  - [Alist](#alist)
   - [Dev](#dev)
 
 ## V2ray
@@ -258,6 +259,12 @@ docker run -it ffmpeg-h265-static
     `tv -i http://xxx/xxx.ts -a aac -v libx264 -b 3000 -k flv -T rtmp://127.0.0.1/flv/xxx`
 
 - 或者输入 tv 打开 HLS 面板， tv f 打开 FLV 面板，使用方法  **Enter**
+
+## Alist
+
+```bash
+./debug ali
+```
 
 ## Dev
 

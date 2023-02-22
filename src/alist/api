@@ -1,0 +1,257 @@
+Alist.auth.login()
+{
+    alist_payload=$(
+    $JQ_FILE -c -n --arg username "$alist_acc_username" --arg password "$alist_acc_password" \
+        '{
+            username: $username,
+            password: $password,
+            otp_code: ""
+        }'
+    )
+
+    IFS="${delimiters[0]}"$'\t' read -r auth_login_code auth_login_message alist_acc_token < <(curl -s -L 20 "${alists_url[alists_index]}"/api/auth/login \
+    -H "Content-Type: application/json" \
+    -H "User-Agent: $USER_AGENT_BROWSER" \
+    --data "$alist_payload" \
+    | $JQ_FILE -r --arg delimiter "${delimiters[0]}" '(if (.|type == "string") then {} else . end) as $response |
+    ($response.data | if (.|type == "string") then {} else . end) as $data |
+    reduce ({code,message}|keys_unsorted[]) as $key ([];
+        $response[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
+            . + [($val|tostring) + $delimiter]
+        else
+            . + [$delimiter]
+        end
+    ) + reduce ({token}|keys_unsorted[]) as $key ([];
+        $data[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
+            . + [($val|tostring) + $delimiter]
+        else
+            . + [$delimiter]
+        end
+    )|@tsv')
+
+    if [ "$auth_login_code" -eq 200 ] 
+    then
+        jq_path='["alist",'"$alists_index"',"accs",'"$alist_accs_index"',"token"]'
+        JQ update "$SERVICES_FILE" "$alist_acc_token"
+        Println "$info 账号 $alist_acc_username 登陆成功\n"
+    else
+        Println "$error 账号 $alist_acc_username 登陆失败: $message\n"
+        return 1
+    fi
+}
+
+Alist.me()
+{
+    IFS="${delimiters[0]}"$'\t' read -r me_code me_message id base_path role disabled \
+    permission github_id tp < <(curl -s -L 20 "${alists_url[alists_index]}"/api/me \
+    -H "Content-Type: application/json" \
+    -H "User-Agent: $USER_AGENT_BROWSER" \
+    -H "Authorization: $alist_acc_token" \
+    | $JQ_FILE -r --arg delimiter "${delimiters[0]}" '(if (.|type == "string") then {} else . end) as $response |
+    ($response.data | if (.|type == "string") then {} else . end) as $data |
+    reduce ({code,message}|keys_unsorted[]) as $key ([];
+        $response[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
+            . + [($val|tostring) + $delimiter]
+        else
+            . + [$delimiter]
+        end
+    ) + reduce ({id,base_path,role,disabled,permission,github_id,otp}|keys_unsorted[]) as $key ([];
+        $data[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
+            . + [($val|tostring) + $delimiter]
+        else
+            . + [$delimiter]
+        end
+    )|@tsv')
+
+    return 0
+}
+
+Alist.fs.get()
+{
+    IFS="${delimiters[0]}"$'\t' read -r fs_get_code fs_get_message name size is_dir \
+    modified sign thumb type raw_url readme provider related < <(curl -s -L 20 "${alists_url[alists_index]}"/api/fs/get \
+    -H "Content-Type: application/json" \
+    -H "User-Agent: $USER_AGENT_BROWSER" \
+    -H "Authorization: $alist_acc_token" \
+    --data '{"path":"/","password":""}' \
+    | $JQ_FILE -r --arg delimiter "${delimiters[0]}" '(if (.|type == "string") then {} else . end) as $response |
+    ($response.data | if (.|type == "string") then {} else . end) as $data |
+    reduce ({code,message}|keys_unsorted[]) as $key ([];
+        $response[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
+            . + [($val|tostring) + $delimiter]
+        else
+            . + [$delimiter]
+        end
+    ) + reduce ({name,size,is_dir,modified,sign,thumb,type,raw_url,readme,provider,related}|keys_unsorted[]) as $key ([];
+        $data[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
+            . + [($val|tostring) + $delimiter]
+        else
+            . + [$delimiter]
+        end
+    )|@tsv')
+
+    return 0
+}
+
+Alist.public.settings()
+{
+    IFS="${delimiters[0]}"$'\t' read -r pub_set_code pub_set_message allow_indexed announcement \
+    audio_autoplay audio_cover auto_update_index default_page_size external_previews \
+    favicon filename_char_mapping forward_direct_link_params github_login_enabled \
+    hide_files home_container home_icon iframe_previews logo main_color ocr_api \
+    package_download pagination_type search_index settings_layout site_title \
+    version video_autoplay < <(curl -s -L 20 "${alists_url[alists_index]}"/api/public/settings \
+    -H "Content-Type: application/json" \
+    -H "User-Agent: $USER_AGENT_BROWSER" \
+    -H "Authorization: $alist_acc_token" \
+    | $JQ_FILE -r --arg delimiter "${delimiters[0]}" '(if (.|type == "string") then {} else . end) as $response |
+    ($response.data | if (.|type == "string") then {} else . end) as $data |
+    reduce ({code,message}|keys_unsorted[]) as $key ([];
+        $response[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
+            . + [($val|tostring) + $delimiter]
+        else
+            . + [$delimiter]
+        end
+    ) + reduce ({allow_indexed,announcement,audio_autoplay,audio_cover,auto_update_index,default_page_size,
+        external_previews,favicon,filename_char_mapping,forward_direct_link_params,github_login_enabled,
+        hide_files,home_container,home_icon,iframe_previews,logo,main_color,ocr_api,package_download,
+        pagination_type,search_index,settings_layout,site_title,version,video_autoplay}|keys_unsorted[]) as $key ([];
+        $data[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
+            . + [($val|tostring) + $delimiter]
+        else
+            . + [$delimiter]
+        end
+    )|@tsv')
+
+    return 0
+}
+
+Alist.fs.list()
+{
+    alist_payload=$(
+    $JQ_FILE -c -n --arg path "$1" --arg password "" \
+    --arg page 1 --arg per_page 0 --arg refresh "false" \
+        '{
+            path: $path,
+            password: $password,
+            page: $page | tonumber,
+            per_page: $per_page | tonumber,
+            refresh: $refresh | test("true")
+        }'
+    )
+
+    response=$(
+        curl -s -L 20 "${alists_url[alists_index]}"/api/fs/list \
+        -H "Content-Type: application/json" \
+        -H "User-Agent: $USER_AGENT_BROWSER" \
+        -H "Authorization: $alist_acc_token" \
+        --data "$alist_payload"
+    )
+
+    IFS=$'\003\t' read -r fs_list_code fs_list_message total readme write provider \
+    content_name content_size content_is_dir content_modified content_sign content_thumb \
+    content_type < <(JQs flat "$response" '' '
+    (if (.|type == "string") then {} else . end) as $response |
+    ($response.data | if (.|type == "string") then {} else . end) as $data |
+    ($data.content // "" | if (.|type == "string") then {} else . end) as $content |
+    reduce ({code,message}|keys_unsorted[]) as $key ([];
+        $response[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
+            . + [($val|tostring) + "\u0003"]
+        else
+            . + ["\u0003"]
+        end
+    ) + reduce ({total,readme,write,provider}|keys_unsorted[]) as $key ([];
+        $data[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
+            . + [($val|tostring) + "\u0003"]
+        else
+            . + ["\u0003"]
+        end
+    ) + reduce ({name,size,is_dir,modified,sign,thumb,type}|keys_unsorted[]) as $key ([];
+        $content[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
+            . + [($val|tostring) + "\u0003"]
+        else
+            . + ["\u0003"]
+        end
+    )|@tsv' "${delimiters[@]}")
+
+    if [ "$fs_list_code" -ne 200 ] 
+    then
+        return 1
+    fi
+
+    return 0
+}
+
+Alist.fs.rename()
+{
+    alist_payload=$(
+    $JQ_FILE -c -n --arg name "$alist_file_name" --arg path "$alist_path/${alist_files_name[alist_files_index]}" \
+        '{
+            name: $name,
+            path: $path
+        }'
+    )
+
+    response=$(
+        curl -s -L 20 "${alists_url[alists_index]}"/api/fs/rename \
+        -H "Content-Type: application/json" \
+        -H "User-Agent: $USER_AGENT_BROWSER" \
+        -H "Authorization: $alist_acc_token" \
+        --data "$alist_payload"
+    )
+
+    IFS=$'\002\t' read -r fs_rename_code fs_rename_message < <(JQs flat "$response" '' '
+    (if (.|type == "string") then {} else . end) as $response |
+    reduce ({code,message}|keys_unsorted[]) as $key ([];
+        $response[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
+            . + [($val|tostring) + "\u0002"]
+        else
+            . + ["\u0002"]
+        end
+    )|@tsv' "${delimiters[@]}")
+
+    if [ "$fs_rename_code" -eq 200 ] 
+    then
+        Println "$info 文件名修改成功"
+    else
+        Println "$error 文件名修改失败: $fs_rename_message"
+    fi
+
+    return 0
+}
+
+Alist.fs.remove()
+{
+    alist_payload=$(
+    $JQ_FILE -c -n --arg dir "$alist_path" --arg file "$alist_file_delete_name" \
+        '{
+            dir: $dir,
+            names: [$file]
+        }'
+    )
+
+    response=$(
+        curl -s -L 20 "${alists_url[alists_index]}"/api/fs/remove \
+        -H "Content-Type: application/json" \
+        -H "User-Agent: $USER_AGENT_BROWSER" \
+        -H "Authorization: $alist_acc_token" \
+        --data "$alist_payload"
+    )
+
+    IFS=$'\002\t' read -r fs_remove_code fs_remove_message < <(JQs flat "$response" '' '
+    (if (.|type == "string") then {} else . end) as $response |
+    reduce ({code,message}|keys_unsorted[]) as $key ([];
+        $response[$key] as $val | ($val | type) as $type | if $val or ($type == "boolean") then
+            . + [($val|tostring) + "\u0002"]
+        else
+            . + ["\u0002"]
+        end
+    )|@tsv' "${delimiters[@]}")
+
+    if [ "$fs_remove_code" -ne 200 ] 
+    then
+        return 1
+    fi
+
+    return 0
+}
