@@ -47009,13 +47009,20 @@ PveSelectVM()
 
 DNSCryptConfig()
 {
-    echo "$(awk '!x{x=sub(/.*\[static\..*/,"  [static.\047alidns-doh-fix\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
-    echo "$(awk '!x{x=sub(/.*stamp = .*/,"  stamp = \047sdns://AgAAAAAAAAAAACCY49XlNq8pWM0vfxT3BO9KJ20l4zzWXy5l9eTycnwTMA5kbnMuYWxpZG5zLmNvbQovZG5zLXF1ZXJ5\047")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
-    echo "$(awk '!x{x=sub(/.*server_names = \[.*/,"server_names = [\047dnspod-doh\047,\047alidns-doh-fix\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+    if [ "$location_china" == "$i18n_yes" ] 
+    then
+        echo "$(awk '!x{x=sub(/.*\[static\..*/,"  [static.\047alidns-doh-fix\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+        echo "$(awk '!x{x=sub(/.* stamp = .*/,"  stamp = \047sdns://AgAAAAAAAAAAACCY49XlNq8pWM0vfxT3BO9KJ20l4zzWXy5l9eTycnwTMA5kbnMuYWxpZG5zLmNvbQovZG5zLXF1ZXJ5\047")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+        echo "$(awk '!x{x=sub(/.*server_names = \[.*/,"server_names = [\047dnspod-doh\047,\047alidns-doh-fix\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+        echo "$(awk '!x{x=sub(/.*bootstrap_resolvers = .*/,"bootstrap_resolvers = [\047114.114.114.114:53\047, \0478.8.8.8:53\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+        echo "$(awk '!x{x=sub(/.*netprobe_address = .*/,"netprobe_address = \047114.114.114.114:53\047")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+    else
+        echo "$(awk '!x{x=sub(/.*server_names = \[.*/,"server_names = [\047google\047, \047cloudflare\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+    fi
+
     echo "$(awk '!x{x=sub(/^listen_addresses = .*/,"listen_addresses = [\047[::]:'"${listen_port:-53}"'\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
-    echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = true")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
-    echo "$(awk '!x{x=sub(/.*bootstrap_resolvers = .*/,"bootstrap_resolvers = [\047114.114.114.114:53\047, \0478.8.8.8:53\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
-    echo "$(awk '!x{x=sub(/.*netprobe_address = .*/,"netprobe_address = \047114.114.114.114:53\047")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+    echo "$(awk '!x{x=sub(/.*block_ipv6 = .*/,"block_ipv6 = '"${block_ipv6:-false}"'")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+    echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = '"${require_dnssec:-true}"'")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
 }
 
 Menu()
@@ -48345,7 +48352,7 @@ $HOME/ip.sh" > /etc/rc.local
             if dnscrypt_version=$(curl -s -Lm 20 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') 
             then
                 echo
-                inquirer list_input "本机是否在国内" ny_options ny_option
+                inquirer list_input "本机是否在国内" yn_options location_china
 
                 if [[ $dnscrypt_version_old == "*" ]]
                 then
@@ -48361,12 +48368,7 @@ $HOME/ip.sh" > /etc/rc.local
                         cd dnscrypt-$dnscrypt_version
                         cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
 
-                        if [ "$ny_option" == "$i18n_yes" ] 
-                        then
-                            DNSCryptConfig
-                        else
-                            echo "$(awk '!x{x=sub(/.*server_names = \[.*/,"server_names = [\047google\047, \047cloudflare\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
-                        fi
+                        DNSCryptConfig
 
                         for((i=0;i<3;i++));
                         do
@@ -48412,6 +48414,12 @@ $HOME/ip.sh" > /etc/rc.local
                     fi
                 elif [[ $dnscrypt_version_old != "$dnscrypt_version" ]] 
                 then
+                    block_ipv6=$(sed -n -e "s/^block_ipv6 = \(.*\)/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
+                    require_dnssec=$(sed -n -e "s/^require_dnssec = \(.*\)/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
+
+                    echo
+                    inquirer text_input "输入监听端口 : " listen_port $(sed -n -e "s/^listen_addresses = .*:\([0-9]*\)']/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
+
                     if curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_$arch-$dnscrypt_version.tar.gz_tmp
                     then
                         if [ -L /etc/resolv.conf ] 
@@ -48431,12 +48439,7 @@ $HOME/ip.sh" > /etc/rc.local
                         cd dnscrypt-$dnscrypt_version
                         cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
 
-                        if [ "$ny_option" == "$i18n_yes" ] 
-                        then
-                            DNSCryptConfig
-                        else
-                            echo "$(awk '!x{x=sub(/.*server_names = \[.*/,"server_names = [\047google\047, \047cloudflare\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
-                        fi
+                        DNSCryptConfig
 
                         ./dnscrypt-proxy -service install > /dev/null
                         ./dnscrypt-proxy -service start > /dev/null
@@ -48939,6 +48942,9 @@ then
 
             if dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
             then
+                echo
+                inquirer list_input "本机是否在国内" ny_options location_china
+
                 DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
                 dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
 
@@ -49075,6 +49081,9 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
                     nmcli con up armbian
                 elif [[ $dnscrypt_version_old != "$dnscrypt_version" ]] 
                 then
+                    block_ipv6=$(sed -n -e "s/^block_ipv6 = \(.*\)/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
+                    require_dnssec=$(sed -n -e "s/^require_dnssec = \(.*\)/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
+
                     echo
                     inquirer text_input "输入监听端口 : " listen_port $(sed -n -e "s/^listen_addresses = .*:\([0-9]*\)']/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
 
@@ -50227,6 +50236,9 @@ then
                 DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
                 dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
 
+                echo
+                inquirer list_input "本机是否在国内" yn_options location_china
+
                 if [[ $dnscrypt_version_old == "*" ]]
                 then
                     echo
@@ -50286,6 +50298,9 @@ then
                     Println "$info dnscrypt proxy 安装配置成功\n"
                 elif [[ $dnscrypt_version_old != "$dnscrypt_version" ]] 
                 then
+                    block_ipv6=$(sed -n -e "s/^block_ipv6 = \(.*\)/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
+                    require_dnssec=$(sed -n -e "s/^require_dnssec = \(.*\)/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
+
                     echo
                     inquirer text_input "输入监听端口 : " listen_port $(sed -n -e "s/^listen_addresses = .*:\([0-9]*\)']/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
 

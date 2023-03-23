@@ -100,66 +100,73 @@ case $armbian_num in
             Spinner "编译安装 JQ, 耗时可能会很长" JQInstall
         fi
 
-        if dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
+        if ! dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
         then
-            DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
-            dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
+            Println "$error 无法连接服务器, 请稍后再试\n"
+            exit 1
+        fi
 
-            if [[ $dnscrypt_version_old == "*" ]]
+        DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
+        dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
+
+        echo
+        inquirer list_input "本机是否在国内" yn_options location_china
+
+        if [[ $dnscrypt_version_old == "*" ]]
+        then
+            echo
+            inquirer text_input "输入监听端口 : " listen_port 53
+
+            Println "$tip 请确保已经将本机器用网线连接到主路由器的 LAN 口"
+            ExitOnList n "`gettext \"是否继续\"`"
+
+            echo
+            ExitOnText "请输入主路由器 ip : " eth0_gateway
+
+            Println "$tip 必须和主路由器 ip 在同一网段"
+            ExitOnText "设置本机静态 ip : " eth0_ip
+
+            Println "$info 下载 dnscrypt proxy ..."
+
+            if ! curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp 
             then
-                echo
-                inquirer text_input "输入监听端口 : " listen_port 53
+                Println "$error dnscrypt proxy 下载失败, 请重试\n"
+                exit 1
+            fi
 
-                Println "$tip 请确保已经将本机器用网线连接到主路由器的 LAN 口"
-                ExitOnList n "`gettext \"是否继续\"`"
+            Println "$info 设置 dnscrypt proxy ..."
+            cd ~
+            mv dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz
+            tar zxf dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz
+            mv linux-arm64 dnscrypt-$dnscrypt_version
+            chown -R $USER:$USER dnscrypt-$dnscrypt_version
+            cd dnscrypt-$dnscrypt_version
+            cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
 
-                echo
-                ExitOnText "请输入主路由器 ip : " eth0_gateway
+            if [ ! -f "/etc/NetworkManager/system-connections/armbian.nmconnection" ] 
+            then
+                con=$(nmcli -t c s | grep eth0 | head -1)
+                nmcli connection modify "${con%%:*}" con-name armbian
+            fi
 
-                Println "$tip 必须和主路由器 ip 在同一网段"
-                ExitOnText "设置本机静态 ip : " eth0_ip
+            cp -f /etc/NetworkManager/system-connections/armbian.nmconnection ~/armbian.nmconnection-old
 
-                Println "$info 下载 dnscrypt proxy ..."
-
-                if ! curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp 
+            while IFS= read -r line 
+            do
+                if [[ $line =~ uuid= ]] 
                 then
-                    Println "$error dnscrypt proxy 下载失败, 请重试\n"
-                    exit 1
-                fi
-
-                Println "$info 设置 dnscrypt proxy ..."
-                cd ~
-                mv dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz
-                tar zxf dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz
-                mv linux-arm64 dnscrypt-$dnscrypt_version
-                chown -R $USER:$USER dnscrypt-$dnscrypt_version
-                cd dnscrypt-$dnscrypt_version
-                cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
-
-                if [ ! -f "/etc/NetworkManager/system-connections/armbian.nmconnection" ] 
+                    etho_uuid=${line#*=}
+                elif [[ $line =~ timestamp= ]] 
                 then
-                    con=$(nmcli -t c s | grep eth0 | head -1)
-                    nmcli connection modify "${con%%:*}" con-name armbian
+                    eth0_timestamp=${line#*=}
+                elif [[ $line =~ mac-address= ]]
+                then
+                    eth0_mac=${line#*=}
+                    break
                 fi
+            done < "/etc/NetworkManager/system-connections/armbian.nmconnection"
 
-                cp -f /etc/NetworkManager/system-connections/armbian.nmconnection ~/armbian.nmconnection-old
-
-                while IFS= read -r line 
-                do
-                    if [[ $line =~ uuid= ]] 
-                    then
-                        etho_uuid=${line#*=}
-                    elif [[ $line =~ timestamp= ]] 
-                    then
-                        eth0_timestamp=${line#*=}
-                    elif [[ $line =~ mac-address= ]]
-                    then
-                        eth0_mac=${line#*=}
-                        break
-                    fi
-                done < "/etc/NetworkManager/system-connections/armbian.nmconnection"
-
-                echo "[connection]
+            echo "[connection]
 id=armbian
 uuid=$etho_uuid
 type=ethernet
@@ -185,102 +192,102 @@ addr-gen-mode=stable-privacy
 dns-search=
 method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
 
-                DNSCryptConfig
+            DNSCryptConfig
 
-                for((i=0;i<3;i++));
-                do
-                    if ./dnscrypt-proxy -check > /dev/null 
-                    then
-                        break
-                    elif [[ $i -eq 2 ]] 
-                    then
-                        cd ~
-                        rm -rf dnscrypt-$dnscrypt_version
-                        Println "$error 发生错误, 请重试\n"
-                        exit 1
-                    fi
-                done
-
-                if [ -d /etc/resolvconf ] 
+            for((i=0;i<3;i++));
+            do
+                if ./dnscrypt-proxy -check > /dev/null 
                 then
-                    DEBIAN_FRONTEND=noninteractive apt-get -y --purge remove resolvconf > /dev/null 2>&1 || true
-                fi
-
-                systemctl stop systemd-resolved
-                systemctl disable systemd-resolved
-                ./dnscrypt-proxy -service install > /dev/null
-                ./dnscrypt-proxy -service start > /dev/null
-
-                if ! grep -q "#allow-hotplug eth0" < /etc/network/interfaces
+                    break
+                elif [[ $i -eq 2 ]] 
                 then
-                    echo "$(awk '!x{x=sub(/allow-hotplug eth0/,"#allow-hotplug eth0")}1' /etc/network/interfaces)" > /etc/network/interfaces
-                fi
-                if ! grep -q "#no-auto-down eth0" < /etc/network/interfaces
-                then
-                    echo "$(awk '!x{x=sub(/no-auto-down eth0/,"#no-auto-down eth0")}1' /etc/network/interfaces)" > /etc/network/interfaces
-                fi
-                if ! grep -q "#iface eth0 inet dhcp" < /etc/network/interfaces
-                then
-                    echo "$(awk '!x{x=sub(/iface eth0 inet dhcp/,"#iface eth0 inet dhcp")}1' /etc/network/interfaces)" > /etc/network/interfaces
-                fi
-
-                if [ -f /etc/resolv.conf ] 
-                then
-                    printf -v now '%(%m-%d-%H:%M:%S)T' -1
-                    mv /etc/resolv.conf /etc/resolv.conf-$now
-                fi
-
-                echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
-
-                nmcli connection reload
-                systemctl restart NetworkManager
-                Println "$info dnscrypt proxy 安装配置成功, 请重启 Armbian 后连接 IP: $eth0_ip\n"
-                nmcli con up armbian
-            elif [[ $dnscrypt_version_old != "$dnscrypt_version" ]] 
-            then
-                echo
-                inquirer text_input "输入监听端口 : " listen_port $(sed -n -e "s/^listen_addresses = .*:\([0-9]*\)']/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
-
-                if [[ -x $(command -v docker) ]] && [[ -n $(docker container ls -a -f name=openwrt$ -q) ]]
-                then
-                    Println "$tip 如果已经安装并运行旁路由 openwrt-v2ray, 建议先关闭旁路由 openwrt-v2ray"
-                    ExitOnList n "`gettext \"是否继续\"`"
-                fi
-
-                if ! curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp 
-                then
-                    Println "$error dnscrypt proxy 下载失败, 请重试\n"
+                    cd ~
+                    rm -rf dnscrypt-$dnscrypt_version
+                    Println "$error 发生错误, 请重试\n"
                     exit 1
                 fi
+            done
 
-                if [ -L /etc/resolv.conf ] 
-                then
-                    etc_resolv=$(< /etc/resolv.conf)
-                    rm -f /etc/resolv.conf
-                    echo "$etc_resolv" > /etc/resolv.conf
-                fi
-
-                cd ~/dnscrypt-$dnscrypt_version_old
-                ./dnscrypt-proxy -service stop > /dev/null
-                ./dnscrypt-proxy -service uninstall > /dev/null
-                cd ~
-                mv dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz
-                tar zxf dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz
-                mv linux-arm64 dnscrypt-$dnscrypt_version
-                cd dnscrypt-$dnscrypt_version
-                cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
-
-                DNSCryptConfig
-
-                ./dnscrypt-proxy -service install > /dev/null
-                ./dnscrypt-proxy -service start > /dev/null
-
-                Println "$info dnscrypt proxy 升级成功\n"
-            else
-                Println "$error dnscrypt proxy 已经是最新\n"
+            if [ -d /etc/resolvconf ] 
+            then
+                DEBIAN_FRONTEND=noninteractive apt-get -y --purge remove resolvconf > /dev/null 2>&1 || true
             fi
+
+            systemctl stop systemd-resolved
+            systemctl disable systemd-resolved
+            ./dnscrypt-proxy -service install > /dev/null
+            ./dnscrypt-proxy -service start > /dev/null
+
+            if ! grep -q "#allow-hotplug eth0" < /etc/network/interfaces
+            then
+                echo "$(awk '!x{x=sub(/allow-hotplug eth0/,"#allow-hotplug eth0")}1' /etc/network/interfaces)" > /etc/network/interfaces
+            fi
+            if ! grep -q "#no-auto-down eth0" < /etc/network/interfaces
+            then
+                echo "$(awk '!x{x=sub(/no-auto-down eth0/,"#no-auto-down eth0")}1' /etc/network/interfaces)" > /etc/network/interfaces
+            fi
+            if ! grep -q "#iface eth0 inet dhcp" < /etc/network/interfaces
+            then
+                echo "$(awk '!x{x=sub(/iface eth0 inet dhcp/,"#iface eth0 inet dhcp")}1' /etc/network/interfaces)" > /etc/network/interfaces
+            fi
+
+            if [ -f /etc/resolv.conf ] 
+            then
+                printf -v now '%(%m-%d-%H:%M:%S)T' -1
+                mv /etc/resolv.conf /etc/resolv.conf-$now
+            fi
+
+            echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
+
+            nmcli connection reload
+            systemctl restart NetworkManager
+            Println "$info dnscrypt proxy 安装配置成功, 请重启 Armbian 后连接 IP: $eth0_ip\n"
+            nmcli con up armbian
+        elif [[ $dnscrypt_version_old != "$dnscrypt_version" ]] 
+        then
+            block_ipv6=$(sed -n -e "s/^block_ipv6 = \(.*\)/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
+            require_dnssec=$(sed -n -e "s/^require_dnssec = \(.*\)/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
+
+            echo
+            inquirer text_input "输入监听端口 : " listen_port $(sed -n -e "s/^listen_addresses = .*:\([0-9]*\)']/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
+
+            if [[ -x $(command -v docker) ]] && [[ -n $(docker container ls -a -f name=openwrt$ -q) ]]
+            then
+                Println "$tip 如果已经安装并运行旁路由 openwrt-v2ray, 建议先关闭旁路由 openwrt-v2ray"
+                ExitOnList n "`gettext \"是否继续\"`"
+            fi
+
+            if ! curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp 
+            then
+                Println "$error dnscrypt proxy 下载失败, 请重试\n"
+                exit 1
+            fi
+
+            if [ -L /etc/resolv.conf ] 
+            then
+                etc_resolv=$(< /etc/resolv.conf)
+                rm -f /etc/resolv.conf
+                echo "$etc_resolv" > /etc/resolv.conf
+            fi
+
+            cd ~/dnscrypt-$dnscrypt_version_old
+            ./dnscrypt-proxy -service stop > /dev/null
+            ./dnscrypt-proxy -service uninstall > /dev/null
+            cd ~
+            mv dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz
+            tar zxf dnscrypt-proxy-linux_arm64-$dnscrypt_version.tar.gz
+            mv linux-arm64 dnscrypt-$dnscrypt_version
+            cd dnscrypt-$dnscrypt_version
+            cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
+
+            DNSCryptConfig
+
+            ./dnscrypt-proxy -service install > /dev/null
+            ./dnscrypt-proxy -service start > /dev/null
+
+            Println "$info dnscrypt proxy 升级成功\n"
         else
-            Println "$error 无法连接服务器, 请稍后再试\n"
+            Println "$error dnscrypt proxy 已经是最新\n"
         fi
     ;;
     5)

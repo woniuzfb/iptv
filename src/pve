@@ -360,106 +360,113 @@ case $pve_num in
         DistCheck
         JQInstall
 
-        if dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
+        if ! dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
         then
-            DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
-            dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
-
-            if [[ $dnscrypt_version_old == "*" ]]
-            then
-                echo
-                inquirer text_input "输入监听端口 : " listen_port 53
-
-                Println "$info 下载 dnscrypt proxy ..."
-
-                if ! curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz_tmp 
-                then
-                    Println "$error dnscrypt proxy 下载失败, 请重试\n"
-                    exit 1
-                fi
-
-                Println "$info 设置 dnscrypt proxy ..."
-                cd ~
-                mv dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz
-                tar zxf dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz
-                mv linux-x86_64 dnscrypt-$dnscrypt_version
-                chown -R $USER:$USER dnscrypt-$dnscrypt_version
-                cd dnscrypt-$dnscrypt_version
-                cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
-
-                DNSCryptConfig
-
-                for((i=0;i<3;i++));
-                do
-                    if ./dnscrypt-proxy -check > /dev/null 
-                    then
-                        break
-                    elif [[ $i -eq 2 ]] 
-                    then
-                        cd ~
-                        rm -rf dnscrypt-$dnscrypt_version
-                        Println "$error 发生错误, 请重试\n"
-                        exit 1
-                    fi
-                done
-
-                if [ -d /etc/resolvconf ] 
-                then
-                    DEBIAN_FRONTEND=noninteractive apt-get -y --purge remove resolvconf > /dev/null 2>&1 || true
-                fi
-
-                systemctl stop systemd-resolved
-                systemctl disable systemd-resolved
-                ./dnscrypt-proxy -service install > /dev/null
-                ./dnscrypt-proxy -service start > /dev/null
-
-                if [ -f /etc/resolv.conf ] 
-                then
-                    printf -v now '%(%m-%d-%H:%M:%S)T' -1
-                    mv /etc/resolv.conf /etc/resolv.conf-$now
-                fi
-
-                echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
-
-                Println "$info dnscrypt proxy 安装配置成功\n"
-            elif [[ $dnscrypt_version_old != "$dnscrypt_version" ]] 
-            then
-                echo
-                inquirer text_input "输入监听端口 : " listen_port $(sed -n -e "s/^listen_addresses = .*:\([0-9]*\)']/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
-
-                if ! curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz_tmp 
-                then
-                    Println "$error dnscrypt proxy 下载失败, 请重试\n"
-                    exit 1
-                fi
-
-                if [ -L /etc/resolv.conf ] 
-                then
-                    etc_resolv=$(< /etc/resolv.conf)
-                    rm -f /etc/resolv.conf
-                    echo "$etc_resolv" > /etc/resolv.conf
-                fi
-
-                cd ~/dnscrypt-$dnscrypt_version_old
-                ./dnscrypt-proxy -service stop > /dev/null
-                ./dnscrypt-proxy -service uninstall > /dev/null
-                cd ~
-                mv dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz
-                tar zxf dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz
-                mv linux-x86_64 dnscrypt-$dnscrypt_version
-                cd dnscrypt-$dnscrypt_version
-                cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
-
-                DNSCryptConfig
-
-                ./dnscrypt-proxy -service install > /dev/null
-                ./dnscrypt-proxy -service start > /dev/null
-                Println "$info dnscrypt proxy 升级成功\n"
-            else
-                Println "$error dnscrypt proxy 已经是最新\n"
-            fi
-        else
             Println "$error 无法连接服务器, 请稍后再试\n"
+            exit 1
+        fi
+
+        DNSCRYPT_ROOT=$(dirname ~/dnscrypt-*/dnscrypt-proxy | sort | tail -1)
+        dnscrypt_version_old=${DNSCRYPT_ROOT#*-}
+
+        echo
+        inquirer list_input "本机是否在国内" yn_options location_china
+
+        if [[ $dnscrypt_version_old == "*" ]]
+        then
+            echo
+            inquirer text_input "输入监听端口 : " listen_port 53
+
+            Println "$info 下载 dnscrypt proxy ..."
+
+            if ! curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz_tmp 
+            then
+                Println "$error dnscrypt proxy 下载失败, 请重试\n"
+                exit 1
+            fi
+
+            Println "$info 设置 dnscrypt proxy ..."
+            cd ~
+            mv dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz
+            tar zxf dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz
+            mv linux-x86_64 dnscrypt-$dnscrypt_version
+            chown -R $USER:$USER dnscrypt-$dnscrypt_version
+            cd dnscrypt-$dnscrypt_version
+            cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
+
+            DNSCryptConfig
+
+            for((i=0;i<3;i++));
+            do
+                if ./dnscrypt-proxy -check > /dev/null 
+                then
+                    break
+                elif [[ $i -eq 2 ]] 
+                then
+                    cd ~
+                    rm -rf dnscrypt-$dnscrypt_version
+                    Println "$error 发生错误, 请重试\n"
+                    exit 1
+                fi
+            done
+
+            if [ -d /etc/resolvconf ] 
+            then
+                DEBIAN_FRONTEND=noninteractive apt-get -y --purge remove resolvconf > /dev/null 2>&1 || true
+            fi
+
+            systemctl stop systemd-resolved
+            systemctl disable systemd-resolved
+            ./dnscrypt-proxy -service install > /dev/null
+            ./dnscrypt-proxy -service start > /dev/null
+
+            if [ -f /etc/resolv.conf ] 
+            then
+                printf -v now '%(%m-%d-%H:%M:%S)T' -1
+                mv /etc/resolv.conf /etc/resolv.conf-$now
+            fi
+
+            echo -e "nameserver 127.0.0.1\noptions edns0" > /etc/resolv.conf
+
+            Println "$info dnscrypt proxy 安装配置成功\n"
+        elif [[ $dnscrypt_version_old != "$dnscrypt_version" ]] 
+        then
+            block_ipv6=$(sed -n -e "s/^block_ipv6 = \(.*\)/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
+            require_dnssec=$(sed -n -e "s/^require_dnssec = \(.*\)/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
+
+            echo
+            inquirer text_input "输入监听端口 : " listen_port $(sed -n -e "s/^listen_addresses = .*:\([0-9]*\)']/\1/p" $DNSCRYPT_ROOT/dnscrypt-proxy.toml)
+
+            if ! curl -L "$FFMPEG_MIRROR_LINK/dnscrypt/dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz" -o ~/dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz_tmp 
+            then
+                Println "$error dnscrypt proxy 下载失败, 请重试\n"
+                exit 1
+            fi
+
+            if [ -L /etc/resolv.conf ] 
+            then
+                etc_resolv=$(< /etc/resolv.conf)
+                rm -f /etc/resolv.conf
+                echo "$etc_resolv" > /etc/resolv.conf
+            fi
+
+            cd ~/dnscrypt-$dnscrypt_version_old
+            ./dnscrypt-proxy -service stop > /dev/null
+            ./dnscrypt-proxy -service uninstall > /dev/null
+            cd ~
+            mv dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz_tmp dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz
+            tar zxf dnscrypt-proxy-linux_x86_64-$dnscrypt_version.tar.gz
+            mv linux-x86_64 dnscrypt-$dnscrypt_version
+            cd dnscrypt-$dnscrypt_version
+            cp -f example-dnscrypt-proxy.toml dnscrypt-proxy.toml
+
+            DNSCryptConfig
+
+            ./dnscrypt-proxy -service install > /dev/null
+            ./dnscrypt-proxy -service start > /dev/null
+            Println "$info dnscrypt proxy 升级成功\n"
+        else
+            Println "$error dnscrypt proxy 已经是最新\n"
         fi
     ;;
     7)

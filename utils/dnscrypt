@@ -1,10 +1,17 @@
 DNSCryptConfig()
 {
-    echo "$(awk '!x{x=sub(/.*\[static\..*/,"  [static.\047alidns-doh-fix\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
-    echo "$(awk '!x{x=sub(/.*stamp = .*/,"  stamp = \047sdns://AgAAAAAAAAAAACCY49XlNq8pWM0vfxT3BO9KJ20l4zzWXy5l9eTycnwTMA5kbnMuYWxpZG5zLmNvbQovZG5zLXF1ZXJ5\047")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
-    echo "$(awk '!x{x=sub(/.*server_names = \[.*/,"server_names = [\047dnspod-doh\047,\047alidns-doh-fix\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+    if [ "$location_china" == "$i18n_yes" ] 
+    then
+        echo "$(awk '!x{x=sub(/.*\[static\..*/,"  [static.\047alidns-doh-fix\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+        echo "$(awk '!x{x=sub(/.* stamp = .*/,"  stamp = \047sdns://AgAAAAAAAAAAACCY49XlNq8pWM0vfxT3BO9KJ20l4zzWXy5l9eTycnwTMA5kbnMuYWxpZG5zLmNvbQovZG5zLXF1ZXJ5\047")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+        echo "$(awk '!x{x=sub(/.*server_names = \[.*/,"server_names = [\047dnspod-doh\047,\047alidns-doh-fix\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+        echo "$(awk '!x{x=sub(/.*bootstrap_resolvers = .*/,"bootstrap_resolvers = [\047114.114.114.114:53\047, \0478.8.8.8:53\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+        echo "$(awk '!x{x=sub(/.*netprobe_address = .*/,"netprobe_address = \047114.114.114.114:53\047")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+    else
+        echo "$(awk '!x{x=sub(/.*server_names = \[.*/,"server_names = [\047google\047, \047cloudflare\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+    fi
+
     echo "$(awk '!x{x=sub(/^listen_addresses = .*/,"listen_addresses = [\047[::]:'"${listen_port:-53}"'\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
-    echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = true")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
-    echo "$(awk '!x{x=sub(/.*bootstrap_resolvers = .*/,"bootstrap_resolvers = [\047114.114.114.114:53\047, \0478.8.8.8:53\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
-    echo "$(awk '!x{x=sub(/.*netprobe_address = .*/,"netprobe_address = \047114.114.114.114:53\047")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+    echo "$(awk '!x{x=sub(/.*block_ipv6 = .*/,"block_ipv6 = '"${block_ipv6:-false}"'")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+    echo "$(awk '!x{x=sub(/.*require_dnssec = .*/,"require_dnssec = '"${require_dnssec:-true}"'")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
 }
