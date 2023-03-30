@@ -274,11 +274,18 @@ DepInstall()
 
 DepsCheck()
 {
+    if [ "${deps_checked:-false}" = true ] 
+    then
+        return 0
+    fi
+
     DistCheck
 
     DepInstall tput
 
     Spinner "`gettext \"检查依赖, 耗时可能会很长\"`" DepsInstall
+
+    deps_checked=true
 }
 
 DepsInstall()

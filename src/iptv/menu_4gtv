@@ -132,8 +132,7 @@ done
 cookies=""
 
 Println "$info 获取频道 ..."
-IFS="^" read -r _4gtv_chnl_id _4gtv_chnl_name _4gtv_chnl_aid < <(curl -s -Lm 10 \
-    -H "User-Agent: $user_agent" \
+IFS="^" read -r _4gtv_chnl_id _4gtv_chnl_name _4gtv_chnl_aid < <(CurlFake -s -Lm 10 \
     -H "Referer: https://www.4gtv.tv/channel.html?channelSet_id=$_4gtv_set_id" \
     "https://api2.4gtv.tv/Channel/GetChannelBySetId/$_4gtv_set_id/pc/L" \
     | $JQ_FILE -r '[([.Data[].fnID]|join("|")),([.Data[].fsNAME]|join("|")),([.Data[].fs4GTV_ID]|join("|"))]|join("^")'
@@ -244,9 +243,8 @@ do
         Println "$info 解析 [ $hinet_4gtv_chnl_name ] 链接 ..."
         stream_links=("https://embed.4gtv.tv/HiNet/$hinet_4gtv_chnl_name_enc.html")
         headers="Referer: ${stream_links[0]}?ar=0&as=1&volume=0\r\n"
-        stream_link_data=$(curl -s -Lm 10 \
+        stream_link_data=$(CurlFake -s -Lm 10 \
             ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
-            -H "User-Agent: $user_agent" \
             -H "${headers:0:-4}" \
             "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$hinet_4gtv_chnl_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)") || true
         if [ -n "$stream_link_data" ] 
@@ -350,9 +348,8 @@ do
 
         for((try_i=0;try_i<10;try_i++));
         do
-            stream_link_data=$(curl -s -Lm 10 \
+            stream_link_data=$(CurlFake -s -Lm 10 \
                 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
-                -H "User-Agent: $user_agent" \
                 -H "${headers:0:-4}" \
                 --data "value=$value" "https://api2.4gtv.tv/Channel/GetChannelUrl3") || true
             if [ -n "$stream_link_data" ] 

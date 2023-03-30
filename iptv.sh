@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-sh_ver="1.87.8"
+sh_ver="1.87.9"
 sh_debug=0
 export LANGUAGE=
 export LC_ALL=
@@ -21,6 +21,7 @@ ARM_FILE="/usr/local/bin/arm"
 PVE_FILE="/usr/local/bin/pve"
 IPTV_ROOT="/usr/local/iptv"
 JQ_FILE="$IPTV_ROOT/jq"
+CURL_IMPERSONATE_FILE=/usr/local/bin/curl-impersonate
 CHANNELS_FILE="$IPTV_ROOT/channels.json"
 LOCK_FILE="$IPTV_ROOT/lock"
 MONITOR_LOG="$IPTV_ROOT/monitor.log"
@@ -578,11 +579,18 @@ i18nGetMsg
 
 DepsCheck()
 {
+    if [ "${deps_checked:-false}" = true ] 
+    then
+        return 0
+    fi
+
     DistCheck
 
     DepInstall tput
 
     Spinner "`gettext \"检查依赖, 耗时可能会很长\"`" DepsInstall
+
+    deps_checked=true
 }
 
 DepsInstall()
@@ -3196,6 +3204,114 @@ JQInstall()
     fi
 }
 
+CurlImpersonateInstall()
+{
+    if [[ -x "$CURL_IMPERSONATE_FILE" ]] 
+    then
+        return 0
+    fi
+
+    DepsCheck
+    ArchCheck
+
+    if [ "$dist" == "mac" ] 
+    then
+        DepInstall nss
+        DepInstall ca-certificates
+    elif [ "$dist" == "rpm" ] 
+    then
+        DepInstall nss
+        DepInstall nss-pem
+        DepInstall ca-certificates
+    else
+        DepInstall libnss3
+        if [ "$dist" == "ubu" ] && grep -q "bionic" < "/etc/apt/sources.list" 
+        then
+            DepInstall libnsspem
+        else
+            DepInstall nss-plugin-pem
+        fi
+        DepInstall ca-certificates
+    fi
+
+    JQInstall
+
+    if ! curl_impersonate_ver=$(curl -s -m 30 "https://api.github.com/repos/lwthiker/curl-impersonate/releases/latest" | $JQ_FILE -r '.tag_name') 
+    then
+        Println "$error curl impersonate 下载出错, 无法连接 github ?\n"
+        exit 1
+    fi
+
+    if [ "$arch" == "x86_64" ] 
+    then
+        if [ "$dist" == "mac" ] 
+        then
+            curl_impersonate_package_name="curl-impersonate-$curl_impersonate_ver.x86_64-macos"
+        else
+            curl_impersonate_package_name="curl-impersonate-$curl_impersonate_ver.x86_64-linux-gnu"
+        fi
+    elif [ "$arch" == "arm64" ] 
+    then
+        curl_impersonate_package_name="curl-impersonate-$curl_impersonate_ver.aarch64-linux-gnu"
+    else
+        Println "$error 系统不支持\n"
+        exit 1
+    fi
+
+    Println "$info 下载 curl impersonate ..."
+
+    mkdir -p "$HOME/curl-impersonate/"
+
+    if ! curl -s -L "https://github.com/lwthiker/curl-impersonate/releases/download/$curl_impersonate_ver/$curl_impersonate_package_name.tar.gz" -o "$HOME/$curl_impersonate_package_name.tar.gz_tmp"
+    then
+        Println "$error curl impersonate 下载出错, 无法连接 github ?\n"
+        exit 1
+    fi
+
+    mv "$HOME/$curl_impersonate_package_name.tar.gz_tmp" "$HOME/$curl_impersonate_package_name.tar.gz"
+
+    tar -C "$HOME/curl-impersonate/" -xzf "$HOME/$curl_impersonate_package_name.tar.gz"
+
+    echo "$(awk '!x{x=sub(/dir=.*/,"dir='"$HOME/curl-impersonate"'")}1' "$HOME/curl-impersonate/curl_chrome99")" > $CURL_IMPERSONATE_FILE
+
+    chmod +x "$CURL_IMPERSONATE_FILE"
+
+    Println "$info curl impersonate 安装成功"
+}
+
+CurlImpersonateUpdate()
+{
+    if [[ -x "$CURL_IMPERSONATE_FILE" ]] 
+    then
+        echo
+        inquirer list_input_index "curl impersonate 已经存在, 是否重新安装" ny_options ny_options_index
+        if [ "$ny_options_index" -eq 1 ] 
+        then
+            rm -f "$CURL_IMPERSONATE_FILE"
+            CurlImpersonateInstall
+        fi
+    else
+        CurlImpersonateInstall
+    fi
+
+    impersonate_options=()
+
+    for ele in "$HOME"/curl-impersonate/curl_*
+    do
+        impersonate_options+=("${ele##*/}")
+    done
+
+    echo
+    inquirer list_input "选择 curl impersonate" impersonate_options impersonate_option
+
+    echo "$(awk '!x{x=sub(/dir=.*/,"dir='"$HOME/curl-impersonate"'")}1' "$HOME/curl-impersonate/$impersonate_option")" > $CURL_IMPERSONATE_FILE
+
+    chmod +x "$CURL_IMPERSONATE_FILE"
+
+    Println "$info curl impersonate 设置成功"
+}
+
+
 Install()
 {
     if [ -e "$IPTV_ROOT" ]
@@ -3215,6 +3331,7 @@ Install()
 
         FFmpegInstall
         JQInstall
+        CurlImpersonateInstall
 
         default=$(
         $JQ_FILE -n \
@@ -3443,7 +3560,7 @@ Update()
     # A limitation of statically linking glibc is the loss of DNS resolution.
     DepInstall nscd
 
-    JQInstall > /dev/null
+    JQInstall
 
     ln -sf "$IPTV_ROOT"/ffmpeg-git-*/ff* /usr/local/bin/
     Println "`eval_gettext \"脚本已更新为最新版本 [ \\\${green}\\\$sh_new_ver\\\${normal} ] ! (输入: tv 使用)\"`\n" && exit 0
@@ -4056,6 +4173,12 @@ FilterString()
 
         read -r ${var?} <<< "$var_new"
     done
+}
+
+CurlFake()
+{
+    CurlImpersonateInstall
+    curl-impersonate "$@"
 }
 
 RandStr()
@@ -9434,8 +9557,7 @@ SetStreamLink()
                 user_agent="${user_agent:-$USER_AGENT_BROWSER}"
                 headers="${headers:-Referer: https://embed.4gtv.tv/HiNet/$channel_name_enc.html?ar=0&as=1&volume=0\\r\\n}"
                 cookies="${cookies:-}"
-                stream_link_data=$(curl -s -Lm 10 \
-                -H "User-Agent: $user_agent" \
+                stream_link_data=$(CurlFake -s -Lm 10 \
                 -H "${headers:0:-4}" \
                 "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)") || true
                 if [ -n "$stream_link_data" ] 
@@ -9499,8 +9621,7 @@ SetStreamLink()
 
         for((try_i=0;try_i<10;try_i++));
         do
-            stream_link_data=$(curl -s -Lm 10 \
-            -H "User-Agent: $user_agent" \
+            stream_link_data=$(CurlFake -s -Lm 10 \
             -H "${headers:0:-4}" \
             --data "value=$value" \
             "https://api2.4gtv.tv/Channel/GetChannelUrl3") || true
@@ -12534,9 +12655,8 @@ StartChannel()
                 chnl_headers="Referer: https://embed.4gtv.tv/HiNet/$channel_name_enc.html?ar=0&as=1&volume=0\r\n"
                 chnl_cookies=""
 
-                stream_link_data=$(curl -s -Lm 10 \
+                stream_link_data=$(CurlFake -s -Lm 10 \
                 ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
-                -H "User-Agent: $chnl_user_agent" \
                 -H "${chnl_headers:0:-4}" \
                 "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)") || true
 
@@ -12614,9 +12734,8 @@ StartChannel()
 
         for((try_i=0;try_i<10;try_i++));
         do
-            stream_link_data=$(curl -s -Lm 10 \
+            stream_link_data=$(CurlFake -s -Lm 10 \
             ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
-            -H "User-Agent: $chnl_user_agent" \
             -H "${chnl_headers:0:-4}" \
             --data "value=$value" \
             "https://api2.4gtv.tv/Channel/GetChannelUrl3") || true
@@ -16189,8 +16308,7 @@ Reg4gtvAcc()
 {
     Set4gtvAccEmail
     Set4gtvAccPass
-    IFS=" " read -r result msg < <(curl -s -Lm 10 \
-        -H "User-Agent: $user_agent" \
+    IFS=" " read -r result msg < <(CurlFake -s -Lm 10 \
         -H 'Origin: https://www.4gtv.tv' \
         -H 'Referer: https://www.4gtv.tv/signup.html' \
         -d "fnREGISTER_TYPE=1&fsLOGIN_TYPE=&fsLINK_ID=&fsUSER=$_4gtv_acc_email&fsLOGIN_TYPE=&fsLINK_ID=&fsPASSWORD=$_4gtv_acc_pass&fsPASSWORD1=$_4gtv_acc_pass&fnBIRTH_YEAR=$((RANDOM%20+1980))&fsSEX=male" \
@@ -16370,9 +16488,8 @@ Login4gtvAcc()
 
     while true 
     do
-        if curl -s -Lm 20 \
+        if CurlFake -s -Lm 20 \
             -H 'authority: www.4gtv.tv' \
-            -H "User-Agent: $user_agent" \
             -H 'referer: https://www.4gtv.tv/channel.html' \
             "https://www.4gtv.tv/validatecode?t=$(date +%s%3N)" -o "$IMG_FILE" && /usr/local/bin/imgcat --half-height "$IMG_FILE"
         then
@@ -16389,8 +16506,7 @@ Login4gtvAcc()
         fi
 
         Println "$info 登录账号..."
-        IFS="^" read -r result msg token < <(curl -s -Lm 20 \
-            -H "User-Agent: $user_agent" \
+        IFS="^" read -r result msg token < <(CurlFake -s -Lm 20 \
             -H 'Origin: https://www.4gtv.tv' \
             -H 'Referer: https://www.4gtv.tv/channel.html' \
             -d "fsUSER=$_4gtv_acc_email&fsPASSWORD=$_4gtv_acc_pass&fsVALIDATE_CODE=$validatecode" \
@@ -16415,8 +16531,7 @@ Login4gtvAcc()
         random_number=$(od -An -N6 -t u8 < /dev/urandom)
         random_number=${random_number: -12}
         fsLINK_ID="$random_number${random_number:0:9}"
-        IFS="^" read -r result < <(curl -s -Lm 20 \
-            -H "User-Agent: $user_agent" \
+        IFS="^" read -r result < <(CurlFake -s -Lm 20 \
             -H 'Origin: https://www.4gtv.tv' \
             -H 'Referer: https://www.4gtv.tv/channel_sub.html?channelSet_id=1&asset_id=4gtv-4gtv003&channel_id=1' \
             -d "fsLOGIN_TYPE=03&fsLINK_ID=$fsLINK_ID&clsIDENTITY_VALIDATE_ARUS%5BfsVALUE%5D=$(UrlencodeUpper $token)" \
@@ -16432,8 +16547,7 @@ Login4gtvAcc()
     Println "$info 账号验证成功"
     Println "$info 开启 7 天豪华套餐"
 
-    IFS="^" read -r result msg < <(curl -s -Lm 20 \
-        -H "User-Agent: $user_agent" \
+    IFS="^" read -r result msg < <(CurlFake -s -Lm 20 \
         -H 'Origin: https://www.4gtv.tv' \
         -H 'Referer: https://www.4gtv.tv/channel_sub.html?channelSet_id=1&asset_id=4gtv-4gtv003&channel_id=1' \
         -d "fsVALUE=$(UrlencodeUpper $token)" \
@@ -16479,8 +16593,7 @@ List4gtvAcc()
                         exit 1
                     else
                         Println "$info 查询中..."
-                        IFS="^" read -r result msg fnLEFT_PROMO_DAYS < <(curl -s -Lm 20 \
-                            -H "User-Agent: $user_agent" \
+                        IFS="^" read -r result msg fnLEFT_PROMO_DAYS < <(CurlFake -s -Lm 20 \
                             -H 'Origin: https://www.4gtv.tv' \
                             -H 'Referer: https://www.4gtv.tv/channel.html' \
                             -d "clsIDENTITY_VALIDATE_ARUS%5BfsVALUE%5D=$(UrlencodeUpper $fsVALUE)" \
@@ -16646,8 +16759,7 @@ _4gtvCron()
 {
     _4gtv_acc_email="$(RandStr)_$(printf '%(%s)T' -1)@gmail.com"
     _4gtv_acc_pass=$(RandStr)
-    IFS=" " read -r result msg < <(curl -s -Lm 10 \
-        -H "User-Agent: $user_agent" \
+    IFS=" " read -r result msg < <(CurlFake -s -Lm 10 \
         -H 'Origin: https://www.4gtv.tv' \
         -H 'Referer: https://www.4gtv.tv/signup.html' \
         -d "fnREGISTER_TYPE=1&fsLOGIN_TYPE=&fsLINK_ID=&fsUSER=$_4gtv_acc_email&fsLOGIN_TYPE=&fsLINK_ID=&fsPASSWORD=$_4gtv_acc_pass&fsPASSWORD1=$_4gtv_acc_pass&fnBIRTH_YEAR=$((RANDOM%20+1980))&fsSEX=male" \
@@ -16687,9 +16799,8 @@ _4gtvCron()
 
     for((i=0;i<5;i++));
     do
-        if curl -s -Lm 20 \
+        if CurlFake -s -Lm 20 \
             -H 'authority: www.4gtv.tv' \
-            -H "User-Agent: $user_agent" \
             -H 'referer: https://www.4gtv.tv/channel.html' \
             "https://www.4gtv.tv/validatecode?t=$(date +%s%3N)" -o "$IMG_FILE" && /usr/local/bin/imgcat --half-height "$IMG_FILE"
         then
@@ -16704,8 +16815,7 @@ _4gtvCron()
         fi
 
         Println "$info 登录账号..."
-        IFS="^" read -r result msg token < <(curl -s -Lm 20 \
-            -H "User-Agent: $user_agent" \
+        IFS="^" read -r result msg token < <(CurlFake -s -Lm 20 \
             -H 'Origin: https://www.4gtv.tv' \
             -H 'Referer: https://www.4gtv.tv/channel.html' \
             -d "fsUSER=$_4gtv_acc_email&fsPASSWORD=$_4gtv_acc_pass&fsVALIDATE_CODE=$validatecode" \
@@ -16735,8 +16845,7 @@ _4gtvCron()
         random_number=$(od -An -N6 -t u8 < /dev/urandom)
         random_number=${random_number: -12}
         fsLINK_ID="$random_number${random_number:0:9}"
-        IFS="^" read -r result < <(curl -s -Lm 20 \
-            -H "User-Agent: $user_agent" \
+        IFS="^" read -r result < <(CurlFake -s -Lm 20 \
             -H 'Origin: https://www.4gtv.tv' \
             -H 'Referer: https://www.4gtv.tv/channel_sub.html?channelSet_id=1&asset_id=4gtv-4gtv003&channel_id=1' \
             -d "fsLOGIN_TYPE=03&fsLINK_ID=$fsLINK_ID&clsIDENTITY_VALIDATE_ARUS%5BfsVALUE%5D=$(UrlencodeUpper $token)" \
@@ -16752,8 +16861,7 @@ _4gtvCron()
     Println "$info 账号验证成功"
     Println "$info 开启 7 天豪华套餐"
 
-    IFS="^" read -r result msg < <(curl -s -Lm 20 \
-        -H "User-Agent: $user_agent" \
+    IFS="^" read -r result msg < <(CurlFake -s -Lm 20 \
         -H 'Origin: https://www.4gtv.tv' \
         -H 'Referer: https://www.4gtv.tv/channel_sub.html?channelSet_id=1&asset_id=4gtv-4gtv003&channel_id=1' \
         -d "fsVALUE=$(UrlencodeUpper $token)" \
@@ -19158,8 +19266,7 @@ Schedule_4gtv()
             then
                 break
             fi
-        done < <(curl -s -Lm 20 \
-            -H "User-Agent: $USER_AGENT_BROWSER" \
+        done < <(CurlFake -s -Lm 20 \
             -H "Referer: https://www.4gtv.tv/channel_sub.html?channelSet_id=1&asset_id=$_4gtv_id&channel_id=1" \
             "https://www.4gtv.tv/proglist/$_4gtv_id.txt" \
             | $JQ_FILE '.[]|[.sdate,.stime,.title]|join("=")')
@@ -30251,6 +30358,9 @@ AcmeCheck()
         if [ -e ~/.acme.sh/ca/acme.zerossl.com/ca.conf ] 
         then
             . ~/.acme.sh/ca/acme.zerossl.com/ca.conf
+        elif [ -e ~/.acme.sh/ca/acme.zerossl.com/v2/DV90/ca.conf ] 
+        then
+            . ~/.acme.sh/ca/acme.zerossl.com/v2/DV90/ca.conf
         fi
 
         if [ -n "${CA_EAB_KEY_ID:-}" ] && [ -n "${CA_EAB_HMAC_KEY:-}" ]
@@ -50837,8 +50947,7 @@ then
             cookies=""
 
             Println "$info 获取频道 ..."
-            IFS="^" read -r _4gtv_chnl_id _4gtv_chnl_name _4gtv_chnl_aid < <(curl -s -Lm 10 \
-                -H "User-Agent: $user_agent" \
+            IFS="^" read -r _4gtv_chnl_id _4gtv_chnl_name _4gtv_chnl_aid < <(CurlFake -s -Lm 10 \
                 -H "Referer: https://www.4gtv.tv/channel.html?channelSet_id=$_4gtv_set_id" \
                 "https://api2.4gtv.tv/Channel/GetChannelBySetId/$_4gtv_set_id/pc/L" \
                 | $JQ_FILE -r '[([.Data[].fnID]|join("|")),([.Data[].fsNAME]|join("|")),([.Data[].fs4GTV_ID]|join("|"))]|join("^")'
@@ -50956,9 +51065,8 @@ then
                     Println "$info 解析 [ $hinet_4gtv_chnl_name ] 链接 ..."
                     stream_links=("https://embed.4gtv.tv/HiNet/$hinet_4gtv_chnl_name_enc.html")
                     headers="Referer: ${stream_links[0]}?ar=0&as=1&volume=0\r\n"
-                    stream_link_data=$(curl -s -Lm 10 \
+                    stream_link_data=$(CurlFake -s -Lm 10 \
                         ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
-                        -H "User-Agent: $user_agent" \
                         -H "${headers:0:-4}" \
                         "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$hinet_4gtv_chnl_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)") || true
                     if [ -n "$stream_link_data" ] 
@@ -51007,9 +51115,8 @@ then
 
                     for((try_i=0;try_i<10;try_i++));
                     do
-                        stream_link_data=$(curl -s -Lm 10 \
+                        stream_link_data=$(CurlFake -s -Lm 10 \
                             ${_4gtv_proxy_command[@]+"${_4gtv_proxy_command[@]}"} \
-                            -H "User-Agent: $user_agent" \
                             -H "${headers:0:-4}" \
                             --data "value=$value" "https://api2.4gtv.tv/Channel/GetChannelUrl3") || true
                         if [ -n "$stream_link_data" ] 
@@ -51943,6 +52050,11 @@ then
 
             Println "$info 颜色设置成功\n"
 
+            exit 0
+        ;;
+        curl)
+            CurlImpersonateUpdate
+            echo
             exit 0
         ;;
         *)

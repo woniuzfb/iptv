@@ -236,6 +236,7 @@ Install()
 
         FFmpegInstall
         JQInstall
+        CurlImpersonateInstall
 
         default=$(
         $JQ_FILE -n \
@@ -462,7 +463,7 @@ Update()
     # A limitation of statically linking glibc is the loss of DNS resolution.
     DepInstall nscd
 
-    JQInstall > /dev/null
+    JQInstall
 
     ln -sf "$IPTV_ROOT"/ffmpeg-git-*/ff* /usr/local/bin/
     Println "`eval_gettext \"脚本已更新为最新版本 [ \\\${green}\\\$sh_new_ver\\\${normal} ] ! (输入: tv 使用)\"`\n" && exit 0

@@ -35,6 +35,7 @@ FFMPEG_MIRROR_LINK=http://pngquant.com/ffmpeg
 FFMPEG_MIRROR_ROOT="$IPTV_ROOT"/ffmpeg
 LOCK_FILE="$IPTV_ROOT"/lock
 JQ_FILE="$IPTV_ROOT"/jq
+CURL_IMPERSONATE_FILE=/usr/local/bin/curl-impersonate
 CHANNELS_FILE="$IPTV_ROOT"/channels.json
 MONITOR_LOG="$IPTV_ROOT"/monitor.log
 LOGROTATE_CONFIG="$IPTV_ROOT"/logrotate

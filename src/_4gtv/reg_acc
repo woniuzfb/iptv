@@ -2,8 +2,7 @@ Reg4gtvAcc()
 {
     Set4gtvAccEmail
     Set4gtvAccPass
-    IFS=" " read -r result msg < <(curl -s -Lm 10 \
-        -H "User-Agent: $user_agent" \
+    IFS=" " read -r result msg < <(CurlFake -s -Lm 10 \
         -H 'Origin: https://www.4gtv.tv' \
         -H 'Referer: https://www.4gtv.tv/signup.html' \
         -d "fnREGISTER_TYPE=1&fsLOGIN_TYPE=&fsLINK_ID=&fsUSER=$_4gtv_acc_email&fsLOGIN_TYPE=&fsLINK_ID=&fsPASSWORD=$_4gtv_acc_pass&fsPASSWORD1=$_4gtv_acc_pass&fnBIRTH_YEAR=$((RANDOM%20+1980))&fsSEX=male" \

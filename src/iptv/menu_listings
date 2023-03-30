@@ -1934,8 +1934,7 @@ Schedule_4gtv()
             then
                 break
             fi
-        done < <(curl -s -Lm 20 \
-            -H "User-Agent: $USER_AGENT_BROWSER" \
+        done < <(CurlFake -s -Lm 20 \
             -H "Referer: https://www.4gtv.tv/channel_sub.html?channelSet_id=1&asset_id=$_4gtv_id&channel_id=1" \
             "https://www.4gtv.tv/proglist/$_4gtv_id.txt" \
             | $JQ_FILE '.[]|[.sdate,.stime,.title]|join("=")')

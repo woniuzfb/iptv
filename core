@@ -75,6 +75,12 @@ printf()
     builtin printf "$@"
 }
 
+CurlFake()
+{
+    CurlImpersonateInstall
+    curl-impersonate "$@"
+}
+
 SetDelimiters()
 {
     [ -n "${delimiters:-}" ] && return 0
@@ -238,5 +244,7 @@ Include utils/progress "$@"
 Include utils/shfile "$@"
 
 Include utils/jq "$@"
+
+Include utils/curl "$@"
 
 Include utils/log

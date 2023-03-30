@@ -237,8 +237,7 @@ ParseStream()
                     user_agent="${user_agent:-$USER_AGENT_BROWSER}"
                     headers="${headers:-Referer: https://embed.4gtv.tv/HiNet/$channel_name_enc.html?ar=0&as=1&volume=0\\r\\n}"
                     cookies="${cookies:-}"
-                    stream_link_data=$(curl -s -Lm 10 \
-                    -H "User-Agent: $user_agent" \
+                    stream_link_data=$(CurlFake -s -Lm 10 \
                     -H "${headers:0:-4}" \
                     "https://app.4gtv.tv/Data/HiNet/GetURL.ashx?ChannelNamecallback=channelname&Type=LIVE&Content=$channel_id&HostURL=https%3A%2F%2Fwww.hinet.net%2Ftv%2F&_=$(date +%s%3N)") || true
 
@@ -308,8 +307,7 @@ ParseStream()
 
             for((try_i=0;try_i<10;try_i++));
             do
-                stream_link_data=$(curl -s -Lm 10 \
-                -H "User-Agent: $user_agent" \
+                stream_link_data=$(CurlFake -s -Lm 10 \
                 -H "${headers:0:-4}" \
                 --data "value=$value" \
                 "https://api2.4gtv.tv/Channel/GetChannelUrl3") || true

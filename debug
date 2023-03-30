@@ -148,6 +148,9 @@ then
         color)
             Include src/iptv/menu_color "$@"
         ;;
+        curl)
+            Include src/iptv/cmd_curl "$@"
+        ;;
         b)
             Include src/iptv/cmd_backup "$@"
         ;;

@@ -1,0 +1,106 @@
+CurlImpersonateInstall()
+{
+    if [[ -x "$CURL_IMPERSONATE_FILE" ]] 
+    then
+        return 0
+    fi
+
+    DepsCheck
+    ArchCheck
+
+    if [ "$dist" == "mac" ] 
+    then
+        DepInstall nss
+        DepInstall ca-certificates
+    elif [ "$dist" == "rpm" ] 
+    then
+        DepInstall nss
+        DepInstall nss-pem
+        DepInstall ca-certificates
+    else
+        DepInstall libnss3
+        if [ "$dist" == "ubu" ] && grep -q "bionic" < "/etc/apt/sources.list" 
+        then
+            DepInstall libnsspem
+        else
+            DepInstall nss-plugin-pem
+        fi
+        DepInstall ca-certificates
+    fi
+
+    JQInstall
+
+    if ! curl_impersonate_ver=$(curl -s -m 30 "https://api.github.com/repos/lwthiker/curl-impersonate/releases/latest" | $JQ_FILE -r '.tag_name') 
+    then
+        Println "$error curl impersonate 下载出错, 无法连接 github ?\n"
+        exit 1
+    fi
+
+    if [ "$arch" == "x86_64" ] 
+    then
+        if [ "$dist" == "mac" ] 
+        then
+            curl_impersonate_package_name="curl-impersonate-$curl_impersonate_ver.x86_64-macos"
+        else
+            curl_impersonate_package_name="curl-impersonate-$curl_impersonate_ver.x86_64-linux-gnu"
+        fi
+    elif [ "$arch" == "arm64" ] 
+    then
+        curl_impersonate_package_name="curl-impersonate-$curl_impersonate_ver.aarch64-linux-gnu"
+    else
+        Println "$error 系统不支持安装 curl impersonate\n"
+        exit 1
+    fi
+
+    Println "$info 下载 curl impersonate ..."
+
+    mkdir -p "$HOME/curl-impersonate/"
+
+    if ! curl -s -L "https://github.com/lwthiker/curl-impersonate/releases/download/$curl_impersonate_ver/$curl_impersonate_package_name.tar.gz" -o "$HOME/$curl_impersonate_package_name.tar.gz_tmp"
+    then
+        Println "$error curl impersonate 下载出错, 无法连接 github ?\n"
+        exit 1
+    fi
+
+    mv "$HOME/$curl_impersonate_package_name.tar.gz_tmp" "$HOME/$curl_impersonate_package_name.tar.gz"
+
+    tar -C "$HOME/curl-impersonate/" -xzf "$HOME/$curl_impersonate_package_name.tar.gz"
+
+    echo "$(awk '!x{x=sub(/dir=.*/,"dir='"$HOME/curl-impersonate"'")}1' "$HOME/curl-impersonate/curl_chrome99")" > $CURL_IMPERSONATE_FILE
+
+    chmod +x "$CURL_IMPERSONATE_FILE"
+
+    Println "$info curl impersonate 安装成功"
+}
+
+CurlImpersonateUpdate()
+{
+    if [[ -x "$CURL_IMPERSONATE_FILE" ]] 
+    then
+        echo
+        inquirer list_input_index "curl impersonate 已经存在, 是否重新安装" ny_options ny_options_index
+        if [ "$ny_options_index" -eq 1 ] 
+        then
+            rm -f "$CURL_IMPERSONATE_FILE"
+            CurlImpersonateInstall
+        fi
+    else
+        CurlImpersonateInstall
+    fi
+
+    impersonate_options=()
+
+    for ele in "$HOME"/curl-impersonate/curl_*
+    do
+        impersonate_options+=("${ele##*/}")
+    done
+
+    echo
+    inquirer list_input "选择 curl impersonate" impersonate_options impersonate_option
+
+    echo "$(awk '!x{x=sub(/dir=.*/,"dir='"$HOME/curl-impersonate"'")}1' "$HOME/curl-impersonate/$impersonate_option")" > $CURL_IMPERSONATE_FILE
+
+    chmod +x "$CURL_IMPERSONATE_FILE"
+
+    Println "$info curl impersonate 设置成功"
+}
