@@ -9,23 +9,25 @@ GoInstall()
         fi
     fi
 
+    DistCheck
+
+    if [ "$dist" == "mac" ] 
+    then
+        DepInstall brew
+        brew install go
+    fi
+
     ArchCheck
 
     DepInstall curl
 
-    go_version=""
+    JQInstall
 
-    while IFS= read -r line
-    do
-        if [[ $line == *"goVersion = "* ]] 
-        then
-            go_version=${line#*\"}
-            go_version=${go_version%\"*}
-            break
-        fi
-    done < <(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://golang.org/doc/install" 2> /dev/null)
-
-    go_version=${go_version:-1.16.5}
+    if ! go_version=$(curl -s -Lm 20 https://go.dev/dl/?mode=json | $JQ_FILE -r '.[0].version')
+    then
+        Println "$error 无法连接 go.dev ?"
+        go_version=1.16.5
+    fi
 
     if [ "$arch" == "i386" ] 
     then

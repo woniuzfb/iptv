@@ -4,6 +4,8 @@ Include utils/crossplane "$@"
 
 Include utils/openssl "$@"
 
+Include utils/jq "$@"
+
 Include utils/go "$@"
 
 Include utils/postfix "$@"

@@ -70,7 +70,7 @@ DEFAULT_DEMOS="default.json"
 TS_CHANNELS="channels.json"
 XTREAM_CODES_CHANNELS="xtream_codes"
 USER_AGENT_BROWSER="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.55 Safari/537.36"
-USER_AGENT_TV="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
+USER_AGENT_TV="Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3"
 USER_AGENT_PHONE="iPhone; CPU iPhone OS 15_2 like Mac OS X"
 monitor=false
 red='\033[31m'
@@ -2240,19 +2240,13 @@ GoInstall()
 
     DepInstall curl
 
-    go_version=""
+    JQInstall
 
-    while IFS= read -r line
-    do
-        if [[ $line == *"goVersion = "* ]] 
-        then
-            go_version=${line#*\"}
-            go_version=${go_version%\"*}
-            break
-        fi
-    done < <(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" "https://golang.org/doc/install" 2> /dev/null)
-
-    go_version=${go_version:-1.16.5}
+    if ! go_version=$(curl -s -Lm 20 https://go.dev/dl/?mode=json | $JQ_FILE -r '.[0].version')
+    then
+        Println "$error 无法连接 go.dev ?"
+        go_version=1.16.5
+    fi
 
     if [ "$arch" == "i386" ] 
     then
@@ -3214,11 +3208,7 @@ CurlImpersonateInstall()
     DepsCheck
     ArchCheck
 
-    if [ "$dist" == "mac" ] 
-    then
-        DepInstall nss
-        DepInstall ca-certificates
-    elif [ "$dist" == "rpm" ] 
+    if [ "$dist" == "rpm" ] 
     then
         DepInstall nss
         DepInstall nss-pem
@@ -3236,7 +3226,7 @@ CurlImpersonateInstall()
 
     JQInstall
 
-    if ! curl_impersonate_ver=$(curl -s -m 30 "https://api.github.com/repos/lwthiker/curl-impersonate/releases/latest" | $JQ_FILE -r '.tag_name') 
+    if ! curl_impersonate_ver=$(curl -s -Lm 20 "https://api.github.com/repos/lwthiker/curl-impersonate/releases/latest" | $JQ_FILE -r '.tag_name') 
     then
         Println "$error curl impersonate 下载出错, 无法连接 github ?\n"
         exit 1
@@ -3244,17 +3234,12 @@ CurlImpersonateInstall()
 
     if [ "$arch" == "x86_64" ] 
     then
-        if [ "$dist" == "mac" ] 
-        then
-            curl_impersonate_package_name="curl-impersonate-$curl_impersonate_ver.x86_64-macos"
-        else
-            curl_impersonate_package_name="curl-impersonate-$curl_impersonate_ver.x86_64-linux-gnu"
-        fi
+        curl_impersonate_package_name="curl-impersonate-$curl_impersonate_ver.x86_64-linux-gnu"
     elif [ "$arch" == "arm64" ] 
     then
         curl_impersonate_package_name="curl-impersonate-$curl_impersonate_ver.aarch64-linux-gnu"
     else
-        Println "$error 系统不支持\n"
+        Println "$error 系统不支持安装 curl impersonate\n"
         exit 1
     fi
 
@@ -3262,7 +3247,7 @@ CurlImpersonateInstall()
 
     mkdir -p "$HOME/curl-impersonate/"
 
-    if ! curl -s -L "https://github.com/lwthiker/curl-impersonate/releases/download/$curl_impersonate_ver/$curl_impersonate_package_name.tar.gz" -o "$HOME/$curl_impersonate_package_name.tar.gz_tmp"
+    if ! curl -s -Lm 20 "https://github.com/lwthiker/curl-impersonate/releases/download/$curl_impersonate_ver/$curl_impersonate_package_name.tar.gz" -o "$HOME/$curl_impersonate_package_name.tar.gz_tmp"
     then
         Println "$error curl impersonate 下载出错, 无法连接 github ?\n"
         exit 1
@@ -3272,11 +3257,23 @@ CurlImpersonateInstall()
 
     tar -C "$HOME/curl-impersonate/" -xzf "$HOME/$curl_impersonate_package_name.tar.gz"
 
-    echo "$(awk '!x{x=sub(/dir=.*/,"dir='"$HOME/curl-impersonate"'")}1' "$HOME/curl-impersonate/curl_chrome99")" > $CURL_IMPERSONATE_FILE
+    rm -f "$CURL_IMPERSONATE_FILE"
+
+    awk '!x{x=sub(/dir=.*/,"dir='"$HOME/curl-impersonate"'")}1' "$HOME/curl-impersonate/curl_chrome99" > "$CURL_IMPERSONATE_FILE"
 
     chmod +x "$CURL_IMPERSONATE_FILE"
 
     Println "$info curl impersonate 安装成功"
+}
+
+CurlImpersonateValidateService()
+{
+    if [ "$1" == "$i18n_cancel" ] || [[ $1 =~ ^[A-Za-z0-9_\.\-]+$ ]] 
+    then
+        return 0
+    fi
+
+    return 1
 }
 
 CurlImpersonateUpdate()
@@ -3294,6 +3291,36 @@ CurlImpersonateUpdate()
         CurlImpersonateInstall
     fi
 
+    echo
+    config_options=( '设置默认服务' )
+
+    if ls -A "$CURL_IMPERSONATE_FILE"/-* > /dev/null 2>&1
+    then
+        for service in "$CURL_IMPERSONATE_FILE"-*
+        do
+            service_name="${service#*${CURL_IMPERSONATE_FILE}-}"
+            config_options+=("$service_name")
+        done
+    fi
+
+    config_options+=( '新增服务' )
+
+    config_options_count=${#config_options[@]}
+
+    inquirer list_input_index "选择操作" config_options config_options_index
+
+    impersonate_service_file="$CURL_IMPERSONATE_FILE"
+
+    if [ "$config_options_index" -eq $((config_options_count-1)) ] 
+    then
+        echo
+        ExitOnText "输入服务名称" impersonate_service_name CurlImpersonateValidateService "请输入正确的服务名称(字母、数字、下划线组成)"
+        impersonate_service_file="$impersonate_service_file-$impersonate_service_name"
+    elif [ "$config_options_index" -gt 0 ] 
+    then
+        impersonate_service_file="$impersonate_service_file-${config_options[config_options_index]}"
+    fi
+
     impersonate_options=()
 
     for ele in "$HOME"/curl-impersonate/curl_*
@@ -3304,13 +3331,135 @@ CurlImpersonateUpdate()
     echo
     inquirer list_input "选择 curl impersonate" impersonate_options impersonate_option
 
-    echo "$(awk '!x{x=sub(/dir=.*/,"dir='"$HOME/curl-impersonate"'")}1' "$HOME/curl-impersonate/$impersonate_option")" > $CURL_IMPERSONATE_FILE
+    rm -f "$impersonate_service_file"
 
-    chmod +x "$CURL_IMPERSONATE_FILE"
+    awk '!x{x=sub(/dir=.*/,"dir='"$HOME/curl-impersonate"'")}1' "$HOME/curl-impersonate/$impersonate_option" > "$impersonate_service_file"
+
+    chmod +x "$impersonate_service_file"
+
+    headers_name=()
+    headers_val=()
+
+    while IFS= read -r line 
+    do
+        if [[ $line =~ ^[[:blank:]]*-H\ \'([^:]+):\ (.*)\'\ \\$ ]] 
+        then
+            headers_name+=("${BASH_REMATCH[1]}")
+            headers_val+=("${BASH_REMATCH[2]}")
+        fi
+    done < "$impersonate_service_file"
+
+    if [ -n "${headers_name:-}" ] 
+    then
+        echo
+        inquirer checkbox_input_indices "选择修改的 header" headers_name headers_name_indices
+
+        config_options=( '输入' '删除' )
+
+        for i in "${headers_name_indices[@]}"
+        do
+            echo
+            inquirer list_input_index "对 ${headers_name[i]} 选择操作" config_options config_options_index
+            if [ "$config_options_index" -eq 0 ] 
+            then
+                echo
+                inquirer text_input "输入 ${headers_name[i]} 值" header_val "${headers_val[i]}"
+
+                echo "$(awk '!x{x=sub(/-H '\'''"${headers_name[i]}"': .*'\'' \\/,"-H '\'''"${headers_name[i]}"': '"$header_val"''\'' \\")}1' "$impersonate_service_file")" > "$impersonate_service_file"
+                Println "$info ${headers_name[i]}  修改成功"
+            else
+                sed -i "/^[[:blank:]]*-H '${headers_name[i]}:/d" "$impersonate_service_file"
+                Println "$info ${headers_name[i]}  删除成功"
+            fi
+        done
+    fi
 
     Println "$info curl impersonate 设置成功"
 }
 
+CurlImpersonateCompile()
+{
+    echo
+    inquirer text_input "输入 curl-impersonate 安装目录" curl_impersonate_prefix /usr/local/curl-impersonate
+
+    DepInstall git
+
+    cd ~
+
+    if [ -d curl-impersonate.git ] 
+    then
+        printf -v update_date '%(%m-%d-%H:%M:%S)T' -1
+        mv curl-impersonate.git curl-impersonate.git_"$update_date"
+    fi
+
+    git clone https://github.com/lwthiker/curl-impersonate.git curl-impersonate.git
+    cd curl-impersonate.git
+
+    GoInstall
+
+    DistCheck
+
+    if [ "$dist" == "rpm" ] 
+    then
+        yum groupinstall -y "Development Tools"
+        # Fedora only
+        # yum groupinstall "C Development Tools and Libraries"
+        yum install -y cmake3 python3 python3-pip
+        yum install -y ninja-build || pip3 install ninja
+    else
+        apt-get -y install build-essential pkg-config cmake ninja-build curl autoconf automake libtool unzip
+    fi
+
+    mkdir build && cd build
+    ../configure --prefix="$curl_impersonate_prefix"
+    make chrome-build
+    sudo make chrome-install
+    sudo ldconfig
+
+    sudo mkdir -p "$curl_impersonate_prefix"/include/curl/
+    mv curl-*/include/curl/* "$curl_impersonate_prefix"/include/curl/
+    cp -f curl-*/curl-impersonate-chrome-config "$curl_impersonate_prefix"/bin/
+    chmod +x "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config
+
+    # rm -f /usr/local/bin/curl-config
+    # ln -s "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config /usr/local/bin/curl-config
+
+    Println "$info curl impersonate 编译成功\n"
+}
+
+NodeLibcurlImpersonateCompile()
+{
+    if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
+    then
+        NodejsInstall
+    fi
+
+    echo
+    inquirer text_input "输入编译安装好的 curl impersonate 路径" curl_impersonate_prefix /usr/local/curl-impersonate
+
+    if [ ! -d "$curl_impersonate_prefix" ] 
+    then
+        Println "$error curl impersonate 目录不存在, 请先编译安装\n"
+        exit 1
+    fi
+
+    cd ~
+
+    if [ -d node-libcurl ] 
+    then
+        printf -v update_date '%(%m-%d-%H:%M:%S)T' -1
+        mv node-libcurl node-libcurl_"$update_date"
+    fi
+
+    git clone https://github.com/JCMais/node-libcurl.git
+    cd node-libcurl
+    curl -s -Lm 20 "$FFMPEG_MIRROR_LINK/node-libcurl-impersonate.patch" -o node-libcurl-impersonate.patch
+    patch -p1 < node-libcurl-impersonate.patch
+
+    rm -f /usr/local/bin/curl-config
+    ln -s "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config /usr/local/bin/curl-config
+    npm install --force
+}
 
 Install()
 {
@@ -4178,6 +4327,22 @@ FilterString()
 CurlFake()
 {
     CurlImpersonateInstall
+    local service_name="$1"
+    if [[ -x "${CURL_IMPERSONATE_FILE}-$service_name" ]] 
+    then
+        shift
+        "${CURL_IMPERSONATE_FILE}-$service_name" "$@"
+        return 0
+    elif [ "$service_name" == "xtream_codes" ] 
+    then
+        rm -f "${CURL_IMPERSONATE_FILE}-$service_name"
+        awk '!x{x=sub(/dir=.*/,"dir='"$HOME/curl-impersonate"'")}1' "$HOME/curl-impersonate/curl_chrome99_android" > "${CURL_IMPERSONATE_FILE}-$service_name"
+        chmod +x "${CURL_IMPERSONATE_FILE}-$service_name"
+        echo "$(awk '!x{x=sub(/-H '\''User-Agent: .*'\'' \\/,"-H '\''User-Agent: '"$USER_AGENT_TV"''\'' \\")}1' "${CURL_IMPERSONATE_FILE}-$service_name")" > "${CURL_IMPERSONATE_FILE}-$service_name"
+        shift
+        "${CURL_IMPERSONATE_FILE}-$service_name" "$@"
+        return 0
+    fi
     curl-impersonate "$@"
 }
 
@@ -12237,12 +12402,12 @@ CheckIfXtreamCodes()
             mac=$(UrlencodeUpper "$chnl_mac")
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
-            token_url="$server/portal.php?type=stb&action=handshake"
+            token_url="$server/portal.php?type=stb&action=handshake&token=&prehash=0&JsHttpRequest=1-xml"
             profile_url="$server/portal.php?type=stb&action=get_profile"
             account_info_url="$server/portal.php?type=account_info&action=get_main_info"
             genres_url="$server/portal.php?type=itv&action=get_genres"
 
-            access_token=$(curl -s -Lm 10 \
+            access_token=$(CurlFake xtream_codes -s -Lm 10 \
                 -H "User-Agent: $chnl_user_agent" \
                 --cookie "$chnl_cookies" "$token_url" \
                 | $JQ_FILE -r '.js.token' 2> /dev/null) || true
@@ -12257,12 +12422,12 @@ CheckIfXtreamCodes()
 
                 printf -v chnl_cookies_command '%b' "${chnl_cookies//;/; path=\/;\\r\\n}; path=/;"
 
-                profile=$(curl -s -Lm 10\
+                profile=$(CurlFake xtream_codes -s -Lm 10\
                     -H "$chnl_user_agent" \
                     -H "${chnl_headers:0:-4}" \
                     --cookie "$chnl_cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
 
-                exp_date=$(curl -s -Lm 10 \
+                exp_date=$(CurlFake xtream_codes -s -Lm 10 \
                     -H "User-Agent: $chnl_user_agent" \
                     -H "${chnl_headers:0:-4}" \
                     --cookie "$chnl_cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
@@ -12292,7 +12457,7 @@ CheckIfXtreamCodes()
                 if [ -n "$chnl_xc_proxy" ] 
                 then
                     server=${chnl_xc_proxy%\/}
-                    IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(curl -sL "$server/?cmd=$chnl_cmd&check=1" \
+                    IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(CurlFake xtream_codes -sL "$server/?cmd=$chnl_cmd&check=1" \
                         -H "User-Agent: $chnl_user_agent" \
                         -H "${chnl_headers:0:-4}" \
                         --cookie "$chnl_cookies" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
@@ -12313,7 +12478,7 @@ CheckIfXtreamCodes()
                     fi
                 else
                     create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
-                    cmd=$(curl -s -Lm 10 \
+                    cmd=$(CurlFake xtream_codes -s -Lm 10 \
                         -H "User-Agent: $chnl_user_agent" \
                         -H "${chnl_headers:0:-4}" \
                         --cookie "$chnl_cookies" "$create_link_url" \
@@ -22611,12 +22776,12 @@ MonitorHlsRestartChannel()
             mac=$(UrlencodeUpper "$chnl_mac")
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
-            token_url="$server/portal.php?type=stb&action=handshake"
+            token_url="$server/portal.php?type=stb&action=handshake&token=&prehash=0&JsHttpRequest=1-xml"
             profile_url="$server/portal.php?type=stb&action=get_profile"
             account_info_url="$server/portal.php?type=account_info&action=get_main_info"
             genres_url="$server/portal.php?type=itv&action=get_genres"
 
-            access_token=$(curl -s -Lm 10 -H "User-Agent: $chnl_user_agent" \
+            access_token=$(CurlFake xtream_codes -s -Lm 10 -H "User-Agent: $chnl_user_agent" \
                 --cookie "$chnl_cookies" "$token_url" \
                 | $JQ_FILE -r '.js.token' 2> /dev/null) || true
 
@@ -22649,12 +22814,12 @@ MonitorHlsRestartChannel()
 
             chnl_headers="Authorization: Bearer $access_token\r\n"
             printf -v chnl_headers_command '%b' "$chnl_headers"
-            profile=$(curl -s -Lm 10 \
+            profile=$(CurlFake xtream_codes -s -Lm 10 \
                 -H "User-Agent: $chnl_user_agent" \
                 -H "${chnl_headers:0:-4}" \
                 --cookie "$chnl_cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
 
-            exp_date=$(curl -s -Lm 10 \
+            exp_date=$(CurlFake xtream_codes -s -Lm 10 \
                 -H "User-Agent: $chnl_user_agent" \
                 -H "${chnl_headers:0:-4}" \
                 --cookie "$chnl_cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
@@ -22689,7 +22854,7 @@ MonitorHlsRestartChannel()
             if [ -n "$chnl_xc_proxy" ] 
             then
                 server=${chnl_xc_proxy%\/}
-                IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(curl -sL \
+                IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(CurlFake xtream_codes -sL \
                     -H "User-Agent: $chnl_user_agent" \
                     -H "${chnl_headers:0:-4}" \
                     --cookie "$chnl_cookies" \
@@ -22733,7 +22898,7 @@ MonitorHlsRestartChannel()
                 fi
             else
                 create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
-                cmd=$(curl -s -Lm 10 \
+                cmd=$(CurlFake xtream_codes -s -Lm 10 \
                     -H "User-Agent: $chnl_user_agent" \
                     -H "${chnl_headers:0:-4}" \
                     --cookie "$chnl_cookies" \
@@ -23133,12 +23298,12 @@ MonitorFlvRestartChannel()
             mac=$(UrlencodeUpper "$chnl_mac")
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
-            token_url="$server/portal.php?type=stb&action=handshake"
+            token_url="$server/portal.php?type=stb&action=handshake&token=&prehash=0&JsHttpRequest=1-xml"
             profile_url="$server/portal.php?type=stb&action=get_profile"
             account_info_url="$server/portal.php?type=account_info&action=get_main_info"
             genres_url="$server/portal.php?type=itv&action=get_genres"
 
-            access_token=$(curl -s -Lm 10 \
+            access_token=$(CurlFake xtream_codes -s -Lm 10 \
                 -H "User-Agent: $chnl_user_agent" \
                 --cookie "$chnl_cookies" "$token_url" \
                 | $JQ_FILE -r '.js.token' 2> /dev/null) || true
@@ -23173,12 +23338,12 @@ MonitorFlvRestartChannel()
             chnl_headers="Authorization: Bearer $access_token\r\n"
             printf -v chnl_headers_command '%b' "$chnl_headers"
 
-            profile=$(curl -s -Lm 10 \
+            profile=$(CurlFake xtream_codes -s -Lm 10 \
                 -H "User-Agent: $chnl_user_agent" \
                 -H "${chnl_headers:0:-4}" \
                 --cookie "$chnl_cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
 
-            exp_date=$(curl -s -Lm 10 \
+            exp_date=$(CurlFake xtream_codes -s -Lm 10 \
                 -H "User-Agent: $chnl_user_agent" \
                 -H "${chnl_headers:0:-4}" \
                 --cookie "$chnl_cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
@@ -23213,7 +23378,7 @@ MonitorFlvRestartChannel()
             if [ -n "$chnl_xc_proxy" ] 
             then
                 server=${chnl_xc_proxy%\/}
-                IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(curl -sL \
+                IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(CurlFake xtream_codes -sL \
                     -H "User-Agent: $chnl_user_agent" \
                     -H "${chnl_headers:0:-4}" \
                     --cookie "$chnl_cookies" \
@@ -23257,7 +23422,7 @@ MonitorFlvRestartChannel()
                 fi
             else
                 create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
-                cmd=$(curl -s -Lm 10 \
+                cmd=$(CurlFake xtream_codes -s -Lm 10 \
                     -H "User-Agent: $chnl_user_agent" \
                     -H "${chnl_headers:0:-4}" \
                     --cookie "$chnl_cookies" "$create_link_url" \
@@ -23481,7 +23646,7 @@ MonitorTryAccounts()
 
             chnl_user_agent="$USER_AGENT_TV"
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
-            token_url="$server/portal.php?type=stb&action=handshake"
+            token_url="$server/portal.php?type=stb&action=handshake&token=&prehash=0&JsHttpRequest=1-xml"
             profile_url="$server/portal.php?type=stb&action=get_profile"
             account_info_url="$server/portal.php?type=account_info&action=get_main_info"
             genres_url="$server/portal.php?type=itv&action=get_genres"
@@ -23516,7 +23681,7 @@ MonitorTryAccounts()
                     mac=$(UrlencodeUpper "$mac_address")
                     chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
 
-                    access_token=$(curl -s -Lm 10 \
+                    access_token=$(CurlFake xtream_codes -s -Lm 10 \
                         -H "User-Agent: $chnl_user_agent" \
                         --cookie "$chnl_cookies" "$token_url" \
                         | $JQ_FILE -r '.js.token' 2> /dev/null) || true
@@ -23530,12 +23695,12 @@ MonitorTryAccounts()
 
                     printf -v chnl_cookies_command '%b' "${chnl_cookies//;/; path=\/;\\r\\n}; path=/;"
 
-                    profile=$(curl -s -Lm 10 \
+                    profile=$(CurlFake xtream_codes -s -Lm 10 \
                         -H "User-Agent: $chnl_user_agent" \
                         -H "${chnl_headers:0:-4}" \
                         --cookie "$chnl_cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
 
-                    exp_date=$(curl -s -Lm 10 \
+                    exp_date=$(CurlFake xtream_codes -s -Lm 10 \
                         -H "User-Agent: $chnl_user_agent" \
                         -H "${chnl_headers:0:-4}" \
                         --cookie "$chnl_cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
@@ -23548,7 +23713,7 @@ MonitorTryAccounts()
                     if [ -n "$chnl_xc_proxy" ] 
                     then
                         server=${chnl_xc_proxy%\/}
-                        IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(curl -sL \
+                        IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(CurlFake xtream_codes -sL \
                             -H "User-Agent: $chnl_user_agent" \
                             -H "${chnl_headers:0:-4}" \
                             --cookie "$chnl_cookies" \
@@ -23570,7 +23735,7 @@ MonitorTryAccounts()
                         fi
                     else
                         create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
-                        cmd=$(curl -s -Lm 10 \
+                        cmd=$(CurlFake xtream_codes -s -Lm 10 \
                             -H "User-Agent: $chnl_user_agent" \
                             -H "${chnl_headers:0:-4}" \
                             --cookie "$chnl_cookies" "$create_link_url" \
@@ -25531,7 +25696,7 @@ VerifyXtreamCodesMac()
         Println "$info 验证 $domain ..."
 
         server="http://$domain"
-        token_url="$server/portal.php?type=stb&action=handshake"
+        token_url="$server/portal.php?type=stb&action=handshake&token=&prehash=0&JsHttpRequest=1-xml"
         profile_url="$server/portal.php?type=stb&action=get_profile"
         account_info_url="$server/portal.php?type=account_info&action=get_main_info"
         [ -z "${timezone:-}" ] && timezone=$(UrlencodeUpper "Europe/Amsterdam")
@@ -25554,7 +25719,7 @@ VerifyXtreamCodesMac()
     exp_date=""
     mac=$(UrlencodeUpper "$mac_address")
 
-    access_token=$(curl -s -Lm 10 \
+    access_token=$(CurlFake xtream_codes -s -Lm 10 \
         -H "User-Agent: $USER_AGENT_TV" \
         --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" \
         | $JQ_FILE -r '.js.token' 2> /dev/null) || true
@@ -25566,12 +25731,12 @@ VerifyXtreamCodesMac()
         return 0
     fi
 
-    profile=$(curl -s -Lm 10 \
+    profile=$(CurlFake xtream_codes -s -Lm 10 \
         -H "User-Agent: $USER_AGENT_TV" \
         -H "Authorization: Bearer $access_token" \
         --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
 
-    exp_date=$(curl -s -Lm 10 \
+    exp_date=$(CurlFake xtream_codes -s -Lm 10 \
         -H "User-Agent: $USER_AGENT_TV" \
         -H "Authorization: Bearer $access_token" \
         --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
@@ -26390,7 +26555,7 @@ XtreamCodesListChnls()
             use_proxy_yn="$i18n_no"
         fi
 
-        token_url="$server/portal.php?type=stb&action=handshake"
+        token_url="$server/portal.php?type=stb&action=handshake&token=&prehash=0&JsHttpRequest=1-xml"
         profile_url="$server/portal.php?type=stb&action=get_profile"
         genres_url="$server/portal.php?type=itv&action=get_genres"
         account_info_url="$server/portal.php?type=account_info&action=get_main_info"
@@ -26400,7 +26565,7 @@ XtreamCodesListChnls()
             mac=$(UrlencodeUpper "$mac_address")
             cookies="mac=$mac; stb_lang=en; timezone=$timezone"
 
-            access_token=$(curl -s -Lm 10 \
+            access_token=$(CurlFake xtream_codes -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
                 --cookie "$cookies" "$token_url" \
                 | $JQ_FILE -r '.js.token' 2> /dev/null) || true
@@ -26440,12 +26605,12 @@ XtreamCodesListChnls()
             headers="Authorization: Bearer $access_token\r\n"
             printf -v headers_command '%b' "$headers"
 
-            profile=$(curl -s -Lm 10 \
+            profile=$(CurlFake xtream_codes -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
                 -H "${headers:0:-4}" \
                 --cookie "$cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
 
-            exp_date=$(curl -s -Lm 10 \
+            exp_date=$(CurlFake xtream_codes -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
                 -H "${headers:0:-4}" \
                 --cookie "$cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
@@ -26497,7 +26662,7 @@ XtreamCodesListChnls()
                 genres_count=$((genres_count+1))
                 genres_id+=("$map_id")
                 genres_list="$genres_list ${green}$genres_count.${normal}${indent_6}$map_title\n\n"
-            done < <(curl -s -Lm 10 \
+            done < <(CurlFake xtream_codes -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
                 -H "${headers:0:-4}" \
                 --cookie "$cookies" "$genres_url" \
@@ -26576,7 +26741,7 @@ XtreamCodesListChnls()
                         ordered_list_page=${genres_list_pages[genres_index]}
                     else
                         ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=1"
-                        ordered_list_page=$(curl -s -Lm 10 \
+                        ordered_list_page=$(CurlFake xtream_codes -s -Lm 10 \
                             -H "User-Agent: $user_agent" \
                             -H "${headers:0:-4}" \
                             --cookie "$cookies" "$ordered_list_url" | $JQ_FILE -r -c '.' 2> /dev/null) || ordered_list_page=""
@@ -26619,7 +26784,7 @@ XtreamCodesListChnls()
                             if [ "$page" -gt 1 ] 
                             then
                                 ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=$page"
-                                ordered_list_page=$(curl -s -Lm 10 \
+                                ordered_list_page=$(CurlFake xtream_codes -s -Lm 10 \
                                     -H "User-Agent: $user_agent" \
                                     -H "${headers:0:-4}" \
                                     --cookie "$cookies" "$ordered_list_url" | $JQ_FILE -r -c '.' 2> /dev/null) || ordered_list_page=""
@@ -26741,7 +26906,7 @@ XtreamCodesListChnls()
                         else
                             create_link_url="$server/portal.php?type=itv&action=create_link&cmd=${xc_chnls_cmd[xc_chnls_index]}&series=&forced_storage=undefined&disable_ad=0&download=0"
 
-                            cmd=$(curl -s -Lm 10 \
+                            cmd=$(CurlFake xtream_codes -s -Lm 10 \
                                 -H "User-Agent: $user_agent" \
                                 -H "${headers:0:-4}" \
                                 --cookie "$cookies" "$create_link_url" \
@@ -26815,7 +26980,7 @@ XtreamCodesListChnls()
                         then
                             Println "$info 尝试直连 ..."
                             # curl -k -s -o /dev/null -w '%{redirect_url}'
-                            IFS=" " read -r stream_link new_access_token new_cookies < <(curl -sL \
+                            IFS=" " read -r stream_link new_access_token new_cookies < <(CurlFake xtream_codes -sL \
                                 -H "User-Agent: $user_agent" \
                                 --cookie "$cookies" \
                                 "$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}&check=1" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
@@ -27013,7 +27178,7 @@ XtreamCodesAddMac()
     fi
 
     timezone=$(UrlencodeUpper "Europe/Amsterdam")
-    token_url="$server/portal.php?type=stb&action=handshake"
+    token_url="$server/portal.php?type=stb&action=handshake&token=&prehash=0&JsHttpRequest=1-xml"
     profile_url="$server/portal.php?type=stb&action=get_profile"
     account_info_url="$server/portal.php?type=account_info&action=get_main_info"
 
@@ -27026,7 +27191,7 @@ XtreamCodesAddMac()
         exp_date=""
         mac=$(UrlencodeUpper "$mac_address")
 
-        access_token=$(curl -s -Lm 10 \
+        access_token=$(CurlFake xtream_codes -s -Lm 10 \
             -H "User-Agent: $USER_AGENT_TV" \
             --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$token_url" \
             | $JQ_FILE -r '.js.token' 2> /dev/null) || true
@@ -27037,12 +27202,12 @@ XtreamCodesAddMac()
             continue
         fi
 
-        profile=$(curl -s -Lm 10 \
+        profile=$(CurlFake xtream_codes -s -Lm 10 \
             -H "User-Agent: $USER_AGENT_TV" \
             -H "Authorization: Bearer $access_token" \
             --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
 
-        exp_date=$(curl -s -Lm 10 \
+        exp_date=$(CurlFake xtream_codes -s -Lm 10 \
             -H "User-Agent: $USER_AGENT_TV" \
             -H "Authorization: Bearer $access_token" \
             --cookie "mac=$mac; stb_lang=en; timezone=$timezone" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
@@ -52053,8 +52218,21 @@ then
             exit 0
         ;;
         curl)
-            CurlImpersonateUpdate
             echo
+            curl_options=( '安装/设置 curl impersonate' '编译 curl impersonate' '编译 node-libcurl (使用 curl impersonate)' )
+            inquirer list_input_index "选择操作" curl_options curl_options_index
+
+            if [ "$curl_options_index" -eq 0 ] 
+            then
+                CurlImpersonateUpdate
+
+                echo
+            elif [ "$curl_options_index" -eq 1 ] 
+            then
+                CurlImpersonateCompile
+            else
+                NodeLibcurlImpersonateCompile
+            fi
             exit 0
         ;;
         *)

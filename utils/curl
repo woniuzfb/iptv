@@ -30,7 +30,7 @@ CurlImpersonateInstall()
 
     JQInstall
 
-    if ! curl_impersonate_ver=$(curl -s -m 30 "https://api.github.com/repos/lwthiker/curl-impersonate/releases/latest" | $JQ_FILE -r '.tag_name') 
+    if ! curl_impersonate_ver=$(curl -s -Lm 20 "https://api.github.com/repos/lwthiker/curl-impersonate/releases/latest" | $JQ_FILE -r '.tag_name') 
     then
         Println "$error curl impersonate 下载出错, 无法连接 github ?\n"
         exit 1
@@ -56,7 +56,7 @@ CurlImpersonateInstall()
 
     mkdir -p "$HOME/curl-impersonate/"
 
-    if ! curl -s -L "https://github.com/lwthiker/curl-impersonate/releases/download/$curl_impersonate_ver/$curl_impersonate_package_name.tar.gz" -o "$HOME/$curl_impersonate_package_name.tar.gz_tmp"
+    if ! curl -s -Lm 20 "https://github.com/lwthiker/curl-impersonate/releases/download/$curl_impersonate_ver/$curl_impersonate_package_name.tar.gz" -o "$HOME/$curl_impersonate_package_name.tar.gz_tmp"
     then
         Println "$error curl impersonate 下载出错, 无法连接 github ?\n"
         exit 1
@@ -66,11 +66,23 @@ CurlImpersonateInstall()
 
     tar -C "$HOME/curl-impersonate/" -xzf "$HOME/$curl_impersonate_package_name.tar.gz"
 
-    echo "$(awk '!x{x=sub(/dir=.*/,"dir='"$HOME/curl-impersonate"'")}1' "$HOME/curl-impersonate/curl_chrome99")" > $CURL_IMPERSONATE_FILE
+    rm -f "$CURL_IMPERSONATE_FILE"
+
+    awk '!x{x=sub(/dir=.*/,"dir='"$HOME/curl-impersonate"'")}1' "$HOME/curl-impersonate/curl_chrome99" > "$CURL_IMPERSONATE_FILE"
 
     chmod +x "$CURL_IMPERSONATE_FILE"
 
     Println "$info curl impersonate 安装成功"
+}
+
+CurlImpersonateValidateService()
+{
+    if [ "$1" == "$i18n_cancel" ] || [[ $1 =~ ^[A-Za-z0-9_\.\-]+$ ]] 
+    then
+        return 0
+    fi
+
+    return 1
 }
 
 CurlImpersonateUpdate()
@@ -88,6 +100,36 @@ CurlImpersonateUpdate()
         CurlImpersonateInstall
     fi
 
+    echo
+    config_options=( '设置默认服务' )
+
+    if ls -A "$CURL_IMPERSONATE_FILE"/-* > /dev/null 2>&1
+    then
+        for service in "$CURL_IMPERSONATE_FILE"-*
+        do
+            service_name="${service#*${CURL_IMPERSONATE_FILE}-}"
+            config_options+=("$service_name")
+        done
+    fi
+
+    config_options+=( '新增服务' )
+
+    config_options_count=${#config_options[@]}
+
+    inquirer list_input_index "选择操作" config_options config_options_index
+
+    impersonate_service_file="$CURL_IMPERSONATE_FILE"
+
+    if [ "$config_options_index" -eq $((config_options_count-1)) ] 
+    then
+        echo
+        ExitOnText "输入服务名称" impersonate_service_name CurlImpersonateValidateService "请输入正确的服务名称(字母、数字、下划线组成)"
+        impersonate_service_file="$impersonate_service_file-$impersonate_service_name"
+    elif [ "$config_options_index" -gt 0 ] 
+    then
+        impersonate_service_file="$impersonate_service_file-${config_options[config_options_index]}"
+    fi
+
     impersonate_options=()
 
     for ele in "$HOME"/curl-impersonate/curl_*
@@ -98,9 +140,142 @@ CurlImpersonateUpdate()
     echo
     inquirer list_input "选择 curl impersonate" impersonate_options impersonate_option
 
-    echo "$(awk '!x{x=sub(/dir=.*/,"dir='"$HOME/curl-impersonate"'")}1' "$HOME/curl-impersonate/$impersonate_option")" > $CURL_IMPERSONATE_FILE
+    rm -f "$impersonate_service_file"
 
-    chmod +x "$CURL_IMPERSONATE_FILE"
+    awk '!x{x=sub(/dir=.*/,"dir='"$HOME/curl-impersonate"'")}1' "$HOME/curl-impersonate/$impersonate_option" > "$impersonate_service_file"
+
+    chmod +x "$impersonate_service_file"
+
+    headers_name=()
+    headers_val=()
+
+    while IFS= read -r line 
+    do
+        if [[ $line =~ ^[[:blank:]]*-H\ \'([^:]+):\ (.*)\'\ \\$ ]] 
+        then
+            headers_name+=("${BASH_REMATCH[1]}")
+            headers_val+=("${BASH_REMATCH[2]}")
+        fi
+    done < "$impersonate_service_file"
+
+    if [ -n "${headers_name:-}" ] 
+    then
+        echo
+        inquirer checkbox_input_indices "选择修改的 header" headers_name headers_name_indices
+
+        config_options=( '输入' '删除' )
+
+        for i in "${headers_name_indices[@]}"
+        do
+            echo
+            inquirer list_input_index "对 ${headers_name[i]} 选择操作" config_options config_options_index
+            if [ "$config_options_index" -eq 0 ] 
+            then
+                echo
+                inquirer text_input "输入 ${headers_name[i]} 值" header_val "${headers_val[i]}"
+
+                echo "$(awk '!x{x=sub(/-H '\'''"${headers_name[i]}"': .*'\'' \\/,"-H '\'''"${headers_name[i]}"': '"$header_val"''\'' \\")}1' "$impersonate_service_file")" > "$impersonate_service_file"
+                Println "$info ${headers_name[i]}  修改成功"
+            else
+                sed -i "/^[[:blank:]]*-H '${headers_name[i]}:/d" "$impersonate_service_file"
+                Println "$info ${headers_name[i]}  删除成功"
+            fi
+        done
+    fi
 
     Println "$info curl impersonate 设置成功"
+}
+
+CurlImpersonateCompile()
+{
+    echo
+    inquirer text_input "输入 curl-impersonate 安装目录" curl_impersonate_prefix /usr/local/curl-impersonate
+
+    DepInstall git
+
+    cd ~
+
+    if [ -d curl-impersonate.git ] 
+    then
+        printf -v update_date '%(%m-%d-%H:%M:%S)T' -1
+        mv curl-impersonate.git curl-impersonate.git_"$update_date"
+    fi
+
+    git clone https://github.com/lwthiker/curl-impersonate.git curl-impersonate.git
+    cd curl-impersonate.git
+
+    GoInstall
+
+    DistCheck
+
+    if [ "$dist" == "mac" ] 
+    then
+        DepInstall brew
+        brew install pkg-config make cmake ninja autoconf automake libtool go
+        mkdir build && cd build
+        ../configure --prefix="$curl_impersonate_prefix"
+        gmake chrome-build
+        sudo gmake chrome-install
+    else
+        if [ "$dist" == "rpm" ] 
+        then
+            yum groupinstall -y "Development Tools"
+            # Fedora only
+            # yum groupinstall "C Development Tools and Libraries"
+            yum install -y cmake3 python3 python3-pip
+            yum install -y ninja-build || pip3 install ninja
+        else
+            apt-get -y install build-essential pkg-config cmake ninja-build curl autoconf automake libtool unzip
+        fi
+
+        mkdir build && cd build
+        ../configure --prefix="$curl_impersonate_prefix"
+        make chrome-build
+        sudo make chrome-install
+        sudo ldconfig
+    fi
+
+    sudo mkdir -p "$curl_impersonate_prefix"/include/curl/
+    mv curl-*/include/curl/* "$curl_impersonate_prefix"/include/curl/
+    cp -f curl-*/curl-impersonate-chrome-config "$curl_impersonate_prefix"/bin/
+    chmod +x "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config
+
+    # rm -f /usr/local/bin/curl-config
+    # ln -s "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config /usr/local/bin/curl-config
+
+    Println "$info curl impersonate 编译成功\n"
+}
+
+NodeLibcurlImpersonateCompile()
+{
+    if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
+    then
+        NodejsInstall
+    fi
+
+    echo
+    inquirer text_input "输入编译安装好的 curl impersonate 路径" curl_impersonate_prefix /usr/local/curl-impersonate
+
+    if [ ! -d "$curl_impersonate_prefix" ] 
+    then
+        Println "$error curl impersonate 目录不存在, 请先编译安装\n"
+        exit 1
+    fi
+
+    cd ~
+
+    if [ -d node-libcurl ] 
+    then
+        printf -v update_date '%(%m-%d-%H:%M:%S)T' -1
+        mv node-libcurl node-libcurl_"$update_date"
+    fi
+
+    git clone https://github.com/JCMais/node-libcurl.git
+    cd node-libcurl
+    curl -s -Lm 20 "$FFMPEG_MIRROR_LINK/node-libcurl-impersonate.patch" -o node-libcurl-impersonate.patch
+    patch -p1 < node-libcurl-impersonate.patch
+
+    rm -f /usr/local/bin/curl-config
+    ln -s "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config /usr/local/bin/curl-config
+    npm install --force
 }

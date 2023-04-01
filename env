@@ -60,7 +60,7 @@ DEFAULT_DEMOS=default.json
 TS_CHANNELS=channels.json
 XTREAM_CODES_CHANNELS=xtream_codes
 USER_AGENT_BROWSER="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.55 Safari/537.36"
-USER_AGENT_TV="Mozilla/5.0 (QtEmbedded; U; Linux; C)"
+USER_AGENT_TV="Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3"
 USER_AGENT_PHONE="iPhone; CPU iPhone OS 15_2 like Mac OS X"
 
 # v2ray

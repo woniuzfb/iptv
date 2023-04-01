@@ -222,6 +222,12 @@ DepInstall()
             BrewInstall
         fi
 
+        if [ "$dependency" == "brew" ] 
+        then
+            Println "`eval_gettext \"\\\$info \\\$dependency 安装成功\"`"
+            return 0
+        fi
+
         if brew install $dependency >/dev/null 2>&1
         then
             Println "`eval_gettext \"\\\$info \\\$dependency 安装成功\"`"

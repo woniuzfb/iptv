@@ -233,7 +233,7 @@ async function handleRequest(request) {
   }
   else if (cmd) {
     upstream = upstreamURL.origin
-    const tokenURL = upstream + "/portal.php?type=stb&action=handshake"
+    const tokenURL = upstream + "/portal.php?type=stb&action=handshake&token=&prehash=0&JsHttpRequest=1-xml"
     const profileURL = upstream + "/portal.php?type=stb&action=get_profile"
     const genresURL = upstream + "/portal.php?type=itv&action=get_genres"
     //const accountURL = upstream + "/portal.php?type=account_info&action=get_main_info"

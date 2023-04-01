@@ -78,6 +78,22 @@ printf()
 CurlFake()
 {
     CurlImpersonateInstall
+    local service_name="$1"
+    if [[ -x "${CURL_IMPERSONATE_FILE}-$service_name" ]] 
+    then
+        shift
+        "${CURL_IMPERSONATE_FILE}-$service_name" "$@"
+        return 0
+    elif [ "$service_name" == "xtream_codes" ] 
+    then
+        rm -f "${CURL_IMPERSONATE_FILE}-$service_name"
+        awk '!x{x=sub(/dir=.*/,"dir='"$HOME/curl-impersonate"'")}1' "$HOME/curl-impersonate/curl_chrome99_android" > "${CURL_IMPERSONATE_FILE}-$service_name"
+        chmod +x "${CURL_IMPERSONATE_FILE}-$service_name"
+        echo "$(awk '!x{x=sub(/-H '\''User-Agent: .*'\'' \\/,"-H '\''User-Agent: '"$USER_AGENT_TV"''\'' \\")}1' "${CURL_IMPERSONATE_FILE}-$service_name")" > "${CURL_IMPERSONATE_FILE}-$service_name"
+        shift
+        "${CURL_IMPERSONATE_FILE}-$service_name" "$@"
+        return 0
+    fi
     curl-impersonate "$@"
 }
 

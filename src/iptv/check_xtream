@@ -65,12 +65,12 @@ CheckIfXtreamCodes()
             mac=$(UrlencodeUpper "$chnl_mac")
             timezone=$(UrlencodeUpper "Europe/Amsterdam")
             chnl_cookies="mac=$mac; stb_lang=en; timezone=$timezone"
-            token_url="$server/portal.php?type=stb&action=handshake"
+            token_url="$server/portal.php?type=stb&action=handshake&token=&prehash=0&JsHttpRequest=1-xml"
             profile_url="$server/portal.php?type=stb&action=get_profile"
             account_info_url="$server/portal.php?type=account_info&action=get_main_info"
             genres_url="$server/portal.php?type=itv&action=get_genres"
 
-            access_token=$(curl -s -Lm 10 \
+            access_token=$(CurlFake xtream_codes -s -Lm 10 \
                 -H "User-Agent: $chnl_user_agent" \
                 --cookie "$chnl_cookies" "$token_url" \
                 | $JQ_FILE -r '.js.token' 2> /dev/null) || true
@@ -85,12 +85,12 @@ CheckIfXtreamCodes()
 
                 printf -v chnl_cookies_command '%b' "${chnl_cookies//;/; path=\/;\\r\\n}; path=/;"
 
-                profile=$(curl -s -Lm 10\
+                profile=$(CurlFake xtream_codes -s -Lm 10\
                     -H "$chnl_user_agent" \
                     -H "${chnl_headers:0:-4}" \
                     --cookie "$chnl_cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
 
-                exp_date=$(curl -s -Lm 10 \
+                exp_date=$(CurlFake xtream_codes -s -Lm 10 \
                     -H "User-Agent: $chnl_user_agent" \
                     -H "${chnl_headers:0:-4}" \
                     --cookie "$chnl_cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
@@ -120,7 +120,7 @@ CheckIfXtreamCodes()
                 if [ -n "$chnl_xc_proxy" ] 
                 then
                     server=${chnl_xc_proxy%\/}
-                    IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(curl -sL "$server/?cmd=$chnl_cmd&check=1" \
+                    IFS=" " read -r chnl_stream_link new_access_token new_cookies < <(CurlFake xtream_codes -sL "$server/?cmd=$chnl_cmd&check=1" \
                         -H "User-Agent: $chnl_user_agent" \
                         -H "${chnl_headers:0:-4}" \
                         --cookie "$chnl_cookies" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true
@@ -141,7 +141,7 @@ CheckIfXtreamCodes()
                     fi
                 else
                     create_link_url="$server/portal.php?type=itv&action=create_link&cmd=$chnl_cmd&series=&forced_storage=undefined&disable_ad=0&download=0"
-                    cmd=$(curl -s -Lm 10 \
+                    cmd=$(CurlFake xtream_codes -s -Lm 10 \
                         -H "User-Agent: $chnl_user_agent" \
                         -H "${chnl_headers:0:-4}" \
                         --cookie "$chnl_cookies" "$create_link_url" \

@@ -155,7 +155,7 @@ XtreamCodesListChnls()
             use_proxy_yn="$i18n_no"
         fi
 
-        token_url="$server/portal.php?type=stb&action=handshake"
+        token_url="$server/portal.php?type=stb&action=handshake&token=&prehash=0&JsHttpRequest=1-xml"
         profile_url="$server/portal.php?type=stb&action=get_profile"
         genres_url="$server/portal.php?type=itv&action=get_genres"
         account_info_url="$server/portal.php?type=account_info&action=get_main_info"
@@ -165,7 +165,7 @@ XtreamCodesListChnls()
             mac=$(UrlencodeUpper "$mac_address")
             cookies="mac=$mac; stb_lang=en; timezone=$timezone"
 
-            access_token=$(curl -s -Lm 10 \
+            access_token=$(CurlFake xtream_codes -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
                 --cookie "$cookies" "$token_url" \
                 | $JQ_FILE -r '.js.token' 2> /dev/null) || true
@@ -205,12 +205,12 @@ XtreamCodesListChnls()
             headers="Authorization: Bearer $access_token\r\n"
             printf -v headers_command '%b' "$headers"
 
-            profile=$(curl -s -Lm 10 \
+            profile=$(CurlFake xtream_codes -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
                 -H "${headers:0:-4}" \
                 --cookie "$cookies" "$profile_url" | $JQ_FILE -r '.js.id // ""' 2> /dev/null) || true
 
-            exp_date=$(curl -s -Lm 10 \
+            exp_date=$(CurlFake xtream_codes -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
                 -H "${headers:0:-4}" \
                 --cookie "$cookies" "$account_info_url" | $JQ_FILE -r '.js.phone' 2> /dev/null) || true
@@ -262,7 +262,7 @@ XtreamCodesListChnls()
                 genres_count=$((genres_count+1))
                 genres_id+=("$map_id")
                 genres_list="$genres_list ${green}$genres_count.${normal}${indent_6}$map_title\n\n"
-            done < <(curl -s -Lm 10 \
+            done < <(CurlFake xtream_codes -s -Lm 10 \
                 -H "User-Agent: $user_agent" \
                 -H "${headers:0:-4}" \
                 --cookie "$cookies" "$genres_url" \
@@ -341,7 +341,7 @@ XtreamCodesListChnls()
                         ordered_list_page=${genres_list_pages[genres_index]}
                     else
                         ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=1"
-                        ordered_list_page=$(curl -s -Lm 10 \
+                        ordered_list_page=$(CurlFake xtream_codes -s -Lm 10 \
                             -H "User-Agent: $user_agent" \
                             -H "${headers:0:-4}" \
                             --cookie "$cookies" "$ordered_list_url" | $JQ_FILE -r -c '.' 2> /dev/null) || ordered_list_page=""
@@ -384,7 +384,7 @@ XtreamCodesListChnls()
                             if [ "$page" -gt 1 ] 
                             then
                                 ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=$page"
-                                ordered_list_page=$(curl -s -Lm 10 \
+                                ordered_list_page=$(CurlFake xtream_codes -s -Lm 10 \
                                     -H "User-Agent: $user_agent" \
                                     -H "${headers:0:-4}" \
                                     --cookie "$cookies" "$ordered_list_url" | $JQ_FILE -r -c '.' 2> /dev/null) || ordered_list_page=""
@@ -505,7 +505,7 @@ XtreamCodesListChnls()
                         else
                             create_link_url="$server/portal.php?type=itv&action=create_link&cmd=${xc_chnls_cmd[xc_chnls_index]}&series=&forced_storage=undefined&disable_ad=0&download=0"
 
-                            cmd=$(curl -s -Lm 10 \
+                            cmd=$(CurlFake xtream_codes -s -Lm 10 \
                                 -H "User-Agent: $user_agent" \
                                 -H "${headers:0:-4}" \
                                 --cookie "$cookies" "$create_link_url" \
@@ -579,7 +579,7 @@ XtreamCodesListChnls()
                         then
                             Println "$info 尝试直连 ..."
                             # curl -k -s -o /dev/null -w '%{redirect_url}'
-                            IFS=" " read -r stream_link new_access_token new_cookies < <(curl -sL \
+                            IFS=" " read -r stream_link new_access_token new_cookies < <(CurlFake xtream_codes -sL \
                                 -H "User-Agent: $user_agent" \
                                 --cookie "$cookies" \
                                 "$server/?cmd=${xc_chnls_cmd[xc_chnls_index]}&check=1" | $JQ_FILE -r '.|join(" ")' 2> /dev/null) || true

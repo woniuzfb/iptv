@@ -20,7 +20,7 @@ SearchXtreamCodesChnls()
             if [ "$i" -gt 1 ] 
             then
                 ordered_list_url="$server/portal.php?type=itv&action=get_ordered_list&genre=${genres_id[genres_index]}&force_ch_link_check=&fav=0&sortby=number&hd=0&p=$i"
-                ordered_list_page=$(curl -s -Lm 10 \
+                ordered_list_page=$(CurlFake xtream_codes -s -Lm 10 \
                     -H "User-Agent: $user_agent" \
                     -H "${headers:0:-4}" \
                     --cookie "$cookies" "$ordered_list_url" | $JQ_FILE -r -c '.' 2> /dev/null) || ordered_list_page=""

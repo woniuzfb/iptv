@@ -1,0 +1,142 @@
+diff --git a/.dockerignore b/.dockerignore
+index a12448b..3ee0452 100644
+--- a/.dockerignore
++++ b/.dockerignore
+@@ -11,7 +11,7 @@ deps/
+ dist/
+ docs/
+ examples/
+-lib/binding/node_libcurl.node
++lib/binding/node_libcurl-impersonate.node
+ node_modules/
+ tsconfig.tsbuildinfo
+ website/
+diff --git a/lib/Curl.ts b/lib/Curl.ts
+index d2a419c..5d44ba3 100644
+--- a/lib/Curl.ts
++++ b/lib/Curl.ts
+@@ -69,7 +69,7 @@ import { CurlReadFunc } from './enum/CurlReadFunc'
+ import { CurlInfoNameSpecific, GetInfoReturn } from './types/EasyNativeBinding'
+ 
+ // eslint-disable-next-line @typescript-eslint/no-var-requires
+-const bindings: NodeLibcurlNativeBinding = require('../lib/binding/node_libcurl.node')
++const bindings: NodeLibcurlNativeBinding = require('../lib/binding/node_libcurl-impersonate.node')
+ 
+ const { Curl: _Curl, CurlVersionInfo } = bindings
+ 
+diff --git a/lib/Easy.ts b/lib/Easy.ts
+index 36d189d..ee18143 100644
+--- a/lib/Easy.ts
++++ b/lib/Easy.ts
+@@ -7,7 +7,7 @@
+ import { NodeLibcurlNativeBinding } from './types'
+ 
+ // eslint-disable-next-line @typescript-eslint/no-var-requires
+-const bindings: NodeLibcurlNativeBinding = require('../lib/binding/node_libcurl.node')
++const bindings: NodeLibcurlNativeBinding = require('../lib/binding/node_libcurl-impersonate.node')
+ 
+ /**
+  * This is a Node.js wrapper around the binding {@link EasyNativeBinding | native Easy class}
+diff --git a/lib/Multi.ts b/lib/Multi.ts
+index f025772..3e36253 100644
+--- a/lib/Multi.ts
++++ b/lib/Multi.ts
+@@ -7,7 +7,7 @@
+ import { NodeLibcurlNativeBinding } from './types'
+ 
+ // eslint-disable-next-line @typescript-eslint/no-var-requires
+-const bindings: NodeLibcurlNativeBinding = require('../lib/binding/node_libcurl.node')
++const bindings: NodeLibcurlNativeBinding = require('../lib/binding/node_libcurl-impersonate.node')
+ 
+ /**
+  * This is a Node.js wrapper around the binding {@link MultiNativeBinding | native Multi class}.
+diff --git a/lib/Share.ts b/lib/Share.ts
+index 9bba413..bccbb1e 100644
+--- a/lib/Share.ts
++++ b/lib/Share.ts
+@@ -8,7 +8,7 @@ import { NodeLibcurlNativeBinding } from './types'
+ import { CurlShareOption } from './enum/CurlShareOption'
+ 
+ // eslint-disable-next-line @typescript-eslint/no-var-requires
+-const bindings: NodeLibcurlNativeBinding = require('../lib/binding/node_libcurl.node')
++const bindings: NodeLibcurlNativeBinding = require('../lib/binding/node_libcurl-impersonate.node')
+ 
+ /**
+  * This is a Node.js wrapper around the binding {@link EasyNativeBinding | native Easy class}.
+diff --git a/package.json b/package.json
+index 15071fd..49350a8 100644
+--- a/package.json
++++ b/package.json
+@@ -1,7 +1,7 @@
+ {
+-  "name": "node-libcurl",
++  "name": "node-libcurl-impersonate",
+   "version": "3.0.0",
+-  "description": "The fastest http(s) client (and much more) for Node.js - Node.js bindings for libcurl",
++  "description": "The fastest http(s) client (and much more) for Node.js - Node.js bindings for libcurl (curl-impersonate)",
+   "keywords": [
+     "node-curl",
+     "curl",
+@@ -23,7 +23,7 @@
+   "main": "./dist/index.js",
+   "types": "./dist/index.d.ts",
+   "binary": {
+-    "module_name": "node_libcurl",
++    "module_name": "node_libcurl-impersonate",
+     "module_path": "./lib/binding/",
+     "remote_path": "./v{version}/",
+     "package_name": "{module_name}-v{version}-{node_abi}-{platform}-{arch}-{libc}.tar.gz",
+diff --git a/scripts/utils/retrieveConstantList.js b/scripts/utils/retrieveConstantList.js
+index 6b145a7..40bbc81 100644
+--- a/scripts/utils/retrieveConstantList.js
++++ b/scripts/utils/retrieveConstantList.js
+@@ -50,6 +50,29 @@ const retrieveConstantList = async ({ url, constantPrefix, blacklist }) => {
+     .get()
+     .sort((a, b) => a.constantName.localeCompare(b.constantName))
+     .filter((item) => !blacklist.includes(item.constantOriginal))
++    .concat(
++      /**
++       * curl-impersonate new options
++       */
++      [
++        {
++          constantOriginal: 'CURLOPT_SSL_CERT_COMPRESSION',
++          constantName: 'SSL_COMPRESSION',
++          constantNameCamelCase: 'sslCompression',
++          description: '(curl-impersonate) SSL Compression type. Eg. brotli',
++          url:
++            'https://github.com/lwthiker/curl-impersonate/blob/main/chrome/patches/curl-impersonate.patch#L125',
++        },
++        {
++          constantOriginal: 'CURLOPT_SSL_ENABLE_ALPS',
++          constantName: 'SSL_ENABLE_ALPS',
++          constantNameCamelCase: 'sslEnableAlps',
++          description: '(curl-impersonate) TLS Client hello match Extension',
++          url:
++            'https://github.com/lwthiker/curl-impersonate/blob/main/chrome/patches/curl-impersonate.patch#L119',
++        },
++      ],
++    )
+ }
+ 
+ module.exports = {
+diff --git a/src/Curl.cc b/src/Curl.cc
+index 7bd02e3..9c409a0 100644
+--- a/src/Curl.cc
++++ b/src/Curl.cc
+@@ -239,6 +239,7 @@ const std::vector<CurlConstant> curlOptionInteger = {
+ 
+ #if NODE_LIBCURL_VER_GE(7, 56, 0)
+     {"SSH_COMPRESSION", CURLOPT_SSH_COMPRESSION},
++    {"SSL_COMPRESSION", CURLOPT_SSL_CERT_COMPRESSION},
+ #endif
+ 
+     {"SSL_OPTIONS", CURLOPT_SSL_OPTIONS},
+@@ -247,6 +248,7 @@ const std::vector<CurlConstant> curlOptionInteger = {
+ #if NODE_LIBCURL_VER_GE(7, 36, 0)
+     {"SSL_ENABLE_ALPN", CURLOPT_SSL_ENABLE_ALPN},
+     {"SSL_ENABLE_NPN", CURLOPT_SSL_ENABLE_NPN},
++    {"SSL_ENABLE_ALPS", CURLOPT_SSL_ENABLE_ALPS},
+ #endif
+ 
+     {"SSL_SESSIONID_CACHE", CURLOPT_SSL_SESSIONID_CACHE},

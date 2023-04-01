@@ -1,5 +1,23 @@
-CurlImpersonateUpdate
+Include utils/jq "$@"
+
+Include utils/go "$@"
+
+Include utils/nodejs "$@"
 
 echo
+curl_options=( '安装/设置 curl impersonate' '编译 curl impersonate' '编译 node-libcurl (使用 curl impersonate)' )
+inquirer list_input_index "选择操作" curl_options curl_options_index
+
+if [ "$curl_options_index" -eq 0 ] 
+then
+    CurlImpersonateUpdate
+
+    echo
+elif [ "$curl_options_index" -eq 1 ] 
+then
+    CurlImpersonateCompile
+else
+    NodeLibcurlImpersonateCompile
+fi
 
 exit 0
