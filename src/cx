@@ -1,5 +1,7 @@
 [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
 
+Include src/xtream_codes/domain_filter "$@"
+
 Include src/xtream_codes/get_domains "$@"
 
 Include src/xtream_codes/get_channels "$@"

@@ -147,16 +147,9 @@ CheckIfXtreamCodes()
                         --cookie "$chnl_cookies" "$create_link_url" \
                         | $JQ_FILE -r '.js.cmd') || true
 
-                    if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
+                    if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/(.+) ]] 
                     then
-                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
-                    elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/(.+) ]] 
-                    then
-                        #chnl_stream_link="http://localhost:3000/${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${BASH_REMATCH[5]}"
-                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
-                    elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+) ]] 
-                    then
-                        chnl_stream_link="http://localhost:3000/${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}"
+                        chnl_stream_link="http://localhost:3000/$(XtreamCodesDomainFilter ${BASH_REMATCH[2]})/${BASH_REMATCH[3]}"
                     else
                         Println "$error $chnl_domain 返回 cmd: ${cmd:-无} $chnl_domain $chnl_mac\n" && exit 1
                     fi

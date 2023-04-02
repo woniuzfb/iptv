@@ -1,0 +1,50 @@
+XtreamCodesDomainFilter()
+{
+    local domain=$1
+
+    if [ ! -e "$XTREAM_CODES"_domain_filter ]
+    then
+        ShFallback
+        if ! curl -s -Lm 10 "$SH_FALLBACK/xtream_codes_domain_filter" -o "$XTREAM_CODES"_domain_filter
+        then
+            echo "$domain"
+            return 0
+        fi
+    fi
+
+    local domain_match domain_replace
+
+    while IFS= read -r line
+    do
+        domain_match=${line% *}
+        domain_replace=${line#* }
+        if [[ $domain_match =~ : ]]
+        then
+            if [ "$domain" == "$domain_match" ]
+            then
+                echo "$domain_replace"
+                break
+            fi
+        elif [[ $domain_replace =~ : ]]
+        then
+            if [ "${domain%:*}" == "$domain_match" ]
+            then
+                echo "$domain_replace"
+                break
+            fi
+        elif [[ $domain =~ : ]]
+        then
+            if [ "${domain%:*}" == "$domain_match" ]
+            then
+                echo "$domain_replace:${domain#*:}"
+                break
+            fi
+        elif [ "$domain" == "$domain_match" ]
+        then
+            echo "$domain_replace"
+            break
+        fi
+    done < "$XTREAM_CODES"_domain_filter
+
+    return 0
+}

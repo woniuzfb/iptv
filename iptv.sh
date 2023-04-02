@@ -3268,7 +3268,7 @@ CurlImpersonateInstall()
 
 CurlImpersonateValidateService()
 {
-    if [ "$1" == "$i18n_cancel" ] || [[ $1 =~ ^[A-Za-z0-9_\.\-]+$ ]] 
+    if [ "$1" == "$i18n_cancel" ] || [[ $1 =~ ^[A-Za-z0-9_.]+$ ]] 
     then
         return 0
     fi
@@ -3417,7 +3417,7 @@ CurlImpersonateCompile()
     sudo ldconfig
 
     sudo mkdir -p "$curl_impersonate_prefix"/include/curl/
-    mv curl-*/include/curl/* "$curl_impersonate_prefix"/include/curl/
+    cp -f curl-*/include/curl/* "$curl_impersonate_prefix"/include/curl/
     cp -f curl-*/curl-impersonate-chrome-config "$curl_impersonate_prefix"/bin/
     chmod +x "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config
 
@@ -12484,15 +12484,9 @@ CheckIfXtreamCodes()
                         --cookie "$chnl_cookies" "$create_link_url" \
                         | $JQ_FILE -r '.js.cmd') || true
 
-                    if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
+                    if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/(.+) ]] 
                     then
-                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
-                    elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
-                    then
-                        chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
-                    elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+) ]] 
-                    then
-                        chnl_stream_link="http://localhost:3000/${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]%%\?*}?${BASH_REMATCH[4]##*\?}"
+                        chnl_stream_link="http://localhost:3000/$(XtreamCodesDomainFilter ${BASH_REMATCH[2]})/${BASH_REMATCH[3]}"
                     else
                         Println "$error $chnl_domain 返回 cmd: ${cmd:-无} $chnl_domain $chnl_mac\n" && exit 1
                     fi
@@ -22904,12 +22898,9 @@ MonitorHlsRestartChannel()
                     --cookie "$chnl_cookies" \
                     "$create_link_url" | $JQ_FILE -r '.js.cmd') || true
 
-                if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
+                if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/(.+) ]] 
                 then
-                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
-                elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
-                then
-                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                    chnl_stream_link="http://localhost:3000/$(XtreamCodesDomainFilter ${BASH_REMATCH[2]})/${BASH_REMATCH[3]}"
                 else
                     if [ "$to_try" -eq 1 ] 
                     then
@@ -23428,12 +23419,9 @@ MonitorFlvRestartChannel()
                     --cookie "$chnl_cookies" "$create_link_url" \
                     | $JQ_FILE -r '.js.cmd') || true
 
-                if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
+                if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/(.+) ]] 
                 then
-                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
-                elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
-                then
-                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                    chnl_stream_link="http://localhost:3000/$(XtreamCodesDomainFilter ${BASH_REMATCH[2]})/${BASH_REMATCH[3]}"
                 else
                     if [ "$to_try" -eq 1 ] 
                     then
@@ -23741,12 +23729,9 @@ MonitorTryAccounts()
                             --cookie "$chnl_cookies" "$create_link_url" \
                             | $JQ_FILE -r '.js.cmd') || true
 
-                        if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
+                        if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/(.+) ]] 
                         then
-                            chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
-                        elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
-                        then
-                            chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                            chnl_stream_link="http://localhost:3000/$(XtreamCodesDomainFilter ${BASH_REMATCH[2]})/${BASH_REMATCH[3]}"
                         else
                             continue
                         fi
@@ -25575,6 +25560,57 @@ MonitorErr()
     printf '%s\n' "$date_now [ERROR: $1]" >> "$MONITOR_LOG"
 }
 
+XtreamCodesDomainFilter()
+{
+    local domain=$1
+
+    if [ ! -e "$XTREAM_CODES"_domain_filter ]
+    then
+        ShFallback
+        if ! curl -s -Lm 10 "$SH_FALLBACK/xtream_codes_domain_filter" -o "$XTREAM_CODES"_domain_filter
+        then
+            echo "$domain"
+            return 0
+        fi
+    fi
+
+    local domain_match domain_replace
+
+    while IFS= read -r line
+    do
+        domain_match=${line% *}
+        domain_replace=${line#* }
+        if [[ $domain_match =~ : ]]
+        then
+            if [ "$domain" == "$domain_match" ]
+            then
+                echo "$domain_replace"
+                break
+            fi
+        elif [[ $domain_replace =~ : ]]
+        then
+            if [ "${domain%:*}" == "$domain_match" ]
+            then
+                echo "$domain_replace"
+                break
+            fi
+        elif [[ $domain =~ : ]]
+        then
+            if [ "${domain%:*}" == "$domain_match" ]
+            then
+                echo "$domain_replace:${domain#*:}"
+                break
+            fi
+        elif [ "$domain" == "$domain_match" ]
+        then
+            echo "$domain_replace"
+            break
+        fi
+    done < "$XTREAM_CODES"_domain_filter
+
+    return 0
+}
+
 XtreamCodesGetDomains()
 {
     [ -n "${xtream_codes_domains:-}" ] && return 0
@@ -26912,15 +26948,9 @@ XtreamCodesListChnls()
                                 --cookie "$cookies" "$create_link_url" \
                                 | $JQ_FILE -r '.js.cmd') || true
 
-                            if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
+                            if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/(.+) ]] 
                             then
-                                stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
-                            elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
-                            then
-                                stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
-                            elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+) ]] 
-                            then
-                                stream_link="http://localhost:3000/${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]%%\?*}?${BASH_REMATCH[4]##*\?}"
+                                stream_link="http://localhost:3000/$(XtreamCodesDomainFilter ${BASH_REMATCH[2]})/${BASH_REMATCH[3]}"
                             else
                                 Println "$error 返回 cmd: ${cmd:-无} 错误, 请重试"
                                 continue

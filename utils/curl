@@ -77,7 +77,7 @@ CurlImpersonateInstall()
 
 CurlImpersonateValidateService()
 {
-    if [ "$1" == "$i18n_cancel" ] || [[ $1 =~ ^[A-Za-z0-9_\.\-]+$ ]] 
+    if [ "$1" == "$i18n_cancel" ] || [[ $1 =~ ^[A-Za-z0-9_.]+$ ]] 
     then
         return 0
     fi
@@ -236,7 +236,7 @@ CurlImpersonateCompile()
     fi
 
     sudo mkdir -p "$curl_impersonate_prefix"/include/curl/
-    mv curl-*/include/curl/* "$curl_impersonate_prefix"/include/curl/
+    cp -f curl-*/include/curl/* "$curl_impersonate_prefix"/include/curl/
     cp -f curl-*/curl-impersonate-chrome-config "$curl_impersonate_prefix"/bin/
     chmod +x "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config
 

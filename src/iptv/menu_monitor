@@ -672,12 +672,9 @@ MonitorHlsRestartChannel()
                     --cookie "$chnl_cookies" \
                     "$create_link_url" | $JQ_FILE -r '.js.cmd') || true
 
-                if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
+                if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/(.+) ]] 
                 then
-                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
-                elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
-                then
-                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                    chnl_stream_link="http://localhost:3000/$(XtreamCodesDomainFilter ${BASH_REMATCH[2]})/${BASH_REMATCH[3]}"
                 else
                     if [ "$to_try" -eq 1 ] 
                     then
@@ -1196,12 +1193,9 @@ MonitorFlvRestartChannel()
                     --cookie "$chnl_cookies" "$create_link_url" \
                     | $JQ_FILE -r '.js.cmd') || true
 
-                if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
+                if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/(.+) ]] 
                 then
-                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
-                elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
-                then
-                    chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                    chnl_stream_link="http://localhost:3000/$(XtreamCodesDomainFilter ${BASH_REMATCH[2]})/${BASH_REMATCH[3]}"
                 else
                     if [ "$to_try" -eq 1 ] 
                     then
@@ -1509,12 +1503,9 @@ MonitorTryAccounts()
                             --cookie "$chnl_cookies" "$create_link_url" \
                             | $JQ_FILE -r '.js.cmd') || true
 
-                        if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/live/([^/]+)/([^/]+)/([^/]+) ]] 
+                        if [[ ${cmd#* } =~ ([^/]+)//([^/]+)/(.+) ]] 
                         then
-                            chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/live/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
-                        elif [[ ${cmd#* } =~ ([^/]+)//([^/]+)/([^/]+)/([^/]+)/([^/]+) ]] 
-                        then
-                            chnl_stream_link="${BASH_REMATCH[1]}//${BASH_REMATCH[2]}/${BASH_REMATCH[3]}/${BASH_REMATCH[4]}/${cmd##*/}"
+                            chnl_stream_link="http://localhost:3000/$(XtreamCodesDomainFilter ${BASH_REMATCH[2]})/${BASH_REMATCH[3]}"
                         else
                             continue
                         fi
