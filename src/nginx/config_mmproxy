@@ -1,9 +1,11 @@
+Include utils/go
+
 if [ ! -e ~/allowed-subnets.txt ] 
 then
     echo -en "0.0.0.0/0\n::/0\n" > ~/allowed-subnets.txt
 fi
 
-if [[ ! -x "$HOME/go/bin/go-mmproxy" ]] 
+if [[ ! -x $(command -v go-mmproxy) ]] 
 then
     Println "$info 安装 go-mmproxy"
 

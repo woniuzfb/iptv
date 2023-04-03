@@ -636,13 +636,10 @@ fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
             done
 
             docker exec -it openwrt /bin/ash -c "
-            uci set firewall.@defaults[0].forward='ACCEPT'
             uci del firewall.@defaults[0].syn_flood
             uci set firewall.@defaults[0].synflood_protect='1'
             uci set firewall.@defaults[0].flow_offloading='1'
             uci set firewall.@defaults[0].flow_offloading_hw='1'
-            uci set firewall.@zone[1].input='ACCEPT'
-            uci set firewall.@zone[1].forward='ACCEPT'
             uci set network.lan.ipaddr='$openwrt_ip'
             uci set network.lan.gateway='$eth0_gateway'
             uci add_list network.lan.dns='$eth0_ip'

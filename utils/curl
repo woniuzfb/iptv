@@ -264,18 +264,19 @@ NodeLibcurlImpersonateCompile()
 
     cd ~
 
-    if [ -d node-libcurl ] 
+    if [ -d node-libcurl-impersonate ] 
     then
         printf -v update_date '%(%m-%d-%H:%M:%S)T' -1
-        mv node-libcurl node-libcurl_"$update_date"
+        mv node-libcurl-impersonate node-libcurl-impersonate_"$update_date"
     fi
 
-    git clone https://github.com/JCMais/node-libcurl.git
-    cd node-libcurl
+    git clone https://github.com/JCMais/node-libcurl.git node-libcurl-impersonate
+    cd node-libcurl-impersonate
     curl -s -Lm 20 "$FFMPEG_MIRROR_LINK/node-libcurl-impersonate.patch" -o node-libcurl-impersonate.patch
     patch -p1 < node-libcurl-impersonate.patch
 
     rm -f /usr/local/bin/curl-config
     ln -s "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config /usr/local/bin/curl-config
-    npm install --force
+    npm install --force --unsafe-perm
+    npm run build:dist
 }

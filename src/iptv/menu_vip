@@ -6,6 +6,7 @@ VipMenu()
         VipUserMenu
         return 0
     fi
+
     Println "  `gettext \"VIP 面板\"`
 
   ${red}1.${normal} `gettext \"查看 VIP 用户\"`
@@ -25,7 +26,9 @@ VipMenu()
  ${red}15.${normal} `gettext \"关闭 VIP\"`
 
  `eval_gettext \"\\\$tip 输入: h 切换到 HLS 面板, f 切换到 FLV 面板\"`\n\n"
+
     read -p "`gettext \"输入序号\"` [1-15]: " vip_menu_num
+
     case "$vip_menu_num" in
         h)
             kind=""

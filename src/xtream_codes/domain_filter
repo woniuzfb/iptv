@@ -22,29 +22,29 @@ XtreamCodesDomainFilter()
         then
             if [ "$domain" == "$domain_match" ]
             then
-                echo "$domain_replace"
+                domain="$domain_replace"
                 break
             fi
         elif [[ $domain_replace =~ : ]]
         then
             if [ "${domain%:*}" == "$domain_match" ]
             then
-                echo "$domain_replace"
+                domain="$domain_replace"
                 break
             fi
         elif [[ $domain =~ : ]]
         then
             if [ "${domain%:*}" == "$domain_match" ]
             then
-                echo "$domain_replace:${domain#*:}"
+                domain="$domain_replace:${domain#*:}"
                 break
             fi
         elif [ "$domain" == "$domain_match" ]
         then
-            echo "$domain_replace"
+            domain="$domain_replace"
             break
         fi
     done < "$XTREAM_CODES"_domain_filter
 
-    return 0
+    echo "$domain"
 }

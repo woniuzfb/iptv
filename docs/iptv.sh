@@ -25584,31 +25584,31 @@ XtreamCodesDomainFilter()
         then
             if [ "$domain" == "$domain_match" ]
             then
-                echo "$domain_replace"
+                domain="$domain_replace"
                 break
             fi
         elif [[ $domain_replace =~ : ]]
         then
             if [ "${domain%:*}" == "$domain_match" ]
             then
-                echo "$domain_replace"
+                domain="$domain_replace"
                 break
             fi
         elif [[ $domain =~ : ]]
         then
             if [ "${domain%:*}" == "$domain_match" ]
             then
-                echo "$domain_replace:${domain#*:}"
+                domain="$domain_replace:${domain#*:}"
                 break
             fi
         elif [ "$domain" == "$domain_match" ]
         then
-            echo "$domain_replace"
+            domain="$domain_replace"
             break
         fi
     done < "$XTREAM_CODES"_domain_filter
 
-    return 0
+    echo "$domain"
 }
 
 XtreamCodesGetDomains()
@@ -49780,13 +49780,10 @@ fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
                 done
 
                 docker exec -it openwrt /bin/ash -c "
-                uci set firewall.@defaults[0].forward='ACCEPT'
                 uci del firewall.@defaults[0].syn_flood
                 uci set firewall.@defaults[0].synflood_protect='1'
                 uci set firewall.@defaults[0].flow_offloading='1'
                 uci set firewall.@defaults[0].flow_offloading_hw='1'
-                uci set firewall.@zone[1].input='ACCEPT'
-                uci set firewall.@zone[1].forward='ACCEPT'
                 uci set network.lan.ipaddr='$openwrt_ip'
                 uci set network.lan.gateway='$eth0_gateway'
                 uci add_list network.lan.dns='$eth0_ip'
