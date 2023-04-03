@@ -2,7 +2,6 @@ const express = require('express');
 const app = express();
 // node-libcurl built with libcurl-impersonate
 const { Curl, CurlFeature, CurlHttpVersion, CurlSslVersion } = require('/root/node-libcurl/dist');
-const { createProxyMiddleware } = require('http-proxy-middleware');
 const port = 3000;
 
 const curlRequest = async (req, res, next) => {
@@ -20,22 +19,22 @@ const curlRequest = async (req, res, next) => {
       'Sec-Fetch-Dest: document',
       'Accept-Encoding: gzip, deflate, br',
       'Accept-Language: en-US,en;q=0.9',
-      'Host: ' + req.query.host
+      'Host: ' + req.params.host
     ];
 
     if (req.get('Cookie')) {
-      headers.push('Cookie: ' + req.get('Cookie'))
+      headers.push('Cookie: ' + req.get('Cookie'));
     }
 
     if (req.get('Authorization')) {
-      headers.push('Authorization: ' + req.get('Authorization'))
+      headers.push('Authorization: ' + req.get('Authorization'));
     }
 
     const curl = new Curl();
     const close = curl.close.bind(curl);
 
     curl.enable(CurlFeature.StreamResponse);
-    curl.setOpt(Curl.option.URL, req.query.url);
+    curl.setOpt(Curl.option.URL, 'http:/' + req.originalUrl);
     curl.setOpt(Curl.option.FOLLOWLOCATION, 1);
     curl.setOpt(Curl.option.HTTPHEADER, headers);
     curl.setOpt(Curl.option.HTTP_VERSION, CurlHttpVersion.V2_0);
@@ -59,22 +58,30 @@ const curlRequest = async (req, res, next) => {
     //})
 
     curl.on('stream', async (stream, _statusCode, _headers) => {
-      stream.on('end', () => {
-        console.log('response stream: finished!')
-      })
-      stream.on('error', (error) => {
-        console.log('response stream: error', error)
-      })
-      stream.on('close', () => {
-        console.log('response stream: close')
-      })
+      //stream.on('end', () => {
+      //  console.log('response stream: finished!');
+      //})
+      //stream.on('error', (error) => {
+      //  console.log('response stream: error', error);
+      //})
+      //stream.on('close', () => {
+      // console.log('response stream: close');
+      //})
+
+      res.set({
+        'Access-Control-Allow-Origin': 'http://localhost',
+        'Access-Control-Allow-Credentials': 'true'
+      });
+
+      res.cookie('domain', 'localhost');
 
       // usinc async iterators (Node.js >= 10)
       for await (const chunk of stream) {
-        res.write(chunk)
+        res.write(chunk);
       }
-      res.end()
-    })
+
+      res.end();
+    });
 
     curl.perform();
   } catch (err) {
@@ -82,27 +89,7 @@ const curlRequest = async (req, res, next) => {
   }
 }
 
-const customPath = function (path, req) {
-  return '/curl?host=' + req.params.host + '&url=http:/' + req.originalUrl;
-};
-
-app.use('/curl', curlRequest);
-
-app.use('/:host', createProxyMiddleware({
-  target: `http://localhost:${port}`,
-  //changeOrigin: true,
-  followRedirects: false,
-  //autoRewrite: true,
-  pathRewrite: customPath,
-  logger: console,
-  cookieDomainRewrite: "localhost",
-  on: {
-    ProxyRes: (proxyRes, req, res) => {
-        res.header("Access-Control-Allow-Origin", "http://localhost");
-        res.header("Access-Control-Allow-Credentials", "true");
-    },
-  },
-}));
+app.use('/:host', curlRequest);
 
 app.use((err, req, res, next) => {
   res.status(400).send(err.message);
