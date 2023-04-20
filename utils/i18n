@@ -188,8 +188,7 @@ LocaleFix()
     then
         if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
         then
-            setenforce permissive
-            sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+            setenforce 0
         fi
 
         yum -y install glibc-common glibc-locale-source glibc-all-langpacks glibc-langpack-en glibc-langpacks-zh langpacks-zh_CN >/dev/null 2>&1 || true

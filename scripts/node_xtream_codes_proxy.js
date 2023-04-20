@@ -2,18 +2,22 @@ const express = require('express');
 const app = express();
 const { Curl, CurlFeature, CurlHttpVersion, CurlSslVersion } = require('node-libcurl-impersonate');
 const caseless = require('caseless');
+const setCookie = require('set-cookie-parser');
 const port = 3000;
 
 /* *
- * true:  redirect request's headers, but you can change them in 
- *       `overrideHttpHeader` or add missing headers in `noOverrideHttpHeader`
- *
- * false: only request's `Content-Type`, `Cookie` and `Authorization` headers 
- *        passed to upstream. Add more allowed headers in `allowedHeaders`
- */
-const reqHeadersPass = true;
+* true:  will redirect the request's headers, but you can still change them using the 
+*        `overrideHttpHeader` option or add missing headers using the `noOverrideHttpHeader` option.
+*
+* false: will only pass the request's "User-Agent", "Content-Type", "Cookie", and "Authorization" headers 
+*        to the upstream server. You can add more allowed headers using the `allowedHeaders` option.
+*
+* It's better to set the value to 'false' if the target is using Cloudflare or other similar services 
+* for frontend domain, otherwise, you may encounter annoying 400 Bad Request errors.
+*/
+const reqHeadersPass = false;
 
-const allowedHeaders = [ 'Content-Type', 'Authorization', 'Cookie' ];
+const allowedHeaders = ['User-Agent', 'Content-Type', 'Authorization', 'Cookie'];
 
 const debug = process.env.DEBUG || false;
 
@@ -27,11 +31,15 @@ const curlRequest = async (req, res, next) => {
 
     const overrideHttpHeader = [
       `Authority: ${targetHost}`,
-      `Host: ${targetHost}`,
+      `Host: ${targetHost}`
+    ];
+
+    const noOverrideHttpHeader = [
       'sec-ch-ua: " Not A;Brand";v="99", "Chromium";v="99", "Google Chrome";v="99"',
       'sec-ch-ua-mobile: ?1',
       'sec-ch-ua-platform: "Android"',
       'Upgrade-Insecure-Requests: 1',
+      'User-Agent: Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
       'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
       'Sec-Fetch-Site: none',
       'Sec-Fetch-Mode: navigate',
@@ -41,17 +49,13 @@ const curlRequest = async (req, res, next) => {
       'Accept-Language: en-US,en;q=0.9'
     ];
 
-    const noOverrideHttpHeader = [
-      'User-Agent: Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
-    ];
-
     const options = {
       url: `${req.protocol}:/${req.originalUrl}`,
       followLocation: false,
     };
 
     let reqHeaders = {},
-        cReqHeaders = caseless(reqHeaders);
+      cReqHeaders = caseless(reqHeaders);
 
     if (reqHeadersPass === false) {
       for (const header of allowedHeaders) {
@@ -114,14 +118,11 @@ const curlRequest = async (req, res, next) => {
     curl.on('stream', async (stream, statusCode, headers) => {
       if (headersSent === false) {
         let resHeaders = headers[0],
-            cResHeaders = caseless(resHeaders);
+          cResHeaders = caseless(resHeaders);
         if (debug) {
-          console.log('resHeaders:');
-          console.log(resHeaders);
-          console.log('reqHeaders:');
-          console.log(req.headers);
-          console.log('httpHeader:');
-          console.log(httpHeader);
+          console.log('resHeaders:', resHeaders);
+          console.log('reqHeaders:', req.headers);
+          console.log('httpHeader:', httpHeader);
         }
         cResHeaders.set('server', 'AIOS', true);
         const reason = resHeaders.result.reason;
@@ -129,17 +130,18 @@ const curlRequest = async (req, res, next) => {
         cResHeaders.set('Access-Control-Allow-Origin', `${req.protocol}://${req.hostname}:${port}`, true);
         cResHeaders.set('Access-Control-Allow-Credentials', 'true', true);
         if (cResHeaders.has('set-cookie')) {
-          const cookieArray = cResHeaders.get('set-cookie').split(';').map((cookie) => {
-            const [name, values] = cookie.trim().split('=');
-            const value = values.join('=').trim();
-            if (name === 'domain') {
-              return `${name}=${req.hostname}`;
-            } else if (name === 'path') {
-              return `${name}=/${targetHost}${value}`;
+          const cookies = setCookie(cResHeaders.get('set-cookie'));
+          cookies.map((cookie) => {
+            const cookieName = cookie.name.toLocaleLowerCase();
+            if (cookieName === 'domain') {
+              res.set('domain', `${req.hostname}`, cookie);
+            } else if (cookieName === 'path') {
+              res.set('path', `/${targetHost}${value}`, cookie);
+            } else {
+              res.set(cookie.name, cookie.value, cookie);
             }
-            return `${name}=${value}`;
           });
-          cResHeaders.set('set-cookie', cookieArray.join('; ').trim(), true);
+          cResHeaders.del('set-cookie');
         }
         res.set(resHeaders);
         if (statusCode === 301 || statusCode === 302) {
@@ -162,10 +164,12 @@ const curlRequest = async (req, res, next) => {
       stream.on('end', () => {
         res.end();
       });
-      //stream.on('error', (error) => {
-      //  console.log('response stream error: ', error);
-      //  res.end();
-      //});
+      stream.on('error', (error) => {
+        if (debug) {
+          console.log('response stream error: ', error);
+        }
+        res.end();
+      });
       //stream.on('close', () => {
       // console.log('response stream: close');
       //})

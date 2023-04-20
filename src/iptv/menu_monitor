@@ -26,7 +26,6 @@ AntiDDoSSet()
 
         if ufw show added | grep -q "None" 
         then
-            [ -x "$(command -v iptables)" ] && iptables -F
             Println "$info 添加常用 ufw 规则"
             ufw allow ssh > /dev/null 2>&1
             ufw allow http > /dev/null 2>&1

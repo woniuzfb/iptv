@@ -222,8 +222,7 @@ DepInstall()
         then
             if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
             then
-                setenforce permissive
-                sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+                setenforce 0
             fi
 
             if yum -y install $dependency >/dev/null 2>&1
@@ -259,8 +258,7 @@ DepInstall()
     then
         if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
         then
-            setenforce permissive
-            sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+            setenforce 0
         fi
 
         if [ "$dependency" == "dig" ] 
@@ -488,8 +486,7 @@ LocaleFix()
     then
         if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
         then
-            setenforce permissive
-            sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+            setenforce 0
         fi
 
         yum -y install glibc-common glibc-locale-source glibc-all-langpacks glibc-langpack-en glibc-langpacks-zh langpacks-zh_CN >/dev/null 2>&1 || true
@@ -599,8 +596,7 @@ DepsInstall()
     then
         if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
         then
-            setenforce permissive
-            sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+            setenforce 0
         fi
 
         depends=(wget unzip vim curl crond logrotate patch nscd)
@@ -22252,7 +22248,6 @@ AntiDDoSSet()
 
         if ufw show added | grep -q "None" 
         then
-            [ -x "$(command -v iptables)" ] && iptables -F
             Println "$info 添加常用 ufw 规则"
             ufw allow ssh > /dev/null 2>&1
             ufw allow http > /dev/null 2>&1

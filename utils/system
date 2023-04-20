@@ -182,8 +182,7 @@ DepInstall()
         then
             if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
             then
-                setenforce permissive
-                sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+                setenforce 0
             fi
 
             if yum -y install $dependency >/dev/null 2>&1
@@ -239,8 +238,7 @@ DepInstall()
     then
         if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
         then
-            setenforce permissive
-            sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+            setenforce 0
         fi
 
         if [ "$dependency" == "dig" ] 
@@ -317,8 +315,7 @@ DepsInstall()
     then
         if [[ -x $(command -v getenforce) ]] && [ "$(getenforce)" != "Disabled" ]
         then
-            setenforce permissive
-            sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config
+            setenforce 0
         fi
 
         depends=(wget unzip vim curl crond logrotate patch nscd)
