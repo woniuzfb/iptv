@@ -42,9 +42,7 @@ then
     ExitOnList n "`gettext \"尚未安装, 是否现在安装\"`"
     Install
 else
-    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-    FFMPEG="$FFMPEG_ROOT/ffmpeg"
-    FFPROBE="$FFMPEG_ROOT/ffprobe"
+    FFmpegInstall
 
     GetDefault
 

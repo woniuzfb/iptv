@@ -7,7 +7,6 @@ ImageMagickInstall()
         wait $progress_pid 2> /dev/null
     ' EXIT
     rm -f "$IPTV_ROOT/magick"
-    DistCheck
     if [ "$dist" == "rpm" ] 
     then
         yum -y install ImageMagick >/dev/null 2>&1

@@ -1,11 +1,6 @@
 XtreamCodesListChnls()
 {
-    if [ -z "${FFMPEG:-}" ] 
-    then
-        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-        FFMPEG="$FFMPEG_ROOT/ffmpeg"
-        FFPROBE="$FFMPEG_ROOT/ffprobe"
-    fi
+    FFmpegInstall
 
     while true 
     do
@@ -548,10 +543,9 @@ XtreamCodesListChnls()
                                 rm -f "${TMP_FILE}.jpeg"
                             ' EXIT
 
-                            $FFMPEG -hide_banner -loglevel debug -user_agent "$user_agent" \
+                            $FFMPEG_FILE -hide_banner -loglevel debug -user_agent "$user_agent" \
                                 -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" -ss "$ss" -frames:v 1 "${TMP_FILE}.jpeg" || EXIT_STATUS=$?
 
-                            DistCheck
                             if [ ! -e "/usr/local/bin/imgcat" ] 
                             then
                                 ImgcatInstall
@@ -564,7 +558,7 @@ XtreamCodesListChnls()
 
                             trap - EXIT
                         else
-                            $FFPROBE -hide_banner -loglevel debug -show_streams -user_agent "$user_agent" \
+                            $FFPROBE_FILE -hide_banner -loglevel debug -show_streams -user_agent "$user_agent" \
                                 -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" || EXIT_STATUS=$?
                         fi
 
@@ -604,7 +598,7 @@ XtreamCodesListChnls()
                                     rm -f "${TMP_FILE}.jpeg"
                                 ' EXIT
 
-                                $FFMPEG -hide_banner -loglevel debug -user_agent "$user_agent" \
+                                $FFMPEG_FILE -hide_banner -loglevel debug -user_agent "$user_agent" \
                                     -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" -ss "$ss" -frames:v 1 "${TMP_FILE}.jpeg" || EXIT_STATUS=$?
 
                                 /usr/local/bin/imgcat --half-height "${TMP_FILE}.jpeg" 2> /dev/null || EXIT_STATUS=$?
@@ -614,7 +608,7 @@ XtreamCodesListChnls()
 
                                 trap - EXIT
                             else
-                                $FFPROBE -hide_banner -loglevel debug -show_streams -user_agent "$user_agent" \
+                                $FFPROBE_FILE -hide_banner -loglevel debug -show_streams -user_agent "$user_agent" \
                                     -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" || EXIT_STATUS=$?
                             fi
                         fi

@@ -12,8 +12,6 @@ Include utils/dnscrypt "$@"
 
 ShFileCheck
 
-JQ_FILE="/usr/local/bin/jq"
-
 Println "  Armbian 管理面板 ${normal}${red}[v$sh_ver]${normal}
 
   ${green}1.${normal} 更改 apt 源

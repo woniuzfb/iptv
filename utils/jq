@@ -1,7 +1,5 @@
 JQInstall()
 {
-    [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
-
     if [[ -x "$JQ_FILE" ]] 
     then
         return 0
@@ -32,8 +30,7 @@ JQInstall()
             ln -sf /usr/local/bin/jq "$JQ_FILE"
         fi
         Println "`eval_gettext \"\\\$info JQ 安装完成\"`"
-    elif [ ! -e "$JQ_FILE" ] || ! $JQ_FILE -V > /dev/null 2>&1 
-    then
+    else
         Println "`eval_gettext \"\\\$info 开始下载/安装 JQ...\"`"
         if [ "$dist" == "mac" ] 
         then
@@ -41,27 +38,26 @@ JQInstall()
             return 0
         fi
         #experimental# grep -Po '"tag_name": "jq-\K.*?(?=")'
-        if jq_ver=$(curl -s -m 10 "$FFMPEG_MIRROR_LINK/jq.json" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        if ! jq_ver=$(curl -s -m 10 "$FFMPEG_MIRROR_LINK/jq.json" |  grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
         then
-            if grep -q 64 <<< "$arch" 
-            then
-                jq_package="jq-linux64"
-            else
-                jq_package="jq-linux32"
-            fi
-            if curl -L "$FFMPEG_MIRROR_LINK/$jq_ver/$jq_package" -o "$JQ_FILE"
-            then
-                chmod +x "$JQ_FILE"
-                Println "`eval_gettext \"\\\$info JQ 安装完成\"`"
-            else
-                rm -f "$JQ_FILE"
-                Println "`eval_gettext \"\\\$error 下载 JQ 失败, 请重试 !\"`" && exit 1
-            fi
-        else
-            Println "`eval_gettext \"\\\$error 暂时无法连接服务器, 请稍后再试 !\"`" && exit 1
+            Println "`eval_gettext \"\\\$error 暂时无法连接服务器, 请稍后再试 !\"`"
+            exit 1
         fi
-    else
-        Println "`eval_gettext \"\\\$info JQ 已安装\"`"
+        if grep -q 64 <<< "$arch" 
+        then
+            jq_package="jq-linux64"
+        else
+            jq_package="jq-linux32"
+        fi
+        if curl -L "$FFMPEG_MIRROR_LINK/$jq_ver/$jq_package" -o "$JQ_FILE"
+        then
+            chmod +x "$JQ_FILE"
+            Println "`eval_gettext \"\\\$info JQ 安装完成\"`"
+        else
+            rm -f "$JQ_FILE"
+            Println "`eval_gettext \"\\\$error 下载 JQ 失败, 请重试 !\"`"
+            exit 1
+        fi
     fi
 }
 

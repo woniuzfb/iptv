@@ -316,8 +316,6 @@ V2rayConfigUpdate()
 
 ShFileCheck
 
-[ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
-
 v2ray_sh="v2"
 v2ray_name="v2ray"
 tls_name="TLS"

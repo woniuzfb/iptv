@@ -8,7 +8,7 @@ ReplaceInclude()
         return
     elif [ "$replace_name" == "src/\$self" ] 
     then
-        echo "${2:-}if [ \"\$self\" == \"tv\" ]"
+        echo "${2:-}if [ \"\$self\" == \"tv\" ] || [ \"\$self\" == \"iptv\" ]"
         echo "${2:-}then"
         ReplaceInclude src/tv "    ${2:-}"
         bins=(v2 x nx or pve arm ibm cf cx ali)

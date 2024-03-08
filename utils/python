@@ -5,8 +5,6 @@ PythonInstall()
         return 0
     fi
 
-    DistCheck
-
     Println "`eval_gettext \"\\\$info 安装 python3 ...\"`"
 
     Progress &

@@ -98,10 +98,9 @@ VipListChannel()
     echo
     inquirer list_input_index "测试频道" ny_options ny_options_index
 
-    if [ "$ny_options_index" -eq 1 ] && [ -z "${FFPROBE:-}" ]
+    if [ "$ny_options_index" -eq 1 ] 
     then
-        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-        FFPROBE="$FFMPEG_ROOT/ffprobe"
+        FFmpegInstall
     fi
 
     for vip_channels_num in "${vip_channels_num_arr[@]}"
@@ -117,7 +116,7 @@ VipListChannel()
         then
             printf -v ffprobe_headers_command '%b' "x-forwarded-for: 127.0.0.1\r\n"
 
-            if ! $FFPROBE -user_agent "$USER_AGENT_TV" \
+            if ! $FFPROBE_FILE -user_agent "$USER_AGENT_TV" \
                 -headers "$ffprobe_headers_command" -show_streams -hide_banner -i "$stream_link"
             then
                 if [ -n "${vip_public_host:-}" ] 

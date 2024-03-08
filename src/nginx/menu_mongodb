@@ -32,8 +32,6 @@ MongodbMenu()
         echo
         ExitOnList n "升级会清除现有 mongodb 配置, 是否继续"
 
-        DistCheck
-
         service mongod stop
 
         if [ "$dist" == "rpm" ] 

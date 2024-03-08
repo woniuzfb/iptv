@@ -509,4 +509,5 @@ then
     jq_path='["channels"]'
     JQ update "$CHANNELS_FILE" new_channels
 fi
+
 printf '%s' "" > ${LOCK_FILE}

@@ -31,7 +31,6 @@ V2rayListInboundShare()
         Println "分享链接: ${green}vmess://$vmess_link${normal}\n"
         echo
         ExitOnList y "`gettext \"打印二维码\"`"
-        DistCheck
         if [ ! -e "/usr/local/bin/imgcat" ] 
         then
             ImgcatInstall

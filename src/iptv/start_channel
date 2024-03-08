@@ -1181,12 +1181,7 @@ StartChannel()
         chnl_const=false
     fi
 
-    if [ -z "${FFMPEG:-}" ] 
-    then
-        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-        FFMPEG="$FFMPEG_ROOT/ffmpeg"
-        FFPROBE="$FFMPEG_ROOT/ffprobe"
-    fi
+    FFmpegInstall
 
     if [[ ${chnl_input_flags:0:1} == "'" ]] 
     then

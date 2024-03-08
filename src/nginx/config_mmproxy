@@ -15,7 +15,7 @@ then
     if [[ ! -x $(command -v go-mmproxy) ]] 
     then
         export PATH="$PATH:$HOME/go/bin"
-        DistCheck
+
         if [ "$dist" == "rpm" ] 
         then
             echo "export PATH=\$PATH:\$HOME/go/bin" >> ~/.bash_profile

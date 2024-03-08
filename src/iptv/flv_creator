@@ -139,7 +139,7 @@ FlvStreamCreator()
 
     if [ "$flv_h265" = true ] 
     then
-        FFMPEG="/usr/local/bin/ffmpeg_c"
+        FFMPEG="$FFMPEG_FILE_ROOT"/ffmpeg_c
     fi
 
     if [ "${stream_url_qualities_count:-0}" -gt 1 ] || [ "${stream_url_audio_count:-0}" -gt 0 ] || [ "${stream_url_subtitles_count:-0}" -gt 0 ]
@@ -303,7 +303,7 @@ FlvStreamCreator()
         fi
 
         PrepTerm
-        $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+        $FFMPEG_FILE ${global_options[@]+"${global_options[@]}"} \
         ${variants_input_command[@]+"${variants_input_command[@]}"} \
         ${variants_output_command[@]+"${variants_output_command[@]}"} \
         ${map_command[@]+"${map_command[@]}"} \
@@ -536,7 +536,7 @@ FlvStreamCreator()
     fi
 
     PrepTerm
-    $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+    $FFMPEG_FILE ${global_options[@]+"${global_options[@]}"} \
     ${input_command[@]+"${input_command[@]}"} \
     ${variants_output_command[@]+"${variants_output_command[@]}"} \
     ${map_command[@]+"${map_command[@]}"} \
@@ -610,7 +610,7 @@ FlvStreamCreator()
 
     if [ "$chnl_flv_h265" = true ] 
     then
-        FFMPEG="/usr/local/bin/ffmpeg_c"
+        FFMPEG="$FFMPEG_FILE_ROOT"/ffmpeg_c
     fi
 
     if [ "${chnl_stream_url_qualities_count:-0}" -gt 1 ] || [ -n "${chnl_stream_url_audio_indices:-}" ]
@@ -773,7 +773,7 @@ FlvStreamCreator()
         fi
 
         PrepTerm
-        $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+        $FFMPEG_FILE ${global_options[@]+"${global_options[@]}"} \
         ${chnl_variants_input_command[@]+"${chnl_variants_input_command[@]}"} \
         ${chnl_variants_output_command[@]+"${chnl_variants_output_command[@]}"} \
         ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
@@ -1006,7 +1006,7 @@ FlvStreamCreator()
     fi
 
     PrepTerm
-    $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+    $FFMPEG_FILE ${global_options[@]+"${global_options[@]}"} \
     ${chnl_input_command[@]+"${chnl_input_command[@]}"} \
     ${chnl_variants_output_command[@]+"${chnl_variants_output_command[@]}"} \
     ${chnl_map_command[@]+"${chnl_map_command[@]}"} \

@@ -32,7 +32,6 @@ VipEnable()
                 Println "$info 安装 md5sum..."
                 if [[ ! -x $(command -v gcc) ]] 
                 then
-                    DistCheck
                     if [ "$dist" == "rpm" ] 
                     then
                         yum -y install gcc gcc-c++ >/dev/null 2>&1

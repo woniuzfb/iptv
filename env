@@ -26,7 +26,12 @@ NX_FILE=/usr/local/bin/nx
 XC_FILE=/usr/local/bin/cx
 ARM_FILE=/usr/local/bin/arm
 PVE_FILE=/usr/local/bin/pve
-LOG_FILE="$HOME/iptv.log"
+LOG_FILE="$HOME"/iptv.log
+JQ_FILE=/usr/local/bin/jq
+FFMPEG_FILE=/usr/local/bin/ffmpeg
+FFPROBE_FILE=/usr/local/bin/ffprobe
+FFMPEG_ROOT="$HOME"
+CURL_IMPERSONATE_FILE=/usr/local/bin/curl-impersonate
 
 # iptv
 IPTV_ROOT=/usr/local/iptv
@@ -34,8 +39,6 @@ FFMPEG_LOG_ROOT="$IPTV_ROOT"/ffmpeg
 FFMPEG_MIRROR_LINK=http://pngquant.com/ffmpeg
 FFMPEG_MIRROR_ROOT="$IPTV_ROOT"/ffmpeg
 LOCK_FILE="$IPTV_ROOT"/lock
-JQ_FILE="$IPTV_ROOT"/jq
-CURL_IMPERSONATE_FILE=/usr/local/bin/curl-impersonate
 CHANNELS_FILE="$IPTV_ROOT"/channels.json
 MONITOR_LOG="$IPTV_ROOT"/monitor.log
 LOGROTATE_CONFIG="$IPTV_ROOT"/logrotate

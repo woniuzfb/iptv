@@ -1,0 +1,410 @@
+Include utils/ffmpeg "$@"
+
+LianHuanHuaDownload()
+{
+    local book_url="$1" ebooks_root="$2" title="$3" i j
+    local ebook_path="$ebooks_root/$title"
+
+    i=2
+    until [ ! -d "$ebook_path" ] 
+    do
+        if [ "$i" -gt 2 ] 
+        then
+            ebook_path="${ebook_path%-*}"
+        fi
+        ebook_path="${ebook_path}-$i"
+        ((i++))
+    done
+
+    book_html=$(CurlFake -s -L -b "$cookie_file" -H "Referer: $book_url" $book_url)
+    iframe_path=$(grep -oP '<iframe id="iframepage" src="\K[^"]+' <<< "$book_html" | sed 's/\&amp;/\&/g')
+
+    if [ "${iframe_path:-}" == "#" ] 
+    then
+        printf '%s' '' > "$cookie_file"
+        CurlFake -s -L -c "$cookie_file" http://www.zhlhh.com/ > /dev/null
+        login_html=$(CurlFake -s -L -b "$cookie_file" -H "Referer: http://www.zhlhh.com/index.aspx" "http://www.zhlhh.com/user/login.aspx?libcode=$libcode")
+        viewstate=$(grep -oP '<input(.+)name="__VIEWSTATE"(.+)value="\K[^"]+' <<< "$login_html")
+        viewstate_generator=$(grep -oP '<input(.+)name="__VIEWSTATEGENERATOR"(.+)value="\K[^"]+' <<< "$login_html")
+        event_validation=$(grep -oP '<input(.+)name="__EVENTVALIDATION"(.+)value="\K[^"]+' <<< "$login_html")
+        CurlFake -s -b "$cookie_file" -c "$cookie_file" \
+        --data "__VIEWSTATE=$viewstate&__VIEWSTATEGENERATOR=$viewstate_generator&__EVENTVALIDATION=$event_validation&txtusername=admin&txtpassword=21232f297a57a5a743894a0e4a801fc3&btnlogin=登 录&returnUrl=http://www.zhlhh.com/" "http://www.zhlhh.com/user/login.aspx?libcode=$libcode" > /dev/null
+        book_html=$(CurlFake -s -L -b "$cookie_file" -H "Referer: $book_url" $book_url)
+        iframe_path=$(grep -oP '<iframe id="iframepage" src="\K[^"]+' <<< "$book_html" | sed 's/\&amp;/\&/g')
+    fi
+
+    iframe_url="${book_url%/*}/$iframe_path"
+    book_html=$(CurlFake -s -L -b "$cookie_file" -H "Referer: $book_url" "$iframe_url")
+    source_src=$(grep -oP '<input id="sousrc"(.+)value="\K[^"]+' <<< "$book_html")
+    book_images=($(grep -m1 -oE "var filenamefc=new Array\(.+\);" <<< "$book_html" | grep -oE "[0-9]+"))
+    p_p=$(grep -oP '<div id="p_p"(.+)">\K[^<]+' <<< "$book_html")
+    iii=( 5 6 7 1 3 8 101 88 66 77 44 55 33 22 4 84 65 42 )
+
+    IFS="|" read -r -a pp <<< "${p_p}|"
+
+    total=0
+    for((i=0;i<${#pp[1]};i++));
+    do
+        c=${pp[1]:$i:1}
+        if [[ $c =~ ^[0-9]+$ ]] 
+        then
+            total=$((total+c))
+        else
+            ((total++))
+        fi
+    done
+
+    mkdir -p "$ebook_path"
+
+    if ! TMP_DIR=$(mktemp -q -d)
+    then
+        exit $?
+    fi
+
+    trap '
+        rm -rf "${TMP_DIR:-notfound}"
+    ' EXIT
+
+    for((i=0;i<${#book_images[@]};i++));
+    do
+        book_image="${book_images[i]}"
+        book_image_formated=$(printf '%04d' $((i+1)))
+
+        echo -ne "\r"
+        tput el
+        echo -n "$title ${book_image_formated}.jpg"
+
+        ffmpeg_inputs=()
+
+        for((j=0;j<${pp[2]};j++));
+        do
+            ffmpeg_inputs+=( -i "$TMP_DIR/${j}.jpg" )
+
+            if [ $j -gt "${#iii[@]}" ] 
+            then
+                image_name="${book_image}$((total*j))"
+            else
+                image_name="${book_image}$((total*iii[j]))"
+            fi
+
+            CurlFake -s -L -o "$TMP_DIR/${j}.jpg" "${source_src}${pp[0]}/${pp[1]}/${image_name}.jpg"
+        done
+
+        # https://stackoverflow.com/questions/10225403/how-can-i-extract-a-good-quality-jpeg-image-from-a-video-file-with-ffmpeg
+        $FFMPEG_FILE ${ffmpeg_inputs[@]+"${ffmpeg_inputs[@]}"} -hide_banner -loglevel error -filter_complex hstack=inputs=$j -qmin 1 -q:v 1 -update true "$ebook_path/${book_image_formated}.jpg"
+    done
+
+    echo -ne "\r"
+    tput el
+
+    rm -rf "${TMP_DIR:-notfound}"
+
+    trap - EXIT
+}
+
+search_keys=( a b c d e f a )
+search_means=( '书名' '原著' '改编' '绘画' '出版社' '颜色' '人物' )
+libcode=A7CCFF874E0E58868FF7FA84BF94B4C94E9F781AEF6E50E0359E12099735745F2B943218D8F245B2BD8EFA919770D399
+lhh_config="$HOME/ebooks/config.json"
+cookie_file="$HOME/ebooks/zhlhh_cookie"
+
+if [ ! -s "$lhh_config" ] 
+then
+    mkdir -p "$HOME/ebooks/"
+    printf '{"%s":{"%s":[]}}' "books" "zhlhh" > "$lhh_config"
+fi
+
+SetDelimiters
+
+IFS=$'\003\t' read -r default_save_dir m_adapter m_addtime m_bookname m_category_id m_cover m_drawing m_m \
+    m_muludir m_original m_p m_publish m_yd m_downloaded m_fav < <(JQs flat "$lhh_config" '' \
+'(.default // ""| if (.|type == "string") then {} else . end) as $default |
+(.books.zhlhh | if . == "" then {} else . end) as $zhlhh |
+reduce ({save_dir}|keys_unsorted[]) as $key ([];
+    $default[$key] as $val | if $val then
+        . + [$val + "\u0003"]
+    else
+        . + ["\u0003"]
+    end
+) + 
+reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p,publish,
+    yd,downloaded,fav}|keys_unsorted[]) as $key ([];
+        $zhlhh[$key] as $val | if $val then
+            . + [$val + "\u0002\u0003"]
+        else
+            . + ["\u0003"]
+        end
+    )
+|@tsv' "${delimiters[@]}")
+
+IFS="${delimiters[1]}" read -r -a books_adapter <<< "$m_adapter"
+IFS="${delimiters[1]}" read -r -a books_addtime <<< "$m_addtime"
+IFS="${delimiters[1]}" read -r -a books_bookname <<< "$m_bookname"
+IFS="${delimiters[1]}" read -r -a books_category_id <<< "$m_category_id"
+IFS="${delimiters[1]}" read -r -a books_cover <<< "$m_cover"
+IFS="${delimiters[1]}" read -r -a books_drawing <<< "$m_drawing"
+IFS="${delimiters[1]}" read -r -a books_m <<< "$m_m"
+IFS="${delimiters[1]}" read -r -a books_muludir <<< "$m_muludir"
+IFS="${delimiters[1]}" read -r -a books_original <<< "$m_original"
+IFS="${delimiters[1]}" read -r -a books_p <<< "$m_p"
+IFS="${delimiters[1]}" read -r -a books_publish <<< "$m_publish"
+IFS="${delimiters[1]}" read -r -a books_yd <<< "$m_yd"
+IFS="${delimiters[1]}" read -r -a books_downloaded <<< "$m_downloaded"
+IFS="${delimiters[1]}" read -r -a books_fav <<< "$m_fav"
+
+books_total=${#books_adapter[@]}
+
+Println "$tip 人物只能单独查询"
+inquirer checkbox_input_indices "选择查询选项" search_means search_keys_indices 20
+
+search_keys_count="${#search_keys[@]}"
+
+if EleInArray 6 search_keys_indices
+then
+    echo
+    ExitOnText "输入查询的人物" search_text
+    post_data="${search_keys[6]}=$search_text&p=1&s=1000"
+    post_url="http://www.zhlhh.com/web/handler/main.ashx/G_P_B"
+else
+    colors=( '全部' '黑白' '彩色' )
+    for search_keys_index in "${search_keys_indices[@]}"
+    do
+        case $search_keys_index in
+            0) 
+                echo
+                ExitOnText "输入书名" book_name
+            ;;
+            1) 
+                echo
+                ExitOnText "输入原著" book_original
+            ;;
+            2) 
+                echo
+                ExitOnText "输入改编" book_adapter
+            ;;
+            3) 
+                echo
+                ExitOnText "输入绘画" book_drawing
+            ;;
+            4) 
+                echo
+                ExitOnText "输入出版社" book_publish
+            ;;
+            5) 
+                echo
+                inquirer list_input_index "选择颜色" colors colors_index
+            ;;
+        esac
+    done
+
+    post_data="a=${book_name:-}&b=${book_original:-}&c=${book_adapter:-}&d=${book_drawing:-}&e=${book_publish:-}&f=${colors[${colors_index:-0}]}&p=1&s=1000"
+    post_url="http://www.zhlhh.com/web/handler/main.ashx/G_F_B"
+fi
+
+IFS=$'\003\t' read -r result_count result_total m_adapter m_addtime m_bookname m_category_id m_cover m_drawing m_m \
+    m_muludir m_original m_p m_publish m_yd < <(
+JQs flat "$(CurlFake -s -L -b "$cookie_file" -H "Referer: http://www.zhlhh.com/" --data ''"$post_data"'' $post_url)" '' \
+'[.AllCount|tostring + "\u0003"] +
+[.pageInfor.AllCount|tostring + "\u0003"] +
+((.result | if . == "" then {} else . end) as $result |
+reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p,publish,
+    yd}|keys_unsorted[]) as $key ([];
+        $result[$key] as $val | if $val then
+            . + [$val + "\u0002\u0003"]
+        else
+            . + ["\u0003"]
+        end
+    ))
+|@tsv' "${delimiters[@]}")
+
+if [ "$result_count" -eq 0 ] 
+then
+    Println "$error 没有结果"
+    exit 1
+fi
+
+iframe_paths=($(CurlFake -s -L -b "$cookie_file" -H "Referer: http://www.zhlhh.com/" "http://www.zhlhh.com/web/js/main.js" | grep -oP 'url = "\K[^"]+'))
+
+IFS="${delimiters[1]}" read -r -a result_adapter <<< "$m_adapter"
+IFS="${delimiters[1]}" read -r -a result_addtime <<< "$m_addtime"
+IFS="${delimiters[1]}" read -r -a result_bookname <<< "$m_bookname"
+IFS="${delimiters[1]}" read -r -a result_category_id <<< "$m_category_id"
+IFS="${delimiters[1]}" read -r -a result_cover <<< "$m_cover"
+IFS="${delimiters[1]}" read -r -a result_drawing <<< "$m_drawing"
+IFS="${delimiters[1]}" read -r -a result_m <<< "$m_m"
+IFS="${delimiters[1]}" read -r -a result_muludir <<< "$m_muludir"
+IFS="${delimiters[1]}" read -r -a result_original <<< "$m_original"
+IFS="${delimiters[1]}" read -r -a result_p <<< "$m_p"
+IFS="${delimiters[1]}" read -r -a result_publish <<< "$m_publish"
+IFS="${delimiters[1]}" read -r -a result_yd <<< "$m_yd"
+
+for((i=0;i<result_count;i++));
+do
+    if [ "$books_total" -gt 0 ] && EleInArray "${result_m[i]}" books_m 
+    then
+        for((j=0;j<books_total;j++));
+        do
+            if [ "${books_m[j]}" -eq "${result_m[i]}" ] 
+            then
+                books_adapter[j]="${result_adapter[i]}"
+                books_addtime[j]="${result_addtime[i]}"
+                books_bookname[j]="${result_bookname[i]}"
+                books_category_id[j]="${result_category_id[i]}"
+                books_cover[j]="${result_cover[i]}"
+                books_drawing[j]="${result_drawing[i]}"
+                books_muludir[j]="${result_muludir[i]}"
+                books_original[j]="${result_original[i]}"
+                books_p[j]="${result_p[i]}"
+                books_publish[j]="${result_publish[i]}"
+                books_yd[j]="${result_yd[i]}"
+
+                if [ "${books_downloaded[j]}" = true ] 
+                then
+                    result_bookname[i]="${result_bookname[i]} ${green}[已下载]${normal}"
+                fi
+
+                if [ "${books_fav[j]}" = true ] 
+                then
+                    result_bookname[i]="${result_bookname[i]} ${green}[已收藏]${normal}"
+                fi
+                break
+            fi
+        done
+    else
+        books_adapter+=("${result_adapter[i]}")
+        books_addtime+=("${result_addtime[i]}")
+        books_bookname+=("${result_bookname[i]}")
+        books_category_id+=("${result_category_id[i]}")
+        books_cover+=("${result_cover[i]}")
+        books_drawing+=("${result_drawing[i]}")
+        books_m+=("${result_m[i]}")
+        books_muludir+=("${result_muludir[i]}")
+        books_original+=("${result_original[i]}")
+        books_p+=("${result_p[i]}")
+        books_publish+=("${result_publish[i]}")
+        books_yd+=("${result_yd[i]}")
+        books_downloaded+=("false")
+        books_fav+=("false")
+    fi
+done
+
+books_total=${#books_adapter[@]}
+books=""
+
+for((i=0;i<books_total;i++));
+do
+    new_book=$(
+    $JQ_FILE -n --arg adapter "${books_adapter[i]}" --arg addtime "${books_addtime[i]}" \
+    --arg bookname "${books_bookname[i]}" --arg category_id "${books_category_id[i]}" \
+    --arg cover "${books_cover[i]}" --arg drawing "${books_drawing[i]}" \
+    --arg m "${books_m[i]}" --arg muludir "${books_muludir[i]}" \
+    --arg original "${books_original[i]}" --arg p "${books_p[i]}" \
+    --arg publish "${books_publish[i]}" --arg yd "${books_yd[i]}" \
+    --arg downloaded "${books_downloaded[i]}" --arg fav "${books_fav[i]}" \
+        '{
+            adapter: $adapter,
+            addtime: $addtime,
+            bookname: $bookname,
+            category_id: $category_id | tonumber,
+            cover: $cover,
+            drawing: $drawing,
+            m: $m | tonumber,
+            muludir: $muludir,
+            original: $original,
+            p: $p,
+            publish: $publish,
+            yd: $yd,
+            downloaded: $downloaded | test("true"),
+            fav: $fav | test("true")
+        }'
+    )
+
+    [ -n "${books:-}" ] && books="${books},"
+    books="${books}${new_book}"
+done
+
+json=true
+jq_path='["books","zhlhh"]'
+JQ update "$lhh_config" "[$books]"
+
+echo
+inquirer checkbox_input_indices "选择连环画" result_bookname result_indices 20
+
+echo
+result_options=( '下载' '收藏' '取消收藏' )
+inquirer checkbox_input_indices "选择操作" result_options result_options_indices
+
+for result_options_index in "${result_options_indices[@]}"
+do
+    if [ "$result_options_index" -eq 0 ] 
+    then
+        echo
+        inquirer text_input "输入存储文件夹目录" save_dir "${default_save_dir}"
+        if [ -z "$save_dir" ] 
+        then
+            Println "已取消...\n"
+            exit 1
+        fi
+
+        if [ "$save_dir" != "$default_save_dir" ] 
+        then
+            jq_path='["default","save_dir"]'
+            JQ update "$lhh_config" "$save_dir"
+        fi
+
+        FFmpegInstall
+
+        for result_index in "${result_indices[@]}"
+        do
+            for((i=0;i<books_total;i++));
+            do
+                if [ "${books_m[i]}" -eq "${result_m[result_index]}" ] 
+                then
+                    book_url="http://www.zhlhh.com${iframe_paths[result_yd[result_index]]:-iframe_paths[0]}?libcode=$libcode&m=${result_m[result_index]}&p=${result_p[result_index]}&y_l_s="
+                    LianHuanHuaDownload "${book_url}" "$save_dir" "${books_bookname[i]}"
+                    if [ "${books_downloaded[i]}" = false ] 
+                    then
+                        bool=true
+                        jq_path='["books","zhlhh",'"$i"',"downloaded"]'
+                        JQ update "$lhh_config" true
+                    fi
+                    continue 2
+                fi
+            done
+        done
+
+        Println "$info 下载完成\n"
+    elif [ "$result_options_index" -eq 1 ] 
+    then
+        for result_index in "${result_indices[@]}"
+        do
+            for((i=0;i<books_total;i++));
+            do
+                if [ "${books_m[i]}" -eq "${result_m[result_index]}" ] 
+                then
+                    bool=true
+                    jq_path='["books","zhlhh",'"$i"',"fav"]'
+                    JQ update "$lhh_config" true
+                    continue 2
+                fi
+            done
+        done
+        Println "$info 已添加到收藏\n"
+    else
+        for result_index in "${result_indices[@]}"
+        do
+            for((i=0;i<books_total;i++));
+            do
+                if [ "${books_m[i]}" -eq "${result_m[result_index]}" ] 
+                then
+                    bool=true
+                    jq_path='["books","zhlhh",'"$i"',"fav"]'
+                    JQ update "$lhh_config" false
+                    continue 2
+                fi
+            done
+        done
+        Println "$info 已取消收藏\n"
+    fi
+done
+

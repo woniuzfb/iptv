@@ -14,7 +14,7 @@ OpensslInstall()
         kill $progress_pid
         wait $progress_pid 2> /dev/null
     ' EXIT
-    DistCheck
+
     if [ "$dist" == "rpm" ] 
     then
         yum -y install openssl openssl-devel >/dev/null 2>&1

@@ -1,6 +1,5 @@
 if [[ ! -x $(command -v postfix) ]] 
 then
-    DistCheck
     Spinner "安装 postfix" PostfixInstall
 else
     echo

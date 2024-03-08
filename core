@@ -33,7 +33,8 @@ EleInArray()
 {
   local ele="$1"
   shift
-  local arr=("$@")
+  local var=("$1"[@])
+  local arr=("${!var}")
   [[ "$ele" == @($(JoinByChar '|' "${arr[@]//|/\\|}")) ]]
 }
 
@@ -41,8 +42,6 @@ printf()
 {
     if [ "${BASH_VERSINFO[0]}" -lt 4 ] 
     then
-        DistCheck
-
         if [[ "${3:-}" =~ \%\((.+)\)T ]] 
         then
             if [ "${4:--1}" == "-1" ] 

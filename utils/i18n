@@ -180,8 +180,6 @@ i18nGetMsg()
 
 LocaleFix()
 {
-    DistCheck
-
     Println "${green}[INFO]${normal} Installing language (locale) support, it takes awhile..."
 
     if [ "$dist" == "rpm" ] 
@@ -246,6 +244,7 @@ then
 
     DepInstall gsed
     DepInstall gdate
+    DepInstall ggrep
 
 sed()
 {
@@ -257,7 +256,11 @@ date()
     gdate "$@"
 }
 
-    JQ_FILE=/usr/local/bin/jq
+grep()
+{
+    ggrep "$@"
+}
+
 else
     TEXTDOMAINDIR=/usr/share/locale
 fi

@@ -1,4 +1,3 @@
-DistCheck
 DepInstall vim
 if [ "$dist" == "rpm" ] 
 then

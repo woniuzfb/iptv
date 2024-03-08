@@ -1,6 +1,5 @@
 GitInstall()
 {
-    DistCheck
     if [ "$dist" == "rpm" ] 
     then
         yum -y install git > /dev/null

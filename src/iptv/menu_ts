@@ -773,9 +773,7 @@ IFS="${delimiters[1]}" read -ra livetv_url <<< "$m_livetv_url"
 echo
 inquirer checkbox_input_indices "选择添加的频道" chnl_name chnl_indices
 
-FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-FFMPEG="$FFMPEG_ROOT/ffmpeg"
-FFPROBE="$FFMPEG_ROOT/ffprobe"
+FFmpegInstall
 
 headers=""
 cookies=""

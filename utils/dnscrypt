@@ -5,8 +5,8 @@ DNSCryptConfig()
         echo "$(awk '!x{x=sub(/.*\[static\..*/,"  [static.\047alidns-doh-fix\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
         echo "$(awk '!x{x=sub(/.* stamp = .*/,"  stamp = \047sdns://AgAAAAAAAAAAACCY49XlNq8pWM0vfxT3BO9KJ20l4zzWXy5l9eTycnwTMA5kbnMuYWxpZG5zLmNvbQovZG5zLXF1ZXJ5\047")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
         echo "$(awk '!x{x=sub(/.*server_names = \[.*/,"server_names = [\047dnspod-doh\047,\047alidns-doh-fix\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
-        echo "$(awk '!x{x=sub(/.*bootstrap_resolvers = .*/,"bootstrap_resolvers = [\047114.114.114.114:53\047, \0478.8.8.8:53\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
-        echo "$(awk '!x{x=sub(/.*netprobe_address = .*/,"netprobe_address = \047114.114.114.114:53\047")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+        echo "$(awk '!x{x=sub(/.*bootstrap_resolvers = .*/,"bootstrap_resolvers = [\047119.29.29.29:53\047, \047180.76.76.76:53\047, \0471.1.1.1:53\047, \047114.114.114.114:53\047, \0478.8.8.8:53\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
+        echo "$(awk '!x{x=sub(/.*netprobe_address = .*/,"netprobe_address = \0471.1.1.1:53\047")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
     else
         echo "$(awk '!x{x=sub(/.*server_names = \[.*/,"server_names = [\047google\047, \047cloudflare\047]")}1' dnscrypt-proxy.toml)" > dnscrypt-proxy.toml
     fi

@@ -123,9 +123,7 @@ XtreamCodesTestAcc()
     Println "IP: ${green}${ips[ips_index]}${normal} 域名: ${green}${new_domains[ips_index]//|/ }${normal}"
     Println "${green}账号:${normal}"
 
-    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-    FFMPEG="$FFMPEG_ROOT/ffmpeg"
-    FFPROBE="$FFMPEG_ROOT/ffprobe"
+    FFmpegInstall
 
     for account in "${accounts[@]}"
     do
@@ -150,10 +148,10 @@ XtreamCodesTestAcc()
             done
 
             # curl --output /dev/null -m 3 -s --fail -r 0-0
-            if $FFPROBE $proxy_command -i "http://$domain/$username/$password/$channel_id" -rw_timeout 5000000 -show_streams -select_streams a -loglevel quiet > /dev/null
+            if $FFPROBE_FILE $proxy_command -i "http://$domain/$username/$password/$channel_id" -rw_timeout 5000000 -show_streams -select_streams a -loglevel quiet > /dev/null
             then
                 printf "${green}%s${normal}\r\033[12C%-21s%-21s${green}%s${normal}\n%s\n\n" "[成功]" "$username" "$password" "$domain" "http://$domain/$username/$password/$channel_id"
-            elif $FFPROBE $proxy_command -i "http://$domain/live/$username/$password/$channel_id.ts" -rw_timeout 5000000 -show_streams -select_streams a -loglevel quiet > /dev/null 
+            elif $FFPROBE_FILE $proxy_command -i "http://$domain/live/$username/$password/$channel_id.ts" -rw_timeout 5000000 -show_streams -select_streams a -loglevel quiet > /dev/null 
             then
                 printf "${green}%s${normal}\r\033[12C%-21s%-21s${green}%s${normal}\n%s\n\n" "[成功]" "$username" "$password" "$domain" "http://$domain/live/$username/$password/$channel_id.ts"
             else

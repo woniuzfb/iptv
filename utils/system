@@ -2,7 +2,7 @@ DistCheck()
 {
     [ -n "${dist:-}" ] && return 0
 
-    dist_files=( /etc/issue /etc/os-release /proc/version )
+    local dist_files=( /etc/issue /etc/os-release /proc/version ) dist_file
     dist=""
 
     for dist_file in "${dist_files[@]}"
@@ -122,53 +122,52 @@ AptUpdate()
 
 BrewInstall()
 {
-    if ! curl -s -S -Lm 20 https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | bash
+    if [[ ! -x $(command -v brew) ]] 
     then
-        Println "${green}[info]${normal} 尝试更换国内源...\n"
-
-        export HOMEBREW_BREW_GIT_REMOTE="https://mirrors.ustc.edu.cn/brew.git"
-        export HOMEBREW_CORE_GIT_REMOTE="https://mirrors.ustc.edu.cn/homebrew-core.git"
-        export HOMEBREW_BOTTLE_DOMAIN="https://mirrors.ustc.edu.cn/homebrew-bottles"
-        export HOMEBREW_API_DOMAIN="https://mirrors.ustc.edu.cn/homebrew-bottles/api"
-
-        if ! curl -s -S -Lm 20 https://mirrors.ustc.edu.cn/misc/brew-install.sh | bash 
+        if ! curl -s -S -Lm 20 https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | bash
         then
-            Println "${green}[ERROR]${normal} 无法安装 Homebrew\n"
-            exit 1
-        fi
+            Println "${green}[info]${normal} 尝试更换国内源...\n"
 
-        export HOMEBREW_BREW_GIT_REMOTE="https://mirrors.ustc.edu.cn/brew.git"
-        brew update >/dev/null 2>&1
+            export HOMEBREW_BREW_GIT_REMOTE="https://mirrors.ustc.edu.cn/brew.git"
+            export HOMEBREW_CORE_GIT_REMOTE="https://mirrors.ustc.edu.cn/homebrew-core.git"
+            export HOMEBREW_BOTTLE_DOMAIN="https://mirrors.ustc.edu.cn/homebrew-bottles"
+            export HOMEBREW_API_DOMAIN="https://mirrors.ustc.edu.cn/homebrew-bottles/api"
+
+            if ! curl -s -S -Lm 20 https://mirrors.ustc.edu.cn/misc/brew-install.sh | bash 
+            then
+                Println "${green}[ERROR]${normal} 无法安装 Homebrew\n"
+                exit 1
+            fi
+
+            export HOMEBREW_BREW_GIT_REMOTE="https://mirrors.ustc.edu.cn/brew.git"
+            brew update >/dev/null 2>&1
+        fi
     fi
 }
 
 DepInstall()
 {
-    dependency=$1
+    local dependency=$1
 
     [[ -x $(command -v $dependency) ]] && return 0
 
-    DistCheck
-
-    if [ "$dependency" == "gettext" ] || [ "$dependency" == "wget" ] || [ "$dependency" == "gsed" ] || [ "$dependency" == "gdate" ]
+    if [ "$dependency" == "gettext" ] || [ "$dependency" == "wget" ] || [ "$dependency" == "gsed" ] || [ "$dependency" == "gdate" ] || [ "$dependency" == "ggrep" ]
     then
         Println "${green}[INFO]${normal} Installing $dependency, it takes awhile..."
 
         if [ "$dist" == "mac" ] 
         then
-            if [[ ! -x $(command -v brew) ]] 
-            then
-                BrewInstall
-            fi
+            BrewInstall
 
             if [ "$dependency" == "gsed" ] 
             then
                 dependency=gnu-sed
-            fi
-
-            if [ "$dependency" == "gdate" ] 
+            elif [ "$dependency" == "gdate" ] 
             then
                 dependency=coreutils
+            elif [ "$dependency" == "ggrep" ] 
+            then
+                dependency=grep
             fi
 
             if brew install $dependency >/dev/null 2>&1
@@ -216,10 +215,7 @@ DepInstall()
 
     if [ "$dist" == "mac" ] 
     then
-        if [[ ! -x $(command -v brew) ]] 
-        then
-            BrewInstall
-        fi
+        BrewInstall
 
         if [ "$dependency" == "brew" ] 
         then
@@ -282,8 +278,6 @@ DepsCheck()
     then
         return 0
     fi
-
-    DistCheck
 
     DepInstall tput
 
@@ -390,8 +384,6 @@ DepsInstall()
 
 ResourceLimit()
 {
-    DistCheck
-
     if [ ! -e /proc/sys/fs/file-max ] 
     then
         echo 65536 > /proc/sys/fs/file-max

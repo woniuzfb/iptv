@@ -1,14 +1,11 @@
 [ ! -d "$IPTV_ROOT" ] && Println "$error 尚未安装, 请检查 !\n" && exit 1
 
-if [[ ! -x $(command -v curl) ]] || [ ! -e "$JQ_FILE" ]
+if [[ ! -x $(command -v curl) ]] 
 then
     DepsCheck
 fi
 
-if [ ! -e "$JQ_FILE" ] 
-then
-    JQInstall
-fi
+JQInstall
 
 mkdir -p "$FFMPEG_MIRROR_ROOT/builds"
 mkdir -p "$FFMPEG_MIRROR_ROOT/releases"
@@ -149,7 +146,7 @@ then
     if [ ! -e "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64" ] || [ ! -e "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32" ] 
     then
         Println "$info 下载 jq ..."
-        rm -f "$FFMPEG_MIRROR_ROOT/jq-"*
+        rm -rf "$FFMPEG_MIRROR_ROOT/jq-"*
         mkdir -p "$FFMPEG_MIRROR_ROOT/$jq_ver/"
         if curl -s -L "https://github.com/stedolan/jq/releases/download/$jq_ver/jq-linux64" -o "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux64_tmp" && curl -s -L "https://github.com/stedolan/jq/releases/download/$jq_ver/jq-linux32" -o "$FFMPEG_MIRROR_ROOT/$jq_ver/jq-linux32_tmp"
         then

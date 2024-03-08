@@ -10,12 +10,12 @@
   - [IBM Cloud Foundry](#ibm-cloud-foundry)
   - [Cloudflare partner,workers](#cloudflare-partnerworkers)
   - [FFmpeg](#ffmpeg)
-    - [编译静态 FFmpeg](#编译静态-ffmpeg)
     - [自动解析直播源](#自动解析直播源)
     - [快捷键](#快捷键)
     - [参数详解](#参数详解)
     - [举例](#举例)
   - [Alist](#alist)
+  - [LianHuanHua](#lianhuanhua)
   - [Dev](#dev)
 
 ## V2ray
@@ -153,15 +153,6 @@ wget https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 - 节目表
 - VIP
 
-### 编译静态 FFmpeg
-
-``` bash
-cd scripts
-docker build -t ffmpeg-h265-static .
-docker run -it ffmpeg-h265-static
-./build.sh
-```
-
 ### 自动解析直播源
 
 `cx` 打开 xtream codes 账号/频道 管理面板
@@ -264,6 +255,12 @@ docker run -it ffmpeg-h265-static
 
 ```bash
 ./debug ali
+```
+
+## LianHuanHua
+
+```bash
+./debug lhh
 ```
 
 ## Dev

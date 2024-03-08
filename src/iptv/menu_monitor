@@ -853,7 +853,7 @@ MonitorHlsRestartChannel()
                         then
                             audio=0
                         fi
-                    done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet)
+                    done < <($FFPROBE_FILE $encrypt_command -i "$f" -show_streams -loglevel quiet)
                     break
                 done
 
@@ -1325,7 +1325,7 @@ MonitorFlvRestartChannel()
                 then
                     video=1
                 fi
-            done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -rw_timeout 10000000 -show_streams -loglevel quiet)
+            done < <($FFPROBE_FILE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -rw_timeout 10000000 -show_streams -loglevel quiet)
             if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ] 
             then
                 MonitorFlvRestartSuccess
@@ -1524,7 +1524,7 @@ MonitorTryAccounts()
                         then
                             video=1
                         fi
-                    done < <($FFPROBE $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies_command" -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet)
+                    done < <($FFPROBE_FILE $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies_command" -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet)
 
                     if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ]
                     then
@@ -1605,7 +1605,7 @@ MonitorTryAccounts()
                                 then
                                     video=1
                                 fi
-                            done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -rw_timeout 10000000 -show_streams -loglevel quiet)
+                            done < <($FFPROBE_FILE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -rw_timeout 10000000 -show_streams -loglevel quiet)
 
                             if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ]
                             then
@@ -1672,7 +1672,7 @@ MonitorTryAccounts()
                                         then
                                             audio=0
                                         fi
-                                    done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet)
+                                    done < <($FFPROBE_FILE $encrypt_command -i "$f" -show_streams -loglevel quiet)
                                     break
                                 done
 
@@ -1736,7 +1736,7 @@ MonitorTryAccounts()
                     then
                         video=1
                     fi
-                done < <($FFPROBE $chnl_proxy_command -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet)
+                done < <($FFPROBE_FILE $chnl_proxy_command -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet)
 
                 if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ]
                 then
@@ -1819,7 +1819,7 @@ MonitorTryAccounts()
                         then
                             video=1
                         fi
-                    done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -rw_timeout 10000000 -show_streams -loglevel quiet)
+                    done < <($FFPROBE_FILE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -rw_timeout 10000000 -show_streams -loglevel quiet)
 
                     if [ "$audio" -eq 1 ] && [ "$video" -eq 1 ]
                     then
@@ -1887,7 +1887,7 @@ MonitorTryAccounts()
                                 then
                                     audio=0
                                 fi
-                            done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet)
+                            done < <($FFPROBE_FILE $encrypt_command -i "$f" -show_streams -loglevel quiet)
                             break
                         done
 
@@ -2185,9 +2185,8 @@ Monitor()
             mkdir -p "$LIVE_ROOT"
             MonitorLog "监控启动成功 PID $BASHPID !"
 
-            FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-            FFMPEG="$FFMPEG_ROOT/ffmpeg"
-            FFPROBE="$FFMPEG_ROOT/ffprobe"
+            FFmpegInstall
+
             monitor=true
 
             XtreamCodesGetDomains
@@ -2798,7 +2797,7 @@ Monitor()
                             then
                                 video=1
                             fi
-                        done < <($FFPROBE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -rw_timeout 10000000 -show_streams -loglevel quiet)
+                        done < <($FFPROBE_FILE -i "${chnl_flv_pull_link:-$chnl_flv_push_link}" -rw_timeout 10000000 -show_streams -loglevel quiet)
 
                         if [ "$audio" -eq 0 ] || [ "$video" -eq 0 ]
                         then
@@ -3071,7 +3070,7 @@ Monitor()
                                             then
                                                 audio=0
                                             fi
-                                        done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet)
+                                        done < <($FFPROBE_FILE $encrypt_command -i "$f" -show_streams -loglevel quiet)
                                         break
                                     done
 
@@ -3113,7 +3112,7 @@ Monitor()
                                                 then
                                                     audio=0
                                                 fi
-                                            done < <($FFPROBE $encrypt_command -i "$f" -show_streams -loglevel quiet)
+                                            done < <($FFPROBE_FILE $encrypt_command -i "$f" -show_streams -loglevel quiet)
 
                                             if [ "$audio" -eq 0 ] || [ "$video" -eq 0 ] || [[ $video_bitrate -lt $hls_min_bitrate ]]
                                             then

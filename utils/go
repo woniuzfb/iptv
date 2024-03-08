@@ -9,8 +9,6 @@ GoInstall()
         fi
     fi
 
-    DistCheck
-
     if [ "$dist" == "mac" ] 
     then
         DepInstall brew

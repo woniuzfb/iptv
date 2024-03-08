@@ -312,6 +312,7 @@ do
                     Println "$info 频道 [ $chnl_channel_name ] 修改成功 !\n"
                 done
             else
+                echo
                 inquirer list_input "是否推流 flv" ny_options add_channel_flv_yn
                 if [ "$add_channel_flv_yn" == "$i18n_yes" ] 
                 then

@@ -119,7 +119,6 @@ Include src/nginx/menu_mongodb "$@"
 OpenrestyInstall()
 {
     DepsCheck
-    JQInstall >/dev/null
 
     if [ "$dist" == "mac" ] && [ ! -d /usr/local/openresty ]
     then
@@ -406,7 +405,7 @@ OpenrestyInstall()
 
 ShFileCheck
 
-[ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
+JQInstall
 
 nginx_prefix="/usr/local/openresty/nginx"
 nginx_name="openresty"

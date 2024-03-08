@@ -4,8 +4,6 @@ Include utils/crossplane "$@"
 
 Include utils/openssl "$@"
 
-Include utils/jq "$@"
-
 Include utils/go "$@"
 
 Include utils/postfix "$@"
@@ -129,7 +127,6 @@ NginxInstall()
     inquirer list_input_index "选择 openssl 版本" openssl_options openssl_options_index
 
     DepsCheck
-    JQInstall >/dev/null
 
     if [ "$dist" == "mac" ] && [ ! -d /usr/local/nginx ]
     then
@@ -410,7 +407,7 @@ NginxUpdate()
 
 ShFileCheck
 
-[ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
+JQInstall
 
 nginx_prefix="/usr/local/nginx"
 nginx_name="nginx"

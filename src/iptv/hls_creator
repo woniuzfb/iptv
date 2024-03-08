@@ -446,7 +446,7 @@ HlsStreamCreatorPlus()
         hls_command+=( "$output_dir_root/${playlist_name}_%v.m3u8" )
 
         PrepTerm
-        $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+        $FFMPEG_FILE ${global_options[@]+"${global_options[@]}"} \
         ${variants_input_command[@]+"${variants_input_command[@]}"} \
         ${variants_output_command[@]+"${variants_output_command[@]}"} \
         ${map_command[@]+"${map_command[@]}"} \
@@ -798,7 +798,7 @@ HlsStreamCreatorPlus()
     fi
 
     PrepTerm
-    $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+    $FFMPEG_FILE ${global_options[@]+"${global_options[@]}"} \
     ${input_command[@]+"${input_command[@]}"} \
     ${variants_output_command[@]+"${variants_output_command[@]}"} \
     ${map_command[@]+"${map_command[@]}"} \
@@ -809,7 +809,7 @@ HlsStreamCreatorPlus()
 
     # seg
     # PrepTerm
-    # $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+    # $FFMPEG_FILE ${global_options[@]+"${global_options[@]}"} \
     # ${input_command[@]+"${input_command[@]}"} \
     # ${variants_output_command[@]+"${variants_output_command[@]}"} \
     # ${map_command[@]+"${map_command[@]}"} \
@@ -1203,7 +1203,7 @@ HlsStreamCreatorPlus()
         chnl_hls_command+=( "$chnl_output_dir_root/${chnl_playlist_name}_%v.m3u8" )
 
         PrepTerm
-        $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+        $FFMPEG_FILE ${global_options[@]+"${global_options[@]}"} \
         ${chnl_variants_input_command[@]+"${chnl_variants_input_command[@]}"} \
         ${chnl_variants_output_command[@]+"${chnl_variants_output_command[@]}"} \
         ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
@@ -1556,7 +1556,7 @@ HlsStreamCreatorPlus()
 
     # https://stackoverflow.com/questions/23235651/how-can-i-do-ansi-c-quoting-of-an-existing-bash-variable
     PrepTerm
-    $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+    $FFMPEG_FILE ${global_options[@]+"${global_options[@]}"} \
     ${chnl_input_command[@]+"${chnl_input_command[@]}"} \
     ${chnl_variants_output_command[@]+"${chnl_variants_output_command[@]}"} \
     ${chnl_map_command[@]+"${chnl_map_command[@]}"} \
@@ -1567,7 +1567,7 @@ HlsStreamCreatorPlus()
 
     # seg
     # PrepTerm
-    # $FFMPEG ${global_options[@]+"${global_options[@]}"} \
+    # $FFMPEG_FILE ${global_options[@]+"${global_options[@]}"} \
     # ${chnl_input_command[@]+"${chnl_input_command[@]}"} \
     # ${chnl_variants_output_command[@]+"${chnl_variants_output_command[@]}"} \
     # ${chnl_map_command[@]+"${chnl_map_command[@]}"} \

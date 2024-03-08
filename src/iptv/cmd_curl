@@ -1,5 +1,3 @@
-Include utils/jq "$@"
-
 Include utils/go "$@"
 
 Include utils/nodejs "$@"

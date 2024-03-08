@@ -2,12 +2,7 @@ CheckIfXtreamCodes()
 {
     XtreamCodesGetDomains
 
-    if [ -z "${FFPROBE:-}" ] 
-    then
-        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-        FFMPEG="$FFMPEG_ROOT/ffmpeg"
-        FFPROBE="$FFMPEG_ROOT/ffprobe"
-    fi
+    FFmpegInstall
 
     to_try=0
 
@@ -179,7 +174,7 @@ CheckIfXtreamCodes()
                     then
                         video=1
                     fi
-                done < <($FFPROBE $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies_command" -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet)
+                done < <($FFPROBE_FILE $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies_command" -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet)
 
                 if [ "$audio" -eq 0 ] || [ "$video" -eq 0 ]
                 then
@@ -255,7 +250,7 @@ CheckIfXtreamCodes()
                 then
                     video=1
                 fi
-            done < <($FFPROBE $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies_command" -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet)
+            done < <($FFPROBE_FILE $chnl_proxy_command -user_agent "$chnl_user_agent" -headers "$chnl_headers_command" -cookies "$chnl_cookies_command" -i "$chnl_stream_link" -rw_timeout 10000000 -show_streams -loglevel quiet)
 
             if [ "$audio" -eq 0 ] || [ "$video" -eq 0 ] 
             then

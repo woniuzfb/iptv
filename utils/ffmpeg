@@ -1,23 +1,48 @@
 FFmpegInstall()
 {
-    FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-    FFMPEG="$FFMPEG_ROOT/ffmpeg"
-    FFPROBE="$FFMPEG_ROOT/ffprobe"
-
-    if [ ! -e "$FFMPEG" ] || [ ! -e "$FFPROBE" ]
+    if FFMPEG_FILE_ROOT=$(find "$FFMPEG_ROOT"/ffmpeg-git-* -type d 2> /dev/null | head -1)
     then
-        Println "`eval_gettext \"\\\$info 开始下载/安装 FFmpeg...\"`"
+        FFMPEG_FILE="$FFMPEG_FILE_ROOT/ffmpeg"
+        FFPROBE_FILE="$FFMPEG_FILE_ROOT/ffprobe"
+    elif [ "$FFMPEG_ROOT" != "$HOME" ] && FFMPEG_FILE_ROOT=$(find "$HOME"/ffmpeg-git-* -type d 2> /dev/null | head -1) 
+    then
+        FFMPEG_ROOT="$HOME"
+        FFMPEG_FILE="$FFMPEG_FILE_ROOT/ffmpeg"
+        FFPROBE_FILE="$FFMPEG_FILE_ROOT/ffprobe"
+    fi
 
-        if [ "$dist" == "mac" ] 
+    if [[ -x "$FFMPEG_FILE" ]] && [[ -x "$FFPROBE_FILE" ]]
+    then
+        return 0
+    fi
+
+    Println "`eval_gettext \"\\\$info 开始下载/安装 FFmpeg...\"`"
+
+    if [ "$dist" == "mac" ] 
+    then
+        echo
+        inquirer list_input_index "FFmpeg 开启 openvino, 开启时可能会安装失败" ny_options ny_options_index
+
+        BrewInstall
+
+        if [ "$ny_options_index" -eq 0 ] 
         then
-            DepInstall ffmpeg
-            mkdir -p "$IPTV_ROOT"/ffmpeg-git-brew/
-            ln -sf /usr/local/bin/ffmpeg "$IPTV_ROOT"/ffmpeg-git-brew/ffmpeg
-            ln -sf /usr/local/bin/ffprobe "$IPTV_ROOT"/ffmpeg-git-brew/ffprobe
-            return 0
+            if ! curl -s -L https://github.com/Homebrew/homebrew-core/raw/HEAD/Formula/f/ffmpeg.rb -- | grep -v openvino > "$HOME"/ffmpeg.rb
+            then
+                Println "`eval_gettext \"\\\$error 暂时无法连接服务器, 请稍后再试 !\"`\n"
+                exit 1
+            fi
+
+            brew install "$HOME"/ffmpeg.rb
+        else
+            brew install ffmpeg
         fi
+    else
+        rm -rf "$FFMPEG_ROOT/"ffmpeg-git-*
 
         ArchCheck
+
+        local ffmpeg_package FFMPEG_PACKAGE_FILE
 
         if [ "$arch" == "x86_64" ]
         then
@@ -36,7 +61,7 @@ FFmpegInstall()
             exit 1
         fi
 
-        FFMPEG_PACKAGE_FILE="$IPTV_ROOT/$ffmpeg_package"
+        FFMPEG_PACKAGE_FILE="$FFMPEG_ROOT/$ffmpeg_package"
 
         if ! curl -L "$FFMPEG_MIRROR_LINK/builds/$ffmpeg_package" -o "$FFMPEG_PACKAGE_FILE"
         then
@@ -44,22 +69,20 @@ FFmpegInstall()
             exit 1
         fi
 
-        tar xJf "$FFMPEG_PACKAGE_FILE" -C "$IPTV_ROOT" && rm -f "${FFMPEG_PACKAGE_FILE:-notfound}"
+        tar xJf "$FFMPEG_PACKAGE_FILE" -C "$FFMPEG_ROOT" && rm -f "${FFMPEG_PACKAGE_FILE:-notfound}"
 
-        FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-        FFMPEG="$FFMPEG_ROOT/ffmpeg"
-        FFPROBE="$FFMPEG_ROOT/ffprobe"
+        FFMPEG_FILE_ROOT=$(dirname "$FFMPEG_ROOT"/ffmpeg-git-*/ffmpeg 2> /dev/null) || true
+        FFMPEG_FILE="$FFMPEG_FILE_ROOT/ffmpeg"
+        FFPROBE_FILE="$FFMPEG_FILE_ROOT/ffprobe"
 
-        if [ ! -e "$FFMPEG" ] || [ ! -e "$FFPROBE" ]
+        if [ ! -e "$FFMPEG_FILE" ] || [ ! -e "$FFPROBE_FILE" ]
         then
             Println "`eval_gettext \"\\\$error FFmpeg 解压失败 !\"`"
             exit 1
         fi
-
-        Println "`eval_gettext \"\\\$info FFmpeg 安装成功\"`"
-    else
-        Println "`eval_gettext \"\\\$info FFmpeg 已安装\"`"
     fi
+
+    Println "`eval_gettext \"\\\$info FFmpeg 安装成功\"`"
 }
 
 FFmpegCompile()

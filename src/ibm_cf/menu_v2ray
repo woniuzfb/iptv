@@ -1,7 +1,5 @@
 IbmV2rayMenu()
 {
-    [ ! -d "$IPTV_ROOT" ] && JQ_FILE="/usr/local/bin/jq"
-
     Println " IBM $v2ray_package_name APP 面板 ${normal}${red}[v$sh_ver]${normal}
 
   ${green}1.${normal} 下载 $v2ray_package_name APP

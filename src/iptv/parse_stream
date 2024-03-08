@@ -352,12 +352,7 @@ ParseStream()
     then
         Println "$info 检测中..."
 
-        if [ -z "${FFMPEG:-}" ] 
-        then
-            FFMPEG_ROOT=$(dirname "$IPTV_ROOT"/ffmpeg-git-*/ffmpeg)
-            FFMPEG="$FFMPEG_ROOT/ffmpeg"
-            FFPROBE="$FFMPEG_ROOT/ffprobe"
-        fi
+        FFmpegInstall
 
         ffprobe_command=()
 
@@ -373,7 +368,7 @@ ParseStream()
             ffprobe_command+=( -cookies "$cookies_command" )
         fi
 
-        if probe=$($FFPROBE -v quiet -print_format json -show_programs -show_streams -show_format -user_agent "$user_agent" \
+        if probe=$($FFPROBE_FILE -v quiet -print_format json -show_programs -show_streams -show_format -user_agent "$user_agent" \
             ${ffprobe_command[@]+"${ffprobe_command[@]}"} -i "$stream_link") 
         then
             SetDelimiters
