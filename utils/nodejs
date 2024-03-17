@@ -1,10 +1,19 @@
 NodejsInstall()
 {
+    if [[ -x $(command -v node) ]] && [[ -x $(command -v npm) ]]
+    then
+        return 0
+    fi
+
     DepsCheck
 
-    if [ "$dist" == "rpm" ] && { [[ -x $(command -v node) ]] || [[ -x $(command -v npm) ]]; }
+    if [ "$dist" == "mac" ] 
     then
-        yum remove -y nodejs npm
+        DepInstall node
+        return 0
+    elif [ "$dist" == "rpm" ] && { [[ -x $(command -v node) ]] || [[ -x $(command -v npm) ]]; }
+    then
+        yum remove -y nodejs npm || true
     fi
 
     Progress &
@@ -34,5 +43,7 @@ NodejsInstall()
     kill $progress_pid
     wait $progress_pid 2> /dev/null || true
     trap - EXIT
-    echo -n "...100%" && Println "$info nodejs 安装完成"
+
+    echo -n "...100%"
+    Println "$info nodejs 安装完成"
 }

@@ -263,6 +263,9 @@ wget https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 ./debug lhh
 ```
 
+- 1w+ 某某分享 (知乎 + 头条)
+- 某某全站 (号称7成连环画?)
+
 ## Dev
 
 v2.0.0 broken atm

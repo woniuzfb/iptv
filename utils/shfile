@@ -106,6 +106,7 @@ ShFileCheck()
     [ ! -e "$ARM_FILE" ] && ln -s "$SH_FILE" "$ARM_FILE"
     [ ! -e "$PVE_FILE" ] && ln -s "$SH_FILE" "$PVE_FILE"
     [ ! -e "$ALIST_FILE" ] && ln -s "$SH_FILE" "$ALIST_FILE"
+    [ ! -e "$LIANHUANHUA_FILE" ] && ln -s "$SH_FILE" "$LIANHUANHUA_FILE"
 
     return 0
 }

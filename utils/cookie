@@ -1,0 +1,85 @@
+CookiesGet()
+{
+    local cookies cookie_commands=() url="$1" var_name="$2" data="${3:-}"
+    local oIFS=$IFS
+
+    if [ "${use_cookie_file:-false}" = true ] 
+    then
+        cookie_commands+=( -b "$COOKIE_FILE" )
+    fi
+
+    if [ "${save_cookie_file:-false}" = true ] 
+    then
+        cookie_commands+=( -c "$COOKIE_FILE" )
+    fi
+
+    if [ -n "${data:-}" ] 
+    then
+        cookie_commands+=( --data "$data" )
+    fi
+
+    IFS=$'\n'
+
+    if [ "${save_return:-false}" = true ] 
+    then
+        if TMP_FILE=$(mktemp -q)
+        then
+            chmod +r "$TMP_FILE"
+        else
+            exit $?
+        fi
+
+        trap '
+            rm -f "${TMP_FILE:-notfound}"
+        ' EXIT
+
+        if ! cookies=($(CurlFake -s -Lm 20 -D - ${cookie_commands[@]+"${cookie_commands[@]}"} -o "$TMP_FILE" "$url" | grep -i 'set-cookie'))
+        then
+            Println "$error 无法连接 $url, 请稍后再试\n"
+            exit 1
+        fi
+
+        return_body="$(< $TMP_FILE)"
+
+        rm -f "${TMP_FILE:-notfound}"
+    elif ! cookies=($(CurlFake -s -Lm 20 -D - ${cookie_commands[@]+"${cookie_commands[@]}"} -o /dev/null "$url" | grep -i 'set-cookie'))
+    then
+        Println "$error 无法连接 $url, 请稍后再试\n"
+        exit 1
+    fi
+
+    IFS="$oIFS"
+
+    read -r -a ${var_name?} <<< "${cookies[@]#*set-cookie:}"
+
+    use_cookie_file=false
+    save_cookie_file=false
+    save_return=false
+}
+
+CookiesToJson()
+{
+    local domain="$1"
+    shift
+    local cookies=("$@") cookie new_cookie cookie_json
+    cookies=("${cookies[@]%;}")
+
+    for cookie in "${cookies[@]}"
+    do
+        new_cookie=$(
+        $JQ_FILE -n --arg name "${cookie%=*}" --arg value "${cookie#*=}" \
+        --arg domain "${domain}" --arg path / \
+            '{
+                name: $name,
+                value: $value,
+                domain: $domain,
+                path: $path
+            }'
+        )
+
+        [ -n "${cookie_json:-}" ] && cookie_json="${cookie_json},"
+        cookie_json="${cookie_json}${new_cookie}"
+    done
+
+    echo "[$cookie_json]" | $JQ_FILE -c .
+}

@@ -30,8 +30,14 @@ LOG_FILE="$HOME"/iptv.log
 JQ_FILE=/usr/local/bin/jq
 FFMPEG_FILE=/usr/local/bin/ffmpeg
 FFPROBE_FILE=/usr/local/bin/ffprobe
-FFMPEG_ROOT="$HOME"
 CURL_IMPERSONATE_FILE=/usr/local/bin/curl-impersonate
+
+# FFmpeg
+FFMPEG_ROOT="$HOME"
+
+# node
+NODE_ROOT="$HOME"/iptv_sh_node
+NODE_TOUTIAO_LINK=https://raw.githubusercontent.com/woniuzfb/iptv/main/scripts/toutiao
 
 # iptv
 IPTV_ROOT=/usr/local/iptv
@@ -45,7 +51,6 @@ LOGROTATE_CONFIG="$IPTV_ROOT"/logrotate
 CRON_FILE="$IPTV_ROOT"/cron
 XTREAM_CODES="$IPTV_ROOT"/xtream_codes
 XTREAM_CODES_EXAM="$IPTV_ROOT"/xtream_codes_exam
-NODE_ROOT="$IPTV_ROOT"/node
 IP_DENY="$IPTV_ROOT"/ip.deny
 IP_LOG="$IPTV_ROOT"/ip.log
 LIVE_ROOT="$IPTV_ROOT"/live
@@ -62,7 +67,7 @@ MD5SUM_LINK_FALLBACK="$FFMPEG_MIRROR_LINK"/md5sum.c
 DEFAULT_DEMOS=default.json
 TS_CHANNELS=channels.json
 XTREAM_CODES_CHANNELS=xtream_codes
-USER_AGENT_BROWSER="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.55 Safari/537.36"
+USER_AGENT_BROWSER="Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 USER_AGENT_TV="Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3"
 USER_AGENT_PHONE="iPhone; CPU iPhone OS 15_2 like Mac OS X"
 
@@ -95,3 +100,6 @@ IBM_CONFIG="$HOME"/ibm.json
 
 # Alist
 ALIST_FILE=/usr/local/bin/ali
+
+# LianHuanHua
+LIANHUANHUA_FILE=/usr/local/bin/lhh

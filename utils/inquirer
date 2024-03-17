@@ -402,8 +402,122 @@ inquirer()
         tput cuu $((checkbox_page_list_count-current_index))
     }
 
+    inquirer:on_checkbox_input_page() {
+        if [ "$checkbox_input_page" = true ] && [[ "$1" =~ [0-9] ]] 
+        then
+            checkbox_input_page_num="${checkbox_input_page_num:-}$1"
+            checkbox_input_page_num=${checkbox_input_page_num#\0}
+        else
+            checkbox_input_page=true
+            checkbox_input_page_num=""
+        fi
+    }
+
     inquirer:on_checkbox_input_enter() {
         local i
+
+        if [ "$checkbox_input_page" = true ] 
+        then
+            checkbox_input_page=false
+            if [ -n "${checkbox_input_page_num:-}" ] 
+            then
+                if [ "$checkbox_input_page_num" -gt "$checkbox_pages_count" ] || [ "$checkbox_input_page_num" -eq $((checkbox_pages_index+1)) ]
+                then
+                    checkbox_input_page_num=""
+                    return 0
+                fi
+
+                checkbox_pages_index=$((checkbox_input_page_num-1))
+
+                checkbox_pages_tip="${dim}$checkbox_pages_arrows $((checkbox_pages_index+1))/$checkbox_pages_count `gettext \"页\"`${normal}"
+
+                if [ "$checkbox_input_page_num" -eq "$checkbox_pages_count" ] 
+                then
+                    checkbox_page_list_count=$((checkbox_list_count-checkbox_pages_index*checkbox_list_perpage))
+                else
+                    checkbox_page_list_count=$checkbox_list_perpage
+                fi
+
+                inquirer:page_instructions
+                tput cub "$(tput cols)"
+                tput cud $((checkbox_list_perpage-current_index+1))
+
+                for((i=0;i<=checkbox_list_perpage;i++));
+                do
+                    tput el
+                    tput cuu1
+                done
+
+                tput el
+
+                if [ "$current_index" -gt "$checkbox_page_list_count" ] 
+                then
+                    current_index=$checkbox_page_list_count
+                fi
+
+                checkbox_page_list=()
+                checkbox_page_selected=()
+                checkbox_page_select_all=true
+
+                for((i=0;i<checkbox_page_list_count;i++));
+                do
+                    checkbox_page_list+=("${checkbox_list[i+checkbox_list_perpage*checkbox_pages_index]}")
+
+                    if [ "$i" = "$current_index" ] 
+                    then
+                        if [ "${checkbox_selected[i+checkbox_list_perpage*checkbox_pages_index]}" = true ]
+                        then
+                            checkbox_page_selected+=("true")
+                            inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_page_list[i]}\n"
+                        else
+                            checkbox_page_selected+=("false")
+                            checkbox_page_select_all=false
+                            inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_page_list[i]}\n"
+                        fi
+                    else
+                        if [ "${checkbox_selected[i+checkbox_list_perpage*checkbox_pages_index]}" = true ]
+                        then
+                            checkbox_page_selected+=("true")
+                            inquirer:print " ${green}${checked}${normal} ${checkbox_page_list[i]}\n"
+                        else
+                            checkbox_page_selected+=("false")
+                            checkbox_page_select_all=false
+                            inquirer:print " ${unchecked} ${checkbox_page_list[i]}\n"
+                        fi
+                    fi
+                done
+
+                checkbox_page_list+=("$(gettext 全选)")
+
+                if [ "$current_index" -eq $checkbox_page_list_count ] 
+                then
+                    if [ "$checkbox_page_select_all" = true ] 
+                    then
+                        checkbox_page_selected+=("true")
+                        inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                    else
+                        checkbox_page_selected+=("false")
+                        inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                    fi
+                else
+                    if [ "$checkbox_page_select_all" = true ] 
+                    then
+                        checkbox_page_selected+=("true")
+                        inquirer:print " ${green}${checked}${normal} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                    else
+                        checkbox_page_selected+=("false")
+                        inquirer:print " ${unchecked} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                    fi
+                fi
+
+                ((checkbox_page_list_count++))
+
+                tput cuu $((checkbox_page_list_count-current_index))
+
+                checkbox_input_page_num=""
+            fi
+            return 0
+        fi
 
         for i in "${!checkbox_list[@]}"
         do
@@ -498,6 +612,7 @@ inquirer()
             "s" ) inquirer:on_checkbox_input_down;;
             "a" ) inquirer:on_checkbox_input_left;;
             "d" ) inquirer:on_checkbox_input_right;;
+            [0-9Pp] ) inquirer:on_checkbox_input_page "$1";;
         esac
     }
 
@@ -1475,6 +1590,8 @@ inquirer()
     checkbox_page_list_count=0 \
     checkbox_page_selected=() \
     checkbox_page_select_all=true \
+    checkbox_input_page=false \
+    checkbox_input_page_num \
     checkbox_pages_tip \
     checkbox_pages_arrows="\xe2\x9d\xae\xe2\x9d\xaf" \
     checkbox_pages_index=0 \

@@ -1,0 +1,20 @@
+NodeInstallToutiao()
+{
+    if [ ! -f "$NODE_ROOT"/toutiao/browser.js ] 
+    then
+        DepInstall curl
+        echo
+        toutiao_files=( 'browser.js' 'signer.js' 'webmssdk.js' 'xbogus.js' )
+        for toutiao_file in "${toutiao_files[@]}"
+        do
+            if ! curl -Lm 20 -o "$NODE_ROOT"/toutiao/"$toutiao_file" "$NODE_TOUTIAO_LINK"/"$toutiao_file" 
+            then
+                Println "$error 无法连接 github ?\n"
+                exit 1
+            fi
+        done
+        cd "$NODE_ROOT"/toutiao/
+        npm i playwright-chromium
+        Println "$info 头条签名 node 安装成功"
+    fi
+}
