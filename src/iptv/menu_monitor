@@ -20,7 +20,7 @@ MonitorMenu()
 
 AntiDDoSSet()
 {
-    if [ -x "$(command -v ufw)" ] && [ -s "$nginx_prefix/logs/access.log" ] && ls -A $LIVE_ROOT/* > /dev/null 2>&1
+    if [[ -x "$(command -v ufw)" ]] && [ -s "$nginx_prefix/logs/access.log" ] && ls -A $LIVE_ROOT/* > /dev/null 2>&1
     then
         sleep 1
 

@@ -12,7 +12,7 @@ index a12448b..3ee0452 100644
  tsconfig.tsbuildinfo
  website/
 diff --git a/lib/Curl.ts b/lib/Curl.ts
-index d2a419c..5d44ba3 100644
+index 14013df..7f89018 100644
 --- a/lib/Curl.ts
 +++ b/lib/Curl.ts
 @@ -69,7 +69,7 @@ import { CurlReadFunc } from './enum/CurlReadFunc'
@@ -64,22 +64,22 @@ index 9bba413..bccbb1e 100644
  /**
   * This is a Node.js wrapper around the binding {@link EasyNativeBinding | native Easy class}.
 diff --git a/package.json b/package.json
-index 15071fd..49350a8 100644
+index 4d392fc..633a602 100644
 --- a/package.json
 +++ b/package.json
 @@ -1,7 +1,7 @@
  {
 -  "name": "node-libcurl",
 +  "name": "node-libcurl-impersonate",
-   "version": "3.0.0",
+   "version": "4.0.0",
 -  "description": "The fastest http(s) client (and much more) for Node.js - Node.js bindings for libcurl",
 +  "description": "The fastest http(s) client (and much more) for Node.js - Node.js bindings for libcurl (curl-impersonate)",
    "keywords": [
      "node-curl",
      "curl",
-@@ -23,7 +23,7 @@
-   "main": "./dist/index.js",
-   "types": "./dist/index.d.ts",
+@@ -30,7 +30,7 @@
+     "LIBCURL_VERSION_WIN_DEPS"
+   ],
    "binary": {
 -    "module_name": "node_libcurl",
 +    "module_name": "node_libcurl-impersonate",

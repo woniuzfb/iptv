@@ -84,6 +84,8 @@ dim_underlined='\033[37;4;2m'
 indent_6='\r\033[6C'
 indent_20='\r\033[20C'
 
+shopt -s extglob
+
 Println()
 {
     printf '\n%b\n' "$1"
@@ -22537,7 +22539,7 @@ TsMenu()
 
 AntiDDoSSet()
 {
-    if [ -x "$(command -v ufw)" ] && [ -s "$nginx_prefix/logs/access.log" ] && ls -A $LIVE_ROOT/* > /dev/null 2>&1
+    if [[ -x "$(command -v ufw)" ]] && [ -s "$nginx_prefix/logs/access.log" ] && ls -A $LIVE_ROOT/* > /dev/null 2>&1
     then
         sleep 1
 
@@ -27716,7 +27718,7 @@ OpenrestyInstall()
         mv $openssl_name $openssl_name-patched
         cd $openssl_name-patched
         curl -s -L "$FFMPEG_MIRROR_LINK/openssl-1.1.1f-sess_set_get_cb_yield.patch" -o openssl-1.1.1f-sess_set_get_cb_yield.patch
-        patch -p1 < openssl-1.1.1f-sess_set_get_cb_yield.patch >/dev/null 2>&1
+        patch -p1 < openssl-1.1.1f-sess_set_get_cb_yield.patch >/dev/null 2>&1 || true
         cd ~
     fi
 
@@ -27725,7 +27727,7 @@ OpenrestyInstall()
     cd "$openresty_package_name/bundle/ngx_lua-"*
 
     curl -s -L "$FFMPEG_MIRROR_LINK/fix_ngx_lua_resp_get_headers_key_whitespace.patch" -o fix_ngx_lua_resp_get_headers_key_whitespace.patch
-    patch -p1 < fix_ngx_lua_resp_get_headers_key_whitespace.patch >/dev/null 2>&1
+    patch -p1 < fix_ngx_lua_resp_get_headers_key_whitespace.patch >/dev/null 2>&1 || true
 
     cd ../..
 
@@ -27896,30 +27898,31 @@ NginxInstall()
         fi
     fi
 
-    while IFS= read -r line
-    do
-        if [ "$openssl_options_index" -eq 0 ] 
-        then
-            if [[ $line == *"openssl-1."* ]] 
+    if [ "$openssl_options_index" -eq 0 ] 
+    then
+        openssl_url="https://www.openssl.org/source/old"
+        openssl_vers=($(curl -s -Lm 20 $openssl_url/ | grep -oP '<li><a href="[^"]+">\K[^<]+'))
+
+        for openssl_ver in "${openssl_vers[@]}"
+        do
+            if [ "${openssl_ver%%.*}" -eq 1 ] 
             then
-                openssl_name=${line#*<a href=\"}
-                openssl_name=${openssl_name%%.tar.gz*}
                 break
             fi
-        else
-            if [[ $line == *"openssl-3.0"* ]] 
-            then
-                openssl_name=${line#*<a href=\"}
-                openssl_name=${openssl_name%%.tar.gz*}
-                break
-            fi
-        fi
-    done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://www.openssl.org/source/ 2> /dev/null)
+        done
+        openssl_url="$openssl_url/$openssl_ver"
+    else
+        openssl_url="https://www.openssl.org/source"
+    fi
+
+    openssl_packs=($(curl -s -Lm 20 $openssl_url/ | grep -oP '<td><a href="[^"]+">\K[^<]+'))
+    openssl_pack="${openssl_packs[0]}"
+    openssl_name=${openssl_pack%.tar*}
 
     if [ ! -d "./$openssl_name" ] 
     then
-        curl -s -L "https://www.openssl.org/source/$openssl_name.tar.gz" -o "$openssl_name.tar.gz"
-        tar xzf "$openssl_name.tar.gz"
+        curl -s -L "$openssl_url/$openssl_pack" -o "$openssl_pack"
+        tar xzf "$openssl_pack"
     fi
 
     echo -n "...60%..."

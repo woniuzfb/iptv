@@ -213,6 +213,7 @@ CurlImpersonateCompile()
         mkdir build && cd build
         ../configure --prefix="$curl_impersonate_prefix"
         gmake chrome-build
+        Println "$tip 可能需要输入密码建立安装路径 $curl_impersonate_prefix"
         sudo gmake chrome-install
     else
         if [ "$dist" == "rpm" ] 
@@ -233,23 +234,25 @@ CurlImpersonateCompile()
         sudo ldconfig
     fi
 
+    if [ "$dist" == "mac" ] 
+    then
+        Println "$tip 可能需要输入密码建立安装路径 ${curl_impersonate_prefix}/include/curl/"
+    fi
+
     sudo mkdir -p "$curl_impersonate_prefix"/include/curl/
-    cp -f curl-*/include/curl/* "$curl_impersonate_prefix"/include/curl/
-    cp -f curl-*/curl-impersonate-chrome-config "$curl_impersonate_prefix"/bin/
-    chmod +x "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config
+    sudo cp -f curl-*/include/curl/* "$curl_impersonate_prefix"/include/curl/
+    # sudo cp -f curl-*/curl-impersonate-chrome-config "$curl_impersonate_prefix"/bin/
+    # sudo chmod +x "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config
 
     # rm -f /usr/local/bin/curl-config
-    # ln -s "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config /usr/local/bin/curl-config
+    # sudo ln -s "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config /usr/local/bin/curl-config
 
     Println "$info curl impersonate 编译成功\n"
 }
 
 NodeLibcurlImpersonateCompile()
 {
-    if [[ ! -x $(command -v node) ]] || [[ ! -x $(command -v npm) ]] 
-    then
-        NodejsInstall
-    fi
+    NodejsInstall
 
     echo
     inquirer text_input "输入编译安装好的 curl impersonate 路径" curl_impersonate_prefix /usr/local/curl-impersonate
@@ -271,10 +274,19 @@ NodeLibcurlImpersonateCompile()
     git clone https://github.com/JCMais/node-libcurl.git node-libcurl-impersonate
     cd node-libcurl-impersonate
     curl -s -Lm 20 "$FFMPEG_MIRROR_LINK/node-libcurl-impersonate.patch" -o node-libcurl-impersonate.patch
-    patch -p1 < node-libcurl-impersonate.patch
+    patch -p1 < node-libcurl-impersonate.patch || true
+
+    if [ "$dist" == "mac" ] 
+    then
+        Println "$tip 可能需要输入密码创建链接 ln -s ${curl_impersonate_prefix}/bin/curl-impersonate-chrome-config /usr/local/bin/curl-config"
+        sudo ln -s "${curl_impersonate_prefix}"/lib/libcurl-impersonate-chrome.*.dylib /usr/local/curl-impersonate/lib/libcurl.dylib
+    fi
 
     rm -f /usr/local/bin/curl-config
-    ln -s "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config /usr/local/bin/curl-config
-    npm install --force --unsafe-perm
+    sudo ln -s "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config /usr/local/bin/curl-config
+    npm run clean:dist
+    npm install --force --build-from-source --unsafe-perm
     npm run build:dist
+
+    Println "$info 查看 $HOME/node-libcurl-impersonate/lib/binding/node_libcurl-impersonate.node\n可以这样使用 const { Curl, CurlFeature, CurlHttpVersion, CurlSslVersion } = require('$HOME/node-libcurl-impersonate/dist')\n详见 https://github.com/JCMais/node-libcurl/\n"
 }

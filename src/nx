@@ -130,7 +130,7 @@ NginxInstall()
 
     if [ "$dist" == "mac" ] && [ ! -d /usr/local/nginx ]
     then
-        Println "$info 建立目录 /usr/local/nginx\n"
+        Println "$info 建立目录 /usr/local/nginx, 可能需要输入密码\n"
         sudo mkdir /usr/local/nginx
         sudo chown $USER /usr/local/nginx
     fi
@@ -261,30 +261,31 @@ NginxInstall()
             fi
         fi
 
-        while IFS= read -r line
-        do
-            if [ "$openssl_options_index" -eq 0 ] 
-            then
-                if [[ $line == *"openssl-1."* ]] 
+        if [ "$openssl_options_index" -eq 0 ] 
+        then
+            openssl_url="https://www.openssl.org/source/old"
+            openssl_vers=($(curl -s -Lm 20 $openssl_url/ | grep -oP '<li><a href="[^"]+">\K[^<]+'))
+
+            for openssl_ver in "${openssl_vers[@]}"
+            do
+                if [ "${openssl_ver%%.*}" -eq 1 ] 
                 then
-                    openssl_name=${line#*<a href=\"}
-                    openssl_name=${openssl_name%%.tar.gz*}
                     break
                 fi
-            else
-                if [[ $line == *"openssl-3.0"* ]] 
-                then
-                    openssl_name=${line#*<a href=\"}
-                    openssl_name=${openssl_name%%.tar.gz*}
-                    break
-                fi
-            fi
-        done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://www.openssl.org/source/ 2> /dev/null)
+            done
+            openssl_url="$openssl_url/$openssl_ver"
+        else
+            openssl_url="https://www.openssl.org/source"
+        fi
+
+        openssl_packs=($(curl -s -Lm 20 $openssl_url/ | grep -oP '<td><a href="[^"]+">\K[^<]+'))
+        openssl_pack="${openssl_packs[0]}"
+        openssl_name=${openssl_pack%.tar*}
 
         if [ ! -d "./$openssl_name" ] 
         then
-            curl -s -L "https://www.openssl.org/source/$openssl_name.tar.gz" -o "$openssl_name.tar.gz"
-            tar xzf "$openssl_name.tar.gz"
+            curl -s -L "$openssl_url/$openssl_pack" -o "$openssl_pack"
+            tar xzf "$openssl_pack"
         fi
 
         echo -n "...60%..."
@@ -469,7 +470,7 @@ Println "  nginx 管理面板 ${normal}${red}[v$sh_ver]${normal}
  ${green}11.${normal} 开关
  ${green}12.${normal} 重启
 ————————————
- ${green}13.${normal} 配置 日志切割
+ ${green}13.${normal} 配置 vim
  ${green}14.${normal} 配置 nodejs
  ${green}15.${normal} 配置 mongodb
  ${green}16.${normal} 配置 postfix
@@ -477,6 +478,7 @@ Println "  nginx 管理面板 ${normal}${red}[v$sh_ver]${normal}
  ${green}18.${normal} 配置 dnscrypt proxy
  ${green}19.${normal} 识别 cloudflare/ibm ip
  ${green}20.${normal} 删除域名
+ ${green}21.${normal} 日志切割
 
  ${tip} 输入: nx 打开面板
 
@@ -529,7 +531,7 @@ case "$nginx_num" in
         NginxRestart
     ;;
     13) 
-        NginxLogRotate
+        VimConfig
     ;;
     14)
         NodejsMenu
@@ -551,6 +553,9 @@ case "$nginx_num" in
     ;;
     20)
         NginxDeleteDomain
+    ;;
+    21) 
+        NginxLogRotate
     ;;
     *) Println "$error $i18n_input_correct_number [1-20]\n"
     ;;

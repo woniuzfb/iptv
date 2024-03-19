@@ -10,19 +10,31 @@ LhhDownload()
 {
     if ! CurlFake "$@"
     then
-        sleep 10
-        if ! CurlFake "$@" 
+        if [ "${curl_retry:-true}" = true ] 
         then
-            Println "$error $@\n\n发生错误请重试\n"
-            exit 1
+            sleep 10
+            if CurlFake "$@" 
+            then
+                return 0
+            fi
         fi
+
+        if [ "${curl_print_error:-true}" = true ] 
+        then
+            echo "$@"
+            Println "$error \n发生错误请重试\n"
+        fi
+        return 1
     fi
+
+    curl_retry=true
+    curl_print_error=true
 }
 
 ZhLhhDownload()
 {
     local book_url="$1" title="$2" i j
-    local book_path="$save_dir/$title"
+    local book_path="$save_dir/${title//\//_}"
 
     i=2
     until [ ! -d "$book_path" ] 
@@ -465,7 +477,7 @@ reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p
 HdlzZhihuDownload()
 {
     local id=$1 title=$2 i j
-    local book_path="$save_dir/$title"
+    local book_path="$save_dir/${title//\//_}"
     shift 2
 
     i=2
@@ -548,7 +560,7 @@ HdlzZhihuDownload()
 HdlzToutiaoDownload()
 {
     local id=$1 title=$2 i j
-    local book_path="$save_dir/$title"
+    local book_path="$save_dir/${title//\//_}"
 
     i=2
     until [ ! -d "$book_path" ] 
@@ -581,9 +593,16 @@ HdlzToutiaoDownload()
 
         while true 
         do
-            if ! LhhDownload -s -L -A "$getinfo_useragent" -H "referer: https://www.toutiao.com/article/${id}" -H "cookie: ${toutiao_cookies[*]}" -o "$book_path/${book_image_formated}.jpg" "$book_image" 
+            curl_retry=false
+            curl_print_error=false
+            if ! LhhDownload -s -Lm 20 -A "$getinfo_useragent" -H "referer: https://www.toutiao.com/article/${id}" -H "cookie: ${toutiao_cookies[*]}" -o "$book_path/${book_image_formated}.jpg" "$book_image" 
             then
                 HdlzGetTouTiaoCookies
+                if ! book_images=($(LhhDownload -s -L -A "$getinfo_useragent" -H "referer: $signed_url" -H "cookie: ${toutiao_cookies[*]}" "https://www.toutiao.com/article/${id}" | grep -oP '<article[^>]*>.*?</article>' | grep -oP '<img[^>]*src="\K[^"]*(?=")'))
+                then
+                    Println "$error 无法获取图片\n"
+                    exit 1
+                fi
                 continue
             fi
             break
@@ -1036,7 +1055,7 @@ reduce ({id,behot_time,title}|keys_unsorted[]) as $key ([];
                 then
                     if ! HdlzZhihuDownload "${books_id[result_index]}" "${books_title[result_index]#*｜}" ${books_excerpt[result_index]}
                     then
-                        Println "$error "${books_title[result_index]#*｜}" 下载失败, 请检查资源是否存在 https://zhuanlan.zhihu.com/p/${books_id[result_index]}\n"
+                        Println "$error ${books_title[result_index]#*｜} 下载失败, 请检查资源是否存在 https://zhuanlan.zhihu.com/p/${books_id[result_index]}\n"
                         all_success=false
                         continue
                     fi
@@ -1047,7 +1066,7 @@ reduce ({id,behot_time,title}|keys_unsorted[]) as $key ([];
                     fi
                     if ! HdlzToutiaoDownload "${books_id[result_index]}" "${books_title[result_index]#*｜}"
                     then
-                        Println "$error "${books_title[result_index]#*｜}" 下载失败, 请检查资源是否存在 https://www.toutiao.com/article/${books_id[result_index]}\n"
+                        Println "$error ${books_title[result_index]#*｜} 下载失败, 请检查资源是否存在 https://www.toutiao.com/article/${books_id[result_index]}\n"
                         all_success=false
                         continue
                     fi

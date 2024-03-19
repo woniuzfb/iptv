@@ -12,21 +12,16 @@ NginxConfigServerHttpsPort()
 
 NginxConfigServerRoot()
 {
-    Println "设置公开的根目录"
-    while read -p "(默认: $nginx_prefix/html): " server_root 
+    while true 
     do
-        if [ -z "$server_root" ] 
-        then
-            server_root="$nginx_prefix/html"
-            break
-        elif [ "${server_root:0:1}" != "/" ] 
+        echo
+        inquirer text_input "设置公开的根目录" server_root "$nginx_prefix/html"
+
+        if [ "${server_root:0:1}" != "/" ] 
         then
             Println "$error 输入错误\n"
         else
-            if [ "${server_root: -1}" == "/" ] 
-            then
-                server_root=${server_root:0:-1}
-            fi
+            server_root="${server_root%/}"
 
             mkdir -p "$server_root"
             break
@@ -36,25 +31,23 @@ NginxConfigServerRoot()
 
 NginxConfigServerLiveRoot()
 {
-    Println "设置公开目录下的(live目录 - HLS输出目录)位置"
-    while read -p "(默认: $server_root/): " server_live_root 
+    while true 
     do
-        if [ -z "$server_live_root" ] 
-        then
-            server_live_root="$server_root"
-            ln -sf "$LIVE_ROOT" "$server_live_root/"
-            break
-        elif [ "${server_live_root:0:1}" != "/" ] 
+        echo
+        inquirer text_input "设置公开目录下的(live目录 - HLS输出目录)位置" server_live_root "$server_root"
+
+        if [ "${server_live_root:0:1}" != "/" ] 
         then
             Println "$error 输入错误\n"
         else
-            if [ "${server_live_root: -1}" == "/" ] 
+            server_live_root="${server_live_root%/}"
+
+            if [ -d "$LIVE_ROOT" ] 
             then
-                server_live_root=${server_live_root:0:-1}
+                ln -sf "$LIVE_ROOT" "$server_live_root/"
             fi
 
             mkdir -p "$server_live_root"
-            ln -sf "$LIVE_ROOT" "$server_live_root/"
             break
         fi
     done

@@ -3,179 +3,169 @@ NginxAddDomain()
     NginxListDomains
 
     Println "$tip 多个域名用空格分隔"
-    read -p "输入指向本机的IP或域名: " domains
+    ExitOnText "输入指向本机的IP或域名" domains
 
-    if [ -n "$domains" ] 
-    then
-        NginxCheckLocalhost
-        NginxAddHttp
+    NginxCheckLocalhost
+    NginxAddHttp
 
-        IFS=" " read -ra new_domains <<< "$domains"
-        for server_domain in "${new_domains[@]}"
-        do
-            if [ -e "$nginx_prefix/conf/sites_available/$server_domain.conf" ] 
-            then
-                Println "$error $server_domain 已存在"
-                continue
-            fi
+    new_domains=( $domains )
+    domain_options=( http 'http => https' 'http + https' )
 
-            if [[ $server_domain =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || [[ ! $server_domain =~ ^([a-zA-Z0-9](([a-zA-Z0-9-]){0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]]
-            then
-                server_num=1
-            else
-                Println "选择网站类型
+    for server_domain in "${new_domains[@]}"
+    do
+        if [ -e "$nginx_prefix/conf/sites_available/$server_domain.conf" ] 
+        then
+            Println "$error $server_domain 已存在"
+            continue
+        fi
 
-  ${green}1.${normal} http
-  ${green}2.${normal} http => https
-  ${green}3.${normal} http +  https
- \n"
-                read -p "`gettext \"输入序号\"` [1-3]: " server_num
-            fi
+        if [[ $server_domain =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || [[ ! $server_domain =~ ^([a-zA-Z0-9](([a-zA-Z0-9-]){0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]]
+        then
+            domain_options_index=0
+        else
+            echo
+            inquirer list_input_index "选择网站 $server_domain 类型" domain_options domain_options_index
+        fi
 
-            case $server_num in
-                1) 
+        case $domain_options_index in
+            0) 
+                NginxConfigServerHttpPort
+                echo
+                inquirer list_input "是否设置跳转到其它网址" ny_options http_redirect_yn
+
+                if [ "$http_redirect_yn" == "$i18n_yes" ] 
+                then
+                    NginxAppendHttpRedirectConf
+                else
+                    NginxConfigServerRoot
+                    NginxConfigServerLiveRoot
+                    NginxAppendHttpConf
+                fi
+
+                updated=0
+                NginxAddCorsHost
+                [ "$updated" -eq 1 ] && NginxBuildConf parse_out
+
+                NginxEnableDomain
+                Println "$info $server_domain 配置成功\n"
+            ;;
+            1) 
+                NginxDomainInstallCert "$server_domain"
+                echo
+                inquirer list_input "是否设置 http 跳转 https" yn_options http_to_https_yn
+
+                if [ "$http_to_https_yn" == "$i18n_yes" ] 
+                then
+                    Println "$info 设置 $server_domain http 配置"
+                    NginxConfigServerHttpPort
+                    NginxAppendHttpRedirectToHttpsConf
+                fi
+
+                NginxConfigServerHttpsPort
+                echo
+                inquirer list_input "是否设置 https 跳转到其它网址" ny_options https_redirect_yn
+
+                if [ "$https_redirect_yn" == "$i18n_yes" ] 
+                then
+                    NginxAppendHttpsRedirectConf
+                else
+                    NginxConfigServerRoot
+                    NginxConfigServerLiveRoot
+                    NginxAppendHttpsConf
+                fi
+
+                updated=0
+                NginxAddCorsHost
+                [ "$updated" -eq 1 ] && NginxBuildConf parse_out
+
+                NginxEnableDomain
+                Println "$info $server_domain 配置成功\n"
+            ;;
+            2) 
+                NginxDomainInstallCert "$server_domain"
+                echo
+                inquirer list_input "http 和 https 是否使用相同的目录" yn_options http_https_same_dir_yn
+
+                if [ "$http_https_same_dir_yn" == "$i18n_yes" ] 
+                then
+                    NginxConfigServerHttpPort
+                    NginxConfigServerHttpsPort
+                    echo
+                    inquirer list_input "是否设置跳转到其它网址" ny_options http_https_redirect_yn
+                    if [ "$http_https_redirect_yn" == "$i18n_yes" ] 
+                    then
+                        NginxAppendHttpHttpsRedirectConf
+                    else
+                        NginxConfigServerRoot
+                        NginxConfigServerLiveRoot
+                        NginxAppendHttpHttpsConf
+                    fi
+                else
                     NginxConfigServerHttpPort
                     echo
-                    inquirer list_input "是否设置跳转到其它网址" ny_options http_redirect_yn
-
+                    inquirer list_input "是否设置 http 跳转到其它网址" ny_options http_redirect_yn
                     if [ "$http_redirect_yn" == "$i18n_yes" ] 
                     then
                         NginxAppendHttpRedirectConf
-                    else
-                        NginxConfigServerRoot
-                        NginxConfigServerLiveRoot
-                        NginxAppendHttpConf
-                    fi
-
-                    updated=0
-                    NginxAddCorsHost
-                    [ "$updated" -eq 1 ] && NginxBuildConf parse_out
-
-                    NginxEnableDomain
-                    Println "$info $server_domain 配置成功\n"
-                ;;
-                2) 
-                    NginxDomainInstallCert "$server_domain"
-                    echo
-                    inquirer list_input "是否设置 http 跳转 https" yn_options http_to_https_yn
-
-                    if [ "$http_to_https_yn" == "$i18n_yes" ] 
-                    then
-                        Println "$info 设置 $server_domain http 配置"
-                        NginxConfigServerHttpPort
-                        NginxAppendHttpRedirectToHttpsConf
-                    fi
-
-                    NginxConfigServerHttpsPort
-                    echo
-                    inquirer list_input "是否设置 https 跳转到其它网址" ny_options https_redirect_yn
-
-                    if [ "$https_redirect_yn" == "$i18n_yes" ] 
-                    then
-                        NginxAppendHttpsRedirectConf
-                    else
-                        NginxConfigServerRoot
-                        NginxConfigServerLiveRoot
-                        NginxAppendHttpsConf
-                    fi
-
-                    updated=0
-                    NginxAddCorsHost
-                    [ "$updated" -eq 1 ] && NginxBuildConf parse_out
-
-                    NginxEnableDomain
-                    Println "$info $server_domain 配置成功\n"
-                ;;
-                3) 
-                    NginxDomainInstallCert "$server_domain"
-                    echo
-                    inquirer list_input "http 和 https 是否使用相同的目录" yn_options http_https_same_dir_yn
-
-                    if [ "$http_https_same_dir_yn" == "$i18n_yes" ] 
-                    then
-                        NginxConfigServerHttpPort
                         NginxConfigServerHttpsPort
+
                         echo
-                        inquirer list_input "是否设置跳转到其它网址" ny_options http_https_redirect_yn
-                        if [ "$http_https_redirect_yn" == "$i18n_yes" ] 
+                        inquirer list_input "是否设置 https 跳转到其它网址" yn_options https_redirect_yn
+
+                        if [ "$https_redirect_yn" == "$i18n_yes" ] 
                         then
-                            NginxAppendHttpHttpsRedirectConf
+                            NginxAppendHttpsRedirectConf
                         else
                             NginxConfigServerRoot
                             NginxConfigServerLiveRoot
-                            NginxAppendHttpHttpsConf
+                            NginxAppendHttpsConf
                         fi
                     else
-                        NginxConfigServerHttpPort
+                        NginxConfigServerRoot
+                        NginxConfigServerLiveRoot
+
+                        server_http_root="$server_root"
+                        server_http_live_root="$server_live_root"
+                        server_http_deny="$deny_aliyun"
+
+                        NginxConfigServerHttpsPort
+
                         echo
-                        inquirer list_input "是否设置 http 跳转到其它网址" ny_options http_redirect_yn
-                        if [ "$http_redirect_yn" == "$i18n_yes" ] 
+                        inquirer list_input "是否设置 https 跳转到其它网址" yn_options https_redirect_yn
+
+                        if [ "$https_redirect_yn" == "$i18n_yes" ] 
                         then
-                            NginxAppendHttpRedirectConf
-                            NginxConfigServerHttpsPort
+                            NginxAppendHttpConf
+                            NginxAppendHttpsRedirectConf
+                        else
+                            server_root=""
+                            server_live_root=""
+                            deny_aliyun=""
+                            NginxConfigServerRoot
+                            NginxConfigServerLiveRoot
 
-                            echo
-                            inquirer list_input "是否设置 https 跳转到其它网址" yn_options https_redirect_yn
+                            server_https_root="$server_root"
+                            server_https_live_root="$server_live_root"
+                            server_https_deny="$deny_aliyun"
 
-                            if [ "$https_redirect_yn" == "$i18n_yes" ] 
+                            if [ "$server_http_root" == "$server_https_root" ] && [ "$server_http_live_root" == "$server_https_live_root" ] && [ "$server_http_deny" == "$server_https_deny" ]
                             then
-                                NginxAppendHttpsRedirectConf
+                                NginxAppendHttpHttpsConf
                             else
-                                NginxConfigServerRoot
-                                NginxConfigServerLiveRoot
+                                NginxAppendHttpConf
                                 NginxAppendHttpsConf
                             fi
-                        else
-                            NginxConfigServerRoot
-                            NginxConfigServerLiveRoot
-
-                            server_http_root="$server_root"
-                            server_http_live_root="$server_live_root"
-                            server_http_deny="$deny_aliyun"
-
-                            NginxConfigServerHttpsPort
-
-                            echo
-                            inquirer list_input "是否设置 https 跳转到其它网址" yn_options https_redirect_yn
-
-                            if [ "$https_redirect_yn" == "$i18n_yes" ] 
-                            then
-                                NginxAppendHttpConf
-                                NginxAppendHttpsRedirectConf
-                            else
-                                server_root=""
-                                server_live_root=""
-                                deny_aliyun=""
-                                NginxConfigServerRoot
-                                NginxConfigServerLiveRoot
-
-                                server_https_root="$server_root"
-                                server_https_live_root="$server_live_root"
-                                server_https_deny="$deny_aliyun"
-
-                                if [ "$server_http_root" == "$server_https_root" ] && [ "$server_http_live_root" == "$server_https_live_root" ] && [ "$server_http_deny" == "$server_https_deny" ]
-                                then
-                                    NginxAppendHttpHttpsConf
-                                else
-                                    NginxAppendHttpConf
-                                    NginxAppendHttpsConf
-                                fi
-                            fi
                         fi
                     fi
+                fi
 
-                    updated=0
-                    NginxAddCorsHost
-                    [ "$updated" -eq 1 ] && NginxBuildConf parse_out
+                updated=0
+                NginxAddCorsHost
+                [ "$updated" -eq 1 ] && NginxBuildConf parse_out
 
-                    NginxEnableDomain
-                    Println "$info $server_domain 配置成功\n"
-                ;;
-                *) Println "$i18n_canceled...\n" && exit 1
-                ;;
-            esac
-        done
-    else
-        Println "$i18n_canceled...\n" && exit 1
-    fi
+                NginxEnableDomain
+                Println "$info $server_domain 配置成功\n"
+            ;;
+        esac
+    done
 }

@@ -93,7 +93,7 @@ CurlFake()
         "${CURL_IMPERSONATE_FILE}-$service_name" "$@"
         return 0
     fi
-    curl-impersonate "$@"
+    $CURL_IMPERSONATE_FILE "$@"
 }
 
 SetDelimiters()
