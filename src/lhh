@@ -300,7 +300,7 @@ reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p
         IFS="${delimiters[1]}" read -r -a result_publish <<< "$m_publish"
         IFS="${delimiters[1]}" read -r -a result_yd <<< "$m_yd"
 
-        local i j
+        local i j books new_book books_indices
 
         for((i=0;i<result_count;i++));
         do
@@ -310,18 +310,6 @@ reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p
                 do
                     if [ "${books_m[j]}" -eq "${result_m[i]}" ] 
                     then
-                        books_adapter[j]="${result_adapter[i]}"
-                        books_addtime[j]="${result_addtime[i]}"
-                        books_bookname[j]="${result_bookname[i]}"
-                        books_category_id[j]="${result_category_id[i]}"
-                        books_cover[j]="${result_cover[i]}"
-                        books_drawing[j]="${result_drawing[i]}"
-                        books_muludir[j]="${result_muludir[i]}"
-                        books_original[j]="${result_original[i]}"
-                        books_p[j]="${result_p[i]}"
-                        books_publish[j]="${result_publish[i]}"
-                        books_yd[j]="${result_yd[i]}"
-
                         if [ "${books_downloaded[j]}" = true ] 
                         then
                             result_bookname[i]="${result_bookname[i]} ${green}[已下载]${normal}"
@@ -331,6 +319,7 @@ reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p
                         then
                             result_bookname[i]="${result_bookname[i]} ${green}[已收藏]${normal}"
                         fi
+                        books_indices+=("$j")
                         break
                     fi
                 done
@@ -349,47 +338,43 @@ reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p
                 books_yd+=("${result_yd[i]}")
                 books_downloaded+=("false")
                 books_fav+=("false")
+                new_book=$(
+                $JQ_FILE -n --arg adapter "${result_adapter[i]}" --arg addtime "${result_addtime[i]}" \
+                --arg bookname "${result_bookname[i]}" --arg category_id "${result_category_id[i]}" \
+                --arg cover "${result_cover[i]}" --arg drawing "${result_drawing[i]}" \
+                --arg m "${result_m[i]}" --arg muludir "${result_muludir[i]}" \
+                --arg original "${result_original[i]}" --arg p "${result_p[i]}" \
+                --arg publish "${result_publish[i]}" --arg yd "${result_yd[i]}" \
+                    '{
+                        adapter: $adapter,
+                        addtime: $addtime,
+                        bookname: $bookname,
+                        category_id: $category_id | tonumber,
+                        cover: $cover,
+                        drawing: $drawing,
+                        m: $m | tonumber,
+                        muludir: $muludir,
+                        original: $original,
+                        p: $p,
+                        publish: $publish,
+                        yd: $yd,
+                        downloaded: false,
+                        fav: false
+                    }'
+                )
+
+                [ -n "${books:-}" ] && books="${books},"
+                books="${books}${new_book}"
+                books_indices+=("$books_total")
+                ((books_total++))
             fi
         done
 
-        books_total=${#books_adapter[@]}
-        local books new_book
-
-        for((i=0;i<books_total;i++));
-        do
-            new_book=$(
-            $JQ_FILE -n --arg adapter "${books_adapter[i]}" --arg addtime "${books_addtime[i]}" \
-            --arg bookname "${books_bookname[i]}" --arg category_id "${books_category_id[i]}" \
-            --arg cover "${books_cover[i]}" --arg drawing "${books_drawing[i]}" \
-            --arg m "${books_m[i]}" --arg muludir "${books_muludir[i]}" \
-            --arg original "${books_original[i]}" --arg p "${books_p[i]}" \
-            --arg publish "${books_publish[i]}" --arg yd "${books_yd[i]}" \
-            --arg downloaded "${books_downloaded[i]}" --arg fav "${books_fav[i]}" \
-                '{
-                    adapter: $adapter,
-                    addtime: $addtime,
-                    bookname: $bookname,
-                    category_id: $category_id | tonumber,
-                    cover: $cover,
-                    drawing: $drawing,
-                    m: $m | tonumber,
-                    muludir: $muludir,
-                    original: $original,
-                    p: $p,
-                    publish: $publish,
-                    yd: $yd,
-                    downloaded: $downloaded | test("true"),
-                    fav: $fav | test("true")
-                }'
-            )
-
-            [ -n "${books:-}" ] && books="${books},"
-            books="${books}${new_book}"
-        done
-
-        json=true
-        jq_path='["books","zhlhh"]'
-        JQ update "$ebooks_config" "[$books]"
+        if [ -n "${books:-}" ] 
+        then
+            jq_path='["books","zhlhh"]'
+            JQ add "$ebooks_config" "[$books]"
+        fi
     fi
 
     echo
@@ -421,21 +406,15 @@ reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p
 
             for result_index in "${result_indices[@]}"
             do
-                for((i=0;i<books_total;i++));
-                do
-                    if [ "${books_m[i]}" -eq "${result_m[result_index]}" ] 
-                    then
-                        book_url="http://www.zhlhh.com${iframe_paths[result_yd[result_index]]:-iframe_paths[0]}?libcode=$libcode&m=${result_m[result_index]}&p=${result_p[result_index]}&y_l_s="
-                        ZhLhhDownload "${book_url}" "${books_bookname[i]}"
-                        if [ "${books_downloaded[i]}" = false ] 
-                        then
-                            bool=true
-                            jq_path='["books","zhlhh",'"$i"',"downloaded"]'
-                            JQ update "$ebooks_config" true
-                        fi
-                        continue 2
-                    fi
-                done
+                books_index=${books_indices[result_index]}
+                book_url="http://www.zhlhh.com${iframe_paths[result_yd[result_index]]:-iframe_paths[0]}?libcode=$libcode&m=${result_m[result_index]}&p=${result_p[result_index]}&y_l_s="
+                ZhLhhDownload "${book_url}" "${books_bookname[books_index]}"
+                if [ "${books_downloaded[books_index]}" = false ] 
+                then
+                    bool=true
+                    jq_path='["books","zhlhh",'"$books_index"',"downloaded"]'
+                    JQ update "$ebooks_config" true
+                fi
             done
 
             Println "$info 下载完成\n"
@@ -443,31 +422,25 @@ reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p
         then
             for result_index in "${result_indices[@]}"
             do
-                for((i=0;i<books_total;i++));
-                do
-                    if [ "${books_m[i]}" -eq "${result_m[result_index]}" ] 
-                    then
-                        bool=true
-                        jq_path='["books","zhlhh",'"$i"',"fav"]'
-                        JQ update "$ebooks_config" true
-                        continue 2
-                    fi
-                done
+                books_index=${books_indices[result_index]}
+                if [ "${books_fav[books_index]}" = false ]
+                then
+                    bool=true
+                    jq_path='["books","zhlhh",'"$books_index"',"fav"]'
+                    JQ update "$ebooks_config" true
+                fi
             done
             Println "$info 已添加到收藏\n"
         else
             for result_index in "${result_indices[@]}"
             do
-                for((i=0;i<books_total;i++));
-                do
-                    if [ "${books_m[i]}" -eq "${result_m[result_index]}" ] 
-                    then
-                        bool=true
-                        jq_path='["books","zhlhh",'"$i"',"fav"]'
-                        JQ update "$ebooks_config" false
-                        continue 2
-                    fi
-                done
+                books_index=${books_indices[result_index]}
+                if [ "${books_fav[books_index]}" = true ]
+                then
+                    bool=true
+                    jq_path='["books","zhlhh",'"$books_index"',"fav"]'
+                    JQ update "$ebooks_config" false
+                fi
             done
             Println "$info 已取消收藏\n"
         fi
