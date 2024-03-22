@@ -300,7 +300,7 @@ reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p
         IFS="${delimiters[1]}" read -r -a result_publish <<< "$m_publish"
         IFS="${delimiters[1]}" read -r -a result_yd <<< "$m_yd"
 
-        local i j books new_book books_indices
+        local i j books new_book books_indices=()
 
         for((i=0;i<result_count;i++));
         do

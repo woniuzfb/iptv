@@ -693,7 +693,7 @@ inquirer()
         local var=("$1"[@])
         if [[ -z ${!var:-} ]] 
         then
-            return 0
+            return
         fi
         local join_list=("${!var}") first=true item
         for item in "${join_list[@]}"
@@ -709,7 +709,7 @@ inquirer()
     }
 
     inquirer:on_default() {
-        return 0
+        return
     }
 
     inquirer:on_keypress() {
@@ -749,7 +749,7 @@ inquirer()
                 # The space is the first printable character listed on http://www.asciitable.com/, ~ is the last
                 # [^ -~]
                 *[$'\x80'-$'\xFF']*) 
-                    if [[ ${BASH_VERSINFO[0]} -lt 4 ]] && [ "$option" == "text_input" ] 
+                    if [[ ${BASH_VERSINFO[0]} -lt 4 ]] 
                     then
                         char_read="${char_read:-}$key"
                         LC_ALL= LANG=C
@@ -819,6 +819,46 @@ inquirer()
     }
 
     inquirer:on_checkbox_input_up() {
+        if [ "$checkbox_input_search" = true ] 
+        then
+            tput cub "$(tput cols)"
+            tput el
+            tput cuu1
+            tput el
+            tput cuu1
+            tput el
+
+            stty -echo
+            tput civis
+
+            local i
+
+            for((i=0;i<checkbox_page_list_count;i++));
+            do
+                if [ "$i" = "$current_index" ] 
+                then
+                    if [ "${checkbox_page_selected[i]}" = true ]
+                    then
+                        inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_page_list[i]}\n"
+                    else
+                        inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_page_list[i]}\n"
+                    fi
+                else
+                    if [ "${checkbox_page_selected[i]}" = true ]
+                    then
+                        inquirer:print " ${green}${checked}${normal} ${checkbox_page_list[i]}\n"
+                    else
+                        inquirer:print " ${unchecked} ${checkbox_page_list[i]}\n"
+                    fi
+                fi
+            done
+
+            tput cuu $((checkbox_page_list_count-current_index))
+
+            checkbox_input_search=false
+            return
+        fi
+
         inquirer:remove_instructions
         tput cub "$(tput cols)"
 
@@ -849,6 +889,11 @@ inquirer()
     }
 
     inquirer:on_checkbox_input_down() {
+        if [ "$checkbox_input_search" = true ] 
+        then
+            return
+        fi
+
         inquirer:remove_instructions
         tput cub "$(tput cols)"
 
@@ -881,6 +926,12 @@ inquirer()
     inquirer:on_checkbox_input_left() {
         if [ -z "${checkbox_pages_tip:-}" ] 
         then
+            return
+        fi
+
+        if [ "$checkbox_input_search" = true ] 
+        then
+            inquirer:on_text_input_left
             return
         fi
 
@@ -980,6 +1031,12 @@ inquirer()
             return
         fi
 
+        if [ "$checkbox_input_search" = true ] 
+        then
+            inquirer:on_text_input_right
+            return
+        fi
+
         local i
 
         if [ "$checkbox_pages_index" -eq $((checkbox_pages_count-1)) ] 
@@ -1075,8 +1132,157 @@ inquirer()
         tput cuu $((checkbox_page_list_count-current_index))
     }
 
+    inquirer:on_checkbox_input_page() {
+        if [ "$checkbox_input_page" = true ] && [[ "$1" =~ [0-9] ]] 
+        then
+            checkbox_input_page_num="${checkbox_input_page_num:-}$1"
+            checkbox_input_page_num=${checkbox_input_page_num#\0}
+        else
+            checkbox_input_page=true
+            checkbox_input_page_num=""
+        fi
+    }
+
     inquirer:on_checkbox_input_enter() {
         local i
+
+        if [ "$checkbox_input_search" = true ] 
+        then
+            if [ -n "$text_input" ] 
+            then
+                tput cub "$(tput cols)"
+                tput el
+                tput cuu1
+                tput el
+                tput cuu1
+                tput el
+                tput cuu1
+                tput el
+
+                local checkbox_list_page
+
+                for i in "${!checkbox_list[@]}"
+                do
+                    if [[ "${checkbox_list[i]}" =~ "$text_input" ]] 
+                    then
+                        checkbox_list_page=$((i/checkbox_list_perpage+1))
+                        inquirer:print "${green}P${checkbox_list_page}${normal} ${checkbox_list[i]}\n"
+                    fi
+                done
+
+                if [ -n "${checkbox_list_page:-}" ] 
+                then
+                    tput cud1
+                fi
+
+                inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt} ${checkbox_pages_tip:-}${dim}`gettext \"(按 <space> 选择, <enter> 确认)\"`${normal}\n\n\n"
+            fi
+            inquirer:on_checkbox_input_up
+            return
+        fi
+
+        if [ "$checkbox_input_page" = true ] 
+        then
+            checkbox_input_page=false
+            if [ -n "${checkbox_input_page_num:-}" ] 
+            then
+                if [ "$checkbox_input_page_num" -gt "$checkbox_pages_count" ] || [ "$checkbox_input_page_num" -eq $((checkbox_pages_index+1)) ]
+                then
+                    checkbox_input_page_num=""
+                    return
+                fi
+
+                checkbox_pages_index=$((checkbox_input_page_num-1))
+
+                checkbox_pages_tip="${dim}$checkbox_pages_arrows $((checkbox_pages_index+1))/$checkbox_pages_count `gettext \"页\"`${normal}"
+
+                if [ "$checkbox_input_page_num" -eq "$checkbox_pages_count" ] 
+                then
+                    checkbox_page_list_count=$((checkbox_list_count-checkbox_pages_index*checkbox_list_perpage))
+                else
+                    checkbox_page_list_count=$checkbox_list_perpage
+                fi
+
+                inquirer:page_instructions
+                tput cub "$(tput cols)"
+                tput cud $((checkbox_list_perpage-current_index+1))
+
+                for((i=0;i<=checkbox_list_perpage;i++));
+                do
+                    tput el
+                    tput cuu1
+                done
+
+                tput el
+
+                if [ "$current_index" -gt "$checkbox_page_list_count" ] 
+                then
+                    current_index=$checkbox_page_list_count
+                fi
+
+                checkbox_page_list=()
+                checkbox_page_selected=()
+                checkbox_page_select_all=true
+
+                for((i=0;i<checkbox_page_list_count;i++));
+                do
+                    checkbox_page_list+=("${checkbox_list[i+checkbox_list_perpage*checkbox_pages_index]}")
+
+                    if [ "$i" = "$current_index" ] 
+                    then
+                        if [ "${checkbox_selected[i+checkbox_list_perpage*checkbox_pages_index]}" = true ]
+                        then
+                            checkbox_page_selected+=("true")
+                            inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_page_list[i]}\n"
+                        else
+                            checkbox_page_selected+=("false")
+                            checkbox_page_select_all=false
+                            inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_page_list[i]}\n"
+                        fi
+                    else
+                        if [ "${checkbox_selected[i+checkbox_list_perpage*checkbox_pages_index]}" = true ]
+                        then
+                            checkbox_page_selected+=("true")
+                            inquirer:print " ${green}${checked}${normal} ${checkbox_page_list[i]}\n"
+                        else
+                            checkbox_page_selected+=("false")
+                            checkbox_page_select_all=false
+                            inquirer:print " ${unchecked} ${checkbox_page_list[i]}\n"
+                        fi
+                    fi
+                done
+
+                checkbox_page_list+=("$(gettext 全选)")
+
+                if [ "$current_index" -eq $checkbox_page_list_count ] 
+                then
+                    if [ "$checkbox_page_select_all" = true ] 
+                    then
+                        checkbox_page_selected+=("true")
+                        inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                    else
+                        checkbox_page_selected+=("false")
+                        inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                    fi
+                else
+                    if [ "$checkbox_page_select_all" = true ] 
+                    then
+                        checkbox_page_selected+=("true")
+                        inquirer:print " ${green}${checked}${normal} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                    else
+                        checkbox_page_selected+=("false")
+                        inquirer:print " ${unchecked} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                    fi
+                fi
+
+                ((checkbox_page_list_count++))
+
+                tput cuu $((checkbox_page_list_count-current_index))
+
+                checkbox_input_page_num=""
+            fi
+            return
+        fi
 
         for i in "${!checkbox_list[@]}"
         do
@@ -1114,6 +1320,12 @@ inquirer()
     }
 
     inquirer:on_checkbox_input_space() {
+        if [ "$checkbox_input_search" = true ] 
+        then
+            inquirer:on_text_input_ascii
+            return
+        fi
+
         local i
 
         inquirer:remove_instructions
@@ -1166,12 +1378,80 @@ inquirer()
 
     inquirer:on_checkbox_input_ascii() {
         local key=$1
-        case "$key" in
-            "w" ) inquirer:on_checkbox_input_up;;
-            "s" ) inquirer:on_checkbox_input_down;;
-            "a" ) inquirer:on_checkbox_input_left;;
-            "d" ) inquirer:on_checkbox_input_right;;
-        esac
+
+        if [ "$checkbox_input_search" = false ] 
+        then
+            case "$key" in
+                "w" ) 
+                    inquirer:on_checkbox_input_up
+                    return
+                ;;
+                "s" ) 
+                    inquirer:on_checkbox_input_down
+                    return
+                ;;
+                "a" ) 
+                    inquirer:on_checkbox_input_left
+                    return
+                ;;
+                "d" ) 
+                    inquirer:on_checkbox_input_right
+                    return
+                ;;
+            esac
+            if [ "$key" == "/" ]
+            then
+                if [ "$checkbox_pages_count" -eq 1 ] 
+                then
+                    return
+                fi
+
+                checkbox_input_search=true
+                text_input=""
+                current_pos=0
+
+                tput cub "$(tput cols)"
+                tput cud $((checkbox_list_perpage-current_index+1))
+
+                for((i=0;i<=checkbox_list_perpage;i++));
+                do
+                    tput el
+                    tput cuu1
+                done
+
+                tput el
+                tput cud1
+
+                inquirer:print "${green}?${normal} ${bold}${bg_black}${white}输入搜索内容${bold} ${dim}( \xe2\x86\x91 返回)${normal}\n"
+
+                stty -echo
+                tput cnorm
+            elif [[ "$key" =~ [0-9Pp] ]]
+            then
+                inquirer:on_checkbox_input_page "$key"
+            fi
+            return
+        fi
+
+        inquirer:on_text_input_ascii "$key"
+    }
+
+    inquirer:on_checkbox_input_not_ascii() {
+        if [ "$checkbox_input_search" = false ] 
+        then
+            return
+        fi
+
+        inquirer:on_text_input_not_ascii "$1"
+    }
+
+    inquirer:on_checkbox_input_backspace() {
+        if [ "$checkbox_input_search" = false ] 
+        then
+            return
+        fi
+
+        inquirer:on_text_input_backspace
     }
 
     inquirer:_checkbox_input() {
@@ -1185,7 +1465,8 @@ inquirer()
             checkbox_selected_options=("${checkbox_list[@]}")
             checkbox_selected_indices=(0)
 
-            return 0
+            inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt} ${bg_black}${cyan}$(inquirer:join checkbox_selected_options)${normal}\n"
+            return
         fi
 
         checkbox_selected=()
@@ -1279,7 +1560,7 @@ inquirer()
 
         tput cuu $checkbox_page_list_count
 
-        inquirer:on_keypress inquirer:on_checkbox_input_up inquirer:on_checkbox_input_down inquirer:on_checkbox_input_space inquirer:on_checkbox_input_enter inquirer:on_checkbox_input_left inquirer:on_checkbox_input_right inquirer:on_checkbox_input_ascii
+        inquirer:on_keypress inquirer:on_checkbox_input_up inquirer:on_checkbox_input_down inquirer:on_checkbox_input_space inquirer:on_checkbox_input_enter inquirer:on_checkbox_input_left inquirer:on_checkbox_input_right inquirer:on_checkbox_input_ascii inquirer:on_checkbox_input_backspace inquirer:on_checkbox_input_not_ascii
     }
 
     inquirer:checkbox_input() {
@@ -1309,7 +1590,7 @@ inquirer()
     inquirer:on_sort_up() {
         if [ "${#sort_options[@]}" -eq 1 ]
         then
-            return 0
+            return
         fi
 
         tput cub "$(tput cols)"
@@ -1333,7 +1614,7 @@ inquirer()
     inquirer:on_sort_down() {
         if [ "${#sort_options[@]}" -eq 1 ]
         then
-            return 0
+            return
         fi
 
         tput cub "$(tput cols)"
@@ -1357,7 +1638,7 @@ inquirer()
     inquirer:on_sort_move_up() {
         if [ "${#sort_options[@]}" -eq 1 ]
         then
-            return 0
+            return
         fi
 
         local i
@@ -1392,7 +1673,7 @@ inquirer()
     inquirer:on_sort_move_down() {
         if [ "${#sort_options[@]}" -eq 1 ]
         then
-            return 0
+            return
         fi
 
         local i
@@ -1509,7 +1790,7 @@ inquirer()
 
         if [ "${#list_options[@]}" -eq 1 ]
         then
-            return 0
+            return
         fi
 
         tput cub "$(tput cols)"
@@ -1535,7 +1816,7 @@ inquirer()
 
         if [ "${#list_options[@]}" -eq 1 ]
         then
-            return 0
+            return
         fi
 
         tput cub "$(tput cols)"
@@ -1588,7 +1869,7 @@ inquirer()
 
         if [ "${#list_options[@]}" -eq 1 ] 
         then
-            return 0
+            return
         fi
 
         first_keystroke=true
@@ -1793,7 +2074,7 @@ inquirer()
     }
 
     inquirer:text_input_default_validator() {
-        return 0
+        return
     }
 
     inquirer:text_input() {
@@ -1834,7 +2115,7 @@ inquirer()
         then
             return 1
         fi
-        return 0
+        return
     }
 
     inquirer:remove_date_instructions() {
@@ -1903,7 +2184,7 @@ inquirer()
         case $current_pos in
             3)  
                 local year=$((${date_pick:0:4}-1))
-                [ "$year" -eq 2020 ] && return 0
+                [ "$year" -eq 2020 ] && return
                 date_pick="$year${date_pick:4}"
             ;;
             6) 
@@ -2141,24 +2422,27 @@ inquirer()
     break_keypress \
     first_keystroke \
     current_index \
-    checkbox_list \
+    checkbox_list=() \
     checkbox_list_count \
     checkbox_list_perpage=0 \
     checkbox_page_list=() \
     checkbox_page_list_count=0 \
     checkbox_page_selected=() \
     checkbox_page_select_all=true \
+    checkbox_input_page=false \
+    checkbox_input_page_num \
+    checkbox_input_search=false \
     checkbox_pages_tip \
     checkbox_pages_arrows="\xe2\x9d\xae\xe2\x9d\xaf" \
     checkbox_pages_index=0 \
     checkbox_pages_count=1 \
-    checkbox_selected \
-    checkbox_selected_indices \
-    checkbox_selected_options \
+    checkbox_selected=() \
+    checkbox_selected_indices=() \
+    checkbox_selected_options=() \
     checkbox_input_failed_msg \
-    sort_options \
-    sort_indices \
-    list_options \
+    sort_options=() \
+    sort_indices=() \
+    list_options=() \
     current_pos \
     failed_count \
     text_default \
@@ -2168,8 +2452,8 @@ inquirer()
     date_pick \
     date_pick_regex_failed_msg \
     date_pick_validator \
-    colors \
-    bg_colors \
+    colors=() \
+    bg_colors=() \
     colors_index \
     bg_colors_index \
     arrow checked unchecked bold dim normal

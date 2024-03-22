@@ -1749,7 +1749,7 @@ inquirer()
     break_keypress \
     first_keystroke \
     current_index \
-    checkbox_list \
+    checkbox_list=() \
     checkbox_list_count \
     checkbox_list_perpage=0 \
     checkbox_page_list=() \
@@ -1763,13 +1763,13 @@ inquirer()
     checkbox_pages_arrows="\xe2\x9d\xae\xe2\x9d\xaf" \
     checkbox_pages_index=0 \
     checkbox_pages_count=1 \
-    checkbox_selected \
-    checkbox_selected_indices \
-    checkbox_selected_options \
+    checkbox_selected=() \
+    checkbox_selected_indices=() \
+    checkbox_selected_options=() \
     checkbox_input_failed_msg \
-    sort_options \
-    sort_indices \
-    list_options \
+    sort_options=() \
+    sort_indices=() \
+    list_options=() \
     current_pos \
     failed_count \
     text_default \
@@ -1779,8 +1779,8 @@ inquirer()
     date_pick \
     date_pick_regex_failed_msg \
     date_pick_validator \
-    colors \
-    bg_colors \
+    colors=() \
+    bg_colors=() \
     colors_index \
     bg_colors_index \
     arrow checked unchecked bold dim normal
