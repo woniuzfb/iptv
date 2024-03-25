@@ -34,6 +34,7 @@ IP_DENY="$IPTV_ROOT/ip.deny"
 IP_LOG="$IPTV_ROOT/ip.log"
 FFMPEG_LOG_ROOT="$IPTV_ROOT/ffmpeg"
 # create your own mirror: tv ffmpeg
+BACKUP_ROOT="$HOME"/iptv_sh_backup
 FFMPEG_MIRROR_LINK="http://pngquant.com/ffmpeg"
 V2_FILE="/usr/local/bin/v2"
 V2_LINK="https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh"
@@ -41,6 +42,7 @@ V2_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/v2ray_install-release.sh"
 V2CTL_FILE="/usr/local/bin/v2ctl"
 V2_CONFIG="/usr/local/etc/v2ray/config.json"
 X_FILE="/usr/local/bin/x"
+X_CONFIG="/usr/local/etc/xray/config.json"
 FFMPEG_MIRROR_ROOT="$IPTV_ROOT/ffmpeg"
 LIVE_ROOT="$IPTV_ROOT/live"
 SERVICES_FILE="$IPTV_ROOT/services.json"
@@ -17052,7 +17054,7 @@ Reg4gtvAcc()
         | $JQ_FILE -r '[.Success,.ErrMessage]|join(" ")'
     ) || true
 
-    if [ "$result" = true ]
+    if [ "$result" = true ] || [ "$msg" = "String was not recognized as a valid DateTime." ]
     then
         if [ ! -s "$SERVICES_FILE" ] 
         then
@@ -17281,7 +17283,7 @@ Login4gtvAcc()
         fi
     done
     Println "$info 账号验证成功"
-    Println "$info 开启 7 天豪华套餐"
+    Println "$info 开启 30 天豪华套餐"
 
     IFS="^" read -r result msg < <(CurlFake -s -Lm 20 \
         -H 'Origin: https://www.4gtv.tv' \
@@ -17293,9 +17295,9 @@ Login4gtvAcc()
 
     if [ "$result" = true ] 
     then
-        Println "$info 7 天豪华套餐开启成功\n"
+        Println "$info 30 天豪华套餐开启成功\n"
     else
-        Println "$error 开启 7 天豪华套餐发生错误, 请重试\n\n$msg\n"
+        Println "$error 开启 30 天豪华套餐发生错误, 请重试\n\n$msg\n"
     fi
 }
 
@@ -17595,7 +17597,7 @@ _4gtvCron()
         fi
     done
     Println "$info 账号验证成功"
-    Println "$info 开启 7 天豪华套餐"
+    Println "$info 开启 30 天豪华套餐"
 
     IFS="^" read -r result msg < <(CurlFake -s -Lm 20 \
         -H 'Origin: https://www.4gtv.tv' \
@@ -17607,9 +17609,9 @@ _4gtvCron()
 
     if [ "$result" = true ] 
     then
-        Println "$info 7 天豪华套餐开启成功\n"
+        Println "$info 30 天豪华套餐开启成功\n"
     else
-        Println "$error 开启 7 天豪华套餐发生错误, 请重试\n\n$msg\n"
+        Println "$error 开启 30 天豪华套餐发生错误, 请重试\n\n$msg\n"
     fi
 }
 
@@ -48089,6 +48091,8 @@ Usage()
 
      `gettext \"pve 打开 Proxmox VE 管理面板\"`
 
+     `gettext \"tv backup 备份所有重要文件\"`
+
      `gettext \"tv ed 选择默认编辑器\"`
 
      `gettext \"tv a 设置自定义命令\"`
@@ -49364,7 +49368,7 @@ then
         V2_LINK="https://raw.githubusercontent.com/XTLS/Xray-install/main/install-release.sh"
         V2_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/xray_install-release.sh"
         V2CTL_FILE="/usr/local/bin/xray"
-        V2_CONFIG="/usr/local/etc/xray/config.json"
+        V2_CONFIG="$X_CONFIG"
     elif [ -d /etc/v2ray/ ] 
     then
         systemctl disable v2ray --now > /dev/null 2> /dev/null || true
@@ -52840,6 +52844,151 @@ then
             fi
             exit 0
         ;;
+        backup)
+            iptv_source="$IPTV_ROOT"
+
+            iptv_excludes=(
+                ffmpeg-git-'*'
+                vip
+                node_modules
+            )
+
+            ffmpeg_excludes=(
+                Amlogic_s905-kernel-master.zip
+                builds
+                c
+                dnscrypt
+                fontforge-20190413.tar.gz
+                imgcat.zip
+                jq-'*'
+                releases
+                v2ray
+                xray
+                '*'.ipk
+            )
+
+            if [[ "$FFMPEG_MIRROR_ROOT" =~ "$IPTV_ROOT"(.+) ]]
+            then
+                relative_path="${BASH_REMATCH[1]}"
+                relative_path="${relative_path#/}"
+                for i in "${!ffmpeg_excludes[@]}"
+                do
+                    ffmpeg_excludes[i]="$relative_path/${ffmpeg_excludes[i]}"
+                done
+                iptv_excludes+=("${ffmpeg_excludes[@]}")
+            else
+                ffmpeg_source="$FFMPEG_MIRROR_ROOT"
+            fi
+
+            if [[ "$LIVE_ROOT" =~ "$IPTV_ROOT"(.+) ]]
+            then
+                iptv_excludes+=("${BASH_REMATCH[1]#/}")
+            fi
+
+            node_excludes=(
+                node_modules
+            )
+
+            if [[ "$NODE_ROOT" =~ "$IPTV_ROOT"(.+) ]]
+            then
+                relative_path="${BASH_REMATCH[1]}"
+                relative_path="${relative_path#/}"
+                for i in "${!node_excludes[@]}"
+                do
+                    node_excludes[i]="$relative_path/${node_excludes[i]}"
+                done
+                iptv_excludes+=("${node_excludes[@]}")
+            else
+                node_source="$NODE_ROOT"
+            fi
+
+            nginx_source=/usr/local/nginx
+
+            nginx_includes=(
+                conf
+                html
+                logs
+            )
+
+            nginx_excludes=(
+                logs/'*'.gz
+                node_modules
+            )
+
+            openresty_source=/usr/local/openresty
+
+            openresty_includes=(
+                nginx/conf
+                nginx/html
+                nginx/logs
+                nginx/lua
+            )
+
+            openresty_excludes=(
+                nginx/logs/'*'.gz
+                node_modules
+            )
+
+            v2ray_source="${V2_CONFIG%/*}"
+
+            xray_source="${X_CONFIG%/*}"
+
+            DepInstall rsync
+
+            mkdir -p "$BACKUP_ROOT"
+
+            for backup in iptv nginx openresty v2ray xray ffmpeg node
+            do
+                rsync_commands=()
+                source="${backup}_source"
+
+                if [[ -z "${!source:-}" ]] 
+                then
+                    continue
+                fi
+
+                source="${!source}"
+
+                if [ ! -d "$source" ] 
+                then
+                    continue
+                fi
+
+                excludes=("${backup}_excludes"[@])
+
+                if [[ -n "${!excludes:-}" ]] 
+                then
+                    excludes=("${!excludes}")
+                    for exclude in "${excludes[@]}"
+                    do
+                        rsync_commands+=( --exclude="$exclude" )
+                    done
+                fi
+
+                includes=("${backup}_includes"[@])
+
+                if [[ -n "${!includes:-}" ]] 
+                then
+                    includes=("${!includes}")
+                    for include in "${includes[@]}"
+                    do
+                        if [ ! -d "$source/$include" ] 
+                        then
+                            continue
+                        fi
+                        rsync_commands+=( "$source/$include" )
+                    done
+                else
+                    rsync_commands+=( "$source/" )
+                fi
+
+                rsync -avP --safe-links ${rsync_commands[@]+"${rsync_commands[@]}"} "$BACKUP_ROOT/$backup/"
+            done
+
+            Println "$info 已创建备份 $BACKUP_ROOT\n"
+
+            exit 0
+        ;;
         *)
         ;;
     esac
@@ -52855,7 +53004,7 @@ then
         Menu
     fi
 else
-    while getopts "i:l:P:o:p:S:t:s:c:v:a:f:d:q:b:r:k:K:m:n:z:H:T:L:CRe" flag
+    while getopts "i:l:P:o:p:S:t:s:c:v:a:f:d:q:b:r:k:K:m:n:z:H:T:L:CReh" flag
     do
         case "$flag" in
             i) stream_link="$OPTARG";;
@@ -52885,7 +53034,7 @@ else
             H) flv_h265=true;;
             T) flv_push_link="$OPTARG";;
             L) flv_pull_link="$OPTARG";;
-            *) Usage;
+            h|*) Usage;
         esac
     done
 

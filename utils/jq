@@ -2,7 +2,11 @@ JQInstall()
 {
     if [[ -x "$JQ_FILE" ]] 
     then
-        return 0
+        return
+    elif [[ -x "$IPTV_ROOT"/jq ]] 
+    then
+        JQ_FILE="$IPTV_ROOT"/jq
+        return
     fi
 
     DepsCheck

@@ -32,6 +32,9 @@ FFMPEG_FILE=/usr/local/bin/ffmpeg
 FFPROBE_FILE=/usr/local/bin/ffprobe
 CURL_IMPERSONATE_FILE=/usr/local/bin/curl-impersonate
 
+# backup
+BACKUP_ROOT="$HOME"/iptv_sh_backup
+
 # FFmpeg
 FFMPEG_ROOT="$HOME"
 
@@ -80,6 +83,7 @@ V2_CONFIG=/usr/local/etc/v2ray/config.json
 
 # xray
 X_FILE=/usr/local/bin/x
+X_CONFIG=/usr/local/etc/xray/config.json
 
 # cloudflare
 CF_FILE=/usr/local/bin/cf

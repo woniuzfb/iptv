@@ -1,6 +1,3 @@
-JQ_FILE="$IPTV_ROOT"/jq
-FFMPEG_ROOT="$IPTV_ROOT"
-
 Include utils/python "$@"
 
 Include utils/ffmpeg "$@"

@@ -323,6 +323,6 @@ V2_FILE="/usr/local/bin/x"
 V2_LINK="https://raw.githubusercontent.com/XTLS/Xray-install/main/install-release.sh"
 V2_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/xray_install-release.sh"
 V2CTL_FILE="/usr/local/bin/xray"
-V2_CONFIG="/usr/local/etc/xray/config.json"
+V2_CONFIG="$X_CONFIG"
 
 Include src/v2ray/menu "$@"

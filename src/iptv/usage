@@ -98,6 +98,8 @@ Usage()
 
      `gettext \"pve 打开 Proxmox VE 管理面板\"`
 
+     `gettext \"tv backup 备份所有重要文件\"`
+
      `gettext \"tv ed 选择默认编辑器\"`
 
      `gettext \"tv a 设置自定义命令\"`

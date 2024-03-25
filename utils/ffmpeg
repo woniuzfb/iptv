@@ -4,9 +4,9 @@ FFmpegInstall()
     then
         FFMPEG_FILE="$FFMPEG_FILE_ROOT/ffmpeg"
         FFPROBE_FILE="$FFMPEG_FILE_ROOT/ffprobe"
-    elif [ "$FFMPEG_ROOT" != "$HOME" ] && FFMPEG_FILE_ROOT=$(find "$HOME"/ffmpeg-git-* -type d 2> /dev/null | head -1) 
+    elif FFMPEG_FILE_ROOT=$(find "$IPTV_ROOT"/ffmpeg-git-* -type d 2> /dev/null | head -1) 
     then
-        FFMPEG_ROOT="$HOME"
+        FFMPEG_ROOT="$IPTV_ROOT"
         FFMPEG_FILE="$FFMPEG_FILE_ROOT/ffmpeg"
         FFPROBE_FILE="$FFMPEG_FILE_ROOT/ffprobe"
     fi

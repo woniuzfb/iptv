@@ -10,7 +10,7 @@ Reg4gtvAcc()
         | $JQ_FILE -r '[.Success,.ErrMessage]|join(" ")'
     ) || true
 
-    if [ "$result" = true ]
+    if [ "$result" = true ] || [ "$msg" = "String was not recognized as a valid DateTime." ]
     then
         if [ ! -s "$SERVICES_FILE" ] 
         then
