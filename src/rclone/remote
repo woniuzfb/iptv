@@ -1,0 +1,188 @@
+RcloneRemoteView()
+{
+    ServiceGet rclone remote
+
+    if [ "$rclone_remotes_count" -eq 0 ] 
+    then
+        Println "$error 请先添加 rclone 远端\n"
+        return 1
+    fi
+
+    rclone_remotes=()
+    rclone_remotes_options=()
+
+    local i rclone_remotes_list="" rclone_remote_list=""
+
+    for((i=0;i<rclone_remotes_count;i++));
+    do
+        rclone_remote_list="名称: ${rclone_remotes_name[i]} 类型: ${rclone_remotes_type[i]}\n供应: ${rclone_remotes_vendor[i]} 用户: ${rclone_remotes_user[i]}\n地址: ${rclone_remotes_url[i]}\n\n"
+        rclone_remotes_list="${rclone_remotes_list}${green}$((i+1)).${normal} $rclone_remote_list"
+        rclone_remotes+=("$rclone_remote_list")
+        rclone_remotes_options+=("名称: ${rclone_remotes_name[i]} 地址: ${rclone_remotes_url[i]}")
+    done
+
+    Println "$rclone_remotes_list"
+}
+
+RcloneRemoteAddNameValidator()
+{
+    if [ "$1" != "$i18n_cancel" ] && [ "$rclone_remotes_count" -gt 0 ] && EleInArray "$1" rclone_remotes_name
+    then
+        return 1
+    fi
+
+    return 0
+}
+
+RcloneRemoteAdd()
+{
+    ServiceGet rclone remote
+
+    echo
+    ExitOnText "输入远端名称" rclone_remote_name RcloneRemoteAddNameValidator "远端名称已存在"
+
+    rclone_remote_types=( webdav )
+    echo
+    inquirer checkbox_input_indices "选择远端类型" rclone_remote_types rclone_remote_types_index
+
+    Println "$tip 比如 https://domain.com"
+    ExitOnText "输入远端地址" rclone_remote_url
+
+    rclone_remote_vendors=( rclone other )
+    echo
+    inquirer list_input_index "选择远端供应" rclone_remote_vendors rclone_remote_vendors_index
+
+    echo
+    ExitOnText "输入远端用户" rclone_remote_user
+
+    echo
+    ExitOnText "输入远端用户密码" rclone_remote_pass
+
+    new_remote=$(
+    $JQ_FILE -n --arg name "$rclone_remote_name" --arg type "${rclone_remote_types[rclone_remote_types_index]}" \
+    --arg url "$rclone_remote_url" --arg vendor "${rclone_remote_vendors[rclone_remote_vendors_index]}" \
+    --arg user "$rclone_remote_user" --arg pass $(rclone obscure "$rclone_remote_pass") \
+        '{
+            name: $name,
+            type: $type,
+            url: $url,
+            vendor: $vendor,
+            user: $user,
+            pass: $pass
+        }'
+    )
+
+    jq_path='["rclone","remote"]'
+    JQ add "$SERVICES_CONFIG" "[$new_remote]"
+
+    Println "$info 远端添加成功\n"
+}
+
+RcloneRemoteEditNameValidator()
+{
+    if [ "$1" != "${rclone_remotes_name[rclone_remotes_index]}" ] && EleInArray "$1" rclone_remotes_name
+    then
+        return 1
+    fi
+
+    return 0
+}
+
+RcloneRemoteEdit()
+{
+    RcloneRemoteView
+
+    echo
+    inquirer checkbox_input_indices "选择修改的远端" rclone_remotes_options rclone_remotes_indices
+
+    rclone_remote_edit_options=( '名称' '类型' '地址' '供应' '用户' '密码' )
+    rclone_remote_vendors=( rclone other )
+
+    for rclone_remotes_index in "${rclone_remotes_indices[@]}"
+    do
+        Println "${rclone_remotes[${rclone_remotes_index}]}"
+        inquirer checkbox_input_indices "选择修改的内容" rclone_remote_edit_options rclone_remote_edit_options_indices
+
+        for rclone_remote_edit_options_index in "${rclone_remote_edit_options_indices[@]}"
+        do
+            case $rclone_remote_edit_options_index in
+                0) 
+                    echo
+                    inquirer text_input "输入新名称" rclone_remote_name "${rclone_remotes_name[rclone_remotes_index]}" RcloneRemoteEditNameValidator "远端名称已存在"
+                    if [ "$rclone_remote_name" != "${rclone_remotes_name[rclone_remotes_index]}" ] 
+                    then
+                        rclone_remotes_name[rclone_remotes_index]="$rclone_remote_name"
+                        jq_path='["rclone","remote",'"$rclone_remotes_index"',"name"]'
+                        JQ update "$SERVICES_CONFIG" "$rclone_remote_name"
+                        Println "$info 名称修改成功\n"
+                    fi
+                ;;
+                1) 
+
+                ;;
+                2) 
+                    echo
+                    inquirer text_input "输入新地址" rclone_remote_url "${rclone_remotes_url[rclone_remotes_index]}"
+                    if [ "$rclone_remote_url" != "${rclone_remotes_url[rclone_remotes_index]}" ] 
+                    then
+                        jq_path='["rclone","remote",'"$rclone_remotes_index"',"url"]'
+                        JQ update "$SERVICES_CONFIG" "$rclone_remote_url"
+                        Println "$info 地址修改成功\n"
+                    fi
+                ;;
+                3) 
+                    echo
+                    inquirer list_input_index "选择新供应" rclone_remote_vendors rclone_remote_vendors_index
+                    if [ "${rclone_remote_vendors[rclone_remote_vendors_index]}" != "${rclone_remotes_vendor[rclone_remotes_index]}" ] 
+                    then
+                        jq_path='["rclone","remote",'"$rclone_remotes_index"',"vendor"]'
+                        JQ update "$SERVICES_CONFIG" "${rclone_remote_vendors[rclone_remote_vendors_index]}"
+                        Println "$info 供应修改成功\n"
+                    fi
+                ;;
+                4) 
+                    echo
+                    inquirer text_input "输入新用户" rclone_remote_user "${rclone_remotes_user[rclone_remotes_index]}"
+                    if [ "$rclone_remote_user" != "${rclone_remotes_user[rclone_remotes_index]}" ] 
+                    then
+                        jq_path='["rclone","remote",'"$rclone_remotes_index"',"user"]'
+                        JQ update "$SERVICES_CONFIG" "$rclone_remote_user"
+                        Println "$info 用户修改成功\n"
+                    fi
+                ;;
+                5) 
+                    echo
+                    rclone_remote_pass_decrypted=$(Deobscure "${rclone_remotes_pass[rclone_remotes_index]}")
+                    inquirer text_input "输入新密码" rclone_remote_pass "$rclone_remote_pass_decrypted"
+                    if [ "$rclone_remote_pass" != "$rclone_remote_pass_decrypted" ] 
+                    then
+                        jq_path='["rclone","remote",'"$rclone_remotes_index"',"pass"]'
+                        JQ update "$SERVICES_CONFIG" $(rclone obscure "$rclone_remote_pass")
+                        Println "$info 密码修改成功\n"
+                    fi
+                ;;
+            esac
+        done
+    done
+
+    return 0
+}
+
+RcloneRemoteDel()
+{
+    RcloneRemoteView
+
+    echo
+    inquirer checkbox_input_indices "选择删除的远端" rclone_remotes_options rclone_remotes_indices
+
+    local rclone_remotes_index_offset=0
+
+    for rclone_remotes_index in "${rclone_remotes_indices[@]}"
+    do
+        jq_path='["rclone","remote",'"$((rclone_remotes_index-rclone_remotes_index_offset))"']'
+        JQ delete "$SERVICES_CONFIG"
+        rclone_remotes_index_offset=$((rclone_remotes_index_offset+1))
+    done
+
+    Println "$info 远端删除成功\n"
+}

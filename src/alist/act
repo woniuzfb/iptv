@@ -1,6 +1,6 @@
 AlistAct()
 {
-    GetServiceAccs alist
+    ServiceGet alist
 
     if [ "$alists_count" -eq 0 ] 
     then
@@ -162,7 +162,7 @@ AlistAct()
             then
                 echo
                 alist_files_indices=()
-                inquirer checkbox_input_indices "多选" alist_checkbox_options alist_files_indices
+                inquirer checkbox_input_indices "多选" alist_checkbox_options alist_files_indices 20
             elif [ "${alist_files_options[alist_files_options_index]}" == "选择所有目录文件" ] 
             then
                 alist_files_indices=("${alist_dir_indices[@]}")
@@ -225,11 +225,17 @@ AlistAct()
         elif [ "$alist_files_edit_option" == "批量重命名" ] 
         then
             echo
-            inquirer text_input "输入 sed 命令" alist_files_edit_sed "$i18n_cancel"
+            inquirer text_input "输入 sed 命令(-e)" alist_files_edit_sed "$i18n_cancel"
             if [ "$alist_file_name" == "$i18n_cancel" ] 
             then
                 continue
             fi
+            for alist_files_index in "${alist_files_indices[@]}"
+            do
+                alist_file_name=$(echo "${alist_files_name[alist_files_index]}" | sed -e "$alist_files_edit_sed")
+                Println "$info 修改 ${alist_files_name[alist_files_index]} => $alist_file_name\n"
+                Alist.fs.rename
+            done
         else
             echo
             alist_files_txt=""

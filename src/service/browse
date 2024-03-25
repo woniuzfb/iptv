@@ -1,0 +1,147 @@
+ServiceBrowseRenameValidator()
+{
+    if [ "$1" != "$browse_list_rename" ] && [ -e "$browse_list_rename_root/$1" ]
+    then
+        return 1
+    fi
+}
+
+ServiceBrowse()
+{
+    local root="$1" files=() lists=() lists_options=() lists_indices=() extra_options=() extra_commands=() lists_options_count lists_index file files_count depth=0 i
+    shift
+
+    while [ -n "${1:-}" ] 
+    do
+        extra_options+=("$1")
+        extra_commands+=("$2")
+        shift 2
+    done
+
+    if [ ! -d "$root" ] 
+    then
+        Println "$error 无效的目录: $root\n"
+        return 1
+    fi
+
+    while true 
+    do
+        lists_indices=()
+        shopt -s nullglob
+        files=("$root"/*)
+        shopt -u nullglob
+
+        # IFS=$'\n'
+        # files=($(ls -1 "$@" "$root"))
+
+        if [[ -z "${files:-}" ]] 
+        then
+            if [ "$depth" -gt 0 ] 
+            then
+                root=${root%/*}
+                depth=$((depth-1))
+                continue
+            else
+                Println "$error 目录为空: $root\n"
+                return 1
+            fi
+        fi
+
+        files=( "${files[@]##*/}")
+        files_count=${#files[@]}
+        lists=()
+
+        if [ "$depth" -gt 0 ] 
+        then
+            lists+=("返回上级目录")
+        fi
+
+        for file in "${files[@]}"
+        do
+            if [ -d "$root/$file" ] 
+            then
+                lists+=("$file/")
+            else
+                lists+=("$file")
+            fi
+        done
+
+        echo
+        inquirer checkbox_input_indices "请选择" lists lists_indices 20
+
+        if [ "$depth" -gt 0 ] && [ "${#lists_indices[@]}" -eq 1 ] && [ "${lists_indices[0]}" -eq 0 ] 
+        then
+            root=${root%/*}
+            depth=$((depth-1))
+            continue
+        fi
+
+        if [ "$depth" -gt 0 ] 
+        then
+            if [ "${lists_indices[0]}" -eq 0 ] 
+            then
+                unset lists_indices[0]
+                lists_indices=("${lists_indices[@]}")
+            fi
+            unset lists[0]
+            lists=("${lists[@]%/}")
+            for((i=0;i<${#lists_indices[@]};i++));
+            do
+                lists_indices[i]=$((lists_indices[i]-1))
+            done
+        fi
+
+        if [ -n "${extra_options:-}" ] 
+        then
+            lists_options=( "${extra_options[@]}" )
+        else
+            lists_options=()
+        fi
+
+        if [ "${#lists_indices[@]}" -eq 1 ] && [ -d "$root/${files[${lists_indices[0]}]}" ] 
+        then
+            lists_options+=( '重命名' '删除' '取消' )
+            lists_options=( '进入' "${lists_options[@]}" )
+        else
+            lists_options+=( '重命名' '删除' '取消' )
+        fi
+
+        echo
+        inquirer list_input_index "请选择" lists_options list_options_index
+        if [ "${lists_options[list_options_index]}" == "进入" ] 
+        then
+            root="$root/${files[${lists_indices[0]}]}"
+            depth=$((depth+1))
+        elif [ "${lists_options[list_options_index]}" == "重命名" ] 
+        then
+            for lists_index in "${lists_indices[@]}"
+            do
+                echo
+                browse_list_rename="${lists[lists_index]}"
+                browse_list_rename_root="$root"
+                inquirer text_input "重命名 ${lists[lists_index]}" new_name "$browse_list_rename" ServiceBrowseRenameValidator "文件名已存在"
+            done
+        elif [ "${lists_options[list_options_index]}" == "删除" ] 
+        then
+            echo
+            inquirer list_input_index "确认删除" ny_options ny_options_index
+            if [ "$ny_options_index" -eq 1 ] 
+            then
+                for lists_index in "${lists_indices[@]}"
+                do
+                    rm -rf "$root/${files[${lists_indices[lists_index]}]:-notfound}"
+                done
+            fi
+        elif [ "${lists_options[list_options_index]}" == "取消" ] 
+        then
+            continue
+        elif [ "${lists_options[0]}" == "进入" ] 
+        then
+            "${extra_commands[list_options_index-1]}" "$root" "${lists_indices[@]}" || continue
+        else
+            "${extra_commands[list_options_index]}" "$root" "${lists_indices[@]}" || continue
+        fi
+    done
+
+    return 0
+}

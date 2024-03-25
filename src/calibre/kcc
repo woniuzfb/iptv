@@ -1,0 +1,455 @@
+KccInstall()
+{
+    if [[ -x "$KCC_FILE" ]] 
+    then
+        cd "$CALIBRE_ROOT/kcc"
+        git pull
+        Println "$info KCC 更新成功\n"
+        return 0
+    fi
+    DepInstall git
+    PythonInstall
+    git clone https://github.com/ciromattia/kcc.git "$KCC_ROOT"
+    cd "$KCC_ROOT"
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+    Println "$info KCC 安装成功\n"
+}
+
+KccView()
+{
+    ServiceGet kcc
+
+    if [ -z "${kcc_output:-}" ] 
+    then
+        Println "$error 请先设置 kcc\n"
+        return 1
+    fi
+
+    local kcc_list="输出格式: $kcc_format\n"
+
+    if [ "$kcc_process" = true ] 
+    then
+        kcc_list="${kcc_list}处理图片: 是\n"
+    else
+        kcc_list="${kcc_list}处理图片: 否\n"
+    fi
+
+    if [ -n "${kcc_sources:-}" ] 
+    then
+        kcc_source=$(JoinByString ', ' "${kcc_sources[@]}")
+    fi
+
+    kcc_list="${kcc_list}额外参数: ${kcc_args:-无}\n输出目录: $kcc_output\n源图片: ${kcc_source:-无}\n"
+
+    Println "$kcc_list"
+}
+
+KccBrowse()
+{
+    KccView
+
+    kcc_view_options=( '输出目录' '源图片' )
+
+    echo
+    inquirer list_input_index "请选择" kcc_view_options kcc_view_options_index
+
+    if [ "$kcc_view_options_index" -eq 0 ] 
+    then
+        ServiceBrowse "$kcc_output"
+    elif [ "$kcc_view_options_index" -eq 1 ] 
+    then
+        if [ -z "${kcc_sources:-}" ] 
+        then
+            Println "$error 请先添加源图片目录\n"
+            return 1
+        fi
+        echo
+        inquirer list_input_index "请选择源图片目录" kcc_sources kcc_sources_index
+        ServiceBrowse "${kcc_sources[kcc_sources_index]}"
+    fi
+}
+
+KccConfig()
+{
+    ServiceGet kcc
+
+    kcc_format_options=( Auto MOBI EPUB CBZ KFX MOBI+EPUB )
+
+    echo
+    inquirer list_input "选择输出格式" kcc_format_options kcc_format
+
+    echo
+    inquirer list_input_index "是否处理图片" ny_options ny_index
+
+    if [ "$ny_index" -eq 0 ] 
+    then
+        kcc_process=false
+        kcc_args=""
+    else
+        kcc_process=true
+        echo
+        inquirer text_input "输入额外参数" kcc_args "$i18n_not_set"
+        if [ "$kcc_args" == "$i18n_not_set" ] 
+        then
+            kcc_args=""
+        fi
+    fi
+
+    echo
+    ExitOnText "设置输出目录" kcc_output
+    RemoveQuotes kcc_output
+
+    kcc_sources=()
+
+    while true 
+    do
+        echo
+        inquirer text_input "输入源图片目录" kcc_source
+        RemoveQuotes kcc_source
+        if [ -z "$kcc_source" ] 
+        then
+            Println "$error 源图片目录不能为空"
+        else
+            kcc_sources+=("$kcc_source")
+            echo
+            inquirer list_input_index "继续添加源图片目录" ny_options ny_index
+            if [ "$ny_index" -eq 0 ] 
+            then
+                break
+            fi
+        fi
+    done
+
+    kcc_payload=$(
+    $JQ_FILE -c -n --arg format "$kcc_format" --arg process "$kcc_process" \
+    --arg args "$kcc_args" --arg output "$kcc_output" \
+    --argjson source "$(ToJsonArray kcc_sources)" \
+        '{
+            format: $format,
+            process: $process | test("true"),
+            args: $args,
+            output: $output,
+            source: $source
+        }'
+    )
+
+    json=true
+    jq_path='["kcc"]'
+    JQ update "$SERVICES_CONFIG" "$kcc_payload"
+
+    Println "$info kcc 设置成功\n"
+}
+
+KccConfigEdit()
+{
+    KccView
+
+    kcc_config_edit_options=( '输出格式' '是否处理图片' '额外参数' '输出目录' '添加源图片目录' '修改源图片目录' '删除源图片目录' )
+    kcc_format_options=( Auto MOBI EPUB CBZ KFX MOBI+EPUB )
+
+    echo
+    inquirer checkbox_input_indices "请选择修改内容" kcc_config_edit_options kcc_config_edit_options_indices
+
+    for kcc_config_edit_options_index in "${kcc_config_edit_options_indices[@]}"
+    do
+        case $kcc_config_edit_options_index in
+            0) 
+                echo
+                inquirer list_input "选择输出格式" kcc_format_options new_kcc_format
+                if [ "$new_kcc_format" != "$kcc_format" ] 
+                then
+                    jq_path='["kcc","format"]'
+                    JQ update "$SERVICES_CONFIG" "$new_kcc_format"
+                    Println "$info 输出格式修改成功\n"
+                fi
+            ;;
+            1) 
+                echo
+                inquirer list_input_index "是否处理图片" ny_options ny_index
+                if [ "$ny_index" -eq 0 ] 
+                then
+                    new_kcc_process=false
+                else
+                    new_kcc_process=true
+                fi
+
+                if [ "$new_kcc_process" != "$kcc_process" ] 
+                then
+                    bool=true
+                    jq_path='["kcc","process"]'
+                    JQ update "$SERVICES_CONFIG" "$new_kcc_process"
+                    Println "$info 是否处理图片修改成功\n"
+                fi
+            ;;
+            2)
+                echo
+                inquirer text_input "输入额外参数" new_kcc_args "$i18n_not_set"
+                if [ "$new_kcc_args" == "$i18n_not_set" ] 
+                then
+                    new_kcc_args=""
+                fi
+                if [ "$new_kcc_args" != "$kcc_args" ] 
+                then
+                    jq_path='["kcc","args"]'
+                    JQ update "$SERVICES_CONFIG" "$new_kcc_args"
+                    Println "$info 额外参数修改成功\n"
+                fi
+            ;;
+            3) 
+                echo
+                inquirer text_input "设置输出目录" new_kcc_output "$kcc_output"
+                RemoveQuotes new_kcc_output
+                if [ "$new_kcc_output" != "$kcc_output" ] 
+                then
+                    jq_path='["kcc","output"]'
+                    JQ update "$SERVICES_CONFIG" "$new_kcc_output"
+                    Println "$info 输出目录修改成功\n"
+                fi
+            ;;
+            4)
+                while true 
+                do
+                    echo
+                    inquirer text_input "输入源图片目录" new_kcc_source "$i18n_not_set"
+                    if [ "$new_kcc_source" == "$i18n_not_set" ] 
+                    then
+                        break
+                    fi
+                    RemoveQuotes new_kcc_source
+                    if [ -z "$new_kcc_source" ] 
+                    then
+                        Println "$error 源图片目录不能为空"
+                    elif EleInArray "$new_kcc_source" kcc_sources
+                    then
+                        Println "$error 源图片目录已存在"
+                    else
+                        kcc_sources+=("$new_kcc_source")
+                        echo
+                        inquirer list_input_index "继续添加源图片目录" ny_options ny_index
+                        if [ "$ny_index" -eq 0 ] 
+                        then
+                            break
+                        fi
+                    fi
+                done
+                json=true
+                jq_path='["kcc","source"]'
+                JQ update "$SERVICES_CONFIG" "$(ToJsonArray kcc_sources)"
+                Println "$info 源图片目录添加成功\n"
+            ;;
+            5)
+                if [ -z "${kcc_sources:-}" ] 
+                then
+                    Println "$error 请先添加源图片目录\n"
+                    return 1
+                fi
+
+                echo
+                inquirer checkbox_input_indices "请选择源图片目录" kcc_sources kcc_sources_indices
+
+                kcc_source_update=false
+
+                for kcc_sources_index in "${kcc_sources_indices[@]}"
+                do
+                    while true 
+                    do
+                        echo
+                        inquirer text_input "修改源图片目录 ${kcc_sources[kcc_sources_index]}" new_kcc_source "$i18n_not_set"
+                        if [ "$new_kcc_source" == "$i18n_not_set" ] 
+                        then
+                            continue 2
+                        fi
+                        RemoveQuotes new_kcc_source
+                        if [ -z "$new_kcc_source" ] 
+                        then
+                            Println "$error 源图片目录不能为空"
+                        elif EleInArray "$new_kcc_source" kcc_sources
+                        then
+                            Println "$error 源图片目录已存在"
+                        else
+                            kcc_sources[$kcc_sources_index]="$new_kcc_source"
+                            kcc_source_update=true
+                            break
+                        fi
+                    done
+                done
+
+                if [ "$kcc_source_update" = true ] 
+                then
+                    json=true
+                    jq_path='["kcc","source"]'
+                    JQ update "$SERVICES_CONFIG" "$(ToJsonArray kcc_sources)"
+                    Println "$info 源图片目录修改成功\n"
+                fi
+            ;;
+            6)
+                if [ -z "${kcc_sources:-}" ] 
+                then
+                    Println "$error 请先添加源图片目录\n"
+                    return 1
+                fi
+
+                echo
+                inquirer checkbox_input_indices "请选择源图片目录" kcc_sources kcc_sources_indices
+
+                for kcc_sources_index in "${kcc_sources_indices[@]}"
+                do
+                    unset kcc_sources[$kcc_sources_index]
+                done
+
+                json=true
+                jq_path='["kcc","source"]'
+
+                if [ "${#kcc_sources[@]}" -eq 0 ]
+                then
+                    JQ update "$SERVICES_CONFIG" "[]"
+                else
+                    kcc_sources=("${kcc_sources[@]}")
+                    JQ update "$SERVICES_CONFIG" "$(ToJsonArray kcc_sources)"
+                fi
+
+                Println "$info 源图片目录删除成功\n"
+            ;;
+        esac
+    done
+
+    return 0
+}
+
+KccConvert()
+{
+    local source="$1"
+    shift
+    local files_indices=( "$@" ) files_index kcc_commands=() kcc_output_name
+    shopt -s nullglob
+    local files=("$source"/*)
+    shopt -u nullglob
+
+    local kcc_convert_formats=( Auto MOBI EPUB CBZ KFX MOBI+EPUB ) format
+
+    if [ "${kcc_format:-Auto}" != "Auto" ] 
+    then
+        kcc_convert_formats=( "$kcc_format" )
+        for format in Auto MOBI EPUB CBZ KFX MOBI+EPUB
+        do
+            if [ "$format" != "$kcc_format" ] 
+            then
+                kcc_convert_formats+=( "$format" )
+            fi
+        done
+    fi
+
+    if [ "${kcc_format:-Auto}" != "KFX Output" ] 
+    then
+        kcc_convert_formats+=( 'KFX Output' )
+    fi
+
+    kcc_convert_outputs=( "$kcc_output" '当前目录' '输入新目录' )
+
+    echo
+    inquirer list_input_index "选择输出目录" kcc_convert_outputs kcc_convert_outputs_index
+
+    case $kcc_convert_outputs_index in
+        1) kcc_output="$source"
+        ;;
+        2) 
+            echo
+            inquirer text_input "输入转换输出的目录" kcc_output "$kcc_output"
+            RemoveQuotes kcc_output
+        ;;
+    esac
+
+    echo
+    inquirer list_input "选择输出格式" kcc_convert_formats kcc_format
+
+    if [ "$kcc_format" == "KFX Output" ] 
+    then
+        for files_index in "${files_indices[@]}"
+        do
+            if [ -d "${files[files_index]}" ] || [ "${files[files_index]##*.}" != "kpf" ]
+            then
+                Println "$error 请只选择kpf文件\n"
+                return 1
+            fi
+        done
+
+        CalibrePluginInstall 'KFX Output'
+
+        for files_index in "${files_indices[@]}"
+        do
+            kcc_output_name="${files[files_index]##*/}"
+            kcc_output_name="${kcc_output_name%.*}.kfx"
+            "$CALIBRE_BIN_ROOT"/calibre-debug -r "KFX Output" -- "${files[files_index]}" "${kcc_output}/${kcc_output_name}"
+            Println "$info ${files[files_index]##*/} 转换成功\n"
+        done
+
+        return 0
+    fi
+
+    for files_index in "${files_indices[@]}"
+    do
+        if [ ! -d "${files[files_index]}" ] 
+        then
+            Println "$error 请只选择图片目录\n"
+            return 1
+        fi
+    done
+
+    if [ "${kcc_process:-false}" = false ] 
+    then
+        kcc_commands+=( -n )
+    elif [ -n "$kcc_args" ] 
+    then
+        kcc_commands+=($kcc_args)
+    fi
+
+    source "${KCC_ROOT}/venv/bin/activate"
+
+    for files_index in "${files_indices[@]}"
+    do
+        python3 "$KCC_FILE" ${kcc_commands+"${kcc_commands[@]}"} -f "$kcc_format" -o "$kcc_output"/ "${files[files_index]}"
+        Println "$info ${files[files_index]##*/} 转换成功\n"
+    done
+
+    return 0
+}
+
+KccMenu()
+{
+    kcc_options=( '浏览' '转换' '设置' '修改设置' '更新/安装' )
+    echo
+    inquirer list_input_index "请选择" kcc_options kcc_options_index
+
+    case $kcc_options_index in
+        0) KccBrowse
+        ;;
+        1) 
+            KccView
+
+            if [ -z "${kcc_sources:-}" ] 
+            then
+                Println "$error 请先添加源图片目录\n"
+                return 1
+            fi
+
+            if [[ ! -x "$KCC_FILE" ]] 
+            then
+                Println "$error 请先安装 kcc\n"
+                return 1
+            fi
+
+            echo
+            inquirer list_input_index "选择源图片目录" kcc_sources kcc_sources_index
+
+            ServiceBrowse "${kcc_sources[$kcc_sources_index]}" "转换" KccConvert
+        ;;
+        2) KccConfig
+        ;;
+        3) KccConfigEdit
+        ;;
+        4) KccInstall
+        ;;
+    esac
+}

@@ -1,0 +1,25 @@
+Obscure()
+{
+    OpensslInstall
+
+    local hexkey="9c935b48730a554d6bfd7c63c886a92bd390198eb8128afbf4de162b8b95f638"
+    local hexiv=$(openssl rand -hex 16)
+    local buff=$(echo "$1" | openssl enc -aes-256-ctr -K "$hexkey" -iv "$hexiv")
+    hexiv=$(echo -n "$hexiv" | xxd -r -p)
+    local encrypted=$(echo -n "$hexiv$buff" | Base64urlEncode)
+
+    echo "$encrypted"
+}
+
+Deobscure()
+{
+    OpensslInstall
+
+    local hexkey="9c935b48730a554d6bfd7c63c886a92bd390198eb8128afbf4de162b8b95f638"
+    local decoded=$(echo -n "$1" | Base64urlDecode)
+    local hexiv=$(echo -n "$decoded" | head -c 16 | hexdump -v -e '/1 "%02x"') # xxd -p
+    local buff=$(echo -n "$decoded" | tail -c +17)
+    local decrypted=$(echo -n "$buff" | openssl enc -aes-256-ctr -d -K "$hexkey" -iv "$hexiv" -nopad)
+
+    echo "$decrypted"
+}

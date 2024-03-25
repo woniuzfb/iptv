@@ -107,6 +107,8 @@ ShFileCheck()
     [ ! -e "$PVE_FILE" ] && ln -s "$SH_FILE" "$PVE_FILE"
     [ ! -e "$ALIST_FILE" ] && ln -s "$SH_FILE" "$ALIST_FILE"
     [ ! -e "$LIANHUANHUA_FILE" ] && ln -s "$SH_FILE" "$LIANHUANHUA_FILE"
+    [ ! -e "$RCLONE_FILE" ] && ln -s "$SH_FILE" "$RCLONE_FILE"
+    [ ! -e "$CALIBRE_FILE" ] && ln -s "$SH_FILE" "$CALIBRE_FILE"
 
     return 0
 }

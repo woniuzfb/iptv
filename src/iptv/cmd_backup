@@ -1,3 +1,213 @@
-echo
+# --exclude=exclude_before --include=src/ --include=src/xxx/*** --exclude=src/*** --exclude=exclude_after
+
+IPTV_ROOT="${IPTV_ROOT%/}"
+FFMPEG_MIRROR_ROOT="${FFMPEG_MIRROR_ROOT%/}"
+LIVE_ROOT="${LIVE_ROOT%/}"
+NODE_ROOT="${NODE_ROOT%/}"
+
+iptv_source="$IPTV_ROOT"
+
+iptv_excludes_before=(
+    /c/
+    /ffmpeg-git-'*'
+    /vip/
+    node_modules/
+)
+
+ffmpeg_excludes_before=(
+    /Amlogic_s905-kernel-master.zip
+    /builds/
+    /calibre/
+    /dnscrypt/
+    /ffmpeg_c
+    /fontforge-20190413.tar.gz
+    /imgcat.zip
+    /jq-'*'
+    /releases/
+    /v2ray/
+    /xray/
+    '*'.ipk
+    '*'.err
+    '*'.log
+    '*'.pid
+)
+
+if [[ "$FFMPEG_MIRROR_ROOT" =~ "$iptv_source"(.*) ]]
+then
+    relative_path="${BASH_REMATCH[1]:-}"
+    relative_path="${relative_path#/}"
+    if [ -n "$relative_path" ] 
+    then
+        for i in "${!ffmpeg_excludes_before[@]}"
+        do
+            if [[ "${ffmpeg_excludes_before[i]}" == /* ]] 
+            then
+                ffmpeg_excludes_before[i]="/${relative_path}${ffmpeg_excludes_before[i]}"
+            else
+                ffmpeg_excludes_before[i]="/$relative_path/${ffmpeg_excludes_before[i]}"
+            fi
+        done
+    fi
+    iptv_excludes_before+=("${ffmpeg_excludes_before[@]}")
+else
+    ffmpeg_source="$FFMPEG_MIRROR_ROOT"
+fi
+
+if [[ "$LIVE_ROOT" =~ "$IPTV_ROOT"(.+) ]]
+then
+    iptv_excludes_before+=("${BASH_REMATCH[1]}")
+fi
+
+node_excludes_before=(
+    node_modules/
+)
+
+if ! [[ "$NODE_ROOT" =~ "$IPTV_ROOT"(.*) ]]
+then
+    node_source="$NODE_ROOT"
+fi
+
+nginx_source=/usr/local/nginx
+
+nginx_excludes_before=(
+    /logs/'*'.gz
+    node_modules/
+)
+
+nginx_includes=(
+    /conf/'***'
+    /html/'***'
+    /logs/'***'
+)
+
+nginx_excludes_after=(
+    /'***'
+)
+
+openresty_source=/usr/local/openresty
+
+openresty_excludes_before=(
+    /nginx/logs/'*'.gz
+    node_modules/
+)
+
+openresty_includes=(
+    /nginx/
+    /nginx/conf/'***'
+    /nginx/html/'***'
+    /nginx/logs/'***'
+    /nginx/lua/'***'
+)
+
+openresty_excludes_after=(
+    /'***'
+)
+
+v2ray_source="${V2_CONFIG%/*}"
+
+xray_source="${X_CONFIG%/*}"
+
+if [ "$dist" == "mac" ] 
+then
+    systemd_source="$HOME"/Library/LaunchAgents
+else
+    systemd_source=/etc/systemd/system
+fi
+
+systemd_includes=(
+    /alist.service
+    /aria2.service
+    /dnscrypt-proxy.service
+    /mmproxy-'*'.service
+    /nginx.service
+    /openresty.service
+    /v2ray.service
+    /xray.service
+    /aios.'*'.service
+    /com.aios.'*'.plist
+)
+
+systemd_excludes_after=(
+    /'***'
+)
+
+services_source="$SERVICES_ROOT"
+
+services_excludes_before=(
+    venv/
+    node_modules/
+    .git/
+    /calibre/bin/
+    /calibre/kcc/
+)
+
+home_source="$HOME"
+
+home_includes=(
+    /.bash_history
+)
+
+home_excludes_after=(
+    /'***'
+)
+
+DepInstall rsync
+
+mkdir -p "$BACKUP_ROOT"
+
+for backup in iptv nginx openresty v2ray xray ffmpeg node systemd services home
+do
+    rsync_commands=()
+    source="${backup}_source"
+
+    if [[ -z "${!source:-}" ]] 
+    then
+        continue
+    fi
+
+    source="${!source}"
+
+    if [ ! -d "$source" ] 
+    then
+        continue
+    fi
+
+    excludes_before=("${backup}_excludes_before"[@])
+
+    if [[ -n "${!excludes_before:-}" ]] 
+    then
+        excludes_before=("${!excludes_before}")
+        for exclude in "${excludes_before[@]}"
+        do
+            rsync_commands+=( --exclude="$exclude" )
+        done
+    fi
+
+    includes=("${backup}_includes"[@])
+
+    if [[ -n "${!includes:-}" ]] 
+    then
+        includes_arr=("${!includes}")
+        for include in "${includes_arr[@]}"
+        do
+            rsync_commands+=( --include="$include" )
+        done
+    fi
+
+    excludes_after=("${backup}_excludes_after"[@])
+
+    if [[ -n "${!excludes_after:-}" ]] 
+    then
+        excludes_after=("${!excludes_after}")
+        for exclude in "${excludes_after[@]}"
+        do
+            rsync_commands+=( --exclude="$exclude" )
+        done
+    fi
+
+    rsync -avP --safe-links --delete --delete-excluded ${rsync_commands[@]+"${rsync_commands[@]}"} "$source/" "$BACKUP_ROOT/$backup/"
+done
+
+Println "$info 已创建备份 $BACKUP_ROOT\n"
 
 exit 0

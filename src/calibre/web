@@ -1,0 +1,103 @@
+CalibreWebInstall()
+{
+    if [ -d "$CALIBRE_ROOT/web" ] 
+    then
+        cd "$CALIBRE_ROOT/web"
+        git pull
+        Println "$info Calibre Web 更新成功\n"
+        return
+    fi
+
+    DepInstall git
+    PythonInstall
+    git clone https://github.com/janeczku/calibre-web.git "$CALIBRE_ROOT/web"
+    cd "$CALIBRE_ROOT/web"
+    if [ "$dist" == "ubu" ] || [ "$dist" == "deb" ]
+    then
+        python3 -m pip install virtualenv
+        virtualenv venv
+    else
+        python3 -m venv venv
+    fi
+    ./venv/bin/python3 -m pip install -r requirements.txt
+    Println "$info Calibre Web 安装成功\n"
+}
+
+CalibreWebStart()
+{
+    service_name="calibre-web"
+
+    if ServiceControl is-active "$service_name"
+    then
+        Println "$error $service_name 已运行\n"
+        return 1
+    fi
+
+    service_commands=( "$CALIBRE_ROOT"/web/venv/bin/python3 "$CALIBRE_ROOT"/web/cps.py )
+
+    if ! err_msg=$(ServiceControl start "$service_name" service_commands)
+    then
+        Println "$error $service_name 启动失败, $err_msg\n"
+        return 1
+    fi
+
+    Println "$info $service_name 启动成功\n"
+}
+
+CalibreWebStop()
+{
+    service_name="calibre-web"
+
+    if ! ServiceControl is-active "$service_name"
+    then
+        Println "$error $service_name 未运行\n"
+        return 1
+    fi
+
+    if ! err_msg=$(ServiceControl stop "$service_name")
+    then
+        Println "$error $service_name 关闭失败, $err_msg\n"
+        return 1
+    fi
+
+    Println "$info $service_name 关闭成功\n"
+}
+
+CalibreWebRestart()
+{
+    service_name="calibre-web"
+
+    if ServiceControl is-active "$service_name" && ! err_msg=$(ServiceControl stop "$service_name")
+    then
+        Println "$error $service_name 关闭失败, $err_msg\n"
+        return 1
+    fi
+
+    service_commands=( "$CALIBRE_ROOT"/web/venv/bin/python3 "$CALIBRE_ROOT"/web/cps.py )
+
+    if ! err_msg=$(ServiceControl start "$service_name" service_commands)
+    then
+        Println "$error $service_name 重启失败, $err_msg\n"
+        return 1
+    fi
+
+    Println "$info $service_name 重启成功\n"
+}
+
+CalibreWebView()
+{
+    service_name="calibre-web"
+
+    if ! ServiceControl is-active "$service_name"
+    then
+        Println "$error $service_name 未运行\n"
+        return 1
+    fi
+
+    Println "$info 访问 Calibre Web: http://localhost:8083 , 用户名 admin 初始密码 admin123\n"
+
+    if [ "$dist" == "mac" ] 
+    then
+        open "http://localhost:8083"
+    fi
+}

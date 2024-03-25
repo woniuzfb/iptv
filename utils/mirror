@@ -308,6 +308,13 @@ else
     Println "$error jq.json 下载出错, 无法连接 github ?"
 fi
 
+if curl -s -L "https://api.github.com/repos/alist-org/alist/releases/latest" -o "$FFMPEG_MIRROR_ROOT/alist.json_tmp"
+then
+    mv "$FFMPEG_MIRROR_ROOT/alist.json_tmp" "$FFMPEG_MIRROR_ROOT/alist.json"
+else
+    Println "$error alist.json 下载出错, 无法连接 github ?"
+fi
+
 if curl -s -L "https://api.github.com/repos/v2fly/v2ray-core/releases/latest" -o "$FFMPEG_MIRROR_ROOT/v2ray.json_tmp"
 then
     mv "$FFMPEG_MIRROR_ROOT/v2ray.json_tmp" "$FFMPEG_MIRROR_ROOT/v2ray.json"

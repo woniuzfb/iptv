@@ -22,7 +22,7 @@ Del4gtvAcc()
                 then
                     _4gtv_accs_index=$((_4gtv_accs_num-1))
                     jq_path='["4gtv","accounts",'"$_4gtv_accs_index"']'
-                    JQ delete "$SERVICES_FILE"
+                    JQ delete "$SERVICES_CONFIG"
                     Println "$info 账号删除成功\n"
                     break
                 else

@@ -1,120 +1,65 @@
 Include utils/python "$@"
-
 Include utils/crossplane "$@"
-
 Include utils/openssl "$@"
-
 Include utils/go "$@"
-
 Include utils/postfix "$@"
-
 Include utils/tesseract "$@"
-
 Include utils/git "$@"
-
 Include utils/nodejs "$@"
-
 Include utils/mongodb "$@"
-
 Include utils/dnscrypt "$@"
-
-Include src/nginx/install_cert "$@"
-
+Include utils/iperf "$@"
+Include utils/swap "$@"
 Include src/nginx/view_status "$@"
-
 Include src/nginx/toggle "$@"
-
 Include src/nginx/restart "$@"
-
 Include src/nginx/parse_config "$@"
-
 Include src/nginx/get_config "$@"
-
 Include src/nginx/list_domains "$@"
-
 Include src/nginx/select_domain "$@"
-
 Include src/nginx/list_domain "$@"
-
 Include src/nginx/select_domain_server "$@"
-
 Include src/nginx/config_domain "$@"
-
 Include src/nginx/get_stream "$@"
-
 Include src/nginx/list_stream "$@"
-
 Include src/nginx/list_localhost "$@"
-
 Include src/nginx/select_localhost_server "$@"
-
 Include src/nginx/is_block_directive "$@"
-
 Include src/nginx/input_args "$@"
-
 Include src/nginx/add_directive "$@"
-
 Include src/nginx/add_user "$@"
-
 Include src/nginx/add_stream "$@"
-
 Include src/nginx/add_http "$@"
-
 Include src/nginx/add_rtmp "$@"
-
 Include src/nginx/add_enabled "$@"
-
 Include src/nginx/add_ssl "$@"
-
 Include src/nginx/add_localhost "$@"
-
 Include src/nginx/add_nodejs "$@"
-
 Include src/nginx/add_cors "$@"
-
 Include src/nginx/add_upstream_nodejs "$@"
-
 Include src/nginx/add_flv "$@"
-
 Include src/nginx/add_samesite_none "$@"
-
 Include src/nginx/build_conf "$@"
-
 Include src/nginx/check_localhost "$@"
-
 Include src/nginx/config_directive "$@"
-
 Include src/nginx/config_localhost "$@"
-
 Include src/nginx/config_server "$@"
-
 Include src/nginx/check_acme "$@"
-
 Include src/nginx/update_cert "$@"
-
 Include src/nginx/toggle_domain "$@"
-
 Include src/nginx/delete_domain "$@"
-
 Include src/nginx/delete_domain "$@"
-
 Include src/nginx/rotate_log "$@"
-
 Include src/nginx/update_ip "$@"
-
 Include src/nginx/enable_domain "$@"
-
 Include src/nginx/disable_domain "$@"
-
 Include src/nginx/append_conf "$@"
-
 Include src/nginx/add_domain "$@"
-
 Include src/nginx/config_nodejs "$@"
-
 Include src/nginx/menu_nodejs "$@"
-
 Include src/nginx/menu_mongodb "$@"
+Include src/nginx/sites_crt "$@"
+Include src/service/browse "$@"
 
 NginxInstall()
 {
@@ -418,7 +363,8 @@ NGINX_FILE="$nginx_prefix/sbin/nginx"
 if [ "$dist" != "mac" ] && [ ! -s "/etc/systemd/system/$nginx_name.service" ] && [ -d "$nginx_prefix" ]
 then
     ResourceLimit
-    echo "[Unit]
+cat > /etc/systemd/system/$nginx_name.service <<EOF
+[Unit]
 Description=$nginx_name
 After=syslog.target network-online.target remote-fs.target nss-lookup.target
 Wants=network-online.target
@@ -446,12 +392,70 @@ LimitNPROC=64000
 LimitMEMLOCK=infinity
 
 [Install]
-WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
+WantedBy=multi-user.target
+EOF
     $NGINX_FILE -s stop 2> /dev/null || true
     systemctl daemon-reload
     systemctl enable "$nginx_name"
     systemctl start "$nginx_name"
 fi
+
+case ${1:-} in
+    e) 
+        if [ ! -d "$nginx_prefix" ] 
+        then
+            Println "$error 尚未安装, 请检查 !\n"
+            exit 1
+        fi
+
+        shopt -s nullglob
+        nginx_confs=("$nginx_prefix"/conf/sites_available/*)
+        shopt -u nullglob
+
+        if [ -z "${nginx_confs:-}" ] 
+        then
+            Println "$error 请先添加域名 !\n"
+            exit 1
+        fi
+
+        nginx_confs=( "$nginx_prefix"/conf/nginx.conf "${nginx_confs[@]}" )
+
+        echo
+        inquirer list_input_index "选择配置文件" nginx_confs nginx_confs_index
+        editor "${nginx_confs[nginx_confs_index]}"
+        exit 0
+    ;;
+    l) 
+        if [ ! -d "$nginx_prefix" ] 
+        then
+            Println "$error 尚未安装, 请检查 !\n"
+            exit 1
+        fi
+
+        shopt -s nullglob
+        nginx_logs=("$nginx_prefix"/logs/*)
+        shopt -u nullglob
+
+        if [ -z "${nginx_logs:-}" ] 
+        then
+            Println "$error 没有日志 !\n"
+            exit 1
+        fi
+
+        echo
+        inquirer list_input_index "选择日志文件" nginx_logs nginx_logs_index
+
+        if [ "${2:-}" == "t" ] 
+        then
+            tail -f "${nginx_logs[nginx_logs_index]}"
+            exit 0
+        fi
+        editor "${nginx_logs[nginx_logs_index]}"
+        exit 0
+    ;;
+    *) 
+    ;;
+esac
 
 Println "  nginx 管理面板 ${normal}${red}[v$sh_ver]${normal}
 
@@ -476,14 +480,17 @@ Println "  nginx 管理面板 ${normal}${red}[v$sh_ver]${normal}
  ${green}16.${normal} 配置 postfix
  ${green}17.${normal} 配置 mmproxy
  ${green}18.${normal} 配置 dnscrypt proxy
- ${green}19.${normal} 识别 cloudflare/ibm ip
+ ${green}19.${normal} 识别 ip
  ${green}20.${normal} 删除域名
  ${green}21.${normal} 日志切割
+ ${green}22.${normal} 证书管理
+ ${green}23.${normal} swap
+ ${green}24.${normal} 测速
 
  ${tip} 输入: nx 打开面板
 
 "
-read -p "`gettext \"输入序号\"` [1-20]: " nginx_num
+read -p "`gettext \"输入序号\"` [1-24]: " nginx_num
 case "$nginx_num" in
     1) 
         if [ -d "$nginx_prefix" ] 
@@ -557,7 +564,16 @@ case "$nginx_num" in
     21) 
         NginxLogRotate
     ;;
-    *) Println "$error $i18n_input_correct_number [1-20]\n"
+    22) 
+        NginxSitesCrtManage
+    ;;
+    23) 
+        Swap
+    ;;
+    24) 
+        IperfMenu
+    ;;
+    *) Println "$error $i18n_input_correct_number [1-24]\n"
     ;;
 esac
 

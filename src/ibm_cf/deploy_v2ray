@@ -92,12 +92,13 @@ applications:
     GOPACKAGENAME: goapp
 " > "${ibm_cf_app_name}_manifest.yml"
 
-    printf '%s' 'package main
+cat > main.go <<EOF
+package main
 
 func main() {
 
 }
-' > "main.go"
+EOF
     ibmcloud cf push -f "${ibm_cf_app_name}_manifest.yml"
     cd ..
     rm -rf "$IBM_APPS_ROOT/ibm_$v2ray_rand_name"

@@ -35,11 +35,7 @@ V2rayListInboundShare()
         then
             ImgcatInstall
         fi
-        if [[ ! -x $(command -v convert) ]] 
-        then
-            Println "$info 安装 ImageMagick"
-            ImageMagickInstall
-        fi
+        ImageMagickInstall
         DepInstall qrencode
         qrencode -s 1 -o "$HOME/vmess_link.png" "vmess://$vmess_link"
         /usr/local/bin/imgcat --half-height "$HOME/vmess_link.png"

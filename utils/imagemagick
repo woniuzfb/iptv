@@ -1,21 +1,16 @@
 ImageMagickInstall()
 {
-    Progress &
-    progress_pid=$!
-    trap '
-        kill $progress_pid
-        wait $progress_pid 2> /dev/null
-    ' EXIT
+    if [[ -x $(command -v convert) ]] 
+    then
+        return 0
+    fi
+
     rm -f "$IPTV_ROOT/magick"
+
     if [ "$dist" == "rpm" ] 
     then
-        yum -y install ImageMagick >/dev/null 2>&1
+        DepInstall ImageMagick
     else
-        apt-get -y install imagemagick >/dev/null 2>&1
+        DepInstall imagemagick
     fi
-    kill $progress_pid
-    wait $progress_pid 2> /dev/null || true
-    trap - EXIT
-    echo -n "...100%"
-    Println "\n`eval_gettext \"\\\$info magick 安装完成\"`\n"
 }

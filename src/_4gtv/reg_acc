@@ -10,11 +10,11 @@ Reg4gtvAcc()
         | $JQ_FILE -r '[.Success,.ErrMessage]|join(" ")'
     ) || true
 
-    if [ "$result" = true ]
+    if [ "$result" = true ] || [ "$msg" = "String was not recognized as a valid DateTime." ]
     then
-        if [ ! -s "$SERVICES_FILE" ] 
+        if [ ! -s "$SERVICES_CONFIG" ] 
         then
-            printf '{"%s":{"%s":[]}}' "4gtv" "accounts" > "$SERVICES_FILE"
+            printf '{"%s":{"%s":[]}}' "4gtv" "accounts" > "$SERVICES_CONFIG"
         fi
         new_acc=$(
         $JQ_FILE -n --arg email "$_4gtv_acc_email" --arg password "$_4gtv_acc_pass" \
@@ -24,7 +24,7 @@ Reg4gtvAcc()
             }'
         )
         jq_path='["4gtv","accounts"]'
-        JQ add "$SERVICES_FILE" "[$new_acc]"
+        JQ add "$SERVICES_CONFIG" "[$new_acc]"
         Println "$info 账号注册成功\n"
     else
         Println "$error 账号注册失败, 请重试\n\n$msg\n"

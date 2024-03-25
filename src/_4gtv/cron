@@ -12,9 +12,9 @@ _4gtvCron()
 
     if [ "$result" = true ]
     then
-        if [ ! -s "$SERVICES_FILE" ] 
+        if [ ! -s "$SERVICES_CONFIG" ] 
         then
-            printf '{"%s":{"%s":[]}}' "4gtv" "accounts" > "$SERVICES_FILE"
+            printf '{"%s":{"%s":[]}}' "4gtv" "accounts" > "$SERVICES_CONFIG"
         fi
         new_acc=$(
         $JQ_FILE -n --arg email "$_4gtv_acc_email" --arg password "$_4gtv_acc_pass" \
@@ -24,7 +24,7 @@ _4gtvCron()
             }'
         )
         jq_path='["4gtv","accounts"]'
-        JQ add "$SERVICES_FILE" "[$new_acc]"
+        JQ add "$SERVICES_CONFIG" "[$new_acc]"
         Println "$info 账号注册成功\n"
     else
         Println "$error 账号注册失败, 请重试\n\n$msg\n"
@@ -34,11 +34,7 @@ _4gtvCron()
 
     IMG_FILE="$IPTV_ROOT/4gtv.png"
 
-    if [[ ! -x $(command -v convert) ]] 
-    then
-        Println "$info 安装 ImageMagick"
-        ImageMagickInstall
-    fi
+    ImageMagickInstall
 
     for((i=0;i<5;i++));
     do
@@ -52,7 +48,6 @@ _4gtvCron()
             read -p "(默认: 刷新验证码): " validatecode
             [ -z "$validatecode" ] && continue
         else
-            Println "$info 尝试修复 magick ..."
             ImageMagickInstall
             rm -f "${IMG_FILE:-notfound}"
         fi
@@ -79,7 +74,7 @@ _4gtvCron()
     map_string=true
     jq_path='["4gtv","accounts"]'
     jq_path2='["token"]'
-    JQ update "$SERVICES_FILE" email "$_4gtv_acc_email" "$token"
+    JQ update "$SERVICES_CONFIG" email "$_4gtv_acc_email" "$token"
 
     Println "$info 账号登录成功"
     Println "$info 验证账号..."
@@ -102,7 +97,7 @@ _4gtvCron()
         fi
     done
     Println "$info 账号验证成功"
-    Println "$info 开启 7 天豪华套餐"
+    Println "$info 开启 30 天豪华套餐"
 
     IFS="^" read -r result msg < <(CurlFake -s -Lm 20 \
         -H 'Origin: https://www.4gtv.tv' \
@@ -114,8 +109,8 @@ _4gtvCron()
 
     if [ "$result" = true ] 
     then
-        Println "$info 7 天豪华套餐开启成功\n"
+        Println "$info 30 天豪华套餐开启成功\n"
     else
-        Println "$error 开启 7 天豪华套餐发生错误, 请重试\n\n$msg\n"
+        Println "$error 开启 30 天豪华套餐发生错误, 请重试\n\n$msg\n"
     fi
 }

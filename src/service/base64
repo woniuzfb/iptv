@@ -1,0 +1,23 @@
+Base64urlEncode()
+{
+    OpensslInstall
+
+    (if [ -z "${1:-}" ]; then cat -; else echo -n "$1"; fi) |
+    openssl base64 -e -A |
+    sed s/\\+/-/g |
+    sed s/\\//_/g |
+    sed -E s/=+$//
+}
+
+Base64urlDecode()
+{
+    OpensslInstall
+
+    local input=$(if [ -z "${1:-}" ]; then echo -n $(cat -); else echo -n "$1"; fi)
+    local mod=$(($(echo -n "$input" | wc -c) % 4))
+    local padding=$(if [ $mod -eq 2 ]; then echo -n '=='; elif [ $mod -eq 3 ]; then echo -n '=' ; fi)
+    echo -n "$input$padding" |
+    sed s/-/+/g |
+    sed s/_/\\//g |
+    openssl base64 -d -A
+}

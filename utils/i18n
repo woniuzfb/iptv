@@ -261,6 +261,11 @@ grep()
     ggrep "$@"
 }
 
+base64()
+{
+    gbase64 "$@"
+}
+
 else
     TEXTDOMAINDIR=/usr/share/locale
 fi

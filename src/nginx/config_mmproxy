@@ -5,24 +5,12 @@ then
     echo -en "0.0.0.0/0\n::/0\n" > ~/allowed-subnets.txt
 fi
 
+GoInstall
+
 if [[ ! -x $(command -v go-mmproxy) ]] 
 then
     Println "$info 安装 go-mmproxy"
-
-    GoInstall
-    go get github.com/path-network/go-mmproxy
-
-    if [[ ! -x $(command -v go-mmproxy) ]] 
-    then
-        export PATH="$PATH:$HOME/go/bin"
-
-        if [ "$dist" == "rpm" ] 
-        then
-            echo "export PATH=\$PATH:\$HOME/go/bin" >> ~/.bash_profile
-        else
-            echo "export PATH=\$PATH:\$HOME/go/bin" >> ~/.profile
-        fi
-    fi
+    go install github.com/path-network/go-mmproxy@latest
 fi
 
 echo
@@ -62,7 +50,10 @@ fi
 
 if [ "$mmproxy_name" == "ssh" ] 
 then
-    Println "$tip 请确保已经设置 ssh 监听地址和端口"
+    Println "$tip 请之后将 nginx 分流 ssh 协议至 $mmproxy_listen, 并将 ssh 监听改为下面输入的地址和端口"
+elif [ "$mmproxy_name" == "acme" ] 
+then
+    Println "$tip 请之后将 nginx 分流 acme 协议至 $mmproxy_listen"
 fi
 
 Println "$tip 比如: 127.0.0.1:2222"
@@ -76,19 +67,22 @@ then
     reload=1
 fi
 
-echo "[Unit]
+cat > /etc/systemd/system/mmproxy-"$mmproxy_name".service <<EOF
+[Unit]
 Description=mmproxy-$mmproxy_name
 After=syslog.target network-online.target nss-lookup.target
 Wants=network-online.target
 
 [Service]
-ExecStart=$HOME/go/bin/go-mmproxy --allowed-subnets $HOME/allowed-subnets.txt -l $mmproxy_listen -4 $mmproxy_target_v4 -6 $mmproxy_target_v6
+ExecStart=$go_path/bin/go-mmproxy --allowed-subnets $HOME/allowed-subnets.txt -l $mmproxy_listen -4 $mmproxy_target_v4 -6 $mmproxy_target_v6
+StartLimitInterval=60s
+StartLimitBurst=5
 RestartSec=5
-StartLimitIntervalSec=0
 Restart=on-failure
 
 [Install]
-WantedBy=multi-user.target" > "/etc/systemd/system/mmproxy-$mmproxy_name.service"
+WantedBy=multi-user.target
+EOF
 
 if [ "${reload:-0}" -eq 1 ] 
 then
@@ -100,20 +94,24 @@ else
     systemctl start "mmproxy-$mmproxy_name"
 fi
 
-if [ ! -f ~/ip.sh ] 
+if [ ! -f "$HOME"/ip.sh ] 
 then
-    echo "#!/bin/bash
+cat > "$HOME"/ip.sh <<EOF
+#!/bin/bash
 ip rule add from 127.0.0.1/8 iif lo table 100
 ip route add local 0.0.0.0/0 dev lo table 100
 ip -6 rule add from ::1/128 iif lo table 100
-ip -6 route add local ::/0 dev lo table 100" > ~/ip.sh
+ip -6 route add local ::/0 dev lo table 100
+EOF
     chmod +x ~/ip.sh
 fi
 
 if [ ! -f /etc/rc.local ]
 then
-    echo "#!/bin/bash
-$HOME/ip.sh" > /etc/rc.local
+cat > /etc/rc.local <<EOF
+#!/bin/bash
+$HOME/ip.sh
+EOF
 elif ! grep -q "$HOME/ip.sh" < /etc/rc.local
 then
     echo "$HOME/ip.sh" >> /etc/rc.local
@@ -124,10 +122,11 @@ chmod +x /etc/rc.local
 if [[ $(systemctl is-active rc-local) == "inactive" ]] 
 then
     systemctl enable rc-local || true
-    if ! grep -q 'iif lo lookup 100' < <(ip rule list)
-    then
-        systemctl start rc-local || true
-    fi
+fi
+
+if ! grep -q 'iif lo lookup 100' < <(ip rule list)
+then
+    systemctl restart rc-local || true
 fi
 
 Println "$info mmproxy-$mmproxy_name 设置成功\n"

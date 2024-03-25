@@ -1,0 +1,29 @@
+Include src/calibre/web "$@"
+Include src/calibre/kcc "$@"
+Include src/calibre/install "$@"
+Include src/service/control "$@"
+Include src/service/get "$@"
+Include src/service/browse "$@"
+Include utils/python "$@"
+Include utils/imagemagick "$@"
+
+calibre_options=( 'kcc' '安装/更新 calibre' '开启 Calibre Web' '关闭 Calibre Web' '重启 Calibre Web' '查看 Calibre Web' '安装/更新 Calibre Web' )
+echo
+inquirer list_input_index "请选择" calibre_options calibre_options_index
+
+case $calibre_options_index in
+    0) KccMenu
+    ;;
+    1) CalibreInstall
+    ;;
+    2) CalibreWebStart
+    ;;
+    3) CalibreWebStop
+    ;;
+    4) CalibreWebRestart
+    ;;
+    5) CalibreWebView
+    ;;
+    6) CalibreWebInstall
+    ;;
+esac

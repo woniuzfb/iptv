@@ -15,7 +15,7 @@ VimConfig()
 
     if curl -s -fLo ~/.vim/autoload/plug.vim --create-dirs "$FFMPEG_MIRROR_LINK/vim-plug.vim"
     then
-        printf '%s' "
+cat > "$HOME"/.vimrc <<EOF
 call plug#begin('~/.vim/plugged')
 Plug 'preservim/nerdcommenter'
 Plug 'ryanpcmcquen/fix-vim-pasting'
@@ -29,7 +29,7 @@ set expandtab
 
 autocmd BufRead,BufNewFile *.conf setfiletype conf
 filetype indent off
-" > ~/.vimrc
+EOF
         DepInstall git
         Println "$info vimrc 设置完成, 请在 vim 下执行 PlugInstall\n"
     else

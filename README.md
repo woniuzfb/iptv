@@ -15,6 +15,8 @@
     - [参数详解](#参数详解)
     - [举例](#举例)
   - [Alist](#alist)
+  - [Rclone](#rclone)
+  - [Calibre](#calibre)
   - [LianHuanHua](#lianhuanhua)
   - [Dev](#dev)
 
@@ -54,6 +56,7 @@ wget https://woniuzfb.github.io/iptv/nx.sh && bash nx.sh
 - postfix
 - mmproxy
 - dnscrypt proxy
+- iperf3
 
 ---
 
@@ -256,6 +259,26 @@ wget https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 ```bash
 ./debug ali
 ```
+
+## Rclone
+
+```bash
+./debug rc
+```
+
+- remote
+- mount
+- serve
+- sync
+
+## Calibre
+
+```bash
+./debug cw
+```
+
+- calibre-web
+- kcc
 
 ## LianHuanHua
 

@@ -229,7 +229,7 @@ do
     model="${ts_model[ts_index]}"
     app_version="${ts_app_version[ts_index]}"
 
-    GetServiceAccs "$id"
+    ServiceGet "$id"
 
     accs_options=()
 
@@ -540,7 +540,7 @@ do
         if [ "$acc_options_index" -eq 1 ] 
         then
             jq_path='["'"$id"'","accounts",'"$accs_options_index"']'
-            JQ delete "$SERVICES_FILE"
+            JQ delete "$SERVICES_CONFIG"
             Println "$info 账号删除成功"
             continue
         fi
@@ -644,7 +644,7 @@ do
 
         merge=true
         jq_path='["'"$id"'","accounts",'"$accs_options_index"']'
-        JQ update "$SERVICES_FILE" "$update"
+        JQ update "$SERVICES_CONFIG" "$update"
     else
         if [ -n "$img_url" ] 
         then
@@ -696,15 +696,15 @@ do
             )
         fi
 
-        if [[ $($JQ_FILE --argjson path '["'"$id"'","accounts"]' --arg user_name "$user_name" 'getpath($path) // []|map(select(.user_name==$user_name))' "$SERVICES_FILE") != "[]" ]] 
+        if [[ $($JQ_FILE --argjson path '["'"$id"'","accounts"]' --arg user_name "$user_name" 'getpath($path) // []|map(select(.user_name==$user_name))' "$SERVICES_CONFIG") != "[]" ]] 
         then
             merge=true
             map_string=true
             jq_path='["'"$id"'","accounts"]'
-            JQ update "$SERVICES_FILE" user_name "$user_name" "$new_acc"
+            JQ update "$SERVICES_CONFIG" user_name "$user_name" "$new_acc"
         else
             jq_path='["'"$id"'","accounts"]'
-            JQ add "$SERVICES_FILE" "[$new_acc]"
+            JQ add "$SERVICES_CONFIG" "[$new_acc]"
         fi
     fi
 

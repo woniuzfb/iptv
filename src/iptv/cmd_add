@@ -1,4 +1,4 @@
-while getopts "i:l:P:o:p:S:t:s:c:v:a:f:q:b:r:k:K:m:n:z:H:T:L:CRe" flag
+while getopts "i:l:P:o:p:S:t:s:c:v:a:f:q:b:r:k:K:m:n:z:H:T:L:CReh" flag
 do
     case "$flag" in
         i) stream_link="$OPTARG";;
@@ -27,7 +27,7 @@ do
         H) flv_h265=true;;
         T) flv_push_link="$OPTARG";;
         L) flv_pull_link="$OPTARG";;
-        *) Usage;
+        h|*) Usage;
     esac
 done
 

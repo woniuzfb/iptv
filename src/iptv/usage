@@ -84,6 +84,7 @@ Usage()
         `gettext \"x e 手动修改 config.json\"`
 
      `gettext \"nx 打开 nginx 面板\"`
+        `gettext \"nx e 手动修改配置文件\"`
 
      `gettext \"or 打开 openresty 面板\"`
 
@@ -97,6 +98,10 @@ Usage()
      `gettext \"arm 打开 Armbian 管理面板\"`
 
      `gettext \"pve 打开 Proxmox VE 管理面板\"`
+
+     `gettext \"tv b 备份所有重要文件\"`
+
+     `gettext \"tv curl 安装 curl impersonate\"`
 
      `gettext \"tv ed 选择默认编辑器\"`
 

@@ -3,8 +3,11 @@ Include utils/ffmpeg "$@"
 Include utils/node "$@"
 Include utils/nodejs "$@"
 
-ebooks_root="$HOME/ebooks"
-ebooks_config="$ebooks_root/config.json"
+if [ ! -f "$LIANHUANHUA_CONFIG" ] && [ -f "$HOME/ebooks/config.json" ] 
+then
+    mkdir -p "$LIANHUANHUA_ROOT"
+    cp  "$HOME/ebooks/config.json" "$LIANHUANHUA_CONFIG"
+fi
 
 LhhDownload()
 {
@@ -44,7 +47,7 @@ ZhLhhDownload()
             book_path="${book_path%-*}"
         fi
         book_path="${book_path}-$i"
-        ((i++))
+        i=$((i+1))
     done
 
     book_html=$(CurlFake -s -L -b "$COOKIE_FILE" -H "Referer: $book_url" $book_url)
@@ -81,7 +84,7 @@ ZhLhhDownload()
         then
             total=$((total+c))
         else
-            ((total++))
+            total=$((total+1))
         fi
     done
 
@@ -138,17 +141,17 @@ ZhLhh()
     local search_keys=( a b c d e f a )
     local search_means=( '书名' '原著' '改编' '绘画' '出版社' '颜色' '人物' )
     libcode=A7CCFF874E0E58868FF7FA84BF94B4C94E9F781AEF6E50E0359E12099735745F2B943218D8F245B2BD8EFA919770D399
-    COOKIE_FILE="$ebooks_root/cookie_zhlhh"
+    COOKIE_FILE="$LIANHUANHUA_ROOT/cookie_zhlhh"
 
-    if [ ! -s "$ebooks_config" ] 
+    if [ ! -s "$LIANHUANHUA_CONFIG" ] 
     then
-        mkdir -p "$ebooks_root/"
-        printf '{"%s":{"%s":[]}}' "books" "zhlhh" > "$ebooks_config"
+        mkdir -p "$LIANHUANHUA_ROOT/"
+        printf '{"%s":{"%s":[]}}' "books" "zhlhh" > "$LIANHUANHUA_CONFIG"
     fi
 
     SetDelimiters
 
-    jq_input=$($JQ_FILE -c 'del(.books.hdlz)' "$ebooks_config")
+    jq_input=$($JQ_FILE -c 'del(.books.hdlz)' "$LIANHUANHUA_CONFIG")
 
 IFS=$'\003\t' read -r default_save_dir m_adapter m_addtime m_bookname m_category_id m_cover m_drawing m_m \
     m_muludir m_original m_p m_publish m_yd m_downloaded m_fav < <(JQs flat "$jq_input" '' \
@@ -216,6 +219,7 @@ reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p
         result_yd=("${books_yd[@]}")
         result_p=("${books_p[@]}")
         iframe_paths=($(CurlFake -s -L -b "$COOKIE_FILE" -H "Referer: http://www.zhlhh.com/" "http://www.zhlhh.com/web/js/main.js" | grep -oP 'url = "\K[^"]+'))
+        books_indices=("${!books_m[@]}")
     else
         if EleInArray $((${#search_means[@]}-1)) search_keys_indices
         then
@@ -229,7 +233,7 @@ reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p
             do
                 if [ "$books_total" -gt 0 ] 
                 then
-                    ((search_keys_index--))
+                    search_keys_index=$((search_keys_index-1))
                 fi
                 case $search_keys_index in
                     0) 
@@ -366,14 +370,14 @@ reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p
                 [ -n "${books:-}" ] && books="${books},"
                 books="${books}${new_book}"
                 books_indices+=("$books_total")
-                ((books_total++))
+                books_total=$((books_total+1))
             fi
         done
 
         if [ -n "${books:-}" ] 
         then
             jq_path='["books","zhlhh"]'
-            JQ add "$ebooks_config" "[$books]"
+            JQ add "$LIANHUANHUA_CONFIG" "[$books]"
         fi
     fi
 
@@ -390,6 +394,7 @@ reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p
         then
             echo
             inquirer text_input "输入存储文件夹目录" save_dir "${default_save_dir}"
+            RemoveQuotes save_dir
             if [ -z "$save_dir" ] 
             then
                 Println "已取消...\n"
@@ -399,7 +404,7 @@ reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p
             if [ "$save_dir" != "$default_save_dir" ] 
             then
                 jq_path='["default","save_dir"]'
-                JQ update "$ebooks_config" "$save_dir"
+                JQ update "$LIANHUANHUA_CONFIG" "$save_dir"
             fi
 
             FFmpegInstall
@@ -413,7 +418,7 @@ reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p
                 then
                     bool=true
                     jq_path='["books","zhlhh",'"$books_index"',"downloaded"]'
-                    JQ update "$ebooks_config" true
+                    JQ update "$LIANHUANHUA_CONFIG" true
                 fi
             done
 
@@ -427,7 +432,7 @@ reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p
                 then
                     bool=true
                     jq_path='["books","zhlhh",'"$books_index"',"fav"]'
-                    JQ update "$ebooks_config" true
+                    JQ update "$LIANHUANHUA_CONFIG" true
                 fi
             done
             Println "$info 已添加到收藏\n"
@@ -439,7 +444,7 @@ reduce ({adapter,addtime,bookname,category_id,cover,drawing,m,muludir,original,p
                 then
                     bool=true
                     jq_path='["books","zhlhh",'"$books_index"',"fav"]'
-                    JQ update "$ebooks_config" false
+                    JQ update "$LIANHUANHUA_CONFIG" false
                 fi
             done
             Println "$info 已取消收藏\n"
@@ -461,7 +466,7 @@ HdlzZhihuDownload()
             book_path="${book_path%-*}"
         fi
         book_path="${book_path}-$i"
-        ((i++))
+        i=$((i+1))
     done
 
     if ! book_images=($(LhhDownload -s -L -b "$COOKIE_FILE" "https://zhuanlan.zhihu.com/p/${id}" | grep -oP 'data-original-token="\K[^"]+' | uniq))
@@ -503,7 +508,7 @@ HdlzZhihuDownload()
                     book_images_name="${book_images_name%-*}"
                 fi
                 book_images_name="${book_images_name}-$i"
-                ((i++))
+                i=$((i+1))
             done
 
             mkdir -p "$book_path/${book_images_name}"
@@ -543,7 +548,7 @@ HdlzToutiaoDownload()
             book_path="${book_path%-*}"
         fi
         book_path="${book_path}-$i"
-        ((i++))
+        i=$((i+1))
     done
 
     if ! book_images=($(LhhDownload -s -L -A "$getinfo_useragent" -H "referer: $signed_url" -H "cookie: ${toutiao_cookies[*]}" "https://www.toutiao.com/article/${id}" | grep -oP '<article[^>]*>.*?</article>' | grep -oP '<img[^>]*src="\K[^"]*(?=")'))
@@ -631,15 +636,15 @@ HdlzGetTouTiaoCookies()
 
 HdlzLhh()
 {
-    if [ ! -s "$ebooks_config" ] 
+    if [ ! -s "$LIANHUANHUA_CONFIG" ] 
     then
-        mkdir -p "$ebooks_root/"
-        printf '{"%s":{"%s":[]}}' "books" "hdlz" > "$ebooks_config"
+        mkdir -p "$LIANHUANHUA_ROOT/"
+        printf '{"%s":{"%s":[]}}' "books" "hdlz" > "$LIANHUANHUA_CONFIG"
     fi
 
     SetDelimiters
 
-IFS=$'\003\t' read -r default_save_dir m_source m_id m_title m_cover m_excerpt m_behot_time m_downloaded m_fav < <(JQs flat "$ebooks_config" '' \
+IFS=$'\003\t' read -r default_save_dir m_source m_id m_title m_cover m_excerpt m_behot_time m_downloaded m_fav < <(JQs flat "$LIANHUANHUA_CONFIG" '' \
 '(.default // ""| if (.|type == "string") then {} else . end) as $default |
 (.books.hdlz | if . == "" then {} else . end) as $hdlz |
 reduce ({save_dir}|keys_unsorted[]) as $key ([];
@@ -676,7 +681,7 @@ reduce ({source,id,title,cover,excerpt,behot_time,downloaded,fav}|keys_unsorted[
         inquirer list_input_index "是否重新查询" lookup_options lookup_options_index
     fi
 
-    COOKIE_FILE="$ebooks_root/cookie_hdlz"
+    COOKIE_FILE="$LIANHUANHUA_ROOT/cookie_hdlz"
 
     if [ "$books_total" -eq 0 ] || [ "$lookup_options_index" -eq 1 ] || [ "$lookup_options_index" -eq 3 ]
     then
@@ -745,7 +750,7 @@ reduce ({excerpt,id,image_url,title}|keys_unsorted[]) as $key ([];
                 do
                     if [ "${book_excerpts[j]}" == "[图片]" ] 
                     then
-                        ((book_images_count++))
+                        book_images_count=$((book_images_count+1))
                     elif [ "${book_excerpts[j]}" == "end" ] 
                     then
                         if [ "${book_excerpts[j-1]}" == "[图片]" ] && [ -n "${book_images_command:-}" ] 
@@ -810,7 +815,7 @@ reduce ({excerpt,id,image_url,title}|keys_unsorted[]) as $key ([];
                 books="${books}${new_book}"
             done
 
-            ((loop++))
+            loop=$((loop+1))
 
             if [ "$paging_is_end" = true ] 
             then
@@ -824,9 +829,8 @@ reduce ({excerpt,id,image_url,title}|keys_unsorted[]) as $key ([];
                 continue
             fi
 
-            json=true
             jq_path='["books","hdlz"]'
-            JQ add "$ebooks_config" "[$books]"
+            JQ add "$LIANHUANHUA_CONFIG" "[$books]"
         done
     fi
 
@@ -837,14 +841,14 @@ reduce ({excerpt,id,image_url,title}|keys_unsorted[]) as $key ([];
 
         HdlzGetTouTiaoCookies
 
-        last_behot_time=$(date +%s)
-        for((i=0;i<books_total;i++));
-        do
-            if [ "${books_source[i]}" = "toutiao" ] && [ "${books_behot_time[i]}" -lt "$last_behot_time" ]
-            then
-                last_behot_time="${books_behot_time[i]}"
-            fi
-        done
+        # last_behot_time=$(date +%s)
+        # for((i=0;i<books_total;i++));
+        # do
+        #     if [ "${books_source[i]}" = "toutiao" ] && [ "${books_behot_time[i]}" -lt "$last_behot_time" ]
+        #     then
+        #         last_behot_time="${books_behot_time[i]}"
+        #     fi
+        # done
 
         # if [[ "${feed_cookie}" =~ (.*)__ac_nonce=([^\;]+)\;\ (.*) ]] || [[ "${feed_cookie}" =~ (.*)__ac_nonce=([^ ]+)(.*) ]] 
         # then
@@ -918,10 +922,10 @@ reduce ({id,behot_time,title}|keys_unsorted[]) as $key ([];
 
             toutiao_total=$((toutiao_total+result_total))
 
-            if [ "${result_behot_time[result_total-1]}" -gt "$last_behot_time" ] 
-            then
-                continue
-            fi
+            # if [ "${result_behot_time[result_total-1]}" -gt "$last_behot_time" ] 
+            # then
+            #     continue
+            # fi
 
             books_total=$((books_total+result_total))
             books=""
@@ -970,9 +974,8 @@ reduce ({id,behot_time,title}|keys_unsorted[]) as $key ([];
                 continue
             fi
 
-            json=true
             jq_path='["books","hdlz"]'
-            JQ add "$ebooks_config" "[$books]"
+            JQ add "$LIANHUANHUA_CONFIG" "[$books]"
         done
     fi
 
@@ -1006,6 +1009,7 @@ reduce ({id,behot_time,title}|keys_unsorted[]) as $key ([];
         then
             echo
             inquirer text_input "输入存储文件夹目录" save_dir "${default_save_dir}"
+            RemoveQuotes save_dir
             if [ -z "$save_dir" ] 
             then
                 Println "已取消...\n"
@@ -1015,7 +1019,7 @@ reduce ({id,behot_time,title}|keys_unsorted[]) as $key ([];
             if [ "$save_dir" != "$default_save_dir" ] 
             then
                 jq_path='["default","save_dir"]'
-                JQ update "$ebooks_config" "$save_dir"
+                JQ update "$LIANHUANHUA_CONFIG" "$save_dir"
             fi
 
             local all_success=true all_failed=true
@@ -1023,7 +1027,7 @@ reduce ({id,behot_time,title}|keys_unsorted[]) as $key ([];
 
             for result_index in "${result_indices[@]}"
             do
-                ((result_count--))
+                result_count=$((result_count-1))
                 if [ "${books_source[result_index]}" == "zhihu" ] 
                 then
                     if ! HdlzZhihuDownload "${books_id[result_index]}" "${books_title[result_index]#*｜}" ${books_excerpt[result_index]}
@@ -1051,7 +1055,7 @@ reduce ({id,behot_time,title}|keys_unsorted[]) as $key ([];
                 then
                     bool=true
                     jq_path='["books","hdlz",'"$result_index"',"downloaded"]'
-                    JQ update "$ebooks_config" true
+                    JQ update "$LIANHUANHUA_CONFIG" true
                 fi
             done
 
@@ -1071,7 +1075,7 @@ reduce ({id,behot_time,title}|keys_unsorted[]) as $key ([];
             do
                 bool=true
                 jq_path='["books","hdlz",'"$result_index"',"fav"]'
-                JQ update "$ebooks_config" true
+                JQ update "$LIANHUANHUA_CONFIG" true
             done
             Println "$info 已添加到收藏\n"
         else
@@ -1079,7 +1083,7 @@ reduce ({id,behot_time,title}|keys_unsorted[]) as $key ([];
             do
                 bool=true
                 jq_path='["books","hdlz",'"$result_index"',"fav"]'
-                JQ update "$ebooks_config" false
+                JQ update "$LIANHUANHUA_CONFIG" false
             done
             Println "$info 已取消收藏\n"
         fi

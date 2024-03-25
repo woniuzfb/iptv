@@ -1,0 +1,224 @@
+ServiceControlIsActive()
+{
+    exceptions=( v2ray xray nginx openresty trojan dnscrypt-proxy )
+    service_label="$1"
+    if [ "$dist" == "mac" ] 
+    then
+        if ! EleInArray "$service_label" exceptions
+        then
+            service_label="com.aios.$service_label"
+        fi
+        service_file="$HOME/Library/LaunchAgents/${service_label}.plist"
+        if [ ! -f "$service_file" ] || ! { launchctl print "gui/$UID/$service_label" 2> /dev/null | grep -q "pid ="; }
+        then
+            return 1
+        fi
+    else
+        if ! EleInArray "$service_label" exceptions
+        then
+            service_label="aios.$service_label"
+        fi
+        service_file="/etc/systemd/system/${service_label}.service"
+        if [ ! -f "$service_file" ] || ! systemctl is-active --quiet "$service_label" 
+        then
+            return 1
+        fi
+    fi
+    return 0
+}
+
+ServiceControlIsEnabled()
+{
+    exceptions=( v2ray xray nginx openresty trojan dnscrypt-proxy )
+    service_label="$1"
+    if [ "$dist" == "mac" ] 
+    then
+        if ! EleInArray "$service_label" exceptions
+        then
+            service_label="com.aios.$service_label"
+        fi
+        service_file="$HOME/Library/LaunchAgents/${service_label}.plist"
+        if [ ! -f "$service_file" ] 
+        then
+            return 1
+        fi
+    else
+        if ! EleInArray "$service_label" exceptions
+        then
+            service_label="aios.$service_label"
+        fi
+        service_file="/etc/systemd/system/${service_label}.service"
+        if [ ! -f "$service_file" ] 
+        then
+            return 1
+        fi
+    fi
+    return 0
+}
+
+ServiceControlStart()
+{
+    if ServiceControlIsActive "$1" 
+    then
+        echo "服务已启动"
+        return 0
+    fi
+
+    local var=("$2"[@])
+    local args=() arg arr
+
+    if [[ -n "${!var:-}" ]] 
+    then
+        args=("${!var}")
+        if [[ ! -x "${args[0]}" ]] 
+        then
+            echo "${args[0]} 不存在"
+            return 1
+        fi
+    elif [ ! -f "$service_file" ] 
+    then
+        echo "$service_file 不存在"
+        return 1
+    fi
+
+    if [ "$dist" == "mac" ] 
+    then
+        if [ ! -f "$service_file" ] || [ -n "${3:-}" ]
+        then
+            arr="<array>"
+            for arg in "${args[@]}"
+            do
+                arr="$arr\n        <string>$arg</string>"
+            done
+            arr="$arr\n    </array>"
+            arr=$(echo -e "$arr")
+cat > "$service_file" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>$service_label</string>
+    <key>ProgramArguments</key>
+    $arr
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist>
+EOF
+        fi
+        launchctl load "$service_file"
+    else
+        if [ ! -f "$service_file" ] || [ -n "${3:-}" ]
+        then
+cat > "$service_file" <<EOF
+[Unit]
+Description=${service_label}
+After=syslog.target network-online.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+ExecStart=${args[*]}
+WorkingDirectory=${args[0]%/*}/
+StartLimitInterval=60s
+StartLimitBurst=5
+RestartSec=5
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        fi
+        systemctl daemon-reload
+        systemctl enable "${service_label}.service"
+        systemctl start "${service_label}.service"
+    fi
+}
+
+ServiceControlStop()
+{
+    if ! ServiceControlIsActive "$1" 
+    then
+        echo "服务未启动"
+        return 0
+    fi
+
+    if [ "$dist" == "mac" ] 
+    then
+        launchctl unload "$service_file"
+    else
+        systemctl stop "${service_label}.service"
+    fi
+}
+
+ServiceControlRestart()
+{
+    if ServiceControlIsActive "$1" 
+    then
+        ServiceControlStop
+    fi
+
+    ServiceControlStart
+}
+
+ServiceControlDisable()
+{
+    if ServiceControlIsActive "$1" 
+    then
+        ServiceControlStop
+    fi
+
+    if [ "$dist" == "mac" ] 
+    then
+        rm -f "$service_file"
+    else
+        systemctl disable "${service_label}".service --now > /dev/null 2> /dev/null || true
+        rm -f /etc/systemd/system/"${service_label}".service
+        rm -f /lib/systemd/system/"${service_label}".service
+        rm -f /etc/init.d/"${service_label}"
+    fi
+}
+
+ServiceControlRename()
+{
+    local old_service_label="$1"
+    local new_service_label="$2"
+    if [ "$dist" == "mac" ] 
+    then
+        mv "$HOME/Library/LaunchAgents/com.aios.$old_service_label.plist" "$HOME/Library/LaunchAgents/com.aios.$new_service_label.plist"
+    else
+        mv "/etc/systemd/system/aios.$old_service_label.service" "/etc/systemd/system/aios.$new_service_label.service"
+    fi
+}
+
+ServiceControl()
+{
+    local cmd=$1
+    shift
+    case $cmd in
+        is-active) 
+            ServiceControlIsActive "$@"
+        ;;
+        is-enabled) 
+            ServiceControlIsEnabled "$@"
+        ;;
+        start) 
+            ServiceControlStart "$@"
+        ;;
+        stop) 
+            ServiceControlStop "$@"
+        ;;
+        restart) 
+            ServiceControlRestart "$@"
+        ;;
+        disable) 
+            ServiceControlDisable "$@"
+        ;;
+        rename)
+            ServiceControlRename "$@"
+        ;;
+    esac
+    return $?
+}

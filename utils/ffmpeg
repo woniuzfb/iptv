@@ -4,9 +4,9 @@ FFmpegInstall()
     then
         FFMPEG_FILE="$FFMPEG_FILE_ROOT/ffmpeg"
         FFPROBE_FILE="$FFMPEG_FILE_ROOT/ffprobe"
-    elif [ "$FFMPEG_ROOT" != "$HOME" ] && FFMPEG_FILE_ROOT=$(find "$HOME"/ffmpeg-git-* -type d 2> /dev/null | head -1) 
+    elif FFMPEG_FILE_ROOT=$(find "$IPTV_ROOT"/ffmpeg-git-* -type d 2> /dev/null | head -1) 
     then
-        FFMPEG_ROOT="$HOME"
+        FFMPEG_ROOT="$IPTV_ROOT"
         FFMPEG_FILE="$FFMPEG_FILE_ROOT/ffmpeg"
         FFPROBE_FILE="$FFMPEG_FILE_ROOT/ffprobe"
     fi
@@ -318,7 +318,8 @@ Cflags: -I\${includedir}
     cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DBUILD_SHARED_LIBS=OFF ..
     make $nproc
     make install
-    printf '%s' "prefix=$HOME/ffmpeg_build
+cat > "$HOME"/ffmpeg_build/lib/pkgconfig/libxml-2.0.pc <<EOF
+prefix=$HOME/ffmpeg_build
 exec_prefix=\${prefix}
 libdir=\${prefix}/lib
 includedir=\${prefix}/include
@@ -329,7 +330,7 @@ Version: 2.9.10
 Requires:
 Libs: -L\${libdir} -lxml2
 Cflags: -I\${includedir}
-" > "$HOME/ffmpeg_build/lib/pkgconfig/libxml-2.0.pc"
+EOF
 
     # libpng (for openjpeg)
     cd ~/ffmpeg_sources
@@ -741,7 +742,8 @@ Cflags: -I\${includedir}
     make install
     mkdir -p "$HOME/ffmpeg_build/include/rubberband/"
     cp -f ../rubberband/* "$HOME/ffmpeg_build/include/rubberband/"
-    printf '%s' "prefix=$HOME/ffmpeg_build
+cat > "$HOME"/ffmpeg_build/lib/pkgconfig/rubberband.pc <<EOF
+prefix=$HOME/ffmpeg_build
 exec_prefix=\${prefix}
 libdir=\${prefix}/lib
 includedir=\${prefix}/include
@@ -751,7 +753,7 @@ Version: 1.9
 Description:
 Libs: -L\${libdir} -lrubberband
 Cflags: -I\${includedir}
-" > "$HOME/ffmpeg_build/lib/pkgconfig/rubberband.pc"
+EOF
 
     # libsrt
     cd ~/ffmpeg_sources

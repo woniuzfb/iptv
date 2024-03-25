@@ -1,0 +1,247 @@
+RcloneMountView()
+{
+    RcloneRemoteView
+
+    echo
+    inquirer list_input_index "选择远端" rclone_remotes_options rclone_remotes_index
+
+    if [ -z "${rclone_remotes_path[rclone_remotes_index]:-}" ] 
+    then
+        Println "$error 请先添加挂载\n"
+        return 1
+    fi
+
+    IFS="${delimiters[1]}" read -r -a rclone_remote_paths <<< "${rclone_remotes_path[rclone_remotes_index]}"
+    IFS="${delimiters[1]}" read -r -a rclone_remote_mount_paths <<< "${rclone_remotes_mount_path[rclone_remotes_index]}"
+
+    rclone_remote_mount_count=${#rclone_remote_paths[@]}
+
+    rclone_remote_mount_options=()
+    local i rclone_remote_mount_list=""
+
+    for((i=0;i<rclone_remote_mount_count;i++));
+    do
+        if ServiceControl is-active "${rclone_remotes_name[rclone_remotes_index]}-$((i+1))"
+        then
+            rclone_remote_mount_list="${rclone_remote_mount_list}${green}$((i+1)).${normal} 远端路径: ${rclone_remote_paths[i]}\n挂载点: ${rclone_remote_mount_paths[i]} ${green}(已挂载)${normal}\n\n"
+            rclone_remote_mount_options+=("${rclone_remotes_name[rclone_remotes_index]}:${rclone_remote_paths[i]} -> ${rclone_remote_mount_paths[i]} ${green}(已挂载)${normal}")
+        else
+            rclone_remote_mount_list="${rclone_remote_mount_list}${green}$((i+1)).${normal} 远端路径: ${rclone_remote_paths[i]}\n挂载点: ${rclone_remote_mount_paths[i]}\n\n"
+            rclone_remote_mount_options+=("${rclone_remotes_name[rclone_remotes_index]}:${rclone_remote_paths[i]} -> ${rclone_remote_mount_paths[i]}")
+        fi
+    done
+
+    Println "$rclone_remote_mount_list"
+}
+
+RcloneMountAdd()
+{
+    RcloneRemoteView
+
+    echo
+    inquirer list_input_index "选择远端" rclone_remotes_options rclone_remotes_index
+
+    echo
+    ExitOnText "输入远端地址" rclone_remote_path
+
+    echo
+    ExitOnText "输入挂载点" rclone_remote_mount_path
+    RemoveQuotes rclone_remote_mount_path
+
+    new_mount=$(
+    $JQ_FILE -n --arg path "$rclone_remote_path" --arg mount_path "$rclone_remote_mount_path" \
+        '{
+            path: $path,
+            mount_path: $mount_path
+        }'
+    )
+
+    jq_path='["rclone","remote",'"$rclone_remotes_index"',"mount"]'
+    JQ add "$SERVICES_CONFIG" "[$new_mount]"
+
+    Println "$info 挂载添加成功\n"
+}
+
+RcloneMountEdit()
+{
+    RcloneMountView
+
+    inquirer checkbox_input_indices "选择修改的挂载" rclone_remote_mount_options rclone_remote_mount_indices
+
+    rclone_remote_mount_edit_options=( '远端路径' '挂载点' )
+
+    for rclone_remote_mount_index in "${rclone_remote_mount_indices[@]}"
+    do
+        echo "${rclone_remote_mount_options[rclone_remote_mount_index]}"
+
+        echo
+        inquirer list_input_index "选择修改" rclone_remote_mount_edit_options rclone_remote_mount_edit_options_index
+
+        if [ "$rclone_remote_mount_edit_options_index" == "0" ] 
+        then
+            echo
+            inquirer text_input "输入新远端地址" rclone_remote_path "${rclone_remote_paths[rclone_remote_mount_index]}"
+
+            if [ "$rclone_remote_path" != "${rclone_remote_paths[rclone_remote_mount_index]}" ] 
+            then
+                jq_path='["rclone","remote",'"$rclone_remotes_index"',"mount",'"$rclone_remote_mount_index"',"path"]'
+                JQ update "$SERVICES_CONFIG" "$rclone_remote_path"
+                Println "$info 远端路径修改成功\n"
+            fi
+        else
+            echo
+            inquirer text_input "输入新挂载点" rclone_remote_mount_path "${rclone_remote_mount_paths[rclone_remote_mount_index]}"
+            if [ "$rclone_remote_mount_path" != "${rclone_remote_mount_paths[rclone_remote_mount_index]}" ] 
+            then
+                jq_path='["rclone","remote",'"$rclone_remotes_index"',"mount",'"$rclone_remote_mount_index"',"mount_path"]'
+                JQ update "$SERVICES_CONFIG" "$rclone_remote_mount_path"
+                Println "$info 挂载点修改成功\n"
+            fi
+        fi
+    done
+
+    return 0
+}
+
+RcloneMountDel()
+{
+    RcloneMountView
+
+    Println "$tip 也将停止挂载"
+    inquirer checkbox_input_indices "选择删除的挂载" rclone_remote_mount_options rclone_remote_mount_indices
+
+    local rclone_remote_mount_index_offset=0 i active_indices=()
+
+    for((i=0;i<rclone_remote_mount_count;i++));
+    do
+        if ServiceControl is-active "rclone.mount.${rclone_remotes_name[rclone_remotes_index]}-$((i+1))"
+        then
+            active_indices+=("$i")
+            Println "$info 暂停挂载 ${rclone_remote_mount_options[i]}"
+            ServiceControl stop "rclone.mount.${rclone_remotes_name[rclone_remotes_index]}-$((i+1))"
+        fi
+    done
+
+    for rclone_remote_mount_index in "${rclone_remote_mount_indices[@]}"
+    do
+        service_name="rclone.mount.${rclone_remotes_name[rclone_remotes_index]}-$((rclone_remote_mount_index+1))"
+        if ServiceControl is-enabled "$service_name"
+        then
+            Println "$info 正在删除挂载 ${rclone_remote_mount_options[rclone_remote_mount_index]}"
+            if ! err_msg=$(ServiceControl disable "$service_name")
+            then
+                Println "$error 删除挂载失败, $err_msg\n"
+                continue
+            fi
+        fi
+
+        unset rclone_remote_paths[rclone_remote_mount_index]
+        unset rclone_remote_mount_paths[rclone_remote_mount_index]
+
+        for((i=rclone_remote_mount_index+1;i<rclone_remote_mount_count;i++));
+        do
+            if ServiceControl is-enabled "rclone.mount.${rclone_remotes_name[rclone_remotes_index]}-$((i+1))"
+            then
+                ServiceControl rename "rclone.mount.${rclone_remotes_name[rclone_remotes_index]}-$((i+1))" "rclone.mount.${rclone_remotes_name[rclone_remotes_index]}-$i"
+            fi
+        done
+
+        if [ ${#active_indices[@]} -gt 0 ] 
+        then
+            for i in "${!active_indices[@]}"
+            do
+                if [ "$rclone_remote_mount_index" -lt "${active_indices[i]}" ] 
+                then
+                    active_indices[i]=$((active_indices[i]-1))
+                fi
+            done
+        fi
+
+        jq_path='["rclone","remote",'"$rclone_remotes_index"',"mount",'"$((rclone_remote_mount_index-rclone_remote_mount_index_offset))"']'
+        JQ delete "$SERVICES_CONFIG"
+        rclone_remote_mount_index_offset=$((rclone_remote_mount_index_offset+1))
+    done
+
+    if [ ${#active_indices[@]} -gt 0 ]
+    then
+        rclone_remote_paths=("${rclone_remote_paths[@]}")
+        rclone_remote_mount_paths=("${rclone_remote_mount_paths[@]}")
+
+        for i in "${active_indices[@]}"
+        do
+            Println "$info 恢复挂载 ${rclone_remotes_name[rclone_remotes_index]}:${rclone_remote_paths[i]} -> ${rclone_remote_mount_paths[i]}"
+            ServiceControl start "rclone.mount.${rclone_remotes_name[rclone_remotes_index]}-$((i+1))"
+        done
+    fi
+
+    Println "$info 挂载删除成功\n"
+}
+
+RcloneMountExc()
+{
+    RcloneMountView
+
+    if [ "$dist" == "mac" ] && [ ! -f /usr/local/lib/libfuse.dylib ]
+    then
+        DepInstall macfuse
+    fi
+
+    inquirer checkbox_input_indices "选择执行的挂载" rclone_remote_mount_options rclone_remote_mount_indices
+
+    RcloneConfigUpdate
+
+    for rclone_remote_mount_index in "${rclone_remote_mount_indices[@]}"
+    do
+        rclone_remote_path="${rclone_remote_paths[rclone_remote_mount_index]}"
+        rclone_remote_mount_path="${rclone_remote_mount_paths[rclone_remote_mount_index]}"
+        rclone_mount_list="${rclone_remotes_name[rclone_remotes_index]}:$rclone_remote_path -> $rclone_remote_mount_path"
+        service_name="rclone.mount.${rclone_remotes_name[rclone_remotes_index]}-$((rclone_remote_mount_index+1))"
+
+        if ServiceControl is-active "$service_name"
+        then
+            Println "$error $rclone_mount_list 已挂载\n"
+            continue
+        fi
+
+        service_commands=( $(command -v rclone) mount ${rclone_remotes_name[rclone_remotes_index]}:$rclone_remote_path "$rclone_remote_mount_path" --allow-non-empty )
+
+        if ! err_msg=$(ServiceControl start "$service_name" service_commands)
+        then
+            Println "$error 挂载 $rclone_mount_list 失败, $err_msg\n"
+            continue
+        fi
+
+        Println "$info 挂载 $rclone_mount_list 成功\n"
+    done
+}
+
+RcloneMountDeExc()
+{
+    RcloneMountView
+
+    inquirer checkbox_input_indices "选择取消的挂载" rclone_remote_mount_options rclone_remote_mount_indices
+
+    for rclone_remote_mount_index in "${rclone_remote_mount_indices[@]}"
+    do
+        rclone_remote_path="${rclone_remote_paths[rclone_remote_mount_index]}"
+        rclone_remote_mount_path="${rclone_remote_mount_paths[rclone_remote_mount_index]}"
+        rclone_mount_list="${rclone_remotes_name[rclone_remotes_index]}:$rclone_remote_path -> $rclone_remote_mount_path"
+        service_name="rclone.mount.${rclone_remotes_name[rclone_remotes_index]}-$((rclone_remote_mount_index+1))"
+
+        if ! ServiceControl is-active "$service_name"
+        then
+            Println "$error $rclone_mount_list 未挂载\n"
+            continue
+        fi
+
+        Println "$info 正在取消挂载 $rclone_mount_list"
+
+        if ! err_msg=$(ServiceControl stop "$service_name")
+        then
+            Println "$error 取消挂载 $rclone_mount_list 失败, $err_msg\n"
+            continue
+        fi
+
+        Println "$info 取消挂载 $rclone_mount_list 成功\n"
+    done
+}

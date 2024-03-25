@@ -274,7 +274,7 @@ ParseStream()
 
             if [ "$set_id" -eq 1 ] 
             then
-                GetServiceAccs 4gtv
+                ServiceGet 4gtv
                 for((s_i=0;s_i<_4gtv_accs_count;s_i++));
                 do
                     if [ -n "${_4gtv_accs_token[s_i]:-}" ] 

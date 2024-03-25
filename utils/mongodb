@@ -20,14 +20,14 @@ MongodbInstall()
             exit 1
         fi
 
-        printf '%s' "
+cat > /etc/yum.repos.d/mongodb-org-4.4.repo <<EOF
 [mongodb-org-4.4]
 name=MongoDB Repository
 baseurl=https://repo.mongodb.org/yum/redhat/\$releasever/mongodb-org/4.4/$arch_path/
 gpgcheck=1
 enabled=1
 gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
-" > /etc/yum.repos.d/mongodb-org-4.4.repo
+EOF
 
         yum install -y mongodb-org >/dev/null 2>&1
     else
@@ -66,7 +66,7 @@ gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
     if [[ $(ps --no-headers -o comm 1) == "systemd" ]] 
     then
         sed -i "s/LimitNOFILE=.*/LimitNOFILE=$file_max/" /lib/systemd/system/mongod.service
-        sed -i '/TasksAccounting=/a RestartSec=5\nStartLimitIntervalSec=0\nRestart=on-failure' /lib/systemd/system/mongod.service
+        sed -i '/TasksAccounting=/a StartLimitInterval=60s\nStartLimitBurst=5\nRestartSec=5\nRestart=on-failure' /lib/systemd/system/mongod.service
         systemctl daemon-reload
         sed -i "s/destination: file/destination: syslog/" /etc/mongod.conf
         sed -i "s/  logAppend: true/  #logAppend: true/" /etc/mongod.conf

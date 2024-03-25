@@ -1,0 +1,257 @@
+AlistAppAdd()
+{
+    ServiceGet alist
+
+    if [ "$alists_count" -gt 0 ] 
+    then
+        alists_txt=""
+        for((i=0;i<alists_count;i++));
+        do
+            alists_txt="$alists_txt\n${green}$((i+1)).${normal}${indent_6}名称: ${alists_name[i]:-无}\n${indent_6}地址: ${alists_url[i]}\n"
+        done
+
+        Println "$alists_txt"
+    fi
+
+    echo
+    inquirer text_input "输入 Alist 名称" alist_name "$i18n_not_set"
+
+    if [ "$alist_name" == "$i18n_not_set" ] 
+    then
+        alist_name=""
+    fi
+
+    echo
+    ExitOnText "输入 Alist 地址" alist_url
+
+    if [ "$alists_count" -gt 0 ] 
+    then
+        for url in "${alists_url[@]}"
+        do
+            if [ "$url" == "$alist_url" ] 
+            then
+                Println "$error Alist 地址已存在\n"
+                exit 1
+            fi
+        done
+    fi
+
+    new_app=$(
+    $JQ_FILE -n --arg name "$alist_name" --arg url "$alist_url" \
+        '{
+            name: $name,
+            url: $url,
+            accs: []
+        }'
+    )
+
+    jq_path='["alist"]'
+    JQ add "$SERVICES_CONFIG" "[$new_app]"
+
+    Println "$info Alist 添加成功\n"
+}
+
+AlistAppView()
+{
+    ServiceGet alist
+
+    if [ "$alists_count" -eq 0 ] 
+    then
+        Println "$error 没有 Alist\n"
+        exit 1
+    fi
+
+    alists_txt=""
+    for((i=0;i<alists_count;i++));
+    do
+        alists_txt="$alists_txt\n${green}$((i+1)).${normal}${indent_6}名称: ${alists_name[i]:-无}\n${indent_6}地址: ${alists_url[i]}\n"
+    done
+
+    Println "$alists_txt\n"
+}
+
+AlistAppInstall()
+{
+    JQInstall
+
+    if [ -d "$ALIST_ROOT" ] 
+    then
+        if [[ -x "$ALIST_ROOT"/alist ]] 
+        then
+            alist_version_latest=$(curl -s -Lm 20 "$FFMPEG_MIRROR_LINK"/alist.json | $JQ_FILE -r .tag_name)
+            alist_version=$("$ALIST_ROOT"/alist version | grep -oP '^Version: \K.+')
+            if [ "$alist_version" == "$alist_version_latest" ] 
+            then
+                Println "$info Alist 已是最新版本 $alist_version\n"
+                return 0
+            fi
+        fi
+
+        if [ -f "$HOME"/Library/LaunchAgents/com.aios.alist.plist ] 
+        then
+            launchctl unload ~/Library/LaunchAgents/com.aios.alist.plist
+        elif [ -f /etc/systemd/system/alist.service ] 
+        then
+            systemctl stop alist 2>/dev/null || true
+        fi
+
+        printf -v date '%(%m-%d-%H:%M:%S)T' -1
+        alist_backup="$ALIST_ROOT-$date"
+        mv "$ALIST_ROOT" "$alist_backup"
+    else
+        echo
+        ExitOnText "设置 Alist admin 密码" alist_pass
+    fi
+
+    if [ "$dist" == "mac" ] 
+    then
+        alist_pack_name="alist-darwin"
+    else
+        alist_pack_name="alist-linux-musl"
+    fi
+
+    ArchCheck
+
+    if [ "$arch" == "x86_64" ] 
+    then
+        alist_pack_name="${alist_pack_name}-amd64.tar.gz"
+    elif [ "$arch" == "s390x" ] 
+    then
+        alist_pack_name="${alist_pack_name}-s390x.tar.gz"
+    else
+        alist_pack_name="${alist_pack_name}-arm64.tar.gz"
+    fi
+
+    if ! TMP_DIR=$(mktemp -q -d) 
+    then
+        printf -v TMP_DIR '%(%m-%d-%H:%M:%S)T' -1
+        mkdir -p "$TMP_DIR"
+    fi
+
+    trap '
+        rm -rf "${TMP_DIR:-notfound}"
+    ' EXIT
+
+    cd "$TMP_DIR"
+
+    if ! curl -O -L "$ALIST_LINK/releases/latest/download/$alist_pack_name" && ! curl -O -L "$ALIST_LINK_FALLBACK/releases/latest/download/$alist_pack_name"
+    then
+        Println "$error 无法下载 Alist, 请稍后再试\n"
+        return 1
+    fi
+
+    mkdir "$ALIST_ROOT"
+    tar zxf "$TMP_DIR/$alist_pack_name" -C "$ALIST_ROOT"/
+
+    if [ -n "${alist_backup:-}" ] && [ -d "${alist_backup}/data" ]
+    then
+        cp -r "$alist_backup"/data "$ALIST_ROOT"/
+    else
+        mkdir -p "$ALIST_ROOT"/data/log
+        alist_config=$(
+        $JQ_FILE -n --arg db_file "${ALIST_ROOT}/data/data.db" --arg bleve_dir "${ALIST_ROOT}/data/bleve" \
+        --arg log "${ALIST_ROOT}/data/log/log.log" \
+            '{
+                "force": false,
+                "site_url": "",
+                "cdn": "",
+                "jwt_secret": "",
+                "token_expires_in": 48,
+                "database": {
+                    "type": "sqlite3",
+                    "host": "",
+                    "port": 0,
+                    "user": "",
+                    "password": "",
+                    "name": "",
+                    "db_file": $db_file,
+                    "table_prefix": "x_",
+                    "ssl_mode": "",
+                    "dsn": ""
+                },
+                "meilisearch": {
+                    "host": "http://localhost:7700",
+                    "api_key": "",
+                    "index_prefix": ""
+                },
+                "scheme": {
+                    "address": "127.0.0.1",
+                    "http_port": 5244,
+                    "https_port": -1,
+                    "force_https": false,
+                    "cert_file": "",
+                    "key_file": "",
+                    "unix_file": "",
+                    "unix_file_perm": ""
+                },
+                "temp_dir": "/tmp/alist",
+                "bleve_dir": $bleve_dir,
+                "dist_dir": "",
+                "log": {
+                    "enable": true,
+                    "name": $log,
+                    "max_size": 10,
+                    "max_backups": 5,
+                    "max_age": 28,
+                    "compress": false
+                },
+                "delayed_start": 0,
+                "max_connections": 0,
+                "tls_insecure_skip_verify": true,
+                "tasks": {
+                    "download": {
+                    "workers": 5,
+                    "max_retry": 1
+                    },
+                    "transfer": {
+                    "workers": 5,
+                    "max_retry": 2
+                    },
+                    "upload": {
+                    "workers": 5,
+                    "max_retry": 0
+                    },
+                    "copy": {
+                    "workers": 5,
+                    "max_retry": 2
+                    }
+                },
+                "cors": {
+                    "allow_origins": [
+                    "*"
+                    ],
+                    "allow_methods": [
+                    "*"
+                    ],
+                    "allow_headers": [
+                    "*"
+                    ]
+                },
+                "s3": {
+                    "enable": false,
+                    "port": 5246,
+                    "ssl": false
+                }
+            }'
+        )
+
+        echo "$alist_config" > "$ALIST_ROOT"/data/config.json
+        cd "$ALIST_ROOT"
+        ./alist admin set "$alist_pass"
+    fi
+
+    service_name="alist"
+
+    service_commands=( "$ALIST_ROOT"/alist server --data "$ALIST_ROOT"/data )
+
+    if ! err_msg=$(ServiceControl start "$service_name" service_commands)
+    then
+        Println "$error $service_name 启动失败, $err_msg\n"
+        return 1
+    fi
+
+    rm -rf "${TMP_DIR:-notfound}"
+    trap - EXIT
+
+    Println "$info Alist 安装成功\n"
+}

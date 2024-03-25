@@ -29,14 +29,14 @@ NodejsInstall()
         yum -y install gcc-c++ make >/dev/null 2>&1
         # yum groupinstall 'Development Tools'
 
-        if bash <(curl -sL https://rpm.nodesource.com/setup_14.x) > /dev/null
+        if curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash - >/dev/null
         then
-            yum -y install nodejs >/dev/null 2>&1
+            sudo yum install -y nsolid >/dev/null 2>&1
         fi
     else
-        if bash <(curl -sL https://deb.nodesource.com/setup_14.x) > /dev/null 
+        if curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash - >/dev/null
         then
-            apt-get install -y nodejs >/dev/null 2>&1
+            sudo apt-get install -y nodejs >/dev/null 2>&1
         fi
     fi
 

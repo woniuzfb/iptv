@@ -1,0 +1,120 @@
+Include src/service/get "$@"
+Include src/service/base64 "$@"
+Include src/service/obscure "$@"
+Include src/service/control "$@"
+Include src/rclone/config "$@"
+Include src/rclone/remote "$@"
+Include src/rclone/mount "$@"
+Include src/rclone/serve "$@"
+Include src/rclone/sync "$@"
+Include utils/openssl "$@"
+Include utils/htpasswd "$@"
+
+echo
+rclone_options=( '远端' '挂载' '服务' '服务账号' '同步' '安装/更新' )
+inquirer list_input_index "请选择" rclone_options rclone_options_index
+
+case $rclone_options_index in
+    0) 
+        echo
+        rclone_remote_options=( '查看' '添加' '修改' '删除' )
+        inquirer list_input_index "选择操作" rclone_remote_options rclone_remote_options_index
+
+        case $rclone_remote_options_index in
+            0) RcloneRemoteView
+            ;;
+            1) RcloneRemoteAdd
+            ;;
+            2) RcloneRemoteEdit
+            ;;
+            3) RcloneRemoteDel
+            ;;
+        esac
+    ;;
+    1) 
+        echo
+        rclone_mount_options=( '查看' '添加' '修改' '删除' '执行挂载' '取消挂载' )
+        inquirer list_input_index "选择操作" rclone_mount_options rclone_mount_options_index
+
+        case $rclone_mount_options_index in
+            0) RcloneMountView
+            ;;
+            1) RcloneMountAdd
+            ;;
+            2) RcloneMountEdit
+            ;;
+            3) RcloneMountDel
+            ;;
+            4) RcloneMountExc
+            ;;
+            5) RcloneMountDeExc
+            ;;
+        esac
+    ;;
+    2) 
+        echo
+        rclone_serve_options=( '查看' '添加' '修改' '删除' '执行服务' '取消服务' )
+        inquirer list_input_index "选择操作" rclone_serve_options rclone_serve_options_index
+
+        case $rclone_serve_options_index in
+            0) RcloneServeView
+            ;;
+            1) RcloneServeAdd
+            ;;
+            2) RcloneServeEdit
+            ;;
+            3) RcloneServeDel
+            ;;
+            4) RcloneServeExc
+            ;;
+            5) RcloneServeDeExc
+            ;;
+        esac
+    ;;
+    3) 
+        echo
+        rclone_serve_acc_options=( '查看' '添加' '修改' '删除' )
+        inquirer list_input_index "选择操作" rclone_serve_acc_options rclone_serve_acc_options_index
+
+        case $rclone_serve_acc_options_index in
+            0) RcloneServeAccView
+            ;;
+            1) RcloneServeAccAdd
+            ;;
+            2) RcloneServeAccEdit
+            ;;
+            3) RcloneServeAccDel
+            ;;
+        esac
+    ;;
+    4)
+        echo
+        rclone_sync_options=( '查看' '添加' '修改' '删除' '执行' )
+        inquirer list_input_index "选择操作" rclone_sync_options rclone_sync_options_index
+
+        case $rclone_sync_options_index in
+            0) RcloneSyncView
+            ;;
+            1) RcloneSyncAdd
+            ;;
+            2) RcloneSyncEdit
+            ;;
+            3) RcloneSyncDel
+            ;;
+            4) RcloneSyncExc
+            ;;
+        esac
+    ;;
+    5) 
+        if [[ -x $(command -v rclone) ]] 
+        then
+            rclone selfupdate
+        else
+            if [ "$dist" == "mac" ] 
+            then
+                Println "$tip 可能需要输入密码继续安装"
+            fi
+            sudo -v ; curl https://rclone.org/install.sh | grep -v 0555 | sudo bash
+        fi
+    ;;
+esac

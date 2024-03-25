@@ -1,0 +1,17 @@
+RcloneConfigUpdate()
+{
+    if [ -z "${rclone_remotes_count:-}" ] 
+    then
+        ServiceGet rclone remote
+    fi
+
+    if [ "$rclone_remotes_count" -gt 0 ] 
+    then
+        local i rclone_config=""
+        for((i=0;i<rclone_remotes_count;i++));
+        do
+            rclone_config="${rclone_config}[${rclone_remotes_name[i]}]\ntype = ${rclone_remotes_type[i]}\nurl = ${rclone_remotes_url[i]}\nvendor = ${rclone_remotes_vendor[i]}\nuser = ${rclone_remotes_user[i]}\npass = ${rclone_remotes_pass[i]}\n\n"
+        done
+        echo -ne "$rclone_config" > "$HOME/.config/rclone/rclone.conf"
+    fi
+}

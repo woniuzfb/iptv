@@ -2,7 +2,11 @@ JQInstall()
 {
     if [[ -x "$JQ_FILE" ]] 
     then
-        return 0
+        return
+    elif [[ -x "$IPTV_ROOT"/jq ]] 
+    then
+        JQ_FILE="$IPTV_ROOT"/jq
+        return
     fi
 
     DepsCheck
@@ -440,7 +444,7 @@ JQs()
 
             $JQ_FILE --arg d1 "$5" --arg d2 "${6:-$5}" --arg d3 "${7:-$5}" --arg d4 "${8:-$5}" --arg d5 "${9:-$5}" --arg d6 "${10:-$5}" -r -c -s '
             def flat(a;b;c;d;e;f;g):
-                a as $a | (a[0]| type) as $type | if ($type == "object") then
+                (a // [{}]) as $a | (a[0]| type) as $type | if ($type == "object") then
                     ([a[] | keys_unsorted[]] | unique) as $keys | reduce a[] as $item ({};
                     reduce($keys[]) as $key (.;
                     $item[$key] as $val | ($val | type) as $type | (.[$key]) as $val2 | ($val2 | type) as $type2 | .[$key] = 
@@ -501,6 +505,8 @@ JQs()
                     flat([flat(a[];b;c;d;e;f;g)];b;c;d;e;f;g)
                 elif ($a == [""]) then
                     "\"\""
+                elif ($a == [{}]) then
+                    {}
                 else
                     a|join(b)
                 end;

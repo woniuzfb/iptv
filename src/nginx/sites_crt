@@ -1,4 +1,4 @@
-NginxDomainInstallCert()
+NginxSitesCertInstall()
 {
     local domain=$1
 
@@ -30,5 +30,34 @@ NginxDomainInstallCert()
 
     NginxDomainUpdateCrt "$domain" 1
 
-    Println "$info $domain 证书安装成功"
+    Println "$info $domain 证书安装成功\n"
+}
+
+NginxSitesCrtManage()
+{
+    if [ ! -d "$nginx_prefix"/conf/sites_crt ] 
+    then
+        Println "$error 请先安装 $nginx_name\n"
+        return 1
+    fi
+
+    echo
+    crt_options=( '查看证书' '安装本地证书' '安装域名证书' )
+    inquirer list_input_index "选择操作" crt_options crt_options_index
+
+    case $crt_options_index in
+        0) ServiceBrowse "$nginx_prefix"/conf/sites_crt
+        ;;
+        1) 
+            cd "$nginx_prefix"/conf/sites_crt
+            openssl genrsa -out localhost.key 2048
+            openssl req -subj "/C=US/ST=NULL/L=NULL/O=NULL/OU=NULL/CN=NULL/emailAddress=NULL@example.com" -new -key localhost.key -out localhost.csr
+            openssl x509 -req -days 3650 -in localhost.csr -signkey localhost.key -out localhost.crt
+            Println "$info 本地证书安装成功\n"
+        ;;
+        2) NginxConfigDomain
+        ;;
+    esac
+
+    return 0
 }

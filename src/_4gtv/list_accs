@@ -1,6 +1,6 @@
 List4gtvAccs()
 {
-    GetServiceAccs 4gtv
+    ServiceGet 4gtv
     _4gtv_accs_list=""
 
     for((i=0;i<_4gtv_accs_count;i++));

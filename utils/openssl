@@ -5,24 +5,13 @@ OpensslInstall()
         return 0
     fi
 
-    echo
-    ExitOnList y "`gettext \"是否安装 openssl\"`"
-
-    Progress &
-    progress_pid=$!
-    trap '
-        kill $progress_pid
-        wait $progress_pid 2> /dev/null
-    ' EXIT
+    DepInstall openssl
 
     if [ "$dist" == "rpm" ] 
     then
-        yum -y install openssl openssl-devel >/dev/null 2>&1
-    else
-        apt-get -y install openssl libssl-dev >/dev/null 2>&1
+        DepInstall openssl-devel
+    elif [ "$dist" != "mac" ] 
+    then
+        DepInstall libssl-dev
     fi
-    kill $progress_pid
-    wait $progress_pid 2> /dev/null || true
-    trap - EXIT
-    echo -n "...100%" && Println "`eval_gettext \"\\\$info openssl 安装完成\"`"
 }

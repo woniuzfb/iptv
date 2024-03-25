@@ -32,7 +32,7 @@ Login4gtvAcc()
                     }'
                 )
                 jq_path='["4gtv","accounts"]'
-                JQ add "$SERVICES_FILE" "[$new_acc]"
+                JQ add "$SERVICES_CONFIG" "[$new_acc]"
                 Println "$info 账号添加成功\n"
                 break
             ;;
@@ -52,11 +52,7 @@ Login4gtvAcc()
 
     IMG_FILE="$IPTV_ROOT/4gtv.png"
 
-    if [[ ! -x $(command -v convert) ]] 
-    then
-        Println "$info 安装 ImageMagick"
-        ImageMagickInstall
-    fi
+    ImageMagickInstall
 
     while true 
     do
@@ -70,7 +66,6 @@ Login4gtvAcc()
             read -p "(默认: 刷新验证码): " validatecode
             [ -z "$validatecode" ] && continue
         else
-            Println "$info 尝试修复 magick ..."
             ImageMagickInstall
             rm -f "${IMG_FILE:-notfound}"
             Println "$error 连接发生错误, 请重试\n"
@@ -95,7 +90,7 @@ Login4gtvAcc()
     done
 
     jq_path='["4gtv","accounts",'"$_4gtv_accs_index"',"token"]'
-    JQ update "$SERVICES_FILE" "$token"
+    JQ update "$SERVICES_CONFIG" "$token"
     Println "$info 账号登录成功"
     Println "$info 验证账号..."
     for((i=0;i<3;i++));
@@ -117,7 +112,7 @@ Login4gtvAcc()
         fi
     done
     Println "$info 账号验证成功"
-    Println "$info 开启 7 天豪华套餐"
+    Println "$info 开启 30 天豪华套餐"
 
     IFS="^" read -r result msg < <(CurlFake -s -Lm 20 \
         -H 'Origin: https://www.4gtv.tv' \
@@ -129,8 +124,8 @@ Login4gtvAcc()
 
     if [ "$result" = true ] 
     then
-        Println "$info 7 天豪华套餐开启成功\n"
+        Println "$info 30 天豪华套餐开启成功\n"
     else
-        Println "$error 开启 7 天豪华套餐发生错误, 请重试\n\n$msg\n"
+        Println "$error 开启 30 天豪华套餐发生错误, 请重试\n\n$msg\n"
     fi
 }

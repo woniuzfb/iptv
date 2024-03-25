@@ -13,29 +13,42 @@ Trim()
 
 JoinByChar()
 {
-  local IFS="$1"
-  shift
-  echo "$*"
+    local IFS="$1"
+    shift
+    echo "$*"
 }
 
 JoinByString()
 {
-  local separator="$1"
-  shift
-  local first="$1"
-  shift
-  printf "%s" "$first" "${@/#/$separator}"
+    local separator="$1"
+    shift
+    local first="$1"
+    shift
+    printf "%s" "$first" "${@/#/$separator}"
+}
+
+ToJsonArray()
+{
+    local var=("$1"[@])
+    if [[ -z "${!var:-}" ]] 
+    then
+        echo "[]"
+        return 0
+    fi
+    local arr=("${!var}")
+    local json_array=$(printf '%s\n' "${arr[@]}" | $JQ_FILE -R . | $JQ_FILE -s .)
+    echo $json_array
 }
 
 shopt -s extglob
 
 EleInArray()
 {
-  local ele="$1"
-  shift
-  local var=("$1"[@])
-  local arr=("${!var}")
-  [[ "$ele" == @($(JoinByChar '|' "${arr[@]//|/\\|}")) ]]
+    local ele="$1"
+    shift
+    local var=("$1"[@])
+    local arr=("${!var}")
+    [[ "$ele" == @($(JoinByChar '|' "${arr[@]//|/\\|}")) ]]
 }
 
 printf()
@@ -195,6 +208,16 @@ GetFreePort()
 GetRandomMac()
 {
     echo $RANDOM|md5sum|sed 's/../&:/g'|cut -c 1-17
+}
+
+RemoveQuotes()
+{
+    local text="${!1}"
+    if [[ "$text" =~ ^\"(.*)\"$ ]] || [[ "$text" =~ ^\'(.*)\'$ ]]
+    then
+        text="${BASH_REMATCH[1]}"
+        read -r ${1} <<< "$text"
+    fi
 }
 
 PrepTerm()

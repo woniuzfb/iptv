@@ -1,5 +1,19 @@
 GoInstall()
 {
+    if [[ ! "$PATH" =~ /usr/local/go/bin ]]
+    then
+        PATH="$PATH":/usr/local/go/bin
+    fi
+
+    go_path=${GOPATH:-"$HOME"/go}
+
+    if [[ ! "$PATH" =~ $go_path ]]
+    then
+        PATH="${PATH}:${go_path}/bin"
+    fi
+
+    export PATH
+
     if [[ -x $(command -v go) ]] 
     then
         go_version_list=($(go version))
@@ -11,8 +25,8 @@ GoInstall()
 
     if [ "$dist" == "mac" ] 
     then
-        DepInstall brew
-        brew install go
+        DepInstall go
+        return 0
     fi
 
     ArchCheck
@@ -24,7 +38,7 @@ GoInstall()
     if ! go_version=$(curl -s -Lm 20 https://go.dev/dl/?mode=json | $JQ_FILE -r '.[0].version')
     then
         Println "$error 无法连接 go.dev ?"
-        go_version=1.16.5
+        go_version=1.22.2
     fi
 
     if [ "$arch" == "i386" ] 
@@ -44,14 +58,9 @@ GoInstall()
     if ! curl -L https://golang.org/dl/$go_package -o ~/$go_package && ! curl -L https://gomirrors.org/dl/$go_package -o ~/$go_package
     then
         Println "$error 下载 golang 失败, 请稍后再试\n"
-        exit 1
+        return 1
     fi
 
-    rm -rf /usr/local/go && tar -C /usr/local -xzf ~/$go_package
-
-    if [[ ! -x $(command -v go) ]] 
-    then
-        export PATH="$PATH:/usr/local/go/bin"
-        echo "export PATH=\$PATH:/usr/local/go/bin" >> /etc/profile
-    fi
+    rm -rf /usr/local/go
+    tar -C /usr/local -xzf ~/$go_package
 }

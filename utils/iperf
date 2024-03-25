@@ -1,0 +1,377 @@
+Include src/service/get "$@"
+
+IperfInstall()
+{
+    local install="更新"
+
+    if [ -z "${2:-}" ] 
+    then
+        install="安装"
+        if [[ -x $(command -v iperf3) ]] 
+        then
+            return 0
+        fi
+    elif [[ ! -x $(command -v iperf3) ]] 
+    then
+        install="安装"
+    fi
+
+    if [ "$dist" == "mac" ] 
+    then
+        brew install iperf3
+        return 0
+    fi
+
+    Println "$info $install iperf3 ..."
+
+    ArchCheck
+
+    case $arch in
+        i386) iperf_arch="x86"
+        ;;
+        x86_64) iperf_arch="x64"
+        ;;
+        arm64) iperf_arch="aarch64"
+        ;;
+        *) iperf_arch="arm"
+        ;;
+    esac
+
+    if ! curl -s -L -o /usr/local/bin/iperf3 https://raw.githubusercontent.com/masonr/yet-another-bench-script/master/bin/iperf/iperf3_${iperf_arch} && ! curl -s -L -o /usr/local/bin/iperf3 "$FFMPEG_MIRROR_LINK"/iperf/iperf3_${iperf_arch}
+    then
+        Println "$error iperf3 ${install}失败\n"
+        return 1
+    fi
+
+    chmod +x /usr/local/bin/iperf3
+
+    Println "$info iperf3 ${install}成功\n"
+}
+
+IperfView()
+{
+    IperfInstall
+    ServiceGet iperf
+
+    if [ "$iperf_count" -eq 0 ] 
+    then
+        [ -n "${1:-}" ] && return 0
+        Println "$error 请先添加服务\n"
+        return 1
+    fi
+
+    local iperf_server_list="" iperf_client_list=""
+    iperf_server_options=()
+    iperf_server_indices=()
+    iperf_client_options=()
+    iperf_client_indices=()
+    iperf_servers_name=()
+    iperf_servers_args=()
+    iperf_clients_name=()
+    iperf_clients_target=()
+    iperf_clients_args=()
+
+    local i
+    for((i=0;i<iperf_count;i++));
+    do
+        if [ "${iperf_types[i]}" == "server" ] 
+        then
+            iperf_servers_name+=("${iperf_names[i]}")
+            iperf_servers_args+=("${iperf_args[i]}")
+            iperf_server_options+=("名称: ${iperf_names[i]:-无}, 参数: ${iperf_args[i]}")
+            iperf_server_list="${iperf_server_list}${green}${#iperf_servers_name[@]}.${normal} 名称: ${iperf_names[i]:-无}, 参数: ${iperf_args[i]:-无}\n"
+            iperf_server_indices+=("$i")
+        else
+            iperf_clients_name+=("${iperf_names[i]}")
+            iperf_clients_target+=("${iperf_targets[i]}")
+            iperf_clients_args+=("${iperf_args[i]}")
+            iperf_client_options+=("名称: ${iperf_names[i]:-无}, 目标: ${iperf_targets[i]}, 参数: ${iperf_args[i]}")
+            iperf_client_list="${iperf_client_list}${green}${#iperf_clients_name[@]}.${normal} 名称: ${iperf_names[i]:-无}, 目标: ${iperf_targets[i]:-无}, 参数: ${iperf_args[i]:-无}\n"
+            iperf_client_indices+=("$i")
+        fi
+    done
+
+    iperf_servers_count=${#iperf_servers_name[@]}
+    iperf_clients_count=${#iperf_clients_name[@]}
+
+    if [ -n "${iperf_server_list:-}" ] 
+    then
+        Println "服务端列表:\n${iperf_server_list}\n"
+    fi
+
+    if [ -n "${iperf_client_list:-}" ] 
+    then
+        Println "客户端列表:\n${iperf_client_list}\n"
+    fi
+}
+
+IperfAdd()
+{
+    IperfView true
+    iperf_type_options=( '服务端' '客户端' )
+    echo
+    inquirer list_input_index "请选择添加类型" iperf_type_options iperf_type_index
+
+    echo
+    inquirer text_input "输入服务名称" iperf_name "$i18n_not_set"
+
+    if [ "$iperf_name" == "$i18n_not_set" ] 
+    then
+        iperf_name=""
+    fi
+
+    if [ "$iperf_type_index" -eq 1 ] 
+    then
+        iperf_target_options=( '输入目标地址' )
+
+        if iperf_target_hosts=($(grep "^Host " ~/.ssh/config | grep -v "Host \*" | awk '{print $2}'))
+        then
+            iperf_target_options+=("${iperf_target_hosts[@]}")
+        fi
+
+        echo
+        inquirer list_input_index "请选择" iperf_target_options iperf_target_index 20
+
+        if [ "$iperf_target_index" -eq 0 ] 
+        then
+            echo
+            ExitOnText "输入目标地址" iperf_target
+        else
+            iperf_target="${iperf_target_options[iperf_target_index]}"
+        fi
+
+        iperf_type="client"
+    else
+        iperf_type="server"
+        iperf_target=""
+    fi
+
+    echo
+    inquirer text_input "输入 iperf3 参数" iperf_args "$i18n_not_set"
+
+    if [ "$iperf_args" == "$i18n_not_set" ] 
+    then
+        iperf_args=""
+    fi
+
+    iperf_service=$(
+        $JQ_FILE -n \
+            --arg type "$iperf_type" \
+            --arg name "$iperf_name" \
+            --arg target "$iperf_target" \
+            --arg args "$iperf_args" \
+            '{type:$type,name:$name,target:$target,args:$args}'
+    )
+
+    jq_path='["iperf"]'
+    JQ add "$SERVICES_CONFIG" "[$iperf_service]"
+
+    Println "$info 添加成功\n"
+}
+
+IperfEdit()
+{
+    IperfView
+    iperf_edit_options=( '服务端' '客户端' )
+    echo
+    inquirer list_input_index "请选择" iperf_edit_options iperf_edit_options_index
+
+    if [ "$iperf_edit_options_index" -eq 0 ] 
+    then
+        if [ "$iperf_servers_count" -eq 0 ] 
+        then
+            Println "$error 请先添加服务端\n"
+            return 1
+        fi
+        iperf_options=("${iperf_server_options[@]}")
+        iperf_indices=("${iperf_server_indices[@]}")
+        iperf_edit_options=( '名称' '参数' )
+    else
+        if [ "$iperf_clients_count" -eq 0 ] 
+        then
+            Println "$error 请先添加客户端\n"
+            return 1
+        fi
+        iperf_options=("${iperf_client_options[@]}")
+        iperf_indices=("${iperf_client_indices[@]}")
+        iperf_edit_options=( '名称' '目标' '参数' )
+    fi
+
+    echo
+    inquirer list_input_index "请选择" iperf_options iperf_options_index
+
+    echo
+    inquirer checkbox_input_indices "请选择修改内容" iperf_edit_options iperf_edit_options_indices
+
+    for iperf_edit_options_index in "${iperf_edit_options_indices[@]}"
+    do
+        case "${iperf_edit_options[iperf_edit_options_index]}" in
+            '名称') 
+                echo
+                inquirer text_input "输入服务名称" iperf_name "${iperf_name[iperf_indices[iperf_options_index]]:-$i18n_not_set}"
+                if [ "$iperf_name" == "$i18n_not_set" ] 
+                then
+                    iperf_name=""
+                fi
+                jq_path='["iperf",'"${iperf_indices[iperf_options_index]}"',"name"]'
+                JQ update "$SERVICES_CONFIG" "$iperf_name"
+            ;;
+            '目标') 
+                iperf_target_options=( '输入目标地址' )
+
+                if iperf_target_hosts=($(grep "^Host " ~/.ssh/config | grep -v "Host \*" | awk '{print $2}'))
+                then
+                    iperf_target_options+=("${iperf_target_hosts[@]}")
+                fi
+
+                echo
+                inquirer list_input_index "请选择" iperf_target_options iperf_target_index 20
+
+                if [ "$iperf_target_index" -eq 0 ] 
+                then
+                    echo
+                    inquirer text_input "输入目标地址" iperf_target "${iperf_target[iperf_indices[iperf_options_index]]:-$i18n_not_set}"
+                    if [ "$iperf_target" == "$i18n_not_set" ] 
+                    then
+                        iperf_target=""
+                    fi
+                else
+                    iperf_target="${iperf_target_options[iperf_target_index]}"
+                fi
+                jq_path='["iperf",'"${iperf_indices[iperf_options_index]}"',"target"]'
+                JQ update "$SERVICES_CONFIG" "$iperf_target"
+            ;;
+            *) 
+                echo
+                inquirer text_input "输入 iperf3 参数" iperf_args "${iperf_args[iperf_indices[iperf_options_index]]:-$i18n_not_set}"
+                if [ "$iperf_args" == "$i18n_not_set" ] 
+                then
+                    iperf_args=""
+                fi
+                jq_path='["iperf",'"${iperf_indices[iperf_options_index]}"',"args"]'
+                JQ update "$SERVICES_CONFIG" "$iperf_args"
+            ;;
+        esac
+        Println "$info ${iperf_edit_options[iperf_edit_options_index]} 修改成功\n"
+    done
+
+    return 0
+}
+
+IperfDel()
+{
+    IperfView
+    iperf_del_options=( '服务端' '客户端' )
+    echo
+    inquirer list_input_index "请选择" iperf_del_options iperf_del_options_index
+
+    if [ "$iperf_del_options_index" -eq 0 ] 
+    then
+        if [ "$iperf_servers_count" -eq 0 ] 
+        then
+            Println "$error 请先添加服务端\n"
+            return 1
+        fi
+        iperf_options=("${iperf_server_options[@]}")
+        iperf_indices=("${iperf_server_indices[@]}")
+    else
+        if [ "$iperf_clients_count" -eq 0 ] 
+        then
+            Println "$error 请先添加客户端\n"
+            return 1
+        fi
+        iperf_options=("${iperf_client_options[@]}")
+        iperf_indices=("${iperf_client_indices[@]}")
+    fi
+
+    echo
+    inquirer checkbox_input_indices "请选择删除" iperf_options iperf_del_indices
+
+    for iperf_del_index in "${iperf_del_indices[@]}"
+    do
+        jq_path='["iperf",'"${iperf_indices[iperf_del_index]}"']'
+        JQ delete "$SERVICES_CONFIG"
+    done
+
+    Println "$info 删除成功\n"
+}
+
+IperfStart()
+{
+    IperfView
+    iperf_start_options=( '服务端' '客户端' )
+    echo
+    inquirer list_input_index "请选择" iperf_start_options iperf_start_options_index
+
+    if [ "$iperf_start_options_index" -eq 0 ] 
+    then
+        if [ "$iperf_servers_count" -eq 0 ] 
+        then
+            Println "$error 请先添加服务端\n"
+            return 1
+        fi
+        iperf_options=("${iperf_server_options[@]}")
+        iperf_indices=("${iperf_server_indices[@]}")
+    else
+        if [ "$iperf_clients_count" -eq 0 ] 
+        then
+            Println "$error 请先添加客户端\n"
+            return 1
+        fi
+        iperf_options=("${iperf_client_options[@]}")
+        iperf_indices=("${iperf_client_indices[@]}")
+    fi
+
+    echo
+    inquirer checkbox_input_indices "请选择启动" iperf_options iperf_start_indices
+
+    for iperf_start_index in "${iperf_start_indices[@]}"
+    do
+        iperf_commands=()
+        if [ "$iperf_start_options_index" -eq 0 ] 
+        then
+            iperf_commands+=("-s")
+        else
+            iperf_target="${iperf_targets[iperf_indices[iperf_start_index]]}"
+            if [ -z "$iperf_target" ] 
+            then
+                Println "$error 请先设置客户端 ${iperf_options[iperf_start_index]} 目标地址\n"
+                continue
+            fi
+            iperf_target_host=$(awk -v host="$iperf_target" '$1 == "Host" && $2 == host {flag=1} flag && $1 == "Hostname" {print $2; exit}' ~/.ssh/config)
+            if [ -n "${iperf_target_host}" ] 
+            then
+                iperf_target="$iperf_target_host"
+            fi
+            iperf_commands+=( -c "$iperf_target")
+        fi
+        iperf_commands+=(${iperf_args[iperf_indices[iperf_start_index]]})
+        iperf3 "${iperf_commands[@]}"
+    done
+
+    Println "$info 启动成功\n"
+}
+
+IperfMenu()
+{
+    iperf_options=( '浏览' '启动' '添加' '修改' '删除' '安装/更新 iperf3' )
+    echo
+    inquirer list_input_index "请选择" iperf_options iperf_options_index
+
+    case $iperf_options_index in
+        0) IperfView
+        ;;
+        1) IperfStart
+        ;;
+        2) IperfAdd
+        ;;
+        3) IperfEdit
+        ;;
+        4) IperfDel
+        ;;
+        5) IperfInstall 1
+        ;;
+    esac
+
+    return 0
+}

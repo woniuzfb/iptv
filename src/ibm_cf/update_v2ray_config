@@ -6,7 +6,8 @@ IbmUpdateV2rayConfig()
         exit 1
     elif [ ! -s "$V2_CONFIG" ] 
     then
-        printf '%s' '{
+cat > "$V2_CONFIG" <<EOF
+{
   "log": {
     "access": "none",
     "error": "none",
@@ -23,6 +24,7 @@ IbmUpdateV2rayConfig()
       "tag": "block"
     }
   ]
-}' > "$V2_CONFIG"
+}
+EOF
     fi
 }

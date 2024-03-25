@@ -48,10 +48,10 @@ ArchCheck()
     if grep -Eqi "x86_64|amd64" <<< "$arch" 
     then
         arch="x86_64"
-    elif grep -Eqi "i386|i686" <<< "$arch" 
+    elif grep -Eqi "i386|i686|x86" <<< "$arch" 
     then
         arch="i386"
-    elif grep -Eqi "aarch64|armv8" <<< "$arch" 
+    elif grep -Eqi "aarch64|armv8|arm64" <<< "$arch" 
     then
         arch="arm64"
     elif grep -qi "armv7" <<< "$arch" 
@@ -87,23 +87,23 @@ DebFixSources()
 
         if grep -q "jessie" <<< "$deb_list"
         then
-            printf '%s' "
+cat > /etc/apt/sources.list <<EOF
 deb http://archive.debian.org/debian/ jessie main
 deb-src http://archive.debian.org/debian/ jessie main
 
 deb http://security.debian.org jessie/updates main
 deb-src http://security.debian.org jessie/updates main
-" > "/etc/apt/sources.list"
+EOF
             apt-get clean >/dev/null 2>&1
         elif grep -q "wheezy" <<< "$deb_list" 
         then
-            printf '%s' "
+cat > /etc/apt/sources.list <<EOF
 deb http://archive.debian.org/debian/ wheezy main
 deb-src http://archive.debian.org/debian/ wheezy main
 
 deb http://security.debian.org wheezy/updates main
 deb-src http://security.debian.org wheezy/updates main
-" > "/etc/apt/sources.list"
+EOF
             apt-get clean >/dev/null 2>&1
         fi
 
@@ -443,7 +443,7 @@ ResourceLimit()
     then
         if [ ! -e ~/.bash_profile ] || ! grep -q ulimit < ~/.bash_profile
         then
-cat >> ~/.bash_profile << EOF
+cat >> ~/.bash_profile <<EOF
 ulimit -f unlimited
 ulimit -t unlimited
 ulimit -v unlimited
@@ -456,7 +456,7 @@ EOF
     else
         if [ ! -e ~/.profile ] || ! grep -q ulimit < ~/.profile
         then
-cat >> ~/.profile << EOF
+cat >> ~/.profile <<EOF
 ulimit -f unlimited
 ulimit -t unlimited
 ulimit -v unlimited

@@ -223,7 +223,7 @@ StartChannel()
 
         if [ "$set_id" -eq 1 ] 
         then
-            GetServiceAccs 4gtv
+            ServiceGet 4gtv
             for((i=0;i<_4gtv_accs_count;i++));
             do
                 if [ -n "${_4gtv_accs_token[i]:-}" ] 

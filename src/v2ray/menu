@@ -72,7 +72,6 @@ case $v2ray_num in
     ;;
     2) 
         V2rayUpdate
-        systemctl restart $v2ray_name
     ;;
     3) 
         V2rayConfigUpdate

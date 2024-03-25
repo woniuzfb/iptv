@@ -1,0 +1,603 @@
+RcloneSyncView()
+{
+    ServiceGet rclone sync
+
+    if [ "$rclone_syncs_count" -eq 0 ] 
+    then
+        Println "$error 请先添加同步\n"
+        return 1
+    fi
+
+    local rclone_syncs_list="" i rclone_sync_include_list rclone_sync_exclude_before_list rclone_sync_exclude_after_list
+    rclone_syncs_options=()
+
+    for((i=0;i<rclone_syncs_count;i++));
+    do
+        rclone_syncs_list="${rclone_syncs_list}${green}$((i+1)).${normal} rsync: "
+        if [ "${rclone_syncs_rsync[i]}" = true ] 
+        then
+            rclone_syncs_list="${rclone_syncs_list}${green}是${normal}\n"
+        else
+            rclone_syncs_list="${rclone_syncs_list}${red}否${normal}\n"
+        fi
+        if [[ -z "${rclone_syncs_exclude_before[i]:-}" ]] 
+        then
+            rclone_sync_exclude_before_list="前排除: 未设置\n"
+        else
+            IFS="${delimiters[0]}" read -r -a rclone_sync_excludes_before <<< "${rclone_syncs_exclude_before[i]}"
+            rclone_sync_exclude_before_list="前排除:\n$(printf '%s\n' "${rclone_sync_excludes_before[@]}")\n"
+        fi
+        if [[ -z "${rclone_syncs_include[i]:-}" ]] 
+        then
+            rclone_sync_include_list="包含: 未设置\n"
+        else
+            IFS="${delimiters[0]}" read -r -a rclone_sync_includes <<< "${rclone_syncs_include[i]}"
+            rclone_sync_include_list="包含:\n$(printf '%s\n' "${rclone_sync_includes[@]}")"
+        fi
+        if [[ -z "${rclone_syncs_exclude_after[i]:-}" ]] 
+        then
+            rclone_sync_exclude_after_list="后排除: 未设置\n"
+        else
+            IFS="${delimiters[0]}" read -r -a rclone_sync_excludes_after <<< "${rclone_syncs_exclude_after[i]}"
+            rclone_sync_exclude_after_list="后排除:\n$(printf '%s\n' "${rclone_sync_excludes_after[@]}")\n"
+        fi
+        rclone_syncs_list="${rclone_syncs_list}同步源: ${rclone_syncs_source[i]}\n同步目标: ${rclone_syncs_target[i]}\n同步参数: ${rclone_syncs_args[i]:-无}\n${rclone_sync_exclude_before_list}${rclone_sync_include_list}${rclone_sync_exclude_after_list}\n"
+        rclone_syncs_options+=("源: ${rclone_syncs_source[i]} 目标: ${rclone_syncs_target[i]} rsync: ${rclone_syncs_rsync[i]}")
+    done
+
+    Println "$rclone_syncs_list"
+}
+
+RcloneSyncLocalValidator()
+{
+    if [[ "$1" == "$i18n_cancel" ]] || [[ "$1" =~ ^[\'\"]?/.*[\'\"]?$ ]]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+RcloneSyncRsyncRemoteValidator()
+{
+    if [[ "$1" == "$i18n_cancel" ]] || [[ "$1" =~ ^[a-zA-Z0-9]+:.*$ ]] 
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+RcloneSyncAdd()
+{
+    Println "$tip 如果选否将使用 rsync 同步"
+    inquirer list_input_index "是否使用远端" ny_options ny_index
+
+    rclone_sync_target_options=( '输入本地目录' )
+    rclone_sync_excludes_before=()
+    rclone_sync_includes=()
+    rclone_sync_excludes_after=()
+
+    if [ "$ny_index" -eq 0 ] 
+    then
+        rclone_sync_rsync=true
+        rclone_sync_rsync_options=( '输入本地同步源' '输入远程同步源' )
+
+        if rclone_sync_rsync_hosts=($(grep "^Host " ~/.ssh/config | grep -v "Host \*" | awk '{print $2}'))
+        then
+            rclone_sync_rsync_options+=("${rclone_sync_rsync_hosts[@]}")
+            rclone_sync_target_options+=("${rclone_sync_rsync_hosts[@]}")
+        fi
+
+        echo
+        inquirer list_input_index "选择同步源" rclone_sync_rsync_options rclone_sync_rsync_options_index 20
+
+        case $rclone_sync_rsync_options_index in
+            0) 
+                echo
+                ExitOnText "输入本地路径" rclone_sync_source RcloneSyncLocalValidator "路径错误"
+                RemoveQuotes rclone_sync_source
+            ;;
+            1) 
+                echo
+                ExitOnText "输入远程同步源" rclone_sync_source RcloneSyncRsyncRemoteValidator "远程格式错误"
+            ;;
+            *) 
+                rclone_sync_rsync_host="${rclone_sync_rsync_hosts[rclone_sync_rsync_options_index-2]}"
+                echo
+                ExitOnText "输入远程同步源 $rclone_sync_rsync_host 的路径" rclone_sync_rsync_host_path
+                rclone_sync_source="$rclone_sync_rsync_host:$rclone_sync_rsync_host_path"
+            ;;
+        esac
+    else
+        rclone_sync_rsync=false
+
+        RcloneRemoteView
+
+        echo
+        inquirer list_input_index "选择同步源" rclone_remotes_options rclone_remotes_index 20
+
+        echo
+        ExitOnText "输入远端 ${rclone_remotes_name[rclone_remotes_index]} 的路径" rclone_sync_remote_path
+        rclone_sync_source="${rclone_remotes_name[rclone_remotes_index]}:$rclone_sync_remote_path"
+
+        rclone_sync_target_options+=("${rclone_remotes_name[@]}")
+    fi
+
+    RcloneSyncSetExcludeBefore
+    RcloneSyncSetInclude
+    RcloneSyncSetExcludeAfter
+
+    echo
+    inquirer list_input_index "选择同步目标" rclone_sync_target_options rclone_sync_target_options_index 20
+
+    if [ "$rclone_sync_target_options_index" -eq 0 ] 
+    then
+        echo
+        ExitOnText "输入同步的本地目录" rclone_sync_target RcloneSyncLocalValidator "路径错误"
+        RemoveQuotes rclone_sync_target
+    else
+        rclone_sync_target="${rclone_sync_target_options[rclone_sync_target_options_index-1]}"
+        echo
+        ExitOnText "输入同步目标 $rclone_sync_target 的路径" rclone_sync_target_path
+        rclone_sync_target="$rclone_sync_target:$rclone_sync_target_path"
+    fi
+
+    echo
+    inquirer text_input "输入同步参数" rclone_sync_args "$i18n_not_set"
+
+    if [ "$rclone_sync_args" == "$i18n_not_set" ] 
+    then
+        rclone_sync_args=""
+    fi
+
+    rclone_sync=$(
+        $JQ_FILE -c -n --arg rsync "$rclone_sync_rsync" --arg source "$rclone_sync_source" --arg target "$rclone_sync_target" \
+        --arg args "$rclone_sync_args" --argjson exclude_before "$(ToJsonArray rclone_sync_excludes_before)" --argjson include "$(ToJsonArray rclone_sync_includes)" --argjson exclude_after "$(ToJsonArray rclone_sync_excludes_after)" \
+        '{
+            rsync: $rsync | test("true"),
+            source: $source,
+            target: $target,
+            args: $args,
+            exclude_before: $exclude_before,
+            include: $include,
+            exclude_after: $exclude_after
+        }'
+    )
+
+    jq_path='["rclone","sync"]'
+    JQ add "$SERVICES_CONFIG" "[$rclone_sync]"
+
+    Println "$info 同步添加成功\n"
+}
+
+RcloneSyncSetExcludeBefore()
+{
+    rclone_sync_excludes_before=()
+    while true 
+    do
+        if [ "$rclone_sync_rsync" = true ] 
+        then
+            Println "$tip 用于参数 --exclude, 置于所有 --include 之前, 每次输入一项"
+        else
+            Println "$tip 用于参数 --filter - , 置于所有 --filter + 之前, 每次输入一项"
+        fi
+        inquirer text_input "输入排除的文件或目录" rclone_sync_exclude_before "跳过"
+        RemoveQuotes rclone_sync_exclude_before
+        if [ "$rclone_sync_exclude_before" == "跳过" ] 
+        then
+            break
+        fi
+        rclone_sync_excludes_before+=("$rclone_sync_exclude_before")
+    done
+    return 0
+}
+
+RcloneSyncSetInclude()
+{
+    rclone_sync_includes=()
+    while true 
+    do
+        if [ "$rclone_sync_rsync" = true ] 
+        then
+            Println "$tip 用于参数 --include, 每次输入一项, 如果设置将排除其他所有文件"
+        else
+            Println "$tip 用于参数 --filter + , 每次输入一项"
+        fi
+        inquirer text_input "输入包含的文件或目录" rclone_sync_include "跳过"
+        RemoveQuotes rclone_sync_include
+        if [ "$rclone_sync_include" == "跳过" ] 
+        then
+            break
+        fi
+        rclone_sync_includes+=("$rclone_sync_include")
+    done
+    return 0
+}
+
+RcloneSyncSetExcludeAfter()
+{
+    rclone_sync_excludes_after=()
+    while true 
+    do
+        if [ "$rclone_sync_rsync" = true ] 
+        then
+            Println "$tip 用于参数 --exclude, 置于所有 --include 之后, 每次输入一项"
+        else
+            Println "$tip 用于参数 --filter - , 置于所有 --filter + 之后, 每次输入一项"
+        fi
+        inquirer text_input "输入排除的文件或目录" rclone_sync_exclude_after "跳过"
+        RemoveQuotes rclone_sync_exclude_after
+        if [ "$rclone_sync_exclude_after" == "跳过" ] 
+        then
+            break
+        fi
+        rclone_sync_excludes_after+=("$rclone_sync_exclude_after")
+    done
+    return 0
+}
+
+RcloneSyncEdit()
+{
+    RcloneSyncView
+
+    inquirer list_input_index "选择同步" rclone_syncs_options rclone_syncs_index 20
+
+    rclone_sync_rsync=${rclone_syncs_rsync[rclone_syncs_index]}
+
+    rclone_sync_edit_options=( '源' '目标' '参数' '前排除' '包含' '后排除' )
+
+    echo
+    inquirer list_input_index "选择编辑" rclone_sync_edit_options rclone_sync_edit_options_index
+
+    case $rclone_sync_edit_options_index in
+        0) 
+            Println "$tip 如果选否将使用 rsync 同步"
+            inquirer list_input_index "是否使用远端" ny_options ny_index
+
+            if [ "$ny_index" -eq 0 ] 
+            then
+                rclone_sync_rsync=true
+                rclone_sync_rsync_options=( '输入本地同步源' '输入远程同步源' )
+
+                if rclone_sync_rsync_hosts=($(grep "^Host " ~/.ssh/config | grep -v "Host \*" | awk '{print $2}'))
+                then
+                    rclone_sync_rsync_options+=("${rclone_sync_rsync_hosts[@]}")
+                fi
+
+                echo
+                inquirer list_input_index "选择同步源" rclone_sync_rsync_options rclone_sync_rsync_options_index 20
+
+                case $rclone_sync_rsync_options_index in
+                    0) 
+                        echo
+                        ExitOnText "输入本地路径" rclone_sync_source RcloneSyncLocalValidator "路径错误"
+                        RemoveQuotes rclone_sync_source
+                    ;;
+                    1) 
+                        echo
+                        ExitOnText "输入远程同步源" rclone_sync_source RcloneSyncRsyncRemoteValidator "远程格式错误"
+                    ;;
+                    *) 
+                        rclone_sync_rsync_host="${rclone_sync_rsync_hosts[rclone_sync_rsync_options_index-2]}"
+                        echo
+                        ExitOnText "输入远程同步源 $rclone_sync_rsync_host 的路径" rclone_sync_rsync_host_path
+                        rclone_sync_source="$rclone_sync_rsync_host:$rclone_sync_rsync_host_path"
+                    ;;
+                esac
+            else
+                rclone_sync_rsync=false
+
+                RcloneRemoteView
+
+                echo
+                inquirer list_input_index "选择同步源" rclone_remotes_options rclone_remotes_index 20
+
+                echo
+                ExitOnText "输入远端 ${rclone_remotes_name[rclone_remotes_index]} 的路径" rclone_sync_remote_path
+                rclone_sync_source="${rclone_remotes_name[rclone_remotes_index]}:$rclone_sync_remote_path"
+            fi
+
+            if [ "$rclone_sync_source" != "${rclone_syncs_source[rclone_syncs_index]}" ] 
+            then
+                jq_path='["rclone","sync",'"$rclone_syncs_index"',"source"]'
+                JQ update "$SERVICES_CONFIG" "$rclone_sync_source"
+            fi
+
+            if [ "$rclone_sync_rsync" != "${rclone_syncs_rsync[rclone_syncs_index]}" ] 
+            then
+                bool=true
+                jq_path='["rclone","sync",'"$rclone_syncs_index"',"rsync"]'
+                JQ update "$SERVICES_CONFIG" "$rclone_sync_rsync"
+            fi
+
+            Println "$info 同步源修改成功\n"
+        ;;
+        1) 
+            rclone_sync_target_options=( '输入本地目录' )
+
+            if [ "${rclone_syncs_rsync[rclone_syncs_index]}" = true ] 
+            then
+                if rclone_sync_rsync_hosts=($(grep "^Host " ~/.ssh/config | grep -v "Host \*" | awk '{print $2}'))
+                then
+                    rclone_sync_target_options+=("${rclone_sync_rsync_hosts[@]}")
+                fi
+            else
+                RcloneRemoteView
+                rclone_sync_target_options+=("${rclone_remotes_name[@]}")
+            fi
+
+            echo
+            inquirer list_input_index "选择同步目标" rclone_sync_target_options rclone_sync_target_options_index 20
+
+            if [ "$rclone_sync_target_options_index" -eq 0 ] 
+            then
+                echo
+                ExitOnText "输入同步的本地目录" rclone_sync_target RcloneSyncLocalValidator "路径错误"
+                RemoveQuotes rclone_sync_target
+            else
+                rclone_sync_target="${rclone_sync_target_options[rclone_sync_target_options_index-1]}"
+                echo
+                ExitOnText "输入同步目标 $rclone_sync_target 的路径" rclone_sync_target_path
+                rclone_sync_target="$rclone_sync_target:$rclone_sync_target_path"
+            fi
+
+            if [ "$rclone_sync_target" != "${rclone_syncs_target[rclone_syncs_index]}" ] 
+            then
+                jq_path='["rclone","sync",'"$rclone_syncs_index"',"target"]'
+                JQ update "$SERVICES_CONFIG" "$rclone_sync_target"
+                Println "$info 同步目标修改成功\n"
+            fi
+        ;;
+        2) 
+            echo
+            inquirer text_input "输入同步参数" rclone_sync_args "$i18n_not_set"
+
+            if [ "$rclone_sync_args" == "$i18n_not_set" ] 
+            then
+                rclone_sync_args=""
+            fi
+
+            if [ "$rclone_sync_args" != "${rclone_syncs_args[rclone_syncs_index]}" ] 
+            then
+                jq_path='["rclone","sync",'"$rclone_syncs_index"',"args"]'
+                JQ update "$SERVICES_CONFIG" "$rclone_sync_args"
+                Println "$info 同步参数修改成功\n"
+            fi
+        ;;
+        3)
+            if [ -z "${rclone_syncs_exclude_before[rclone_syncs_index]:-}" ] 
+            then
+                RcloneSyncSetExcludeBefore
+            else
+                IFS="${delimiters[0]}" read -r -a rclone_sync_excludes_before <<< "${rclone_syncs_exclude_before[rclone_syncs_index]}"
+                rclone_sync_exclude_options=( '新增' '修改' '删除' )
+                echo
+                inquirer list_input_index "选择操作" rclone_sync_exclude_options rclone_sync_exclude_options_index
+
+                if [ "$rclone_sync_exclude_options_index" -eq 0 ] 
+                then
+                    RcloneSyncSetExcludeBefore
+                else
+                    echo
+                    inquirer checkbox_input_indices "选择排除的文件或目录" rclone_sync_excludes_before rclone_sync_excludes_before_indices
+
+                    if [ "$rclone_sync_exclude_options_index" -eq 1 ] 
+                    then
+                        for rclone_sync_excludes_before_index in "${rclone_sync_excludes_before_indices[@]}"
+                        do
+                            Println "$info 修改 ${rclone_sync_excludes_before[rclone_sync_excludes_before_index]}"
+                            inquirer text_input "输入新的文件或目录" rclone_sync_exclude_before "跳过"
+                            RemoveQuotes rclone_sync_exclude_before
+                            if [ "$rclone_sync_exclude_before" == "跳过" ] || [ "$rclone_sync_exclude_before" == "${rclone_sync_excludes_before[rclone_sync_excludes_before_index]}" ]
+                            then
+                                continue
+                            fi
+                            jq_path='["rclone","sync",'"$rclone_syncs_index"',"exclude_before",'"$rclone_sync_excludes_before_index"']'
+                            JQ update "$SERVICES_CONFIG" "$rclone_sync_exclude_before"
+                        done
+                        Println "$info 前排除修改成功\n"
+                    else
+                        for rclone_sync_excludes_before_index in "${rclone_sync_excludes_before_indices[@]}"
+                        do
+                            jq_path='["rclone","sync",'"$rclone_syncs_index"',"exclude_before",'"$rclone_sync_excludes_before_index"']'
+                            JQ delete "$SERVICES_CONFIG"
+                        done
+                        Println "$info 前排除删除成功\n"
+                    fi
+                    return 0
+                fi
+            fi
+
+            jq_path='["rclone","sync",'"$rclone_syncs_index"',"exclude_before"]'
+            JQ add "$SERVICES_CONFIG" "$(ToJsonArray rclone_sync_excludes_before)"
+            Println "$info 前排除添加成功\n"
+        ;;
+        4)
+            if [ -z "${rclone_syncs_include[rclone_syncs_index]:-}" ] 
+            then
+                RcloneSyncSetInclude
+            else
+                IFS="${delimiters[0]}" read -r -a rclone_sync_includes <<< "${rclone_syncs_include[rclone_syncs_index]}"
+                rclone_sync_include_options=( '新增' '修改' '删除' )
+                echo
+                inquirer list_input_index "选择操作" rclone_sync_include_options rclone_sync_include_options_index
+
+                if [ "$rclone_sync_include_options_index" -eq 0 ] 
+                then
+                    RcloneSyncSetInclude
+                else
+                    echo
+                    inquirer checkbox_input_indices "选择包含的文件或目录" rclone_sync_includes rclone_sync_includes_indices
+
+                    if [ "$rclone_sync_include_options_index" -eq 1 ] 
+                    then
+                        for rclone_sync_includes_index in "${rclone_sync_includes_indices[@]}"
+                        do
+                            Println "$info 修改 ${rclone_sync_includes[rclone_sync_includes_index]}"
+                            inquirer text_input "输入新的文件或目录" rclone_sync_include "跳过"
+                            RemoveQuotes rclone_sync_include
+                            if [ "$rclone_sync_include" == "跳过" ] || [ "$rclone_sync_include" == "${rclone_sync_includes[rclone_sync_includes_index]}" ]
+                            then
+                                continue
+                            fi
+                            jq_path='["rclone","sync",'"$rclone_syncs_index"',"include",'"$rclone_sync_includes_index"']'
+                            JQ update "$SERVICES_CONFIG" "$rclone_sync_include"
+                        done
+                        Println "$info 包含修改成功\n"
+                    else
+                        for rclone_sync_includes_index in "${rclone_sync_includes_indices[@]}"
+                        do
+                            jq_path='["rclone","sync",'"$rclone_syncs_index"',"include",'"$rclone_sync_includes_index"']'
+                            JQ delete "$SERVICES_CONFIG"
+                        done
+                        Println "$info 包含删除成功\n"
+                    fi
+                    return 0
+                fi
+            fi
+
+            jq_path='["rclone","sync",'"$rclone_syncs_index"',"include"]'
+            JQ add "$SERVICES_CONFIG" "$(ToJsonArray rclone_sync_includes)"
+            Println "$info 包含添加成功\n"
+        ;;
+        5)
+            if [ -z "${rclone_syncs_exclude_after[rclone_syncs_index]:-}" ] 
+            then
+                RcloneSyncSetExcludeAfter
+            else
+                IFS="${delimiters[0]}" read -r -a rclone_sync_excludes_after <<< "${rclone_syncs_exclude_after[rclone_syncs_index]}"
+                rclone_sync_exclude_options=( '新增' '修改' '删除' )
+                echo
+                inquirer list_input_index "选择操作" rclone_sync_exclude_options rclone_sync_exclude_options_index
+
+                if [ "$rclone_sync_exclude_options_index" -eq 0 ] 
+                then
+                    RcloneSyncSetExcludeAfter
+                else
+                    echo
+                    inquirer checkbox_input_indices "选择排除的文件或目录" rclone_sync_excludes_after rclone_sync_excludes_after_indices
+
+                    if [ "$rclone_sync_exclude_options_index" -eq 1 ] 
+                    then
+                        for rclone_sync_excludes_after_index in "${rclone_sync_excludes_after_indices[@]}"
+                        do
+                            Println "$info 修改 ${rclone_sync_excludes_after[rclone_sync_excludes_after_index]}"
+                            inquirer text_input "输入新的文件或目录" rclone_sync_exclude_after "跳过"
+                            RemoveQuotes rclone_sync_exclude_after
+                            if [ "$rclone_sync_exclude_after" == "跳过" ] || [ "$rclone_sync_exclude_after" == "${rclone_sync_excludes_after[rclone_sync_excludes_after_index]}" ]
+                            then
+                                continue
+                            fi
+                            jq_path='["rclone","sync",'"$rclone_syncs_index"',"exclude_after",'"$rclone_sync_excludes_after_index"']'
+                            JQ update "$SERVICES_CONFIG" "$rclone_sync_exclude_after"
+                        done
+                        Println "$info 后排除修改成功\n"
+                    else
+                        for rclone_sync_excludes_after_index in "${rclone_sync_excludes_after_indices[@]}"
+                        do
+                            jq_path='["rclone","sync",'"$rclone_syncs_index"',"exclude_after",'"$rclone_sync_excludes_after_index"']'
+                            JQ delete "$SERVICES_CONFIG"
+                        done
+                        Println "$info 后排除删除成功\n"
+                    fi
+                    return 0
+                fi
+            fi
+
+            jq_path='["rclone","sync",'"$rclone_syncs_index"',"exclude_after"]'
+            JQ add "$SERVICES_CONFIG" "$(ToJsonArray rclone_sync_excludes_after)"
+            Println "$info 后排除添加成功\n"
+        ;;
+    esac
+
+    return 0
+}
+
+RcloneSyncDel()
+{
+    RcloneSyncView
+
+    inquirer checkbox_input_index "选择同步" rclone_syncs_options rclone_syncs_indices 20
+
+    for rclone_syncs_index in "${rclone_syncs_indices[@]}"
+    do
+        jq_path='["rclone","sync",'"$rclone_syncs_index"']'
+        JQ delete "$SERVICES_CONFIG"
+    done
+
+    Println "$info 同步删除成功\n"
+}
+
+RcloneSyncExc()
+{
+    RcloneSyncView
+
+    inquirer checkbox_input_indices "选择同步" rclone_syncs_options rclone_syncs_indices 20
+
+    DepInstall rsync
+
+    for rclone_syncs_index in "${rclone_syncs_indices[@]}"
+    do
+        rclone_sync_args="${rclone_syncs_args[rclone_syncs_index]:-}"
+        rclone_sync_source="${rclone_syncs_source[rclone_syncs_index]}"
+        if [ "${rclone_syncs_rsync[rclone_syncs_index]}" = true ]
+        then
+            rsync_commands=()
+            if [ -n "${rclone_syncs_exclude_before[rclone_syncs_index]:-}" ] 
+            then
+                IFS="${delimiters[0]}" read -r -a rclone_sync_excludes_before <<< "${rclone_syncs_exclude_before[rclone_syncs_index]}"
+                for rclone_sync_exclude_before in "${rclone_sync_excludes_before[@]}"
+                do
+                    rsync_commands+=("--exclude=${rclone_sync_exclude_before#"$rclone_sync_source"}")
+                done
+            fi
+            if [ -n "${rclone_syncs_include[rclone_syncs_index]:-}" ] 
+            then
+                IFS="${delimiters[0]}" read -r -a rclone_sync_includes <<< "${rclone_syncs_include[rclone_syncs_index]}"
+                for rclone_sync_include in "${rclone_sync_includes[@]}"
+                do
+                    rsync_commands+=("--include=${rclone_sync_include#"$rclone_sync_source"}")
+                done
+            fi
+            if [ -n "${rclone_syncs_exclude_after[rclone_syncs_index]:-}" ] 
+            then
+                IFS="${delimiters[0]}" read -r -a rclone_sync_excludes_after <<< "${rclone_syncs_exclude_after[rclone_syncs_index]}"
+                for rclone_sync_exclude_after in "${rclone_sync_excludes_after[@]}"
+                do
+                    rsync_commands+=("--exclude=${rclone_sync_exclude_after#"$rclone_sync_source"}")
+                done
+            fi
+            rsync -avhP --safe-links --delete --delete-excluded $rclone_sync_args ${rsync_commands[@]+"${rsync_commands[@]}"} "$rclone_sync_source"/ "${rclone_syncs_target[rclone_syncs_index]}/"
+        else
+            sync_commands=()
+            if [ -n "${rclone_syncs_exclude_before[rclone_syncs_index]:-}" ] 
+            then
+                IFS="${delimiters[0]}" read -r -a rclone_sync_excludes_before <<< "${rclone_syncs_exclude_before[rclone_syncs_index]}"
+                for rclone_sync_exclude_before in "${rclone_sync_excludes_before[@]}"
+                do
+                    sync_commands+=("--filter='- ${rclone_sync_exclude_before#"$rclone_sync_source"}'")
+                done
+            fi
+            if [ -n "${rclone_syncs_include[rclone_syncs_index]:-}" ] 
+            then
+                IFS="${delimiters[0]}" read -r -a rclone_sync_includes <<< "${rclone_syncs_include[rclone_syncs_index]}"
+                for rclone_sync_include in "${rclone_sync_includes[@]}"
+                do
+                    sync_commands+=("--filter='+ ${rclone_sync_include#"$rclone_sync_source"}'")
+                done
+            fi
+            if [ -n "${rclone_syncs_exclude_after[rclone_syncs_index]:-}" ] 
+            then
+                IFS="${delimiters[0]}" read -r -a rclone_sync_excludes_after <<< "${rclone_syncs_exclude_after[rclone_syncs_index]}"
+                for rclone_sync_exclude_after in "${rclone_sync_excludes_after[@]}"
+                do
+                    sync_commands+=("--filter='- ${rclone_sync_exclude_after#"$rclone_sync_source"}'")
+                done
+            fi
+            rclone sync "$rclone_sync_source" "${rclone_syncs_target[rclone_syncs_index]}" --delete-excluded $rclone_sync_args ${rsync_commands[@]+"${rsync_commands[@]}"}
+        fi
+    done
+
+    return 0
+}

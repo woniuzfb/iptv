@@ -169,7 +169,7 @@ AntiDDoS()
             MonitorLog "AntiDDoS 启动成功 PID $BASHPID !"
 
             current_ip=${SSH_CLIENT%% *}
-            [ -n "${anti_ddos_level:-}" ] && ((anti_ddos_level++))
+            [ -n "${anti_ddos_level:-}" ] && anti_ddos_level=$((anti_ddos_level+1))
             monitor=true
 
             while true
@@ -822,7 +822,7 @@ MonitorHlsRestartChannel()
                 f_count=1
                 for f in "$chnl_output_dir_root/$chnl_seg_dir_path"*.ts
                 do
-                    ((f_count++))
+                    f_count=$((f_count+1))
                 done
 
                 f_num=$((f_count/2))
@@ -832,7 +832,7 @@ MonitorHlsRestartChannel()
                 do
                     if [ "$f_count" -lt "$f_num" ] 
                     then
-                        ((f_count++))
+                        f_count=$((f_count+1))
                         continue
                     fi
                     [ -n "$encrypt_command" ] && f="crypto:$f"
@@ -1641,7 +1641,7 @@ MonitorTryAccounts()
                                 f_count=1
                                 for f in "$chnl_output_dir_root/$chnl_seg_dir_path"*.ts
                                 do
-                                    ((f_count++))
+                                    f_count=$((f_count+1))
                                 done
 
                                 f_num=$((f_count/2))
@@ -1651,7 +1651,7 @@ MonitorTryAccounts()
                                 do
                                     if [ "$f_count" -lt "$f_num" ] 
                                     then
-                                        ((f_count++))
+                                        f_count=$((f_count+1))
                                         continue
                                     fi
                                     [ -n "$encrypt_command" ] && f="crypto:$f"
@@ -1856,7 +1856,7 @@ MonitorTryAccounts()
                         f_count=1
                         for f in "$chnl_output_dir_root/$chnl_seg_dir_path"*.ts
                         do
-                            ((f_count++))
+                            f_count=$((f_count+1))
                         done
 
                         f_num=$((f_count/2))
@@ -1866,7 +1866,7 @@ MonitorTryAccounts()
                         do
                             if [ "$f_count" -lt "$f_num" ] 
                             then
-                                ((f_count++))
+                                f_count=$((f_count+1))
                                 continue
                             fi
                             [ -n "$encrypt_command" ] && f="crypto:$f"
@@ -2905,7 +2905,7 @@ Monitor()
                     then
                         loop=1
                     else
-                        ((loop++))
+                        loop=$((loop+1))
                     fi
 
                     while IFS= read -r old_file_path
@@ -3037,7 +3037,7 @@ Monitor()
 
                                     for f in "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[chnls_index]}/"*.ts
                                     do
-                                        ((f_count++))
+                                        f_count=$((f_count+1))
                                     done
 
                                     f_num=$((f_count/2))
@@ -3047,7 +3047,7 @@ Monitor()
                                     do
                                         if [ "$f_count" -lt "$f_num" ] 
                                         then
-                                            ((f_count++))
+                                            f_count=$((f_count+1))
                                             continue
                                         fi
 
@@ -3084,7 +3084,7 @@ Monitor()
                                         do
                                             if [ "$f_count" -lt "$f_num" ] 
                                             then
-                                                ((f_count++))
+                                                f_count=$((f_count+1))
                                                 continue
                                             fi
 
@@ -3116,7 +3116,7 @@ Monitor()
 
                                             if [ "$audio" -eq 0 ] || [ "$video" -eq 0 ] || [[ $video_bitrate -lt $hls_min_bitrate ]]
                                             then
-                                                ((fail_count++))
+                                                fail_count=$((fail_count+1))
                                             fi
 
                                             if [ "$fail_count" -gt 3 ] 

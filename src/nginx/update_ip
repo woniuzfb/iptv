@@ -15,7 +15,8 @@ NginxUpdateIp()
 
     Println "$info 更新 ip ..."
 
-    printf '%s' "#!/bin/bash
+cat > "$HOME"/update_cf_ibm_ip.sh <<EOF
+#!/bin/bash
 echo -e 'set_real_ip_from 127.0.0.0/24;\n#Cloudflare' > $nginx_prefix/conf/cloudflare_ip.conf;
 ibm_ips=(
   50.22.0.0/16
@@ -37,20 +38,20 @@ ibm_ips=(
   169.61.0.0/16
   169.62.0.0/16
 )
-for i in \"\${ibm_ips[@]}\"; do
-        echo \"set_real_ip_from \$i;\" >> $nginx_prefix/conf/cloudflare_ip.conf;
+for i in "\${ibm_ips[@]}"; do
+        echo "set_real_ip_from \$i;" >> $nginx_prefix/conf/cloudflare_ip.conf;
 done
 for i in \$(curl https://www.cloudflare.com/ips-v4); do
-        echo \"set_real_ip_from \$i;\" >> $nginx_prefix/conf/cloudflare_ip.conf;
+        echo "set_real_ip_from \$i;" >> $nginx_prefix/conf/cloudflare_ip.conf;
 done
 for i in \$(curl https://www.cloudflare.com/ips-v6); do
-        echo \"set_real_ip_from \$i;\" >> $nginx_prefix/conf/cloudflare_ip.conf;
+        echo "set_real_ip_from \$i;" >> $nginx_prefix/conf/cloudflare_ip.conf;
 done
 echo >> $nginx_prefix/conf/cloudflare_ip.conf;
 echo '# use any of the following two' >> $nginx_prefix/conf/cloudflare_ip.conf;
 echo 'real_ip_header CF-Connecting-IP;' >> $nginx_prefix/conf/cloudflare_ip.conf;
 echo '#real_ip_header X-Forwarded-For;' >> $nginx_prefix/conf/cloudflare_ip.conf;
-" > ~/update_cf_ibm_ip.sh
+EOF
 
     bash ~/update_cf_ibm_ip.sh
 

@@ -34,6 +34,7 @@ IP_DENY="$IPTV_ROOT/ip.deny"
 IP_LOG="$IPTV_ROOT/ip.log"
 FFMPEG_LOG_ROOT="$IPTV_ROOT/ffmpeg"
 # create your own mirror: tv ffmpeg
+BACKUP_ROOT="$HOME"/iptv_sh_backup
 FFMPEG_MIRROR_LINK="http://pngquant.com/ffmpeg"
 V2_FILE="/usr/local/bin/v2"
 V2_LINK="https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh"
@@ -41,6 +42,7 @@ V2_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/v2ray_install-release.sh"
 V2CTL_FILE="/usr/local/bin/v2ctl"
 V2_CONFIG="/usr/local/etc/v2ray/config.json"
 X_FILE="/usr/local/bin/x"
+X_CONFIG="/usr/local/etc/xray/config.json"
 FFMPEG_MIRROR_ROOT="$IPTV_ROOT/ffmpeg"
 LIVE_ROOT="$IPTV_ROOT/live"
 SERVICES_FILE="$IPTV_ROOT/services.json"
@@ -136,10 +138,10 @@ ArchCheck()
     if grep -Eqi "x86_64|amd64" <<< "$arch" 
     then
         arch="x86_64"
-    elif grep -Eqi "i386|i686" <<< "$arch" 
+    elif grep -Eqi "i386|i686|x86" <<< "$arch" 
     then
         arch="i386"
-    elif grep -Eqi "aarch64|armv8" <<< "$arch" 
+    elif grep -Eqi "aarch64|armv8|arm64" <<< "$arch" 
     then
         arch="arm64"
     elif grep -qi "armv7" <<< "$arch" 
@@ -800,9 +802,9 @@ inquirer()
             tput cub "$(tput cols)"
             tput cuf $((prompt_width+3))
             tput el
-            if [ -n "${checkbox_pages_tip:-}" ] 
+            if [ -n "${pages_tip:-}" ] 
             then
-                inquirer:print "$checkbox_pages_tip"
+                inquirer:print "$pages_tip"
             fi
             tput cud $((current_index+1))
             first_keystroke=false
@@ -814,12 +816,12 @@ inquirer()
         tput cub "$(tput cols)"
         tput cuf $((prompt_width+3))
         tput el
-        inquirer:print "$checkbox_pages_tip"
+        inquirer:print "$pages_tip"
         tput cud $((current_index+1))
     }
 
     inquirer:on_checkbox_input_up() {
-        if [ "$checkbox_input_search" = true ] 
+        if [ "$input_search" = true ] 
         then
             tput cub "$(tput cols)"
             tput el
@@ -833,29 +835,29 @@ inquirer()
 
             local i
 
-            for((i=0;i<checkbox_page_list_count;i++));
+            for((i=0;i<page_list_count;i++));
             do
                 if [ "$i" = "$current_index" ] 
                 then
                     if [ "${checkbox_page_selected[i]}" = true ]
                     then
-                        inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_page_list[i]}\n"
+                        inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${page_list[i]}\n"
                     else
-                        inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_page_list[i]}\n"
+                        inquirer:print "${cyan}${arrow}${normal}${unchecked} ${page_list[i]}\n"
                     fi
                 else
                     if [ "${checkbox_page_selected[i]}" = true ]
                     then
-                        inquirer:print " ${green}${checked}${normal} ${checkbox_page_list[i]}\n"
+                        inquirer:print " ${green}${checked}${normal} ${page_list[i]}\n"
                     else
-                        inquirer:print " ${unchecked} ${checkbox_page_list[i]}\n"
+                        inquirer:print " ${unchecked} ${page_list[i]}\n"
                     fi
                 fi
             done
 
-            tput cuu $((checkbox_page_list_count-current_index))
+            tput cuu $((page_list_count-current_index))
 
-            checkbox_input_search=false
+            input_search=false
             return
         fi
 
@@ -864,15 +866,15 @@ inquirer()
 
         if [ "${checkbox_page_selected[current_index]}" = true ]
         then
-            inquirer:print " ${green}${checked}${normal} ${checkbox_page_list[current_index]}"
+            inquirer:print " ${green}${checked}${normal} ${page_list[current_index]}"
         else
-            inquirer:print " ${unchecked} ${checkbox_page_list[current_index]}"
+            inquirer:print " ${unchecked} ${page_list[current_index]}"
         fi
 
         if [ $current_index = 0 ]
         then
-            current_index=$((checkbox_page_list_count-1))
-            tput cud $((checkbox_page_list_count-1))
+            current_index=$((page_list_count-1))
+            tput cud $((page_list_count-1))
         else
             current_index=$((current_index-1))
             tput cuu1
@@ -882,14 +884,14 @@ inquirer()
 
         if [ "${checkbox_page_selected[current_index]}" = true ]
         then
-            inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_page_list[current_index]}"
+            inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${page_list[current_index]}"
         else
-            inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_page_list[current_index]}"
+            inquirer:print "${cyan}${arrow}${normal}${unchecked} ${page_list[current_index]}"
         fi
     }
 
     inquirer:on_checkbox_input_down() {
-        if [ "$checkbox_input_search" = true ] 
+        if [ "$input_search" = true ] 
         then
             return
         fi
@@ -899,15 +901,15 @@ inquirer()
 
         if [ "${checkbox_page_selected[current_index]}" = true ]
         then
-            inquirer:print " ${green}${checked}${normal} ${checkbox_page_list[current_index]}"
+            inquirer:print " ${green}${checked}${normal} ${page_list[current_index]}"
         else
-            inquirer:print " ${unchecked} ${checkbox_page_list[current_index]}"
+            inquirer:print " ${unchecked} ${page_list[current_index]}"
         fi
 
-        if [ $current_index = $((checkbox_page_list_count-1)) ]
+        if [ $current_index = $((page_list_count-1)) ]
         then
             current_index=0
-            tput cuu $((checkbox_page_list_count-1))
+            tput cuu $((page_list_count-1))
         else
             current_index=$((current_index+1))
             tput cud1
@@ -917,19 +919,19 @@ inquirer()
 
         if [ "${checkbox_page_selected[current_index]}" = true ]
         then
-            inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_page_list[current_index]}"
+            inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${page_list[current_index]}"
         else
-            inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_page_list[current_index]}"
+            inquirer:print "${cyan}${arrow}${normal}${unchecked} ${page_list[current_index]}"
         fi
     }
 
     inquirer:on_checkbox_input_left() {
-        if [ -z "${checkbox_pages_tip:-}" ] 
+        if [ -z "${pages_tip:-}" ] 
         then
             return
         fi
 
-        if [ "$checkbox_input_search" = true ] 
+        if [ "$input_search" = true ] 
         then
             inquirer:on_text_input_left
             return
@@ -937,22 +939,22 @@ inquirer()
 
         local i
 
-        if [ "$checkbox_pages_index" -eq 0 ] 
+        if [ "$pages_index" -eq 0 ] 
         then
-            checkbox_pages_index=$((checkbox_pages_count-1))
-            checkbox_page_list_count=$((checkbox_list_count-checkbox_list_perpage*checkbox_pages_index))
+            pages_index=$((pages_count-1))
+            page_list_count=$((list_count-list_perpage*pages_index))
         else
-            ((checkbox_pages_index--))
-            checkbox_page_list_count=$checkbox_list_perpage
+            pages_index=$((pages_index-1))
+            page_list_count=$list_perpage
         fi
 
-        checkbox_pages_tip="${dim}$checkbox_pages_arrows $((checkbox_pages_index+1))/$checkbox_pages_count `gettext \"页\"`${normal}"
+        pages_tip="${dim}$pages_arrows $((pages_index+1))/$pages_count `gettext \"页\"`${normal}"
 
         inquirer:page_instructions
         tput cub "$(tput cols)"
-        tput cud $((checkbox_list_perpage-current_index+1))
+        tput cud $((list_perpage-current_index+1))
 
-        for((i=0;i<=checkbox_list_perpage;i++));
+        for((i=0;i<=list_perpage;i++));
         do
             tput el
             tput cuu1
@@ -960,78 +962,78 @@ inquirer()
 
         tput el
 
-        if [ "$current_index" -gt "$checkbox_page_list_count" ] 
+        if [ "$current_index" -gt "$page_list_count" ] 
         then
-            current_index=$checkbox_page_list_count
+            current_index=$page_list_count
         fi
 
-        checkbox_page_list=()
+        page_list=()
         checkbox_page_selected=()
         checkbox_page_select_all=true
 
-        for((i=0;i<checkbox_page_list_count;i++));
+        for((i=0;i<page_list_count;i++));
         do
-            checkbox_page_list+=("${checkbox_list[i+checkbox_list_perpage*checkbox_pages_index]}")
+            page_list+=("${checkbox_list[i+list_perpage*pages_index]}")
 
             if [ "$i" = "$current_index" ] 
             then
-                if [ "${checkbox_selected[i+checkbox_list_perpage*checkbox_pages_index]}" = true ]
+                if [ "${checkbox_selected[i+list_perpage*pages_index]}" = true ]
                 then
                     checkbox_page_selected+=("true")
-                    inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_page_list[i]}\n"
+                    inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${page_list[i]}\n"
                 else
                     checkbox_page_selected+=("false")
                     checkbox_page_select_all=false
-                    inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_page_list[i]}\n"
+                    inquirer:print "${cyan}${arrow}${normal}${unchecked} ${page_list[i]}\n"
                 fi
             else
-                if [ "${checkbox_selected[i+checkbox_list_perpage*checkbox_pages_index]}" = true ]
+                if [ "${checkbox_selected[i+list_perpage*pages_index]}" = true ]
                 then
                     checkbox_page_selected+=("true")
-                    inquirer:print " ${green}${checked}${normal} ${checkbox_page_list[i]}\n"
+                    inquirer:print " ${green}${checked}${normal} ${page_list[i]}\n"
                 else
                     checkbox_page_selected+=("false")
                     checkbox_page_select_all=false
-                    inquirer:print " ${unchecked} ${checkbox_page_list[i]}\n"
+                    inquirer:print " ${unchecked} ${page_list[i]}\n"
                 fi
             fi
         done
 
-        checkbox_page_list+=("$(gettext 全选)")
+        page_list+=("$(gettext 全选)")
 
-        if [ "$current_index" -eq $checkbox_page_list_count ] 
+        if [ "$current_index" -eq $page_list_count ] 
         then
             if [ "$checkbox_page_select_all" = true ] 
             then
                 checkbox_page_selected+=("true")
-                inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${page_list[page_list_count]}\n"
             else
                 checkbox_page_selected+=("false")
-                inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                inquirer:print "${cyan}${arrow}${normal}${unchecked} ${page_list[page_list_count]}\n"
             fi
         else
             if [ "$checkbox_page_select_all" = true ] 
             then
                 checkbox_page_selected+=("true")
-                inquirer:print " ${green}${checked}${normal} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                inquirer:print " ${green}${checked}${normal} ${page_list[page_list_count]}\n"
             else
                 checkbox_page_selected+=("false")
-                inquirer:print " ${unchecked} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                inquirer:print " ${unchecked} ${page_list[page_list_count]}\n"
             fi
         fi
 
-        ((checkbox_page_list_count++))
+        page_list_count=$((page_list_count+1))
 
-        tput cuu $((checkbox_page_list_count-current_index))
+        tput cuu $((page_list_count-current_index))
     }
 
     inquirer:on_checkbox_input_right() {
-        if [ -z "${checkbox_pages_tip:-}" ] 
+        if [ -z "${pages_tip:-}" ] 
         then
             return
         fi
 
-        if [ "$checkbox_input_search" = true ] 
+        if [ "$input_search" = true ] 
         then
             inquirer:on_text_input_right
             return
@@ -1039,27 +1041,27 @@ inquirer()
 
         local i
 
-        if [ "$checkbox_pages_index" -eq $((checkbox_pages_count-1)) ] 
+        if [ "$pages_index" -eq $((pages_count-1)) ] 
         then
-            checkbox_pages_index=0
-            checkbox_page_list_count=$checkbox_list_perpage
+            pages_index=0
+            page_list_count=$list_perpage
         else
-            ((checkbox_pages_index++))
-            if [ "$checkbox_pages_index" -eq $((checkbox_pages_count-1)) ] 
+            pages_index=$((pages_index+1))
+            if [ "$pages_index" -eq $((pages_count-1)) ] 
             then
-                checkbox_page_list_count=$((checkbox_list_count-checkbox_pages_index*checkbox_list_perpage))
+                page_list_count=$((list_count-pages_index*list_perpage))
             else
-                checkbox_page_list_count=$checkbox_list_perpage
+                page_list_count=$list_perpage
             fi
         fi
 
-        checkbox_pages_tip="${dim}$checkbox_pages_arrows $((checkbox_pages_index+1))/$checkbox_pages_count `gettext \"页\"`${normal}"
+        pages_tip="${dim}$pages_arrows $((pages_index+1))/$pages_count `gettext \"页\"`${normal}"
 
         inquirer:page_instructions
         tput cub "$(tput cols)"
-        tput cud $((checkbox_list_perpage-current_index+1))
+        tput cud $((list_perpage-current_index+1))
 
-        for((i=0;i<=checkbox_list_perpage;i++));
+        for((i=0;i<=list_perpage;i++));
         do
             tput el
             tput cuu1
@@ -1067,86 +1069,86 @@ inquirer()
 
         tput el
 
-        if [ "$current_index" -gt "$checkbox_page_list_count" ] 
+        if [ "$current_index" -gt "$page_list_count" ] 
         then
-            current_index=$checkbox_page_list_count
+            current_index=$page_list_count
         fi
 
-        checkbox_page_list=()
+        page_list=()
         checkbox_page_selected=()
         checkbox_page_select_all=true
 
-        for((i=0;i<checkbox_page_list_count;i++));
+        for((i=0;i<page_list_count;i++));
         do
-            checkbox_page_list+=("${checkbox_list[i+checkbox_list_perpage*checkbox_pages_index]}")
+            page_list+=("${checkbox_list[i+list_perpage*pages_index]}")
 
             if [ "$i" = "$current_index" ] 
             then
-                if [ "${checkbox_selected[i+checkbox_list_perpage*checkbox_pages_index]}" = true ]
+                if [ "${checkbox_selected[i+list_perpage*pages_index]}" = true ]
                 then
                     checkbox_page_selected+=("true")
-                    inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_page_list[i]}\n"
+                    inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${page_list[i]}\n"
                 else
                     checkbox_page_selected+=("false")
                     checkbox_page_select_all=false
-                    inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_page_list[i]}\n"
+                    inquirer:print "${cyan}${arrow}${normal}${unchecked} ${page_list[i]}\n"
                 fi
             else
-                if [ "${checkbox_selected[i+checkbox_list_perpage*checkbox_pages_index]}" = true ]
+                if [ "${checkbox_selected[i+list_perpage*pages_index]}" = true ]
                 then
                     checkbox_page_selected+=("true")
-                    inquirer:print " ${green}${checked}${normal} ${checkbox_page_list[i]}\n"
+                    inquirer:print " ${green}${checked}${normal} ${page_list[i]}\n"
                 else
                     checkbox_page_selected+=("false")
                     checkbox_page_select_all=false
-                    inquirer:print " ${unchecked} ${checkbox_page_list[i]}\n"
+                    inquirer:print " ${unchecked} ${page_list[i]}\n"
                 fi
             fi
         done
 
-        checkbox_page_list+=("$(gettext 全选)")
+        page_list+=("$(gettext 全选)")
 
-        if [ "$current_index" -eq $checkbox_page_list_count ] 
+        if [ "$current_index" -eq $page_list_count ] 
         then
             if [ "$checkbox_page_select_all" = true ] 
             then
                 checkbox_page_selected+=("true")
-                inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${page_list[page_list_count]}\n"
             else
                 checkbox_page_selected+=("false")
-                inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                inquirer:print "${cyan}${arrow}${normal}${unchecked} ${page_list[page_list_count]}\n"
             fi
         else
             if [ "$checkbox_page_select_all" = true ] 
             then
                 checkbox_page_selected+=("true")
-                inquirer:print " ${green}${checked}${normal} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                inquirer:print " ${green}${checked}${normal} ${page_list[page_list_count]}\n"
             else
                 checkbox_page_selected+=("false")
-                inquirer:print " ${unchecked} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                inquirer:print " ${unchecked} ${page_list[page_list_count]}\n"
             fi
         fi
 
-        ((checkbox_page_list_count++))
+        page_list_count=$((page_list_count+1))
 
-        tput cuu $((checkbox_page_list_count-current_index))
+        tput cuu $((page_list_count-current_index))
     }
 
-    inquirer:on_checkbox_input_page() {
-        if [ "$checkbox_input_page" = true ] && [[ "$1" =~ [0-9] ]] 
+    inquirer:on_input_page() {
+        if [ "$input_page" = true ] && [[ "$1" =~ [0-9] ]] 
         then
-            checkbox_input_page_num="${checkbox_input_page_num:-}$1"
-            checkbox_input_page_num=${checkbox_input_page_num#\0}
+            input_page_num="${input_page_num:-}$1"
+            input_page_num=${input_page_num#\0}
         else
-            checkbox_input_page=true
-            checkbox_input_page_num=""
+            input_page=true
+            input_page_num=""
         fi
     }
 
     inquirer:on_checkbox_input_enter() {
         local i
 
-        if [ "$checkbox_input_search" = true ] 
+        if [ "$input_search" = true ] 
         then
             if [ -n "$text_input" ] 
             then
@@ -1158,6 +1160,7 @@ inquirer()
                 tput el
                 tput cuu1
                 tput el
+                tput cud1
 
                 local checkbox_list_page
 
@@ -1165,7 +1168,7 @@ inquirer()
                 do
                     if [[ "${checkbox_list[i]}" =~ "$text_input" ]] 
                     then
-                        checkbox_list_page=$((i/checkbox_list_perpage+1))
+                        checkbox_list_page=$((i/list_perpage+1))
                         inquirer:print "${green}P${checkbox_list_page}${normal} ${checkbox_list[i]}\n"
                     fi
                 done
@@ -1175,39 +1178,39 @@ inquirer()
                     tput cud1
                 fi
 
-                inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt} ${checkbox_pages_tip:-}${dim}`gettext \"(按 <space> 选择, <enter> 确认)\"`${normal}\n\n\n"
+                inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt} ${pages_tip:-}${dim}`gettext \"(按 <space> 选择, <enter> 确认)\"`${normal}\n\n\n"
             fi
             inquirer:on_checkbox_input_up
             return
         fi
 
-        if [ "$checkbox_input_page" = true ] 
+        if [ "$input_page" = true ] 
         then
-            checkbox_input_page=false
-            if [ -n "${checkbox_input_page_num:-}" ] 
+            input_page=false
+            if [ -n "${input_page_num:-}" ] 
             then
-                if [ "$checkbox_input_page_num" -gt "$checkbox_pages_count" ] || [ "$checkbox_input_page_num" -eq $((checkbox_pages_index+1)) ]
+                if [ "$input_page_num" -gt "$pages_count" ] || [ "$input_page_num" -eq $((pages_index+1)) ]
                 then
-                    checkbox_input_page_num=""
+                    input_page_num=""
                     return
                 fi
 
-                checkbox_pages_index=$((checkbox_input_page_num-1))
+                pages_index=$((input_page_num-1))
 
-                checkbox_pages_tip="${dim}$checkbox_pages_arrows $((checkbox_pages_index+1))/$checkbox_pages_count `gettext \"页\"`${normal}"
+                pages_tip="${dim}$pages_arrows $((pages_index+1))/$pages_count `gettext \"页\"`${normal}"
 
-                if [ "$checkbox_input_page_num" -eq "$checkbox_pages_count" ] 
+                if [ "$input_page_num" -eq "$pages_count" ] 
                 then
-                    checkbox_page_list_count=$((checkbox_list_count-checkbox_pages_index*checkbox_list_perpage))
+                    page_list_count=$((list_count-pages_index*list_perpage))
                 else
-                    checkbox_page_list_count=$checkbox_list_perpage
+                    page_list_count=$list_perpage
                 fi
 
                 inquirer:page_instructions
                 tput cub "$(tput cols)"
-                tput cud $((checkbox_list_perpage-current_index+1))
+                tput cud $((list_perpage-current_index+1))
 
-                for((i=0;i<=checkbox_list_perpage;i++));
+                for((i=0;i<=list_perpage;i++));
                 do
                     tput el
                     tput cuu1
@@ -1215,71 +1218,71 @@ inquirer()
 
                 tput el
 
-                if [ "$current_index" -gt "$checkbox_page_list_count" ] 
+                if [ "$current_index" -gt "$page_list_count" ] 
                 then
-                    current_index=$checkbox_page_list_count
+                    current_index=$page_list_count
                 fi
 
-                checkbox_page_list=()
+                page_list=()
                 checkbox_page_selected=()
                 checkbox_page_select_all=true
 
-                for((i=0;i<checkbox_page_list_count;i++));
+                for((i=0;i<page_list_count;i++));
                 do
-                    checkbox_page_list+=("${checkbox_list[i+checkbox_list_perpage*checkbox_pages_index]}")
+                    page_list+=("${checkbox_list[i+list_perpage*pages_index]}")
 
                     if [ "$i" = "$current_index" ] 
                     then
-                        if [ "${checkbox_selected[i+checkbox_list_perpage*checkbox_pages_index]}" = true ]
+                        if [ "${checkbox_selected[i+list_perpage*pages_index]}" = true ]
                         then
                             checkbox_page_selected+=("true")
-                            inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_page_list[i]}\n"
+                            inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${page_list[i]}\n"
                         else
                             checkbox_page_selected+=("false")
                             checkbox_page_select_all=false
-                            inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_page_list[i]}\n"
+                            inquirer:print "${cyan}${arrow}${normal}${unchecked} ${page_list[i]}\n"
                         fi
                     else
-                        if [ "${checkbox_selected[i+checkbox_list_perpage*checkbox_pages_index]}" = true ]
+                        if [ "${checkbox_selected[i+list_perpage*pages_index]}" = true ]
                         then
                             checkbox_page_selected+=("true")
-                            inquirer:print " ${green}${checked}${normal} ${checkbox_page_list[i]}\n"
+                            inquirer:print " ${green}${checked}${normal} ${page_list[i]}\n"
                         else
                             checkbox_page_selected+=("false")
                             checkbox_page_select_all=false
-                            inquirer:print " ${unchecked} ${checkbox_page_list[i]}\n"
+                            inquirer:print " ${unchecked} ${page_list[i]}\n"
                         fi
                     fi
                 done
 
-                checkbox_page_list+=("$(gettext 全选)")
+                page_list+=("$(gettext 全选)")
 
-                if [ "$current_index" -eq $checkbox_page_list_count ] 
+                if [ "$current_index" -eq $page_list_count ] 
                 then
                     if [ "$checkbox_page_select_all" = true ] 
                     then
                         checkbox_page_selected+=("true")
-                        inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                        inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${page_list[page_list_count]}\n"
                     else
                         checkbox_page_selected+=("false")
-                        inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                        inquirer:print "${cyan}${arrow}${normal}${unchecked} ${page_list[page_list_count]}\n"
                     fi
                 else
                     if [ "$checkbox_page_select_all" = true ] 
                     then
                         checkbox_page_selected+=("true")
-                        inquirer:print " ${green}${checked}${normal} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                        inquirer:print " ${green}${checked}${normal} ${page_list[page_list_count]}\n"
                     else
                         checkbox_page_selected+=("false")
-                        inquirer:print " ${unchecked} ${checkbox_page_list[checkbox_page_list_count]}\n"
+                        inquirer:print " ${unchecked} ${page_list[page_list_count]}\n"
                     fi
                 fi
 
-                ((checkbox_page_list_count++))
+                page_list_count=$((page_list_count+1))
 
-                tput cuu $((checkbox_page_list_count-current_index))
+                tput cuu $((page_list_count-current_index))
 
-                checkbox_input_page_num=""
+                input_page_num=""
             fi
             return
         fi
@@ -1304,9 +1307,9 @@ inquirer()
             inquirer:print "${bg_black}${red}${checkbox_input_failed_msg}${normal}"
             tput rc
         else
-            tput cud $((checkbox_page_list_count-current_index))
+            tput cud $((page_list_count-current_index))
 
-            for i in $(seq $((checkbox_page_list_count+1)))
+            for i in $(seq $((page_list_count+1)))
             do
                 tput el
                 tput cuu1
@@ -1320,7 +1323,7 @@ inquirer()
     }
 
     inquirer:on_checkbox_input_space() {
-        if [ "$checkbox_input_search" = true ] 
+        if [ "$input_search" = true ] 
         then
             inquirer:on_text_input_ascii
             return
@@ -1332,32 +1335,32 @@ inquirer()
         tput cub "$(tput cols)"
         tput el
 
-        if [ "$current_index" -eq $((checkbox_page_list_count-1)) ] 
+        if [ "$current_index" -eq $((page_list_count-1)) ] 
         then
             if [ "${checkbox_page_selected[current_index]}" = true ]
             then
                 tput cuu $current_index
-                for i in "${!checkbox_page_list[@]}"
+                for i in "${!page_list[@]}"
                 do
                     if [ "$i" -eq "$current_index" ]
                     then
-                        inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_page_list[i]}"
+                        inquirer:print "${cyan}${arrow}${normal}${unchecked} ${page_list[i]}"
                     else
-                        inquirer:print " ${unchecked} ${checkbox_page_list[i]}\n"
-                        checkbox_selected[i+checkbox_pages_index*checkbox_list_perpage]=false
+                        inquirer:print " ${unchecked} ${page_list[i]}\n"
+                        checkbox_selected[i+pages_index*list_perpage]=false
                     fi
                     checkbox_page_selected[i]=false
                 done
             else
                 tput cuu $current_index
-                for i in "${!checkbox_page_list[@]}"
+                for i in "${!page_list[@]}"
                 do
                     if [ "$i" -eq "$current_index" ]
                     then
-                        inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_page_list[i]}"
+                        inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${page_list[i]}"
                     else
-                        inquirer:print " ${green}${checked}${normal} ${checkbox_page_list[i]}\n"
-                        checkbox_selected[i+checkbox_pages_index*checkbox_list_perpage]=true
+                        inquirer:print " ${green}${checked}${normal} ${page_list[i]}\n"
+                        checkbox_selected[i+pages_index*list_perpage]=true
                     fi
                     checkbox_page_selected[i]=true
                 done
@@ -1366,12 +1369,12 @@ inquirer()
             if [ "${checkbox_page_selected[current_index]}" = true ]
             then
                 checkbox_page_selected[current_index]=false
-                checkbox_selected[current_index+checkbox_pages_index*checkbox_list_perpage]=false
-                inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_page_list[current_index]}"
+                checkbox_selected[current_index+pages_index*list_perpage]=false
+                inquirer:print "${cyan}${arrow}${normal}${unchecked} ${page_list[current_index]}"
             else
                 checkbox_page_selected[current_index]=true
-                checkbox_selected[current_index+checkbox_pages_index*checkbox_list_perpage]=true
-                inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${checkbox_page_list[current_index]}"
+                checkbox_selected[current_index+pages_index*list_perpage]=true
+                inquirer:print "${cyan}${arrow}${green}${checked}${normal} ${page_list[current_index]}"
             fi
         fi
     }
@@ -1379,7 +1382,7 @@ inquirer()
     inquirer:on_checkbox_input_ascii() {
         local key=$1
 
-        if [ "$checkbox_input_search" = false ] 
+        if [ "$input_search" = false ] 
         then
             case "$key" in
                 "w" ) 
@@ -1401,19 +1404,19 @@ inquirer()
             esac
             if [ "$key" == "/" ]
             then
-                if [ "$checkbox_pages_count" -eq 1 ] 
+                if [ "$pages_count" -eq 1 ] 
                 then
                     return
                 fi
 
-                checkbox_input_search=true
+                input_search=true
                 text_input=""
                 current_pos=0
 
                 tput cub "$(tput cols)"
-                tput cud $((checkbox_list_perpage-current_index+1))
+                tput cud $((list_perpage-current_index+1))
 
-                for((i=0;i<=checkbox_list_perpage;i++));
+                for((i=0;i<=list_perpage;i++));
                 do
                     tput el
                     tput cuu1
@@ -1422,13 +1425,13 @@ inquirer()
                 tput el
                 tput cud1
 
-                inquirer:print "${green}?${normal} ${bold}${bg_black}${white}输入搜索内容${bold} ${dim}( \xe2\x86\x91 返回)${normal}\n"
+                inquirer:print "${green}?${normal} ${bold}${bg_black}${white}输入搜索内容${bold} ${dim}( $arrow_up 返回)${normal}\n"
 
                 stty -echo
                 tput cnorm
             elif [[ "$key" =~ [0-9Pp] ]]
             then
-                inquirer:on_checkbox_input_page "$key"
+                inquirer:on_input_page "$key"
             fi
             return
         fi
@@ -1437,7 +1440,7 @@ inquirer()
     }
 
     inquirer:on_checkbox_input_not_ascii() {
-        if [ "$checkbox_input_search" = false ] 
+        if [ "$input_search" = false ] 
         then
             return
         fi
@@ -1446,7 +1449,7 @@ inquirer()
     }
 
     inquirer:on_checkbox_input_backspace() {
-        if [ "$checkbox_input_search" = false ] 
+        if [ "$input_search" = false ] 
         then
             return
         fi
@@ -1456,11 +1459,11 @@ inquirer()
 
     inquirer:_checkbox_input() {
         local i var=("$2"[@])
-        checkbox_list_perpage=${4:-$checkbox_list_perpage}
+        list_perpage=${4:-$list_perpage}
         checkbox_list=("${!var}")
-        checkbox_list_count=${#checkbox_list[@]}
+        list_count=${#checkbox_list[@]}
 
-        if [ "$checkbox_list_count" -eq 1 ] 
+        if [ "$list_count" -eq 1 ] 
         then
             checkbox_selected_options=("${checkbox_list[@]}")
             checkbox_selected_indices=(0)
@@ -1482,17 +1485,17 @@ inquirer()
         stty -echo
         tput civis
 
-        if [ "$checkbox_list_perpage" -gt 0 ] && [ "$checkbox_list_count" -gt "$checkbox_list_perpage" ] 
+        if [ "$list_perpage" -gt 0 ] && [ "$list_count" -gt "$list_perpage" ] 
         then
-            checkbox_pages_count=$((checkbox_list_count/checkbox_list_perpage))
-            if [[ $((checkbox_list_perpage*checkbox_pages_count)) -lt "$checkbox_list_count" ]] 
+            pages_count=$((list_count/list_perpage))
+            if [[ $((list_perpage*pages_count)) -lt "$list_count" ]] 
             then
-                ((checkbox_pages_count++))
+                pages_count=$((pages_count+1))
             fi
-            checkbox_pages_tip="${dim}$checkbox_pages_arrows $((checkbox_pages_index+1))/$checkbox_pages_count `gettext \"页\"`${normal} "
+            pages_tip="${dim}$pages_arrows $((pages_index+1))/$pages_count `gettext \"页\"`${normal} "
         fi
 
-        inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt} ${checkbox_pages_tip:-}${dim}`gettext \"(按 <space> 选择, <enter> 确认)\"`${normal}\n"
+        inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt} ${pages_tip:-}${dim}`gettext \"(按 <space> 选择, <enter> 确认)\"`${normal}\n"
 
         for i in "${!checkbox_list[@]}"
         do
@@ -1520,7 +1523,7 @@ inquirer()
                 else
                     inquirer:print "${cyan}${arrow}${normal}${unchecked} ${checkbox_list[i]}\n"
                 fi
-            elif [ "$checkbox_pages_count" -gt 1 ] && [ "$i" = "$checkbox_list_perpage" ] 
+            elif [ "$pages_count" -gt 1 ] && [ "$i" = "$list_perpage" ] 
             then
                 break
             else
@@ -1531,11 +1534,11 @@ inquirer()
                     inquirer:print " ${unchecked} ${checkbox_list[i]}\n"
                 fi
             fi
-            ((checkbox_page_list_count++))
-            checkbox_page_list+=("${checkbox_list[i]}")
+            page_list_count=$((page_list_count+1))
+            page_list+=("${checkbox_list[i]}")
         done
 
-        for((i=0;i<checkbox_page_list_count;i++));
+        for((i=0;i<page_list_count;i++));
         do
             if [ "${checkbox_selected[i]}" = true ] 
             then
@@ -1546,19 +1549,19 @@ inquirer()
             fi
         done
 
-        checkbox_page_list+=("$(gettext 全选)")
-        ((checkbox_page_list_count++))
+        page_list+=("$(gettext 全选)")
+        page_list_count=$((page_list_count+1))
 
         if [ "$checkbox_page_select_all" = true ] 
         then
             checkbox_page_selected+=("true")
-            inquirer:print " ${green}${checked}${normal} ${checkbox_page_list[checkbox_page_list_count-1]}\n"
+            inquirer:print " ${green}${checked}${normal} ${page_list[page_list_count-1]}\n"
         else
             checkbox_page_selected+=("false")
-            inquirer:print " ${unchecked} ${checkbox_page_list[checkbox_page_list_count-1]}\n"
+            inquirer:print " ${unchecked} ${page_list[page_list_count-1]}\n"
         fi
 
-        tput cuu $checkbox_page_list_count
+        tput cuu $page_list_count
 
         inquirer:on_keypress inquirer:on_checkbox_input_up inquirer:on_checkbox_input_down inquirer:on_checkbox_input_space inquirer:on_checkbox_input_enter inquirer:on_checkbox_input_left inquirer:on_checkbox_input_right inquirer:on_checkbox_input_ascii inquirer:on_checkbox_input_backspace inquirer:on_checkbox_input_not_ascii
     }
@@ -1786,21 +1789,46 @@ inquirer()
     }
 
     inquirer:on_list_input_up() {
-        inquirer:remove_instructions
-
-        if [ "${#list_options[@]}" -eq 1 ]
+        if [ "$input_search" = true ] 
         then
+            tput cub "$(tput cols)"
+            tput el
+            tput cuu1
+            tput el
+            tput cuu1
+            tput el
+
+            stty -echo
+            tput civis
+
+            local i
+
+            for((i=0;i<page_list_count;i++));
+            do
+                if [ "$i" = "$current_index" ] 
+                then
+                    inquirer:print "${cyan}${arrow} ${page_list[i]} ${normal}\n"
+                else
+                    inquirer:print "  ${page_list[i]}\n"
+                fi
+            done
+
+            tput cuu $((page_list_count-current_index))
+
+            input_search=false
             return
         fi
 
+        inquirer:remove_instructions
+
         tput cub "$(tput cols)"
 
-        inquirer:print "  ${list_options[current_index]}"
+        inquirer:print "  ${page_list[current_index]}"
 
         if [ $current_index = 0 ]
         then
-            current_index=$((${#list_options[@]}-1))
-            tput cud $((${#list_options[@]}-1))
+            current_index=$((page_list_count-1))
+            tput cud $((page_list_count-1))
         else
             current_index=$((current_index-1))
             tput cuu1
@@ -1808,25 +1836,25 @@ inquirer()
 
         tput cub "$(tput cols)"
 
-        inquirer:print "${cyan}${arrow} ${list_options[current_index]}${normal}"
+        inquirer:print "${cyan}${arrow} ${page_list[current_index]}${normal}"
     }
 
     inquirer:on_list_input_down() {
-        inquirer:remove_instructions
-
-        if [ "${#list_options[@]}" -eq 1 ]
+        if [ "$input_search" = true ] 
         then
             return
         fi
 
+        inquirer:remove_instructions
+
         tput cub "$(tput cols)"
 
-        inquirer:print "  ${list_options[current_index]}"
+        inquirer:print "  ${page_list[current_index]}"
 
-        if [ $current_index = $((${#list_options[@]}-1)) ]
+        if [ $current_index = $((page_list_count-1)) ]
         then
             current_index=0
-            tput cuu $((${#list_options[@]}-1))
+            tput cuu $((page_list_count-1))
         else
             current_index=$((current_index+1))
             tput cud1
@@ -1834,41 +1862,358 @@ inquirer()
 
         tput cub "$(tput cols)"
 
-        inquirer:print "${cyan}${arrow} ${list_options[current_index]} ${normal}"
+        inquirer:print "${cyan}${arrow} ${page_list[current_index]} ${normal}"
     }
 
-    inquirer:on_list_input_enter_space() {
+    inquirer:on_list_input_left() {
+        if [ -z "${pages_tip:-}" ] 
+        then
+            return
+        fi
+
+        if [ "$input_search" = true ] 
+        then
+            inquirer:on_text_input_left
+            return
+        fi
+
         local i
 
-        tput cud $((${#list_options[@]}-current_index))
+        if [ "$pages_index" -eq 0 ] 
+        then
+            pages_index=$((pages_count-1))
+            page_list_count=$((list_count-list_perpage*pages_index))
+        else
+            pages_index=$((pages_index-1))
+            page_list_count=$list_perpage
+        fi
+
+        pages_tip="${dim}$pages_arrows $((pages_index+1))/$pages_count `gettext \"页\"`${normal}"
+
+        inquirer:page_instructions
+        tput cub "$(tput cols)"
+        tput cud $((list_perpage-current_index))
+
+        for((i=0;i<list_perpage;i++));
+        do
+            tput el
+            tput cuu1
+        done
+
+        tput el
+
+        if [ "$current_index" -ge "$page_list_count" ] 
+        then
+            current_index=$((page_list_count-1))
+        fi
+
+        page_list=()
+
+        for((i=0;i<page_list_count;i++));
+        do
+            page_list+=("${list_options[i+list_perpage*pages_index]}")
+
+            if [ "$i" = "$current_index" ] 
+            then
+                inquirer:print "${cyan}${arrow} ${page_list[i]} ${normal}\n"
+            else
+                inquirer:print "  ${page_list[i]}\n"
+            fi
+        done
+
+        tput cuu $((page_list_count-current_index))
+    }
+
+    inquirer:on_list_input_right() {
+        if [ -z "${pages_tip:-}" ] 
+        then
+            return
+        fi
+
+        if [ "$input_search" = true ] 
+        then
+            inquirer:on_text_input_right
+            return
+        fi
+
+        local i
+
+        if [ "$pages_index" -eq $((pages_count-1)) ] 
+        then
+            pages_index=0
+            page_list_count=$list_perpage
+        else
+            pages_index=$((pages_index+1))
+            if [ "$pages_index" -eq $((pages_count-1)) ] 
+            then
+                page_list_count=$((list_count-pages_index*list_perpage))
+            else
+                page_list_count=$list_perpage
+            fi
+        fi
+
+        pages_tip="${dim}$pages_arrows $((pages_index+1))/$pages_count `gettext \"页\"`${normal}"
+
+        inquirer:page_instructions
+        tput cub "$(tput cols)"
+        tput cud $((list_perpage-current_index))
+
+        for((i=0;i<list_perpage;i++));
+        do
+            tput el
+            tput cuu1
+        done
+
+        tput el
+
+        if [ "$current_index" -ge "$page_list_count" ] 
+        then
+            current_index=$((page_list_count-1))
+        fi
+
+        page_list=()
+
+        for((i=0;i<page_list_count;i++));
+        do
+            page_list+=("${list_options[i+list_perpage*pages_index]}")
+
+            if [ "$i" = "$current_index" ] 
+            then
+                inquirer:print "${cyan}${arrow} ${page_list[i]} ${normal}\n"
+            else
+                inquirer:print "  ${page_list[i]}\n"
+            fi
+        done
+
+        tput cuu $((page_list_count-current_index))
+    }
+
+    inquirer:on_list_input_space() {
+        if [ "$input_search" = true ] 
+        then
+            inquirer:on_text_input_ascii
+            return
+        fi
+
+        local i
+
+        tput cud $((page_list_count-current_index))
         tput cub "$(tput cols)"
 
-        for i in $(seq $((${#list_options[@]}+1)))
+        for i in $(seq $((page_list_count+1)))
         do
             tput el
             tput cuu1
         done
 
         tput cuf $((prompt_width+3))
-        inquirer:print "${bg_black}${cyan}${list_options[current_index]}${normal}\n"
+        inquirer:print "${bg_black}${cyan}${page_list[current_index]}${normal}\n"
+
+        break_keypress=true
+    }
+
+    inquirer:on_list_input_enter() {
+        local i
+
+        if [ "$input_search" = true ] 
+        then
+            if [ -n "$text_input" ] 
+            then
+                tput cub "$(tput cols)"
+                tput el
+                tput cuu1
+                tput el
+                tput cuu1
+                tput el
+                tput cuu1
+                tput el
+                tput cud1
+
+                local list_page
+
+                for i in "${!list_options[@]}"
+                do
+                    if [[ "${list_options[i]}" =~ "$text_input" ]] 
+                    then
+                        list_page=$((i/list_perpage+1))
+                        inquirer:print "${green}P${list_page}${normal} ${list_options[i]}\n"
+                    fi
+                done
+
+                if [ -n "${list_page:-}" ] 
+                then
+                    tput cud1
+                fi
+
+                inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt} ${pages_tip:-}${dim}`gettext \"(使用上下箭头选择)\"`${normal}\n\n\n"
+            fi
+            inquirer:on_list_input_up
+            return
+        fi
+
+        if [ "$input_page" = true ] 
+        then
+            input_page=false
+            if [ -n "${input_page_num:-}" ] 
+            then
+                if [ "$input_page_num" -gt "$pages_count" ] || [ "$input_page_num" -eq $((pages_index+1)) ]
+                then
+                    input_page_num=""
+                    return
+                fi
+
+                pages_index=$((input_page_num-1))
+
+                pages_tip="${dim}$pages_arrows $((pages_index+1))/$pages_count `gettext \"页\"`${normal}"
+
+                if [ "$input_page_num" -eq "$pages_count" ] 
+                then
+                    page_list_count=$((list_count-pages_index*list_perpage))
+                else
+                    page_list_count=$list_perpage
+                fi
+
+                inquirer:page_instructions
+                tput cub "$(tput cols)"
+                tput cud $((list_perpage-current_index+1))
+
+                for((i=0;i<=list_perpage;i++));
+                do
+                    tput el
+                    tput cuu1
+                done
+
+                tput el
+
+                if [ "$current_index" -ge "$page_list_count" ] 
+                then
+                    current_index=$((page_list_count-1))
+                fi
+
+                page_list=()
+
+                for((i=0;i<page_list_count;i++));
+                do
+                    page_list+=("${list_options[i+list_perpage*pages_index]}")
+
+                    if [ "$i" = "$current_index" ] 
+                    then
+                        inquirer:print "${cyan}${arrow} ${page_list[i]} ${normal}\n"
+                    else
+                        inquirer:print "  ${page_list[i]}\n"
+                    fi
+                done
+
+                tput cuu $((page_list_count-current_index))
+
+                input_page_num=""
+            fi
+            return
+        fi
+
+        tput cud $((page_list_count-current_index))
+        tput cub "$(tput cols)"
+
+        for i in $(seq $((page_list_count+1)))
+        do
+            tput el
+            tput cuu1
+        done
+
+        tput cuf $((prompt_width+3))
+        inquirer:print "${bg_black}${cyan}${page_list[current_index]}${normal}\n"
 
         break_keypress=true
     }
 
     inquirer:on_list_input_ascii() {
-        case "$1" in
-            "w" ) inquirer:on_list_input_up;;
-            "s" ) inquirer:on_list_input_down;;
-        esac
+        local key=$1
+
+        if [ "$input_search" = false ] 
+        then
+            case "$key" in
+                "w" ) 
+                    inquirer:on_list_input_up
+                    return
+                ;;
+                "s" ) 
+                    inquirer:on_list_input_down
+                    return
+                ;;
+                "a" ) 
+                    inquirer:on_list_input_left
+                    return
+                ;;
+                "d" ) 
+                    inquirer:on_list_input_right
+                    return
+                ;;
+            esac
+            if [ "$key" == "/" ]
+            then
+                if [ "$pages_count" -eq 1 ] 
+                then
+                    return
+                fi
+
+                input_search=true
+                text_input=""
+                current_pos=0
+
+                tput cub "$(tput cols)"
+                tput cud $((list_perpage-current_index+1))
+
+                for((i=0;i<=list_perpage;i++));
+                do
+                    tput el
+                    tput cuu1
+                done
+
+                tput el
+                tput cud1
+
+                inquirer:print "${green}?${normal} ${bold}${bg_black}${white}输入搜索内容${bold} ${dim}( $arrow_up 返回)${normal}\n"
+
+                stty -echo
+                tput cnorm
+            elif [[ "$key" =~ [0-9Pp] ]]
+            then
+                inquirer:on_input_page "$key"
+            fi
+            return
+        fi
+
+        inquirer:on_text_input_ascii "$key"
+    }
+
+    inquirer:on_list_input_not_ascii() {
+        if [ "$input_search" = false ] 
+        then
+            return
+        fi
+
+        inquirer:on_text_input_not_ascii "$1"
+    }
+
+    inquirer:on_list_input_backspace() {
+        if [ "$input_search" = false ] 
+        then
+            return
+        fi
+
+        inquirer:on_text_input_backspace
     }
 
     inquirer:_list_input() {
         local i var=("$2"[@])
+        list_perpage=${3:-$list_perpage}
         list_options=("${!var}")
+        list_count=${#list_options[@]}
         current_index=0
 
-        if [ "${#list_options[@]}" -eq 1 ] 
+        if [ "$list_count" -eq 1 ] 
         then
+            inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt} ${bg_black}${cyan}${list_options[current_index]}${normal}\n"
             return
         fi
 
@@ -1879,29 +2224,44 @@ inquirer()
         stty -echo
         tput civis
 
-        inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt} ${dim}`gettext \"(使用上下箭头选择)\"`${normal}\n"
+        if [ "$list_perpage" -gt 0 ] && [ "$list_count" -gt "$list_perpage" ] 
+        then
+            pages_count=$((list_count/list_perpage))
+            if [[ $((list_perpage*pages_count)) -lt "$list_count" ]] 
+            then
+                pages_count=$((pages_count+1))
+            fi
+            pages_tip="${dim}$pages_arrows $((pages_index+1))/$pages_count `gettext \"页\"`${normal} "
+        fi
+
+        inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt} ${pages_tip:-}${dim}`gettext \"(使用上下箭头选择)\"`${normal}\n"
 
         for i in "${!list_options[@]}"
         do
             if [ $i = 0 ]
             then
                 inquirer:print "${cyan}${arrow} ${list_options[i]} ${normal}\n"
+            elif [ "$pages_count" -gt 1 ] && [ "$i" = "$list_perpage" ] 
+            then
+                break
             else
                 inquirer:print "  ${list_options[i]}\n"
             fi
+            page_list_count=$((page_list_count+1))
+            page_list+=("${list_options[i]}")
         done
 
-        tput cuu ${#list_options[@]}
+        tput cuu $page_list_count
 
-        inquirer:on_keypress inquirer:on_list_input_up inquirer:on_list_input_down inquirer:on_list_input_enter_space inquirer:on_list_input_enter_space inquirer:on_default inquirer:on_default inquirer:on_list_input_ascii
+        inquirer:on_keypress inquirer:on_list_input_up inquirer:on_list_input_down inquirer:on_list_input_space inquirer:on_list_input_enter inquirer:on_list_input_left inquirer:on_list_input_right inquirer:on_list_input_ascii inquirer:on_list_input_backspace inquirer:on_list_input_not_ascii
     }
 
     inquirer:list_input() {
         var_name=$3
 
-        inquirer:_list_input "$1" "$2"
+        inquirer:_list_input "$1" "$2" ${4:-$list_perpage}
 
-        read -r ${var_name?} <<< "${list_options[current_index]}"
+        read -r ${var_name?} <<< "${page_list[current_index]}"
 
         inquirer:cleanup
 
@@ -1911,9 +2271,9 @@ inquirer()
     inquirer:list_input_index() {
         var_name=$3
 
-        inquirer:_list_input "$1" "$2"
+        inquirer:_list_input "$1" "$2" ${4:-$list_perpage}
 
-        read -r ${var_name?} <<< "$current_index"
+        read -r ${var_name?} <<< "$((list_perpage*pages_index+current_index))"
 
         inquirer:cleanup
 
@@ -1947,13 +2307,14 @@ inquirer()
     }
 
     inquirer:on_text_input_enter() {
+        local validate_failed_msg
         text_input=${text_input:-$text_default}
 
         tput civis
         tput cub "$(tput cols)"
         tput el
 
-        if $text_input_validator "$text_input"
+        if validate_failed_msg=$($text_input_validator "$text_input")
         then
             tput sc
             tput cuu $((1+failed_count*3))
@@ -1966,7 +2327,7 @@ inquirer()
         else
             failed_count=$((failed_count+1))
             tput cud1
-            inquirer:print "${bg_black}${red}${text_input_regex_failed_msg}${normal}\n"
+            inquirer:print "${bg_black}${red}${validate_failed_msg:-$text_input_validate_failed_msg}${normal}\n"
             tput cud1
             if [ "$text_input" == "$text_default" ] 
             then
@@ -2093,7 +2454,7 @@ inquirer()
         fi
 
         text_input_validator=${4:-inquirer:text_input_default_validator}
-        text_input_regex_failed_msg=${5:-$(gettext "输入验证错误")}
+        text_input_validate_failed_msg=${5:-$(gettext "输入验证错误")}
 
         inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt}${text_default_tip}\n"
 
@@ -2253,7 +2614,7 @@ inquirer()
         else
             failed_count=$((failed_count+1))
             tput cud1
-            inquirer:print "${bg_black}${red}${date_pick_regex_failed_msg}${normal}\n"
+            inquirer:print "${bg_black}${red}${date_pick_validate_failed_msg}${normal}\n"
             tput cud1
             inquirer:print "${date_pick}"
             tput cub $((19-current_pos))
@@ -2265,7 +2626,7 @@ inquirer()
     inquirer:date_pick() {
         var_name=$2
         date_pick_validator=${3:-inquirer:date_pick_default_validator}
-        date_pick_regex_failed_msg=${4:-$(gettext "时间验证错误")}
+        date_pick_validate_failed_msg=${4:-$(gettext "时间验证错误")}
         date_pick=$(printf '%(%Y-%m-%d %H:%M:%S)T' "${!var_name:--1}")
         current_pos=12
         failed_count=0
@@ -2422,20 +2783,20 @@ inquirer()
     break_keypress \
     first_keystroke \
     current_index \
+    list_perpage=0 \
+    list_count \
+    page_list=() \
+    page_list_count=0 \
+    pages_arrows="\xe2\x9d\xae\xe2\x9d\xaf" \
+    pages_tip \
+    pages_index=0 \
+    pages_count=1 \
+    input_page=false \
+    input_page_num \
+    input_search=false \
     checkbox_list=() \
-    checkbox_list_count \
-    checkbox_list_perpage=0 \
-    checkbox_page_list=() \
-    checkbox_page_list_count=0 \
     checkbox_page_selected=() \
     checkbox_page_select_all=true \
-    checkbox_input_page=false \
-    checkbox_input_page_num \
-    checkbox_input_search=false \
-    checkbox_pages_tip \
-    checkbox_pages_arrows="\xe2\x9d\xae\xe2\x9d\xaf" \
-    checkbox_pages_index=0 \
-    checkbox_pages_count=1 \
     checkbox_selected=() \
     checkbox_selected_indices=() \
     checkbox_selected_options=() \
@@ -2447,21 +2808,22 @@ inquirer()
     failed_count \
     text_default \
     text_input \
-    text_input_regex_failed_msg \
+    text_input_validate_failed_msg \
     text_input_validator \
     date_pick \
-    date_pick_regex_failed_msg \
+    date_pick_validate_failed_msg \
     date_pick_validator \
     colors=() \
     bg_colors=() \
     colors_index \
     bg_colors_index \
-    arrow checked unchecked bold dim normal
+    arrow arrow_up checked unchecked bold dim normal
 
     prompt_raw=$(printf '%b' "$prompt"|sed 's/\x1b\[[0-9;]*m//g')
     prompt_width=$(inquirer:display_length "$prompt_raw")
 
     arrow='\xe2\x9d\xaf'
+    arrow_up='\xe2\x86\x91'
     checked='\xe2\x97\x89'
     unchecked='\xe2\x97\xaf'
     red=${red:-'\033[31m'}
@@ -2804,6 +3166,20 @@ CrossplaneInstall()
 
 GoInstall()
 {
+    if [[ ! "$PATH" =~ /usr/local/go/bin ]]
+    then
+        PATH="$PATH":/usr/local/go/bin
+    fi
+
+    go_path=${GOPATH:-"$HOME"/go}
+
+    if [[ ! "$PATH" =~ $go_path ]]
+    then
+        PATH="${PATH}:${go_path}/bin"
+    fi
+
+    export PATH
+
     if [[ -x $(command -v go) ]] 
     then
         go_version_list=($(go version))
@@ -2811,6 +3187,12 @@ GoInstall()
         then
             return 0
         fi
+    fi
+
+    if [ "$dist" == "mac" ] 
+    then
+        DepInstall go
+        return 0
     fi
 
     ArchCheck
@@ -2822,7 +3204,7 @@ GoInstall()
     if ! go_version=$(curl -s -Lm 20 https://go.dev/dl/?mode=json | $JQ_FILE -r '.[0].version')
     then
         Println "$error 无法连接 go.dev ?"
-        go_version=1.16.5
+        go_version=1.22.2
     fi
 
     if [ "$arch" == "i386" ] 
@@ -2842,16 +3224,11 @@ GoInstall()
     if ! curl -L https://golang.org/dl/$go_package -o ~/$go_package && ! curl -L https://gomirrors.org/dl/$go_package -o ~/$go_package
     then
         Println "$error 下载 golang 失败, 请稍后再试\n"
-        exit 1
+        return 1
     fi
 
-    rm -rf /usr/local/go && tar -C /usr/local -xzf ~/$go_package
-
-    if [[ ! -x $(command -v go) ]] 
-    then
-        export PATH="$PATH:/usr/local/go/bin"
-        echo "export PATH=\$PATH:/usr/local/go/bin" >> /etc/profile
-    fi
+    rm -rf /usr/local/go
+    tar -C /usr/local -xzf ~/$go_package
 }
 
 FFmpegInstall()
@@ -9284,7 +9661,7 @@ InputChannelsIndex()
                     continue 2
                 elif [[ $chnl_index_start -gt 0 ]] && [[ $chnl_index_end -le $chnls_count ]] && [[ $chnl_index_end -gt $chnl_index_start ]] 
                 then
-                    ((chnl_index_start--))
+                    chnl_index_start=$((chnl_index_start-1))
                     for((i=chnl_index_start;i<chnl_index_end;i++));
                     do
                         chnls_pid_chosen+=("${chnls_pid[i]}")
@@ -9299,7 +9676,7 @@ InputChannelsIndex()
                 Println "$error $i18n_input_correct_no\n"
                 continue 2
             else
-                ((chnl_index--))
+                chnl_index=$((chnl_index-1))
                 chnls_pid_chosen+=("${chnls_pid[chnl_index]}")
                 chnls_indices+=("$chnl_index")
             fi
@@ -17052,7 +17429,7 @@ Reg4gtvAcc()
         | $JQ_FILE -r '[.Success,.ErrMessage]|join(" ")'
     ) || true
 
-    if [ "$result" = true ]
+    if [ "$result" = true ] || [ "$msg" = "String was not recognized as a valid DateTime." ]
     then
         if [ ! -s "$SERVICES_FILE" ] 
         then
@@ -17281,7 +17658,7 @@ Login4gtvAcc()
         fi
     done
     Println "$info 账号验证成功"
-    Println "$info 开启 7 天豪华套餐"
+    Println "$info 开启 30 天豪华套餐"
 
     IFS="^" read -r result msg < <(CurlFake -s -Lm 20 \
         -H 'Origin: https://www.4gtv.tv' \
@@ -17293,9 +17670,9 @@ Login4gtvAcc()
 
     if [ "$result" = true ] 
     then
-        Println "$info 7 天豪华套餐开启成功\n"
+        Println "$info 30 天豪华套餐开启成功\n"
     else
-        Println "$error 开启 7 天豪华套餐发生错误, 请重试\n\n$msg\n"
+        Println "$error 开启 30 天豪华套餐发生错误, 请重试\n\n$msg\n"
     fi
 }
 
@@ -17595,7 +17972,7 @@ _4gtvCron()
         fi
     done
     Println "$info 账号验证成功"
-    Println "$info 开启 7 天豪华套餐"
+    Println "$info 开启 30 天豪华套餐"
 
     IFS="^" read -r result msg < <(CurlFake -s -Lm 20 \
         -H 'Origin: https://www.4gtv.tv' \
@@ -17607,9 +17984,9 @@ _4gtvCron()
 
     if [ "$result" = true ] 
     then
-        Println "$info 7 天豪华套餐开启成功\n"
+        Println "$info 30 天豪华套餐开启成功\n"
     else
-        Println "$error 开启 7 天豪华套餐发生错误, 请重试\n\n$msg\n"
+        Println "$error 开启 30 天豪华套餐发生错误, 请重试\n\n$msg\n"
     fi
 }
 
@@ -22972,7 +23349,7 @@ AntiDDoS()
             MonitorLog "AntiDDoS 启动成功 PID $BASHPID !"
 
             current_ip=${SSH_CLIENT%% *}
-            [ -n "${anti_ddos_level:-}" ] && ((anti_ddos_level++))
+            [ -n "${anti_ddos_level:-}" ] && anti_ddos_level=$((anti_ddos_level+1))
             monitor=true
 
             while true
@@ -23625,7 +24002,7 @@ MonitorHlsRestartChannel()
                 f_count=1
                 for f in "$chnl_output_dir_root/$chnl_seg_dir_path"*.ts
                 do
-                    ((f_count++))
+                    f_count=$((f_count+1))
                 done
 
                 f_num=$((f_count/2))
@@ -23635,7 +24012,7 @@ MonitorHlsRestartChannel()
                 do
                     if [ "$f_count" -lt "$f_num" ] 
                     then
-                        ((f_count++))
+                        f_count=$((f_count+1))
                         continue
                     fi
                     [ -n "$encrypt_command" ] && f="crypto:$f"
@@ -24444,7 +24821,7 @@ MonitorTryAccounts()
                                 f_count=1
                                 for f in "$chnl_output_dir_root/$chnl_seg_dir_path"*.ts
                                 do
-                                    ((f_count++))
+                                    f_count=$((f_count+1))
                                 done
 
                                 f_num=$((f_count/2))
@@ -24454,7 +24831,7 @@ MonitorTryAccounts()
                                 do
                                     if [ "$f_count" -lt "$f_num" ] 
                                     then
-                                        ((f_count++))
+                                        f_count=$((f_count+1))
                                         continue
                                     fi
                                     [ -n "$encrypt_command" ] && f="crypto:$f"
@@ -24659,7 +25036,7 @@ MonitorTryAccounts()
                         f_count=1
                         for f in "$chnl_output_dir_root/$chnl_seg_dir_path"*.ts
                         do
-                            ((f_count++))
+                            f_count=$((f_count+1))
                         done
 
                         f_num=$((f_count/2))
@@ -24669,7 +25046,7 @@ MonitorTryAccounts()
                         do
                             if [ "$f_count" -lt "$f_num" ] 
                             then
-                                ((f_count++))
+                                f_count=$((f_count+1))
                                 continue
                             fi
                             [ -n "$encrypt_command" ] && f="crypto:$f"
@@ -25709,7 +26086,7 @@ Monitor()
                     then
                         loop=1
                     else
-                        ((loop++))
+                        loop=$((loop+1))
                     fi
 
                     while IFS= read -r old_file_path
@@ -25841,7 +26218,7 @@ Monitor()
 
                                     for f in "$LIVE_ROOT/$output_dir_name/${chnls_seg_dir_name[chnls_index]}/"*.ts
                                     do
-                                        ((f_count++))
+                                        f_count=$((f_count+1))
                                     done
 
                                     f_num=$((f_count/2))
@@ -25851,7 +26228,7 @@ Monitor()
                                     do
                                         if [ "$f_count" -lt "$f_num" ] 
                                         then
-                                            ((f_count++))
+                                            f_count=$((f_count+1))
                                             continue
                                         fi
 
@@ -25888,7 +26265,7 @@ Monitor()
                                         do
                                             if [ "$f_count" -lt "$f_num" ] 
                                             then
-                                                ((f_count++))
+                                                f_count=$((f_count+1))
                                                 continue
                                             fi
 
@@ -25920,7 +26297,7 @@ Monitor()
 
                                             if [ "$audio" -eq 0 ] || [ "$video" -eq 0 ] || [[ $video_bitrate -lt $hls_min_bitrate ]]
                                             then
-                                                ((fail_count++))
+                                                fail_count=$((fail_count+1))
                                             fi
 
                                             if [ "$fail_count" -gt 3 ] 
@@ -31446,7 +31823,8 @@ NginxUpdateCFIBMip()
 
     Println "$info 更新 ip ..."
 
-    printf '%s' "#!/bin/bash
+cat > "$HOME"/update_cf_ibm_ip.sh <<EOF
+#!/bin/bash
 echo -e 'set_real_ip_from 127.0.0.0/24;\n#Cloudflare' > $nginx_prefix/conf/cloudflare_ip.conf;
 ibm_ips=(
   50.22.0.0/16
@@ -31468,20 +31846,20 @@ ibm_ips=(
   169.61.0.0/16
   169.62.0.0/16
 )
-for i in \"\${ibm_ips[@]}\"; do
-        echo \"set_real_ip_from \$i;\" >> $nginx_prefix/conf/cloudflare_ip.conf;
+for i in "\${ibm_ips[@]}"; do
+        echo "set_real_ip_from \$i;" >> $nginx_prefix/conf/cloudflare_ip.conf;
 done
 for i in \$(curl https://www.cloudflare.com/ips-v4); do
-        echo \"set_real_ip_from \$i;\" >> $nginx_prefix/conf/cloudflare_ip.conf;
+        echo "set_real_ip_from \$i;" >> $nginx_prefix/conf/cloudflare_ip.conf;
 done
 for i in \$(curl https://www.cloudflare.com/ips-v6); do
-        echo \"set_real_ip_from \$i;\" >> $nginx_prefix/conf/cloudflare_ip.conf;
+        echo "set_real_ip_from \$i;" >> $nginx_prefix/conf/cloudflare_ip.conf;
 done
 echo >> $nginx_prefix/conf/cloudflare_ip.conf;
 echo '# use any of the following two' >> $nginx_prefix/conf/cloudflare_ip.conf;
 echo 'real_ip_header CF-Connecting-IP;' >> $nginx_prefix/conf/cloudflare_ip.conf;
 echo '#real_ip_header X-Forwarded-For;' >> $nginx_prefix/conf/cloudflare_ip.conf;
-" > ~/update_cf_ibm_ip.sh
+EOF
 
     bash ~/update_cf_ibm_ip.sh
 
@@ -31502,7 +31880,8 @@ NginxDisableDomain()
 
 NginxAppendHttpConf()
 {
-    printf '%s' "    server {
+cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+    server {
         listen      $server_http_port;
         server_name $server_domain;
 
@@ -31520,49 +31899,52 @@ NginxAppendHttpConf()
         }
     }
 
-" >> "$nginx_prefix/conf/sites_available/$server_domain.conf"
+EOF
 }
 
 NginxAppendHttpRedirectConf()
 {
     echo && read -p "输入网址: " http_redirect_address
-    printf '%s' "    server {
+cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+    server {
         listen      $server_http_port;
         server_name $server_domain;
 
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
-        proxy_set_header Connection \"\";
+        proxy_set_header Connection "";
 
         location / {
             return 301 $http_redirect_address\$request_uri;
         }
     }
 
-" >> "$nginx_prefix/conf/sites_available/$server_domain.conf"
+EOF
 }
 
 NginxAppendHttpRedirectToHttpsConf()
 {
-    printf '%s' "    server {
+cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+    server {
         listen      $server_http_port;
         server_name $server_domain;
 
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
-        proxy_set_header Connection \"\";
+        proxy_set_header Connection "";
 
         location / {
             return 301 https://$server_domain\$request_uri;
         }
     }
 
-" > "$nginx_prefix/conf/sites_available/$server_domain.conf"
+EOF
 }
 
 NginxAppendHttpsConf()
 {
-    printf '%s' "    server {
+cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+    server {
         listen      $server_https_port ssl;
         server_name $server_domain;
 
@@ -31583,14 +31965,15 @@ NginxAppendHttpsConf()
         }
     }
 
-" >> "$nginx_prefix/conf/sites_available/$server_domain.conf"
+EOF
 }
 
 NginxAppendHttpsRedirectConf()
 {
     echo && read -p "输入网址: " https_redirect_address
-    printf '%s' "    server {
-        listen      $server_https_port;
+cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+    server {
+        listen      $server_https_port ssl;
         server_name $server_domain;
 
         access_log off;
@@ -31600,22 +31983,23 @@ NginxAppendHttpsRedirectConf()
 
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
-        proxy_set_header Connection \"\";
+        proxy_set_header Connection "";
 
         location / {
             return 301 $https_redirect_address\$request_uri;
         }
     }
 
-" >> "$nginx_prefix/conf/sites_available/$server_domain.conf"
+EOF
 }
 
 NginxAppendHttpHttpsRedirectConf()
 {
     echo && read -p "输入网址: " http_https_redirect_address
-    printf '%s' "    server {
+cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+    server {
         listen      $server_http_port;
-        listen      $server_https_port;
+        listen      $server_https_port ssl;
         server_name $server_domain;
 
         access_log off;
@@ -31625,19 +32009,20 @@ NginxAppendHttpHttpsRedirectConf()
 
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
-        proxy_set_header Connection \"\";
+        proxy_set_header Connection "";
 
         location / {
             return 301 $http_https_redirect_address\$request_uri;
         }
     }
 
-" >> "$nginx_prefix/conf/sites_available/$server_domain.conf"
+EOF
 }
 
 NginxAppendHttpHttpsConf()
 {
-    printf '%s' "    server {
+cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+    server {
         listen      $server_http_port;
         listen      $server_https_port ssl;
         server_name $server_domain;
@@ -31659,7 +32044,7 @@ NginxAppendHttpHttpsConf()
         }
     }
 
-" > "$nginx_prefix/conf/sites_available/$server_domain.conf"
+EOF
 }
 
 NginxAddDomain()
@@ -31924,7 +32309,7 @@ ResourceLimit()
     then
         if [ ! -e ~/.bash_profile ] || ! grep -q ulimit < ~/.bash_profile
         then
-cat >> ~/.bash_profile << EOF
+cat >> ~/.bash_profile <<EOF
 ulimit -f unlimited
 ulimit -t unlimited
 ulimit -v unlimited
@@ -31937,7 +32322,7 @@ EOF
     else
         if [ ! -e ~/.profile ] || ! grep -q ulimit < ~/.profile
         then
-cat >> ~/.profile << EOF
+cat >> ~/.profile <<EOF
 ulimit -f unlimited
 ulimit -t unlimited
 ulimit -v unlimited
@@ -32287,7 +32672,7 @@ gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
     if [[ $(ps --no-headers -o comm 1) == "systemd" ]] 
     then
         sed -i "s/LimitNOFILE=.*/LimitNOFILE=$file_max/" /lib/systemd/system/mongod.service
-        sed -i '/TasksAccounting=/a RestartSec=5\nStartLimitIntervalSec=0\nRestart=on-failure' /lib/systemd/system/mongod.service
+        sed -i '/TasksAccounting=/a StartLimitInterval=60s\nStartLimitBurst=5\nRestartSec=5\nRestart=on-failure' /lib/systemd/system/mongod.service
         systemctl daemon-reload
         sed -i "s/destination: file/destination: syslog/" /etc/mongod.conf
         sed -i "s/  logAppend: true/  #logAppend: true/" /etc/mongod.conf
@@ -48089,6 +48474,8 @@ Usage()
 
      `gettext \"pve 打开 Proxmox VE 管理面板\"`
 
+     `gettext \"tv backup 备份所有重要文件\"`
+
      `gettext \"tv ed 选择默认编辑器\"`
 
      `gettext \"tv a 设置自定义命令\"`
@@ -48718,7 +49105,8 @@ then
     if [ ! -s "/etc/systemd/system/$nginx_name.service" ] && [ -d "$nginx_prefix" ]
     then
         ResourceLimit
-        echo "[Unit]
+cat > /etc/systemd/system/$nginx_name.service <<EOF
+[Unit]
 Description=$nginx_name
 After=syslog.target network-online.target remote-fs.target nss-lookup.target
 Wants=network-online.target
@@ -48746,12 +49134,42 @@ LimitNPROC=64000
 LimitMEMLOCK=infinity
 
 [Install]
-WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
+WantedBy=multi-user.target
+EOF
         $NGINX_FILE -s stop 2> /dev/null || true
         systemctl daemon-reload
         systemctl enable "$nginx_name"
         systemctl start "$nginx_name"
     fi
+
+case $* in
+    "e") 
+        if [ ! -d "$nginx_prefix" ] 
+        then
+            Println "$error 尚未安装, 请检查 !\n"
+            exit 1
+        fi
+
+        shopt -s nullglob
+        nginx_confs=("$nginx_prefix"/conf/sites_available/*)
+        shopt -u nullglob
+
+        if [ -z "${nginx_confs:-}" ] 
+        then
+            Println "$error 请先添加域名 !\n"
+            exit 1
+        fi
+
+        nginx_confs=( "$nginx_prefix"/conf/nginx.conf "${nginx_confs[@]}" )
+
+        echo
+        inquirer list_input_index "选择配置文件" nginx_confs nginx_confs_index
+        editor "${nginx_confs[nginx_confs_index]}"
+        exit 0
+    ;;
+    *) 
+    ;;
+esac
 
     Println "  openresty 管理面板 ${normal}${red}[v$sh_ver]${normal}
 
@@ -48851,7 +49269,8 @@ then
     if [ ! -s "/etc/systemd/system/$nginx_name.service" ] && [ -d "$nginx_prefix" ]
     then
         ResourceLimit
-        echo "[Unit]
+cat > /etc/systemd/system/$nginx_name.service <<EOF
+[Unit]
 Description=$nginx_name
 After=syslog.target network-online.target remote-fs.target nss-lookup.target
 Wants=network-online.target
@@ -48879,12 +49298,70 @@ LimitNPROC=64000
 LimitMEMLOCK=infinity
 
 [Install]
-WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
+WantedBy=multi-user.target
+EOF
         $NGINX_FILE -s stop 2> /dev/null || true
         systemctl daemon-reload
         systemctl enable "$nginx_name"
         systemctl start "$nginx_name"
     fi
+
+case ${1:-} in
+    e) 
+        if [ ! -d "$nginx_prefix" ] 
+        then
+            Println "$error 尚未安装, 请检查 !\n"
+            exit 1
+        fi
+
+        shopt -s nullglob
+        nginx_confs=("$nginx_prefix"/conf/sites_available/*)
+        shopt -u nullglob
+
+        if [ -z "${nginx_confs:-}" ] 
+        then
+            Println "$error 请先添加域名 !\n"
+            exit 1
+        fi
+
+        nginx_confs=( "$nginx_prefix"/conf/nginx.conf "${nginx_confs[@]}" )
+
+        echo
+        inquirer list_input_index "选择配置文件" nginx_confs nginx_confs_index
+        editor "${nginx_confs[nginx_confs_index]}"
+        exit 0
+    ;;
+    l) 
+        if [ ! -d "$nginx_prefix" ] 
+        then
+            Println "$error 尚未安装, 请检查 !\n"
+            exit 1
+        fi
+
+        shopt -s nullglob
+        nginx_logs=("$nginx_prefix"/logs/*)
+        shopt -u nullglob
+
+        if [ -z "${nginx_logs:-}" ] 
+        then
+            Println "$error 没有日志 !\n"
+            exit 1
+        fi
+
+        echo
+        inquirer list_input_index "选择日志文件" nginx_logs nginx_logs_index
+
+        if [ "${2:-}" == "t" ] 
+        then
+            tail -f "${nginx_logs[nginx_logs_index]}"
+            exit 0
+        fi
+        editor "${nginx_logs[nginx_logs_index]}"
+        exit 0
+    ;;
+    *) 
+    ;;
+esac
 
     Println "  nginx 管理面板 ${normal}${red}[v$sh_ver]${normal}
 
@@ -49039,24 +49516,12 @@ WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
                 echo -en "0.0.0.0/0\n::/0\n" > ~/allowed-subnets.txt
             fi
 
+            GoInstall
+
             if [[ ! -x "$HOME/go/bin/go-mmproxy" ]] 
             then
                 Println "$info 安装 go-mmproxy"
-
-                GoInstall
-                go get github.com/path-network/go-mmproxy
-
-                if [[ ! -x $(command -v go-mmproxy) ]] 
-                then
-                    export PATH="$PATH:$HOME/go/bin"
-                    DistCheck
-                    if [ "$dist" == "rpm" ] 
-                    then
-                        echo "export PATH=\$PATH:\$HOME/go/bin" >> ~/.bash_profile
-                    else
-                        echo "export PATH=\$PATH:\$HOME/go/bin" >> ~/.profile
-                    fi
-                fi
+                go install github.com/path-network/go-mmproxy@latest
             fi
 
             echo
@@ -49096,7 +49561,10 @@ WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
 
             if [ "$mmproxy_name" == "ssh" ] 
             then
-                Println "$tip 请确保已经设置 ssh 监听地址和端口"
+                Println "$tip 请之后将 nginx 分流 ssh 协议至 $mmproxy_listen, 并将 ssh 监听改为下面输入的地址和端口"
+            elif [ "$mmproxy_name" == "acme" ] 
+            then
+                Println "$tip 请之后将 nginx 分流 acme 协议至 $mmproxy_listen"
             fi
 
             Println "$tip 比如: 127.0.0.1:2222"
@@ -49110,19 +49578,22 @@ WantedBy=multi-user.target" > /etc/systemd/system/$nginx_name.service
                 reload=1
             fi
 
-            echo "[Unit]
+cat > /etc/systemd/system/mmproxy-"$mmproxy_name".service <<EOF
+[Unit]
 Description=mmproxy-$mmproxy_name
 After=syslog.target network-online.target nss-lookup.target
 Wants=network-online.target
 
 [Service]
-ExecStart=$HOME/go/bin/go-mmproxy --allowed-subnets $HOME/allowed-subnets.txt -l $mmproxy_listen -4 $mmproxy_target_v4 -6 $mmproxy_target_v6
+ExecStart=$go_path/bin/go-mmproxy --allowed-subnets $HOME/allowed-subnets.txt -l $mmproxy_listen -4 $mmproxy_target_v4 -6 $mmproxy_target_v6
+StartLimitInterval=60s
+StartLimitBurst=5
 RestartSec=5
-StartLimitIntervalSec=0
 Restart=on-failure
 
 [Install]
-WantedBy=multi-user.target" > "/etc/systemd/system/mmproxy-$mmproxy_name.service"
+WantedBy=multi-user.target
+EOF
 
             if [ "${reload:-0}" -eq 1 ] 
             then
@@ -49136,18 +49607,22 @@ WantedBy=multi-user.target" > "/etc/systemd/system/mmproxy-$mmproxy_name.service
 
             if [ ! -f ~/ip.sh ] 
             then
-                echo "#!/bin/bash
+cat > "$HOME"/ip.sh <<EOF
+#!/bin/bash
 ip rule add from 127.0.0.1/8 iif lo table 100
 ip route add local 0.0.0.0/0 dev lo table 100
 ip -6 rule add from ::1/128 iif lo table 100
-ip -6 route add local ::/0 dev lo table 100" > ~/ip.sh
+ip -6 route add local ::/0 dev lo table 100
+EOF
                 chmod +x ~/ip.sh
             fi
 
             if [ ! -f /etc/rc.local ]
             then
-                echo "#!/bin/bash
-$HOME/ip.sh" > /etc/rc.local
+cat > /etc/rc.local <<EOF
+#!/bin/bash
+$HOME/ip.sh
+EOF
             elif ! grep -q "$HOME/ip.sh" < /etc/rc.local
             then
                 echo "$HOME/ip.sh" >> /etc/rc.local
@@ -49158,10 +49633,11 @@ $HOME/ip.sh" > /etc/rc.local
             if [[ $(systemctl is-active rc-local) == "inactive" ]] 
             then
                 systemctl enable rc-local || true
-                if ! grep -q 'iif lo lookup 100' < <(ip rule list)
-                then
-                    systemctl start rc-local || true
-                fi
+            fi
+
+            if ! grep -q 'iif lo lookup 100' < <(ip rule list)
+            then
+                systemctl restart rc-local || true
             fi
 
             Println "$info mmproxy-$mmproxy_name 设置成功\n"
@@ -49364,7 +49840,7 @@ then
         V2_LINK="https://raw.githubusercontent.com/XTLS/Xray-install/main/install-release.sh"
         V2_LINK_FALLBACK="$FFMPEG_MIRROR_LINK/xray_install-release.sh"
         V2CTL_FILE="/usr/local/bin/xray"
-        V2_CONFIG="/usr/local/etc/xray/config.json"
+        V2_CONFIG="$X_CONFIG"
     elif [ -d /etc/v2ray/ ] 
     then
         systemctl disable v2ray --now > /dev/null 2> /dev/null || true
@@ -52421,6 +52897,13 @@ then
                 Println "$error jq.json 下载出错, 无法连接 github ?"
             fi
 
+            if curl -s -L "https://api.github.com/repos/alist-org/alist/releases/latest" -o "$FFMPEG_MIRROR_ROOT/alist.json_tmp"
+            then
+                mv "$FFMPEG_MIRROR_ROOT/alist.json_tmp" "$FFMPEG_MIRROR_ROOT/alist.json"
+            else
+                Println "$error alist.json 下载出错, 无法连接 github ?"
+            fi
+
             if curl -s -L "https://api.github.com/repos/v2fly/v2ray-core/releases/latest" -o "$FFMPEG_MIRROR_ROOT/v2ray.json_tmp"
             then
                 mv "$FFMPEG_MIRROR_ROOT/v2ray.json_tmp" "$FFMPEG_MIRROR_ROOT/v2ray.json"
@@ -52840,6 +53323,213 @@ then
             fi
             exit 0
         ;;
+        b|backup)
+            # --exclude=exclude_before --include=src/ --include=src/xxx/*** --exclude=src/*** --exclude=exclude_after
+
+            IPTV_ROOT="${IPTV_ROOT%/}"
+            FFMPEG_MIRROR_ROOT="${FFMPEG_MIRROR_ROOT%/}"
+            LIVE_ROOT="${LIVE_ROOT%/}"
+            NODE_ROOT="${NODE_ROOT%/}"
+
+            iptv_source="$IPTV_ROOT"
+
+            iptv_excludes_before=(
+                /c/
+                /ffmpeg-git-'*'
+                /vip/
+                node_modules/
+            )
+
+            ffmpeg_excludes_before=(
+                /Amlogic_s905-kernel-master.zip
+                /builds/
+                /calibre/
+                /dnscrypt/
+                /ffmpeg_c
+                /fontforge-20190413.tar.gz
+                /imgcat.zip
+                /jq-'*'
+                /releases/
+                /v2ray/
+                /xray/
+                '*'.ipk
+                '*'.err
+                '*'.log
+                '*'.pid
+            )
+
+            if [[ "$FFMPEG_MIRROR_ROOT" =~ "$iptv_source"(.*) ]]
+            then
+                relative_path="${BASH_REMATCH[1]:-}"
+                relative_path="${relative_path#/}"
+                if [ -n "$relative_path" ] 
+                then
+                    for i in "${!ffmpeg_excludes_before[@]}"
+                    do
+                        if [[ "${ffmpeg_excludes_before[i]}" == /* ]] 
+                        then
+                            ffmpeg_excludes_before[i]="/${relative_path}${ffmpeg_excludes_before[i]}"
+                        else
+                            ffmpeg_excludes_before[i]="/$relative_path/${ffmpeg_excludes_before[i]}"
+                        fi
+                    done
+                fi
+                iptv_excludes_before+=("${ffmpeg_excludes_before[@]}")
+            else
+                ffmpeg_source="$FFMPEG_MIRROR_ROOT"
+            fi
+
+            if [[ "$LIVE_ROOT" =~ "$IPTV_ROOT"(.+) ]]
+            then
+                iptv_excludes_before+=("${BASH_REMATCH[1]}")
+            fi
+
+            node_excludes_before=(
+                node_modules/
+            )
+
+            if ! [[ "$NODE_ROOT" =~ "$IPTV_ROOT"(.*) ]]
+            then
+                node_source="$NODE_ROOT"
+            fi
+
+            nginx_source=/usr/local/nginx
+
+            nginx_excludes_before=(
+                /logs/'*'.gz
+                node_modules/
+            )
+
+            nginx_includes=(
+                /conf/'***'
+                /html/'***'
+                /logs/'***'
+            )
+
+            nginx_excludes_after=(
+                /'***'
+            )
+
+            openresty_source=/usr/local/openresty
+
+            openresty_excludes_before=(
+                /nginx/logs/'*'.gz
+                node_modules/
+            )
+
+            openresty_includes=(
+                /nginx/
+                /nginx/conf/'***'
+                /nginx/html/'***'
+                /nginx/logs/'***'
+                /nginx/lua/'***'
+            )
+
+            openresty_excludes_after=(
+                /'***'
+            )
+
+            v2ray_source="${V2_CONFIG%/*}"
+
+            xray_source="${X_CONFIG%/*}"
+
+            DistCheck
+
+            if [ "$dist" == "mac" ] 
+            then
+                systemd_source="$HOME"/Library/LaunchAgents
+            else
+                systemd_source=/etc/systemd/system
+            fi
+
+            systemd_includes=(
+                /alist.service
+                /aria2.service
+                /dnscrypt-proxy.service
+                /mmproxy-'*'.service
+                /nginx.service
+                /openresty.service
+                /v2ray.service
+                /xray.service
+                /aios.'*'.service
+                /com.aios.'*'.plist
+            )
+
+            systemd_excludes_after=(
+                /'***'
+            )
+
+            home_source="$HOME"
+
+            home_includes=(
+                /.bash_history
+            )
+
+            home_excludes_after=(
+                /'***'
+            )
+
+            DepInstall rsync
+
+            mkdir -p "$BACKUP_ROOT"
+
+            for backup in iptv nginx openresty v2ray xray ffmpeg node systemd home
+            do
+                rsync_commands=()
+                source="${backup}_source"
+
+                if [[ -z "${!source:-}" ]] 
+                then
+                    continue
+                fi
+
+                source="${!source}"
+
+                if [ ! -d "$source" ] 
+                then
+                    continue
+                fi
+
+                excludes_before=("${backup}_excludes_before"[@])
+
+                if [[ -n "${!excludes_before:-}" ]] 
+                then
+                    excludes_before=("${!excludes_before}")
+                    for exclude in "${excludes_before[@]}"
+                    do
+                        rsync_commands+=( --exclude="$exclude" )
+                    done
+                fi
+
+                includes=("${backup}_includes"[@])
+
+                if [[ -n "${!includes:-}" ]] 
+                then
+                    includes_arr=("${!includes}")
+                    for include in "${includes_arr[@]}"
+                    do
+                        rsync_commands+=( --include="$include" )
+                    done
+                fi
+
+                excludes_after=("${backup}_excludes_after"[@])
+
+                if [[ -n "${!excludes_after:-}" ]] 
+                then
+                    excludes_after=("${!excludes_after}")
+                    for exclude in "${excludes_after[@]}"
+                    do
+                        rsync_commands+=( --exclude="$exclude" )
+                    done
+                fi
+
+                rsync -avP --safe-links --delete --delete-excluded ${rsync_commands[@]+"${rsync_commands[@]}"} "$source/" "$BACKUP_ROOT/$backup/"
+            done
+
+            Println "$info 已创建备份 $BACKUP_ROOT\n"
+
+            exit 0
+        ;;
         *)
         ;;
     esac
@@ -52855,7 +53545,7 @@ then
         Menu
     fi
 else
-    while getopts "i:l:P:o:p:S:t:s:c:v:a:f:d:q:b:r:k:K:m:n:z:H:T:L:CRe" flag
+    while getopts "i:l:P:o:p:S:t:s:c:v:a:f:d:q:b:r:k:K:m:n:z:H:T:L:CReh" flag
     do
         case "$flag" in
             i) stream_link="$OPTARG";;
@@ -52885,7 +53575,7 @@ else
             H) flv_h265=true;;
             T) flv_push_link="$OPTARG";;
             L) flv_pull_link="$OPTARG";;
-            *) Usage;
+            h|*) Usage;
         esac
     done
 

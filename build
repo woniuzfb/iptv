@@ -11,7 +11,7 @@ ReplaceInclude()
         echo "${2:-}if [ \"\$self\" == \"tv\" ] || [ \"\$self\" == \"iptv\" ]"
         echo "${2:-}then"
         ReplaceInclude src/tv "    ${2:-}"
-        bins=(v2 x nx or pve arm ibm cf cx ali lhh)
+        bins=(v2 x nx or pve arm ibm cf cx ali lhh rc cw)
         for bin in "${bins[@]}"
         do
             echo "${2:-}elif [ \"\$self\" == \"$bin\" ]"
@@ -31,11 +31,31 @@ ReplaceInclude()
         replace_name="${replace_name#*/}"
     done
 
+    local here=false here_tag=""
     while IFS= read -r line 
     do
+        if [ "$here" = true ] 
+        then
+            echo "$line"
+            if [ "$line" = "$here_tag" ] 
+            then
+                here=false
+            fi
+            continue
+        elif [[ $line =~ ^([ ]*)cat([ ]) ]] 
+        then
+            here=true
+            here_tag="${line#*<<}"
+            here_tag="${here_tag#"${here_tag%%[![:space:]]*}"}"
+            here_tag=${here_tag%% *}
+            here_tag=${here_tag#-}
+        fi
         if [ -z "$line" ] 
         then
             echo
+        elif [ "$here" = true ]
+        then
+            echo "$line"
         elif [[ $line =~ ^([ ]*)Include\ ([^ ]+) ]] 
         then
             ReplaceInclude ${BASH_REMATCH[2]} "${2:-}${BASH_REMATCH[1]}"

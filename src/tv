@@ -1,222 +1,111 @@
-JQ_FILE="$IPTV_ROOT"/jq
-FFMPEG_ROOT="$IPTV_ROOT"
-
 Include utils/python "$@"
-
 Include utils/ffmpeg "$@"
-
 Include utils/youtube "$@"
-
 Include utils/openssl "$@"
-
 Include utils/pdf2html "$@"
-
 Include utils/imagemagick "$@"
-
 Include utils/imgcat "$@"
-
 Include utils/git "$@"
-
 Include utils/nodejs "$@"
-
 Include utils/mongodb "$@"
-
 Include src/iptv/filter_string "$@"
-
 Include src/iptv/rand_name "$@"
-
 Include src/iptv/sync_file "$@"
-
 Include src/iptv/flv_creator "$@"
-
 Include src/iptv/hls_creator "$@"
-
 Include src/iptv/get_default "$@"
-
 Include src/iptv/get_channels "$@"
-
 Include src/iptv/list_channels "$@"
-
 Include src/iptv/get_channel "$@"
-
 Include src/iptv/list_channel "$@"
-
 Include src/iptv/input_channels "$@"
-
 Include src/iptv/view_channel "$@"
-
 Include src/iptv/parse_hls "$@"
-
 Include src/iptv/parse_youtube "$@"
-
 Include src/iptv/parse_stream "$@"
-
 Include src/iptv/set_stream "$@"
-
 Include src/iptv/add_channel "$@"
-
 Include src/iptv/edit_channel "$@"
-
 Include src/iptv/menu_edit_channel "$@"
-
 Include src/iptv/toggle_channel "$@"
-
 Include src/iptv/check_xtream "$@"
-
 Include src/iptv/start_channel "$@"
-
 Include src/iptv/stop_channel "$@"
-
 Include src/iptv/restart_channel "$@"
-
 Include src/iptv/view_log "$@"
-
 Include src/iptv/delete_channel "$@"
-
 Include src/iptv/edit_default "$@"
-
 Include src/iptv/list_schedule "$@"
-
 Include src/iptv/parse_schedule "$@"
-
 Include src/iptv/search_soccer "$@"
-
 Include src/iptv/add_schedule "$@"
-
 Include src/iptv/edit_schedule "$@"
-
 Include src/iptv/sort_schedule "$@"
-
 Include src/iptv/delete_schedule "$@"
-
 Include src/iptv/menu_schedule "$@"
-
 Include src/iptv/list_monitor "$@"
-
 Include src/iptv/start_monitor "$@"
-
 Include src/iptv/menu_monitor "$@"
-
 Include src/iptv/menu_edit_default "$@"
-
-Include src/iptv/get_service "$@"
-
+Include src/service/get "$@"
 Include src/_4gtv/set_acc "$@"
-
 Include src/_4gtv/reg_acc "$@"
-
 Include src/_4gtv/list_accs "$@"
-
 Include src/_4gtv/login_acc "$@"
-
 Include src/_4gtv/list_acc "$@"
-
 Include src/_4gtv/edit_acc "$@"
-
 Include src/_4gtv/del_acc "$@"
-
 Include src/_4gtv/get_acc_token "$@"
-
 Include src/_4gtv/use_proxy "$@"
-
 Include src/_4gtv/cron "$@"
-
 Include src/_4gtv/enable_cron "$@"
-
 Include src/_4gtv/disable_cron "$@"
-
 Include src/_4gtv/add_link "$@"
-
 Include src/_4gtv/start_link "$@"
-
 Include src/xtream_codes/get_domains "$@"
-
 Include src/xtream_codes/get_channels "$@"
-
 Include src/xtream_codes/add_account "$@"
-
 Include src/xtream_codes/verify_mac "$@"
-
 Include src/xtream_codes/list "$@"
-
 Include src/xtream_codes/list_account "$@"
-
 Include src/xtream_codes/test_account "$@"
-
 Include src/xtream_codes/list_mac "$@"
-
 Include src/xtream_codes/search_channels "$@"
-
 Include src/xtream_codes/list_channels "$@"
-
 Include src/xtream_codes/add_mac "$@"
-
 Include src/vip/set_host "$@"
-
 Include src/vip/add_host "$@"
-
 Include src/vip/edit_host "$@"
-
 Include src/vip/get_hosts "$@"
-
 Include src/vip/list_hosts "$@"
-
 Include src/vip/delete_host "$@"
-
 Include src/vip/set_user "$@"
-
 Include src/vip/add_user "$@"
-
 Include src/vip/edit_user "$@"
-
 Include src/vip/get_users "$@"
-
 Include src/vip/list_users "$@"
-
 Include src/vip/list_user "$@"
-
 Include src/vip/delete_user "$@"
-
 Include src/vip/set_channel "$@"
-
 Include src/vip/add_channel "$@"
-
 Include src/vip/deploy_channel "$@"
-
 Include src/vip/edit_channel "$@"
-
 Include src/vip/list_channels "$@"
-
 Include src/vip/get_stream "$@"
-
 Include src/vip/list_channel "$@"
-
 Include src/vip/delete_channel "$@"
-
 Include src/vip/get_config "$@"
-
 Include src/vip/set_public "$@"
-
 Include src/vip/process_lists "$@"
-
 Include src/vip/get_schedules "$@"
-
 Include src/vip/monitor "$@"
-
 Include src/vip/enable "$@"
-
 Include src/vip/disable "$@"
-
 Include src/vip/list_user_channel "$@"
-
 Include src/vip/verify_license "$@"
-
 Include src/iptv/menu_vip_user "$@"
-
 Include src/iptv/menu_vip "$@"
-
 Include src/iptv/menu_iptv "$@"
-
 Include src/iptv/usage "$@"
 
 Install()
@@ -541,7 +430,7 @@ then
         curl)
             Include src/iptv/cmd_curl "$@"
         ;;
-        b)
+        b|backup)
             Include src/iptv/cmd_backup "$@"
         ;;
         *)

@@ -365,16 +365,18 @@ method=ignore" > /etc/NetworkManager/system-connections/armbian.nmconnection
         then
             if [ -f /etc/NetworkManager/dispatcher.d/promisc.sh ] 
             then
-                printf '%s' '#!/usr/bin/env bash
+cat > /etc/NetworkManager/dispatcher.d/90-promisc.sh <<EOF
+#!/usr/bin/env bash
 
 interface=$1
 event=$2
 
-if [[ $event == "up" ]] && [[ $interface == "eth0" ]] 
+if [[ \$event == "up" ]] && [[ \$interface == "eth0" ]] 
 then
-  ip link set $interface promisc on
-  echo "$interface received $event" | systemd-cat -p info -t dispatch_script
-fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
+  ip link set \$interface promisc on
+  echo "\$interface received \$event" | systemd-cat -p info -t dispatch_script
+fi
+EOF
 
                 rm -f /etc/NetworkManager/dispatcher.d/promisc.sh
                 chmod +x /etc/NetworkManager/dispatcher.d/90-promisc.sh
@@ -588,16 +590,18 @@ method=ignore" > /etc/NetworkManager/system-connections/hMACvLAN.nmconnection
 
         if [ ! -s /etc/NetworkManager/dispatcher.d/90-promisc.sh ] 
         then
-            printf '%s' '#!/usr/bin/env bash
+cat > /etc/NetworkManager/dispatcher.d/90-promisc.sh <<EOF
+#!/usr/bin/env bash
 
 interface=$1
 event=$2
 
-if [[ $event == "up" ]] && [[ $interface == "eth0" ]] 
+if [[ \$event == "up" ]] && [[ \$interface == "eth0" ]] 
 then
-  ip link set $interface promisc on
-  echo "$interface received $event" | systemd-cat -p info -t dispatch_script
-fi' > /etc/NetworkManager/dispatcher.d/90-promisc.sh
+  ip link set \$interface promisc on
+  echo "\$interface received \$event" | systemd-cat -p info -t dispatch_script
+fi
+EOF
 
             rm -f /etc/NetworkManager/dispatcher.d/promisc.sh
             chmod +x /etc/NetworkManager/dispatcher.d/90-promisc.sh

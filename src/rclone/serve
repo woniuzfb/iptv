@@ -1,0 +1,562 @@
+RcloneServeView()
+{
+    ServiceGet rclone serve
+
+    if [ "$rclone_serves_count" -eq 0 ] 
+    then
+        Println "$error 请先添加 rclone 服务\n"
+        return 1
+    fi
+
+    rclone_serves_options=()
+    local i rclone_serves_list=""
+
+    for((i=0;i<rclone_serves_count;i++));
+    do
+        IFS="${delimiters[0]}" read -r -a rclone_serve_addrs <<< "${rclone_serves_addr[i]}"
+
+        rclone_serves_options+=( "${rclone_serves_remote[i]} -> ${rclone_serve_addrs[*]}")
+        rclone_serves_list="${rclone_serves_list}${green}$((i+1)).${normal} 服务: ${rclone_serves_remote[i]}\n协议: ${rclone_serves_protocol[i]}\n监听: ${rclone_serve_addrs[*]}\n参数: ${rclone_serves_args[i]:-无}\n\n"
+    done
+
+    Println "$rclone_serves_list"
+}
+
+RcloneServeAddRemoteValidator()
+{
+    if [ "$1" == "$i18n_cancel" ] || [ "${1:0:1}" == "/" ] 
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+RcloneServeAddAddrValidator()
+{
+    if [ "${1:0:1}" == "/" ] || [ "${1:0:8}" == "unix:///" ] || [[ "$1" =~ ^[0-9.]*:[0-9]+ ]]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+RcloneServeAdd()
+{
+    ServiceGet rclone serve
+
+    rclone_serve_options=( '本地' '远端' )
+    echo
+    inquirer list_input_index "选择服务内容" rclone_serve_options rclone_serve_options_index
+
+    if [ "$rclone_serve_options_index" -eq 0 ] 
+    then
+        echo
+        ExitOnText "输入本地服务路径" rclone_serve_remote RcloneServeAddRemoteValidator
+    else
+        RcloneRemoteView
+        echo
+        inquirer list_input_index "选择服务的远端" rclone_remotes_options rclone_remotes_index
+        rclone_serve_remote="${rclone_remotes_name[rclone_remotes_index]}"
+    fi
+
+    rclone_serve_protocol_options=( webdav nfs )
+    echo
+    inquirer list_input "选择服务协议" rclone_serve_protocol_options rclone_serve_protocol
+
+    rclone_serve_addrs=()
+
+    while true
+    do
+        Println "$tip 比如 1.2.3.4:8000, :8080, :0(自动检测端口), unix:///path/to/socket. 如果使用 socket 或绝对路径, 连接验证将不可用"
+        inquirer text_input "输入监听地址 IP:PORT/socket/绝对路径" rclone_serve_addr :0 RcloneServeAddAddrValidator "地址格式错误"
+
+        rclone_serve_addrs+=("$rclone_serve_addr")
+
+        echo
+        inquirer list_input_index "是否继续添加监听地址" ny_options ny_index
+
+        if [ "$ny_index" -eq 0 ] 
+        then
+            break
+        fi
+    done
+
+    while true 
+    do
+        rclone_serve_htpasswd=$(RandStr)
+        if [ "$rclone_serves_count" -gt 0 ] && EleInArray "$rclone_serve_htpasswd" rclone_serves_htpasswd 
+        then
+            continue
+        fi
+        break
+    done
+
+    echo
+    inquirer text_input "输入服务参数" rclone_serve_args "$i18n_not_set"
+
+    if [ "$rclone_serve_args" == "$i18n_not_set" ] 
+    then
+        rclone_serve_args=""
+    fi
+
+    new_serve=$(
+    $JQ_FILE -n --arg remote "$rclone_serve_remote" --arg protocol "$rclone_serve_protocol" \
+    --argjson addr "$(ToJsonArray rclone_serve_addrs)" --arg htpasswd "$rclone_serve_htpasswd" \
+    --arg args "$rclone_serve_args" \
+        '{
+            remote: $remote,
+            protocol: $protocol,
+            addr: $addr,
+            htpasswd: $htpasswd,
+            args: $args
+        }'
+    )
+
+    jq_path='["rclone","serve"]'
+    JQ add "$SERVICES_CONFIG" "[$new_serve]"
+
+    Println "$info 服务添加成功\n"
+}
+
+RcloneServeEdit()
+{
+    RcloneServeView
+
+    inquirer checkbox_input_indices "选择修改的服务" rclone_serves_options rclone_serves_indices
+
+    rclone_serve_edit_options=( '服务内容' '服务协议' '监听地址' '服务参数' )
+    rclone_serve_options=( '本地' '远端' )
+    rclone_serve_protocol_options=( webdav nfs )
+    rclone_serve_addr_options=( '修改' '删除' )
+
+    for rclone_serves_index in "${rclone_serves_indices[@]}"
+    do
+        echo "${rclone_serves_options[rclone_serves_index]}"
+
+        echo
+        inquirer checkbox_input_indices "选择修改" rclone_serve_edit_options rclone_serve_edit_options_indices
+
+        for rclone_serve_edit_options_index in "${rclone_serve_edit_options_indices[@]}"
+        do
+            case $rclone_serve_edit_options_index in
+                0) 
+                    echo
+                    inquirer list_input_index "选择服务内容" rclone_serve_options rclone_serve_options_index
+
+                    if [ "$rclone_serve_options_index" -eq 0 ] 
+                    then
+                        echo
+                        ExitOnText "输入本地服务路径" rclone_serve_remote RcloneServeAddRemoteValidator
+                    else
+                        RcloneRemoteView
+                        echo
+                        inquirer list_input_index "选择服务的远端" rclone_remotes_options rclone_remotes_index
+                        rclone_serve_remote="${rclone_remotes_name[rclone_remotes_index]}"
+                    fi
+
+                    if [ "$rclone_serve_remote" != "${rclone_serves_remote[rclone_serves_index]}" ] 
+                    then
+                        jq_path='["rclone","serve",'"$rclone_serves_index"',"remote"]'
+                        JQ update "$SERVICES_CONFIG" "$rclone_serve_remote"
+                        Println "$info 服务内容修改成功\n"
+                    fi
+                ;;
+                1)
+                    echo
+                    inquirer list_input "选择服务协议" rclone_serve_protocol_options rclone_serve_protocol
+                    if [ "$rclone_serve_protocol" != "${rclone_serves_protocol[rclone_serves_index]}" ] 
+                    then
+                        jq_path='["rclone","serve",'"$rclone_serves_index"',"protocol"]'
+                        JQ update "$SERVICES_CONFIG" "$rclone_serve_protocol"
+                        Println "$info 服务协议修改成功\n"
+                    fi
+                ;;
+                2) 
+                    rclone_serve_addr="${rclone_serves_addr[i]}"
+                    IFS="${delimiters[0]}" read -r -a rclone_serve_addrs <<< "$rclone_serve_addr"
+                    echo
+                    inquirer checkbox_input_indices "选择监听地址" rclone_serve_addrs rclone_serve_addrs_indices
+                    local rclone_serve_addrs_index_offset=0
+                    for rclone_serve_addrs_index in "${rclone_serve_addrs_indices[@]}"
+                    do
+                        echo
+                        inquirer list_input_index "选择操作 ${rclone_serve_addrs[rclone_serve_addrs_index]}" rclone_serve_addr_options rclone_serve_addr_options_index
+                        if [ "$rclone_serve_addr_options_index" -eq 0 ] 
+                        then
+                            Println "$tip 比如 1.2.3.4:8000, :8080, :0(自动检测端口), unix:///path/to/socket. 如果使用 socket 或绝对路径, 连接验证将不可用"
+                            inquirer text_input "输入新监听地址 IP:PORT/socket/绝对路径" rclone_serve_addr ${rclone_serve_addrs[rclone_serve_addrs_index]} RcloneServeAddAddrValidator "地址格式错误"
+                            if [ "$rclone_serve_addr" != "${rclone_serve_addrs[rclone_serve_addrs_index]}" ] 
+                            then
+                                jq_path='["rclone","serve",'"$rclone_serves_index"',"addr",'"$((rclone_serve_addrs_index-rclone_serve_addrs_index_offset))"']'
+                                JQ update "$SERVICES_CONFIG" "$rclone_serve_addr"
+                                Println "$info 监听地址修改成功\n"
+                            fi
+                        else
+                            jq_path='["rclone","serve",'"$rclone_serves_index"',"addr",'"$((rclone_serve_addrs_index-rclone_serve_addrs_index_offset))"']'
+                            JQ delete "$SERVICES_CONFIG" "$rclone_serve_addr"
+                            rclone_serve_addrs_index_offset=$((rclone_serve_addrs_index_offset+1))
+                            Println "$info 监听地址删除成功\n"
+                        fi
+                    done
+                ;;
+                3)
+                    echo
+                    inquirer text_input "输入服务参数" rclone_serve_args "${rclone_serves_args[rclone_serves_index]:-$i18n_not_set}"
+                    if [ "$rclone_serve_args" == "${rclone_serves_args[rclone_serves_index]:-$i18n_not_set}" ] 
+                    then
+                        continue
+                    fi
+                    jq_path='["rclone","serve",'"$rclone_serves_index"',"args"]'
+                    JQ update "$SERVICES_CONFIG" "$rclone_serve_args"
+                    Println "$info 服务参数修改成功\n"
+                ;;
+            esac
+        done
+    done
+
+    return 0
+}
+
+RcloneServeDel()
+{
+    RcloneServeView
+
+    Println "$tip 也将停止服务"
+    inquirer checkbox_input_indices "选择删除的服务" rclone_serves_options rclone_serves_indices
+
+    local rclone_serves_index_offset=0 i active_indices=()
+
+    for((i=0;i<rclone_serves_count;i++));
+    do
+        if ServiceControl is-active "rclone.serve-$((i+1))"
+        then
+            active_indices+=("$i")
+            Println "$info 暂停服务 ${rclone_serves_options[i]}"
+            ServiceControl stop "rclone.serve-$((i+1))"
+        fi
+    done
+
+    for rclone_serves_index in "${rclone_serves_indices[@]}"
+    do
+        service_name="rclone.serve-$((rclone_serves_index+1))"
+        if ServiceControl is-enabled "$service_name"
+        then
+            Println "$info 正在删除服务 ${rclone_serves_options[rclone_serves_index]}"
+            if ! err_msg=$(ServiceControl disable "$service_name")
+            then
+                Println "$error 删除服务失败, $err_msg\n"
+                continue
+            fi
+        fi
+
+        unset rclone_serves_remote[rclone_serves_index]
+        unset rclone_serves_addr[rclone_serves_index]
+
+        for((i=rclone_serves_index+1;i<rclone_serves_count;i++));
+        do
+            if ServiceControl is-enabled "rclone.serve-$((i+1))"
+            then
+                ServiceControl rename "rclone.serve-$((i+1))" "rclone.serve-$i"
+            fi
+        done
+
+        if [ ${#active_indices[@]} -gt 0 ] 
+        then
+            for i in "${!active_indices[@]}"
+            do
+                if [ "$rclone_serves_index" -lt "${active_indices[i]}" ] 
+                then
+                    active_indices[i]=$((active_indices[i]-1))
+                fi
+            done
+        fi
+
+        jq_path='["rclone","serve",'"$((rclone_serves_index-rclone_serves_index_offset))"']'
+        JQ delete "$SERVICES_CONFIG"
+        rclone_serves_index_offset=$((rclone_serves_index_offset+1))
+    done
+
+    if [ ${#active_indices[@]} -gt 0 ] 
+    then
+        rclone_serves_remote=("${rclone_serves_remote[@]}")
+        rclone_serves_addr=("${rclone_serves_addr[@]}")
+
+        for i in "${active_indices[@]}"
+        do
+            IFS="${delimiters[0]}" read -r -a rclone_serve_addrs <<< "${rclone_serves_addr[i]}"
+            Println "$info 恢复服务 ${rclone_serves_remote[i]} -> ${rclone_serve_addrs[*]}"
+            ServiceControl start "rclone.serve-$((i+1))"
+        done
+    fi
+
+    Println "$info 服务删除成功\n"
+}
+
+RcloneServeExc()
+{
+    RcloneServeView
+
+    inquirer checkbox_input_indices "选择执行的服务" rclone_serves_options rclone_serves_indices
+
+    RcloneConfigUpdate
+
+    for rclone_serves_index in "${rclone_serves_indices[@]}"
+    do
+        service_name="rclone.serve-$((rclone_serves_index+1))"
+        rclone_serve_addr="${rclone_serves_addr[rclone_serves_index]}"
+        IFS="${delimiters[0]}" read -r -a rclone_serve_addrs <<< "$rclone_serve_addr"
+        rclone_serve_list="${rclone_serves_remote[rclone_serves_index]} -> ${rclone_serve_addrs[*]}"
+
+        if ServiceControl is-active "$service_name"
+        then
+            Println "$error $rclone_serve_list 已运行\n"
+            continue
+        fi
+
+        rclone_serve_accs_count=0
+
+        if [ -n "${rclone_serves_user[rclone_serves_index]:-}" ] 
+        then
+            IFS="${delimiters[1]}" read -r -a rclone_serve_users <<< "${rclone_serves_user[rclone_serves_index]}"
+            IFS="${delimiters[1]}" read -r -a rclone_serve_passwords <<< "${rclone_serves_pass[rclone_serves_index]}"
+
+            rclone_serve_accs_count=${#rclone_serve_users[@]}
+        fi
+
+        service_commands=( $(command -v rclone) serve "${rclone_serves_protocol[rclone_serves_index]}" "${rclone_serves_remote[rclone_serves_index]}" )
+        rclone_serve_auth=false
+
+        for rclone_serve_addr in "${rclone_serve_addrs[@]}"
+        do
+            service_commands+=( --addr "$rclone_serve_addr" )
+
+            if [ "$rclone_serve_auth" = false ] && [[ "$rclone_serve_addr" =~ ^[0-9.]*:[0-9]+ ]] 
+            then
+                rclone_serve_auth=true
+            fi
+        done
+
+        if [ "${rclone_serves_protocol[rclone_serves_index]}" != "nfs" ] && [ "$rclone_serve_auth" = true ] && [ "$rclone_serve_accs_count" -gt 0 ] 
+        then
+            if [ ! -f "$RCLONE_ROOT/serve/htpasswd/${rclone_serves_htpasswd[rclone_serves_index]}" ] 
+            then
+                mkdir -p "$RCLONE_ROOT/serve/htpasswd"
+                htpasswd -Bbc "$RCLONE_ROOT/serve/htpasswd/${rclone_serves_htpasswd[rclone_serves_index]}" "${rclone_serve_users[0]}" "${rclone_serve_passwords[0]}"
+                for((i=1;i<rclone_serve_accs_count;i++));
+                do
+                    htpasswd -Bb "$RCLONE_ROOT/serve/htpasswd/${rclone_serves_htpasswd[rclone_serves_index]}" "${rclone_serve_users[i]}" "${rclone_serve_passwords[i]}"
+                done
+            fi
+            service_commands+=( --htpasswd "$RCLONE_ROOT/serve/htpasswd/${rclone_serves_htpasswd[rclone_serves_index]}" )
+        fi
+
+        if [ -n "${rclone_serves_args[rclone_serves_index]:-}" ] 
+        then
+            service_commands+=( ${rclone_serves_args[rclone_serves_index]} )
+        fi
+
+        if ! err_msg=$(ServiceControl start "$service_name" service_commands update)
+        then
+            Println "$error 服务 $rclone_serve_list 失败, $err_msg\n"
+            continue
+        fi
+
+        Println "$info 服务 $rclone_serve_list 执行成功\n"
+    done
+
+    return 0
+}
+
+RcloneServeDeExc()
+{
+    RcloneServeView
+
+    inquirer checkbox_input_indices "选择取消的服务" rclone_serves_options rclone_serves_indices
+
+    for rclone_serves_index in "${rclone_serves_indices[@]}"
+    do
+        service_name="rclone.serve-$((rclone_serves_index+1))"
+        rclone_serve_addr="${rclone_serves_addr[rclone_serves_index]}"
+        IFS="${delimiters[0]}" read -r -a rclone_serve_addrs <<< "$rclone_serve_addr"
+        rclone_serve_list="${rclone_serves_remote[rclone_serves_index]} -> ${rclone_serve_addrs[*]}"
+
+        if ! ServiceControl is-active "$service_name"
+        then
+            Println "$error $rclone_serve_list 未运行\n"
+            continue
+        fi
+
+        if ! err_msg=$(ServiceControl stop "$service_name")
+        then
+            Println "$error 取消服务 $rclone_serve_list 失败, $err_msg\n"
+            continue
+        fi
+
+        Println "$info 取消服务 $rclone_serve_list 成功\n"
+    done
+
+    return 0
+}
+
+RcloneServeAccView()
+{
+    RcloneServeView
+
+    inquirer list_input_index "选择服务" rclone_serves_options rclone_serves_index
+
+    if [ -z "${rclone_serves_user[rclone_serves_index]:-}" ] 
+    then
+        Println "$error 请先添加账号\n"
+        return 1
+    fi
+
+    IFS="${delimiters[1]}" read -r -a rclone_serve_users <<< "${rclone_serves_user[rclone_serves_index]}"
+    IFS="${delimiters[1]}" read -r -a rclone_serve_passwords <<< "${rclone_serves_pass[rclone_serves_index]}"
+
+    rclone_serve_accs_count=${#rclone_serve_users[@]}
+
+    local i rclone_serve_accs_list=""
+    for((i=0;i<rclone_serve_accs_count;i++));
+    do
+        rclone_serve_accs_list="${rclone_serve_accs_list}${green}$((i+1)).${normal} 用户: ${rclone_serve_users[i]} 密码: ${rclone_serve_passwords[i]}\n"
+    done
+
+    Println "$rclone_serve_accs_list\n"
+}
+
+RcloneServeAccAddValidator()
+{
+    if [ "$1" != "$i18n_cancel" ] && [ "$rclone_serve_accs_count" -gt 0 ] && EleInArray "$1" rclone_serve_users
+    then
+        return 1
+    fi
+
+    return 0
+}
+
+RcloneServeAccAdd()
+{
+    HtpasswdInstall
+
+    RcloneServeView
+
+    inquirer list_input_index "选择服务" rclone_serves_options rclone_serves_index
+
+    rclone_serve_accs_count=0
+
+    if [ -n "${rclone_serves_user[rclone_serves_index]:-}" ] 
+    then
+        IFS="${delimiters[1]}" read -r -a rclone_serve_users <<< "${rclone_serves_user[rclone_serves_index]}"
+        IFS="${delimiters[1]}" read -r -a rclone_serve_passwords <<< "${rclone_serves_pass[rclone_serves_index]}"
+
+        rclone_serve_accs_count=${#rclone_serve_users[@]}
+    fi
+
+    echo
+    ExitOnText "输入账号" rclone_serve_user RcloneServeAccAddValidator "账号已存在"
+
+    echo
+    ExitOnText "输入密码" rclone_serve_pass
+
+    new_acc=$(
+    $JQ_FILE -n --arg user "$rclone_serve_user" --arg pass "$rclone_serve_pass" \
+        '{
+            user: $user,
+            pass: $pass
+        }'
+    )
+
+    jq_path='["rclone","serve",'"$rclone_serves_index"',"accs"]'
+    JQ add "$SERVICES_CONFIG" "[$new_acc]"
+
+    if [ ! -f "$RCLONE_ROOT/serve/htpasswd/${rclone_serves_htpasswd[rclone_serves_index]}" ] 
+    then
+        mkdir -p "$RCLONE_ROOT/serve/htpasswd"
+        htpasswd -Bbc "$RCLONE_ROOT/serve/htpasswd/${rclone_serves_htpasswd[rclone_serves_index]}" "$rclone_serve_user" "$rclone_serve_pass"
+    else
+        htpasswd -Bb "$RCLONE_ROOT/serve/htpasswd/${rclone_serves_htpasswd[rclone_serves_index]}" "$rclone_serve_user" "$rclone_serve_pass"
+    fi
+
+    Println "$info 账号添加成功\n"
+}
+
+RcloneServeAccEditValidator()
+{
+    if [ "$rclone_serve_user" == "${rclone_serve_users[rclone_serve_users_index]}" ] 
+    then
+        return 0
+    fi
+
+    if EleInArray "$1" rclone_serve_users
+    then
+        return 1
+    fi
+
+    return 0
+}
+
+RcloneServeAccEdit()
+{
+    RcloneServeAccView
+
+    rclone_serve_acc_edit_options=( '修改账号' '修改密码' )
+
+    echo
+    inquirer checkbox_input_indices "选择账号" rclone_serve_users rclone_serve_accs_indices
+
+    for rclone_serve_accs_index in "${rclone_serve_accs_indices[@]}"
+    do
+        echo
+        inquirer checkbox_input_indices "选择操作 ${rclone_serve_users[rclone_serve_accs_index]}" rclone_serve_acc_edit_options rclone_serve_acc_edit_options_indices
+        for rclone_serve_acc_edit_options_index in "${rclone_serve_acc_edit_options_indices[@]}"
+        do
+            if [ "$rclone_serve_acc_edit_options_index" -eq 0 ] 
+            then
+                echo
+                inquirer text_input "输入新账号" rclone_serve_user "${rclone_serve_users[rclone_serve_accs_index]}" RcloneServeAccEditValidator "账号已存在"
+                if [ "$rclone_serve_user" != "${rclone_serve_users[rclone_serve_accs_index]}" ] 
+                then
+                    jq_path='["rclone","serve",'"$rclone_serves_index"',"accs",'"$rclone_serve_accs_index"',"user"]'
+                    JQ update "$SERVICES_CONFIG" "$rclone_serve_user"
+                    htpasswd -D "$RCLONE_ROOT/serve/htpasswd/${rclone_serves_htpasswd[rclone_serves_index]}" "${rclone_serve_users[rclone_serve_accs_index]}"
+                    htpasswd -Bb "$RCLONE_ROOT/serve/htpasswd/${rclone_serves_htpasswd[rclone_serves_index]}" "$rclone_serve_user" "${rclone_serve_passwords[rclone_serve_accs_index]}"
+                    Println "$info 账号修改成功\n"
+                fi
+            else
+                echo
+                inquirer text_input "输入新密码" rclone_serve_pass "${rclone_serve_passwords[rclone_serve_accs_index]}"
+                if [ "$rclone_serve_pass" != "${rclone_serve_passwords[rclone_serve_accs_index]}" ] 
+                then
+                    jq_path='["rclone","serve",'"$rclone_serves_index"',"accs",'"$rclone_serve_accs_index"',"pass"]'
+                    JQ update "$SERVICES_CONFIG" "$rclone_serve_pass"
+                    htpasswd -Bb "$RCLONE_ROOT/serve/htpasswd/${rclone_serves_htpasswd[rclone_serves_index]}" "${rclone_serve_users[rclone_serve_accs_index]}" "$rclone_serve_pass"
+                    Println "$info 密码修改成功\n"
+                fi
+            fi
+        done
+    done
+
+    return 0
+}
+
+RcloneServeAccDel()
+{
+    RcloneServeAccView
+
+    echo
+    inquirer checkbox_input_indices "选择账号" rclone_serve_users rclone_serve_accs_indices
+
+    local rclone_serve_accs_index_offset=0
+
+    for rclone_serve_accs_index in "${rclone_serve_accs_indices[@]}"
+    do
+        jq_path='["rclone","serve",'"$rclone_serves_index"',"accs",'"$((rclone_serve_accs_index-rclone_serve_accs_index_offset))"']'
+        JQ delete "$SERVICES_CONFIG"
+        htpasswd -D "$RCLONE_ROOT/serve/htpasswd/${rclone_serves_htpasswd[rclone_serves_index]}" "${rclone_serve_users[rclone_serve_accs_index]}"
+        rclone_serve_accs_index_offset=$((rclone_serve_accs_index_offset+1))
+    done
+
+    Println "$info 账号删除成功\n"
+}

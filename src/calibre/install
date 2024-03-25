@@ -1,0 +1,59 @@
+CalibreInstall()
+{
+    if [ "$dist" == "mac" ] 
+    then
+        brew install --cask calibre
+    else
+        DepInstall wget
+        DepInstall xdg-utils
+        if [ "$dist" == "rpm" ] 
+        then
+            DepInstall xz
+            DepInstall libglvnd-opengl
+            DepInstall libxcb-cursor-devel
+            DepInstall nss
+        else
+            DepInstall xz-utils
+            DepInstall libopengl0
+            DepInstall libxcb-cursor0
+            DepInstall libnss3
+        fi
+        ImageMagickInstall
+        DepInstall libegl1
+        PythonInstall
+        pip3 install pyqt6
+        mkdir -p "$CALIBRE_ROOT"/bin
+        sudo -v && wget -nv -O- https://download.calibre-ebook.com/linux-installer.sh | sudo sh /dev/stdin install_dir="$CALIBRE_ROOT"/bin
+    fi
+
+    Println "$info calibre 安装/更新成功\n"
+}
+
+CalibrePluginInstall()
+{
+    if { [ "$dist" == "mac" ] && [ ! -d /Applications/calibre.app ]; } || { [ "$dist" != "mac" ] && [ ! -d "$CALIBRE_ROOT"/bin ]; }
+    then
+        CalibreInstall
+    fi
+
+    if [ "$dist" == "mac" ] 
+    then
+        CALIBRE_BIN_ROOT="/Applications/calibre.app/Contents/MacOS"
+    else
+        CALIBRE_BIN_ROOT="$CALIBRE_ROOT"/bin/calibre
+    fi
+
+    local plugin_name="$1" plugin_grep=$("$CALIBRE_BIN_ROOT"/calibre-customize -l)
+    if ! grep -q "$plugin_name" <<< "$plugin_grep"
+    then
+        DepInstall curl
+        mkdir -p "$CALIBRE_ROOT"/plugins
+        if ! curl -L -o "${CALIBRE_ROOT}/plugins/${plugin_name}.zip" "$FFMPEG_MIRROR_LINK/calibre/plugins/${plugin_name}.zip"
+        then
+            Println "$error $plugin_name 插件不存在\n"
+            return 1
+        fi
+        "$CALIBRE_BIN_ROOT"/calibre-customize -a "${CALIBRE_ROOT}/plugins/${plugin_name}.zip"
+        Println "$info $plugin_name 插件安装成功\n"
+    fi
+}

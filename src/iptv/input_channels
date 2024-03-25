@@ -79,7 +79,7 @@ InputChannelsIndex()
                     continue 2
                 elif [[ $chnl_index_start -gt 0 ]] && [[ $chnl_index_end -le $chnls_count ]] && [[ $chnl_index_end -gt $chnl_index_start ]] 
                 then
-                    ((chnl_index_start--))
+                    chnl_index_start=$((chnl_index_start-1))
                     for((i=chnl_index_start;i<chnl_index_end;i++));
                     do
                         chnls_pid_chosen+=("${chnls_pid[i]}")
@@ -94,7 +94,7 @@ InputChannelsIndex()
                 Println "$error $i18n_input_correct_no\n"
                 continue 2
             else
-                ((chnl_index--))
+                chnl_index=$((chnl_index-1))
                 chnls_pid_chosen+=("${chnls_pid[chnl_index]}")
                 chnls_indices+=("$chnl_index")
             fi
