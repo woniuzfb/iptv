@@ -1,24 +1,27 @@
-# All In One Script
+<details>
+<summary><h1>All In One Script</h1></summary>
 
-- [All In One Script](#all-in-one-script)
-  - [V2ray](#v2ray)
-  - [Xray](#xray)
-  - [Nginx](#nginx)
-  - [Openresty](#openresty)
-  - [Armbian](#armbian)
-  - [Proxmox VE](#proxmox-ve)
-  - [IBM Cloud Foundry](#ibm-cloud-foundry)
-  - [Cloudflare partner,workers](#cloudflare-partnerworkers)
-  - [FFmpeg](#ffmpeg)
-    - [自动解析直播源](#自动解析直播源)
-    - [快捷键](#快捷键)
-    - [参数详解](#参数详解)
-    - [举例](#举例)
-  - [Alist](#alist)
-  - [Rclone](#rclone)
-  - [Calibre](#calibre)
-  - [LianHuanHua](#lianhuanhua)
-  - [Dev](#dev)
+- [V2ray](#v2ray)
+- [Xray](#xray)
+- [Nginx](#nginx)
+- [Openresty](#openresty)
+- [Armbian](#armbian)
+- [Proxmox VE](#proxmox-ve)
+- [IBM Cloud Foundry](#ibm-cloud-foundry)
+- [Cloudflare partner,workers](#cloudflare-partnerworkers)
+- [FFmpeg](#ffmpeg)
+  - [自动解析直播源](#自动解析直播源)
+  - [快捷键](#快捷键)
+  - [参数详解](#参数详解)
+  - [举例](#举例)
+- [Alist](#alist)
+- [Rclone](#rclone)
+- [Calibre](#calibre)
+- [LianHuanHua](#lianhuanhua)
+- [Docker](#docker)
+- [Dev](#dev)
+
+</details>
 
 ## V2ray
 
@@ -46,6 +49,8 @@ wget https://woniuzfb.github.io/iptv/x.sh && bash x.sh
 wget https://woniuzfb.github.io/iptv/nx.sh && bash nx.sh
 ```
 
+<details>
+
 `nx` 打开 Nginx 管理面板
 
 - 使用官方 crossplane 解析配置
@@ -58,6 +63,8 @@ wget https://woniuzfb.github.io/iptv/nx.sh && bash nx.sh
 - dnscrypt proxy
 - iperf3
 
+</details>
+
 ---
 
 ## Openresty
@@ -66,7 +73,11 @@ wget https://woniuzfb.github.io/iptv/nx.sh && bash nx.sh
 wget https://woniuzfb.github.io/iptv/or.sh && bash or.sh
 ```
 
+<details>
+
 `or` 打开 OpenResty 管理面板
+
+</details>
 
 ---
 
@@ -75,6 +86,8 @@ wget https://woniuzfb.github.io/iptv/or.sh && bash or.sh
 ``` bash
 wget https://woniuzfb.github.io/iptv/arm.sh && bash arm.sh
 ```
+
+<details>
 
 `arm` 打开 Armbian 管理面板
 
@@ -86,6 +99,8 @@ wget https://woniuzfb.github.io/iptv/arm.sh && bash arm.sh
 - 一键配置透明代理(直连国内, 代理国外), 配置文件保存/切换
 - NAT类型检测
 
+</details>
+
 ---
 
 ## Proxmox VE
@@ -93,6 +108,8 @@ wget https://woniuzfb.github.io/iptv/arm.sh && bash arm.sh
 ``` bash
 wget https://woniuzfb.github.io/iptv/pve.sh && bash pve.sh
 ```
+
+<details>
 
 `pve` 打开 Proxmox VE 管理面板
 
@@ -102,6 +119,8 @@ wget https://woniuzfb.github.io/iptv/pve.sh && bash pve.sh
 - xray/v2ray core 切换
 - 一键配置透明代理(直连国内, 代理国外), 配置文件保存/切换
 
+</details>
+
 ---
 
 ## IBM Cloud Foundry
@@ -110,11 +129,15 @@ wget https://woniuzfb.github.io/iptv/pve.sh && bash pve.sh
 wget https://woniuzfb.github.io/iptv/ibm.sh && bash ibm.sh
 ```
 
+<details>
+
 `ibm` 打开 ibm CF 管理面板
 
 `ibm v2` 打开 ibm v2ray APP 管理面板
 
 `ibm x` 打开 ibm xray  APP 管理面板
+
+</details>
 
 ---
 
@@ -123,6 +146,8 @@ wget https://woniuzfb.github.io/iptv/ibm.sh && bash ibm.sh
 ``` bash
 wget https://woniuzfb.github.io/iptv/cf.sh && bash cf.sh
 ```
+
+<details>
 
 `cf` 打开 cloudflare partner,workers 管理面板
 
@@ -139,6 +164,8 @@ wget https://woniuzfb.github.io/iptv/cf.sh && bash cf.sh
   - 可以设置中转 IBM CF
 - 账号可能会被 cloudflare 列入黑名单, 无法使用 api
 
+</details>
+
 ---
 
 ## FFmpeg
@@ -146,6 +173,8 @@ wget https://woniuzfb.github.io/iptv/cf.sh && bash cf.sh
 ``` bash
 wget https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 ```
+
+<details>
 
 `tv` 打开 iptv 管理面板
 
@@ -254,6 +283,8 @@ wget https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 
 - 或者输入 tv 打开 HLS 面板， tv f 打开 FLV 面板，使用方法  **Enter**
 
+</details>
+
 ## Alist
 
 ```bash
@@ -266,10 +297,14 @@ wget https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 ./debug rc
 ```
 
+<details>
+
 - remote
 - mount
 - serve
 - sync
+
+</details>
 
 ## Calibre
 
@@ -277,8 +312,12 @@ wget https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 ./debug cw
 ```
 
+<details>
+
 - calibre-web
 - kcc
+
+</details>
 
 ## LianHuanHua
 
@@ -286,8 +325,25 @@ wget https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 ./debug lhh
 ```
 
+<details>
+
 - 1w+ 某某分享 (知乎 + 头条)
 - 某某全站 (号称7成连环画?)
+
+</details>
+
+## Docker
+
+```bash
+./debug dr
+```
+
+<details>
+
+- traefik
+- authelia
+
+</details>
 
 ## Dev
 

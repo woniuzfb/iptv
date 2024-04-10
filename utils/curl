@@ -8,15 +8,15 @@ CurlImpersonateInstall()
     DepsCheck
     ArchCheck
 
+    DepInstall ca-certificates
+
     if [ "$dist" == "mac" ] 
     then
         DepInstall nss
-        DepInstall ca-certificates
     elif [ "$dist" == "rpm" ] 
     then
         DepInstall nss
         DepInstall nss-pem
-        DepInstall ca-certificates
     else
         DepInstall libnss3
         if [ "$dist" == "ubu" ] && grep -q "bionic" < "/etc/apt/sources.list" 
@@ -25,7 +25,6 @@ CurlImpersonateInstall()
         else
             DepInstall nss-plugin-pem
         fi
-        DepInstall ca-certificates
     fi
 
     JQInstall

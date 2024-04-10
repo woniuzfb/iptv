@@ -6,11 +6,11 @@ IperfInstall()
 
     if [ -z "${2:-}" ] 
     then
-        install="安装"
         if [[ -x $(command -v iperf3) ]] 
         then
             return 0
         fi
+        install="安装"
     elif [[ ! -x $(command -v iperf3) ]] 
     then
         install="安装"
@@ -19,6 +19,7 @@ IperfInstall()
     if [ "$dist" == "mac" ] 
     then
         brew install iperf3
+        Println "$info iperf3 ${install}成功\n"
         return 0
     fi
 

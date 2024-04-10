@@ -416,7 +416,7 @@ case ${1:-} in
         nginx_confs=( "$nginx_prefix"/conf/nginx.conf "${nginx_confs[@]}" )
 
         echo
-        inquirer list_input_index "选择配置文件" nginx_confs nginx_confs_index
+        inquirer list_input_index "选择配置文件" nginx_confs nginx_confs_index 20
         editor "${nginx_confs[nginx_confs_index]}"
         exit 0
     ;;
@@ -438,7 +438,7 @@ case ${1:-} in
         fi
 
         echo
-        inquirer list_input_index "选择日志文件" nginx_logs nginx_logs_index
+        inquirer list_input_index "选择日志文件" nginx_logs nginx_logs_index 20
 
         if [ "${2:-}" == "t" ] 
         then

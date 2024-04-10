@@ -31880,7 +31880,7 @@ NginxDisableDomain()
 
 NginxAppendHttpConf()
 {
-cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+cat >> "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
     server {
         listen      $server_http_port;
         server_name $server_domain;
@@ -31905,7 +31905,7 @@ EOF
 NginxAppendHttpRedirectConf()
 {
     echo && read -p "输入网址: " http_redirect_address
-cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+cat >> "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
     server {
         listen      $server_http_port;
         server_name $server_domain;
@@ -31924,7 +31924,7 @@ EOF
 
 NginxAppendHttpRedirectToHttpsConf()
 {
-cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+cat >> "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
     server {
         listen      $server_http_port;
         server_name $server_domain;
@@ -31943,7 +31943,7 @@ EOF
 
 NginxAppendHttpsConf()
 {
-cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+cat >> "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
     server {
         listen      $server_https_port ssl;
         server_name $server_domain;
@@ -31971,7 +31971,7 @@ EOF
 NginxAppendHttpsRedirectConf()
 {
     echo && read -p "输入网址: " https_redirect_address
-cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+cat >> "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
     server {
         listen      $server_https_port ssl;
         server_name $server_domain;
@@ -31996,7 +31996,7 @@ EOF
 NginxAppendHttpHttpsRedirectConf()
 {
     echo && read -p "输入网址: " http_https_redirect_address
-cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+cat >> "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
     server {
         listen      $server_http_port;
         listen      $server_https_port ssl;
@@ -32021,7 +32021,7 @@ EOF
 
 NginxAppendHttpHttpsConf()
 {
-cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+cat >> "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
     server {
         listen      $server_http_port;
         listen      $server_https_port ssl;
@@ -49167,6 +49167,34 @@ case $* in
         editor "${nginx_confs[nginx_confs_index]}"
         exit 0
     ;;
+    l) 
+        if [ ! -d "$nginx_prefix" ] 
+        then
+            Println "$error 尚未安装, 请检查 !\n"
+            exit 1
+        fi
+
+        shopt -s nullglob
+        nginx_logs=("$nginx_prefix"/logs/*)
+        shopt -u nullglob
+
+        if [ -z "${nginx_logs:-}" ] 
+        then
+            Println "$error 没有日志 !\n"
+            exit 1
+        fi
+
+        echo
+        inquirer list_input_index "选择日志文件" nginx_logs nginx_logs_index 20
+
+        if [ "${2:-}" == "t" ] 
+        then
+            tail -f "${nginx_logs[nginx_logs_index]}"
+            exit 0
+        fi
+        editor "${nginx_logs[nginx_logs_index]}"
+        exit 0
+    ;;
     *) 
     ;;
 esac
@@ -49327,7 +49355,7 @@ case ${1:-} in
         nginx_confs=( "$nginx_prefix"/conf/nginx.conf "${nginx_confs[@]}" )
 
         echo
-        inquirer list_input_index "选择配置文件" nginx_confs nginx_confs_index
+        inquirer list_input_index "选择配置文件" nginx_confs nginx_confs_index 20
         editor "${nginx_confs[nginx_confs_index]}"
         exit 0
     ;;
@@ -49349,7 +49377,7 @@ case ${1:-} in
         fi
 
         echo
-        inquirer list_input_index "选择日志文件" nginx_logs nginx_logs_index
+        inquirer list_input_index "选择日志文件" nginx_logs nginx_logs_index 20
 
         if [ "${2:-}" == "t" ] 
         then

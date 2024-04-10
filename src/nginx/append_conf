@@ -1,6 +1,6 @@
 NginxAppendHttpConf()
 {
-cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+cat >> "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
     server {
         listen      $server_http_port;
         server_name $server_domain;
@@ -25,7 +25,7 @@ EOF
 NginxAppendHttpRedirectConf()
 {
     echo && read -p "输入网址: " http_redirect_address
-cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+cat >> "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
     server {
         listen      $server_http_port;
         server_name $server_domain;
@@ -44,7 +44,7 @@ EOF
 
 NginxAppendHttpRedirectToHttpsConf()
 {
-cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+cat >> "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
     server {
         listen      $server_http_port;
         server_name $server_domain;
@@ -54,7 +54,7 @@ cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
         proxy_set_header Connection "";
 
         location / {
-            return 301 https://$server_domain\$request_uri;
+            return 301 https://\$server_domain\$request_uri;
         }
     }
 
@@ -63,7 +63,7 @@ EOF
 
 NginxAppendHttpsConf()
 {
-cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+cat >> "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
     server {
         listen      $server_https_port ssl;
         server_name $server_domain;
@@ -91,7 +91,7 @@ EOF
 NginxAppendHttpsRedirectConf()
 {
     echo && read -p "输入网址: " https_redirect_address
-cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+cat >> "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
     server {
         listen      $server_https_port ssl;
         server_name $server_domain;
@@ -116,7 +116,7 @@ EOF
 NginxAppendHttpHttpsRedirectConf()
 {
     echo && read -p "输入网址: " http_https_redirect_address
-cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+cat >> "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
     server {
         listen      $server_http_port;
         listen      $server_https_port ssl;
@@ -141,7 +141,7 @@ EOF
 
 NginxAppendHttpHttpsConf()
 {
-cat > "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
+cat >> "$nginx_prefix/conf/sites_available/$server_domain.conf" <<EOF
     server {
         listen      $server_http_port;
         listen      $server_https_port ssl;
