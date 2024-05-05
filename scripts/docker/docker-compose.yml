@@ -1,0 +1,146 @@
+name: aios
+
+networks:
+  net:
+    driver: bridge
+
+secrets:
+  JWT_SECRET:
+    file: ${PWD}/data/authelia/secrets/JWT_SECRET
+  SESSION_SECRET:
+    file: ${PWD}/data/authelia/secrets/SESSION_SECRET
+  SESSION_REDIS_PASSWORD:
+    file: ${PWD}/data/authelia/secrets/SESSION_REDIS_PASSWORD
+  STORAGE_POSTGRES_PASSWORD:
+    file: ${PWD}/data/authelia/secrets/STORAGE_POSTGRES_PASSWORD
+  STORAGE_ENCRYPTION_KEY:
+    file: ${PWD}/data/authelia/secrets/STORAGE_ENCRYPTION_KEY
+
+services:
+  traefik:
+    image: traefik:latest
+    container_name: traefik
+    networks:
+      net:
+        aliases: []
+    ports:
+      - 80:80
+      - 443:443
+      - 8080:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PWD}/data/traefik/config:/etc/traefik
+      - ${PWD}/data/traefik/logs:/var/log/traefik
+      - ${PWD}/data/traefik/plugins-local:/plugins-local
+      - ${PWD}/certs/traefik:/certs
+    environment:
+      DOMAIN: ${TRAEFIK_DOMAIN}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.api.rule=Host(`traefik.${TRAEFIK_DOMAIN}`)
+      - traefik.http.routers.api.entrypoints=websecure
+      - traefik.http.routers.api.service=api@internal
+      - traefik.http.routers.api.tls=true
+      - traefik.http.routers.api.tls.options=default
+      - traefik.http.routers.api.middlewares=authelia@docker
+
+  whoami:
+    image: "traefik/whoami"
+    container_name: whoami
+    restart: unless-stopped
+    networks:
+      - net
+    expose:
+      - 80
+    labels:
+      - traefik.enable=true
+      - 'traefik.http.routers.whoami.rule=Host(`traefik.${TRAEFIK_DOMAIN}`) && Path(`/whoami`)'
+
+  secure:
+    image: traefik/whoami
+    container_name: secure
+    restart: unless-stopped
+    networks:
+      - net
+    expose:
+      - 80
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.secure.rule=Host(`secure.${AUTHELIA_DOMAIN}`)
+      - traefik.http.routers.secure.entrypoints=websecure
+      - traefik.http.routers.secure.tls=true
+      - traefik.http.routers.secure.tls.options=default
+      - traefik.http.routers.secure.middlewares=authelia@docker
+
+  public:
+    image: traefik/whoami
+    container_name: public
+    restart: unless-stopped
+    networks:
+      - net
+    expose:
+      - 80
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.public.rule=Host(`public.${AUTHELIA_DOMAIN}`)
+      - traefik.http.routers.public.entrypoints=websecure
+      - traefik.http.routers.public.tls=true
+      - traefik.http.routers.public.tls.options=default
+      - traefik.http.routers.public.middlewares=authelia@docker
+
+  authelia:
+    image: docker.io/authelia/authelia:latest
+    container_name: authelia
+    restart: unless-stopped
+    networks:
+      net:
+        aliases: []
+    expose:
+      - 9091
+    ports:
+      - 127.0.0.1:9091:9091
+    volumes:
+      - ${PWD}/data/authelia/config:/config
+      - ${PWD}/data/authelia/logs:/var/log/authelia
+    secrets:
+      - JWT_SECRET
+      - SESSION_SECRET
+      - SESSION_REDIS_PASSWORD
+      - STORAGE_POSTGRES_PASSWORD
+      - STORAGE_ENCRYPTION_KEY
+    healthcheck:
+      disable: true
+    environment:
+      AUTHELIA_JWT_SECRET_FILE: /run/secrets/JWT_SECRET
+      AUTHELIA_SESSION_SECRET_FILE: /run/secrets/SESSION_SECRET
+      AUTHELIA_SESSION_REDIS_PASSWORD_FILE: /run/secrets/SESSION_REDIS_PASSWORD
+      AUTHELIA_STORAGE_POSTGRES_PASSWORD_FILE: /run/secrets/STORAGE_POSTGRES_PASSWORD
+      AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE: /run/secrets/STORAGE_ENCRYPTION_KEY
+      X_AUTHELIA_CONFIG_FILTERS: template
+      DOMAIN: ${AUTHELIA_DOMAIN}
+      TZ: Asia/Shanghai
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.authelia.rule=Host(`authelia.${AUTHELIA_DOMAIN}`)
+      - traefik.http.routers.authelia.entrypoints=websecure
+      - traefik.http.routers.authelia.tls=true
+      - traefik.http.routers.authelia.tls.options=default
+      - traefik.http.middlewares.authelia.forwardauth.address=http://authelia:9091/api/authz/forward-auth
+      - traefik.http.middlewares.authelia.forwardauth.trustForwardHeader=true
+      - traefik.http.middlewares.authelia.forwardauth.authResponseHeaders=Remote-User,Remote-Groups,Remote-Name,Remote-Email
+
+  redis:
+    image: redis:alpine
+    container_name: redis
+    volumes:
+      - ${PWD}/data/redis:/data
+    networks:
+      - net
+    expose:
+      - 6379
+    restart: unless-stopped
+    secrets:
+      - SESSION_REDIS_PASSWORD
+    environment:
+      TZ: Asia/Shanghai
+    command: /bin/sh -c 'redis-server --appendonly yes --requirepass "$$(< /run/secrets/SESSION_REDIS_PASSWORD)"'

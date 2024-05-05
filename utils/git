@@ -1,15 +1,25 @@
 GitInstall()
 {
-    if [ "$dist" == "rpm" ] 
+    if [[ -x $(command -v git) ]] 
     then
-        yum -y install git > /dev/null
-    elif [ "$dist" == "ubu" ] 
-    then
-        add-apt-repository ppa:git-core/ppa -y > /dev/null 
-        AptUpdate
-        apt-get -y install git > /dev/null
-    else
-        apt-get -y install git > /dev/null
+        return 0
     fi
-    Println "$info git 安装成功...\n"
+
+    Println "$info 安装 git"
+
+    case $dist in
+        mac) brew install git
+        ;;
+        rpm) yum -y install git
+        ;;
+        deb) apt-get -y install git
+        ;;
+        ubu) 
+            add-apt-repository ppa:git-core/ppa -y
+            apt-get -y update
+            apt-get -y install git
+        ;;
+    esac
+
+    Println "$info git 安装成功\n"
 }

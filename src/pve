@@ -1,13 +1,8 @@
 Include utils/apt "$@"
-
 Include utils/vim "$@"
-
 Include utils/dnscrypt "$@"
-
 Include src/proxmox/get_vms "$@"
-
 Include src/proxmox/list_vms "$@"
-
 Include src/proxmox/select_vm "$@"
 
 if [[ ! -x $(command -v pveum) ]] 
@@ -260,7 +255,7 @@ case $pve_num in
         then
             Println "$info 安装 nbfc..."
 
-            DepInstall git
+            GitInstall
             DepInstall curl
             DepInstall unzip
 

@@ -28,6 +28,7 @@ ARM_FILE=/usr/local/bin/arm
 PVE_FILE=/usr/local/bin/pve
 LOG_FILE="$HOME"/iptv.log
 JQ_FILE=/usr/local/bin/jq
+YQ_FILE=/usr/local/bin/yq
 FFMPEG_FILE=/usr/local/bin/ffmpeg
 FFPROBE_FILE=/usr/local/bin/ffprobe
 CURL_IMPERSONATE_FILE=/usr/local/bin/curl-impersonate
@@ -127,3 +128,12 @@ CALIBRE_ROOT="$SERVICES_ROOT"/calibre
 # Kcc
 KCC_ROOT="$CALIBRE_ROOT"/kcc
 KCC_FILE="$KCC_ROOT"/kcc-c2e.py
+
+# docker
+DOCKER_FILE=/usr/local/bin/dr
+DOCKER_ROOT="$SERVICES_ROOT"/docker
+DOCKER_CONFIG="$SERVICES_ROOT"/docker/docker-compose.yml
+
+# aios
+AIOS_LINK=https://github.com/woniuzfb/iptv
+AIOS_ROOT="$SERVICES_ROOT"/aios

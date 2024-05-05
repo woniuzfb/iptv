@@ -1,0 +1,313 @@
+DockerServiceStart()
+{
+    DockerInstall
+    PostgresqlInstall
+    YqInstall
+
+    . "$DOCKER_ROOT"/.env
+
+    if [ ! -f "$DOCKER_ROOT/certs/traefik/$TRAEFIK_DOMAIN".crt ] || [ ! -f "$DOCKER_ROOT/certs/traefik/$TRAEFIK_DOMAIN".key ]
+    then
+        Println "$error $TRAEFIK_DOMAIN 的证书不存在\n"
+        return 1
+    fi
+
+    if [ ! -f "$DOCKER_ROOT"/certs/traefik/hub.docker.com.crt ] || [ ! -f "$DOCKER_ROOT"/certs/traefik/hub.docker.com.key ]
+    then
+        Println "$error hub.docker.com 的证书不存在\n"
+        return 1
+    fi
+
+    traefik_local_plugins=($(yq '.experimental.localPlugins | map_values(.modulename) | to_entries | .[] | .value' "$DOCKER_ROOT"/data/traefik/config/traefik.yml))
+
+    for traefik_local_plugin in "${traefik_local_plugins[@]}"
+    do
+        if [ ! -d "$DOCKER_ROOT/data/traefik/plugins-local/src/$traefik_local_plugin" ] 
+        then
+            Println "$error traefik 本地插件 $traefik_local_plugin 不存在, 请先设置\n"
+            return 1
+        fi
+    done
+
+    JWT_SECRET=$(< "$DOCKER_ROOT"/data/authelia/secrets/JWT_SECRET)
+    SESSION_REDIS_PASSWORD=$(< "$DOCKER_ROOT"/data/authelia/secrets/SESSION_REDIS_PASSWORD)
+    SESSION_SECRET=$(< "$DOCKER_ROOT"/data/authelia/secrets/SESSION_SECRET)
+    STORAGE_ENCRYPTION_KEY=$(< "$DOCKER_ROOT"/data/authelia/secrets/STORAGE_ENCRYPTION_KEY)
+    STORAGE_POSTGRES_PASSWORD=$(< "$DOCKER_ROOT"/data/authelia/secrets/STORAGE_POSTGRES_PASSWORD)
+
+    for var in JWT_SECRET SESSION_REDIS_PASSWORD SESSION_SECRET STORAGE_ENCRYPTION_KEY STORAGE_POSTGRES_PASSWORD
+    do
+        if [[ -z "${!var:-}" ]] 
+        then
+            Println "$error $var 为空, 请先设置服务 secrets\n"
+            return 1
+        fi
+    done
+
+    if ! psql -c "\du" | grep -q authelia || ! psql -c "SELECT datname FROM pg_catalog.pg_database;" | grep -q authelia
+    then
+        Println "$error 请先设置服务 postgresql\n"
+        return 1
+    fi
+
+    cd "$DOCKER_ROOT"
+
+    mkdir -p "$DOCKER_ROOT/data/redis"
+    mkdir -p "$DOCKER_ROOT/data/traefik/logs"
+    mkdir -p "$DOCKER_ROOT/data/authelia/logs"
+
+    docker compose up -d
+}
+
+DockerServiceStop()
+{
+    DockerInstall
+
+    cd "$DOCKER_ROOT"
+
+    docker compose stop
+}
+
+DockerServiceConfig()
+{
+    echo
+    docker_config_options=( 'Traefik' 'Authelia' 'Postgresql' )
+    inquirer checkbox_input_indices "请选择" docker_config_options docker_config_options_indices
+
+    for docker_config_options_index in "${docker_config_options_indices[@]}"
+    do
+        echo
+        case $docker_config_options_index in
+            0)
+                traefik_options=( '域名' '本地插件' )
+                inquirer checkbox_input_indices "选择 traefik 设置选项" traefik_options traefik_options_indices
+
+                for traefik_options_index in "${traefik_options_indices[@]}"
+                do
+                    if [ $traefik_options_index -eq 0 ] 
+                    then
+                        . "$DOCKER_ROOT"/.env
+                        echo
+                        inquirer text_input "请输入 traefik 使用的域名" traefik_domain "$TRAEFIK_DOMAIN"
+                        if [ "$traefik_domain" != "$TRAEFIK_DOMAIN" ] 
+                        then
+                            sed -i "/TRAEFIK_DOMAIN=/c\TRAEFIK_DOMAIN=$traefik_domain" "$DOCKER_ROOT"/.env
+                            Println "$info traefik 域名已设置为 $traefik_domain\n"
+                        fi
+                    else
+                        traefik_local_plugins=( cors-preflight )
+                        traefik_plugins=( github.com/Medzoner/traefik-plugin-cors-preflight )
+                        echo
+                        inquirer checkbox_input_indices "选择 traefik 本地插件" traefik_local_plugins traefik_local_plugins_indices
+                        for traefik_local_plugins_index in "${traefik_local_plugins_indices[@]}"
+                        do
+                            if [ -d "$DOCKER_ROOT/data/traefik/plugins-local/src/${traefik_plugins[$traefik_local_plugins_index]}" ] 
+                            then
+                                cd "$DOCKER_ROOT/data/traefik/plugins-local/src/${traefik_plugins[$traefik_local_plugins_index]}"
+                                git pull
+                                Println "$info ${traefik_local_plugins[$traefik_local_plugins_index]} 插件已更新\n"
+                                continue
+                            fi
+                            git clone "https://${traefik_plugins[$traefik_local_plugins_index]}" "$DOCKER_ROOT/data/traefik/plugins-local/src/${traefik_plugins[$traefik_local_plugins_index]}"
+                            Println "$info ${traefik_local_plugins[$traefik_local_plugins_index]} 插件已安装\n"
+                        done
+                    fi
+                done
+            ;;
+            1)
+                authelia_options=( '域名' '用户名' '显示名' '密码' secrets )
+                inquirer checkbox_input_indices "选择 authelia 设置选项" authelia_options authelia_options_indices
+                for authelia_options_index in "${authelia_options_indices[@]}"
+                do
+                    case $authelia_options_index in
+                        0)
+                            . "$DOCKER_ROOT"/.env
+                            echo
+                            inquirer text_input "请输入 authelia 使用的域名" authelia_domain "$AUTHELIA_DOMAIN"
+                            if [ "$authelia_domain" != "$AUTHELIA_DOMAIN" ] 
+                            then
+                                sed -i "/AUTHELIA_DOMAIN=/c\AUTHELIA_DOMAIN=$traefik_domain" "$DOCKER_ROOT"/.env
+                                echo
+                                inquirer list_input_index "是否添加到 /etc/hosts" ny_options ny_index
+                                if [ $ny_index -eq 1 ] 
+                                then
+                                    Println "$tip 可能需要输入密码"
+                                    echo "\
+127.0.0.1  hub.docker.com
+127.0.0.1  authelia.$DOMAIN
+127.0.0.1  public.$DOMAIN
+127.0.0.1  traefik.$DOMAIN
+127.0.0.1  secure.$DOMAIN" | sudo tee -a /etc/hosts > /dev/null
+                                fi
+                                Println "$info authelia 域名已设置为 $authelia_domain\n"
+                            fi
+                        ;;
+                        1)
+                            authelia_usernames=($(yq '.users | keys | join(" ")' "$DOCKER_ROOT"/data/authelia/config/users_database.yml))
+                            authelia_default_username="${authelia_usernames[0]}"
+                            echo
+                            inquirer text_input "请输入 authelia 用户名" authelia_username "$authelia_default_username"
+                            if [ "$authelia_username" != "$authelia_default_username" ] 
+                            then
+                                yq_path_new=".users.$authelia_username"
+                                yq_path_old=".users.$authelia_default_username"
+                                YQ update_key "$DOCKER_ROOT"/data/authelia/config/users_database.yml
+                                authelia_user_email=$(yq ".users.$authelia_username.email" "$DOCKER_ROOT"/data/authelia/config/users_database.yml)
+                                if [[ "$authelia_user_email" =~ '<USERNAME>' ]] 
+                                then
+                                    yq_path='["users","'$authelia_username'","email"]'
+                                    yq_replace="${authelia_username}@${authelia_user_email#*@}"
+                                    YQ update "$DOCKER_ROOT"/data/authelia/config/users_database.yml
+                                fi
+                                Println "$info authelia 用户名已改为 $authelia_username\n"
+                            fi
+                        ;;
+                        2)
+                            authelia_usernames=($(yq '.users | keys | join(" ")' "$DOCKER_ROOT"/data/authelia/config/users_database.yml))
+                            authelia_default_username="${authelia_usernames[0]}"
+                            authelia_default_displayname=$(yq ".users.$authelia_default_username.displayname" "$DOCKER_ROOT"/data/authelia/config/users_database.yml)
+                            echo
+                            inquirer text_input "请输入 authelia 用户 $authelia_default_username 的显示名" authelia_displayname "$authelia_default_displayname"
+                            if [ "$authelia_displayname" != "$authelia_default_displayname" ] 
+                            then
+                                yq_path='["users","'$authelia_default_username'","displayname"]'
+                                yq_replace="$authelia_displayname"
+                                YQ update "$DOCKER_ROOT"/data/authelia/config/users_database.yml
+                                Println "$info authelia 用户 $authelia_default_username 的显示名已改为 $authelia_displayname\n"
+                            fi
+                        ;;
+                        3)
+                            authelia_usernames=($(yq '.users | keys | join(" ")' "$DOCKER_ROOT"/data/authelia/config/users_database.yml))
+                            authelia_default_username="${authelia_usernames[0]}"
+                            authelia_default_password=$(yq ".users.$authelia_default_username.password" "$DOCKER_ROOT"/data/authelia/config/users_database.yml)
+                            DockerInstall
+                            if ! docker images | grep -q authelia/authelia
+                            then
+                                Println "$info 下载 authelia 镜像..."
+                                docker pull authelia/authelia
+                            fi 
+                            echo
+                            inquirer text_input "请输入 authelia 用户 $authelia_default_username 的密码" authelia_password "$authelia_default_password"
+                            authelia_password=$(docker run authelia/authelia authelia crypto hash generate argon2 --password $authelia_password | sed 's/Digest: //g')
+                            if [ "$authelia_password" != "$authelia_default_password" ] 
+                            then
+                                yq_path='["users","'$authelia_default_username'","password"]'
+                                yq_replace="$authelia_password"
+                                YQ update "$DOCKER_ROOT"/data/authelia/config/users_database.yml
+                                Println "$info authelia 用户 $authelia_default_username 的密码已改为 $authelia_password\n"
+                            fi
+                        ;;
+                        4)
+                            authelia_secrets=( JWT_SECRET SESSION_REDIS_PASSWORD SESSION_SECRET STORAGE_ENCRYPTION_KEY STORAGE_POSTGRES_PASSWORD )
+                            echo
+                            inquirer checkbox_input_indices "选择设置的 secret" authelia_secrets authelia_secrets_indices
+
+                            for authelia_secret_index in "${authelia_secrets_indices[@]}"
+                            do
+                                echo
+                                case $authelia_secret_index in
+                                    0)
+                                        default_jwt_secret=$(< "$DOCKER_ROOT"/data/authelia/secrets/JWT_SECRET)
+                                        inquirer text_input "请输入 JWT_SECRET" JWT_SECRET "${default_jwt_secret:-$(openssl rand -hex 32)}"
+                                    ;;
+                                    1)
+                                        default_session_redis_password=$(< "$DOCKER_ROOT"/data/authelia/secrets/SESSION_REDIS_PASSWORD)
+                                        inquirer text_input "请输入 SESSION_REDIS_PASSWORD" SESSION_REDIS_PASSWORD "${default_session_redis_password:-$(openssl rand -hex 64)}"
+                                    ;;
+                                    2)
+                                        default_session_secret=$(< "$DOCKER_ROOT"/data/authelia/secrets/SESSION_SECRET)
+                                        inquirer text_input "请输入 SESSION_SECRET" SESSION_SECRET "${default_session_secret:-$(openssl rand -hex 64)}"
+                                    ;;
+                                    3)
+                                        default_storage_encryption_key=$(< "$DOCKER_ROOT"/data/authelia/secrets/STORAGE_ENCRYPTION_KEY)
+                                        inquirer text_input "请输入 STORAGE_ENCRYPTION_KEY" STORAGE_ENCRYPTION_KEY "${default_storage_encryption_key:-$(openssl rand -hex 32)}"
+                                    ;;
+                                    4)
+                                        default_storage_postgres_password=$(< "$DOCKER_ROOT"/data/authelia/secrets/STORAGE_POSTGRES_PASSWORD)
+                                        inquirer text_input "请输入 STORAGE_POSTGRES_PASSWORD" STORAGE_POSTGRES_PASSWORD "${default_storage_postgres_password:-$(RandStr 15)}"
+                                    ;;
+                                esac
+                                echo -n "${!authelia_secrets[authelia_secret_index]}" > "$DOCKER_ROOT"/data/authelia/secrets/${authelia_secrets[authelia_secret_index]}
+                                Println "$info ${authelia_secrets[authelia_secret_index]} 设置成功\n"
+                            done
+                        ;;
+                    esac
+                done
+            ;;
+            2)
+                postgresql_options=( '添加 role authelia' '添加 database authelia' '设置 role authelia 的密码' )
+                echo
+                inquirer checkbox_input_indices "选择 postgresql 设置选项" postgresql_options postgresql_options_indices
+                for postgresql_options_index in "${postgresql_options_indices[@]}"
+                do
+                    case $postgresql_options_index in
+                        0)
+                            if psql -c "\du" | grep -q authelia 
+                            then
+                                Println "$error role authelia 已存在\n"
+                                continue
+                            fi
+                            default_storage_postgres_password=$(< "$DOCKER_ROOT"/data/authelia/secrets/STORAGE_POSTGRES_PASSWORD)
+                            echo
+                            inquirer text_input "请输入 role authelia 的密码" storage_postgres_password "${default_storage_postgres_password:-$(RandStr 15)}"
+                            psql -c "CREATE ROLE authelia PASSWORD '$storage_postgres_password' CREATEDB REPLICATION LOGIN;"
+                            Println "$info role authelia 已添加\n"
+                        ;;
+                        1)
+                            if ! psql -c "\du" | grep -q authelia 
+                            then
+                                Println "$error 请先添加 role authelia\n"
+                                continue
+                            fi
+                            if psql -c "SELECT datname FROM pg_catalog.pg_database;" | grep -q authelia
+                            then
+                                Println "$error database authelia 已存在\n"
+                                continue
+                            fi
+                            psql -c "CREATE DATABASE authelia OWNER authelia;"
+                            Println "$info database authelia 已添加\n"
+                        ;;
+                        2)
+                            if ! psql -c "\du" | grep -q authelia 
+                            then
+                                Println "$error 请先添加 role authelia\n"
+                                continue
+                            fi
+                            default_storage_postgres_password=$(< "$DOCKER_ROOT"/data/authelia/secrets/STORAGE_POSTGRES_PASSWORD)
+                            echo
+                            inquirer text_input "请输入 role authelia 的密码" storage_postgres_password "${default_storage_postgres_password:-$(RandStr 15)}"
+                            psql -c "ALTER ROLE authelia PASSWORD '$storage_postgres_password';"
+                            Println "$info role authelia 的密码已设置\n"
+                        ;;
+                    esac
+                done
+            ;;
+        esac
+    done
+
+    return 0
+}
+
+DockerService()
+{
+    docker_service_options=( '启动' '关闭' '重启' '设置' )
+    echo
+    inquirer list_input_index "请选择" docker_service_options docker_service_options_index
+
+    case $docker_service_options_index in
+        0) DockerServiceStart
+        ;;
+        1) DockerServiceStop
+        ;;
+        2)
+            DockerServiceStop
+            DockerServiceStart
+        ;;
+        3)
+            YqInstall
+            DockerServiceConfig
+        ;;
+    esac
+
+    return 0
+}

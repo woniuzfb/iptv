@@ -1,1 +1,25 @@
+Include src/docker/install "$@"
+Include src/docker/crt "$@"
+Include src/docker/service "$@"
+Include src/service/browse "$@"
+Include utils/postgresql "$@"
+Include utils/yq "$@"
+
+DepInstall sudo
+
+docker_options=( '服务' '管理证书' '安装/更新 docker' '安装/更新 postgresql' '安装/更新 yq' )
 echo
+inquirer list_input_index "请选择" docker_options docker_options_index
+
+case $docker_options_index in
+    0) DockerService
+    ;;
+    1) DockerCrtManage
+    ;;
+    2) DockerInstall update
+    ;;
+    3) PostgresqlInstall update
+    ;;
+    4) YqInstall update
+    ;;
+esac

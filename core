@@ -272,17 +272,11 @@ WaitTerm()
 }
 
 Include utils/system "$@"
-
 Include utils/inquirer "$@"
-
 Include utils/spinner "$@"
-
 Include utils/progress "$@"
-
 Include utils/shfile "$@"
-
 Include utils/jq "$@"
-
+Include utils/git "$@"
 Include utils/curl "$@"
-
 Include utils/log

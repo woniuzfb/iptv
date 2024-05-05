@@ -7,7 +7,7 @@ KccInstall()
         Println "$info KCC 更新成功\n"
         return 0
     fi
-    DepInstall git
+    GitInstall
     PythonInstall
     git clone https://github.com/ciromattia/kcc.git "$KCC_ROOT"
     cd "$KCC_ROOT"

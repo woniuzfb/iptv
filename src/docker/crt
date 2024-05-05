@@ -1,0 +1,120 @@
+DockerCrtSelfSignValid()
+{
+    local domain=$1
+
+    if [ -e "$service_cert_root/$domain".crt ] && [ -e "$service_cert_root/$domain".key ]
+    then
+        return 1
+    fi
+}
+
+DockerCrtManage()
+{
+    if [ ! -d "$DOCKER_ROOT" ] 
+    then
+        if [ ! -d "$AIOS_ROOT" ] 
+        then
+            GitInstall
+            git clone "$AIOS_LINK" "$AIOS_ROOT"
+        else
+            cd "$AIOS_ROOT"
+            git pull
+        fi
+        cp -r "$AIOS_ROOT"/scripts/docker "$DOCKER_ROOT"
+    fi
+
+    echo
+    crt_options=( '浏览证书' '安装自签名证书' )
+    inquirer list_input_index "选择操作" crt_options crt_options_index
+
+    case $crt_options_index in
+        0) ServiceBrowse "$DOCKER_ROOT"/certs
+        ;;
+        1) 
+            cd "$DOCKER_ROOT"/certs
+
+            if [ ! -f "$DOCKER_ROOT"/certs/root.crt ] 
+            then
+                echo
+                inquirer text_input "请输入你想设置的根证书公用名CN (Common Name)" root_cn root.yourdomain.com
+                openssl req -new -nodes -text -out root.csr -newkey rsa:4096 -keyout root.key -subj "/CN=$root_cn"
+                chmod og-rwx root.key
+                openssl x509 -req -in root.csr -text -days 3650 -extfile "$DOCKER_ROOT"/certs/openssl.cnf -extensions v3_ca -signkey root.key -out root.crt
+                Println "$info "$DOCKER_ROOT"/certs/root.crt 可以添加到用户端系统用来验证之后自签名的证书\n"
+            fi
+
+            docker_certs_services=( 'traefik' )
+            echo
+            inquirer list_input "选择安装证书的服务" docker_certs_services docker_certs_service
+
+            service_cert_root="$DOCKER_ROOT/certs/$docker_certs_service"
+
+            mkdir -p newcerts
+            mkdir -p "$docker_certs_service"
+
+            echo
+            inquirer text_input "请输入自签名证书公用名CN (Common Name)" server_cn localhost DockerCrtSelfSignValid "证书已存在"
+
+            ny_index=0
+
+            if ! [[ "$server_cn" =~ \* ]] 
+            then
+                echo
+                inquirer list_input_index "是否将子域名 *.$server_cn 加到 SAN" ny_options ny_index
+            fi
+
+            if [ "$ny_index" -eq 1 ] 
+            then
+                root_domain="${server_cn#\*.}"
+                san="DNS:$root_domain,DNS:*.$root_domain,IP:127.0.0.1,IP:::1"
+            else
+                san="DNS:$server_cn,IP:127.0.0.1,IP:::1"
+            fi
+
+            openssl req -new -nodes -text -out "$service_cert_root/${server_cn}".csr -newkey rsa:4096 -keyout "$service_cert_root/${server_cn}".key -subj "/CN=$server_cn" -addext "subjectAltName=$san"
+
+            chmod og-rwx "$service_cert_root/${server_cn}".key
+
+            if openssl help x509 2>&1 | grep -q "copy_extensions"
+            then
+                openssl_cmds=(openssl x509 -req -copy_extensions copy -in "$service_cert_root/${server_cn}".csr -text -days 365 -CA root.crt -CAkey root.key -CAcreateserial -out "$service_cert_root/${server_cn}".crt)
+            else
+                openssl_cmds=(openssl ca -batch -config "$DOCKER_ROOT"/certs/openssl.cnf -policy signing_policy -extensions signing_req -out "$service_cert_root/${server_cn}".crt -infiles "$service_cert_root/${server_cn}".csr)
+            fi
+
+            if [ ! -f ./index.txt ] 
+            then
+                touch index.txt
+            fi
+
+            if [ ! -f ./serial ] 
+            then
+                echo 01 > serial
+            fi
+
+            "${openssl_cmds[@]}"
+
+            openssl x509 -in "$service_cert_root/${server_cn}".crt -outform PEM -out "$service_cert_root/${server_cn}".pem
+
+            if [ "$ny_index" -eq 1 ] 
+            then
+                openssl req -new -nodes -text -out "$service_cert_root/*.${server_cn}".csr -newkey rsa:4096 -keyout "$service_cert_root/*.${server_cn}".key -subj "/CN=*.$server_cn" -addext "subjectAltName=$san"
+                chmod og-rwx "$service_cert_root/*.${server_cn}".key
+                if openssl help x509 2>&1 | grep -q "copy_extensions"
+                then
+                    openssl_cmds=(openssl x509 -req -copy_extensions copy -in "$service_cert_root/*.${server_cn}".csr -text -days 365 -CA ../root.crt -CAkey ../root.key -CAcreateserial -out "$service_cert_root/*.${server_cn}".crt)
+                else
+                    openssl_cmds=(openssl ca -batch -config "$DOCKER_ROOT"/certs/openssl.cnf -policy signing_policy -extensions signing_req -out "$service_cert_root/*.${server_cn}".crt -infiles "$service_cert_root/*.${server_cn}".csr)
+                fi
+                "${openssl_cmds[@]}"
+                openssl x509 -in "$service_cert_root/*.${server_cn}".crt -outform PEM -out "$service_cert_root/*.${server_cn}".pem
+                cat "$service_cert_root/${server_cn}".pem "$service_cert_root/*.${server_cn}".pem > "$service_cert_root/${server_cn}".pem.tmp
+                mv "$service_cert_root/${server_cn}".pem.tmp "$service_cert_root/${server_cn}".pem
+            fi
+
+            Println "$info 自签名证书安装成功\n"
+        ;;
+    esac
+
+    return 0
+}

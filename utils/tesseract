@@ -11,7 +11,7 @@ TesseractInstall()
     if [ "$dist" == "ubu" ] 
     then
         add-apt-repository ppa:alex-p/tesseract-ocr -y
-        AptUpdate
+        apt-get -y update
         apt-get -y install tesseract
     elif [ "$dist" == "deb" ] 
     then

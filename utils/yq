@@ -1,0 +1,78 @@
+YqInstall()
+{
+    local install="更新"
+
+    if [ -z "${1:-}" ] 
+    then
+        if [[ -x $(command -v yq) ]] 
+        then
+            return 0
+        fi
+        install="安装"
+    elif [[ ! -x $(command -v yq) ]] 
+    then
+        install="安装"
+    fi
+
+    DepsCheck
+    ArchCheck
+
+    if [ "$dist" == "mac" ] 
+    then
+        echo
+        inquirer list_input_index "是否编译(brew安装可能会很慢)" ny_options ny_index
+        if [ "$ny_index" -eq 1 ] 
+        then
+            brew install yq
+            Println "$info yq ${install}成功\n"
+            return 0
+        fi
+        if [ "$arch" == "x86_64" ] 
+        then
+            yq_name=yq_darwin_amd64
+        else
+            yq_name=yq_darwin_arm64
+        fi
+    else
+        case $arch in
+            i386) yq_name=yq_linux_386
+            ;;
+            x86_64) yq_name=yq_linux_amd64
+            ;;
+            arm64|s390x) yq_name=yq_linux_$arch
+            ;;
+            arm*) yq_name=yq_linux_arm
+            ;;
+            *) Println "不支持的架构: $arch"; return 1
+            ;;
+        esac
+    fi
+
+    if curl -L "$FFMPEG_MIRROR_LINK/yq/$yq_name" -o "$YQ_FILE"_tmp
+    then
+        mv "$YQ_FILE"_tmp "$YQ_FILE"
+        chmod +x "$YQ_FILE"
+    else
+        rm -f "$YQ_FILE"_tmp
+        Println "`eval_gettext \"\\\$error 下载 yq 失败, 请重试 !\"`"
+        return 1
+    fi
+
+    Println "$info yq ${install}成功\n"
+}
+
+YQ()
+{
+    case $1 in
+        update)
+            local pattern replace
+            pattern="${yq_path}" replace="${yq_replace}" yq -i 'setpath(env(pattern); env(replace))' "$2"
+        ;;
+        update_key)
+            local pattern_new pattern_old
+            pattern_new="${yq_path_new}" pattern_old="${yq_path_old}" yq -i 'eval(strenv(pattern_new)) = eval(strenv(pattern_old)) | del(eval(strenv(pattern_old)))' "$2"
+        ;;
+    esac
+
+    return 0
+}

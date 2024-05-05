@@ -1548,6 +1548,7 @@ inquirer()
         if [ "$list_count" -eq 1 ] 
         then
             inquirer:print "${green}?${normal} ${bold}${bg_black}${white}${prompt} ${bg_black}${cyan}${list_options[current_index]}${normal}\n"
+            page_list=("${list_options[@]}")
             return
         fi
 
@@ -1794,11 +1795,12 @@ inquirer()
 
         trap inquirer:control_c EXIT
 
-        stty -echo
-        tput cnorm
+        #stty -echo
+        #tput cnorm
 
-        inquirer:on_keypress inquirer:on_default inquirer:on_default inquirer:on_text_input_ascii inquirer:on_text_input_enter inquirer:on_text_input_left inquirer:on_text_input_right inquirer:on_text_input_ascii inquirer:on_text_input_backspace inquirer:on_text_input_not_ascii
-        read -r ${var_name?} <<< "$text_input"
+        read -e text_input
+        #inquirer:on_keypress inquirer:on_default inquirer:on_default inquirer:on_text_input_ascii inquirer:on_text_input_enter inquirer:on_text_input_left inquirer:on_text_input_right inquirer:on_text_input_ascii inquirer:on_text_input_backspace inquirer:on_text_input_not_ascii
+        read -r ${var_name?} <<< "${text_input:-$text_default}"
 
         inquirer:cleanup
 

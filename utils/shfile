@@ -109,6 +109,7 @@ ShFileCheck()
     [ ! -e "$LIANHUANHUA_FILE" ] && ln -s "$SH_FILE" "$LIANHUANHUA_FILE"
     [ ! -e "$RCLONE_FILE" ] && ln -s "$SH_FILE" "$RCLONE_FILE"
     [ ! -e "$CALIBRE_FILE" ] && ln -s "$SH_FILE" "$CALIBRE_FILE"
+    [ ! -e "$DOCKER_FILE" ] && ln -s "$SH_FILE" "$DOCKER_FILE"
 
     return 0
 }

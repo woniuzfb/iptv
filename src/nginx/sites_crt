@@ -1,4 +1,4 @@
-NginxSitesCertInstall()
+NginxSitesCrtInstall()
 {
     local domain=$1
 
@@ -33,6 +33,16 @@ NginxSitesCertInstall()
     Println "$info $domain 证书安装成功\n"
 }
 
+NginxSitesCrtSelfSignValid()
+{
+    local domain=$1
+
+    if [ -e "$cert_root/$domain".crt ] && [ -e "$cert_root/$domain".key ]
+    then
+        return 1
+    fi
+}
+
 NginxSitesCrtManage()
 {
     if [ ! -d "$nginx_prefix"/conf/sites_crt ] 
@@ -42,7 +52,7 @@ NginxSitesCrtManage()
     fi
 
     echo
-    crt_options=( '查看证书' '安装本地证书' '安装域名证书' )
+    crt_options=( '浏览证书' '安装自签名证书' '安装ACME证书' )
     inquirer list_input_index "选择操作" crt_options crt_options_index
 
     case $crt_options_index in
@@ -50,10 +60,91 @@ NginxSitesCrtManage()
         ;;
         1) 
             cd "$nginx_prefix"/conf/sites_crt
-            openssl genrsa -out localhost.key 2048
-            openssl req -subj "/C=US/ST=NULL/L=NULL/O=NULL/OU=NULL/CN=NULL/emailAddress=NULL@example.com" -new -key localhost.key -out localhost.csr
-            openssl x509 -req -days 3650 -in localhost.csr -signkey localhost.key -out localhost.crt
-            Println "$info 本地证书安装成功\n"
+
+            if [ ! -f "$nginx_prefix"/conf/sites_crt/openssl.cnf ] 
+            then
+                if ! curl -Lm 20 -o "$nginx_prefix"/conf/sites_crt/openssl.cnf "$FFMPEG_MIRROR_LINK"/openssl.cnf 
+                then
+                    Println "$error 下载 openssl.cnf 失败, 请稍后再试\n"
+                    return 1
+                fi
+            fi
+
+            if [ ! -f "$nginx_prefix"/conf/sites_crt/root.crt ] 
+            then
+                echo
+                inquirer text_input "请输入你想设置的根证书公用名CN (Common Name)" root_cn root.yourdomain.com
+                openssl req -new -nodes -text -out root.csr -newkey rsa:4096 -keyout root.key -subj "/CN=$root_cn"
+                chmod og-rwx root.key
+                openssl x509 -req -in root.csr -text -days 3650 -extfile "$nginx_prefix"/conf/sites_crt/openssl.cnf -extensions v3_ca -signkey root.key -out root.crt
+                Println "$info "$nginx_prefix"/conf/root.crt 可以添加到用户端系统用来验证之后自签名的证书\n"
+            fi
+
+            cert_root="$nginx_prefix"/conf/sites_crt
+
+            mkdir -p newcerts
+
+            echo
+            inquirer text_input "请输入自签名证书公用名CN (Common Name)" server_cn localhost NginxSitesCrtSelfSignValid "证书已存在"
+
+            ny_index=0
+
+            if ! [[ "$server_cn" =~ \* ]] 
+            then
+                echo
+                inquirer list_input_index "是否将子域名 *.$server_cn 加到 SAN" ny_options ny_index
+            fi
+
+            if [ "$ny_index" -eq 1 ] 
+            then
+                root_domain="${server_cn#\*.}"
+                san="DNS:$root_domain,DNS:*.$root_domain,IP:127.0.0.1,IP:::1"
+            else
+                san="DNS:$server_cn,IP:127.0.0.1,IP:::1"
+            fi
+
+            openssl req -new -nodes -text -out "$cert_root/${server_cn}".csr -newkey rsa:4096 -keyout "$cert_root/${server_cn}".key -subj "/CN=$server_cn" -addext "subjectAltName=$san"
+
+            chmod og-rwx "$cert_root/${server_cn}".key
+
+            if openssl help x509 2>&1 | grep -q "copy_extensions"
+            then
+                openssl_cmds=(openssl x509 -req -copy_extensions copy -in "$cert_root/${server_cn}".csr -text -days 365 -CA root.crt -CAkey root.key -CAcreateserial -out "$cert_root/${server_cn}".crt)
+            else
+                openssl_cmds=(openssl ca -batch -config "$nginx_prefix"/conf/sites_crt/openssl.cnf -policy signing_policy -extensions signing_req -out "$cert_root/${server_cn}".crt -infiles "$cert_root/${server_cn}".csr)
+            fi
+
+            if [ ! -f ./index.txt ] 
+            then
+                touch index.txt
+            fi
+
+            if [ ! -f ./serial ] 
+            then
+                echo 01 > serial
+            fi
+
+            "${openssl_cmds[@]}"
+
+            openssl x509 -in "$cert_root/${server_cn}".crt -outform PEM -out "$cert_root/${server_cn}".pem
+
+            if [ "$ny_index" -eq 1 ] 
+            then
+                openssl req -new -nodes -text -out "$cert_root/*.${server_cn}".csr -newkey rsa:4096 -keyout "$cert_root/*.${server_cn}".key -subj "/CN=*.$server_cn" -addext "subjectAltName=$san"
+                chmod og-rwx '*'.${server_cn}.key
+                if openssl help x509 2>&1 | grep -q "copy_extensions"
+                then
+                    openssl_cmds=(openssl x509 -req -copy_extensions copy -in "$cert_root/*.${server_cn}".csr -text -days 365 -CA ../root.crt -CAkey ../root.key -CAcreateserial -out "$cert_root/*.${server_cn}".crt)
+                else
+                    openssl_cmds=(openssl ca -batch -config "$nginx_prefix"/conf/sites_crt/openssl.cnf -policy signing_policy -extensions signing_req -out "$cert_root/*.${server_cn}".crt -infiles "$cert_root/*.${server_cn}".csr)
+                fi
+                "${openssl_cmds[@]}"
+                openssl x509 -in "$cert_root/*.${server_cn}".crt -outform PEM -out "$cert_root/*.${server_cn}".pem
+                cat "$cert_root/${server_cn}".pem "$cert_root/*.${server_cn}".pem > "$cert_root/${server_cn}".pem.tmp
+                mv "$cert_root/${server_cn}".pem.tmp "$cert_root/${server_cn}".pem
+            fi
+
+            Println "$info 自签名证书安装成功\n"
         ;;
         2) NginxConfigDomain
         ;;

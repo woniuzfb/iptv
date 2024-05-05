@@ -1,5 +1,5 @@
 #!/bin/bash
-# LianHuanHua / Rclone / Alist / Calibre / FFmpeg / Nginx / Openresty / V2ray / Xray / Cloudflare / IBM Cloud Foundry / Armbian / Proxmox VE / ...
+# Docker / LianHuanHua / Rclone / Alist / Calibre / FFmpeg / Nginx / Openresty / V2ray / Xray / Cloudflare / IBM Cloud Foundry / Armbian / Proxmox VE / ...
 # Copyright (C) 2019-2024
 # Released under GPL Version 3 License
 

@@ -1,0 +1,100 @@
+tls:
+  certificates:
+    - certFile: /certs/hub.docker.com.crt
+      keyFile: /certs/hub.docker.com.key
+  stores:
+    default:
+      defaultCertificate:
+        certFile: '/certs/{{ env "DOMAIN" }}.crt'
+        keyFile: '/certs/{{ env "DOMAIN" }}.key'
+
+http:
+  routers:
+    pianomarvel:
+      entryPoints:
+        - websecure
+      rule: 'Host(`pianomvl.{{ env "DOMAIN" }}`)'
+      service: noop@internal
+      tls: {}
+      middlewares:
+        - CorsPreflight
+        - pianomarvel
+
+    docker:
+      entryPoints:
+        - websecure
+      rule: "Host(`hub.docker.com`)"
+      service: noop@internal
+      tls: {}
+      middlewares:
+        - docker-redirect
+
+    xbox-redirect-1-http:
+      entryPoints:
+        - web
+      rule: "HostRegexp(`{subdomain:(assets1|assets2|d1|d2|xvcf1|xvcf2)}.xboxlive.com`)"
+      service: noop@internal
+      middlewares:
+        - CorsPreflight
+        - xbox-redirect-1
+
+    xbox-redirect-1-https:
+      entryPoints:
+        - websecure
+      rule: "HostRegexp(`{subdomain:(assets1|assets2|d1|d2|xvcf1|xvcf2)}.xboxlive.com`)"
+      service: noop@internal
+      tls: {}
+      middlewares:
+        - CorsPreflight
+        - xbox-redirect-1
+
+    xbox-redirect-2-http:
+      entryPoints:
+        - web
+      rule: "HostRegexp(`{subdomain:(dlassets|dlassets2)}.xboxlive.com`)"
+      service: noop@internal
+      middlewares:
+        - CorsPreflight
+        - xbox-redirect-2
+
+    xbox-redirect-2-https:
+      entryPoints:
+        - websecure
+      rule: "HostRegexp(`{subdomain:(dlassets|dlassets2)}.xboxlive.com`)"
+      service: noop@internal
+      tls: {}
+      middlewares:
+        - CorsPreflight
+        - xbox-redirect-2
+
+  middlewares:
+    CorsPreflight:
+      plugin:
+        CorsPreflight:
+          code: 204
+          method: OPTIONS
+
+    pianomarvel:
+      redirectRegex:
+        regex: '^https://(.*).{{ env "DOMAIN" }}/(.*)'
+        replacement: "http://127.0.0.1:3000/api.pianomarvel.com/$2"
+        permanent: true
+
+    docker-redirect:
+      redirectRegex:
+        regex: "^https://hub.docker.com/(.*)"
+        replacement: "http://pngquant.com/ffmpeg/docker/$1"
+        permanent: true
+
+    xbox-redirect-1:
+      redirectRegex:
+        regex: "^http://(.*).xboxlive.com/(.*)"
+        replacement: "http://$1.xboxlive.cn/$2"
+        permanent: true
+
+    xbox-redirect-2:
+      redirectRegex:
+        regex: "^http://(.*).xboxlive.com/(.*)"
+        replacement: "http://dlassets.xboxlive.cn/$2"
+        permanent: true
+

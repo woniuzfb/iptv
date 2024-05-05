@@ -50,7 +50,7 @@ NginxAddDomain()
                 Println "$info $server_domain 配置成功\n"
             ;;
             1) 
-                NginxSitesCertInstall "$server_domain"
+                NginxSitesCrtInstall "$server_domain"
                 inquirer list_input "是否设置 http 跳转 https" yn_options http_to_https_yn
 
                 if [ "$http_to_https_yn" == "$i18n_yes" ] 
@@ -81,7 +81,7 @@ NginxAddDomain()
                 Println "$info $server_domain 配置成功\n"
             ;;
             2) 
-                NginxSitesCertInstall "$server_domain"
+                NginxSitesCrtInstall "$server_domain"
                 inquirer list_input "http 和 https 是否使用相同的目录" yn_options http_https_same_dir_yn
 
                 if [ "$http_https_same_dir_yn" == "$i18n_yes" ] 

@@ -1,0 +1,76 @@
+---
+###############################################################
+#                   Authelia configuration                    #
+###############################################################
+
+server:
+  address: tcp://:9091
+  endpoints:
+    authz:
+      forward-auth:
+        implementation: ForwardAuth
+
+log:
+  level: error
+  file_path: /var/log/authelia/authelia.log
+
+totp:
+  issuer: authelia.com
+
+# identity_validation:
+#   reset_password:
+#     jwt_secret: '{{ env "AUTHELIA_JWT_SECRET_FILE" }}'
+
+authentication_backend:
+  file:
+    path: /config/users_database.yml
+
+access_control:
+  default_policy: deny
+  rules:
+    - domain: 'public.{{ env "DOMAIN" }}'
+      policy: bypass
+    - domain: 'traefik.{{ env "DOMAIN" }}'
+      policy: one_factor
+    - domain: 'secure.{{ env "DOMAIN" }}'
+      policy: two_factor
+
+session:
+#   secret: '{{ env "AUTHELIA_SESSION_SECRET_FILE" }}'
+  cookies:
+    - name: authelia_session
+      domain: '{{ env "DOMAIN" }}'
+      authelia_url: 'https://authelia.{{ env "DOMAIN" }}'
+      default_redirection_url: 'https://public.{{ env "DOMAIN" }}'
+      expiration: '1 hour'
+      inactivity: '5 minutes'
+
+  redis:
+    host: redis
+    port: 6379
+    # password: '{{ env "AUTHELIA_SESSION_REDIS_PASSWORD_FILE" }}'
+
+regulation:
+  max_retries: 3
+  find_time: '2 minutes'
+  ban_time: '5 minutes'
+
+storage:
+  # encryption_key: '{{ env "AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE" }}'
+  postgres:
+    address: tcp://127.0.0.1:5432
+    database: authelia
+    schema: public
+    username: authelia
+    # password: '{{ env "AUTHELIA_STORAGE_POSTGRES_PASSWORD_FILE" }}'
+    timeout: 5s
+
+notifier:
+  filesystem:
+    filename: /config/notification.txt
+  # smtp:
+  #   username: test
+  #   password: {{ env "AUTHELIA_NOTIFIER_SMTP_PASSWORD_FILE" }}
+  #   address: smtp://mail.exmaple.com:25
+  #   sender: 'admin@{{ env "DOMAIN" }}'
+...

@@ -190,7 +190,7 @@ CurlImpersonateCompile()
     echo
     inquirer text_input "输入 curl-impersonate 安装目录" curl_impersonate_prefix /usr/local/curl-impersonate
 
-    DepInstall git
+    GitInstall
 
     cd ~
 

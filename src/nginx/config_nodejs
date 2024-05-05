@@ -160,10 +160,7 @@ app.listen(port, () => console.log(\`App listening on port \${port}!\`))
   }
 }' > "$NODE_ROOT/package.json"
 
-    if [[ ! -x $(command -v git) ]] 
-    then
-        Spinner "安装 git" GitInstall
-    fi
+    GitInstall
 
     cd "$NODE_ROOT"
     npm install

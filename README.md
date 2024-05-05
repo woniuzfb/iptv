@@ -342,6 +342,8 @@ wget https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 
 - traefik
 - authelia
+- postgresql
+- yq
 
 </details>
 

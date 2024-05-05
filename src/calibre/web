@@ -8,7 +8,7 @@ CalibreWebInstall()
         return
     fi
 
-    DepInstall git
+    GitInstall
     PythonInstall
     git clone https://github.com/janeczku/calibre-web.git "$CALIBRE_ROOT/web"
     cd "$CALIBRE_ROOT/web"

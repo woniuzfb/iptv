@@ -12,17 +12,17 @@ DistCheck()
             continue
         fi
 
-        if grep -Eqi "Red Hat|redhat|CentOS|Fedora|Amazon" < "$dist_file" 
-        then
-            dist="rpm"
-            break
-        elif grep -qi "Ubuntu" < "$dist_file" 
+        if grep -qi "Ubuntu" < "$dist_file" 
         then
             dist="ubu"
             break
         elif grep -qi "Debian" < "$dist_file" 
         then
             dist="deb"
+            break
+        elif grep -Eqi "Red Hat|redhat|rhel|CentOS|Fedora|Amazon" < "$dist_file" 
+        then
+            dist="rpm"
             break
         fi
     done
@@ -34,7 +34,7 @@ DistCheck()
             dist="mac"
         else
             Println "${red}[ERROR]${normal} not support yet...\n"
-            exit 1
+            return 1
         fi
     fi
 }
@@ -312,7 +312,7 @@ DepsInstall()
             setenforce 0
         fi
 
-        depends=(wget unzip vim curl crond logrotate patch nscd)
+        depends=(sudo wget unzip vim curl crond logrotate patch nscd)
 
         if [[ ! -x $(command -v dig) ]] 
         then
@@ -354,7 +354,7 @@ DepsInstall()
 
         apt-get -y install ca-certificates >/dev/null 2>&1
 
-        depends=(wget unzip vim curl cron ufw python3 logrotate patch nscd)
+        depends=(sudo wget unzip vim curl cron ufw python3 logrotate patch nscd)
 
         if [[ ! -x $(command -v dig) ]] 
         then
