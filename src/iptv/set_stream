@@ -702,11 +702,7 @@ SetEncrypt()
                             then
                                 if [ ! -f "$NODE_ROOT/index.js" ] 
                                 then
-                                    if [[ ! -x $(command -v mongo) ]] 
-                                    then
-                                        MongodbInstall
-                                    fi
-
+                                    MongodbInstall
                                     NodejsConfig
                                 fi
                             else
@@ -720,11 +716,7 @@ SetEncrypt()
                         fi
                     elif [ ! -f "$NODE_ROOT/index.js" ] 
                     then
-                        if [[ ! -x $(command -v mongo) ]] 
-                        then
-                            MongodbInstall
-                        fi
-
+                        MongodbInstall
                         NodejsConfig
                     fi
                 fi

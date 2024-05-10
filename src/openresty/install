@@ -1,0 +1,598 @@
+OpenrestyPackageInstall()
+{
+    # nc -vz 127.0.0.1 80
+    DepInstall lsof
+    if lsof -Pi :80 -sTCP:LISTEN -t &>/dev/null
+    then
+        Println "$error 80 端口被占用, 请先关闭占用端口的程序\n"
+        return 1
+    fi
+
+    DepInstall curl
+    DepInstall ca-certificates
+
+    ArchCheck
+
+    if [ "$arch" == "arm64" ] 
+    then
+        arch_path="/arm64"
+    else
+        arch_path=""
+    fi
+
+    . /etc/os-release
+
+    case $dist in
+        ubu) 
+            DepInstall lsb-release
+            DepInstall ubuntu-keyring
+            DepInstall gpg
+            if [ ! -f /etc/apt/sources.list.d/openresty.list ] 
+            then
+                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                then
+                    curl -fsSL https://mirrors.ustc.edu.cn/openresty/pubkey.gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] https://mirrors.ustc.edu.cn/openresty${arch_path}/ubuntu \
+                    ${VERSION_CODENAME:-$UBUNTU_CODENAME} main" | tee /etc/apt/sources.list.d/openresty.list
+                else
+                    curl -fsSL https://openresty.org/package/pubkey.gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] http://openresty.org/package${arch_path}/ubuntu \
+                    ${VERSION_CODENAME:-$UBUNTU_CODENAME} main" | tee /etc/apt/sources.list.d/openresty.list
+                fi
+                sudo apt-get update
+            fi
+            sudo apt-get -y install openresty --no-install-recommends
+        ;;
+        deb) 
+            DepInstall lsb-release
+            DepInstall debian-archive-keyring
+            DepInstall gpg
+            if [ ! -f /etc/apt/sources.list.d/openresty.list ] 
+            then
+                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                then
+                    curl -fsSL https://mirrors.ustc.edu.cn/openresty/pubkey.gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] https://mirrors.ustc.edu.cn/openresty${arch_path}/debian \
+                    ${VERSION_CODENAME} openresty" | sudo tee /etc/apt/sources.list.d/openresty.list
+                else
+                    curl -fsSL https://openresty.org/package/pubkey.gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] http://openresty.org/package${arch_path}/debian \
+                    ${VERSION_CODENAME} openresty" | sudo tee /etc/apt/sources.list.d/openresty.list
+                fi
+                sudo apt-get update
+            fi
+            sudo apt-get -y install openresty --no-install-recommends
+        ;;
+        rpm) 
+            DepInstall yum-utils
+
+            if [ ! -f /etc/yum.repos.d/openresty.repo ] 
+            then
+                dist_names=( amazon alinux tlinux oracle rocky fedora centos rhel )
+
+                for dist_name in "${dist_names[@]}"
+                do
+                    if grep -qi "$dist_name" <<< "$ID" || grep -qi "$dist_name" <<< "$NAME"
+                    then
+                        case $dist_name in
+                            amazon|alinux|tlinux|oracle|fedora)
+                                curl -s -L https://openresty.org/package/$dist_name/openresty.repo -o /etc/yum.repos.d/openresty.repo
+                            ;;
+                            rocky|centos|rhel)
+                                if [ "${VERSION_ID%%.*}" -gt 8 ] 
+                                then
+                                    curl -s -L https://openresty.org/package/$dist_name/openresty2.repo -o /etc/yum.repos.d/openresty.repo
+                                else
+                                    curl -s -L https://openresty.org/package/$dist_name/openresty.repo -o /etc/yum.repos.d/openresty.repo
+                                fi
+                            ;;
+                        esac
+                        break
+                    fi
+                done
+            fi
+            sudo yum check-update
+            sudo yum install -y openresty openresty-opm openresty-doc
+        ;;
+        *)
+            Println "$error 不支持的系统\n"
+            return 1
+        ;;
+    esac
+
+    if ! grep -q "$nginx_name:" < "/etc/passwd"
+    then
+        if grep -q '\--group ' < <(adduser --help)
+        then
+            adduser "$nginx_name" --system --group --no-create-home > /dev/null
+        else
+            adduser "$nginx_name" --system --no-create-home > /dev/null
+        fi
+        usermod -s /usr/sbin/nologin "$nginx_name"
+    fi
+
+    sed -i "s/#user  nobody;/user $nginx_name $nginx_name;/" "$nginx_prefix/conf/nginx.conf"
+    sed -i "s/worker_connections  1024;/worker_connections  51200;/" "$nginx_prefix/conf/nginx.conf"
+
+    mkdir -p "$nginx_prefix/conf/sites_crt/"
+    mkdir -p "$nginx_prefix/conf/sites_available/"
+    mkdir -p "$nginx_prefix/conf/sites_enabled/"
+    mkdir -p "$nginx_prefix/html/localhost/"
+
+    CrossplaneInstall
+
+    Println "$info $nginx_name 安装成功\n"
+}
+
+OpenrestySourceInstall()
+{
+    local install="更新"
+
+    if [ -z "${1:-}" ] 
+    then
+        if [[ -x $(command -v $nginx_name) ]] 
+        then
+            return 0
+        fi
+        install="安装"
+    elif [[ ! -x $(command -v $nginx_name) ]] 
+    then
+        install="安装"
+    fi
+
+    DepsCheck
+
+    echo
+    pcre_options=( pcre pcre2 )
+    inquirer list_input_index "选择 pcre 版本" pcre_options pcre_options_index
+
+    Println "$tip 如果选择 openssl, $nginx_name 将不支持 ssl_early_data (0-RTT)"
+    openssl_options=( openssl@1.1 quictls )
+    inquirer list_input_index "选择 openssl 版本" openssl_options openssl_options_index
+
+    echo
+    inquirer list_input_index "额外添加编译选项" ny_options ny_index
+    install_options_selected=()
+    if [ "$ny_index" -eq 1 ] 
+    then
+        echo
+        install_options=( --with-http_iconv_module --with-http_postgres_module --with-http_slice_module )
+        inquirer checkbox_input "选择编译选项" install_options install_options_selected
+    fi
+
+    if [ "$dist" == "mac" ] 
+    then
+        Println "$tip 如果选择官方编译, $nginx_name 将缺少 nginx-http-flv-module 和 quictls 选择"
+        inquirer list_input_index "使用官方编译" yn_options yn_index
+        if [ "$yn_index" -eq 0 ] 
+        then
+            brew tap openresty/brew
+            brew install openresty ${install_options_selected[@]+"${install_options_selected[@]}"}
+            if [ ! -d "$nginx_prefix" ] 
+            then
+                Println "$info 建立目录 $nginx_prefix, 可能需要输入密码\n"
+                sudo mkdir -p "$nginx_prefix"/html/localhost/
+                sudo chown "$USER" "$nginx_prefix"
+                ln -s "$HOMEBREW_PREFIX"/etc/openresty "$nginx_prefix"/conf
+                ln -s "$HOMEBREW_PREFIX"/var/log/nginx "$nginx_prefix"/logs
+            fi
+            return
+        fi
+        if [ ! -d "$nginx_prefix" ]
+        then
+            Println "$info 建立目录 "$nginx_prefix", 可能需要输入密码\n"
+            sudo mkdir "$nginx_prefix"
+            sudo chown $USER "$nginx_prefix"
+            sudo chown $USER "${nginx_prefix%/*}"
+            if [ ! -f /etc/paths.d/openresty ] 
+            then
+                sudo mkdir -p /etc/paths.d
+                echo "$HOMEBREW_PREFIX"/openresty/bin | sudo tee /etc/paths.d/openresty
+            fi
+        fi
+    fi
+
+    mkdir -p "$DEPENDS_ROOT"
+    cd "$DEPENDS_ROOT"
+
+    rm -rf nginx-http-flv-module-master
+    curl -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o nginx-http-flv-module.zip
+    Println "$info 解压 nginx-http-flv-module ..."
+    unzip nginx-http-flv-module.zip >/dev/null 2>&1
+
+    #cd nginx-http-flv-module-master
+    #curl -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch
+    #patch -p1 < Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch
+    #cd "$DEPENDS_ROOT"
+
+    latest_release=0
+    while IFS= read -r line
+    do
+        if [[ $line == *"Lastest release"* ]] 
+        then
+            latest_release=1
+        elif [ "$latest_release" -eq 1 ] && [[ $line == *"<a "* ]]
+        then
+            openresty_package_name=${line#*/download/}
+            openresty_package_name=${openresty_package_name%%.tar.gz*}
+            break
+        fi
+    done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://openresty.org/en/download.html 2> /dev/null)
+
+    if [ ! -d "./$openresty_package_name" ] 
+    then
+        curl -L "https://openresty.org/download/$openresty_package_name.tar.gz" -o "$openresty_package_name.tar.gz"
+        Println "$info 解压 $openresty_package_name ..."
+        tar xzf "$openresty_package_name.tar.gz"
+    fi
+
+    if [ "$dist" == "mac" ] 
+    then
+        DepInstall "${pcre_options[pcre_options_index]}"
+        DepInstall zlib
+        DepInstall geoip
+
+        cc_opt="-I$HOMEBREW_PREFIX/opt/geoip/include -I$HOMEBREW_PREFIX/opt/${pcre_options[pcre_options_index]}/include -I$HOMEBREW_PREFIX/opt/zlib/include"
+        ld_opt="-L$HOMEBREW_PREFIX/opt/geoip/lib -I$HOMEBREW_PREFIX/opt/${pcre_options[pcre_options_index]}/lib -L$HOMEBREW_PREFIX/opt/zlib/lib"
+
+        for install_option in "${install_options_selected[@]}"
+        do
+            if [ "$install_option" == "--with-http_postgres_module" ] 
+            then
+                DepInstall postgresql@14
+                cc_opt="$cc_opt -I$HOMEBREW_PREFIX/opt/postgresql@14/include"
+                ld_opt="$ld_opt -L$HOMEBREW_PREFIX/opt/postgresql@14/lib"
+                break
+            fi
+        done
+
+        if [ "$openssl_options_index" -eq 1 ] 
+        then
+            QuictlsInstall
+            cc_opt="$cc_opt -I$DEPENDS_ROOT/quictls/build/include"
+            ld_opt="$ld_opt -L$DEPENDS_ROOT/quictls/build/lib"
+        else
+            DepInstall openresty/brew/openresty-openssl111
+            cc_opt="$cc_opt -I$HOMEBREW_PREFIX/opt/openresty-openssl111/include"
+            ld_opt="$ld_opt -L$HOMEBREW_PREFIX/opt/openresty-openssl111/lib"
+        fi
+
+        cd "$openresty_package_name/bundle/ngx_lua-"*
+
+        curl -L "$FFMPEG_MIRROR_LINK/fix_ngx_lua_resp_get_headers_key_whitespace.patch" -o fix_ngx_lua_resp_get_headers_key_whitespace.patch
+        patch -p1 < fix_ngx_lua_resp_get_headers_key_whitespace.patch || true
+
+        cd ../../
+
+        ./configure \
+        --add-module=../nginx-http-flv-module-master \
+        --with-cc-opt="$cc_opt" \
+        --with-ld-opt="$ld_opt" \
+        --with-debug \
+        --with-http_addition_module \
+        --with-http_auth_request_module \
+        --with-http_dav_module \
+        --with-http_degradation_module \
+        --with-http_gunzip_module \
+        --with-http_geoip_module \
+        --with-http_gzip_static_module \
+        --with-http_mp4_module \
+        --with-http_random_index_module \
+        --with-http_realip_module \
+        --with-http_secure_link_module \
+        --with-http_slice_module \
+        --with-http_ssl_module \
+        --with-http_stub_status_module \
+        --with-http_sub_module \
+        --with-http_v2_module \
+        --with-http_v3_module \
+        --with-http_flv_module \
+        --without-mail_pop3_module \
+        --without-mail_imap_module \
+        --without-mail_smtp_module \
+        --with-pcre-jit \
+        --without-http_rds_json_module \
+        --without-http_rds_csv_module \
+        --without-lua_rds_parser \
+        --with-ipv6 \
+        --with-stream \
+        --with-stream_realip_module \
+        --with-stream_ssl_module \
+        --with-stream_ssl_preread_module \
+        --with-threads \
+        --with-luajit-xcflags=-DLUAJIT_NUMMODE=2\ -DLUAJIT_ENABLE_LUA52COMPAT\ -fno-stack-check ${install_options_selected[@]+"${install_options_selected[@]}"}
+    else
+        if [ "$dist" == "rpm" ] 
+        then
+            . /etc/os-release
+
+            case ${VERSION_ID%%.*} in
+                9) 
+                    dnf config-manager --set-enabled crb
+                    dnf install -y epel-release
+                    if dnf list epel-next-release &>/dev/null 
+                    then
+                        dnf install -y epel-next-release
+                    fi
+                ;;
+                8) 
+                    dnf config-manager --set-enabled powertools
+                    dnf install -y epel-release
+                    if dnf list epel-next-release &>/dev/null 
+                    then
+                        dnf install -y epel-next-release
+                    fi
+                ;;
+                *) 
+                    yum install -y epel-release
+                ;;
+            esac
+
+            yum groupinstall -y 'Development Tools'
+            timedatectl set-timezone Asia/Shanghai
+            systemctl restart crond
+            yum install -y pcre-devel openssl-devel gcc zlib-devel libpq-devel
+        else
+            timedatectl set-timezone Asia/Shanghai
+            systemctl restart cron
+            apt-get -y install debconf-utils
+            echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
+            apt-get -y install libpcre3-dev perl make software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext build-essential libpq-dev
+        fi
+
+        while IFS= read -r line
+        do
+            if [[ $line =~ \<A\ HREF=\"(.+)\.tar\.gz ]] 
+            then
+                zlib_name=${BASH_REMATCH[1]}
+                break
+            fi
+        done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://www.zlib.net 2> /dev/null)
+
+        if [ ! -d $zlib_name ] 
+        then
+            curl -L https://www.zlib.net/$zlib_name.tar.gz -o $zlib_name.tar.gz
+            Println "$info 解压 $zlib_name ..."
+            tar xzf $zlib_name.tar.gz
+        fi
+
+        if [ "$pcre_options_index" -eq 0 ] 
+        then
+            pcre_name=pcre-8.45
+            if [ ! -d $pcre_name ] 
+            then
+                curl -L https://downloads.sourceforge.net/pcre/pcre/${pcre_name#*-}/$pcre_name.zip -o $pcre_name.zip
+                Println "$info 解压 $pcre_name ..."
+                unzip $pcre_name.zip >/dev/null 2>&1
+            fi
+        else
+            pcre_name=$(curl -Lm 20 "$FFMPEG_MIRROR_LINK/pcre2.json" | $JQ_FILE -r '.tag_name')
+            if [ ! -d $pcre_name ] 
+            then
+                curl -L $FFMPEG_MIRROR_LINK/pcre2/$pcre_name/$pcre_name.zip -o $pcre_name.zip
+                Println "$info 解压 $pcre_name ..."
+                unzip $pcre_name.zip >/dev/null 2>&1
+            fi
+        fi
+
+        openssl_url="https://www.openssl.org/source/old"
+        openssl_vers=($(curl -s -Lm 20 $openssl_url/ | grep -oP '<li><a href="[^"]+">\K[^<]+'))
+
+        for openssl_ver in "${openssl_vers[@]}"
+        do
+            if [ "${openssl_ver%%.*}" -eq 1 ] 
+            then
+                break
+            fi
+        done
+
+        openssl_url="$openssl_url/$openssl_ver"
+
+        openssl_packs=($(curl -s -Lm 20 $openssl_url/ | grep -oP '<td><a href="[^"]+">\K[^<]+'))
+        openssl_pack="${openssl_packs[0]}"
+        openssl_name=${openssl_pack%.tar*}
+
+        if [ "$openssl_options_index" -eq 1 ] 
+        then
+            openssl_ver=${openssl_name#*-}
+            openssl_name=openssl-OpenSSL_${openssl_ver//./_}-quic1
+        fi
+
+        if [ ! -d ${openssl_name}-patched ] || [ ! -s ${openssl_name}-patched/openssl-1.1.1f-sess_set_get_cb_yield.patch ]
+        then
+            rm -rf ${openssl_name:-notfound}
+            rm -rf ${openssl_name}-patched
+
+            if [ "$openssl_options_index" -eq 1 ] 
+            then
+                Println "$info 下载 ${openssl_name#*-} ..."
+                if ! curl -Lm 30 https://github.com/quictls/openssl/archive/refs/tags/${openssl_name#*-}.tar.gz -o "$openssl_name".tar.gz
+                then
+                    curl -L "$FFMPEG_MIRROR_LINK/${openssl_name#*-}".tar.gz -o "$openssl_name".tar.gz
+                fi
+                Println "$info 解压 ${openssl_name#*-} ..."
+                tar xzf ${openssl_name}.tar.gz
+            else
+                curl -L "$openssl_url/$openssl_pack" -o "$openssl_pack"
+                Println "$info 解压 $openssl_name ..."
+                tar xzf "$openssl_pack"
+            fi
+
+            mv ${openssl_name} ${openssl_name}-patched
+            cd ${openssl_name}-patched
+
+            curl -L "$FFMPEG_MIRROR_LINK/openssl-1.1.1f-sess_set_get_cb_yield.patch" -o openssl-1.1.1f-sess_set_get_cb_yield.patch
+            patch -p1 < openssl-1.1.1f-sess_set_get_cb_yield.patch || true
+            cd "$DEPENDS_ROOT"
+        fi
+
+        cd "$openresty_package_name/bundle/ngx_lua-"*
+
+        curl -L "$FFMPEG_MIRROR_LINK/fix_ngx_lua_resp_get_headers_key_whitespace.patch" -o fix_ngx_lua_resp_get_headers_key_whitespace.patch
+        patch -p1 < fix_ngx_lua_resp_get_headers_key_whitespace.patch || true
+
+        cd ../..
+
+        ./configure \
+        --add-module=../nginx-http-flv-module-master \
+        --with-pcre=../$pcre_name \
+        --with-pcre-jit \
+        --with-zlib=../$zlib_name \
+        --with-openssl=../${openssl_name}-patched \
+        --with-openssl-opt="no-threads shared zlib -g enable-ssl3 enable-ssl3-method enable-ec_nistp_64_gcc_128" \
+        --with-http_ssl_module \
+        --with-http_v2_module \
+        --with-http_v3_module \
+        --without-mail_pop3_module \
+        --without-mail_imap_module \
+        --without-mail_smtp_module \
+        --without-http_rds_json_module \
+        --without-http_rds_csv_module \
+        --without-lua_rds_parser \
+        --with-http_stub_status_module \
+        --with-http_realip_module \
+        --with-debug \
+        --with-http_addition_module \
+        --with-http_auth_request_module \
+        --with-http_secure_link_module \
+        --with-http_slice_module \
+        --with-http_random_index_module \
+        --with-http_gzip_static_module \
+        --with-http_sub_module \
+        --with-http_dav_module \
+        --with-http_degradation_module \
+        --with-http_flv_module \
+        --with-http_mp4_module \
+        --with-http_gunzip_module \
+        --with-ipv6 \
+        --with-stream \
+        --with-stream_ssl_preread_module \
+        --with-stream_ssl_module \
+        --with-stream_realip_module \
+        --with-threads \
+        --with-luajit-xcflags=-DLUAJIT_NUMMODE=2\ -DLUAJIT_ENABLE_LUA52COMPAT\ -fno-stack-check ${install_options_selected[@]+"${install_options_selected[@]}"}
+    fi
+
+    nproc="-j$(nproc 2> /dev/null)" || nproc="-j1"
+
+    make $nproc
+    make install
+
+    ln -sf "$nginx_prefix"/sbin/nginx "$AIOS_PREFIX"/bin/
+
+    if [ "$dist" != "mac" ] 
+    then
+        if ! grep -q "$nginx_name:" < "/etc/passwd"
+        then
+            if grep -q '\--group ' < <(adduser --help)
+            then
+                adduser "$nginx_name" --system --group --no-create-home > /dev/null
+            else
+                adduser "$nginx_name" --system --no-create-home > /dev/null
+            fi
+            usermod -s /usr/sbin/nologin "$nginx_name"
+        fi
+
+        sed -i "s/#user  nobody;/user $nginx_name $nginx_name;/" "$nginx_prefix/conf/nginx.conf"
+    fi
+
+    sed -i "s/worker_processes .*/worker_processes  ${nproc:2};/" "$nginx_prefix/conf/nginx.conf"
+    sed -i "s/worker_connections  1024;/worker_connections  51200;/" "$nginx_prefix/conf/nginx.conf"
+
+    mkdir -p "$nginx_prefix/conf/sites_crt/"
+    mkdir -p "$nginx_prefix/conf/sites_available/"
+    mkdir -p "$nginx_prefix/conf/sites_enabled/"
+    mkdir -p "$nginx_prefix/html/localhost/"
+
+    CrossplaneInstall
+
+    Println "$info $nginx_name ${install}成功\n"
+}
+
+OpenrestyInstall()
+{
+    if [ -d "$nginx_prefix" ] 
+    then
+        Println "$error $nginx_name 已经存在 $nginx_prefix !\n"
+        return 1
+    elif [[ -x $(command -v $nginx_name) ]] 
+    then
+        Println "$error $nginx_name 已经存在 $(command -v $nginx_name), 请先卸载!\n"
+        return 1
+    fi
+
+    if [ "$dist" != "mac" ] 
+    then
+        Println "$tip 选择快速安装将缺少 nginx-http-flv-module 和 quictls 选择"
+        openresty_install_options=( "${nginx_name}官方包 (快速安装)" '编译安装' )
+        inquirer list_input_index "选择安装方式" openresty_install_options openresty_install_options_index
+
+        if [ "$openresty_install_options_index" -eq 0 ] 
+        then
+            OpenrestyPackageInstall
+            return
+        fi
+    fi
+
+    OpenrestySourceInstall
+}
+
+OpenrestyUninstall()
+{
+    if [ ! -d "$nginx_prefix" ] 
+    then
+        Println "$error $nginx_name 未安装 !\n"
+        return 1
+    fi
+
+    echo
+    ExitOnList n "`eval_gettext \"确定删除 \\\$nginx_name 包括所有配置文件, 操作不可恢复\"`"
+
+    ServiceControlDisable "$nginx_name"
+
+    case $dist in
+        mac) 
+            if brew list "$nginx_name" &>/dev/null
+            then
+                brew uninstall "$nginx_name"
+            fi
+        ;;
+        rpm) 
+            if rpm -q "$nginx_name" &> /dev/null
+            then
+                yum remove -y "$nginx_name"* || true
+            fi
+        ;;
+        *) 
+            if dpkg -s "$nginx_name" &> /dev/null 
+            then
+                apt-get -y --purge remove "$nginx_name"* || true
+            fi
+        ;;
+    esac
+
+    rm -rf "${nginx_prefix%/*}"
+
+    Println "$info $nginx_name 卸载完成\n"
+}
+
+OpenrestyUpdate()
+{
+    ShFileUpdate "$nginx_name"
+
+    if [ ! -d "$nginx_prefix" ] 
+    then
+        Println "$error $nginx_name 未安装 !\n"
+        return 1
+    fi
+
+    if [ "$dist" == "rpm" ] && rpm -q "$nginx_name" &> /dev/null
+    then
+        yum update -y "$nginx_name"
+    elif { [ "$dist" == "deb" ] || [ "$dist" == "ubu" ]; } && dpkg -s "$nginx_name" &> /dev/null
+    then
+        apt-get -y install --only-upgrade "$nginx_name"
+    else
+        OpenrestySourceInstall update
+    fi
+}

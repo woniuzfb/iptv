@@ -1,0 +1,87 @@
+QuictlsInstall()
+{
+    if [ -d "$DEPENDS_ROOT"/quictls/build ] 
+    then
+        return 0
+    fi
+
+    GitInstall
+
+    rm -rf "$DEPENDS_ROOT"/quictls
+    mkdir -p "$DEPENDS_ROOT"
+
+    git clone "$QUICTLS_LINK" "$DEPENDS_ROOT"/quictls
+
+    cd "$DEPENDS_ROOT"/quictls
+
+    DepInstall ca-certificates
+    DepInstall perl
+
+    unset OPENSSL_LOCAL_CONFIG_DIR
+
+    args=(
+        --prefix="$DEPENDS_ROOT"/quictls/build
+        --openssldir="$DEPENDS_ROOT"/quictls/build/etc
+        --libdir=lib
+    )
+
+    ArchCheck
+
+    if [ "$dist" == "mac" ] 
+    then
+        export PERL="$HOMEBREW_PREFIX"/opt/perl/bin/perl
+        args+=( darwin64-${arch}-cc )
+    else
+        case $arch in
+            x86_64) args+=( linux-x86_64 )
+            ;;
+            i386) args+=( linux-elf )
+            ;;
+            arm64) args+=( linux-aarch64 )
+            ;;
+            arm*) args+=( linux-armv4 )
+            ;;
+            *) Println "$error 不支持的架构 $arch\n"; return 1
+        esac
+
+        if [ "$dist" == "rpm" ] 
+        then
+            . /etc/os-release
+
+            case ${VERSION_ID%%.*} in
+                9) 
+                    dnf config-manager --set-enabled crb
+                    dnf install -y epel-release
+                    if dnf list epel-next-release &>/dev/null 
+                    then
+                        dnf install -y epel-next-release
+                    fi
+                ;;
+                8) 
+                    dnf config-manager --set-enabled powertools
+                    dnf install -y epel-release
+                    if dnf list epel-next-release &>/dev/null 
+                    then
+                        dnf install -y epel-next-release
+                    fi
+                ;;
+                7) 
+                    yum install -y epel-release
+                ;;
+                *) Println "$error 不支持的系统版本\n"; return 1
+                ;;
+            esac
+
+            yum groupinstall -y 'Development Tools'
+            yum install -y glibc-devel lua-devel pcre-devel openssl-devel systemd-devel zlib-devel
+        else
+            sudo apt-get install -y gcc libc6-dev liblua5.4-dev libpcre3-dev libssl-dev libsystemd-dev make zlib1g-dev
+        fi
+    fi
+
+    git checkout OpenSSL_1_1_1w+quic
+    mkdir -p build/etc
+    perl ./Configure "${args[@]}"
+    make
+    make install
+}

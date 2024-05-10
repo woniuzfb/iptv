@@ -6,27 +6,27 @@ MongodbMenu()
 
     if [ "$mongodb_options_index" -eq 0 ] 
     then
-        if [[ ! -x $(command -v mongo) ]] 
+        if [[ ! -x $(command -v mongod) ]] 
         then
             Println "$error 请先安装 mongodb\n"
-            exit 1
+            return 1
         fi
 
         systemctl --no-pager -l status mongod
     elif [ "$mongodb_options_index" -eq 1 ] 
     then
-        if [[ -x $(command -v mongo) ]] 
+        if [[ -x $(command -v mongod) ]]
         then
             Println "$error mongodb 已存在\n"
-            exit 1
+            return 1
         fi
 
         MongodbInstall
     else
-        if [[ ! -x $(command -v mongo) ]] 
+        if [[ ! -x $(command -v mongod) ]] 
         then
             Println "$error 请先安装 mongodb\n"
-            exit 1
+            return 1
         fi
 
         echo
@@ -40,7 +40,7 @@ MongodbMenu()
 
             rm -f /etc/yum.repos.d/mongodb-org-*.repo
         else
-            apt-get -y purge mongodb-org*
+            apt-get -y --purge remove mongodb-org*
             apt-get -y autoremove
 
             rm -f /etc/apt/sources.list.d/mongodb-org-*.list

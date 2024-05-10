@@ -18,20 +18,21 @@ indent_20='\r\033[20C'
 
 # files
 SH_LINK=https://woniuzfb.github.io/iptv/iptv.sh
+AIOS_PREFIX=/usr/local
 SH_FALLBACK=cn.epub.fun
-SH_FILE=/usr/local/bin/tv
-i18n_FILE=/usr/local/bin/tv-i18n
-OR_FILE=/usr/local/bin/or
-NX_FILE=/usr/local/bin/nx
-XC_FILE=/usr/local/bin/cx
-ARM_FILE=/usr/local/bin/arm
-PVE_FILE=/usr/local/bin/pve
+SH_FILE="$AIOS_PREFIX"/bin/tv
+i18n_FILE="$AIOS_PREFIX"/bin/tv-i18n
+OR_FILE="$AIOS_PREFIX"/bin/or
+NX_FILE="$AIOS_PREFIX"/bin/nx
+XC_FILE="$AIOS_PREFIX"/bin/cx
+ARM_FILE="$AIOS_PREFIX"/bin/arm
+PVE_FILE="$AIOS_PREFIX"/bin/pve
 LOG_FILE="$HOME"/iptv.log
-JQ_FILE=/usr/local/bin/jq
-YQ_FILE=/usr/local/bin/yq
-FFMPEG_FILE=/usr/local/bin/ffmpeg
-FFPROBE_FILE=/usr/local/bin/ffprobe
-CURL_IMPERSONATE_FILE=/usr/local/bin/curl-impersonate
+JQ_FILE="$AIOS_PREFIX"/bin/jq
+YQ_FILE="$AIOS_PREFIX"/bin/yq
+FFMPEG_FILE="$AIOS_PREFIX"/bin/ffmpeg
+FFPROBE_FILE="$AIOS_PREFIX"/bin/ffprobe
+CURL_IMPERSONATE_FILE="$AIOS_PREFIX"/bin/curl-impersonate
 
 # backup
 BACKUP_ROOT="$HOME"/iptv_sh_backup
@@ -44,7 +45,7 @@ NODE_ROOT="$HOME"/iptv_sh_node
 NODE_TOUTIAO_LINK=https://raw.githubusercontent.com/woniuzfb/iptv/main/scripts/toutiao
 
 # iptv
-IPTV_ROOT=/usr/local/iptv
+IPTV_ROOT="$AIOS_PREFIX"/iptv
 FFMPEG_LOG_ROOT="$IPTV_ROOT"/ffmpeg
 FFMPEG_MIRROR_LINK=http://pngquant.com/ffmpeg
 FFMPEG_MIRROR_ROOT="$IPTV_ROOT"/ffmpeg
@@ -75,18 +76,18 @@ USER_AGENT_TV="Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, l
 USER_AGENT_PHONE="iPhone; CPU iPhone OS 15_2 like Mac OS X"
 
 # v2ray
-V2_FILE=/usr/local/bin/v2
+V2_FILE="$AIOS_PREFIX"/bin/v2
 V2_LINK=https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh
 V2_LINK_FALLBACK="$FFMPEG_MIRROR_LINK"/v2ray_install-release.sh
-V2CTL_FILE=/usr/local/bin/v2ctl
-V2_CONFIG=/usr/local/etc/v2ray/config.json
+V2CTL_FILE="$AIOS_PREFIX"/bin/v2ctl
+V2_CONFIG="$AIOS_PREFIX"/etc/v2ray/config.json
 
 # xray
-X_FILE=/usr/local/bin/x
-X_CONFIG=/usr/local/etc/xray/config.json
+X_FILE="$AIOS_PREFIX"/bin/x
+X_CONFIG="$AIOS_PREFIX"/etc/xray/config.json
 
 # cloudflare
-CF_FILE=/usr/local/bin/cf
+CF_FILE="$AIOS_PREFIX"/bin/cf
 CF_CONFIG="$HOME"/cloudflare.json
 CF_WORKERS_ROOT="$HOME"/workers
 CF_WORKERS_FILE="$CF_WORKERS_ROOT"/cloudflare_workers.py
@@ -98,7 +99,7 @@ XTREAM_CODES_PROXY_LINK=https://raw.githubusercontent.com/woniuzfb/iptv/main/scr
 XTREAM_CODES_PROXY_LINK_FALLBACK="$FFMPEG_MIRROR_LINK"/xtream_codes_proxy.js
 
 # ibm cf
-IBM_FILE=/usr/local/bin/ibm
+IBM_FILE="$AIOS_PREFIX"/bin/ibm
 IBM_APPS_ROOT="$HOME"/ibm_apps
 IBM_CONFIG="$HOME"/ibm.json
 
@@ -106,23 +107,28 @@ IBM_CONFIG="$HOME"/ibm.json
 SERVICES_ROOT="$HOME"/iptv_sh_services
 SERVICES_CONFIG="$SERVICES_ROOT"/config.json
 
+# depends
+DEPENDS_ROOT="$SERVICES_ROOT"/depends
+AIOS_LINK=https://github.com/woniuzfb/iptv
+QUICTLS_LINK=https://github.com/quictls/openssl
+
 # Alist
-ALIST_FILE=/usr/local/bin/ali
+ALIST_FILE="$AIOS_PREFIX"/bin/ali
 ALIST_ROOT="$SERVICES_ROOT"/alist
 ALIST_LINK=https://github.com/alist-org/alist
 ALIST_LINK_FALLBACK="$FFMPEG_MIRROR_LINK"/alist
 
 # LianHuanHua
-LIANHUANHUA_FILE=/usr/local/bin/lhh
+LIANHUANHUA_FILE="$AIOS_PREFIX"/bin/lhh
 LIANHUANHUA_ROOT="$SERVICES_ROOT"/lianhuanhua
 LIANHUANHUA_CONFIG="$LIANHUANHUA_ROOT"/config.json
 
 # Rclone
-RCLONE_FILE=/usr/local/bin/rc
+RCLONE_FILE="$AIOS_PREFIX"/bin/rc
 RCLONE_ROOT="$SERVICES_ROOT"/rclone
 
 # Calibre
-CALIBRE_FILE=/usr/local/bin/cw
+CALIBRE_FILE="$AIOS_PREFIX"/bin/cw
 CALIBRE_ROOT="$SERVICES_ROOT"/calibre
 
 # Kcc
@@ -130,10 +136,6 @@ KCC_ROOT="$CALIBRE_ROOT"/kcc
 KCC_FILE="$KCC_ROOT"/kcc-c2e.py
 
 # docker
-DOCKER_FILE=/usr/local/bin/dr
+DOCKER_FILE="$AIOS_PREFIX"/bin/dr
 DOCKER_ROOT="$SERVICES_ROOT"/docker
 DOCKER_CONFIG="$SERVICES_ROOT"/docker/docker-compose.yml
-
-# aios
-AIOS_LINK=https://github.com/woniuzfb/iptv
-AIOS_ROOT="$SERVICES_ROOT"/aios

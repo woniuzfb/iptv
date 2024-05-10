@@ -43,16 +43,16 @@ NginxDomainUpdateCrt()
         [ "$stopped" -eq 1 ] && systemctl start $nginx_name
     fi
 
-    if [ -e "/usr/local/share/v2ray/$domain.crt" ] 
+    if [ -e "$AIOS_PREFIX/share/v2ray/$domain.crt" ] 
     then
-        cp -f "$nginx_prefix/conf/sites_crt/$domain.crt" "/usr/local/share/v2ray/$domain.crt"
-        cp -f "$nginx_prefix/conf/sites_crt/$domain.key" "/usr/local/share/v2ray/$domain.key"
+        cp -f "$nginx_prefix/conf/sites_crt/$domain.crt" "$AIOS_PREFIX/share/v2ray/$domain.crt"
+        cp -f "$nginx_prefix/conf/sites_crt/$domain.key" "$AIOS_PREFIX/share/v2ray/$domain.key"
     fi
 
-    if [ -e "/usr/local/share/xray/$domain.crt" ] 
+    if [ -e "$AIOS_PREFIX/share/xray/$domain.crt" ] 
     then
-        cp -f "$nginx_prefix/conf/sites_crt/$domain.crt" "/usr/local/share/xray/$domain.crt"
-        cp -f "$nginx_prefix/conf/sites_crt/$domain.key" "/usr/local/share/xray/$domain.key"
+        cp -f "$nginx_prefix/conf/sites_crt/$domain.crt" "$AIOS_PREFIX/share/xray/$domain.crt"
+        cp -f "$nginx_prefix/conf/sites_crt/$domain.key" "$AIOS_PREFIX/share/xray/$domain.key"
     fi
 
     [ "$quiet" -eq 0 ] && Println "$info $domain 证书更新成功\n"

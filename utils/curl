@@ -32,7 +32,7 @@ CurlImpersonateInstall()
     if ! curl_impersonate_ver=$(curl -s -Lm 20 "https://api.github.com/repos/lwthiker/curl-impersonate/releases/latest" | $JQ_FILE -r '.tag_name') 
     then
         Println "$error curl impersonate 下载出错, 无法连接 github ?\n"
-        exit 1
+        return 1
     fi
 
     if [ "$arch" == "x86_64" ] 
@@ -48,26 +48,26 @@ CurlImpersonateInstall()
         curl_impersonate_package_name="curl-impersonate-$curl_impersonate_ver.aarch64-linux-gnu"
     else
         Println "$error 系统不支持安装 curl impersonate\n"
-        exit 1
+        return 1
     fi
 
     Println "$info 下载 curl impersonate ..."
 
-    mkdir -p "$HOME/curl-impersonate/"
-
-    if ! curl -s -Lm 20 "https://github.com/lwthiker/curl-impersonate/releases/download/$curl_impersonate_ver/$curl_impersonate_package_name.tar.gz" -o "$HOME/$curl_impersonate_package_name.tar.gz_tmp"
+    if ! curl -s -Lm 20 "https://github.com/lwthiker/curl-impersonate/releases/download/$curl_impersonate_ver/$curl_impersonate_package_name.tar.gz" -o "$DEPENDS_ROOT/$curl_impersonate_package_name.tar.gz_tmp"
     then
         Println "$error curl impersonate 下载出错, 无法连接 github ?\n"
-        exit 1
+        return 1
     fi
 
-    mv "$HOME/$curl_impersonate_package_name.tar.gz_tmp" "$HOME/$curl_impersonate_package_name.tar.gz"
+    mv "$DEPENDS_ROOT/$curl_impersonate_package_name.tar.gz_tmp" "$DEPENDS_ROOT/$curl_impersonate_package_name.tar.gz"
 
-    tar -C "$HOME/curl-impersonate/" -xzf "$HOME/$curl_impersonate_package_name.tar.gz"
+    mkdir -p "$DEPENDS_ROOT/curl-impersonate/"
+
+    tar -C "$DEPENDS_ROOT/curl-impersonate/" -xzf "$DEPENDS_ROOT/$curl_impersonate_package_name.tar.gz"
 
     rm -f "$CURL_IMPERSONATE_FILE"
 
-    awk '!x{x=sub(/dir=.*/,"dir='"$HOME/curl-impersonate"'")}1' "$HOME/curl-impersonate/curl_chrome99" > "$CURL_IMPERSONATE_FILE"
+    awk '!x{x=sub(/dir=.*/,"dir='"$DEPENDS_ROOT/curl-impersonate"'")}1' "$DEPENDS_ROOT/curl-impersonate/curl_chrome99" > "$CURL_IMPERSONATE_FILE"
 
     chmod +x "$CURL_IMPERSONATE_FILE"
 
@@ -131,7 +131,7 @@ CurlImpersonateUpdate()
 
     impersonate_options=()
 
-    for ele in "$HOME"/curl-impersonate/curl_*
+    for ele in "$DEPENDS_ROOT"/curl-impersonate/curl_*
     do
         impersonate_options+=("${ele##*/}")
     done
@@ -141,7 +141,7 @@ CurlImpersonateUpdate()
 
     rm -f "$impersonate_service_file"
 
-    awk '!x{x=sub(/dir=.*/,"dir='"$HOME/curl-impersonate"'")}1' "$HOME/curl-impersonate/$impersonate_option" > "$impersonate_service_file"
+    awk '!x{x=sub(/dir=.*/,"dir='"$DEPENDS_ROOT/curl-impersonate"'")}1' "$DEPENDS_ROOT/curl-impersonate/$impersonate_option" > "$impersonate_service_file"
 
     chmod +x "$impersonate_service_file"
 
@@ -188,11 +188,12 @@ CurlImpersonateUpdate()
 CurlImpersonateCompile()
 {
     echo
-    inquirer text_input "输入 curl-impersonate 安装目录" curl_impersonate_prefix /usr/local/curl-impersonate
+    inquirer text_input "输入 curl-impersonate 安装目录" curl_impersonate_prefix "$AIOS_PREFIX"/curl-impersonate
 
     GitInstall
 
-    cd ~
+    mkdir -p "$DEPENDS_ROOT"
+    cd "$DEPENDS_ROOT"
 
     if [ -d curl-impersonate.git ] 
     then
@@ -243,8 +244,8 @@ CurlImpersonateCompile()
     # sudo cp -f curl-*/curl-impersonate-chrome-config "$curl_impersonate_prefix"/bin/
     # sudo chmod +x "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config
 
-    # rm -f /usr/local/bin/curl-config
-    # sudo ln -s "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config /usr/local/bin/curl-config
+    # rm -f "$AIOS_PREFIX"/bin/curl-config
+    # sudo ln -s "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config "$AIOS_PREFIX"/bin/curl-config
 
     Println "$info curl impersonate 编译成功\n"
 }
@@ -254,15 +255,16 @@ NodeLibcurlImpersonateCompile()
     NodejsInstall
 
     echo
-    inquirer text_input "输入编译安装好的 curl impersonate 路径" curl_impersonate_prefix /usr/local/curl-impersonate
+    inquirer text_input "输入编译安装好的 curl impersonate 路径" curl_impersonate_prefix "$AIOS_PREFIX"/curl-impersonate
 
     if [ ! -d "$curl_impersonate_prefix" ] 
     then
         Println "$error curl impersonate 目录不存在, 请先编译安装\n"
-        exit 1
+        return 1
     fi
 
-    cd ~
+    mkdir -p "$DEPENDS_ROOT"
+    cd "$DEPENDS_ROOT"
 
     if [ -d node-libcurl-impersonate ] 
     then
@@ -277,15 +279,15 @@ NodeLibcurlImpersonateCompile()
 
     if [ "$dist" == "mac" ] 
     then
-        Println "$tip 可能需要输入密码创建链接 ln -s ${curl_impersonate_prefix}/bin/curl-impersonate-chrome-config /usr/local/bin/curl-config"
-        sudo ln -s "${curl_impersonate_prefix}"/lib/libcurl-impersonate-chrome.*.dylib /usr/local/curl-impersonate/lib/libcurl.dylib
+        Println "$tip 可能需要输入密码创建链接 ln -s ${curl_impersonate_prefix}/bin/curl-impersonate-chrome-config $AIOS_PREFIX/bin/curl-config"
+        sudo ln -s "${curl_impersonate_prefix}"/lib/libcurl-impersonate-chrome.*.dylib "$AIOS_PREFIX"/curl-impersonate/lib/libcurl.dylib
     fi
 
-    rm -f /usr/local/bin/curl-config
-    sudo ln -s "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config /usr/local/bin/curl-config
+    rm -f "$AIOS_PREFIX"/bin/curl-config
+    sudo ln -s "$curl_impersonate_prefix"/bin/curl-impersonate-chrome-config "$AIOS_PREFIX"/bin/curl-config
     npm run clean:dist
     npm install --force --build-from-source --unsafe-perm
     npm run build:dist
 
-    Println "$info 查看 $HOME/node-libcurl-impersonate/lib/binding/node_libcurl-impersonate.node\n可以这样使用 const { Curl, CurlFeature, CurlHttpVersion, CurlSslVersion } = require('$HOME/node-libcurl-impersonate/dist')\n详见 https://github.com/JCMais/node-libcurl/\n"
+    Println "$info 查看 "$DEPENDS_ROOT"/node-libcurl-impersonate/lib/binding/node_libcurl-impersonate.node\n可以这样使用 const { Curl, CurlFeature, CurlHttpVersion, CurlSslVersion } = require('$DEPENDS_ROOT/node-libcurl-impersonate/dist')\n详见 https://github.com/JCMais/node-libcurl/\n"
 }

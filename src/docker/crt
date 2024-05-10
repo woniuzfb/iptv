@@ -12,15 +12,16 @@ DockerCrtManage()
 {
     if [ ! -d "$DOCKER_ROOT" ] 
     then
-        if [ ! -d "$AIOS_ROOT" ] 
+        if [ ! -d "$DEPENDS_ROOT"/aios ] 
         then
+            mkdir -p "$DEPENDS_ROOT"
             GitInstall
-            git clone "$AIOS_LINK" "$AIOS_ROOT"
+            git clone "$AIOS_LINK" "$DEPENDS_ROOT"/aios
         else
-            cd "$AIOS_ROOT"
-            git pull
+            cd "$DEPENDS_ROOT"/aios
+            git fetch --all && git reset --hard origin/main
         fi
-        cp -r "$AIOS_ROOT"/scripts/docker "$DOCKER_ROOT"
+        cp -r "$DEPENDS_ROOT"/aios/scripts/docker "$DOCKER_ROOT"
     fi
 
     echo

@@ -121,7 +121,10 @@ NginxCheckLocalhost()
 
     NginxAddLocalhost
 
-    NginxAddRtmp
+    if "$NGINX_FILE" -V 2>&1 | grep -qi nginx-http-flv-module
+    then
+        NginxAddRtmp
+    fi
 
     if [ "$updated" -eq 1 ] 
     then

@@ -1,10 +1,7 @@
 # based on https://raw.githubusercontent.com/kahkhang/ora.sh/master/ora.sh
 Spinner()
 {
-    if [[ ! -x $(command -v tput) ]] 
-    then
-        DepInstall tput
-    fi
+    DepInstall tput
 
     local i=1 delay=0.05 FUNCTION_NAME="$2" VARIABLE_NAME="${3:-}" list TMP_FILE
     local green cyan normal

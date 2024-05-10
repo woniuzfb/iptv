@@ -137,6 +137,7 @@ services_excludes_before=(
     venv/
     node_modules/
     .git/
+    /depends/
     /calibre/bin/
     /calibre/kcc/
 )

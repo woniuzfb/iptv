@@ -8,6 +8,7 @@ Include utils/nodejs "$@"
 Include utils/mongodb "$@"
 Include utils/dnscrypt "$@"
 Include utils/iperf "$@"
+Include utils/quictls "$@"
 Include src/nginx/view_status "$@"
 Include src/nginx/toggle "$@"
 Include src/nginx/restart "$@"
@@ -57,306 +58,24 @@ Include src/nginx/config_nodejs "$@"
 Include src/nginx/menu_nodejs "$@"
 Include src/nginx/menu_mongodb "$@"
 Include src/nginx/sites_crt "$@"
-
-OpenrestyInstall()
-{
-    DepsCheck
-
-    if [ "$dist" == "mac" ] && [ ! -d /usr/local/openresty ]
-    then
-        Println "$info 建立目录 /usr/local/openresty, 可能需要输入密码\n"
-        sudo mkdir /usr/local/openresty
-        sudo chown $USER /usr/local/openresty
-    fi
-
-    Progress &
-    progress_pid=$!
-
-    trap '
-        kill $progress_pid
-        wait $progress_pid 2> /dev/null
-    ' EXIT
-
-    cd ~
-
-    rm -rf nginx-http-flv-module-master
-    curl -s -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o nginx-http-flv-module.zip
-    unzip nginx-http-flv-module.zip >/dev/null 2>&1
-
-    #cd nginx-http-flv-module-master
-    #curl -s -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch
-    #patch -p1 < Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch >/dev/null 2>&1
-    #cd ~
-
-    latest_release=0
-    while IFS= read -r line
-    do
-        if [[ $line == *"Lastest release"* ]] 
-        then
-            latest_release=1
-        elif [ "$latest_release" -eq 1 ] && [[ $line == *"<a "* ]]
-        then
-            openresty_package_name=${line#*/download/}
-            openresty_package_name=${openresty_package_name%%.tar.gz*}
-            break
-        fi
-    done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://openresty.org/en/download.html 2> /dev/null)
-
-    if [ ! -d "./$openresty_package_name" ] 
-    then
-        curl -s -L "https://openresty.org/download/$openresty_package_name.tar.gz" -o "$openresty_package_name.tar.gz"
-        tar xzf "$openresty_package_name.tar.gz"
-    fi
-
-    if [ "$dist" == "mac" ] 
-    then
-        DepInstall openresty/brew/openresty-openssl111 >/dev/null
-        DepInstall pcre >/dev/null
-        DepInstall zlib >/dev/null
-        DepInstall geoip >/dev/null
-
-        echo -n "...40%..."
-
-        cd "$openresty_package_name/bundle/ngx_lua-"*
-
-        curl -s -L "$FFMPEG_MIRROR_LINK/fix_ngx_lua_resp_get_headers_key_whitespace.patch" -o fix_ngx_lua_resp_get_headers_key_whitespace.patch
-        patch -p1 < fix_ngx_lua_resp_get_headers_key_whitespace.patch >/dev/null 2>&1 || true
-
-        cd ../../
-
-        cc_opt="-I/usr/local/opt/geoip/include -I/usr/local/opt/pcre@1.1/include -I/usr/local/opt/zlib/include -I/usr/local/opt/openresty-openssl111/include"
-        ld_opt="-L/usr/local/opt/geoip/lib -I/usr/local/opt/pcre@1.1/lib -L/usr/local/opt/zlib/lib -L/usr/local/opt/openresty-openssl111/lib"
-
-        ./configure \
-        --with-cc-opt="$cc_opt" \
-        --with-ld-opt="$ld_opt" \
-        --add-module=../nginx-http-flv-module-master \
-        --with-debug \
-        --with-http_addition_module \
-        --with-http_auth_request_module \
-        --with-http_dav_module \
-        --with-http_degradation_module \
-        --with-http_gunzip_module \
-        --with-http_geoip_module \
-        --with-http_gzip_static_module \
-        --with-http_mp4_module \
-        --with-http_random_index_module \
-        --with-http_realip_module \
-        --with-http_secure_link_module \
-        --with-http_slice_module \
-        --with-http_ssl_module \
-        --with-http_stub_status_module \
-        --with-http_sub_module \
-        --with-http_v2_module \
-        --with-http_flv_module \
-        --without-mail_pop3_module \
-        --without-mail_imap_module \
-        --without-mail_smtp_module \
-        --with-pcre-jit \
-        --without-http_rds_json_module \
-        --without-http_rds_csv_module \
-        --without-lua_rds_parser \
-        --with-stream \
-        --with-stream_realip_module \
-        --with-stream_ssl_module \
-        --with-stream_ssl_preread_module \
-        --with-threads \
-        --with-luajit-xcflags=-DLUAJIT_NUMMODE=2\ -DLUAJIT_ENABLE_LUA52COMPAT\ -fno-stack-check >/dev/null 2>&1
-    else
-        if [ "$dist" == "rpm" ] 
-        then
-            yum -y install gcc gcc-c++ make >/dev/null 2>&1
-            timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
-            systemctl restart crond >/dev/null 2>&1
-            #if grep -q "Fedora" < "/etc/redhat-release"
-            #then
-            #    dnf install -y dnf-plugins-core >/dev/null 2>&1
-            #    dnf config-manager --add-repo https://openresty.org/package/fedora/openresty.repo >/dev/null 2>&1
-            #    dnf install -y openresty >/dev/null 2>&1 || true
-            #    dnf install -y openresty-resty >/dev/null 2>&1
-            #elif grep -q "Amazon" < "/etc/redhat-release"
-            #then
-            #    yum install -y yum-utils >/dev/null 2>&1
-            #    yum-config-manager --add-repo https://openresty.org/package/amazon/openresty.repo >/dev/null 2>&1
-            #    yum install -y openresty >/dev/null 2>&1 || true
-            #    yum install -y openresty-resty >/dev/null 2>&1
-            #elif grep -q "Red Hat" < "/etc/redhat-release"
-            #then
-            #    wget https://openresty.org/package/rhel/openresty.repo -qO /etc/yum.repos.d/openresty.repo >/dev/null 2>&1
-            #    yum check-update >/dev/null 2>&1
-            #    yum install -y openresty >/dev/null 2>&1 || true
-            #    yum install -y openresty-resty >/dev/null 2>&1
-            #else
-            #    wget https://openresty.org/package/centos/openresty.repo -qO /etc/yum.repos.d/openresty.repo >/dev/null 2>&1
-            #    yum check-update >/dev/null 2>&1
-            #    yum install -y openresty >/dev/null 2>&1 || true
-            #    yum install -y openresty-resty >/dev/null 2>&1
-            #fi
-        #elif [ "$dist" == "ubu" ] 
-        #then
-            #apt-get -y install ca-certificates >/dev/null 2>&1
-            #if ! wget -qO - https://openresty.org/package/pubkey.gpg | apt-key add - > /dev/null 2>&1
-            #then
-            #    apt-get -y install gnupg >/dev/null 2>&1
-            #    wget -qO - https://openresty.org/package/pubkey.gpg | apt-key add - > /dev/null
-            #fi
-            #echo "deb http://openresty.org/package/ubuntu $(lsb_release -sc) main" > /etc/apt/sources.list.d/openresty.list
-            #apt-get update >/dev/null 2>&1
-            #apt-get -y install openresty >/dev/null 2>&1 || true
-        else
-            timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
-            systemctl restart cron >/dev/null 2>&1
-            apt-get -y install debconf-utils >/dev/null 2>&1
-            echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
-            apt-get -y install perl software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext build-essential >/dev/null 2>&1
-            #apt-get -y install ca-certificates software-properties-common >/dev/null 2>&1
-            #if ! wget -qO - https://openresty.org/package/pubkey.gpg | apt-key add - > /dev/null 2>&1
-            #then
-            #    apt-get -y install gnupg >/dev/null 2>&1
-            #    wget -qO - https://openresty.org/package/pubkey.gpg | apt-key add - > /dev/null
-            #fi
-            #codename=$(grep -Po 'VERSION="[0-9]+ \(\K[^)]+' /etc/os-release)
-            #echo "deb http://openresty.org/package/debian $codename openresty" > /etc/apt/sources.list.d/openresty.list
-            #apt-get update >/dev/null 2>&1
-            #apt-get -y install openresty >/dev/null 2>&1 || true
-        fi
-
-        echo -n "...40%..."
-
-        while IFS= read -r line
-        do
-            if [[ $line =~ \<A\ HREF=\"(.+)\.tar\.gz ]] 
-            then
-                zlib_name=${BASH_REMATCH[1]}
-                break
-            fi
-        done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://www.zlib.net 2> /dev/null)
-
-        if [ ! -d $zlib_name ] 
-        then
-            curl -s -L https://www.zlib.net/$zlib_name.tar.gz -o $zlib_name.tar.gz
-            tar xzf $zlib_name.tar.gz
-        fi
-
-        pcre_name=pcre-8.45
-        if [ ! -d $pcre_name ] 
-        then
-            curl -s -L https://downloads.sourceforge.net/pcre/pcre/${pcre_name#*-}/$pcre_name.zip -o $pcre_name.zip
-            unzip $pcre_name.zip >/dev/null 2>&1
-        fi
-
-        openssl_name=openssl-1.1.1n
-
-        if [ ! -d ${openssl_name}-patched ] || [ ! -s ${openssl_name}-patched/openssl-1.1.1f-sess_set_get_cb_yield.patch ]
-        then
-            rm -rf ${openssl_name}
-            rm -rf ${openssl_name}-patched
-            curl -s -L https://www.openssl.org/source/old/1.1.1/${openssl_name}.tar.gz -o ${openssl_name}.tar.gz
-            tar xzf ${openssl_name}.tar.gz
-            mv ${openssl_name} ${openssl_name}-patched
-            cd ${openssl_name}-patched
-            curl -s -L "$FFMPEG_MIRROR_LINK/openssl-1.1.1f-sess_set_get_cb_yield.patch" -o openssl-1.1.1f-sess_set_get_cb_yield.patch
-            patch -p1 < openssl-1.1.1f-sess_set_get_cb_yield.patch >/dev/null 2>&1 || true
-            cd ~
-        fi
-
-        echo -n "...60%..."
-
-        cd "$openresty_package_name/bundle/ngx_lua-"*
-
-        curl -s -L "$FFMPEG_MIRROR_LINK/fix_ngx_lua_resp_get_headers_key_whitespace.patch" -o fix_ngx_lua_resp_get_headers_key_whitespace.patch
-        patch -p1 < fix_ngx_lua_resp_get_headers_key_whitespace.patch >/dev/null 2>&1 || true
-
-        cd ../..
-
-        ./configure \
-        --add-module=../nginx-http-flv-module-master \
-        --with-pcre=../$pcre_name \
-        --with-pcre-jit \
-        --with-zlib=../$zlib_name \
-        --with-openssl=../$openssl_name-patched \
-        --with-openssl-opt="no-threads shared zlib -g enable-ssl3 enable-ssl3-method enable-ec_nistp_64_gcc_128" \
-        --with-http_ssl_module \
-        --with-http_v2_module \
-        --without-mail_pop3_module \
-        --without-mail_imap_module \
-        --without-mail_smtp_module \
-        --without-http_rds_json_module \
-        --without-http_rds_csv_module \
-        --without-lua_rds_parser \
-        --with-http_stub_status_module \
-        --with-http_realip_module \
-        --with-debug \
-        --with-http_addition_module \
-        --with-http_auth_request_module \
-        --with-http_secure_link_module \
-        --with-http_slice_module \
-        --with-http_random_index_module \
-        --with-http_gzip_static_module \
-        --with-http_sub_module \
-        --with-http_dav_module \
-        --with-http_degradation_module \
-        --with-http_flv_module \
-        --with-http_mp4_module \
-        --with-http_gunzip_module \
-        --with-stream \
-        --with-stream_ssl_preread_module \
-        --with-stream_ssl_module \
-        --with-stream_realip_module \
-        --with-threads \
-        --with-luajit-xcflags=-DLUAJIT_NUMMODE=2\ -DLUAJIT_ENABLE_LUA52COMPAT\ -fno-stack-check >/dev/null 2>&1
-    fi
-
-    echo -n "...80%..."
-
-    nproc="-j$(nproc 2> /dev/null)" || nproc="-j1"
-    make $nproc >/dev/null 2>&1
-    make install >/dev/null 2>&1
-
-    kill $progress_pid
-    wait $progress_pid 2> /dev/null || true
-    trap - EXIT
-    echo "...100%"
-
-    if [ "$dist" != "mac" ] 
-    then
-        if ! grep -q "$nginx_name:" < "/etc/passwd"
-        then
-            if grep -q '\--group ' < <(adduser --help)
-            then
-                adduser "$nginx_name" --system --group --no-create-home > /dev/null
-            else
-                adduser "$nginx_name" --system --no-create-home > /dev/null
-            fi
-            usermod -s /usr/sbin/nologin "$nginx_name"
-        fi
-
-        sed -i "s/#user  nobody;/user $nginx_name $nginx_name;/" "$nginx_prefix/conf/nginx.conf"
-    fi
-
-    sed -i "s/worker_processes .*/worker_processes  ${nproc:2};/" "$nginx_prefix/conf/nginx.conf"
-    sed -i "s/worker_connections  1024;/worker_connections  51200;/" "$nginx_prefix/conf/nginx.conf"
-
-    mkdir -p "$nginx_prefix/conf/sites_crt/"
-    mkdir -p "$nginx_prefix/conf/sites_available/"
-    mkdir -p "$nginx_prefix/conf/sites_enabled/"
-    mkdir -p "$nginx_prefix/html/localhost/"
-
-    CrossplaneInstall
-}
+Include src/openresty/install "$@"
+Include src/service/control "$@"
 
 ShFileCheck
 
 JQInstall
 
-nginx_prefix="/usr/local/openresty/nginx"
+nginx_prefix="$AIOS_PREFIX/openresty/nginx"
 nginx_name="openresty"
 nginx_ctl="or"
 NGINX_FILE="$nginx_prefix/sbin/nginx"
 
 if [ "$dist" != "mac" ] && [ ! -s "/etc/systemd/system/$nginx_name.service" ] && [ -d "$nginx_prefix" ]
 then
-    ResourceLimit
+    if ! ResourceLimit 
+    then
+        Println "$error 可能环境是 Unprivileged Container ?\n"
+    fi
 cat > /etc/systemd/system/$nginx_name.service <<EOF
 [Unit]
 Description=$nginx_name
@@ -391,7 +110,10 @@ EOF
     $NGINX_FILE -s stop 2> /dev/null || true
     systemctl daemon-reload
     systemctl enable "$nginx_name"
-    systemctl start "$nginx_name"
+    if ! systemctl start "$nginx_name"
+    then
+        Println "$error 端口占用?\n"
+    fi
 fi
 
 case ${1:-} in
@@ -405,12 +127,6 @@ case ${1:-} in
         shopt -s nullglob
         nginx_confs=("$nginx_prefix"/conf/sites_available/*)
         shopt -u nullglob
-
-        if [ -z "${nginx_confs:-}" ] 
-        then
-            Println "$error 请先添加域名 !\n"
-            exit 1
-        fi
 
         nginx_confs=( "$nginx_prefix"/conf/nginx.conf "${nginx_confs[@]}" )
 
@@ -480,22 +196,13 @@ Println "  openresty 管理面板 ${normal}${red}[v$sh_ver]${normal}
 read -p "`gettext \"输入序号\"` [1-17]: " openresty_num
 case "$openresty_num" in
     1) 
-        if [ -d "$nginx_prefix" ] 
-        then
-            Println "$error openresty 已经存在 !\n" && exit 1
-        fi
-
-        echo
-        ExitOnList n "`gettext \"因为是编译 openresty, 耗时会很长, 是否继续\"`"
-
         OpenrestyInstall
-        Println "$info openresty 安装完成\n"
     ;;
     2) 
-        NginxUninstall
+        OpenrestyUninstall
     ;;
     3) 
-        NginxUpdate
+        OpenrestyUpdate
     ;;
     4) 
         NginxListDomain

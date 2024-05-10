@@ -198,6 +198,8 @@ deb-src http://security.debian.org wheezy/updates main
         fi
 
         deb_fix=0
+        sed -i '/deb_fix=/d' "$i18n_FILE"
+        printf "deb_fix=%s" "$deb_fix" >> "$i18n_FILE"
     fi
 }
 
@@ -205,6 +207,7 @@ AptUpdate()
 {
     if [ "${apt_updated:-false}" = false ] 
     then
+        Println "$info 更新软件包列表..."
         apt-get update --allow-releaseinfo-change >/dev/null
         apt_updated=true
     fi
@@ -215,8 +218,6 @@ DepInstall()
     dependency=$1
 
     [[ -x $(command -v $dependency) ]] && return 0
-
-    DistCheck
 
     if [ "$dependency" == "gettext" ] || [ "$dependency" == "wget" ]
     then
@@ -229,12 +230,15 @@ DepInstall()
                 setenforce 0
             fi
 
-            if yum -y install $dependency >/dev/null 2>&1
+            if ! rpm -q $dependency &>/dev/null
             then
-                Println "${green}[INFO]${normal} $dependency installation succeed..."
-            else
-                Println "${green}[ERROR]${normal} $dependency installation failed...\n"
-                exit 1
+                if yum -y install $dependency &>/dev/null
+                then
+                    Println "${green}[INFO]${normal} $dependency installation succeed..."
+                else
+                    Println "${green}[ERROR]${normal} $dependency installation failed...\n"
+                    return 1
+                fi
             fi
         else
             if [ "$dist" == "deb" ] 
@@ -242,21 +246,21 @@ DepInstall()
                 DebFixSources
             fi
 
-            AptUpdate
-
-            if apt-get -y install $dependency >/dev/null 2>&1
+            if ! dpkg -s $dependency &>/dev/null
             then
-                Println "${green}[INFO]${normal} $dependency installation succeed..."
-            else
-                Println "${green}[ERROR]${normal} $dependency installation failed...\n"
-                exit 1
+                AptUpdate
+                if apt-get -y install $dependency &>/dev/null
+                then
+                    Println "${green}[INFO]${normal} $dependency installation succeed..."
+                else
+                    Println "${green}[ERROR]${normal} $dependency installation failed...\n"
+                    return 1
+                fi
             fi
         fi
 
         return 0
     fi
-
-    Println "`eval_gettext \"\\\$info 安装 \\\$dependency, 请稍等...\"`"
 
     if [ "$dist" == "rpm" ] 
     then
@@ -268,14 +272,27 @@ DepInstall()
         if [ "$dependency" == "dig" ] 
         then
             dependency="bind-utils"
+        elif [ "$dependency" == "hexdump" ] 
+        then
+            dependency="util-linux"
+        elif [ "$dependency" == "ss" ] 
+        then
+            dependency="iproute"
+        elif [ "$dependency" == "tput" ] 
+        then
+            dependency="ncurses"
         fi
 
-        if yum -y install $dependency >/dev/null 2>&1
+        if ! rpm -q $dependency &>/dev/null
         then
-            Println "`eval_gettext \"\\\$info \\\$dependency 安装成功\"`"
-        else
-            Println "`eval_gettext \"\\\$error \\\$dependency 安装失败\"`\n"
-            exit 1
+            Println "`eval_gettext \"\\\$info 安装 \\\$dependency, 请稍等...\"`"
+            if yum -y install $dependency >/dev/null 2>&1
+            then
+                Println "`eval_gettext \"\\\$info \\\$dependency 安装成功\"`"
+            else
+                Println "`eval_gettext \"\\\$error \\\$dependency 安装失败\"`\n"
+                return 1
+            fi
         fi
     else
         if [ "$dist" == "deb" ] 
@@ -283,19 +300,31 @@ DepInstall()
             DebFixSources
         fi
 
-        AptUpdate
-
         if [ "$dependency" == "dig" ] 
         then
             dependency="dnsutils"
+        elif [ "$dependency" == "hexdump" ] 
+        then
+            dependency="bsdmainutils"
+        elif [ "$dependency" == "ss" ] 
+        then
+            dependency="iproute2"
+        elif [ "$dependency" == "tput" ] 
+        then
+            dependency="ncurses-bin"
         fi
 
-        if apt-get -y install $1 >/dev/null 2>&1
+        if ! dpkg -s $dependency &>/dev/null
         then
-            Println "`eval_gettext \"\\\$info \\\$dependency 安装成功\"`"
-        else
-            Println "`eval_gettext \"\\\$error \\\$dependency 安装失败\"`\n"
-            exit 1
+            AptUpdate
+            Println "`eval_gettext \"\\\$info 安装 \\\$dependency, 请稍等...\"`"
+            if apt-get -y install $1 >/dev/null 2>&1
+            then
+                Println "`eval_gettext \"\\\$info \\\$dependency 安装成功\"`"
+            else
+                Println "`eval_gettext \"\\\$error \\\$dependency 安装失败\"`\n"
+                return 1
+            fi
         fi
     fi
 }
@@ -482,8 +511,6 @@ i18nGetMsg()
 
 LocaleFix()
 {
-    DistCheck
-
     Println "${green}[INFO]${normal} Installing language (locale) support, it takes awhile..."
 
     if [ "$dist" == "rpm" ] 
@@ -527,6 +554,8 @@ eval_gettext()
 {
     gettext "$1" | (export PATH `envsubst --variables "$1"`; envsubst "$1")
 }
+
+DistCheck
 
 TEXTDOMAIN=iptv
 TEXTDOMAINDIR=/usr/share/locale
@@ -585,8 +614,6 @@ DepsCheck()
         return 0
     fi
 
-    DistCheck
-
     DepInstall tput
 
     Spinner "`gettext \"检查依赖, 耗时可能会很长\"`" DepsInstall
@@ -603,38 +630,30 @@ DepsInstall()
             setenforce 0
         fi
 
-        depends=(wget unzip vim curl crond logrotate patch nscd)
+        depends=(sudo wget unzip vim curl crond logrotate patch nscd bind-utils util-linux iproute)
 
-        if [[ ! -x $(command -v dig) ]] 
+        if [ "${rpm_fix:-1}" -eq 1 ] 
         then
-            depends+=(bind-utils)
-        fi
-
-        if [[ ! -x $(command -v hexdump) ]] 
-        then
-            depends+=(util-linux)
-        fi
-
-        if [[ ! -x $(command -v ss) ]] 
-        then
-            depends+=(iproute)
+            yum -y update ca-certificates &> /dev/null || yum -y reinstall ca-certificates &> /dev/null
+            rpm_fix=0
+            sed -i '/rpm_fix=/d' "$i18n_FILE"
+            printf "rpm_fix=%s" "$rpm_fix" >> "$i18n_FILE"
         fi
 
         for depend in "${depends[@]}"
         do
-            if [[ ! -x $(command -v "$depend") ]] 
+            [[ -x $(command -v $depend) ]] && continue
+            if ! rpm -q "$depend" &> /dev/null
             then
-                if yum -y install "$depend" >/dev/null 2>&1
+                if yum -y install "$depend" &> /dev/null 
                 then
                     Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
                 else
                     Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n"
-                    exit 1
+                    return 1
                 fi
             fi
         done
-
-        yum -y update ca-certificates >/dev/null 2>&1 || yum -y reinstall ca-certificates >/dev/null 2>&1
     else
         if [ "$dist" == "deb" ] 
         then
@@ -643,30 +662,19 @@ DepsInstall()
 
         AptUpdate
 
-        apt-get -y install ca-certificates >/dev/null 2>&1
-
-        depends=(wget unzip vim curl cron ufw python3 logrotate patch nscd)
-
-        if [[ ! -x $(command -v dig) ]] 
-        then
-            depends+=(dnsutils)
-        fi
-
-        if [[ ! -x $(command -v hexdump) ]] 
-        then
-            depends+=(bsdmainutils)
-        fi
+        depends=(ca-certificates sudo wget unzip vim curl cron ufw python3 logrotate patch nscd dnsutils bsdmainutils)
 
         for depend in "${depends[@]}"
         do
-            if [[ ! -x $(command -v "$depend") ]] 
+            [[ -x $(command -v $depend) ]] && continue
+            if ! dpkg -s "$depend" &> /dev/null
             then
-                if apt-get -y install "$depend" >/dev/null 2>&1
+                if apt-get -y install "$depend" &> /dev/null
                 then
                     Println "`eval_gettext \"\\\$info 依赖 \\\$depend 安装成功\"`"
                 else
                     Println "`eval_gettext \"\\\$error 依赖 \\\$depend 安装失败\"`\n"
-                    exit 1
+                    return 1
                 fi
             fi
         done
@@ -2843,10 +2851,7 @@ inquirer()
 # based on https://raw.githubusercontent.com/kahkhang/ora.sh/master/ora.sh
 Spinner()
 {
-    if [[ ! -x $(command -v tput) ]] 
-    then
-        DepInstall tput
-    fi
+    DepInstall tput
 
     local i=1 delay=0.05 FUNCTION_NAME="$2" VARIABLE_NAME="${3:-}" list TMP_FILE
     local green cyan normal
@@ -3111,8 +3116,6 @@ PythonInstall()
     then
         return 0
     fi
-
-    DistCheck
 
     Println "`eval_gettext \"\\\$info 安装 python3 ...\"`"
 
@@ -4350,8 +4353,6 @@ CurlImpersonateCompile()
 
     GoInstall
 
-    DistCheck
-
     if [ "$dist" == "rpm" ] 
     then
         yum groupinstall -y "Development Tools"
@@ -4650,8 +4651,6 @@ Update()
     else
         reinstall_ffmpeg_yn="Y"
     fi
-
-    DistCheck
 
     if [[ ${reinstall_ffmpeg_yn:-N} == [Yy] ]] 
     then
@@ -5047,7 +5046,7 @@ OpensslInstall()
         kill $progress_pid
         wait $progress_pid 2> /dev/null
     ' EXIT
-    DistCheck
+
     if [ "$dist" == "rpm" ] 
     then
         yum -y install openssl openssl-devel >/dev/null 2>&1
@@ -5069,7 +5068,7 @@ ImageMagickInstall()
         wait $progress_pid 2> /dev/null
     ' EXIT
     rm -f "$IPTV_ROOT/magick"
-    DistCheck
+
     if [ "$dist" == "rpm" ] 
     then
         yum -y install ImageMagick >/dev/null 2>&1
@@ -5102,7 +5101,6 @@ Pdf2htmlInstall()
         exit 1
     fi
 
-    DistCheck
     Progress &
     progress_pid=$!
     trap '
@@ -11325,11 +11323,7 @@ SetEncrypt()
                             then
                                 if [ ! -f "$NODE_ROOT/index.js" ] 
                                 then
-                                    if [[ ! -x $(command -v mongo) ]] 
-                                    then
-                                        MongodbInstall
-                                    fi
-
+                                    MongodbInstall
                                     NodejsConfig
                                 fi
                             else
@@ -11343,11 +11337,7 @@ SetEncrypt()
                         fi
                     elif [ ! -f "$NODE_ROOT/index.js" ] 
                     then
-                        if [[ ! -x $(command -v mongo) ]] 
-                        then
-                            MongodbInstall
-                        fi
-
+                        MongodbInstall
                         NodejsConfig
                     fi
                 fi
@@ -22289,7 +22279,7 @@ ImgcatInstall()
         kill $progress_pid
         wait $progress_pid 2> /dev/null
     ' EXIT
-    DistCheck
+
     if [ "$dist" == "rpm" ] 
     then
         yum -y install gcc gcc-c++ make ncurses-devel autoconf libjpeg-turbo-devel libpng-devel >/dev/null 2>&1
@@ -27941,7 +27931,6 @@ XtreamCodesListChnls()
                             $FFMPEG -hide_banner -loglevel debug -user_agent "$user_agent" \
                                 -headers "$headers_command" -cookies "$cookies_command" -i "$stream_link" -ss "$ss" -frames:v 1 "${TMP_FILE}.jpeg" || EXIT_STATUS=$?
 
-                            DistCheck
                             if [ ! -e "/usr/local/bin/imgcat" ] 
                             then
                                 ImgcatInstall
@@ -28241,28 +28230,178 @@ NginxDomainInstallCert()
     Println "$info $domain 证书安装成功"
 }
 
-OpenrestyInstall()
+OpenrestyPackageInstall()
 {
+    # nc -vz 127.0.0.1 80
+    DepInstall lsof
+    if lsof -Pi :80 -sTCP:LISTEN -t &>/dev/null
+    then
+        Println "$error 80 端口被占用, 请先关闭占用端口的程序\n"
+        return 1
+    fi
+
+    DepInstall curl
+    DepInstall ca-certificates
+
+    ArchCheck
+
+    if [ "$arch" == "arm64" ] 
+    then
+        arch_path="/arm64"
+    else
+        arch_path=""
+    fi
+
+    . /etc/os-release
+
+    case $dist in
+        ubu) 
+            DepInstall lsb-release
+            DepInstall ubuntu-keyring
+            DepInstall gpg
+            if [ ! -f /etc/apt/sources.list.d/openresty.list ] 
+            then
+                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                then
+                    curl -fsSL https://mirrors.ustc.edu.cn/openresty/pubkey.gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] https://mirrors.ustc.edu.cn/openresty${arch_path}/ubuntu \
+                    ${VERSION_CODENAME:-$UBUNTU_CODENAME} main" | tee /etc/apt/sources.list.d/openresty.list
+                else
+                    curl -fsSL https://openresty.org/package/pubkey.gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] http://openresty.org/package${arch_path}/ubuntu \
+                    ${VERSION_CODENAME:-$UBUNTU_CODENAME} main" | tee /etc/apt/sources.list.d/openresty.list
+                fi
+                sudo apt-get update
+            fi
+            sudo apt-get -y install openresty --no-install-recommends
+        ;;
+        deb) 
+            DepInstall lsb-release
+            DepInstall debian-archive-keyring
+            DepInstall gpg
+            if [ ! -f /etc/apt/sources.list.d/openresty.list ] 
+            then
+                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                then
+                    curl -fsSL https://mirrors.ustc.edu.cn/openresty/pubkey.gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] https://mirrors.ustc.edu.cn/openresty${arch_path}/debian \
+                    ${VERSION_CODENAME} openresty" | sudo tee /etc/apt/sources.list.d/openresty.list
+                else
+                    curl -fsSL https://openresty.org/package/pubkey.gpg | gpg --batch --yes --dearmor -o /usr/share/keyrings/openresty.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/openresty.gpg] http://openresty.org/package${arch_path}/debian \
+                    ${VERSION_CODENAME} openresty" | sudo tee /etc/apt/sources.list.d/openresty.list
+                fi
+                sudo apt-get update
+            fi
+            sudo apt-get -y install openresty --no-install-recommends
+        ;;
+        rpm) 
+            DepInstall yum-utils
+
+            if [ ! -f /etc/yum.repos.d/openresty.repo ] 
+            then
+                dist_names=( amazon alinux tlinux oracle rocky fedora centos rhel )
+
+                for dist_name in "${dist_names[@]}"
+                do
+                    if grep -qi "$dist_name" <<< "$ID" || grep -qi "$dist_name" <<< "$NAME"
+                    then
+                        case $dist_name in
+                            amazon|alinux|tlinux|oracle|fedora)
+                                curl -s -L https://openresty.org/package/$dist_name/openresty.repo -o /etc/yum.repos.d/openresty.repo
+                            ;;
+                            rocky|centos|rhel)
+                                if [ "${VERSION_ID%%.*}" -gt 8 ] 
+                                then
+                                    curl -s -L https://openresty.org/package/$dist_name/openresty2.repo -o /etc/yum.repos.d/openresty.repo
+                                else
+                                    curl -s -L https://openresty.org/package/$dist_name/openresty.repo -o /etc/yum.repos.d/openresty.repo
+                                fi
+                            ;;
+                        esac
+                        break
+                    fi
+                done
+            fi
+            sudo yum check-update
+            sudo yum install -y openresty openresty-opm openresty-doc
+        ;;
+        *)
+            Println "$error 不支持的系统\n"
+            return 1
+        ;;
+    esac
+
+    if ! grep -q "$nginx_name:" < "/etc/passwd"
+    then
+        if grep -q '\--group ' < <(adduser --help)
+        then
+            adduser "$nginx_name" --system --group --no-create-home > /dev/null
+        else
+            adduser "$nginx_name" --system --no-create-home > /dev/null
+        fi
+        usermod -s /usr/sbin/nologin "$nginx_name"
+    fi
+
+    sed -i "s/#user  nobody;/user $nginx_name $nginx_name;/" "$nginx_prefix/conf/nginx.conf"
+    sed -i "s/worker_connections  1024;/worker_connections  51200;/" "$nginx_prefix/conf/nginx.conf"
+
+    mkdir -p "$nginx_prefix/conf/sites_crt/"
+    mkdir -p "$nginx_prefix/conf/sites_available/"
+    mkdir -p "$nginx_prefix/conf/sites_enabled/"
+    mkdir -p "$nginx_prefix/html/localhost/"
+
+    CrossplaneInstall
+
+    Println "$info $nginx_name 安装成功\n"
+}
+
+OpenrestySourceInstall()
+{
+    local install="更新"
+
+    if [ -z "${1:-}" ] 
+    then
+        if [[ -x $(command -v $nginx_name) ]] 
+        then
+            return 0
+        fi
+        install="安装"
+    elif [[ ! -x $(command -v $nginx_name) ]] 
+    then
+        install="安装"
+    fi
+
     DepsCheck
-    JQInstall >/dev/null
 
-    Progress &
-    progress_pid=$!
+    echo
+    pcre_options=( pcre pcre2 )
+    inquirer list_input_index "选择 pcre 版本" pcre_options pcre_options_index
 
-    trap '
-        kill $progress_pid
-        wait $progress_pid 2> /dev/null
-    ' EXIT
+    Println "$tip 如果选择 openssl, $nginx_name 将不支持 ssl_early_data (0-RTT)"
+    openssl_options=( openssl@1.1 quictls )
+    inquirer list_input_index "选择 openssl 版本" openssl_options openssl_options_index
+
+    echo
+    inquirer list_input_index "额外添加编译选项" ny_options ny_index
+    install_options_selected=()
+    if [ "$ny_index" -eq 1 ] 
+    then
+        echo
+        install_options=( --with-http_iconv_module --with-http_postgres_module --with-http_slice_module )
+        inquirer checkbox_input "选择编译选项" install_options install_options_selected
+    fi
 
     cd ~
 
     rm -rf nginx-http-flv-module-master
-    curl -s -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o nginx-http-flv-module.zip
+    curl -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o nginx-http-flv-module.zip
+    Println "$info 解压 nginx-http-flv-module ..."
     unzip nginx-http-flv-module.zip >/dev/null 2>&1
 
     #cd nginx-http-flv-module-master
-    #curl -s -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch
-    #patch -p1 < Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch >/dev/null 2>&1
+    #curl -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch
+    #patch -p1 < Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch
     #cd ~
 
     latest_release=0
@@ -28281,69 +28420,48 @@ OpenrestyInstall()
 
     if [ ! -d "./$openresty_package_name" ] 
     then
-        curl -s -L "https://openresty.org/download/$openresty_package_name.tar.gz" -o "$openresty_package_name.tar.gz"
+        curl -L "https://openresty.org/download/$openresty_package_name.tar.gz" -o "$openresty_package_name.tar.gz"
+        Println "$info 解压 $openresty_package_name ..."
         tar xzf "$openresty_package_name.tar.gz"
     fi
 
     if [ "$dist" == "rpm" ] 
     then
-        yum -y install gcc gcc-c++ make >/dev/null 2>&1
-        timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
-        systemctl restart crond >/dev/null 2>&1
-        #if grep -q "Fedora" < "/etc/redhat-release"
-        #then
-        #    dnf install -y dnf-plugins-core >/dev/null 2>&1
-        #    dnf config-manager --add-repo https://openresty.org/package/fedora/openresty.repo >/dev/null 2>&1
-        #    dnf install -y openresty >/dev/null 2>&1 || true
-        #    dnf install -y openresty-resty >/dev/null 2>&1
-        #elif grep -q "Amazon" < "/etc/redhat-release"
-        #then
-        #    yum install -y yum-utils >/dev/null 2>&1
-        #    yum-config-manager --add-repo https://openresty.org/package/amazon/openresty.repo >/dev/null 2>&1
-        #    yum install -y openresty >/dev/null 2>&1 || true
-        #    yum install -y openresty-resty >/dev/null 2>&1
-        #elif grep -q "Red Hat" < "/etc/redhat-release"
-        #then
-        #    wget https://openresty.org/package/rhel/openresty.repo -qO /etc/yum.repos.d/openresty.repo >/dev/null 2>&1
-        #    yum check-update >/dev/null 2>&1
-        #    yum install -y openresty >/dev/null 2>&1 || true
-        #    yum install -y openresty-resty >/dev/null 2>&1
-        #else
-        #    wget https://openresty.org/package/centos/openresty.repo -qO /etc/yum.repos.d/openresty.repo >/dev/null 2>&1
-        #    yum check-update >/dev/null 2>&1
-        #    yum install -y openresty >/dev/null 2>&1 || true
-        #    yum install -y openresty-resty >/dev/null 2>&1
-        #fi
-    #elif [ "$dist" == "ubu" ] 
-    #then
-        #apt-get -y install ca-certificates >/dev/null 2>&1
-        #if ! wget -qO - https://openresty.org/package/pubkey.gpg | apt-key add - > /dev/null 2>&1
-        #then
-        #    apt-get -y install gnupg >/dev/null 2>&1
-        #    wget -qO - https://openresty.org/package/pubkey.gpg | apt-key add - > /dev/null
-        #fi
-        #echo "deb http://openresty.org/package/ubuntu $(lsb_release -sc) main" > /etc/apt/sources.list.d/openresty.list
-        #apt-get update >/dev/null 2>&1
-        #apt-get -y install openresty >/dev/null 2>&1 || true
-    else
-        timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
-        systemctl restart cron >/dev/null 2>&1
-        apt-get -y install debconf-utils >/dev/null 2>&1
-        echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
-        apt-get -y install perl software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext build-essential >/dev/null 2>&1
-        #apt-get -y install ca-certificates software-properties-common >/dev/null 2>&1
-        #if ! wget -qO - https://openresty.org/package/pubkey.gpg | apt-key add - > /dev/null 2>&1
-        #then
-        #    apt-get -y install gnupg >/dev/null 2>&1
-        #    wget -qO - https://openresty.org/package/pubkey.gpg | apt-key add - > /dev/null
-        #fi
-        #codename=$(grep -Po 'VERSION="[0-9]+ \(\K[^)]+' /etc/os-release)
-        #echo "deb http://openresty.org/package/debian $codename openresty" > /etc/apt/sources.list.d/openresty.list
-        #apt-get update >/dev/null 2>&1
-        #apt-get -y install openresty >/dev/null 2>&1 || true
-    fi
+        . /etc/os-release
 
-    echo -n "...40%..."
+        case ${VERSION_ID%%.*} in
+            9) 
+                dnf config-manager --set-enabled crb
+                dnf install -y epel-release
+                if dnf list epel-next-release &>/dev/null 
+                then
+                    dnf install -y epel-next-release
+                fi
+            ;;
+            8) 
+                dnf config-manager --set-enabled powertools
+                dnf install -y epel-release
+                if dnf list epel-next-release &>/dev/null 
+                then
+                    dnf install -y epel-next-release
+                fi
+            ;;
+            *) 
+                yum install -y epel-release
+            ;;
+        esac
+
+        yum groupinstall -y 'Development Tools'
+        timedatectl set-timezone Asia/Shanghai
+        systemctl restart crond
+        yum install -y pcre-devel openssl-devel gcc zlib-devel libpq-devel
+    else
+        timedatectl set-timezone Asia/Shanghai
+        systemctl restart cron
+        apt-get -y install debconf-utils
+        echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
+        apt-get -y install libpcre3-dev perl make software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext build-essential libpq-dev
+    fi
 
     while IFS= read -r line
     do
@@ -28356,38 +28474,85 @@ OpenrestyInstall()
 
     if [ ! -d $zlib_name ] 
     then
-        curl -s -L https://www.zlib.net/$zlib_name.tar.gz -o $zlib_name.tar.gz
+        curl -L https://www.zlib.net/$zlib_name.tar.gz -o $zlib_name.tar.gz
+        Println "$info 解压 $zlib_name ..."
         tar xzf $zlib_name.tar.gz
     fi
 
-    pcre_name=pcre-8.45
-    if [ ! -d $pcre_name ] 
+    if [ "$pcre_options_index" -eq 0 ] 
     then
-        curl -s -L https://downloads.sourceforge.net/pcre/pcre/${pcre_name#*-}/$pcre_name.zip -o $pcre_name.zip
-        unzip $pcre_name.zip >/dev/null 2>&1
+        pcre_name=pcre-8.45
+        if [ ! -d $pcre_name ] 
+        then
+            curl -L https://downloads.sourceforge.net/pcre/pcre/${pcre_name#*-}/$pcre_name.zip -o $pcre_name.zip
+            Println "$info 解压 $pcre_name ..."
+            unzip $pcre_name.zip >/dev/null 2>&1
+        fi
+    else
+        pcre_name=$(curl -Lm 20 "$FFMPEG_MIRROR_LINK/pcre2.json" | $JQ_FILE -r '.tag_name')
+        if [ ! -d $pcre_name ] 
+        then
+            curl -L $FFMPEG_MIRROR_LINK/pcre2/$pcre_name/$pcre_name.zip -o $pcre_name.zip
+            Println "$info 解压 $pcre_name ..."
+            unzip $pcre_name.zip >/dev/null 2>&1
+        fi
     fi
 
-    openssl_name=openssl-1.1.1n
+    openssl_url="https://www.openssl.org/source/old"
+    openssl_vers=($(curl -s -Lm 20 $openssl_url/ | grep -oP '<li><a href="[^"]+">\K[^<]+'))
+
+    for openssl_ver in "${openssl_vers[@]}"
+    do
+        if [ "${openssl_ver%%.*}" -eq 1 ] 
+        then
+            break
+        fi
+    done
+
+    openssl_url="$openssl_url/$openssl_ver"
+
+    openssl_packs=($(curl -s -Lm 20 $openssl_url/ | grep -oP '<td><a href="[^"]+">\K[^<]+'))
+    openssl_pack="${openssl_packs[0]}"
+    openssl_name=${openssl_pack%.tar*}
+
+    if [ "$openssl_options_index" -eq 1 ] 
+    then
+        openssl_ver=${openssl_name#*-}
+        openssl_name=openssl-OpenSSL_${openssl_ver//./_}-quic1
+    fi
 
     if [ ! -d ${openssl_name}-patched ] || [ ! -s ${openssl_name}-patched/openssl-1.1.1f-sess_set_get_cb_yield.patch ]
     then
-        rm -rf ${openssl_name}
+        rm -rf ${openssl_name:-notfound}
         rm -rf ${openssl_name}-patched
-        curl -s -L https://www.openssl.org/source/$openssl_name.tar.gz -o $openssl_name.tar.gz
-        tar xzf $openssl_name.tar.gz
-        mv $openssl_name $openssl_name-patched
-        cd $openssl_name-patched
-        curl -s -L "$FFMPEG_MIRROR_LINK/openssl-1.1.1f-sess_set_get_cb_yield.patch" -o openssl-1.1.1f-sess_set_get_cb_yield.patch
-        patch -p1 < openssl-1.1.1f-sess_set_get_cb_yield.patch >/dev/null 2>&1 || true
+
+        if [ "$openssl_options_index" -eq 1 ] 
+        then
+            Println "$info 下载 ${openssl_name#*-} ..."
+            if ! curl -Lm 30 https://github.com/quictls/openssl/archive/refs/tags/${openssl_name#*-}.tar.gz -o "$openssl_name".tar.gz
+            then
+                curl -L "$FFMPEG_MIRROR_LINK/${openssl_name#*-}".tar.gz -o "$openssl_name".tar.gz
+            fi
+            Println "$info 解压 ${openssl_name#*-} ..."
+            tar xzf ${openssl_name}.tar.gz
+        else
+            curl -L "$openssl_url/$openssl_pack" -o "$openssl_pack"
+            Println "$info 解压 $openssl_name ..."
+            tar xzf "$openssl_pack"
+        fi
+
+        mv ${openssl_name} ${openssl_name}-patched
+        cd ${openssl_name}-patched
+
+        curl -L "$FFMPEG_MIRROR_LINK/openssl-1.1.1f-sess_set_get_cb_yield.patch" -o openssl-1.1.1f-sess_set_get_cb_yield.patch
+        patch -p1 < openssl-1.1.1f-sess_set_get_cb_yield.patch || true
         cd ~
     fi
 
-    echo -n "...60%..."
-
     cd "$openresty_package_name/bundle/ngx_lua-"*
 
-    curl -s -L "$FFMPEG_MIRROR_LINK/fix_ngx_lua_resp_get_headers_key_whitespace.patch" -o fix_ngx_lua_resp_get_headers_key_whitespace.patch
-    patch -p1 < fix_ngx_lua_resp_get_headers_key_whitespace.patch >/dev/null 2>&1 || true
+    curl -L "$FFMPEG_MIRROR_LINK/fix_ngx_lua_resp_get_headers_key_whitespace.patch" -o fix_ngx_lua_resp_get_headers_key_whitespace.patch
+    patch -p1 < fix_ngx_lua_resp_get_headers_key_whitespace.patch || true
 
     cd ../..
 
@@ -28396,10 +28561,11 @@ OpenrestyInstall()
     --with-pcre=../$pcre_name \
     --with-pcre-jit \
     --with-zlib=../$zlib_name \
-    --with-openssl=../$openssl_name-patched \
+    --with-openssl=../${openssl_name}-patched \
     --with-openssl-opt="no-threads shared zlib -g enable-ssl3 enable-ssl3-method enable-ec_nistp_64_gcc_128" \
     --with-http_ssl_module \
     --with-http_v2_module \
+    --with-http_v3_module \
     --without-mail_pop3_module \
     --without-mail_imap_module \
     --without-mail_smtp_module \
@@ -28421,23 +28587,20 @@ OpenrestyInstall()
     --with-http_flv_module \
     --with-http_mp4_module \
     --with-http_gunzip_module \
+    --with-ipv6 \
     --with-stream \
     --with-stream_ssl_preread_module \
     --with-stream_ssl_module \
     --with-stream_realip_module \
     --with-threads \
-    --with-luajit-xcflags=-DLUAJIT_NUMMODE=2\ -DLUAJIT_ENABLE_LUA52COMPAT\ -fno-stack-check >/dev/null 2>&1
-
-    echo -n "...80%..."
+    --with-luajit-xcflags=-DLUAJIT_NUMMODE=2\ -DLUAJIT_ENABLE_LUA52COMPAT\ -fno-stack-check ${install_options_selected[@]+"${install_options_selected[@]}"}
 
     nproc="-j$(nproc 2> /dev/null)" || nproc="-j1"
-    make $nproc >/dev/null 2>&1
-    make install >/dev/null 2>&1
 
-    kill $progress_pid
-    wait $progress_pid 2> /dev/null || true
-    trap - EXIT
-    echo "...100%"
+    make $nproc
+    make install
+
+    ln -sf "$nginx_prefix"/sbin/nginx /usr/local/bin/
 
     if ! grep -q "$nginx_name:" < "/etc/passwd"
     then
@@ -28460,38 +28623,311 @@ OpenrestyInstall()
     mkdir -p "$nginx_prefix/html/localhost/"
 
     CrossplaneInstall
+
+    Println "$info $nginx_name ${install}成功\n"
 }
 
-NginxInstall()
+OpenrestyInstall()
 {
+    if [ -d "$nginx_prefix" ] 
+    then
+        Println "$error $nginx_name 已经存在 $nginx_prefix !\n"
+        return 1
+    elif [[ -x $(command -v $nginx_name) ]] 
+    then
+        Println "$error $nginx_name 已经存在 $(command -v $nginx_name), 请先卸载!\n"
+        return 1
+    fi
+
+    Println "$tip 选择快速安装将缺少 nginx-http-flv-module 和 quictls 选择"
+    openresty_install_options=( "${nginx_name}官方包 (快速安装)" '编译安装' )
+    inquirer list_input_index "选择安装方式" openresty_install_options openresty_install_options_index
+
+    if [ "$openresty_install_options_index" -eq 0 ] 
+    then
+        OpenrestyPackageInstall
+        return
+    fi
+
+    OpenrestySourceInstall
+}
+
+OpenrestyUninstall()
+{
+    if [ ! -d "$nginx_prefix" ] 
+    then
+        Println "$error $nginx_name 未安装 !\n"
+        return 1
+    fi
+
+    echo
+    ExitOnList n "`eval_gettext \"确定删除 \\\$nginx_name 包括所有配置文件, 操作不可恢复\"`"
+
+    systemctl stop $nginx_name > /dev/null 2>&1 || true
+    systemctl disable $nginx_name > /dev/null 2>&1 || true
+
+    if [ "$dist" == "rpm" ] && rpm -q "$nginx_name" &> /dev/null
+    then
+        yum remove -y "$nginx_name"* || true
+    elif [ "$dist" != "rpm" ] && dpkg -s "$nginx_name" &> /dev/null
+    then
+        apt-get -y --purge remove "$nginx_name"* || true
+    fi
+
+    rm -rf "${nginx_prefix%/*}"
+
+    Println "$info $nginx_name 卸载完成\n"
+}
+
+OpenrestyUpdate()
+{
+    ShFileUpdate "$nginx_name"
+
+    if [ ! -d "$nginx_prefix" ] 
+    then
+        Println "$error $nginx_name 未安装 !\n"
+        return 1
+    fi
+
+    if [ "$dist" == "rpm" ] && rpm -q "$nginx_name" &> /dev/null
+    then
+        yum update -y "$nginx_name"
+    elif { [ "$dist" == "deb" ] || [ "$dist" == "ubu" ]; } && dpkg -s "$nginx_name" &> /dev/null
+    then
+        apt-get -y install --only-upgrade "$nginx_name"
+    else
+        OpenrestySourceInstall update
+    fi
+}
+
+NginxPackageInstall()
+{
+    DepInstall curl
+    DepInstall ca-certificates
+
+    . /etc/os-release
+
+    case $dist in
+        ubu) 
+            if ! [[ "${VERSION_CODENAME:-$UBUNTU_CODENAME}" =~ focal|jammy|mantic ]] 
+            then
+                Println "$tip Nginx 官方不支持当前版本 ${VERSION_CODENAME:-$UBUNTU_CODENAME}, 安装可能出错"
+            fi
+            DepInstall lsb-release
+            DepInstall ubuntu-keyring
+            DepInstall gpg
+            if [ ! -f /etc/apt/sources.list.d/nginx.list ] 
+            then
+                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                then
+                    curl -fsSL https://mirrors.ustc.edu.cn/nginx/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://mirrors.ustc.edu.cn/nginx/mainline/ubuntu \
+                    ${VERSION_CODENAME:-$UBUNTU_CODENAME} nginx" | tee /etc/apt/sources.list.d/nginx.list
+                else
+                    curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/mainline/ubuntu \
+                    ${VERSION_CODENAME:-$UBUNTU_CODENAME} nginx" | tee /etc/apt/sources.list.d/nginx.list
+                fi
+                echo -e "Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n" | sudo tee /etc/apt/preferences.d/99nginx
+                sudo apt-get update
+            fi
+            sudo apt-get -y install nginx
+        ;;
+        deb) 
+            if ! [[ "${VERSION_CODENAME}" =~ bullseye|bookworm ]] 
+            then
+                Println "$tip Nginx 官方不支持当前版本 ${VERSION_CODENAME}, 安装可能出错"
+            fi
+            DepInstall lsb-release
+            DepInstall debian-archive-keyring
+            DepInstall gpg
+            if [ ! -f /etc/apt/sources.list.d/nginx.list ] 
+            then
+                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                then
+                    curl -fsSL https://mirrors.ustc.edu.cn/nginx/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://mirrors.ustc.edu.cn/nginx/mainline/debian \
+                    ${VERSION_CODENAME} nginx" | sudo tee /etc/apt/sources.list.d/nginx.list
+                else
+                    curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/mainline/debian \
+                    ${VERSION_CODENAME} nginx" | sudo tee /etc/apt/sources.list.d/nginx.list
+                fi
+                echo -e "Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n" | sudo tee /etc/apt/preferences.d/99nginx
+                sudo apt-get update
+            fi
+            sudo apt-get -y install nginx
+        ;;
+        rpm) 
+            if [ "${VERSION_ID%%.*}" -eq 7 ] 
+            then
+                Println "$tip 官方说明: Packages for RHEL 7 and SLES 12 are built without HTTP/3 support because OpenSSL used by those doesn't support TLSv1.3."
+            fi
+
+            DepInstall yum-utils
+
+            if [ ! -f /etc/yum.repos.d/nginx.repo ] 
+            then
+                if grep -q Amazon < /etc/os-release
+                then
+                    if [ "$VERSION" == "2" ] 
+                    then
+cat > /etc/yum.repos.d/nginx.repo << EOF
+[nginx-stable]
+name=nginx stable repo
+baseurl=http://nginx.org/packages/amzn2/\$releasever/\$basearch/
+gpgcheck=1
+enabled=1
+gpgkey=https://nginx.org/keys/nginx_signing.key
+module_hotfixes=true
+priority=9
+
+[nginx-mainline]
+name=nginx mainline repo
+baseurl=http://nginx.org/packages/mainline/amzn2/\$releasever/\$basearch/
+gpgcheck=1
+enabled=0
+gpgkey=https://nginx.org/keys/nginx_signing.key
+module_hotfixes=true
+priority=9
+EOF
+                    elif [ "$VERSION" == "2023" ] 
+                    then
+cat > /etc/yum.repos.d/nginx.repo << EOF
+[nginx-stable]
+name=nginx stable repo
+baseurl=http://nginx.org/packages/amzn/2023/\$basearch/
+gpgcheck=1
+enabled=1
+gpgkey=https://nginx.org/keys/nginx_signing.key
+module_hotfixes=true
+priority=9
+
+[nginx-mainline]
+name=nginx mainline repo
+baseurl=http://nginx.org/packages/mainline/amzn/2023/\$basearch/
+gpgcheck=1
+enabled=0
+gpgkey=https://nginx.org/keys/nginx_signing.key
+module_hotfixes=true
+priority=9
+EOF
+                    else
+                        Println "$error 不支持的系统\n"
+                        return 1
+                    fi
+                else
+cat > /etc/yum.repos.d/nginx.repo << EOF
+[nginx-stable]
+name=nginx stable repo
+baseurl=http://nginx.org/packages/centos/\$releasever/\$basearch/
+gpgcheck=1
+enabled=1
+gpgkey=https://nginx.org/keys/nginx_signing.key
+module_hotfixes=true
+
+[nginx-mainline]
+name=nginx mainline repo
+baseurl=http://nginx.org/packages/mainline/centos/\$releasever/\$basearch/
+gpgcheck=1
+enabled=0
+gpgkey=https://nginx.org/keys/nginx_signing.key
+module_hotfixes=true
+EOF
+                fi
+            fi
+            sudo yum-config-manager --disable nginx-stable
+            sudo yum-config-manager --enable nginx-mainline
+            sudo yum -y install nginx
+        ;;
+        *)
+            Println "$error 不支持的系统\n"
+            return 1
+        ;;
+    esac
+
+    if [ ! -d "$nginx_prefix" ] 
+    then
+        mkdir -p "$nginx_prefix"/sbin
+        mv /usr/sbin/nginx* "$nginx_prefix"/sbin/
+        ln -sf /etc/nginx "$nginx_prefix"/conf
+        ln -sf /var/log/nginx "$nginx_prefix"/logs
+        ln -sf /usr/share/nginx/html "$nginx_prefix"/html
+        ln -sf /var/run/nginx.pid "$nginx_prefix"/logs/nginx.pid
+        for file in "$nginx_prefix"/sbin/*
+        do
+cat > /usr/local/bin/${file##*/} <<EOF
+#!/bin/sh
+$file -p "$nginx_prefix" "\$@"
+EOF
+            chmod +x /usr/local/bin/*
+        done
+    fi
+
+    if ! grep -q "$nginx_name:" < "/etc/passwd"
+    then
+        if grep -q '\--group ' < <(adduser --help)
+        then
+            adduser "$nginx_name" --system --group --no-create-home > /dev/null
+        else
+            adduser "$nginx_name" --system --no-create-home > /dev/null
+        fi
+        usermod -s /usr/sbin/nologin "$nginx_name"
+    fi
+
+    sed -i "s/#user  nobody;/user $nginx_name $nginx_name;/" "$nginx_prefix/conf/nginx.conf"
+    sed -i "s/worker_connections  1024;/worker_connections  51200;/" "$nginx_prefix/conf/nginx.conf"
+    sed -i '/conf.d/d' "$nginx_prefix/conf/nginx.conf"
+    sed -i 's|/var/log/nginx|logs|g' "$nginx_prefix/conf/nginx.conf"
+    sed -i 's|/var/run|logs|g' "$nginx_prefix/conf/nginx.conf"
+    sed -i 's|/etc/nginx/||g' "$nginx_prefix/conf/nginx.conf"
+
+    mkdir -p "$nginx_prefix/conf/sites_crt/"
+    mkdir -p "$nginx_prefix/conf/sites_available/"
+    mkdir -p "$nginx_prefix/conf/sites_enabled/"
+    mkdir -p "$nginx_prefix/html/localhost/"
+
+    CrossplaneInstall
+
+    Println "$info $nginx_name 安装成功\n"
+}
+
+NginxSourceInstall()
+{
+    local install="更新"
+
+    if [ -z "${1:-}" ] 
+    then
+        if [[ -x $(command -v $nginx_name) ]] 
+        then
+            return 0
+        fi
+        install="安装"
+    elif [[ ! -x $(command -v $nginx_name) ]] 
+    then
+        install="安装"
+    fi
+
+    DepsCheck
+
     echo
     pcre_options=( pcre pcre2 )
     inquirer list_input_index "选择 pcre 版本" pcre_options pcre_options_index
 
-    echo
-    openssl_options=( openssl@1.1 openssl@3 )
+    Println "$tip 如果选择 openssl, $nginx_name 将不支持 ssl_early_data (0-RTT)"
+    openssl_options=( openssl@1.1 openssl@3 quictls )
     inquirer list_input_index "选择 openssl 版本" openssl_options openssl_options_index
-
-    DepsCheck
-    JQInstall >/dev/null
-
-    Progress &
-    progress_pid=$!
-
-    trap '
-        kill $progress_pid
-        wait $progress_pid 2> /dev/null
-    ' EXIT
 
     cd ~
 
     rm -rf nginx-http-flv-module-master
-    curl -s -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o nginx-http-flv-module.zip
+    curl -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o nginx-http-flv-module.zip
+    Println "$info 解压 nginx-http-flv-module ..."
     unzip nginx-http-flv-module.zip >/dev/null 2>&1
 
     #cd nginx-http-flv-module-master
     #curl -s -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch
-    #patch -p1 < Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch >/dev/null 2>&1
+    #patch -p1 < Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch
     #cd ~
 
     while IFS= read -r line
@@ -28506,25 +28942,48 @@ NginxInstall()
 
     if [ ! -d "./$nginx_package_name" ] 
     then
-        curl -s -L "https://nginx.org/download/$nginx_package_name.tar.gz" -o "$nginx_package_name.tar.gz"
+        curl -L "https://nginx.org/download/$nginx_package_name.tar.gz" -o "$nginx_package_name.tar.gz"
+        Println "$info 解压 $nginx_package_name ..."
         tar xzf "$nginx_package_name.tar.gz"
     fi
 
     if [ "$dist" == "rpm" ] 
     then
-        yum -y install gcc gcc-c++ make >/dev/null 2>&1
-        # yum groupinstall 'Development Tools'
-        timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
-        systemctl restart crond >/dev/null 2>&1
-    else
-        timedatectl set-timezone Asia/Shanghai >/dev/null 2>&1
-        systemctl restart cron >/dev/null 2>&1
-        apt-get -y install debconf-utils >/dev/null 2>&1
-        echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
-        apt-get -y install software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip build-essential gettext >/dev/null 2>&1
-    fi
+        . /etc/os-release
 
-    echo -n "...40%..."
+        case ${VERSION_ID%%.*} in
+            9) 
+                dnf config-manager --set-enabled crb
+                dnf install -y epel-release
+                if dnf list epel-next-release &>/dev/null 
+                then
+                    dnf install -y epel-next-release
+                fi
+            ;;
+            8) 
+                dnf config-manager --set-enabled powertools
+                dnf install -y epel-release
+                if dnf list epel-next-release &>/dev/null 
+                then
+                    dnf install -y epel-next-release
+                fi
+            ;;
+            *) 
+                yum install -y epel-release
+            ;;
+        esac
+
+        yum groupinstall -y 'Development Tools'
+        timedatectl set-timezone Asia/Shanghai
+        systemctl restart crond
+        yum install -y pcre-devel openssl-devel gcc zlib-devel
+    else
+        timedatectl set-timezone Asia/Shanghai
+        systemctl restart cron
+        apt-get -y install debconf-utils
+        echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
+        apt-get -y install libpcre3-dev perl make software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext build-essential
+    fi
 
     while IFS= read -r line
     do
@@ -28537,7 +28996,8 @@ NginxInstall()
 
     if [ ! -d $zlib_name ] 
     then
-        curl -s -L https://www.zlib.net/$zlib_name.tar.gz -o $zlib_name.tar.gz
+        curl -L https://www.zlib.net/$zlib_name.tar.gz -o $zlib_name.tar.gz
+        Println "$info 解压 $zlib_name ..."
         tar xzf $zlib_name.tar.gz
     fi
 
@@ -28546,46 +29006,59 @@ NginxInstall()
         pcre_name=pcre-8.45
         if [ ! -d $pcre_name ] 
         then
-            curl -s -L https://downloads.sourceforge.net/pcre/pcre/${pcre_name#*-}/$pcre_name.zip -o $pcre_name.zip
+            curl -L https://downloads.sourceforge.net/pcre/pcre/${pcre_name#*-}/$pcre_name.zip -o $pcre_name.zip
+            Println "$info 解压 $pcre_name ..."
             unzip $pcre_name.zip >/dev/null 2>&1
         fi
     else
-        pcre_name=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/pcre2.json" | $JQ_FILE -r '.tag_name')
+        pcre_name=$(curl -s -Lm 20 "$FFMPEG_MIRROR_LINK/pcre2.json" | $JQ_FILE -r '.tag_name')
         if [ ! -d $pcre_name ] 
         then
-            curl -s -L $FFMPEG_MIRROR_LINK/pcre2/$pcre_name/$pcre_name.zip -o $pcre_name.zip
+            curl -L $FFMPEG_MIRROR_LINK/pcre2/$pcre_name/$pcre_name.zip -o $pcre_name.zip
+            Println "$info 解压 $pcre_name ..."
             unzip $pcre_name.zip >/dev/null 2>&1
         fi
     fi
 
-    if [ "$openssl_options_index" -eq 0 ] 
+    if [ "$openssl_options_index" -eq 2 ] 
     then
-        openssl_url="https://www.openssl.org/source/old"
-        openssl_vers=($(curl -s -Lm 20 $openssl_url/ | grep -oP '<li><a href="[^"]+">\K[^<]+'))
-
-        for openssl_ver in "${openssl_vers[@]}"
-        do
-            if [ "${openssl_ver%%.*}" -eq 1 ] 
-            then
-                break
-            fi
-        done
-        openssl_url="$openssl_url/$openssl_ver"
+        openssl_name=openssl-OpenSSL_1_1_1w-quic1
+        Println "$info 下载 ${openssl_name#*-} ..."
+        if ! curl -Lm 30 https://github.com/quictls/openssl/archive/refs/tags/${openssl_name#*-}.tar.gz -o "$openssl_name".tar.gz
+        then
+            curl -L "$FFMPEG_MIRROR_LINK/${openssl_name#*-}".tar.gz -o "$openssl_name".tar.gz
+        fi
+        Println "$info 解压 ${openssl_name#*-} ..."
+        tar xzf "$openssl_name".tar.gz
     else
-        openssl_url="https://www.openssl.org/source"
+        if [ "$openssl_options_index" -eq 0 ] 
+        then
+            openssl_url="https://www.openssl.org/source/old"
+            openssl_vers=($(curl -s -Lm 20 $openssl_url/ | grep -oP '<li><a href="[^"]+">\K[^<]+'))
+
+            for openssl_ver in "${openssl_vers[@]}"
+            do
+                if [ "${openssl_ver%%.*}" -eq 1 ] 
+                then
+                    break
+                fi
+            done
+            openssl_url="$openssl_url/$openssl_ver"
+        else
+            openssl_url="https://www.openssl.org/source"
+        fi
+
+        openssl_packs=($(curl -s -Lm 20 $openssl_url/ | grep -oP '<td><a href="[^"]+">\K[^<]+'))
+        openssl_pack="${openssl_packs[0]}"
+        openssl_name=${openssl_pack%.tar*}
+
+        if [ ! -d "./$openssl_name" ] 
+        then
+            curl -L "$openssl_url/$openssl_pack" -o "$openssl_pack"
+            Println "$info 解压 $openssl_name ..."
+            tar xzf "$openssl_pack"
+        fi
     fi
-
-    openssl_packs=($(curl -s -Lm 20 $openssl_url/ | grep -oP '<td><a href="[^"]+">\K[^<]+'))
-    openssl_pack="${openssl_packs[0]}"
-    openssl_name=${openssl_pack%.tar*}
-
-    if [ ! -d "./$openssl_name" ] 
-    then
-        curl -s -L "$openssl_url/$openssl_pack" -o "$openssl_pack"
-        tar xzf "$openssl_pack"
-    fi
-
-    echo -n "...60%..."
 
     cd "$nginx_package_name/"
 
@@ -28607,6 +29080,8 @@ NginxInstall()
     --with-http_stub_status_module \
     --with-http_sub_module \
     --with-http_v2_module \
+    --with-http_v3_module \
+    --with-http_flv_module \
     --with-mail \
     --with-mail_ssl_module \
     --with-pcre=../$pcre_name \
@@ -28617,22 +29092,14 @@ NginxInstall()
     --with-stream_ssl_module \
     --with-stream_ssl_preread_module \
     --with-openssl=../$openssl_name \
-    --with-threads >/dev/null 2>&1
-
-    echo -n "...80%..."
+    --with-threads
 
     nproc="-j$(nproc 2> /dev/null)" || nproc="-j1"
 
-    make $nproc >/dev/null 2>&1
-    make install >/dev/null 2>&1
+    make $nproc
+    make install
 
-    kill $progress_pid
-    wait $progress_pid 2> /dev/null || true
-    trap - EXIT
-
-    ln -sf /usr/local/nginx/sbin/nginx /usr/local/bin/
-
-    echo "...100%"
+    ln -sf "$nginx_prefix"/sbin/nginx /usr/local/bin/
 
     if ! grep -q "$nginx_name:" < "/etc/passwd"
     then
@@ -28655,6 +29122,33 @@ NginxInstall()
     mkdir -p "$nginx_prefix/html/localhost/"
 
     CrossplaneInstall
+
+    Println "$info $nginx_name ${install}成功\n"
+}
+
+NginxInstall()
+{
+    if [ -d "$nginx_prefix" ] 
+    then
+        Println "$error $nginx_name 已经存在 $nginx_prefix !\n"
+        return 1
+    elif [[ -x $(command -v $nginx_name) ]] 
+    then
+        Println "$error $nginx_name 已经存在 $(command -v $nginx_name), 请先卸载!\n"
+        return 1
+    fi
+
+    Println "$tip 选择快速安装将缺少 nginx-http-flv-module 以及 quictls 选择"
+    nginx_install_options=( "${nginx_name}官方包 (快速安装)" '编译安装' )
+    inquirer list_input_index "选择安装方式" nginx_install_options nginx_install_options_index
+
+    if [ "$nginx_install_options_index" -eq 0 ] 
+    then
+        NginxPackageInstall
+        return
+    fi
+
+    NginxSourceInstall
 }
 
 NginxUninstall()
@@ -28662,7 +29156,7 @@ NginxUninstall()
     if [ ! -d "$nginx_prefix" ] 
     then
         Println "$error $nginx_name 未安装 !\n"
-        exit 1
+        return 1
     fi
 
     echo
@@ -28670,12 +29164,20 @@ NginxUninstall()
 
     systemctl stop $nginx_name || true
 
-    if [ "$nginx_ctl" == "or" ] 
+    DepInstall file
+
+    if file -h "$nginx_prefix/conf" | grep -q 'symbolic link'
     then
-        rm -rf "${nginx_prefix%/*}"
-    else
-        rm -rf "$nginx_prefix"
+        if [ "$dist" == "yum" ] 
+        then
+            yum -y remove "$nginx_name" || true
+        else
+            apt-get -y --purge remove "$nginx_name"* || true
+        fi
+        rm -f /usr/local/bin/"$nginx_name"*
     fi
+
+    rm -rf "$nginx_prefix"
 
     Println "$info $nginx_name 卸载完成\n"
 }
@@ -28687,15 +29189,23 @@ NginxUpdate()
     if [ ! -d "$nginx_prefix" ] 
     then
         Println "$error $nginx_name 未安装 !\n"
-        exit 1
+        return 1
     fi
 
-    echo
-    ExitOnList n "`eval_gettext \"是否重新编译 \\\$nginx_name\"`"
+    DepInstall file
 
-    nginx_name_upper=$(tr '[:lower:]' '[:upper:]' <<< "${nginx_name:0:1}")"${nginx_name:1}"
-    "$nginx_name_upper"Install
-    Println "$info $nginx_name 升级完成\n"
+    if ! file -h "$nginx_prefix/conf" | grep -q 'symbolic link'
+    then
+        NginxSourceInstall update
+        return
+    fi
+
+    if [ "$dist" == "rpm" ] 
+    then
+        yum update -y "$nginx_name"
+    else
+        apt-get -y install --only-upgrade "$nginx_name"
+    fi
 }
 
 NginxViewStatus()
@@ -30446,7 +30956,10 @@ NginxCheckLocalhost()
 
     NginxAddLocalhost
 
-    NginxAddRtmp
+    if "$NGINX_FILE" -V 2>&1 | grep -qi nginx-http-flv-module
+    then
+        NginxAddRtmp
+    fi
 
     if [ "$updated" -eq 1 ] 
     then
@@ -32230,25 +32743,30 @@ NginxAddDomain()
 
 GitInstall()
 {
-    DistCheck
-    if [ "$dist" == "rpm" ] 
+    if [[ -x $(command -v git) ]] 
     then
-        yum -y install git > /dev/null
-    elif [ "$dist" == "ubu" ] 
-    then
-        add-apt-repository ppa:git-core/ppa -y > /dev/null 
-        AptUpdate
-        apt-get -y install git > /dev/null
-    else
-        apt-get -y install git > /dev/null
+        return 0
     fi
-    Println "$info git 安装成功...\n"
+
+    Println "$info 安装 git"
+
+    case $dist in
+        rpm) yum -y install git
+        ;;
+        deb) apt-get -y install git
+        ;;
+        ubu) 
+            add-apt-repository ppa:git-core/ppa -y
+            apt-get -y update
+            apt-get -y install git
+        ;;
+    esac
+
+    Println "$info git 安装成功\n"
 }
 
 ResourceLimit()
 {
-    DistCheck
-
     if [ ! -e /proc/sys/fs/file-max ] 
     then
         echo 65536 > /proc/sys/fs/file-max
@@ -32593,7 +33111,7 @@ NodejsMenu()
             exit 1
         fi
 
-        if [[ ! -x $(command -v mongo) ]] 
+        if [[ ! -x $(command -v mongod) ]] 
         then
             Println "$error 请先安装 mongodb\n"
             exit 1
@@ -32605,68 +33123,102 @@ NodejsMenu()
 
 MongodbInstall()
 {
+    if [[ -x $(command -v mongod) ]]
+    then
+        return 0
+    fi
+
     DepsCheck
 
-    Println "$info 安装 mongodb, 请等待(国内可能无法安装)..."
-
-    ResourceLimit
-
-    if [ "$dist" == "rpm" ] 
+    if ! ResourceLimit 
     then
-        ArchCheck
-        if [ "$arch" == "arm64" ]
-        then
-            arch_path="aarch64"
-        elif [ "$arch" == "x86_64" ] || [ "$arch" == "s390x" ]
-        then
-            arch_path="$arch"
-        else
-            Println "$error 不支持当前系统\n"
-            exit 1
-        fi
+        Println "$error 可能环境是 Unprivileged Container ?\n"
+    fi
 
-        printf '%s' "
-[mongodb-org-4.4]
+    DepInstall curl
+    DepInstall ca-certificates
+
+    ArchCheck
+
+    if [ "$arch" == "arm64" ] 
+    then
+        arch_path="aarch64"
+    elif [ "$arch" == "x86_64" ] || [ "$arch" == "s390x" ]
+    then
+        arch_path="$arch"
+    else
+        Println "$error 不支持当前系统\n"
+        return 1
+    fi
+
+    case $dist in
+        rpm) 
+            DepInstall yum-utils
+            if [ ! -f /etc/yum.repos.d/mongodb-org-7.0.repo ] 
+            then
+                if grep -qi Amazon <<< "$ID" || grep -qi Amazon <<< "$NAME" 
+                then
+cat > /etc/yum.repos.d/mongodb-org-7.0.repo <<EOF
+[mongodb-org-7.0]
 name=MongoDB Repository
-baseurl=https://repo.mongodb.org/yum/redhat/\$releasever/mongodb-org/4.4/$arch_path/
+baseurl=https://repo.mongodb.org/yum/amazon/$VERSION/mongodb-org/7.0/$arch_path/
 gpgcheck=1
 enabled=1
-gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
-" > /etc/yum.repos.d/mongodb-org-4.4.repo
-
-        yum install -y mongodb-org >/dev/null 2>&1
-    else
-        AptUpdate
-
-        if ! wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | apt-key add - > /dev/null 2>&1
-        then
-            apt-get -y install gnupg >/dev/null 2>&1
-            wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | apt-key add - > /dev/null
-        fi
-
-        if [ "$dist" == "ubu" ] 
-        then
-            if grep -q "xenial" < "/etc/apt/sources.list"
-            then
-                echo "deb [ arch=amd64,arm64,s390x ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
-            elif grep -q "bionic" < "/etc/apt/sources.list" 
-            then
-                echo "deb [ arch=amd64,arm64,s390x ] https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
-            else
-                echo "deb [ arch=amd64,arm64,s390x ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+gpgkey=https://pgp.mongodb.com/server-7.0.asc
+EOF
+                else
+cat > /etc/yum.repos.d/mongodb-org-7.0.repo <<EOF
+[mongodb-org-7.0]
+name=MongoDB Repository
+baseurl=https://repo.mongodb.org/yum/redhat/${VERSION_ID%%.*}/mongodb-org/7.0/$arch_path/
+gpgcheck=1
+enabled=1
+gpgkey=https://pgp.mongodb.com/server-7.0.asc
+EOF
+                fi
             fi
-        else
-            if grep -q "stretch" < "/etc/apt/sources.list"
+            sudo yum-config-manager --enable mongodb-org-7.0
+            sudo yum install -y mongodb-org
+        ;;
+        ubu) 
+            if ! [[ "${VERSION_CODENAME:-$UBUNTU_CODENAME}" =~ focal|jammy ]] 
             then
-                echo "deb http://repo.mongodb.org/apt/debian stretch/mongodb-org/4.4 main" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
-            else
-                echo "deb http://repo.mongodb.org/apt/debian buster/mongodb-org/4.4 main" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+                Println "$tip Mongodb 官方不支持当前版本 ${VERSION_CODENAME:-$UBUNTU_CODENAME}, 安装可能出错"
             fi
-        fi
-
-        apt-get update >/dev/null
-        apt-get install -y mongodb-org >/dev/null 2>&1
-    fi
+            DepInstall lsb-release
+            DepInstall ubuntu-keyring
+            DepInstall gpg
+            if [ ! -f /etc/apt/sources.list.d/mongodb-org-7.0.list ] 
+            then
+                curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
+                echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu \
+                ${VERSION_CODENAME:-$UBUNTU_CODENAME}/mongodb-org/7.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+                sudo apt-get update
+            fi
+            sudo apt-get -y install mongodb-org
+        ;;
+        deb)
+            if ! [[ "${VERSION_CODENAME}" =~ bullseye|bookworm ]] 
+            then
+                Println "$tip Mongodb 官方不支持当前版本 ${VERSION_CODENAME}, 安装可能出错"
+            fi
+            DepInstall lsb-release
+            DepInstall debian-archive-keyring
+            DepInstall gpg
+            if [ ! -f /etc/apt/sources.list.d/mongodb-org-7.0.list ] 
+            then
+                curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
+                echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] http://repo.mongodb.org/apt/debian \
+                ${VERSION_CODENAME:-$UBUNTU_CODENAME}/mongodb-org/7.0 main" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+                sudo apt-get update
+            fi
+            sudo apt-get -y install mongodb-org
+        ;;
+        sles)
+            sudo zypper addrepo --gpgcheck "https://repo.mongodb.org/zypper/suse/${VERSION_ID%%.*}/mongodb-org/7.0/$arch_path/" mongodb
+            sudo zypper -n install mongodb-org
+        ;;
+    esac
 
     if [[ $(ps --no-headers -o comm 1) == "systemd" ]] 
     then
@@ -32682,7 +33234,7 @@ gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
         service mongod start
     fi
 
-    Println "$info mongodb 安装成功"
+    Println "$info mongodb 安装成功\n"
 }
 
 MongodbMenu()
@@ -32693,7 +33245,7 @@ MongodbMenu()
 
     if [ "$mongodb_options_index" -eq 0 ] 
     then
-        if [[ ! -x $(command -v mongo) ]] 
+        if [[ ! -x $(command -v mongod) ]] 
         then
             Println "$error 请先安装 mongodb\n"
             exit 1
@@ -32702,7 +33254,7 @@ MongodbMenu()
         systemctl --no-pager -l status mongod
     elif [ "$mongodb_options_index" -eq 1 ] 
     then
-        if [[ -x $(command -v mongo) ]] 
+        if [[ -x $(command -v mongod) ]] 
         then
             Println "$error mongodb 已存在\n"
             exit 1
@@ -32710,7 +33262,7 @@ MongodbMenu()
 
         MongodbInstall
     else
-        if [[ ! -x $(command -v mongo) ]] 
+        if [[ ! -x $(command -v mongod) ]] 
         then
             Println "$error 请先安装 mongodb\n"
             exit 1
@@ -32718,8 +33270,6 @@ MongodbMenu()
 
         echo
         ExitOnList n "升级会清除现有 mongodb 配置, 是否继续"
-
-        DistCheck
 
         service mongod stop
 
@@ -32729,7 +33279,7 @@ MongodbMenu()
 
             rm -f /etc/yum.repos.d/mongodb-org-*.repo
         else
-            apt-get -y purge mongodb-org*
+            apt-get -y --purge remove mongodb-org*
             apt-get -y autoremove
 
             rm -f /etc/apt/sources.list.d/mongodb-org-*.list
@@ -36402,7 +36952,7 @@ V2rayListInboundAccountLink()
         Println "分享链接: ${green}vmess://$vmess_link${normal}\n"
         echo
         ExitOnList y "`gettext \"打印二维码\"`"
-        DistCheck
+
         if [ ! -e "/usr/local/bin/imgcat" ] 
         then
             ImgcatInstall
@@ -47881,7 +48431,6 @@ VipEnable()
                 Println "$info 安装 md5sum..."
                 if [[ ! -x $(command -v gcc) ]] 
                 then
-                    DistCheck
                     if [ "$dist" == "rpm" ] 
                     then
                         yum -y install gcc gcc-c++ >/dev/null 2>&1
@@ -49103,7 +49652,10 @@ then
 
     if [ ! -s "/etc/systemd/system/$nginx_name.service" ] && [ -d "$nginx_prefix" ]
     then
-        ResourceLimit
+        if ! ResourceLimit 
+        then
+            Println "$error 可能环境是 Unprivileged Container ?\n"
+        fi
 cat > /etc/systemd/system/$nginx_name.service <<EOF
 [Unit]
 Description=$nginx_name
@@ -49138,7 +49690,10 @@ EOF
         $NGINX_FILE -s stop 2> /dev/null || true
         systemctl daemon-reload
         systemctl enable "$nginx_name"
-        systemctl start "$nginx_name"
+        if ! systemctl start "$nginx_name"
+        then
+            Println "$error 端口占用?\n"
+        fi
     fi
 
 case $* in
@@ -49152,12 +49707,6 @@ case $* in
         shopt -s nullglob
         nginx_confs=("$nginx_prefix"/conf/sites_available/*)
         shopt -u nullglob
-
-        if [ -z "${nginx_confs:-}" ] 
-        then
-            Println "$error 请先添加域名 !\n"
-            exit 1
-        fi
 
         nginx_confs=( "$nginx_prefix"/conf/nginx.conf "${nginx_confs[@]}" )
 
@@ -49225,22 +49774,13 @@ esac
     read -p "`gettext \"输入序号\"` [1-15]: " openresty_num
     case "$openresty_num" in
         1) 
-            if [ -d "$nginx_prefix" ] 
-            then
-                Println "$error openresty 已经存在 !\n" && exit 1
-            fi
-
-            echo
-            ExitOnList n "`gettext \"因为是编译 openresty, 耗时会很长, 是否继续\"`"
-
             OpenrestyInstall
-            Println "$info openresty 安装完成\n"
         ;;
         2) 
-            NginxUninstall
+            OpenrestyUninstall
         ;;
         3) 
-            NginxUpdate
+            OpenrestyUpdate
         ;;
         4) 
             NginxListDomain
@@ -49295,7 +49835,10 @@ then
 
     if [ ! -s "/etc/systemd/system/$nginx_name.service" ] && [ -d "$nginx_prefix" ]
     then
-        ResourceLimit
+        if ! ResourceLimit 
+        then
+            Println "$error 可能环境是 Unprivileged Container ?\n"
+        fi
 cat > /etc/systemd/system/$nginx_name.service <<EOF
 [Unit]
 Description=$nginx_name
@@ -49330,7 +49873,10 @@ EOF
         $NGINX_FILE -s stop 2> /dev/null || true
         systemctl daemon-reload
         systemctl enable "$nginx_name"
-        systemctl start "$nginx_name"
+        if ! systemctl start "$nginx_name"
+        then
+            Println "$error 端口占用?\n"
+        fi
     fi
 
 case ${1:-} in
@@ -49344,12 +49890,6 @@ case ${1:-} in
         shopt -s nullglob
         nginx_confs=("$nginx_prefix"/conf/sites_available/*)
         shopt -u nullglob
-
-        if [ -z "${nginx_confs:-}" ] 
-        then
-            Println "$error 请先添加域名 !\n"
-            exit 1
-        fi
 
         nginx_confs=( "$nginx_prefix"/conf/nginx.conf "${nginx_confs[@]}" )
 
@@ -49422,16 +49962,7 @@ esac
     read -p "`gettext \"输入序号\"` [1-20]: " nginx_num
     case "$nginx_num" in
         1) 
-            if [ -d "$nginx_prefix" ] 
-            then
-                Println "$error nginx 已经存在 !\n" && exit 1
-            fi
-
-            echo
-            ExitOnList n "`gettext \"因为是编译 nginx, 耗时会很长, 是否继续\"`"
-
             NginxInstall
-            Println "$info nginx 安装完成\n"
         ;;
         2) 
             NginxUninstall
@@ -49478,7 +50009,6 @@ esac
         16)
             if [[ ! -x $(command -v postfix) ]] 
             then
-                DistCheck
                 Spinner "安装 postfix" PostfixInstall
             else
                 echo
@@ -51610,7 +52140,6 @@ then
             fi
         ;;
         6) 
-            DistCheck
             JQInstall
 
             if dnscrypt_version=$(curl -s -Lm 10 "$FFMPEG_MIRROR_LINK/dnscrypt.json" | $JQ_FILE -r '.tag_name') 
@@ -51780,7 +52309,6 @@ then
             Println "$info 请在虚拟机内执行 opkg update; opkg install qemu-ga 后关机再开启\n\n如果是在国内, 可以在 openwrt 内执行下面命令加快 opkg 速度\nsed -i 's_http[s]*://downloads.openwrt.org_$FFMPEG_MIRROR_LINK/openwrt_' /etc/opkg/distfeeds.conf\n"
         ;;
         9)
-            DistCheck
             JQInstall
 
             Println "$tip 请确保已经安装 qemu-guest-agent\n"
@@ -51806,7 +52334,6 @@ then
             Println "$info openwrt-v2ray 安装成功, 请重新登录 openwrt 后台\n"
         ;;
         10)
-            DistCheck
             JQInstall
 
             Println "$tip 请确保已经安装 qemu-guest-agent\n"
@@ -51840,7 +52367,6 @@ then
             Println "$info 界面语言切换成功\n"
         ;;
         11)
-            DistCheck
             JQInstall
 
             Println "$tip 请确保已经安装 qemu-guest-agent\n"
@@ -51913,7 +52439,6 @@ then
             Println "$info 切换成功\n"
         ;;
         12)
-            DistCheck
             JQInstall
 
             Println "$tip 请确保已经安装 qemu-guest-agent\n"
@@ -53222,7 +53747,6 @@ then
             exit 0
         ;;
         "ed"|"editor")
-            DistCheck
             DepInstall vim
             if [ "$dist" == "rpm" ] 
             then
@@ -53459,8 +53983,6 @@ then
             v2ray_source="${V2_CONFIG%/*}"
 
             xray_source="${X_CONFIG%/*}"
-
-            DistCheck
 
             if [ "$dist" == "mac" ] 
             then

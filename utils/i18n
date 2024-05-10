@@ -242,9 +242,30 @@ if [ "$dist" == "mac" ]
 then
     TEXTDOMAINDIR=/usr/local/share/locale
 
+    BrewInstall
+
+    ArchCheck
+
+    if [ "$arch" == "arm64" ] 
+    then
+        HOMEBREW_PREFIX="/opt/homebrew"
+        if [ "${add_homebrew_path:-false}" = true ] 
+        then
+            echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+        fi
+        if ! grep -q homebrew <<< "$PATH"
+        then
+            export PATH="/opt/homebrew/bin:$PATH"
+        fi
+    else
+        HOMEBREW_PREFIX="/usr/local"
+    fi
+
     DepInstall gsed
     DepInstall gdate
     DepInstall ggrep
+
+    AIOS_PREFIX="$HOMEBREW_PREFIX"
 
 sed()
 {

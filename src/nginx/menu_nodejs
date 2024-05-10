@@ -37,7 +37,7 @@ NodejsMenu()
             exit 1
         fi
 
-        if [[ ! -x $(command -v mongo) ]] 
+        if [[ ! -x $(command -v mongod) ]] 
         then
             Println "$error 请先安装 mongodb\n"
             exit 1

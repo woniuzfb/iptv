@@ -1,0 +1,603 @@
+NginxPackageInstall()
+{
+    DepInstall curl
+    DepInstall ca-certificates
+
+    . /etc/os-release
+
+    case $dist in
+        ubu) 
+            if ! [[ "${VERSION_CODENAME:-$UBUNTU_CODENAME}" =~ focal|jammy|mantic ]] 
+            then
+                Println "$tip Nginx 官方不支持当前版本 ${VERSION_CODENAME:-$UBUNTU_CODENAME}, 安装可能出错"
+            fi
+            DepInstall lsb-release
+            DepInstall ubuntu-keyring
+            DepInstall gpg
+            if [ ! -f /etc/apt/sources.list.d/nginx.list ] 
+            then
+                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                then
+                    curl -fsSL https://mirrors.ustc.edu.cn/nginx/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://mirrors.ustc.edu.cn/nginx/mainline/ubuntu \
+                    ${VERSION_CODENAME:-$UBUNTU_CODENAME} nginx" | tee /etc/apt/sources.list.d/nginx.list
+                else
+                    curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/mainline/ubuntu \
+                    ${VERSION_CODENAME:-$UBUNTU_CODENAME} nginx" | tee /etc/apt/sources.list.d/nginx.list
+                fi
+                echo -e "Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n" | sudo tee /etc/apt/preferences.d/99nginx
+                sudo apt-get update
+            fi
+            sudo apt-get -y install nginx
+        ;;
+        deb) 
+            if ! [[ "${VERSION_CODENAME}" =~ bullseye|bookworm ]] 
+            then
+                Println "$tip Nginx 官方不支持当前版本 ${VERSION_CODENAME}, 安装可能出错"
+            fi
+            DepInstall lsb-release
+            DepInstall debian-archive-keyring
+            DepInstall gpg
+            if [ ! -f /etc/apt/sources.list.d/nginx.list ] 
+            then
+                if grep -q "mirrors.ustc.edu.cn" < /etc/apt/sources.list
+                then
+                    curl -fsSL https://mirrors.ustc.edu.cn/nginx/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] https://mirrors.ustc.edu.cn/nginx/mainline/debian \
+                    ${VERSION_CODENAME} nginx" | sudo tee /etc/apt/sources.list.d/nginx.list
+                else
+                    curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --batch --yes --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg
+                    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/mainline/debian \
+                    ${VERSION_CODENAME} nginx" | sudo tee /etc/apt/sources.list.d/nginx.list
+                fi
+                echo -e "Package: *\nPin: origin nginx.org\nPin: release o=nginx\nPin-Priority: 900\n" | sudo tee /etc/apt/preferences.d/99nginx
+                sudo apt-get update
+            fi
+            sudo apt-get -y install nginx
+        ;;
+        rpm) 
+            if [ "${VERSION_ID%%.*}" -eq 7 ] 
+            then
+                Println "$tip 官方说明: Packages for RHEL 7 and SLES 12 are built without HTTP/3 support because OpenSSL used by those doesn't support TLSv1.3."
+            fi
+
+            DepInstall yum-utils
+
+            if [ ! -f /etc/yum.repos.d/nginx.repo ] 
+            then
+                if grep -q Amazon < /etc/os-release
+                then
+                    if [ "$VERSION" == "2" ] 
+                    then
+cat > /etc/yum.repos.d/nginx.repo <<EOF
+[nginx-stable]
+name=nginx stable repo
+baseurl=http://nginx.org/packages/amzn2/\$releasever/\$basearch/
+gpgcheck=1
+enabled=1
+gpgkey=https://nginx.org/keys/nginx_signing.key
+module_hotfixes=true
+priority=9
+
+[nginx-mainline]
+name=nginx mainline repo
+baseurl=http://nginx.org/packages/mainline/amzn2/\$releasever/\$basearch/
+gpgcheck=1
+enabled=0
+gpgkey=https://nginx.org/keys/nginx_signing.key
+module_hotfixes=true
+priority=9
+EOF
+                    elif [ "$VERSION" == "2023" ] 
+                    then
+cat > /etc/yum.repos.d/nginx.repo <<EOF
+[nginx-stable]
+name=nginx stable repo
+baseurl=http://nginx.org/packages/amzn/2023/\$basearch/
+gpgcheck=1
+enabled=1
+gpgkey=https://nginx.org/keys/nginx_signing.key
+module_hotfixes=true
+priority=9
+
+[nginx-mainline]
+name=nginx mainline repo
+baseurl=http://nginx.org/packages/mainline/amzn/2023/\$basearch/
+gpgcheck=1
+enabled=0
+gpgkey=https://nginx.org/keys/nginx_signing.key
+module_hotfixes=true
+priority=9
+EOF
+                    else
+                        Println "$error 不支持的系统\n"
+                        return 1
+                    fi
+                else
+cat > /etc/yum.repos.d/nginx.repo <<EOF
+[nginx-stable]
+name=nginx stable repo
+baseurl=http://nginx.org/packages/centos/\$releasever/\$basearch/
+gpgcheck=1
+enabled=1
+gpgkey=https://nginx.org/keys/nginx_signing.key
+module_hotfixes=true
+
+[nginx-mainline]
+name=nginx mainline repo
+baseurl=http://nginx.org/packages/mainline/centos/\$releasever/\$basearch/
+gpgcheck=1
+enabled=0
+gpgkey=https://nginx.org/keys/nginx_signing.key
+module_hotfixes=true
+EOF
+                fi
+            fi
+            sudo yum-config-manager --disable nginx-stable
+            sudo yum-config-manager --enable nginx-mainline
+            sudo yum -y install nginx
+        ;;
+        alpine)
+            sudo apk add openssl curl ca-certificates
+            printf "%s%s%s%s\n" \
+            "@nginx " \
+            "http://nginx.org/packages/mainline/alpine/v" \
+            `egrep -o '^[0-9]+\.[0-9]+' /etc/alpine-release` \
+            "/main" \
+            | sudo tee -a /etc/apk/repositories
+            curl -o /tmp/nginx_signing.rsa.pub https://nginx.org/keys/nginx_signing.rsa.pub
+            sudo mv /tmp/nginx_signing.rsa.pub /etc/apk/keys/
+            sudo apk add nginx@nginx
+        ;;
+        sles)
+            if [ "${VERSION_ID%%.*}" -eq 12 ] 
+            then
+                Println "$tip 官方说明: Packages for RHEL 7 and SLES 12 are built without HTTP/3 support because OpenSSL used by those doesn't support TLSv1.3."
+            fi
+            sudo zypper install curl ca-certificates gpg2
+            sudo zypper addrepo --gpgcheck --type yum --refresh --check 'http://nginx.org/packages/mainline/sles/$releasever_major' nginx-mainline
+            curl -o /tmp/nginx_signing.key https://nginx.org/keys/nginx_signing.key
+            sudo rpmkeys --import /tmp/nginx_signing.key
+            sudo zypper install nginx
+        ;;
+        *)
+            Println "$error 不支持的系统\n"
+            return 1
+        ;;
+    esac
+
+    if [ ! -d "$nginx_prefix" ] 
+    then
+        mkdir -p "$nginx_prefix"/sbin
+        mv /usr/sbin/nginx* "$nginx_prefix"/sbin/
+        ln -sf /etc/nginx "$nginx_prefix"/conf
+        ln -sf /var/log/nginx "$nginx_prefix"/logs
+        ln -sf /usr/share/nginx/html "$nginx_prefix"/html
+        ln -sf /var/run/nginx.pid "$nginx_prefix"/logs/nginx.pid
+        for file in "$nginx_prefix"/sbin/*
+        do
+cat > "$AIOS_PREFIX"/bin/${file##*/} <<EOF
+#!/bin/sh
+$file -p "$nginx_prefix" "\$@"
+EOF
+            chmod +x "$AIOS_PREFIX"/bin/*
+        done
+    fi
+
+    if ! grep -q "$nginx_name:" < "/etc/passwd"
+    then
+        if grep -q '\--group ' < <(adduser --help)
+        then
+            adduser "$nginx_name" --system --group --no-create-home > /dev/null
+        else
+            adduser "$nginx_name" --system --no-create-home > /dev/null
+        fi
+        usermod -s /usr/sbin/nologin "$nginx_name"
+    fi
+
+    sed -i "s/#user  nobody;/user $nginx_name $nginx_name;/" "$nginx_prefix/conf/nginx.conf"
+    sed -i "s/worker_connections  1024;/worker_connections  51200;/" "$nginx_prefix/conf/nginx.conf"
+    sed -i '/conf.d/d' "$nginx_prefix/conf/nginx.conf"
+    sed -i 's|/var/log/nginx|logs|g' "$nginx_prefix/conf/nginx.conf"
+    sed -i 's|/var/run|logs|g' "$nginx_prefix/conf/nginx.conf"
+    sed -i 's|/etc/nginx/||g' "$nginx_prefix/conf/nginx.conf"
+
+    mkdir -p "$nginx_prefix/conf/sites_crt/"
+    mkdir -p "$nginx_prefix/conf/sites_available/"
+    mkdir -p "$nginx_prefix/conf/sites_enabled/"
+    mkdir -p "$nginx_prefix/html/localhost/"
+
+    CrossplaneInstall
+
+    Println "$info $nginx_name 安装成功\n"
+}
+
+NginxSourceInstall()
+{
+    local install="更新"
+
+    if [ -z "${1:-}" ] 
+    then
+        if [[ -x $(command -v $nginx_name) ]] 
+        then
+            return 0
+        fi
+        install="安装"
+    elif [[ ! -x $(command -v $nginx_name) ]] 
+    then
+        install="安装"
+    fi
+
+    DepsCheck
+
+    echo
+    pcre_options=( pcre pcre2 )
+    inquirer list_input_index "选择 pcre 版本" pcre_options pcre_options_index
+
+    Println "$tip 如果选择 openssl, $nginx_name 将不支持 ssl_early_data (0-RTT)"
+    openssl_options=( openssl@1.1 openssl@3 quictls )
+    inquirer list_input_index "选择 openssl 版本" openssl_options openssl_options_index
+
+    if [ "$dist" == "mac" ] && [ ! -d "$nginx_prefix" ]
+    then
+        Println "$info 建立目录 "$nginx_prefix", 可能需要输入密码\n"
+        sudo mkdir "$nginx_prefix"
+        sudo chown $USER "$nginx_prefix"
+    fi
+
+    mkdir -p "$DEPENDS_ROOT"
+    cd "$DEPENDS_ROOT"
+
+    rm -rf nginx-http-flv-module-master
+    curl -L "$FFMPEG_MIRROR_LINK/nginx-http-flv-module.zip" -o nginx-http-flv-module.zip
+    Println "$info 解压 nginx-http-flv-module ..."
+    unzip nginx-http-flv-module.zip >/dev/null 2>&1
+
+    #cd nginx-http-flv-module-master
+    #curl -s -L "$FFMPEG_MIRROR_LINK/Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch" -o Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch
+    #patch -p1 < Add-SVT-HEVC-support-for-RTMP-and-HLS-on-Nginx-HTTP-FLV.patch
+    #cd "$DEPENDS_ROOT"
+
+    while IFS= read -r line
+    do
+        if [[ $line == *"/download/"* ]] 
+        then
+            nginx_package_name=${line#*/download/}
+            nginx_package_name=${nginx_package_name%%.tar.gz*}
+            break
+        fi
+    done < <(curl -s -Lm 20 -H "User-Agent: $USER_AGENT_BROWSER" https://nginx.org/en/download.html 2> /dev/null)
+
+    if [ ! -d "./$nginx_package_name" ] 
+    then
+        curl -L "https://nginx.org/download/$nginx_package_name.tar.gz" -o "$nginx_package_name.tar.gz"
+        Println "$info 解压 $nginx_package_name ..."
+        tar xzf "$nginx_package_name.tar.gz"
+    fi
+
+    if [ "$dist" == "mac" ] 
+    then
+        DepInstall "${pcre_options[pcre_options_index]}"
+        DepInstall zlib
+
+        cc_opt="-I$HOMEBREW_PREFIX/opt/${pcre_options[pcre_options_index]}/include -I$HOMEBREW_PREFIX/opt/zlib/include"
+        ld_opt="-I$HOMEBREW_PREFIX/opt/${pcre_options[pcre_options_index]}/lib -L$HOMEBREW_PREFIX/opt/zlib/lib"
+
+        if [ "$openssl_options_index" -eq 2 ] 
+        then
+            QuictlsInstall
+            cc_opt="$cc_opt -I$DEPENDS_ROOT/quictls/build/include"
+            ld_opt="$ld_opt -L$DEPENDS_ROOT/quictls/build/lib"
+        else
+            DepInstall "${openssl_options[openssl_options_index]}"
+            cc_opt="$cc_opt -I$HOMEBREW_PREFIX/opt/${openssl_options[openssl_options_index]}/include"
+            ld_opt="$ld_opt -L$HOMEBREW_PREFIX/opt/${openssl_options[openssl_options_index]}/lib"
+        fi
+
+        cd "$DEPENDS_ROOT/$nginx_package_name/"
+
+        ./configure \
+        --with-cc-opt="$cc_opt" \
+        --with-ld-opt="$ld_opt" \
+        --add-module=../nginx-http-flv-module-master \
+        --with-debug \
+        --with-http_addition_module \
+        --with-http_auth_request_module \
+        --with-http_dav_module \
+        --with-http_degradation_module \
+        --with-http_gunzip_module \
+        --with-http_gzip_static_module \
+        --with-http_mp4_module \
+        --with-http_random_index_module \
+        --with-http_realip_module \
+        --with-http_secure_link_module \
+        --with-http_slice_module \
+        --with-http_ssl_module \
+        --with-http_stub_status_module \
+        --with-http_sub_module \
+        --with-http_v2_module \
+        --with-http_v3_module \
+        --with-http_flv_module \
+        --with-mail \
+        --with-mail_ssl_module \
+        --with-pcre \
+        --with-pcre-jit \
+        --with-stream \
+        --with-stream_realip_module \
+        --with-stream_ssl_module \
+        --with-stream_ssl_preread_module \
+        --with-threads
+    else
+        if [ "$dist" == "rpm" ] 
+        then
+            . /etc/os-release
+
+            case ${VERSION_ID%%.*} in
+                9) 
+                    dnf config-manager --set-enabled crb
+                    dnf install -y epel-release
+                    if dnf list epel-next-release &>/dev/null 
+                    then
+                        dnf install -y epel-next-release
+                    fi
+                ;;
+                8) 
+                    dnf config-manager --set-enabled powertools
+                    dnf install -y epel-release
+                    if dnf list epel-next-release &>/dev/null 
+                    then
+                        dnf install -y epel-next-release
+                    fi
+                ;;
+                *) 
+                    yum install -y epel-release
+                ;;
+            esac
+
+            yum groupinstall -y 'Development Tools'
+            timedatectl set-timezone Asia/Shanghai
+            systemctl restart crond
+            yum install -y pcre-devel openssl-devel gcc zlib-devel
+        else
+            timedatectl set-timezone Asia/Shanghai
+            systemctl restart cron
+            apt-get -y install debconf-utils
+            echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
+            apt-get -y install libpcre3-dev perl make software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext build-essential
+        fi
+
+        while IFS= read -r line
+        do
+            if [[ $line =~ \<A\ HREF=\"(.+)\.tar\.gz ]] 
+            then
+                zlib_name=${BASH_REMATCH[1]}
+                break
+            fi
+        done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://www.zlib.net 2> /dev/null)
+
+        if [ ! -d $zlib_name ] 
+        then
+            curl -L https://www.zlib.net/$zlib_name.tar.gz -o $zlib_name.tar.gz
+            Println "$info 解压 $zlib_name ..."
+            tar xzf $zlib_name.tar.gz
+        fi
+
+        if [ "$pcre_options_index" -eq 0 ] 
+        then
+            pcre_name=pcre-8.45
+            if [ ! -d $pcre_name ] 
+            then
+                curl -L https://downloads.sourceforge.net/pcre/pcre/${pcre_name#*-}/$pcre_name.zip -o $pcre_name.zip
+                Println "$info 解压 $pcre_name ..."
+                unzip $pcre_name.zip >/dev/null 2>&1
+            fi
+        else
+            pcre_name=$(curl -s -Lm 20 "$FFMPEG_MIRROR_LINK/pcre2.json" | $JQ_FILE -r '.tag_name')
+            if [ ! -d $pcre_name ] 
+            then
+                curl -L $FFMPEG_MIRROR_LINK/pcre2/$pcre_name/$pcre_name.zip -o $pcre_name.zip
+                Println "$info 解压 $pcre_name ..."
+                unzip $pcre_name.zip >/dev/null 2>&1
+            fi
+        fi
+
+        if [ "$openssl_options_index" -eq 2 ] 
+        then
+            openssl_name=openssl-OpenSSL_1_1_1w-quic1
+            Println "$info 下载 ${openssl_name#*-} ..."
+            if ! curl -Lm 30 https://github.com/quictls/openssl/archive/refs/tags/${openssl_name#*-}.tar.gz -o "$openssl_name".tar.gz
+            then
+                curl -L "$FFMPEG_MIRROR_LINK/${openssl_name#*-}".tar.gz -o "$openssl_name".tar.gz
+            fi
+            Println "$info 解压 ${openssl_name#*-} ..."
+            tar xzf "$openssl_name".tar.gz
+        else
+            if [ "$openssl_options_index" -eq 0 ] 
+            then
+                openssl_url="https://www.openssl.org/source/old"
+                openssl_vers=($(curl -s -Lm 20 $openssl_url/ | grep -oP '<li><a href="[^"]+">\K[^<]+'))
+
+                for openssl_ver in "${openssl_vers[@]}"
+                do
+                    if [ "${openssl_ver%%.*}" -eq 1 ] 
+                    then
+                        break
+                    fi
+                done
+                openssl_url="$openssl_url/$openssl_ver"
+            else
+                openssl_url="https://www.openssl.org/source"
+            fi
+
+            openssl_packs=($(curl -s -Lm 20 $openssl_url/ | grep -oP '<td><a href="[^"]+">\K[^<]+'))
+            openssl_pack="${openssl_packs[0]}"
+            openssl_name=${openssl_pack%.tar*}
+
+            if [ ! -d "./$openssl_name" ] 
+            then
+                curl -L "$openssl_url/$openssl_pack" -o "$openssl_pack"
+                Println "$info 解压 $openssl_name ..."
+                tar xzf "$openssl_pack"
+            fi
+        fi
+
+        cd "$nginx_package_name/"
+
+        ./configure \
+        --add-module=../nginx-http-flv-module-master \
+        --with-debug \
+        --with-http_addition_module \
+        --with-http_auth_request_module \
+        --with-http_dav_module \
+        --with-http_degradation_module \
+        --with-http_gunzip_module \
+        --with-http_gzip_static_module \
+        --with-http_mp4_module \
+        --with-http_random_index_module \
+        --with-http_realip_module \
+        --with-http_secure_link_module \
+        --with-http_slice_module \
+        --with-http_ssl_module \
+        --with-http_stub_status_module \
+        --with-http_sub_module \
+        --with-http_v2_module \
+        --with-http_v3_module \
+        --with-http_flv_module \
+        --with-mail \
+        --with-mail_ssl_module \
+        --with-pcre=../$pcre_name \
+        --with-pcre-jit \
+        --with-zlib=../$zlib_name \
+        --with-stream \
+        --with-stream_realip_module \
+        --with-stream_ssl_module \
+        --with-stream_ssl_preread_module \
+        --with-openssl=../$openssl_name \
+        --with-threads
+    fi
+
+    nproc="-j$(nproc 2> /dev/null)" || nproc="-j1"
+
+    make $nproc
+    make install
+
+    ln -sf "$nginx_prefix"/sbin/nginx "$AIOS_PREFIX"/bin/
+
+    if [ "$dist" != "mac" ] 
+    then
+        if ! grep -q "$nginx_name:" < "/etc/passwd"
+        then
+            if grep -q '\--group ' < <(adduser --help)
+            then
+                adduser "$nginx_name" --system --group --no-create-home > /dev/null
+            else
+                adduser "$nginx_name" --system --no-create-home > /dev/null
+            fi
+            usermod -s /usr/sbin/nologin "$nginx_name"
+        fi
+
+        sed -i "s/#user  nobody;/user $nginx_name $nginx_name;/" "$nginx_prefix/conf/nginx.conf"
+    fi
+
+    sed -i "s/worker_processes .*/worker_processes  ${nproc:2};/" "$nginx_prefix/conf/nginx.conf"
+    sed -i "s/worker_connections  1024;/worker_connections  51200;/" "$nginx_prefix/conf/nginx.conf"
+
+    mkdir -p "$nginx_prefix/conf/sites_crt/"
+    mkdir -p "$nginx_prefix/conf/sites_available/"
+    mkdir -p "$nginx_prefix/conf/sites_enabled/"
+    mkdir -p "$nginx_prefix/html/localhost/"
+
+    CrossplaneInstall
+
+    Println "$info $nginx_name ${install}成功\n"
+}
+
+NginxInstall()
+{
+    if [ -d "$nginx_prefix" ] 
+    then
+        Println "$error $nginx_name 已经存在 $nginx_prefix !\n"
+        return 1
+    elif [[ -x $(command -v $nginx_name) ]] 
+    then
+        Println "$error $nginx_name 已经存在 $(command -v $nginx_name), 请先卸载!\n"
+        return 1
+    fi
+
+    if [ "$dist" != "mac" ] 
+    then
+        Println "$tip 选择快速安装将缺少 nginx-http-flv-module 以及 quictls 选择"
+        nginx_install_options=( "${nginx_name}官方包 (快速安装)" '编译安装' )
+        inquirer list_input_index "选择安装方式" nginx_install_options nginx_install_options_index
+
+        if [ "$nginx_install_options_index" -eq 0 ] 
+        then
+            NginxPackageInstall
+            return
+        fi
+    fi
+
+    NginxSourceInstall
+}
+
+NginxUninstall()
+{
+    if [ ! -d "$nginx_prefix" ] 
+    then
+        Println "$error $nginx_name 未安装 !\n"
+        return 1
+    fi
+
+    echo
+    ExitOnList n "`eval_gettext \"确定删除 \\\$nginx_name 包括所有配置文件, 操作不可恢复\"`"
+
+    ServiceControlDisable $nginx_name
+
+    DepInstall file
+
+    if file -h "$nginx_prefix/conf" | grep -q 'symbolic link'
+    then
+        if [ "$dist" == "yum" ] 
+        then
+            yum -y remove "$nginx_name" || true
+        else
+            apt-get -y --purge remove "$nginx_name"* || true
+        fi
+        rm -f /usr/local/bin/"$nginx_name"*
+    elif [ "$dist" == "mac" ] 
+    then
+        brew uninstall "$nginx_name"
+        Println "$info 可能需要输入密码删除目录 "$nginx_prefix"\n"
+    fi
+
+    sudo rm -rf "$nginx_prefix"
+
+    Println "$info $nginx_name 卸载完成\n"
+}
+
+NginxUpdate()
+{
+    ShFileUpdate "$nginx_name"
+
+    if [ ! -d "$nginx_prefix" ] 
+    then
+        Println "$error $nginx_name 未安装 !\n"
+        return 1
+    fi
+
+    DepInstall file
+
+    if ! file -h "$nginx_prefix/conf" | grep -q 'symbolic link'
+    then
+        NginxSourceInstall update
+        return
+    fi
+
+    if [ "$dist" == "rpm" ] 
+    then
+        yum update -y "$nginx_name"
+    else
+        apt-get -y install --only-upgrade "$nginx_name"
+    fi
+}

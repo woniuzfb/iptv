@@ -106,6 +106,8 @@ Include src/iptv/menu_vip_user "$@"
 Include src/iptv/menu_vip "$@"
 Include src/iptv/menu_iptv "$@"
 Include src/iptv/usage "$@"
+Include src/nginx/install "$@"
+Include src/openresty/install "$@"
 
 Install()
 {

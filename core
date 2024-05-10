@@ -99,7 +99,7 @@ CurlFake()
     elif [ "$service_name" == "xtream_codes" ] 
     then
         rm -f "${CURL_IMPERSONATE_FILE}-$service_name"
-        awk '!x{x=sub(/dir=.*/,"dir='"$HOME/curl-impersonate"'")}1' "$HOME/curl-impersonate/curl_chrome99_android" > "${CURL_IMPERSONATE_FILE}-$service_name"
+        awk '!x{x=sub(/dir=.*/,"dir='"$DEPENDS_ROOT/curl-impersonate"'")}1' "$DEPENDS_ROOT/curl-impersonate/curl_chrome99_android" > "${CURL_IMPERSONATE_FILE}-$service_name"
         chmod +x "${CURL_IMPERSONATE_FILE}-$service_name"
         echo "$(awk '!x{x=sub(/-H '\''User-Agent: .*'\'' \\/,"-H '\''User-Agent: '"$USER_AGENT_TV"''\'' \\")}1' "${CURL_IMPERSONATE_FILE}-$service_name")" > "${CURL_IMPERSONATE_FILE}-$service_name"
         shift

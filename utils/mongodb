@@ -1,67 +1,112 @@
 MongodbInstall()
 {
+    if [[ -x $(command -v mongod) ]]
+    then
+        return 0
+    fi
+
     DepsCheck
 
-    Println "$info 安装 mongodb, 请等待(国内可能无法安装)..."
-
-    ResourceLimit
-
-    if [ "$dist" == "rpm" ] 
+    if ! ResourceLimit 
     then
-        ArchCheck
-        if [ "$arch" == "arm64" ]
-        then
-            arch_path="aarch64"
-        elif [ "$arch" == "x86_64" ] || [ "$arch" == "s390x" ]
-        then
-            arch_path="$arch"
-        else
-            Println "$error 不支持当前系统\n"
-            exit 1
-        fi
+        Println "$error 可能环境是 Unprivileged Container ?\n"
+    fi
 
-cat > /etc/yum.repos.d/mongodb-org-4.4.repo <<EOF
-[mongodb-org-4.4]
+    DepInstall curl
+    DepInstall ca-certificates
+
+    ArchCheck
+
+    if [ "$arch" == "arm64" ] 
+    then
+        arch_path="aarch64"
+    elif [ "$arch" == "x86_64" ] || [ "$arch" == "s390x" ]
+    then
+        arch_path="$arch"
+    else
+        Println "$error 不支持当前系统\n"
+        return 1
+    fi
+
+    case $dist in
+        mac) 
+            if ! xcode-select -p &> /dev/null
+            then
+                xcode-select --install
+            fi
+            brew tap mongodb/brew
+            brew install mongodb-community
+            brew services start mongodb-community
+            Println "$info mongodb 安装成功\n"
+            return 0
+        ;;
+        rpm) 
+            DepInstall yum-utils
+            if [ ! -f /etc/yum.repos.d/mongodb-org-7.0.repo ] 
+            then
+                if grep -qi Amazon <<< "$ID" || grep -qi Amazon <<< "$NAME" 
+                then
+cat > /etc/yum.repos.d/mongodb-org-7.0.repo <<EOF
+[mongodb-org-7.0]
 name=MongoDB Repository
-baseurl=https://repo.mongodb.org/yum/redhat/\$releasever/mongodb-org/4.4/$arch_path/
+baseurl=https://repo.mongodb.org/yum/amazon/$VERSION/mongodb-org/7.0/$arch_path/
 gpgcheck=1
 enabled=1
-gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
+gpgkey=https://pgp.mongodb.com/server-7.0.asc
 EOF
-
-        yum install -y mongodb-org >/dev/null 2>&1
-    else
-        AptUpdate
-
-        if ! wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | apt-key add - > /dev/null 2>&1
-        then
-            apt-get -y install gnupg >/dev/null 2>&1
-            wget -qO - https://www.mongodb.org/static/pgp/server-4.4.asc | apt-key add - > /dev/null
-        fi
-
-        if [ "$dist" == "ubu" ] 
-        then
-            if grep -q "xenial" < "/etc/apt/sources.list"
-            then
-                echo "deb [ arch=amd64,arm64,s390x ] https://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
-            elif grep -q "bionic" < "/etc/apt/sources.list" 
-            then
-                echo "deb [ arch=amd64,arm64,s390x ] https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
-            else
-                echo "deb [ arch=amd64,arm64,s390x ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/4.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+                else
+cat > /etc/yum.repos.d/mongodb-org-7.0.repo <<EOF
+[mongodb-org-7.0]
+name=MongoDB Repository
+baseurl=https://repo.mongodb.org/yum/redhat/${VERSION_ID%%.*}/mongodb-org/7.0/$arch_path/
+gpgcheck=1
+enabled=1
+gpgkey=https://pgp.mongodb.com/server-7.0.asc
+EOF
+                fi
             fi
-        else
-            if grep -q "stretch" < "/etc/apt/sources.list"
+            sudo yum-config-manager --enable mongodb-org-7.0
+            sudo yum install -y mongodb-org
+        ;;
+        ubu) 
+            if ! [[ "${VERSION_CODENAME:-$UBUNTU_CODENAME}" =~ focal|jammy ]] 
             then
-                echo "deb http://repo.mongodb.org/apt/debian stretch/mongodb-org/4.4 main" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
-            else
-                echo "deb http://repo.mongodb.org/apt/debian buster/mongodb-org/4.4 main" | tee /etc/apt/sources.list.d/mongodb-org-4.4.list
+                Println "$tip Mongodb 官方不支持当前版本 ${VERSION_CODENAME:-$UBUNTU_CODENAME}, 安装可能出错"
             fi
-        fi
-
-        apt-get update >/dev/null
-        apt-get install -y mongodb-org >/dev/null 2>&1
-    fi
+            DepInstall lsb-release
+            DepInstall ubuntu-keyring
+            DepInstall gpg
+            if [ ! -f /etc/apt/sources.list.d/mongodb-org-7.0.list ] 
+            then
+                curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
+                echo "deb [arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg] https://repo.mongodb.org/apt/ubuntu \
+                ${VERSION_CODENAME:-$UBUNTU_CODENAME}/mongodb-org/7.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+                sudo apt-get update
+            fi
+            sudo apt-get -y install mongodb-org
+        ;;
+        deb)
+            if ! [[ "${VERSION_CODENAME}" =~ bullseye|bookworm ]] 
+            then
+                Println "$tip Mongodb 官方不支持当前版本 ${VERSION_CODENAME}, 安装可能出错"
+            fi
+            DepInstall lsb-release
+            DepInstall debian-archive-keyring
+            DepInstall gpg
+            if [ ! -f /etc/apt/sources.list.d/mongodb-org-7.0.list ] 
+            then
+                curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | gpg --batch --yes --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
+                echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] http://repo.mongodb.org/apt/debian \
+                ${VERSION_CODENAME:-$UBUNTU_CODENAME}/mongodb-org/7.0 main" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+                sudo apt-get update
+            fi
+            sudo apt-get -y install mongodb-org
+        ;;
+        sles)
+            sudo zypper addrepo --gpgcheck "https://repo.mongodb.org/zypper/suse/${VERSION_ID%%.*}/mongodb-org/7.0/$arch_path/" mongodb
+            sudo zypper -n install mongodb-org
+        ;;
+    esac
 
     if [[ $(ps --no-headers -o comm 1) == "systemd" ]] 
     then
@@ -77,5 +122,5 @@ EOF
         service mongod start
     fi
 
-    Println "$info mongodb 安装成功"
+    Println "$info mongodb 安装成功\n"
 }

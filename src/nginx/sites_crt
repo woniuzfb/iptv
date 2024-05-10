@@ -2,16 +2,16 @@ NginxSitesCrtInstall()
 {
     local domain=$1
 
-    if [ -e "/usr/local/nginx/conf/sites_crt/$domain.crt" ] && [ -d /usr/local/openresty/nginx/conf ] && [ ! -e "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" ]
+    if [ -e "$AIOS_PREFIX/nginx/conf/sites_crt/$domain.crt" ] && [ -d "$AIOS_PREFIX"/openresty/nginx/conf ] && [ ! -e "$AIOS_PREFIX/openresty/nginx/conf/sites_crt/$domain.crt" ]
     then
-        mkdir -p /usr/local/openresty/nginx/conf/sites_crt
-        ln "/usr/local/nginx/conf/sites_crt/$domain.crt" "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt"
-        ln "/usr/local/nginx/conf/sites_crt/$domain.key" "/usr/local/openresty/nginx/conf/sites_crt/$domain.key"
-    elif [ -e "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" ] && [ -d /usr/local/nginx/conf ] && [ ! -e "/usr/local/nginx/conf/sites_crt/$domain.crt" ] 
+        mkdir -p "$AIOS_PREFIX"/openresty/nginx/conf/sites_crt
+        ln "$AIOS_PREFIX/nginx/conf/sites_crt/$domain.crt" "$AIOS_PREFIX/openresty/nginx/conf/sites_crt/$domain.crt"
+        ln "$AIOS_PREFIX/nginx/conf/sites_crt/$domain.key" "$AIOS_PREFIX/openresty/nginx/conf/sites_crt/$domain.key"
+    elif [ -e "$AIOS_PREFIX/openresty/nginx/conf/sites_crt/$domain.crt" ] && [ -d "$AIOS_PREFIX"/nginx/conf ] && [ ! -e "$AIOS_PREFIX/nginx/conf/sites_crt/$domain.crt" ] 
     then
-        mkdir -p /usr/local/nginx/conf/sites_crt
-        ln "/usr/local/openresty/nginx/conf/sites_crt/$domain.crt" "/usr/local/nginx/conf/sites_crt/$domain.crt"
-        ln "/usr/local/openresty/nginx/conf/sites_crt/$domain.key" "/usr/local/nginx/conf/sites_crt/$domain.key"
+        mkdir -p "$AIOS_PREFIX"/nginx/conf/sites_crt
+        ln "$AIOS_PREFIX/openresty/nginx/conf/sites_crt/$domain.crt" "$AIOS_PREFIX/nginx/conf/sites_crt/$domain.crt"
+        ln "$AIOS_PREFIX/openresty/nginx/conf/sites_crt/$domain.key" "$AIOS_PREFIX/nginx/conf/sites_crt/$domain.key"
     fi
 
     if [ -e "$nginx_prefix/conf/sites_crt/$domain.crt" ] && [ -e "$nginx_prefix/conf/sites_crt/$domain.key" ]

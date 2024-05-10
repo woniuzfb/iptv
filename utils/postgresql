@@ -79,7 +79,7 @@ PostgresqlInstall()
         ;;
         rpm) 
             ArchCheck
-            . /etc/os-release
+
             local repo_name=""
             if [ "$arch" == "arm64" ] 
             then
@@ -122,7 +122,6 @@ PostgresqlInstall()
             systemctl start postgresql.service
         ;;
         sles)
-            . /etc/os-release
             if [ "${VERSION_ID%%.*}" -eq 12 ] 
             then
                 SUSEConnect -p PackageHub/12/x86_64
