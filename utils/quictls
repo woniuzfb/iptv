@@ -1,18 +1,25 @@
 QuictlsInstall()
 {
-    if [ -d "$DEPENDS_ROOT"/quictls/build ] 
+    local build_dir=build args=() quictls_path="$DEPENDS_ROOT"/quictls
+
+    if [ -z "${1:-}" ] 
     then
-        return 0
+        quictls_install_options=()
+    else
+        quictls_install_options=("$@")
     fi
 
-    GitInstall
+    if EleInArray static quictls_install_options
+    then
+        build_dir+=-static
+        quictls_path+=-static
+    fi
 
-    rm -rf "$DEPENDS_ROOT"/quictls
-    mkdir -p "$DEPENDS_ROOT"
-
-    git clone "$QUICTLS_LINK" "$DEPENDS_ROOT"/quictls
-
-    cd "$DEPENDS_ROOT"/quictls
+    if [ -d "$DEPENDS_ROOT/openssl-OpenSSL_1_1_1w-quic1/$build_dir" ] 
+    then
+        ln -sfn "$DEPENDS_ROOT/openssl-OpenSSL_1_1_1w-quic1/$build_dir" "$quictls_path"
+        return 0
+    fi
 
     DepInstall ca-certificates
     DepInstall perl
@@ -20,10 +27,15 @@ QuictlsInstall()
     unset OPENSSL_LOCAL_CONFIG_DIR
 
     args=(
-        --prefix="$DEPENDS_ROOT"/quictls/build
-        --openssldir="$DEPENDS_ROOT"/quictls/build/etc
+        --prefix="$DEPENDS_ROOT/openssl-OpenSSL_1_1_1w-quic1/$build_dir"
+        --openssldir="$DEPENDS_ROOT/openssl-OpenSSL_1_1_1w-quic1/$build_dir/etc"
         --libdir=lib
     )
+
+    if EleInArray static quictls_install_options
+    then
+        args+=(no-shared)
+    fi
 
     ArchCheck
 
@@ -31,6 +43,7 @@ QuictlsInstall()
     then
         export PERL="$HOMEBREW_PREFIX"/opt/perl/bin/perl
         args+=( darwin64-${arch}-cc )
+        SourceInstallReady
     else
         case $arch in
             x86_64) args+=( linux-x86_64 )
@@ -46,42 +59,28 @@ QuictlsInstall()
 
         if [ "$dist" == "rpm" ] 
         then
-            . /etc/os-release
-
-            case ${VERSION_ID%%.*} in
-                9) 
-                    dnf config-manager --set-enabled crb
-                    dnf install -y epel-release
-                    if dnf list epel-next-release &>/dev/null 
-                    then
-                        dnf install -y epel-next-release
-                    fi
-                ;;
-                8) 
-                    dnf config-manager --set-enabled powertools
-                    dnf install -y epel-release
-                    if dnf list epel-next-release &>/dev/null 
-                    then
-                        dnf install -y epel-next-release
-                    fi
-                ;;
-                7) 
-                    yum install -y epel-release
-                ;;
-                *) Println "$error 不支持的系统版本\n"; return 1
-                ;;
-            esac
-
-            yum groupinstall -y 'Development Tools'
-            yum install -y glibc-devel lua-devel pcre-devel openssl-devel systemd-devel zlib-devel
+            SourceInstallReady glibc-devel openssl-devel systemd-devel zlib-devel
         else
-            sudo apt-get install -y gcc libc6-dev liblua5.4-dev libpcre3-dev libssl-dev libsystemd-dev make zlib1g-dev
+            SourceInstallReady gcc libc6-dev libssl-dev libsystemd-dev make zlib1g-dev
         fi
     fi
 
-    git checkout OpenSSL_1_1_1w+quic
-    mkdir -p build/etc
+    mkdir -p "$DEPENDS_ROOT"
+    cd "$DEPENDS_ROOT"
+
+    if ! curl -Lm 30 https://github.com/quictls/openssl/archive/refs/tags/OpenSSL_1_1_1w-quic1.tar.gz -o OpenSSL_1_1_1w-quic1.tar.gz
+    then
+        curl -L "$FFMPEG_MIRROR_LINK"/OpenSSL_1_1_1w-quic1.tar.gz -o OpenSSL_1_1_1w-quic1.tar.gz
+    fi
+
+    Println "$info 解压 OpenSSL_1_1_1w-quic1 ..."
+    tar xzf OpenSSL_1_1_1w-quic1.tar.gz
+    cd openssl-OpenSSL_1_1_1w-quic1
+
     perl ./Configure "${args[@]}"
+    make clean
     make
     make install
+
+    ln -s "$DEPENDS_ROOT/openssl-OpenSSL_1_1_1w-quic1/$build_dir" "$quictls_path"
 }

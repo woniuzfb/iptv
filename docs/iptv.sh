@@ -28418,12 +28418,9 @@ OpenrestySourceInstall()
         fi
     done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://openresty.org/en/download.html 2> /dev/null)
 
-    if [ ! -d "./$openresty_package_name" ] 
-    then
-        curl -L "https://openresty.org/download/$openresty_package_name.tar.gz" -o "$openresty_package_name.tar.gz"
-        Println "$info 解压 $openresty_package_name ..."
-        tar xzf "$openresty_package_name.tar.gz"
-    fi
+    curl -L "https://openresty.org/download/$openresty_package_name.tar.gz" -o "$openresty_package_name.tar.gz"
+    Println "$info 解压 $openresty_package_name ..."
+    tar xzf "$openresty_package_name.tar.gz"
 
     if [ "$dist" == "rpm" ] 
     then
@@ -28587,7 +28584,6 @@ OpenrestySourceInstall()
     --with-http_flv_module \
     --with-http_mp4_module \
     --with-http_gunzip_module \
-    --with-ipv6 \
     --with-stream \
     --with-stream_ssl_preread_module \
     --with-stream_ssl_module \
@@ -28597,6 +28593,7 @@ OpenrestySourceInstall()
 
     nproc="-j$(nproc 2> /dev/null)" || nproc="-j1"
 
+    make clean
     make $nproc
     make install
 
@@ -29096,6 +29093,7 @@ NginxSourceInstall()
 
     nproc="-j$(nproc 2> /dev/null)" || nproc="-j1"
 
+    make clean
     make $nproc
     make install
 

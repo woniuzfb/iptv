@@ -61,17 +61,18 @@ NodejsConfig()
     username=$(RandStr)
     password=$(RandStr)
 
+    mongosh admin --eval "db.getSiblingDB('admin').createUser({user: '${username}', pwd: '${password}', roles: ['root']})"
+
     if [[ $(ps --no-headers -o comm 1) == "systemd" ]] 
     then
-        mongo admin --eval "db.getSiblingDB('admin').createUser({user: '${username}', pwd: '${password}', roles: ['root']})"
         systemctl restart mongod
     else
-        mongo admin --eval "db.getSiblingDB('admin').createUser({user: '${username}', pwd: '${password}', roles: ['root']})"
         service mongod restart
     fi
 
     mkdir -p "$NODE_ROOT"
-    echo "
+
+    cat > "$NODE_ROOT/index.js" <<EOF
 const express = require('express');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
@@ -136,10 +137,10 @@ app.get('/channels', (req, res) => {
 
 app.listen(port, () => console.log(\`App listening on port \${port}!\`))
 
-" > "$NODE_ROOT/index.js"
+EOF
 
-    $JQ_FILE -n \
-'{
+    cat > "$NODE_ROOT/package.json" <<EOF
+{
   "name": "node",
   "version": "1.0.0",
   "description": "",
@@ -158,7 +159,8 @@ app.listen(port, () => console.log(\`App listening on port \${port}!\`))
     "mongoose": "^6.0.8",
     "path": "^0.12.7"
   }
-}' > "$NODE_ROOT/package.json"
+}
+EOF
 
     GitInstall
 

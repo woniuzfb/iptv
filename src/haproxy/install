@@ -1,0 +1,263 @@
+HAProxyInstall()
+{
+    local install="更新"
+
+    if [ -z "${1:-}" ] 
+    then
+        if [[ -x $(command -v haproxy) ]] 
+        then
+            Println "$error haproxy 已安装 !\n"
+            return 0
+        fi
+        install="安装"
+    elif [[ ! -x $(command -v haproxy) ]] 
+    then
+        install="安装"
+    fi
+
+    DepsCheck
+
+    args=()
+    ldflags=()
+
+    if [ "$dist" == "mac" ] 
+    then
+        if [ -d "$DEPENDS_ROOT"/haproxy ] 
+        then
+            Println "$info 已经存在 $DEPENDS_ROOT/haproxy !\n"
+            return 1
+        fi
+
+        if [ ! -f /etc/paths.d/haproxy ] 
+        then
+            sudo mkdir -p /etc/paths.d
+            echo "$DEPENDS_ROOT"/haproxy/bin | sudo tee /etc/paths.d/haproxy
+        fi
+    else
+        echo
+        inquirer list_input_index "开启 USE_GETADDRINFO" yn_options yn_index
+
+        if [ "$yn_index" -eq 0 ] 
+        then
+            args+=( USE_GETADDRINFO=1 )
+        fi
+    fi
+
+    echo
+    pcre_options=( pcre pcre2 )
+    inquirer list_input_index "选择 pcre 版本" pcre_options pcre_options_index
+
+    if [ "$pcre_options_index" -eq 0 ] 
+    then
+        pcre_args=( USE_STATIC_PCRE USE_PCRE )
+        echo
+        inquirer list_input_index "开启 USE_PCRE_JIT" yn_options yn_index
+        if [ "$yn_index" -eq 0 ] 
+        then
+            args+=( USE_PCRE_JIT=1 )
+        fi
+    else
+        pcre_args=( USE_STATIC_PCRE2 USE_PCRE2 )
+        echo
+        inquirer list_input_index "开启 USE_PCRE2_JIT" yn_options yn_index
+        if [ "$yn_index" -eq 0 ] 
+        then
+            args+=( USE_PCRE2_JIT=1 )
+        fi
+    fi
+
+    echo
+    inquirer list_input_index "选择 ${pcre_options[pcre_options_index]} 编译选项" pcre_args pcre_args_index
+    args+=( "${pcre_args[pcre_args_index]}=1" )
+
+    if [ "$pcre_args_index" -eq 0 ] 
+    then
+        static_pcre=true
+    else
+        static_pcre=false
+    fi
+
+    Println "$tip 如果选择 openssl, haproxy 将不支持 QUIC 0-RTT"
+    openssl_options=( openssl@1.1 openssl@3 quictls )
+    inquirer list_input_index "选择 openssl 版本" openssl_options openssl_options_index
+
+    args+=( USE_OPENSSL=1 )
+
+    if [ "$openssl_options_index" -eq 2 ] 
+    then
+        args+=( USE_QUIC=1 )
+    fi
+
+    echo
+    inquirer list_input_index "开启硬件加密加速 USE_ENGINE" yn_options yn_index
+
+    if [ "$yn_index" -eq 0 ] 
+    then
+        args+=( USE_ENGINE=1 )
+    fi
+
+    if [ "$openssl_options_index" -eq 1 ] 
+    then
+        echo
+        inquirer list_input_index "开启 USE_PTHREAD_EMULATION" yn_options yn_index
+
+        if [ "$yn_index" -eq 0 ] 
+        then
+            args+=( USE_PTHREAD_EMULATION=1 )
+        fi
+    fi
+
+    echo
+    inquirer list_input_index "静态链接 ${openssl_options[openssl_options_index]}" yn_options yn_index
+
+    if [ "$yn_index" -eq 0 ] 
+    then
+        tls_install_args=(static)
+        static_ssl=true
+    else
+        tls_install_args=()
+        static_ssl=false
+    fi
+
+    echo
+    inquirer list_input_index "静态链接 zlib" yn_options yn_index
+
+    if [ "$yn_index" -eq 0 ] 
+    then
+        zlib_install_args=(static)
+        args+=( USE_ZLIB=1 ZLIB_INC="$DEPENDS_ROOT"/zlib-static/include ZLIB_LIB="$DEPENDS_ROOT"/zlib-static/lib )
+    else
+        zlib_install_args=()
+        ldflags+=("$DEPENDS_ROOT"/zlib/lib)
+        args+=( USE_ZLIB=1 ZLIB_INC="$DEPENDS_ROOT"/zlib/include ZLIB_LIB="$DEPENDS_ROOT"/zlib/lib )
+    fi
+
+    echo
+    inquirer list_input_index "静态链接 Lua" yn_options yn_index
+
+    if [ "$yn_index" -eq 0 ] 
+    then
+        static_lua=true
+        LuaInstall static
+        args+=( USE_LUA=1 LUA_INC="$DEPENDS_ROOT"/lua-static/include LUA_LIB="$DEPENDS_ROOT"/lua-static/lib )
+    else
+        static_lua=false
+        LuaInstall
+        ldflags+=("$DEPENDS_ROOT"/lua/lib)
+        args+=( USE_LUA=1 LUA_INC="$DEPENDS_ROOT"/lua/include LUA_LIB="$DEPENDS_ROOT"/lua/lib )
+    fi
+
+    ZlibInstall ${zlib_install_args[@]+"${zlib_install_args[@]}"}
+
+    case $openssl_options_index in
+        0)
+            OpensslSourceInstall "${openssl_options[0]}" ${tls_install_args[@]+"${tls_install_args[@]}"}
+            if [ "$static_ssl" = false ] 
+            then
+                ldflags+=("$DEPENDS_ROOT"/openssl/lib)
+                args+=( SSL_INC="$DEPENDS_ROOT"/openssl/include SSL_LIB="$DEPENDS_ROOT"/openssl/lib )
+            else
+                args+=( SSL_INC="$DEPENDS_ROOT"/openssl-static/include SSL_LIB="$DEPENDS_ROOT"/openssl-static/lib )
+            fi
+        ;;
+        1)
+            OpensslSourceInstall "${openssl_options[1]}" ${tls_install_args[@]+"${tls_install_args[@]}"}
+            if [ "$static_ssl" = false ] 
+            then
+                ldflags+=("$DEPENDS_ROOT"/openssl3/lib)
+                args+=( SSL_INC="$DEPENDS_ROOT"/openssl3/include SSL_LIB="$DEPENDS_ROOT"/openssl3/lib )
+            else
+                args+=( SSL_INC="$DEPENDS_ROOT"/openssl3-static/include SSL_LIB="$DEPENDS_ROOT"/openssl3-static/lib )
+            fi
+        ;;
+        2)
+            QuictlsInstall ${tls_install_args[@]+"${tls_install_args[@]}"}
+            if [ "$static_ssl" = false ] 
+            then
+                ldflags+=("$DEPENDS_ROOT"/quictls/lib)
+                args+=( SSL_INC="$DEPENDS_ROOT"/quictls/include SSL_LIB="$DEPENDS_ROOT"/quictls/lib )
+            else
+                args+=( SSL_INC="$DEPENDS_ROOT"/quictls-static/include SSL_LIB="$DEPENDS_ROOT"/quictls-static/lib )
+            fi
+        ;;
+    esac
+
+    mkdir -p "$DEPENDS_ROOT"
+    cd "$DEPENDS_ROOT"
+
+    haproxy_ver=$(curl -s -L https://www.haproxy.org/ | grep -oPm1 '<a href="/download/(?!.*dev).+.tar.gz">\K[^<]+' || true)
+
+    if [ ! -d haproxy-"${haproxy_ver}" ] 
+    then
+        if ! curl -Lm 30 "https://www.haproxy.org/download/${haproxy_ver%.*}/src/haproxy-${haproxy_ver}.tar.gz" -o haproxy-"${haproxy_ver}".tar.gz
+        then
+            curl -Lm 30 "$FFMPEG_MIRROR_LINK/haproxy/haproxy-${haproxy_ver}.tar.gz" -o haproxy-"${haproxy_ver}".tar.gz
+        fi
+        Println "$info 解压 haproxy-${haproxy_ver} ..."
+        tar xzf haproxy-"${haproxy_ver}".tar.gz
+    fi
+
+    cd haproxy-"${haproxy_ver}"
+    make clean
+
+    if [ "$dist" == "mac" ] 
+    then
+        SourceInstallReady "${pcre_options[pcre_options_index]}"
+
+        if [ "$static_pcre" = false ] 
+        then
+            ldflags+=("$HOMEBREW_PREFIX/opt/${pcre_options[pcre_options_index]}/lib")
+        fi
+
+        args+=( PCRE_INC="$HOMEBREW_PREFIX/opt/${pcre_options[pcre_options_index]}/include" PCRE_LIB="$HOMEBREW_PREFIX/opt/${pcre_options[pcre_options_index]}/lib" )
+
+        args+=( USE_PROMEX=1 )
+
+        if [ -n "${ldflags:-}" ] 
+        then
+            args+=( LDFLAGS="-Wl,-rpath,$(JoinByString : "${ldflags[@]}")" )
+        fi
+
+        make TARGET=osx ${args[@]+"${args[@]}"}
+    else
+        if [ "$dist" == "rpm" ] 
+        then
+            if [ "$pcre_options_index" -eq 0 ] 
+            then
+                SourceInstallReady pcre-devel
+            else
+                SourceInstallReady pcre2-devel
+            fi
+        else
+            if [ "$pcre_options_index" -eq 0 ] 
+            then
+                SourceInstallReady libpcre3-dev
+            else
+                SourceInstallReady libpcre2-dev
+            fi
+        fi
+
+        args+=( USE_SYSTEMD=1 USE_PROMEX=1 )
+
+        if [ -n "${ldflags:-}" ] 
+        then
+            args+=( LDFLAGS="-Wl,-rpath,$(JoinByString : "${ldflags[@]}")" )
+        fi
+
+        make TARGET=linux-glibc ${args[@]+"${args[@]}"}
+    fi
+
+    Println "$info haproxy ${install}成功\n"
+}
+
+HAProxyUninstall()
+{
+
+
+    Println "$info haproxy 卸载完成\n"
+}
+
+HAProxyUpdate()
+{
+    HAProxyInstall update
+}

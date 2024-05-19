@@ -171,12 +171,16 @@ EOF
     then
         mkdir -p "$nginx_prefix"/sbin
         mv /usr/sbin/nginx* "$nginx_prefix"/sbin/
-        ln -sf /etc/nginx "$nginx_prefix"/conf
-        ln -sf /var/log/nginx "$nginx_prefix"/logs
-        ln -sf /usr/share/nginx/html "$nginx_prefix"/html
+        ln -sfn /etc/nginx "$nginx_prefix"/conf
+        ln -sfn /var/log/nginx "$nginx_prefix"/logs
+        ln -sfn /usr/share/nginx/html "$nginx_prefix"/html
         ln -sf /var/run/nginx.pid "$nginx_prefix"/logs/nginx.pid
         for file in "$nginx_prefix"/sbin/*
         do
+            if [[ -x "$AIOS_PREFIX"/bin/${file##*/} ]] 
+            then
+                continue
+            fi
 cat > "$AIOS_PREFIX"/bin/${file##*/} <<EOF
 #!/bin/sh
 $file -p "$nginx_prefix" "\$@"
@@ -241,7 +245,7 @@ NginxSourceInstall()
 
     if [ "$dist" == "mac" ] && [ ! -d "$nginx_prefix" ]
     then
-        Println "$info 建立目录 "$nginx_prefix", 可能需要输入密码\n"
+        Println "$info 建立目录 $nginx_prefix, 可能需要输入密码\n"
         sudo mkdir "$nginx_prefix"
         sudo chown $USER "$nginx_prefix"
     fi
@@ -278,8 +282,7 @@ NginxSourceInstall()
 
     if [ "$dist" == "mac" ] 
     then
-        DepInstall "${pcre_options[pcre_options_index]}"
-        DepInstall zlib
+        SourceInstallReady "${pcre_options[pcre_options_index]}" zlib
 
         cc_opt="-I$HOMEBREW_PREFIX/opt/${pcre_options[pcre_options_index]}/include -I$HOMEBREW_PREFIX/opt/zlib/include"
         ld_opt="-I$HOMEBREW_PREFIX/opt/${pcre_options[pcre_options_index]}/lib -L$HOMEBREW_PREFIX/opt/zlib/lib"
@@ -331,40 +334,9 @@ NginxSourceInstall()
     else
         if [ "$dist" == "rpm" ] 
         then
-            . /etc/os-release
-
-            case ${VERSION_ID%%.*} in
-                9) 
-                    dnf config-manager --set-enabled crb
-                    dnf install -y epel-release
-                    if dnf list epel-next-release &>/dev/null 
-                    then
-                        dnf install -y epel-next-release
-                    fi
-                ;;
-                8) 
-                    dnf config-manager --set-enabled powertools
-                    dnf install -y epel-release
-                    if dnf list epel-next-release &>/dev/null 
-                    then
-                        dnf install -y epel-next-release
-                    fi
-                ;;
-                *) 
-                    yum install -y epel-release
-                ;;
-            esac
-
-            yum groupinstall -y 'Development Tools'
-            timedatectl set-timezone Asia/Shanghai
-            systemctl restart crond
-            yum install -y pcre-devel openssl-devel gcc zlib-devel
+            SourceInstallReady openssl-devel gcc
         else
-            timedatectl set-timezone Asia/Shanghai
-            systemctl restart cron
-            apt-get -y install debconf-utils
-            echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
-            apt-get -y install libpcre3-dev perl make software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext build-essential
+            SourceInstallReady perl software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext
         fi
 
         while IFS= read -r line
@@ -416,7 +388,7 @@ NginxSourceInstall()
             if [ "$openssl_options_index" -eq 0 ] 
             then
                 openssl_url="https://www.openssl.org/source/old"
-                openssl_vers=($(curl -s -Lm 20 $openssl_url/ | grep -oP '<li><a href="[^"]+">\K[^<]+'))
+                openssl_vers=($(curl -s -L $openssl_url/ | grep -oP '<li><a href="[^"]+">\K[^<]+' || true))
 
                 for openssl_ver in "${openssl_vers[@]}"
                 do
@@ -430,7 +402,7 @@ NginxSourceInstall()
                 openssl_url="https://www.openssl.org/source"
             fi
 
-            openssl_packs=($(curl -s -Lm 20 $openssl_url/ | grep -oP '<td><a href="[^"]+">\K[^<]+'))
+            openssl_packs=($(curl -s -L $openssl_url/ | grep -oP '<td><a href="[^"]+">\K[^<]+' || true))
             openssl_pack="${openssl_packs[0]}"
             openssl_name=${openssl_pack%.tar*}
 
@@ -479,6 +451,7 @@ NginxSourceInstall()
 
     nproc="-j$(nproc 2> /dev/null)" || nproc="-j1"
 
+    make clean
     make $nproc
     make install
 

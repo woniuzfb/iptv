@@ -180,7 +180,7 @@ OpenrestySourceInstall()
         fi
         if [ ! -d "$nginx_prefix" ]
         then
-            Println "$info 建立目录 "$nginx_prefix", 可能需要输入密码\n"
+            Println "$info 建立目录 $nginx_prefix, 可能需要输入密码\n"
             sudo mkdir "$nginx_prefix"
             sudo chown $USER "$nginx_prefix"
             sudo chown $USER "${nginx_prefix%/*}"
@@ -219,18 +219,13 @@ OpenrestySourceInstall()
         fi
     done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://openresty.org/en/download.html 2> /dev/null)
 
-    if [ ! -d "./$openresty_package_name" ] 
-    then
-        curl -L "https://openresty.org/download/$openresty_package_name.tar.gz" -o "$openresty_package_name.tar.gz"
-        Println "$info 解压 $openresty_package_name ..."
-        tar xzf "$openresty_package_name.tar.gz"
-    fi
+    curl -L "https://openresty.org/download/$openresty_package_name.tar.gz" -o "$openresty_package_name.tar.gz"
+    Println "$info 解压 $openresty_package_name ..."
+    tar xzf "$openresty_package_name.tar.gz"
 
     if [ "$dist" == "mac" ] 
     then
-        DepInstall "${pcre_options[pcre_options_index]}"
-        DepInstall zlib
-        DepInstall geoip
+        SourceInstallReady "${pcre_options[pcre_options_index]}" zlib geoip
 
         cc_opt="-I$HOMEBREW_PREFIX/opt/geoip/include -I$HOMEBREW_PREFIX/opt/${pcre_options[pcre_options_index]}/include -I$HOMEBREW_PREFIX/opt/zlib/include"
         ld_opt="-L$HOMEBREW_PREFIX/opt/geoip/lib -I$HOMEBREW_PREFIX/opt/${pcre_options[pcre_options_index]}/lib -L$HOMEBREW_PREFIX/opt/zlib/lib"
@@ -294,7 +289,6 @@ OpenrestySourceInstall()
         --without-http_rds_json_module \
         --without-http_rds_csv_module \
         --without-lua_rds_parser \
-        --with-ipv6 \
         --with-stream \
         --with-stream_realip_module \
         --with-stream_ssl_module \
@@ -304,40 +298,9 @@ OpenrestySourceInstall()
     else
         if [ "$dist" == "rpm" ] 
         then
-            . /etc/os-release
-
-            case ${VERSION_ID%%.*} in
-                9) 
-                    dnf config-manager --set-enabled crb
-                    dnf install -y epel-release
-                    if dnf list epel-next-release &>/dev/null 
-                    then
-                        dnf install -y epel-next-release
-                    fi
-                ;;
-                8) 
-                    dnf config-manager --set-enabled powertools
-                    dnf install -y epel-release
-                    if dnf list epel-next-release &>/dev/null 
-                    then
-                        dnf install -y epel-next-release
-                    fi
-                ;;
-                *) 
-                    yum install -y epel-release
-                ;;
-            esac
-
-            yum groupinstall -y 'Development Tools'
-            timedatectl set-timezone Asia/Shanghai
-            systemctl restart crond
-            yum install -y pcre-devel openssl-devel gcc zlib-devel libpq-devel
+            SourceInstallReady openssl-devel gcc libpq-devel
         else
-            timedatectl set-timezone Asia/Shanghai
-            systemctl restart cron
-            apt-get -y install debconf-utils
-            echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
-            apt-get -y install libpcre3-dev perl make software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext build-essential libpq-dev
+            SourceInstallReady perl software-properties-common pkg-config libssl-dev libghc-zlib-dev libcurl4-gnutls-dev libexpat1-dev unzip gettext libpq-dev
         fi
 
         while IFS= read -r line
@@ -376,7 +339,7 @@ OpenrestySourceInstall()
         fi
 
         openssl_url="https://www.openssl.org/source/old"
-        openssl_vers=($(curl -s -Lm 20 $openssl_url/ | grep -oP '<li><a href="[^"]+">\K[^<]+'))
+        openssl_vers=($(curl -s -L $openssl_url/ | grep -oP '<li><a href="[^"]+">\K[^<]+' || true))
 
         for openssl_ver in "${openssl_vers[@]}"
         do
@@ -388,7 +351,7 @@ OpenrestySourceInstall()
 
         openssl_url="$openssl_url/$openssl_ver"
 
-        openssl_packs=($(curl -s -Lm 20 $openssl_url/ | grep -oP '<td><a href="[^"]+">\K[^<]+'))
+        openssl_packs=($(curl -s -L $openssl_url/ | grep -oP '<td><a href="[^"]+">\K[^<]+' || true))
         openssl_pack="${openssl_packs[0]}"
         openssl_name=${openssl_pack%.tar*}
 
@@ -400,7 +363,6 @@ OpenrestySourceInstall()
 
         if [ ! -d ${openssl_name}-patched ] || [ ! -s ${openssl_name}-patched/openssl-1.1.1f-sess_set_get_cb_yield.patch ]
         then
-            rm -rf ${openssl_name:-notfound}
             rm -rf ${openssl_name}-patched
 
             if [ "$openssl_options_index" -eq 1 ] 
@@ -418,8 +380,10 @@ OpenrestySourceInstall()
                 tar xzf "$openssl_pack"
             fi
 
-            mv ${openssl_name} ${openssl_name}-patched
+            cp -r ${openssl_name} ${openssl_name}-patched
             cd ${openssl_name}-patched
+
+            make clean
 
             curl -L "$FFMPEG_MIRROR_LINK/openssl-1.1.1f-sess_set_get_cb_yield.patch" -o openssl-1.1.1f-sess_set_get_cb_yield.patch
             patch -p1 < openssl-1.1.1f-sess_set_get_cb_yield.patch || true
@@ -464,7 +428,6 @@ OpenrestySourceInstall()
         --with-http_flv_module \
         --with-http_mp4_module \
         --with-http_gunzip_module \
-        --with-ipv6 \
         --with-stream \
         --with-stream_ssl_preread_module \
         --with-stream_ssl_module \
@@ -475,6 +438,7 @@ OpenrestySourceInstall()
 
     nproc="-j$(nproc 2> /dev/null)" || nproc="-j1"
 
+    make clean
     make $nproc
     make install
 

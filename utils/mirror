@@ -430,6 +430,17 @@ then
     fi
 fi
 
+if [ ! -e "$FFMPEG_MIRROR_ROOT/OpenSSL_1_1_1w-quic1.tar.gz" ] 
+then
+    Println "$info 下载 OpenSSL_1_1_1w-quic1 ..."
+    if curl -s -L "https://github.com/quictls/openssl/archive/refs/tags/OpenSSL_1_1_1w-quic1.tar.gz" -o "$FFMPEG_MIRROR_ROOT/OpenSSL_1_1_1w-quic1.tar.gz_tmp"
+    then
+        mv "$FFMPEG_MIRROR_ROOT/OpenSSL_1_1_1w-quic1.tar.gz_tmp" "$FFMPEG_MIRROR_ROOT/OpenSSL_1_1_1w-quic1.tar.gz"
+    else
+        Println "$error OpenSSL_1_1_1w-quic1 下载出错, 无法连接 github ?"
+    fi
+fi
+
 Println "$info 下载 v2ray install-release.sh ..."
 if curl -s -L "$V2_LINK" -o "$FFMPEG_MIRROR_ROOT/v2ray_install-release.sh_tmp"
 then

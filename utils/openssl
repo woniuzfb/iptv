@@ -1,12 +1,110 @@
-OpensslInstall()
+OpensslSourceInstall()
 {
-    if [[ -x $(command -v openssl) ]] 
+    local build_dir=build args=() openssl_path="$DEPENDS_ROOT"/openssl
+
+    DepInstall ca-certificates
+    DepInstall perl
+
+    if [ -z "${1:-}" ] 
     then
+        openssl_install_options=( openssl@1.1 )
+    else
+        openssl_install_options=("$@")
+    fi
+
+    if ! EleInArray openssl@3 openssl_install_options
+    then
+        openssl_url="https://www.openssl.org/source/old"
+        openssl_vers=($(curl -s -L $openssl_url/ | grep -oP '<li><a href="[^"]+">\K[^<]+' || true))
+
+        for openssl_ver in "${openssl_vers[@]}"
+        do
+            if [ "${openssl_ver%%.*}" -eq 1 ] 
+            then
+                break
+            fi
+        done
+        openssl_url="$openssl_url/$openssl_ver"
+    else
+        openssl_url="https://www.openssl.org/source"
+        openssl_path+=3
+    fi
+
+    openssl_packs=($(curl -s -L $openssl_url/ | grep -oP '<td><a href="[^"]+">\K[^<]+' || true))
+    openssl_pack="${openssl_packs[0]}"
+    openssl_name=${openssl_pack%.tar*}
+
+    if EleInArray static openssl_install_options
+    then
+        build_dir+=-static
+        openssl_path+=-static
+    fi
+
+    if [ -d "$DEPENDS_ROOT/$openssl_name/$build_dir" ] 
+    then
+        ln -sfn "$DEPENDS_ROOT/$openssl_name/$build_dir" "$openssl_path"
         return 0
     fi
 
-    DepInstall openssl
+    unset OPENSSL_LOCAL_CONFIG_DIR
 
+    args=(
+        --prefix="$DEPENDS_ROOT/$openssl_name/$build_dir"
+        --openssldir="$DEPENDS_ROOT/$openssl_name/$build_dir"/etc
+        --libdir=lib
+    )
+
+    if EleInArray static openssl_install_options
+    then
+        args+=(no-shared)
+    fi
+
+    ArchCheck
+
+    if [ "$dist" == "mac" ] 
+    then
+        export PERL="$HOMEBREW_PREFIX"/opt/perl/bin/perl
+        args+=( darwin64-${arch}-cc )
+        SourceInstallReady
+    else
+        case $arch in
+            x86_64) args+=( linux-x86_64 )
+            ;;
+            i386) args+=( linux-elf )
+            ;;
+            arm64) args+=( linux-aarch64 )
+            ;;
+            arm*) args+=( linux-armv4 )
+            ;;
+            *) Println "$error 不支持的架构 $arch\n"; return 1
+        esac
+
+        if [ "$dist" == "rpm" ] 
+        then
+            SourceInstallReady glibc-devel openssl-devel systemd-devel zlib-devel
+        else
+            SourceInstallReady gcc libc6-dev libssl-dev libsystemd-dev make zlib1g-dev
+        fi
+    fi
+
+    mkdir -p "$DEPENDS_ROOT"
+    cd "$DEPENDS_ROOT"
+
+    curl -L "$openssl_url/$openssl_pack" -o "$openssl_pack"
+    Println "$info 解压 $openssl_name ..."
+    tar xzf "$openssl_pack"
+    cd "$openssl_name"
+
+    perl ./Configure ${args[@]+"${args[@]}"}
+    make clean
+    make
+    make install
+
+    ln -sfn "$DEPENDS_ROOT/$openssl_name/$build_dir" "$openssl_path"
+}
+
+OpensslPackageInstall()
+{
     if [ "$dist" == "rpm" ] 
     then
         DepInstall openssl-devel
@@ -14,4 +112,9 @@ OpensslInstall()
     then
         DepInstall libssl-dev
     fi
+}
+
+OpensslInstall()
+{
+    DepInstall openssl
 }

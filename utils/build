@@ -1,0 +1,119 @@
+PackageInstallReady()
+{
+    DepInstall curl
+    DepInstall ca-certificates
+
+    . /etc/os-release
+
+    case $dist in
+        mac)
+            if ! xcode-select -p &> /dev/null
+            then
+                xcode-select --install
+            fi
+        ;;
+        rpm)
+            DepInstall yum-utils
+        ;;
+        ubu)
+            DepInstall lsb-release
+            DepInstall ubuntu-keyring
+            DepInstall gpg
+        ;;
+        deb)
+            DepInstall lsb-release
+            DepInstall debian-archive-keyring
+            DepInstall gpg
+        ;;
+    esac
+
+    return 0
+}
+
+SourceInstallReady()
+{
+    local package
+
+    case $dist in
+        mac)
+            if ! xcode-select -p &> /dev/null
+            then
+                xcode-select --install
+            fi
+            if [ -n "${1:-}" ] 
+            then
+                for package in "$@"
+                do
+                    if ! brew list "$package" &> /dev/null
+                    then
+                        brew install "$package"
+                    fi
+                done
+            fi
+        ;;
+        rpm)
+            if ! rpm -q epel-release &> /dev/null 
+            then
+                . /etc/os-release
+                case ${VERSION_ID%%.*} in
+                    9) 
+                        dnf config-manager --set-enabled crb
+                        dnf install -y epel-release
+                        if dnf list epel-next-release &>/dev/null 
+                        then
+                            dnf install -y epel-next-release
+                        fi
+                    ;;
+                    8) 
+                        dnf config-manager --set-enabled powertools
+                        dnf install -y epel-release
+                        if dnf list epel-next-release &>/dev/null 
+                        then
+                            dnf install -y epel-next-release
+                        fi
+                    ;;
+                    7) 
+                        yum install -y epel-release
+                    ;;
+                    *) Println "$error 不支持的系统版本\n"; return 1
+                    ;;
+                esac
+            fi
+
+            yum groupinstall -y 'Development Tools'
+            # timedatectl set-timezone Asia/Shanghai
+            # systemctl restart crond
+            if [ -n "${1:-}" ] 
+            then
+                for package in "$@"
+                do
+                    if ! rpm -q "$package" &> /dev/null 
+                    then
+                        yum install -y "$package"
+                    fi
+                done
+            fi
+        ;;
+        ubu|deb)
+            # timedatectl set-timezone Asia/Shanghai
+            # systemctl restart cron
+            if ! dpkg -s debconf-utils &> /dev/null 
+            then
+                apt-get -y install debconf-utils
+            fi
+            echo '* libraries/restart-without-asking boolean true' | debconf-set-selections
+            if [ -n "${1:-}" ] 
+            then
+                for package in build-essential "$@"
+                do
+                    if ! dpkg -s "$package" &> /dev/null 
+                    then
+                        apt-get -y install "$package"
+                    fi
+                done
+            fi
+        ;;
+    esac
+
+    return 0
+}

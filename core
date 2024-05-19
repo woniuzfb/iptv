@@ -47,6 +47,10 @@ EleInArray()
     local ele="$1"
     shift
     local var=("$1"[@])
+    if [[ -z "${!var:-}" ]] 
+    then
+        return 1
+    fi
     local arr=("${!var}")
     [[ "$ele" == @($(JoinByChar '|' "${arr[@]//|/\\|}")) ]]
 }
@@ -173,6 +177,7 @@ Urldecode()
 
 GetServerIp()
 {
+    local ip
     ip=$(dig +short myip.opendns.com @resolver1.opendns.com) || true
     if [ -z "$ip" ] || [ "${#ip}" -gt 15 ]
     then
@@ -186,23 +191,42 @@ GetServerIp()
 
 GetFreePort()
 {
+    local lport uport
     if [ -n "${1:-}" ] && [ -n "${2:-}" ]
     then
         lport=$1
         uport=$2
+    elif [ "$dist" == "mac" ] 
+    then
+        lport=1024
+        uport=49151
     else
         read lport uport < /proc/sys/net/ipv4/ip_local_port_range
     fi
 
-    while true
-    do
-        candidate=$((lport+RANDOM%(uport-lport)))
-        if ! ( echo -n "" >/dev/tcp/127.0.0.1/"$candidate" )  >/dev/null 2>&1
-        then
-            echo "$candidate"
-            break
-        fi
-    done
+    if [ "$dist" == "mac" ] 
+    then
+        DepInstall lsof
+        while true
+        do
+            candidate=$((lport+RANDOM%(uport-lport)))
+            if ! lsof -Pi :"$candidate" -sTCP:LISTEN -t &>/dev/null
+            then
+                echo "$candidate"
+                break
+            fi
+        done
+    else
+        while true
+        do
+            candidate=$((lport+RANDOM%(uport-lport)))
+            if ! ( echo -n "" >/dev/tcp/127.0.0.1/"$candidate" )  >/dev/null 2>&1
+            then
+                echo "$candidate"
+                break
+            fi
+        done
+    fi
 }
 
 GetRandomMac()
@@ -272,6 +296,7 @@ WaitTerm()
 }
 
 Include utils/system "$@"
+Include utils/build "$@"
 Include utils/inquirer "$@"
 Include utils/spinner "$@"
 Include utils/progress "$@"

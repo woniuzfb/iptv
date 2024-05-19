@@ -16,32 +16,64 @@ Swap()
 
     if [ $swap_options_index -eq 0 ]
     then
-        if [ -f /swapfile ]
+        if [ -f "$DEPENDS_ROOT"/swapfile ]
         then
-            Println "swapfile 已存在\n"
+            Println "$DEPENDS_ROOT/swapfile 已存在\n"
+            return 1
+        elif [ -f /swapfile ] 
+        then
+            Println "/swapfile 已存在\n"
             return 1
         fi
 
         echo
         inquirer text_input "请输入 swap 大小(MB)" swapsize 500 SwapValidateSize "swap 大小必须是数字"
 
-        fallocate -l 500M /swapfile
-        chmod 600 /swapfile
-        mkswap /swapfile
-        swapon /swapfile
-        echo '/swapfile none swap defaults 0 0' >> /etc/fstab
+        mkdir -p "$DEPENDS_ROOT"
+
+        if [ "$dist" == "mac" ] 
+        then
+            Println "$tip 可能需要输入密码"
+            sudo mkfile ${swapsize}m "$DEPENDS_ROOT"/swapfile
+            sudo chmod 0600 "$DEPENDS_ROOT"/swapfile
+            sudo mdutil -a -i -o SWAP="$DEPENDS_ROOT"/swapfile
+            sudo mdutil -a -s
+        else
+            fallocate -l ${swapsize}M "$DEPENDS_ROOT"/swapfile
+            chmod 600 "$DEPENDS_ROOT"/swapfile
+            mkswap "$DEPENDS_ROOT"/swapfile
+            swapon "$DEPENDS_ROOT"/swapfile
+            echo "$DEPENDS_ROOT/swapfile none swap defaults 0 0" >> /etc/fstab
+        fi
+
         Println "swap 创建成功\n"
     else
-        if [ ! -f /swapfile ]
+        if [ ! -f /swapfile ] && [ ! -f "$DEPENDS_ROOT"/swapfile ]
         then
             Println "swapfile 不存在\n"
             return 1
         fi
 
-        sed -i '/swapfile/d' /etc/fstab
-        echo 3 > /proc/sys/vm/drop_caches
-        swapoff -a
-        rm -f /swapfile
+        for swapfile in /swapfile "$DEPENDS_ROOT"/swapfile
+        do
+            if [ ! -f "$swapfile" ] 
+            then
+                continue
+            fi
+
+            if [ "$dist" == "mac" ] 
+            then
+                Println "$tip 可能需要输入密码"
+                sudo mdutil -d -i -o SWAP="$swapfile"
+            else
+                sed -i '/swapfile/d' /etc/fstab
+                echo 3 > /proc/sys/vm/drop_caches
+                swapoff -a
+            fi
+
+            rm -f "$swapfile"
+        done
+
         Println "swap 移除成功\n"
     fi
 }

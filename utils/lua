@@ -1,0 +1,88 @@
+LuaInstall()
+{
+    local build_dir=build lua_path="$DEPENDS_ROOT"/lua static=false patch=https://raw.githubusercontent.com/Homebrew/formula-patches/0dcd11880c7d63eb395105a5cdddc1ca05b40f4a/lua/lua-so.patch
+
+    lua_package=$(curl -s -L https://www.lua.org/download.html | grep -oPm1 '<A HREF="ftp/\K[^"]+' || true)
+    lua_name=${lua_package%.tar*}
+    lua_ver=${lua_name#lua-}
+
+    if [ -n "${1:-}" ] 
+    then
+        lua_install_options=("$@")
+
+        if EleInArray static lua_install_options
+        then
+            build_dir+=-static
+            lua_path+=-static
+            static=true
+        fi
+    fi
+
+    if [ ! -d "$DEPENDS_ROOT/$lua_name/$build_dir" ] 
+    then
+        mkdir -p "$DEPENDS_ROOT"
+        cd "$DEPENDS_ROOT"
+
+        if [ "$dist" == "mac" ] 
+        then
+            DepInstall readline
+            DepInstall lua
+
+            mkdir "$lua_name/$build_dir"/{bin,lib,include}
+            cp "$HOMEBREW_PREFIX"/opt/lua/bin/{lua,luac} "$lua_name/$build_dir"/bin/
+            cp "$HOMEBREW_PREFIX"/opt/lua/include/lua/* "$lua_name/$build_dir"/include/
+            cp "$HOMEBREW_PREFIX"/opt/lua/lib/liblua.a "$lua_name/$build_dir"/lib/
+            if ! $static 
+            then
+                cp "$HOMEBREW_PREFIX"/opt/lua/lib/liblua.dylib "$lua_name/$build_dir"/lib/
+            fi
+        else
+            if [ "$dist" == "rpm" ] 
+            then
+                DepInstall readline-devel
+            else
+                DepInstall libreadline-dev
+            fi
+
+            curl -L "https://www.lua.org/ftp/$lua_package" -o "$lua_package"
+            Println "$info 解压 $lua_name ..."
+            tar xzf "$lua_package"
+            cd "$lua_name"
+
+            if ! $static 
+            then
+                curl -Lm 20 "$FFMPEG_MIRROR_LINK/${patch##*/}" -o "${patch##*/}"
+                patch -p1 < "${patch##*/}"
+            fi
+
+            make clean
+            make linux-readline INSTALL_TOP="$DEPENDS_ROOT/$lua_name/$build_dir"
+            make install INSTALL_TOP="$DEPENDS_ROOT/$lua_name/$build_dir"
+
+            mkdir "$build_dir"/lib/pkgconfig
+            cat > "$build_dir"/lib/pkgconfig/lua.pc << EOF
+V= ${lua_ver%.*}
+R= ${lua_ver}
+prefix= $DEPENDS_ROOT/$lua_name/$build_dir
+INSTALL_BIN= \${prefix}/bin
+INSTALL_INC= \${prefix}/include
+INSTALL_LIB= \${prefix}/lib
+INSTALL_MAN= \${prefix}/share/man/man1
+INSTALL_LMOD= \${prefix}/share/lua/\${V}
+INSTALL_CMOD= \${prefix}/lib/lua/\${V}
+exec_prefix= \${prefix}
+libdir= \${exec_prefix}/lib
+includedir= \${prefix}/include
+
+Name: Lua
+Description: An Extensible Extension Language
+Version: ${lua_ver}
+Requires:
+Libs: -L\${libdir} -llua -lm
+Cflags: -I\${includedir}
+EOF
+        fi
+    fi
+
+    ln -sfn "$DEPENDS_ROOT/$lua_name/$build_dir" "$lua_path"
+}

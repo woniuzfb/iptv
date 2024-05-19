@@ -35,8 +35,21 @@ MongodbInstall()
                 xcode-select --install
             fi
             brew tap mongodb/brew
-            brew install mongodb-community
-            brew services start mongodb-community
+            macos_version=$(sw_vers -productVersion)
+            if [ "${macos_version%%.*}" -lt 12 ] 
+            then
+                mkdir -p "$DEPENDS_ROOT"
+                if ! curl -Lm 20 https://github.com/Homebrew/homebrew-core/raw/HEAD/Formula/m/mongosh.rb -o "$DEPENDS_ROOT"/mongosh.rb
+                then
+                    curl -Lm 20 "$FFMPEG_MIRROR_LINK"/mongosh.rb -o "$DEPENDS_ROOT"/mongosh.rb
+                fi
+                sed -i 's/"node"/"node@20"/g' "$DEPENDS_ROOT"/mongosh.rb
+                brew install "$DEPENDS_ROOT"/mongosh.rb
+                brew install mongodb-community --without-mongosh
+            else
+                brew install mongodb-community
+            fi
+            brew services start mongodb/brew/mongodb-community
             Println "$info mongodb 安装成功\n"
             return 0
         ;;

@@ -19,6 +19,7 @@
 - [Calibre](#calibre)
 - [LianHuanHua](#lianhuanhua)
 - [Docker](#docker)
+- [HAProxy](#haproxy)
 - [Dev](#dev)
 
 </details>
@@ -344,6 +345,18 @@ wget https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 - authelia
 - postgresql
 - yq
+
+</details>
+
+## HAProxy
+
+```bash
+./debug ha
+```
+
+<details>
+
+- static/dynamic linking pcre/zlib/lua/openssl/quictls
 
 </details>
 

@@ -42,12 +42,13 @@ NginxConfigServerLiveRoot()
         else
             server_live_root="${server_live_root%/}"
 
+            mkdir -p "$server_live_root"
+
             if [ -d "$LIVE_ROOT" ] 
             then
-                ln -sf "$LIVE_ROOT" "$server_live_root/"
+                ln -sf "$LIVE_ROOT" "$server_live_root"/
             fi
 
-            mkdir -p "$server_live_root"
             break
         fi
     done

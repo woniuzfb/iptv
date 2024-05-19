@@ -110,7 +110,6 @@ SERVICES_CONFIG="$SERVICES_ROOT"/config.json
 # depends
 DEPENDS_ROOT="$SERVICES_ROOT"/depends
 AIOS_LINK=https://github.com/woniuzfb/iptv
-QUICTLS_LINK=https://github.com/quictls/openssl
 
 # Alist
 ALIST_FILE="$AIOS_PREFIX"/bin/ali
@@ -139,3 +138,7 @@ KCC_FILE="$KCC_ROOT"/kcc-c2e.py
 DOCKER_FILE="$AIOS_PREFIX"/bin/dr
 DOCKER_ROOT="$SERVICES_ROOT"/docker
 DOCKER_CONFIG="$SERVICES_ROOT"/docker/docker-compose.yml
+
+# HAProxy
+HAPROXY_LINK=https://github.com/haproxy/haproxy
+HAPROXY_FILE="$AIOS_PREFIX"/bin/ha

@@ -110,6 +110,7 @@ ShFileCheck()
     [ ! -e "$RCLONE_FILE" ] && ln -s "$SH_FILE" "$RCLONE_FILE"
     [ ! -e "$CALIBRE_FILE" ] && ln -s "$SH_FILE" "$CALIBRE_FILE"
     [ ! -e "$DOCKER_FILE" ] && ln -s "$SH_FILE" "$DOCKER_FILE"
+    [ ! -e "$HAPROXY_FILE" ] && ln -s "$SH_FILE" "$HAPROXY_FILE"
 
     return 0
 }

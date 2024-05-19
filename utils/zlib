@@ -1,0 +1,41 @@
+ZlibInstall()
+{
+    local build_dir=build args=() zlib_path="$DEPENDS_ROOT"/zlib
+
+    if [ -n "${1:-}" ]
+    then
+        zlib_install_options=("$@")
+
+        if EleInArray static zlib_install_options
+        then
+            build_dir+=-static
+            args=(--static)
+            zlib_path="$DEPENDS_ROOT"/zlib-static
+        fi
+    fi
+
+    while IFS= read -r line
+    do
+        if [[ $line =~ \<A\ HREF=\"(.+)\.tar\.gz ]] 
+        then
+            zlib_name=${BASH_REMATCH[1]}
+            break
+        fi
+    done < <(curl -s -L -H "User-Agent: $USER_AGENT_BROWSER" https://www.zlib.net 2> /dev/null)
+
+    if [ ! -d "$DEPENDS_ROOT/$zlib_name/$build_dir" ] 
+    then
+        mkdir -p "$DEPENDS_ROOT"
+        cd "$DEPENDS_ROOT"
+        curl -L "https://www.zlib.net/$zlib_name.tar.gz" -o "$zlib_name".tar.gz
+        Println "$info 解压 $zlib_name ..."
+        tar xzf "$zlib_name".tar.gz
+        cd "$zlib_name"
+        ./configure --prefix="$DEPENDS_ROOT/$zlib_name/$build_dir" ${args[@]+"${args[@]}"}
+        make clean
+        make
+        make install
+    fi
+
+    ln -sfn "$DEPENDS_ROOT/$zlib_name/$build_dir" "$zlib_path"
+}
