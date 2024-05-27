@@ -11,12 +11,18 @@ fi
 
 LhhDownload()
 {
-    if ! CurlFake "$@"
+    CurlImpersonateInstall
+    if [[ ! -x "${CURL_IMPERSONATE_FILE}-lhh" ]] 
+    then
+        cp -f "$CURL_IMPERSONATE_FILE" "${CURL_IMPERSONATE_FILE}-lhh"
+        sed -i '/User-Agent:/d' "${CURL_IMPERSONATE_FILE}-lhh"
+    fi
+    if ! CurlFake lhh "$@"
     then
         if [ "${curl_retry:-true}" = true ] 
         then
             sleep 10
-            if CurlFake "$@" 
+            if CurlFake lhh "$@" 
             then
                 return 0
             fi
@@ -68,7 +74,7 @@ ZhLhhDownload()
     fi
 
     iframe_url="${book_url%/*}/$iframe_path"
-    book_html=$(LhhDownload -s -L -b "$COOKIE_FILE" -H "Referer: $book_url" "$iframe_url")
+    book_html=$(LhhDownload -s -L -A "$USER_AGENT_BROWSER" -b "$COOKIE_FILE" -H "Referer: $book_url" "$iframe_url")
     source_src=$(grep -oP '<input id="sousrc"(.+)value="\K[^"]+' <<< "$book_html")
     book_images=($(grep -m1 -oE "var filenamefc=new Array\(.+\);" <<< "$book_html" | grep -oE "[0-9]+"))
     p_p=$(grep -oP '<div id="p_p"(.+)">\K[^<]+' <<< "$book_html")
@@ -121,7 +127,7 @@ ZhLhhDownload()
                 image_name="${book_image}$((total*iii[j]))"
             fi
 
-            LhhDownload -s -L -b "$COOKIE_FILE" -o "$TMP_DIR/${j}.jpg" "${source_src}${pp[0]}/${pp[1]}/${image_name}.jpg"
+            LhhDownload -s -L -A "$USER_AGENT_BROWSER" -b "$COOKIE_FILE" -o "$TMP_DIR/${j}.jpg" "${source_src}${pp[0]}/${pp[1]}/${image_name}.jpg"
         done
 
         # https://stackoverflow.com/questions/10225403/how-can-i-extract-a-good-quality-jpeg-image-from-a-video-file-with-ffmpeg
@@ -469,7 +475,7 @@ HdlzZhihuDownload()
         i=$((i+1))
     done
 
-    if ! book_images=($(LhhDownload -s -L -b "$COOKIE_FILE" "https://zhuanlan.zhihu.com/p/${id}" | grep -oP 'data-original-token="\K[^"]+' | uniq))
+    if ! book_images=($(LhhDownload -s -L -A "$USER_AGENT_BROWSER" -b "$COOKIE_FILE" "https://zhuanlan.zhihu.com/p/${id}" | grep -oP 'data-original-token="\K[^"]+' | uniq))
     then
         return 1
     fi
@@ -487,7 +493,7 @@ HdlzZhihuDownload()
             tput el
             echo -n "还剩 $result_count 本, $title ${book_image_formated}.jpg"
 
-            LhhDownload -s -L -b "$COOKIE_FILE" -o "$book_path/${book_image_formated}.jpg" "$book_image"
+            LhhDownload -s -L -A "$USER_AGENT_BROWSER" -b "$COOKIE_FILE" -o "$book_path/${book_image_formated}.jpg" "$book_image"
         done
 
         echo -ne "\r"
@@ -522,7 +528,7 @@ HdlzZhihuDownload()
                 tput el
                 echo -n "还剩 $result_count 本, $title ${book_image_formated}.jpg"
 
-                LhhDownload -s -L -b "$COOKIE_FILE" -o "$book_path/${book_images_name}/${book_image_formated}.jpg" "$book_image"
+                LhhDownload -s -L -A "$USER_AGENT_BROWSER" -b "$COOKIE_FILE" -o "$book_path/${book_images_name}/${book_image_formated}.jpg" "$book_image"
             done
 
             echo -ne "\r"
@@ -630,7 +636,8 @@ HdlzGetTouTiaoCookies()
     fi
 
     cookie_mstoken=$(RandStr 64)
-    toutiao_cookies=( "msToken=${cookie_mstoken};" ${toutiao_cookies[@]} )
+    cookie_verify="verify_$(RandStr 8)_$(RandStr 8)_$(RandStr 4)_$(RandStr 4)_$(RandStr 4)_$(RandStr 12)"
+    toutiao_cookies=( "msToken=${cookie_mstoken};" "s_v_web_id=${cookie_verify};" ${toutiao_cookies[@]} )
     toutiao_cookies_json="$(CookiesToJson www.toutiao.com ${toutiao_cookies[@]})"
 }
 
@@ -855,7 +862,10 @@ reduce ({excerpt,id,image_url,title}|keys_unsorted[]) as $key ([];
         #    cookie_nonce="${BASH_REMATCH[2]}"
         # fi
         # cookie_signature=$(node "$NODE_ROOT"/toutiao/browser.js "$cookie_nonce" "$toutiao_cookies_json" | $JQ_FILE -r '.data.signature')
-        IFS= read -r signed_url < <(node "$NODE_ROOT"/toutiao/browser.js "https://www.toutiao.com/api/pc/list/user/feed?category=profile_all&token=MS4wLjABAAAAB2ev2na9xNHI8py8dnKvLnSYGkxaFKDtOQTqbR7nsEzpNhwVqpCY8ZZz6s7qA8vt&max_behot_time=0&aid=24&app_name=toutiao_web" "$toutiao_cookies_json" | $JQ_FILE -r '.data.signed_url')
+
+        signed_url="https://www.toutiao.com/api/pc/list/user/feed?category=profile_all&token=MS4wLjABAAAAB2ev2na9xNHI8py8dnKvLnSYGkxaFKDtOQTqbR7nsEzpNhwVqpCY8ZZz6s7qA8vt&max_behot_time=0&aid=24&app_name=toutiao_web"
+        IFS= read -r a_bogus < <(node "$NODE_ROOT"/toutiao/browser.js "$signed_url" "$toutiao_cookies_json" | $JQ_FILE -r '.data."a-bogus"')
+        signed_url="${signed_url}&a_bogus=${a_bogus}"
 
         local toutiao_total=0
 
@@ -892,21 +902,25 @@ reduce ({id,behot_time,title}|keys_unsorted[]) as $key ([];
                     max_behot_time=$m_max_behot_time
                 else
                     cookie_mstoken=$(RandStr 64)
+                    cookie_verify="verify_$(RandStr 8)_$(RandStr 8)_$(RandStr 4)_$(RandStr 4)_$(RandStr 4)_$(RandStr 12)"
                     toutiao_cookies[0]="msToken=${cookie_mstoken};"
+                    toutiao_cookies[1]="s_v_web_id=${cookie_verify};"
                     toutiao_cookies_json="$(CookiesToJson www.toutiao.com ${toutiao_cookies[@]})"
                 fi
 
-                if ! signed_response=$(node "$NODE_ROOT"/toutiao/browser.js "https://www.toutiao.com/api/pc/list/user/feed?category=profile_all&token=MS4wLjABAAAAB2ev2na9xNHI8py8dnKvLnSYGkxaFKDtOQTqbR7nsEzpNhwVqpCY8ZZz6s7qA8vt&max_behot_time=${max_behot_time}&aid=24&app_name=toutiao_web" "$toutiao_cookies_json")
+                if ! signed_response=$(node "$NODE_ROOT"/toutiao/browser.js "https://www.toutiao.com/api/pc/list/user/feed?category=profile_all&token=MS4wLjABAAAAB2ev2na9xNHI8py8dnKvLnSYGkxaFKDtOQTqbR7nsEzpNhwVqpCY8ZZz6s7qA8vt&max_behot_time=${max_behot_time:-0}&aid=24&app_name=toutiao_web" "$toutiao_cookies_json")
                 then
                     sleep 12
                     continue
                 fi
 
-                if ! signed_url=$($JQ_FILE -r '.data.signed_url' <<< "$signed_response" 2> /dev/null) 
+                if ! a_bogus=$($JQ_FILE -r '.data."a-bogus"' <<< "$signed_response" 2> /dev/null) 
                 then
                     Println "$error $signed_response\n"
                     continue
                 fi
+
+                signed_url="${signed_url%&*}&a_bogus=${a_bogus}"
 
                 if [ "$result_total" -eq 0 ] 
                 then

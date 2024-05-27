@@ -29,7 +29,7 @@ CurlImpersonateInstall()
 
     JQInstall
 
-    if ! curl_impersonate_ver=$(curl -s -Lm 20 "https://api.github.com/repos/lwthiker/curl-impersonate/releases/latest" | $JQ_FILE -r '.tag_name') 
+    if ! curl_impersonate_ver=$(curl -s -Lm 30 "https://api.github.com/repos/lwthiker/curl-impersonate/releases/latest" | $JQ_FILE -r '.tag_name') 
     then
         Println "$error curl impersonate 下载出错, 无法连接 github ?\n"
         return 1
@@ -53,15 +53,13 @@ CurlImpersonateInstall()
 
     Println "$info 下载 curl impersonate ..."
 
-    if ! curl -s -Lm 20 "https://github.com/lwthiker/curl-impersonate/releases/download/$curl_impersonate_ver/$curl_impersonate_package_name.tar.gz" -o "$DEPENDS_ROOT/$curl_impersonate_package_name.tar.gz_tmp"
+    mkdir -p "$DEPENDS_ROOT/curl-impersonate/"
+
+    if ! curl -L "https://github.com/lwthiker/curl-impersonate/releases/download/$curl_impersonate_ver/$curl_impersonate_package_name.tar.gz" -o "$DEPENDS_ROOT/$curl_impersonate_package_name.tar.gz"
     then
         Println "$error curl impersonate 下载出错, 无法连接 github ?\n"
         return 1
     fi
-
-    mv "$DEPENDS_ROOT/$curl_impersonate_package_name.tar.gz_tmp" "$DEPENDS_ROOT/$curl_impersonate_package_name.tar.gz"
-
-    mkdir -p "$DEPENDS_ROOT/curl-impersonate/"
 
     tar -C "$DEPENDS_ROOT/curl-impersonate/" -xzf "$DEPENDS_ROOT/$curl_impersonate_package_name.tar.gz"
 
@@ -274,7 +272,7 @@ NodeLibcurlImpersonateCompile()
 
     git clone https://github.com/JCMais/node-libcurl.git node-libcurl-impersonate
     cd node-libcurl-impersonate
-    curl -s -Lm 20 "$FFMPEG_MIRROR_LINK/node-libcurl-impersonate.patch" -o node-libcurl-impersonate.patch
+    curl -s -Lm 30 "$FFMPEG_MIRROR_LINK/node-libcurl-impersonate.patch" -o node-libcurl-impersonate.patch
     patch -p1 < node-libcurl-impersonate.patch || true
 
     if [ "$dist" == "mac" ] 

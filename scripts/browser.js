@@ -1,3 +1,4 @@
+const ver = "1.0.0";
 const { chromium, devices } = require('playwright-chromium');
 const desktop = devices["Desktop Chrome"];
 
@@ -27,7 +28,7 @@ class Utils {
 
 class Signer {
   userAgent =
-    "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+    "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
   args = [
     "--disable-blink-features",
     "--disable-blink-features=AutomationControlled",
@@ -113,25 +114,28 @@ class Signer {
           return string ? window.byted_acrawler.sign("", string) : window.byted_acrawler.sign({ url: url });
         };
 
-        window.generateBogus = function generateBogus(params) {
-          if (typeof window.byted_acrawler.generateBogus !== "function") {
-            throw "No X-Bogus function found";
-          }
-          return window.byted_acrawler.generateBogus(params);
-        };
+        // window.generateBogus = function generateBogus(params) {
+        //   if (typeof window.byted_acrawler.generateBogus !== "function") {
+        //     throw "No X-Bogus function found";
+        //   }
+        //   return window.byted_acrawler.generateBogus(params);
+        // };
 
         return this;
       });
 
-      let LOAD_SCRIPTS = ["xbogus.js"];
-      await Promise.all(LOAD_SCRIPTS.map(async (script) => {
-        await this.page.addScriptTag({
-          path: `${__dirname}/${script}`,
-        });
-        //console.log("[+] " + script + " loaded");
-      }));
+      // let LOAD_SCRIPTS = ["xbogus.js"];
+      // await Promise.all(LOAD_SCRIPTS.map(async (script) => {
+      //   await this.page.addScriptTag({
+      //     path: `${__dirname}/${script}`,
+      //   });
+      //   //console.log("[+] " + script + " loaded");
+      // }));
+
+      const a_bogus = new URL(feedRequest.url()).searchParams.get('a_bogus');
 
       return {
+        "a-bogus": encodeURIComponent(a_bogus),
         feed: {
           url: feedRequest.url(),
           headers: feedRequest.headers(),
@@ -152,12 +156,12 @@ class Signer {
     if (Utils.isUrl(link)) {
       token = await this.page.evaluate(`generateSignature("","${link}")`);
       let signed_url = link + "&_signature=" + token;
-      let queryString = new URL(signed_url).searchParams.toString();
-      let bogus = await this.page.evaluate(`generateBogus("${queryString}","${this.userAgent}")`);
+      // let queryString = new URL(signed_url).searchParams.toString();
+      // let bogus = await this.page.evaluate(`generateBogus("${queryString}","${this.userAgent}")`);
       return {
         signature: token,
-        "x-bogus": bogus,
-        signed_url: signed_url,
+        // "x-bogus": bogus,
+        "signed-url": signed_url,
       };
     }
     token = await this.page.evaluate(`generateSignature("${link}")`);
