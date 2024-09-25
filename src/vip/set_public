@@ -14,8 +14,8 @@ VipSetPublicRoot()
 VipSetPublicHost()
 {
     Println "$tip 比如 http://localhost"
-    inquirer text_input "请输入公开目录的 域名 或者 IP 网址: " vip_public_host "$i18n_not_set"
-    if [ "$vip_public_host" == "$i18n_not_set" ] 
+    inquirer text_input "请输入公开目录的 域名 或者 IP 网址: " vip_public_host "$i18n_blank"
+    if [ "$vip_public_host" == "$i18n_blank" ] 
     then
         vip_public_host=""
     fi

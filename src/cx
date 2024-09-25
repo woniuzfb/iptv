@@ -129,9 +129,9 @@ case $xtream_codes_num in
         echo -e "$result" >> "$XTREAM_CODES_EXAM"
 
         echo && echo
-        inquirer list_input_index "验证 mac" ny_options ny_options_index
+        inquirer list_input_index "验证 mac" ny_options ny_index
 
-        if [ "$ny_options_index" -eq 1 ] 
+        if [ "$ny_index" -eq 1 ] 
         then
             verify_mac=1
         fi

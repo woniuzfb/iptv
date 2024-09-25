@@ -94,9 +94,9 @@ RcloneServeAdd()
     done
 
     echo
-    inquirer text_input "输入服务参数" rclone_serve_args "$i18n_not_set"
+    inquirer text_input "输入服务参数" rclone_serve_args "$i18n_blank"
 
-    if [ "$rclone_serve_args" == "$i18n_not_set" ] 
+    if [ "$rclone_serve_args" == "$i18n_blank" ] 
     then
         rclone_serve_args=""
     fi
@@ -203,8 +203,8 @@ RcloneServeEdit()
                 ;;
                 3)
                     echo
-                    inquirer text_input "输入服务参数" rclone_serve_args "${rclone_serves_args[rclone_serves_index]:-$i18n_not_set}"
-                    if [ "$rclone_serve_args" == "${rclone_serves_args[rclone_serves_index]:-$i18n_not_set}" ] 
+                    inquirer text_input "输入服务参数" rclone_serve_args "${rclone_serves_args[rclone_serves_index]:-$i18n_blank}"
+                    if [ "$rclone_serve_args" == "${rclone_serves_args[rclone_serves_index]:-$i18n_blank}" ] 
                     then
                         continue
                     fi

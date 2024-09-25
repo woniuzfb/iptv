@@ -1104,13 +1104,234 @@ reduce ({id,behot_time,title}|keys_unsorted[]) as $key ([];
     done
 }
 
+DangValidateId()
+{
+    if [ "$1" == "$i18n_cancel" ]
+    then
+        return 0
+    fi
+
+    book_id=${1##*/}
+    book_id=${book_id%%_*}
+
+    if [ "$books_total" -gt 0 ] 
+    then
+        local id
+        for id in "${books_id[@]}"
+        do
+            if [ "$id" == "$book_id" ] 
+            then
+                return 1
+            fi
+        done
+    fi
+
+    return 0
+}
+
+DangValidateStartPage()
+{
+    if [ "$1" == "$i18n_cancel" ] || [[ $1 =~ ^[0-9]+$ ]]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+DangValidateEndPage()
+{
+    if [ "$1" == "$i18n_cancel" ] || { [[ $1 =~ ^[0-9]+$ ]] && [ "$1" -ge "$book_start" ]; }
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+DangCloudDownload()
+{
+    echo
+    inquirer text_input "输入存储文件夹目录" save_dir "${default_save_dir}"
+    RemoveQuotes save_dir
+
+    if [ -z "$save_dir" ] 
+    then
+        Println "已取消...\n"
+        return 1
+    fi
+
+    if [ "$save_dir" != "$default_save_dir" ] 
+    then
+        jq_path='["default","save_dir"]'
+        JQ update "$LIANHUANHUA_CONFIG" "$save_dir"
+    fi
+
+    local book_path="$save_dir/${book_title//\//_}"
+    local book_images_count=$((book_end-book_start+1))
+
+    local i=2
+    until [ ! -d "$book_path" ] 
+    do
+        if [ "$i" -gt 2 ] 
+        then
+            book_path="${book_path%-*}"
+        fi
+        book_path="${book_path}-$i"
+        i=$((i+1))
+    done
+
+    mkdir -p "$book_path"
+
+    book_image_format_num=${#book_end}
+    book_image_formated=$(printf "%0${book_image_format_num}d" $book_start)
+    LhhDownload -s -L -A "$USER_AGENT_BROWSER" -o "$book_path/${book_image_formated}.jpg" "${book_img%/*}/${book_id}_cover_epub.jpg"
+
+    book_image_formated=$(printf "%0${book_image_format_num}d" $((book_start+1)))
+    LhhDownload -s -L -A "$USER_AGENT_BROWSER" -o "$book_path/${book_image_formated}.jpg" "${book_img%/*}/${book_id}_F001_epub.jpg"
+
+    book_image_formated=$(printf "%0${book_image_format_num}d" $((book_start+2)))
+    LhhDownload -s -L -A "$USER_AGENT_BROWSER" -o "$book_path/${book_image_formated}.jpg" "${book_img%/*}/${book_id}_F002_epub.jpg"
+
+    for((i=0;i<book_images_count;i++));
+    do
+        book_image_formated=$(printf "%0${book_image_format_num}d" $((book_start+i)))
+        book_image_save_formated=$(printf "%0${book_image_format_num}d" $((book_start+i+3)))
+
+        echo -ne "\r"
+        tput el
+        echo -n "还剩 $((book_images_count-i)) 张, $book_title ${book_image_formated}.jpg"
+
+        LhhDownload -s -L -A "$USER_AGENT_BROWSER" -o "$book_path/${book_image_save_formated}.jpg" "${book_img%/*}/${book_id}_P${book_image_formated}_epub.jpg"
+    done
+
+    echo -ne "\r"
+    tput el
+}
+
+DangCloud()
+{
+    if [ ! -s "$LIANHUANHUA_CONFIG" ] 
+    then
+        mkdir -p "$LIANHUANHUA_ROOT/"
+        printf '{"%s":{"%s":[]}}' "books" "dang" > "$LIANHUANHUA_CONFIG"
+    fi
+
+    SetDelimiters
+
+IFS=$'\003\t' read -r default_save_dir m_id m_title m_cover m_start m_end m_downloaded m_fav < <(JQs flat "$LIANHUANHUA_CONFIG" '' \
+'(.default // ""| if (.|type == "string") then {} else . end) as $default |
+(.books.dang | if . == "" then {} else . end) as $dang |
+reduce ({save_dir}|keys_unsorted[]) as $key ([];
+    $default[$key] as $val | if $val then
+        . + [$val + "\u0003"]
+    else
+        . + ["\u0003"]
+    end
+) + 
+reduce ({id,title,cover,start,end,downloaded,fav}|keys_unsorted[]) as $key ([];
+        $dang[$key] as $val | if $val then
+            . + [$val + "\u0002\u0003"]
+        else
+            . + ["\u0003"]
+        end
+    )
+|@tsv' "${delimiters[@]}")
+
+    IFS="${delimiters[1]}" read -r -a books_id <<< "$m_id"
+    IFS="${delimiters[1]}" read -r -a books_title <<< "$m_title"
+    IFS="${delimiters[1]}" read -r -a books_cover <<< "$m_cover"
+    IFS="${delimiters[1]}" read -r -a books_start <<< "$m_start"
+    IFS="${delimiters[1]}" read -r -a books_end <<< "$m_end"
+    IFS="${delimiters[1]}" read -r -a books_downloaded <<< "$m_downloaded"
+    IFS="${delimiters[1]}" read -r -a books_fav <<< "$m_fav"
+
+    local books_total=${#books_id[@]}
+
+    dang_options_index=0
+
+    if [ "$books_total" -gt 0 ] 
+    then
+        echo
+        dang_options=( '添加' '选择' )
+        inquirer list_input_index "请选择操作" dang_options dang_options_index
+    fi
+
+    if [ "$dang_options_index" -eq 0 ] 
+    then
+        echo
+        ExitOnText "输入书名" book_title
+
+        Println "$tip 比如 https://img7x6.ddimg.cn/imgother10/xx/xx/xxxxxxxxxx_cover_epub.jpg"
+        ExitOnText "输入图片链接" book_img DangValidateId "此书已经存在"
+
+        book_id=${book_img##*/}
+        book_id=${book_id%%_*}
+
+        echo
+        ExitOnText "输入起始页码" book_start DangValidateStartPage "请输入数字"
+
+        echo
+        ExitOnText "输入结束页码" book_end DangValidateEndPage "请输入数字且不能小于起始页码"
+
+        echo
+        inquirer list_input_index "收藏" ny_options ny_index
+
+        if [ "$ny_index" -eq 0 ] 
+        then
+            book_fav=false
+        else
+            book_fav=true
+        fi
+
+        echo
+        inquirer list_input_index "下载" ny_options ny_index
+
+        if [ "$ny_index" -eq 0 ] 
+        then
+            book_downloaded=false
+        else
+            DangCloudDownload
+            book_downloaded=true
+        fi
+
+        new_book=$(
+        $JQ_FILE -n --arg id "${book_id}" --arg title "$book_title" \
+        --arg cover "${book_img%/*}/${book_id}_cover_epub.jpg" --arg start "$book_start" \
+        --arg end "$book_end" --arg downloaded "$book_downloaded" \
+        --arg fav "$book_fav" \
+            '{
+                id: $id | tonumber,
+                title: $title,
+                cover: $cover,
+                start: $start | tonumber,
+                end: $end | tonumber,
+                downloaded: $downloaded | test("true"),
+                fav: $fav | test("true")
+            }'
+        )
+
+        jq_path='["books","dang"]'
+        JQ add "$LIANHUANHUA_CONFIG" "[$new_book]"
+
+        Println "$info ${book_title} 添加成功\n"
+    fi
+
+    echo
+
+}
+
 echo
-lhh_options=( '中华连环画' '瀚大黎众连环画' )
+lhh_options=( '中华连环画' '瀚大黎众连环画' '当当云阅读(漫画)' )
 inquirer list_input_index "选择连环画" lhh_options lhh_options_index
 
-if [ "$lhh_options_index" -eq 0 ] 
-then
-    ZhLhh
-else
-    HdlzLhh
-fi
+case $lhh_options_index in
+    0) ZhLhh
+    ;;
+    1) HdlzLhh
+    ;;
+    2) DangCloud
+    ;;
+esac
+
+return 0

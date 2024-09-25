@@ -1,0 +1,49 @@
+TestInquirerInputValidator()
+{
+    if [ "$1" == "$i18n_cancel" ] || [[ "$1" =~ ^[0-9]+$ ]]
+    then
+        return 0
+    fi
+
+    return 1
+}
+
+TestInquirerInput()
+{
+    Println "$tip 输入非数字会提示错误"
+    inquirer text_input "测试输入 validator" user_input "$i18n_cancel" TestInquirerInputValidator "请输入数字"
+}
+
+TestInquirerList()
+{
+    Println "$tip 选择 是 得 true, 否 得 false"
+    inquirer list_input_yn "请选择" tf_options tf_result
+    Println "$info 结果为 $tf_result\n"
+
+    Println "$tip 选择 是 得 0, 否 得 1"
+    inquirer list_input_ny "请选择" oz_options oz_result
+    Println "$info 结果为 $oz_result\n"
+}
+
+TestInquirer()
+{
+    test_inquirer_options=( 
+        '1. 输入非数字会提示错误'
+        '2. 选择获得正确值'
+    )
+
+    test_inquirer_actions=(
+        TestInquirerInput
+        TestInquirerList
+    )
+
+    echo
+    inquirer checkbox_input_indices "选择测试项目" test_inquirer_options test_inquirer_options_indices
+
+    for test_inquirer_options_index in "${test_inquirer_options_indices[@]}"
+    do
+        ${test_inquirer_actions[test_inquirer_options_index]}
+    done
+
+    return
+}

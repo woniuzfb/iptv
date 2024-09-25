@@ -12,18 +12,22 @@ CalibreInstall()
             DepInstall libglvnd-opengl
             DepInstall libxcb-cursor-devel
             DepInstall nss
+            DepInstall libxkbcommon
+            DepInstall mesa-libEGL
         else
             DepInstall xz-utils
             DepInstall libopengl0
             DepInstall libxcb-cursor0
             DepInstall libnss3
+            DepInstall libxkbcommon-x11-0
+            DepInstall libglx0
+            DepInstall libegl1
         fi
         ImageMagickInstall
-        DepInstall libegl1
         PythonInstall
         pip3 install pyqt6
         mkdir -p "$CALIBRE_ROOT"/bin
-        sudo -v && wget -nv -O- https://download.calibre-ebook.com/linux-installer.sh | sudo sh /dev/stdin install_dir="$CALIBRE_ROOT"/bin
+        sudo -v && wget -nv -O- https://download.calibre-ebook.com/linux-installer.sh | sudo sh /dev/stdin install_dir="$CALIBRE_ROOT"/bin version=7.16.0
     fi
 
     Println "$info calibre 安装/更新成功\n"

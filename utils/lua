@@ -55,7 +55,6 @@ LuaInstall()
                 patch -p1 < "${patch##*/}"
             fi
 
-            make clean
             make linux-readline INSTALL_TOP="$DEPENDS_ROOT/$lua_name/$build_dir"
             make install INSTALL_TOP="$DEPENDS_ROOT/$lua_name/$build_dir"
 

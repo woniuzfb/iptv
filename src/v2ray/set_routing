@@ -54,8 +54,8 @@ V2raySetRouting()
             "network": $network
         }')
         Println "$tip 多个域名用空格分隔, 格式如 127.0.0.1, 10.0.0.0/8, geoip:cn, geoip:private, ext:file:tag"
-        inquirer text_input "输入匹配的域名: " routing_rule_domain "$i18n_not_set"
-        if [ "$routing_rule_domain" != "$i18n_not_set" ] 
+        inquirer text_input "输入匹配的域名: " routing_rule_domain "$i18n_blank"
+        if [ "$routing_rule_domain" != "$i18n_blank" ] 
         then
             IFS=" " read -r -a domains <<< "$routing_rule_domain"
             printf -v routing_rule_domain ',"%s"' "${domains[@]}"
@@ -68,8 +68,8 @@ V2raySetRouting()
             }' <<< "$new_routing_rule")
         fi
         Println "$tip 多个 IP 范围用空格分隔"
-        inquirer text_input "输入匹配的 IP 范围: " routing_rule_ip "$i18n_not_set"
-        if [ "$routing_rule_ip" != "$i18n_not_set" ] 
+        inquirer text_input "输入匹配的 IP 范围: " routing_rule_ip "$i18n_blank"
+        if [ "$routing_rule_ip" != "$i18n_blank" ] 
         then
             IFS=" " read -r -a ips <<< "$routing_rule_ip"
             printf -v routing_rule_ip ',"%s"' "${ips[@]}"
@@ -82,8 +82,8 @@ V2raySetRouting()
             }' <<< "$new_routing_rule")
         fi
         Println "$tip 多个端口用空格分隔, 格式如 53 443 1000-2000"
-        inquirer text_input "输入目标端口范围: " routing_rule_port "$i18n_not_set"
-        if [ "$routing_rule_port" != "$i18n_not_set" ] 
+        inquirer text_input "输入目标端口范围: " routing_rule_port "$i18n_blank"
+        if [ "$routing_rule_port" != "$i18n_blank" ] 
         then
             new_routing_rule=$(
             $JQ_FILE --arg port "${routing_rule_port// /,}" \
@@ -93,8 +93,8 @@ V2raySetRouting()
             }' <<< "$new_routing_rule")
         fi
         Println "$tip 多个端口用空格分隔, 格式如 53 443 1000-2000"
-        inquirer text_input "输入来源端口范围: " routing_rule_source_port "$i18n_not_set"
-        if [ "$routing_rule_source_port" != "$i18n_not_set" ] 
+        inquirer text_input "输入来源端口范围: " routing_rule_source_port "$i18n_blank"
+        if [ "$routing_rule_source_port" != "$i18n_blank" ] 
         then
             new_routing_rule=$(
             $JQ_FILE --arg sourcePort "${routing_rule_source_port// /,}" \
@@ -104,8 +104,8 @@ V2raySetRouting()
             }' <<< "$new_routing_rule")
         fi
         Println "$tip 多个 IP 用空格分隔, 格式如 127.0.0.1, 10.0.0.0/8"
-        inquirer text_input "输入匹配的来源 IP: " routing_rule_source "$i18n_not_set"
-        if [ "$routing_rule_source" != "$i18n_not_set" ] 
+        inquirer text_input "输入匹配的来源 IP: " routing_rule_source "$i18n_blank"
+        if [ "$routing_rule_source" != "$i18n_blank" ] 
         then
             IFS=" " read -r -a sources <<< "$routing_rule_source"
             printf -v routing_rule_source ',"%s"' "${sources[@]}"
@@ -118,8 +118,8 @@ V2raySetRouting()
             }' <<< "$new_routing_rule")
         fi
         Println "$tip 多个邮箱地址用空格分隔, Shadowsocks 和 VMess 支持此规则"
-        inquirer text_input "输入匹配的邮箱地址: " routing_rule_user "$i18n_not_set"
-        if [ "$routing_rule_user" != "$i18n_not_set" ] 
+        inquirer text_input "输入匹配的邮箱地址: " routing_rule_user "$i18n_blank"
+        if [ "$routing_rule_user" != "$i18n_blank" ] 
         then
             IFS=" " read -r -a users <<< "$routing_rule_user"
             printf -v routing_rule_user ',"%s"' "${users[@]}"
@@ -148,8 +148,8 @@ V2raySetRouting()
             }' <<< "$new_routing_rule")
         fi
         Println "$tip 用于检测流量的属性值, 目前只有 http 入站代理会设置这一属性"
-        inquirer text_input "输入 starlark 脚本: " routing_rule_attrs "$i18n_not_set"
-        if [ "$routing_rule_attrs" != "$i18n_not_set" ] 
+        inquirer text_input "输入 starlark 脚本: " routing_rule_attrs "$i18n_blank"
+        if [ "$routing_rule_attrs" != "$i18n_blank" ] 
         then
             new_routing_rule=$(
             $JQ_FILE --arg attrs "$routing_rule_attrs" \
@@ -159,8 +159,8 @@ V2raySetRouting()
             }' <<< "$new_routing_rule")
         fi
         echo
-        inquirer text_input "输入匹配的入站标签: " routing_rule_inbound_tag "$i18n_not_set"
-        if [ "$routing_rule_inbound_tag" != "$i18n_not_set" ] 
+        inquirer text_input "输入匹配的入站标签: " routing_rule_inbound_tag "$i18n_blank"
+        if [ "$routing_rule_inbound_tag" != "$i18n_blank" ] 
         then
             new_routing_rule=$(
             $JQ_FILE --arg inboundTag "$routing_rule_inbound_tag" \
@@ -170,8 +170,8 @@ V2raySetRouting()
             }' <<< "$new_routing_rule")
         fi
         Println "$tip 出站标签 和 负载均衡器标签 须二选一, 同时指定时, 出站标签 生效"
-        inquirer text_input "输入对应的出站标签: " routing_rule_outbound_tag "$i18n_not_set"
-        if [ "$routing_rule_outbound_tag" != "$i18n_not_set" ] 
+        inquirer text_input "输入对应的出站标签: " routing_rule_outbound_tag "$i18n_blank"
+        if [ "$routing_rule_outbound_tag" != "$i18n_blank" ] 
         then
             new_routing_rule=$(
             $JQ_FILE --arg outboundTag "$routing_rule_outbound_tag" \
@@ -181,8 +181,8 @@ V2raySetRouting()
             }' <<< "$new_routing_rule")
         fi
         echo
-        inquirer text_input "输入对应的负载均衡器标签: " routing_rule_balancer_tag "$i18n_not_set"
-        if [ "$routing_rule_balancer_tag" != "$i18n_not_set" ] 
+        inquirer text_input "输入对应的负载均衡器标签: " routing_rule_balancer_tag "$i18n_blank"
+        if [ "$routing_rule_balancer_tag" != "$i18n_blank" ] 
         then
             new_routing_rule=$(
             $JQ_FILE --arg balancerTag "$routing_rule_balancer_tag" \
@@ -207,8 +207,8 @@ V2raySetRouting()
             "tag": $tag
         }')
         Println "$tip 多个字符串用空格分隔"
-        inquirer text_input "输入匹配出站标签字符串: " routing_balancer_selector "$i18n_not_set"
-        if [ "$routing_balancer_selector" != "$i18n_not_set" ] 
+        inquirer text_input "输入匹配出站标签字符串: " routing_balancer_selector "$i18n_blank"
+        if [ "$routing_balancer_selector" != "$i18n_blank" ] 
         then
             IFS=" " read -r -a selectors <<< "$routing_balancer_selector"
             printf -v routing_balancer_selector ',"%s"' "${selectors[@]}"

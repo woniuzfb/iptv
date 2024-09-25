@@ -524,9 +524,9 @@ XtreamCodesListChnls()
                         printf -v cookies_command '%b' "${cookies//;/; path=\/;\\r\\n}; path=/;"
 
                         echo
-                        inquirer list_input_index "截图" ny_options ny_options_index
+                        inquirer list_input_index "截图" ny_options ny_index
 
-                        if [[ $ny_options_index -eq 1 ]] 
+                        if [[ $ny_index -eq 1 ]] 
                         then
                             Println "$tip 格式如 HH:MM:SS"
                             inquirer text_input "输入截图位置" ss 00:00:03
@@ -584,7 +584,7 @@ XtreamCodesListChnls()
                             printf -v headers_command '%b' "$Authorization: Bearer $access_token"
                             printf -v cookies_command '%b' "${cookies//;/; path=\/;\\r\\n}; path=/;"
 
-                            if [[ $ny_options_index -eq 1 ]] 
+                            if [[ $ny_index -eq 1 ]] 
                             then
                                 if TMP_FILE=$(mktemp -q) 
                                 then

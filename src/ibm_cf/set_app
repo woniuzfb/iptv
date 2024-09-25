@@ -77,8 +77,8 @@ IbmSetCfAppRouteHostname()
 IbmSetCfAppRoutePath()
 {
     echo
-    inquirer text_input "请输入 http 路由 path: " ibm_cf_app_route_path "$i18n_not_set"
-    if [ "$ibm_cf_app_route_path" == "$i18n_not_set" ] 
+    inquirer text_input "请输入 http 路由 path: " ibm_cf_app_route_path "$i18n_blank"
+    if [ "$ibm_cf_app_route_path" == "$i18n_blank" ] 
     then
         ibm_cf_app_route_path=""
     fi

@@ -345,10 +345,10 @@ ParseStream()
         fi
 
         Println "$info 使用输入源 ${stream_links[0]}"
-        inquirer list_input_index "自动检测" yn_options yn_options_index
+        inquirer list_input_index "自动检测" yn_options yn_index
     fi
 
-    if [ "${stream_link_parsed:-false}" = true ] || [ "$yn_options_index" -eq 0 ] 
+    if [ "${stream_link_parsed:-false}" = true ] || [ "$yn_index" -eq 0 ] 
     then
         Println "$info 检测中..."
 
@@ -429,9 +429,9 @@ ParseStream()
                     is_hls=true
 
                     Println "$tip 输入源是多级索引列表的情况下可以选择是"
-                    inquirer list_input_index "解析 hls 一级索引列表" ny_options ny_options_index
+                    inquirer list_input_index "解析 hls 一级索引列表" ny_options ny_index
 
-                    if [ "$ny_options_index" -eq 1 ] 
+                    if [ "$ny_index" -eq 1 ] 
                     then
                         if ParseHlsPlaylist 
                         then
@@ -706,9 +706,9 @@ ParseStream()
     if [ "$is_hls" = true ] 
     then
         Println "$tip 输入源是多级索引列表的情况下可以选择是"
-        inquirer list_input_index "解析 hls 一级索引列表" ny_options ny_options_index
+        inquirer list_input_index "解析 hls 一级索引列表" ny_options ny_index
 
-        if [ "$ny_options_index" -eq 1 ] 
+        if [ "$ny_index" -eq 1 ] 
         then
             if ParseHlsPlaylist 
             then

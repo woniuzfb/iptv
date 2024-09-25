@@ -20,6 +20,7 @@
 - [LianHuanHua](#lianhuanhua)
 - [Docker](#docker)
 - [HAProxy](#haproxy)
+- [tests](#tests)
 - [Dev](#dev)
 
 </details>
@@ -359,6 +360,12 @@ wget https://woniuzfb.github.io/iptv/iptv.sh && bash iptv.sh
 - static/dynamic linking pcre/zlib/lua/openssl/quictls
 
 </details>
+
+## tests
+
+```bash
+./debug tt
+```
 
 ## Dev
 

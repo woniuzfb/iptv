@@ -23,9 +23,9 @@ EditChannelSchedule()
             JQ update "$CHANNELS_FILE" "$schedule_end_time"
         elif [ "$channel_schedule_options_index" -eq 2 ] 
         then
-            inquirer list_input_index "每日循环" ny_options ny_options_index
+            inquirer list_input_index "每日循环" ny_options ny_index
 
-            if [ "$ny_options_index" -eq 0 ] 
+            if [ "$ny_index" -eq 0 ] 
             then
                 schedule_loop=false
             else
@@ -37,9 +37,9 @@ EditChannelSchedule()
             JQ update "$CHANNELS_FILE" "$schedule_loop"
         elif [ "$channel_schedule_options_index" -eq 3 ] 
         then
-            inquirer list_input_index "自动清除" ny_options ny_options_index
+            inquirer list_input_index "自动清除" ny_options ny_index
 
-            if [ "$ny_options_index" -eq 0 ] 
+            if [ "$ny_index" -eq 0 ] 
             then
                 schedule_auto_remove=false
             else
@@ -51,16 +51,16 @@ EditChannelSchedule()
             JQ update "$CHANNELS_FILE" "$schedule_auto_remove"
         elif [ "$channel_schedule_options_index" -eq 4 ] 
         then
-            inquirer list_input_index "防盗链" yn_options yn_options_index
+            inquirer list_input_index "防盗链" yn_options yn_index
 
-            if [ "$yn_options_index" -eq 0 ] 
+            if [ "$yn_index" -eq 0 ] 
             then
                 schedule_hls_change=true
 
                 echo
-                inquirer list_input_index "防盗链一次" ny_options yn_options_index
+                inquirer list_input_index "防盗链一次" ny_options yn_index
 
-                if [ "$yn_options_index" -eq 0 ] 
+                if [ "$yn_index" -eq 0 ] 
                 then
                     schedule_hls_change_once=false
                 else
@@ -80,9 +80,9 @@ EditChannelSchedule()
             JQ update "$CHANNELS_FILE" "$schedule_hls_change_once"
         elif [ "$channel_schedule_options_index" -eq 5 ] 
         then
-            inquirer text_input "输入频道名称" schedule_channel_name "$i18n_not_set"
+            inquirer text_input "输入频道名称" schedule_channel_name "$i18n_blank"
 
-            if [ "$schedule_channel_name" == "$i18n_not_set" ] 
+            if [ "$schedule_channel_name" == "$i18n_blank" ] 
             then
                 schedule_channel_name=""
             fi
@@ -93,9 +93,9 @@ EditChannelSchedule()
             if [ -n "$schedule_channel_name" ] && [ "${chnl_schedules_status[chnl_schedules_index]}" -eq 1 ] && [ "$schedule_channel_name" != "${chnls_channel_name[chnls_index]}" ]
             then
                 echo
-                inquirer list_input_index "同步频道名称" ny_options ny_options_index
+                inquirer list_input_index "同步频道名称" ny_options ny_index
 
-                if [ "$ny_options_index" -eq 1 ] 
+                if [ "$ny_index" -eq 1 ] 
                 then
                     jq_path='["channels",'"$chnls_index"',"channel_name"]'
                     JQ update "$CHANNELS_FILE" "$schedule_channel_name"

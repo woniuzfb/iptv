@@ -16,9 +16,9 @@ SetStreamLink()
 SetIsHls()
 {
     Println "$tip 如果直播源重定向至 .m3u8 地址, 请选择 是"
-    inquirer list_input_index "是否是 HLS 链接" ny_options ny_options_index
+    inquirer list_input_index "是否是 HLS 链接" ny_options ny_index
 
-    if [ "$ny_options_index" -eq 0 ]
+    if [ "$ny_index" -eq 0 ]
     then
         is_hls=false
     else
@@ -33,7 +33,7 @@ SetMapValidate()
     for map in "${maps[@]}"
     do
         case "$map" in
-            "$i18n_not_set") 
+            "$i18n_blank") 
                 indices_input=""
                 return 0
             ;;
@@ -53,7 +53,7 @@ SetMapValidate()
 SetVideoMap()
 {
     Println "$tip 多个流用空格分隔"
-    inquirer text_input "输入使用的视频流序号" indices_input "$i18n_not_set" SetMapValidate "必须是大于等于0的数字"
+    inquirer text_input "输入使用的视频流序号" indices_input "$i18n_blank" SetMapValidate "必须是大于等于0的数字"
 
     if [ -n "${indices_input:-}" ] 
     then
@@ -66,7 +66,7 @@ SetVideoMap()
 SetAudioMap()
 {
     Println "$tip 多个流用空格分隔"
-    inquirer text_input "输入使用的音频流序号" indices_input "$i18n_not_set" SetMapValidate "必须是大于等于0的数字"
+    inquirer text_input "输入使用的音频流序号" indices_input "$i18n_blank" SetMapValidate "必须是大于等于0的数字"
 
     if [ -n "${indices_input:-}" ] 
     then
@@ -79,7 +79,7 @@ SetAudioMap()
 SetSubtitleMap()
 {
     Println "$tip 多个流用空格分隔"
-    inquirer text_input "输入使用的字幕流序号" indices_input "$i18n_not_set" SetMapValidate "必须是大于等于0的数字"
+    inquirer text_input "输入使用的字幕流序号" indices_input "$i18n_blank" SetMapValidate "必须是大于等于0的数字"
 
     if [ -n "${indices_input:-}" ] 
     then
@@ -97,17 +97,17 @@ SetSubtitle()
     while true 
     do
         Println "$tip 比如 简体中文"
-        inquirer text_input "新增字幕语言名称" subtitle_name "$i18n_not_set"
+        inquirer text_input "新增字幕语言名称" subtitle_name "$i18n_blank"
 
-        if [ "$subtitle_name" == "$i18n_not_set" ] 
+        if [ "$subtitle_name" == "$i18n_blank" ] 
         then
             break
         fi
 
         Println "$tip 比如 chi"
-        inquirer text_input "设置字幕语言标识" subtitle_language "$i18n_not_set"
+        inquirer text_input "设置字幕语言标识" subtitle_language "$i18n_blank"
 
-        if [ "$subtitle_language" == "$i18n_not_set" ] 
+        if [ "$subtitle_language" == "$i18n_blank" ] 
         then
             subtitle_language=""
         fi
@@ -117,9 +117,9 @@ SetSubtitle()
             subtitle_default=false
 
             echo
-            inquirer list_input_index "自动选择字幕 $subtitle_name" yn_options yn_options_index
+            inquirer list_input_index "自动选择字幕 $subtitle_name" yn_options yn_index
 
-            if [ "$yn_options_index" -eq 0 ] 
+            if [ "$yn_index" -eq 0 ] 
             then
                 subtitle_auto_select=true
             else
@@ -127,9 +127,9 @@ SetSubtitle()
             fi
         else
             echo
-            inquirer list_input_index "默认并自动选择字幕 $subtitle_name" ny_options ny_options_index
+            inquirer list_input_index "默认并自动选择字幕 $subtitle_name" ny_options ny_index
 
-            if [ "$ny_options_index" -eq 1 ] 
+            if [ "$ny_index" -eq 1 ] 
             then
                 subtitle_default=true
                 subtitle_auto_select=true
@@ -137,9 +137,9 @@ SetSubtitle()
                 subtitle_default=false
 
                 echo
-                inquirer list_input_index "自动选择字幕 $subtitle_name" yn_options yn_options_index
+                inquirer list_input_index "自动选择字幕 $subtitle_name" yn_options yn_index
 
-                if [ "$yn_options_index" -eq 0 ] 
+                if [ "$yn_index" -eq 0 ] 
                 then
                     subtitle_auto_select=true
                 else
@@ -186,8 +186,8 @@ SetSubtitle()
 SetDrawtext()
 {
     Println "$tip 比如 fontsize=25:fontfile=/usr/local/iptv/AlibabaSans-Regular.otf:fontcolor=white:box=1:boxcolor=black@0.5:x=50:y=10:text=yourdomain.com"
-    inquirer text_input "输入 drawtext 水印 : " draw_text "${d_draw_text:-$i18n_not_set}"
-    if [ "$draw_text" == "omit" ] || [ "$draw_text" == "$i18n_not_set" ]
+    inquirer text_input "输入 drawtext 水印 : " draw_text "${d_draw_text:-$i18n_blank}"
+    if [ "$draw_text" == "omit" ] || [ "$draw_text" == "$i18n_blank" ]
     then
         draw_text=""
     fi
@@ -202,9 +202,9 @@ SetLive()
         Println "$tip 选择 否 则无法监控"
     fi
 
-    inquirer list_input_index "是否是无限时长直播源" yn_options yn_options_index
+    inquirer list_input_index "是否是无限时长直播源" yn_options yn_index
 
-    if [ "$yn_options_index" -eq 0 ]
+    if [ "$yn_index" -eq 0 ]
     then
         live=true
     else
@@ -222,9 +222,9 @@ SetProxy()
     fi
 
     Println "$tip 可以使用脚本自带的 v2ray 管理面板添加代理, 可以输入 omit 省略此选项"
-    inquirer text_input "请输入 FFmpeg 代理, 比如 http://username:passsword@127.0.0.1:5555 : " proxy "${d_proxy:-$i18n_not_set}"
+    inquirer text_input "请输入 FFmpeg 代理, 比如 http://username:passsword@127.0.0.1:5555 : " proxy "${d_proxy:-$i18n_blank}"
 
-    if [ "$proxy" == "omit" ] || [ "$proxy" == "$i18n_not_set" ]
+    if [ "$proxy" == "omit" ] || [ "$proxy" == "$i18n_blank" ]
     then
         proxy=""
     fi
@@ -240,9 +240,9 @@ SetXtreamCodesProxy()
     fi
 
     Println "$tip 可以使用脚本自带的 cloudflare workers 管理面板添加 xtream codes 代理 worker, 可以输入 omit 省略此选项"
-    inquirer text_input "请输入 xtream codes 代理: " xc_proxy "${d_xc_proxy:-$i18n_not_set}"
+    inquirer text_input "请输入 xtream codes 代理: " xc_proxy "${d_xc_proxy:-$i18n_blank}"
 
-    if [ "$xc_proxy" == "omit" ] || [ "$xc_proxy" == "$i18n_not_set" ]
+    if [ "$xc_proxy" == "omit" ] || [ "$xc_proxy" == "$i18n_blank" ]
     then
         xc_proxy=""
     fi
@@ -252,14 +252,14 @@ SetUserAgent()
 {
     if [ "${stream_link_parsed:-false}" = true ] 
     then
-        Println "  FFmpeg UA: ${green} ${user_agent:-$i18n_not_set} ${normal}\n"
+        Println "  FFmpeg UA: ${green} ${user_agent:-$i18n_blank} ${normal}\n"
         return 0
     fi
 
     Println "$tip 可以输入 omit 省略此选项"
-    inquirer text_input "请输入 FFmpeg 的 user agent: " user_agent "${d_user_agent:-$i18n_not_set}"
+    inquirer text_input "请输入 FFmpeg 的 user agent: " user_agent "${d_user_agent:-$i18n_blank}"
 
-    if [ "$user_agent" == "omit" ] || [ "$user_agent" == "$i18n_not_set" ]
+    if [ "$user_agent" == "omit" ] || [ "$user_agent" == "$i18n_blank" ]
     then
         user_agent=""
     fi
@@ -269,14 +269,14 @@ SetHeaders()
 {
     if [ "${stream_link_parsed:-false}" = true ] 
     then
-        Println "  FFmpeg headers: ${green} ${headers:-$i18n_not_set} ${normal}\n"
+        Println "  FFmpeg headers: ${green} ${headers:-$i18n_blank} ${normal}\n"
         return 0
     fi
 
     Println "$tip 多个 header 用 \\\r\\\n 分隔, 可以输入 omit 省略此选项"
-    inquirer text_input "请输入 FFmpeg headers: " headers "${d_headers:-$i18n_not_set}"
+    inquirer text_input "请输入 FFmpeg headers: " headers "${d_headers:-$i18n_blank}"
 
-    if [ "$headers" == "omit" ] || [ "$headers" == "$i18n_not_set" ]
+    if [ "$headers" == "omit" ] || [ "$headers" == "$i18n_blank" ]
     then
         headers=""
     fi
@@ -296,14 +296,14 @@ SetCookies()
 {
     if [ "${stream_link_parsed:-false}" = true ] 
     then
-        Println "  FFmpeg cookies: ${green} ${cookies:-$i18n_not_set} ${normal}\n"
+        Println "  FFmpeg cookies: ${green} ${cookies:-$i18n_blank} ${normal}\n"
         return 0
     fi
 
     Println "$tip 多个 cookies 用 ; 分隔, 可以输入 omit 省略此选项"
-    inquirer text_input "请输入 FFmpeg cookies: " cookies "${d_cookies:-$i18n_not_set}"
+    inquirer text_input "请输入 FFmpeg cookies: " cookies "${d_cookies:-$i18n_blank}"
 
-    if [ "$cookies" == "omit" ] || [ "$cookies" == "$i18n_not_set" ]
+    if [ "$cookies" == "omit" ] || [ "$cookies" == "$i18n_blank" ]
     then
         cookies=""
     fi
@@ -351,9 +351,9 @@ SetPlaylistName()
 SetSegDirName()
 {
     Println "$tip 可以输入 omit 省略此选项"
-    inquirer text_input "请输入分片所在子目录名称: " seg_dir_name "${d_seg_dir_name:-$i18n_not_set}"
+    inquirer text_input "请输入分片所在子目录名称: " seg_dir_name "${d_seg_dir_name:-$i18n_blank}"
 
-    if [ "$seg_dir_name" == "omit" ] || [ "$seg_dir_name" == "$i18n_not_set" ]
+    if [ "$seg_dir_name" == "omit" ] || [ "$seg_dir_name" == "$i18n_blank" ]
     then
         seg_dir_name=""
     fi
@@ -460,7 +460,7 @@ SetAudioCodec()
 
 SetVideoAudioShift()
 {
-    if [ "$d_video_audio_shift_text" == "$i18n_not_set" ] 
+    if [ "$d_video_audio_shift_text" == "$i18n_blank" ] 
     then
         video_audio_shift_options=( "$d_video_audio_shift_text" '设置 画面延迟' '设置 声音延迟' )
     else
@@ -474,7 +474,7 @@ SetVideoAudioShift()
 
         case $video_audio_shift_options_index in
             0) 
-                if [ "$d_video_audio_shift_text" != "$i18n_not_set" ] 
+                if [ "$d_video_audio_shift_text" != "$i18n_blank" ] 
                 then
                     if [ -n "${d_video_shift:-}" ] 
                     then
@@ -513,7 +513,7 @@ SetVideoAudioShift()
             ;;
             3) 
                 video_audio_shift=""
-                video_audio_shift_text="$i18n_not_set"
+                video_audio_shift_text="$i18n_blank"
                 break
             ;;
         esac
@@ -527,9 +527,9 @@ SetQuality()
     Println "$tip 多个 crf 固定码率因子用逗号分隔, 取值每 +/- 6 会大概导致码率的减半或加倍\nx264 和 x265 取值范围为 [0,51]\nx264 的默认值是 23, 视觉无损值 18\nx265 的默认值是 28, 视觉无损值 24\nVP9 取值范围为 [0,63], 建议取值范围为 [15,35]"
     while true 
     do
-        inquirer text_input "请输入 crf 值: " quality "${d_quality:-$i18n_not_set}"
+        inquirer text_input "请输入 crf 值: " quality "${d_quality:-$i18n_blank}"
         case "$quality" in
-            "$i18n_not_set")
+            "$i18n_blank")
                 quality=""
                 break
             ;;
@@ -552,9 +552,9 @@ SetBitrate()
 {
     Println "$tip 如果未设置 crf, 用于指定输出视频码率(ABR 或 CBR), 否则用于 VBV 的 -maxrate 和 -bufsize (capped CRF)\n多个码率(k)用逗号分隔, 比如: 800,1000,1500  可以输入 omit 省略此选项"
 
-    inquirer text_input "请输入码率: " bitrate "${d_bitrate:-$i18n_not_set}"
+    inquirer text_input "请输入码率: " bitrate "${d_bitrate:-$i18n_blank}"
 
-    if [ "$bitrate" == "omit" ] || [ "$bitrate" == "$i18n_not_set" ] 
+    if [ "$bitrate" == "omit" ] || [ "$bitrate" == "$i18n_blank" ] 
     then
         bitrate=""
     fi
@@ -564,9 +564,9 @@ SetResolution()
 {
     Println "$tip 多个分辨率用逗号分隔, 比如: 960x540,1280x720  可以输入 omit 省略此选项"
 
-    inquirer text_input "请输入分辨率: " resolution "${d_resolution:-$i18n_not_set}"
+    inquirer text_input "请输入分辨率: " resolution "${d_resolution:-$i18n_blank}"
 
-    if [ "$resolution" == "omit" ] || [ "$resolution" == "$i18n_not_set" ] 
+    if [ "$resolution" == "omit" ] || [ "$resolution" == "$i18n_blank" ] 
     then
         resolution=""
     fi
@@ -574,7 +574,7 @@ SetResolution()
 
 SetConst()
 {
-    const_options=( "$i18n_not_set" '限制性编码(VBV)' )
+    const_options=( "$i18n_blank" '限制性编码(VBV)' )
 
     if [ -z "${quality:-}" ] 
     then
@@ -771,9 +771,9 @@ SetInputFlags()
     fi
 
     Println "$tip 可以输入 omit 省略此选项"
-    inquirer text_input "请输入 FFmpeg 额外的输入参数: " input_flags "${d_input_flags:-$i18n_not_set}"
+    inquirer text_input "请输入 FFmpeg 额外的输入参数: " input_flags "${d_input_flags:-$i18n_blank}"
 
-    if [ "$input_flags" == "omit" ] || [ "$input_flags" == "$i18n_not_set" ]
+    if [ "$input_flags" == "omit" ] || [ "$input_flags" == "$i18n_blank" ]
     then
         input_flags=""
     fi
@@ -786,8 +786,8 @@ SetOutputFlags()
         d_output_flags=${d_output_flags//-sc_threshold 0/}
     fi
     Println "$tip 可以输入 omit 省略此选项"
-    inquirer text_input "请输入 FFmpeg 额外的输出参数: " output_flags "${d_output_flags:-$i18n_not_set}"
-    if [ "$output_flags" == "omit" ] || [ "$output_flags" == "$i18n_not_set" ]
+    inquirer text_input "请输入 FFmpeg 额外的输出参数: " output_flags "${d_output_flags:-$i18n_blank}"
+    if [ "$output_flags" == "omit" ] || [ "$output_flags" == "$i18n_blank" ]
     then
         output_flags=""
     fi
@@ -829,9 +829,9 @@ SetSync()
 SetSyncFile()
 {
     Println "$tip 多个文件用空格分隔, 可以输入 omit 省略此选项"
-    inquirer text_input "设置默认 sync_file: " sync_file "${d_sync_file:-$i18n_not_set}"
+    inquirer text_input "设置默认 sync_file: " sync_file "${d_sync_file:-$i18n_blank}"
 
-    if [ "$sync_file" == "omit" ] || [ "$sync_file" == "${d_sync_file:-$i18n_not_set}" ]
+    if [ "$sync_file" == "omit" ] || [ "$sync_file" == "${d_sync_file:-$i18n_blank}" ]
     then
         sync_file=""
     fi
@@ -840,9 +840,9 @@ SetSyncFile()
 SetSyncIndex()
 {
     Println "$tip 多个 sync_index 用空格分隔, 可以输入 omit 省略此选项"
-    inquirer text_input "设置默认 sync_index: " sync_index "${d_sync_index:-$i18n_not_set}"
+    inquirer text_input "设置默认 sync_index: " sync_index "${d_sync_index:-$i18n_blank}"
 
-    if [ "$sync_index" == "omit" ] || [ "$sync_index" == "${d_sync_index:-$i18n_not_set}" ]
+    if [ "$sync_index" == "omit" ] || [ "$sync_index" == "${d_sync_index:-$i18n_blank}" ]
     then
         sync_index=""
     fi
@@ -851,9 +851,9 @@ SetSyncIndex()
 SetSyncPairs()
 {
     Println "$tip 多个 sync_pairs 用空格分隔, 可以输入 omit 省略此选项"
-    inquirer text_input "设置默认 sync_pairs: " sync_pairs "${d_sync_pairs:-$i18n_not_set}"
+    inquirer text_input "设置默认 sync_pairs: " sync_pairs "${d_sync_pairs:-$i18n_blank}"
 
-    if [ "$sync_pairs" == "omit" ] || [ "$sync_pairs" == "${d_sync_pairs:-$i18n_not_set}" ]
+    if [ "$sync_pairs" == "omit" ] || [ "$sync_pairs" == "${d_sync_pairs:-$i18n_blank}" ]
     then
         sync_pairs=""
     fi
@@ -862,8 +862,8 @@ SetSyncPairs()
 SetScheduleFile()
 {
     Println "$tip 可以输入 omit 省略此选项"
-    inquirer text_input "设置节目表文件绝对路径: " schedule_file "${d_schedule_file:-$i18n_not_set}"
-    if [ "$schedule_file" == "omit" ] || [ "$schedule_file" == "$i18n_not_set" ]
+    inquirer text_input "设置节目表文件绝对路径: " schedule_file "${d_schedule_file:-$i18n_blank}"
+    if [ "$schedule_file" == "omit" ] || [ "$schedule_file" == "$i18n_blank" ]
     then
         schedule_file=""
     fi
@@ -1345,8 +1345,8 @@ SetRecheckPeriod()
 SetFlvH265()
 {
     echo
-    inquirer list_input_index "是否推流 h265" ny_options ny_options_index
-    if [ "$ny_options_index" -eq 0 ] 
+    inquirer list_input_index "是否推流 h265" ny_options ny_index
+    if [ "$ny_index" -eq 0 ] 
     then
         flv_h265=false
     else
@@ -1406,8 +1406,8 @@ SetFlvPullLink()
         d_flv_pull_link="http://127.0.0.1/flv?app=flv&stream=${chnl_flv_push_link##*/}"
     fi
     Println "$tip 比如 http://domain.com/flv?app=flv&stream=xxx 监控会验证此链接来确定是否重启频道, 如果不确定可以先留空, 可以输入 omit 省略此选项"
-    inquirer text_input "请输入拉流(播放)地址: " flv_pull_link "${d_flv_pull_link:-$i18n_not_set}"
-    if [ "$flv_pull_link" == "omit" ] || [ "$flv_pull_link" == "$i18n_not_set" ]
+    inquirer text_input "请输入拉流(播放)地址: " flv_pull_link "${d_flv_pull_link:-$i18n_blank}"
+    if [ "$flv_pull_link" == "omit" ] || [ "$flv_pull_link" == "$i18n_blank" ]
     then
         flv_pull_link=""
     fi

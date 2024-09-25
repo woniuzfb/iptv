@@ -45,14 +45,14 @@ CloudflareEditUser()
     Println "  用户密码: ${green} $cf_user_pass_new ${normal}\n"
 
     Println "请输入用户 Token"
-    read -p "(默认: ${cf_user_token:-$i18n_not_set}): " cf_user_token_new
+    read -p "(默认: ${cf_user_token:-$i18n_blank}): " cf_user_token_new
     cf_user_token_new=${cf_user_token_new:-$cf_user_token}
-    Println "  用户 Token: ${green} ${cf_user_token_new:-$i18n_not_set} ${normal}\n"
+    Println "  用户 Token: ${green} ${cf_user_token_new:-$i18n_blank} ${normal}\n"
 
     Println "请输入用户 Key"
-    read -p "(默认: ${cf_user_api_key:-$i18n_not_set}): " cf_user_api_key_new
+    read -p "(默认: ${cf_user_api_key:-$i18n_blank}): " cf_user_api_key_new
     cf_user_api_key_new=${cf_user_api_key_new:-$cf_user_api_key}
-    Println "  用户 Token: ${green} ${cf_user_api_key_new:-$i18n_not_set} ${normal}\n"
+    Println "  用户 Token: ${green} ${cf_user_api_key_new:-$i18n_blank} ${normal}\n"
 
     new_user=$(
     $JQ_FILE -n --arg email "$cf_user_email_new" --arg pass "$cf_user_pass_new" \

@@ -46,9 +46,9 @@ AlistAccAdd()
         ExitOnText "输入登录名" alist_acc_username
 
         echo
-        inquirer text_input "输入密码" alist_acc_password "$i18n_not_set"
+        inquirer text_input "输入密码" alist_acc_password "$i18n_blank"
 
-        if [ "$alist_acc_password" == "$i18n_not_set" ] 
+        if [ "$alist_acc_password" == "$i18n_blank" ] 
         then
             alist_acc_password=""
         fi

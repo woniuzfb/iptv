@@ -2466,11 +2466,18 @@ inquirer()
 
         trap inquirer:control_c EXIT
 
+        read -e text_input
+
+        until validate_failed_msg=$($text_input_validator "$text_input") 
+        do
+            inquirer:print "\n${bg_black}${red}${validate_failed_msg:-$text_input_validate_failed_msg}${normal}\n\n"
+            read -e text_input
+        done
+
         #stty -echo
         #tput cnorm
-
-        read -e text_input
         #inquirer:on_keypress inquirer:on_default inquirer:on_default inquirer:on_text_input_ascii inquirer:on_text_input_enter inquirer:on_text_input_left inquirer:on_text_input_right inquirer:on_text_input_ascii inquirer:on_text_input_backspace inquirer:on_text_input_not_ascii
+
         read -r ${var_name?} <<< "${text_input:-$text_default}"
 
         inquirer:cleanup
@@ -31995,9 +32002,11 @@ AcmeCheck()
     if [ ! -f "$HOME/.acme.sh/acme.sh" ] 
     then
         DepInstall socat
-        { curl -s -m 10 https://get.acme.sh || curl -s -m 20 "$FFMPEG_MIRROR_LINK/acme.sh"; } \
+        { curl -s -m 20 https://raw.githubusercontent.com/acmesh-official/acme.sh/master/acme.sh || curl -s -m 20 "$FFMPEG_MIRROR_LINK/acme.sh"; } \
         | sed "s+https://raw.githubusercontent.com/acmesh-official+$FFMPEG_MIRROR_LINK/acmesh-content+g" \
-        | sed "s+| sh+| sed 's~PROJECT=\"https://github.com/acmesh-official~PROJECT=\"$FFMPEG_MIRROR_LINK/acmesh-project~' | sed 's~https://api.github.com~$FFMPEG_MIRROR_LINK/acmesh-api~g' | sh+g" | bash
+        | sed "s+| sh+| sed 's~PROJECT=\"https://github.com/acmesh-official~PROJECT=\"$FFMPEG_MIRROR_LINK/acmesh-project~' | sed 's~https://api.github.com~$FFMPEG_MIRROR_LINK/acmesh-api~g' | sh+g" > ~/acme.sh
+        cd ~
+        bash acme.sh --install
     else
         echo
         inquirer list_input_index "更新 acme.sh" ny_options ny_options_index
@@ -53578,7 +53587,7 @@ then
             fi
 
             Println "$info 下载 acme.sh ..."
-            if curl -s -L https://get.acme.sh -o "$FFMPEG_MIRROR_ROOT/acme.sh_tmp"
+            if curl -s -L https://raw.githubusercontent.com/acmesh-official/acme.sh/master/acme.sh -o "$FFMPEG_MIRROR_ROOT/acme.sh_tmp"
             then
                 mv "$FFMPEG_MIRROR_ROOT/acme.sh_tmp" "$FFMPEG_MIRROR_ROOT/acme.sh"
             else

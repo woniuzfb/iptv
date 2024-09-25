@@ -87,16 +87,16 @@ AddChannelsSchedule()
                     inquirer date_pick "设置结束日期" schedule_end_time
 
                     echo
-                    inquirer list_input_index "每日循环" ny_options ny_options_index
+                    inquirer list_input_index "每日循环" ny_options ny_index
 
-                    if [ "$ny_options_index" -eq 0 ] 
+                    if [ "$ny_index" -eq 0 ] 
                     then
                         schedule_loop=false
 
                         echo
-                        inquirer list_input_index "结束后自动清除" ny_options ny_options_index
+                        inquirer list_input_index "结束后自动清除" ny_options ny_index
 
-                        if [ "$ny_options_index" -eq 0 ] 
+                        if [ "$ny_index" -eq 0 ] 
                         then
                             schedule_auto_remove=false
                         else
@@ -108,16 +108,16 @@ AddChannelsSchedule()
                     fi
 
                     echo
-                    inquirer list_input_index "防盗链" yn_options yn_options_index
+                    inquirer list_input_index "防盗链" yn_options yn_index
 
-                    if [ "$yn_options_index" -eq 0 ] 
+                    if [ "$yn_index" -eq 0 ] 
                     then
                         schedule_hls_change=true
 
                         echo
-                        inquirer list_input_index "防盗链一次" ny_options yn_options_index
+                        inquirer list_input_index "防盗链一次" ny_options yn_index
 
-                        if [ "$yn_options_index" -eq 0 ] 
+                        if [ "$yn_index" -eq 0 ] 
                         then
                             schedule_hls_change_once=false
                         else
@@ -182,16 +182,16 @@ AddChannelsSchedule()
             inquirer date_pick "设置结束日期" schedule_end_time
 
             echo
-            inquirer list_input_index "每日循环" ny_options ny_options_index
+            inquirer list_input_index "每日循环" ny_options ny_index
 
-            if [ "$ny_options_index" -eq 0 ] 
+            if [ "$ny_index" -eq 0 ] 
             then
                 schedule_loop=false
 
                 echo
-                inquirer list_input_index "结束后自动清除" ny_options ny_options_index
+                inquirer list_input_index "结束后自动清除" ny_options ny_index
 
-                if [ "$ny_options_index" -eq 0 ] 
+                if [ "$ny_index" -eq 0 ] 
                 then
                     schedule_auto_remove=false
                 else
@@ -203,16 +203,16 @@ AddChannelsSchedule()
             fi
 
             echo
-            inquirer list_input_index "防盗链" yn_options yn_options_index
+            inquirer list_input_index "防盗链" yn_options yn_index
 
-            if [ "$yn_options_index" -eq 0 ] 
+            if [ "$yn_index" -eq 0 ] 
             then
                 schedule_hls_change=true
 
                 echo
-                inquirer list_input_index "防盗链一次" ny_options yn_options_index
+                inquirer list_input_index "防盗链一次" ny_options yn_index
 
-                if [ "$yn_options_index" -eq 0 ] 
+                if [ "$yn_index" -eq 0 ] 
                 then
                     schedule_hls_change_once=false
                 else
@@ -224,9 +224,9 @@ AddChannelsSchedule()
             fi
 
             echo
-            inquirer text_input "输入频道名称" schedule_channel_name "$i18n_not_set"
+            inquirer text_input "输入频道名称" schedule_channel_name "$i18n_blank"
 
-            if [ "$schedule_channel_name" == "$i18n_not_set" ] 
+            if [ "$schedule_channel_name" == "$i18n_blank" ] 
             then
                 schedule_channel_name=""
             fi
@@ -258,9 +258,9 @@ AddChannelsSchedule()
             Println "$info 频道 [ ${schedule_channel_name:-${chnls_channel_name[chnls_index]}} ] 计划添加成功\n"
 
             echo
-            inquirer list_input_index "是否继续添加此频道计划" ny_options ny_options_index
+            inquirer list_input_index "是否继续添加此频道计划" ny_options ny_index
 
-            if [ "$ny_options_index" -eq 0 ] 
+            if [ "$ny_index" -eq 0 ] 
             then
                 break
             fi

@@ -21,9 +21,9 @@ FFmpegInstall()
     if [ "$dist" == "mac" ] 
     then
         echo
-        inquirer list_input_index "FFmpeg 开启 openvino, 开启时可能会安装失败" ny_options ny_options_index
+        inquirer list_input_index "FFmpeg 开启 openvino, 开启时可能会安装失败" ny_options ny_index
 
-        if [ "$ny_options_index" -eq 0 ] 
+        if [ "$ny_index" -eq 0 ] 
         then
             if ! curl -s -L https://github.com/Homebrew/homebrew-core/raw/HEAD/Formula/f/ffmpeg.rb -- | grep -v openvino > "$HOME"/ffmpeg.rb
             then

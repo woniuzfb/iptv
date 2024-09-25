@@ -107,9 +107,9 @@ EditChannelMenu()
             echo
             if [ "$chnl_status" == "on" ] || [ "$chnl_flv_status" == "on" ]
             then
-                inquirer list_input_index "重启频道" ny_options ny_options_index
+                inquirer list_input_index "重启频道" ny_options ny_index
 
-                if [ "$ny_options_index" -eq 0 ]
+                if [ "$ny_index" -eq 0 ]
                 then
                     Println "不重启...\n"
                 else
@@ -123,9 +123,9 @@ EditChannelMenu()
                     StartChannel
                 fi
             else
-                inquirer list_input_index "启动频道" ny_options ny_options_index
+                inquirer list_input_index "启动频道" ny_options ny_index
 
-                if [ "$ny_options_index" -eq 0 ]
+                if [ "$ny_index" -eq 0 ]
                 then
                     Println "不启动...\n"
                 else

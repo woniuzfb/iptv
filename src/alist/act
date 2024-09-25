@@ -61,9 +61,9 @@ AlistAct()
     if [ -n "${alist_accs_token[alist_accs_index]}" ] 
     then
         echo
-        inquirer list_input_index "是否重新登陆账号" ny_options ny_options_index
+        inquirer list_input_index "是否重新登陆账号" ny_options ny_index
 
-        if [ "$ny_options_index" -eq 0 ] 
+        if [ "$ny_index" -eq 0 ] 
         then
             alist_acc_token="${alist_accs_token[alist_accs_index]}"
         else
@@ -248,9 +248,9 @@ AlistAct()
             done
 
             Println "$alist_files_txt\n"
-            inquirer list_input_index "确认删除以上文件" ny_options ny_options_index
+            inquirer list_input_index "确认删除以上文件" ny_options ny_index
 
-            if [ "$ny_options_index" -eq 1 ] 
+            if [ "$ny_index" -eq 1 ] 
             then
                 for alist_file_delete_name in "${alist_files_delete_names[@]}"
                 do

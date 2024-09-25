@@ -90,12 +90,12 @@ EditStreamLink()
 
             if [ "$xc_select" = false ] 
             then
-                inquirer text_input "输入新的直播源( mpegts / hls / flv / youtube ...): " stream_link "$i18n_not_set"
+                inquirer text_input "输入新的直播源( mpegts / hls / flv / youtube ...): " stream_link "$i18n_blank"
             else
                 stream_link="${chnl_stream_links[chnl_stream_links_index]//${chnl_stream_links[chnl_stream_links_index]##*|}/$new_mac}"
             fi
 
-            if [ "$stream_link" == "$i18n_not_set" ] 
+            if [ "$stream_link" == "$i18n_blank" ] 
             then
                 continue
             fi

@@ -40,13 +40,17 @@ i18nGetMsg()
             i18n_default_cancel=$(gettext "(默认: 取消): ")
             i18n_input_correct_no=$(gettext "请输入正确的序号")
             i18n_input_correct_number=$(gettext "请输入正确的数字")
-            i18n_not_set=${i18n_not_set:-$(gettext "不设置")}
+            i18n_blank=${i18n_blank:-$(gettext "不设置")}
             i18n_random=${i18n_random:-$(gettext "随机")}
             info="${green}`gettext \"[信息]\"`${normal}"
             error="${red}`gettext \"[错误]\"`${normal}"
             tip="${green}`gettext \"[注意]\"`${normal}"
             yn_options=( "$i18n_yes" "$i18n_no" )
             ny_options=( "$i18n_no" "$i18n_yes" )
+            tf_options=( true false )
+            ft_options=( false true )
+            zo_options=( 0 1 )
+            oz_options=( 1 0 )
         ;;
         get_default)
             i18n_proxy=${i18n_proxy:-$(gettext "代理")}

@@ -5,9 +5,9 @@ VipDelChannel()
     if [ -z "${vip_hosts_index:-}" ] 
     then
         echo
-        inquirer list_input_index "清空所有频道" ny_options ny_options_index
+        inquirer list_input_index "清空所有频道" ny_options ny_index
 
-        if [ "$ny_options_index" -eq 1 ] 
+        if [ "$ny_index" -eq 1 ] 
         then
             for((vip_hosts_index=0;vip_hosts_index<vip_hosts_count;vip_hosts_index++));
             do

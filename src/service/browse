@@ -124,8 +124,8 @@ ServiceBrowse()
         elif [ "${lists_options[list_options_index]}" == "删除" ] 
         then
             echo
-            inquirer list_input_index "确认删除" ny_options ny_options_index
-            if [ "$ny_options_index" -eq 1 ] 
+            inquirer list_input_index "确认删除" ny_options ny_index
+            if [ "$ny_index" -eq 1 ] 
             then
                 for lists_index in "${lists_indices[@]}"
                 do

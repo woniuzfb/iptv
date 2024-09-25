@@ -44,9 +44,9 @@ XtreamCodesTestAcc()
     chnls=()
 
     Println "比如 http://username:passsword@127.0.0.1:5555"
-    inquirer text_input "输入 FFmpeg 代理: " proxy "$i18n_not_set"
+    inquirer text_input "输入 FFmpeg 代理: " proxy "$i18n_blank"
 
-    if [ "$proxy" == "$i18n_not_set" ] 
+    if [ "$proxy" == "$i18n_blank" ] 
     then
         proxy_command=""
     else

@@ -1,0 +1,279 @@
+Include src/v2ray/set_bound "$@"
+
+V2raySecurity()
+{
+    echo
+    stream_security_options=( 'none' 'tls' 'utls' )
+    inquirer list_input_index "选择传输层协议设置" stream_security_options stream_security_options_index
+
+    case $stream_security_options_index in
+        1) V2rayTlsSettings
+        ;;
+        2) V2rayUtlsSettings
+        ;;
+        *) return
+        ;;
+    esac
+
+    return
+}
+
+V2raySocketMark()
+{
+    socket_mark=0
+
+    if [ "$dist" = "mac" ] || [ "$v2ray_inbound" = true ]
+    then
+        return
+    fi
+
+    Println "$tip 当其值非零时，在出站连接上标记 SO_MARK"
+    inquirer text_input "设置标记" socket_mark 0
+}
+
+V2raySocketTcpFastOpen()
+{
+    echo
+    socket_tfo_options=( '系统默认' '强制开启' '强制关闭' )
+    inquirer list_input_index "TCP Fast Open" socket_tfo_options socket_tfo_options_index
+
+    unset socket_tfo_length
+
+    if [ "$socket_tfo_options_index" -eq 2 ] 
+    then
+        socket_tfo=false
+        return
+    fi
+
+    if [ "$socket_tfo_options_index" -eq 0 ] 
+    then
+        socket_tfo=""
+    else
+        socket_tfo=true
+    fi
+
+    if [ "$dist" != "mac" ] && [ "$v2ray_inbound" = true ] 
+    then
+        echo
+        inquirer text_input "入站连接的 TCP Fast Open 队列长度" socket_tfo_length 4096
+    fi
+}
+
+V2raySocketTproxy()
+{
+    unset socket_tproxy
+
+    if [ "$dist" = "mac" ]
+    then
+        rerturn
+    fi
+
+    echo
+    socket_tproxy_options=( 'off' 'redirect' 'tproxy' )
+    inquirer list_input "设置透明代理模式" socket_tproxy_options socket_tproxy
+}
+
+V2raySocketTcpKeepAliveInterval()
+{
+    unset socket_tcp_keep_alive_interval
+
+    if [ "$dist" = "mac" ]
+    then
+        rerturn
+    fi
+
+    Println "$tip 0 代表保持默认值"
+    inquirer text_input "TCP 保持活跃的数据包发送间隔(秒): " socket_tcp_keep_alive_interval 0
+}
+
+V2raySocketBindToDevice()
+{
+    echo
+    inquirer text_input "将连接绑定到指定的网络设备" socket_bind_to_device "$i18n_blank"
+
+    if [ "$socket_bind_to_device" == "$i18n_blank" ] 
+    then
+        socket_bind_to_device=""
+    fi
+}
+
+V2raySocket()
+{
+    V2raySocketMark
+    V2raySocketTcpFastOpen
+    V2raySocketTproxy
+    V2raySocketTcpKeepAliveInterval
+    V2raySocketBindToDevice
+
+    new_socket='{}'
+
+    if [ "$socket_mark" -ne 0 ] 
+    then
+        JQs merge_c new_socket --arg mark "$socket_mark" '. * {
+            "mark": $mark | tonumber
+        }'
+    fi
+
+    if [ -n "${socket_tfo:-}" ] 
+    then
+        new_socket=$(
+        $JQ_FILE --arg tcpFastOpen "$socket_tfo" \
+        '. * 
+        {
+            "tcpFastOpen": $tcpFastOpen | test("true")
+        }' <<< "$new_socket")
+    fi
+
+    if [ -n "${socket_tfo_length:-}" ] 
+    then
+        new_socket=$(
+        $JQ_FILE --arg tcpFastOpenQueueLength "$socket_tfo_length" \
+        '. * 
+        {
+            "tcpFastOpenQueueLength": $tcpFastOpenQueueLength | tonumber
+        }' <<< "$new_socket")
+    fi
+
+    if [ -n "${socket_tproxy:-}" ] 
+    then
+        new_socket=$(
+        $JQ_FILE --arg tproxy "$socket_tproxy" \
+        '. * 
+        {
+            "tproxy": $tproxy
+        }' <<< "$new_socket")
+    fi
+
+    if [ -n "${socket_tcp_keep_alive_interval:-}" ] 
+    then
+        new_socket=$(
+        $JQ_FILE --arg tcpKeepAliveInterval "$socket_tcp_keep_alive_interval" \
+        '. * 
+        {
+            "tcpKeepAliveInterval": $tcpKeepAliveInterval | tonumber
+        }' <<< "$new_socket")
+    fi
+
+    if [ -n "${socket_bind_to_device:-}" ] 
+    then
+        new_socket=$(
+        $JQ_FILE --arg bindToDevice "$socket_bind_to_device" \
+        '. * 
+        {
+            "bindToDevice": $bindToDevice
+        }' <<< "$new_socket")
+    fi
+}
+
+V2rayStreamTransport()
+{
+    echo
+    stream_transport_options=( 'tcp' 'websocket' 'mkcp' 'grpc' 'quic' 'meek' 'httpupgrade' 'hysteria2' )
+    inquirer list_input "选择传输层协议" stream_transport_options stream_transport
+}
+
+V2rayTcpSettings()
+{
+    if [ "${1:-inbound}" != "inbound" ] 
+    then
+        return
+    fi
+
+    V2raySetTcpProxyProtocol
+
+    JQs merge_c stream_transport_settings --arg acceptProxyProtocol "$tcp_accept_proxy_protocol" '. * {
+        "acceptProxyProtocol": $acceptProxyProtocol | test("true")
+    }'
+}
+
+V2rayWebSocketSettings()
+{
+    V2raySetWebSocketPath
+
+    if [ "${1:-inbound}" == "inbound" ] 
+    then
+        V2raySetWebSocketAcceptProxyProtocol
+        V2raySetWebSocketInboundMaxEarlyData
+        V2raySetWebsocketUseBrowserForwarding
+
+        if [ "$ws_max_early_data" -gt 0 ] 
+        then
+            V2raySetWebSocketEarlyDataHeaderName
+        else
+            ws_early_data_header_name=""
+        fi
+
+        JQs merge_c stream_transport_settings --arg acceptProxyProtocol "$ws_accept_proxy_protocol" \
+        --arg path "$ws_path" --arg maxEarlyData "$ws_max_early_data" \
+        --arg useBrowserForwarding "$ws_use_browser_forwarding" \
+        --arg earlyDataHeaderName "$ws_early_data_header_name" '. * {
+            "acceptProxyProtocol": $acceptProxyProtocol | test("true"),
+            "path": $path,
+            "maxEarlyData": $maxEarlyData | tonumber,
+            "useBrowserForwarding": $useBrowserForwarding | test("true"),
+            "earlyDataHeaderName": $earlyDataHeaderName
+        }'
+    else
+        V2raySetWebSocketHeaders
+        V2raySetOutboundMaxEarlyData
+        V2raySetEarlyDataHeaderName
+
+        JQs merge_c stream_transport_settings --arg acceptProxyProtocol "$ws_accept_proxy_protocol" \
+        --arg path "$ws_path" --argjson headers "$ws_headers" \
+        --arg maxEarlyData "$ws_max_early_data" \
+        --arg earlyDataHeaderName "$ws_early_data_header_name" '. * {
+            "acceptProxyProtocol": $acceptProxyProtocol | test("true"),
+            "path": $path,
+            "headers": $headers,
+            "maxEarlyData": $maxEarlyData | tonumber,
+            "earlyDataHeaderName": $earlyDataHeaderName
+        }'
+    fi
+}
+
+V2rayStream()
+{
+    V2rayStreamTransport
+
+    stream_transport_settings='{}'
+
+    case $stream_transport_options in
+        0) V2rayTcpSettings "$@"
+        ;;
+        1) V2rayWebSocketSettings "$@"
+        ;;
+        2) V2rayMkcpSettings "$@"
+        ;;
+        3) V2rayGrpcSettings "$@"
+        ;;
+        4) V2rayQuicSettings "$@"
+        ;;
+        5) V2rayMeekSettings "$@"
+        ;;
+        6) V2rayHttpupgradeSettings "$@"
+        ;;
+        7) V2rayHysteria2Settings "$@"
+        ;;
+        *) return
+        ;;
+    esac
+
+    V2raySecurity
+    V2raySocket
+
+    new_stream=$(
+    $JQ_FILE -n --arg transport "$stream_transport" \
+        --argjson transportSettings "$stream_transport_settings" \
+        --arg security "$stream_security" \
+        --argjson securitySettings "$stream_security_settings" \
+        --argjson socketSettings "$new_socket" \
+    '{
+        "transport": $transport,
+        "transportSettings": $transportSettings,
+        "security": $security,
+        "securitySettings": $securitySettings,
+        "socketSettings": $socketSettings
+    }')
+
+    return
+}

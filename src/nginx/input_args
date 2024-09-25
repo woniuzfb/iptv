@@ -4,9 +4,9 @@ NginxInputArgs()
     while true 
     do
         Println "$tip 空字符用 '' 表示"
-        inquirer text_input "输入单个指令值: " arg "$i18n_not_set"
+        inquirer text_input "输入单个指令值: " arg "$i18n_blank"
 
-        if [ "$arg" == "$i18n_not_set" ] 
+        if [ "$arg" == "$i18n_blank" ] 
         then
             break
         fi

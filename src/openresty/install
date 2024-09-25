@@ -383,8 +383,6 @@ OpenrestySourceInstall()
             cp -r ${openssl_name} ${openssl_name}-patched
             cd ${openssl_name}-patched
 
-            make clean
-
             curl -L "$FFMPEG_MIRROR_LINK/openssl-1.1.1f-sess_set_get_cb_yield.patch" -o openssl-1.1.1f-sess_set_get_cb_yield.patch
             patch -p1 < openssl-1.1.1f-sess_set_get_cb_yield.patch || true
             cd "$DEPENDS_ROOT"
@@ -438,7 +436,6 @@ OpenrestySourceInstall()
 
     nproc="-j$(nproc 2> /dev/null)" || nproc="-j1"
 
-    make clean
     make $nproc
     make install
 

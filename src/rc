@@ -106,6 +106,7 @@ case $rclone_options_index in
         esac
     ;;
     5) 
+        DepInstall rsync
         if [[ -x $(command -v rclone) ]] 
         then
             rclone selfupdate

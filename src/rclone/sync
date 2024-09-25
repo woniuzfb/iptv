@@ -137,16 +137,16 @@ RcloneSyncAdd()
         ExitOnText "输入同步的本地目录" rclone_sync_target RcloneSyncLocalValidator "路径错误"
         RemoveQuotes rclone_sync_target
     else
-        rclone_sync_target="${rclone_sync_target_options[rclone_sync_target_options_index-1]}"
+        rclone_sync_target="${rclone_sync_target_options[rclone_sync_target_options_index]}"
         echo
         ExitOnText "输入同步目标 $rclone_sync_target 的路径" rclone_sync_target_path
         rclone_sync_target="$rclone_sync_target:$rclone_sync_target_path"
     fi
 
     echo
-    inquirer text_input "输入同步参数" rclone_sync_args "$i18n_not_set"
+    inquirer text_input "输入同步参数" rclone_sync_args "$i18n_blank"
 
-    if [ "$rclone_sync_args" == "$i18n_not_set" ] 
+    if [ "$rclone_sync_args" == "$i18n_blank" ] 
     then
         rclone_sync_args=""
     fi
@@ -336,7 +336,7 @@ RcloneSyncEdit()
                 ExitOnText "输入同步的本地目录" rclone_sync_target RcloneSyncLocalValidator "路径错误"
                 RemoveQuotes rclone_sync_target
             else
-                rclone_sync_target="${rclone_sync_target_options[rclone_sync_target_options_index-1]}"
+                rclone_sync_target="${rclone_sync_target_options[rclone_sync_target_options_index]}"
                 echo
                 ExitOnText "输入同步目标 $rclone_sync_target 的路径" rclone_sync_target_path
                 rclone_sync_target="$rclone_sync_target:$rclone_sync_target_path"
@@ -351,9 +351,9 @@ RcloneSyncEdit()
         ;;
         2) 
             echo
-            inquirer text_input "输入同步参数" rclone_sync_args "$i18n_not_set"
+            inquirer text_input "输入同步参数" rclone_sync_args "$i18n_blank"
 
-            if [ "$rclone_sync_args" == "$i18n_not_set" ] 
+            if [ "$rclone_sync_args" == "$i18n_blank" ] 
             then
                 rclone_sync_args=""
             fi

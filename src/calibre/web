@@ -3,7 +3,9 @@ CalibreWebInstall()
     if [ -d "$CALIBRE_ROOT/web" ] 
     then
         cd "$CALIBRE_ROOT/web"
+        git stash
         git pull
+        git stash pop
         Println "$info Calibre Web 更新成功\n"
         return
     fi

@@ -14,9 +14,9 @@ AlistAppAdd()
     fi
 
     echo
-    inquirer text_input "输入 Alist 名称" alist_name "$i18n_not_set"
+    inquirer text_input "输入 Alist 名称" alist_name "$i18n_blank"
 
-    if [ "$alist_name" == "$i18n_not_set" ] 
+    if [ "$alist_name" == "$i18n_blank" ] 
     then
         alist_name=""
     fi

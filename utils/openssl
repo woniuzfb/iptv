@@ -96,7 +96,6 @@ OpensslSourceInstall()
     cd "$openssl_name"
 
     perl ./Configure ${args[@]+"${args[@]}"}
-    make clean
     make
     make install
 

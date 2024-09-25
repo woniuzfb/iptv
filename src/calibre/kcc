@@ -90,8 +90,8 @@ KccConfig()
     else
         kcc_process=true
         echo
-        inquirer text_input "输入额外参数" kcc_args "$i18n_not_set"
-        if [ "$kcc_args" == "$i18n_not_set" ] 
+        inquirer text_input "输入额外参数" kcc_args "$i18n_blank"
+        if [ "$kcc_args" == "$i18n_blank" ] 
         then
             kcc_args=""
         fi
@@ -185,8 +185,8 @@ KccConfigEdit()
             ;;
             2)
                 echo
-                inquirer text_input "输入额外参数" new_kcc_args "$i18n_not_set"
-                if [ "$new_kcc_args" == "$i18n_not_set" ] 
+                inquirer text_input "输入额外参数" new_kcc_args "$i18n_blank"
+                if [ "$new_kcc_args" == "$i18n_blank" ] 
                 then
                     new_kcc_args=""
                 fi
@@ -212,8 +212,8 @@ KccConfigEdit()
                 while true 
                 do
                     echo
-                    inquirer text_input "输入源图片目录" new_kcc_source "$i18n_not_set"
-                    if [ "$new_kcc_source" == "$i18n_not_set" ] 
+                    inquirer text_input "输入源图片目录" new_kcc_source "$i18n_blank"
+                    if [ "$new_kcc_source" == "$i18n_blank" ] 
                     then
                         break
                     fi
@@ -256,8 +256,8 @@ KccConfigEdit()
                     while true 
                     do
                         echo
-                        inquirer text_input "修改源图片目录 ${kcc_sources[kcc_sources_index]}" new_kcc_source "$i18n_not_set"
-                        if [ "$new_kcc_source" == "$i18n_not_set" ] 
+                        inquirer text_input "修改源图片目录 ${kcc_sources[kcc_sources_index]}" new_kcc_source "$i18n_blank"
+                        if [ "$new_kcc_source" == "$i18n_blank" ] 
                         then
                             continue 2
                         fi

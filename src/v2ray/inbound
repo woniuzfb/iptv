@@ -1,128 +1,152 @@
-V2rayAddInbound()
+V2rayInboundProtocol()
 {
-    V2raySetInboundProtocol
-    V2raySetInboundNetwork
+    echo
+    inbound_protocols=( 'vmess' 'vless' 'vliteu' 'http' 'socks' 'shadowsocks' 'dokodemo-door' 'trojan' )
+    inquirer list_input "选择入站代理协议" inbound_protocols inbound_protocol
+}
 
-    V2raySetInboundSockoptTcpFastOpen
-    V2raySetSockoptTproxy
+V2rayInboundSettings()
+{
+    return
+}
 
-    if [ "$v2ray_name" == "xray" ] 
+V2rayInboundPortValidator()
+{
+    if [ "$1" == "$i18n_random" ] || [[ "$1" =~ ^[1-9][0-9]*$ ]] || [[ "$1" =~ ^([1-9][0-9]*)-([1-9][0-9]*)$ ]]
     then
-        V2raySetSockoptAcceptProxyProtocol
-    else
-        V2raySetSockoptTcpKeepAliveInterval
+        return 0
     fi
 
-    V2raySetSniffingEnabled
+    return 1
+}
 
-    if [ "$sniffing_enabled" = true ] 
+V2rayInboundPort()
+{
+    Println "$tip 数值或范围,比如 1234、5-10"
+    inquirer text_input "输入入站端口" inbound_port "$i18n_random" V2rayInboundPortValidator
+
+    if [ "$inbound_port" == "$i18n_random" ] 
     then
-        V2raySetSniffingDestOverride
-        V2raySetSniffingMetadataOnly
-    else
-        sniffing_dest_override=""
-        sniffing_metadata_only=false
+        inbound_port=$(GetFreePort)
+        Println "  入站端口: ${green}$inbound_port${normal}"
     fi
+}
 
-    if [ "$v2ray_name" == "xray" ] && [ -n "$sniffing_dest_override" ] 
+V2rayInboundListen()
+{
+    Println "$tip 填写 Unix domain socket 时, 入站端口将被忽略"
+    inquirer text_input "输入入站监听地址" inbound_listen 0.0.0.0
+}
+
+V2rayInboundTag()
+{
+    echo
+    inquirer text_input "输入入站标识" inbound_tag "$i18n_random"
+
+    if [ "$inbound_tag" == "$i18n_random" ] 
     then
-        V2raySetSniffingDomainsExcluded
-    fi
-
-    if [ "$self" == "ibm" ] 
-    then
-        V2raySetSecurity
-        V2raySetTag
-        V2raySetListen
-    else
-        echo
-        inquirer list_input "是否通过此脚本配置的 nginx 连接" ny_options nginx_proxy_yn
-
-        if [[ $nginx_proxy_yn == "$i18n_yes" ]]
-        then
-            if [ "$protocol" == "vless" ] || [ "$protocol" == "trojan" ]
+        local free_tag
+        while true 
+        do
+            free_tag=$(RandStr)
+            if ! grep -q '"tag": "'"$free_tag"'"' < "$V2_CONFIG"
             then
-                V2raySetSecurity
-            else
-                security="none"
+                inbound_tag="$free_tag"
+                break
             fi
-            V2raySetNginxTag
-            listen="127.0.0.1"
-        else
-            V2raySetSecurity
-            V2raySetTag
-            V2raySetListen
-        fi
+        done
+        Println "  入站标识: ${green}$inbound_tag${normal}"
+    fi
+}
+
+V2rayInboundSniffingEnabled()
+{
+    echo
+    inquirer list_input_index "是否开启流量探测" ny_options ny_index
+
+    if [ "$ny_index" -eq 0 ] 
+    then
+        inbound_sniffing_enabled=false
+    else
+        inbound_sniffing_enabled=true
+    fi
+}
+
+V2rayInboundSniffingDestOverride()
+{
+    inbound_sniffing_dest_override_options=( 'http' 'tls' 'quic' 'fakedns' 'fakedns+others' )
+
+    Println "$tip 当流量为指定类型时，按其中包括的目标地址重置当前连接的目标"
+    inquirer checkbox_input "指定流量类型: " inbound_sniffing_dest_override_options inbound_sniffing_dest_override_options_selected
+
+    inbound_sniffing_dest_override=$(JoinByChar , "${inbound_sniffing_dest_override_options_selected[@]}")
+}
+
+V2rayInboundSniffingMetadataOnly()
+{
+    echo
+    inquirer list_input_index "仅使用元数据推断目标地址而不截取流量内容" ny_options ny_index
+
+    if [ "$ny_index" -eq 0 ] 
+    then
+        inbound_sniffing_metadata_only=false
+    else
+        inbound_sniffing_metadata_only=true
+    fi
+}
+
+V2rayInboundSniffing()
+{
+    V2rayInboundSniffingEnabled
+
+    if [ "$inbound_sniffing_enabled" = false ] 
+    then
+        inbound_sniffing_dest_override=""
+        inbound_sniffing_metadata_only=false
+        return
     fi
 
-    if [ "$network" == "domainsocket" ] 
-    then
-        port=$(GetFreePort)
-    else
-        V2raySetLocalPort
-    fi
+    V2rayInboundSniffingDestOverride
+    V2rayInboundSniffingMetadataOnly
+
+    new_sniffing=$(
+    $JQ_FILE -n --arg enabled "$sniffing_enabled" \
+        --argjson destOverride "[$sniffing_dest_override]" \
+        --arg metadataOnly "$sniffing_metadata_only" \
+    '{
+        "enabled": $enabled | test("true"),
+        "destOverride": $destOverride,
+        "metadataOnly": $metadataOnly | test("true")
+    }')
+}
+
+V2rayInboundAdd()
+{
+    V2rayInboundProtocol
+    V2rayInboundSettings
+    V2rayInboundPort
+    V2rayInboundListen
+    V2rayInboundTag
+    V2rayInboundSniffing
+    V2rayStream
 
     new_inbound=$(
-    $JQ_FILE -n --arg listen "$listen" --arg port "$port" \
-        --arg protocol "$protocol" --arg network "$network" \
-        --arg security "$security" --arg tproxy "$sockopt_tproxy" \
-        --arg enabled "$sniffing_enabled" --argjson destOverride "[$sniffing_dest_override]" \
-        --arg metadataOnly "$sniffing_metadata_only" --arg tag "$tag" \
+    $JQ_FILE -n --arg listen "$inbound_listen" \
+        --arg port "$inbound_port" \
+        --arg protocol "$inbound_protocol" \
+        --argjson settings "$inbound_settings" \
+        --argjson streamSettings "$new_stream" \
+        --argjson sniffing "$new_sniffing" \
+        --arg tag "$inbound_tag" \
     '{
         "listen": $listen,
         "port": $port | tonumber,
         "protocol": $protocol,
-        "streamSettings": {
-            "network": $network,
-            "security": $security,
-            "sockopt": {
-                "tproxy": $tproxy
-            }
-        },
-        "sniffing": {
-            "enabled": $enabled | test("true"),
-            "destOverride": $destOverride,
-            "metadataOnly": $metadataOnly | test("true")
-        },
+        "settings": $settings,
+        "streamSettings": $streamSettings,
+        "sniffing": $sniffing,
         "tag": $tag
     }')
-
-    if [ "$v2ray_name" == "xray" ] 
-    then
-        new_inbound=$(
-        $JQ_FILE --arg acceptProxyProtocol "$sockopt_accept_proxy_protocol" \
-        '. * 
-        {
-            "streamSettings": {
-                "sockopt": {
-                    "acceptProxyProtocol": $acceptProxyProtocol | test("true")
-                }
-            }
-        }' <<< "$new_inbound")
-
-        if [ -n "${sniffing_domains_excluded:-}" ] 
-        then
-            new_inbound=$(
-            $JQ_FILE --argjson domainsExcluded "[$sniffing_domains_excluded]" \
-            '. * 
-            {
-                "sniffing": {
-                    "domainsExcluded": $domainsExcluded
-                }
-            }' <<< "$new_inbound")
-        fi
-    else
-        new_inbound=$(
-        $JQ_FILE --arg tcpKeepAliveInterval "$sockopt_tcp_keep_alive_interval" \
-        '. * 
-        {
-            "streamSettings": {
-                "sockopt": {
-                    "tcpKeepAliveInterval": $tcpKeepAliveInterval | tonumber
-                }
-            }
-        }' <<< "$new_inbound")
-    fi
 
     if [ -n "$sockopt_tfo" ] 
     then
@@ -175,7 +199,7 @@ V2rayAddInbound()
 
     if [ "$security" == "tls" ] 
     then
-        V2raySetTlsServerName
+        V2rayTlsServerName
 
         if [ -n "$tls_server_name" ] 
         then
@@ -191,9 +215,9 @@ V2rayAddInbound()
             }' <<< "$new_inbound")
         fi
 
-        V2raySetTlsAlpn
-        V2raySetTlsDisableSystemRoot
-        V2raySetTlsVerifyClientCertificate
+        V2rayTlsAlpn
+        V2rayTlsDisableSystemRoot
+        V2rayTlsVerifyClientCertificate
 
         new_inbound=$(
         $JQ_FILE --argjson alpn "[$tls_alpn]" --arg disableSystemRoot "$tls_disable_system_root" \
@@ -221,7 +245,7 @@ V2rayAddInbound()
                 fi
             fi
             Println "$info 设置证书"
-            V2raySetCertificates
+            V2rayCertificates
             merge=$(
             $JQ_FILE -n --argjson certificates "[$certificate]" \
             '{
@@ -244,7 +268,7 @@ V2rayAddInbound()
         done
     elif [ "$security" == "xtls" ] 
     then
-        V2raySetTlsServerName
+        V2rayTlsServerName
 
         if [ -n "$tls_server_name" ] 
         then
@@ -260,13 +284,13 @@ V2rayAddInbound()
             }' <<< "$new_inbound")
         fi
 
-        V2raySetTlsAlpn
-        V2raySetTlsDisableSystemRoot
-        V2raySetTlsMinVersion
-        V2raySetTlsMaxVersion
-        V2raySetTlsPreferServerCipherSuites
-        V2raySetTlsCipherSuites
-        V2raySetTlsRejectUnknownSni
+        V2rayTlsAlpn
+        V2rayTlsDisableSystemRoot
+        V2rayTlsMinVersion
+        V2rayTlsMaxVersion
+        V2rayTlsPreferServerCipherSuites
+        V2rayTlsCipherSuites
+        V2rayTlsRejectUnknownSni
 
         new_inbound=$(
         $JQ_FILE --argjson alpn "[$tls_alpn]" --arg minVersion "$tls_min_version" \
@@ -300,7 +324,7 @@ V2rayAddInbound()
                 fi
             fi
             Println "$info 设置证书"
-            V2raySetCertificates
+            V2rayCertificates
             merge=$(
             $JQ_FILE -n --argjson certificates "[$certificate]" \
             '{
@@ -325,7 +349,7 @@ V2rayAddInbound()
 
     if [ "$protocol" == "vmess" ] 
     then
-        V2raySetDisableInsecureEncryption
+        V2rayDisableInsecureEncryption
 
         new_inbound=$(
         $JQ_FILE --arg disableInsecureEncryption "$disable_insecure_encryption" \
@@ -337,11 +361,11 @@ V2rayAddInbound()
             }
         }' <<< "$new_inbound")
 
-        V2raySetDetourTo
+        V2rayDetourTo
 
         if [ "$detour_to" != "$i18n_blank" ] 
         then
-            V2raySetDetourDefault
+            V2rayDetourDefault
             new_inbound=$(
             $JQ_FILE --arg level "$level" --arg alterId "$alter_id" --arg to "$detour_to" \
             '. * 
@@ -382,7 +406,7 @@ V2rayAddInbound()
 
         if { [ "$security" == "tls" ] || [ "$security" == "xtls" ]; } && [ "$network" == "tcp" ] && [[ $tls_alpn == *"http/1.1"* ]]
         then
-            V2raySetFallbacks
+            V2rayFallbacks
 
             if [ "$v2ray_fallbacks" != "[]" ] 
             then
@@ -398,9 +422,9 @@ V2rayAddInbound()
         fi
     elif [ "$protocol" == "http" ] 
     then
-        V2raySetTimeout
-        V2raySetAllowTransparent
-        V2raySetLevel
+        V2rayTimeout
+        V2rayAllowTransparent
+        V2rayLevel
 
         new_inbound=$(
         $JQ_FILE --arg timeout "$timeout" --arg allowTransparent "$allow_transparent" \
@@ -416,9 +440,9 @@ V2rayAddInbound()
         }' <<< "$new_inbound")
     elif [ "$protocol" == "socks" ] 
     then
-        V2raySetLevel
-        V2raySetAuth
-        V2raySetUdp
+        V2rayLevel
+        V2rayAuth
+        V2rayUdp
 
         new_inbound=$(
         $JQ_FILE --arg auth "$auth" --arg udp "$udp" \
@@ -434,7 +458,7 @@ V2rayAddInbound()
 
         if [ "$udp" = true ] 
         then
-            V2raySetIp
+            V2rayIp
             new_inbound=$(
             $JQ_FILE --arg ip "$ip" \
             '. * 
@@ -449,7 +473,7 @@ V2rayAddInbound()
         if [ "$v2ray_name" == "xray" ] && [[ $($V2CTL_FILE version | head -1 | cut -d' ' -f2) =~ ([^.]+).([^.]+).([^.]+) ]] && \
         [ "${BASH_REMATCH[1]}" -ge 1 ] && [ "${BASH_REMATCH[2]}" -ge 2 ] && [ "${BASH_REMATCH[3]}" -ge 3 ]
         then
-            V2raySetSettingsNetwork
+            V2raySettingsNetwork
 
             new_inbound=$(
             $JQ_FILE --arg network "$settings_network" \
@@ -461,11 +485,11 @@ V2rayAddInbound()
                 }
             }' <<< "$new_inbound")
         else
-            V2raySetEmail
-            V2raySetShadowsocksMethod
-            V2raySetPassword
-            V2raySetLevel
-            V2raySetSettingsNetwork
+            V2rayEmail
+            V2rayShadowsocksMethod
+            V2rayPassword
+            V2rayLevel
+            V2raySettingsNetwork
 
             new_inbound=$(
             $JQ_FILE --arg email "$email" --arg method "$shadowsocks_method" \
@@ -484,7 +508,7 @@ V2rayAddInbound()
 
             if [ "$v2ray_name" == "v2ray" ] 
             then
-                V2raySetIvCheck
+                V2rayIvCheck
 
                 new_inbound=$(
                 $JQ_FILE --arg ivCheck "$iv_check" \
@@ -512,10 +536,10 @@ V2rayAddInbound()
                 }
             }' <<< "$new_inbound")
         else
-            V2raySetSettingsNetwork
-            V2raySetTimeout
-            V2raySetLevel
-            V2raySetFollowRedirect
+            V2raySettingsNetwork
+            V2rayTimeout
+            V2rayLevel
+            V2rayFollowRedirect
 
             if [ "$follow_redirect" = true ] 
             then
@@ -532,8 +556,8 @@ V2rayAddInbound()
                     }
                 }' <<< "$new_inbound")
             else
-                V2raySetAddress
-                V2raySetAddressPort
+                V2rayAddress
+                V2rayAddressPort
 
                 new_inbound=$(
                 $JQ_FILE --arg address "$address" --arg port "$address_port" \
@@ -556,9 +580,9 @@ V2rayAddInbound()
 
     if [ "$network" == "ws" ] 
     then
-        V2raySetAcceptProxyProtocol
-        V2raySetPath
-        V2raySetWsHeaders
+        V2rayAcceptProxyProtocol
+        V2rayPath
+        V2rayWsHeaders
 
         new_inbound=$(
         $JQ_FILE --arg acceptProxyProtocol "$accept_proxy_protocol" \
@@ -576,17 +600,17 @@ V2rayAddInbound()
 
         if [ "$v2ray_name" == "v2ray" ] 
         then
-            V2raySetInboundMaxEarlyData
+            V2rayInboundMaxEarlyData
 
             if [ "$max_early_data" -gt 0 ] 
             then
-                V2raySetEarlyDataHeaderName
+                V2rayEarlyDataHeaderName
 
                 if [ -n "$early_data_header_name" ] && [ "$early_data_header_name" != "Sec-WebSocket-Protocol" ]
                 then
                     use_browser_forwarding=false
                 else
-                    V2raySetUseBrowserForwarding
+                    V2rayUseBrowserForwarding
                 fi
             else
                 early_data_header_name=""
@@ -610,8 +634,8 @@ V2rayAddInbound()
         fi
     elif [ "$network" == "tcp" ] 
     then
-        V2raySetAcceptProxyProtocol
-        V2raySetHeaderType
+        V2rayAcceptProxyProtocol
+        V2rayHeaderType
 
         new_inbound=$(
         $JQ_FILE --arg acceptProxyProtocol "$accept_proxy_protocol" \
@@ -632,15 +656,15 @@ V2rayAddInbound()
         }' <<< "$new_inbound")
     elif [ "$network" == "kcp" ] 
     then
-        V2raySetHeaderType
-        V2raySetKcpMtu
-        V2raySetKcpTti
-        V2raySetKcpUplinkCapacity
-        V2raySetKcpDownlinkCapacity
-        V2raySetKcpCongestion
-        V2raySetKcpReadBufferSize
-        V2raySetKcpWriteBufferSize
-        V2raySetKcpSeed
+        V2rayHeaderType
+        V2rayKcpMtu
+        V2rayKcpTti
+        V2rayKcpUplinkCapacity
+        V2rayKcpDownlinkCapacity
+        V2rayKcpCongestion
+        V2rayKcpReadBufferSize
+        V2rayKcpWriteBufferSize
+        V2rayKcpSeed
 
         new_inbound=$(
         $JQ_FILE --arg mtu "$kcp_mtu" --arg tti "$kcp_tti" \
@@ -668,9 +692,9 @@ V2rayAddInbound()
         }' <<< "$new_inbound")
     elif [ "$network" == "http" ] 
     then
-        V2raySetHttpHost
-        V2raySetPath
-        V2raySetHttpHeaders
+        V2rayHttpHost
+        V2rayPath
+        V2rayHttpHeaders
 
         new_inbound=$(
         $JQ_FILE --argjson host "[$http_host]" --arg path "$path" \
@@ -688,7 +712,7 @@ V2rayAddInbound()
 
         if [ "$v2ray_name" == "v2ray" ] 
         then
-            V2raySetHttpMethod
+            V2rayHttpMethod
 
             new_inbound=$(
             $JQ_FILE --arg method "$http_method" \
@@ -703,9 +727,9 @@ V2rayAddInbound()
         fi
     elif [ "$network" == "quic" ] 
     then
-        V2raySetQuicSecurity
-        V2raySetQuicKey
-        V2raySetHeaderType
+        V2rayQuicSecurity
+        V2rayQuicKey
+        V2rayHeaderType
 
         new_inbound=$(
         $JQ_FILE --arg security "$quic_security" \
@@ -724,9 +748,9 @@ V2rayAddInbound()
         }' <<< "$new_inbound")
     elif [ "$network" == "domainsocket" ] 
     then
-        V2raySetDsPath
-        V2raySetDsAbstract
-        V2raySetDsPadding
+        V2rayDsPath
+        V2rayDsAbstract
+        V2rayDsPadding
 
         new_inbound=$(
         $JQ_FILE --arg path "$ds_path" \
@@ -742,7 +766,7 @@ V2rayAddInbound()
             }
         }' <<< "$new_inbound")
     else
-        V2raySetGrpcServiceName
+        V2rayGrpcServiceName
 
         new_inbound=$(
         $JQ_FILE --arg grpcSettings "$grpc_service_name" \
@@ -757,7 +781,7 @@ V2rayAddInbound()
 
         if [ "$v2ray_name" == "xray" ] 
         then
-            V2raySetGrpcMultiMode
+            V2rayGrpcMultiMode
 
             new_inbound=$(
             $JQ_FILE --arg multiMode "$grpc_multi_mode" \

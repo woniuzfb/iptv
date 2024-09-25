@@ -3,8 +3,8 @@ Use4gtvProxy()
     GetDefault
     d_4gtv_proxy=${d_4gtv_proxy:-$d_proxy}
     Println "$tip 可以使用脚本自带的 v2ray 管理面板添加代理, 可以输入 omit 省略此选项"
-    inquirer text_input "请输入 4gtv 代理, 比如 http://username:passsword@127.0.0.1:5555 : " _4gtv_proxy "${d_4gtv_proxy:-$i18n_not_set}"
-    if [ "$_4gtv_proxy" == "omit" ] || [ "$_4gtv_proxy" == "$i18n_not_set" ]
+    inquirer text_input "请输入 4gtv 代理, 比如 http://username:passsword@127.0.0.1:5555 : " _4gtv_proxy "${d_4gtv_proxy:-$i18n_blank}"
+    if [ "$_4gtv_proxy" == "omit" ] || [ "$_4gtv_proxy" == "$i18n_blank" ]
     then
         _4gtv_proxy=""
         _4gtv_proxy_command=()

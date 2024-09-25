@@ -32,7 +32,6 @@ ZlibInstall()
         tar xzf "$zlib_name".tar.gz
         cd "$zlib_name"
         ./configure --prefix="$DEPENDS_ROOT/$zlib_name/$build_dir" ${args[@]+"${args[@]}"}
-        make clean
         make
         make install
     fi

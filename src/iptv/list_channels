@@ -32,7 +32,7 @@ ListChannels()
             chnls_audio_shift=${chnls_video_audio_shift[chnls_index]#*_}
             chnls_video_audio_shift_text="$i18n_audio_shift $chnls_audio_shift($i18n_seconds)"
         else
-            chnls_video_audio_shift_text="$i18n_not_set"
+            chnls_video_audio_shift_text="$i18n_blank"
         fi
 
         IFS=, read -r -a chnl_qualities <<< "${chnls_quality[chnls_index]}"

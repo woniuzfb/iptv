@@ -44,9 +44,9 @@ then
     if [ "$debug_options_index" -eq 0 ] 
     then
         echo
-        inquirer list_input_index "是否部署" ny_options ny_options_index
+        inquirer list_input_index "是否部署" ny_options ny_index
 
-        if [ "$ny_options_index" -eq 0 ] 
+        if [ "$ny_index" -eq 0 ] 
         then
             "$DEV_PATH"/make
         else
@@ -69,9 +69,9 @@ then
         inquirer list_input "选择测试的程序" self_options self
 
         echo
-        inquirer text_input "输入参数" args_input "$i18n_not_set"
+        inquirer text_input "输入参数" args_input "$i18n_blank"
 
-        if [ "$args_input" == "$i18n_not_set" ] 
+        if [ "$args_input" == "$i18n_blank" ] 
         then
             args=()
         else

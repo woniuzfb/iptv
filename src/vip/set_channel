@@ -22,8 +22,8 @@ VipSetChannelName()
 VipSetChannelEpgId()
 {
     echo
-    inquirer text_input "请输入频道 epg id: " vip_channel_epg_id "$i18n_not_set"
-    if [ "$vip_channel_epg_id" == "$i18n_not_set" ] 
+    inquirer text_input "请输入频道 epg id: " vip_channel_epg_id "$i18n_blank"
+    if [ "$vip_channel_epg_id" == "$i18n_blank" ] 
     then
         vip_channel_epg_id=""
     fi

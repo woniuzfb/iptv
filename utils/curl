@@ -87,8 +87,8 @@ CurlImpersonateUpdate()
     if [[ -x "$CURL_IMPERSONATE_FILE" ]] 
     then
         echo
-        inquirer list_input_index "curl impersonate 已经存在, 是否重新安装" ny_options ny_options_index
-        if [ "$ny_options_index" -eq 1 ] 
+        inquirer list_input_index "curl impersonate 已经存在, 是否重新安装" ny_options ny_index
+        if [ "$ny_index" -eq 1 ] 
         then
             rm -f "$CURL_IMPERSONATE_FILE"
             CurlImpersonateInstall

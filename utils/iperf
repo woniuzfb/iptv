@@ -114,9 +114,9 @@ IperfAdd()
     inquirer list_input_index "请选择添加类型" iperf_type_options iperf_type_index
 
     echo
-    inquirer text_input "输入服务名称" iperf_name "$i18n_not_set"
+    inquirer text_input "输入服务名称" iperf_name "$i18n_blank"
 
-    if [ "$iperf_name" == "$i18n_not_set" ] 
+    if [ "$iperf_name" == "$i18n_blank" ] 
     then
         iperf_name=""
     fi
@@ -148,9 +148,9 @@ IperfAdd()
     fi
 
     echo
-    inquirer text_input "输入 iperf3 参数" iperf_args "$i18n_not_set"
+    inquirer text_input "输入 iperf3 参数" iperf_args "$i18n_blank"
 
-    if [ "$iperf_args" == "$i18n_not_set" ] 
+    if [ "$iperf_args" == "$i18n_blank" ] 
     then
         iperf_args=""
     fi
@@ -209,8 +209,8 @@ IperfEdit()
         case "${iperf_edit_options[iperf_edit_options_index]}" in
             '名称') 
                 echo
-                inquirer text_input "输入服务名称" iperf_name "${iperf_name[iperf_indices[iperf_options_index]]:-$i18n_not_set}"
-                if [ "$iperf_name" == "$i18n_not_set" ] 
+                inquirer text_input "输入服务名称" iperf_name "${iperf_name[iperf_indices[iperf_options_index]]:-$i18n_blank}"
+                if [ "$iperf_name" == "$i18n_blank" ] 
                 then
                     iperf_name=""
                 fi
@@ -231,8 +231,8 @@ IperfEdit()
                 if [ "$iperf_target_index" -eq 0 ] 
                 then
                     echo
-                    inquirer text_input "输入目标地址" iperf_target "${iperf_target[iperf_indices[iperf_options_index]]:-$i18n_not_set}"
-                    if [ "$iperf_target" == "$i18n_not_set" ] 
+                    inquirer text_input "输入目标地址" iperf_target "${iperf_target[iperf_indices[iperf_options_index]]:-$i18n_blank}"
+                    if [ "$iperf_target" == "$i18n_blank" ] 
                     then
                         iperf_target=""
                     fi
@@ -244,8 +244,8 @@ IperfEdit()
             ;;
             *) 
                 echo
-                inquirer text_input "输入 iperf3 参数" iperf_args "${iperf_args[iperf_indices[iperf_options_index]]:-$i18n_not_set}"
-                if [ "$iperf_args" == "$i18n_not_set" ] 
+                inquirer text_input "输入 iperf3 参数" iperf_args "${iperf_args[iperf_indices[iperf_options_index]]:-$i18n_blank}"
+                if [ "$iperf_args" == "$i18n_blank" ] 
                 then
                     iperf_args=""
                 fi

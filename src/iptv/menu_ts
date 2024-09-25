@@ -841,16 +841,16 @@ do
     fi
 
     echo
-    inquirer list_input_index "添加频道 ${chnl_name[chnl_index]}" yn_options yn_options_index
+    inquirer list_input_index "添加频道 ${chnl_name[chnl_index]}" yn_options yn_index
 
-    if [ "$yn_options_index" -eq 0 ] 
+    if [ "$yn_index" -eq 0 ] 
     then
         stream_links=("$stream_link|$id|$user_name")
 
         echo
-        inquirer list_input_index "是否 添加/替换 现有频道直播源" ny_options ny_options_index
+        inquirer list_input_index "是否 添加/替换 现有频道直播源" ny_options ny_index
 
-        if [ "$ny_options_index" -eq 1 ] 
+        if [ "$ny_index" -eq 1 ] 
         then
             ListChannels
             InputChannelsIndex
@@ -883,9 +883,9 @@ do
             done
         else
             echo
-            inquirer list_input_index "是否推流 flv" ny_options ny_options_index
+            inquirer list_input_index "是否推流 flv" ny_options ny_index
 
-            if [ "$ny_options_index" -eq 1 ] 
+            if [ "$ny_index" -eq 1 ] 
             then
                 kind="flv"
             fi

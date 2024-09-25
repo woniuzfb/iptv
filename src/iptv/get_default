@@ -50,7 +50,7 @@ GetDefault()
         d_audio_shift=${d_video_audio_shift#*_}
         d_video_audio_shift_text=$(eval_gettext "声音延迟 \$d_audio_shift 秒")
     else
-        d_video_audio_shift_text=$i18n_not_set
+        d_video_audio_shift_text=$i18n_blank
     fi
 
     d_const_cbr=${d_const_cbr:-false}
@@ -82,7 +82,7 @@ GetDefault()
 
     if [ "$d_recheck_period" -eq 0 ] 
     then
-        d_recheck_period_text=$i18n_not_set
+        d_recheck_period_text=$i18n_blank
     else
         d_recheck_period_text="$d_recheck_period"
     fi

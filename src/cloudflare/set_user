@@ -33,8 +33,8 @@ CloudflareSetUserPass()
 CloudflareSetUserToken()
 {
     Println "$tip 需要 workers 和 zone(区域) 编辑权限, 以及 zone(区域) 的 Analytics 读取权限"
-    inquirer text_input "请输入用户 Token: " cf_user_token "$i18n_not_set"
-    if [ "$cf_user_token" == "$i18n_not_set" ] 
+    inquirer text_input "请输入用户 Token: " cf_user_token "$i18n_blank"
+    if [ "$cf_user_token" == "$i18n_blank" ] 
     then
         cf_user_token=""
     else
@@ -51,8 +51,8 @@ CloudflareSetUserToken()
 CloudflareSetUserKey()
 {
     echo
-    inquirer text_input "请输入用户 Global API KEY: " cf_user_api_key "$i18n_not_set"
-    if [ "$cf_user_api_key" == "$i18n_not_set" ] 
+    inquirer text_input "请输入用户 Global API KEY: " cf_user_api_key "$i18n_blank"
+    if [ "$cf_user_api_key" == "$i18n_blank" ] 
     then
         cf_user_api_key=""
     fi

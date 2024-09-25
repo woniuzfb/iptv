@@ -96,9 +96,9 @@ VipListChannel()
     fi
 
     echo
-    inquirer list_input_index "测试频道" ny_options ny_options_index
+    inquirer list_input_index "测试频道" ny_options ny_index
 
-    if [ "$ny_options_index" -eq 1 ] 
+    if [ "$ny_index" -eq 1 ] 
     then
         FFmpegInstall
     fi
@@ -112,7 +112,7 @@ VipListChannel()
 
         VipGetStreamLink
 
-        if [ "$ny_options_index" -eq 1 ] 
+        if [ "$ny_index" -eq 1 ] 
         then
             printf -v ffprobe_headers_command '%b' "x-forwarded-for: 127.0.0.1\r\n"
 

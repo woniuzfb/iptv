@@ -93,9 +93,9 @@ Start4gtvLink()
                 then
                     choose_asked=true
                     echo
-                    inquirer list_input_index "是否按分辨率自动选择" yn_options yn_options_index
+                    inquirer list_input_index "是否按分辨率自动选择" yn_options yn_index
 
-                    if [ "$yn_options_index" -eq 0 ] 
+                    if [ "$yn_index" -eq 0 ] 
                     then
                         i=$((i-1))
                         continue

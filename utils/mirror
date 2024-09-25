@@ -450,7 +450,7 @@ else
 fi
 
 Println "$info 下载 acme.sh ..."
-if curl -s -L https://get.acme.sh -o "$FFMPEG_MIRROR_ROOT/acme.sh_tmp"
+if curl -s -L https://raw.githubusercontent.com/acmesh-official/acme.sh/master/acme.sh -o "$FFMPEG_MIRROR_ROOT/acme.sh_tmp"
 then
     mv "$FFMPEG_MIRROR_ROOT/acme.sh_tmp" "$FFMPEG_MIRROR_ROOT/acme.sh"
 else

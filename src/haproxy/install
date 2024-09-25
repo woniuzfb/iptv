@@ -198,7 +198,6 @@ HAProxyInstall()
     fi
 
     cd haproxy-"${haproxy_ver}"
-    make clean
 
     if [ "$dist" == "mac" ] 
     then

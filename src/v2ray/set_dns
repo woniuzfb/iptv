@@ -30,20 +30,20 @@ V2raySetDns()
         echo
         inquirer text_input "输入服务器端口: " dns_server_port 53
         Println "$tip 用于 DNS 查询时通知 DNS 服务器, 客户端所在的地理位置"
-        inquirer text_input "输入通知 DNS 的 IP 地址: " dns_server_client_ip "$i18n_not_set"
-        if [ "$dns_server_client_ip" == "$i18n_not_set" ] 
+        inquirer text_input "输入通知 DNS 的 IP 地址: " dns_server_client_ip "$i18n_blank"
+        if [ "$dns_server_client_ip" == "$i18n_blank" ] 
         then
             dns_server_client_ip=""
         fi
         Println "$tip 优先使用此服务器进行查询, 多个域名用空格分隔, 格式和路由配置中相同"
-        inquirer text_input "输入域名: " dns_server_domain "$i18n_not_set"
-        if [ "$dns_server_domain" == "$i18n_not_set" ] 
+        inquirer text_input "输入域名: " dns_server_domain "$i18n_blank"
+        if [ "$dns_server_domain" == "$i18n_blank" ] 
         then
             dns_server_domain=""
         fi
         Println "$tip 当配置此项时, $v2ray_name DNS 会对返回的 IP 的进行校验, 只返回包含列表中的地址, 多个 IP 范围用空格分隔, 格式和路由配置中相同"
-        inquirer text_input "输入 IP 范围: " dns_server_expect_ips "$i18n_not_set"
-        if [ "$dns_server_expect_ips" == "$i18n_not_set" ] 
+        inquirer text_input "输入 IP 范围: " dns_server_expect_ips "$i18n_blank"
+        if [ "$dns_server_expect_ips" == "$i18n_blank" ] 
         then
             dns_server_expect_ips=""
         fi

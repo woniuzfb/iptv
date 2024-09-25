@@ -78,7 +78,6 @@ QuictlsInstall()
     cd openssl-OpenSSL_1_1_1w-quic1
 
     perl ./Configure "${args[@]}"
-    make clean
     make
     make install
 

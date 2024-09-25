@@ -27,7 +27,7 @@ ListChannel()
     then
         chnl_seg_dir_name_text="${green}$chnl_seg_dir_name${normal}"
     else
-        chnl_seg_dir_name_text="${red}$i18n_not_set${normal}"
+        chnl_seg_dir_name_text="${red}$i18n_blank${normal}"
     fi
 
     if [ "$v_or_a" == "v" ] 
@@ -37,7 +37,7 @@ ListChannel()
     then
         chnl_video_audio_shift_text="${green}$i18n_audio_shift $chnl_audio_shift($i18n_seconds)${normal}"
     else
-        chnl_video_audio_shift_text="${green}$i18n_not_set${normal}"
+        chnl_video_audio_shift_text="${green}$i18n_blank${normal}"
     fi
 
     if [ "$chnl_encrypt" = false ]
@@ -223,8 +223,8 @@ ListChannel()
 
     [ -n "$chnl_video_quality_text" ] && printf '%b' "$chnl_video_quality_text"
 
-    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_input_flags" "${chnl_input_flags:-$i18n_not_set}"
-    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_output_flags" "${chnl_output_flags:-$i18n_not_set}"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_input_flags" "${chnl_input_flags:-$i18n_blank}"
+    printf " %s${indent_20}${green}%s${normal}\n" "$i18n_output_flags" "${chnl_output_flags:-$i18n_blank}"
     printf ' %b' "EXT-X-ENDLIST${indent_20}$chnl_hls_end_list_text\n"
     printf ' %b' "sync${indent_20}$chnl_sync_text\n"
 

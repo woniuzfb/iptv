@@ -451,7 +451,6 @@ NginxSourceInstall()
 
     nproc="-j$(nproc 2> /dev/null)" || nproc="-j1"
 
-    make clean
     make $nproc
     make install
 

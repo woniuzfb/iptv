@@ -25,8 +25,8 @@ VipSetHostSeed()
 VipSetHostToken()
 {
     echo
-    inquirer text_input "请输入 VIP 频道所在服务器的 token: " vip_host_token "$i18n_not_set"
-    if [ "$vip_host_token" == "$i18n_not_set" ] 
+    inquirer text_input "请输入 VIP 频道所在服务器的 token: " vip_host_token "$i18n_blank"
+    if [ "$vip_host_token" == "$i18n_blank" ] 
     then
         vip_host_token=""
     fi

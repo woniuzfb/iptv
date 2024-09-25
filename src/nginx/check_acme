@@ -5,14 +5,17 @@ AcmeCheck()
     if [ ! -f "$HOME/.acme.sh/acme.sh" ] 
     then
         DepInstall socat
-        { curl -s -m 10 https://get.acme.sh || curl -s -m 20 "$FFMPEG_MIRROR_LINK/acme.sh"; } \
+        mkdir -p "$DEPENDS_ROOT"
+        { curl -s -m 20 https://raw.githubusercontent.com/acmesh-official/acme.sh/master/acme.sh || curl -s -m 20 "$FFMPEG_MIRROR_LINK/acme.sh"; } \
         | sed "s+https://raw.githubusercontent.com/acmesh-official+$FFMPEG_MIRROR_LINK/acmesh-content+g" \
-        | sed "s+| sh+| sed 's~PROJECT=\"https://github.com/acmesh-official~PROJECT=\"$FFMPEG_MIRROR_LINK/acmesh-project~' | sed 's~https://api.github.com~$FFMPEG_MIRROR_LINK/acmesh-api~g' | sh+g" | bash
+        | sed "s+| sh+| sed 's~PROJECT=\"https://github.com/acmesh-official~PROJECT=\"$FFMPEG_MIRROR_LINK/acmesh-project~' | sed 's~https://api.github.com~$FFMPEG_MIRROR_LINK/acmesh-api~g' | sh+g" > "$DEPENDS_ROOT"/acme.sh
+        cd "$DEPENDS_ROOT"
+        bash acme.sh --install
     else
         echo
-        inquirer list_input_index "更新 acme.sh" ny_options ny_options_index
+        inquirer list_input_index "更新 acme.sh" ny_options ny_index
 
-        if [ "$ny_options_index" -eq 1 ] 
+        if [ "$ny_index" -eq 1 ] 
         then
             ~/.acme.sh/acme.sh --upgrade
         fi

@@ -1591,6 +1591,34 @@ inquirer()
         trap - EXIT
     }
 
+    inquirer:list_input_yn() {
+        var_name=$3
+        local hidden_var=("$2"[@])
+        local hidden_options=("${!hidden_var}")
+
+        inquirer:_list_input "$1" yn_options
+
+        read -r ${var_name?} <<< "${hidden_options[current_index]}"
+
+        inquirer:cleanup
+
+        trap - EXIT
+    }
+
+    inquirer:list_input_ny() {
+        var_name=$3
+        local hidden_var=("$2"[@])
+        local hidden_options=("${!hidden_var}")
+
+        inquirer:_list_input "$1" ny_options
+
+        read -r ${var_name?} <<< "${hidden_options[current_index]}"
+
+        inquirer:cleanup
+
+        trap - EXIT
+    }
+
     inquirer:list_input_index() {
         var_name=$3
 
@@ -1783,11 +1811,18 @@ inquirer()
 
         trap inquirer:control_c EXIT
 
+        read -e text_input
+
+        until validate_failed_msg=$($text_input_validator "$text_input") 
+        do
+            inquirer:print "\n${bg_black}${red}${validate_failed_msg:-$text_input_validate_failed_msg}${normal}\n\n"
+            read -e text_input
+        done
+
         #stty -echo
         #tput cnorm
-
-        read -e text_input
         #inquirer:on_keypress inquirer:on_default inquirer:on_default inquirer:on_text_input_ascii inquirer:on_text_input_enter inquirer:on_text_input_left inquirer:on_text_input_right inquirer:on_text_input_ascii inquirer:on_text_input_backspace inquirer:on_text_input_not_ascii
+
         read -r ${var_name?} <<< "${text_input:-$text_default}"
 
         inquirer:cleanup

@@ -75,9 +75,9 @@ CloudflareEditWorker()
                         if [ -d "$CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]:-notfound}" ] 
                         then
                             echo
-                            inquirer list_input_index "是否删除原路径目录" yn_options yn_options_index
+                            inquirer list_input_index "是否删除原路径目录" yn_options yn_index
 
-                            if [ "$yn_options_index" -eq 0 ] 
+                            if [ "$yn_index" -eq 0 ] 
                             then
                                 rm -rf "$CF_WORKERS_ROOT/${cf_workers_path[cf_workers_index]:-notfound}"
                             fi  

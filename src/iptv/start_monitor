@@ -16,9 +16,9 @@ MonitorStart()
             nginx_ctl="nx"
         else
             echo
-            inquirer list_input_index "没有检测到运行的 nginx, 是否使用 openresty" yn_options yn_options_index
+            inquirer list_input_index "没有检测到运行的 nginx, 是否使用 openresty" yn_options yn_index
 
-            if [ "$yn_options_index" -eq 0 ] 
+            if [ "$yn_index" -eq 0 ] 
             then
                 nginx_prefix="/usr/local/openresty/nginx"
                 nginx_name="openresty"

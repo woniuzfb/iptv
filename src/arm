@@ -823,8 +823,8 @@ EOF
         fi
 
         echo
-        inquirer text_input "输入当前配置保存名称: " config_name "$i18n_not_set"
-        if [ "$config_name" == "$i18n_not_set" ] 
+        inquirer text_input "输入当前配置保存名称: " config_name "$i18n_blank"
+        if [ "$config_name" == "$i18n_blank" ] 
         then
             config_name=""
         else
